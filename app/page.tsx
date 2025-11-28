@@ -1,21 +1,33 @@
 "use client"
 
 import type React from "react"
-import { useState, useRef } from "react"
-// 只引入图标库，不引入 button/card 等组件库
-import { Upload, FileText, Loader2, Clock, CheckCircle2 } from "lucide-react"
-import ReactMarkdown from "react-markdown"
-// 引入数据库连接
+import { useState, useRef, useEffect } from "react"
+// 引入图标
+import { Upload, Loader2, CheckCircle2, Terminal, Sparkles } from "lucide-react"
+// 引入 Supabase
 import { supabase } from "@/lib/supabase"
+// 引入我们做好的“装修组件” (确保路径正确)
+import ReportRenderer from "@/components/ReportRenderer"
 
 type Status = "idle" | "uploading" | "processing" | "completed"
 
 export default function Home() {
+  // --- 1. 状态管理 ---
   const [status, setStatus] = useState<Status>("idle")
   const [result, setResult] = useState<string>("")
   const [logs, setLogs] = useState<string[]>([])
   const [fileName, setFileName] = useState<string>("")
   const fileInputRef = useRef<HTMLInputElement>(null)
+  
+  // 用于自动滚动终端日志
+  const terminalEndRef = useRef<HTMLDivElement>(null)
+
+  // 自动滚动到底部
+  useEffect(() => {
+    terminalEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  }, [logs, result])
+
+  // --- 2. 核心逻辑功能 (保持不变) ---
 
   // 保存到 Supabase
   const saveToSupabase = async (file_name: string, essayResult: string) => {
@@ -39,11 +51,13 @@ export default function Home() {
     }
   }
 
+  // 添加日志
   const addLog = (message: string) => {
     const timestamp = new Date().toLocaleTimeString("zh-CN")
     setLogs((prev) => [...prev, `[${timestamp}] ${message}`])
   }
 
+  // 处理上传
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -90,12 +104,14 @@ export default function Home() {
               
               const data = JSON.parse(jsonStr)
 
+              // 拼接文本
               if (data.event === "text_chunk" && data.data?.text) {
                 const newText = data.data.text
                 fullText += newText
                 setResult((prev) => prev + newText)
               } 
               
+              // 监听完成
               if (data.event === "workflow_finished") {
                 setStatus("completed")
                 addLog("🏁 工作流执行完毕")
@@ -113,103 +129,108 @@ export default function Home() {
     }
   }
 
+  // --- 3. 极致 UI 渲染 ---
   return (
-    <div className="min-h-screen bg-slate-50 p-4 md:p-8 font-sans">
-      <div className="mx-auto max-w-7xl">
-        <div className="mb-8 text-center">
-          <h1 className="text-3xl font-bold text-slate-800 mb-2 flex justify-center items-center gap-2">
-            <CheckCircle2 className="text-green-600"/> 作文智能批改引擎
+    <div className="min-h-screen bg-[#f8f9fa] p-4 md:p-8 font-sans text-slate-800">
+      <div className="mx-auto max-w-5xl space-y-12">
+        
+        {/* === 头部标题 === */}
+        <div className="text-center pt-8">
+          <h1 className="text-4xl font-extrabold text-slate-900 mb-3 flex justify-center items-center gap-3">
+            <Sparkles className="text-yellow-500 w-8 h-8" />
+            <span>作文智能批改引擎</span>
           </h1>
-          <p className="text-slate-500">企业级 MoA 架构 • 视觉识别 • 深度批改</p>
+          <p className="text-slate-500 text-lg">MoA 混合智能体架构 · 企业级深度诊断</p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* === 上传区域 === */}
+        <div className="max-w-xl mx-auto">
+          <input ref={fileInputRef} type="file" accept="image/*,.pdf" onChange={handleFileUpload} className="hidden" />
           
-          {/* 左侧区域：上传与展示 (使用原生 div 替代 Card) */}
-          <div className="lg:col-span-2 p-8 border border-slate-200 shadow-sm bg-white rounded-xl">
-            <div className="space-y-6">
-              <input ref={fileInputRef} type="file" accept="image/*,.pdf" onChange={handleFileUpload} className="hidden" />
-
-              {/* 上传按钮区域 */}
-              <div
-                onClick={() => status !== 'processing' && fileInputRef.current?.click()}
-                className={`
-                  border-2 border-dashed rounded-xl p-10 text-center
-                  transition-all cursor-pointer select-none
-                  ${status === "idle" || status === "completed" 
-                    ? "border-blue-300 bg-blue-50/50 hover:border-blue-500 hover:bg-blue-50" 
-                    : "border-slate-200 bg-slate-50 cursor-not-allowed opacity-80"}
-                `}
-              >
-                <div className="flex flex-col items-center gap-4">
-                  {status === "processing" || status === "uploading" ? (
-                    <Loader2 className="w-12 h-12 text-blue-600 animate-spin" />
-                  ) : (
-                    <Upload className="w-12 h-12 text-blue-600" />
-                  )}
-
-                  <div>
-                    <p className="text-lg font-semibold text-slate-700">
-                      {status === "idle" && "点击上传作文图片 / PDF"}
-                      {status === "uploading" && "正在上传文件..."}
-                      {status === "processing" && "AI 正在深度思考..."}
-                      {status === "completed" && "批改完成，可再次上传"}
-                    </p>
-                    <p className="text-sm text-slate-400 mt-1">{fileName || "支持 JPG, PNG, PDF 格式"}</p>
-                  </div>
+          <div
+            onClick={() => status !== 'processing' && fileInputRef.current?.click()}
+            className={`
+              group relative overflow-hidden rounded-2xl border-2 border-dashed p-10 text-center transition-all duration-300
+              ${status === "idle" || status === "completed" 
+                ? "border-slate-300 bg-white hover:border-blue-500 hover:shadow-lg cursor-pointer" 
+                : "border-slate-200 bg-slate-50 cursor-not-allowed opacity-80"}
+            `}
+          >
+            <div className="relative z-10 flex flex-col items-center gap-4">
+              {status === "processing" || status === "uploading" ? (
+                <Loader2 className="w-16 h-16 text-blue-600 animate-spin" />
+              ) : (
+                <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <Upload className="w-8 h-8 text-blue-600" />
                 </div>
+              )}
+
+              <div>
+                <p className="text-xl font-bold text-slate-700">
+                  {status === "idle" && "点击上传作文图片"}
+                  {status === "uploading" && "正在上传文件..."}
+                  {status === "processing" && "AI 正在深度思考..."}
+                  {status === "completed" && "批改完成，点击上传新图片"}
+                </p>
+                <p className="text-sm text-slate-400 mt-2">{fileName || "支持 JPG, PNG, PDF 格式"}</p>
               </div>
-
-              {/* 结果展示区域 (使用原生 div 替代 ScrollArea) */}
-              <div className="border rounded-xl p-6 bg-white min-h-[500px] shadow-inner overflow-hidden">
-                <div className="flex items-center gap-2 mb-4 pb-4 border-b">
-                  <FileText className="w-5 h-5 text-blue-600" />
-                  <h2 className="text-lg font-semibold text-slate-800">批改结果</h2>
-                </div>
-
-                <div className="h-[450px] overflow-y-auto pr-4">
-                  {result ? (
-                    <article className="prose prose-slate max-w-none prose-p:leading-relaxed prose-headings:text-slate-800">
-                      <ReactMarkdown>{result}</ReactMarkdown>
-                    </article>
-                  ) : (
-                    <div className="flex flex-col items-center justify-center h-full text-slate-300 gap-4 mt-20">
-                      <FileText className="w-16 h-16 opacity-20" />
-                      <p>等待 AI 生成结果...</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* 右侧日志区域 */}
-          <div className="p-0 border border-slate-200 shadow-sm bg-slate-900 text-slate-300 rounded-xl overflow-hidden flex flex-col h-[600px] lg:h-auto">
-            <div className="p-4 border-b border-slate-700 bg-slate-950 flex items-center gap-2">
-              <Clock className="w-4 h-4 text-green-400" />
-              <h2 className="font-mono text-sm font-bold text-slate-100">System Logs</h2>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-4 font-mono text-xs space-y-3">
-                {logs.length === 0 && <p className="opacity-30 italic">Waiting for connection...</p>}
-                
-                {logs.map((log, index) => (
-                  <div key={index} className="flex items-start gap-2 animate-in fade-in slide-in-from-left-2 duration-300">
-                    <span className="text-green-500 mt-0.5">➜</span>
-                    <span className="break-all">{log}</span>
-                  </div>
-                ))}
-                
-                {status === "processing" && (
-                  <div className="text-blue-400 animate-pulse pl-4">
-                    _ cursor processing...
-                  </div>
-                )}
             </div>
           </div>
         </div>
+
+        {/* === 双视窗结果展示区 (核心升级) === */}
+        {(status === "processing" || status === "completed" || result) && (
+          <div className="animate-in fade-in slide-in-from-bottom-10 duration-1000 space-y-12 pb-20">
+            
+            {/* 🖥️ 视窗 A: 极客终端 (显示日志 + 原始数据流) */}
+            <div className="rounded-xl overflow-hidden bg-[#1e1e1e] border border-gray-800 shadow-2xl mx-auto max-w-4xl">
+              {/* 终端头部 */}
+              <div className="flex items-center justify-between px-4 py-3 bg-[#252526] border-b border-black/40">
+                <div className="flex gap-2">
+                  <div className="w-3 h-3 rounded-full bg-[#ff5f56]"></div> {/* Mac 红 */}
+                  <div className="w-3 h-3 rounded-full bg-[#ffbd2e]"></div> {/* Mac 黄 */}
+                  <div className="w-3 h-3 rounded-full bg-[#27c93f]"></div> {/* Mac 绿 */}
+                </div>
+                <div className="text-xs font-mono text-gray-500 flex items-center gap-2">
+                  <Terminal className="w-3 h-3" />
+                  <span>AI_KERNEL_DEBUG_CONSOLE</span>
+                </div>
+                <div className="w-10"></div> {/* 占位平衡 */}
+              </div>
+
+              {/* 终端内容 */}
+              <div className="p-6 font-mono text-xs md:text-sm text-green-400/90 leading-relaxed h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent bg-[#1e1e1e]">
+                {/* 1. 系统日志区域 */}
+                <div className="mb-4 text-gray-500 border-b border-gray-800 pb-2">
+                   {logs.map((log, i) => (
+                     <div key={i} className="mb-1">{log}</div>
+                   ))}
+                </div>
+                
+                {/* 2. 实时流文字区域 */}
+                <div className="whitespace-pre-wrap">
+                  <span className="text-blue-400 mr-2">root@ai-engine:~$</span>
+                  {result}
+                  <span className="inline-block w-2 h-4 bg-green-500 ml-1 animate-pulse align-middle"></span>
+                </div>
+                {/* 锚点用于自动滚动 */}
+                <div ref={terminalEndRef}></div>
+              </div>
+            </div>
+
+            {/* 📜 视窗 B: 极致纸质报告 (通过连接线挂在终端下面) */}
+            <div className="relative">
+              {/* 装饰：连接线 */}
+              <div className="absolute -top-12 left-1/2 -translate-x-1/2 w-px h-12 bg-gradient-to-b from-gray-800 to-transparent border-l border-dashed border-gray-400/50"></div>
+              
+              {/* 如果有结果，渲染高级报告组件 */}
+              {result && <ReportRenderer content={result} />}
+            </div>
+
+          </div>
+        )}
+        
       </div>
     </div>
   )
 }
-// final fix
