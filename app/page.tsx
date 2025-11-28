@@ -1,54 +1,41 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useRef } from "react"
+// 只引入图标库，不引入 button/card 等组件库
 import { Upload, FileText, Loader2, Clock, CheckCircle2 } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import ReactMarkdown from "react-markdown"
-import { createClient } from "@/lib/supabase/client"
+// 引入数据库连接
+import { supabase } from "@/lib/supabase"
 
 type Status = "idle" | "uploading" | "processing" | "completed"
 
-export default function EssayAnalyzer() {
+export default function Home() {
   const [status, setStatus] = useState<Status>("idle")
   const [result, setResult] = useState<string>("")
   const [logs, setLogs] = useState<string[]>([])
   const [fileName, setFileName] = useState<string>("")
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const saveToSupabase = async (essayResult: string) => {
+  // 保存到 Supabase
+  const saveToSupabase = async (file_name: string, essayResult: string) => {
+    addLog("💾 正在归档至 Supabase...")
     try {
-      const supabase = createClient()
-      if (!supabase) {
-        console.warn("[v0] Supabase not configured, skipping save")
-        return
-      }
-
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-      if (!user) {
-        console.warn("[v0] User not logged in, skipping save")
-        return
-      }
-
-      const { error } = await supabase.from("essay_reviews").insert({
-        user_id: user.id,
-        content: essayResult,
-        created_at: new Date().toISOString(),
+      const { error } = await supabase.from("submissions").insert({
+        original_text: `File: ${file_name}`,
+        ai_result: essayResult,
+        status: "completed",
       })
 
       if (error) {
-        console.error("[v0] Error saving to Supabase:", error)
-        addLog("保存失败: " + error.message)
+        console.error("Supabase Error:", error)
+        addLog("⚠ 保存失败: " + error.message)
       } else {
-        addLog("✓ 已保存到数据库")
+        addLog("✅ 数据已永久保存")
       }
-    } catch (error) {
-      console.error("[v0] Error in saveToSupabase:", error)
+    } catch (error: any) {
+      console.error("Save Error:", error)
+      addLog("⚠ 保存出错: " + error.message)
     }
   }
 
@@ -57,199 +44,172 @@ export default function EssayAnalyzer() {
     setLogs((prev) => [...prev, `[${timestamp}] ${message}`])
   }
 
-  const handleFileUpload = async (file: File) => {
-    console.log("[v0] Starting file upload:", file.name)
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
     setFileName(file.name)
     setStatus("uploading")
     setResult("")
     setLogs([])
-    addLog("开始上传文件: " + file.name)
+    addLog("🚀 开始上传文件: " + file.name)
 
     try {
       const formData = new FormData()
       formData.append("file", file)
 
       setStatus("processing")
-      addLog("正在处理文件...")
+      addLog("🧠 AI 正在视觉识别与分析...")
 
       const response = await fetch("/api/analyze", {
         method: "POST",
         body: formData,
       })
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
+      if (!response.body) throw new Error("No response body")
 
-      const reader = response.body?.getReader()
+      const reader = response.body.getReader()
       const decoder = new TextDecoder()
+      let fullText = ""
 
-      if (!reader) {
-        throw new Error("No response body")
-      }
-
-      addLog("开始接收批改结果...")
+      addLog("⚡ 开始接收流式批改结果...")
 
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
 
         const chunk = decoder.decode(value, { stream: true })
-        const lines = chunk.split("\n").filter((line) => line.trim())
+        const lines = chunk.split("\n")
 
         for (const line of lines) {
           if (line.startsWith("data: ")) {
             try {
-              const data = JSON.parse(line.slice(6))
+              const jsonStr = line.slice(6)
+              if (!jsonStr || jsonStr === "[DONE]") continue 
+              
+              const data = JSON.parse(jsonStr)
 
-              if (data.event === "text_chunk" && data.text) {
-                setResult((prev) => prev + data.text)
-              } else if (data.event === "log" && data.message) {
-                addLog(data.message)
-              } else if (data.event === "workflow_finished") {
-                addLog("✓ 批改完成")
+              if (data.event === "text_chunk" && data.data?.text) {
+                const newText = data.data.text
+                fullText += newText
+                setResult((prev) => prev + newText)
+              } 
+              
+              if (data.event === "workflow_finished") {
                 setStatus("completed")
-                // Save the final result
-                await saveToSupabase(result)
-              } else if (data.event === "error") {
-                addLog("✗ 错误: " + data.message)
-                throw new Error(data.message)
+                addLog("🏁 工作流执行完毕")
+                await saveToSupabase(file.name, fullText)
               }
-            } catch (e) {
-              console.error("[v0] Error parsing chunk:", e)
-            }
+            } catch (e) {}
           }
         }
       }
 
-      if (status !== "completed") {
-        setStatus("completed")
-        addLog("✓ 处理完成")
-      }
-    } catch (error) {
-      console.error("[v0] Error in handleFileUpload:", error)
-      addLog("✗ 错误: " + (error instanceof Error ? error.message : "未知错误"))
+    } catch (error: any) {
+      console.error("Upload Error:", error)
+      addLog("❌ 错误: " + error.message)
       setStatus("idle")
     }
   }
 
-  const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      handleFileUpload(file)
-    }
-  }
-
-  const triggerFileInput = () => {
-    fileInputRef.current?.click()
-  }
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-green-50/30 p-8">
+    <div className="min-h-screen bg-slate-50 p-4 md:p-8 font-sans">
       <div className="mx-auto max-w-7xl">
         <div className="mb-8 text-center">
-          <h1 className="text-4xl font-bold text-green-800 mb-2">作文智能批改</h1>
-          <p className="text-green-600">上传作文图片，获取专业的AI批改建议</p>
+          <h1 className="text-3xl font-bold text-slate-800 mb-2 flex justify-center items-center gap-2">
+            <CheckCircle2 className="text-green-600"/> 作文智能批改引擎
+          </h1>
+          <p className="text-slate-500">企业级 MoA 架构 • 视觉识别 • 深度批改</p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Upload Area */}
-          <Card className="lg:col-span-2 p-8 border-2 border-green-100 shadow-lg">
+          
+          {/* 左侧区域：上传与展示 (使用原生 div 替代 Card) */}
+          <div className="lg:col-span-2 p-8 border border-slate-200 shadow-sm bg-white rounded-xl">
             <div className="space-y-6">
-              <input ref={fileInputRef} type="file" accept="image/*,.pdf" onChange={onFileChange} className="hidden" />
+              <input ref={fileInputRef} type="file" accept="image/*,.pdf" onChange={handleFileUpload} className="hidden" />
 
-              {/* Upload Button */}
+              {/* 上传按钮区域 */}
               <div
-                onClick={triggerFileInput}
+                onClick={() => status !== 'processing' && fileInputRef.current?.click()}
                 className={`
-                  border-2 border-dashed rounded-lg p-12 text-center
-                  transition-all cursor-pointer
-                  ${status === "idle" ? "border-green-300 bg-green-50/50 hover:border-green-400 hover:bg-green-50" : "border-gray-300 bg-gray-50"}
+                  border-2 border-dashed rounded-xl p-10 text-center
+                  transition-all cursor-pointer select-none
+                  ${status === "idle" || status === "completed" 
+                    ? "border-blue-300 bg-blue-50/50 hover:border-blue-500 hover:bg-blue-50" 
+                    : "border-slate-200 bg-slate-50 cursor-not-allowed opacity-80"}
                 `}
               >
                 <div className="flex flex-col items-center gap-4">
-                  {status === "processing" ? (
-                    <Loader2 className="w-16 h-16 text-green-600 animate-spin" />
+                  {status === "processing" || status === "uploading" ? (
+                    <Loader2 className="w-12 h-12 text-blue-600 animate-spin" />
                   ) : (
-                    <Upload className="w-16 h-16 text-green-600" />
+                    <Upload className="w-12 h-12 text-blue-600" />
                   )}
 
                   <div>
-                    <p className="text-lg font-semibold text-green-800 mb-1">
-                      {status === "idle" && "点击上传作文图片"}
-                      {status === "uploading" && "正在上传..."}
-                      {status === "processing" && "正在批改中..."}
-                      {status === "completed" && "批改完成！"}
+                    <p className="text-lg font-semibold text-slate-700">
+                      {status === "idle" && "点击上传作文图片 / PDF"}
+                      {status === "uploading" && "正在上传文件..."}
+                      {status === "processing" && "AI 正在深度思考..."}
+                      {status === "completed" && "批改完成，可再次上传"}
                     </p>
-                    <p className="text-sm text-green-600">{fileName || "支持 JPG、PNG、PDF 格式"}</p>
+                    <p className="text-sm text-slate-400 mt-1">{fileName || "支持 JPG, PNG, PDF 格式"}</p>
                   </div>
-
-                  {status === "idle" && <Button className="bg-green-600 hover:bg-green-700">选择文件</Button>}
                 </div>
               </div>
 
-              {/* Result Area */}
-              <div className="border rounded-lg p-6 bg-white min-h-[400px]">
+              {/* 结果展示区域 (使用原生 div 替代 ScrollArea) */}
+              <div className="border rounded-xl p-6 bg-white min-h-[500px] shadow-inner overflow-hidden">
                 <div className="flex items-center gap-2 mb-4 pb-4 border-b">
-                  <FileText className="w-5 h-5 text-green-600" />
-                  <h2 className="text-lg font-semibold text-green-800">批改结果</h2>
+                  <FileText className="w-5 h-5 text-blue-600" />
+                  <h2 className="text-lg font-semibold text-slate-800">批改结果</h2>
                 </div>
 
-                <ScrollArea className="h-[500px] pr-4">
+                <div className="h-[450px] overflow-y-auto pr-4">
                   {result ? (
-                    <ReactMarkdown className="prose prose-green max-w-none">{result}</ReactMarkdown>
+                    <article className="prose prose-slate max-w-none prose-p:leading-relaxed prose-headings:text-slate-800">
+                      <ReactMarkdown>{result}</ReactMarkdown>
+                    </article>
                   ) : (
-                    <div className="flex items-center justify-center h-full text-gray-400">
-                      <div className="text-center">
-                        <FileText className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                        <p>
-                          {status === "processing" ? (
-                            <span className="flex items-center gap-2">
-                              等待结果中
-                              <span className="animate-pulse">...</span>
-                            </span>
-                          ) : (
-                            "上传文件后，批改结果将显示在此处"
-                          )}
-                        </p>
-                      </div>
+                    <div className="flex flex-col items-center justify-center h-full text-slate-300 gap-4 mt-20">
+                      <FileText className="w-16 h-16 opacity-20" />
+                      <p>等待 AI 生成结果...</p>
                     </div>
                   )}
-                </ScrollArea>
+                </div>
               </div>
             </div>
-          </Card>
+          </div>
 
-          {/* Log Sidebar */}
-          <Card className="p-6 border-2 border-green-100 shadow-lg">
-            <div className="flex items-center gap-2 mb-4 pb-4 border-b">
-              <Clock className="w-5 h-5 text-green-600" />
-              <h2 className="text-lg font-semibold text-green-800">处理日志</h2>
+          {/* 右侧日志区域 */}
+          <div className="p-0 border border-slate-200 shadow-sm bg-slate-900 text-slate-300 rounded-xl overflow-hidden flex flex-col h-[600px] lg:h-auto">
+            <div className="p-4 border-b border-slate-700 bg-slate-950 flex items-center gap-2">
+              <Clock className="w-4 h-4 text-green-400" />
+              <h2 className="font-mono text-sm font-bold text-slate-100">System Logs</h2>
             </div>
 
-            <ScrollArea className="h-[600px]">
-              <div className="space-y-2">
-                {logs.length === 0 ? (
-                  <p className="text-sm text-gray-400 text-center py-8">暂无日志</p>
-                ) : (
-                  logs.map((log, index) => (
-                    <div key={index} className="text-xs font-mono bg-green-50 p-2 rounded border border-green-100">
-                      {log}
-                    </div>
-                  ))
-                )}
-
-                {status === "completed" && (
-                  <div className="flex items-center gap-2 mt-4 p-3 bg-green-100 rounded-lg">
-                    <CheckCircle2 className="w-5 h-5 text-green-600" />
-                    <span className="text-sm font-medium text-green-800">所有任务已完成</span>
+            <div className="flex-1 overflow-y-auto p-4 font-mono text-xs space-y-3">
+                {logs.length === 0 && <p className="opacity-30 italic">Waiting for connection...</p>}
+                
+                {logs.map((log, index) => (
+                  <div key={index} className="flex items-start gap-2 animate-in fade-in slide-in-from-left-2 duration-300">
+                    <span className="text-green-500 mt-0.5">➜</span>
+                    <span className="break-all">{log}</span>
+                  </div>
+                ))}
+                
+                {status === "processing" && (
+                  <div className="text-blue-400 animate-pulse pl-4">
+                    _ cursor processing...
                   </div>
                 )}
-              </div>
-            </ScrollArea>
-          </Card>
+            </div>
+          </div>
         </div>
       </div>
     </div>
   )
 }
+// final fix
