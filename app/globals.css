@@ -1,8 +1,16 @@
 @import "tailwindcss";
+/* ✅ 修复点：必须把字体引入放在最上面，紧跟在 tailwindcss 后面 */
+@import url('https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@400;700&display=swap');
 
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  /* ✅ 合并变量定义：把之前的自定义变量整合到这里 */
+  --font-hand: 'Ma Shan Zheng', cursive;
+  --font-serif: 'Noto Serif SC', serif;
+  --paper-bg: #fdfbf7;  /* 温暖的米色 */
+  --ink-color: #2c2c2c; /* 深灰墨水色 */
 }
 
 @theme inline {
@@ -25,26 +33,15 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
-/* --- 把下面这些内容加到 globals.css 的最底下 --- */
+/* --- 下面是自定义样式 --- */
 
-/* 1. 引入字体：马善政(手写) 和 思源宋体(正文) */
-@import url('https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@400;700&display=swap');
-
-/* 2. 定义变量 */
-:root {
-  --font-hand: 'Ma Shan Zheng', cursive;
-  --font-serif: 'Noto Serif SC', serif;
-  --paper-bg: #fdfbf7;  /* 温暖的米色 */
-  --ink-color: #2c2c2c; /* 深灰墨水色 */
-}
-
-/* 3. 核心：纸张噪点纹理 (CSS魔法，不需要图片) */
+/* 3. 核心：纸张噪点纹理 (CSS魔法) */
 .texture-paper {
   background-color: var(--paper-bg);
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.05'/%3E%3C/svg%3E");
 }
 
-/* 4. 印章动画 (让分数像盖章一样砸下来) */
+/* 4. 印章动画 */
 @keyframes stamp-in {
   0% { opacity: 0; transform: scale(2) rotate(-15deg); }
   50% { opacity: 1; transform: scale(0.9) rotate(-15deg); }
