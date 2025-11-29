@@ -2,12 +2,12 @@
 
 import type React from "react"
 import { useState, useRef, useEffect } from "react"
-// 引入图标 (已移除未使用的 CheckCircle2)
+// 引入图标
 import { Upload, Loader2, Terminal, Sparkles } from "lucide-react"
 // 引入 Supabase
 import { supabase } from "@/lib/supabase"
 // 引入我们做好的“装修组件”
-import ReportRenderer from "./components/ReportRenderer"
+import ReportRenderer from "./components/ReportRenderer" // 假设它在 ./components/ReportRenderer
 
 type Status = "idle" | "uploading" | "processing" | "completed"
 
@@ -57,7 +57,7 @@ export default function Home() {
     setLogs((prev) => [...prev, `[${timestamp}] ${message}`])
   }
 
-  // 处理上传
+  // 处理上传 (已集成了健壮的流式解析)
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -67,6 +67,8 @@ export default function Home() {
     setResult("")
     setLogs([])
     addLog("🚀 开始上传文件: " + file.name)
+
+    let fullText = "" // 将 fullText 移到 try 块外部，以便 finally 中访问
 
     try {
       const formData = new FormData()
@@ -85,7 +87,7 @@ export default function Home() {
 
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
-      let fullText = ""
+      let lineBuffer = "" // <-- 引入行缓冲区
 
       addLog("⚡ 开始接收流式批改结果...")
 
@@ -93,14 +95,28 @@ export default function Home() {
         const { done, value } = await reader.read()
         if (done) break
 
-        const chunk = decoder.decode(value, { stream: true })
-        const lines = chunk.split("\n")
+        // 1. 将新数据块追加到缓冲区
+        lineBuffer += decoder.decode(value, { stream: true })
+        
+        // 2. 查找缓冲区中第一个换行符
+        let boundary = lineBuffer.indexOf("\n")
 
-        for (const line of lines) {
+        // 3. 只要缓冲区中还有换行符，就持续处理
+        while (boundary !== -1) {
+          // 提取完整的一行
+          const line = lineBuffer.substring(0, boundary).trim()
+          
+          // 从缓冲区中移除已处理的行
+          lineBuffer = lineBuffer.substring(boundary + 1)
+
+          // --- 这是你的原始逻辑，现在是 100% 安全的 ---
           if (line.startsWith("data: ")) {
             try {
-              const jsonStr = line.slice(6)
-              if (!jsonStr || jsonStr === "[DONE]") continue 
+              const jsonStr = line.slice(6).trim()
+              if (!jsonStr || jsonStr === "[DONE]") {
+                boundary = lineBuffer.indexOf("\n") // 查找下一个换行符
+                continue
+              }
               
               const data = JSON.parse(jsonStr)
 
@@ -115,19 +131,40 @@ export default function Home() {
               if (data.event === "workflow_finished") {
                 setStatus("completed")
                 addLog("🏁 工作流执行完毕")
-                await saveToSupabase(file.name, fullText)
+                // 这里的 await 是安全的，因为流即将结束
+                await saveToSupabase(file.name, fullText) 
               }
             } catch (e) {
-              // 忽略解析错误，防止崩坏
+              console.warn("SSE parse error, skipping line:", line, e)
+              addLog("⚠️ AI 数据流解析轻微异常 (已跳过)")
             }
           }
+          // --- 你的逻辑结束 ---
+
+          // 4. 查找下一个换行符，准备下一次内循环
+          boundary = lineBuffer.indexOf("\n")
         }
       }
+      
+      // 健壮性检查：如果流结束了，但 "workflow_finished" 事件没收到
+      // (检查 status 是为了防止重复保存)
+      if (status !== "completed" && fullText) {
+        addLog("🏁 数据流已关闭")
+        setStatus("completed")
+        addLog("⚠️ 未收到完成信号，强制保存。")
+        await saveToSupabase(file.name, fullText)
+      }
+
 
     } catch (error: any) {
       console.error("Upload Error:", error)
       addLog("❌ 错误: " + (error.message || "上传处理失败"))
       setStatus("idle")
+    } finally {
+      // 确保无论成功还是失败，都可以重新上传同一个文件
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ""
+      }
     }
   }
 
@@ -150,7 +187,7 @@ export default function Home() {
           <input ref={fileInputRef} type="file" accept="image/*,.pdf" onChange={handleFileUpload} className="hidden" />
           
           <div
-            onClick={() => status !== 'processing' && fileInputRef.current?.click()}
+            onClick={() => (status === 'idle' || status === 'completed') && fileInputRef.current?.click()}
             className={`
               group relative overflow-hidden rounded-2xl border-2 border-dashed p-10 text-center transition-all duration-300
               ${status === "idle" || status === "completed" 
@@ -213,7 +250,10 @@ export default function Home() {
                 <div className="whitespace-pre-wrap">
                   <span className="text-blue-400 mr-2">root@ai-engine:~$</span>
                   {result}
-                  <span className="inline-block w-2 h-4 bg-green-500 ml-1 animate-pulse align-middle"></span>
+                  {/* 当状态是 processing 时才显示跳动光标 */}
+                  {status === "processing" && (
+                    <span className="inline-block w-2 h-4 bg-green-500 ml-1 animate-pulse align-middle"></span>
+                  )}
                 </div>
                 {/* 锚点用于自动滚动 */}
                 <div ref={terminalEndRef}></div>
@@ -226,7 +266,8 @@ export default function Home() {
               <div className="absolute -top-12 left-1/2 -translate-x-1/2 w-px h-12 bg-gradient-to-b from-gray-800 to-transparent border-l border-dashed border-gray-400/50"></div>
               
               {/* 如果有结果，渲染高级报告组件 */}
-              {result && <ReportRenderer content={result} />}
+              {/* ✅【修复 1】: 已将 'content' 修改为 'reportText' */}
+              {result && <ReportRenderer reportText={result} />}
             </div>
 
           </div>

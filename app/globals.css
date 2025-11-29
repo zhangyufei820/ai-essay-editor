@@ -1,47 +1,44 @@
-@import "tailwindcss";
-/* ✅ 修复点：必须把字体引入放在最上面，紧跟在 tailwindcss 后面 */
+/* 1. 注入 Tailwind 的基础、组件和工具样式 */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 2. 引入你需要的字体 (必须放在 Tailwind 注入之后) */
 @import url('https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@400;700&display=swap');
 
+/* 3. 定义你的 CSS 变量 */
 :root {
   --background: #ffffff;
   --foreground: #171717;
 
-  /* ✅ 合并变量定义：把之前的自定义变量整合到这里 */
+  /* 你自定义的变量 */
   --font-hand: 'Ma Shan Zheng', cursive;
   --font-serif: 'Noto Serif SC', serif;
   --paper-bg: #fdfbf7;  /* 温暖的米色 */
   --ink-color: #2c2c2c; /* 深灰墨水色 */
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
+    --paper-bg: #1a1a1a;
+    --ink-color: #d1d1d1;
   }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
 }
 
-/* --- 下面是自定义样式 --- */
-
-/* 3. 核心：纸张噪点纹理 (CSS魔法) */
+/* 4. 核心：纸张噪点纹理 */
 .texture-paper {
   background-color: var(--paper-bg);
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.05'/%3E%3C/svg%3E");
 }
 
-/* 4. 印章动画 */
+/* 5. 印章动画 */
 @keyframes stamp-in {
   0% { opacity: 0; transform: scale(2) rotate(-15deg); }
   50% { opacity: 1; transform: scale(0.9) rotate(-15deg); }
@@ -53,7 +50,7 @@ body {
   animation: stamp-in 0.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
-/* 5. 3D 透视容器 */
+/* 6. 3D 透视容器 */
 .perspective-1000 {
   perspective: 1000px;
 }
