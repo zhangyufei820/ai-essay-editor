@@ -2,12 +2,12 @@
 
 import type React from "react"
 import { useState, useRef, useEffect } from "react"
-// 引入图标
-import { Upload, Loader2, CheckCircle2, Terminal, Sparkles } from "lucide-react"
+// 引入图标 (已移除未使用的 CheckCircle2)
+import { Upload, Loader2, Terminal, Sparkles } from "lucide-react"
 // 引入 Supabase
 import { supabase } from "@/lib/supabase"
-// 引入我们做好的“装修组件” (确保路径正确)
-import ReportRenderer from "@/components/ReportRenderer"
+// 引入我们做好的“装修组件”
+import ReportRenderer from "./components/ReportRenderer"
 
 type Status = "idle" | "uploading" | "processing" | "completed"
 
@@ -27,7 +27,7 @@ export default function Home() {
     terminalEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [logs, result])
 
-  // --- 2. 核心逻辑功能 (保持不变) ---
+  // --- 2. 核心逻辑功能 ---
 
   // 保存到 Supabase
   const saveToSupabase = async (file_name: string, essayResult: string) => {
@@ -47,7 +47,7 @@ export default function Home() {
       }
     } catch (error: any) {
       console.error("Save Error:", error)
-      addLog("⚠ 保存出错: " + error.message)
+      addLog("⚠ 保存出错: " + (error.message || "未知错误"))
     }
   }
 
@@ -117,14 +117,16 @@ export default function Home() {
                 addLog("🏁 工作流执行完毕")
                 await saveToSupabase(file.name, fullText)
               }
-            } catch (e) {}
+            } catch (e) {
+              // 忽略解析错误，防止崩坏
+            }
           }
         }
       }
 
     } catch (error: any) {
       console.error("Upload Error:", error)
-      addLog("❌ 错误: " + error.message)
+      addLog("❌ 错误: " + (error.message || "上传处理失败"))
       setStatus("idle")
     }
   }
@@ -178,7 +180,7 @@ export default function Home() {
           </div>
         </div>
 
-        {/* === 双视窗结果展示区 (核心升级) === */}
+        {/* === 双视窗结果展示区 === */}
         {(status === "processing" || status === "completed" || result) && (
           <div className="animate-in fade-in slide-in-from-bottom-10 duration-1000 space-y-12 pb-20">
             
@@ -234,4 +236,3 @@ export default function Home() {
     </div>
   )
 }
-// Force Vercel Rebuild 2025
