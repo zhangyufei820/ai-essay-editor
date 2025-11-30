@@ -11,7 +11,6 @@ export const BETA_CONFIG = {
     stripe: true, // Stripe国际支付 - 已配置
     alipay: false, // 支付宝 - 等待支付宝开放平台审核
     wechatPay: false, // 微信支付 - 等待微信支付商户审核
-    xunhupay: true, // 迅虎支付 - 已配置（支付宝+微信）
   },
   // 核心功能（始终可用）
   core: {

@@ -8,16 +8,15 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { UserCircle } from "lucide-react"
 
 export default function CompleteProfilePage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [phone, setPhone] = useState("")
-  const [displayName, setDisplayName] = useState("")
+  const [name, setName] = useState("")
+  const [email, setEmail] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
-  const redirect = searchParams.get("redirect") || "/chat"
 
   useEffect(() => {
     const phoneParam = searchParams.get("phone")
@@ -34,19 +33,9 @@ export default function CompleteProfilePage() {
     setLoading(true)
 
     try {
-      const response = await fetch("/api/auth/complete-profile", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone, displayName }),
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || "保存失败")
-      }
-
-      router.push(redirect)
+      // 这里需要调用API创建用户资料
+      // 暂时直接跳转
+      router.push("/chat")
     } catch (err: any) {
       setError(err.message)
     } finally {
@@ -55,47 +44,46 @@ export default function CompleteProfilePage() {
   }
 
   return (
-    <div className="flex min-h-screen w-full items-center justify-center p-4 bg-gradient-to-br from-green-50 to-blue-50">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 to-blue-50 p-4">
       <Card className="w-full max-w-md">
-        <CardHeader className="text-center space-y-2">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-green-100">
-            <UserCircle className="h-7 w-7 text-green-600" />
-          </div>
-          <CardTitle className="text-2xl">完善个人信息</CardTitle>
-          <CardDescription>欢迎加入沈翔智学！</CardDescription>
+        <CardHeader>
+          <CardTitle>完善个人信息</CardTitle>
+          <CardDescription>请填写以下信息完成注册</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="displayName">昵称</Label>
+              <Label htmlFor="name">姓名</Label>
               <Input
-                id="displayName"
+                id="name"
                 type="text"
-                placeholder="给自己起个名字"
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                maxLength={20}
-                className="h-11"
-                autoFocus
+                placeholder="请输入姓名"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
                 required
               />
             </div>
 
-            <div className="rounded-lg bg-green-50 border border-green-200 p-4 space-y-2">
-              <p className="font-medium text-green-900">🎁 新用户福利</p>
-              <ul className="text-sm text-green-700 space-y-1">
-                <li>✓ 注册即送1000积分</li>
-                <li>✓ 免费体验AI对话</li>
-                <li>✓ 免费作文批改</li>
-              </ul>
+            <div className="space-y-2">
+              <Label htmlFor="email">邮箱（可选）</Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="请输入邮箱"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
             </div>
 
-            {error && (
-              <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-600">{error}</div>
-            )}
+            <div className="space-y-2">
+              <Label>手机号</Label>
+              <Input type="tel" value={phone} disabled />
+            </div>
 
-            <Button type="submit" disabled={loading || !displayName.trim()} className="w-full" size="lg">
-              {loading ? "保存中..." : "开始使用"}
+            {error && <p className="text-sm text-red-600">{error}</p>}
+
+            <Button type="submit" disabled={loading || !name} className="w-full">
+              {loading ? "提交中..." : "完成注册"}
             </Button>
           </form>
         </CardContent>

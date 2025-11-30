@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { Award, BookOpen, TrendingUp, Users } from 'lucide-react'
+import { Award, BookOpen, TrendingUp, Users } from "lucide-react"
 import Link from "next/link"
 
 const teacherFeatures = [
@@ -28,12 +28,12 @@ const teacherFeatures = [
 
 export function TeacherSection() {
   return (
-    <section className="relative py-20 bg-gradient-to-b from-primary/5 to-muted/30">
+    <section className="relative py-20 bg-primary/5">
       <div className="container mx-auto px-4">
         <div className="grid gap-12 lg:grid-cols-2 lg:gap-16 items-center">
           {/* Left: Content */}
           <div>
-            <div className="mb-6 inline-flex items-center gap-2 rounded-full bg-primary/10 px-4 py-2 text-sm font-medium text-primary shadow-md">
+            <div className="mb-6 inline-flex items-center gap-2 rounded-full bg-primary/10 px-4 py-2 text-sm font-medium text-primary">
               <Users className="h-4 w-4" />
               教师专业发展
             </div>
@@ -60,22 +60,16 @@ export function TeacherSection() {
           </div>
 
           {/* Right: Features Grid */}
-          <div className="grid gap-6 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2">
             {teacherFeatures.map((feature) => {
               const Icon = feature.icon
               return (
-                <Card 
-                  key={feature.title} 
-                  className="group relative overflow-hidden rounded-2xl border-2 border-border/50 bg-card p-6 shadow-lg transition-all duration-300 hover:border-primary hover:shadow-xl hover:scale-[1.02]"
-                >
-                  <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
-                  <div className="relative">
-                    <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 text-primary shadow-md transition-all duration-300 group-hover:scale-110">
-                      <Icon className="h-6 w-6" />
-                    </div>
-                    <h3 className="mb-2 text-lg font-bold">{feature.title}</h3>
-                    <p className="text-sm text-muted-foreground leading-relaxed">{feature.description}</p>
+                <Card key={feature.title} className="border-2 p-6">
+                  <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                    <Icon className="h-6 w-6" />
                   </div>
+                  <h3 className="mb-2 text-lg font-bold">{feature.title}</h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed">{feature.description}</p>
                 </Card>
               )
             })}

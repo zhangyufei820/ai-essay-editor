@@ -7,8 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
-import { Mail, Sparkles } from "lucide-react"
-import Link from "next/link"
+import { Sparkles } from "lucide-react"
 
 const VALID_INVITE_CODES = ["BETA2024", "TEST2024", "DEMO2024"]
 
@@ -36,7 +35,7 @@ export default function LoginPage() {
       localStorage.setItem("user_name", userName)
       localStorage.setItem("invite_code", inviteCode.toUpperCase())
       localStorage.setItem("login_time", new Date().toISOString())
-      localStorage.setItem("credits", "1000")
+      localStorage.setItem("credits", "1000") // 初始积分
 
       router.push("/chat")
     } catch (error: unknown) {
@@ -54,26 +53,10 @@ export default function LoginPage() {
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-green-100">
               <Sparkles className="h-7 w-7 text-green-600" />
             </div>
-            <CardTitle className="text-2xl">欢迎使用沈翔智学</CardTitle>
-            <CardDescription>选择登录方式开始体验</CardDescription>
+            <CardTitle className="text-2xl">欢迎使用创意作文批改师</CardTitle>
+            <CardDescription>输入邀请码开始体验</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <Link href="/auth/email-login" className="block">
-              <Button variant="default" size="lg" className="w-full gap-2">
-                <Mail className="h-5 w-5" />
-                邮箱验证码登录
-              </Button>
-            </Link>
-
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t" />
-              </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-background px-2 text-muted-foreground">测试登录</span>
-              </div>
-            </div>
-
+          <CardContent>
             <form onSubmit={handleLogin} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="inviteCode">邀请码</Label>
@@ -107,8 +90,8 @@ export default function LoginPage() {
                 <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-600">{error}</div>
               )}
 
-              <Button type="submit" className="w-full bg-transparent" disabled={isLoading} size="lg" variant="outline">
-                {isLoading ? "登录中..." : "快速体验（测试）"}
+              <Button type="submit" className="w-full" disabled={isLoading} size="lg">
+                {isLoading ? "登录中..." : "立即开始"}
               </Button>
             </form>
           </CardContent>

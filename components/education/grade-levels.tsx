@@ -1,5 +1,5 @@
 import { Card } from "@/components/ui/card"
-import { Baby, BookOpen, GraduationCap, School } from 'lucide-react'
+import { Baby, BookOpen, GraduationCap, School } from "lucide-react"
 import Link from "next/link"
 
 const gradeLevels = [
@@ -48,36 +48,33 @@ export function GradeLevels() {
           </p>
         </div>
 
-        <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
           {gradeLevels.map((level) => {
             const Icon = level.icon
             return (
               <Link key={level.id} href={level.href}>
-                <Card className="group relative h-full overflow-hidden rounded-2xl border-2 border-border/50 bg-card p-8 shadow-lg transition-all duration-300 hover:border-primary hover:shadow-2xl hover:scale-[1.02] hover:-translate-y-1">
-                  <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
-                  <div className="relative">
-                    <div className="mb-6 inline-flex h-14 w-14 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 text-primary shadow-md transition-all duration-300 group-hover:scale-110 group-hover:bg-primary group-hover:text-primary-foreground group-hover:shadow-lg">
-                      <Icon className="h-7 w-7" />
-                    </div>
+                <Card className="group relative h-full overflow-hidden border-2 p-6 transition-all hover:border-primary hover:shadow-lg">
+                  <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
+                    <Icon className="h-6 w-6" />
+                  </div>
 
-                    <h3 className="mb-3 text-xl font-bold">{level.title}</h3>
-                    <p className="mb-6 text-sm text-muted-foreground leading-relaxed">{level.description}</p>
+                  <h3 className="mb-2 text-xl font-bold">{level.title}</h3>
+                  <p className="mb-4 text-sm text-muted-foreground leading-relaxed">{level.description}</p>
 
-                    <div className="flex flex-wrap gap-2">
-                      {level.subjects.slice(0, 4).map((subject) => (
-                        <span
-                          key={subject}
-                          className="rounded-full bg-secondary px-3 py-1.5 text-xs font-medium text-secondary-foreground shadow-sm"
-                        >
-                          {subject}
-                        </span>
-                      ))}
-                      {level.subjects.length > 4 && (
-                        <span className="rounded-full bg-secondary px-3 py-1.5 text-xs font-medium text-secondary-foreground shadow-sm">
-                          +{level.subjects.length - 4}
-                        </span>
-                      )}
-                    </div>
+                  <div className="flex flex-wrap gap-2">
+                    {level.subjects.slice(0, 4).map((subject) => (
+                      <span
+                        key={subject}
+                        className="rounded-full bg-secondary px-3 py-1 text-xs font-medium text-secondary-foreground"
+                      >
+                        {subject}
+                      </span>
+                    ))}
+                    {level.subjects.length > 4 && (
+                      <span className="rounded-full bg-secondary px-3 py-1 text-xs font-medium text-secondary-foreground">
+                        +{level.subjects.length - 4}
+                      </span>
+                    )}
                   </div>
                 </Card>
               </Link>

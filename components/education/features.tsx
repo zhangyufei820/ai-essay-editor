@@ -1,5 +1,5 @@
 import { Card } from "@/components/ui/card"
-import { Bot, FileText, LineChart, Sparkles, Target, Zap } from 'lucide-react'
+import { Bot, FileText, LineChart, Sparkles, Target, Zap } from "lucide-react"
 
 const features = [
   {
@@ -36,7 +36,7 @@ const features = [
 
 export function Features() {
   return (
-    <section id="features" className="py-20 bg-gradient-to-b from-background to-muted/30">
+    <section className="py-20 bg-muted/30">
       <div className="container mx-auto px-4">
         <div className="mb-12 text-center">
           <h2 className="mb-4 text-4xl font-bold tracking-tight text-balance">核心功能</h2>
@@ -45,22 +45,16 @@ export function Features() {
           </p>
         </div>
 
-        <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {features.map((feature) => {
             const Icon = feature.icon
             return (
-              <Card 
-                key={feature.title} 
-                className="group relative overflow-hidden rounded-2xl border-2 border-border/50 bg-card p-8 shadow-lg transition-all duration-300 hover:border-primary hover:shadow-2xl hover:scale-[1.02] hover:-translate-y-1"
-              >
-                <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
-                <div className="relative">
-                  <div className="mb-6 inline-flex h-14 w-14 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 text-primary shadow-md transition-all duration-300 group-hover:scale-110 group-hover:shadow-lg">
-                    <Icon className="h-7 w-7" />
-                  </div>
-                  <h3 className="mb-3 text-xl font-bold">{feature.title}</h3>
-                  <p className="text-sm text-muted-foreground leading-relaxed">{feature.description}</p>
+              <Card key={feature.title} className="border-2 p-6 transition-all hover:border-primary hover:shadow-md">
+                <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                  <Icon className="h-6 w-6" />
                 </div>
+                <h3 className="mb-2 text-xl font-bold">{feature.title}</h3>
+                <p className="text-sm text-muted-foreground leading-relaxed">{feature.description}</p>
               </Card>
             )
           })}

@@ -1,3 +1,4 @@
+import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import { TeacherHero } from "@/components/teacher/hero"
 import { TeacherResources } from "@/components/teacher/resources"
@@ -7,6 +8,7 @@ import { TeacherCommunity } from "@/components/teacher/community"
 export default function TeacherPage() {
   return (
     <main className="min-h-screen">
+      <Header />
       <TeacherHero />
       <TeacherResources />
       <TeacherDevelopment />

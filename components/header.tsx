@@ -1,14 +1,11 @@
 "use client"
 
-import type React from "react"
-
 import { Button } from "@/components/ui/button"
-import { Menu, X, Coins, User, ChevronDown } from "lucide-react"
+import { Menu, X, Coins, User, ChevronDown } from 'lucide-react'
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { createClient } from "@/lib/supabase/client"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import Image from "next/image"
 
 export function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -17,7 +14,7 @@ export function Header() {
 
   useEffect(() => {
     const supabase = createClient()
-
+    
     if (!supabase) {
       return
     }
@@ -57,32 +54,11 @@ export function Header() {
     return () => subscription.unsubscribe()
   }, [])
 
-  const handleAnchorClick = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
-    if (href.startsWith("/#")) {
-      e.preventDefault()
-      const sectionId = href.substring(2)
-      const element = document.getElementById(sectionId)
-
-      if (element) {
-        element.scrollIntoView({ behavior: "smooth", block: "start" })
-      } else {
-        window.location.href = href
-      }
-    }
-  }
-
   return (
     <header className="sticky top-0 z-50 w-full bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <nav className="container flex h-16 items-center justify-between px-4">
         <Link href="/" className="flex items-center gap-2">
-          <Image
-            src="/images/logo.png"
-            alt="沈翔智学"
-            width={220}
-            height={75}
-            className="h-14 w-auto object-contain"
-            priority
-          />
+          <div className="text-xl font-bold text-primary">沈翔智学</div>
         </Link>
 
         <div className="hidden items-center gap-6 md:flex">
@@ -152,21 +128,19 @@ export function Header() {
             作文批改
           </Link>
 
-          <Link
+          <a
             href="/#features"
             className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-            onClick={(e) => handleAnchorClick(e, "/#features")}
           >
             核心功能
-          </Link>
+          </a>
 
-          <Link
+          <a
             href="/#pricing"
             className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-            onClick={(e) => handleAnchorClick(e, "/#pricing")}
           >
             价格方案
-          </Link>
+          </a>
         </div>
 
         <div className="hidden items-center gap-4 md:flex">
@@ -245,27 +219,12 @@ export function Header() {
             <Link href="/chat" className="block text-sm font-medium" onClick={() => setMobileMenuOpen(false)}>
               作文批改
             </Link>
-
-            <Link
-              href="/#features"
-              className="block text-sm font-medium"
-              onClick={(e) => {
-                handleAnchorClick(e, "/#features")
-                setMobileMenuOpen(false)
-              }}
-            >
+            <a href="/#features" className="block text-sm font-medium" onClick={() => setMobileMenuOpen(false)}>
               核心功能
-            </Link>
-            <Link
-              href="/#pricing"
-              className="block text-sm font-medium"
-              onClick={(e) => {
-                handleAnchorClick(e, "/#pricing")
-                setMobileMenuOpen(false)
-              }}
-            >
+            </a>
+            <a href="/#pricing" className="block text-sm font-medium" onClick={() => setMobileMenuOpen(false)}>
               价格方案
-            </Link>
+            </a>
 
             <div className="flex flex-col gap-2 pt-4 border-t">
               {user ? (

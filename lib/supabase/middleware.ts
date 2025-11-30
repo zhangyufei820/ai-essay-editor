@@ -2,15 +2,6 @@ import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
 
 export async function updateSession(request: NextRequest) {
-  const url = request.nextUrl
-  const code = url.searchParams.get("code")
-
-  if (code && !url.pathname.startsWith("/auth/callback")) {
-    const callbackUrl = url.clone()
-    callbackUrl.pathname = "/auth/callback"
-    return NextResponse.redirect(callbackUrl)
-  }
-
   let supabaseResponse = NextResponse.next({
     request,
   })
@@ -34,7 +25,15 @@ export async function updateSession(request: NextRequest) {
     },
   )
 
-  // Protected routes can check auth themselves
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user && !request.nextUrl.pathname.startsWith("/auth") && request.nextUrl.pathname.startsWith("/chat")) {
+    const url = request.nextUrl.clone()
+    url.pathname = "/auth/login"
+    return NextResponse.redirect(url)
+  }
 
   return supabaseResponse
 }

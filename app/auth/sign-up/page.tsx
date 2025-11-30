@@ -8,15 +8,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import Link from "next/link"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useState } from "react"
-import { CheckCircle2, Mail, Info } from "lucide-react"
-import { Alert, AlertDescription } from "@/components/ui/alert"
 
 export default function SignUpPage() {
   const searchParams = useSearchParams()
-  const referralCode = searchParams.get("ref")
-  const redirect = searchParams.get("redirect") || "/chat?welcome=true"
+  const referralCode = searchParams.get("ref") // 从URL获取推荐码
 
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -25,7 +22,6 @@ export default function SignUpPage() {
   const [phone, setPhone] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
-  const [emailSent, setEmailSent] = useState(false)
   const router = useRouter()
 
   const handleSignUp = async (e: React.FormEvent) => {
@@ -65,14 +61,11 @@ export default function SignUpPage() {
         metadata.referral_code = referralCode
       }
 
-      const baseUrl = typeof window !== "undefined" ? window.location.origin : "https://shenxiang.school"
-      const fullRedirectUrl = `${baseUrl}/auth/callback?next=${encodeURIComponent(redirect)}`
-
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          emailRedirectTo: fullRedirectUrl,
+          emailRedirectTo: `${window.location.origin}/chat`,
           data: metadata,
         },
       })
@@ -90,65 +83,12 @@ export default function SignUpPage() {
         })
       }
 
-      console.log("[v0] Sign up successful, showing email confirmation screen")
-      setEmailSent(true)
+      router.push("/chat?welcome=true")
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : "注册失败，请重试")
     } finally {
       setIsLoading(false)
     }
-  }
-
-  if (emailSent) {
-    return (
-      <div className="flex min-h-screen w-full items-center justify-center p-6 md:p-10 bg-gradient-to-br from-green-50 to-blue-50">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center space-y-4">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
-              <CheckCircle2 className="h-10 w-10 text-green-600" />
-            </div>
-            <CardTitle className="text-2xl">注册成功！</CardTitle>
-            <CardDescription className="text-base">
-              我们已向 <strong className="text-foreground">{email}</strong> 发送了确认邮件
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Alert>
-              <Mail className="h-4 w-4" />
-              <AlertDescription className="space-y-2">
-                <p className="font-semibold">请按以下步骤完成注册：</p>
-                <ol className="list-decimal list-inside space-y-1 ml-2 text-sm">
-                  <li>打开您的邮箱（请检查收件箱和垃圾邮件箱）</li>
-                  <li>查找来自 Supabase 的确认邮件</li>
-                  <li>
-                    点击邮件中的 <strong>"Confirm your mail"</strong> 链接
-                  </li>
-                  <li>完成邮箱验证后即可登录使用</li>
-                </ol>
-              </AlertDescription>
-            </Alert>
-
-            <div className="rounded-lg bg-blue-50 border border-blue-200 p-4 space-y-2">
-              <div className="flex items-start gap-2">
-                <Info className="h-4 w-4 text-blue-600 mt-0.5" />
-                <div>
-                  <p className="text-sm font-medium text-blue-900">温馨提示</p>
-                  <ul className="text-sm text-blue-700 space-y-1 mt-1">
-                    <li>邮件可能需要1-2分钟送达</li>
-                    <li>链接有效期为24小时</li>
-                    <li>确认邮箱后将自动获得1000积分</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-
-            <Button asChild className="w-full" size="lg">
-              <Link href="/auth/email-login">返回登录页</Link>
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    )
   }
 
   return (

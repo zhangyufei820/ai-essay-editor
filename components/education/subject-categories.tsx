@@ -1,5 +1,5 @@
 import { Card } from "@/components/ui/card"
-import { Atom, BookA, Calculator, Globe2, Palette, TestTube } from 'lucide-react'
+import { Atom, BookA, Calculator, Globe2, Palette, TestTube } from "lucide-react"
 import Link from "next/link"
 
 const categories = [
@@ -55,7 +55,7 @@ const categories = [
 
 export function SubjectCategories() {
   return (
-    <section className="py-20 bg-gradient-to-b from-muted/30 to-background">
+    <section className="py-20">
       <div className="container mx-auto px-4">
         <div className="mb-12 text-center">
           <h2 className="mb-4 text-4xl font-bold tracking-tight text-balance">学科分类</h2>
@@ -64,31 +64,28 @@ export function SubjectCategories() {
           </p>
         </div>
 
-        <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {categories.map((category) => {
             const Icon = category.icon
             return (
               <Link key={category.id} href={category.href}>
-                <Card className="group relative h-full overflow-hidden rounded-2xl border-2 border-border/50 bg-card p-8 shadow-lg transition-all duration-300 hover:border-primary hover:shadow-2xl hover:scale-[1.02] hover:-translate-y-1">
-                  <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
-                  <div className="relative">
-                    <div
-                      className={`mb-6 inline-flex h-16 w-16 items-center justify-center rounded-xl shadow-md transition-all duration-300 group-hover:scale-110 group-hover:shadow-lg ${category.color}`}
-                    >
-                      <Icon className="h-8 w-8" />
-                    </div>
-
-                    <h3 className="mb-4 text-2xl font-bold">{category.title}</h3>
-
-                    <ul className="space-y-2.5">
-                      {category.subjects.map((subject) => (
-                        <li key={subject} className="flex items-center text-sm text-muted-foreground">
-                          <span className="mr-2.5 h-1.5 w-1.5 rounded-full bg-primary shadow-sm" />
-                          {subject}
-                        </li>
-                      ))}
-                    </ul>
+                <Card className="group h-full border-2 p-6 transition-all hover:border-primary hover:shadow-lg">
+                  <div
+                    className={`mb-4 inline-flex h-14 w-14 items-center justify-center rounded-xl ${category.color} transition-transform group-hover:scale-110`}
+                  >
+                    <Icon className="h-7 w-7" />
                   </div>
+
+                  <h3 className="mb-3 text-2xl font-bold">{category.title}</h3>
+
+                  <ul className="space-y-2">
+                    {category.subjects.map((subject) => (
+                      <li key={subject} className="flex items-center text-sm text-muted-foreground">
+                        <span className="mr-2 h-1.5 w-1.5 rounded-full bg-primary" />
+                        {subject}
+                      </li>
+                    ))}
+                  </ul>
                 </Card>
               </Link>
             )

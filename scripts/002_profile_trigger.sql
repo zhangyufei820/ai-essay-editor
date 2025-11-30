@@ -6,18 +6,14 @@ security definer
 set search_path = public
 as $$
 begin
-  -- Insert profile with email
-  insert into public.profiles (id, email, display_name, phone, wechat_id)
+  insert into public.profiles (id, display_name, phone, wechat_id)
   values (
     new.id,
-    new.email,
-    coalesce(new.raw_user_meta_data ->> 'display_name', split_part(new.email, '@', 1)),
+    coalesce(new.raw_user_meta_data ->> 'display_name', null),
     coalesce(new.raw_user_meta_data ->> 'phone', null),
     coalesce(new.raw_user_meta_data ->> 'wechat_id', null)
   )
-  on conflict (id) do update set
-    email = excluded.email,
-    display_name = coalesce(excluded.display_name, profiles.display_name);
+  on conflict (id) do nothing;
 
   return new;
 end;

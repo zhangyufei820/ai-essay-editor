@@ -25,7 +25,7 @@ const features = [
   {
     icon: Calendar,
     title: "学习日程管理",
-    description: "帮助���子建立良好作息，合理安排学习和休息时间",
+    description: "帮助孩子建立良好作息，合理安排学习和休息时间",
   },
   {
     icon: Bell,

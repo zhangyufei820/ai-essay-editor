@@ -1,22 +1,15 @@
-import Image from "next/image"
-
 export function Footer() {
   return (
     <footer className="border-t border-border bg-muted/30">
       <div className="container px-4 py-12">
         <div className="grid gap-8 md:grid-cols-4">
-          <div className="py-16 md:py-24">
-            <div className="mb-4">
-              <Image
-                src="/images/logo.png"
-                alt="沈翔智学"
-                width={220}
-                height={75}
-                className="h-14 w-auto object-contain"
-              />
+          <div className="md:col-span-2">
+            <div className="flex items-center gap-2 mb-4">
+              
+              <span className="text-xl font-semibold">{""}</span>
             </div>
             <p className="text-sm text-muted-foreground leading-relaxed max-w-md">
-              专业的AI智能教育平台，为学生、教师和家长提供个性化的学习辅导和作文批改服务。
+              {""}
             </p>
           </div>
 

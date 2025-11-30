@@ -1,7 +1,6 @@
 -- Create profiles table for user management
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
-  email text unique,
   display_name text,
   phone text,
   wechat_id text,
@@ -29,6 +28,3 @@ create policy "profiles_update_own"
 create policy "profiles_delete_own"
   on public.profiles for delete
   using (auth.uid() = id);
-
--- Create index on email for faster lookups
-create index if not exists profiles_email_idx on public.profiles(email);

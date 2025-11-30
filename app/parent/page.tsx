@@ -1,3 +1,4 @@
+import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import { ParentHero } from "@/components/parent/hero"
 import { ParentFeatures } from "@/components/parent/features"
@@ -8,6 +9,7 @@ import { ParentAI } from "@/components/parent/ai-learning"
 export default function ParentPage() {
   return (
     <main className="min-h-screen">
+      <Header />
       <ParentHero />
       <ParentFeatures />
       <ParentInteraction />
