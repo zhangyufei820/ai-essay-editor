@@ -2,49 +2,80 @@ export interface Product {
   id: string
   name: string
   description: string
-  priceInCents: number
+  priceInCents: number // 价格（单位：分）
   features: string[]
   popular?: boolean
 }
 
 // 产品目录 - 所有价格的唯一真实来源
+// [!!!] 修复：这里的 ID 必须与 pricing.tsx 中的 ID 完全匹配 [!!!]
 export const PRODUCTS: Product[] = [
+  // --- 订阅方案 (来自 pricing.tsx) ---
   {
-    id: "trial",
-    name: "体验版",
-    description: "适合初次尝试的用户",
-    priceInCents: 0, // 免费
-    features: ["3次免费批改机会", "基础语法检查", "简单润色建议", "标准响应速度"],
+    id: "basic",
+    name: "基础版",
+    description: "适合入门体验",
+    priceInCents: 2800, // 28 元 * 100
+    features: ["每月 2,000 积分", "调用所有 AI 模型", "标准生成速度", "社区支持", "调用专业智能体"],
   },
   {
-    id: "standard",
-    name: "标准版",
-    description: "适合日常写作需求",
-    priceInCents: 4900, // ¥49
+    id: "pro",
+    name: "专业版",
+    description: "适合高频学生",
+    priceInCents: 6800, // 68 元 * 100
     features: [
-      "30次批改机会/月",
-      "全面语法检查",
-      "文学大师风格润色",
-      "徐贲式论述文指导",
-      "优先响应速度",
-      "支持多种文件格式",
+      "每月 5,000 积分",
+      "调用所有 AI 模型",
+      "优先生成速度",
+      "高级润色工具",
+      "名师辅导 (1次/月)",
+      "调用专业智能体",
     ],
     popular: true,
   },
   {
-    id: "professional",
-    name: "专业版",
-    description: "适合高频使用和专业需求",
-    priceInCents: 9900, // ¥99
+    id: "premium",
+    name: "豪华版",
+    description: "适合重度用户/教育者",
+    priceInCents: 12800, // 128 元 * 100
     features: [
-      "无限次批改",
-      "全面语法检查",
-      "12位文学大师风格",
-      "徐贲式论述文深度指导",
-      "最快响应速度",
-      "支持所有文件格式",
-      "专属客服支持",
-      "批改历史永久保存",
+      "每月 12,000 积分",
+      "调用三大顶尖模型",
+      "最高优先速度",
+      "高级润色工具",
+      "名师辅导 (2次/月)",
+      "无限次 AI 对话",
+      "调用专业智能体",
     ],
+  },
+
+  // --- 积分充值包 (来自 pricing.tsx) ---
+  {
+    id: "credits-500",
+    name: "500 积分充值包",
+    description: "永久有效，适合轻度或测试用户",
+    priceInCents: 500, // 5 元 * 100
+    features: ["500 积分", "永久有效", "可用于生成作文或兑换辅导"],
+  },
+  {
+    id: "credits-1000",
+    name: "1000 积分充值包",
+    description: "永久有效，适合轻度或测试用户",
+    priceInCents: 1000, // 10 元 * 100
+    features: ["1000 积分", "永久有效", "可用于生成作文或兑换辅导"],
+  },
+  {
+    id: "credits-5000",
+    name: "5000 积分充值包",
+    description: "永久有效 (96折优惠)",
+    priceInCents: 4800, // 48 元 * 100
+    features: ["5000 积分", "永久有效", "可用于生成作文或兑换辅导"],
+  },
+  {
+    id: "credits-10000",
+    name: "10000 积分充值包",
+    description: "永久有效 (9折优惠)",
+    priceInCents: 9000, // 90 元 * 100
+    features: ["10000 积分", "永久有效", "可用于生成作文或兑换辅导"],
   },
 ]

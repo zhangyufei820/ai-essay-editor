@@ -22,6 +22,13 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-CN">
+      {/* ✅ 新增：在这里通过 CDN 引入 Authing 样式，避开 Next.js 编译错误 */}
+      <head>
+        <link
+          rel="stylesheet"
+          href="https://cdn.authing.co/packages/guard-react/latest/guard.min.css"
+        />
+      </head>
       <body className={`font-sans antialiased`}>
         <SidebarProvider>
           <AppSidebar />

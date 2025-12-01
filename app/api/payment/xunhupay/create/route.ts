@@ -1,65 +1,93 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@/lib/supabase/server"
-import { createXunhupayOrder } from "@/lib/xunhupay"
-import { PRODUCTS } from "@/lib/products"
+import { NextResponse } from "next/server";
+import crypto from "crypto";
+import { PRODUCTS } from "@/lib/products"; 
 
-export async function GET(request: NextRequest) {
+// 1. 签名算法 (保持你验证成功的这个版本：直接拼接)
+function gen_sign(params: any, appSecret: string) {
+  const sortedKeys = Object.keys(params).sort();
+  const kvPairs = [];
+  
+  for (const key of sortedKeys) {
+    if (params[key] !== "" && params[key] !== undefined && key !== "hash") {
+      kvPairs.push(`${key}=${params[key]}`);
+    }
+  }
+  
+  // 核心：直接拼接密钥，无连接符
+  let stringA = kvPairs.join("&");
+  let stringSignTemp = stringA + appSecret;
+  
+  return crypto.createHash("md5").update(stringSignTemp, "utf8").digest("hex");
+}
+
+export async function GET(request: Request) {
   try {
-    const searchParams = request.nextUrl.searchParams
-    const productId = searchParams.get("productId")
-    const paymentType = (searchParams.get("type") || "alipay") as "alipay" | "wechat"
+    // 你的账号配置 (保持不变)
+    const APP_ID = "201906175339"; 
+    const APP_SECRET = "5f9c2b5d451978f6f369375cf7247cf7"; 
 
-    if (!productId) {
-      return NextResponse.json({ error: "缺少产品ID" }, { status: 400 })
+    const { searchParams } = new URL(request.url);
+    const productId = searchParams.get("productId");
+    const product = PRODUCTS.find((p) => p.id === productId);
+    const price = product ? (product.priceInCents / 100).toFixed(2) : "0.01";
+    
+    // 依然用英文标题，稳
+    const safeTitle = "VIP_Service"; 
+    const tradeOrderId = `ORDER_${Date.now()}`;
+
+    const params: any = {
+      version: "1.1",
+      appid: APP_ID,
+      trade_order_id: tradeOrderId,
+      total_fee: price,
+      title: safeTitle,
+      time: Math.floor(Date.now() / 1000).toString(),
+      nonce_str: Math.floor(Math.random() * 1000000).toString(),
+      type: "WAP", 
+      wap_url: "http://localhost:3000", 
+      notify_url: "http://localhost:3000/api/payment/callback", 
+    };
+
+    // 计算签名
+    params.hash = gen_sign(params, APP_SECRET);
+
+    // =========================================================
+    // 🚨 关键升级：后端自动帮你在迅虎拿“入场券”
+    // =========================================================
+    
+    // 1. 组装请求参数
+    const formData = new URLSearchParams(params);
+
+    console.log("🚀 [后端] 正在请求迅虎接口获取支付页...");
+
+    // 2. 发起请求 (这次签名对了，所以不会报错了)
+    const response = await fetch("https://api.xunhupay.com/payment/do.html", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        // 加上 Referer 防止被拦截
+        "Referer": "http://localhost:3000",
+      },
+      body: formData,
+    });
+
+    // 3. 解析你刚才看到的那个 JSON
+    const data = await response.json();
+    console.log("✅ [后端] 迅虎返回成功:", data);
+
+    // 4. 提取真正的支付链接
+    // 优先用 url (通用)，如果没返回 url 则用 url_qrcode
+    const finalPayUrl = data.url || data.url_qrcode;
+
+    if (finalPayUrl) {
+       // 返回给前端，让前端直接跳这个地址
+       return NextResponse.json({ url: finalPayUrl });
+    } else {
+       throw new Error("未获取到支付链接: " + JSON.stringify(data));
     }
 
-    const supabase = await createServerClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return NextResponse.redirect(new URL("/auth/login", request.url))
-    }
-
-    const product = PRODUCTS.find((p) => p.id === productId)
-
-    if (!product) {
-      return NextResponse.json({ error: "产品不存在" }, { status: 404 })
-    }
-
-    // 生成订单号
-    const orderNo = `XH${Date.now()}${Math.random().toString(36).substring(2, 9).toUpperCase()}`
-
-    // 创建订单记录
-    const { error: orderError } = await supabase.from("orders").insert({
-      order_no: orderNo,
-      user_id: user.id,
-      product_id: product.id,
-      product_name: product.name,
-      amount: product.priceInCents / 100,
-      payment_method: `xunhupay_${paymentType}`,
-      status: "pending",
-    })
-
-    if (orderError) {
-      console.error("[迅虎支付] 创建订单失败:", orderError)
-      return NextResponse.json({ error: "创建订单失败" }, { status: 500 })
-    }
-
-    // 生成支付URL
-    const paymentUrl = createXunhupayOrder({
-      outTradeNo: orderNo,
-      totalAmount: (product.priceInCents / 100).toFixed(2),
-      subject: product.name,
-      body: product.description,
-      paymentType,
-    })
-
-    // 重定向到支付页面
-    return NextResponse.redirect(paymentUrl)
-  } catch (error) {
-    console.error("[迅虎支付] 创建订单错误:", error)
-    return NextResponse.json({ error: "系统错误" }, { status: 500 })
+  } catch (error: any) {
+    console.error("❌ API Error:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

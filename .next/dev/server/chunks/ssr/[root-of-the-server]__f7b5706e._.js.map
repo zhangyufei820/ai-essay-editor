@@ -1,0 +1,6 @@
+{
+  "version": 3,
+  "sources": [],
+  "sections": [
+    {"offset": {"line": 14, "column": 0}, "map": {"version":3,"sources":["file:///Users/aixingren/ai-essay-editor/app/auth/login/page.tsx"],"sourcesContent":["import { redirect } from 'next/navigation'\n\n// 这里的逻辑是：\n// 如果用户不小心访问了这个旧地址 (/auth/login)，\n// 强制把他踢到新地址 (/login) 去。\nexport default function OldLoginPageRedirect() {\n  redirect('/login')\n}"],"names":[],"mappings":";;;;AAAA;AAAA;;AAKe,SAAS;IACtB,IAAA,iMAAQ,EAAC;AACX","debugId":null}}]
+}

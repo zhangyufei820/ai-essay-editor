@@ -1,414 +1,232 @@
 "use client"
 
-import * as React from "react"
-import {
-  BookOpen,
-  Bot,
-  ChevronRight,
-  Coins,
-  GraduationCap,
-  Home,
-  LogOut,
-  School,
-  Sparkles,
-  CreditCard,
-  Users,
-  User,
-} from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { createClient } from "@/lib/supabase/client"
+import { useState, useEffect, useRef } from "react"
+import { Button } from "@/components/ui/button" 
+import { 
+  Home, FileText, Users, CreditCard, 
+  LogOut, School, Coins, Zap, Settings, ChevronRight,
+  PanelLeftClose, PanelLeftOpen, User
+} from "lucide-react"
+import { cn } from "@/lib/utils"
+import { createClient } from "@supabase/supabase-js"
 
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarFooter,
-  SidebarHeader,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarMenuSub,
-  SidebarMenuSubButton,
-  SidebarMenuSubItem,
-  SidebarRail,
-  SidebarGroup,
-  SidebarGroupLabel,
-  useSidebar,
-} from "@/components/ui/sidebar"
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
 
-function SidebarContent_() {
+export function AppSidebar() {
   const pathname = usePathname()
-  const [user, setUser] = React.useState<any>(null)
-  const [credits, setCredits] = React.useState<number | null>(null)
-  const { setOpen } = useSidebar()
-  const hoverTimeoutRef = React.useRef<NodeJS.Timeout | null>(null)
+  const [user, setUser] = useState<any>(null)
+  const [credits, setCredits] = useState<number>(0)
+  
+  // 控制菜单显示 (点击触发)
+  const [showUserMenu, setShowUserMenu] = useState(false)
+  
+  // 控制侧边栏展开
+  const [isOpen, setIsOpen] = useState(true)
+  
+  const menuRef = useRef<HTMLDivElement>(null)
 
-  React.useEffect(() => {
-    const supabase = createClient()
-
-    if (!supabase) {
-      return
-    }
-
-    const initAuth = async () => {
-      try {
-        const {
-          data: { user },
-          error,
-        } = await supabase.auth.getUser()
-
-        if (error) {
-          return
-        }
-
-        setUser(user)
-
-        if (user) {
+  useEffect(() => {
+    const loadUserData = async () => {
+      let currentUserId = ""
+      if (typeof window !== 'undefined') {
+        const userStr = localStorage.getItem('currentUser')
+        if (userStr) {
           try {
-            const { data, error: creditsError } = await supabase
-              .from("user_credits")
-              .select("credits")
-              .eq("user_id", user.id)
-              .single()
-
-            if (creditsError) {
-            } else if (data) {
-              setCredits(data.credits)
-            }
-          } catch (err) {}
+            const parsedUser = JSON.parse(userStr)
+            setUser(parsedUser)
+            currentUserId = parsedUser.id || parsedUser.sub || parsedUser.userId
+          } catch (e) { console.error(e) }
         }
-      } catch (err) {}
-    }
-
-    initAuth()
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      setUser(session?.user ?? null)
-      if (session?.user) {
-        try {
-          const { data, error } = await supabase
-            .from("user_credits")
-            .select("credits")
-            .eq("user_id", session.user.id)
-            .single()
-
-          if (error) {
-          } else if (data) {
-            setCredits(data.credits)
-          }
-        } catch (err) {}
-      } else {
-        setCredits(null)
       }
-    })
 
-    return () => subscription.unsubscribe()
+      if (currentUserId) {
+        const { data } = await supabase
+          .from('user_credits')
+          .select('credits')
+          .eq('user_id', currentUserId)
+          .single()
+        
+        if (data) setCredits(data.credits)
+      }
+    }
+    loadUserData()
+
+    // 点击外部关闭菜单
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setShowUserMenu(false)
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
 
-  React.useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (e.clientX < 50) {
-        if (hoverTimeoutRef.current) {
-          clearTimeout(hoverTimeoutRef.current)
-        }
-        setOpen(true)
-      } else if (e.clientX > 280) {
-        if (hoverTimeoutRef.current) {
-          clearTimeout(hoverTimeoutRef.current)
-        }
-        hoverTimeoutRef.current = setTimeout(() => {
-          setOpen(false)
-        }, 300)
-      }
-    }
-
-    window.addEventListener("mousemove", handleMouseMove)
-    return () => {
-      window.removeEventListener("mousemove", handleMouseMove)
-      if (hoverTimeoutRef.current) {
-        clearTimeout(hoverTimeoutRef.current)
-      }
-    }
-  }, [setOpen])
-
-  const handleAnchorClick = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
-    if (href.startsWith("/#")) {
-      if (pathname === "/") {
-        e.preventDefault()
-        const sectionId = href.substring(2)
-        const element = document.getElementById(sectionId)
-        if (element) {
-          element.scrollIntoView({ behavior: "smooth", block: "start" })
-        }
-      }
-    }
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
+    localStorage.removeItem('currentUser')
+    window.location.href = "/login"
   }
+
+  const getDisplayName = () => {
+    if (!user) return "未登录"
+    if (user.user_metadata?.name) return user.user_metadata.name
+    const phone = user.phone || user.phoneNumber
+    if (phone) return String(phone).replace(/(\d{3})\d{4}(\d{4})/, '$1****$2')
+    return user.email?.split('@')[0] || "普通用户"
+  }
+
+  const getAvatarUrl = () => user?.user_metadata?.avatar_url || null
+
+  const menuItems = [
+    { title: "功能", items: [
+      { name: "首页", href: "/", icon: Home },
+      { name: "作文批改", href: "/chat", icon: FileText },
+    ]},
+    { title: "服务", items: [
+      { name: "教师专区", href: "/teacher", icon: School },
+      { name: "家长专区", href: "/parent", icon: Users },
+      { name: "价格方案", href: "/pricing", icon: CreditCard },
+    ]}
+  ]
 
   return (
     <>
-      <SidebarHeader>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton size="lg" asChild>
-              <Link href="/">
-                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                  <School className="size-4" />
-                </div>
-                <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-semibold">沈翔智学</span>
-                  <span className="truncate text-xs">AI智能教育平台</span>
-                </div>
+      {/* 悬浮展开按钮 (当侧边栏收起时显示) - 使用 fixed 确保它也固定在窗口 */}
+      {!isOpen && (
+        <div className="fixed left-4 top-4 z-50">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => setIsOpen(true)}
+            className="h-9 w-9 bg-white shadow-md border-gray-200 text-slate-600 hover:bg-slate-50"
+          >
+            <PanelLeftOpen className="h-5 w-5" />
+          </Button>
+        </div>
+      )}
+
+      <div 
+        className={cn(
+          // ✅ 核心修改：
+          // 1. 将 relative 改为 sticky top-0，确保侧边栏在页面滚动时钉在窗口顶部。
+          // 2. 添加 supports-[height:100dvh]:h-[100dvh] 以更精确地占满移动端视口高度。
+          "flex h-screen supports-[height:100dvh]:h-[100dvh] sticky top-0 flex-col border-r border-[#E5E0D6] bg-[#FDFBF7] transition-all duration-300 ease-in-out z-40",
+          isOpen ? "w-64" : "w-0 -translate-x-full opacity-0 overflow-hidden border-none"
+        )}
+      >
+        {/* 内部折叠按钮 */}
+        <button
+          onClick={() => setIsOpen(false)}
+          className="absolute right-2 top-2 p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-black/5 transition-colors z-10"
+        >
+          <PanelLeftClose className="h-4 w-4" />
+        </button>
+
+        {/* Logo 部分 */}
+        <div className="p-6 pb-4 shrink-0">
+          <Link href="/" className="block">
+             <img 
+               src="/images/logo.png" 
+               alt="沈翔智学" 
+               className="h-16 w-auto object-contain"
+             />
+          </Link>
+        </div>
+
+        {/* 菜单列表 - flex-1 自动填充中间空间，pb-20 防止底部遮挡 */}
+        <div className="flex-1 overflow-y-auto py-2 px-3 space-y-6 pb-20"> 
+          {menuItems.map((group, i) => (
+            <div key={i}>
+              <h3 className="mb-2 px-4 text-xs font-semibold text-muted-foreground/70">{group.title}</h3>
+              <div className="space-y-1">
+                {group.items.map((item) => {
+                  const isActive = pathname === item.href
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={cn(
+                        "flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-colors",
+                        isActive 
+                          ? "bg-white text-[#0F766E] shadow-sm ring-1 ring-[#E5E0D6]" 
+                          : "text-slate-600 hover:bg-[#F3EFE5] hover:text-slate-900"
+                      )}
+                    >
+                      <item.icon className={cn("h-5 w-5 shrink-0", isActive ? "text-[#0F766E]" : "text-slate-400")} />
+                      {item.name}
+                    </Link>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* ✅ 底部用户信息 - 在父容器被 sticky 固定后，这里的 absolute bottom-0 将完美工作 */}
+        <div 
+          className="absolute bottom-0 left-0 right-0 border-t border-[#E5E0D6] p-3 bg-[#FDFBF7] z-50" 
+          ref={menuRef}
+        >
+          
+          {/* 弹出菜单 */}
+          {showUserMenu && (
+            <div className="absolute bottom-[calc(100%+8px)] left-3 w-56 rounded-xl border border-border/50 bg-white p-1 shadow-2xl animate-in slide-in-from-bottom-2 z-[60]">
+              <div className="flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-slate-700 bg-slate-50/50">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-100 text-amber-600"><Coins className="h-4 w-4" /></div>
+                <div className="flex flex-col"><span>{credits} 积分</span><span className="text-[10px] text-muted-foreground font-normal">当前余额</span></div>
+              </div>
+              <div className="my-1 h-px bg-slate-100" />
+              
+              <Link href="/settings" onClick={() => setShowUserMenu(false)}>
+                 <div className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-slate-600 hover:bg-slate-50 cursor-pointer">
+                   <Settings className="h-4 w-4" /> 账号设置
+                 </div>
               </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
-      </SidebarHeader>
-      <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>平台功能</SidebarGroupLabel>
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton asChild tooltip="首页" isActive={pathname === "/"}>
-                <Link href="/">
-                  <Home />
-                  <span>首页</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton asChild tooltip="作文批改" isActive={pathname === "/chat"}>
-                <Link href="/chat">
-                  <Bot />
-                  <span>作文批改</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
-        </SidebarGroup>
+              
+              <Link href="/pricing" onClick={() => setShowUserMenu(false)}>
+                 <div className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-slate-600 hover:bg-slate-50 cursor-pointer">
+                   <Zap className="h-4 w-4" /> 升级套餐
+                 </div>
+              </Link>
 
-        <SidebarGroup>
-          <SidebarGroupLabel>教育资源</SidebarGroupLabel>
-          <SidebarMenu>
-            <Collapsible
-              asChild
-              defaultOpen={
-                pathname.startsWith("/primary") ||
-                pathname.startsWith("/middle") ||
-                pathname.startsWith("/high") ||
-                pathname.startsWith("/university")
-              }
-              className="group/collapsible"
-            >
-              <SidebarMenuItem>
-                <CollapsibleTrigger asChild>
-                  <SidebarMenuButton tooltip="学段选择">
-                    <GraduationCap />
-                    <span>学段选择</span>
-                    <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
-                  </SidebarMenuButton>
-                </CollapsibleTrigger>
-                <CollapsibleContent>
-                  <SidebarMenuSub>
-                    <SidebarMenuSubItem>
-                      <SidebarMenuSubButton asChild isActive={pathname === "/primary"}>
-                        <Link href="/primary">小学教育</Link>
-                      </SidebarMenuSubButton>
-                    </SidebarMenuSubItem>
-                    <SidebarMenuSubItem>
-                      <SidebarMenuSubButton asChild isActive={pathname === "/middle"}>
-                        <Link href="/middle">初中教育</Link>
-                      </SidebarMenuSubButton>
-                    </SidebarMenuSubItem>
-                    <SidebarMenuSubItem>
-                      <SidebarMenuSubButton asChild isActive={pathname === "/high"}>
-                        <Link href="/high">高中教育</Link>
-                      </SidebarMenuSubButton>
-                    </SidebarMenuSubItem>
-                    <SidebarMenuSubItem>
-                      <SidebarMenuSubButton asChild isActive={pathname === "/university"}>
-                        <Link href="/university">大学教育</Link>
-                      </SidebarMenuSubButton>
-                    </SidebarMenuSubItem>
-                  </SidebarMenuSub>
-                </CollapsibleContent>
-              </SidebarMenuItem>
-            </Collapsible>
-
-            <Collapsible asChild defaultOpen={pathname.startsWith("/subjects")} className="group/collapsible">
-              <SidebarMenuItem>
-                <CollapsibleTrigger asChild>
-                  <SidebarMenuButton tooltip="学科中心">
-                    <BookOpen />
-                    <span>学科中心</span>
-                    <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
-                  </SidebarMenuButton>
-                </CollapsibleTrigger>
-                <CollapsibleContent>
-                  <SidebarMenuSub>
-                    <SidebarMenuSubItem>
-                      <SidebarMenuSubButton asChild isActive={pathname === "/subjects/chinese"}>
-                        <Link href="/subjects/chinese">语文</Link>
-                      </SidebarMenuSubButton>
-                    </SidebarMenuSubItem>
-                    <SidebarMenuSubItem>
-                      <SidebarMenuSubButton asChild isActive={pathname === "/subjects/math"}>
-                        <Link href="/subjects/math">数学</Link>
-                      </SidebarMenuSubButton>
-                    </SidebarMenuSubItem>
-                    <SidebarMenuSubItem>
-                      <SidebarMenuSubButton asChild isActive={pathname === "/subjects/english"}>
-                        <Link href="/subjects/english">英语</Link>
-                      </SidebarMenuSubButton>
-                    </SidebarMenuSubItem>
-                    <SidebarMenuSubItem>
-                      <SidebarMenuSubButton asChild isActive={pathname === "/subjects/science"}>
-                        <Link href="/subjects/science">科学</Link>
-                      </SidebarMenuSubButton>
-                    </SidebarMenuSubItem>
-                    <SidebarMenuSubItem>
-                      <SidebarMenuSubButton asChild isActive={pathname === "/subjects/more"}>
-                        <Link href="/subjects/more">更多学科</Link>
-                      </SidebarMenuSubButton>
-                    </SidebarMenuSubItem>
-                  </SidebarMenuSub>
-                </CollapsibleContent>
-              </SidebarMenuItem>
-            </Collapsible>
-          </SidebarMenu>
-        </SidebarGroup>
-
-        <SidebarGroup>
-          <SidebarGroupLabel>社区与服务</SidebarGroupLabel>
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton asChild tooltip="教师专区" isActive={pathname === "/teacher"}>
-                <Link href="/teacher">
-                  <Users />
-                  <span>教师专区</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton asChild tooltip="家长专区" isActive={pathname === "/parent"}>
-                <Link href="/parent">
-                  <User />
-                  <span>家长专区</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton asChild tooltip="核心功能">
-                <a href="/#features" onClick={(e) => handleAnchorClick(e, "/#features")}>
-                  <Sparkles />
-                  <span>核心功能</span>
-                </a>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton asChild tooltip="价格方案">
-                <a href="/#pricing" onClick={(e) => handleAnchorClick(e, "/#pricing")}>
-                  <CreditCard />
-                  <span>价格方案</span>
-                </a>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
-        </SidebarGroup>
-      </SidebarContent>
-      <SidebarFooter>
-        <SidebarMenu>
-          {user ? (
-            <SidebarMenuItem>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <SidebarMenuButton
-                    size="lg"
-                    className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
-                  >
-                    <Avatar className="h-8 w-8 rounded-lg">
-                      <AvatarImage src={user.user_metadata?.avatar_url || "/placeholder.svg"} alt={user.email} />
-                      <AvatarFallback className="rounded-lg">CN</AvatarFallback>
-                    </Avatar>
-                    <div className="grid flex-1 text-left text-sm leading-tight">
-                      <span className="truncate font-semibold">{user.email?.split("@")[0]}</span>
-                      <span className="truncate text-xs">{user.email}</span>
-                    </div>
-                    <Coins className="ml-auto size-4" />
-                  </SidebarMenuButton>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg"
-                  side="bottom"
-                  align="end"
-                  sideOffset={4}
-                >
-                  <DropdownMenuLabel className="p-0 font-normal">
-                    <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
-                      <Avatar className="h-8 w-8 rounded-lg">
-                        <AvatarImage src={user.user_metadata?.avatar_url || "/placeholder.svg"} alt={user.email} />
-                        <AvatarFallback className="rounded-lg">CN</AvatarFallback>
-                      </Avatar>
-                      <div className="grid flex-1 text-left text-sm leading-tight">
-                        <span className="truncate font-semibold">{user.email?.split("@")[0]}</span>
-                        <span className="truncate text-xs">{user.email}</span>
-                      </div>
-                    </div>
-                  </DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuGroup>
-                    <DropdownMenuItem>
-                      <Coins className="mr-2 size-4" />
-                      <span>{credits !== null ? credits : "..."} 积分</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem asChild>
-                      <Link href="/credits">
-                        <CreditCard className="mr-2 size-4" />
-                        <span>充值中心</span>
-                      </Link>
-                    </DropdownMenuItem>
-                  </DropdownMenuGroup>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem>
-                    <LogOut className="mr-2 size-4" />
-                    <span>退出登录</span>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </SidebarMenuItem>
-          ) : (
-            <SidebarMenuItem>
-              <SidebarMenuButton asChild tooltip="登录/注册">
-                <Link href="/auth/email-login">
-                  <User />
-                  <span>登录 / 注册</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
+              <div className="my-1 h-px bg-slate-100" />
+              <button onClick={handleLogout} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-red-600 hover:bg-red-50"><LogOut className="h-4 w-4" /> 退出登录</button>
+            </div>
           )}
-        </SidebarMenu>
-      </SidebarFooter>
-      <SidebarRail />
-    </>
-  )
-}
 
-export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-  return (
-    <Sidebar collapsible="offcanvas" {...props}>
-      <SidebarContent_ />
-    </Sidebar>
+          {/* 用户按钮 */}
+          {user ? (
+            <button 
+              onClick={() => setShowUserMenu(!showUserMenu)}
+              className={cn(
+                "flex items-center w-full h-12 rounded-xl border p-2 transition-all duration-200 hover:shadow-sm overflow-hidden",
+                showUserMenu ? "bg-white border-[#E5E0D6]" : "border-transparent hover:bg-white/50"
+              )}
+            >
+              <div className="w-[40px] flex items-center justify-center shrink-0">
+                <div className="h-9 w-9 rounded-full bg-[#0F766E] text-white flex items-center justify-center font-bold text-sm overflow-hidden border-2 border-white shadow-sm">
+                  {getAvatarUrl() ? <img src={getAvatarUrl()} alt="User" className="h-full w-full object-cover" /> : user.email?.[0]?.toUpperCase() || "S"}
+                </div>
+              </div>
+
+              <div className="flex flex-1 flex-col items-start overflow-hidden ml-2">
+                <span className="truncate text-sm font-bold text-slate-700 w-full text-left">{getDisplayName()}</span>
+                <span className="truncate text-[10px] text-muted-foreground w-full text-left">点击管理账号</span>
+              </div>
+              <ChevronRight className={cn("h-4 w-4 text-slate-400 transition-transform", showUserMenu && "rotate-90")} />
+            </button>
+          ) : (
+            <Link href="/login">
+              <Button className="w-full bg-[#0F766E] hover:bg-[#0d655d]">登录 / 注册</Button>
+            </Link>
+          )}
+        </div>
+      </div>
+    </>
   )
 }
