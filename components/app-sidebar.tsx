@@ -25,10 +25,29 @@ export function AppSidebar() {
   // 控制菜单显示 (点击触发)
   const [showUserMenu, setShowUserMenu] = useState(false)
   
-  // 控制侧边栏展开
+  // ⚠️ 修改点1：默认状态 isOpen 虽然初始设为 true，但在下方的 useEffect 会立刻根据屏幕修正
   const [isOpen, setIsOpen] = useState(true)
   
   const menuRef = useRef<HTMLDivElement>(null)
+
+  // ⚠️ 修改点2：智能识别设备宽度
+  // 如果是手机 (<768px)，默认收起侧边栏，否则挡住屏幕无法操作
+  useEffect(() => {
+    const checkScreenSize = () => {
+      if (window.innerWidth < 768) {
+        setIsOpen(false) 
+      } else {
+        setIsOpen(true)
+      }
+    }
+
+    // 初始化检查
+    checkScreenSize()
+
+    // 监听屏幕旋转或缩放
+    window.addEventListener('resize', checkScreenSize)
+    return () => window.removeEventListener('resize', checkScreenSize)
+  }, [])
 
   useEffect(() => {
     const loadUserData = async () => {
@@ -56,7 +75,6 @@ export function AppSidebar() {
     }
     loadUserData()
 
-    // 点击外部关闭菜单
     const handleClickOutside = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setShowUserMenu(false)
@@ -70,6 +88,14 @@ export function AppSidebar() {
     await supabase.auth.signOut()
     localStorage.removeItem('currentUser')
     window.location.href = "/login"
+  }
+
+  // ⚠️ 修改点3：手机端点击菜单项后，自动收起侧边栏
+  // 否则用户跳转到新页面后，侧边栏还挡在前面
+  const handleMobileClick = () => {
+    if (window.innerWidth < 768) {
+      setIsOpen(false)
+    }
   }
 
   const getDisplayName = () => {
@@ -96,7 +122,7 @@ export function AppSidebar() {
 
   return (
     <>
-      {/* 悬浮展开按钮 (当侧边栏收起时显示) - 使用 fixed 确保它也固定在窗口 */}
+      {/* 悬浮展开按钮 */}
       {!isOpen && (
         <div className="fixed left-4 top-4 z-50">
           <Button
@@ -112,9 +138,7 @@ export function AppSidebar() {
 
       <div 
         className={cn(
-          // ✅ 核心修改：
-          // 1. 将 relative 改为 sticky top-0，确保侧边栏在页面滚动时钉在窗口顶部。
-          // 2. 添加 supports-[height:100dvh]:h-[100dvh] 以更精确地占满移动端视口高度。
+          // ⚠️ 保持之前的 sticky 修复，确保电脑端和手机端布局稳固
           "flex h-screen supports-[height:100dvh]:h-[100dvh] sticky top-0 flex-col border-r border-[#E5E0D6] bg-[#FDFBF7] transition-all duration-300 ease-in-out z-40",
           isOpen ? "w-64" : "w-0 -translate-x-full opacity-0 overflow-hidden border-none"
         )}
@@ -129,7 +153,8 @@ export function AppSidebar() {
 
         {/* Logo 部分 */}
         <div className="p-6 pb-4 shrink-0">
-          <Link href="/" className="block">
+          {/* Logo 也加上 handleMobileClick，防止点 Logo 回首页时被挡住 */}
+          <Link href="/" className="block" onClick={handleMobileClick}>
              <img 
                src="/images/logo.png" 
                alt="沈翔智学" 
@@ -138,7 +163,7 @@ export function AppSidebar() {
           </Link>
         </div>
 
-        {/* 菜单列表 - flex-1 自动填充中间空间，pb-20 防止底部遮挡 */}
+        {/* 菜单列表 */}
         <div className="flex-1 overflow-y-auto py-2 px-3 space-y-6 pb-20"> 
           {menuItems.map((group, i) => (
             <div key={i}>
@@ -150,6 +175,7 @@ export function AppSidebar() {
                     <Link
                       key={item.href}
                       href={item.href}
+                      onClick={handleMobileClick} // ⚠️ 关键：点击菜单跳转后，自动收起侧边栏
                       className={cn(
                         "flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-colors",
                         isActive 
@@ -167,12 +193,11 @@ export function AppSidebar() {
           ))}
         </div>
 
-        {/* ✅ 底部用户信息 - 在父容器被 sticky 固定后，这里的 absolute bottom-0 将完美工作 */}
+        {/* 底部用户信息 */}
         <div 
           className="absolute bottom-0 left-0 right-0 border-t border-[#E5E0D6] p-3 bg-[#FDFBF7] z-50" 
           ref={menuRef}
         >
-          
           {/* 弹出菜单 */}
           {showUserMenu && (
             <div className="absolute bottom-[calc(100%+8px)] left-3 w-56 rounded-xl border border-border/50 bg-white p-1 shadow-2xl animate-in slide-in-from-bottom-2 z-[60]">
@@ -221,8 +246,12 @@ export function AppSidebar() {
               <ChevronRight className={cn("h-4 w-4 text-slate-400 transition-transform", showUserMenu && "rotate-90")} />
             </button>
           ) : (
-            <Link href="/login">
-              <Button className="w-full bg-[#0F766E] hover:bg-[#0d655d]">登录 / 注册</Button>
+            // ⚠️ 按钮也加上 handleMobileClick
+            <Link href="/login" onClick={handleMobileClick}>
+              {/* ⚠️ 修改点4：强制 text-white font-bold 解决字体看不清问题 */}
+              <Button className="w-full bg-[#0F766E] hover:bg-[#0d655d] text-white font-bold shadow-md">
+                登录 / 注册
+              </Button>
             </Link>
           )}
         </div>
