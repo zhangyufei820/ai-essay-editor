@@ -345,10 +345,23 @@ export function EnhancedChatInterface() {
         if (res.status === 402) throw new Error("积分不足")
         if (!res.ok) throw new Error("请求失败")
         
-        const reader = res.body?.getReader(); const decoder = new TextDecoder();
+        const reader = res.body?.getReader(); 
+        const decoder = new TextDecoder();
+        let buffer = ""; // ✅ 核心修复：数据缓冲区，防止中文乱码
+
         while (true) {
-            const { done, value } = await reader!.read(); if (done) break
-            const chunk = decoder.decode(value, { stream: true }); const lines = chunk.split("\n")
+            const { done, value } = await reader!.read(); 
+            if (done) break;
+            
+            // ✅ 累积数据到缓冲区，而不是每次都重新处理
+            buffer += decoder.decode(value, { stream: true });
+            
+            // ✅ 按行分割
+            const lines = buffer.split("\n");
+            
+            // ✅ 保留最后一行（因为它可能是不完整的），下次循环再处理
+            buffer = lines.pop() || "";
+
             for (const line of lines) {
                 if (!line.startsWith("data: ")) continue
                 const data = line.slice(6).trim(); if (data === "[DONE]") continue
