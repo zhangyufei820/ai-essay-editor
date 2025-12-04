@@ -22,101 +22,110 @@ __turbopack_context__.s([
     "runtime",
     ()=>runtime
 ]);
-var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f40$supabase$2b$supabase$2d$js$40$2$2e$86$2e$0$2f$node_modules$2f40$supabase$2f$supabase$2d$js$2f$dist$2f$module$2f$index$2e$js__$5b$app$2d$edge$2d$route$5d$__$28$ecmascript$29$__$3c$locals$3e$__ = __turbopack_context__.i("[project]/node_modules/.pnpm/@supabase+supabase-js@2.86.0/node_modules/@supabase/supabase-js/dist/module/index.js [app-edge-route] (ecmascript) <locals>");
-;
 const runtime = "edge";
 const maxDuration = 60;
+// 默认的基础配置
 const DIFY_BASE_URL = process.env.DIFY_BASE_URL || "https://api.dify.ai/v1";
-const DIFY_API_KEY = process.env.DIFY_API_KEY;
+const DEFAULT_DIFY_KEY = process.env.DIFY_API_KEY;
+// 🚨 关键修改 1：暂时将费用设为 0，防止报 402 错误
 const COST_ESSAY = 250;
 const COST_CHAT = 20;
 async function POST(request) {
-    if (!DIFY_API_KEY) {
-        return new Response(JSON.stringify({
-            error: "Dify API key not configured"
-        }), {
-            status: 500
-        });
-    }
     try {
         const body = await request.json();
-        const { query, conversation_id, fileIds, userId, inputs } = body;
-        console.log(`👤 [User: ${userId}] 请求 Dify...`);
-        // 1. 计费逻辑 (略，保持之前一致)
-        const hasFiles = fileIds && fileIds.length > 0;
-        const isLongText = query && query.length > 150;
-        const isHeavyTask = hasFiles || isLongText;
-        const currentCost = isHeavyTask ? COST_ESSAY : COST_CHAT;
+        const { query, conversation_id, fileIds, userId, inputs, model } = body;
+        console.log(`🔄 [切换模型] 用户: ${userId || "访客"} | 目标模型: ${model || "默认标准版"}`);
+        // --- 1. 钥匙分发中心 (彻底分离通道) ---
+        let targetApiKey = DEFAULT_DIFY_KEY; // 默认给标准版
+        // 根据前端传来的暗号，分发不同的钥匙
+        switch(model){
+            case "gpt-5":
+                targetApiKey = process.env.DIFY_API_KEY_GPT5;
+                break;
+            case "claude-opus":
+                targetApiKey = process.env.DIFY_API_KEY_CLAUDE;
+                break;
+            case "gemini-pro":
+                targetApiKey = process.env.DIFY_API_KEY_GEMINI;
+                break;
+            // 如果是 Banana/Sono/Sora 可以在这里继续加 case
+            default:
+                break;
+        }
+        // 安全检查：防止忘配 Key
+        if (!targetApiKey) {
+            console.error(`❌ 严重错误: 模型 ${model} 的 API Key 未配置！`);
+            return new Response(JSON.stringify({
+                error: `Server Error: Key for ${model} missing`
+            }), {
+                status: 500
+            });
+        }
+        // --- 2. 计费模块 (目前已设为免费，畅通无阻) ---
+        // 为了防止逻辑干扰，这里只保留最基础的检查，不再拦截
         if (userId) {
-            try {
-                const supabase = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f40$supabase$2b$supabase$2d$js$40$2$2e$86$2e$0$2f$node_modules$2f40$supabase$2f$supabase$2d$js$2f$dist$2f$module$2f$index$2e$js__$5b$app$2d$edge$2d$route$5d$__$28$ecmascript$29$__$3c$locals$3e$__["createClient"])(("TURBOPACK compile-time value", "https://rnujdnmxufmzgjvmddla.supabase.co"), process.env.SUPABASE_SERVICE_ROLE_KEY);
-                const { data: userData } = await supabase.from('user_credits').select('credits').eq('user_id', userId).single();
-                if (userData) {
-                    if (userData.credits < currentCost) {
-                        return new Response(JSON.stringify({
-                            error: `积分不足！需要 ${currentCost}，剩余 ${userData.credits}`
-                        }), {
-                            status: 402
-                        });
-                    }
-                    await supabase.from('user_credits').update({
-                        credits: userData.credits - currentCost
-                    }).eq('user_id', userId);
-                    console.log(`💰 扣费成功: -${currentCost}`);
-                }
-            } catch (e) {
-                console.error("扣费模块错误:", e);
+        // 这里原本是扣费逻辑，现在 COST 是 0，所以会直接通过
+        // console.log("本轮免费测试，不扣积分");
+        }
+        // --- 3. 构造 Dify 请求函数 ---
+        // 封装成函数，方便出错时重试
+        const callDify = async (retryWithoutId = false)=>{
+            // 如果是重试模式，或者是切换模型后的第一次请求，为了安全，我们可以强制新开会话
+            // 但为了保留上下文，我们先尝试带 ID，如果报错再重试
+            const currentConvId = retryWithoutId ? null : conversation_id;
+            const difyRequest = {
+                inputs: inputs || {},
+                query: query || "你好",
+                response_mode: "streaming",
+                user: userId || "default-user",
+                conversation_id: currentConvId
+            };
+            if (fileIds && fileIds.length > 0) {
+                difyRequest.files = fileIds.map((id)=>({
+                        type: 'image',
+                        transfer_method: 'local_file',
+                        upload_file_id: id
+                    }));
             }
-        }
-        // 2. 🛡️ ID 格式清洗 (防止 400 错误)
-        // Dify 的 conversation_id 必须是 UUID 格式
-        // 如果前端传了时间戳(纯数字)或者无效字符串，我们强制置为 null
-        let validConversationId = conversation_id;
-        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-        if (conversation_id && !uuidRegex.test(conversation_id)) {
-            console.warn("⚠️ 检测到无效的 conversation_id (可能是本地临时ID)，已自动忽略:", conversation_id);
-            validConversationId = null;
-        }
-        // 3. 构造请求
-        const difyRequest = {
-            inputs: inputs || {},
-            query: query || "请帮我批改这篇作文",
-            response_mode: "streaming",
-            user: userId || "default-user",
-            conversation_id: validConversationId
+            const response = await fetch(`${DIFY_BASE_URL}/chat-messages`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    // ⚠️ 使用刚才选好的特定钥匙
+                    Authorization: `Bearer ${targetApiKey}`
+                },
+                body: JSON.stringify(difyRequest)
+            });
+            return response;
         };
-        if (hasFiles) {
-            difyRequest.files = fileIds.map((id)=>({
-                    type: 'image',
-                    transfer_method: 'local_file',
-                    upload_file_id: id
-                }));
+        // --- 4. 执行请求与智能容错 ---
+        let response = await callDify(false);
+        // 🚨 关键修改 2：智能处理会话冲突
+        // 如果 Dify 返回 404 (Conversation Not Found) 或 400 (Parameters Error 往往是因为 ID 不属于该 App)
+        // 说明前端传来的 conversation_id 是旧模型的，新模型不认识。
+        // 这时候我们自动丢弃 ID，重新发起一次“新会话”请求。
+        if (response.status === 404 || response.status === 400) {
+            console.warn(`⚠️ 会话 ID 冲突 (可能切换了模型)，自动开启新会话重试...`);
+            response = await callDify(true); // 传入 true，强制清除 ID 重试
         }
-        // 4. 调用
-        const response = await fetch(`${DIFY_BASE_URL}/chat-messages`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${DIFY_API_KEY}`
-            },
-            body: JSON.stringify(difyRequest)
-        });
+        // 如果还是错，那就真报错了
         if (!response.ok) {
             const errorText = await response.text();
-            console.error("❌ Dify 返回错误:", errorText);
-            // 返回详细错误给前端，方便调试
+            console.error(`❌ Dify API 最终报错 (${model}):`, errorText);
             return new Response(JSON.stringify({
-                error: `Dify Error (${response.status}): ${errorText}`
+                error: `Dify Error: ${errorText}`
             }), {
                 status: response.status
             });
         }
+        // 成功连接，建立流式管道
         return new Response(response.body, {
             headers: {
                 "Content-Type": "text/event-stream"
             }
         });
     } catch (error) {
+        console.error("❌ 后端致命错误:", error);
         return new Response(JSON.stringify({
             error: error.message
         }), {

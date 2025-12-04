@@ -19,12 +19,8 @@
         "server/edge/chunks/0439a_next_dist_0d5a89bd._.js",
         "server/edge/chunks/edge-wrapper_46552a26.js",
         "server/edge/chunks/4b6e4_@opentelemetry_api_build_esm_df5f8bb8._.js",
-        "server/edge/chunks/d2cd0_@supabase_realtime-js_dist_module_03eeeb28._.js",
-        "server/edge/chunks/f96a7_@supabase_storage-js_dist_module_f068553d._.js",
-        "server/edge/chunks/0f7e6_@supabase_auth-js_dist_module_920474a1._.js",
-        "server/edge/chunks/node_modules__pnpm_ed6bfd8b._.js",
         "server/edge/chunks/[root-of-the-server]__dd890a8d._.js",
-        "server/edge/chunks/turbopack-edge-wrapper_6ec65e3a.js"
+        "server/edge/chunks/turbopack-edge-wrapper_a216df57.js"
       ],
       "name": "app/api/dify-chat/route",
       "page": "/api/dify-chat/route",
@@ -39,9 +35,9 @@
       "env": {
         "__NEXT_BUILD_ID": "development",
         "NEXT_SERVER_ACTIONS_ENCRYPTION_KEY": "CTwaxzesVcQbBou1rOplAZpgK8nCNUrwOGdXcsQuqiY=",
-        "__NEXT_PREVIEW_MODE_ID": "0f53cac90e9470a8bc60850e65345939",
-        "__NEXT_PREVIEW_MODE_ENCRYPTION_KEY": "b6bfd7999230548e7d7e2731b9fcf88a3a1635d5ec1718ab389ecaa6a363b84b",
-        "__NEXT_PREVIEW_MODE_SIGNING_KEY": "04a6210ea6be3876f6228cd567ef4b8584d015352b3470f1490cbd17f6a2e365"
+        "__NEXT_PREVIEW_MODE_ID": "c2c149393ab23f9334474f8b023da6f7",
+        "__NEXT_PREVIEW_MODE_ENCRYPTION_KEY": "a14ad961d9538eccd0585c8d2896062431b392d598ca35e78312e7f4012be32b",
+        "__NEXT_PREVIEW_MODE_SIGNING_KEY": "a30dc36085db08a4ca5c71f4a12ec0cf0c85bf620ad14ae71731bdf14f311813"
       }
     }
   }
