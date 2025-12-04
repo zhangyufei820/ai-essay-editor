@@ -2,6 +2,9 @@
 
 import type React from "react"
 import { useState, useRef, useEffect } from "react"
+// ✅ 新增：引入图片压缩库
+import imageCompression from 'browser-image-compression';
+
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -261,33 +264,89 @@ export function EnhancedChatInterface() {
     return userId ? 20 : 0 
   }
 
-  // 文件上传逻辑
+  // --- ✅ 核心修改：文件上传逻辑 (增加前端压缩) ---
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files; if (!files || !files.length) return;
-    setFileProcessing({ status: "uploading", progress: 0, message: "正在上传..." })
+    const files = event.target.files; 
+    if (!files || !files.length) return;
+    
+    setFileProcessing({ status: "uploading", progress: 0, message: "正在处理图片..." })
+    
     try {
         const uploadPromises = Array.from(files).map(async (file) => {
+            let fileToUpload = file;
+
+            // === 前端压缩逻辑开始 ===
+            if (file.type.startsWith("image/")) {
+                try {
+                    console.log(`原始文件: ${file.name} size: ${(file.size / 1024 / 1024).toFixed(2)} MB`);
+                    
+                    const options = {
+                        maxSizeMB: 1,           // 目标最大 1MB (足够清晰且传输快)
+                        maxWidthOrHeight: 1920, // 限制最大分辨率 1920px
+                        useWebWorker: true,     // 开启多线程
+                        fileType: "image/jpeg"  // 强制转为 JPG
+                    };
+
+                    const compressedBlob = await imageCompression(file, options);
+                    
+                    // 创建新的 File 对象
+                    fileToUpload = new File([compressedBlob], file.name.replace(/\.[^/.]+$/, ".jpg"), {
+                        type: "image/jpeg",
+                        lastModified: Date.now(),
+                    });
+
+                    console.log(`压缩后: ${(fileToUpload.size / 1024 / 1024).toFixed(2)} MB`);
+                } catch (error) {
+                    console.error("图片压缩失败，将尝试上传原图", error);
+                }
+            }
+            // === 前端压缩逻辑结束 ===
+
             const formData = new FormData(); 
-            formData.append("file", file); 
+            formData.append("file", fileToUpload); 
             formData.append("user", userId)
+            
             const res = await fetch("/api/dify-upload", { method: "POST", body: formData })
-            if (!res.ok) throw new Error("上传失败");
+            
+            if (!res.ok) {
+                const errText = await res.text();
+                throw new Error(`上传失败: ${res.status} ${errText}`);
+            }
+            
             const data = await res.json()
             return new Promise<UploadedFile>((resolve) => {
-                const reader = new FileReader(); 
-                reader.onload = e => resolve({ 
-                    name: file.name, type: file.type, size: file.size, data: e.target?.result as string, 
-                    difyFileId: data.id, preview: file.type.startsWith("image/") ? e.target?.result as string : undefined 
-                });
-                reader.readAsDataURL(file)
+                // 如果是图片，直接用 URL.createObjectURL 预览，不用读取整个 Base64
+                if (fileToUpload.type.startsWith("image/")) {
+                    resolve({ 
+                        name: fileToUpload.name, 
+                        type: fileToUpload.type, 
+                        size: fileToUpload.size, 
+                        data: "", // 图片上传后 data 可以留空或存 url，取决于你后续用途，这里保持兼容性只存预览
+                        difyFileId: data.id, 
+                        preview: URL.createObjectURL(fileToUpload) 
+                    });
+                } else {
+                    const reader = new FileReader(); 
+                    reader.onload = e => resolve({ 
+                        name: fileToUpload.name, 
+                        type: fileToUpload.type, 
+                        size: fileToUpload.size, 
+                        data: e.target?.result as string, 
+                        difyFileId: data.id, 
+                        preview: undefined 
+                    });
+                    reader.readAsDataURL(fileToUpload)
+                }
             })
         });
+        
         const results = await Promise.all(uploadPromises);
         setUploadedFiles(p => [...p, ...results]);
         setFileProcessing({ status: "idle", progress: 100, message: "上传完成" })
         setTimeout(() => setFileProcessing({ status: "idle", progress: 0, message: "" }), 1000)
-    } catch(e) {
-        toast.error("部分文件上传失败")
+    } catch(e: any) {
+        console.error("上传错误:", e);
+        toast.error("上传失败，请检查网络或重试")
         setFileProcessing({ status: "error", progress: 0, message: "上传失败" })
     }
     if(fileInputRef.current) fileInputRef.current.value=""
