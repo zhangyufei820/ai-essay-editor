@@ -1,15 +1,15 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname, useRouter } from "next/navigation"
+import { usePathname } from "next/navigation"
 import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button" 
 import { 
-  Home, FileText, Settings, ChevronRight,
+  Home, Settings, ChevronRight,
   PanelLeftClose, PanelLeftOpen, LogOut, Zap, Coins,
-  ChevronDown, History, BookOpen, GraduationCap, School, 
-  Library, PenTool, Calculator, Globe,  Microscope,
-  FlaskConical, Dna, Hourglass, Landmark, Gavel,
+  ChevronDown, History, GraduationCap, School, 
+  Library, PenTool, Calculator, Globe, Microscope,
+  FlaskConical, Hourglass, Landmark,
   BookA, Bot, LayoutGrid
 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -191,8 +191,6 @@ export function AppSidebar() {
       <div 
         className={cn(
           "flex h-screen supports-[height:100dvh]:h-[100dvh] sticky top-0 flex-col border-r border-[#E5E0D6] bg-[#FDFBF7] transition-all duration-300 ease-in-out z-40",
-          // ✅ 核心修复：手机端收起时宽度为0 (w-0)，隐藏溢出 (overflow-hidden)，去掉边框 (border-none)
-          // ✅ 电脑端收起时保留图标栏 (md:w-[70px])，显示溢出内容如Tooltip (md:overflow-visible)，保留边框 (md:border-r)
           isOpen 
             ? "w-64 border-r" 
             : "w-0 border-none overflow-hidden md:w-[70px] md:border-r md:overflow-visible" 
@@ -204,7 +202,6 @@ export function AppSidebar() {
           className={cn(
             "absolute -right-3 top-6 flex h-6 w-6 items-center justify-center rounded-full border border-gray-200 bg-white text-slate-400 shadow-sm hover:text-slate-600 transition-all z-50",
             !isOpen && "rotate-180",
-            // 手机端收起时隐藏这个按钮，防止悬浮在半空
             !isOpen && "hidden md:flex" 
           )}
         >
@@ -217,7 +214,6 @@ export function AppSidebar() {
              {isOpen ? (
                <img src="/images/logo.png" alt="Logo" className="h-14 w-auto object-contain" />
              ) : (
-               // 收起时显示小 Logo 或图标
                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#0F766E] text-white">
                  <span className="text-lg font-bold">沈</span>
                </div>
@@ -225,8 +221,11 @@ export function AppSidebar() {
           </Link>
         </div>
 
-        {/* --- 核心滚动区域 --- */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden py-2 px-3 pb-24 scrollbar-thin scrollbar-thumb-gray-200">
+        {/* --- 核心滚动区域 (已优化) --- 
+            移除了 pb-24，改用 flex-1 自动填充，
+            这样底部栏会自然接在下面，而不会浮动覆盖。
+        */}
+        <div className="flex-1 overflow-y-auto overflow-x-hidden py-2 px-3 scrollbar-thin scrollbar-thumb-gray-200">
           
           {/* A. 主页 (一级菜单) */}
           <Link
@@ -248,7 +247,7 @@ export function AppSidebar() {
           <div className="mb-2">
             <button
               onClick={() => {
-                if (!isOpen) setIsOpen(true) // 如果是收起状态，点击图标则展开侧边栏
+                if (!isOpen) setIsOpen(true)
                 setIsAgentsExpanded(!isAgentsExpanded)
               }}
               className={cn(
@@ -266,11 +265,10 @@ export function AppSidebar() {
               )}
             </button>
 
-            {/* 智能体子菜单 (仅在侧边栏展开 + 菜单展开时显示) */}
             {isOpen && isAgentsExpanded && (
               <div className="mt-2 pl-2 space-y-4 animate-in slide-in-from-top-2">
                 
-                {/* B-1. 核心功能板块 */}
+                {/* 核心功能 */}
                 <div>
                   <div className="px-3 mb-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">核心功能</div>
                   <Link
@@ -288,7 +286,7 @@ export function AppSidebar() {
                   </Link>
                 </div>
 
-                {/* B-2. 全学段智能体板块 */}
+                {/* 全学段智能体 */}
                 <div>
                   <div className="px-3 mb-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">全学段智能体</div>
                   <div className="space-y-1 ml-2">
@@ -307,7 +305,6 @@ export function AppSidebar() {
                             <ChevronDown className={cn("h-3 w-3 text-slate-400 transition-transform", isStageOpen && "rotate-180")} />
                           </button>
                           
-                          {/* 三级菜单 (具体科目) */}
                           {isStageOpen && (
                             <div className="ml-2 mt-1 space-y-0.5 border-l-2 border-slate-200 pl-2">
                               {group.items.map((item, idx) => (
@@ -332,7 +329,7 @@ export function AppSidebar() {
             )}
           </div>
 
-          {/* C. 历史会话 (一级菜单) */}
+          {/* C. 历史会话 */}
           <div className="mt-2">
              <button
               onClick={() => {
@@ -354,7 +351,6 @@ export function AppSidebar() {
               )}
             </button>
 
-            {/* 历史记录列表 */}
             {isOpen && isHistoryExpanded && (
               <div className="mt-2 pl-2 space-y-1 animate-in slide-in-from-top-2">
                  {sessions.length === 0 ? (
@@ -380,9 +376,12 @@ export function AppSidebar() {
 
         </div>
 
-        {/* --- 底部用户固定区域 --- */}
+        {/* --- 底部用户固定区域 (已优化) --- 
+            移除了 absolute, 改为 mt-auto (自动顶到底部) + shrink-0 (防止被压缩)
+            修复了手机端可能错位的问题
+        */}
         <div 
-          className="absolute bottom-0 left-0 right-0 border-t border-[#E5E0D6] p-3 bg-[#FDFBF7] z-50" 
+          className="mt-auto shrink-0 border-t border-[#E5E0D6] p-3 bg-[#FDFBF7] z-50 sticky bottom-0" 
           ref={menuRef}
         >
           {showUserMenu && isOpen && (
@@ -435,6 +434,7 @@ export function AppSidebar() {
           ) : (
             <Link href="/login" onClick={handleMobileClick}>
               {isOpen ? (
+                // ✅ 这里保留了 text-white，确保按钮文字是白色的
                 <Button className="w-full bg-[#0F766E] hover:bg-[#0d655d] text-white font-bold shadow-md">
                   登录 / 注册
                 </Button>
