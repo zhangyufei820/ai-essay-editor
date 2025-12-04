@@ -1,16 +1,16 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button" 
 import { 
   Home, FileText, Settings, ChevronRight,
   PanelLeftClose, PanelLeftOpen, LogOut, Zap, Coins,
   ChevronDown, History, BookOpen, GraduationCap, School, 
-  Library, PenTool, Calculator, Globe, Microscope,
+  Library, PenTool, Calculator, Globe,  Microscope,
   FlaskConical, Dna, Hourglass, Landmark, Gavel,
-  BookA, Bot, LayoutGrid, Sparkles
+  BookA, Bot, LayoutGrid
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { createClient } from "@supabase/supabase-js"
@@ -52,11 +52,8 @@ export function AppSidebar() {
   const menuRef = useRef<HTMLDivElement>(null)
 
   // --- 菜单折叠状态 ---
-  // 1. 一级菜单折叠状态
-  const [isAgentsExpanded, setIsAgentsExpanded] = useState(true) // 智能体合集默认展开
-  const [isHistoryExpanded, setIsHistoryExpanded] = useState(false) // 历史记录默认收起
-
-  // 2. 二级菜单（学段）折叠状态
+  const [isAgentsExpanded, setIsAgentsExpanded] = useState(true) 
+  const [isHistoryExpanded, setIsHistoryExpanded] = useState(false) 
   const [expandedStages, setExpandedStages] = useState<Record<string, boolean>>({
     "primary": false, "middle": false, "high": false, "uni": false
   })
@@ -167,7 +164,10 @@ export function AppSidebar() {
     localStorage.removeItem('currentUser')
     window.location.href = "/login"
   }
+  
+  // 手机端点击后自动收起
   const handleMobileClick = () => { if (window.innerWidth < 768) setIsOpen(false) }
+  
   const getDisplayName = () => user?.user_metadata?.name || user?.email?.split('@')[0] || "普通用户"
   const getAvatarUrl = () => user?.user_metadata?.avatar_url || null
 
@@ -191,7 +191,11 @@ export function AppSidebar() {
       <div 
         className={cn(
           "flex h-screen supports-[height:100dvh]:h-[100dvh] sticky top-0 flex-col border-r border-[#E5E0D6] bg-[#FDFBF7] transition-all duration-300 ease-in-out z-40",
-          isOpen ? "w-64" : "w-[70px]" // 收起时保留 70px 宽度显示图标
+          // ✅ 核心修复：手机端收起时宽度为0 (w-0)，隐藏溢出 (overflow-hidden)，去掉边框 (border-none)
+          // ✅ 电脑端收起时保留图标栏 (md:w-[70px])，显示溢出内容如Tooltip (md:overflow-visible)，保留边框 (md:border-r)
+          isOpen 
+            ? "w-64 border-r" 
+            : "w-0 border-none overflow-hidden md:w-[70px] md:border-r md:overflow-visible" 
         )}
       >
         {/* 内部折叠/展开按钮 */}
@@ -199,7 +203,9 @@ export function AppSidebar() {
           onClick={() => setIsOpen(!isOpen)}
           className={cn(
             "absolute -right-3 top-6 flex h-6 w-6 items-center justify-center rounded-full border border-gray-200 bg-white text-slate-400 shadow-sm hover:text-slate-600 transition-all z-50",
-            !isOpen && "rotate-180"
+            !isOpen && "rotate-180",
+            // 手机端收起时隐藏这个按钮，防止悬浮在半空
+            !isOpen && "hidden md:flex" 
           )}
         >
           <PanelLeftClose className="h-3.5 w-3.5" />
@@ -359,7 +365,7 @@ export function AppSidebar() {
                     sessions.map(session => (
                        <Link 
                          key={session.id}
-                         href="/chat" // 实际项目中应带上 id: /chat?id=xxx
+                         href="/chat" 
                          onClick={handleMobileClick}
                          className="block mx-2 rounded-lg px-3 py-2 hover:bg-white hover:shadow-sm transition-all group"
                        >
