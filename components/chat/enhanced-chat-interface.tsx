@@ -5,19 +5,38 @@ import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Send, Paperclip, X, FileText, Copy, Check, Loader2, CheckCircle2, AlertCircle, Sparkles, User, Brain, PanelLeftClose, PanelLeftOpen } from "lucide-react"
+import { 
+  Send, Paperclip, X, FileText, Copy, Loader2, Sparkles, User, Brain, AlertCircle, 
+  ChevronDown, Crown, Image as ImageIcon, Music, Video, Zap, Bot, Film, Palette, AudioLines
+} from "lucide-react"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
-import { Progress } from "@/components/ui/progress"
 import { AnalysisStages } from "./analysis-stages"
-import { ChatSidebar, type ChatSession } from "./chat-sidebar"
 import { createClient } from "@supabase/supabase-js"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuLabel
+} from "@/components/ui/dropdown-menu"
 
+// --- Supabase 初始化 ---
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
+// --- 类型定义 ---
+type UploadedFile = { name: string; type: string; size: number; data: string; preview?: string; difyFileId?: string }
+type Message = { id: string; role: "user" | "assistant"; content: string }
+type FileProcessingState = { status: "idle" | "uploading" | "processing" | "recognizing" | "complete" | "error"; progress: number; message: string }
+
+// ✅ 新增模型定义
+type ModelType = "standard" | "gpt-5" | "claude-opus" | "gemini-pro" | "banana-2-pro" | "sono-v5" | "sora-2-pro"
+type GenMode = "text" | "image" | "music" | "video"
+
+// --- 辅助组件：思考加载器 ---
 const SimpleBrainLoader = () => (
   <div className="flex items-center gap-3 py-6 px-4 bg-white/50 rounded-xl border border-dashed border-[#0F766E]/20">
     <div className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-[#0F766E]/10">
@@ -29,6 +48,7 @@ const SimpleBrainLoader = () => (
   </div>
 )
 
+// --- 辅助组件：文本渲染器 ---
 const InlineText = ({ text }: { text: string }) => {
   if (!text) return null;
   const parts = text.split(/(\*\*.*?\*\*)/g);
@@ -102,20 +122,24 @@ const TableBlock = ({ lines }: { lines: string[] }) => {
   } catch (e) { return null; }
 };
 
-type UploadedFile = { name: string; type: string; size: number; data: string; preview?: string; difyFileId?: string }
-type Message = { id: string; role: "user" | "assistant"; content: string }
-type FileProcessingState = { status: "idle" | "uploading" | "processing" | "recognizing" | "complete" | "error"; progress: number; message: string }
-
+// --- 主组件 ---
 export function EnhancedChatInterface() {
   const [userId, setUserId] = useState<string>("")
-  
-  // ✨ 新增：用户头像 URL 状态
   const [userAvatar, setUserAvatar] = useState<string>("")
-
+  const [userCredits, setUserCredits] = useState<number>(0)
   const sessionIdRef = useRef<string | null>(null)
-  const [sessions, setSessions] = useState<ChatSession[]>([])
   const [currentSessionId, setCurrentSessionId] = useState<string>("")
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true)
+
+  // --- 新增状态：模型与模式 ---
+  const [selectedModel, setSelectedModel] = useState<ModelType>("standard")
+  const [genMode, setGenMode] = useState<GenMode>("text")
+  
+  // 模拟每日免费额度 (实际项目应从数据库获取)
+  const [dailyUsage, setDailyUsage] = useState<number>(0)
+  const DAILY_LIMIT = 20
+
+  // 判断是否为豪华会员 (模拟：积分 > 1000 或 metadata 标记)
+  const isLuxury = userCredits > 1000 
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -124,21 +148,20 @@ export function EnhancedChatInterface() {
         try {
           const user = JSON.parse(userStr)
           setUserId(user.id || user.sub || user.userId || "")
-          // ✅ 获取头像
-          if (user.user_metadata?.avatar_url) {
-            setUserAvatar(user.user_metadata.avatar_url)
-          }
-          if (user.id || user.sub || user.userId) fetchSessions(user.id || user.sub || user.userId)
+          if (user.user_metadata?.avatar_url) setUserAvatar(user.user_metadata.avatar_url)
+          // 获取积分
+          fetchCredits(user.id || user.sub || user.userId)
         } catch (e) {}
       }
     }
   }, [])
 
-  const fetchSessions = async (uid: string) => {
-    const { data } = await supabase.from('chat_sessions').select('*').eq('user_id', uid).order('created_at', { ascending: false })
-    if (data) setSessions(data.map((s: any) => ({ id: s.id, title: s.title || "新对话", date: new Date(s.created_at).getTime(), preview: s.preview || "" })))
+  const fetchCredits = async (uid: string) => {
+    const { data } = await supabase.from('user_credits').select('credits').eq('user_id', uid).single()
+    if (data) setUserCredits(data.credits)
   }
 
+  // 消息加载逻辑
   const fetchMessages = async (sessionId: string) => {
     const { data } = await supabase.from('chat_messages').select('*').eq('session_id', sessionId).order('created_at', { ascending: true })
     setMessages(data ? data.map((m: any) => ({ id: m.id, role: m.role, content: m.content })) : [])
@@ -150,7 +173,6 @@ export function EnhancedChatInterface() {
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
   const [fileProcessing, setFileProcessing] = useState<FileProcessingState>({ status: "idle", progress: 0, message: "" })
   const [isComplexMode, setIsComplexMode] = useState(false)
-  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null)
   const [analysisStage, setAnalysisStage] = useState(0)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -160,61 +182,131 @@ export function EnhancedChatInterface() {
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }) }, [messages])
   useEffect(() => { if (isLoading && isComplexMode && analysisStage < 4) setTimeout(() => setAnalysisStage(p => Math.min(p + 1, 4)), 2000) }, [isLoading, analysisStage, isComplexMode])
 
-  const handleSelectSession = (sessionId: string) => { setCurrentSessionId(sessionId); sessionIdRef.current = sessionId; fetchMessages(sessionId) }
-  const handleNewChat = () => { setCurrentSessionId(""); sessionIdRef.current = null; setMessages([]); setUploadedFiles([]); setIsComplexMode(false) }
-  const handleDeleteSession = async (sessionId: string) => { 
-    setSessions(s => s.filter(i => i.id !== sessionId)); 
-    if (sessionId === currentSessionId) handleNewChat(); 
-    await supabase.from('chat_sessions').delete().eq('id', sessionId) 
+  // --- 模型配置 (新增 Banana/Sono/Sora) ---
+  const modelConfig = {
+    "standard": { name: "作文批改智能体", icon: Sparkles, color: "text-[#0F766E]", badge: null },
+    
+    // 文本大模型
+    "gpt-5": { name: "ChatGPT 5.1", icon: Zap, color: "text-emerald-600", badge: "Plus" },
+    "claude-opus": { name: "Claude Opus 4.5", icon: Bot, color: "text-orange-600", badge: "Pro" },
+    "gemini-pro": { name: "Gemini 3.0 Pro", icon: Sparkles, color: "text-blue-600", badge: "Adv" },
+    
+    // 多模态生成模型
+    "banana-2-pro": { name: "Banana 2 Pro", icon: Palette, color: "text-yellow-500", badge: "Art" },
+    "sono-v5": { name: "Sono V5", icon: AudioLines, color: "text-pink-500", badge: "Music" },
+    "sora-2-pro": { name: "Sora 2 Pro", icon: Film, color: "text-indigo-600", badge: "Video" },
   }
-  
+
+  // --- 切换模型逻辑 (已修复：允许切换并重置模式) ---
+  const handleModelChange = (model: ModelType) => {
+    if (model !== "standard") {
+      if (isLuxury) {
+        toast.success(`已切换至 ${modelConfig[model].name}`, { description: "豪华会员无限畅享" })
+      } else {
+        if (dailyUsage < DAILY_LIMIT) {
+          toast.info(`已切换至 ${modelConfig[model].name}`, { description: `今日免费额度: ${dailyUsage}/${DAILY_LIMIT} 次` })
+        } else {
+          toast.warning(`今日免费额度已耗尽`, { description: "继续使用将消耗 50 积分/次，升级豪华会员无限畅享" })
+        }
+      }
+    } else {
+      toast.success("已切换至标准智能体")
+    }
+    
+    // ✅ 修复：切换左侧模型时，默认重置回文本模式
+    // 如果是生成模型(Banana/Sono/Sora)，则保持对应的模式
+    if (model === "banana-2-pro") setGenMode("image")
+    else if (model === "sono-v5") setGenMode("music")
+    else if (model === "sora-2-pro") setGenMode("video")
+    else setGenMode("text")
+
+    setSelectedModel(model)
+    
+    if (input === "" || input.startsWith("生成")) {
+       setInput("")
+    }
+  }
+
+  // --- 切换模式逻辑 (点击右侧图标) ---
+  const handleModeChange = (mode: GenMode) => {
+    setGenMode(mode)
+    
+    // ✅ 智能联动：点击右侧图标，左侧模型自动切换
+    if (mode === "image") setSelectedModel("banana-2-pro")
+    else if (mode === "music") setSelectedModel("sono-v5")
+    else if (mode === "video") setSelectedModel("sora-2-pro")
+    else setSelectedModel("standard") // 回到文本时切回标准
+
+    const prompts = {
+      "text": "",
+      "image": "生成一张关于...的插画，风格是...",
+      "music": "生成一首轻快的钢琴曲，时长30秒...",
+      "video": "生成一段4秒的视频，内容是..."
+    }
+    setInput(prompts[mode])
+    if (mode !== "text") textareaRef.current?.focus()
+  }
+
+  // --- 计算消耗积分 ---
+  const calculateCost = () => {
+    if (genMode === "video") return 300
+    if (genMode === "music") return 100
+    if (genMode === "image") return isLuxury ? 0 : 50
+    
+    if (selectedModel !== "standard") {
+      if (isLuxury) return 0 
+      if (dailyUsage < DAILY_LIMIT) return 0 
+      return 50 
+    }
+    return userId ? 20 : 0 
+  }
+
+  // 文件上传逻辑
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files; if (!files || !files.length) return;
     setFileProcessing({ status: "uploading", progress: 0, message: "正在上传..." })
-    const newFiles: UploadedFile[] = []
-    
     try {
         const uploadPromises = Array.from(files).map(async (file) => {
             const formData = new FormData(); 
             formData.append("file", file); 
             formData.append("user", userId)
-            
             const res = await fetch("/api/dify-upload", { method: "POST", body: formData })
             if (!res.ok) throw new Error("上传失败");
-            
             const data = await res.json()
             return new Promise<UploadedFile>((resolve) => {
                 const reader = new FileReader(); 
                 reader.onload = e => resolve({ 
-                    name: file.name, 
-                    type: file.type, 
-                    size: file.size, 
-                    data: e.target?.result as string, 
-                    difyFileId: data.id, 
-                    preview: file.type.startsWith("image/") ? e.target?.result as string : undefined 
+                    name: file.name, type: file.type, size: file.size, data: e.target?.result as string, 
+                    difyFileId: data.id, preview: file.type.startsWith("image/") ? e.target?.result as string : undefined 
                 });
                 reader.readAsDataURL(file)
             })
         });
-
         const results = await Promise.all(uploadPromises);
         setUploadedFiles(p => [...p, ...results]);
         setFileProcessing({ status: "idle", progress: 100, message: "上传完成" })
         setTimeout(() => setFileProcessing({ status: "idle", progress: 0, message: "" }), 1000)
-
     } catch(e) {
         toast.error("部分文件上传失败")
         setFileProcessing({ status: "error", progress: 0, message: "上传失败" })
     }
-    
     if(fileInputRef.current) fileInputRef.current.value=""
   }
 
   const removeFile = (i: number) => setUploadedFiles(p => p.filter((_, idx) => idx !== i))
 
+  // 提交逻辑
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault(); if (!userId) { toast.error("请登录"); return }
     const txt = (input || "").trim(); if (!txt && !uploadedFiles.length) return
+    
+    // 检查积分
+    const cost = calculateCost()
+    if (userCredits < cost) {
+      toast.error("积分不足", { description: `本次操作需要 ${cost} 积分，当前余额 ${userCredits}` })
+      return
+    }
+
     setFileProcessing({ status: "idle", progress: 0, message: "" })
     setIsLoading(true); setAnalysisStage(0); 
     setIsComplexMode(uploadedFiles.length > 0 || txt.length > 150)
@@ -223,14 +315,13 @@ export function EnhancedChatInterface() {
     const userMsg: Message = { id: Date.now().toString(), role: "user", content: txt || "批改作文" }
     setMessages(p => [...p, userMsg]); setInput(""); setUploadedFiles([])
     
-    const existing = sessions.find(s => s.id === sid)
+    // 会话标题处理
     const preview = userMsg.content.slice(0, 30)
+    const { data: existing } = await supabase.from('chat_sessions').select('id').eq('id', sid).single()
     if (!existing) {
         await supabase.from('chat_sessions').insert({ id: sid, user_id: userId, title: userMsg.content.slice(0, 10)|| "作文", preview })
-        setSessions(p => [{ id: sid, title: userMsg.content.slice(0, 10)|| "作文", date: Date.now(), preview }, ...p])
     } else {
         await supabase.from('chat_sessions').update({ preview }).eq('id', sid)
-        setSessions(p => p.map(s => s.id === sid ? { ...s, preview } : s))
     }
     await supabase.from('chat_messages').insert({ session_id: sid, role: "user", content: userMsg.content })
 
@@ -241,7 +332,15 @@ export function EnhancedChatInterface() {
         const fileIds = uploadedFiles.map(f => f.difyFileId).filter(Boolean)
         const res = await fetch("/api/dify-chat", {
             method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ query: userMsg.content, fileIds, userId, conversation_id: sessionIdRef.current })
+            body: JSON.stringify({ 
+              query: userMsg.content, 
+              fileIds, 
+              userId, 
+              conversation_id: sessionIdRef.current,
+              // 传递额外参数给后端
+              model: selectedModel,
+              mode: genMode
+            })
         })
         if (res.status === 402) throw new Error("积分不足")
         if (!res.ok) throw new Error("请求失败")
@@ -264,9 +363,23 @@ export function EnhancedChatInterface() {
             }
         }
         if (hasRec) await supabase.from('chat_messages').insert({ session_id: sid, role: "assistant", content: fullText })
+        
+        // 成功后更新本地积分和使用次数
+        setUserCredits(prev => prev - cost)
+        if (selectedModel !== "standard" && !isLuxury && dailyUsage < DAILY_LIMIT) {
+          setDailyUsage(prev => prev + 1)
+        }
+
     } catch (e: any) {
         toast.error(e.message || "出错了"); setMessages(p => p.filter(m => m.id !== botId))
-    } finally { setIsLoading(false) }
+    } finally { 
+      setIsLoading(false)
+      // 任务完成后重置为文本模式
+      if (genMode !== "text") {
+        setGenMode("text")
+        setSelectedModel("standard")
+      }
+    }
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -275,27 +388,25 @@ export function EnhancedChatInterface() {
 
   return (
     <div className="flex h-screen w-full bg-[#FAFAF9] overflow-hidden relative">
-      
-      <div className={cn("h-full shrink-0 border-r border-[#E5E0D6] bg-white transition-all duration-300 ease-in-out z-10", isSidebarOpen ? "w-80" : "w-0 overflow-hidden opacity-0")}>
-        <ChatSidebar currentSessionId={currentSessionId} sessions={sessions} onSelectSession={handleSelectSession} onNewChat={handleNewChat} onDeleteSession={handleDeleteSession} />
-      </div>
-
       <div className="flex flex-1 flex-col h-full relative min-w-0 bg-white">
-        
-        <div className="absolute left-6 top-6 z-20">
-          <Button variant="ghost" size="icon" onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="h-9 w-9 rounded-xl bg-white border border-gray-200 shadow-sm hover:bg-gray-50 text-slate-500">
-            {isSidebarOpen ? <PanelLeftClose className="h-5 w-5" /> : <PanelLeftOpen className="h-5 w-5" />}
-          </Button>
-        </div>
-
         <div className="flex-1 h-0">
           <ScrollArea className="h-full">
-            <div className="mx-auto max-w-4xl px-6 py-10">
+            <div className="mx-auto max-w-4xl px-4 md:px-6 py-10">
               {messages.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-24 text-center">
+                <div className="flex flex-col items-center justify-center py-24 text-center animate-in fade-in zoom-in duration-500">
                   <div className="mb-8 flex h-20 w-20 items-center justify-center rounded-3xl bg-[#0F766E]/10 shadow-lg shadow-[#0F766E]/5"><FileText className="h-10 w-10 text-[#0F766E]" /></div>
                   <h1 className="mb-4 text-3xl font-extrabold text-slate-800 tracking-tight">你好！欢迎使用沈翔智学！</h1>
-                  <p className="mb-2 max-w-lg text-lg text-slate-500 font-medium">专业的作文批改专家，为学生习作提供深度点评。</p>
+                  <p className="mb-6 max-w-lg text-lg text-slate-500 font-medium">专业的作文批改专家，为学生习作提供深度点评。</p>
+                  
+                  {/* 引导标签 */}
+                  <div className="flex gap-2 justify-center flex-wrap">
+                    <span className="px-3 py-1 bg-orange-50 text-orange-600 text-xs font-bold rounded-full border border-orange-100 flex items-center gap-1">
+                      <Crown className="h-3 w-3" /> 豪华会员畅享 ChatGPT 5.1 / Claude 4.5 / Gemini 3.0
+                    </span>
+                    <span className="px-3 py-1 bg-blue-50 text-blue-600 text-xs font-bold rounded-full border border-blue-100 flex items-center gap-1">
+                      <Video className="h-3 w-3" /> 支持视频生成
+                    </span>
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-10 pt-12">
@@ -306,7 +417,6 @@ export function EnhancedChatInterface() {
                           <Sparkles className="h-6 w-6" />
                         </div>
                       )}
-                      
                       <div className={cn(
                         "relative rounded-3xl px-8 py-6 shadow-sm border",
                         message.role === "user" 
@@ -320,7 +430,6 @@ export function EnhancedChatInterface() {
                               isComplexMode ? <AnalysisStages /> : <SimpleBrainLoader />
                            ) : <UltimateRenderer content={message.content} />
                         )}
-                        
                         {message.role === "assistant" && message.content && (
                           <div className="mt-6 flex items-center justify-end border-t border-gray-100 pt-4">
                             <Button variant="ghost" size="sm" className="h-8 gap-2 text-xs text-slate-400 hover:text-[#0F766E] hover:bg-[#0F766E]/5 transition-colors" onClick={() => navigator.clipboard.writeText(message.content).then(() => toast.success("已复制"))}>
@@ -329,10 +438,8 @@ export function EnhancedChatInterface() {
                           </div>
                         )}
                       </div>
-                      
                       {message.role === "user" && (
                         <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-200 shadow-inner mt-1 overflow-hidden">
-                          {/* ✅ 核心修改：显示用户头像 */}
                           {userAvatar ? (
                             <img src={userAvatar} alt="Me" className="h-full w-full object-cover" />
                           ) : (
@@ -349,8 +456,8 @@ export function EnhancedChatInterface() {
           </ScrollArea>
         </div>
 
-        {/* 底部输入框 (保持不变) */}
-        <div className="border-t border-gray-100 bg-white/90 backdrop-blur-md p-6 shrink-0 z-20">
+        {/* --- 底部输入框区域 (全新重构) --- */}
+        <div className="border-t border-gray-100 bg-white/90 backdrop-blur-md p-3 md:p-6 shrink-0 z-20">
           <div className="mx-auto max-w-4xl">
             {fileProcessing.status !== "idle" && (
               <div className="mb-4 rounded-xl border border-[#0F766E]/20 bg-[#F0FDF9] p-4 shadow-sm animate-in slide-in-from-bottom-2">
@@ -372,28 +479,146 @@ export function EnhancedChatInterface() {
               </div>
             )}
 
-            <form onSubmit={onSubmit} className="relative shadow-lg shadow-gray-200/50 rounded-2xl">
-              <div className="flex items-end gap-3 rounded-2xl border border-gray-200 bg-white p-2 pl-3 focus-within:border-[#0F766E] focus-within:ring-2 focus-within:ring-[#0F766E]/20 transition-all">
-                <Button type="button" variant="ghost" size="icon" className="h-11 w-11 shrink-0 rounded-xl text-slate-400 hover:text-[#0F766E] hover:bg-[#0F766E]/5" onClick={() => fileInputRef.current?.click()} disabled={isLoading}>
-                  <Paperclip className="h-6 w-6" />
+            {/* 新版输入框容器 */}
+            <form onSubmit={onSubmit} className="relative shadow-lg shadow-gray-200/50 rounded-2xl border border-gray-200 bg-white transition-all focus-within:border-[#0F766E] focus-within:ring-2 focus-within:ring-[#0F766E]/10">
+              
+              {/* Top Toolbar: 模型切换 & 多模态工具 */}
+              <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100 bg-gray-50/50 rounded-t-2xl">
+                {/* 左侧：模型选择 */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button type="button" variant="ghost" size="sm" className="h-8 gap-2 text-slate-600 hover:bg-white hover:shadow-sm transition-all rounded-lg px-2 data-[state=open]:bg-white data-[state=open]:text-[#0F766E]">
+                      {(() => {
+                        const CurrentIcon = modelConfig[selectedModel].icon
+                        return <CurrentIcon className={cn("h-4 w-4", modelConfig[selectedModel].color)} />
+                      })()}
+                      {/* 手机端隐藏文字，只显示图标，防止拥挤 */}
+                      <span className="font-semibold text-xs hidden sm:inline">{modelConfig[selectedModel].name}</span>
+                      <ChevronDown className="h-3 w-3 opacity-50" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-60 p-1 z-50">
+                    <DropdownMenuLabel className="text-xs text-slate-400 font-normal px-2 py-1.5">
+                      选择 AI 模型 (今日免费: {DAILY_LIMIT - dailyUsage}/{DAILY_LIMIT})
+                    </DropdownMenuLabel>
+                    {(Object.entries(modelConfig) as [ModelType, any][]).map(([key, config]) => (
+                      <DropdownMenuItem 
+                        key={key} 
+                        onClick={() => handleModelChange(key)}
+                        className={cn(
+                          "flex items-center gap-3 px-2 py-2.5 rounded-md cursor-pointer focus:bg-[#0F766E]/5",
+                          selectedModel === key && "bg-[#0F766E]/10"
+                        )}
+                      >
+                        <div className={cn("flex h-8 w-8 items-center justify-center rounded-lg border border-gray-100 bg-white shadow-sm", config.color)}>
+                          <config.icon className="h-4 w-4" />
+                        </div>
+                        <div className="flex flex-col flex-1">
+                          <span className={cn("text-sm font-semibold", selectedModel === key ? "text-[#0F766E]" : "text-slate-700")}>
+                            {config.name}
+                          </span>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            {config.badge && (
+                              <span className="text-[10px] text-amber-500 flex items-center gap-0.5 font-medium bg-amber-50 px-1.5 rounded-full border border-amber-100">
+                                <Crown className="h-2.5 w-2.5" /> {config.badge}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        {selectedModel === key && <div className="h-2 w-2 rounded-full bg-[#0F766E]" />}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                {/* 右侧：多模态工具 */}
+                <div className="flex items-center gap-1">
+                  <div className="h-4 w-px bg-gray-200 mx-1" />
+                  <Button 
+                    type="button" variant="ghost" size="sm" 
+                    onClick={() => handleModeChange("image")}
+                    className={cn("h-8 w-8 rounded-lg p-0 hover:bg-white hover:text-purple-600 transition-colors", genMode === "image" && "bg-purple-50 text-purple-600")}
+                    title="AI 绘图 (Banana 2 Pro)"
+                  >
+                    <ImageIcon className="h-4 w-4" />
+                  </Button>
+                  <Button 
+                    type="button" variant="ghost" size="sm" 
+                    onClick={() => handleModeChange("music")}
+                    className={cn("h-8 w-8 rounded-lg p-0 hover:bg-white hover:text-pink-600 transition-colors", genMode === "music" && "bg-pink-50 text-pink-600")}
+                    title="AI 音乐 (Sono V5)"
+                  >
+                    <Music className="h-4 w-4" />
+                  </Button>
+                  <Button 
+                    type="button" variant="ghost" size="sm" 
+                    onClick={() => handleModeChange("video")}
+                    className={cn("h-8 w-8 rounded-lg p-0 hover:bg-white hover:text-blue-600 transition-colors", genMode === "video" && "bg-blue-50 text-blue-600")}
+                    title="AI 视频 (Sora 2 Pro)"
+                  >
+                    <Video className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+
+              {/* Input Area */}
+              <div className="flex items-end gap-3 p-2 pl-3">
+                <Button type="button" variant="ghost" size="icon" className="h-10 w-10 shrink-0 rounded-xl text-slate-400 hover:text-[#0F766E] hover:bg-[#0F766E]/5" onClick={() => fileInputRef.current?.click()} disabled={isLoading}>
+                  <Paperclip className="h-5 w-5" />
                 </Button>
                 <input ref={fileInputRef} type="file" className="hidden" accept="image/*,.txt,.doc,.docx,.pdf" multiple onChange={handleFileUpload} />
+                
                 <Textarea
                   ref={textareaRef}
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder={userId ? "输入作文内容或上传图片，按 Enter 发送..." : "请先登录..."}
-                  className="min-h-[52px] max-h-[200px] flex-1 resize-none border-0 bg-transparent p-3 text-[16px] text-slate-800 placeholder:text-slate-400 focus-visible:ring-0 leading-relaxed"
+                  placeholder={
+                    genMode === "text" 
+                      ? (userId ? "输入内容开始批改或对话..." : "请先登录...") 
+                      : (genMode === "image" ? "描述你想生成的画面..." : genMode === "music" ? "描述音乐风格..." : "描述视频内容...")
+                  }
+                  className="min-h-[48px] max-h-[200px] flex-1 resize-none border-0 bg-transparent p-2.5 text-base text-slate-800 placeholder:text-slate-400 focus-visible:ring-0 leading-relaxed"
                   disabled={isLoading}
                   rows={1}
                 />
-                <Button type="submit" size="icon" className="h-11 w-11 shrink-0 rounded-xl bg-[#0F766E] text-white shadow-md hover:bg-[#0d655d] transition-all disabled:opacity-50 disabled:cursor-not-allowed" disabled={isLoading || (!input.trim() && uploadedFiles.length === 0)}>
-                  {isLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : <Send className="h-5 w-5 ml-0.5" />}
+                
+                {/* 发送按钮 - 修正为深青色 #0F766E */}
+                <Button 
+                  type="submit" 
+                  size="icon" 
+                  className={cn(
+                    "h-11 w-11 shrink-0 rounded-xl bg-[#0F766E] text-white shadow-md hover:bg-[#0d655d] transition-all disabled:opacity-50 disabled:cursor-not-allowed",
+                    genMode !== "text" && "bg-gradient-to-r from-purple-500 to-pink-500 hover:opacity-90"
+                  )}
+                  disabled={isLoading || (!input.trim() && uploadedFiles.length === 0)}
+                >
+                  {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5 ml-0.5" />}
                 </Button>
               </div>
             </form>
-            <p className="mt-4 text-center text-xs font-medium text-slate-400">{userId ? "深度批改 250 积分 / 普通对话 20 积分" : "未登录"}</p>
+
+            {/* 底部计费提示 (动态) */}
+            <p className="mt-4 text-center text-xs font-medium text-slate-400 flex items-center justify-center gap-2">
+              {userId ? (
+                <>
+                  <span>
+                    当前模式: 
+                    <span className={cn(
+                      "ml-1 font-bold",
+                      genMode === "text" ? "text-[#0F766E]" : "text-purple-600"
+                    )}>
+                      {genMode === "text" ? (selectedModel === "standard" ? "普通对话" : modelConfig[selectedModel].name) : 
+                       (genMode === "image" ? "AI 绘图" : genMode === "music" ? "AI 音乐" : "AI 视频")}
+                    </span>
+                  </span>
+                  <span className="w-1 h-1 rounded-full bg-slate-300" />
+                  <span>
+                    预计消耗: <span className="font-bold text-amber-500">{calculateCost()} 积分</span>
+                  </span>
+                </>
+              ) : "未登录"}
+            </p>
           </div>
         </div>
       </div>

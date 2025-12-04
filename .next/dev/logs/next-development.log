@@ -1,29 +1,188 @@
-[00:00:02.189] Server  WARN     ⚠ Minimum recommended TypeScript version is v5.1.0, older versions can potentially be incompatible with Next.js. Detected: 5.0.2
-[00:00:02.222] Server  WARN     ⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
-[00:00:02.406] Server  LOG      ✓ Ready in 1807ms
-[00:00:18.639] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
-[00:00:18.926] Browser WARN    Image with src "/images/logo.png" was detected as the Largest Contentful Paint (LCP). Please add the `loading="eager"` property if this image is above the fold.
+[00:00:01.654] Server  WARN     ⚠ Minimum recommended TypeScript version is v5.1.0, older versions can potentially be incompatible with Next.js. Detected: 5.0.2
+[00:00:01.685] Server  WARN     ⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+[00:00:01.834] Server  LOG      ✓ Ready in 1332ms
+[00:00:10.762] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:00:10.963] Browser WARN    GoTrueClient@sb-rnujdnmxufmzgjvmddla-auth-token:1 (2.86.0) 2025-12-03T08:37:29.006Z Multiple GoTrueClient instances detected in the same browser context. It is not an error, but this should be avoided as it may produce undefined behavior when used concurrently under the same storage key.
+[00:00:10.963] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
+[00:00:10.963] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/chat","route":"/chat"}
+[00:00:10.963] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3000/chat color: rgb(120, 120, 120) color: inherit {"dp":"/chat","o":"http://localhost:3000/chat","sdkn":"@vercel/analytics/next","sdkv":"1.5.0","sv":"0.1.3","ts":1764751049086}
+[00:22:19.160] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:22:20.421] Browser WARN    GoTrueClient@sb-rnujdnmxufmzgjvmddla-auth-token:1 (2.86.0) 2025-12-03T08:59:37.441Z Multiple GoTrueClient instances detected in the same browser context. It is not an error, but this should be avoided as it may produce undefined behavior when used concurrently under the same storage key.
+[00:22:20.422] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
+[00:22:20.422] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/chat","route":"/chat"}
+[00:22:20.422] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3000/chat color: rgb(120, 120, 120) color: inherit {"dp":"/chat","o":"http://localhost:3000/chat","sdkn":"@vercel/analytics/next","sdkv":"1.5.0","sv":"0.1.3","ts":1764752377591}
+[00:22:37.543] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:22:37.724] Browser WARN    GoTrueClient@sb-rnujdnmxufmzgjvmddla-auth-token:1 (2.86.0) 2025-12-03T08:59:55.749Z Multiple GoTrueClient instances detected in the same browser context. It is not an error, but this should be avoided as it may produce undefined behavior when used concurrently under the same storage key.
+[00:22:37.724] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
+[00:22:37.724] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/chat","route":"/chat"}
+[00:22:37.724] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3000/chat color: rgb(120, 120, 120) color: inherit {"dp":"/chat","o":"http://localhost:3000/chat","sdkn":"@vercel/analytics/next","sdkv":"1.5.0","sv":"0.1.3","ts":1764752395828}
+[00:22:41.901] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:22:42.095] Browser WARN    GoTrueClient@sb-rnujdnmxufmzgjvmddla-auth-token:1 (2.86.0) 2025-12-03T09:00:00.108Z Multiple GoTrueClient instances detected in the same browser context. It is not an error, but this should be avoided as it may produce undefined behavior when used concurrently under the same storage key.
+[00:22:42.095] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
+[00:22:42.095] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/chat","route":"/chat"}
+[00:22:42.095] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3000/chat color: rgb(120, 120, 120) color: inherit {"dp":"/chat","o":"http://localhost:3000/chat","sdkn":"@vercel/analytics/next","sdkv":"1.5.0","sv":"0.1.3","ts":1764752400198}
+[00:22:55.491] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3000/ color: rgb(120, 120, 120) color: inherit {"dp":"/","o":"http://localhost:3000/","sdkn":"@vercel/analytics/next","sdkv":"1.5.0","sv":"0.1.3","ts":1764752413548}
+[00:23:16.583] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:23:16.853] Browser WARN    Image with src "/images/logo.png" was detected as the Largest Contentful Paint (LCP). Please add the `loading="eager"` property if this image is above the fold.
 Read more: https://nextjs.org/docs/app/api-reference/components/image#loading
-[00:00:18.926] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
-[00:00:18.926] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/","route":"/"}
-[00:00:18.926] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3000/ color: rgb(120, 120, 120) color: inherit {"dp":"/","o":"http://localhost:3000/","r":"","sdkn":"@vercel/analytics/next","sdkv":"1.5.0","sv":"0.1.3","ts":1764648900526}
-[00:06:24.183] Server  LOG      ✓ Compiled in 130ms
-[00:06:24.716] Browser WARN    GoTrueClient@sb-rnujdnmxufmzgjvmddla-auth-token:1 (2.86.0) 2025-12-02T04:21:05.850Z Multiple GoTrueClient instances detected in the same browser context. It is not an error, but this should be avoided as it may produce undefined behavior when used concurrently under the same storage key.
-[00:06:38.111] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
-[00:06:38.381] Browser WARN    Image with src "/images/logo.png" was detected as the Largest Contentful Paint (LCP). Please add the `loading="eager"` property if this image is above the fold.
+[00:23:16.853] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
+[00:23:16.853] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/","route":"/"}
+[00:23:16.853] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3000/ color: rgb(120, 120, 120) color: inherit {"dp":"/","o":"http://localhost:3000/","sdkn":"@vercel/analytics/next","sdkv":"1.5.0","sv":"0.1.3","ts":1764752434955}
+[00:24:03.715] Browser WARN    GoTrueClient@sb-rnujdnmxufmzgjvmddla-auth-token:1 (2.86.0) 2025-12-03T09:01:21.783Z Multiple GoTrueClient instances detected in the same browser context. It is not an error, but this should be avoided as it may produce undefined behavior when used concurrently under the same storage key.
+[00:24:03.715] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3000/chat color: rgb(120, 120, 120) color: inherit {"dp":"/chat","o":"http://localhost:3000/chat","sdkn":"@vercel/analytics/next","sdkv":"1.5.0","sv":"0.1.3","ts":1764752481807}
+[00:27:41.339] Server  LOG      ✓ Compiled in 78ms
+[00:27:42.420] Browser WARN    GoTrueClient@sb-rnujdnmxufmzgjvmddla-auth-token:2 (2.86.0) 2025-12-03T09:04:59.523Z Multiple GoTrueClient instances detected in the same browser context. It is not an error, but this should be avoided as it may produce undefined behavior when used concurrently under the same storage key.
+[00:27:48.878] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:27:49.065] Browser WARN    GoTrueClient@sb-rnujdnmxufmzgjvmddla-auth-token:1 (2.86.0) 2025-12-03T09:05:07.097Z Multiple GoTrueClient instances detected in the same browser context. It is not an error, but this should be avoided as it may produce undefined behavior when used concurrently under the same storage key.
+[00:27:49.065] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
+[00:27:49.065] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/chat","route":"/chat"}
+[00:27:49.065] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3000/chat color: rgb(120, 120, 120) color: inherit {"dp":"/chat","o":"http://localhost:3000/chat","sdkn":"@vercel/analytics/next","sdkv":"1.5.0","sv":"0.1.3","ts":1764752707163}
+[00:27:58.142] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:27:58.262] Browser WARN    GoTrueClient@sb-rnujdnmxufmzgjvmddla-auth-token:1 (2.86.0) 2025-12-03T09:05:16.347Z Multiple GoTrueClient instances detected in the same browser context. It is not an error, but this should be avoided as it may produce undefined behavior when used concurrently under the same storage key.
+[00:27:58.366] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
+[00:27:58.366] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/chat","route":"/chat"}
+[00:27:58.366] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3000/chat color: rgb(120, 120, 120) color: inherit {"dp":"/chat","o":"http://localhost:3000/chat","sdkn":"@vercel/analytics/next","sdkv":"1.5.0","sv":"0.1.3","ts":1764752716464}
+[00:28:42.485] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3000/ color: rgb(120, 120, 120) color: inherit {"dp":"/","o":"http://localhost:3000/","sdkn":"@vercel/analytics/next","sdkv":"1.5.0","sv":"0.1.3","ts":1764752760534}
+[18:37:12.005] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[18:37:12.286] Browser WARN    Image with src "/images/logo.png" was detected as the Largest Contentful Paint (LCP). Please add the `loading="eager"` property if this image is above the fold.
 Read more: https://nextjs.org/docs/app/api-reference/components/image#loading
-[00:06:38.381] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
-[00:06:38.381] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/","route":"/"}
-[00:06:38.381] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3000/ color: rgb(120, 120, 120) color: inherit {"dp":"/","o":"http://localhost:3000/","r":"","sdkn":"@vercel/analytics/next","sdkv":"1.5.0","sv":"0.1.3","ts":1764649279968}
-[00:07:01.222] Browser WARN    GoTrueClient@sb-rnujdnmxufmzgjvmddla-auth-token:1 (2.86.0) 2025-12-02T04:21:42.766Z Multiple GoTrueClient instances detected in the same browser context. It is not an error, but this should be avoided as it may produce undefined behavior when used concurrently under the same storage key.
-[00:07:01.222] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3000/chat color: rgb(120, 120, 120) color: inherit {"dp":"/chat","o":"http://localhost:3000/chat","sdkn":"@vercel/analytics/next","sdkv":"1.5.0","sv":"0.1.3","ts":1764649302800}
-[00:07:04.412] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3000/teacher color: rgb(120, 120, 120) color: inherit {"dp":"/teacher","o":"http://localhost:3000/teacher","sdkn":"@vercel/analytics/next","sdkv":"1.5.0","sv":"0.1.3","ts":1764649305994}
-[00:07:06.564] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3000/parent color: rgb(120, 120, 120) color: inherit {"dp":"/parent","o":"http://localhost:3000/parent","sdkn":"@vercel/analytics/next","sdkv":"1.5.0","sv":"0.1.3","ts":1764649308149}
-[00:07:08.338] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3000/ color: rgb(120, 120, 120) color: inherit {"dp":"/","o":"http://localhost:3000/","sdkn":"@vercel/analytics/next","sdkv":"1.5.0","sv":"0.1.3","ts":1764649309889}
-[00:07:11.962] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3000/pricing color: rgb(120, 120, 120) color: inherit {"dp":"/pricing","o":"http://localhost:3000/pricing","sdkn":"@vercel/analytics/next","sdkv":"1.5.0","sv":"0.1.3","ts":1764649313546}
-[00:07:12.816] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3000/parent color: rgb(120, 120, 120) color: inherit {"dp":"/parent","o":"http://localhost:3000/parent","sdkn":"@vercel/analytics/next","sdkv":"1.5.0","sv":"0.1.3","ts":1764649314400}
-[00:07:13.843] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3000/teacher color: rgb(120, 120, 120) color: inherit {"dp":"/teacher","o":"http://localhost:3000/teacher","sdkn":"@vercel/analytics/next","sdkv":"1.5.0","sv":"0.1.3","ts":1764649315425}
-[00:17:39.521] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
-[00:17:39.719] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
-[00:17:39.719] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/teacher","route":"/teacher"}
-[00:17:39.719] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3000/teacher color: rgb(120, 120, 120) color: inherit {"dp":"/teacher","o":"http://localhost:3000/teacher","r":"","sdkn":"@vercel/analytics/next","sdkv":"1.5.0","sv":"0.1.3","ts":1764649941384}
+[18:37:12.286] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
+[18:37:12.286] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/","route":"/"}
+[18:37:12.286] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3000/ color: rgb(120, 120, 120) color: inherit {"dp":"/","o":"http://localhost:3000/","sdkn":"@vercel/analytics/next","sdkv":"1.5.0","sv":"0.1.3","ts":1764818069952}
+[18:37:26.524] Browser WARN    GoTrueClient@sb-rnujdnmxufmzgjvmddla-auth-token:1 (2.86.0) 2025-12-04T03:14:44.158Z Multiple GoTrueClient instances detected in the same browser context. It is not an error, but this should be avoided as it may produce undefined behavior when used concurrently under the same storage key.
+[18:37:26.524] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3000/settings color: rgb(120, 120, 120) color: inherit {"dp":"/settings","o":"http://localhost:3000/settings","sdkn":"@vercel/analytics/next","sdkv":"1.5.0","sv":"0.1.3","ts":1764818084187}
+[18:37:35.446] Browser WARN    GoTrueClient@sb-rnujdnmxufmzgjvmddla-auth-token:2 (2.86.0) 2025-12-04T03:14:53.085Z Multiple GoTrueClient instances detected in the same browser context. It is not an error, but this should be avoided as it may produce undefined behavior when used concurrently under the same storage key.
+[18:37:35.446] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3000/chat color: rgb(120, 120, 120) color: inherit {"dp":"/chat","o":"http://localhost:3000/chat","sdkn":"@vercel/analytics/next","sdkv":"1.5.0","sv":"0.1.3","ts":1764818093106}
+[18:37:45.656] Server  LOG     👤 [User: 692d7e1ba051ecf7d4374975] 请求 Dify...
+[18:37:47.674] Server  LOG     💰 扣费成功: -20
+[18:40:17.135] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[18:40:17.321] Browser WARN    GoTrueClient@sb-rnujdnmxufmzgjvmddla-auth-token:1 (2.86.0) 2025-12-04T03:17:34.899Z Multiple GoTrueClient instances detected in the same browser context. It is not an error, but this should be avoided as it may produce undefined behavior when used concurrently under the same storage key.
+[18:40:17.321] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
+[18:40:17.321] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/chat","route":"/chat"}
+[18:40:17.321] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3000/chat color: rgb(120, 120, 120) color: inherit {"dp":"/chat","o":"http://localhost:3000/chat","sdkn":"@vercel/analytics/next","sdkv":"1.5.0","sv":"0.1.3","ts":1764818254983}
+[18:45:21.749] Server  LOG      ✓ Compiled in 103ms
+[18:45:22.073] Browser WARN    GoTrueClient@sb-rnujdnmxufmzgjvmddla-auth-token:2 (2.86.0) 2025-12-04T03:22:39.485Z Multiple GoTrueClient instances detected in the same browser context. It is not an error, but this should be avoided as it may produce undefined behavior when used concurrently under the same storage key.
+[18:45:27.757] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[18:45:27.945] Browser WARN    GoTrueClient@sb-rnujdnmxufmzgjvmddla-auth-token:1 (2.86.0) 2025-12-04T03:22:45.555Z Multiple GoTrueClient instances detected in the same browser context. It is not an error, but this should be avoided as it may produce undefined behavior when used concurrently under the same storage key.
+[18:45:28.063] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
+[18:45:28.063] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/chat","route":"/chat"}
+[18:45:28.063] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3000/chat color: rgb(120, 120, 120) color: inherit {"dp":"/chat","o":"http://localhost:3000/chat","sdkn":"@vercel/analytics/next","sdkv":"1.5.0","sv":"0.1.3","ts":1764818565714}
+[18:45:33.115] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[18:45:33.279] Browser WARN    GoTrueClient@sb-rnujdnmxufmzgjvmddla-auth-token:1 (2.86.0) 2025-12-04T03:22:50.879Z Multiple GoTrueClient instances detected in the same browser context. It is not an error, but this should be avoided as it may produce undefined behavior when used concurrently under the same storage key.
+[18:45:33.279] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
+[18:45:33.279] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/chat","route":"/chat"}
+[18:45:33.279] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3000/chat color: rgb(120, 120, 120) color: inherit {"dp":"/chat","o":"http://localhost:3000/chat","sdkn":"@vercel/analytics/next","sdkv":"1.5.0","sv":"0.1.3","ts":1764818570930}
+[18:45:48.512] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[18:45:48.678] Browser WARN    GoTrueClient@sb-rnujdnmxufmzgjvmddla-auth-token:1 (2.86.0) 2025-12-04T03:23:06.264Z Multiple GoTrueClient instances detected in the same browser context. It is not an error, but this should be avoided as it may produce undefined behavior when used concurrently under the same storage key.
+[18:45:48.678] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
+[18:45:48.678] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/chat","route":"/chat"}
+[18:45:48.678] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3000/chat color: rgb(120, 120, 120) color: inherit {"dp":"/chat","o":"http://localhost:3000/chat","sdkn":"@vercel/analytics/next","sdkv":"1.5.0","sv":"0.1.3","ts":1764818586328}
+[18:50:39.080] Server  LOG      ✓ Compiled in 99ms
+[18:50:40.072] Browser WARN    GoTrueClient@sb-rnujdnmxufmzgjvmddla-auth-token:2 (2.86.0) 2025-12-04T03:27:56.806Z Multiple GoTrueClient instances detected in the same browser context. It is not an error, but this should be avoided as it may produce undefined behavior when used concurrently under the same storage key.
+[18:50:44.427] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[18:50:44.590] Browser WARN    GoTrueClient@sb-rnujdnmxufmzgjvmddla-auth-token:1 (2.86.0) 2025-12-04T03:28:02.224Z Multiple GoTrueClient instances detected in the same browser context. It is not an error, but this should be avoided as it may produce undefined behavior when used concurrently under the same storage key.
+[18:50:44.695] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
+[18:50:44.695] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/chat","route":"/chat"}
+[18:50:44.695] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3000/chat color: rgb(120, 120, 120) color: inherit {"dp":"/chat","o":"http://localhost:3000/chat","sdkn":"@vercel/analytics/next","sdkv":"1.5.0","sv":"0.1.3","ts":1764818882335}
+[18:50:51.558] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[18:50:51.740] Browser WARN    GoTrueClient@sb-rnujdnmxufmzgjvmddla-auth-token:1 (2.86.0) 2025-12-04T03:28:09.311Z Multiple GoTrueClient instances detected in the same browser context. It is not an error, but this should be avoided as it may produce undefined behavior when used concurrently under the same storage key.
+[18:50:51.740] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
+[18:50:51.740] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/chat","route":"/chat"}
+[18:50:51.740] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3000/chat color: rgb(120, 120, 120) color: inherit {"dp":"/chat","o":"http://localhost:3000/chat","sdkn":"@vercel/analytics/next","sdkv":"1.5.0","sv":"0.1.3","ts":1764818889358}
+[18:53:08.980] Server  LOG      ✓ Compiled in 55ms
+[18:53:09.073] Browser WARN    GoTrueClient@sb-rnujdnmxufmzgjvmddla-auth-token:2 (2.86.0) 2025-12-04T03:30:26.741Z Multiple GoTrueClient instances detected in the same browser context. It is not an error, but this should be avoided as it may produce undefined behavior when used concurrently under the same storage key.
+[18:53:14.292] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[18:53:14.500] Browser WARN    GoTrueClient@sb-rnujdnmxufmzgjvmddla-auth-token:1 (2.86.0) 2025-12-04T03:30:32.082Z Multiple GoTrueClient instances detected in the same browser context. It is not an error, but this should be avoided as it may produce undefined behavior when used concurrently under the same storage key.
+[18:53:14.500] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
+[18:53:14.500] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/chat","route":"/chat"}
+[18:53:14.500] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3000/chat color: rgb(120, 120, 120) color: inherit {"dp":"/chat","o":"http://localhost:3000/chat","sdkn":"@vercel/analytics/next","sdkv":"1.5.0","sv":"0.1.3","ts":1764819032175}
+[18:53:18.576] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[18:53:18.758] Browser WARN    GoTrueClient@sb-rnujdnmxufmzgjvmddla-auth-token:1 (2.86.0) 2025-12-04T03:30:36.358Z Multiple GoTrueClient instances detected in the same browser context. It is not an error, but this should be avoided as it may produce undefined behavior when used concurrently under the same storage key.
+[18:53:18.758] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
+[18:53:18.758] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/chat","route":"/chat"}
+[18:53:18.758] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3000/chat color: rgb(120, 120, 120) color: inherit {"dp":"/chat","o":"http://localhost:3000/chat","sdkn":"@vercel/analytics/next","sdkv":"1.5.0","sv":"0.1.3","ts":1764819036433}
+[18:53:24.224] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[18:53:24.417] Browser WARN    GoTrueClient@sb-rnujdnmxufmzgjvmddla-auth-token:1 (2.86.0) 2025-12-04T03:30:42.006Z Multiple GoTrueClient instances detected in the same browser context. It is not an error, but this should be avoided as it may produce undefined behavior when used concurrently under the same storage key.
+[18:53:24.417] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
+[18:53:24.417] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/chat","route":"/chat"}
+[18:53:24.417] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3000/chat color: rgb(120, 120, 120) color: inherit {"dp":"/chat","o":"http://localhost:3000/chat","sdkn":"@vercel/analytics/next","sdkv":"1.5.0","sv":"0.1.3","ts":1764819042092}
+[18:55:25.948] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[18:55:26.052] Browser WARN    GoTrueClient@sb-rnujdnmxufmzgjvmddla-auth-token:1 (2.86.0) 2025-12-04T03:32:43.723Z Multiple GoTrueClient instances detected in the same browser context. It is not an error, but this should be avoided as it may produce undefined behavior when used concurrently under the same storage key.
+[18:55:26.153] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
+[18:55:26.153] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/chat","route":"/chat"}
+[18:55:26.153] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3000/chat color: rgb(120, 120, 120) color: inherit {"dp":"/chat","o":"http://localhost:3000/chat","sdkn":"@vercel/analytics/next","sdkv":"1.5.0","sv":"0.1.3","ts":1764819163826}
+[18:55:28.957] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[18:55:28.957] Browser WARN    GoTrueClient@sb-rnujdnmxufmzgjvmddla-auth-token:1 (2.86.0) 2025-12-04T03:32:46.725Z Multiple GoTrueClient instances detected in the same browser context. It is not an error, but this should be avoided as it may produce undefined behavior when used concurrently under the same storage key.
+[18:55:29.147] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
+[18:55:29.147] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/chat","route":"/chat"}
+[18:55:29.147] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3000/chat color: rgb(120, 120, 120) color: inherit {"dp":"/chat","o":"http://localhost:3000/chat","sdkn":"@vercel/analytics/next","sdkv":"1.5.0","sv":"0.1.3","ts":1764819166821}
+[18:57:31.438] Server  LOG      ✓ Compiled in 48ms
+[18:57:32.071] Browser WARN    GoTrueClient@sb-rnujdnmxufmzgjvmddla-auth-token:2 (2.86.0) 2025-12-04T03:34:49.190Z Multiple GoTrueClient instances detected in the same browser context. It is not an error, but this should be avoided as it may produce undefined behavior when used concurrently under the same storage key.
+[18:57:36.343] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[18:57:36.477] Browser WARN    GoTrueClient@sb-rnujdnmxufmzgjvmddla-auth-token:1 (2.86.0) 2025-12-04T03:34:54.116Z Multiple GoTrueClient instances detected in the same browser context. It is not an error, but this should be avoided as it may produce undefined behavior when used concurrently under the same storage key.
+[18:57:36.555] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
+[18:57:36.555] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/chat","route":"/chat"}
+[18:57:36.555] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3000/chat color: rgb(120, 120, 120) color: inherit {"dp":"/chat","o":"http://localhost:3000/chat","sdkn":"@vercel/analytics/next","sdkv":"1.5.0","sv":"0.1.3","ts":1764819294226}
+[19:18:51.073] Browser WARN    GoTrueClient@sb-rnujdnmxufmzgjvmddla-auth-token:2 (2.86.0) 2025-12-04T03:56:07.993Z Multiple GoTrueClient instances detected in the same browser context. It is not an error, but this should be avoided as it may produce undefined behavior when used concurrently under the same storage key.
+[19:19:04.081] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[19:19:04.289] Browser WARN    GoTrueClient@sb-rnujdnmxufmzgjvmddla-auth-token:1 (2.86.0) 2025-12-04T03:56:21.880Z Multiple GoTrueClient instances detected in the same browser context. It is not an error, but this should be avoided as it may produce undefined behavior when used concurrently under the same storage key.
+[19:19:04.289] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
+[19:19:04.289] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/chat","route":"/chat"}
+[19:19:04.289] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3000/chat color: rgb(120, 120, 120) color: inherit {"dp":"/chat","o":"http://localhost:3000/chat","sdkn":"@vercel/analytics/next","sdkv":"1.5.0","sv":"0.1.3","ts":1764820581967}
+[19:19:40.713] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[19:19:40.904] Browser WARN    GoTrueClient@sb-rnujdnmxufmzgjvmddla-auth-token:1 (2.86.0) 2025-12-04T03:56:58.491Z Multiple GoTrueClient instances detected in the same browser context. It is not an error, but this should be avoided as it may produce undefined behavior when used concurrently under the same storage key.
+[19:19:40.904] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
+[19:19:40.904] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/chat","route":"/chat"}
+[19:19:40.904] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3000/chat color: rgb(120, 120, 120) color: inherit {"dp":"/chat","o":"http://localhost:3000/chat","sdkn":"@vercel/analytics/next","sdkv":"1.5.0","sv":"0.1.3","ts":1764820618581}
+[19:31:23.911] Server  LOG      ✓ Compiled in 136ms
+[19:31:24.072] Browser WARN    GoTrueClient@sb-rnujdnmxufmzgjvmddla-auth-token:2 (2.86.0) 2025-12-04T04:08:41.665Z Multiple GoTrueClient instances detected in the same browser context. It is not an error, but this should be avoided as it may produce undefined behavior when used concurrently under the same storage key.
+[19:31:31.636] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[19:31:31.843] Browser WARN    GoTrueClient@sb-rnujdnmxufmzgjvmddla-auth-token:1 (2.86.0) 2025-12-04T04:08:49.427Z Multiple GoTrueClient instances detected in the same browser context. It is not an error, but this should be avoided as it may produce undefined behavior when used concurrently under the same storage key.
+[19:31:31.843] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
+[19:31:31.843] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/chat","route":"/chat"}
+[19:31:31.843] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3000/chat color: rgb(120, 120, 120) color: inherit {"dp":"/chat","o":"http://localhost:3000/chat","sdkn":"@vercel/analytics/next","sdkv":"1.5.0","sv":"0.1.3","ts":1764821329514}
+[19:32:48.686] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[19:32:48.826] Browser WARN    GoTrueClient@sb-rnujdnmxufmzgjvmddla-auth-token:1 (2.86.0) 2025-12-04T04:10:06.462Z Multiple GoTrueClient instances detected in the same browser context. It is not an error, but this should be avoided as it may produce undefined behavior when used concurrently under the same storage key.
+[19:32:48.928] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
+[19:32:48.928] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/chat","route":"/chat"}
+[19:32:48.928] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3000/chat color: rgb(120, 120, 120) color: inherit {"dp":"/chat","o":"http://localhost:3000/chat","sdkn":"@vercel/analytics/next","sdkv":"1.5.0","sv":"0.1.3","ts":1764821406598}
+[19:36:06.694] Server  LOG      ✓ Compiled in 78ms
+[19:36:07.072] Browser WARN    GoTrueClient@sb-rnujdnmxufmzgjvmddla-auth-token:2 (2.86.0) 2025-12-04T04:13:24.445Z Multiple GoTrueClient instances detected in the same browser context. It is not an error, but this should be avoided as it may produce undefined behavior when used concurrently under the same storage key.
+[19:36:13.465] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[19:36:13.652] Browser WARN    GoTrueClient@sb-rnujdnmxufmzgjvmddla-auth-token:1 (2.86.0) 2025-12-04T04:13:31.241Z Multiple GoTrueClient instances detected in the same browser context. It is not an error, but this should be avoided as it may produce undefined behavior when used concurrently under the same storage key.
+[19:36:13.652] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
+[19:36:13.652] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/chat","route":"/chat"}
+[19:36:13.652] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3000/chat color: rgb(120, 120, 120) color: inherit {"dp":"/chat","o":"http://localhost:3000/chat","sdkn":"@vercel/analytics/next","sdkv":"1.5.0","sv":"0.1.3","ts":1764821611320}
+[19:46:14.881] Server  LOG      ✓ Compiled in 205ms
+[19:46:15.072] Browser WARN    GoTrueClient@sb-rnujdnmxufmzgjvmddla-auth-token:2 (2.86.0) 2025-12-04T04:23:32.624Z Multiple GoTrueClient instances detected in the same browser context. It is not an error, but this should be avoided as it may produce undefined behavior when used concurrently under the same storage key.
+[19:46:22.286] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[19:46:22.491] Browser WARN    GoTrueClient@sb-rnujdnmxufmzgjvmddla-auth-token:1 (2.86.0) 2025-12-04T04:23:40.063Z Multiple GoTrueClient instances detected in the same browser context. It is not an error, but this should be avoided as it may produce undefined behavior when used concurrently under the same storage key.
+[19:46:22.491] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
+[19:46:22.491] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/chat","route":"/chat"}
+[19:46:22.491] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3000/chat color: rgb(120, 120, 120) color: inherit {"dp":"/chat","o":"http://localhost:3000/chat","sdkn":"@vercel/analytics/next","sdkv":"1.5.0","sv":"0.1.3","ts":1764822220148}
+[19:54:12.772] Server  LOG      ✓ Compiled in 146ms
+[19:54:13.073] Browser ERROR   ./components/chat/enhanced-chat-interface.tsx:628:3
+Parsing ecmascript source code failed
+  626 |   )
+  627 | }
+> 628 | ```
+      |   ^
+
+Unterminated template
+
+Import traces:
+  Client Component Browser:
+    ./components/chat/enhanced-chat-interface.tsx [Client Component Browser]
+    ./app/chat/page.tsx [Client Component Browser]
+    ./app/chat/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./components/chat/enhanced-chat-interface.tsx [Client Component SSR]
+    ./app/chat/page.tsx [Client Component SSR]
+    ./app/chat/page.tsx [Server Component]
+[19:56:42.084] Browser WARN    GoTrueClient@sb-rnujdnmxufmzgjvmddla-auth-token:2 (2.86.0) 2025-12-04T04:33:58.960Z Multiple GoTrueClient instances detected in the same browser context. It is not an error, but this should be avoided as it may produce undefined behavior when used concurrently under the same storage key.
+[19:56:52.052] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[19:56:52.267] Browser WARN    GoTrueClient@sb-rnujdnmxufmzgjvmddla-auth-token:1 (2.86.0) 2025-12-04T04:34:09.779Z Multiple GoTrueClient instances detected in the same browser context. It is not an error, but this should be avoided as it may produce undefined behavior when used concurrently under the same storage key.
+[19:56:52.267] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
+[19:56:52.267] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/chat","route":"/chat"}
+[19:56:52.267] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3000/chat color: rgb(120, 120, 120) color: inherit {"dp":"/chat","o":"http://localhost:3000/chat","sdkn":"@vercel/analytics/next","sdkv":"1.5.0","sv":"0.1.3","ts":1764822849872}

@@ -57,7 +57,10 @@ function AuthingLoginComponent() {
               user_id: finalUser.id || finalUser.sub,
               email: finalUser.email,
               nickname: finalUser.nickname || finalUser.username,
-              avatar: finalUser.photo
+              avatar: finalUser.photo,
+              // ✨ [新增] 同步手机号
+              // Authing 返回的手机号字段可能是 phone 或 phone_number
+              phone: finalUser.phone || finalUser.phone_number 
             })
           })
         } catch(e) {

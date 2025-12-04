@@ -25,14 +25,54 @@
       "env": {
         "__NEXT_BUILD_ID": "development",
         "NEXT_SERVER_ACTIONS_ENCRYPTION_KEY": "CTwaxzesVcQbBou1rOplAZpgK8nCNUrwOGdXcsQuqiY=",
-        "__NEXT_PREVIEW_MODE_ID": "e2ed57e9aacfd055252e8fce39320a21",
-        "__NEXT_PREVIEW_MODE_ENCRYPTION_KEY": "3ecca0e3575aef6a4a387a4dec4541834eb7e0f7c18b618a1689d48f591cb371",
-        "__NEXT_PREVIEW_MODE_SIGNING_KEY": "fdd60b7849e728e2820a8dc63fa6c2cdd0974dc61596264d3c4143b51b359e85"
+        "__NEXT_PREVIEW_MODE_ID": "0f53cac90e9470a8bc60850e65345939",
+        "__NEXT_PREVIEW_MODE_ENCRYPTION_KEY": "b6bfd7999230548e7d7e2731b9fcf88a3a1635d5ec1718ab389ecaa6a363b84b",
+        "__NEXT_PREVIEW_MODE_SIGNING_KEY": "04a6210ea6be3876f6228cd567ef4b8584d015352b3470f1490cbd17f6a2e365"
       }
     }
   },
   "sortedMiddleware": [
     "/"
   ],
-  "functions": {}
+  "functions": {
+    "/api/dify-chat/route": {
+      "files": [
+        "server/middleware-build-manifest.js",
+        "server/interception-route-rewrite-manifest.js",
+        "server/server-reference-manifest.js",
+        "server/app/api/dify-chat/route_client-reference-manifest.js",
+        "server/edge/chunks/_next-internal_server_app_api_dify-chat_route_actions_59757102.js",
+        "server/edge/chunks/0439a_next_dist_esm_shared_lib_3c9a6e48._.js",
+        "server/edge/chunks/0439a_next_dist_esm_server_b6c1bb02._.js",
+        "server/edge/chunks/0439a_next_dist_esm_cbb4ef83._.js",
+        "server/edge/chunks/0439a_next_dist_compiled_f67554ee._.js",
+        "server/edge/chunks/0439a_next_dist_0d5a89bd._.js",
+        "server/edge/chunks/edge-wrapper_46552a26.js",
+        "server/edge/chunks/4b6e4_@opentelemetry_api_build_esm_df5f8bb8._.js",
+        "server/edge/chunks/d2cd0_@supabase_realtime-js_dist_module_03eeeb28._.js",
+        "server/edge/chunks/f96a7_@supabase_storage-js_dist_module_f068553d._.js",
+        "server/edge/chunks/0f7e6_@supabase_auth-js_dist_module_920474a1._.js",
+        "server/edge/chunks/node_modules__pnpm_ed6bfd8b._.js",
+        "server/edge/chunks/[root-of-the-server]__dd890a8d._.js",
+        "server/edge/chunks/turbopack-edge-wrapper_6ec65e3a.js"
+      ],
+      "name": "app/api/dify-chat/route",
+      "page": "/api/dify-chat/route",
+      "matchers": [
+        {
+          "regexp": "^/api/dify-chat(?:/)?$",
+          "originalSource": "/api/dify-chat"
+        }
+      ],
+      "wasm": [],
+      "assets": [],
+      "env": {
+        "__NEXT_BUILD_ID": "development",
+        "NEXT_SERVER_ACTIONS_ENCRYPTION_KEY": "CTwaxzesVcQbBou1rOplAZpgK8nCNUrwOGdXcsQuqiY=",
+        "__NEXT_PREVIEW_MODE_ID": "0f53cac90e9470a8bc60850e65345939",
+        "__NEXT_PREVIEW_MODE_ENCRYPTION_KEY": "b6bfd7999230548e7d7e2731b9fcf88a3a1635d5ec1718ab389ecaa6a363b84b",
+        "__NEXT_PREVIEW_MODE_SIGNING_KEY": "04a6210ea6be3876f6228cd567ef4b8584d015352b3470f1490cbd17f6a2e365"
+      }
+    }
+  }
 }

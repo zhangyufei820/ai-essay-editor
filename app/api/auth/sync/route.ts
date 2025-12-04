@@ -5,7 +5,8 @@ export async function POST(request: Request) {
   try {
     // 1. 获取前端传来的用户信息
     const body = await request.json()
-    const { user_id, email, nickname, avatar } = body
+    // 【修改点 1】: 这里增加了 phone 字段的读取
+    const { user_id, email, nickname, avatar, phone } = body
 
     if (!user_id) {
       return NextResponse.json({ error: 'Missing user_id' }, { status: 400 })
@@ -26,21 +27,30 @@ export async function POST(request: Request) {
 
     // 4. 如果是新用户，执行初始化
     if (!existingUser) {
-      console.log(`[Sync] 新用户 ${email} 初始化中...`)
+      // 日志优化：如果是手机注册，email可能为空，所以打印 phone 或 user_id
+      console.log(`[Sync] 新用户 ${email || phone || user_id} 初始化中...`)
 
       // A. 插入个人资料
       const { error: profileError } = await supabaseAdmin
         .from('user_profiles')
         .insert({
           user_id,
-          email,
-          nickname: nickname || email?.split('@')[0] || '新用户',
+          email: email || null, // 确保如果是手机注册，email 存为 null 而不是 undefined
+          phone: phone || null, // 【修改点 2】: 将手机号写入数据库
+          
+          // 【修改点 3】: 智能昵称逻辑
+          // 优先级：前端传来的昵称 > 邮箱前缀 > 手机号 > '新用户'
+          nickname: nickname || email?.split('@')[0] || phone || '新用户',
+          
           avatar_url: avatar
         })
       
-      if (profileError) console.error('创建 Profile 失败:', profileError)
+      if (profileError) {
+        console.error('创建 Profile 失败:', profileError)
+        // 如果这里报错，通常是因为数据库没有 phone 列，或者字段类型不对
+      }
 
-      // B. ✨ 赠送初始积分 (这里改成 1000 分) ✨
+      // B. ✨ 赠送初始积分 (1000 分) ✨
       const { error: creditError } = await supabaseAdmin
         .from('user_credits')
         .insert({
