@@ -196,7 +196,7 @@ export function EnhancedChatInterface() {
     
     // 多模态生成模型
     "banana-2-pro": { name: "Banana 2 Pro", icon: Palette, color: "text-yellow-500", badge: "Art" },
-    "sono-v5": { name: "Sono V5", icon: AudioLines, color: "text-pink-500", badge: "Music" },
+    "suno-v5": { name: "Sono V5", icon: AudioLines, color: "text-pink-500", badge: "Music" },
     "sora-2-pro": { name: "Sora 2 Pro", icon: Film, color: "text-indigo-600", badge: "Video" },
   }
 
