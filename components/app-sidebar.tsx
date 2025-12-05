@@ -361,7 +361,8 @@ export function AppSidebar() {
                     sessions.map(session => (
                        <Link 
                          key={session.id}
-                         href="/chat" 
+                         // ✅ 修复点：添加 id 参数，让聊天页面知道加载哪个会话
+                         href={`/chat?id=${session.id}`} 
                          onClick={handleMobileClick}
                          className="block mx-2 rounded-lg px-3 py-2 hover:bg-white hover:shadow-sm transition-all group"
                        >

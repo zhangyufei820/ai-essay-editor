@@ -754,7 +754,7 @@ __turbopack_context__.s([
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$build$2f$polyfills$2f$process$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__ = /*#__PURE__*/ __turbopack_context__.i("[project]/node_modules/.pnpm/next@16.0.0_@opentelemetry+api@1.9.0_react-dom@19.2.0_react@19.2.0__react@19.2.0/node_modules/next/dist/build/polyfills/process.js [app-client] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/.pnpm/next@16.0.0_@opentelemetry+api@1.9.0_react-dom@19.2.0_react@19.2.0__react@19.2.0/node_modules/next/dist/compiled/react/jsx-dev-runtime.js [app-client] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/.pnpm/next@16.0.0_@opentelemetry+api@1.9.0_react-dom@19.2.0_react@19.2.0__react@19.2.0/node_modules/next/dist/compiled/react/index.js [app-client] (ecmascript)");
-// ✅ 新增：引入图片压缩库
+var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$navigation$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/.pnpm/next@16.0.0_@opentelemetry+api@1.9.0_react-dom@19.2.0_react@19.2.0__react@19.2.0/node_modules/next/navigation.js [app-client] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$browser$2d$image$2d$compression$40$2$2e$0$2e$2$2f$node_modules$2f$browser$2d$image$2d$compression$2f$dist$2f$browser$2d$image$2d$compression$2e$mjs__$5b$app$2d$client$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/.pnpm/browser-image-compression@2.0.2/node_modules/browser-image-compression/dist/browser-image-compression.mjs [app-client] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$button$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/components/ui/button.tsx [app-client] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$textarea$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/components/ui/textarea.tsx [app-client] (ecmascript)");
@@ -787,6 +787,7 @@ var __TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$dropdown
 ;
 var _s = __turbopack_context__.k.signature();
 "use client";
+;
 ;
 ;
 ;
@@ -1159,23 +1160,23 @@ const TableBlock = ({ lines })=>{
     }
 };
 _c3 = TableBlock;
-function EnhancedChatInterface() {
+// --- 内部聊天核心组件 ---
+function ChatInterfaceInner() {
     _s();
+    const searchParams = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$navigation$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useSearchParams"])();
+    const urlSessionId = searchParams.get("id");
     const [userId, setUserId] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])("");
     const [userAvatar, setUserAvatar] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])("");
     const [userCredits, setUserCredits] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])(0);
     const sessionIdRef = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useRef"])(null);
     const [currentSessionId, setCurrentSessionId] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])("");
-    // --- 新增状态：模型与模式 ---
     const [selectedModel, setSelectedModel] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])("standard");
     const [genMode, setGenMode] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])("text");
-    // 模拟每日免费额度 (实际项目应从数据库获取)
     const [dailyUsage, setDailyUsage] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])(0);
     const DAILY_LIMIT = 20;
-    // 判断是否为豪华会员 (模拟：积分 > 1000 或 metadata 标记)
     const isLuxury = userCredits > 1000;
     (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useEffect"])({
-        "EnhancedChatInterface.useEffect": ()=>{
+        "ChatInterfaceInner.useEffect": ()=>{
             if ("TURBOPACK compile-time truthy", 1) {
                 const userStr = localStorage.getItem('currentUser');
                 if (userStr) {
@@ -1183,27 +1184,49 @@ function EnhancedChatInterface() {
                         const user = JSON.parse(userStr);
                         setUserId(user.id || user.sub || user.userId || "");
                         if (user.user_metadata?.avatar_url) setUserAvatar(user.user_metadata.avatar_url);
-                        // 获取积分
                         fetchCredits(user.id || user.sub || user.userId);
                     } catch (e) {}
                 }
             }
         }
-    }["EnhancedChatInterface.useEffect"], []);
+    }["ChatInterfaceInner.useEffect"], []);
     const fetchCredits = async (uid)=>{
         const { data } = await supabase.from('user_credits').select('credits').eq('user_id', uid).single();
         if (data) setUserCredits(data.credits);
     };
-    // 消息加载逻辑
-    const fetchMessages = async (sessionId)=>{
-        const { data } = await supabase.from('chat_messages').select('*').eq('session_id', sessionId).order('created_at', {
-            ascending: true
-        });
-        setMessages(data ? data.map((m)=>({
-                id: m.id,
-                role: m.role,
-                content: m.content
-            })) : []);
+    (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useEffect"])({
+        "ChatInterfaceInner.useEffect": ()=>{
+            if (urlSessionId && urlSessionId !== currentSessionId) {
+                loadHistorySession(urlSessionId);
+            }
+        }
+    }["ChatInterfaceInner.useEffect"], [
+        urlSessionId
+    ]);
+    const loadHistorySession = async (sid)=>{
+        setIsLoading(true);
+        setMessages([]);
+        try {
+            const { data, error } = await supabase.from('chat_messages').select('*').eq('session_id', sid).order('created_at', {
+                ascending: true
+            });
+            if (error) throw error;
+            if (data && data.length > 0) {
+                const historyMessages = data.map((m)=>({
+                        id: m.id,
+                        role: m.role,
+                        content: m.content
+                    }));
+                setMessages(historyMessages);
+                setCurrentSessionId(sid);
+                sessionIdRef.current = sid;
+            }
+        } catch (e) {
+            console.error("加载历史会话失败:", e);
+            __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$sonner$40$2$2e$0$2e$7_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$sonner$2f$dist$2f$index$2e$mjs__$5b$app$2d$client$5d$__$28$ecmascript$29$__["toast"].error("加载历史会话失败");
+        } finally{
+            setIsLoading(false);
+        }
     };
     const [messages, setMessages] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])([]);
     const [input, setInput] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])("");
@@ -1220,28 +1243,29 @@ function EnhancedChatInterface() {
     const messagesEndRef = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useRef"])(null);
     const textareaRef = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useRef"])(null);
     (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useEffect"])({
-        "EnhancedChatInterface.useEffect": ()=>{
+        "ChatInterfaceInner.useEffect": ()=>{
             messagesEndRef.current?.scrollIntoView({
                 behavior: "smooth"
             });
         }
-    }["EnhancedChatInterface.useEffect"], [
+    }["ChatInterfaceInner.useEffect"], [
         messages
     ]);
     (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useEffect"])({
-        "EnhancedChatInterface.useEffect": ()=>{
+        "ChatInterfaceInner.useEffect": ()=>{
             if (isLoading && isComplexMode && analysisStage < 4) setTimeout({
-                "EnhancedChatInterface.useEffect": ()=>setAnalysisStage({
-                        "EnhancedChatInterface.useEffect": (p)=>Math.min(p + 1, 4)
-                    }["EnhancedChatInterface.useEffect"])
-            }["EnhancedChatInterface.useEffect"], 2000);
+                "ChatInterfaceInner.useEffect": ()=>setAnalysisStage({
+                        "ChatInterfaceInner.useEffect": (p)=>Math.min(p + 1, 4)
+                    }["ChatInterfaceInner.useEffect"])
+            }["ChatInterfaceInner.useEffect"], 2000);
         }
-    }["EnhancedChatInterface.useEffect"], [
+    }["ChatInterfaceInner.useEffect"], [
         isLoading,
         analysisStage,
         isComplexMode
     ]);
-    // --- 模型配置 (新增 Banana/Sono/Sora) ---
+    // --- 模型配置 (新增 Banana/Suno/Sora) ---
+    // ✅ 修正点2：key 改为 suno-v5，名称改为 Suno V5
     const modelConfig = {
         "standard": {
             name: "作文批改智能体",
@@ -1249,7 +1273,6 @@ function EnhancedChatInterface() {
             color: "text-[#0F766E]",
             badge: null
         },
-        // 文本大模型
         "gpt-5": {
             name: "ChatGPT 5.1",
             icon: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$lucide$2d$react$40$0$2e$454$2e$0_react$40$19$2e$2$2e$0$2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$zap$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__default__as__Zap$3e$__["Zap"],
@@ -1268,15 +1291,14 @@ function EnhancedChatInterface() {
             color: "text-blue-600",
             badge: "Adv"
         },
-        // 多模态生成模型
         "banana-2-pro": {
             name: "Banana 2 Pro",
             icon: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$lucide$2d$react$40$0$2e$454$2e$0_react$40$19$2e$2$2e$0$2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$palette$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__default__as__Palette$3e$__["Palette"],
             color: "text-yellow-500",
             badge: "Art"
         },
-        "sono-v5": {
-            name: "Sono V5",
+        "suno-v5": {
+            name: "Suno V5",
             icon: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$lucide$2d$react$40$0$2e$454$2e$0_react$40$19$2e$2$2e$0$2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$audio$2d$lines$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__default__as__AudioLines$3e$__["AudioLines"],
             color: "text-pink-500",
             badge: "Music"
@@ -1288,7 +1310,6 @@ function EnhancedChatInterface() {
             badge: "Video"
         }
     };
-    // --- 切换模型逻辑 (已修复：允许切换并重置模式) ---
     const handleModelChange = (model)=>{
         if (model !== "standard") {
             if (isLuxury) {
@@ -1309,10 +1330,8 @@ function EnhancedChatInterface() {
         } else {
             __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$sonner$40$2$2e$0$2e$7_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$sonner$2f$dist$2f$index$2e$mjs__$5b$app$2d$client$5d$__$28$ecmascript$29$__["toast"].success("已切换至标准智能体");
         }
-        // ✅ 修复：切换左侧模型时，默认重置回文本模式
-        // 如果是生成模型(Banana/Sono/Sora)，则保持对应的模式
         if (model === "banana-2-pro") setGenMode("image");
-        else if (model === "sono-v5") setGenMode("music");
+        else if (model === "suno-v5") setGenMode("music"); // ✅ 修正点3：使用正确的 suno-v5
         else if (model === "sora-2-pro") setGenMode("video");
         else setGenMode("text");
         setSelectedModel(model);
@@ -1320,14 +1339,12 @@ function EnhancedChatInterface() {
             setInput("");
         }
     };
-    // --- 切换模式逻辑 (点击右侧图标) ---
     const handleModeChange = (mode)=>{
         setGenMode(mode);
-        // ✅ 智能联动：点击右侧图标，左侧模型自动切换
         if (mode === "image") setSelectedModel("banana-2-pro");
-        else if (mode === "music") setSelectedModel("sono-v5");
+        else if (mode === "music") setSelectedModel("suno-v5"); // ✅ 修正点4：使用正确的 suno-v5
         else if (mode === "video") setSelectedModel("sora-2-pro");
-        else setSelectedModel("standard"); // 回到文本时切回标准
+        else setSelectedModel("standard");
         const prompts = {
             "text": "",
             "image": "生成一张关于...的插画，风格是...",
@@ -1337,7 +1354,6 @@ function EnhancedChatInterface() {
         setInput(prompts[mode]);
         if (mode !== "text") textareaRef.current?.focus();
     };
-    // --- 计算消耗积分 ---
     const calculateCost = ()=>{
         if (genMode === "video") return 300;
         if (genMode === "music") return 100;
@@ -1349,7 +1365,6 @@ function EnhancedChatInterface() {
         }
         return userId ? 20 : 0;
     };
-    // --- ✅ 核心修改：文件上传逻辑 (增加前端压缩) ---
     const handleFileUpload = async (event)=>{
         const files = event.target.files;
         if (!files || !files.length) return;
@@ -1361,7 +1376,6 @@ function EnhancedChatInterface() {
         try {
             const uploadPromises = Array.from(files).map(async (file)=>{
                 let fileToUpload = file;
-                // === 前端压缩逻辑开始 ===
                 if (file.type.startsWith("image/")) {
                     try {
                         console.log(`原始文件: ${file.name} size: ${(file.size / 1024 / 1024).toFixed(2)} MB`);
@@ -1369,10 +1383,9 @@ function EnhancedChatInterface() {
                             maxSizeMB: 1,
                             maxWidthOrHeight: 1920,
                             useWebWorker: true,
-                            fileType: "image/jpeg" // 强制转为 JPG
+                            fileType: "image/jpeg"
                         };
                         const compressedBlob = await (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$browser$2d$image$2d$compression$40$2$2e$0$2e$2$2f$node_modules$2f$browser$2d$image$2d$compression$2f$dist$2f$browser$2d$image$2d$compression$2e$mjs__$5b$app$2d$client$5d$__$28$ecmascript$29$__["default"])(file, options);
-                        // 创建新的 File 对象
                         fileToUpload = new File([
                             compressedBlob
                         ], file.name.replace(/\.[^/.]+$/, ".jpg"), {
@@ -1384,7 +1397,6 @@ function EnhancedChatInterface() {
                         console.error("图片压缩失败，将尝试上传原图", error);
                     }
                 }
-                // === 前端压缩逻辑结束 ===
                 const formData = new FormData();
                 formData.append("file", fileToUpload);
                 formData.append("user", userId);
@@ -1398,7 +1410,6 @@ function EnhancedChatInterface() {
                 }
                 const data = await res.json();
                 return new Promise((resolve)=>{
-                    // 如果是图片，直接用 URL.createObjectURL 预览，不用读取整个 Base64
                     if (fileToUpload.type.startsWith("image/")) {
                         resolve({
                             name: fileToUpload.name,
@@ -1449,7 +1460,6 @@ function EnhancedChatInterface() {
         if (fileInputRef.current) fileInputRef.current.value = "";
     };
     const removeFile = (i)=>setUploadedFiles((p)=>p.filter((_, idx)=>idx !== i));
-    // 提交逻辑
     const onSubmit = async (e)=>{
         e.preventDefault();
         if (!userId) {
@@ -1458,7 +1468,6 @@ function EnhancedChatInterface() {
         }
         const txt = (input || "").trim();
         if (!txt && !uploadedFiles.length) return;
-        // 检查积分
         const cost = calculateCost();
         if (userCredits < cost) {
             __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$sonner$40$2$2e$0$2e$7_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$sonner$2f$dist$2f$index$2e$mjs__$5b$app$2d$client$5d$__$28$ecmascript$29$__["toast"].error("积分不足", {
@@ -1475,9 +1484,13 @@ function EnhancedChatInterface() {
         setAnalysisStage(0);
         setIsComplexMode(uploadedFiles.length > 0 || txt.length > 150);
         let sid = currentSessionId;
-        if (!sid) {
+        if (!sid && !urlSessionId) {
             sid = Date.now().toString();
             setCurrentSessionId(sid);
+            sessionIdRef.current = sid;
+        } else if (urlSessionId) {
+            sid = urlSessionId;
+            sessionIdRef.current = urlSessionId;
         }
         const userMsg = {
             id: Date.now().toString(),
@@ -1490,7 +1503,6 @@ function EnhancedChatInterface() {
             ]);
         setInput("");
         setUploadedFiles([]);
-        // 会话标题处理
         const preview = userMsg.content.slice(0, 30);
         const { data: existing } = await supabase.from('chat_sessions').select('id').eq('id', sid).single();
         if (!existing) {
@@ -1533,7 +1545,6 @@ function EnhancedChatInterface() {
                     fileIds,
                     userId,
                     conversation_id: sessionIdRef.current,
-                    // 传递额外参数给后端
                     model: selectedModel,
                     mode: genMode
                 })
@@ -1542,17 +1553,14 @@ function EnhancedChatInterface() {
             if (!res.ok) throw new Error("请求失败");
             const reader = res.body?.getReader();
             const decoder = new TextDecoder();
-            let buffer = ""; // ✅ 核心修复：数据缓冲区，防止中文乱码
+            let buffer = "";
             while(true){
                 const { done, value } = await reader.read();
                 if (done) break;
-                // ✅ 累积数据到缓冲区，而不是每次都重新处理
                 buffer += decoder.decode(value, {
                     stream: true
                 });
-                // ✅ 按行分割
                 const lines = buffer.split("\n");
-                // ✅ 保留最后一行（因为它可能是不完整的），下次循环再处理
                 buffer = lines.pop() || "";
                 for (const line of lines){
                     if (!line.startsWith("data: ")) continue;
@@ -1560,7 +1568,9 @@ function EnhancedChatInterface() {
                     if (data === "[DONE]") continue;
                     try {
                         const json = JSON.parse(data);
-                        if (json.conversation_id && sessionIdRef.current !== json.conversation_id) sessionIdRef.current = json.conversation_id;
+                        if (json.conversation_id && sessionIdRef.current !== json.conversation_id) {
+                            sessionIdRef.current = json.conversation_id;
+                        }
                         if (json.answer) {
                             if (!hasRec) setAnalysisStage(4);
                             hasRec = true;
@@ -1578,7 +1588,6 @@ function EnhancedChatInterface() {
                 role: "assistant",
                 content: fullText
             });
-            // 成功后更新本地积分和使用次数
             setUserCredits((prev)=>prev - cost);
             if (selectedModel !== "standard" && !isLuxury && dailyUsage < DAILY_LIMIT) {
                 setDailyUsage((prev)=>prev + 1);
@@ -1588,7 +1597,6 @@ function EnhancedChatInterface() {
             setMessages((p)=>p.filter((m)=>m.id !== botId));
         } finally{
             setIsLoading(false);
-            // 任务完成后重置为文本模式
             if (genMode !== "text") {
                 setGenMode("text");
                 setSelectedModel("standard");
@@ -1621,12 +1629,12 @@ function EnhancedChatInterface() {
                                             className: "h-10 w-10 text-[#0F766E]"
                                         }, void 0, false, {
                                             fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                            lineNumber: 469,
+                                            lineNumber: 486,
                                             columnNumber: 141
                                         }, this)
                                     }, void 0, false, {
                                         fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                        lineNumber: 469,
+                                        lineNumber: 486,
                                         columnNumber: 19
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("h1", {
@@ -1634,7 +1642,7 @@ function EnhancedChatInterface() {
                                         children: "你好！欢迎使用沈翔智学！"
                                     }, void 0, false, {
                                         fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                        lineNumber: 470,
+                                        lineNumber: 487,
                                         columnNumber: 19
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -1642,7 +1650,7 @@ function EnhancedChatInterface() {
                                         children: "专业的作文批改专家，为学生习作提供深度点评。"
                                     }, void 0, false, {
                                         fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                        lineNumber: 471,
+                                        lineNumber: 488,
                                         columnNumber: 19
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1655,14 +1663,14 @@ function EnhancedChatInterface() {
                                                         className: "h-3 w-3"
                                                     }, void 0, false, {
                                                         fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                                        lineNumber: 476,
+                                                        lineNumber: 492,
                                                         columnNumber: 23
                                                     }, this),
                                                     " 豪华会员畅享 ChatGPT 5.1 / Claude 4.5 / Gemini 3.0"
                                                 ]
                                             }, void 0, true, {
                                                 fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                                lineNumber: 475,
+                                                lineNumber: 491,
                                                 columnNumber: 21
                                             }, this),
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -1672,26 +1680,26 @@ function EnhancedChatInterface() {
                                                         className: "h-3 w-3"
                                                     }, void 0, false, {
                                                         fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                                        lineNumber: 479,
+                                                        lineNumber: 495,
                                                         columnNumber: 23
                                                     }, this),
                                                     " 支持视频生成"
                                                 ]
                                             }, void 0, true, {
                                                 fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                                lineNumber: 478,
+                                                lineNumber: 494,
                                                 columnNumber: 21
                                             }, this)
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                        lineNumber: 474,
+                                        lineNumber: 490,
                                         columnNumber: 19
                                     }, this)
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                lineNumber: 468,
+                                lineNumber: 485,
                                 columnNumber: 17
                             }, this) : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                                 className: "space-y-10 pt-12",
@@ -1705,12 +1713,12 @@ function EnhancedChatInterface() {
                                                         className: "h-6 w-6"
                                                     }, void 0, false, {
                                                         fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                                        lineNumber: 489,
+                                                        lineNumber: 505,
                                                         columnNumber: 27
                                                     }, this)
                                                 }, void 0, false, {
                                                     fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                                    lineNumber: 488,
+                                                    lineNumber: 504,
                                                     columnNumber: 25
                                                 }, this),
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1721,21 +1729,21 @@ function EnhancedChatInterface() {
                                                             children: message.content
                                                         }, void 0, false, {
                                                             fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                                            lineNumber: 499,
+                                                            lineNumber: 515,
                                                             columnNumber: 27
                                                         }, this) : isLoading && !message.content ? isComplexMode ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$chat$2f$analysis$2d$stages$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["AnalysisStages"], {}, void 0, false, {
                                                             fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                                            lineNumber: 502,
+                                                            lineNumber: 518,
                                                             columnNumber: 47
                                                         }, this) : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(SimpleBrainLoader, {}, void 0, false, {
                                                             fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                                            lineNumber: 502,
+                                                            lineNumber: 518,
                                                             columnNumber: 68
                                                         }, this) : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(UltimateRenderer, {
                                                             content: message.content
                                                         }, void 0, false, {
                                                             fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                                            lineNumber: 503,
+                                                            lineNumber: 519,
                                                             columnNumber: 32
                                                         }, this),
                                                         message.role === "assistant" && message.content && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1750,25 +1758,25 @@ function EnhancedChatInterface() {
                                                                         className: "h-3.5 w-3.5"
                                                                     }, void 0, false, {
                                                                         fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                                                        lineNumber: 508,
+                                                                        lineNumber: 524,
                                                                         columnNumber: 32
                                                                     }, this),
                                                                     " 复制全文"
                                                                 ]
                                                             }, void 0, true, {
                                                                 fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                                                lineNumber: 507,
+                                                                lineNumber: 523,
                                                                 columnNumber: 29
                                                             }, this)
                                                         }, void 0, false, {
                                                             fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                                            lineNumber: 506,
+                                                            lineNumber: 522,
                                                             columnNumber: 27
                                                         }, this)
                                                     ]
                                                 }, void 0, true, {
                                                     fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                                    lineNumber: 492,
+                                                    lineNumber: 508,
                                                     columnNumber: 23
                                                 }, this),
                                                 message.role === "user" && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1779,52 +1787,52 @@ function EnhancedChatInterface() {
                                                         className: "h-full w-full object-cover"
                                                     }, void 0, false, {
                                                         fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                                        lineNumber: 516,
+                                                        lineNumber: 532,
                                                         columnNumber: 29
                                                     }, this) : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$lucide$2d$react$40$0$2e$454$2e$0_react$40$19$2e$2$2e$0$2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$user$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__default__as__User$3e$__["User"], {
                                                         className: "h-6 w-6 text-slate-500"
                                                     }, void 0, false, {
                                                         fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                                        lineNumber: 518,
+                                                        lineNumber: 534,
                                                         columnNumber: 29
                                                     }, this)
                                                 }, void 0, false, {
                                                     fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                                    lineNumber: 514,
+                                                    lineNumber: 530,
                                                     columnNumber: 25
                                                 }, this)
                                             ]
                                         }, message.id, true, {
                                             fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                            lineNumber: 486,
+                                            lineNumber: 502,
                                             columnNumber: 21
                                         }, this)),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                                         ref: messagesEndRef
                                     }, void 0, false, {
                                         fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                        lineNumber: 524,
+                                        lineNumber: 540,
                                         columnNumber: 19
                                     }, this)
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                lineNumber: 484,
+                                lineNumber: 500,
                                 columnNumber: 17
                             }, this)
                         }, void 0, false, {
                             fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                            lineNumber: 466,
+                            lineNumber: 483,
                             columnNumber: 13
                         }, this)
                     }, void 0, false, {
                         fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                        lineNumber: 465,
+                        lineNumber: 482,
                         columnNumber: 11
                     }, this)
                 }, void 0, false, {
                     fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                    lineNumber: 464,
+                    lineNumber: 481,
                     columnNumber: 9
                 }, this),
                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1841,13 +1849,13 @@ function EnhancedChatInterface() {
                                             className: "h-5 w-5 text-red-500"
                                         }, void 0, false, {
                                             fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                            lineNumber: 537,
+                                            lineNumber: 552,
                                             columnNumber: 56
                                         }, this) : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$lucide$2d$react$40$0$2e$454$2e$0_react$40$19$2e$2$2e$0$2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$loader$2d$circle$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__default__as__Loader2$3e$__["Loader2"], {
                                             className: "h-5 w-5 animate-spin text-[#0F766E]"
                                         }, void 0, false, {
                                             fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                            lineNumber: 537,
+                                            lineNumber: 552,
                                             columnNumber: 107
                                         }, this),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -1855,18 +1863,18 @@ function EnhancedChatInterface() {
                                             children: fileProcessing.message
                                         }, void 0, false, {
                                             fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                            lineNumber: 538,
+                                            lineNumber: 553,
                                             columnNumber: 19
                                         }, this)
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                    lineNumber: 536,
+                                    lineNumber: 551,
                                     columnNumber: 17
                                 }, this)
                             }, void 0, false, {
                                 fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                lineNumber: 535,
+                                lineNumber: 550,
                                 columnNumber: 15
                             }, this),
                             uploadedFiles.length > 0 && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1878,7 +1886,7 @@ function EnhancedChatInterface() {
                                                 className: "h-5 w-5 text-[#0F766E]"
                                             }, void 0, false, {
                                                 fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                                lineNumber: 546,
+                                                lineNumber: 561,
                                                 columnNumber: 21
                                             }, this),
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -1886,7 +1894,7 @@ function EnhancedChatInterface() {
                                                 children: f.name
                                             }, void 0, false, {
                                                 fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                                lineNumber: 547,
+                                                lineNumber: 562,
                                                 columnNumber: 21
                                             }, this),
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
@@ -1896,23 +1904,23 @@ function EnhancedChatInterface() {
                                                     className: "h-4 w-4"
                                                 }, void 0, false, {
                                                     fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                                    lineNumber: 548,
+                                                    lineNumber: 563,
                                                     columnNumber: 122
                                                 }, this)
                                             }, void 0, false, {
                                                 fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                                lineNumber: 548,
+                                                lineNumber: 563,
                                                 columnNumber: 21
                                             }, this)
                                         ]
                                     }, i, true, {
                                         fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                        lineNumber: 545,
+                                        lineNumber: 560,
                                         columnNumber: 19
                                     }, this))
                             }, void 0, false, {
                                 fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                lineNumber: 543,
+                                lineNumber: 558,
                                 columnNumber: 15
                             }, this),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("form", {
@@ -1938,7 +1946,7 @@ function EnhancedChatInterface() {
                                                                         className: (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$utils$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["cn"])("h-4 w-4", modelConfig[selectedModel].color)
                                                                     }, void 0, false, {
                                                                         fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                                                        lineNumber: 565,
+                                                                        lineNumber: 577,
                                                                         columnNumber: 32
                                                                     }, this);
                                                                 })(),
@@ -1947,25 +1955,25 @@ function EnhancedChatInterface() {
                                                                     children: modelConfig[selectedModel].name
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                                                    lineNumber: 568,
+                                                                    lineNumber: 579,
                                                                     columnNumber: 23
                                                                 }, this),
                                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$lucide$2d$react$40$0$2e$454$2e$0_react$40$19$2e$2$2e$0$2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$chevron$2d$down$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__default__as__ChevronDown$3e$__["ChevronDown"], {
                                                                     className: "h-3 w-3 opacity-50"
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                                                    lineNumber: 569,
+                                                                    lineNumber: 580,
                                                                     columnNumber: 23
                                                                 }, this)
                                                             ]
                                                         }, void 0, true, {
                                                             fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                                            lineNumber: 562,
+                                                            lineNumber: 574,
                                                             columnNumber: 21
                                                         }, this)
                                                     }, void 0, false, {
                                                         fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                                        lineNumber: 561,
+                                                        lineNumber: 573,
                                                         columnNumber: 19
                                                     }, this),
                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$dropdown$2d$menu$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["DropdownMenuContent"], {
@@ -1983,7 +1991,7 @@ function EnhancedChatInterface() {
                                                                 ]
                                                             }, void 0, true, {
                                                                 fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                                                lineNumber: 573,
+                                                                lineNumber: 584,
                                                                 columnNumber: 21
                                                             }, this),
                                                             Object.entries(modelConfig).map(([key, config])=>/*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$dropdown$2d$menu$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["DropdownMenuItem"], {
@@ -1996,12 +2004,12 @@ function EnhancedChatInterface() {
                                                                                 className: "h-4 w-4"
                                                                             }, void 0, false, {
                                                                                 fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                                                                lineNumber: 586,
+                                                                                lineNumber: 597,
                                                                                 columnNumber: 27
                                                                             }, this)
                                                                         }, void 0, false, {
                                                                             fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                                                            lineNumber: 585,
+                                                                            lineNumber: 596,
                                                                             columnNumber: 25
                                                                         }, this),
                                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -2012,7 +2020,7 @@ function EnhancedChatInterface() {
                                                                                     children: config.name
                                                                                 }, void 0, false, {
                                                                                     fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                                                                    lineNumber: 589,
+                                                                                    lineNumber: 600,
                                                                                     columnNumber: 27
                                                                                 }, this),
                                                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -2024,7 +2032,7 @@ function EnhancedChatInterface() {
                                                                                                 className: "h-2.5 w-2.5"
                                                                                             }, void 0, false, {
                                                                                                 fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                                                                                lineNumber: 595,
+                                                                                                lineNumber: 606,
                                                                                                 columnNumber: 33
                                                                                             }, this),
                                                                                             " ",
@@ -2032,43 +2040,43 @@ function EnhancedChatInterface() {
                                                                                         ]
                                                                                     }, void 0, true, {
                                                                                         fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                                                                        lineNumber: 594,
+                                                                                        lineNumber: 605,
                                                                                         columnNumber: 31
                                                                                     }, this)
                                                                                 }, void 0, false, {
                                                                                     fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                                                                    lineNumber: 592,
+                                                                                    lineNumber: 603,
                                                                                     columnNumber: 27
                                                                                 }, this)
                                                                             ]
                                                                         }, void 0, true, {
                                                                             fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                                                            lineNumber: 588,
+                                                                            lineNumber: 599,
                                                                             columnNumber: 25
                                                                         }, this),
                                                                         selectedModel === key && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                                                                             className: "h-2 w-2 rounded-full bg-[#0F766E]"
                                                                         }, void 0, false, {
                                                                             fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                                                            lineNumber: 600,
+                                                                            lineNumber: 611,
                                                                             columnNumber: 51
                                                                         }, this)
                                                                     ]
                                                                 }, key, true, {
                                                                     fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                                                    lineNumber: 577,
+                                                                    lineNumber: 588,
                                                                     columnNumber: 23
                                                                 }, this))
                                                         ]
                                                     }, void 0, true, {
                                                         fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                                        lineNumber: 572,
+                                                        lineNumber: 583,
                                                         columnNumber: 19
                                                     }, this)
                                                 ]
                                             }, void 0, true, {
                                                 fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                                lineNumber: 560,
+                                                lineNumber: 572,
                                                 columnNumber: 17
                                             }, this),
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -2078,7 +2086,7 @@ function EnhancedChatInterface() {
                                                         className: "h-4 w-px bg-gray-200 mx-1"
                                                     }, void 0, false, {
                                                         fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                                        lineNumber: 608,
+                                                        lineNumber: 618,
                                                         columnNumber: 19
                                                     }, this),
                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$button$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Button"], {
@@ -2092,12 +2100,12 @@ function EnhancedChatInterface() {
                                                             className: "h-4 w-4"
                                                         }, void 0, false, {
                                                             fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                                            lineNumber: 615,
+                                                            lineNumber: 625,
                                                             columnNumber: 21
                                                         }, this)
                                                     }, void 0, false, {
                                                         fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                                        lineNumber: 609,
+                                                        lineNumber: 619,
                                                         columnNumber: 19
                                                     }, this),
                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$button$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Button"], {
@@ -2106,17 +2114,17 @@ function EnhancedChatInterface() {
                                                         size: "sm",
                                                         onClick: ()=>handleModeChange("music"),
                                                         className: (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$utils$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["cn"])("h-8 w-8 rounded-lg p-0 hover:bg-white hover:text-pink-600 transition-colors", genMode === "music" && "bg-pink-50 text-pink-600"),
-                                                        title: "AI 音乐 (Sono V5)",
+                                                        title: "AI 音乐 (Suno V5)",
                                                         children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$lucide$2d$react$40$0$2e$454$2e$0_react$40$19$2e$2$2e$0$2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$music$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__default__as__Music$3e$__["Music"], {
                                                             className: "h-4 w-4"
                                                         }, void 0, false, {
                                                             fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                                            lineNumber: 623,
+                                                            lineNumber: 633,
                                                             columnNumber: 21
                                                         }, this)
                                                     }, void 0, false, {
                                                         fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                                        lineNumber: 617,
+                                                        lineNumber: 627,
                                                         columnNumber: 19
                                                     }, this),
                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$button$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Button"], {
@@ -2130,24 +2138,24 @@ function EnhancedChatInterface() {
                                                             className: "h-4 w-4"
                                                         }, void 0, false, {
                                                             fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                                            lineNumber: 631,
+                                                            lineNumber: 641,
                                                             columnNumber: 21
                                                         }, this)
                                                     }, void 0, false, {
                                                         fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                                        lineNumber: 625,
+                                                        lineNumber: 635,
                                                         columnNumber: 19
                                                     }, this)
                                                 ]
                                             }, void 0, true, {
                                                 fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                                lineNumber: 607,
+                                                lineNumber: 617,
                                                 columnNumber: 17
                                             }, this)
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                        lineNumber: 558,
+                                        lineNumber: 571,
                                         columnNumber: 15
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -2164,12 +2172,12 @@ function EnhancedChatInterface() {
                                                     className: "h-5 w-5"
                                                 }, void 0, false, {
                                                     fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                                    lineNumber: 639,
+                                                    lineNumber: 648,
                                                     columnNumber: 19
                                                 }, this)
                                             }, void 0, false, {
                                                 fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                                lineNumber: 638,
+                                                lineNumber: 647,
                                                 columnNumber: 17
                                             }, this),
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("input", {
@@ -2181,7 +2189,7 @@ function EnhancedChatInterface() {
                                                 onChange: handleFileUpload
                                             }, void 0, false, {
                                                 fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                                lineNumber: 641,
+                                                lineNumber: 650,
                                                 columnNumber: 17
                                             }, this),
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$textarea$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Textarea"], {
@@ -2195,7 +2203,7 @@ function EnhancedChatInterface() {
                                                 rows: 1
                                             }, void 0, false, {
                                                 fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                                lineNumber: 643,
+                                                lineNumber: 652,
                                                 columnNumber: 17
                                             }, this),
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$button$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Button"], {
@@ -2207,30 +2215,30 @@ function EnhancedChatInterface() {
                                                     className: "h-5 w-5 animate-spin"
                                                 }, void 0, false, {
                                                     fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                                    lineNumber: 668,
+                                                    lineNumber: 676,
                                                     columnNumber: 32
                                                 }, this) : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$lucide$2d$react$40$0$2e$454$2e$0_react$40$19$2e$2$2e$0$2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$send$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__default__as__Send$3e$__["Send"], {
                                                     className: "h-5 w-5 ml-0.5"
                                                 }, void 0, false, {
                                                     fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                                    lineNumber: 668,
+                                                    lineNumber: 676,
                                                     columnNumber: 79
                                                 }, this)
                                             }, void 0, false, {
                                                 fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                                lineNumber: 659,
+                                                lineNumber: 667,
                                                 columnNumber: 17
                                             }, this)
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                        lineNumber: 637,
+                                        lineNumber: 646,
                                         columnNumber: 15
                                     }, this)
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                lineNumber: 555,
+                                lineNumber: 569,
                                 columnNumber: 13
                             }, this),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -2245,20 +2253,20 @@ function EnhancedChatInterface() {
                                                     children: genMode === "text" ? selectedModel === "standard" ? "普通对话" : modelConfig[selectedModel].name : genMode === "image" ? "AI 绘图" : genMode === "music" ? "AI 音乐" : "AI 视频"
                                                 }, void 0, false, {
                                                     fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                                    lineNumber: 679,
+                                                    lineNumber: 686,
                                                     columnNumber: 21
                                                 }, this)
                                             ]
                                         }, void 0, true, {
                                             fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                            lineNumber: 677,
+                                            lineNumber: 684,
                                             columnNumber: 19
                                         }, this),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
                                             className: "w-1 h-1 rounded-full bg-slate-300"
                                         }, void 0, false, {
                                             fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                            lineNumber: 687,
+                                            lineNumber: 694,
                                             columnNumber: 19
                                         }, this),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -2272,53 +2280,86 @@ function EnhancedChatInterface() {
                                                     ]
                                                 }, void 0, true, {
                                                     fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                                    lineNumber: 689,
+                                                    lineNumber: 696,
                                                     columnNumber: 27
                                                 }, this)
                                             ]
                                         }, void 0, true, {
                                             fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                            lineNumber: 688,
+                                            lineNumber: 695,
                                             columnNumber: 19
                                         }, this)
                                     ]
                                 }, void 0, true) : "未登录"
                             }, void 0, false, {
                                 fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                                lineNumber: 674,
+                                lineNumber: 681,
                                 columnNumber: 13
                             }, this)
                         ]
                     }, void 0, true, {
                         fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                        lineNumber: 533,
+                        lineNumber: 548,
                         columnNumber: 11
                     }, this)
                 }, void 0, false, {
                     fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-                    lineNumber: 532,
+                    lineNumber: 547,
                     columnNumber: 9
                 }, this)
             ]
         }, void 0, true, {
             fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-            lineNumber: 463,
+            lineNumber: 480,
             columnNumber: 7
         }, this)
     }, void 0, false, {
         fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
-        lineNumber: 462,
+        lineNumber: 479,
         columnNumber: 5
     }, this);
 }
-_s(EnhancedChatInterface, "YaFtNxj+dF/+jkigph6TPz3q9g0=");
-_c4 = EnhancedChatInterface;
-var _c, _c1, _c2, _c3, _c4;
+_s(ChatInterfaceInner, "ROkTzB7zYEybzp20p/sJO1qC/0Y=", false, function() {
+    return [
+        __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$navigation$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useSearchParams"]
+    ];
+});
+_c4 = ChatInterfaceInner;
+function EnhancedChatInterface() {
+    return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Suspense"], {
+        fallback: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+            className: "flex h-screen w-full items-center justify-center bg-white",
+            children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$lucide$2d$react$40$0$2e$454$2e$0_react$40$19$2e$2$2e$0$2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$loader$2d$circle$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__default__as__Loader2$3e$__["Loader2"], {
+                className: "h-8 w-8 animate-spin text-[#0F766E]"
+            }, void 0, false, {
+                fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
+                lineNumber: 710,
+                columnNumber: 100
+            }, void 0)
+        }, void 0, false, {
+            fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
+            lineNumber: 710,
+            columnNumber: 25
+        }, void 0),
+        children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$0_$40$opentelemetry$2b$api$40$1$2e$9$2e$0_react$2d$dom$40$19$2e$2$2e$0_react$40$19$2e$2$2e$0_$5f$react$40$19$2e$2$2e$0$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(ChatInterfaceInner, {}, void 0, false, {
+            fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
+            lineNumber: 711,
+            columnNumber: 7
+        }, this)
+    }, void 0, false, {
+        fileName: "[project]/components/chat/enhanced-chat-interface.tsx",
+        lineNumber: 710,
+        columnNumber: 5
+    }, this);
+}
+_c5 = EnhancedChatInterface;
+var _c, _c1, _c2, _c3, _c4, _c5;
 __turbopack_context__.k.register(_c, "SimpleBrainLoader");
 __turbopack_context__.k.register(_c1, "InlineText");
 __turbopack_context__.k.register(_c2, "UltimateRenderer");
 __turbopack_context__.k.register(_c3, "TableBlock");
-__turbopack_context__.k.register(_c4, "EnhancedChatInterface");
+__turbopack_context__.k.register(_c4, "ChatInterfaceInner");
+__turbopack_context__.k.register(_c5, "EnhancedChatInterface");
 if (typeof globalThis.$RefreshHelpers$ === 'object' && globalThis.$RefreshHelpers !== null) {
     __turbopack_context__.k.registerExports(__turbopack_context__.m, globalThis.$RefreshHelpers$);
 }

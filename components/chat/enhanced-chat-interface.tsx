@@ -1,8 +1,8 @@
 "use client"
 
 import type React from "react"
-import { useState, useRef, useEffect } from "react"
-// ✅ 新增：引入图片压缩库
+import { useState, useRef, useEffect, Suspense } from "react"
+import { useSearchParams } from "next/navigation" 
 import imageCompression from 'browser-image-compression';
 
 import { Button } from "@/components/ui/button"
@@ -35,8 +35,8 @@ type UploadedFile = { name: string; type: string; size: number; data: string; pr
 type Message = { id: string; role: "user" | "assistant"; content: string }
 type FileProcessingState = { status: "idle" | "uploading" | "processing" | "recognizing" | "complete" | "error"; progress: number; message: string }
 
-// ✅ 新增模型定义
-type ModelType = "standard" | "gpt-5" | "claude-opus" | "gemini-pro" | "banana-2-pro" | "sono-v5" | "sora-2-pro"
+// ✅ 修正点1：ModelType 里的拼写改为 suno-v5
+type ModelType = "standard" | "gpt-5" | "claude-opus" | "gemini-pro" | "banana-2-pro" | "suno-v5" | "sora-2-pro"
 type GenMode = "text" | "image" | "music" | "video"
 
 // --- 辅助组件：思考加载器 ---
@@ -125,23 +125,23 @@ const TableBlock = ({ lines }: { lines: string[] }) => {
   } catch (e) { return null; }
 };
 
-// --- 主组件 ---
-export function EnhancedChatInterface() {
+// --- 内部聊天核心组件 ---
+function ChatInterfaceInner() {
+  const searchParams = useSearchParams()
+  const urlSessionId = searchParams.get("id")
+
   const [userId, setUserId] = useState<string>("")
   const [userAvatar, setUserAvatar] = useState<string>("")
   const [userCredits, setUserCredits] = useState<number>(0)
   const sessionIdRef = useRef<string | null>(null)
   const [currentSessionId, setCurrentSessionId] = useState<string>("")
 
-  // --- 新增状态：模型与模式 ---
   const [selectedModel, setSelectedModel] = useState<ModelType>("standard")
   const [genMode, setGenMode] = useState<GenMode>("text")
   
-  // 模拟每日免费额度 (实际项目应从数据库获取)
   const [dailyUsage, setDailyUsage] = useState<number>(0)
   const DAILY_LIMIT = 20
 
-  // 判断是否为豪华会员 (模拟：积分 > 1000 或 metadata 标记)
   const isLuxury = userCredits > 1000 
 
   useEffect(() => {
@@ -152,7 +152,6 @@ export function EnhancedChatInterface() {
           const user = JSON.parse(userStr)
           setUserId(user.id || user.sub || user.userId || "")
           if (user.user_metadata?.avatar_url) setUserAvatar(user.user_metadata.avatar_url)
-          // 获取积分
           fetchCredits(user.id || user.sub || user.userId)
         } catch (e) {}
       }
@@ -164,10 +163,40 @@ export function EnhancedChatInterface() {
     if (data) setUserCredits(data.credits)
   }
 
-  // 消息加载逻辑
-  const fetchMessages = async (sessionId: string) => {
-    const { data } = await supabase.from('chat_messages').select('*').eq('session_id', sessionId).order('created_at', { ascending: true })
-    setMessages(data ? data.map((m: any) => ({ id: m.id, role: m.role, content: m.content })) : [])
+  useEffect(() => {
+    if (urlSessionId && urlSessionId !== currentSessionId) {
+       loadHistorySession(urlSessionId)
+    }
+  }, [urlSessionId])
+
+  const loadHistorySession = async (sid: string) => {
+    setIsLoading(true)
+    setMessages([]) 
+    try {
+      const { data, error } = await supabase
+        .from('chat_messages')
+        .select('*')
+        .eq('session_id', sid)
+        .order('created_at', { ascending: true })
+      
+      if (error) throw error
+
+      if (data && data.length > 0) {
+        const historyMessages = data.map((m: any) => ({
+           id: m.id,
+           role: m.role,
+           content: m.content
+        }))
+        setMessages(historyMessages)
+        setCurrentSessionId(sid)
+        sessionIdRef.current = sid
+      }
+    } catch (e) {
+      console.error("加载历史会话失败:", e)
+      toast.error("加载历史会话失败")
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const [messages, setMessages] = useState<Message[]>([])
@@ -185,22 +214,20 @@ export function EnhancedChatInterface() {
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }) }, [messages])
   useEffect(() => { if (isLoading && isComplexMode && analysisStage < 4) setTimeout(() => setAnalysisStage(p => Math.min(p + 1, 4)), 2000) }, [isLoading, analysisStage, isComplexMode])
 
-  // --- 模型配置 (新增 Banana/Sono/Sora) ---
+  // --- 模型配置 (新增 Banana/Suno/Sora) ---
+  // ✅ 修正点2：key 改为 suno-v5，名称改为 Suno V5
   const modelConfig = {
     "standard": { name: "作文批改智能体", icon: Sparkles, color: "text-[#0F766E]", badge: null },
     
-    // 文本大模型
     "gpt-5": { name: "ChatGPT 5.1", icon: Zap, color: "text-emerald-600", badge: "Plus" },
     "claude-opus": { name: "Claude Opus 4.5", icon: Bot, color: "text-orange-600", badge: "Pro" },
     "gemini-pro": { name: "Gemini 3.0 Pro", icon: Sparkles, color: "text-blue-600", badge: "Adv" },
     
-    // 多模态生成模型
     "banana-2-pro": { name: "Banana 2 Pro", icon: Palette, color: "text-yellow-500", badge: "Art" },
-    "suno-v5": { name: "Sono V5", icon: AudioLines, color: "text-pink-500", badge: "Music" },
+    "suno-v5": { name: "Suno V5", icon: AudioLines, color: "text-pink-500", badge: "Music" },
     "sora-2-pro": { name: "Sora 2 Pro", icon: Film, color: "text-indigo-600", badge: "Video" },
   }
 
-  // --- 切换模型逻辑 (已修复：允许切换并重置模式) ---
   const handleModelChange = (model: ModelType) => {
     if (model !== "standard") {
       if (isLuxury) {
@@ -216,10 +243,8 @@ export function EnhancedChatInterface() {
       toast.success("已切换至标准智能体")
     }
     
-    // ✅ 修复：切换左侧模型时，默认重置回文本模式
-    // 如果是生成模型(Banana/Sono/Sora)，则保持对应的模式
     if (model === "banana-2-pro") setGenMode("image")
-    else if (model === "sono-v5") setGenMode("music")
+    else if (model === "suno-v5") setGenMode("music") // ✅ 修正点3：使用正确的 suno-v5
     else if (model === "sora-2-pro") setGenMode("video")
     else setGenMode("text")
 
@@ -230,15 +255,13 @@ export function EnhancedChatInterface() {
     }
   }
 
-  // --- 切换模式逻辑 (点击右侧图标) ---
   const handleModeChange = (mode: GenMode) => {
     setGenMode(mode)
     
-    // ✅ 智能联动：点击右侧图标，左侧模型自动切换
     if (mode === "image") setSelectedModel("banana-2-pro")
-    else if (mode === "music") setSelectedModel("sono-v5")
+    else if (mode === "music") setSelectedModel("suno-v5") // ✅ 修正点4：使用正确的 suno-v5
     else if (mode === "video") setSelectedModel("sora-2-pro")
-    else setSelectedModel("standard") // 回到文本时切回标准
+    else setSelectedModel("standard")
 
     const prompts = {
       "text": "",
@@ -250,7 +273,6 @@ export function EnhancedChatInterface() {
     if (mode !== "text") textareaRef.current?.focus()
   }
 
-  // --- 计算消耗积分 ---
   const calculateCost = () => {
     if (genMode === "video") return 300
     if (genMode === "music") return 100
@@ -264,7 +286,6 @@ export function EnhancedChatInterface() {
     return userId ? 20 : 0 
   }
 
-  // --- ✅ 核心修改：文件上传逻辑 (增加前端压缩) ---
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files; 
     if (!files || !files.length) return;
@@ -275,21 +296,19 @@ export function EnhancedChatInterface() {
         const uploadPromises = Array.from(files).map(async (file) => {
             let fileToUpload = file;
 
-            // === 前端压缩逻辑开始 ===
             if (file.type.startsWith("image/")) {
                 try {
                     console.log(`原始文件: ${file.name} size: ${(file.size / 1024 / 1024).toFixed(2)} MB`);
                     
                     const options = {
-                        maxSizeMB: 1,           // 目标最大 1MB (足够清晰且传输快)
-                        maxWidthOrHeight: 1920, // 限制最大分辨率 1920px
-                        useWebWorker: true,     // 开启多线程
-                        fileType: "image/jpeg"  // 强制转为 JPG
+                        maxSizeMB: 1,           
+                        maxWidthOrHeight: 1920, 
+                        useWebWorker: true,     
+                        fileType: "image/jpeg"  
                     };
 
                     const compressedBlob = await imageCompression(file, options);
                     
-                    // 创建新的 File 对象
                     fileToUpload = new File([compressedBlob], file.name.replace(/\.[^/.]+$/, ".jpg"), {
                         type: "image/jpeg",
                         lastModified: Date.now(),
@@ -300,7 +319,6 @@ export function EnhancedChatInterface() {
                     console.error("图片压缩失败，将尝试上传原图", error);
                 }
             }
-            // === 前端压缩逻辑结束 ===
 
             const formData = new FormData(); 
             formData.append("file", fileToUpload); 
@@ -315,13 +333,12 @@ export function EnhancedChatInterface() {
             
             const data = await res.json()
             return new Promise<UploadedFile>((resolve) => {
-                // 如果是图片，直接用 URL.createObjectURL 预览，不用读取整个 Base64
                 if (fileToUpload.type.startsWith("image/")) {
                     resolve({ 
                         name: fileToUpload.name, 
                         type: fileToUpload.type, 
                         size: fileToUpload.size, 
-                        data: "", // 图片上传后 data 可以留空或存 url，取决于你后续用途，这里保持兼容性只存预览
+                        data: "", 
                         difyFileId: data.id, 
                         preview: URL.createObjectURL(fileToUpload) 
                     });
@@ -354,12 +371,10 @@ export function EnhancedChatInterface() {
 
   const removeFile = (i: number) => setUploadedFiles(p => p.filter((_, idx) => idx !== i))
 
-  // 提交逻辑
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault(); if (!userId) { toast.error("请登录"); return }
     const txt = (input || "").trim(); if (!txt && !uploadedFiles.length) return
     
-    // 检查积分
     const cost = calculateCost()
     if (userCredits < cost) {
       toast.error("积分不足", { description: `本次操作需要 ${cost} 积分，当前余额 ${userCredits}` })
@@ -370,11 +385,19 @@ export function EnhancedChatInterface() {
     setIsLoading(true); setAnalysisStage(0); 
     setIsComplexMode(uploadedFiles.length > 0 || txt.length > 150)
     
-    let sid = currentSessionId; if (!sid) { sid = Date.now().toString(); setCurrentSessionId(sid) }
+    let sid = currentSessionId; 
+    if (!sid && !urlSessionId) { 
+        sid = Date.now().toString(); 
+        setCurrentSessionId(sid);
+        sessionIdRef.current = sid;
+    } else if (urlSessionId) {
+        sid = urlSessionId
+        sessionIdRef.current = urlSessionId
+    }
+
     const userMsg: Message = { id: Date.now().toString(), role: "user", content: txt || "批改作文" }
     setMessages(p => [...p, userMsg]); setInput(""); setUploadedFiles([])
     
-    // 会话标题处理
     const preview = userMsg.content.slice(0, 30)
     const { data: existing } = await supabase.from('chat_sessions').select('id').eq('id', sid).single()
     if (!existing) {
@@ -395,8 +418,7 @@ export function EnhancedChatInterface() {
               query: userMsg.content, 
               fileIds, 
               userId, 
-              conversation_id: sessionIdRef.current,
-              // 传递额外参数给后端
+              conversation_id: sessionIdRef.current, 
               model: selectedModel,
               mode: genMode
             })
@@ -406,19 +428,14 @@ export function EnhancedChatInterface() {
         
         const reader = res.body?.getReader(); 
         const decoder = new TextDecoder();
-        let buffer = ""; // ✅ 核心修复：数据缓冲区，防止中文乱码
+        let buffer = ""; 
 
         while (true) {
             const { done, value } = await reader!.read(); 
             if (done) break;
             
-            // ✅ 累积数据到缓冲区，而不是每次都重新处理
             buffer += decoder.decode(value, { stream: true });
-            
-            // ✅ 按行分割
             const lines = buffer.split("\n");
-            
-            // ✅ 保留最后一行（因为它可能是不完整的），下次循环再处理
             buffer = lines.pop() || "";
 
             for (const line of lines) {
@@ -426,7 +443,9 @@ export function EnhancedChatInterface() {
                 const data = line.slice(6).trim(); if (data === "[DONE]") continue
                 try {
                     const json = JSON.parse(data)
-                    if (json.conversation_id && sessionIdRef.current !== json.conversation_id) sessionIdRef.current = json.conversation_id
+                    if (json.conversation_id && sessionIdRef.current !== json.conversation_id) {
+                        sessionIdRef.current = json.conversation_id
+                    }
                     if (json.answer) {
                         if (!hasRec) setAnalysisStage(4); hasRec = true; fullText += json.answer
                         setMessages(p => p.map(m => m.id === botId ? { ...m, content: fullText } : m))
@@ -436,7 +455,6 @@ export function EnhancedChatInterface() {
         }
         if (hasRec) await supabase.from('chat_messages').insert({ session_id: sid, role: "assistant", content: fullText })
         
-        // 成功后更新本地积分和使用次数
         setUserCredits(prev => prev - cost)
         if (selectedModel !== "standard" && !isLuxury && dailyUsage < DAILY_LIMIT) {
           setDailyUsage(prev => prev + 1)
@@ -446,7 +464,6 @@ export function EnhancedChatInterface() {
         toast.error(e.message || "出错了"); setMessages(p => p.filter(m => m.id !== botId))
     } finally { 
       setIsLoading(false)
-      // 任务完成后重置为文本模式
       if (genMode !== "text") {
         setGenMode("text")
         setSelectedModel("standard")
@@ -470,7 +487,6 @@ export function EnhancedChatInterface() {
                   <h1 className="mb-4 text-3xl font-extrabold text-slate-800 tracking-tight">你好！欢迎使用沈翔智学！</h1>
                   <p className="mb-6 max-w-lg text-lg text-slate-500 font-medium">专业的作文批改专家，为学生习作提供深度点评。</p>
                   
-                  {/* 引导标签 */}
                   <div className="flex gap-2 justify-center flex-wrap">
                     <span className="px-3 py-1 bg-orange-50 text-orange-600 text-xs font-bold rounded-full border border-orange-100 flex items-center gap-1">
                       <Crown className="h-3 w-3" /> 豪华会员畅享 ChatGPT 5.1 / Claude 4.5 / Gemini 3.0
@@ -528,7 +544,6 @@ export function EnhancedChatInterface() {
           </ScrollArea>
         </div>
 
-        {/* --- 底部输入框区域 (全新重构) --- */}
         <div className="border-t border-gray-100 bg-white/90 backdrop-blur-md p-3 md:p-6 shrink-0 z-20">
           <div className="mx-auto max-w-4xl">
             {fileProcessing.status !== "idle" && (
@@ -551,12 +566,9 @@ export function EnhancedChatInterface() {
               </div>
             )}
 
-            {/* 新版输入框容器 */}
             <form onSubmit={onSubmit} className="relative shadow-lg shadow-gray-200/50 rounded-2xl border border-gray-200 bg-white transition-all focus-within:border-[#0F766E] focus-within:ring-2 focus-within:ring-[#0F766E]/10">
               
-              {/* Top Toolbar: 模型切换 & 多模态工具 */}
               <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100 bg-gray-50/50 rounded-t-2xl">
-                {/* 左侧：模型选择 */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button type="button" variant="ghost" size="sm" className="h-8 gap-2 text-slate-600 hover:bg-white hover:shadow-sm transition-all rounded-lg px-2 data-[state=open]:bg-white data-[state=open]:text-[#0F766E]">
@@ -564,7 +576,6 @@ export function EnhancedChatInterface() {
                         const CurrentIcon = modelConfig[selectedModel].icon
                         return <CurrentIcon className={cn("h-4 w-4", modelConfig[selectedModel].color)} />
                       })()}
-                      {/* 手机端隐藏文字，只显示图标，防止拥挤 */}
                       <span className="font-semibold text-xs hidden sm:inline">{modelConfig[selectedModel].name}</span>
                       <ChevronDown className="h-3 w-3 opacity-50" />
                     </Button>
@@ -603,7 +614,6 @@ export function EnhancedChatInterface() {
                   </DropdownMenuContent>
                 </DropdownMenu>
 
-                {/* 右侧：多模态工具 */}
                 <div className="flex items-center gap-1">
                   <div className="h-4 w-px bg-gray-200 mx-1" />
                   <Button 
@@ -618,7 +628,7 @@ export function EnhancedChatInterface() {
                     type="button" variant="ghost" size="sm" 
                     onClick={() => handleModeChange("music")}
                     className={cn("h-8 w-8 rounded-lg p-0 hover:bg-white hover:text-pink-600 transition-colors", genMode === "music" && "bg-pink-50 text-pink-600")}
-                    title="AI 音乐 (Sono V5)"
+                    title="AI 音乐 (Suno V5)"
                   >
                     <Music className="h-4 w-4" />
                   </Button>
@@ -633,7 +643,6 @@ export function EnhancedChatInterface() {
                 </div>
               </div>
 
-              {/* Input Area */}
               <div className="flex items-end gap-3 p-2 pl-3">
                 <Button type="button" variant="ghost" size="icon" className="h-10 w-10 shrink-0 rounded-xl text-slate-400 hover:text-[#0F766E] hover:bg-[#0F766E]/5" onClick={() => fileInputRef.current?.click()} disabled={isLoading}>
                   <Paperclip className="h-5 w-5" />
@@ -655,7 +664,6 @@ export function EnhancedChatInterface() {
                   rows={1}
                 />
                 
-                {/* 发送按钮 - 修正为深青色 #0F766E */}
                 <Button 
                   type="submit" 
                   size="icon" 
@@ -670,7 +678,6 @@ export function EnhancedChatInterface() {
               </div>
             </form>
 
-            {/* 底部计费提示 (动态) */}
             <p className="mt-4 text-center text-xs font-medium text-slate-400 flex items-center justify-center gap-2">
               {userId ? (
                 <>
@@ -695,5 +702,13 @@ export function EnhancedChatInterface() {
         </div>
       </div>
     </div>
+  )
+}
+
+export function EnhancedChatInterface() {
+  return (
+    <Suspense fallback={<div className="flex h-screen w-full items-center justify-center bg-white"><Loader2 className="h-8 w-8 animate-spin text-[#0F766E]" /></div>}>
+      <ChatInterfaceInner />
+    </Suspense>
   )
 }
