@@ -5,6 +5,8 @@ import { Analytics } from "@vercel/analytics/next"
 import "./globals.css"
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/app-sidebar"
+// ✅ 引入刚才新建的微信拦截组件
+import WxGuard from "@/components/WxGuard"
 
 const _geist = Geist({ subsets: ["latin"] })
 const _geistMono = Geist_Mono({ subsets: ["latin"] })
@@ -30,6 +32,9 @@ export default function RootLayout({
         />
       </head>
       <body className={`font-sans antialiased`}>
+        {/* ✅ WxGuard 放在最上方，确保它是 body 的第一个子元素 */}
+        <WxGuard />
+
         <SidebarProvider>
           <AppSidebar />
           <SidebarInset>
