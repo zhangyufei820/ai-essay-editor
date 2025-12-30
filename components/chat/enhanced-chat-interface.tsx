@@ -647,7 +647,13 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         sessionIdRef.current = urlSessionId
     }
 
-    const userMsg: Message = { id: Date.now().toString(), role: "user", content: txt || "批改作文" }
+    // 🔥 根据模型类型设置不同的默认提示词
+    const defaultPrompts: Record<string, string> = {
+      "standard": "批改作文",
+      "teaching-pro": "分析教学材料",
+    }
+    const defaultPrompt = defaultPrompts[selectedModel] || "请分析"
+    const userMsg: Message = { id: Date.now().toString(), role: "user", content: txt || defaultPrompt }
     setMessages(p => [...p, userMsg]); setInput(""); setUploadedFiles([])
     
     const preview = userMsg.content.slice(0, 30)
