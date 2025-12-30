@@ -11,25 +11,52 @@ function generateShareId(): string {
   return result
 }
 
-// 从内容中提取标题
-function extractTitle(content: string): string {
-  // 尝试从 Markdown 标题中提取
-  const h1Match = content.match(/^#\s+(.+)$/m)
-  if (h1Match) return h1Match[1].slice(0, 50)
+// 从对话中提取标题
+function extractTitle(messages: Array<{role: string, content: string}>): string {
+  // 从用户第一条消息提取
+  const firstUserMsg = messages.find(m => m.role === 'user')
+  if (firstUserMsg) {
+    return firstUserMsg.content.slice(0, 30).replace(/\n/g, ' ') + (firstUserMsg.content.length > 30 ? '...' : '')
+  }
   
-  const h2Match = content.match(/^##\s+(.+)$/m)
-  if (h2Match) return h2Match[1].slice(0, 50)
+  // 从 AI 回复中提取标题
+  const firstAiMsg = messages.find(m => m.role === 'assistant')
+  if (firstAiMsg) {
+    const h1Match = firstAiMsg.content.match(/^#\s+(.+)$/m)
+    if (h1Match) return h1Match[1].slice(0, 50)
+    
+    const h2Match = firstAiMsg.content.match(/^##\s+(.+)$/m)
+    if (h2Match) return h2Match[1].slice(0, 50)
+  }
   
-  // 否则取前30个字符
-  return content.slice(0, 30).replace(/\n/g, ' ') + '...'
+  return 'AI 对话分享'
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { content, userId } = body
+    const { messages, userId, modelName } = body
 
-    if (!content || content.trim().length === 0) {
+    // 🔥 支持两种格式：messages 数组（对话）或 content 字符串（单条内容）
+    let contentToSave: string
+    let title: string
+
+    if (messages && Array.isArray(messages) && messages.length > 0) {
+      // 新格式：保存整个对话
+      contentToSave = JSON.stringify({
+        type: 'conversation',
+        modelName: modelName || '沈翔智学',
+        messages: messages
+      })
+      title = extractTitle(messages)
+    } else if (body.content && typeof body.content === 'string') {
+      // 兼容旧格式：单条内容
+      contentToSave = JSON.stringify({
+        type: 'single',
+        content: body.content
+      })
+      title = body.content.slice(0, 30).replace(/\n/g, ' ') + '...'
+    } else {
       return NextResponse.json({ error: '内容不能为空' }, { status: 400 })
     }
 
@@ -57,15 +84,12 @@ export async function POST(request: NextRequest) {
       attempts++
     }
 
-    // 提取标题
-    const title = extractTitle(content)
-
     // 插入分享记录
     const { data, error } = await supabaseAdmin
       .from('shared_content')
       .insert({
         share_id: shareId,
-        content: content,
+        content: contentToSave,
         title: title,
         user_id: userId || null,
         view_count: 0

@@ -984,16 +984,26 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   // 🔗 分享功能 - 生成分享链接
   const [isSharing, setIsSharing] = useState(false)
   
-  const handleShare = async (content: string) => {
+  // 🔥 分享整个对话
+  const handleShare = async () => {
     if (isSharing) return
+    if (messages.length === 0) {
+      toast.error("没有可分享的内容")
+      return
+    }
+    
     setIsSharing(true)
     
     try {
-      // 调用 API 创建分享链接
+      // 🔥 发送整个对话到 API
       const res = await fetch('/api/share', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content, userId })
+        body: JSON.stringify({ 
+          messages: messages.map(m => ({ role: m.role, content: m.content })),
+          userId,
+          modelName: modelConfig[selectedModel].name
+        })
       })
       
       if (!res.ok) {
@@ -1016,7 +1026,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         try {
           await navigator.share({
             title: '沈翔智学 - AI 分析报告',
-            text: '查看我的 AI 分析报告',
+            text: '查看我的 AI 对话',
             url: shareUrl
           })
         } catch (err) {
@@ -1153,7 +1163,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                             <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs text-slate-400 hover:bg-slate-100" onClick={() => handleExportPDF(message.content)}>
                                <Download className="h-3 w-3" /> 导出
                             </Button>
-                            <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs text-slate-400 hover:bg-slate-100" onClick={() => handleShare(message.content)}>
+                            <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs text-slate-400 hover:bg-slate-100" onClick={() => handleShare()}>
                                <Share2 className="h-3 w-3" /> 分享
                             </Button>
                           </div>

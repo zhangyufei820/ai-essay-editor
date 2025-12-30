@@ -3,9 +3,10 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
-import { GraduationCap, Copy, Download, ArrowLeft, Eye, Calendar, Loader2 } from 'lucide-react'
+import { GraduationCap, Copy, Download, ArrowLeft, Eye, Calendar, Loader2, User, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
+import { cn } from '@/lib/utils'
 
 const BRAND_GREEN = "#14532d"
 
@@ -137,6 +138,36 @@ function ContentRenderer({ content }: { content: string }) {
   return <div className="w-full">{renderedElements}</div>
 }
 
+// 🔥 对话消息组件
+function MessageItem({ role, content }: { role: 'user' | 'assistant', content: string }) {
+  return (
+    <div className={cn("flex gap-3", role === "user" ? "justify-end" : "justify-start")}>
+      {role === "assistant" && (
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-white mt-1" style={{ backgroundColor: BRAND_GREEN }}>
+          <Sparkles className="h-4 w-4" />
+        </div>
+      )}
+      <div className={cn(
+        "relative rounded-2xl px-4 py-3",
+        role === "user" 
+          ? "text-white max-w-[75%]" 
+          : "bg-slate-50 w-full max-w-full"
+      )} style={role === "user" ? { backgroundColor: BRAND_GREEN } : {}}>
+        {role === "user" ? (
+          <div className="whitespace-pre-wrap text-[15px] leading-relaxed">{content}</div>
+        ) : (
+          <ContentRenderer content={content} />
+        )}
+      </div>
+      {role === "user" && (
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-slate-200 mt-1">
+          <User className="h-4 w-4 text-slate-500" />
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function SharePage() {
   const params = useParams()
   const router = useRouter()
@@ -149,6 +180,14 @@ export default function SharePage() {
     title: string
     view_count: number
     created_at: string
+  } | null>(null)
+  
+  // 🔥 解析后的对话数据
+  const [parsedData, setParsedData] = useState<{
+    type: 'conversation' | 'single'
+    modelName?: string
+    messages?: Array<{ role: 'user' | 'assistant', content: string }>
+    content?: string
   } | null>(null)
 
   useEffect(() => {
@@ -172,6 +211,18 @@ export default function SharePage() {
         }
 
         setShareData(data)
+        
+        // 🔥 解析内容
+        try {
+          const parsed = JSON.parse(data.content)
+          setParsedData(parsed)
+        } catch {
+          // 兼容旧格式：纯文本内容
+          setParsedData({
+            type: 'single',
+            content: data.content
+          })
+        }
 
         // 更新查看次数
         await supabase
@@ -193,14 +244,23 @@ export default function SharePage() {
   }, [shareId])
 
   const handleCopy = async () => {
-    if (shareData?.content) {
-      await navigator.clipboard.writeText(shareData.content)
-      toast.success('已复制到剪贴板')
+    if (!parsedData) return
+    
+    let textToCopy = ''
+    if (parsedData.type === 'conversation' && parsedData.messages) {
+      textToCopy = parsedData.messages.map(m => 
+        `${m.role === 'user' ? '用户' : 'AI'}：${m.content}`
+      ).join('\n\n')
+    } else if (parsedData.content) {
+      textToCopy = parsedData.content
     }
+    
+    await navigator.clipboard.writeText(textToCopy)
+    toast.success('已复制到剪贴板')
   }
 
   const handleExportPDF = () => {
-    if (!shareData?.content) return
+    if (!parsedData) return
 
     const printWindow = window.open('', '_blank')
     if (!printWindow) {
@@ -208,37 +268,27 @@ export default function SharePage() {
       return
     }
 
-    // Markdown 转 HTML
-    const convertMarkdownToHTML = (md: string): string => {
-      let html = md
-      html = html.replace(/^#### (.+)$/gm, '<h4>$1</h4>')
-      html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>')
-      html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>')
-      html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>')
-      html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-      html = html.replace(/\*(.+?)\*/g, '<em>$1</em>')
-      html = html.replace(/^- (.+)$/gm, '<li>$1</li>')
-      html = html.replace(/^---$/gm, '<hr>')
-      html = html.replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>')
-      html = html.replace(/(<li>.+<\/li>\n?)+/g, '<ul>$&</ul>')
-      const lines = html.split('\n')
-      html = lines.map(line => {
-        const trimmed = line.trim()
-        if (!trimmed) return ''
-        if (trimmed.startsWith('<')) return line
-        return `<p>${line}</p>`
-      }).join('\n')
-      return html
+    // 🔥 根据类型生成不同的 HTML
+    let htmlContent = ''
+    
+    if (parsedData.type === 'conversation' && parsedData.messages) {
+      htmlContent = parsedData.messages.map(m => {
+        if (m.role === 'user') {
+          return `<div class="user-message"><strong>用户：</strong>${m.content}</div>`
+        } else {
+          return `<div class="ai-message"><strong>AI：</strong>${convertMarkdownToHTML(m.content)}</div>`
+        }
+      }).join('')
+    } else if (parsedData.content) {
+      htmlContent = convertMarkdownToHTML(parsedData.content)
     }
-
-    const htmlContent = convertMarkdownToHTML(shareData.content)
 
     printWindow.document.write(`
       <!DOCTYPE html>
       <html>
       <head>
         <meta charset="utf-8">
-        <title>${shareData.title || '沈翔智学 - AI 分析报告'}</title>
+        <title>${shareData?.title || '沈翔智学 - AI 对话'}</title>
         <style>
           * { margin: 0; padding: 0; box-sizing: border-box; }
           body { font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif; padding: 40px; max-width: 800px; margin: 0 auto; color: #333; line-height: 1.8; }
@@ -246,6 +296,8 @@ export default function SharePage() {
           .header h1 { color: #14532d; font-size: 24px; margin-bottom: 8px; }
           .header p { color: #666; font-size: 12px; }
           .content { font-size: 14px; }
+          .user-message { background: #14532d; color: white; padding: 12px 16px; border-radius: 12px; margin: 16px 0; max-width: 80%; margin-left: auto; }
+          .ai-message { background: #f5f5f5; padding: 16px; border-radius: 12px; margin: 16px 0; }
           .content h1 { font-size: 20px; color: #14532d; margin: 24px 0 12px; }
           .content h2 { font-size: 18px; color: #14532d; margin: 20px 0 10px; border-left: 3px solid #14532d; padding-left: 10px; }
           .content h3 { font-size: 16px; color: #14532d; margin: 16px 0 8px; }
@@ -260,7 +312,7 @@ export default function SharePage() {
       </head>
       <body>
         <div class="header">
-          <h1>沈翔智学 - AI 分析报告</h1>
+          <h1>${parsedData.modelName || '沈翔智学'} - AI 对话</h1>
           <p>${new Date().toLocaleString('zh-CN')}</p>
         </div>
         <div class="content">${htmlContent}</div>
@@ -271,6 +323,29 @@ export default function SharePage() {
     printWindow.document.close()
     printWindow.onload = () => printWindow.print()
     toast.success('已打开打印预览')
+  }
+
+  // Markdown 转 HTML
+  function convertMarkdownToHTML(md: string): string {
+    let html = md
+    html = html.replace(/^#### (.+)$/gm, '<h4>$1</h4>')
+    html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>')
+    html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    html = html.replace(/\*(.+?)\*/g, '<em>$1</em>')
+    html = html.replace(/^- (.+)$/gm, '<li>$1</li>')
+    html = html.replace(/^---$/gm, '<hr>')
+    html = html.replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>')
+    html = html.replace(/(<li>.+<\/li>\n?)+/g, '<ul>$&</ul>')
+    const lines = html.split('\n')
+    html = lines.map(line => {
+      const trimmed = line.trim()
+      if (!trimmed) return ''
+      if (trimmed.startsWith('<')) return line
+      return `<p>${line}</p>`
+    }).join('\n')
+    return html
   }
 
   if (loading) {
@@ -284,7 +359,7 @@ export default function SharePage() {
     )
   }
 
-  if (error || !shareData) {
+  if (error || !shareData || !parsedData) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="text-center">
@@ -324,7 +399,19 @@ export default function SharePage() {
       <main className="max-w-4xl mx-auto px-4 py-8">
         {/* 标题卡片 */}
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 mb-6">
-          <h1 className="text-xl font-bold text-slate-800 mb-4">{shareData.title || 'AI 分析报告'}</h1>
+          <div className="flex items-center gap-2 mb-2">
+            {parsedData.modelName && (
+              <span className="px-2 py-0.5 text-xs font-medium rounded-full text-white" style={{ backgroundColor: BRAND_GREEN }}>
+                {parsedData.modelName}
+              </span>
+            )}
+            {parsedData.type === 'conversation' && (
+              <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-700">
+                对话记录
+              </span>
+            )}
+          </div>
+          <h1 className="text-xl font-bold text-slate-800 mb-4">{shareData.title || 'AI 对话'}</h1>
           <div className="flex items-center gap-4 text-sm text-slate-500">
             <div className="flex items-center gap-1.5">
               <Calendar className="h-4 w-4" />
@@ -339,7 +426,16 @@ export default function SharePage() {
 
         {/* 内容卡片 */}
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 md:p-8">
-          <ContentRenderer content={shareData.content} />
+          {/* 🔥 根据类型渲染不同内容 */}
+          {parsedData.type === 'conversation' && parsedData.messages ? (
+            <div className="space-y-6">
+              {parsedData.messages.map((msg, index) => (
+                <MessageItem key={index} role={msg.role} content={msg.content} />
+              ))}
+            </div>
+          ) : (
+            <ContentRenderer content={parsedData.content || ''} />
+          )}
 
           {/* 操作按钮 */}
           <div className="mt-8 pt-6 border-t border-slate-200 flex items-center justify-end gap-3">
