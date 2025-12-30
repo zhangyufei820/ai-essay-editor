@@ -656,6 +656,14 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     let fullText = ""; let hasRec = false
     try {
         const fileIds = uploadedFiles.map(f => f.difyFileId).filter(Boolean)
+        
+        console.log("🚀 [API 请求] 发送到 /api/dify-chat:", {
+          query: userMsg.content.slice(0, 50),
+          userId,
+          model: selectedModel,
+          sessionId: sessionIdRef.current
+        })
+        
         const res = await fetch("/api/dify-chat", {
             method: "POST", 
             headers: { 
@@ -671,8 +679,19 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
               mode: genMode
             })
         })
+        
+        console.log("📥 [API 响应] 状态码:", res.status)
+        
+        if (res.status === 401) {
+          toast.error("请先登录")
+          throw new Error("未授权")
+        }
         if (res.status === 402) throw new Error("积分不足")
-        if (!res.ok) throw new Error("请求失败")
+        if (!res.ok) {
+          const errorText = await res.text()
+          console.error("❌ [API 错误]", res.status, errorText)
+          throw new Error(`请求失败: ${res.status}`)
+        }
         
         const reader = res.body?.getReader(); 
         const decoder = new TextDecoder();

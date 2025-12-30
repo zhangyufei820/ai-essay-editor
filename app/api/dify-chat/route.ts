@@ -10,6 +10,7 @@ import {
 
 export const runtime = "edge"
 export const maxDuration = 60
+export const dynamic = "force-dynamic"
 
 // 默认的基础配置
 const DIFY_BASE_URL = process.env.DIFY_BASE_URL || "https://api.dify.ai/v1"
