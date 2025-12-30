@@ -1,6 +1,9 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 
+// 🔥 允许的 HTTP 方法
+export const dynamic = 'force-dynamic'
+
 // 生成短链接 ID（8位随机字符）
 function generateShareId(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789'
