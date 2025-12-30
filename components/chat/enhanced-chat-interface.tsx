@@ -1107,7 +1107,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
             onScroll={handleScroll}
             className="h-full overflow-y-auto custom-scrollbar"
           >
-            <div className="mx-auto max-w-5xl px-4 md:px-6 lg:px-10 py-6 md:py-8">
+            <div className="mx-auto max-w-6xl px-4 md:px-6 lg:px-10 py-6 md:py-8">
               {messages.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 md:py-16 text-center animate-in fade-in duration-500">
                   <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl" style={{ backgroundColor: `${BRAND_GREEN}15` }}>
