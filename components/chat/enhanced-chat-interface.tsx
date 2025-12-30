@@ -83,6 +83,7 @@ const InlineText = ({ text }: { text: string }) => {
 };
 
 // TableBlock 必须在 UltimateRenderer 之前定义
+// 🔥 增大表格字体：表头 text-sm，表格内容 text-base
 const TableBlock = ({ lines }: { lines: string[] }) => {
   if (lines.length < 2) return null;
   try {
@@ -91,11 +92,11 @@ const TableBlock = ({ lines }: { lines: string[] }) => {
     if (!headerLine) return null;
     const headers = headerLine.split("|").filter(c => c.trim()).map(c => c.trim());
     return (
-      <div className="my-4 overflow-hidden rounded-xl border border-slate-100 bg-white">
+      <div className="my-5 overflow-hidden rounded-xl border border-slate-100 bg-white">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-slate-100">
-            <thead className="bg-slate-50"><tr>{headers.map((h, i) => (<th key={i} className="px-4 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">{h}</th>))}</tr></thead>
-            <tbody className="divide-y divide-slate-50">{bodyLines.map((line, i) => { const cells = line.split("|").filter(c => c.trim()).map(c => c.trim()); return (<tr key={i} className="hover:bg-slate-50/50 transition-colors">{cells.map((cell, j) => (<td key={j} className="px-4 py-2.5 text-sm text-slate-600"><InlineText text={cell} /></td>))}</tr>); })}</tbody>
+            <thead className="bg-slate-50"><tr>{headers.map((h, i) => (<th key={i} className="px-4 py-3 text-left text-sm font-semibold text-slate-600 tracking-wide">{h}</th>))}</tr></thead>
+            <tbody className="divide-y divide-slate-50">{bodyLines.map((line, i) => { const cells = line.split("|").filter(c => c.trim()).map(c => c.trim()); return (<tr key={i} className="hover:bg-slate-50/50 transition-colors">{cells.map((cell, j) => (<td key={j} className="px-4 py-3 text-base text-slate-700 leading-relaxed"><InlineText text={cell} /></td>))}</tr>); })}</tbody>
           </table>
         </div>
       </div>
@@ -134,32 +135,33 @@ function UltimateRenderer({ content, isStreaming = false }: { content: string; i
       continue;
     }
     
+    // 🔥 增大字体：h1=2xl, h2=xl, h3=lg, 正文=base(16px)
     if (line.trim().startsWith("# ")) {
       renderedElements.push(
-        <h1 key={i} className="mt-8 mb-4 text-xl font-bold text-slate-800">
+        <h1 key={i} className="mt-8 mb-4 text-2xl font-bold text-slate-800">
           {line.replace(/^#\s+/, "")}
           {isLastLine && isStreaming && <StreamingCursor />}
         </h1>
       );
     } else if (line.trim().startsWith("## ")) {
       renderedElements.push(
-        <h2 key={i} className={`mt-6 mb-3 text-lg font-semibold text-slate-700 flex items-center gap-2`}>
-          <span className={`w-1 h-5 bg-[${BRAND_GREEN}] rounded-full`}></span>
+        <h2 key={i} className={`mt-6 mb-3 text-xl font-semibold text-slate-700 flex items-center gap-2`}>
+          <span className={`w-1 h-6 bg-[${BRAND_GREEN}] rounded-full`}></span>
           {line.replace(/^##\s+/, "")}
           {isLastLine && isStreaming && <StreamingCursor />}
         </h2>
       );
     } else if (line.trim().startsWith("### ")) {
       renderedElements.push(
-        <h3 key={i} className={`mt-5 mb-2 text-base font-semibold text-[${BRAND_GREEN}]`}>
+        <h3 key={i} className={`mt-5 mb-2 text-lg font-semibold text-[${BRAND_GREEN}]`}>
           {line.replace(/^###\s+/, "")}
           {isLastLine && isStreaming && <StreamingCursor />}
         </h3>
       );
     } else if (line.trim().startsWith("- ")) {
       renderedElements.push(
-        <div key={i} className="flex gap-2.5 ml-1 my-2 text-[15px] text-slate-600 leading-relaxed">
-          <div className={`mt-2 w-1.5 h-1.5 rounded-full bg-[${BRAND_GREEN}]/60 shrink-0`}></div>
+        <div key={i} className="flex gap-2.5 ml-1 my-2.5 text-base text-slate-700 leading-relaxed">
+          <div className={`mt-2.5 w-1.5 h-1.5 rounded-full bg-[${BRAND_GREEN}]/60 shrink-0`}></div>
           <span>
             <InlineText text={line.replace(/^- /, "")} />
             {isLastLine && isStreaming && <StreamingCursor />}
@@ -169,7 +171,7 @@ function UltimateRenderer({ content, isStreaming = false }: { content: string; i
     } else if (line.trim().startsWith("> ")) {
       renderedElements.push(
         <blockquote key={i} className={`my-4 border-l-2 border-[${BRAND_GREEN}] bg-[${BRAND_GREEN}]/5 px-4 py-3 rounded-r-xl`}>
-          <div className="text-[15px] text-slate-600 leading-relaxed">
+          <div className="text-base text-slate-700 leading-relaxed">
             <InlineText text={line.replace(/^> /, "")} />
             {isLastLine && isStreaming && <StreamingCursor />}
           </div>
@@ -178,10 +180,10 @@ function UltimateRenderer({ content, isStreaming = false }: { content: string; i
     } else if (line.trim() === "---") {
       renderedElements.push(<div key={i} className="py-4"><div className="h-px bg-slate-100"></div></div>);
     } else if (line.trim() === "") {
-      renderedElements.push(<div key={i} className="h-3"></div>);
+      renderedElements.push(<div key={i} className="h-4"></div>);
     } else {
       renderedElements.push(
-        <p key={i} className="text-[15px] leading-[1.8] text-slate-600 my-2">
+        <p key={i} className="text-base leading-[1.9] text-slate-700 my-2.5">
           <InlineText text={line} />
           {isLastLine && isStreaming && <StreamingCursor />}
         </p>
