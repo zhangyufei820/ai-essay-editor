@@ -127,6 +127,27 @@ export async function getUserReferralCode(userId: string): Promise<string | null
   return data?.code || null
 }
 
+// 🎯 邀请奖励配置
+export const REFERRAL_CONFIG = {
+  REWARD_PER_INVITE: 1000,      // 每次成功邀请，双方各得积分
+  MAX_REFERRER_REWARD: 50000,   // 邀请者最多可获得的总积分
+}
+
+// 获取用户已获得的邀请奖励总额
+export async function getReferralRewardTotal(userId: string): Promise<number> {
+  const supabase = await createServerClient()
+  
+  const { data, error } = await supabase
+    .from("referrals")
+    .select("reward_credits")
+    .eq("referrer_id", userId)
+    .eq("status", "completed")
+  
+  if (error || !data) return 0
+  
+  return data.reduce((sum, r) => sum + (r.reward_credits || 0), 0)
+}
+
 // 处理推荐注册
 export async function handleReferralSignup(newUserId: string, referralCode: string): Promise<boolean> {
   const supabase = await createServerClient()
@@ -143,13 +164,23 @@ export async function handleReferralSignup(newUserId: string, referralCode: stri
   }
 
   const referrerId = codeData.user_id
+  
+  // 🔥 检查邀请者是否已达到奖励上限
+  const currentRewardTotal = await getReferralRewardTotal(referrerId)
+  const canReceiveReward = currentRewardTotal < REFERRAL_CONFIG.MAX_REFERRER_REWARD
+  
+  // 计算实际奖励（如果接近上限，只给剩余额度）
+  const remainingQuota = REFERRAL_CONFIG.MAX_REFERRER_REWARD - currentRewardTotal
+  const actualReferrerReward = canReceiveReward 
+    ? Math.min(REFERRAL_CONFIG.REWARD_PER_INVITE, remainingQuota)
+    : 0
 
   // 创建推荐记录
   const { error: referralError } = await supabase.from("referrals").insert({
     referrer_id: referrerId,
     referee_id: newUserId,
     referral_code: referralCode,
-    reward_credits: 500,
+    reward_credits: actualReferrerReward,
     status: "completed",
     completed_at: new Date().toISOString(),
   })
@@ -159,11 +190,13 @@ export async function handleReferralSignup(newUserId: string, referralCode: stri
     return false
   }
 
-  // 给推荐人增加积分
-  await addCredits(referrerId, 500, "referral", `推荐新用户获得奖励`, newUserId)
+  // 🎁 给推荐人增加积分（如果未达上限）
+  if (actualReferrerReward > 0) {
+    await addCredits(referrerId, actualReferrerReward, "referral", `🎉 成功邀请好友，获得 ${actualReferrerReward} 积分奖励`, newUserId)
+  }
 
-  // 给新用户额外增加积分
-  await addCredits(newUserId, 200, "referral", `通过推荐码注册获得奖励`)
+  // 🎁 给新用户增加积分（被邀请者始终获得奖励）
+  await addCredits(newUserId, REFERRAL_CONFIG.REWARD_PER_INVITE, "referral", `🎊 通过好友邀请注册，获得 ${REFERRAL_CONFIG.REWARD_PER_INVITE} 积分奖励`)
 
   // 更新推荐码使用次数
   await supabase

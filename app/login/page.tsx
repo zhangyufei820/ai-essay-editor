@@ -7,8 +7,8 @@ function AuthingLoginComponent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   
-  // 这是你之前提供的 Authing App ID
-  const appId = '692b0bd30de159be78db726b' 
+  // 从环境变量读取 Authing App ID
+  const appId = process.env.NEXT_PUBLIC_AUTHING_APP_ID || ''
   const guardRef = useRef<any>(null)
   const [isLoaded, setIsLoaded] = useState(false)
 
@@ -35,10 +35,11 @@ function AuthingLoginComponent() {
       const Guard = module.Guard
       if (guardRef.current) return
 
-      const guard = new Guard({
-        appId,
-        mode: 'normal', // 使用普通模式，不强制跳转
-      })
+      try {
+        const guard = new Guard({
+          appId,
+          mode: 'normal', // 使用普通模式，不强制跳转
+        })
 
       // ✅ 登录成功的处理逻辑
       guard.on('login', async (userInfo: any) => {
@@ -79,8 +80,15 @@ function AuthingLoginComponent() {
         }
       })
 
-      guard.start('#authing-guard-container')
-      guardRef.current = guard
+        guard.start('#authing-guard-container')
+        guardRef.current = guard
+        setIsLoaded(true)
+      } catch (error) {
+        console.error('Authing Guard 初始化失败:', error)
+        setIsLoaded(true) // 即使失败也标记为已加载，避免无限等待
+      }
+    }).catch((error) => {
+      console.error('加载 Authing 模块失败:', error)
       setIsLoaded(true)
     })
   }, [appId, router, searchParams])

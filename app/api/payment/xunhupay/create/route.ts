@@ -22,9 +22,14 @@ function gen_sign(params: any, appSecret: string) {
 
 export async function GET(request: Request) {
   try {
-    // 你的账号配置 (保持不变)
-    const APP_ID = "201906175339"; 
-    const APP_SECRET = "5f9c2b5d451978f6f369375cf7247cf7"; 
+    // 从环境变量读取支付配置
+    const APP_ID = process.env.XUNHUPAY_APPID;
+    const APP_SECRET = process.env.XUNHUPAY_APPSECRET;
+    
+    if (!APP_ID || !APP_SECRET) {
+      console.error("❌ 支付配置缺失：XUNHUPAY_APPID 或 XUNHUPAY_APPSECRET 未设置");
+      return NextResponse.json({ error: "支付服务未配置" }, { status: 503 });
+    }
 
     const { searchParams } = new URL(request.url);
     const productId = searchParams.get("productId");

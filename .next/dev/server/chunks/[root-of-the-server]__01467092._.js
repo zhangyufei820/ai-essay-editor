@@ -56,15 +56,28 @@ async function POST(request) {
         });
     }
     try {
+        // 🔐 从 header 获取用户身份（middleware 已验证）
+        const headerUserId = request.headers.get("X-User-Id");
         const formData = await request.formData();
         const file = formData.get("file");
-        // ✅ 修改 2: 获取前端传来的真实用户 ID
-        const userId = formData.get("user");
+        // 优先使用 header 中的 userId，其次使用 formData 中的
+        const userId = headerUserId || formData.get("user");
         if (!file) {
             return new Response(JSON.stringify({
                 error: "No file provided"
             }), {
                 status: 400,
+                headers: {
+                    "Content-Type": "application/json"
+                }
+            });
+        }
+        // 🔐 二次验证：确保有用户身份
+        if (!userId) {
+            return new Response(JSON.stringify({
+                error: "未授权访问，请先登录"
+            }), {
+                status: 401,
                 headers: {
                     "Content-Type": "application/json"
                 }

@@ -1,21 +1,39 @@
 "use client"
 
 import type React from "react"
-import { useState, useRef, useEffect, Suspense } from "react"
-import { useSearchParams } from "next/navigation" 
-import imageCompression from 'browser-image-compression';
+import { useState, useRef, useEffect, Suspense, useCallback } from "react"
+import { useSearchParams, useRouter } from "next/navigation"
 
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { 
   Send, Paperclip, X, FileText, Copy, Loader2, Sparkles, User, Brain, AlertCircle, 
-  ChevronDown, Crown, Image as ImageIcon, Music, Video, Zap, Bot, Film, Palette, AudioLines
+  ChevronDown, ChevronLeft, Bot, Film, Palette, AudioLines, ArrowDown, GraduationCap,
+  Download, Share2
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
-import { AnalysisStages } from "./analysis-stages"
+import { MessageBubble } from "./MessageBubble"
+import { ChatInput } from "./ChatInput"
+import { EmptyState } from "./EmptyState"
+import { AIStatusIndicator } from "@/components/ai/AIStatusIndicator"
+import { ModelSelector } from "./ModelSelector"
+import { WorkflowVisualizer } from "./WorkflowVisualizer"
+import { useWorkflowVisualizer } from "@/hooks/useWorkflowVisualizer"
+import { motion, AnimatePresence } from "framer-motion"
+import { brandColors, slateColors } from "@/lib/design-tokens"
 import { createClient } from "@supabase/supabase-js"
+import { collapseSidebar, refreshCredits } from "@/components/app-sidebar"
+import { 
+  calculatePreviewCost, 
+  ModelType, 
+  GenMode,
+  MODEL_COSTS,
+  DAILY_FREE_LIMIT,
+  LUXURY_THRESHOLD,
+  getModelDisplayName
+} from "@/lib/pricing"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,6 +41,9 @@ import {
   DropdownMenuTrigger,
   DropdownMenuLabel
 } from "@/components/ui/dropdown-menu"
+
+// 🔥 品牌深绿色（参考主页标题）
+const BRAND_GREEN = "#14532d"
 
 // --- Supabase 初始化 ---
 const supabase = createClient(
@@ -35,19 +56,13 @@ type UploadedFile = { name: string; type: string; size: number; data: string; pr
 type Message = { id: string; role: "user" | "assistant"; content: string }
 type FileProcessingState = { status: "idle" | "uploading" | "processing" | "recognizing" | "complete" | "error"; progress: number; message: string }
 
-// ✅ 修正点1：ModelType 里的拼写改为 suno-v5
-type ModelType = "standard" | "gpt-5" | "claude-opus" | "gemini-pro" | "banana-2-pro" | "suno-v5" | "sora-2-pro"
-type GenMode = "text" | "image" | "music" | "video"
-
 // --- 辅助组件：思考加载器 ---
 const SimpleBrainLoader = () => (
-  <div className="flex items-center gap-3 py-6 px-4 bg-white/50 rounded-xl border border-dashed border-[#0F766E]/20">
-    <div className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-[#0F766E]/10">
-      <Brain className="h-6 w-6 text-[#0F766E] animate-pulse" />
+  <div className="flex items-center gap-3 py-4 px-4 bg-slate-50 rounded-2xl">
+    <div className={`relative flex h-8 w-8 items-center justify-center rounded-xl bg-[${BRAND_GREEN}]/10`}>
+      <Brain className={`h-5 w-5 text-[${BRAND_GREEN}] animate-pulse`} />
     </div>
-    <div className="space-y-1">
-      <span className="text-base text-[#0F766E] font-medium animate-pulse">AI 导师正在思考中...</span>
-    </div>
+    <span className="text-sm text-slate-500 font-medium animate-pulse">思考中...</span>
   </div>
 )
 
@@ -59,7 +74,7 @@ const InlineText = ({ text }: { text: string }) => {
     <>
       {parts.map((part, index) => {
         if (part.startsWith("**") && part.endsWith("**")) {
-          return <strong key={index} className="font-bold text-[#0F766E] bg-[#0F766E]/10 px-1.5 py-0.5 rounded mx-0.5 box-decoration-clone">{part.slice(2, -2)}</strong>;
+          return <strong key={index} className={`font-semibold text-[${BRAND_GREEN}]`}>{part.slice(2, -2)}</strong>;
         }
         return <span key={index}>{part}</span>;
       })}
@@ -67,44 +82,7 @@ const InlineText = ({ text }: { text: string }) => {
   );
 };
 
-function UltimateRenderer({ content }: { content: string }) {
-  if (!content) return <span className="animate-pulse text-[#0F766E] text-lg">▌</span>;
-  const lines = content.split("\n");
-  const renderedElements = [];
-  let tableBuffer: string[] = [];
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const isTableLine = line.trim().startsWith("|") && line.includes("|");
-    if (isTableLine) {
-      tableBuffer.push(line);
-      if (i === lines.length - 1 || !lines[i + 1].trim().startsWith("|")) {
-        renderedElements.push(<TableBlock key={`tbl-${i}`} lines={tableBuffer} />);
-        tableBuffer = [];
-      }
-      continue;
-    }
-    if (line.trim().startsWith("# ")) {
-      renderedElements.push(<h1 key={i} className="mt-12 mb-8 text-3xl font-extrabold text-slate-900 tracking-tight leading-tight border-b-2 border-[#0F766E]/20 pb-4"><span className="text-[#0F766E] mr-2">#</span> {line.replace(/^#\s+/, "")}</h1>);
-    } else if (line.trim().startsWith("## ")) {
-      renderedElements.push(<h2 key={i} className="mt-10 mb-6 text-2xl font-bold text-slate-800 flex items-center gap-3"><span className="w-1.5 h-7 bg-[#0F766E] rounded-full inline-block shadow-sm"></span>{line.replace(/^##\s+/, "")}</h2>);
-    } else if (line.trim().startsWith("### ")) {
-      renderedElements.push(<h3 key={i} className="mt-8 mb-4 text-xl font-bold text-[#0F766E]">{line.replace(/^###\s+/, "")}</h3>);
-    } else if (line.trim().startsWith("- ")) {
-      renderedElements.push(<div key={i} className="flex gap-3 ml-2 my-3 text-[17px] text-slate-700 leading-8"><div className="mt-[11px] w-2 h-2 rounded-full bg-[#0F766E] shrink-0 opacity-60"></div><span><InlineText text={line.replace(/^- /, "")} /></span></div>);
-    } else if (line.trim().startsWith("> ")) {
-      renderedElements.push(<blockquote key={i} className="my-6 border-l-4 border-[#0F766E] bg-[#F0FDF9] px-6 py-5 rounded-r-xl shadow-sm"><div className="text-[#0F766E] font-semibold text-sm mb-1 opacity-80">💡 导师点评</div><div className="text-[17px] text-slate-700 leading-8 italic"><InlineText text={line.replace(/^> /, "")} /></div></blockquote>);
-    } else if (line.trim() === "---") {
-      renderedElements.push(<div key={i} className="py-8 flex items-center justify-center"><div className="h-px bg-gray-200 w-full"></div><div className="mx-4 text-gray-300">✦</div><div className="h-px bg-gray-200 w-full"></div></div>);
-    } else if (line.trim() === "") {
-      renderedElements.push(<div key={i} className="h-4"></div>);
-    } else {
-      renderedElements.push(<p key={i} className="text-[17px] leading-[2] text-slate-700 my-3 tracking-wide"><InlineText text={line} /></p>);
-    }
-  }
-  return <div className="w-full pb-8">{renderedElements}</div>;
-}
-
+// TableBlock 必须在 UltimateRenderer 之前定义
 const TableBlock = ({ lines }: { lines: string[] }) => {
   if (lines.length < 2) return null;
   try {
@@ -113,11 +91,11 @@ const TableBlock = ({ lines }: { lines: string[] }) => {
     if (!headerLine) return null;
     const headers = headerLine.split("|").filter(c => c.trim()).map(c => c.trim());
     return (
-      <div className="my-8 overflow-hidden rounded-2xl border border-[#0F766E]/20 shadow-md w-full bg-white ring-1 ring-black/5">
+      <div className="my-4 overflow-hidden rounded-xl border border-slate-100 bg-white">
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-100">
-            <thead className="bg-[#0F766E]"><tr>{headers.map((h, i) => (<th key={i} className="px-6 py-4 text-left text-sm font-bold text-white tracking-wider whitespace-nowrap uppercase">{h}</th>))}</tr></thead>
-            <tbody className="divide-y divide-gray-50">{bodyLines.map((line, i) => { const cells = line.split("|").filter(c => c.trim()).map(c => c.trim()); return (<tr key={i} className="hover:bg-[#F0FDF9] transition-colors odd:bg-white even:bg-gray-50/50">{cells.map((cell, j) => (<td key={j} className="px-6 py-4 text-[16px] text-slate-700 leading-relaxed min-w-[120px]"><InlineText text={cell} /></td>))}</tr>); })}</tbody>
+          <table className="min-w-full divide-y divide-slate-100">
+            <thead className="bg-slate-50"><tr>{headers.map((h, i) => (<th key={i} className="px-4 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">{h}</th>))}</tr></thead>
+            <tbody className="divide-y divide-slate-50">{bodyLines.map((line, i) => { const cells = line.split("|").filter(c => c.trim()).map(c => c.trim()); return (<tr key={i} className="hover:bg-slate-50/50 transition-colors">{cells.map((cell, j) => (<td key={j} className="px-4 py-2.5 text-sm text-slate-600"><InlineText text={cell} /></td>))}</tr>); })}</tbody>
           </table>
         </div>
       </div>
@@ -125,10 +103,106 @@ const TableBlock = ({ lines }: { lines: string[] }) => {
   } catch (e) { return null; }
 };
 
+// 🎯 GenSpark 风格终端光标
+const StreamingCursor = () => (
+  <span className="streaming-cursor inline-block ml-1 text-emerald-500 animate-cursor-blink">▍</span>
+)
+
+function UltimateRenderer({ content, isStreaming = false }: { content: string; isStreaming?: boolean }) {
+  if (!content) return <span className="text-emerald-500 animate-cursor-blink">▍</span>;
+  const lines = content.split("\n");
+  const renderedElements = [];
+  let tableBuffer: string[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const isTableLine = line.trim().startsWith("|") && line.includes("|");
+    const isLastLine = i === lines.length - 1;
+    
+    if (isTableLine) {
+      tableBuffer.push(line);
+      if (isLastLine || !lines[i + 1].trim().startsWith("|")) {
+        renderedElements.push(<TableBlock key={`tbl-${i}`} lines={tableBuffer} />);
+        tableBuffer = [];
+      }
+      continue;
+    }
+    
+    // 🔥 跳过 #### 及更多 # 的标题（不渲染）
+    if (line.trim().match(/^#{4,}\s/)) {
+      // 完全跳过，不渲染
+      continue;
+    }
+    
+    if (line.trim().startsWith("# ")) {
+      renderedElements.push(
+        <h1 key={i} className="mt-8 mb-4 text-xl font-bold text-slate-800">
+          {line.replace(/^#\s+/, "")}
+          {isLastLine && isStreaming && <StreamingCursor />}
+        </h1>
+      );
+    } else if (line.trim().startsWith("## ")) {
+      renderedElements.push(
+        <h2 key={i} className={`mt-6 mb-3 text-lg font-semibold text-slate-700 flex items-center gap-2`}>
+          <span className={`w-1 h-5 bg-[${BRAND_GREEN}] rounded-full`}></span>
+          {line.replace(/^##\s+/, "")}
+          {isLastLine && isStreaming && <StreamingCursor />}
+        </h2>
+      );
+    } else if (line.trim().startsWith("### ")) {
+      renderedElements.push(
+        <h3 key={i} className={`mt-5 mb-2 text-base font-semibold text-[${BRAND_GREEN}]`}>
+          {line.replace(/^###\s+/, "")}
+          {isLastLine && isStreaming && <StreamingCursor />}
+        </h3>
+      );
+    } else if (line.trim().startsWith("- ")) {
+      renderedElements.push(
+        <div key={i} className="flex gap-2.5 ml-1 my-2 text-[15px] text-slate-600 leading-relaxed">
+          <div className={`mt-2 w-1.5 h-1.5 rounded-full bg-[${BRAND_GREEN}]/60 shrink-0`}></div>
+          <span>
+            <InlineText text={line.replace(/^- /, "")} />
+            {isLastLine && isStreaming && <StreamingCursor />}
+          </span>
+        </div>
+      );
+    } else if (line.trim().startsWith("> ")) {
+      renderedElements.push(
+        <blockquote key={i} className={`my-4 border-l-2 border-[${BRAND_GREEN}] bg-[${BRAND_GREEN}]/5 px-4 py-3 rounded-r-xl`}>
+          <div className="text-[15px] text-slate-600 leading-relaxed">
+            <InlineText text={line.replace(/^> /, "")} />
+            {isLastLine && isStreaming && <StreamingCursor />}
+          </div>
+        </blockquote>
+      );
+    } else if (line.trim() === "---") {
+      renderedElements.push(<div key={i} className="py-4"><div className="h-px bg-slate-100"></div></div>);
+    } else if (line.trim() === "") {
+      renderedElements.push(<div key={i} className="h-3"></div>);
+    } else {
+      renderedElements.push(
+        <p key={i} className="text-[15px] leading-[1.8] text-slate-600 my-2">
+          <InlineText text={line} />
+          {isLastLine && isStreaming && <StreamingCursor />}
+        </p>
+      );
+    }
+  }
+  return <div className="w-full">{renderedElements}</div>;
+}
+
 // --- 内部聊天核心组件 ---
-function ChatInterfaceInner() {
+interface ChatInterfaceInnerProps {
+  initialModel?: ModelType
+}
+
+function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   const searchParams = useSearchParams()
+  const router = useRouter()
   const urlSessionId = searchParams.get("id")
+  const urlAgent = searchParams.get("agent")
+  // 🔥 优先使用 initialModel prop（来自动态路由），其次使用 URL 参数
+  const effectiveAgent = initialModel || urlAgent
 
   const [userId, setUserId] = useState<string>("")
   const [userAvatar, setUserAvatar] = useState<string>("")
@@ -143,6 +217,26 @@ function ChatInterfaceInner() {
   const DAILY_LIMIT = 20
 
   const isLuxury = userCredits > 1000 
+  
+  // 🎯 升级引导横幅状态（非豪华会员显示，发送消息后消失）
+  const [showUpgradeBanner, setShowUpgradeBanner] = useState(true)
+
+  // 🎯 工作流可视化 Hook (GenSpark 1:1 复刻版)
+  const {
+    workflowState,
+    isProcessing: isWorkflowProcessing,
+    isThinking,
+    isGenerating,
+    isFastTrack,
+    showCursor,
+    handleSSEEvent,
+    resetWorkflow,
+    toggleExpanded,
+    getSummaryText,
+    markWorkflowComplete,
+    currentRunningText,
+    triggerHandover
+  } = useWorkflowVisualizer()
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -150,17 +244,49 @@ function ChatInterfaceInner() {
       if (userStr) {
         try {
           const user = JSON.parse(userStr)
-          setUserId(user.id || user.sub || user.userId || "")
+          const uid = user.id || user.sub || user.userId || ""
+          console.log("🔑 [用户初始化] 解析用户:", { 
+            id: user.id, 
+            sub: user.sub, 
+            userId: user.userId,
+            finalUid: uid 
+          })
+          setUserId(uid)
           if (user.user_metadata?.avatar_url) setUserAvatar(user.user_metadata.avatar_url)
-          fetchCredits(user.id || user.sub || user.userId)
-        } catch (e) {}
+          if (uid) fetchCredits(uid)
+        } catch (e) {
+          console.error("❌ [用户初始化] 解析失败:", e)
+        }
+      } else {
+        console.warn("⚠️ [用户初始化] localStorage 中无 currentUser")
       }
     }
   }, [])
 
   const fetchCredits = async (uid: string) => {
-    const { data } = await supabase.from('user_credits').select('credits').eq('user_id', uid).single()
-    if (data) setUserCredits(data.credits)
+    console.log("💰 [积分查询] 通过 API 查询用户:", uid)
+    try {
+      // 🔥 使用 API 查询积分（绕过 RLS 限制）
+      const res = await fetch(`/api/user/credits?user_id=${encodeURIComponent(uid)}`)
+      if (res.ok) {
+        const data = await res.json()
+        console.log("✅ [积分查询] API 成功:", data.credits)
+        setUserCredits(data.credits || 0)
+      } else {
+        console.error("❌ [积分查询] API 失败:", res.status)
+        // 备用：直接查询数据库
+        const { data, error } = await supabase.from('user_credits').select('credits').eq('user_id', uid).single()
+        if (!error && data) {
+          console.log("✅ [积分查询] 备用查询成功:", data.credits)
+          setUserCredits(data.credits)
+        }
+      }
+    } catch (err) {
+      console.error("❌ [积分查询] 异常:", err)
+      // 备用：直接查询数据库
+      const { data } = await supabase.from('user_credits').select('credits').eq('user_id', uid).single()
+      if (data) setUserCredits(data.credits)
+    }
   }
 
   useEffect(() => {
@@ -168,6 +294,33 @@ function ChatInterfaceInner() {
        loadHistorySession(urlSessionId)
     }
   }, [urlSessionId])
+
+  const prevUrlAgentRef = useRef<string | null>(null)
+  
+  useEffect(() => {
+    const agentToModel: Record<string, ModelType> = {
+      "teaching-pro": "teaching-pro",
+      "standard": "standard",
+    }
+    
+    const targetModel = urlAgent ? (agentToModel[urlAgent] || "standard") : "standard"
+    
+    console.log(`🔗 [URL Sync] urlAgent=${urlAgent}, prevUrlAgent=${prevUrlAgentRef.current}, targetModel=${targetModel}`)
+    
+    if (urlAgent !== prevUrlAgentRef.current) {
+      prevUrlAgentRef.current = urlAgent
+      
+      console.log(`🔄 [强制模型同步] → ${targetModel}`)
+      setSelectedModel(targetModel)
+      setGenMode("text")
+      
+      if (!urlSessionId) {
+        setMessages([])
+        sessionIdRef.current = null
+        setCurrentSessionId("")
+      }
+    }
+  }, [urlAgent, urlSessionId])
 
   const loadHistorySession = async (sid: string) => {
     setIsLoading(true)
@@ -210,121 +363,189 @@ function ChatInterfaceInner() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const scrollAreaRef = useRef<HTMLDivElement>(null)
+  // 🔥 记录当前正在处理的 AI 消息 ID
+  const currentBotIdRef = useRef<string | null>(null)
+  
+  // 🔥 智能滚动状态
+  const [isNearBottom, setIsNearBottom] = useState(true)
+  const [hasNewMessage, setHasNewMessage] = useState(false)
 
-  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }) }, [messages])
-  useEffect(() => { if (isLoading && isComplexMode && analysisStage < 4) setTimeout(() => setAnalysisStage(p => Math.min(p + 1, 4)), 2000) }, [isLoading, analysisStage, isComplexMode])
-
-  // --- 模型配置 (新增 Banana/Suno/Sora) ---
-  // ✅ 修正点2：key 改为 suno-v5，名称改为 Suno V5
-  const modelConfig = {
-    "standard": { name: "作文批改智能体", icon: Sparkles, color: "text-[#0F766E]", badge: null },
-    
-    "gpt-5": { name: "ChatGPT 5.1", icon: Zap, color: "text-emerald-600", badge: "Plus" },
-    "claude-opus": { name: "Claude Opus 4.5", icon: Bot, color: "text-orange-600", badge: "Pro" },
-    "gemini-pro": { name: "Gemini 3.0 Pro", icon: Sparkles, color: "text-blue-600", badge: "Adv" },
-    
-    "banana-2-pro": { name: "Banana 2 Pro", icon: Palette, color: "text-yellow-500", badge: "Art" },
-    "suno-v5": { name: "Suno V5", icon: AudioLines, color: "text-pink-500", badge: "Music" },
-    "sora-2-pro": { name: "Sora 2 Pro", icon: Film, color: "text-indigo-600", badge: "Video" },
+  // 检测是否在底部附近
+  const handleScroll = () => {
+    if (scrollAreaRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } = scrollAreaRef.current
+      const isNear = scrollHeight - scrollTop - clientHeight < 100
+      setIsNearBottom(isNear)
+      if (isNear) setHasNewMessage(false)
+    }
   }
 
+  // 滚动到底部的函数
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+    setHasNewMessage(false)
+  }
+
+  // 新消息时的智能滚动处理
+  useEffect(() => {
+    if (isNearBottom) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+    } else if (messages.length > 0) {
+      setHasNewMessage(true)
+    }
+  }, [messages, isNearBottom])
+  useEffect(() => { if (isLoading && isComplexMode && analysisStage < 4) setTimeout(() => setAnalysisStage(p => Math.min(p + 1, 4)), 2000) }, [isLoading, analysisStage, isComplexMode])
+
+  // --- 模型配置（增强版：添加描述和标签） ---
+  const modelConfig = {
+    "standard": { 
+      name: "作文批改", 
+      icon: Sparkles, 
+      color: BRAND_GREEN,
+      description: "专业作文分析与点评",
+      badge: "推荐",
+      group: "教育专用"
+    },
+    "teaching-pro": { 
+      name: "教学评助手", 
+      icon: Brain, 
+      color: "#7c3aed",
+      description: "教学评估与反馈",
+      group: "教育专用"
+    },
+    "gpt-5": { 
+      name: "ChatGPT 5.1", 
+      icon: Bot, 
+      color: "#16a34a",
+      description: "通用智能对话",
+      badge: "新",
+      group: "通用模型"
+    },
+    "claude-opus": { 
+      name: "Claude Opus 4.5", 
+      icon: Bot, 
+      color: "#ea580c",
+      description: "深度推理与分析",
+      group: "通用模型"
+    },
+    "gemini-pro": { 
+      name: "Gemini 3.0 Pro", 
+      icon: Sparkles, 
+      color: "#2563eb",
+      description: "多模态理解",
+      group: "通用模型"
+    },
+    "banana-2-pro": { 
+      name: "Banana 2 Pro", 
+      icon: Palette, 
+      color: "#ca8a04",
+      description: "AI 图像生成",
+      badge: "热门",
+      group: "创意生成"
+    },
+    "suno-v5": { 
+      name: "Suno V5", 
+      icon: AudioLines, 
+      color: "#db2777",
+      description: "AI 音乐创作",
+      group: "创意生成"
+    },
+    "sora-2-pro": { 
+      name: "Sora 2 Pro", 
+      icon: Film, 
+      color: "#4f46e5",
+      description: "AI 视频生成",
+      badge: "Pro",
+      group: "创意生成"
+    },
+  }
+
+  // 🔥 转换为 ModelSelector 需要的格式
+  const modelList = Object.entries(modelConfig).map(([key, config]) => ({
+    key,
+    name: config.name,
+    icon: config.icon,
+    color: config.color,
+    description: config.description,
+    badge: (config as any).badge,
+    group: config.group
+  }))
+
   const handleModelChange = (model: ModelType) => {
+    if (model !== selectedModel) {
+      sessionIdRef.current = null
+      setCurrentSessionId("")
+      setMessages([])
+      console.log(`🔄 [模型切换] ${selectedModel} → ${model}，已清除会话`)
+    }
+    
     if (model !== "standard") {
       if (isLuxury) {
-        toast.success(`已切换至 ${modelConfig[model].name}`, { description: "豪华会员无限畅享" })
+        toast.success(`已切换至 ${modelConfig[model].name}`)
       } else {
         if (dailyUsage < DAILY_LIMIT) {
-          toast.info(`已切换至 ${modelConfig[model].name}`, { description: `今日免费额度: ${dailyUsage}/${DAILY_LIMIT} 次` })
+          toast.info(`已切换至 ${modelConfig[model].name}`, { description: `今日免费: ${dailyUsage}/${DAILY_LIMIT}` })
         } else {
-          toast.warning(`今日免费额度已耗尽`, { description: "继续使用将消耗 50 积分/次，升级豪华会员无限畅享" })
+          toast.warning(`今日免费额度已用完`)
         }
       }
-    } else {
-      toast.success("已切换至标准智能体")
     }
     
     if (model === "banana-2-pro") setGenMode("image")
-    else if (model === "suno-v5") setGenMode("music") // ✅ 修正点3：使用正确的 suno-v5
+    else if (model === "suno-v5") setGenMode("music")
     else if (model === "sora-2-pro") setGenMode("video")
     else setGenMode("text")
 
     setSelectedModel(model)
+    
+    if (model === "standard" || model === "teaching-pro") {
+      const newUrl = model === "standard" ? '/chat' : `/chat?agent=${model}`
+      console.log(`🔗 [URL 同步] 下拉框切换 → ${newUrl}`)
+      router.push(newUrl, { scroll: false })
+    }
     
     if (input === "" || input.startsWith("生成")) {
        setInput("")
     }
   }
 
-  const handleModeChange = (mode: GenMode) => {
-    setGenMode(mode)
-    
-    if (mode === "image") setSelectedModel("banana-2-pro")
-    else if (mode === "music") setSelectedModel("suno-v5") // ✅ 修正点4：使用正确的 suno-v5
-    else if (mode === "video") setSelectedModel("sora-2-pro")
-    else setSelectedModel("standard")
-
-    const prompts = {
-      "text": "",
-      "image": "生成一张关于...的插画，风格是...",
-      "music": "生成一首轻快的钢琴曲，时长30秒...",
-      "video": "生成一段4秒的视频，内容是..."
-    }
-    setInput(prompts[mode])
-    if (mode !== "text") textareaRef.current?.focus()
-  }
-
   const calculateCost = () => {
-    if (genMode === "video") return 300
-    if (genMode === "music") return 100
-    if (genMode === "image") return isLuxury ? 0 : 50
-    
-    if (selectedModel !== "standard") {
-      if (isLuxury) return 0 
-      if (dailyUsage < DAILY_LIMIT) return 0 
-      return 50 
-    }
-    return userId ? 20 : 0 
+    if (!userId) return 0
+    return calculatePreviewCost(selectedModel, {
+      isLuxury,
+      estimatedInputTokens: input.length > 0 ? Math.ceil(input.length / 4) * 2 : undefined
+    })
   }
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files; 
     if (!files || !files.length) return;
     
-    setFileProcessing({ status: "uploading", progress: 0, message: "正在处理图片..." })
+    // 🔥 检查用户是否已登录
+    if (!userId) {
+      toast.error("请先登录后再上传文件")
+      return
+    }
+    
+    setFileProcessing({ status: "uploading", progress: 0, message: "正在处理..." })
     
     try {
         const uploadPromises = Array.from(files).map(async (file) => {
-            let fileToUpload = file;
-
-            if (file.type.startsWith("image/")) {
-                try {
-                    console.log(`原始文件: ${file.name} size: ${(file.size / 1024 / 1024).toFixed(2)} MB`);
-                    
-                    const options = {
-                        maxSizeMB: 1,           
-                        maxWidthOrHeight: 1920, 
-                        useWebWorker: true,     
-                        fileType: "image/jpeg"  
-                    };
-
-                    const compressedBlob = await imageCompression(file, options);
-                    
-                    fileToUpload = new File([compressedBlob], file.name.replace(/\.[^/.]+$/, ".jpg"), {
-                        type: "image/jpeg",
-                        lastModified: Date.now(),
-                    });
-
-                    console.log(`压缩后: ${(fileToUpload.size / 1024 / 1024).toFixed(2)} MB`);
-                } catch (error) {
-                    console.error("图片压缩失败，将尝试上传原图", error);
-                }
-            }
+            const fileToUpload = file;
 
             const formData = new FormData(); 
             formData.append("file", fileToUpload); 
             formData.append("user", userId)
             
-            const res = await fetch("/api/dify-upload", { method: "POST", body: formData })
+            // 🔥 添加 X-User-Id header 以通过 middleware 验证
+            const res = await fetch("/api/dify-upload", { 
+              method: "POST", 
+              headers: {
+                "X-User-Id": userId
+              },
+              body: formData 
+            })
             
             if (!res.ok) {
                 const errText = await res.text();
@@ -359,11 +580,11 @@ function ChatInterfaceInner() {
         
         const results = await Promise.all(uploadPromises);
         setUploadedFiles(p => [...p, ...results]);
-        setFileProcessing({ status: "idle", progress: 100, message: "上传完成" })
+        setFileProcessing({ status: "idle", progress: 100, message: "完成" })
         setTimeout(() => setFileProcessing({ status: "idle", progress: 0, message: "" }), 1000)
     } catch(e: any) {
         console.error("上传错误:", e);
-        toast.error("上传失败，请检查网络或重试")
+        toast.error("上传失败")
         setFileProcessing({ status: "error", progress: 0, message: "上传失败" })
     }
     if(fileInputRef.current) fileInputRef.current.value=""
@@ -375,15 +596,35 @@ function ChatInterfaceInner() {
     e.preventDefault(); if (!userId) { toast.error("请登录"); return }
     const txt = (input || "").trim(); if (!txt && !uploadedFiles.length) return
     
+    console.log("📤 [onSubmit] 发送消息:", {
+      model: selectedModel,
+      mode: genMode,
+      query: txt.slice(0, 50) + "...",
+      urlAgent,
+      sessionId: sessionIdRef.current
+    })
+    
     const cost = calculateCost()
     if (userCredits < cost) {
-      toast.error("积分不足", { description: `本次操作需要 ${cost} 积分，当前余额 ${userCredits}` })
+      toast.error("积分不足", { 
+        description: `需要 ${cost} 积分，当前 ${userCredits}`,
+        duration: 2000
+      })
+      setTimeout(() => {
+        router.push("/pricing")
+      }, 1500)
       return
     }
 
     setFileProcessing({ status: "idle", progress: 0, message: "" })
     setIsLoading(true); setAnalysisStage(0); 
     setIsComplexMode(uploadedFiles.length > 0 || txt.length > 150)
+    
+    // 🎯 重置工作流可视化状态
+    resetWorkflow()
+    
+    // 🔥 自动折叠侧边栏，进入专注模式
+    collapseSidebar()
     
     let sid = currentSessionId; 
     if (!sid && !urlSessionId) { 
@@ -407,13 +648,20 @@ function ChatInterfaceInner() {
     }
     await supabase.from('chat_messages').insert({ session_id: sid, role: "user", content: userMsg.content })
 
-    const botId = (Date.now()+1).toString(); setMessages(p => [...p, { id: botId, role: "assistant", content: "" }])
+    const botId = (Date.now()+1).toString(); 
+    // 🔥 记录当前正在处理的消息 ID
+    currentBotIdRef.current = botId
+    setMessages(p => [...p, { id: botId, role: "assistant", content: "" }])
     
     let fullText = ""; let hasRec = false
     try {
         const fileIds = uploadedFiles.map(f => f.difyFileId).filter(Boolean)
         const res = await fetch("/api/dify-chat", {
-            method: "POST", headers: { "Content-Type": "application/json" },
+            method: "POST", 
+            headers: { 
+              "Content-Type": "application/json",
+              "X-User-Id": userId
+            },
             body: JSON.stringify({ 
               query: userMsg.content, 
               fileIds, 
@@ -443,11 +691,42 @@ function ChatInterfaceInner() {
                 const data = line.slice(6).trim(); if (data === "[DONE]") continue
                 try {
                     const json = JSON.parse(data)
+                    
+                    // 🎯 工作流事件处理 - 传递给可视化 Hook
+                    // 🔥 Dify SSE 格式：node_started 事件的数据在 json.data 中
+                    if (json.event) {
+                      const nodeData = json.data || {}
+                      const nodeTitle = nodeData.title || json.title
+                      
+                      // 🔍 调试日志
+                      if (json.event === 'node_started' || json.event === 'node_finished') {
+                        console.log(`🔔 [SSE Event] ${json.event}: "${nodeTitle}"`, nodeData)
+                      }
+                      
+                      handleSSEEvent({
+                        event: json.event,
+                        data: {
+                          node_id: nodeData.node_id || json.node_id,
+                          title: nodeTitle,
+                          status: nodeData.status || json.status,
+                          workflow_run_id: nodeData.workflow_run_id || json.workflow_run_id
+                        }
+                      })
+                    }
+                    
                     if (json.conversation_id && sessionIdRef.current !== json.conversation_id) {
                         sessionIdRef.current = json.conversation_id
                     }
                     if (json.answer) {
-                        if (!hasRec) setAnalysisStage(4); hasRec = true; fullText += json.answer
+                        // 🔥 【关键】收到第一个 answer 时，强制触发 handover
+                        // 确保光标在文字开始输出时立即显示
+                        if (!hasRec) {
+                          setAnalysisStage(4)
+                          triggerHandover() // 强制结束思考，激活光标
+                          console.log("✍️ [Answer] 收到第一个 answer，触发 handover")
+                        }
+                        hasRec = true
+                        fullText += json.answer
                         setMessages(p => p.map(m => m.id === botId ? { ...m, content: fullText } : m))
                     }
                 } catch {}
@@ -464,6 +743,20 @@ function ChatInterfaceInner() {
         toast.error(e.message || "出错了"); setMessages(p => p.filter(m => m.id !== botId))
     } finally { 
       setIsLoading(false)
+      // 🎯 标记工作流完成
+      markWorkflowComplete()
+      
+      // 🔥 积分刷新：对话结束后触发全局积分刷新
+      console.log("🔄 [积分刷新] 对话结束，触发积分重新查询...")
+      if (userId) {
+        fetchCredits(userId)
+      }
+      // 🔥 触发侧边栏积分刷新
+      refreshCredits()
+      console.log("✅ [积分刷新] 已触发全局积分刷新事件")
+      
+      router.refresh()
+      
       if (genMode !== "text") {
         setGenMode("text")
         setSelectedModel("standard")
@@ -475,63 +768,249 @@ function ChatInterfaceInner() {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); onSubmit(e as unknown as React.FormEvent) }
   }
 
+  // 🔥 返回按钮
+  const handleBack = () => {
+    router.push("/")
+  }
+
+  // 📄 导出 PDF 功能（使用浏览器打印）
+  const handleExportPDF = (content: string) => {
+    try {
+      // 创建打印窗口
+      const printWindow = window.open('', '_blank')
+      if (!printWindow) {
+        toast.error("请允许弹出窗口以导出 PDF")
+        return
+      }
+      
+      // 写入打印内容
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <title>沈翔智学 - AI 分析报告</title>
+          <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { 
+              font-family: 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', sans-serif; 
+              padding: 40px; 
+              max-width: 800px; 
+              margin: 0 auto;
+              color: #333;
+              line-height: 1.8;
+            }
+            .header { 
+              text-align: center; 
+              margin-bottom: 30px; 
+              padding-bottom: 20px; 
+              border-bottom: 2px solid #14532d; 
+            }
+            .header h1 { color: #14532d; font-size: 24px; margin-bottom: 8px; }
+            .header p { color: #666; font-size: 12px; }
+            .content { font-size: 14px; white-space: pre-wrap; }
+            .footer { 
+              margin-top: 40px; 
+              padding-top: 20px; 
+              border-top: 1px solid #eee; 
+              text-align: center; 
+              color: #999; 
+              font-size: 11px; 
+            }
+            @media print {
+              body { padding: 20px; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>沈翔智学 - AI 分析报告</h1>
+            <p>${new Date().toLocaleString('zh-CN')}</p>
+          </div>
+          <div class="content">${content.replace(/\n/g, '<br>')}</div>
+          <div class="footer">由沈翔智学 AI 生成 · www.shenxiangzhixue.com</div>
+        </body>
+        </html>
+      `)
+      printWindow.document.close()
+      
+      // 等待内容加载后打印
+      printWindow.onload = () => {
+        printWindow.print()
+      }
+      
+      toast.success("已打开打印预览，请选择「保存为 PDF」")
+    } catch (err) {
+      console.error("PDF 导出失败:", err)
+      toast.error("PDF 导出失败，请重试")
+    }
+  }
+
+  // 🔗 分享功能
+  const handleShare = async (content: string) => {
+    const shareText = content.slice(0, 500) + (content.length > 500 ? '...' : '')
+    const shareUrl = window.location.href
+    
+    // 尝试使用原生分享 API（移动端）
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: '沈翔智学 - AI 分析报告',
+          text: shareText,
+          url: shareUrl
+        })
+        toast.success("分享成功")
+        return
+      } catch (err) {
+        // 用户取消分享或不支持
+        if ((err as Error).name !== 'AbortError') {
+          console.error("分享失败:", err)
+        }
+      }
+    }
+    
+    // 降级方案：复制链接
+    try {
+      await navigator.clipboard.writeText(`${shareText}\n\n查看完整内容: ${shareUrl}`)
+      toast.success("已复制分享内容到剪贴板")
+    } catch (err) {
+      toast.error("分享失败，请手动复制")
+    }
+  }
+
   return (
-    <div className="flex h-screen w-full bg-[#FAFAF9] overflow-hidden relative">
-      <div className="flex flex-1 flex-col h-full relative min-w-0 bg-white">
-        <div className="flex-1 h-0">
-          <ScrollArea className="h-full">
-            <div className="mx-auto max-w-4xl px-4 md:px-6 py-10">
+    <div className="flex h-screen w-full bg-white overflow-hidden relative">
+      <div className="flex flex-1 flex-col h-full relative min-w-0">
+        
+        {/* 🎯 升级引导横幅 - 非豪华会员常驻显示，用户手动关闭 */}
+        <AnimatePresence>
+          {showUpgradeBanner && !isLuxury && (
+            <motion.div
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20, height: 0 }}
+              className="bg-gradient-to-r from-emerald-50 to-green-50 border-b border-emerald-100 px-4 py-3 shrink-0"
+            >
+              <div className="mx-auto max-w-3xl flex items-center justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-emerald-800">
+                    每天仅需4元，解锁无限顶级AI模型
+                  </p>
+                  <p className="text-xs text-emerald-600 mt-0.5 truncate">
+                    Gemini 3 Pro、ChatGPT 5.2、Claude Opus 4.5 等
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Button
+                    size="sm"
+                    className="h-8 px-4 text-white text-xs font-medium rounded-full shadow-sm hover:opacity-90 transition-all"
+                    style={{ backgroundColor: BRAND_GREEN }}
+                    onClick={() => router.push("/pricing")}
+                  >
+                    升级豪华会员
+                  </Button>
+                  <button
+                    onClick={() => setShowUpgradeBanner(false)}
+                    className="p-1 text-emerald-400 hover:text-emerald-600 transition-colors"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* 🔥 顶部导航栏 - 移动端和桌面端都显示返回按钮 */}
+        <div className="flex items-center h-14 px-4 border-b border-slate-100 bg-white shrink-0">
+          <button 
+            onClick={handleBack}
+            className="flex items-center gap-1 text-slate-600 hover:text-slate-800 transition-colors"
+          >
+            <ChevronLeft className="h-5 w-5" />
+            <span className="text-sm font-medium">返回</span>
+          </button>
+          <div className="flex-1 text-center md:text-left md:ml-4">
+            <span className="text-sm font-medium text-slate-700">{modelConfig[selectedModel].name}</span>
+          </div>
+          <div className="w-16 md:hidden" />
+        </div>
+
+        {/* 🔥 滚动区域优化 */}
+        <div className="flex-1 h-0 relative overflow-hidden">
+          <div 
+            ref={scrollAreaRef}
+            onScroll={handleScroll}
+            className="h-full overflow-y-auto custom-scrollbar"
+          >
+            <div className="mx-auto max-w-3xl px-4 md:px-6 lg:px-10 py-6 md:py-8">
               {messages.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-24 text-center animate-in fade-in zoom-in duration-500">
-                  <div className="mb-8 flex h-20 w-20 items-center justify-center rounded-3xl bg-[#0F766E]/10 shadow-lg shadow-[#0F766E]/5"><FileText className="h-10 w-10 text-[#0F766E]" /></div>
-                  <h1 className="mb-4 text-3xl font-extrabold text-slate-800 tracking-tight">你好！欢迎使用沈翔智学！</h1>
-                  <p className="mb-6 max-w-lg text-lg text-slate-500 font-medium">专业的作文批改专家，为学生习作提供深度点评。</p>
-                  
-                  <div className="flex gap-2 justify-center flex-wrap">
-                    <span className="px-3 py-1 bg-orange-50 text-orange-600 text-xs font-bold rounded-full border border-orange-100 flex items-center gap-1">
-                      <Crown className="h-3 w-3" /> 豪华会员畅享 ChatGPT 5.1 / Claude 4.5 / Gemini 3.0
-                    </span>
-                    <span className="px-3 py-1 bg-blue-50 text-blue-600 text-xs font-bold rounded-full border border-blue-100 flex items-center gap-1">
-                      <Video className="h-3 w-3" /> 支持视频生成
-                    </span>
+                <div className="flex flex-col items-center justify-center py-12 md:py-16 text-center animate-in fade-in duration-500">
+                  <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl" style={{ backgroundColor: `${BRAND_GREEN}15` }}>
+                    <GraduationCap className="h-7 w-7" style={{ color: BRAND_GREEN }} />
                   </div>
+                  <h1 className="text-xl font-semibold text-slate-800">欢迎使用沈翔智学</h1>
                 </div>
               ) : (
-                <div className="space-y-10 pt-12">
+                <div className="space-y-6 pt-4">
                   {messages.map((message) => (
-                    <div key={message.id} className={cn("flex gap-5", message.role === "user" ? "justify-end" : "justify-start")}>
+                    <div key={message.id} className={cn("flex gap-3", message.role === "user" ? "justify-end" : "justify-start")}>
                       {message.role === "assistant" && (
-                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#0F766E] shadow-lg shadow-[#0F766E]/20 text-white mt-1">
-                          <Sparkles className="h-6 w-6" />
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-white mt-1" style={{ backgroundColor: BRAND_GREEN }}>
+                          <Sparkles className="h-4 w-4" />
                         </div>
                       )}
                       <div className={cn(
-                        "relative rounded-3xl px-8 py-6 shadow-sm border",
+                        "relative rounded-2xl px-4 py-3",
                         message.role === "user" 
-                          ? "bg-[#0F766E] text-white border-transparent max-w-[80%]" 
-                          : "bg-white border-gray-100 shadow-xl shadow-gray-200/40 w-full max-w-full"
-                      )}>
+                          ? "text-white max-w-[75%]" 
+                          : "bg-slate-50 w-full max-w-full"
+                      )} style={message.role === "user" ? { backgroundColor: BRAND_GREEN } : {}}>
                         {message.role === "user" ? (
-                          <div className="whitespace-pre-wrap text-[17px] leading-relaxed font-medium">{message.content}</div>
+                          <div className="whitespace-pre-wrap text-[15px] leading-relaxed">{message.content}</div>
                         ) : (
-                           isLoading && !message.content ? (
-                              isComplexMode ? <AnalysisStages /> : <SimpleBrainLoader />
-                           ) : <UltimateRenderer content={message.content} />
+                           <>
+                             {/* 🎯 工作流可视化面板 - 仅在当前正在处理的消息中显示 */}
+                             {message.id === currentBotIdRef.current && (isWorkflowProcessing || workflowState.nodes.length > 0) && (
+                               <WorkflowVisualizer
+                                 workflowState={workflowState}
+                                 isThinking={isThinking}
+                                 isGenerating={isGenerating}
+                                 onToggle={toggleExpanded}
+                                 currentRunningText={currentRunningText}
+                                 className="mb-4"
+                               />
+                             )}
+                             {message.id === currentBotIdRef.current && isLoading && !message.content && !isFastTrack ? (
+                                <SimpleBrainLoader />
+                             ) : (
+                                <UltimateRenderer 
+                                  content={message.content} 
+                                  isStreaming={message.id === currentBotIdRef.current && showCursor && isLoading}
+                                />
+                             )}
+                           </>
                         )}
                         {message.role === "assistant" && message.content && (
-                          <div className="mt-6 flex items-center justify-end border-t border-gray-100 pt-4">
-                            <Button variant="ghost" size="sm" className="h-8 gap-2 text-xs text-slate-400 hover:text-[#0F766E] hover:bg-[#0F766E]/5 transition-colors" onClick={() => navigator.clipboard.writeText(message.content).then(() => toast.success("已复制"))}>
-                               <Copy className="h-3.5 w-3.5" /> 复制全文
+                          <div className="mt-4 flex items-center justify-end gap-1 border-t border-slate-100 pt-3">
+                            <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs text-slate-400 hover:bg-slate-100" onClick={() => navigator.clipboard.writeText(message.content).then(() => toast.success("已复制"))}>
+                               <Copy className="h-3 w-3" /> 复制
+                            </Button>
+                            <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs text-slate-400 hover:bg-slate-100" onClick={() => handleExportPDF(message.content)}>
+                               <Download className="h-3 w-3" /> 导出
+                            </Button>
+                            <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs text-slate-400 hover:bg-slate-100" onClick={() => handleShare(message.content)}>
+                               <Share2 className="h-3 w-3" /> 分享
                             </Button>
                           </div>
                         )}
                       </div>
                       {message.role === "user" && (
-                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-200 shadow-inner mt-1 overflow-hidden">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-slate-200 mt-1 overflow-hidden">
                           {userAvatar ? (
                             <img src={userAvatar} alt="Me" className="h-full w-full object-cover" />
                           ) : (
-                            <User className="h-6 w-6 text-slate-500" />
+                            <User className="h-4 w-4 text-slate-500" />
                           )}
                         </div>
                       )}
@@ -541,112 +1020,71 @@ function ChatInterfaceInner() {
                 </div>
               )}
             </div>
-          </ScrollArea>
+          </div>
+          
+          {/* 🔥 新消息提示按钮 */}
+          <AnimatePresence>
+            {hasNewMessage && (
+              <motion.button
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 10 }}
+                onClick={scrollToBottom}
+                className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 text-white text-sm rounded-full shadow-lg flex items-center gap-2 hover:opacity-90 transition-all"
+                style={{ backgroundColor: BRAND_GREEN }}
+              >
+                <ArrowDown className="w-4 h-4" />
+                新消息
+              </motion.button>
+            )}
+          </AnimatePresence>
         </div>
 
-        <div className="border-t border-gray-100 bg-white/90 backdrop-blur-md p-3 md:p-6 shrink-0 z-20">
-          <div className="mx-auto max-w-4xl">
+        {/* 🔥 输入框区域 */}
+        <div className="border-t border-slate-100 bg-white p-3 md:p-6 shrink-0 z-20">
+          <div className="mx-auto max-w-3xl">
             {fileProcessing.status !== "idle" && (
-              <div className="mb-4 rounded-xl border border-[#0F766E]/20 bg-[#F0FDF9] p-4 shadow-sm animate-in slide-in-from-bottom-2">
-                <div className="flex items-center gap-3">
-                  {fileProcessing.status === "error" ? <AlertCircle className="h-5 w-5 text-red-500" /> : <Loader2 className="h-5 w-5 animate-spin text-[#0F766E]" />}
-                  <p className="text-sm font-medium text-slate-700">{fileProcessing.message}</p>
+              <div className="mb-3 rounded-xl bg-slate-50 p-3 animate-in slide-in-from-bottom-2">
+                <div className="flex items-center gap-2">
+                  {fileProcessing.status === "error" ? <AlertCircle className="h-4 w-4 text-red-500" /> : <Loader2 className="h-4 w-4 animate-spin" style={{ color: BRAND_GREEN }} />}
+                  <p className="text-sm text-slate-600">{fileProcessing.message}</p>
                 </div>
               </div>
             )}
             {uploadedFiles.length > 0 && (
-              <div className="mb-4 flex flex-wrap gap-3">
+              <div className="mb-3 flex flex-wrap gap-2">
                 {uploadedFiles.map((f, i) => (
-                  <div key={i} className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-2.5 shadow-sm group">
-                    <FileText className="h-5 w-5 text-[#0F766E]" />
-                    <span className="max-w-[120px] truncate text-sm font-medium text-slate-700">{f.name}</span>
-                    <button onClick={() => removeFile(i)} className="text-gray-400 hover:text-red-500 transition-colors"><X className="h-4 w-4" /></button>
+                  <div key={i} className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-1.5 text-sm">
+                    <FileText className="h-4 w-4" style={{ color: BRAND_GREEN }} />
+                    <span className="max-w-[100px] truncate text-slate-600">{f.name}</span>
+                    <button onClick={() => removeFile(i)} className="text-slate-400 hover:text-red-500"><X className="h-3.5 w-3.5" /></button>
                   </div>
                 ))}
               </div>
             )}
 
-            <form onSubmit={onSubmit} className="relative shadow-lg shadow-gray-200/50 rounded-2xl border border-gray-200 bg-white transition-all focus-within:border-[#0F766E] focus-within:ring-2 focus-within:ring-[#0F766E]/10">
+            {/* 🔥 增强阴影 + 恢复智能体下拉框 */}
+            <form onSubmit={onSubmit} className="relative rounded-[24px] bg-white shadow-[0_2px_8px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.08),0_16px_48px_rgba(0,0,0,0.08),0_24px_64px_rgba(0,0,0,0.06),0_32px_80px_rgba(0,0,0,0.04)] border border-slate-100 transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] focus-within:shadow-[0_4px_12px_rgba(0,0,0,0.06),0_12px_32px_rgba(0,0,0,0.12),0_20px_56px_rgba(0,0,0,0.12),0_28px_72px_rgba(0,0,0,0.08),0_36px_88px_rgba(0,0,0,0.06)]" style={{ ['--focus-border' as any]: `${BRAND_GREEN}33` }}>
               
-              <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100 bg-gray-50/50 rounded-t-2xl">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button type="button" variant="ghost" size="sm" className="h-8 gap-2 text-slate-600 hover:bg-white hover:shadow-sm transition-all rounded-lg px-2 data-[state=open]:bg-white data-[state=open]:text-[#0F766E]">
-                      {(() => {
-                        const CurrentIcon = modelConfig[selectedModel].icon
-                        return <CurrentIcon className={cn("h-4 w-4", modelConfig[selectedModel].color)} />
-                      })()}
-                      <span className="font-semibold text-xs hidden sm:inline">{modelConfig[selectedModel].name}</span>
-                      <ChevronDown className="h-3 w-3 opacity-50" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" className="w-60 p-1 z-50">
-                    <DropdownMenuLabel className="text-xs text-slate-400 font-normal px-2 py-1.5">
-                      选择 AI 模型 (今日免费: {DAILY_LIMIT - dailyUsage}/{DAILY_LIMIT})
-                    </DropdownMenuLabel>
-                    {(Object.entries(modelConfig) as [ModelType, any][]).map(([key, config]) => (
-                      <DropdownMenuItem 
-                        key={key} 
-                        onClick={() => handleModelChange(key)}
-                        className={cn(
-                          "flex items-center gap-3 px-2 py-2.5 rounded-md cursor-pointer focus:bg-[#0F766E]/5",
-                          selectedModel === key && "bg-[#0F766E]/10"
-                        )}
-                      >
-                        <div className={cn("flex h-8 w-8 items-center justify-center rounded-lg border border-gray-100 bg-white shadow-sm", config.color)}>
-                          <config.icon className="h-4 w-4" />
-                        </div>
-                        <div className="flex flex-col flex-1">
-                          <span className={cn("text-sm font-semibold", selectedModel === key ? "text-[#0F766E]" : "text-slate-700")}>
-                            {config.name}
-                          </span>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            {config.badge && (
-                              <span className="text-[10px] text-amber-500 flex items-center gap-0.5 font-medium bg-amber-50 px-1.5 rounded-full border border-amber-100">
-                                <Crown className="h-2.5 w-2.5" /> {config.badge}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        {selectedModel === key && <div className="h-2 w-2 rounded-full bg-[#0F766E]" />}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-
-                <div className="flex items-center gap-1">
-                  <div className="h-4 w-px bg-gray-200 mx-1" />
-                  <Button 
-                    type="button" variant="ghost" size="sm" 
-                    onClick={() => handleModeChange("image")}
-                    className={cn("h-8 w-8 rounded-lg p-0 hover:bg-white hover:text-purple-600 transition-colors", genMode === "image" && "bg-purple-50 text-purple-600")}
-                    title="AI 绘图 (Banana 2 Pro)"
-                  >
-                    <ImageIcon className="h-4 w-4" />
-                  </Button>
-                  <Button 
-                    type="button" variant="ghost" size="sm" 
-                    onClick={() => handleModeChange("music")}
-                    className={cn("h-8 w-8 rounded-lg p-0 hover:bg-white hover:text-pink-600 transition-colors", genMode === "music" && "bg-pink-50 text-pink-600")}
-                    title="AI 音乐 (Suno V5)"
-                  >
-                    <Music className="h-4 w-4" />
-                  </Button>
-                  <Button 
-                    type="button" variant="ghost" size="sm" 
-                    onClick={() => handleModeChange("video")}
-                    className={cn("h-8 w-8 rounded-lg p-0 hover:bg-white hover:text-blue-600 transition-colors", genMode === "video" && "bg-blue-50 text-blue-600")}
-                    title="AI 视频 (Sora 2 Pro)"
-                  >
-                    <Video className="h-4 w-4" />
+              {/* 🔥 使用增强版 ModelSelector 组件 */}
+              <div className="flex items-center px-3 py-2 border-b border-slate-50">
+                <ModelSelector
+                  selectedModel={selectedModel}
+                  onModelChange={(model) => handleModelChange(model as ModelType)}
+                  models={modelList}
+                  disabled={isLoading}
+                  dailyFreeInfo={{ used: dailyUsage, total: DAILY_LIMIT }}
+                />
+              </div>
+              
+              <div className="flex items-end gap-2 p-3">
+                {/* 文件上传按钮 */}
+                <div className="flex flex-col items-center gap-1 shrink-0">
+                  <span className="text-[10px] font-medium text-slate-400">文件上传</span>
+                  <Button type="button" variant="ghost" size="icon" className="h-10 w-10 rounded-xl text-slate-400 hover:bg-slate-50" onClick={() => fileInputRef.current?.click()} disabled={isLoading}>
+                    <Paperclip className="h-5 w-5" />
                   </Button>
                 </div>
-              </div>
-
-              <div className="flex items-end gap-3 p-2 pl-3">
-                <Button type="button" variant="ghost" size="icon" className="h-10 w-10 shrink-0 rounded-xl text-slate-400 hover:text-[#0F766E] hover:bg-[#0F766E]/5" onClick={() => fileInputRef.current?.click()} disabled={isLoading}>
-                  <Paperclip className="h-5 w-5" />
-                </Button>
                 <input ref={fileInputRef} type="file" className="hidden" accept="image/*,.txt,.doc,.docx,.pdf" multiple onChange={handleFileUpload} />
                 
                 <Textarea
@@ -654,50 +1092,31 @@ function ChatInterfaceInner() {
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder={
-                    genMode === "text" 
-                      ? (userId ? "输入内容开始批改或对话..." : "请先登录...") 
-                      : (genMode === "image" ? "描述你想生成的画面..." : genMode === "music" ? "描述音乐风格..." : "描述视频内容...")
-                  }
-                  className="min-h-[48px] max-h-[200px] flex-1 resize-none border-0 bg-transparent p-2.5 text-base text-slate-800 placeholder:text-slate-400 focus-visible:ring-0 leading-relaxed"
+                  placeholder={userId ? "输入内容开始对话..." : "请先登录..."}
+                  className="min-h-[48px] max-h-[160px] flex-1 resize-none border-0 bg-transparent p-2 text-[15px] text-slate-700 placeholder:text-slate-400 focus-visible:ring-0 leading-relaxed"
                   disabled={isLoading}
                   rows={1}
                 />
                 
-                <Button 
-                  type="submit" 
-                  size="icon" 
-                  className={cn(
-                    "h-11 w-11 shrink-0 rounded-xl bg-[#0F766E] text-white shadow-md hover:bg-[#0d655d] transition-all disabled:opacity-50 disabled:cursor-not-allowed",
-                    genMode !== "text" && "bg-gradient-to-r from-purple-500 to-pink-500 hover:opacity-90"
-                  )}
-                  disabled={isLoading || (!input.trim() && uploadedFiles.length === 0)}
-                >
-                  {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5 ml-0.5" />}
-                </Button>
+                {/* 发送按钮 */}
+                <div className="flex flex-col items-center gap-1 shrink-0">
+                  <span className="text-[10px] font-medium text-slate-400">发送</span>
+                  <Button 
+                    type="submit" 
+                    size="icon" 
+                    className="h-10 w-10 rounded-xl text-white shadow-[0_4px_12px_rgba(20,83,45,0.3)] hover:opacity-90 transition-all disabled:opacity-40"
+                    style={{ backgroundColor: BRAND_GREEN }}
+                    disabled={isLoading || (!input.trim() && uploadedFiles.length === 0)}
+                  >
+                    {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
+                  </Button>
+                </div>
               </div>
             </form>
 
-            <p className="mt-4 text-center text-xs font-medium text-slate-400 flex items-center justify-center gap-2">
-              {userId ? (
-                <>
-                  <span>
-                    当前模式: 
-                    <span className={cn(
-                      "ml-1 font-bold",
-                      genMode === "text" ? "text-[#0F766E]" : "text-purple-600"
-                    )}>
-                      {genMode === "text" ? (selectedModel === "standard" ? "普通对话" : modelConfig[selectedModel].name) : 
-                       (genMode === "image" ? "AI 绘图" : genMode === "music" ? "AI 音乐" : "AI 视频")}
-                    </span>
-                  </span>
-                  <span className="w-1 h-1 rounded-full bg-slate-300" />
-                  <span>
-                    预计消耗: <span className="font-bold text-amber-500">{calculateCost()} 积分</span>
-                  </span>
-                </>
-              ) : "未登录"}
-            </p>
+            {!userId && (
+              <p className="mt-3 text-center text-xs text-slate-400">未登录</p>
+            )}
           </div>
         </div>
       </div>
@@ -705,10 +1124,16 @@ function ChatInterfaceInner() {
   )
 }
 
-export function EnhancedChatInterface() {
+// 🔥 导出 Props 类型供外部使用
+export interface EnhancedChatInterfaceProps {
+  initialModel?: ModelType
+}
+
+export function EnhancedChatInterface(props: EnhancedChatInterfaceProps) {
+  const { initialModel } = props
   return (
-    <Suspense fallback={<div className="flex h-screen w-full items-center justify-center bg-white"><Loader2 className="h-8 w-8 animate-spin text-[#0F766E]" /></div>}>
-      <ChatInterfaceInner />
+    <Suspense fallback={<div className="flex h-screen w-full items-center justify-center bg-white"><Loader2 className="h-6 w-6 animate-spin" style={{ color: BRAND_GREEN }} /></div>}>
+      <ChatInterfaceInner initialModel={initialModel} />
     </Suspense>
   )
 }

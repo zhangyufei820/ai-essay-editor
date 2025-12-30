@@ -1,0 +1,1 @@
+{"version":3,"sources":["turbopack:///[project]/lib/supabase.ts"],"sourcesContent":["import { createClient } from \"@/lib/supabase/client\"\n\nexport const supabase = createClient()\n"],"names":[],"mappings":"uCAEO,IAAM,EAAW,CAAA,EAFxB,AAEwB,EAFxB,CAAA,CAAA,OAEwB,YAAA,AAAY"}

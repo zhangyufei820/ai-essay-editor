@@ -11,15 +11,25 @@ export default function WxGuard() {
 
     const ua = navigator.userAgent.toLowerCase();
     
-    // 判断是否是微信 (micromessenger)
+    // 调试日志
+    console.log("[WxGuard] User-Agent:", ua);
+    
+    // 排除 HeadlessChrome（Puppeteer）等自动化测试工具 - 这些不应该被阻止
+    const isHeadless = ua.includes("headlesschrome") || ua.includes("puppeteer");
+    if (isHeadless) {
+      console.log("[WxGuard] 检测到自动化测试工具，跳过检测");
+      return;
+    }
+    
+    // 判断是否是微信 (micromessenger) - 必须包含完整的 micromessenger 字符串
     const isWeChat = ua.includes("micromessenger");
     
-    // 判断是否是QQ内置浏览器 (qq/ 或 mqqbrowser)
-    // 注意：有些手机浏览器也会带 mqqbrowser 标识，所以这里主要拦截带 "qq/" 的环境
-    const isQQ = ua.includes("qq/") && !ua.includes("mqqbrowser"); 
+    // 判断是否是QQ内置浏览器 - 更精确的检测
+    // QQ 内置浏览器的 UA 通常包含 "qq/" 后跟版本号，如 "qq/8.9.0"
+    // 或者包含 "qqbrowser" 字符串
+    const isQQ = /qq\/[\d.]+/.test(ua) || ua.includes("qqbrowser");
 
-    // 如果您想更严格一点，把所有在QQ里的都拦截，可以用下面这行代替上面那行：
-    // const isQQ = ua.includes("qq/") || ua.includes("mqqbrowser");
+    console.log("[WxGuard] isWeChat:", isWeChat, "isQQ:", isQQ);
 
     if (isWeChat || isQQ) {
       setIsBlocked(true);

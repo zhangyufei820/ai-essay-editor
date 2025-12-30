@@ -5,11 +5,36 @@ export async function POST(request: Request) {
   try {
     // 1. 获取前端传来的用户信息
     const body = await request.json()
-    // 【修改点 1】: 这里增加了 phone 字段的读取
     const { user_id, email, nickname, avatar, phone } = body
 
     if (!user_id) {
       return NextResponse.json({ error: 'Missing user_id' }, { status: 400 })
+    }
+
+    // 🔐 安全验证：检查请求来源
+    // 方式1: 检查 Referer 头，确保请求来自本站
+    const referer = request.headers.get('referer') || ''
+    const origin = request.headers.get('origin') || ''
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+    
+    const isValidOrigin = referer.startsWith(appUrl) || 
+                          origin.startsWith(appUrl) ||
+                          referer.includes('localhost') ||
+                          origin.includes('localhost')
+    
+    if (!isValidOrigin) {
+      console.warn(`🚫 [Auth/Sync] 可疑请求来源被拦截: referer=${referer}, origin=${origin}`)
+      return NextResponse.json({ error: 'Invalid request origin' }, { status: 403 })
+    }
+
+    // 方式2: 基本的 user_id 格式验证（防止注入攻击）
+    // Authing 的 user_id 通常是 24 位十六进制字符串
+    const isValidUserId = /^[a-f0-9]{24}$/.test(user_id) || 
+                          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(user_id)
+    
+    if (!isValidUserId) {
+      console.warn(`🚫 [Auth/Sync] 无效的 user_id 格式: ${user_id}`)
+      return NextResponse.json({ error: 'Invalid user_id format' }, { status: 400 })
     }
 
     // 2. 使用 Service Role Key 创建超级管理员客户端
@@ -51,6 +76,7 @@ export async function POST(request: Request) {
       }
 
       // B. ✨ 赠送初始积分 (1000 分) ✨
+      // 🔥 只使用数据库中存在的字段：user_id, credits, is_pro
       const { error: creditError } = await supabaseAdmin
         .from('user_credits')
         .insert({
@@ -59,7 +85,24 @@ export async function POST(request: Request) {
           is_pro: false
         })
 
-      if (creditError) console.error('赠送积分失败:', creditError)
+      if (creditError) {
+        console.error('赠送积分失败:', creditError)
+        // 如果插入失败，尝试 upsert
+        const { error: upsertError } = await supabaseAdmin
+          .from('user_credits')
+          .upsert({
+            user_id,
+            credits: 1000, 
+            is_pro: false
+          })
+        if (upsertError) {
+          console.error('Upsert 积分也失败:', upsertError)
+        } else {
+          console.log(`✅ [Sync] 用户 ${user_id} 积分 Upsert 成功`)
+        }
+      } else {
+        console.log(`✅ [Sync] 用户 ${user_id} 赠送 1000 积分成功`)
+      }
 
       return NextResponse.json({ success: true, message: 'New user initialized' })
     }

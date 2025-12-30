@@ -1,0 +1,3 @@
+{
+  "/api/payment/xunhupay/notify/route": "app/api/payment/xunhupay/notify/route.js"
+}

@@ -1,19 +1,57 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname } from "next/navigation"
-import { useState, useEffect, useRef } from "react"
+import { usePathname, useSearchParams, useRouter } from "next/navigation"
+import { useState, useEffect, useRef, Suspense, useCallback } from "react"
 import { Button } from "@/components/ui/button" 
 import { 
-  Home, Settings, ChevronRight,
-  PanelLeftClose, PanelLeftOpen, LogOut, Zap, Coins,
-  ChevronDown, History, GraduationCap, School, 
-  Library, PenTool, Calculator, Globe, Microscope,
-  FlaskConical, Hourglass, Landmark,
-  BookA, Bot, LayoutGrid
+  Home, Settings, ChevronRight, ChevronDown,
+  Menu, X, LogOut, Zap, Coins,
+  History, Bot, FileEdit, GraduationCap,
+  Gift, HelpCircle
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { createClient } from "@supabase/supabase-js"
+
+// --- 设计系统颜色常量 ---
+const COLORS = {
+  primary: {
+    main: "#22C55E",      // 主品牌色（更鲜艳的绿色）
+    dark: "#15803D",      // 深色（选中文字）
+    darker: "#14532D",    // 更深色（标题）
+    light: "#DCFCE7",     // 浅色背景
+    hover: "rgba(34, 197, 94, 0.12)", // 选中态背景
+  },
+  // 🎨 侧边栏专用配色 - 基于主页风格的浅绿灰色
+  sidebar: {
+    bg: "#F8FAF9",           // 主背景 - 带绿调的浅灰
+    bgGradient: "linear-gradient(180deg, #F0F7F4 0%, #F8FAF9 50%, #FAFBFA 100%)", // 渐变背景
+    cardBg: "#FFFFFF",       // 卡片背景
+    border: "#E2E8E4",       // 边框色 - 带绿调
+    divider: "#E5EBE7",      // 分割线
+  },
+  gray: {
+    50: "#FAFAFA",
+    100: "#F5F5F5",
+    200: "#E5E7EB",
+    300: "#D1D5DB",
+    400: "#9CA3AF",
+    500: "#6B7280",
+    600: "#4B5563",
+    700: "#374151",
+    800: "#1F2937",
+    900: "#111827",
+  },
+  error: "#EF4444",
+  divider: "#E5EBE7",
+}
+
+// 🎨 文字阴影样式
+const TEXT_SHADOWS = {
+  subtle: "0 1px 2px rgba(0,0,0,0.05)",
+  medium: "0 1px 3px rgba(0,0,0,0.1)",
+  strong: "0 2px 4px rgba(0,0,0,0.12)",
+}
 
 // --- 类型定义 ---
 type ChatSession = {
@@ -23,121 +61,157 @@ type ChatSession = {
   preview: string
 }
 
-type StageGroup = {
-  id: string
-  title: string
-  icon: any
-  items: { name: string; href: string; icon?: any }[]
-}
-
 // --- 初始化 Supabase ---
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
-export function AppSidebar() {
+// 🔥 全局状态：用于跨组件控制侧边栏折叠
+const SIDEBAR_COLLAPSE_EVENT = 'sidebar-collapse'
+// 🔥 全局事件：用于触发积分刷新
+const CREDITS_REFRESH_EVENT = 'credits-refresh'
+
+// 内部组件
+function AppSidebarInner() {
   const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const currentAgent = searchParams.get("agent")
   
   // --- 状态管理 ---
   const [user, setUser] = useState<any>(null)
   const [credits, setCredits] = useState<number>(0)
   const [sessions, setSessions] = useState<ChatSession[]>([])
+  const [currentUserId, setCurrentUserId] = useState<string>("")
   
   // 侧边栏整体开关
   const [isOpen, setIsOpen] = useState(true)
+  const [isMobile, setIsMobile] = useState(false)
+  
+  // 🔥 历史对话折叠状态
+  const [isHistoryExpanded, setIsHistoryExpanded] = useState(false)
   
   // 底部用户菜单开关
   const [showUserMenu, setShowUserMenu] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
-  // --- 菜单折叠状态 ---
-  const [isAgentsExpanded, setIsAgentsExpanded] = useState(true) 
-  const [isHistoryExpanded, setIsHistoryExpanded] = useState(false) 
-  const [expandedStages, setExpandedStages] = useState<Record<string, boolean>>({
-    "primary": false, "middle": false, "high": false, "uni": false
-  })
-
-  // --- 智能体数据结构 (全学段) ---
-  const stageGroups: StageGroup[] = [
-    {
-      id: "primary",
-      title: "小学智能体",
-      icon: School,
-      items: [
-        { name: "小学语文", href: "/chat?agent=primary-chinese", icon: BookA },
-        { name: "小学数学", href: "/chat?agent=primary-math", icon: Calculator },
-        { name: "小学英语", href: "/chat?agent=primary-english", icon: Globe },
-        { name: "科学启蒙", href: "/chat?agent=primary-science", icon: Microscope },
-      ]
-    },
-    {
-      id: "middle",
-      title: "初中智能体",
-      icon: Library,
-      items: [
-        { name: "初中语文", href: "/chat?agent=middle-chinese", icon: BookA },
-        { name: "初中数学", href: "/chat?agent=middle-math", icon: Calculator },
-        { name: "初中英语", href: "/chat?agent=middle-english", icon: Globe },
-        { name: "初中物理", href: "/chat?agent=middle-physics", icon: Zap },
-        { name: "初中化学", href: "/chat?agent=middle-chemistry", icon: FlaskConical },
-        { name: "初中历史", href: "/chat?agent=middle-history", icon: Hourglass },
-      ]
-    },
-    {
-      id: "high",
-      title: "高中智能体",
-      icon: Landmark,
-      items: [
-        { name: "高中语文", href: "/chat?agent=high-chinese", icon: BookA },
-        { name: "高中数学", href: "/chat?agent=high-math", icon: Calculator },
-        { name: "高中英语", href: "/chat?agent=high-english", icon: Globe },
-        { name: "高中物理", href: "/chat?agent=high-physics", icon: Zap },
-        { name: "高中化学", href: "/chat?agent=high-chemistry", icon: FlaskConical },
-        { name: "高中历史", href: "/chat?agent=high-history", icon: Hourglass },
-      ]
-    },
-    {
-      id: "uni",
-      title: "大学智能体",
-      icon: GraduationCap,
-      items: [
-        { name: "高等数学", href: "/chat?agent=uni-math", icon: Calculator },
-        { name: "大学英语", href: "/chat?agent=uni-english", icon: Globe },
-        { name: "论文写作", href: "/chat?agent=uni-thesis", icon: PenTool },
-      ]
+  // 🔥 积分查询函数 - 使用专用 API（绕过 RLS 限制）
+  const fetchCredits = useCallback(async (uid: string) => {
+    if (!uid) return
+    console.log("🔍 [侧边栏] 通过 API 查询积分，用户ID:", uid)
+    
+    try {
+      // 使用专用 API 查询积分（使用 Service Role Key，绕过 RLS）
+      const res = await fetch(`/api/user/credits?user_id=${encodeURIComponent(uid)}`)
+      
+      if (res.ok) {
+        const data = await res.json()
+        console.log("✅ [侧边栏] 积分查询成功:", data)
+        setCredits(data.credits || 0)
+        
+        if (data.isNew) {
+          console.log("🆕 [侧边栏] 新用户，已自动初始化 1000 积分")
+        }
+      } else {
+        const errorData = await res.json().catch(() => ({}))
+        console.error("❌ [侧边栏] 积分 API 返回错误:", res.status, errorData)
+        
+        // 如果 API 失败，尝试直接查询数据库作为备用
+        const { data: creditData } = await supabase
+          .from('user_credits')
+          .select('credits')
+          .eq('user_id', uid)
+          .maybeSingle()
+        
+        if (creditData) {
+          console.log("✅ [侧边栏] 备用查询成功:", creditData.credits)
+          setCredits(creditData.credits)
+        }
+      }
+    } catch (err) {
+      console.error("❌ [侧边栏] 积分查询异常:", err)
+      
+      // 网络错误时尝试直接查询
+      try {
+        const { data: creditData } = await supabase
+          .from('user_credits')
+          .select('credits')
+          .eq('user_id', uid)
+          .maybeSingle()
+        
+        if (creditData) {
+          setCredits(creditData.credits)
+        }
+      } catch (e) {
+        console.error("❌ [侧边栏] 备用查询也失败:", e)
+      }
     }
-  ]
+  }, [])
 
   // --- 初始化逻辑 ---
   useEffect(() => {
-    // 屏幕宽度检测
     const checkScreenSize = () => {
-      if (window.innerWidth < 768) setIsOpen(false)
+      const mobile = window.innerWidth < 768
+      setIsMobile(mobile)
+      if (mobile) setIsOpen(false)
       else setIsOpen(true)
     }
     checkScreenSize()
     window.addEventListener('resize', checkScreenSize)
 
-    // 加载数据
-    const loadData = async () => {
-      let currentUserId = ""
+    const handleCollapse = () => {
+      console.log("📥 [侧边栏] 收到折叠指令")
+      setIsOpen(false)
+    }
+    window.addEventListener(SIDEBAR_COLLAPSE_EVENT, handleCollapse)
+
+    // 🔥 监听积分刷新事件
+    const handleCreditsRefresh = () => {
+      console.log("💰 [侧边栏] 收到积分刷新指令")
       if (typeof window !== 'undefined') {
         const userStr = localStorage.getItem('currentUser')
         if (userStr) {
           try {
             const parsedUser = JSON.parse(userStr)
-            setUser(parsedUser)
-            currentUserId = parsedUser.id || parsedUser.sub || parsedUser.userId
+            const uid = parsedUser.id || parsedUser.sub || parsedUser.userId
+            if (uid) {
+              fetchCredits(uid)
+            }
           } catch (e) { console.error(e) }
         }
       }
+    }
+    window.addEventListener(CREDITS_REFRESH_EVENT, handleCreditsRefresh)
 
-      if (currentUserId) {
-        const { data: creditData } = await supabase.from('user_credits').select('credits').eq('user_id', currentUserId).single()
-        if (creditData) setCredits(creditData.credits)
+    const loadData = async () => {
+      let userId = ""
+      if (typeof window !== 'undefined') {
+        const userStr = localStorage.getItem('currentUser')
+        console.log("🔍 [侧边栏] localStorage currentUser:", userStr?.substring(0, 200))
+        if (userStr) {
+          try {
+            const parsedUser = JSON.parse(userStr)
+            console.log("🔍 [侧边栏] 解析用户数据:", {
+              id: parsedUser.id,
+              sub: parsedUser.sub,
+              userId: parsedUser.userId,
+              user_id: parsedUser.user_id,
+              email: parsedUser.email
+            })
+            setUser(parsedUser)
+            // 🔥 扩展用户 ID 获取方式
+            userId = parsedUser.id || parsedUser.sub || parsedUser.userId || parsedUser.user_id || ""
+            console.log("🔍 [侧边栏] 最终用户ID:", userId)
+            setCurrentUserId(userId)
+          } catch (e) { console.error("❌ [侧边栏] 解析用户数据失败:", e) }
+        }
+      }
 
-        const { data: sessionData } = await supabase.from('chat_sessions').select('*').eq('user_id', currentUserId).order('created_at', { ascending: false }).limit(20)
+      if (userId) {
+        console.log("🚀 [侧边栏] 开始查询积分，用户ID:", userId)
+        await fetchCredits(userId)
+        const { data: sessionData } = await supabase.from('chat_sessions').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(10)
         if (sessionData) {
           setSessions(sessionData.map((s: any) => ({
             id: s.id, title: s.title || "新对话", date: new Date(s.created_at).getTime(), preview: s.preview || ""
@@ -153,301 +227,499 @@ export function AppSidebar() {
     document.addEventListener("mousedown", handleClickOutside)
     return () => {
       window.removeEventListener('resize', checkScreenSize)
+      window.removeEventListener(SIDEBAR_COLLAPSE_EVENT, handleCollapse)
+      window.removeEventListener(CREDITS_REFRESH_EVENT, handleCreditsRefresh)
       document.removeEventListener("mousedown", handleClickOutside)
     }
-  }, [])
+  }, [fetchCredits])
+
+  useEffect(() => {
+    if (currentUserId) {
+      console.log("🔄 [侧边栏] 路由变化，刷新积分...")
+      fetchCredits(currentUserId)
+    }
+  }, [pathname, searchParams, currentUserId, fetchCredits])
 
   // --- 交互处理 ---
-  const toggleStage = (id: string) => setExpandedStages(prev => ({ ...prev, [id]: !prev[id] }))
   const handleLogout = async () => {
     await supabase.auth.signOut()
     localStorage.removeItem('currentUser')
     window.location.href = "/login"
   }
   
-  // 手机端点击后自动收起
-  const handleMobileClick = () => { if (window.innerWidth < 768) setIsOpen(false) }
+  const handleNavClick = () => { 
+    if (isMobile) setIsOpen(false) 
+  }
   
-  const getDisplayName = () => user?.user_metadata?.name || user?.email?.split('@')[0] || "普通用户"
+  // 🔥 修复：显示完整用户名（邮箱或手机号）
+  const getDisplayName = () => {
+    if (!user) return "用户"
+    // 优先显示手机号
+    if (user.phone) return user.phone
+    // 其次显示邮箱
+    if (user.email) return user.email
+    // 再次显示用户名
+    if (user.user_metadata?.name) return user.user_metadata.name
+    return "用户"
+  }
+  
   const getAvatarUrl = () => user?.user_metadata?.avatar_url || null
+
+  // --- 导航项组件 - 🎨 增强立体感和字体样式 ---
+  const NavItem = ({ 
+    href, 
+    icon: Icon, 
+    label, 
+    isActive,
+    onClick 
+  }: { 
+    href: string
+    icon: React.ElementType
+    label: string
+    isActive: boolean
+    onClick?: () => void
+  }) => (
+    <Link
+      href={href}
+      onClick={onClick || handleNavClick}
+      className={cn(
+        "relative flex items-center gap-3 px-3 py-3 transition-all",
+        "rounded-xl",
+        isActive 
+          ? "font-bold" 
+          : "font-semibold hover:bg-white/80"
+      )}
+      style={isActive ? { 
+        backgroundColor: "rgba(34, 197, 94, 0.15)",
+        boxShadow: "0 2px 8px rgba(34, 197, 94, 0.15), inset 0 1px 0 rgba(255,255,255,0.5)",
+        color: COLORS.primary.dark
+      } : {
+        color: COLORS.gray[700],
+        textShadow: TEXT_SHADOWS.subtle
+      }}
+    >
+      {/* 左侧色条 - 选中态，更粗更明显 */}
+      {isActive && (
+        <div 
+          className="absolute left-0 top-1/2 -translate-y-1/2 w-[4px] h-8 rounded-r-full"
+          style={{ 
+            backgroundColor: COLORS.primary.main,
+            boxShadow: `2px 0 8px ${COLORS.primary.main}60`
+          }}
+        />
+      )}
+      
+      {/* 图标 - 20px，选中态填充样式，增加阴影 */}
+      <Icon 
+        className="h-5 w-5 shrink-0"
+        style={{
+          color: isActive ? COLORS.primary.dark : COLORS.gray[600],
+          filter: isActive ? `drop-shadow(0 2px 4px ${COLORS.primary.main}40)` : "none"
+        }}
+        fill={isActive ? "currentColor" : "none"}
+        strokeWidth={isActive ? 0 : 2}
+      />
+      
+      <span 
+        className="text-sm"
+        style={{
+          textShadow: isActive ? TEXT_SHADOWS.medium : TEXT_SHADOWS.subtle
+        }}
+      >
+        {label}
+      </span>
+    </Link>
+  )
 
   // --- 主逻辑渲染 ---
   return (
     <>
-      {/* 悬浮展开按钮 (仅当侧边栏完全隐藏/收起时显示) */}
-      {!isOpen && (
-        <div className="fixed left-4 top-4 z-50">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => setIsOpen(true)}
-            className="h-9 w-9 bg-white shadow-md border-gray-200 text-slate-600 hover:bg-slate-50"
-          >
-            <PanelLeftOpen className="h-5 w-5" />
-          </Button>
-        </div>
+      {/* 🍎 移动端：顶部汉堡菜单按钮 */}
+      {isMobile && !isOpen && (
+        <button
+          onClick={() => setIsOpen(true)}
+          className="fixed left-4 top-4 z-50 flex h-10 w-10 items-center justify-center rounded-xl bg-white shadow-md text-[#757575] hover:bg-[#F5F5F5] transition-all"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
+      )}
+
+      {/* 🍎 移动端：半透明遮罩层 */}
+      {isMobile && isOpen && (
+        <div 
+          className="fixed inset-0 z-30 bg-black/20 backdrop-blur-sm animate-in fade-in duration-200"
+          onClick={() => setIsOpen(false)}
+        />
       )}
 
       <div 
         className={cn(
-          "flex h-screen supports-[height:100dvh]:h-[100dvh] sticky top-0 flex-col border-r border-[#E5E0D6] bg-[#FDFBF7] transition-all duration-300 ease-in-out z-40",
-          isOpen 
-            ? "w-64 border-r" 
-            : "w-0 border-none overflow-hidden md:w-[70px] md:border-r md:overflow-visible" 
+          "flex h-screen supports-[height:100dvh]:h-[100dvh] flex-col transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] z-40",
+          isMobile 
+            ? cn(
+                "fixed left-0 top-0 bottom-0 w-72 shadow-2xl",
+                isOpen ? "translate-x-0" : "-translate-x-full"
+              )
+            : cn(
+                "sticky top-0 border-r",
+                isOpen ? "w-64" : "w-0 overflow-hidden"
+              )
         )}
+        style={{ 
+          background: COLORS.sidebar.bgGradient,
+          borderColor: COLORS.sidebar.border,
+          boxShadow: isMobile ? "4px 0 24px rgba(0,0,0,0.12)" : "1px 0 8px rgba(0,0,0,0.04)"
+        }}
       >
-        {/* 内部折叠/展开按钮 */}
-        <button
-          onClick={() => setIsOpen(!isOpen)}
-          className={cn(
-            "absolute -right-3 top-6 flex h-6 w-6 items-center justify-center rounded-full border border-gray-200 bg-white text-slate-400 shadow-sm hover:text-slate-600 transition-all z-50",
-            !isOpen && "rotate-180",
-            !isOpen && "hidden md:flex" 
-          )}
-        >
-          <PanelLeftClose className="h-3.5 w-3.5" />
-        </button>
+        {/* 🍎 移动端：关闭按钮 */}
+        {isMobile && (
+          <button
+            onClick={() => setIsOpen(false)}
+            className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-lg text-[#9E9E9E] hover:text-[#616161] hover:bg-[#F5F5F5] transition-all z-50"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        )}
 
-        {/* 1. Logo 区域 */}
-        <div className={cn("flex items-center justify-center h-20 shrink-0 transition-all", isOpen ? "px-6" : "px-2")}>
-          <Link href="/" onClick={handleMobileClick}>
-             {isOpen ? (
-               <img src="/images/logo.png" alt="Logo" className="h-14 w-auto object-contain" />
-             ) : (
-               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#0F766E] text-white">
-                 <span className="text-lg font-bold">沈</span>
-               </div>
-             )}
+        {/* 1. Logo 区域 - 放大至最大，填满宽度 */}
+        <div className="flex items-center shrink-0 px-3 py-4">
+          <Link href="/" onClick={handleNavClick} className="flex items-center w-full">
+            <img src="/images/logo.png" alt="Logo" className="w-full h-auto object-contain" style={{ maxWidth: "180px" }} />
           </Link>
         </div>
 
-        {/* --- 核心滚动区域 (已优化) --- 
-            移除了 pb-24，改用 flex-1 自动填充，
-            这样底部栏会自然接在下面，而不会浮动覆盖。
-        */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden py-2 px-3 scrollbar-thin scrollbar-thumb-gray-200">
-          
-          {/* A. 主页 (一级菜单) */}
-          <Link
-            href="/"
-            onClick={handleMobileClick}
-            className={cn(
-              "flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-colors mb-2 group relative",
-              pathname === "/" 
-                ? "bg-white text-[#0F766E] shadow-sm ring-1 ring-[#E5E0D6]" 
-                : "text-slate-600 hover:bg-[#F3EFE5] hover:text-slate-900"
-            )}
-            title={!isOpen ? "主页" : ""}
-          >
-            <Home className="h-5 w-5 shrink-0" />
-            {isOpen && <span>主页</span>}
-          </Link>
-
-          {/* B. 智能体合集 (一级菜单) */}
-          <div className="mb-2">
-            <button
-              onClick={() => {
-                if (!isOpen) setIsOpen(true)
-                setIsAgentsExpanded(!isAgentsExpanded)
-              }}
-              className={cn(
-                "flex w-full items-center justify-between rounded-xl px-3 py-3 text-sm font-medium transition-colors group",
-                isAgentsExpanded ? "text-slate-900 bg-[#F3EFE5]/50" : "text-slate-600 hover:bg-[#F3EFE5]"
-              )}
-              title={!isOpen ? "智能体合集" : ""}
+        {/* 2. 积分显示 - 🎨 简洁轻量化，无底色 */}
+        {user && (
+          <div className="px-5 mb-3 flex items-center gap-2">
+            <Coins className="h-4 w-4" style={{ color: COLORS.primary.main }} />
+            <span 
+              className="text-sm font-semibold"
+              style={{ color: COLORS.primary.dark }}
             >
-              <div className="flex items-center gap-3">
-                <LayoutGrid className="h-5 w-5 shrink-0 text-[#0F766E]" />
-                {isOpen && <span>智能体合集</span>}
-              </div>
-              {isOpen && (
-                <ChevronDown className={cn("h-4 w-4 text-slate-400 transition-transform", isAgentsExpanded && "rotate-180")} />
-              )}
-            </button>
-
-            {isOpen && isAgentsExpanded && (
-              <div className="mt-2 pl-2 space-y-4 animate-in slide-in-from-top-2">
-                
-                {/* 核心功能 */}
-                <div>
-                  <div className="px-3 mb-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">核心功能</div>
-                  <Link
-                    href="/chat"
-                    onClick={handleMobileClick}
-                    className={cn(
-                      "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-bold transition-colors ml-2",
-                      pathname === "/chat" 
-                        ? "bg-[#0F766E] text-white shadow-md" 
-                        : "bg-white text-[#0F766E] shadow-sm ring-1 ring-[#0F766E]/10 hover:bg-[#0F766E]/5"
-                    )}
-                  >
-                    <Bot className="h-4 w-4 shrink-0" />
-                    作文批改智能体
-                  </Link>
-                </div>
-
-                {/* 全学段智能体 */}
-                <div>
-                  <div className="px-3 mb-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">全学段智能体</div>
-                  <div className="space-y-1 ml-2">
-                    {stageGroups.map((group) => {
-                      const isStageOpen = expandedStages[group.id];
-                      return (
-                        <div key={group.id}>
-                          <button 
-                            onClick={() => toggleStage(group.id)}
-                            className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-xs font-medium text-slate-600 hover:bg-white hover:shadow-sm transition-all"
-                          >
-                            <div className="flex items-center gap-2">
-                              <group.icon className="h-3.5 w-3.5 text-slate-500" />
-                              {group.title}
-                            </div>
-                            <ChevronDown className={cn("h-3 w-3 text-slate-400 transition-transform", isStageOpen && "rotate-180")} />
-                          </button>
-                          
-                          {isStageOpen && (
-                            <div className="ml-2 mt-1 space-y-0.5 border-l-2 border-slate-200 pl-2">
-                              {group.items.map((item, idx) => (
-                                <Link
-                                  key={idx}
-                                  href={item.href}
-                                  onClick={handleMobileClick}
-                                  className="flex items-center gap-2 rounded-md px-2 py-1.5 text-[11px] font-medium text-slate-500 hover:text-[#0F766E] hover:bg-slate-50 transition-colors"
-                                >
-                                  {item.name}
-                                </Link>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-
-              </div>
-            )}
+              {credits.toLocaleString()}
+            </span>
+            <span 
+              className="text-xs"
+              style={{ color: COLORS.gray[500] }}
+            >
+              积分
+            </span>
           </div>
+        )}
+
+        {/* --- 核心滚动区域 --- */}
+        <div className="flex-1 overflow-y-auto overflow-x-hidden py-2 px-3 scrollbar-thin scrollbar-thumb-gray-200/50">
+          
+          {/* A. 主页 */}
+          <NavItem 
+            href="/"
+            icon={Home}
+            label="主页"
+            isActive={pathname === "/"}
+          />
+
+          {/* B. 智能体列表 */}
+          <div className="mt-5 mb-3 px-3">
+            <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: COLORS.gray[500] }}>
+              智能体
+            </span>
+          </div>
+          
+          {/* 作文批改 - 🔥 使用新路由 /chat/standard */}
+          <NavItem 
+            href="/chat/standard"
+            icon={FileEdit}
+            label="作文批改"
+            isActive={pathname === "/chat/standard" || (pathname === "/chat" && !currentAgent)}
+          />
+          
+          {/* 教学评助手 - 🔥 使用新路由 /chat/teaching-pro */}
+          <NavItem 
+            href="/chat/teaching-pro"
+            icon={GraduationCap}
+            label="教学评助手"
+            isActive={pathname === "/chat/teaching-pro" || currentAgent === "teaching-pro"}
+          />
+
+          {/* 分割线 - 智能体和最近对话之间 */}
+          <div 
+            className="my-5 mx-3 h-px"
+            style={{ backgroundColor: COLORS.divider }}
+          />
 
           {/* C. 历史会话 */}
-          <div className="mt-2">
-             <button
-              onClick={() => {
-                if (!isOpen) setIsOpen(true)
-                setIsHistoryExpanded(!isHistoryExpanded)
-              }}
-              className={cn(
-                "flex w-full items-center justify-between rounded-xl px-3 py-3 text-sm font-medium transition-colors group",
-                isHistoryExpanded ? "text-slate-900 bg-[#F3EFE5]/50" : "text-slate-600 hover:bg-[#F3EFE5]"
-              )}
-              title={!isOpen ? "历史会话" : ""}
-            >
-              <div className="flex items-center gap-3">
-                <History className="h-5 w-5 shrink-0 text-slate-500" />
-                {isOpen && <span>历史会话</span>}
-              </div>
-              {isOpen && (
-                <ChevronDown className={cn("h-4 w-4 text-slate-400 transition-transform", isHistoryExpanded && "rotate-180")} />
-              )}
-            </button>
-
-            {isOpen && isHistoryExpanded && (
-              <div className="mt-2 pl-2 space-y-1 animate-in slide-in-from-top-2">
-                 {sessions.length === 0 ? (
-                    <div className="px-4 py-3 text-xs text-slate-400 text-center bg-slate-50 rounded-lg mx-2 border border-dashed border-slate-200">
-                      暂无记录
+          {sessions.length > 0 && (
+            <>
+              <button 
+                onClick={() => setIsHistoryExpanded(!isHistoryExpanded)}
+                className="mb-2 px-3 flex items-center gap-2 w-full text-left hover:opacity-80 transition-opacity"
+              >
+                <History className="h-4 w-4" style={{ color: COLORS.gray[500] }} />
+                <span 
+                  className="text-[11px] font-semibold uppercase tracking-wider flex-1"
+                  style={{ color: COLORS.gray[500] }}
+                >
+                  最近对话
+                </span>
+                <ChevronDown 
+                  className={cn(
+                    "h-4 w-4 transition-transform duration-200",
+                    isHistoryExpanded && "rotate-180"
+                  )}
+                  style={{ color: COLORS.gray[400] }}
+                />
+              </button>
+              
+              {/* 折叠内容 */}
+              <div className={cn(
+                "space-y-0.5 overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]",
+                isHistoryExpanded ? "max-h-[400px] opacity-100" : "max-h-0 opacity-0"
+              )}>
+                {sessions.slice(0, 6).map(session => (
+                  <Link 
+                    key={session.id}
+                    href={`/chat?id=${session.id}`} 
+                    onClick={handleNavClick}
+                    className="block rounded-lg px-3 py-2.5 transition-all group"
+                    style={{ backgroundColor: "transparent" }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = COLORS.gray[100]}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
+                  >
+                    <div 
+                      className="text-[13px] font-medium truncate"
+                      style={{ color: COLORS.gray[700] }}
+                    >
+                      {session.title}
                     </div>
-                 ) : (
-                    sessions.map(session => (
-                       <Link 
-                         key={session.id}
-                         // ✅ 修复点：添加 id 参数，让聊天页面知道加载哪个会话
-                         href={`/chat?id=${session.id}`} 
-                         onClick={handleMobileClick}
-                         className="block mx-2 rounded-lg px-3 py-2 hover:bg-white hover:shadow-sm transition-all group"
-                       >
-                         <div className="text-xs font-medium text-slate-700 truncate group-hover:text-[#0F766E]">{session.title}</div>
-                         <div className="text-[10px] text-slate-400 truncate mt-0.5">{session.preview}</div>
-                       </Link>
-                    ))
-                 )}
+                    <div 
+                      className="text-[11px] truncate mt-0.5"
+                      style={{ color: COLORS.gray[500] }}
+                    >
+                      {session.preview}
+                    </div>
+                  </Link>
+                ))}
               </div>
-            )}
-          </div>
-
+            </>
+          )}
         </div>
 
-        {/* --- 底部用户固定区域 (已优化) --- 
-            移除了 absolute, 改为 mt-auto (自动顶到底部) + shrink-0 (防止被压缩)
-            修复了手机端可能错位的问题
-        */}
+        {/* --- 底部用户固定区域 - 🎨 增强立体感 --- */}
         <div 
-          className="mt-auto shrink-0 border-t border-[#E5E0D6] p-3 bg-[#FDFBF7] z-50 sticky bottom-0" 
+          className="mt-auto shrink-0 z-50 relative" 
           ref={menuRef}
+          style={{ 
+            background: "linear-gradient(180deg, rgba(255,255,255,0.9) 0%, #FFFFFF 100%)",
+            borderTop: `1px solid ${COLORS.sidebar.divider}`,
+            boxShadow: "0 -4px 12px rgba(0,0,0,0.02)"
+          }}
         >
-          {showUserMenu && isOpen && (
-            <div className="absolute bottom-[calc(100%+8px)] left-3 w-56 rounded-xl border border-border/50 bg-white p-1 shadow-2xl animate-in slide-in-from-bottom-2 z-[60]">
-              <div className="flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-slate-700 bg-slate-50/50">
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-100 text-amber-600"><Coins className="h-4 w-4" /></div>
-                <div className="flex flex-col"><span>{credits} 积分</span><span className="text-[10px] text-muted-foreground font-normal">当前余额</span></div>
-              </div>
-              <div className="my-1 h-px bg-slate-100" />
+          {/* 🎁 邀请和帮助按钮 - 垂直排列 */}
+          {user && (
+            <div className="flex flex-col gap-1 py-2 px-3">
+              <Link 
+                href="/invite" 
+                onClick={handleNavClick}
+                className="flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all hover:bg-white/80 group cursor-pointer"
+              >
+                <div 
+                  className="w-9 h-9 rounded-lg flex items-center justify-center transition-all"
+                  style={{ 
+                    background: `linear-gradient(135deg, ${COLORS.primary.light} 0%, #BBF7D0 100%)`
+                  }}
+                >
+                  <Gift className="w-4 h-4" style={{ color: COLORS.primary.dark }} />
+                </div>
+                <span 
+                  className="text-sm font-medium"
+                  style={{ color: COLORS.gray[700] }}
+                >
+                  邀请好友
+                </span>
+              </Link>
+              
+              <Link 
+                href="/help" 
+                onClick={handleNavClick}
+                className="flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all hover:bg-white/80 group cursor-pointer"
+              >
+                <div 
+                  className="w-9 h-9 rounded-lg flex items-center justify-center transition-all"
+                  style={{ 
+                    background: "linear-gradient(135deg, #F9FAFB 0%, #F3F4F6 100%)",
+                    border: `1px solid ${COLORS.gray[200]}`
+                  }}
+                >
+                  <HelpCircle className="w-4 h-4" style={{ color: COLORS.gray[600] }} />
+                </div>
+                <span 
+                  className="text-sm font-medium"
+                  style={{ color: COLORS.gray[700] }}
+                >
+                  帮助中心
+                </span>
+              </Link>
+            </div>
+          )}
+          
+          {/* 分割线 */}
+          {user && <div className="h-px mx-4" style={{ backgroundColor: COLORS.sidebar.divider }} />}
+          
+          {/* 用户信息区域 */}
+          <div className="p-3">
+          {/* 🍎 弹出菜单 */}
+          {showUserMenu && (
+            <div 
+              className="absolute bottom-[calc(100%+8px)] left-3 right-3 rounded-xl bg-white p-1.5 shadow-lg animate-in slide-in-from-bottom-2 duration-200 z-[60]"
+              style={{ border: `1px solid ${COLORS.gray[200]}` }}
+            >
               <Link href="/settings" onClick={() => setShowUserMenu(false)}>
-                 <div className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-slate-600 hover:bg-slate-50 cursor-pointer">
-                   <Settings className="h-4 w-4" /> 账号设置
-                 </div>
+                <div 
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm cursor-pointer transition-colors"
+                  style={{ color: COLORS.gray[700] }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = COLORS.gray[100]}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
+                >
+                  <Settings className="h-5 w-5" style={{ color: COLORS.gray[600] }} /> 
+                  账号设置
+                </div>
               </Link>
               <Link href="/pricing" onClick={() => setShowUserMenu(false)}>
-                 <div className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-slate-600 hover:bg-slate-50 cursor-pointer">
-                   <Zap className="h-4 w-4" /> 升级套餐
-                 </div>
+                <div 
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm cursor-pointer transition-colors"
+                  style={{ color: COLORS.gray[700] }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = COLORS.gray[100]}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
+                >
+                  <Zap className="h-5 w-5" style={{ color: COLORS.gray[600] }} /> 
+                  升级会员
+                </div>
               </Link>
-              <div className="my-1 h-px bg-slate-100" />
-              <button onClick={handleLogout} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-red-600 hover:bg-red-50"><LogOut className="h-4 w-4" /> 退出登录</button>
+              <div className="my-1 h-px mx-2" style={{ backgroundColor: COLORS.divider }} />
+              {/* 退出登录 - 默认灰色，hover变红 */}
+              <button 
+                onClick={handleLogout} 
+                className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors group"
+                style={{ color: COLORS.gray[600] }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = "#FEE2E2"
+                  e.currentTarget.style.color = COLORS.error
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = "transparent"
+                  e.currentTarget.style.color = COLORS.gray[600]
+                }}
+              >
+                <LogOut className="h-5 w-5" /> 
+                退出登录
+              </button>
             </div>
           )}
 
           {user ? (
             <button 
-              onClick={() => setShowUserMenu(!showUserMenu)}
+              type="button"
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                console.log("🔥 [用户按钮] 点击触发，当前菜单状态:", showUserMenu)
+                setShowUserMenu(!showUserMenu)
+              }}
               className={cn(
-                "flex items-center w-full rounded-xl border transition-all duration-200 hover:shadow-sm overflow-hidden",
-                showUserMenu ? "bg-white border-[#E5E0D6]" : "border-transparent hover:bg-white/50",
-                isOpen ? "h-12 p-2" : "h-12 justify-center border-none p-0"
+                "flex items-center w-full rounded-xl transition-all duration-200 overflow-hidden h-14 p-2.5 gap-3 cursor-pointer select-none"
               )}
+              style={{ 
+                backgroundColor: showUserMenu ? "rgba(34, 197, 94, 0.08)" : "transparent",
+                boxShadow: showUserMenu ? "0 2px 8px rgba(0,0,0,0.04)" : "none"
+              }}
+              onMouseEnter={(e) => {
+                if (!showUserMenu) {
+                  e.currentTarget.style.backgroundColor = "rgba(0,0,0,0.03)"
+                  e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.04)"
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!showUserMenu) {
+                  e.currentTarget.style.backgroundColor = "transparent"
+                  e.currentTarget.style.boxShadow = "none"
+                }
+              }}
             >
-              <div className="w-[40px] flex items-center justify-center shrink-0">
-                <div className="h-9 w-9 rounded-full bg-[#0F766E] text-white flex items-center justify-center font-bold text-sm overflow-hidden border-2 border-white shadow-sm">
-                  {getAvatarUrl() ? <img src={getAvatarUrl()} alt="User" className="h-full w-full object-cover" /> : user.email?.[0]?.toUpperCase() || "S"}
-                </div>
+              <div 
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-white text-sm font-black overflow-hidden pointer-events-none"
+                style={{ 
+                  background: `linear-gradient(135deg, ${COLORS.primary.main} 0%, #16A34A 100%)`,
+                  boxShadow: `0 3px 10px ${COLORS.primary.main}40`
+                }}
+              >
+                {getAvatarUrl() ? (
+                  <img src={getAvatarUrl()} alt="User" className="h-full w-full object-cover" />
+                ) : (
+                  user.email?.[0]?.toUpperCase() || "U"
+                )}
               </div>
-              
-              {isOpen && (
-                <>
-                  <div className="flex flex-1 flex-col items-start overflow-hidden ml-2">
-                    <span className="truncate text-sm font-bold text-slate-700 w-full text-left">{getDisplayName()}</span>
-                    <span className="truncate text-[10px] text-muted-foreground w-full text-left">点击管理账号</span>
-                  </div>
-                  <ChevronRight className={cn("h-4 w-4 text-slate-400 transition-transform", showUserMenu && "rotate-90")} />
-                </>
-              )}
+              {/* 用户邮箱信息 - 🎨 加粗加阴影 */}
+              <div className="flex flex-1 flex-col items-start overflow-hidden pointer-events-none min-w-0">
+                <span 
+                  className="text-sm font-bold w-full text-left truncate"
+                  style={{ 
+                    color: COLORS.gray[800],
+                    textShadow: TEXT_SHADOWS.subtle,
+                    textOverflow: "ellipsis",
+                    overflow: "hidden",
+                    whiteSpace: "nowrap"
+                  }}
+                >
+                  {getDisplayName()}
+                </span>
+              </div>
+              <ChevronRight 
+                className={cn(
+                  "h-4 w-4 transition-transform duration-200 pointer-events-none shrink-0",
+                  showUserMenu && "rotate-90"
+                )}
+                style={{ color: COLORS.gray[500] }}
+              />
             </button>
           ) : (
-            <Link href="/login" onClick={handleMobileClick}>
-              {isOpen ? (
-                // ✅ 这里保留了 text-white，确保按钮文字是白色的
-                <Button className="w-full bg-[#0F766E] hover:bg-[#0d655d] text-white font-bold shadow-md">
-                  登录 / 注册
-                </Button>
-              ) : (
-                 <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#0F766E] text-white mx-auto">
-                   <LogOut className="h-4 w-4" />
-                 </div>
-              )}
+            <Link href="/login" onClick={handleNavClick}>
+              <Button 
+                className="w-full text-white font-semibold rounded-lg h-11"
+                style={{ 
+                  backgroundColor: COLORS.primary.main,
+                  boxShadow: `0 4px 12px ${COLORS.primary.main}40`
+                }}
+              >
+                登录 / 注册
+              </Button>
             </Link>
           )}
+          </div>
         </div>
       </div>
     </>
+  )
+}
+
+// 🔥 导出折叠函数
+export const collapseSidebar = () => {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(SIDEBAR_COLLAPSE_EVENT))
+  }
+}
+
+// 🔥 导出积分刷新函数
+export const refreshCredits = () => {
+  if (typeof window !== 'undefined') {
+    console.log("📤 [积分刷新] 触发全局积分刷新事件")
+    window.dispatchEvent(new CustomEvent(CREDITS_REFRESH_EVENT))
+  }
+}
+
+export function AppSidebar() {
+  return (
+    <Suspense fallback={<div className="w-64 h-screen bg-white border-r border-gray-200" />}>
+      <AppSidebarInner />
+    </Suspense>
   )
 }

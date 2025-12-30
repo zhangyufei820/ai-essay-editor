@@ -9,11 +9,11 @@ export interface XunhupayConfig {
 }
 
 export const xunhupayConfig: XunhupayConfig = {
-  appId: process.env.XUNHUPAY_APP_ID || "2019061715339",
-  appSecret: process.env.XUNHUPAY_APP_SECRET || "c09c917331de8d12ee6561a1af6c9ab9",
-  gateway: "https://api.xunhupay.com/payment/do.html",
-  notifyUrl: process.env.NEXT_PUBLIC_APP_URL + "/api/payment/xunhupay/notify",
-  returnUrl: process.env.NEXT_PUBLIC_APP_URL + "/payment/success",
+  appId: process.env.XUNHUPAY_APPID || "",
+  appSecret: process.env.XUNHUPAY_APPSECRET || "",
+  gateway: process.env.XUNHUPAY_API_URL || "https://api.xunhupay.com/payment/do.html",
+  notifyUrl: (process.env.NEXT_PUBLIC_APP_URL || "") + "/api/payment/xunhupay/notify",
+  returnUrl: (process.env.NEXT_PUBLIC_APP_URL || "") + "/payment/success",
 }
 
 // 生成签名 (MD5)
