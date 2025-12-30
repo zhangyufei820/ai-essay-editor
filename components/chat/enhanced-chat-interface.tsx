@@ -519,16 +519,25 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   }
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    console.log("📎 [handleFileUpload] 触发文件上传事件")
     const files = event.target.files; 
-    if (!files || !files.length) return;
+    console.log("📎 [handleFileUpload] 选择的文件:", files?.length, files)
+    
+    if (!files || !files.length) {
+      console.log("📎 [handleFileUpload] 没有选择文件，退出")
+      return;
+    }
     
     // 🔥 检查用户是否已登录
     if (!userId) {
+      console.log("📎 [handleFileUpload] 用户未登录")
       toast.error("请先登录后再上传文件")
       return
     }
     
+    console.log("📎 [handleFileUpload] 开始上传，用户ID:", userId)
     setFileProcessing({ status: "uploading", progress: 0, message: "正在处理..." })
+    toast.info(`正在上传 ${files.length} 个文件...`)
     
     try {
         const uploadPromises = Array.from(files).map(async (file) => {
@@ -1215,14 +1224,34 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
               </div>
               
               <div className="flex items-end gap-2 p-3">
-                {/* 文件上传按钮 */}
+                {/* 文件上传按钮 - 🔥 移除 disabled，允许随时上传 */}
                 <div className="flex flex-col items-center gap-1 shrink-0">
                   <span className="text-[10px] font-medium text-slate-400">文件上传</span>
-                  <Button type="button" variant="ghost" size="icon" className="h-10 w-10 rounded-xl text-slate-400 hover:bg-slate-50" onClick={() => fileInputRef.current?.click()} disabled={isLoading}>
+                  <Button 
+                    type="button" 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-10 w-10 rounded-xl text-slate-400 hover:bg-slate-50 disabled:opacity-50" 
+                    onClick={() => {
+                      console.log("📎 [文件上传] 点击上传按钮, isLoading:", isLoading, "userId:", userId)
+                      if (!userId) {
+                        toast.error("请先登录后再上传文件")
+                        return
+                      }
+                      fileInputRef.current?.click()
+                    }}
+                  >
                     <Paperclip className="h-5 w-5" />
                   </Button>
                 </div>
-                <input ref={fileInputRef} type="file" className="hidden" accept="image/*,.txt,.doc,.docx,.pdf" multiple onChange={handleFileUpload} />
+                <input 
+                  ref={fileInputRef} 
+                  type="file" 
+                  className="hidden" 
+                  accept="image/*,.txt,.doc,.docx,.pdf" 
+                  multiple 
+                  onChange={handleFileUpload} 
+                />
                 
                 <Textarea
                   ref={textareaRef}
