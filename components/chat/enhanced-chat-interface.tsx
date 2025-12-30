@@ -964,35 +964,54 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     }
   }
 
-  // 🔗 分享功能
+  // 🔗 分享功能 - 生成分享链接
+  const [isSharing, setIsSharing] = useState(false)
+  
   const handleShare = async (content: string) => {
-    const shareText = content.slice(0, 500) + (content.length > 500 ? '...' : '')
-    const shareUrl = window.location.href
+    if (isSharing) return
+    setIsSharing(true)
     
-    // 尝试使用原生分享 API（移动端）
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: '沈翔智学 - AI 分析报告',
-          text: shareText,
-          url: shareUrl
-        })
-        toast.success("分享成功")
-        return
-      } catch (err) {
-        // 用户取消分享或不支持
-        if ((err as Error).name !== 'AbortError') {
-          console.error("分享失败:", err)
+    try {
+      // 调用 API 创建分享链接
+      const res = await fetch('/api/share', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content, userId })
+      })
+      
+      if (!res.ok) {
+        throw new Error('创建分享失败')
+      }
+      
+      const data = await res.json()
+      const shareUrl = data.shareUrl
+      
+      // 复制链接到剪贴板
+      await navigator.clipboard.writeText(shareUrl)
+      
+      toast.success("分享链接已复制", {
+        description: shareUrl,
+        duration: 5000
+      })
+      
+      // 移动端尝试使用原生分享
+      if (navigator.share) {
+        try {
+          await navigator.share({
+            title: '沈翔智学 - AI 分析报告',
+            text: '查看我的 AI 分析报告',
+            url: shareUrl
+          })
+        } catch (err) {
+          // 用户取消分享，忽略
         }
       }
-    }
-    
-    // 降级方案：复制链接
-    try {
-      await navigator.clipboard.writeText(`${shareText}\n\n查看完整内容: ${shareUrl}`)
-      toast.success("已复制分享内容到剪贴板")
+      
     } catch (err) {
-      toast.error("分享失败，请手动复制")
+      console.error("分享失败:", err)
+      toast.error("分享失败，请稍后重试")
+    } finally {
+      setIsSharing(false)
     }
   }
 
