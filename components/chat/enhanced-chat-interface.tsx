@@ -83,7 +83,7 @@ const InlineText = ({ text }: { text: string }) => {
 };
 
 // TableBlock 必须在 UltimateRenderer 之前定义
-// 🔥 增大表格字体：表头 text-sm，表格内容 text-base
+// 🔥 增大表格字体：表头 text-base，表格内容 text-lg
 const TableBlock = ({ lines }: { lines: string[] }) => {
   if (lines.length < 2) return null;
   try {
@@ -92,11 +92,11 @@ const TableBlock = ({ lines }: { lines: string[] }) => {
     if (!headerLine) return null;
     const headers = headerLine.split("|").filter(c => c.trim()).map(c => c.trim());
     return (
-      <div className="my-5 overflow-hidden rounded-xl border border-slate-100 bg-white">
+      <div className="my-6 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-slate-100">
-            <thead className="bg-slate-50"><tr>{headers.map((h, i) => (<th key={i} className="px-4 py-3 text-left text-sm font-semibold text-slate-600 tracking-wide">{h}</th>))}</tr></thead>
-            <tbody className="divide-y divide-slate-50">{bodyLines.map((line, i) => { const cells = line.split("|").filter(c => c.trim()).map(c => c.trim()); return (<tr key={i} className="hover:bg-slate-50/50 transition-colors">{cells.map((cell, j) => (<td key={j} className="px-4 py-3 text-base text-slate-700 leading-relaxed"><InlineText text={cell} /></td>))}</tr>); })}</tbody>
+          <table className="min-w-full divide-y divide-slate-200">
+            <thead className="bg-slate-50"><tr>{headers.map((h, i) => (<th key={i} className="px-5 py-4 text-left text-base font-semibold text-slate-700 tracking-wide">{h}</th>))}</tr></thead>
+            <tbody className="divide-y divide-slate-100">{bodyLines.map((line, i) => { const cells = line.split("|").filter(c => c.trim()).map(c => c.trim()); return (<tr key={i} className="hover:bg-slate-50/50 transition-colors">{cells.map((cell, j) => (<td key={j} className="px-5 py-4 text-lg text-slate-700 leading-relaxed"><InlineText text={cell} /></td>))}</tr>); })}</tbody>
           </table>
         </div>
       </div>
@@ -135,33 +135,33 @@ function UltimateRenderer({ content, isStreaming = false }: { content: string; i
       continue;
     }
     
-    // 🔥 增大字体：h1=2xl, h2=xl, h3=lg, 正文=base(16px)
+    // 🔥 再次增大字体：h1=3xl, h2=2xl, h3=xl, 正文=lg(18px)
     if (line.trim().startsWith("# ")) {
       renderedElements.push(
-        <h1 key={i} className="mt-8 mb-4 text-2xl font-bold text-slate-800">
+        <h1 key={i} className="mt-10 mb-5 text-3xl font-bold text-slate-800">
           {line.replace(/^#\s+/, "")}
           {isLastLine && isStreaming && <StreamingCursor />}
         </h1>
       );
     } else if (line.trim().startsWith("## ")) {
       renderedElements.push(
-        <h2 key={i} className={`mt-6 mb-3 text-xl font-semibold text-slate-700 flex items-center gap-2`}>
-          <span className={`w-1 h-6 bg-[${BRAND_GREEN}] rounded-full`}></span>
+        <h2 key={i} className={`mt-8 mb-4 text-2xl font-semibold text-slate-700 flex items-center gap-2`}>
+          <span className={`w-1.5 h-7 bg-[${BRAND_GREEN}] rounded-full`}></span>
           {line.replace(/^##\s+/, "")}
           {isLastLine && isStreaming && <StreamingCursor />}
         </h2>
       );
     } else if (line.trim().startsWith("### ")) {
       renderedElements.push(
-        <h3 key={i} className={`mt-5 mb-2 text-lg font-semibold text-[${BRAND_GREEN}]`}>
+        <h3 key={i} className={`mt-6 mb-3 text-xl font-semibold text-[${BRAND_GREEN}]`}>
           {line.replace(/^###\s+/, "")}
           {isLastLine && isStreaming && <StreamingCursor />}
         </h3>
       );
     } else if (line.trim().startsWith("- ")) {
       renderedElements.push(
-        <div key={i} className="flex gap-2.5 ml-1 my-2.5 text-base text-slate-700 leading-relaxed">
-          <div className={`mt-2.5 w-1.5 h-1.5 rounded-full bg-[${BRAND_GREEN}]/60 shrink-0`}></div>
+        <div key={i} className="flex gap-3 ml-1 my-3 text-lg text-slate-700 leading-relaxed">
+          <div className={`mt-3 w-2 h-2 rounded-full bg-[${BRAND_GREEN}]/60 shrink-0`}></div>
           <span>
             <InlineText text={line.replace(/^- /, "")} />
             {isLastLine && isStreaming && <StreamingCursor />}
@@ -170,20 +170,20 @@ function UltimateRenderer({ content, isStreaming = false }: { content: string; i
       );
     } else if (line.trim().startsWith("> ")) {
       renderedElements.push(
-        <blockquote key={i} className={`my-4 border-l-2 border-[${BRAND_GREEN}] bg-[${BRAND_GREEN}]/5 px-4 py-3 rounded-r-xl`}>
-          <div className="text-base text-slate-700 leading-relaxed">
+        <blockquote key={i} className={`my-5 border-l-3 border-[${BRAND_GREEN}] bg-[${BRAND_GREEN}]/5 px-5 py-4 rounded-r-xl`}>
+          <div className="text-lg text-slate-700 leading-relaxed">
             <InlineText text={line.replace(/^> /, "")} />
             {isLastLine && isStreaming && <StreamingCursor />}
           </div>
         </blockquote>
       );
     } else if (line.trim() === "---") {
-      renderedElements.push(<div key={i} className="py-4"><div className="h-px bg-slate-100"></div></div>);
+      renderedElements.push(<div key={i} className="py-5"><div className="h-px bg-slate-200"></div></div>);
     } else if (line.trim() === "") {
-      renderedElements.push(<div key={i} className="h-4"></div>);
+      renderedElements.push(<div key={i} className="h-5"></div>);
     } else {
       renderedElements.push(
-        <p key={i} className="text-base leading-[1.9] text-slate-700 my-2.5">
+        <p key={i} className="text-lg leading-[1.9] text-slate-700 my-3">
           <InlineText text={line} />
           {isLastLine && isStreaming && <StreamingCursor />}
         </p>
@@ -1091,7 +1091,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
             onScroll={handleScroll}
             className="h-full overflow-y-auto custom-scrollbar"
           >
-            <div className="mx-auto max-w-3xl px-4 md:px-6 lg:px-10 py-6 md:py-8">
+            <div className="mx-auto max-w-5xl px-4 md:px-6 lg:px-10 py-6 md:py-8">
               {messages.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 md:py-16 text-center animate-in fade-in duration-500">
                   <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl" style={{ backgroundColor: `${BRAND_GREEN}15` }}>
@@ -1190,7 +1190,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 
         {/* 🔥 输入框区域 */}
         <div className="border-t border-slate-100 bg-white p-3 md:p-6 shrink-0 z-20">
-          <div className="mx-auto max-w-3xl">
+          <div className="mx-auto max-w-5xl">
             {fileProcessing.status !== "idle" && (
               <div className="mb-3 rounded-xl bg-slate-50 p-3 animate-in slide-in-from-bottom-2">
                 <div className="flex items-center gap-2">
