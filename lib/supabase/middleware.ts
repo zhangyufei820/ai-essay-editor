@@ -16,6 +16,7 @@ const PUBLIC_API_ROUTES = [
   "/api/auth/",           // 认证相关接口
   "/api/payment/xunhupay/notify", // 支付回调
   "/api/providers",       // 公开的配置接口
+  "/api/share",           // 分享功能
 ]
 
 export async function updateSession(request: NextRequest) {

@@ -986,15 +986,23 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   
   // 🔥 分享整个对话
   const handleShare = async () => {
-    if (isSharing) return
+    console.log("🔗 [分享] 点击分享按钮, isSharing:", isSharing, "messages:", messages.length)
+    
+    if (isSharing) {
+      console.log("🔗 [分享] 正在分享中，跳过")
+      return
+    }
     if (messages.length === 0) {
+      console.log("🔗 [分享] 没有消息，显示错误")
       toast.error("没有可分享的内容")
       return
     }
     
     setIsSharing(true)
+    toast.info("正在生成分享链接...")
     
     try {
+      console.log("🔗 [分享] 发送 API 请求...")
       // 🔥 发送整个对话到 API
       const res = await fetch('/api/share', {
         method: 'POST',
@@ -1006,11 +1014,16 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         })
       })
       
+      console.log("🔗 [分享] API 响应状态:", res.status)
+      
       if (!res.ok) {
+        const errText = await res.text()
+        console.error("🔗 [分享] API 错误:", errText)
         throw new Error('创建分享失败')
       }
       
       const data = await res.json()
+      console.log("🔗 [分享] API 返回数据:", data)
       const shareUrl = data.shareUrl
       
       // 复制链接到剪贴板
@@ -1035,7 +1048,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       }
       
     } catch (err) {
-      console.error("分享失败:", err)
+      console.error("🔗 [分享] 失败:", err)
       toast.error("分享失败，请稍后重试")
     } finally {
       setIsSharing(false)
