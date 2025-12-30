@@ -792,7 +792,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     router.push("/")
   }
 
-  // 📄 导出 PDF 功能（使用浏览器打印）
+  // 📄 导出 PDF 功能（使用浏览器打印，支持 Markdown 渲染）
   const handleExportPDF = (content: string) => {
     try {
       // 创建打印窗口
@@ -801,6 +801,72 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         toast.error("请允许弹出窗口以导出 PDF")
         return
       }
+      
+      // 🔥 将 Markdown 转换为 HTML
+      const convertMarkdownToHTML = (md: string): string => {
+        let html = md
+        
+        // 转换标题 (从 h4 到 h1，避免顺序问题)
+        html = html.replace(/^#### (.+)$/gm, '<h4>$1</h4>')
+        html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>')
+        html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>')
+        html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>')
+        
+        // 转换粗体
+        html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        
+        // 转换斜体
+        html = html.replace(/\*(.+?)\*/g, '<em>$1</em>')
+        
+        // 转换列表项
+        html = html.replace(/^- (.+)$/gm, '<li>$1</li>')
+        
+        // 转换分隔线
+        html = html.replace(/^---$/gm, '<hr>')
+        
+        // 转换引用
+        html = html.replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>')
+        
+        // 转换表格
+        const tableRegex = /(\|.+\|[\r\n]+)+/g
+        html = html.replace(tableRegex, (match) => {
+          const rows = match.trim().split('\n').filter(row => row.trim() && !row.includes('---'))
+          if (rows.length === 0) return match
+          
+          let tableHTML = '<table>'
+          rows.forEach((row, index) => {
+            const cells = row.split('|').filter(cell => cell.trim())
+            const tag = index === 0 ? 'th' : 'td'
+            const rowTag = index === 0 ? 'thead' : 'tbody'
+            if (index === 0) tableHTML += '<thead>'
+            if (index === 1) tableHTML += '<tbody>'
+            tableHTML += '<tr>'
+            cells.forEach(cell => {
+              tableHTML += `<${tag}>${cell.trim()}</${tag}>`
+            })
+            tableHTML += '</tr>'
+            if (index === 0) tableHTML += '</thead>'
+          })
+          tableHTML += '</tbody></table>'
+          return tableHTML
+        })
+        
+        // 将连续的 <li> 包装在 <ul> 中
+        html = html.replace(/(<li>.+<\/li>\n?)+/g, '<ul>$&</ul>')
+        
+        // 转换普通段落（非空行且不是已转换的 HTML 标签）
+        const lines = html.split('\n')
+        html = lines.map(line => {
+          const trimmed = line.trim()
+          if (!trimmed) return ''
+          if (trimmed.startsWith('<')) return line
+          return `<p>${line}</p>`
+        }).join('\n')
+        
+        return html
+      }
+      
+      const htmlContent = convertMarkdownToHTML(content)
       
       // 写入打印内容
       printWindow.document.write(`
@@ -827,7 +893,40 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
             }
             .header h1 { color: #14532d; font-size: 24px; margin-bottom: 8px; }
             .header p { color: #666; font-size: 12px; }
-            .content { font-size: 14px; white-space: pre-wrap; }
+            .content { font-size: 14px; }
+            .content h1 { font-size: 20px; color: #14532d; margin: 24px 0 12px; }
+            .content h2 { font-size: 18px; color: #14532d; margin: 20px 0 10px; border-left: 3px solid #14532d; padding-left: 10px; }
+            .content h3 { font-size: 16px; color: #14532d; margin: 16px 0 8px; }
+            .content h4 { font-size: 14px; color: #666; margin: 12px 0 6px; }
+            .content p { margin: 8px 0; text-indent: 0; }
+            .content strong { color: #14532d; font-weight: 600; }
+            .content ul { margin: 12px 0; padding-left: 24px; }
+            .content li { margin: 6px 0; }
+            .content blockquote { 
+              margin: 12px 0; 
+              padding: 12px 16px; 
+              background: #f5f5f5; 
+              border-left: 3px solid #14532d; 
+              color: #555;
+            }
+            .content hr { margin: 20px 0; border: none; border-top: 1px solid #eee; }
+            .content table { 
+              width: 100%; 
+              border-collapse: collapse; 
+              margin: 16px 0; 
+              font-size: 13px;
+            }
+            .content th, .content td { 
+              border: 1px solid #ddd; 
+              padding: 8px 12px; 
+              text-align: left; 
+            }
+            .content th { 
+              background: #f5f5f5; 
+              font-weight: 600; 
+              color: #333;
+            }
+            .content tr:nth-child(even) { background: #fafafa; }
             .footer { 
               margin-top: 40px; 
               padding-top: 20px; 
@@ -846,8 +945,8 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
             <h1>沈翔智学 - AI 分析报告</h1>
             <p>${new Date().toLocaleString('zh-CN')}</p>
           </div>
-          <div class="content">${content.replace(/\n/g, '<br>')}</div>
-          <div class="footer">由沈翔智学 AI 生成 · www.shenxiangzhixue.com</div>
+          <div class="content">${htmlContent}</div>
+          <div class="footer">由沈翔智学 AI 生成 · www.shenxiang.school</div>
         </body>
         </html>
       `)
