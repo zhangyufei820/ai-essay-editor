@@ -45,6 +45,37 @@ import {
 // 🔥 品牌深绿色（参考主页标题）
 const BRAND_GREEN = "#14532d"
 
+// 🔥 移动端用户信息显示组件
+const MobileUserInfo = ({ 
+  userName, 
+  credits, 
+  onMenuClick 
+}: { 
+  userName: string
+  credits: number
+  onMenuClick: () => void 
+}) => (
+  <button 
+    onClick={onMenuClick}
+    className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-50 transition-colors"
+  >
+    <div 
+      className="flex h-7 w-7 items-center justify-center rounded-lg text-white text-xs font-bold"
+      style={{ backgroundColor: BRAND_GREEN }}
+    >
+      {userName?.[0]?.toUpperCase() || "U"}
+    </div>
+    <div className="flex flex-col items-start">
+      <span className="text-xs font-medium text-slate-700 max-w-[80px] truncate">
+        {userName || "用户"}
+      </span>
+      <span className="text-[10px] text-emerald-600 font-medium">
+        {credits.toLocaleString()} 积分
+      </span>
+    </div>
+  </button>
+)
+
 // --- Supabase 初始化 ---
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -209,6 +240,8 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   const [userId, setUserId] = useState<string>("")
   const [userAvatar, setUserAvatar] = useState<string>("")
   const [userCredits, setUserCredits] = useState<number>(0)
+  // 🔥 新增：用户显示名称（手机号/邮箱）
+  const [userDisplayName, setUserDisplayName] = useState<string>("")
   const sessionIdRef = useRef<string | null>(null)
   const [currentSessionId, setCurrentSessionId] = useState<string>("")
 
@@ -251,10 +284,18 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
             id: user.id, 
             sub: user.sub, 
             userId: user.userId,
-            finalUid: uid 
+            finalUid: uid,
+            phone: user.phone,
+            email: user.email
           })
           setUserId(uid)
           if (user.user_metadata?.avatar_url) setUserAvatar(user.user_metadata.avatar_url)
+          
+          // 🔥 设置用户显示名称：优先手机号 > 邮箱 > 用户名
+          const displayName = user.phone || user.phone_number || user.email || user.nickname || user.username || user.user_metadata?.name || "用户"
+          setUserDisplayName(displayName)
+          console.log("👤 [用户初始化] 显示名称:", displayName)
+          
           if (uid) fetchCredits(uid)
         } catch (e) {
           console.error("❌ [用户初始化] 解析失败:", e)
@@ -1098,19 +1139,38 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
           )}
         </AnimatePresence>
 
-        {/* 🔥 顶部导航栏 - 移动端和桌面端都显示返回按钮 */}
+        {/* 🔥 顶部导航栏 - 移动端显示用户信息和积分 */}
         <div className="flex items-center h-14 px-4 border-b border-slate-100 bg-white shrink-0">
           <button 
             onClick={handleBack}
             className="flex items-center gap-1 text-slate-600 hover:text-slate-800 transition-colors"
           >
             <ChevronLeft className="h-5 w-5" />
-            <span className="text-sm font-medium">返回</span>
+            <span className="text-sm font-medium hidden sm:inline">返回</span>
           </button>
           <div className="flex-1 text-center md:text-left md:ml-4">
             <span className="text-sm font-medium text-slate-700">{modelConfig[selectedModel].name}</span>
           </div>
-          <div className="w-16 md:hidden" />
+          {/* 🔥 移动端用户信息显示 - 仅在移动端显示 */}
+          <div className="md:hidden">
+            {userId ? (
+              <MobileUserInfo 
+                userName={userDisplayName}
+                credits={userCredits}
+                onMenuClick={() => router.push("/settings")}
+              />
+            ) : (
+              <button
+                onClick={() => router.push("/login")}
+                className="px-3 py-1.5 text-xs font-medium text-white rounded-lg"
+                style={{ backgroundColor: BRAND_GREEN }}
+              >
+                登录
+              </button>
+            )}
+          </div>
+          {/* 桌面端占位 */}
+          <div className="hidden md:block w-16" />
         </div>
 
         {/* 🔥 滚动区域优化 */}

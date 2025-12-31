@@ -1,9 +1,1 @@
-{
-  "/api/dify-chat/route": "app-edge-has-no-entrypoint",
-  "/api/dify-upload/route": "app/api/dify-upload/route.js",
-  "/api/user/credits/route": "app/api/user/credits/route.js",
-  "/chat/[model]/page": "app/chat/[model]/page.js",
-  "/chat/page": "app/chat/page.js",
-  "/invite/page": "app/invite/page.js",
-  "/page": "app/page.js"
-}
+{}

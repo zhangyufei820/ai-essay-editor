@@ -3,14 +3,12 @@
   "middleware": {
     "/": {
       "files": [
-        "server/edge/chunks/_ab62c1b6._.js",
-        "server/edge/chunks/4b6e4_@opentelemetry_api_build_esm_9b4beb88._.js",
-        "server/edge/chunks/d2cd0_@supabase_realtime-js_dist_module_9a412010._.js",
-        "server/edge/chunks/f96a7_@supabase_storage-js_dist_module_2541d38c._.js",
-        "server/edge/chunks/0f7e6_@supabase_auth-js_dist_module_b3e679b7._.js",
-        "server/edge/chunks/node_modules__pnpm_38ccbb5d._.js",
+        "server/edge/chunks/node_modules_next_dist_4c6d306c._.js",
+        "server/edge/chunks/node_modules_@opentelemetry_api_build_esm_4557a825._.js",
+        "server/edge/chunks/node_modules_@supabase_auth-js_dist_module_33c852e9._.js",
+        "server/edge/chunks/node_modules_f76aabff._.js",
         "server/edge/chunks/[root-of-the-server]__4e4490ab._.js",
-        "server/edge/chunks/turbopack-edge-wrapper_1dd07899.js"
+        "server/edge/chunks/turbopack-node_modules_next_dist_esm_build_templates_edge-wrapper_406b01cc.js"
       ],
       "name": "middleware",
       "page": "/",
@@ -25,54 +23,14 @@
       "env": {
         "__NEXT_BUILD_ID": "development",
         "NEXT_SERVER_ACTIONS_ENCRYPTION_KEY": "3RB5yWmtFsE9LElVgV1KFiooGqblvCEXjNqcuT4Qjz0=",
-        "__NEXT_PREVIEW_MODE_ID": "f314d3bfb97196a878781ed512b55e49",
-        "__NEXT_PREVIEW_MODE_ENCRYPTION_KEY": "ffe4de2cb314715216d79b63d10d6960b4a777f9bff0bf1a66a7e1dc6da6d3db",
-        "__NEXT_PREVIEW_MODE_SIGNING_KEY": "a94e3171518ed31cb5b57440db10ae9f996cdea7dee29d06670e6fb9d5a90d3c"
+        "__NEXT_PREVIEW_MODE_ID": "409e86bbd7e6dd2b44b8dd5274d3c1be",
+        "__NEXT_PREVIEW_MODE_ENCRYPTION_KEY": "1fe376b9c965b1f922b187caf2ae18d32f90c02b7b3502f8a5f83ca01afb0135",
+        "__NEXT_PREVIEW_MODE_SIGNING_KEY": "b32945c91e50bbc7313c81eb8c354b4c3f8707252d82a1dab5f8c4555d31a674"
       }
     }
   },
   "sortedMiddleware": [
     "/"
   ],
-  "functions": {
-    "/api/dify-chat/route": {
-      "files": [
-        "server/middleware-build-manifest.js",
-        "server/interception-route-rewrite-manifest.js",
-        "server/server-reference-manifest.js",
-        "server/app/api/dify-chat/route_client-reference-manifest.js",
-        "server/edge/chunks/_next-internal_server_app_api_dify-chat_route_actions_59757102.js",
-        "server/edge/chunks/3d63e_next_dist_esm_shared_lib_7bf088d8._.js",
-        "server/edge/chunks/3d63e_next_dist_esm_server_9f933ad3._.js",
-        "server/edge/chunks/3d63e_next_dist_esm_185aeeba._.js",
-        "server/edge/chunks/3d63e_next_dist_compiled_fa60ec5e._.js",
-        "server/edge/chunks/3d63e_next_dist_65250ead._.js",
-        "server/edge/chunks/edge-wrapper_fa4720c8.js",
-        "server/edge/chunks/4b6e4_@opentelemetry_api_build_esm_df5f8bb8._.js",
-        "server/edge/chunks/d2cd0_@supabase_realtime-js_dist_module_03eeeb28._.js",
-        "server/edge/chunks/f96a7_@supabase_storage-js_dist_module_f068553d._.js",
-        "server/edge/chunks/0f7e6_@supabase_auth-js_dist_module_920474a1._.js",
-        "server/edge/chunks/node_modules__pnpm_ed6bfd8b._.js",
-        "server/edge/chunks/[root-of-the-server]__5ce086d2._.js",
-        "server/edge/chunks/turbopack-edge-wrapper_076865cc.js"
-      ],
-      "name": "app/api/dify-chat/route",
-      "page": "/api/dify-chat/route",
-      "matchers": [
-        {
-          "regexp": "^/api/dify-chat(?:/)?$",
-          "originalSource": "/api/dify-chat"
-        }
-      ],
-      "wasm": [],
-      "assets": [],
-      "env": {
-        "__NEXT_BUILD_ID": "development",
-        "NEXT_SERVER_ACTIONS_ENCRYPTION_KEY": "3RB5yWmtFsE9LElVgV1KFiooGqblvCEXjNqcuT4Qjz0=",
-        "__NEXT_PREVIEW_MODE_ID": "f314d3bfb97196a878781ed512b55e49",
-        "__NEXT_PREVIEW_MODE_ENCRYPTION_KEY": "ffe4de2cb314715216d79b63d10d6960b4a777f9bff0bf1a66a7e1dc6da6d3db",
-        "__NEXT_PREVIEW_MODE_SIGNING_KEY": "a94e3171518ed31cb5b57440db10ae9f996cdea7dee29d06670e6fb9d5a90d3c"
-      }
-    }
-  }
+  "functions": {}
 }
