@@ -144,9 +144,50 @@ const StreamingCursor = () => (
   <span className="streaming-cursor inline-block ml-1 text-emerald-500 animate-cursor-blink">▍</span>
 )
 
+// 🧠 可折叠的思考块组件（用于 Gemini 等模型的 <think> 标签）
+const ThinkingBlock = ({ content, isStreaming }: { content: string; isStreaming?: boolean }) => {
+  const [isExpanded, setIsExpanded] = useState(false)
+  
+  return (
+    <div className="my-4 rounded-xl border border-slate-200 bg-slate-50/50 overflow-hidden">
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="w-full flex items-center gap-2 px-4 py-3 text-left hover:bg-slate-100/50 transition-colors"
+      >
+        <Brain className="h-4 w-4 text-slate-400" />
+        <span className="text-sm font-medium text-slate-500">AI 思考过程</span>
+        <ChevronDown className={cn("h-4 w-4 text-slate-400 ml-auto transition-transform", isExpanded && "rotate-180")} />
+        {isStreaming && <span className="text-xs text-emerald-500 animate-pulse">思考中...</span>}
+      </button>
+      {isExpanded && (
+        <div className="px-4 pb-4 pt-2 border-t border-slate-200 text-sm text-slate-600 leading-relaxed max-h-[300px] overflow-y-auto">
+          {content.split('\n').map((line, i) => (
+            <p key={i} className="my-1">{line || '\u00A0'}</p>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function UltimateRenderer({ content, isStreaming = false }: { content: string; isStreaming?: boolean }) {
   if (!content) return <span className="text-emerald-500 animate-cursor-blink">▍</span>;
-  const lines = content.split("\n");
+  
+  // 🧠 处理 <think> 标签：提取思考内容并折叠显示
+  const thinkMatch = content.match(/<think>([\s\S]*?)<\/think>/i)
+  const thinkContent = thinkMatch ? thinkMatch[1].trim() : null
+  const mainContent = content.replace(/<think>[\s\S]*?<\/think>/gi, '').trim()
+  
+  // 如果只有 <think> 标签还没闭合（流式输出中）
+  const hasOpenThink = content.includes('<think>') && !content.includes('</think>')
+  const openThinkContent = hasOpenThink ? content.split('<think>')[1] : null
+  
+  // 如果内容为空或只有思考内容
+  if (!mainContent && !thinkContent && !openThinkContent) {
+    return <span className="text-emerald-500 animate-cursor-blink">▍</span>;
+  }
+  
+  const lines = mainContent.split("\n");
   const renderedElements = [];
   let tableBuffer: string[] = [];
 
@@ -225,7 +266,18 @@ function UltimateRenderer({ content, isStreaming = false }: { content: string; i
       );
     }
   }
-  return <div className="w-full overflow-hidden break-words">{renderedElements}</div>;
+  return (
+    <div className="w-full overflow-hidden break-words">
+      {/* 🧠 显示折叠的思考块（已完成的思考） */}
+      {thinkContent && <ThinkingBlock content={thinkContent} isStreaming={false} />}
+      
+      {/* 🧠 显示正在进行的思考（流式输出中） */}
+      {openThinkContent && <ThinkingBlock content={openThinkContent} isStreaming={true} />}
+      
+      {/* 主要内容 */}
+      {renderedElements}
+    </div>
+  );
 }
 
 // --- 内部聊天核心组件 ---
