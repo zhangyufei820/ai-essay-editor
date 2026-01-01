@@ -8,7 +8,7 @@ import {
   getModelDisplayName
 } from "@/lib/pricing"
 
-export const runtime = "edge"
+export const runtime = "nodejs"
 export const maxDuration = 60
 export const dynamic = "force-dynamic"
 
