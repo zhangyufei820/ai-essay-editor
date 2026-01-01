@@ -9,7 +9,8 @@ import {
 } from "@/lib/pricing"
 
 export const runtime = "nodejs"
-export const maxDuration = 60
+// 🔥 增加超时时间到 300 秒（5分钟），支持长文本生成
+export const maxDuration = 300
 export const dynamic = "force-dynamic"
 
 // 默认的基础配置
