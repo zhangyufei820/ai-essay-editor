@@ -234,16 +234,34 @@ function UltimateRenderer({ content, isStreaming = false }: { content: string; i
           {isLastLine && isStreaming && <StreamingCursor />}
         </h3>
       );
-    } else if (line.trim().startsWith("- ")) {
+    } else if (line.trim().startsWith("- ") || line.trim().startsWith("* ")) {
+      // 🔥 支持 - 和 * 两种无序列表格式
+      const listContent = line.trim().replace(/^[-*]\s+/, "")
       renderedElements.push(
         <div key={i} className="flex gap-3 ml-1 my-3 text-lg text-slate-700 leading-relaxed">
           <div className={`mt-3 w-2 h-2 rounded-full bg-[${BRAND_GREEN}]/60 shrink-0`}></div>
           <span>
-            <InlineText text={line.replace(/^- /, "")} />
+            <InlineText text={listContent} />
             {isLastLine && isStreaming && <StreamingCursor />}
           </span>
         </div>
       );
+    } else if (line.trim().match(/^\d+\.\s+/)) {
+      // 🔥 支持数字编号列表（1. 2. 3. 等）
+      const numMatch = line.trim().match(/^(\d+)\.\s+(.*)/)
+      if (numMatch) {
+        const num = numMatch[1]
+        const listContent = numMatch[2]
+        renderedElements.push(
+          <div key={i} className="flex gap-3 ml-1 my-3 text-lg text-slate-700 leading-relaxed">
+            <span className={`text-[${BRAND_GREEN}] font-semibold shrink-0`}>{num}.</span>
+            <span>
+              <InlineText text={listContent} />
+              {isLastLine && isStreaming && <StreamingCursor />}
+            </span>
+          </div>
+        );
+      }
     } else if (line.trim().startsWith("> ")) {
       renderedElements.push(
         <blockquote key={i} className={`my-5 border-l-3 border-[${BRAND_GREEN}] bg-[${BRAND_GREEN}]/5 px-5 py-4 rounded-r-xl`}>
