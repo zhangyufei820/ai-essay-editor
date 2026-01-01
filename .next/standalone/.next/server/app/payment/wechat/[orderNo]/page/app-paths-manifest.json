@@ -1,3 +1,0 @@
-{
-  "/payment/wechat/[orderNo]/page": "app/payment/wechat/[orderNo]/page.js"
-}

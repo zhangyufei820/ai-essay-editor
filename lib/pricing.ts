@@ -85,7 +85,7 @@ export const MODEL_COSTS: Record<ModelType, ModelCostConfig> = {
   "gpt-5": { 
     category: "standalone",
     tokenRate: STANDALONE_TOKEN_RATE,
-    displayName: "ChatGPT 5.1",
+    displayName: "ChatGPT 5.2",
     mode: "text",
     estimatedTokens: 1500  // 预估平均 1.5K tokens
   },

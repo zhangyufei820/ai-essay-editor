@@ -21,6 +21,10 @@ import { AIStatusIndicator } from "@/components/ai/AIStatusIndicator"
 import { ModelSelector } from "./ModelSelector"
 import { WorkflowVisualizer } from "./WorkflowVisualizer"
 import { useWorkflowVisualizer } from "@/hooks/useWorkflowVisualizer"
+// 🎵 Suno 音乐生成相关导入
+import { MusicCard } from "./MusicCard"
+import { useSunoMusic, extractTaskId, removeTaskIdFromText } from "@/hooks/useSunoMusic"
+import { TASK_ID_REGEX } from "@/lib/suno-config"
 import { motion, AnimatePresence } from "framer-motion"
 import { brandColors, slateColors } from "@/lib/design-tokens"
 import { createClient } from "@supabase/supabase-js"
@@ -273,6 +277,15 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     triggerHandover
   } = useWorkflowVisualizer()
 
+  // 🎵 Suno 音乐生成 Hook（完全隔离，仅在 suno-v5 模型时使用）
+  const {
+    musicTasks,
+    getTaskByMessageId,
+    startMusicGeneration,
+    retryTask,
+    hasActiveTasks: hasSunoActiveTasks
+  } = useSunoMusic()
+
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const userStr = localStorage.getItem('currentUser')
@@ -458,7 +471,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       group: "教育专用"
     },
     "gpt-5": { 
-      name: "ChatGPT 5.1", 
+      name: "ChatGPT 5.2", 
       icon: Bot, 
       color: "#16a34a",
       description: "通用智能对话",
@@ -692,10 +705,67 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     const defaultPrompts: Record<string, string> = {
       "standard": "批改作文",
       "teaching-pro": "分析教学材料",
+      "suno-v5": "创作一首歌曲",
     }
     const defaultPrompt = defaultPrompts[selectedModel] || "请分析"
     const userMsg: Message = { id: Date.now().toString(), role: "user", content: txt || defaultPrompt }
     setMessages(p => [...p, userMsg]); setInput(""); setUploadedFiles([])
+
+    // ============================================
+    // 🎵 Suno V5 特殊处理逻辑（完全隔离）
+    // ============================================
+    if (selectedModel === "suno-v5") {
+      console.log("🎵 [Suno V5] 进入音乐生成模式")
+      
+      const botId = (Date.now() + 1).toString()
+      currentBotIdRef.current = botId
+      setMessages(p => [...p, { id: botId, role: "assistant", content: "" }])
+      
+      try {
+        // 使用 Suno 服务生成音乐
+        await startMusicGeneration(
+          userMsg.content,
+          userId,
+          botId,
+          // onTextChunk: 实时更新文字
+          (chunk) => {
+            setMessages(p => p.map(m => 
+              m.id === botId ? { ...m, content: m.content + chunk } : m
+            ))
+          },
+          // onComplete: 生成完成
+          async (fullText) => {
+            setMessages(p => p.map(m => 
+              m.id === botId ? { ...m, content: fullText } : m
+            ))
+            
+            // 保存到数据库
+            await supabase.from('chat_messages').insert({ 
+              session_id: sid, 
+              role: "assistant", 
+              content: fullText 
+            })
+            
+            // 扣除积分
+            setUserCredits(prev => prev - cost)
+            
+            console.log("✅ [Suno V5] 音乐生成任务已提交")
+          }
+        )
+      } catch (err: any) {
+        console.error("❌ [Suno V5] 生成失败:", err)
+        toast.error(err.message || "音乐生成失败")
+        setMessages(p => p.filter(m => m.id !== botId))
+      } finally {
+        setIsLoading(false)
+        refreshCredits()
+      }
+      
+      return // 🔥 关键：Suno V5 处理完毕后直接返回，不执行后续逻辑
+    }
+    // ============================================
+    // 🎵 Suno V5 特殊处理结束
+    // ============================================
     
     const preview = userMsg.content.slice(0, 30)
     const { data: existing } = await supabase.from('chat_sessions').select('id').eq('id', sid).single()
@@ -1221,10 +1291,53 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                              {message.id === currentBotIdRef.current && isLoading && !message.content && !isFastTrack ? (
                                 <SimpleBrainLoader />
                              ) : (
-                                <UltimateRenderer 
-                                  content={message.content} 
-                                  isStreaming={message.id === currentBotIdRef.current && showCursor && isLoading}
-                                />
+                                <>
+                                  {/* 🎵 Suno 音乐卡片渲染 - 检测 [TASK_ID:...] */}
+                                  {(() => {
+                                    const musicTask = getTaskByMessageId(message.id)
+                                    const hasTaskId = TASK_ID_REGEX.test(message.content)
+                                    
+                                    if (musicTask || hasTaskId) {
+                                      // 从文本中提取 Task ID（如果 musicTask 不存在）
+                                      const taskId = musicTask?.taskId || extractTaskId(message.content) || ""
+                                      const cleanContent = removeTaskIdFromText(message.content)
+                                      
+                                      return (
+                                        <>
+                                          {/* 显示清理后的文字内容 */}
+                                          {cleanContent && (
+                                            <UltimateRenderer 
+                                              content={cleanContent} 
+                                              isStreaming={message.id === currentBotIdRef.current && showCursor && isLoading}
+                                            />
+                                          )}
+                                          {/* 显示音乐卡片 */}
+                                          {taskId && (
+                                            <MusicCard
+                                              taskId={taskId}
+                                              status={musicTask?.status || "PENDING"}
+                                              audioUrl={musicTask?.audioUrl}
+                                              coverUrl={musicTask?.coverUrl}
+                                              title={musicTask?.title}
+                                              duration={musicTask?.duration}
+                                              errorMessage={musicTask?.errorMessage}
+                                              onRetry={() => retryTask(taskId, userId)}
+                                              className="mt-4"
+                                            />
+                                          )}
+                                        </>
+                                      )
+                                    }
+                                    
+                                    // 普通消息渲染
+                                    return (
+                                      <UltimateRenderer 
+                                        content={message.content} 
+                                        isStreaming={message.id === currentBotIdRef.current && showCursor && isLoading}
+                                      />
+                                    )
+                                  })()}
+                                </>
                              )}
                            </>
                         )}

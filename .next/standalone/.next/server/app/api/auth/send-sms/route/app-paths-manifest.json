@@ -1,3 +1,0 @@
-{
-  "/api/auth/send-sms/route": "app/api/auth/send-sms/route.js"
-}

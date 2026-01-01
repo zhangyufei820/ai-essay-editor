@@ -1,3 +1,0 @@
-{
-  "/api/auth/verify-email-otp/route": "app/api/auth/verify-email-otp/route.js"
-}
