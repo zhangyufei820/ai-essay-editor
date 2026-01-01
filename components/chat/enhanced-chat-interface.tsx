@@ -225,7 +225,7 @@ function UltimateRenderer({ content, isStreaming = false }: { content: string; i
       );
     }
   }
-  return <div className="w-full">{renderedElements}</div>;
+  return <div className="w-full overflow-hidden break-words">{renderedElements}</div>;
 }
 
 // --- 内部聊天核心组件 ---
@@ -1269,10 +1269,10 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                         </div>
                       )}
                       <div className={cn(
-                        "relative rounded-2xl px-4 py-3",
-                        message.role === "user" 
-                          ? "text-white max-w-[75%]" 
-                          : "bg-slate-50 w-full max-w-full"
+                        "relative rounded-2xl px-4 py-3 overflow-hidden",
+                        message.role === "user"
+                          ? "text-white max-w-[75%]"
+                          : "bg-slate-50 w-full max-w-full break-words"
                       )} style={message.role === "user" ? { backgroundColor: BRAND_GREEN } : {}}>
                         {message.role === "user" ? (
                           <div className="whitespace-pre-wrap text-[15px] leading-relaxed">{message.content}</div>
