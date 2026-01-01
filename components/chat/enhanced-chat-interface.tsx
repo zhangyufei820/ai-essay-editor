@@ -603,13 +603,14 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
             formData.append("file", fileToUpload); 
             formData.append("user", userId)
             
-            // 🔥 添加 X-User-Id header 以通过 middleware 验证
-            const res = await fetch("/api/dify-upload", { 
-              method: "POST", 
+            // 🔥 添加 X-User-Id 和 X-Model header 以通过 middleware 验证并选择正确的 API Key
+            const res = await fetch("/api/dify-upload", {
+              method: "POST",
               headers: {
-                "X-User-Id": userId
+                "X-User-Id": userId,
+                "X-Model": selectedModel || ""
               },
-              body: formData 
+              body: formData
             })
             
             if (!res.ok) {

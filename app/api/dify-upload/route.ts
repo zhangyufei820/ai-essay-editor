@@ -7,10 +7,26 @@ export const runtime = "nodejs"
 export const maxDuration = 60; 
 
 const DIFY_BASE_URL = process.env.DIFY_BASE_URL || "https://api.dify.ai/v1"
-const DIFY_API_KEY = process.env.DIFY_API_KEY
+const DEFAULT_DIFY_KEY = process.env.DIFY_API_KEY
+
+// 🔥 根据模型获取对应的 API Key（与 dify-chat 保持一致）
+function getApiKeyForModel(model: string | null): string {
+  switch (model) {
+    case "teaching-pro":
+      return process.env.DIFY_TEACHING_PRO_API_KEY || DEFAULT_DIFY_KEY || "";
+    case "gpt-5":
+      return process.env.DIFY_API_KEY_GPT5 || DEFAULT_DIFY_KEY || "";
+    case "claude-opus":
+      return process.env.DIFY_API_KEY_CLAUDE || DEFAULT_DIFY_KEY || "";
+    case "gemini-pro":
+      return process.env.DIFY_API_KEY_GEMINI || DEFAULT_DIFY_KEY || "";
+    default:
+      return DEFAULT_DIFY_KEY || "";
+  }
+}
 
 export async function POST(request: NextRequest) {
-  if (!DIFY_API_KEY) {
+  if (!DEFAULT_DIFY_KEY) {
     return new Response(JSON.stringify({ error: "Dify API key not configured" }), {
       status: 500,
       headers: { "Content-Type": "application/json" },
@@ -20,11 +36,15 @@ export async function POST(request: NextRequest) {
   try {
     // 🔐 从 header 获取用户身份（middleware 已验证）
     const headerUserId = request.headers.get("X-User-Id")
+    // 🔥 从 header 获取当前选择的模型
+    const model = request.headers.get("X-Model") || null
     
     const formData = await request.formData()
     const file = formData.get("file") as File
     // 优先使用 header 中的 userId，其次使用 formData 中的
     const userId = headerUserId || formData.get("user") as string 
+    // 也支持从 formData 获取模型（兼容旧版本）
+    const modelFromForm = formData.get("model") as string | null
 
     if (!file) {
       return new Response(JSON.stringify({ error: "No file provided" }), {
@@ -41,6 +61,12 @@ export async function POST(request: NextRequest) {
       })
     }
 
+    // 🔥 根据模型选择正确的 API Key
+    const targetModel = model || modelFromForm
+    const targetApiKey = getApiKeyForModel(targetModel)
+    
+    console.log(`[Upload] 用户: ${userId} | 模型: ${targetModel || "default"} | 文件: ${file.name}`)
+
     const difyFormData = new FormData()
     difyFormData.append("file", file)
     // ✅ 修改 3: 使用真实的用户 ID，保持与对话接口一致
@@ -52,7 +78,7 @@ export async function POST(request: NextRequest) {
     const response = await fetch(uploadUrl, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${DIFY_API_KEY}`,
+        Authorization: `Bearer ${targetApiKey}`,
         // 注意：使用 fetch 发送 FormData 时，通常不需要手动设置 Content-Type，
         // 浏览器/Node环境会自动生成带 boundary 的正确 Header
       },
