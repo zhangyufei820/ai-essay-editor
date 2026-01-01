@@ -14,7 +14,8 @@ export const dynamic = "force-dynamic"
 
 // 默认的基础配置
 const DIFY_BASE_URL = process.env.DIFY_BASE_URL || "https://api.dify.ai/v1"
-const DEFAULT_DIFY_KEY = process.env.DIFY_API_KEY 
+// 🔥 作文批改（standard）使用专用的 ESSAY_CORRECTION_API_KEY
+const DEFAULT_DIFY_KEY = process.env.ESSAY_CORRECTION_API_KEY || process.env.DIFY_API_KEY 
 
 // Supabase 客户端（用于扣费）
 const supabaseAdmin = createClient(

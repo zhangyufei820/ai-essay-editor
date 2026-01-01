@@ -7,7 +7,8 @@ export const runtime = "nodejs"
 export const maxDuration = 60; 
 
 const DIFY_BASE_URL = process.env.DIFY_BASE_URL || "https://api.dify.ai/v1"
-const DEFAULT_DIFY_KEY = process.env.DIFY_API_KEY
+// 🔥 作文批改（standard）使用专用的 ESSAY_CORRECTION_API_KEY
+const DEFAULT_DIFY_KEY = process.env.ESSAY_CORRECTION_API_KEY || process.env.DIFY_API_KEY
 
 // 🔥 根据模型获取对应的 API Key（与 dify-chat 保持一致）
 function getApiKeyForModel(model: string | null): string {
