@@ -2,6 +2,10 @@ import { type NextRequest, NextResponse } from "next/server"
 
 export const maxDuration = 60
 
+// 使用专门的作文批改环境变量
+const ESSAY_CORRECTION_API_KEY = process.env.ESSAY_CORRECTION_API_KEY
+const ESSAY_CORRECTION_BASE_URL = process.env.ESSAY_CORRECTION_BASE_URL
+
 const MODELS = {
   gpt: "openai/gpt-5",
   claude: "anthropic/claude-4.1-opus",
@@ -27,39 +31,67 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "请提供作文内容" }, { status: 400 })
     }
 
-    const testResult = `## 📝 作文批改报告（测试版本）
+    // 检查是否配置了作文批改环境变量
+    if (!ESSAY_CORRECTION_API_KEY || !ESSAY_CORRECTION_BASE_URL) {
+      console.error("[v0] Essay correction API key or base URL not configured")
+      return NextResponse.json(
+        { error: "作文批改服务未配置" },
+        { status: 500 }
+      )
+    }
 
-### 基本信息
-- 题目：${topic || "作文"}
-- 字数：${essayText?.length || 0} 字
-- 年级：${gradeLevel || "未指定"}
+    console.log("[v0] Using essay correction service:", ESSAY_CORRECTION_BASE_URL)
 
-### 测试说明
-**API 路由工作正常！**
-
-如果您看到这条消息，说明：
-1. ✅ 前端成功调用了 API
-2. ✅ API 路由正确接收了请求
-3. ✅ API 能够返回结果
-
-接下来我们将添加 AI 模型调用。
-
----
-*这是一个测试响应，用于确认 API 基础功能*`
-
-    console.log("[v0] Returning test result")
-
-    return NextResponse.json(
-      {
-        result: testResult,
-        extractedText: essayText,
+    // 构建请求体
+    const difyRequest = {
+      inputs: {
+        gradeLevel: gradeLevel || "初中",
+        topic: topic || "作文",
+        wordLimit: wordLimit || "800字",
+        studentName: studentName || "学生",
+        genre: genre || "记叙文",
+        background: background || "课外习作"
       },
-      {
+      query: essayText,
+      response_mode: "blocking",
+      user: "essay-correction-user"
+    }
+
+    try {
+      // 调用作文批改 API
+      const response = await fetch(`${ESSAY_CORRECTION_BASE_URL}/chat-messages`, {
+        method: "POST",
         headers: {
-          "Access-Control-Allow-Origin": "*",
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${ESSAY_CORRECTION_API_KEY}`
         },
-      },
-    )
+        body: JSON.stringify(difyRequest)
+      })
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error("[v0] Essay correction API error:", response.status, errorText)
+        throw new Error(`API 错误: ${response.status} ${errorText}`)
+      }
+
+      const result = await response.json()
+      console.log("[v0] Essay correction API response received")
+
+      return NextResponse.json(
+        {
+          result: result.answer,
+          extractedText: essayText,
+        },
+        {
+          headers: {
+            "Access-Control-Allow-Origin": "*",
+          },
+        }
+      )
+    } catch (apiError) {
+      console.error("[v0] Essay correction API call failed:", apiError)
+      throw apiError
+    }
 
     // const prompt = `请作为专业语文教师，对以下作文进行批改：
 
