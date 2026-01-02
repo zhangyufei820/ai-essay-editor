@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { PRODUCTS } from "@/lib/products"; 
+import { headers } from "next/headers";
 
 // 1. 签名算法 (保持你验证成功的这个版本：直接拼接)
 function gen_sign(params: any, appSecret: string) {
@@ -20,6 +21,23 @@ function gen_sign(params: any, appSecret: string) {
   return crypto.createHash("md5").update(stringSignTemp, "utf8").digest("hex");
 }
 
+// 获取当前请求的基础URL
+function getBaseUrl(request: Request): string {
+  // 优先使用环境变量中配置的URL
+  if (process.env.NEXT_PUBLIC_APP_URL && !process.env.NEXT_PUBLIC_APP_URL.includes('localhost')) {
+    return process.env.NEXT_PUBLIC_APP_URL;
+  }
+  
+  // 从请求头中获取host
+  const url = new URL(request.url);
+  const host = request.headers.get('host') || url.host;
+  
+  // 判断协议 - 生产环境使用https
+  const protocol = host.includes('localhost') ? 'http' : 'https';
+  
+  return `${protocol}://${host}`;
+}
+
 export async function GET(request: Request) {
   try {
     // 从环境变量读取支付配置
@@ -31,14 +49,19 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "支付服务未配置" }, { status: 503 });
     }
 
+    // 动态获取基础URL
+    const baseUrl = getBaseUrl(request);
+    console.log("🌐 当前基础URL:", baseUrl);
+
     const { searchParams } = new URL(request.url);
     const productId = searchParams.get("productId");
+    const userId = searchParams.get("userId");
     const product = PRODUCTS.find((p) => p.id === productId);
     const price = product ? (product.priceInCents / 100).toFixed(2) : "0.01";
     
     // 依然用英文标题，稳
     const safeTitle = "VIP_Service"; 
-    const tradeOrderId = `ORDER_${Date.now()}`;
+    const tradeOrderId = `ORDER_${Date.now()}_${userId || 'anonymous'}`;
 
     const params: any = {
       version: "1.1",
@@ -49,8 +72,8 @@ export async function GET(request: Request) {
       time: Math.floor(Date.now() / 1000).toString(),
       nonce_str: Math.floor(Math.random() * 1000000).toString(),
       type: "WAP", 
-      wap_url: "http://localhost:3000", 
-      notify_url: "http://localhost:3000/api/payment/callback", 
+      wap_url: baseUrl, 
+      notify_url: `${baseUrl}/api/payment/xunhupay/notify`, 
     };
 
     // 计算签名
@@ -71,7 +94,7 @@ export async function GET(request: Request) {
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
         // 加上 Referer 防止被拦截
-        "Referer": "http://localhost:3000",
+        "Referer": baseUrl,
       },
       body: formData,
     });
