@@ -22,9 +22,7 @@ function gen_sign(params: any, appSecret: string) {
 
 // 获取当前请求的基础URL
 function getBaseUrl(request: Request): string {
-  // 优先使用环境变量中配置的URL
   if (process.env.NEXT_PUBLIC_APP_URL && !process.env.NEXT_PUBLIC_APP_URL.includes('localhost')) {
-    // 确保URL包含www
     let url = process.env.NEXT_PUBLIC_APP_URL;
     if (!url.includes('www.') && url.includes('shenxiang.school')) {
       url = url.replace('https://', 'https://www.');
@@ -32,7 +30,6 @@ function getBaseUrl(request: Request): string {
     return url;
   }
   
-  // 从请求头中获取host
   const url = new URL(request.url);
   const host = request.headers.get('host') || url.host;
   const protocol = host.includes('localhost') ? 'http' : 'https';
@@ -42,23 +39,20 @@ function getBaseUrl(request: Request): string {
 
 export async function GET(request: Request) {
   try {
-    // 从环境变量读取支付配置
     const APP_ID = process.env.XUNHUPAY_APPID;
     const APP_SECRET = process.env.XUNHUPAY_APPSECRET;
     
     if (!APP_ID || !APP_SECRET) {
-      console.error("❌ 支付配置缺失：XUNHUPAY_APPID 或 XUNHUPAY_APPSECRET 未设置");
+      console.error("❌ 支付配置缺失");
       return NextResponse.json({ error: "支付服务未配置" }, { status: 503 });
     }
 
-    // 动态获取基础URL
     const baseUrl = getBaseUrl(request);
     console.log("🌐 当前基础URL:", baseUrl);
 
     const { searchParams } = new URL(request.url);
     const productId = searchParams.get("productId");
     const userId = searchParams.get("userId");
-    const billing = searchParams.get("billing") || "monthly";
     
     if (!userId) {
       return NextResponse.json({ error: "缺少用户ID" }, { status: 400 });
@@ -73,9 +67,7 @@ export async function GET(request: Request) {
     const safeTitle = "VIP_Service"; 
     const tradeOrderId = `ORDER_${Date.now()}_${userId}`;
 
-    // =========================================================
-    // 1. 在数据库中创建订单记录（重要！回调时需要查询）
-    // =========================================================
+    // 1. 在数据库中创建订单记录
     const supabaseAdmin = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -88,7 +80,7 @@ export async function GET(request: Request) {
         user_id: userId,
         product_id: productId,
         product_name: product.name,
-        amount: product.priceInCents / 100, // 转换为元
+        amount: product.priceInCents / 100,
         status: 'pending',
         payment_method: 'xunhupay',
       });
@@ -100,9 +92,7 @@ export async function GET(request: Request) {
 
     console.log("✅ 订单创建成功:", tradeOrderId);
 
-    // =========================================================
     // 2. 构建迅虎支付参数
-    // =========================================================
     const params: any = {
       version: "1.1",
       appid: APP_ID,
@@ -116,28 +106,56 @@ export async function GET(request: Request) {
       notify_url: `${baseUrl}/api/payment/xunhupay/notify`, 
     };
 
-    // 计算签名
     params.hash = gen_sign(params, APP_SECRET);
 
-    console.log("📤 [后端] 生成的支付参数:", params);
+    console.log("📤 请求迅虎支付参数:", params);
 
-    // =========================================================
-    // 3. 返回签名后的参数和URL，让前端直接跳转
-    // =========================================================
+    // 3. 调用迅虎支付API获取真正的支付链接
+    const formData = new URLSearchParams(params);
     
-    // 构建GET请求URL
-    const queryString = new URLSearchParams(params).toString();
-    const redirectUrl = `https://api.xunhupay.com/payment/do.html?${queryString}`;
+    const response = await fetch("https://api.xunhupay.com/payment/do.html", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "User-Agent": "Mozilla/5.0 (compatible; ShenxiangSchool/1.0)",
+        "Accept": "application/json",
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("❌ 迅虎返回错误:", response.status, errorText);
+      return NextResponse.json({ 
+        error: `迅虎支付返回错误: ${response.status}`,
+        details: errorText
+      }, { status: 500 });
+    }
+
+    const data = await response.json();
+    console.log("✅ 迅虎返回:", data);
+
+    // 4. 检查返回结果
+    if (data.errcode !== 0) {
+      console.error("❌ 迅虎支付错误:", data);
+      return NextResponse.json({ 
+        error: data.errmsg || "支付创建失败",
+        code: data.errcode
+      }, { status: 500 });
+    }
+
+    // 5. 返回支付链接
+    const payUrl = data.url || data.url_qrcode;
     
+    if (!payUrl) {
+      console.error("❌ 未获取到支付链接:", data);
+      return NextResponse.json({ error: "未获取到支付链接" }, { status: 500 });
+    }
+
     return NextResponse.json({ 
       success: true,
       orderNo: tradeOrderId,
-      // 返回迅虎支付的API地址
-      paymentUrl: "https://api.xunhupay.com/payment/do.html",
-      // 返回签名后的参数（用于POST表单提交）
-      params: params,
-      // 返回直接跳转的URL（GET方式）
-      url: redirectUrl
+      url: payUrl
     });
 
   } catch (error: any) {
