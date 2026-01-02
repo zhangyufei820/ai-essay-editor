@@ -88,12 +88,9 @@ export async function GET(request: Request) {
         user_id: userId,
         product_id: productId,
         product_name: product.name,
-        amount: product.priceInCents,
+        amount: product.priceInCents / 100, // 转换为元
         status: 'pending',
         payment_method: 'xunhupay',
-        billing_cycle: billing,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
       });
 
     if (orderError) {
