@@ -89,18 +89,49 @@ export async function GET(request: Request) {
     console.log("🚀 [后端] 正在请求迅虎接口获取支付页...");
 
     // 2. 发起请求 (这次签名对了，所以不会报错了)
-    const response = await fetch("https://api.xunhupay.com/payment/do.html", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        // 加上 Referer 防止被拦截
-        "Referer": baseUrl,
-      },
-      body: formData,
-    });
+    console.log("📤 [后端] 请求参数:", Object.fromEntries(formData));
+    
+    let response;
+    try {
+      response = await fetch("https://api.xunhupay.com/payment/do.html", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "User-Agent": "Mozilla/5.0 (compatible; ShenxiangSchool/1.0)",
+        },
+        body: formData,
+      });
+    } catch (fetchError: any) {
+      console.error("❌ [后端] fetch请求失败:", fetchError.message, fetchError.cause);
+      return NextResponse.json({ 
+        error: `网络请求失败: ${fetchError.message}`,
+        details: fetchError.cause?.code || 'UNKNOWN'
+      }, { status: 500 });
+    }
 
-    // 3. 解析你刚才看到的那个 JSON
-    const data = await response.json();
+    // 3. 检查响应状态
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("❌ [后端] 迅虎返回错误:", response.status, errorText);
+      return NextResponse.json({ 
+        error: `迅虎支付返回错误: ${response.status}`,
+        details: errorText
+      }, { status: 500 });
+    }
+
+    // 4. 解析JSON响应
+    let data;
+    try {
+      data = await response.json();
+    } catch (jsonError) {
+      const text = await response.text();
+      console.error("❌ [后端] JSON解析失败:", text);
+      return NextResponse.json({ 
+        error: "响应解析失败",
+        details: text
+      }, { status: 500 });
+    }
+    
     console.log("✅ [后端] 迅虎返回成功:", data);
 
     // 4. 提取真正的支付链接
