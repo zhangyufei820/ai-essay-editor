@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { PRODUCTS } from "@/lib/products"; 
 
-// 1. 签名算法 (保持你验证成功的这个版本：直接拼接)
+// 签名算法
 function gen_sign(params: any, appSecret: string) {
   const sortedKeys = Object.keys(params).sort();
   const kvPairs = [];
@@ -13,7 +13,6 @@ function gen_sign(params: any, appSecret: string) {
     }
   }
   
-  // 核心：直接拼接密钥，无连接符
   let stringA = kvPairs.join("&");
   let stringSignTemp = stringA + appSecret;
   
@@ -24,14 +23,17 @@ function gen_sign(params: any, appSecret: string) {
 function getBaseUrl(request: Request): string {
   // 优先使用环境变量中配置的URL
   if (process.env.NEXT_PUBLIC_APP_URL && !process.env.NEXT_PUBLIC_APP_URL.includes('localhost')) {
-    return process.env.NEXT_PUBLIC_APP_URL;
+    // 确保URL包含www
+    let url = process.env.NEXT_PUBLIC_APP_URL;
+    if (!url.includes('www.') && url.includes('shenxiang.school')) {
+      url = url.replace('https://', 'https://www.');
+    }
+    return url;
   }
   
   // 从请求头中获取host
   const url = new URL(request.url);
   const host = request.headers.get('host') || url.host;
-  
-  // 判断协议 - 生产环境使用https
   const protocol = host.includes('localhost') ? 'http' : 'https';
   
   return `${protocol}://${host}`;
@@ -58,7 +60,6 @@ export async function GET(request: Request) {
     const product = PRODUCTS.find((p) => p.id === productId);
     const price = product ? (product.priceInCents / 100).toFixed(2) : "0.01";
     
-    // 依然用英文标题，稳
     const safeTitle = "VIP_Service"; 
     const tradeOrderId = `ORDER_${Date.now()}_${userId || 'anonymous'}`;
 
@@ -78,47 +79,26 @@ export async function GET(request: Request) {
     // 计算签名
     params.hash = gen_sign(params, APP_SECRET);
 
-    // 组装请求参数
-    const formData = new URLSearchParams(params);
+    console.log("📤 [后端] 生成的支付参数:", params);
 
-    console.log("🚀 [后端] 正在请求迅虎接口获取支付页...");
-    console.log("📤 [后端] 请求参数:", Object.fromEntries(formData));
-
-    // 发起请求到迅虎支付
-    const response = await fetch("https://api.xunhupay.com/payment/do.html", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "User-Agent": "Mozilla/5.0 (compatible; ShenxiangSchool/1.0)",
-        "Accept": "application/json",
-      },
-      body: formData,
+    // =========================================================
+    // 方案：返回签名后的参数和URL，让前端直接跳转
+    // 这样可以绕过 Vercel 服务器无法访问中国API的问题
+    // =========================================================
+    
+    // 构建GET请求URL
+    const queryString = new URLSearchParams(params).toString();
+    const redirectUrl = `https://api.xunhupay.com/payment/do.html?${queryString}`;
+    
+    return NextResponse.json({ 
+      success: true,
+      // 返回迅虎支付的API地址
+      paymentUrl: "https://api.xunhupay.com/payment/do.html",
+      // 返回签名后的参数（用于POST表单提交）
+      params: params,
+      // 返回直接跳转的URL（GET方式）
+      url: redirectUrl
     });
-
-    // 检查响应状态
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("❌ [后端] 迅虎返回错误:", response.status, errorText);
-      return NextResponse.json({ 
-        error: `迅虎支付返回错误: ${response.status}`,
-        details: errorText
-      }, { status: 500 });
-    }
-
-    // 解析JSON响应
-    const data = await response.json();
-    console.log("✅ [后端] 迅虎返回成功:", data);
-
-    // 提取真正的支付链接
-    // 优先用 url (通用)，如果没返回 url 则用 url_qrcode
-    const finalPayUrl = data.url || data.url_qrcode;
-
-    if (finalPayUrl) {
-       // 返回给前端，让前端直接跳这个地址
-       return NextResponse.json({ url: finalPayUrl });
-    } else {
-       throw new Error("未获取到支付链接: " + JSON.stringify(data));
-    }
 
   } catch (error: any) {
     console.error("❌ API Error:", error);
