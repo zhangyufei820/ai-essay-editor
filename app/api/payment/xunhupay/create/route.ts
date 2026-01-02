@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { PRODUCTS } from "@/lib/products"; 
+import { createClient } from '@supabase/supabase-js'
 
 // 签名算法
 function gen_sign(params: any, appSecret: string) {
@@ -57,12 +58,54 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const productId = searchParams.get("productId");
     const userId = searchParams.get("userId");
-    const product = PRODUCTS.find((p) => p.id === productId);
-    const price = product ? (product.priceInCents / 100).toFixed(2) : "0.01";
+    const billing = searchParams.get("billing") || "monthly";
     
+    if (!userId) {
+      return NextResponse.json({ error: "缺少用户ID" }, { status: 400 });
+    }
+    
+    const product = PRODUCTS.find((p) => p.id === productId);
+    if (!product) {
+      return NextResponse.json({ error: "产品不存在" }, { status: 404 });
+    }
+    
+    const price = (product.priceInCents / 100).toFixed(2);
     const safeTitle = "VIP_Service"; 
-    const tradeOrderId = `ORDER_${Date.now()}_${userId || 'anonymous'}`;
+    const tradeOrderId = `ORDER_${Date.now()}_${userId}`;
 
+    // =========================================================
+    // 1. 在数据库中创建订单记录（重要！回调时需要查询）
+    // =========================================================
+    const supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+
+    const { error: orderError } = await supabaseAdmin
+      .from('orders')
+      .insert({
+        order_no: tradeOrderId,
+        user_id: userId,
+        product_id: productId,
+        product_name: product.name,
+        amount: product.priceInCents,
+        status: 'pending',
+        payment_method: 'xunhupay',
+        billing_cycle: billing,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+
+    if (orderError) {
+      console.error("❌ 创建订单失败:", orderError);
+      return NextResponse.json({ error: "创建订单失败" }, { status: 500 });
+    }
+
+    console.log("✅ 订单创建成功:", tradeOrderId);
+
+    // =========================================================
+    // 2. 构建迅虎支付参数
+    // =========================================================
     const params: any = {
       version: "1.1",
       appid: APP_ID,
@@ -82,8 +125,7 @@ export async function GET(request: Request) {
     console.log("📤 [后端] 生成的支付参数:", params);
 
     // =========================================================
-    // 方案：返回签名后的参数和URL，让前端直接跳转
-    // 这样可以绕过 Vercel 服务器无法访问中国API的问题
+    // 3. 返回签名后的参数和URL，让前端直接跳转
     // =========================================================
     
     // 构建GET请求URL
@@ -92,6 +134,7 @@ export async function GET(request: Request) {
     
     return NextResponse.json({ 
       success: true,
+      orderNo: tradeOrderId,
       // 返回迅虎支付的API地址
       paymentUrl: "https://api.xunhupay.com/payment/do.html",
       // 返回签名后的参数（用于POST表单提交）
