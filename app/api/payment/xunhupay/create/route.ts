@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { PRODUCTS } from "@/lib/products"; 
-import { headers } from "next/headers";
 
 // 1. 签名算法 (保持你验证成功的这个版本：直接拼接)
 function gen_sign(params: any, appSecret: string) {
@@ -79,54 +78,24 @@ export async function GET(request: Request) {
     // 计算签名
     params.hash = gen_sign(params, APP_SECRET);
 
-    // =========================================================
-    // 🚨 关键升级：后端自动帮你在迅虎拿“入场券”
-    // =========================================================
-    
-    // 1. 组装请求参数
+    // 组装请求参数
     const formData = new URLSearchParams(params);
 
     console.log("🚀 [后端] 正在请求迅虎接口获取支付页...");
-
-    // 2. 发起请求 (这次签名对了，所以不会报错了)
     console.log("📤 [后端] 请求参数:", Object.fromEntries(formData));
-    
-    let response;
-    try {
-      // 添加超时控制 - Vercel Serverless 默认10秒超时
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 8000); // 8秒超时
-      
-      response = await fetch("https://api.xunhupay.com/payment/do.html", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-          "User-Agent": "Mozilla/5.0 (compatible; ShenxiangSchool/1.0)",
-          "Accept": "application/json",
-        },
-        body: formData,
-        signal: controller.signal,
-      });
-      
-      clearTimeout(timeoutId);
-    } catch (fetchError: any) {
-      console.error("❌ [后端] fetch请求失败:", fetchError.message, fetchError.cause);
-      
-      // 检查是否是超时错误
-      if (fetchError.name === 'AbortError') {
-        return NextResponse.json({ 
-          error: "支付服务响应超时，请稍后重试",
-          details: 'TIMEOUT'
-        }, { status: 504 });
-      }
-      
-      return NextResponse.json({ 
-        error: `网络请求失败: ${fetchError.message}`,
-        details: fetchError.cause?.code || fetchError.name || 'UNKNOWN'
-      }, { status: 500 });
-    }
 
-    // 3. 检查响应状态
+    // 发起请求到迅虎支付
+    const response = await fetch("https://api.xunhupay.com/payment/do.html", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "User-Agent": "Mozilla/5.0 (compatible; ShenxiangSchool/1.0)",
+        "Accept": "application/json",
+      },
+      body: formData,
+    });
+
+    // 检查响应状态
     if (!response.ok) {
       const errorText = await response.text();
       console.error("❌ [后端] 迅虎返回错误:", response.status, errorText);
@@ -136,22 +105,11 @@ export async function GET(request: Request) {
       }, { status: 500 });
     }
 
-    // 4. 解析JSON响应
-    let data;
-    try {
-      data = await response.json();
-    } catch (jsonError) {
-      const text = await response.text();
-      console.error("❌ [后端] JSON解析失败:", text);
-      return NextResponse.json({ 
-        error: "响应解析失败",
-        details: text
-      }, { status: 500 });
-    }
-    
+    // 解析JSON响应
+    const data = await response.json();
     console.log("✅ [后端] 迅虎返回成功:", data);
 
-    // 4. 提取真正的支付链接
+    // 提取真正的支付链接
     // 优先用 url (通用)，如果没返回 url 则用 url_qrcode
     const finalPayUrl = data.url || data.url_qrcode;
 
