@@ -93,19 +93,36 @@ export async function GET(request: Request) {
     
     let response;
     try {
+      // 添加超时控制 - Vercel Serverless 默认10秒超时
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000); // 8秒超时
+      
       response = await fetch("https://api.xunhupay.com/payment/do.html", {
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
           "User-Agent": "Mozilla/5.0 (compatible; ShenxiangSchool/1.0)",
+          "Accept": "application/json",
         },
         body: formData,
+        signal: controller.signal,
       });
+      
+      clearTimeout(timeoutId);
     } catch (fetchError: any) {
       console.error("❌ [后端] fetch请求失败:", fetchError.message, fetchError.cause);
+      
+      // 检查是否是超时错误
+      if (fetchError.name === 'AbortError') {
+        return NextResponse.json({ 
+          error: "支付服务响应超时，请稍后重试",
+          details: 'TIMEOUT'
+        }, { status: 504 });
+      }
+      
       return NextResponse.json({ 
         error: `网络请求失败: ${fetchError.message}`,
-        details: fetchError.cause?.code || 'UNKNOWN'
+        details: fetchError.cause?.code || fetchError.name || 'UNKNOWN'
       }, { status: 500 });
     }
 
