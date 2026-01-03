@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { 
-  Gift, Copy, Check, ChevronLeft, Heart, Users, Sparkles, 
-  PartyPopper, Star, ArrowRight, Share2
+  Gift, Copy, Check, ChevronLeft, Heart, Sparkles, 
+  PartyPopper, Share2
 } from "lucide-react"
 import { toast } from "sonner"
 import { createClient } from "@supabase/supabase-js"
@@ -32,6 +32,7 @@ export default function InvitePage() {
   const [copied, setCopied] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isPaidMember, setIsPaidMember] = useState(false)
+  const [checkingMembership, setCheckingMembership] = useState(false)
 
   useEffect(() => {
     loadUserData()
@@ -86,19 +87,20 @@ export default function InvitePage() {
           setTotalReward(total)
         }
 
-        // 🔥 检查是否为付费会员：查询订单表中是否有成功的付费订单
-        const { data: orders } = await supabase
-          .from('orders')
-          .select('id, status, amount')
-          .eq('user_id', userId)
-          .eq('status', 'paid')
-          .gt('amount', 0)
-          .limit(1)
-
-        // 有任何成功的付费订单即为付费会员
-        const hasPaidOrder = !!(orders && orders.length > 0)
-        console.log('🔍 [邀请页] 会员检查:', { userId: userId.slice(0, 8), hasPaidOrder, ordersCount: orders?.length })
-        setIsPaidMember(hasPaidOrder)
+        // 🔥 使用后端 API 检查会员状态（绕过 RLS）
+        try {
+          const response = await fetch('/api/user/membership', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId })
+          })
+          const result = await response.json()
+          console.log('🔍 [邀请页] 会员检查结果:', result)
+          setIsPaidMember(result.isPaidMember === true)
+        } catch (e) {
+          console.error('会员检查失败:', e)
+          setIsPaidMember(false)
+        }
       }
     } catch (e) {
       console.error("加载用户数据失败:", e)
@@ -131,19 +133,32 @@ export default function InvitePage() {
     }
   }
 
-  const handleShare = async () => {
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: '沈翔智学 - 邀请你一起学习',
-          text: `我在用沈翔智学，AI智能批改作文超好用！用我的邀请链接注册，我们都能获得1000积分奖励！`,
-          url: inviteLink
-        })
-      } catch (e) {
-        // 用户取消分享
+  // 🔥 核心逻辑：点击"立即分享"按钮
+  const handleShareClick = async () => {
+    // 如果是会员，执行分享
+    if (isPaidMember) {
+      if (navigator.share) {
+        try {
+          await navigator.share({
+            title: '沈翔智学 - 邀请你一起学习',
+            text: `我在用沈翔智学，AI智能批改作文超好用！用我的邀请链接注册，我们都能获得1000积分奖励！`,
+            url: inviteLink
+          })
+        } catch (e) {
+          // 用户取消分享，改为复制
+          handleCopy()
+        }
+      } else {
+        handleCopy()
       }
     } else {
-      handleCopy()
+      // 非会员，跳转到订阅页面
+      toast.info("成为会员后即可分享邀请链接", {
+        description: "正在跳转到订阅页面..."
+      })
+      setTimeout(() => {
+        router.push('/pricing')
+      }, 500)
     }
   }
 
@@ -206,57 +221,65 @@ export default function InvitePage() {
           transition={{ delay: 0.1 }}
           className="bg-white rounded-2xl shadow-lg border border-slate-100 p-6 md:p-8 mb-8"
         >
-          {isPaidMember ? (
-            <>
-              <div className="flex items-center gap-3 mb-6">
-                <div 
-                  className="w-12 h-12 rounded-xl flex items-center justify-center"
-                  style={{ backgroundColor: BRAND_GREEN_LIGHT }}
-                >
-                  <Gift className="w-6 h-6" style={{ color: BRAND_GREEN }} />
-                </div>
-                <div>
-                  <h2 className="text-xl font-semibold text-slate-800">您的专属邀请链接</h2>
-                  <p className="text-sm text-slate-500">分享给好友，双方各得 1000 积分</p>
-                </div>
-              </div>
+          <div className="flex items-center gap-3 mb-6">
+            <div 
+              className="w-12 h-12 rounded-xl flex items-center justify-center"
+              style={{ backgroundColor: BRAND_GREEN_LIGHT }}
+            >
+              <Gift className="w-6 h-6" style={{ color: BRAND_GREEN }} />
+            </div>
+            <div>
+              <h2 className="text-xl font-semibold text-slate-800">邀请好友，共享奖励</h2>
+              <p className="text-sm text-slate-500">分享给好友，双方各得 1000 积分</p>
+            </div>
+          </div>
 
-              {/* 邀请链接输入框 */}
-              <div className="flex gap-3 mb-6">
-                <div className="flex-1 bg-slate-50 rounded-xl px-4 py-3 text-slate-600 text-sm truncate border border-slate-200">
-                  {inviteLink}
-                </div>
-                <Button
-                  onClick={handleCopy}
-                  className="shrink-0 text-white px-6"
-                  style={{ backgroundColor: BRAND_GREEN }}
-                >
-                  {copied ? (
-                    <>
-                      <Check className="w-4 h-4 mr-2" />
-                      已复制
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-4 h-4 mr-2" />
-                      复制链接
-                    </>
-                  )}
-                </Button>
+          {/* 邀请链接输入框（会员可见） */}
+          {isPaidMember && (
+            <div className="flex gap-3 mb-6">
+              <div className="flex-1 bg-slate-50 rounded-xl px-4 py-3 text-slate-600 text-sm truncate border border-slate-200">
+                {inviteLink}
               </div>
-
-              {/* 分享按钮 */}
               <Button
-                onClick={handleShare}
-                variant="outline"
-                className="w-full h-12 text-base border-2"
-                style={{ borderColor: BRAND_GREEN, color: BRAND_GREEN }}
+                onClick={handleCopy}
+                className="shrink-0 text-white px-6"
+                style={{ backgroundColor: BRAND_GREEN }}
               >
-                <Share2 className="w-5 h-5 mr-2" />
-                分享给好友
+                {copied ? (
+                  <>
+                    <Check className="w-4 h-4 mr-2" />
+                    已复制
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-4 h-4 mr-2" />
+                    复制链接
+                  </>
+                )}
               </Button>
+            </div>
+          )}
 
-              {/* 邀请统计 */}
+          {/* 🔥 核心按钮：始终显示"立即分享" */}
+          <Button
+            onClick={handleShareClick}
+            className="w-full h-12 text-base text-white"
+            style={{ backgroundColor: BRAND_GREEN }}
+          >
+            <Share2 className="w-5 h-5 mr-2" />
+            立即分享
+          </Button>
+
+          {/* 非会员提示 */}
+          {!isPaidMember && (
+            <p className="text-center text-sm text-slate-400 mt-4">
+              成为会员后即可获得专属邀请链接
+            </p>
+          )}
+
+          {/* 邀请统计（会员可见） */}
+          {isPaidMember && (
+            <>
               <div className="mt-8 grid grid-cols-2 gap-4">
                 <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-4 text-center">
                   <div className="text-3xl font-bold" style={{ color: BRAND_GREEN_DARK }}>{inviteCount}</div>
@@ -290,30 +313,6 @@ export default function InvitePage() {
                 )}
               </div>
             </>
-          ) : (
-            /* 非付费会员提示 */
-            <div className="text-center py-8">
-              <div 
-                className="w-20 h-20 rounded-full mx-auto mb-6 flex items-center justify-center"
-                style={{ backgroundColor: BRAND_GREEN_LIGHT }}
-              >
-                <Star className="w-10 h-10" style={{ color: BRAND_GREEN }} />
-              </div>
-              <h2 className="text-xl font-semibold text-slate-800 mb-3">
-                成为会员，开启邀请奖励
-              </h2>
-              <p className="text-slate-500 mb-6 max-w-md mx-auto">
-                付费会员可以通过邀请好友获得积分奖励。升级会员后，您将获得专属邀请链接。
-              </p>
-              <Button
-                onClick={() => router.push('/pricing')}
-                className="text-white px-8 h-12 text-base"
-                style={{ backgroundColor: BRAND_GREEN }}
-              >
-                立即升级会员
-                <ArrowRight className="w-5 h-5 ml-2" />
-              </Button>
-            </div>
           )}
         </motion.div>
 
