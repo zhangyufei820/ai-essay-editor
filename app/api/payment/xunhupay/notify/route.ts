@@ -3,6 +3,19 @@ import { createServerClient } from "@/lib/supabase/server"
 import { verifyXunhupaySign } from "@/lib/xunhupay"
 import { addCredits } from "@/lib/credits"
 
+// 🔥 产品积分映射表（与 lib/products.ts 保持一致）
+const PRODUCT_CREDITS: Record<string, number> = {
+  // 订阅套餐
+  "basic": 2000,      // 基础版 28元 → 2000积分
+  "pro": 5000,        // 专业版 68元 → 5000积分
+  "premium": 12000,   // 豪华版 128元 → 12000积分
+  // 积分充值包
+  "credits-500": 500,
+  "credits-1000": 1000,
+  "credits-5000": 5000,
+  "credits-10000": 10000,
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
@@ -56,11 +69,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "更新订单失败" }, { status: 500 })
     }
 
-    // 计算并增加积分（假设1元 = 100积分）
-    const credits = Math.floor(Number.parseFloat(total_fee) * 100)
-    console.log(`[迅虎支付] 准备为用户 ${order.user_id} 增加 ${credits} 积分，订单金额: ${total_fee}`)
+    // 🔥 根据产品 ID 确定积分数量
+    let credits = PRODUCT_CREDITS[order.product_id]
     
-    const success = await addCredits(order.user_id, credits, "purchase", `购买${order.product_name}获得积分`, order.id)
+    // 如果产品 ID 不在映射表中，使用备用计算（1元 = 100积分）
+    if (!credits) {
+      credits = Math.floor(Number.parseFloat(total_fee) * 100)
+      console.warn(`[迅虎支付] 产品 ${order.product_id} 不在积分映射表中，使用备用计算: ${credits} 积分`)
+    }
+    
+    console.log(`[迅虎支付] 准备为用户 ${order.user_id} 增加 ${credits} 积分，产品: ${order.product_id}, 订单金额: ${total_fee}`)
+    
+    const success = await addCredits(order.user_id, credits, "purchase", `购买${order.product_name}获得${credits}积分`, order.id)
 
     if (!success) {
       console.error(`[迅虎支付] 增加积分失败，用户ID: ${order.user_id}, 积分: ${credits}`)
