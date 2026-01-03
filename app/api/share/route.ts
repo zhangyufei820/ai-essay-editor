@@ -36,9 +36,18 @@ function extractTitle(messages: Array<{role: string, content: string}>): string 
 }
 
 export async function POST(request: NextRequest) {
+  console.log('🔗 [Share API] 收到分享请求')
+  
   try {
     const body = await request.json()
     const { messages, userId, modelName } = body
+    
+    console.log('🔗 [Share API] 请求参数:', {
+      hasMessages: !!messages,
+      messagesCount: messages?.length,
+      userId: userId?.slice(0, 8) + '...',
+      modelName
+    })
 
     // 🔥 支持两种格式：messages 数组（对话）或 content 字符串（单条内容）
     let contentToSave: string
@@ -60,14 +69,27 @@ export async function POST(request: NextRequest) {
       })
       title = body.content.slice(0, 30).replace(/\n/g, ' ') + '...'
     } else {
+      console.error('🔗 [Share API] 内容为空')
       return NextResponse.json({ error: '内容不能为空' }, { status: 400 })
     }
 
+    // 🔥 检查环境变量
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    
+    console.log('🔗 [Share API] 环境变量检查:', {
+      hasSupabaseUrl: !!supabaseUrl,
+      hasServiceRoleKey: !!serviceRoleKey,
+      serviceRoleKeyLength: serviceRoleKey?.length
+    })
+    
+    if (!supabaseUrl || !serviceRoleKey) {
+      console.error('🔗 [Share API] 缺少环境变量')
+      return NextResponse.json({ error: '服务配置错误' }, { status: 500 })
+    }
+
     // 使用 Service Role Key 创建管理员客户端
-    const supabaseAdmin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    )
+    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey)
 
     // 生成唯一的分享 ID
     let shareId = generateShareId()
@@ -88,6 +110,8 @@ export async function POST(request: NextRequest) {
     }
 
     // 插入分享记录
+    console.log('🔗 [Share API] 准备插入数据:', { shareId, title, contentLength: contentToSave.length })
+    
     const { data, error } = await supabaseAdmin
       .from('shared_content')
       .insert({
@@ -101,9 +125,25 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (error) {
-      console.error('创建分享失败:', error)
-      return NextResponse.json({ error: '创建分享失败' }, { status: 500 })
+      console.error('🔗 [Share API] 创建分享失败:', {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint
+      })
+      
+      // 🔥 特殊处理：表不存在的错误
+      if (error.code === '42P01' || error.message?.includes('does not exist')) {
+        return NextResponse.json({ 
+          error: '分享功能暂未开放，请联系管理员',
+          detail: '数据库表未创建'
+        }, { status: 503 })
+      }
+      
+      return NextResponse.json({ error: '创建分享失败: ' + error.message }, { status: 500 })
     }
+    
+    console.log('🔗 [Share API] 分享创建成功:', { shareId, title })
 
     // 构建分享链接
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://www.shenxiang.school'

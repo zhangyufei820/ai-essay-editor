@@ -9,10 +9,10 @@
 // A. 生成 API (Chatflow) - 用于提交提示词
 // ============================================
 export const SUNO_GENERATE_CONFIG = {
-  baseUrl: "https://api.dify.ai/v1",
+  baseUrl: "http://43.154.111.156/v1",
   endpoint: "/chat-messages",
   // API Key 从环境变量读取，此处仅作为备用默认值
-  apiKey: process.env.NEXT_PUBLIC_SUNO_GENERATE_API_KEY || "app-Tyc34BR5WMyrRUqg1dcuO42m",
+  apiKey: process.env.NEXT_PUBLIC_SUNO_GENERATE_API_KEY || "app-aUM5wY1ACN5M0zHkMdijZCcC",
   method: "POST" as const,
 }
 
@@ -20,10 +20,10 @@ export const SUNO_GENERATE_CONFIG = {
 // B. 查询 API (Workflow) - 用于轮询进度
 // ============================================
 export const SUNO_QUERY_CONFIG = {
-  baseUrl: "https://api.dify.ai/v1",
+  baseUrl: "http://43.154.111.156/v1",
   endpoint: "/workflows/run",
   // API Key 从环境变量读取，此处仅作为备用默认值
-  apiKey: process.env.NEXT_PUBLIC_SUNO_QUERY_API_KEY || "app-5qpzXBthRSYKSnTRIfW55aZ3",
+  apiKey: process.env.NEXT_PUBLIC_SUNO_QUERY_API_KEY || "app-XenDdavZwSjiEHd2SyiTfECc",
   method: "POST" as const,
 }
 
