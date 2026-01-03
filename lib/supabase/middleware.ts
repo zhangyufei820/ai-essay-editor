@@ -8,7 +8,7 @@ const PROTECTED_API_ROUTES = [
   "/api/chat-session",
   "/api/save-message",
   "/api/save-essay-review",
-  "/api/user/update",
+  // 注意：/api/user/update 已移除，因为该 API 内部有完整的用户验证逻辑
 ]
 
 // 公开的 API 路由（不需要验证）
