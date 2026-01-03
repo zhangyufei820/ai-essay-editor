@@ -86,15 +86,19 @@ export default function InvitePage() {
           setTotalReward(total)
         }
 
-        // 检查是否为付费会员（简单判断：积分 > 1000 或有购买记录）
-        const { data: credits } = await supabase
-          .from('user_credits')
-          .select('credits, total_earned')
+        // 🔥 检查是否为付费会员：查询订单表中是否有成功的付费订单
+        const { data: orders } = await supabase
+          .from('orders')
+          .select('id, status, amount')
           .eq('user_id', userId)
-          .single()
+          .eq('status', 'paid')
+          .gt('amount', 0)
+          .limit(1)
 
-        // 这里简化判断，实际可以检查订单表
-        setIsPaidMember(credits?.total_earned > 1000 || credits?.credits > 5000)
+        // 有任何成功的付费订单即为付费会员
+        const hasPaidOrder = !!(orders && orders.length > 0)
+        console.log('🔍 [邀请页] 会员检查:', { userId: userId.slice(0, 8), hasPaidOrder, ordersCount: orders?.length })
+        setIsPaidMember(hasPaidOrder)
       }
     } catch (e) {
       console.error("加载用户数据失败:", e)
