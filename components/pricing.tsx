@@ -15,10 +15,10 @@ const subscriptionPlans = [
     monthlyPrice: 28,
     annualPrice: 268.8,
     credits: 2000,
-    essaysPerMonth: 100,
+    essaysPerMonth: 13,
     features: [
       { text: "每月 2,000 积分", highlight: true },
-      { text: "(约可批改 100 篇作文)", subtext: true },
+      { text: "(约可批改 13 篇作文)", subtext: true },
       { text: "调用所有 AI 模型" },
       { text: "标准生成速度" },
       { text: "社区支持" },
@@ -33,10 +33,10 @@ const subscriptionPlans = [
     monthlyPrice: 68,
     annualPrice: 652.8,
     credits: 5000,
-    essaysPerMonth: 250,
+    essaysPerMonth: 33,
     features: [
       { text: "每月 5,000 积分", highlight: true },
-      { text: "(约可批改 250 篇作文)", subtext: true },
+      { text: "(约可批改 33 篇作文)", subtext: true },
       { text: "调用所有 AI 模型" },
       { text: "优先生成速度", highlight: true },
       { text: "高级润色工具", highlight: true },
@@ -52,10 +52,10 @@ const subscriptionPlans = [
     monthlyPrice: 128,
     annualPrice: 1228.8,
     credits: 12000,
-    essaysPerMonth: 600,
+    essaysPerMonth: 80,
     features: [
       { text: "每月 12,000 积分", highlight: true },
-      { text: "(约可批改 600 篇作文)", subtext: true },
+      { text: "(约可批改 80 篇作文)", subtext: true },
       { text: "调用三大顶尖模型 (Claude, Gemini, ChatGPT)", highlight: true },
       { text: "最高优先速度", highlight: true },
       { text: "高级润色工具" },
@@ -246,8 +246,8 @@ export function Pricing() {
               <Check className="w-5 h-5 text-primary mr-3 flex-shrink-0 mt-0.5" />
               <span>
                 <span className="font-bold text-gray-900">作文批改 (单次):</span> 约{" "}
-                <span className="font-bold text-primary">20 积分</span>
-                <span className="text-gray-500 text-sm ml-1">(按实际 Token 消耗计费)</span>
+                <span className="font-bold text-primary">150 积分</span>
+                <span className="font-semibold text-gray-700 text-sm ml-1">(按实际 Token 消耗计费)</span>
               </span>
             </li>
             <li className="flex items-start">
@@ -255,7 +255,7 @@ export function Pricing() {
               <span>
                 <span className="font-bold text-gray-900">AI 对话 (单次):</span> 约{" "}
                 <span className="font-bold text-primary">15-30 积分</span>
-                <span className="text-gray-500 text-sm ml-1">(根据对话长度浮动)</span>
+                <span className="font-semibold text-gray-700 text-sm ml-1">(根据对话长度浮动)</span>
               </span>
             </li>
             <li className="flex items-start">
@@ -263,7 +263,7 @@ export function Pricing() {
               <span>
                 <span className="font-bold text-gray-900">高级模型 (GPT/Claude/Gemini):</span> 约{" "}
                 <span className="font-bold text-primary">30-40 积分</span>
-                <span className="text-gray-500 text-sm ml-1">(单次对话)</span>
+                <span className="font-semibold text-gray-700 text-sm ml-1">(单次对话)</span>
               </span>
             </li>
             <li className="flex items-start">
@@ -271,11 +271,11 @@ export function Pricing() {
               <span>
                 <span className="font-bold text-gray-900">兑换名师辅导 (1次):</span> 消耗{" "}
                 <span className="font-bold text-primary">1000 积分</span>
-                <span className="text-gray-500 text-sm ml-1">(专业版/豪华版包含免费次数)</span>
+                <span className="font-semibold text-gray-700 text-sm ml-1">(专业版/豪华版包含免费次数)</span>
               </span>
             </li>
           </ul>
-          <p className="text-gray-500 text-sm mt-4">
+          <p className="text-gray-700 font-semibold text-sm mt-4">
             💡 提示：实际消耗根据输入输出的 Token 数量计算，以上为参考值。智能体服务 10积分/1K Token，独立模型 20积分/1K Token。
           </p>
         </div>
