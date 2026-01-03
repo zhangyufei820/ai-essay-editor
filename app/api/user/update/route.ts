@@ -1,13 +1,20 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 
-export const runtime = 'edge'
+// 🔥 移除 edge runtime，使用 Node.js runtime 以支持 admin API
+export const dynamic = 'force-dynamic'
 
 // 使用 Service Role Key (超级管理员权限)
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+function getSupabaseAdmin() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  
+  if (!url || !key) {
+    throw new Error('缺少 Supabase 配置')
+  }
+  
+  return createClient(url, key)
+}
 
 function isUUID(str: string) {
   const regex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -21,8 +28,13 @@ function getPureNumbers(str: any) {
 }
 
 export async function POST(req: NextRequest) {
+  console.log('[Admin Update] 收到更新请求')
+  
   try {
+    const supabaseAdmin = getSupabaseAdmin()
     let { userId, name, avatarUrl } = await req.json()
+
+    console.log('[Admin Update] 请求参数:', { userId: userId?.slice(0, 10), name, hasAvatar: !!avatarUrl })
 
     if (!userId) {
       return NextResponse.json({ error: "缺少 User ID" }, { status: 400 })
@@ -32,7 +44,7 @@ export async function POST(req: NextRequest) {
 
     // 1. 如果传进来的是 UUID，直接更新
     if (isUUID(userId)) {
-        // 直接走更新流程...
+        console.log('[Admin Update] 检测到 UUID 格式，直接更新')
     } 
     // 2. 如果不是 UUID，开启【全网通缉】模式
     else {
@@ -45,10 +57,13 @@ export async function POST(req: NextRequest) {
         perPage: 1000 
       })
       
-      if (listError) throw listError
+      if (listError) {
+        console.error('[Admin Update] 获取用户列表失败:', listError)
+        throw listError
+      }
 
       // 🕵️‍♂️ 深度比对
-      const targetUser = users.find(u => {
+      const targetUser = users.find((u: any) => {
         // A. 检查标准手机号字段
         const dbPhone = getPureNumbers(u.phone)
         // B. 检查邮箱字段 (有些人用手机号当邮箱注册)
@@ -71,7 +86,7 @@ export async function POST(req: NextRequest) {
         // 🛑 调试信息：如果找不到，打印前3个用户看看长什么样，方便排查
         console.error(`[Admin Update] ❌ 遍历了 ${users.length} 个用户仍未找到。`)
         if (users.length > 0) {
-            console.log("数据库里的用户样本:", users.slice(0, 3).map(u => ({ id: u.id, phone: u.phone, email: u.email })))
+            console.log("数据库里的用户样本:", users.slice(0, 3).map((u: any) => ({ id: u.id, phone: u.phone, email: u.email })))
         }
         
         return NextResponse.json({ 
@@ -81,6 +96,8 @@ export async function POST(req: NextRequest) {
     }
 
     // 3. 执行强制更新
+    console.log('[Admin Update] 执行更新:', { userId, name, hasAvatar: !!avatarUrl })
+    
     const { data, error } = await supabaseAdmin.auth.admin.updateUserById(
       userId,
       {
@@ -96,7 +113,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    console.log(`[Admin Update] 更新成功!`)
+    console.log(`[Admin Update] ✅ 更新成功!`)
     return NextResponse.json({ success: true, user: data.user })
 
   } catch (error: any) {
