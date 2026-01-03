@@ -48,8 +48,6 @@ export async function POST(request: NextRequest) {
       .update({
         status: "paid",
         trade_no: tradeNo,
-        paid_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
       })
       .eq("order_no", orderNo)
 
@@ -60,13 +58,15 @@ export async function POST(request: NextRequest) {
 
     // 计算并增加积分（假设1元 = 100积分）
     const credits = Math.floor(Number.parseFloat(total_fee) * 100)
+    console.log(`[迅虎支付] 准备为用户 ${order.user_id} 增加 ${credits} 积分，订单金额: ${total_fee}`)
+    
     const success = await addCredits(order.user_id, credits, "purchase", `购买${order.product_name}获得积分`, order.id)
 
     if (!success) {
-      console.error("[迅虎支付] 增加积分失败")
+      console.error(`[迅虎支付] 增加积分失败，用户ID: ${order.user_id}, 积分: ${credits}`)
+    } else {
+      console.log(`[迅虎支付] 订单 ${orderNo} 支付成功，用户 ${order.user_id} 增加 ${credits} 积分`)
     }
-
-    console.log(`[迅虎支付] 订单 ${orderNo} 支付成功，增加 ${credits} 积分`)
 
     return NextResponse.json({ success: true })
   } catch (error) {

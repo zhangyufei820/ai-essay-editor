@@ -2,8 +2,7 @@ import { createServerClient } from "@/lib/supabase/server"
 
 export interface UserCredits {
   credits: number
-  total_earned: number
-  total_spent: number
+  is_pro?: boolean
 }
 
 export interface CreditTransaction {
@@ -20,7 +19,7 @@ export async function getUserCredits(userId: string): Promise<UserCredits | null
 
   const { data, error } = await supabase
     .from("user_credits")
-    .select("credits, total_earned, total_spent")
+    .select("credits, is_pro")
     .eq("user_id", userId)
     .single()
 
@@ -52,7 +51,6 @@ export async function spendCredits(
     .from("user_credits")
     .update({
       credits: credits.credits - amount,
-      total_spent: credits.total_spent + amount,
       updated_at: new Date().toISOString(),
     })
     .eq("user_id", userId)
@@ -61,14 +59,6 @@ export async function spendCredits(
     console.error("Error updating credits:", updateError)
     return false
   }
-
-  // 记录交易
-  await supabase.from("credit_transactions").insert({
-    user_id: userId,
-    amount: -amount,
-    type,
-    description,
-  })
 
   return true
 }
@@ -83,15 +73,37 @@ export async function addCredits(
 ): Promise<boolean> {
   const supabase = await createServerClient()
 
-  const credits = await getUserCredits(userId)
-  if (!credits) return false
+  let credits = await getUserCredits(userId)
+  
+  // 如果用户积分记录不存在，先创建一条记录
+  if (!credits) {
+    console.log(`[积分系统] 用户 ${userId} 积分记录不存在，正在创建...`)
+    
+    const { error: insertError } = await supabase
+      .from("user_credits")
+      .insert({
+        user_id: userId,
+        credits: 0,
+      })
+    
+    if (insertError) {
+      console.error("[积分系统] 创建积分记录失败:", insertError)
+      return false
+    }
+    
+    // 重新获取积分记录
+    credits = await getUserCredits(userId)
+    if (!credits) {
+      console.error("[积分系统] 创建后仍无法获取积分记录")
+      return false
+    }
+  }
 
   // 增加积分
   const { error: updateError } = await supabase
     .from("user_credits")
     .update({
       credits: credits.credits + amount,
-      total_earned: credits.total_earned + amount,
       updated_at: new Date().toISOString(),
     })
     .eq("user_id", userId)
@@ -101,15 +113,7 @@ export async function addCredits(
     return false
   }
 
-  // 记录交易
-  await supabase.from("credit_transactions").insert({
-    user_id: userId,
-    amount,
-    type,
-    description,
-    reference_id: referenceId,
-  })
-
+  console.log(`[积分系统] 用户 ${userId} 成功增加 ${amount} 积分，当前积分: ${credits.credits + amount}`)
   return true
 }
 

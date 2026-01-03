@@ -15,10 +15,10 @@ const subscriptionPlans = [
     monthlyPrice: 28,
     annualPrice: 268.8,
     credits: 2000,
-    essaysPerMonth: 8,
+    essaysPerMonth: 100,
     features: [
       { text: "每月 2,000 积分", highlight: true },
-      { text: "(约可修改 8 篇作文)", subtext: true },
+      { text: "(约可批改 100 篇作文)", subtext: true },
       { text: "调用所有 AI 模型" },
       { text: "标准生成速度" },
       { text: "社区支持" },
@@ -33,10 +33,10 @@ const subscriptionPlans = [
     monthlyPrice: 68,
     annualPrice: 652.8,
     credits: 5000,
-    essaysPerMonth: 20,
+    essaysPerMonth: 250,
     features: [
       { text: "每月 5,000 积分", highlight: true },
-      { text: "(约可修改 20 篇作文)", subtext: true },
+      { text: "(约可批改 250 篇作文)", subtext: true },
       { text: "调用所有 AI 模型" },
       { text: "优先生成速度", highlight: true },
       { text: "高级润色工具", highlight: true },
@@ -52,10 +52,10 @@ const subscriptionPlans = [
     monthlyPrice: 128,
     annualPrice: 1228.8,
     credits: 12000,
-    essaysPerMonth: 50,
+    essaysPerMonth: 600,
     features: [
       { text: "每月 12,000 积分", highlight: true },
-      { text: "(约可修改 50 篇作文)", subtext: true },
+      { text: "(约可批改 600 篇作文)", subtext: true },
       { text: "调用三大顶尖模型 (Claude, Gemini, ChatGPT)", highlight: true },
       { text: "最高优先速度", highlight: true },
       { text: "高级润色工具" },
@@ -238,39 +238,46 @@ export function Pricing() {
           <p className="text-gray-700 leading-relaxed mb-6">
             <span className="font-bold text-gray-900">问：积分是如何消耗的？</span>
             <br />
-            答：您的每一次操作都会消耗积分。我们的系统会智能调用 Gemini、Claude、GPT
+            答：积分按实际使用的 Token 数量计费，不同功能消耗不同。我们的系统会智能调用 Gemini、Claude、GPT
             三个模型以确保最佳输出质量。积分可用于 AI 服务或兑换增值服务。
           </p>
           <ul className="space-y-3 text-gray-700">
             <li className="flex items-start">
               <Check className="w-5 h-5 text-primary mr-3 flex-shrink-0 mt-0.5" />
               <span>
-                <span className="font-bold text-gray-900">生成一篇作文 (约800字):</span> 消耗约{" "}
-                <span className="font-bold text-primary">240 积分</span>
+                <span className="font-bold text-gray-900">作文批改 (单次):</span> 约{" "}
+                <span className="font-bold text-primary">20 积分</span>
+                <span className="text-gray-500 text-sm ml-1">(按实际 Token 消耗计费)</span>
               </span>
             </li>
             <li className="flex items-start">
               <Check className="w-5 h-5 text-primary mr-3 flex-shrink-0 mt-0.5" />
               <span>
-                <span className="font-bold text-gray-900">AI 润色 (单次):</span> 消耗约{" "}
-                <span className="font-bold text-primary">70 积分</span>
+                <span className="font-bold text-gray-900">AI 对话 (单次):</span> 约{" "}
+                <span className="font-bold text-primary">15-30 积分</span>
+                <span className="text-gray-500 text-sm ml-1">(根据对话长度浮动)</span>
               </span>
             </li>
             <li className="flex items-start">
               <Check className="w-5 h-5 text-primary mr-3 flex-shrink-0 mt-0.5" />
               <span>
-                <span className="font-bold text-gray-900">语法检查:</span> 消耗约{" "}
-                <span className="font-bold text-primary">25 积分</span>
+                <span className="font-bold text-gray-900">高级模型 (GPT/Claude/Gemini):</span> 约{" "}
+                <span className="font-bold text-primary">30-40 积分</span>
+                <span className="text-gray-500 text-sm ml-1">(单次对话)</span>
               </span>
             </li>
             <li className="flex items-start">
               <Check className="w-5 h-5 text-primary mr-3 flex-shrink-0 mt-0.5" />
               <span>
                 <span className="font-bold text-gray-900">兑换名师辅导 (1次):</span> 消耗{" "}
-                <span className="font-bold text-primary">1000 积分</span> (专业版/豪华版包含免费次数)
+                <span className="font-bold text-primary">1000 积分</span>
+                <span className="text-gray-500 text-sm ml-1">(专业版/豪华版包含免费次数)</span>
               </span>
             </li>
           </ul>
+          <p className="text-gray-500 text-sm mt-4">
+            💡 提示：实际消耗根据输入输出的 Token 数量计算，以上为参考值。智能体服务 10积分/1K Token，独立模型 20积分/1K Token。
+          </p>
         </div>
       </div>
     </section>
