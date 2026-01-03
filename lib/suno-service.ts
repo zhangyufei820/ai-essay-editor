@@ -6,15 +6,18 @@
  * 2. checkMusicStatus - 查询任务状态
  * 
  * ⚠️ 安全协议：此文件完全独立，不影响任何现有功能
+ * 
+ * 🔥 重要更新：现在通过后端代理 API 调用，解决 CORS 和 Mixed Content 问题
  */
 
 import {
-  SUNO_GENERATE_CONFIG,
-  SUNO_QUERY_CONFIG,
   TASK_ID_REGEX,
   type MusicGenerationStatus,
   type MusicGenerationResult,
 } from "./suno-config"
+
+// 代理 API 地址
+const SUNO_PROXY_API = "/api/suno"
 
 // ============================================
 // 类型定义
@@ -25,6 +28,7 @@ interface GenerateResponse {
   answer: string
   conversation_id?: string
   message_id?: string
+  error?: string
 }
 
 /** 查询 API 响应类型 */
@@ -39,10 +43,11 @@ interface QueryResponse {
       error_message?: string
     }
   }
+  error?: string
 }
 
 // ============================================
-// 1. 生成音乐 - 调用 Chatflow API
+// 1. 生成音乐 - 通过代理 API
 // ============================================
 
 /**
@@ -65,34 +70,40 @@ export async function generateMusic(
   console.log("🎵 [Suno] 开始生成音乐:", { query: query.slice(0, 50), userId })
 
   try {
-    const url = `${SUNO_GENERATE_CONFIG.baseUrl}${SUNO_GENERATE_CONFIG.endpoint}`
-    
-    const response = await fetch(url, {
-      method: SUNO_GENERATE_CONFIG.method,
+    const response = await fetch(SUNO_PROXY_API, {
+      method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${SUNO_GENERATE_CONFIG.apiKey}`,
       },
       body: JSON.stringify({
-        inputs: {},
+        action: "generate",
         query: query,
-        response_mode: "blocking", // 使用阻塞模式获取完整回复
-        user: userId,
+        userId: userId,
       }),
     })
 
     if (!response.ok) {
-      const errorText = await response.text()
-      console.error("❌ [Suno] 生成 API 错误:", response.status, errorText)
+      const errorData = await response.json().catch(() => ({}))
+      console.error("❌ [Suno] 生成 API 错误:", response.status, errorData)
       return {
         success: false,
         answer: "",
         taskId: null,
-        error: `API 错误: ${response.status}`,
+        error: errorData.error || `API 错误: ${response.status}`,
       }
     }
 
     const data: GenerateResponse = await response.json()
+    
+    if (data.error) {
+      return {
+        success: false,
+        answer: "",
+        taskId: null,
+        error: data.error,
+      }
+    }
+    
     console.log("✅ [Suno] 生成 API 响应:", data.answer?.slice(0, 100))
 
     // 使用正则提取 Task ID
@@ -119,7 +130,7 @@ export async function generateMusic(
 }
 
 // ============================================
-// 2. 查询音乐状态 - 调用 Workflow API
+// 2. 查询音乐状态 - 通过代理 API
 // ============================================
 
 /**
@@ -136,34 +147,38 @@ export async function checkMusicStatus(
   console.log("🔍 [Suno] 查询任务状态:", { taskId, userId })
 
   try {
-    const url = `${SUNO_QUERY_CONFIG.baseUrl}${SUNO_QUERY_CONFIG.endpoint}`
-    
-    const response = await fetch(url, {
-      method: SUNO_QUERY_CONFIG.method,
+    const response = await fetch(SUNO_PROXY_API, {
+      method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${SUNO_QUERY_CONFIG.apiKey}`,
       },
       body: JSON.stringify({
-        inputs: {
-          task_id: taskId,
-        },
-        response_mode: "blocking",
-        user: userId,
+        action: "query",
+        taskId: taskId,
+        userId: userId,
       }),
     })
 
     if (!response.ok) {
-      const errorText = await response.text()
-      console.error("❌ [Suno] 查询 API 错误:", response.status, errorText)
+      const errorData = await response.json().catch(() => ({}))
+      console.error("❌ [Suno] 查询 API 错误:", response.status, errorData)
       return {
         status: "ERROR",
         taskId,
-        errorMessage: `查询失败: ${response.status}`,
+        errorMessage: errorData.error || `查询失败: ${response.status}`,
       }
     }
 
     const data: QueryResponse = await response.json()
+    
+    if (data.error) {
+      return {
+        status: "ERROR",
+        taskId,
+        errorMessage: data.error,
+      }
+    }
+    
     const outputs = data.data?.outputs || {}
     
     console.log("📊 [Suno] 查询结果:", {
@@ -227,12 +242,14 @@ export function removeTaskIdFromText(text: string): string {
 }
 
 // ============================================
-// 4. 流式生成音乐（可选，用于显示实时回复）
+// 4. 流式生成音乐（简化版，使用阻塞模式模拟）
 // ============================================
 
 /**
  * 流式提交音乐生成任务
  * 用于在 UI 上实时显示 AI 的文字回复
+ * 
+ * 注意：由于使用代理 API，这里改为阻塞模式，但仍保持相同的接口
  * 
  * @param query - 用户输入的提示词
  * @param userId - 用户 ID
@@ -245,67 +262,22 @@ export async function generateMusicStreaming(
   onChunk: (text: string) => void,
   onComplete: (result: { answer: string; taskId: string | null }) => void
 ): Promise<void> {
-  console.log("🎵 [Suno] 开始流式生成音乐:", { query: query.slice(0, 50), userId })
+  console.log("🎵 [Suno] 开始生成音乐 (通过代理):", { query: query.slice(0, 50), userId })
 
   try {
-    const url = `${SUNO_GENERATE_CONFIG.baseUrl}${SUNO_GENERATE_CONFIG.endpoint}`
+    // 先显示一个加载提示
+    onChunk("正在为您创作音乐，请稍候...")
     
-    const response = await fetch(url, {
-      method: SUNO_GENERATE_CONFIG.method,
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${SUNO_GENERATE_CONFIG.apiKey}`,
-      },
-      body: JSON.stringify({
-        inputs: {},
-        query: query,
-        response_mode: "streaming", // 流式模式
-        user: userId,
-      }),
-    })
-
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error("❌ [Suno] 流式生成 API 错误:", response.status, errorText)
-      onComplete({ answer: `错误: ${response.status}`, taskId: null })
-      return
-    }
-
-    const reader = response.body?.getReader()
-    const decoder = new TextDecoder()
-    let fullText = ""
-    let buffer = ""
-
-    while (reader) {
-      const { done, value } = await reader.read()
-      if (done) break
-
-      buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split("\n")
-      buffer = lines.pop() || ""
-
-      for (const line of lines) {
-        if (!line.startsWith("data: ")) continue
-        const data = line.slice(6).trim()
-        if (data === "[DONE]") continue
-
-        try {
-          const json = JSON.parse(data)
-          if (json.answer) {
-            fullText += json.answer
-            onChunk(json.answer)
-          }
-        } catch {}
-      }
-    }
-
-    // 提取 Task ID
-    const taskId = extractTaskId(fullText)
-    console.log("✅ [Suno] 流式生成完成, Task ID:", taskId)
+    const result = await generateMusic(query, userId)
     
-    onComplete({ answer: fullText, taskId })
+    if (result.success) {
+      // 清除加载提示，显示实际回复
+      onComplete({ answer: result.answer, taskId: result.taskId })
+    } else {
+      onComplete({ answer: `错误: ${result.error}`, taskId: null })
+    }
   } catch (error: any) {
-    console.error("❌ [Suno] 流式生成异常:", error)
+    console.error("❌ [Suno] 生成异常:", error)
     onComplete({ answer: `错误: ${error.message}`, taskId: null })
   }
 }
