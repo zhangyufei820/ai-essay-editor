@@ -57,20 +57,34 @@ export async function POST(req: NextRequest) {
     
     let orders: any[] = []
     
-    // 尝试直接用 userId 查询
-    const { data: directOrders, error: directError } = await supabaseAdmin
-      .from('orders')
-      .select('id, status, amount, product_name, created_at, order_no, user_id')
-      .eq('user_id', userId)
-      .eq('status', 'paid')
-      .gt('amount', 0)
-      .order('created_at', { ascending: false })
-      .limit(5)
+    // 尝试直接用 userId 查询（支持多种格式）
+    // Authing ID 可能是 24 位十六进制字符串
+    const userIdVariants = [
+      userId,
+      userId?.toLowerCase?.(),
+      userId?.toUpperCase?.()
+    ].filter(Boolean)
     
-    if (!directError && directOrders && directOrders.length > 0) {
-      orders = directOrders
-      console.log('🔍 [会员检查] 策略1成功，找到订单:', orders.length)
-    } else {
+    for (const tryId of userIdVariants) {
+      if (orders.length > 0) break
+      
+      const { data: directOrders, error: directError } = await supabaseAdmin
+        .from('orders')
+        .select('id, status, amount, product_name, created_at, order_no, user_id')
+        .eq('user_id', tryId)
+        .eq('status', 'paid')
+        .gt('amount', 0)
+        .order('created_at', { ascending: false })
+        .limit(5)
+      
+      if (!directError && directOrders && directOrders.length > 0) {
+        orders = directOrders
+        console.log('🔍 [会员检查] 策略1成功，找到订单:', orders.length, '使用ID:', tryId)
+        break
+      }
+    }
+    
+    if (orders.length === 0) {
       console.log('🔍 [会员检查] 策略1未找到订单，尝试策略2')
       
       // 🔥 策略2: 通过订单号模糊匹配（订单号格式: ORDER_时间戳_用户ID）
