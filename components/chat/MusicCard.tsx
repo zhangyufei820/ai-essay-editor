@@ -2,13 +2,14 @@
  * 🎵 MusicCard 组件 - Suno 音乐生成卡片
  * 
  * 功能：
- * 1. 加载中状态：显示旋转动画和进度提示
- * 2. 成功状态：显示双曲目播放面板（Suno V5 一次生成两首歌）
+ * 1. 加载中状态：显示"正在思考"动画
+ * 2. 成功状态：显示双曲目播放面板
  * 3. 错误状态：显示错误信息
  * 
- * 🔥 更新：支持增量渲染 - 两首歌独立显示，不等待批量完成
- * 
- * ⚠️ 安全协议：此组件完全独立，不影响任何现有功能
+ * 🔥 更新：
+ * - 增量渲染 - 两首歌独立显示
+ * - 品牌深绿色主题
+ * - 高端大气的排版设计
  */
 
 "use client"
@@ -17,66 +18,43 @@ import React, { useState, useRef, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { 
   Music, 
-  Loader2, 
   Play, 
   Pause, 
   Volume2, 
   VolumeX,
   AlertCircle,
   Download,
-  RefreshCw
+  RefreshCw,
+  Sparkles
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import type { MusicGenerationStatus, SongSlot, SongSlotStatus } from "@/lib/suno-config"
+import type { MusicGenerationStatus, SongSlot } from "@/lib/suno-config"
 
-// 🔥 品牌深绿色
+// 🔥 品牌深绿色（与主网站一致）
 const BRAND_GREEN = "#14532d"
-const SUNO_PINK = "#db2777"
 
 // ============================================
-// 类型定义 - 🔥 更新：支持增量渲染
+// 类型定义
 // ============================================
 
 interface MusicCardProps {
-  /** 任务 ID */
   taskId: string
-  /** 🔥 双槽位独立状态 */
   songs: [SongSlot, SongSlot]
-  /** 全局状态（用于显示整体错误） */
   globalStatus?: MusicGenerationStatus
-  /** 全局错误信息 */
   errorMessage?: string
-  /** 重试回调 */
   onRetry?: () => void
-  /** 自定义类名 */
   className?: string
 }
-
-// ============================================
-// 单曲播放器 Props
-// ============================================
 
 interface SingleTrackPlayerProps {
   audioUrl: string
   coverUrl?: string
   title?: string
-  version: number  // 1 或 2
+  version: number
 }
 
 // ============================================
-// 加载状态提示文案
-// ============================================
-
-const LOADING_MESSAGES = [
-  "正在谱写旋律...",
-  "AI 正在创作中...",
-  "灵感涌现中...",
-  "音符跳动中...",
-  "即将完成...",
-]
-
-// ============================================
-// 主组件 - 🔥 增量渲染版本
+// 主组件 - 高端大气版本
 // ============================================
 
 export function MusicCard({
@@ -87,26 +65,15 @@ export function MusicCard({
   onRetry,
   className,
 }: MusicCardProps) {
-  // 加载文案轮换
-  const [loadingIndex, setLoadingIndex] = useState(0)
-  
   // 判断是否有任何槽位在加载
   const hasLoadingSlot = songs.some(s => s.status === "loading")
-  
-  useEffect(() => {
-    if (hasLoadingSlot) {
-      const timer = setInterval(() => {
-        setLoadingIndex((prev) => (prev + 1) % LOADING_MESSAGES.length)
-      }, 3000)
-      return () => clearInterval(timer)
-    }
-  }, [hasLoadingSlot])
+  const hasReadySlot = songs.some(s => s.status === "ready")
 
   // 全局错误状态
-  if (globalStatus === "ERROR" && !songs.some(s => s.status === "ready")) {
+  if (globalStatus === "ERROR" && !hasReadySlot) {
     return (
       <div className={cn(
-        "relative overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white shadow-sm",
+        "relative overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm",
         className
       )}>
         <ErrorState message={errorMessage} onRetry={onRetry} />
@@ -117,45 +84,37 @@ export function MusicCard({
   return (
     <div
       className={cn(
-        "relative overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white shadow-sm",
+        "relative overflow-hidden rounded-2xl border border-slate-100 bg-gradient-to-br from-slate-50/80 to-white shadow-sm",
         "transition-all duration-300",
         className
       )}
     >
-      <div className="p-4">
-        {/* 标题区域 */}
-        <div className="flex items-center gap-2 mb-4">
+      <div className="p-5">
+        {/* 🔥 简洁标题：由 Suno V5 生成 */}
+        <div className="flex items-center gap-3 mb-5">
           <div 
-            className="flex h-8 w-8 items-center justify-center rounded-lg"
-            style={{ backgroundColor: `${SUNO_PINK}15` }}
+            className="flex h-10 w-10 items-center justify-center rounded-xl"
+            style={{ backgroundColor: `${BRAND_GREEN}10` }}
           >
-            <Music className="h-4 w-4" style={{ color: SUNO_PINK }} />
+            <Sparkles className="h-5 w-5" style={{ color: BRAND_GREEN }} />
           </div>
           <div>
-            <h3 className="font-medium text-slate-800">
-              AI 生成的音乐
+            <h3 className="text-base font-semibold text-slate-800">
+              由 Suno V5 生成
             </h3>
-            <p className="text-xs text-slate-400">
-              由 Suno V5 生成 · 2 个版本
+            <p className="text-xs text-slate-400 mt-0.5">
+              为您创作了 2 个版本
             </p>
           </div>
         </div>
 
-        {/* 🔥 双槽位网格布局 - 增量渲染 */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* 🔥 高端双槽位布局 */}
+        <div className="space-y-3">
           {/* 槽位 1 */}
-          <SongSlotRenderer 
-            slot={songs[0]} 
-            version={1} 
-            loadingMessage={LOADING_MESSAGES[loadingIndex]}
-          />
+          <SongSlotRenderer slot={songs[0]} version={1} />
 
           {/* 槽位 2 */}
-          <SongSlotRenderer 
-            slot={songs[1]} 
-            version={2} 
-            loadingMessage={LOADING_MESSAGES[(loadingIndex + 2) % LOADING_MESSAGES.length]}
-          />
+          <SongSlotRenderer slot={songs[1]} version={2} />
         </div>
       </div>
     </div>
@@ -163,69 +122,66 @@ export function MusicCard({
 }
 
 // ============================================
-// 🔥 单槽位渲染器 - 根据状态显示不同内容
+// 单槽位渲染器 - 高端设计
 // ============================================
 
 function SongSlotRenderer({
   slot,
   version,
-  loadingMessage,
 }: {
   slot: SongSlot
   version: number
-  loadingMessage: string
 }) {
-  // 版本标签颜色
-  const versionColors = {
-    1: { bg: "#fef3c7", text: "#d97706", border: "#fcd34d" },
-    2: { bg: "#dbeafe", text: "#2563eb", border: "#93c5fd" },
-  }
-  const colors = versionColors[version as 1 | 2] || versionColors[1]
-
   return (
     <AnimatePresence mode="wait">
-      {/* 加载中 */}
+      {/* 加载中 - 显示"正在思考" */}
       {slot.status === "loading" && (
         <motion.div
           key="loading"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="bg-slate-50 rounded-xl p-4 border border-slate-100 min-h-[120px] flex flex-col items-center justify-center"
+          initial={{ opacity: 0, y: 5 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -5 }}
+          className="flex items-center gap-4 p-4 rounded-xl bg-slate-50/80 border border-slate-100"
         >
-          {/* 版本标签 */}
-          <div 
-            className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium mb-3"
-            style={{ 
-              backgroundColor: colors.bg, 
-              color: colors.text,
-              border: `1px solid ${colors.border}`
-            }}
-          >
-            版本 {version}
+          {/* 封面占位 */}
+          <div className="relative h-14 w-14 rounded-lg bg-gradient-to-br from-slate-100 to-slate-50 flex items-center justify-center shrink-0 overflow-hidden">
+            <Music className="h-6 w-6 text-slate-300" />
+            {/* 脉冲动画 */}
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent animate-shimmer" />
           </div>
-
-          {/* 音乐波形条 */}
-          <div className="flex items-end gap-1 mb-3 h-6">
-            {[0, 1, 2, 3, 4].map((i) => (
-              <motion.div
-                key={i}
-                className="w-1 rounded-full"
-                style={{ backgroundColor: SUNO_PINK }}
-                animate={{
-                  height: ["6px", "18px", "6px"],
+          
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-2">
+              <span 
+                className="text-xs font-medium px-2 py-0.5 rounded-full"
+                style={{ 
+                  backgroundColor: `${BRAND_GREEN}10`,
+                  color: BRAND_GREEN
                 }}
-                transition={{
-                  duration: 0.8,
-                  repeat: Infinity,
-                  delay: i * 0.1,
-                  ease: "easeInOut",
-                }}
-              />
-            ))}
+              >
+                版本 {version}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="flex items-end gap-0.5 h-4">
+                {[0, 1, 2, 3].map((i) => (
+                  <motion.div
+                    key={i}
+                    className="w-0.5 rounded-full"
+                    style={{ backgroundColor: BRAND_GREEN }}
+                    animate={{ height: ["4px", "14px", "4px"] }}
+                    transition={{
+                      duration: 0.6,
+                      repeat: Infinity,
+                      delay: i * 0.1,
+                      ease: "easeInOut",
+                    }}
+                  />
+                ))}
+              </div>
+              <span className="text-sm text-slate-500">正在思考...</span>
+            </div>
           </div>
-
-          <p className="text-xs text-slate-500">{loadingMessage}</p>
         </motion.div>
       )}
 
@@ -233,8 +189,8 @@ function SongSlotRenderer({
       {slot.status === "ready" && slot.audioUrl && (
         <motion.div
           key="ready"
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
+          initial={{ opacity: 0, y: 5 }}
+          animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0 }}
         >
           <SingleTrackPlayer
@@ -253,22 +209,19 @@ function SongSlotRenderer({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="bg-red-50 rounded-xl p-4 border border-red-100 min-h-[120px] flex flex-col items-center justify-center"
+          className="flex items-center gap-4 p-4 rounded-xl bg-red-50/50 border border-red-100"
         >
-          {/* 版本标签 */}
-          <div 
-            className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium mb-3"
-            style={{ 
-              backgroundColor: colors.bg, 
-              color: colors.text,
-              border: `1px solid ${colors.border}`
-            }}
-          >
-            版本 {version}
+          <div className="h-14 w-14 rounded-lg bg-red-100/50 flex items-center justify-center shrink-0">
+            <AlertCircle className="h-6 w-6 text-red-400" />
           </div>
-
-          <AlertCircle className="h-6 w-6 text-red-400 mb-2" />
-          <p className="text-xs text-red-500">{slot.errorMessage || "生成失败"}</p>
+          <div className="flex-1">
+            <span 
+              className="text-xs font-medium px-2 py-0.5 rounded-full bg-red-100 text-red-600"
+            >
+              版本 {version}
+            </span>
+            <p className="text-sm text-red-500 mt-1">{slot.errorMessage || "生成失败"}</p>
+          </div>
         </motion.div>
       )}
     </AnimatePresence>
@@ -276,7 +229,7 @@ function SongSlotRenderer({
 }
 
 // ============================================
-// 单曲播放器组件
+// 单曲播放器 - 高端简洁设计
 // ============================================
 
 function SingleTrackPlayer({
@@ -291,7 +244,6 @@ function SingleTrackPlayer({
   const [currentTime, setCurrentTime] = useState(0)
   const [audioDuration, setAudioDuration] = useState(0)
 
-  // 播放/暂停
   const togglePlay = () => {
     if (audioRef.current) {
       if (isPlaying) {
@@ -303,7 +255,6 @@ function SingleTrackPlayer({
     }
   }
 
-  // 静音切换
   const toggleMute = () => {
     if (audioRef.current) {
       audioRef.current.muted = !isMuted
@@ -311,7 +262,6 @@ function SingleTrackPlayer({
     }
   }
 
-  // 进度条点击
   const handleProgressClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (audioRef.current && audioDuration > 0) {
       const rect = e.currentTarget.getBoundingClientRect()
@@ -320,7 +270,6 @@ function SingleTrackPlayer({
     }
   }
 
-  // 时间更新
   useEffect(() => {
     const audio = audioRef.current
     if (!audio) return
@@ -340,8 +289,8 @@ function SingleTrackPlayer({
     }
   }, [])
 
-  // 格式化时间
   const formatTime = (seconds: number) => {
+    if (!isFinite(seconds) || isNaN(seconds)) return "0:00"
     const mins = Math.floor(seconds / 60)
     const secs = Math.floor(seconds % 60)
     return `${mins}:${secs.toString().padStart(2, "0")}`
@@ -349,139 +298,135 @@ function SingleTrackPlayer({
 
   const progress = audioDuration > 0 ? (currentTime / audioDuration) * 100 : 0
 
-  // 版本标签颜色
-  const versionColors = {
-    1: { bg: "#fef3c7", text: "#d97706", border: "#fcd34d" },
-    2: { bg: "#dbeafe", text: "#2563eb", border: "#93c5fd" },
-  }
-  const colors = versionColors[version as 1 | 2] || versionColors[1]
-
   return (
-    <div className="bg-slate-50 rounded-xl p-3 border border-slate-100">
-      {/* 隐藏的 audio 元素 */}
+    <div className="flex items-center gap-4 p-4 rounded-xl bg-white border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
       <audio ref={audioRef} src={audioUrl} preload="metadata" />
 
-      {/* 版本标签 */}
-      <div 
-        className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium mb-3"
-        style={{ 
-          backgroundColor: colors.bg, 
-          color: colors.text,
-          border: `1px solid ${colors.border}`
-        }}
-      >
-        版本 {version}
-      </div>
-
-      <div className="flex gap-3">
-        {/* 封面图 */}
-        <div className="relative shrink-0">
-          <div 
-            className={cn(
-              "h-16 w-16 rounded-lg overflow-hidden bg-gradient-to-br from-pink-100 to-purple-100",
-              "shadow-sm"
-            )}
-          >
-            {coverUrl ? (
-              <img
-                src={coverUrl}
-                alt={`${title || "音乐"} - 版本 ${version}`}
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <div className="h-full w-full flex items-center justify-center">
-                <Music className="h-6 w-6 text-pink-400" />
-              </div>
-            )}
-          </div>
-          
-          {/* 播放状态指示器 */}
-          {isPlaying && (
-            <div className="absolute -bottom-1 -right-1 flex items-end gap-0.5 p-1 bg-white rounded-lg shadow-sm">
-              {[0, 1, 2].map((i) => (
-                <motion.div
-                  key={i}
-                  className="w-0.5 rounded-full bg-pink-500"
-                  animate={{ height: ["3px", "10px", "3px"] }}
-                  transition={{
-                    duration: 0.5,
-                    repeat: Infinity,
-                    delay: i * 0.1,
-                  }}
-                />
-              ))}
+      {/* 封面 + 播放按钮 */}
+      <div className="relative shrink-0">
+        <div className="h-14 w-14 rounded-lg overflow-hidden bg-gradient-to-br from-emerald-100 to-green-50 shadow-sm">
+          {coverUrl ? (
+            <img
+              src={coverUrl}
+              alt={`版本 ${version}`}
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <div className="h-full w-full flex items-center justify-center">
+              <Music className="h-6 w-6" style={{ color: BRAND_GREEN }} />
             </div>
           )}
         </div>
-
-        {/* 播放器控制 */}
-        <div className="flex-1 min-w-0">
-          {/* 进度条 */}
-          <div
-            className="relative h-1.5 bg-slate-200 rounded-full cursor-pointer mb-2 group"
-            onClick={handleProgressClick}
+        
+        {/* 播放按钮覆盖层 */}
+        <button
+          onClick={togglePlay}
+          className="absolute inset-0 flex items-center justify-center bg-black/20 rounded-lg opacity-0 hover:opacity-100 transition-opacity"
+        >
+          <div 
+            className="h-8 w-8 rounded-full flex items-center justify-center text-white"
+            style={{ backgroundColor: BRAND_GREEN }}
           >
-            <div
-              className="absolute inset-y-0 left-0 rounded-full transition-all"
-              style={{ 
-                width: `${progress}%`,
-                backgroundColor: SUNO_PINK 
-              }}
-            />
-            {/* 拖动点 */}
-            <div
-              className="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-white shadow-md border-2 opacity-0 group-hover:opacity-100 transition-opacity"
-              style={{ 
-                left: `${progress}%`,
-                borderColor: SUNO_PINK,
-                transform: `translateX(-50%) translateY(-50%)`
-              }}
-            />
+            {isPlaying ? (
+              <Pause className="h-3.5 w-3.5" />
+            ) : (
+              <Play className="h-3.5 w-3.5 ml-0.5" />
+            )}
           </div>
+        </button>
 
-          {/* 时间和控制按钮 */}
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-slate-400">
-              {formatTime(currentTime)} / {formatTime(audioDuration)}
-            </span>
-
-            <div className="flex items-center gap-1">
-              {/* 静音按钮 */}
-              <button
-                onClick={toggleMute}
-                className="p-1 rounded-md hover:bg-slate-200 transition-colors"
-              >
-                {isMuted ? (
-                  <VolumeX className="h-3.5 w-3.5 text-slate-400" />
-                ) : (
-                  <Volume2 className="h-3.5 w-3.5 text-slate-400" />
-                )}
-              </button>
-
-              {/* 播放/暂停按钮 */}
-              <button
-                onClick={togglePlay}
-                className="flex h-7 w-7 items-center justify-center rounded-full text-white shadow-sm hover:opacity-90 transition-all"
-                style={{ backgroundColor: SUNO_PINK }}
-              >
-                {isPlaying ? (
-                  <Pause className="h-3 w-3" />
-                ) : (
-                  <Play className="h-3 w-3 ml-0.5" />
-                )}
-              </button>
-
-              {/* 下载按钮 */}
-              <a
-                href={audioUrl}
-                download={`${title || "suno-music"}-v${version}.mp3`}
-                className="p-1 rounded-md hover:bg-slate-200 transition-colors"
-              >
-                <Download className="h-3.5 w-3.5 text-slate-400" />
-              </a>
-            </div>
+        {/* 播放状态指示器 */}
+        {isPlaying && (
+          <div className="absolute -bottom-1 -right-1 flex items-end gap-0.5 p-1 bg-white rounded-lg shadow-sm">
+            {[0, 1, 2].map((i) => (
+              <motion.div
+                key={i}
+                className="w-0.5 rounded-full"
+                style={{ backgroundColor: BRAND_GREEN }}
+                animate={{ height: ["3px", "10px", "3px"] }}
+                transition={{
+                  duration: 0.5,
+                  repeat: Infinity,
+                  delay: i * 0.1,
+                }}
+              />
+            ))}
           </div>
+        )}
+      </div>
+
+      {/* 播放器信息 */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 mb-2">
+          <span 
+            className="text-xs font-medium px-2 py-0.5 rounded-full"
+            style={{ 
+              backgroundColor: `${BRAND_GREEN}10`,
+              color: BRAND_GREEN
+            }}
+          >
+            版本 {version}
+          </span>
+          <span className="text-xs text-slate-400">
+            {formatTime(currentTime)} / {formatTime(audioDuration)}
+          </span>
         </div>
+
+        {/* 进度条 */}
+        <div
+          className="relative h-1.5 bg-slate-100 rounded-full cursor-pointer group"
+          onClick={handleProgressClick}
+        >
+          <div
+            className="absolute inset-y-0 left-0 rounded-full transition-all"
+            style={{ 
+              width: `${progress}%`,
+              backgroundColor: BRAND_GREEN 
+            }}
+          />
+          <div
+            className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-white shadow-md border-2 opacity-0 group-hover:opacity-100 transition-opacity"
+            style={{ 
+              left: `${progress}%`,
+              borderColor: BRAND_GREEN,
+              transform: `translateX(-50%) translateY(-50%)`
+            }}
+          />
+        </div>
+      </div>
+
+      {/* 控制按钮 */}
+      <div className="flex items-center gap-1 shrink-0">
+        <button
+          onClick={toggleMute}
+          className="p-2 rounded-lg hover:bg-slate-50 transition-colors"
+        >
+          {isMuted ? (
+            <VolumeX className="h-4 w-4 text-slate-400" />
+          ) : (
+            <Volume2 className="h-4 w-4 text-slate-400" />
+          )}
+        </button>
+
+        <button
+          onClick={togglePlay}
+          className="flex h-9 w-9 items-center justify-center rounded-lg text-white shadow-sm hover:opacity-90 transition-all"
+          style={{ backgroundColor: BRAND_GREEN }}
+        >
+          {isPlaying ? (
+            <Pause className="h-4 w-4" />
+          ) : (
+            <Play className="h-4 w-4 ml-0.5" />
+          )}
+        </button>
+
+        <a
+          href={audioUrl}
+          download={`suno-v${version}.mp3`}
+          className="p-2 rounded-lg hover:bg-slate-50 transition-colors"
+        >
+          <Download className="h-4 w-4 text-slate-400" />
+        </a>
       </div>
     </div>
   )
@@ -503,13 +448,13 @@ function ErrorState({
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -10 }}
-      className="flex flex-col items-center justify-center p-8 min-h-[200px]"
+      className="flex flex-col items-center justify-center p-8 min-h-[180px]"
     >
       <div 
-        className="flex h-14 w-14 items-center justify-center rounded-2xl mb-4"
+        className="flex h-12 w-12 items-center justify-center rounded-xl mb-4"
         style={{ backgroundColor: "#fef2f2" }}
       >
-        <AlertCircle className="h-7 w-7 text-red-500" />
+        <AlertCircle className="h-6 w-6 text-red-500" />
       </div>
 
       <p className="text-sm font-medium text-slate-700 mb-1">
@@ -524,7 +469,7 @@ function ErrorState({
         <button
           onClick={onRetry}
           className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white rounded-lg hover:opacity-90 transition-all"
-          style={{ backgroundColor: SUNO_PINK }}
+          style={{ backgroundColor: BRAND_GREEN }}
         >
           <RefreshCw className="h-4 w-4" />
           重新生成
@@ -535,7 +480,12 @@ function ErrorState({
 }
 
 // ============================================
-// 导出默认组件
+// CSS 动画（需要添加到 globals.css）
 // ============================================
+// @keyframes shimmer {
+//   0% { transform: translateX(-100%); }
+//   100% { transform: translateX(100%); }
+// }
+// .animate-shimmer { animation: shimmer 1.5s infinite; }
 
 export default MusicCard
