@@ -113,7 +113,7 @@ export const MODEL_COSTS: Record<ModelType, ModelCostConfig> = {
   },
   "suno-v5": { 
     category: "media",
-    fixedCost: 100, // 成本 100 积分 → 用户扣费 250 积分
+    fixedCost: 70, // API 成本 ¥0.70/次 = 70 积分 → 用户扣费 175 积分（60% 毛利）
     displayName: "Suno V5",
     mode: "music"
   },
