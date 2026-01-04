@@ -787,11 +787,21 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     // ============================================
     if (selectedModel === "suno-v5") {
       console.log("🎵 [Suno V5] 进入音乐生成模式")
-      
+
+      // 🔥 创建会话和保存用户消息（与普通对话一致）
+      const preview = userMsg.content.slice(0, 30)
+      const { data: existing } = await supabase.from('chat_sessions').select('id').eq('id', sid).single()
+      if (!existing) {
+        await supabase.from('chat_sessions').insert({ id: sid, user_id: userId, title: "音乐创作", preview })
+      } else {
+        await supabase.from('chat_sessions').update({ preview }).eq('id', sid)
+      }
+      await supabase.from('chat_messages').insert({ session_id: sid, role: "user", content: userMsg.content })
+
       const botId = (Date.now() + 1).toString()
       currentBotIdRef.current = botId
       setMessages(p => [...p, { id: botId, role: "assistant", content: "" }])
-      
+
       try {
         // 使用 Suno 服务生成音乐
         await startMusicGeneration(
@@ -800,26 +810,35 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
           botId,
           // onTextChunk: 实时更新文字
           (chunk) => {
-            setMessages(p => p.map(m => 
+            setMessages(p => p.map(m =>
               m.id === botId ? { ...m, content: m.content + chunk } : m
             ))
           },
           // onComplete: 生成完成
           async (fullText) => {
-            setMessages(p => p.map(m => 
+            setMessages(p => p.map(m =>
               m.id === botId ? { ...m, content: fullText } : m
             ))
-            
+
             // 保存到数据库
-            await supabase.from('chat_messages').insert({ 
-              session_id: sid, 
-              role: "assistant", 
-              content: fullText 
+            await supabase.from('chat_messages').insert({
+              session_id: sid,
+              role: "assistant",
+              content: fullText
             })
-            
-            // 扣除积分
+
+            // 🔥 扣除积分（调用 API）
+            try {
+              await fetch('/api/user/credits', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId, amount: -cost, reason: 'suno-v5' })
+              })
+            } catch (e) {
+              console.error("❌ [积分扣除] 失败:", e)
+            }
             setUserCredits(prev => prev - cost)
-            
+
             console.log("✅ [Suno V5] 音乐生成任务已提交")
           }
         )
