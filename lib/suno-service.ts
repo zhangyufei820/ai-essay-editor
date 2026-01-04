@@ -31,13 +31,18 @@ interface GenerateResponse {
   error?: string
 }
 
-/** 查询 API 响应类型 */
+/** 查询 API 响应类型 - 🔥 更新：支持双曲目 */
 interface QueryResponse {
   data: {
     outputs?: {
       status?: string
+      // 第一首歌
       audio_url?: string
       cover_url?: string
+      // 第二首歌（新增字段）
+      audio_url_2?: string
+      cover_url_2?: string
+      // 通用字段
       title?: string
       duration?: number
       error_message?: string
@@ -181,10 +186,13 @@ export async function checkMusicStatus(
     
     const outputs = data.data?.outputs || {}
     
+    // 🔥 更新：记录双曲目信息
     console.log("📊 [Suno] 查询结果:", {
       status: outputs.status,
-      hasAudio: !!outputs.audio_url,
-      hasCover: !!outputs.cover_url,
+      hasAudio1: !!outputs.audio_url,
+      hasCover1: !!outputs.cover_url,
+      hasAudio2: !!outputs.audio_url_2,
+      hasCover2: !!outputs.cover_url_2,
     })
 
     // 映射状态
@@ -197,11 +205,17 @@ export async function checkMusicStatus(
       status = "PROCESSING"
     }
 
+    // 🔥 返回双曲目数据
     return {
       status,
       taskId,
+      // 第一首歌
       audioUrl: outputs.audio_url,
       coverUrl: outputs.cover_url,
+      // 第二首歌
+      audioUrl2: outputs.audio_url_2,
+      coverUrl2: outputs.cover_url_2,
+      // 通用字段
       title: outputs.title,
       duration: outputs.duration,
       errorMessage: outputs.error_message,

@@ -55,12 +55,18 @@ export type MusicGenerationStatus =
 
 // ============================================
 // 音乐生成结果类型
+// 🔥 更新：支持双曲目（Suno V5 一次生成两首歌）
 // ============================================
 export interface MusicGenerationResult {
   status: MusicGenerationStatus
   taskId: string
+  // 第一首歌
   audioUrl?: string
   coverUrl?: string
+  // 第二首歌（新增字段）
+  audioUrl2?: string
+  coverUrl2?: string
+  // 通用字段
   title?: string
   duration?: number
   errorMessage?: string

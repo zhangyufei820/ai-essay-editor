@@ -22,13 +22,18 @@ import { SUNO_POLLING_CONFIG, type MusicGenerationResult } from "@/lib/suno-conf
 // 类型定义
 // ============================================
 
-/** 单个音乐任务状态 */
+/** 单个音乐任务状态 - 🔥 更新：支持双曲目 */
 export interface MusicTask {
   taskId: string
   messageId: string  // 关联的消息 ID
   status: MusicGenerationResult["status"]
+  // 第一首歌
   audioUrl?: string
   coverUrl?: string
+  // 第二首歌（新增字段）
+  audioUrl2?: string
+  coverUrl2?: string
+  // 通用字段
   title?: string
   duration?: number
   errorMessage?: string
@@ -143,11 +148,16 @@ export function useSunoMusic(): UseSunoMusicReturn {
       // 查询状态
       const result = await checkMusicStatus(taskId, userId)
       
-      // 更新任务状态
+      // 🔥 更新任务状态（包含双曲目数据）
       updateTask(taskId, {
         status: result.status,
+        // 第一首歌
         audioUrl: result.audioUrl,
         coverUrl: result.coverUrl,
+        // 第二首歌
+        audioUrl2: result.audioUrl2,
+        coverUrl2: result.coverUrl2,
+        // 通用字段
         title: result.title,
         duration: result.duration,
         errorMessage: result.errorMessage,

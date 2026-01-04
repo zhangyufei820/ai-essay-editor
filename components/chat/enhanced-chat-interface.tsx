@@ -1389,6 +1389,8 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                                               status={musicTask?.status || "PENDING"}
                                               audioUrl={musicTask?.audioUrl}
                                               coverUrl={musicTask?.coverUrl}
+                                              audioUrl2={musicTask?.audioUrl2}
+                                              coverUrl2={musicTask?.coverUrl2}
                                               title={musicTask?.title}
                                               duration={musicTask?.duration}
                                               errorMessage={musicTask?.errorMessage}
