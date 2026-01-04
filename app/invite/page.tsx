@@ -181,20 +181,48 @@ export default function InvitePage() {
 
   // 🔥 核心逻辑：点击"立即分享"按钮
   const handleShareClick = async () => {
+    console.log('🔍 [分享] 点击分享按钮, isPaidMember:', isPaidMember)
+    
     // 如果是会员，执行分享
     if (isPaidMember) {
-      if (navigator.share) {
+      // 检测是否在微信浏览器中
+      const isWechat = /MicroMessenger/i.test(navigator.userAgent)
+      console.log('🔍 [分享] 是否微信浏览器:', isWechat)
+      
+      // 微信浏览器中直接复制链接（微信有自己的分享机制）
+      if (isWechat) {
+        handleCopy()
+        toast.success("链接已复制！", {
+          description: "请点击右上角「...」分享给好友"
+        })
+        return
+      }
+      
+      // 检查 Web Share API 是否可用
+      const canShare = typeof navigator !== 'undefined' && 
+                       typeof navigator.share === 'function' &&
+                       navigator.canShare?.({ url: inviteLink, text: '测试' })
+      
+      console.log('🔍 [分享] Web Share API 可用:', canShare)
+      
+      if (canShare) {
         try {
           await navigator.share({
             title: '沈翔智学 - 邀请你一起学习',
             text: `我在用沈翔智学，AI智能批改作文超好用！用我的邀请链接注册，我们都能获得1000积分奖励！`,
             url: inviteLink
           })
-        } catch (e) {
-          // 用户取消分享，改为复制
-          handleCopy()
+          console.log('🔍 [分享] 分享成功')
+        } catch (e: any) {
+          console.log('🔍 [分享] 分享失败或取消:', e?.message || e)
+          // 用户取消分享或分享失败，改为复制
+          if (e?.name !== 'AbortError') {
+            handleCopy()
+          }
         }
       } else {
+        // Web Share API 不可用，直接复制
+        console.log('🔍 [分享] Web Share API 不可用，执行复制')
         handleCopy()
       }
     } else {
