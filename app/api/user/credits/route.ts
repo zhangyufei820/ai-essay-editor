@@ -2,12 +2,19 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 
 /**
- * 🎯 用户积分查询 API
+ * 🎯 用户积分 API
  * 
- * GET /api/user/credits?user_id=xxx
+ * GET /api/user/credits?user_id=xxx - 查询积分
+ * POST /api/user/credits - 扣除/增加积分
  * 
- * 使用 Service Role Key 查询，绕过 RLS 限制
+ * 使用 Service Role Key，绕过 RLS 限制
  */
+
+// 创建超级管理员客户端
+const getSupabaseAdmin = () => createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+)
 
 export async function GET(request: Request) {
   try {
@@ -78,6 +85,72 @@ export async function GET(request: Request) {
 
   } catch (error) {
     console.error('[积分API] 异常:', error)
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
+  }
+}
+
+/**
+ * 🎯 POST - 扣除/增加积分
+ * 
+ * Body: { userId: string, amount: number, reason?: string }
+ * amount 为负数表示扣除，正数表示增加
+ */
+export async function POST(request: Request) {
+  try {
+    const body = await request.json()
+    const { userId, amount, reason } = body
+
+    if (!userId) {
+      return NextResponse.json({ error: 'Missing userId' }, { status: 400 })
+    }
+
+    if (typeof amount !== 'number') {
+      return NextResponse.json({ error: 'Invalid amount' }, { status: 400 })
+    }
+
+    console.log(`💰 [积分API] 变更积分: userId=${userId}, amount=${amount}, reason=${reason}`)
+
+    const supabaseAdmin = getSupabaseAdmin()
+
+    // 先查询当前积分
+    const { data: currentData, error: queryError } = await supabaseAdmin
+      .from('user_credits')
+      .select('credits')
+      .eq('user_id', userId)
+      .single()
+
+    if (queryError) {
+      console.error(`❌ [积分API] 查询当前积分失败:`, queryError)
+      return NextResponse.json({ error: queryError.message }, { status: 500 })
+    }
+
+    const currentCredits = currentData?.credits || 0
+    const newCredits = Math.max(0, currentCredits + amount) // 确保不会变成负数
+
+    // 更新积分
+    const { data: updateData, error: updateError } = await supabaseAdmin
+      .from('user_credits')
+      .update({ credits: newCredits })
+      .eq('user_id', userId)
+      .select('credits')
+      .single()
+
+    if (updateError) {
+      console.error(`❌ [积分API] 更新积分失败:`, updateError)
+      return NextResponse.json({ error: updateError.message }, { status: 500 })
+    }
+
+    console.log(`✅ [积分API] 积分变更成功: ${currentCredits} → ${newCredits} (${amount > 0 ? '+' : ''}${amount})`)
+
+    return NextResponse.json({
+      success: true,
+      previousCredits: currentCredits,
+      newCredits: updateData?.credits || newCredits,
+      change: amount
+    })
+
+  } catch (error) {
+    console.error('[积分API] POST 异常:', error)
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }
