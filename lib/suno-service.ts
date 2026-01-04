@@ -32,17 +32,26 @@ interface GenerateResponse {
   error?: string
 }
 
-/** 查询 API 响应类型 - 🔥 更新：支持双曲目 */
+/** 查询 API 响应类型 - 🔥 更新：支持双曲目独立状态 */
 interface QueryResponse {
   data: {
     outputs?: {
       status?: string
+      // 🔥 新增：独立状态字段
+      status_1?: string  // 第一首歌状态
+      status_2?: string  // 第二首歌状态
       // 第一首歌
       audio_url?: string
+      audio_url_1?: string  // 兼容新字段名
       cover_url?: string
-      // 第二首歌（新增字段）
+      cover_url_1?: string
+      title_1?: string
+      duration_1?: number
+      // 第二首歌
       audio_url_2?: string
       cover_url_2?: string
+      title_2?: string
+      duration_2?: number
       // 通用字段
       title?: string
       duration?: number
@@ -187,16 +196,22 @@ export async function checkMusicStatus(
     
     const outputs = data.data?.outputs || {}
     
-    // 🔥 更新：记录双曲目信息
+    // 🔥 兼容新旧字段名
+    const audioUrl1 = outputs.audio_url_1 || outputs.audio_url
+    const coverUrl1 = outputs.cover_url_1 || outputs.cover_url
+    const audioUrl2 = outputs.audio_url_2
+    const coverUrl2 = outputs.cover_url_2
+    
+    // 🔥 更新：记录双曲目独立状态
     console.log("📊 [Suno] 查询结果:", {
-      status: outputs.status,
-      hasAudio1: !!outputs.audio_url,
-      hasCover1: !!outputs.cover_url,
-      hasAudio2: !!outputs.audio_url_2,
-      hasCover2: !!outputs.cover_url_2,
+      globalStatus: outputs.status,
+      status1: outputs.status_1,
+      status2: outputs.status_2,
+      hasAudio1: !!audioUrl1,
+      hasAudio2: !!audioUrl2,
     })
 
-    // 映射状态
+    // 映射全局状态
     let status: MusicGenerationStatus = "PENDING"
     if (outputs.status === "SUCCESS" || outputs.status === "success") {
       status = "SUCCESS"
@@ -206,19 +221,24 @@ export async function checkMusicStatus(
       status = "PROCESSING"
     }
 
-    // 🔥 返回双曲目数据
+    // 🔥 返回双曲目数据（包含独立状态）
     return {
       status,
       taskId,
+      // 🔥 独立状态
+      status1: outputs.status_1,
+      status2: outputs.status_2,
       // 第一首歌
-      audioUrl: outputs.audio_url,
-      coverUrl: outputs.cover_url,
+      audioUrl: audioUrl1,
+      coverUrl: coverUrl1,
+      title: outputs.title_1 || outputs.title,
+      duration: outputs.duration_1 || outputs.duration,
       // 第二首歌
-      audioUrl2: outputs.audio_url_2,
-      coverUrl2: outputs.cover_url_2,
-      // 通用字段
-      title: outputs.title,
-      duration: outputs.duration,
+      audioUrl2: audioUrl2,
+      coverUrl2: coverUrl2,
+      title2: outputs.title_2,
+      duration2: outputs.duration_2,
+      // 错误信息
       errorMessage: outputs.error_message,
     }
   } catch (error: any) {

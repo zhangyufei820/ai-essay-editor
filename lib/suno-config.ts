@@ -66,20 +66,43 @@ export type MusicGenerationStatus =
   | "ERROR"      // 生成失败
 
 // ============================================
+// 单首歌曲状态（用于增量渲染）
+// ============================================
+export type SongSlotStatus = "loading" | "ready" | "error"
+
+export interface SongSlot {
+  id: 1 | 2
+  status: SongSlotStatus
+  audioUrl?: string
+  coverUrl?: string
+  title?: string
+  duration?: number
+  errorMessage?: string
+}
+
+// ============================================
 // 音乐生成结果类型
-// 🔥 更新：支持双曲目（Suno V5 一次生成两首歌）
+// 🔥 更新：支持双曲目独立状态（增量渲染）
 // ============================================
 export interface MusicGenerationResult {
+  /** 全局状态（用于判断是否继续轮询） */
   status: MusicGenerationStatus
   taskId: string
+  
+  // 🔥 新增：独立状态字段（Agent B 返回）
+  status1?: string  // 第一首歌状态
+  status2?: string  // 第二首歌状态
+  
   // 第一首歌
   audioUrl?: string
   coverUrl?: string
-  // 第二首歌（新增字段）
+  // 第二首歌
   audioUrl2?: string
   coverUrl2?: string
   // 通用字段
   title?: string
+  title2?: string
   duration?: number
+  duration2?: number
   errorMessage?: string
 }

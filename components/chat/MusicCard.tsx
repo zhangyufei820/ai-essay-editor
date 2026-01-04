@@ -6,7 +6,7 @@
  * 2. 成功状态：显示双曲目播放面板（Suno V5 一次生成两首歌）
  * 3. 错误状态：显示错误信息
  * 
- * 🔥 更新：支持双曲目展示（版本 1 和版本 2）
+ * 🔥 更新：支持增量渲染 - 两首歌独立显示，不等待批量完成
  * 
  * ⚠️ 安全协议：此组件完全独立，不影响任何现有功能
  */
@@ -27,34 +27,24 @@ import {
   RefreshCw
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import type { MusicGenerationStatus, MusicGenerationResult } from "@/lib/suno-config"
+import type { MusicGenerationStatus, SongSlot, SongSlotStatus } from "@/lib/suno-config"
 
 // 🔥 品牌深绿色
 const BRAND_GREEN = "#14532d"
 const SUNO_PINK = "#db2777"
 
 // ============================================
-// 类型定义 - 🔥 更新：支持双曲目
+// 类型定义 - 🔥 更新：支持增量渲染
 // ============================================
 
 interface MusicCardProps {
   /** 任务 ID */
   taskId: string
-  /** 当前状态 */
-  status: MusicGenerationStatus
-  /** 第一首歌音频 URL */
-  audioUrl?: string
-  /** 第一首歌封面 URL */
-  coverUrl?: string
-  /** 第二首歌音频 URL（新增） */
-  audioUrl2?: string
-  /** 第二首歌封面 URL（新增） */
-  coverUrl2?: string
-  /** 歌曲标题 */
-  title?: string
-  /** 时长（秒） */
-  duration?: number
-  /** 错误信息 */
+  /** 🔥 双槽位独立状态 */
+  songs: [SongSlot, SongSlot]
+  /** 全局状态（用于显示整体错误） */
+  globalStatus?: MusicGenerationStatus
+  /** 全局错误信息 */
   errorMessage?: string
   /** 重试回调 */
   onRetry?: () => void
@@ -86,18 +76,13 @@ const LOADING_MESSAGES = [
 ]
 
 // ============================================
-// 主组件
+// 主组件 - 🔥 增量渲染版本
 // ============================================
 
 export function MusicCard({
   taskId,
-  status,
-  audioUrl,
-  coverUrl,
-  audioUrl2,
-  coverUrl2,
-  title,
-  duration,
+  songs,
+  globalStatus,
   errorMessage,
   onRetry,
   className,
@@ -105,14 +90,29 @@ export function MusicCard({
   // 加载文案轮换
   const [loadingIndex, setLoadingIndex] = useState(0)
   
+  // 判断是否有任何槽位在加载
+  const hasLoadingSlot = songs.some(s => s.status === "loading")
+  
   useEffect(() => {
-    if (status === "PENDING" || status === "PROCESSING") {
+    if (hasLoadingSlot) {
       const timer = setInterval(() => {
         setLoadingIndex((prev) => (prev + 1) % LOADING_MESSAGES.length)
       }, 3000)
       return () => clearInterval(timer)
     }
-  }, [status])
+  }, [hasLoadingSlot])
+
+  // 全局错误状态
+  if (globalStatus === "ERROR" && !songs.some(s => s.status === "ready")) {
+    return (
+      <div className={cn(
+        "relative overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white shadow-sm",
+        className
+      )}>
+        <ErrorState message={errorMessage} onRetry={onRetry} />
+      </div>
+    )
+  }
 
   return (
     <div
@@ -122,178 +122,156 @@ export function MusicCard({
         className
       )}
     >
-      <AnimatePresence mode="wait">
-        {/* 加载中状态 */}
-        {(status === "PENDING" || status === "PROCESSING") && (
-          <LoadingState 
-            key="loading" 
-            message={LOADING_MESSAGES[loadingIndex]} 
-          />
-        )}
+      <div className="p-4">
+        {/* 标题区域 */}
+        <div className="flex items-center gap-2 mb-4">
+          <div 
+            className="flex h-8 w-8 items-center justify-center rounded-lg"
+            style={{ backgroundColor: `${SUNO_PINK}15` }}
+          >
+            <Music className="h-4 w-4" style={{ color: SUNO_PINK }} />
+          </div>
+          <div>
+            <h3 className="font-medium text-slate-800">
+              AI 生成的音乐
+            </h3>
+            <p className="text-xs text-slate-400">
+              由 Suno V5 生成 · 2 个版本
+            </p>
+          </div>
+        </div>
 
-        {/* 成功状态 - 🔥 双曲目面板 */}
-        {status === "SUCCESS" && audioUrl && (
-          <SuccessState
-            key="success"
-            audioUrl={audioUrl}
-            coverUrl={coverUrl}
-            audioUrl2={audioUrl2}
-            coverUrl2={coverUrl2}
-            title={title}
-            duration={duration}
+        {/* 🔥 双槽位网格布局 - 增量渲染 */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* 槽位 1 */}
+          <SongSlotRenderer 
+            slot={songs[0]} 
+            version={1} 
+            loadingMessage={LOADING_MESSAGES[loadingIndex]}
           />
-        )}
 
-        {/* 错误状态 */}
-        {status === "ERROR" && (
-          <ErrorState
-            key="error"
-            message={errorMessage}
-            onRetry={onRetry}
+          {/* 槽位 2 */}
+          <SongSlotRenderer 
+            slot={songs[1]} 
+            version={2} 
+            loadingMessage={LOADING_MESSAGES[(loadingIndex + 2) % LOADING_MESSAGES.length]}
           />
-        )}
-      </AnimatePresence>
+        </div>
+      </div>
     </div>
   )
 }
 
 // ============================================
-// 加载中状态组件
+// 🔥 单槽位渲染器 - 根据状态显示不同内容
 // ============================================
 
-function LoadingState({ message }: { message: string }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -10 }}
-      className="flex flex-col items-center justify-center p-8 min-h-[200px]"
-    >
-      {/* 音乐波形动画 */}
-      <div className="relative mb-6">
-        <div 
-          className="flex h-16 w-16 items-center justify-center rounded-2xl"
-          style={{ backgroundColor: `${SUNO_PINK}15` }}
-        >
-          <Music className="h-8 w-8" style={{ color: SUNO_PINK }} />
-        </div>
-        
-        {/* 脉冲动画 */}
-        <div 
-          className="absolute inset-0 rounded-2xl animate-ping opacity-20"
-          style={{ backgroundColor: SUNO_PINK }}
-        />
-      </div>
-
-      {/* 音乐波形条 */}
-      <div className="flex items-end gap-1 mb-4 h-8">
-        {[0, 1, 2, 3, 4].map((i) => (
-          <motion.div
-            key={i}
-            className="w-1.5 rounded-full"
-            style={{ backgroundColor: SUNO_PINK }}
-            animate={{
-              height: ["8px", "24px", "8px"],
-            }}
-            transition={{
-              duration: 0.8,
-              repeat: Infinity,
-              delay: i * 0.1,
-              ease: "easeInOut",
-            }}
-          />
-        ))}
-      </div>
-
-      {/* 加载文案 */}
-      <motion.p
-        key={message}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        className="text-sm font-medium text-slate-600"
-      >
-        {message}
-      </motion.p>
-
-      {/* 进度提示 */}
-      <p className="mt-2 text-xs text-slate-400">
-        音乐生成通常需要 1-3 分钟
-      </p>
-    </motion.div>
-  )
-}
-
-// ============================================
-// 成功状态组件 - 🔥 双曲目播放面板
-// ============================================
-
-function SuccessState({
-  audioUrl,
-  coverUrl,
-  audioUrl2,
-  coverUrl2,
-  title,
-  duration,
+function SongSlotRenderer({
+  slot,
+  version,
+  loadingMessage,
 }: {
-  audioUrl: string
-  coverUrl?: string
-  audioUrl2?: string
-  coverUrl2?: string
-  title?: string
-  duration?: number
+  slot: SongSlot
+  version: number
+  loadingMessage: string
 }) {
-  // 判断是否有第二首歌
-  const hasTwoTracks = !!audioUrl2
+  // 版本标签颜色
+  const versionColors = {
+    1: { bg: "#fef3c7", text: "#d97706", border: "#fcd34d" },
+    2: { bg: "#dbeafe", text: "#2563eb", border: "#93c5fd" },
+  }
+  const colors = versionColors[version as 1 | 2] || versionColors[1]
 
   return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.95 }}
-      className="p-4"
-    >
-      {/* 标题区域 */}
-      <div className="flex items-center gap-2 mb-4">
-        <div 
-          className="flex h-8 w-8 items-center justify-center rounded-lg"
-          style={{ backgroundColor: `${SUNO_PINK}15` }}
+    <AnimatePresence mode="wait">
+      {/* 加载中 */}
+      {slot.status === "loading" && (
+        <motion.div
+          key="loading"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="bg-slate-50 rounded-xl p-4 border border-slate-100 min-h-[120px] flex flex-col items-center justify-center"
         >
-          <Music className="h-4 w-4" style={{ color: SUNO_PINK }} />
-        </div>
-        <div>
-          <h3 className="font-medium text-slate-800">
-            {title || "AI 生成的音乐"}
-          </h3>
-          <p className="text-xs text-slate-400">
-            由 Suno V5 生成 {hasTwoTracks ? "· 2 个版本" : ""}
-          </p>
-        </div>
-      </div>
+          {/* 版本标签 */}
+          <div 
+            className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium mb-3"
+            style={{ 
+              backgroundColor: colors.bg, 
+              color: colors.text,
+              border: `1px solid ${colors.border}`
+            }}
+          >
+            版本 {version}
+          </div>
 
-      {/* 🔥 双曲目网格布局 */}
-      <div className={cn(
-        "grid gap-4",
-        hasTwoTracks ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1"
-      )}>
-        {/* 版本 1 */}
-        <SingleTrackPlayer
-          audioUrl={audioUrl}
-          coverUrl={coverUrl}
-          title={title}
-          version={1}
-        />
+          {/* 音乐波形条 */}
+          <div className="flex items-end gap-1 mb-3 h-6">
+            {[0, 1, 2, 3, 4].map((i) => (
+              <motion.div
+                key={i}
+                className="w-1 rounded-full"
+                style={{ backgroundColor: SUNO_PINK }}
+                animate={{
+                  height: ["6px", "18px", "6px"],
+                }}
+                transition={{
+                  duration: 0.8,
+                  repeat: Infinity,
+                  delay: i * 0.1,
+                  ease: "easeInOut",
+                }}
+              />
+            ))}
+          </div>
 
-        {/* 版本 2（如果存在） */}
-        {hasTwoTracks && audioUrl2 && (
+          <p className="text-xs text-slate-500">{loadingMessage}</p>
+        </motion.div>
+      )}
+
+      {/* 就绪 - 显示播放器 */}
+      {slot.status === "ready" && slot.audioUrl && (
+        <motion.div
+          key="ready"
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0 }}
+        >
           <SingleTrackPlayer
-            audioUrl={audioUrl2}
-            coverUrl={coverUrl2}
-            title={title}
-            version={2}
+            audioUrl={slot.audioUrl}
+            coverUrl={slot.coverUrl}
+            title={slot.title}
+            version={version}
           />
-        )}
-      </div>
-    </motion.div>
+        </motion.div>
+      )}
+
+      {/* 错误 */}
+      {slot.status === "error" && (
+        <motion.div
+          key="error"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="bg-red-50 rounded-xl p-4 border border-red-100 min-h-[120px] flex flex-col items-center justify-center"
+        >
+          {/* 版本标签 */}
+          <div 
+            className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium mb-3"
+            style={{ 
+              backgroundColor: colors.bg, 
+              color: colors.text,
+              border: `1px solid ${colors.border}`
+            }}
+          >
+            版本 {version}
+          </div>
+
+          <AlertCircle className="h-6 w-6 text-red-400 mb-2" />
+          <p className="text-xs text-red-500">{slot.errorMessage || "生成失败"}</p>
+        </motion.div>
+      )}
+    </AnimatePresence>
   )
 }
 

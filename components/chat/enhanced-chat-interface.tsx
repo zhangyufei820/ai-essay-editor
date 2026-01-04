@@ -1382,18 +1382,13 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                                               isStreaming={message.id === currentBotIdRef.current && showCursor && isLoading}
                                             />
                                           )}
-                                          {/* 显示音乐卡片 */}
-                                          {taskId && (
+                                          {/* 显示音乐卡片 - 🔥 增量渲染版本 */}
+                                          {taskId && musicTask && (
                                             <MusicCard
                                               taskId={taskId}
-                                              status={musicTask?.status || "PENDING"}
-                                              audioUrl={musicTask?.audioUrl}
-                                              coverUrl={musicTask?.coverUrl}
-                                              audioUrl2={musicTask?.audioUrl2}
-                                              coverUrl2={musicTask?.coverUrl2}
-                                              title={musicTask?.title}
-                                              duration={musicTask?.duration}
-                                              errorMessage={musicTask?.errorMessage}
+                                              songs={musicTask.songs}
+                                              globalStatus={musicTask.globalStatus}
+                                              errorMessage={musicTask.errorMessage}
                                               onRetry={() => retryTask(taskId, userId)}
                                               className="mt-4"
                                             />

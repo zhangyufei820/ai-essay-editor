@@ -4,9 +4,8 @@
  * 功能：
  * 1. 管理多个音乐生成任务
  * 2. 自动轮询任务状态（5秒间隔）
- * 3. 非阻塞 UI（用户可自由滚动）
- * 
- * 🔥 重构：修复轮询闭包问题，使用 useRef 存储最新状态
+ * 3. 🔥 增量渲染 - 两首歌独立显示，不等待批量完成
+ * 4. 非阻塞 UI（用户可自由滚动）
  * 
  * ⚠️ 安全协议：此 Hook 完全独立，不影响任何现有功能
  */
@@ -18,26 +17,25 @@ import {
   extractTaskId,
   removeTaskIdFromText 
 } from "@/lib/suno-service"
-import { SUNO_POLLING_CONFIG, type MusicGenerationResult } from "@/lib/suno-config"
+import { 
+  SUNO_POLLING_CONFIG, 
+  type MusicGenerationResult,
+  type SongSlotStatus,
+  type SongSlot
+} from "@/lib/suno-config"
 
 // ============================================
 // 类型定义
 // ============================================
 
-/** 单个音乐任务状态 - 🔥 支持双曲目 */
+/** 单个音乐任务状态 - 🔥 支持双槽位独立状态 */
 export interface MusicTask {
   taskId: string
   messageId: string  // 关联的消息 ID
-  status: MusicGenerationResult["status"]
-  // 第一首歌
-  audioUrl?: string
-  coverUrl?: string
-  // 第二首歌（新增字段）
-  audioUrl2?: string
-  coverUrl2?: string
-  // 通用字段
-  title?: string
-  duration?: number
+  /** 全局状态（用于判断是否继续轮询） */
+  globalStatus: MusicGenerationResult["status"]
+  /** 🔥 双槽位独立状态 */
+  songs: [SongSlot, SongSlot]
   errorMessage?: string
   createdAt: number
   pollCount: number
@@ -63,6 +61,16 @@ export interface UseSunoMusicReturn {
   clearCompletedTasks: () => void
   /** 是否有正在进行的任务 */
   hasActiveTasks: boolean
+}
+
+// ============================================
+// 辅助函数：创建初始双槽位
+// ============================================
+function createInitialSongs(): [SongSlot, SongSlot] {
+  return [
+    { id: 1, status: "loading" },
+    { id: 2, status: "loading" }
+  ]
 }
 
 // ============================================
@@ -126,10 +134,10 @@ export function useSunoMusic(): UseSunoMusicReturn {
   }, [])
 
   // ============================================
-  // 🔥 轮询任务状态 - 使用 ref 获取最新状态
+  // 🔥 轮询任务状态 - 增量渲染逻辑
   // ============================================
   const pollTaskStatus = useCallback(async (taskId: string, userId: string) => {
-    // 🔥 从 ref 获取最新状态，避免闭包问题
+    // 从 ref 获取最新状态，避免闭包问题
     const task = musicTasksRef.current.get(taskId)
     
     if (!task) {
@@ -142,7 +150,7 @@ export function useSunoMusic(): UseSunoMusicReturn {
     if (task.pollCount >= SUNO_POLLING_CONFIG.maxAttempts) {
       console.log(`⏰ [Suno] 轮询超时: ${taskId}，已轮询 ${task.pollCount} 次`)
       updateTask(taskId, {
-        status: "ERROR",
+        globalStatus: "ERROR",
         errorMessage: "生成超时（5分钟），请重试"
       })
       stopPolling(taskId)
@@ -155,37 +163,69 @@ export function useSunoMusic(): UseSunoMusicReturn {
       // 调用 Agent B 查询状态
       const result = await checkMusicStatus(taskId, userId)
       
-      console.log(`📊 [Suno] 轮询结果: ${taskId}`, {
-        status: result.status,
-        hasAudio: !!result.audioUrl,
-        hasAudio2: !!result.audioUrl2
-      })
+      // 🔥 增量渲染：独立更新每个槽位
+      const currentSongs = [...task.songs] as [SongSlot, SongSlot]
       
-      // 🔥 更新任务状态（包含双曲目数据）
+      // 🔥 槽位 1：如果有 URL 且当前还在 loading，更新为 ready
+      if (result.audioUrl && currentSongs[0].status === "loading") {
+        console.log(`✅ [Suno] 歌曲 1 已就绪: ${taskId}`)
+        currentSongs[0] = {
+          id: 1,
+          status: "ready",
+          audioUrl: result.audioUrl,
+          coverUrl: result.coverUrl,
+          title: result.title,
+          duration: result.duration
+        }
+      }
+      
+      // 🔥 槽位 2：如果有 URL 且当前还在 loading，更新为 ready
+      if (result.audioUrl2 && currentSongs[1].status === "loading") {
+        console.log(`✅ [Suno] 歌曲 2 已就绪: ${taskId}`)
+        currentSongs[1] = {
+          id: 2,
+          status: "ready",
+          audioUrl: result.audioUrl2,
+          coverUrl: result.coverUrl2,
+          title: result.title2,
+          duration: result.duration2
+        }
+      }
+      
+      // 检查独立状态字段（如果 Agent B 返回了）
+      if (result.status1 === "error" && currentSongs[0].status === "loading") {
+        currentSongs[0] = { ...currentSongs[0], status: "error", errorMessage: "生成失败" }
+      }
+      if (result.status2 === "error" && currentSongs[1].status === "loading") {
+        currentSongs[1] = { ...currentSongs[1], status: "error", errorMessage: "生成失败" }
+      }
+      
+      console.log(`📊 [Suno] 槽位状态: Song1=${currentSongs[0].status}, Song2=${currentSongs[1].status}`)
+      
+      // 更新任务状态
       updateTask(taskId, {
-        status: result.status,
-        // 第一首歌
-        audioUrl: result.audioUrl,
-        coverUrl: result.coverUrl,
-        // 第二首歌
-        audioUrl2: result.audioUrl2,
-        coverUrl2: result.coverUrl2,
-        // 通用字段
-        title: result.title,
-        duration: result.duration,
+        globalStatus: result.status,
+        songs: currentSongs,
         errorMessage: result.errorMessage,
         pollCount: task.pollCount + 1
       })
 
-      // 如果完成或出错，停止轮询
-      if (result.status === "SUCCESS") {
-        console.log(`✅ [Suno] 音乐生成成功: ${taskId}`)
+      // 🔥 终止条件：
+      // 1. 两首歌都 ready
+      // 2. 全局状态为 ERROR
+      // 3. 超时（已在上面处理）
+      const bothReady = currentSongs[0].status === "ready" && currentSongs[1].status === "ready"
+      const hasError = result.status === "ERROR"
+      
+      if (bothReady) {
+        console.log(`🎉 [Suno] 两首歌都已就绪，停止轮询: ${taskId}`)
+        updateTask(taskId, { globalStatus: "SUCCESS" })
         stopPolling(taskId)
-      } else if (result.status === "ERROR") {
-        console.log(`❌ [Suno] 音乐生成失败: ${taskId}`, result.errorMessage)
+      } else if (hasError) {
+        console.log(`❌ [Suno] 全局错误，停止轮询: ${taskId}`, result.errorMessage)
         stopPolling(taskId)
       }
-      // PENDING 或 PROCESSING 状态继续轮询
+      // 否则继续轮询
       
     } catch (error: any) {
       console.error(`❌ [Suno] 轮询异常: ${taskId}`, error)
@@ -246,11 +286,12 @@ export function useSunoMusic(): UseSunoMusicReturn {
         if (taskId) {
           console.log(`🔑 [Suno] 检测到 Task ID: ${taskId}，开始轮询`)
           
-          // 创建新任务
+          // 🔥 创建新任务（双槽位初始化为 loading）
           const newTask: MusicTask = {
             taskId,
             messageId,
-            status: "PENDING",
+            globalStatus: "PENDING",
+            songs: createInitialSongs(),
             createdAt: Date.now(),
             pollCount: 0
           }
@@ -284,7 +325,8 @@ export function useSunoMusic(): UseSunoMusicReturn {
     
     // 重置任务状态
     updateTask(taskId, {
-      status: "PENDING",
+      globalStatus: "PENDING",
+      songs: createInitialSongs(),
       pollCount: 0,
       errorMessage: undefined
     })
@@ -300,7 +342,7 @@ export function useSunoMusic(): UseSunoMusicReturn {
     setMusicTasks(prev => {
       const newMap = new Map(prev)
       for (const [taskId, task] of newMap) {
-        if (task.status === "SUCCESS" || task.status === "ERROR") {
+        if (task.globalStatus === "SUCCESS" || task.globalStatus === "ERROR") {
           newMap.delete(taskId)
         }
       }
@@ -312,7 +354,7 @@ export function useSunoMusic(): UseSunoMusicReturn {
   // 计算是否有活跃任务
   // ============================================
   const hasActiveTasks = Array.from(musicTasks.values()).some(
-    task => task.status === "PENDING" || task.status === "PROCESSING"
+    task => task.globalStatus === "PENDING" || task.globalStatus === "PROCESSING"
   )
 
   // ============================================
