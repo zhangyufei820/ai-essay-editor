@@ -52,53 +52,99 @@ export default function InvitePage() {
       const parsedUser = JSON.parse(userStr)
       const userId = parsedUser.id || parsedUser.sub || parsedUser.userId
       setUser(parsedUser)
+      
+      console.log('🔍 [邀请页] 开始加载用户数据')
+      console.log('🔍 [邀请页] 用户 ID:', userId)
+      console.log('🔍 [邀请页] 完整用户对象:', JSON.stringify(parsedUser, null, 2))
 
       if (userId) {
-        // 获取用户的推荐码
-        const { data: codeData } = await supabase
-          .from('referral_codes')
-          .select('code, uses')
-          .eq('user_id', userId)
-          .single()
+        // 生成本地推荐码（不依赖数据库）
+        const localCode = generateReferralCode(userId)
+        setReferralCode(localCode)
+        
+        // 尝试获取用户的推荐码（如果表存在）
+        try {
+          const { data: codeData, error: codeError } = await supabase
+            .from('referral_codes')
+            .select('code, uses')
+            .eq('user_id', userId)
+            .single()
 
-        if (codeData) {
-          setReferralCode(codeData.code)
-          setInviteCount(codeData.uses || 0)
-        } else {
-          // 如果没有推荐码，生成一个
-          const newCode = generateReferralCode(userId)
-          await supabase.from('referral_codes').insert({
-            user_id: userId,
-            code: newCode,
-            uses: 0
-          })
-          setReferralCode(newCode)
+          if (!codeError && codeData) {
+            setReferralCode(codeData.code)
+            setInviteCount(codeData.uses || 0)
+          } else {
+            console.log('🔍 [邀请页] 推荐码表查询失败或不存在，使用本地生成的推荐码')
+          }
+        } catch (e) {
+          console.log('🔍 [邀请页] 推荐码表不可用，使用本地生成的推荐码')
         }
 
-        // 获取邀请奖励总额
-        const { data: referrals } = await supabase
-          .from('referrals')
-          .select('reward_credits')
-          .eq('referrer_id', userId)
-          .eq('status', 'completed')
+        // 尝试获取邀请奖励总额
+        try {
+          const { data: referrals } = await supabase
+            .from('referrals')
+            .select('reward_credits')
+            .eq('referrer_id', userId)
+            .eq('status', 'completed')
 
-        if (referrals) {
-          const total = referrals.reduce((sum, r) => sum + (r.reward_credits || 0), 0)
-          setTotalReward(total)
+          if (referrals) {
+            const total = referrals.reduce((sum, r) => sum + (r.reward_credits || 0), 0)
+            setTotalReward(total)
+          }
+        } catch (e) {
+          console.log('🔍 [邀请页] 邀请奖励表不可用')
         }
 
         // 🔥 使用后端 API 检查会员状态（绕过 RLS）
-        try {
-          const response = await fetch('/api/user/membership', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId })
-          })
-          const result = await response.json()
-          console.log('🔍 [邀请页] 会员检查结果:', result)
-          setIsPaidMember(result.isPaidMember === true)
-        } catch (e) {
-          console.error('会员检查失败:', e)
+        // 尝试多种可能的用户 ID
+        const possibleUserIds = [
+          userId,
+          parsedUser.id,
+          parsedUser.sub,
+          parsedUser.userId,
+          parsedUser.user_id,
+          parsedUser._id,
+          // 尝试用户的手机号或邮箱
+          parsedUser.phone,
+          parsedUser.email,
+          parsedUser.phone_number,
+          parsedUser.mobile
+        ].filter(Boolean)
+        
+        // 去重
+        const uniqueUserIds = [...new Set(possibleUserIds)]
+        
+        console.log('🔍 [邀请页] 尝试的用户 ID 列表:', uniqueUserIds)
+        
+        let membershipFound = false
+        
+        for (const tryUserId of uniqueUserIds) {
+          if (membershipFound) break
+          
+          try {
+            console.log('🔍 [邀请页] 尝试用户 ID:', tryUserId)
+            const response = await fetch('/api/user/membership', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ userId: tryUserId })
+            })
+            const result = await response.json()
+            console.log('🔍 [邀请页] 会员检查结果:', result)
+            
+            if (result.isPaidMember === true) {
+              membershipFound = true
+              setIsPaidMember(true)
+              console.log('🔍 [邀请页] ✅ 找到会员状态，用户 ID:', tryUserId)
+              break
+            }
+          } catch (e) {
+            console.error('会员检查失败:', e)
+          }
+        }
+        
+        if (!membershipFound) {
+          console.log('🔍 [邀请页] ❌ 未找到会员状态')
           setIsPaidMember(false)
         }
       }
