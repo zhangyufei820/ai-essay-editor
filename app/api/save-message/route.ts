@@ -19,15 +19,16 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { session_id, role, content, files } = body
+    const { session_id, role, content, files, metadata } = body
 
-    // 保存消息
+    // 🔥 保存消息（支持 metadata 字段，用于存储音乐等附加数据）
     const { data: message, error: messageError } = await supabase
       .from("chat_messages")
       .insert({
         session_id,
         role,
         content,
+        metadata: metadata || null,  // 🔥 音乐数据等
       })
       .select()
       .single()

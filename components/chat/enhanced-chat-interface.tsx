@@ -88,7 +88,25 @@ const supabase = createClient(
 
 // --- 类型定义 ---
 type UploadedFile = { name: string; type: string; size: number; data: string; preview?: string; difyFileId?: string }
-type Message = { id: string; role: "user" | "assistant"; content: string }
+// 🔥 消息类型 - 支持 metadata 存储音乐等附加数据
+type Message = { 
+  id: string
+  role: "user" | "assistant"
+  content: string
+  metadata?: {
+    type?: "music"
+    taskId?: string
+    songs?: Array<{
+      id: number
+      status: "loading" | "ready" | "error"
+      audioUrl?: string
+      coverUrl?: string
+      title?: string
+      duration?: number
+      errorMessage?: string
+    }>
+  } | null
+}
 type FileProcessingState = { status: "idle" | "uploading" | "processing" | "recognizing" | "complete" | "error"; progress: number; message: string }
 
 // --- 辅助组件：思考加载器 ---
@@ -461,10 +479,12 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       if (error) throw error
 
       if (data && data.length > 0) {
+        // 🔥 加载消息时包含 metadata（用于恢复音乐数据）
         const historyMessages = data.map((m: any) => ({
            id: m.id,
            role: m.role,
-           content: m.content
+           content: m.content,
+           metadata: m.metadata || null  // 🔥 包含音乐等附加数据
         }))
         setMessages(historyMessages)
         setCurrentSessionId(sid)
@@ -1382,32 +1402,36 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                                 <SimpleBrainLoader />
                              ) : (
                                 <>
-                                  {/* 🎵 Suno 音乐卡片渲染 - 检测 [TASK_ID:...] */}
+                                  {/* 🎵 Suno 音乐卡片渲染 - 支持实时任务和历史 metadata */}
                                   {(() => {
                                     const musicTask = getTaskByMessageId(message.id)
                                     const hasTaskId = TASK_ID_REGEX.test(message.content)
+                                    // 🔥 从 metadata 恢复历史音乐数据
+                                    const savedMusic = message.metadata?.type === "music" ? message.metadata : null
                                     
-                                    if (musicTask || hasTaskId) {
-                                      // 从文本中提取 Task ID（如果 musicTask 不存在）
-                                      const taskId = musicTask?.taskId || extractTaskId(message.content) || ""
+                                    if (musicTask || hasTaskId || savedMusic) {
+                                      const taskId = musicTask?.taskId || savedMusic?.taskId || extractTaskId(message.content) || ""
                                       const cleanContent = removeTaskIdFromText(message.content)
+                                      
+                                      // 🔥 优先使用实时任务数据，其次使用保存的 metadata
+                                      const songs = (musicTask?.songs || savedMusic?.songs || []) as [any, any]
+                                      const globalStatus = musicTask?.globalStatus || (savedMusic ? "SUCCESS" : "PENDING")
                                       
                                       return (
                                         <>
-                                          {/* 显示清理后的文字内容 */}
                                           {cleanContent && (
                                             <UltimateRenderer 
                                               content={cleanContent} 
                                               isStreaming={message.id === currentBotIdRef.current && showCursor && isLoading}
                                             />
                                           )}
-                                          {/* 显示音乐卡片 - 🔥 增量渲染版本 */}
-                                          {taskId && musicTask && (
+                                          {/* 🔥 显示音乐卡片 - 支持历史恢复 */}
+                                          {(taskId && songs.length > 0) && (
                                             <MusicCard
                                               taskId={taskId}
-                                              songs={musicTask.songs}
-                                              globalStatus={musicTask.globalStatus}
-                                              errorMessage={musicTask.errorMessage}
+                                              songs={songs}
+                                              globalStatus={globalStatus}
+                                              errorMessage={musicTask?.errorMessage}
                                               onRetry={() => retryTask(taskId, userId)}
                                               className="mt-4"
                                             />
@@ -1416,7 +1440,6 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                                       )
                                     }
                                     
-                                    // 普通消息渲染
                                     return (
                                       <UltimateRenderer 
                                         content={message.content} 
