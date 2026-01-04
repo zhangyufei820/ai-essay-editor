@@ -12,6 +12,7 @@
 
 import {
   TASK_ID_REGEX,
+  UUID_REGEX,
   type MusicGenerationStatus,
   type MusicGenerationResult,
 } from "./suno-config"
@@ -237,22 +238,48 @@ export async function checkMusicStatus(
 /**
  * 从 AI 回复文本中提取 Task ID
  * 
+ * 🔥 支持两种格式：
+ * 1. [TASK_ID:xxx] - 标记格式
+ * 2. 纯 UUID - 866059ef-6422-4cda-xxxx-xxxxxxxxxxxx
+ * 
  * @param text - AI 回复的完整文本
  * @returns Task ID 或 null
  */
 export function extractTaskId(text: string): string | null {
-  const match = text.match(TASK_ID_REGEX)
-  return match ? match[1].trim() : null
+  // 优先尝试 [TASK_ID:xxx] 格式
+  const tagMatch = text.match(TASK_ID_REGEX)
+  if (tagMatch) {
+    console.log("🔑 [Suno] 从 [TASK_ID:xxx] 格式提取:", tagMatch[1].trim())
+    return tagMatch[1].trim()
+  }
+  
+  // 🔥 其次尝试纯 UUID 格式
+  const uuidMatch = text.match(UUID_REGEX)
+  if (uuidMatch) {
+    console.log("🔑 [Suno] 从纯 UUID 格式提取:", uuidMatch[0])
+    return uuidMatch[0]
+  }
+  
+  console.log("⚠️ [Suno] 未找到 Task ID，文本:", text.slice(0, 100))
+  return null
 }
 
 /**
  * 从文本中移除 Task ID 标记，返回干净的显示文本
  * 
- * @param text - 包含 [TASK_ID:xxx] 的文本
+ * 🔥 支持两种格式：
+ * 1. [TASK_ID:xxx] - 标记格式
+ * 2. 纯 UUID - 866059ef-6422-4cda-xxxx-xxxxxxxxxxxx
+ * 
+ * @param text - 包含 Task ID 的文本
  * @returns 移除标记后的文本
  */
 export function removeTaskIdFromText(text: string): string {
-  return text.replace(TASK_ID_REGEX, "").trim()
+  // 移除 [TASK_ID:xxx] 格式
+  let cleaned = text.replace(TASK_ID_REGEX, "")
+  // 移除纯 UUID 格式（可选，如果 UUID 单独成行或被空格包围）
+  cleaned = cleaned.replace(new RegExp(`\\s*${UUID_REGEX.source}\\s*`, 'gi'), " ")
+  return cleaned.trim()
 }
 
 // ============================================

@@ -3,8 +3,10 @@
  * 
  * 功能：
  * 1. 管理多个音乐生成任务
- * 2. 自动轮询任务状态
+ * 2. 自动轮询任务状态（5秒间隔）
  * 3. 非阻塞 UI（用户可自由滚动）
+ * 
+ * 🔥 重构：修复轮询闭包问题，使用 useRef 存储最新状态
  * 
  * ⚠️ 安全协议：此 Hook 完全独立，不影响任何现有功能
  */
@@ -22,7 +24,7 @@ import { SUNO_POLLING_CONFIG, type MusicGenerationResult } from "@/lib/suno-conf
 // 类型定义
 // ============================================
 
-/** 单个音乐任务状态 - 🔥 更新：支持双曲目 */
+/** 单个音乐任务状态 - 🔥 支持双曲目 */
 export interface MusicTask {
   taskId: string
   messageId: string  // 关联的消息 ID
@@ -71,6 +73,14 @@ export function useSunoMusic(): UseSunoMusicReturn {
   // 音乐任务状态（使用 Map 支持多任务）
   const [musicTasks, setMusicTasks] = useState<Map<string, MusicTask>>(new Map())
   
+  // 🔥 使用 ref 存储最新的 musicTasks，解决轮询闭包问题
+  const musicTasksRef = useRef<Map<string, MusicTask>>(new Map())
+  
+  // 同步 state 到 ref
+  useEffect(() => {
+    musicTasksRef.current = musicTasks
+  }, [musicTasks])
+  
   // 轮询定时器引用
   const pollingTimersRef = useRef<Map<string, NodeJS.Timeout>>(new Map())
   
@@ -116,37 +126,40 @@ export function useSunoMusic(): UseSunoMusicReturn {
   }, [])
 
   // ============================================
-  // 开始轮询任务状态
+  // 🔥 轮询任务状态 - 使用 ref 获取最新状态
   // ============================================
-  const startPolling = useCallback((taskId: string, userId: string) => {
-    // 防止重复轮询
-    if (pollingTimersRef.current.has(taskId)) {
-      console.log(`⚠️ [Suno] 任务 ${taskId} 已在轮询中`)
+  const pollTaskStatus = useCallback(async (taskId: string, userId: string) => {
+    // 🔥 从 ref 获取最新状态，避免闭包问题
+    const task = musicTasksRef.current.get(taskId)
+    
+    if (!task) {
+      console.log(`⚠️ [Suno] 任务不存在，停止轮询: ${taskId}`)
+      stopPolling(taskId)
       return
     }
 
-    console.log(`🔄 [Suno] 开始轮询: ${taskId}`)
-    
-    const poll = async () => {
-      const task = musicTasks.get(taskId)
-      if (!task) {
-        stopPolling(taskId)
-        return
-      }
+    // 检查是否超过最大轮询次数（5分钟超时）
+    if (task.pollCount >= SUNO_POLLING_CONFIG.maxAttempts) {
+      console.log(`⏰ [Suno] 轮询超时: ${taskId}，已轮询 ${task.pollCount} 次`)
+      updateTask(taskId, {
+        status: "ERROR",
+        errorMessage: "生成超时（5分钟），请重试"
+      })
+      stopPolling(taskId)
+      return
+    }
 
-      // 检查是否超过最大轮询次数
-      if (task.pollCount >= SUNO_POLLING_CONFIG.maxAttempts) {
-        console.log(`⏰ [Suno] 轮询超时: ${taskId}`)
-        updateTask(taskId, {
-          status: "ERROR",
-          errorMessage: "生成超时，请重试"
-        })
-        stopPolling(taskId)
-        return
-      }
+    console.log(`🔄 [Suno] 轮询中: ${taskId}，第 ${task.pollCount + 1} 次`)
 
-      // 查询状态
+    try {
+      // 调用 Agent B 查询状态
       const result = await checkMusicStatus(taskId, userId)
+      
+      console.log(`📊 [Suno] 轮询结果: ${taskId}`, {
+        status: result.status,
+        hasAudio: !!result.audioUrl,
+        hasAudio2: !!result.audioUrl2
+      })
       
       // 🔥 更新任务状态（包含双曲目数据）
       updateTask(taskId, {
@@ -165,19 +178,46 @@ export function useSunoMusic(): UseSunoMusicReturn {
       })
 
       // 如果完成或出错，停止轮询
-      if (result.status === "SUCCESS" || result.status === "ERROR") {
-        console.log(`✅ [Suno] 任务完成: ${taskId}, 状态: ${result.status}`)
+      if (result.status === "SUCCESS") {
+        console.log(`✅ [Suno] 音乐生成成功: ${taskId}`)
+        stopPolling(taskId)
+      } else if (result.status === "ERROR") {
+        console.log(`❌ [Suno] 音乐生成失败: ${taskId}`, result.errorMessage)
         stopPolling(taskId)
       }
+      // PENDING 或 PROCESSING 状态继续轮询
+      
+    } catch (error: any) {
+      console.error(`❌ [Suno] 轮询异常: ${taskId}`, error)
+      // 网络错误不停止轮询，继续重试
+      updateTask(taskId, {
+        pollCount: task.pollCount + 1
+      })
+    }
+  }, [updateTask, stopPolling])
+
+  // ============================================
+  // 开始轮询任务状态
+  // ============================================
+  const startPolling = useCallback((taskId: string, userId: string) => {
+    // 防止重复轮询
+    if (pollingTimersRef.current.has(taskId)) {
+      console.log(`⚠️ [Suno] 任务 ${taskId} 已在轮询中`)
+      return
     }
 
+    console.log(`🔄 [Suno] 开始轮询: ${taskId}，间隔 ${SUNO_POLLING_CONFIG.interval}ms`)
+    
     // 立即执行一次
-    poll()
+    pollTaskStatus(taskId, userId)
 
-    // 设置定时轮询
-    const timer = setInterval(poll, SUNO_POLLING_CONFIG.interval)
+    // 设置定时轮询（每 5 秒）
+    const timer = setInterval(() => {
+      pollTaskStatus(taskId, userId)
+    }, SUNO_POLLING_CONFIG.interval)
+    
     pollingTimersRef.current.set(taskId, timer)
-  }, [musicTasks, updateTask, stopPolling])
+  }, [pollTaskStatus])
 
   // ============================================
   // 开始生成音乐
@@ -192,7 +232,7 @@ export function useSunoMusic(): UseSunoMusicReturn {
     console.log(`🎵 [Suno] 开始生成音乐: ${query.slice(0, 30)}...`)
     userIdRef.current = userId
 
-    // 调用流式生成 API
+    // 调用 Agent A 生成音乐
     await generateMusicStreaming(
       query,
       userId,
@@ -200,26 +240,34 @@ export function useSunoMusic(): UseSunoMusicReturn {
       (result) => {
         onComplete(result.answer)
 
-        // 如果提取到 Task ID，创建任务并开始轮询
-        if (result.taskId) {
+        // 🔥 从回复中提取 Task ID（支持 [TASK_ID:xxx] 和纯 UUID 格式）
+        const taskId = result.taskId || extractTaskId(result.answer)
+        
+        if (taskId) {
+          console.log(`🔑 [Suno] 检测到 Task ID: ${taskId}，开始轮询`)
+          
+          // 创建新任务
           const newTask: MusicTask = {
-            taskId: result.taskId,
+            taskId,
             messageId,
             status: "PENDING",
             createdAt: Date.now(),
             pollCount: 0
           }
 
+          // 添加到任务列表
           setMusicTasks(prev => {
             const newMap = new Map(prev)
-            newMap.set(result.taskId!, newTask)
+            newMap.set(taskId, newTask)
             return newMap
           })
 
-          // 延迟一点开始轮询，确保状态已更新
+          // 🔥 延迟 100ms 开始轮询，确保状态已更新到 ref
           setTimeout(() => {
-            startPolling(result.taskId!, userId)
+            startPolling(taskId, userId)
           }, 100)
+        } else {
+          console.log(`⚠️ [Suno] 未检测到 Task ID，无法轮询`)
         }
       }
     )

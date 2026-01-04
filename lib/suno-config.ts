@@ -31,10 +31,10 @@ export const SUNO_QUERY_CONFIG = {
 // 轮询配置
 // ============================================
 export const SUNO_POLLING_CONFIG = {
-  /** 轮询间隔（毫秒） */
-  interval: 3000,
-  /** 最大轮询次数（防止无限轮询） */
-  maxAttempts: 100,
+  /** 轮询间隔（毫秒）- 每 5 秒查询一次 */
+  interval: 5000,
+  /** 最大轮询次数（5分钟 / 5秒 = 60次） */
+  maxAttempts: 60,
   /** 超时时间（毫秒）- 5分钟 */
   timeout: 5 * 60 * 1000,
 }
@@ -42,7 +42,19 @@ export const SUNO_POLLING_CONFIG = {
 // ============================================
 // Task ID 提取正则
 // ============================================
+
+/** 
+ * 原格式：[TASK_ID:xxx] 
+ * 用于从标记格式中提取 Task ID
+ */
 export const TASK_ID_REGEX = /\[TASK_ID:\s*(.*?)\]/
+
+/**
+ * 🔥 新增：纯 UUID 格式正则
+ * 用于直接从文本中提取 UUID（Agent A 可能直接返回 UUID）
+ * 格式：866059ef-6422-4cda-xxxx-xxxxxxxxxxxx
+ */
+export const UUID_REGEX = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i
 
 // ============================================
 // 音乐生成状态枚举
