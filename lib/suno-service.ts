@@ -303,14 +303,12 @@ export function removeTaskIdFromText(text: string): string {
 }
 
 // ============================================
-// 4. 流式生成音乐（简化版，使用阻塞模式模拟）
+// 4. 🔥 流式生成音乐（真正的流式输出）
 // ============================================
 
 /**
  * 流式提交音乐生成任务
- * 用于在 UI 上实时显示 AI 的文字回复
- * 
- * 注意：由于使用代理 API，这里改为阻塞模式，但仍保持相同的接口
+ * 用于在 UI 上实时显示 AI 的文字回复（歌词逐字显示）
  * 
  * @param query - 用户输入的提示词
  * @param userId - 用户 ID
@@ -323,22 +321,87 @@ export async function generateMusicStreaming(
   onChunk: (text: string) => void,
   onComplete: (result: { answer: string; taskId: string | null }) => void
 ): Promise<void> {
-  console.log("🎵 [Suno] 开始生成音乐 (通过代理):", { query: query.slice(0, 50), userId })
+  console.log("🎵 [Suno] 开始流式生成音乐:", { query: query.slice(0, 50), userId })
 
   try {
-    // 先显示一个加载提示
-    onChunk("正在为您创作音乐，请稍候...")
-    
-    const result = await generateMusic(query, userId)
-    
-    if (result.success) {
-      // 清除加载提示，显示实际回复
-      onComplete({ answer: result.answer, taskId: result.taskId })
-    } else {
-      onComplete({ answer: `错误: ${result.error}`, taskId: null })
+    const response = await fetch(SUNO_PROXY_API, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        action: "generate",
+        query: query,
+        userId: userId,
+        streaming: true,  // 🔥 启用流式模式
+      }),
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      console.error("❌ [Suno] 流式 API 错误:", response.status, errorData)
+      onComplete({ answer: `错误: ${errorData.error || response.status}`, taskId: null })
+      return
     }
+
+    // 🔥 处理 SSE 流式响应
+    const reader = response.body?.getReader()
+    if (!reader) {
+      onComplete({ answer: "错误: 无法读取流式响应", taskId: null })
+      return
+    }
+
+    const decoder = new TextDecoder()
+    let fullText = ""
+    let taskId: string | null = null
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      const chunk = decoder.decode(value, { stream: true })
+      const lines = chunk.split("\n")
+
+      for (const line of lines) {
+        if (line.startsWith("data: ")) {
+          const data = line.slice(6)
+          if (data === "[DONE]") continue
+
+          try {
+            const parsed = JSON.parse(data)
+            
+            // 🔥 Dify SSE 格式：event 类型
+            if (parsed.event === "message" || parsed.event === "agent_message") {
+              const text = parsed.answer || ""
+              if (text) {
+                fullText += text
+                onChunk(fullText)  // 🔥 每次发送累积的完整文本
+              }
+            } else if (parsed.event === "message_end") {
+              // 消息结束
+              console.log("✅ [Suno] 流式消息结束")
+            }
+            
+            // 兼容其他格式
+            if (parsed.answer && !parsed.event) {
+              fullText = parsed.answer
+              onChunk(fullText)
+            }
+          } catch (e) {
+            // 忽略解析错误
+          }
+        }
+      }
+    }
+
+    // 🔥 提取 Task ID
+    taskId = extractTaskId(fullText)
+    console.log("✅ [Suno] 流式完成，Task ID:", taskId)
+    
+    onComplete({ answer: fullText, taskId })
+
   } catch (error: any) {
-    console.error("❌ [Suno] 生成异常:", error)
+    console.error("❌ [Suno] 流式生成异常:", error)
     onComplete({ answer: `错误: ${error.message}`, taskId: null })
   }
 }
