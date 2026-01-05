@@ -190,7 +190,11 @@ export async function POST(request: NextRequest) {
             targetApiKey = process.env.DIFY_API_KEY_GEMINI;
             keySource = "DIFY_API_KEY_GEMINI";
             break;
-        // 如果是 Banana/Sono/Sora 可以在这里继续加 case
+        case "banana-2-pro":
+            targetApiKey = process.env.DIFY_BANANA_API_KEY;
+            keySource = "DIFY_BANANA_API_KEY";
+            break;
+        // 如果是 Sono/Sora 可以在这里继续加 case
         default:
             // 如果没传 model 或者 model 是 standard，就用上面的默认 Key
             break;

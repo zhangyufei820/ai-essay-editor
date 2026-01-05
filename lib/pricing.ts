@@ -107,8 +107,8 @@ export const MODEL_COSTS: Record<ModelType, ModelCostConfig> = {
   // ========== 多媒体模型（按次固定扣费）==========
   "banana-2-pro": { 
     category: "media",
-    fixedCost: 50,  // 成本 50 积分 → 用户扣费 125 积分
-    displayName: "Banana 2 Pro",
+    fixedCost: 6,  // 成本 0.6 元 = 6 积分 → 用户扣费 10 积分（60% 毛利）
+    displayName: "Banana 2 Pro 4K",
     mode: "image"
   },
   "suno-v5": { 

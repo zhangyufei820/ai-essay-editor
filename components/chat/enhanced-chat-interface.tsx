@@ -582,9 +582,9 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       description: "多模态理解",
       group: "通用模型"
     },
-    "banana-2-pro": { 
-      name: "Banana 2 Pro", 
-      icon: Palette, 
+    "banana-2-pro": {
+      name: "Banana 2 Pro 4K",
+      icon: Palette,
       color: "#ca8a04",
       description: "AI 图像生成",
       badge: "热门",
