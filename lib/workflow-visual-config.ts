@@ -163,6 +163,14 @@ export const NODE_VISUAL_MAP: Record<string, WorkflowNodeConfig> = {
     estimatedDuration: 2
   },
   
+  // ============================================
+  // 🎨 Banana 2 Pro 4K - 图像生成节点映射
+  // ============================================
+  
+  // 🔥 Banana 使用快速通道，不显示思考过程
+  // 首轮对话会显示 SimpleBrainLoader（"思考中..."）
+  // 后续直接显示生成结果，不显示工作流节点
+  
   // --- B. 核心检索层 (Retrieval Layer) ---
   '知识检索': {
     label: '语义知识库深度检索',

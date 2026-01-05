@@ -1035,10 +1035,11 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       
       router.refresh()
       
-      if (genMode !== "text") {
-        setGenMode("text")
-        setSelectedModel("standard")
-      }
+      // 🔥 移除自动切换回 standard 的逻辑，保持当前模型
+      // if (genMode !== "text") {
+      //   setGenMode("text")
+      //   setSelectedModel("standard")
+      // }
     }
   }
 
@@ -1389,7 +1390,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                   </div>
                   <h1 className="text-xl font-semibold text-slate-800">欢迎使用沈翔智学</h1>
                   
-                  {/* 🔥 作文批改模式的使用注意事项 */}
+                  {/* 🔥 作文批改模式的使用注意事项 - 文艺版 */}
                   {selectedModel === "standard" && (
                     <motion.div
                       initial={{ opacity: 0, y: 10 }}
@@ -1397,44 +1398,84 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                       transition={{ delay: 0.3, duration: 0.5 }}
                       className="mt-8 max-w-lg mx-auto"
                     >
-                      <div className="bg-gradient-to-br from-emerald-50 to-green-50 rounded-2xl p-5 border border-emerald-100 shadow-sm">
-                        <div className="flex items-center gap-2 mb-3">
-                          <div className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ backgroundColor: `${BRAND_GREEN}20` }}>
-                            <FileText className="h-4 w-4" style={{ color: BRAND_GREEN }} />
-                          </div>
-                          <h3 className="text-sm font-semibold text-slate-700">📋 文件上传规范</h3>
-                        </div>
+                      <div className="relative bg-gradient-to-br from-emerald-50/80 via-green-50/60 to-teal-50/80 rounded-3xl p-6 border border-emerald-200/50 shadow-lg backdrop-blur-sm overflow-hidden">
+                        {/* 装饰性背景 */}
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-100/30 rounded-full blur-3xl -z-0"></div>
+                        <div className="absolute bottom-0 left-0 w-24 h-24 bg-green-100/30 rounded-full blur-2xl -z-0"></div>
                         
-                        <div className="space-y-3 text-left">
-                          <div className="flex items-start gap-2">
-                            <span className="text-emerald-500 mt-0.5">✅</span>
-                            <div>
-                              <p className="text-sm font-medium text-slate-700">手写作文图片</p>
-                              <p className="text-xs text-slate-500">直接上传手写作文的照片或扫描件（JPG/PNG/GIF）</p>
+                        <div className="relative z-10">
+                          {/* 标题区域 */}
+                          <div className="flex items-center justify-center gap-3 mb-6">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-green-600 shadow-md">
+                              <FileText className="h-5 w-5 text-white" />
+                            </div>
+                            <h3 className="text-lg font-bold bg-gradient-to-r from-emerald-700 to-green-700 bg-clip-text text-transparent">
+                              文件上传指南
+                            </h3>
+                          </div>
+                          
+                          {/* 内容区域 - 卡片式布局 */}
+                          <div className="space-y-3 text-left">
+                            {/* 手写作文 */}
+                            <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-4 border border-emerald-100/50 shadow-sm hover:shadow-md transition-all">
+                              <div className="flex items-start gap-3">
+                                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center">
+                                  <span className="text-emerald-600 text-lg">📝</span>
+                                </div>
+                                <div className="flex-1">
+                                  <p className="text-sm font-semibold text-slate-800 mb-1">手写作文图片</p>
+                                  <p className="text-xs text-slate-600 leading-relaxed">
+                                    直接上传手写作文的照片或扫描件<br/>
+                                    <span className="text-emerald-600">支持 JPG、PNG、GIF 格式</span>
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {/* 纯文字文档 */}
+                            <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-4 border border-emerald-100/50 shadow-sm hover:shadow-md transition-all">
+                              <div className="flex items-start gap-3">
+                                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+                                  <span className="text-blue-600 text-lg">📄</span>
+                                </div>
+                                <div className="flex-1">
+                                  <p className="text-sm font-semibold text-slate-800 mb-1">纯文字文档</p>
+                                  <p className="text-xs text-slate-600 leading-relaxed">
+                                    支持电子文档格式<br/>
+                                    <span className="text-blue-600">TXT、DOC、DOCX、PDF 等</span>
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {/* 请勿上传 */}
+                            <div className="bg-red-50/80 backdrop-blur-sm rounded-2xl p-4 border border-red-100/50 shadow-sm">
+                              <div className="flex items-start gap-3">
+                                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-red-100 flex items-center justify-center">
+                                  <span className="text-red-600 text-lg">⚠️</span>
+                                </div>
+                                <div className="flex-1">
+                                  <p className="text-sm font-semibold text-red-800 mb-1">请勿上传</p>
+                                  <p className="text-xs text-red-700 leading-relaxed">
+                                    包含手写体图片的文档<br/>
+                                    <span className="text-red-600">如 PDF 内嵌手写图片，系统无法识别</span>
+                                  </p>
+                                </div>
+                              </div>
                             </div>
                           </div>
                           
-                          <div className="flex items-start gap-2">
-                            <span className="text-emerald-500 mt-0.5">✅</span>
-                            <div>
-                              <p className="text-sm font-medium text-slate-700">纯文字文档</p>
-                              <p className="text-xs text-slate-500">支持 TXT、DOC、DOCX、PDF 等格式的电子文档</p>
+                          {/* 底部提示 */}
+                          <div className="mt-5 pt-4 border-t border-emerald-200/50">
+                            <div className="flex items-start gap-2">
+                              <span className="text-amber-500 text-base flex-shrink-0">💡</span>
+                              <p className="text-xs text-slate-600 leading-relaxed">
+                                <span className="font-semibold text-slate-700">温馨提示：</span>
+                                手写作文请直接拍照上传图片，电子作文请使用纯文字文档。
+                                <span className="text-slate-500">文件大小限制：图片 &lt; 10MB，文档 &lt; 15MB</span>
+                              </p>
                             </div>
                           </div>
-                          
-                          <div className="flex items-start gap-2">
-                            <span className="text-red-400 mt-0.5">⚠️</span>
-                            <div>
-                              <p className="text-sm font-medium text-gray-600">请勿上传</p>
-                              <p className="text-xs text-slate-500">包含手写体图片的文档（如 PDF 内嵌手写图片），系统无法识别</p>
-                            </div>
-                          </div>
-                        </div>
-                        
-                        <div className="mt-4 pt-3 border-t border-emerald-100">
-                          <p className="text-xs text-slate-500 leading-relaxed">
-                            💡 <strong>小贴士：</strong>手写作文请直接拍照上传图片，电子作文请使用纯文字文档。文件大小限制：图片 &lt; 10MB，文档 &lt; 15MB
-                          </p>
                         </div>
                       </div>
                     </motion.div>
