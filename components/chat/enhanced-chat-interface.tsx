@@ -644,12 +644,11 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     else setGenMode("text")
 
     setSelectedModel(model)
-    
-    if (model === "standard" || model === "teaching-pro") {
-      const newUrl = model === "standard" ? '/chat' : `/chat?agent=${model}`
-      console.log(`🔗 [URL 同步] 下拉框切换 → ${newUrl}`)
-      router.push(newUrl, { scroll: false })
-    }
+
+    // 🔥 为每个模型设置独立的路由，确保对话隔离
+    const newUrl = model === "standard" ? '/chat' : `/chat/${model}`
+    console.log(`🔗 [URL 同步] 切换模型 ${model} → ${newUrl}`)
+    router.push(newUrl, { scroll: false })
     
     if (input === "" || input.startsWith("生成")) {
        setInput("")
