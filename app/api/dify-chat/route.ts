@@ -24,6 +24,131 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
+/**
+ * 🔥 验证AI响应是否为有效的作文批改结果
+ * 如果AI没有识别到文档内容，返回的是废话/提示语，则不应该扣费
+ * 
+ * @param responseText AI返回的完整文本
+ * @param modelType 使用的模型类型
+ * @returns true = 有效响应，应该扣费；false = 无效响应，不扣费
+ */
+function validateEssayCorrectionResponse(responseText: string, modelType: ModelType): boolean {
+  // 如果响应为空或太短，不扣费
+  if (!responseText || responseText.length < 100) {
+    console.log(`⚠️ [验证] 响应内容过短 (${responseText?.length || 0} 字符)，不扣费`)
+    return false
+  }
+  
+  // 🔥 检测无效响应的关键词（AI没有识别到文档时的常见回复）
+  const invalidPatterns = [
+    /没有.*?提供.*?文本/i,
+    /没有.*?识别.*?内容/i,
+    /无法.*?识别.*?文档/i,
+    /请.*?提供.*?作文/i,
+    /请.*?上传.*?文档/i,
+    /没有.*?收到.*?作文/i,
+    /未.*?检测到.*?内容/i,
+    /没有.*?找到.*?文本/i,
+    /请.*?输入.*?作文/i,
+    /无法.*?读取.*?文件/i,
+    /文档.*?为空/i,
+    /内容.*?为空/i,
+    /没有.*?文字/i,
+    /图片.*?无法.*?识别/i,
+    /OCR.*?失败/i,
+    /不显示.*?提供.*?文本/i,
+    // 🔥 新增：检测"评分全为0"的无效响应
+    /您尚未提供.*?作文/i,
+    /尚未提供.*?内容/i,
+    /无法评价/i,
+    /无法统计/i,
+    /无法进行.*?分析/i,
+    /无法判定/i,
+    /未提供.*?作文/i,
+    /未提供.*?内容/i,
+    /需要.*?作文.*?文本/i,
+    /缺少.*?作文/i,
+  ]
+  
+  // 检查是否匹配无效模式
+  for (const pattern of invalidPatterns) {
+    if (pattern.test(responseText)) {
+      console.log(`⚠️ [验证] 检测到无效响应模式: ${pattern}`)
+      return false
+    }
+  }
+  
+  // 🔥 新增：检测"综合总分为0"的情况
+  // 匹配类似 "综合总分 100% 0" 或 "得分 0" 的模式
+  const zeroScorePatterns = [
+    /综合总分.*?100%.*?0[^\d]/,
+    /综合.*?得分.*?[：:]\s*0[^\d]/,
+    /总分.*?[：:]\s*0[^\d]/,
+    /等级判定.*?无法判定/,
+  ]
+  
+  let zeroScoreCount = 0
+  for (const pattern of zeroScorePatterns) {
+    if (pattern.test(responseText)) {
+      zeroScoreCount++
+    }
+  }
+  
+  // 如果检测到多个"0分"指标，说明是无效响应
+  if (zeroScoreCount >= 2) {
+    console.log(`⚠️ [验证] 检测到评分全为0的无效响应 (${zeroScoreCount}个0分指标)`)
+    return false
+  }
+  
+  // 🔥 检测有效响应的关键词（作文批改应该包含的内容）
+  const validIndicators = [
+    /批改/,
+    /评分/,
+    /得分/,
+    /分数/,
+    /优点/,
+    /缺点/,
+    /建议/,
+    /修改/,
+    /润色/,
+    /原文/,
+    /总评/,
+    /点评/,
+    /结构/,
+    /语言/,
+    /内容/,
+    /主题/,
+    /开头/,
+    /结尾/,
+    /段落/,
+  ]
+  
+  // 至少要匹配3个有效指标才认为是有效的批改结果
+  let validCount = 0
+  for (const indicator of validIndicators) {
+    if (indicator.test(responseText)) {
+      validCount++
+    }
+  }
+  
+  if (validCount < 3) {
+    console.log(`⚠️ [验证] 有效指标不足 (${validCount}/3)，可能不是有效的批改结果`)
+    return false
+  }
+  
+  // 🔥 新增：检查是否有实际的分数（非0分）
+  // 匹配类似 "得分 15" 或 "分数：18" 的模式
+  const hasRealScore = /得分.*?[1-9]\d*|分数.*?[1-9]\d*|[1-9]\d*\s*分/.test(responseText)
+  
+  if (!hasRealScore) {
+    console.log(`⚠️ [验证] 未检测到有效分数，可能是无效批改`)
+    return false
+  }
+  
+  console.log(`✅ [验证] 响应有效，包含 ${validCount} 个批改指标，且有实际分数`)
+  return true
+}
+
 export async function POST(request: NextRequest) {
   try {
     // 🔐 从 header 获取用户身份（middleware 已验证）
@@ -192,10 +317,11 @@ export async function POST(request: NextRequest) {
         return new Response(JSON.stringify({ error: `Dify Error: ${errorText}` }), { status: response.status })
     }
 
-    // --- 5. 流式响应 + 静默扣费 ---
+    // --- 5. 流式响应 + 智能扣费 ---
     // 创建一个 TransformStream 来处理流式数据并在结束时扣费
     let totalTokens = 0
     let conversationId = ""
+    let fullResponseText = ""  // 🔥 收集完整响应内容用于验证
     
     const transformStream = new TransformStream({
       async transform(chunk, controller) {
@@ -220,6 +346,11 @@ export async function POST(request: NextRequest) {
                 conversationId = json.conversation_id
               }
               
+              // 🔥 收集响应文本内容
+              if (json.event === "message" && json.answer) {
+                fullResponseText += json.answer
+              }
+              
               // 提取 token 使用量（Dify 在 message_end 事件中返回）
               if (json.event === "message_end" && json.metadata?.usage) {
                 totalTokens = json.metadata.usage.total_tokens || 0
@@ -231,8 +362,17 @@ export async function POST(request: NextRequest) {
       },
       
       async flush(controller) {
-        // 流结束时执行静默扣费
+        // 流结束时执行智能扣费
         try {
+          // 🔥 验证响应内容是否为有效的作文批改结果
+          const isValidEssayCorrection = validateEssayCorrectionResponse(fullResponseText, modelType)
+          
+          if (!isValidEssayCorrection) {
+            console.warn(`⚠️ [智能扣费] 检测到无效响应，跳过扣费 | 用户: ${userId} | 模型: ${modelType}`)
+            console.log(`📝 [响应内容预览] ${fullResponseText.substring(0, 200)}...`)
+            return  // 不扣费
+          }
+          
           // 计算实际费用
           const actualCost = calculateActualCost(modelType, { totalTokens })
           
@@ -263,8 +403,10 @@ export async function POST(request: NextRequest) {
               await supabaseAdmin.from("credit_transactions").insert({
                 user_id: userId,
                 amount: -actualCost,
-                type: "ai_chat",
-                description: `使用 ${getModelDisplayName(modelType)} 对话 (${totalTokens} tokens)`
+                type: "consume",
+                description: `使用 ${getModelDisplayName(modelType)} 对话 (${totalTokens} tokens)`,
+                balance_before: latestCredits?.credits || 0,
+                balance_after: newCredits
               })
             } catch (txError) {
               console.warn(`⚠️ [交易记录] 写入失败（可忽略）:`, txError)

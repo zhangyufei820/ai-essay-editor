@@ -31,12 +31,40 @@ export async function getUserCredits(userId: string): Promise<UserCredits | null
   return data
 }
 
+// 记录积分交易
+async function recordTransaction(
+  supabase: any,
+  userId: string,
+  amount: number,
+  type: string,
+  description: string,
+  balanceBefore: number,
+  balanceAfter: number,
+  referenceId?: string
+): Promise<void> {
+  try {
+    await supabase.from("credit_transactions").insert({
+      user_id: userId,
+      amount: amount,
+      type: type,
+      description: description,
+      reference_id: referenceId || null,
+      balance_before: balanceBefore,
+      balance_after: balanceAfter,
+    })
+  } catch (error) {
+    // 如果表不存在，静默失败（不影响主流程）
+    console.log("[积分系统] 记录交易失败（表可能不存在）:", error)
+  }
+}
+
 // 消费积分
 export async function spendCredits(
   userId: string,
   amount: number,
   type: string,
   description: string,
+  referenceId?: string
 ): Promise<boolean> {
   const supabase = await createServerClient()
 
@@ -46,11 +74,14 @@ export async function spendCredits(
     return false
   }
 
+  const balanceBefore = credits.credits
+  const balanceAfter = credits.credits - amount
+
   // 扣除积分
   const { error: updateError } = await supabase
     .from("user_credits")
     .update({
-      credits: credits.credits - amount,
+      credits: balanceAfter,
       updated_at: new Date().toISOString(),
     })
     .eq("user_id", userId)
@@ -60,6 +91,10 @@ export async function spendCredits(
     return false
   }
 
+  // 记录交易
+  await recordTransaction(supabase, userId, -amount, type, description, balanceBefore, balanceAfter, referenceId)
+  
+  console.log(`[积分系统] 用户 ${userId} 消费 ${amount} 积分，余额: ${balanceAfter}`)
   return true
 }
 
@@ -74,6 +109,7 @@ export async function addCredits(
   const supabase = await createServerClient()
 
   let credits = await getUserCredits(userId)
+  let balanceBefore = 0
   
   // 如果用户积分记录不存在，先创建一条记录
   if (!credits) {
@@ -99,11 +135,14 @@ export async function addCredits(
     }
   }
 
+  balanceBefore = credits.credits
+  const balanceAfter = credits.credits + amount
+
   // 增加积分
   const { error: updateError } = await supabase
     .from("user_credits")
     .update({
-      credits: credits.credits + amount,
+      credits: balanceAfter,
       updated_at: new Date().toISOString(),
     })
     .eq("user_id", userId)
@@ -113,8 +152,30 @@ export async function addCredits(
     return false
   }
 
-  console.log(`[积分系统] 用户 ${userId} 成功增加 ${amount} 积分，当前积分: ${credits.credits + amount}`)
+  // 记录交易
+  await recordTransaction(supabase, userId, amount, type, description, balanceBefore, balanceAfter, referenceId)
+
+  console.log(`[积分系统] 用户 ${userId} 成功增加 ${amount} 积分，当前积分: ${balanceAfter}`)
   return true
+}
+
+// 获取用户积分交易记录
+export async function getCreditTransactions(userId: string, limit: number = 50): Promise<CreditTransaction[]> {
+  const supabase = await createServerClient()
+
+  const { data, error } = await supabase
+    .from("credit_transactions")
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(limit)
+
+  if (error) {
+    console.error("Error fetching credit transactions:", error)
+    return []
+  }
+
+  return data || []
 }
 
 // 获取用户推荐码
