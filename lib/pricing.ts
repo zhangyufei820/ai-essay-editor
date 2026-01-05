@@ -104,12 +104,14 @@ export const MODEL_COSTS: Record<ModelType, ModelCostConfig> = {
     estimatedTokens: 1500  // 预估平均 1.5K tokens
   },
   
-  // ========== 多媒体模型（按次固定扣费）==========
+  // ========== 多媒体模型（混合计费）==========
   "banana-2-pro": { 
-    category: "media",
-    fixedCost: 6,  // 成本 0.6 元 = 6 积分 → 用户扣费 10 积分（60% 毛利）
+    category: "standalone",  // 🔥 改为 standalone，因为包含 LLM 对话
+    tokenRate: STANDALONE_TOKEN_RATE,  // 20 积分/1K Token（LLM 部分）
+    fixedCost: 13,  // 🔥 图像生成固定成本：0.8元 * 1.6 = 1.28元 ≈ 13积分
     displayName: "Banana 2 Pro 4K",
-    mode: "image"
+    mode: "image",
+    estimatedTokens: 500  // 预估 LLM 对话消耗
   },
   "suno-v5": { 
     category: "media",
@@ -187,12 +189,12 @@ export function calculateActualCost(
     return 20
   }
   
-  // 多媒体模型：固定价格
+  // 纯多媒体模型（如 Suno、Sora）：固定价格
   if (config.category === "media" && config.fixedCost) {
     return Math.ceil(config.fixedCost / PROFIT_MARGIN)
   }
   
-  // 文本模型：根据实际 Token 数计费
+  // 文本模型或混合模型：根据实际 Token 数计费
   const tokenRate = config.tokenRate || AGENT_TOKEN_RATE
   
   // 优先使用 totalTokens，否则使用 input + output
@@ -207,7 +209,13 @@ export function calculateActualCost(
   }
   
   // 实际消耗 = Token 数 / 1000 * 单价
-  const actualCost = Math.ceil((totalTokens / 1000) * tokenRate)
+  let actualCost = Math.ceil((totalTokens / 1000) * tokenRate)
+  
+  // 🔥 Banana 2 Pro 4K 混合计费：Token 费用 + 图像生成固定成本
+  if (model === "banana-2-pro" && config.fixedCost) {
+    actualCost += config.fixedCost  // 加上图像生成的固定成本（13积分）
+    console.log(`💰 [Banana 计费] Token: ${totalTokens} → ${Math.ceil((totalTokens / 1000) * tokenRate)}积分 + 图像生成: ${config.fixedCost}积分 = ${actualCost}积分`)
+  }
   
   // 最低消费 5 积分
   return Math.max(actualCost, 5)
