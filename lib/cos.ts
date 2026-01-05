@@ -21,12 +21,18 @@ import { randomUUID } from 'crypto'
 // 配置
 // ============================================
 
+// 🔥 统一使用 NEXT_PUBLIC_CDN_URL（前后端通用）
+// 优先级：NEXT_PUBLIC_CDN_URL > TENCENT_COS_CDN_DOMAIN > 默认值
+const CDN_DOMAIN = process.env.NEXT_PUBLIC_CDN_URL 
+  || process.env.TENCENT_COS_CDN_DOMAIN 
+  || 'https://cdn.shenxiang.school'
+
 const COS_CONFIG = {
   SecretId: process.env.TENCENT_COS_SECRET_ID || '',
   SecretKey: process.env.TENCENT_COS_SECRET_KEY || '',
   Bucket: process.env.TENCENT_COS_BUCKET || 'media-shenxiang-1394034082',
   Region: process.env.TENCENT_COS_REGION || 'ap-hongkong',
-  CdnDomain: process.env.TENCENT_COS_CDN_DOMAIN || 'https://cdn.shenxiang.school',
+  CdnDomain: CDN_DOMAIN,
 }
 
 // 创建 COS 实例（延迟初始化）
