@@ -54,6 +54,10 @@ export default function ModelChatPage() {
   const params = useParams()
   const model = params.model as string
   
+  // 🔍 调试日志
+  console.log('🔍 [ModelChatPage] 当前模型:', model)
+  console.log('🔍 [ModelChatPage] 是否为 banana-2-pro:', model === 'banana-2-pro')
+  
   // 验证模型是否支持
   if (!SUPPORTED_MODELS.includes(model as SupportedModel)) {
     notFound()
@@ -61,6 +65,7 @@ export default function ModelChatPage() {
 
   // 🔥 根据模型选择不同的界面组件
   if (model === 'banana-2-pro') {
+    console.log('✅ [ModelChatPage] 使用 BananaChatInterface')
     return (
       <main className="flex min-h-screen flex-col">
         <div className="flex-1">
@@ -71,6 +76,7 @@ export default function ModelChatPage() {
   }
 
   // 其他模型使用通用界面
+  console.log('⚠️ [ModelChatPage] 使用 EnhancedChatInterface，模型:', model)
   return (
     <main className="flex min-h-screen flex-col">
       <div className="flex-1">
