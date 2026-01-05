@@ -45,15 +45,25 @@ export default function RootLayout({
     <html lang="zh-CN">
       {/* ✅ 新增：在这里通过 CDN 引入 Authing 样式，避开 Next.js 编译错误 */}
       <head>
+        {/* 🚀 DNS 预解析 - 提前解析 CDN 域名，减少首屏延迟 */}
+        <link rel="dns-prefetch" href="//cdn.shenxiang.school" />
+        <link rel="preconnect" href="https://cdn.shenxiang.school" crossOrigin="anonymous" />
+        <link rel="dns-prefetch" href="//cdn.authing.co" />
+        <link rel="preconnect" href="https://cdn.authing.co" crossOrigin="anonymous" />
+        <link rel="dns-prefetch" href="//rnujdnmxufmzgjvmddla.supabase.co" />
+        <link rel="preconnect" href="https://rnujdnmxufmzgjvmddla.supabase.co" crossOrigin="anonymous" />
+        
+        {/* 🔥 Authing 样式 */}
         <link
           rel="stylesheet"
           href="https://cdn.authing.co/packages/guard-react/latest/guard.min.css"
         />
-        {/* PWA Apple 图标 */}
-        <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
-        <link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-152x152.png" />
-        <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-192x192.png" />
-        <link rel="apple-touch-icon" sizes="167x167" href="/icons/icon-192x192.png" />
+        
+        {/* PWA Apple 图标 - 使用 CDN */}
+        <link rel="apple-touch-icon" href="https://cdn.shenxiang.school/icons/icon-192x192.png" />
+        <link rel="apple-touch-icon" sizes="152x152" href="https://cdn.shenxiang.school/icons/icon-152x152.png" />
+        <link rel="apple-touch-icon" sizes="180x180" href="https://cdn.shenxiang.school/icons/icon-192x192.png" />
+        <link rel="apple-touch-icon" sizes="167x167" href="https://cdn.shenxiang.school/icons/icon-192x192.png" />
       </head>
       <body className={`font-sans antialiased`}>
         {/* ✅ WxGuard 放在最上方，确保它是 body 的第一个子元素 */}
