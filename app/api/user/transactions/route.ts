@@ -7,6 +7,19 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
+// 🔥 将数据库中的 type 映射为显示标签
+function mapTypeToLabel(type: string): string {
+  const typeMap: Record<string, string> = {
+    'purchase': '购买积分',
+    'consume': '消耗积分',
+    'refund': '退款积分',
+    'bonus': '奖励积分',
+    'register': '注册积分',
+    'manual': '手动调整',
+  }
+  return typeMap[type] || '其他积分'
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
@@ -18,26 +31,49 @@ export async function GET(request: NextRequest) {
 
     console.log('📊 [积分记录] 查询用户:', userId)
 
-    // 尝试从 credit_transactions 表获取
-    const { data: transactions, error: txError } = await supabaseAdmin
-      .from('credit_transactions')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-      .limit(50)
+    // 🔥 先检查 credit_transactions 表是否存在
+    let tableExists = true
+    try {
+      const { error: checkError } = await supabaseAdmin
+        .from('credit_transactions')
+        .select('id')
+        .limit(1)
+      
+      if (checkError && checkError.code === '42P01') {
+        tableExists = false
+        console.log('⚠️ [积分记录] credit_transactions 表不存在')
+      }
+    } catch (e) {
+      tableExists = false
+    }
 
-    if (!txError && transactions && transactions.length > 0) {
-      console.log('✅ [积分记录] 从 credit_transactions 获取到', transactions.length, '条记录')
-      return NextResponse.json({
-        transactions: transactions.map((t: any) => ({
-          id: t.id,
-          description: t.description || t.reason || '-',
-          amount: t.amount,
-          type: t.amount > 0 ? '获得' : '消耗',
-          credit_type: t.credit_type || t.type || '其他积分',
-          created_at: t.created_at,
-        }))
-      })
+    // 尝试从 credit_transactions 表获取
+    let transactions: any[] = []
+    if (tableExists) {
+      const { data: txData, error: txError } = await supabaseAdmin
+        .from('credit_transactions')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(50)
+
+      if (!txError && txData && txData.length > 0) {
+        console.log('✅ [积分记录] 从 credit_transactions 获取到', txData.length, '条记录')
+        return NextResponse.json({
+          transactions: txData.map((t: any) => ({
+            id: t.id,
+            description: t.description || t.reason || '-',
+            amount: t.amount,
+            type: t.amount > 0 ? '获得' : '消耗',
+            credit_type: mapTypeToLabel(t.type) || '其他积分',
+            created_at: t.created_at,
+          }))
+        })
+      }
+      
+      if (txError) {
+        console.log('⚠️ [积分记录] 查询 credit_transactions 失败:', txError.message)
+      }
     }
 
     // 如果 credit_transactions 表没有数据，尝试从 orders 表构建记录
