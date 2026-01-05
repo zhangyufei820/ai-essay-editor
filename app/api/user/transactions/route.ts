@@ -109,12 +109,33 @@ export async function GET(request: NextRequest) {
     if (profile) {
       allTransactions.push({
         id: 'register-bonus',
-        description: '新用户注册',
-        amount: 3000,
+        description: '新用户注册赠送',
+        amount: 1000,
         type: '获得',
         credit_type: '注册积分',
         created_at: profile.created_at,
       })
+    }
+
+    // 🔥 如果仍然没有数据，从 user_credits 表获取当前积分并生成一条记录
+    if (allTransactions.length === 0) {
+      const { data: userCredits } = await supabaseAdmin
+        .from('user_credits')
+        .select('credits, created_at, updated_at')
+        .eq('user_id', userId)
+        .single()
+      
+      if (userCredits) {
+        // 添加当前积分记录
+        allTransactions.push({
+          id: 'current-balance',
+          description: '账户当前积分',
+          amount: userCredits.credits || 0,
+          type: '获得',
+          credit_type: '其他积分',
+          created_at: userCredits.updated_at || userCredits.created_at || new Date().toISOString(),
+        })
+      }
     }
 
     // 按时间排序
