@@ -142,6 +142,29 @@ export async function POST(request: Request) {
 
     console.log(`✅ [积分API] 积分变更成功: ${currentCredits} → ${newCredits} (${amount > 0 ? '+' : ''}${amount})`)
 
+    // 🔥 记录到 credit_transactions 表
+    try {
+      const transactionType = amount > 0 ? 'bonus' : 'consume'
+      const { error: txError } = await supabaseAdmin
+        .from('credit_transactions')
+        .insert({
+          user_id: userId,
+          amount: amount,
+          type: transactionType,
+          description: reason || (amount > 0 ? '积分增加' : '积分消耗'),
+          reason: reason || (amount > 0 ? '积分增加' : '积分消耗')
+        })
+      
+      if (txError) {
+        console.error(`⚠️ [积分API] 记录交易失败:`, txError)
+        // 不影响主流程，继续返回成功
+      } else {
+        console.log(`✅ [积分API] 交易记录已保存`)
+      }
+    } catch (txErr) {
+      console.error(`⚠️ [积分API] 记录交易异常:`, txErr)
+    }
+
     return NextResponse.json({
       success: true,
       previousCredits: currentCredits,
