@@ -18,7 +18,7 @@ const SUPPORTED_MODELS = [
 
 export type SupportedModel = typeof SUPPORTED_MODELS[number]
 
-// 动态导入 EnhancedChatInterface，禁用 SSR
+// 🔥 动态导入通用聊天界面
 const EnhancedChatInterface = dynamic(
   () => import("@/components/chat/enhanced-chat-interface").then(mod => ({ default: mod.EnhancedChatInterface })),
   { 
@@ -34,6 +34,22 @@ const EnhancedChatInterface = dynamic(
   }
 )
 
+// 🍌 动态导入 Banana 2 Pro 专用界面
+const BananaChatInterface = dynamic(
+  () => import("@/components/chat/banana-chat-interface").then(mod => ({ default: mod.BananaChatInterface })),
+  { 
+    ssr: false,
+    loading: () => (
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-4 border-amber-200 border-t-amber-600 rounded-full animate-spin"></div>
+          <p className="text-slate-500 text-sm">加载图片生成界面...</p>
+        </div>
+      </div>
+    )
+  }
+)
+
 export default function ModelChatPage() {
   const params = useParams()
   const model = params.model as string
@@ -43,6 +59,18 @@ export default function ModelChatPage() {
     notFound()
   }
 
+  // 🔥 根据模型选择不同的界面组件
+  if (model === 'banana-2-pro') {
+    return (
+      <main className="flex min-h-screen flex-col">
+        <div className="flex-1">
+          <BananaChatInterface />
+        </div>
+      </main>
+    )
+  }
+
+  // 其他模型使用通用界面
   return (
     <main className="flex min-h-screen flex-col">
       <div className="flex-1">
