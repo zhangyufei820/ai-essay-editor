@@ -381,7 +381,45 @@ export async function POST(request: NextRequest) {
                     const imageUrl = match[1]
                     if (!bananaImageUrls.includes(imageUrl)) {
                       bananaImageUrls.push(imageUrl)
-                      console.log(`🎨 [Banana] 检测到图片 URL: ${imageUrl}`)
+                      console.log(`🎨 [Banana] 检测到图片 URL (message): ${imageUrl}`)
+                    }
+                  }
+                }
+              }
+              
+              // 🎨 处理 message_file 事件（图片文件）
+              if (json.event === "message_file" && model === "banana-2-pro") {
+                console.log(`🎨 [Banana] 收到 message_file 事件:`, JSON.stringify(json))
+                
+                // Dify 返回的图片文件格式：{ type: "image", url: "..." }
+                if (json.type === "image" && json.url) {
+                  const imageUrl = json.url
+                  if (!bananaImageUrls.includes(imageUrl)) {
+                    bananaImageUrls.push(imageUrl)
+                    console.log(`🎨 [Banana] 检测到图片 URL (message_file): ${imageUrl}`)
+                    
+                    // 🔥 立即将图片 URL 以 Markdown 格式添加到响应中
+                    fullResponseText += `\n\n![Generated Image](${imageUrl})`
+                  }
+                }
+              }
+              
+              // 🎨 处理 workflow_finished 事件（可能包含图片）
+              if (json.event === "workflow_finished" && model === "banana-2-pro") {
+                console.log(`🎨 [Banana] 收到 workflow_finished 事件:`, JSON.stringify(json))
+                
+                // 检查是否有输出文件
+                if (json.outputs && json.outputs.files) {
+                  for (const file of json.outputs.files) {
+                    if (file.type === "image" && file.url) {
+                      const imageUrl = file.url
+                      if (!bananaImageUrls.includes(imageUrl)) {
+                        bananaImageUrls.push(imageUrl)
+                        console.log(`🎨 [Banana] 检测到图片 URL (workflow_finished): ${imageUrl}`)
+                        
+                        // 🔥 立即将图片 URL 以 Markdown 格式添加到响应中
+                        fullResponseText += `\n\n![Generated Image](${imageUrl})`
+                      }
                     }
                   }
                 }
