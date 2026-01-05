@@ -75,6 +75,85 @@ export interface UploadResult {
 // ============================================
 
 /**
+ * 直接上传 Buffer 到腾讯云 COS
+ * 
+ * @param buffer - 文件 Buffer
+ * @param modelName - 模型名称（用于目录组织）
+ * @param fileExtension - 文件扩展名（如 mp3, png, mp4）
+ * @param fileName - 原始文件名（可选）
+ * @returns 上传结果，包含 CDN 加速 URL
+ */
+export async function uploadBufferToCos(
+  buffer: Buffer,
+  modelName: ModelType,
+  fileExtension: string,
+  fileName?: string
+): Promise<UploadResult> {
+  console.log('📤 [COS] 开始上传 Buffer:', { size: buffer.length, modelName, fileName })
+  
+  // 检查 COS 实例
+  const cos = getCosInstance()
+  if (!cos) {
+    console.log('⚠️ [COS] 未配置密钥，跳过上传')
+    return {
+      success: false,
+      cdnUrl: '',
+      error: 'COS 未配置',
+    }
+  }
+  
+  try {
+    // 生成存储路径
+    const date = new Date().toISOString().split('T')[0] // 2026-01-05
+    const uuid = randomUUID()
+    const key = `ai-generated/${modelName}/${date}/${uuid}.${fileExtension}`
+    
+    console.log('📁 [COS] 存储路径:', key)
+    
+    // 上传到 COS
+    const uploadResult = await new Promise<COS.PutObjectResult>((resolve, reject) => {
+      cos.putObject({
+        Bucket: COS_CONFIG.Bucket,
+        Region: COS_CONFIG.Region,
+        Key: key,
+        Body: buffer,
+        ContentLength: buffer.length,
+      }, (err, data) => {
+        if (err) {
+          reject(err)
+        } else {
+          resolve(data)
+        }
+      })
+    })
+    
+    console.log('✅ [COS] 上传成功:', uploadResult.Location)
+    
+    // 构建 CDN URL
+    const cdnUrl = `${COS_CONFIG.CdnDomain}/${key}`
+    const cosUrl = `https://${uploadResult.Location}`
+    
+    console.log('🚀 [COS] CDN URL:', cdnUrl)
+    
+    return {
+      success: true,
+      cdnUrl,
+      cosUrl,
+      key,
+    }
+    
+  } catch (error: any) {
+    console.error('❌ [COS] 上传失败:', error.message || error)
+    
+    return {
+      success: false,
+      cdnUrl: '',
+      error: error.message || '上传失败',
+    }
+  }
+}
+
+/**
  * 将远程 URL 的文件上传到腾讯云 COS
  * 
  * @param sourceUrl - AI 模型生成的临时链接

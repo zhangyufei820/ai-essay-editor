@@ -1,10 +1,11 @@
 import type { NextRequest } from "next/server"
+import { uploadBufferToCos } from "@/lib/cos"
 
 // ✅ 修改 1: 切换回 Node.js 运行时，以支持更大的文件和更稳定的上传
 export const runtime = "nodejs" 
 
 // 可选：设置最大执行时间（秒），防止上传大文件超时
-export const maxDuration = 60; 
+export const maxDuration = 60;
 
 const DIFY_BASE_URL = process.env.DIFY_BASE_URL || "https://api.dify.ai/v1"
 // 🔥 作文批改（standard）使用专用的 ESSAY_CORRECTION_API_KEY
@@ -113,7 +114,38 @@ export async function POST(request: NextRequest) {
     const data = await response.json()
     console.log("[Backend] Dify upload success:", { fileId: data.id, fileName: file.name, userId })
 
-    return new Response(JSON.stringify(data), {
+    // 🔥 同时上传到腾讯云 COS（用于永久存储）
+    let cosUrl: string | undefined
+    try {
+      // 将文件转换为 Buffer
+      const arrayBuffer = await file.arrayBuffer()
+      const buffer = Buffer.from(arrayBuffer)
+      
+      // 获取文件扩展名
+      const fileExt = file.name.split('.').pop() || 'jpg'
+      
+      // 直接上传 Buffer 到 COS
+      const cosResult = await uploadBufferToCos(
+        buffer,
+        targetModel === 'banana-2-pro' || targetModel === 'banana' ? 'banana' : 'other',
+        fileExt,
+        file.name
+      )
+      
+      if (cosResult.success && cosResult.cdnUrl) {
+        cosUrl = cosResult.cdnUrl
+        console.log("[Backend] COS upload success:", cosUrl)
+      }
+    } catch (cosError) {
+      console.error("[Backend] COS upload failed (non-critical):", cosError)
+      // COS 上传失败不影响主流程
+    }
+
+    // 返回结果（包含 Dify ID 和 COS URL）
+    return new Response(JSON.stringify({
+      ...data,
+      cosUrl, // 添加 COS URL
+    }), {
       status: 200,
       headers: { "Content-Type": "application/json" },
     })
