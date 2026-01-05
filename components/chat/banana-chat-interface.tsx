@@ -39,6 +39,15 @@ type Message = {
   content: string
 }
 
+type UploadedFile = { 
+  name: string
+  type: string
+  size: number
+  data: string
+  preview?: string
+  difyFileId?: string
+}
+
 // 🎯 流式光标组件
 const StreamingCursor = () => (
   <span className="inline-block ml-1 text-green-700 animate-pulse">▍</span>
@@ -150,10 +159,12 @@ function BananaChatInterfaceInner() {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const currentBotIdRef = useRef<string | null>(null)
   
   const [isNearBottom, setIsNearBottom] = useState(true)
@@ -261,6 +272,77 @@ function BananaChatInterfaceInner() {
       estimatedInputTokens: input.length > 0 ? Math.ceil(input.length / 4) * 2 : undefined
     })
   }
+
+  // 文件上传处理
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files
+    if (!files || !files.length) return
+    
+    if (!userId) {
+      toast.error("请先登录后再上传文件")
+      return
+    }
+    
+    toast.info(`正在上传 ${files.length} 个文件...`)
+    
+    try {
+      const uploadPromises = Array.from(files).map(async (file) => {
+        const formData = new FormData()
+        formData.append("file", file)
+        formData.append("user", userId)
+        
+        const res = await fetch("/api/dify-upload", {
+          method: "POST",
+          headers: {
+            "X-User-Id": userId,
+            "X-Model": "banana-2-pro"
+          },
+          body: formData
+        })
+        
+        if (!res.ok) {
+          const errText = await res.text()
+          throw new Error(`上传失败: ${res.status} ${errText}`)
+        }
+        
+        const data = await res.json()
+        return new Promise<UploadedFile>((resolve) => {
+          if (file.type.startsWith("image/")) {
+            resolve({
+              name: file.name,
+              type: file.type,
+              size: file.size,
+              data: "",
+              difyFileId: data.id,
+              preview: URL.createObjectURL(file)
+            })
+          } else {
+            const reader = new FileReader()
+            reader.onload = e => resolve({
+              name: file.name,
+              type: file.type,
+              size: file.size,
+              data: e.target?.result as string,
+              difyFileId: data.id,
+              preview: undefined
+            })
+            reader.readAsDataURL(file)
+          }
+        })
+      })
+      
+      const results = await Promise.all(uploadPromises)
+      setUploadedFiles(p => [...p, ...results])
+      toast.success("文件上传成功")
+    } catch (e: any) {
+      console.error("上传错误:", e)
+      toast.error("上传失败")
+    }
+    
+    if (fileInputRef.current) fileInputRef.current.value = ""
+  }
+
+  const removeFile = (i: number) => setUploadedFiles(p => p.filter((_, idx) => idx !== i))
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -421,7 +503,7 @@ function BananaChatInterfaceInner() {
           </button>
           <div className="flex-1 text-center md:text-left md:ml-4">
             <div className="flex items-center justify-center md:justify-start gap-2">
-              <Palette className="h-4 w-4" style={{ color: BANANA_COLOR }} />
+              <span className="text-lg">🍌</span>
               <span className="text-sm font-medium text-slate-700">Banana 2 Pro 4K</span>
             </div>
           </div>
@@ -455,8 +537,8 @@ function BananaChatInterfaceInner() {
             <div className="mx-auto max-w-4xl px-4 md:px-6 py-6 md:py-8">
               {messages.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-16 text-center">
-                  <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-green-50">
-                    <Palette className="h-8 w-8 text-green-700" />
+                  <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-yellow-50">
+                    <span className="text-4xl">🍌</span>
                   </div>
                   <h1 className="text-xl font-semibold text-slate-800 mb-2">AI 图片生成</h1>
                   <p className="text-sm text-slate-500 max-w-md">
@@ -485,7 +567,7 @@ function BananaChatInterfaceInner() {
                             {isLoading && message.id === currentBotIdRef.current && !message.content ? (
                               <div className="flex items-center gap-2 text-slate-500">
                                 <Loader2 className="h-4 w-4 animate-spin" />
-                                <span className="text-sm">正在生成图片...</span>
+                                <span className="text-sm">思考中...</span>
                               </div>
                             ) : (
                               <BananaRenderer 
@@ -534,8 +616,66 @@ function BananaChatInterfaceInner() {
         {/* 输入框 */}
         <div className="border-t border-slate-100 bg-white p-3 md:p-6 shrink-0">
           <div className="mx-auto max-w-4xl">
+            {/* 文件预览区域 */}
+            {uploadedFiles.length > 0 && (
+              <div className="mb-3 flex flex-wrap gap-2">
+                {uploadedFiles.map((f, i) => (
+                  <div key={i} className="relative group">
+                    {f.preview ? (
+                      <div className="relative w-20 h-20 rounded-lg overflow-hidden border-2 border-slate-200">
+                        <img src={f.preview} alt={f.name} className="w-full h-full object-cover" />
+                        <button
+                          onClick={() => removeFile(i)}
+                          className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm border border-slate-200">
+                        <FileText className="h-4 w-4 text-green-600" />
+                        <span className="max-w-[100px] truncate text-slate-600">{f.name}</span>
+                        <button onClick={() => removeFile(i)} className="text-slate-400 hover:text-red-500">
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
             <form onSubmit={onSubmit} className="relative rounded-[24px] bg-white shadow-lg border border-slate-200">
               <div className="flex items-end gap-2 p-3">
+                {/* 文件上传按钮 */}
+                <div className="flex flex-col items-center gap-1 shrink-0">
+                  <span className="text-[10px] font-medium text-slate-400">文件</span>
+                  <Button 
+                    type="button" 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-10 w-10 rounded-xl text-slate-400 hover:bg-slate-50" 
+                    onClick={() => {
+                      if (!userId) {
+                        toast.error("请先登录后再上传文件")
+                        return
+                      }
+                      fileInputRef.current?.click()
+                    }}
+                    disabled={isLoading}
+                  >
+                    <Paperclip className="h-5 w-5" />
+                  </Button>
+                </div>
+                <input 
+                  ref={fileInputRef} 
+                  type="file" 
+                  className="hidden" 
+                  accept="image/*" 
+                  multiple 
+                  onChange={handleFileUpload} 
+                />
+
                 <Textarea
                   ref={textareaRef}
                   value={input}

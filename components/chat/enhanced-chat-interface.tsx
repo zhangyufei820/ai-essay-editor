@@ -584,7 +584,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     },
     "banana-2-pro": {
       name: "Banana 2 Pro 4K",
-      icon: Palette,
+      icon: "🍌",
       color: "#ca8a04",
       description: "AI 图像生成",
       badge: "热门",

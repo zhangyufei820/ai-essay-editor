@@ -49,7 +49,7 @@ const COLORS = {
 interface Model {
   key: string
   name: string
-  icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>
+  icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }> | string
   color: string
   description?: string
   badge?: string
@@ -286,6 +286,7 @@ function ModelMenuItem({
   onClick: () => void
 }) {
   const Icon = model.icon
+  const isStringIcon = typeof Icon === 'string'
 
   return (
     <motion.button
@@ -310,10 +311,14 @@ function ModelMenuItem({
         className="flex h-8 w-8 items-center justify-center rounded-lg shrink-0"
         style={{ backgroundColor: `${model.color}15` }}
       >
-        <Icon 
-          className="h-4 w-4" 
-          style={{ color: model.color }}
-        />
+        {isStringIcon ? (
+          <span className="text-lg">{Icon}</span>
+        ) : (
+          <Icon 
+            className="h-4 w-4" 
+            style={{ color: model.color }}
+          />
+        )}
       </div>
 
       {/* 模型信息 */}
