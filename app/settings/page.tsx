@@ -153,23 +153,13 @@ export default function SettingsPage() {
   const fetchTransactions = async (userId: string) => {
     setLoadingTransactions(true)
     try {
-      // 尝试从 credit_transactions 表获取
-      const { data, error } = await supabase
-        .from('credit_transactions')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(20)
-      
-      if (!error && data) {
-        setTransactions(data.map((t: any) => ({
-          id: t.id,
-          description: t.description || "-",
-          amount: t.amount,
-          type: t.amount > 0 ? "获得" : "消耗",
-          credit_type: t.credit_type || "其他积分",
-          created_at: t.created_at,
-        })))
+      // 使用专用 API 获取积分记录（绕过 RLS）
+      const res = await fetch(`/api/user/transactions?user_id=${encodeURIComponent(userId)}`)
+      if (res.ok) {
+        const data = await res.json()
+        setTransactions(data.transactions || [])
+      } else {
+        console.error("获取积分记录失败:", await res.text())
       }
     } catch (e) {
       console.error("获取积分记录失败:", e)

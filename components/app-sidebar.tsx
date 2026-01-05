@@ -552,53 +552,75 @@ function AppSidebarInner() {
           
           {/* 用户信息区域 */}
           <div className="p-3">
-          {/* 🍎 弹出菜单 */}
+          {/* 🍎 弹出菜单 - 从右侧呼出 */}
           {showUserMenu && (
-            <div 
-              className="absolute bottom-[calc(100%+8px)] left-3 right-3 rounded-xl bg-white p-1.5 shadow-lg animate-in slide-in-from-bottom-2 duration-200 z-[60]"
-              style={{ border: `1px solid ${COLORS.gray[200]}` }}
-            >
-              <Link href="/settings" onClick={() => setShowUserMenu(false)}>
-                <div 
-                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm cursor-pointer transition-colors"
-                  style={{ color: COLORS.gray[700] }}
-                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = COLORS.gray[100]}
-                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
-                >
-                  <Settings className="h-5 w-5" style={{ color: COLORS.gray[600] }} /> 
-                  账号设置
-                </div>
-              </Link>
-              <Link href="/pricing" onClick={() => setShowUserMenu(false)}>
-                <div 
-                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm cursor-pointer transition-colors"
-                  style={{ color: COLORS.gray[700] }}
-                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = COLORS.gray[100]}
-                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
-                >
-                  <Zap className="h-5 w-5" style={{ color: COLORS.gray[600] }} /> 
-                  升级会员
-                </div>
-              </Link>
-              <div className="my-1 h-px mx-2" style={{ backgroundColor: COLORS.divider }} />
-              {/* 退出登录 - 默认灰色，hover变红 */}
-              <button 
-                onClick={handleLogout} 
-                className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors group"
-                style={{ color: COLORS.gray[600] }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = "#FEE2E2"
-                  e.currentTarget.style.color = COLORS.error
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = "transparent"
-                  e.currentTarget.style.color = COLORS.gray[600]
-                }}
+            <>
+              {/* 遮罩层 */}
+              <div 
+                className="fixed inset-0 bg-black/20 z-[99]"
+                onClick={() => setShowUserMenu(false)}
+              />
+              {/* 右侧抽屉 */}
+              <div 
+                className="fixed top-0 right-0 h-full w-80 bg-white shadow-2xl animate-in slide-in-from-right duration-300 z-[100] overflow-y-auto"
+                style={{ borderLeft: `1px solid ${COLORS.gray[200]}` }}
               >
-                <LogOut className="h-5 w-5" /> 
-                退出登录
-              </button>
-            </div>
+                {/* 顶部标题栏 */}
+                <div className="flex items-center justify-between p-4 border-b" style={{ borderColor: COLORS.gray[200] }}>
+                  <h3 className="text-lg font-semibold text-gray-900">账号菜单</h3>
+                  <button 
+                    onClick={() => setShowUserMenu(false)}
+                    className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+                  >
+                    <X className="h-5 w-5 text-gray-500" />
+                  </button>
+                </div>
+                
+                {/* 菜单内容 */}
+                <div className="p-3">
+                  <Link href="/settings" onClick={() => setShowUserMenu(false)}>
+                    <div 
+                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm cursor-pointer transition-colors"
+                      style={{ color: COLORS.gray[700] }}
+                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = COLORS.gray[100]}
+                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
+                    >
+                      <Settings className="h-5 w-5" style={{ color: COLORS.gray[600] }} /> 
+                      账号设置
+                    </div>
+                  </Link>
+                  <Link href="/pricing" onClick={() => setShowUserMenu(false)}>
+                    <div 
+                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm cursor-pointer transition-colors"
+                      style={{ color: COLORS.gray[700] }}
+                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = COLORS.gray[100]}
+                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
+                    >
+                      <Zap className="h-5 w-5" style={{ color: COLORS.gray[600] }} /> 
+                      升级会员
+                    </div>
+                  </Link>
+                  <div className="my-1 h-px mx-2" style={{ backgroundColor: COLORS.divider }} />
+                  {/* 退出登录 - 默认灰色，hover变红 */}
+                  <button 
+                    onClick={handleLogout} 
+                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors group"
+                    style={{ color: COLORS.gray[600] }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = "#FEE2E2"
+                      e.currentTarget.style.color = COLORS.error
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = "transparent"
+                      e.currentTarget.style.color = COLORS.gray[600]
+                    }}
+                  >
+                    <LogOut className="h-5 w-5" /> 
+                    退出登录
+                  </button>
+                </div>
+              </div>
+            </>
           )}
 
           {user ? (
