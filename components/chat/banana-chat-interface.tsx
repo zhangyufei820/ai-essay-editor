@@ -25,7 +25,7 @@ import { collapseSidebar, refreshCredits } from "@/components/app-sidebar"
 import { calculatePreviewCost } from "@/lib/pricing"
 
 const BRAND_GREEN = "#14532d"
-const BANANA_COLOR = "#ca8a04"
+const BANANA_COLOR = "#14532d" // 使用网站主题深绿色
 
 // Supabase 初始化
 const supabase = createClient(
@@ -41,7 +41,7 @@ type Message = {
 
 // 🎯 流式光标组件
 const StreamingCursor = () => (
-  <span className="inline-block ml-1 text-amber-500 animate-pulse">▍</span>
+  <span className="inline-block ml-1 text-green-700 animate-pulse">▍</span>
 )
 
 // 🖼️ 图片渲染组件 - 支持 Markdown 格式 ![](url)
@@ -80,7 +80,7 @@ function BananaRenderer({ content, isStreaming = false }: { content: string; isS
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.3 }}
-          className="relative rounded-2xl overflow-hidden shadow-xl border border-amber-100"
+          className="relative rounded-2xl overflow-hidden shadow-xl border border-green-100"
         >
           <img 
             src={img.url} 
@@ -128,7 +128,7 @@ const MobileUserInfo = ({
       <span className="text-xs font-medium text-slate-700 max-w-[80px] truncate">
         {userName || "用户"}
       </span>
-      <span className="text-[10px] text-amber-600 font-medium">
+      <span className="text-[10px] text-green-700 font-medium">
         {credits.toLocaleString()} 积分
       </span>
     </div>
@@ -455,8 +455,8 @@ function BananaChatInterfaceInner() {
             <div className="mx-auto max-w-4xl px-4 md:px-6 py-6 md:py-8">
               {messages.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-16 text-center">
-                  <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-50">
-                    <Palette className="h-8 w-8 text-amber-600" />
+                  <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-green-50">
+                    <Palette className="h-8 w-8 text-green-700" />
                   </div>
                   <h1 className="text-xl font-semibold text-slate-800 mb-2">AI 图片生成</h1>
                   <p className="text-sm text-slate-500 max-w-md">
