@@ -645,10 +645,9 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 
     setSelectedModel(model)
 
-    // 🔥 为每个模型设置独立的路由，确保对话隔离
-    const newUrl = model === "standard" ? '/chat' : `/chat/${model}`
-    console.log(`🔗 [URL 同步] 切换模型 ${model} → ${newUrl}`)
-    router.push(newUrl, { scroll: false })
+    // 🔥 移除路由跳转逻辑 - 保持在当前页面，不改变 URL
+    // 用户可以在任何模型页面切换到其他模型，无需跳转
+    console.log(`🔄 [模型切换] 已切换至 ${model}，保持当前 URL`)
     
     if (input === "" || input.startsWith("生成")) {
        setInput("")
