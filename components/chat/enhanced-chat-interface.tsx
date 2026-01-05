@@ -1367,6 +1367,57 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                     <GraduationCap className="h-7 w-7" style={{ color: BRAND_GREEN }} />
                   </div>
                   <h1 className="text-xl font-semibold text-slate-800">欢迎使用沈翔智学</h1>
+                  
+                  {/* 🔥 作文批改模式的使用注意事项 */}
+                  {selectedModel === "standard" && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.3, duration: 0.5 }}
+                      className="mt-8 max-w-lg mx-auto"
+                    >
+                      <div className="bg-gradient-to-br from-emerald-50 to-green-50 rounded-2xl p-5 border border-emerald-100 shadow-sm">
+                        <div className="flex items-center gap-2 mb-3">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ backgroundColor: `${BRAND_GREEN}20` }}>
+                            <FileText className="h-4 w-4" style={{ color: BRAND_GREEN }} />
+                          </div>
+                          <h3 className="text-sm font-semibold text-slate-700">📋 文件上传规范</h3>
+                        </div>
+                        
+                        <div className="space-y-3 text-left">
+                          <div className="flex items-start gap-2">
+                            <span className="text-emerald-500 mt-0.5">✅</span>
+                            <div>
+                              <p className="text-sm font-medium text-slate-700">手写作文图片</p>
+                              <p className="text-xs text-slate-500">直接上传手写作文的照片或扫描件（JPG/PNG/GIF）</p>
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-start gap-2">
+                            <span className="text-emerald-500 mt-0.5">✅</span>
+                            <div>
+                              <p className="text-sm font-medium text-slate-700">纯文字文档</p>
+                              <p className="text-xs text-slate-500">支持 TXT、DOC、DOCX、PDF 等格式的电子文档</p>
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-start gap-2">
+                            <span className="text-red-400 mt-0.5">⚠️</span>
+                            <div>
+                              <p className="text-sm font-medium text-red-600">请勿上传</p>
+                              <p className="text-xs text-slate-500">包含手写体图片的文档（如 PDF 内嵌手写图片），系统无法识别</p>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="mt-4 pt-3 border-t border-emerald-100">
+                          <p className="text-xs text-slate-500 leading-relaxed">
+                            💡 <strong>小贴士：</strong>手写作文请直接拍照上传图片，电子作文请使用纯文字文档。文件大小限制：图片 &lt; 10MB，文档 &lt; 15MB
+                          </p>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-6 pt-4">
