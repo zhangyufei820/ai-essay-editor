@@ -364,13 +364,22 @@ export async function POST(request: NextRequest) {
       async flush(controller) {
         // 流结束时执行智能扣费
         try {
-          // 🔥 验证响应内容是否为有效的作文批改结果
-          const isValidEssayCorrection = validateEssayCorrectionResponse(fullResponseText, modelType)
+          // 🔥 只对作文批改模型（standard）进行严格验证
+          // 其他模型（如 teaching-pro、gpt-5 等）直接扣费
+          if (modelType === "standard") {
+            const isValidEssayCorrection = validateEssayCorrectionResponse(fullResponseText, modelType)
+            
+            if (!isValidEssayCorrection) {
+              console.warn(`⚠️ [智能扣费] 检测到无效作文批改响应，跳过扣费 | 用户: ${userId} | 模型: ${modelType}`)
+              console.log(`📝 [响应内容预览] ${fullResponseText.substring(0, 200)}...`)
+              return  // 不扣费
+            }
+          }
           
-          if (!isValidEssayCorrection) {
-            console.warn(`⚠️ [智能扣费] 检测到无效响应，跳过扣费 | 用户: ${userId} | 模型: ${modelType}`)
-            console.log(`📝 [响应内容预览] ${fullResponseText.substring(0, 200)}...`)
-            return  // 不扣费
+          // 🔥 对于所有模型：如果响应内容过短（小于50字符），不扣费
+          if (fullResponseText.length < 50) {
+            console.warn(`⚠️ [智能扣费] 响应内容过短 (${fullResponseText.length} 字符)，跳过扣费 | 用户: ${userId}`)
+            return
           }
           
           // 计算实际费用
