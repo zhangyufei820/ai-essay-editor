@@ -899,7 +899,9 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
           query: userMsg.content.slice(0, 50),
           userId,
           model: selectedModel,
-          sessionId: sessionIdRef.current
+          mode: genMode,
+          sessionId: sessionIdRef.current,
+          fileCount: fileIds.length
         })
         
         const res = await fetch("/api/dify-chat", {
@@ -997,8 +999,18 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         }
 
     } catch (e: any) {
-        toast.error(e.message || "出错了"); setMessages(p => p.filter(m => m.id !== botId))
-    } finally { 
+        console.error("❌ [对话异常] 详细错误:", e)
+        console.error("❌ [对话异常] 错误堆栈:", e.stack)
+        console.error("❌ [对话异常] 模型:", selectedModel, "模式:", genMode)
+        
+        const errorMsg = e.message || "对话出错，请重试"
+        toast.error(errorMsg, {
+          description: selectedModel === "banana-2-pro" ? "图片生成失败，请检查提示词" : undefined,
+          duration: 5000
+        })
+        
+        setMessages(p => p.filter(m => m.id !== botId))
+    } finally {
       setIsLoading(false)
       // 🎯 标记工作流完成
       markWorkflowComplete()
