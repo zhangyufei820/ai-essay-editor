@@ -160,6 +160,8 @@ function BananaChatInterfaceInner() {
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
+  const [uploadProgress, setUploadProgress] = useState<number>(0)
+  const [isUploading, setIsUploading] = useState(false)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -283,10 +285,12 @@ function BananaChatInterfaceInner() {
       return
     }
     
-    toast.info(`正在上传 ${files.length} 个文件...`)
+    setIsUploading(true)
+    setUploadProgress(0)
     
     try {
-      const uploadPromises = Array.from(files).map(async (file) => {
+      const totalFiles = files.length
+      const uploadPromises = Array.from(files).map(async (file, index) => {
         const formData = new FormData()
         formData.append("file", file)
         formData.append("user", userId)
@@ -306,6 +310,10 @@ function BananaChatInterfaceInner() {
         }
         
         const data = await res.json()
+        
+        // 更新进度
+        setUploadProgress(Math.round(((index + 1) / totalFiles) * 100))
+        
         return new Promise<UploadedFile>((resolve) => {
           if (file.type.startsWith("image/")) {
             resolve({
@@ -337,6 +345,9 @@ function BananaChatInterfaceInner() {
     } catch (e: any) {
       console.error("上传错误:", e)
       toast.error("上传失败")
+    } finally {
+      setIsUploading(false)
+      setUploadProgress(0)
     }
     
     if (fileInputRef.current) fileInputRef.current.value = ""
@@ -380,6 +391,12 @@ function BananaChatInterfaceInner() {
     const userMsg: Message = { id: Date.now().toString(), role: "user", content: txt }
     setMessages(p => [...p, userMsg])
     setInput("")
+    
+    // 提取文件ID
+    const fileIds = uploadedFiles.map(f => f.difyFileId).filter(Boolean) as string[]
+    
+    // 清空已上传文件
+    setUploadedFiles([])
 
     // 创建会话
     const preview = userMsg.content.slice(0, 30)
@@ -405,7 +422,7 @@ function BananaChatInterfaceInner() {
             },
             body: JSON.stringify({ 
               query: userMsg.content, 
-              fileIds: [], 
+              fileIds: fileIds, 
               userId, 
               conversation_id: sessionIdRef.current, 
               model: "banana-2-pro",
@@ -551,7 +568,7 @@ function BananaChatInterfaceInner() {
                     <div key={message.id} className={cn("flex gap-3", message.role === "user" ? "justify-end" : "justify-start")}>
                       {message.role === "assistant" && (
                         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-white mt-1" style={{ backgroundColor: BANANA_COLOR }}>
-                          <Palette className="h-4 w-4" />
+                          <span className="text-lg">🍌</span>
                         </div>
                       )}
                       <div className={cn(
@@ -616,6 +633,25 @@ function BananaChatInterfaceInner() {
         {/* 输入框 */}
         <div className="border-t border-slate-100 bg-white p-3 md:p-6 shrink-0">
           <div className="mx-auto max-w-4xl">
+            {/* 上传进度条 */}
+            {isUploading && (
+              <div className="mb-3 rounded-lg bg-slate-50 p-3 border border-slate-200">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-medium text-slate-600">上传中...</span>
+                  <span className="text-xs font-medium" style={{ color: BANANA_COLOR }}>{uploadProgress}%</span>
+                </div>
+                <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
+                  <motion.div
+                    className="h-full rounded-full"
+                    style={{ backgroundColor: BANANA_COLOR }}
+                    initial={{ width: 0 }}
+                    animate={{ width: `${uploadProgress}%` }}
+                    transition={{ duration: 0.3 }}
+                  />
+                </div>
+              </div>
+            )}
+
             {/* 文件预览区域 */}
             {uploadedFiles.length > 0 && (
               <div className="mb-3 flex flex-wrap gap-2">
