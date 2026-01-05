@@ -7,9 +7,11 @@
  * 3. API Key 安全 - 不暴露在前端
  * 
  * 🔥 更新：支持流式输出
+ * 🔥 更新：集成腾讯云 COS 存储，将音频/封面转存至 CDN
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { uploadToCos, isCdnUrl, isCosConfigured } from '@/lib/cos'
 
 export const dynamic = 'force-dynamic'
 
@@ -152,7 +154,73 @@ async function handleQuery(taskId: string, userId: string) {
   }
 
   const data = await response.json()
-  console.log('✅ [Suno Proxy] 查询成功:', data.data?.outputs?.status)
+  const status = data.data?.outputs?.status
+  console.log('✅ [Suno Proxy] 查询成功:', status)
+  
+  // 🔥 如果生成成功，将音频和封面转存到腾讯云 COS
+  if (status === 'SUCCESS' || status === 'success') {
+    const outputs = data.data?.outputs || {}
+    
+    // 检查 COS 是否已配置
+    if (isCosConfigured()) {
+      console.log('📤 [Suno Proxy] 开始转存资源到 COS...')
+      
+      try {
+        // 转存第一首歌的音频
+        const audioUrl1 = outputs.audio_url_1 || outputs.audio_url
+        if (audioUrl1 && !isCdnUrl(audioUrl1)) {
+          const result = await uploadToCos(audioUrl1, 'suno', 'mp3')
+          if (result.success) {
+            if (outputs.audio_url_1) {
+              data.data.outputs.audio_url_1 = result.cdnUrl
+            } else {
+              data.data.outputs.audio_url = result.cdnUrl
+            }
+            console.log('✅ [Suno Proxy] 音频1转存成功:', result.cdnUrl)
+          }
+        }
+        
+        // 转存第一首歌的封面
+        const coverUrl1 = outputs.cover_url_1 || outputs.cover_url
+        if (coverUrl1 && !isCdnUrl(coverUrl1)) {
+          const result = await uploadToCos(coverUrl1, 'suno', 'jpg')
+          if (result.success) {
+            if (outputs.cover_url_1) {
+              data.data.outputs.cover_url_1 = result.cdnUrl
+            } else {
+              data.data.outputs.cover_url = result.cdnUrl
+            }
+            console.log('✅ [Suno Proxy] 封面1转存成功:', result.cdnUrl)
+          }
+        }
+        
+        // 转存第二首歌的音频
+        if (outputs.audio_url_2 && !isCdnUrl(outputs.audio_url_2)) {
+          const result = await uploadToCos(outputs.audio_url_2, 'suno', 'mp3')
+          if (result.success) {
+            data.data.outputs.audio_url_2 = result.cdnUrl
+            console.log('✅ [Suno Proxy] 音频2转存成功:', result.cdnUrl)
+          }
+        }
+        
+        // 转存第二首歌的封面
+        if (outputs.cover_url_2 && !isCdnUrl(outputs.cover_url_2)) {
+          const result = await uploadToCos(outputs.cover_url_2, 'suno', 'jpg')
+          if (result.success) {
+            data.data.outputs.cover_url_2 = result.cdnUrl
+            console.log('✅ [Suno Proxy] 封面2转存成功:', result.cdnUrl)
+          }
+        }
+        
+        console.log('✅ [Suno Proxy] 资源转存完成')
+      } catch (cosError: any) {
+        // 🔥 COS 上传失败不影响业务，记录日志即可
+        console.error('⚠️ [Suno Proxy] COS 转存失败，使用原始 URL:', cosError.message)
+      }
+    } else {
+      console.log('⚠️ [Suno Proxy] COS 未配置，跳过资源转存')
+    }
+  }
   
   return NextResponse.json(data)
 }
