@@ -52,7 +52,17 @@ function CheckoutFlow({ productId }: { productId: string }) {
 
   if (!product) { notFound() }
 
-  const displayPrice = product.priceInCents
+  // 🔥 根据计费周期计算显示价格
+  // 年付 = 月付 × 12（可以设置折扣）
+  const isSubscription = ["basic", "pro", "premium"].includes(productId)
+  const annualDiscount = 0.8 // 年付8折优惠
+  
+  let displayPrice = product.priceInCents
+  if (billing === "annual" && isSubscription) {
+    // 年付价格 = 月付 × 12 × 折扣
+    displayPrice = Math.round(product.priceInCents * 12 * annualDiscount)
+  }
+  
   const checkoutUrl = `/checkout/${productId}?billing=${billing}`
   const loginRedirectUrl = `/login?redirect=${encodeURIComponent(checkoutUrl)}`
 

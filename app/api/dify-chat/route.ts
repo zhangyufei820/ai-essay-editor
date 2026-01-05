@@ -407,18 +407,24 @@ export async function POST(request: NextRequest) {
           } else {
             console.log(`✅ [静默扣费成功] 用户 ${userId}: ${latestCredits?.credits} - ${actualCost} = ${newCredits} | Token: ${totalTokens}`)
             
-            // 记录交易流水（可选，如果 credit_transactions 表存在）
-            try {
-              await supabaseAdmin.from("credit_transactions").insert({
-                user_id: userId,
-                amount: -actualCost,
-                type: "consume",
-                description: `使用 ${getModelDisplayName(modelType)} 对话 (${totalTokens} tokens)`,
-                balance_before: latestCredits?.credits || 0,
-                balance_after: newCredits
-              })
-            } catch (txError) {
-              console.warn(`⚠️ [交易记录] 写入失败（可忽略）:`, txError)
+            // 🔥 记录交易流水（重要：用于使用记录展示）
+            const { error: txError } = await supabaseAdmin.from("credit_transactions").insert({
+              user_id: userId,
+              amount: -actualCost,
+              type: "consume",
+              description: `使用 ${getModelDisplayName(modelType)} 对话 (${totalTokens} tokens)`,
+              balance_before: latestCredits?.credits || 0,
+              balance_after: newCredits
+            })
+            
+            if (txError) {
+              console.error(`❌ [交易记录] 写入失败:`, txError.message, txError.code)
+              // 🔥 如果是表不存在错误，尝试创建表
+              if (txError.code === '42P01') {
+                console.error(`❌ [交易记录] credit_transactions 表不存在！请在 Supabase 中执行 scripts/011_create_credit_transactions.sql`)
+              }
+            } else {
+              console.log(`✅ [交易记录] 写入成功: 用户 ${userId} 消耗 ${actualCost} 积分`)
             }
           }
         } catch (e) {
