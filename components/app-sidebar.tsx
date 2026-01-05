@@ -504,32 +504,25 @@ function AppSidebarInner() {
           )}
         </div>
 
-        {/* --- 底部用户固定区域 - 🎨 增强立体感 --- */}
+        {/* --- 底部用户固定区域 - 🎨 透明背景，不遮挡历史对话 --- */}
         <div 
           className="mt-auto shrink-0 z-50 relative" 
           ref={menuRef}
           style={{ 
-            background: "linear-gradient(180deg, rgba(255,255,255,0.9) 0%, #FFFFFF 100%)",
-            borderTop: `1px solid ${COLORS.sidebar.divider}`,
-            boxShadow: "0 -4px 12px rgba(0,0,0,0.02)"
+            background: "transparent",
+            borderTop: "none",
+            boxShadow: "none"
           }}
         >
-          {/* 🎁 邀请和帮助按钮 - 垂直排列 */}
+          {/* 🎁 邀请和帮助按钮 - 垂直排列，无底色 */}
           {user && (
             <div className="flex flex-col gap-1 py-2 px-3">
               <Link 
                 href="/invite" 
                 onClick={handleNavClick}
-                className="flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all hover:bg-white/80 group cursor-pointer"
+                className="flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all hover:bg-gray-100/60 group cursor-pointer"
               >
-                <div 
-                  className="w-9 h-9 rounded-lg flex items-center justify-center transition-all"
-                  style={{ 
-                    background: `linear-gradient(135deg, ${COLORS.primary.light} 0%, #BBF7D0 100%)`
-                  }}
-                >
-                  <Gift className="w-4 h-4" style={{ color: COLORS.primary.dark }} />
-                </div>
+                <Gift className="w-5 h-5" style={{ color: COLORS.primary.main }} />
                 <span 
                   className="text-sm font-medium"
                   style={{ color: COLORS.gray[700] }}
@@ -541,17 +534,9 @@ function AppSidebarInner() {
               <Link 
                 href="/help" 
                 onClick={handleNavClick}
-                className="flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all hover:bg-white/80 group cursor-pointer"
+                className="flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all hover:bg-gray-100/60 group cursor-pointer"
               >
-                <div 
-                  className="w-9 h-9 rounded-lg flex items-center justify-center transition-all"
-                  style={{ 
-                    background: "linear-gradient(135deg, #F9FAFB 0%, #F3F4F6 100%)",
-                    border: `1px solid ${COLORS.gray[200]}`
-                  }}
-                >
-                  <HelpCircle className="w-4 h-4" style={{ color: COLORS.gray[600] }} />
-                </div>
+                <HelpCircle className="w-5 h-5" style={{ color: COLORS.gray[500] }} />
                 <span 
                   className="text-sm font-medium"
                   style={{ color: COLORS.gray[700] }}
