@@ -921,6 +921,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         })
         
         console.log("📥 [API 响应] 状态码:", res.status)
+        console.log("📥 [API 响应] Headers:", Object.fromEntries(res.headers.entries()))
         
         if (res.status === 401) {
           toast.error("请先登录")
@@ -929,8 +930,17 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         if (res.status === 402) throw new Error("积分不足")
         if (!res.ok) {
           const errorText = await res.text()
-          console.error("❌ [API 错误]", res.status, errorText)
-          throw new Error(`请求失败: ${res.status}`)
+          console.error("❌ [API 错误] 状态码:", res.status)
+          console.error("❌ [API 错误] 响应内容:", errorText)
+          
+          // 🔥 尝试解析 JSON 错误信息
+          try {
+            const errorJson = JSON.parse(errorText)
+            console.error("❌ [API 错误] 解析后:", errorJson)
+            throw new Error(errorJson.error || errorJson.details || `请求失败: ${res.status}`)
+          } catch (parseError) {
+            throw new Error(`请求失败 (${res.status}): ${errorText.slice(0, 100)}`)
+          }
         }
         
         const reader = res.body?.getReader(); 

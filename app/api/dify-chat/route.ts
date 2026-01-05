@@ -205,7 +205,23 @@ export async function POST(request: NextRequest) {
     // 安全检查：防止忘配 Key
     if (!targetApiKey) {
         console.error(`❌ 严重错误: 模型 ${model} 的 API Key 未配置！环境变量 ${keySource} 为空`);
-        return new Response(JSON.stringify({ error: `Server Error: Key for ${model} missing` }), { status: 500 });
+        return new Response(JSON.stringify({ 
+          error: `配置错误：${model} 模型的 API Key 未设置`,
+          details: `请在 Vercel 环境变量中配置 ${keySource}`
+        }), { 
+          status: 500,
+          headers: { "Content-Type": "application/json" }
+        });
+    }
+    
+    // 🔥 Banana 专用调试日志
+    if (model === "banana-2-pro") {
+      console.log(`🎨 [Banana Debug] 请求详情:`)
+      console.log(`  - 用户ID: ${userId}`)
+      console.log(`  - 查询内容: ${query?.slice(0, 50)}...`)
+      console.log(`  - 文件数量: ${fileIds?.length || 0}`)
+      console.log(`  - Conversation ID: ${conversation_id || "新会话"}`)
+      console.log(`  - API Key 前缀: ${targetApiKey?.substring(0, 15)}...`)
     }
 
     // --- 2. 获取用户积分（用于预检查） ---
