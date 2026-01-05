@@ -638,16 +638,20 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       }
     }
     
-    if (model === "banana-2-pro") setGenMode("image")
-    else if (model === "suno-v5") setGenMode("music")
+    // 🚀 Banana 2 Pro 使用专用页面，自动跳转
+    if (model === "banana-2-pro") {
+      console.log('✅ [模型切换] 检测到 banana-2-pro，跳转到专用页面')
+      router.push('/chat/banana-2-pro')
+      return
+    }
+
+    if (model === "suno-v5") setGenMode("music")
     else if (model === "sora-2-pro") setGenMode("video")
     else setGenMode("text")
 
     setSelectedModel(model)
 
-    // 🔥 移除路由跳转逻辑 - 保持在当前页面，不改变 URL
-    // 用户可以在任何模型页面切换到其他模型，无需跳转
-    console.log(`🔄 [模型切换] 已切换至 ${model}，保持当前 URL`)
+    console.log(`🔄 [模型切换] 已切换至 ${model}`)
     
     if (input === "" || input.startsWith("生成")) {
        setInput("")

@@ -1,5 +1,7 @@
 "use client"
 
+import { useEffect } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import dynamic from 'next/dynamic'
 
 // 动态导入 EnhancedChatInterface，禁用 SSR
@@ -19,6 +21,21 @@ const EnhancedChatInterface = dynamic(
 )
 
 export default function ChatPage() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  
+  useEffect(() => {
+    // 🔍 检查 URL 参数中的模型
+    const model = searchParams.get('model')
+    console.log('🔍 [ChatPage] URL 参数 model:', model)
+    
+    // 🚀 如果是 banana-2-pro，自动跳转到专用页面
+    if (model === 'banana-2-pro') {
+      console.log('✅ [ChatPage] 检测到 banana-2-pro，跳转到专用页面')
+      router.push('/chat/banana-2-pro')
+    }
+  }, [searchParams, router])
+  
   return (
     <main className="flex min-h-screen flex-col">
       <div className="flex-1">
