@@ -877,6 +877,118 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     // 🎵 Suno V5 特殊处理结束
     // ============================================
     
+    // ============================================
+    // 🎨 Banana 2 Pro 4K / Sora 2 Pro 特殊处理
+    // ============================================
+    if ((selectedModel as string) === "banana-2-pro" || (selectedModel as string) === "sora-2-pro") {
+      console.log(`🎨 [${selectedModel}] 进入多媒体生成模式`)
+      
+      const mediaType = selectedModel === "banana-2-pro" ? "图片" : "视频"
+      const preview = `${mediaType}生成: ${userMsg.content.slice(0, 20)}`
+      
+      // 创建会话
+      const { data: existing } = await supabase.from('chat_sessions').select('id').eq('id', sid).single()
+      if (!existing) {
+        await supabase.from('chat_sessions').insert({ id: sid, user_id: userId, title: `${mediaType}创作`, preview })
+      } else {
+        await supabase.from('chat_sessions').update({ preview }).eq('id', sid)
+      }
+      await supabase.from('chat_messages').insert({ session_id: sid, role: "user", content: userMsg.content })
+
+      const botId = (Date.now() + 1).toString()
+      currentBotIdRef.current = botId
+      setMessages(p => [...p, { id: botId, role: "assistant", content: `正在生成${mediaType}，请稍候...` }])
+
+      try {
+        console.log(`🚀 [${selectedModel}] 调用 dify-chat API`)
+        
+        const res = await fetch("/api/dify-chat", {
+          method: "POST",
+          headers: { 
+            "Content-Type": "application/json",
+            "X-User-Id": userId
+          },
+          body: JSON.stringify({ 
+            query: userMsg.content,
+            userId,
+            conversation_id: sessionIdRef.current,
+            model: selectedModel,
+            mode: genMode
+          })
+        })
+
+        if (!res.ok) {
+          const errorText = await res.text()
+          console.error(`❌ [${selectedModel}] API 错误:`, res.status, errorText)
+          throw new Error(`${mediaType}生成失败: ${res.status}`)
+        }
+
+        // 读取流式响应
+        const reader = res.body?.getReader()
+        const decoder = new TextDecoder()
+        let buffer = ""
+        let fullText = ""
+
+        while (true) {
+          const { done, value } = await reader!.read()
+          if (done) break
+
+          buffer += decoder.decode(value, { stream: true })
+          const lines = buffer.split("\n")
+          buffer = lines.pop() || ""
+
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) continue
+            const data = line.slice(6).trim()
+            if (data === "[DONE]") continue
+
+            try {
+              const json = JSON.parse(data)
+              
+              if (json.conversation_id && sessionIdRef.current !== json.conversation_id) {
+                sessionIdRef.current = json.conversation_id
+              }
+              
+              if (json.answer) {
+                fullText += json.answer
+                setMessages(p => p.map(m =>
+                  m.id === botId ? { ...m, content: fullText } : m
+                ))
+              }
+            } catch (e) {
+              console.error(`❌ [${selectedModel}] 解析 SSE 失败:`, e)
+            }
+          }
+        }
+
+        // 保存到数据库
+        if (fullText) {
+          await supabase.from('chat_messages').insert({
+            session_id: sid,
+            role: "assistant",
+            content: fullText
+          })
+        }
+
+        // 扣除积分
+        setUserCredits(prev => prev - cost)
+        console.log(`✅ [${selectedModel}] ${mediaType}生成完成`)
+
+      } catch (err: any) {
+        console.error(`❌ [${selectedModel}] 生成失败:`, err)
+        toast.error(err.message || `${mediaType}生成失败`)
+        setMessages(p => p.filter(m => m.id !== botId))
+      } finally {
+        setIsLoading(false)
+        refreshCredits()
+      }
+
+      return // 🔥 关键：处理完毕后直接返回
+    }
+    // ============================================
+    // 🎨 Banana / Sora 特殊处理结束
+    // ============================================
+    
     const preview = userMsg.content.slice(0, 30)
     const { data: existing } = await supabase.from('chat_sessions').select('id').eq('id', sid).single()
     if (!existing) {
