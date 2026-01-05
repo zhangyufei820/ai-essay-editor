@@ -21,6 +21,9 @@ function getApiKeyForModel(model: string | null): string {
       return process.env.DIFY_API_KEY_CLAUDE || DEFAULT_DIFY_KEY || "";
     case "gemini-pro":
       return process.env.DIFY_API_KEY_GEMINI || DEFAULT_DIFY_KEY || "";
+    case "banana":
+    case "banana-2-pro":
+      return process.env.DIFY_BANANA_API_KEY || DEFAULT_DIFY_KEY || "";
     default:
       return DEFAULT_DIFY_KEY || "";
   }
