@@ -1404,7 +1404,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                           <div className="flex items-start gap-2">
                             <span className="text-red-400 mt-0.5">⚠️</span>
                             <div>
-                              <p className="text-sm font-medium text-red-600">请勿上传</p>
+                              <p className="text-sm font-medium text-gray-600">请勿上传</p>
                               <p className="text-xs text-slate-500">包含手写体图片的文档（如 PDF 内嵌手写图片），系统无法识别</p>
                             </div>
                           </div>

@@ -552,75 +552,54 @@ function AppSidebarInner() {
           
           {/* 用户信息区域 */}
           <div className="p-3">
-          {/* 🍎 弹出菜单 - 从右侧呼出 */}
+          {/* 🍎 弹出菜单 - 在用户头像右侧弹出 */}
           {showUserMenu && (
-            <>
-              {/* 遮罩层 */}
-              <div 
-                className="fixed inset-0 bg-black/20 z-[99]"
-                onClick={() => setShowUserMenu(false)}
-              />
-              {/* 右侧抽屉 */}
-              <div 
-                className="fixed top-0 right-0 h-full w-80 bg-white shadow-2xl animate-in slide-in-from-right duration-300 z-[100] overflow-y-auto"
-                style={{ borderLeft: `1px solid ${COLORS.gray[200]}` }}
-              >
-                {/* 顶部标题栏 */}
-                <div className="flex items-center justify-between p-4 border-b" style={{ borderColor: COLORS.gray[200] }}>
-                  <h3 className="text-lg font-semibold text-gray-900">账号菜单</h3>
-                  <button 
-                    onClick={() => setShowUserMenu(false)}
-                    className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+            <div 
+              className="absolute left-full bottom-0 ml-2 w-48 bg-white rounded-xl shadow-lg border animate-in fade-in slide-in-from-left-2 duration-200 z-[100]"
+              style={{ borderColor: COLORS.gray[200] }}
+            >
+              <div className="p-1.5">
+                <Link href="/settings" onClick={() => setShowUserMenu(false)}>
+                  <div 
+                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm cursor-pointer transition-colors"
+                    style={{ color: COLORS.gray[700] }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = COLORS.gray[100]}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
                   >
-                    <X className="h-5 w-5 text-gray-500" />
-                  </button>
-                </div>
-                
-                {/* 菜单内容 */}
-                <div className="p-3">
-                  <Link href="/settings" onClick={() => setShowUserMenu(false)}>
-                    <div 
-                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm cursor-pointer transition-colors"
-                      style={{ color: COLORS.gray[700] }}
-                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = COLORS.gray[100]}
-                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
-                    >
-                      <Settings className="h-5 w-5" style={{ color: COLORS.gray[600] }} /> 
-                      账号设置
-                    </div>
-                  </Link>
-                  <Link href="/pricing" onClick={() => setShowUserMenu(false)}>
-                    <div 
-                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm cursor-pointer transition-colors"
-                      style={{ color: COLORS.gray[700] }}
-                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = COLORS.gray[100]}
-                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
-                    >
-                      <Zap className="h-5 w-5" style={{ color: COLORS.gray[600] }} /> 
-                      升级会员
-                    </div>
-                  </Link>
-                  <div className="my-1 h-px mx-2" style={{ backgroundColor: COLORS.divider }} />
-                  {/* 退出登录 - 默认灰色，hover变红 */}
-                  <button 
-                    onClick={handleLogout} 
-                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors group"
-                    style={{ color: COLORS.gray[600] }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = "#FEE2E2"
-                      e.currentTarget.style.color = COLORS.error
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = "transparent"
-                      e.currentTarget.style.color = COLORS.gray[600]
-                    }}
+                    <Settings className="h-4 w-4" style={{ color: COLORS.gray[500] }} /> 
+                    账号设置
+                  </div>
+                </Link>
+                <Link href="/pricing" onClick={() => setShowUserMenu(false)}>
+                  <div 
+                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm cursor-pointer transition-colors"
+                    style={{ color: COLORS.gray[700] }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = COLORS.gray[100]}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
                   >
-                    <LogOut className="h-5 w-5" /> 
-                    退出登录
-                  </button>
-                </div>
+                    <Zap className="h-4 w-4" style={{ color: COLORS.gray[500] }} /> 
+                    升级会员
+                  </div>
+                </Link>
+                <div className="my-1 h-px mx-2" style={{ backgroundColor: COLORS.divider }} />
+                <button 
+                  onClick={handleLogout} 
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors"
+                  style={{ color: COLORS.gray[600] }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = COLORS.gray[100]
+                    e.currentTarget.style.color = COLORS.error
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = "transparent"
+                    e.currentTarget.style.color = COLORS.gray[600]
+                  }}
+                >
+                  <LogOut className="h-4 w-4" /> 
+                  退出登录
+                </button>
               </div>
-            </>
+            </div>
           )}
 
           {user ? (
