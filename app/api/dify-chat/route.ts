@@ -297,23 +297,49 @@ export async function POST(request: NextRequest) {
     const callDify = async (retryWithoutId = false) => {
         const currentConvId = retryWithoutId ? null : conversation_id;
 
-        const difyRequest: any = {
-            inputs: inputs || {},
-            query: query || "你好",
-            response_mode: "streaming",
-            user: userId || "default-user",
-            conversation_id: currentConvId,
+        // 🎨 Banana 2 Pro 使用 Workflow API，其他模型使用 Chat API
+        const isWorkflow = model === "banana-2-pro";
+        const apiEndpoint = isWorkflow ? "/workflows/run" : "/chat-messages";
+
+        let difyRequest: any;
+
+        if (isWorkflow) {
+            // 🎨 Workflow API 格式
+            difyRequest = {
+                inputs: {
+                    query: query || "你好",
+                    ...(inputs || {})
+                },
+                response_mode: "streaming",
+                user: userId || "default-user",
+            }
+            
+            // Workflow 不支持 files 参数，需要通过 inputs 传递
+            if (fileIds && fileIds.length > 0) {
+                difyRequest.inputs.files = fileIds;
+            }
+        } else {
+            // 💬 Chat API 格式
+            difyRequest = {
+                inputs: inputs || {},
+                query: query || "你好",
+                response_mode: "streaming",
+                user: userId || "default-user",
+                conversation_id: currentConvId,
+            }
+
+            if (fileIds && fileIds.length > 0) {
+                difyRequest.files = fileIds.map((id: string) => ({
+                    type: 'image',
+                    transfer_method: 'local_file',
+                    upload_file_id: id
+                }));
+            }
         }
 
-        if (fileIds && fileIds.length > 0) {
-            difyRequest.files = fileIds.map((id: string) => ({
-                type: 'image',
-                transfer_method: 'local_file',
-                upload_file_id: id
-            }));
-        }
+        console.log(`🔗 [API端点] ${apiEndpoint} | 模式: ${isWorkflow ? 'Workflow' : 'Chat'}`)
 
-        const response = await fetch(`${DIFY_BASE_URL}/chat-messages`, {
+        const response = await fetch(`${DIFY_BASE_URL}${apiEndpoint}`, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
