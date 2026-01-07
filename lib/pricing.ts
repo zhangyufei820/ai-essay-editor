@@ -108,7 +108,7 @@ export const MODEL_COSTS: Record<ModelType, ModelCostConfig> = {
   "banana-2-pro": { 
     category: "standalone",  // 🔥 改为 standalone，因为包含 LLM 对话
     tokenRate: STANDALONE_TOKEN_RATE,  // 20 积分/1K Token（LLM 部分）
-    fixedCost: 13,  // 🔥 图像生成固定成本：0.8元 * 1.6 = 1.28元 ≈ 13积分
+    fixedCost: 80,  // 🔥 图像生成 API 成本：0.8元 = 80积分（成本价，利润在 calculateActualCost 中加10%）
     displayName: "Banana 2 Pro 4K",
     mode: "image",
     estimatedTokens: 500  // 预估 LLM 对话消耗
@@ -211,10 +211,13 @@ export function calculateActualCost(
   // 实际消耗 = Token 数 / 1000 * 单价
   let actualCost = Math.ceil((totalTokens / 1000) * tokenRate)
   
-  // 🔥 Banana 2 Pro 4K 混合计费：Token 费用 + 图像生成固定成本
+  // 🔥 Banana 2 Pro 4K 混合计费：(Token 费用 + 图像生成成本) × 1.1（10%利润）
   if (model === "banana-2-pro" && config.fixedCost) {
-    actualCost += config.fixedCost  // 加上图像生成的固定成本（13积分）
-    console.log(`💰 [Banana 计费] Token: ${totalTokens} → ${Math.ceil((totalTokens / 1000) * tokenRate)}积分 + 图像生成: ${config.fixedCost}积分 = ${actualCost}积分`)
+    const tokenCost = Math.ceil((totalTokens / 1000) * tokenRate)
+    const imageCost = config.fixedCost  // 80积分（0.8元）
+    const totalCost = tokenCost + imageCost
+    actualCost = Math.ceil(totalCost * 1.1)  // 加10%利润
+    console.log(`💰 [Banana 计费] Token: ${totalTokens} → ${tokenCost}积分 + 图像: ${imageCost}积分 = ${totalCost}积分 × 1.1 = ${actualCost}积分`)
   }
   
   // 最低消费 5 积分
