@@ -309,22 +309,27 @@ export async function POST(request: NextRequest) {
 
         if (isWorkflow) {
             // 🎨 Workflow API 格式
-            // 🔥 关键：根据 Dify Workflow 配置，Banana 2 Pro 需要的字段名是 image_prompt 和 init_image
+            // 🔥 关键修复：init_image 需要是文件对象格式，而不是简单的文件ID字符串
             difyRequest = {
                 inputs: {
                     image_prompt: query || "",  // ✅ 文本提示词
-                    init_image: (fileIds && fileIds.length > 0) ? fileIds[0] : null,  // 🔥 修复：使用第一个文件ID作为初始图片
                     ...(inputs || {})           // 保留其他可能的输入
                 },
                 response_mode: "streaming",
                 user: userId || "default-user",
             }
             
-            console.log(`🎨 [Banana] Workflow 请求体:`, JSON.stringify(difyRequest, null, 2))
-            console.log(`🎨 [Banana] 文件ID数量: ${fileIds?.length || 0}`)
+            // 🔥 如果有文件，构造文件对象格式
             if (fileIds && fileIds.length > 0) {
-                console.log(`🎨 [Banana] 使用文件ID: ${fileIds[0]}`)
+                difyRequest.inputs.init_image = {
+                    type: 'image',
+                    transfer_method: 'local_file',
+                    upload_file_id: fileIds[0]
+                }
+                console.log(`🎨 [Banana] 使用文件对象:`, difyRequest.inputs.init_image)
             }
+            
+            console.log(`🎨 [Banana] Workflow 请求体:`, JSON.stringify(difyRequest, null, 2))
         } else {
             // 💬 Chat API 格式
             difyRequest = {
