@@ -219,10 +219,11 @@ export async function POST(request: NextRequest) {
     if (model === "banana-2-pro") {
       console.log(`🎨 [Banana Debug] 请求详情:`)
       console.log(`  - 用户ID: ${userId}`)
-      console.log(`  - 查询内容: ${query?.slice(0, 50)}...`)
+      console.log(`  - 查询内容: ${query?.slice(0, 100)}`)
       console.log(`  - 文件数量: ${fileIds?.length || 0}`)
       console.log(`  - Conversation ID: ${conversation_id || "新会话"}`)
-      console.log(`  - API Key 前缀: ${targetApiKey?.substring(0, 15)}...`)
+      console.log(`  - API Key: ${targetApiKey}`)
+      console.log(`  - Base URL: ${DIFY_BASE_URL}`)
     }
 
     // --- 2. 获取用户积分（用于预检查） ---
@@ -325,18 +326,40 @@ export async function POST(request: NextRequest) {
     };
 
     // --- 4. 执行请求与智能容错 ---
+    console.log(`🚀 [Dify请求] 开始调用 Dify API...`)
     let response = await callDify(false);
+    
+    console.log(`📡 [Dify响应] 状态码: ${response.status}`)
+    
+    if (model === "banana-2-pro") {
+      console.log(`🎨 [Banana] Dify响应头:`, Object.fromEntries(response.headers.entries()))
+    }
 
     if (response.status === 404 || response.status === 400) {
         console.warn(`⚠️ 会话 ID 冲突 (可能切换了模型)，自动开启新会话重试...`);
         response = await callDify(true);
+        console.log(`📡 [Dify重试] 新状态码: ${response.status}`)
     }
 
     if (!response.ok) {
         const errorText = await response.text()
         console.error(`❌ Dify API 最终报错 (${model}):`, errorText)
+        
+        // 🔥 Banana 特殊错误处理
+        if (model === "banana-2-pro") {
+          console.error(`🎨 [Banana错误] 完整错误信息:`, {
+            status: response.status,
+            statusText: response.statusText,
+            error: errorText,
+            apiKey: targetApiKey?.substring(0, 20) + '...',
+            baseUrl: DIFY_BASE_URL
+          })
+        }
+        
         return new Response(JSON.stringify({ error: `Dify Error: ${errorText}` }), { status: response.status })
     }
+    
+    console.log(`✅ [Dify请求] 成功，开始流式传输...`)
 
     // --- 5. 流式响应 + 智能扣费 + Banana 图片转存 ---
     // 创建一个 TransformStream 来处理流式数据并在结束时扣费
@@ -355,6 +378,11 @@ export async function POST(request: NextRequest) {
           const text = new TextDecoder().decode(chunk)
           const lines = text.split("\n")
           
+          // 🎨 Banana 调试：记录原始数据
+          if (model === "banana-2-pro" && text.trim()) {
+            console.log(`🎨 [Banana流式] 收到数据块:`, text.substring(0, 200))
+          }
+          
           for (const line of lines) {
             if (!line.startsWith("data: ")) continue
             const data = line.slice(6).trim()
@@ -362,6 +390,11 @@ export async function POST(request: NextRequest) {
             
             try {
               const json = JSON.parse(data)
+              
+              // 🎨 Banana 调试：记录所有事件
+              if (model === "banana-2-pro") {
+                console.log(`🎨 [Banana事件] ${json.event}:`, JSON.stringify(json).substring(0, 300))
+              }
               
               // 提取 conversation_id
               if (json.conversation_id) {
