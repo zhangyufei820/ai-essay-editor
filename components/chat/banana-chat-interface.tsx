@@ -38,6 +38,7 @@ type Message = {
   id: string
   role: "user" | "assistant"
   content: string
+  files?: UploadedFile[]  // 🔥 新增：用户消息可以包含上传的文件
 }
 
 type UploadedFile = { 
@@ -389,10 +390,16 @@ function BananaChatInterfaceInner() {
         sessionIdRef.current = urlSessionId
     }
 
-    // 🔥 先保存用户输入的文本
+    // 🔥 先保存用户输入的文本和文件
     const userInputText = txt
+    const userFiles = [...uploadedFiles]  // 🔥 保存文件副本用于显示
     
-    const userMsg: Message = { id: Date.now().toString(), role: "user", content: userInputText }
+    const userMsg: Message = { 
+      id: Date.now().toString(), 
+      role: "user", 
+      content: userInputText,
+      files: userFiles  // 🔥 保存文件信息到消息中
+    }
     setMessages(p => [...p, userMsg])
     setInput("")
     
@@ -639,7 +646,34 @@ function BananaChatInterfaceInner() {
                           : "bg-slate-50 w-full max-w-full"
                       )} style={message.role === "user" ? { backgroundColor: BANANA_COLOR } : {}}>
                         {message.role === "user" ? (
-                          <div className="whitespace-pre-wrap text-[15px] leading-relaxed">{message.content}</div>
+                          <div className="space-y-3">
+                            {/* 🔥 显示上传的文件（带动画） */}
+                            {message.files && message.files.length > 0 && (
+                              <div className="flex flex-wrap gap-2 mb-2">
+                                {message.files.map((file, idx) => (
+                                  <motion.div
+                                    key={idx}
+                                    initial={{ opacity: 0, scale: 0.8 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    transition={{ duration: 0.3, delay: idx * 0.1 }}
+                                  >
+                                    {file.preview ? (
+                                      <div className="relative w-16 h-16 rounded-lg overflow-hidden border-2 border-white/30">
+                                        <img src={file.preview} alt={file.name} className="w-full h-full object-cover" />
+                                      </div>
+                                    ) : (
+                                      <div className="flex items-center gap-1.5 rounded-lg bg-white/20 px-2 py-1 text-xs">
+                                        <FileText className="h-3 w-3" />
+                                        <span className="max-w-[60px] truncate">{file.name}</span>
+                                      </div>
+                                    )}
+                                  </motion.div>
+                                ))}
+                              </div>
+                            )}
+                            {/* 文本内容 */}
+                            <div className="whitespace-pre-wrap text-[15px] leading-relaxed">{message.content}</div>
+                          </div>
                         ) : (
                           <>
                             {isLoading && message.id === currentBotIdRef.current && !message.content ? (
