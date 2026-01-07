@@ -438,7 +438,7 @@ export async function POST(request: NextRequest) {
                 conversationId = json.conversation_id
               }
               
-              // 🔥 收集响应文本内容
+              // 🔥 收集响应文本内容（Chat API）
               if (json.event === "message" && json.answer) {
                 fullResponseText += json.answer
                 
@@ -453,6 +453,29 @@ export async function POST(request: NextRequest) {
                       bananaImageUrls.push(imageUrl)
                       console.log(`🎨 [Banana] 检测到图片 URL (message): ${imageUrl}`)
                     }
+                  }
+                }
+              }
+              
+              // 🔥 收集 Workflow API 的文本响应（Banana 2 Pro）
+              if (json.event === "text_chunk" || json.event === "agent_message") {
+                const text = json.data?.text || json.text || ''
+                if (text) {
+                  fullResponseText += text
+                  console.log(`🎨 [Workflow文本] 收集到文本: ${text.substring(0, 50)}...`)
+                }
+              }
+              
+              // 🔥 收集 Workflow 完成事件的输出文本
+              if (json.event === "workflow_finished") {
+                if (json.data?.outputs) {
+                  const outputs = json.data.outputs
+                  if (outputs.text) {
+                    fullResponseText += outputs.text
+                    console.log(`🎨 [Workflow完成] 收集到输出文本: ${outputs.text.substring(0, 50)}...`)
+                  } else if (outputs.result) {
+                    fullResponseText += outputs.result
+                    console.log(`🎨 [Workflow完成] 收集到结果文本: ${outputs.result.substring(0, 50)}...`)
                   }
                 }
               }
@@ -532,13 +555,20 @@ export async function POST(request: NextRequest) {
         
         // 流结束时执行智能扣费
         try {
-          // 🔥 基础验证：响应内容不能为空
-          if (!fullResponseText || fullResponseText.trim().length === 0) {
+          // 🔥 特殊处理：Banana 2 Pro 即使没有文本也要扣费（因为生成了图片）
+          const isBananaWithImages = model === "banana-2-pro" && bananaImageUrls.length > 0
+          
+          // 🔥 基础验证：响应内容不能为空（除非是 Banana 生成了图片）
+          if (!isBananaWithImages && (!fullResponseText || fullResponseText.trim().length === 0)) {
             console.warn(`⚠️ [智能扣费] 响应内容为空，跳过扣费 | 用户: ${userId}`)
             return
           }
           
-          console.log(`💰 [扣费] 准备扣费 | 用户: ${userId} | 模型: ${modelType} | 响应长度: ${fullResponseText.length} 字符`)
+          if (isBananaWithImages) {
+            console.log(`💰 [Banana扣费] 生成了 ${bananaImageUrls.length} 张图片，强制扣费 | 用户: ${userId}`)
+          }
+          
+          console.log(`💰 [扣费] 准备扣费 | 用户: ${userId} | 模型: ${modelType} | 响应长度: ${fullResponseText.length} 字符 | 图片数: ${bananaImageUrls.length}`)
           
           // 计算实际费用
           const actualCost = calculateActualCost(modelType, { totalTokens })
