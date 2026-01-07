@@ -23,6 +23,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import { createClient } from "@supabase/supabase-js"
 import { collapseSidebar, refreshCredits } from "@/components/app-sidebar"
 import { calculatePreviewCost } from "@/lib/pricing"
+import { UltimateRenderer } from "@/components/chat/UltimateRenderer"
 
 const BRAND_GREEN = "#14532d"
 const BANANA_COLOR = "#14532d" // 使用网站主题深绿色
@@ -53,7 +54,7 @@ const StreamingCursor = () => (
   <span className="inline-block ml-1 text-green-700 animate-pulse">▍</span>
 )
 
-// 🖼️ 图片渲染组件 - 支持 Markdown 格式 ![](url)
+// 🖼️ 图片渲染组件 - 支持 Markdown 格式 ![](url) + Markdown 文本渲染
 function BananaRenderer({ content, isStreaming = false }: { content: string; isStreaming?: boolean }) {
   if (!content) return <StreamingCursor />;
   
@@ -74,10 +75,10 @@ function BananaRenderer({ content, isStreaming = false }: { content: string; isS
   
   return (
     <div className="space-y-4">
-      {/* 文字描述 */}
+      {/* 文字描述 - 使用 UltimateRenderer 渲染 Markdown */}
       {textContent && (
-        <div className="text-slate-700 leading-relaxed whitespace-pre-wrap">
-          {textContent}
+        <div className="text-slate-700 leading-relaxed">
+          <UltimateRenderer content={textContent} />
           {isStreaming && !images.length && <StreamingCursor />}
         </div>
       )}
