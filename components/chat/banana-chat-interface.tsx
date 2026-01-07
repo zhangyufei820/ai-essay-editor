@@ -460,15 +460,70 @@ function BananaChatInterfaceInner() {
                 try {
                     const json = JSON.parse(data)
                     
+                    // 🎨 Workflow API 事件处理
+                    console.log(`🎨 [Banana前端] 收到事件:`, json.event, json)
+                    
+                    // 处理 conversation_id（Chat API）
                     if (json.conversation_id && sessionIdRef.current !== json.conversation_id) {
                         sessionIdRef.current = json.conversation_id
                     }
                     
+                    // 处理 Chat API 的 answer 字段
                     if (json.answer) {
                         fullText += json.answer
                         setMessages(p => p.map(m => m.id === botId ? { ...m, content: fullText } : m))
                     }
-                } catch {}
+                    
+                    // 🎨 处理 Workflow API 的 text 事件
+                    if (json.event === 'text_chunk' || json.event === 'agent_message') {
+                        const text = json.data?.text || json.text || ''
+                        if (text) {
+                            fullText += text
+                            setMessages(p => p.map(m => m.id === botId ? { ...m, content: fullText } : m))
+                        }
+                    }
+                    
+                    // 🎨 处理 Workflow 完成事件（可能包含最终输出）
+                    if (json.event === 'workflow_finished') {
+                        console.log(`🎨 [Banana前端] Workflow完成:`, json.data)
+                        
+                        // 检查输出中是否有文本
+                        if (json.data?.outputs) {
+                            const outputs = json.data.outputs
+                            
+                            // 尝试提取文本输出
+                            if (outputs.text) {
+                                fullText = outputs.text
+                                setMessages(p => p.map(m => m.id === botId ? { ...m, content: fullText } : m))
+                            } else if (outputs.result) {
+                                fullText = outputs.result
+                                setMessages(p => p.map(m => m.id === botId ? { ...m, content: fullText } : m))
+                            }
+                            
+                            // 检查是否有图片文件
+                            if (outputs.files && Array.isArray(outputs.files)) {
+                                for (const file of outputs.files) {
+                                    if (file.type === 'image' && file.url) {
+                                        fullText += `\n\n![Generated Image](${file.url})`
+                                    }
+                                }
+                                setMessages(p => p.map(m => m.id === botId ? { ...m, content: fullText } : m))
+                            }
+                        }
+                    }
+                    
+                    // 🎨 处理 message_file 事件（图片）
+                    if (json.event === 'message_file') {
+                        console.log(`🎨 [Banana前端] 收到图片:`, json)
+                        if (json.type === 'image' && json.url) {
+                            fullText += `\n\n![Generated Image](${json.url})`
+                            setMessages(p => p.map(m => m.id === botId ? { ...m, content: fullText } : m))
+                        }
+                    }
+                    
+                } catch (e) {
+                    console.error(`🎨 [Banana前端] 解析失败:`, e, data)
+                }
             }
         }
         
