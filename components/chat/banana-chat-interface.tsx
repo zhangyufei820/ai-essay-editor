@@ -552,7 +552,23 @@ function BananaChatInterfaceInner() {
 
     } catch (e: any) {
         console.error("❌ [Banana 对话异常]:", e)
-        toast.error(e.message || "图片生成失败，请重试", { duration: 5000 })
+        console.error("❌ [错误堆栈]:", e.stack)
+        console.error("❌ [错误详情]:", {
+          message: e.message,
+          name: e.name,
+          userInputText,
+          fileIds,
+          userId
+        })
+        
+        // 🔥 显示详细错误信息
+        const errorMsg = e.message || "图片生成失败，请重试"
+        toast.error(errorMsg, { 
+          duration: 5000,
+          description: `请查看控制台了解详情`
+        })
+        
+        // 🔥 只删除 bot 消息，保留用户消息
         setMessages(p => p.filter(m => m.id !== botId))
     } finally {
       setIsLoading(false)
