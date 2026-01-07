@@ -158,6 +158,10 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { query, conversation_id, fileIds, userId: bodyUserId, inputs, model } = body
     
+    // 🔥 调试：打印完整请求体
+    console.log(`🔍 [请求体] 完整内容:`, JSON.stringify(body, null, 2))
+    console.log(`🔍 [query字段] 值: "${query}" | 类型: ${typeof query} | 长度: ${query?.length || 0}`)
+    
     // 优先使用 header 中的 userId（更安全），其次使用 body 中的
     const userId = headerUserId || bodyUserId
     
@@ -305,27 +309,23 @@ export async function POST(request: NextRequest) {
 
         if (isWorkflow) {
             // 🎨 Workflow API 格式
-            // 注意：Workflow 的 inputs 应该直接是用户输入的内容，不要嵌套 query
+            // 🔥 关键：根据 Dify Workflow 配置，Banana 2 Pro 需要的字段名是 image_prompt
             difyRequest = {
-                inputs: inputs || {},
+                inputs: {
+                    image_prompt: query || "",  // ✅ 正确的字段名！
+                    init_image: null,           // 初始图片（可选）
+                    ...(inputs || {})           // 保留其他可能的输入
+                },
                 response_mode: "streaming",
                 user: userId || "default-user",
             }
             
-            // 🔥 关键修复：Workflow 需要将 query 作为 inputs 的一个字段
-            // 而不是嵌套在 inputs.query 中
-            if (query) {
-                // 尝试多种可能的字段名
-                difyRequest.inputs.prompt = query
-                difyRequest.inputs.user_input = query
-                difyRequest.inputs.text = query
-                difyRequest.inputs.query = query
-            }
-            
-            // Workflow 不支持 files 参数，需要通过 inputs 传递
+            // 文件上传（如果有）
             if (fileIds && fileIds.length > 0) {
+                // 根据 Dify 配置，文件应该放在 userinput.files 中
+                difyRequest.inputs["userinput.files"] = fileIds
+                // 也尝试其他可能的字段名
                 difyRequest.inputs.files = fileIds
-                difyRequest.inputs.image_files = fileIds
             }
             
             console.log(`🎨 [Banana] Workflow 请求体:`, JSON.stringify(difyRequest, null, 2))

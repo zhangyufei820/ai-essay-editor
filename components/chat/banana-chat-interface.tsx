@@ -388,7 +388,10 @@ function BananaChatInterfaceInner() {
         sessionIdRef.current = urlSessionId
     }
 
-    const userMsg: Message = { id: Date.now().toString(), role: "user", content: txt }
+    // 🔥 先保存用户输入的文本
+    const userInputText = txt
+    
+    const userMsg: Message = { id: Date.now().toString(), role: "user", content: userInputText }
     setMessages(p => [...p, userMsg])
     setInput("")
     
@@ -399,14 +402,14 @@ function BananaChatInterfaceInner() {
     setUploadedFiles([])
 
     // 创建会话
-    const preview = userMsg.content.slice(0, 30)
+    const preview = userInputText.slice(0, 30)
     const { data: existing } = await supabase.from('chat_sessions').select('id').eq('id', sid).single()
     if (!existing) {
         await supabase.from('chat_sessions').insert({ id: sid, user_id: userId, title: "图片生成", preview })
     } else {
         await supabase.from('chat_sessions').update({ preview }).eq('id', sid)
     }
-    await supabase.from('chat_messages').insert({ session_id: sid, role: "user", content: userMsg.content })
+    await supabase.from('chat_messages').insert({ session_id: sid, role: "user", content: userInputText })
 
     const botId = (Date.now()+1).toString()
     currentBotIdRef.current = botId
@@ -414,6 +417,8 @@ function BananaChatInterfaceInner() {
     
     let fullText = ""
     try {
+        console.log(`🎨 [Banana前端] 准备发送请求，用户输入: "${userInputText}"`)
+        
         const res = await fetch("/api/dify-chat", {
             method: "POST", 
             headers: { 
@@ -421,7 +426,7 @@ function BananaChatInterfaceInner() {
               "X-User-Id": userId
             },
             body: JSON.stringify({ 
-              query: userMsg.content, 
+              query: userInputText,
               fileIds: fileIds, 
               userId, 
               conversation_id: sessionIdRef.current, 
