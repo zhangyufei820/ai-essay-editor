@@ -305,19 +305,30 @@ export async function POST(request: NextRequest) {
 
         if (isWorkflow) {
             // 🎨 Workflow API 格式
+            // 注意：Workflow 的 inputs 应该直接是用户输入的内容，不要嵌套 query
             difyRequest = {
-                inputs: {
-                    query: query || "你好",
-                    ...(inputs || {})
-                },
+                inputs: inputs || {},
                 response_mode: "streaming",
                 user: userId || "default-user",
             }
             
+            // 🔥 关键修复：Workflow 需要将 query 作为 inputs 的一个字段
+            // 而不是嵌套在 inputs.query 中
+            if (query) {
+                // 尝试多种可能的字段名
+                difyRequest.inputs.prompt = query
+                difyRequest.inputs.user_input = query
+                difyRequest.inputs.text = query
+                difyRequest.inputs.query = query
+            }
+            
             // Workflow 不支持 files 参数，需要通过 inputs 传递
             if (fileIds && fileIds.length > 0) {
-                difyRequest.inputs.files = fileIds;
+                difyRequest.inputs.files = fileIds
+                difyRequest.inputs.image_files = fileIds
             }
+            
+            console.log(`🎨 [Banana] Workflow 请求体:`, JSON.stringify(difyRequest, null, 2))
         } else {
             // 💬 Chat API 格式
             difyRequest = {
