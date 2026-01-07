@@ -1,7 +1,7 @@
 "use client"
 
 /**
- * Banana 2 Pro 4K 专用聊天界面
+ * Banana2 Pro 4K 专用聊天界面
  * 特点：
  * 1. 流式输出文字描述
  * 2. 自动渲染生成的图片（支持 Markdown 格式）
@@ -582,7 +582,7 @@ function BananaChatInterfaceInner() {
           <div className="flex-1 text-center md:text-left md:ml-4">
             <div className="flex items-center justify-center md:justify-start gap-2">
               <span className="text-lg">🍌</span>
-              <span className="text-sm font-medium text-slate-700">Banana 2 Pro 4K</span>
+              <span className="text-sm font-medium text-slate-700">Banana2 Pro 4K</span>
             </div>
           </div>
           <div className="md:hidden">
@@ -620,7 +620,7 @@ function BananaChatInterfaceInner() {
                   </div>
                   <h1 className="text-xl font-semibold text-slate-800 mb-2">AI 图片生成</h1>
                   <p className="text-sm text-slate-500 max-w-md">
-                    描述你想要的图片，Banana 2 Pro 4K 将为你创作高质量的 AI 图像
+                    描述你想要的图片，Banana2 Pro 4K 将为你创作高质量的 AI 图像
                   </p>
                 </div>
               ) : (

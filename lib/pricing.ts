@@ -109,7 +109,7 @@ export const MODEL_COSTS: Record<ModelType, ModelCostConfig> = {
     category: "standalone",  // 🔥 改为 standalone，因为包含 LLM 对话
     tokenRate: STANDALONE_TOKEN_RATE,  // 20 积分/1K Token（LLM 部分）
     fixedCost: 80,  // 🔥 图像生成 API 成本：0.8元 = 80积分（成本价，利润在 calculateActualCost 中加10%）
-    displayName: "Banana 2 Pro 4K",
+    displayName: "Banana2 Pro 4K",
     mode: "image",
     estimatedTokens: 500  // 预估 LLM 对话消耗
   },
