@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
-import { PRODUCTS } from "@/lib/products"; 
+import { PRODUCTS, requiresMembership, hasActiveMembership } from "@/lib/products"; 
 import { createClient } from '@supabase/supabase-js'
 
 // 签名算法
@@ -57,10 +57,52 @@ export async function GET(request: Request) {
     if (!userId) {
       return NextResponse.json({ error: "缺少用户ID" }, { status: 400 });
     }
+
+    if (!productId) {
+      return NextResponse.json({ error: "缺少产品ID" }, { status: 400 });
+    }
     
     const product = PRODUCTS.find((p) => p.id === productId);
     if (!product) {
       return NextResponse.json({ error: "产品不存在" }, { status: 404 });
+    }
+
+    // 初始化 Supabase 客户端
+    const supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+
+    // 检查产品是否需要会员资格
+    if (requiresMembership(productId)) {
+      // 查询用户会员状态
+      const { data: userCredits, error: creditsError } = await supabaseAdmin
+        .from('user_credits')
+        .select('is_pro, membership_status')
+        .eq('user_id', userId)
+        .single();
+
+      if (creditsError) {
+        console.error("❌ 查询用户会员状态失败:", creditsError);
+        return NextResponse.json({ 
+          error: "无法验证会员状态",
+          details: "请先登录或联系客服"
+        }, { status: 500 });
+      }
+
+      // 检查用户是否有有效会员
+      const membershipStatus = userCredits?.membership_status || (userCredits?.is_pro ? 'pro' : null);
+      
+      if (!hasActiveMembership(membershipStatus)) {
+        console.log("❌ 用户无会员资格，无法购买积分充值包");
+        return NextResponse.json({ 
+          error: "积分充值包仅限会员购买",
+          details: "请先订阅会员套餐（基础版/专业版/豪华版）后再购买积分充值包",
+          requiresMembership: true
+        }, { status: 403 });
+      }
+
+      console.log(`✅ 用户会员验证通过: ${membershipStatus}`);
     }
     
     const price = (product.priceInCents / 100).toFixed(2);
@@ -68,10 +110,6 @@ export async function GET(request: Request) {
     const tradeOrderId = `ORDER_${Date.now()}_${userId}`;
 
     // 1. 在数据库中创建订单记录
-    const supabaseAdmin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    );
 
     const { error: orderError } = await supabaseAdmin
       .from('orders')

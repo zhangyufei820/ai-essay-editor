@@ -1,8 +1,8 @@
 "use client"
 
 import { notFound, useRouter, useSearchParams } from "next/navigation"
-import { PRODUCTS } from "@/lib/products"
-import { ArrowLeft, Loader2, LogIn, CheckCircle2, ExternalLink } from "lucide-react"
+import { PRODUCTS, requiresMembership, hasActiveMembership } from "@/lib/products"
+import { ArrowLeft, Loader2, LogIn, CheckCircle2, ExternalLink, AlertTriangle, Crown } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -18,11 +18,16 @@ function CheckoutFlow({ productId }: { productId: string }) {
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [isPaying, setIsPaying] = useState(false)
+  const [membershipStatus, setMembershipStatus] = useState<string | null>(null)
   
   // 新增：如果跳转失败，显示手动支付链接
   const [manualPayUrl, setManualPayUrl] = useState<string | null>(null)
 
   const billing = searchParams.get("billing") || "monthly"
+  
+  // 检查产品是否需要会员
+  const needsMembership = requiresMembership(productId)
+  const isUserMember = hasActiveMembership(membershipStatus)
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -36,6 +41,20 @@ function CheckoutFlow({ productId }: { productId: string }) {
         
         if (supabaseUser) {
           setUser(supabaseUser)
+          
+          // 查询用户会员状态
+          if (supabase) {
+            const { data: userCredits } = await supabase
+              .from('user_credits')
+              .select('is_pro, membership_status')
+              .eq('user_id', supabaseUser.id)
+              .single()
+            
+            if (userCredits) {
+              const status = userCredits.membership_status || (userCredits.is_pro ? 'pro' : null)
+              setMembershipStatus(status)
+            }
+          }
         } else {
           const localUser = localStorage.getItem('currentUser')
           if (localUser) {
@@ -96,6 +115,12 @@ function CheckoutFlow({ productId }: { productId: string }) {
       console.log("API响应:", data);
 
       if (!res.ok) {
+        // 特殊处理会员限制错误
+        if (data.requiresMembership) {
+          alert(`❌ ${data.error}\n\n${data.details}\n\n请先订阅会员套餐后再购买积分充值包。`)
+          setIsPaying(false)
+          return
+        }
         throw new Error(data.error || "请求失败")
       }
 
@@ -151,13 +176,55 @@ function CheckoutFlow({ productId }: { productId: string }) {
 
         <div className="max-w-4xl mx-auto">
           <div className="bg-card rounded-2xl shadow-lg p-8 mb-8">
-            <h1 className="text-3xl font-bold mb-2">{product.name}</h1>
-            <p className="text-muted-foreground mb-4">{product.description}</p>
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <h1 className="text-3xl font-bold mb-2">{product.name}</h1>
+                <p className="text-muted-foreground">{product.description}</p>
+              </div>
+              {needsMembership && (
+                <Badge variant="secondary" className="flex items-center gap-1">
+                  <Crown className="h-3 w-3" />
+                  会员专享
+                </Badge>
+              )}
+            </div>
             <div className="text-4xl font-bold text-primary mb-6">
               ¥{(displayPrice / 100).toFixed(2)}
               <span className="text-lg text-muted-foreground ml-2">/ {billing === "annual" ? "年" : billing === "monthly" ? "月" : "次"}</span>
             </div>
           </div>
+
+          {/* 会员限制提示 */}
+          {needsMembership && !isUserMember && (
+            <Alert className="mb-6 border-amber-200 bg-amber-50">
+              <AlertTriangle className="h-4 w-4 text-amber-600" />
+              <AlertDescription className="text-amber-900">
+                <div className="font-semibold mb-2">⚠️ 积分充值包仅限会员购买</div>
+                <p className="text-sm mb-3">
+                  您需要先订阅会员套餐（基础版/专业版/豪华版）才能购买积分充值包。
+                </p>
+                <Link href="/#pricing">
+                  <Button size="sm" variant="default" className="bg-amber-600 hover:bg-amber-700">
+                    <Crown className="h-4 w-4 mr-2" />
+                    立即订阅会员
+                  </Button>
+                </Link>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* 会员身份确认 */}
+          {needsMembership && isUserMember && (
+            <Alert className="mb-6 border-green-200 bg-green-50">
+              <CheckCircle2 className="h-4 w-4 text-green-600" />
+              <AlertDescription className="text-green-900">
+                <div className="flex items-center gap-2">
+                  <Crown className="h-4 w-4" />
+                  <span className="font-semibold">您是 {membershipStatus?.toUpperCase()} 会员，可以购买积分充值包</span>
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
 
           {/* 如果自动跳转失败，显示这个手动支付框 */}
           {manualPayUrl && (
@@ -174,13 +241,21 @@ function CheckoutFlow({ productId }: { productId: string }) {
 
           <div className="bg-card rounded-2xl shadow-lg p-8">
             <h2 className="text-xl font-semibold mb-4">选择支付方式</h2>
+            
+            {/* 如果需要会员但用户不是会员，禁用支付按钮 */}
+            {needsMembership && !isUserMember && (
+              <div className="mb-4 p-4 bg-muted rounded-lg text-center text-muted-foreground">
+                请先订阅会员后再购买积分充值包
+              </div>
+            )}
+            
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
               
               <Button
                 variant="outline"
                 className="h-auto py-4 flex flex-col items-center gap-2"
                 onClick={() => handlePayment("alipay")}
-                disabled={!BETA_CONFIG.payment.xunhupay || isPaying} 
+                disabled={!BETA_CONFIG.payment.xunhupay || isPaying || (needsMembership && !isUserMember)} 
               >
                 {isPaying ? <Loader2 className="h-6 w-6 animate-spin text-primary" /> : (
                   <>
@@ -196,7 +271,7 @@ function CheckoutFlow({ productId }: { productId: string }) {
                 variant="outline"
                 className="h-auto py-4 flex flex-col items-center gap-2"
                 onClick={() => handlePayment("wechat")}
-                disabled={!BETA_CONFIG.payment.xunhupay || isPaying}
+                disabled={!BETA_CONFIG.payment.xunhupay || isPaying || (needsMembership && !isUserMember)}
               >
                 {isPaying ? <Loader2 className="h-6 w-6 animate-spin text-primary" /> : (
                   <>
