@@ -172,6 +172,7 @@ export function calculatePreviewCost(
  * 
  * @param model - 模型类型
  * @param tokenUsage - 实际 Token 使用量
+ * @param options - 额外选项（如是否生成了图像）
  * @returns 应扣积分数
  */
 export function calculateActualCost(
@@ -180,6 +181,9 @@ export function calculateActualCost(
     totalTokens?: number
     inputTokens?: number
     outputTokens?: number
+  },
+  options?: {
+    hasGeneratedImage?: boolean  // 🔥 新增：是否生成了图像
   }
 ): number {
   const config = MODEL_COSTS[model]
@@ -211,13 +215,21 @@ export function calculateActualCost(
   // 实际消耗 = Token 数 / 1000 * 单价
   let actualCost = Math.ceil((totalTokens / 1000) * tokenRate)
   
-  // 🔥 Banana 2 Pro 4K 混合计费：(Token 费用 + 图像生成成本) × 1.1（10%利润）
-  if (model === "banana-2-pro" && config.fixedCost) {
+  // 🔥 Banana 2 Pro 4K 动态计费：根据是否生成图像决定
+  if (model === "banana-2-pro") {
     const tokenCost = Math.ceil((totalTokens / 1000) * tokenRate)
-    const imageCost = config.fixedCost  // 80积分（0.8元）
-    const totalCost = tokenCost + imageCost
-    actualCost = Math.ceil(totalCost * 1.1)  // 加10%利润
-    console.log(`💰 [Banana 计费] Token: ${totalTokens} → ${tokenCost}积分 + 图像: ${imageCost}积分 = ${totalCost}积分 × 1.1 = ${actualCost}积分`)
+    
+    // 🔥 关键修复：只有生成了图像才加上图像成本
+    if (options?.hasGeneratedImage && config.fixedCost) {
+      const imageCost = config.fixedCost  // 80积分（0.8元）
+      const totalCost = tokenCost + imageCost
+      actualCost = Math.ceil(totalCost * 1.1)  // 加10%利润
+      console.log(`💰 [Banana 计费] Token: ${totalTokens} → ${tokenCost}积分 + 图像: ${imageCost}积分 = ${totalCost}积分 × 1.1 = ${actualCost}积分`)
+    } else {
+      // 🔥 只对话，不生成图像：仅扣除 Token 费用
+      actualCost = tokenCost
+      console.log(`💰 [Banana 计费] 仅对话 Token: ${totalTokens} → ${tokenCost}积分（无图像生成）`)
+    }
   }
   
   // 最低消费 5 积分

@@ -556,23 +556,23 @@ export async function POST(request: NextRequest) {
         
         // 流结束时执行智能扣费
         try {
-          // 🔥 特殊处理：Banana 2 Pro 即使没有文本也要扣费（因为生成了图片）
-          const isBananaWithImages = model === "banana-2-pro" && bananaImageUrls.length > 0
+          // 🔥 检测是否生成了图像
+          const hasGeneratedImage = bananaImageUrls.length > 0
           
           // 🔥 基础验证：响应内容不能为空（除非是 Banana 生成了图片）
-          if (!isBananaWithImages && (!fullResponseText || fullResponseText.trim().length === 0)) {
+          if (!hasGeneratedImage && (!fullResponseText || fullResponseText.trim().length === 0)) {
             console.warn(`⚠️ [智能扣费] 响应内容为空，跳过扣费 | 用户: ${userId}`)
             return
           }
           
-          if (isBananaWithImages) {
-            console.log(`💰 [Banana扣费] 生成了 ${bananaImageUrls.length} 张图片，强制扣费 | 用户: ${userId}`)
-          }
+          console.log(`💰 [扣费] 准备扣费 | 用户: ${userId} | 模型: ${modelType} | 响应长度: ${fullResponseText.length} 字符 | 图片数: ${bananaImageUrls.length} | 生成图像: ${hasGeneratedImage}`)
           
-          console.log(`💰 [扣费] 准备扣费 | 用户: ${userId} | 模型: ${modelType} | 响应长度: ${fullResponseText.length} 字符 | 图片数: ${bananaImageUrls.length}`)
-          
-          // 计算实际费用
-          const actualCost = calculateActualCost(modelType, { totalTokens })
+          // 🔥 计算实际费用（传递是否生成图像的标志）
+          const actualCost = calculateActualCost(
+            modelType, 
+            { totalTokens },
+            { hasGeneratedImage }  // 🔥 关键：传递图像生成标志
+          )
           
           // 🔥 修复：只查询存在的字段 credits（移除 total_spent）
           const { data: latestCredits } = await supabaseAdmin
