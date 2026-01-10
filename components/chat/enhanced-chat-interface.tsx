@@ -1087,6 +1087,9 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         return
       }
       
+      // 🔥 移除思考过程标签（<think>...</think>）
+      const cleanContent = content.replace(/<think>[\s\S]*?<\/think>/gi, '').trim()
+      
       // 🔥 将 Markdown 转换为 HTML
       const convertMarkdownToHTML = (md: string): string => {
         let html = md
@@ -1151,7 +1154,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         return html
       }
       
-      const htmlContent = convertMarkdownToHTML(content)
+      const htmlContent = convertMarkdownToHTML(cleanContent)
       
       // 写入打印内容
       printWindow.document.write(`
