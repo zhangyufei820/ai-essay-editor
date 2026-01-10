@@ -248,6 +248,14 @@ function UltimateRenderer({ content, isStreaming = false }: { content: string; i
           {isLastLine && isStreaming && <StreamingCursor />}
         </h3>
       );
+    } else if (line.trim().startsWith("#### ")) {
+      // 🔥 支持 #### 四级标题
+      renderedElements.push(
+        <h4 key={i} className="mt-5 mb-2 text-lg font-semibold text-slate-700">
+          {line.replace(/^####\s+/, "")}
+          {isLastLine && isStreaming && <StreamingCursor />}
+        </h4>
+      );
     } else if (line.trim().startsWith("- ") || line.trim().startsWith("* ")) {
       // 🔥 支持 - 和 * 两种无序列表格式
       const listContent = line.trim().replace(/^[-*]\s+/, "")
@@ -1612,6 +1620,9 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                           <div className="mt-4 flex items-center justify-end gap-1 border-t border-slate-100 pt-3">
                             <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs text-slate-400 hover:bg-slate-100" onClick={() => navigator.clipboard.writeText(message.content).then(() => toast.success("已复制"))}>
                                <Copy className="h-3 w-3" /> 复制
+                            </Button>
+                            <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs text-slate-400 hover:bg-slate-100" onClick={() => window.print()}>
+                               <Download className="h-3 w-3" /> 打印
                             </Button>
                             <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs text-slate-400 hover:bg-slate-100" onClick={() => handleExportPDF(message.content)}>
                                <Download className="h-3 w-3" /> 导出
