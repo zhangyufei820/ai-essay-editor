@@ -60,7 +60,7 @@ async function handleGenerate(query: string, userId: string, taskMode?: string) 
       'Authorization': `Bearer ${SUNO_GENERATE_API_KEY}`,
     },
     body: JSON.stringify({
-      inputs: taskMode ? { task_mode: taskMode } : {},  // 🔥 传递 task_mode
+      inputs: taskMode ? { mode: taskMode } : {},  // 🔥 改为 mode 参数
       query: query,
       response_mode: 'blocking',
       user: userId,
@@ -96,7 +96,7 @@ async function handleGenerateStreaming(query: string, userId: string, taskMode?:
       'Authorization': `Bearer ${SUNO_GENERATE_API_KEY}`,
     },
     body: JSON.stringify({
-      inputs: taskMode ? { task_mode: taskMode } : {},  // 🔥 传递 task_mode
+      inputs: taskMode ? { mode: taskMode } : {},  // 🔥 改为 mode 参数
       query: query,
       response_mode: 'streaming',
       user: userId,
