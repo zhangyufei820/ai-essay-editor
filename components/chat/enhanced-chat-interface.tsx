@@ -856,6 +856,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
           userMsg.content,
           userId,
           botId,
+          sunoMode,  // 🔥 传递用户选择的模式
           // onTextChunk: 实时更新文字
           (chunk) => {
             setMessages(p => p.map(m =>

@@ -25,16 +25,16 @@ export async function POST(req: NextRequest) {
   
   try {
     const body = await req.json()
-    const { action, query, userId, taskId, streaming } = body
+    const { action, query, userId, taskId, streaming, taskMode } = body
     
-    console.log('🎵 [Suno Proxy] 参数:', { action, userId: userId?.slice(0, 8), hasQuery: !!query, taskId, streaming })
+    console.log('🎵 [Suno Proxy] 参数:', { action, userId: userId?.slice(0, 8), hasQuery: !!query, taskId, streaming, taskMode })
 
     if (action === 'generate') {
       // 生成音乐
       if (streaming) {
-        return await handleGenerateStreaming(query, userId)
+        return await handleGenerateStreaming(query, userId, taskMode)
       }
-      return await handleGenerate(query, userId)
+      return await handleGenerate(query, userId, taskMode)
     } else if (action === 'query') {
       // 查询状态
       return await handleQuery(taskId, userId)
@@ -48,8 +48,8 @@ export async function POST(req: NextRequest) {
 }
 
 // 生成音乐（阻塞模式）
-async function handleGenerate(query: string, userId: string) {
-  console.log('🎵 [Suno Proxy] 开始生成音乐（阻塞模式）')
+async function handleGenerate(query: string, userId: string, taskMode?: string) {
+  console.log('🎵 [Suno Proxy] 开始生成音乐（阻塞模式）, taskMode:', taskMode)
   
   const url = `${SUNO_BASE_URL}/chat-messages`
   
@@ -60,7 +60,7 @@ async function handleGenerate(query: string, userId: string) {
       'Authorization': `Bearer ${SUNO_GENERATE_API_KEY}`,
     },
     body: JSON.stringify({
-      inputs: {},
+      inputs: taskMode ? { task_mode: taskMode } : {},  // 🔥 传递 task_mode
       query: query,
       response_mode: 'blocking',
       user: userId,
@@ -84,8 +84,8 @@ async function handleGenerate(query: string, userId: string) {
 }
 
 // 🔥 生成音乐（流式模式）
-async function handleGenerateStreaming(query: string, userId: string) {
-  console.log('🎵 [Suno Proxy] 开始生成音乐（流式模式）')
+async function handleGenerateStreaming(query: string, userId: string, taskMode?: string) {
+  console.log('🎵 [Suno Proxy] 开始生成音乐（流式模式）, taskMode:', taskMode)
   
   const url = `${SUNO_BASE_URL}/chat-messages`
   
@@ -96,7 +96,7 @@ async function handleGenerateStreaming(query: string, userId: string) {
       'Authorization': `Bearer ${SUNO_GENERATE_API_KEY}`,
     },
     body: JSON.stringify({
-      inputs: {},
+      inputs: taskMode ? { task_mode: taskMode } : {},  // 🔥 传递 task_mode
       query: query,
       response_mode: 'streaming',
       user: userId,

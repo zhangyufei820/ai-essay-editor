@@ -312,16 +312,18 @@ export function removeTaskIdFromText(text: string): string {
  * 
  * @param query - 用户输入的提示词
  * @param userId - 用户 ID
+ * @param taskMode - Suno 模式（inspiration/custom/extend）
  * @param onChunk - 每收到一个文本块时的回调
  * @param onComplete - 完成时的回调，包含完整回复和 Task ID
  */
 export async function generateMusicStreaming(
   query: string,
   userId: string,
+  taskMode: string,  // 🔥 新增：Suno 模式参数
   onChunk: (text: string) => void,
   onComplete: (result: { answer: string; taskId: string | null }) => void
 ): Promise<void> {
-  console.log("🎵 [Suno] 开始流式生成音乐:", { query: query.slice(0, 50), userId })
+  console.log("🎵 [Suno] 开始流式生成音乐:", { query: query.slice(0, 50), userId, taskMode })
 
   try {
     const response = await fetch(SUNO_PROXY_API, {
@@ -333,6 +335,7 @@ export async function generateMusicStreaming(
         action: "generate",
         query: query,
         userId: userId,
+        taskMode: taskMode,  // 🔥 传递模式参数
         streaming: true,  // 🔥 启用流式模式
       }),
     })

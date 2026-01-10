@@ -52,6 +52,7 @@ export interface UseSunoMusicReturn {
     query: string,
     userId: string,
     messageId: string,
+    taskMode: string,  // 🔥 新增：Suno 模式参数
     onTextChunk: (text: string) => void,
     onComplete: (fullText: string) => void
   ) => Promise<void>
@@ -266,16 +267,18 @@ export function useSunoMusic(): UseSunoMusicReturn {
     query: string,
     userId: string,
     messageId: string,
+    taskMode: string,  // 🔥 新增：Suno 模式参数
     onTextChunk: (text: string) => void,
     onComplete: (fullText: string) => void
   ) => {
-    console.log(`🎵 [Suno] 开始生成音乐: ${query.slice(0, 30)}...`)
+    console.log(`🎵 [Suno] 开始生成音乐: ${query.slice(0, 30)}..., 模式: ${taskMode}`)
     userIdRef.current = userId
 
     // 调用 Agent A 生成音乐
     await generateMusicStreaming(
       query,
       userId,
+      taskMode,  // 🔥 传递模式参数
       onTextChunk,
       (result) => {
         onComplete(result.answer)
