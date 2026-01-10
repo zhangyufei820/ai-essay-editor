@@ -110,6 +110,57 @@ type Message = {
 }
 type FileProcessingState = { status: "idle" | "uploading" | "processing" | "recognizing" | "complete" | "error"; progress: number; message: string }
 
+// 🎵 格式化 Suno 响应：只保留歌词和 prompt，移除思考过程和冗余内容
+function formatSunoResponse(fullText: string): string {
+  // 1. 移除思考过程 <think>...</think>
+  let content = fullText.replace(/<think>[\s\S]*?<\/think>/gi, '').trim()
+  
+  // 2. 尝试提取 JSON 中的歌词
+  const jsonMatch = content.match(/```json\s*([\s\S]*?)```/i)
+  if (jsonMatch) {
+    try {
+      const jsonData = JSON.parse(jsonMatch[1])
+      const title = jsonData.title || ''
+      const lyrics = jsonData.lyrics_plain_text || jsonData.lyrics || ''
+      const stylePrompt = jsonData.style_prompt || ''
+      
+      // 3. 格式化输出（Claude 风格：简洁、清晰）
+      let formatted = ''
+      
+      if (title) {
+        formatted += `## 🎵 ${title}\n\n`
+      }
+      
+      if (stylePrompt) {
+        formatted += `**风格提示词：**\n\`\`\`\n${stylePrompt}\n\`\`\`\n\n`
+      }
+      
+      if (lyrics) {
+        formatted += `**完整歌词：**\n\n${lyrics}\n`
+      }
+      
+      // 添加任务 ID 提示（如果有）
+      const taskIdMatch = fullText.match(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/i)
+      if (taskIdMatch) {
+        formatted += `\n---\n📝 任务ID: \`${taskIdMatch[1]}\`\n请回复 **"确认生成"** 开始生成音乐！`
+      }
+      
+      return formatted || content
+    } catch (e) {
+      // JSON 解析失败，返回原始内容
+    }
+  }
+  
+  // 4. 如果没有 JSON，尝试提取歌词部分
+  // 移除 Phase 分析等冗余内容
+  const lyricsMatch = content.match(/\*\*(?:完整歌词|歌词)[：:]\*\*[\s\S]*?(?=\n\n(?:##|\*\*生成|$))/i)
+  if (lyricsMatch) {
+    return lyricsMatch[0]
+  }
+  
+  return content
+}
+
 // --- 辅助组件：思考加载器 ---
 const SimpleBrainLoader = () => (
   <div className="flex items-center gap-3 py-4 px-4 bg-slate-50 rounded-2xl">
@@ -857,16 +908,19 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
           userId,
           botId,
           sunoMode,  // 🔥 传递用户选择的模式
-          // onTextChunk: 实时更新文字
+          // onTextChunk: 实时更新文字（chunk 已经是累积的完整文本）
           (chunk) => {
+            // 🔥 chunk 是累积的完整文本，直接替换而不是拼接
             setMessages(p => p.map(m =>
-              m.id === botId ? { ...m, content: m.content + chunk } : m
+              m.id === botId ? { ...m, content: chunk } : m
             ))
           },
           // onComplete: 生成完成
           async (fullText) => {
+            // 🔥 提取并格式化歌词和 prompt
+            const formattedContent = formatSunoResponse(fullText)
             setMessages(p => p.map(m =>
-              m.id === botId ? { ...m, content: fullText } : m
+              m.id === botId ? { ...m, content: formattedContent } : m
             ))
 
             // 保存到数据库
