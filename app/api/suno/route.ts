@@ -60,11 +60,11 @@ async function handleGenerate(query: string, userId: string, taskMode?: string) 
       'Authorization': `Bearer ${SUNO_GENERATE_API_KEY}`,
     },
     body: JSON.stringify({
-      inputs: taskMode ? { mode: taskMode } : {},  // 🔥 改为 mode 参数
+      inputs: { task_mode: taskMode || 'inspiration' },  // 🔥 task_mode 是必填参数
       query: query,
       response_mode: 'blocking',
       user: userId,
-      conversation_id: '',  // 🔥 新增：空字符串表示新对话
+      conversation_id: '',
     }),
   })
 
@@ -96,11 +96,11 @@ async function handleGenerateStreaming(query: string, userId: string, taskMode?:
       'Authorization': `Bearer ${SUNO_GENERATE_API_KEY}`,
     },
     body: JSON.stringify({
-      inputs: taskMode ? { mode: taskMode } : {},  // 🔥 改为 mode 参数
+      inputs: { task_mode: taskMode || 'inspiration' },  // 🔥 task_mode 是必填参数
       query: query,
       response_mode: 'streaming',
       user: userId,
-      conversation_id: '',  // 🔥 新增：空字符串表示新对话
+      conversation_id: '',
     }),
   })
 
