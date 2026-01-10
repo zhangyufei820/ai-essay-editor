@@ -88,11 +88,12 @@ const supabase = createClient(
 
 // --- 类型定义 ---
 type UploadedFile = { name: string; type: string; size: number; data: string; preview?: string; difyFileId?: string }
-// 🔥 消息类型 - 支持 metadata 存储音乐等附加数据
+// 🔥 消息类型 - 支持 metadata 存储音乐等附加数据，支持 files 显示上传的文件
 type Message = { 
   id: string
   role: "user" | "assistant"
   content: string
+  files?: UploadedFile[]  // 🔥 新增：用户消息携带的文件
   metadata?: {
     type?: "music"
     taskId?: string
@@ -808,7 +809,13 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       "suno-v5": "创作一首歌曲",
     }
     const defaultPrompt = defaultPrompts[selectedModel] || "请分析"
-    const userMsg: Message = { id: Date.now().toString(), role: "user", content: txt || defaultPrompt }
+    // 🔥 将上传的文件附加到用户消息中
+    const userMsg: Message = { 
+      id: Date.now().toString(), 
+      role: "user", 
+      content: txt || defaultPrompt,
+      files: uploadedFiles.length > 0 ? [...uploadedFiles] : undefined  // 🔥 携带文件信息
+    }
     setMessages(p => [...p, userMsg]); setInput(""); setUploadedFiles([])
 
     // ============================================
@@ -1507,7 +1514,34 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                           : "bg-slate-50 w-full max-w-full break-words"
                       )} style={message.role === "user" ? { backgroundColor: BRAND_GREEN } : {}}>
                         {message.role === "user" ? (
-                          <div className="whitespace-pre-wrap text-[15px] leading-relaxed">{message.content}</div>
+                          <div className="space-y-3">
+                            {/* 🔥 显示上传的文件（带动画） */}
+                            {message.files && message.files.length > 0 && (
+                              <div className="flex flex-wrap gap-2 mb-2">
+                                {message.files.map((file, idx) => (
+                                  <motion.div
+                                    key={idx}
+                                    initial={{ opacity: 0, scale: 0.8 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    transition={{ duration: 0.3, delay: idx * 0.1 }}
+                                  >
+                                    {file.preview ? (
+                                      <div className="relative w-16 h-16 rounded-lg overflow-hidden border-2 border-white/30">
+                                        <img src={file.preview} alt={file.name} className="w-full h-full object-cover" />
+                                      </div>
+                                    ) : (
+                                      <div className="flex items-center gap-1.5 rounded-lg bg-white/20 px-2 py-1 text-xs">
+                                        <FileText className="h-3 w-3" />
+                                        <span className="max-w-[60px] truncate">{file.name}</span>
+                                      </div>
+                                    )}
+                                  </motion.div>
+                                ))}
+                              </div>
+                            )}
+                            {/* 文本内容 */}
+                            <div className="whitespace-pre-wrap text-[15px] leading-relaxed">{message.content}</div>
+                          </div>
                         ) : (
                            <>
                              {/* 🎯 工作流可视化面板 - 仅在当前正在处理的消息中显示 */}
