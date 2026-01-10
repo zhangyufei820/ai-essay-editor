@@ -223,11 +223,6 @@ function UltimateRenderer({ content, isStreaming = false }: { content: string; i
       continue;
     }
     
-    // 🔥 跳过 #### 及更多 # 的标题（不渲染）
-    if (line.trim().match(/^#{4,}\s/)) {
-      // 完全跳过，不渲染
-      continue;
-    }
     
     // 🔥 再次增大字体：h1=3xl, h2=2xl, h3=xl, 正文=lg(18px)
     if (line.trim().startsWith("# ")) {
@@ -503,6 +498,8 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
   const [fileProcessing, setFileProcessing] = useState<FileProcessingState>({ status: "idle", progress: 0, message: "" })
+  const [uploadProgress, setUploadProgress] = useState<number>(0)
+  const [isUploading, setIsUploading] = useState(false)
   const [isComplexMode, setIsComplexMode] = useState(false)
   const [analysisStage, setAnalysisStage] = useState(0)
 
@@ -684,11 +681,13 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     }
     
     console.log("📎 [handleFileUpload] 开始上传，用户ID:", userId)
+    setIsUploading(true)
+    setUploadProgress(0)
     setFileProcessing({ status: "uploading", progress: 0, message: "正在处理..." })
-    toast.info(`正在上传 ${files.length} 个文件...`)
     
     try {
-        const uploadPromises = Array.from(files).map(async (file) => {
+        const totalFiles = files.length
+        const uploadPromises = Array.from(files).map(async (file, index) => {
             const fileToUpload = file;
 
             const formData = new FormData(); 
@@ -711,6 +710,10 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
             }
             
             const data = await res.json()
+            
+            // 🔥 更新进度
+            setUploadProgress(Math.round(((index + 1) / totalFiles) * 100))
+            
             return new Promise<UploadedFile>((resolve) => {
                 if (fileToUpload.type.startsWith("image/")) {
                     resolve({ 
@@ -738,12 +741,16 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         
         const results = await Promise.all(uploadPromises);
         setUploadedFiles(p => [...p, ...results]);
+        toast.success("文件上传成功")
         setFileProcessing({ status: "idle", progress: 100, message: "完成" })
         setTimeout(() => setFileProcessing({ status: "idle", progress: 0, message: "" }), 1000)
     } catch(e: any) {
         console.error("上传错误:", e);
         toast.error("上传失败")
         setFileProcessing({ status: "error", progress: 0, message: "上传失败" })
+    } finally {
+        setIsUploading(false)
+        setUploadProgress(0)
     }
     if(fileInputRef.current) fileInputRef.current.value=""
   }
@@ -1619,7 +1626,25 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         {/* 🔥 输入框区域 */}
         <div className="border-t border-slate-100 bg-white p-3 md:p-6 shrink-0 z-20">
           <div className="mx-auto max-w-5xl">
-            {fileProcessing.status !== "idle" && (
+            {/* 🔥 上传进度条 - 参考 banana-chat-interface.tsx */}
+            {isUploading && (
+              <div className="mb-3 rounded-xl bg-slate-50 p-3 border border-slate-200 animate-in slide-in-from-bottom-2">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-medium text-slate-600">上传中...</span>
+                  <span className="text-xs font-medium" style={{ color: BRAND_GREEN }}>{uploadProgress}%</span>
+                </div>
+                <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
+                  <motion.div
+                    className="h-full rounded-full"
+                    style={{ backgroundColor: BRAND_GREEN }}
+                    initial={{ width: 0 }}
+                    animate={{ width: `${uploadProgress}%` }}
+                    transition={{ duration: 0.3 }}
+                  />
+                </div>
+              </div>
+            )}
+            {fileProcessing.status !== "idle" && !isUploading && (
               <div className="mb-3 rounded-xl bg-slate-50 p-3 animate-in slide-in-from-bottom-2">
                 <div className="flex items-center gap-2">
                   {fileProcessing.status === "error" ? <AlertCircle className="h-4 w-4 text-red-500" /> : <Loader2 className="h-4 w-4 animate-spin" style={{ color: BRAND_GREEN }} />}
