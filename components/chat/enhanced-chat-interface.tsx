@@ -345,7 +345,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   const [genMode, setGenMode] = useState<GenMode>("text")
   
   // 🎵 Suno V5 音乐生成模式（必选项）
-  type SunoMode = "inspiration" | "custom" | "extend" | "fetch"
+  type SunoMode = "inspiration" | "custom" | "extend"
   const [sunoMode, setSunoMode] = useState<SunoMode>("inspiration")
   
   const [dailyUsage, setDailyUsage] = useState<number>(0)
@@ -1724,129 +1724,97 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                   <span className="text-xs sm:text-sm font-semibold text-slate-700">选择生成模式</span>
                   <span className="text-[10px] sm:text-xs text-red-500">*必选</span>
                 </div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+                <div className="grid grid-cols-3 gap-2 sm:gap-3">
                   {/* 1. inspiration (灵感模式) */}
                   <button
                     type="button"
                     onClick={() => setSunoMode("inspiration")}
                     className={cn(
-                      "relative flex flex-col items-center gap-2 p-3 sm:p-4 rounded-xl sm:rounded-2xl border-2 transition-all duration-200",
+                      "relative flex flex-col items-center gap-1.5 p-2 sm:p-3 rounded-lg sm:rounded-xl border-2 transition-all duration-200",
                       sunoMode === "inspiration"
                         ? "border-emerald-500 bg-emerald-50 shadow-md"
                         : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
                     )}
                   >
                     <div className={cn(
-                      "flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-xl",
+                      "flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-lg",
                       sunoMode === "inspiration" ? "bg-emerald-500" : "bg-slate-100"
                     )}>
-                      <Sparkles className={cn("h-5 w-5 sm:h-6 sm:w-6", sunoMode === "inspiration" ? "text-white" : "text-slate-400")} />
+                      <Sparkles className={cn("h-4 w-4 sm:h-5 sm:w-5", sunoMode === "inspiration" ? "text-white" : "text-slate-400")} />
                     </div>
                     <div className="text-center">
-                      <p className={cn("text-xs sm:text-sm font-semibold", sunoMode === "inspiration" ? "text-emerald-700" : "text-slate-700")}>
+                      <p className={cn("text-[11px] sm:text-xs font-semibold", sunoMode === "inspiration" ? "text-emerald-700" : "text-slate-700")}>
                         灵感模式
                       </p>
-                      <p className="text-[10px] sm:text-xs text-slate-500 mt-0.5">inspiration</p>
+                      <p className="text-[9px] sm:text-[10px] text-slate-500 mt-0.5">inspiration</p>
                     </div>
                     {sunoMode === "inspiration" && (
-                      <div className="absolute top-2 right-2 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500">
-                        <svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <div className="absolute top-1.5 right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500">
+                        <svg className="h-2.5 w-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                         </svg>
                       </div>
                     )}
                   </button>
 
-                  {/* 2. custom (自定义模式) */}
+                  {/* 2. custom (自定义模式) - 使用绿色 */}
                   <button
                     type="button"
                     onClick={() => setSunoMode("custom")}
                     className={cn(
-                      "relative flex flex-col items-center gap-2 p-3 sm:p-4 rounded-xl sm:rounded-2xl border-2 transition-all duration-200",
+                      "relative flex flex-col items-center gap-1.5 p-2 sm:p-3 rounded-lg sm:rounded-xl border-2 transition-all duration-200",
                       sunoMode === "custom"
-                        ? "border-blue-500 bg-blue-50 shadow-md"
+                        ? "border-emerald-500 bg-emerald-50 shadow-md"
                         : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
                     )}
                   >
                     <div className={cn(
-                      "flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-xl",
-                      sunoMode === "custom" ? "bg-blue-500" : "bg-slate-100"
+                      "flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-lg",
+                      sunoMode === "custom" ? "bg-emerald-500" : "bg-slate-100"
                     )}>
-                      <Palette className={cn("h-5 w-5 sm:h-6 sm:w-6", sunoMode === "custom" ? "text-white" : "text-slate-400")} />
+                      <Palette className={cn("h-4 w-4 sm:h-5 sm:w-5", sunoMode === "custom" ? "text-white" : "text-slate-400")} />
                     </div>
                     <div className="text-center">
-                      <p className={cn("text-xs sm:text-sm font-semibold", sunoMode === "custom" ? "text-blue-700" : "text-slate-700")}>
+                      <p className={cn("text-[11px] sm:text-xs font-semibold", sunoMode === "custom" ? "text-emerald-700" : "text-slate-700")}>
                         自定义模式
                       </p>
-                      <p className="text-[10px] sm:text-xs text-slate-500 mt-0.5">custom</p>
+                      <p className="text-[9px] sm:text-[10px] text-slate-500 mt-0.5">custom</p>
                     </div>
                     {sunoMode === "custom" && (
-                      <div className="absolute top-2 right-2 flex h-5 w-5 items-center justify-center rounded-full bg-blue-500">
-                        <svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <div className="absolute top-1.5 right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500">
+                        <svg className="h-2.5 w-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                         </svg>
                       </div>
                     )}
                   </button>
 
-                  {/* 3. extend (续写模式) */}
+                  {/* 3. extend (续写模式) - 使用绿色 */}
                   <button
                     type="button"
                     onClick={() => setSunoMode("extend")}
                     className={cn(
-                      "relative flex flex-col items-center gap-2 p-3 sm:p-4 rounded-xl sm:rounded-2xl border-2 transition-all duration-200",
+                      "relative flex flex-col items-center gap-1.5 p-2 sm:p-3 rounded-lg sm:rounded-xl border-2 transition-all duration-200",
                       sunoMode === "extend"
-                        ? "border-purple-500 bg-purple-50 shadow-md"
+                        ? "border-emerald-500 bg-emerald-50 shadow-md"
                         : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
                     )}
                   >
                     <div className={cn(
-                      "flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-xl",
-                      sunoMode === "extend" ? "bg-purple-500" : "bg-slate-100"
+                      "flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-lg",
+                      sunoMode === "extend" ? "bg-emerald-500" : "bg-slate-100"
                     )}>
-                      <FileText className={cn("h-5 w-5 sm:h-6 sm:w-6", sunoMode === "extend" ? "text-white" : "text-slate-400")} />
+                      <FileText className={cn("h-4 w-4 sm:h-5 sm:w-5", sunoMode === "extend" ? "text-white" : "text-slate-400")} />
                     </div>
                     <div className="text-center">
-                      <p className={cn("text-xs sm:text-sm font-semibold", sunoMode === "extend" ? "text-purple-700" : "text-slate-700")}>
+                      <p className={cn("text-[11px] sm:text-xs font-semibold", sunoMode === "extend" ? "text-emerald-700" : "text-slate-700")}>
                         续写模式
                       </p>
-                      <p className="text-[10px] sm:text-xs text-slate-500 mt-0.5">extend</p>
+                      <p className="text-[9px] sm:text-[10px] text-slate-500 mt-0.5">extend</p>
                     </div>
                     {sunoMode === "extend" && (
-                      <div className="absolute top-2 right-2 flex h-5 w-5 items-center justify-center rounded-full bg-purple-500">
-                        <svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                        </svg>
-                      </div>
-                    )}
-                  </button>
-
-                  {/* 4. fetch (查询进度) */}
-                  <button
-                    type="button"
-                    onClick={() => setSunoMode("fetch")}
-                    className={cn(
-                      "relative flex flex-col items-center gap-2 p-3 sm:p-4 rounded-xl sm:rounded-2xl border-2 transition-all duration-200",
-                      sunoMode === "fetch"
-                        ? "border-amber-500 bg-amber-50 shadow-md"
-                        : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
-                    )}
-                  >
-                    <div className={cn(
-                      "flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-xl",
-                      sunoMode === "fetch" ? "bg-amber-500" : "bg-slate-100"
-                    )}>
-                      <Download className={cn("h-5 w-5 sm:h-6 sm:w-6", sunoMode === "fetch" ? "text-white" : "text-slate-400")} />
-                    </div>
-                    <div className="text-center">
-                      <p className={cn("text-xs sm:text-sm font-semibold", sunoMode === "fetch" ? "text-amber-700" : "text-slate-700")}>
-                        查询进度
-                      </p>
-                      <p className="text-[10px] sm:text-xs text-slate-500 mt-0.5">fetch</p>
-                    </div>
-                    {sunoMode === "fetch" && (
-                      <div className="absolute top-2 right-2 flex h-5 w-5 items-center justify-center rounded-full bg-amber-500">
-                        <svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <div className="absolute top-1.5 right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500">
+                        <svg className="h-2.5 w-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                         </svg>
                       </div>
