@@ -64,6 +64,7 @@ async function handleGenerate(query: string, userId: string) {
       query: query,
       response_mode: 'blocking',
       user: userId,
+      conversation_id: '',  // 🔥 新增：空字符串表示新对话
     }),
   })
 
@@ -99,6 +100,7 @@ async function handleGenerateStreaming(query: string, userId: string) {
       query: query,
       response_mode: 'streaming',
       user: userId,
+      conversation_id: '',  // 🔥 新增：空字符串表示新对话
     }),
   })
 
