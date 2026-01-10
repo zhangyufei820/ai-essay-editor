@@ -10,7 +10,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { 
   Send, Paperclip, X, FileText, Copy, Loader2, Sparkles, User, Brain, AlertCircle, 
   ChevronDown, ChevronLeft, Bot, Film, Palette, AudioLines, ArrowDown, GraduationCap,
-  Download, Share2
+  Download, Share2, Printer
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
@@ -1625,7 +1625,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                                <Copy className="h-3 w-3" /> <span className="hidden xs:inline">复制</span>
                             </Button>
                             <Button variant="ghost" size="sm" className="h-7 sm:h-8 gap-1 sm:gap-1.5 text-[10px] sm:text-xs text-slate-400 hover:bg-slate-100 px-2 sm:px-3" onClick={() => window.print()}>
-                               <Download className="h-3 w-3" /> <span className="hidden xs:inline">打印</span>
+                               <Printer className="h-3 w-3" /> <span className="hidden xs:inline">打印</span>
                             </Button>
                             <Button variant="ghost" size="sm" className="h-7 sm:h-8 gap-1 sm:gap-1.5 text-[10px] sm:text-xs text-slate-400 hover:bg-slate-100 px-2 sm:px-3" onClick={() => handleExportPDF(message.content)}>
                                <Download className="h-3 w-3" /> <span className="hidden xs:inline">导出</span>
