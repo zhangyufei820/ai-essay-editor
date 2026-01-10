@@ -2,15 +2,26 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Loader2, Upload, FileText } from "lucide-react"
-import ReactMarkdown from "react-markdown"
+import { Loader2, Upload, FileText, X } from "lucide-react"
+import { UltimateRenderer } from "@/components/chat/UltimateRenderer"
+import { motion } from "framer-motion"
+import { toast } from "sonner"
+
+type UploadedFile = { 
+  name: string
+  type: string
+  size: number
+  data: string
+  preview?: string
+  difyFileId?: string
+}
 
 export function EssayGrader() {
   const [essayText, setEssayText] = useState("")
@@ -19,31 +30,94 @@ export function EssayGrader() {
   const [wordLimit, setWordLimit] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [result, setResult] = useState("")
-  const [files, setFiles] = useState<File[]>([])
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
+  const [uploadProgress, setUploadProgress] = useState<number>(0)
+  const [isUploading, setIsUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      setFiles(Array.from(e.target.files))
+  // 🔥 文件上传处理 - 参考 banana-chat-interface.tsx
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files
+    if (!files || !files.length) return
+    
+    setIsUploading(true)
+    setUploadProgress(0)
+    
+    try {
+      const totalFiles = files.length
+      const uploadPromises = Array.from(files).map(async (file, index) => {
+        const formData = new FormData()
+        formData.append("file", file)
+        formData.append("user", "essay-correction-user")
+        
+        const res = await fetch("/api/dify-upload", {
+          method: "POST",
+          headers: {
+            "X-User-Id": "essay-correction-user",
+            "X-Model": "essay-correction"
+          },
+          body: formData
+        })
+        
+        if (!res.ok) {
+          const errText = await res.text()
+          throw new Error(`上传失败: ${res.status} ${errText}`)
+        }
+        
+        const data = await res.json()
+        
+        // 更新进度
+        setUploadProgress(Math.round(((index + 1) / totalFiles) * 100))
+        
+        return new Promise<UploadedFile>((resolve) => {
+          if (file.type.startsWith("image/")) {
+            resolve({
+              name: file.name,
+              type: file.type,
+              size: file.size,
+              data: "",
+              difyFileId: data.id,
+              preview: URL.createObjectURL(file)
+            })
+          } else {
+            const reader = new FileReader()
+            reader.onload = e => resolve({
+              name: file.name,
+              type: file.type,
+              size: file.size,
+              data: e.target?.result as string,
+              difyFileId: data.id,
+              preview: undefined
+            })
+            reader.readAsDataURL(file)
+          }
+        })
+      })
+      
+      const results = await Promise.all(uploadPromises)
+      setUploadedFiles(p => [...p, ...results])
+      toast.success("文件上传成功")
+    } catch (e: any) {
+      console.error("上传错误:", e)
+      toast.error("上传失败")
+    } finally {
+      setIsUploading(false)
+      setUploadProgress(0)
     }
+    
+    if (fileInputRef.current) fileInputRef.current.value = ""
   }
 
-  const readFileAsBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onload = () => resolve(reader.result as string)
-      reader.onerror = reject
-      reader.readAsDataURL(file)
-    })
-  }
+  const removeFile = (i: number) => setUploadedFiles(p => p.filter((_, idx) => idx !== i))
 
   const handleSubmit = async () => {
-    if (!essayText.trim() && files.length === 0) {
-      alert("请输入作文内容或上传作文图片")
+    if (!essayText.trim() && uploadedFiles.length === 0) {
+      toast.error("请输入作文内容或上传作文图片")
       return
     }
 
     if (!gradeLevel || !topic || !wordLimit) {
-      alert("请填写年级、题目和字数要求")
+      toast.error("请填写年级、题目和字数要求")
       return
     }
 
@@ -51,15 +125,8 @@ export function EssayGrader() {
     setResult("")
 
     try {
-      const images = await Promise.all(
-        files
-          .filter((f) => f.type.startsWith("image/"))
-          .map(async (file) => ({
-            name: file.name,
-            type: file.type,
-            data: await readFileAsBase64(file),
-          })),
-      )
+      // 🔥 提取文件ID - 参考 banana-chat-interface.tsx
+      const fileIds = uploadedFiles.map(f => f.difyFileId).filter(Boolean) as string[]
 
       const response = await fetch("/api/essay-grade", {
         method: "POST",
@@ -71,7 +138,7 @@ export function EssayGrader() {
           gradeLevel,
           topic,
           wordLimit,
-          images, // 发送图片数据
+          fileIds, // 🔥 发送文件ID而不是base64数据
         }),
       })
 
@@ -79,11 +146,56 @@ export function EssayGrader() {
         throw new Error("批改失败")
       }
 
-      const data = await response.json()
-      setResult(data.result)
+      // 🔥 处理流式响应 - 参考 banana-chat-interface.tsx
+      const reader = response.body?.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ""
+      let fullText = ""
+
+      while (true) {
+        const { done, value } = await reader!.read()
+        if (done) break
+        
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split("\n")
+        buffer = lines.pop() || ""
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue
+          const data = line.slice(6).trim()
+          if (data === "[DONE]") continue
+          
+          try {
+            const json = JSON.parse(data)
+            
+            // 🔥 处理思考过程（agent_thought）
+            if (json.event === "agent_thought") {
+              console.log("[作文批改] 思考:", json.thought)
+            }
+            
+            // 🔥 处理文本输出（answer字段）
+            if (json.answer) {
+              fullText += json.answer
+              setResult(fullText)
+            }
+            
+            // 🔥 处理 message 事件
+            if (json.event === "message" && json.answer) {
+              fullText += json.answer
+              setResult(fullText)
+            }
+          } catch (e) {
+            console.error("解析失败:", e, data)
+          }
+        }
+      }
+      
+      // 清空已上传文件
+      setUploadedFiles([])
+      toast.success("批改完成")
     } catch (error) {
       console.error("Error:", error)
-      alert("批改过程中出现错误，请重试")
+      toast.error("批改过程中出现错误，请重试")
     } finally {
       setIsLoading(false)
     }
@@ -114,18 +226,67 @@ export function EssayGrader() {
               onChange={(e) => setEssayText(e.target.value)}
               className="min-h-[300px] resize-y"
             />
+            
+            {/* 🔥 上传进度条 */}
+            {isUploading && (
+              <div className="rounded-lg bg-slate-50 p-3 border border-slate-200">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-medium text-slate-600">上传中...</span>
+                  <span className="text-xs font-medium text-green-700">{uploadProgress}%</span>
+                </div>
+                <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
+                  <motion.div
+                    className="h-full rounded-full bg-green-700"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${uploadProgress}%` }}
+                    transition={{ duration: 0.3 }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* 🔥 文件预览区域 */}
+            {uploadedFiles.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {uploadedFiles.map((f, i) => (
+                  <div key={i} className="relative group">
+                    {f.preview ? (
+                      <div className="relative w-20 h-20 rounded-lg overflow-hidden border-2 border-slate-200">
+                        <img src={f.preview} alt={f.name} className="w-full h-full object-cover" />
+                        <button
+                          onClick={() => removeFile(i)}
+                          className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm border border-slate-200">
+                        <FileText className="h-4 w-4 text-green-600" />
+                        <span className="max-w-[100px] truncate text-slate-600">{f.name}</span>
+                        <button onClick={() => removeFile(i)} className="text-slate-400 hover:text-red-500">
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+            
             <div className="flex gap-2">
               <div className="relative">
                 <Input
+                  ref={fileInputRef}
                   type="file"
                   accept="image/*"
                   multiple
-                  onChange={handleFileChange}
+                  onChange={handleFileUpload}
                   className="hidden"
                   id="file-upload"
                 />
                 <Label htmlFor="file-upload">
-                  <Button variant="outline" size="sm" asChild>
+                  <Button variant="outline" size="sm" asChild type="button">
                     <span>
                       <Upload className="w-4 h-4 mr-2" />
                       上传作文图片
@@ -138,11 +299,6 @@ export function EssayGrader() {
                 上传文档 (即将推出)
               </Button>
             </div>
-            {files.length > 0 && (
-              <p className="text-sm text-muted-foreground">
-                已选择 {files.length} 个文件: {files.map((f) => f.name).join(", ")}
-              </p>
-            )}
           </div>
 
           {/* Metadata Inputs */}
@@ -199,8 +355,9 @@ export function EssayGrader() {
             <CardDescription>AI为您生成的专业批改报告</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="prose prose-slate max-w-none dark:prose-invert">
-              <ReactMarkdown>{result}</ReactMarkdown>
+            {/* 🔥 使用 UltimateRenderer 替代 ReactMarkdown，确保完整渲染 */}
+            <div className="w-full">
+              <UltimateRenderer content={result} />
             </div>
           </CardContent>
         </Card>
