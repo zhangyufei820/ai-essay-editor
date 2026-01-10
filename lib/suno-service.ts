@@ -313,17 +313,19 @@ export function removeTaskIdFromText(text: string): string {
  * @param query - 用户输入的提示词
  * @param userId - 用户 ID
  * @param taskMode - Suno 模式（inspiration/custom/extend）
+ * @param conversationId - 🔥 会话 ID（可选，用于保持多轮对话连续性）
  * @param onChunk - 每收到一个文本块时的回调
- * @param onComplete - 完成时的回调，包含完整回复和 Task ID
+ * @param onComplete - 完成时的回调，包含完整回复、Task ID 和新的 conversationId
  */
 export async function generateMusicStreaming(
   query: string,
   userId: string,
-  taskMode: string,  // 🔥 新增：Suno 模式参数
+  taskMode: string,  // 🔥 Suno 模式参数
+  conversationId: string | null,  // 🔥 新增：会话 ID
   onChunk: (text: string) => void,
-  onComplete: (result: { answer: string; taskId: string | null }) => void
+  onComplete: (result: { answer: string; taskId: string | null; conversationId?: string }) => void
 ): Promise<void> {
-  console.log("🎵 [Suno] 开始流式生成音乐:", { query: query.slice(0, 50), userId, taskMode })
+  console.log("🎵 [Suno] 开始流式生成音乐:", { query: query.slice(0, 50), userId, taskMode, conversationId })
 
   try {
     const response = await fetch(SUNO_PROXY_API, {
@@ -336,6 +338,7 @@ export async function generateMusicStreaming(
         query: query,
         userId: userId,
         taskMode: taskMode,  // 🔥 传递模式参数
+        conversationId: conversationId || '',  // 🔥 传递会话 ID
         streaming: true,  // 🔥 启用流式模式
       }),
     })
@@ -357,6 +360,7 @@ export async function generateMusicStreaming(
     const decoder = new TextDecoder()
     let fullText = ""
     let taskId: string | null = null
+    let newConversationId: string | undefined = undefined  // 🔥 保存返回的 conversationId
 
     while (true) {
       const { done, value } = await reader.read()
@@ -372,6 +376,12 @@ export async function generateMusicStreaming(
 
           try {
             const parsed = JSON.parse(data)
+            
+            // 🔥 提取 conversation_id（Dify 在每个事件中都会返回）
+            if (parsed.conversation_id && !newConversationId) {
+              newConversationId = parsed.conversation_id
+              console.log("🔑 [Suno] 获取 conversationId:", newConversationId)
+            }
             
             // 🔥 Dify SSE 格式：event 类型
             if (parsed.event === "message" || parsed.event === "agent_message") {
@@ -399,9 +409,9 @@ export async function generateMusicStreaming(
 
     // 🔥 提取 Task ID
     taskId = extractTaskId(fullText)
-    console.log("✅ [Suno] 流式完成，Task ID:", taskId)
+    console.log("✅ [Suno] 流式完成，Task ID:", taskId, "conversationId:", newConversationId)
     
-    onComplete({ answer: fullText, taskId })
+    onComplete({ answer: fullText, taskId, conversationId: newConversationId })
 
   } catch (error: any) {
     console.error("❌ [Suno] 流式生成异常:", error)

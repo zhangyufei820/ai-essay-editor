@@ -47,12 +47,14 @@ export interface UseSunoMusicReturn {
   musicTasks: Map<string, MusicTask>
   /** 根据消息 ID 获取任务 */
   getTaskByMessageId: (messageId: string) => MusicTask | undefined
+  /** 🔥 当前会话 ID（用于多轮对话） */
+  conversationId: string | null
   /** 开始生成音乐 */
   startMusicGeneration: (
     query: string,
     userId: string,
     messageId: string,
-    taskMode: string,  // 🔥 新增：Suno 模式参数
+    taskMode: string,  // 🔥 Suno 模式参数
     onTextChunk: (text: string) => void,
     onComplete: (fullText: string) => void
   ) => Promise<void>
@@ -81,6 +83,9 @@ function createInitialSongs(): [SongSlot, SongSlot] {
 export function useSunoMusic(): UseSunoMusicReturn {
   // 音乐任务状态（使用 Map 支持多任务）
   const [musicTasks, setMusicTasks] = useState<Map<string, MusicTask>>(new Map())
+  
+  // 🔥 会话 ID 状态（用于保持多轮对话连续性）
+  const [conversationId, setConversationId] = useState<string | null>(null)
   
   // 🔥 使用 ref 存储最新的 musicTasks，解决轮询闭包问题
   const musicTasksRef = useRef<Map<string, MusicTask>>(new Map())
@@ -279,9 +284,16 @@ export function useSunoMusic(): UseSunoMusicReturn {
       query,
       userId,
       taskMode,  // 🔥 传递模式参数
+      conversationId,  // 🔥 传递会话 ID 保持多轮对话连续性
       onTextChunk,
       (result) => {
         onComplete(result.answer)
+        
+        // 🔥 保存新的 conversationId
+        if (result.conversationId) {
+          setConversationId(result.conversationId)
+          console.log(`🔑 [Suno] 更新 conversationId: ${result.conversationId}`)
+        }
 
         // 🔥 从回复中提取 Task ID（支持 [TASK_ID:xxx] 和纯 UUID 格式）
         const taskId = result.taskId || extractTaskId(result.answer)
@@ -376,6 +388,7 @@ export function useSunoMusic(): UseSunoMusicReturn {
   return {
     musicTasks,
     getTaskByMessageId,
+    conversationId,  // 🔥 返回会话 ID
     startMusicGeneration,
     retryTask,
     clearCompletedTasks,

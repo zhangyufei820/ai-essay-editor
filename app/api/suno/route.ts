@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
   
   try {
     const body = await req.json()
-    const { action, query, userId, taskId, streaming, taskMode } = body
+    const { action, query, userId, taskId, streaming, taskMode, conversationId } = body
     
     // 🔥 调试日志：打印原始 taskMode 值
     console.log('🎵 [Suno Proxy] 参数:', { 
@@ -53,9 +53,9 @@ export async function POST(req: NextRequest) {
     if (action === 'generate') {
       // 生成音乐 - 🔥 使用验证后的 safeTaskMode
       if (streaming) {
-        return await handleGenerateStreaming(query, userId, safeTaskMode)
+        return await handleGenerateStreaming(query, userId, safeTaskMode, conversationId)
       }
-      return await handleGenerate(query, userId, safeTaskMode)
+      return await handleGenerate(query, userId, safeTaskMode, conversationId)
     } else if (action === 'query') {
       // 查询状态
       return await handleQuery(taskId, userId)
@@ -69,8 +69,8 @@ export async function POST(req: NextRequest) {
 }
 
 // 生成音乐（阻塞模式）
-async function handleGenerate(query: string, userId: string, taskMode?: string) {
-  console.log('🎵 [Suno Proxy] 开始生成音乐（阻塞模式）, taskMode:', taskMode)
+async function handleGenerate(query: string, userId: string, taskMode?: string, conversationId?: string) {
+  console.log('🎵 [Suno Proxy] 开始生成音乐（阻塞模式）, taskMode:', taskMode, 'conversationId:', conversationId)
   
   const url = `${SUNO_BASE_URL}/chat-messages`
   
@@ -85,7 +85,7 @@ async function handleGenerate(query: string, userId: string, taskMode?: string) 
       query: query,
       response_mode: 'blocking',
       user: userId,
-      conversation_id: '',
+      conversation_id: conversationId || '',  // 🔥 传递 conversationId 保持会话连续性
     }),
   })
 
@@ -105,8 +105,8 @@ async function handleGenerate(query: string, userId: string, taskMode?: string) 
 }
 
 // 🔥 生成音乐（流式模式）
-async function handleGenerateStreaming(query: string, userId: string, taskMode?: string) {
-  console.log('🎵 [Suno Proxy] 开始生成音乐（流式模式）, taskMode:', taskMode)
+async function handleGenerateStreaming(query: string, userId: string, taskMode?: string, conversationId?: string) {
+  console.log('🎵 [Suno Proxy] 开始生成音乐（流式模式）, taskMode:', taskMode, 'conversationId:', conversationId)
   
   const url = `${SUNO_BASE_URL}/chat-messages`
   
@@ -121,7 +121,7 @@ async function handleGenerateStreaming(query: string, userId: string, taskMode?:
       query: query,
       response_mode: 'streaming',
       user: userId,
-      conversation_id: '',
+      conversation_id: conversationId || '',  // 🔥 传递 conversationId 保持会话连续性
     }),
   })
 
