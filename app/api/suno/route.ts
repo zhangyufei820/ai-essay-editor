@@ -27,14 +27,29 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const { action, query, userId, taskId, streaming, taskMode } = body
     
-    console.log('🎵 [Suno Proxy] 参数:', { action, userId: userId?.slice(0, 8), hasQuery: !!query, taskId, streaming, taskMode })
+    // 🔥 调试日志：打印原始 taskMode 值
+    console.log('🎵 [Suno Proxy] 参数:', { 
+      action, 
+      userId: userId?.slice(0, 8), 
+      hasQuery: !!query, 
+      taskId, 
+      streaming, 
+      taskMode,
+      taskModeType: typeof taskMode,
+      rawBody: JSON.stringify(body).slice(0, 200)
+    })
+    
+    // 🔥 验证 taskMode 值，只允许有效值
+    const validModes = ['inspiration', 'custom', 'extend']
+    const safeTaskMode = validModes.includes(taskMode) ? taskMode : 'inspiration'
+    console.log('🎵 [Suno Proxy] 安全 taskMode:', safeTaskMode)
 
     if (action === 'generate') {
-      // 生成音乐
+      // 生成音乐 - 🔥 使用验证后的 safeTaskMode
       if (streaming) {
-        return await handleGenerateStreaming(query, userId, taskMode)
+        return await handleGenerateStreaming(query, userId, safeTaskMode)
       }
-      return await handleGenerate(query, userId, taskMode)
+      return await handleGenerate(query, userId, safeTaskMode)
     } else if (action === 'query') {
       // 查询状态
       return await handleQuery(taskId, userId)
