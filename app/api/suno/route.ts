@@ -39,10 +39,16 @@ export async function POST(req: NextRequest) {
       rawBody: JSON.stringify(body).slice(0, 200)
     })
     
-    // 🔥 验证 taskMode 值，只允许有效值
-    const validModes = ['inspiration', 'custom', 'extend']
-    const safeTaskMode = validModes.includes(taskMode) ? taskMode : 'inspiration'
-    console.log('🎵 [Suno Proxy] 安全 taskMode:', safeTaskMode)
+    // 🔥 Dify 要求的完整选项值（必须带序号和中文）
+    const taskModeMap: Record<string, string> = {
+      'inspiration': '1. inspiration (灵感模式)',
+      'custom': '2. custom (自定义模式)',
+      'extend': '3. extend (续写模式)',
+      'fetch': '4. fetch (查询进度)'
+    }
+    // 将简化值转换为 Dify 要求的完整值
+    const safeTaskMode = taskModeMap[taskMode] || taskModeMap['inspiration']
+    console.log('🎵 [Suno Proxy] 转换 taskMode:', taskMode, '->', safeTaskMode)
 
     if (action === 'generate') {
       // 生成音乐 - 🔥 使用验证后的 safeTaskMode
