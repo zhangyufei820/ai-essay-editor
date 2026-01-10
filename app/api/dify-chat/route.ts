@@ -434,6 +434,11 @@ export async function POST(request: NextRequest) {
                 console.log(`🎨 [Banana事件] ${json.event}:`, JSON.stringify(json).substring(0, 300))
               }
               
+              // 🧠 记录工作流节点事件（用于前端思考过程显示）
+              if (json.event === 'node_started' || json.event === 'node_finished') {
+                console.log(`🧠 [工作流节点] ${json.event}: ${json.data?.title || json.title || '未知节点'}`)
+              }
+              
               // 提取 conversation_id
               if (json.conversation_id) {
                 conversationId = json.conversation_id
