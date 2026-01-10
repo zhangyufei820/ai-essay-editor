@@ -1366,17 +1366,17 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
           )}
         </AnimatePresence>
 
-        {/* 🔥 顶部导航栏 - 移动端显示用户信息和积分 */}
-        <div className="flex items-center h-14 px-4 border-b border-slate-100 bg-white shrink-0">
+        {/* 🔥 顶部导航栏 - 移动端优化：增加高度和触摸区域 */}
+        <div className="flex items-center h-16 md:h-14 px-3 md:px-4 border-b border-slate-100 bg-white shrink-0">
           <button 
             onClick={handleBack}
-            className="flex items-center gap-1 text-slate-600 hover:text-slate-800 transition-colors"
+            className="flex items-center gap-1 text-slate-600 hover:text-slate-800 transition-colors min-w-[44px] min-h-[44px] -ml-2 justify-center"
           >
             <ChevronLeft className="h-5 w-5" />
             <span className="text-sm font-medium hidden sm:inline">返回</span>
           </button>
           <div className="flex-1 text-center md:text-left md:ml-4">
-            <span className="text-sm font-medium text-slate-700">{modelConfig[selectedModel].name}</span>
+            <span className="text-sm md:text-base font-medium text-slate-700">{modelConfig[selectedModel].name}</span>
           </div>
           {/* 🔥 移动端用户信息显示 - 仅在移动端显示 */}
           <div className="md:hidden">
@@ -1389,7 +1389,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
             ) : (
               <button
                 onClick={() => router.push("/login")}
-                className="px-3 py-1.5 text-xs font-medium text-white rounded-lg"
+                className="px-3 py-2 text-xs font-medium text-white rounded-lg min-h-[36px]"
                 style={{ backgroundColor: BRAND_GREEN }}
               >
                 登录
@@ -1407,49 +1407,49 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
             onScroll={handleScroll}
             className="h-full overflow-y-auto custom-scrollbar"
           >
-            <div className="mx-auto max-w-6xl px-4 md:px-6 lg:px-10 py-6 md:py-8">
+            <div className="mx-auto max-w-6xl px-3 sm:px-4 md:px-6 lg:px-10 py-4 sm:py-6 md:py-8">
               {messages.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 md:py-16 text-center animate-in fade-in duration-500">
-                  <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl" style={{ backgroundColor: `${BRAND_GREEN}15` }}>
-                    <GraduationCap className="h-7 w-7" style={{ color: BRAND_GREEN }} />
+                <div className="flex flex-col items-center justify-center py-8 sm:py-12 md:py-16 text-center animate-in fade-in duration-500">
+                  <div className="mb-4 sm:mb-6 flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-2xl" style={{ backgroundColor: `${BRAND_GREEN}15` }}>
+                    <GraduationCap className="h-6 w-6 sm:h-7 sm:w-7" style={{ color: BRAND_GREEN }} />
                   </div>
-                  <h1 className="text-xl font-semibold text-slate-800">欢迎使用沈翔智学</h1>
+                  <h1 className="text-lg sm:text-xl font-semibold text-slate-800 px-4">欢迎使用沈翔智学</h1>
                   
-                  {/* 🔥 作文批改模式的使用注意事项 - 文艺版 */}
+                  {/* 🔥 作文批改模式的使用注意事项 - 移动端优化 */}
                   {selectedModel === "standard" && (
                     <motion.div
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.3, duration: 0.5 }}
-                      className="mt-8 max-w-lg mx-auto"
+                      className="mt-6 sm:mt-8 max-w-lg mx-auto px-2"
                     >
-                      <div className="relative bg-gradient-to-br from-emerald-50/80 via-green-50/60 to-teal-50/80 rounded-3xl p-6 border border-emerald-200/50 shadow-lg backdrop-blur-sm overflow-hidden">
+                      <div className="relative bg-gradient-to-br from-emerald-50/80 via-green-50/60 to-teal-50/80 rounded-2xl sm:rounded-3xl p-4 sm:p-6 border border-emerald-200/50 shadow-lg backdrop-blur-sm overflow-hidden">
                         {/* 装饰性背景 */}
                         <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-100/30 rounded-full blur-3xl -z-0"></div>
                         <div className="absolute bottom-0 left-0 w-24 h-24 bg-green-100/30 rounded-full blur-2xl -z-0"></div>
                         
                         <div className="relative z-10">
-                          {/* 标题区域 */}
-                          <div className="flex items-center justify-center gap-3 mb-6">
-                            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-green-600 shadow-md">
-                              <FileText className="h-5 w-5 text-white" />
+                          {/* 标题区域 - 移动端优化 */}
+                          <div className="flex items-center justify-center gap-2 sm:gap-3 mb-4 sm:mb-6">
+                            <div className="flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-xl sm:rounded-2xl bg-gradient-to-br from-emerald-500 to-green-600 shadow-md">
+                              <FileText className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
                             </div>
-                            <h3 className="text-lg font-bold bg-gradient-to-r from-emerald-700 to-green-700 bg-clip-text text-transparent">
+                            <h3 className="text-base sm:text-lg font-bold bg-gradient-to-r from-emerald-700 to-green-700 bg-clip-text text-transparent">
                               文件上传指南
                             </h3>
                           </div>
                           
-                          {/* 内容区域 - 卡片式布局 */}
-                          <div className="space-y-3 text-left">
-                            {/* 手写作文 */}
-                            <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-4 border border-emerald-100/50 shadow-sm hover:shadow-md transition-all">
-                              <div className="flex items-start gap-3">
-                                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center">
-                                  <span className="text-emerald-600 text-lg">📝</span>
+                          {/* 内容区域 - 卡片式布局，移动端优化 */}
+                          <div className="space-y-2 sm:space-y-3 text-left">
+                            {/* 手写作文 - 移动端优化 */}
+                            <div className="bg-white/80 backdrop-blur-sm rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-emerald-100/50 shadow-sm hover:shadow-md transition-all">
+                              <div className="flex items-start gap-2 sm:gap-3">
+                                <div className="flex-shrink-0 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-emerald-100 flex items-center justify-center">
+                                  <span className="text-emerald-600 text-base sm:text-lg">📝</span>
                                 </div>
-                                <div className="flex-1">
-                                  <p className="text-sm font-semibold text-slate-800 mb-1">手写作文图片</p>
-                                  <p className="text-xs text-slate-600 leading-relaxed">
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs sm:text-sm font-semibold text-slate-800 mb-0.5 sm:mb-1">手写作文图片</p>
+                                  <p className="text-[11px] sm:text-xs text-slate-600 leading-relaxed">
                                     直接上传手写作文的照片或扫描件<br/>
                                     <span className="text-emerald-600">支持 JPG、PNG、GIF 格式</span>
                                   </p>
@@ -1457,15 +1457,15 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                               </div>
                             </div>
                             
-                            {/* 纯文字文档 */}
-                            <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-4 border border-emerald-100/50 shadow-sm hover:shadow-md transition-all">
-                              <div className="flex items-start gap-3">
-                                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
-                                  <span className="text-blue-600 text-lg">📄</span>
+                            {/* 纯文字文档 - 移动端优化 */}
+                            <div className="bg-white/80 backdrop-blur-sm rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-emerald-100/50 shadow-sm hover:shadow-md transition-all">
+                              <div className="flex items-start gap-2 sm:gap-3">
+                                <div className="flex-shrink-0 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-blue-100 flex items-center justify-center">
+                                  <span className="text-blue-600 text-base sm:text-lg">📄</span>
                                 </div>
-                                <div className="flex-1">
-                                  <p className="text-sm font-semibold text-slate-800 mb-1">纯文字文档</p>
-                                  <p className="text-xs text-slate-600 leading-relaxed">
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs sm:text-sm font-semibold text-slate-800 mb-0.5 sm:mb-1">纯文字文档</p>
+                                  <p className="text-[11px] sm:text-xs text-slate-600 leading-relaxed">
                                     支持电子文档格式<br/>
                                     <span className="text-blue-600">TXT、DOC、DOCX、PDF 等</span>
                                   </p>
@@ -1473,15 +1473,15 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                               </div>
                             </div>
                             
-                            {/* 请勿上传 */}
-                            <div className="bg-red-50/80 backdrop-blur-sm rounded-2xl p-4 border border-red-100/50 shadow-sm">
-                              <div className="flex items-start gap-3">
-                                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-red-100 flex items-center justify-center">
-                                  <span className="text-red-600 text-lg">⚠️</span>
+                            {/* 请勿上传 - 移动端优化 */}
+                            <div className="bg-red-50/80 backdrop-blur-sm rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-red-100/50 shadow-sm">
+                              <div className="flex items-start gap-2 sm:gap-3">
+                                <div className="flex-shrink-0 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-red-100 flex items-center justify-center">
+                                  <span className="text-red-600 text-base sm:text-lg">⚠️</span>
                                 </div>
-                                <div className="flex-1">
-                                  <p className="text-sm font-semibold text-red-800 mb-1">请勿上传</p>
-                                  <p className="text-xs text-red-700 leading-relaxed">
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs sm:text-sm font-semibold text-red-800 mb-0.5 sm:mb-1">请勿上传</p>
+                                  <p className="text-[11px] sm:text-xs text-red-700 leading-relaxed">
                                     包含手写体图片的文档<br/>
                                     <span className="text-red-600">如 PDF 内嵌手写图片，系统无法识别</span>
                                   </p>
@@ -1490,14 +1490,14 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                             </div>
                           </div>
                           
-                          {/* 底部提示 */}
-                          <div className="mt-5 pt-4 border-t border-emerald-200/50">
-                            <div className="flex items-start gap-2">
-                              <span className="text-amber-500 text-base flex-shrink-0">💡</span>
-                              <p className="text-xs text-slate-600 leading-relaxed">
+                          {/* 底部提示 - 移动端优化 */}
+                          <div className="mt-3 sm:mt-5 pt-3 sm:pt-4 border-t border-emerald-200/50">
+                            <div className="flex items-start gap-1.5 sm:gap-2">
+                              <span className="text-amber-500 text-sm sm:text-base flex-shrink-0">💡</span>
+                              <p className="text-[11px] sm:text-xs text-slate-600 leading-relaxed">
                                 <span className="font-semibold text-slate-700">温馨提示：</span>
                                 手写作文请直接拍照上传图片，电子作文请使用纯文字文档。
-                                <span className="text-slate-500">文件大小限制：图片 &lt; 10MB，文档 &lt; 15MB</span>
+                                <span className="text-slate-500 block mt-1">文件大小限制：图片 &lt; 10MB，文档 &lt; 15MB</span>
                               </p>
                             </div>
                           </div>
@@ -1507,25 +1507,25 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                   )}
                 </div>
               ) : (
-                <div className="space-y-6 pt-4">
+                <div className="space-y-4 sm:space-y-6 pt-2 sm:pt-4">
                   {messages.map((message) => (
-                    <div key={message.id} className={cn("flex gap-3", message.role === "user" ? "justify-end" : "justify-start")}>
+                    <div key={message.id} className={cn("flex gap-2 sm:gap-3", message.role === "user" ? "justify-end" : "justify-start")}>
                       {message.role === "assistant" && (
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-white mt-1" style={{ backgroundColor: BRAND_GREEN }}>
-                          <Sparkles className="h-4 w-4" />
+                        <div className="flex h-7 w-7 sm:h-8 sm:w-8 shrink-0 items-center justify-center rounded-lg sm:rounded-xl text-white mt-1" style={{ backgroundColor: BRAND_GREEN }}>
+                          <Sparkles className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                         </div>
                       )}
                       <div className={cn(
-                        "relative rounded-2xl px-4 py-3 overflow-hidden",
+                        "relative rounded-xl sm:rounded-2xl px-3 py-2.5 sm:px-4 sm:py-3 overflow-hidden",
                         message.role === "user"
-                          ? "text-white max-w-[75%]"
+                          ? "text-white max-w-[85%] sm:max-w-[75%]"
                           : "bg-slate-50 w-full max-w-full break-words"
                       )} style={message.role === "user" ? { backgroundColor: BRAND_GREEN } : {}}>
                         {message.role === "user" ? (
-                          <div className="space-y-3">
-                            {/* 🔥 显示上传的文件（带动画） */}
+                          <div className="space-y-2 sm:space-y-3">
+                            {/* 🔥 显示上传的文件（带动画）- 移动端优化 */}
                             {message.files && message.files.length > 0 && (
-                              <div className="flex flex-wrap gap-2 mb-2">
+                              <div className="flex flex-wrap gap-1.5 sm:gap-2 mb-2">
                                 {message.files.map((file, idx) => (
                                   <motion.div
                                     key={idx}
@@ -1534,21 +1534,21 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                                     transition={{ duration: 0.3, delay: idx * 0.1 }}
                                   >
                                     {file.preview ? (
-                                      <div className="relative w-16 h-16 rounded-lg overflow-hidden border-2 border-white/30">
+                                      <div className="relative w-12 h-12 sm:w-16 sm:h-16 rounded-md sm:rounded-lg overflow-hidden border-2 border-white/30">
                                         <img src={file.preview} alt={file.name} className="w-full h-full object-cover" />
                                       </div>
                                     ) : (
-                                      <div className="flex items-center gap-1.5 rounded-lg bg-white/20 px-2 py-1 text-xs">
-                                        <FileText className="h-3 w-3" />
-                                        <span className="max-w-[60px] truncate">{file.name}</span>
+                                      <div className="flex items-center gap-1 sm:gap-1.5 rounded-md sm:rounded-lg bg-white/20 px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs">
+                                        <FileText className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+                                        <span className="max-w-[50px] sm:max-w-[60px] truncate">{file.name}</span>
                                       </div>
                                     )}
                                   </motion.div>
                                 ))}
                               </div>
                             )}
-                            {/* 文本内容 */}
-                            <div className="whitespace-pre-wrap text-[15px] leading-relaxed">{message.content}</div>
+                            {/* 文本内容 - 移动端优化字体 */}
+                            <div className="whitespace-pre-wrap text-sm sm:text-[15px] leading-relaxed">{message.content}</div>
                           </div>
                         ) : (
                            <>
@@ -1617,28 +1617,28 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                            </>
                         )}
                         {message.role === "assistant" && message.content && (
-                          <div className="mt-4 flex items-center justify-end gap-1 border-t border-slate-100 pt-3">
-                            <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs text-slate-400 hover:bg-slate-100" onClick={() => navigator.clipboard.writeText(message.content).then(() => toast.success("已复制"))}>
-                               <Copy className="h-3 w-3" /> 复制
+                          <div className="mt-3 sm:mt-4 flex items-center justify-end gap-0.5 sm:gap-1 border-t border-slate-100 pt-2 sm:pt-3">
+                            <Button variant="ghost" size="sm" className="h-7 sm:h-8 gap-1 sm:gap-1.5 text-[10px] sm:text-xs text-slate-400 hover:bg-slate-100 px-2 sm:px-3" onClick={() => navigator.clipboard.writeText(message.content).then(() => toast.success("已复制"))}>
+                               <Copy className="h-3 w-3" /> <span className="hidden xs:inline">复制</span>
                             </Button>
-                            <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs text-slate-400 hover:bg-slate-100" onClick={() => window.print()}>
-                               <Download className="h-3 w-3" /> 打印
+                            <Button variant="ghost" size="sm" className="h-7 sm:h-8 gap-1 sm:gap-1.5 text-[10px] sm:text-xs text-slate-400 hover:bg-slate-100 px-2 sm:px-3" onClick={() => window.print()}>
+                               <Download className="h-3 w-3" /> <span className="hidden xs:inline">打印</span>
                             </Button>
-                            <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs text-slate-400 hover:bg-slate-100" onClick={() => handleExportPDF(message.content)}>
-                               <Download className="h-3 w-3" /> 导出
+                            <Button variant="ghost" size="sm" className="h-7 sm:h-8 gap-1 sm:gap-1.5 text-[10px] sm:text-xs text-slate-400 hover:bg-slate-100 px-2 sm:px-3" onClick={() => handleExportPDF(message.content)}>
+                               <Download className="h-3 w-3" /> <span className="hidden xs:inline">导出</span>
                             </Button>
-                            <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs text-slate-400 hover:bg-slate-100" onClick={() => handleShare()}>
-                               <Share2 className="h-3 w-3" /> 分享
+                            <Button variant="ghost" size="sm" className="h-7 sm:h-8 gap-1 sm:gap-1.5 text-[10px] sm:text-xs text-slate-400 hover:bg-slate-100 px-2 sm:px-3" onClick={() => handleShare()}>
+                               <Share2 className="h-3 w-3" /> <span className="hidden xs:inline">分享</span>
                             </Button>
                           </div>
                         )}
                       </div>
                       {message.role === "user" && (
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-slate-200 mt-1 overflow-hidden">
+                        <div className="flex h-7 w-7 sm:h-8 sm:w-8 shrink-0 items-center justify-center rounded-lg sm:rounded-xl bg-slate-200 mt-1 overflow-hidden">
                           {userAvatar ? (
                             <img src={userAvatar} alt="Me" className="h-full w-full object-cover" />
                           ) : (
-                            <User className="h-4 w-4 text-slate-500" />
+                            <User className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-slate-500" />
                           )}
                         </div>
                       )}
@@ -1668,17 +1668,17 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
           </AnimatePresence>
         </div>
 
-        {/* 🔥 输入框区域 */}
-        <div className="border-t border-slate-100 bg-white p-3 md:p-6 shrink-0 z-20">
+        {/* 🔥 输入框区域 - 移动端优化 */}
+        <div className="border-t border-slate-100 bg-white p-2 sm:p-3 md:p-6 shrink-0 z-20 safe-area-bottom">
           <div className="mx-auto max-w-5xl">
-            {/* 🔥 上传进度条 - 参考 banana-chat-interface.tsx */}
+            {/* 🔥 上传进度条 - 移动端优化 */}
             {isUploading && (
-              <div className="mb-3 rounded-xl bg-slate-50 p-3 border border-slate-200 animate-in slide-in-from-bottom-2">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-medium text-slate-600">上传中...</span>
-                  <span className="text-xs font-medium" style={{ color: BRAND_GREEN }}>{uploadProgress}%</span>
+              <div className="mb-2 sm:mb-3 rounded-lg sm:rounded-xl bg-slate-50 p-2 sm:p-3 border border-slate-200 animate-in slide-in-from-bottom-2">
+                <div className="flex items-center justify-between mb-1.5 sm:mb-2">
+                  <span className="text-[10px] sm:text-xs font-medium text-slate-600">上传中...</span>
+                  <span className="text-[10px] sm:text-xs font-medium" style={{ color: BRAND_GREEN }}>{uploadProgress}%</span>
                 </div>
-                <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
+                <div className="w-full h-1.5 sm:h-2 bg-slate-200 rounded-full overflow-hidden">
                   <motion.div
                     className="h-full rounded-full"
                     style={{ backgroundColor: BRAND_GREEN }}
@@ -1690,30 +1690,30 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
               </div>
             )}
             {fileProcessing.status !== "idle" && !isUploading && (
-              <div className="mb-3 rounded-xl bg-slate-50 p-3 animate-in slide-in-from-bottom-2">
-                <div className="flex items-center gap-2">
-                  {fileProcessing.status === "error" ? <AlertCircle className="h-4 w-4 text-red-500" /> : <Loader2 className="h-4 w-4 animate-spin" style={{ color: BRAND_GREEN }} />}
-                  <p className="text-sm text-slate-600">{fileProcessing.message}</p>
+              <div className="mb-2 sm:mb-3 rounded-lg sm:rounded-xl bg-slate-50 p-2 sm:p-3 animate-in slide-in-from-bottom-2">
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  {fileProcessing.status === "error" ? <AlertCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-red-500" /> : <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin" style={{ color: BRAND_GREEN }} />}
+                  <p className="text-xs sm:text-sm text-slate-600">{fileProcessing.message}</p>
                 </div>
               </div>
             )}
             {uploadedFiles.length > 0 && (
-              <div className="mb-3 flex flex-wrap gap-2">
+              <div className="mb-2 sm:mb-3 flex flex-wrap gap-1.5 sm:gap-2">
                 {uploadedFiles.map((f, i) => (
-                  <div key={i} className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-1.5 text-sm">
-                    <FileText className="h-4 w-4" style={{ color: BRAND_GREEN }} />
-                    <span className="max-w-[100px] truncate text-slate-600">{f.name}</span>
-                    <button onClick={() => removeFile(i)} className="text-slate-400 hover:text-red-500"><X className="h-3.5 w-3.5" /></button>
+                  <div key={i} className="flex items-center gap-1.5 sm:gap-2 rounded-md sm:rounded-lg bg-slate-50 px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm">
+                    <FileText className="h-3.5 w-3.5 sm:h-4 sm:w-4" style={{ color: BRAND_GREEN }} />
+                    <span className="max-w-[80px] sm:max-w-[100px] truncate text-slate-600">{f.name}</span>
+                    <button onClick={() => removeFile(i)} className="text-slate-400 hover:text-red-500 min-w-[20px] min-h-[20px] flex items-center justify-center"><X className="h-3 w-3 sm:h-3.5 sm:w-3.5" /></button>
                   </div>
                 ))}
               </div>
             )}
 
-            {/* 🔥 增强阴影 + 恢复智能体下拉框 */}
-            <form onSubmit={onSubmit} className="relative rounded-[24px] bg-white shadow-[0_2px_8px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.08),0_16px_48px_rgba(0,0,0,0.08),0_24px_64px_rgba(0,0,0,0.06),0_32px_80px_rgba(0,0,0,0.04)] border border-slate-100 transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] focus-within:shadow-[0_4px_12px_rgba(0,0,0,0.06),0_12px_32px_rgba(0,0,0,0.12),0_20px_56px_rgba(0,0,0,0.12),0_28px_72px_rgba(0,0,0,0.08),0_36px_88px_rgba(0,0,0,0.06)]" style={{ ['--focus-border' as any]: `${BRAND_GREEN}33` }}>
+            {/* 🔥 输入框 - 移动端优化圆角和阴影 */}
+            <form onSubmit={onSubmit} className="relative rounded-2xl sm:rounded-[24px] bg-white shadow-lg sm:shadow-[0_2px_8px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.08),0_16px_48px_rgba(0,0,0,0.08),0_24px_64px_rgba(0,0,0,0.06),0_32px_80px_rgba(0,0,0,0.04)] border border-slate-100 transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] focus-within:shadow-xl sm:focus-within:shadow-[0_4px_12px_rgba(0,0,0,0.06),0_12px_32px_rgba(0,0,0,0.12),0_20px_56px_rgba(0,0,0,0.12),0_28px_72px_rgba(0,0,0,0.08),0_36px_88px_rgba(0,0,0,0.06)]" style={{ ['--focus-border' as any]: `${BRAND_GREEN}33` }}>
               
-              {/* 🔥 使用增强版 ModelSelector 组件 */}
-              <div className="flex items-center px-3 py-2 border-b border-slate-50">
+              {/* 🔥 使用增强版 ModelSelector 组件 - 移动端优化 */}
+              <div className="flex items-center px-2 sm:px-3 py-1.5 sm:py-2 border-b border-slate-50">
                 <ModelSelector
                   selectedModel={selectedModel}
                   onModelChange={(model) => handleModelChange(model as ModelType)}
@@ -1723,15 +1723,15 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                 />
               </div>
               
-              <div className="flex items-end gap-2 p-3">
-                {/* 文件上传按钮 - 🔥 移除 disabled，允许随时上传 */}
-                <div className="flex flex-col items-center gap-1 shrink-0">
-                  <span className="text-[10px] font-medium text-slate-400">文件上传</span>
+              <div className="flex items-end gap-1.5 sm:gap-2 p-2 sm:p-3">
+                {/* 文件上传按钮 - 移动端优化触摸区域 */}
+                <div className="flex flex-col items-center gap-0.5 sm:gap-1 shrink-0">
+                  <span className="text-[9px] sm:text-[10px] font-medium text-slate-400 hidden sm:block">文件上传</span>
                   <Button 
                     type="button" 
                     variant="ghost" 
                     size="icon" 
-                    className="h-10 w-10 rounded-xl text-slate-400 hover:bg-slate-50 disabled:opacity-50" 
+                    className="h-9 w-9 sm:h-10 sm:w-10 rounded-lg sm:rounded-xl text-slate-400 hover:bg-slate-50 disabled:opacity-50 min-h-[44px] sm:min-h-0" 
                     onClick={() => {
                       console.log("📎 [文件上传] 点击上传按钮, isLoading:", isLoading, "userId:", userId)
                       if (!userId) {
@@ -1741,7 +1741,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                       fileInputRef.current?.click()
                     }}
                   >
-                    <Paperclip className="h-5 w-5" />
+                    <Paperclip className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
                   </Button>
                 </div>
                 <input 
@@ -1759,29 +1759,29 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
                   placeholder={userId ? "输入内容开始对话..." : "请先登录..."}
-                  className="min-h-[48px] max-h-[160px] flex-1 resize-none border-0 bg-transparent p-2 text-[15px] text-slate-700 placeholder:text-slate-400 focus-visible:ring-0 leading-relaxed"
+                  className="min-h-[44px] sm:min-h-[48px] max-h-[120px] sm:max-h-[160px] flex-1 resize-none border-0 bg-transparent p-2 text-sm sm:text-[15px] text-slate-700 placeholder:text-slate-400 focus-visible:ring-0 leading-relaxed"
                   disabled={isLoading}
                   rows={1}
                 />
                 
-                {/* 发送按钮 */}
-                <div className="flex flex-col items-center gap-1 shrink-0">
-                  <span className="text-[10px] font-medium text-slate-400">发送</span>
+                {/* 发送按钮 - 移动端优化触摸区域 */}
+                <div className="flex flex-col items-center gap-0.5 sm:gap-1 shrink-0">
+                  <span className="text-[9px] sm:text-[10px] font-medium text-slate-400 hidden sm:block">发送</span>
                   <Button 
                     type="submit" 
                     size="icon" 
-                    className="h-10 w-10 rounded-xl text-white shadow-[0_4px_12px_rgba(20,83,45,0.3)] hover:opacity-90 transition-all disabled:opacity-40"
+                    className="h-9 w-9 sm:h-10 sm:w-10 rounded-lg sm:rounded-xl text-white shadow-lg sm:shadow-[0_4px_12px_rgba(20,83,45,0.3)] hover:opacity-90 transition-all disabled:opacity-40 min-h-[44px] sm:min-h-0"
                     style={{ backgroundColor: BRAND_GREEN }}
                     disabled={isLoading || (!input.trim() && uploadedFiles.length === 0)}
                   >
-                    {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
+                    {isLoading ? <Loader2 className="h-4.5 w-4.5 sm:h-5 sm:w-5 animate-spin" /> : <Send className="h-4.5 w-4.5 sm:h-5 sm:w-5" />}
                   </Button>
                 </div>
               </div>
             </form>
 
             {!userId && (
-              <p className="mt-3 text-center text-xs text-slate-400">未登录</p>
+              <p className="mt-2 sm:mt-3 text-center text-[10px] sm:text-xs text-slate-400">未登录</p>
             )}
           </div>
         </div>
