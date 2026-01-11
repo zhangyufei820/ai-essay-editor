@@ -115,9 +115,11 @@ export const MODEL_COSTS: Record<ModelType, ModelCostConfig> = {
   },
   "suno-v5": { 
     category: "media",
-    fixedCost: 70, // API 成本 ¥0.70/次 = 70 积分 → 用户扣费 175 积分（60% 毛利）
+    tokenRate: AGENT_TOKEN_RATE,  // 🎵 Suno 也会消耗 token（Dify 工作流）
+    fixedCost: 80,  // 🎵 Suno API 固定成本：0.8元 = 80积分
     displayName: "Suno V5",
-    mode: "music"
+    mode: "music",
+    estimatedTokens: 500  // 预估 Dify 工作流消耗
   },
   "sora-2-pro": { 
     category: "media",
@@ -152,7 +154,17 @@ export function calculatePreviewCost(
     return 20
   }
   
-  // 多媒体模型：固定价格
+  // 🎵 Suno V5 预览：(0.8元 + 预估token成本) × 1.2
+  if (model === "suno-v5") {
+    const tokenRate = config.tokenRate || AGENT_TOKEN_RATE
+    const estimatedTokens = options?.estimatedInputTokens || config.estimatedTokens || 500
+    const fixedApiCost = config.fixedCost || 80  // 0.8元 = 80积分
+    const tokenCost = Math.ceil((estimatedTokens / 1000) * tokenRate)
+    const totalCost = fixedApiCost + tokenCost
+    return Math.ceil(totalCost * 1.2)  // 加 20% 利润
+  }
+  
+  // 其他多媒体模型：固定价格
   if (config.category === "media" && config.fixedCost) {
     return Math.ceil(config.fixedCost / PROFIT_MARGIN)
   }
@@ -193,7 +205,28 @@ export function calculateActualCost(
     return 20
   }
   
-  // 纯多媒体模型（如 Suno、Sora）：固定价格
+  // 🎵 Suno V5 特殊计费：(0.8元 + token成本) × 1.2
+  if (model === "suno-v5") {
+    const tokenRate = config.tokenRate || AGENT_TOKEN_RATE
+    let totalTokens = tokenUsage?.totalTokens || 0
+    if (!totalTokens && tokenUsage) {
+      totalTokens = (tokenUsage.inputTokens || 0) + (tokenUsage.outputTokens || 0)
+    }
+    if (!totalTokens) {
+      totalTokens = config.estimatedTokens || 500
+    }
+    
+    // Suno 成本计算：固定成本（0.8元=80积分） + token 成本
+    const fixedApiCost = config.fixedCost || 80  // 0.8元 = 80积分
+    const tokenCost = Math.ceil((totalTokens / 1000) * tokenRate)  // token 成本
+    const totalCost = fixedApiCost + tokenCost  // 总成本
+    const userCharge = Math.ceil(totalCost * 1.2)  // 加 20% 利润
+    
+    console.log(`🎵 [Suno 计费] 固定成本: ${fixedApiCost}积分 + Token(${totalTokens}): ${tokenCost}积分 = ${totalCost}积分 × 1.2 = ${userCharge}积分`)
+    return Math.max(userCharge, 5)
+  }
+  
+  // 其他纯多媒体模型（如 Sora）：固定价格
   if (config.category === "media" && config.fixedCost) {
     return Math.ceil(config.fixedCost / PROFIT_MARGIN)
   }

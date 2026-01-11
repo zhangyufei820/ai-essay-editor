@@ -20,14 +20,39 @@ const SUNO_BASE_URL = process.env.SUNO_API_BASE_URL || "http://43.154.111.156/v1
 const SUNO_GENERATE_API_KEY = process.env.SUNO_GENERATE_API_KEY || "app-aUM5wY1ACN5M0zHkMdijZCcC"
 const SUNO_QUERY_API_KEY = process.env.SUNO_QUERY_API_KEY || "app-XenDdavZwSjiEHd2SyiTfECc"
 
+/** 专业模式表单数据结构 */
+interface SunoProFormInputs {
+  task_mode: 'Normal' | 'Extend' | 'Cover'
+  MV: 'chirp-v4' | 'chirp-v3-5' | 'chirp-v3-0'
+  target_id: string
+  continue_at: number | null
+  title: string
+  prompt: string
+  style_tags: string
+  negative_tags: string
+  instrumental: boolean
+  vocal_gender: 'm' | 'f'
+  end_at: number | null
+}
+
 export async function POST(req: NextRequest) {
   console.log('🎵 [Suno Proxy] 收到请求')
   
   try {
     const body = await req.json()
-    const { action, query, userId, taskId, streaming, taskMode, conversationId } = body
+    const { 
+      action, 
+      query, 
+      userId, 
+      taskId, 
+      streaming, 
+      taskMode, 
+      conversationId,
+      // 🔥 专业模式新增字段
+      proFormData
+    } = body
     
-    // 🔥 调试日志：打印原始 taskMode 值
+    // 🔥 调试日志：打印原始参数
     console.log('🎵 [Suno Proxy] 参数:', { 
       action, 
       userId: userId?.slice(0, 8), 
@@ -35,23 +60,30 @@ export async function POST(req: NextRequest) {
       taskId, 
       streaming, 
       taskMode,
-      taskModeType: typeof taskMode,
-      rawBody: JSON.stringify(body).slice(0, 200)
+      hasProFormData: !!proFormData,
+      rawBody: JSON.stringify(body).slice(0, 300)
     })
-    
-    // 🔥 Dify 要求的完整选项值（必须带序号和中文）
-    const taskModeMap: Record<string, string> = {
-      'inspiration': '1. inspiration (灵感模式)',
-      'custom': '2. custom (自定义模式)',
-      'extend': '3. extend (续写模式)',
-      'fetch': '4. fetch (查询进度)'
-    }
-    // 将简化值转换为 Dify 要求的完整值
-    const safeTaskMode = taskModeMap[taskMode] || taskModeMap['inspiration']
-    console.log('🎵 [Suno Proxy] 转换 taskMode:', taskMode, '->', safeTaskMode)
 
     if (action === 'generate') {
-      // 生成音乐 - 🔥 使用验证后的 safeTaskMode
+      // 🔥 专业模式：使用 proFormData 中的完整参数
+      if (proFormData) {
+        console.log('🎵 [Suno Proxy] 使用专业模式参数:', proFormData)
+        if (streaming) {
+          return await handleGenerateStreamingPro(proFormData, userId, conversationId)
+        }
+        return await handleGeneratePro(proFormData, userId, conversationId)
+      }
+      
+      // 🔥 简单模式：兼容旧逻辑
+      const taskModeMap: Record<string, string> = {
+        'inspiration': '1. inspiration (灵感模式)',
+        'custom': '2. custom (自定义模式)',
+        'extend': '3. extend (续写模式)',
+        'fetch': '4. fetch (查询进度)'
+      }
+      const safeTaskMode = taskModeMap[taskMode] || taskModeMap['inspiration']
+      console.log('🎵 [Suno Proxy] 简单模式 - 转换 taskMode:', taskMode, '->', safeTaskMode)
+      
       if (streaming) {
         return await handleGenerateStreaming(query, userId, safeTaskMode, conversationId)
       }
@@ -102,6 +134,130 @@ async function handleGenerate(query: string, userId: string, taskMode?: string, 
   console.log('✅ [Suno Proxy] 生成成功:', data.answer?.slice(0, 100))
   
   return NextResponse.json(data)
+}
+
+// ============================================
+// 🔥 专业模式处理函数
+// ============================================
+
+/**
+ * 专业模式 - 生成音乐（阻塞模式）
+ * 使用完整的表单参数提交至 Dify API
+ */
+async function handleGeneratePro(formData: SunoProFormInputs, userId: string, conversationId?: string) {
+  console.log('🎵 [Suno Proxy Pro] 开始生成音乐（阻塞模式）')
+  console.log('🎵 [Suno Proxy Pro] 参数:', JSON.stringify(formData, null, 2))
+  
+  const url = `${SUNO_BASE_URL}/chat-messages`
+  
+  // 🔥 构建 inputs 对象，确保所有字段都经过清洗
+  const inputs = {
+    task_mode: formData.task_mode || 'Normal',
+    MV: formData.MV || 'chirp-v4',
+    prompt: (formData.prompt || '').trim(),
+    style_tags: (formData.style_tags || '').trim(),
+    title: (formData.title || '').trim(),
+    instrumental: formData.instrumental || false,
+    target_id: (formData.target_id || '').trim(),
+    continue_at: formData.continue_at !== null ? Number(formData.continue_at) : 0,
+    negative_tags: (formData.negative_tags || '').trim(),
+    vocal_gender: (formData.vocal_gender || 'm').trim(), // 🔥 关键：确保无空格
+    end_at: formData.end_at !== null ? Number(formData.end_at) : null,
+  }
+  
+  console.log('🎵 [Suno Proxy Pro] 清洗后的 inputs:', inputs)
+  
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${SUNO_GENERATE_API_KEY}`,
+    },
+    body: JSON.stringify({
+      inputs,
+      query: '执行任务', // 🔥 专业模式使用固定 query
+      response_mode: 'blocking',
+      user: userId,
+      conversation_id: conversationId || '',
+    }),
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    console.error('❌ [Suno Proxy Pro] 生成 API 错误:', response.status, errorText)
+    return NextResponse.json({ 
+      error: `Suno API 错误: ${response.status}`,
+      details: errorText 
+    }, { status: response.status })
+  }
+
+  const data = await response.json()
+  console.log('✅ [Suno Proxy Pro] 生成成功:', data.answer?.slice(0, 100))
+  
+  return NextResponse.json(data)
+}
+
+/**
+ * 专业模式 - 生成音乐（流式模式）
+ * 使用完整的表单参数提交至 Dify API
+ */
+async function handleGenerateStreamingPro(formData: SunoProFormInputs, userId: string, conversationId?: string) {
+  console.log('🎵 [Suno Proxy Pro] 开始生成音乐（流式模式）')
+  console.log('🎵 [Suno Proxy Pro] 参数:', JSON.stringify(formData, null, 2))
+  
+  const url = `${SUNO_BASE_URL}/chat-messages`
+  
+  // 🔥 构建 inputs 对象，确保所有字段都经过清洗
+  const inputs = {
+    task_mode: formData.task_mode || 'Normal',
+    MV: formData.MV || 'chirp-v4',
+    prompt: (formData.prompt || '').trim(),
+    style_tags: (formData.style_tags || '').trim(),
+    title: (formData.title || '').trim(),
+    instrumental: formData.instrumental || false,
+    target_id: (formData.target_id || '').trim(),
+    continue_at: formData.continue_at !== null ? Number(formData.continue_at) : 0,
+    negative_tags: (formData.negative_tags || '').trim(),
+    vocal_gender: (formData.vocal_gender || 'm').trim(), // 🔥 关键：确保无空格
+    end_at: formData.end_at !== null ? Number(formData.end_at) : null,
+  }
+  
+  console.log('🎵 [Suno Proxy Pro] 清洗后的 inputs:', inputs)
+  
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${SUNO_GENERATE_API_KEY}`,
+    },
+    body: JSON.stringify({
+      inputs,
+      query: '执行任务', // 🔥 专业模式使用固定 query
+      response_mode: 'streaming',
+      user: userId,
+      conversation_id: conversationId || '',
+    }),
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    console.error('❌ [Suno Proxy Pro] 流式 API 错误:', response.status, errorText)
+    return NextResponse.json({ 
+      error: `Suno API 错误: ${response.status}`,
+      details: errorText 
+    }, { status: response.status })
+  }
+
+  // 🔥 直接转发流式响应
+  const headers = new Headers()
+  headers.set('Content-Type', 'text/event-stream')
+  headers.set('Cache-Control', 'no-cache')
+  headers.set('Connection', 'keep-alive')
+
+  return new Response(response.body, {
+    status: 200,
+    headers,
+  })
 }
 
 // 🔥 生成音乐（流式模式）

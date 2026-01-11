@@ -12,10 +12,12 @@
 
 import { useState, useEffect, useRef, useCallback } from "react"
 import { 
-  generateMusicStreaming, 
+  generateMusicStreaming,
+  generateMusicStreamingPro,
   checkMusicStatus, 
   extractTaskId,
-  removeTaskIdFromText 
+  removeTaskIdFromText,
+  type SunoProFormData
 } from "@/lib/suno-service"
 import { 
   SUNO_POLLING_CONFIG, 
@@ -49,12 +51,20 @@ export interface UseSunoMusicReturn {
   getTaskByMessageId: (messageId: string) => MusicTask | undefined
   /** 🔥 当前会话 ID（用于多轮对话） */
   conversationId: string | null
-  /** 开始生成音乐 */
+  /** 开始生成音乐（简单模式） */
   startMusicGeneration: (
     query: string,
     userId: string,
     messageId: string,
     taskMode: string,  // 🔥 Suno 模式参数
+    onTextChunk: (text: string) => void,
+    onComplete: (fullText: string) => void
+  ) => Promise<void>
+  /** 🔥 开始生成音乐（专业模式） */
+  startMusicGenerationPro: (
+    formData: SunoProFormData,
+    userId: string,
+    messageId: string,
     onTextChunk: (text: string) => void,
     onComplete: (fullText: string) => void
   ) => Promise<void>
@@ -65,6 +75,9 @@ export interface UseSunoMusicReturn {
   /** 是否有正在进行的任务 */
   hasActiveTasks: boolean
 }
+
+// 🔥 导出类型供外部使用
+export type { SunoProFormData }
 
 // ============================================
 // 辅助函数：创建初始双槽位
@@ -330,6 +343,68 @@ export function useSunoMusic(): UseSunoMusicReturn {
   }, [startPolling])
 
   // ============================================
+  // 🔥 专业模式：开始生成音乐
+  // ============================================
+  const startMusicGenerationPro = useCallback(async (
+    formData: SunoProFormData,
+    userId: string,
+    messageId: string,
+    onTextChunk: (text: string) => void,
+    onComplete: (fullText: string) => void
+  ) => {
+    console.log(`🎵 [Suno Pro] 开始专业模式生成音乐:`, formData.task_mode, formData.prompt.slice(0, 30))
+    userIdRef.current = userId
+
+    // 调用专业模式流式生成
+    await generateMusicStreamingPro(
+      formData,
+      userId,
+      conversationId,
+      onTextChunk,
+      (result) => {
+        onComplete(result.answer)
+        
+        // 保存新的 conversationId
+        if (result.conversationId) {
+          setConversationId(result.conversationId)
+          console.log(`🔑 [Suno Pro] 更新 conversationId: ${result.conversationId}`)
+        }
+
+        // 从回复中提取 Task ID
+        const taskId = result.taskId || extractTaskId(result.answer)
+        
+        if (taskId) {
+          console.log(`🔑 [Suno Pro] 检测到 Task ID: ${taskId}，开始轮询`)
+          
+          // 创建新任务
+          const newTask: MusicTask = {
+            taskId,
+            messageId,
+            globalStatus: "PENDING",
+            songs: createInitialSongs(),
+            createdAt: Date.now(),
+            pollCount: 0
+          }
+
+          // 添加到任务列表
+          setMusicTasks(prev => {
+            const newMap = new Map(prev)
+            newMap.set(taskId, newTask)
+            return newMap
+          })
+
+          // 延迟开始轮询
+          setTimeout(() => {
+            startPolling(taskId, userId)
+          }, 100)
+        } else {
+          console.log(`⚠️ [Suno Pro] 未检测到 Task ID，无法轮询`)
+        }
+      }
+    )
+  }, [conversationId, startPolling])
+
+  // ============================================
   // 重试任务
   // ============================================
   const retryTask = useCallback((taskId: string, userId: string) => {
@@ -390,6 +465,7 @@ export function useSunoMusic(): UseSunoMusicReturn {
     getTaskByMessageId,
     conversationId,  // 🔥 返回会话 ID
     startMusicGeneration,
+    startMusicGenerationPro,  // 🔥 专业模式
     retryTask,
     clearCompletedTasks,
     hasActiveTasks

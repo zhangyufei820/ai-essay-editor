@@ -23,8 +23,9 @@ import { WorkflowVisualizer } from "./WorkflowVisualizer"
 import { useWorkflowVisualizer } from "@/hooks/useWorkflowVisualizer"
 // 🎵 Suno 音乐生成相关导入
 import { MusicCard } from "./MusicCard"
-import { useSunoMusic, extractTaskId, removeTaskIdFromText } from "@/hooks/useSunoMusic"
+import { useSunoMusic, extractTaskId, removeTaskIdFromText, type SunoProFormData } from "@/hooks/useSunoMusic"
 import { TASK_ID_REGEX } from "@/lib/suno-config"
+import { SunoProForm, type SunoFormData } from "./SunoProForm"
 import { motion, AnimatePresence } from "framer-motion"
 import { brandColors, slateColors } from "@/lib/design-tokens"
 import { createClient } from "@supabase/supabase-js"
@@ -392,7 +393,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   const sessionIdRef = useRef<string | null>(null)
   const [currentSessionId, setCurrentSessionId] = useState<string>("")
 
-  const [selectedModel, setSelectedModel] = useState<ModelType>("standard")
+  const [selectedModel, setSelectedModel] = useState<ModelType>(initialModel || "standard")
   const [genMode, setGenMode] = useState<GenMode>("text")
   
   // 🎵 Suno V5 音乐生成模式（必选项）
@@ -1471,6 +1472,116 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
           >
             <div className="mx-auto max-w-6xl px-3 sm:px-4 md:px-6 lg:px-10 py-4 sm:py-6 md:py-8">
               {messages.length === 0 ? (
+                selectedModel === "suno-v5" ? (
+                  // 🎵 Suno V5 专业模式表单 - 放在主滚动区域
+                  <div className="py-4 sm:py-6 animate-in fade-in duration-500">
+                    <div className="text-center mb-6">
+                      <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl mx-auto bg-gradient-to-br from-pink-500/20 to-purple-500/20">
+                        <AudioLines className="h-7 w-7 text-pink-600" />
+                      </div>
+                      <h1 className="text-xl font-semibold text-slate-800">Suno V5 音乐创作</h1>
+                      <p className="text-sm text-slate-500 mt-1">填写下方表单，AI 将为您创作独特的音乐</p>
+                    </div>
+                    <SunoProForm
+                      onSubmit={async (formData) => {
+                        if (!userId) { 
+                          toast.error("请登录")
+                          return
+                        }
+                        
+                        const cost = calculateCost()
+                        if (userCredits < cost) {
+                          toast.error("积分不足", { 
+                            description: `需要 ${cost} 积分，当前 ${userCredits}`,
+                            duration: 2000
+                          })
+                          setTimeout(() => router.push("/pricing"), 1500)
+                          return
+                        }
+
+                        setIsLoading(true)
+                        collapseSidebar()
+                        
+                        let sid = currentSessionId
+                        if (!sid && !urlSessionId) { 
+                          sid = Date.now().toString()
+                          setCurrentSessionId(sid)
+                          sessionIdRef.current = sid
+                        } else if (urlSessionId) {
+                          sid = urlSessionId
+                          sessionIdRef.current = urlSessionId
+                        }
+
+                        const userContent = `🎵 专业模式创作\n\n**标题**: ${formData.title || '未命名'}\n**模式**: ${formData.task_mode}\n**风格**: ${formData.style_tags || '默认'}\n\n${formData.prompt}`
+                        const userMsg: Message = { 
+                          id: Date.now().toString(), 
+                          role: "user", 
+                          content: userContent
+                        }
+                        setMessages(p => [...p, userMsg])
+
+                        const preview = formData.title || formData.prompt.slice(0, 30)
+                        const { data: existing } = await supabase.from('chat_sessions').select('id').eq('id', sid).single()
+                        if (!existing) {
+                          await supabase.from('chat_sessions').insert({ id: sid, user_id: userId, title: "音乐创作", preview })
+                        }
+                        await supabase.from('chat_messages').insert({ session_id: sid, role: "user", content: userContent })
+
+                        const botId = (Date.now() + 1).toString()
+                        currentBotIdRef.current = botId
+                        setMessages(p => [...p, { id: botId, role: "assistant", content: "" }])
+
+                        try {
+                          const queryText = `[PRO_MODE]\n${JSON.stringify(formData)}`
+                          
+                          await startMusicGeneration(
+                            queryText,
+                            userId,
+                            botId,
+                            formData.task_mode.toLowerCase(),
+                            (chunk) => {
+                              setMessages(p => p.map(m =>
+                                m.id === botId ? { ...m, content: chunk } : m
+                              ))
+                            },
+                            async (fullText) => {
+                              const formattedContent = formatSunoResponse(fullText)
+                              setMessages(p => p.map(m =>
+                                m.id === botId ? { ...m, content: formattedContent } : m
+                              ))
+
+                              await supabase.from('chat_messages').insert({
+                                session_id: sid,
+                                role: "assistant",
+                                content: fullText
+                              })
+
+                              try {
+                                await fetch('/api/user/credits', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ userId, amount: -cost, reason: 'suno-v5-pro' })
+                                })
+                              } catch (e) {
+                                console.error("❌ [积分扣除] 失败:", e)
+                              }
+                              setUserCredits(prev => prev - cost)
+                            }
+                          )
+                        } catch (err: any) {
+                          console.error("❌ [Suno Pro] 生成失败:", err)
+                          toast.error(err.message || "音乐生成失败")
+                          setMessages(p => p.filter(m => m.id !== botId))
+                        } finally {
+                          setIsLoading(false)
+                          refreshCredits()
+                        }
+                      }}
+                      isLoading={isLoading}
+                      disabled={!userId || hasSunoActiveTasks}
+                    />
+                  </div>
+                ) : (
                 <div className="flex flex-col items-center justify-center py-8 sm:py-12 md:py-16 text-center animate-in fade-in duration-500">
                   <div className="mb-4 sm:mb-6 flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-2xl" style={{ backgroundColor: `${BRAND_GREEN}15` }}>
                     <GraduationCap className="h-6 w-6 sm:h-7 sm:w-7" style={{ color: BRAND_GREEN }} />
@@ -1568,6 +1679,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                     </motion.div>
                   )}
                 </div>
+                )
               ) : (
                 <div className="space-y-4 sm:space-y-6 pt-2 sm:pt-4">
                   {messages.map((message) => (
@@ -1771,115 +1883,8 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
               </div>
             )}
 
-            {/* 🎵 Suno V5 模式选择器 - 仅在 Suno V5 模型时显示 */}
-            {selectedModel === "suno-v5" && (
-              <div className="mb-3 sm:mb-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <AudioLines className="h-4 w-4" style={{ color: "#db2777" }} />
-                  <span className="text-xs sm:text-sm font-semibold text-slate-700">选择生成模式</span>
-                  <span className="text-[10px] sm:text-xs text-red-500">*必选</span>
-                </div>
-                <div className="grid grid-cols-3 gap-2 sm:gap-3">
-                  {/* 1. inspiration (灵感模式) */}
-                  <button
-                    type="button"
-                    onClick={() => setSunoMode("inspiration")}
-                    className={cn(
-                      "relative flex flex-col items-center gap-1.5 p-2 sm:p-3 rounded-lg sm:rounded-xl border-2 transition-all duration-200",
-                      sunoMode === "inspiration"
-                        ? "border-emerald-500 bg-emerald-50 shadow-md"
-                        : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
-                    )}
-                  >
-                    <div className={cn(
-                      "flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-lg",
-                      sunoMode === "inspiration" ? "bg-emerald-500" : "bg-slate-100"
-                    )}>
-                      <Sparkles className={cn("h-4 w-4 sm:h-5 sm:w-5", sunoMode === "inspiration" ? "text-white" : "text-slate-400")} />
-                    </div>
-                    <div className="text-center">
-                      <p className={cn("text-[11px] sm:text-xs font-semibold", sunoMode === "inspiration" ? "text-emerald-700" : "text-slate-700")}>
-                        灵感模式
-                      </p>
-                      <p className="text-[9px] sm:text-[10px] text-slate-500 mt-0.5">inspiration</p>
-                    </div>
-                    {sunoMode === "inspiration" && (
-                      <div className="absolute top-1.5 right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500">
-                        <svg className="h-2.5 w-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                        </svg>
-                      </div>
-                    )}
-                  </button>
-
-                  {/* 2. custom (自定义模式) - 使用绿色 */}
-                  <button
-                    type="button"
-                    onClick={() => setSunoMode("custom")}
-                    className={cn(
-                      "relative flex flex-col items-center gap-1.5 p-2 sm:p-3 rounded-lg sm:rounded-xl border-2 transition-all duration-200",
-                      sunoMode === "custom"
-                        ? "border-emerald-500 bg-emerald-50 shadow-md"
-                        : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
-                    )}
-                  >
-                    <div className={cn(
-                      "flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-lg",
-                      sunoMode === "custom" ? "bg-emerald-500" : "bg-slate-100"
-                    )}>
-                      <Palette className={cn("h-4 w-4 sm:h-5 sm:w-5", sunoMode === "custom" ? "text-white" : "text-slate-400")} />
-                    </div>
-                    <div className="text-center">
-                      <p className={cn("text-[11px] sm:text-xs font-semibold", sunoMode === "custom" ? "text-emerald-700" : "text-slate-700")}>
-                        自定义模式
-                      </p>
-                      <p className="text-[9px] sm:text-[10px] text-slate-500 mt-0.5">custom</p>
-                    </div>
-                    {sunoMode === "custom" && (
-                      <div className="absolute top-1.5 right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500">
-                        <svg className="h-2.5 w-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                        </svg>
-                      </div>
-                    )}
-                  </button>
-
-                  {/* 3. extend (续写模式) - 使用绿色 */}
-                  <button
-                    type="button"
-                    onClick={() => setSunoMode("extend")}
-                    className={cn(
-                      "relative flex flex-col items-center gap-1.5 p-2 sm:p-3 rounded-lg sm:rounded-xl border-2 transition-all duration-200",
-                      sunoMode === "extend"
-                        ? "border-emerald-500 bg-emerald-50 shadow-md"
-                        : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
-                    )}
-                  >
-                    <div className={cn(
-                      "flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-lg",
-                      sunoMode === "extend" ? "bg-emerald-500" : "bg-slate-100"
-                    )}>
-                      <FileText className={cn("h-4 w-4 sm:h-5 sm:w-5", sunoMode === "extend" ? "text-white" : "text-slate-400")} />
-                    </div>
-                    <div className="text-center">
-                      <p className={cn("text-[11px] sm:text-xs font-semibold", sunoMode === "extend" ? "text-emerald-700" : "text-slate-700")}>
-                        续写模式
-                      </p>
-                      <p className="text-[9px] sm:text-[10px] text-slate-500 mt-0.5">extend</p>
-                    </div>
-                    {sunoMode === "extend" && (
-                      <div className="absolute top-1.5 right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500">
-                        <svg className="h-2.5 w-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                        </svg>
-                      </div>
-                    )}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* 🔥 输入框 - 移动端优化圆角和阴影 */}
+            {/* 🔥 输入框 - Suno V5 模式时隐藏（表单在滚动区域内） */}
+            {selectedModel !== "suno-v5" && (
             <form onSubmit={onSubmit} className="relative rounded-2xl sm:rounded-[24px] bg-white shadow-lg sm:shadow-[0_2px_8px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.08),0_16px_48px_rgba(0,0,0,0.08),0_24px_64px_rgba(0,0,0,0.06),0_32px_80px_rgba(0,0,0,0.04)] border border-slate-100 transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] focus-within:shadow-xl sm:focus-within:shadow-[0_4px_12px_rgba(0,0,0,0.06),0_12px_32px_rgba(0,0,0,0.12),0_20px_56px_rgba(0,0,0,0.12),0_28px_72px_rgba(0,0,0,0.08),0_36px_88px_rgba(0,0,0,0.06)]" style={{ ['--focus-border' as any]: `${BRAND_GREEN}33` }}>
               
               {/* 🔥 使用增强版 ModelSelector 组件 - 移动端优化 */}
@@ -1949,8 +1954,9 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                 </div>
               </div>
             </form>
+            )}
 
-            {!userId && (
+            {!userId && selectedModel !== "suno-v5" && (
               <p className="mt-2 sm:mt-3 text-center text-[10px] sm:text-xs text-slate-400">未登录</p>
             )}
           </div>

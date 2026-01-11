@@ -197,7 +197,8 @@ function AppSidebarInner() {
               sub: parsedUser.sub,
               userId: parsedUser.userId,
               user_id: parsedUser.user_id,
-              email: parsedUser.email
+              email: parsedUser.email,
+              phone: parsedUser.phone
             })
             setUser(parsedUser)
             // 🔥 扩展用户 ID 获取方式
@@ -205,6 +206,11 @@ function AppSidebarInner() {
             console.log("🔍 [侧边栏] 最终用户ID:", userId)
             setCurrentUserId(userId)
           } catch (e) { console.error("❌ [侧边栏] 解析用户数据失败:", e) }
+        }
+        
+        // 🔥 如果没有用户 ID，打印警告
+        if (!userId) {
+          console.warn("⚠️ [侧边栏] 用户已登录但无法获取用户ID，检查 localStorage 数据结构")
         }
       }
 
@@ -641,7 +647,8 @@ function AppSidebarInner() {
                 {getAvatarUrl() ? (
                   <img src={getAvatarUrl()} alt="User" className="h-full w-full object-cover" />
                 ) : (
-                  user.email?.[0]?.toUpperCase() || "U"
+                  // 🔥 修复：优先使用手机号或邮箱的首字符
+                  (user.phone?.[0] || user.email?.[0] || user.user_metadata?.name?.[0] || "U").toUpperCase()
                 )}
               </div>
               {/* 用户邮箱信息 - 🎨 加粗加阴影 */}

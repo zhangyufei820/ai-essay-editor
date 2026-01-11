@@ -21,6 +21,25 @@ import {
 const SUNO_PROXY_API = "/api/suno"
 
 // ============================================
+// 🔥 专业模式表单数据类型
+// ============================================
+
+/** 专业模式表单数据结构（与 SunoProForm.tsx 保持一致） */
+export interface SunoProFormData {
+  task_mode: 'Normal' | 'Extend' | 'Cover'
+  MV: 'chirp-v5' | 'chirp-v4' | 'chirp-v3-5' | 'chirp-v3-0'
+  target_id: string
+  continue_at: number | null
+  title: string
+  prompt: string
+  style_tags: string
+  negative_tags: string
+  instrumental: boolean
+  vocal_gender: 'm' | 'f'
+  end_at: number | null
+}
+
+// ============================================
 // 类型定义
 // ============================================
 
@@ -415,6 +434,124 @@ export async function generateMusicStreaming(
 
   } catch (error: any) {
     console.error("❌ [Suno] 流式生成异常:", error)
+    onComplete({ answer: `错误: ${error.message}`, taskId: null })
+  }
+}
+
+// ============================================
+// 5. 🔥 专业模式：流式生成音乐
+// ============================================
+
+/**
+ * 专业模式 - 流式提交音乐生成任务
+ * 使用完整的表单参数提交至 Dify 工作流 API
+ * 
+ * @param formData - 专业模式表单数据
+ * @param userId - 用户 ID
+ * @param conversationId - 会话 ID（可选）
+ * @param onChunk - 每收到一个文本块时的回调
+ * @param onComplete - 完成时的回调
+ */
+export async function generateMusicStreamingPro(
+  formData: SunoProFormData,
+  userId: string,
+  conversationId: string | null,
+  onChunk: (text: string) => void,
+  onComplete: (result: { answer: string; taskId: string | null; conversationId?: string }) => void
+): Promise<void> {
+  console.log("🎵 [Suno Pro] 开始专业模式流式生成:", { 
+    formData: JSON.stringify(formData).slice(0, 100), 
+    userId, 
+    conversationId 
+  })
+
+  try {
+    const response = await fetch(SUNO_PROXY_API, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        action: "generate",
+        userId: userId,
+        conversationId: conversationId || '',
+        streaming: true,
+        // 🔥 专业模式：传递完整表单数据
+        proFormData: formData,
+      }),
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      console.error("❌ [Suno Pro] 流式 API 错误:", response.status, errorData)
+      onComplete({ answer: `错误: ${errorData.error || response.status}`, taskId: null })
+      return
+    }
+
+    // 处理 SSE 流式响应
+    const reader = response.body?.getReader()
+    if (!reader) {
+      onComplete({ answer: "错误: 无法读取流式响应", taskId: null })
+      return
+    }
+
+    const decoder = new TextDecoder()
+    let fullText = ""
+    let taskId: string | null = null
+    let newConversationId: string | undefined = undefined
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      const chunk = decoder.decode(value, { stream: true })
+      const lines = chunk.split("\n")
+
+      for (const line of lines) {
+        if (line.startsWith("data: ")) {
+          const data = line.slice(6)
+          if (data === "[DONE]") continue
+
+          try {
+            const parsed = JSON.parse(data)
+            
+            // 提取 conversation_id
+            if (parsed.conversation_id && !newConversationId) {
+              newConversationId = parsed.conversation_id
+              console.log("🔑 [Suno Pro] 获取 conversationId:", newConversationId)
+            }
+            
+            // Dify SSE 格式
+            if (parsed.event === "message" || parsed.event === "agent_message") {
+              const text = parsed.answer || ""
+              if (text) {
+                fullText += text
+                onChunk(fullText)
+              }
+            } else if (parsed.event === "message_end") {
+              console.log("✅ [Suno Pro] 流式消息结束")
+            }
+            
+            // 兼容其他格式
+            if (parsed.answer && !parsed.event) {
+              fullText = parsed.answer
+              onChunk(fullText)
+            }
+          } catch (e) {
+            // 忽略解析错误
+          }
+        }
+      }
+    }
+
+    // 提取 Task ID
+    taskId = extractTaskId(fullText)
+    console.log("✅ [Suno Pro] 流式完成，Task ID:", taskId, "conversationId:", newConversationId)
+    
+    onComplete({ answer: fullText, taskId, conversationId: newConversationId })
+
+  } catch (error: any) {
+    console.error("❌ [Suno Pro] 流式生成异常:", error)
     onComplete({ answer: `错误: ${error.message}`, taskId: null })
   }
 }
