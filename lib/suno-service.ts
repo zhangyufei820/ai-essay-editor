@@ -484,7 +484,9 @@ export async function generateMusicStreamingPro(
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}))
       console.error("❌ [Suno Pro] 流式 API 错误:", response.status, errorData)
-      onComplete({ answer: `错误: ${errorData.error || response.status}`, taskId: null })
+      // 🔥 显示详细错误信息
+      const errorMsg = errorData.details || errorData.error || `状态码: ${response.status}`
+      onComplete({ answer: `❌ API 错误:\n\n${errorMsg}`, taskId: null })
       return
     }
 

@@ -216,39 +216,42 @@ async function handleGeneratePro(formData: SunoProFormInputs, userId: string, co
  */
 async function handleGenerateStreamingPro(formData: SunoProFormInputs, userId: string, conversationId?: string) {
   console.log('🎵 [Suno Proxy Pro] 开始生成音乐（流式模式）')
-  console.log('🎵 [Suno Proxy Pro] 参数:', JSON.stringify(formData, null, 2))
+  console.log('🎵 [Suno Proxy Pro] 原始参数:', JSON.stringify(formData, null, 2))
   
   const url = `${SUNO_BASE_URL}/chat-messages`
   
-  // 🔥 构建 inputs 对象，确保与 Dify 工作流参数完全对应
-  // 🔥 关键修复：可选的数字字段为空时不传，避免 API 校验错误
-  
-  // 🔥 处理 negative_tags：Dify 工作流中是数组类型
-  const negativeTagsArray = formData.negative_tags 
-    ? formData.negative_tags.split(',').map(tag => tag.trim()).filter(Boolean)
-    : []
+  // 🔥 构建 inputs 对象，严格按照 Dify 工作流定义
+  // 🔥 必填字段：task_mode, MV, vocal_gender
+  // 🔥 可选字段：prompt, style_tags, title, instrumental, target_id, negative_tags, continue_at, end_at
   
   const inputs: Record<string, any> = {
+    // 🔥 必填字段
     task_mode: formData.task_mode || 'Normal',
-    MV: formData.MV || 'chirp-v5',  // 🔥 默认使用最新版本
-    prompt: (formData.prompt || '').trim(),
-    style_tags: (formData.style_tags || '').trim(),
-    title: (formData.title || '').trim(),
-    instrumental: formData.instrumental ?? false,
-    target_id: (formData.target_id || '').trim(),
-    negative_tags: negativeTagsArray,  // 🔥 转换为数组格式
-    vocal_gender: (formData.vocal_gender || 'm').trim(),
+    MV: formData.MV || 'chirp-v5',
+    vocal_gender: formData.vocal_gender || 'm',
+    
+    // 🔥 可选字段 - 字符串类型
+    prompt: formData.prompt || '',
+    style_tags: formData.style_tags || '',
+    title: formData.title || '',
+    target_id: formData.target_id || '',
+    
+    // 🔥 布尔类型
+    instrumental: !!formData.instrumental,
+    
+    // 🔥 negative_tags：保持字符串格式（根据截图显示为多行文本）
+    negative_tags: formData.negative_tags || '',
   }
   
-  // 🔥 关键修复：只有在有值时才传递数字字段
-  if (formData.continue_at !== null && formData.continue_at !== undefined) {
+  // 🔥 数字字段：只有在有值且大于0时才传递
+  if (formData.continue_at && Number(formData.continue_at) > 0) {
     inputs.continue_at = Number(formData.continue_at)
   }
-  if (formData.end_at !== null && formData.end_at !== undefined) {
+  if (formData.end_at && Number(formData.end_at) > 0) {
     inputs.end_at = Number(formData.end_at)
   }
   
-  console.log('🎵 [Suno Proxy Pro] 清洗后的 inputs:', inputs)
+  console.log('🎵 [Suno Proxy Pro] 发送到 Dify 的 inputs:', JSON.stringify(inputs, null, 2))
   
   const response = await fetch(url, {
     method: 'POST',
