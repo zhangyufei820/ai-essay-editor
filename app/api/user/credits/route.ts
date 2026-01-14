@@ -112,19 +112,40 @@ export async function POST(request: Request) {
 
     const supabaseAdmin = getSupabaseAdmin()
 
-    // 先查询当前积分
+    // 先查询当前积分（使用 maybeSingle 避免用户不存在时报错）
     const { data: currentData, error: queryError } = await supabaseAdmin
       .from('user_credits')
       .select('credits')
       .eq('user_id', userId)
-      .single()
+      .maybeSingle()
 
-    if (queryError) {
+    // 🔥 如果用户没有积分记录，先创建一条
+    if (!currentData) {
+      console.log(`🆕 [积分API] 用户 ${userId} 无积分记录，自动创建...`)
+      const { data: newCredit, error: createError } = await supabaseAdmin
+        .from('user_credits')
+        .upsert({
+          user_id: userId,
+          credits: 1000,
+          is_pro: false
+        })
+        .select('credits')
+        .single()
+      
+      if (createError) {
+        console.error(`❌ [积分API] 创建积分记录失败:`, createError)
+        return NextResponse.json({ error: createError.message }, { status: 500 })
+      }
+      // 使用新创建的积分继续处理
+      var currentCredits = newCredit?.credits || 1000
+    } else {
+      var currentCredits = currentData.credits || 0
+    }
+
+    if (queryError && queryError.code !== 'PGRST116') {
       console.error(`❌ [积分API] 查询当前积分失败:`, queryError)
       return NextResponse.json({ error: queryError.message }, { status: 500 })
     }
-
-    const currentCredits = currentData?.credits || 0
     const newCredits = Math.max(0, currentCredits + amount) // 确保不会变成负数
 
     // 更新积分
