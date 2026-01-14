@@ -239,10 +239,14 @@ async function handleGenerateStreamingPro(formData: SunoProFormInputs, userId: s
     'Cover': '4.Cover(翻唱)'  // 注意：没有空格！
   }
   
+  // 🔥 关键：确保 MV 有默认值，Dify 截图显示默认是 chirp-v4
+  const mvValue = formData.MV || 'chirp-v4'
+  console.log('🎵 [Suno Proxy Pro] MV 值:', formData.MV, '->', mvValue)
+  
   const inputs: Record<string, any> = {
     // 🔥 必填字段 - task_mode 使用完整选项字符串
     task_mode: taskModeMapping[formData.task_mode] || '1. inspiration (灵感模式)',
-    MV: formData.MV || 'chirp-v5',
+    MV: mvValue,  // 🔥 确保 MV 总是有值
     vocal_gender: formData.vocal_gender || 'm',
     
     // 🔥 可选字段 - 字符串类型
