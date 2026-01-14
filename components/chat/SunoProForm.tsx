@@ -371,7 +371,7 @@ export function SunoProForm({ onSubmit, isLoading = false, disabled = false }: S
   }
 
   return (
-    <div className="relative bg-[#0a0e17] rounded-2xl p-6 border border-slate-800/50 overflow-hidden">
+    <div className="relative bg-[#0a0e17] rounded-2xl p-4 md:p-6 border border-slate-800/50 overflow-hidden w-full max-w-none">
       {/* 🔥 科技背景灯效果 */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         {/* 中心光晕 */}
@@ -560,7 +560,7 @@ export function SunoProForm({ onSubmit, isLoading = false, disabled = false }: S
         <TechCard
           title="风格内容"
           icon={<Palette className="h-5 w-5" />}
-          defaultOpen={false}
+          defaultOpen={true}
         >
           {/* 歌曲标题 */}
           <div>
@@ -628,7 +628,7 @@ export function SunoProForm({ onSubmit, isLoading = false, disabled = false }: S
         <TechCard
           title="高级参数"
           icon={<Sliders className="h-5 w-5" />}
-          defaultOpen={false}
+          defaultOpen={true}
         >
           {/* 纯音乐开关 */}
           <div className="flex items-center justify-between p-3 rounded-lg bg-[#161b22] border border-slate-700/50">
