@@ -113,11 +113,15 @@ async function handleGenerate(query: string, userId: string, taskMode?: string, 
       'Authorization': `Bearer ${SUNO_GENERATE_API_KEY}`,
     },
     body: JSON.stringify({
-      inputs: { task_mode: taskMode || 'inspiration' },  // 🔥 task_mode 是必填参数
+      inputs: { 
+        task_mode: taskMode || '1. inspiration (灵感模式)',  // 🔥 使用完整格式
+        MV: 'chirp-v4',  // 🔥 必填字段
+        vocal_gender: 'm',  // 🔥 必填字段
+      },
       query: query,
       response_mode: 'blocking',
       user: userId,
-      conversation_id: conversationId || '',  // 🔥 传递 conversationId 保持会话连续性
+      conversation_id: conversationId || '',
     }),
   })
 
@@ -321,11 +325,15 @@ async function handleGenerateStreaming(query: string, userId: string, taskMode?:
       'Authorization': `Bearer ${SUNO_GENERATE_API_KEY}`,
     },
     body: JSON.stringify({
-      inputs: { task_mode: taskMode || 'inspiration' },  // 🔥 task_mode 是必填参数
+      inputs: { 
+        task_mode: taskMode || '1. inspiration (灵感模式)',  // 🔥 使用完整格式
+        MV: 'chirp-v4',  // 🔥 必填字段
+        vocal_gender: 'm',  // 🔥 必填字段
+      },
       query: query,
       response_mode: 'streaming',
       user: userId,
-      conversation_id: conversationId || '',  // 🔥 传递 conversationId 保持会话连续性
+      conversation_id: conversationId || '',
     }),
   })
 
