@@ -430,6 +430,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     musicTasks,
     getTaskByMessageId,
     startMusicGeneration,
+    startMusicGenerationPro,  // 🔥 专业模式函数
     retryTask,
     hasActiveTasks: hasSunoActiveTasks
   } = useSunoMusic()
@@ -1532,13 +1533,11 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                         setMessages(p => [...p, { id: botId, role: "assistant", content: "" }])
 
                         try {
-                          const queryText = `[PRO_MODE]\n${JSON.stringify(formData)}`
-                          
-                          await startMusicGeneration(
-                            queryText,
+                          // 🔥 使用专业模式函数，传递完整 formData 对象
+                          await startMusicGenerationPro(
+                            formData,
                             userId,
                             botId,
-                            formData.task_mode.toLowerCase(),
                             (chunk) => {
                               setMessages(p => p.map(m =>
                                 m.id === botId ? { ...m, content: chunk } : m
