@@ -153,13 +153,20 @@ async function handleGeneratePro(formData: SunoProFormInputs, userId: string, co
   // 🔥 构建 inputs 对象，确保与 Dify 工作流参数完全对应
   // 🔥 关键修复：可选的数字字段为空时不传，避免 API 校验错误
   
+  // 🔥 关键修复：task_mode 必须使用完整选项字符串
+  const taskModeMapping: Record<string, string> = {
+    'Normal': '1. inspiration (灵感模式)',
+    'Extend': '3. extend (续写模式)',
+    'Cover': '4.Cover(翻唱)'
+  }
+  
   // 🔥 处理 negative_tags：Dify 工作流中是数组类型
   const negativeTagsArray = formData.negative_tags 
     ? formData.negative_tags.split(',').map(tag => tag.trim()).filter(Boolean)
     : []
   
   const inputs: Record<string, any> = {
-    task_mode: formData.task_mode || 'Normal',
+    task_mode: taskModeMapping[formData.task_mode] || '1. inspiration (灵感模式)',
     MV: formData.MV || 'chirp-v5',  // 🔥 默认使用最新版本
     prompt: (formData.prompt || '').trim(),
     style_tags: (formData.style_tags || '').trim(),
