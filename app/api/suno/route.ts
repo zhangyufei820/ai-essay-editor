@@ -115,7 +115,7 @@ async function handleGenerate(query: string, userId: string, taskMode?: string, 
     body: JSON.stringify({
       inputs: { 
         task_mode: taskMode || '1. inspiration (灵感模式)',  // 🔥 使用完整格式
-        MV: 'chirp-v4',  // 🔥 必填字段
+        MV: 'chirp-v5',  // 🔥 统一使用 V5 模型
         vocal_gender: 'm',  // 🔥 必填字段
       },
       query: query,
@@ -243,8 +243,8 @@ async function handleGenerateStreamingPro(formData: SunoProFormInputs, userId: s
     'Cover': '4.Cover(翻唱)'  // 注意：没有空格！
   }
   
-  // 🔥 关键：确保 MV 有默认值，Dify 截图显示默认是 chirp-v4
-  const mvValue = formData.MV || 'chirp-v4'
+  // 🔥 关键：确保 MV 有默认值，统一使用最新的 chirp-v5
+  const mvValue = formData.MV || 'chirp-v5'
   console.log('🎵 [Suno Proxy Pro] MV 值:', formData.MV, '->', mvValue)
   
   const inputs: Record<string, any> = {
@@ -327,7 +327,7 @@ async function handleGenerateStreaming(query: string, userId: string, taskMode?:
     body: JSON.stringify({
       inputs: { 
         task_mode: taskMode || '1. inspiration (灵感模式)',  // 🔥 使用完整格式
-        MV: 'chirp-v4',  // 🔥 必填字段
+        MV: 'chirp-v5',  // 🔥 统一使用 V5 模型
         vocal_gender: 'm',  // 🔥 必填字段
       },
       query: query,
