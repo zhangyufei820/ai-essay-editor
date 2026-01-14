@@ -373,16 +373,116 @@ async function handleGenerateStreamingPro(formData: SunoProFormInputs, userId: s
     }, { status: response.status })
   }
 
-  // 🔥 直接转发流式响应
+  // 🔥 创建 TransformStream 处理流式响应，解析 Token 使用量
+  const { readable, writable } = new TransformStream()
+  
+  // 🔥 在后台处理流，解析 token 并补扣积分
+  processStreamWithTokenBilling(response.body!, writable, userId, formData.task_mode, conversationId)
+  
   const headers = new Headers()
   headers.set('Content-Type', 'text/event-stream')
   headers.set('Cache-Control', 'no-cache')
   headers.set('Connection', 'keep-alive')
 
-  return new Response(response.body, {
+  return new Response(readable, {
     status: 200,
     headers,
   })
+}
+
+/**
+ * 🔥 处理流式响应，解析 Token 使用量并补扣积分
+ */
+async function processStreamWithTokenBilling(
+  sourceStream: ReadableStream<Uint8Array>,
+  targetWritable: WritableStream<Uint8Array>,
+  userId: string,
+  taskMode: string,
+  conversationId?: string
+) {
+  const reader = sourceStream.getReader()
+  const writer = targetWritable.getWriter()
+  const decoder = new TextDecoder()
+  
+  let buffer = ''
+  let totalTokens = 0
+  
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      
+      if (done) {
+        break
+      }
+      
+      // 写入原始数据到客户端
+      await writer.write(value)
+      
+      // 解析 SSE 事件获取 token 使用量
+      buffer += decoder.decode(value, { stream: true })
+      
+      // 处理完整的 SSE 事件
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || '' // 保留不完整的行
+      
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try {
+            const jsonStr = line.slice(6).trim()
+            if (jsonStr && jsonStr !== '[DONE]') {
+              const event = JSON.parse(jsonStr)
+              
+              // 🔥 检查 message_end 事件，获取 token 使用量
+              if (event.event === 'message_end' && event.metadata?.usage) {
+                const usage = event.metadata.usage
+                totalTokens = usage.total_tokens || 0
+                console.log('💰 [Token 计费] 检测到使用量:', {
+                  total_tokens: totalTokens,
+                  prompt_tokens: usage.prompt_tokens,
+                  completion_tokens: usage.completion_tokens
+                })
+              }
+            }
+          } catch (e) {
+            // JSON 解析失败，忽略
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.error('❌ [Token 计费] 流处理错误:', error)
+  } finally {
+    await writer.close()
+    
+    // 🔥 流结束后，根据 Token 使用量补扣积分
+    if (totalTokens > 0) {
+      const tokenCredits = Math.ceil(totalTokens * TOKEN_TO_CREDITS_RATIO)
+      
+      if (tokenCredits > 0) {
+        console.log('💰 [Token 计费] 补扣积分:', {
+          totalTokens,
+          tokenCredits,
+          ratio: TOKEN_TO_CREDITS_RATIO
+        })
+        
+        const success = await spendCredits(
+          userId,
+          tokenCredits,
+          'suno_llm_token',
+          `🎵 AI 音乐创作 - ${taskMode} 模式（LLM Token: ${totalTokens}）`,
+          conversationId
+        )
+        
+        if (success) {
+          console.log('✅ [Token 计费] Token 积分补扣成功:', tokenCredits)
+        } else {
+          console.error('❌ [Token 计费] Token 积分补扣失败')
+        }
+      }
+    } else {
+      console.log('💰 [Token 计费] 无 LLM Token 消耗（可能跳过了 LLM）')
+    }
+  }
 }
 
 // 🔥 生成音乐（流式模式）
