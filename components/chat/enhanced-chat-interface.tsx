@@ -1883,8 +1883,8 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
               </div>
             )}
 
-            {/* 🔥 输入框 - Suno V5 模式时隐藏（表单在滚动区域内） */}
-            {selectedModel !== "suno-v5" && (
+            {/* 🔥 输入框 - 所有模式都显示（Suno V5 也需要输入框进行对话） */}
+            {(selectedModel !== "suno-v5" || messages.length > 0) && (
             <form onSubmit={onSubmit} className="relative rounded-2xl sm:rounded-[24px] bg-white shadow-lg sm:shadow-[0_2px_8px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.08),0_16px_48px_rgba(0,0,0,0.08),0_24px_64px_rgba(0,0,0,0.06),0_32px_80px_rgba(0,0,0,0.04)] border border-slate-100 transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] focus-within:shadow-xl sm:focus-within:shadow-[0_4px_12px_rgba(0,0,0,0.06),0_12px_32px_rgba(0,0,0,0.12),0_20px_56px_rgba(0,0,0,0.12),0_28px_72px_rgba(0,0,0,0.08),0_36px_88px_rgba(0,0,0,0.06)]" style={{ ['--focus-border' as any]: `${BRAND_GREEN}33` }}>
               
               {/* 🔥 使用增强版 ModelSelector 组件 - 移动端优化 */}

@@ -358,6 +358,12 @@ export function SunoProForm({ onSubmit, isLoading = false, disabled = false }: S
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     
+    // 🔥 Cover/Extend 模式必须填写 target_id
+    if ((formData.task_mode === "Cover" || formData.task_mode === "Extend") && !formData.target_id.trim()) {
+      alert(`${formData.task_mode === "Cover" ? "翻唱" : "续写"}模式需要填写目标任务 ID`)
+      return
+    }
+    
     // 数据清洗
     const cleanedData: SunoFormData = {
       ...formData,
