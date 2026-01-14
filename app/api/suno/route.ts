@@ -14,8 +14,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { uploadToCos, isCdnUrl, isCosConfigured } from '@/lib/cos'
 import { spendCredits, getUserCredits } from '@/lib/credits'
 
-// 🔥 Suno 音乐生成消耗的积分数
-const SUNO_CREDITS_COST = 100
+// 🔥 Suno 音乐生成计费配置
+const SUNO_BASE_CREDITS = 100           // 基础费用（Suno API 调用）
+const TOKEN_TO_CREDITS_RATIO = 0.01     // Token 转积分比例：100 tokens = 1 积分
 
 export const dynamic = 'force-dynamic'
 
@@ -246,24 +247,24 @@ async function handleGenerateStreamingPro(formData: SunoProFormInputs, userId: s
     }, { status: 400 })
   }
   
-  console.log('🎵 [Suno Proxy Pro] 当前积分:', userCredits.credits, '需要消耗:', SUNO_CREDITS_COST)
+  console.log('🎵 [Suno Proxy Pro] 当前积分:', userCredits.credits, '需要消耗:', SUNO_BASE_CREDITS)
   
-  if (userCredits.credits < SUNO_CREDITS_COST) {
+  if (userCredits.credits < SUNO_BASE_CREDITS) {
     console.error('❌ [Suno Proxy Pro] 积分不足')
     return NextResponse.json({ 
-      error: `积分不足，需要 ${SUNO_CREDITS_COST} 积分，当前余额 ${userCredits.credits}`,
+      error: `积分不足，需要 ${SUNO_BASE_CREDITS} 积分，当前余额 ${userCredits.credits}`,
       code: 'INSUFFICIENT_CREDITS',
-      required: SUNO_CREDITS_COST,
+      required: SUNO_BASE_CREDITS,
       current: userCredits.credits
     }, { status: 402 })
   }
   
-  // 🔥 扣除积分
+  // 🔥 扣除基础积分（流式结束后会补扣 Token 费用）
   const spendSuccess = await spendCredits(
     userId, 
-    SUNO_CREDITS_COST, 
+    SUNO_BASE_CREDITS, 
     'suno_music', 
-    `🎵 AI 音乐创作 - ${formData.task_mode} 模式`,
+    `🎵 AI 音乐创作 - ${formData.task_mode} 模式（基础费用）`,
     conversationId
   )
   
@@ -275,7 +276,7 @@ async function handleGenerateStreamingPro(formData: SunoProFormInputs, userId: s
     }, { status: 500 })
   }
   
-  console.log('✅ [Suno Proxy Pro] 积分扣除成功，剩余:', userCredits.credits - SUNO_CREDITS_COST)
+  console.log('✅ [Suno Proxy Pro] 基础积分扣除成功，剩余:', userCredits.credits - SUNO_BASE_CREDITS)
   
   const url = `${SUNO_BASE_URL}/chat-messages`
   
