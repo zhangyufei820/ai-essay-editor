@@ -20,10 +20,10 @@ const SUNO_BASE_URL = process.env.SUNO_API_BASE_URL || "http://43.154.111.156/v1
 const SUNO_GENERATE_API_KEY = process.env.SUNO_GENERATE_API_KEY || "app-aUM5wY1ACN5M0zHkMdijZCcC"
 const SUNO_QUERY_API_KEY = process.env.SUNO_QUERY_API_KEY || "app-XenDdavZwSjiEHd2SyiTfECc"
 
-/** 专业模式表单数据结构 */
+/** 专业模式表单数据结构 - 🔥 与 Dify 工作流参数完全对应 */
 interface SunoProFormInputs {
   task_mode: 'Normal' | 'Extend' | 'Cover'
-  MV: 'chirp-v4' | 'chirp-v3-5' | 'chirp-v3-0'
+  MV: 'chirp-v5' | 'chirp-v4' | 'chirp-v3-5' | 'chirp-v3-0'  // 🔥 添加 chirp-v5
   target_id: string
   continue_at: number | null
   title: string
@@ -150,19 +150,32 @@ async function handleGeneratePro(formData: SunoProFormInputs, userId: string, co
   
   const url = `${SUNO_BASE_URL}/chat-messages`
   
-  // 🔥 构建 inputs 对象，确保所有字段都经过清洗
-  const inputs = {
+  // 🔥 构建 inputs 对象，确保与 Dify 工作流参数完全对应
+  // 🔥 关键修复：可选的数字字段为空时不传，避免 API 校验错误
+  
+  // 🔥 处理 negative_tags：Dify 工作流中是数组类型
+  const negativeTagsArray = formData.negative_tags 
+    ? formData.negative_tags.split(',').map(tag => tag.trim()).filter(Boolean)
+    : []
+  
+  const inputs: Record<string, any> = {
     task_mode: formData.task_mode || 'Normal',
-    MV: formData.MV || 'chirp-v4',
+    MV: formData.MV || 'chirp-v5',  // 🔥 默认使用最新版本
     prompt: (formData.prompt || '').trim(),
     style_tags: (formData.style_tags || '').trim(),
     title: (formData.title || '').trim(),
-    instrumental: formData.instrumental || false,
+    instrumental: formData.instrumental ?? false,
     target_id: (formData.target_id || '').trim(),
-    continue_at: formData.continue_at !== null ? Number(formData.continue_at) : 0,
-    negative_tags: (formData.negative_tags || '').trim(),
-    vocal_gender: (formData.vocal_gender || 'm').trim(), // 🔥 关键：确保无空格
-    end_at: formData.end_at !== null ? Number(formData.end_at) : null,
+    negative_tags: negativeTagsArray,  // 🔥 转换为数组格式
+    vocal_gender: (formData.vocal_gender || 'm').trim(),
+  }
+  
+  // 🔥 关键修复：只有在有值时才传递数字字段
+  if (formData.continue_at !== null && formData.continue_at !== undefined) {
+    inputs.continue_at = Number(formData.continue_at)
+  }
+  if (formData.end_at !== null && formData.end_at !== undefined) {
+    inputs.end_at = Number(formData.end_at)
   }
   
   console.log('🎵 [Suno Proxy Pro] 清洗后的 inputs:', inputs)
@@ -175,7 +188,7 @@ async function handleGeneratePro(formData: SunoProFormInputs, userId: string, co
     },
     body: JSON.stringify({
       inputs,
-      query: '执行任务', // 🔥 专业模式使用固定 query
+      query: formData.prompt || '执行任务', // 🔥 使用 prompt 作为 query
       response_mode: 'blocking',
       user: userId,
       conversation_id: conversationId || '',
@@ -207,19 +220,32 @@ async function handleGenerateStreamingPro(formData: SunoProFormInputs, userId: s
   
   const url = `${SUNO_BASE_URL}/chat-messages`
   
-  // 🔥 构建 inputs 对象，确保所有字段都经过清洗
-  const inputs = {
+  // 🔥 构建 inputs 对象，确保与 Dify 工作流参数完全对应
+  // 🔥 关键修复：可选的数字字段为空时不传，避免 API 校验错误
+  
+  // 🔥 处理 negative_tags：Dify 工作流中是数组类型
+  const negativeTagsArray = formData.negative_tags 
+    ? formData.negative_tags.split(',').map(tag => tag.trim()).filter(Boolean)
+    : []
+  
+  const inputs: Record<string, any> = {
     task_mode: formData.task_mode || 'Normal',
-    MV: formData.MV || 'chirp-v4',
+    MV: formData.MV || 'chirp-v5',  // 🔥 默认使用最新版本
     prompt: (formData.prompt || '').trim(),
     style_tags: (formData.style_tags || '').trim(),
     title: (formData.title || '').trim(),
-    instrumental: formData.instrumental || false,
+    instrumental: formData.instrumental ?? false,
     target_id: (formData.target_id || '').trim(),
-    continue_at: formData.continue_at !== null ? Number(formData.continue_at) : 0,
-    negative_tags: (formData.negative_tags || '').trim(),
-    vocal_gender: (formData.vocal_gender || 'm').trim(), // 🔥 关键：确保无空格
-    end_at: formData.end_at !== null ? Number(formData.end_at) : null,
+    negative_tags: negativeTagsArray,  // 🔥 转换为数组格式
+    vocal_gender: (formData.vocal_gender || 'm').trim(),
+  }
+  
+  // 🔥 关键修复：只有在有值时才传递数字字段
+  if (formData.continue_at !== null && formData.continue_at !== undefined) {
+    inputs.continue_at = Number(formData.continue_at)
+  }
+  if (formData.end_at !== null && formData.end_at !== undefined) {
+    inputs.end_at = Number(formData.end_at)
   }
   
   console.log('🎵 [Suno Proxy Pro] 清洗后的 inputs:', inputs)
@@ -232,7 +258,7 @@ async function handleGenerateStreamingPro(formData: SunoProFormInputs, userId: s
     },
     body: JSON.stringify({
       inputs,
-      query: '执行任务', // 🔥 专业模式使用固定 query
+      query: formData.prompt || '执行任务', // 🔥 使用 prompt 作为 query
       response_mode: 'streaming',
       user: userId,
       conversation_id: conversationId || '',
