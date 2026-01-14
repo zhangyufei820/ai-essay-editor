@@ -482,10 +482,20 @@ export async function generateMusicStreamingPro(
     })
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}))
-      console.error("❌ [Suno Pro] 流式 API 错误:", response.status, errorData)
-      // 🔥 显示详细错误信息
-      const errorMsg = errorData.details || errorData.error || `状态码: ${response.status}`
+      // 🔥 尝试获取错误详情（可能是 JSON 或纯文本）
+      let errorMsg = `状态码: ${response.status}`
+      try {
+        const contentType = response.headers.get('content-type') || ''
+        if (contentType.includes('application/json')) {
+          const errorData = await response.json()
+          errorMsg = errorData.details || errorData.error || JSON.stringify(errorData)
+        } else {
+          errorMsg = await response.text()
+        }
+      } catch (e) {
+        errorMsg = `状态码: ${response.status}`
+      }
+      console.error("❌ [Suno Pro] 流式 API 错误:", response.status, errorMsg)
       onComplete({ answer: `❌ API 错误:\n\n${errorMsg}`, taskId: null })
       return
     }
