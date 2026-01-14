@@ -1,13 +1,9 @@
 /**
- * 🎵 Suno V5 专业模式表单 - 科技感深色设计版 V2
+ * 🎵 Suno V5 专业模式表单 - 科技感深色设计版 V3
  * 
- * 设计特点：
- * - 使用网站主色调（深蓝色）
- * - 统一的青色/蓝绿色功能按钮
- * - 正方形功能版块
- * - 大面积提示词输入框
- * - 科技背景灯效果
- * - 全中文界面
+ * 🔥 关键修改：分离歌词和提示词字段
+ * - lyrics：歌词（只填这个会走 LLM 优化）
+ * - prompt：风格提示词（填了这个会跳过 LLM，直接生成）
  */
 
 "use client"
@@ -32,7 +28,9 @@ import {
   Zap,
   Target,
   Hash,
-  Radio
+  Radio,
+  PenLine,
+  Lightbulb
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -49,7 +47,8 @@ export type VocalGender = "m" | "f"
 export interface SunoFormData {
   task_mode: TaskMode
   MV: ModelVersion
-  prompt: string
+  prompt: string      // 🔥 风格提示词（填了会跳过 LLM）
+  lyrics: string      // 🔥 歌词（只填这个会走 LLM）
   style_tags: string
   title: string
   instrumental: boolean
@@ -67,7 +66,7 @@ interface SunoProFormProps {
 }
 
 // ============================================
-// 科技感卡片组件 - 统一配色
+// 科技感卡片组件
 // ============================================
 
 interface TechCardProps {
@@ -88,10 +87,8 @@ const TechCard = ({ title, icon, children, defaultOpen = true }: TechCardProps) 
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ duration: 0.4, ease: [0.25, 0.1, 0.25, 1] }}
     >
-      {/* 顶部发光线条 */}
       <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent" />
       
-      {/* 标题栏 */}
       <motion.button
         onClick={() => setIsOpen(!isOpen)}
         className="w-full flex items-center justify-between p-4 hover:bg-white/5 transition-colors"
@@ -115,7 +112,6 @@ const TechCard = ({ title, icon, children, defaultOpen = true }: TechCardProps) 
         </motion.div>
       </motion.button>
       
-      {/* 展开内容 */}
       <AnimatePresence initial={false}>
         {isOpen && (
           <motion.div
@@ -136,7 +132,7 @@ const TechCard = ({ title, icon, children, defaultOpen = true }: TechCardProps) 
 }
 
 // ============================================
-// 正方形模式选择卡片 - 统一绿色
+// 模式选择卡片
 // ============================================
 
 interface ModeCardProps {
@@ -160,7 +156,6 @@ const ModeCard = ({ icon, title, description, selected, onClick }: ModeCardProps
     whileHover={{ scale: 1.02 }}
     whileTap={{ scale: 0.98 }}
   >
-    {/* 选中时的背景动画 */}
     {selected && (
       <motion.div
         className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-teal-500/5"
@@ -169,7 +164,6 @@ const ModeCard = ({ icon, title, description, selected, onClick }: ModeCardProps
       />
     )}
     
-    {/* 图标 */}
     <motion.div 
       className={cn(
         "relative z-10 flex h-14 w-14 items-center justify-center rounded-xl mb-3 transition-all duration-300",
@@ -186,7 +180,6 @@ const ModeCard = ({ icon, title, description, selected, onClick }: ModeCardProps
       </div>
     </motion.div>
     
-    {/* 文字 */}
     <div className="relative z-10 text-center">
       <p className={cn(
         "font-semibold text-sm transition-colors",
@@ -202,7 +195,6 @@ const ModeCard = ({ icon, title, description, selected, onClick }: ModeCardProps
       </p>
     </div>
     
-    {/* 选中标记 */}
     <AnimatePresence>
       {selected && (
         <motion.div
@@ -221,7 +213,7 @@ const ModeCard = ({ icon, title, description, selected, onClick }: ModeCardProps
 )
 
 // ============================================
-// 模型版本选择器 - 2x2 正方形
+// 模型选择器
 // ============================================
 
 interface ModelSelectorProps {
@@ -326,7 +318,8 @@ export function SunoProForm({ onSubmit, isLoading = false, disabled = false }: S
   const [formData, setFormData] = useState<SunoFormData>({
     task_mode: "Normal",
     MV: "chirp-v5",
-    prompt: "",
+    prompt: "",       // 🔥 风格提示词
+    lyrics: "",       // 🔥 歌词
     style_tags: "",
     title: "",
     instrumental: false,
@@ -337,18 +330,24 @@ export function SunoProForm({ onSubmit, isLoading = false, disabled = false }: S
     end_at: null
   })
 
-  // 显示条件字段
   const showTargetId = formData.task_mode === "Extend" || formData.task_mode === "Cover"
   const showContinueAt = formData.task_mode === "Extend"
+  
+  // 🔥 判断是否会走 LLM：只有歌词，没有 prompt
+  const willUseLLM = formData.lyrics.trim() && !formData.prompt.trim()
 
-  // 更新表单数据
   const updateField = <K extends keyof SunoFormData>(field: K, value: SunoFormData[K]) => {
     setFormData(prev => ({ ...prev, [field]: value }))
   }
 
-  // 提交处理
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    
+    // 至少填写歌词或提示词
+    if (!formData.lyrics.trim() && !formData.prompt.trim()) {
+      alert("请至少填写歌词或风格提示词")
+      return
+    }
     
     if ((formData.task_mode === "Cover" || formData.task_mode === "Extend") && !formData.target_id.trim()) {
       alert(`${formData.task_mode === "Cover" ? "翻唱" : "续写"}模式需要填写目标任务 ID`)
@@ -358,6 +357,7 @@ export function SunoProForm({ onSubmit, isLoading = false, disabled = false }: S
     const cleanedData: SunoFormData = {
       ...formData,
       prompt: formData.prompt.trim(),
+      lyrics: formData.lyrics.trim(),
       title: formData.title.trim(),
       style_tags: formData.style_tags.trim(),
       negative_tags: formData.negative_tags.trim(),
@@ -372,15 +372,12 @@ export function SunoProForm({ onSubmit, isLoading = false, disabled = false }: S
 
   return (
     <div className="relative bg-[#0a0e17] rounded-2xl p-4 md:p-6 border border-slate-800/50 overflow-hidden w-full max-w-none">
-      {/* 🔥 科技背景灯效果 */}
+      {/* 科技背景灯效果 */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        {/* 中心光晕 */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px]">
           <div className="absolute inset-0 bg-gradient-radial from-emerald-500/10 via-emerald-500/5 to-transparent rounded-full blur-3xl" />
         </div>
-        {/* 顶部光线 */}
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[400px] h-[200px] bg-gradient-to-b from-emerald-500/20 via-emerald-500/5 to-transparent blur-2xl" />
-        {/* 网格背景 */}
         <div className="absolute inset-0 opacity-[0.03]" style={{
           backgroundImage: `linear-gradient(rgba(16, 185, 129, 0.1) 1px, transparent 1px),
                            linear-gradient(90deg, rgba(16, 185, 129, 0.1) 1px, transparent 1px)`,
@@ -390,7 +387,7 @@ export function SunoProForm({ onSubmit, isLoading = false, disabled = false }: S
 
       {/* 标题 */}
       <motion.div 
-        className="relative z-10 flex items-center gap-3 mb-8"
+        className="relative z-10 flex items-center gap-3 mb-6"
         initial={{ opacity: 0, x: -20 }}
         animate={{ opacity: 1, x: 0 }}
       >
@@ -403,34 +400,42 @@ export function SunoProForm({ onSubmit, isLoading = false, disabled = false }: S
         </div>
       </motion.div>
 
-      {/* 🔥 主输入区域 - 大面积提示词框放最前面 */}
+      {/* 🔥 歌词输入框（优先显示，最大） */}
       <motion.div
-        className="relative z-10 mb-6"
+        className="relative z-10 mb-4"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
       >
-        <div className="relative rounded-xl border-2 border-emerald-500/30 bg-[#0d1117]/80 p-4 hover:border-emerald-500/50 transition-colors">
-          {/* 发光边框 */}
-          <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-emerald-500/10 via-transparent to-emerald-500/10 pointer-events-none" />
-          
+        <div className={cn(
+          "relative rounded-xl border-2 bg-[#0d1117]/80 p-4 transition-colors",
+          willUseLLM 
+            ? "border-purple-500/50 hover:border-purple-500/70" 
+            : "border-emerald-500/30 hover:border-emerald-500/50"
+        )}>
           <label className="flex items-center gap-2 text-sm font-semibold text-emerald-400 mb-3">
-            <Mic2 className="h-5 w-5" />
-            提示词 / 歌词
-            <span className="text-red-400">*</span>
-            <span className="ml-auto text-xs text-slate-500 font-normal">输入你想要的音乐描述或歌词</span>
+            <PenLine className="h-5 w-5" />
+            歌词
+            <span className="ml-auto text-xs text-slate-500 font-normal flex items-center gap-1">
+              {willUseLLM && (
+                <span className="text-purple-400 flex items-center gap-1">
+                  <Sparkles className="h-3 w-3" />
+                  将使用 AI 优化
+                </span>
+              )}
+            </span>
           </label>
           <textarea
-            value={formData.prompt}
-            onChange={(e) => updateField("prompt", e.target.value)}
-            placeholder="例如：一首充满阳光气息的夏日流行曲，节奏轻快，让人想起海边漫步的美好时光...
-
-或者直接输入歌词：
-[Verse 1]
+            value={formData.lyrics}
+            onChange={(e) => updateField("lyrics", e.target.value)}
+            placeholder="[Verse 1]
 阳光洒在海面上
 微风轻轻吹过脸庞
-..."
-            rows={8}
+
+[Chorus]
+让我们一起飞翔
+在这无尽的天空..."
+            rows={6}
             className={cn(
               "w-full p-4 rounded-lg bg-[#161b22] border border-slate-700/50",
               "text-slate-200 placeholder:text-slate-500",
@@ -439,19 +444,47 @@ export function SunoProForm({ onSubmit, isLoading = false, disabled = false }: S
             )}
           />
           <p className="text-xs text-emerald-400/60 mt-2 flex items-center gap-1">
-            💡 提示：详细描述音乐风格、情感、场景，AI 将为你创作独特的歌曲
+            💡 只填歌词会让 AI 自动生成风格；填写下方风格提示词则直接生成
           </p>
         </div>
       </motion.div>
 
-      <form onSubmit={handleSubmit} className="relative z-10 space-y-4 max-h-[45vh] overflow-y-auto pr-2 custom-scrollbar">
+      {/* 🔥 风格提示词（填了会跳过 LLM） */}
+      <motion.div
+        className="relative z-10 mb-4"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.15 }}
+      >
+        <div className="relative rounded-xl border border-slate-700/50 bg-[#0d1117]/60 p-4 hover:border-slate-600/50 transition-colors">
+          <label className="flex items-center gap-2 text-sm font-semibold text-slate-300 mb-3">
+            <Lightbulb className="h-5 w-5 text-amber-400" />
+            风格提示词
+            <span className="text-xs text-slate-500 font-normal">（可选，填写后跳过 AI 优化直接生成）</span>
+          </label>
+          <input
+            type="text"
+            value={formData.prompt}
+            onChange={(e) => updateField("prompt", e.target.value)}
+            placeholder="例如：流行, 轻快, 夏日感, 清新女声"
+            className={cn(
+              "w-full p-3 rounded-lg bg-[#161b22] border border-slate-700/50",
+              "text-slate-200 placeholder:text-slate-500",
+              "focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/20",
+              "outline-none transition-all text-sm"
+            )}
+          />
+        </div>
+      </motion.div>
+
+      <form onSubmit={handleSubmit} className="relative z-10 space-y-4 max-h-[40vh] overflow-y-auto pr-2 custom-scrollbar">
         {/* 基础设置卡片 */}
         <TechCard
           title="基础设置"
           icon={<Settings2 className="h-5 w-5" />}
           defaultOpen={true}
         >
-          {/* 创作模式 - 正方形 */}
+          {/* 创作模式 */}
           <div>
             <label className="flex items-center gap-2 text-sm font-medium text-slate-300 mb-3">
               <Music4 className="h-4 w-4 text-emerald-400" />
@@ -558,9 +591,9 @@ export function SunoProForm({ onSubmit, isLoading = false, disabled = false }: S
 
         {/* 风格内容卡片 */}
         <TechCard
-          title="风格内容"
+          title="更多选项"
           icon={<Palette className="h-5 w-5" />}
-          defaultOpen={true}
+          defaultOpen={false}
         >
           {/* 歌曲标题 */}
           <div>
@@ -628,7 +661,7 @@ export function SunoProForm({ onSubmit, isLoading = false, disabled = false }: S
         <TechCard
           title="高级参数"
           icon={<Sliders className="h-5 w-5" />}
-          defaultOpen={true}
+          defaultOpen={false}
         >
           {/* 纯音乐开关 */}
           <div className="flex items-center justify-between p-3 rounded-lg bg-[#161b22] border border-slate-700/50">
@@ -697,7 +730,7 @@ export function SunoProForm({ onSubmit, isLoading = false, disabled = false }: S
           </div>
         </TechCard>
 
-        {/* 提交按钮 */}
+        {/* 🔥 提交按钮 - 显示当前模式 */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -705,13 +738,17 @@ export function SunoProForm({ onSubmit, isLoading = false, disabled = false }: S
         >
           <Button
             type="submit"
-            disabled={disabled || isLoading || !formData.prompt.trim()}
+            disabled={disabled || isLoading || (!formData.lyrics.trim() && !formData.prompt.trim())}
             className={cn(
               "w-full h-14 rounded-xl text-white font-semibold text-base transition-all duration-300",
-              "bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-500 bg-[length:200%_auto]",
-              "hover:bg-right hover:shadow-xl hover:shadow-emerald-500/30",
+              willUseLLM 
+                ? "bg-gradient-to-r from-purple-500 via-pink-500 to-purple-500"
+                : "bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-500",
+              "bg-[length:200%_auto] hover:bg-right hover:shadow-xl",
+              willUseLLM ? "hover:shadow-purple-500/30" : "hover:shadow-emerald-500/30",
               "disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-none",
-              "border border-emerald-500/30"
+              "border",
+              willUseLLM ? "border-purple-500/30" : "border-emerald-500/30"
             )}
           >
             {isLoading ? (
@@ -721,7 +758,7 @@ export function SunoProForm({ onSubmit, isLoading = false, disabled = false }: S
                 transition={{ duration: 1.5, repeat: Infinity }}
               >
                 <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                <span>AI 正在创作中...</span>
+                <span>{willUseLLM ? "AI 正在优化创作中..." : "正在生成中..."}</span>
               </motion.div>
             ) : (
               <motion.div 
@@ -729,11 +766,22 @@ export function SunoProForm({ onSubmit, isLoading = false, disabled = false }: S
                 whileHover={{ scale: 1.02 }}
               >
                 <Send className="h-5 w-5" />
-                <span>开始创作</span>
+                <span>{willUseLLM ? "AI 优化创作" : "开始创作"}</span>
                 <Sparkles className="h-4 w-4" />
               </motion.div>
             )}
           </Button>
+          
+          {/* 模式提示 */}
+          <p className="text-xs text-center mt-2 text-slate-500">
+            {willUseLLM ? (
+              <span className="text-purple-400">🎯 AI 将根据歌词自动生成最佳风格</span>
+            ) : formData.prompt.trim() ? (
+              <span className="text-amber-400">⚡ 将直接使用您设定的风格生成</span>
+            ) : (
+              <span>请输入歌词或风格提示词</span>
+            )}
+          </p>
         </motion.div>
       </form>
 

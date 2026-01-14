@@ -23,11 +23,12 @@ const SUNO_QUERY_API_KEY = process.env.SUNO_QUERY_API_KEY || "app-XenDdavZwSjiEH
 /** 专业模式表单数据结构 - 🔥 与 Dify 工作流参数完全对应 */
 interface SunoProFormInputs {
   task_mode: 'Normal' | 'Extend' | 'Cover'
-  MV: 'chirp-v5' | 'chirp-v4' | 'chirp-v3-5' | 'chirp-v3-0'  // 🔥 添加 chirp-v5
+  MV: 'chirp-v5' | 'chirp-v4' | 'chirp-v3-5' | 'chirp-v3-0'
   target_id: string
   continue_at: number | null
   title: string
-  prompt: string
+  prompt: string      // 🔥 风格提示词（填了跳过 LLM）
+  lyrics: string      // 🔥 歌词（只填这个走 LLM）
   style_tags: string
   negative_tags: string
   instrumental: boolean
@@ -255,6 +256,18 @@ async function handleGenerateStreamingPro(formData: SunoProFormInputs, userId: s
     converted: instrumentalValue 
   })
   
+  // 🔥 关键逻辑：
+  // - lyrics 有值 + prompt 为空 → 走 LLM（Dify 条件分支判断）
+  // - lyrics 有值 + prompt 有值 → 跳过 LLM，直接生成
+  const lyricsValue = formData.lyrics || ''
+  const promptValue = formData.prompt || ''
+  
+  console.log('🎵 [Suno Proxy Pro] 歌词与提示词:', {
+    hasLyrics: !!lyricsValue,
+    hasPrompt: !!promptValue,
+    willUseLLM: lyricsValue && !promptValue
+  })
+  
   const inputs: Record<string, any> = {
     // 🔥 必填字段 - task_mode 使用完整选项字符串
     task_mode: taskModeMapping[formData.task_mode] || '1. inspiration (灵感模式)',
@@ -262,7 +275,8 @@ async function handleGenerateStreamingPro(formData: SunoProFormInputs, userId: s
     vocal_gender: formData.vocal_gender || 'm',
     
     // 🔥 可选字段 - 字符串类型
-    prompt: formData.prompt || '',
+    prompt: promptValue,        // 风格提示词（填了跳过 LLM）
+    lyrics: lyricsValue,        // 🔥 新增：歌词字段（只填这个走 LLM）
     style_tags: formData.style_tags || '',
     title: formData.title || '',
     target_id: formData.target_id || '',
@@ -270,11 +284,12 @@ async function handleGenerateStreamingPro(formData: SunoProFormInputs, userId: s
     // 🔥 布尔类型 - false=有人声, true=纯音乐
     instrumental: instrumentalValue,
     
-    // 🔥 negative_tags：保持字符串格式（根据截图显示为多行文本）
+    // 🔥 negative_tags：保持字符串格式
     negative_tags: formData.negative_tags || '',
   }
   
   console.log('🎵 [Suno Proxy Pro] 最终 instrumental 在 inputs 中:', inputs.instrumental)
+  console.log('🎵 [Suno Proxy Pro] lyrics 和 prompt:', { lyrics: inputs.lyrics?.slice(0, 50), prompt: inputs.prompt?.slice(0, 50) })
   
   // 🔥 数字字段：只有在有值且大于0时才传递
   if (formData.continue_at && Number(formData.continue_at) > 0) {
