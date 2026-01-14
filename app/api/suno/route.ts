@@ -224,16 +224,11 @@ async function handleGenerateStreamingPro(formData: SunoProFormInputs, userId: s
   // 🔥 必填字段：task_mode, MV, vocal_gender
   // 🔥 可选字段：prompt, style_tags, title, instrumental, target_id, negative_tags, continue_at, end_at
   
-  // 🔥 关键修复：task_mode 必须是 Dify 工作流中定义的完整选项字符串
-  const taskModeMapping: Record<string, string> = {
-    'Normal': '1. inspiration (灵感模式)',
-    'Extend': '3. extend (续写模式)',
-    'Cover': '4.Cover(翻唱)'
-  }
-  
+  // 🔥 关键修复：task_mode 使用简短值（与 Dify 条件分支判断一致）
+  // Dify 截图显示条件分支判断的是 "task_mode 是 Normal" 而不是完整选项
   const inputs: Record<string, any> = {
-    // 🔥 必填字段 - task_mode 需要映射为完整选项
-    task_mode: taskModeMapping[formData.task_mode] || '1. inspiration (灵感模式)',
+    // 🔥 必填字段 - task_mode 直接使用简短值
+    task_mode: formData.task_mode || 'Normal',
     MV: formData.MV || 'chirp-v5',
     vocal_gender: formData.vocal_gender || 'm',
     
