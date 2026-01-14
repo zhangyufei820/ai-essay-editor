@@ -247,6 +247,14 @@ async function handleGenerateStreamingPro(formData: SunoProFormInputs, userId: s
   const mvValue = formData.MV || 'chirp-v5'
   console.log('🎵 [Suno Proxy Pro] MV 值:', formData.MV, '->', mvValue)
   
+  // 🔥 关键：确保 instrumental 值正确（false = 有人声，true = 纯音乐）
+  const instrumentalValue = formData.instrumental === true
+  console.log('🎵 [Suno Proxy Pro] instrumental 值:', { 
+    raw: formData.instrumental, 
+    type: typeof formData.instrumental,
+    converted: instrumentalValue 
+  })
+  
   const inputs: Record<string, any> = {
     // 🔥 必填字段 - task_mode 使用完整选项字符串
     task_mode: taskModeMapping[formData.task_mode] || '1. inspiration (灵感模式)',
@@ -259,12 +267,14 @@ async function handleGenerateStreamingPro(formData: SunoProFormInputs, userId: s
     title: formData.title || '',
     target_id: formData.target_id || '',
     
-    // 🔥 布尔类型
-    instrumental: !!formData.instrumental,
+    // 🔥 布尔类型 - false=有人声, true=纯音乐
+    instrumental: instrumentalValue,
     
     // 🔥 negative_tags：保持字符串格式（根据截图显示为多行文本）
     negative_tags: formData.negative_tags || '',
   }
+  
+  console.log('🎵 [Suno Proxy Pro] 最终 instrumental 在 inputs 中:', inputs.instrumental)
   
   // 🔥 数字字段：只有在有值且大于0时才传递
   if (formData.continue_at && Number(formData.continue_at) > 0) {
