@@ -1506,7 +1506,17 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                           sessionIdRef.current = urlSessionId
                         }
 
-                        const userContent = `🎵 专业模式创作\n\n**标题**: ${formData.title || '未命名'}\n**模式**: ${formData.task_mode}\n**风格**: ${formData.style_tags || '默认'}\n\n${formData.prompt}`
+                        // 🔥 用户消息：显示歌词和音乐提示词（如果有）
+                        let userContent = `🎵 专业模式创作\n\n**标题**: ${formData.title || '未命名'}\n**模式**: ${formData.task_mode}`
+                        if (formData.lyrics) {
+                          userContent += `\n\n**歌词**:\n${formData.lyrics}`
+                        }
+                        if (formData.prompt) {
+                          userContent += `\n\n**音乐提示词**: ${formData.prompt}`
+                        }
+                        if (formData.style_tags) {
+                          userContent += `\n**风格标签**: ${formData.style_tags}`
+                        }
                         const userMsg: Message = { 
                           id: Date.now().toString(), 
                           role: "user", 
