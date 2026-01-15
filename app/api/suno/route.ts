@@ -316,25 +316,24 @@ async function handleGenerateStreamingPro(formData: SunoProFormInputs, userId: s
     willUseLLM: lyricsValue && !promptValue
   })
   
+  // 🔥 关键修复：空字符串不传递，让 Dify 正确判断"为空"
   const inputs: Record<string, any> = {
-    // 🔥 必填字段 - task_mode 使用完整选项字符串
+    // 🔥 必填字段
     task_mode: taskModeMapping[formData.task_mode] || '1. inspiration (灵感模式)',
-    MV: mvValue,  // 🔥 确保 MV 总是有值
+    MV: mvValue,
     vocal_gender: formData.vocal_gender || 'm',
     
-    // 🔥 可选字段 - 字符串类型
-    prompt: promptValue,        // 风格提示词（填了跳过 LLM）
-    lyrics: lyricsValue,        // 🔥 新增：歌词字段（只填这个走 LLM）
-    style_tags: formData.style_tags || '',
-    title: formData.title || '',
-    target_id: formData.target_id || '',
-    
-    // 🔥 布尔类型 - false=有人声, true=纯音乐
+    // 🔥 布尔类型
     instrumental: instrumentalValue,
-    
-    // 🔥 negative_tags：保持字符串格式
-    negative_tags: formData.negative_tags || '',
   }
+  
+  // 🔥 可选字段：只有有值时才传递，空字符串不传
+  if (lyricsValue) inputs.lyrics = lyricsValue
+  if (promptValue) inputs.prompt = promptValue
+  if (formData.style_tags?.trim()) inputs.style_tags = formData.style_tags.trim()
+  if (formData.title?.trim()) inputs.title = formData.title.trim()
+  if (formData.target_id?.trim()) inputs.target_id = formData.target_id.trim()
+  if (formData.negative_tags?.trim()) inputs.negative_tags = formData.negative_tags.trim()
   
   console.log('🎵 [Suno Proxy Pro] 最终 instrumental 在 inputs 中:', inputs.instrumental)
   console.log('🎵 [Suno Proxy Pro] lyrics 和 prompt:', { lyrics: inputs.lyrics?.slice(0, 50), prompt: inputs.prompt?.slice(0, 50) })
