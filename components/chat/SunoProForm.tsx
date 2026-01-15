@@ -604,7 +604,7 @@ export function SunoProForm({ onSubmit, isLoading = false, disabled = false }: S
               icon={<Hash className="h-4 w-4 text-emerald-500" />}
               value={formData.style_tags}
               onChange={(v) => updateField("style_tags", v)}
-              placeholder="例如：流行, 轻快, 夏日, 民谣"
+              placeholder="例如：流行, 轻快, 夏日, 民谣, 摇滚, 电子, R&B, 嘻哈, 古典, 爵士, 乡村, 抒情, 动感, 治愈"
               hint="用逗号分隔多个标签"
             />
             
@@ -613,7 +613,7 @@ export function SunoProForm({ onSubmit, isLoading = false, disabled = false }: S
               icon={<Hash className="h-4 w-4 text-gray-400" />}
               value={formData.negative_tags}
               onChange={(v) => updateField("negative_tags", v)}
-              placeholder="例如：低质量, 噪音, 失真"
+              placeholder="例如：低质量, 噪音, 失真, 单调, 沉闷, 杂音, 模糊, 过度混响"
             />
           </GlassCard>
 
