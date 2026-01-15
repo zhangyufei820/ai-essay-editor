@@ -1639,16 +1639,16 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                             </div>
                             
                             {/* 请勿上传 - 移动端优化 */}
-                            <div className="bg-red-50/80 backdrop-blur-sm rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-red-100/50 shadow-sm">
+                            <div className="bg-amber-50/80 backdrop-blur-sm rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-amber-200/50 shadow-sm">
                               <div className="flex items-start gap-2 sm:gap-3">
-                                <div className="flex-shrink-0 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-red-100 flex items-center justify-center">
-                                  <span className="text-red-600 text-base sm:text-lg">⚠️</span>
+                                <div className="flex-shrink-0 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-amber-100 flex items-center justify-center">
+                                  <span className="text-amber-600 text-base sm:text-lg">⚠️</span>
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                  <p className="text-xs sm:text-sm font-semibold text-red-800 mb-0.5 sm:mb-1">请勿上传</p>
-                                  <p className="text-[11px] sm:text-xs text-red-700 leading-relaxed">
+                                  <p className="text-xs sm:text-sm font-semibold text-amber-800 mb-0.5 sm:mb-1">请勿上传</p>
+                                  <p className="text-[11px] sm:text-xs text-amber-700 leading-relaxed">
                                     包含手写体图片的文档<br/>
-                                    <span className="text-red-600">如 PDF 内嵌手写图片，系统无法识别</span>
+                                    <span className="text-amber-600">如 PDF 内嵌手写图片，系统无法识别</span>
                                   </p>
                                 </div>
                               </div>
