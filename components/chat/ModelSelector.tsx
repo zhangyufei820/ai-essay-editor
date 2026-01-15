@@ -17,10 +17,10 @@ import { cn } from "@/lib/utils"
 
 const COLORS = {
   primary: {
-    main: "#4CAF50",
-    dark: "#2E7D32",
-    light: "#E8F5E9",
-    hover: "rgba(76, 175, 80, 0.08)",
+    main: "#14532d",
+    dark: "#0d3a1f",
+    light: "#dcfce7",
+    hover: "rgba(20, 83, 45, 0.08)",
   },
   gray: {
     50: "#FAFAFA",

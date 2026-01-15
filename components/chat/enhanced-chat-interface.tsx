@@ -610,7 +610,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   const modelConfig = {
     "standard": { 
       name: "作文批改", 
-      icon: Sparkles, 
+      icon: GraduationCap, 
       color: BRAND_GREEN,
       description: "专业作文分析与点评",
       badge: "推荐",
@@ -619,36 +619,36 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     "teaching-pro": { 
       name: "教学评助手", 
       icon: Brain, 
-      color: "#7c3aed",
+      color: BRAND_GREEN,
       description: "教学评估与反馈",
       group: "教育专用"
     },
     "gpt-5": { 
       name: "ChatGPT 5.2", 
       icon: Bot, 
-      color: "#16a34a",
+      color: BRAND_GREEN,
       description: "通用智能对话",
       badge: "新",
       group: "通用模型"
     },
     "claude-opus": { 
       name: "Claude Opus 4.5", 
-      icon: Bot, 
-      color: "#ea580c",
+      icon: Sparkles, 
+      color: BRAND_GREEN,
       description: "深度推理与分析",
       group: "通用模型"
     },
     "gemini-pro": { 
       name: "Gemini 3.0 Pro", 
       icon: Sparkles, 
-      color: "#2563eb",
+      color: BRAND_GREEN,
       description: "多模态理解",
       group: "通用模型"
     },
     "banana-2-pro": {
       name: "Banana2 Pro 4K",
-      icon: "🍌",
-      color: "#ca8a04",
+      icon: Palette,
+      color: BRAND_GREEN,
       description: "AI 图像生成",
       badge: "热门",
       group: "创意生成"
@@ -656,14 +656,14 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     "suno-v5": { 
       name: "Suno V5", 
       icon: AudioLines, 
-      color: "#db2777",
+      color: BRAND_GREEN,
       description: "AI 音乐创作",
       group: "创意生成"
     },
     "sora-2-pro": { 
       name: "Sora 2 Pro", 
       icon: Film, 
-      color: "#4f46e5",
+      color: BRAND_GREEN,
       description: "AI 视频生成",
       badge: "Pro",
       group: "创意生成"
