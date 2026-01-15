@@ -31,7 +31,8 @@ export interface SunoProFormData {
   target_id: string
   continue_at: number | null
   title: string
-  prompt: string
+  prompt: string      // 🔥 风格提示词（填了跳过 LLM）
+  lyrics: string      // 🔥 歌词（只填这个走 LLM）
   style_tags: string
   negative_tags: string
   instrumental: boolean
