@@ -80,8 +80,18 @@ export default function EmailLoginPage() {
         throw new Error(data.error || "验证失败")
       }
 
+      // 🔥 如果返回了登录链接，直接跳转完成登录
+      if (data.redirectUrl) {
+        console.log("[Email Login] 跳转到登录链接")
+        window.location.href = data.redirectUrl
+        return
+      }
+
+      // 兼容旧流程
       const supabase = createClient()
-      await supabase.auth.refreshSession()
+      if (supabase) {
+        await supabase.auth.refreshSession()
+      }
 
       router.push(redirect)
       router.refresh()

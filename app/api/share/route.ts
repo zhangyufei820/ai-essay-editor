@@ -1,8 +1,16 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
+import { addCredits } from '@/lib/credits'
 
 // 🔥 允许的 HTTP 方法
 export const dynamic = 'force-dynamic'
+
+// 🎁 分享奖励配置
+const SHARE_REWARD_CONFIG = {
+  CREDITS_PER_SHARE: 50,     // 每次分享获得积分
+  MAX_DAILY_SHARES: 5,        // 每天最多获得奖励的分享次数
+  COOLDOWN_HOURS: 1,          // 同一对话分享冷却时间（小时）
+}
 
 // 生成短链接 ID（8位随机字符）
 function generateShareId(): string {
@@ -145,6 +153,51 @@ export async function POST(request: NextRequest) {
     
     console.log('🔗 [Share API] 分享创建成功:', { shareId, title })
 
+    // 🎁 发放分享积分奖励
+    let creditsRewarded = 0
+    let rewardMessage = ''
+    
+    if (userId) {
+      try {
+        // 检查今天已经获得奖励的分享次数
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        
+        const { data: todayShares, error: countError } = await supabaseAdmin
+          .from('shared_content')
+          .select('id, created_at')
+          .eq('user_id', userId)
+          .gte('created_at', today.toISOString())
+        
+        const todayShareCount = todayShares?.length || 0
+        
+        console.log('🎁 [Share API] 今日分享次数:', todayShareCount, '/ 最大:', SHARE_REWARD_CONFIG.MAX_DAILY_SHARES)
+        
+        if (todayShareCount <= SHARE_REWARD_CONFIG.MAX_DAILY_SHARES) {
+          // 发放积分
+          const success = await addCredits(
+            userId, 
+            SHARE_REWARD_CONFIG.CREDITS_PER_SHARE, 
+            'share_reward',
+            `📤 分享对话获得 ${SHARE_REWARD_CONFIG.CREDITS_PER_SHARE} 积分奖励`,
+            shareId
+          )
+          
+          if (success) {
+            creditsRewarded = SHARE_REWARD_CONFIG.CREDITS_PER_SHARE
+            rewardMessage = `🎉 分享成功！获得 ${creditsRewarded} 积分奖励（今日 ${todayShareCount}/${SHARE_REWARD_CONFIG.MAX_DAILY_SHARES}）`
+            console.log('🎁 [Share API] 积分发放成功:', creditsRewarded)
+          }
+        } else {
+          rewardMessage = `分享成功！今日积分奖励已达上限（${SHARE_REWARD_CONFIG.MAX_DAILY_SHARES}次）`
+          console.log('🎁 [Share API] 今日奖励已达上限')
+        }
+      } catch (rewardError) {
+        console.error('🎁 [Share API] 积分发放异常:', rewardError)
+        // 积分发放失败不影响分享功能
+      }
+    }
+
     // 构建分享链接
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://www.shenxiang.school'
     const shareUrl = `${baseUrl}/share/${shareId}`
@@ -153,7 +206,12 @@ export async function POST(request: NextRequest) {
       success: true,
       shareId,
       shareUrl,
-      title
+      title,
+      // 🎁 返回积分奖励信息
+      reward: {
+        credits: creditsRewarded,
+        message: rewardMessage
+      }
     })
 
   } catch (error) {
