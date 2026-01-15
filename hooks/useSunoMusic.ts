@@ -340,7 +340,7 @@ export function useSunoMusic(): UseSunoMusicReturn {
         }
       }
     )
-  }, [startPolling])
+  }, [conversationId, startPolling])
 
   // ============================================
   // 🔥 专业模式：开始生成音乐
