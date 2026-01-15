@@ -434,9 +434,9 @@ export function SunoProForm({ onSubmit, isLoading = false, disabled = false }: S
                 ? "border-2 border-emerald-600/40 shadow-lg shadow-emerald-600/10" 
                 : "border-2 border-gray-200/50 dark:border-gray-700/50"
             )}>
-              <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-200 mb-3">
+              <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200 mb-3">
                 <PenLine className="h-4 w-4 text-emerald-500" />
-                歌词
+                <span className="font-bold text-base">歌词</span>
                 {willUseLLM && (
                   <span className="ml-auto px-2 py-0.5 text-xs bg-gradient-to-r from-emerald-600 to-emerald-500 text-white rounded-full flex items-center gap-1">
                     <Sparkles className="h-3 w-3" />
@@ -459,24 +459,24 @@ export function SunoProForm({ onSubmit, isLoading = false, disabled = false }: S
                   "text-base leading-relaxed"
                 )}
               />
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                💡 只填歌词会让 AI 自动生成风格；填写下方风格提示词则直接生成
-              </p>
             </div>
           </motion.div>
 
-          {/* 🎨 风格提示词 */}
+          {/* 🎨 音乐提示词 */}
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.15 }}
           >
             <div className="relative rounded-2xl p-5 bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm border-2 border-gray-200/50 dark:border-gray-700/50">
-              <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-200 mb-3">
+              <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200 mb-1">
                 <Lightbulb className="h-4 w-4 text-amber-500" />
-                风格提示词
-                <span className="text-xs font-normal text-gray-400">（可选）</span>
+                <span className="font-bold text-base">音乐提示词</span>
+                <span className="text-xs font-normal text-gray-400">（可选，填写后跳过 AI 优化）</span>
               </label>
+              <p className="text-xs font-semibold text-amber-600 dark:text-amber-400 mb-3">
+                💡 只填歌词会让 AI 自动生成风格；填写音乐提示词则直接生成
+              </p>
               <input
                 type="text"
                 value={formData.prompt}
