@@ -111,12 +111,12 @@ const GlassCard = ({ title, icon, children, defaultOpen = true, badge }: GlassCa
           className="w-full flex items-center justify-between p-4 hover:bg-white/30 dark:hover:bg-white/5 transition-all duration-200"
         >
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-pink-500 to-orange-400 text-white shadow-lg shadow-pink-500/20">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-lg shadow-emerald-500/20">
               {icon}
             </div>
             <span className="font-semibold text-gray-800 dark:text-white">{title}</span>
             {badge && (
-              <span className="px-2 py-0.5 text-xs font-medium bg-gradient-to-r from-pink-500 to-orange-400 text-white rounded-full">
+              <span className="px-2 py-0.5 text-xs font-medium bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-full">
                 {badge}
               </span>
             )}
@@ -170,7 +170,7 @@ const ModeButton = ({ icon, title, subtitle, selected, onClick }: ModeButtonProp
       "relative flex flex-col items-center justify-center p-4 rounded-2xl transition-all duration-300",
       "border-2",
       selected
-        ? "border-pink-500/50 bg-gradient-to-br from-pink-500/10 to-orange-500/10 shadow-lg shadow-pink-500/10"
+        ? "border-emerald-500/50 bg-gradient-to-br from-emerald-500/10 to-emerald-600/10 shadow-lg shadow-emerald-500/10"
         : "border-gray-200/50 dark:border-gray-700/50 bg-white/40 dark:bg-gray-800/40 hover:bg-white/60 dark:hover:bg-gray-800/60"
     )}
     whileHover={{ scale: 1.02 }}
@@ -180,7 +180,7 @@ const ModeButton = ({ icon, title, subtitle, selected, onClick }: ModeButtonProp
       className={cn(
         "flex h-12 w-12 items-center justify-center rounded-xl mb-2 transition-all duration-300",
         selected 
-          ? "bg-gradient-to-br from-pink-500 to-orange-400 text-white shadow-lg shadow-pink-500/30" 
+          ? "bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-lg shadow-emerald-500/30" 
           : "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400"
       )}
     >
@@ -188,7 +188,7 @@ const ModeButton = ({ icon, title, subtitle, selected, onClick }: ModeButtonProp
     </motion.div>
     <span className={cn(
       "font-medium text-sm",
-      selected ? "text-pink-600 dark:text-pink-400" : "text-gray-700 dark:text-gray-300"
+      selected ? "text-emerald-600 dark:text-emerald-400" : "text-gray-700 dark:text-gray-300"
     )}>
       {title}
     </span>
@@ -198,7 +198,7 @@ const ModeButton = ({ icon, title, subtitle, selected, onClick }: ModeButtonProp
       <motion.div
         initial={{ scale: 0 }}
         animate={{ scale: 1 }}
-        className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-pink-500 to-orange-400 shadow-lg"
+        className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 shadow-lg"
       >
         <svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
@@ -231,7 +231,7 @@ const GlassInput = ({
     <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200">
       {icon}
       {label}
-      {required && <span className="text-pink-500">*</span>}
+      {required && <span className="text-emerald-500">*</span>}
     </label>
     {multiline ? (
       <textarea
@@ -244,7 +244,7 @@ const GlassInput = ({
           "bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm",
           "border border-gray-200/50 dark:border-gray-700/50",
           "text-gray-800 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500",
-          "focus:border-pink-500/50 focus:ring-2 focus:ring-pink-500/20",
+          "focus:border-emerald-500/50 focus:ring-2 focus:ring-emerald-500/20",
           "outline-none transition-all duration-200 resize-none",
           "text-base leading-relaxed"
         )}
@@ -260,7 +260,7 @@ const GlassInput = ({
           "bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm",
           "border border-gray-200/50 dark:border-gray-700/50",
           "text-gray-800 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500",
-          "focus:border-pink-500/50 focus:ring-2 focus:ring-pink-500/20",
+          "focus:border-emerald-500/50 focus:ring-2 focus:ring-emerald-500/20",
           "outline-none transition-all duration-200"
         )}
       />
@@ -299,7 +299,7 @@ const GenderSelector = ({ value, onChange, disabled }: GenderSelectorProps) => (
           "flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl transition-all duration-200",
           "border-2",
           value === option.val
-            ? "border-pink-500/50 bg-pink-500/10 text-pink-600 dark:text-pink-400"
+            ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
             : "border-gray-200/50 dark:border-gray-700/50 bg-white/40 dark:bg-gray-800/40 text-gray-600 dark:text-gray-300",
           disabled && "opacity-50 cursor-not-allowed"
         )}
@@ -340,7 +340,7 @@ const ModelSelector = ({ value, onChange }: ModelSelectorProps) => (
           "flex-1 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-200",
           "border-2",
           value === model.value
-            ? "border-pink-500/50 bg-pink-500/10 text-pink-600 dark:text-pink-400"
+            ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
             : "border-gray-200/50 dark:border-gray-700/50 bg-white/40 dark:bg-gray-800/40 text-gray-600 dark:text-gray-300 hover:bg-white/60"
         )}
         whileHover={{ scale: 1.02 }}
@@ -415,7 +415,7 @@ export function SunoProForm({ onSubmit, isLoading = false, disabled = false }: S
   return (
     <div className="relative w-full max-w-2xl mx-auto">
       {/* 背景装饰 */}
-      <div className="absolute -inset-4 bg-gradient-to-r from-pink-500/20 via-purple-500/20 to-orange-500/20 rounded-3xl blur-3xl opacity-50" />
+      <div className="absolute -inset-4 bg-gradient-to-r from-emerald-500/20 via-emerald-600/20 to-emerald-600/20 rounded-3xl blur-3xl opacity-50" />
       
       <div className="relative rounded-3xl p-6 bg-white/80 dark:bg-gray-900/80 backdrop-blur-2xl border border-white/50 dark:border-gray-800/50 shadow-2xl shadow-gray-200/50 dark:shadow-black/20">
         
@@ -425,7 +425,7 @@ export function SunoProForm({ onSubmit, isLoading = false, disabled = false }: S
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
         >
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-pink-500 to-orange-400 mb-4 shadow-xl shadow-pink-500/30">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 mb-4 shadow-xl shadow-emerald-500/30">
             <Music4 className="h-8 w-8 text-white" />
           </div>
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">
@@ -448,14 +448,14 @@ export function SunoProForm({ onSubmit, isLoading = false, disabled = false }: S
               "relative rounded-2xl p-5 transition-all duration-300",
               "bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm",
               willUseLLM 
-                ? "border-2 border-purple-500/40 shadow-lg shadow-purple-500/10" 
+                ? "border-2 border-emerald-600/40 shadow-lg shadow-emerald-600/10" 
                 : "border-2 border-gray-200/50 dark:border-gray-700/50"
             )}>
               <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-200 mb-3">
-                <PenLine className="h-4 w-4 text-pink-500" />
+                <PenLine className="h-4 w-4 text-emerald-500" />
                 歌词
                 {willUseLLM && (
-                  <span className="ml-auto px-2 py-0.5 text-xs bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-full flex items-center gap-1">
+                  <span className="ml-auto px-2 py-0.5 text-xs bg-gradient-to-r from-emerald-600 to-emerald-500 text-white rounded-full flex items-center gap-1">
                     <Sparkles className="h-3 w-3" />
                     AI 将优化
                   </span>
@@ -471,7 +471,7 @@ export function SunoProForm({ onSubmit, isLoading = false, disabled = false }: S
                   "bg-white/80 dark:bg-gray-900/80",
                   "border border-gray-200/50 dark:border-gray-700/50",
                   "text-gray-800 dark:text-white placeholder:text-gray-400",
-                  "focus:border-pink-500/50 focus:ring-2 focus:ring-pink-500/20",
+                  "focus:border-emerald-500/50 focus:ring-2 focus:ring-emerald-500/20",
                   "outline-none transition-all duration-200 resize-none",
                   "text-base leading-relaxed"
                 )}
@@ -520,7 +520,7 @@ export function SunoProForm({ onSubmit, isLoading = false, disabled = false }: S
             {/* 创作模式 */}
             <div>
               <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200 mb-3">
-                <Music4 className="h-4 w-4 text-pink-500" />
+                <Music4 className="h-4 w-4 text-emerald-500" />
                 创作模式
               </label>
               <div className="grid grid-cols-3 gap-3">
@@ -551,7 +551,7 @@ export function SunoProForm({ onSubmit, isLoading = false, disabled = false }: S
             {/* 模型版本 */}
             <div>
               <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200 mb-3">
-                <Sparkles className="h-4 w-4 text-pink-500" />
+                <Sparkles className="h-4 w-4 text-emerald-500" />
                 模型版本
               </label>
               <ModelSelector
@@ -571,7 +571,7 @@ export function SunoProForm({ onSubmit, isLoading = false, disabled = false }: S
                 >
                   <GlassInput
                     label="目标任务 ID"
-                    icon={<Target className="h-4 w-4 text-pink-500" />}
+                    icon={<Target className="h-4 w-4 text-emerald-500" />}
                     value={formData.target_id}
                     onChange={(v) => updateField("target_id", v)}
                     placeholder="输入要续写/翻唱的歌曲任务 ID"
@@ -592,7 +592,7 @@ export function SunoProForm({ onSubmit, isLoading = false, disabled = false }: S
                 >
                   <GlassInput
                     label="续写起点（秒）"
-                    icon={<Clock className="h-4 w-4 text-pink-500" />}
+                    icon={<Clock className="h-4 w-4 text-emerald-500" />}
                     value={formData.continue_at?.toString() || ""}
                     onChange={(v) => updateField("continue_at", v ? Number(v) : null)}
                     placeholder="例如：30"
@@ -610,7 +610,7 @@ export function SunoProForm({ onSubmit, isLoading = false, disabled = false }: S
           >
             <GlassInput
               label="歌曲标题"
-              icon={<FileText className="h-4 w-4 text-pink-500" />}
+              icon={<FileText className="h-4 w-4 text-emerald-500" />}
               value={formData.title}
               onChange={(v) => updateField("title", v)}
               placeholder="例如：夏日清风"
@@ -618,7 +618,7 @@ export function SunoProForm({ onSubmit, isLoading = false, disabled = false }: S
             
             <GlassInput
               label="音乐风格标签"
-              icon={<Hash className="h-4 w-4 text-pink-500" />}
+              icon={<Hash className="h-4 w-4 text-emerald-500" />}
               value={formData.style_tags}
               onChange={(v) => updateField("style_tags", v)}
               placeholder="例如：流行, 轻快, 夏日, 民谣"
@@ -643,11 +643,11 @@ export function SunoProForm({ onSubmit, isLoading = false, disabled = false }: S
             {/* 纯音乐开关 */}
             <div className="flex items-center justify-between p-4 rounded-xl bg-white/60 dark:bg-gray-800/60 border border-gray-200/50 dark:border-gray-700/50">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-pink-500/10">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10">
                   {formData.instrumental ? (
-                    <VolumeX className="h-5 w-5 text-pink-500" />
+                    <VolumeX className="h-5 w-5 text-emerald-500" />
                   ) : (
-                    <Volume2 className="h-5 w-5 text-pink-500" />
+                    <Volume2 className="h-5 w-5 text-emerald-500" />
                   )}
                 </div>
                 <div>
@@ -660,7 +660,7 @@ export function SunoProForm({ onSubmit, isLoading = false, disabled = false }: S
               <Switch
                 checked={formData.instrumental}
                 onCheckedChange={(v) => updateField("instrumental", v)}
-                className="data-[state=checked]:bg-pink-500"
+                className="data-[state=checked]:bg-emerald-500"
               />
             </div>
 
@@ -675,7 +675,7 @@ export function SunoProForm({ onSubmit, isLoading = false, disabled = false }: S
                 >
                   <div className="space-y-2">
                     <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200">
-                      <Mic2 className="h-4 w-4 text-pink-500" />
+                      <Mic2 className="h-4 w-4 text-emerald-500" />
                       人声性别
                     </label>
                     <GenderSelector
@@ -691,7 +691,7 @@ export function SunoProForm({ onSubmit, isLoading = false, disabled = false }: S
             {/* 结束时间 */}
             <GlassInput
               label="结束时间（秒）"
-              icon={<Clock className="h-4 w-4 text-pink-500" />}
+              icon={<Clock className="h-4 w-4 text-emerald-500" />}
               value={formData.end_at?.toString() || ""}
               onChange={(v) => updateField("end_at", v ? Number(v) : null)}
               placeholder="留空则自动生成完整歌曲"
@@ -712,8 +712,8 @@ export function SunoProForm({ onSubmit, isLoading = false, disabled = false }: S
                 "w-full h-14 rounded-2xl font-semibold text-base transition-all duration-300",
                 "text-white shadow-xl",
                 willUseLLM 
-                  ? "bg-gradient-to-r from-purple-500 via-pink-500 to-purple-500 shadow-purple-500/30 hover:shadow-purple-500/50"
-                  : "bg-gradient-to-r from-pink-500 via-orange-500 to-pink-500 shadow-pink-500/30 hover:shadow-pink-500/50",
+                  ? "bg-gradient-to-r from-emerald-600 via-emerald-500 to-emerald-600 shadow-emerald-600/30 hover:shadow-emerald-600/50"
+                  : "bg-gradient-to-r from-emerald-500 via-emerald-600 to-emerald-500 shadow-emerald-500/30 hover:shadow-emerald-500/50",
                 "bg-[length:200%_auto] hover:bg-right",
                 "disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-none"
               )}
@@ -741,7 +741,7 @@ export function SunoProForm({ onSubmit, isLoading = false, disabled = false }: S
             
             <p className="text-xs text-center mt-3 text-gray-500 dark:text-gray-400">
               {willUseLLM ? (
-                <span className="text-purple-500 dark:text-purple-400">
+                <span className="text-emerald-600 dark:text-emerald-400">
                   ✨ AI 将根据歌词自动生成最佳风格
                 </span>
               ) : formData.prompt.trim() ? (
