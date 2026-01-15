@@ -1,22 +1,16 @@
 /**
- * 🎵 MusicCard 组件 - Suno 音乐生成卡片
+ * 🎵 MusicCard 组件 - Suno 音乐生成卡片 V2
  * 
- * 功能：
- * 1. 加载中状态：显示"音乐正在创作中"动画
- * 2. 成功状态：显示双曲目播放面板（网页内播放）
- * 3. 错误状态：显示错误信息
- * 4. 下载功能：下载到本地
- * 
- * 🔥 更新：
- * - 封面放大两倍
- * - 加载中显示"音乐正在创作中"
- * - 网页内播放（不跳转）
- * - 下载到本地功能
+ * 🔥 全新设计：
+ * 1. 大封面 + 下方播放按钮
+ * 2. 右侧歌词滚动显示（高亮当前行）
+ * 3. 底部音频波形进度条（跳动音符效果）
+ * 4. 界面更高端大气
  */
 
 "use client"
 
-import React, { useState, useRef, useEffect } from "react"
+import React, { useState, useRef, useEffect, useMemo } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { 
   Music, 
@@ -28,7 +22,9 @@ import {
   Download,
   RefreshCw,
   Sparkles,
-  Loader2
+  Loader2,
+  SkipBack,
+  SkipForward
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
@@ -50,11 +46,50 @@ interface MusicCardProps {
   className?: string
 }
 
-interface SingleTrackPlayerProps {
-  audioUrl: string
-  coverUrl?: string
-  title?: string
-  version: number
+/** 歌词行 */
+interface LyricLine {
+  time: number  // 秒
+  text: string
+}
+
+// ============================================
+// 歌词解析工具
+// ============================================
+
+/** 解析 LRC 格式歌词 */
+function parseLyrics(lyricsText: string): LyricLine[] {
+  if (!lyricsText) return []
+  
+  const lines: LyricLine[] = []
+  const lrcRegex = /\[(\d{2}):(\d{2})(?:\.(\d{2,3}))?\](.*)/g
+  
+  // 尝试 LRC 格式
+  let match
+  while ((match = lrcRegex.exec(lyricsText)) !== null) {
+    const minutes = parseInt(match[1], 10)
+    const seconds = parseInt(match[2], 10)
+    const milliseconds = match[3] ? parseInt(match[3].padEnd(3, '0'), 10) : 0
+    const time = minutes * 60 + seconds + milliseconds / 1000
+    const text = match[4].trim()
+    if (text) {
+      lines.push({ time, text })
+    }
+  }
+  
+  // 如果没有时间戳，按行分割（普通歌词）
+  if (lines.length === 0) {
+    const plainLines = lyricsText.split('\n').filter(l => l.trim())
+    // 每行假设 4 秒
+    plainLines.forEach((text, index) => {
+      // 跳过标签行（如 [Verse 1]、[Chorus] 等）
+      const trimmedText = text.trim()
+      if (trimmedText && !trimmedText.match(/^\[.*\]$/)) {
+        lines.push({ time: index * 4, text: trimmedText })
+      }
+    })
+  }
+  
+  return lines.sort((a, b) => a.time - b.time)
 }
 
 // ============================================
@@ -69,7 +104,6 @@ export function MusicCard({
   onRetry,
   className,
 }: MusicCardProps) {
-  // 判断是否有任何槽位在加载
   const hasLoadingSlot = songs.some(s => s.status === "loading")
   const hasReadySlot = songs.some(s => s.status === "ready")
 
@@ -94,7 +128,7 @@ export function MusicCard({
       )}
     >
       <div className="p-5">
-        {/* 🔥 简洁标题：由 Suno V5 生成 */}
+        {/* 🔥 简洁标题 */}
         <div className="flex items-center gap-3 mb-5">
           <div 
             className="flex h-10 w-10 items-center justify-center rounded-xl"
@@ -113,11 +147,8 @@ export function MusicCard({
         </div>
 
         {/* 🔥 高端双槽位布局 */}
-        <div className="space-y-4">
-          {/* 槽位 1 */}
+        <div className="space-y-6">
           <SongSlotRenderer slot={songs[0]} version={1} />
-
-          {/* 槽位 2 */}
           <SongSlotRenderer slot={songs[1]} version={2} />
         </div>
       </div>
@@ -126,7 +157,7 @@ export function MusicCard({
 }
 
 // ============================================
-// 单槽位渲染器 - 高端设计
+// 单槽位渲染器
 // ============================================
 
 function SongSlotRenderer({
@@ -138,67 +169,20 @@ function SongSlotRenderer({
 }) {
   return (
     <AnimatePresence mode="wait">
-      {/* 加载中 - 显示"音乐正在创作中" */}
+      {/* 加载中 */}
       {slot.status === "loading" && (
         <motion.div
           key="loading"
           initial={{ opacity: 0, y: 5 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -5 }}
-          className="flex items-center gap-4 p-4 rounded-xl bg-slate-50/80 border border-slate-100"
+          className="rounded-2xl bg-slate-50/80 border border-slate-100 p-6"
         >
-          {/* 🔥 封面占位 - 放大两倍 */}
-          <div className="relative h-28 w-28 rounded-xl bg-gradient-to-br from-slate-100 to-slate-50 flex items-center justify-center shrink-0 overflow-hidden">
-            <Music className="h-10 w-10 text-slate-300" />
-            {/* 脉冲动画 */}
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent animate-shimmer" />
-          </div>
-          
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-3">
-              <span 
-                className="text-xs font-medium px-2 py-0.5 rounded-full"
-                style={{ 
-                  backgroundColor: `${BRAND_GREEN}10`,
-                  color: BRAND_GREEN
-                }}
-              >
-                版本 {version}
-              </span>
-            </div>
-            
-            {/* 🔥 音乐波形动画 */}
-            <div className="flex items-center gap-3 mb-2">
-              <div className="flex items-end gap-0.5 h-5">
-                {[0, 1, 2, 3, 4].map((i) => (
-                  <motion.div
-                    key={i}
-                    className="w-1 rounded-full"
-                    style={{ backgroundColor: BRAND_GREEN }}
-                    animate={{ height: ["6px", "18px", "6px"] }}
-                    transition={{
-                      duration: 0.7,
-                      repeat: Infinity,
-                      delay: i * 0.12,
-                      ease: "easeInOut",
-                    }}
-                  />
-                ))}
-              </div>
-            </div>
-            
-            {/* 🔥 显示"音乐正在创作中" */}
-            <p className="text-sm font-medium" style={{ color: BRAND_GREEN }}>
-              音乐正在创作中...
-            </p>
-            <p className="text-xs text-slate-400 mt-1">
-              请耐心等待，约需 30-60 秒
-            </p>
-          </div>
+          <LoadingState version={version} />
         </motion.div>
       )}
 
-      {/* 就绪 - 显示播放器 */}
+      {/* 就绪 - 显示新版播放器 */}
       {slot.status === "ready" && slot.audioUrl && (
         <motion.div
           key="ready"
@@ -206,10 +190,11 @@ function SongSlotRenderer({
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0 }}
         >
-          <SingleTrackPlayer
+          <PremiumMusicPlayer
             audioUrl={slot.audioUrl}
             coverUrl={slot.coverUrl}
             title={slot.title}
+            lyrics={slot.lyrics}
             version={version}
           />
         </motion.div>
@@ -222,15 +207,13 @@ function SongSlotRenderer({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="flex items-center gap-4 p-4 rounded-xl bg-red-50/50 border border-red-100"
+          className="flex items-center gap-4 p-6 rounded-2xl bg-red-50/50 border border-red-100"
         >
-          <div className="h-28 w-28 rounded-xl bg-red-100/50 flex items-center justify-center shrink-0">
-            <AlertCircle className="h-10 w-10 text-red-400" />
+          <div className="h-20 w-20 rounded-xl bg-red-100/50 flex items-center justify-center shrink-0">
+            <AlertCircle className="h-8 w-8 text-red-400" />
           </div>
           <div className="flex-1">
-            <span 
-              className="text-xs font-medium px-2 py-0.5 rounded-full bg-red-100 text-red-600"
-            >
+            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-red-100 text-red-600">
               版本 {version}
             </span>
             <p className="text-sm text-red-500 mt-2">{slot.errorMessage || "生成失败"}</p>
@@ -242,26 +225,111 @@ function SongSlotRenderer({
 }
 
 // ============================================
-// 单曲播放器 - 高端简洁设计（网页内播放）
+// 加载状态组件
 // ============================================
 
-function SingleTrackPlayer({
+function LoadingState({ version }: { version: number }) {
+  return (
+    <div className="flex items-center gap-6">
+      {/* 封面占位 */}
+      <div className="relative h-32 w-32 rounded-xl bg-gradient-to-br from-slate-100 to-slate-50 flex items-center justify-center shrink-0 overflow-hidden">
+        <Music className="h-12 w-12 text-slate-300" />
+        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent animate-shimmer" />
+      </div>
+      
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 mb-4">
+          <span 
+            className="text-xs font-medium px-2 py-0.5 rounded-full"
+            style={{ backgroundColor: `${BRAND_GREEN}10`, color: BRAND_GREEN }}
+          >
+            版本 {version}
+          </span>
+        </div>
+        
+        {/* 音乐波形动画 */}
+        <div className="flex items-end gap-1 h-8 mb-3">
+          {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
+            <motion.div
+              key={i}
+              className="w-1.5 rounded-full"
+              style={{ backgroundColor: BRAND_GREEN }}
+              animate={{ height: ["8px", "24px", "8px"] }}
+              transition={{
+                duration: 0.7,
+                repeat: Infinity,
+                delay: i * 0.1,
+                ease: "easeInOut",
+              }}
+            />
+          ))}
+        </div>
+        
+        <p className="text-sm font-medium" style={{ color: BRAND_GREEN }}>
+          音乐正在创作中...
+        </p>
+        <p className="text-xs text-slate-400 mt-1">
+          请耐心等待，约需 30-60 秒
+        </p>
+      </div>
+    </div>
+  )
+}
+
+// ============================================
+// 🔥 全新高端音乐播放器
+// ============================================
+
+interface PremiumMusicPlayerProps {
+  audioUrl: string
+  coverUrl?: string
+  title?: string
+  lyrics?: string
+  version: number
+}
+
+function PremiumMusicPlayer({
   audioUrl,
   coverUrl,
   title,
+  lyrics,
   version,
-}: SingleTrackPlayerProps) {
+}: PremiumMusicPlayerProps) {
   const audioRef = useRef<HTMLAudioElement>(null)
+  const lyricsContainerRef = useRef<HTMLDivElement>(null)
+  
   const [isPlaying, setIsPlaying] = useState(false)
   const [isMuted, setIsMuted] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [audioDuration, setAudioDuration] = useState(0)
   const [isDownloading, setIsDownloading] = useState(false)
+  
+  // 解析歌词
+  const parsedLyrics = useMemo(() => parseLyrics(lyrics || ''), [lyrics])
+  
+  // 当前歌词行索引
+  const currentLyricIndex = useMemo(() => {
+    if (parsedLyrics.length === 0) return -1
+    for (let i = parsedLyrics.length - 1; i >= 0; i--) {
+      if (currentTime >= parsedLyrics[i].time) {
+        return i
+      }
+    }
+    return -1
+  }, [currentTime, parsedLyrics])
 
-  const togglePlay = (e: React.MouseEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    
+  // 滚动歌词到当前行
+  useEffect(() => {
+    if (currentLyricIndex >= 0 && lyricsContainerRef.current) {
+      const container = lyricsContainerRef.current
+      const activeLine = container.querySelector(`[data-index="${currentLyricIndex}"]`)
+      if (activeLine) {
+        activeLine.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }
+    }
+  }, [currentLyricIndex])
+
+  const togglePlay = () => {
     if (audioRef.current) {
       if (isPlaying) {
         audioRef.current.pause()
@@ -272,34 +340,29 @@ function SingleTrackPlayer({
     }
   }
 
-  const toggleMute = (e: React.MouseEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    
+  const toggleMute = () => {
     if (audioRef.current) {
       audioRef.current.muted = !isMuted
       setIsMuted(!isMuted)
     }
   }
 
-  const handleProgressClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    e.preventDefault()
-    e.stopPropagation()
-    
-    if (audioRef.current && audioDuration > 0) {
-      const rect = e.currentTarget.getBoundingClientRect()
-      const percent = (e.clientX - rect.left) / rect.width
-      audioRef.current.currentTime = percent * audioDuration
+  const seekTo = (time: number) => {
+    if (audioRef.current) {
+      audioRef.current.currentTime = time
     }
   }
 
-  // 🔥 下载到本地功能
-  const handleDownload = async (e: React.MouseEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    
+  const handleProgressClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (audioRef.current && audioDuration > 0) {
+      const rect = e.currentTarget.getBoundingClientRect()
+      const percent = (e.clientX - rect.left) / rect.width
+      seekTo(percent * audioDuration)
+    }
+  }
+
+  const handleDownload = async () => {
     if (isDownloading) return
-    
     setIsDownloading(true)
     toast.info("正在下载音乐...")
     
@@ -316,7 +379,6 @@ function SingleTrackPlayer({
       window.URL.revokeObjectURL(url)
       toast.success("下载成功！")
     } catch (err) {
-      console.error("下载失败:", err)
       toast.error("下载失败，请重试")
     } finally {
       setIsDownloading(false)
@@ -352,140 +414,195 @@ function SingleTrackPlayer({
   const progress = audioDuration > 0 ? (currentTime / audioDuration) * 100 : 0
 
   return (
-    <div className="flex items-center gap-4 p-4 rounded-xl bg-white border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
-      {/* 🔥 网页内播放 - 隐藏的 audio 元素 */}
+    <div className="rounded-2xl bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 overflow-hidden shadow-xl">
       <audio ref={audioRef} src={audioUrl} preload="metadata" />
-
-      {/* 🔥 封面 + 播放按钮 - 放大两倍 */}
-      <div className="relative shrink-0">
-        <div className="h-28 w-28 rounded-xl overflow-hidden bg-gradient-to-br from-emerald-100 to-green-50 shadow-sm">
-          {coverUrl ? (
-            <img
-              src={coverUrl}
-              alt={`版本 ${version}`}
-              className="h-full w-full object-cover"
-            />
-          ) : (
-            <div className="h-full w-full flex items-center justify-center">
-              <Music className="h-10 w-10" style={{ color: BRAND_GREEN }} />
-            </div>
-          )}
-        </div>
-        
-        {/* 播放按钮覆盖层 */}
-        <button
-          onClick={togglePlay}
-          className="absolute inset-0 flex items-center justify-center bg-black/20 rounded-xl opacity-0 hover:opacity-100 transition-opacity"
-        >
-          <div 
-            className="h-12 w-12 rounded-full flex items-center justify-center text-white shadow-lg"
-            style={{ backgroundColor: BRAND_GREEN }}
-          >
-            {isPlaying ? (
-              <Pause className="h-5 w-5" />
+      
+      {/* 🔥 主体布局：左封面 + 右歌词 */}
+      <div className="flex min-h-[280px]">
+        {/* 左侧：封面 + 播放控制 */}
+        <div className="w-[240px] p-5 flex flex-col items-center justify-center shrink-0 border-r border-slate-700/50">
+          {/* 版本标签 */}
+          <div className="mb-3">
+            <span 
+              className="text-xs font-medium px-3 py-1 rounded-full"
+              style={{ backgroundColor: BRAND_GREEN, color: 'white' }}
+            >
+              版本 {version}
+            </span>
+          </div>
+          
+          {/* 🔥 大封面 */}
+          <div className="relative w-40 h-40 rounded-xl overflow-hidden shadow-2xl mb-4">
+            {coverUrl ? (
+              <img
+                src={coverUrl}
+                alt={title || `版本 ${version}`}
+                className={cn(
+                  "w-full h-full object-cover transition-transform duration-1000",
+                  isPlaying && "animate-spin-slow"
+                )}
+                style={{ animationDuration: '8s' }}
+              />
             ) : (
-              <Play className="h-5 w-5 ml-0.5" />
+              <div className="w-full h-full bg-gradient-to-br from-emerald-600 to-green-800 flex items-center justify-center">
+                <Music className="h-16 w-16 text-white/60" />
+              </div>
+            )}
+            
+            {/* 播放状态光晕 */}
+            {isPlaying && (
+              <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
             )}
           </div>
-        </button>
-
-        {/* 播放状态指示器 */}
-        {isPlaying && (
-          <div className="absolute -bottom-1 -right-1 flex items-end gap-0.5 p-1.5 bg-white rounded-lg shadow-sm">
-            {[0, 1, 2].map((i) => (
-              <motion.div
-                key={i}
-                className="w-1 rounded-full"
-                style={{ backgroundColor: BRAND_GREEN }}
-                animate={{ height: ["4px", "12px", "4px"] }}
-                transition={{
-                  duration: 0.5,
-                  repeat: Infinity,
-                  delay: i * 0.1,
-                }}
-              />
-            ))}
+          
+          {/* 🔥 播放按钮（在封面下方） */}
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => seekTo(Math.max(0, currentTime - 10))}
+              className="p-2 rounded-full bg-slate-700/50 hover:bg-slate-600/50 transition-colors"
+            >
+              <SkipBack className="h-4 w-4 text-white" />
+            </button>
+            
+            <button
+              onClick={togglePlay}
+              className="flex h-14 w-14 items-center justify-center rounded-full shadow-lg hover:scale-105 transition-transform"
+              style={{ backgroundColor: BRAND_GREEN }}
+            >
+              {isPlaying ? (
+                <Pause className="h-6 w-6 text-white" />
+              ) : (
+                <Play className="h-6 w-6 text-white ml-1" />
+              )}
+            </button>
+            
+            <button
+              onClick={() => seekTo(Math.min(audioDuration, currentTime + 10))}
+              className="p-2 rounded-full bg-slate-700/50 hover:bg-slate-600/50 transition-colors"
+            >
+              <SkipForward className="h-4 w-4 text-white" />
+            </button>
           </div>
-        )}
-      </div>
-
-      {/* 播放器信息 */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-3">
-          <span 
-            className="text-xs font-medium px-2 py-0.5 rounded-full"
-            style={{ 
-              backgroundColor: `${BRAND_GREEN}10`,
-              color: BRAND_GREEN
-            }}
-          >
-            版本 {version}
-          </span>
-          <span className="text-sm text-slate-500">
-            {formatTime(currentTime)} / {formatTime(audioDuration)}
-          </span>
+          
+          {/* 音量 + 下载 */}
+          <div className="flex items-center gap-2 mt-3">
+            <button
+              onClick={toggleMute}
+              className="p-2 rounded-full hover:bg-slate-700/50 transition-colors"
+            >
+              {isMuted ? (
+                <VolumeX className="h-4 w-4 text-slate-400" />
+              ) : (
+                <Volume2 className="h-4 w-4 text-slate-400" />
+              )}
+            </button>
+            
+            <button
+              onClick={handleDownload}
+              disabled={isDownloading}
+              className="p-2 rounded-full hover:bg-slate-700/50 transition-colors disabled:opacity-50"
+            >
+              {isDownloading ? (
+                <Loader2 className="h-4 w-4 text-slate-400 animate-spin" />
+              ) : (
+                <Download className="h-4 w-4 text-slate-400" />
+              )}
+            </button>
+          </div>
         </div>
-
-        {/* 进度条 */}
-        <div
-          className="relative h-2 bg-slate-100 rounded-full cursor-pointer group"
+        
+        {/* 🔥 右侧：歌词显示区域 */}
+        <div className="flex-1 flex flex-col">
+          {/* 歌词滚动区域 */}
+          <div 
+            ref={lyricsContainerRef}
+            className="flex-1 overflow-y-auto p-5 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent"
+            style={{ maxHeight: '220px' }}
+          >
+            {parsedLyrics.length > 0 ? (
+              <div className="space-y-3 py-10">
+                {parsedLyrics.map((line, index) => (
+                  <motion.div
+                    key={index}
+                    data-index={index}
+                    onClick={() => seekTo(line.time)}
+                    className={cn(
+                      "text-center cursor-pointer transition-all duration-300 px-4 py-1 rounded-lg",
+                      index === currentLyricIndex
+                        ? "text-white text-lg font-medium scale-105"
+                        : "text-slate-500 text-sm hover:text-slate-300"
+                    )}
+                    style={{
+                      color: index === currentLyricIndex ? BRAND_GREEN : undefined,
+                      textShadow: index === currentLyricIndex ? '0 0 20px rgba(20,83,45,0.5)' : undefined
+                    }}
+                  >
+                    {line.text}
+                  </motion.div>
+                ))}
+              </div>
+            ) : (
+              <div className="h-full flex items-center justify-center">
+                <div className="text-center">
+                  <Music className="h-12 w-12 text-slate-600 mx-auto mb-3" />
+                  <p className="text-slate-500 text-sm">暂无歌词</p>
+                  <p className="text-slate-600 text-xs mt-1">享受纯音乐体验</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+      
+      {/* 🔥 底部：音频波形进度条 */}
+      <div className="px-5 pb-4">
+        {/* 时间显示 */}
+        <div className="flex justify-between text-xs text-slate-500 mb-2">
+          <span>{formatTime(currentTime)}</span>
+          <span>{formatTime(audioDuration)}</span>
+        </div>
+        
+        {/* 🔥 音符波浪进度条 */}
+        <div 
+          className="relative h-12 cursor-pointer group"
           onClick={handleProgressClick}
         >
+          {/* 背景波形 */}
+          <div className="absolute inset-0 flex items-end justify-around gap-0.5">
+            {Array.from({ length: 50 }).map((_, i) => {
+              const barProgress = (i / 50) * 100
+              const isActive = barProgress <= progress
+              const height = Math.sin((i / 50) * Math.PI * 4) * 0.5 + 0.5 // 波浪效果
+              
+              return (
+                <motion.div
+                  key={i}
+                  className="flex-1 rounded-t-sm transition-colors"
+                  style={{
+                    height: `${20 + height * 70}%`,
+                    backgroundColor: isActive ? BRAND_GREEN : 'rgb(71, 85, 105)',
+                    opacity: isActive ? 1 : 0.3
+                  }}
+                  animate={isPlaying && isActive ? {
+                    height: [`${20 + height * 70}%`, `${30 + height * 60}%`, `${20 + height * 70}%`]
+                  } : {}}
+                  transition={{
+                    duration: 0.4,
+                    repeat: Infinity,
+                    delay: i * 0.02,
+                    ease: "easeInOut"
+                  }}
+                />
+              )
+            })}
+          </div>
+          
+          {/* 进度指示器 */}
           <div
-            className="absolute inset-y-0 left-0 rounded-full transition-all"
-            style={{ 
-              width: `${progress}%`,
-              backgroundColor: BRAND_GREEN 
-            }}
-          />
-          <div
-            className="absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-white shadow-md border-2 opacity-0 group-hover:opacity-100 transition-opacity"
-            style={{ 
-              left: `${progress}%`,
-              borderColor: BRAND_GREEN,
-              transform: `translateX(-50%) translateY(-50%)`
-            }}
+            className="absolute top-0 bottom-0 w-0.5 bg-white shadow-lg transition-all"
+            style={{ left: `${progress}%` }}
           />
         </div>
-      </div>
-
-      {/* 控制按钮 */}
-      <div className="flex items-center gap-1 shrink-0">
-        <button
-          onClick={toggleMute}
-          className="p-2 rounded-lg hover:bg-slate-50 transition-colors"
-        >
-          {isMuted ? (
-            <VolumeX className="h-5 w-5 text-slate-400" />
-          ) : (
-            <Volume2 className="h-5 w-5 text-slate-400" />
-          )}
-        </button>
-
-        <button
-          onClick={togglePlay}
-          className="flex h-10 w-10 items-center justify-center rounded-lg text-white shadow-sm hover:opacity-90 transition-all"
-          style={{ backgroundColor: BRAND_GREEN }}
-        >
-          {isPlaying ? (
-            <Pause className="h-5 w-5" />
-          ) : (
-            <Play className="h-5 w-5 ml-0.5" />
-          )}
-        </button>
-
-        {/* 🔥 下载按钮 - 使用 fetch + blob */}
-        <button
-          onClick={handleDownload}
-          disabled={isDownloading}
-          className="p-2 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50"
-        >
-          {isDownloading ? (
-            <Loader2 className="h-5 w-5 text-slate-400 animate-spin" />
-          ) : (
-            <Download className="h-5 w-5 text-slate-400" />
-          )}
-        </button>
       </div>
     </div>
   )

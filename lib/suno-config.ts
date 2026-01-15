@@ -76,6 +76,7 @@ export interface SongSlot {
   audioUrl?: string
   coverUrl?: string
   title?: string
+  lyrics?: string  // 🔥 新增：歌词文本
   duration?: number
   errorMessage?: string
 }
