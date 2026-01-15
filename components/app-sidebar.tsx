@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { 
   Home, Settings, ChevronRight, ChevronDown,
   Menu, X, LogOut, Zap, Coins,
-  History, Bot, FileEdit, GraduationCap,
+  History, Bot, GraduationCap, Brain,
   Gift, HelpCircle
 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -434,7 +434,7 @@ function AppSidebarInner() {
           {/* 作文批改 - 🔥 使用新路由 /chat/standard */}
           <NavItem 
             href="/chat/standard"
-            icon={FileEdit}
+            icon={GraduationCap}
             label="作文批改"
             isActive={pathname === "/chat/standard" || (pathname === "/chat" && !currentAgent)}
           />
@@ -442,7 +442,7 @@ function AppSidebarInner() {
           {/* 教学评助手 - 🔥 使用新路由 /chat/teaching-pro */}
           <NavItem 
             href="/chat/teaching-pro"
-            icon={GraduationCap}
+            icon={Brain}
             label="教学评助手"
             isActive={pathname === "/chat/teaching-pro" || currentAgent === "teaching-pro"}
           />

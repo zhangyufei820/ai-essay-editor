@@ -1610,13 +1610,13 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                             <div className="bg-white/80 backdrop-blur-sm rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-emerald-100/50 shadow-sm hover:shadow-md transition-all">
                               <div className="flex items-start gap-2 sm:gap-3">
                                 <div className="flex-shrink-0 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-emerald-100 flex items-center justify-center">
-                                  <span className="text-emerald-600 text-base sm:text-lg">📝</span>
+                                  <Paperclip className="w-3.5 h-3.5 sm:w-4 sm:h-4" style={{ color: BRAND_GREEN }} />
                                 </div>
                                 <div className="flex-1 min-w-0">
                                   <p className="text-xs sm:text-sm font-semibold text-slate-800 mb-0.5 sm:mb-1">手写作文图片</p>
                                   <p className="text-[11px] sm:text-xs text-slate-600 leading-relaxed">
                                     直接上传手写作文的照片或扫描件<br/>
-                                    <span className="text-emerald-600">支持 JPG、PNG、GIF 格式</span>
+                                    <span style={{ color: BRAND_GREEN }}>支持 JPG、PNG、GIF 格式</span>
                                   </p>
                                 </div>
                               </div>
@@ -1625,30 +1625,30 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                             {/* 纯文字文档 - 移动端优化 */}
                             <div className="bg-white/80 backdrop-blur-sm rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-emerald-100/50 shadow-sm hover:shadow-md transition-all">
                               <div className="flex items-start gap-2 sm:gap-3">
-                                <div className="flex-shrink-0 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-blue-100 flex items-center justify-center">
-                                  <span className="text-blue-600 text-base sm:text-lg">📄</span>
+                                <div className="flex-shrink-0 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-emerald-100 flex items-center justify-center">
+                                  <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4" style={{ color: BRAND_GREEN }} />
                                 </div>
                                 <div className="flex-1 min-w-0">
                                   <p className="text-xs sm:text-sm font-semibold text-slate-800 mb-0.5 sm:mb-1">纯文字文档</p>
                                   <p className="text-[11px] sm:text-xs text-slate-600 leading-relaxed">
                                     支持电子文档格式<br/>
-                                    <span className="text-blue-600">TXT、DOC、DOCX、PDF 等</span>
+                                    <span style={{ color: BRAND_GREEN }}>TXT、DOC、DOCX、PDF 等</span>
                                   </p>
                                 </div>
                               </div>
                             </div>
                             
                             {/* 请勿上传 - 移动端优化 */}
-                            <div className="bg-amber-50/80 backdrop-blur-sm rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-amber-200/50 shadow-sm">
+                            <div className="bg-slate-50/80 backdrop-blur-sm rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-slate-200/50 shadow-sm">
                               <div className="flex items-start gap-2 sm:gap-3">
-                                <div className="flex-shrink-0 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-amber-100 flex items-center justify-center">
-                                  <span className="text-amber-600 text-base sm:text-lg">⚠️</span>
+                                <div className="flex-shrink-0 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-slate-200 flex items-center justify-center">
+                                  <AlertCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-500" />
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                  <p className="text-xs sm:text-sm font-semibold text-amber-800 mb-0.5 sm:mb-1">请勿上传</p>
-                                  <p className="text-[11px] sm:text-xs text-amber-700 leading-relaxed">
+                                  <p className="text-xs sm:text-sm font-semibold text-slate-700 mb-0.5 sm:mb-1">请勿上传</p>
+                                  <p className="text-[11px] sm:text-xs text-slate-600 leading-relaxed">
                                     包含手写体图片的文档<br/>
-                                    <span className="text-amber-600">如 PDF 内嵌手写图片，系统无法识别</span>
+                                    <span className="text-slate-500">如 PDF 内嵌手写图片，系统无法识别</span>
                                   </p>
                                 </div>
                               </div>
@@ -1658,7 +1658,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                           {/* 底部提示 - 移动端优化 */}
                           <div className="mt-3 sm:mt-5 pt-3 sm:pt-4 border-t border-emerald-200/50">
                             <div className="flex items-start gap-1.5 sm:gap-2">
-                              <span className="text-amber-500 text-sm sm:text-base flex-shrink-0">💡</span>
+                              <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 mt-0.5" style={{ color: BRAND_GREEN }} />
                               <p className="text-[11px] sm:text-xs text-slate-600 leading-relaxed">
                                 <span className="font-semibold text-slate-700">温馨提示：</span>
                                 手写作文请直接拍照上传图片，电子作文请使用纯文字文档。
