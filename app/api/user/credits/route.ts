@@ -166,13 +166,28 @@ export async function POST(request: Request) {
     // 🔥 记录到 credit_transactions 表
     try {
       const transactionType = amount > 0 ? 'bonus' : 'consume'
+      
+      // 🔥 生成友好的描述文本
+      const descriptionMap: Record<string, string> = {
+        'suno-v5': '使用 Suno V5 音乐创作',
+        'suno-v5-pro': '使用 Suno V5 专业模式',
+        'standard': '使用 作文批改智能体 对话',
+        'teaching-pro': '使用 教学评助手 对话',
+        'banana-2-pro': '使用 Banana2 Pro 4K 对话',
+        'gpt-5': '使用 ChatGPT 5.2 对话',
+        'claude-opus': '使用 Claude Opus 4.5 对话',
+        'gemini-pro': '使用 Gemini 3.0 Pro 对话',
+        'sora-2-pro': '使用 Sora 2 Pro 视频生成',
+      }
+      const friendlyDescription = descriptionMap[reason] || reason || (amount > 0 ? '积分增加' : '积分消耗')
+      
       const { error: txError } = await supabaseAdmin
         .from('credit_transactions')
         .insert({
           user_id: userId,
           amount: amount,
           type: transactionType,
-          description: reason || (amount > 0 ? '积分增加' : '积分消耗'),
+          description: friendlyDescription,
           reason: reason || (amount > 0 ? '积分增加' : '积分消耗')
         })
       

@@ -16,8 +16,13 @@ function mapTypeToLabel(type: string): string {
     'bonus': '奖励积分',
     'register': '注册积分',
     'manual': '手动调整',
+    // 🎵 Suno 音乐创作相关
+    'suno_music': '音乐创作',
+    'suno_llm_token': '音乐创作',
+    // 🎨 其他模型
+    'referral': '邀请奖励',
   }
-  return typeMap[type] || '其他积分'
+  return typeMap[type] || '消耗积分'
 }
 
 export async function GET(request: NextRequest) {
