@@ -64,8 +64,8 @@ const emptyConfig: Record<EmptyType, { icon: LucideIcon; iconBg: string; iconCol
   },
   search: {
     icon: Search,
-    iconBg: "bg-purple-50",
-    iconColor: "text-purple-500"
+    iconBg: "bg-emerald-50",
+    iconColor: "text-emerald-500"
   },
   users: {
     icon: Users,

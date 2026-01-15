@@ -24,7 +24,7 @@ const categories = [
     title: "自然科学",
     icon: Atom,
     subjects: ["物理", "化学", "生物", "地球科学", "天文学"],
-    color: "text-purple-600 bg-purple-50 dark:bg-purple-950/30",
+    color: "text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30",
     href: "/subjects/science",
   },
   {
@@ -48,7 +48,7 @@ const categories = [
     title: "艺术与创造",
     icon: Palette,
     subjects: ["美术", "音乐", "设计", "创意写作", "表演"],
-    color: "text-pink-600 bg-pink-50 dark:bg-pink-950/30",
+    color: "text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30",
     href: "/subjects/arts",
   },
 ]

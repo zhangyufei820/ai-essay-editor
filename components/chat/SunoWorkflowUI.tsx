@@ -327,7 +327,7 @@ const GenerationProgressCard = ({
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl border border-purple-200 p-6"
+      className="bg-gradient-to-br from-emerald-50 to-emerald-50 rounded-2xl border border-emerald-200 p-6"
     >
       {/* 进度圆环 */}
       <div className="flex items-center gap-6">
@@ -338,14 +338,14 @@ const GenerationProgressCard = ({
               strokeDasharray={`${progressPercent * 2.26} 226`} />
           </svg>
           <div className="absolute inset-0 flex items-center justify-center">
-            <Music4 className="h-7 w-7 text-purple-600" />
+            <Music4 className="h-7 w-7 text-emerald-600" />
           </div>
         </div>
         <div className="flex-1">
           <h3 className="font-semibold text-slate-800 mb-1">{statusText}</h3>
           <p className="text-xs text-slate-500 mb-2">{progress.message || `任务ID: ${progress.taskId.slice(0, 8)}...`}</p>
           {progress.estimatedTime && (
-            <div className="flex items-center gap-1 text-xs text-purple-600">
+            <div className="flex items-center gap-1 text-xs text-emerald-600">
               <Clock className="h-3 w-3" />
               <span>预计 {progress.estimatedTime} 秒</span>
             </div>

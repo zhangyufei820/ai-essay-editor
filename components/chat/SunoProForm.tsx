@@ -419,23 +419,6 @@ export function SunoProForm({ onSubmit, isLoading = false, disabled = false }: S
       
       <div className="relative rounded-3xl p-6 bg-white/80 dark:bg-gray-900/80 backdrop-blur-2xl border border-white/50 dark:border-gray-800/50 shadow-2xl shadow-gray-200/50 dark:shadow-black/20">
         
-        {/* 顶部标题 */}
-        <motion.div 
-          className="text-center mb-8"
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-        >
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 mb-4 shadow-xl shadow-emerald-500/30">
-            <Music4 className="h-8 w-8 text-white" />
-          </div>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">
-            AI 音乐创作
-          </h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            Suno V5 · 专业模式
-          </p>
-        </motion.div>
-
         <form onSubmit={handleSubmit} className="space-y-5">
           
           {/* 🎵 歌词输入 */}

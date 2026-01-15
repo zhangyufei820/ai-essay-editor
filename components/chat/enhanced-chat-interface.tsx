@@ -1476,13 +1476,6 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                 selectedModel === "suno-v5" ? (
                   // 🎵 Suno V5 专业模式表单 - 放在主滚动区域
                   <div className="py-4 sm:py-6 animate-in fade-in duration-500">
-                    <div className="text-center mb-6">
-                      <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl mx-auto bg-gradient-to-br from-pink-500/20 to-purple-500/20">
-                        <AudioLines className="h-7 w-7 text-pink-600" />
-                      </div>
-                      <h1 className="text-xl font-semibold text-slate-800">Suno V5 音乐创作</h1>
-                      <p className="text-sm text-slate-500 mt-1">填写下方表单，AI 将为您创作独特的音乐</p>
-                    </div>
                     <SunoProForm
                       onSubmit={async (formData) => {
                         if (!userId) { 

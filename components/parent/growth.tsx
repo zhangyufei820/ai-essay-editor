@@ -99,7 +99,7 @@ export function ParentGrowth() {
                       <span className="text-green-600">+15%</span>
                     </div>
                     <div className="h-2 rounded-full bg-muted">
-                      <div className="h-2 rounded-full bg-purple-500" style={{ width: "82%" }} />
+                      <div className="h-2 rounded-full bg-emerald-500" style={{ width: "82%" }} />
                     </div>
                   </div>
                 </div>
