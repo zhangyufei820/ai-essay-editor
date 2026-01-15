@@ -429,6 +429,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   const {
     musicTasks,
     getTaskByMessageId,
+    conversationId: sunoConversationId,  // 🔥 获取 Suno 会话 ID
     startMusicGeneration,
     startMusicGenerationPro,  // 🔥 专业模式函数
     retryTask,
@@ -999,7 +1000,8 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
               query: userMsg.content, 
               fileIds, 
               userId, 
-              conversation_id: sessionIdRef.current, 
+              // 🔥 Suno V5 使用 useSunoMusic 的 conversationId 保持会话连续性
+              conversation_id: selectedModel === "suno-v5" && sunoConversationId ? sunoConversationId : sessionIdRef.current, 
               model: selectedModel,
               mode: genMode
             })
