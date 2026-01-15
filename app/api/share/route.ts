@@ -7,9 +7,8 @@ export const dynamic = 'force-dynamic'
 
 // 🎁 分享奖励配置
 const SHARE_REWARD_CONFIG = {
-  CREDITS_PER_SHARE: 50,     // 每次分享获得积分
+  CREDITS_PER_SHARE: 1000,    // 每次分享双方各获得积分
   MAX_DAILY_SHARES: 5,        // 每天最多获得奖励的分享次数
-  COOLDOWN_HOURS: 1,          // 同一对话分享冷却时间（小时）
 }
 
 // 生成短链接 ID（8位随机字符）
