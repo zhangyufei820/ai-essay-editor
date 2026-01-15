@@ -470,25 +470,26 @@ export function SunoProForm({ onSubmit, isLoading = false, disabled = false }: S
           >
             <div className="relative rounded-2xl p-5 bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm border-2 border-gray-200/50 dark:border-gray-700/50">
               <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200 mb-1">
-                <Lightbulb className="h-4 w-4 text-amber-500" />
+                <Lightbulb className="h-4 w-4 text-emerald-500" />
                 <span className="font-bold text-base">音乐提示词</span>
                 <span className="text-xs font-normal text-gray-400">（可选，填写后跳过 AI 优化）</span>
               </label>
-              <p className="text-xs font-semibold text-amber-600 dark:text-amber-400 mb-3">
+              <p className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-3">
                 💡 只填歌词会让 AI 自动生成风格；填写音乐提示词则直接生成
               </p>
-              <input
-                type="text"
+              <textarea
                 value={formData.prompt}
                 onChange={(e) => updateField("prompt", e.target.value)}
                 placeholder="例如：流行, 轻快, 夏日感, 清新女声"
+                rows={6}
                 className={cn(
                   "w-full px-4 py-3 rounded-xl",
                   "bg-white/80 dark:bg-gray-900/80",
                   "border border-gray-200/50 dark:border-gray-700/50",
                   "text-gray-800 dark:text-white placeholder:text-gray-400",
-                  "focus:border-amber-500/50 focus:ring-2 focus:ring-amber-500/20",
-                  "outline-none transition-all duration-200"
+                  "focus:border-emerald-500/50 focus:ring-2 focus:ring-emerald-500/20",
+                  "outline-none transition-all duration-200 resize-none",
+                  "text-base leading-relaxed"
                 )}
               />
             </div>
