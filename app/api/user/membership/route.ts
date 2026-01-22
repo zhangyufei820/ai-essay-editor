@@ -181,37 +181,44 @@ export async function POST(req: NextRequest) {
       }
     }
     
-    // 🔥 策略5: 检查 user_credits 表（积分 >= 1000 视为会员）
+    // 🔥 策略5: 检查 user_credits 表（最重要：检查 is_pro 字段！）
+    let isPro = false
     let hasHighCredits = false
-    if (orders.length === 0) {
-      console.log('🔍 [会员检查] 策略5: 检查积分表')
+    
+    console.log('🔍 [会员检查] 策略5: 检查积分表和 is_pro 字段')
+    
+    const { data: creditsData, error: creditsError } = await supabaseAdmin
+      .from('user_credits')
+      .select('credits, is_pro, user_id')
+      .eq('user_id', userId)
+      .single()
+    
+    if (!creditsError && creditsData) {
+      console.log('🔍 [会员检查] 策略5: 用户积分:', creditsData.credits, 'is_pro:', creditsData.is_pro)
       
-      const { data: creditsData, error: creditsError } = await supabaseAdmin
-        .from('user_credits')
-        .select('credits, user_id')
-        .eq('user_id', userId)
-        .single()
-      
-      if (!creditsError && creditsData) {
-        console.log('🔍 [会员检查] 策略5: 用户积分:', creditsData.credits)
-        // 积分 >= 1000 视为付费会员（购买会员会获得大量积分）
-        if (creditsData.credits >= 1000) {
-          hasHighCredits = true
-          console.log('🔍 [会员检查] 策略5成功: 用户积分充足，视为会员')
-        }
-      } else {
-        console.log('🔍 [会员检查] 策略5: 未找到积分记录或查询失败')
+      // 🔥 关键！is_pro = true 就是会员
+      if (creditsData.is_pro === true) {
+        isPro = true
+        console.log('🔍 [会员检查] 策略5成功: is_pro=true，是会员！')
       }
+      
+      // 积分 >= 1000 也视为会员（备用判断）
+      if (creditsData.credits >= 1000) {
+        hasHighCredits = true
+        console.log('🔍 [会员检查] 策略5: 用户积分充足，也视为会员')
+      }
+    } else {
+      console.log('🔍 [会员检查] 策略5: 未找到积分记录或查询失败')
     }
     
     console.log('🔍 [会员检查] 最终订单数量:', orders.length)
-    console.log('🔍 [会员检查] 高积分用户:', hasHighCredits)
+    console.log('🔍 [会员检查] is_pro:', isPro, '高积分用户:', hasHighCredits)
     if (orders.length > 0) {
       console.log('🔍 [会员检查] 最近订单:', orders[0])
     }
     
-    // 🔥 有订单或高积分都视为会员
-    const isPaidMember = orders.length > 0 || hasHighCredits
+    // 🔥 is_pro=true 或 有订单 或 高积分 都视为会员
+    const isPaidMember = isPro || orders.length > 0 || hasHighCredits
     
     return NextResponse.json({
       isPaidMember,
