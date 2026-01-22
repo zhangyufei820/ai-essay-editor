@@ -1,4 +1,4 @@
-import { createServerClient } from "@/lib/supabase/server"
+import { createClient } from "@supabase/supabase-js"
 
 export interface UserCredits {
   credits: number
@@ -13,9 +13,17 @@ export interface CreditTransaction {
   created_at: string
 }
 
+// 🔥 使用 Service Role Key 创建管理员客户端（绕过所有 RLS）
+function getSupabaseAdmin() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+}
+
 // 获取用户积分
 export async function getUserCredits(userId: string): Promise<UserCredits | null> {
-  const supabase = await createServerClient()
+  const supabase = getSupabaseAdmin()
 
   const { data, error } = await supabase
     .from("user_credits")
@@ -24,7 +32,7 @@ export async function getUserCredits(userId: string): Promise<UserCredits | null
     .single()
 
   if (error) {
-    console.error("Error fetching user credits:", error)
+    console.error("[积分系统] 获取用户积分失败:", error)
     return null
   }
 
@@ -66,7 +74,7 @@ export async function spendCredits(
   description: string,
   referenceId?: string
 ): Promise<boolean> {
-  const supabase = await createServerClient()
+  const supabase = getSupabaseAdmin()
 
   // 检查积分是否足够
   const credits = await getUserCredits(userId)
@@ -87,7 +95,7 @@ export async function spendCredits(
     .eq("user_id", userId)
 
   if (updateError) {
-    console.error("Error updating credits:", updateError)
+    console.error("[积分系统] 扣除积分失败:", updateError)
     return false
   }
 
@@ -106,7 +114,7 @@ export async function addCredits(
   description: string,
   referenceId?: string,
 ): Promise<boolean> {
-  const supabase = await createServerClient()
+  const supabase = getSupabaseAdmin()
 
   let credits = await getUserCredits(userId)
   let balanceBefore = 0
@@ -115,12 +123,14 @@ export async function addCredits(
   if (!credits) {
     console.log(`[积分系统] 用户 ${userId} 积分记录不存在，正在创建...`)
     
+    // 🔥 直接尝试创建积分记录（使用 upsert 避免冲突）
     const { error: insertError } = await supabase
       .from("user_credits")
-      .insert({
+      .upsert({
         user_id: userId,
         credits: 0,
-      })
+        is_pro: type === "purchase", // 购买时标记为 Pro
+      }, { onConflict: 'user_id' })
     
     if (insertError) {
       console.error("[积分系统] 创建积分记录失败:", insertError)
@@ -148,7 +158,7 @@ export async function addCredits(
     .eq("user_id", userId)
 
   if (updateError) {
-    console.error("Error updating credits:", updateError)
+    console.error("[积分系统] 增加积分失败:", updateError)
     return false
   }
 
@@ -161,7 +171,7 @@ export async function addCredits(
 
 // 获取用户积分交易记录
 export async function getCreditTransactions(userId: string, limit: number = 50): Promise<CreditTransaction[]> {
-  const supabase = await createServerClient()
+  const supabase = getSupabaseAdmin()
 
   const { data, error } = await supabase
     .from("credit_transactions")
@@ -171,7 +181,7 @@ export async function getCreditTransactions(userId: string, limit: number = 50):
     .limit(limit)
 
   if (error) {
-    console.error("Error fetching credit transactions:", error)
+    console.error("[积分系统] 获取交易记录失败:", error)
     return []
   }
 
@@ -180,12 +190,12 @@ export async function getCreditTransactions(userId: string, limit: number = 50):
 
 // 获取用户推荐码
 export async function getUserReferralCode(userId: string): Promise<string | null> {
-  const supabase = await createServerClient()
+  const supabase = getSupabaseAdmin()
 
   const { data, error } = await supabase.from("referral_codes").select("code").eq("user_id", userId).single()
 
   if (error) {
-    console.error("Error fetching referral code:", error)
+    console.error("[积分系统] 获取推荐码失败:", error)
     return null
   }
 
@@ -200,7 +210,7 @@ export const REFERRAL_CONFIG = {
 
 // 获取用户已获得的邀请奖励总额
 export async function getReferralRewardTotal(userId: string): Promise<number> {
-  const supabase = await createServerClient()
+  const supabase = getSupabaseAdmin()
   
   const { data, error } = await supabase
     .from("referrals")
@@ -215,7 +225,7 @@ export async function getReferralRewardTotal(userId: string): Promise<number> {
 
 // 处理推荐注册
 export async function handleReferralSignup(newUserId: string, referralCode: string): Promise<boolean> {
-  const supabase = await createServerClient()
+  const supabase = getSupabaseAdmin()
 
   // 查找推荐码对应的用户
   const { data: codeData, error: codeError } = await supabase
@@ -251,7 +261,7 @@ export async function handleReferralSignup(newUserId: string, referralCode: stri
   })
 
   if (referralError) {
-    console.error("Error creating referral:", referralError)
+    console.error("[积分系统] 创建推荐记录失败:", referralError)
     return false
   }
 
@@ -262,12 +272,6 @@ export async function handleReferralSignup(newUserId: string, referralCode: stri
 
   // 🎁 给新用户增加积分（被邀请者始终获得奖励）
   await addCredits(newUserId, REFERRAL_CONFIG.REWARD_PER_INVITE, "referral", `🎊 通过好友邀请注册，获得 ${REFERRAL_CONFIG.REWARD_PER_INVITE} 积分奖励`)
-
-  // 更新推荐码使用次数
-  await supabase
-    .from("referral_codes")
-    .update({ uses: supabase.rpc("increment", { x: 1 }) })
-    .eq("user_id", referrerId)
 
   return true
 }

@@ -103,7 +103,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '积分发放失败，请稍后重试' }, { status: 500 })
     }
 
-    // 6. 记录领取记录（防止重复领取）
+    // 🔥 6. 发放积分给分享者（双方都获得积分！）
+    if (shareData.user_id) {
+      const sharerSuccess = await addCredits(
+        shareData.user_id,
+        SHARE_REWARD_CONFIG.CREDITS_PER_VIEW,
+        'share_bonus',
+        `🎉 您的分享被他人查看，获得 ${SHARE_REWARD_CONFIG.CREDITS_PER_VIEW} 积分奖励`,
+        shareId
+      )
+      
+      if (sharerSuccess) {
+        console.log('🎁 [Share Reward] 分享者积分发放成功:', shareData.user_id.slice(0, 8) + '...')
+      } else {
+        console.error('🎁 [Share Reward] 分享者积分发放失败（不影响访问者）')
+      }
+    }
+
+    // 7. 记录领取记录（防止重复领取）
     await supabaseAdmin.from('share_reward_claims').insert({
       share_id: shareId,
       viewer_id: viewerId,

@@ -1,26 +1,34 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@/lib/supabase/server"
+import { createClient } from "@supabase/supabase-js"
 import { verifyXunhupaySign } from "@/lib/xunhupay"
-import { addCredits } from "@/lib/credits"
 
-// 🔥 产品积分映射表（与 lib/products.ts 保持一致）
-const PRODUCT_CREDITS: Record<string, number> = {
-  // 订阅套餐
-  "basic": 2000,      // 基础版 28元 → 2000积分
-  "pro": 5000,        // 专业版 68元 → 5000积分
-  "premium": 12000,   // 豪华版 128元 → 12000积分
-  // 积分充值包
-  "credits-500": 500,
-  "credits-1000": 1000,
-  "credits-5000": 5000,
-  "credits-10000": 10000,
+// 🔥 使用 Service Role Key 创建管理员客户端（绕过所有 RLS）
+function getSupabaseAdmin() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+}
+
+// 🔥 产品配置（积分 + 是否是会员产品）
+const PRODUCT_CONFIG: Record<string, { credits: number, isPro: boolean }> = {
+  // 订阅套餐（会员产品）
+  "basic": { credits: 2000, isPro: true },
+  "pro": { credits: 5000, isPro: true },
+  "premium": { credits: 12000, isPro: true },
+  // 积分充值包（非会员产品）
+  "credits-500": { credits: 500, isPro: false },
+  "credits-1000": { credits: 1000, isPro: false },
+  "credits-5000": { credits: 5000, isPro: false },
+  "credits-10000": { credits: 10000, isPro: false },
 }
 
 export async function POST(request: NextRequest) {
+  const supabase = getSupabaseAdmin()
+  
   try {
     const body = await request.json()
-
-    console.log("[迅虎支付] 收到回调:", body)
+    console.log("[迅虎支付] 收到回调:", JSON.stringify(body))
 
     // 验证签名
     if (!verifyXunhupaySign(body)) {
@@ -32,10 +40,9 @@ export async function POST(request: NextRequest) {
 
     // 只处理支付成功的通知
     if (status !== "OD") {
+      console.log("[迅虎支付] 订单状态不是 OD:", status)
       return NextResponse.json({ success: false, message: "订单未完成" })
     }
-
-    const supabase = await createServerClient()
 
     // 查询订单
     const { data: order, error: orderError } = await supabase
@@ -45,9 +52,11 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (orderError || !order) {
-      console.error("[迅虎支付] 订单不存在:", orderNo)
+      console.error("[迅虎支付] 订单不存在:", orderNo, orderError)
       return NextResponse.json({ error: "订单不存在" }, { status: 404 })
     }
+
+    console.log("[迅虎支付] 找到订单:", order.id, "用户:", order.user_id, "产品:", order.product_id)
 
     // 检查订单是否已处理
     if (order.status === "paid") {
@@ -56,39 +65,113 @@ export async function POST(request: NextRequest) {
     }
 
     // 更新订单状态
-    const { error: updateError } = await supabase
+    const { error: updateOrderError } = await supabase
       .from("orders")
       .update({
         status: "paid",
         trade_no: tradeNo,
+        updated_at: new Date().toISOString()
       })
       .eq("order_no", orderNo)
 
-    if (updateError) {
-      console.error("[迅虎支付] 更新订单失败:", updateError)
+    if (updateOrderError) {
+      console.error("[迅虎支付] 更新订单失败:", updateOrderError)
       return NextResponse.json({ error: "更新订单失败" }, { status: 500 })
     }
 
-    // 🔥 根据产品 ID 确定积分数量
-    let credits = PRODUCT_CREDITS[order.product_id]
-    
-    // 如果产品 ID 不在映射表中，使用备用计算（1元 = 100积分）
-    if (!credits) {
-      credits = Math.floor(Number.parseFloat(total_fee) * 100)
-      console.warn(`[迅虎支付] 产品 ${order.product_id} 不在积分映射表中，使用备用计算: ${credits} 积分`)
+    // 🔥 获取产品配置
+    const productConfig = PRODUCT_CONFIG[order.product_id] || { 
+      credits: Math.floor(Number.parseFloat(total_fee) * 100),
+      isPro: order.product_id?.includes('basic') || order.product_id?.includes('pro') || order.product_id?.includes('premium')
     }
     
-    console.log(`[迅虎支付] 准备为用户 ${order.user_id} 增加 ${credits} 积分，产品: ${order.product_id}, 订单金额: ${total_fee}`)
-    
-    const success = await addCredits(order.user_id, credits, "purchase", `购买${order.product_name}获得${credits}积分`, order.id)
+    const { credits, isPro } = productConfig
+    console.log(`[迅虎支付] 产品配置: ${order.product_id} → 积分=${credits}, isPro=${isPro}`)
 
-    if (!success) {
-      console.error(`[迅虎支付] 增加积分失败，用户ID: ${order.user_id}, 积分: ${credits}`)
+    // 🔥 查询用户当前积分记录
+    const { data: currentCredits, error: creditsError } = await supabase
+      .from("user_credits")
+      .select("*")
+      .eq("user_id", order.user_id)
+      .maybeSingle()
+
+    if (currentCredits) {
+      // 更新现有记录
+      const newCredits = currentCredits.credits + credits
+      const newIsPro = isPro || currentCredits.is_pro // 一旦成为会员就保持
+      
+      console.log(`[迅虎支付] 更新用户积分: ${currentCredits.credits} → ${newCredits}, is_pro: ${currentCredits.is_pro} → ${newIsPro}`)
+      
+      const { error: updateError } = await supabase
+        .from("user_credits")
+        .update({
+          credits: newCredits,
+          is_pro: newIsPro,
+          updated_at: new Date().toISOString()
+        })
+        .eq("user_id", order.user_id)
+
+      if (updateError) {
+        console.error("[迅虎支付] 更新积分失败:", updateError)
+        // 不返回错误，订单已标记为 paid，后续可以手动补积分
+      } else {
+        console.log(`[迅虎支付] ✅ 用户 ${order.user_id} 积分更新成功`)
+      }
     } else {
-      console.log(`[迅虎支付] 订单 ${orderNo} 支付成功，用户 ${order.user_id} 增加 ${credits} 积分`)
+      // 创建新记录
+      console.log(`[迅虎支付] 用户无积分记录，创建新记录: 积分=${credits}, is_pro=${isPro}`)
+      
+      const { error: insertError } = await supabase
+        .from("user_credits")
+        .insert({
+          user_id: order.user_id,
+          credits: credits,
+          is_pro: isPro
+        })
+
+      if (insertError) {
+        console.error("[迅虎支付] 创建积分记录失败:", insertError)
+        
+        // 🔥 如果是外键约束错误，尝试 upsert
+        if (insertError.code === '23503') {
+          console.log("[迅虎支付] 尝试使用 upsert...")
+          const { error: upsertError } = await supabase
+            .from("user_credits")
+            .upsert({
+              user_id: order.user_id,
+              credits: credits,
+              is_pro: isPro
+            }, { onConflict: 'user_id' })
+          
+          if (upsertError) {
+            console.error("[迅虎支付] upsert 也失败:", upsertError)
+          } else {
+            console.log("[迅虎支付] ✅ upsert 成功")
+          }
+        }
+      } else {
+        console.log(`[迅虎支付] ✅ 用户 ${order.user_id} 积分记录创建成功`)
+      }
     }
 
+    // 🔥 记录交易流水（可选，失败不影响主流程）
+    try {
+      await supabase.from("credit_transactions").insert({
+        user_id: order.user_id,
+        amount: credits,
+        type: "purchase",
+        description: `购买${order.product_name}获得${credits}积分`,
+        reference_id: order.id,
+        balance_before: currentCredits?.credits || 0,
+        balance_after: (currentCredits?.credits || 0) + credits
+      })
+    } catch (txError) {
+      console.log("[迅虎支付] 记录交易流水失败（不影响主流程）:", txError)
+    }
+
+    console.log(`[迅虎支付] ✅ 订单 ${orderNo} 处理完成`)
     return NextResponse.json({ success: true })
+    
   } catch (error) {
     console.error("[迅虎支付] 处理回调错误:", error)
     return NextResponse.json({ error: "处理失败" }, { status: 500 })
