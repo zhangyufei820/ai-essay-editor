@@ -28,6 +28,17 @@ import { UltimateRenderer } from "@/components/chat/UltimateRenderer"
 const BRAND_GREEN = "#14532d"
 const BANANA_COLOR = "#14532d" // 使用网站主题深绿色
 
+// 🎨 尺寸选项配置
+const SIZE_OPTIONS = [
+  { label: "16:9", value: "16:9", width: 1920, height: 1080 },
+  { label: "9:16", value: "9:16", width: 1080, height: 1920 },
+  { label: "1:1", value: "1:1", width: 1024, height: 1024 },
+  { label: "3:4", value: "3:4", width: 768, height: 1024 },
+  { label: "4:3", value: "4:3", width: 1024, height: 768 },
+] as const
+
+type SizeOption = typeof SIZE_OPTIONS[number]
+
 // Supabase 初始化
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -164,6 +175,7 @@ function BananaChatInterfaceInner() {
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
   const [uploadProgress, setUploadProgress] = useState<number>(0)
   const [isUploading, setIsUploading] = useState(false)
+  const [selectedSize, setSelectedSize] = useState<SizeOption>(SIZE_OPTIONS[1]) // 默认 9:16
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -439,7 +451,13 @@ function BananaChatInterfaceInner() {
               userId, 
               conversation_id: sessionIdRef.current, 
               model: "banana-2-pro",
-              mode: "image"
+              mode: "image",
+              // 🎨 传递尺寸参数
+              imageSize: {
+                ratio: selectedSize.value,
+                width: selectedSize.width,
+                height: selectedSize.height
+              }
             })
         })
         
@@ -793,6 +811,30 @@ function BananaChatInterfaceInner() {
             )}
 
             <form onSubmit={onSubmit} className="relative rounded-[24px] bg-white shadow-lg border border-slate-200">
+              {/* 🎨 尺寸选择器 */}
+              <div className="px-3 pt-3 pb-2 border-b border-slate-100">
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-medium text-slate-400">尺寸</span>
+                  <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-full">
+                    {SIZE_OPTIONS.map((size) => (
+                      <button
+                        key={size.value}
+                        type="button"
+                        onClick={() => setSelectedSize(size)}
+                        className={cn(
+                          "px-3 py-1.5 text-xs font-medium rounded-full transition-all duration-200",
+                          selectedSize.value === size.value
+                            ? "bg-white text-slate-800 shadow-sm"
+                            : "text-slate-500 hover:text-slate-700"
+                        )}
+                      >
+                        {size.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              
               <div className="flex items-end gap-2 p-3">
                 {/* 文件上传按钮 */}
                 <div className="flex flex-col items-center gap-1 shrink-0">

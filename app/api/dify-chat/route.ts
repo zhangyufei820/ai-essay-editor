@@ -156,7 +156,7 @@ export async function POST(request: NextRequest) {
     const headerUserId = request.headers.get("X-User-Id")
     
     const body = await request.json()
-    const { query, conversation_id, fileIds, userId: bodyUserId, inputs, model } = body
+    const { query, conversation_id, fileIds, userId: bodyUserId, inputs, model, imageSize } = body
     
     // 🔥 调试：打印完整请求体
     console.log(`🔍 [请求体] 完整内容:`, JSON.stringify(body, null, 2))
@@ -327,6 +327,14 @@ export async function POST(request: NextRequest) {
                     upload_file_id: fileIds[0]
                 }
                 console.log(`🎨 [Banana] 使用文件对象:`, difyRequest.inputs.init_image)
+            }
+            
+            // 🎨 传递尺寸参数（如果有）
+            if (imageSize) {
+                difyRequest.inputs.aspect_ratio = imageSize.ratio || "9:16"
+                difyRequest.inputs.image_width = imageSize.width || 1080
+                difyRequest.inputs.image_height = imageSize.height || 1920
+                console.log(`🎨 [Banana] 图片尺寸: ${imageSize.ratio} (${imageSize.width}x${imageSize.height})`)
             }
             
             console.log(`🎨 [Banana] Workflow 请求体:`, JSON.stringify(difyRequest, null, 2))
