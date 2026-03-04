@@ -16,24 +16,46 @@ export const xunhupayConfig: XunhupayConfig = {
   returnUrl: (process.env.NEXT_PUBLIC_APP_URL || "") + "/payment/success",
 }
 
-// 生成签名 (MD5)
+// 生成签名 (MD5) - 迅虎支付标准格式
 function generateSign(params: Record<string, any>, appSecret: string): string {
-  // 按照key排序并拼接
+  // 按照key排序并拼接（排除空值和hash字段）
   const sortedKeys = Object.keys(params).sort()
-  const signString = sortedKeys.map((key) => `${key}=${params[key]}`).join("&")
-  const stringWithSecret = `${signString}&key=${appSecret}`
+  const kvPairs: string[] = []
+  
+  for (const key of sortedKeys) {
+    if (params[key] !== "" && params[key] !== undefined && key !== "hash" && key !== "sign") {
+      kvPairs.push(`${key}=${params[key]}`)
+    }
+  }
+  
+  const signString = kvPairs.join("&")
+  // 迅虎支付签名格式：参数串 + appSecret（直接拼接）
+  const stringWithSecret = signString + appSecret
 
   // MD5签名
   return crypto.createHash("md5").update(stringWithSecret, "utf8").digest("hex").toLowerCase()
 }
 
-// 验证签名
+// 验证签名 - 支持多种签名格式
 export function verifyXunhupaySign(params: Record<string, any>): boolean {
-  const receivedSign = params.sign
+  // 迅虎支付回调中的签名字段可能是 hash 或 sign
+  const receivedSign = (params.hash || params.sign || "").toLowerCase()
+  
+  if (!receivedSign) {
+    console.log("[迅虎支付签名验证] 未找到签名字段")
+    return false
+  }
+  
   const paramsWithoutSign = { ...params }
   delete paramsWithoutSign.sign
+  delete paramsWithoutSign.hash
 
   const calculatedSign = generateSign(paramsWithoutSign, xunhupayConfig.appSecret)
+  
+  console.log("[迅虎支付签名验证] 收到签名:", receivedSign)
+  console.log("[迅虎支付签名验证] 计算签名:", calculatedSign)
+  console.log("[迅虎支付签名验证] 验证结果:", receivedSign === calculatedSign)
+  
   return receivedSign === calculatedSign
 }
 
