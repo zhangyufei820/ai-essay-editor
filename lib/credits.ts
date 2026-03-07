@@ -275,3 +275,35 @@ export async function handleReferralSignup(newUserId: string, referralCode: stri
 
   return true
 }
+
+// 创建用户推荐码
+export async function createUserReferralCode(userId: string): Promise<string | null> {
+  const supabase = getSupabaseAdmin()
+  
+  // 生成推荐码
+  const prefix = "SX"
+  const suffix = userId.slice(-6).toUpperCase()
+  const random = Math.random().toString(36).substring(2, 5).toUpperCase()
+  const code = `${prefix}${random}${suffix}`
+  
+  try {
+    const { error } = await supabase
+      .from("referral_codes")
+      .upsert({
+        user_id: userId,
+        code: code,
+        uses: 0,
+      }, { onConflict: 'user_id' })
+    
+    if (error) {
+      console.error("[积分系统] 创建推荐码失败:", error)
+      return null
+    }
+    
+    console.log(`[积分系统] 用户 ${userId} 推荐码创建成功: ${code}`)
+    return code
+  } catch (error) {
+    console.error("[积分系统] 创建推荐码异常:", error)
+    return null
+  }
+}

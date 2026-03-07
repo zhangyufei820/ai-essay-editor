@@ -58,26 +58,29 @@ export default function InvitePage() {
       console.log('🔍 [邀请页] 完整用户对象:', JSON.stringify(parsedUser, null, 2))
 
       if (userId) {
-        // 生成本地推荐码（不依赖数据库）
-        const localCode = generateReferralCode(userId)
-        setReferralCode(localCode)
-        
-        // 尝试获取用户的推荐码（如果表存在）
+        // 🔥 通过后端 API 获取或创建推荐码（确保存入数据库）
         try {
-          const { data: codeData, error: codeError } = await supabase
-            .from('referral_codes')
-            .select('code, uses')
-            .eq('user_id', userId)
-            .single()
-
-          if (!codeError && codeData) {
-            setReferralCode(codeData.code)
-            setInviteCount(codeData.uses || 0)
+          const refResponse = await fetch('/api/referral/get-code', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId })
+          })
+          const refResult = await refResponse.json()
+          
+          if (refResult.code) {
+            setReferralCode(refResult.code)
+            setInviteCount(refResult.uses || 0)
+            console.log('🔍 [邀请页] 推荐码获取成功:', refResult.code)
           } else {
-            console.log('🔍 [邀请页] 推荐码表查询失败或不存在，使用本地生成的推荐码')
+            // 降级：使用本地生成的推荐码
+            const localCode = generateReferralCode(userId)
+            setReferralCode(localCode)
+            console.log('🔍 [邀请页] API 获取失败，使用本地推荐码:', localCode)
           }
         } catch (e) {
-          console.log('🔍 [邀请页] 推荐码表不可用，使用本地生成的推荐码')
+          const localCode = generateReferralCode(userId)
+          setReferralCode(localCode)
+          console.log('🔍 [邀请页] 推荐码 API 不可用，使用本地推荐码')
         }
 
         // 尝试获取邀请奖励总额

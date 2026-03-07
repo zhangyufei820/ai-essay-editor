@@ -4,7 +4,7 @@ import { createServerClient } from "@/lib/supabase/server"
 
 export async function POST(request: NextRequest) {
   try {
-    const { phone, code } = await request.json()
+    const { phone, code, referralCode } = await request.json()
 
     // 验证验证码
     const isValid = verificationStore.verify(phone, code)
@@ -41,6 +41,7 @@ export async function POST(request: NextRequest) {
         success: true,
         isNewUser: true,
         phone,
+        referralCode, // 🔥 传递推荐码给完善信息页面
         message: "验证成功，请完善个人信息",
       })
     }

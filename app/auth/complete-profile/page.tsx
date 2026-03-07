@@ -18,6 +18,7 @@ function CompleteProfileForm() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const redirect = searchParams.get("redirect") || "/chat"
+  const referralCode = searchParams.get("ref") // 🔥 获取推荐码
 
   useEffect(() => {
     const phoneParam = searchParams.get("phone")
@@ -37,7 +38,7 @@ function CompleteProfileForm() {
       const response = await fetch("/api/auth/complete-profile", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone, displayName }),
+        body: JSON.stringify({ phone, displayName, referralCode }), // 🔥 传递推荐码
       })
 
       const data = await response.json()

@@ -86,11 +86,17 @@ export async function POST(request: NextRequest) {
       // 🎁 给新用户发放注册积分（如果需要）
       if (userId) {
         try {
-          const { addCredits } = await import("@/lib/credits")
+          const { addCredits, createUserReferralCode } = await import("@/lib/credits")
+          
+          // 1. 发放注册积分
           await addCredits(userId, 1000, "signup_bonus", "🎉 注册成功，获得 1000 积分新人礼包")
           console.log(`[v0] 新用户积分发放成功`)
+          
+          // 2. 为新用户创建推荐码
+          await createUserReferralCode(userId)
+          console.log(`[v0] 新用户推荐码创建成功`)
         } catch (creditsError) {
-          console.error("[v0] 积分发放失败:", creditsError)
+          console.error("[v0] 积分或推荐码处理失败:", creditsError)
           // 不影响登录流程
         }
       }

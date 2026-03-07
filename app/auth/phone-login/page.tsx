@@ -16,6 +16,7 @@ export default function PhoneLoginPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const redirect = searchParams.get("redirect") || "/chat"
+  const referralCode = searchParams.get("ref") // 🔥 获取推荐码
 
   const [phone, setPhone] = useState("")
   const [code, setCode] = useState("")
@@ -76,7 +77,7 @@ export default function PhoneLoginPage() {
       const response = await fetch("/api/auth/verify-phone", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone, code }),
+        body: JSON.stringify({ phone, code, referralCode }), // 🔥 传递推荐码
       })
 
       const data = await response.json()
@@ -86,7 +87,9 @@ export default function PhoneLoginPage() {
       }
 
       if (data.isNewUser) {
-        router.push(`/auth/complete-profile?phone=${phone}&redirect=${encodeURIComponent(redirect)}`)
+        // 🔥 将推荐码传递给完善信息页面
+        const refParam = data.referralCode ? `&ref=${data.referralCode}` : ""
+        router.push(`/auth/complete-profile?phone=${phone}&redirect=${encodeURIComponent(redirect)}${refParam}`)
       } else {
         router.push(redirect)
       }
