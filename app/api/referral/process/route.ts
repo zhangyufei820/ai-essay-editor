@@ -22,15 +22,25 @@ export async function POST(request: Request) {
           process.env.SUPABASE_SERVICE_ROLE_KEY!
         )
         
-        const { error: updateError } = await supabase
+        // 先获取当前的 uses 值
+        const { data: codeData, error: fetchError } = await supabase
           .from("referral_codes")
-          .update({ uses: supabase.rpc('increment_uses', { code: referralCode }) })
+          .select("uses")
           .eq("code", referralCode)
+          .single()
         
-        if (updateError) {
-          console.log(`[推荐处理] 更新推荐码使用次数失败（非关键）:`, updateError)
-        } else {
-          console.log(`[推荐处理] 推荐码使用次数已更新`)
+        if (!fetchError && codeData) {
+          const currentUses = codeData.uses || 0
+          const { error: updateError } = await supabase
+            .from("referral_codes")
+            .update({ uses: currentUses + 1 })
+            .eq("code", referralCode)
+          
+          if (updateError) {
+            console.log(`[推荐处理] 更新推荐码使用次数失败（非关键）:`, updateError)
+          } else {
+            console.log(`[推荐处理] 推荐码使用次数已更新: ${currentUses} -> ${currentUses + 1}`)
+          }
         }
       } catch (e) {
         console.log(`[推荐处理] 更新推荐码使用次数异常（非关键）:`, e)

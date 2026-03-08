@@ -70,7 +70,7 @@ export default function InvitePage() {
           if (refResult.code) {
             setReferralCode(refResult.code)
             setInviteCount(refResult.uses || 0)
-            console.log('🔍 [邀请页] 推荐码获取成功:', refResult.code)
+            console.log('🔍 [邀请页] 推荐码获取成功:', refResult.code, '使用次数:', refResult.uses)
           } else {
             // 降级：使用本地生成的推荐码
             const localCode = generateReferralCode(userId)
@@ -83,20 +83,27 @@ export default function InvitePage() {
           console.log('🔍 [邀请页] 推荐码 API 不可用，使用本地推荐码')
         }
 
-        // 尝试获取邀请奖励总额
+        // 🔥 获取邀请奖励总额（从 referrals 表）
         try {
-          const { data: referrals } = await supabase
+          const { data: referrals, error } = await supabase
             .from('referrals')
             .select('reward_credits')
             .eq('referrer_id', userId)
             .eq('status', 'completed')
 
-          if (referrals) {
+          if (error) {
+            console.log('🔍 [邀请页] 查询 referrals 表失败:', error)
+          } else if (referrals && referrals.length > 0) {
             const total = referrals.reduce((sum, r) => sum + (r.reward_credits || 0), 0)
             setTotalReward(total)
+            console.log('🔍 [邀请页] 邀请奖励总额:', total, '邀请数:', referrals.length)
+          } else {
+            console.log('🔍 [邀请页] 暂无邀请记录')
+            setTotalReward(0)
           }
         } catch (e) {
-          console.log('🔍 [邀请页] 邀请奖励表不可用')
+          console.log('🔍 [邀请页] 邀请奖励表查询异常:', e)
+          setTotalReward(0)
         }
 
         // 🔥 使用后端 API 检查会员状态（绕过 RLS）
