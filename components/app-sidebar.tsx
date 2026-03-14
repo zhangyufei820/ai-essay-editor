@@ -479,7 +479,7 @@ function AppSidebarInner() {
               {/* 折叠内容 */}
               <div className={cn(
                 "space-y-0.5 overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]",
-                isHistoryExpanded ? "max-h-[600px] opacity-100" : "max-h-0 opacity-0"
+                isHistoryExpanded ? "max-h-[9999px] opacity-100" : "max-h-0 opacity-0"
               )}>
                 {sessions.map(session => (
                   <Link 
