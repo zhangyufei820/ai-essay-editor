@@ -217,7 +217,7 @@ function AppSidebarInner() {
       if (userId) {
         console.log("🚀 [侧边栏] 开始查询积分，用户ID:", userId)
         await fetchCredits(userId)
-        const { data: sessionData } = await supabase.from('chat_sessions').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(10)
+        const { data: sessionData } = await supabase.from('chat_sessions').select('*').eq('user_id', userId).order('created_at', { ascending: false })
         if (sessionData) {
           setSessions(sessionData.map((s: any) => ({
             id: s.id, title: s.title || "新对话", date: new Date(s.created_at).getTime(), preview: s.preview || ""
@@ -479,9 +479,9 @@ function AppSidebarInner() {
               {/* 折叠内容 */}
               <div className={cn(
                 "space-y-0.5 overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]",
-                isHistoryExpanded ? "max-h-[400px] opacity-100" : "max-h-0 opacity-0"
+                isHistoryExpanded ? "max-h-[600px] opacity-100" : "max-h-0 opacity-0"
               )}>
-                {sessions.slice(0, 6).map(session => (
+                {sessions.map(session => (
                   <Link 
                     key={session.id}
                     href={`/chat?id=${session.id}`} 
