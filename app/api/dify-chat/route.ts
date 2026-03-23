@@ -156,7 +156,7 @@ export async function POST(request: NextRequest) {
     const headerUserId = request.headers.get("X-User-Id")
     
     const body = await request.json()
-    const { query, conversation_id, fileIds, userId: bodyUserId, inputs, model, imageSize } = body
+    const { query, conversation_id, fileIds, userId: bodyUserId, inputs, model, imageSize, estimatedCost } = body
     
     // 🔥 调试：打印完整请求体
     console.log(`🔍 [请求体] 完整内容:`, JSON.stringify(body, null, 2))
@@ -610,11 +610,14 @@ export async function POST(request: NextRequest) {
             console.log(`✅ [静默扣费成功] 用户 ${userId}: ${latestCredits?.credits} - ${actualCost} = ${newCredits} | Token: ${totalTokens}`)
             
             // 🔥 记录交易流水（重要：用于使用记录展示）
+            // 🔥 如果前端传来了 estimatedCost，优先��用前端的成本计算
+            const displayTokens = totalTokens > 0 ? `${totalTokens} tokens` : (estimatedCost ? `${estimatedCost} 积分` : '0 tokens')
+            
             const { error: txError } = await supabaseAdmin.from("credit_transactions").insert({
               user_id: userId,
               amount: -actualCost,
               type: "consume",
-              description: `使用 ${getModelDisplayName(modelType)} 对话 (${totalTokens} tokens)`,
+              description: `使用 ${getModelDisplayName(modelType)} 对话 (${displayTokens})`,
               balance_before: latestCredits?.credits || 0,
               balance_after: newCredits
             })

@@ -1003,7 +1003,9 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
               // 🔥 Suno V5 使用 useSunoMusic 的 conversationId 保持会话连续性
               conversation_id: selectedModel === "suno-v5" && sunoConversationId ? sunoConversationId : sessionIdRef.current, 
               model: selectedModel,
-              mode: genMode
+              mode: genMode,
+              // 🔥 传递前端计算的成本，用于后端记录交易
+              estimatedCost: cost
             })
         })
         
