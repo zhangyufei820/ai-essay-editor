@@ -784,7 +784,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                 throw new Error("大文件上传服务暂不可用，请联系管理员配置")
               }
               
-              data = await uploadToLighthouse(fileToUpload, userId)
+              data = await uploadToLighthouse(fileToUpload, userId, selectedModel)
             } else {
               // ✅ 小文件：走 Vercel API（带安全校验）
               console.log("📤 [Upload Strategy] 小文件走 Vercel:", fileToUpload.name)
