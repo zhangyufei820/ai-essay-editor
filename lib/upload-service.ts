@@ -21,7 +21,7 @@ export const VERCEL_FILE_SIZE_LIMIT = 4 * 1024 * 1024
 
 // Lighthouse 服务器直连地址
 export const LIGHTHOUSE_UPLOAD_URL = process.env.NEXT_PUBLIC_LIGHTHOUSE_UPLOAD_URL 
-  || "https://api.shenxiang.school/v1/files/upload"
+  || ""
 
 // ============================================
 // 应用 API Key 映射表

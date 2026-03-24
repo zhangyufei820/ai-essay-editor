@@ -780,7 +780,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
               console.log("🚀 [Upload Strategy] 大文件直连:", fileToUpload.name, (fileToUpload.size / 1024 / 1024).toFixed(2) + "MB")
               
               // 检查是否配置了直连地址
-              if (!LIGHTHOUSE_UPLOAD_URL || LIGHTHOUSE_UPLOAD_URL === "https://api.shenxiang.school/v1/files/upload") {
+              if (!LIGHTHOUSE_UPLOAD_URL) {
                 throw new Error("大文件上传服务暂不可用，请联系管理员配置")
               }
               
