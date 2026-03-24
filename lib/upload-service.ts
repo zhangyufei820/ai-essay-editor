@@ -33,23 +33,23 @@ export const LIGHTHOUSE_UPLOAD_URL = process.env.NEXT_PUBLIC_LIGHTHOUSE_UPLOAD_U
  */
 export const DIFY_API_KEY_MAP: Record<string, string | undefined> = {
   // 作文批改 - 专用 API Key
-  "standard": process.env.ESSAY_CORRECTION_API_KEY || process.env.DIFY_API_KEY,
+  "standard": process.env.NEXT_PUBLIC_ESSAY_CORRECTION_API_KEY || process.env.NEXT_PUBLIC_DIFY_API_KEY,
   
   // 教学评助手
-  "teaching-pro": process.env.DIFY_TEACHING_PRO_API_KEY || process.env.DIFY_API_KEY,
+  "teaching-pro": process.env.NEXT_PUBLIC_DIFY_TEACHING_PRO_API_KEY || process.env.NEXT_PUBLIC_DIFY_API_KEY,
   
   // 通用模型
-  "gpt-5": process.env.DIFY_API_KEY_GPT5 || process.env.DIFY_API_KEY,
-  "claude-opus": process.env.DIFY_API_KEY_CLAUDE || process.env.DIFY_API_KEY,
-  "gemini-pro": process.env.DIFY_API_KEY_GEMINI || process.env.DIFY_API_KEY,
+  "gpt-5": process.env.NEXT_PUBLIC_DIFY_API_KEY_GPT5 || process.env.NEXT_PUBLIC_DIFY_API_KEY,
+  "claude-opus": process.env.NEXT_PUBLIC_DIFY_API_KEY_CLAUDE || process.env.NEXT_PUBLIC_DIFY_API_KEY,
+  "gemini-pro": process.env.NEXT_PUBLIC_DIFY_API_KEY_GEMINI || process.env.NEXT_PUBLIC_DIFY_API_KEY,
   
   // 创意生成
-  "banana": process.env.DIFY_BANANA_API_KEY || process.env.DIFY_API_KEY,
-  "banana-2-pro": process.env.DIFY_BANANA_API_KEY || process.env.DIFY_API_KEY,
+  "banana": process.env.NEXT_PUBLIC_DIFY_BANANA_API_KEY || process.env.NEXT_PUBLIC_DIFY_API_KEY,
+  "banana-2-pro": process.env.NEXT_PUBLIC_DIFY_BANANA_API_KEY || process.env.NEXT_PUBLIC_DIFY_API_KEY,
   
   // 音乐和视频
-  "suno-v5": process.env.DIFY_API_KEY || process.env.SUNO_API_KEY,
-  "sora-2-pro": process.env.DIFY_API_KEY || process.env.SORA_API_KEY,
+  "suno-v5": process.env.NEXT_PUBLIC_DIFY_API_KEY || process.env.NEXT_PUBLIC_SUNO_API_KEY,
+  "sora-2-pro": process.env.NEXT_PUBLIC_DIFY_API_KEY || process.env.NEXT_PUBLIC_SORA_API_KEY,
 }
 
 /**
