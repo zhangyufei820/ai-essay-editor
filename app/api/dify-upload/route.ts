@@ -33,7 +33,7 @@ const MAX_FILE_SIZE_VERCEL = 4.5 * 1024 * 1024
 
 // Lighthouse 服务器直连地址（用于大文件上传）
 // 实际部署时替换为你的服务器地址
-const LIGHTHOUSE_UPLOAD_URL = process.env.LIGHTHOUSE_UPLOAD_URL || "https://api.shenxiang.school/v1/files/upload"
+const LIGHTHOUSE_UPLOAD_URL = process.env.NEXT_PUBLIC_LIGHTHOUSE_UPLOAD_URL || ""
 
 const DIFY_BASE_URL = process.env.DIFY_BASE_URL || "https://api.dify.ai"
 // 🔥 作文批改（standard）使用专用的 ESSAY_CORRECTION_API_KEY
