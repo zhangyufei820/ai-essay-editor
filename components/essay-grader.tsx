@@ -143,50 +143,68 @@ export function EssayGrader() {
       })
 
       if (!response.ok) {
-        throw new Error("批改失败")
+        const errorText = await response.text()
+        console.error("[作文批改] 响应错误:", response.status, errorText)
+        throw new Error(`批改失败: ${response.status}`)
       }
 
-      // 🔥 处理流式响应 - 参考 banana-chat-interface.tsx
+      // 🔥 处理流式响应 - 添加安全检查
       const reader = response.body?.getReader()
+      
+      if (!reader) {
+        console.error("[作文批改] 无法获取 reader，响应体为空")
+        throw new Error("响应无效，无法读取流数据")
+      }
+
       const decoder = new TextDecoder()
       let buffer = ""
       let fullText = ""
 
-      while (true) {
-        const { done, value } = await reader!.read()
-        if (done) break
-        
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split("\n")
-        buffer = lines.pop() || ""
-
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue
-          const data = line.slice(6).trim()
-          if (data === "[DONE]") continue
+      try {
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
           
-          try {
-            const json = JSON.parse(data)
+          buffer += decoder.decode(value, { stream: true })
+          const lines = buffer.split("\n")
+          buffer = lines.pop() || ""
+
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) continue
+            const data = line.slice(6).trim()
+            if (data === "[DONE]") continue
             
-            // 🔥 处理思考过程（agent_thought）
-            if (json.event === "agent_thought") {
-              console.log("[作文批改] 思考:", json.thought)
+            try {
+              const json = JSON.parse(data)
+              
+              // 🔥 处理思考过程（agent_thought）
+              if (json.event === "agent_thought") {
+                console.log("[作文批改] 思考:", json.thought)
+              }
+              
+              // 🔥 处理文本输出（answer字段）
+              if (json.answer) {
+                fullText += json.answer
+                setResult(fullText)
+              }
+              
+              // 🔥 处理 message 事件
+              if (json.event === "message" && json.answer) {
+                fullText += json.answer
+                setResult(fullText)
+              }
+            } catch (e) {
+              console.error("解析失败:", e, data)
             }
-            
-            // 🔥 处理文本输出（answer字段）
-            if (json.answer) {
-              fullText += json.answer
-              setResult(fullText)
-            }
-            
-            // 🔥 处理 message 事件
-            if (json.event === "message" && json.answer) {
-              fullText += json.answer
-              setResult(fullText)
-            }
-          } catch (e) {
-            console.error("解析失败:", e, data)
           }
+        }
+      } catch (streamError) {
+        console.error("[作文批改] 流读取错误:", streamError)
+        // 如果流读取出错，但已有部分内容，仍然显示
+        if (fullText) {
+          console.log("[作文批改] 部分内容已生成，显示中...")
+        } else {
+          throw new Error("流读取失败")
         }
       }
       
@@ -195,7 +213,8 @@ export function EssayGrader() {
       toast.success("批改完成")
     } catch (error) {
       console.error("Error:", error)
-      toast.error("批改过程中出现错误，请重试")
+      const errorMessage = error instanceof Error ? error.message : "未知错误"
+      toast.error(`批改失败: ${errorMessage}`)
     } finally {
       setIsLoading(false)
     }
