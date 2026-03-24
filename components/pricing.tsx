@@ -278,6 +278,21 @@ export function Pricing() {
           <p className="text-gray-700 font-semibold text-sm mt-4">
             💡 提示：实际消耗根据输入输出的 Token 数量计算，以上为参考值。智能体服务 10积分/1K Token，独立模型 20积分/1K Token。
           </p>
+          
+          {/* 支持链接 */}
+          <div className="mt-8 pt-6 border-t border-gray-200">
+            <p className="text-gray-600 text-center">
+              需要更多帮助？{" "}
+              <a 
+                href="/help" 
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary font-semibold hover:underline"
+              >
+                查看帮助中心
+              </a>
+            </p>
+          </div>
         </div>
       </div>
     </section>
