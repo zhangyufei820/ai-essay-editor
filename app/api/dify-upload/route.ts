@@ -1,11 +1,39 @@
 import type { NextRequest } from "next/server"
 import { uploadBufferToCos } from "@/lib/cos"
+import { randomUUID } from "crypto"
+import path from "path"
 
 // ✅ 修改 1: 切换回 Node.js 运行时，以支持更大的文件和更稳定的上传
 export const runtime = "nodejs" 
 
 // 可选：设置最大执行时间（秒），防止上传大文件超时
 export const maxDuration = 60;
+
+// ============================================
+// 安全限制配置
+// ============================================
+
+// ✅ 安全校验：允许的文件 MIME 类型
+const ALLOWED_MIME_TYPES = [
+  "image/jpeg", 
+  "image/png", 
+  "image/gif", 
+  "image/webp",
+  "application/pdf", 
+  "text/plain",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document" // .docx
+]
+
+// ✅ 安全校验：允许的文件扩展名
+const ALLOWED_EXTENSIONS = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".pdf", ".txt", ".docx"]
+
+// ✅ 安全校验：Vercel 限制下的最大文件大小 (4.5MB)
+// 大文件应走直连方案，此处作为 Vercel 层的安全防护
+const MAX_FILE_SIZE_VERCEL = 4.5 * 1024 * 1024
+
+// Lighthouse 服务器直连地址（用于大文件上传）
+// 实际部署时替换为你的服务器地址
+const LIGHTHOUSE_UPLOAD_URL = process.env.LIGHTHOUSE_UPLOAD_URL || "https://api.shenxiang.school/v1/files/upload"
 
 const DIFY_BASE_URL = process.env.DIFY_BASE_URL || "https://api.dify.ai/v1"
 // 🔥 作文批改（standard）使用专用的 ESSAY_CORRECTION_API_KEY
@@ -30,7 +58,63 @@ function getApiKeyForModel(model: string | null): string {
   }
 }
 
+// ============================================
+// 安全校验函数
+// ============================================
+
+/**
+ * ✅ 安全校验：验证文件类型 (MIME)
+ */
+function validateFileType(file: File): { valid: boolean; error?: string } {
+  if (!ALLOWED_MIME_TYPES.includes(file.type)) {
+    return { 
+      valid: false, 
+      error: `不支持的文件格式: ${file.type || '未知类型'}` 
+    }
+  }
+  return { valid: true }
+}
+
+/**
+ * ✅ 安全校验：验证文件扩展名
+ */
+function validateFileExtension(fileName: string): { valid: boolean; safeExt?: string; error?: string } {
+  const ext = path.extname(fileName).toLowerCase()
+  
+  if (!ext) {
+    return { valid: false, error: "文件缺少扩展名" }
+  }
+  
+  if (!ALLOWED_EXTENSIONS.includes(ext)) {
+    return { valid: false, error: `不允许的文件后缀: ${ext}` }
+  }
+  
+  return { valid: true, safeExt: ext }
+}
+
+/**
+ * ✅ 安全校验：验证文件大小
+ */
+function validateFileSize(file: File, maxSize: number = MAX_FILE_SIZE_VERCEL): { valid: boolean; error?: string } {
+  if (file.size > maxSize) {
+    const maxSizeMB = (maxSize / 1024 / 1024).toFixed(1)
+    return { 
+      valid: false, 
+      error: `文件过大 (${(file.size / 1024 / 1024).toFixed(1)}MB)，超过 ${maxSizeMB}MB 限制。大文件请使用直连通道上传。` 
+    }
+  }
+  return { valid: true }
+}
+
+/**
+ * ✅ 安全校验：生成安全的随机文件名
+ */
+function generateSafeFileName(originalExt: string): string {
+  return `${randomUUID()}${originalExt}`
+}
+
 export async function POST(request: NextRequest) {
+  // ✅ 检查 API Key 配置
   if (!DEFAULT_DIFY_KEY) {
     return new Response(JSON.stringify({ error: "Dify API key not configured" }), {
       status: 500,
@@ -51,8 +135,11 @@ export async function POST(request: NextRequest) {
     // 也支持从 formData 获取模型（兼容旧版本）
     const modelFromForm = formData.get("model") as string | null
 
+    // ============================================
+    // 1. 存在性校验
+    // ============================================
     if (!file) {
-      return new Response(JSON.stringify({ error: "No file provided" }), {
+      return new Response(JSON.stringify({ error: "未选择文件" }), {
         status: 400,
         headers: { "Content-Type": "application/json" },
       })
@@ -66,26 +153,78 @@ export async function POST(request: NextRequest) {
       })
     }
 
+    // ============================================
+    // 2. 安全校验：文件大小
+    // ============================================
+    const sizeCheck = validateFileSize(file)
+    if (!sizeCheck.valid) {
+      console.warn(`[Upload Security] 文件大小校验失败: ${file.name} - ${sizeCheck.error}`)
+      return new Response(JSON.stringify({ 
+        error: sizeCheck.error,
+        code: "FILE_TOO_LARGE",
+        hint: "大文件请通过直连通道上传"
+      }), {
+        status: 413,
+        headers: { "Content-Type": "application/json" },
+      })
+    }
+
+    // ============================================
+    // 3. 安全校验：文件类型 (MIME)
+    // ============================================
+    const typeCheck = validateFileType(file)
+    if (!typeCheck.valid) {
+      console.warn(`[Upload Security] 文件类型校验失败: ${file.name} - ${typeCheck.error}`)
+      return new Response(JSON.stringify({ 
+        error: typeCheck.error,
+        code: "INVALID_FILE_TYPE"
+      }), {
+        status: 415,
+        headers: { "Content-Type": "application/json" },
+      })
+    }
+
+    // ============================================
+    // 4. 安全校验：文件扩展名
+    // ============================================
+    const extCheck = validateFileExtension(file.name)
+    if (!extCheck.valid) {
+      console.warn(`[Upload Security] 文件扩展名校验失败: ${file.name} - ${extCheck.error}`)
+      return new Response(JSON.stringify({ 
+        error: extCheck.error,
+        code: "INVALID_EXTENSION"
+      }), {
+        status: 403,
+        headers: { "Content-Type": "application/json" },
+      })
+    }
+
+    // ============================================
+    // 5. 安全校验：生成安全的随机文件名
+    // ============================================
+    const safeFileName = generateSafeFileName(extCheck.safeExt!)
+    console.log(`[Upload] 安全校验通过: ${file.name} -> ${safeFileName} | 用户: ${userId} | 大小: ${(file.size / 1024 / 1024).toFixed(2)}MB`)
+
     // 🔥 根据模型选择正确的 API Key
     const targetModel = model || modelFromForm
     const targetApiKey = getApiKeyForModel(targetModel)
     
-    console.log(`[Upload] 用户: ${userId} | 模型: ${targetModel || "default"} | 文件: ${file.name}`)
-
+    // ============================================
+    // 6. 转发到 Dify
+    // ============================================
+    // 创建一个新的 FormData，使用安全的文件名
     const difyFormData = new FormData()
-    difyFormData.append("file", file)
-    // ✅ 修改 3: 使用真实的用户 ID，保持与对话接口一致
-    difyFormData.append("user", userId || "anonymous-user") 
+    // 注意：这里我们仍使用原始文件内容，但可以创建新 File 对象使用安全名称
+    const safeFile = new File([file], safeFileName, { type: file.type })
+    difyFormData.append("file", safeFile)
+    difyFormData.append("user", userId || "anonymous-user")
 
-    // Dify 文件上传的正确端点
     const uploadUrl = `${DIFY_BASE_URL}/files/upload`
 
     const response = await fetch(uploadUrl, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${targetApiKey}`,
-        // 注意：使用 fetch 发送 FormData 时，通常不需要手动设置 Content-Type，
-        // 浏览器/Node环境会自动生成带 boundary 的正确 Header
       },
       body: difyFormData,
     })
@@ -112,24 +251,21 @@ export async function POST(request: NextRequest) {
     }
 
     const data = await response.json()
-    console.log("[Backend] Dify upload success:", { fileId: data.id, fileName: file.name, userId })
+    console.log("[Backend] Dify upload success:", { fileId: data.id, fileName: safeFileName, userId })
 
-    // 🔥 同时上传到腾讯云 COS（用于永久存储）
+    // ============================================
+    // 7. 同时上传到腾讯云 COS（用于永久存储）
+    // ============================================
     let cosUrl: string | undefined
     try {
-      // 将文件转换为 Buffer
       const arrayBuffer = await file.arrayBuffer()
       const buffer = Buffer.from(arrayBuffer)
       
-      // 获取文件扩展名
-      const fileExt = file.name.split('.').pop() || 'jpg'
-      
-      // 直接上传 Buffer 到 COS
       const cosResult = await uploadBufferToCos(
         buffer,
         targetModel === 'banana-2-pro' || targetModel === 'banana' ? 'banana' : 'other',
-        fileExt,
-        file.name
+        extCheck.safeExt!.replace('.', ''),
+        safeFileName
       )
       
       if (cosResult.success && cosResult.cdnUrl) {
@@ -145,6 +281,7 @@ export async function POST(request: NextRequest) {
     return new Response(JSON.stringify({
       ...data,
       cosUrl, // 添加 COS URL
+      safeFileName, // 返回安全文件名供后续使用
     }), {
       status: 200,
       headers: { "Content-Type": "application/json" },
