@@ -730,6 +730,79 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     })
   }
 
+  // ============================================
+  // 🔥 大文件上传：直连 Lighthouse 服务器
+  // ============================================
+  
+  // Vercel 限制阈值：4MB（略低于 4.5MB 硬限制）
+  const VERCEL_FILE_SIZE_LIMIT = 4 * 1024 * 1024
+  
+  // Lighthouse 服务器直连地址
+  const LIGHTHOUSE_UPLOAD_URL = typeof window !== 'undefined' 
+    ? (process.env.NEXT_PUBLIC_LIGHTHOUSE_UPLOAD_URL || "https://api.shenxiang.school/v1/files/upload")
+    : ""
+  
+  /**
+   * 🔥 大文件直连上传 - 绕过 Vercel 4.5MB 限制
+   */
+  const uploadToLighthouse = async (file: File, userId: string): Promise<{ id: string }> => {
+    console.log("🚀 [Lighthouse 直连] 开始上传大文件:", file.name, (file.size / 1024 / 1024).toFixed(2) + "MB")
+    
+    const formData = new FormData()
+    formData.append("file", file)
+    formData.append("user", userId)
+    
+    // 🔥 从环境变量获取 Dify API Key（前端公开版本）
+    const difyApiKey = typeof window !== 'undefined' 
+      ? process.env.NEXT_PUBLIC_DIFY_API_KEY 
+      : ""
+    
+    const response = await fetch(LIGHTHOUSE_UPLOAD_URL, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${difyApiKey}`,
+        "X-User-Id": userId,
+        "X-Model": selectedModel || ""
+      },
+      body: formData
+    })
+    
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error("❌ [Lighthouse 直连] 上传失败:", response.status, errorText)
+      throw new Error(`大文件上传失败: ${response.status}`)
+    }
+    
+    const data = await response.json()
+    console.log("✅ [Lighthouse 直连] 上传成功:", data.id)
+    return data
+  }
+  
+  /**
+   * ✅ 安全校验：前端文件类型检查
+   */
+  const validateFileForUpload = (file: File): { valid: boolean; error?: string } => {
+    const ALLOWED_TYPES = [
+      "image/jpeg", "image/png", "image/gif", "image/webp",
+      "application/pdf", "text/plain",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ]
+    
+    const MAX_SIZE = 50 * 1024 * 1024 // 50MB 前端限制
+    
+    // 检查文件大小
+    if (file.size > MAX_SIZE) {
+      return { valid: false, error: `文件超过 50MB 限制` }
+    }
+    
+    // 检查文件类型
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      return { valid: false, error: `不支持的文件格式: ${file.type || '未知'}` }
+    }
+    
+    return { valid: true }
+  }
+
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     console.log("📎 [handleFileUpload] 触发文件上传事件")
     const files = event.target.files; 
@@ -756,27 +829,58 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         const totalFiles = files.length
         const uploadPromises = Array.from(files).map(async (file, index) => {
             const fileToUpload = file;
-
-            const formData = new FormData(); 
-            formData.append("file", fileToUpload); 
-            formData.append("user", userId)
             
-            // 🔥 添加 X-User-Id 和 X-Model header 以通过 middleware 验证并选择正确的 API Key
-            const res = await fetch("/api/dify-upload", {
-              method: "POST",
-              headers: {
-                "X-User-Id": userId,
-                "X-Model": selectedModel || ""
-              },
-              body: formData
-            })
-            
-            if (!res.ok) {
-                const errText = await res.text();
-                throw new Error(`上传失败: ${res.status} ${errText}`);
+            // ============================================
+            // 🔥 前端安全校验
+            // ============================================
+            const validation = validateFileForUpload(fileToUpload)
+            if (!validation.valid) {
+              throw new Error(validation.error)
             }
+
+            // ============================================
+            // 🔥 分流策略：大文件直连，小文件走 Vercel
+            // ============================================
+            let data: { id: string }
             
-            const data = await res.json()
+            if (fileToUpload.size > VERCEL_FILE_SIZE_LIMIT) {
+              // 🔥 大文件：直连 Lighthouse 服务器
+              console.log("🚀 [Upload Strategy] 大文件直连:", fileToUpload.name, (fileToUpload.size / 1024 / 1024).toFixed(2) + "MB")
+              
+              // 检查是否配置了直连地址
+              if (!LIGHTHOUSE_UPLOAD_URL || LIGHTHOUSE_UPLOAD_URL === "https://api.shenxiang.school/v1/files/upload") {
+                throw new Error("大文件上传服务暂不可用，请联系管理员配置")
+              }
+              
+              data = await uploadToLighthouse(fileToUpload, userId)
+            } else {
+              // ✅ 小文件：走 Vercel API（带安全校验）
+              console.log("📤 [Upload Strategy] 小文件走 Vercel:", fileToUpload.name)
+              
+              const formData = new FormData(); 
+              formData.append("file", fileToUpload); 
+              formData.append("user", userId)
+              
+              const res = await fetch("/api/dify-upload", {
+                method: "POST",
+                headers: {
+                  "X-User-Id": userId,
+                  "X-Model": selectedModel || ""
+                },
+                body: formData
+              })
+              
+              if (!res.ok) {
+                const errData = await res.json().catch(() => ({}))
+                // 如果是 413 错误，提示用户使用大文件直连
+                if (res.status === 413) {
+                  throw new Error("文件超过 Vercel 限制，请尝试压缩文件或分段上传")
+                }
+                throw new Error(errData.error || `上传失败: ${res.status}`)
+              }
+              
+              data = await res.json()
+            }
             
             // 🔥 更新进度
             setUploadProgress(Math.round(((index + 1) / totalFiles) * 100))
@@ -813,8 +917,8 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         setTimeout(() => setFileProcessing({ status: "idle", progress: 0, message: "" }), 1000)
     } catch(e: any) {
         console.error("上传错误:", e);
-        toast.error("上传失败")
-        setFileProcessing({ status: "error", progress: 0, message: "上传失败" })
+        toast.error(e.message || "上传失败")
+        setFileProcessing({ status: "error", progress: 0, message: e.message || "上传失败" })
     } finally {
         setIsUploading(false)
         setUploadProgress(0)
