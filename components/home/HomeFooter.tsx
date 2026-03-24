@@ -24,10 +24,10 @@ const footerLinks = {
   support: {
     title: "支持",
     links: [
-      { label: "帮助中心", href: "#" },
-      { label: "使用指南", href: "#" },
-      { label: "常见问题", href: "#" },
-      { label: "联系我们", href: "#" }
+      { label: "帮助中心", href: "/help" },
+      { label: "使用指南", href: "/help" },
+      { label: "常见问题", href: "/help" },
+      { label: "联系我们", href: "/help" }
     ]
   },
   company: {

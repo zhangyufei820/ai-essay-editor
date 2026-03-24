@@ -54,13 +54,13 @@ const footerSections: FooterSection[] = [
       { label: "价格方案", href: "/pricing" }
     ]
   },
-  {
+    {
     title: "支持",
     links: [
       { label: "帮助中心", href: "/help" },
-      { label: "使用指南", href: "/guide" },
-      { label: "常见问题", href: "/faq" },
-      { label: "联系我们", href: "/contact" }
+      { label: "使用指南", href: "/help" },
+      { label: "常见问题", href: "/help" },
+      { label: "联系我们", href: "/help" }
     ]
   },
   {
