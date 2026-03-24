@@ -21,7 +21,7 @@ import { brandColors, slateColors, creamColors } from "@/lib/design-tokens"
 // 客服联系方式配置
 const contactInfo = {
   phone: "19132896773",
-  wechatQR: "https://minimax-algeng-chat-tts.oss-cn-wulanchabu.aliyuncs.com/ccv2%2F2026-03-24%2FMiniMax-M2.5%2F1971067774105035514%2Fd71e116bef29426e8f979c7069bc2f89ac50fa4d651cfc3c994cd68fd92a662b..jpeg"
+  wechatQR: "/images/wechat-qr.jpg"
 }
 
 // ============================================
