@@ -13,9 +13,16 @@ import {
   ChevronDown,
   ChevronUp,
   ArrowLeft,
-  ExternalLink
+  ExternalLink,
+  Phone
 } from "lucide-react"
 import { brandColors, slateColors, creamColors } from "@/lib/design-tokens"
+
+// 客服联系方式配置
+const contactInfo = {
+  phone: "19132896773",
+  wechatQR: "https://minimax-algeng-chat-tts.oss-cn-wulanchabu.aliyuncs.com/ccv2%2F2026-03-24%2FMiniMax-M2.5%2F1971067774105035514%2Fd71e116bef29426e8f979c7069bc2f89ac50fa4d651cfc3c994cd68fd92a662b..jpeg"
+}
 
 // ============================================
 // 常见问题数据
@@ -36,7 +43,7 @@ const faqCategories = [
       },
       {
         q: "如何联系客服？",
-        a: "你可以通过以下方式联系我们：\n\n• 在页面底部点击「联系我们」\n• 添加官方微信\n• 发送邮件至 support@shenxiang.school\n\n我们工作时间为：周一至周五 9:00-18:00"
+        a: "你可以通过以下方式联系我们：\n\n• 微信：扫码下方二维码添加客服微信\n• 电话：19132896773\n• 邮件：support@shenxiang.school\n\n我们工作时间为：周一至周五 9:00-18:00"
       }
     ]
   },
@@ -323,27 +330,69 @@ export default function HelpPage() {
           />
         ))}
 
-        {/* 联系客服 */}
+        {/* 联系客服 - 带二维码 */}
         <div 
-          className="rounded-2xl p-8 text-center"
+          className="rounded-2xl p-8"
           style={{ 
             background: `linear-gradient(135deg, ${brandColors[600]} 0%, ${brandColors[700]} 100%)`
           }}
         >
-          <MessageCircle className="w-12 h-12 mx-auto mb-4 text-white" />
-          <h3 className="text-xl font-semibold text-white mb-2">
-            没有找到答案？
-          </h3>
-          <p className="text-white/80 mb-6">
-            我们的客服团队随时为你服务
-          </p>
-          <Link 
-            href="/chat"
-            className="inline-flex items-center gap-2 px-6 py-3 bg-white text-green-700 font-medium rounded-xl hover:bg-gray-50 transition-colors"
-          >
-            <MessageCircle className="w-5 h-5" />
-            联系客服
-          </Link>
+          <div className="text-center mb-6">
+            <MessageCircle className="w-12 h-12 mx-auto mb-4 text-white" />
+            <h3 className="text-xl font-semibold text-white mb-2">
+              联系客服
+            </h3>
+            <p className="text-white/80">
+              扫描下方二维码添加客服微信，或拨打客服电话
+            </p>
+          </div>
+          
+          {/* 联系方式展示 */}
+          <div className="flex flex-col md:flex-row items-center justify-center gap-8 md:gap-12">
+            {/* 微信二维码 */}
+            <div className="flex flex-col items-center">
+              <div 
+                className="w-40 h-40 md:w-48 md:h-48 bg-white rounded-xl p-2 shadow-lg mb-3"
+              >
+                <img 
+                  src={contactInfo.wechatQR} 
+                  alt="客服微信二维码" 
+                  className="w-full h-full object-contain"
+                />
+              </div>
+              <span className="text-white font-medium">扫码添加客服微信</span>
+            </div>
+            
+            {/* 分隔线（移动端不显示） */}
+            <div className="hidden md:block w-px h-32 bg-white/30" />
+            
+            {/* 电话 */}
+            <div className="flex flex-col items-center">
+              <div 
+                className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center mb-3"
+              >
+                <Phone className="w-8 h-8 text-white" />
+              </div>
+              <a 
+                href={`tel:${contactInfo.phone}`}
+                className="text-2xl font-bold text-white hover:underline"
+              >
+                {contactInfo.phone}
+              </a>
+              <span className="text-white/70 text-sm mt-1">工作日 9:00-18:00</span>
+            </div>
+          </div>
+          
+          {/* 在线客服按钮 */}
+          <div className="text-center mt-8">
+            <Link 
+              href="/chat"
+              className="inline-flex items-center gap-2 px-6 py-3 bg-white text-green-700 font-medium rounded-xl hover:bg-gray-50 transition-colors"
+            >
+              <MessageCircle className="w-5 h-5" />
+              在线客服
+            </Link>
+          </div>
         </div>
       </div>
 
