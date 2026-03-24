@@ -35,7 +35,7 @@ const MAX_FILE_SIZE_VERCEL = 4.5 * 1024 * 1024
 // 实际部署时替换为你的服务器地址
 const LIGHTHOUSE_UPLOAD_URL = process.env.LIGHTHOUSE_UPLOAD_URL || "https://api.shenxiang.school/v1/files/upload"
 
-const DIFY_BASE_URL = process.env.DIFY_BASE_URL || "https://api.dify.ai/v1"
+const DIFY_BASE_URL = process.env.DIFY_BASE_URL || "https://api.dify.ai"
 // 🔥 作文批改（standard）使用专用的 ESSAY_CORRECTION_API_KEY
 const DEFAULT_DIFY_KEY = process.env.ESSAY_CORRECTION_API_KEY || process.env.DIFY_API_KEY
 
