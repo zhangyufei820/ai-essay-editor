@@ -50,7 +50,7 @@ export function EssayGrader() {
         formData.append("file", file)
         formData.append("user", "essay-correction-user")
         
-        const res = await fetch("/api/dify-upload", {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || ''}/api/dify-upload`, {
           method: "POST",
           headers: {
             "X-User-Id": "essay-correction-user",
@@ -128,7 +128,7 @@ export function EssayGrader() {
       // 🔥 提取文件ID - 参考 banana-chat-interface.tsx
       const fileIds = uploadedFiles.map(f => f.difyFileId).filter(Boolean) as string[]
 
-      const response = await fetch("/api/essay-grade", {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || ''}/api/essay-grade`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
