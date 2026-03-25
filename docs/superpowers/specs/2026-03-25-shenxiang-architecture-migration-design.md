@@ -398,8 +398,8 @@ services:
     image: dify/dify-api:latest
     environment:
       - SECRET_KEY=${DIFY_SECRET_KEY}
-      - INIT夸姈成才-EMAIL=${DIFY_ADMIN_EMAIL}
-      - INIT_PASSWORD=${DIFY_ADMIN_PASSWORD}
+      - INIT_ADMIN_EMAIL=${DIFY_ADMIN_EMAIL}
+      - INIT_ADMIN_PASSWORD=${DIFY_ADMIN_PASSWORD}
       - DB_USERNAME=shenxiang
       - DB_PASSWORD=${POSTGRES_PASSWORD}
       - DB_HOST=postgres
@@ -467,6 +467,7 @@ services:
     environment:
       - PORT=9000
       - NODE_ENV=production
+      - LIGHTHOUSE_SECRET=${LIGHTHOUSE_SECRET}
     ports:
       - "9000:9000"  # 仅内网访问
     networks:
@@ -580,17 +581,45 @@ try {
 |------|------|--------|----------|
 | **第一阶段** | 服务器初始化 | Gemini | 4h |
 | | Nginx 配置（含600s） | Gemini | 2h |
-| | Dify 部署 | Gemini | 2h |
+| | Dify 部署 (含 Redis) | Gemini | 4h |
 | | PostgreSQL 部署 | Gemini | 1h |
+| | Lighthouse 部署 | Gemini | 2h |
 | | Docker Compose 编写 | Gemini | 2h |
 | **第二阶段** | 数据迁移脚本 | Gemini | 4h |
 | | 数据校验 | Gemini | 2h |
 | **第三阶段** | 前端环境变量 | Claude Code | 1h |
-| | API URL 修改 (38个路由) | Claude Code | 4h |
+| | API Base URL 修改 | Claude Code | 4h |
 | | next.config.mjs 更新 | Claude Code | 1h |
 | | Dockerfile 编写 | Claude Code | 2h |
 | | Nginx SSL 配置 | Gemini | 1h |
 | | 灰度/全量发布 | Gemini | 2h |
+
+### 10.3 API 路由清单
+
+| 路由 | 目标 | 改动 |
+|------|------|------|
+| `/api/auth/*` | Supabase | 保持 |
+| `/api/dify-chat` | Next.js → Dify | Base URL 改为内网 |
+| `/api/dify-upload` | Next.js → Dify | Base URL 改为内网 |
+| `/api/chat-session` | 本地 PG | 指向本地 |
+| `/api/save-message` | 本地 PG | 指向本地 |
+| `/api/save-essay-review` | 本地 PG | 指向本地 |
+| `/api/user/credits` | 本地 PG | 指向本地 |
+| `/api/user/transactions` | 本地 PG | 指向本地 |
+| `/api/user/membership` | 本地 PG | 指向本地 |
+| `/api/payment/*` | 第三方 | 保持 |
+| `/api/suno` | 第三方 | 保持 |
+| `/api/sparkpage` | Dify | Base URL 改为内网 |
+| `/api/essay-grade` | Dify | Base URL 改为内网 |
+| `/api/essay-review` | Dify | Base URL 改为内网 |
+| `/api/document-process` | Dify | Base URL 改为内网 |
+| `/api/presentation` | Dify | Base URL 改为内网 |
+| `/api/ocr` | 第三方/本地 | 待定 |
+| `/api/providers` | 配置 | 保持 |
+| `/api/share/*` | 本地 PG | 指向本地 |
+| `/api/referral/*` | 本地 PG | 指向本地 |
+| `/api/web-search` | 第三方 | 保持 |
+| `/api/debug/*` | - | 移除或保留 |
 
 ---
 
@@ -653,55 +682,7 @@ psql -h localhost -U shenxiang -d shenxiang < backup_pre_migration.sql
 
 ---
 
-### 10.2 详细任务
-
-| 阶段 | 任务 | 负责方 | 预计工时 |
-|------|------|--------|----------|
-| **第一阶段** | 服务器初始化 | Gemini | 4h |
-| | Nginx 配置（含600s） | Gemini | 2h |
-| | Dify 部署 (含 Redis) | Gemini | 4h |
-| | PostgreSQL 部署 | Gemini | 1h |
-| | Lighthouse 部署 | Gemini | 2h |
-| | Docker Compose 编写 | Gemini | 2h |
-| **第二阶段** | 数据迁移脚本 | Gemini | 4h |
-| | 数据校验 | Gemini | 2h |
-| **第三阶段** | 前端环境变量 | Claude Code | 1h |
-| | API Base URL 修改 | Claude Code | 4h |
-| | next.config.mjs 更新 | Claude Code | 1h |
-| | Dockerfile 编写 | Claude Code | 2h |
-| | Nginx SSL 配置 | Gemini | 1h |
-| | 灰度/全量发布 | Gemini | 2h |
-
-### 10.3 API 路由清单
-
-| 路由 | 目标 | 改动 |
-|------|------|------|
-| `/api/auth/*` | Supabase | 保持 |
-| `/api/dify-chat` | Next.js → Dify | Base URL 改为内网 |
-| `/api/dify-upload` | Next.js → Dify | Base URL 改为内网 |
-| `/api/chat-session` | 本地 PG | 指向本地 |
-| `/api/save-message` | 本地 PG | 指向本地 |
-| `/api/save-essay-review` | 本地 PG | 指向本地 |
-| `/api/user/credits` | 本地 PG | 指向本地 |
-| `/api/user/transactions` | 本地 PG | 指向本地 |
-| `/api/user/membership` | 本地 PG | 指向本地 |
-| `/api/payment/*` | 第三方 | 保持 |
-| `/api/suno` | 第三方 | 保持 |
-| `/api/sparkpage` | Dify | Base URL 改为内网 |
-| `/api/essay-grade` | Dify | Base URL 改为内网 |
-| `/api/essay-review` | Dify | Base URL 改为内网 |
-| `/api/document-process` | Dify | Base URL 改为内网 |
-| `/api/presentation` | Dify | Base URL 改为内网 |
-| `/api/ocr` | 第三方/本地 | 待定 |
-| `/api/providers` | 配置 | 保持 |
-| `/api/share/*` | 本地 PG | 指向本地 |
-| `/api/referral/*` | 本地 PG | 指向本地 |
-| `/api/web-search` | 第三方 | 保持 |
-| `/api/debug/*` | - | 移除或保留 |
-
----
-
-**文档版本**: v1.1
+**文档版本**: v1.2
 **创建日期**: 2026-03-25
-**评审版本**: v1.0 → v1.1 修复了 10 个问题
+**评审版本**: v1.0 → v1.1 (修复10个问题) → v1.2 (修复3个新问题)
 **下次审查**: 评审通过后
