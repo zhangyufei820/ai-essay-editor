@@ -28,6 +28,8 @@ import { UltimateRenderer } from "@/components/chat/UltimateRenderer"
 const BRAND_GREEN = "#14532d"
 const BANANA_COLOR = "#14532d" // 使用网站主题深绿色
 
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || ''
+
 // 🎨 尺寸选项配置
 const SIZE_OPTIONS = [
   { label: "16:9", value: "16:9", width: 1920, height: 1080 },
@@ -210,7 +212,7 @@ function BananaChatInterfaceInner() {
 
   const fetchCredits = async (uid: string) => {
     try {
-      const res = await fetch(`/api/user/credits?user_id=${encodeURIComponent(uid)}`)
+      const res = await fetch(`${API_BASE}/api/user/credits?user_id=${encodeURIComponent(uid)}`)
       if (res.ok) {
         const data = await res.json()
         setUserCredits(data.credits || 0)
@@ -309,7 +311,7 @@ function BananaChatInterfaceInner() {
         formData.append("file", file)
         formData.append("user", userId)
         
-        const res = await fetch("/api/dify-upload", {
+        const res = await fetch(`${API_BASE}/api/dify-upload`, {
           method: "POST",
           headers: {
             "X-User-Id": userId,
@@ -439,7 +441,7 @@ function BananaChatInterfaceInner() {
     try {
         console.log(`🎨 [Banana前端] 准备发送请求，用户输入: "${userInputText}"`)
         
-        const res = await fetch("/api/dify-chat", {
+        const res = await fetch(`${API_BASE}/api/dify-chat`, {
             method: "POST", 
             headers: { 
               "Content-Type": "application/json",
