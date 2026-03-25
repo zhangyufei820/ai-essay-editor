@@ -34,6 +34,10 @@ const nextConfig = {
         protocol: 'https',
         hostname: '**.wx.qq.com',
       },
+      {
+        protocol: 'https',
+        hostname: 'api.shenxiang.school',
+      },
     ],
     // 设备尺寸断点
     deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048],
