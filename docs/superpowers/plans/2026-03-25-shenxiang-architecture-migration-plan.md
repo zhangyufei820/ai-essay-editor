@@ -216,7 +216,7 @@ git commit -m "feat: use environment variable for API URLs in essay-analyzer"
 - Modify: `app/api/dify-chat/route.ts`
 
 **注意**: 此文件同时需要：
-1. Dify URL 改为内网地址 (Task 8)
+1. Dify URL 改为内网地址
 2. Supabase 积分扣费改为本地 PostgreSQL (Task 10c)
 
 - [ ] **Step 1: 找到 DIFY_BASE_URL 定义 (约第18行)**
@@ -406,7 +406,7 @@ WORKDIR /app
 
 # 安装依赖
 COPY package*.json ./
-RUN npm ci --only=production
+RUN npm ci --omit=dev
 
 # 复制源代码
 COPY . .
@@ -421,7 +421,7 @@ WORKDIR /app
 
 # 安装生产依赖
 COPY package*.json ./
-RUN npm ci --only=production && npm cache clean --force
+RUN npm ci --omit=dev && npm cache clean --force
 
 # 从构建阶段复制
 COPY --from=builder /app/.next/standalone ./
@@ -530,6 +530,7 @@ services:
       - DIFY_INTERNAL_URL=http://host.docker.internal:8080/v1
       - NEXT_PUBLIC_SUPABASE_URL=${SUPABASE_URL}
       - NEXT_PUBLIC_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - LOCAL_POSTGRES_URL=postgresql://shenxiang:password@postgres:5432/shenxiang
     volumes:
       - .:/app
       - /app/node_modules
@@ -710,6 +711,6 @@ Task 14 (验证构建) ← Task 11-13
 
 ---
 
-**计划版本**: v1.1
+**计划版本**: v1.3
 **创建日期**: 2026-03-25
 **基于设计文档**: docs/superpowers/specs/2026-03-25-shenxiang-architecture-migration-design.md
