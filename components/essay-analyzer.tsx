@@ -68,7 +68,7 @@ export default function EssayAnalyzer() {
       setStatus("processing")
       addLog("正在连接AI批改引擎...")
 
-      const response = await fetch("/api/analyze", {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || ''}/api/analyze`, {
         method: "POST",
         body: formData,
       })
