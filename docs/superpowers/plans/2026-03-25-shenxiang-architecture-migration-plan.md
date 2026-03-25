@@ -252,25 +252,87 @@ git commit -m "feat: use DIFY_INTERNAL_URL for dify-upload"
 
 ---
 
-### Task 10: 检查其他 API 路由文件
+### Task 10: 检查并改造所有 Dify 相关 API 路由
 
 **Files:**
-- Modify: 其他 `app/api/**/route.ts` 文件
+- Modify: `app/api/sparkpage/route.ts`
+- Modify: `app/api/essay-grade/route.ts`
+- Modify: `app/api/essay-review/route.ts`
+- Modify: `app/api/document-process/route.ts`
+- Modify: `app/api/presentation/route.ts`
 
-- [ ] **Step 1: 使用 Grep 查找所有硬编码的 api.dify.ai 引用**
+- [ ] **Step 1: 使用 Grep 查找所有 api.dify.ai 引用**
 
 ```bash
 grep -r "api.dify.ai" app/api/
 ```
 
-- [ ] **Step 2: 替换为使用 DIFY_INTERNAL_URL 环境变量**
+预期输出：列出所有包含 api.dify.ai 的文件
+
+- [ ] **Step 2: 逐个修改找到的文件，将 DIFY_BASE_URL 替换为内网地址**
+
+每个文件都需要修改 DIFY_BASE_URL 定义，模式与 Task 8 相同
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add app/api/
-git commit -m "feat: update all API routes to use DIFY_INTERNAL_URL"
+git add app/api/sparkpage/route.ts app/api/essay-grade/route.ts app/api/essay-review/route.ts app/api/document-process/route.ts app/api/presentation/route.ts
+git commit -m "feat: update Dify API routes to use internal URL"
 ```
+
+---
+
+### Task 10b: 检查所有 chat 组件中的 API 调用
+
+**Files:**
+- Modify: `components/chat/ChatInput.tsx`
+- Modify: `components/chat/MessageBubble.tsx`
+- Modify: `components/chat/WorkflowVisualizer.tsx`
+- Modify: `components/chat/EmptyState.tsx`
+- Modify: `components/chat/MusicCard.tsx`
+- Modify: `components/chat/ModelSelector.tsx`
+
+- [ ] **Step 1: 查找所有 chat 组件中的 fetch 调用**
+
+```bash
+grep -r "fetch.*api/" components/chat/
+```
+
+- [ ] **Step 2: 替换为使用 NEXT_PUBLIC_API_BASE_URL 环境变量**
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add components/chat/
+git commit -m "feat: update chat components to use environment variable API base URL"
+```
+
+---
+
+### Task 10c: 检查其他需要指向本地 PG 的 API 路由
+
+**Files:**
+- Modify: `app/api/chat-session/route.ts`
+- Modify: `app/api/save-message/route.ts`
+- Modify: `app/api/save-essay-review/route.ts`
+- Modify: `app/api/user/credits/route.ts`
+- Modify: `app/api/user/transactions/route.ts`
+- Modify: `app/api/user/membership/route.ts`
+- Modify: `app/api/share/route.ts`
+- Modify: `app/api/referral/route.ts`
+
+- [ ] **Step 1: 查找所有使用 Supabase 写数据的路由**
+
+这些路由需要改为使用本地 PostgreSQL
+
+- [ ] **Step 2: Commit**
+
+```bash
+git add app/api/
+git commit -m "feat: update data routes to use local PostgreSQL"
+```
+
+**注意**: 本步骤涉及数据库连接变更，具体改动取决于数据迁移进度，可与 Task 10a/b 并行执行
 
 ---
 
@@ -278,6 +340,8 @@ git commit -m "feat: update all API routes to use DIFY_INTERNAL_URL"
 
 **Files:**
 - Create: `Dockerfile`
+
+**说明**: 本 Dockerfile 用于构建 Next.js 容器镜像。Nginx 配置由第一阶段 (Gemini) 负责。
 
 - [ ] **Step 1: 创建多阶段构建 Dockerfile**
 
@@ -385,10 +449,15 @@ git commit -m "chore: add .dockerignore"
 
 ---
 
-### Task 13: 创建 docker-compose.yml (前端服务部分)
+### Task 13: 创建 docker-compose.yml (前端开发环境)
 
 **Files:**
-- Create: `docker-compose.yml` (注：完整配置在设计文档 Section 8.1，此处为前端开发环境)
+- Create: `docker-compose.yml`
+- Create: `docker-compose.prod.yml` (生产环境完整配置)
+
+**说明**:
+- 本文件用于**前端本地开发**，不包含 Nginx/Lighthouse (由第一阶段 Gemini 负责)
+- 生产环境完整配置见 `docker-compose.prod.yml` (基于设计文档 Section 8.1)
 
 - [ ] **Step 1: 创建开发环境 docker-compose.yml**
 
@@ -438,11 +507,15 @@ networks:
     driver: bridge
 ```
 
-- [ ] **Step 2: Commit**
+- [ ] **Step 2: 创建生产环境 docker-compose.prod.yml**
+
+基于设计文档 Section 8.1 创建完整的生产环境配置 (包含 Nginx, Dify, Lighthouse)
+
+- [ ] **Step 3: Commit**
 
 ```bash
-git add docker-compose.yml
-git commit -m "feat: add docker-compose for local development"
+git add docker-compose.yml docker-compose.prod.yml
+git commit -m "feat: add docker-compose files for dev and prod"
 ```
 
 ---
@@ -486,10 +559,12 @@ git commit -m "chore: verify Docker build works"
 | 7 | essay-analyzer.tsx 改造 | ⬜ |
 | 8 | dify-chat route.ts 改造 | ⬜ |
 | 9 | dify-upload route.ts 改造 | ⬜ |
-| 10 | 其他 API 路由检查 | ⬜ |
+| 10 | Dify 相关 API 路由改造 | ⬜ |
+| 10b | Chat 组件 API 调用改造 | ⬜ |
+| 10c | 数据路由指向本地 PG | ⬜ |
 | 11 | 创建 Dockerfile | ⬜ |
 | 12 | 创建 .dockerignore | ⬜ |
-| 13 | 创建 docker-compose.yml | ⬜ |
+| 13 | 创建 docker-compose.yml (dev + prod) | ⬜ |
 | 14 | 验证构建 | ⬜ |
 
 ---
