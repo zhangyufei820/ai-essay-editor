@@ -210,10 +210,14 @@ git commit -m "feat: use environment variable for API URLs in essay-analyzer"
 
 ---
 
-### Task 8: app/api/dify-chat/route.ts Dify URL 改造
+### Task 8: app/api/dify-chat/route.ts Dify URL + Supabase 改造
 
 **Files:**
 - Modify: `app/api/dify-chat/route.ts`
+
+**注意**: 此文件同时需要：
+1. Dify URL 改为内网地址 (Task 8)
+2. Supabase 积分扣费改为本地 PostgreSQL (Task 10c)
 
 - [ ] **Step 1: 找到 DIFY_BASE_URL 定义 (约第18行)**
 
@@ -227,11 +231,24 @@ const DIFY_BASE_URL = process.env.DIFY_INTERNAL_URL
   || "https://api.dify.ai/v1"
 ```
 
-- [ ] **Step 2: Commit**
+- [ ] **Step 2: 找到 Supabase 客户端定义 (约第23-26行)**
+
+```typescript
+// 当前
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+)
+
+// 改造后 - 使用本地 PostgreSQL
+// 见 Task 10c 的实现模式
+```
+
+- [ ] **Step 3: Commit**
 
 ```bash
 git add app/api/dify-chat/route.ts
-git commit -m "feat: use DIFY_INTERNAL_URL for self-hosted Dify"
+git commit -m "feat: use DIFY_INTERNAL_URL and local PostgreSQL for dify-chat"
 ```
 
 ---
@@ -309,9 +326,10 @@ git commit -m "feat: update chat components to use environment variable API base
 
 ---
 
-### Task 10c: 检查其他需要指向本地 PG 的 API 路由
+### Task 10c: 将 Supabase 数据操作迁移到本地 PostgreSQL
 
 **Files:**
+- Modify: `app/api/dify-chat/route.ts` (积分扣费、事务记录)
 - Modify: `app/api/chat-session/route.ts`
 - Modify: `app/api/save-message/route.ts`
 - Modify: `app/api/save-essay-review/route.ts`
@@ -319,20 +337,55 @@ git commit -m "feat: update chat components to use environment variable API base
 - Modify: `app/api/user/transactions/route.ts`
 - Modify: `app/api/user/membership/route.ts`
 - Modify: `app/api/share/route.ts`
-- Modify: `app/api/referral/route.ts`
+- Modify: `app/api/referral/get-code/route.ts`
+- Modify: `app/api/referral/process/route.ts`
+- Modify: `app/api/share/claim-reward/route.ts`
 
-- [ ] **Step 1: 查找所有使用 Supabase 写数据的路由**
+**依赖**: 第一阶段 (Gemini) 完成 PostgreSQL 部署
 
-这些路由需要改为使用本地 PostgreSQL
+**实现模式**:
 
-- [ ] **Step 2: Commit**
+```typescript
+// 1. 添加 PostgreSQL 客户端 (推荐使用 postgres.js)
+import { Pool } from '@neondatabase/serverless'
+
+const pool = new Pool({
+  connectionString: process.env.LOCAL_POSTGRES_URL,
+})
+
+// 2. 替换 Supabase 调用
+// 原来: const { data } = await supabase.from('table').select()
+// 改为: const { rows } = await pool.query('SELECT * FROM table WHERE user_id = $1', [userId])
+```
+
+- [ ] **Step 1: 确认 LOCAL_POSTGRES_URL 环境变量已配置 (Task 1)**
+
+- [ ] **Step 2: 安装 postgres.js**
+
+```bash
+npm install @neondatabase/serverless
+```
+
+- [ ] **Step 3: 逐个修改文件，将 Supabase 数据操作替换为本地 PG**
+
+每个文件的改动模式相同：
+1. 导入 postgres.js
+2. 创建 Pool 实例
+3. 替换 supabase 调用为 pool.query
+
+- [ ] **Step 4: Commit**
 
 ```bash
 git add app/api/
-git commit -m "feat: update data routes to use local PostgreSQL"
+npm install @neondatabase/serverless
+git add package.json package-lock.json
+git commit -m "feat: migrate data operations from Supabase to local PostgreSQL"
 ```
 
-**注意**: 本步骤涉及数据库连接变更，具体改动取决于数据迁移进度，可与 Task 10a/b 并行执行
+**注意**:
+- `/api/auth/*` 路由继续使用 Supabase Auth (不迁移)
+- `/api/payment/*` 路由使用第三方支付 API (保持不变)
+- 涉及数据库迁移的具体表结构见设计文档 Section 10.3
 
 ---
 
@@ -557,11 +610,11 @@ git commit -m "chore: verify Docker build works"
 | 5 | banana-chat-interface.tsx 改造 | ⬜ |
 | 6 | essay-grader.tsx 改造 | ⬜ |
 | 7 | essay-analyzer.tsx 改造 | ⬜ |
-| 8 | dify-chat route.ts 改造 | ⬜ |
+| 8 | dify-chat route.ts (Dify URL + PG) | ⬜ |
 | 9 | dify-upload route.ts 改造 | ⬜ |
 | 10 | Dify 相关 API 路由改造 | ⬜ |
 | 10b | Chat 组件 API 调用改造 | ⬜ |
-| 10c | 数据路由指向本地 PG | ⬜ |
+| 10c | 数据路由迁移到本地 PG | ⬜ |
 | 11 | 创建 Dockerfile | ⬜ |
 | 12 | 创建 .dockerignore | ⬜ |
 | 13 | 创建 docker-compose.yml (dev + prod) | ⬜ |
@@ -622,14 +675,20 @@ Task 2 (next.config.mjs) ← Task 1
 Task 3 (API工具) ← Task 1
     ↓
 Task 4-7 (组件改造) ← Task 3
-Task 8-9 (API路由) ← Task 3
-Task 10 (其他路由) ← Task 8-9
+Task 8 (dify-chat) ← Task 1, Task 3
+Task 9 (dify-upload) ← Task 3
+Task 10 (Dify路由) ← Task 3
+Task 10b (Chat组件) ← Task 1
+    ↓
+Task 10c (数据迁移) ← Task 1, Task 3, Phase 1完成
     ↓
 Task 11-12 (Docker) ← Task 1
 Task 13 (docker-compose) ← Task 11
     ↓
 Task 14 (验证构建) ← Task 11-13
 ```
+
+**注意**: Phase 1 (Gemini) 必须在 Task 10c 之前完成，以确保 PostgreSQL 可用
 
 ---
 
@@ -651,6 +710,6 @@ Task 14 (验证构建) ← Task 11-13
 
 ---
 
-**计划版本**: v1.0
+**计划版本**: v1.1
 **创建日期**: 2026-03-25
 **基于设计文档**: docs/superpowers/specs/2026-03-25-shenxiang-architecture-migration-design.md
