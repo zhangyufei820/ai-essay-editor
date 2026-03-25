@@ -1,0 +1,37 @@
+# 依赖
+node_modules
+.npm
+
+# 构建产物
+.next
+out
+
+# 测试
+coverage
+*.test.ts
+*.spec.ts
+
+# 开发文件
+.env*
+!.env.example
+.git
+.gitignore
+
+# 文档
+README.md
+docs
+*.md
+
+# IDE
+.vscode
+.idea
+
+# 日志
+logs
+*.log
+npm-debug.log*
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
