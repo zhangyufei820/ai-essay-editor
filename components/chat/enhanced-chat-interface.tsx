@@ -31,6 +31,7 @@ import { brandColors, slateColors } from "@/lib/design-tokens"
 import { createClient } from "@supabase/supabase-js"
 import { collapseSidebar, refreshCredits } from "@/components/app-sidebar"
 import { validateFileForUpload, VERCEL_FILE_SIZE_LIMIT, LIGHTHOUSE_UPLOAD_URL, getApiKeyForModel, uploadToLighthouse } from "@/lib/upload-service"
+import { getApiUrl } from "@/lib/api-config"
 import { 
   calculatePreviewCost, 
   ModelType, 
@@ -1026,7 +1027,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
           fileCount: fileIds.length
         })
         
-        const res = await fetch("/api/dify-chat", {
+        const res = await fetch(getApiUrl("/api/dify-chat"), {
             method: "POST", 
             headers: { 
               "Content-Type": "application/json",
@@ -1111,6 +1112,8 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                     if (json.conversation_id && sessionIdRef.current !== json.conversation_id) {
                         sessionIdRef.current = json.conversation_id
                     }
+
+                    // 🔥 处理 Chat API 的 answer 字段
                     if (json.answer) {
                         // 🔥 【关键】收到第一个 answer 时，强制触发 handover
                         // 确保光标在文字开始输出时立即显示
@@ -1123,7 +1126,37 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                         fullText += json.answer
                         setMessages(p => p.map(m => m.id === botId ? { ...m, content: fullText } : m))
                     }
-                } catch {}
+
+                    // 🔥 处理 Workflow API 的 text_chunk/agent_message 事件
+                    // 某些 Dify 工作流使用这些事件类型而不是 message+answer
+                    if ((json.event === 'text_chunk' || json.event === 'agent_message') && !json.answer) {
+                        const text = json.data?.text || json.text || ''
+                        if (text) {
+                            if (!hasRec) {
+                              setAnalysisStage(4)
+                              triggerHandover()
+                              console.log("✍️ [TextChunk] 收到第一个文本块，触发 handover")
+                            }
+                            hasRec = true
+                            fullText += text
+                            setMessages(p => p.map(m => m.id === botId ? { ...m, content: fullText } : m))
+                        }
+                    }
+
+                    // 🔥 处理 workflow_finished 事件的输出文本（备用方案）
+                    if (json.event === 'workflow_finished' && json.data?.outputs) {
+                        const outputs = json.data.outputs
+                        if (outputs.text && !hasRec) {
+                            fullText = outputs.text
+                            setMessages(p => p.map(m => m.id === botId ? { ...m, content: fullText } : m))
+                        } else if (outputs.result && !hasRec) {
+                            fullText = outputs.result
+                            setMessages(p => p.map(m => m.id === botId ? { ...m, content: fullText } : m))
+                        }
+                    }
+                } catch (e) {
+                    console.error("❌ [流式解析] 解析事件失败:", e, "原始数据:", data)
+                }
             }
         }
         if (hasRec) await supabase.from('chat_messages').insert({ session_id: sid, role: "assistant", content: fullText })
