@@ -150,44 +150,6 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
 }
 
 // ============================================
-// 分类组件
-// ============================================
-
-function CategorySection({ 
-  title, 
-  icon: Icon, 
-  questions 
-}: { 
-  title: string
-  icon: any
-  questions: { q: string; a: string }[]
-}) {
-  return (
-    <div className="mb-12">
-      <div className="flex items-center gap-3 mb-6">
-        <div 
-          className="w-10 h-10 rounded-xl flex items-center justify-center"
-          style={{ backgroundColor: brandColors[100] }}
-        >
-          <Icon className="w-5 h-5" style={{ color: brandColors[600] }} />
-        </div>
-        <h2 className="text-xl font-semibold" style={{ color: slateColors[800] }}>
-          {title}
-        </h2>
-      </div>
-      <div 
-        className="bg-white rounded-2xl p-6"
-        style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}
-      >
-        {questions.map((item, index) => (
-          <FAQItem key={index} question={item.q} answer={item.a} />
-        ))}
-      </div>
-    </div>
-  )
-}
-
-// ============================================
 // 快速链接卡片
 // ============================================
 
@@ -214,35 +176,269 @@ function QuickLinks() {
   ]
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-12">
+    <motion.div 
+      className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-12"
+      initial="hidden"
+      whileInView="visible"
+      viewport={{ once: true, margin: "-100px" }}
+      variants={{
+        visible: {
+          transition: {
+            staggerChildren: 0.15
+          }
+        }
+      }}
+    >
       {links.map((link) => (
-        <Link
+        <motion.div
           key={link.href}
-          href={link.href}
-          className="flex items-center gap-4 p-4 rounded-xl transition-all hover:scale-[1.02]"
-          style={{ 
-            backgroundColor: 'white',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
+          variants={{
+            hidden: { opacity: 0, y: 30 },
+            visible: { 
+              opacity: 1, 
+              y: 0,
+              transition: { duration: 0.5, ease: "easeOut" }
+            }
+          }}
+          whileHover={{ scale: 1.03, transition: { duration: 0.2 } }}
+        >
+          <Link
+            href={link.href}
+            className="flex items-center gap-4 p-4 rounded-xl transition-all h-full"
+            style={{ 
+              backgroundColor: 'white',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
+            }}
+          >
+            <motion.div 
+              className="w-12 h-12 rounded-xl flex items-center justify-center"
+              style={{ backgroundColor: brandColors[50] }}
+              whileHover={{ rotate: 10 }}
+            >
+              <link.icon className="w-6 h-6" style={{ color: brandColors[600] }} />
+            </motion.div>
+            <div>
+              <h3 className="font-medium" style={{ color: slateColors[800] }}>
+                {link.title}
+              </h3>
+              <p className="text-sm" style={{ color: slateColors[500] }}>
+                {link.desc}
+              </p>
+            </div>
+            <ExternalLink className="w-4 h-4 ml-auto" style={{ color: slateColors[400] }} />
+          </Link>
+        </motion.div>
+      ))}
+    </motion.div>
+  )
+}
+
+// ============================================
+// 分类组件 - 动画版本
+// ============================================
+
+function CategorySection({ 
+  title, 
+  icon: Icon, 
+  questions,
+  index
+}: { 
+  title: string
+  icon: any
+  questions: { q: string; a: string }[]
+  index: number
+}) {
+  return (
+    <motion.div 
+      className="mb-12"
+      initial="hidden"
+      whileInView="visible"
+      viewport={{ once: true, margin: "-50px" }}
+      variants={{
+        hidden: { opacity: 0, y: 40 },
+        visible: { 
+          opacity: 1, 
+          y: 0,
+          transition: { duration: 0.6, ease: "easeOut", delay: index * 0.1 }
+        }
+      }}
+    >
+      <motion.div 
+        className="flex items-center gap-3 mb-6"
+        initial={{ x: -20, opacity: 0 }}
+        whileInView={{ x: 0, opacity: 1 }}
+        viewport={{ once: true }}
+        transition={{ duration: 0.4, delay: index * 0.1 + 0.2 }}
+      >
+        <motion.div 
+          className="w-10 h-10 rounded-xl flex items-center justify-center"
+          style={{ backgroundColor: brandColors[100] }}
+          whileHover={{ rotate: 90, scale: 1.1 }}
+        >
+          <Icon className="w-5 h-5" style={{ color: brandColors[600] }} />
+        </motion.div>
+        <h2 className="text-xl font-semibold" style={{ color: slateColors[800] }}>
+          {title}
+        </h2>
+      </motion.div>
+      <div 
+        className="bg-white rounded-2xl p-6"
+        style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}
+      >
+        {questions.map((item, qIndex) => (
+          <motion.div
+            key={qIndex}
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+            transition={{ delay: index * 0.1 + qIndex * 0.05 + 0.3 }}
+          >
+            <FAQItem question={item.q} answer={item.a} />
+          </motion.div>
+        ))}
+      </div>
+    </motion.div>
+  )
+}
+
+// ============================================
+// 联系客服区域 - 动画版本
+// ============================================
+
+function ContactSection() {
+  return (
+    <motion.div 
+      className="rounded-2xl p-8"
+      style={{ 
+        background: `linear-gradient(135deg, ${brandColors[600]} 0%, ${brandColors[700]} 100%)`
+      }}
+      initial={{ opacity: 0, y: 30, scale: 0.95 }}
+      whileInView={{ opacity: 1, y: 0, scale: 1 }}
+      viewport={{ once: true, margin: "-50px" }}
+      transition={{ duration: 0.6, ease: "easeOut" }}
+    >
+      <motion.div 
+        className="text-center mb-6"
+        initial={{ y: -20, opacity: 0 }}
+        whileInView={{ y: 0, opacity: 1 }}
+        viewport={{ once: true }}
+        transition={{ delay: 0.2, duration: 0.5 }}
+      >
+        <motion.div
+          animate={{ 
+            scale: [1, 1.1, 1],
+            rotate: [0, 5, -5, 0]
+          }}
+          transition={{ 
+            duration: 2,
+            repeat: Infinity,
+            repeatDelay: 3
           }}
         >
-          <div 
-            className="w-12 h-12 rounded-xl flex items-center justify-center"
-            style={{ backgroundColor: brandColors[50] }}
+          <MessageCircle className="w-12 h-12 mx-auto mb-4 text-white" />
+        </motion.div>
+        <h3 className="text-xl font-semibold text-white mb-2">
+          联系客服
+        </h3>
+        <p className="text-white/80">
+          扫描下方二维码添加客服微信，或拨打客服电话
+        </p>
+      </motion.div>
+      
+      {/* 联系方式展示 */}
+      <motion.div 
+        className="flex flex-col md:flex-row items-center justify-center gap-8 md:gap-12"
+        initial={{ opacity: 0 }}
+        whileInView={{ opacity: 1 }}
+        viewport={{ once: true }}
+        transition={{ delay: 0.4, duration: 0.5 }}
+      >
+        {/* 微信二维码 */}
+        <motion.div 
+          className="flex flex-col items-center"
+          whileHover={{ scale: 1.05 }}
+          transition={{ type: "spring", stiffness: 300 }}
+        >
+          <motion.div 
+            className="w-40 h-40 md:w-48 md:h-48 bg-white rounded-xl p-2 shadow-lg mb-3"
+            animate={{ 
+              boxShadow: [
+                "0 4px 20px rgba(0,0,0,0.15)",
+                "0 8px 30px rgba(0,0,0,0.25)",
+                "0 4px 20px rgba(0,0,0,0.15)"
+              ]
+            }}
+            transition={{ duration: 2, repeat: Infinity }}
           >
-            <link.icon className="w-6 h-6" style={{ color: brandColors[600] }} />
-          </div>
-          <div>
-            <h3 className="font-medium" style={{ color: slateColors[800] }}>
-              {link.title}
-            </h3>
-            <p className="text-sm" style={{ color: slateColors[500] }}>
-              {link.desc}
-            </p>
-          </div>
-          <ExternalLink className="w-4 h-4 ml-auto" style={{ color: slateColors[400] }} />
-        </Link>
-      ))}
-    </div>
+            <img 
+              src={contactInfo.wechatQR} 
+              alt="客服微信二维码" 
+              className="w-full h-full object-contain"
+            />
+          </motion.div>
+          <span className="text-white font-medium">扫码添加客服微信</span>
+        </motion.div>
+        
+        {/* 分隔线（移动端不显示） */}
+        <motion.div 
+          className="hidden md:block w-px h-32 bg-white/30"
+          initial={{ scaleY: 0 }}
+          whileInView={{ scaleY: 1 }}
+          viewport={{ once: true }}
+          transition={{ delay: 0.6, duration: 0.5 }}
+        />
+        
+        {/* 电话 */}
+        <motion.div 
+          className="flex flex-col items-center"
+          whileHover={{ scale: 1.05 }}
+          transition={{ type: "spring", stiffness: 300 }}
+        >
+          <motion.div 
+            className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center mb-3"
+            animate={{ 
+              boxShadow: [
+                "0 0 0 0 rgba(255,255,255,0.4)",
+                "0 0 0 10px rgba(255,255,255,0)",
+              ]
+            }}
+            transition={{ duration: 1.5, repeat: Infinity }}
+          >
+            <Phone className="w-8 h-8 text-white" />
+          </motion.div>
+          <motion.a 
+            href={`tel:${contactInfo.phone}`}
+            className="text-2xl font-bold text-white hover:underline"
+            whileHover={{ scale: 1.05 }}
+          >
+            {contactInfo.phone}
+          </motion.a>
+          <span className="text-white/70 text-sm mt-1">工作日 9:00-18:00</span>
+        </motion.div>
+      </motion.div>
+      
+      {/* 在线客服按钮 */}
+      <motion.div 
+        className="text-center mt-8"
+        initial={{ opacity: 0, y: 20 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        transition={{ delay: 0.6, duration: 0.5 }}
+      >
+        <motion.div
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+        >
+          <Link 
+            href="/chat"
+            className="inline-flex items-center gap-2 px-6 py-3 bg-white text-green-700 font-medium rounded-xl hover:bg-gray-50 transition-colors"
+          >
+            <MessageCircle className="w-5 h-5" />
+            在线客服
+          </Link>
+        </motion.div>
+      </motion.div>
+    </motion.div>
   )
 }
 
@@ -255,43 +451,124 @@ export default function HelpPage() {
     <main className="min-h-screen" style={{ backgroundColor: creamColors[100] }}>
       {/* 顶部背景 */}
       <div 
-        className="relative py-16 md:py-20"
+        className="relative py-16 md:py-20 overflow-hidden"
         style={{ 
           background: `linear-gradient(135deg, ${brandColors[700]} 0%, ${brandColors[800]} 100%)`
         }}
       >
-        <div className="max-w-4xl mx-auto px-4">
+        {/* 动态背景装饰 */}
+        <motion.div 
+          className="absolute inset-0 overflow-hidden"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 1 }}
+        >
+          {[...Array(5)].map((_, i) => (
+            <motion.div
+              key={i}
+              className="absolute w-64 h-64 rounded-full"
+              style={{
+                background: `radial-gradient(circle, ${brandColors[500]}20 0%, transparent 70%)`,
+                left: `${20 + i * 20}%`,
+                top: `${10 + (i % 3) * 30}%`,
+              }}
+              animate={{
+                y: [0, -30, 0],
+                scale: [1, 1.1, 1],
+                opacity: [0.3, 0.6, 0.3],
+              }}
+              transition={{
+                duration: 4 + i,
+                repeat: Infinity,
+                delay: i * 0.5,
+              }}
+            />
+          ))}
+        </motion.div>
+
+        {/* 浮动图标装饰 */}
+        <motion.div 
+          className="absolute top-20 right-10 opacity-10"
+          animate={{
+            y: [0, -15, 0],
+            rotate: [0, 10, 0],
+          }}
+          transition={{ duration: 3, repeat: Infinity }}
+        >
+          <HelpCircle className="w-32 h-32 text-white" />
+        </motion.div>
+        
+        <div className="max-w-4xl mx-auto px-4 relative z-10">
           {/* 返回按钮 */}
-          <Link 
-            href="/"
-            className="inline-flex items-center gap-2 text-white/80 hover:text-white mb-8 transition-colors"
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.5 }}
           >
-            <ArrowLeft className="w-4 h-4" />
-            <span>返回首页</span>
-          </Link>
+            <Link 
+              href="/"
+              className="inline-flex items-center gap-2 text-white/80 hover:text-white mb-8 transition-colors"
+            >
+              <motion.span
+                whileHover={{ x: -5 }}
+                className="flex items-center gap-2"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                <span>返回首页</span>
+              </motion.span>
+            </Link>
+          </motion.div>
           
           {/* 标题 */}
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
+            transition={{ duration: 0.6, delay: 0.2 }}
           >
-            <div className="flex items-center gap-4 mb-4">
-              <HelpCircle className="w-10 h-10 text-white" />
+            <motion.div 
+              className="flex items-center gap-4 mb-4"
+              animate={{ 
+                textShadow: [
+                  "0 0 20px rgba(255,255,255,0.3)",
+                  "0 0 40px rgba(255,255,255,0.5)",
+                  "0 0 20px rgba(255,255,255,0.3)"
+                ]
+              }}
+              transition={{ duration: 2, repeat: Infinity }}
+            >
+              <motion.div
+                animate={{ 
+                  rotate: [0, 10, -10, 0],
+                  scale: [1, 1.1, 1]
+                }}
+                transition={{ duration: 1, repeat: Infinity, repeatDelay: 2 }}
+              >
+                <HelpCircle className="w-10 h-10 text-white" />
+              </motion.div>
               <h1 className="text-3xl md:text-4xl font-bold text-white">
                 帮助中心
               </h1>
-            </div>
-            <p className="text-white/80 text-lg max-w-2xl">
+            </motion.div>
+            <motion.p 
+              className="text-white/80 text-lg max-w-2xl"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.5, duration: 0.5 }}
+            >
               这里是沈翔智学的使用指南和问题解答，
               <br className="hidden md:block" />
               如果没有找到答案，请联系我们的客服。
-            </p>
+            </motion.p>
           </motion.div>
         </div>
         
         {/* 波浪装饰 */}
-        <div className="absolute bottom-0 left-0 right-0">
+        <motion.div 
+          className="absolute bottom-0 left-0 right-0"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.8, duration: 0.5 }}
+        >
           <svg 
             viewBox="0 0 1440 60" 
             fill="none" 
@@ -299,12 +576,15 @@ export default function HelpPage() {
             className="w-full"
             preserveAspectRatio="none"
           >
-            <path 
+            <motion.path 
               d="M0 60 C240 30 480 0 720 0 C960 0 1200 30 1440 60 L1440 60 L0 60Z" 
               fill={creamColors[100]}
+              initial={{ pathLength: 0 }}
+              animate={{ pathLength: 1 }}
+              transition={{ duration: 1.5, delay: 0.5 }}
             />
           </svg>
-        </div>
+        </motion.div>
       </div>
 
       {/* 主内容区 */}
@@ -313,103 +593,76 @@ export default function HelpPage() {
         <QuickLinks />
 
         {/* FAQ 分类 */}
-        {faqCategories.map((category) => (
+        {faqCategories.map((category, index) => (
           <CategorySection
             key={category.title}
             title={category.title}
             icon={category.icon}
             questions={category.questions}
+            index={index}
           />
         ))}
 
         {/* 联系客服 - 带二维码 */}
-        <div 
-          className="rounded-2xl p-8"
-          style={{ 
-            background: `linear-gradient(135deg, ${brandColors[600]} 0%, ${brandColors[700]} 100%)`
-          }}
-        >
-          <div className="text-center mb-6">
-            <MessageCircle className="w-12 h-12 mx-auto mb-4 text-white" />
-            <h3 className="text-xl font-semibold text-white mb-2">
-              联系客服
-            </h3>
-            <p className="text-white/80">
-              扫描下方二维码添加客服微信，或拨打客服电话
-            </p>
-          </div>
-          
-          {/* 联系方式展示 */}
-          <div className="flex flex-col md:flex-row items-center justify-center gap-8 md:gap-12">
-            {/* 微信二维码 */}
-            <div className="flex flex-col items-center">
-              <div 
-                className="w-40 h-40 md:w-48 md:h-48 bg-white rounded-xl p-2 shadow-lg mb-3"
-              >
-                <img 
-                  src={contactInfo.wechatQR} 
-                  alt="客服微信二维码" 
-                  className="w-full h-full object-contain"
-                />
-              </div>
-              <span className="text-white font-medium">扫码添加客服微信</span>
-            </div>
-            
-            {/* 分隔线（移动端不显示） */}
-            <div className="hidden md:block w-px h-32 bg-white/30" />
-            
-            {/* 电话 */}
-            <div className="flex flex-col items-center">
-              <div 
-                className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center mb-3"
-              >
-                <Phone className="w-8 h-8 text-white" />
-              </div>
-              <a 
-                href={`tel:${contactInfo.phone}`}
-                className="text-2xl font-bold text-white hover:underline"
-              >
-                {contactInfo.phone}
-              </a>
-              <span className="text-white/70 text-sm mt-1">工作日 9:00-18:00</span>
-            </div>
-          </div>
-          
-          {/* 在线客服按钮 */}
-          <div className="text-center mt-8">
-            <Link 
-              href="/chat"
-              className="inline-flex items-center gap-2 px-6 py-3 bg-white text-green-700 font-medium rounded-xl hover:bg-gray-50 transition-colors"
-            >
-              <MessageCircle className="w-5 h-5" />
-              在线客服
-            </Link>
-          </div>
-        </div>
+        <ContactSection />
       </div>
 
       {/* 底部导航 */}
-      <div className="border-t" style={{ borderColor: slateColors[100], backgroundColor: 'white' }}>
+      <motion.div 
+        className="border-t"
+        style={{ borderColor: slateColors[100], backgroundColor: 'white' }}
+        initial={{ opacity: 0 }}
+        whileInView={{ opacity: 1 }}
+        viewport={{ once: true }}
+        transition={{ duration: 0.5 }}
+      >
         <div className="max-w-4xl mx-auto px-4 py-8">
-          <div className="flex flex-wrap justify-center gap-6">
-            <Link href="/pricing" className="text-sm hover:underline" style={{ color: slateColors[600] }}>
-              价格方案
-            </Link>
-            <Link href="/about" className="text-sm hover:underline" style={{ color: slateColors[600] }}>
-              关于我们
-            </Link>
-            <Link href="/privacy" className="text-sm hover:underline" style={{ color: slateColors[600] }}>
-              隐私政策
-            </Link>
-            <Link href="/terms" className="text-sm hover:underline" style={{ color: slateColors[600] }}>
-              服务条款
-            </Link>
-          </div>
-          <p className="text-center text-sm mt-4" style={{ color: slateColors[400] }}>
+          <motion.div 
+            className="flex flex-wrap justify-center gap-6"
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true }}
+            variants={{
+              hidden: {},
+              visible: {
+                transition: {
+                  staggerChildren: 0.1
+                }
+              }
+            }}
+          >
+            {[
+              { href: "/pricing", text: "价格方案" },
+              { href: "/about", text: "关于我们" },
+              { href: "/privacy", text: "隐私政策" },
+              { href: "/terms", text: "服务条款" }
+            ].map((item) => (
+              <motion.div
+                key={item.href}
+                variants={{
+                  hidden: { opacity: 0, y: 10 },
+                  visible: { opacity: 1, y: 0 }
+                }}
+                whileHover={{ scale: 1.1, color: brandColors[600] }}
+              >
+                <Link href={item.href} className="text-sm hover:underline" style={{ color: slateColors[600] }}>
+                  {item.text}
+                </Link>
+              </motion.div>
+            ))}
+          </motion.div>
+          <motion.p 
+            className="text-center text-sm mt-4"
+            style={{ color: slateColors[400] }}
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+            transition={{ delay: 0.5, duration: 0.5 }}
+          >
             © {new Date().getFullYear()} 沈翔智学. All rights reserved.
-          </p>
+          </motion.p>
         </div>
-      </div>
+      </motion.div>
     </main>
   )
 }
