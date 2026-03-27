@@ -3,9 +3,9 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# 安装依赖
+# 安装依赖（包括 devDependencies，用于构建阶段）
 COPY package*.json ./
-RUN npm ci --omit=dev
+RUN npm ci
 
 # 复制源代码
 COPY . .
