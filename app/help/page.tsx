@@ -408,9 +408,10 @@ function ContactSection() {
           </motion.div>
           <motion.a 
             href={`tel:${contactInfo.phone}`}
-            className="text-2xl font-bold text-white hover:underline"
+            className="text-2xl font-bold text-white hover:underline flex items-center gap-2"
             whileHover={{ scale: 1.05 }}
           >
+            <Phone className="w-5 h-5" />
             {contactInfo.phone}
           </motion.a>
           <span className="text-white/70 text-sm mt-1">工作日 9:00-18:00</span>
