@@ -144,13 +144,13 @@ docker --version
 docker-compose --version
 ```
 
-### 3.2 Docker 镜像加速
+### 3.2 Docker 配置 (镜像加速 + 日志 + 存储驱动)
 
 ```bash
 # 创建 Docker 配置目录
 mkdir -p /etc/docker
 
-# 编辑 daemon.json
+# 编辑 daemon.json (合并镜像加速、日志轮转、存储驱动)
 cat > /etc/docker/daemon.json << 'EOF'
 {
   "registry-mirrors": [
@@ -161,7 +161,8 @@ cat > /etc/docker/daemon.json << 'EOF'
   "log-opts": {
     "max-size": "100m",
     "max-file": "3"
-  }
+  },
+  "storage-driver": "overlay2"
 }
 EOF
 
@@ -240,7 +241,7 @@ docker run -d \
   redis-server /usr/local/etc/redis/redis.conf
 ```
 
-### 6.2 验证 Redis
+### 5.2 验证 Redis
 
 ```bash
 # 测试连接
@@ -249,9 +250,9 @@ docker exec -it shenxiang-redis redis-cli -a [Redis密码] ping
 
 ---
 
-## 阶段七：Dify 部署 (Day 2-3)
+## 阶段六：Dify 部署 (Day 2-3)
 
-### 7.1 拉取 Dify
+### 6.1 拉取 Dify
 
 ```bash
 # 创建目录
@@ -373,7 +374,7 @@ docker run -d \
   --restart unless-stopped \
   -e MINIO_ROOT_USER=shenxiang \
   -e MINIO_ROOT_PASSWORD=[复杂密码，至少8位] \
-  -e MINIO_DEFAULT_BUCKET=shenxiang \
+  -e MINIO_DEFAULT_BUCKET=shenxiang-uploads \
   -e MINIO_PUBLIC_CDN_URL=http://localhost:9000 \
   -v /data/minio/data:/data \
   --network shenxiang-net \
@@ -387,19 +388,19 @@ docker run -d \
 
 ```bash
 # 安装 mc 客户端
-docker exec -it shenxiang-minio apt-get update && apt-get install -y mc
+docker exec -i shenxiang-minio apt-get update && apt-get install -y mc
 
 # 配置 mc 连接到本机 MinIO
-docker exec -it shenxiang-minio mc alias set myminio http://localhost:9000 shenxiang [密码]
+docker exec -i shenxiang-minio mc alias set myminio http://localhost:9000 shenxiang [密码]
 
 # 创建存储桶
-docker exec -it shenxiang-minio mc mb myminio/shenxiang-uploads
+docker exec -i shenxiang-minio mc mb myminio/shenxiang-uploads
 
 # 设置存储桶为公开读取（用于提供文件访问URL）
-docker exec -it shenxiang-minio mc anonymous set download myminio/shenxiang-uploads
+docker exec -i shenxiang-minio mc anonymous set download myminio/shenxiang-uploads
 
 # 设置存储桶策略 - 允许带签名的上传请求
-docker exec -it shenxiang-minio mc anonymous set upload myminio/shenxiang-uploads
+docker exec -i shenxiang-minio mc anonymous set upload myminio/shenxiang-uploads
 ```
 
 ### 7.3 验证 MinIO
@@ -547,7 +548,7 @@ PROJECT_DIR="/data/nextjs"
 CONTAINER_NAME="shenxiang-nextjs"
 
 echo "========== $(date) =========="
-echo "📦 开始自动部署..."
+echo "[INFO] Starting auto-deployment..."
 
 # 1. 停止旧容器
 docker stop $CONTAINER_NAME 2>/dev/null
@@ -573,9 +574,9 @@ docker run -d \
 # 5. 验证
 sleep 3
 if docker ps | grep -q $CONTAINER_NAME; then
-  echo "✅ 部署成功！"
+  echo "[OK] Deployment successful!"
 else
-  echo "❌ 部署失败！"
+  echo "[FAIL] Deployment failed!"
   docker logs $CONTAINER_NAME
 fi
 EOF
@@ -585,6 +586,8 @@ chmod +x /data/nextjs/webhook/deploy.sh
 
 #### 8.7.2 创建 Webhook 接收服务
 
+**⚠️ 重要: 必须设置 GITHUB_WEBHOOK_SECRET 环境变量，否则服务无法启动!**
+
 ```bash
 # 创建 webhook 服务
 cat > /data/nextjs/webhook/server.js << 'EOF'
@@ -592,7 +595,11 @@ const http = require('http');
 const { exec } = require('child_process');
 const crypto = require('crypto');
 
-const SECRET = process.env.GITHUB_WEBHOOK_SECRET || 'your-secret';
+const SECRET = process.env.GITHUB_WEBHOOK_SECRET;
+if (!SECRET) {
+  console.error('[FAIL] GITHUB_WEBHOOK_SECRET environment variable not set');
+  process.exit(1);
+}
 const PORT = 3001;
 
 http.createServer((req, res) => {
@@ -607,16 +614,16 @@ http.createServer((req, res) => {
       const digest = 'sha256=' + hmac.digest('hex');
 
       if (signature !== digest) {
-        console.log('❌ 签名验证失败');
+        console.log('[FAIL] Signature verification failed');
         res.writeHead(403);
         res.end('Forbidden');
         return;
       }
 
-      console.log('✅ Webhook 收到，正在部署...');
+      console.log('[OK] Webhook received, starting deployment...');
       exec('/data/nextjs/webhook/deploy.sh', (err, stdout, stderr) => {
         if (err) {
-          console.error('❌ 部署失败:', err);
+          console.error('[FAIL] Deployment failed:', err);
           res.writeHead(500);
           res.end('Deploy failed');
           return;
@@ -631,27 +638,55 @@ http.createServer((req, res) => {
     res.end('Not found');
   }
 }).listen(PORT, () => {
-  console.log(`🚀 Webhook 服务已启动，监听端口 ${PORT}`);
+  console.log('[OK] Webhook service started on port ' + PORT);
 });
 EOF
 ```
 
 #### 8.7.3 启动 Webhook 服务
 
+**⚠️ 重要:**
+1. **必须安装 Node.js 18+ 版本**，不要使用默认 apt 源的旧版本!
+2. **必须设置 GITHUB_WEBHOOK_SECRET 环境变量** (强密码，不能使用默认值!)
+
 ```bash
-# 安装 Node.js（如果没有）
-apt install -y nodejs npm
+# 安装 Node.js 18.x (必须使用 NodeSource 仓库)
+curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
+apt install -y nodejs
 
-# 设置密码（自己定义一个）
-export GITHUB_WEBHOOK_SECRET="your-password"
+# 验证 Node 版本
+node --version  # 应显示 v18.x.x
 
-# 启动服务
-cd /data/nextjs/webhook
-node server.js &
+# 创建 webhook systemd 服务
+cat > /etc/systemd/system/webhook.service << 'EOF'
+[Unit]
+Description=GitHub Webhook Server
+After=network.target
 
-# 设置开机自启
-echo "cd /data/nextjs/webhook && GITHUB_WEBHOOK_SECRET=your-password node server.js" >> /etc/rc.local
+[Service]
+Type=simple
+ExecStart=/usr/bin/node /data/nextjs/webhook/server.js
+Restart=always
+RestartSec=5
+Environment=GITHUB_WEBHOOK_SECRET=YOUR_ACTUAL_SECRET_HERE
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# 替换为你生成的强密码 (必须修改!)
+sed -i 's/YOUR_ACTUAL_SECRET_HERE/你的强密码/' /etc/systemd/system/webhook.service
+
+# 启用并启动服务
+systemctl daemon-reload
+systemctl enable webhook
+systemctl start webhook
+
+# 验证状态
+systemctl status webhook
 ```
+
+**⚠️ 警告: `YOUR_ACTUAL_SECRET_HERE` 必须替换为强密码，否则服务无法保护你的部署安全!**
 
 #### 8.7.4 GitHub 配置 Webhook
 
@@ -663,7 +698,7 @@ echo "cd /data/nextjs/webhook && GITHUB_WEBHOOK_SECRET=your-password node server
 |------|-----|
 | Payload URL | `http://服务器IP:3001/webhook` |
 | Content type | `application/json` |
-| Secret | `your-password`（和上面的一致） |
+| Secret | `your-password`（和上面设置的一致，**必须修改!**） |
 | 触发事件 | **Just the push event** |
 
 4. 点击 **Add webhook**
@@ -794,8 +829,8 @@ systemctl reload nginx
 ### 9.2 更新 /etc/hosts (可选，用于本地测试)
 
 ```bash
-# 如果 Nginx 在容器内运行，添加 hosts
-echo "127.0.0.1 shenxiang-nextjs shenxiang-postgres shenxiang-redis shenxiang-dify shenxiang-lighthouse" >> /etc/hosts
+# 添加容器网络主机名 (仅用于本地测试)
+echo "127.0.0.1 shenxiang-nextjs shenxiang-dify shenxiang-redis shenxiang-minio" >> /etc/hosts
 ```
 
 ### 9.3 Nginx 服务化 (systemd)
@@ -895,8 +930,11 @@ tar -czf $BACKUP_DIR/minio_$DATE.tar.gz /data/minio/data
 # 备份 Nginx 配置
 tar -czf $BACKUP_DIR/nginx_$DATE.tar.gz /etc/nginx/sites-available
 
-# 备份 docker-compose 配置
-tar -czf $BACKUP_DIR/docker_$DATE.tar.gz /data/nextjs/docker-compose.yml /data/dify/docker/.env
+# 备份 Next.js 应用 (包括 webhook)
+tar -czf $BACKUP_DIR/nextjs_$DATE.tar.gz /data/nextjs
+
+# 备份 Dify 配置
+tar -czf $BACKUP_DIR/dify_$DATE.tar.gz /data/dify/docker/.env
 
 # 保留最近 30 天
 find $BACKUP_DIR -name "*.tar.gz" -mtime +30 -delete
@@ -908,25 +946,13 @@ chmod +x /data/backup.sh
 echo "0 3 * * * /data/backup.sh >> /var/log/backup.log 2>&1" >> /var/spool/cron/crontabs/root
 ```
 
-### 13.3 日志轮转
+### 11.3 日志轮转
+
+日志配置已在阶段 3.2 的 `daemon.json` 中统一配置，包含日志轮转 (max-size: 100m, max-file: 3) 和存储驱动 (overlay2)。
+
+如需单独调整日志设置，编辑 `/etc/docker/daemon.json` 后执行:
 
 ```bash
-# 配置 Docker 日志轮转
-cat > /etc/docker/daemon.json << 'EOF'
-{
-  "registry-mirrors": [
-    "https://docker.mirrors.ustc.edu.cn",
-    "https://hub-mirror.c.163.com"
-  ],
-  "log-driver": "json-file",
-  "log-opts": {
-    "max-size": "100m",
-    "max-file": "3"
-  },
-  "storage-driver": "overlay2"
-}
-EOF
-
 systemctl restart docker
 ```
 
@@ -1060,7 +1086,7 @@ systemctl restart nginx
 
 ---
 
-**文档版本**: v1.5
+**文档版本**: v1.7
 **创建日期**: 2026-03-26
-**更新日期**: 2026-03-27 (v1.5 → v1.6: 新增自动部署 Webhook 配置)
+**更新日期**: 2026-03-28 (v1.7: 修复 CRITICAL 安全问题 - webhook secret 强制校验、systemd 守护、docker exec -i、备份 webhook)
 **状态**: 待审核
