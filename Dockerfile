@@ -18,19 +18,16 @@ FROM node:20-alpine AS runner
 
 WORKDIR /app
 
-# 安装生产依赖
-COPY package*.json ./
-RUN npm ci --omit=dev && npm cache clean --force
-
-# 从构建阶段复制
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./
-COPY --from=builder /app/public ./public
-
 # 环境变量
 ENV NODE_ENV=production
 ENV PORT=3000
 
+# 从构建阶段精准复制 Standalone 产物及静态文件夹 (注意目标路径的修改)
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
+COPY --from=builder /app/public ./public
+
 EXPOSE 3000
 
+# Standalone 模式的终极启动命令
 CMD ["node", "server.js"]
