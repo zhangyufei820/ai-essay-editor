@@ -11,10 +11,7 @@ RUN npm ci
 COPY . .
 
 # 构建
-RUN --mount=type=secret,id=env,target=/tmp/secret.env \
-    cp /tmp/secret.env /app/.env && \
-    npm run build && \
-    rm -f /app/.env
+RUN npm run build
 
 # ========== 生产阶段 ==========
 FROM node:20-alpine AS runner
