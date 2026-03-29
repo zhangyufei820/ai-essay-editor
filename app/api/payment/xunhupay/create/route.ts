@@ -17,7 +17,7 @@ function gen_sign(params: any, appSecret: string) {
   let stringA = kvPairs.join("&");
   let stringSignTemp = stringA + appSecret;
   
-  return crypto.createHash("md5").update(stringSignTemp, "utf8").digest("hex");
+  return crypto.createHash("md5").update(stringSignTemp, "utf8").digest("hex").toLowerCase();
 }
 
 // 获取当前请求的基础URL
