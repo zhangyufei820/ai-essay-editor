@@ -1,11 +1,11 @@
 # ========== 构建阶段 ==========
-FROM node:20-alpine AS builder
+FROM node:20 AS builder
 
 WORKDIR /app
 
 # 安装依赖（包括 devDependencies，用于构建阶段）
 COPY package*.json ./
-RUN npm cache clean --force && npm install --force
+RUN npm install -g pnpm && pnpm install
 
 # 复制源代码
 COPY . .
@@ -14,7 +14,7 @@ COPY . .
 RUN npm run build
 
 # ========== 生产阶段 ==========
-FROM node:20-alpine AS runner
+FROM node:20 AS runner
 
 WORKDIR /app
 
