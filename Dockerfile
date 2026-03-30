@@ -5,7 +5,7 @@ WORKDIR /app
 
 # 安装依赖（包括 devDependencies，用于构建阶段）
 COPY package*.json ./
-RUN npm ci
+RUN npm cache clean --force && npm install --force
 
 # 复制源代码
 COPY . .
