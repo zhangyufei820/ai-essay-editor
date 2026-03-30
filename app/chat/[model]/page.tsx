@@ -8,12 +8,14 @@ import { useParams, notFound } from 'next/navigation'
 const SUPPORTED_MODELS = [
   'standard',        // 作文批改（默认）
   'teaching-pro',    // 教学评助手
-  'gpt-5',           // ChatGPT 5.1
-  'claude-opus',     // Claude Opus 4.5
-  'gemini-pro',      // Gemini 3.0 Pro
+  'gpt-5',           // ChatGPT 5.4
+  'claude-opus',     // Claude opus4.6thinking
+  'gemini-pro',      // Gemini 3.1 pro
   'banana-2-pro',    // Banana 2 Pro (图像)
   'suno-v5',         // Suno V5 (音乐)
   'sora-2-pro',      // Sora 2 Pro (视频)
+  'grok-4.2',        // Grok-4.2
+  'open-claw',       // Open Claw
 ] as const
 
 export type SupportedModel = typeof SUPPORTED_MODELS[number]

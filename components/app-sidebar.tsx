@@ -272,18 +272,20 @@ function AppSidebarInner() {
   const getAvatarUrl = () => user?.user_metadata?.avatar_url || null
 
   // --- 导航项组件 - 🎨 增强立体感和字体样式 ---
-  const NavItem = ({ 
-    href, 
-    icon: Icon, 
-    label, 
+  const NavItem = ({
+    href,
+    icon: Icon,
+    label,
     isActive,
-    onClick 
-  }: { 
+    onClick,
+    badge
+  }: {
     href: string
     icon: React.ElementType
     label: string
     isActive: boolean
     onClick?: () => void
+    badge?: string
   }) => (
     <Link
       href={href}
@@ -291,11 +293,11 @@ function AppSidebarInner() {
       className={cn(
         "relative flex items-center gap-3 px-3 py-3 transition-all",
         "rounded-xl",
-        isActive 
-          ? "font-bold" 
+        isActive
+          ? "font-bold"
           : "font-semibold hover:bg-white/80"
       )}
-      style={isActive ? { 
+      style={isActive ? {
         backgroundColor: "rgba(34, 197, 94, 0.15)",
         boxShadow: "0 2px 8px rgba(34, 197, 94, 0.15), inset 0 1px 0 rgba(255,255,255,0.5)",
         color: COLORS.primary.dark
@@ -306,17 +308,17 @@ function AppSidebarInner() {
     >
       {/* 左侧色条 - 选中态，更粗更明显 */}
       {isActive && (
-        <div 
+        <div
           className="absolute left-0 top-1/2 -translate-y-1/2 w-[4px] h-8 rounded-r-full"
-          style={{ 
+          style={{
             backgroundColor: COLORS.primary.main,
             boxShadow: `2px 0 8px ${COLORS.primary.main}60`
           }}
         />
       )}
-      
+
       {/* 图标 - 20px，选中态填充样式，增加阴影 */}
-      <Icon 
+      <Icon
         className="h-5 w-5 shrink-0"
         style={{
           color: isActive ? COLORS.primary.dark : COLORS.gray[600],
@@ -325,8 +327,8 @@ function AppSidebarInner() {
         fill={isActive ? "currentColor" : "none"}
         strokeWidth={isActive ? 0 : 2}
       />
-      
-      <span 
+
+      <span
         className="text-sm"
         style={{
           textShadow: isActive ? TEXT_SHADOWS.medium : TEXT_SHADOWS.subtle
@@ -334,6 +336,15 @@ function AppSidebarInner() {
       >
         {label}
       </span>
+
+      {/* 推荐标识 - 右上角 */}
+      {badge && (
+        <span
+          className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-sm"
+        >
+          {badge}
+        </span>
+      )}
     </Link>
   )
 
@@ -440,11 +451,20 @@ function AppSidebarInner() {
           />
           
           {/* 教学评助手 - 🔥 使用新路由 /chat/teaching-pro */}
-          <NavItem 
+          <NavItem
             href="/chat/teaching-pro"
             icon={Brain}
             label="教学评助手"
             isActive={pathname === "/chat/teaching-pro" || currentAgent === "teaching-pro"}
+          />
+
+          {/* Open Claw - 🔥 使用新路由 /chat/open-claw */}
+          <NavItem
+            href="/chat/open-claw"
+            icon={Bot}
+            label="Open Claw"
+            isActive={pathname === "/chat/open-claw"}
+            badge="推荐"
           />
 
           {/* 分割线 - 智能体和最近对话之间 */}

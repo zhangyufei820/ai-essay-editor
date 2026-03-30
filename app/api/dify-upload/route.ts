@@ -55,6 +55,10 @@ function getApiKeyForModel(model: string | null): string {
     case "banana":
     case "banana-2-pro":
       return process.env.DIFY_BANANA_API_KEY || DEFAULT_DIFY_KEY || "";
+    case "grok-4.2":
+      return process.env.DIFY_API_KEY_GROK42 || DEFAULT_DIFY_KEY || "";
+    case "open-claw":
+      return process.env.DIFY_API_KEY_OPENCLAW || DEFAULT_DIFY_KEY || "";
     default:
       return DEFAULT_DIFY_KEY || "";
   }

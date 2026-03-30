@@ -18,15 +18,17 @@
 // 1. 类型定义
 // ============================================
 
-export type ModelType = 
-  | "standard" 
+export type ModelType =
+  | "standard"
   | "teaching-pro"
-  | "gpt-5" 
-  | "claude-opus" 
-  | "gemini-pro" 
-  | "banana-2-pro" 
-  | "suno-v5" 
+  | "gpt-5"
+  | "claude-opus"
+  | "gemini-pro"
+  | "banana-2-pro"
+  | "suno-v5"
   | "sora-2-pro"
+  | "grok-4.2"
+  | "open-claw"
 
 export type GenMode = "text" | "image" | "music" | "video"
 
@@ -82,26 +84,40 @@ export const MODEL_COSTS: Record<ModelType, ModelCostConfig> = {
   },
   
   // ========== 独立模型（20 积分/1K Token）==========
-  "gpt-5": { 
+  "gpt-5": {
     category: "standalone",
     tokenRate: STANDALONE_TOKEN_RATE,
-    displayName: "ChatGPT 5.2",
+    displayName: "ChatGPT 5.4",
     mode: "text",
     estimatedTokens: 1500  // 预估平均 1.5K tokens
   },
-  "claude-opus": { 
+  "claude-opus": {
     category: "standalone",
     tokenRate: STANDALONE_TOKEN_RATE,
-    displayName: "Claude Opus 4.5",
+    displayName: "Claude opus4.6thinking",
     mode: "text",
     estimatedTokens: 2000  // 预估平均 2K tokens
   },
-  "gemini-pro": { 
+  "gemini-pro": {
     category: "standalone",
     tokenRate: STANDALONE_TOKEN_RATE,
-    displayName: "Gemini 3.0 Pro",
+    displayName: "Gemini 3.1 pro",
     mode: "text",
     estimatedTokens: 1500  // 预估平均 1.5K tokens
+  },
+  "grok-4.2": {
+    category: "standalone",
+    tokenRate: STANDALONE_TOKEN_RATE,
+    displayName: "Grok-4.2",
+    mode: "text",
+    estimatedTokens: 1500
+  },
+  "open-claw": {
+    category: "standalone",
+    tokenRate: STANDALONE_TOKEN_RATE,
+    displayName: "Open Claw",
+    mode: "text",
+    estimatedTokens: 1500
   },
   
   // ========== 多媒体模型（混合计费）==========

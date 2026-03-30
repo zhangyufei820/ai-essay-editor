@@ -9,11 +9,51 @@
 
 import { useRef, useEffect, useState, type KeyboardEvent, type ChangeEvent } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Send, Paperclip, X, Loader2, ChevronDown, FileText, Image as ImageIcon } from "lucide-react"
+import { Send, Paperclip, X, Loader2, ChevronDown, FileText, Image as ImageIcon, Mic, MicOff } from "lucide-react"
 import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { brandColors, slateColors } from "@/lib/design-tokens"
+
+// ============================================
+// Web Speech API 类型定义
+// ============================================
+type SpeechRecognitionEvent = {
+  resultIndex: number
+  results: {
+    [key: number]: {
+      [key: number]: { transcript: string; confidence: number }
+      isFinal: boolean
+      length: number
+    }
+    length: number
+  }
+}
+
+type SpeechRecognitionErrorEvent = {
+  error: string
+  message: string
+}
+
+interface SpeechRecognition extends EventTarget {
+  continuous: boolean
+  interimResults: boolean
+  lang: string
+  onresult: (event: SpeechRecognitionEvent) => void
+  onerror: (event: SpeechRecognitionErrorEvent) => void
+  onend: () => void
+  onstart: () => void
+  start: () => void
+  stop: () => void
+  abort: () => void
+}
+
+declare global {
+  interface Window {
+    SpeechRecognition: new () => SpeechRecognition
+    webkitSpeechRecognition: new () => SpeechRecognition
+  }
+}
 
 // ============================================
 // 类型定义
@@ -141,6 +181,8 @@ export function ChatInput({
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isFocused, setIsFocused] = useState(false)
+  const [isListening, setIsListening] = useState(false)
+  const recognitionRef = useRef<SpeechRecognition | null>(null)
 
   // 自动调整高度
   useEffect(() => {
@@ -176,6 +218,63 @@ export function ChatInput({
       e.target.value = ""
     }
   }
+
+  // 语音输入处理
+  const toggleVoiceInput = () => {
+    // 检查浏览器是否支持语音识别
+    const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition
+    if (!SpeechRecognitionAPI) {
+      console.error("当前浏览器不支持语音识别")
+      return
+    }
+
+    if (isListening) {
+      // 停止语音识别
+      recognitionRef.current?.stop()
+      setIsListening(false)
+    } else {
+      // 开始语音识别
+      const recognition = new SpeechRecognitionAPI()
+      recognition.continuous = true
+      recognition.interimResults = true
+      recognition.lang = "zh-CN" // 设置为中文
+
+      recognition.onresult = (event: SpeechRecognitionEvent) => {
+        let transcript = ""
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const result = event.results[i]
+          if (result.isFinal) {
+            transcript += result[0].transcript
+          }
+        }
+        if (transcript) {
+          onChange(value + transcript)
+        }
+      }
+
+      recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+        console.error("语音识别错误:", event.error)
+        setIsListening(false)
+      }
+
+      recognition.onend = () => {
+        setIsListening(false)
+      }
+
+      recognitionRef.current = recognition
+      recognition.start()
+      setIsListening(true)
+    }
+  }
+
+  // 组件卸载时停止语音识别
+  useEffect(() => {
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.abort()
+      }
+    }
+  }, [])
 
   // 是否可以提交
   const canSubmit = !isLoading && !disabled && (value.trim() || uploadedFiles.length > 0)
@@ -285,6 +384,32 @@ export function ChatInput({
             </Button>
           </div>
         )}
+
+        {/* 语音输入按钮 */}
+        <div className="flex flex-col items-center gap-1 shrink-0">
+          <span className="text-[10px] font-medium" style={{ color: slateColors[400] }}>
+            {isListening ? "录音中" : "语音输入"}
+          </span>
+          <motion.button
+            type="button"
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={toggleVoiceInput}
+            disabled={isLoading || disabled}
+            className={cn(
+              "h-10 w-10 rounded-xl flex items-center justify-center transition-all duration-200",
+              isListening
+                ? "bg-red-500 text-white shadow-lg animate-pulse"
+                : "bg-slate-100 hover:bg-slate-200 text-slate-600"
+            )}
+          >
+            {isListening ? (
+              <MicOff className="h-5 w-5" />
+            ) : (
+              <Mic className="h-5 w-5" />
+            )}
+          </motion.button>
+        </div>
 
         {/* 文本输入框 */}
         <Textarea

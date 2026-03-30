@@ -50,7 +50,7 @@ describe('lib/pricing.ts v2.0 - 计费公式测试', () => {
   describe('模型配置', () => {
     const allModels: ModelType[] = [
       'standard', 'teaching-pro', 'gpt-5', 'claude-opus', 'gemini-pro',
-      'banana-2-pro', 'suno-v5', 'sora-2-pro'
+      'banana-2-pro', 'suno-v5', 'sora-2-pro', 'grok-4.2', 'open-claw'
     ]
 
     test.each(allModels)('模型 %s 应有有效的配置', (model) => {
@@ -71,7 +71,7 @@ describe('lib/pricing.ts v2.0 - 计费公式测试', () => {
     })
 
     test('独立模型应有正确的 tokenRate', () => {
-      const standalones: ModelType[] = ['gpt-5', 'claude-opus', 'gemini-pro']
+      const standalones: ModelType[] = ['gpt-5', 'claude-opus', 'gemini-pro', 'grok-4.2', 'open-claw']
       standalones.forEach(model => {
         const config = MODEL_COSTS[model]
         expect(config.category).toBe('standalone')
@@ -209,7 +209,11 @@ describe('lib/pricing.ts v2.0 - 计费公式测试', () => {
     test('getModelDisplayName 返回正确的显示名称', () => {
       expect(getModelDisplayName('standard')).toBe('作文批改智能体')
       expect(getModelDisplayName('teaching-pro')).toBe('教学评智能助手')
-      expect(getModelDisplayName('gpt-5')).toBe('ChatGPT 5.1')
+      expect(getModelDisplayName('gpt-5')).toBe('ChatGPT 5.4')
+      expect(getModelDisplayName('claude-opus')).toBe('Claude opus4.6thinking')
+      expect(getModelDisplayName('gemini-pro')).toBe('Gemini 3.1 pro')
+      expect(getModelDisplayName('grok-4.2')).toBe('Grok-4.2')
+      expect(getModelDisplayName('open-claw')).toBe('Open Claw')
       expect(getModelDisplayName('sora-2-pro')).toBe('Sora 2 Pro')
     })
 

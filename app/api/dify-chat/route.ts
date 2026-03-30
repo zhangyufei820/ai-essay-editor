@@ -201,6 +201,14 @@ export async function POST(request: NextRequest) {
             targetApiKey = process.env.DIFY_BANANA_API_KEY;
             keySource = "DIFY_BANANA_API_KEY";
             break;
+        case "grok-4.2":
+            targetApiKey = process.env.DIFY_API_KEY_GROK42;
+            keySource = "DIFY_API_KEY_GROK42";
+            break;
+        case "open-claw":
+            targetApiKey = process.env.DIFY_API_KEY_OPENCLAW;
+            keySource = "DIFY_API_KEY_OPENCLAW";
+            break;
         // 如果是 Sono/Sora 可以在这里继续加 case
         default:
             // 如果没传 model 或者 model 是 standard，就用上面的默认 Key
