@@ -626,24 +626,24 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       description: "教学评估与反馈",
       group: "教育专用"
     },
-    "gpt-5": { 
-      name: "ChatGPT 5.2", 
-      icon: Bot, 
+    "gpt-5": {
+      name: "ChatGPT 5.4",
+      icon: Bot,
       color: BRAND_GREEN,
       description: "通用智能对话",
       badge: "新",
       group: "通用模型"
     },
-    "claude-opus": { 
-      name: "Claude Opus 4.5", 
-      icon: Sparkles, 
+    "claude-opus": {
+      name: "Claude opus4.6thinking",
+      icon: Sparkles,
       color: BRAND_GREEN,
       description: "深度推理与分析",
       group: "通用模型"
     },
-    "gemini-pro": { 
-      name: "Gemini 3.0 Pro", 
-      icon: Sparkles, 
+    "gemini-pro": {
+      name: "Gemini 3.1 pro",
+      icon: Sparkles,
       color: BRAND_GREEN,
       description: "多模态理解",
       group: "通用模型"
@@ -656,20 +656,35 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       badge: "热门",
       group: "创意生成"
     },
-    "suno-v5": { 
-      name: "Suno V5", 
-      icon: AudioLines, 
+    "suno-v5": {
+      name: "Suno V5",
+      icon: AudioLines,
       color: BRAND_GREEN,
       description: "AI 音乐创作",
       group: "创意生成"
     },
-    "sora-2-pro": { 
-      name: "Sora 2 Pro", 
-      icon: Film, 
+    "sora-2-pro": {
+      name: "Sora 2 Pro",
+      icon: Film,
       color: BRAND_GREEN,
       description: "AI 视频生成",
       badge: "Pro",
       group: "创意生成"
+    },
+    "grok-4.2": {
+      name: "Grok-4.2",
+      icon: Sparkles,
+      color: BRAND_GREEN,
+      description: "xAI 智能助手",
+      group: "通用模型"
+    },
+    "open-claw": {
+      name: "Open Claw",
+      icon: Bot,
+      color: BRAND_GREEN,
+      description: "OpenClaw 智能助手",
+      badge: "推荐",
+      group: "通用模型"
     },
   }
 
