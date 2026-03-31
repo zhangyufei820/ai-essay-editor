@@ -159,6 +159,21 @@ export async function POST(request: NextRequest) {
     
     const body = await request.json()
     const { query, conversation_id, fileIds, userId: bodyUserId, inputs, model, imageSize, estimatedCost } = body
+
+    // 🔥 会话隔离修复：为每个模型创建独立的 conversation_id 命名空间
+    // 防止多用户并发时不同模型复用同一个 conversation_id 导致 Dify 404 冲突
+    // 每个模型的 conversation_id 前缀为 "model_name:"，Dify 端可剥离前缀处理
+    const modelPrefix = model || "standard"
+    let effectiveConvId = conversation_id
+    if (conversation_id && !conversation_id.startsWith(`${modelPrefix}:`)) {
+      // 检测到 conversation_id 来自不同模型（无当前模型前缀），说明发生了模型切换
+      // 为防止会话冲突，清除旧的 conversation_id，强制创建新会话
+      console.warn(`⚠️ [会话隔离] 检测到模型切换，conversation_id="${conversation_id}" 不属于当前模型 "${modelPrefix}"，强制创建新会话`)
+      effectiveConvId = null
+    } else if (conversation_id && conversation_id.startsWith(`${modelPrefix}:`)) {
+      // 当前模型前缀，剥离后发送给 Dify
+      effectiveConvId = conversation_id.slice((modelPrefix + ":").length)
+    }
     
     // 🔥 调试：打印完整请求体
     console.log(`🔍 [请求体] 完整内容:`, JSON.stringify(body, null, 2))
@@ -355,7 +370,7 @@ export async function POST(request: NextRequest) {
                 query: query || "你好",
                 response_mode: "streaming",
                 user: userId || "default-user",
-                conversation_id: currentConvId,
+                conversation_id: effectiveConvId !== undefined ? effectiveConvId : currentConvId,
             }
 
             if (fileIds && fileIds.length > 0) {
@@ -404,7 +419,9 @@ export async function POST(request: NextRequest) {
         // 只有首次失败才重试，重试后仍失败则退出循环
         if ((response.status === 404 || response.status === 400) && retryCount === 0) {
             retryCount++;
-            console.warn(`⚠️ 会话 ID 冲突 (可能切换了模型)，自动开启新会话重试...`);
+            console.warn(`⚠️ [会话隔离] 会话 ID 冲突 (模型=${modelPrefix})，自动开启新会话重试...`);
+            // 强制清除 effectiveConvId，确保重试时创建全新会话
+            effectiveConvId = null;
             continue;
         }
 

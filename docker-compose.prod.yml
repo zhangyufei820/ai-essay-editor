@@ -1,13 +1,65 @@
-# Production Environment Configuration
+# ============================================================
+# Production docker-compose.prod.yml
+# Architecture: shenxiang.school platform
+# ============================================================
+# 
+# Services:
+#   - lighthouse: GitHub webhook trigger server (port 3001)
+#     * 迁移自主机进程 /data/nextjs/webhook/server.js
+#     * 触发 /data/nextjs/webhook/deploy.sh 执行 CI/CD
+#     * 需要访问 Docker socket 以执行 docker 命令
 #
-# This is a placeholder file for the complete production environment configuration.
-# Full implementation based on design document Section 8.1 (includes Nginx, Dify, Lighthouse).
+#   - nextjs: Next.js 应用 (端口 3000)
+#     * 已在 Docker 中运行 (shenxiang-nextjs)
+#     * 通过 deploy.sh 重建
 #
-# TODO: Implement complete production configuration with:
-#   - Nginx reverse proxy
-#   - Dify integration
-#   - Lighthouse CI
-#   - Production-ready database configuration
-#   - SSL/TLS configuration
-#   - Proper health checks
-#   - Logging configuration
+#   - Dify 服务通过 docker-* 容器独立运行
+#
+# Usage:
+#   docker-compose -f docker-compose.prod.yml up -d lighthouse
+#   docker-compose -f docker-compose.prod.yml logs -f lighthouse
+# ============================================================
+
+version: '3.8'
+
+services:
+  # ----------------------------------------------------------
+  # Lighthouse - GitHub Webhook CI/CD Trigger Server
+  # ----------------------------------------------------------
+  lighthouse:
+    build:
+      context: /data/nextjs/webhook
+      dockerfile: Dockerfile.lighthouse
+    container_name: shenxiang-lighthouse
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3001:3001"  # 仅监听本地，Nginx 代理
+    environment:
+      - NODE_ENV=production
+      - GITHUB_WEBHOOK_SECRET=${GITHUB_WEBHOOK_SECRET:-你的密码}
+    volumes:
+      # 挂载 Docker socket 用于执行 docker 命令 (CI/CD)
+      - /var/run/docker.sock:/var/run/docker.sock
+      # 挂载部署脚本所在目录
+      - /data/nextjs/webhook:/data/nextjs/webhook
+      # 挂载 Next.js 项目目录 (用于 git pull)
+      - /data/nextjs/ai-essay-editor:/data/nextjs/ai-essay-editor
+      # 挂载环境变量文件
+      - /data/nextjs/.env:/data/nextjs/.env:ro
+    networks:
+      - shenxiang-net
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3001/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: 'json-file'
+      options:
+        max-size: '10m'
+        max-file: '3'
+
+networks:
+  shenxiang-net:
+    external: true

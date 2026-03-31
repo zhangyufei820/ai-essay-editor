@@ -1,0 +1,13 @@
+
+> my-v0-project@0.1.0 start
+> next start
+
+▲ Next.js 16.1.1
+- Local:         http://localhost:3000
+- Network:       http://10.5.0.17:3000
+
+✓ Starting...
+⚠ "next start" does not work with "output: standalone" configuration. Use "node .next/standalone/server.js" instead.
+✓ Ready in 255ms
+⚠️ 会话 ID 冲突 (可能切换了模型)，自动开启新会话重试...
+⚠️ 会话 ID 冲突 (可能切换了模型)，自动开启新会话重试...
