@@ -381,20 +381,40 @@ export async function POST(request: NextRequest) {
         return response;
     };
 
-    // --- 4. 执行请求与智能容错 ---
+    // --- 4. 执行请求与智能容错（最多重试1次，防止死循环）---
+    const MAX_RETRIES = 1;
+    let retryCount = 0;
+    let response = null;
+
     console.log(`🚀 [Dify请求] 开始调用 Dify API...`)
-    let response = await callDify(false);
-    
-    console.log(`📡 [Dify响应] 状态码: ${response.status}`)
-    
-    if (model === "banana-2-pro") {
-      console.log(`🎨 [Banana] Dify响应头:`, Object.fromEntries(response.headers.entries()))
+
+    while (retryCount <= MAX_RETRIES) {
+        const isRetry = retryCount > 0;
+        if (isRetry) {
+            console.warn(`🔄 [Dify重试] 第 ${retryCount} 次重试 (isNewSession=true)`);
+        }
+
+        response = await callDify(isRetry);
+        console.log(`📡 [Dify响应] 状态码: ${response.status}`)
+
+        if (model === "banana-2-pro") {
+            console.log(`🎨 [Banana] Dify响应头:`, Object.fromEntries(response.headers.entries()))
+        }
+
+        // 只有首次失败才重试，重试后仍失败则退出循环
+        if ((response.status === 404 || response.status === 400) && retryCount === 0) {
+            retryCount++;
+            console.warn(`⚠️ 会话 ID 冲突 (可能切换了模型)，自动开启新会话重试...`);
+            continue;
+        }
+
+        // 非 404/400 错误，或已经是重试后的结果，直接跳出
+        break;
     }
 
-    if (response.status === 404 || response.status === 400) {
-        console.warn(`⚠️ 会话 ID 冲突 (可能切换了模型)，自动开启新会话重试...`);
-        response = await callDify(true);
-        console.log(`📡 [Dify重试] 新状态码: ${response.status}`)
+    // 防御：确保 response 已赋值
+    if (!response) {
+        return new Response(JSON.stringify({ error: "请求失败：无法获取响应" }), { status: 500 })
     }
 
     if (!response.ok) {
