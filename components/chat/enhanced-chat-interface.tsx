@@ -910,14 +910,22 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     // 🔥 自动折叠侧边栏，进入专注模式
     collapseSidebar()
     
-    let sid = currentSessionId; 
-    if (!sid && !urlSessionId) { 
-        sid = Date.now().toString(); 
+    let sid = currentSessionId;
+    // 🔥 修复：当模型切换时（sessionIdRef.current === null），即使 urlSessionId 存在也忽略
+    // 否则会导致用旧模型的 session 去请求新模型
+    const isModelSwitch = sessionIdRef.current === null && currentSessionId;
+    if (!sid && !urlSessionId) {
+        sid = Date.now().toString();
         setCurrentSessionId(sid);
         sessionIdRef.current = sid;
-    } else if (urlSessionId) {
-        sid = urlSessionId
-        sessionIdRef.current = urlSessionId
+    } else if (urlSessionId && !isModelSwitch) {
+        sid = urlSessionId;
+        sessionIdRef.current = urlSessionId;
+    } else {
+        // 模型切换或无 session 的情况，生成新的
+        sid = Date.now().toString();
+        setCurrentSessionId(sid);
+        sessionIdRef.current = sid;
     }
 
     // 🔥 根据模型类型设置不同的默认提示词
@@ -1585,13 +1593,19 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                         collapseSidebar()
                         
                         let sid = currentSessionId
-                        if (!sid && !urlSessionId) { 
+                        // 🔥 修复：当模型切换时，即使 urlSessionId 存在也忽略
+                        const isModelSwitch = sessionIdRef.current === null && currentSessionId;
+                        if (!sid && !urlSessionId) {
                           sid = Date.now().toString()
                           setCurrentSessionId(sid)
                           sessionIdRef.current = sid
-                        } else if (urlSessionId) {
+                        } else if (urlSessionId && !isModelSwitch) {
                           sid = urlSessionId
                           sessionIdRef.current = urlSessionId
+                        } else {
+                          sid = Date.now().toString()
+                          setCurrentSessionId(sid)
+                          sessionIdRef.current = sid
                         }
 
                         // 🔥 用户消息：显示歌词和音乐提示词（如果有）
