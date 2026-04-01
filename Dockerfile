@@ -3,6 +3,14 @@ FROM node:20 AS builder
 
 WORKDIR /app
 
+# 接受构建参数
+ARG NEXT_PUBLIC_SUPABASE_URL
+ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+# 设置环境变量（构建时需要）
+ENV NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+
 # 安装依赖（包括 devDependencies，用于构建阶段）
 COPY package*.json ./
 RUN npm install -g pnpm && pnpm install

@@ -1484,7 +1484,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   }
 
   return (
-    <div className="flex h-screen w-full bg-white overflow-hidden relative">
+    <div className="flex h-[100dvh] w-full bg-white overflow-hidden relative">
       <div className="flex flex-1 flex-col h-full relative min-w-0">
         
         {/* 🎯 升级引导横幅 - 非豪华会员常驻显示，用户手动关闭 */}
@@ -2078,7 +2078,7 @@ export interface EnhancedChatInterfaceProps {
 export function EnhancedChatInterface(props: EnhancedChatInterfaceProps) {
   const { initialModel } = props
   return (
-    <Suspense fallback={<div className="flex h-screen w-full items-center justify-center bg-white"><Loader2 className="h-6 w-6 animate-spin" style={{ color: BRAND_GREEN }} /></div>}>
+    <Suspense fallback={<div className="flex h-[100dvh] w-full items-center justify-center bg-white"><Loader2 className="h-6 w-6 animate-spin" style={{ color: BRAND_GREEN }} /></div>}>
       <ChatInterfaceInner initialModel={initialModel} />
     </Suspense>
   )

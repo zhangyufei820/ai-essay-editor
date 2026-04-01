@@ -19,6 +19,12 @@
 // 文件大小限制：50MB
 export const FILE_SIZE_LIMIT = 50 * 1024 * 1024
 
+// Vercel 文件大小限制（兼容旧代码）
+export const VERCEL_FILE_SIZE_LIMIT = 4 * 1024 * 1024 // 4MB
+
+// Lighthouse 上传服务器地址
+export const LIGHTHOUSE_UPLOAD_URL = process.env.NEXT_PUBLIC_LIGHTHOUSE_UPLOAD_URL || ""
+
 // 文件上传服务器地址
 export const UPLOAD_URL = process.env.NEXT_PUBLIC_UPLOAD_URL || ""
 
@@ -295,14 +301,65 @@ export async function uploadMultiple(
   options: UploadOptions
 ): Promise<UploadResult[]> {
   const results = await Promise.all(
-    files.map((file, index) => 
+    files.map((file, index) =>
       universalUpload(file, {
         ...options,
-        onProgress: options.onProgress 
-          ? (progress) => options.onProgress!(Math.round(((index + 1) / files.length) * 100))
+        onProgress: options.onProgress
+          ? () => options.onProgress!(Math.round(((index + 1) / files.length) * 100))
           : undefined
       })
     )
   )
   return results
+}
+
+// ============================================
+// Lighthouse 大文件上传
+// ============================================
+
+/**
+ * 🚀 Lighthouse 大文件直连上传
+ * 用于绕过 Vercel 4MB 的请求体限制
+ *
+ * @param file - 要上传的文件
+ * @param userId - 用户 ID
+ * @param model - 模型名称（用于获取对应 API Key）
+ * @returns 上传结果
+ */
+export async function uploadToLighthouse(
+  file: File,
+  userId: string,
+  model: string = "standard"
+): Promise<{ id: string }> {
+  const apiKey = getApiKeyForModel(model)
+
+  if (!apiKey) {
+    throw new Error("未配置 API Key，请联系管理员")
+  }
+
+  if (!LIGHTHOUSE_UPLOAD_URL) {
+    throw new Error("大文件上传服务暂不可用，请联系管理员配置")
+  }
+
+  const formData = new FormData()
+  formData.append("file", file)
+  formData.append("user", userId)
+
+  const response = await fetch(LIGHTHOUSE_UPLOAD_URL, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "X-User-Id": userId,
+      "X-Model": model
+    },
+    body: formData
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(`大文件上传失败 (${response.status}): ${errorText}`)
+  }
+
+  const data = await response.json()
+  return { id: data.id }
 }

@@ -5,15 +5,15 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: "https://rnujdnmxufmzgjvmddla.supabase.co"
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: "sb_publishable_J6ZjOA1cvNVJE0msWjvJEA_Y3MHr9LH"
     ports:
       - "3000:3000"
     environment:
       - NODE_ENV=development
       - NEXT_PUBLIC_API_BASE_URL=http://localhost:3000
       - DIFY_INTERNAL_URL=http://host.docker.internal:8080/v1
-      - NEXT_PUBLIC_SUPABASE_URL=${SUPABASE_URL}
-      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
-      - LOCAL_POSTGRES_URL=postgresql://shenxiang:password@postgres:5432/shenxiang
     volumes:
       - .:/app
       - /app/node_modules
