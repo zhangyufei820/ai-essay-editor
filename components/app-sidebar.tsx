@@ -220,7 +220,11 @@ function AppSidebarInner() {
         const { data: sessionData } = await supabase.from('chat_sessions').select('*').eq('user_id', userId).order('created_at', { ascending: false })
         if (sessionData) {
           setSessions(sessionData.map((s: any) => ({
-            id: s.id, title: s.title || "新对话", date: new Date(s.created_at).getTime(), preview: s.preview || ""
+            id: s.id,
+            title: s.title || "新对话",
+            date: new Date(s.created_at).getTime(),
+            preview: s.preview || "",
+            ai_model: s.ai_model || "standard"
           })))
         }
       }
@@ -502,9 +506,9 @@ function AppSidebarInner() {
                 isHistoryExpanded ? "max-h-[9999px] opacity-100" : "max-h-0 opacity-0"
               )}>
                 {sessions.map(session => (
-                  <Link 
+                  <Link
                     key={session.id}
-                    href={`/chat?id=${session.id}`} 
+                    href={`/chat/${session.ai_model || 'standard'}?id=${session.id}`}
                     onClick={handleNavClick}
                     className="block rounded-lg px-3 py-2.5 transition-all group"
                     style={{ backgroundColor: "transparent" }}

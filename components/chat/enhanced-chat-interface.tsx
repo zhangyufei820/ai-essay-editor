@@ -508,11 +508,19 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   
   useEffect(() => {
     const agentToModel: Record<string, ModelType> = {
-      "teaching-pro": "teaching-pro",
       "standard": "standard",
+      "teaching-pro": "teaching-pro",
+      "gpt-5": "gpt-5",
+      "claude-opus": "claude-opus",
+      "gemini-pro": "gemini-pro",
+      "banana-2-pro": "banana-2-pro",
+      "suno-v5": "suno-v5",
+      "sora-2-pro": "sora-2-pro",
+      "grok-4.2": "grok-4.2",
+      "open-claw": "open-claw",
     }
-    
-    const targetModel = urlAgent ? (agentToModel[urlAgent] || "standard") : "standard"
+
+    const targetModel = urlAgent ? (agentToModel[urlAgent] || urlAgent as ModelType) : (initialModel || "standard")
     
     console.log(`🔗 [URL Sync] urlAgent=${urlAgent}, prevUrlAgent=${prevUrlAgentRef.current}, targetModel=${targetModel}`)
     
@@ -1117,9 +1125,9 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     const preview = userMsg.content.slice(0, 30)
     const { data: existing } = await supabase.from('chat_sessions').select('id').eq('id', sid).single()
     if (!existing) {
-        await supabase.from('chat_sessions').insert({ id: sid, user_id: userId, title: userMsg.content.slice(0, 10)|| "作文", preview })
+        await supabase.from('chat_sessions').insert({ id: sid, user_id: userId, title: userMsg.content.slice(0, 10)|| "作文", preview, ai_model: selectedModel })
     } else {
-        await supabase.from('chat_sessions').update({ preview }).eq('id', sid)
+        await supabase.from('chat_sessions').update({ preview, ai_model: selectedModel }).eq('id', sid)
     }
     await supabase.from('chat_messages').insert({ session_id: sid, role: "user", content: userMsg.content })
 
@@ -1888,7 +1896,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                         "relative rounded-xl sm:rounded-2xl px-3 py-2.5 sm:px-4 sm:py-3 overflow-hidden",
                         message.role === "user"
                           ? "text-white max-w-[85%] sm:max-w-[75%]"
-                          : "bg-slate-50 w-full max-w-full break-words"
+                          : "bg-[#F5EDE0] w-full max-w-full break-words"
                       )} style={message.role === "user" ? { backgroundColor: BRAND_GREEN } : {}}>
                         {message.role === "user" ? (
                           <div className="space-y-2 sm:space-y-3">

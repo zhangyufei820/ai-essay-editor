@@ -15,17 +15,23 @@ export const maxDuration = 60;
 
 // ✅ 安全校验：允许的文件 MIME 类型
 const ALLOWED_MIME_TYPES = [
-  "image/jpeg", 
-  "image/png", 
-  "image/gif", 
+  "image/jpeg",
+  "image/png",
+  "image/gif",
   "image/webp",
-  "application/pdf", 
+  "application/pdf",
   "text/plain",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document" // .docx
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document", // .docx
+  // 语音文件类型
+  "audio/webm",
+  "audio/mp3",
+  "audio/mpeg",
+  "audio/ogg",
+  "audio/wav"
 ]
 
 // ✅ 安全校验：允许的文件扩展名
-const ALLOWED_EXTENSIONS = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".pdf", ".txt", ".docx"]
+const ALLOWED_EXTENSIONS = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".pdf", ".txt", ".docx", ".webm", ".mp3", ".ogg", ".wav"]
 
 // ✅ 安全校验：Vercel 限制下的最大文件大小 (4.5MB)
 // 大文件应走直连方案，此处作为 Vercel 层的安全防护

@@ -70,7 +70,7 @@ export async function uploadAudioToDify(
 }
 
 /**
- * 🔊 调用 Dify TTS 获取音频 URL
+ * 🔊 调用 TTS API 获取音频 URL
  * @param text 文字内容
  * @param model 当前模型
  * @returns 音频 Blob URL
@@ -79,32 +79,28 @@ export async function getDifyTTS(
   text: string,
   model?: string
 ): Promise<string> {
-  const apiKey = getDifyApiKey(model)
-
-  if (!apiKey) {
-    throw new Error("未配置 API Key")
-  }
-
-  const response = await fetch(`https://api.shenxiang.school/v1/text-to-audio`, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      text,
-      user: "tts-user",
-      streaming: false
+  try {
+    // 使用本地 TTS API 路由
+    const response = await fetch(getApiUrl("/api/tts"), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ text, model })
     })
-  })
 
-  if (!response.ok) {
-    throw new Error("TTS 请求失败")
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: "TTS 请求失败" }))
+      throw new Error(error.error || "TTS 请求失败")
+    }
+
+    // 将音频数据转换为 Blob URL
+    const audioBlob = await response.blob()
+    return URL.createObjectURL(audioBlob)
+  } catch (error) {
+    console.error("🔊 [TTS] 错误:", error)
+    throw error
   }
-
-  // 将音频数据转换为 Blob URL
-  const audioBlob = await response.blob()
-  return URL.createObjectURL(audioBlob)
 }
 
 /**
