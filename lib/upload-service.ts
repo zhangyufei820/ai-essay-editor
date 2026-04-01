@@ -2,7 +2,7 @@
  * 📤 通用上传服务 (Universal Upload Service)
  * 
  * 🎯 功能：
- * 1. 大文件直连 Lighthouse 服务器，绕过 Vercel 4.5MB 限制
+ * 1. 大文件直传到服务器，绕过 Vercel 限制
  * 2. 根据不同应用动态获取对应的 API Key
  * 3. 全局统一的上传入口
  * 
@@ -16,12 +16,11 @@
 // 配置常量
 // ============================================
 
-// Vercel 限制阈值：4MB（略低于 4.5MB 硬限制）
-export const VERCEL_FILE_SIZE_LIMIT = 4 * 1024 * 1024
+// 文件大小限制：50MB
+export const FILE_SIZE_LIMIT = 50 * 1024 * 1024
 
-// Lighthouse 服务器直连地址
-export const LIGHTHOUSE_UPLOAD_URL = process.env.NEXT_PUBLIC_LIGHTHOUSE_UPLOAD_URL 
-  || ""
+// 文件上传服务器地址
+export const UPLOAD_URL = process.env.NEXT_PUBLIC_UPLOAD_URL || ""
 
 // ============================================
 // 应用 API Key 映射表
@@ -149,14 +148,14 @@ export function validateFileForUpload(file: File): { valid: boolean; error?: str
 }
 
 /**
- * 🚀 大文件直连 Lighthouse 上传
+ * 🚀 直连服务器上传
  * 
  * @param file - 要上传的文件
  * @param userId - 用户 ID
  * @param model - 模型名称
  * @returns 上传结果
  */
-export async function uploadToLighthouse(
+export async function uploadToServer(
   file: File, 
   userId: string, 
   model: string = "standard"
@@ -167,11 +166,15 @@ export async function uploadToLighthouse(
     throw new Error("未配置 API Key，请联系管理员")
   }
   
+  if (!UPLOAD_URL) {
+    throw new Error("未配置上传服务器地址")
+  }
+  
   const formData = new FormData()
   formData.append("file", file)
   formData.append("user", userId)
   
-  const response = await fetch(LIGHTHOUSE_UPLOAD_URL, {
+  const response = await fetch(UPLOAD_URL, {
     method: "POST",
     headers: {
       "Authorization": `Bearer ${apiKey}`,
@@ -183,7 +186,7 @@ export async function uploadToLighthouse(
   
   if (!response.ok) {
     const errorText = await response.text()
-    throw new Error(`大文件上传失败 (${response.status}): ${errorText}`)
+    throw new Error(`文件上传失败 (${response.status}): ${errorText}`)
   }
   
   const data = await response.json()
@@ -234,81 +237,42 @@ export async function universalUpload(
   formData.append("user", userId)
   
   try {
-    // 4. 判断是否需要直连
-    const shouldUseDirectUpload = file.size > VERCEL_FILE_SIZE_LIMIT
+    // 4. 直连上传到服务器
+    if (!UPLOAD_URL) {
+      console.error("📤 [Universal Upload] 未配置上传服务器地址")
+      return { success: false, error: "未配置上传服务器地址" }
+    }
     
-    if (shouldUseDirectUpload) {
-      // 🔥 大文件直连 Lighthouse
-      console.log("📤 [Universal Upload] 大文件直连:", (file.size / 1024 / 1024).toFixed(2) + "MB")
-      
-      const response = await fetch(LIGHTHOUSE_UPLOAD_URL, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${apiKey}`,
-          "X-User-Id": userId,
-          "X-Model": model
-        },
-        body: formData
-      })
-      
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error("📤 [Universal Upload] 直连失败:", response.status, errorText)
-        return { 
-          success: false, 
-          error: `大文件上传失败 (${response.status})` 
-        }
+    console.log("📤 [Universal Upload] 直连上传:", (file.size / 1024 / 1024).toFixed(2) + "MB")
+    
+    const response = await fetch(UPLOAD_URL, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "X-User-Id": userId,
+        "X-Model": model
+      },
+      body: formData
+    })
+    
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error("📤 [Universal Upload] 上传失败:", response.status, errorText)
+      return { 
+        success: false, 
+        error: `文件上传失败 (${response.status})` 
       }
-      
-      const data = await response.json()
-      console.log("📤 [Universal Upload] 直连成功:", data.id)
-      
-      if (onProgress) onProgress(100)
-      
-      return {
-        success: true,
-        fileId: data.id,
-        fileName: data.file_name
-      }
-    } else {
-      // ✅ 小文件走 Vercel API
-      console.log("📤 [Universal Upload] 小文件走 Vercel:", (file.size / 1024 / 1024).toFixed(2) + "MB")
-      
-      const response = await fetch("/api/dify-upload", {
-        method: "POST",
-        headers: {
-          "X-User-Id": userId,
-          "X-Model": model
-        },
-        body: formData
-      })
-      
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        
-        // 如果是 413 错误，尝试降级到直连
-        if (response.status === 413 && LIGHTHOUSE_UPLOAD_URL) {
-          console.log("📤 [Universal Upload] Vercel 限制，尝试降级到直连...")
-          return universalUpload(file, options)
-        }
-        
-        return { 
-          success: false, 
-          error: errorData.error || `上传失败 (${response.status})` 
-        }
-      }
-      
-      const data = await response.json()
-      console.log("📤 [Universal Upload] Vercel 成功:", data.id)
-      
-      if (onProgress) onProgress(100)
-      
-      return {
-        success: true,
-        fileId: data.id,
-        fileName: data.safeFileName || data.file_name,
-        cosUrl: data.cosUrl
-      }
+    }
+    
+    const data = await response.json()
+    console.log("📤 [Universal Upload] 上传成功:", data.id)
+    
+    if (onProgress) onProgress(100)
+    
+    return {
+      success: true,
+      fileId: data.id,
+      fileName: data.file_name
     }
   } catch (error) {
     console.error("📤 [Universal Upload] 异常:", error)
