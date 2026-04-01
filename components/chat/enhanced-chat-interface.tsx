@@ -221,22 +221,22 @@ const StreamingCursor = () => (
 // 🧠 可折叠的思考块组件（用于 Gemini 等模型的 <think> 标签）
 const ThinkingBlock = ({ content, isStreaming }: { content: string; isStreaming?: boolean }) => {
   const [isExpanded, setIsExpanded] = useState(false)
-  
+
   return (
-    <div className="my-4 rounded-xl border border-slate-200 bg-slate-50/50 overflow-hidden">
+    <div className="my-3 rounded-lg border border-dashed border-slate-300 bg-slate-50/80 overflow-hidden">
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full flex items-center gap-2 px-4 py-3 text-left hover:bg-slate-100/50 transition-colors"
+        className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-slate-100/60 transition-colors"
       >
-        <Brain className="h-4 w-4 text-slate-400" />
-        <span className="text-sm font-medium text-slate-500">AI 思考过程</span>
-        <ChevronDown className={cn("h-4 w-4 text-slate-400 ml-auto transition-transform", isExpanded && "rotate-180")} />
-        {isStreaming && <span className="text-xs text-emerald-500 animate-pulse">思考中...</span>}
+        <Brain className="h-3.5 w-3.5 text-slate-400" />
+        <span className="text-[13px] font-medium text-slate-500">AI 思考过程</span>
+        <ChevronDown className={cn("h-3.5 w-3.5 text-slate-400 ml-auto transition-transform duration-200", isExpanded && "rotate-180")} />
+        {isStreaming && <span className="text-[11px] text-emerald-500 animate-pulse">思考中...</span>}
       </button>
       {isExpanded && (
-        <div className="px-4 pb-4 pt-2 border-t border-slate-200 text-sm text-slate-600 leading-relaxed max-h-[300px] overflow-y-auto">
+        <div className="px-3 pb-3 pt-1 border-t border-dashed border-slate-200 text-[13px] text-slate-600 leading-relaxed max-h-[250px] overflow-y-auto">
           {content.split('\n').map((line, i) => (
-            <p key={i} className="my-1">{line || '\u00A0'}</p>
+            <p key={i} className="my-0.5">{line || '\u00A0'}</p>
           ))}
         </div>
       )}
@@ -521,16 +521,16 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     }
 
     const targetModel = urlAgent ? (agentToModel[urlAgent] || urlAgent as ModelType) : (initialModel || "standard")
-    
+
     console.log(`🔗 [URL Sync] urlAgent=${urlAgent}, prevUrlAgent=${prevUrlAgentRef.current}, targetModel=${targetModel}`)
-    
+
     if (urlAgent !== prevUrlAgentRef.current) {
       prevUrlAgentRef.current = urlAgent
-      
+
       console.log(`🔄 [强制模型同步] → ${targetModel}`)
       setSelectedModel(targetModel)
       setGenMode("text")
-      
+
       if (!urlSessionId) {
         setMessages([])
         sessionIdRef.current = null
@@ -539,16 +539,40 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     }
   }, [urlAgent, urlSessionId])
 
+  // 🔥 当路由参数 initialModel 变化时，同步更新 selectedModel
+  useEffect(() => {
+    if (initialModel && initialModel !== selectedModel) {
+      console.log(`🔄 [模型同步] initialModel=${initialModel} → selectedModel=${initialModel}`)
+      setSelectedModel(initialModel)
+    }
+  }, [initialModel])
+
   const loadHistorySession = async (sid: string) => {
     setIsLoading(true)
-    setMessages([]) 
+    setMessages([])
     try {
+      // 🔥 先获取会话信息（包括 ai_model）以同步模型状态
+      const { data: sessionData, error: sessionError } = await supabase
+        .from('chat_sessions')
+        .select('ai_model')
+        .eq('id', sid)
+        .single()
+
+      if (sessionError) {
+        console.warn("获取会话模型失败:", sessionError)
+      } else if (sessionData?.ai_model) {
+        // 🔥 同步模型状态
+        console.log(`🔄 [历史会话模型同步] ai_model=${sessionData.ai_model}`)
+        setSelectedModel(sessionData.ai_model as ModelType)
+      }
+
+      // 🔥 加载消息
       const { data, error } = await supabase
         .from('chat_messages')
         .select('*')
         .eq('session_id', sid)
         .order('created_at', { ascending: true })
-      
+
       if (error) throw error
 
       if (data && data.length > 0) {
@@ -1896,7 +1920,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                         "relative rounded-xl sm:rounded-2xl px-3 py-2.5 sm:px-4 sm:py-3 overflow-hidden",
                         message.role === "user"
                           ? "text-white max-w-[85%] sm:max-w-[75%]"
-                          : "bg-[#F5EDE0] w-full max-w-full break-words"
+                          : "bg-[#F9F8F3] w-full max-w-full break-words border border-[#E5E5E5]"
                       )} style={message.role === "user" ? { backgroundColor: BRAND_GREEN } : {}}>
                         {message.role === "user" ? (
                           <div className="space-y-2 sm:space-y-3">
