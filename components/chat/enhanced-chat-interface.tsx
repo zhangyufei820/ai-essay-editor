@@ -7,10 +7,10 @@ import { useSearchParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { 
-  Send, Paperclip, X, FileText, Copy, Loader2, Sparkles, User, Brain, AlertCircle, 
+import {
+  Send, Paperclip, X, FileText, Copy, Loader2, Sparkles, User, Brain, AlertCircle,
   ChevronDown, ChevronLeft, Bot, Film, Palette, AudioLines, ArrowDown, GraduationCap,
-  Download, Share2, Printer
+  Download, Share2, Printer, Mic, MicOff, Volume2
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
@@ -31,6 +31,7 @@ import { brandColors, slateColors } from "@/lib/design-tokens"
 import { createClient } from "@supabase/supabase-js"
 import { collapseSidebar, refreshCredits } from "@/components/app-sidebar"
 import { validateFileForUpload, VERCEL_FILE_SIZE_LIMIT, LIGHTHOUSE_UPLOAD_URL, getApiKeyForModel, uploadToLighthouse } from "@/lib/upload-service"
+import { VoiceRecorder, getDifyTTS, uploadAudioToDify } from "@/lib/voice-service"
 import { getApiUrl } from "@/lib/api-config"
 import { 
   calculatePreviewCost, 
@@ -575,6 +576,11 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  // 🎤 语音输入状态
+  const [isListening, setIsListening] = useState(false)
+  const [isPlaying, setIsPlaying] = useState(false)
+  const voiceRecorderRef = useRef<VoiceRecorder | null>(null)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
   // 🔥 记录当前正在处理的 AI 消息 ID
   const currentBotIdRef = useRef<string | null>(null)
@@ -875,6 +881,91 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   }
 
   const removeFile = (i: number) => setUploadedFiles(p => p.filter((_, idx) => idx !== i))
+
+  // ============================================
+  // 🎤 语音输入功能
+  // ============================================
+  const toggleVoiceInput = async () => {
+    if (isListening) {
+      // 停止录音
+      try {
+        const audioBlob = await voiceRecorderRef.current?.stop()
+        setIsListening(false)
+
+        if (audioBlob && audioBlob.size > 0) {
+          toast.info("正在识别语音...")
+          const fileId = await uploadAudioToDify(audioBlob, selectedModel)
+
+          // 将音频文件添加到上传列表
+          const audioUrl = URL.createObjectURL(audioBlob)
+          setUploadedFiles(p => [...p, {
+            name: "录音.mp3",
+            type: "audio/mp3",
+            size: audioBlob.size,
+            data: audioUrl,
+            difyFileId: fileId
+          }])
+          toast.success("语音已识别并添加")
+        }
+      } catch (error) {
+        console.error("🎤 停止录音失败:", error)
+        toast.error("录音处理失败")
+        setIsListening(false)
+      }
+    } else {
+      // 开始录音
+      if (!userId) {
+        toast.error("请先登录")
+        return
+      }
+
+      if (!VoiceRecorder.isSupported()) {
+        toast.error("当前浏览器不支持语音输入")
+        return
+      }
+
+      try {
+        voiceRecorderRef.current = new VoiceRecorder()
+        await voiceRecorderRef.current.start()
+        setIsListening(true)
+        toast.info("录音中，再次点击停止", { duration: 2000 })
+      } catch (error) {
+        console.error("🎤 开始录音失败:", error)
+        toast.error("无法访问麦克风，请检查权限设置")
+      }
+    }
+  }
+
+  // ============================================
+  // 🔊 TTS 语音播放功能
+  // ============================================
+  const playAssistantMessage = async (content: string) => {
+    if (isPlaying) {
+      // 停止播放
+      audioRef.current?.pause()
+      audioRef.current = null
+      setIsPlaying(false)
+      return
+    }
+
+    try {
+      toast.info("正在生成语音...")
+      const audioUrl = await getDifyTTS(content, selectedModel)
+
+      audioRef.current = new Audio(audioUrl)
+      audioRef.current.onended = () => setIsPlaying(false)
+      audioRef.current.onerror = () => {
+        setIsPlaying(false)
+        toast.error("音频播放失败")
+      }
+      await audioRef.current.play()
+      setIsPlaying(true)
+      toast.success("播放中...")
+    } catch (error) {
+      console.error("🔊 TTS 播放失败:", error)
+      toast.error("语音合成失败")
+    }
+  }
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault(); if (!userId) { toast.error("请登录"); return }
@@ -1908,6 +1999,13 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                             <Button variant="ghost" size="sm" className="h-7 sm:h-8 gap-1 sm:gap-1.5 text-[10px] sm:text-xs text-slate-400 hover:bg-slate-100 px-2 sm:px-3" onClick={() => handleShare()}>
                                <Share2 className="h-3 w-3" /> <span className="hidden xs:inline">分享</span>
                             </Button>
+                            {/* 🔊 语音播放按钮 */}
+                            <Button variant="ghost" size="sm" className={cn(
+                              "h-7 sm:h-8 gap-1 sm:gap-1.5 text-[10px] sm:text-xs px-2 sm:px-3",
+                              isPlaying ? "text-green-600 bg-green-50 hover:bg-green-100" : "text-slate-400 hover:bg-slate-100"
+                            )} onClick={() => playAssistantMessage(message.content)}>
+                               <Volume2 className="h-3 w-3" /> <span className="hidden xs:inline">{isPlaying ? "停止" : "朗读"}</span>
+                            </Button>
                           </div>
                         )}
                       </div>
@@ -2023,14 +2121,36 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                     <Paperclip className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
                   </Button>
                 </div>
-                <input 
-                  ref={fileInputRef} 
-                  type="file" 
-                  className="hidden" 
-                  accept="image/*,.txt,.doc,.docx,.pdf" 
-                  multiple 
-                  onChange={handleFileUpload} 
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  className="hidden"
+                  accept="image/*,.txt,.doc,.docx,.pdf,audio/*"
+                  multiple
+                  onChange={handleFileUpload}
                 />
+
+                {/* 🎤 语音输入按钮 */}
+                <div className="flex flex-col items-center gap-0.5 sm:gap-1 shrink-0">
+                  <span className="text-[9px] sm:text-[10px] font-medium text-slate-400 hidden sm:block">
+                    {isListening ? "录音中" : "语音"}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className={cn(
+                      "h-9 w-9 sm:h-10 sm:w-10 rounded-lg sm:rounded-xl min-h-[44px] sm:min-h-0",
+                      isListening
+                        ? "bg-red-500 text-white hover:bg-red-600 animate-pulse"
+                        : "text-slate-400 hover:bg-slate-50"
+                    )}
+                    onClick={toggleVoiceInput}
+                    disabled={isLoading}
+                  >
+                    {isListening ? <MicOff className="h-4.5 w-4.5 sm:h-5 sm:w-5" /> : <Mic className="h-4.5 w-4.5 sm:h-5 sm:w-5" />}
+                  </Button>
+                </div>
                 
                 <Textarea
                   ref={textareaRef}
