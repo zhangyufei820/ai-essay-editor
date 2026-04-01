@@ -60,7 +60,11 @@ export async function POST(request: NextRequest) {
     }
 
     // 调用 Dify TTS API
-    const difyResponse = await fetch(`${DIFY_BASE_URL}/v1/text-to-audio`, {
+    // 注意：DIFY_BASE_URL 已经是完整路径（含/v1），不需要再加
+    const difyUrl = DIFY_BASE_URL.includes('/v1')
+      ? `${DIFY_BASE_URL}/text-to-audio`
+      : `${DIFY_BASE_URL}/v1/text-to-audio`
+    const difyResponse = await fetch(difyUrl, {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${apiKey}`,
