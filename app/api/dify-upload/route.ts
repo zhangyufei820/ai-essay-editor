@@ -33,8 +33,8 @@ const ALLOWED_MIME_TYPES = [
 // ✅ 安全校验：允许的文件扩展名
 const ALLOWED_EXTENSIONS = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".pdf", ".txt", ".docx", ".webm", ".mp3", ".ogg", ".wav"]
 
-// ✅ 安全校验：服务器实际限制约 95MB（docker-nginx-1 100M 上限）
-const MAX_FILE_SIZE_VERCEL = 80 * 1024 * 1024
+// ✅ 安全校验：docker-nginx-1 100M 上限
+const MAX_FILE_SIZE_VERCEL = 100 * 1024 * 1024
 
 const DIFY_BASE_URL = process.env.DIFY_INTERNAL_URL
   || process.env.DIFY_BASE_URL
@@ -139,7 +139,7 @@ export async function POST(request: NextRequest) {
       if (size > MAX_FILE_SIZE_VERCEL) {
         console.warn(`[Upload Security] 文件过大 (${(size/1024/1024).toFixed(1)}MB)，超过 API 限制 (4.5MB)`)
         return new Response(JSON.stringify({
-          error: `文件过大 (${(size/1024/1024).toFixed(1)}MB)，超过服务器限制 80MB`,
+          error: `文件过大 (${(size/1024/1024).toFixed(1)}MB)，超过服务器限制 100MB`,
           code: "FILE_TOO_LARGE",
           hint: "请压缩文件后重试"
         }), {

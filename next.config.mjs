@@ -13,6 +13,21 @@ const nextConfig = {
   output: 'standalone',
 
   // ============================================
+  // API 配置：允许大文件上传（服务器自托管，无 Vercel 限制）
+  // ============================================
+  experimental: {
+    // Next.js 16 proxy 会将请求 body 缓冲到内存，默认 10MB
+    // 设为 100MB 以支持大文件上传
+    proxyClientMaxBodySize: '100mb',
+    // 优化包导入
+    optimizePackageImports: [
+      'lucide-react',
+      'framer-motion',
+      '@radix-ui/react-icons',
+    ],
+  },
+
+  // ============================================
   // 图片优化配置
   // ============================================
   images: {
@@ -48,10 +63,10 @@ const nextConfig = {
   // ============================================
   // 性能优化
   // ============================================
-  
+
   // 压缩配置
   compress: true,
-  
+
   // 生产环境移除 console.log
   compiler: {
     removeConsole: process.env.NODE_ENV === 'production' ? {
@@ -63,18 +78,6 @@ const nextConfig = {
   // Turbopack 配置（Next.js 16 默认使用）
   // ============================================
   turbopack: {},
-
-  // ============================================
-  // 实验性功能
-  // ============================================
-  experimental: {
-    // 优化包导入
-    optimizePackageImports: [
-      'lucide-react',
-      'framer-motion',
-      '@radix-ui/react-icons',
-    ],
-  },
 
   // ============================================
   // 重定向和重写

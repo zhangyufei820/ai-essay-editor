@@ -17,7 +17,7 @@
 // ============================================
 
 // 文件大小限制：50MB
-export const FILE_SIZE_LIMIT = 50 * 1024 * 1024
+export const FILE_SIZE_LIMIT = 100 * 1024 * 1024
 
 // Lighthouse 直连地址（暂保留，所有文件统一走 /api/dify-upload）
 export const LIGHTHOUSE_UPLOAD_URL = process.env.NEXT_PUBLIC_LIGHTHOUSE_UPLOAD_URL || ""
@@ -80,7 +80,7 @@ export const ALLOWED_FILE_TYPES = [
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 ]
 
-export const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50MB
+export const MAX_FILE_SIZE = 100 * 1024 * 1024 // 100MB
 
 // ============================================
 // 类型定义
