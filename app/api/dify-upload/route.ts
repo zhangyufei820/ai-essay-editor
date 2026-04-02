@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server"
-import { uploadBufferToCos } from "@/lib/cos"
+import { uploadBufferToCos, rewriteToCdnUrl } from "@/lib/cos"
 import { randomUUID } from "crypto"
 import path from "path"
 
@@ -222,7 +222,7 @@ export async function POST(request: NextRequest) {
     const targetApiKey = getApiKeyForModel(targetModel)
     
     // ============================================
-    // 6. 转发到 Dify
+    // 6. 转发到 Dify（内部已切到 COS 存储）
     // ============================================
     // 创建一个新的 FormData，使用安全的文件名
     const difyFormData = new FormData()
@@ -266,7 +266,22 @@ export async function POST(request: NextRequest) {
     console.log("[Backend] Dify upload success:", { fileId: data.id, fileName: safeFileName, userId })
 
     // ============================================
-    // 7. 同时上传到腾讯云 COS（用于永久存储）
+    // 7. 将 Dify 返回的 URL 重写为 CDN URL
+    // ============================================
+    let rewrittenData = { ...data }
+    if (data.url) {
+      rewrittenData.url = rewriteToCdnUrl(data.url)
+      console.log("[Backend] CDN URL rewrite:", data.url, "->", rewrittenData.url)
+    }
+    if (data.audio_url) {
+      rewrittenData.audio_url = rewriteToCdnUrl(data.audio_url)
+    }
+    if (data.image_url) {
+      rewrittenData.image_url = rewriteToCdnUrl(data.image_url)
+    }
+
+    // ============================================
+    // 8. 同时上传到腾讯云 COS（用于永久存储）
     // ============================================
     let cosUrl: string | undefined
     try {
@@ -291,7 +306,7 @@ export async function POST(request: NextRequest) {
 
     // 返回结果（包含 Dify ID 和 COS URL）
     return new Response(JSON.stringify({
-      ...data,
+      ...rewrittenData,
       cosUrl, // 添加 COS URL
       safeFileName, // 返回安全文件名供后续使用
     }), {
