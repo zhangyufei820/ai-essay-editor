@@ -33,13 +33,8 @@ const ALLOWED_MIME_TYPES = [
 // ✅ 安全校验：允许的文件扩展名
 const ALLOWED_EXTENSIONS = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".pdf", ".txt", ".docx", ".webm", ".mp3", ".ogg", ".wav"]
 
-// ✅ 安全校验：Vercel 限制下的最大文件大小 (4.5MB)
-// 大文件应走直连方案，此处作为 Vercel 层的安全防护
-const MAX_FILE_SIZE_VERCEL = 4.5 * 1024 * 1024
-
-// Lighthouse 服务器直连地址（用于大文件上传）
-// 实际部署时替换为你的服务器地址
-const LIGHTHOUSE_UPLOAD_URL = process.env.NEXT_PUBLIC_LIGHTHOUSE_UPLOAD_URL || ""
+// ✅ 安全校验：服务器实际限制约 95MB（docker-nginx-1 100M 上限）
+const MAX_FILE_SIZE_VERCEL = 80 * 1024 * 1024
 
 const DIFY_BASE_URL = process.env.DIFY_INTERNAL_URL
   || process.env.DIFY_BASE_URL
@@ -112,7 +107,7 @@ function validateFileSize(file: File, maxSize: number = MAX_FILE_SIZE_VERCEL): {
     const maxSizeMB = (maxSize / 1024 / 1024).toFixed(1)
     return { 
       valid: false, 
-      error: `文件过大 (${(file.size / 1024 / 1024).toFixed(1)}MB)，超过 ${maxSizeMB}MB 限制。大文件请使用直连通道上传。` 
+      error: `文件过大 (${(file.size / 1024 / 1024).toFixed(1)}MB)，超过 ${maxSizeMB}限制` 
     }
   }
   return { valid: true }
@@ -144,9 +139,9 @@ export async function POST(request: NextRequest) {
       if (size > MAX_FILE_SIZE_VERCEL) {
         console.warn(`[Upload Security] 文件过大 (${(size/1024/1024).toFixed(1)}MB)，超过 API 限制 (4.5MB)`)
         return new Response(JSON.stringify({
-          error: `文件过大 (${(size/1024/1024).toFixed(1)}MB)，Vercel API 限制 4.5MB`,
+          error: `文件过大 (${(size/1024/1024).toFixed(1)}MB)，超过服务器限制 80MB`,
           code: "FILE_TOO_LARGE",
-          hint: "大文件请使用直连通道上传"
+          hint: "请压缩文件后重试"
         }), {
           status: 413,
           headers: { "Content-Type": "application/json" },
@@ -193,7 +188,7 @@ export async function POST(request: NextRequest) {
       return new Response(JSON.stringify({ 
         error: sizeCheck.error,
         code: "FILE_TOO_LARGE",
-        hint: "大文件请通过直连通道上传"
+        hint: "请压缩文件后重试"
       }), {
         status: 413,
         headers: { "Content-Type": "application/json" },

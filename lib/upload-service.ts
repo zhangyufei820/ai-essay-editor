@@ -19,10 +19,7 @@
 // 文件大小限制：50MB
 export const FILE_SIZE_LIMIT = 50 * 1024 * 1024
 
-// Vercel 文件大小限制（兼容旧代码）
-export const VERCEL_FILE_SIZE_LIMIT = 4 * 1024 * 1024 // 4MB
-
-// Lighthouse 上传服务器地址
+// Lighthouse 直连地址（暂保留，所有文件统一走 /api/dify-upload）
 export const LIGHTHOUSE_UPLOAD_URL = process.env.NEXT_PUBLIC_LIGHTHOUSE_UPLOAD_URL || ""
 
 // 文件上传服务器地址

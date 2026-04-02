@@ -30,7 +30,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import { brandColors, slateColors } from "@/lib/design-tokens"
 import { createClient } from "@supabase/supabase-js"
 import { collapseSidebar, refreshCredits } from "@/components/app-sidebar"
-import { validateFileForUpload, VERCEL_FILE_SIZE_LIMIT, LIGHTHOUSE_UPLOAD_URL, getApiKeyForModel, uploadToLighthouse } from "@/lib/upload-service"
+import { validateFileForUpload, MAX_FILE_SIZE } from "@/lib/upload-service"
 import { VoiceRecorder, getDifyTTS, uploadAudioToDify } from "@/lib/voice-service"
 import { getApiUrl } from "@/lib/api-config"
 import { 
@@ -825,48 +825,32 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
             }
 
             // ============================================
-            // 🔥 分流策略：大文件直连，小文件走 Vercel
+            // ✅ 上传：统一走 /api/dify-upload → Dify → 腾讯云 COS
             // ============================================
-            let data: { id: string }
-            
-            if (fileToUpload.size > VERCEL_FILE_SIZE_LIMIT) {
-              // 🔥 大文件：直连 Lighthouse 服务器
-              console.log("🚀 [Upload Strategy] 大文件直连:", fileToUpload.name, (fileToUpload.size / 1024 / 1024).toFixed(2) + "MB")
-              
-              // 检查是否配置了直连地址
-              if (!LIGHTHOUSE_UPLOAD_URL) {
-                throw new Error("大文件上传服务暂不可用，请联系管理员配置")
+            console.log("📤 [Upload] 上传文件:", fileToUpload.name, (fileToUpload.size / 1024 / 1024).toFixed(2) + "MB")
+
+            const formData = new FormData();
+            formData.append("file", fileToUpload);
+            formData.append("user", userId)
+
+            const res = await fetch("/api/dify-upload", {
+              method: "POST",
+              headers: {
+                "X-User-Id": userId,
+                "X-Model": selectedModel || ""
+              },
+              body: formData
+            })
+
+            if (!res.ok) {
+              const errData = await res.json().catch(() => ({}))
+              if (res.status === 413) {
+                throw new Error(`文件超过 ${(MAX_FILE_SIZE / 1024 / 1024).toFixed(0)}MB 限制`)
               }
-              
-              data = await uploadToLighthouse(fileToUpload, userId, selectedModel)
-            } else {
-              // ✅ 小文件：走 Vercel API（带安全校验）
-              console.log("📤 [Upload Strategy] 小文件走 Vercel:", fileToUpload.name)
-              
-              const formData = new FormData(); 
-              formData.append("file", fileToUpload); 
-              formData.append("user", userId)
-              
-              const res = await fetch("/api/dify-upload", {
-                method: "POST",
-                headers: {
-                  "X-User-Id": userId,
-                  "X-Model": selectedModel || ""
-                },
-                body: formData
-              })
-              
-              if (!res.ok) {
-                const errData = await res.json().catch(() => ({}))
-                // 如果是 413 错误，提示用户使用大文件直连
-                if (res.status === 413) {
-                  throw new Error("文件超过 Vercel 限制，请尝试压缩文件或分段上传")
-                }
-                throw new Error(errData.error || `上传失败: ${res.status}`)
-              }
-              
-              data = await res.json()
+              throw new Error(errData.error || `上传失败: ${res.status}`)
             }
+
+            const data = await res.json()
             
             // 🔥 更新进度
             setUploadProgress(Math.round(((index + 1) / totalFiles) * 100))
