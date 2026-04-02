@@ -135,11 +135,30 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    // ============================================
+    // 0. 大文件预检：Vercel/Node API 限制 4.5MB，超出引导使用直连
+    // ============================================
+    const contentLength = request.headers.get("content-length")
+    if (contentLength) {
+      const size = parseInt(contentLength, 10)
+      if (size > MAX_FILE_SIZE_VERCEL) {
+        console.warn(`[Upload Security] 文件过大 (${(size/1024/1024).toFixed(1)}MB)，超过 API 限制 (4.5MB)`)
+        return new Response(JSON.stringify({
+          error: `文件过大 (${(size/1024/1024).toFixed(1)}MB)，Vercel API 限制 4.5MB`,
+          code: "FILE_TOO_LARGE",
+          hint: "大文件请使用直连通道上传"
+        }), {
+          status: 413,
+          headers: { "Content-Type": "application/json" },
+        })
+      }
+    }
+
     // 🔐 从 header 获取用户身份（middleware 已验证）
     const headerUserId = request.headers.get("X-User-Id")
     // 🔥 从 header 获取当前选择的模型
     const model = request.headers.get("X-Model") || null
-    
+
     const formData = await request.formData()
     const file = formData.get("file") as File
     // 优先使用 header 中的 userId，其次使用 formData 中的
