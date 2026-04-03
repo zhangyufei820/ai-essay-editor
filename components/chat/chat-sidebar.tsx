@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Plus, MessageSquare, Trash2, MoreHorizontal } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 
 // ✅ 保持类型定义导出，确保父组件不报错
 export type ChatSession = {
@@ -62,6 +63,27 @@ export function ChatSidebar({
   // 定义分组显示的顺序
   const groupOrder = ["今天", "昨天", "过去 7 天", "更早"];
 
+  // 格式化时间戳
+  const formatTime = (timestamp: number) => {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const target = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+    // 今天显示时间
+    if (target.getTime() === today.getTime()) {
+      return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false });
+    }
+    // 昨天也显示时间
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
+    if (target.getTime() === yesterday.getTime()) {
+      return `昨天 ${date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })}`;
+    }
+    // 其他日期显示月/日 + 时间
+    return `${date.getMonth() + 1}/${date.getDate()} ${date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })}`;
+  };
+
   return (
     // 移除 w-72，让父容器控制宽度，避免双重滚动条
     <div className="flex h-full w-full flex-col bg-[#FDFBF7]">
@@ -108,29 +130,47 @@ export function ChatSidebar({
                   <div className="space-y-1">
                     {groupItems.map((session) => (
                       <div key={session.id} className="group relative">
-                        <button
-                          onClick={() => onSelectSession(session.id)}
-                          className={cn(
-                            "relative flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left transition-all duration-200",
-                            currentSessionId === session.id
-                              ? "bg-white text-[#0F766E] shadow-sm ring-1 ring-[#E5E0D6]" // 选中状态
-                              : "text-slate-600 hover:bg-slate-200/50 hover:text-slate-900" // 悬停状态
-                          )}
-                        >
-                          <MessageSquare className={cn(
-                            "h-4 w-4 shrink-0 transition-colors",
-                            currentSessionId === session.id ? "text-[#0F766E]" : "text-slate-400 group-hover:text-slate-500"
-                          )} />
-                          
-                          <div className="flex flex-1 flex-col overflow-hidden">
-                            <span className="truncate text-sm font-medium">
-                              {session.title || "新对话"}
-                            </span>
-                            <span className="truncate text-[10px] text-slate-400 font-normal mt-0.5">
-                              {session.preview || "无预览内容"}
-                            </span>
-                          </div>
-                        </button>
+                        <Tooltip delayDuration={300}>
+                          <TooltipTrigger asChild>
+                            <button
+                              onClick={() => onSelectSession(session.id)}
+                              className={cn(
+                                "relative flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left transition-all duration-200",
+                                currentSessionId === session.id
+                                  ? "bg-white text-[#0F766E] shadow-sm ring-1 ring-[#E5E0D6]" // 选中状态
+                                  : "text-slate-600 hover:bg-slate-200/50 hover:text-slate-900" // 悬停状态
+                              )}
+                            >
+                              <MessageSquare className={cn(
+                                "h-4 w-4 shrink-0 transition-colors",
+                                currentSessionId === session.id ? "text-[#0F766E]" : "text-slate-400 group-hover:text-slate-500"
+                              )} />
+
+                              <div className="flex flex-1 flex-col overflow-hidden">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="truncate text-sm font-medium">
+                                    {session.title || "新对话"}
+                                  </span>
+                                  <span className="text-[10px] text-slate-400 font-normal shrink-0">
+                                    {formatTime(session.date)}
+                                  </span>
+                                </div>
+                                <span className="truncate text-[10px] text-slate-400 font-normal mt-0.5">
+                                  {session.preview || "无预览内容"}
+                                </span>
+                              </div>
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent side="right" className="max-w-xs p-3">
+                            <div className="space-y-1">
+                              <p className="font-medium text-sm">{session.title || "新对话"}</p>
+                              <p className="text-xs text-slate-500">{formatTime(session.date)}</p>
+                              <p className="text-xs text-slate-600 mt-2 border-t pt-2">
+                                {session.preview || "无预览内容"}
+                              </p>
+                            </div>
+                          </TooltipContent>
+                        </Tooltip>
                         
                         {/* 删除按钮 - 悬浮显示 */}
                         <div className={cn(
