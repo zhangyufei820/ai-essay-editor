@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
-// 使用 Service Role Key 绕过 RLS
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+// 使用 Service Role Key 绕过 RLS - 延迟创建避免构建时错误
+function getSupabaseAdmin() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+}
 
 // 🔥 将数据库中的 type 映射为显示标签
 function mapTypeToLabel(type: string): string {
@@ -38,6 +40,7 @@ export async function GET(request: NextRequest) {
 
     // 🔥 先检查 credit_transactions 表是否存在
     let tableExists = true
+    const supabaseAdmin = getSupabaseAdmin()
     try {
       const { error: checkError } = await supabaseAdmin
         .from('credit_transactions')
@@ -83,7 +86,7 @@ export async function GET(request: NextRequest) {
 
     // 如果 credit_transactions 表没有数据，尝试从 orders 表构建记录
     console.log('📊 [积分记录] credit_transactions 无数据，尝试从 orders 构建')
-    
+
     const { data: orders, error: ordersError } = await supabaseAdmin
       .from('orders')
       .select('*')
