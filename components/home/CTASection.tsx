@@ -195,7 +195,7 @@ export function CTASection() {
           >
             <div className="relative w-full aspect-[16/9] md:aspect-[21/9] rounded-2xl overflow-hidden bg-white/10 shadow-2xl">
               <Image
-                src="/graduation.jpg.jpg"
+                src="/images/Gemini_Generated_Image_lk7m49lk7m49lk7m.png"
                 alt="毕业学生"
                 fill
                 className="object-cover"
