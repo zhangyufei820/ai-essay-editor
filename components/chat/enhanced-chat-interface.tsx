@@ -7,6 +7,7 @@ import { useSearchParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { useIsMobile } from "@/hooks/use-mobile"
 import {
   Send, Paperclip, X, FileText, Copy, Loader2, Sparkles, User, Brain, AlertCircle,
   ChevronDown, ChevronLeft, Bot, Film, Palette, AudioLines, ArrowDown, GraduationCap,
@@ -388,6 +389,9 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   const urlAgent = searchParams.get("agent")
   // 🔥 优先使用 initialModel prop（来自动态路由），其次使用 URL 参数
   const effectiveAgent = initialModel || urlAgent
+
+  // 🔥 检测手机端
+  const isMobile = useIsMobile()
 
   const [userId, setUserId] = useState<string>("")
   const [userAvatar, setUserAvatar] = useState<string>("")
@@ -2002,8 +2006,8 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                               }}
                             >
                               <>
-                             {/* 🎯 工作流可视化面板 - 仅在当前正在处理的消息中显示 */}
-                             {message.id === currentBotIdRef.current && (isWorkflowProcessing || workflowState.nodes.length > 0) && (
+                             {/* 🎯 工作流可视化面板 - 仅在当前正在处理的消息中显示 (手机端隐藏) */}
+                             {message.id === currentBotIdRef.current && (isWorkflowProcessing || workflowState.nodes.length > 0) && !isMobile && (
                                <WorkflowVisualizer
                                  workflowState={workflowState}
                                  isThinking={isThinking}
