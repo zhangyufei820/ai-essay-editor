@@ -264,7 +264,7 @@ export async function POST(request: NextRequest) {
     console.log(`🔍 [积分查询] 开始查询用户: ${userId}`)
     
     // 🔥 修复：只查询存在的字段 credits 和 user_id（移除不存在的 total_spent）
-    let { data: userCredits, error: creditsError } = await supabaseAdmin
+    let { data: userCredits, error: creditsError } = await getSupabaseAdmin()
       .from("user_credits")
       .select("credits, user_id")
       .eq("user_id", userId)
@@ -275,7 +275,7 @@ export async function POST(request: NextRequest) {
     if (creditsError?.code === "PGRST116") {
       console.log(`🆕 [新用户] 用户 ${userId} 在 user_credits 表中不存在，自动创建积分记录，赠送 1000 积分`)
       
-      const { data: newCredits, error: insertError } = await supabaseAdmin
+      const { data: newCredits, error: insertError } = await getSupabaseAdmin()
         .from("user_credits")
         .insert({ user_id: userId, credits: 1000, is_pro: false })
         .select()
@@ -284,7 +284,7 @@ export async function POST(request: NextRequest) {
       if (insertError) {
         console.error(`❌ [新用户] 创建积分记录失败:`, insertError)
         // 尝试 upsert
-        const { data: upsertData, error: upsertError } = await supabaseAdmin
+        const { data: upsertData, error: upsertError } = await getSupabaseAdmin()
           .from("user_credits")
           .upsert({ user_id: userId, credits: 1000, is_pro: false })
           .select()
@@ -637,7 +637,7 @@ export async function POST(request: NextRequest) {
           )
           
           // 🔥 修复：只查询存在的字段 credits（移除 total_spent）
-          const { data: latestCredits } = await supabaseAdmin
+          const { data: latestCredits } = await getSupabaseAdmin()
             .from("user_credits")
             .select("credits")
             .eq("user_id", userId)
@@ -646,7 +646,7 @@ export async function POST(request: NextRequest) {
           const newCredits = (latestCredits?.credits || 0) - actualCost
           
           // 🔥 修复：只更新存在的字段 credits（移除 total_spent 和 updated_at）
-          const { error: updateError } = await supabaseAdmin
+          const { error: updateError } = await getSupabaseAdmin()
             .from("user_credits")
             .update({ 
               credits: Math.max(newCredits, 0)  // 防止负数
@@ -662,7 +662,7 @@ export async function POST(request: NextRequest) {
             // 🔥 如果前端传来了 estimatedCost，优先��用前端的成本计算
             const displayTokens = totalTokens > 0 ? `${totalTokens} tokens` : (estimatedCost ? `${estimatedCost} 积分` : '0 tokens')
             
-            const { error: txError } = await supabaseAdmin.from("credit_transactions").insert({
+            const { error: txError } = await getSupabaseAdmin().from("credit_transactions").insert({
               user_id: userId,
               amount: -actualCost,
               type: "consume",
