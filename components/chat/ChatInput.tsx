@@ -365,29 +365,29 @@ export function ChatInput({
       </AnimatePresence>
 
       {/* 输入区域 */}
-      <div className="flex items-end gap-3 p-3">
+      <div className="flex items-end gap-2 sm:gap-3 p-2 sm:p-3">
         {/* 附件按钮（工具栏隐藏时显示） */}
         {!showModelSelector && (
-          <div className="flex flex-col items-center gap-1 shrink-0">
-            <span className="text-[10px] font-medium" style={{ color: slateColors[400] }}>
+          <div className="flex flex-col items-center gap-0.5 sm:gap-1 shrink-0">
+            <span className="text-[10px] font-medium hidden sm:block" style={{ color: slateColors[400] }}>
               文件上传
             </span>
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              className="h-10 w-10 rounded-xl"
+              className="h-9 w-9 sm:h-10 sm:w-10 rounded-lg sm:rounded-xl"
               onClick={() => fileInputRef.current?.click()}
               disabled={isLoading || disabled}
             >
-              <Paperclip className="h-5 w-5" style={{ color: slateColors[400] }} />
+              <Paperclip className="h-4 w-4 sm:h-5 sm:w-5" style={{ color: slateColors[400] }} />
             </Button>
           </div>
         )}
 
         {/* 语音输入按钮 */}
-        <div className="flex flex-col items-center gap-1 shrink-0">
-          <span className="text-[10px] font-medium" style={{ color: slateColors[400] }}>
+        <div className="flex flex-col items-center gap-0.5 sm:gap-1 shrink-0">
+          <span className="text-[10px] font-medium hidden sm:block" style={{ color: slateColors[400] }}>
             {isListening ? "录音中" : "语音输入"}
           </span>
           <motion.button
@@ -397,16 +397,16 @@ export function ChatInput({
             onClick={toggleVoiceInput}
             disabled={isLoading || disabled}
             className={cn(
-              "h-10 w-10 rounded-xl flex items-center justify-center transition-all duration-200",
+              "h-9 w-9 sm:h-10 sm:w-10 rounded-lg sm:rounded-xl flex items-center justify-center transition-all duration-200",
               isListening
                 ? "bg-red-500 text-white shadow-lg animate-pulse"
                 : "bg-slate-100 hover:bg-slate-200 text-slate-600"
             )}
           >
             {isListening ? (
-              <MicOff className="h-5 w-5" />
+              <MicOff className="h-4 w-4 sm:h-5 sm:w-5" />
             ) : (
-              <Mic className="h-5 w-5" />
+              <Mic className="h-4 w-4 sm:h-5 sm:w-5" />
             )}
           </motion.button>
         </div>
@@ -422,16 +422,16 @@ export function ChatInput({
           placeholder={disabled ? "请先登录..." : placeholder}
           disabled={disabled || isLoading}
           className={cn(
-            "flex-1 min-h-[48px] max-h-[160px] resize-none border-0 bg-transparent",
-            "text-[15px] leading-relaxed focus-visible:ring-0 p-2"
+            "flex-1 min-h-[36px] sm:min-h-[48px] max-h-[120px] sm:max-h-[160px] resize-none border-0 bg-transparent",
+            "text-sm sm:text-[15px] leading-relaxed focus-visible:ring-0 p-1.5 sm:p-2"
           )}
           style={{ color: slateColors[700] }}
           rows={1}
         />
 
         {/* 发送按钮 */}
-        <div className="flex flex-col items-center gap-1 shrink-0">
-          <span className="text-[10px] font-medium" style={{ color: slateColors[400] }}>
+        <div className="flex flex-col items-center gap-0.5 sm:gap-1 shrink-0">
+          <span className="text-[10px] font-medium hidden sm:block" style={{ color: slateColors[400] }}>
             发送
           </span>
           <motion.button
@@ -441,14 +441,14 @@ export function ChatInput({
             disabled={!canSubmit}
             onClick={onSubmit}
             className={cn(
-              "h-10 w-10 rounded-xl flex items-center justify-center",
+              "h-9 w-9 sm:h-10 sm:w-10 rounded-lg sm:rounded-xl flex items-center justify-center",
               "text-white transition-all duration-200",
               !canSubmit && "opacity-40 cursor-not-allowed"
             )}
-            style={{ 
+            style={{
               backgroundColor: brandColors[900],
-              boxShadow: canSubmit 
-                ? `0 4px 12px ${brandColors[900]}40` 
+              boxShadow: canSubmit
+                ? `0 4px 12px ${brandColors[900]}40`
                 : "none"
             }}
           >

@@ -206,7 +206,7 @@ const TableBlock = ({ lines }: { lines: string[] }) => {
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-slate-200">
             <thead className="bg-slate-50"><tr>{headers.map((h, i) => (<th key={i} className="px-5 py-4 text-left text-base font-semibold text-slate-700 tracking-wide">{h}</th>))}</tr></thead>
-            <tbody className="divide-y divide-slate-100">{bodyLines.map((line, i) => { const cells = line.split("|").filter(c => c.trim()).map(c => c.trim()); return (<tr key={i} className="hover:bg-slate-50/50 transition-colors">{cells.map((cell, j) => (<td key={j} className="px-5 py-4 text-lg text-slate-700 leading-relaxed"><InlineText text={cell} /></td>))}</tr>); })}</tbody>
+            <tbody className="divide-y divide-slate-100">{bodyLines.map((line, i) => { const cells = line.split("|").filter(c => c.trim()).map(c => c.trim()); return (<tr key={i} className="hover:bg-slate-50/50 transition-colors">{cells.map((cell, j) => (<td key={j} className="px-3 sm:px-5 py-3 sm:py-4 text-sm sm:text-base text-slate-700 leading-relaxed"><InlineText text={cell} /></td>))}</tr>); })}</tbody>
           </table>
         </div>
       </div>
@@ -284,14 +284,14 @@ function UltimateRenderer({ content, isStreaming = false }: { content: string; i
     // 🔥 再次增大字体：h1=3xl, h2=2xl, h3=xl, 正文=lg(18px)
     if (line.trim().startsWith("# ")) {
       renderedElements.push(
-        <h1 key={i} className="mt-10 mb-5 text-3xl font-bold text-slate-800">
+        <h1 key={i} className="mt-6 sm:mt-10 mb-3 sm:mb-5 text-xl sm:text-2xl font-bold text-slate-800">
           {line.replace(/^#\s+/, "")}
           {isLastLine && isStreaming && <StreamingCursor />}
         </h1>
       );
     } else if (line.trim().startsWith("## ")) {
       renderedElements.push(
-        <h2 key={i} className={`mt-8 mb-4 text-2xl font-semibold text-slate-700 flex items-center gap-2`}>
+        <h2 key={i} className={`mt-6 sm:mt-8 mb-2 sm:mb-4 text-lg sm:text-xl font-semibold text-slate-700 flex items-center gap-2`}>
           <span className={`w-1.5 h-7 bg-[${BRAND_GREEN}] rounded-full`}></span>
           {line.replace(/^##\s+/, "")}
           {isLastLine && isStreaming && <StreamingCursor />}
@@ -299,7 +299,7 @@ function UltimateRenderer({ content, isStreaming = false }: { content: string; i
       );
     } else if (line.trim().startsWith("### ")) {
       renderedElements.push(
-        <h3 key={i} className={`mt-6 mb-3 text-xl font-semibold text-[${BRAND_GREEN}]`}>
+        <h3 key={i} className={`mt-4 sm:mt-6 mb-2 sm:mb-3 text-base sm:text-lg font-semibold text-[${BRAND_GREEN}]`}>
           {line.replace(/^###\s+/, "")}
           {isLastLine && isStreaming && <StreamingCursor />}
         </h3>
@@ -307,7 +307,7 @@ function UltimateRenderer({ content, isStreaming = false }: { content: string; i
     } else if (line.trim().startsWith("#### ")) {
       // 🔥 支持 #### 四级标题
       renderedElements.push(
-        <h4 key={i} className="mt-5 mb-2 text-lg font-semibold text-slate-700">
+        <h4 key={i} className="mt-4 sm:mt-5 mb-1 sm:mb-2 text-base sm:text-lg font-semibold text-slate-700">
           {line.replace(/^####\s+/, "")}
           {isLastLine && isStreaming && <StreamingCursor />}
         </h4>
@@ -316,7 +316,7 @@ function UltimateRenderer({ content, isStreaming = false }: { content: string; i
       // 🔥 支持 - 和 * 两种无序列表格式
       const listContent = line.trim().replace(/^[-*]\s+/, "")
       renderedElements.push(
-        <div key={i} className="flex gap-3 ml-1 my-3 text-lg text-slate-700 leading-relaxed">
+        <div key={i} className="flex gap-2 sm:gap-3 ml-1 my-2 sm:my-3 text-sm sm:text-base text-slate-700 leading-relaxed">
           <div className={`mt-3 w-2 h-2 rounded-full bg-[${BRAND_GREEN}]/60 shrink-0`}></div>
           <span>
             <InlineText text={listContent} />
@@ -331,7 +331,7 @@ function UltimateRenderer({ content, isStreaming = false }: { content: string; i
         const num = numMatch[1]
         const listContent = numMatch[2]
         renderedElements.push(
-          <div key={i} className="flex gap-3 ml-1 my-3 text-lg text-slate-700 leading-relaxed">
+          <div key={i} className="flex gap-2 sm:gap-3 ml-1 my-2 sm:my-3 text-sm sm:text-base text-slate-700 leading-relaxed">
             <span className={`text-[${BRAND_GREEN}] font-semibold shrink-0`}>{num}.</span>
             <span>
               <InlineText text={listContent} />
@@ -342,8 +342,8 @@ function UltimateRenderer({ content, isStreaming = false }: { content: string; i
       }
     } else if (line.trim().startsWith("> ")) {
       renderedElements.push(
-        <blockquote key={i} className={`my-5 border-l-3 border-[${BRAND_GREEN}] bg-[${BRAND_GREEN}]/5 px-5 py-4 rounded-r-xl`}>
-          <div className="text-lg text-slate-700 leading-relaxed">
+        <blockquote key={i} className={`my-3 sm:my-5 border-l-3 border-[${BRAND_GREEN}] bg-[${BRAND_GREEN}]/5 px-3 sm:px-5 py-2 sm:py-4 rounded-r-xl`}>
+          <div className="text-sm sm:text-base text-slate-700 leading-relaxed">
             <InlineText text={line.replace(/^> /, "")} />
             {isLastLine && isStreaming && <StreamingCursor />}
           </div>
@@ -355,7 +355,7 @@ function UltimateRenderer({ content, isStreaming = false }: { content: string; i
       renderedElements.push(<div key={i} className="h-5"></div>);
     } else {
       renderedElements.push(
-        <p key={i} className="text-lg leading-[1.9] text-slate-700 my-3">
+        <p key={i} className="text-sm sm:text-base leading-relaxed sm:leading-[1.9] text-slate-700 my-2 sm:my-3">
           <InlineText text={line} />
           {isLastLine && isStreaming && <StreamingCursor />}
         </p>
