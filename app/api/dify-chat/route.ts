@@ -226,6 +226,22 @@ export async function POST(request: NextRequest) {
             targetApiKey = process.env.DIFY_API_KEY_OPENCLAW;
             keySource = "DIFY_API_KEY_OPENCLAW";
             break;
+        case "quanquan-math":
+            targetApiKey = process.env.DIFY_QUANQUANMATH_API_KEY;
+            keySource = "DIFY_QUANQUANMATH_API_KEY";
+            break;
+        case "quanquan-english":
+            targetApiKey = process.env.DIFY_QUANQUANENGLISH_API_KEY;
+            keySource = "DIFY_QUANQUANENGLISH_API_KEY";
+            break;
+        case "beike-pro":
+            targetApiKey = process.env.DIFY_BEIKE_PRO_API_KEY;
+            keySource = "DIFY_BEIKE_PRO_API_KEY";
+            break;
+        case "banzhuren":
+            targetApiKey = process.env.DIFY_BANZHUREN_API_KEY;
+            keySource = "DIFY_BANZHUREN_API_KEY";
+            break;
         // 如果是 Sono/Sora 可以在这里继续加 case
         default:
             // 如果没传 model 或者 model 是 standard，就用上面的默认 Key

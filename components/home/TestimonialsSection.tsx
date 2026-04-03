@@ -1,26 +1,27 @@
 /**
  * 📝 沈翔智学 - 用户评价区域
- * 
+ *
  * 展示真实用户评价，使用响应式瀑布流布局。
  * 包含评价卡片、用户信息、点赞功能等。
+ * 特性：悬停展开、3D倾斜、绿色星光
  */
 
 "use client"
 
-import { useState } from "react"
-import { motion, AnimatePresence } from "framer-motion"
+import { useState, useRef } from "react"
+import { motion, AnimatePresence, useMotionValue, useTransform } from "framer-motion"
 import { Quote, Star, ThumbsUp, X, ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 // ============================================
-// 设计系统颜色常量
+// 🎨 Design Tokens - 与主页一致的绿色系
 // ============================================
 
 const COLORS = {
   primary: {
-    main: "#4CAF50",
-    dark: "#2E7D32",
-    light: "#E8F5E9",
+    main: "#00C896",     // 极光绿（与主页一致）
+    dark: "#0d3a1f",     // 深邃墨绿
+    light: "#E8F5E9",    // 浅绿背景
   },
   gray: {
     50: "#FAFAFA",
@@ -34,7 +35,7 @@ const COLORS = {
     800: "#424242",
     900: "#212121",
   },
-  star: "#FFA000",
+  star: "#00C896",       // 绿色星星（与主页一致）
   roles: {
     student: { bg: "#E3F2FD", text: "#1976D2" },
     parent: { bg: "#E8F5E9", text: "#2E7D32" },
@@ -155,7 +156,7 @@ const testimonials: Testimonial[] = [
   },
   {
     id: "11",
-    content: "女儿以前最怕写作文，现在每次写完都要让AI批改，还会根据建议修改。学习态度都变了！",
+    content: "女儿以前最怕写作文，现在每次写完都要让AI批改，还会根据建议修改，学习态度都变了！",
     author: "林女士",
     role: "parent",
     roleLabel: "学生家长",
@@ -182,20 +183,20 @@ const containerVariants = {
   visible: {
     opacity: 1,
     transition: {
-      staggerChildren: 0.05,
+      staggerChildren: 0.08,
       delayChildren: 0.1
     }
   }
 }
 
 const cardVariants = {
-  hidden: { opacity: 0, y: 20 },
+  hidden: { opacity: 0, y: 30 },
   visible: {
     opacity: 1,
     y: 0,
     transition: {
-      duration: 0.4,
-      ease: [0.33, 1, 0.68, 1] as [number, number, number, number]
+      duration: 0.5,
+      ease: [0.34, 1.56, 0.64, 1] as [number, number, number, number]
     }
   }
 }
@@ -206,15 +207,13 @@ const cardVariants = {
 
 function RoleTag({ role, label }: { role: "student" | "parent" | "teacher"; label: string }) {
   const roleStyle = COLORS.roles[role]
-  
+
   return (
     <span
-      className="px-2 py-0.5 text-xs font-medium rounded-full"
+      className="px-2.5 py-1 text-xs font-medium rounded-full"
       style={{
         backgroundColor: roleStyle.bg,
         color: roleStyle.text,
-        height: "22px",
-        lineHeight: "18px",
       }}
     >
       {label}
@@ -223,108 +222,191 @@ function RoleTag({ role, label }: { role: "student" | "parent" | "teacher"; labe
 }
 
 // ============================================
-// 评价卡片组件
+// 评价卡片组件 - 悬停展开 + 3D倾斜
 // ============================================
 
-function TestimonialCard({ 
-  testimonial, 
+function TestimonialCard({
+  testimonial,
   index,
-  onExpand 
-}: { 
+}: {
   testimonial: Testimonial
   index: number
-  onExpand: (testimonial: Testimonial) => void
 }) {
   const [isLiked, setIsLiked] = useState(false)
   const [likes, setLikes] = useState(testimonial.likes)
-  const [isExpanded, setIsExpanded] = useState(false)
-  
+  const [isHovered, setIsHovered] = useState(false)
+
+  // 3D 倾斜 refs
+  const cardRef = useRef<HTMLDivElement>(null)
+  const rotateX = useMotionValue(0)
+  const rotateY = useMotionValue(0)
+
   const handleLike = (e: React.MouseEvent) => {
     e.stopPropagation()
+    e.preventDefault()
     if (!isLiked) {
       setLikes(prev => prev + 1)
       setIsLiked(true)
     }
   }
 
-  const shouldTruncate = testimonial.content.length > 100
+  // 3D 倾斜处理
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!cardRef.current) return
+    const rect = cardRef.current.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const y = e.clientY - rect.top
+    const centerX = rect.width / 2
+    const centerY = rect.height / 2
+    const rotateXValue = (y - centerY) / 25
+    const rotateYValue = (centerX - x) / 25
+    rotateX.set(rotateXValue)
+    rotateY.set(rotateYValue)
+  }
+
+  const handleMouseLeave = () => {
+    rotateX.set(0)
+    rotateY.set(0)
+    setIsHovered(false)
+  }
+
+  // 瀑布流高度变化
+  const baseHeight = 200 + (index % 3) * 30
 
   return (
     <motion.div
+      ref={cardRef}
       variants={cardVariants}
-      whileHover={{ y: -2, boxShadow: "0 8px 24px rgba(0,0,0,0.1)" }}
-      className="relative bg-white rounded-2xl p-6 cursor-pointer transition-all duration-200"
+      initial={{ opacity: 0, y: 40, scale: 0.95 }}
+      whileInView={{ opacity: 1, y: 0, scale: 1 }}
+      viewport={{ once: true, margin: "-50px" }}
       style={{
-        width: "100%",
-        minHeight: "200px",
-        border: `1px solid ${COLORS.border}`,
-        boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+        rotateX,
+        rotateY,
+        transformStyle: "preserve-3d",
+        height: isHovered ? `${baseHeight + 80}px` : `${baseHeight}px`,
       }}
-      onClick={() => onExpand(testimonial)}
+      whileHover={{
+        y: -8,
+        transition: { duration: 0.3 }
+      }}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
+      className="relative bg-white rounded-2xl p-6 cursor-pointer overflow-hidden"
+      onClick={() => {}}
     >
-      {/* 引号装饰 */}
-      <Quote 
-        className="absolute top-6 right-6 w-6 h-6 rotate-180" 
-        style={{ color: COLORS.primary.main, opacity: 0.1 }}
+      {/* 科技感背景光晕 - 悬停时显示 */}
+      <motion.div
+        className="absolute inset-0 pointer-events-none"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: isHovered ? 1 : 0 }}
+        transition={{ duration: 0.3 }}
+        style={{
+          background: `radial-gradient(ellipse at 50% 0%, ${COLORS.primary.main}08 0%, transparent 70%)`,
+        }}
       />
 
-      {/* 评分星星 */}
+      {/* 左侧科技光条 */}
+      <motion.div
+        className="absolute left-0 top-0 bottom-0 w-0.5 rounded-r"
+        initial={{ opacity: 0, scaleY: 0 }}
+        animate={{
+          opacity: isHovered ? 1 : 0,
+          scaleY: isHovered ? 1 : 0
+        }}
+        transition={{ duration: 0.3 }}
+        style={{
+          background: `linear-gradient(180deg, ${COLORS.primary.main} 0%, ${COLORS.primary.main}60 100%)`,
+          boxShadow: `0 0 20px ${COLORS.primary.main}40`,
+        }}
+      />
+
+      {/* 右上角装饰引号 */}
+      <Quote
+        className="absolute top-4 right-4 w-10 h-10 rotate-180"
+        style={{
+          color: COLORS.primary.main,
+          opacity: isHovered ? 0.15 : 0.05,
+          transition: "opacity 0.3s"
+        }}
+      />
+
+      {/* 评分星星 - 绿色系 */}
       <div className="flex gap-1 mb-4">
         {Array.from({ length: testimonial.rating }).map((_, i) => (
-          <Star 
-            key={i} 
-            className="w-4 h-4" 
-            fill={COLORS.star}
-            style={{ color: COLORS.star }}
-          />
+          <motion.div
+            key={i}
+            initial={{ opacity: 0, scale: 0 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: i * 0.1 }}
+          >
+            <Star
+              className="w-4 h-4"
+              fill={COLORS.star}
+              style={{ color: COLORS.star }}
+            />
+          </motion.div>
         ))}
       </div>
 
-      {/* 评价内容 */}
-      <div className="mb-6">
-        <p 
+      {/* 评价内容 - 悬停展开 */}
+      <div className="mb-4">
+        <p
           className={cn(
-            "text-sm leading-relaxed",
-            !isExpanded && shouldTruncate && "line-clamp-3"
+            "text-sm leading-relaxed transition-all duration-300",
           )}
-          style={{ color: COLORS.gray[700], lineHeight: 1.6 }}
+          style={{
+            color: COLORS.gray[700],
+            lineHeight: 1.7,
+            display: isHovered ? "-webkit-box" : "-webkit-box",
+            WebkitLineClamp: isHovered ? "unset" : 3,
+            WebkitBoxOrient: "vertical",
+            overflow: "hidden",
+          }}
         >
           "{testimonial.content}"
         </p>
-        {shouldTruncate && !isExpanded && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              setIsExpanded(true)
-            }}
-            className="text-xs font-medium mt-1 flex items-center gap-0.5"
-            style={{ color: COLORS.primary.main }}
-          >
-            ...展开 <ChevronDown className="w-3 h-3" />
-          </button>
-        )}
       </div>
 
-      {/* 用户信息和点赞 */}
-      <div 
-        className="flex items-center justify-between pt-4 border-t"
-        style={{ borderColor: COLORS.border }}
+      {/* 用户信息和点赞 - 底部固定 */}
+      <div
+        className="absolute bottom-4 left-6 right-6 flex items-center justify-between"
+        style={{
+          opacity: isHovered ? 1 : 0.8,
+          transform: `translateY(${isHovered ? 0 : 10}px)`,
+          transition: "all 0.3s ease"
+        }}
       >
         <div className="flex items-center gap-3">
-          {/* 头像 */}
-          <div 
-            className="w-10 h-10 rounded-full flex items-center justify-center font-semibold text-sm"
-            style={{ 
-              background: `linear-gradient(135deg, ${COLORS.primary.light}, ${COLORS.primary.main}20)`,
+          {/* 头像 - 科技感光晕 */}
+          <motion.div
+            className="relative w-10 h-10 rounded-full flex items-center justify-center font-semibold text-sm"
+            whileHover={{ scale: 1.1 }}
+            style={{
+              background: `linear-gradient(135deg, ${COLORS.primary.main}20 0%, ${COLORS.primary.main}10 100%)`,
               color: COLORS.primary.dark,
+              boxShadow: `0 0 20px ${COLORS.primary.main}20`,
             }}
           >
             {testimonial.author.charAt(0)}
-          </div>
+            {/* 头像呼吸光效 */}
+            <motion.div
+              className="absolute inset-0 rounded-full"
+              animate={{
+                boxShadow: [
+                  `0 0 10px ${COLORS.primary.main}20`,
+                  `0 0 20px ${COLORS.primary.main}30`,
+                  `0 0 10px ${COLORS.primary.main}20`,
+                ],
+              }}
+              transition={{ duration: 2, repeat: Infinity }}
+            />
+          </motion.div>
           <div>
-            <p 
-              className="text-sm"
-              style={{ color: COLORS.gray[900], fontWeight: 500 }}
+            <p
+              className="text-sm font-medium"
+              style={{ color: COLORS.gray[900] }}
             >
               {testimonial.author}
             </p>
@@ -332,109 +414,46 @@ function TestimonialCard({
           </div>
         </div>
 
-        {/* 点赞按钮 */}
-        <button
+        {/* 点赞按钮 - 科技感 */}
+        <motion.button
           onClick={handleLike}
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.9 }}
           className={cn(
             "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200",
-            isLiked ? "bg-green-50" : "hover:bg-gray-50"
+            isLiked
+              ? "bg-gradient-to-r from-emerald-50 to-green-50"
+              : "bg-slate-50 hover:from-emerald-50 hover:to-green-50"
           )}
-          style={{ 
+          style={{
             color: isLiked ? COLORS.primary.main : COLORS.gray[500],
+            boxShadow: isLiked ? `0 0 15px ${COLORS.primary.main}20` : "none",
           }}
         >
-          <ThumbsUp className={cn("w-3.5 h-3.5", isLiked && "fill-current")} />
+          <motion.div
+            animate={isLiked ? {
+              scale: [1, 1.3, 1],
+            } : {}}
+            transition={{ duration: 0.3 }}
+          >
+            <ThumbsUp
+              className={cn("w-3.5 h-3.5", isLiked && "fill-current")}
+            />
+          </motion.div>
           <span>{likes}</span>
-        </button>
+        </motion.button>
       </div>
+
+      {/* 底部渐变遮罩 - 非悬停时 */}
+      {!isHovered && (
+        <div
+          className="absolute bottom-0 left-0 right-0 h-16 pointer-events-none"
+          style={{
+            background: "linear-gradient(to top, white 30%, transparent 100%)",
+          }}
+        />
+      )}
     </motion.div>
-  )
-}
-
-// ============================================
-// 详情模态框组件
-// ============================================
-
-function TestimonialModal({ 
-  testimonial, 
-  onClose 
-}: { 
-  testimonial: Testimonial | null
-  onClose: () => void
-}) {
-  if (!testimonial) return null
-
-  return (
-    <AnimatePresence>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 flex items-center justify-center p-4"
-        style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
-        onClick={onClose}
-      >
-        <motion.div
-          initial={{ scale: 0.95, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          exit={{ scale: 0.95, opacity: 0 }}
-          transition={{ duration: 0.2 }}
-          className="bg-white rounded-2xl p-8 max-w-lg w-full relative"
-          style={{ boxShadow: "0 24px 48px rgba(0,0,0,0.2)" }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {/* 关闭按钮 */}
-          <button
-            onClick={onClose}
-            className="absolute top-4 right-4 p-2 rounded-full hover:bg-gray-100 transition-colors"
-          >
-            <X className="w-5 h-5" style={{ color: COLORS.gray[500] }} />
-          </button>
-
-          {/* 评分 */}
-          <div className="flex gap-1 mb-4">
-            {Array.from({ length: testimonial.rating }).map((_, i) => (
-              <Star 
-                key={i} 
-                className="w-5 h-5" 
-                fill={COLORS.star}
-                style={{ color: COLORS.star }}
-              />
-            ))}
-          </div>
-
-          {/* 完整评价内容 */}
-          <p 
-            className="text-base leading-relaxed mb-6"
-            style={{ color: COLORS.gray[700], lineHeight: 1.8 }}
-          >
-            "{testimonial.content}"
-          </p>
-
-          {/* 用户信息 */}
-          <div className="flex items-center gap-3 pt-4 border-t" style={{ borderColor: COLORS.border }}>
-            <div 
-              className="w-12 h-12 rounded-full flex items-center justify-center font-semibold"
-              style={{ 
-                background: `linear-gradient(135deg, ${COLORS.primary.light}, ${COLORS.primary.main}20)`,
-                color: COLORS.primary.dark,
-              }}
-            >
-              {testimonial.author.charAt(0)}
-            </div>
-            <div>
-              <p 
-                className="text-base font-medium"
-                style={{ color: COLORS.gray[900] }}
-              >
-                {testimonial.author}
-              </p>
-              <RoleTag role={testimonial.role} label={testimonial.roleLabel} />
-            </div>
-          </div>
-        </motion.div>
-      </motion.div>
-    </AnimatePresence>
   )
 }
 
@@ -443,59 +462,104 @@ function TestimonialModal({
 // ============================================
 
 export function TestimonialsSection() {
-  const [selectedTestimonial, setSelectedTestimonial] = useState<Testimonial | null>(null)
-
   return (
-    <section 
-      id="testimonials" 
-      className="py-24 md:py-32"
-      style={{ backgroundColor: COLORS.gray[50] }}
+    <section
+      id="testimonials"
+      className="py-24 md:py-32 relative overflow-hidden"
+      style={{ backgroundColor: "#FAFAFA" }}
     >
-      <div className="max-w-7xl mx-auto px-4 md:px-6">
+      {/* 背景装饰 - 科技感网格 */}
+      <div
+        className="absolute inset-0 opacity-[0.02]"
+        style={{
+          backgroundImage: `
+            linear-gradient(${COLORS.primary.main} 1px, transparent 1px),
+            linear-gradient(90deg, ${COLORS.primary.main} 1px, transparent 1px)
+          `,
+          backgroundSize: "60px 60px"
+        }}
+      />
+
+      {/* 背景光晕 */}
+      <div
+        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] rounded-full blur-3xl pointer-events-none"
+        style={{
+          background: `radial-gradient(circle, ${COLORS.primary.main}08 0%, transparent 70%)`,
+        }}
+      />
+
+      <div className="max-w-7xl mx-auto px-4 md:px-6 relative z-10">
         {/* 页面标题区域 */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 30 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.6 }}
-          className="text-center mb-16"
+          className="text-center mb-20"
         >
-          {/* 小标签 */}
-          <span 
-            className="text-xs font-medium uppercase tracking-wider mb-4 block"
-            style={{ color: COLORS.primary.main, fontSize: "12px" }}
+          {/* 小标签 - 科技感胶囊 */}
+          <motion.div
+            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full mb-6"
+            style={{
+              background: `linear-gradient(135deg, ${COLORS.primary.main}15 0%, ${COLORS.primary.main}08 100%)`,
+              border: `1px solid ${COLORS.primary.main}30`,
+            }}
+            whileHover={{
+              boxShadow: `0 0 30px ${COLORS.primary.main}20`,
+            }}
           >
-            用户评价
-          </span>
-          
+            <motion.div
+              className="w-1.5 h-1.5 rounded-full"
+              animate={{
+                boxShadow: [
+                  `0 0 6px ${COLORS.primary.main}`,
+                  `0 0 12px ${COLORS.primary.main}`,
+                  `0 0 6px ${COLORS.primary.main}`,
+                ],
+                opacity: [0.7, 1, 0.7],
+              }}
+              transition={{ duration: 2, repeat: Infinity }}
+              style={{ backgroundColor: COLORS.primary.main }}
+            />
+            <span
+              className="text-xs font-medium uppercase tracking-wider"
+              style={{ color: COLORS.primary.main, letterSpacing: "2px" }}
+            >
+              用户评价
+            </span>
+          </motion.div>
+
           {/* 主标题 */}
-          <h2 
-            className="text-4xl md:text-5xl mb-4"
-            style={{ 
-              color: COLORS.gray[900],
-              fontWeight: 700,
-              fontSize: "40px",
+          <h2
+            className="text-4xl md:text-5xl mb-6 font-bold"
+            style={{
+              color: COLORS.primary.dark,
+              letterSpacing: "1px",
             }}
           >
             听听他们怎么说
           </h2>
 
           {/* 副标题 */}
-          <p 
-            className="text-base"
-            style={{ color: COLORS.gray[600], fontSize: "16px" }}
+          <motion.p
+            className="text-base md:text-lg"
+            style={{ color: COLORS.gray[600] }}
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+            transition={{ delay: 0.3 }}
           >
-            来自10,000+真实用户的学习体验分享
-          </p>
+            来自<span className="font-semibold" style={{ color: COLORS.primary.main }}>10,000+</span>真实用户的学习体验分享
+          </motion.p>
         </motion.div>
 
-        {/* 评价卡片网格 - 响应式瀑布流 */}
+        {/* 评价卡片网格 - 瀑布流布局，间距加大 */}
         <motion.div
           initial="hidden"
           whileInView="visible"
-          viewport={{ once: true }}
+          viewport={{ once: true, margin: "-100px" }}
           variants={containerVariants}
-          className="grid gap-6"
+          className="grid gap-8 md:gap-10"
           style={{
             gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
           }}
@@ -505,19 +569,10 @@ export function TestimonialsSection() {
               key={testimonial.id}
               testimonial={testimonial}
               index={index}
-              onExpand={setSelectedTestimonial}
             />
           ))}
         </motion.div>
       </div>
-
-      {/* 详情模态框 */}
-      {selectedTestimonial && (
-        <TestimonialModal
-          testimonial={selectedTestimonial}
-          onClose={() => setSelectedTestimonial(null)}
-        />
-      )}
     </section>
   )
 }

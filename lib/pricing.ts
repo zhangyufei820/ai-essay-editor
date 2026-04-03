@@ -29,6 +29,10 @@ export type ModelType =
   | "sora-2-pro"
   | "grok-4.2"
   | "open-claw"
+  | "quanquan-math"
+  | "quanquan-english"
+  | "beike-pro"
+  | "banzhuren"
 
 export type GenMode = "text" | "image" | "music" | "video"
 
@@ -75,12 +79,40 @@ export const MODEL_COSTS: Record<ModelType, ModelCostConfig> = {
     mode: "text",
     estimatedTokens: 2000  // 预估平均 2K tokens
   },
-  "teaching-pro": { 
+  "teaching-pro": {
     category: "agent",
     tokenRate: AGENT_TOKEN_RATE,
     displayName: "教学评智能助手",
     mode: "text",
     estimatedTokens: 2500  // 预估平均 2.5K tokens
+  },
+  "quanquan-math": {
+    category: "agent",
+    tokenRate: AGENT_TOKEN_RATE,
+    displayName: "全学段数学智能体",
+    mode: "text",
+    estimatedTokens: 2000
+  },
+  "quanquan-english": {
+    category: "agent",
+    tokenRate: AGENT_TOKEN_RATE,
+    displayName: "全学段英语智能体",
+    mode: "text",
+    estimatedTokens: 2000
+  },
+  "beike-pro": {
+    category: "agent",
+    tokenRate: AGENT_TOKEN_RATE,
+    displayName: "全学段备课助手Pro",
+    mode: "text",
+    estimatedTokens: 3000
+  },
+  "banzhuren": {
+    category: "agent",
+    tokenRate: AGENT_TOKEN_RATE,
+    displayName: "班主任超级助手",
+    mode: "text",
+    estimatedTokens: 2500
   },
   
   // ========== 独立模型（20 积分/1K Token）==========

@@ -236,21 +236,23 @@ export function EmptyState({
           <GraduationCap className="h-10 w-10 text-white" />
         </motion.div>
 
-        {/* 主标题 */}
-        <h1 
-          className="text-2xl font-semibold mb-2"
-          style={{ 
+        {/* 主标题 - 字间距0.1em，透明度85%，谦逊优雅 */}
+        <h1
+          className="text-2xl font-medium mb-2"
+          style={{
             color: COLORS.gray[900],
-            fontWeight: 600,
+            fontWeight: 500,
+            letterSpacing: "0.1em",
+            opacity: 0.85,
           }}
         >
           欢迎使用沈翔智学
         </h1>
 
         {/* 副标题 */}
-        <p 
+        <p
           className="text-sm max-w-sm"
-          style={{ color: COLORS.gray[600] }}
+          style={{ color: COLORS.gray[600], letterSpacing: "0.02em" }}
         >
           我是你的AI学习助手，专业批改作文、解答问题
         </p>

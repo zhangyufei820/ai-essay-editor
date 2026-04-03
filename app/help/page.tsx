@@ -307,17 +307,18 @@ function CategorySection({
 
 function ContactSection() {
   return (
-    <motion.div 
+    <motion.div
       className="rounded-2xl p-8"
-      style={{ 
-        background: `linear-gradient(135deg, ${brandColors[600]} 0%, ${brandColors[700]} 100%)`
+      style={{
+        background: `linear-gradient(135deg, ${brandColors[50]} 0%, ${brandColors[100]}50 100%)`,
+        border: `1px solid ${brandColors[200]}40`
       }}
       initial={{ opacity: 0, y: 30, scale: 0.95 }}
       whileInView={{ opacity: 1, y: 0, scale: 1 }}
       viewport={{ once: true, margin: "-50px" }}
       transition={{ duration: 0.6, ease: "easeOut" }}
     >
-      <motion.div 
+      <motion.div
         className="text-center mb-6"
         initial={{ y: -20, opacity: 0 }}
         whileInView={{ y: 0, opacity: 1 }}
@@ -325,22 +326,22 @@ function ContactSection() {
         transition={{ delay: 0.2, duration: 0.5 }}
       >
         <motion.div
-          animate={{ 
+          animate={{
             scale: [1, 1.1, 1],
             rotate: [0, 5, -5, 0]
           }}
-          transition={{ 
+          transition={{
             duration: 2,
             repeat: Infinity,
             repeatDelay: 3
           }}
         >
-          <MessageCircle className="w-12 h-12 mx-auto mb-4 text-white" />
+          <MessageCircle className="w-12 h-12 mx-auto mb-4" style={{ color: brandColors[600] }} />
         </motion.div>
-        <h3 className="text-xl font-semibold text-white mb-2">
+        <h3 className="text-xl font-semibold mb-2" style={{ color: brandColors[800] }}>
           联系客服
         </h3>
-        <p className="text-white/80">
+        <p style={{ color: slateColors[600] }}>
           扫描下方二维码添加客服微信，或拨打客服电话
         </p>
       </motion.div>
@@ -354,72 +355,75 @@ function ContactSection() {
         transition={{ delay: 0.4, duration: 0.5 }}
       >
         {/* 微信二维码 */}
-        <motion.div 
+        <motion.div
           className="flex flex-col items-center"
           whileHover={{ scale: 1.05 }}
           transition={{ type: "spring", stiffness: 300 }}
         >
-          <motion.div 
+          <motion.div
             className="w-40 h-40 md:w-48 md:h-48 bg-white rounded-xl p-2 shadow-lg mb-3"
-            animate={{ 
+            animate={{
               boxShadow: [
-                "0 4px 20px rgba(0,0,0,0.15)",
-                "0 8px 30px rgba(0,0,0,0.25)",
-                "0 4px 20px rgba(0,0,0,0.15)"
+                "0 4px 20px rgba(0,0,0,0.1)",
+                "0 8px 30px rgba(0,0,0,0.15)",
+                "0 4px 20px rgba(0,0,0,0.1)"
               ]
             }}
             transition={{ duration: 2, repeat: Infinity }}
           >
-            <img 
-              src={contactInfo.wechatQR} 
-              alt="客服微信二维码" 
+            <img
+              src={contactInfo.wechatQR}
+              alt="客服微信二维码"
               className="w-full h-full object-contain"
             />
           </motion.div>
-          <span className="text-white font-medium">扫码添加客服微信</span>
+          <span className="font-medium" style={{ color: brandColors[700] }}>扫码添加客服微信</span>
         </motion.div>
         
         {/* 分隔线（移动端不显示） */}
-        <motion.div 
-          className="hidden md:block w-px h-32 bg-white/30"
+        <motion.div
+          className="hidden md:block w-px h-32"
+          style={{ backgroundColor: brandColors[200] }}
           initial={{ scaleY: 0 }}
           whileInView={{ scaleY: 1 }}
           viewport={{ once: true }}
           transition={{ delay: 0.6, duration: 0.5 }}
         />
-        
+
         {/* 电话 */}
-        <motion.div 
+        <motion.div
           className="flex flex-col items-center"
           whileHover={{ scale: 1.05 }}
           transition={{ type: "spring", stiffness: 300 }}
         >
-          <motion.div 
-            className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center mb-3"
-            animate={{ 
+          <motion.div
+            className="w-16 h-16 rounded-full flex items-center justify-center mb-3"
+            style={{ backgroundColor: brandColors[100] }}
+            animate={{
               boxShadow: [
-                "0 0 0 0 rgba(255,255,255,0.4)",
-                "0 0 0 10px rgba(255,255,255,0)",
+                "0 0 0 0 rgba(34, 197, 94, 0.2)",
+                "0 0 0 10px rgba(34, 197, 94, 0)",
               ]
             }}
             transition={{ duration: 1.5, repeat: Infinity }}
           >
-            <Phone className="w-8 h-8 text-white" />
+            <Phone className="w-8 h-8" style={{ color: brandColors[600] }} />
           </motion.div>
-          <motion.a 
+          <motion.a
             href={`tel:${contactInfo.phone}`}
-            className="text-2xl font-bold text-white hover:underline flex items-center gap-2"
+            className="text-2xl font-bold flex items-center gap-2 hover:underline"
+            style={{ color: brandColors[700] }}
             whileHover={{ scale: 1.05 }}
           >
             <Phone className="w-5 h-5" />
             {contactInfo.phone}
           </motion.a>
-          <span className="text-white/70 text-sm mt-1">工作日 9:00-18:00</span>
+          <span className="text-sm mt-1" style={{ color: slateColors[500] }}>工作日 9:00-18:00</span>
         </motion.div>
       </motion.div>
-      
+
       {/* 在线客服按钮 */}
-      <motion.div 
+      <motion.div
         className="text-center mt-8"
         initial={{ opacity: 0, y: 20 }}
         whileInView={{ opacity: 1, y: 0 }}
@@ -430,9 +434,14 @@ function ContactSection() {
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
         >
-          <Link 
+          <Link
             href="/chat"
-            className="inline-flex items-center gap-2 px-6 py-3 bg-white text-green-700 font-medium rounded-xl hover:bg-gray-50 transition-colors"
+            className="inline-flex items-center gap-2 px-6 py-3 font-medium rounded-xl transition-colors"
+            style={{
+              backgroundColor: brandColors[600],
+              color: "white",
+              boxShadow: `0 4px 12px ${brandColors[600]}40`
+            }}
           >
             <MessageCircle className="w-5 h-5" />
             在线客服
@@ -450,15 +459,15 @@ function ContactSection() {
 export default function HelpPage() {
   return (
     <main className="min-h-screen" style={{ backgroundColor: creamColors[100] }}>
-      {/* 顶部背景 */}
-      <div 
+      {/* 顶部背景 - 渐变到透明的有机光影流 */}
+      <div
         className="relative py-16 md:py-20 overflow-hidden"
-        style={{ 
-          background: `linear-gradient(135deg, ${brandColors[700]} 0%, ${brandColors[800]} 100%)`
+        style={{
+          background: `linear-gradient(180deg, ${brandColors[700]} 0%, ${brandColors[800]}60 50%, transparent 100%)`
         }}
       >
-        {/* 动态背景装饰 */}
-        <motion.div 
+        {/* 动态背景装饰 - 有机光影流 */}
+        <motion.div
           className="absolute inset-0 overflow-hidden"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -469,27 +478,29 @@ export default function HelpPage() {
               key={i}
               className="absolute w-64 h-64 rounded-full"
               style={{
-                background: `radial-gradient(circle, ${brandColors[500]}20 0%, transparent 70%)`,
+                background: `radial-gradient(circle, ${brandColors[400]}15 0%, transparent 70%)`,
                 left: `${20 + i * 20}%`,
                 top: `${10 + (i % 3) * 30}%`,
               }}
               animate={{
-                y: [0, -30, 0],
-                scale: [1, 1.1, 1],
-                opacity: [0.3, 0.6, 0.3],
+                y: [0, -40, 0],
+                x: [0, 20, 0],
+                scale: [1, 1.15, 1],
+                opacity: [0.2, 0.5, 0.2],
               }}
               transition={{
-                duration: 4 + i,
+                duration: 8 + i * 2,
                 repeat: Infinity,
-                delay: i * 0.5,
+                delay: i * 1,
+                ease: "linear",
               }}
             />
           ))}
         </motion.div>
 
-        {/* 浮动图标装饰 */}
-        <motion.div 
-          className="absolute top-20 right-10 opacity-10"
+        {/* 浮动图标装饰 - 透明度调低50%成为皮肤肌理 */}
+        <motion.div
+          className="absolute top-20 right-10 opacity-[0.05]"
           animate={{
             y: [0, -15, 0],
             rotate: [0, 10, 0],

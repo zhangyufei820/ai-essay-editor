@@ -13,6 +13,7 @@ import dynamic from 'next/dynamic'
 
 // 首屏组件 - 直接导入（关键路径）
 import { HeroSection } from '@/components/home'
+import { OpenClawSection } from '@/components/home'
 
 // 非首屏组件 - 动态导入（懒加载）
 const CapabilitiesSection = dynamic(
@@ -124,7 +125,10 @@ export default function Home() {
     <main className="min-h-screen bg-white">
       {/* Hero 区域 - 全屏首屏（关键路径，直接加载） */}
       <HeroSection />
-      
+
+      {/* OpenClaw 专区 */}
+      <OpenClawSection />
+
       {/* 非首屏内容 - 懒加载 */}
       <Suspense fallback={<SectionSkeleton height="600px" />}>
         <CapabilitiesSection />

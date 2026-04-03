@@ -10,7 +10,8 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   Send, Paperclip, X, FileText, Copy, Loader2, Sparkles, User, Brain, AlertCircle,
   ChevronDown, ChevronLeft, Bot, Film, Palette, AudioLines, ArrowDown, GraduationCap,
-  Download, Share2, Printer, Mic, MicOff, Volume2
+  Download, Share2, Printer, Mic, MicOff, Volume2, History, Calculator, Languages,
+  BookOpen, Users
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
@@ -411,6 +412,10 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   // 🎯 升级引导横幅状态（非豪华会员显示，发送消息后消失）
   const [showUpgradeBanner, setShowUpgradeBanner] = useState(true)
 
+  // 🔥 历史会话侧边栏状态
+  const [showHistorySidebar, setShowHistorySidebar] = useState(false)
+  const [chatSessions, setChatSessions] = useState<ChatSession[]>([])
+
   // 🎯 工作流可视化 Hook (GenSpark 1:1 复刻版)
   const {
     workflowState,
@@ -462,7 +467,10 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
           setUserDisplayName(displayName)
           console.log("👤 [用户初始化] 显示名称:", displayName)
           
-          if (uid) fetchCredits(uid)
+          if (uid) {
+            fetchCredits(uid)
+            fetchChatSessions(uid)
+          }
         } catch (e) {
           console.error("❌ [用户初始化] 解析失败:", e)
         }
@@ -495,6 +503,35 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       // 备用：直接查询数据库
       const { data } = await supabase.from('user_credits').select('credits').eq('user_id', uid).single()
       if (data) setUserCredits(data.credits)
+    }
+  }
+
+  // 🔥 获取历史会话列表
+  const fetchChatSessions = async (uid: string) => {
+    try {
+      const { data: sessionData, error } = await supabase
+        .from('chat_sessions')
+        .select('*')
+        .eq('user_id', uid)
+        .order('created_at', { ascending: false })
+        .limit(50)
+
+      if (error) {
+        console.error("❌ [历史会话] 查询失败:", error)
+        return
+      }
+
+      if (sessionData && sessionData.length > 0) {
+        setChatSessions(sessionData.map((s: any) => ({
+          id: s.id,
+          title: s.title || "新对话",
+          date: new Date(s.created_at).getTime(),
+          preview: s.preview || "",
+          ai_model: s.ai_model || "standard"
+        })))
+      }
+    } catch (err) {
+      console.error("❌ [历史会话] 查询异常:", err)
     }
   }
 
@@ -657,11 +694,39 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       badge: "推荐",
       group: "教育专用"
     },
-    "teaching-pro": { 
-      name: "教学评助手", 
-      icon: Brain, 
+    "teaching-pro": {
+      name: "教学评助手",
+      icon: Brain,
       color: BRAND_GREEN,
       description: "教学评估与反馈",
+      group: "教育专用"
+    },
+    "quanquan-math": {
+      name: "全学段数学",
+      icon: Calculator,
+      color: BRAND_GREEN,
+      description: "问题解答，步骤清晰",
+      group: "教育专用"
+    },
+    "quanquan-english": {
+      name: "全学段英语",
+      icon: Languages,
+      color: BRAND_GREEN,
+      description: "听说读写，全面覆盖",
+      group: "教育专用"
+    },
+    "beike-pro": {
+      name: "备课助手Pro",
+      icon: BookOpen,
+      color: BRAND_GREEN,
+      description: "智能备课，高效便捷",
+      group: "教育专用"
+    },
+    "banzhuren": {
+      name: "班主任助手",
+      icon: Users,
+      color: BRAND_GREEN,
+      description: "班级管理，家校沟通",
       group: "教育专用"
     },
     "gpt-5": {
@@ -1592,6 +1657,74 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 
   return (
     <div className="flex h-[100dvh] w-full bg-white overflow-hidden relative">
+      {/* 🔥 历史会话侧边栏 - 左侧滑出 */}
+      <AnimatePresence>
+        {showHistorySidebar && (
+          <>
+            {/* 遮罩层 */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-40 bg-black/20 backdrop-blur-sm"
+              onClick={() => setShowHistorySidebar(false)}
+            />
+            {/* 侧边栏 */}
+            <motion.div
+              initial={{ x: -280 }}
+              animate={{ x: 0 }}
+              exit={{ x: -280 }}
+              transition={{ duration: 0.3, ease: [0.32, 0.72, 0, 1] }}
+              className="fixed left-0 top-0 bottom-0 w-72 z-50 flex flex-col"
+              style={{
+                background: "#FDFBF7",
+                boxShadow: "4px 0 24px rgba(0,0,0,0.12)",
+              }}
+            >
+              {/* 头部 */}
+              <div className="flex items-center justify-between px-4 py-4 border-b border-slate-100">
+                <span className="text-sm font-semibold text-slate-700">历史会话</span>
+                <button
+                  onClick={() => setShowHistorySidebar(false)}
+                  className="p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
+                >
+                  <X className="h-4 w-4 text-slate-500" />
+                </button>
+              </div>
+              {/* 会话列表 */}
+              <ScrollArea className="flex-1">
+                <div className="p-3 space-y-2">
+                  {chatSessions.length === 0 ? (
+                    <div className="text-center py-8 text-slate-400 text-sm">
+                      暂无历史会话
+                    </div>
+                  ) : (
+                    chatSessions.map(session => (
+                      <button
+                        key={session.id}
+                        onClick={() => {
+                          router.push(`/chat/${session.ai_model || 'standard'}?id=${session.id}`)
+                          setShowHistorySidebar(false)
+                        }}
+                        className={cn(
+                          "w-full text-left px-3 py-3 rounded-xl transition-all",
+                          currentSessionId === session.id
+                            ? "bg-emerald-50 text-emerald-700"
+                            : "hover:bg-slate-100 text-slate-600"
+                        )}
+                      >
+                        <div className="text-sm font-medium truncate">{session.title}</div>
+                        <div className="text-xs text-slate-400 truncate mt-0.5">{session.preview}</div>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </ScrollArea>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
       <div className="flex flex-1 flex-col h-full relative min-w-0">
         
         {/* 🎯 升级引导横幅 - 非豪华会员常驻显示，用户手动关闭 */}
@@ -1635,9 +1768,15 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 
         {/* 🔥 顶部导航栏 - 移动端优化：增加高度和触摸区域 */}
         <div className="flex items-center h-16 md:h-14 px-3 md:px-4 border-b border-slate-100 bg-white shrink-0">
-          <button 
-            onClick={handleBack}
+          <button
+            onClick={() => setShowHistorySidebar(!showHistorySidebar)}
             className="flex items-center gap-1 text-slate-600 hover:text-slate-800 transition-colors min-w-[44px] min-h-[44px] -ml-2 justify-center"
+          >
+            <History className="h-5 w-5" />
+          </button>
+          <button
+            onClick={handleBack}
+            className="flex items-center gap-1 text-slate-600 hover:text-slate-800 transition-colors min-w-[44px] min-h-[44px] justify-center"
           >
             <ChevronLeft className="h-5 w-5" />
             <span className="text-sm font-medium hidden sm:inline">返回</span>
@@ -1798,100 +1937,9 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                     <GraduationCap className="h-6 w-6 sm:h-7 sm:w-7" style={{ color: BRAND_GREEN }} />
                   </div>
                   <h1 className="text-lg sm:text-xl font-semibold text-slate-800 px-4">欢迎使用沈翔智学</h1>
-                  
-                  {/* 🔥 作文批改模式的使用注意事项 - 移动端优化 */}
-                  {selectedModel === "standard" && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.3, duration: 0.5 }}
-                      className="mt-6 sm:mt-8 max-w-lg mx-auto px-2"
-                    >
-                      <div className="relative bg-gradient-to-br from-emerald-50/80 via-green-50/60 to-teal-50/80 rounded-2xl sm:rounded-3xl p-4 sm:p-6 border border-emerald-200/50 shadow-lg backdrop-blur-sm overflow-hidden">
-                        {/* 装饰性背景 */}
-                        <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-100/30 rounded-full blur-3xl -z-0"></div>
-                        <div className="absolute bottom-0 left-0 w-24 h-24 bg-green-100/30 rounded-full blur-2xl -z-0"></div>
-                        
-                        <div className="relative z-10">
-                          {/* 标题区域 - 移动端优化 */}
-                          <div className="flex items-center justify-center gap-2 sm:gap-3 mb-4 sm:mb-6">
-                            <div className="flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-xl sm:rounded-2xl bg-gradient-to-br from-emerald-500 to-green-600 shadow-md">
-                              <FileText className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
-                            </div>
-                            <h3 className="text-base sm:text-lg font-bold bg-gradient-to-r from-emerald-700 to-green-700 bg-clip-text text-transparent">
-                              文件上传指南
-                            </h3>
-                          </div>
-                          
-                          {/* 内容区域 - 卡片式布局，移动端优化 */}
-                          <div className="space-y-2 sm:space-y-3 text-left">
-                            {/* 手写作文 - 移动端优化 */}
-                            <div className="bg-white/80 backdrop-blur-sm rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-emerald-100/50 shadow-sm hover:shadow-md transition-all">
-                              <div className="flex items-start gap-2 sm:gap-3">
-                                <div className="flex-shrink-0 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-emerald-100 flex items-center justify-center">
-                                  <Paperclip className="w-3.5 h-3.5 sm:w-4 sm:h-4" style={{ color: BRAND_GREEN }} />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-xs sm:text-sm font-semibold text-slate-800 mb-0.5 sm:mb-1">手写作文图片</p>
-                                  <p className="text-[11px] sm:text-xs text-slate-600 leading-relaxed">
-                                    直接上传手写作文的照片或扫描件<br/>
-                                    <span style={{ color: BRAND_GREEN }}>支持 JPG、PNG、GIF 格式</span>
-                                  </p>
-                                </div>
-                              </div>
-                            </div>
-                            
-                            {/* 纯文字文档 - 移动端优化 */}
-                            <div className="bg-white/80 backdrop-blur-sm rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-emerald-100/50 shadow-sm hover:shadow-md transition-all">
-                              <div className="flex items-start gap-2 sm:gap-3">
-                                <div className="flex-shrink-0 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-emerald-100 flex items-center justify-center">
-                                  <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4" style={{ color: BRAND_GREEN }} />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-xs sm:text-sm font-semibold text-slate-800 mb-0.5 sm:mb-1">纯文字文档</p>
-                                  <p className="text-[11px] sm:text-xs text-slate-600 leading-relaxed">
-                                    支持电子文档格式<br/>
-                                    <span style={{ color: BRAND_GREEN }}>TXT、DOC、DOCX、PDF 等</span>
-                                  </p>
-                                </div>
-                              </div>
-                            </div>
-                            
-                            {/* 请勿上传 - 移动端优化 */}
-                            <div className="bg-slate-50/80 backdrop-blur-sm rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-slate-200/50 shadow-sm">
-                              <div className="flex items-start gap-2 sm:gap-3">
-                                <div className="flex-shrink-0 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-slate-200 flex items-center justify-center">
-                                  <AlertCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-500" />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-xs sm:text-sm font-semibold text-slate-700 mb-0.5 sm:mb-1">请勿上传</p>
-                                  <p className="text-[11px] sm:text-xs text-slate-600 leading-relaxed">
-                                    包含手写体图片的文档<br/>
-                                    <span className="text-slate-500">如 PDF 内嵌手写图片，系统无法识别</span>
-                                  </p>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                          
-                          {/* 底部提示 - 移动端优化 */}
-                          <div className="mt-3 sm:mt-5 pt-3 sm:pt-4 border-t border-emerald-200/50">
-                            <div className="flex items-start gap-1.5 sm:gap-2">
-                              <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 mt-0.5" style={{ color: BRAND_GREEN }} />
-                              <p className="text-[11px] sm:text-xs text-slate-600 leading-relaxed">
-                                <span className="font-semibold text-slate-700">温馨提示：</span>
-                                手写作文请直接拍照上传图片，电子作文请使用纯文字文档。
-                                <span className="text-slate-500 block mt-1">文件大小限制：图片 &lt; 10MB，文档 &lt; 15MB</span>
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </motion.div>
-                  )}
                 </div>
                 )
-              ) : (
+                ) : (
                 <div className="space-y-4 sm:space-y-6 pt-2 sm:pt-4">
                   {messages.map((message) => (
                     <div key={message.id} className={cn("flex gap-2 sm:gap-3", message.role === "user" ? "justify-end" : "justify-start")}>
@@ -1936,7 +1984,24 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                             <div className="whitespace-pre-wrap text-sm sm:text-[15px] leading-relaxed">{message.content}</div>
                           </div>
                         ) : (
-                           <>
+                          <div className="relative pl-3">
+                            <motion.div
+                              className="absolute left-0 top-0 bottom-0 w-0.5 rounded-full"
+                              style={{
+                                background: "linear-gradient(to bottom, rgba(0, 200, 150, 0.6), rgba(0, 200, 150, 0.1))",
+                              }}
+                              animate={{ opacity: [0.5, 1, 0.5] }}
+                              transition={{ duration: 3, repeat: Infinity }}
+                            />
+                            <div
+                              className="rounded-2xl px-4 py-3 ml-3"
+                              style={{
+                                background: "rgba(255, 255, 255, 0.80)",
+                                border: "1px solid rgba(255, 255, 255, 0.3)",
+                                boxShadow: "0 2px 8px rgba(14, 58, 31, 0.02)",
+                              }}
+                            >
+                              <>
                              {/* 🎯 工作流可视化面板 - 仅在当前正在处理的消息中显示 */}
                              {message.id === currentBotIdRef.current && (isWorkflowProcessing || workflowState.nodes.length > 0) && (
                                <WorkflowVisualizer
@@ -1999,7 +2064,9 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                                   })()}
                                 </>
                              )}
-                           </>
+                                </>
+                              </div>
+                            </div>
                         )}
                         {message.role === "assistant" && message.content && (
                           <div className="mt-3 sm:mt-4 flex items-center justify-end gap-0.5 sm:gap-1 border-t border-slate-100 pt-2 sm:pt-3">
@@ -2182,11 +2249,11 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                 {/* 发送按钮 - 移动端优化触摸区域 */}
                 <div className="flex flex-col items-center gap-0.5 sm:gap-1 shrink-0">
                   <span className="text-[9px] sm:text-[10px] font-medium text-slate-400 hidden sm:block">发送</span>
-                  <Button 
-                    type="submit" 
-                    size="icon" 
-                    className="h-9 w-9 sm:h-10 sm:w-10 rounded-lg sm:rounded-xl text-white shadow-lg sm:shadow-[0_4px_12px_rgba(20,83,45,0.3)] hover:opacity-90 transition-all disabled:opacity-40 min-h-[44px] sm:min-h-0"
-                    style={{ backgroundColor: BRAND_GREEN }}
+                  <Button
+                    type="submit"
+                    size="icon"
+                    className="h-9 w-9 sm:h-10 sm:w-10 rounded-lg sm:rounded-xl text-white shadow-lg sm:shadow-[0_4px_12px_rgba(5,46,22,0.4)] hover:opacity-90 transition-all disabled:opacity-40 min-h-[44px] sm:min-h-0"
+                    style={{ backgroundColor: "#052e16" }}
                     disabled={isLoading || (!input.trim() && uploadedFiles.length === 0)}
                   >
                     {isLoading ? <Loader2 className="h-4.5 w-4.5 sm:h-5 sm:w-5 animate-spin" /> : <Send className="h-4.5 w-4.5 sm:h-5 sm:w-5" />}

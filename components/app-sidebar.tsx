@@ -3,14 +3,19 @@
 import Link from "next/link"
 import { usePathname, useSearchParams, useRouter } from "next/navigation"
 import { useState, useEffect, useRef, Suspense, useCallback } from "react"
-import { Button } from "@/components/ui/button" 
-import { 
+import { motion } from "framer-motion"
+import { Button } from "@/components/ui/button"
+import {
   Home, Settings, ChevronRight, ChevronDown,
   Menu, X, LogOut, Zap, Coins,
-  History, Bot, GraduationCap, Brain,
-  Gift, HelpCircle
+  Bot, GraduationCap, Brain,
+  Gift, HelpCircle, Sparkles
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { AgentPanel } from "./chat/AgentPanel"
+import { ModelPanel } from "./chat/ModelPanel"
+import { CreativePanel } from "./chat/CreativePanel"
+import { EducationPanel } from "./chat/EducationPanel"
 import { createClient } from "@supabase/supabase-js"
 
 // --- 设计系统颜色常量 ---
@@ -89,10 +94,19 @@ function AppSidebarInner() {
   // 侧边栏整体开关
   const [isOpen, setIsOpen] = useState(true)
   const [isMobile, setIsMobile] = useState(false)
-  
-  // 🔥 历史对话折叠状态
-  const [isHistoryExpanded, setIsHistoryExpanded] = useState(false)
-  
+
+  // 🔥 智能体专区面板状态
+  const [isAgentPanelOpen, setIsAgentPanelOpen] = useState(false)
+
+  // 🔥 AI模型专区面板状态
+  const [isModelPanelOpen, setIsModelPanelOpen] = useState(false)
+
+  // 🔥 创意生成专区面板状态
+  const [isCreativePanelOpen, setIsCreativePanelOpen] = useState(false)
+
+  // 🔥 教育专区面板状态
+  const [isEducationPanelOpen, setIsEducationPanelOpen] = useState(false)
+
   // 底部用户菜单开关
   const [showUserMenu, setShowUserMenu] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -276,7 +290,7 @@ function AppSidebarInner() {
   
   const getAvatarUrl = () => user?.user_metadata?.avatar_url || null
 
-  // --- 导航项组件 - 🎨 增强立体感和字体样式 ---
+  // --- 导航项组件 - 🎨 画廊导视风格，图标缩小10%，间距拉大15%
   const NavItem = ({
     href,
     icon: Icon,
@@ -296,41 +310,47 @@ function AppSidebarInner() {
       href={href}
       onClick={onClick || handleNavClick}
       className={cn(
-        "relative flex items-center gap-3 px-3 py-3 transition-all",
+        "relative flex items-center gap-3 px-3 py-[13px] transition-all", // 间距拉大15%
         "rounded-xl",
         isActive
           ? "font-bold"
           : "font-semibold hover:bg-white/80"
       )}
       style={isActive ? {
-        backgroundColor: "rgba(34, 197, 94, 0.15)",
-        boxShadow: "0 2px 8px rgba(34, 197, 94, 0.15), inset 0 1px 0 rgba(255,255,255,0.5)",
+        backgroundColor: "rgba(34, 197, 94, 0.15)", // 15%-20% 不透明度
         color: COLORS.primary.dark
       } : {
         color: COLORS.gray[700],
         textShadow: TEXT_SHADOWS.subtle
       }}
     >
-      {/* 左侧色条 - 选中态，更粗更明显 */}
+      {/* 左侧色条 - 选中态，柔和光晕 */}
       {isActive && (
-        <div
-          className="absolute left-0 top-1/2 -translate-y-1/2 w-[4px] h-8 rounded-r-full"
+        <motion.div
+          className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-7 rounded-r-full"
           style={{
             backgroundColor: COLORS.primary.main,
-            boxShadow: `2px 0 8px ${COLORS.primary.main}60`
           }}
+          animate={{
+            boxShadow: [
+              `0 0 8px ${COLORS.primary.main}40`,
+              `0 0 16px ${COLORS.primary.main}60`,
+              `0 0 8px ${COLORS.primary.main}40`,
+            ],
+          }}
+          transition={{ duration: 2.5, repeat: Infinity }}
         />
       )}
 
-      {/* 图标 - 20px，选中态填充样式，增加阴影 */}
+      {/* 图标 - 18px (缩小10%)，Light权重 strokeWidth:1.5 */}
       <Icon
-        className="h-5 w-5 shrink-0"
+        className="h-[18px] w-[18px] shrink-0"
         style={{
           color: isActive ? COLORS.primary.dark : COLORS.gray[600],
-          filter: isActive ? `drop-shadow(0 2px 4px ${COLORS.primary.main}40)` : "none"
+          filter: isActive ? `drop-shadow(0 1px 3px ${COLORS.primary.main}30)` : "none"
         }}
         fill={isActive ? "currentColor" : "none"}
-        strokeWidth={isActive ? 0 : 2}
+        strokeWidth={isActive ? 0 : 1.5}
       />
 
       <span
@@ -342,13 +362,23 @@ function AppSidebarInner() {
         {label}
       </span>
 
-      {/* 推荐标识 - 右上角 */}
+      {/* 推荐标识 - 绿色呼吸光点，替代红色标签 */}
       {badge && (
-        <span
-          className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-sm"
-        >
-          {badge}
-        </span>
+        <motion.span
+          className="absolute right-2 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full"
+          style={{
+            backgroundColor: COLORS.primary.main,
+          }}
+          animate={{
+            boxShadow: [
+              `0 0 4px ${COLORS.primary.main}60`,
+              `0 0 8px ${COLORS.primary.main}80`,
+              `0 0 4px ${COLORS.primary.main}60`,
+            ],
+            opacity: [0.7, 1, 0.7],
+          }}
+          transition={{ duration: 2, repeat: Infinity }}
+        />
       )}
     </Link>
   )
@@ -384,7 +414,7 @@ function AppSidebarInner() {
               )
             : cn(
                 "sticky top-0 border-r",
-                isOpen ? "w-64" : "w-0 overflow-hidden"
+                isOpen ? "w-52" : "w-0 overflow-hidden"
               )
         )}
         style={{ 
@@ -403,16 +433,16 @@ function AppSidebarInner() {
           </button>
         )}
 
-        {/* 1. Logo 区域 - 放大至最大，填满宽度 */}
-        <div className="flex items-center shrink-0 px-3 py-4">
+        {/* 1. Logo 区域 - 🎨 呼吸间距，确保品牌标识有足够的视域空间 */}
+        <div className="flex items-center shrink-0 px-3 py-5">
           <Link href="/" onClick={handleNavClick} className="flex items-center w-full">
             <img src="/images/logo.png" alt="Logo" className="w-full h-auto object-contain" style={{ maxWidth: "180px" }} />
           </Link>
         </div>
 
-        {/* 2. 积分显示 - 🎨 简洁轻量化，无底色 */}
+        {/* 2. 积分显示 - 🎨 简洁轻量化，无底色，增加上方间距 */}
         {user && (
-          <div className="px-5 mb-3 flex items-center gap-2">
+          <div className="px-5 mb-4 flex items-center gap-2">
             <Coins className="h-4 w-4" style={{ color: COLORS.primary.main }} />
             <span 
               className="text-sm font-semibold"
@@ -429,8 +459,28 @@ function AppSidebarInner() {
           </div>
         )}
 
-        {/* --- 核心滚动区域 --- */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden py-2 px-3 scrollbar-thin scrollbar-thumb-gray-200/50">
+        {/* --- 核心滚动区域 - 🎨 定制滚动条：3px宽，半透明浅灰，仅滚动时显示 --- */}
+        <div className="flex-1 overflow-y-auto overflow-x-hidden py-2 px-3"
+          style={{
+            scrollbarWidth: 'thin',
+            scrollbarColor: 'rgba(14, 58, 31, 0.15) transparent',
+          }}
+        >
+          <style>{`
+            div::-webkit-scrollbar {
+              width: 3px;
+            }
+            div::-webkit-scrollbar-track {
+              background: transparent;
+            }
+            div::-webkit-scrollbar-thumb {
+              background: rgba(14, 58, 31, 0.15);
+              border-radius: 2px;
+            }
+            div:hover::-webkit-scrollbar-thumb {
+              background: rgba(14, 58, 31, 0.25);
+            }
+          `}</style>
           
           {/* A. 主页 */}
           <NavItem 
@@ -440,109 +490,113 @@ function AppSidebarInner() {
             isActive={pathname === "/"}
           />
 
-          {/* B. 智能体列表 */}
-          <div className="mt-5 mb-3 px-3">
-            <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: COLORS.gray[500] }}>
-              智能体
-            </span>
+          {/* B. 智能体专区入口 - OpenClaw 专区 */}
+          <div className="mt-8 mb-4 px-3">
+            <motion.button
+              onClick={() => setIsAgentPanelOpen(true)}
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-xl"
+              style={{
+                backgroundColor: "rgba(34, 197, 94, 0.08)",
+                border: "1px solid rgba(34, 197, 94, 0.2)",
+                boxShadow: "0 2px 8px rgba(34, 197, 94, 0.1), inset 0 1px 0 rgba(255,255,255,0.5)"
+              }}
+              whileHover={{
+                scale: 1.03,
+                boxShadow: "0 4px 16px rgba(34, 197, 94, 0.2), 0 8px 24px rgba(34, 197, 94, 0.15), inset 0 1px 0 rgba(255,255,255,0.8)"
+              }}
+              whileTap={{ scale: 0.98 }}
+              transition={{ duration: 0.2 }}
+            >
+              <Sparkles className="w-4 h-4" style={{ color: COLORS.primary.main }} />
+              <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: COLORS.primary.dark }}>
+                智能体专区
+              </span>
+            </motion.button>
           </div>
-          
-          {/* 作文批改 - 🔥 使用新路由 /chat/standard */}
-          <NavItem 
-            href="/chat/standard"
-            icon={GraduationCap}
-            label="作文批改"
-            isActive={pathname === "/chat/standard" || (pathname === "/chat" && !currentAgent)}
-          />
-          
-          {/* 教学评助手 - 🔥 使用新路由 /chat/teaching-pro */}
-          <NavItem
-            href="/chat/teaching-pro"
-            icon={Brain}
-            label="教学评助手"
-            isActive={pathname === "/chat/teaching-pro" || currentAgent === "teaching-pro"}
-          />
 
-          {/* Open Claw - 🔥 使用新路由 /chat/open-claw */}
-          <NavItem
-            href="/chat/open-claw"
-            icon={Bot}
-            label="Open Claw"
-            isActive={pathname === "/chat/open-claw"}
-            badge="推荐"
-          />
+          {/* C. 教育专区入口 - 包含所有教育智能体 */}
+          <div className="mb-4 px-3">
+            <motion.button
+              onClick={() => setIsEducationPanelOpen(true)}
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-xl"
+              style={{
+                backgroundColor: "rgba(14, 58, 31, 0.04)",
+                border: "1px solid rgba(14, 58, 31, 0.08)",
+                boxShadow: "0 2px 8px rgba(14, 58, 31, 0.05), inset 0 1px 0 rgba(255,255,255,0.5)"
+              }}
+              whileHover={{
+                scale: 1.03,
+                boxShadow: "0 4px 16px rgba(14, 58, 31, 0.1), 0 8px 24px rgba(14, 58, 31, 0.08), inset 0 1px 0 rgba(255,255,255,0.8)"
+              }}
+              whileTap={{ scale: 0.98 }}
+              transition={{ duration: 0.2 }}
+            >
+              <GraduationCap className="w-4 h-4" style={{ color: COLORS.primary.main }} />
+              <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: COLORS.primary.dark }}>
+                教育专区
+              </span>
+            </motion.button>
+          </div>
 
-          {/* 分割线 - 智能体和最近对话之间 */}
-          <div 
-            className="my-5 mx-3 h-px"
-            style={{ backgroundColor: COLORS.divider }}
-          />
+          {/* D. AI模型专区入口 */}
+          <div className="mb-4 px-3">
+            <motion.button
+              onClick={() => setIsModelPanelOpen(true)}
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-xl"
+              style={{
+                backgroundColor: "rgba(14, 58, 31, 0.04)",
+                border: "1px solid rgba(14, 58, 31, 0.08)",
+                boxShadow: "0 2px 8px rgba(14, 58, 31, 0.05), inset 0 1px 0 rgba(255,255,255,0.5)"
+              }}
+              whileHover={{
+                scale: 1.03,
+                boxShadow: "0 4px 16px rgba(14, 58, 31, 0.1), 0 8px 24px rgba(14, 58, 31, 0.08), inset 0 1px 0 rgba(255,255,255,0.8)"
+              }}
+              whileTap={{ scale: 0.98 }}
+              transition={{ duration: 0.2 }}
+            >
+              <Sparkles className="w-4 h-4" style={{ color: COLORS.primary.main }} />
+              <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: COLORS.primary.dark }}>
+                AI模型专区
+              </span>
+            </motion.button>
+          </div>
 
-          {/* C. 历史会话 */}
-          {sessions.length > 0 && (
-            <>
-              <button 
-                onClick={() => setIsHistoryExpanded(!isHistoryExpanded)}
-                className="mb-2 px-3 flex items-center gap-2 w-full text-left hover:opacity-80 transition-opacity"
-              >
-                <History className="h-4 w-4" style={{ color: COLORS.gray[500] }} />
-                <span 
-                  className="text-[11px] font-semibold uppercase tracking-wider flex-1"
-                  style={{ color: COLORS.gray[500] }}
-                >
-                  最近对话
-                </span>
-                <ChevronDown 
-                  className={cn(
-                    "h-4 w-4 transition-transform duration-200",
-                    isHistoryExpanded && "rotate-180"
-                  )}
-                  style={{ color: COLORS.gray[400] }}
-                />
-              </button>
-              
-              {/* 折叠内容 */}
-              <div className={cn(
-                "space-y-0.5 overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]",
-                isHistoryExpanded ? "max-h-[9999px] opacity-100" : "max-h-0 opacity-0"
-              )}>
-                {sessions.map(session => (
-                  <Link
-                    key={session.id}
-                    href={`/chat/${session.ai_model || 'standard'}?id=${session.id}`}
-                    onClick={handleNavClick}
-                    className="block rounded-lg px-3 py-2.5 transition-all group"
-                    style={{ backgroundColor: "transparent" }}
-                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = COLORS.gray[100]}
-                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
-                  >
-                    <div 
-                      className="text-[13px] font-medium truncate"
-                      style={{ color: COLORS.gray[700] }}
-                    >
-                      {session.title}
-                    </div>
-                    <div 
-                      className="text-[11px] truncate mt-0.5"
-                      style={{ color: COLORS.gray[500] }}
-                    >
-                      {session.preview}
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            </>
-          )}
+          {/* E. 创意生成专区入口 */}
+          <div className="mb-4 px-3">
+            <motion.button
+              onClick={() => setIsCreativePanelOpen(true)}
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-xl"
+              style={{
+                backgroundColor: "rgba(0, 200, 150, 0.08)",
+                border: "1px solid rgba(0, 200, 150, 0.2)",
+                boxShadow: "0 2px 8px rgba(0, 200, 150, 0.1), inset 0 1px 0 rgba(255,255,255,0.5)"
+              }}
+              whileHover={{
+                scale: 1.03,
+                boxShadow: "0 4px 16px rgba(0, 200, 150, 0.2), 0 8px 24px rgba(0, 200, 150, 0.15), inset 0 1px 0 rgba(255,255,255,0.8)"
+              }}
+              whileTap={{ scale: 0.98 }}
+              transition={{ duration: 0.2 }}
+            >
+              <Sparkles className="w-4 h-4" style={{ color: COLORS.primary.main }} />
+              <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: COLORS.primary.dark }}>
+                创意生成
+              </span>
+            </motion.button>
+          </div>
         </div>
 
-        {/* --- 底部用户固定区域 - 🎨 透明背景，不遮挡历史对话 --- */}
-        <div 
-          className="mt-auto shrink-0 z-50 relative" 
+        {/* --- 底部用户固定区域 - 🎨 玻璃拟态浮出效果 --- */}
+        <div
+          className="mt-auto shrink-0 z-50 relative"
           ref={menuRef}
-          style={{ 
-            background: "transparent",
-            borderTop: "none",
-            boxShadow: "none"
+          style={{
+            background: "rgba(255, 255, 255, 0.60)",
+            backdropFilter: "blur(20px)",
+            WebkitBackdropFilter: "blur(20px)",
+            borderTop: "1px solid rgba(255, 255, 255, 0.3)",
+            boxShadow: "0 -4px 30px rgba(14, 58, 31, 0.04)",
           }}
         >
           {/* 🎁 邀请和帮助按钮 - 垂直排列，无底色 */}
@@ -715,6 +769,30 @@ function AppSidebarInner() {
           </div>
         </div>
       </div>
+
+      {/* 🔥 智能体专区面板 */}
+      <AgentPanel
+        isOpen={isAgentPanelOpen}
+        onClose={() => setIsAgentPanelOpen(false)}
+      />
+
+      {/* 🔥 AI模型专区面板 */}
+      <ModelPanel
+        isOpen={isModelPanelOpen}
+        onClose={() => setIsModelPanelOpen(false)}
+      />
+
+      {/* 🔥 创意生成专区面板 */}
+      <CreativePanel
+        isOpen={isCreativePanelOpen}
+        onClose={() => setIsCreativePanelOpen(false)}
+      />
+
+      {/* 🔥 教育专区面板 */}
+      <EducationPanel
+        isOpen={isEducationPanelOpen}
+        onClose={() => setIsEducationPanelOpen(false)}
+      />
     </>
   )
 }

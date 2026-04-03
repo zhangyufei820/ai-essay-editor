@@ -54,6 +54,12 @@ export const DIFY_API_KEY_MAP: Record<string, string | undefined> = {
   // 音乐和视频
   "suno-v5": process.env.NEXT_PUBLIC_DIFY_API_KEY || process.env.NEXT_PUBLIC_SUNO_API_KEY,
   "sora-2-pro": process.env.NEXT_PUBLIC_DIFY_API_KEY || process.env.NEXT_PUBLIC_SORA_API_KEY,
+
+  // 智能体专区
+  "quanquan-math": process.env.NEXT_PUBLIC_DIFY_QUANQUANMATH_API_KEY || process.env.NEXT_PUBLIC_DIFY_API_KEY,
+  "quanquan-english": process.env.NEXT_PUBLIC_DIFY_QUANQUANENGLISH_API_KEY || process.env.NEXT_PUBLIC_DIFY_API_KEY,
+  "beike-pro": process.env.NEXT_PUBLIC_DIFY_BEIKE_PRO_API_KEY || process.env.NEXT_PUBLIC_DIFY_API_KEY,
+  "banzhuren": process.env.NEXT_PUBLIC_DIFY_BANZHUREN_API_KEY || process.env.NEXT_PUBLIC_DIFY_API_KEY,
 }
 
 /**

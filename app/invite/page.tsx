@@ -261,9 +261,91 @@ export default function InvitePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-emerald-50">
-      {/* 顶部导航 */}
-      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-100">
+    <div className="relative min-h-screen overflow-hidden" style={{ background: "#F8FAF8" }}>
+      {/* 🌊 有机光流背景层 */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        {/* 底层渐变 */}
+        <div
+          className="absolute inset-0"
+          style={{
+            background: `linear-gradient(180deg, ${BRAND_GREEN_DARK} 0%, ${BRAND_GREEN}20 40%, #F8FAF8 100%)`,
+          }}
+        />
+
+        {/* 光流元素 1 */}
+        <motion.div
+          className="absolute w-96 h-96 rounded-full blur-3xl"
+          style={{
+            background: `radial-gradient(circle, ${BRAND_GREEN}15 0%, transparent 70%)`,
+            top: "-10%",
+            right: "-10%",
+          }}
+          animate={{
+            y: [0, -60, 0],
+            x: [0, 30, 0],
+            scale: [1, 1.2, 1],
+            opacity: [0.3, 0.6, 0.3],
+          }}
+          transition={{
+            duration: 10,
+            ease: "linear",
+            repeat: Infinity,
+          }}
+        />
+
+        {/* 光流元素 2 */}
+        <motion.div
+          className="absolute w-80 h-80 rounded-full blur-3xl"
+          style={{
+            background: `radial-gradient(circle, ${BRAND_GREEN_LIGHT}80 0%, transparent 70%)`,
+            bottom: "10%",
+            left: "-15%",
+          }}
+          animate={{
+            y: [0, 50, 0],
+            x: [0, -25, 0],
+            scale: [1, 1.15, 1],
+            opacity: [0.4, 0.7, 0.4],
+          }}
+          transition={{
+            duration: 12,
+            ease: "linear",
+            repeat: Infinity,
+          }}
+        />
+
+        {/* 光流元素 3 */}
+        <motion.div
+          className="absolute w-64 h-64 rounded-full blur-2xl"
+          style={{
+            background: `radial-gradient(circle, ${BRAND_GREEN}10 0%, transparent 70%)`,
+            top: "30%",
+            left: "20%",
+          }}
+          animate={{
+            y: [0, -40, 0],
+            x: [0, 20, 0],
+            scale: [1, 1.1, 1],
+            opacity: [0.2, 0.5, 0.2],
+          }}
+          transition={{
+            duration: 8,
+            ease: "linear",
+            repeat: Infinity,
+          }}
+        />
+      </div>
+
+      {/* 顶部导航 - 玻璃态 */}
+      <header
+        className="sticky top-0 z-50 border-b"
+        style={{
+          background: "rgba(255, 255, 255, 0.70)",
+          backdropFilter: "blur(20px) saturate(180%)",
+          WebkitBackdropFilter: "blur(20px) saturate(180%)",
+          borderColor: "rgba(14, 58, 31, 0.04)",
+        }}
+      >
         <div className="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
             <img src="/images/logo.png" alt="沈翔智学" className="h-10 w-auto" />

@@ -1,6 +1,6 @@
 /**
  * 📝 沈翔学校 - Hero 区域组件
- * 
+ *
  * 主页首屏展示区域，包含品牌标语、CTA 按钮和智能对话框演示动画。
  * 每个字都有从四面八方汇聚的动画效果，象征来自五湖四海的会员。
  * 背景有学科知识图标动画，展示全功能覆盖。
@@ -11,7 +11,7 @@
 import { motion, AnimatePresence } from "framer-motion"
 import Link from "next/link"
 import { useState, useEffect, useCallback } from "react"
-import { 
+import {
   ArrowRight, Sparkles, MessageSquare, ChevronDown, Send, Paperclip, FileText, X
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -86,14 +86,14 @@ const bgBottomLeftVariants = {
 // 字符汇聚动画组件
 // ============================================
 
-function AnimatedText({ text, className, style, delay = 0 }: { 
-  text: string; 
-  className?: string; 
+function AnimatedText({ text, className, style, delay = 0 }: {
+  text: string;
+  className?: string;
   style?: React.CSSProperties;
   delay?: number;
 }) {
   const characters = text.split('')
-  
+
   return (
     <span className={className} style={style}>
       {characters.map((char, index) => {
@@ -101,16 +101,16 @@ function AnimatedText({ text, className, style, delay = 0 }: {
         return (
           <motion.span
             key={index}
-            initial={{ 
-              opacity: 0, 
+            initial={{
+              opacity: 0,
               x: direction.x,
               y: direction.y,
               scale: 0,
               rotate: Math.random() * 360 - 180
             }}
-            animate={{ 
-              opacity: 1, 
-              x: 0, 
+            animate={{
+              opacity: 1,
+              x: 0,
               y: 0,
               scale: 1,
               rotate: 0
@@ -121,7 +121,7 @@ function AnimatedText({ text, className, style, delay = 0 }: {
               ease: [0.34, 1.56, 0.64, 1]
             }}
             className="inline-block"
-            style={{ 
+            style={{
               display: char === ' ' ? 'inline' : 'inline-block',
               whiteSpace: char === ' ' ? 'pre' : 'normal'
             }}
@@ -158,7 +158,7 @@ function TypewriterText({ text, onComplete }: { text: string; onComplete?: () =>
     <span>
       {displayText}
       {currentIndex < text.length && (
-        <motion.span 
+        <motion.span
           className="inline-block w-0.5 h-4 ml-0.5"
           style={{ backgroundColor: brandColors[600] }}
           animate={{ opacity: [1, 0, 1] }}
@@ -194,16 +194,16 @@ function ChatDemo() {
     const timer = setTimeout(() => {
       // 显示第一条 AI 消息
       setVisibleMessages(1)
-      
+
       // 2秒后显示文件上传动画
       setTimeout(() => {
         setShowFileUpload(true)
-        
+
         // 1.5秒后显示文件消息
         setTimeout(() => {
           setShowFileUpload(false)
           setVisibleMessages(2)
-          
+
           // 1秒后开始用户输入
           setTimeout(() => {
             setIsTyping(true)
@@ -219,11 +219,11 @@ function ChatDemo() {
                   setIsTyping(false)
                   setUserInput("")
                   setVisibleMessages(3)
-                  
+
                   // 显示 AI 回复
                   setTimeout(() => {
                     setVisibleMessages(4)
-                    
+
                     // 3秒后重新开始循环
                     setTimeout(() => {
                       resetAndPlay()
@@ -241,13 +241,13 @@ function ChatDemo() {
   }, [cycleKey, resetAndPlay])
 
   return (
-    <motion.div 
+    <motion.div
       key={cycleKey}
       initial={{ opacity: 0, y: 40 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.8, delay: 0.5, ease: [0.32, 0.72, 0, 1] }}
       className="rounded-3xl overflow-hidden max-w-2xl mx-auto relative"
-      style={{ 
+      style={{
         backgroundColor: 'white',
         // 🎨 增强悬浮感 - 柔和扩散的大范围投影
         boxShadow: `
@@ -259,12 +259,12 @@ function ChatDemo() {
       }}
     >
       {/* 顶部栏 */}
-      <div 
+      <div
         className="px-4 py-3 flex items-center justify-between border-b"
         style={{ borderColor: slateColors[100] }}
       >
         <div className="flex items-center gap-2">
-          <span 
+          <span
             className="w-2 h-2 rounded-full"
             style={{ backgroundColor: brandColors[500] }}
           />
@@ -290,7 +290,7 @@ function ChatDemo() {
               exit={{ opacity: 0 }}
               className="flex items-start gap-3 mb-4"
             >
-              <motion.div 
+              <motion.div
                 className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0"
                 style={{ backgroundColor: brandColors[100] }}
                 animate={{ scale: [1, 1.05, 1] }}
@@ -298,7 +298,7 @@ function ChatDemo() {
               >
                 <Sparkles className="h-4 w-4" style={{ color: brandColors[600] }} />
               </motion.div>
-              <div 
+              <div
                 className="flex-1 rounded-2xl px-4 py-3"
                 style={{ backgroundColor: slateColors[50] }}
               >
@@ -318,11 +318,11 @@ function ChatDemo() {
               exit={{ opacity: 0 }}
               className="flex items-start gap-3 mb-4 justify-end"
             >
-              <div 
+              <div
                 className="rounded-2xl px-4 py-3 flex items-center gap-3"
                 style={{ backgroundColor: brandColors[50], border: `1px solid ${brandColors[200]}` }}
               >
-                <div 
+                <div
                   className="w-10 h-10 rounded-lg flex items-center justify-center"
                   style={{ backgroundColor: brandColors[100] }}
                 >
@@ -349,7 +349,7 @@ function ChatDemo() {
               exit={{ opacity: 0 }}
               className="flex items-start gap-3 mb-4 justify-end"
             >
-              <div 
+              <div
                 className="rounded-2xl px-4 py-3"
                 style={{ backgroundColor: brandColors[600] }}
               >
@@ -369,13 +369,13 @@ function ChatDemo() {
               exit={{ opacity: 0 }}
               className="flex items-start gap-3"
             >
-              <motion.div 
+              <motion.div
                 className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0"
                 style={{ backgroundColor: brandColors[100] }}
               >
                 <Sparkles className="h-4 w-4" style={{ color: brandColors[600] }} />
               </motion.div>
-              <div 
+              <div
                 className="flex-1 rounded-2xl px-4 py-3"
                 style={{ backgroundColor: slateColors[50] }}
               >
@@ -399,11 +399,11 @@ function ChatDemo() {
               exit={{ opacity: 0, y: -10, height: 0 }}
               className="mb-3"
             >
-              <div 
+              <div
                 className="rounded-xl p-3 flex items-center gap-3"
                 style={{ backgroundColor: brandColors[50], border: `1px solid ${brandColors[200]}` }}
               >
-                <div 
+                <div
                   className="w-10 h-10 rounded-lg flex items-center justify-center"
                   style={{ backgroundColor: brandColors[100] }}
                 >
@@ -414,7 +414,7 @@ function ChatDemo() {
                     我的作文.jpg
                   </p>
                   <div className="flex items-center gap-2 mt-1">
-                    <motion.div 
+                    <motion.div
                       className="h-1 rounded-full flex-1"
                       style={{ backgroundColor: brandColors[100] }}
                     >
@@ -437,9 +437,9 @@ function ChatDemo() {
           )}
         </AnimatePresence>
 
-        <div 
+        <div
           className="rounded-2xl border flex items-center gap-2 px-4 py-3"
-          style={{ 
+          style={{
             borderColor: slateColors[200],
             backgroundColor: slateColors[50]
           }}
@@ -450,7 +450,7 @@ function ChatDemo() {
               {isTyping ? userInput : "输入内容开始对话..."}
             </span>
             {isTyping && (
-              <motion.span 
+              <motion.span
                 className="inline-block w-0.5 h-4 ml-0.5"
                 style={{ backgroundColor: slateColors[700] }}
                 animate={{ opacity: [1, 0, 1] }}
@@ -478,28 +478,28 @@ function ChatDemo() {
 
 export function HeroSection() {
   return (
-    <section 
+    <section
       className="relative min-h-screen flex flex-col items-center justify-center overflow-hidden py-20"
       style={{ backgroundColor: creamColors[100] }}
     >
       {/* 背景装饰 - 渐变光晕 */}
-      <motion.div 
+      <motion.div
         className="absolute inset-0 overflow-hidden pointer-events-none"
         initial="hidden"
         animate="visible"
       >
-        <motion.div 
+        <motion.div
           variants={bgTopRightVariants}
           className="absolute -top-40 -right-40 w-[500px] h-[500px] rounded-full blur-[100px]"
           style={{ backgroundColor: `${brandColors[300]}40` }}
         />
-        <motion.div 
+        <motion.div
           variants={bgBottomLeftVariants}
           className="absolute -bottom-40 -left-40 w-[500px] h-[500px] rounded-full blur-[100px]"
           style={{ backgroundColor: `${brandColors[200]}30` }}
         />
         {/* 微妙的网格背景 */}
-        <div 
+        <div
           className="absolute inset-0 opacity-[0.015]"
           style={{
             backgroundImage: `linear-gradient(${slateColors[400]} 1px, transparent 1px), linear-gradient(90deg, ${slateColors[400]} 1px, transparent 1px)`,
@@ -513,15 +513,15 @@ export function HeroSection() {
         {/* 上半部分：文字内容 */}
         <div className="text-center mb-16">
           {/* 标签 */}
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: -30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, ease: [0.32, 0.72, 0, 1] }}
             className="mb-6"
           >
-            <span 
+            <span
               className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium"
-              style={{ 
+              style={{
                 backgroundColor: brandColors[50],
                 color: brandColors[700]
               }}
@@ -532,9 +532,9 @@ export function HeroSection() {
           </motion.div>
 
           {/* 主标题 - 每个字从四面八方汇聚，超大字体突出显示，强烈立体感 */}
-          <h1 
+          <h1
             className="text-5xl md:text-6xl lg:text-8xl font-black tracking-tight mb-8"
-            style={{ 
+            style={{
               color: brandColors[900],
               textShadow: '0 6px 12px rgba(0,0,0,0.15), 0 3px 6px rgba(0,0,0,0.1), 0 1px 3px rgba(0,0,0,0.08)'
             }}
@@ -547,7 +547,7 @@ export function HeroSection() {
           </h1>
 
           {/* 副标题 */}
-          <motion.p 
+          <motion.p
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 1.2, ease: [0.32, 0.72, 0, 1] }}
@@ -560,7 +560,7 @@ export function HeroSection() {
           </motion.p>
 
           {/* CTA 按钮组 - 🎨 增强渐变和发光效果 */}
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 1.4, ease: [0.32, 0.72, 0, 1] }}
@@ -569,11 +569,11 @@ export function HeroSection() {
             <Link href="/chat">
               <motion.button
                 className="group relative h-14 px-8 text-base font-bold rounded-2xl text-white overflow-hidden"
-                style={{ 
+                style={{
                   background: `linear-gradient(135deg, ${brandColors[600]} 0%, ${brandColors[700]} 50%, ${brandColors[800]} 100%)`,
                   boxShadow: `0 8px 24px ${brandColors[600]}40, 0 4px 12px ${brandColors[700]}30`
                 }}
-                whileHover={{ 
+                whileHover={{
                   scale: 1.05,
                   boxShadow: `0 12px 32px ${brandColors[500]}50, 0 6px 16px ${brandColors[600]}40, 0 0 40px ${brandColors[400]}30`
                 }}
@@ -581,14 +581,14 @@ export function HeroSection() {
                 transition={{ duration: 0.2 }}
               >
                 {/* 发光效果层 */}
-                <motion.div 
+                <motion.div
                   className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
                   style={{
                     background: `linear-gradient(135deg, ${brandColors[500]}40 0%, transparent 50%, ${brandColors[400]}20 100%)`
                   }}
                 />
                 {/* 闪光动画 */}
-                <motion.div 
+                <motion.div
                   className="absolute inset-0 opacity-0 group-hover:opacity-100"
                   initial={{ x: '-100%' }}
                   whileHover={{ x: '100%' }}
@@ -608,12 +608,12 @@ export function HeroSection() {
             <Link href="/pricing">
               <motion.button
                 className="group h-14 px-8 text-base font-semibold rounded-2xl border-2 bg-white/80 backdrop-blur-sm"
-                style={{ 
+                style={{
                   borderColor: slateColors[200],
                   color: slateColors[700],
                   boxShadow: '0 4px 12px rgba(0,0,0,0.05)'
                 }}
-                whileHover={{ 
+                whileHover={{
                   scale: 1.05,
                   borderColor: brandColors[300],
                   color: brandColors[700],
