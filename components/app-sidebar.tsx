@@ -754,17 +754,19 @@ function AppSidebarInner() {
               />
             </button>
           ) : (
-            <Link href="/login" onClick={handleNavClick}>
-              <Button 
-                className="w-full text-white font-semibold rounded-lg h-11"
-                style={{ 
-                  backgroundColor: COLORS.primary.main,
-                  boxShadow: `0 4px 12px ${COLORS.primary.main}40`
-                }}
-              >
-                登录 / 注册
-              </Button>
-            </Link>
+            <button
+              onClick={() => {
+                handleNavClick()
+                router.push('/login')
+              }}
+              className="w-full flex items-center justify-center gap-2 text-white font-semibold rounded-lg h-11 transition-all hover:opacity-90"
+              style={{
+                backgroundColor: COLORS.primary.main,
+                boxShadow: `0 4px 12px ${COLORS.primary.main}40`
+              }}
+            >
+              登录 / 注册
+            </button>
           )}
           </div>
         </div>
