@@ -12,6 +12,7 @@ export type ChatSession = {
   title: string
   date: number
   preview: string
+  ai_model?: string
 }
 
 interface ChatSidebarProps {

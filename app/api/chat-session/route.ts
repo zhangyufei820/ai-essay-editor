@@ -51,15 +51,19 @@ export async function GET(request: NextRequest) {
       data: { user },
     } = await supabase.auth.getUser()
 
-    if (!user) {
+    // 🔥 支持 X-User-Id 头（用于 Authing 用户）
+    const userIdHeader = request.headers.get("X-User-Id")
+    const effectiveUserId = user?.id || userIdHeader
+
+    if (!effectiveUserId) {
       return NextResponse.json({ error: "未登录" }, { status: 401 })
     }
 
     const { data: sessions, error } = await supabase
       .from("chat_sessions")
       .select("*")
-      .eq("user_id", user.id)
-      .order("updated_at", { ascending: false })
+      .eq("user_id", effectiveUserId)
+      .order("created_at", { ascending: false }) // 使用 created_at，因为表只有这个时间列
 
     if (error) throw error
 

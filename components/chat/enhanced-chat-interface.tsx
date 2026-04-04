@@ -446,6 +446,55 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   const [showHistorySidebar, setShowHistorySidebar] = useState(false)
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([])
 
+  // 🔥 获取历史会话列表（必须在 useEffect 之前定义，否则闭包调用时函数未定义）
+  // 🔥 修复: 使用 API 路由代替直接 Supabase 查询，支持 Authing 用户
+  const fetchChatSessions = async (uid: string) => {
+    console.log("📋 [历史会话] 开始查询, uid:", uid)
+    try {
+      // 使用 API 路由，通过 X-User-Id 头传递用户 ID
+      const res = await fetch(`/api/chat-session`, {
+        headers: { 'X-User-Id': uid }
+      })
+
+      console.log("📋 [历史会话] API 响应状态:", res.status)
+
+      if (!res.ok) {
+        if (res.status === 401) {
+          console.warn("⚠️ [历史会话] 用户未登录")
+          setChatSessions([])
+          return
+        }
+        throw new Error(`HTTP ${res.status}`)
+      }
+
+      const { sessions } = await res.json()
+      console.log("📋 [历史会话] API 返回数据:", sessions?.length || 0, "条")
+
+      // 防御性检查
+      const safeSessionData = Array.isArray(sessions) ? sessions : []
+
+      if (safeSessionData.length > 0) {
+        console.log("📋 [历史会话] 找到会话:", safeSessionData.length)
+        const mapped = safeSessionData.map((s: any) => ({
+          id: s.id,
+          title: s.title || "新对话",
+          date: new Date(s.created_at).getTime(), // 使用 created_at，因为表只有这个时间列
+          preview: s.preview || "",
+          ai_model: s.ai_model || "standard"
+        }))
+        console.log("📋 [历史会话] 映射后数据:", mapped.length, "条")
+        setChatSessions(mapped)
+        console.log("📋 [历史会话] setChatSessions 已调用")
+      } else {
+        console.log("📋 [历史会话] 无数据")
+        setChatSessions([])
+      }
+    } catch (err) {
+      console.error("❌ [历史会话] 查询异常:", err)
+      setChatSessions([])
+    }
+  }
+
   // 🎯 工作流可视化 Hook (GenSpark 1:1 复刻版)
   const {
     workflowState,
@@ -533,52 +582,6 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       // 备用：直接查询数据库
       const { data } = await supabase.from('user_credits').select('credits').eq('user_id', uid).single()
       if (data) setUserCredits(data.credits)
-    }
-  }
-
-  // 🔥 获取历史会话列表
-  const fetchChatSessions = async (uid: string) => {
-    console.log("📋 [历史会话] 开始查询, uid:", uid)
-    try {
-      const { data: sessionData, error } = await supabase
-        .from('chat_sessions')
-        .select('*')
-        .eq('user_id', uid)
-        .order('updated_at', { ascending: false })
-
-      console.log("📋 [历史会话] 查询结果:", {
-        count: sessionData?.length,
-        error,
-        sessionDataIsArray: Array.isArray(sessionData),
-        sessionDataType: typeof sessionData,
-      })
-
-      if (error) {
-        console.error("❌ [历史会话] 查询失败:", error)
-        return
-      }
-
-      // 🔥 防御性检查：确保 sessionData 是数组且有数据
-      const safeSessionData = Array.isArray(sessionData) ? sessionData : []
-
-      if (safeSessionData.length > 0) {
-        console.log("📋 [历史会话] 找到会话:", safeSessionData.length)
-        const mapped = safeSessionData.map((s: any) => ({
-          id: s.id,
-          title: s.title || "新对话",
-          date: new Date(s.updated_at).getTime(),
-          preview: s.preview || "",
-          ai_model: s.ai_model || "standard"
-        }))
-        console.log("📋 [历史会话] 映射后数据:", mapped.length, "条")
-        setChatSessions(mapped)
-        console.log("📋 [历史会话] setChatSessions 已调用")
-      } else {
-        console.log("📋 [历史会话] 无数据 (safeSessionData.length = 0)")
-        setChatSessions([])
-      }
-    } catch (err) {
-      console.error("❌ [历史会话] 查询异常:", err)
     }
   }
 
@@ -1739,41 +1742,11 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                 </button>
               </div>
 
-              {/* 新建会话按钮 - Claude风格 */}
-              <div className="px-3 pt-3 pb-2">
-                <button
-                  onClick={() => {
-                    router.push('/chat')
-                    setShowHistorySidebar(false)
-                  }}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-full transition-all duration-200"
-                  style={{
-                    backgroundColor: "rgba(16, 163, 127, 0.08)",
-                    border: "1px solid rgba(16, 163, 127, 0.3)",
-                    color: "#10A37F",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = "rgba(16, 163, 127, 0.15)"
-                    e.currentTarget.style.borderColor = "rgba(16, 163, 127, 0.5)"
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = "rgba(16, 163, 127, 0.08)"
-                    e.currentTarget.style.borderColor = "rgba(16, 163, 127, 0.3)"
-                  }}
-                >
-                  <Sparkles className="w-4 h-4" />
-                  <span className="text-sm font-semibold">新建会话</span>
-                </button>
-              </div>
-
               {/* 会话列表 */}
               <ScrollArea className="flex-1 px-1 scrollbar-thin">
                 <div className="p-2 space-y-1">
                   {chatSessions.length === 0 ? (
                     <div className="text-center py-8 text-slate-400 text-sm">
-                      <div className="text-xs text-red-400 mb-2">uid: {userId || '无'}</div>
-                      <div className="text-xs text-orange-400 mb-2">会话数: {chatSessions.length}</div>
-                      <div className="text-xs text-gray-400 mb-2">请打开浏览器控制台(F12)查看历史会话查询日志</div>
                       暂无历史会话
                     </div>
                   ) : (

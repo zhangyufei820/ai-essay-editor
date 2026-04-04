@@ -15,7 +15,7 @@ type ChatSession = {
   processing_mode: string
   ai_provider: string
   created_at: string
-  updated_at: string
+  created_at: string
 }
 
 type EssayReview = {
@@ -30,21 +30,67 @@ export default function HistoryPage() {
   const [sessions, setSessions] = useState<ChatSession[]>([])
   const [reviews, setReviews] = useState<EssayReview[]>([])
   const [loading, setLoading] = useState(true)
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
 
   useEffect(() => {
+    // Check if user is logged in
+    const userStr = localStorage.getItem('currentUser')
+    if (userStr) {
+      try {
+        const user = JSON.parse(userStr)
+        const uid = user.id || user.sub || user.userId || user.user_id
+        if (uid) {
+          setIsLoggedIn(true)
+        }
+      } catch (e) {
+        console.error("[v0] Parse user error:", e)
+      }
+    }
     loadHistory()
   }, [])
 
   const loadHistory = async () => {
     try {
-      const [sessionsRes, reviewsRes] = await Promise.all([fetch("/api/chat-session"), fetch("/api/save-essay-review")])
-
-      if (sessionsRes.ok) {
-        const { sessions } = await sessionsRes.json()
-        setSessions(sessions || [])
+      // Get user ID from localStorage
+      const userStr = localStorage.getItem('currentUser')
+      let userId = ''
+      if (userStr) {
+        try {
+          const user = JSON.parse(userStr)
+          userId = user.id || user.sub || user.userId || user.user_id || ''
+        } catch (e) {
+          console.error("[v0] Parse user error:", e)
+        }
       }
 
-      if (reviewsRes.ok) {
+      const headers: Record<string, string> = {}
+      if (userId) {
+        headers['X-User-Id'] = userId
+      }
+
+      const [sessionsRes, reviewsRes] = await Promise.all([
+        fetch("/api/chat-session", { headers }),
+        fetch("/api/save-essay-review", { headers })
+      ])
+
+      // Handle sessions response
+      if (sessionsRes.status === 401) {
+        // User not logged in
+        setIsLoggedIn(false)
+        setSessions([])
+      } else if (sessionsRes.ok) {
+        const { sessions } = await sessionsRes.json()
+        setSessions(sessions || [])
+        if (sessions && sessions.length > 0) {
+          setIsLoggedIn(true)
+        }
+      }
+
+      // Handle reviews response
+      if (reviewsRes.status === 401) {
+        // User not logged in - reviews also require auth
+        setReviews([])
+      } else if (reviewsRes.ok) {
         const { reviews } = await reviewsRes.json()
         setReviews(reviews || [])
       }
@@ -78,7 +124,14 @@ export default function HistoryPage() {
 
           <ScrollArea className="h-[600px]">
             <div className="space-y-3">
-              {sessions.length === 0 ? (
+              {!isLoggedIn ? (
+                <Card className="p-8 text-center">
+                  <p className="text-muted-foreground mb-4">请先登录后查看历史记录</p>
+                  <Button asChild>
+                    <Link href="/login">去登录</Link>
+                  </Button>
+                </Card>
+              ) : sessions.length === 0 ? (
                 <Card className="p-8 text-center">
                   <p className="text-muted-foreground">暂无聊天记录</p>
                 </Card>
@@ -91,7 +144,7 @@ export default function HistoryPage() {
                     </div>
                     <div className="mb-3 flex items-center gap-2 text-sm text-muted-foreground">
                       <Clock className="h-3 w-3" />
-                      {new Date(session.updated_at).toLocaleString("zh-CN")}
+                      {new Date(session.created_at).toLocaleString("zh-CN")}
                     </div>
                     <Button variant="outline" size="sm" asChild>
                       <Link href={`/chat?session=${session.id}`}>继续对话</Link>
