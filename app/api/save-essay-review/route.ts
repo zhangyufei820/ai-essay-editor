@@ -49,6 +49,23 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ reviews: [] }, { status: 200 })
     }
 
+    // 🔥 支持 X-User-Id 头（用于 Authing 用户）- 优先使用header
+    const userIdHeader = request.headers.get("X-User-Id")
+
+    // 如果有 X-User-Id header，直接使用（Authing 用户场景）
+    if (userIdHeader) {
+      const supabase = await createServerClient()
+      const { data: reviews, error } = await supabase
+        .from("essay_reviews")
+        .select("*")
+        .eq("user_id", userIdHeader)
+        .order("created_at", { ascending: false })
+
+      if (error) throw error
+      return NextResponse.json({ reviews })
+    }
+
+    // 否则尝试 Supabase 认证
     const supabase = await createServerClient()
     const {
       data: { user },

@@ -167,7 +167,7 @@ export function ModelLogo({
   const sizeConfig = LOGO_SIZES[size]
   const brandColor = config?.brandColor || "#10A37F"
 
-  // 有本地 SVG - 纯 SVG logo，无背景
+  // 有本地 SVG - 纯 SVG logo，显示原始颜色
   if (config?.svgPath && config?.useLocal) {
     return (
       <div
@@ -180,10 +180,6 @@ export function ModelLogo({
           width={sizeConfig.iconSize}
           height={sizeConfig.iconSize}
           className="object-contain"
-          style={{
-            imageRendering: "-webkit-optimize-contrast",
-            filter: "brightness(0) saturate(100%) invert(46%) sepia(12%) saturate(3390%) hue-rotate(125deg) brightness(97%) contrast(101%)",
-          }}
         />
       </div>
     )
@@ -262,10 +258,6 @@ export function ModelLogoWithBg({
           width={sizeConfig.iconSize}
           height={sizeConfig.iconSize}
           className="object-contain"
-          style={{
-            imageRendering: "-webkit-optimize-contrast",
-            filter: "brightness(0) saturate(100%) invert(46%) sepia(12%) saturate(3390%) hue-rotate(125deg) brightness(97%) contrast(101%)",
-          }}
         />
       </div>
     )

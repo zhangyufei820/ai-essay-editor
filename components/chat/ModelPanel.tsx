@@ -406,7 +406,7 @@ function FloatingIslandCard({
           <Icon
             className="w-5.5 h-5.5"
             style={{
-              color: isRecommended ? TOKENS.primary[700] : TOKENS.primary[800],
+              color: "#10A37F",
               strokeWidth: 1.5,
             }}
           />

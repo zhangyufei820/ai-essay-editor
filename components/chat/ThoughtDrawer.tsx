@@ -135,6 +135,21 @@ export const ThoughtDrawer: React.FC<ThoughtDrawerProps> = ({
 
   const elapsedTime = getElapsedTime()
 
+  // 🔥 加载状态：只显示转圈，无文字无方块
+  if (isThinking && !isGenerating && !isExpanded) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: -4 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -4 }}
+        transition={{ duration: 0.15 }}
+        className={cn("flex items-center justify-center", className)}
+      >
+        <Loader2 className="h-4 w-4 animate-spin text-[#10A37F]" strokeWidth={2} />
+      </motion.div>
+    )
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0, y: -4 }}
@@ -161,12 +176,12 @@ export const ThoughtDrawer: React.FC<ThoughtDrawerProps> = ({
               <Check className="h-2.5 w-2.5 text-white" strokeWidth={3} />
             </div>
           )}
-          
+
           {/* 状态文本 */}
           <span className="text-sm text-gray-600">
             {getStatusText()}
           </span>
-          
+
           {/* 耗时（可选） */}
           {elapsedTime && isThinking && (
             <span className="text-xs text-gray-400 ml-1">
@@ -174,7 +189,7 @@ export const ThoughtDrawer: React.FC<ThoughtDrawerProps> = ({
             </span>
           )}
         </div>
-        
+
         {/* 右侧展开/折叠图标 */}
         <motion.div
           animate={{ rotate: isExpanded ? 180 : 0 }}

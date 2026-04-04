@@ -38,10 +38,10 @@ function CheckoutFlow({ productId }: { productId: string }) {
           const { data } = await supabase.auth.getUser()
           supabaseUser = data.user
         }
-        
+
         if (supabaseUser) {
           setUser(supabaseUser)
-          
+
           // 查询用户会员状态
           if (supabase) {
             const { data: userCredits } = await supabase
@@ -49,7 +49,7 @@ function CheckoutFlow({ productId }: { productId: string }) {
               .select('is_pro, membership_status')
               .eq('user_id', supabaseUser.id)
               .single()
-            
+
             if (userCredits) {
               const status = userCredits.membership_status || (userCredits.is_pro ? 'pro' : null)
               setMembershipStatus(status)
@@ -60,11 +60,14 @@ function CheckoutFlow({ productId }: { productId: string }) {
           if (localUser) {
             try {
               setUser(JSON.parse(localUser))
-            } catch (e) { console.error(e) }
+            } catch (e) { console.error('解析本地用户信息失败:', e) }
           }
         }
-      } catch (error) { console.error(error) } 
-      finally { setLoading(false) }
+      } catch (error) {
+        console.error('检查登录状态失败:', error)
+      } finally {
+        setLoading(false)
+      }
     }
     checkAuth()
   }, [])
@@ -293,7 +296,14 @@ function CheckoutFlow({ productId }: { productId: string }) {
 export default function CheckoutPage({ params }: { params: Promise<{ productId: string }> }) {
   const { productId } = use(params)
   return (
-    <Suspense fallback={<div>Loading...</div>}>
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-b from-background to-muted/20 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="h-8 w-8 animate-spin text-[#10A37F]" />
+          <p className="text-muted-foreground">正在加载...</p>
+        </div>
+      </div>
+    }>
       <CheckoutFlow productId={productId} />
     </Suspense>
   )
