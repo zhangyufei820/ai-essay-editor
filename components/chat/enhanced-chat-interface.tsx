@@ -546,24 +546,36 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         .eq('user_id', uid)
         .order('updated_at', { ascending: false })
 
-      console.log("📋 [历史会话] 查询结果:", { count: sessionData?.length, error })
+      console.log("📋 [历史会话] 查询结果:", {
+        count: sessionData?.length,
+        error,
+        sessionDataIsArray: Array.isArray(sessionData),
+        sessionDataType: typeof sessionData,
+      })
 
       if (error) {
         console.error("❌ [历史会话] 查询失败:", error)
         return
       }
 
-      if (sessionData && sessionData.length > 0) {
-        console.log("📋 [历史会话] 找到会话:", sessionData.length)
-        setChatSessions(sessionData.map((s: any) => ({
+      // 🔥 防御性检查：确保 sessionData 是数组且有数据
+      const safeSessionData = Array.isArray(sessionData) ? sessionData : []
+
+      if (safeSessionData.length > 0) {
+        console.log("📋 [历史会话] 找到会话:", safeSessionData.length)
+        const mapped = safeSessionData.map((s: any) => ({
           id: s.id,
           title: s.title || "新对话",
           date: new Date(s.updated_at).getTime(),
           preview: s.preview || "",
           ai_model: s.ai_model || "standard"
-        })))
+        }))
+        console.log("📋 [历史会话] 映射后数据:", mapped.length, "条")
+        setChatSessions(mapped)
+        console.log("📋 [历史会话] setChatSessions 已调用")
       } else {
-        console.log("📋 [历史会话] 无数据")
+        console.log("📋 [历史会话] 无数据 (safeSessionData.length = 0)")
+        setChatSessions([])
       }
     } catch (err) {
       console.error("❌ [历史会话] 查询异常:", err)
@@ -1761,6 +1773,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                     <div className="text-center py-8 text-slate-400 text-sm">
                       <div className="text-xs text-red-400 mb-2">uid: {userId || '无'}</div>
                       <div className="text-xs text-orange-400 mb-2">会话数: {chatSessions.length}</div>
+                      <div className="text-xs text-gray-400 mb-2">请打开浏览器控制台(F12)查看历史会话查询日志</div>
                       暂无历史会话
                     </div>
                   ) : (
