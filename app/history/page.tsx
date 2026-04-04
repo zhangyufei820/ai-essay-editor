@@ -15,7 +15,6 @@ type ChatSession = {
   processing_mode: string
   ai_provider: string
   created_at: string
-  created_at: string
 }
 
 type EssayReview = {
@@ -57,15 +56,22 @@ export default function HistoryPage() {
       if (userStr) {
         try {
           const user = JSON.parse(userStr)
+          console.log("[v0] History user object:", user)
           userId = user.id || user.sub || user.userId || user.user_id || ''
+          console.log("[v0] Extracted userId:", userId)
         } catch (e) {
           console.error("[v0] Parse user error:", e)
         }
+      } else {
+        console.log("[v0] No currentUser in localStorage")
       }
 
       const headers: Record<string, string> = {}
       if (userId) {
         headers['X-User-Id'] = userId
+        console.log("[v0] Sending request with X-User-Id header")
+      } else {
+        console.log("[v0] No userId, sending request without auth header")
       }
 
       const [sessionsRes, reviewsRes] = await Promise.all([
