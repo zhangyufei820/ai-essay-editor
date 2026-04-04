@@ -1759,6 +1759,8 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                 <div className="p-2 space-y-1">
                   {chatSessions.length === 0 ? (
                     <div className="text-center py-8 text-slate-400 text-sm">
+                      <div className="text-xs text-red-400 mb-2">uid: {userId || '无'}</div>
+                      <div className="text-xs text-orange-400 mb-2">会话数: {chatSessions.length}</div>
                       暂无历史会话
                     </div>
                   ) : (
