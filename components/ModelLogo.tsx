@@ -162,14 +162,14 @@ export function ModelLogo({
   const sizeConfig = LOGO_SIZES[size]
   const brandColor = config?.brandColor || "#15803D"
 
-  // 有本地 SVG - 需要添加背景色使白色SVG可见
+  // 有本地 SVG - 需要添加背景色使白色SVG可见，暗黑模式下增强对比度
   if (config?.svgPath) {
     return (
       <div
         className={`flex items-center justify-center shrink-0 rounded-lg ${sizeConfig.container} ${className || ""}`}
         style={{
-          backgroundColor: `${brandColor}15`,
-          border: `1px solid ${brandColor}30`,
+          backgroundColor: `${brandColor}30`,
+          border: `1px solid ${brandColor}50`,
           ...style,
         }}
       >
@@ -178,7 +178,7 @@ export function ModelLogo({
           alt={modelKey}
           width={sizeConfig.iconSize}
           height={sizeConfig.iconSize}
-          className="object-contain"
+          className="object-contain dark:brightness-0 dark:invert"
           style={{
             imageRendering: "-webkit-optimize-contrast",
             filter: config.svgFilter || "none",
