@@ -46,6 +46,7 @@ interface ArtisticIconProps {
   modelKey: ModelIconKey
   size?: number
   className?: string
+  style?: React.CSSProperties
 }
 
 // ============================================
@@ -55,24 +56,25 @@ interface ArtisticIconProps {
 /**
  * Single icon with zoom animation (scale 0.8 → 1.1, 2.5s cycle)
  */
-export function ArtisticThinkingIcon({ 
-  modelKey, 
+export function ArtisticThinkingIcon({
+  modelKey,
   size = 24,
-  className 
+  className,
+  style
 }: ArtisticIconProps) {
   const IconComponent = MODEL_ICONS[modelKey]
-  
+
   if (!IconComponent) return null
-  
+
   return (
     <div
       className={`animate-artistic-zoom inline-flex items-center justify-center ${className || ""}`}
+      style={style}
     >
-      <IconComponent 
+      <IconComponent
         size={size}
         strokeWidth={2}
         strokeLinecap="round"
-        className="text-gray-600 dark:text-gray-400"
       />
     </div>
   )

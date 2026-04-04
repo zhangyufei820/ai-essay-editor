@@ -74,7 +74,6 @@ const TOKENS = {
 interface EducationAgent {
   key: string
   name: string
-  nameEn?: string
   description: string
   badge?: string
   href: string
@@ -92,44 +91,38 @@ interface EducationPanelProps {
 const EDUCATION_AGENTS: EducationAgent[] = [
   {
     key: "standard",
-    name: "Essay Grading",
-    nameEn: "Essay Grading",
-    description: "Professional essay analysis",
+    name: "作文批改",
+    description: "专业作文分析与点评",
     href: "/chat/standard",
   },
   {
     key: "teaching-pro",
-    name: "Teaching Assistant",
-    nameEn: "Teaching Assistant",
-    description: "Teaching evaluation & feedback",
+    name: "教学助手",
+    description: "教学评价与反馈",
     href: "/chat/teaching-pro",
   },
   {
     key: "quanquan-math",
-    name: "Math Agent",
-    nameEn: "Math Agent",
-    description: "Step-by-step problem solving",
+    name: "数学助手",
+    description: "一步步解题指导",
     href: "/chat/quanquan-math",
   },
   {
     key: "quanquan-english",
-    name: "English Agent",
-    nameEn: "English Agent",
-    description: "Comprehensive language learning",
+    name: "英语助手",
+    description: "综合语言学习",
     href: "/chat/quanquan-english",
   },
   {
     key: "beike-pro",
-    name: "Lesson Planner",
-    nameEn: "Lesson Planner",
-    description: "Smart lesson preparation",
+    name: "备课助手",
+    description: "智能备课准备",
     href: "/chat/beike-pro",
   },
   {
     key: "banzhuren",
-    name: "Class Manager",
-    nameEn: "Class Manager",
-    description: "Class management & communication",
+    name: "班主任",
+    description: "班级管理与沟通",
     href: "/chat/banzhuren",
   },
 ]
@@ -418,6 +411,7 @@ function FloatingIslandCard({
         <ArtisticThinkingIcon
           modelKey={agent.key as any}
           size={24}
+          style={{ color: "#10A37F" }}
         />
 
         {/* 悬停时图标微光 */}
@@ -431,16 +425,6 @@ function FloatingIslandCard({
           transition={{ duration: 0.3 }}
         />
       </motion.div>
-
-      {/* 英文名 */}
-      {agent.nameEn && (
-        <p
-          className="text-[8px] mb-1 tracking-widest uppercase"
-          style={{ color: TOKENS.text.tertiary, letterSpacing: "0.15em" }}
-        >
-          {agent.nameEn}
-        </p>
-      )}
 
       {/* 中文名 */}
       <p
