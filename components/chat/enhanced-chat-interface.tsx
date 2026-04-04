@@ -480,7 +480,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       if (userStr) {
         try {
           const user = JSON.parse(userStr)
-          const uid = user.id || user.sub || user.userId || ""
+          const uid = user.id || user.sub || user.userId || user.user_id || ""
           console.log("🔑 [用户初始化] 解析用户:", { 
             id: user.id, 
             sub: user.sub, 
