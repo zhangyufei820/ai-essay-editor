@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Badge } from "@/components/ui/badge"
+import { LoadingStateCard } from "@/components/ui/LoadingStateCard"
 import { MessageSquare, FileText, Clock } from "lucide-react"
 import Link from "next/link"
 
@@ -57,10 +58,7 @@ export default function HistoryPage() {
   if (loading) {
     return (
       <div className="container mx-auto flex min-h-screen items-center justify-center">
-        <div className="text-center">
-          <div className="mb-4 inline-block h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-          <p className="text-muted-foreground">加载中...</p>
-        </div>
+        <LoadingStateCard modelKey="standard" />
       </div>
     )
   }

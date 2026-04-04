@@ -28,6 +28,7 @@ import { useSunoMusic, extractTaskId, removeTaskIdFromText, type SunoProFormData
 import { TASK_ID_REGEX } from "@/lib/suno-config"
 import { SunoProForm, type SunoFormData } from "./SunoProForm"
 import type { ChatSession } from "./chat-sidebar"
+import { LoadingStateCard } from "@/components/ui/LoadingStateCard"
 import { motion, AnimatePresence } from "framer-motion"
 import { brandColors, slateColors } from "@/lib/design-tokens"
 import { createClient } from "@supabase/supabase-js"
@@ -2330,7 +2331,7 @@ export interface EnhancedChatInterfaceProps {
 export function EnhancedChatInterface(props: EnhancedChatInterfaceProps) {
   const { initialModel } = props
   return (
-    <Suspense fallback={<div className="flex h-[100dvh] w-full items-center justify-center bg-white"><Loader2 className="h-6 w-6 animate-spin" style={{ color: BRAND_GREEN }} /></div>}>
+    <Suspense fallback={<div className="flex h-[100dvh] w-full items-center justify-center bg-white"><LoadingStateCard modelKey="standard" /></div>}>
       <ChatInterfaceInner initialModel={initialModel} />
     </Suspense>
   )
