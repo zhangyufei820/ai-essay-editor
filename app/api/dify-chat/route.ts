@@ -7,7 +7,6 @@ import {
   LUXURY_THRESHOLD,
   getModelDisplayName
 } from "@/lib/pricing"
-import { uploadToCos } from "@/lib/cos"
 
 export const runtime = "nodejs"
 // 🔥 增加超时时间到 300 秒（5分钟），支持长文本生成
@@ -608,30 +607,6 @@ export async function POST(request: NextRequest) {
       },
       
       async flush(controller) {
-        // 🎨 Banana 图片转存到 COS（在扣费之前执行，确保图片已保存）
-        if (model === "banana-2-pro" && bananaImageUrls.length > 0) {
-          console.log(`🎨 [Banana COS] 开始转存 ${bananaImageUrls.length} 张图片到 COS...`)
-          
-          for (const imageUrl of bananaImageUrls) {
-            try {
-              console.log(`🎨 [Banana COS] 转存图片: ${imageUrl}`)
-              const result = await uploadToCos(imageUrl, 'banana', 'png')
-              
-              if (result.success && result.cdnUrl) {
-                console.log(`✅ [Banana COS] 转存成功: ${result.cdnUrl}`)
-                // 🔥 替换响应文本中的图片 URL 为 CDN URL
-                fullResponseText = fullResponseText.replace(imageUrl, result.cdnUrl)
-              } else {
-                console.warn(`⚠️ [Banana COS] 转存失败: ${result.error}`)
-              }
-            } catch (err) {
-              console.error(`❌ [Banana COS] 转存异常:`, err)
-            }
-          }
-          
-          console.log(`✅ [Banana COS] 图片转存完成，已替换为 CDN URL`)
-        }
-        
         // 流结束时执行智能扣费
         try {
           // 🔥 检测是否生成了图像

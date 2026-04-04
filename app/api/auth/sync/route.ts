@@ -19,14 +19,16 @@ export async function POST(request: Request) {
     
     // 🔥 修复：支持 Vercel 部署域名验证
     // Vercel 部署的域名格式：*.vercel.app 或自定义域名
-    const isValidOrigin = referer.startsWith(appUrl) || 
+    const isValidOrigin = referer.startsWith(appUrl) ||
                           origin.startsWith(appUrl) ||
                           referer.includes('localhost') ||
                           origin.includes('localhost') ||
                           referer.includes('vercel.app') ||
                           origin.includes('vercel.app') ||
                           referer.includes('shenxiangzhixue') ||
-                          origin.includes('shenxiangzhixue')
+                          origin.includes('shenxiangzhixue') ||
+                          referer.includes('shenxiang.school') ||
+                          origin.includes('shenxiang.school')
     
     if (!isValidOrigin) {
       console.warn(`🚫 [Auth/Sync] 可疑请求来源被拦截: referer=${referer}, origin=${origin}`)
