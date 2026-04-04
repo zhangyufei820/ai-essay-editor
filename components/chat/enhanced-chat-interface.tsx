@@ -231,7 +231,7 @@ const ThinkingBlock = ({ content, isStreaming }: { content: string; isStreaming?
 
   const contentId = `thinking-content-${content.slice(0, 20).replace(/\s/g, '-')}`
   return (
-    <div className="my-2">
+    <div className="my-2 thinking-block-scanline">
       <button
         onClick={() => setIsExpanded(!isExpanded)}
         className="flex items-center gap-1.5 px-1 py-1 rounded text-xs transition-colors hover:bg-slate-100/50"
@@ -242,14 +242,24 @@ const ThinkingBlock = ({ content, isStreaming }: { content: string; isStreaming?
         <ChevronDown
           className={cn("h-3 w-3 transition-transform duration-200", isExpanded ? "" : "-rotate-90")}
         />
-        <span className="text-xs" style={{ color: "#9CA3AF" }}>
-          {isStreaming ? "Thinking..." : `Thought ${thinkPreview}${thinkPreview.length >= 50 ? '...' : ''}`}
-        </span>
+        {/* 代码风格Loading */}
+        {isStreaming ? (
+          <div className="flex items-center gap-0.5 code-loading">
+            <span className="char-1 text-xs" style={{ fontFamily: 'monospace', color: '#10A37F' }}>{'{'}</span>
+            <span className="char-2 text-xs" style={{ fontFamily: 'monospace', color: '#10A37F' }}>{';'}</span>
+            <span className="char-3 text-xs" style={{ fontFamily: 'monospace', color: '#10A37F' }}> </span>
+            <span className="char-4 text-xs" style={{ fontFamily: 'monospace', color: '#10A37F' }}>{'}'}</span>
+          </div>
+        ) : (
+          <span className="text-xs" style={{ color: "#9CA3AF" }}>
+            {`Thought ${thinkPreview}${thinkPreview.length >= 50 ? '...' : ''}`}
+          </span>
+        )}
       </button>
       {isExpanded && hasContent && (
         <div
           id={contentId}
-          className="mt-1 pl-4 text-xs leading-relaxed overflow-y-auto max-h-[200px]"
+          className="mt-1 pl-4 text-xs leading-relaxed overflow-y-auto max-h-[200px] thinking-content-scanline"
           style={{ color: "#6B7280", borderLeft: "1px solid #E5E7EB" }}
         >
           {content.split('\n').map((line, i) => (

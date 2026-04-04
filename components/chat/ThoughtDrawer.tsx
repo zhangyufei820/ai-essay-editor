@@ -16,7 +16,7 @@
 
 import React from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Check, ChevronDown, Loader2 } from "lucide-react"
+import { Check, ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { 
   WorkflowState, 
@@ -122,7 +122,7 @@ export const ThoughtDrawer: React.FC<ThoughtDrawerProps> = ({
     if (completedCount > 0) {
       return `已完成 ${completedCount} 个分析步骤`
     }
-    return "正在分析中..."
+    return "" // 移除"正在分析中..."
   }
 
   // 获取耗时显示（可选）
@@ -143,7 +143,7 @@ export const ThoughtDrawer: React.FC<ThoughtDrawerProps> = ({
       transition={{ duration: 0.15 }}
       className={cn(
         // 🔥 极简样式：浅灰/浅绿背景，圆角，无阴影
-        "rounded-lg bg-gray-50 overflow-hidden",
+        "rounded-lg bg-gray-50 overflow-hidden thinking-block-scanline",
         className
       )}
     >
@@ -153,15 +153,14 @@ export const ThoughtDrawer: React.FC<ThoughtDrawerProps> = ({
         className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-100/50 transition-colors"
       >
         <div className="flex items-center gap-2">
-          {/* 左侧状态图标 */}
+          {/* 左侧状态图标 - 代码风格Loading */}
           {isThinking && !isGenerating ? (
-            <motion.div
-              animate={{ rotate: 360 }}
-              transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
-              className="flex h-4 w-4 items-center justify-center"
-            >
-              <Loader2 className="h-3.5 w-3.5 text-emerald-600" />
-            </motion.div>
+            <div className="flex h-4 w-5 items-center justify-center code-loading">
+              <span className="char-1">{'{'}</span>
+              <span className="char-2">{';'}</span>
+              <span className="char-3"> </span>
+              <span className="char-4">{'}'}</span>
+            </div>
           ) : (
             <div className="flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500">
               <Check className="h-2.5 w-2.5 text-white" strokeWidth={3} />

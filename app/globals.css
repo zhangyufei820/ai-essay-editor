@@ -921,3 +921,145 @@
     0 1px 2px rgba(0, 0, 0, 0.05),
     inset 0 2px 4px rgba(0, 0, 0, 0.05);
 }
+
+/* ============================================
+ * 💻 代码风格 Loading 动画 - Thinking 专用
+ * ============================================ */
+
+/* 代码字符闪烁动画 */
+@keyframes code-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.code-loading-char {
+  animation: code-blink 0.6s ease-in-out infinite;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  color: #10A37F;
+  font-weight: 600;
+}
+
+/* 代码加载器容器 */
+.code-loading {
+  display: inline-flex;
+  align-items: center;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+}
+
+/* 字符依次闪烁延迟 */
+.code-loading .char-1 { animation: code-blink 0.6s ease-in-out infinite; animation-delay: 0s; }
+.code-loading .char-2 { animation: code-blink 0.6s ease-in-out infinite; animation-delay: 0.1s; }
+.code-loading .char-3 { animation: code-blink 0.6s ease-in-out infinite; animation-delay: 0.2s; }
+.code-loading .char-4 { animation: code-blink 0.6s ease-in-out infinite; animation-delay: 0.3s; }
+.code-loading .char-5 { animation: code-blink 0.6s ease-in-out infinite; animation-delay: 0.4s; }
+
+/* ============================================
+ * 🌈 Thinking 区块扫光效果 (Scanline Effect)
+ * ============================================ */
+
+.thinking-block-scanline {
+  position: relative;
+  overflow: hidden;
+}
+
+.thinking-block-scanline::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 100%;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(16, 163, 127, 0.08) 50%,
+    transparent 100%
+  );
+  animation: scanline-sweep 2s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 1;
+}
+
+@keyframes scanline-sweep {
+  0% {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+}
+
+/* 展开内容的扫光 */
+.thinking-content-scanline {
+  position: relative;
+}
+
+.thinking-content-scanline::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(16, 163, 127, 0.4) 50%,
+    transparent 100%
+  );
+  animation: content-scanline 2s ease-in-out infinite;
+  z-index: 2;
+}
+
+@keyframes content-scanline {
+  0% {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+
+/* ============================================
+ * ✨ 文字字母聚拢动画
+ * ============================================ */
+
+@keyframes letter-gather {
+  0% {
+    opacity: 0;
+    transform: translateX(-10px);
+    letter-spacing: 0.5em;
+  }
+  50% {
+    opacity: 0.5;
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+    letter-spacing: normal;
+  }
+}
+
+.letter-gather {
+  animation: letter-gather 0.6s ease-out forwards;
+}
+
+.letter-gather-delay-1 { animation-delay: 0.1s; }
+.letter-gather-delay-2 { animation-delay: 0.2s; }
+.letter-gather-delay-3 { animation-delay: 0.3s; }
