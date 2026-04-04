@@ -1799,7 +1799,8 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         <div className="flex items-center h-16 md:h-14 px-3 md:px-4 border-b border-slate-100 bg-white shrink-0 pt-safe">
           <button
             onClick={() => setShowHistorySidebar(!showHistorySidebar)}
-            className="flex items-center gap-1 text-slate-600 hover:text-slate-800 transition-colors min-w-[44px] min-h-[44px] -ml-2 justify-center"
+            className="flex items-center gap-1 text-slate-600 hover:text-slate-800 transition-colors min-w-[44px] min-h-[44px] justify-center"
+            style={{ marginLeft: '48px' }}
           >
             <History className="h-5 w-5" />
           </button>
