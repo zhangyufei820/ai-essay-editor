@@ -1725,7 +1725,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
               animate={{ x: 0 }}
               exit={{ x: -280 }}
               transition={{ duration: 0.3, ease: [0.32, 0.72, 0, 1] }}
-              className="fixed left-0 top-0 md:top-0 bottom-0 w-72 z-50 flex flex-col"
+              className="fixed left-0 top-0 h-screen w-72 z-50 flex flex-col"
               style={{
                 background: "#FDFBF7",
                 boxShadow: "4px 0 24px rgba(0,0,0,0.12)",
@@ -1743,8 +1743,8 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
               </div>
 
               {/* 会话列表 */}
-              <ScrollArea className="flex-1 px-1 scrollbar-thin">
-                <div className="p-2 space-y-1">
+              <ScrollArea className="flex-1 min-h-0 px-1 scrollbar-thin">
+                <div className="p-2 space-y-1 h-full">
                   {chatSessions.length === 0 ? (
                     <div className="text-center py-8 text-slate-400 text-sm">
                       暂无历史会话
