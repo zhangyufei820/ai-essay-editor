@@ -162,12 +162,16 @@ export function ModelLogo({
   const sizeConfig = LOGO_SIZES[size]
   const brandColor = config?.brandColor || "#15803D"
 
-  // 有本地 SVG
+  // 有本地 SVG - 需要添加背景色使白色SVG可见
   if (config?.svgPath) {
     return (
       <div
-        className={`flex items-center justify-center shrink-0 ${sizeConfig.container} ${className || ""}`}
-        style={style}
+        className={`flex items-center justify-center shrink-0 rounded-lg ${sizeConfig.container} ${className || ""}`}
+        style={{
+          backgroundColor: `${brandColor}15`,
+          border: `1px solid ${brandColor}30`,
+          ...style,
+        }}
       >
         <img
           src={config.svgPath}
