@@ -156,10 +156,10 @@ export const ThoughtDrawer: React.FC<ThoughtDrawerProps> = ({
           {/* 左侧状态图标 - 代码风格Loading */}
           {isThinking && !isGenerating ? (
             <div className="flex h-4 w-5 items-center justify-center code-loading">
-              <span className="char-1">{'{'}</span>
-              <span className="char-2">{';'}</span>
-              <span className="char-3"> </span>
-              <span className="char-4">{'}'}</span>
+              <span className="char-1" style={{ fontFamily: 'monospace', color: '#10A37F' }}>{'{'}</span>
+              <span className="char-2" style={{ fontFamily: 'monospace', color: '#10A37F' }}>{';'}</span>
+              <span className="char-3" style={{ fontFamily: 'monospace', color: '#10A37F' }}> </span>
+              <span className="char-4" style={{ fontFamily: 'monospace', color: '#10A37F' }}>{'}'}</span>
             </div>
           ) : (
             <div className="flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500">
