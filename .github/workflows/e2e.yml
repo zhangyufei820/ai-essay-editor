@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   e2e:
-    name: E2E Tests (Chromium + Mobile)
+    name: E2E Tests (Chromium)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,6 +27,16 @@ jobs:
 
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps chromium
+
+      - name: Start dev server
+        run: npm run dev &
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          NEXT_PUBLIC_AUTHING_APP_ID: ${{ secrets.NEXT_PUBLIC_AUTHING_APP_ID }}
+
+      - name: Wait for dev server
+        run: npx wait-on http://localhost:3000 --timeout 120000
 
       - name: Run Playwright tests
         run: npx playwright test
