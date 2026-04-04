@@ -232,15 +232,30 @@ function AppSidebarInner() {
       if (userId) {
         console.log("🚀 [侧边栏] 开始查询积分，用户ID:", userId)
         await fetchCredits(userId)
-        const { data: sessionData } = await supabase.from('chat_sessions').select('*').eq('user_id', userId).order('created_at', { ascending: false })
-        if (sessionData) {
-          setSessions(sessionData.map((s: any) => ({
-            id: s.id,
-            title: s.title || "新对话",
-            date: new Date(s.created_at).getTime(),
-            preview: s.preview || "",
-            ai_model: s.ai_model || "standard"
-          })))
+
+        // 使用 API 端点查询历史会话（绕过 RLS 限制）
+        try {
+          const sessionRes = await fetch('/api/chat-session', {
+            headers: {
+              'X-User-Id': userId
+            }
+          })
+          if (sessionRes.ok) {
+            const sessionData = await sessionRes.json()
+            if (sessionData.sessions) {
+              setSessions(sessionData.sessions.map((s: any) => ({
+                id: s.id,
+                title: s.title || "新对话",
+                date: new Date(s.created_at).getTime(),
+                preview: s.preview || "",
+                ai_model: s.ai_model || "standard"
+              })))
+            }
+          } else {
+            console.warn("⚠️ [侧边栏] 会话查询失败:", sessionRes.status)
+          }
+        } catch (e) {
+          console.error("❌ [侧边栏] 会话查询异常:", e)
         }
       }
     }
