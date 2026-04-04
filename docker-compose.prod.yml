@@ -2,22 +2,14 @@
 # Production docker-compose.prod.yml
 # Architecture: shenxiang.school platform
 # ============================================================
-# 
-# Services:
-#   - lighthouse: GitHub webhook trigger server (port 3001)
-#     * 迁移自主机进程 /data/nextjs/webhook/server.js
-#     * 触发 /data/nextjs/webhook/deploy.sh 执行 CI/CD
-#     * 需要访问 Docker socket 以执行 docker 命令
 #
-#   - nextjs: Next.js 应用 (端口 3000)
-#     * 已在 Docker 中运行 (shenxiang-nextjs)
-#     * 通过 deploy.sh 重建
+# 部署命令:
+#   git pull && docker-compose -f docker-compose.prod.yml up -d --build nextjs
 #
-#   - Dify 服务通过 docker-* 容器独立运行
-#
-# Usage:
-#   docker-compose -f docker-compose.prod.yml up -d lighthouse
-#   docker-compose -f docker-compose.prod.yml logs -f lighthouse
+# 环境变量文件 (.env.production) 必须包含:
+#   - SUPABASE_SERVICE_ROLE_KEY
+#   - DIFY_API_KEY, DIFY_API_KEY_GPT5, DIFY_API_KEY_CLAUDE, etc.
+#   - XUNHUPAY_APPSECRET
 # ============================================================
 
 version: '3.8'
@@ -33,27 +25,67 @@ services:
     container_name: shenxiang-lighthouse
     restart: unless-stopped
     ports:
-      - "127.0.0.1:3001:3001"  # 仅监听本地，Nginx 代理
+      - "127.0.0.1:3001:3001"
     environment:
       - NODE_ENV=production
       - GITHUB_WEBHOOK_SECRET=${GITHUB_WEBHOOK_SECRET:-你的密码}
     volumes:
-      # 挂载 Docker socket 用于执行 docker 命令 (CI/CD)
       - /var/run/docker.sock:/var/run/docker.sock
-      # 挂载部署脚本所在目录
       - /data/nextjs/webhook:/data/nextjs/webhook
-      # 挂载 Next.js 项目目录 (用于 git pull)
       - /data/nextjs/ai-essay-editor:/data/nextjs/ai-essay-editor
-      # 挂载环境变量文件
       - /data/nextjs/.env:/data/nextjs/.env:ro
     networks:
       - shenxiang-net
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3001/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
+    logging:
+      driver: 'json-file'
+      options:
+        max-size: '10m'
+        max-file: '3'
+
+  # ----------------------------------------------------------
+  # Next.js 应用
+  # ----------------------------------------------------------
+  nextjs:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+        NEXT_PUBLIC_AUTHING_APP_ID: ${NEXT_PUBLIC_AUTHING_APP_ID}
+    image: ai-essay-editor:latest
+    container_name: shenxiang-nextjs
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    env_file:
+      - .env.production
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - DIFY_INTERNAL_URL=http://docker-api-1:5001/v1
+      - DIFY_BASE_URL=http://docker-api-1:5001/v1
+      - DIFY_API_KEY=${DIFY_API_KEY}
+      - DIFY_API_KEY_GPT5=${DIFY_API_KEY_GPT5}
+      - DIFY_API_KEY_CLAUDE=${DIFY_API_KEY_CLAUDE}
+      - DIFY_API_KEY_GEMINI=${DIFY_API_KEY_GEMINI}
+      - DIFY_API_KEY_OPENCLAW=${DIFY_API_KEY_OPENCLAW}
+      - DIFY_API_KEY_GROK42=${DIFY_API_KEY_GROK42}
+      - DIFY_BANANA_API_KEY=${DIFY_BANANA_API_KEY}
+      - DIFY_TEACHING_PRO_API_KEY=${DIFY_TEACHING_PRO_API_KEY}
+      - DIFY_QUANQUANMATH_API_KEY=${DIFY_QUANQUANMATH_API_KEY}
+      - DIFY_QUANQUANENGLISH_API_KEY=${DIFY_QUANQUANENGLISH_API_KEY}
+      - DIFY_BEIKE_PRO_API_KEY=${DIFY_BEIKE_PRO_API_KEY}
+      - DIFY_BANZHUREN_API_KEY=${DIFY_BANZHUREN_API_KEY}
+      - NEXT_PUBLIC_APP_URL=https://www.shenxiang.school
+      - NEXT_PUBLIC_AUTHING_APP_ID=${NEXT_PUBLIC_AUTHING_APP_ID}
+      - XUNHUPAY_APPID=${XUNHUPAY_APPID}
+      - XUNHUPAY_APPSECRET=${XUNHUPAY_APPSECRET}
+    networks:
+      - shenxiang-net
+      - docker_default
     logging:
       driver: 'json-file'
       options:
@@ -62,4 +94,6 @@ services:
 
 networks:
   shenxiang-net:
+    external: true
+  docker_default:
     external: true

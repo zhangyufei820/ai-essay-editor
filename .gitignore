@@ -44,3 +44,6 @@ next-env.d.ts
 # Logs
 logs
 *.log
+
+# 环境变量文件（包含 secrets）
+.env.production
