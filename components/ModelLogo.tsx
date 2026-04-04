@@ -1,6 +1,15 @@
 "use client"
 
 import React from "react"
+import {
+  FileCheck2,
+  Sparkles,
+  Calculator,
+  Languages,
+  LayoutDashboard,
+  UsersRound,
+  type LucideProps,
+} from "lucide-react"
 
 // ============================================
 // AI 模型 Logo 映射表
@@ -25,91 +34,87 @@ export type ModelKey =
 interface ModelLogoConfig {
   /** SVG 文件路径（本地 /public 路径） */
   svgPath?: string
-  /** 是否使用本地 SVG */
+  /** 使用本地 SVG */
   useLocal?: boolean
-  /** 主色（用于图标背景或备用图标着色） */
+  /** 主色 */
   brandColor?: string
-  /** 首字母（用于无 SVG 时显示） */
-  initials?: string
-  /** SVG 着色滤镜（用于匹配墨绿色主题） */
-  svgFilter?: string
+  /** Lucide 图标组件 */
+  LucideIcon?: React.FC<LucideProps>
+  /** Lucide 图标尺寸 */
+  lucideSize?: number
 }
 
 // ============================================
-// Logo 映射配置 - 适配墨绿色主题
+// Logo 映射配置 - 统一使用 Lucide 线性图标 + 沈翔绿主色
 // ============================================
 
 const MODEL_LOGOS: Record<ModelKey, ModelLogoConfig> = {
-  // 官方模型 Logo - 使用滤镜将白色/SVG颜色转换为墨绿色系
+  // 官方模型 Logo - 使用本地 SVG（无背景，纯 logo）
   "gpt-5": {
     svgPath: "/logos/chatgpt-icon.svg",
     useLocal: true,
-    brandColor: "#15803D", // 墨绿色
-    svgFilter: undefined,
+    brandColor: "#10A37F",
   },
   "claude-opus": {
     svgPath: "/logos/claude-ai-icon.svg",
     useLocal: true,
-    brandColor: "#15803D", // 墨绿色
-    svgFilter: undefined,
+    brandColor: "#10A37F",
   },
   "gemini-pro": {
     svgPath: "/logos/google-gemini-icon.svg",
     useLocal: true,
-    brandColor: "#15803D", // 墨绿色
-    svgFilter: undefined,
+    brandColor: "#10A37F",
   },
   "grok-4.2": {
     svgPath: "/logos/grok-icon.svg",
     useLocal: true,
-    brandColor: "#15803D", // 墨绿色
-    svgFilter: undefined,
+    brandColor: "#10A37F",
   },
 
-  // 教育类智能体 - 墨绿色系
+  // 教育类智能体 - 使用 Lucide 线性图标，无背景
   "standard": {
-    brandColor: "#15803D",
-    initials: "作",
+    LucideIcon: FileCheck2,
+    brandColor: "#10A37F",
   },
   "teaching-pro": {
-    brandColor: "#15803D",
-    initials: "教",
+    LucideIcon: Sparkles,
+    brandColor: "#10A37F",
   },
   "quanquan-math": {
-    brandColor: "#15803D",
-    initials: "数",
+    LucideIcon: Calculator,
+    brandColor: "#10A37F",
   },
   "quanquan-english": {
-    brandColor: "#15803D",
-    initials: "英",
+    LucideIcon: Languages,
+    brandColor: "#10A37F",
   },
   "beike-pro": {
-    brandColor: "#15803D",
-    initials: "备",
+    LucideIcon: LayoutDashboard,
+    brandColor: "#10A37F",
   },
   "banzhuren": {
-    brandColor: "#15803D",
-    initials: "班",
+    LucideIcon: UsersRound,
+    brandColor: "#10A37F",
   },
 
   // 创意生成类
   "banana-2-pro": {
-    brandColor: "#15803D",
-    initials: "图",
+    LucideIcon: Sparkles,
+    brandColor: "#10A37F",
   },
   "suno-v5": {
-    brandColor: "#15803D",
-    initials: "音",
+    LucideIcon: Sparkles,
+    brandColor: "#10A37F",
   },
   "sora-2-pro": {
-    brandColor: "#15803D",
-    initials: "影",
+    LucideIcon: Sparkles,
+    brandColor: "#10A37F",
   },
 
   // 其他
   "open-claw": {
-    brandColor: "#15803D",
-    initials: "OC",
+    LucideIcon: Sparkles,
+    brandColor: "#10A37F",
   },
 }
 
@@ -122,102 +127,105 @@ type LogoSize = "xs" | "sm" | "md" | "lg" | "xl"
 interface LogoSizeConfig {
   container: string
   iconSize: number
-  fontSize: number
 }
 
 const LOGO_SIZES: Record<LogoSize, LogoSizeConfig> = {
-  xs: { container: "w-5 h-5", iconSize: 12, fontSize: 7 },
-  sm: { container: "w-6 h-6", iconSize: 14, fontSize: 8 },
-  md: { container: "w-8 h-8", iconSize: 18, fontSize: 10 },
-  lg: { container: "w-10 h-10", iconSize: 22, fontSize: 12 },
-  xl: { container: "w-14 h-14", iconSize: 32, fontSize: 16 },
+  xs: { container: "w-5 h-5", iconSize: 12 },
+  sm: { container: "w-6 h-6", iconSize: 14 },
+  md: { container: "w-8 h-8", iconSize: 18 },
+  lg: { container: "w-10 h-10", iconSize: 22 },
+  xl: { container: "w-14 h-14", iconSize: 32 },
 }
 
 // ============================================
-// ModelLogo 组件 - 适配墨绿色主题
+// ModelLogo 组件 - 统一使用 Lucide 线性图标 + 沈翔绿主色
 // ============================================
 
 interface ModelLogoProps {
   modelKey: ModelKey
   size?: LogoSize
-  /** 是否显示背景（默认 sm 以下无背景） */
+  /** 是否显示背景（默认无背景） */
   showBg?: boolean
   className?: string
   style?: React.CSSProperties
 }
 
 /**
- * AI 模型 Logo 组件 - 墨绿色主题
- * - 官方模型：使用本地 SVG + 墨绿色滤镜
- * - 其他模型：墨绿色背景 + 首字母
+ * AI 模型 Logo 组件 - 沈翔绿主题
+ * - 所有 logo 统一使用线性图标风格
+ * - 无背景，纯色图标
+ * - 颜色统一使用 #10A37F
  */
 export function ModelLogo({
   modelKey,
   size = "md",
-  showBg = size === "md" || size === "lg" || size === "xl",
+  showBg = false,
   className,
   style
 }: ModelLogoProps) {
   const config = MODEL_LOGOS[modelKey]
   const sizeConfig = LOGO_SIZES[size]
-  const brandColor = config?.brandColor || "#15803D"
+  const brandColor = config?.brandColor || "#10A37F"
 
-  // 有本地 SVG - 需要添加背景色使白色SVG可见，暗黑模式下增强对比度
-  if (config?.svgPath) {
+  // 有本地 SVG - 纯 SVG logo，无背景
+  if (config?.svgPath && config?.useLocal) {
     return (
       <div
-        className={`flex items-center justify-center shrink-0 rounded-lg ${sizeConfig.container} ${className || ""} dark:bg-[#10A37F]/20 dark:border-[#10A37F]/40`}
-        style={{
-          backgroundColor: `${brandColor}30`,
-          border: `1px solid ${brandColor}50`,
-          ...style,
-        }}
+        className={`flex items-center justify-center shrink-0 ${className || ""}`}
+        style={style}
       >
         <img
           src={config.svgPath}
           alt={`${modelKey.replace(/-/g, ' ')} logo`}
           width={sizeConfig.iconSize}
           height={sizeConfig.iconSize}
-          className="object-contain dark:brightness-0 dark:invert"
+          className="object-contain"
           style={{
             imageRendering: "-webkit-optimize-contrast",
-            filter: config.svgFilter || "none",
+            filter: "brightness(0) saturate(100%) invert(46%) sepia(12%) saturate(3390%) hue-rotate(125deg) brightness(97%) contrast(101%)",
           }}
         />
       </div>
     )
   }
 
-  // 无 SVG，使用首字母
+  // 使用 Lucide 图标 - 纯图标，无背景
+  if (config?.LucideIcon) {
+    const IconComponent = config.LucideIcon
+    return (
+      <div
+        className={`flex items-center justify-center shrink-0 ${className || ""}`}
+        style={style}
+      >
+        <IconComponent
+          size={sizeConfig.iconSize}
+          strokeWidth={2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          style={{ color: brandColor }}
+        />
+      </div>
+    )
+  }
+
+  // Fallback - 纯图标无背景
   return (
     <div
-      className={`flex items-center justify-center rounded-md ${sizeConfig.container} ${className || ""}`}
-      style={
-        showBg
-          ? {
-              backgroundColor: `${brandColor}15`,
-              border: `1px solid ${brandColor}30`,
-              ...style,
-            }
-          : style
-      }
+      className={`flex items-center justify-center shrink-0 ${className || ""}`}
+      style={style}
     >
-      <span
-        style={{
-          color: brandColor,
-          fontWeight: 600,
-          fontSize: sizeConfig.fontSize,
-          lineHeight: 1,
-        }}
-      >
-        {config?.initials || modelKey.slice(0, 2).toUpperCase()}
-      </span>
+      <Sparkles
+        size={sizeConfig.iconSize}
+        strokeWidth={2}
+        strokeLinecap="round"
+        style={{ color: brandColor }}
+      />
     </div>
   )
 }
 
 // ============================================
-// ModelLogoWithBg 组件 - 带背景版本
+// ModelLogoWithBg 组件 - 带背景版本（保留用于特殊场景）
 // ============================================
 
 interface ModelLogoWithBgProps {
@@ -233,14 +241,74 @@ export function ModelLogoWithBg({
   className,
   style
 }: ModelLogoWithBgProps) {
+  const config = MODEL_LOGOS[modelKey]
+  const sizeConfig = LOGO_SIZES[size]
+  const brandColor = config?.brandColor || "#10A37F"
+
+  // 有本地 SVG - 带淡绿背景
+  if (config?.svgPath && config?.useLocal) {
+    return (
+      <div
+        className={`flex items-center justify-center shrink-0 rounded-lg ${sizeConfig.container} ${className || ""}`}
+        style={{
+          backgroundColor: `${brandColor}15`,
+          border: `1px solid ${brandColor}30`,
+          ...style,
+        }}
+      >
+        <img
+          src={config.svgPath}
+          alt={`${modelKey.replace(/-/g, ' ')} logo`}
+          width={sizeConfig.iconSize}
+          height={sizeConfig.iconSize}
+          className="object-contain"
+          style={{
+            imageRendering: "-webkit-optimize-contrast",
+            filter: "brightness(0) saturate(100%) invert(46%) sepia(12%) saturate(3390%) hue-rotate(125deg) brightness(97%) contrast(101%)",
+          }}
+        />
+      </div>
+    )
+  }
+
+  // 使用 Lucide 图标 - 带淡绿背景
+  if (config?.LucideIcon) {
+    const IconComponent = config.LucideIcon
+    return (
+      <div
+        className={`flex items-center justify-center shrink-0 rounded-lg ${sizeConfig.container} ${className || ""}`}
+        style={{
+          backgroundColor: `${brandColor}15`,
+          border: `1px solid ${brandColor}30`,
+          ...style,
+        }}
+      >
+        <IconComponent
+          size={sizeConfig.iconSize}
+          strokeWidth={2}
+          strokeLinecap="round"
+          style={{ color: brandColor }}
+        />
+      </div>
+    )
+  }
+
+  // Fallback
   return (
-    <ModelLogo
-      modelKey={modelKey}
-      size={size}
-      showBg={true}
-      className={className}
-      style={style}
-    />
+    <div
+      className={`flex items-center justify-center shrink-0 rounded-lg ${sizeConfig.container} ${className || ""}`}
+      style={{
+        backgroundColor: `${brandColor}15`,
+        border: `1px solid ${brandColor}30`,
+        ...style,
+      }}
+    >
+      <Sparkles
+        size={sizeConfig.iconSize}
+        strokeWidth={2}
+        style={{ color: brandColor }}
+      />
+    </div>
   )
 }
 
@@ -257,10 +325,10 @@ interface SectionLogoProps {
 }
 
 const SECTION_CONFIG: Record<string, { modelKey: ModelKey; showBg: boolean }> = {
-  agent: { modelKey: "open-claw", showBg: true },
-  education: { modelKey: "teaching-pro", showBg: true },
-  "ai-model": { modelKey: "gpt-5", showBg: true },
-  creative: { modelKey: "banana-2-pro", showBg: true },
+  agent: { modelKey: "open-claw", showBg: false },
+  education: { modelKey: "teaching-pro", showBg: false },
+  "ai-model": { modelKey: "gpt-5", showBg: false },
+  creative: { modelKey: "banana-2-pro", showBg: false },
 }
 
 export function SectionLogo({ type, size = "sm", className, style }: SectionLogoProps) {
