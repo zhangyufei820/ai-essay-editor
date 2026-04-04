@@ -7,7 +7,8 @@
 "use client"
 
 import { motion, AnimatePresence } from "framer-motion"
-import { X, Bot, Sparkles } from "lucide-react"
+import { X, Sparkles } from "lucide-react"
+import { ModelLogo } from "@/components/ModelLogo"
 
 // ============================================
 // 🎨 Design Tokens - "智慧之光" 配色系统
@@ -163,7 +164,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
                       boxShadow: "0 4px 20px rgba(14, 58, 31, 0.25), 0 0 40px rgba(134, 239, 172, 0.1)",
                     }}
                   >
-                    <Bot className="w-5 h-5 text-white" />
+                    <ModelLogo modelKey="open-claw" size="xl" />
                   </div>
                   {/* 呼吸光环 */}
                   <motion.div
@@ -386,12 +387,9 @@ function OpenClawCard({ onClick }: { onClick: () => void }) {
           }}
           transition={{ duration: 0.3 }}
         >
-          <Bot
-            className="w-8 h-8"
-            style={{
-              color: TOKENS.primary[700],
-              strokeWidth: 1.5,
-            }}
+          <ModelLogo
+            modelKey="open-claw"
+            size="lg"
           />
 
           {/* 悬停时图标微光 */}

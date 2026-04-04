@@ -11,6 +11,8 @@ import { useState, useRef, useEffect } from "react"
 import { Check, ChevronDown } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import { cn } from "@/lib/utils"
+import { ModelLogo } from "@/components/ModelLogo"
+import type { ModelKey } from "@/components/ModelLogo"
 
 // ============================================
 // 🎨 Design Tokens - 与 AgentPanel 保持一致
@@ -54,11 +56,13 @@ const TOKENS = {
 interface Model {
   key: string
   name: string
-  icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }> | string
+  icon?: React.ComponentType<{ className?: string; style?: React.CSSProperties }> | string
   color: string
   description?: string
   badge?: string
   group?: string
+  /** 使用 ModelLogo 组件渲染图标 */
+  modelKey?: ModelKey
 }
 
 interface ModelSelectorProps {
@@ -353,6 +357,7 @@ function ModelMenuItem({
 }) {
   const Icon = model.icon
   const isStringIcon = typeof Icon === 'string'
+  const hasModelLogo = !!model.modelKey
 
   return (
     <motion.button
@@ -375,7 +380,7 @@ function ModelMenuItem({
       }}
       whileTap={{ scale: 0.98 }}
     >
-      {/* 模型图标 - 等线风格 */}
+      {/* 模型图标 - 使用 ModelLogo 或 Lucide 图标 */}
       <div
         className="flex h-8 w-8 items-center justify-center rounded-lg shrink-0"
         style={{
@@ -387,9 +392,11 @@ function ModelMenuItem({
             : "1px solid rgba(14, 58, 31, 0.04)",
         }}
       >
-        {isStringIcon ? (
+        {hasModelLogo ? (
+          <ModelLogo modelKey={model.modelKey!} size="md" />
+        ) : isStringIcon ? (
           <span className="text-sm">{Icon}</span>
-        ) : (
+        ) : Icon ? (
           <Icon
             className="h-4 w-4"
             style={{
@@ -397,7 +404,7 @@ function ModelMenuItem({
               strokeWidth: 1.5,
             }}
           />
-        )}
+        ) : null}
       </div>
 
       {/* 模型信息 */}

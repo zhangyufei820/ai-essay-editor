@@ -1,80 +1,63 @@
 /**
- * 💬 沈翔学校 - 消息气泡组件 (Message Bubble)
- * 
- * 聊天界面的核心组件，用于渲染用户消息和 AI 消息。
+ * 💬 Message Bubble Component - Claude Style
+ *
+ * Refactored to match Claude.ai's visual style:
+ * - Flat, minimal container design
+ * - Subtle action toolbar (show on hover)
+ * - Clean typography with proper line-height
  */
 
 "use client"
 
 import { memo, useState } from "react"
 import { motion, type Easing } from "framer-motion"
-import { Copy, Check, User, Sparkles } from "lucide-react"
+import { Copy, Check, User, Sparkles, ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { brandColors, slateColors } from "@/lib/design-tokens"
+import { slateColors } from "@/lib/design-tokens"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 
+// Claude style colors
+const CLAUDE_TEXT_COLOR = "#374151"
+const CLAUDE_SECONDARY_COLOR = "#6B7280"
+const CLAUDE_AVATAR_BG = "#10B981" // Emerald green
+
 // ============================================
-// 类型定义
+// Types
 // ============================================
 
 interface MessageBubbleProps {
-  /** 消息角色：user | assistant */
   role: "user" | "assistant"
-  /** 消息内容 */
   content: string
-  /** 是否正在流式输出 */
   isStreaming?: boolean
-  /** 时间戳 */
   timestamp?: Date
-  /** 头像 URL */
   avatar?: string
-  /** 复制回调 */
   onCopy?: () => void
-  /** 自定义类名 */
   className?: string
 }
 
 // ============================================
-// 动画配置
+// Animation Config
 // ============================================
 
 const userMessageVariants = {
-  hidden: { 
-    opacity: 0, 
-    x: 20, 
-    scale: 0.95 
-  },
-  visible: { 
-    opacity: 1, 
-    x: 0, 
-    scale: 1,
-    transition: { 
-      duration: 0.35,
-      ease: [0.33, 1, 0.68, 1] as Easing
-    }
+  hidden: { opacity: 0, x: 20, scale: 0.95 },
+  visible: {
+    opacity: 1, x: 0, scale: 1,
+    transition: { duration: 0.35, ease: [0.33, 1, 0.68, 1] as Easing }
   }
 }
 
 const assistantMessageVariants = {
-  hidden: { 
-    opacity: 0, 
-    x: -20, 
-    scale: 0.95 
-  },
-  visible: { 
-    opacity: 1, 
-    x: 0, 
-    scale: 1,
-    transition: { 
-      duration: 0.35,
-      ease: [0.33, 1, 0.68, 1] as Easing
-    }
+  hidden: { opacity: 0, x: -20, scale: 0.95 },
+  visible: {
+    opacity: 1, x: 0, scale: 1,
+    transition: { duration: 0.35, ease: [0.33, 1, 0.68, 1] as Easing }
   }
 }
 
 // ============================================
-// 流式光标组件
+// Streaming Cursor
 // ============================================
 
 function StreamingCursor() {
@@ -83,10 +66,10 @@ function StreamingCursor() {
       animate={{ opacity: [1, 0, 1] }}
       transition={{ duration: 0.8, repeat: Infinity }}
       className="inline-block ml-0.5"
-      style={{ 
-        width: 2, 
-        height: "1em", 
-        backgroundColor: brandColors[600],
+      style={{
+        width: 2,
+        height: "1em",
+        backgroundColor: CLAUDE_AVATAR_BG,
         verticalAlign: "text-bottom"
       }}
     />
@@ -94,49 +77,47 @@ function StreamingCursor() {
 }
 
 // ============================================
-// 用户头像组件
+// User Avatar
 // ============================================
 
 function UserAvatar({ avatar }: { avatar?: string }) {
   if (avatar) {
     return (
-      <img 
-        src={avatar} 
-        alt="用户头像" 
-        className="w-8 h-8 rounded-full object-cover"
+      <img
+        src={avatar}
+        alt="User avatar"
+        className="w-7 h-7 rounded-full object-cover"
       />
     )
   }
-  
+
   return (
-    <div 
-      className="w-8 h-8 rounded-full flex items-center justify-center"
+    <div
+      className="w-7 h-7 rounded-full flex items-center justify-center"
       style={{ backgroundColor: slateColors[200] }}
     >
-      <User className="w-4 h-4" style={{ color: slateColors[500] }} />
+      <User className="w-3.5 h-3.5" style={{ color: slateColors[500] }} />
     </div>
   )
 }
 
 // ============================================
-// AI 头像组件
+// AI Avatar - Smaller, aligned
 // ============================================
 
 function AIAvatar() {
   return (
-    <div 
-      className="w-8 h-8 rounded-full flex items-center justify-center"
-      style={{ 
-        background: `linear-gradient(135deg, ${brandColors[900]} 0%, ${brandColors[700]} 100%)` 
-      }}
+    <div
+      className="w-6 h-6 rounded-full flex items-center justify-center shrink-0"
+      style={{ backgroundColor: CLAUDE_AVATAR_BG }}
     >
-      <Sparkles className="w-4 h-4 text-white" />
+      <Sparkles className="w-3 h-3 text-white" />
     </div>
   )
 }
 
 // ============================================
-// 复制按钮组件
+// Copy Button - Subtle, shows on hover
 // ============================================
 
 function CopyButton({ content, onCopy }: { content: string; onCopy?: () => void }) {
@@ -149,7 +130,7 @@ function CopyButton({ content, onCopy }: { content: string; onCopy?: () => void 
       onCopy?.()
       setTimeout(() => setCopied(false), 2000)
     } catch (err) {
-      console.error("复制失败:", err)
+      console.error("Copy failed:", err)
     }
   }
 
@@ -159,20 +140,20 @@ function CopyButton({ content, onCopy }: { content: string; onCopy?: () => void 
       className={cn(
         "flex items-center gap-1 px-2 py-1 rounded text-xs transition-all duration-200",
         "opacity-0 group-hover:opacity-100",
-        copied 
-          ? "text-green-600 bg-green-50" 
+        copied
+          ? "text-emerald-600 bg-emerald-50"
           : "text-slate-400 hover:text-slate-600 hover:bg-slate-100"
       )}
     >
       {copied ? (
         <>
           <Check className="w-3 h-3" />
-          <span>已复制</span>
+          <span>Copied</span>
         </>
       ) : (
         <>
           <Copy className="w-3 h-3" />
-          <span>复制</span>
+          <span>Copy</span>
         </>
       )}
     </button>
@@ -180,7 +161,7 @@ function CopyButton({ content, onCopy }: { content: string; onCopy?: () => void 
 }
 
 // ============================================
-// 时间戳组件
+// Timestamp
 // ============================================
 
 function Timestamp({ date }: { date: Date }) {
@@ -190,8 +171,8 @@ function Timestamp({ date }: { date: Date }) {
   })
 
   return (
-    <span 
-      className="text-xs opacity-50"
+    <span
+      className="text-xs"
       style={{ color: slateColors[400] }}
     >
       {formatted}
@@ -200,7 +181,7 @@ function Timestamp({ date }: { date: Date }) {
 }
 
 // ============================================
-// Markdown 渲染组件（简化版）
+// Markdown Content - Clean typography
 // ============================================
 
 function MarkdownContent({ content }: { content: string }) {
@@ -208,19 +189,35 @@ function MarkdownContent({ content }: { content: string }) {
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
       components={{
-        p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
-        ul: ({ children }) => <ul className="list-disc pl-4 mb-2">{children}</ul>,
-        ol: ({ children }) => <ol className="list-decimal pl-4 mb-2">{children}</ol>,
-        li: ({ children }) => <li className="mb-1">{children}</li>,
+        p: ({ children }) => (
+          <p className="mb-2 last:mb-0" style={{ lineHeight: 1.6, color: CLAUDE_TEXT_COLOR }}>
+            {children}
+          </p>
+        ),
+        ul: ({ children }) => (
+          <ul className="list-disc pl-4 mb-2" style={{ lineHeight: 1.6 }}>
+            {children}
+          </ul>
+        ),
+        ol: ({ children }) => (
+          <ol className="list-decimal pl-4 mb-2" style={{ lineHeight: 1.6 }}>
+            {children}
+          </ol>
+        ),
+        li: ({ children }) => (
+          <li className="mb-1" style={{ color: CLAUDE_TEXT_COLOR }}>
+            {children}
+          </li>
+        ),
         code: ({ children, className }) => {
           const isInline = !className
           if (isInline) {
             return (
-              <code 
+              <code
                 className="px-1.5 py-0.5 rounded text-sm"
-                style={{ 
+                style={{
                   backgroundColor: slateColors[100],
-                  color: brandColors[800]
+                  color: slateColors[800]
                 }}
               >
                 {children}
@@ -234,25 +231,55 @@ function MarkdownContent({ content }: { content: string }) {
           )
         },
         pre: ({ children }) => (
-          <pre 
+          <pre
             className="rounded-lg overflow-hidden mb-2"
             style={{ backgroundColor: slateColors[900] }}
           >
             {children}
           </pre>
         ),
-        strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+        strong: ({ children }) => (
+          <strong className="font-semibold" style={{ color: CLAUDE_TEXT_COLOR }}>
+            {children}
+          </strong>
+        ),
         em: ({ children }) => <em className="italic">{children}</em>,
         a: ({ href, children }) => (
-          <a 
-            href={href} 
-            target="_blank" 
+          <a
+            href={href}
+            target="_blank"
             rel="noopener noreferrer"
             className="underline underline-offset-2"
-            style={{ color: brandColors[700] }}
+            style={{ color: CLAUDE_AVATAR_BG }}
           >
             {children}
           </a>
+        ),
+        h1: ({ children }) => (
+          <h1 className="text-xl font-bold mb-3 mt-4" style={{ color: CLAUDE_TEXT_COLOR }}>
+            {children}
+          </h1>
+        ),
+        h2: ({ children }) => (
+          <h2 className="text-lg font-semibold mb-2 mt-4" style={{ color: CLAUDE_TEXT_COLOR }}>
+            {children}
+          </h2>
+        ),
+        h3: ({ children }) => (
+          <h3 className="text-base font-semibold mb-2 mt-3" style={{ color: CLAUDE_TEXT_COLOR }}>
+            {children}
+          </h3>
+        ),
+        blockquote: ({ children }) => (
+          <blockquote
+            className="border-l-2 px-3 py-2 my-2 rounded-r"
+            style={{
+              borderColor: slateColors[300],
+              backgroundColor: slateColors[50]
+            }}
+          >
+            {children}
+          </blockquote>
         ),
       }}
     >
@@ -262,7 +289,7 @@ function MarkdownContent({ content }: { content: string }) {
 }
 
 // ============================================
-// 消息气泡主组件
+// Main Component
 // ============================================
 
 const MessageBubble = memo(function MessageBubble({
@@ -276,19 +303,19 @@ const MessageBubble = memo(function MessageBubble({
 }: MessageBubbleProps) {
   const isUser = role === "user"
 
-  // 用户消息样式
+  // User message style - solid color, no border
   const userBubbleStyle = {
-    backgroundColor: brandColors[900],
+    backgroundColor: "#052e16", // Deep green to match brand
     color: "white",
-    borderRadius: "16px 4px 16px 16px",
+    borderRadius: "18px 4px 18px 18px",
     maxWidth: "75%",
   }
 
-  // AI 消息样式
+  // AI message style - Flat, minimal, almost no container
   const assistantBubbleStyle = {
-    backgroundColor: slateColors[50],
-    color: slateColors[700],
-    borderRadius: "4px 16px 16px 16px",
+    backgroundColor: "transparent",
+    color: CLAUDE_TEXT_COLOR,
+    borderRadius: "0",
     maxWidth: "85%",
   }
 
@@ -303,40 +330,50 @@ const MessageBubble = memo(function MessageBubble({
         className
       )}
     >
-      {/* 头像 */}
-      <div className="flex-shrink-0 mt-1">
+      {/* Avatar - Smaller for AI, aligned with text */}
+      <div className="flex-shrink-0 mt-0.5">
         {isUser ? <UserAvatar avatar={avatar} /> : <AIAvatar />}
       </div>
 
-      {/* 消息内容 */}
+      {/* Message Content */}
       <div className={cn("flex flex-col", isUser ? "items-end" : "items-start")}>
+        {/* Flat bubble without heavy container styling */}
         <div
-          className="px-4 py-3 shadow-sm"
+          className={cn(
+            "px-1 py-1",
+            isUser ? "" : "" // No background for AI, minimal padding
+          )}
           style={isUser ? userBubbleStyle : assistantBubbleStyle}
         >
           {isUser ? (
-            // 用户消息：普通文本，保留换行
-            <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+            <p
+              className="whitespace-pre-wrap break-words text-sm"
+              style={{ lineHeight: 1.6 }}
+            >
               {content}
             </p>
           ) : (
-            // AI 消息：Markdown 渲染
-            <div className="text-sm leading-relaxed prose prose-sm max-w-none">
+            <div
+              className="text-sm"
+              style={{ lineHeight: 1.6, color: CLAUDE_TEXT_COLOR }}
+            >
               <MarkdownContent content={content} />
               {isStreaming && <StreamingCursor />}
             </div>
           )}
         </div>
 
-        {/* 底部操作栏 */}
-        <div className={cn(
-          "flex items-center gap-2 mt-1 px-1",
-          isUser ? "flex-row-reverse" : "flex-row"
-        )}>
-          {/* 时间戳 */}
+        {/* Bottom action bar - Hidden by default, shows on hover */}
+        <div
+          className={cn(
+            "flex items-center gap-2 mt-1 px-1",
+            "opacity-0 group-hover:opacity-100 transition-opacity duration-200",
+            isUser ? "flex-row-reverse" : "flex-row"
+          )}
+        >
           {timestamp && <Timestamp date={timestamp} />}
-          
-          {/* AI 消息的复制按钮 */}
+
+          {/* Copy button for AI messages */}
           {!isUser && !isStreaming && content && (
             <CopyButton content={content} onCopy={onCopy} />
           )}

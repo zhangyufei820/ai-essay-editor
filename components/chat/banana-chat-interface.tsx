@@ -667,59 +667,63 @@ function BananaChatInterfaceInner() {
                   </p>
                 </div>
               ) : (
-                <div className="space-y-6">
+                <div className="space-y-5">
                   {messages.map((message) => (
-                    <div key={message.id} className={cn("flex gap-3", message.role === "user" ? "justify-end" : "justify-start")}>
+                    <div key={message.id} className={cn("flex gap-3 group", message.role === "user" ? "justify-end" : "justify-start")}>
                       {message.role === "assistant" && (
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-white mt-1" style={{ backgroundColor: BANANA_COLOR }}>
-                          <span className="text-lg">🍌</span>
+                        <div className="flex w-6 h-6 shrink-0 items-center justify-center rounded-full mt-0.5" style={{ backgroundColor: BANANA_COLOR }}>
+                          <span className="text-sm">🍌</span>
                         </div>
                       )}
+                      {/* Flat content container */}
                       <div className={cn(
-                        "relative rounded-2xl px-4 py-3",
-                        message.role === "user"
-                          ? "text-white max-w-[75%]"
-                          : "bg-slate-50 w-full max-w-full"
-                      )} style={message.role === "user" ? { backgroundColor: BANANA_COLOR } : {}}>
+                        "flex flex-col max-w-[80%]",
+                        message.role === "user" ? "items-end" : "items-start"
+                      )}>
+                        {/* User message */}
                         {message.role === "user" ? (
-                          <div className="space-y-3">
-                            {/* 🔥 显示上传的文件（带动画） */}
-                            {message.files && message.files.length > 0 && (
-                              <div className="flex flex-wrap gap-2 mb-2">
-                                {message.files.map((file, idx) => (
-                                  <motion.div
-                                    key={idx}
-                                    initial={{ opacity: 0, scale: 0.8 }}
-                                    animate={{ opacity: 1, scale: 1 }}
-                                    transition={{ duration: 0.3, delay: idx * 0.1 }}
-                                  >
-                                    {file.preview ? (
-                                      <div className="relative w-16 h-16 rounded-lg overflow-hidden border-2 border-white/30">
-                                        <img src={file.preview} alt={file.name} className="w-full h-full object-cover" />
-                                      </div>
-                                    ) : (
-                                      <div className="flex items-center gap-1.5 rounded-lg bg-white/20 px-2 py-1 text-xs">
-                                        <FileText className="h-3 w-3" />
-                                        <span className="max-w-[60px] truncate">{file.name}</span>
-                                      </div>
-                                    )}
-                                  </motion.div>
-                                ))}
-                              </div>
-                            )}
-                            {/* 文本内容 */}
-                            <div className="whitespace-pre-wrap text-[15px] leading-relaxed">{message.content}</div>
+                          <div
+                            className="rounded-2xl px-4 py-3 text-white"
+                            style={{ backgroundColor: BANANA_COLOR, borderRadius: "18px 4px 18px 18px" }}
+                          >
+                            <div className="space-y-2">
+                              {message.files && message.files.length > 0 && (
+                                <div className="flex flex-wrap gap-2 mb-2">
+                                  {message.files.map((file, idx) => (
+                                    <motion.div
+                                      key={idx}
+                                      initial={{ opacity: 0, scale: 0.8 }}
+                                      animate={{ opacity: 1, scale: 1 }}
+                                      transition={{ duration: 0.3, delay: idx * 0.1 }}
+                                    >
+                                      {file.preview ? (
+                                        <div className="relative w-14 h-14 rounded-lg overflow-hidden border-2 border-white/30">
+                                          <img src={file.preview} alt={file.name} className="w-full h-full object-cover" />
+                                        </div>
+                                      ) : (
+                                        <div className="flex items-center gap-1.5 rounded-lg bg-white/20 px-2 py-1 text-xs">
+                                          <FileText className="h-3 w-3" />
+                                          <span className="max-w-[60px] truncate">{file.name}</span>
+                                        </div>
+                                      )}
+                                    </motion.div>
+                                  ))}
+                                </div>
+                              )}
+                              <div className="whitespace-pre-wrap text-sm" style={{ lineHeight: 1.6 }}>{message.content}</div>
+                            </div>
                           </div>
                         ) : (
+                          /* AI message - Flat, minimal */
                           <>
                             {isLoading && message.id === currentBotIdRef.current && !message.content ? (
-                              <div className="flex items-center gap-2 text-slate-500">
+                              <div className="flex items-center gap-2 py-3 text-sm" style={{ color: "#9CA3AF" }}>
                                 <Loader2 className="h-4 w-4 animate-spin" />
-                                <span className="text-sm">思考中...</span>
+                                <span className="animate-pulse">Thinking...</span>
                               </div>
                             ) : (
-                              <BananaRenderer 
-                                content={message.content} 
+                              <BananaRenderer
+                                content={message.content}
                                 isStreaming={message.id === currentBotIdRef.current && isLoading}
                               />
                             )}
@@ -727,11 +731,11 @@ function BananaChatInterfaceInner() {
                         )}
                       </div>
                       {message.role === "user" && (
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-slate-200 mt-1 overflow-hidden">
+                        <div className="flex w-6 h-6 shrink-0 items-center justify-center rounded-full bg-slate-200 mt-0.5 overflow-hidden">
                           {userAvatar ? (
                             <img src={userAvatar} alt="Me" className="h-full w-full object-cover" />
                           ) : (
-                            <User className="h-4 w-4 text-slate-500" />
+                            <User className="h-3.5 w-3.5 text-slate-500" />
                           )}
                         </div>
                       )}

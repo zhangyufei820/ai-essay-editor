@@ -1,44 +1,51 @@
 /**
- * 📝 沈翔学校 - 终极渲染器 (Ultimate Renderer)
- * 
- * 用于渲染 AI 回复内容的 Markdown 解析器，支持丰富的格式。
+ * 📝 Ultimate Renderer - Claude Style
+ *
+ * Refactored to match Claude.ai's visual style:
+ * - No left border accents
+ * - Clean typography with line-height 1.6
+ * - Minimal visual decorations
+ * - Flat design
  */
 
 "use client"
 
 import React, { useMemo, memo, type ReactNode } from "react"
 import { cn } from "@/lib/utils"
-import { brandColors, slateColors } from "@/lib/design-tokens"
+import { slateColors } from "@/lib/design-tokens"
+
+// Claude style colors
+const CLAUDE_TEXT_COLOR = "#374151"
+const CLAUDE_SECONDARY_COLOR = "#6B7280"
+const CLAUDE_ACCENT_COLOR = "#10B981"
 
 // ============================================
-// 类型定义
+// Types
 // ============================================
 
 interface UltimateRendererProps {
-  /** Markdown 内容 */
   content: string
-  /** 自定义类名 */
   className?: string
 }
 
 // ============================================
-// 内联文本渲染器（处理加粗）
+// Inline Text Renderer
 // ============================================
 
 const InlineText = memo(function InlineText({ text }: { text: string }) {
   if (!text) return null
-  
+
   const parts = text.split(/(\*\*.*?\*\*)/g)
-  
+
   return (
     <>
       {parts.map((part, index) => {
         if (part.startsWith("**") && part.endsWith("**")) {
           return (
-            <strong 
-              key={index} 
+            <strong
+              key={index}
               className="font-semibold"
-              style={{ color: brandColors[900] }}
+              style={{ color: CLAUDE_TEXT_COLOR }}
             >
               {part.slice(2, -2)}
             </strong>
@@ -51,50 +58,50 @@ const InlineText = memo(function InlineText({ text }: { text: string }) {
 })
 
 // ============================================
-// 表格渲染器
+// Table Renderer - Clean style
 // ============================================
 
 const TableBlock = memo(function TableBlock({ lines }: { lines: string[] }) {
   if (lines.length < 2) return null
-  
+
   try {
     const headerLine = lines.find(l => l.includes("|") && !l.includes("---"))
     const bodyLines = lines.filter(l => l.includes("|") && !l.includes("---") && l !== headerLine)
-    
+
     if (!headerLine) return null
-    
+
     const headers = headerLine.split("|").filter(c => c.trim()).map(c => c.trim())
-    
+
     return (
-      <div className="my-5 overflow-hidden rounded-xl border" style={{ borderColor: slateColors[100] }}>
+      <div className="my-4 overflow-hidden rounded-lg border" style={{ borderColor: slateColors[200] }}>
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y" style={{ borderColor: slateColors[100] }}>
+          <table className="min-w-full divide-y" style={{ borderColor: slateColors[200] }}>
             <thead style={{ backgroundColor: slateColors[50] }}>
               <tr>
                 {headers.map((h, i) => (
-                  <th 
-                    key={i} 
+                  <th
+                    key={i}
                     className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider"
-                    style={{ color: slateColors[600] }}
+                    style={{ color: CLAUDE_SECONDARY_COLOR }}
                   >
                     {h}
                   </th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y" style={{ borderColor: slateColors[50] }}>
+            <tbody className="divide-y" style={{ borderColor: slateColors[100] }}>
               {bodyLines.map((line, i) => {
                 const cells = line.split("|").filter(c => c.trim()).map(c => c.trim())
                 return (
-                  <tr 
-                    key={i} 
+                  <tr
+                    key={i}
                     className="transition-colors hover:bg-slate-50/50"
                   >
                     {cells.map((cell, j) => (
-                      <td 
-                        key={j} 
+                      <td
+                        key={j}
                         className="px-4 py-3 text-sm"
-                        style={{ color: slateColors[600] }}
+                        style={{ color: CLAUDE_TEXT_COLOR }}
                       >
                         <InlineText text={cell} />
                       </td>
@@ -113,17 +120,17 @@ const TableBlock = memo(function TableBlock({ lines }: { lines: string[] }) {
 })
 
 // ============================================
-// 流式光标
+// Streaming Cursor
 // ============================================
 
 function StreamingCursor() {
   return (
-    <span 
+    <span
       className="inline-block animate-pulse ml-0.5"
-      style={{ 
-        width: 2, 
-        height: "1em", 
-        backgroundColor: brandColors[600],
+      style={{
+        width: 2,
+        height: "1em",
+        backgroundColor: CLAUDE_ACCENT_COLOR,
         verticalAlign: "text-bottom"
       }}
     >
@@ -133,27 +140,28 @@ function StreamingCursor() {
 }
 
 // ============================================
-// 终极渲染器主组件
+// Main Renderer
 // ============================================
 
-const UltimateRenderer = memo(function UltimateRenderer({ 
-  content, 
-  className 
+const UltimateRenderer = memo(function UltimateRenderer({
+  content,
+  className
 }: UltimateRendererProps) {
   const elements = useMemo(() => {
     if (!content) {
       return <StreamingCursor />
     }
-    
+
     const lines = content.split("\n")
     const renderedElements: React.ReactElement[] = []
     let tableBuffer: string[] = []
-    
+
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i]
       const isTableLine = line.trim().startsWith("|") && line.includes("|")
-      
-      // 处理表格
+      const isLastLine = i === lines.length - 1
+
+      // Handle tables
       if (isTableLine) {
         tableBuffer.push(line)
         if (i === lines.length - 1 || !lines[i + 1].trim().startsWith("|")) {
@@ -162,151 +170,163 @@ const UltimateRenderer = memo(function UltimateRenderer({
         }
         continue
       }
-      
-      // H1 标题 - 带左侧品牌色竖线
+
+      // H1 - Clean, no decorations
       if (line.trim().startsWith("# ")) {
         renderedElements.push(
-          <h1 
-            key={i} 
-            className="mt-8 mb-4 text-2xl font-bold flex items-center gap-3"
-            style={{ color: slateColors[800] }}
+          <h1
+            key={i}
+            className="text-xl font-bold mt-6 mb-3"
+            style={{ color: CLAUDE_TEXT_COLOR }}
           >
-            <span 
-              className="w-1 h-7 rounded-full shrink-0"
-              style={{ backgroundColor: brandColors[900] }}
-            />
             {line.replace(/^#\s+/, "")}
+            {isLastLine && <StreamingCursor />}
           </h1>
         )
       }
-      // H2 标题 - 带左侧品牌色圆点
+      // H2 - Clean, no left border
       else if (line.trim().startsWith("## ")) {
         renderedElements.push(
-          <h2 
-            key={i} 
-            className="mt-6 mb-3 text-xl font-semibold flex items-center gap-2"
-            style={{ color: slateColors[700] }}
+          <h2
+            key={i}
+            className="text-lg font-semibold mt-5 mb-2"
+            style={{ color: CLAUDE_TEXT_COLOR }}
           >
-            <span 
-              className="w-2 h-2 rounded-full shrink-0"
-              style={{ backgroundColor: brandColors[700] }}
-            />
             {line.replace(/^##\s+/, "")}
+            {isLastLine && <StreamingCursor />}
           </h2>
         )
       }
-      // H3 标题
+      // H3
       else if (line.trim().startsWith("### ")) {
         renderedElements.push(
-          <h3 
-            key={i} 
-            className="mt-5 mb-2 text-lg font-semibold"
-            style={{ color: brandColors[900] }}
+          <h3
+            key={i}
+            className="text-base font-semibold mt-4 mb-2"
+            style={{ color: CLAUDE_TEXT_COLOR }}
           >
             {line.replace(/^###\s+/, "")}
+            {isLastLine && <StreamingCursor />}
           </h3>
         )
       }
-      // 无序列表
-      else if (line.trim().startsWith("- ")) {
+      // H4
+      else if (line.trim().startsWith("#### ")) {
         renderedElements.push(
-          <div 
-            key={i} 
-            className="flex gap-3 ml-1 my-2 text-[15px] leading-[1.8]"
-            style={{ color: slateColors[600] }}
+          <h4
+            key={i}
+            className="text-sm font-semibold mt-3 mb-2"
+            style={{ color: CLAUDE_TEXT_COLOR }}
           >
-            <div 
-              className="mt-[10px] w-1.5 h-1.5 rounded-full shrink-0"
-              style={{ backgroundColor: `${brandColors[600]}99` }}
+            {line.replace(/^####\s+/, "")}
+            {isLastLine && <StreamingCursor />}
+          </h4>
+        )
+      }
+      // Unordered list - Minimal bullet
+      else if (line.trim().startsWith("- ") || line.trim().startsWith("* ")) {
+        const listContent = line.trim().replace(/^[-*]\s+/, "")
+        renderedElements.push(
+          <div
+            key={i}
+            className="flex gap-2 my-2 text-sm"
+            style={{ lineHeight: 1.6, color: CLAUDE_TEXT_COLOR }}
+          >
+            <span
+              className="mt-[7px] w-1.5 h-1.5 rounded-full shrink-0"
+              style={{ backgroundColor: CLAUDE_SECONDARY_COLOR }}
             />
             <span>
-              <InlineText text={line.replace(/^- /, "")} />
+              <InlineText text={listContent} />
+              {isLastLine && <StreamingCursor />}
             </span>
           </div>
         )
       }
-      // 有序列表（数字开头）
+      // Ordered list
       else if (/^\d+\.\s/.test(line.trim())) {
         const match = line.trim().match(/^(\d+)\.\s(.*)/)
         if (match) {
           renderedElements.push(
-            <div 
-              key={i} 
-              className="flex gap-3 ml-1 my-2 text-[15px] leading-[1.8]"
-              style={{ color: slateColors[600] }}
+            <div
+              key={i}
+              className="flex gap-2 my-2 text-sm"
+              style={{ lineHeight: 1.6, color: CLAUDE_TEXT_COLOR }}
             >
-              <span 
-                className="font-semibold shrink-0 w-5 text-center"
-                style={{ color: brandColors[700] }}
+              <span
+                className="font-medium shrink-0 w-5 text-center"
+                style={{ color: CLAUDE_SECONDARY_COLOR }}
               >
                 {match[1]}.
               </span>
               <span>
                 <InlineText text={match[2]} />
+                {isLastLine && <StreamingCursor />}
               </span>
             </div>
           )
         }
       }
-      // 引用块
+      // Blockquote - Minimal left border, no background
       else if (line.trim().startsWith("> ")) {
         renderedElements.push(
-          <blockquote 
-            key={i} 
-            className="my-4 px-4 py-3 rounded-r-xl border-l-[3px]"
-            style={{ 
-              borderColor: brandColors[600],
-              backgroundColor: brandColors[50]
+          <blockquote
+            key={i}
+            className="my-3 px-3 py-2 border-l-2 rounded-r"
+            style={{
+              borderColor: slateColors[300],
+              backgroundColor: slateColors[50]
             }}
           >
-            <div 
-              className="text-[15px] leading-[1.8]"
-              style={{ color: slateColors[600] }}
+            <div
+              className="text-sm"
+              style={{ lineHeight: 1.6, color: CLAUDE_SECONDARY_COLOR }}
             >
               <InlineText text={line.replace(/^> /, "")} />
+              {isLastLine && <StreamingCursor />}
             </div>
           </blockquote>
         )
       }
-      // 分隔线
+      // Divider
       else if (line.trim() === "---") {
         renderedElements.push(
-          <div key={i} className="py-6">
-            <div 
+          <div key={i} className="py-4">
+            <div
               className="h-px"
-              style={{ 
-                background: `linear-gradient(to right, transparent, ${slateColors[200]}, transparent)` 
+              style={{
+                background: `linear-gradient(to right, transparent, ${slateColors[200]}, transparent)`
               }}
             />
           </div>
         )
       }
-      // 空行
+      // Empty line
       else if (line.trim() === "") {
-        renderedElements.push(<div key={i} className="h-3" />)
+        renderedElements.push(<div key={i} className="h-2" />)
       }
-      // 代码块开始
+      // Skip code block markers
       else if (line.trim().startsWith("```")) {
-        // 简单处理：跳过代码块标记
         continue
       }
-      // 普通段落
+      // Regular paragraph
       else {
         renderedElements.push(
-          <p 
-            key={i} 
-            className="text-[15px] leading-[1.8] my-3"
-            style={{ color: slateColors[600] }}
+          <p
+            key={i}
+            className="text-sm my-2"
+            style={{ lineHeight: 1.6, color: CLAUDE_TEXT_COLOR }}
           >
             <InlineText text={line} />
+            {isLastLine && <StreamingCursor />}
           </p>
         )
       }
     }
-    
+
     return renderedElements
   }, [content])
-  
+
   return (
     <div className={cn("w-full", className)}>
       {elements}

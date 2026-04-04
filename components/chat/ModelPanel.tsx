@@ -8,7 +8,8 @@
 "use client"
 
 import { motion, AnimatePresence } from "framer-motion"
-import { X, Bot, Sparkles, Zap, Brain, Languages, Calculator } from "lucide-react"
+import { X, Sparkles } from "lucide-react"
+import { ModelLogoWithBg } from "@/components/ModelLogo"
 
 // ============================================
 // 🎨 Design Tokens - "智慧之光" 配色系统
@@ -74,7 +75,7 @@ interface Model {
   key: string
   name: string
   nameEn?: string
-  icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>
+  icon?: React.ComponentType<{ className?: string; style?: React.CSSProperties }>
   description: string
   badge?: string
 }
@@ -93,7 +94,6 @@ const MODELS: Model[] = [
     key: "gpt-5",
     name: "ChatGPT 5.4",
     nameEn: "GPT-5",
-    icon: Bot,
     description: "通用智能对话",
     badge: "新",
   },
@@ -101,21 +101,18 @@ const MODELS: Model[] = [
     key: "claude-opus",
     name: "Claude Opus4.6",
     nameEn: "Claude",
-    icon: Brain,
     description: "深度推理与分析",
   },
   {
     key: "gemini-pro",
     name: "Gemini 3.1",
     nameEn: "Gemini",
-    icon: Sparkles,
     description: "多模态理解",
   },
   {
     key: "grok-4.2",
     name: "Grok-4.2",
     nameEn: "Grok",
-    icon: Zap,
     description: "xAI 智能助手",
   },
 ]
@@ -385,7 +382,7 @@ function FloatingIslandCard({
         />
       )}
 
-      {/* 图标容器 - 等线风格 + 渐变 */}
+      {/* 图标容器 - 使用 ModelLogo 或 Lucide 图标 */}
       <motion.div
         className="relative w-12 h-12 rounded-xl flex items-center justify-center mb-3.5"
         style={{
@@ -404,14 +401,17 @@ function FloatingIslandCard({
         }}
         transition={{ duration: 0.3 }}
       >
-        <Icon
-          className="w-5.5 h-5.5"
-          style={{
-            color: isRecommended ? TOKENS.primary[700] : TOKENS.primary[800],
-            // 等线风格 - 细线条
-            strokeWidth: 1.5,
-          }}
-        />
+        {Icon ? (
+          <Icon
+            className="w-5.5 h-5.5"
+            style={{
+              color: isRecommended ? TOKENS.primary[700] : TOKENS.primary[800],
+              strokeWidth: 1.5,
+            }}
+          />
+        ) : (
+          <ModelLogoWithBg modelKey={model.key as any} size="xl" />
+        )}
 
         {/* 悬停时图标微光 */}
         <motion.div

@@ -66,7 +66,7 @@ export default function HistoryPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="container mx-auto px-4 py-8 ml-14 sm:ml-0">
       <h1 className="mb-8 text-3xl font-bold">历史记录</h1>
 
       <div className="grid gap-8 lg:grid-cols-2">

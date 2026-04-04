@@ -8,7 +8,8 @@
 "use client"
 
 import { motion, AnimatePresence } from "framer-motion"
-import { X, GraduationCap, Brain, Calculator, Languages, BookOpen, Users, Sparkles } from "lucide-react"
+import { X, GraduationCap, Sparkles } from "lucide-react"
+import { ModelLogo } from "@/components/ModelLogo"
 
 // ============================================
 // 🎨 Design Tokens - "智慧之光" 配色系统
@@ -74,7 +75,6 @@ interface EducationAgent {
   key: string
   name: string
   nameEn?: string
-  icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>
   description: string
   badge?: string
   href: string
@@ -94,7 +94,6 @@ const EDUCATION_AGENTS: EducationAgent[] = [
     key: "standard",
     name: "作文批改",
     nameEn: "Essay Grading",
-    icon: GraduationCap,
     description: "精准发现问题，启发写作思维",
     href: "/chat/standard",
   },
@@ -102,7 +101,6 @@ const EDUCATION_AGENTS: EducationAgent[] = [
     key: "teaching-pro",
     name: "教学评助手",
     nameEn: "Teaching Assistant",
-    icon: Brain,
     description: "教学设计，提升质量",
     href: "/chat/teaching-pro",
   },
@@ -110,7 +108,6 @@ const EDUCATION_AGENTS: EducationAgent[] = [
     key: "quanquan-math",
     name: "全学段数学",
     nameEn: "Math Agent",
-    icon: Calculator,
     description: "问题解答，步骤清晰",
     href: "/chat/quanquan-math",
   },
@@ -118,7 +115,6 @@ const EDUCATION_AGENTS: EducationAgent[] = [
     key: "quanquan-english",
     name: "全学段英语",
     nameEn: "English Agent",
-    icon: Languages,
     description: "听说读写，全面覆盖",
     href: "/chat/quanquan-english",
   },
@@ -126,7 +122,6 @@ const EDUCATION_AGENTS: EducationAgent[] = [
     key: "beike-pro",
     name: "备课助手Pro",
     nameEn: "Lesson Planner",
-    icon: BookOpen,
     description: "智能备课，高效便捷",
     href: "/chat/beike-pro",
   },
@@ -134,7 +129,6 @@ const EDUCATION_AGENTS: EducationAgent[] = [
     key: "banzhuren",
     name: "班主任助手",
     nameEn: "Class Manager",
-    icon: Users,
     description: "班级管理，家校沟通",
     href: "/chat/banzhuren",
   },
@@ -348,7 +342,6 @@ function FloatingIslandCard({
   agent: EducationAgent
   onClick: () => void
 }) {
-  const Icon = agent.icon
   const isRecommended = agent.badge === "推荐"
 
   return (
@@ -422,12 +415,9 @@ function FloatingIslandCard({
         }}
         transition={{ duration: 0.3 }}
       >
-        <Icon
-          className="w-5.5 h-5.5"
-          style={{
-            color: isRecommended ? TOKENS.primary[700] : TOKENS.primary[800],
-            strokeWidth: 1.5,
-          }}
+        <ModelLogo
+          modelKey={agent.key as any}
+          size="xl"
         />
 
         {/* 悬停时图标微光 */}

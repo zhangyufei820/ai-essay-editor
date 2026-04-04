@@ -9,7 +9,7 @@ import {
   Home, Settings, ChevronRight, ChevronDown,
   Menu, X, LogOut, Zap, Coins,
   Bot, GraduationCap, Brain,
-  Gift, HelpCircle, Sparkles
+  Gift, HelpCircle, Sparkles, Palette
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { AgentPanel } from "./chat/AgentPanel"
@@ -507,7 +507,7 @@ function AppSidebarInner() {
               whileTap={{ scale: 0.98 }}
               transition={{ duration: 0.2 }}
             >
-              <Sparkles className="w-4 h-4" style={{ color: COLORS.primary.main }} />
+              <Sparkles className="w-5 h-5" style={{ color: COLORS.primary.main }} />
               <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: COLORS.primary.dark }}>
                 智能体专区
               </span>
@@ -531,7 +531,7 @@ function AppSidebarInner() {
               whileTap={{ scale: 0.98 }}
               transition={{ duration: 0.2 }}
             >
-              <GraduationCap className="w-4 h-4" style={{ color: COLORS.primary.main }} />
+              <GraduationCap className="w-5 h-5" style={{ color: COLORS.primary.dark }} />
               <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: COLORS.primary.dark }}>
                 教育专区
               </span>
@@ -555,7 +555,7 @@ function AppSidebarInner() {
               whileTap={{ scale: 0.98 }}
               transition={{ duration: 0.2 }}
             >
-              <Sparkles className="w-4 h-4" style={{ color: COLORS.primary.main }} />
+              <Bot className="w-5 h-5" style={{ color: COLORS.primary.dark }} />
               <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: COLORS.primary.dark }}>
                 AI模型专区
               </span>
@@ -579,7 +579,7 @@ function AppSidebarInner() {
               whileTap={{ scale: 0.98 }}
               transition={{ duration: 0.2 }}
             >
-              <Sparkles className="w-4 h-4" style={{ color: COLORS.primary.main }} />
+              <Palette className="w-5 h-5" style={{ color: "#00C896" }} />
               <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: COLORS.primary.dark }}>
                 创意生成
               </span>

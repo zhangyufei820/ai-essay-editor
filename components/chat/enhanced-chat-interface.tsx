@@ -9,10 +9,9 @@ import { Textarea } from "@/components/ui/textarea"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useIsMobile } from "@/hooks/use-mobile"
 import {
-  Send, Paperclip, X, FileText, Copy, Loader2, Sparkles, User, Brain, AlertCircle,
-  ChevronDown, ChevronLeft, Bot, Film, Palette, AudioLines, ArrowDown, GraduationCap,
-  Download, Share2, Printer, Mic, MicOff, Volume2, History, Calculator, Languages,
-  BookOpen, Users
+  Send, Paperclip, X, FileText, Copy, Loader2, User, Brain, AlertCircle,
+  ChevronDown, ChevronLeft, ArrowDown,
+  Download, Share2, Printer, Mic, MicOff, Volume2, History
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
@@ -28,6 +27,7 @@ import { MusicCard } from "./MusicCard"
 import { useSunoMusic, extractTaskId, removeTaskIdFromText, type SunoProFormData } from "@/hooks/useSunoMusic"
 import { TASK_ID_REGEX } from "@/lib/suno-config"
 import { SunoProForm, type SunoFormData } from "./SunoProForm"
+import type { ChatSession } from "./chat-sidebar"
 import { motion, AnimatePresence } from "framer-motion"
 import { brandColors, slateColors } from "@/lib/design-tokens"
 import { createClient } from "@supabase/supabase-js"
@@ -35,6 +35,7 @@ import { collapseSidebar, refreshCredits } from "@/components/app-sidebar"
 import { validateFileForUpload, MAX_FILE_SIZE } from "@/lib/upload-service"
 import { VoiceRecorder, getDifyTTS, uploadAudioToDify } from "@/lib/voice-service"
 import { getApiUrl } from "@/lib/api-config"
+import { ModelLogo } from "@/components/ModelLogo"
 import { 
   calculatePreviewCost, 
   ModelType, 
@@ -167,13 +168,11 @@ function formatSunoResponse(fullText: string): string {
   return content
 }
 
-// --- 辅助组件：思考加载器 ---
+// --- 辅助组件：思考加载器 - Claude Style ---
 const SimpleBrainLoader = () => (
-  <div className="flex items-center gap-3 py-4 px-4 bg-slate-50 rounded-2xl">
-    <div className={`relative flex h-8 w-8 items-center justify-center rounded-xl bg-[${BRAND_GREEN}]/10`}>
-      <Brain className={`h-5 w-5 text-[${BRAND_GREEN}] animate-pulse`} />
-    </div>
-    <span className="text-sm text-slate-500 font-medium animate-pulse">思考中...</span>
+  <div className="flex items-center gap-2 py-3 text-sm" style={{ color: "#9CA3AF" }}>
+    <Brain className="h-3.5 w-3.5 animate-pulse" style={{ color: "#9CA3AF" }} />
+    <span className="animate-pulse">Thinking...</span>
   </div>
 )
 
@@ -220,23 +219,39 @@ const StreamingCursor = () => (
   <span className="streaming-cursor inline-block ml-1 text-emerald-500 animate-cursor-blink">▍</span>
 )
 
-// 🧠 可折叠的思考块组件（用于 Gemini 等模型的 <think> 标签）
+// 🧠 可折叠的思考块组件 - Claude Style (Minimal, collapsible)
 const ThinkingBlock = ({ content, isStreaming }: { content: string; isStreaming?: boolean }) => {
   const [isExpanded, setIsExpanded] = useState(false)
 
+  // Calculate thinking duration or just show "Thinking"
+  const thinkPreview = content.split('\n').filter(l => l.trim()).slice(0, 2).join(' ').slice(0, 50)
+  const hasContent = content.trim().length > 0
+
+  if (!hasContent && !isStreaming) return null
+
+  const contentId = `thinking-content-${content.slice(0, 20).replace(/\s/g, '-')}`
   return (
-    <div className="my-3 rounded-lg border border-dashed border-slate-300 bg-slate-50/80 overflow-hidden">
+    <div className="my-2">
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-slate-100/60 transition-colors"
+        className="flex items-center gap-1.5 px-1 py-1 rounded text-xs transition-colors hover:bg-slate-100/50"
+        style={{ color: "#9CA3AF" }}
+        aria-expanded={isExpanded}
+        aria-controls={contentId}
       >
-        <Brain className="h-3.5 w-3.5 text-slate-400" />
-        <span className="text-[13px] font-medium text-slate-500">AI 思考过程</span>
-        <ChevronDown className={cn("h-3.5 w-3.5 text-slate-400 ml-auto transition-transform duration-200", isExpanded && "rotate-180")} />
-        {isStreaming && <span className="text-[11px] text-emerald-500 animate-pulse">思考中...</span>}
+        <ChevronDown
+          className={cn("h-3 w-3 transition-transform duration-200", isExpanded ? "" : "-rotate-90")}
+        />
+        <span className="text-xs" style={{ color: "#9CA3AF" }}>
+          {isStreaming ? "Thinking..." : `Thought ${thinkPreview}${thinkPreview.length >= 50 ? '...' : ''}`}
+        </span>
       </button>
-      {isExpanded && (
-        <div className="px-3 pb-3 pt-1 border-t border-dashed border-slate-200 text-[13px] text-slate-600 leading-relaxed max-h-[250px] overflow-y-auto">
+      {isExpanded && hasContent && (
+        <div
+          id={contentId}
+          className="mt-1 pl-4 text-xs leading-relaxed overflow-y-auto max-h-[200px]"
+          style={{ color: "#6B7280", borderLeft: "1px solid #E5E7EB" }}
+        >
           {content.split('\n').map((line, i) => (
             <p key={i} className="my-0.5">{line || '\u00A0'}</p>
           ))}
@@ -690,9 +705,9 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 
   // --- 模型配置（增强版：添加描述和标签） ---
   const modelConfig = {
-    "standard": { 
-      name: "作文批改", 
-      icon: GraduationCap, 
+    "standard": {
+      name: "作文批改",
+      modelKey: "standard",
       color: BRAND_GREEN,
       description: "专业作文分析与点评",
       badge: "推荐",
@@ -700,42 +715,42 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     },
     "teaching-pro": {
       name: "教学评助手",
-      icon: Brain,
+      modelKey: "teaching-pro",
       color: BRAND_GREEN,
       description: "教学评估与反馈",
       group: "教育专用"
     },
     "quanquan-math": {
       name: "全学段数学",
-      icon: Calculator,
+      modelKey: "quanquan-math",
       color: BRAND_GREEN,
       description: "问题解答，步骤清晰",
       group: "教育专用"
     },
     "quanquan-english": {
       name: "全学段英语",
-      icon: Languages,
+      modelKey: "quanquan-english",
       color: BRAND_GREEN,
       description: "听说读写，全面覆盖",
       group: "教育专用"
     },
     "beike-pro": {
       name: "备课助手Pro",
-      icon: BookOpen,
+      modelKey: "beike-pro",
       color: BRAND_GREEN,
       description: "智能备课，高效便捷",
       group: "教育专用"
     },
     "banzhuren": {
       name: "班主任助手",
-      icon: Users,
+      modelKey: "banzhuren",
       color: BRAND_GREEN,
       description: "班级管理，家校沟通",
       group: "教育专用"
     },
     "gpt-5": {
       name: "ChatGPT 5.4",
-      icon: Bot,
+      modelKey: "gpt-5",
       color: BRAND_GREEN,
       description: "通用智能对话",
       badge: "新",
@@ -743,21 +758,21 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     },
     "claude-opus": {
       name: "Claude opus4.6thinking",
-      icon: Sparkles,
+      modelKey: "claude-opus",
       color: BRAND_GREEN,
       description: "深度推理与分析",
       group: "通用模型"
     },
     "gemini-pro": {
       name: "Gemini 3.1 pro",
-      icon: Sparkles,
+      modelKey: "gemini-pro",
       color: BRAND_GREEN,
       description: "多模态理解",
       group: "通用模型"
     },
     "banana-2-pro": {
       name: "Banana2 Pro 4K",
-      icon: Palette,
+      modelKey: "banana-2-pro",
       color: BRAND_GREEN,
       description: "AI 图像生成",
       badge: "热门",
@@ -765,14 +780,14 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     },
     "suno-v5": {
       name: "Suno V5",
-      icon: AudioLines,
+      modelKey: "suno-v5",
       color: BRAND_GREEN,
       description: "AI 音乐创作",
       group: "创意生成"
     },
     "sora-2-pro": {
       name: "Sora 2 Pro",
-      icon: Film,
+      modelKey: "sora-2-pro",
       color: BRAND_GREEN,
       description: "AI 视频生成",
       badge: "Pro",
@@ -780,14 +795,14 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     },
     "grok-4.2": {
       name: "Grok-4.2",
-      icon: Sparkles,
+      modelKey: "grok-4.2",
       color: BRAND_GREEN,
       description: "xAI 智能助手",
       group: "通用模型"
     },
     "open-claw": {
       name: "Open Claw",
-      icon: Bot,
+      modelKey: "open-claw",
       color: BRAND_GREEN,
       description: "OpenClaw 智能助手",
       badge: "推荐",
@@ -799,7 +814,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   const modelList = Object.entries(modelConfig).map(([key, config]) => ({
     key,
     name: config.name,
-    icon: config.icon,
+    modelKey: (config as any).modelKey,
     color: config.color,
     description: config.description,
     badge: (config as any).badge,
@@ -1673,13 +1688,13 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
               className="fixed inset-0 z-40 bg-black/20 backdrop-blur-sm"
               onClick={() => setShowHistorySidebar(false)}
             />
-            {/* 侧边栏 */}
+            {/* 侧边栏 - top-16 md:top-14 避免被顶部导航栏挡住 */}
             <motion.div
               initial={{ x: -280 }}
               animate={{ x: 0 }}
               exit={{ x: -280 }}
               transition={{ duration: 0.3, ease: [0.32, 0.72, 0, 1] }}
-              className="fixed left-0 top-0 bottom-0 w-72 z-50 flex flex-col"
+              className="fixed left-0 top-16 md:top-14 bottom-0 w-72 z-50 flex flex-col"
               style={{
                 background: "#FDFBF7",
                 boxShadow: "4px 0 24px rgba(0,0,0,0.12)",
@@ -1771,7 +1786,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         </AnimatePresence>
 
         {/* 🔥 顶部导航栏 - 移动端优化：增加高度和触摸区域 */}
-        <div className="flex items-center h-16 md:h-14 px-3 md:px-4 border-b border-slate-100 bg-white shrink-0">
+        <div className="flex items-center h-16 md:h-14 px-3 md:px-4 border-b border-slate-100 bg-white shrink-0 pt-safe">
           <button
             onClick={() => setShowHistorySidebar(!showHistorySidebar)}
             className="flex items-center gap-1 text-slate-600 hover:text-slate-800 transition-colors min-w-[44px] min-h-[44px] -ml-2 justify-center"
@@ -1937,171 +1952,190 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                   </div>
                 ) : (
                 <div className="flex flex-col items-center justify-center py-8 sm:py-12 md:py-16 text-center animate-in fade-in duration-500">
-                  <div className="mb-4 sm:mb-6 flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-2xl" style={{ backgroundColor: `${BRAND_GREEN}15` }}>
-                    <GraduationCap className="h-6 w-6 sm:h-7 sm:w-7" style={{ color: BRAND_GREEN }} />
+                  <div className="mb-4 sm:mb-6">
+                    <ModelLogo modelKey={selectedModel as any} size="xl" />
                   </div>
                   <h1 className="text-lg sm:text-xl font-semibold text-slate-800 px-4">欢迎使用沈翔智学</h1>
                 </div>
                 )
                 ) : (
-                <div className="space-y-4 sm:space-y-6 pt-2 sm:pt-4">
+                <div className="space-y-5 sm:space-y-6 pt-2 sm:pt-4">
                   {messages.map((message) => (
-                    <div key={message.id} className={cn("flex gap-2 sm:gap-3", message.role === "user" ? "justify-end" : "justify-start")}>
+                    <div key={message.id} className={cn("flex gap-2 sm:gap-3 group", message.role === "user" ? "justify-end" : "justify-start")}>
                       {message.role === "assistant" && (
-                        <div className="flex h-7 w-7 sm:h-8 sm:w-8 shrink-0 items-center justify-center rounded-lg sm:rounded-xl text-white mt-1" style={{ backgroundColor: BRAND_GREEN }}>
-                          <Sparkles className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                        // Smaller AI avatar - 使用 ModelLogo
+                        <div className="flex w-8 h-8 sm:w-10 sm:h-10 shrink-0 items-center justify-center mt-0.5">
+                          <ModelLogo modelKey={selectedModel as any} size="md" />
                         </div>
                       )}
+                      {/* Flat content container - No heavy backgrounds or borders */}
                       <div className={cn(
-                        "relative rounded-xl sm:rounded-2xl px-3 py-2.5 sm:px-4 sm:py-3 overflow-hidden",
-                        message.role === "user"
-                          ? "text-white max-w-[85%] sm:max-w-[75%]"
-                          : "bg-[#F9F8F3] w-full max-w-full break-words border border-[#F2F2EF]"
-                      )} style={message.role === "user" ? { backgroundColor: BRAND_GREEN } : {}}>
+                        "flex flex-col max-w-[85%] sm:max-w-[80%]",
+                        message.role === "user" ? "items-end" : "items-start"
+                      )}>
+                        {/* User message - Solid dark green background */}
                         {message.role === "user" ? (
-                          <div className="space-y-2 sm:space-y-3">
-                            {/* 🔥 显示上传的文件（带动画）- 移动端优化 */}
-                            {message.files && message.files.length > 0 && (
-                              <div className="flex flex-wrap gap-1.5 sm:gap-2 mb-2">
-                                {message.files.map((file, idx) => (
-                                  <motion.div
-                                    key={idx}
-                                    initial={{ opacity: 0, scale: 0.8 }}
-                                    animate={{ opacity: 1, scale: 1 }}
-                                    transition={{ duration: 0.3, delay: idx * 0.1 }}
-                                  >
-                                    {file.preview ? (
-                                      <div className="relative w-12 h-12 sm:w-16 sm:h-16 rounded-md sm:rounded-lg overflow-hidden border-2 border-white/30">
-                                        <img src={file.preview} alt={file.name} className="w-full h-full object-cover" />
-                                      </div>
-                                    ) : (
-                                      <div className="flex items-center gap-1 sm:gap-1.5 rounded-md sm:rounded-lg bg-white/20 px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs">
-                                        <FileText className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
-                                        <span className="max-w-[50px] sm:max-w-[60px] truncate">{file.name}</span>
-                                      </div>
-                                    )}
-                                  </motion.div>
-                                ))}
-                              </div>
-                            )}
-                            {/* 文本内容 - 移动端优化字体 */}
-                            <div className="whitespace-pre-wrap text-sm sm:text-[15px] leading-relaxed">{message.content}</div>
+                          <div
+                            className="rounded-2xl px-4 py-3 text-white"
+                            style={{ backgroundColor: "#052e16", borderRadius: "18px 4px 18px 18px" }}
+                          >
+                            <div className="space-y-2">
+                              {/* Show uploaded files */}
+                              {message.files && message.files.length > 0 && (
+                                <div className="flex flex-wrap gap-2 mb-2">
+                                  {message.files.map((file, idx) => (
+                                    <motion.div
+                                      key={idx}
+                                      initial={{ opacity: 0, scale: 0.8 }}
+                                      animate={{ opacity: 1, scale: 1 }}
+                                      transition={{ duration: 0.3, delay: idx * 0.1 }}
+                                    >
+                                      {file.preview ? (
+                                        <div className="relative w-14 h-14 sm:w-16 sm:h-16 rounded-lg overflow-hidden border-2 border-white/30">
+                                          <img src={file.preview} alt={file.name} className="w-full h-full object-cover" />
+                                        </div>
+                                      ) : (
+                                        <div className="flex items-center gap-1.5 rounded-lg bg-white/20 px-2 py-1 text-xs">
+                                          <FileText className="h-3 w-3" />
+                                          <span className="max-w-[60px] truncate">{file.name}</span>
+                                        </div>
+                                      )}
+                                    </motion.div>
+                                  ))}
+                                </div>
+                              )}
+                              <div className="whitespace-pre-wrap text-sm sm:text-[15px]" style={{ lineHeight: 1.6 }}>{message.content}</div>
+                            </div>
                           </div>
                         ) : (
-                          <div className="relative pl-3">
-                            <motion.div
-                              className="absolute left-0 top-0 bottom-0 w-0.5 rounded-full"
-                              style={{
-                                background: "linear-gradient(to bottom, rgba(0, 200, 150, 0.6), rgba(0, 200, 150, 0.1))",
-                              }}
-                              animate={{ opacity: [0.5, 1, 0.5] }}
-                              transition={{ duration: 3, repeat: Infinity }}
-                            />
-                            <div
-                              className="rounded-2xl px-4 py-3 ml-3"
-                              style={{
-                                background: "rgba(255, 255, 255, 0.80)",
-                                border: "1px solid rgba(255, 255, 255, 0.3)",
-                                boxShadow: "0 2px 8px rgba(14, 58, 31, 0.02)",
-                              }}
-                            >
+                          // AI message - Flat, minimal container
+                          <div className="w-full">
+                            {/* Workflow visualization - Only show when processing */}
+                            {message.id === currentBotIdRef.current && (isWorkflowProcessing || workflowState.nodes.length > 0) && !isMobile && (
+                              <WorkflowVisualizer
+                                workflowState={workflowState}
+                                isThinking={isThinking}
+                                isGenerating={isGenerating}
+                                onToggle={toggleExpanded}
+                                currentRunningText={currentRunningText}
+                                className="mb-3"
+                              />
+                            )}
+                            {/* Thinking state */}
+                            {message.id === currentBotIdRef.current && isLoading && !message.content && !isFastTrack ? (
+                              <SimpleBrainLoader />
+                            ) : (
                               <>
-                             {/* 🎯 工作流可视化面板 - 仅在当前正在处理的消息中显示 (手机端隐藏) */}
-                             {message.id === currentBotIdRef.current && (isWorkflowProcessing || workflowState.nodes.length > 0) && !isMobile && (
-                               <WorkflowVisualizer
-                                 workflowState={workflowState}
-                                 isThinking={isThinking}
-                                 isGenerating={isGenerating}
-                                 onToggle={toggleExpanded}
-                                 currentRunningText={currentRunningText}
-                                 className="mb-4"
-                               />
-                             )}
-                             {message.id === currentBotIdRef.current && isLoading && !message.content && !isFastTrack ? (
-                                <SimpleBrainLoader />
-                             ) : (
-                                <>
-                                  {/* 🎵 Suno 音乐卡片渲染 - 支持实时任务和历史 metadata */}
-                                  {(() => {
-                                    const musicTask = getTaskByMessageId(message.id)
-                                    const hasTaskId = TASK_ID_REGEX.test(message.content)
-                                    // 🔥 从 metadata 恢复历史音乐数据
-                                    const savedMusic = message.metadata?.type === "music" ? message.metadata : null
-                                    
-                                    if (musicTask || hasTaskId || savedMusic) {
-                                      const taskId = musicTask?.taskId || savedMusic?.taskId || extractTaskId(message.content) || ""
-                                      const cleanContent = removeTaskIdFromText(message.content)
-                                      
-                                      // 🔥 优先使用实时任务数据，其次使用保存的 metadata
-                                      const songs = (musicTask?.songs || savedMusic?.songs || []) as [any, any]
-                                      const globalStatus = musicTask?.globalStatus || (savedMusic ? "SUCCESS" : "PENDING")
-                                      
-                                      return (
-                                        <>
-                                          {cleanContent && (
-                                            <UltimateRenderer 
-                                              content={cleanContent} 
-                                              isStreaming={message.id === currentBotIdRef.current && showCursor && isLoading}
-                                            />
-                                          )}
-                                          {/* 🔥 显示音乐卡片 - 支持历史恢复 */}
-                                          {(taskId && songs.length > 0) && (
-                                            <MusicCard
-                                              taskId={taskId}
-                                              songs={songs}
-                                              globalStatus={globalStatus}
-                                              errorMessage={musicTask?.errorMessage}
-                                              onRetry={() => retryTask(taskId, userId)}
-                                              className="mt-4"
-                                            />
-                                          )}
-                                        </>
-                                      )
-                                    }
-                                    
+                                {/* Content renderer */}
+                                {(() => {
+                                  const musicTask = getTaskByMessageId(message.id)
+                                  const hasTaskId = TASK_ID_REGEX.test(message.content)
+                                  const savedMusic = message.metadata?.type === "music" ? message.metadata : null
+
+                                  if (musicTask || hasTaskId || savedMusic) {
+                                    const taskId = musicTask?.taskId || savedMusic?.taskId || extractTaskId(message.content) || ""
+                                    const cleanContent = removeTaskIdFromText(message.content)
+                                    const songs = (musicTask?.songs || savedMusic?.songs || []) as [any, any]
+                                    const globalStatus = musicTask?.globalStatus || (savedMusic ? "SUCCESS" : "PENDING")
+
                                     return (
-                                      <UltimateRenderer 
-                                        content={message.content} 
-                                        isStreaming={message.id === currentBotIdRef.current && showCursor && isLoading}
-                                      />
+                                      <>
+                                        {cleanContent && (
+                                          <UltimateRenderer
+                                            content={cleanContent}
+                                            isStreaming={message.id === currentBotIdRef.current && showCursor && isLoading}
+                                          />
+                                        )}
+                                        {(taskId && songs.length > 0) && (
+                                          <MusicCard
+                                            taskId={taskId}
+                                            songs={songs}
+                                            globalStatus={globalStatus}
+                                            errorMessage={musicTask?.errorMessage}
+                                            onRetry={() => retryTask(taskId, userId)}
+                                            className="mt-4"
+                                          />
+                                        )}
+                                      </>
                                     )
-                                  })()}
-                                </>
-                             )}
-                                </>
+                                  }
+
+                                  return (
+                                    <UltimateRenderer
+                                      content={message.content}
+                                      isStreaming={message.id === currentBotIdRef.current && showCursor && isLoading}
+                                    />
+                                  )
+                                })()}
+                              </>
+                            )}
+
+                            {/* Action toolbar - Subtle, shows on hover */}
+                            {message.content && (
+                              <div
+                                className={cn(
+                                  "flex items-center gap-1 mt-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                                )}
+                              >
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 sm:h-8 gap-1 text-[10px] sm:text-xs text-slate-400 hover:text-slate-600 hover:bg-slate-100 px-2"
+                                  onClick={() => navigator.clipboard.writeText(message.content).then(() => toast.success("已复制"))}
+                                >
+                                  <Copy className="h-3 w-3" />
+                                  <span className="hidden sm:inline">复制</span>
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 sm:h-8 gap-1 text-[10px] sm:text-xs text-slate-400 hover:text-slate-600 hover:bg-slate-100 px-2"
+                                  onClick={() => window.print()}
+                                >
+                                  <Printer className="h-3 w-3" />
+                                  <span className="hidden sm:inline">打印</span>
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 sm:h-8 gap-1 text-[10px] sm:text-xs text-slate-400 hover:text-slate-600 hover:bg-slate-100 px-2"
+                                  onClick={() => handleExportPDF(message.content)}
+                                >
+                                  <Download className="h-3 w-3" />
+                                  <span className="hidden sm:inline">导出</span>
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 sm:h-8 gap-1 text-[10px] sm:text-xs text-slate-400 hover:text-slate-600 hover:bg-slate-100 px-2"
+                                  onClick={() => handleShare()}
+                                >
+                                  <Share2 className="h-3 w-3" />
+                                  <span className="hidden sm:inline">分享</span>
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className={cn(
+                                    "h-7 sm:h-8 gap-1 text-[10px] sm:text-xs px-2",
+                                    isPlaying ? "text-emerald-600 bg-emerald-50 hover:bg-emerald-100" : "text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                                  )}
+                                  onClick={() => playAssistantMessage(message.content)}
+                                >
+                                  <Volume2 className="h-3 w-3" />
+                                  <span className="hidden sm:inline">{isPlaying ? "停止" : "朗读"}</span>
+                                </Button>
                               </div>
-                            </div>
-                        )}
-                        {message.role === "assistant" && message.content && (
-                          <div className="mt-3 sm:mt-4 flex items-center justify-end gap-0.5 sm:gap-1 border-t border-slate-100 pt-2 sm:pt-3">
-                            <Button variant="ghost" size="sm" className="h-7 sm:h-8 gap-1 sm:gap-1.5 text-[10px] sm:text-xs text-slate-400 hover:bg-slate-100 px-2 sm:px-3" onClick={() => navigator.clipboard.writeText(message.content).then(() => toast.success("已复制"))}>
-                               <Copy className="h-3 w-3" /> <span className="hidden xs:inline">复制</span>
-                            </Button>
-                            <Button variant="ghost" size="sm" className="h-7 sm:h-8 gap-1 sm:gap-1.5 text-[10px] sm:text-xs text-slate-400 hover:bg-slate-100 px-2 sm:px-3" onClick={() => window.print()}>
-                               <Printer className="h-3 w-3" /> <span className="hidden xs:inline">打印</span>
-                            </Button>
-                            <Button variant="ghost" size="sm" className="h-7 sm:h-8 gap-1 sm:gap-1.5 text-[10px] sm:text-xs text-slate-400 hover:bg-slate-100 px-2 sm:px-3" onClick={() => handleExportPDF(message.content)}>
-                               <Download className="h-3 w-3" /> <span className="hidden xs:inline">导出</span>
-                            </Button>
-                            <Button variant="ghost" size="sm" className="h-7 sm:h-8 gap-1 sm:gap-1.5 text-[10px] sm:text-xs text-slate-400 hover:bg-slate-100 px-2 sm:px-3" onClick={() => handleShare()}>
-                               <Share2 className="h-3 w-3" /> <span className="hidden xs:inline">分享</span>
-                            </Button>
-                            {/* 🔊 语音播放按钮 */}
-                            <Button variant="ghost" size="sm" className={cn(
-                              "h-7 sm:h-8 gap-1 sm:gap-1.5 text-[10px] sm:text-xs px-2 sm:px-3",
-                              isPlaying ? "text-green-600 bg-green-50 hover:bg-green-100" : "text-slate-400 hover:bg-slate-100"
-                            )} onClick={() => playAssistantMessage(message.content)}>
-                               <Volume2 className="h-3 w-3" /> <span className="hidden xs:inline">{isPlaying ? "停止" : "朗读"}</span>
-                            </Button>
+                            )}
                           </div>
                         )}
                       </div>
                       {message.role === "user" && (
-                        <div className="flex h-7 w-7 sm:h-8 sm:w-8 shrink-0 items-center justify-center rounded-lg sm:rounded-xl bg-slate-200 mt-1 overflow-hidden">
+                        <div className="flex w-6 h-6 sm:w-7 sm:h-7 shrink-0 items-center justify-center rounded-full bg-slate-200 mt-0.5 overflow-hidden">
                           {userAvatar ? (
                             <img src={userAvatar} alt="Me" className="h-full w-full object-cover" />
                           ) : (
-                            <User className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-slate-500" />
+                            <User className="h-3.5 w-3.5 text-slate-500" />
                           )}
                         </div>
                       )}
