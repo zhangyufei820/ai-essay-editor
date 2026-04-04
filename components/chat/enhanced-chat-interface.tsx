@@ -219,54 +219,19 @@ const StreamingCursor = () => (
   <span className="streaming-cursor inline-block ml-1 text-emerald-500 animate-cursor-blink">▍</span>
 )
 
-// 🧠 可折叠的思考块组件 - Claude Style (Minimal, collapsible)
+// 🧠 可折叠的思考块组件 - 简化版，只有加载中时显示简单转圈
 const ThinkingBlock = ({ content, isStreaming }: { content: string; isStreaming?: boolean }) => {
-  const [isExpanded, setIsExpanded] = useState(false)
+  // 加载中时只显示简单转圈，不显示文字和方块
+  if (isStreaming) {
+    return (
+      <div className="my-2 flex items-center justify-center">
+        <Loader2 className="w-4 h-4 animate-spin text-[#10A37F]" strokeWidth={2} />
+      </div>
+    )
+  }
 
-  // Calculate thinking duration or just show "Thinking"
-  const thinkPreview = content.split('\n').filter(l => l.trim()).slice(0, 2).join(' ').slice(0, 50)
-  const hasContent = content.trim().length > 0
-
-  if (!hasContent && !isStreaming) return null
-
-  const contentId = `thinking-content-${content.slice(0, 20).replace(/\s/g, '-')}`
-  return (
-    <div className="my-2 thinking-block-scanline">
-      <button
-        onClick={() => setIsExpanded(!isExpanded)}
-        className="flex items-center gap-1.5 px-1 py-1 rounded text-xs transition-colors hover:bg-slate-100/50"
-        style={{ color: "#9CA3AF" }}
-        aria-expanded={isExpanded}
-        aria-controls={contentId}
-      >
-        <ChevronDown
-          className={cn("h-3 w-3 transition-transform duration-200", isExpanded ? "" : "-rotate-90")}
-        />
-        {/* 代码风格Loading */}
-        {isStreaming ? (
-          <div className="flex items-center gap-0.5 code-loading">
-            <span className="char-1 text-xs" style={{ fontFamily: 'monospace', color: '#10A37F' }}>{'{'}</span>
-            <span className="char-2 text-xs" style={{ fontFamily: 'monospace', color: '#10A37F' }}>{';'}</span>
-            <span className="char-3 text-xs" style={{ fontFamily: 'monospace', color: '#10A37F' }}> </span>
-            <span className="char-4 text-xs" style={{ fontFamily: 'monospace', color: '#10A37F' }}>{'}'}</span>
-          </div>
-        ) : (
-          <span className="text-xs" style={{ color: "#9CA3AF" }}>
-            {`Thought ${thinkPreview}${thinkPreview.length >= 50 ? '...' : ''}`}
-          </span>
-        )}
-      </button>
-      {isExpanded && hasContent && (
-        <div
-          id={contentId}
-          className="mt-1 pl-4 text-xs leading-relaxed overflow-y-auto max-h-[200px] thinking-content-scanline"
-          style={{ color: "#6B7280", borderLeft: "1px solid #E5E7EB" }}
-        >
-          {content.split('\n').map((line, i) => (
-            <p key={i} className="my-0.5">{line || '\u00A0'}</p>
-          ))}
-        </div>
-      )}
+  // 非加载状态时不显示思考块
+  return null
     </div>
   )
 }
