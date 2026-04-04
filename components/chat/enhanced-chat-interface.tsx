@@ -538,6 +538,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 
   // 🔥 获取历史会话列表
   const fetchChatSessions = async (uid: string) => {
+    console.log("📋 [历史会话] 开始查询, uid:", uid)
     try {
       const { data: sessionData, error } = await supabase
         .from('chat_sessions')
@@ -545,12 +546,15 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         .eq('user_id', uid)
         .order('updated_at', { ascending: false })
 
+      console.log("📋 [历史会话] 查询结果:", { count: sessionData?.length, error })
+
       if (error) {
         console.error("❌ [历史会话] 查询失败:", error)
         return
       }
 
       if (sessionData && sessionData.length > 0) {
+        console.log("📋 [历史会话] 找到会话:", sessionData.length)
         setChatSessions(sessionData.map((s: any) => ({
           id: s.id,
           title: s.title || "新对话",
@@ -558,6 +562,8 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
           preview: s.preview || "",
           ai_model: s.ai_model || "standard"
         })))
+      } else {
+        console.log("📋 [历史会话] 无数据")
       }
     } catch (err) {
       console.error("❌ [历史会话] 查询异常:", err)
