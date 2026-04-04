@@ -1,6 +1,5 @@
 import type React from "react"
 import type { Metadata, Viewport } from "next"
-import { Analytics } from "@vercel/analytics/next"
 import "./globals.css"
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/app-sidebar"
@@ -79,7 +78,6 @@ export default function RootLayout({
         {/* PWA 安装提示 */}
         <InstallPrompt />
         
-        <Analytics />
       </body>
     </html>
   )
