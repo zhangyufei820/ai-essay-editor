@@ -6,10 +6,10 @@ import { useState, useEffect, useRef, Suspense, useCallback } from "react"
 import { motion } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import {
-  Home, Settings, ChevronRight, ChevronDown,
+  Settings, ChevronRight, ChevronDown,
   Menu, X, LogOut, Zap, Coins,
   Bot, GraduationCap, Brain,
-  Gift, HelpCircle, Sparkles, Palette
+  Gift, HelpCircle, Sparkles, Palette, User
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { AgentPanel } from "./chat/AgentPanel"
@@ -288,6 +288,11 @@ function AppSidebarInner() {
     return "用户"
   }
   
+  const getUserId = () => {
+    if (!user) return ""
+    return user.id || user.sub || user.userId || user.user_id || ""
+  }
+
   const getAvatarUrl = () => user?.user_metadata?.avatar_url || null
 
   // --- 导航项组件 - 🎨 画廊导视风格，图标缩小10%，间距拉大15%
@@ -440,23 +445,27 @@ function AppSidebarInner() {
           </Link>
         </div>
 
-        {/* 2. 积分显示 - 🎨 简洁轻量化，无底色，增加上方间距 */}
+        {/* 2. 积分显示 - 可点击跳转 */}
         {user && (
-          <div className="px-5 mb-4 flex items-center gap-2">
+          <Link
+            href="/credits"
+            onClick={handleNavClick}
+            className="px-3 mb-4 flex items-center justify-center gap-2 cursor-pointer hover:bg-gray-100/50 rounded-xl transition-all duration-300 py-1"
+          >
             <Coins className="h-4 w-4" style={{ color: COLORS.primary.main }} />
-            <span 
+            <span
               className="text-sm font-semibold"
               style={{ color: COLORS.primary.dark }}
             >
               {credits.toLocaleString()}
             </span>
-            <span 
+            <span
               className="text-xs"
               style={{ color: COLORS.gray[500] }}
             >
               积分
             </span>
-          </div>
+          </Link>
         )}
 
         {/* --- 核心滚动区域 - 🎨 定制滚动条：3px宽，半透明浅灰，仅滚动时显示 --- */}
@@ -482,15 +491,7 @@ function AppSidebarInner() {
             }
           `}</style>
           
-          {/* A. 主页 */}
-          <NavItem 
-            href="/"
-            icon={Home}
-            label="主页"
-            isActive={pathname === "/"}
-          />
-
-          {/* B. 智能体专区入口 - OpenClaw 专区 */}
+          {/* 智能体专区入口 - OpenClaw 专区 */}
           <div className="mt-8 mb-4 px-3">
             <motion.button
               onClick={() => setIsAgentPanelOpen(true)}
@@ -568,7 +569,7 @@ function AppSidebarInner() {
               onClick={() => setIsCreativePanelOpen(true)}
               className="w-full flex items-center gap-2 px-3 py-2 rounded-xl"
               style={{
-                backgroundColor: "rgba(0, 200, 150, 0.08)",
+                backgroundColor: "rgba(0, 200, 150, 0.02)",
                 border: "1px solid rgba(0, 200, 150, 0.2)",
                 boxShadow: "0 2px 8px rgba(0, 200, 150, 0.1), inset 0 1px 0 rgba(255,255,255,0.5)"
               }}
@@ -587,56 +588,42 @@ function AppSidebarInner() {
           </div>
         </div>
 
-        {/* --- 底部用户固定区域 - 🎨 玻璃拟态浮出效果 --- */}
+        {/* --- 底部用户固定区域 - 去框化，与侧边栏背景融合 --- */}
         <div
-          className="mt-auto shrink-0 z-50 relative"
+          className="mt-auto shrink-0 z-50 relative px-2 pb-4"
           ref={menuRef}
-          style={{
-            background: "rgba(255, 255, 255, 0.60)",
-            backdropFilter: "blur(20px)",
-            WebkitBackdropFilter: "blur(20px)",
-            borderTop: "1px solid rgba(255, 255, 255, 0.3)",
-            boxShadow: "0 -4px 30px rgba(14, 58, 31, 0.04)",
-          }}
         >
-          {/* 🎁 邀请和帮助按钮 - 垂直排列，无底色 */}
+          {/* 100% 宽度极细分割线 */}
+          {user && <div className="h-px w-full bg-gray-100/50 mb-3" />}
+
+          {/* 🎁 邀请和帮助按钮 - 极简化 */}
           {user && (
-            <div className="flex flex-col gap-1 py-2 px-3">
-              <Link 
-                href="/invite" 
+            <div className="flex flex-col gap-1 mb-3">
+              <Link
+                href="/invite"
                 onClick={handleNavClick}
-                className="flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all hover:bg-gray-100/60 group cursor-pointer"
+                className="flex items-center justify-center p-2 rounded-xl transition-all duration-300 hover:bg-[#10A37F]/10 cursor-pointer"
               >
-                <Gift className="w-5 h-5" style={{ color: COLORS.primary.main }} />
-                <span 
-                  className="text-sm font-medium"
-                  style={{ color: COLORS.gray[700] }}
+                <motion.div
+                  animate={{ scale: [1, 1.2, 1], rotate: [0, 8, -8, 0] }}
+                  transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
                 >
-                  邀请好友
-                </span>
+                  <Gift className="w-4 h-4 text-[#10A37F]" strokeWidth={1.5} />
+                </motion.div>
               </Link>
-              
-              <Link 
-                href="/help" 
+
+              <Link
+                href="/help"
                 onClick={handleNavClick}
-                className="flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all hover:bg-gray-100/60 group cursor-pointer"
+                className="flex items-center justify-center p-2 rounded-xl transition-all duration-300 hover:bg-[#10A37F]/10 cursor-pointer"
               >
-                <HelpCircle className="w-5 h-5" style={{ color: COLORS.gray[500] }} />
-                <span 
-                  className="text-sm font-medium"
-                  style={{ color: COLORS.gray[700] }}
-                >
-                  帮助中心
-                </span>
+                <HelpCircle className="w-4 h-4 text-gray-400 hover:text-gray-600 transition-colors duration-300" strokeWidth={1.5} />
               </Link>
             </div>
           )}
-          
-          {/* 分割线 */}
-          {user && <div className="h-px mx-4" style={{ backgroundColor: COLORS.sidebar.divider }} />}
-          
+
           {/* 用户信息区域 */}
-          <div className="p-3">
+          <div className="px-2">
           {/* 🍎 弹出菜单 - 在用户头像右侧弹出 */}
           {showUserMenu && (
             <div 
@@ -716,33 +703,24 @@ function AppSidebarInner() {
                 }
               }}
             >
-              <div 
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-white text-sm font-black overflow-hidden pointer-events-none"
-                style={{ 
-                  background: `linear-gradient(135deg, ${COLORS.primary.main} 0%, #16A34A 100%)`,
-                  boxShadow: `0 3px 10px ${COLORS.primary.main}40`
-                }}
+              {/* 扁平化头像 */}
+              <div
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg pointer-events-none"
+                style={{ backgroundColor: "rgba(16, 163, 127, 0.1)" }}
               >
                 {getAvatarUrl() ? (
-                  <img src={getAvatarUrl()} alt="User" className="h-full w-full object-cover" />
+                  <img src={getAvatarUrl()} alt="User" className="h-full w-full object-cover rounded-lg" />
                 ) : (
-                  // 🔥 修复：优先使用手机号或邮箱的首字符
-                  (user.phone?.[0] || user.email?.[0] || user.user_metadata?.name?.[0] || "U").toUpperCase()
+                  <User className="h-5 w-5" style={{ color: "#10A37F" }} strokeWidth={2} />
                 )}
               </div>
-              {/* 用户邮箱信息 - 🎨 加粗加阴影 */}
+              {/* 昵称 + ID/手机号 */}
               <div className="flex flex-1 flex-col items-start overflow-hidden pointer-events-none min-w-0">
-                <span 
-                  className="text-sm font-bold w-full text-left truncate"
-                  style={{ 
-                    color: COLORS.gray[800],
-                    textShadow: TEXT_SHADOWS.subtle,
-                    textOverflow: "ellipsis",
-                    overflow: "hidden",
-                    whiteSpace: "nowrap"
-                  }}
-                >
+                <span className="text-sm font-semibold w-full text-left truncate" style={{ color: COLORS.gray[800] }}>
                   {getDisplayName()}
+                </span>
+                <span className="text-xs text-gray-400 w-full text-left truncate">
+                  {getUserId().slice(0, 8)}...
                 </span>
               </div>
               <ChevronRight 

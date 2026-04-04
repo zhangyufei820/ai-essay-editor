@@ -10,7 +10,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { useIsMobile } from "@/hooks/use-mobile"
 import {
   Send, Paperclip, X, FileText, Copy, Loader2, User, Brain, AlertCircle,
-  ChevronDown, ChevronLeft, ArrowDown,
+  ChevronDown, ChevronLeft, ArrowDown, Sparkles,
   Download, Share2, Printer, Mic, MicOff, Volume2, History
 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -543,8 +543,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         .from('chat_sessions')
         .select('*')
         .eq('user_id', uid)
-        .order('created_at', { ascending: false })
-        .limit(50)
+        .order('updated_at', { ascending: false })
 
       if (error) {
         console.error("❌ [历史会话] 查询失败:", error)
@@ -555,7 +554,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         setChatSessions(sessionData.map((s: any) => ({
           id: s.id,
           title: s.title || "新对话",
-          date: new Date(s.created_at).getTime(),
+          date: new Date(s.updated_at).getTime(),
           preview: s.preview || "",
           ai_model: s.ai_model || "standard"
         })))
@@ -1699,20 +1698,20 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
               className="fixed inset-0 z-40 bg-black/20 backdrop-blur-sm"
               onClick={() => setShowHistorySidebar(false)}
             />
-            {/* 侧边栏 - top-16 md:top-14 避免被顶部导航栏挡住 */}
+            {/* 侧边栏 - 顶部对齐，无间隙 */}
             <motion.div
               initial={{ x: -280 }}
               animate={{ x: 0 }}
               exit={{ x: -280 }}
               transition={{ duration: 0.3, ease: [0.32, 0.72, 0, 1] }}
-              className="fixed left-0 top-16 md:top-14 bottom-0 w-72 z-50 flex flex-col"
+              className="fixed left-0 top-0 md:top-0 bottom-0 w-72 z-50 flex flex-col"
               style={{
                 background: "#FDFBF7",
                 boxShadow: "4px 0 24px rgba(0,0,0,0.12)",
               }}
             >
               {/* 头部 */}
-              <div className="flex items-center justify-between px-4 py-4 border-b border-slate-100">
+              <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-slate-100">
                 <span className="text-sm font-semibold text-slate-700">历史会话</span>
                 <button
                   onClick={() => setShowHistorySidebar(false)}
@@ -1721,9 +1720,37 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                   <X className="h-4 w-4 text-slate-500" />
                 </button>
               </div>
+
+              {/* 新建会话按钮 - Claude风格 */}
+              <div className="px-3 pt-3 pb-2">
+                <button
+                  onClick={() => {
+                    router.push('/chat')
+                    setShowHistorySidebar(false)
+                  }}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-full transition-all duration-200"
+                  style={{
+                    backgroundColor: "rgba(16, 163, 127, 0.08)",
+                    border: "1px solid rgba(16, 163, 127, 0.3)",
+                    color: "#10A37F",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = "rgba(16, 163, 127, 0.15)"
+                    e.currentTarget.style.borderColor = "rgba(16, 163, 127, 0.5)"
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = "rgba(16, 163, 127, 0.08)"
+                    e.currentTarget.style.borderColor = "rgba(16, 163, 127, 0.3)"
+                  }}
+                >
+                  <Sparkles className="w-4 h-4" />
+                  <span className="text-sm font-semibold">新建会话</span>
+                </button>
+              </div>
+
               {/* 会话列表 */}
-              <ScrollArea className="flex-1">
-                <div className="p-3 space-y-2">
+              <ScrollArea className="flex-1 px-1 scrollbar-thin">
+                <div className="p-2 space-y-1">
                   {chatSessions.length === 0 ? (
                     <div className="text-center py-8 text-slate-400 text-sm">
                       暂无历史会话
@@ -1737,13 +1764,23 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                           setShowHistorySidebar(false)
                         }}
                         className={cn(
-                          "w-full text-left px-3 py-3 rounded-xl transition-all",
+                          "w-full text-left px-3 py-2.5 rounded-lg transition-all",
                           currentSessionId === session.id
-                            ? "bg-emerald-50 text-emerald-700"
+                            ? "bg-[#10A37F]/10 text-[#10A37F]"
                             : "hover:bg-slate-100 text-slate-600"
                         )}
                       >
-                        <div className="text-sm font-medium truncate">{session.title}</div>
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="text-sm font-medium truncate flex-1">{session.title}</div>
+                          <div className="text-[10px] text-slate-400 shrink-0">
+                            {new Date(session.date).toLocaleString('zh-CN', {
+                              month: '2-digit',
+                              day: '2-digit',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </div>
+                        </div>
                         <div className="text-xs text-slate-400 truncate mt-0.5">{session.preview}</div>
                       </button>
                     ))

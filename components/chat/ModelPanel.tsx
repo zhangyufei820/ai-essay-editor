@@ -8,7 +8,8 @@
 "use client"
 
 import { motion, AnimatePresence } from "framer-motion"
-import { X, Sparkles } from "lucide-react"
+import { X } from "lucide-react"
+import { ArtisticThinkingIcon } from "@/components/icons/ArtisticThinkingIcons"
 import { ModelLogoWithBg } from "@/components/ModelLogo"
 
 // ============================================
@@ -206,7 +207,7 @@ export function ModelPanel({ isOpen, onClose }: ModelPanelProps) {
                       boxShadow: "0 4px 20px rgba(14, 58, 31, 0.25), 0 0 40px rgba(134, 239, 172, 0.1)",
                     }}
                   >
-                    <Sparkles className="w-5 h-5 text-white" />
+                    <ArtisticThinkingIcon modelKey="teaching-pro" size={20} />
                   </div>
                   {/* 呼吸光环 */}
                   <motion.div

@@ -243,18 +243,19 @@ function ChatDemo() {
   return (
     <motion.div
       key={cycleKey}
-      initial={{ opacity: 0, y: 40 }}
-      animate={{ opacity: 1, y: 0 }}
+      initial={{ opacity: 0, y: 40, rotate: -1 }}
+      animate={{ opacity: 1, y: 0, rotate: 0 }}
       transition={{ duration: 0.8, delay: 0.5, ease: [0.32, 0.72, 0, 1] }}
       className="rounded-3xl overflow-hidden max-w-2xl mx-auto relative"
       style={{
         backgroundColor: 'white',
-        // 🎨 增强悬浮感 - 柔和扩散的大范围投影
+        transform: "rotate(-1deg)",
         boxShadow: `
-          0 4px 6px -1px rgba(0, 0, 0, 0.05),
-          0 10px 15px -3px rgba(0, 0, 0, 0.08),
-          0 25px 50px -12px rgba(0, 0, 0, 0.12),
-          0 50px 100px -20px rgba(34, 197, 94, 0.1)
+          0 2px 4px rgba(0, 0, 0, 0.02),
+          0 8px 16px rgba(0, 0, 0, 0.04),
+          0 20px 40px rgba(0, 0, 0, 0.06),
+          0 40px 80px rgba(34, 197, 94, 0.08),
+          inset 0 1px 0 rgba(255,255,255,0.8)
         `
       }}
     >
@@ -264,17 +265,18 @@ function ChatDemo() {
         style={{ borderColor: slateColors[100] }}
       >
         <div className="flex items-center gap-2">
-          <span
-            className="w-2 h-2 rounded-full"
-            style={{ backgroundColor: brandColors[500] }}
-          />
+          <motion.div
+            animate={{ scale: [1, 1.15, 1], opacity: [0.8, 1, 0.8] }}
+            transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
+          >
+            <Sparkles className="w-4 h-4" style={{ color: brandColors[600] }} strokeWidth={2} />
+          </motion.div>
           <span className="text-sm font-medium" style={{ color: slateColors[700] }}>
-            作文批改
+            沈翔智学
           </span>
-          <ChevronDown className="w-4 h-4" style={{ color: slateColors[400] }} />
         </div>
         <span className="text-xs" style={{ color: slateColors[400] }}>
-          今日免费: 20/20
+          AI 助手
         </span>
       </div>
 

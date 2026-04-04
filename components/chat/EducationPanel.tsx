@@ -8,8 +8,8 @@
 "use client"
 
 import { motion, AnimatePresence } from "framer-motion"
-import { X, GraduationCap, Sparkles } from "lucide-react"
-import { ModelLogo } from "@/components/ModelLogo"
+import { X, GraduationCap } from "lucide-react"
+import { ArtisticThinkingIcon } from "@/components/icons/ArtisticThinkingIcons"
 
 // ============================================
 // 🎨 Design Tokens - "智慧之光" 配色系统
@@ -415,9 +415,9 @@ function FloatingIslandCard({
         }}
         transition={{ duration: 0.3 }}
       >
-        <ModelLogo
+        <ArtisticThinkingIcon
           modelKey={agent.key as any}
-          size="xl"
+          size={24}
         />
 
         {/* 悬停时图标微光 */}

@@ -7,8 +7,9 @@
 "use client"
 
 import { motion, AnimatePresence } from "framer-motion"
-import { X, Sparkles } from "lucide-react"
+import { X } from "lucide-react"
 import { ModelLogo } from "@/components/ModelLogo"
+import { ArtisticThinkingIcon } from "@/components/icons/ArtisticThinkingIcons"
 
 // ============================================
 // 🎨 Design Tokens - "智慧之光" 配色系统
@@ -248,7 +249,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
                     }}
                     transition={{ duration: 3, repeat: Infinity }}
                   >
-                    <Sparkles className="w-4 h-4" style={{ color: TOKENS.primary[700] }} />
+                    <ArtisticThinkingIcon modelKey="teaching-pro" size={20} />
                   </motion.div>
                   <div>
                     <p className="text-xs font-medium" style={{ color: TOKENS.text.primary }}>

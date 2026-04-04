@@ -71,9 +71,9 @@ export default function RootLayout({
 
         <SidebarProvider>
           <AppSidebar />
-          <SidebarInset>
-            <div className="flex flex-1 flex-col">{children}</div>
-          </SidebarInset>
+          <div className="flex flex-1 flex-col min-h-screen">
+            {children}
+          </div>
         </SidebarProvider>
         
         {/* PWA 安装提示 */}
