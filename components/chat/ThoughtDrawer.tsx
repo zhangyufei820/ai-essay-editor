@@ -16,7 +16,7 @@
 
 import React from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Check, ChevronDown } from "lucide-react"
+import { Check, ChevronDown, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { 
   WorkflowState, 
@@ -153,14 +153,9 @@ export const ThoughtDrawer: React.FC<ThoughtDrawerProps> = ({
         className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-100/50 transition-colors"
       >
         <div className="flex items-center gap-2">
-          {/* 左侧状态图标 - 代码风格Loading */}
+          {/* 左侧状态图标 - 简单Loading */}
           {isThinking && !isGenerating ? (
-            <div className="flex h-4 w-5 items-center justify-center code-loading">
-              <span className="char-1" style={{ fontFamily: 'monospace', color: '#10A37F' }}>{'{'}</span>
-              <span className="char-2" style={{ fontFamily: 'monospace', color: '#10A37F' }}>{';'}</span>
-              <span className="char-3" style={{ fontFamily: 'monospace', color: '#10A37F' }}> </span>
-              <span className="char-4" style={{ fontFamily: 'monospace', color: '#10A37F' }}>{'}'}</span>
-            </div>
+            <Loader2 className="h-4 w-4 animate-spin text-[#10A37F]" strokeWidth={2} />
           ) : (
             <div className="flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500">
               <Check className="h-2.5 w-2.5 text-white" strokeWidth={3} />
