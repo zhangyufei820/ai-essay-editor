@@ -1210,9 +1210,9 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     const preview = userMsg.content.slice(0, 30)
     const { data: existing } = await supabase.from('chat_sessions').select('id').eq('id', sid).single()
     if (!existing) {
-        await supabase.from('chat_sessions').insert({ id: sid, user_id: userId, title: userMsg.content.slice(0, 10)|| "作文", preview, ai_model: selectedModel })
+        await supabase.from('chat_sessions').insert({ id: sid, user_id: userId, title: userMsg.content.slice(0, 10)|| "作文", preview })
     } else {
-        await supabase.from('chat_sessions').update({ preview, ai_model: selectedModel }).eq('id', sid)
+        await supabase.from('chat_sessions').update({ preview }).eq('id', sid)
     }
     await supabase.from('chat_messages').insert({ session_id: sid, role: "user", content: userMsg.content })
 
