@@ -2,6 +2,9 @@
  * 🚀 沈翔学校 - Next.js 配置（Next.js 16 兼容版）
  */
 
+import * as Sentry from '@sentry/nextjs';
+import { withSentryConfig } from '@sentry/nextjs';
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // ============================================
@@ -129,4 +132,8 @@ const nextConfig = {
   },
 }
 
-export default nextConfig
+export default withSentryConfig(nextConfig, {
+  org: process.env.SENTRY_ORG || 'your-org',
+  project: 'ai-essay-editor',
+  silent: true,
+});
