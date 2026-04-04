@@ -232,8 +232,6 @@ const ThinkingBlock = ({ content, isStreaming }: { content: string; isStreaming?
 
   // 非加载状态时不显示思考块
   return null
-    </div>
-  )
 }
 
 function UltimateRenderer({ content, isStreaming = false }: { content: string; isStreaming?: boolean }) {
