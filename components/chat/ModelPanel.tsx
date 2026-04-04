@@ -10,7 +10,7 @@
 import { motion, AnimatePresence } from "framer-motion"
 import { X } from "lucide-react"
 import { ArtisticThinkingIcon } from "@/components/icons/ArtisticThinkingIcons"
-import { ModelLogoWithBg } from "@/components/ModelLogo"
+import { ModelLogo } from "@/components/ModelLogo"
 
 // ============================================
 // 🎨 Design Tokens - "智慧之光" 配色系统
@@ -411,7 +411,7 @@ function FloatingIslandCard({
             }}
           />
         ) : (
-          <ModelLogoWithBg modelKey={model.key as any} size="xl" />
+          <ModelLogo modelKey={model.key as any} size="xl" />
         )}
 
         {/* 悬停时图标微光 */}

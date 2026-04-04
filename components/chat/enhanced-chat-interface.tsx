@@ -784,21 +784,21 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       color: BRAND_GREEN,
       description: "通用智能对话",
       badge: "新",
-      group: "通用模型"
+      group: "AI模型"
     },
     "claude-opus": {
       name: "Claude opus4.6thinking",
       modelKey: "claude-opus",
       color: BRAND_GREEN,
       description: "深度推理与分析",
-      group: "通用模型"
+      group: "AI模型"
     },
     "gemini-pro": {
       name: "Gemini 3.1 pro",
       modelKey: "gemini-pro",
       color: BRAND_GREEN,
       description: "多模态理解",
-      group: "通用模型"
+      group: "AI模型"
     },
     "banana-2-pro": {
       name: "Banana2 Pro 4K",
@@ -828,7 +828,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       modelKey: "grok-4.2",
       color: BRAND_GREEN,
       description: "xAI 智能助手",
-      group: "通用模型"
+      group: "AI模型"
     },
     "open-claw": {
       name: "Open Claw",
@@ -836,7 +836,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       color: BRAND_GREEN,
       description: "OpenClaw 智能助手",
       badge: "推荐",
-      group: "通用模型"
+      group: "AI模型"
     },
   }
 

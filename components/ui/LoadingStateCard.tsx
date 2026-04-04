@@ -1,86 +1,21 @@
 /**
  * 💳 Loading State Card
- * 
- * Flat rectangular status card for AI processing states.
- * Features cycling mathematical symbols and linked English text.
+ *
+ * Simple minimal loading indicator without cycling symbols or text.
  */
 
 "use client"
 
-import React, { useEffect, useState } from "react"
-import { ArtisticThinkingIcon, type ModelIconKey } from "@/components/icons/ArtisticThinkingIcons"
-
-// ============================================
-// Cycling Symbols Configuration
-// ============================================
-
-const CYCLING_SYMBOLS = ["∫", "∑", "∞", "√", "[", "]", "{", ";", "}"]
-
-const LINKED_TEXTS = [
-  "Thinking...", 
-  "Scheming...", 
-  "Meandering...", 
-  "Thinking..."
-]
+import React from "react"
+import { Loader2 } from "lucide-react"
 
 // ============================================
 // LoadingStateCard Props
 // ============================================
 
 interface LoadingStateCardProps {
-  modelKey?: ModelIconKey
+  modelKey?: string
   className?: string
-}
-
-// ============================================
-// Cycling Symbol Component
-// ============================================
-
-function CyclingSymbol({ index }: { index: number }) {
-  const [currentIndex, setCurrentIndex] = useState(0)
-  
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentIndex((prev) => (prev + 1) % CYCLING_SYMBOLS.length)
-    }, 400) // Change symbol every 400ms
-    
-    return () => clearInterval(interval)
-  }, [])
-  
-  return (
-    <span
-      className="code-loading-char inline-block min-w-[1.5ch] text-center text-[#10A37F] dark:text-[#10A37F]"
-      style={{
-        animationDelay: `${index * 0.1}s`,
-        fontFamily: "'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace",
-        fontWeight: 600,
-      }}
-    >
-      {CYCLING_SYMBOLS[(currentIndex + index) % CYCLING_SYMBOLS.length]}
-    </span>
-  )
-}
-
-// ============================================
-// Linked Text Component
-// ============================================
-
-function LinkedText() {
-  const [currentIndex, setCurrentIndex] = useState(0)
-  
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentIndex((prev) => (prev + 1) % LINKED_TEXTS.length)
-    }, 2000) // Change text every 2 seconds
-    
-    return () => clearInterval(interval)
-  }, [])
-  
-  return (
-    <span className="text-sm text-gray-500 dark:text-gray-400 transition-opacity duration-300">
-      {LINKED_TEXTS[currentIndex]}
-    </span>
-  )
 }
 
 // ============================================
@@ -88,45 +23,26 @@ function LinkedText() {
 // ============================================
 
 /**
- * Flat rectangular status card with:
- * - Top: Dynamic code status block with cycling symbols
- * - Bottom: Linked English text cycling through thinking states
- * 
- * Uses bg-[#10A37F]/5 opacity (5% brand green), rounded-2xl, no border
+ * Simple loading indicator with just a spinner icon.
+ * No cycling symbols, no text, minimal design.
  */
-export function LoadingStateCard({ 
+export function LoadingStateCard({
   modelKey = "standard",
-  className 
+  className
 }: LoadingStateCardProps) {
   return (
     <div
       className={`
-        rounded-2xl bg-[#10A37F]/5 
-        px-6 py-4 
-        flex flex-col items-center justify-center gap-4
+        rounded-2xl
+        px-4 py-3
+        flex items-center justify-center
         ${className || ""}
       `}
-      style={{
-        backgroundColor: "rgba(16, 163, 127, 0.05)",
-        minWidth: "200px",
-        maxWidth: "320px",
-      }}
     >
-      {/* Top: Icon with cycling symbols */}
-      <div className="flex items-center gap-3">
-        <ArtisticThinkingIcon 
-          modelKey={modelKey} 
-          size={28}
-        />
-        <div className="flex gap-1">
-          {[0, 1, 2, 3, 4].map((i) => (
-            <CyclingSymbol key={i} index={i} />
-          ))}
-        </div>
-      </div>
-      
-      {/* Bottom: Linked English text */}
-      <LinkedText />
+      <Loader2
+        className="w-5 h-5 animate-spin text-[#10A37F]"
+        strokeWidth={2}
+      />
     </div>
   )
 }
@@ -135,23 +51,18 @@ export function LoadingStateCard({
 // Compact Loading State (inline)
 // ============================================
 
-export function CompactLoadingState({ 
+export function CompactLoadingState({
   modelKey = "standard",
-  className 
+  className
 }: LoadingStateCardProps) {
   return (
-    <div 
+    <div
       className={`inline-flex items-center gap-2 ${className || ""}`}
     >
-      <ArtisticThinkingIcon 
-        modelKey={modelKey} 
-        size={16}
+      <Loader2
+        className="w-4 h-4 animate-spin text-[#10A37F]"
+        strokeWidth={2}
       />
-      <span className="text-xs text-gray-500 dark:text-gray-400">
-        <LinkedText />
-      </span>
     </div>
   )
 }
-
-export { CYCLING_SYMBOLS, LINKED_TEXTS }
