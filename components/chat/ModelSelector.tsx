@@ -240,17 +240,14 @@ export function ModelSelector({
             animate={{ opacity: 1, y: 0, scaleY: 1 }}
             exit={{ opacity: 0, y: 8, scaleY: 0.95 }}
             transition={{ duration: 0.25, ease: [0.32, 0.72, 0, 1] }}
-            className="absolute bottom-full left-0 mb-2 z-50 origin-bottom"
+            className="absolute bottom-full left-0 mb-2 z-50 origin-bottom w-[340px] max-w-[calc(100vw-32px)]"
             style={{
-              width: "340px",
-              maxHeight: "420px",
               borderRadius: "16px",
               background: TOKENS.glass.light,
               backdropFilter: "blur(20px) saturate(180%)",
               WebkitBackdropFilter: "blur(20px) saturate(180%)",
               border: "1px solid rgba(14, 58, 31, 0.06)",
               boxShadow: TOKENS.shadow.glow,
-              overflow: "hidden",
             }}
           >
             {/* 顶部极光光条 */}
