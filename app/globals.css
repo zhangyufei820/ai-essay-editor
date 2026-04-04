@@ -923,6 +923,213 @@
 }
 
 /* ============================================
+ * 📝 Markdown 内容渲染样式
+ * ============================================ */
+
+/* 全局字体设置 */
+.markdown-content,
+.prose-content {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+/* 正文段落 - 行高1.5，紧凑间距 */
+.markdown-content p,
+.prose-content p {
+  line-height: 1.5;
+  margin-bottom: 0.75rem;
+  color: #374151;
+}
+
+.markdown-content p:last-child,
+.prose-content p:last-child {
+  margin-bottom: 0;
+}
+
+/* 标题样式 - 带绿色装饰条 */
+.markdown-content h1,
+.prose-content h1 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-top: 1.25rem;
+  margin-bottom: 0.75rem;
+  color: #111827;
+  border-left: 4px solid #10A37F;
+  padding-left: 0.75rem;
+  line-height: 1.4;
+}
+
+.markdown-content h2,
+.prose-content h2 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin-top: 1.25rem;
+  margin-bottom: 0.5rem;
+  color: #111827;
+  border-left: 4px solid #10A37F;
+  padding-left: 0.75rem;
+  line-height: 1.4;
+}
+
+.markdown-content h3,
+.prose-content h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-top: 1.25rem;
+  margin-bottom: 0.5rem;
+  color: #111827;
+  border-left: 4px solid #10A37F;
+  padding-left: 0.75rem;
+  line-height: 1.4;
+}
+
+.markdown-content h4,
+.prose-content h4 {
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+  color: #111827;
+  border-left: 4px solid #10A37F;
+  padding-left: 0.75rem;
+  line-height: 1.4;
+}
+
+/* 列表样式 - 紧凑化 */
+.markdown-content ul,
+.prose-content ul {
+  margin-bottom: 0.75rem;
+}
+
+.markdown-content ul li,
+.prose-content ul li {
+  line-height: 1.5;
+  margin-bottom: 0.25rem;
+  color: #374151;
+}
+
+.markdown-content ul li + li,
+.prose-content ul li + li {
+  margin-top: 0.25rem;
+}
+
+/* 列表符号 - 绿色小圆点 */
+.markdown-content ul li::before,
+.prose-content ul li::before {
+  color: #10A37F;
+  font-weight: bold;
+}
+
+/* 有序列表 - 绿色加粗数字 */
+.markdown-content ol,
+.prose-content ol {
+  margin-bottom: 0.75rem;
+  padding-left: 0;
+  list-style: none;
+  counter-reset: item;
+}
+
+.markdown-content ol li,
+.prose-content ol li {
+  line-height: 1.5;
+  margin-bottom: 0.25rem;
+  color: #374151;
+  counter-increment: item;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.markdown-content ol li::before,
+.prose-content ol li::before {
+  content: counter(item) ".";
+  font-weight: 700;
+  color: #10A37F;
+  font-size: 0.875em;
+  min-width: 1.25rem;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.markdown-content ol li + li,
+.prose-content ol li + li {
+  margin-top: 0.25rem;
+}
+
+/* 引用块 - 紧凑 */
+.markdown-content blockquote,
+.prose-content blockquote {
+  border-left: 3px solid #10A37F;
+  padding-left: 0.75rem;
+  margin: 0.75rem 0;
+  color: #6B7280;
+  font-style: normal;
+  line-height: 1.5;
+}
+
+/* 代码块 - 紧凑 */
+.markdown-content code,
+.prose-content code {
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  font-size: 0.875em;
+  background-color: #F3F4F6;
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+  color: #10A37F;
+}
+
+.markdown-content pre,
+.prose-content pre {
+  background-color: #1F2937;
+  color: #E5E7EB;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  margin: 0.75rem 0;
+  overflow-x: auto;
+  line-height: 1.5;
+}
+
+.markdown-content pre code,
+.prose-content pre code {
+  background: none;
+  color: inherit;
+  padding: 0;
+  font-size: 0.875rem;
+}
+
+/* 强调样式 */
+.markdown-content strong,
+.prose-content strong {
+  font-weight: 600;
+  color: #111827;
+}
+
+.markdown-content em,
+.prose-content em {
+  font-style: italic;
+}
+
+/* 链接 */
+.markdown-content a,
+.prose-content a {
+  color: #10A37F;
+  text-decoration: underline;
+  text-decoration-color: rgba(16, 163, 127, 0.3);
+}
+
+.markdown-content a:hover,
+.prose-content a:hover {
+  text-decoration-color: #10A37F;
+}
+
+/* 水平线 */
+.markdown-content hr,
+.prose-content hr {
+  border: none;
+  border-top: 1px solid #E5E7EB;
+  margin: 1.5rem 0;
+}
+
+/* ============================================
  * 💻 代码风格 Loading 动画 - Thinking 专用
  * ============================================ */
 

@@ -20,6 +20,7 @@ import remarkGfm from "remark-gfm"
 // Claude style colors
 const CLAUDE_TEXT_COLOR = "#374151"
 const CLAUDE_SECONDARY_COLOR = "#6B7280"
+const CLAUDE_ACCENT_COLOR = "#10A37F" // 沈翔绿
 const CLAUDE_AVATAR_BG = "#10B981" // Emerald green
 
 // ============================================
@@ -190,22 +191,22 @@ function MarkdownContent({ content }: { content: string }) {
       remarkPlugins={[remarkGfm]}
       components={{
         p: ({ children }) => (
-          <p className="mb-2 last:mb-0" style={{ lineHeight: 1.6, color: CLAUDE_TEXT_COLOR }}>
+          <p className="mb-3 last:mb-0" style={{ lineHeight: 1.5, color: CLAUDE_TEXT_COLOR }}>
             {children}
           </p>
         ),
         ul: ({ children }) => (
-          <ul className="list-disc pl-4 mb-2" style={{ lineHeight: 1.6 }}>
+          <ul className="list-disc pl-5 mb-3 space-y-1" style={{ lineHeight: 1.5 }}>
             {children}
           </ul>
         ),
         ol: ({ children }) => (
-          <ol className="list-decimal pl-4 mb-2" style={{ lineHeight: 1.6 }}>
+          <ol className="list-decimal pl-5 mb-3 space-y-1" style={{ lineHeight: 1.5 }}>
             {children}
           </ol>
         ),
         li: ({ children }) => (
-          <li className="mb-1" style={{ color: CLAUDE_TEXT_COLOR }}>
+          <li className="text-sm" style={{ lineHeight: 1.5, color: CLAUDE_TEXT_COLOR }}>
             {children}
           </li>
         ),
@@ -217,7 +218,7 @@ function MarkdownContent({ content }: { content: string }) {
                 className="px-1.5 py-0.5 rounded text-sm"
                 style={{
                   backgroundColor: slateColors[100],
-                  color: slateColors[800]
+                  color: CLAUDE_ACCENT_COLOR
                 }}
               >
                 {children}
@@ -225,14 +226,14 @@ function MarkdownContent({ content }: { content: string }) {
             )
           }
           return (
-            <code className={cn("block p-3 rounded-lg text-sm overflow-x-auto", className)}>
+            <code className={cn("block p-4 rounded-lg text-sm overflow-x-auto mb-3", className)}>
               {children}
             </code>
           )
         },
         pre: ({ children }) => (
           <pre
-            className="rounded-lg overflow-hidden mb-2"
+            className="rounded-lg overflow-hidden mb-3"
             style={{ backgroundColor: slateColors[900] }}
           >
             {children}
@@ -250,32 +251,50 @@ function MarkdownContent({ content }: { content: string }) {
             target="_blank"
             rel="noopener noreferrer"
             className="underline underline-offset-2"
-            style={{ color: CLAUDE_AVATAR_BG }}
+            style={{ color: CLAUDE_ACCENT_COLOR }}
           >
             {children}
           </a>
         ),
         h1: ({ children }) => (
-          <h1 className="text-xl font-bold mb-3 mt-4" style={{ color: CLAUDE_TEXT_COLOR }}>
+          <h1
+            className="text-xl font-semibold pl-3 border-l-4 mt-5 mb-3"
+            style={{ color: "#111827", borderColor: CLAUDE_ACCENT_COLOR, lineHeight: 1.4 }}
+          >
             {children}
           </h1>
         ),
         h2: ({ children }) => (
-          <h2 className="text-lg font-semibold mb-2 mt-4" style={{ color: CLAUDE_TEXT_COLOR }}>
+          <h2
+            className="text-lg font-semibold pl-3 border-l-4 mt-5 mb-2"
+            style={{ color: "#111827", borderColor: CLAUDE_ACCENT_COLOR, lineHeight: 1.4 }}
+          >
             {children}
           </h2>
         ),
         h3: ({ children }) => (
-          <h3 className="text-base font-semibold mb-2 mt-3" style={{ color: CLAUDE_TEXT_COLOR }}>
+          <h3
+            className="text-base font-semibold pl-3 border-l-4 mt-5 mb-2"
+            style={{ color: "#111827", borderColor: CLAUDE_ACCENT_COLOR, lineHeight: 1.4 }}
+          >
             {children}
           </h3>
         ),
+        h4: ({ children }) => (
+          <h4
+            className="text-sm font-semibold pl-3 border-l-4 mt-4 mb-2"
+            style={{ color: "#111827", borderColor: CLAUDE_ACCENT_COLOR, lineHeight: 1.4 }}
+          >
+            {children}
+          </h4>
+        ),
         blockquote: ({ children }) => (
           <blockquote
-            className="border-l-2 px-3 py-2 my-2 rounded-r"
+            className="border-l-4 px-4 py-3 my-3 rounded-r"
             style={{
-              borderColor: slateColors[300],
-              backgroundColor: slateColors[50]
+              borderColor: CLAUDE_ACCENT_COLOR,
+              backgroundColor: slateColors[50],
+              lineHeight: 1.5
             }}
           >
             {children}

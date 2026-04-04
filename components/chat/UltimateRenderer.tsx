@@ -17,7 +17,7 @@ import { slateColors } from "@/lib/design-tokens"
 // Claude style colors
 const CLAUDE_TEXT_COLOR = "#374151"
 const CLAUDE_SECONDARY_COLOR = "#6B7280"
-const CLAUDE_ACCENT_COLOR = "#10B981"
+const CLAUDE_ACCENT_COLOR = "#10A37F" // 沈翔绿
 
 // ============================================
 // Types
@@ -171,70 +171,86 @@ const UltimateRenderer = memo(function UltimateRenderer({
         continue
       }
 
-      // H1 - Clean, no decorations
+      // H1 - 带绿色装饰条
       if (line.trim().startsWith("# ")) {
         renderedElements.push(
           <h1
             key={i}
-            className="text-xl font-bold mt-6 mb-3"
-            style={{ color: CLAUDE_TEXT_COLOR }}
+            className="text-xl font-semibold mt-5 mb-3 pl-3 border-l-4"
+            style={{
+              color: "#111827",
+              borderColor: CLAUDE_ACCENT_COLOR,
+              lineHeight: 1.4,
+            }}
           >
             {line.replace(/^#\s+/, "")}
             {isLastLine && <StreamingCursor />}
           </h1>
         )
       }
-      // H2 - Clean, no left border
+      // H2 - 带绿色装饰条
       else if (line.trim().startsWith("## ")) {
         renderedElements.push(
           <h2
             key={i}
-            className="text-lg font-semibold mt-5 mb-2"
-            style={{ color: CLAUDE_TEXT_COLOR }}
+            className="text-lg font-semibold mt-5 mb-3 pl-3 border-l-4"
+            style={{
+              color: "#111827",
+              borderColor: CLAUDE_ACCENT_COLOR,
+              lineHeight: 1.4,
+            }}
           >
             {line.replace(/^##\s+/, "")}
             {isLastLine && <StreamingCursor />}
           </h2>
         )
       }
-      // H3
+      // H3 - 带绿色装饰条
       else if (line.trim().startsWith("### ")) {
         renderedElements.push(
           <h3
             key={i}
-            className="text-base font-semibold mt-4 mb-2"
-            style={{ color: CLAUDE_TEXT_COLOR }}
+            className="text-base font-semibold mt-5 mb-3 pl-3 border-l-4"
+            style={{
+              color: "#111827",
+              borderColor: CLAUDE_ACCENT_COLOR,
+              lineHeight: 1.4,
+            }}
           >
             {line.replace(/^###\s+/, "")}
             {isLastLine && <StreamingCursor />}
           </h3>
         )
       }
-      // H4
+      // H4 - 带绿色装饰条
       else if (line.trim().startsWith("#### ")) {
         renderedElements.push(
           <h4
             key={i}
-            className="text-sm font-semibold mt-3 mb-2"
-            style={{ color: CLAUDE_TEXT_COLOR }}
+            className="text-sm font-semibold mt-4 mb-2 pl-3 border-l-4"
+            style={{
+              color: "#111827",
+              borderColor: CLAUDE_ACCENT_COLOR,
+              lineHeight: 1.4,
+            }}
           >
             {line.replace(/^####\s+/, "")}
             {isLastLine && <StreamingCursor />}
           </h4>
         )
       }
-      // Unordered list - Minimal bullet
+      // Unordered list - 绿色小圆点，紧凑间距
       else if (line.trim().startsWith("- ") || line.trim().startsWith("* ")) {
         const listContent = line.trim().replace(/^[-*]\s+/, "")
         renderedElements.push(
           <div
             key={i}
-            className="flex gap-2 my-2 text-sm"
-            style={{ lineHeight: 1.6, color: CLAUDE_TEXT_COLOR }}
+            className="flex gap-2 my-1 text-sm"
+            style={{ lineHeight: 1.5, color: CLAUDE_TEXT_COLOR }}
           >
             <span
-              className="mt-[7px] w-1.5 h-1.5 rounded-full shrink-0"
-              style={{ backgroundColor: CLAUDE_SECONDARY_COLOR }}
+              className="mt-[5px] w-1.5 h-1.5 rounded-full shrink-0"
+              style={{ backgroundColor: CLAUDE_ACCENT_COLOR }}
             />
             <span>
               <InlineText text={listContent} />
@@ -243,19 +259,19 @@ const UltimateRenderer = memo(function UltimateRenderer({
           </div>
         )
       }
-      // Ordered list
+      // Ordered list - 绿色加粗数字，紧凑间距
       else if (/^\d+\.\s/.test(line.trim())) {
         const match = line.trim().match(/^(\d+)\.\s(.*)/)
         if (match) {
           renderedElements.push(
             <div
               key={i}
-              className="flex gap-2 my-2 text-sm"
-              style={{ lineHeight: 1.6, color: CLAUDE_TEXT_COLOR }}
+              className="flex gap-2 my-1 text-sm"
+              style={{ lineHeight: 1.5, color: CLAUDE_TEXT_COLOR }}
             >
               <span
-                className="font-medium shrink-0 w-5 text-center"
-                style={{ color: CLAUDE_SECONDARY_COLOR }}
+                className="font-bold shrink-0 w-5 text-center text-xs"
+                style={{ color: CLAUDE_ACCENT_COLOR }}
               >
                 {match[1]}.
               </span>
@@ -267,21 +283,20 @@ const UltimateRenderer = memo(function UltimateRenderer({
           )
         }
       }
-      // Blockquote - Minimal left border, no background
+      // Blockquote - 绿色左边框
       else if (line.trim().startsWith("> ")) {
         renderedElements.push(
           <blockquote
             key={i}
-            className="my-3 px-3 py-2 border-l-2 rounded-r"
+            className="my-3 px-4 py-3 border-l-4 rounded-r"
             style={{
-              borderColor: slateColors[300],
-              backgroundColor: slateColors[50]
+              borderColor: CLAUDE_ACCENT_COLOR,
+              lineHeight: 1.5,
+              color: CLAUDE_SECONDARY_COLOR,
+              backgroundColor: slateColors[50],
             }}
           >
-            <div
-              className="text-sm"
-              style={{ lineHeight: 1.6, color: CLAUDE_SECONDARY_COLOR }}
-            >
+            <div className="text-sm">
               <InlineText text={line.replace(/^> /, "")} />
               {isLastLine && <StreamingCursor />}
             </div>
@@ -309,13 +324,13 @@ const UltimateRenderer = memo(function UltimateRenderer({
       else if (line.trim().startsWith("```")) {
         continue
       }
-      // Regular paragraph
+      // Regular paragraph - 行高1.5，紧凑间距
       else {
         renderedElements.push(
           <p
             key={i}
-            className="text-sm my-2"
-            style={{ lineHeight: 1.6, color: CLAUDE_TEXT_COLOR }}
+            className="text-sm my-1.5"
+            style={{ lineHeight: 1.5, color: CLAUDE_TEXT_COLOR, marginBottom: '0.75rem' }}
           >
             <InlineText text={line} />
             {isLastLine && <StreamingCursor />}
