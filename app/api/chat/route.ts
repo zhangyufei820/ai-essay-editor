@@ -202,18 +202,18 @@ export async function POST(req: Request) {
       return { role: msg.role, content: textContent }
     })
 
-    const response = await fetch(`${customConfig.baseURL}/chat/completions`, {
+    const response = await fetch(`${customConfig.baseURL}/chat-messages`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${customConfig.apiKey}`,
       },
       body: JSON.stringify({
-        model: modelName,
-        messages: apiMessages,
-        stream: true,
-        temperature: 0.7,
-        max_tokens: 4000,
+        query: apiMessages[apiMessages.length - 1]?.content || "",
+        conversation_id: "",
+        response_mode: "streaming",
+        user: userId || "anonymous",
+        inputs: {},
       }),
     })
 
@@ -250,20 +250,25 @@ export async function POST(req: Request) {
             buffer = lines.pop() || ""
             for (const line of lines) {
               const trimmed = line.trim()
-              if (!trimmed || trimmed === "data: [DONE]") continue
+              if (!trimmed) continue
+              // Dify 流式格式: data: {"event": "message", "answer": "xxx"}
               if (trimmed.startsWith("data: ")) {
                 try {
-                   const jsonStr = trimmed.slice(6)
-                   const data = JSON.parse(jsonStr)
-                   if (data.choices && data.choices[0]?.delta?.content) {
-                     const content = data.choices[0].delta.content
-                     const aiSDKChunk = `0:${JSON.stringify({ type: "text-delta", textDelta: content })}\n`
-                     controller.enqueue(encoder.encode(aiSDKChunk))
-                   }
+                  const jsonStr = trimmed.slice(6)
+                  const data = JSON.parse(jsonStr)
+                  // Dify 事件: message (内容块), message_end (结束)
+                  if (data.event === "message" && data.answer) {
+                    const content = data.answer
+                    const aiSDKChunk = `0:${JSON.stringify({ type: "text-delta", textDelta: content })}\n`
+                    controller.enqueue(encoder.encode(aiSDKChunk))
+                  }
                 } catch (e) {}
               }
             }
           }
+          // 发送结束信号
+          const finishChunk = `0:${JSON.stringify({ type: "finish", finishReason: "stop" })}\n`
+          controller.enqueue(encoder.encode(finishChunk))
           controller.close()
         } catch (error) {
           controller.error(error)

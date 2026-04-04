@@ -41,18 +41,19 @@ export type CustomAPIConfig = {
 }
 
 export function getAPIConfig(provider: string): CustomAPIConfig | null {
-  const DEFAULT_API_KEY = "sk-diaycftqfopXhIAf5gm7G35xSndFo0VzMi0PyRpHQGz4voxG"
-  const DEFAULT_BASE_URL = "https://www.vivaapi.cn/v1"
+  // 使用 Dify 配置
+  const apiKey = process.env.DIFY_API_KEY || process.env.CUSTOM_API_KEY || ""
+  const baseURL = process.env.DIFY_BASE_URL || process.env.CUSTOM_BASE_URL || "http://172.23.0.3:5001/v1"
 
-  // All providers use the same vivaapi endpoint
-  const apiKey = process.env.CUSTOM_API_KEY || DEFAULT_API_KEY
-  const baseURL = process.env.CUSTOM_BASE_URL || DEFAULT_BASE_URL
+  if (!apiKey) {
+    console.error("[v0] DIFY_API_KEY is not configured")
+    return null
+  }
 
-  console.log(`[v0] Using vivaapi for all models`)
-  console.log(`[v0] Base URL: ${baseURL}`)
+  console.log(`[v0] Using Dify API: ${baseURL}`)
 
   return {
-    provider: "vivaapi",
+    provider: "dify",
     apiKey,
     baseURL,
   }
