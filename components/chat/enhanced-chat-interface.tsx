@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useIsMobile } from "@/hooks/use-mobile"
 import {
-  Send, Paperclip, X, FileText, Copy, Loader2, User, Brain, AlertCircle,
+  Send, Paperclip, X, FileText, Copy, Loader2, User, AlertCircle,
   ChevronDown, ChevronLeft, ArrowDown, Sparkles,
   Download, Share2, Printer, Mic, MicOff, Volume2, History
 } from "lucide-react"
@@ -170,10 +170,9 @@ function formatSunoResponse(fullText: string): string {
 }
 
 // --- 辅助组件：思考加载器 - Claude Style ---
-const SimpleBrainLoader = () => (
-  <div className="flex items-center gap-2 py-3 text-sm" style={{ color: "#9CA3AF" }}>
-    <Brain className="h-3.5 w-3.5 animate-pulse" style={{ color: "#9CA3AF" }} />
-    <span className="animate-pulse">Thinking...</span>
+const SimpleBrainLoader = ({ modelKey = "standard" }: { modelKey?: string }) => (
+  <div className="py-3">
+    <LoadingStateCard modelKey={modelKey as any} />
   </div>
 )
 
