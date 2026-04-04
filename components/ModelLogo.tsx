@@ -166,7 +166,7 @@ export function ModelLogo({
   if (config?.svgPath) {
     return (
       <div
-        className={`flex items-center justify-center shrink-0 rounded-lg ${sizeConfig.container} ${className || ""}`}
+        className={`flex items-center justify-center shrink-0 rounded-lg ${sizeConfig.container} ${className || ""} dark:bg-[#10A37F]/20 dark:border-[#10A37F]/40`}
         style={{
           backgroundColor: `${brandColor}30`,
           border: `1px solid ${brandColor}50`,
