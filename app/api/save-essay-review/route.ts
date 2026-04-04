@@ -52,17 +52,11 @@ export async function GET(request: NextRequest) {
     // 🔥 支持 X-User-Id 头（用于 Authing 用户）- 优先使用header
     const userIdHeader = request.headers.get("X-User-Id")
 
-    // 如果有 X-User-Id header，直接使用（Authing 用户场景）
+    // 如果有 X-User-Id header（Authing 用户），跳过 essay_reviews 查询
+    // 因为 Authing 用户 ID 不是标准 UUID，无法与 essay_reviews 表的 UUID 列匹配
     if (userIdHeader) {
-      const supabase = await createServerClient()
-      const { data: reviews, error } = await supabase
-        .from("essay_reviews")
-        .select("*")
-        .eq("user_id", userIdHeader)
-        .order("created_at", { ascending: false })
-
-      if (error) throw error
-      return NextResponse.json({ reviews })
+      console.log("[v0] Authing user detected, skipping essay_reviews query")
+      return NextResponse.json({ reviews: [] })
     }
 
     // 否则尝试 Supabase 认证
