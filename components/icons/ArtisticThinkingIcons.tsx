@@ -65,13 +65,8 @@ export function ArtisticThinkingIcon({
   if (!IconComponent) return null
   
   return (
-    <div 
-      className={`animate-artistic-zoom ${className || ""}`}
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-      }}
+    <div
+      className={`animate-artistic-zoom inline-flex items-center justify-center ${className || ""}`}
     >
       <IconComponent 
         size={size}
@@ -100,9 +95,8 @@ export function ArtisticThinkingIconGroup({
   className?: string
 }) {
   return (
-    <div 
+    <div
       className={`flex items-center justify-center gap-3 ${className || ""}`}
-      style={{ gap: "12px" }}
     >
       {modelKeys.map((key, index) => (
         <ArtisticThinkingIcon 

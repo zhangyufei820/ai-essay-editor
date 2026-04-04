@@ -48,11 +48,10 @@ function CyclingSymbol({ index }: { index: number }) {
   }, [])
   
   return (
-    <span 
-      className="code-loading-char inline-block min-w-[1.5ch] text-center"
-      style={{ 
+    <span
+      className="code-loading-char inline-block min-w-[1.5ch] text-center text-[#10A37F] dark:text-[#10A37F]"
+      style={{
         animationDelay: `${index * 0.1}s`,
-        color: "#10A37F",
         fontFamily: "'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace",
         fontWeight: 600,
       }}

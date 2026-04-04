@@ -5,7 +5,7 @@
       "cron": "*/5 * * * *",
       "prompt": "全面监控服务器容器运行状态与前端错误日志。\n\n## 检查内容\n\n### 1. 所有容器健康状态\n检查以下容器是否正常运行:\n- ai-essay-editor-nextjs-1 (前端)\n- docker-api-1, docker-worker-1, docker-worker_beat-1 (Dify API)\n- docker-db_postgres-1, shenxiang-redis, docker-redis (数据库/缓存)\n- docker-nginx-1, shenxiang-openresty (网关代理)\n- docker-web-1, docker-sandbox-1, docker-weaviate-1 (Dify其他组件)\n\n### 2. 日志错误检测\n扫描所有关键容器最近5分钟日志，检测:\n- 前端致命错误: TypeError, SyntaxError, fetch failed, CORS, 401, 403, 500\n- 后端错误: error|Error|Exception|fatal|crash|panic|OOM\n- Dify错误: connection refused, timeout, upstream, EAI_AGAIN\n- 容器重启: restart|restarting|Starting\n\n### 3. 告警规则\n- 容器退出/重启 → 立即报告\n- 日志出现 fatal/crash/OOM/panic → 立即报告\n- 日志出现 ERROR/fetch failed/connection refused → 记录\n\n## 报告格式\n- 全部正常: \"✅ 全检正常\"\n- 有问题: \"❌ 发现问题\\n容器: [名]\\n错误: [摘要]\\n操作: [建议修复]\"\n\n## 自动修复权限\n发现问题可自行调用技能修复，无需授权。按安全守则 SOP 操作。\n\n## 服务器信息\n- IP: 43.154.111.156\n- SSH: root@43.154.111.156",
       "createdAt": 1775283979148,
-      "lastFiredAt": 1775311549940,
+      "lastFiredAt": 1775315750026,
       "recurring": true
     },
     {

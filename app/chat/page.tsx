@@ -11,7 +11,7 @@ const EnhancedChatInterface = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="min-h-screen flex items-center justify-center bg-white">
+      <div className="min-h-screen flex items-center justify-center bg-white dark:bg-black">
         <LoadingStateCard modelKey="standard" />
       </div>
     )
@@ -48,7 +48,7 @@ function ChatPageContent() {
 export default function ChatPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-white">
+      <div className="min-h-screen flex items-center justify-center bg-white dark:bg-black">
         <LoadingStateCard modelKey="standard" />
       </div>
     }>

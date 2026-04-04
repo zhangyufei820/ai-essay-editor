@@ -175,7 +175,7 @@ export function ModelLogo({
       >
         <img
           src={config.svgPath}
-          alt={modelKey}
+          alt={`${modelKey.replace(/-/g, ' ')} logo`}
           width={sizeConfig.iconSize}
           height={sizeConfig.iconSize}
           className="object-contain dark:brightness-0 dark:invert"
