@@ -809,7 +809,7 @@ export const refreshCredits = () => {
 
 export function AppSidebar() {
   return (
-    <Suspense fallback={<div className="w-64 h-screen bg-white border-r border-gray-200" />}>
+    <Suspense fallback={<div className="hidden md:block w-64 h-screen bg-white border-r border-gray-200" />}>
       <AppSidebarInner />
     </Suspense>
   )
