@@ -32,7 +32,7 @@ import { LoadingStateCard } from "@/components/ui/LoadingStateCard"
 import { motion, AnimatePresence } from "framer-motion"
 import { brandColors, slateColors } from "@/lib/design-tokens"
 import { createClient } from "@supabase/supabase-js"
-import { collapseSidebar, refreshCredits } from "@/components/app-sidebar"
+import { collapseSidebar, refreshCredits, refreshSessionList } from "@/components/app-sidebar"
 import { validateFileForUpload, MAX_FILE_SIZE } from "@/lib/upload-service"
 import { VoiceRecorder, getDifyTTS, uploadAudioToDify } from "@/lib/voice-service"
 import { getApiUrl } from "@/lib/api-config"
@@ -616,9 +616,10 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         console.log(`🔄 [历史会话模型同步] 使用 fallback 模型: ${fallbackModel}`)
         setSelectedModel(fallbackModel as ModelType)
       } else {
-        // 🔥 同步模型状态 - 优先使用会话存储的模型，否则使用 initialModel，最后默认 standard
-        const targetModel = sessionData?.ai_model || initialModel || "standard"
-        console.log(`🔄 [历史会话模型同步] ai_model=${sessionData?.ai_model}, initialModel=${initialModel} → selectedModel=${targetModel}`)
+        // 🔥 同步模型状态 - URL 的 initialModel 作为主要来源（用户显式选择），
+        // 仅当 URL 没有指定模型时才使用数据库的 ai_model
+        const targetModel = initialModel || sessionData?.ai_model || "standard"
+        console.log(`🔄 [历史会话模型同步] initialModel=${initialModel}, ai_model=${sessionData?.ai_model} → selectedModel=${targetModel}`)
         setSelectedModel(targetModel as ModelType)
         console.log(`✅ [历史会话模型同步] setSelectedModel 已调用: ${targetModel}`)
       }
@@ -1152,6 +1153,9 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       }
       await supabase.from('chat_messages').insert({ session_id: sid, role: "user", content: userMsg.content })
 
+      // 🔥 刷新侧边栏会话列表
+      refreshSessionList()
+
       const botId = (Date.now() + 1).toString()
       currentBotIdRef.current = botId
       setMessages(p => [...p, { id: botId, role: "assistant", content: "" }])
@@ -1223,6 +1227,9 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         await supabase.from('chat_sessions').update({ preview, ai_model: selectedModel }).eq('id', sid)
     }
     await supabase.from('chat_messages').insert({ session_id: sid, role: "user", content: userMsg.content })
+
+    // 🔥 刷新侧边栏会话列表
+    refreshSessionList()
 
     const botId = (Date.now()+1).toString(); 
     // 🔥 记录当前正在处理的消息 ID
@@ -1802,7 +1809,6 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
           <button
             onClick={() => setShowHistorySidebar(!showHistorySidebar)}
             className="flex items-center gap-1 text-slate-600 hover:text-slate-800 transition-colors min-w-[44px] min-h-[44px] justify-center"
-            style={{ marginLeft: '48px' }}
           >
             <History className="h-5 w-5" />
           </button>
@@ -1910,6 +1916,9 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                           await supabase.from('chat_sessions').insert({ id: sid, user_id: userId, title: "音乐创作", preview, ai_model: selectedModel })
                         }
                         await supabase.from('chat_messages').insert({ session_id: sid, role: "user", content: userContent })
+
+                        // 🔥 刷新侧边栏会话列表
+                        refreshSessionList()
 
                         const botId = (Date.now() + 1).toString()
                         currentBotIdRef.current = botId

@@ -77,6 +77,8 @@ const supabase = createClient(
 const SIDEBAR_COLLAPSE_EVENT = 'sidebar-collapse'
 // 🔥 全局事件：用于触发积分刷新
 const CREDITS_REFRESH_EVENT = 'credits-refresh'
+// 🔥 全局事件：用于触发会话列表刷新
+const SESSION_LIST_REFRESH_EVENT = 'session-list-refresh'
 
 // 内部组件
 function AppSidebarInner() {
@@ -199,6 +201,38 @@ function AppSidebarInner() {
     }
     window.addEventListener(CREDITS_REFRESH_EVENT, handleCreditsRefresh)
 
+    // 🔥 监听会话列表刷新事件
+    const handleSessionListRefresh = () => {
+      console.log("📋 [侧边栏] 收到会话列表刷新指令")
+      if (typeof window !== 'undefined') {
+        const userStr = localStorage.getItem('currentUser')
+        if (userStr) {
+          try {
+            const parsedUser = JSON.parse(userStr)
+            const uid = parsedUser.id || parsedUser.sub || parsedUser.userId || parsedUser.user_id
+            if (uid) {
+              // 直接调用 API 获取最新会话列表
+              fetch('/api/chat-session', {
+                headers: { 'X-User-Id': uid }
+              }).then(res => res.json()).then(data => {
+                if (data.sessions) {
+                  setSessions(data.sessions.map((s: any) => ({
+                    id: s.id,
+                    title: s.title || "新对话",
+                    date: new Date(s.created_at).getTime(),
+                    preview: s.preview || "",
+                    ai_model: s.ai_model || "standard"
+                  })))
+                  console.log("📋 [侧边栏] 会话列表已刷新:", data.sessions.length)
+                }
+              }).catch(err => console.error("❌ [侧边栏] 会话列表刷新失败:", err))
+            }
+          } catch (e) { console.error(e) }
+        }
+      }
+    }
+    window.addEventListener(SESSION_LIST_REFRESH_EVENT, handleSessionListRefresh)
+
     const loadData = async () => {
       let userId = ""
       if (typeof window !== 'undefined') {
@@ -269,6 +303,7 @@ function AppSidebarInner() {
       window.removeEventListener('resize', checkScreenSize)
       window.removeEventListener(SIDEBAR_COLLAPSE_EVENT, handleCollapse)
       window.removeEventListener(CREDITS_REFRESH_EVENT, handleCreditsRefresh)
+      window.removeEventListener(SESSION_LIST_REFRESH_EVENT, handleSessionListRefresh)
       document.removeEventListener("mousedown", handleClickOutside)
     }
   }, [fetchCredits])
@@ -818,6 +853,14 @@ export const refreshCredits = () => {
   if (typeof window !== 'undefined') {
     console.log("📤 [积分刷新] 触发全局积分刷新事件")
     window.dispatchEvent(new CustomEvent(CREDITS_REFRESH_EVENT))
+  }
+}
+
+// 🔥 导出会话列表刷新函数
+export const refreshSessionList = () => {
+  if (typeof window !== 'undefined') {
+    console.log("📤 [会话列表刷新] 触发全局会话列表刷新事件")
+    window.dispatchEvent(new CustomEvent(SESSION_LIST_REFRESH_EVENT))
   }
 }
 
