@@ -31,6 +31,7 @@ WORKDIR /app
 # 环境变量
 ENV NODE_ENV=production
 ENV PORT=3000
+ENV HOSTNAME=0.0.0.0
 
 # 从构建阶段精准复制 Standalone 产物及静态文件夹 (注意目标路径的修改)
 COPY --from=builder /app/.next/standalone ./
