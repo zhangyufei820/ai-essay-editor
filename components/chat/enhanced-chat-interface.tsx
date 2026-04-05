@@ -607,10 +607,15 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 
       if (sessionError) {
         console.warn("获取会话模型失败:", sessionError)
-      } else if (sessionData?.ai_model) {
-        // 🔥 同步模型状态
-        console.log(`🔄 [历史会话模型同步] ai_model=${sessionData.ai_model}`)
-        setSelectedModel(sessionData.ai_model as ModelType)
+        // 🔥 即使查询失败，也尝试使用 initialModel 或默认值
+        const fallbackModel = initialModel || "standard"
+        console.log(`🔄 [历史会话模型同步] 使用 fallback 模型: ${fallbackModel}`)
+        setSelectedModel(fallbackModel as ModelType)
+      } else {
+        // 🔥 同步模型状态 - 优先使用会话存储的模型，否则使用 initialModel，最后默认 standard
+        const targetModel = sessionData?.ai_model || initialModel || "standard"
+        console.log(`🔄 [历史会话模型同步] ai_model=${sessionData?.ai_model}, initialModel=${initialModel} → selectedModel=${targetModel}`)
+        setSelectedModel(targetModel as ModelType)
       }
 
       // 🔥 加载消息
