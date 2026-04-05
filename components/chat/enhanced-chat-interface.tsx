@@ -169,11 +169,9 @@ function formatSunoResponse(fullText: string): string {
   return content
 }
 
-// --- 辅助组件：思考加载器 - Claude Style ---
+// --- 辅助组件：思考加载器 - Claude 极简风格 ---
 const SimpleBrainLoader = ({ modelKey = "standard" }: { modelKey?: string }) => (
-  <div className="py-3">
-    <LoadingStateCard modelKey={modelKey as any} />
-  </div>
+  <LoadingStateCard modelKey={modelKey as any} />
 )
 
 // --- 辅助组件：文本渲染器 ---

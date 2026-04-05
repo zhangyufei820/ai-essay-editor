@@ -1,13 +1,13 @@
 /**
- * 💳 Loading State Card
+ * 💳 Loading State Card - Claude 极简风格
  *
- * Simple minimal loading indicator without cycling symbols or text.
+ * 无动画圆圈，只有静态星形图标 + 浅灰色思考文字
  */
 
 "use client"
 
 import React from "react"
-import { Loader2 } from "lucide-react"
+import { Sparkles } from "lucide-react"
 
 // ============================================
 // LoadingStateCard Props
@@ -19,12 +19,14 @@ interface LoadingStateCardProps {
 }
 
 // ============================================
-// LoadingStateCard Component
+// LoadingStateCard Component - 极简思考指示器
 // ============================================
 
 /**
- * Simple loading indicator with just a spinner icon.
- * No cycling symbols, no text, minimal design.
+ * 极简思考指示器：
+ * - 静态小星形图标（不旋转）
+ * - 浅灰色 "Thinking..." 文字
+ * - 左侧对齐，图标与文字顶部对齐
  */
 export function LoadingStateCard({
   modelKey = "standard",
@@ -32,23 +34,21 @@ export function LoadingStateCard({
 }: LoadingStateCardProps) {
   return (
     <div
-      className={`
-        rounded-2xl
-        px-4 py-3
-        flex items-center justify-center
-        ${className || ""}
-      `}
+      className={`inline-flex items-center gap-1.5 ${className || ""}`}
     >
-      <Loader2
-        className="w-5 h-5 animate-spin text-[#10A37F]"
-        strokeWidth={2}
+      <Sparkles
+        className="w-3 h-3 text-slate-400 shrink-0"
+        strokeWidth={1.5}
       />
+      <span className="text-xs text-slate-400 font-normal tracking-wide">
+        Thinking...
+      </span>
     </div>
   )
 }
 
 // ============================================
-// Compact Loading State (inline)
+// Compact Loading State (inline) - 同样极简风格
 // ============================================
 
 export function CompactLoadingState({
@@ -57,12 +57,15 @@ export function CompactLoadingState({
 }: LoadingStateCardProps) {
   return (
     <div
-      className={`inline-flex items-center gap-2 ${className || ""}`}
+      className={`inline-flex items-center gap-1.5 ${className || ""}`}
     >
-      <Loader2
-        className="w-4 h-4 animate-spin text-[#10A37F]"
-        strokeWidth={2}
+      <Sparkles
+        className="w-3 h-3 text-slate-400 shrink-0"
+        strokeWidth={1.5}
       />
+      <span className="text-xs text-slate-400 font-normal tracking-wide">
+        Thinking...
+      </span>
     </div>
   )
 }

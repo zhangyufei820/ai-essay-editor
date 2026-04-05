@@ -13,9 +13,9 @@ import { useState, useRef, useEffect, Suspense } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { 
-  Send, Paperclip, X, FileText, Copy, Loader2, Palette, User, 
-  ChevronLeft, ArrowDown, Download, Share2
+import {
+  Send, Paperclip, X, FileText, Copy, Loader2, Palette, User,
+  ChevronLeft, ArrowDown, Download, Share2, Sparkles
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
@@ -717,9 +717,9 @@ function BananaChatInterfaceInner() {
                           /* AI message - Flat, minimal */
                           <>
                             {isLoading && message.id === currentBotIdRef.current && !message.content ? (
-                              <div className="flex items-center gap-2 py-3 text-sm" style={{ color: "#9CA3AF" }}>
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                                <span className="animate-pulse">Thinking...</span>
+                              <div className="inline-flex items-center gap-1.5">
+                                <Sparkles className="w-3 h-3 text-slate-400 shrink-0" strokeWidth={1.5} />
+                                <span className="text-xs text-slate-400 font-normal tracking-wide">Thinking...</span>
                               </div>
                             ) : (
                               <BananaRenderer
