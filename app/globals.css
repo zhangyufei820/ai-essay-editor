@@ -267,6 +267,7 @@
     @apply bg-background text-foreground;
     font-size: var(--text-base);
     line-height: var(--leading-base);
+    overflow-x: hidden;
   }
   
   /* 字体层级 */
