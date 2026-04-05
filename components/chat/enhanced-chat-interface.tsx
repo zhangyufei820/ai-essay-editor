@@ -587,12 +587,13 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   }, [urlAgent, urlSessionId])
 
   // 🔥 当路由参数 initialModel 变化时，同步更新 selectedModel
+  // 但如果是加载历史会话（urlSessionId 存在），则跳过，由 loadHistorySession 处理模型同步
   useEffect(() => {
-    if (initialModel && initialModel !== selectedModel) {
+    if (initialModel && initialModel !== selectedModel && !urlSessionId) {
       console.log(`🔄 [模型同步] initialModel=${initialModel} → selectedModel=${initialModel}`)
       setSelectedModel(initialModel)
     }
-  }, [initialModel])
+  }, [initialModel, urlSessionId])
 
   const loadHistorySession = async (sid: string) => {
     console.log(`📂 [loadHistorySession] 开始加载会话: ${sid}, 当前 initialModel=${initialModel}, selectedModel=${selectedModel}`)

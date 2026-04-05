@@ -275,10 +275,24 @@ function AppSidebarInner() {
 
   useEffect(() => {
     if (currentUserId) {
-      console.log("🔄 [侧边栏] 路由变化，刷新积分...")
+      console.log("🔄 [侧边栏] 路由变化，刷新积分和会话...")
       fetchCredits(currentUserId)
+      // 🔥 刷新会话列表
+      fetch('/api/chat-session', {
+        headers: { 'X-User-Id': currentUserId }
+      }).then(res => res.json()).then(data => {
+        if (data.sessions) {
+          setSessions(data.sessions.map((s: any) => ({
+            id: s.id,
+            title: s.title || "新对话",
+            date: new Date(s.created_at).getTime(),
+            preview: s.preview || "",
+            ai_model: s.ai_model || "standard"
+          })))
+        }
+      }).catch(console.error)
     }
-  }, [pathname, searchParams, currentUserId, fetchCredits])
+  }, [pathname, searchParams, currentUserId])
 
   // --- 交互处理 ---
   const handleLogout = async () => {
