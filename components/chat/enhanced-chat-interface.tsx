@@ -595,6 +595,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   }, [initialModel])
 
   const loadHistorySession = async (sid: string) => {
+    console.log(`📂 [loadHistorySession] 开始加载会话: ${sid}, 当前 initialModel=${initialModel}, selectedModel=${selectedModel}`)
     setIsLoading(true)
     setMessages([])
     try {
@@ -604,6 +605,8 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         .select('ai_model')
         .eq('id', sid)
         .single()
+
+      console.log(`📂 [loadHistorySession] 数据库返回: ai_model=${sessionData?.ai_model}, error=${sessionError?.message}`)
 
       if (sessionError) {
         console.warn("获取会话模型失败:", sessionError)
@@ -616,6 +619,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         const targetModel = sessionData?.ai_model || initialModel || "standard"
         console.log(`🔄 [历史会话模型同步] ai_model=${sessionData?.ai_model}, initialModel=${initialModel} → selectedModel=${targetModel}`)
         setSelectedModel(targetModel as ModelType)
+        console.log(`✅ [历史会话模型同步] setSelectedModel 已调用: ${targetModel}`)
       }
 
       // 🔥 加载消息
@@ -1141,9 +1145,9 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       const preview = userMsg.content.slice(0, 30)
       const { data: existing } = await supabase.from('chat_sessions').select('id').eq('id', sid).single()
       if (!existing) {
-        await supabase.from('chat_sessions').insert({ id: sid, user_id: userId, title: "音乐创作", preview })
+        await supabase.from('chat_sessions').insert({ id: sid, user_id: userId, title: "音乐创作", preview, ai_model: selectedModel })
       } else {
-        await supabase.from('chat_sessions').update({ preview }).eq('id', sid)
+        await supabase.from('chat_sessions').update({ preview, ai_model: selectedModel }).eq('id', sid)
       }
       await supabase.from('chat_messages').insert({ session_id: sid, role: "user", content: userMsg.content })
 
@@ -1213,9 +1217,9 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     const preview = userMsg.content.slice(0, 30)
     const { data: existing } = await supabase.from('chat_sessions').select('id').eq('id', sid).single()
     if (!existing) {
-        await supabase.from('chat_sessions').insert({ id: sid, user_id: userId, title: userMsg.content.slice(0, 10)|| "作文", preview })
+        await supabase.from('chat_sessions').insert({ id: sid, user_id: userId, title: userMsg.content.slice(0, 10)|| "作文", preview, ai_model: selectedModel })
     } else {
-        await supabase.from('chat_sessions').update({ preview }).eq('id', sid)
+        await supabase.from('chat_sessions').update({ preview, ai_model: selectedModel }).eq('id', sid)
     }
     await supabase.from('chat_messages').insert({ session_id: sid, role: "user", content: userMsg.content })
 
@@ -1902,7 +1906,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                         const preview = formData.title || formData.prompt.slice(0, 30)
                         const { data: existing } = await supabase.from('chat_sessions').select('id').eq('id', sid).single()
                         if (!existing) {
-                          await supabase.from('chat_sessions').insert({ id: sid, user_id: userId, title: "音乐创作", preview })
+                          await supabase.from('chat_sessions').insert({ id: sid, user_id: userId, title: "音乐创作", preview, ai_model: selectedModel })
                         }
                         await supabase.from('chat_messages').insert({ session_id: sid, role: "user", content: userContent })
 
