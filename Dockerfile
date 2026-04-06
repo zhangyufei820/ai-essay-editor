@@ -33,9 +33,9 @@ ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 
-# 从构建阶段精准复制 Standalone 产物及静态文件夹 (注意目标路径的修改)
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
+# 从构建阶段复制 Next.js 产物（Next.js 16 Turbopack 输出结构）
+COPY --from=builder /app/server.js ./
+COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
 
 EXPOSE 3000
