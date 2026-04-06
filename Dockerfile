@@ -33,12 +33,12 @@ ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 
-# 从构建阶段复制 Next.js 产物（Next.js 16 Turbopack 输出结构）
-COPY --from=builder /app/server.js ./
+# 从构建阶段复制 Next.js 产物（Next.js 16 输出结构）
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
+COPY --from=builder /app/package.json ./
 
 EXPOSE 3000
 
-# Standalone 模式的终极启动命令
-CMD ["node", "server.js"]
+# 启动命令
+CMD ["next", "start"]
