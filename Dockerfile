@@ -42,4 +42,4 @@ COPY --from=builder /app/node_modules ./node_modules
 EXPOSE 3000
 
 # 启动命令
-CMD ["next", "start"]
+CMD ["./node_modules/.bin/next", "start"]
