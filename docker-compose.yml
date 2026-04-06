@@ -23,8 +23,6 @@ services:
       - /app/.next
     depends_on:
       - postgres
-    networks:
-      - shenxiang-net
 
   postgres:
     image: postgres:15
