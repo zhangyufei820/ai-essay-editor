@@ -41,8 +41,8 @@ COPY --from=builder /app/node_modules ./node_modules
 
 EXPOSE 3000
 
-# 清除默认 entrypoint，让 CMD 直接运行
+# 清除默认 entrypoint
 ENTRYPOINT []
 
-# 启动命令 - 使用 node 直接运行
+# 启动命令
 CMD ["node", "node_modules/next/dist/bin/next", "start"]
