@@ -10,10 +10,13 @@ services:
         NEXT_PUBLIC_SUPABASE_ANON_KEY: "sb_publishable_J6ZjOA1cvNVJE0msWjvJEA_Y3MHr9LH"
     ports:
       - "3000:3000"
+    network_mode: host
+    env_file:
+      - .env
     environment:
-      - NODE_ENV=development
+      - NODE_ENV=production
       - NEXT_PUBLIC_API_BASE_URL=http://localhost:3000
-      - DIFY_INTERNAL_URL=http://host.docker.internal:8080/v1
+      - DIFY_INTERNAL_URL=http://127.0.0.1:5001/v1
     volumes:
       - .:/app
       - /app/node_modules
