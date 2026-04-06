@@ -24,6 +24,8 @@ services:
       - /app/.next
     depends_on:
       - postgres
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   postgres:
     image: postgres:15
@@ -43,4 +45,4 @@ volumes:
 
 networks:
   shenxiang-net:
-    driver: bridge
+    external: true
