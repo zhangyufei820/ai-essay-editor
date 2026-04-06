@@ -44,5 +44,5 @@ EXPOSE 3000
 # 清除默认 entrypoint，让 CMD 直接运行
 ENTRYPOINT []
 
-# 启动命令
-CMD ["./node_modules/.bin/next", "start"]
+# 启动命令 - 使用 node 直接运行
+CMD ["node", "node_modules/next/dist/bin/next", "start"]
