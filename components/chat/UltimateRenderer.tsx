@@ -13,6 +13,7 @@
 import React, { useMemo, memo, type ReactNode } from "react"
 import { cn } from "@/lib/utils"
 import { slateColors } from "@/lib/design-tokens"
+import katex from "katex"
 
 // Claude style colors
 const CLAUDE_TEXT_COLOR = "#374151"
@@ -32,23 +33,123 @@ interface UltimateRendererProps {
 // Inline Text Renderer
 // ============================================
 
+// Helper function to render LaTeX
+// KaTeX 常用几何宏（兼容非标准写法）
+const LATEX_MACROS: Record<string, string> = {
+  "\\vec": "\\mathbf{#1}",
+  "\\vb": "\\mathbf{#1}",
+  "\\bm": "\\mathbf{#1}",
+  "\\abs": "\\left|#1\\right|",
+  "\\norm": "\\left\\|#1\\right\\|",
+  "\\set": "\\left\\{#1\\right\\}",
+  "\\령": "\\langle #1 \\rangle",
+  "\\sse": "\\subseteq",
+  "\\nse": "\\nsubseteq",
+  "\\R": "\\mathbb{R}",
+  "\\N": "\\mathbb{N}",
+  "\\Z": "\\mathbb{Z}",
+  "\\Q": "\\mathbb{Q}",
+  "\\C": "\\mathbb{C}",
+  "\\lam": "\\lambda",
+  "\\Lam": "\\Lambda",
+  "\\theta": "\\theta",
+  "\\Theta": "\\Theta",
+  "\\角": "\\angle",
+  "\\三角形": "\\triangle",
+  "\\垂直": "\\perp",
+  "\\平行": "\\parallel",
+  "\\相似": "\\sim",
+  "\\全等": "\\cong",
+}
+
+function renderLatex(text: string, displayMode: boolean): string {
+  try {
+    return katex.renderToString(text, {
+      displayMode,
+      throwOnError: false,
+      errorColor: "#B71C1C",
+      macros: LATEX_MACROS,
+    })
+  } catch (e) {
+    console.error("KaTeX render error:", e)
+    return text
+  }
+}
+
+// Inline math renderer
+const MathInline = memo(function MathInline({ formula }: { formula: string }) {
+  const html = useMemo(() => renderLatex(formula, false), [formula])
+  return (
+    <span
+      dangerouslySetInnerHTML={{ __html: html }}
+      className="math-inline"
+    />
+  )
+})
+
+// Block math renderer
+const MathBlock = memo(function MathBlock({ formula }: { formula: string }) {
+  const html = useMemo(() => renderLatex(formula, true), [formula])
+  return (
+    <div
+      dangerouslySetInnerHTML={{ __html: html }}
+      className="math-block my-3 overflow-x-auto"
+      style={{ display: "block", textAlign: "center" }}
+    />
+  )
+})
+
 const InlineText = memo(function InlineText({ text }: { text: string }) {
   if (!text) return null
 
-  const parts = text.split(/(\*\*.*?\*\*)/g)
+  // Split by ** for bold first
+  const parts = text.split(/(\*\*[^*]+\*\*)/g)
 
   return (
     <>
       {parts.map((part, index) => {
         if (part.startsWith("**") && part.endsWith("**")) {
+          const inner = part.slice(2, -2)
+          // Check for inline math $...$
+          const mathParts = inner.split(/(\$[^$]+\$)/g)
+          if (mathParts.length > 1) {
+            return (
+              <strong
+                key={index}
+                className="font-semibold"
+                style={{ color: CLAUDE_TEXT_COLOR }}
+              >
+                {mathParts.map((mp, mi) => {
+                  if (mp.startsWith("$") && mp.endsWith("$")) {
+                    return <MathInline key={mi} formula={mp.slice(1, -1)} />
+                  }
+                  return <span key={mi}>{mp}</span>
+                })}
+              </strong>
+            )
+          }
           return (
             <strong
               key={index}
               className="font-semibold"
               style={{ color: CLAUDE_TEXT_COLOR }}
             >
-              {part.slice(2, -2)}
+              {inner}
             </strong>
+          )
+        }
+        // Check for inline math $...$
+        const mathParts = part.split(/(\$[^$]+\$)/g)
+        if (mathParts.length > 1) {
+          return (
+            <span key={index}>
+              {mathParts.map((mp, mi) => {
+                if (mp.startsWith("$") && mp.endsWith("$")) {
+                  return <MathInline key={mi} formula={mp.slice(1, -1)} />
+                }
+                return <span key={mi}>{mp}</span>
+              })}
+            </span>
           )
         }
         return <span key={index}>{part}</span>
@@ -322,6 +423,18 @@ const UltimateRenderer = memo(function UltimateRenderer({
       }
       // Skip code block markers
       else if (line.trim().startsWith("```")) {
+        continue
+      }
+      // Block-level LaTeX formula $$...$$
+      else if (line.trim().startsWith("$$") && line.trim().endsWith("$$")) {
+        const formula = line.trim().slice(2, -2).trim()
+        if (formula) {
+          renderedElements.push(
+            <div key={i} className="my-4 flex justify-center">
+              <MathBlock formula={formula} />
+            </div>
+          )
+        }
         continue
       }
       // Regular paragraph - 行高1.5，紧凑间距

@@ -30,6 +30,7 @@ import { SunoProForm, type SunoFormData } from "./SunoProForm"
 import type { ChatSession } from "./chat-sidebar"
 import { LoadingStateCard } from "@/components/ui/LoadingStateCard"
 import { motion, AnimatePresence } from "framer-motion"
+import katex from "katex"
 import { brandColors, slateColors } from "@/lib/design-tokens"
 import { createClient } from "@supabase/supabase-js"
 import { collapseSidebar, refreshCredits, refreshSessionList } from "@/components/app-sidebar"
@@ -175,14 +176,100 @@ const SimpleBrainLoader = ({ modelKey = "standard" }: { modelKey?: string }) => 
 )
 
 // --- 辅助组件：文本渲染器 ---
+// LaTeX 渲染辅助函数
+// KaTeX 常用几何宏（兼容非标准写法）
+const LATEX_MACROS: Record<string, string> = {
+  "\\vec": "\\mathbf{#1}",
+  "\\vb": "\\mathbf{#1}",
+  "\\bm": "\\mathbf{#1}",
+  "\\abs": "\\left|#1\\right|",
+  "\\norm": "\\left\\|#1\\right\\|",
+  "\\set": "\\left\\{#1\\right\\}",
+  "\\령": "\\langle #1 \\rangle",
+  "\\sse": "\\subseteq",
+  "\\nse": "\\nsubseteq",
+  "\\R": "\\mathbb{R}",
+  "\\N": "\\mathbb{N}",
+  "\\Z": "\\mathbb{Z}",
+  "\\Q": "\\mathbb{Q}",
+  "\\C": "\\mathbb{C}",
+  "\\lam": "\\lambda",
+  "\\Lam": "\\Lambda",
+  "\\theta": "\\theta",
+  "\\Theta": "\\Theta",
+  "\\角": "\\angle",
+  "\\三角形": "\\triangle",
+  "\\垂直": "\\perp",
+  "\\平行": "\\parallel",
+  "\\相似": "\\sim",
+  "\\全等": "\\cong",
+}
+
+function renderLatex(latex: string, displayMode: boolean): string {
+  try {
+    return katex.renderToString(latex, {
+      displayMode,
+      throwOnError: false,
+      errorColor: "#B71C1C",
+      macros: LATEX_MACROS,
+    });
+  } catch (e) {
+    console.error("KaTeX render error:", e);
+    return latex;
+  }
+}
+
+// LaTeX 行内公式组件
+function MathInline({ formula }: { formula: string }) {
+  const html = renderLatex(formula, false);
+  return <span dangerouslySetInnerHTML={{ __html: html }} className="math-inline" />;
+}
+
+// LaTeX 块级公式组件
+function MathBlock({ formula }: { formula: string }) {
+  const html = renderLatex(formula, true);
+  return <div dangerouslySetInnerHTML={{ __html: html }} className="math-block my-3 overflow-x-auto text-center" />;
+}
+
 const InlineText = ({ text }: { text: string }) => {
   if (!text) return null;
+
+  // 首先按 ** 分块
   const parts = text.split(/(\*\*.*?\*\*)/g);
   return (
     <>
       {parts.map((part, index) => {
         if (part.startsWith("**") && part.endsWith("**")) {
-          return <strong key={index} className={`font-semibold text-[${BRAND_GREEN}]`}>{part.slice(2, -2)}</strong>;
+          const inner = part.slice(2, -2);
+          // 检查是否包含 LaTeX 公式 $...$
+          const latexParts = inner.split(/(\$[^$]+\$)/g);
+          if (latexParts.length > 1) {
+            return (
+              <strong key={index} className={`font-semibold text-[${BRAND_GREEN}]`}>
+                {latexParts.map((lp, lpIdx) => {
+                  if (lp.startsWith("$") && lp.endsWith("$")) {
+                    return <MathInline key={lpIdx} formula={lp.slice(1, -1)} />;
+                  }
+                  return <span key={lpIdx}>{lp}</span>;
+                })}
+              </strong>
+            );
+          }
+          return <strong key={index} className={`font-semibold text-[${BRAND_GREEN}]`}>{inner}</strong>;
+        }
+        // 检查是否包含 LaTeX 公式
+        const latexParts = part.split(/(\$[^$]+\$)/g);
+        if (latexParts.length > 1) {
+          return (
+            <span key={index}>
+              {latexParts.map((lp, lpIdx) => {
+                if (lp.startsWith("$") && lp.endsWith("$")) {
+                  return <MathInline key={lpIdx} formula={lp.slice(1, -1)} />;
+                }
+                return <span key={lpIdx}>{lp}</span>;
+              })}
+            </span>
+          );
         }
         return <span key={index}>{part}</span>;
       })}
@@ -340,6 +427,16 @@ function UltimateRenderer({ content, isStreaming = false }: { content: string; i
       renderedElements.push(<div key={i} className="py-5"><div className="h-px bg-slate-200"></div></div>);
     } else if (line.trim() === "") {
       renderedElements.push(<div key={i} className="h-5"></div>);
+    } else if (line.trim().startsWith("$$") && line.trim().endsWith("$$")) {
+      // 🔥 支持块级 LaTeX 公式 $$...$$
+      const formula = line.trim().slice(2, -2).trim()
+      if (formula) {
+        renderedElements.push(
+          <div key={i} className="my-4 flex justify-center">
+            <MathBlock formula={formula} />
+          </div>
+        )
+      }
     } else {
       renderedElements.push(
         <p key={i} className="text-sm sm:text-base leading-relaxed sm:leading-[1.9] text-slate-700 my-2 sm:my-3">

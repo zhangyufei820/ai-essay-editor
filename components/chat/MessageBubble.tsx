@@ -16,6 +16,8 @@ import { cn } from "@/lib/utils"
 import { slateColors } from "@/lib/design-tokens"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
+import remarkMath from "remark-math"
+import rehypeKatex from "rehype-katex"
 
 // Claude style colors
 const CLAUDE_TEXT_COLOR = "#374151"
@@ -188,7 +190,8 @@ function Timestamp({ date }: { date: Date }) {
 function MarkdownContent({ content }: { content: string }) {
   return (
     <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
+      remarkPlugins={[remarkGfm, remarkMath]}
+      rehypePlugins={[rehypeKatex]}
       components={{
         p: ({ children }) => (
           <p className="mb-3 last:mb-0" style={{ lineHeight: 1.5, color: CLAUDE_TEXT_COLOR }}>
