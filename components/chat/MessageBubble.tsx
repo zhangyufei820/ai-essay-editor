@@ -231,7 +231,7 @@ function MarkdownContent({ content }: { content: string }) {
               <p
                 className="mb-3 last:mb-0 rounded-r"
                 style={{
-                  lineHeight: 1.6,
+                  lineHeight: 1.4,
                   color: CLAUDE_TEXT_COLOR,
                   backgroundColor: "rgba(16, 185, 129, 0.08)",
                   borderLeft: "3px solid #10B981",
@@ -246,7 +246,7 @@ function MarkdownContent({ content }: { content: string }) {
           }
 
           return (
-            <p className="mb-3 last:mb-0" style={{ lineHeight: 1.6, color: CLAUDE_TEXT_COLOR }}>
+            <p className="mb-3 last:mb-0" style={{ lineHeight: 1.4, color: CLAUDE_TEXT_COLOR }}>
               {children}
             </p>
           )
@@ -422,14 +422,14 @@ const MessageBubble = memo(function MessageBubble({
           {isUser ? (
             <p
               className="whitespace-pre-wrap break-words text-sm"
-              style={{ lineHeight: 1.6 }}
+              style={{ lineHeight: 1.4 }}
             >
               {content}
             </p>
           ) : (
             <div
               className="text-sm ai-content-container"
-              style={{ lineHeight: 1.6, color: CLAUDE_TEXT_COLOR }}
+              style={{ lineHeight: 1.4, color: CLAUDE_TEXT_COLOR }}
             >
               <MarkdownContent content={content} />
               {isStreaming && <StreamingCursor />}

@@ -30,6 +30,7 @@ import { TASK_ID_REGEX } from "@/lib/suno-config"
 import { SunoProForm, type SunoFormData } from "./SunoProForm"
 import type { ChatSession } from "./chat-sidebar"
 import { LoadingStateCard } from "@/components/ui/LoadingStateCard"
+import { ChatSkeleton } from "@/components/ui/chat-skeleton"
 import { motion, AnimatePresence } from "framer-motion"
 import katex from "katex"
 import { brandColors, slateColors } from "@/lib/design-tokens"
@@ -868,6 +869,20 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       }
     }
   }, [isLoading])
+
+  // 🔥 Smart Textarea: auto-expand 2-10 rows
+  useEffect(() => {
+    const textarea = textareaRef.current
+    if (textarea) {
+      textarea.style.height = "auto"
+      const lineHeight = 22
+      const newHeight = Math.min(
+        Math.max(textarea.scrollHeight, lineHeight * 2),
+        lineHeight * 10
+      )
+      textarea.style.height = `${newHeight}px`
+    }
+  }, [input])
 
   // 🔥 首字节探测：一旦当前 AI 消息开始收到内容，立即清除深度思考提示
   useEffect(() => {
@@ -1925,6 +1940,8 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                           key={session.id}
                           onClick={() => {
                             isManualSessionSwitchRef.current = true
+                            // 🔥 乐观更新：立即切换模型 Badge，不等待 API
+                            setSelectedModel(safeModel as ModelType)
                             loadHistorySession(session.id)
                             setShowHistorySidebar(false)
                           }}
@@ -2070,7 +2087,10 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
           >
             <div className="mx-auto max-w-6xl px-3 sm:px-4 md:px-6 lg:px-10 py-4 sm:py-6 md:py-8">
               {messages.length === 0 ? (
-                selectedModel === "suno-v5" ? (
+                // 🔥 骨架屏：会话切换时显示对话块轮廓
+                isLoading && !currentBotIdRef.current ? (
+                  <ChatSkeleton />
+                ) : selectedModel === "suno-v5" ? (
                   // 🎵 Suno V5 专业模式表单 - 放在主滚动区域
                   <div className="py-4 sm:py-6 animate-in fade-in duration-500">
                     <SunoProForm
@@ -2453,10 +2473,9 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 
             {/* 🔥 输入框 - 所有模式都显示（Suno V5 也需要输入框进行对话） */}
             {(selectedModel !== "suno-v5" || messages.length > 0) && (
-            <form onSubmit={onSubmit} className="relative rounded-2xl sm:rounded-[24px] bg-white shadow-lg sm:shadow-[0_2px_8px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.08),0_16px_48px_rgba(0,0,0,0.08),0_24px_64px_rgba(0,0,0,0.06),0_32px_80px_rgba(0,0,0,0.04)] border border-slate-100 transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] focus-within:shadow-xl sm:focus-within:shadow-[0_4px_12px_rgba(0,0,0,0.06),0_12px_32px_rgba(0,0,0,0.12),0_20px_56px_rgba(0,0,0,0.12),0_28px_72px_rgba(0,0,0,0.08),0_36px_88px_rgba(0,0,0,0.06)]" style={{ ['--focus-border' as any]: `${BRAND_GREEN}33` }}>
-              
-              {/* 🔥 使用增强版 ModelSelector 组件 - 移动端优化 */}
-              <div className="flex items-center px-2 sm:px-3 py-1.5 sm:py-2 border-b border-slate-50">
+            <div className="relative mx-auto max-w-3xl w-full">
+              {/* 🔥 悬浮模型选择器 Badge - 左上角半透明胶囊 */}
+              <div className="absolute -top-2.5 -left-2 z-10">
                 <ModelSelector
                   selectedModel={selectedModel}
                   onModelChange={(model) => handleModelChange(model as ModelType)}
@@ -2465,85 +2484,84 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                   dailyFreeInfo={{ used: dailyUsage, total: DAILY_LIMIT }}
                 />
               </div>
-              
-              <div className="flex items-end gap-1.5 sm:gap-2 p-2 sm:p-3">
-                {/* 文件上传按钮 - 移动端优化触摸区域 */}
-                <div className="flex flex-col items-center gap-0.5 sm:gap-1 shrink-0">
-                  <span className="text-[9px] sm:text-[10px] font-medium text-slate-400 hidden sm:block">文件上传</span>
-                  <Button 
-                    type="button" 
-                    variant="ghost" 
-                    size="icon" 
-                    className="h-9 w-9 sm:h-10 sm:w-10 rounded-lg sm:rounded-xl text-slate-400 hover:bg-slate-50 disabled:opacity-50 min-h-[44px] sm:min-h-0" 
+
+              <form
+                onSubmit={onSubmit}
+                className={cn(
+                  "relative rounded-2xl sm:rounded-[24px] bg-white border transition-all duration-300",
+                  "border-zinc-200 focus-within:border-emerald-300",
+                  "focus-within:ring-4 focus-within:ring-emerald-500/10"
+                )}
+              >
+                <div className="flex items-end gap-2 p-2.5 sm:p-3">
+                  {/* 文件上传按钮 */}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-9 w-9 sm:h-10 sm:w-10 rounded-lg shrink-0 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors disabled:opacity-40"
                     onClick={() => {
-                      console.log("📎 [文件上传] 点击上传按钮, isLoading:", isLoading, "userId:", userId)
-                      if (!userId) {
-                        toast.error("请先登录后再上传文件")
-                        return
-                      }
+                      if (!userId) { toast.error("请先登录后再上传文件"); return }
                       fileInputRef.current?.click()
                     }}
+                    disabled={isLoading}
                   >
-                    <Paperclip className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
+                    <Paperclip className="h-4 w-4 sm:h-4.5 sm:w-4.5" />
                   </Button>
-                </div>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  className="hidden"
-                  accept="image/*,.txt,.doc,.docx,.pdf,audio/*"
-                  multiple
-                  onChange={handleFileUpload}
-                />
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    className="hidden"
+                    accept="image/*,.txt,.doc,.docx,.pdf,audio/*"
+                    multiple
+                    onChange={handleFileUpload}
+                  />
 
-                {/* 🎤 语音输入按钮 */}
-                <div className="flex flex-col items-center gap-0.5 sm:gap-1 shrink-0">
-                  <span className="text-[9px] sm:text-[10px] font-medium text-slate-400 hidden sm:block">
-                    {isListening ? "录音中" : "语音"}
-                  </span>
+                  {/* 🎤 语音输入按钮 */}
                   <Button
                     type="button"
                     variant="ghost"
                     size="icon"
                     className={cn(
-                      "h-9 w-9 sm:h-10 sm:w-10 rounded-lg sm:rounded-xl min-h-[44px] sm:min-h-0",
+                      "h-9 w-9 sm:h-10 sm:w-10 rounded-lg shrink-0 transition-colors disabled:opacity-40",
                       isListening
                         ? "bg-red-500 text-white hover:bg-red-600 animate-pulse"
-                        : "text-slate-400 hover:bg-slate-50"
+                        : "text-slate-400 hover:text-emerald-600 hover:bg-emerald-50"
                     )}
                     onClick={toggleVoiceInput}
                     disabled={isLoading}
                   >
-                    {isListening ? <MicOff className="h-4.5 w-4.5 sm:h-5 sm:w-5" /> : <Mic className="h-4.5 w-4.5 sm:h-5 sm:w-5" />}
+                    {isListening ? <MicOff className="h-4 w-4 sm:h-4.5 sm:w-4.5" /> : <Mic className="h-4 w-4 sm:h-4.5 sm:w-4.5" />}
                   </Button>
-                </div>
-                
-                <Textarea
-                  ref={textareaRef}
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder={userId ? "输入内容开始对话..." : "请先登录..."}
-                  className="min-h-[44px] sm:min-h-[48px] max-h-[120px] sm:max-h-[160px] flex-1 resize-none border-0 bg-transparent p-2 text-sm sm:text-[15px] text-slate-700 placeholder:text-slate-400 focus-visible:ring-0 leading-relaxed"
-                  disabled={isLoading}
-                  rows={1}
-                />
-                
-                {/* 发送按钮 - 移动端优化触摸区域 */}
-                <div className="flex flex-col items-center gap-0.5 sm:gap-1 shrink-0">
-                  <span className="text-[9px] sm:text-[10px] font-medium text-slate-400 hidden sm:block">发送</span>
+
+                  {/* 📝 Smart Textarea — auto-expand 2-10 rows */}
+                  <Textarea
+                    ref={textareaRef}
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    placeholder={userId ? "输入内容开始对话..." : "请先登录..."}
+                    className="flex-1 resize-none border-0 bg-transparent text-sm sm:text-[15px] text-slate-700 placeholder:text-slate-300 focus-visible:ring-0 py-1.5 leading-normal"
+                    disabled={isLoading}
+                  />
+
+                  {/* 发送按钮 — 垂直居中 */}
                   <Button
                     type="submit"
                     size="icon"
-                    className="h-9 w-9 sm:h-10 sm:w-10 rounded-lg sm:rounded-xl text-white shadow-lg sm:shadow-[0_4px_12px_rgba(5,46,22,0.4)] hover:opacity-90 transition-all disabled:opacity-40 min-h-[44px] sm:min-h-0"
+                    className="h-9 w-9 sm:h-10 sm:w-10 rounded-lg shrink-0 text-white transition-all hover:opacity-90 disabled:opacity-30"
                     style={{ backgroundColor: "#052e16" }}
                     disabled={isLoading || (!input.trim() && uploadedFiles.length === 0)}
                   >
-                    {isLoading ? <Loader2 className="h-4.5 w-4.5 sm:h-5 sm:w-5 animate-spin" /> : <Send className="h-4.5 w-4.5 sm:h-5 sm:w-5" />}
+                    {isLoading ? (
+                      <Loader2 className="h-4 w-4 sm:h-4.5 sm:w-4.5 animate-spin" />
+                    ) : (
+                      <Send className="h-4 w-4 sm:h-4.5 sm:w-4.5" />
+                    )}
                   </Button>
                 </div>
-              </div>
-            </form>
+              </form>
+            </div>
             )}
 
             {!userId && selectedModel !== "suno-v5" && (
