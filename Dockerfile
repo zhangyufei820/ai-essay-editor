@@ -45,9 +45,10 @@ EXPOSE 3000
 ENTRYPOINT []
 
 # Next.js standalone 模式：静态文件在 .next/static/ 但 standalone server 在 .next/standalone/
-# 需要创建符号链接让 server.js 能找到静态文件
+# 需要创建符号链接让 server.js 能找到静态文件和 public 文件
 RUN mkdir -p /app/.next/standalone/.next && \
-    ln -s /app/.next/static /app/.next/standalone/.next/static
+    ln -s /app/.next/static /app/.next/standalone/.next/static && \
+    ln -s /app/public /app/.next/standalone/public
 
 # 启动命令 - 使用 standalone server.js 以正确加载包含 proxyClientMaxBodySize 的配置
 CMD ["node", ".next/standalone/server.js"]
