@@ -5,6 +5,7 @@ import { Plus, MessageSquare, Trash2, MoreHorizontal } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
+import { format } from "date-fns"
 
 // 模型 key 到显示名称的映射
 const MODEL_DISPLAY_NAMES: Record<string, string> = {
@@ -21,23 +22,9 @@ const MODEL_DISPLAY_NAMES: Record<string, string> = {
   "beike-pro": "备课助手",
 }
 
-// 获取模型徽章颜色 — 统一使用翡翠绿系
-function getModelBadgeColor(modelKey: string): string {
-  // 全部基于网站 emerald 主色 #10A37F，通过透明度区分
-  const colors: Record<string, string> = {
-    "standard": "#10A37F",
-    "teaching-pro": "#10A37F",
-    "gpt-5": "#10A37F",
-    "claude-opus": "#10A37F",
-    "gemini-pro": "#10A37F",
-    "banana-2-pro": "#10A37F",
-    "grok-4.2": "#10A37F",
-    "open-claw": "#10A37F",
-    "quanquan-math": "#10A37F",
-    "quanquan-english": "#10A37F",
-    "beike-pro": "#10A37F",
-  }
-  return colors[modelKey] || "#10A37F"
+// 获取模型徽章颜色 — 硬编码翡翠绿 #10A37F
+function getModelBadgeColor(_modelKey: string): string {
+  return "#10A37F"
 }
 
 // ✅ 保持类型定义导出，确保父组件不报错
@@ -98,14 +85,9 @@ export function ChatSidebar({
   // 定义分组显示的顺序
   const groupOrder = ["今天", "昨天", "过去 7 天", "更早"];
 
-  // 格式化时间戳 — 统一 MM-DD HH:mm 格式
+  // 格式化时间戳 — date-fns MM-dd HH:mm
   const formatTime = (timestamp: number) => {
-    const date = new Date(timestamp);
-    const mm = String(date.getMonth() + 1).padStart(2, '0');
-    const dd = String(date.getDate()).padStart(2, '0');
-    const hh = String(date.getHours()).padStart(2, '0');
-    const min = String(date.getMinutes()).padStart(2, '0');
-    return `${mm}-${dd} ${hh}:${min}`;
+    return format(new Date(timestamp), "MM-dd HH:mm")
   };
 
   return (
@@ -178,11 +160,7 @@ export function ChatSidebar({
                                     </span>
                                     {session.ai_model && session.ai_model !== "standard" && (
                                       <span
-                                        className="text-[9px] px-1.5 py-0.5 rounded-full font-medium shrink-0"
-                                        style={{
-                                          backgroundColor: `${getModelBadgeColor(session.ai_model)}18`,
-                                          color: getModelBadgeColor(session.ai_model)
-                                        }}
+                                        className="text-[9px] px-1.5 py-0.5 rounded-full font-medium shrink-0 bg-emerald-500/10 text-emerald-600"
                                       >
                                         {MODEL_DISPLAY_NAMES[session.ai_model] || session.ai_model}
                                       </span>

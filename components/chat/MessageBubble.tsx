@@ -345,7 +345,7 @@ function MarkdownContent({ content }: { content: string }) {
         ),
         blockquote: ({ children }) => (
           <blockquote
-            className="border-l-3 px-3 py-2 my-2 rounded-r"
+            className="border-l-4 px-3 py-2 my-2 rounded-r"
             style={{
               borderColor: CLAUDE_ACCENT_COLOR,
               backgroundColor: slateColors[50],
