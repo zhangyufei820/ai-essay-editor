@@ -2029,7 +2029,15 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
             <span className="text-sm font-medium hidden sm:inline">返回</span>
           </button>
           <div className="flex-1 text-center md:text-left md:ml-4">
-            <span className="text-sm md:text-base font-medium text-slate-700">{modelConfig[selectedModel].name}</span>
+            <motion.span
+              key={selectedModel}
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              className="text-sm md:text-base font-medium text-slate-700 inline-block"
+            >
+              {modelConfig[selectedModel].name}
+            </motion.span>
           </div>
           {/* 🔥 移动端用户信息显示 - 仅在移动端显示 */}
           <div className="md:hidden">

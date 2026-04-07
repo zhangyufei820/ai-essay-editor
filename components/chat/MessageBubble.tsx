@@ -128,10 +128,10 @@ function UserAvatar({ avatar }: { avatar?: string }) {
 function AIAvatar() {
   return (
     <div
-      className="w-6 h-6 rounded-full flex items-center justify-center shrink-0"
+      className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0"
       style={{ backgroundColor: CLAUDE_AVATAR_BG }}
     >
-      <Sparkles className="w-3 h-3 text-white" />
+      <Sparkles className="w-5 h-5 text-white" />
     </div>
   )
 }
@@ -231,7 +231,7 @@ function MarkdownContent({ content }: { content: string }) {
               <p
                 className="mb-3 last:mb-0 rounded-r"
                 style={{
-                  lineHeight: 1.75,
+                  lineHeight: 1.6,
                   color: CLAUDE_TEXT_COLOR,
                   backgroundColor: "rgba(16, 185, 129, 0.08)",
                   borderLeft: "3px solid #10B981",
@@ -246,7 +246,7 @@ function MarkdownContent({ content }: { content: string }) {
           }
 
           return (
-            <p className="mb-3 last:mb-0" style={{ lineHeight: 1.75, color: CLAUDE_TEXT_COLOR }}>
+            <p className="mb-3 last:mb-0" style={{ lineHeight: 1.6, color: CLAUDE_TEXT_COLOR }}>
               {children}
             </p>
           )
@@ -378,11 +378,11 @@ const MessageBubble = memo(function MessageBubble({
 }: MessageBubbleProps) {
   const isUser = role === "user"
 
-  // User message style - solid color, no border
+  // User message style - transparent background, inherits page text color
   const userBubbleStyle = {
-    backgroundColor: "#052e16", // Deep green to match brand
-    color: "white",
-    borderRadius: "18px 4px 18px 18px",
+    backgroundColor: "transparent",
+    color: "#374151",
+    borderRadius: "0",
     maxWidth: "75%",
   }
 
@@ -405,8 +405,8 @@ const MessageBubble = memo(function MessageBubble({
         className
       )}
     >
-      {/* Avatar - Smaller for AI, aligned with text */}
-      <div className="flex-shrink-0 mt-0.5">
+      {/* Avatar */}
+      <div className="flex-shrink-0 mt-1">
         {isUser ? <UserAvatar avatar={avatar} /> : <AIAvatar />}
       </div>
 
@@ -429,7 +429,7 @@ const MessageBubble = memo(function MessageBubble({
           ) : (
             <div
               className="text-sm ai-content-container"
-              style={{ lineHeight: 1.75, color: CLAUDE_TEXT_COLOR }}
+              style={{ lineHeight: 1.6, color: CLAUDE_TEXT_COLOR }}
             >
               <MarkdownContent content={content} />
               {isStreaming && <StreamingCursor />}

@@ -365,6 +365,25 @@
   100% { background-position: 200% 0; }
 }
 
+@keyframes particlePulse {
+  0% {
+    opacity: 0.2;
+    r: 1.5;
+  }
+  40% {
+    opacity: 1;
+    r: 3;
+  }
+  70% {
+    opacity: 0.5;
+    r: 2;
+  }
+  100% {
+    opacity: 0.2;
+    r: 1.5;
+  }
+}
+
 @keyframes cursor-blink {
   0%, 50% { opacity: 1; }
   51%, 100% { opacity: 0; }
@@ -1318,14 +1337,15 @@
   }
 }
 
-/* AI 内容容器 - 防止滚动抖动 */
+/* AI 内容容器 - 防止滚动抖动，contain: layout 锁定高度防 LaTeX 跳动 */
 .ai-content-container {
   overflow-anchor: auto;
+  contain: layout;
 }
 
 /* AI 内容段落行高 */
 .ai-content-container p {
-  line-height: 1.75 !important;
+  line-height: 1.6 !important;
 }
 
 /* AI 消息结论段落高亮 */

@@ -168,7 +168,7 @@ export function ChatSidebar({
                             <button
                               onClick={() => onSelectSession(session.id)}
                               className={cn(
-                                "relative flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left transition-all duration-200",
+                                "relative flex w-full items-center gap-3 rounded-lg px-3 py-4 text-left transition-all duration-200",
                                 currentSessionId === session.id
                                   ? "bg-white text-[#0F766E] shadow-sm ring-1 ring-[#E5E0D6]" // 选中状态
                                   : "text-slate-600 hover:bg-slate-200/50 hover:text-slate-900" // 悬停状态
