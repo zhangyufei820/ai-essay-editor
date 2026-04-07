@@ -12,8 +12,6 @@
 #   - XUNHUPAY_APPSECRET
 # ============================================================
 
-version: '3.8'
-
 services:
   # ----------------------------------------------------------
   # Lighthouse - GitHub Webhook CI/CD Trigger Server
@@ -24,15 +22,18 @@ services:
       dockerfile: Dockerfile.lighthouse
     container_name: shenxiang-lighthouse
     restart: unless-stopped
+    read_only: true
+    mem_limit: 256m
+    cpus: 0.5
+    pids_limit: 128
     ports:
       - "127.0.0.1:3001:3001"
     environment:
       - NODE_ENV=production
       - GITHUB_WEBHOOK_SECRET=${GITHUB_WEBHOOK_SECRET:-你的密码}
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - /data/nextjs/webhook:/data/nextjs/webhook
-      - /data/nextjs/ai-essay-editor:/data/nextjs/ai-essay-editor
+      - /data/nextjs/webhook:/data/nextjs/webhook:ro
+      - /data/nextjs/ai-essay-editor:/data/nextjs/ai-essay-editor:ro
       - /data/nextjs/.env:/data/nextjs/.env:ro
     networks:
       - shenxiang-net
@@ -61,6 +62,10 @@ services:
     image: ai-essay-editor:latest
     container_name: shenxiang-nextjs
     restart: unless-stopped
+    read_only: true
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 256
     ports:
       - "127.0.0.1:3000:3000"
     env_file:

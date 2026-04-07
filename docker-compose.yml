@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   nextjs:
     build:
@@ -10,6 +8,10 @@ services:
         NEXT_PUBLIC_SUPABASE_ANON_KEY: "sb_publishable_J6ZjOA1cvNVJE0msWjvJEA_Y3MHr9LH"
     container_name: ai-essay-editor-nextjs-dev
     restart: unless-stopped
+    read_only: true
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 256
     ports:
       - "127.0.1.1:3000:3000"
     networks:
@@ -21,7 +23,7 @@ services:
       - NEXT_PUBLIC_API_BASE_URL=
       - DIFY_INTERNAL_URL=http://docker-api-1:5001/v1
     volumes:
-      - .:/app
+      - .:/app:ro
       - /app/node_modules
       - /app/.next
     depends_on:
@@ -40,12 +42,16 @@ services:
     image: postgres:15
     container_name: ai-essay-editor-postgres-dev
     restart: unless-stopped
+    read_only: true
+    mem_limit: 256m
+    cpus: 0.5
+    pids_limit: 64
     environment:
       - POSTGRES_USER=shenxiang
       - POSTGRES_PASSWORD=password
       - POSTGRES_DB=shenxiang
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
