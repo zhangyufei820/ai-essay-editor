@@ -128,10 +128,10 @@ function UserAvatar({ avatar }: { avatar?: string }) {
 function AIAvatar() {
   return (
     <div
-      className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0"
+      className="w-16 h-16 rounded-2xl flex items-center justify-center shrink-0"
       style={{ backgroundColor: CLAUDE_AVATAR_BG }}
     >
-      <Sparkles className="w-5 h-5 text-white" />
+      <Sparkles className="w-6 h-6 text-white" />
     </div>
   )
 }

@@ -80,25 +80,9 @@ const MODEL_DISPLAY_NAMES: Record<string, string> = {
   "sora-2-pro": "视频",
 }
 
-// 获取模型徽章颜色
-function getModelBadgeColor(modelKey: string): string {
-  const colors: Record<string, string> = {
-    "standard": "#10A37F",
-    "teaching-pro": "#0d3a1f",
-    "gpt-5": "#10A37F",
-    "claude-opus": "#DC2626",
-    "gemini-pro": "#F59E0B",
-    "banana-2-pro": "#8B5CF6",
-    "grok-4.2": "#000000",
-    "open-claw": "#6366F1",
-    "quanquan-math": "#059669",
-    "quanquan-english": "#0284C7",
-    "beike-pro": "#EC4899",
-    "banzhuren": "#7C3AED",
-    "suno-v5": "#F59E0B",
-    "sora-2-pro": "#EF4444",
-  }
-  return colors[modelKey] || "#6B7280"
+// 获取模型徽章颜色 — 强制归一：所有模型统一为翡翠绿 #10A37F
+function getModelBadgeColor(_modelKey: string): string {
+  return "#10A37F"
 }
 
 // 🔥 移动端用户信息显示组件
@@ -2482,18 +2466,22 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
             {/* 🔥 输入框 - 所有模式都显示（Suno V5 也需要输入框进行对话） */}
             {(selectedModel !== "suno-v5" || messages.length > 0) && (
             <div className="relative mx-auto max-w-3xl w-full px-2 sm:px-0">
-              {/* 🔥 悬浮模型选择器胶囊 - 贴在输入框左上角，翡翠绿毛玻璃 */}
-              <div className="absolute -top-3 -left-1 z-10">
+              {/* 🔥 悬浮模型选择器胶囊 - 翡翠绿毛玻璃，贴在输入框左上角边框线上 */}
+              <div className="absolute -top-3 left-3 z-10">
                 <div
-                  className="flex items-center gap-1.5 pl-2 pr-2.5 py-1.5 rounded-xl bg-white/70 backdrop-blur-md border shadow-sm"
-                  style={{ borderColor: "rgba(16, 185, 129, 0.2)" }}
+                  className={cn(
+                    "flex items-center gap-1.5 pl-2.5 pr-3 py-1.5 rounded-xl",
+                    "bg-emerald-50/90 backdrop-blur-md",
+                    "border border-emerald-200/50",
+                    "shadow-sm"
+                  )}
                 >
                   {/* 颜色指示点 */}
                   <div
                     className="w-1.5 h-1.5 rounded-full shrink-0"
-                    style={{ backgroundColor: BRAND_GREEN }}
+                    style={{ backgroundColor: "#10A37F" }}
                   />
-                  {/* 模型选择器（仅触发按钮） */}
+                  {/* 模型选择器触发按钮 */}
                   <ModelSelector
                     selectedModel={selectedModel}
                     onModelChange={(model) => handleModelChange(model as ModelType)}
