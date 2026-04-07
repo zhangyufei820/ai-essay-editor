@@ -13,6 +13,7 @@
 import React, { useMemo, memo, type ReactNode } from "react"
 import { cn } from "@/lib/utils"
 import { slateColors } from "@/lib/design-tokens"
+import { LATEX_MACROS, renderLatex } from "@/lib/latex-constants"
 import katex from "katex"
 
 // Claude style colors
@@ -33,49 +34,6 @@ interface UltimateRendererProps {
 // Inline Text Renderer
 // ============================================
 
-// Helper function to render LaTeX
-// KaTeX 常用几何宏（兼容非标准写法）
-const LATEX_MACROS: Record<string, string> = {
-  "\\vec": "\\mathbf{#1}",
-  "\\vb": "\\mathbf{#1}",
-  "\\bm": "\\mathbf{#1}",
-  "\\abs": "\\left|#1\\right|",
-  "\\norm": "\\left\\|#1\\right\\|",
-  "\\set": "\\left\\{#1\\right\\}",
-  "\\령": "\\langle #1 \\rangle",
-  "\\sse": "\\subseteq",
-  "\\nse": "\\nsubseteq",
-  "\\R": "\\mathbb{R}",
-  "\\N": "\\mathbb{N}",
-  "\\Z": "\\mathbb{Z}",
-  "\\Q": "\\mathbb{Q}",
-  "\\C": "\\mathbb{C}",
-  "\\lam": "\\lambda",
-  "\\Lam": "\\Lambda",
-  "\\theta": "\\theta",
-  "\\Theta": "\\Theta",
-  "\\角": "\\angle",
-  "\\三角形": "\\triangle",
-  "\\垂直": "\\perp",
-  "\\平行": "\\parallel",
-  "\\相似": "\\sim",
-  "\\全等": "\\cong",
-}
-
-function renderLatex(text: string, displayMode: boolean): string {
-  try {
-    return katex.renderToString(text, {
-      displayMode,
-      throwOnError: false,
-      errorColor: "#B71C1C",
-      macros: LATEX_MACROS,
-    })
-  } catch (e) {
-    console.error("KaTeX render error:", e)
-    return text
-  }
-}
-
 // Inline math renderer
 const MathInline = memo(function MathInline({ formula }: { formula: string }) {
   const html = useMemo(() => renderLatex(formula, false), [formula])
@@ -93,8 +51,14 @@ const MathBlock = memo(function MathBlock({ formula }: { formula: string }) {
   return (
     <div
       dangerouslySetInnerHTML={{ __html: html }}
-      className="math-block my-3 overflow-x-auto"
-      style={{ display: "block", textAlign: "center" }}
+      className="math-block my-8 overflow-x-auto rounded-lg"
+      style={{
+        display: "block",
+        textAlign: "center",
+        minHeight: "1.5em",
+        backgroundColor: "rgba(249, 250, 251, 0.6)",
+        padding: "1rem"
+      }}
     />
   )
 })
@@ -272,15 +236,16 @@ const UltimateRenderer = memo(function UltimateRenderer({
         continue
       }
 
-      // H1 - 带绿色装饰条
+      // H1 - 带绿色装饰条（板书风格）
       if (line.trim().startsWith("# ")) {
         renderedElements.push(
           <h1
             key={i}
-            className="text-xl font-semibold mt-5 mb-3 pl-3 border-l-4"
+            className="text-xl font-semibold mt-8 mb-4 pl-3 border-l-3 rounded-r"
             style={{
               color: "#111827",
-              borderColor: CLAUDE_ACCENT_COLOR,
+              borderColor: "#10B981",
+              background: "linear-gradient(90deg, rgba(16, 185, 129, 0.08) 0%, transparent 100%)",
               lineHeight: 1.4,
             }}
           >
@@ -289,15 +254,16 @@ const UltimateRenderer = memo(function UltimateRenderer({
           </h1>
         )
       }
-      // H2 - 带绿色装饰条
+      // H2 - 带绿色装饰条（板书风格）
       else if (line.trim().startsWith("## ")) {
         renderedElements.push(
           <h2
             key={i}
-            className="text-lg font-semibold mt-5 mb-3 pl-3 border-l-4"
+            className="text-lg font-semibold mt-8 mb-4 pl-3 border-l-3 rounded-r"
             style={{
               color: "#111827",
-              borderColor: CLAUDE_ACCENT_COLOR,
+              borderColor: "#10B981",
+              background: "linear-gradient(90deg, rgba(16, 185, 129, 0.08) 0%, transparent 100%)",
               lineHeight: 1.4,
             }}
           >
@@ -306,15 +272,16 @@ const UltimateRenderer = memo(function UltimateRenderer({
           </h2>
         )
       }
-      // H3 - 带绿色装饰条
+      // H3 - 带绿色装饰条（板书风格）
       else if (line.trim().startsWith("### ")) {
         renderedElements.push(
           <h3
             key={i}
-            className="text-base font-semibold mt-5 mb-3 pl-3 border-l-4"
+            className="text-base font-semibold mt-8 mb-4 pl-3 border-l-3 rounded-r"
             style={{
               color: "#111827",
-              borderColor: CLAUDE_ACCENT_COLOR,
+              borderColor: "#10B981",
+              background: "linear-gradient(90deg, rgba(16, 185, 129, 0.08) 0%, transparent 100%)",
               lineHeight: 1.4,
             }}
           >
@@ -437,13 +404,13 @@ const UltimateRenderer = memo(function UltimateRenderer({
         }
         continue
       }
-      // Regular paragraph - 行高1.5，紧凑间距
+      // Regular paragraph - 行高1.75，宽松间距
       else {
         renderedElements.push(
           <p
             key={i}
             className="text-sm my-1.5"
-            style={{ lineHeight: 1.5, color: CLAUDE_TEXT_COLOR, marginBottom: '0.75rem' }}
+            style={{ lineHeight: 1.75, color: CLAUDE_TEXT_COLOR, marginBottom: '1.25rem' }}
           >
             <InlineText text={line} />
             {isLastLine && <StreamingCursor />}
@@ -456,11 +423,34 @@ const UltimateRenderer = memo(function UltimateRenderer({
   }, [content])
 
   return (
-    <div className={cn("w-full", className)}>
-      {elements}
+    <div
+      className={cn("w-full", className)}
+      style={{
+        backgroundColor: "rgba(249, 250, 251, 0.5)",
+        borderRadius: "8px",
+        boxShadow: "0 1px 3px rgba(0,0,0,0.04)"
+      }}
+    >
+      <style>{`
+        :root {
+          --ai-line-height: 1.75;
+        }
+        .ai-content p,
+        .ai-content li,
+        .ai-content div,
+        .ai-content span {
+          line-height: calc(var(--ai-line-height, 1.75)) !important;
+        }
+        .ai-content .math-inline {
+          margin: 0 0.15em;
+        }
+      `}</style>
+      <div className="ai-content">
+        {elements}
+      </div>
     </div>
   )
 })
 
-export { UltimateRenderer, InlineText, TableBlock }
+export { UltimateRenderer, InlineText, TableBlock, MathInline, MathBlock }
 export default UltimateRenderer

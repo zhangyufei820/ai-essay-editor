@@ -8,6 +8,8 @@ services:
       args:
         NEXT_PUBLIC_SUPABASE_URL: "https://rnujdnmxufmzgjvmddla.supabase.co"
         NEXT_PUBLIC_SUPABASE_ANON_KEY: "sb_publishable_J6ZjOA1cvNVJE0msWjvJEA_Y3MHr9LH"
+    container_name: ai-essay-editor-nextjs-dev
+    restart: unless-stopped
     ports:
       - "127.0.1.1:3000:3000"
     networks:
@@ -23,12 +25,21 @@ services:
       - /app/node_modules
       - /app/.next
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   postgres:
     image: postgres:15
+    container_name: ai-essay-editor-postgres-dev
+    restart: unless-stopped
     environment:
       - POSTGRES_USER=shenxiang
       - POSTGRES_PASSWORD=password
@@ -39,6 +50,12 @@ services:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - shenxiang-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shenxiang -d shenxiang"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
 volumes:
   postgres_data:

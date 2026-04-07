@@ -628,6 +628,43 @@ export function HeroSection() {
               </motion.button>
             </Link>
           </motion.div>
+
+          {/* 快捷入口 */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 1.6, ease: [0.32, 0.72, 0, 1] }}
+            className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4"
+          >
+            <Link href="/chat?agent=quanquan-math">
+              <motion.div
+                className="flex items-center gap-3 px-6 py-3 rounded-2xl bg-white border border-slate-200 shadow-sm cursor-pointer"
+                whileHover={{ scale: 1.05, boxShadow: "0 8px 24px rgba(0,0,0,0.12)" }}
+                whileTap={{ scale: 0.98 }}
+                transition={{ duration: 0.2 }}
+              >
+                <span className="text-2xl">&#x1F4D0;</span>
+                <div className="text-left">
+                  <div className="text-sm font-semibold text-slate-800">全学段数学</div>
+                  <div className="text-xs text-slate-500">数学问题解答</div>
+                </div>
+              </motion.div>
+            </Link>
+            <Link href="/chat/standard">
+              <motion.div
+                className="flex items-center gap-3 px-6 py-3 rounded-2xl bg-white border border-slate-200 shadow-sm cursor-pointer"
+                whileHover={{ scale: 1.05, boxShadow: "0 8px 24px rgba(0,0,0,0.12)" }}
+                whileTap={{ scale: 0.98 }}
+                transition={{ duration: 0.2 }}
+              >
+                <span className="text-2xl">&#x1F4A1;</span>
+                <div className="text-left">
+                  <div className="text-sm font-semibold text-slate-800">题目解析</div>
+                  <div className="text-xs text-slate-500">详细步骤讲解</div>
+                </div>
+              </motion.div>
+            </Link>
+          </motion.div>
         </div>
 
         {/* 下半部分：对话框演示（循环播放） */}

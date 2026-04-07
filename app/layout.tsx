@@ -6,6 +6,7 @@ import { AppSidebar } from "@/components/app-sidebar"
 import { InstallPrompt } from "@/components/pwa/InstallPrompt"
 // ✅ 引入刚才新建的微信拦截组件
 import WxGuard from "@/components/WxGuard"
+import { AsyncStylesheet } from "@/components/AsyncStylesheet"
 
 // PWA 视口配置
 export const viewport: Viewport = {
@@ -52,20 +53,15 @@ export default function RootLayout({
         <link rel="dns-prefetch" href="//rnujdnmxufmzgjvmddla.supabase.co" />
         <link rel="preconnect" href="https://rnujdnmxufmzgjvmddla.supabase.co" crossOrigin="anonymous" />
         
-        {/* 🔥 Authing 样式 */}
-        <link
-          rel="stylesheet"
-          href="https://cdn.authing.co/packages/guard-react/latest/guard.min.css"
-        />
-        
+        {/* Authing CSS 由登录页自行动态加载（guard-react 组件内部加载），无需全局同步引入 */}
         {/* PWA Apple 图标 - 使用 CDN */}
         <link rel="apple-touch-icon" href="https://cdn.shenxiang.school/icons/icon-192x192.png" />
         <link rel="apple-touch-icon" sizes="152x152" href="https://cdn.shenxiang.school/icons/icon-152x152.png" />
         <link rel="apple-touch-icon" sizes="180x180" href="https://cdn.shenxiang.school/icons/icon-192x192.png" />
         <link rel="apple-touch-icon" sizes="167x167" href="https://cdn.shenxiang.school/icons/icon-192x192.png" />
 
-        {/* KaTeX CSS */}
-        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
+        {/* KaTeX CSS - 异步加载，不阻塞首屏渲染 */}
+        <AsyncStylesheet href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
       </head>
       <body className={`font-sans antialiased`}>
         {/* ✅ WxGuard 放在最上方，确保它是 body 的第一个子元素 */}

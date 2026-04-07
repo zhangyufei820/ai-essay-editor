@@ -13,6 +13,12 @@ const nextConfig = {
   output: 'standalone',
 
   // ============================================
+  // Edge Middleware body size limit (default 10MB)
+  // 解决 /api/dify-upload 等大文件上传 10MB 限制问题
+  // ============================================
+  middlewareClientMaxBodySize: '100mb',
+
+  // ============================================
   // API 配置：允许大文件上传（服务器自托管，无 Vercel 限制）
   // ============================================
   experimental: {

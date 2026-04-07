@@ -1291,3 +1291,88 @@
 .animate-artistic-zoom {
   animation: artistic-zoom 2.5s ease-in-out infinite;
 }
+
+/* ============================================
+ * 💬 MessageBubble AI 消息气泡样式
+ * ============================================ */
+
+/* 移动端 AI 消息气泡宽度 */
+@media (max-width: 639px) {
+  .ai-message-bubble {
+    max-width: 92% !important;
+    padding-left: 2px !important;
+    padding-right: 2px !important;
+  }
+
+  /* 数学公式块移动端优化 - 确保横向滚动 */
+  .math-block {
+    margin: 1rem 0;
+    padding: 0.75rem;
+    font-size: 0.85em;
+  }
+
+  /* 行内公式移动端微调 */
+  .math-inline {
+    margin: 0 0.1em;
+    font-size: 0.95em;
+  }
+}
+
+/* AI 内容容器 - 防止滚动抖动 */
+.ai-content-container {
+  overflow-anchor: auto;
+}
+
+/* AI 内容段落行高 */
+.ai-content-container p {
+  line-height: 1.75 !important;
+}
+
+/* AI 消息结论段落高亮 */
+.ai-conclusion {
+  background-color: rgba(16, 185, 129, 0.08);
+  border-left: 3px solid #10B981;
+  border-radius: 0 8px 8px 0;
+  padding: 12px 16px;
+  margin-bottom: 1.25rem;
+}
+
+/* ============================================
+ * 🔢 KaTeX 数学公式样式
+ * ============================================ */
+
+/* 行内公式间距 */
+.math-inline {
+  margin: 0 0.15em;
+}
+
+/* 公式块样式 */
+.math-block {
+  margin: 1.5rem 0;
+  padding: 1rem;
+  background-color: rgba(249, 250, 251, 0.6);
+  border-radius: 0.5rem;
+  overflow-x: auto;
+  min-height: 1.5em;
+}
+
+/* 数学步骤标题 - 板书风格 */
+.math-step-title {
+  margin-top: 2rem;
+  margin-bottom: 1rem;
+  padding-left: 0.75rem;
+  border-left: 3px solid #10B981;
+  border-radius: 0 4px 4px 0;
+  background: linear-gradient(90deg, rgba(16, 185, 129, 0.08) 0%, transparent 100%);
+}
+
+/* 数学步骤标题 H1 */
+.math-step-title h1,
+.math-step-title h2,
+.math-step-title h3 {
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+  border-left: none !important;
+  background: none !important;
+  padding-left: 0 !important;
+}

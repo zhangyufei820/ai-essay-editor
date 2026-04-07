@@ -379,7 +379,7 @@ function AppSidebarInner() {
       href={href}
       onClick={onClick || handleNavClick}
       className={cn(
-        "relative flex items-center gap-3 px-3 py-[13px] transition-all", // 间距拉大15%
+        "relative flex items-center gap-4 px-4 py-[14px] transition-all", // 间距拉大15%
         "rounded-xl",
         isActive
           ? "font-bold"
@@ -559,7 +559,7 @@ function AppSidebarInner() {
           <div className="mt-8 mb-4 px-3">
             <motion.button
               onClick={() => setIsAgentPanelOpen(true)}
-              className="w-full flex items-center gap-2 px-3 py-2 rounded-xl"
+              className="w-full flex items-center gap-3 px-4 py-[9px] rounded-xl"
               style={{
                 backgroundColor: "rgba(34, 197, 94, 0.08)",
                 border: "1px solid rgba(34, 197, 94, 0.2)",
@@ -583,7 +583,7 @@ function AppSidebarInner() {
           <div className="mb-4 px-3">
             <motion.button
               onClick={() => setIsEducationPanelOpen(true)}
-              className="w-full flex items-center gap-2 px-3 py-2 rounded-xl"
+              className="w-full flex items-center gap-3 px-4 py-[9px] rounded-xl"
               style={{
                 backgroundColor: "rgba(14, 58, 31, 0.04)",
                 border: "1px solid rgba(14, 58, 31, 0.08)",
@@ -607,7 +607,7 @@ function AppSidebarInner() {
           <div className="mb-4 px-3">
             <motion.button
               onClick={() => setIsModelPanelOpen(true)}
-              className="w-full flex items-center gap-2 px-3 py-2 rounded-xl"
+              className="w-full flex items-center gap-3 px-4 py-[9px] rounded-xl"
               style={{
                 backgroundColor: "rgba(14, 58, 31, 0.04)",
                 border: "1px solid rgba(14, 58, 31, 0.08)",
@@ -631,7 +631,7 @@ function AppSidebarInner() {
           <div className="mb-4 px-3">
             <motion.button
               onClick={() => setIsCreativePanelOpen(true)}
-              className="w-full flex items-center gap-2 px-3 py-2 rounded-xl"
+              className="w-full flex items-center gap-3 px-4 py-[9px] rounded-xl"
               style={{
                 backgroundColor: "rgba(0, 200, 150, 0.02)",
                 border: "1px solid rgba(0, 200, 150, 0.2)",

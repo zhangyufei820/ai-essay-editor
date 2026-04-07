@@ -46,26 +46,3 @@ export function LoadingStateCard({
     </div>
   )
 }
-
-// ============================================
-// Compact Loading State (inline) - 同样极简风格
-// ============================================
-
-export function CompactLoadingState({
-  modelKey = "standard",
-  className
-}: LoadingStateCardProps) {
-  return (
-    <div
-      className={`inline-flex items-center gap-1.5 ${className || ""}`}
-    >
-      <Sparkles
-        className="w-3 h-3 text-slate-400 shrink-0"
-        strokeWidth={1.5}
-      />
-      <span className="text-xs text-slate-400 font-normal tracking-wide">
-        Thinking...
-      </span>
-    </div>
-  )
-}

@@ -70,8 +70,17 @@ export interface DifySSEEvent {
     title?: string
     status?: string
     workflow_run_id?: string
+    text?: string
+    outputs?: {
+      text?: string
+      result?: string
+      [key: string]: unknown
+    }
     [key: string]: unknown
   }
+  conversation_id?: string
+  answer?: string
+  text?: string
 }
 
 // ============================================

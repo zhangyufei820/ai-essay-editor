@@ -9,7 +9,7 @@
 
 "use client"
 
-import { memo, useState } from "react"
+import { memo, useMemo } from "react"
 import { motion, type Easing } from "framer-motion"
 import { Copy, Check, User, Sparkles, ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -24,6 +24,23 @@ const CLAUDE_TEXT_COLOR = "#374151"
 const CLAUDE_SECONDARY_COLOR = "#6B7280"
 const CLAUDE_ACCENT_COLOR = "#10A37F" // 沈翔绿
 const CLAUDE_AVATAR_BG = "#10B981" // Emerald green
+
+// Conclusion detection - hoisted to module scope to avoid recreation per render
+const CONCLUSION_KEYWORDS = ["综上所述", "答案是", "结论是", "所以", "因此", "总之", "故", "可得"] as const
+
+function isConclusionParagraph(text: string): boolean {
+  return CONCLUSION_KEYWORDS.some(keyword => text.includes(keyword))
+}
+
+// Extract text content from React children for keyword detection
+function getTextContent(children: React.ReactNode): string {
+  if (typeof children === 'string') return children
+  if (Array.isArray(children)) return children.map(getTextContent).join('')
+  if (children && typeof children === 'object' && 'props' in children) {
+    return getTextContent((children as { props: { children: React.ReactNode } }).props.children)
+  }
+  return ''
+}
 
 // ============================================
 // Types
@@ -67,7 +84,7 @@ function StreamingCursor() {
   return (
     <motion.span
       animate={{ opacity: [1, 0, 1] }}
-      transition={{ duration: 0.8, repeat: Infinity }}
+      transition={{ duration: 0.8, repeat: Infinity, ease: "easeInOut" }}
       className="inline-block ml-0.5"
       style={{
         width: 2,
@@ -187,17 +204,53 @@ function Timestamp({ date }: { date: Date }) {
 // Markdown Content - Clean typography
 // ============================================
 
+// 检测内容是否包含 LaTeX 公式
+const HAS_LATEX_REGEX = /\$[^$]+\$|\$\$[\s\S]+?\$\$/;
+
+// 仅当内容包含公式时才加载 math 插件，节省解析开销
 function MarkdownContent({ content }: { content: string }) {
+  const mathPlugins = useMemo(() => {
+    return HAS_LATEX_REGEX.test(content) ? [remarkMath] : []
+  }, [content])
+
+  const rehypePlugins = useMemo(() => {
+    return HAS_LATEX_REGEX.test(content) ? [rehypeKatex] : []
+  }, [content])
+
   return (
     <ReactMarkdown
-      remarkPlugins={[remarkGfm, remarkMath]}
-      rehypePlugins={[rehypeKatex]}
+      remarkPlugins={[remarkGfm, ...mathPlugins]}
+      rehypePlugins={rehypePlugins}
       components={{
-        p: ({ children }) => (
-          <p className="mb-3 last:mb-0" style={{ lineHeight: 1.5, color: CLAUDE_TEXT_COLOR }}>
-            {children}
-          </p>
-        ),
+        p: ({ children }) => {
+          const textContent = getTextContent(children)
+          const isConclusionPara = isConclusionParagraph(textContent)
+
+          if (isConclusionPara) {
+            return (
+              <p
+                className="mb-3 last:mb-0 rounded-r"
+                style={{
+                  lineHeight: 1.75,
+                  color: CLAUDE_TEXT_COLOR,
+                  backgroundColor: "rgba(16, 185, 129, 0.08)",
+                  borderLeft: "3px solid #10B981",
+                  borderRadius: "0 8px 8px 0",
+                  padding: "12px 16px",
+                  marginBottom: "1.25rem"
+                }}
+              >
+                {children}
+              </p>
+            )
+          }
+
+          return (
+            <p className="mb-3 last:mb-0" style={{ lineHeight: 1.75, color: CLAUDE_TEXT_COLOR }}>
+              {children}
+            </p>
+          )
+        },
         ul: ({ children }) => (
           <ul className="list-disc pl-5 mb-3 space-y-1" style={{ lineHeight: 1.5 }}>
             {children}
@@ -261,24 +314,24 @@ function MarkdownContent({ content }: { content: string }) {
         ),
         h1: ({ children }) => (
           <h1
-            className="text-xl font-semibold pl-3 border-l-4 mt-5 mb-3"
-            style={{ color: "#111827", borderColor: CLAUDE_ACCENT_COLOR, lineHeight: 1.4 }}
+            className="font-bold text-base mt-4 mb-2"
+            style={{ color: "#111827", lineHeight: "var(--ai-line-height, 1.7)" }}
           >
             {children}
           </h1>
         ),
         h2: ({ children }) => (
           <h2
-            className="text-lg font-semibold pl-3 border-l-4 mt-5 mb-2"
-            style={{ color: "#111827", borderColor: CLAUDE_ACCENT_COLOR, lineHeight: 1.4 }}
+            className="font-semibold text-sm mt-3 mb-2"
+            style={{ color: "#111827", lineHeight: "var(--ai-line-height, 1.7)" }}
           >
             {children}
           </h2>
         ),
         h3: ({ children }) => (
           <h3
-            className="text-base font-semibold pl-3 border-l-4 mt-5 mb-2"
-            style={{ color: "#111827", borderColor: CLAUDE_ACCENT_COLOR, lineHeight: 1.4 }}
+            className="font-medium text-sm mt-2 mb-1"
+            style={{ color: "#6B7280", lineHeight: "var(--ai-line-height, 1.7)" }}
           >
             {children}
           </h3>
@@ -338,7 +391,7 @@ const MessageBubble = memo(function MessageBubble({
     backgroundColor: "transparent",
     color: CLAUDE_TEXT_COLOR,
     borderRadius: "0",
-    maxWidth: "85%",
+    maxWidth: "88%",
   }
 
   return (
@@ -362,8 +415,7 @@ const MessageBubble = memo(function MessageBubble({
         {/* Flat bubble without heavy container styling */}
         <div
           className={cn(
-            "px-1 py-1",
-            isUser ? "" : "" // No background for AI, minimal padding
+            isUser ? "px-1 py-1" : "px-0.5 py-1 sm:px-1 ai-message-bubble", // 移动端减少横向padding，为公式留空间
           )}
           style={isUser ? userBubbleStyle : assistantBubbleStyle}
         >
@@ -376,8 +428,8 @@ const MessageBubble = memo(function MessageBubble({
             </p>
           ) : (
             <div
-              className="text-sm"
-              style={{ lineHeight: 1.6, color: CLAUDE_TEXT_COLOR }}
+              className="text-sm ai-content-container"
+              style={{ lineHeight: 1.75, color: CLAUDE_TEXT_COLOR }}
             >
               <MarkdownContent content={content} />
               {isStreaming && <StreamingCursor />}

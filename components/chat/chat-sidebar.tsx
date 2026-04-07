@@ -6,6 +6,38 @@ import { cn } from "@/lib/utils"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 
+// 模型 key 到显示名称的映射
+const MODEL_DISPLAY_NAMES: Record<string, string> = {
+  "standard": "标准",
+  "teaching-pro": "教学 Pro",
+  "gpt-5": "GPT-5",
+  "claude-opus": "Claude",
+  "gemini-pro": "Gemini",
+  "banana-2-pro": "Banana",
+  "grok-4.2": "Grok",
+  "open-claw": "OpenClaw",
+  "quanquan-math": "全科数学",
+  "quanquan-english": "全科英语",
+  "beike-pro": "备课助手",
+}
+
+// 获取模型徽章颜色
+function getModelBadgeColor(modelKey: string): string {
+  const colors: Record<string, string> = {
+    "standard": "#10A37F",
+    "teaching-pro": "#0d3a1f",
+    "gpt-5": "#10A37F",
+    "claude-opus": "#DC2626",
+    "gemini-pro": "#F59E0B",
+    "banana-2-pro": "#8B5CF6",
+    "grok-4.2": "#000000",
+    "open-claw": "#6366F1",
+    "quanquan-math": "#059669",
+    "quanquan-english": "#0284C7",
+  }
+  return colors[modelKey] || "#6B7280"
+}
+
 // ✅ 保持类型定义导出，确保父组件不报错
 export type ChatSession = {
   id: string
@@ -149,9 +181,22 @@ export function ChatSidebar({
 
                               <div className="flex flex-1 flex-col overflow-hidden">
                                 <div className="flex items-center justify-between gap-2">
-                                  <span className="truncate text-sm font-medium">
-                                    {session.title || "新对话"}
-                                  </span>
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <span className="truncate text-sm font-medium">
+                                      {session.title || "新对话"}
+                                    </span>
+                                    {session.ai_model && session.ai_model !== "standard" && (
+                                      <span
+                                        className="text-[9px] px-1.5 py-0.5 rounded-full font-medium shrink-0"
+                                        style={{
+                                          backgroundColor: `${getModelBadgeColor(session.ai_model)}15`,
+                                          color: getModelBadgeColor(session.ai_model)
+                                        }}
+                                      >
+                                        {MODEL_DISPLAY_NAMES[session.ai_model] || session.ai_model}
+                                      </span>
+                                    )}
+                                  </div>
                                   <span className="text-[10px] text-slate-400 font-normal shrink-0">
                                     {formatTime(session.date)}
                                   </span>

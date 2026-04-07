@@ -14,6 +14,7 @@ import dynamic from 'next/dynamic'
 // 首屏组件 - 直接导入（关键路径）
 import { HeroSection } from '@/components/home'
 import { OpenClawSection } from '@/components/home'
+import { Calculator, HelpCircle, FileText, Sparkles, ArrowRight } from 'lucide-react'
 
 // 非首屏组件 - 动态导入（懒加载）
 const CapabilitiesSection = dynamic(
@@ -128,6 +129,90 @@ export default function Home() {
 
       {/* OpenClaw 专区 */}
       <OpenClawSection />
+
+      {/* 🔥 快捷入口卡片 */}
+      <section className="py-16 md:py-20 bg-white">
+        <div className="max-w-6xl mx-auto px-4 md:px-6">
+          <h2 className="text-2xl md:text-3xl font-bold text-center mb-10 text-slate-800">快捷入口</h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
+            {/* 全学段数学 */}
+            <a
+              href="/chat/quanquan-math"
+              className="group relative bg-white rounded-2xl p-6 md:p-8 border border-slate-100 shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-1"
+            >
+              <div className="flex flex-col items-center gap-4">
+                <div className="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-gradient-to-br from-emerald-50 to-green-50 flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <Calculator className="w-7 h-7 md:w-8 md:h-8 text-emerald-600" />
+                </div>
+                <div className="text-center">
+                  <h3 className="font-semibold text-slate-800 mb-1">全学段数学</h3>
+                  <p className="text-xs text-slate-400 hidden md:block">数学问题解答</p>
+                </div>
+              </div>
+              <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                <ArrowRight className="w-4 h-4 text-emerald-500" />
+              </div>
+            </a>
+
+            {/* 题目解析 */}
+            <a
+              href="/chat/problem"
+              className="group relative bg-white rounded-2xl p-6 md:p-8 border border-slate-100 shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-1"
+            >
+              <div className="flex flex-col items-center gap-4">
+                <div className="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-gradient-to-br from-emerald-50 to-green-50 flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <HelpCircle className="w-7 h-7 md:w-8 md:h-8 text-emerald-600" />
+                </div>
+                <div className="text-center">
+                  <h3 className="font-semibold text-slate-800 mb-1">题目解析</h3>
+                  <p className="text-xs text-slate-400 hidden md:block">分步详细讲解</p>
+                </div>
+              </div>
+              <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                <ArrowRight className="w-4 h-4 text-emerald-500" />
+              </div>
+            </a>
+
+            {/* 作文批改 */}
+            <a
+              href="/chat/standard"
+              className="group relative bg-white rounded-2xl p-6 md:p-8 border border-slate-100 shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-1"
+            >
+              <div className="flex flex-col items-center gap-4">
+                <div className="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-gradient-to-br from-emerald-50 to-green-50 flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <FileText className="w-7 h-7 md:w-8 md:h-8 text-emerald-600" />
+                </div>
+                <div className="text-center">
+                  <h3 className="font-semibold text-slate-800 mb-1">作文批改</h3>
+                  <p className="text-xs text-slate-400 hidden md:block">专业点评建议</p>
+                </div>
+              </div>
+              <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                <ArrowRight className="w-4 h-4 text-emerald-500" />
+              </div>
+            </a>
+
+            {/* 创意写作 */}
+            <a
+              href="/chat/creative"
+              className="group relative bg-white rounded-2xl p-6 md:p-8 border border-slate-100 shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-1"
+            >
+              <div className="flex flex-col items-center gap-4">
+                <div className="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-gradient-to-br from-emerald-50 to-green-50 flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <Sparkles className="w-7 h-7 md:w-8 md:h-8 text-emerald-600" />
+                </div>
+                <div className="text-center">
+                  <h3 className="font-semibold text-slate-800 mb-1">创意写作</h3>
+                  <p className="text-xs text-slate-400 hidden md:block">激发创作灵感</p>
+                </div>
+              </div>
+              <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                <ArrowRight className="w-4 h-4 text-emerald-500" />
+              </div>
+            </a>
+          </div>
+        </div>
+      </section>
 
       {/* 非首屏内容 - 懒加载 */}
       <Suspense fallback={<SectionSkeleton height="600px" />}>

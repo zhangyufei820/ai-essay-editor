@@ -21,6 +21,7 @@ import { EmptyState } from "./EmptyState"
 import { AIStatusIndicator } from "@/components/ai/AIStatusIndicator"
 import { ModelSelector } from "./ModelSelector"
 import { WorkflowVisualizer } from "./WorkflowVisualizer"
+import { MathInline, MathBlock } from "./UltimateRenderer"
 import { useWorkflowVisualizer } from "@/hooks/useWorkflowVisualizer"
 // 🎵 Suno 音乐生成相关导入
 import { MusicCard } from "./MusicCard"
@@ -32,11 +33,13 @@ import { LoadingStateCard } from "@/components/ui/LoadingStateCard"
 import { motion, AnimatePresence } from "framer-motion"
 import katex from "katex"
 import { brandColors, slateColors } from "@/lib/design-tokens"
+import { LATEX_MACROS, renderLatex } from "@/lib/latex-constants"
 import { createClient } from "@supabase/supabase-js"
 import { collapseSidebar, refreshCredits, refreshSessionList } from "@/components/app-sidebar"
 import { validateFileForUpload, MAX_FILE_SIZE } from "@/lib/upload-service"
 import { VoiceRecorder, getDifyTTS, uploadAudioToDify } from "@/lib/voice-service"
 import { getApiUrl } from "@/lib/api-config"
+import { logger } from "@/lib/logger"
 import { ModelLogo } from "@/components/ModelLogo"
 import { 
   calculatePreviewCost, 
@@ -119,6 +122,36 @@ type Message = {
 }
 type FileProcessingState = { status: "idle" | "uploading" | "processing" | "recognizing" | "complete" | "error"; progress: number; message: string }
 
+// 🔥 上传状态动态消息数组
+const UPLOAD_STATUS_MESSAGES = {
+  uploading: [
+    "正在上传文件...",
+    "文件传输中...",
+    "上传进度: {progress}%",
+    "正在发送请求..."
+  ],
+  processing: [
+    "正在深度解析题目...",
+    "AI 正在思考中...",
+    "正在识别内容...",
+    "正在分析文件..."
+  ],
+  recognizing: [
+    "正在理解题意...",
+    "深度分析中...",
+    "正在构建解题思路...",
+    "正在提取关键信息..."
+  ]
+}
+
+// 获取状态对应的随机消息
+function getRandomStatusMessage(status: FileProcessingState['status'], progress?: number): string {
+  const messages = UPLOAD_STATUS_MESSAGES[status as keyof typeof UPLOAD_STATUS_MESSAGES]
+  if (!messages) return ""
+  const message = messages[Math.floor(Math.random() * messages.length)]
+  return message.replace('{progress}', String(progress || 0))
+}
+
 // 🎵 格式化 Suno 响应：只保留歌词和 prompt，移除思考过程和冗余内容
 function formatSunoResponse(fullText: string): string {
   // 1. 移除思考过程 <think>...</think>
@@ -176,60 +209,7 @@ const SimpleBrainLoader = ({ modelKey = "standard" }: { modelKey?: string }) => 
 )
 
 // --- 辅助组件：文本渲染器 ---
-// LaTeX 渲染辅助函数
-// KaTeX 常用几何宏（兼容非标准写法）
-const LATEX_MACROS: Record<string, string> = {
-  "\\vec": "\\mathbf{#1}",
-  "\\vb": "\\mathbf{#1}",
-  "\\bm": "\\mathbf{#1}",
-  "\\abs": "\\left|#1\\right|",
-  "\\norm": "\\left\\|#1\\right\\|",
-  "\\set": "\\left\\{#1\\right\\}",
-  "\\령": "\\langle #1 \\rangle",
-  "\\sse": "\\subseteq",
-  "\\nse": "\\nsubseteq",
-  "\\R": "\\mathbb{R}",
-  "\\N": "\\mathbb{N}",
-  "\\Z": "\\mathbb{Z}",
-  "\\Q": "\\mathbb{Q}",
-  "\\C": "\\mathbb{C}",
-  "\\lam": "\\lambda",
-  "\\Lam": "\\Lambda",
-  "\\theta": "\\theta",
-  "\\Theta": "\\Theta",
-  "\\角": "\\angle",
-  "\\三角形": "\\triangle",
-  "\\垂直": "\\perp",
-  "\\平行": "\\parallel",
-  "\\相似": "\\sim",
-  "\\全等": "\\cong",
-}
-
-function renderLatex(latex: string, displayMode: boolean): string {
-  try {
-    return katex.renderToString(latex, {
-      displayMode,
-      throwOnError: false,
-      errorColor: "#B71C1C",
-      macros: LATEX_MACROS,
-    });
-  } catch (e) {
-    console.error("KaTeX render error:", e);
-    return latex;
-  }
-}
-
-// LaTeX 行内公式组件
-function MathInline({ formula }: { formula: string }) {
-  const html = renderLatex(formula, false);
-  return <span dangerouslySetInnerHTML={{ __html: html }} className="math-inline" />;
-}
-
-// LaTeX 块级公式组件
-function MathBlock({ formula }: { formula: string }) {
-  const html = renderLatex(formula, true);
-  return <div dangerouslySetInnerHTML={{ __html: html }} className="math-block my-3 overflow-x-auto text-center" />;
-}
+// LaTeX 渲染辅助函数 (已移至 lib/latex-constants.ts)
 
 const InlineText = ({ text }: { text: string }) => {
   if (!text) return null;
@@ -484,6 +464,11 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   const sessionIdRef = useRef<string | null>(null)
   const [currentSessionId, setCurrentSessionId] = useState<string>("")
 
+  // 🔥 修复：跟踪主动会话切换（侧边栏点击 vs URL 导航）
+  const isManualSessionSwitchRef = useRef(false)
+  // 🔥 修复：记录用户上次使用的模型（用于新建对话时恢复）
+  const lastUsedModelRef = useRef<ModelType>("standard")
+
   const [selectedModel, setSelectedModel] = useState<ModelType>(initialModel || "standard")
   const [genMode, setGenMode] = useState<GenMode>("text")
   
@@ -644,7 +629,8 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 
   useEffect(() => {
     if (urlSessionId && urlSessionId !== currentSessionId) {
-       loadHistorySession(urlSessionId)
+      isManualSessionSwitchRef.current = true
+      loadHistorySession(urlSessionId)
     }
   }, [urlSessionId])
 
@@ -692,8 +678,16 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     }
   }, [initialModel, urlSessionId])
 
+  // 🔥 当 urlSessionId 为空时（新建对话），恢复用户上次使用的模型或默认模型
+  useEffect(() => {
+    if (!urlSessionId && selectedModel !== lastUsedModelRef.current) {
+      logger.debug(`🔄 [新建对话模型恢复] ${selectedModel} → ${lastUsedModelRef.current}`)
+      setSelectedModel(lastUsedModelRef.current)
+    }
+  }, [urlSessionId])
+
   const loadHistorySession = async (sid: string) => {
-    console.log(`📂 [loadHistorySession] 开始加载会话: ${sid}, 当前 initialModel=${initialModel}, selectedModel=${selectedModel}`)
+    logger.debug(`📂 [loadHistorySession] 开始加载会话: ${sid}`)
     setIsLoading(true)
     setMessages([])
     try {
@@ -704,7 +698,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         .eq('id', sid)
         .single()
 
-      console.log(`📂 [loadHistorySession] 数据库返回: ai_model=${sessionData?.ai_model}, error=${sessionError?.message}`)
+      logger.debug(`📂 [loadHistorySession] ai_model=${sessionData?.ai_model}`)
 
       if (sessionError) {
         console.warn("获取会话模型失败:", sessionError)
@@ -713,10 +707,13 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         console.log(`🔄 [历史会话模型同步] 使用 fallback 模型: ${fallbackModel}`)
         setSelectedModel(fallbackModel as ModelType)
       } else {
-        // 🔥 同步模型状态 - URL 的 initialModel 作为主要来源（用户显式选择），
-        // 仅当 URL 没有指定模型时才使用数据库的 ai_model
-        const targetModel = initialModel || sessionData?.ai_model || "standard"
-        console.log(`🔄 [历史会话模型同步] initialModel=${initialModel}, ai_model=${sessionData?.ai_model} → selectedModel=${targetModel}`)
+        // 🔥 同步模型状态 - 当用户主动切换会话时，优先使用会话真实模型
+        // isManualSessionSwitchRef 为 true 时表示侧边栏点击，此时用 sessionData.ai_model
+        // isManualSessionSwitchRef 为 false 时表示 URL 导航，此时用 initialModel（保持分享链接兼容性）
+        const targetModel = isManualSessionSwitchRef.current
+          ? (sessionData?.ai_model || "standard")
+          : (initialModel || sessionData?.ai_model || "standard")
+        console.log(`🔄 [历史会话模型同步] isManual=${isManualSessionSwitchRef.current}, initialModel=${initialModel}, ai_model=${sessionData?.ai_model} → selectedModel=${targetModel}`)
         setSelectedModel(targetModel as ModelType)
         console.log(`✅ [历史会话模型同步] setSelectedModel 已调用: ${targetModel}`)
       }
@@ -747,6 +744,8 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       toast.error("加载历史会话失败")
     } finally {
       setIsLoading(false)
+      // 🔥 重置主动切换标记
+      isManualSessionSwitchRef.current = false
     }
   }
 
@@ -755,6 +754,8 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
   const [fileProcessing, setFileProcessing] = useState<FileProcessingState>({ status: "idle", progress: 0, message: "" })
+  // 🔥 动态状态消息（用于轮播显示）
+  const [dynamicStatusMessage, setDynamicStatusMessage] = useState("")
   const [uploadProgress, setUploadProgress] = useState<number>(0)
   const [isUploading, setIsUploading] = useState(false)
   const [isComplexMode, setIsComplexMode] = useState(false)
@@ -951,6 +952,8 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     else if (model === "sora-2-pro") setGenMode("video")
     else setGenMode("text")
 
+    // 🔥 记录用户上次使用的模型
+    lastUsedModelRef.current = model
     setSelectedModel(model)
 
     console.log(`🔄 [模型切换] 已切换至 ${model}`)
@@ -993,6 +996,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     setIsUploading(true)
     setUploadProgress(0)
     setFileProcessing({ status: "uploading", progress: 0, message: "正在处理..." })
+    setDynamicStatusMessage(getRandomStatusMessage("uploading", 0))
     
     try {
         const totalFiles = files.length
@@ -1067,6 +1071,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         setUploadedFiles(p => [...p, ...results]);
         toast.success("文件上传成功")
         setFileProcessing({ status: "idle", progress: 100, message: "完成" })
+        setDynamicStatusMessage("")
         setTimeout(() => setFileProcessing({ status: "idle", progress: 0, message: "" }), 1000)
     } catch(e: any) {
         console.error("上传错误:", e);
@@ -1191,6 +1196,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     }
 
     setFileProcessing({ status: "idle", progress: 0, message: "" })
+    setDynamicStatusMessage("")
     setIsLoading(true); setAnalysisStage(0); 
     setIsComplexMode(uploadedFiles.length > 0 || txt.length > 150)
     
@@ -1496,11 +1502,19 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
           duration: 5000
         })
         
-        setMessages(p => p.filter(m => m.id !== botId))
+        // 🔥 保留已生成的内容（如果 fullText 有内容，说明 AI 已经输出了部分内容）
+        if (fullText.trim()) {
+          // 保留消息并在末尾添加中断提示
+          setMessages(p => p.map(m => m.id === botId ? { ...m, content: fullText + "\n\n---\n*内容生成已中断* ✨" } : m))
+          toast.error("内容生成中断，已保留已生成的部分", { duration: 4000 })
+        } else {
+          // 没有任何内容，正常移除空气泡
+          setMessages(p => p.filter(m => m.id !== botId))
+        }
     } finally {
       setIsLoading(false)
-      // 🎯 标记工作流完成
-      markWorkflowComplete()
+      // 🔥 重置工作流状态（而非 markWorkflowComplete，否则会显示误导性的"已完成"节点）
+      resetWorkflow()
       
       // 🔥 积分刷新：对话结束后触发全局积分刷新
       console.log("🔄 [积分刷新] 对话结束，触发积分重新查询...")
@@ -1943,10 +1957,10 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 
         {/* 🔥 滚动区域优化 */}
         <div className="flex-1 h-0 relative overflow-hidden">
-          <div 
+          <div
             ref={scrollAreaRef}
             onScroll={handleScroll}
-            className="h-full overflow-y-auto custom-scrollbar"
+            className="h-full overflow-y-auto custom-scrollbar pb-24"
           >
             <div className="mx-auto max-w-6xl px-3 sm:px-4 md:px-6 lg:px-10 py-4 sm:py-6 md:py-8">
               {messages.length === 0 ? (
@@ -2078,7 +2092,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                 </div>
                 )
                 ) : (
-                <div className="space-y-5 sm:space-y-6 pt-2 sm:pt-4">
+                <div className="space-y-5 sm:space-y-6 pt-2 sm:pt-4 pb-24">
                   {messages.map((message) => (
                     <div key={message.id} className={cn("flex gap-2 sm:gap-3 group", message.role === "user" ? "justify-end" : "justify-start")}>
                       {message.role === "assistant" && (
@@ -2309,7 +2323,13 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
               <div className="mb-2 sm:mb-3 rounded-lg sm:rounded-xl bg-slate-50 p-2 sm:p-3 animate-in slide-in-from-bottom-2">
                 <div className="flex items-center gap-1.5 sm:gap-2">
                   {fileProcessing.status === "error" ? <AlertCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-red-500" /> : <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin" style={{ color: BRAND_GREEN }} />}
-                  <p className="text-xs sm:text-sm text-slate-600">{fileProcessing.message}</p>
+                  {dynamicStatusMessage ? (
+                    <p className="text-xs sm:text-sm bg-gradient-to-r from-emerald-600 to-green-500 bg-clip-text text-transparent animate-pulse font-medium">
+                      {dynamicStatusMessage}
+                    </p>
+                  ) : (
+                    <p className="text-xs sm:text-sm text-slate-600">{fileProcessing.message}</p>
+                  )}
                 </div>
               </div>
             )}

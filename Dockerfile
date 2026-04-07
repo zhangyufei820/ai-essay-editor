@@ -44,5 +44,5 @@ EXPOSE 3000
 # 清除默认 entrypoint
 ENTRYPOINT []
 
-# 启动命令
-CMD ["node", "node_modules/next/dist/bin/next", "start"]
+# 启动命令 - 使用 standalone server.js 以正确加载包含 proxyClientMaxBodySize 的配置
+CMD ["node", ".next/standalone/server.js"]
