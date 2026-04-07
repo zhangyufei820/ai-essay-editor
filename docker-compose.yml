@@ -22,15 +22,12 @@ services:
       - NODE_ENV=production
       - NEXT_PUBLIC_API_BASE_URL=
       - DIFY_INTERNAL_URL=http://docker-api-1:5001/v1
-    volumes:
-      - .:/app:ro
-      - /app/node_modules
-      - /app/.next
+    # 生产部署：移除 .:/app bind mount，镜像已包含编译好的 .next
+    # node_modules 无需挂载，镜像内已安装
+    volumes: []
     depends_on:
       postgres:
         condition: service_healthy
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:3000 || exit 1"]
       interval: 30s
