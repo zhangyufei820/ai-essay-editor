@@ -37,6 +37,7 @@ import { brandColors, slateColors } from "@/lib/design-tokens"
 import { LATEX_MACROS, renderLatex } from "@/lib/latex-constants"
 import { createClient } from "@supabase/supabase-js"
 import { collapseSidebar, refreshCredits, refreshSessionList } from "@/components/app-sidebar"
+import { useSelectedModelStore } from "@/hooks/useSelectedModelStore"
 import { validateFileForUpload, MAX_FILE_SIZE } from "@/lib/upload-service"
 import { VoiceRecorder, getDifyTTS, uploadAudioToDify } from "@/lib/voice-service"
 import { getApiUrl } from "@/lib/api-config"
@@ -497,11 +498,14 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   const [currentSessionId, setCurrentSessionId] = useState<string>("")
 
   // 🔥 修复：跟踪主动会话切换（侧边栏点击 vs URL 导航）
-  const isManualSessionSwitchRef = useRef(false)
+  // 🔥 now in Zustand store: useSelectedModelStore
   // 🔥 修复：记录用户上次使用的模型（用于新建对话时恢复）
   const lastUsedModelRef = useRef<ModelType>("standard")
 
-  const [selectedModel, setSelectedModel] = useState<ModelType>(initialModel || "standard")
+  // ✅ 全局状态：所有组件共享单一 selectedModel 真源
+  const selectedModel = useSelectedModelStore((s) => s.selectedModel)
+  const setSelectedModel = useSelectedModelStore((s) => s.setSelectedModel)
+  const isManualSessionSwitchRef = useRef(false) // 仅用于 useEffect 闭包比较
   const [genMode, setGenMode] = useState<GenMode>("text")
   
   // 🎵 Suno V5 音乐生成模式（必选项）
@@ -661,7 +665,8 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 
   useEffect(() => {
     if (urlSessionId && urlSessionId !== currentSessionId) {
-      isManualSessionSwitchRef.current = true
+      // URL 导航（非手动点击），由 loadHistorySession 中的 initialModel 决定模型
+      isManualSessionSwitchRef.current = false
       loadHistorySession(urlSessionId)
     }
   }, [urlSessionId])
@@ -740,12 +745,13 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         setSelectedModel(fallbackModel as ModelType)
       } else {
         // 🔥 同步模型状态 - 当用户主动切换会话时，优先使用会话真实模型
-        // isManualSessionSwitchRef 为 true 时表示侧边栏点击，此时用 sessionData.ai_model
-        // isManualSessionSwitchRef 为 false 时表示 URL 导航，此时用 initialModel（保持分享链接兼容性）
-        const targetModel = isManualSessionSwitchRef.current
+        // store.isManualSessionSwitch 为 true 时表示侧边栏点击，此时用 sessionData.ai_model
+        // store.isManualSessionSwitch 为 false 时表示 URL 导航，此时用 initialModel（保持分享链接兼容性）
+        const isManual = useSelectedModelStore.getState().isManualSessionSwitch
+        const targetModel = isManual
           ? (sessionData?.ai_model || "standard")
           : (initialModel || sessionData?.ai_model || "standard")
-        console.log(`🔄 [历史会话模型同步] isManual=${isManualSessionSwitchRef.current}, initialModel=${initialModel}, ai_model=${sessionData?.ai_model} → selectedModel=${targetModel}`)
+        console.log(`🔄 [历史会话模型同步] isManual=${isManual}, initialModel=${initialModel}, ai_model=${sessionData?.ai_model} → selectedModel=${targetModel}`)
         setSelectedModel(targetModel as ModelType)
         console.log(`✅ [历史会话模型同步] setSelectedModel 已调用: ${targetModel}`)
       }
@@ -776,8 +782,9 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       toast.error("加载历史会话失败")
     } finally {
       setIsLoading(false)
-      // 🔥 重置主动切换标记
+      // 🔥 重置主动切换标记（store + ref）
       isManualSessionSwitchRef.current = false
+      useSelectedModelStore.getState().markUrlNavigation()
     }
   }
 
@@ -1931,11 +1938,15 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                         <button
                           key={session.id}
                           onClick={() => {
-                            isManualSessionSwitchRef.current = true
-                            // 🔥 乐观更新：立即切换模型 Badge，不等待 API
+                            // 1. 标记为手动切换（store）
+                            useSelectedModelStore.getState().markManualSessionSwitch()
+                            // 2. 乐观更新：立即切换模型 Badge（store → 全局广播）
                             setSelectedModel(safeModel as ModelType)
-                            loadHistorySession(session.id)
+                            // 3. 同步更新 URL（单向数据流起点）
+                            router.push(`/chat?sessionId=${session.id}&agent=${safeModel}`)
+                            // 4. 关闭侧边栏
                             setShowHistorySidebar(false)
+                            // loadHistorySession 由 URL 变化触发的 useEffect 统一调用
                           }}
                           className={cn(
                             "w-full text-left px-3 py-2.5 rounded-lg transition-all",
@@ -2463,113 +2474,27 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
               </div>
             )}
 
-            {/* 🔥 输入框 - 所有模式都显示（Suno V5 也需要输入框进行对话） */}
+            {/* 🔥 输入框 - 使用 ChatInput 组件 */}
             {(selectedModel !== "suno-v5" || messages.length > 0) && (
             <div className="relative mx-auto max-w-3xl w-full px-2 sm:px-0">
-              {/* 🔥 悬浮模型选择器胶囊 - 翡翠绿毛玻璃，贴在输入框左上角边框线上 */}
-              <div className="absolute -top-3 left-3 z-10">
-                <div
-                  className={cn(
-                    "flex items-center gap-1.5 pl-2.5 pr-3 py-1.5 rounded-xl",
-                    "bg-emerald-50/90 backdrop-blur-md",
-                    "border border-emerald-200/50",
-                    "shadow-sm"
-                  )}
-                >
-                  {/* 颜色指示点 */}
-                  <div
-                    className="w-1.5 h-1.5 rounded-full shrink-0"
-                    style={{ backgroundColor: "#10A37F" }}
-                  />
-                  {/* 模型选择器触发按钮 */}
-                  <ModelSelector
-                    selectedModel={selectedModel}
-                    onModelChange={(model) => handleModelChange(model as ModelType)}
-                    models={modelList}
-                    disabled={isLoading}
-                    dailyFreeInfo={{ used: dailyUsage, total: DAILY_LIMIT }}
-                  />
-                </div>
-              </div>
-
-              {/* 输入框主体 - 悬浮通透形态 */}
-              <form
+              <ChatInput
+                showModelSelector={true}
+                modelColor={modelConfig[selectedModel].color}
+                modelName={modelConfig[selectedModel].name}
+                onModelClick={() => {}}
+                value={input}
+                onChange={setInput}
                 onSubmit={onSubmit}
-                className={cn(
-                  "relative rounded-xl border transition-all duration-300",
-                  "border-zinc-200/80 bg-white/80 backdrop-blur-md",
-                  "focus-within:border-emerald-300/80 focus-within:ring-2 focus-within:ring-emerald-500/10",
-                  "shadow-xl shadow-black/5"
-                )}
-              >
-                <div className="flex items-end gap-1.5 sm:gap-2 px-3 sm:px-4 py-2.5 sm:py-3">
-                  {/* 文件上传按钮 */}
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 sm:h-9 sm:w-9 rounded-lg shrink-0 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50/50 transition-colors disabled:opacity-40"
-                    onClick={() => {
-                      if (!userId) { toast.error("请先登录后再上传文件"); return }
-                      fileInputRef.current?.click()
-                    }}
-                    disabled={isLoading}
-                  >
-                    <Paperclip className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                  </Button>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    className="hidden"
-                    accept="image/*,.txt,.doc,.docx,.pdf,audio/*"
-                    multiple
-                    onChange={handleFileUpload}
-                  />
-
-                  {/* 🎤 语音输入按钮 */}
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className={cn(
-                      "h-8 w-8 sm:h-9 sm:w-9 rounded-lg shrink-0 transition-colors disabled:opacity-40",
-                      isListening
-                        ? "bg-red-500 text-white hover:bg-red-600 animate-pulse"
-                        : "text-slate-400 hover:text-emerald-600 hover:bg-emerald-50/50"
-                    )}
-                    onClick={toggleVoiceInput}
-                    disabled={isLoading}
-                  >
-                    {isListening ? <MicOff className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> : <Mic className="h-3.5 w-3.5 sm:h-4 sm:w-4" />}
-                  </Button>
-
-                  {/* 📝 Smart Textarea — auto-expand 2-10 rows */}
-                  <Textarea
-                    ref={textareaRef}
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    placeholder={userId ? "输入内容开始对话..." : "请先登录..."}
-                    className="flex-1 resize-none border-0 bg-transparent text-[15px] text-slate-700 placeholder:text-slate-300 focus-visible:ring-0 py-1 leading-normal"
-                    disabled={isLoading}
-                  />
-
-                  {/* 发送按钮 */}
-                  <Button
-                    type="submit"
-                    size="icon"
-                    className="h-8 w-8 sm:h-9 sm:w-9 rounded-lg shrink-0 text-white transition-all hover:opacity-90 disabled:opacity-25"
-                    style={{ backgroundColor: BRAND_GREEN }}
-                    disabled={isLoading || (!input.trim() && uploadedFiles.length === 0)}
-                  >
-                    {isLoading ? (
-                      <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin" />
-                    ) : (
-                      <Send className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                    )}
-                  </Button>
-                </div>
-              </form>
+                uploadedFiles={uploadedFiles}
+                onRemoveFile={(i) => setUploadedFiles((p) => p.filter((_, idx) => idx !== i))}
+                isLoading={isLoading}
+                disabled={isLoading}
+                placeholder={userId ? "输入内容开始对话..." : "请先登录..."}
+                onFileUpload={(files) => {
+                  const target = { target: { files } } as unknown as React.ChangeEvent<HTMLInputElement>
+                  handleFileUpload(target)
+                }}
+              />
             </div>
             )}
 
