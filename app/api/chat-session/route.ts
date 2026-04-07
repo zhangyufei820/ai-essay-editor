@@ -27,6 +27,7 @@ export async function POST(request: NextRequest) {
         processing_mode,
         ai_provider,
         ai_model,
+        date: Date.now(),
       })
       .select()
       .single()

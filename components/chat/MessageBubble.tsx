@@ -82,17 +82,24 @@ const assistantMessageVariants = {
 
 function StreamingCursor() {
   return (
-    <motion.span
-      animate={{ opacity: [1, 0, 1] }}
-      transition={{ duration: 0.8, repeat: Infinity, ease: "easeInOut" }}
-      className="inline-block ml-0.5"
-      style={{
-        width: 2,
-        height: "1em",
-        backgroundColor: CLAUDE_AVATAR_BG,
-        verticalAlign: "text-bottom"
-      }}
-    />
+    <motion.div
+      animate={{ opacity: [0.4, 1, 0.4] }}
+      transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
+      className="inline-flex items-center gap-1"
+    >
+      <span className="text-sm font-medium" style={{ color: CLAUDE_AVATAR_BG }}>
+        Thinking
+      </span>
+      <motion.div
+        animate={{ opacity: [1, 0, 1] }}
+        transition={{ duration: 0.6, repeat: Infinity, ease: "easeInOut", delay: 0.2 }}
+        className="flex gap-0.5"
+      >
+        <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: CLAUDE_AVATAR_BG }} />
+        <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: CLAUDE_AVATAR_BG }} />
+        <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: CLAUDE_AVATAR_BG }} />
+      </motion.div>
+    </motion.div>
   )
 }
 
@@ -128,10 +135,10 @@ function UserAvatar({ avatar }: { avatar?: string }) {
 function AIAvatar() {
   return (
     <div
-      className="w-16 h-16 rounded-2xl flex items-center justify-center shrink-0"
+      className="w-32 h-32 rounded-2xl flex items-center justify-center shrink-0"
       style={{ backgroundColor: CLAUDE_AVATAR_BG }}
     >
-      <Sparkles className="w-6 h-6 text-white" />
+      <Sparkles className="w-12 h-12 text-white" />
     </div>
   )
 }
@@ -404,54 +411,62 @@ const MessageBubble = memo(function MessageBubble({
         className
       )}
     >
-      {/* Avatar */}
-      <div className="flex-shrink-0 mt-1">
-        {isUser ? <UserAvatar avatar={avatar} /> : <AIAvatar />}
-      </div>
+      {/* AI 流式输出中：仅显示 Thinking 动画，无头像无气泡 */}
+      {isStreaming && !isUser ? (
+        <div className="flex items-center py-2">
+          <StreamingCursor />
+        </div>
+      ) : (
+        <>
+          {/* Avatar */}
+          <div className="flex-shrink-0 mt-1">
+            {isUser ? <UserAvatar avatar={avatar} /> : <AIAvatar />}
+          </div>
 
-      {/* Message Content */}
-      <div className={cn("flex flex-col", isUser ? "items-end" : "items-start")}>
-        {/* Flat bubble without heavy container styling */}
-        <div
-          className={cn(
-            isUser ? "px-1 py-1" : "px-0.5 py-1 sm:px-1 ai-message-bubble", // 移动端减少横向padding，为公式留空间
-          )}
-          style={isUser ? userBubbleStyle : assistantBubbleStyle}
-        >
-          {isUser ? (
-            <p
-              className="whitespace-pre-wrap break-words text-sm"
-              style={{ lineHeight: 1.4 }}
-            >
-              {content}
-            </p>
-          ) : (
+          {/* Message Content */}
+          <div className={cn("flex flex-col", isUser ? "items-end" : "items-start")}>
+            {/* Flat bubble without heavy container styling */}
             <div
-              className="text-sm ai-content-container"
-              style={{ lineHeight: 1.4, color: CLAUDE_TEXT_COLOR }}
+              className={cn(
+                isUser ? "px-1 py-1" : "px-0.5 py-1 sm:px-1 ai-message-bubble",
+              )}
+              style={isUser ? userBubbleStyle : assistantBubbleStyle}
             >
-              <MarkdownContent content={content} />
-              {isStreaming && <StreamingCursor />}
+              {isUser ? (
+                <p
+                  className="whitespace-pre-wrap break-words text-sm"
+                  style={{ lineHeight: 1.4 }}
+                >
+                  {content}
+                </p>
+              ) : (
+                <div
+                  className="text-sm ai-content-container"
+                  style={{ lineHeight: 1.4, color: CLAUDE_TEXT_COLOR }}
+                >
+                  <MarkdownContent content={content} />
+                </div>
+              )}
             </div>
-          )}
-        </div>
 
-        {/* Bottom action bar - Hidden by default, shows on hover */}
-        <div
-          className={cn(
-            "flex items-center gap-2 mt-1 px-1",
-            "opacity-0 group-hover:opacity-100 transition-opacity duration-200",
-            isUser ? "flex-row-reverse" : "flex-row"
-          )}
-        >
-          {timestamp && <Timestamp date={timestamp} />}
+            {/* Bottom action bar - Hidden by default, shows on hover */}
+            <div
+              className={cn(
+                "flex items-center gap-2 mt-1 px-1",
+                "opacity-0 group-hover:opacity-100 transition-opacity duration-200",
+                isUser ? "flex-row-reverse" : "flex-row"
+              )}
+            >
+              {timestamp && <Timestamp date={timestamp} />}
 
-          {/* Copy button for AI messages */}
-          {!isUser && !isStreaming && content && (
-            <CopyButton content={content} onCopy={onCopy} />
-          )}
-        </div>
-      </div>
+              {/* Copy button for AI messages */}
+              {!isUser && !isStreaming && content && (
+                <CopyButton content={content} onCopy={onCopy} />
+              )}
+            </div>
+          </div>
+        </>
+      )}
     </motion.div>
   )
 })

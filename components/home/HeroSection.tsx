@@ -17,6 +17,7 @@ import {
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { brandColors, slateColors, creamColors } from "@/lib/design-tokens"
+import { cn } from "@/lib/utils"
 
 
 // ============================================
@@ -490,6 +491,95 @@ function ChatDemo() {
 }
 
 // ============================================
+// 主页聊天输入框组件 - 真实可交互
+// ============================================
+
+function HeroChatInput() {
+  const router = useRouter()
+  const [value, setValue] = useState("")
+  const [isFocused, setIsFocused] = useState(false)
+
+  const handleSubmit = () => {
+    if (value.trim()) {
+      router.push("/chat")
+    }
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault()
+      handleSubmit()
+    }
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ duration: 0.5, delay: 1.5, ease: [0.32, 0.72, 0, 1] }}
+      className="max-w-2xl mx-auto mb-10 w-full px-4"
+    >
+      {/* 输入框主体 */}
+      <div
+        className="relative rounded-3xl bg-white border transition-all duration-300"
+        style={{
+          borderColor: isFocused ? `${brandColors[500]}60` : slateColors[200],
+          boxShadow: isFocused
+            ? `0 8px 24px rgba(16,163,127,0.12),0_4px_12px rgba(0,0,0,0.08)`
+            : `0 2px 8px rgba(0,0,0,0.04),0_8px_24px rgba(0,0,0,0.06)`,
+        }}
+      >
+        {/* 工具栏 */}
+        <div
+          className="flex items-center justify-between px-4 py-2.5 rounded-t-3xl"
+          style={{ borderBottom: `1px solid ${slateColors[100]}` }}
+        >
+          <div className="flex items-center gap-2">
+            <div
+              className="h-2 w-2 rounded-full"
+              style={{ backgroundColor: brandColors[500] }}
+            />
+            <span className="text-xs font-medium" style={{ color: slateColors[600] }}>
+              班主任助手
+            </span>
+            <ChevronDown className="h-3 w-3 opacity-50" style={{ color: slateColors[400] }} />
+          </div>
+          <Paperclip className="h-4 w-4 opacity-40" style={{ color: slateColors[400] }} />
+        </div>
+        {/* 输入区域 */}
+        <div className="flex items-center gap-3 px-4 py-4">
+          <input
+            type="text"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            onKeyDown={handleKeyDown}
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setIsFocused(false)}
+            placeholder="输入内容开始对话..."
+            className="flex-1 text-sm bg-transparent outline-none"
+            style={{ color: slateColors[700] }}
+          />
+          <motion.button
+            onClick={handleSubmit}
+            className={cn(
+              "h-9 w-9 rounded-xl flex items-center justify-center shrink-0 transition-all duration-200",
+              value.trim()
+                ? "text-white cursor-pointer"
+                : "opacity-40 cursor-not-allowed"
+            )}
+            style={{ backgroundColor: brandColors[600] }}
+            whileHover={value.trim() ? { scale: 1.05 } : {}}
+            whileTap={value.trim() ? { scale: 0.95 } : {}}
+          >
+            <Send className="h-4 w-4" />
+          </motion.button>
+        </div>
+      </div>
+    </motion.div>
+  )
+}
+
+// ============================================
 // 主组件
 // ============================================
 
@@ -577,74 +667,9 @@ export function HeroSection() {
             从作文批改到学习规划，全方位助力学业进步。
           </motion.p>
 
-          {/* 🎯 模拟聊天输入框 - 引导用户点击跳转 */}
-          <motion.div
-            initial={{ opacity: 0, y: 20, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            transition={{ duration: 0.5, delay: 1.5, ease: [0.32, 0.72, 0, 1] }}
-            className="max-w-2xl mx-auto mb-10"
-          >
-            <button
-              onClick={() => router.push("/chat")}
-              className="relative w-full group cursor-pointer"
-              style={{}}
-            >
-              {/* 外层装饰光晕 */}
-              <div
-                className="absolute -inset-1 rounded-2xl opacity-30 group-hover:opacity-50 transition-opacity duration-300"
-                style={{
-                  background: `linear-gradient(135deg, ${brandColors[400]}, ${brandColors[600]})`,
-                  filter: "blur(8px)"
-                }}
-              />
-              {/* 输入框主体 */}
-              <div
-                className="relative rounded-2xl bg-white border-2 transition-all duration-300 group-hover:border-emerald-300"
-                style={{
-                  borderColor: `${brandColors[400]}40`,
-                  boxShadow: `0 4px 24px rgba(16, 163, 127, 0.08), 0 2px 8px rgba(0,0,0,0.06)`
-                }}
-              >
-                {/* 工具栏 */}
-                <div
-                  className="flex items-center justify-between px-4 py-2.5 rounded-t-2xl"
-                  style={{ borderBottom: `1px solid ${slateColors[100]}` }}
-                >
-                  <div className="flex items-center gap-2">
-                    <div
-                      className="h-2 w-2 rounded-full"
-                      style={{ backgroundColor: brandColors[500] }}
-                    />
-                    <span className="text-xs font-medium" style={{ color: slateColors[500] }}>
-                      班主任助手
-                    </span>
-                    <ChevronDown className="h-3 w-3 opacity-40" style={{ color: slateColors[400] }} />
-                  </div>
-                  <Paperclip className="h-4 w-4 opacity-40" style={{ color: slateColors[400] }} />
-                </div>
-                {/* 输入区域 */}
-                <div className="flex items-center gap-3 px-4 py-4">
-                  <span className="text-sm" style={{ color: slateColors[400] }}>
-                    输入内容开始对话...
-                  </span>
-                  <div className="flex-1" />
-                  <div
-                    className="h-8 w-8 rounded-lg flex items-center justify-center text-white shrink-0"
-                    style={{ backgroundColor: brandColors[600] }}
-                  >
-                    <Send className="h-3.5 w-3.5" />
-                  </div>
-                </div>
-              </div>
-              {/* 点击提示 */}
-              <p
-                className="text-center text-xs mt-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-                style={{ color: brandColors[600] }}
-              >
-                点击开始对话 →
-              </p>
-            </button>
-          </motion.div>
+          {/* 🎯 真实聊天输入框 - 与对话页体验一致 */}
+          <HeroChatInput />
+
 
           {/* CTA 按钮组 - 🎨 增强渐变和发光效果 */}
           <motion.div
