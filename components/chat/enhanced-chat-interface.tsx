@@ -61,6 +61,45 @@ import {
 // 🔥 品牌深绿色（参考主页标题）
 const BRAND_GREEN = "#14532d"
 
+// 模型 key 到显示名称的映射
+const MODEL_DISPLAY_NAMES: Record<string, string> = {
+  "standard": "标准",
+  "teaching-pro": "教学 Pro",
+  "gpt-5": "GPT-5",
+  "claude-opus": "Claude",
+  "gemini-pro": "Gemini",
+  "banana-2-pro": "Banana",
+  "grok-4.2": "Grok",
+  "open-claw": "OpenClaw",
+  "quanquan-math": "全科数学",
+  "quanquan-english": "全科英语",
+  "beike-pro": "备课助手",
+  "banzhuren": "伴读助手",
+  "suno-v5": "音乐",
+  "sora-2-pro": "视频",
+}
+
+// 获取模型徽章颜色
+function getModelBadgeColor(modelKey: string): string {
+  const colors: Record<string, string> = {
+    "standard": "#10A37F",
+    "teaching-pro": "#0d3a1f",
+    "gpt-5": "#10A37F",
+    "claude-opus": "#DC2626",
+    "gemini-pro": "#F59E0B",
+    "banana-2-pro": "#8B5CF6",
+    "grok-4.2": "#000000",
+    "open-claw": "#6366F1",
+    "quanquan-math": "#059669",
+    "quanquan-english": "#0284C7",
+    "beike-pro": "#EC4899",
+    "banzhuren": "#7C3AED",
+    "suno-v5": "#F59E0B",
+    "sora-2-pro": "#EF4444",
+  }
+  return colors[modelKey] || "#6B7280"
+}
+
 // 🔥 移动端用户信息显示组件
 const MobileUserInfo = ({ 
   userName, 
@@ -204,8 +243,8 @@ function formatSunoResponse(fullText: string): string {
 }
 
 // --- 辅助组件：思考加载器 - Claude 极简风格 ---
-const SimpleBrainLoader = ({ modelKey = "standard" }: { modelKey?: string }) => (
-  <LoadingStateCard modelKey={modelKey as any} />
+const SimpleBrainLoader = ({ modelKey = "standard", showHint = false }: { modelKey?: string; showHint?: boolean }) => (
+  <LoadingStateCard modelKey={modelKey as any} showHint={showHint} />
 )
 
 // --- 辅助组件：文本渲染器 ---
@@ -752,6 +791,9 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  // 🔥 深度思考提示状态（15秒后显示）
+  const [showDeepThinkingHint, setShowDeepThinkingHint] = useState(false)
+  const deepThinkingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
   const [fileProcessing, setFileProcessing] = useState<FileProcessingState>({ status: "idle", progress: 0, message: "" })
   // 🔥 动态状态消息（用于轮播显示）
@@ -802,6 +844,44 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     }
   }, [messages, isNearBottom])
   useEffect(() => { if (isLoading && isComplexMode && analysisStage < 4) setTimeout(() => setAnalysisStage(p => Math.min(p + 1, 4)), 2000) }, [isLoading, analysisStage, isComplexMode])
+
+  // 🔥 深度思考提示：isLoading 启动后 15 秒显示提示，收到首字节后清除
+  useEffect(() => {
+    if (isLoading) {
+      // 15 秒后显示提示
+      deepThinkingTimerRef.current = setTimeout(() => {
+        setShowDeepThinkingHint(true)
+      }, 15_000)
+    } else {
+      // 加载结束，清理所有状态
+      setShowDeepThinkingHint(false)
+      if (deepThinkingTimerRef.current) {
+        clearTimeout(deepThinkingTimerRef.current)
+        deepThinkingTimerRef.current = null
+      }
+    }
+
+    return () => {
+      if (deepThinkingTimerRef.current) {
+        clearTimeout(deepThinkingTimerRef.current)
+        deepThinkingTimerRef.current = null
+      }
+    }
+  }, [isLoading])
+
+  // 🔥 首字节探测：一旦当前 AI 消息开始收到内容，立即清除深度思考提示
+  useEffect(() => {
+    if (isLoading && currentBotIdRef.current) {
+      const currentBotMessage = messages.find(m => m.id === currentBotIdRef.current)
+      if (currentBotMessage && currentBotMessage.content && currentBotMessage.content.length > 0) {
+        setShowDeepThinkingHint(false)
+        if (deepThinkingTimerRef.current) {
+          clearTimeout(deepThinkingTimerRef.current)
+          deepThinkingTimerRef.current = null
+        }
+      }
+    }
+  }, [messages, isLoading, currentBotIdRef.current])
 
   // --- 模型配置（增强版：添加描述和标签） ---
   const modelConfig = {
@@ -1838,34 +1918,52 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                       暂无历史会话
                     </div>
                   ) : (
-                    chatSessions.map(session => (
-                      <button
-                        key={session.id}
-                        onClick={() => {
-                          router.push(`/chat/${session.ai_model || 'standard'}?id=${session.id}`)
-                          setShowHistorySidebar(false)
-                        }}
-                        className={cn(
-                          "w-full text-left px-3 py-2.5 rounded-lg transition-all",
-                          currentSessionId === session.id
-                            ? "bg-[#10A37F]/10 text-[#10A37F]"
-                            : "hover:bg-slate-100 text-slate-600"
-                        )}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="text-sm font-medium truncate flex-1">{session.title}</div>
-                          <div className="text-[10px] text-slate-400 shrink-0">
-                            {new Date(session.date).toLocaleString('zh-CN', {
-                              month: '2-digit',
-                              day: '2-digit',
-                              hour: '2-digit',
-                              minute: '2-digit'
-                            })}
+                    chatSessions.map(session => {
+                      const safeModel = session.ai_model || "standard"
+                      return (
+                        <button
+                          key={session.id}
+                          onClick={() => {
+                            isManualSessionSwitchRef.current = true
+                            loadHistorySession(session.id)
+                            setShowHistorySidebar(false)
+                          }}
+                          className={cn(
+                            "w-full text-left px-3 py-2.5 rounded-lg transition-all",
+                            currentSessionId === session.id
+                              ? "bg-[#10A37F]/10 text-[#10A37F]"
+                              : "hover:bg-slate-100 text-slate-600"
+                          )}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                              <div className="text-sm font-medium truncate">{session.title}</div>
+                              {/* 模型徽章 */}
+                              {safeModel !== "standard" && (
+                                <span
+                                  className="text-[9px] px-1.5 py-0.5 rounded-full font-medium shrink-0"
+                                  style={{
+                                    backgroundColor: `${getModelBadgeColor(safeModel)}18`,
+                                    color: getModelBadgeColor(safeModel)
+                                  }}
+                                >
+                                  {MODEL_DISPLAY_NAMES[safeModel] || safeModel}
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[10px] text-slate-400 shrink-0">
+                              {new Date(session.date).toLocaleString('zh-CN', {
+                                month: '2-digit',
+                                day: '2-digit',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </div>
                           </div>
-                        </div>
-                        <div className="text-xs text-slate-400 truncate mt-0.5">{session.preview}</div>
-                      </button>
-                    ))
+                          <div className="text-xs text-slate-400 truncate mt-0.5">{session.preview}</div>
+                        </button>
+                      )
+                    })
                   )}
                 </div>
               </ScrollArea>
@@ -2156,7 +2254,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                             )}
                             {/* Thinking state */}
                             {message.id === currentBotIdRef.current && isLoading && !message.content && !isFastTrack ? (
-                              <SimpleBrainLoader />
+                              <SimpleBrainLoader showHint={showDeepThinkingHint} />
                             ) : (
                               <>
                                 {/* Content renderer */}

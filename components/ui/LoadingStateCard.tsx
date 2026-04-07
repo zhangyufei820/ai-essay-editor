@@ -16,6 +16,7 @@ import { Sparkles } from "lucide-react"
 interface LoadingStateCardProps {
   modelKey?: string
   className?: string
+  showHint?: boolean   // true = 显示"深度思考中"提示
 }
 
 // ============================================
@@ -30,19 +31,25 @@ interface LoadingStateCardProps {
  */
 export function LoadingStateCard({
   modelKey = "standard",
-  className
+  className,
+  showHint = false
 }: LoadingStateCardProps) {
   return (
-    <div
-      className={`inline-flex items-center gap-1.5 ${className || ""}`}
-    >
-      <Sparkles
-        className="w-3 h-3 text-slate-400 shrink-0"
-        strokeWidth={1.5}
-      />
-      <span className="text-xs text-slate-400 font-normal tracking-wide">
-        Thinking...
-      </span>
+    <div className={`inline-flex flex-col gap-1 ${className || ""}`}>
+      <div className="inline-flex items-center gap-1.5">
+        <Sparkles
+          className="w-3 h-3 text-slate-400 shrink-0"
+          strokeWidth={1.5}
+        />
+        <span className="text-xs text-slate-400 font-normal tracking-wide">
+          {showHint ? "AI 正在深度思考中..." : "Thinking..."}
+        </span>
+      </div>
+      {showHint && (
+        <span className="text-xs text-slate-400 font-normal tracking-wide ml-5">
+          这可能需要一点时间，请耐心等待...
+        </span>
+      )}
     </div>
   )
 }

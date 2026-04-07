@@ -1,8 +1,16 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
-import { 
-  calculateActualCost, 
-  ModelType, 
+import {
+  DifyChatRequest,
+  DifyWorkflowRequest,
+  DifyImageObject,
+  DifyFileObject,
+  DifyWorkflowInputs,
+  DifyImageSize,
+} from "@/lib/dify-types"
+import {
+  calculateActualCost,
+  ModelType,
   MODEL_COSTS,
   LUXURY_THRESHOLD,
   getModelDisplayName
@@ -340,6 +348,13 @@ export async function POST(request: NextRequest) {
     console.log(`💰 [预检查] 用户: ${userId} | 模型: ${modelType} | 当前积分: ${currentCredits}`)
 
     // --- 3. 构造 Dify 请求函数 ---
+    // 🔥 共享流状态：首字节探测 + 超时定时器（供 callDify 和 transformStream 共同访问）
+    const streamStatus: {
+      firstByteReceived: boolean
+      timeoutId: ReturnType<typeof setTimeout> | null
+      controller: AbortController | null
+    } = { firstByteReceived: false, timeoutId: null, controller: null }
+
     const callDify = async (retryWithoutId = false) => {
         const currentConvId = retryWithoutId ? null : conversation_id;
 
@@ -347,7 +362,7 @@ export async function POST(request: NextRequest) {
         const isWorkflow = model === "banana-2-pro";
         const apiEndpoint = isWorkflow ? "/workflows/run" : "/chat-messages";
 
-        let difyRequest: any;
+        let difyRequest: DifyWorkflowRequest | DifyChatRequest;
 
         if (isWorkflow) {
             // 🎨 Workflow API 格式
@@ -360,7 +375,7 @@ export async function POST(request: NextRequest) {
                 response_mode: "streaming",
                 user: userId || "default-user",
             }
-            
+
             // 🔥 如果有文件，构造文件对象格式
             if (fileIds && fileIds.length > 0) {
                 difyRequest.inputs.init_image = {
@@ -370,7 +385,7 @@ export async function POST(request: NextRequest) {
                 }
                 console.log(`🎨 [Banana] 使用文件对象:`, difyRequest.inputs.init_image)
             }
-            
+
             // 🎨 传递尺寸参数（如果有）
             if (imageSize) {
                 difyRequest.inputs.aspect_ratio = imageSize.ratio || "9:16"
@@ -378,7 +393,7 @@ export async function POST(request: NextRequest) {
                 difyRequest.inputs.image_height = imageSize.height || 1920
                 console.log(`🎨 [Banana] 图片尺寸: ${imageSize.ratio} (${imageSize.width}x${imageSize.height})`)
             }
-            
+
             console.log(`🎨 [Banana] Workflow 请求体:`, JSON.stringify(difyRequest, null, 2))
         } else {
             // 💬 Chat API 格式
@@ -401,16 +416,43 @@ export async function POST(request: NextRequest) {
 
         console.log(`🔗 [API端点] ${apiEndpoint} | 模式: ${isWorkflow ? 'Workflow' : 'Chat'}`)
 
-        const response = await fetch(`${DIFY_BASE_URL}${apiEndpoint}`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${targetApiKey}`, 
-            },
-            body: JSON.stringify(difyRequest),
-        })
+        // 🔥 180秒兜底超时 AbortController
+        streamStatus.controller = new AbortController()
+        streamStatus.timeoutId = setTimeout(() => {
+            if (!streamStatus.firstByteReceived) {
+                console.warn(`⏰ [Dify超时] 180秒内未收到首字节，中断请求`)
+                streamStatus.controller?.abort()
+            }
+        }, 180_000)
 
-        return response;
+        try {
+            const response = await fetch(`${DIFY_BASE_URL}${apiEndpoint}`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${targetApiKey}`,
+                },
+                body: JSON.stringify(difyRequest),
+                signal: streamStatus.controller.signal,
+            })
+
+            return response
+        } catch (error: unknown) {
+            // 清理超时定时器
+            if (streamStatus.timeoutId) {
+                clearTimeout(streamStatus.timeoutId)
+                streamStatus.timeoutId = null
+            }
+
+            // 判断是否为 AbortError（超时中断）
+            const err = error instanceof Error ? error : null
+            if (err && (err.name === 'AbortError' || err.message.includes('abort'))) {
+                console.error(`❌ [Dify请求] 请求被中断（超时）:`, err.message)
+                throw new Error('请求超时：Dify 服务在 180 秒内未响应')
+            }
+
+            throw error
+        }
     };
 
     // --- 4. 执行请求与智能容错（最多重试1次，防止死循环）---
@@ -480,6 +522,16 @@ export async function POST(request: NextRequest) {
     
     const transformStream = new TransformStream({
       async transform(chunk, controller) {
+        // 🔥 首字节探测：当 transform 被调用时，说明流式数据已开始传输，取消 180s 超时
+        if (!streamStatus.firstByteReceived) {
+            streamStatus.firstByteReceived = true
+            if (streamStatus.timeoutId) {
+                clearTimeout(streamStatus.timeoutId)
+                streamStatus.timeoutId = null
+            }
+            console.log(`✅ [首字节探测] Dify 流式数据开始传输，已取消 180s 超时定时器`)
+        }
+
         // 直接传递数据给前端
         controller.enqueue(chunk)
         
@@ -683,8 +735,9 @@ export async function POST(request: NextRequest) {
         headers: { "Content-Type": "text/event-stream" },
     })
 
-  } catch (error: any) {
-    console.error("❌ 后端致命错误:", error);
-    return new Response(JSON.stringify({ error: error.message }), { status: 500 })
+  } catch (error: unknown) {
+    const err = error instanceof Error ? error : new Error(String(error))
+    console.error("❌ 后端致命错误:", err.message);
+    return new Response(JSON.stringify({ error: err.message }), { status: 500 })
   }
 }
