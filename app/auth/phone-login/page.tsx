@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -25,6 +25,23 @@ export default function PhoneLoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const [devCode, setDevCode] = useState("")
+
+  // 验证码倒计时定时器 - 组件卸载时自动清理
+  useEffect(() => {
+    if (countdown <= 0) return
+
+    const timer = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer)
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+
+    return () => clearInterval(timer)
+  }, [countdown])
 
   const handleSendCode = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -51,16 +68,6 @@ export default function PhoneLoginPage() {
 
       setStep("code")
       setCountdown(60)
-
-      const timer = setInterval(() => {
-        setCountdown((prev) => {
-          if (prev <= 1) {
-            clearInterval(timer)
-            return 0
-          }
-          return prev - 1
-        })
-      }, 1000)
     } catch (err: any) {
       setError(err.message)
     } finally {

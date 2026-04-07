@@ -191,41 +191,51 @@ function ChatDemo() {
 
   // 自动播放对话演示（循环）
   useEffect(() => {
-    const timer = setTimeout(() => {
-      // 显示第一条 AI 消息
+    // 追踪所有嵌套定时器，组件卸载或 cycleKey 变化时统一清理
+    const timers: ReturnType<typeof setTimeout | typeof setInterval>[] = []
+
+    const addTimer = (fn: () => void, ms: number) => {
+      const id = setTimeout(fn, ms)
+      timers.push(id)
+      return id
+    }
+
+    const addInterval = (fn: () => void, ms: number) => {
+      const id = setInterval(fn, ms)
+      timers.push(id)
+      return id
+    }
+
+    // 外层延迟启动
+    addTimer(() => {
       setVisibleMessages(1)
 
-      // 2秒后显示文件上传动画
-      setTimeout(() => {
+      addTimer(() => {
         setShowFileUpload(true)
 
-        // 1.5秒后显示文件消息
-        setTimeout(() => {
+        addTimer(() => {
           setShowFileUpload(false)
           setVisibleMessages(2)
 
-          // 1秒后开始用户输入
-          setTimeout(() => {
+          addTimer(() => {
             setIsTyping(true)
             const userText = "帮我批改一下这篇作文"
             let i = 0
-            const typeInterval = setInterval(() => {
+            addInterval(() => {
               if (i < userText.length) {
                 setUserInput(userText.slice(0, i + 1))
                 i++
               } else {
-                clearInterval(typeInterval)
-                setTimeout(() => {
+                clearInterval(timers.pop()) // 移除 interval
+                addTimer(() => {
                   setIsTyping(false)
                   setUserInput("")
                   setVisibleMessages(3)
 
-                  // 显示 AI 回复
-                  setTimeout(() => {
+                  addTimer(() => {
                     setVisibleMessages(4)
 
-                    // 3秒后重新开始循环
-                    setTimeout(() => {
+                    addTimer(() => {
                       resetAndPlay()
                     }, 4000)
                   }, 800)
@@ -237,7 +247,11 @@ function ChatDemo() {
       }, 2500)
     }, 1000)
 
-    return () => clearTimeout(timer)
+    // 组件卸载或 cycleKey 变化时清理所有定时器
+    return () => timers.forEach(id => {
+      clearTimeout(id)
+      clearInterval(id)
+    })
   }, [cycleKey, resetAndPlay])
 
   return (

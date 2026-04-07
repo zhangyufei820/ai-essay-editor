@@ -15,7 +15,7 @@ export default function WeChatPaymentPage() {
 
   useEffect(() => {
     const orderNo = Array.isArray(params.orderNo) ? params.orderNo[0] : params.orderNo
-    
+
     if (!orderNo) {
       setError("订单号不存在")
       setLoading(false)
@@ -45,6 +45,9 @@ export default function WeChatPaymentPage() {
               router.push("/payment/success")
             }
           }, 3000)
+
+          // 组件卸载时清理 pollInterval
+          return () => clearInterval(pollInterval)
         } else {
           setError(data.error)
         }
