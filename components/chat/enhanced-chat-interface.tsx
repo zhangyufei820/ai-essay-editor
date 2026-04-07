@@ -76,7 +76,7 @@ const MODEL_DISPLAY_NAMES: Record<string, string> = {
   "quanquan-math": "全科数学",
   "quanquan-english": "全科英语",
   "beike-pro": "备课助手",
-  "banzhuren": "伴读助手",
+  "banzhuren": "班主任助手",
   "suno-v5": "音乐",
   "sora-2-pro": "视频",
 }
@@ -2479,9 +2479,11 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
             <div className="relative mx-auto max-w-3xl w-full px-2 sm:px-0">
               <ChatInput
                 showModelSelector={true}
+                selectedModel={selectedModel}
+                models={modelList}
+                onModelChange={handleModelChange}
                 modelColor={modelConfig[selectedModel].color}
                 modelName={modelConfig[selectedModel].name}
-                onModelClick={() => {}}
                 value={input}
                 onChange={setInput}
                 onSubmit={onSubmit}

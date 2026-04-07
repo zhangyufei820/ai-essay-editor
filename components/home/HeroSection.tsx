@@ -10,6 +10,7 @@
 
 import { motion, AnimatePresence } from "framer-motion"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { useState, useEffect, useCallback } from "react"
 import {
   ArrowRight, Sparkles, MessageSquare, ChevronDown, Send, Paperclip, FileText, X
@@ -493,6 +494,7 @@ function ChatDemo() {
 // ============================================
 
 export function HeroSection() {
+  const router = useRouter()
   return (
     <section
       className="relative min-h-screen flex flex-col items-center justify-center overflow-hidden py-20"
@@ -567,13 +569,82 @@ export function HeroSection() {
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 1.2, ease: [0.32, 0.72, 0, 1] }}
-            className="text-lg md:text-xl max-w-2xl mx-auto mb-10"
+            className="text-lg md:text-xl max-w-2xl mx-auto mb-8"
             style={{ color: slateColors[600] }}
           >
             沈翔智学为每一位学生提供个性化的 AI 辅导体验，
             <br className="hidden md:block" />
             从作文批改到学习规划，全方位助力学业进步。
           </motion.p>
+
+          {/* 🎯 模拟聊天输入框 - 引导用户点击跳转 */}
+          <motion.div
+            initial={{ opacity: 0, y: 20, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ duration: 0.5, delay: 1.5, ease: [0.32, 0.72, 0, 1] }}
+            className="max-w-2xl mx-auto mb-10"
+          >
+            <button
+              onClick={() => router.push("/chat")}
+              className="relative w-full group cursor-pointer"
+              style={{}}
+            >
+              {/* 外层装饰光晕 */}
+              <div
+                className="absolute -inset-1 rounded-2xl opacity-30 group-hover:opacity-50 transition-opacity duration-300"
+                style={{
+                  background: `linear-gradient(135deg, ${brandColors[400]}, ${brandColors[600]})`,
+                  filter: "blur(8px)"
+                }}
+              />
+              {/* 输入框主体 */}
+              <div
+                className="relative rounded-2xl bg-white border-2 transition-all duration-300 group-hover:border-emerald-300"
+                style={{
+                  borderColor: `${brandColors[400]}40`,
+                  boxShadow: `0 4px 24px rgba(16, 163, 127, 0.08), 0 2px 8px rgba(0,0,0,0.06)`
+                }}
+              >
+                {/* 工具栏 */}
+                <div
+                  className="flex items-center justify-between px-4 py-2.5 rounded-t-2xl"
+                  style={{ borderBottom: `1px solid ${slateColors[100]}` }}
+                >
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="h-2 w-2 rounded-full"
+                      style={{ backgroundColor: brandColors[500] }}
+                    />
+                    <span className="text-xs font-medium" style={{ color: slateColors[500] }}>
+                      班主任助手
+                    </span>
+                    <ChevronDown className="h-3 w-3 opacity-40" style={{ color: slateColors[400] }} />
+                  </div>
+                  <Paperclip className="h-4 w-4 opacity-40" style={{ color: slateColors[400] }} />
+                </div>
+                {/* 输入区域 */}
+                <div className="flex items-center gap-3 px-4 py-4">
+                  <span className="text-sm" style={{ color: slateColors[400] }}>
+                    输入内容开始对话...
+                  </span>
+                  <div className="flex-1" />
+                  <div
+                    className="h-8 w-8 rounded-lg flex items-center justify-center text-white shrink-0"
+                    style={{ backgroundColor: brandColors[600] }}
+                  >
+                    <Send className="h-3.5 w-3.5" />
+                  </div>
+                </div>
+              </div>
+              {/* 点击提示 */}
+              <p
+                className="text-center text-xs mt-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                style={{ color: brandColors[600] }}
+              >
+                点击开始对话 →
+              </p>
+            </button>
+          </motion.div>
 
           {/* CTA 按钮组 - 🎨 增强渐变和发光效果 */}
           <motion.div

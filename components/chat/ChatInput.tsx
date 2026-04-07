@@ -14,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { brandColors, slateColors } from "@/lib/design-tokens"
+import { ModelSelector, type Model } from "./ModelSelector"
 
 // ============================================
 // Web Speech API 类型定义
@@ -86,10 +87,16 @@ interface ChatInputProps {
   placeholder?: string
   /** 当前模型名称 */
   modelName?: string
+  /** 当前模型 key（showModelSelector=true 时使用 ModelSelector） */
+  selectedModel?: string
   /** 模型点击回调 */
   onModelClick?: () => void
   /** 是否显示模型选择器 */
   showModelSelector?: boolean
+  /** 模型列表（showModelSelector=true 时必需） */
+  models?: Model[]
+  /** 模型切换回调（showModelSelector=true 时必需） */
+  onModelChange?: (model: string) => void
   /** 模型颜色 */
   modelColor?: string
   /** 自定义类名 */
@@ -173,9 +180,12 @@ export function ChatInput({
   disabled = false,
   placeholder = "输入内容开始对话...",
   modelName,
+  selectedModel,
   onModelClick,
   showModelSelector = false,
   modelColor = brandColors[900],
+  models = [],
+  onModelChange,
   className
 }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -283,9 +293,9 @@ export function ChatInput({
     <div
       className={cn(
         "relative rounded-3xl bg-white border transition-all duration-300",
-        isFocused 
-          ? "shadow-[0_4px_12px_rgba(0,0,0,0.06),0_12px_32px_rgba(0,0,0,0.12),0_20px_56px_rgba(0,0,0,0.12)] ring-1" 
-          : "shadow-[0_2px_8px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.08),0_16px_48px_rgba(0,0,0,0.08)]",
+        isFocused
+          ? "shadow-[0_8px_24px_rgba(0,0,0,0.10),0_20px_48px_rgba(0,0,0,0.15),0_32px_80px_rgba(0,0,0,0.18)] ring-1"
+          : "shadow-[0_4px_12px_rgba(0,0,0,0.06),0_12px_32px_rgba(0,0,0,0.10),0_24px_64px_rgba(0,0,0,0.12)]",
         className
       )}
       style={{ 
@@ -295,31 +305,32 @@ export function ChatInput({
     >
       {/* 工具栏 */}
       {showModelSelector && (
-        <div 
+        <div
           className="flex items-center justify-between px-4 py-2 border-b"
           style={{ borderColor: slateColors[50] }}
         >
-          {/* 模型选择器 */}
-          <button
-            type="button"
-            onClick={onModelClick}
-            className="flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors hover:bg-slate-50"
-          >
-            <div 
-              className="h-2 w-2 rounded-full"
-              style={{ backgroundColor: modelColor }}
+          {/* 模型选择器 - 使用 ModelSelector 组件 */}
+          {models.length > 0 && selectedModel && onModelChange ? (
+            <ModelSelector
+              selectedModel={selectedModel}
+              onModelChange={onModelChange}
+              models={models}
+              disabled={isLoading || disabled}
             />
-            <span 
-              className="text-xs font-medium"
-              style={{ color: slateColors[600] }}
+          ) : (
+            /* Fallback: 简单按钮（当 props 不完整时） */
+            <button
+              type="button"
+              onClick={onModelClick}
+              className="flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors hover:bg-slate-50"
             >
-              {modelName || "选择模型"}
-            </span>
-            <ChevronDown 
-              className="h-3 w-3 opacity-50"
-              style={{ color: slateColors[400] }}
-            />
-          </button>
+              <div className="h-2 w-2 rounded-full" style={{ backgroundColor: modelColor }} />
+              <span className="text-xs font-medium" style={{ color: slateColors[600] }}>
+                {modelName || "选择模型"}
+              </span>
+              <ChevronDown className="h-3 w-3 opacity-50" style={{ color: slateColors[400] }} />
+            </button>
+          )}
 
           {/* 附件按钮 */}
           <Button
