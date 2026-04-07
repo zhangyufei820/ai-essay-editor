@@ -21,21 +21,23 @@ const MODEL_DISPLAY_NAMES: Record<string, string> = {
   "beike-pro": "备课助手",
 }
 
-// 获取模型徽章颜色
+// 获取模型徽章颜色 — 统一使用翡翠绿系
 function getModelBadgeColor(modelKey: string): string {
+  // 全部基于网站 emerald 主色 #10A37F，通过透明度区分
   const colors: Record<string, string> = {
     "standard": "#10A37F",
-    "teaching-pro": "#0d3a1f",
+    "teaching-pro": "#10A37F",
     "gpt-5": "#10A37F",
-    "claude-opus": "#DC2626",
-    "gemini-pro": "#F59E0B",
-    "banana-2-pro": "#8B5CF6",
-    "grok-4.2": "#000000",
-    "open-claw": "#6366F1",
-    "quanquan-math": "#059669",
-    "quanquan-english": "#0284C7",
+    "claude-opus": "#10A37F",
+    "gemini-pro": "#10A37F",
+    "banana-2-pro": "#10A37F",
+    "grok-4.2": "#10A37F",
+    "open-claw": "#10A37F",
+    "quanquan-math": "#10A37F",
+    "quanquan-english": "#10A37F",
+    "beike-pro": "#10A37F",
   }
-  return colors[modelKey] || "#6B7280"
+  return colors[modelKey] || "#10A37F"
 }
 
 // ✅ 保持类型定义导出，确保父组件不报错
@@ -96,25 +98,14 @@ export function ChatSidebar({
   // 定义分组显示的顺序
   const groupOrder = ["今天", "昨天", "过去 7 天", "更早"];
 
-  // 格式化时间戳
+  // 格式化时间戳 — 统一 MM-DD HH:mm 格式
   const formatTime = (timestamp: number) => {
     const date = new Date(timestamp);
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const target = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-
-    // 今天显示时间
-    if (target.getTime() === today.getTime()) {
-      return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false });
-    }
-    // 昨天也显示时间
-    const yesterday = new Date(today);
-    yesterday.setDate(today.getDate() - 1);
-    if (target.getTime() === yesterday.getTime()) {
-      return `昨天 ${date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })}`;
-    }
-    // 其他日期显示月/日 + 时间
-    return `${date.getMonth() + 1}/${date.getDate()} ${date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })}`;
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    const dd = String(date.getDate()).padStart(2, '0');
+    const hh = String(date.getHours()).padStart(2, '0');
+    const min = String(date.getMinutes()).padStart(2, '0');
+    return `${mm}-${dd} ${hh}:${min}`;
   };
 
   return (
@@ -189,7 +180,7 @@ export function ChatSidebar({
                                       <span
                                         className="text-[9px] px-1.5 py-0.5 rounded-full font-medium shrink-0"
                                         style={{
-                                          backgroundColor: `${getModelBadgeColor(session.ai_model)}15`,
+                                          backgroundColor: `${getModelBadgeColor(session.ai_model)}18`,
                                           color: getModelBadgeColor(session.ai_model)
                                         }}
                                       >

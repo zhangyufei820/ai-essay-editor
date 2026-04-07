@@ -9,7 +9,7 @@
 
 "use client"
 
-import { memo, useMemo } from "react"
+import { memo, useMemo, useState } from "react"
 import { motion, type Easing } from "framer-motion"
 import { Copy, Check, User, Sparkles, ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -229,15 +229,14 @@ function MarkdownContent({ content }: { content: string }) {
           if (isConclusionPara) {
             return (
               <p
-                className="mb-3 last:mb-0 rounded-r"
+                className="mb-2 last:mb-0 rounded-r"
                 style={{
                   lineHeight: 1.4,
                   color: CLAUDE_TEXT_COLOR,
                   backgroundColor: "rgba(16, 185, 129, 0.08)",
                   borderLeft: "3px solid #10B981",
-                  borderRadius: "0 8px 8px 0",
-                  padding: "12px 16px",
-                  marginBottom: "1.25rem"
+                  borderRadius: "0 6px 6px 0",
+                  padding: "8px 12px",
                 }}
               >
                 {children}
@@ -246,23 +245,23 @@ function MarkdownContent({ content }: { content: string }) {
           }
 
           return (
-            <p className="mb-3 last:mb-0" style={{ lineHeight: 1.4, color: CLAUDE_TEXT_COLOR }}>
+            <p className="mb-2 last:mb-0" style={{ lineHeight: 1.4, color: CLAUDE_TEXT_COLOR }}>
               {children}
             </p>
           )
         },
         ul: ({ children }) => (
-          <ul className="list-disc pl-5 mb-3 space-y-1" style={{ lineHeight: 1.5 }}>
+          <ul className="list-disc pl-5 mb-2 space-y-0.5" style={{ lineHeight: 1.4 }}>
             {children}
           </ul>
         ),
         ol: ({ children }) => (
-          <ol className="list-decimal pl-5 mb-3 space-y-1" style={{ lineHeight: 1.5 }}>
+          <ol className="list-decimal pl-5 mb-2 space-y-0.5" style={{ lineHeight: 1.4 }}>
             {children}
           </ol>
         ),
         li: ({ children }) => (
-          <li className="text-sm" style={{ lineHeight: 1.5, color: CLAUDE_TEXT_COLOR }}>
+          <li className="text-sm" style={{ lineHeight: 1.4, color: CLAUDE_TEXT_COLOR }}>
             {children}
           </li>
         ),
@@ -314,31 +313,31 @@ function MarkdownContent({ content }: { content: string }) {
         ),
         h1: ({ children }) => (
           <h1
-            className="font-bold text-base mt-4 mb-2"
-            style={{ color: "#111827", lineHeight: "var(--ai-line-height, 1.7)" }}
+            className="font-bold text-base mt-3 mb-1.5"
+            style={{ color: "#111827", lineHeight: 1.4 }}
           >
             {children}
           </h1>
         ),
         h2: ({ children }) => (
           <h2
-            className="font-semibold text-sm mt-3 mb-2"
-            style={{ color: "#111827", lineHeight: "var(--ai-line-height, 1.7)" }}
+            className="font-semibold text-sm mt-2.5 mb-1"
+            style={{ color: "#111827", lineHeight: 1.4 }}
           >
             {children}
           </h2>
         ),
         h3: ({ children }) => (
           <h3
-            className="font-medium text-sm mt-2 mb-1"
-            style={{ color: "#6B7280", lineHeight: "var(--ai-line-height, 1.7)" }}
+            className="font-medium text-sm mt-2 mb-0.5"
+            style={{ color: "#6B7280", lineHeight: 1.4 }}
           >
             {children}
           </h3>
         ),
         h4: ({ children }) => (
           <h4
-            className="text-sm font-semibold pl-3 border-l-4 mt-4 mb-2"
+            className="text-sm font-semibold pl-2.5 border-l-2 mt-2 mb-1"
             style={{ color: "#111827", borderColor: CLAUDE_ACCENT_COLOR, lineHeight: 1.4 }}
           >
             {children}
@@ -346,11 +345,11 @@ function MarkdownContent({ content }: { content: string }) {
         ),
         blockquote: ({ children }) => (
           <blockquote
-            className="border-l-4 px-4 py-3 my-3 rounded-r"
+            className="border-l-3 px-3 py-2 my-2 rounded-r"
             style={{
               borderColor: CLAUDE_ACCENT_COLOR,
               backgroundColor: slateColors[50],
-              lineHeight: 1.5
+              lineHeight: 1.4
             }}
           >
             {children}

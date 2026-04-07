@@ -187,47 +187,29 @@ export function ModelSelector({
 
   return (
     <div ref={containerRef} className={cn("relative", className)}>
-      {/* 触发按钮 - 纤细胶囊 */}
+      {/* 触发按钮 - 透明背景，仅文字+图标，由外层毛玻璃容器提供样式 */}
       <motion.button
         onClick={() => !disabled && setIsOpen(!isOpen)}
         disabled={disabled}
-        className="flex items-center gap-2 px-3 py-1.5 rounded-xl transition-all duration-200"
-        style={{
-          background: isOpen ? "rgba(14, 58, 31, 0.04)" : "transparent",
-        }}
-        whileHover={{ background: "rgba(14, 58, 31, 0.04)" }}
-        whileTap={{ scale: 0.98 }}
+        className="flex items-center gap-1.5 transition-all duration-200"
+        whileTap={{ scale: 0.97 }}
       >
-        {/* 颜色指示点 - 呼吸光晕 */}
-        <motion.span
-          className="w-2 h-2 rounded-full shrink-0"
-          style={{ backgroundColor: currentModel?.color || TOKENS.primary }}
-          animate={isOpen ? {
-            boxShadow: [
-              `0 0 8px ${currentModel?.color || TOKENS.primary}40`,
-              `0 0 16px ${currentModel?.color || TOKENS.primary}60`,
-              `0 0 8px ${currentModel?.color || TOKENS.primary}40`,
-            ],
-          } : {}}
-          transition={{ duration: 1.5, repeat: Infinity }}
-        />
-
         {/* 模型名称 */}
         <span
-          className="text-sm font-medium"
-          style={{ color: TOKENS.text.primary, letterSpacing: "0.3px" }}
+          className="text-xs font-medium text-emerald-700"
+          style={{ letterSpacing: "0.2px" }}
         >
           {currentModel?.name || "选择模型"}
         </span>
 
-        {/* 下拉箭头 - 旋转动画 */}
+        {/* 下拉箭头 */}
         <motion.div
           animate={{ rotate: isOpen ? 180 : 0 }}
           transition={{ duration: 0.2, ease: "easeOut" }}
         >
           <ChevronDown
-            className="w-4 h-4"
-            style={{ color: TOKENS.text.tertiary, strokeWidth: 1.5 }}
+            className="w-3 h-3 text-emerald-600/60"
+            style={{ strokeWidth: 2 }}
           />
         </motion.div>
       </motion.button>

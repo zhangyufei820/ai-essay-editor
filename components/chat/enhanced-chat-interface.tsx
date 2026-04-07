@@ -243,9 +243,17 @@ function formatSunoResponse(fullText: string): string {
   return content
 }
 
-// --- 辅助组件：思考加载器 - Claude 极简风格 ---
-const SimpleBrainLoader = ({ modelKey = "standard", showHint = false }: { modelKey?: string; showHint?: boolean }) => (
-  <LoadingStateCard modelKey={modelKey as any} showHint={showHint} />
+// --- 辅助组件：极简思考动画 - 仅文字呼吸效果，无 SVG/图标 ---
+const SimpleBrainLoader = ({ showHint = false }: { showHint?: boolean }) => (
+  <div className="flex items-center gap-1.5">
+    <motion.span
+      animate={{ opacity: [0.4, 1, 0.4] }}
+      transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
+      className="text-xs text-slate-400 font-normal tracking-wide"
+    >
+      {showHint ? "正在深度思考中..." : "Thinking..."}
+    </motion.span>
+  </div>
 )
 
 // --- 辅助组件：文本渲染器 ---
@@ -2473,40 +2481,53 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 
             {/* 🔥 输入框 - 所有模式都显示（Suno V5 也需要输入框进行对话） */}
             {(selectedModel !== "suno-v5" || messages.length > 0) && (
-            <div className="relative mx-auto max-w-3xl w-full">
-              {/* 🔥 悬浮模型选择器 Badge - 左上角半透明胶囊 */}
-              <div className="absolute -top-2.5 -left-2 z-10">
-                <ModelSelector
-                  selectedModel={selectedModel}
-                  onModelChange={(model) => handleModelChange(model as ModelType)}
-                  models={modelList}
-                  disabled={isLoading}
-                  dailyFreeInfo={{ used: dailyUsage, total: DAILY_LIMIT }}
-                />
+            <div className="relative mx-auto max-w-3xl w-full px-2 sm:px-0">
+              {/* 🔥 悬浮模型选择器胶囊 - 贴在输入框左上角，翡翠绿毛玻璃 */}
+              <div className="absolute -top-3 -left-1 z-10">
+                <div
+                  className="flex items-center gap-1.5 pl-2 pr-2.5 py-1.5 rounded-xl bg-white/70 backdrop-blur-md border shadow-sm"
+                  style={{ borderColor: "rgba(16, 185, 129, 0.2)" }}
+                >
+                  {/* 颜色指示点 */}
+                  <div
+                    className="w-1.5 h-1.5 rounded-full shrink-0"
+                    style={{ backgroundColor: BRAND_GREEN }}
+                  />
+                  {/* 模型选择器（仅触发按钮） */}
+                  <ModelSelector
+                    selectedModel={selectedModel}
+                    onModelChange={(model) => handleModelChange(model as ModelType)}
+                    models={modelList}
+                    disabled={isLoading}
+                    dailyFreeInfo={{ used: dailyUsage, total: DAILY_LIMIT }}
+                  />
+                </div>
               </div>
 
+              {/* 输入框主体 - 悬浮通透形态 */}
               <form
                 onSubmit={onSubmit}
                 className={cn(
-                  "relative rounded-2xl sm:rounded-[24px] bg-white border transition-all duration-300",
-                  "border-zinc-200 focus-within:border-emerald-300",
-                  "focus-within:ring-4 focus-within:ring-emerald-500/10"
+                  "relative rounded-xl border transition-all duration-300",
+                  "border-zinc-200/80 bg-white/80 backdrop-blur-md",
+                  "focus-within:border-emerald-300/80 focus-within:ring-2 focus-within:ring-emerald-500/10",
+                  "shadow-xl shadow-black/5"
                 )}
               >
-                <div className="flex items-end gap-2 p-2.5 sm:p-3">
+                <div className="flex items-end gap-1.5 sm:gap-2 px-3 sm:px-4 py-2.5 sm:py-3">
                   {/* 文件上传按钮 */}
                   <Button
                     type="button"
                     variant="ghost"
                     size="icon"
-                    className="h-9 w-9 sm:h-10 sm:w-10 rounded-lg shrink-0 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors disabled:opacity-40"
+                    className="h-8 w-8 sm:h-9 sm:w-9 rounded-lg shrink-0 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50/50 transition-colors disabled:opacity-40"
                     onClick={() => {
                       if (!userId) { toast.error("请先登录后再上传文件"); return }
                       fileInputRef.current?.click()
                     }}
                     disabled={isLoading}
                   >
-                    <Paperclip className="h-4 w-4 sm:h-4.5 sm:w-4.5" />
+                    <Paperclip className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                   </Button>
                   <input
                     ref={fileInputRef}
@@ -2523,15 +2544,15 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                     variant="ghost"
                     size="icon"
                     className={cn(
-                      "h-9 w-9 sm:h-10 sm:w-10 rounded-lg shrink-0 transition-colors disabled:opacity-40",
+                      "h-8 w-8 sm:h-9 sm:w-9 rounded-lg shrink-0 transition-colors disabled:opacity-40",
                       isListening
                         ? "bg-red-500 text-white hover:bg-red-600 animate-pulse"
-                        : "text-slate-400 hover:text-emerald-600 hover:bg-emerald-50"
+                        : "text-slate-400 hover:text-emerald-600 hover:bg-emerald-50/50"
                     )}
                     onClick={toggleVoiceInput}
                     disabled={isLoading}
                   >
-                    {isListening ? <MicOff className="h-4 w-4 sm:h-4.5 sm:w-4.5" /> : <Mic className="h-4 w-4 sm:h-4.5 sm:w-4.5" />}
+                    {isListening ? <MicOff className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> : <Mic className="h-3.5 w-3.5 sm:h-4 sm:w-4" />}
                   </Button>
 
                   {/* 📝 Smart Textarea — auto-expand 2-10 rows */}
@@ -2541,22 +2562,22 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={handleKeyDown}
                     placeholder={userId ? "输入内容开始对话..." : "请先登录..."}
-                    className="flex-1 resize-none border-0 bg-transparent text-sm sm:text-[15px] text-slate-700 placeholder:text-slate-300 focus-visible:ring-0 py-1.5 leading-normal"
+                    className="flex-1 resize-none border-0 bg-transparent text-[15px] text-slate-700 placeholder:text-slate-300 focus-visible:ring-0 py-1 leading-normal"
                     disabled={isLoading}
                   />
 
-                  {/* 发送按钮 — 垂直居中 */}
+                  {/* 发送按钮 */}
                   <Button
                     type="submit"
                     size="icon"
-                    className="h-9 w-9 sm:h-10 sm:w-10 rounded-lg shrink-0 text-white transition-all hover:opacity-90 disabled:opacity-30"
-                    style={{ backgroundColor: "#052e16" }}
+                    className="h-8 w-8 sm:h-9 sm:w-9 rounded-lg shrink-0 text-white transition-all hover:opacity-90 disabled:opacity-25"
+                    style={{ backgroundColor: BRAND_GREEN }}
                     disabled={isLoading || (!input.trim() && uploadedFiles.length === 0)}
                   >
                     {isLoading ? (
-                      <Loader2 className="h-4 w-4 sm:h-4.5 sm:w-4.5 animate-spin" />
+                      <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin" />
                     ) : (
-                      <Send className="h-4 w-4 sm:h-4.5 sm:w-4.5" />
+                      <Send className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                     )}
                   </Button>
                 </div>
