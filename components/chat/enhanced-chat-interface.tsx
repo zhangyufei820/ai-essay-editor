@@ -35,6 +35,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import katex from "katex"
 import { brandColors, slateColors } from "@/lib/design-tokens"
 import { LATEX_MACROS, renderLatex } from "@/lib/latex-constants"
+import { cleanLLMText } from "@/lib/text-sanitizer"
 import { createClient } from "@supabase/supabase-js"
 import { collapseSidebar, refreshCredits, refreshSessionList, SESSION_LIST_REFRESH_EVENT } from "@/components/app-sidebar"
 import { useSelectedModelStore } from "@/hooks/useSelectedModelStore"
@@ -2339,7 +2340,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                                       <>
                                         {cleanContent && (
                                           <UltimateRenderer
-                                            content={cleanContent}
+                                            content={cleanLLMText(cleanContent)}
                                             isStreaming={message.id === currentBotIdRef.current && showCursor && isLoading}
                                           />
                                         )}
@@ -2359,7 +2360,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 
                                   return (
                                     <UltimateRenderer
-                                      content={message.content}
+                                      content={cleanLLMText(message.content)}
                                       isStreaming={message.id === currentBotIdRef.current && showCursor && isLoading}
                                     />
                                   )
