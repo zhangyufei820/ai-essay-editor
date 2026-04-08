@@ -520,7 +520,13 @@ function HeroChatInput() {
       className="max-w-2xl mx-auto mb-10 w-full px-4"
     >
       {/* 输入框主体 */}
-      <div
+      <form
+        onSubmit={(e) => {
+          e.preventDefault()
+          if (value.trim()) {
+            router.push("/chat")
+          }
+        }}
         className="relative rounded-3xl bg-white border transition-all duration-300"
         style={{
           borderColor: isFocused ? `${brandColors[500]}60` : slateColors[200],
@@ -574,7 +580,7 @@ function HeroChatInput() {
             <Send className="h-4 w-4" />
           </motion.button>
         </div>
-      </div>
+      </form>
     </motion.div>
   )
 }

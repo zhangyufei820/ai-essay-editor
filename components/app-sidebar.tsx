@@ -233,6 +233,15 @@ function AppSidebarInner() {
     }
     window.addEventListener(SESSION_LIST_REFRESH_EVENT, handleSessionListRefresh)
 
+    // 🔥 监听页面可见性变化 - 移动端/PC端切换时自动刷新会话列表
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        console.log("📋 [侧边栏] 页面重新可见，刷新会话列表")
+        handleSessionListRefresh()
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
     const loadData = async () => {
       let userId = ""
       if (typeof window !== 'undefined') {
@@ -304,6 +313,7 @@ function AppSidebarInner() {
       window.removeEventListener(SIDEBAR_COLLAPSE_EVENT, handleCollapse)
       window.removeEventListener(CREDITS_REFRESH_EVENT, handleCreditsRefresh)
       window.removeEventListener(SESSION_LIST_REFRESH_EVENT, handleSessionListRefresh)
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
       document.removeEventListener("mousedown", handleClickOutside)
     }
   }, [fetchCredits])

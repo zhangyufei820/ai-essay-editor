@@ -2083,10 +2083,18 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 
         {/* 🔥 滚动区域优化 */}
         <div className="flex-1 h-0 relative overflow-hidden">
+          {/* 🔥 移动端浮动历史按钮 - 位于右上角 */}
+          <button
+            onClick={() => setShowHistorySidebar(!showHistorySidebar)}
+            className="absolute top-3 right-3 z-40 flex items-center gap-1.5 px-3 py-2 bg-white/95 backdrop-blur-lg rounded-full shadow-lg border border-slate-100 md:hidden"
+          >
+            <History className="h-4 w-4 text-slate-600" />
+            <span className="text-xs font-medium text-slate-600">历史</span>
+          </button>
           <div
             ref={scrollAreaRef}
             onScroll={handleScroll}
-            className="h-full overflow-y-auto custom-scrollbar pb-24"
+            className="h-full overflow-y-auto custom-scrollbar pb-0 md:pb-24"
           >
             <div className="mx-auto max-w-6xl px-3 sm:px-4 md:px-6 lg:px-10 py-4 sm:py-6 md:py-8">
               {messages.length === 0 ? (
@@ -2474,9 +2482,9 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
               </div>
             )}
 
-            {/* 🔥 输入框 - 使用 ChatInput 组件 */}
+            {/* 🔥 输入框 - 使用 ChatInput 组件 - 移动端固定在底部 */}
             {(selectedModel !== "suno-v5" || messages.length > 0) && (
-            <div className="relative mx-auto max-w-3xl w-full px-2 sm:px-0">
+            <div className="fixed bottom-0 left-0 right-0 z-50 md:relative mx-auto max-w-3xl w-full px-2 sm:px-0 pb-safe md:pb-0">
               <ChatInput
                 showModelSelector={true}
                 selectedModel={selectedModel}
