@@ -36,7 +36,7 @@ import katex from "katex"
 import { brandColors, slateColors } from "@/lib/design-tokens"
 import { LATEX_MACROS, renderLatex } from "@/lib/latex-constants"
 import { createClient } from "@supabase/supabase-js"
-import { collapseSidebar, refreshCredits, refreshSessionList } from "@/components/app-sidebar"
+import { collapseSidebar, refreshCredits, refreshSessionList, SESSION_LIST_REFRESH_EVENT } from "@/components/app-sidebar"
 import { useSelectedModelStore } from "@/hooks/useSelectedModelStore"
 import { validateFileForUpload, MAX_FILE_SIZE } from "@/lib/upload-service"
 import { VoiceRecorder, getDifyTTS, uploadAudioToDify } from "@/lib/voice-service"
@@ -481,7 +481,7 @@ interface ChatInterfaceInnerProps {
 function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   const searchParams = useSearchParams()
   const router = useRouter()
-  const urlSessionId = searchParams.get("id")
+  const urlSessionId = searchParams.get("sessionId")
   const urlAgent = searchParams.get("agent")
   // 🔥 优先使用 initialModel prop（来自动态路由），其次使用 URL 参数
   const effectiveAgent = initialModel || urlAgent
@@ -583,6 +583,19 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       console.warn("⚠️ [侧边栏] userId为空，无法获取会话列表")
     }
   }, [showHistorySidebar, userId])
+
+  // 🔥 监听全局会话刷新事件（由 refreshSessionList 触发）
+  // 与 AppSidebar 保持同步，确保新建会话后侧边栏列表能实时更新
+  useEffect(() => {
+    const handleRefresh = () => {
+      console.log("📋 [侧边栏] 收到 SESSION_LIST_REFRESH_EVENT，重新获取会话列表")
+      if (userId) {
+        fetchChatSessions(userId)
+      }
+    }
+    window.addEventListener(SESSION_LIST_REFRESH_EVENT, handleRefresh)
+    return () => window.removeEventListener(SESSION_LIST_REFRESH_EVENT, handleRefresh)
+  }, [userId])
 
   // 🎯 工作流可视化 Hook (GenSpark 1:1 复刻版)
   const {

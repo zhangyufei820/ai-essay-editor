@@ -521,11 +521,9 @@ function HeroChatInput() {
     >
       {/* 输入框主体 */}
       <form
-        onSubmit={(e) => {
+        onSubmit={e => {
           e.preventDefault()
-          if (value.trim()) {
-            router.push("/chat")
-          }
+          handleSubmit()
         }}
         className="relative rounded-3xl bg-white border transition-all duration-300"
         style={{

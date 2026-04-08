@@ -78,7 +78,7 @@ const SIDEBAR_COLLAPSE_EVENT = 'sidebar-collapse'
 // 🔥 全局事件：用于触发积分刷新
 const CREDITS_REFRESH_EVENT = 'credits-refresh'
 // 🔥 全局事件：用于触发会话列表刷新
-const SESSION_LIST_REFRESH_EVENT = 'session-list-refresh'
+export const SESSION_LIST_REFRESH_EVENT = 'session-list-refresh'
 
 // 内部组件
 function AppSidebarInner() {
