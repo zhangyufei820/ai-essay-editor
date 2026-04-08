@@ -693,27 +693,45 @@ export async function POST(request: NextRequest) {
             { hasGeneratedImage }  // 🔥 关键：传递图像生成标志
           )
           
-          // 🔥 修复：只查询存在的字段 credits（移除 total_spent）
-          const { data: latestCredits } = await getSupabaseAdmin()
+          // 🔥 使用原子操作扣费，防止并发问题
+          // 先查询当前积分，同时检查是否为有效数值
+          const { data: latestCredits, error: queryError } = await getSupabaseAdmin()
             .from("user_credits")
             .select("credits")
             .eq("user_id", userId)
             .single()
-          
-          const newCredits = (latestCredits?.credits || 0) - actualCost
-          
-          // 🔥 修复：只更新存在的字段 credits（移除 total_spent 和 updated_at）
-          const { error: updateError } = await getSupabaseAdmin()
+
+          // 🔥 防御性检查：确保查询成功且 credits 是有效数值
+          if (queryError) {
+            console.error(`❌ [静默扣费] 查询用户积分失败 userId=${userId}:`, queryError)
+            return
+          }
+          if (latestCredits?.credits === null || latestCredits?.credits === undefined) {
+            console.error(`❌ [静默扣费] 用户积分数据异常 userId=${userId}, credits=${latestCredits?.credits}`)
+            return
+          }
+
+          const currentCredits = latestCredits.credits
+          const newCredits = currentCredits - actualCost
+
+          // 🔥 使用条件更新：只有积分未变时才扣费，防止并发问题
+          const updateResult = await getSupabaseAdmin()
             .from("user_credits")
-            .update({ 
+            .update({
               credits: Math.max(newCredits, 0)  // 防止负数
             })
             .eq("user_id", userId)
-          
-          if (updateError) {
-            console.error(`❌ [静默扣费失败] 用户 ${userId}:`, updateError)
+            .eq("credits", currentCredits)  // 🔥 关键：只有在积分未变时才更新，防止并发扣费
+            .select("credits")  // 🔥 获取更新后的值
+
+          if (updateResult.error) {
+            console.error(`❌ [静默扣费失败] 用户 ${userId}:`, updateResult.error)
+          } else if (!updateResult.data || updateResult.data.length === 0) {
+            // 🔥 更新未发生（积分已变化），可能是并发请求，跳过扣费
+            console.warn(`⚠️ [静默扣费跳过] 用户 ${userId} 积分已在并发请求中更新，跳过本次扣费 | 当前积分: ${currentCredits}`)
           } else {
-            console.log(`✅ [静默扣费成功] 用户 ${userId}: ${latestCredits?.credits} - ${actualCost} = ${newCredits} | Token: ${totalTokens}`)
+            const updatedCredits = updateResult.data[0]?.credits
+            console.log(`✅ [静默扣费成功] 用户 ${userId}: ${currentCredits} - ${actualCost} = ${updatedCredits} | Token: ${totalTokens}`)
             
             // 🔥 记录交易流水（重要：用于使用记录展示）
             // 🔥 如果前端传来了 estimatedCost，优先��用前端的成本计算
@@ -724,8 +742,8 @@ export async function POST(request: NextRequest) {
               amount: -actualCost,
               type: "consume",
               description: `使用 ${getModelDisplayName(modelType)} 对话 (${displayTokens})`,
-              balance_before: latestCredits?.credits || 0,
-              balance_after: newCredits
+              balance_before: currentCredits,
+              balance_after: updatedCredits
             })
             
             if (txError) {
