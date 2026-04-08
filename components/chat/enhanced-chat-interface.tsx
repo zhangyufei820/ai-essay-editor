@@ -2047,7 +2047,10 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         {/* 🔥 顶部导航栏 - 移动端优化：增加高度和触摸区域 */}
         <div className="flex items-center h-16 md:h-14 px-3 md:px-4 border-b border-slate-100 bg-white shrink-0 pt-safe">
           <button
-            onClick={() => setShowHistorySidebar(!showHistorySidebar)}
+            onClick={() => {
+              console.log("📋 [历史按钮] 点击! showHistorySidebar当前值:", showHistorySidebar)
+              setShowHistorySidebar(!showHistorySidebar)
+            }}
             className="flex items-center gap-1 text-slate-600 hover:text-slate-800 transition-colors min-w-[44px] min-h-[44px] justify-center"
           >
             <History className="h-5 w-5" />
