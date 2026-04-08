@@ -9,13 +9,14 @@ import {
   Settings, ChevronRight, ChevronDown,
   Menu, X, LogOut, Zap, Coins,
   Bot, GraduationCap, Brain,
-  Gift, HelpCircle, Sparkles, Palette, User
+  Gift, HelpCircle, Sparkles, Palette, User, Edit
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { AgentPanel } from "./chat/AgentPanel"
 import { ModelPanel } from "./chat/ModelPanel"
 import { CreativePanel } from "./chat/CreativePanel"
 import { EducationPanel } from "./chat/EducationPanel"
+import { AIPanel } from "./chat/AIPanel"
 import { createClient } from "@supabase/supabase-js"
 
 // --- 设计系统颜色常量 ---
@@ -108,6 +109,9 @@ function AppSidebarInner() {
 
   // 🔥 教育专区面板状态
   const [isEducationPanelOpen, setIsEducationPanelOpen] = useState(false)
+
+  // 🔥 AI写作专区面板状态
+  const [isAIPanelOpen, setIsAIPanelOpen] = useState(false)
 
   // 底部用户菜单开关
   const [showUserMenu, setShowUserMenu] = useState(false)
@@ -660,6 +664,30 @@ function AppSidebarInner() {
               </span>
             </motion.button>
           </div>
+
+          {/* F. AI写作专区入口 */}
+          <div className="mb-4 px-3">
+            <motion.button
+              onClick={() => setIsAIPanelOpen(true)}
+              className="w-full flex items-center gap-3 px-4 py-[9px] rounded-xl"
+              style={{
+                backgroundColor: "rgba(0, 200, 150, 0.02)",
+                border: "1px solid rgba(0, 200, 150, 0.2)",
+                boxShadow: "0 2px 8px rgba(0, 200, 150, 0.1), inset 0 1px 0 rgba(255,255,255,0.5)"
+              }}
+              whileHover={{
+                scale: 1.03,
+                boxShadow: "0 4px 16px rgba(0, 200, 150, 0.2), 0 8px 24px rgba(0, 200, 150, 0.15), inset 0 1px 0 rgba(255,255,255,0.8)"
+              }}
+              whileTap={{ scale: 0.98 }}
+              transition={{ duration: 0.2 }}
+            >
+              <Edit className="w-5 h-5" style={{ color: "#00C896" }} />
+              <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: COLORS.primary.dark }}>
+                AI写作
+              </span>
+            </motion.button>
+          </div>
         </div>
 
         {/* --- 底部用户固定区域 - 去框化，与侧边栏背景融合 --- */}
@@ -846,6 +874,12 @@ function AppSidebarInner() {
       <EducationPanel
         isOpen={isEducationPanelOpen}
         onClose={() => setIsEducationPanelOpen(false)}
+      />
+
+      {/* 🔥 AI写作专区面板 */}
+      <AIPanel
+        isOpen={isAIPanelOpen}
+        onClose={() => setIsAIPanelOpen(false)}
       />
     </>
   )

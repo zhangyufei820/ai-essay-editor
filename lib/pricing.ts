@@ -33,6 +33,7 @@ export type ModelType =
   | "quanquan-english"
   | "beike-pro"
   | "banzhuren"
+  | "ai-writing-paper"
 
 export type GenMode = "text" | "image" | "music" | "video"
 
@@ -114,7 +115,14 @@ export const MODEL_COSTS: Record<ModelType, ModelCostConfig> = {
     mode: "text",
     estimatedTokens: 2500
   },
-  
+  "ai-writing-paper": {
+    category: "agent",
+    tokenRate: AGENT_TOKEN_RATE,
+    displayName: "论文写作助手",
+    mode: "text",
+    estimatedTokens: 3000
+  },
+
   // ========== 独立模型（20 积分/1K Token）==========
   "gpt-5": {
     category: "standalone",

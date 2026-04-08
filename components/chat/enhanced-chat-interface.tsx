@@ -80,6 +80,7 @@ const MODEL_DISPLAY_NAMES: Record<string, string> = {
   "banzhuren": "班主任助手",
   "suno-v5": "音乐",
   "sora-2-pro": "视频",
+  "ai-writing-paper": "论文写作",
 }
 
 // 获取模型徽章颜色 — 强制归一：所有模型统一为翡翠绿 #10A37F
@@ -1026,6 +1027,14 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       description: "OpenClaw 智能助手",
       badge: "推荐",
       group: "AI模型"
+    },
+    "ai-writing-paper": {
+      name: "论文写作",
+      modelKey: "ai-writing-paper",
+      color: "#7C3AED",
+      description: "学术论文写作辅助",
+      badge: "新",
+      group: "AI写作"
     },
   }
 
