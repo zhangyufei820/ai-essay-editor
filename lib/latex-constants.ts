@@ -20,8 +20,6 @@ export const LATEX_MACROS: Record<string, string> = {
   "\\C": "\\mathbb{C}",
   "\\lam": "\\lambda",
   "\\Lam": "\\Lambda",
-  "\\theta": "\\theta",
-  "\\Theta": "\\Theta",
   "\\角": "\\angle",
   "\\三角形": "\\triangle",
   "\\垂直": "\\perp",
