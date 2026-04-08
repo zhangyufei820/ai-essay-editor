@@ -101,14 +101,6 @@ const CREATIVE_OPTIONS: CreativeOption[] = [
     gradient: "linear-gradient(135deg, rgba(134, 239, 172, 0.15) 0%, rgba(99, 102, 241, 0.08) 100%)",
   },
   {
-    key: "video",
-    name: "视频生成",
-    nameEn: "VIDEO",
-    icon: Video,
-    description: "创意视频内容制作",
-    gradient: "linear-gradient(135deg, rgba(236, 72, 153, 0.12) 0%, rgba(134, 239, 172, 0.08) 100%)",
-  },
-  {
     key: "music",
     name: "音乐生成",
     nameEn: "MUSIC",

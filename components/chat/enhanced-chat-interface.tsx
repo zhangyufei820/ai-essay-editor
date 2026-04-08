@@ -1412,6 +1412,8 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       files: uploadedFiles.length > 0 ? [...uploadedFiles] : undefined  // 🔥 携带文件信息
     }
     setMessages(p => [...p, userMsg]); setInput(""); setUploadedFiles([])
+    // 🔥 发送后自动滚动到消息底部，确保 AI 回复时能自动跟进
+    setTimeout(() => scrollToBottom(), 50)
 
     // ============================================
     // 🎵 Suno V5 特殊处理逻辑（完全隔离）

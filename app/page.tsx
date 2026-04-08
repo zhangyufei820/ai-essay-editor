@@ -192,9 +192,9 @@ export default function Home() {
               </div>
             </a>
 
-            {/* 创意写作 */}
+            {/* AI写作 */}
             <a
-              href="/chat/creative"
+              href="/chat/ai-writing-paper"
               className="group relative bg-white rounded-2xl p-6 md:p-8 border border-slate-100 shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-1"
             >
               <div className="flex flex-col items-center gap-4">
