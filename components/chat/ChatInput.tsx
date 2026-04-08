@@ -213,9 +213,8 @@ export function ChatInput({
   // 键盘事件处理
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault()
       if (!isLoading && (value.trim() || uploadedFiles.length > 0)) {
-        onSubmit()
+        onSubmit(e as unknown as React.FormEvent)
       }
     }
   }
