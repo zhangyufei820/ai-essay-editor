@@ -67,7 +67,7 @@ const AI_WRITING_AGENTS: WritingAgent[] = [
     key: "ai-writing-paper",
     name: "论文写作",
     description: "学术论文写作辅助",
-    href: "/ai-writing/paper",
+    href: "/chat/ai-writing-paper",
   },
 ]
 

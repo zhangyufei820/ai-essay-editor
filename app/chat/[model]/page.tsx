@@ -21,6 +21,7 @@ const SUPPORTED_MODELS = [
   'quanquan-english', // 全圈英语智能体
   'beike-pro',       // 倍克Pro智能体
   'banzhuren',       // 班主任智能体
+  'ai-writing-paper', // 论文写作
 ] as const
 
 export type SupportedModel = typeof SUPPORTED_MODELS[number]
