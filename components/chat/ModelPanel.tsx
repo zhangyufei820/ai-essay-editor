@@ -100,13 +100,13 @@ const MODELS: Model[] = [
   },
   {
     key: "claude-opus",
-    name: "Claude Opus4.6",
+    name: "Claude opus4.6thinking",
     nameEn: "Claude",
     description: "深度推理与分析",
   },
   {
     key: "gemini-pro",
-    name: "Gemini 3.1",
+    name: "Gemini 3.1 pro",
     nameEn: "Gemini",
     description: "多模态理解",
   },
@@ -115,6 +115,13 @@ const MODELS: Model[] = [
     name: "Grok-4.2",
     nameEn: "Grok",
     description: "xAI 智能助手",
+  },
+  {
+    key: "open-claw",
+    name: "Open Claw",
+    nameEn: "OpenClaw",
+    description: "OpenClaw 智能助手",
+    badge: "推荐",
   },
 ]
 
