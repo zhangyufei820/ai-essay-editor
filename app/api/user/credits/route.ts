@@ -177,7 +177,6 @@ export async function POST(request: Request) {
         'gpt-5': '使用 ChatGPT 5.2 对话',
         'claude-opus': '使用 Claude Opus 4.5 对话',
         'gemini-pro': '使用 Gemini 3.0 Pro 对话',
-        'sora-2-pro': '使用 Sora 2 Pro 视频生成',
       }
       const friendlyDescription = descriptionMap[reason] || reason || (amount > 0 ? '积分增加' : '积分消耗')
       

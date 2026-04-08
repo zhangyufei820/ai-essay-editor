@@ -29,7 +29,6 @@ export type ModelKey =
   | "banzhuren"
   | "banana-2-pro"
   | "suno-v5"
-  | "sora-2-pro"
 
 interface ModelLogoConfig {
   /** SVG 文件路径（本地 /public 路径） */
@@ -103,10 +102,6 @@ const MODEL_LOGOS: Record<ModelKey, ModelLogoConfig> = {
     brandColor: "#10A37F",
   },
   "suno-v5": {
-    LucideIcon: Sparkles,
-    brandColor: "#10A37F",
-  },
-  "sora-2-pro": {
     LucideIcon: Sparkles,
     brandColor: "#10A37F",
   },

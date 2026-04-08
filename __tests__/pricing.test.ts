@@ -50,7 +50,7 @@ describe('lib/pricing.ts v2.0 - 计费公式测试', () => {
   describe('模型配置', () => {
     const allModels: ModelType[] = [
       'standard', 'teaching-pro', 'gpt-5', 'claude-opus', 'gemini-pro',
-      'banana-2-pro', 'suno-v5', 'sora-2-pro', 'grok-4.2', 'open-claw'
+      'banana-2-pro', 'suno-v5', 'grok-4.2', 'open-claw'
     ]
 
     test.each(allModels)('模型 %s 应有有效的配置', (model) => {
@@ -80,7 +80,7 @@ describe('lib/pricing.ts v2.0 - 计费公式测试', () => {
     })
 
     test('多媒体模型应有 fixedCost', () => {
-      const mediaModels: ModelType[] = ['banana-2-pro', 'suno-v5', 'sora-2-pro']
+      const mediaModels: ModelType[] = ['banana-2-pro', 'suno-v5']
       mediaModels.forEach(model => {
         const config = MODEL_COSTS[model]
         expect(config.category).toBe('media')
@@ -128,12 +128,6 @@ describe('lib/pricing.ts v2.0 - 计费公式测试', () => {
       const cost = calculatePreviewCost('suno-v5')
       // 100 / 0.4 = 250
       expect(cost).toBe(250)
-    })
-
-    test('sora-2-pro 视频：固定 750 积分', () => {
-      const cost = calculatePreviewCost('sora-2-pro')
-      // 300 / 0.4 = 750
-      expect(cost).toBe(750)
     })
 
     test('自定义输入 Token 数量', () => {
@@ -193,7 +187,6 @@ describe('lib/pricing.ts v2.0 - 计费公式测试', () => {
     test('多媒体模型固定价格', () => {
       expect(calculateActualCost('banana-2-pro')).toBe(125)
       expect(calculateActualCost('suno-v5')).toBe(250)
-      expect(calculateActualCost('sora-2-pro')).toBe(750)
     })
 
     test('未知模型返回默认价格 20', () => {
@@ -214,14 +207,12 @@ describe('lib/pricing.ts v2.0 - 计费公式测试', () => {
       expect(getModelDisplayName('gemini-pro')).toBe('Gemini 3.1 pro')
       expect(getModelDisplayName('grok-4.2')).toBe('Grok-4.2')
       expect(getModelDisplayName('open-claw')).toBe('Open Claw')
-      expect(getModelDisplayName('sora-2-pro')).toBe('Sora 2 Pro')
     })
 
     test('getModelMode 返回正确的生成模式', () => {
       expect(getModelMode('standard')).toBe('text')
       expect(getModelMode('banana-2-pro')).toBe('image')
       expect(getModelMode('suno-v5')).toBe('music')
-      expect(getModelMode('sora-2-pro')).toBe('video')
     })
 
     test('getModelCategory 返回正确的模型类别', () => {

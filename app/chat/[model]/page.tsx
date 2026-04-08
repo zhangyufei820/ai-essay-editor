@@ -14,7 +14,6 @@ const SUPPORTED_MODELS = [
   'gemini-pro',      // Gemini 3.1 pro
   'banana-2-pro',    // Banana 2 Pro (图像)
   'suno-v5',         // Suno V5 (音乐)
-  'sora-2-pro',      // Sora 2 Pro (视频)
   'grok-4.2',        // Grok-4.2
   'open-claw',       // Open Claw
   'quanquan-math',   // 全圈数学智能体

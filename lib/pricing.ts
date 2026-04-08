@@ -26,7 +26,6 @@ export type ModelType =
   | "gemini-pro"
   | "banana-2-pro"
   | "suno-v5"
-  | "sora-2-pro"
   | "grok-4.2"
   | "open-claw"
   | "quanquan-math"
@@ -232,12 +231,6 @@ export const MODEL_COSTS: Record<ModelType, ModelCostConfig> = {
     displayName: "Suno V5",
     mode: "music",
     estimatedTokens: 500  // 预估 Dify 工作流消耗
-  },
-  "sora-2-pro": { 
-    category: "media",
-    fixedCost: 300, // 成本 300 积分 → 用户扣费 750 积分
-    displayName: "Sora 2 Pro",
-    mode: "video"
   },
 }
 

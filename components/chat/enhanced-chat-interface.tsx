@@ -79,7 +79,6 @@ const MODEL_DISPLAY_NAMES: Record<string, string> = {
   "beike-pro": "备课助手",
   "banzhuren": "班主任助手",
   "suno-v5": "音乐",
-  "sora-2-pro": "视频",
   "ai-writing-paper": "论文写作",
   "zhongying-essay": "中英文作文",
   "reading-report": "读书报告",
@@ -715,7 +714,6 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       "gemini-pro": "gemini-pro",
       "banana-2-pro": "banana-2-pro",
       "suno-v5": "suno-v5",
-      "sora-2-pro": "sora-2-pro",
       "grok-4.2": "grok-4.2",
       "open-claw": "open-claw",
     }
@@ -1012,14 +1010,6 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       description: "AI 音乐创作",
       group: "创意生成"
     },
-    "sora-2-pro": {
-      name: "Sora 2 Pro",
-      modelKey: "sora-2-pro",
-      color: BRAND_GREEN,
-      description: "AI 视频生成",
-      badge: "Pro",
-      group: "创意生成"
-    },
     "grok-4.2": {
       name: "Grok-4.2",
       modelKey: "grok-4.2",
@@ -1133,7 +1123,6 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     }
 
     if (model === "suno-v5") setGenMode("music")
-    else if (model === "sora-2-pro") setGenMode("video")
     else setGenMode("text")
 
     // 🔥 记录用户上次使用的模型
