@@ -81,6 +81,13 @@ const MODEL_DISPLAY_NAMES: Record<string, string> = {
   "suno-v5": "音乐",
   "sora-2-pro": "视频",
   "ai-writing-paper": "论文写作",
+  "zhongying-essay": "中英文作文",
+  "reading-report": "读书报告",
+  "experiment-report": "实验报告",
+  "study-abroad": "留学文书",
+  "resume-optimize": "简历优化",
+  "speech-defense": "演讲答辩",
+  "school-wechat": "公众号",
 }
 
 // 获取模型徽章颜色 — 强制归一：所有模型统一为翡翠绿 #10A37F
@@ -1031,9 +1038,58 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     "ai-writing-paper": {
       name: "论文写作",
       modelKey: "ai-writing-paper",
-      color: "#7C3AED",
+      color: BRAND_GREEN,
       description: "学术论文写作辅助",
       badge: "新",
+      group: "AI写作"
+    },
+    "zhongying-essay": {
+      name: "中英文作文",
+      modelKey: "zhongying-essay",
+      color: BRAND_GREEN,
+      description: "K12与四六级作文思路启发与语法润色",
+      group: "AI写作"
+    },
+    "reading-report": {
+      name: "读书报告 / 观后感",
+      modelKey: "reading-report",
+      color: BRAND_GREEN,
+      description: "提炼书籍核心观点，深化阅读思考",
+      group: "AI写作"
+    },
+    "experiment-report": {
+      name: "实验报告助理",
+      modelKey: "experiment-report",
+      color: BRAND_GREEN,
+      description: "规范理工科实验报告格式与结论分析",
+      group: "AI写作"
+    },
+    "study-abroad": {
+      name: "留学与升学文书",
+      modelKey: "study-abroad",
+      color: BRAND_GREEN,
+      description: "挖掘个人闪光点，打磨专属申请故事",
+      group: "AI写作"
+    },
+    "resume-optimize": {
+      name: "实习简历优化",
+      modelKey: "resume-optimize",
+      color: BRAND_GREEN,
+      description: "提炼校园经历，生成专业职场简历",
+      group: "AI写作"
+    },
+    "speech-defense": {
+      name: "演讲与答辩稿",
+      modelKey: "speech-defense",
+      color: BRAND_GREEN,
+      description: "竞选、比赛与论文答辩的逐字稿定制",
+      group: "AI写作"
+    },
+    "school-wechat": {
+      name: "学校公众号写作",
+      modelKey: "school-wechat",
+      color: BRAND_GREEN,
+      description: "校园宣传与活动稿件撰写",
       group: "AI写作"
     },
   }

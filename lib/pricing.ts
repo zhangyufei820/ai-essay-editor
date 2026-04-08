@@ -34,6 +34,13 @@ export type ModelType =
   | "beike-pro"
   | "banzhuren"
   | "ai-writing-paper"
+  | "zhongying-essay"
+  | "reading-report"
+  | "experiment-report"
+  | "study-abroad"
+  | "resume-optimize"
+  | "speech-defense"
+  | "school-wechat"
 
 export type GenMode = "text" | "image" | "music" | "video"
 
@@ -121,6 +128,55 @@ export const MODEL_COSTS: Record<ModelType, ModelCostConfig> = {
     displayName: "论文写作助手",
     mode: "text",
     estimatedTokens: 3000
+  },
+  "zhongying-essay": {
+    category: "agent",
+    tokenRate: AGENT_TOKEN_RATE,
+    displayName: "中英文作文助手",
+    mode: "text",
+    estimatedTokens: 2000
+  },
+  "reading-report": {
+    category: "agent",
+    tokenRate: AGENT_TOKEN_RATE,
+    displayName: "读书报告助手",
+    mode: "text",
+    estimatedTokens: 2500
+  },
+  "experiment-report": {
+    category: "agent",
+    tokenRate: AGENT_TOKEN_RATE,
+    displayName: "实验报告助理",
+    mode: "text",
+    estimatedTokens: 2500
+  },
+  "study-abroad": {
+    category: "agent",
+    tokenRate: AGENT_TOKEN_RATE,
+    displayName: "留学与升学文书助手",
+    mode: "text",
+    estimatedTokens: 3000
+  },
+  "resume-optimize": {
+    category: "agent",
+    tokenRate: AGENT_TOKEN_RATE,
+    displayName: "实习简历优化助手",
+    mode: "text",
+    estimatedTokens: 2000
+  },
+  "speech-defense": {
+    category: "agent",
+    tokenRate: AGENT_TOKEN_RATE,
+    displayName: "演讲与答辩稿助手",
+    mode: "text",
+    estimatedTokens: 2500
+  },
+  "school-wechat": {
+    category: "agent",
+    tokenRate: AGENT_TOKEN_RATE,
+    displayName: "学校公众号写作助手",
+    mode: "text",
+    estimatedTokens: 2000
   },
 
   // ========== 独立模型（20 积分/1K Token）==========

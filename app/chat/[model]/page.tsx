@@ -22,6 +22,13 @@ const SUPPORTED_MODELS = [
   'beike-pro',       // 备课助手Pro
   'banzhuren',       // 班主任智能体
   'ai-writing-paper', // 论文写作
+  'zhongying-essay', // 中英文作文
+  'reading-report',   // 读书报告
+  'experiment-report',// 实验报告
+  'study-abroad',    // 留学升学文书
+  'resume-optimize', // 实习简历优化
+  'speech-defense',  // 演讲与答辩稿
+  'school-wechat',   // 学校公众号写作
 ] as const
 
 export type SupportedModel = typeof SUPPORTED_MODELS[number]

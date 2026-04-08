@@ -6,7 +6,7 @@
 
 import { motion, AnimatePresence } from "framer-motion"
 import Link from "next/link"
-import { X, BookOpen, FileText } from "lucide-react"
+import { X, BookOpen, FileText, Pen, GraduationCap, FlaskConical, Briefcase, Mic, Newspaper } from "lucide-react"
 
 const TOKENS = {
   primary: {
@@ -68,6 +68,48 @@ const AI_WRITING_AGENTS: WritingAgent[] = [
     name: "论文写作",
     description: "学术论文写作辅助",
     href: "/chat/ai-writing-paper",
+  },
+  {
+    key: "zhongying-essay",
+    name: "中英文作文",
+    description: "K12与四六级作文思路启发与语法润色",
+    href: "/chat/zhongying-essay",
+  },
+  {
+    key: "reading-report",
+    name: "读书报告 / 观后感",
+    description: "提炼书籍核心观点，深化阅读思考",
+    href: "/chat/reading-report",
+  },
+  {
+    key: "experiment-report",
+    name: "实验报告助理",
+    description: "规范理工科实验报告格式与结论分析",
+    href: "/chat/experiment-report",
+  },
+  {
+    key: "study-abroad",
+    name: "留学与升学文书",
+    description: "挖掘个人闪光点，打磨专属申请故事",
+    href: "/chat/study-abroad",
+  },
+  {
+    key: "resume-optimize",
+    name: "实习简历优化",
+    description: "提炼校园经历，生成专业职场简历",
+    href: "/chat/resume",
+  },
+  {
+    key: "speech-defense",
+    name: "演讲与答辩稿",
+    description: "竞选、比赛与论文答辩的逐字稿定制",
+    href: "/chat/speech-defense",
+  },
+  {
+    key: "school-wechat",
+    name: "学校公众号写作",
+    description: "校园宣传与活动稿件撰写",
+    href: "/chat/school-wechat",
   },
 ]
 
@@ -303,7 +345,14 @@ function WritingIslandCard({
         }}
         transition={{ duration: 0.3 }}
       >
-        <FileText className="w-6 h-6" style={{ color: "#10A37F" }} />
+        {agent.key === "ai-writing-paper" && <FileText className="w-6 h-6" style={{ color: "#10A37F" }} />}
+        {agent.key === "zhongying-essay" && <Pen className="w-6 h-6" style={{ color: "#10A37F" }} />}
+        {agent.key === "reading-report" && <BookOpen className="w-6 h-6" style={{ color: "#10A37F" }} />}
+        {agent.key === "experiment-report" && <FlaskConical className="w-6 h-6" style={{ color: "#10A37F" }} />}
+        {agent.key === "study-abroad" && <GraduationCap className="w-6 h-6" style={{ color: "#10A37F" }} />}
+        {agent.key === "resume-optimize" && <Briefcase className="w-6 h-6" style={{ color: "#10A37F" }} />}
+        {agent.key === "speech-defense" && <Mic className="w-6 h-6" style={{ color: "#10A37F" }} />}
+        {agent.key === "school-wechat" && <Newspaper className="w-6 h-6" style={{ color: "#10A37F" }} />}
       </motion.div>
 
       {/* 中文名 */}
