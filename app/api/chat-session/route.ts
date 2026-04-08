@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createServerClient } from "@/lib/supabase/server"
+import { createClient as createSupabaseClient } from "@supabase/supabase-js"
 
 export async function POST(request: NextRequest) {
   try {
@@ -41,6 +42,14 @@ export async function POST(request: NextRequest) {
   }
 }
 
+// 🔥 创建使用 Service Role Key 的 Supabase 客户端（绕过 RLS）
+function createServiceRoleClient() {
+  return createSupabaseClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+}
+
 export async function GET(request: NextRequest) {
   try {
     if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
@@ -50,16 +59,19 @@ export async function GET(request: NextRequest) {
     // 🔥 支持 X-User-Id 头（用于 Authing 用户）- 优先使用header
     const userIdHeader = request.headers.get("X-User-Id")
 
-    // 如果有 X-User-Id header，直接使用（Authing 用户场景）
+    // 如果有 X-User-Id header，使用 Service Role Key 绕过 RLS
     if (userIdHeader) {
-      const supabase = await createServerClient()
+      const supabase = createServiceRoleClient()
       const { data: sessions, error } = await supabase
         .from("chat_sessions")
         .select("*")
         .eq("user_id", userIdHeader)
         .order("created_at", { ascending: false })
 
-      if (error) throw error
+      if (error) {
+        console.error("[v0] Get sessions error (Service Role):", error)
+        throw error
+      }
       return NextResponse.json({ sessions })
     }
 
