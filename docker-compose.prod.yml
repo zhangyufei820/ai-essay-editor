@@ -72,15 +72,9 @@ services:
       - .env.production
     environment:
       - NODE_ENV=production
-      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
-      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
-      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
       - DIFY_INTERNAL_URL=http://docker-api-1:5001/v1
       - DIFY_BASE_URL=http://docker-api-1:5001/v1
       - NEXT_PUBLIC_APP_URL=https://www.shenxiang.school
-      - NEXT_PUBLIC_AUTHING_APP_ID=${NEXT_PUBLIC_AUTHING_APP_ID}
-      - XUNHUPAY_APPID=${XUNHUPAY_APPID}
-      - XUNHUPAY_APPSECRET=${XUNHUPAY_APPSECRET}
     networks:
       - shenxiang-net
       - docker_default
