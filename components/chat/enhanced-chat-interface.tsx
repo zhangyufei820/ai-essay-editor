@@ -1674,8 +1674,44 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       }
       
       // 🔥 移除思考过程标签（<think>...</think>）
-      const cleanContent = content.replace(/<think>[\s\S]*?<\/think>/gi, '').trim()
-      
+      const cleanContent = cleanLLMText(content.replace(/<think>[\s\S]*?<\/think>/gi, '').trim())
+
+      // 🔥 渲染 LaTeX 数学公式（必须在 markdown 转换之前）
+      const renderMathInMarkdown = (md: string): string => {
+        let html = md
+
+        // 渲染块级公式 $$...$$
+        html = html.replace(/\$\$([\s\S]+?)\$\$/g, (_, math) => {
+          try {
+            return katex.renderToString(math.trim(), {
+              displayMode: true,
+              throwOnError: false,
+              macros: LATEX_MACROS,
+            })
+          } catch (e) {
+            console.error("KaTeX block render error:", e)
+            return `<span class="katex-error">${math}</span>`
+          }
+        })
+
+        // 渲染行内公式 $...$
+        // 注意：块级公式已处理，现在处理行内公式（避免匹配 $$）
+        html = html.replace(/\$([^\$\n]+?)\$/g, (_, math) => {
+          try {
+            return katex.renderToString(math.trim(), {
+              displayMode: false,
+              throwOnError: false,
+              macros: LATEX_MACROS,
+            })
+          } catch (e) {
+            console.error("KaTeX inline render error:", e)
+            return `<span class="katex-error">${math}</span>`
+          }
+        })
+
+        return html
+      }
+
       // 🔥 将 Markdown 转换为 HTML
       const convertMarkdownToHTML = (md: string): string => {
         let html = md
@@ -1740,7 +1776,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         return html
       }
       
-      const htmlContent = convertMarkdownToHTML(cleanContent)
+      const htmlContent = convertMarkdownToHTML(renderMathInMarkdown(cleanContent))
       
       // 写入打印内容
       printWindow.document.write(`
@@ -1749,6 +1785,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         <head>
           <meta charset="utf-8">
           <title>沈翔智学 - AI 分析报告</title>
+          <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.45/dist/katex.min.css">
           <style>
             * { margin: 0; padding: 0; box-sizing: border-box; }
             body { 
@@ -1812,6 +1849,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
             @media print {
               body { padding: 20px; }
             }
+            .katex-error { color: #B71C1C; font-size: 0.9em; }
           </style>
         </head>
         <body>
