@@ -60,8 +60,8 @@ export default function RootLayout({
         <link rel="apple-touch-icon" sizes="180x180" href="https://cdn.shenxiang.school/icons/icon-192x192.png" />
         <link rel="apple-touch-icon" sizes="167x167" href="https://cdn.shenxiang.school/icons/icon-192x192.png" />
 
-        {/* KaTeX CSS - 异步加载，不阻塞首屏渲染 */}
-        <AsyncStylesheet href="https://cdn.jsdelivr.net/npm/katex@0.16.45/dist/katex.min.css" />
+        {/* KaTeX CSS - 同步加载，确保公式排版正确 */}
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.45/dist/katex.min.css" />
       </head>
       <body className={`font-sans antialiased`}>
         {/* ✅ WxGuard 放在最上方，确保它是 body 的第一个子元素 */}
