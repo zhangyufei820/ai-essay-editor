@@ -58,6 +58,7 @@ export async function GET(request: NextRequest) {
 
     // 🔥 支持 X-User-Id 头（用于 Authing 用户）- 优先使用header
     const userIdHeader = request.headers.get("X-User-Id")
+    console.log("📡 [chat-session API] X-User-Id:", userIdHeader, "| 有header:", !!userIdHeader)
 
     // 如果有 X-User-Id header，使用 Service Role Key 绕过 RLS
     if (userIdHeader) {
@@ -67,6 +68,8 @@ export async function GET(request: NextRequest) {
         .select("*")
         .eq("user_id", userIdHeader)
         .order("created_at", { ascending: false })
+
+      console.log("📡 [chat-session API] 查询结果:", sessions?.length || 0, "条| error:", error)
 
       if (error) {
         console.error("[v0] Get sessions error (Service Role):", error)
