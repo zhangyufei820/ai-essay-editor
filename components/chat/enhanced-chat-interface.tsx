@@ -573,6 +573,14 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     }
   }
 
+  // 🔥 当打开历史会话侧边栏时，重新获取会话列表
+  useEffect(() => {
+    if (showHistorySidebar && userId) {
+      console.log("📋 [侧边栏] 打开历史会话，刷新列表")
+      fetchChatSessions(userId)
+    }
+  }, [showHistorySidebar, userId])
+
   // 🎯 工作流可视化 Hook (GenSpark 1:1 复刻版)
   const {
     workflowState,
