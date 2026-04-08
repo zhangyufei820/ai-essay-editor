@@ -575,9 +575,12 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 
   // 🔥 当打开历史会话侧边栏时，重新获取会话列表
   useEffect(() => {
+    console.log("📋 [侧边栏] useEffect触发: showHistorySidebar=", showHistorySidebar, "userId=", userId || "空")
     if (showHistorySidebar && userId) {
       console.log("📋 [侧边栏] 打开历史会话，刷新列表")
       fetchChatSessions(userId)
+    } else if (showHistorySidebar && !userId) {
+      console.warn("⚠️ [侧边栏] userId为空，无法获取会话列表")
     }
   }, [showHistorySidebar, userId])
 
