@@ -33,11 +33,16 @@ ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 
-# 从构建阶段复制 Next.js 产物（Next.js 16 输出结构）
+# 从构建阶段复制 Next.js standalone 产物
+# 注意：不复制整个 node_modules！
+# Next.js standalone 模式已将所有运行时依赖打包到 .next/standalone/ 目录
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/package.json ./
-COPY --from=builder /app/node_modules ./node_modules
+
+# 健康检查：等待 Next.js 启动
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD curl -sf http://localhost:3000/ || exit 1
 
 EXPOSE 3000
 
