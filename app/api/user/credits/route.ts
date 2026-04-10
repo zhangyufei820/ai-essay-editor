@@ -148,17 +148,24 @@ export async function POST(request: Request) {
     }
     const newCredits = Math.max(0, currentCredits + amount) // 确保不会变成负数
 
-    // 更新积分
+    // 🔥 使用条件更新防止并发竞态
     const { data: updateData, error: updateError } = await supabaseAdmin
       .from('user_credits')
       .update({ credits: newCredits })
       .eq('user_id', userId)
+      .eq('credits', currentCredits)  // 🔥 关键：只有在积分未变时才更新
       .select('credits')
       .single()
 
     if (updateError) {
       console.error(`❌ [积分API] 更新积分失败:`, updateError)
       return NextResponse.json({ error: updateError.message }, { status: 500 })
+    }
+
+    // 🔥 检查更新是否成功（条件更新可能因并发而未生效）
+    if (!updateData) {
+      console.warn(`⚠️ [积分API] 积分已被其他请求修改，跳过本次更新 userId=${userId}`)
+      return NextResponse.json({ error: '积分已被其他请求修改，请重试' }, { status: 409 })
     }
 
     console.log(`✅ [积分API] 积分变更成功: ${currentCredits} → ${newCredits} (${amount > 0 ? '+' : ''}${amount})`)
@@ -186,8 +193,7 @@ export async function POST(request: Request) {
           user_id: userId,
           amount: amount,
           type: transactionType,
-          description: friendlyDescription,
-          reason: reason || (amount > 0 ? '积分增加' : '积分消耗')
+          description: friendlyDescription
         })
       
       if (txError) {

@@ -85,7 +85,7 @@ export async function spendCredits(
   const balanceBefore = credits.credits
   const balanceAfter = credits.credits - amount
 
-  // 扣除积分
+  // 🔥 使用条件更新防止并发竞态：只有积分未变化时才扣费
   const { error: updateError } = await supabase
     .from("user_credits")
     .update({
@@ -93,9 +93,23 @@ export async function spendCredits(
       updated_at: new Date().toISOString(),
     })
     .eq("user_id", userId)
+    .eq("credits", credits.credits)  // 🔥 关键：只有在积分未变时才更新
 
   if (updateError) {
     console.error("[积分系统] 扣除积分失败:", updateError)
+    return false
+  }
+
+  // 🔥 检查更新是否成功（条件更新可能因并发而未生效）
+  const { data: verifyData } = await supabase
+    .from("user_credits")
+    .select("credits")
+    .eq("user_id", userId)
+    .single()
+
+  if (verifyData && verifyData.credits !== balanceAfter) {
+    // 积分已被其他请求修改，本次扣费被并发跳过了
+    console.warn(`[积分系统] 扣费被并发跳过 userId=${userId}: 期望=${balanceAfter}, 实际=${verifyData.credits}`)
     return false
   }
 
@@ -246,23 +260,29 @@ export async function handleReferralSignup(newUserId: string, referralCode: stri
   
   // 计算实际奖励（如果接近上限，只给剩余额度）
   const remainingQuota = REFERRAL_CONFIG.MAX_REFERRER_REWARD - currentRewardTotal
-  const actualReferrerReward = canReceiveReward 
+  const actualReferrerReward = canReceiveReward
     ? Math.min(REFERRAL_CONFIG.REWARD_PER_INVITE, remainingQuota)
     : 0
 
-  // 创建推荐记录
-  const { error: referralError } = await supabase.from("referrals").insert({
-    referrer_id: referrerId,
-    referee_id: newUserId,
-    referral_code: referralCode,
-    reward_credits: actualReferrerReward,
-    status: "completed",
-    completed_at: new Date().toISOString(),
-  })
+  // 🔥 只有在邀请者能获得奖励时才创建推荐记录（避免 reward_credits=0 的数据污染）
+  let referralError = null
+  if (actualReferrerReward > 0) {
+    const { error } = await supabase.from("referrals").insert({
+      referrer_id: referrerId,
+      referee_id: newUserId,
+      referral_code: referralCode,
+      reward_credits: actualReferrerReward,
+      status: "completed",
+      completed_at: new Date().toISOString(),
+    })
+    referralError = error
 
-  if (referralError) {
-    console.error("[积分系统] 创建推荐记录失败:", referralError)
-    return false
+    if (referralError) {
+      console.error("[积分系统] 创建推荐记录失败:", referralError)
+      return false
+    }
+  } else {
+    console.log(`[积分系统] 邀请者已达奖励上限，不记录推荐关系 | referrer=${referrerId}`)
   }
 
   // 🎁 给推荐人增加积分（如果未达上限）

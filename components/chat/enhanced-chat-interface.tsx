@@ -2317,16 +2317,9 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                                 content: fullText
                               })
 
-                              try {
-                                await fetch('/api/user/credits', {
-                                  method: 'POST',
-                                  headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({ userId, amount: -cost, reason: 'suno-v5-pro' })
-                                })
-                              } catch (e) {
-                                console.error("❌ [积分扣除] 失败:", e)
-                              }
-                              setUserCredits(prev => prev - cost)
+                              // 🔥 后端 handleGenerateStreamingPro 已包含完整计费逻辑（基础费+Token费）
+                              // 前端不再单独扣费，避免三重计费
+                              // 余额会在 finally 的 refreshCredits() 时同步
                             }
                           )
                         } catch (err: any) {

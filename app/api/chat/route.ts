@@ -78,15 +78,50 @@ export async function POST(req: Request) {
           process.env.SUPABASE_SERVICE_ROLE_KEY!
         )
         const { data } = await supabaseAdmin.from('user_credits').select('credits').eq('user_id', userId).single()
-        
-        if (data) {
-          // 确保不扣成负数
-          const newCredits = Math.max(0, data.credits - currentCost)
-          await supabaseAdmin
-            .from('user_credits')
-            .update({ credits: newCredits })
-            .eq('user_id', userId)
-          console.log(`[Billing] 扣费成功 (-${currentCost})，剩余: ${newCredits}`)
+
+        if (!data) {
+          console.error("[Billing] 无法获取用户积分信息")
+          return
+        }
+
+        const currentCredits = data.credits
+        const newCredits = Math.max(0, currentCredits - currentCost)
+
+        // 🔥 使用条件更新防止并发竞态
+        const updateResult = await supabaseAdmin
+          .from('user_credits')
+          .update({ credits: newCredits })
+          .eq('user_id', userId)
+          .eq('credits', currentCredits)  // 🔥 关键：只有在积分未变时才更新
+          .select('credits')
+          .single()
+
+        if (updateResult.error || !updateResult.data) {
+          console.error("[Billing] 扣费更新失败或被并发跳过:", updateResult.error)
+          return
+        }
+
+        console.log(`[Billing] 扣费成功 (-${currentCost})，剩余: ${newCredits}`)
+
+        // 🔥 记录到 credit_transactions 表
+        const reasonMap: Record<string, string> = {
+          'essay': '作文批改',
+          'chat': 'AI 对话',
+        }
+        const reasonKey = isEssayRequest ? 'essay' : 'chat'
+        const description = reasonMap[reasonKey] || 'AI 对话'
+
+        const { error: txError } = await supabaseAdmin.from('credit_transactions').insert({
+          user_id: userId,
+          amount: -currentCost,
+          type: 'consume',
+          description: `使用 ${description}`,
+          balance_before: currentCredits,
+          balance_after: newCredits
+        })
+
+        if (txError) {
+          console.error("[Billing] 记录交易失败:", txError)
         }
       } catch (e) {
         console.error("[Billing] 扣费失败:", e)
