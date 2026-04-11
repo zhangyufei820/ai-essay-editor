@@ -351,7 +351,7 @@ export function Footer() {
               className="text-xs"
               style={{ color: COLORS.copyright, fontSize: "12px" }}
             >
-              © 2025 沈翔智学. All rights reserved.
+              © 2026 沈翔智学. All rights reserved.
             </p>
 
             {/* 右侧链接 */}
