@@ -1,3 +1,12 @@
 {
-  "tasks": []
+  "tasks": [
+    {
+      "id": "f466719a",
+      "cron": "*/10 * * * *",
+      "prompt": "深度扫描服务器所有日志，每10分钟一次，持续到今晚12点。\n\n执行以下命令并记录结果到 /tmp/server-log-scan/ 目录：\n\n```bash\nLOG_DIR=\"/tmp/server-log-scan\"\nmkdir -p $LOG_DIR\nTS=$(date '+%Y%m%d-%H%M')\nREPORT=\"$LOG_DIR/scan-$TS.txt\"\n\n{\n  echo \"========== 服务器日志扫描 $(date) ==========\"\n  echo \"\"\n  echo \"【容器健康】\"\n  docker ps -a --format '{{.Names}} ({{.Status}})' | grep -v Exited\n  echo \"\"\n  echo \"【关键容器错误（最近10分钟）】\"\n  for c in shenxiang-nextjs docker-worker-1 docker-worker_beat-1 docker-api-1 docker-plugin_daemon-1 docker-web-1 docker-sandbox-1 docker-db_postgres-1 docker-redis-1 docker-weaviate-1 docker-nginx-1; do\n    errs=$(docker logs $c --since '10m' 2>&1 | grep -ciE '^\\d{4}-\\d{2}-\\d{2}.*ERROR|^\\d{4}-\\d{2}-\\d{2}.*FATAL|unavailable|refused|timeout')\n    if [ \"$errs\" -gt 0 ]; then\n      echo \"⚠️ $c: $errs errors\"\n      docker logs $c --since '10m' 2>&1 | grep -iE 'ERROR|FATAL|exception|unavailable|refused|timeout' | tail -3\n    fi\n  done\n  echo \"\"\n  echo \"【shenxiang-nextjs 状态】\"\n  docker inspect shenxiang-nextjs --format '{{.State.Health.Status}} ({{.State.Status}})' 2>/dev/null || echo \"容器不存在\"\n  echo \"\"\n  echo \"【资源使用】\"\n  docker stats --no-stream --format '{{.Name}}: CPU={{.CPUPerc}} MEM={{.MemUsage}}' | grep -E 'shenxiang-nextjs|docker-worker|docker-api' | head -5\n  echo \"\"\n  echo \"【磁盘】\"\n  df -h / | tail -1\n} > $REPORT 2>&1\n\n# 如果有错误，输出警告\nif grep -q \"⚠️\" $REPORT; then\n  echo \"⚠️ [$(date)] 发现错误！详见 $REPORT\"\n  grep \"⚠️\" $REPORT\nelse\n  echo \"✅ [$(date)] 扫描完成，无错误\"\nfi\n```\n\n将输出保存到 $REPORT。如果发现任何 ERROR/FATAL/异常，立即通知用户。",
+      "createdAt": 1775809498127,
+      "lastFiredAt": 1775911486814,
+      "recurring": true
+    }
+  ]
 }
