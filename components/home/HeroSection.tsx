@@ -476,14 +476,15 @@ function ChatDemo() {
               />
             )}
           </div>
-          <motion.div
+          <motion.button
+            aria-label="发送消息"
             className="w-10 h-10 rounded-xl flex items-center justify-center"
             style={{ backgroundColor: brandColors[600] }}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
           >
             <Send className="w-5 h-5 text-white" />
-          </motion.div>
+          </motion.button>
         </div>
       </div>
     </motion.div>

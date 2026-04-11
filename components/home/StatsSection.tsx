@@ -23,7 +23,7 @@ const COLORS = {
   },
   white: "#FFFFFF",
   divider: "rgba(255,255,255,0.2)",
-  iconColor: "rgba(255,255,255,0.6)",
+  iconColor: "rgba(255,255,255,0.85)",
   labelColor: "rgba(255,255,255,0.9)",
 }
 

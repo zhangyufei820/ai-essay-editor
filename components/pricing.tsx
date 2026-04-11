@@ -104,6 +104,8 @@ export function Pricing() {
             </span>
             <button
               onClick={() => setIsAnnual(!isAnnual)}
+              aria-label={isAnnual ? "切换到月付" : "切换到年付"}
+              aria-pressed={isAnnual}
               className="relative inline-block w-14 h-8 rounded-full transition-colors duration-200"
               style={{ backgroundColor: isAnnual ? "oklch(0.35 0.08 150)" : "#d1d5db" }}
             >

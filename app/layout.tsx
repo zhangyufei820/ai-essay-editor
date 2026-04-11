@@ -8,6 +8,51 @@ import { InstallPrompt } from "@/components/pwa/InstallPrompt"
 import WxGuard from "@/components/WxGuard"
 import { AsyncStylesheet } from "@/components/AsyncStylesheet"
 
+// ============================================
+// Schema.org 结构化数据（模块级别常量，避免每次渲染重复创建对象）
+// ============================================
+
+const WEBSITE_SCHEMA = {
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  name: "沈翔智学",
+  url: "https://shenxiang.school",
+  description: "专业的AI作文批改专家，融合文学大师风格，为学生提供深度点评、创意建议和个性化指导",
+  publisher: {
+    "@type": "Organization",
+    name: "沈翔智学",
+    url: "https://shenxiang.school",
+  },
+  potentialAction: {
+    "@type": "SearchAction",
+    target: {
+      "@type": "EntryPoint",
+      urlTemplate: "https://shenxiang.school/chat/standard?query={search_term_string}",
+    },
+    "query-input": "required name=search_term_string",
+  },
+}
+
+const SOFTWARE_SCHEMA = {
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  name: "沈翔智学",
+  applicationCategory: "EducationApplication",
+  operatingSystem: "Web",
+  description: "AI智能作文批改与润色平台，为学生提供专业的作文点评和个性化指导",
+  url: "https://shenxiang.school",
+  offers: {
+    "@type": "AggregateOffer",
+    priceCurrency: "CNY",
+    availability: "https://schema.org/InStock",
+  },
+  aggregateRating: {
+    "@type": "AggregateRating",
+    ratingValue: "4.8",
+    reviewCount: "128",
+  },
+}
+
 // PWA 视口配置
 export const viewport: Viewport = {
   themeColor: "#14532d",
@@ -21,12 +66,41 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   title: "沈翔智学 - AI智能作文批改与润色",
   description: "专业的AI作文批改专家，融合文学大师风格，为学生提供深度点评、创意建议和个性化指导",
-  generator: "v0.app",
+  keywords: "AI作文批改,人工智能辅导,语文学习,作文润色,智能教育,沈翔智学",
+  authors: [{ name: "沈翔智学" }],
+  openGraph: {
+    type: "website",
+    locale: "zh_CN",
+    url: "https://shenxiang.school",
+    siteName: "沈翔智学",
+    title: "沈翔智学 - AI智能作文批改与润色",
+    description: "专业的AI作文批改专家，融合文学大师风格，为学生提供深度点评、创意建议和个性化指导",
+    images: [
+      {
+        url: "https://cdn.shenxiang.school/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "沈翔智学 - AI智能作文批改",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    site: "@shenxiangschool",
+    creator: "@shenxiangschool",
+    title: "沈翔智学 - AI智能作文批改与润色",
+    description: "专业的AI作文批改专家，融合文学大师风格，为学生提供深度点评、创意建议和个性化指导",
+    images: ["https://cdn.shenxiang.school/og-image.png"],
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "沈翔学校",
+    title: "沈翔智学",
   },
   formatDetection: {
     telephone: false,
@@ -62,6 +136,18 @@ export default function RootLayout({
 
         {/* KaTeX CSS - 同步加载，确保公式排版正确 */}
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.45/dist/katex.min.css" />
+
+        {/* Schema.org 结构化数据 - 网站信息 */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(WEBSITE_SCHEMA) }}
+        />
+
+        {/* Schema.org 结构化数据 - 软件应用 */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(SOFTWARE_SCHEMA) }}
+        />
       </head>
       <body className={`font-sans antialiased`}>
         {/* ✅ WxGuard 放在最上方，确保它是 body 的第一个子元素 */}

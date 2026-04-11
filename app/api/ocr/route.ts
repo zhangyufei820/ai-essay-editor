@@ -12,7 +12,10 @@ export async function POST(req: NextRequest) {
 
     console.log(`[v0] OCR: Processing ${images.length} images`)
 
-    const apiKey = process.env.VIVA_API_KEY || "sk-diaycftqfopXhIAf5gm7G35xSndFo0VzMi0PyRpHQGz4voxG"
+    const apiKey = process.env.VIVA_API_KEY
+    if (!apiKey) {
+      throw new Error("VIVA_API_KEY 未配置")
+    }
     const baseURL = "https://www.vivaapi.cn/v1"
 
     const ocrMessages = [

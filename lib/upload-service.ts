@@ -1,11 +1,10 @@
 /**
  * 📤 通用上传服务 (Universal Upload Service)
- * 
+ *
  * 🎯 功能：
  * 1. 大文件直传到服务器，绕过 Vercel 限制
- * 2. 根据不同应用动态获取对应的 API Key
- * 3. 全局统一的上传入口
- * 
+ * 2. 全局统一的上传入口
+ *
  * 🔧 使用方式：
  * import { universalUpload } from '@/lib/upload-service'
  * const result = await universalUpload(file, userId, model)
@@ -16,61 +15,14 @@
 // 配置常量
 // ============================================
 
-// 文件大小限制：50MB
+// 文件大小限制：100MB
 export const FILE_SIZE_LIMIT = 100 * 1024 * 1024
 
 // Lighthouse 直连地址（暂保留，所有文件统一走 /api/dify-upload）
 export const LIGHTHOUSE_UPLOAD_URL = process.env.NEXT_PUBLIC_LIGHTHOUSE_UPLOAD_URL || ""
 
-// 文件上传服务器地址
-export const UPLOAD_URL = process.env.NEXT_PUBLIC_UPLOAD_URL || ""
-
-// ============================================
-// 应用 API Key 映射表
-// ============================================
-
-/**
- * 🔑 Dify 应用 API Key 映射表
- * 根据不同的模型/应用返回对应的 API Key
- */
-export const DIFY_API_KEY_MAP: Record<string, string | undefined> = {
-  // 作文批改 - 专用 API Key
-  "standard": process.env.NEXT_PUBLIC_ESSAY_CORRECTION_API_KEY || process.env.NEXT_PUBLIC_DIFY_API_KEY,
-
-  // 教学评助手
-  "teaching-pro": process.env.NEXT_PUBLIC_DIFY_TEACHING_PRO_API_KEY || process.env.NEXT_PUBLIC_DIFY_API_KEY,
-
-  // 通用模型
-  "gpt-5": process.env.NEXT_PUBLIC_DIFY_API_KEY_GPT5 || process.env.NEXT_PUBLIC_DIFY_API_KEY,
-  "claude-opus": process.env.NEXT_PUBLIC_DIFY_API_KEY_CLAUDE || process.env.NEXT_PUBLIC_DIFY_API_KEY,
-  "gemini-pro": process.env.NEXT_PUBLIC_DIFY_API_KEY_GEMINI || process.env.NEXT_PUBLIC_DIFY_API_KEY,
-  "grok-4.2": process.env.NEXT_PUBLIC_DIFY_API_KEY_GROK42 || process.env.NEXT_PUBLIC_DIFY_API_KEY,
-  "open-claw": process.env.NEXT_PUBLIC_DIFY_API_KEY_OPENCLAW || process.env.NEXT_PUBLIC_DIFY_API_KEY,
-
-  // 创意生成
-  "banana": process.env.NEXT_PUBLIC_DIFY_BANANA_API_KEY || process.env.NEXT_PUBLIC_DIFY_API_KEY,
-  "banana-2-pro": process.env.NEXT_PUBLIC_DIFY_BANANA_API_KEY || process.env.NEXT_PUBLIC_DIFY_API_KEY,
-
-  // 音乐和视频
-  "suno-v5": process.env.NEXT_PUBLIC_DIFY_API_KEY || process.env.NEXT_PUBLIC_SUNO_API_KEY,
-  "sora-2-pro": process.env.NEXT_PUBLIC_DIFY_API_KEY || process.env.NEXT_PUBLIC_SORA_API_KEY,
-
-  // 智能体专区
-  "quanquan-math": process.env.NEXT_PUBLIC_DIFY_QUANQUANMATH_API_KEY || process.env.NEXT_PUBLIC_DIFY_API_KEY,
-  "quanquan-english": process.env.NEXT_PUBLIC_DIFY_QUANQUANENGLISH_API_KEY || process.env.NEXT_PUBLIC_DIFY_API_KEY,
-  "beike-pro": process.env.NEXT_PUBLIC_DIFY_BEIKE_PRO_API_KEY || process.env.NEXT_PUBLIC_DIFY_API_KEY,
-  "banzhuren": process.env.NEXT_PUBLIC_DIFY_BANZHUREN_API_KEY || process.env.NEXT_PUBLIC_DIFY_API_KEY,
-}
-
-/**
- * 🔑 获取指定模型的 API Key
- */
-export function getApiKeyForModel(model: string | null): string {
-  if (!model) {
-    return DIFY_API_KEY_MAP["standard"] || ""
-  }
-  return DIFY_API_KEY_MAP[model] || DIFY_API_KEY_MAP["standard"] || ""
-}
+// 文件上传服务器地址（服务端使用，不暴露给客户端）
+export const UPLOAD_URL = process.env.UPLOAD_URL || ""
 
 // ============================================
 // 允许的文件类型
@@ -87,24 +39,6 @@ export const ALLOWED_FILE_TYPES = [
 ]
 
 export const MAX_FILE_SIZE = 100 * 1024 * 1024 // 100MB
-
-// ============================================
-// 类型定义
-// ============================================
-
-export interface UploadResult {
-  success: boolean
-  fileId?: string
-  fileName?: string
-  cosUrl?: string
-  error?: string
-}
-
-export interface UploadOptions {
-  userId: string
-  model: string
-  onProgress?: (progress: number) => void
-}
 
 // ============================================
 // 安全校验函数
@@ -154,215 +88,4 @@ export function validateFile(file: File): { valid: boolean; error?: string } {
  */
 export function validateFileForUpload(file: File): { valid: boolean; error?: string } {
   return validateFile(file)
-}
-
-/**
- * 🚀 直连服务器上传
- * 
- * @param file - 要上传的文件
- * @param userId - 用户 ID
- * @param model - 模型名称
- * @returns 上传结果
- */
-export async function uploadToServer(
-  file: File, 
-  userId: string, 
-  model: string = "standard"
-): Promise<{ id: string }> {
-  const apiKey = getApiKeyForModel(model)
-  
-  if (!apiKey) {
-    throw new Error("未配置 API Key，请联系管理员")
-  }
-  
-  if (!UPLOAD_URL) {
-    throw new Error("未配置上传服务器地址")
-  }
-  
-  const formData = new FormData()
-  formData.append("file", file)
-  formData.append("user", userId)
-  
-  const response = await fetch(UPLOAD_URL, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "X-User-Id": userId,
-      "X-Model": model
-    },
-    body: formData
-  })
-  
-  if (!response.ok) {
-    const errorText = await response.text()
-    throw new Error(`文件上传失败 (${response.status}): ${errorText}`)
-  }
-  
-  const data = await response.json()
-  return { id: data.id }
-}
-
-// ============================================
-// 核心上传函数
-// ============================================
-
-/**
- * 🚀 通用上传函数
- * 
- * @param file - 要上传的文件
- * @param options - 上传选项
- * @returns 上传结果
- */
-export async function universalUpload(
-  file: File, 
-  options: UploadOptions
-): Promise<UploadResult> {
-  const { userId, model, onProgress } = options
-  
-  console.log("📤 [Universal Upload] 开始上传:", { 
-    fileName: file.name, 
-    fileSize: (file.size / 1024 / 1024).toFixed(2) + "MB",
-    model,
-    userId 
-  })
-  
-  // 1. 安全校验
-  const validation = validateFile(file)
-  if (!validation.valid) {
-    console.warn("📤 [Universal Upload] 安全校验失败:", validation.error)
-    return { success: false, error: validation.error }
-  }
-  
-  // 2. 获取对应模型的 API Key
-  const apiKey = getApiKeyForModel(model)
-  if (!apiKey) {
-    console.error("📤 [Universal Upload] 未配置 API Key for model:", model)
-    return { success: false, error: "未配置 API Key，请联系管理员" }
-  }
-  
-  // 3. 创建 FormData
-  const formData = new FormData()
-  formData.append("file", file)
-  formData.append("user", userId)
-  
-  try {
-    // 4. 直连上传到服务器
-    if (!UPLOAD_URL) {
-      console.error("📤 [Universal Upload] 未配置上传服务器地址")
-      return { success: false, error: "未配置上传服务器地址" }
-    }
-    
-    console.log("📤 [Universal Upload] 直连上传:", (file.size / 1024 / 1024).toFixed(2) + "MB")
-    
-    const response = await fetch(UPLOAD_URL, {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "X-User-Id": userId,
-        "X-Model": model
-      },
-      body: formData
-    })
-    
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error("📤 [Universal Upload] 上传失败:", response.status, errorText)
-      return { 
-        success: false, 
-        error: `文件上传失败 (${response.status})` 
-      }
-    }
-    
-    const data = await response.json()
-    console.log("📤 [Universal Upload] 上传成功:", data.id)
-    
-    if (onProgress) onProgress(100)
-    
-    return {
-      success: true,
-      fileId: data.id,
-      fileName: data.file_name
-    }
-  } catch (error) {
-    console.error("📤 [Universal Upload] 异常:", error)
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : "上传失败" 
-    }
-  }
-}
-
-// ============================================
-// 便捷函数
-// ============================================
-
-/**
- * 📤 上传多个文件
- */
-export async function uploadMultiple(
-  files: File[],
-  options: UploadOptions
-): Promise<UploadResult[]> {
-  const results = await Promise.all(
-    files.map((file, index) =>
-      universalUpload(file, {
-        ...options,
-        onProgress: options.onProgress
-          ? () => options.onProgress!(Math.round(((index + 1) / files.length) * 100))
-          : undefined
-      })
-    )
-  )
-  return results
-}
-
-// ============================================
-// Lighthouse 大文件上传
-// ============================================
-
-/**
- * 🚀 Lighthouse 大文件直连上传
- * 用于绕过 Vercel 4MB 的请求体限制
- *
- * @param file - 要上传的文件
- * @param userId - 用户 ID
- * @param model - 模型名称（用于获取对应 API Key）
- * @returns 上传结果
- */
-export async function uploadToLighthouse(
-  file: File,
-  userId: string,
-  model: string = "standard"
-): Promise<{ id: string }> {
-  const apiKey = getApiKeyForModel(model)
-
-  if (!apiKey) {
-    throw new Error("未配置 API Key，请联系管理员")
-  }
-
-  if (!LIGHTHOUSE_UPLOAD_URL) {
-    throw new Error("大文件上传服务暂不可用，请联系管理员配置")
-  }
-
-  const formData = new FormData()
-  formData.append("file", file)
-  formData.append("user", userId)
-
-  const response = await fetch(LIGHTHOUSE_UPLOAD_URL, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "X-User-Id": userId,
-      "X-Model": model
-    },
-    body: formData
-  })
-
-  if (!response.ok) {
-    const errorText = await response.text()
-    throw new Error(`大文件上传失败 (${response.status}): ${errorText}`)
-  }
-
-  const data = await response.json()
-  return { id: data.id }
 }

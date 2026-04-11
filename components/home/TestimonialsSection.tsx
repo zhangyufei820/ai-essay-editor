@@ -417,6 +417,8 @@ function TestimonialCard({
         {/* 点赞按钮 - 科技感 */}
         <motion.button
           onClick={handleLike}
+          aria-label={`点赞 ${likes}`}
+          aria-pressed={isLiked}
           whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.9 }}
           className={cn(

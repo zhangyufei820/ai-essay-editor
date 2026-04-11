@@ -1,18 +1,16 @@
 /**
  * Suno 音乐生成 API 配置
- * 
+ *
  * ⚠️ 安全提示：此文件仅包含配置常量
- * 实际 API Key 应存储在环境变量中
+ * 实际 API Key 应存储在环境变量中（服务端使用，非 NEXT_PUBLIC_）
  */
 
 // ============================================
 // A. 生成 API (Chatflow) - 用于提交提示词
 // ============================================
 export const SUNO_GENERATE_CONFIG = {
-  baseUrl: "http://43.154.111.156/v1",
+  baseUrl: process.env.SUNO_API_BASE_URL || "http://43.154.111.156/v1",
   endpoint: "/chat-messages",
-  // API Key 从环境变量读取，此处仅作为备用默认值
-  apiKey: process.env.NEXT_PUBLIC_SUNO_GENERATE_API_KEY || "app-aUM5wY1ACN5M0zHkMdijZCcC",
   method: "POST" as const,
 }
 
@@ -20,10 +18,8 @@ export const SUNO_GENERATE_CONFIG = {
 // B. 查询 API (Workflow) - 用于轮询进度
 // ============================================
 export const SUNO_QUERY_CONFIG = {
-  baseUrl: "http://43.154.111.156/v1",
+  baseUrl: process.env.SUNO_API_BASE_URL || "http://43.154.111.156/v1",
   endpoint: "/workflows/run",
-  // API Key 从环境变量读取，此处仅作为备用默认值
-  apiKey: process.env.NEXT_PUBLIC_SUNO_QUERY_API_KEY || "app-XenDdavZwSjiEHd2SyiTfECc",
   method: "POST" as const,
 }
 

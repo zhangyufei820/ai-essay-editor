@@ -20,10 +20,10 @@ const TOKEN_TO_CREDITS_RATIO = 0.01     // Token 转积分比例：100 tokens = 
 
 export const dynamic = 'force-dynamic'
 
-// Suno API 配置（从环境变量读取，或使用默认值）
+// Suno API 配置（从环境变量读取）
 const SUNO_BASE_URL = process.env.SUNO_API_BASE_URL || "http://43.154.111.156/v1"
-const SUNO_GENERATE_API_KEY = process.env.SUNO_GENERATE_API_KEY || "app-aUM5wY1ACN5M0zHkMdijZCcC"
-const SUNO_QUERY_API_KEY = process.env.SUNO_QUERY_API_KEY || "app-XenDdavZwSjiEHd2SyiTfECc"
+const SUNO_GENERATE_API_KEY = process.env.SUNO_GENERATE_API_KEY
+const SUNO_QUERY_API_KEY = process.env.SUNO_QUERY_API_KEY
 
 /** 专业模式表单数据结构 - 🔥 与 Dify 工作流参数完全对应 */
 interface SunoProFormInputs {
@@ -43,7 +43,11 @@ interface SunoProFormInputs {
 
 export async function POST(req: NextRequest) {
   console.log('🎵 [Suno Proxy] 收到请求')
-  
+
+  // 运行时校验（而非模块加载时 throw，避免 Edge Runtime 初始化失败）
+  if (!SUNO_GENERATE_API_KEY) throw new Error("SUNO_GENERATE_API_KEY 未配置")
+  if (!SUNO_QUERY_API_KEY) throw new Error("SUNO_QUERY_API_KEY 未配置")
+
   try {
     const body = await req.json()
     const { 
