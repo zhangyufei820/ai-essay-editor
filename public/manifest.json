@@ -1,7 +1,7 @@
 {
-  "name": "沈翔智学",
+  "name": "沈翔智学智能体广场",
   "short_name": "沈翔智学",
-  "description": "AI 智能学习平台 - 专业作文批改与教学辅助",
+  "description": "沈翔智学智能体广场 - 含各学段中英文作文批改与教学辅助",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",

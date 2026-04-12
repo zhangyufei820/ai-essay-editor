@@ -64,7 +64,7 @@ export const viewport: Viewport = {
 }
 
 export const metadata: Metadata = {
-  title: "沈翔智学 - AI智能作文批改与润色",
+  title: "沈翔智学智能体广场（含各学段中英文作文批改）",
   description: "专业的AI作文批改专家，融合文学大师风格，为学生提供深度点评、创意建议和个性化指导",
   keywords: "AI作文批改,人工智能辅导,语文学习,作文润色,智能教育,沈翔智学",
   authors: [{ name: "沈翔智学" }],
@@ -73,7 +73,7 @@ export const metadata: Metadata = {
     locale: "zh_CN",
     url: "https://shenxiang.school",
     siteName: "沈翔智学",
-    title: "沈翔智学 - AI智能作文批改与润色",
+    title: "沈翔智学智能体广场（含各学段中英文作文批改）",
     description: "专业的AI作文批改专家，融合文学大师风格，为学生提供深度点评、创意建议和个性化指导",
     images: [
       {
@@ -88,7 +88,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     site: "@shenxiangschool",
     creator: "@shenxiangschool",
-    title: "沈翔智学 - AI智能作文批改与润色",
+    title: "沈翔智学智能体广场（含各学段中英文作文批改）",
     description: "专业的AI作文批改专家，融合文学大师风格，为学生提供深度点评、创意建议和个性化指导",
     images: ["https://cdn.shenxiang.school/og-image.png"],
   },
@@ -100,7 +100,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "沈翔智学",
+    title: "沈翔智学智能体",
   },
   formatDetection: {
     telephone: false,
@@ -150,12 +150,20 @@ export default function RootLayout({
         />
       </head>
       <body className={`font-sans antialiased`}>
+        {/* ✅ 无障碍：跳转到主要内容的快捷链接（WCAG 2.1） */}
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:bg-green-900 focus:text-white focus:rounded-lg focus:text-sm focus:font-medium focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+        >
+          跳转到主要内容
+        </a>
+
         {/* ✅ WxGuard 放在最上方，确保它是 body 的第一个子元素 */}
         <WxGuard />
 
         <SidebarProvider>
           <AppSidebar />
-          <div className="flex flex-1 w-full flex-col min-h-screen">
+          <div id="main-content" className="flex flex-1 w-full flex-col min-h-screen">
             {children}
           </div>
         </SidebarProvider>
