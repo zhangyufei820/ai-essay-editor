@@ -1396,3 +1396,11 @@
   background: none !important;
   padding-left: 0 !important;
 }
+
+/* ============================================
+ * ♿ 无障碍：全局焦点指示器 (WCAG 2.1)
+ * ============================================ */
+:focus-visible {
+  outline: 2px solid #10A37F;
+  outline-offset: 2px;
+}

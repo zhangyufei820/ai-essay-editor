@@ -158,6 +158,7 @@ function FilePreviewCard({
       <button
         onClick={() => onRemove(index)}
         className="ml-1 p-0.5 rounded-full transition-colors hover:bg-red-100"
+        aria-label={`移除文件 ${file.name}`}
       >
         <X className="h-3.5 w-3.5 text-slate-400 hover:text-red-500" />
       </button>
@@ -322,6 +323,7 @@ export function ChatInput({
               type="button"
               onClick={onModelClick}
               className="flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors hover:bg-slate-50"
+              aria-label="选择 AI 模型"
             >
               <div className="h-2 w-2 rounded-full" style={{ backgroundColor: modelColor }} />
               <span className="text-xs font-medium" style={{ color: slateColors[600] }}>
@@ -339,6 +341,7 @@ export function ChatInput({
             className="h-8 w-8 rounded-lg"
             onClick={() => fileInputRef.current?.click()}
             disabled={isLoading || disabled}
+            aria-label="上传附件"
           >
             <Paperclip className="h-4 w-4" style={{ color: slateColors[400] }} />
           </Button>
@@ -389,6 +392,7 @@ export function ChatInput({
               className="h-9 w-9 sm:h-10 sm:w-10 rounded-lg sm:rounded-xl"
               onClick={() => fileInputRef.current?.click()}
               disabled={isLoading || disabled}
+              aria-label="上传附件"
             >
               <Paperclip className="h-4 w-4 sm:h-5 sm:w-5" style={{ color: slateColors[400] }} />
             </Button>
@@ -412,6 +416,7 @@ export function ChatInput({
                 ? "bg-red-500 text-white shadow-lg animate-pulse"
                 : "bg-slate-100 hover:bg-slate-200 text-slate-600"
             )}
+            aria-label={isListening ? "停止录音" : "开始语音输入"}
           >
             {isListening ? (
               <MicOff className="h-4 w-4 sm:h-5 sm:w-5" />
@@ -461,6 +466,7 @@ export function ChatInput({
                 ? `0 4px 12px ${brandColors[900]}40`
                 : "none"
             }}
+            aria-label="发送消息"
           >
             {isLoading ? (
               <Loader2 className="h-5 w-5 animate-spin" />
@@ -479,6 +485,7 @@ export function ChatInput({
         multiple
         accept="image/*,.pdf,.doc,.docx,.txt"
         onChange={handleFileChange}
+        aria-label="文件上传"
       />
     </div>
   )

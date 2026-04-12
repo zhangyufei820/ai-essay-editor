@@ -2,6 +2,7 @@
 
 import type React from "react"
 import { useState, useRef, useEffect, Suspense, useCallback } from "react"
+import Link from "next/link"
 import { useSearchParams, useRouter } from "next/navigation"
 
 import { Button } from "@/components/ui/button"
@@ -2624,7 +2625,16 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
             )}
 
             {!userId && selectedModel !== "suno-v5" && (
-              <p className="mt-2 sm:mt-3 text-center text-[10px] sm:text-xs text-slate-400">未登录</p>
+              <div className="mt-2 sm:mt-3 flex items-center justify-center gap-1 text-[10px] sm:text-xs">
+                <span className="text-slate-400">未登录，</span>
+                <Link
+                  href="/auth/sign-up"
+                  className="text-green-700 hover:text-green-600 font-medium underline-offset-2 hover:underline focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-1 rounded px-1"
+                >
+                  立即注册
+                </Link>
+                <span className="text-slate-400">开始对话</span>
+              </div>
             )}
           </div>
         </div>
