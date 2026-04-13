@@ -588,7 +588,7 @@ function AppSidebarInner() {
             >
               <Sparkles className="w-5 h-5" style={{ color: COLORS.primary.main }} />
               <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: COLORS.primary.dark }}>
-                智能体专区
+                OpenClaw
               </span>
             </motion.button>
           </div>
@@ -636,7 +636,7 @@ function AppSidebarInner() {
             >
               <Bot className="w-5 h-5" style={{ color: COLORS.primary.dark }} />
               <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: COLORS.primary.dark }}>
-                AI模型专区
+                顶级模型专区
               </span>
             </motion.button>
           </div>
@@ -660,7 +660,7 @@ function AppSidebarInner() {
             >
               <Palette className="w-5 h-5" style={{ color: "#00C896" }} />
               <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: COLORS.primary.dark }}>
-                创意生成
+                多媒体专区
               </span>
             </motion.button>
           </div>
@@ -684,7 +684,7 @@ function AppSidebarInner() {
             >
               <Edit className="w-5 h-5" style={{ color: "#00C896" }} />
               <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: COLORS.primary.dark }}>
-                AI写作
+                AI写作专区
               </span>
             </motion.button>
           </div>

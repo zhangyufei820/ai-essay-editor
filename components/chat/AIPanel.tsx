@@ -217,7 +217,7 @@ export function AIPanel({ isOpen, onClose }: AIPanelProps) {
                     className="text-base font-semibold tracking-[0.5px]"
                     style={{ color: TOKENS.primary[800], letterSpacing: "1.5px" }}
                   >
-                    AI写作
+                    AI写作专区
                   </h2>
                   <p
                     className="text-[10px] mt-0.5"

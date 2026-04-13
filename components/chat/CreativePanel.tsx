@@ -218,13 +218,13 @@ export function CreativePanel({ isOpen, onClose }: CreativePanelProps) {
                     className="text-base font-semibold tracking-[0.5px]"
                     style={{ color: TOKENS.primary[800], letterSpacing: "1.5px" }}
                   >
-                    创意生成专区
+                    多媒体专区
                   </h2>
                   <p
                     className="text-[10px] mt-0.5"
                     style={{ color: TOKENS.text.tertiary, letterSpacing: "2px", textTransform: "uppercase" }}
                   >
-                    CREATIVE STUDIO
+                    MULTIMEDIA ZONE
                   </p>
                 </div>
               </motion.div>
@@ -335,7 +335,7 @@ export function CreativePanel({ isOpen, onClose }: CreativePanelProps) {
                   className="text-[10px] mt-2"
                   style={{ color: TOKENS.text.tertiary, letterSpacing: "1px" }}
                 >
-                  释放你的想象力
+                  图像·视频·音乐创作
                 </p>
               </motion.div>
             </motion.div>
