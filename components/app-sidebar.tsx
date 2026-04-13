@@ -641,31 +641,7 @@ function AppSidebarInner() {
             </motion.button>
           </div>
 
-          {/* E. 创意生成专区入口 */}
-          <div className="mb-4 px-3">
-            <motion.button
-              onClick={() => setIsCreativePanelOpen(true)}
-              className="w-full flex items-center gap-3 px-4 py-[9px] rounded-xl"
-              style={{
-                backgroundColor: "rgba(0, 200, 150, 0.02)",
-                border: "1px solid rgba(0, 200, 150, 0.2)",
-                boxShadow: "0 2px 8px rgba(0, 200, 150, 0.1), inset 0 1px 0 rgba(255,255,255,0.5)"
-              }}
-              whileHover={{
-                scale: 1.03,
-                boxShadow: "0 4px 16px rgba(0, 200, 150, 0.2), 0 8px 24px rgba(0, 200, 150, 0.15), inset 0 1px 0 rgba(255,255,255,0.8)"
-              }}
-              whileTap={{ scale: 0.98 }}
-              transition={{ duration: 0.2 }}
-            >
-              <Palette className="w-5 h-5" style={{ color: "#00C896" }} />
-              <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: COLORS.primary.dark }}>
-                多媒体专区
-              </span>
-            </motion.button>
-          </div>
-
-          {/* F. AI写作专区入口 */}
+          {/* E. AI写作专区入口 */}
           <div className="mb-4 px-3">
             <motion.button
               onClick={() => setIsAIPanelOpen(true)}
@@ -685,6 +661,30 @@ function AppSidebarInner() {
               <Edit className="w-5 h-5" style={{ color: "#00C896" }} />
               <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: COLORS.primary.dark }}>
                 AI写作专区
+              </span>
+            </motion.button>
+          </div>
+
+          {/* F. 多媒体专区入口 */}
+          <div className="mb-4 px-3">
+            <motion.button
+              onClick={() => setIsCreativePanelOpen(true)}
+              className="w-full flex items-center gap-3 px-4 py-[9px] rounded-xl"
+              style={{
+                backgroundColor: "rgba(0, 200, 150, 0.02)",
+                border: "1px solid rgba(0, 200, 150, 0.2)",
+                boxShadow: "0 2px 8px rgba(0, 200, 150, 0.1), inset 0 1px 0 rgba(255,255,255,0.5)"
+              }}
+              whileHover={{
+                scale: 1.03,
+                boxShadow: "0 4px 16px rgba(0, 200, 150, 0.2), 0 8px 24px rgba(0, 200, 150, 0.15), inset 0 1px 0 rgba(255,255,255,0.8)"
+              }}
+              whileTap={{ scale: 0.98 }}
+              transition={{ duration: 0.2 }}
+            >
+              <Palette className="w-5 h-5" style={{ color: "#00C896" }} />
+              <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: COLORS.primary.dark }}>
+                多媒体专区
               </span>
             </motion.button>
           </div>
