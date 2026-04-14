@@ -536,7 +536,8 @@ export async function POST(request: NextRequest) {
     let conversationId = ""
     let fullResponseText = ""  // 🔥 收集完整响应内容用于验证
     let bananaImageUrls: string[] = []  // 🎨 收集 Banana 生成的图片 URL
-    
+    let jsonBuffer = ""  // 🔥 JSON 行缓冲：跨 chunk 拼接不完整的 SSE 数据行
+
     const transformStream = new TransformStream({
       async transform(chunk, controller) {
         // 🔥 首字节探测：当 transform 被调用时，说明流式数据已开始传输，取消 180s 超时
@@ -551,44 +552,62 @@ export async function POST(request: NextRequest) {
 
         // 直接传递数据给前端
         controller.enqueue(chunk)
-        
+
         // 解析 chunk 提取 token 信息
         try {
           const text = new TextDecoder().decode(chunk)
-          const lines = text.split("\n")
-          
+
           // 🎨 Banana 调试：记录原始数据
           if (model === "banana-2-pro" && text.trim()) {
             console.log(`🎨 [Banana流式] 收到数据块:`, text.substring(0, 200))
           }
-          
+
+          // 🔥 追加到缓冲区，然后只处理完整的行
+          // 完整的 SSE 数据行格式：data: {...}\n
+          // 可能被 TCP 包分割成多块传输，需要跨 chunk 缓冲
+          jsonBuffer += text
+
+          // 按换行分割，处理所有完整的行
+          const lines = jsonBuffer.split("\n")
+          // 保留最后一行（可能是未完成的，等待下一个 chunk）
+          jsonBuffer = lines.pop() || ""
+
           for (const line of lines) {
             if (!line.startsWith("data: ")) continue
             const data = line.slice(6).trim()
             if (data === "[DONE]") continue
-            
+
+            // 🔥 JSON 完整性检查：确保 JSON 字符串完整（以 } 或 ] 结尾）
+            // 如果不完整，说明 SSE 数据行被分割了，保留到缓冲区等待下一个 chunk
+            const trimmed = data.trim()
+            if (trimmed.length > 0 && !trimmed.endsWith("}") && !trimmed.endsWith("]")) {
+              // JSON 不完整（被字节边界分割），放回缓冲区等待下一个 chunk
+              jsonBuffer = line + "\n" + jsonBuffer
+              continue
+            }
+
             try {
               const json = JSON.parse(data)
-              
+
               // 🎨 Banana 调试：记录所有事件
               if (model === "banana-2-pro") {
                 console.log(`🎨 [Banana事件] ${json.event}:`, JSON.stringify(json).substring(0, 300))
               }
-              
+
               // 🧠 记录工作流节点事件（用于前端思考过程显示）
               if (json.event === 'node_started' || json.event === 'node_finished') {
                 console.log(`🧠 [工作流节点] ${json.event}: ${json.data?.title || json.title || '未知节点'}`)
               }
-              
+
               // 提取 conversation_id
               if (json.conversation_id) {
                 conversationId = json.conversation_id
               }
-              
+
               // 🔥 收集响应文本内容（Chat API）
               if (json.event === "message" && json.answer) {
                 fullResponseText += json.answer
-                
+
                 // 🎨 Banana 图片检测：提取图片 URL
                 if (model === "banana-2-pro") {
                   // 匹配 Markdown 图片格式：![alt](url)
@@ -603,7 +622,7 @@ export async function POST(request: NextRequest) {
                   }
                 }
               }
-              
+
               // 🔥 收集 Workflow API 的文本响应（Banana 2 Pro）
               if (json.event === "text_chunk" || json.event === "agent_message") {
                 const text = json.data?.text || json.text || ''
@@ -612,7 +631,7 @@ export async function POST(request: NextRequest) {
                   console.log(`🎨 [Workflow文本] 收集到文本: ${text.substring(0, 50)}...`)
                 }
               }
-              
+
               // 🔥 收集 Workflow 完成事件的输出文本
               if (json.event === "workflow_finished") {
                 if (json.data?.outputs) {
@@ -626,28 +645,28 @@ export async function POST(request: NextRequest) {
                   }
                 }
               }
-              
+
               // 🎨 处理 message_file 事件（图片文件）
               if (json.event === "message_file" && model === "banana-2-pro") {
                 console.log(`🎨 [Banana] 收到 message_file 事件:`, JSON.stringify(json))
-                
+
                 // Dify 返回的图片文件格式：{ type: "image", url: "..." }
                 if (json.type === "image" && json.url) {
                   const imageUrl = json.url
                   if (!bananaImageUrls.includes(imageUrl)) {
                     bananaImageUrls.push(imageUrl)
                     console.log(`🎨 [Banana] 检测到图片 URL (message_file): ${imageUrl}`)
-                    
+
                     // 🔥 立即将图片 URL 以 Markdown 格式添加到响应中
                     fullResponseText += `\n\n![Generated Image](${imageUrl})`
                   }
                 }
               }
-              
+
               // 🎨 处理 workflow_finished 事件（可能包含图片）
               if (json.event === "workflow_finished" && model === "banana-2-pro") {
                 console.log(`🎨 [Banana] 收到 workflow_finished 事件:`, JSON.stringify(json))
-                
+
                 // 检查是否有输出文件
                 if (json.outputs && json.outputs.files) {
                   for (const file of json.outputs.files) {
@@ -656,7 +675,7 @@ export async function POST(request: NextRequest) {
                       if (!bananaImageUrls.includes(imageUrl)) {
                         bananaImageUrls.push(imageUrl)
                         console.log(`🎨 [Banana] 检测到图片 URL (workflow_finished): ${imageUrl}`)
-                        
+
                         // 🔥 立即将图片 URL 以 Markdown 格式添加到响应中
                         fullResponseText += `\n\n![Generated Image](${imageUrl})`
                       }
@@ -664,20 +683,53 @@ export async function POST(request: NextRequest) {
                   }
                 }
               }
-              
+
               // 提取 token 使用量（Dify 在 message_end 事件中返回）
               if (json.event === "message_end" && json.metadata?.usage) {
                 totalTokens = json.metadata.usage.total_tokens || 0
                 console.log(`📊 [Token统计] 总Token: ${totalTokens}`)
               }
             } catch (e) {
-              console.error(`❌ [Transform解析] 事件解析失败:`, e, `| 数据:`, data?.substring(0, 100))
+              // 🔥 只有真正 JSON 格式错误才记录（而不是被截断的数据）
+              if (e instanceof SyntaxError) {
+                // JSON 仍然不完整，放回缓冲区
+                jsonBuffer = line + "\n" + jsonBuffer
+              } else {
+                console.error(`❌ [Transform解析] 事件解析失败:`, e, `| 数据:`, data?.substring(0, 100))
+              }
             }
           }
         } catch (e) {
           console.error(`❌ [Transform] transform阶段异常:`, e)
         }
       },
+
+      async flush(controller) {
+        // 🔥 处理缓冲区中剩余的未完成 JSON（流结束时的最后一条数据）
+        if (jsonBuffer.trim().length > 0) {
+          const line = jsonBuffer.trim()
+          if (line.startsWith("data: ") && line !== "[DONE]") {
+            const data = line.slice(6).trim()
+            try {
+              const json = JSON.parse(data)
+              // 处理最后一条消息的文本收集
+              if (json.event === "message" && json.answer) {
+                fullResponseText += json.answer
+              }
+              if (json.conversation_id) {
+                conversationId = json.conversation_id
+              }
+              if (json.metadata?.usage?.total_tokens) {
+                totalTokens = json.metadata.usage.total_tokens
+              }
+            } catch (e) {
+              // 流结束时的最后数据仍然不完整，静默忽略
+              console.warn(`⚠️ [Flush] 缓冲区剩余数据解析失败:`, e)
+            }
+          }
+        }
+
+        // 流结束时执行智能扣费
       
       async flush(controller) {
         // 流结束时执行智能扣费
