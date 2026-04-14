@@ -236,14 +236,14 @@ function MarkdownContent({ content }: { content: string }) {
           if (isConclusionPara) {
             return (
               <p
-                className="mb-2 last:mb-0 rounded-r"
+                className="mb-1 last:mb-0 rounded-r"
                 style={{
-                  lineHeight: 1.4,
+                  lineHeight: 1.6,
                   color: CLAUDE_TEXT_COLOR,
                   backgroundColor: "rgba(16, 185, 129, 0.08)",
                   borderLeft: "3px solid #10B981",
                   borderRadius: "0 6px 6px 0",
-                  padding: "8px 12px",
+                  padding: "6px 10px",
                 }}
               >
                 {children}
@@ -252,23 +252,23 @@ function MarkdownContent({ content }: { content: string }) {
           }
 
           return (
-            <p className="mb-2 last:mb-0" style={{ lineHeight: 1.4, color: CLAUDE_TEXT_COLOR }}>
+            <p className="mb-1 last:mb-0" style={{ lineHeight: 1.6, color: CLAUDE_TEXT_COLOR }}>
               {children}
             </p>
           )
         },
         ul: ({ children }) => (
-          <ul className="list-disc pl-5 mb-2 space-y-0.5" style={{ lineHeight: 1.4 }}>
+          <ul className="list-disc pl-5 mb-1 space-y-0" style={{ lineHeight: 1.6 }}>
             {children}
           </ul>
         ),
         ol: ({ children }) => (
-          <ol className="list-decimal pl-5 mb-2 space-y-0.5" style={{ lineHeight: 1.4 }}>
+          <ol className="list-decimal pl-5 mb-1 space-y-0" style={{ lineHeight: 1.6 }}>
             {children}
           </ol>
         ),
         li: ({ children }) => (
-          <li className="text-sm" style={{ lineHeight: 1.4, color: CLAUDE_TEXT_COLOR }}>
+          <li style={{ lineHeight: 1.6, color: CLAUDE_TEXT_COLOR }}>
             {children}
           </li>
         ),
@@ -295,7 +295,7 @@ function MarkdownContent({ content }: { content: string }) {
         },
         pre: ({ children }) => (
           <pre
-            className="rounded-lg overflow-hidden mb-3"
+            className="rounded-lg overflow-hidden mb-2"
             style={{ backgroundColor: slateColors[900] }}
           >
             {children}
@@ -320,7 +320,7 @@ function MarkdownContent({ content }: { content: string }) {
         ),
         h1: ({ children }) => (
           <h1
-            className="font-bold text-base mt-3 mb-1.5"
+            className="font-bold text-base mt-2 mb-1"
             style={{ color: "#111827", lineHeight: 1.4 }}
           >
             {children}
@@ -328,7 +328,7 @@ function MarkdownContent({ content }: { content: string }) {
         ),
         h2: ({ children }) => (
           <h2
-            className="font-semibold text-sm mt-2.5 mb-1"
+            className="font-semibold text-sm mt-1.5 mb-0.5"
             style={{ color: "#111827", lineHeight: 1.4 }}
           >
             {children}
@@ -336,7 +336,7 @@ function MarkdownContent({ content }: { content: string }) {
         ),
         h3: ({ children }) => (
           <h3
-            className="font-medium text-sm mt-2 mb-0.5"
+            className="font-medium text-sm mt-1.5 mb-0.5"
             style={{ color: "#6B7280", lineHeight: 1.4 }}
           >
             {children}
@@ -344,7 +344,7 @@ function MarkdownContent({ content }: { content: string }) {
         ),
         h4: ({ children }) => (
           <h4
-            className="text-sm font-semibold pl-2.5 border-l-2 mt-2 mb-1"
+            className="text-sm font-semibold pl-2 border-l-2 mt-1.5 mb-0.5"
             style={{ color: "#111827", borderColor: CLAUDE_ACCENT_COLOR, lineHeight: 1.4 }}
           >
             {children}
@@ -352,11 +352,11 @@ function MarkdownContent({ content }: { content: string }) {
         ),
         blockquote: ({ children }) => (
           <blockquote
-            className="border-l-4 px-3 py-2 my-2 rounded-r"
+            className="border-l-4 px-3 py-1.5 my-1 rounded-r"
             style={{
               borderColor: CLAUDE_ACCENT_COLOR,
               backgroundColor: slateColors[50],
-              lineHeight: 1.4
+              lineHeight: 1.6
             }}
           >
             {children}
@@ -435,14 +435,14 @@ const MessageBubble = memo(function MessageBubble({
               {isUser ? (
                 <p
                   className="whitespace-pre-wrap break-words text-sm"
-                  style={{ lineHeight: 1.4 }}
+                  style={{ lineHeight: 1.6 }}
                 >
                   {content}
                 </p>
               ) : (
                 <div
                   className="text-sm ai-content-container"
-                  style={{ lineHeight: 1.4, color: CLAUDE_TEXT_COLOR }}
+                  style={{ lineHeight: 1.6, color: CLAUDE_TEXT_COLOR }}
                 >
                   <MarkdownContent content={content} />
                 </div>
