@@ -1,5 +1,4 @@
 import type { NextRequest } from "next/server"
-import { uploadBufferToCos, rewriteToCdnUrl } from "@/lib/cos"
 import { randomUUID } from "crypto"
 import path from "path"
 
@@ -279,50 +278,10 @@ export async function POST(request: NextRequest) {
     const data = await response.json()
     console.log("[Backend] Dify upload success:", { fileId: data.id, fileName: safeFileName, userId })
 
-    // ============================================
-    // 7. 将 Dify 返回的 URL 重写为 CDN URL
-    // ============================================
-    let rewrittenData = { ...data }
-    if (data.url) {
-      rewrittenData.url = rewriteToCdnUrl(data.url)
-      console.log("[Backend] CDN URL rewrite:", data.url, "->", rewrittenData.url)
-    }
-    if (data.audio_url) {
-      rewrittenData.audio_url = rewriteToCdnUrl(data.audio_url)
-    }
-    if (data.image_url) {
-      rewrittenData.image_url = rewriteToCdnUrl(data.image_url)
-    }
-
-    // ============================================
-    // 8. 同时上传到腾讯云 COS（用于永久存储）
-    // ============================================
-    let cosUrl: string | undefined
-    try {
-      const arrayBuffer = await file.arrayBuffer()
-      const buffer = Buffer.from(arrayBuffer)
-      
-      const cosResult = await uploadBufferToCos(
-        buffer,
-        targetModel === 'banana-2-pro' || targetModel === 'banana' ? 'banana' : 'other',
-        extCheck.safeExt!.replace('.', ''),
-        safeFileName
-      )
-      
-      if (cosResult.success && cosResult.cdnUrl) {
-        cosUrl = cosResult.cdnUrl
-        console.log("[Backend] COS upload success:", cosUrl)
-      }
-    } catch (cosError) {
-      console.error("[Backend] COS upload failed (non-critical):", cosError)
-      // COS 上传失败不影响主流程
-    }
-
-    // 返回结果（包含 Dify ID 和 COS URL）
+    // 返回 Dify 上传结果
     return new Response(JSON.stringify({
-      ...rewrittenData,
-      cosUrl, // 添加 COS URL
-      safeFileName, // 返回安全文件名供后续使用
+      ...data,
+      safeFileName,
     }), {
       status: 200,
       headers: { "Content-Type": "application/json" },

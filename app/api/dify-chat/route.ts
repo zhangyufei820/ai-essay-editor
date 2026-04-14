@@ -440,6 +440,7 @@ export async function POST(request: NextRequest) {
         }, 180_000)
 
         try {
+            console.warn(`🚀 [Dify请求] 开始请求 Dify... model=${model} endpoint=${DIFY_BASE_URL}${apiEndpoint}`)
             const response = await fetch(`${DIFY_BASE_URL}${apiEndpoint}`, {
                 method: "POST",
                 headers: {
@@ -449,6 +450,7 @@ export async function POST(request: NextRequest) {
                 body: JSON.stringify(difyRequest),
                 signal: streamStatus.controller.signal,
             })
+            console.warn(`✅ [Dify请求] 响应到达 status=${response.status} body=${response.body === null ? 'null' : 'ReadableStream'}`)
 
             return response
         } catch (error: unknown) {
@@ -474,7 +476,7 @@ export async function POST(request: NextRequest) {
     let retryCount = 0;
     let response = null;
 
-    console.log(`🚀 [Dify请求] 开始调用 Dify API...`)
+    console.warn(`🚀 [Dify请求] 开始调用 Dify API...`)
 
     while (retryCount <= MAX_RETRIES) {
         const isRetry = retryCount > 0;
@@ -483,7 +485,8 @@ export async function POST(request: NextRequest) {
         }
 
         response = await callDify(isRetry);
-        console.log(`📡 [Dify响应] 状态码: ${response.status}`)
+        console.warn(`📡 [Dify响应] 状态码: ${response.status}`)
+        console.warn(`📡 [Dify响应] body类型: ${typeof response.body} | body是否为null: ${response.body === null}`)
 
         if (model === "banana-2-pro") {
             console.log(`🎨 [Banana] Dify响应头:`, Object.fromEntries(response.headers.entries()))
@@ -543,7 +546,7 @@ export async function POST(request: NextRequest) {
                 clearTimeout(streamStatus.timeoutId)
                 streamStatus.timeoutId = null
             }
-            console.log(`✅ [首字节探测] Dify 流式数据开始传输，已取消 180s 超时定时器`)
+            console.warn(`✅ [首字节探测] Dify 流式数据开始传输，已取消 180s 超时定时器`)
         }
 
         // 直接传递数据给前端
@@ -667,13 +670,18 @@ export async function POST(request: NextRequest) {
                 totalTokens = json.metadata.usage.total_tokens || 0
                 console.log(`📊 [Token统计] 总Token: ${totalTokens}`)
               }
-            } catch {}
+            } catch (e) {
+              console.error(`❌ [Transform解析] 事件解析失败:`, e, `| 数据:`, data?.substring(0, 100))
+            }
           }
-        } catch {}
+        } catch (e) {
+          console.error(`❌ [Transform] transform阶段异常:`, e)
+        }
       },
       
       async flush(controller) {
         // 流结束时执行智能扣费
+        console.warn(`🔥 [Flush] 流式响应结束，fullResponseText长度=${fullResponseText.length}，开始执行扣费逻辑`)
         try {
           // 🔥 检测是否生成了图像
           const hasGeneratedImage = bananaImageUrls.length > 0
@@ -763,7 +771,13 @@ export async function POST(request: NextRequest) {
     })
 
     // 返回经过 transform 处理的流
-    return new Response(response.body?.pipeThrough(transformStream), {
+    const transformedBody = response.body?.pipeThrough(transformStream)
+    if (!transformedBody) {
+      console.error(`❌ [Stream错误] pipeThrough返回undefined! response.body=${response.body === null ? 'null' : 'not-null'}`)
+      return new Response(JSON.stringify({ error: "Dify响应体为空，服务端流处理失败" }), { status: 502 })
+    }
+    console.warn(`✅ [Stream开始] 开始返回流式响应给前端，body locked: ${transformedBody.locked}`)
+    return new Response(transformedBody, {
         headers: { "Content-Type": "text/event-stream" },
     })
 
