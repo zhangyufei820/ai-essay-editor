@@ -537,6 +537,7 @@ export async function POST(request: NextRequest) {
     let fullResponseText = ""  // 🔥 收集完整响应内容用于验证
     let bananaImageUrls: string[] = []  // 🎨 收集 Banana 生成的图片 URL
     let jsonBuffer = ""  // 🔥 JSON 行缓冲：跨 chunk 拼接不完整的 SSE 数据行
+    let hasReceivedContent = false  // 🔥 标记是否收到了实际内容（用于判断是否扣费）
 
     // 🔥 扣费函数：流结束后根据实际 token 用量扣费
     const deductCredit = async () => {
@@ -684,6 +685,7 @@ export async function POST(request: NextRequest) {
               // 🔥 收集响应文本内容（Chat API）
               if (json.event === "message" && json.answer) {
                 fullResponseText += json.answer
+                hasReceivedContent = true
 
                 // 🎨 Banana 图片检测：提取图片 URL
                 if (model === "banana-2-pro") {
@@ -705,6 +707,7 @@ export async function POST(request: NextRequest) {
                 const text = json.data?.text || json.text || ''
                 if (text) {
                   fullResponseText += text
+                  hasReceivedContent = true
                   console.log(`🎨 [Workflow文本] 收集到文本: ${text.substring(0, 50)}...`)
                 }
               }
@@ -715,9 +718,11 @@ export async function POST(request: NextRequest) {
                   const outputs = json.data.outputs
                   if (outputs.text) {
                     fullResponseText += outputs.text
+                    hasReceivedContent = true
                     console.log(`🎨 [Workflow完成] 收集到输出文本: ${outputs.text.substring(0, 50)}...`)
                   } else if (outputs.result) {
                     fullResponseText += outputs.result
+                    hasReceivedContent = true
                     console.log(`🎨 [Workflow完成] 收集到结果文本: ${outputs.result.substring(0, 50)}...`)
                   }
                 }
@@ -806,9 +811,13 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        // 🔥 流结束，触发扣费（异步执行，不阻塞返回）
-        console.log(`💰 [Billing] 流结束，实际使用 ${totalTokens} tokens，触发扣费...`)
-        deductCredit().catch(e => console.error("[Billing] 扣费异步异常:", e))
+        // 🔥 流结束，触发扣费（仅当有实际内容时才扣费）
+        console.log(`💰 [Billing] 流结束，实际使用 ${totalTokens} tokens，内容长度: ${fullResponseText.length}，hasReceivedContent: ${hasReceivedContent}`)
+        if (hasReceivedContent && totalTokens > 0) {
+          deductCredit().catch(e => console.error("[Billing] 扣费异步异常:", e))
+        } else {
+          console.warn(`⚠️ [Billing] 流结束但无实际内容，不扣费`)
+        }
       }
 
     })
