@@ -16,14 +16,6 @@ export function AuthTester({ onResult }: { onResult: (result: "pass" | "fail") =
       configRequired: false,
     },
     {
-      name: "手机号验证码登录",
-      status: "needs-config",
-      description: "需要配置短信服务商（阿里云/腾讯云）",
-      testUrl: "/auth/phone-login",
-      configRequired: true,
-      envVars: ["SMS_PROVIDER", "SMS_ACCESS_KEY_ID", "SMS_ACCESS_KEY_SECRET"],
-    },
-    {
       name: "微信OAuth登录",
       status: "needs-config",
       description: "需要微信开放平台企业认证",
