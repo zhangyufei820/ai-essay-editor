@@ -538,6 +538,83 @@ export async function POST(request: NextRequest) {
     let bananaImageUrls: string[] = []  // 🎨 收集 Banana 生成的图片 URL
     let jsonBuffer = ""  // 🔥 JSON 行缓冲：跨 chunk 拼接不完整的 SSE 数据行
 
+    // 🔥 扣费函数：流结束后根据实际 token 用量扣费
+    const deductCredit = async () => {
+      if (!userId) return
+      try {
+        const supabaseAdmin = getSupabaseAdmin()
+
+        // 计算实际扣费
+        const currentCost = calculateActualCost(
+          model as ModelType,
+          { totalTokens },
+          { hasGeneratedImage: bananaImageUrls.length > 0 }
+        )
+
+        // 获取当前积分
+        const { data } = await supabaseAdmin
+          .from('user_credits')
+          .select('credits')
+          .eq('user_id', userId)
+          .single()
+
+        if (!data) {
+          console.error("[Billing] 无法获取用户积分信息")
+          return
+        }
+
+        const currentCredits = data.credits
+        const newCredits = Math.max(0, currentCredits - currentCost)
+
+        // 🔥 使用条件更新防止并发竞态
+        const updateResult = await supabaseAdmin
+          .from('user_credits')
+          .update({ credits: newCredits })
+          .eq('user_id', userId)
+          .eq('credits', currentCredits)  // 🔥 关键：只有在积分未变时才更新
+          .select('credits')
+          .single()
+
+        if (updateResult.error || !updateResult.data) {
+          console.error("[Billing] 扣费更新失败或被并发跳过:", updateResult.error)
+          return
+        }
+
+        console.log(`[Billing] 扣费成功 (-${currentCost}积分，${totalTokens} tokens)，用户 ${userId} 剩余: ${newCredits}`)
+
+        // 🔥 记录到 credit_transactions 表
+        const reasonMap: Record<string, string> = {
+          'standard': '作文批改',
+          'teaching-pro': '教学评助手',
+          'claude-opus': 'Claude 对话',
+          'gpt-5': 'GPT-5 对话',
+          'gemini-pro': 'Gemini 对话',
+          'banana-2-pro': 'Banana 绘图',
+          'suno-v5': 'Suno 音乐',
+          'open-claw': 'Open Claw 对话',
+        }
+        const reason = reasonMap[model as string] || `使用 ${getModelDisplayName(model as ModelType)}`
+        const description = bananaImageUrls.length > 0
+          ? `${reason} (生成 ${bananaImageUrls.length} 张图片)`
+          : reason
+
+        const { error: txError } = await supabaseAdmin.from('credit_transactions').insert({
+          user_id: userId,
+          amount: -currentCost,
+          type: 'consume',
+          description,
+          balance_before: currentCredits,
+          balance_after: newCredits
+        })
+
+        if (txError) {
+          console.error("[Billing] 记录交易失败:", txError)
+        }
+      } catch (e) {
+        console.error("[Billing] 扣费失败:", e)
+      }
+    }
+
     const transformStream = new TransformStream({
       async transform(chunk, controller) {
         // 🔥 首字节探测：当 transform 被调用时，说明流式数据已开始传输，取消 180s 超时
@@ -728,6 +805,10 @@ export async function POST(request: NextRequest) {
             }
           }
         }
+
+        // 🔥 流结束，触发扣费（异步执行，不阻塞返回）
+        console.log(`💰 [Billing] 流结束，实际使用 ${totalTokens} tokens，触发扣费...`)
+        deductCredit().catch(e => console.error("[Billing] 扣费异步异常:", e))
       }
 
     })
