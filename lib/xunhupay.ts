@@ -40,22 +40,24 @@ function generateSign(params: Record<string, any>, appSecret: string): string {
 export function verifyXunhupaySign(params: Record<string, any>): boolean {
   // 迅虎支付回调中的签名字段可能是 hash 或 sign
   const receivedSign = (params.hash || params.sign || "").toLowerCase()
-  
+
   if (!receivedSign) {
-    console.log("[迅虎支付签名验证] 未找到签名字段")
+    console.log("[迅虎支付签名验证] 未找到签名字段, params:", JSON.stringify(params))
     return false
   }
-  
+
   const paramsWithoutSign = { ...params }
   delete paramsWithoutSign.sign
   delete paramsWithoutSign.hash
 
   const calculatedSign = generateSign(paramsWithoutSign, xunhupayConfig.appSecret)
-  
+
   console.log("[迅虎支付签名验证] 收到签名:", receivedSign)
   console.log("[迅虎支付签名验证] 计算签名:", calculatedSign)
+  console.log("[迅虎支付签名验证] 使用的appSecret:", xunhupayConfig.appSecret)
+  console.log("[迅虎支付签名验证] 参与签名的参数:", JSON.stringify(paramsWithoutSign))
   console.log("[迅虎支付签名验证] 验证结果:", receivedSign === calculatedSign)
-  
+
   return receivedSign === calculatedSign
 }
 
