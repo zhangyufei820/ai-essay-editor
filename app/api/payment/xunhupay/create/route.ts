@@ -53,7 +53,8 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const productId = searchParams.get("productId");
     const userId = searchParams.get("userId");
-    
+    const billing = searchParams.get("billing") || "monthly";
+
     if (!userId) {
       return NextResponse.json({ error: "缺少用户ID" }, { status: 400 });
     }
@@ -61,10 +62,18 @@ export async function GET(request: Request) {
     if (!productId) {
       return NextResponse.json({ error: "缺少产品ID" }, { status: 400 });
     }
-    
+
     const product = PRODUCTS.find((p) => p.id === productId);
     if (!product) {
       return NextResponse.json({ error: "产品不存在" }, { status: 404 });
+    }
+
+    // 根据计费周期计算价格
+    const isSubscription = ["basic", "pro", "premium"].includes(productId);
+    const annualDiscount = 0.8;
+    let finalPriceInCents = product.priceInCents;
+    if (billing === "annual" && isSubscription) {
+      finalPriceInCents = Math.round(product.priceInCents * 12 * annualDiscount);
     }
 
     // 初始化 Supabase 客户端
@@ -105,7 +114,7 @@ export async function GET(request: Request) {
       console.log(`✅ 用户会员验证通过: ${membershipStatus}`);
     }
     
-    const price = (product.priceInCents / 100).toFixed(2);
+    const price = (finalPriceInCents / 100).toFixed(2);
     const safeTitle = "VIP_Service"; 
     const tradeOrderId = `ORDER_${Date.now()}_${userId}`;
 
@@ -118,7 +127,7 @@ export async function GET(request: Request) {
         user_id: userId,
         product_id: productId,
         product_name: product.name,
-        amount: product.priceInCents / 100,
+        amount: finalPriceInCents / 100,
         status: 'pending',
         payment_method: 'xunhupay',
       });
