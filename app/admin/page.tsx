@@ -5,36 +5,88 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
-import { Users, CreditCard, BarChart3, Lock, Eye, EyeOff, RefreshCw } from "lucide-react"
+import { Users, CreditCard, BarChart3, Lock, Eye, EyeOff, RefreshCw, Search, DollarSign, TrendingUp, UserCheck, Activity } from "lucide-react"
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet"
+import { Badge } from "@/components/ui/badge"
 
-// 硬编码管理员密码已移除，改用服务端验证
-
-interface UserStats {
+interface StatsData {
   totalUsers: number
   memberUsers: number
-  freeUsers: number
+  todayNewUsers: number
+  todayActiveUsers: number
+  totalRevenue: number
+  todayRevenue: number
 }
 
-interface Transaction {
+interface UserData {
+  user_id: string
+  credits: number
+  is_pro: boolean
+  membership_status: string
+  created_at: string
+  lastActiveAt: string
+  transactionCount: number
+}
+
+interface OrderData {
   id: string
-  userId: string
+  order_no: string
+  user_id: string
+  product_name: string
   amount: number
-  type: string
-  createdAt: string
+  credits: number
+  status: string
+  created_at: string
+  paid_at: string
 }
 
-interface DailyStats {
-  newUsers: number
-  activeUsers: number
-  creditsUsed: number
+interface UserDetails {
+  user: {
+    user_id: string
+    credits: number
+    is_pro: boolean
+    membership_status: string
+    created_at: string
+    updated_at: string
+  }
+  transactions: Array<{
+    id: string
+    amount: number
+    type: string
+    description: string
+    created_at: string
+  }>
+  orders: OrderData[]
+  stats: {
+    totalTransactions: number
+    totalOrders: number
+    totalSpent: number
+  }
 }
 
 export default function AdminPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
-  const [activeTab, setActiveTab] = useState("users")
+  const [activeTab, setActiveTab] = useState("overview")
   const [loading, setLoading] = useState(false)
+  const [searchQuery, setSearchQuery] = useState("")
+  
+  // 数据状态
+  const [stats, setStats] = useState<StatsData>({
+    totalUsers: 0,
+    memberUsers: 0,
+    todayNewUsers: 0,
+    todayActiveUsers: 0,
+    totalRevenue: 0,
+    todayRevenue: 0
+  })
+  
+  const [users, setUsers] = useState<UserData[]>([])
+  const [orders, setOrders] = useState<OrderData[]>([])
+  const [selectedUser, setSelectedUser] = useState<string | null>(null)
+  const [userDetails, setUserDetails] = useState<UserDetails | null>(null)
+  const [userDetailsOpen, setUserDetailsOpen] = useState(false)
   
   // 检查本地存储的 token 是否有效
   useEffect(() => {
@@ -50,7 +102,7 @@ export default function AdminPage() {
       .then(data => {
         if (data.valid) {
           setIsAuthenticated(true)
-          fetchOrders()
+          fetchAllData()
         } else {
           // Token 无效，清除本地存储
           localStorage.removeItem('admin_token')
@@ -62,91 +114,110 @@ export default function AdminPage() {
     }
   }, [])
   
-  // 统计数据
-  const [userStats, setUserStats] = useState<UserStats>({
-    totalUsers: 1256,
-    memberUsers: 342,
-    freeUsers: 914
-  })
-  
-  const [transactions, setTransactions] = useState<Transaction[]>([])
-  
-  const [dailyStats, setDailyStats] = useState<DailyStats>({
-    newUsers: 45,
-    activeUsers: 312,
-    creditsUsed: 8450
-  })
-
-  // 模拟获取订单数据
-  const fetchOrders = async () => {
+  // 获取所有数据
+  const fetchAllData = async () => {
     setLoading(true)
-    // 模拟API延迟
-    await new Promise(resolve => setTimeout(resolve, 500))
-    
-    // 模拟订单数据
-    const mockOrders: Transaction[] = [
-      {
-        id: "ORD-001",
-        userId: "user-123",
-        amount: 68,
-        type: "专业版订阅",
-        createdAt: "2026-04-17 14:30:00"
-      },
-      {
-        id: "ORD-002",
-        userId: "user-456",
-        amount: 128,
-        type: "豪华版订阅",
-        createdAt: "2026-04-17 13:15:00"
-      },
-      {
-        id: "ORD-003",
-        userId: "user-789",
-        amount: 90,
-        type: "10000积分包",
-        createdAt: "2026-04-17 11:45:00"
-      },
-      {
-        id: "ORD-004",
-        userId: "user-101",
-        amount: 28,
-        type: "基础版订阅",
-        createdAt: "2026-04-17 10:20:00"
-      },
-      {
-        id: "ORD-005",
-        userId: "user-202",
-        amount: 48,
-        type: "5000积分包",
-        createdAt: "2026-04-17 09:05:00"
+    try {
+      await Promise.all([
+        fetchStats(),
+        fetchUsers(),
+        fetchOrders()
+      ])
+    } catch (error) {
+      console.error('获取数据失败:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+  
+  // 获取统计数据
+  const fetchStats = async () => {
+    try {
+      const token = localStorage.getItem('admin_token')
+      if (!token) return
+      
+      const response = await fetch('/api/admin/stats', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        setStats(data.data)
       }
-    ]
-    
-    setTransactions(mockOrders)
-    setLoading(false)
+    } catch (error) {
+      console.error('获取统计数据失败:', error)
+    }
   }
-
-  // 模拟刷新统计数据
-  const refreshStats = async () => {
-    setLoading(true)
-    await new Promise(resolve => setTimeout(resolve, 500))
-    
-    // 模拟数据变化
-    setUserStats(prev => ({
-      totalUsers: prev.totalUsers + Math.floor(Math.random() * 5),
-      memberUsers: prev.memberUsers + Math.floor(Math.random() * 3),
-      freeUsers: prev.freeUsers + Math.floor(Math.random() * 2)
-    }))
-    
-    setDailyStats(prev => ({
-      newUsers: Math.floor(Math.random() * 50) + 20,
-      activeUsers: Math.floor(Math.random() * 200) + 250,
-      creditsUsed: Math.floor(Math.random() * 5000) + 5000
-    }))
-    
-    setLoading(false)
+  
+  // 获取用户列表
+  const fetchUsers = async (search?: string) => {
+    try {
+      const token = localStorage.getItem('admin_token')
+      if (!token) return
+      
+      const url = new URL('/api/admin/users', window.location.origin)
+      if (search) {
+        url.searchParams.set('search', search)
+      }
+      
+      const response = await fetch(url.toString(), {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        setUsers(data.data)
+      }
+    } catch (error) {
+      console.error('获取用户列表失败:', error)
+    }
   }
-
+  
+  // 获取订单列表
+  const fetchOrders = async () => {
+    try {
+      const token = localStorage.getItem('admin_token')
+      if (!token) return
+      
+      const response = await fetch('/api/admin/orders', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        setOrders(data.data)
+      }
+    } catch (error) {
+      console.error('获取订单列表失败:', error)
+    }
+  }
+  
+  // 获取用户详情
+  const fetchUserDetails = async (userId: string) => {
+    try {
+      const token = localStorage.getItem('admin_token')
+      if (!token) return
+      
+      const response = await fetch(`/api/admin/user-details?userId=${userId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        setUserDetails(data.data)
+        setUserDetailsOpen(true)
+      }
+    } catch (error) {
+      console.error('获取用户详情失败:', error)
+    }
+  }
+  
+  // 搜索用户
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault()
+    fetchUsers(searchQuery)
+  }
+  
   // 处理登录
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -161,7 +232,7 @@ export default function AdminPage() {
       if (data.success && data.token) {
         localStorage.setItem('admin_token', data.token)
         setIsAuthenticated(true)
-        fetchOrders()
+        fetchAllData()
       } else {
         alert(data.error || '密码错误')
       }
@@ -170,7 +241,18 @@ export default function AdminPage() {
       alert('网络错误，请重试')
     }
   }
-
+  
+  // 格式化日期
+  const formatDate = (dateString: string) => {
+    if (!dateString) return '-'
+    return new Date(dateString).toLocaleString('zh-CN')
+  }
+  
+  // 格式化金额
+  const formatAmount = (amount: number) => {
+    return `¥${amount.toLocaleString()}`
+  }
+  
   // 如果未认证，显示登录界面
   if (!isAuthenticated) {
     return (
@@ -219,7 +301,7 @@ export default function AdminPage() {
   // 管理员界面
   return (
     <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-6xl mx-auto">
+      <div className="max-w-7xl mx-auto">
         {/* 头部 */}
         <div className="flex items-center justify-between mb-8">
           <div>
@@ -229,7 +311,7 @@ export default function AdminPage() {
           <div className="flex items-center gap-4">
             <Button
               variant="outline"
-              onClick={refreshStats}
+              onClick={fetchAllData}
               disabled={loading}
               className="flex items-center gap-2"
             >
@@ -248,240 +330,525 @@ export default function AdminPage() {
           </div>
         </div>
 
-        {/* 快速统计卡片 */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600">总用户数</p>
-                  <p className="text-3xl font-bold">{userStats.totalUsers.toLocaleString()}</p>
-                </div>
-                <Users className="w-10 h-10 text-blue-500" />
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600">会员用户</p>
-                  <p className="text-3xl font-bold text-green-600">{userStats.memberUsers.toLocaleString()}</p>
-                </div>
-                <CreditCard className="w-10 h-10 text-green-500" />
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600">免费用户</p>
-                  <p className="text-3xl font-bold text-gray-600">{userStats.freeUsers.toLocaleString()}</p>
-                </div>
-                <Users className="w-10 h-10 text-gray-500" />
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
         {/* 主要内容区域 - Tab导航 */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3 lg:w-[400px]">
+          <TabsList className="grid w-full grid-cols-4 lg:w-[600px]">
+            <TabsTrigger value="overview" className="flex items-center gap-2">
+              <BarChart3 className="w-4 h-4" />
+              概览
+            </TabsTrigger>
             <TabsTrigger value="users" className="flex items-center gap-2">
               <Users className="w-4 h-4" />
-              用户统计
+              用户管理
             </TabsTrigger>
             <TabsTrigger value="orders" className="flex items-center gap-2">
               <CreditCard className="w-4 h-4" />
               订单记录
             </TabsTrigger>
             <TabsTrigger value="stats" className="flex items-center gap-2">
-              <BarChart3 className="w-4 h-4" />
-              用量概览
+              <TrendingUp className="w-4 h-4" />
+              数据分析
             </TabsTrigger>
           </TabsList>
 
-          {/* 用户统计 Tab */}
-          <TabsContent value="users">
-            <Card>
-              <CardHeader>
-                <CardTitle>用户统计详情</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="p-6 bg-blue-50 rounded-xl">
-                    <h3 className="text-lg font-semibold text-blue-800 mb-2">总注册用户</h3>
-                    <p className="text-4xl font-bold text-blue-600">{userStats.totalUsers.toLocaleString()}</p>
-                    <p className="text-sm text-blue-600 mt-2">累计注册用户数</p>
-                  </div>
-                  
-                  <div className="p-6 bg-green-50 rounded-xl">
-                    <h3 className="text-lg font-semibold text-green-800 mb-2">会员用户</h3>
-                    <p className="text-4xl font-bold text-green-600">{userStats.memberUsers.toLocaleString()}</p>
-                    <p className="text-sm text-green-600 mt-2">付费会员用户数</p>
-                  </div>
-                  
-                  <div className="p-6 bg-gray-50 rounded-xl">
-                    <h3 className="text-lg font-semibold text-gray-800 mb-2">免费用户</h3>
-                    <p className="text-4xl font-bold text-gray-600">{userStats.freeUsers.toLocaleString()}</p>
-                    <p className="text-sm text-gray-600 mt-2">未付费用户数</p>
-                  </div>
-                </div>
+          {/* 概览 Tab */}
+          <TabsContent value="overview">
+            <div className="space-y-6">
+              {/* 顶部统计卡片 */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-gray-600">总用户数</p>
+                        <p className="text-3xl font-bold">{stats.totalUsers.toLocaleString()}</p>
+                      </div>
+                      <Users className="w-10 h-10 text-blue-500" />
+                    </div>
+                  </CardContent>
+                </Card>
                 
-                <div className="mt-8 p-6 border rounded-xl">
-                  <h3 className="text-lg font-semibold mb-4">用户转化率</h3>
-                  <div className="flex items-center gap-4">
-                    <div className="flex-1 bg-gray-200 rounded-full h-3">
-                      <div 
-                        className="bg-green-500 h-3 rounded-full transition-all duration-500"
-                        style={{ width: `${((userStats.memberUsers / userStats.totalUsers) * 100).toFixed(1)}%` }}
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-gray-600">会员用户</p>
+                        <p className="text-3xl font-bold text-green-600">{stats.memberUsers.toLocaleString()}</p>
+                      </div>
+                      <UserCheck className="w-10 h-10 text-green-500" />
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-gray-600">总营收</p>
+                        <p className="text-3xl font-bold text-purple-600">{formatAmount(stats.totalRevenue)}</p>
+                      </div>
+                      <DollarSign className="w-10 h-10 text-purple-500" />
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-gray-600">今日新增</p>
+                        <p className="text-3xl font-bold text-orange-600">{stats.todayNewUsers}</p>
+                      </div>
+                      <Activity className="w-10 h-10 text-orange-500" />
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+              
+              {/* 每日数据卡片 */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">今日数据</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600">新增用户</span>
+                      <span className="font-bold text-lg">{stats.todayNewUsers}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600">活跃用户</span>
+                      <span className="font-bold text-lg">{stats.todayActiveUsers}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600">今日营收</span>
+                      <span className="font-bold text-lg text-green-600">{formatAmount(stats.todayRevenue)}</span>
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">用户转化</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div>
+                      <div className="flex justify-between mb-1">
+                        <span className="text-sm text-gray-600">会员转化率</span>
+                        <span className="text-sm font-semibold text-green-600">
+                          {stats.totalUsers > 0 
+                            ? ((stats.memberUsers / stats.totalUsers) * 100).toFixed(1)
+                            : 0}%
+                        </span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-3">
+                        <div 
+                          className="bg-green-500 h-3 rounded-full transition-all duration-500"
+                          style={{ width: `${stats.totalUsers > 0 ? (stats.memberUsers / stats.totalUsers) * 100 : 0}%` }}
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <div className="flex justify-between mb-1">
+                        <span className="text-sm text-gray-600">用户活跃度</span>
+                        <span className="text-sm font-semibold text-blue-600">
+                          {stats.totalUsers > 0 
+                            ? ((stats.todayActiveUsers / stats.totalUsers) * 100).toFixed(1)
+                            : 0}%
+                        </span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-3">
+                        <div 
+                          className="bg-blue-500 h-3 rounded-full transition-all duration-500"
+                          style={{ width: `${stats.totalUsers > 0 ? (stats.todayActiveUsers / stats.totalUsers) * 100 : 0}%` }}
+                        />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">快速链接</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <Button 
+                      variant="outline" 
+                      className="w-full justify-start"
+                      onClick={() => setActiveTab("users")}
+                    >
+                      <Users className="w-4 h-4 mr-2" />
+                      管理用户
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      className="w-full justify-start"
+                      onClick={() => setActiveTab("orders")}
+                    >
+                      <CreditCard className="w-4 h-4 mr-2" />
+                      查看订单
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      className="w-full justify-start"
+                      onClick={() => setActiveTab("stats")}
+                    >
+                      <BarChart3 className="w-4 h-4 mr-2" />
+                      数据分析
+                    </Button>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          </TabsContent>
+
+          {/* 用户管理 Tab */}
+          <TabsContent value="users">
+            <div className="space-y-6">
+              {/* 搜索框 */}
+              <Card>
+                <CardContent className="pt-6">
+                  <form onSubmit={handleSearch} className="flex gap-4">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                      <Input
+                        placeholder="搜索用户ID..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="pl-10"
                       />
                     </div>
-                    <span className="font-bold text-green-600">
-                      {((userStats.memberUsers / userStats.totalUsers) * 100).toFixed(1)}%
-                    </span>
+                    <Button type="submit">搜索</Button>
+                    {searchQuery && (
+                      <Button 
+                        variant="outline" 
+                        type="button"
+                        onClick={() => {
+                          setSearchQuery("")
+                          fetchUsers()
+                        }}
+                      >
+                        清除
+                      </Button>
+                    )}
+                  </form>
+                </CardContent>
+              </Card>
+              
+              {/* 用户列表 */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>用户列表</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b">
+                          <th className="text-left py-3 px-4">用户ID</th>
+                          <th className="text-left py-3 px-4">积分</th>
+                          <th className="text-left py-3 px-4">会员状态</th>
+                          <th className="text-left py-3 px-4">注册时间</th>
+                          <th className="text-left py-3 px-4">最后活跃</th>
+                          <th className="text-left py-3 px-4">交易次数</th>
+                          <th className="text-left py-3 px-4">操作</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {users.map((user) => (
+                          <tr key={user.user_id} className="border-b hover:bg-gray-50">
+                            <td className="py-3 px-4 font-mono text-sm">{user.user_id.slice(0, 8)}...</td>
+                            <td className="py-3 px-4 font-semibold">{user.credits}</td>
+                            <td className="py-3 px-4">
+                              <Badge variant={user.is_pro ? "default" : "secondary"}>
+                                {user.is_pro ? "会员" : "免费"}
+                              </Badge>
+                            </td>
+                            <td className="py-3 px-4 text-gray-600 text-sm">{formatDate(user.created_at)}</td>
+                            <td className="py-3 px-4 text-gray-600 text-sm">{formatDate(user.lastActiveAt)}</td>
+                            <td className="py-3 px-4">{user.transactionCount}</td>
+                            <td className="py-3 px-4">
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                onClick={() => fetchUserDetails(user.user_id)}
+                              >
+                                查看详情
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
-                  <p className="text-sm text-gray-600 mt-2">
-                    会员转化率（会员用户 / 总用户）
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
+                  
+                  {users.length === 0 && (
+                    <div className="text-center py-8 text-gray-500">
+                      暂无用户数据
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
 
           {/* 订单记录 Tab */}
           <TabsContent value="orders">
             <Card>
               <CardHeader>
-                <CardTitle>最近订单记录</CardTitle>
+                <CardTitle>订单记录</CardTitle>
               </CardHeader>
               <CardContent>
-                {loading ? (
-                  <div className="text-center py-8">
-                    <RefreshCw className="w-8 h-8 animate-spin mx-auto text-gray-400" />
-                    <p className="mt-2 text-gray-600">加载中...</p>
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead>
-                        <tr className="border-b">
-                          <th className="text-left py-3 px-4">订单号</th>
-                          <th className="text-left py-3 px-4">用户ID</th>
-                          <th className="text-left py-3 px-4">金额</th>
-                          <th className="text-left py-3 px-4">类型</th>
-                          <th className="text-left py-3 px-4">时间</th>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left py-3 px-4">订单号</th>
+                        <th className="text-left py-3 px-4">用户ID</th>
+                        <th className="text-left py-3 px-4">产品</th>
+                        <th className="text-left py-3 px-4">金额</th>
+                        <th className="text-left py-3 px-4">积分</th>
+                        <th className="text-left py-3 px-4">状态</th>
+                        <th className="text-left py-3 px-4">时间</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {orders.map((order) => (
+                        <tr key={order.id} className="border-b hover:bg-gray-50">
+                          <td className="py-3 px-4 font-mono text-sm">{order.order_no}</td>
+                          <td className="py-3 px-4 font-mono text-sm">{order.user_id.slice(0, 8)}...</td>
+                          <td className="py-3 px-4">{order.product_name}</td>
+                          <td className="py-3 px-4 font-semibold text-green-600">{formatAmount(order.amount)}</td>
+                          <td className="py-3 px-4">{order.credits}</td>
+                          <td className="py-3 px-4">
+                            <Badge variant={order.status === 'paid' ? 'default' : 'secondary'}>
+                              {order.status === 'paid' ? '已支付' : order.status}
+                            </Badge>
+                          </td>
+                          <td className="py-3 px-4 text-gray-600 text-sm">{formatDate(order.created_at)}</td>
                         </tr>
-                      </thead>
-                      <tbody>
-                        {transactions.map((order) => (
-                          <tr key={order.id} className="border-b hover:bg-gray-50">
-                            <td className="py-3 px-4 font-mono text-sm">{order.id}</td>
-                            <td className="py-3 px-4 font-mono text-sm">{order.userId}</td>
-                            <td className="py-3 px-4 font-semibold text-green-600">¥{order.amount}</td>
-                            <td className="py-3 px-4">
-                              <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs">
-                                {order.type}
-                              </span>
-                            </td>
-                            <td className="py-3 px-4 text-gray-600 text-sm">{order.createdAt}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                
+                {orders.length === 0 && (
+                  <div className="text-center py-8 text-gray-500">
+                    暂无订单数据
                   </div>
                 )}
-                
-                <div className="mt-6 flex justify-between items-center">
-                  <p className="text-sm text-gray-600">
-                    显示最近 5 条订单
-                  </p>
-                  <Button variant="outline" size="sm">
-                    查看更多订单
-                  </Button>
-                </div>
               </CardContent>
             </Card>
           </TabsContent>
 
-          {/* 用量概览 Tab */}
+          {/* 数据分析 Tab */}
           <TabsContent value="stats">
-            <Card>
-              <CardHeader>
-                <CardTitle>今日数据概览</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="p-6 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl">
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-lg font-semibold text-blue-800">今日新增用户</h3>
-                      <Users className="w-6 h-6 text-blue-500" />
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>营收分析</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex justify-between items-center p-4 bg-green-50 rounded-lg">
+                      <div>
+                        <p className="text-sm text-green-800">总营收</p>
+                        <p className="text-2xl font-bold text-green-600">{formatAmount(stats.totalRevenue)}</p>
+                      </div>
+                      <DollarSign className="w-8 h-8 text-green-500" />
                     </div>
-                    <p className="text-4xl font-bold text-blue-600">{dailyStats.newUsers}</p>
-                    <p className="text-sm text-blue-600 mt-2">较昨日增长 12%</p>
-                  </div>
-                  
-                  <div className="p-6 bg-gradient-to-br from-green-50 to-green-100 rounded-xl">
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-lg font-semibold text-green-800">今日活跃用户</h3>
-                      <BarChart3 className="w-6 h-6 text-green-500" />
+                    <div className="flex justify-between items-center p-4 bg-blue-50 rounded-lg">
+                      <div>
+                        <p className="text-sm text-blue-800">今日营收</p>
+                        <p className="text-2xl font-bold text-blue-600">{formatAmount(stats.todayRevenue)}</p>
+                      </div>
+                      <Activity className="w-8 h-8 text-blue-500" />
                     </div>
-                    <p className="text-4xl font-bold text-green-600">{dailyStats.activeUsers}</p>
-                    <p className="text-sm text-green-600 mt-2">占总用户 24.8%</p>
-                  </div>
-                  
-                  <div className="p-6 bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl">
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-lg font-semibold text-purple-800">今日积分消耗</h3>
-                      <CreditCard className="w-6 h-6 text-purple-500" />
-                    </div>
-                    <p className="text-4xl font-bold text-purple-600">{dailyStats.creditsUsed.toLocaleString()}</p>
-                    <p className="text-sm text-purple-600 mt-2">平均每人消耗 27 积分</p>
-                  </div>
-                </div>
+                  </CardContent>
+                </Card>
                 
-                <div className="mt-8 p-6 border rounded-xl">
-                  <h3 className="text-lg font-semibold mb-4">本周趋势</h3>
-                  <div className="space-y-4">
-                    <div>
-                      <div className="flex justify-between mb-1">
-                        <span className="text-sm text-gray-600">用户增长</span>
-                        <span className="text-sm font-semibold text-green-600">+12%</span>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>用户增长</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex justify-between items-center p-4 bg-purple-50 rounded-lg">
+                      <div>
+                        <p className="text-sm text-purple-800">总用户</p>
+                        <p className="text-2xl font-bold text-purple-600">{stats.totalUsers}</p>
                       </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div className="bg-green-500 h-2 rounded-full" style={{ width: "72%" }} />
-                      </div>
+                      <Users className="w-8 h-8 text-purple-500" />
                     </div>
-                    
-                    <div>
-                      <div className="flex justify-between mb-1">
-                        <span className="text-sm text-gray-600">积分消耗</span>
-                        <span className="text-sm font-semibold text-blue-600">+8%</span>
+                    <div className="flex justify-between items-center p-4 bg-orange-50 rounded-lg">
+                      <div>
+                        <p className="text-sm text-orange-800">今日新增</p>
+                        <p className="text-2xl font-bold text-orange-600">{stats.todayNewUsers}</p>
                       </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div className="bg-blue-500 h-2 rounded-full" style={{ width: "65%" }} />
-                      </div>
+                      <TrendingUp className="w-8 h-8 text-orange-500" />
                     </div>
-                    
-                    <div>
-                      <div className="flex justify-between mb-1">
-                        <span className="text-sm text-gray-600">付费转化</span>
-                        <span className="text-sm font-semibold text-purple-600">+5%</span>
+                  </CardContent>
+                </Card>
+              </div>
+              
+              <Card>
+                <CardHeader>
+                  <CardTitle>关键指标</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="text-center p-6 border rounded-lg">
+                      <div className="text-4xl font-bold text-blue-600 mb-2">
+                        {stats.totalUsers > 0 
+                          ? ((stats.memberUsers / stats.totalUsers) * 100).toFixed(1)
+                          : 0}%
                       </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div className="bg-purple-500 h-2 rounded-full" style={{ width: "48%" }} />
+                      <p className="text-gray-600">会员转化率</p>
+                    </div>
+                    <div className="text-center p-6 border rounded-lg">
+                      <div className="text-4xl font-bold text-green-600 mb-2">
+                        {stats.totalUsers > 0 
+                          ? ((stats.todayActiveUsers / stats.totalUsers) * 100).toFixed(1)
+                          : 0}%
                       </div>
+                      <p className="text-gray-600">用户活跃度</p>
+                    </div>
+                    <div className="text-center p-6 border rounded-lg">
+                      <div className="text-4xl font-bold text-purple-600 mb-2">
+                        {stats.totalRevenue > 0 && stats.totalUsers > 0
+                          ? formatAmount(Math.round(stats.totalRevenue / stats.totalUsers))
+                          : formatAmount(0)}
+                      </div>
+                      <p className="text-gray-600">用户平均价值</p>
                     </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
         </Tabs>
       </div>
+      
+      {/* 用户详情侧边栏 */}
+      <Sheet open={userDetailsOpen} onOpenChange={setUserDetailsOpen}>
+        <SheetContent className="w-[800px] sm:w-[600px] overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>用户详情</SheetTitle>
+            <SheetDescription>
+              查看用户的详细信息、交易记录和订单历史
+            </SheetDescription>
+          </SheetHeader>
+          
+          {userDetails && (
+            <div className="space-y-6">
+              {/* 用户基本信息 */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="text-center">
+                      <p className="text-sm text-gray-600">积分</p>
+                      <p className="text-3xl font-bold">{userDetails.user.credits}</p>
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="text-center">
+                      <p className="text-sm text-gray-600">会员状态</p>
+                      <Badge variant={userDetails.user.is_pro ? "default" : "secondary"} className="mt-2">
+                        {userDetails.user.is_pro ? "会员" : "免费"}
+                      </Badge>
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="text-center">
+                      <p className="text-sm text-gray-600">总消费</p>
+                      <p className="text-3xl font-bold text-green-600">
+                        {formatAmount(userDetails.stats.totalSpent)}
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+              
+              {/* 用户ID和注册时间 */}
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <p className="text-sm text-gray-600 mb-1">用户ID</p>
+                <p className="font-mono text-sm">{userDetails.user.user_id}</p>
+                <p className="text-sm text-gray-600 mt-4 mb-1">注册时间</p>
+                <p className="text-sm">{formatDate(userDetails.user.created_at)}</p>
+              </div>
+              
+              {/* 最近交易记录 */}
+              <div>
+                <h3 className="text-lg font-semibold mb-4">最近交易记录</h3>
+                <div className="border rounded-lg overflow-hidden">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="bg-gray-50">
+                        <th className="text-left py-2 px-4">类型</th>
+                        <th className="text-left py-2 px-4">数量</th>
+                        <th className="text-left py-2 px-4">描述</th>
+                        <th className="text-left py-2 px-4">时间</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {userDetails.transactions.slice(0, 10).map((transaction) => (
+                        <tr key={transaction.id} className="border-t">
+                          <td className="py-2 px-4">
+                            <Badge variant="outline">{transaction.type}</Badge>
+                          </td>
+                          <td className="py-2 px-4 font-semibold">
+                            <span className={transaction.amount > 0 ? 'text-green-600' : 'text-red-600'}>
+                              {transaction.amount > 0 ? '+' : ''}{transaction.amount}
+                            </span>
+                          </td>
+                          <td className="py-2 px-4 text-sm">{transaction.description || '-'}</td>
+                          <td className="py-2 px-4 text-sm text-gray-600">{formatDate(transaction.created_at)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              
+              {/* 最近订单 */}
+              <div>
+                <h3 className="text-lg font-semibold mb-4">最近订单</h3>
+                <div className="border rounded-lg overflow-hidden">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="bg-gray-50">
+                        <th className="text-left py-2 px-4">订单号</th>
+                        <th className="text-left py-2 px-4">产品</th>
+                        <th className="text-left py-2 px-4">金额</th>
+                        <th className="text-left py-2 px-4">状态</th>
+                        <th className="text-left py-2 px-4">时间</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {userDetails.orders.slice(0, 5).map((order) => (
+                        <tr key={order.id} className="border-t">
+                          <td className="py-2 px-4 font-mono text-sm">{order.order_no}</td>
+                          <td className="py-2 px-4">{order.product_name}</td>
+                          <td className="py-2 px-4 font-semibold">{formatAmount(order.amount)}</td>
+                          <td className="py-2 px-4">
+                            <Badge variant={order.status === 'paid' ? 'default' : 'secondary'}>
+                              {order.status === 'paid' ? '已支付' : order.status}
+                            </Badge>
+                          </td>
+                          <td className="py-2 px-4 text-sm text-gray-600">{formatDate(order.created_at)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   )
 }
