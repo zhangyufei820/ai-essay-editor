@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { getCorsHeaders, handleOptions } from '@/lib/cors'
 
 export const maxDuration = 60
 
@@ -118,6 +119,7 @@ export async function POST(req: NextRequest) {
       // 🔥 返回流式响应
       return new Response(response.body?.pipeThrough(transformStream), {
         headers: { 
+          ...getCorsHeaders(req),
           "Content-Type": "text/event-stream",
           "Cache-Control": "no-cache",
           "Connection": "keep-alive"
@@ -247,12 +249,5 @@ export async function POST(req: NextRequest) {
 }
 
 export async function OPTIONS(req: NextRequest) {
-  return new NextResponse(null, {
-    status: 200,
-    headers: {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization",
-    },
-  })
+  return handleOptions(req)
 }

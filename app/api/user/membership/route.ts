@@ -37,7 +37,7 @@ async function checkMembership(userId: string) {
   for (const tryId of variants) {
     const { data, error } = await supabaseAdmin
       .from('orders')
-      .select('id, status, amount, product_name, created_at, order_no, user_id')
+      .select('id, status, amount, product_name, product_id, created_at, order_no, user_id')
       .eq('user_id', tryId)
       .eq('status', 'paid')
       .gt('amount', 0)
@@ -50,7 +50,7 @@ async function checkMembership(userId: string) {
   if (!orders.length) {
     const { data, error } = await supabaseAdmin
       .from('orders')
-      .select('id, status, amount, product_name, created_at, order_no, user_id')
+      .select('id, status, amount, product_name, product_id, created_at, order_no, user_id')
       .like('order_no', `%_${userId}`)
       .eq('status', 'paid')
       .gt('amount', 0)
@@ -74,7 +74,7 @@ async function checkMembership(userId: string) {
         if (target) {
           const { data, error } = await supabaseAdmin
             .from('orders')
-            .select('id, status, amount, product_name, created_at, order_no, user_id')
+            .select('id, status, amount, product_name, product_id, created_at, order_no, user_id')
             .eq('user_id', target.id)
             .eq('status', 'paid')
             .gt('amount', 0)
@@ -90,7 +90,7 @@ async function checkMembership(userId: string) {
   if (!orders.length) {
     const { data, error } = await supabaseAdmin
       .from('orders')
-      .select('id, status, amount, product_name, created_at, order_no, user_id')
+      .select('id, status, amount, product_name, product_id, created_at, order_no, user_id')
       .eq('status', 'paid').gt('amount', 0)
       .order('created_at', { ascending: false }).limit(100)
     if (!error && data) {
@@ -101,20 +101,36 @@ async function checkMembership(userId: string) {
     }
   }
 
-  // 策略5: 检查 is_pro 字段
+  // 策略5: 检查 is_pro 字段和 membership_status
   let isPro = false, hasHighCredits = false
+  let membershipStatus: string | null = null
   const { data: creditsData, error: creditsError } = await supabaseAdmin
-    .from('user_credits').select('credits, is_pro, user_id').eq('user_id', userId).single()
+    .from('user_credits').select('credits, is_pro, membership_status, user_id').eq('user_id', userId).single()
   if (!creditsError && creditsData) {
     if (creditsData.is_pro === true) isPro = true
     if (creditsData.credits >= 1000) hasHighCredits = true
+    if (creditsData.membership_status) membershipStatus = creditsData.membership_status
   }
 
   const isPaidMember = isPro || orders.length > 0 || hasHighCredits
+
+  // 从订单或用户积分记录中获取订阅类型
+  let type = "免费"
+  if (orders.length > 0 && orders[0]?.product_id) {
+    // 优先从最新订单获取产品类型
+    type = orders[0].product_id
+  } else if (isPro && membershipStatus) {
+    // 检查用户积分记录中的会员标识
+    type = membershipStatus
+  } else if (hasHighCredits) {
+    type = "premium"
+  }
+
   return NextResponse.json({
     isPaidMember,
     orderCount: orders.length,
-    latestOrder: orders[0] || null
+    latestOrder: orders[0] || null,
+    type // 返回订阅类型: "免费", "basic", "pro", "premium"
   })
 }
 

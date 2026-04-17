@@ -72,16 +72,20 @@ const creditPacks = [
   { credits: 10000, price: 90, discount: "9折" },
 ]
 
-export function Pricing() {
+export function Pricing({ currentSubscription }: { currentSubscription?: string }) {
   const [isAnnual, setIsAnnual] = useState(false)
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null)
   const router = useRouter()
 
   const handlePlanSelect = (planId: string) => {
+    // 如果已经是订阅用户选择的方案，不跳转
+    if (planId === currentSubscription) return
     setSelectedPlan(planId)
     // Use productId format that matches [productId]/page.tsx route
     router.push(`/checkout/${planId}?billing=${isAnnual ? "annual" : "monthly"}`)
   }
+
+  const isSubscribedPlan = (planId: string) => currentSubscription && planId === currentSubscription
 
   const handleCreditPurchase = (credits: number, price: number) => {
     router.push(`/checkout/credits-${credits}?price=${price}`)
@@ -122,17 +126,21 @@ export function Pricing() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-16">
-          {subscriptionPlans.map((plan) => (
+          {subscriptionPlans.map((plan) => {
+            const isCurrentPlan = isSubscribedPlan(plan.id)
+            return (
             <Card
               key={plan.id}
-              className={`relative flex flex-col transition-all duration-300 cursor-pointer rounded-2xl overflow-visible bg-white ${
-                plan.popular
+              className={`relative flex flex-col transition-all duration-300 rounded-2xl overflow-visible bg-white ${
+                isCurrentPlan
+                  ? "border-2 border-gray-300 shadow-[0_4px_20px_rgb(0,0,0,0.08)] opacity-60"
+                  : plan.popular
                   ? "border-2 border-primary shadow-[0_8px_30px_rgb(0,0,0,0.12)] hover:shadow-[0_12px_40px_rgb(0,0,0,0.15)]"
                   : "border-2 border-gray-200 shadow-[0_4px_20px_rgb(0,0,0,0.08)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.12)]"
-              } ${selectedPlan === plan.id ? "ring-4 ring-primary/20 ring-offset-2 scale-105" : "hover:scale-105"}`}
+              } ${!isCurrentPlan && selectedPlan === plan.id ? "ring-4 ring-primary/20 ring-offset-2 scale-105" : ""} ${!isCurrentPlan ? "cursor-pointer hover:scale-105" : "cursor-default"}`}
               onClick={() => handlePlanSelect(plan.id)}
             >
-              {plan.popular && (
+              {plan.popular && !isCurrentPlan && (
                 <div className="absolute -top-4 left-1/2 -translate-x-1/2 z-10">
                   <Badge className="bg-primary text-white px-6 py-1.5 text-sm font-semibold shadow-lg rounded-full">
                     最受欢迎
@@ -140,35 +148,46 @@ export function Pricing() {
                 </div>
               )}
 
+              {isCurrentPlan && (
+                <div className="absolute -top-4 left-1/2 -translate-x-1/2 z-10">
+                  <Badge className="bg-gray-500 text-white px-6 py-1.5 text-sm font-semibold shadow-lg rounded-full">
+                    当前方案
+                  </Badge>
+                </div>
+              )}
+
               <CardContent className="p-8 flex flex-col flex-grow">
-                <h3 className="text-2xl font-bold text-gray-900 mb-2">{plan.name}</h3>
-                <p className="text-gray-600 mb-6 text-sm">{plan.description}</p>
+                <h3 className={`text-2xl font-bold mb-2 ${isCurrentPlan ? "text-gray-500" : "text-gray-900"}`}>{plan.name}</h3>
+                <p className={`mb-6 text-sm ${isCurrentPlan ? "text-gray-400" : "text-gray-600"}`}>{plan.description}</p>
 
                 <div className="mb-6">
-                  <span className="text-5xl font-extrabold text-gray-900">
+                  <span className={`text-5xl font-extrabold ${isCurrentPlan ? "text-gray-400" : "text-gray-900"}`}>
                     {isAnnual ? plan.annualPrice : plan.monthlyPrice}
                   </span>
-                  <span className="text-lg font-medium text-gray-600">{isAnnual ? " 元/年" : " 元/月"}</span>
+                  <span className={`text-lg font-medium ${isCurrentPlan ? "text-gray-400" : "text-gray-600"}`}>{isAnnual ? " 元/年" : " 元/月"}</span>
                 </div>
 
-                {isAnnual && (
+                {isAnnual && !isCurrentPlan && (
                   <p className="text-green-600 font-medium h-6 mb-4 text-sm">
                     (折合 {(plan.annualPrice / 12).toFixed(1)} 元/月)
                   </p>
                 )}
 
-                <ul className="space-y-3 text-gray-700 mb-8 flex-grow">
+                <ul className={`space-y-3 mb-8 flex-grow ${isCurrentPlan ? "text-gray-400" : "text-gray-700"}`}>
                   {plan.features.map((feature, idx) => (
-                    <li key={idx} className={`flex items-start ${feature.subtext ? "pl-7 text-sm text-gray-500" : ""}`}>
-                      {!feature.subtext && <Check className="w-5 h-5 text-primary mr-3 flex-shrink-0 mt-0.5" />}
-                      <span className={feature.highlight ? "font-semibold text-gray-900" : ""}>{feature.text}</span>
+                    <li key={idx} className={`flex items-start ${feature.subtext ? "pl-7 text-sm" : ""}`}>
+                      {!feature.subtext && <Check className={`w-5 h-5 mr-3 flex-shrink-0 mt-0.5 ${isCurrentPlan ? "text-gray-400" : "text-primary"}`} />}
+                      <span className={feature.highlight ? "font-semibold" : ""}>{feature.text}</span>
                     </li>
                   ))}
                 </ul>
 
                 <Button
+                  disabled={isCurrentPlan}
                   className={`w-full rounded-xl py-6 text-base font-semibold transition-all ${
-                    plan.popular
+                    isCurrentPlan
+                      ? "bg-gray-200 text-gray-500 cursor-default"
+                      : plan.popular
                       ? "bg-primary hover:bg-primary/90 text-white shadow-lg hover:shadow-xl"
                       : "bg-gray-100 hover:bg-gray-200 text-gray-800 shadow-md hover:shadow-lg"
                   }`}
@@ -177,11 +196,11 @@ export function Pricing() {
                     handlePlanSelect(plan.id)
                   }}
                 >
-                  选择{plan.name}
+                  {isCurrentPlan ? "当前方案" : `选择${plan.name}`}
                 </Button>
               </CardContent>
             </Card>
-          ))}
+          )})}
         </div>
 
         <div className="max-w-4xl mx-auto">

@@ -7,8 +7,7 @@
 
 'use client'
 
-import { useEffect, useState, Suspense } from 'react'
-import { useRouter } from 'next/navigation'
+import { Suspense } from 'react'
 import dynamic from 'next/dynamic'
 
 // 首屏组件 - 直接导入（关键路径）
@@ -81,47 +80,8 @@ function SectionSkeleton({ height = "400px" }: { height?: string }) {
   )
 }
 
-// 加载状态组件
-function LoadingScreen() {
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-white">
-      <div className="flex flex-col items-center gap-4">
-        <div className="w-12 h-12 border-4 border-green-200 border-t-green-700 rounded-full animate-spin" />
-        <p className="text-slate-500 text-sm">加载中...</p>
-      </div>
-    </div>
-  )
-}
 
 export default function Home() {
-  const router = useRouter()
-  const [isAuthorized, setIsAuthorized] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
-
-  useEffect(() => {
-    // 检查是否登录
-    const user = localStorage.getItem('currentUser')
-    
-    if (!user) {
-      // 没登录 -> 踢到登录页
-      router.replace('/login')
-    } else {
-      // 登录了 -> 显示正常的网站内容
-      setIsAuthorized(true)
-    }
-    setIsLoading(false)
-  }, [router])
-
-  // 加载中显示骨架屏
-  if (isLoading) {
-    return <LoadingScreen />
-  }
-
-  // 未授权不渲染
-  if (!isAuthorized) {
-    return null 
-  }
-
   return (
     <main className="min-h-screen bg-white">
       {/* Hero 区域 - 全屏首屏（关键路径，直接加载） */}

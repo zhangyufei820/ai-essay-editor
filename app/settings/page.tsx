@@ -343,26 +343,28 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {/* 🔥 积分信息卡片 */}
+        {/* 🔥 所订阅的会员套餐卡片 */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-          <h3 className="text-sm font-semibold text-gray-900 mb-4">积分信息</h3>
-          
-          {/* 会员类型 + 升级按钮 */}
+          <h3 className="text-sm font-semibold text-gray-900 mb-4">所订阅的会员套餐</h3>
+
+          {/* 当前订阅套餐 */}
           <div className="flex items-center justify-between py-3 border-b border-gray-50">
             <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-600">会员类型</span>
+              <span className="text-sm text-gray-600">当前方案</span>
             </div>
             <div className="flex items-center gap-3">
               <span className="text-sm font-medium text-gray-900">{membershipType}</span>
-              <Link href="/pricing">
-                <Button 
-                  size="sm" 
-                  className="h-7 px-3 text-white text-xs font-medium rounded-full"
-                  style={{ backgroundColor: COLORS.blue }}
-                >
-                  升级
-                </Button>
-              </Link>
+              {membershipType === "免费" && (
+                <Link href="/pricing">
+                  <Button
+                    size="sm"
+                    className="h-7 px-3 text-white text-xs font-medium rounded-full"
+                    style={{ backgroundColor: COLORS.blue }}
+                  >
+                    升级
+                  </Button>
+                </Link>
+              )}
             </div>
           </div>
           

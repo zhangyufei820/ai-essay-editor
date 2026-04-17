@@ -1,5 +1,6 @@
 import { getAPIConfig } from "@/lib/ai-utils"
 import { createClient } from '@supabase/supabase-js'
+import { getCorsHeaders, handleOptions } from '@/lib/cors'
 
 export const maxDuration = 60 // 作文批改比较慢，适当延长超时时间
 
@@ -8,14 +9,7 @@ const COST_ESSAY = 250 // 作文批改：250 积分/次
 const COST_CHAT = 20   // 普通对话：20 积分/次
 
 export async function OPTIONS(req: Request) {
-  return new Response(null, {
-    status: 200,
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-AI-Provider, X-AI-Model',
-    },
-  })
+  return handleOptions(req)
 }
 
 export async function POST(req: Request) {
@@ -167,11 +161,11 @@ export async function POST(req: Request) {
 
         return new Response(stream, {
           headers: {
+            ...getCorsHeaders(req),
             "Content-Type": "text/plain; charset=utf-8",
             "X-Vercel-AI-Data-Stream": "v1",
             "Cache-Control": "no-cache",
             Connection: "keep-alive",
-            'Access-Control-Allow-Origin': '*',
           },
         })
       } catch (error) {
@@ -313,11 +307,11 @@ export async function POST(req: Request) {
 
     return new Response(stream, {
       headers: {
+        ...getCorsHeaders(req),
         "Content-Type": "text/plain; charset=utf-8",
         "X-Vercel-AI-Data-Stream": "v1",
         "Cache-Control": "no-cache",
         Connection: "keep-alive",
-        'Access-Control-Allow-Origin': '*',
       },
     })
   } catch (error) {
