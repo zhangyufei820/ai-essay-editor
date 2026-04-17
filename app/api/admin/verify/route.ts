@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const isValid = verifyAdminToken(token);
+    const isValid = await verifyAdminToken(token);
 
     return NextResponse.json({
       valid: isValid,

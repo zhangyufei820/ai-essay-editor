@@ -23,6 +23,8 @@ const PRODUCT_CONFIG: Record<string, { credits: number, isPro: boolean }> = {
   "credits-10000": { credits: 10000, isPro: false },
 }
 
+const MAX_CREDITS = 10_000_000  // 单用户积分上限 1000 万
+
 export async function POST(request: NextRequest) {
   const supabase = getSupabaseAdmin()
   
@@ -128,6 +130,14 @@ export async function POST(request: NextRequest) {
     if (currentCredits) {
       // 更新现有记录
       const newCredits = currentCredits.credits + credits
+      
+      // 🛡️ 积分上限校验
+      if (newCredits > MAX_CREDITS) {
+        console.error(`[迅虎支付] ⚠️ 积分超限拒绝: userId=${order.user_id}, newCredits=${newCredits} > MAX=${MAX_CREDITS}`)
+        // 订单已标记为 paid，但积分不加（需要人工处理）
+        return new NextResponse("fail", { status: 200 })
+      }
+      
       const newIsPro = isPro || currentCredits.is_pro // 一旦成为会员就保持
       
       console.log(`[迅虎支付] 更新用户积分: ${currentCredits.credits} → ${newCredits}, is_pro: ${currentCredits.is_pro} → ${newIsPro}`)

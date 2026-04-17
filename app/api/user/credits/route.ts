@@ -95,6 +95,8 @@ export async function GET(request: Request) {
  * Body: { userId: string, amount: number, reason?: string }
  * amount 为负数表示扣除，正数表示增加
  */
+const MAX_CREDITS = 10_000_000  // 单用户积分上限 1000 万
+
 export async function POST(request: Request) {
   try {
     // IP 限流：30次/分钟
@@ -154,6 +156,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: queryError.message }, { status: 500 })
     }
     const newCredits = Math.max(0, currentCredits + amount) // 确保不会变成负数
+    
+    // 🛡️ 积分上限校验
+    if (newCredits > MAX_CREDITS) {
+      console.warn(`⚠️ [积分API] 积分超限拒绝: userId=${userId}, newCredits=${newCredits} > MAX=${MAX_CREDITS}`)
+      return NextResponse.json({ 
+        error: `积分上限为 ${MAX_CREDITS}，当前 ${currentCredits} + ${amount} = ${newCredits} 超出限制`,
+        currentCredits,
+        maxCredits: MAX_CREDITS
+      }, { status: 400 })
+    }
 
     // 🔥 使用条件更新防止并发竞态
     const { data: updateData, error: updateError } = await supabaseAdmin

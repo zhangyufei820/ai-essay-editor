@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const token = generateAdminToken(password);
+    const token = await generateAdminToken(password);
     
     if (!token) {
       return NextResponse.json(

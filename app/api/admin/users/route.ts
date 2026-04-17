@@ -8,9 +8,13 @@ export async function GET(req: NextRequest) {
   try {
     // 验证管理员 token
     const token = req.headers.get('authorization')?.replace('Bearer ', '')
-    if (!token || !verifyAdminToken(token)) {
+    if (!token || !(await verifyAdminToken(token))) {
       return NextResponse.json({ error: '未授权' }, { status: 401 })
     }
+
+    // 记录审计日志
+    const { logAdminAction } = await import('@/lib/admin-auth')
+    await logAdminAction('view_users', token)
 
     // 获取查询参数
     const { searchParams } = new URL(req.url)

@@ -29,6 +29,8 @@ export async function GET(request: NextRequest) {
       credit_transactions: { exists: false, created: false },
       user_credits: { exists: false },
       orders: { exists: false },
+      admin_tokens: { exists: false, created: false },
+      admin_actions: { exists: false, created: false },
     }
     
     // 1. 检查 credit_transactions 表
@@ -136,6 +138,67 @@ CREATE INDEX IF NOT EXISTS idx_credit_transactions_created_at ON credit_transact
         .from('orders')
         .select('*', { count: 'exact', head: true })
       results.orders.count = count
+    }
+    
+    // 5. 检查/创建 admin_tokens 表
+    const { error: atError } = await supabaseAdmin
+      .from('admin_tokens')
+      .select('id')
+      .limit(1)
+    
+    if (atError && atError.code === '42P01') {
+      console.log('⚠️ admin_tokens 表不存在，尝试创建...')
+      const { error: createError } = await supabaseAdmin.rpc('exec_sql', {
+        sql: `
+          CREATE TABLE IF NOT EXISTS admin_tokens (
+            id BIGSERIAL PRIMARY KEY,
+            token TEXT NOT NULL UNIQUE,
+            expires_at TIMESTAMPTZ NOT NULL,
+            created_at TIMESTAMPTZ DEFAULT NOW()
+          );
+          CREATE INDEX IF NOT EXISTS idx_admin_tokens_token ON admin_tokens(token);
+          CREATE INDEX IF NOT EXISTS idx_admin_tokens_expires_at ON admin_tokens(expires_at);
+        `
+      })
+      if (createError) {
+        results.admin_tokens.error = createError.message
+      } else {
+        results.admin_tokens.created = true
+        console.log('✅ admin_tokens 表创建成功')
+      }
+    } else {
+      results.admin_tokens.exists = !atError
+    }
+    
+    // 6. 检查/创建 admin_actions 表
+    const { error: aaError } = await supabaseAdmin
+      .from('admin_actions')
+      .select('id')
+      .limit(1)
+    
+    if (aaError && aaError.code === '42P01') {
+      console.log('⚠️ admin_actions 表不存在，尝试创建...')
+      const { error: createError } = await supabaseAdmin.rpc('exec_sql', {
+        sql: `
+          CREATE TABLE IF NOT EXISTS admin_actions (
+            id BIGSERIAL PRIMARY KEY,
+            action TEXT NOT NULL,
+            admin_token_prefix TEXT,
+            details JSONB DEFAULT '{}',
+            created_at TIMESTAMPTZ DEFAULT NOW()
+          );
+          CREATE INDEX IF NOT EXISTS idx_admin_actions_created_at ON admin_actions(created_at DESC);
+          CREATE INDEX IF NOT EXISTS idx_admin_actions_action ON admin_actions(action);
+        `
+      })
+      if (createError) {
+        results.admin_actions.error = createError.message
+      } else {
+        results.admin_actions.created = true
+        console.log('✅ admin_actions 表创建成功')
+      }
+    } else {
+      results.admin_actions.exists = !aaError
     }
     
     return NextResponse.json({
