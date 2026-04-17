@@ -79,11 +79,7 @@ export function Footer() {
         </div>
 
         <div className="mt-12 border-t border-border pt-8 text-center text-sm text-muted-foreground">
-          <p>© 2025 沈翔智学保留所有权利.</p>
-          <p className="mt-2">
-            {/* TODO: 替换为真实的备案号 */}
-            京ICP备XXXXXXXX号-1
-          </p>
+          <p>© 2026 沈翔智学. All rights reserved.</p>
         </div>
       </div>
     </footer>
