@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
     // 只处理支付成功的通知
     if (status !== "OD") {
       console.log("[迅虎支付] 订单状态不是 OD:", status)
-      return NextResponse.json({ success: false, message: "订单未完成" })
+      return new NextResponse("fail", { status: 200 })
     }
 
     // 查询订单
@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
 
     if (orderError || !order) {
       console.error("[迅虎支付] 订单不存在:", orderNo, orderError)
-      return NextResponse.json({ error: "订单不存在" }, { status: 404 })
+      return new NextResponse("fail", { status: 200 })
     }
 
     console.log("[迅虎支付] 找到订单:", order.id, "用户:", order.user_id, "产品:", order.product_id)
@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
     // 检查订单是否已处理
     if (order.status === "paid") {
       console.log("[迅虎支付] 订单已支付，跳过处理")
-      return NextResponse.json({ success: true, message: "订单已处理" })
+      return new NextResponse("success", { status: 200 })
     }
 
     // 更新订单状态
@@ -99,7 +99,7 @@ export async function POST(request: NextRequest) {
 
     if (updateOrderError) {
       console.error("[迅虎支付] 更新订单失败:", updateOrderError)
-      return NextResponse.json({ error: "更新订单失败" }, { status: 500 })
+      return new NextResponse("fail", { status: 200 })
     }
 
     // 🔥 获取产品配置
@@ -193,10 +193,10 @@ export async function POST(request: NextRequest) {
     }
 
     console.log(`[迅虎支付] ✅ 订单 ${orderNo} 处理完成`)
-    return NextResponse.json({ success: true })
+    return new NextResponse("success", { status: 200 })
     
   } catch (error) {
     console.error("[迅虎支付] 处理回调错误:", error)
-    return NextResponse.json({ error: "处理失败" }, { status: 500 })
+    return new NextResponse("fail", { status: 200 })
   }
 }
