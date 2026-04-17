@@ -27,6 +27,13 @@ export async function POST(request: NextRequest) {
   const supabase = getSupabaseAdmin()
   
   try {
+    // IP 限流：10次/分钟
+    const { getClientIP, checkIpRateLimit, createRateLimitResponse } = await import('@/lib/rate-limit')
+    const ip = getClientIP(request)
+    const limitResult = checkIpRateLimit(ip, 10)
+    if (!limitResult.allowed) {
+      return createRateLimitResponse(limitResult.retryAfter!)
+    }
     // 支持多种请求格式（JSON 或 form-urlencoded）
     const contentType = request.headers.get('content-type') || ''
     let body: Record<string, any>

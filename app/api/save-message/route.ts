@@ -4,6 +4,13 @@ import { uploadBase64File } from "@/lib/storage"
 
 export async function POST(request: NextRequest) {
   try {
+    // IP 限流：30次/分钟
+    const { getClientIP, checkIpRateLimit, createRateLimitResponse } = await import('@/lib/rate-limit')
+    const ip = getClientIP(request)
+    const limitResult = checkIpRateLimit(ip, 30)
+    if (!limitResult.allowed) {
+      return createRateLimitResponse(limitResult.retryAfter!)
+    }
     if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
       console.log("[v0] Supabase not configured, skipping message save")
       return NextResponse.json({ message: { id: Date.now().toString() } }, { status: 200 })

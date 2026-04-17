@@ -4,6 +4,13 @@ export const runtime = "edge"
 
 export async function POST(req: NextRequest) {
   try {
+    // IP 限流：30次/分钟
+    const { getClientIP, checkIpRateLimit, createRateLimitResponse } = await import('@/lib/rate-limit')
+    const ip = getClientIP(req)
+    const limitResult = checkIpRateLimit(ip, 30)
+    if (!limitResult.allowed) {
+      return createRateLimitResponse(limitResult.retryAfter!)
+    }
     const { images } = await req.json()
 
     if (!images || !Array.isArray(images) || images.length === 0) {

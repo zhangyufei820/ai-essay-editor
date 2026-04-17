@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server"
 import { randomUUID } from "crypto"
 import path from "path"
+import { getClientIP, checkIpRateLimit, createRateLimitResponse } from "@/lib/rate-limit"
 
 // ✅ 修改 1: 切换回 Node.js 运行时，以支持更大的文件和更稳定的上传
 export const runtime = "nodejs" 
@@ -120,6 +121,13 @@ function generateSafeFileName(originalExt: string): string {
 }
 
 export async function POST(request: NextRequest) {
+  // IP 限流：10次/分钟
+  const ip = getClientIP(request)
+  const limitResult = checkIpRateLimit(ip, 10)
+  if (!limitResult.allowed) {
+    return createRateLimitResponse(limitResult.retryAfter!)
+  }
+
   // ✅ 检查 API Key 配置
   if (!DEFAULT_DIFY_KEY) {
     return new Response(JSON.stringify({ error: "Dify API key not configured" }), {

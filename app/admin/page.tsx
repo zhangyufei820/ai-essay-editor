@@ -7,8 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
 import { Users, CreditCard, BarChart3, Lock, Eye, EyeOff, RefreshCw } from "lucide-react"
 
-// 硬编码管理员密码
-const ADMIN_PASSWORD = "admin2026"
+// 硬编码管理员密码已移除，改用服务端验证
 
 interface UserStats {
   totalUsers: number
@@ -36,6 +35,32 @@ export default function AdminPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [activeTab, setActiveTab] = useState("users")
   const [loading, setLoading] = useState(false)
+  
+  // 检查本地存储的 token 是否有效
+  useEffect(() => {
+    const token = localStorage.getItem('admin_token')
+    if (token) {
+      // 验证 token
+      fetch('/api/admin/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.valid) {
+          setIsAuthenticated(true)
+          fetchOrders()
+        } else {
+          // Token 无效，清除本地存储
+          localStorage.removeItem('admin_token')
+        }
+      })
+      .catch(() => {
+        localStorage.removeItem('admin_token')
+      })
+    }
+  }, [])
   
   // 统计数据
   const [userStats, setUserStats] = useState<UserStats>({
@@ -123,13 +148,26 @@ export default function AdminPage() {
   }
 
   // 处理登录
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (password === ADMIN_PASSWORD) {
-      setIsAuthenticated(true)
-      fetchOrders()
-    } else {
-      alert("密码错误")
+    try {
+      const response = await fetch('/api/admin/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password })
+      })
+      const data = await response.json()
+      
+      if (data.success && data.token) {
+        localStorage.setItem('admin_token', data.token)
+        setIsAuthenticated(true)
+        fetchOrders()
+      } else {
+        alert(data.error || '密码错误')
+      }
+    } catch (error) {
+      console.error('登录失败:', error)
+      alert('网络错误，请重试')
     }
   }
 
@@ -200,7 +238,10 @@ export default function AdminPage() {
             </Button>
             <Button
               variant="outline"
-              onClick={() => setIsAuthenticated(false)}
+              onClick={() => {
+                localStorage.removeItem('admin_token')
+                setIsAuthenticated(false)
+              }}
             >
               退出登录
             </Button>

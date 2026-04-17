@@ -114,15 +114,17 @@ class MemoryRateLimiter {
 const rateLimiter = new MemoryRateLimiter();
 
 /**
- * IP 限流：每分钟最多 30 次 API 请求
+ * IP 限流：每分钟最多指定次数 API 请求
+ * @param ip IP 地址
+ * @param maxRequests 最大请求数（默认 30）
  */
-export function checkIpRateLimit(ip: string): {
+export function checkIpRateLimit(ip: string, maxRequests: number = 30): {
   allowed: boolean;
   remaining: number;
   resetTime: number;
   retryAfter?: number;
 } {
-  return rateLimiter.check(`ip:${ip}`, 30);
+  return rateLimiter.check(`ip:${ip}`, maxRequests);
 }
 
 /**

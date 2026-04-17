@@ -46,6 +46,13 @@ export async function POST(request: NextRequest) {
   console.log('🔗 [Share API] 收到分享请求')
   
   try {
+    // IP 限流：30次/分钟
+    const { getClientIP, checkIpRateLimit, createRateLimitResponse } = await import('@/lib/rate-limit')
+    const ip = getClientIP(request)
+    const limitResult = checkIpRateLimit(ip, 30)
+    if (!limitResult.allowed) {
+      return createRateLimitResponse(limitResult.retryAfter!)
+    }
     const body = await request.json()
     const { messages, userId, modelName } = body
     

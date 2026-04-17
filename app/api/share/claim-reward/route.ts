@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { addCredits } from '@/lib/credits'
+import { getClientIP, checkIpRateLimit, createRateLimitResponse } from '@/lib/rate-limit'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,6 +12,13 @@ const SHARE_REWARD_CONFIG = {
 }
 
 export async function POST(request: NextRequest) {
+  // IP 限流：10次/分钟
+  const ip = getClientIP(request)
+  const limitResult = checkIpRateLimit(ip, 10)
+  if (!limitResult.allowed) {
+    return createRateLimitResponse(limitResult.retryAfter!)
+  }
+
   console.log('🎁 [Share Reward] 收到领取奖励请求')
   
   try {

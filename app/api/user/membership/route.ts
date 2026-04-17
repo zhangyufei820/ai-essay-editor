@@ -148,6 +148,13 @@ export async function GET(req: NextRequest) {
 // POST — JSON body: { userId }
 export async function POST(req: NextRequest) {
   try {
+    // IP 限流：30次/分钟
+    const { getClientIP, checkIpRateLimit, createRateLimitResponse } = await import('@/lib/rate-limit')
+    const ip = getClientIP(req)
+    const limitResult = checkIpRateLimit(ip, 30)
+    if (!limitResult.allowed) {
+      return createRateLimitResponse(limitResult.retryAfter!)
+    }
     const { userId } = await req.json()
     if (!userId) return NextResponse.json({ error: '缺少 userId' }, { status: 400 })
     return await checkMembership(userId)

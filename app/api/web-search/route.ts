@@ -4,6 +4,13 @@ export const maxDuration = 30
 
 export async function POST(req: Request) {
   try {
+    // IP 限流：30次/分钟
+    const { getClientIP, checkIpRateLimit, createRateLimitResponse } = await import('@/lib/rate-limit')
+    const ip = getClientIP(req)
+    const limitResult = checkIpRateLimit(ip, 30)
+    if (!limitResult.allowed) {
+      return createRateLimitResponse(limitResult.retryAfter!)
+    }
     const { query, provider = "google", maxResults = 10 } = await req.json()
 
     if (!query) {

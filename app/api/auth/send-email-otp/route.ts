@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { emailOTPStore } from "@/lib/email-otp-store"
+import { getClientIP, checkIpRateLimit, createRateLimitResponse } from "@/lib/rate-limit"
 
 // 生成6位数字验证码
 function generateOTP(): string {
@@ -61,6 +62,13 @@ async function sendOTPEmail(email: string, code: string): Promise<{ success: boo
 }
 
 export async function POST(request: NextRequest) {
+  // IP 限流：10次/分钟
+  const ip = getClientIP(request)
+  const limitResult = checkIpRateLimit(ip, 10)
+  if (!limitResult.allowed) {
+    return createRateLimitResponse(limitResult.retryAfter!)
+  }
+
   try {
     const { email } = await request.json()
 

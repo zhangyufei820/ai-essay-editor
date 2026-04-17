@@ -45,6 +45,14 @@ const ESSAY_REVIEW_PROMPT = `你是一位专业的作文批改师，融合了汪
 请用温暖、专业、富有启发性的语言进行批改。对于论述文，要特别注重培养学生的理性思维和批判能力。`
 
 export async function POST(req: Request) {
+  // IP 限流：30次/分钟
+  const { getClientIP, checkIpRateLimit, createRateLimitResponse } = await import('@/lib/rate-limit')
+  const ip = getClientIP(req)
+  const limitResult = checkIpRateLimit(ip, 30)
+  if (!limitResult.allowed) {
+    return createRateLimitResponse(limitResult.retryAfter!)
+  }
+
   const { essay, grade, requirements } = await req.json()
 
   if (!essay || !essay.trim()) {

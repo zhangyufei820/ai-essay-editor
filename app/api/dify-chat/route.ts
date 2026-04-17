@@ -163,6 +163,13 @@ function validateEssayCorrectionResponse(responseText: string, modelType: ModelT
 
 export async function POST(request: NextRequest) {
   try {
+    // IP 限流：30次/分钟
+    const { getClientIP, checkIpRateLimit, createRateLimitResponse } = await import('@/lib/rate-limit')
+    const ip = getClientIP(request)
+    const limitResult = checkIpRateLimit(ip, 30)
+    if (!limitResult.allowed) {
+      return createRateLimitResponse(limitResult.retryAfter!)
+    }
     // 🔐 从 header 获取用户身份（middleware 已验证）
     const headerUserId = request.headers.get("X-User-Id")
     

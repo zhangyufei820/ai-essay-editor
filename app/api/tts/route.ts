@@ -41,6 +41,13 @@ function getDifyApiKey(model?: string): string {
 
 export async function POST(request: NextRequest) {
   try {
+    // IP 限流：30次/分钟
+    const { getClientIP, checkIpRateLimit, createRateLimitResponse } = await import('@/lib/rate-limit')
+    const ip = getClientIP(request)
+    const limitResult = checkIpRateLimit(ip, 30)
+    if (!limitResult.allowed) {
+      return createRateLimitResponse(limitResult.retryAfter!)
+    }
     const { text, model } = await request.json()
 
     if (!text || text.trim().length === 0) {

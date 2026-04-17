@@ -1,7 +1,15 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { getClientIP, checkIpRateLimit, createRateLimitResponse } from '@/lib/rate-limit'
 
 export async function POST(request: Request) {
+  // IP 限流：30次/分钟
+  const ip = getClientIP(request)
+  const limitResult = checkIpRateLimit(ip, 30)
+  if (!limitResult.allowed) {
+    return createRateLimitResponse(limitResult.retryAfter!)
+  }
+
   try {
     // 1. 获取前端传来的用户信息
     const body = await request.json()

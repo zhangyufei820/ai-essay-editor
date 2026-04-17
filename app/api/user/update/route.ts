@@ -31,6 +31,13 @@ export async function POST(req: NextRequest) {
   console.log('[Admin Update] 收到更新请求')
   
   try {
+    // IP 限流：30次/分钟
+    const { getClientIP, checkIpRateLimit, createRateLimitResponse } = await import('@/lib/rate-limit')
+    const ip = getClientIP(req)
+    const limitResult = checkIpRateLimit(ip, 30)
+    if (!limitResult.allowed) {
+      return createRateLimitResponse(limitResult.retryAfter!)
+    }
     const supabaseAdmin = getSupabaseAdmin()
     let { userId, name, avatarUrl } = await req.json()
 

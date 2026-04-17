@@ -49,6 +49,13 @@ export async function POST(req: NextRequest) {
   if (!SUNO_QUERY_API_KEY) throw new Error("SUNO_QUERY_API_KEY 未配置")
 
   try {
+    // IP 限流：30次/分钟
+    const { getClientIP, checkIpRateLimit, createRateLimitResponse } = await import('@/lib/rate-limit')
+    const ip = getClientIP(req)
+    const limitResult = checkIpRateLimit(ip, 30)
+    if (!limitResult.allowed) {
+      return createRateLimitResponse(limitResult.retryAfter!)
+    }
     const body = await req.json()
     const { 
       action, 

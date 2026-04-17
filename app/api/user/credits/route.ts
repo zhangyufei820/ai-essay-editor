@@ -97,6 +97,13 @@ export async function GET(request: Request) {
  */
 export async function POST(request: Request) {
   try {
+    // IP 限流：30次/分钟
+    const { getClientIP, checkIpRateLimit, createRateLimitResponse } = await import('@/lib/rate-limit')
+    const ip = getClientIP(request)
+    const limitResult = checkIpRateLimit(ip, 30)
+    if (!limitResult.allowed) {
+      return createRateLimitResponse(limitResult.retryAfter!)
+    }
     const body = await request.json()
     const { userId, amount, reason } = body
 
