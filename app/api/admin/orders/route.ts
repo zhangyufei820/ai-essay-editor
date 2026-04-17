@@ -34,7 +34,6 @@ export async function GET(req: NextRequest) {
         product_name,
         product_id,
         amount,
-        credits,
         status,
         created_at,
         paid_at
@@ -83,7 +82,6 @@ export async function GET(req: NextRequest) {
         product_name: order.product_name || '未知产品',
         product_id: order.product_id,
         amount: order.amount || 0,
-        credits: order.credits || 0,
         status: order.status,
         created_at: order.created_at,
         paid_at: order.paid_at

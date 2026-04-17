@@ -31,7 +31,6 @@ export async function GET(req: NextRequest) {
         user_id,
         credits,
         is_pro,
-        membership_status,
         created_at,
         updated_at
       `)
@@ -95,7 +94,7 @@ export async function GET(req: NextRequest) {
           user_id: user.user_id,
           credits: user.credits || 0,
           is_pro: user.is_pro || false,
-          membership_status: user.membership_status || 'free',
+          membership_status: user.is_pro ? 'pro' : 'free',
           created_at: user.created_at,
           lastActiveAt: lastTransaction?.created_at || user.created_at,
           transactionCount: transactionCount || 0
