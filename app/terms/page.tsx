@@ -282,7 +282,7 @@ export default function TermsPage() {
             </p>
             <ul className="space-y-3" style={{ color: slateColors[600] }}>
               <li>• 客服电话：19132896773</li>
-              <li>• 客服邮箱：82096066@qq.com</li>
+              <li>• 客服邮箱：support@shenxiang.school</li>
             </ul>
           </div>
         </section>

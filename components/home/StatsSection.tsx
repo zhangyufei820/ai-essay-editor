@@ -45,6 +45,7 @@ interface Stat {
 // ============================================
 
 const stats: Stat[] = [
+  // 待接入真实数据：目前为示例数据，可从 /api/stats 接口获取
   { id: "users", value: 10000, suffix: "+", label: "累计服务学生", icon: Users },
   { id: "satisfaction", value: 98, suffix: "%", label: "用户满意度", icon: ThumbsUp },
   { id: "essays", value: 500, suffix: "万+", label: "作文批改次数", icon: FileText },

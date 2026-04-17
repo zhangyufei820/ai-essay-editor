@@ -57,7 +57,7 @@ const FAQ_SCHEMA = {
       'name': '如何联系客服？',
       'acceptedAnswer': {
         '@type': 'Answer',
-        'text': '微信：扫码下方二维码添加客服微信\n电话：19132896773\n邮件：82096066@qq.com\n工作时间为：周一至周五 9:00-18:00',
+        'text': '微信：扫码下方二维码添加客服微信\\n电话：19132896773\\n邮件：support@shenxiang.school\\n工作时间为：周一至周五 9:00-18:00',
       },
     },
   ],

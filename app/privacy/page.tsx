@@ -172,7 +172,7 @@ export default function PrivacyPage() {
               <li>• <strong>导出权</strong>：导出您的个人数据</li>
             </ul>
             <p className="text-lg leading-relaxed mt-4" style={{ color: slateColors[600] }}>
-              如需行使上述权利，请联系客服：82096066@qq.com
+              如需行使上述权利，请联系客服：support@shenxiang.school
             </p>
           </div>
         </section>
@@ -212,7 +212,7 @@ export default function PrivacyPage() {
             </p>
             <ul className="space-y-3" style={{ color: slateColors[600] }}>
               <li>• 客服电话：19132896773</li>
-              <li>• 客服邮箱：82096066@qq.com</li>
+              <li>• 客服邮箱：support@shenxiang.school</li>
             </ul>
           </div>
         </section>

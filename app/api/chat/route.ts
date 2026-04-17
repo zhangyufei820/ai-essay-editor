@@ -14,6 +14,18 @@ export async function OPTIONS(req: Request) {
 
 export async function POST(req: Request) {
   try {
+    // ==========================================
+    // 限流检查
+    // ==========================================
+    const { getClientIP, checkIpRateLimit, checkUserRateLimit, createRateLimitResponse } = await import('@/lib/rate-limit')
+    const ip = getClientIP(req)
+    
+    // IP 限流检查
+    const ipLimitResult = checkIpRateLimit(ip)
+    if (!ipLimitResult.allowed) {
+      return createRateLimitResponse(ipLimitResult.retryAfter!)
+    }
+    
     console.log("[v0] Chat API called")
 
     const body = await req.json()

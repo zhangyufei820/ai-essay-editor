@@ -2,6 +2,8 @@
  * 🚀 沈翔学校 - Next.js 配置（Next.js 16 兼容版）
  */
 
+import { withSentryConfig } from '@sentry/nextjs';
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // ============================================
@@ -127,6 +129,10 @@ const nextConfig = {
             key: 'Permissions-Policy',
             value: 'camera=(), microphone=(), geolocation=()',
           },
+          {
+            key: 'Content-Security-Policy',
+            value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://cdn.authing.co https://cdn.shenxiang.school https://rnujdnmxufmzgjvmddla.supabase.co; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: https: blob:; connect-src 'self' https://rnujdnmxufmzgjvmddla.supabase.co https://api.xunhupay.com https://cdn.shenxiang.school wss:; font-src 'self' data:; frame-ancestors 'none'",
+          },
         ],
       },
       // 静态资源缓存
@@ -143,4 +149,19 @@ const nextConfig = {
   },
 }
 
-export default nextConfig
+export default withSentryConfig(nextConfig, {
+  // Sentry Webpack Plugin 配置
+  // https://docs.sentry.io/platforms/javascript/guides/nextjs/manual-setup/
+  silent: true,
+  // 在生产环境上传 sourcemap
+  widenClientFileUpload: true,
+  // 在生产环境自动删除 console
+  transpileClientSDK: true,
+  // 自动 treeshake Sentry 导入
+  automaticVercelMonitors: true,
+}, {
+  // 报告所有 metadata 项以获得更好的调试
+  tunnelRoute: '/monitoring',
+  // 禁用 Sentry CLI 在构建时上传 sourcemap（可选，根据需要启用）
+  // dryRun: process.env.NODE_ENV === 'development',
+});

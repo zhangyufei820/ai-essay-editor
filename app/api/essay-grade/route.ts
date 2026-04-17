@@ -11,6 +11,18 @@ export async function POST(req: NextRequest) {
   console.log("[作文批改] ===== API 调用开始 =====")
 
   try {
+    // ==========================================
+    // 限流检查
+    // ==========================================
+    const { getClientIP, checkIpRateLimit, createRateLimitResponse } = await import('@/lib/rate-limit')
+    const ip = getClientIP(req)
+    
+    // IP 限流检查
+    const ipLimitResult = checkIpRateLimit(ip)
+    if (!ipLimitResult.allowed) {
+      return createRateLimitResponse(ipLimitResult.retryAfter!)
+    }
+    
     const body = await req.json()
     const { essayText, gradeLevel, topic, wordLimit, studentName, genre, background, fileIds } = body
 

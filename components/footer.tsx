@@ -69,12 +69,21 @@ export function Footer() {
                   联系我们
                 </a>
               </li>
+              <li>
+                <a href="/refund-policy" className="hover:text-foreground transition-colors">
+                  退款政策
+                </a>
+              </li>
             </ul>
           </div>
         </div>
 
         <div className="mt-12 border-t border-border pt-8 text-center text-sm text-muted-foreground">
           <p>© 2025 沈翔智学保留所有权利.</p>
+          <p className="mt-2">
+            {/* TODO: 替换为真实的备案号 */}
+            京ICP备XXXXXXXX号-1
+          </p>
         </div>
       </div>
     </footer>

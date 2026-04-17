@@ -279,7 +279,7 @@ export function CTASection() {
                     ease: "easeInOut"
                   }}
                 >
-                  开始学习
+                  免费开始使用
                 </motion.span>
                 <motion.div
                   animate={{
@@ -293,6 +293,14 @@ export function CTASection() {
                 >
                   <ArrowRight className="w-5 h-5" />
                 </motion.div>
+              </button>
+              
+              {/* 副CTA按钮 */}
+              <button
+                onClick={() => router.push("/pricing")}
+                className="inline-flex items-center gap-2 px-6 py-3 border-2 border-white/30 text-white font-medium rounded-xl hover:bg-white/10 transition-all duration-300 mt-4"
+              >
+                查看价格方案
               </button>
             </motion.div>
           </div>

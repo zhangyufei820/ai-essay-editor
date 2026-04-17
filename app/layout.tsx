@@ -46,11 +46,6 @@ const SOFTWARE_SCHEMA = {
     priceCurrency: "CNY",
     availability: "https://schema.org/InStock",
   },
-  aggregateRating: {
-    "@type": "AggregateRating",
-    ratingValue: "4.8",
-    reviewCount: "128",
-  },
 }
 
 // PWA 视口配置
@@ -124,8 +119,8 @@ export default function RootLayout({
         <link rel="preconnect" href="https://cdn.shenxiang.school" crossOrigin="anonymous" />
         <link rel="dns-prefetch" href="//cdn.authing.co" />
         <link rel="preconnect" href="https://cdn.authing.co" crossOrigin="anonymous" />
-        <link rel="dns-prefetch" href="//rnujdnmxufmzgjvmddla.supabase.co" />
-        <link rel="preconnect" href="https://rnujdnmxufmzgjvmddla.supabase.co" crossOrigin="anonymous" />
+        <link rel="dns-prefetch" href={`//${(process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/^https?:\/\//, '')}`} />
+        <link rel="preconnect" href={process.env.NEXT_PUBLIC_SUPABASE_URL || ''} crossOrigin="anonymous" />
         
         {/* Authing CSS 由登录页自行动态加载（guard-react 组件内部加载），无需全局同步引入 */}
         {/* PWA Apple 图标 - 使用 CDN */}

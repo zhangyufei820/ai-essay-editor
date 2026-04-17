@@ -85,7 +85,7 @@ export function Pricing({ currentSubscription }: { currentSubscription?: string 
     router.push(`/checkout/${planId}?billing=${isAnnual ? "annual" : "monthly"}`)
   }
 
-  const isSubscribedPlan = (planId: string) => currentSubscription && planId === currentSubscription
+  const isSubscribedPlan = (planId: string) => Boolean(currentSubscription && planId === currentSubscription)
 
   const handleCreditPurchase = (credits: number, price: number) => {
     router.push(`/checkout/credits-${credits}?price=${price}`)
@@ -201,6 +201,53 @@ export function Pricing({ currentSubscription }: { currentSubscription?: string 
               </CardContent>
             </Card>
           )})}
+        </div>
+
+        {/* 企业版/校园版入口卡片 */}
+        <div className="max-w-4xl mx-auto mt-12">
+          <Card className="relative overflow-hidden rounded-2xl border-2 border-gray-800 bg-gradient-to-br from-gray-900 to-gray-800 shadow-[0_8px_30px_rgb(0,0,0,0.12)] hover:shadow-[0_12px_40px_rgb(0,0,0,0.15)] transition-all duration-300">
+            <CardContent className="p-8 md:p-10">
+              <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+                <div className="text-center md:text-left flex-1">
+                  <h3 className="text-3xl font-bold text-white mb-3">企业版 / 校园版</h3>
+                  <p className="text-gray-300 text-lg mb-6">为学校和教育机构定制</p>
+                  
+                  <div className="grid grid-cols-2 gap-4 mb-6">
+                    <div className="flex items-center gap-2">
+                      <Check className="w-5 h-5 text-green-400" />
+                      <span className="text-gray-200">批量账号</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Check className="w-5 h-5 text-green-400" />
+                      <span className="text-gray-200">管理后台</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Check className="w-5 h-5 text-green-400" />
+                      <span className="text-gray-200">专属客服</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Check className="w-5 h-5 text-green-400" />
+                      <span className="text-gray-200">定制功能</span>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="flex flex-col items-center md:items-end gap-4">
+                  <div className="text-center md:text-right">
+                    <p className="text-gray-400 text-sm mb-1">定制方案</p>
+                    <p className="text-white text-2xl font-bold">按需定价</p>
+                  </div>
+                  
+                  <Button 
+                    className="bg-white hover:bg-gray-100 text-gray-900 font-semibold px-8 py-6 rounded-xl transition-all duration-300 hover:scale-105"
+                    onClick={() => window.location.href = '/help'}
+                  >
+                    联系商务
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         <div className="max-w-4xl mx-auto">

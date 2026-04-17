@@ -71,6 +71,8 @@ export default function SettingsPage() {
   const [displayName, setDisplayName] = useState("")
   const [avatarUrl, setAvatarUrl] = useState("")
   const [debugError, setDebugError] = useState<string | null>(null)
+  const [showDataExportDialog, setShowDataExportDialog] = useState(false)
+  const [showDeleteAccountDialog, setShowDeleteAccountDialog] = useState(false)
   
   // 积分和会员信息
   const [credits, setCredits] = useState(0)
@@ -494,11 +496,97 @@ export default function SettingsPage() {
           </div>
         </div>
 
+        {/* 🔥 隐私与数据卡片 */}
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+          <h3 className="text-sm font-semibold text-gray-900 mb-4">隐私与数据</h3>
+          
+          {/* 导出数据 */}
+          <div className="flex items-center justify-between py-3 border-b border-gray-50">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600">导出我的数据</span>
+            </div>
+            <Button 
+              size="sm"
+              className="h-7 px-3 text-white text-xs font-medium rounded-full"
+              style={{ backgroundColor: COLORS.blue }}
+              onClick={() => setShowDataExportDialog(true)}
+            >
+              导出
+            </Button>
+          </div>
+          
+          {/* 删除账户 */}
+          <div className="flex items-center justify-between py-3">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600">删除我的账户</span>
+            </div>
+            <Button 
+              size="sm"
+              className="h-7 px-3 text-white text-xs font-medium rounded-full"
+              style={{ backgroundColor: COLORS.red }}
+              onClick={() => setShowDeleteAccountDialog(true)}
+            >
+              删除
+            </Button>
+          </div>
+        </div>
+
         {/* 调试信息 */}
         {debugError && (
           <div className="rounded-lg bg-red-50 p-4 border border-red-200 flex items-start gap-3">
             <AlertCircle className="h-5 w-5 text-red-600 mt-0.5" />
             <div className="text-sm text-red-800 break-all font-mono">{debugError}</div>
+          </div>
+        )}
+
+        {/* 数据导出对话框 */}
+        {showDataExportDialog && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+              <h3 className="text-lg font-semibold mb-4">导出数据</h3>
+              <p className="text-sm text-gray-600 mb-6">
+                如需导出您的个人数据，请联系客服：19132896773
+              </p>
+              <div className="flex justify-end">
+                <Button 
+                  onClick={() => setShowDataExportDialog(false)}
+                  className="text-white"
+                  style={{ backgroundColor: COLORS.blue }}
+                >
+                  我知道了
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 删除账户对话框 */}
+        {showDeleteAccountDialog && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+              <h3 className="text-lg font-semibold mb-4">删除账户</h3>
+              <p className="text-sm text-gray-600 mb-6">
+                账户删除操作不可逆。如需删除账户，请联系客服处理。
+              </p>
+              <div className="flex justify-end gap-2">
+                <Button 
+                  variant="outline"
+                  onClick={() => setShowDeleteAccountDialog(false)}
+                >
+                  取消
+                </Button>
+                <Button 
+                  onClick={() => {
+                    setShowDeleteAccountDialog(false)
+                    toast.success("请联系客服处理账户删除")
+                  }}
+                  className="text-white"
+                  style={{ backgroundColor: COLORS.red }}
+                >
+                  确认删除
+                </Button>
+              </div>
+            </div>
           </div>
         )}
       </div>

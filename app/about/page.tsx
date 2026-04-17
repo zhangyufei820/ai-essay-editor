@@ -126,7 +126,7 @@ export default function AboutPage() {
             </p>
             <ul className="space-y-3" style={{ color: slateColors[600] }}>
               <li>• 客服电话：19132896773</li>
-              <li>• 客服邮箱：82096066@qq.com</li>
+              <li>• 客服邮箱：support@shenxiang.school</li>
               <li>• 工作时间：周一至周五 9:00-18:00</li>
             </ul>
           </div>

@@ -60,7 +60,8 @@ const footerSections: FooterSection[] = [
       { label: "帮助中心", href: "/help" },
       { label: "使用指南", href: "/help" },
       { label: "常见问题", href: "/help" },
-      { label: "联系我们", href: "/help" }
+      { label: "联系我们", href: "/help" },
+      { label: "管理后台", href: "/admin" }
     ]
   },
   {

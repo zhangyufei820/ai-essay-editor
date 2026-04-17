@@ -75,11 +75,11 @@ const testimonials: Testimonial[] = [
   },
   {
     id: "2",
-    content: "作为家长，终于不用为孩子的作文辅导发愁了。AI 批改既专业又及时，孩子也更愿意写作文了。",
+    content: "作为家长，终于不用为孩子的作文辅导发愁了。AI 批改既专业又及时，孩子也更愿意写作文了。偶尔有小错误，但整体很不错。",
     author: "王女士",
     role: "parent",
     roleLabel: "学生家长",
-    rating: 5,
+    rating: 4,
     likes: 96
   },
   {
@@ -102,11 +102,11 @@ const testimonials: Testimonial[] = [
   },
   {
     id: "5",
-    content: "以前写作文总是凑字数，现在AI会告诉我哪里可以展开，怎么写更有深度。老师都说我进步很大！",
+    content: "以前写作文总是凑字数，现在AI会告诉我哪里可以展开，怎么写更有深度。老师都说我进步很大！界面操作可以更简单些。",
     author: "刘雨萱",
     role: "student",
     roleLabel: "初三学生",
-    rating: 5,
+    rating: 4,
     likes: 203
   },
   {
@@ -120,11 +120,11 @@ const testimonials: Testimonial[] = [
   },
   {
     id: "7",
-    content: "半夜写作业遇到不会的题，问AI马上就有答案，还会一步步教我怎么做，简直是救星！",
+    content: "半夜写作业遇到不会的题，问AI马上就有答案，还会一步步教我怎么做，简直是救星！有时候网络有点慢。",
     author: "周小雨",
     role: "student",
     roleLabel: "高二学生",
-    rating: 5,
+    rating: 4,
     likes: 145
   },
   {
@@ -147,11 +147,11 @@ const testimonials: Testimonial[] = [
   },
   {
     id: "10",
-    content: "高考前用来练作文，每篇都能得到详细的反馈。最后高考作文拿了52分，超出预期！",
+    content: "高考前用来练作文，每篇都能得到详细的反馈。最后高考作文拿了52分，超出预期！希望能有更多模板。",
     author: "郑同学",
     role: "student",
     roleLabel: "高三毕业生",
-    rating: 5,
+    rating: 4,
     likes: 289
   },
   {
@@ -165,11 +165,11 @@ const testimonials: Testimonial[] = [
   },
   {
     id: "12",
-    content: "数学题不会做，拍照上传就能得到解答，还会告诉我用了什么知识点，比问同学方便多了。",
+    content: "数学题不会做，拍照上传就能得到解答，还会告诉我用了什么知识点，比问同学方便多了。识别准确率可以再提高。",
     author: "黄小杰",
     role: "student",
     roleLabel: "初一学生",
-    rating: 5,
+    rating: 4,
     likes: 98
   }
 ]
