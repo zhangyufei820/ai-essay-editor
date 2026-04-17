@@ -42,11 +42,11 @@ export async function GET(req: NextRequest) {
       console.error('获取会员用户数失败:', memberUsersError)
     }
 
-    // 3. 获取今日新增用户数 (今天创建的 user_credits 记录)
+    // 3. 获取今日新增用户数 (今天更新的 user_credits 记录，用 updated_at 近似)
     const { count: todayNewUsers, error: todayNewUsersError } = await supabaseAdmin
       .from('user_credits')
       .select('*', { count: 'exact', head: true })
-      .gte('created_at', todayISO)
+      .gte('updated_at', todayISO)
 
     if (todayNewUsersError) {
       console.error('获取今日新增用户失败:', todayNewUsersError)

@@ -31,10 +31,9 @@ export async function GET(req: NextRequest) {
         user_id,
         credits,
         is_pro,
-        created_at,
         updated_at
       `)
-      .order('created_at', { ascending: false })
+      .order('updated_at', { ascending: false })
       .range((page - 1) * pageSize, page * pageSize - 1)
 
     // 如果有搜索参数，添加搜索条件
@@ -95,8 +94,8 @@ export async function GET(req: NextRequest) {
           credits: user.credits || 0,
           is_pro: user.is_pro || false,
           membership_status: user.is_pro ? 'pro' : 'free',
-          created_at: user.created_at,
-          lastActiveAt: lastTransaction?.created_at || user.created_at,
+          created_at: user.updated_at,
+          lastActiveAt: lastTransaction?.created_at || user.updated_at,
           transactionCount: transactionCount || 0
         }
       })

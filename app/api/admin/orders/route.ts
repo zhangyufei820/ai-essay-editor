@@ -34,9 +34,10 @@ export async function GET(req: NextRequest) {
         product_name,
         product_id,
         amount,
+        payment_method,
         status,
         created_at,
-        paid_at
+        updated_at
       `)
       .eq('status', status)
       .order('created_at', { ascending: false })
@@ -46,7 +47,7 @@ export async function GET(req: NextRequest) {
 
     if (ordersError) {
       console.error('获取订单列表失败:', ordersError)
-      return NextResponse.json({ error: '获取订单列表失败' }, { status: 500 })
+      return NextResponse.json({ error: '获取订单列表失败', details: ordersError.message }, { status: 500 })
     }
 
     // 获取订单总数（用于分页）
@@ -82,9 +83,10 @@ export async function GET(req: NextRequest) {
         product_name: order.product_name || '未知产品',
         product_id: order.product_id,
         amount: order.amount || 0,
+        payment_method: order.payment_method,
         status: order.status,
         created_at: order.created_at,
-        paid_at: order.paid_at
+        paid_at: order.updated_at
       })) || [],
       pagination: {
         page,
