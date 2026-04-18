@@ -45,7 +45,7 @@ interface Stat {
 // ============================================
 
 const stats: Stat[] = [
-  // 待接入真实数据：目前为示例数据，可从 /api/stats 接口获取
+  // TODO: 接入真实数据 API（/api/stats），目前使用静态展示值
   { id: "users", value: 10000, suffix: "+", label: "累计服务学生", icon: Users },
   { id: "satisfaction", value: 98, suffix: "%", label: "用户满意度", icon: ThumbsUp },
   { id: "essays", value: 500, suffix: "万+", label: "作文批改次数", icon: FileText },
@@ -87,18 +87,22 @@ function BackgroundPattern() {
 // 数字动画组件
 // ============================================
 
-function AnimatedNumber({ 
-  value, 
-  suffix, 
+function AnimatedNumber({
+  value,
+  suffix,
   isText,
   isInView
-}: { 
+}: {
   value: number | string
   suffix: string
   isText?: boolean
   isInView: boolean
 }) {
-  const [displayValue, setDisplayValue] = useState(0)
+  // 初始化为实际值，避免懒加载时 isInView 不触发导致长期显示 0
+  const [displayValue, setDisplayValue] = useState(() => {
+    if (typeof value === 'number') return value
+    return 0
+  })
 
   useEffect(() => {
     if (isInView && !isText && typeof value === 'number') {

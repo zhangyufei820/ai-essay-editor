@@ -200,9 +200,9 @@ export async function POST(request: Request) {
         'standard': '使用 作文批改智能体 对话',
         'teaching-pro': '使用 教学评助手 对话',
         'banana-2-pro': '使用 Banana2 Pro 4K 对话',
-        'gpt-5': '使用 ChatGPT 5.2 对话',
-        'claude-opus': '使用 Claude Opus 4.5 对话',
-        'gemini-pro': '使用 Gemini 3.0 Pro 对话',
+        'gpt-5': '使用 ChatGPT 5.4 对话',
+        'claude-opus': '使用 Claude Opus 4.6 对话',
+        'gemini-pro': '使用 Gemini 3.1 对话',
       }
       const friendlyDescription = descriptionMap[reason] || reason || (amount > 0 ? '积分增加' : '积分消耗')
       

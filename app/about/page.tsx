@@ -1,7 +1,7 @@
 'use client'
 
 import Link from "next/link"
-import { ArrowLeft, Users, Award, Target, Lightbulb } from "lucide-react"
+import { ArrowLeft, Users, Award, Target, Lightbulb, Shield, Cpu, Rocket, Calendar, BookOpen, Zap } from "lucide-react"
 import { brandColors, slateColors, creamColors } from "@/lib/design-tokens"
 
 export default function AboutPage() {
@@ -111,6 +111,88 @@ export default function AboutPage() {
               </div>
               <h3 className="text-xl font-semibold mb-2" style={{ color: slateColors[800] }}>卓越</h3>
               <p style={{ color: slateColors[600] }}>追求卓越的产品质量和服务水平，致力于成为 AI 教育领域的领导者。</p>
+            </div>
+          </div>
+        </section>
+
+        {/* 技术架构 */}
+        <section className="mb-12">
+          <h2 className="text-2xl font-bold mb-6" style={{ color: slateColors[800] }}>
+            技术架构
+          </h2>
+          <div className="bg-white rounded-2xl p-8" style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="text-center p-4">
+                <div className="w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-3" style={{ backgroundColor: brandColors[100] }}>
+                  <Cpu className="w-6 h-6" style={{ color: brandColors[600] }} />
+                </div>
+                <h3 className="font-semibold mb-1" style={{ color: slateColors[800] }}>多模型协同</h3>
+                <p className="text-sm" style={{ color: slateColors[500] }}>
+                  整合 GPT-5.4、Claude Opus 4.6、Gemini 3.1、DeepSeek V3、Qwen 3.0 等全球顶尖 AI 模型，根据任务智能调度
+                </p>
+              </div>
+              <div className="text-center p-4">
+                <div className="w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-3" style={{ backgroundColor: brandColors[100] }}>
+                  <Zap className="w-6 h-6" style={{ color: brandColors[600] }} />
+                </div>
+                <h3 className="font-semibold mb-1" style={{ color: slateColors[800] }}>多智能体引擎</h3>
+                <p className="text-sm" style={{ color: slateColors[500] }}>
+                  作文批改 Agent、数学解题 Agent、写作教练 Agent 等垂直领域专家，多轮博弈输出高精度解析
+                </p>
+              </div>
+              <div className="text-center p-4">
+                <div className="w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-3" style={{ backgroundColor: brandColors[100] }}>
+                  <Shield className="w-6 h-6" style={{ color: brandColors[600] }} />
+                </div>
+                <h3 className="font-semibold mb-1" style={{ color: slateColors[800] }}>数据安全保障</h3>
+                <p className="text-sm" style={{ color: slateColors[500] }}>
+                  企业级数据加密存储，用户数据严格隔离，符合国内数据安全法规要求
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* 发展历程 */}
+        <section className="mb-12">
+          <h2 className="text-2xl font-bold mb-6" style={{ color: slateColors[800] }}>
+            发展历程
+          </h2>
+          <div className="bg-white rounded-2xl p-8" style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
+            <div className="space-y-6">
+              <div className="flex items-start gap-4">
+                <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: brandColors[100] }}>
+                  <Calendar className="w-5 h-5" style={{ color: brandColors[600] }} />
+                </div>
+                <div>
+                  <h3 className="font-semibold" style={{ color: slateColors[800] }}>2024年 — 产品启动</h3>
+                  <p className="text-sm mt-1" style={{ color: slateColors[500] }}>
+                    沈翔智学正式立项，基于 LLM 技术打造 AI 作文批改引擎，完成核心算法研发与原型验证
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start gap-4">
+                <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: brandColors[100] }}>
+                  <Rocket className="w-5 h-5" style={{ color: brandColors[600] }} />
+                </div>
+                <div>
+                  <h3 className="font-semibold" style={{ color: slateColors[800] }}>2025年 — 正式上线</h3>
+                  <p className="text-sm mt-1" style={{ color: slateColors[500] }}>
+                    平台正式上线运营，接入多模态大模型矩阵，推出全学段数学、英语、作文批改等核心功能
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start gap-4">
+                <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: brandColors[100] }}>
+                  <BookOpen className="w-5 h-5" style={{ color: brandColors[600] }} />
+                </div>
+                <div>
+                  <h3 className="font-semibold" style={{ color: slateColors[800] }}>2026年 — 生态扩展</h3>
+                  <p className="text-sm mt-1" style={{ color: slateColors[500] }}>
+                    推出 OpenClaw 通用助手、备课助手 Pro、班主任助手等垂直智能体，服务超过 10,000+ 学生用户
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
         </section>

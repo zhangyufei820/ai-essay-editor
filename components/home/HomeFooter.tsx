@@ -33,10 +33,10 @@ const footerLinks = {
   company: {
     title: "关于",
     links: [
-      { label: "关于我们", href: "#" },
-      { label: "隐私政策", href: "#" },
-      { label: "服务条款", href: "#" },
-      { label: "用户协议", href: "#" }
+      { label: "关于我们", href: "/about" },
+      { label: "隐私政策", href: "/privacy" },
+      { label: "服务条款", href: "/terms" },
+      { label: "用户协议", href: "/terms" }
     ]
   }
 }
@@ -108,15 +108,15 @@ export function HomeFooter() {
             © {new Date().getFullYear()} 沈翔智学. All rights reserved.
           </p>
           <div className="flex items-center gap-6">
-            <Link 
-              href="#" 
+            <Link
+              href="/privacy"
               className="text-sm transition-colors hover:text-brand-600"
               style={{ color: slateColors[400] }}
             >
               隐私政策
             </Link>
-            <Link 
-              href="#" 
+            <Link
+              href="/terms"
               className="text-sm transition-colors hover:text-brand-600"
               style={{ color: slateColors[400] }}
             >

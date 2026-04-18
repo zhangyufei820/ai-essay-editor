@@ -50,22 +50,22 @@ export function Footer() {
             <h3 className="font-semibold mb-4">支持</h3>
             <ul className="space-y-2 text-sm text-muted-foreground">
               <li>
-                <a href="#" className="hover:text-foreground transition-colors">
+                <a href="/help" className="hover:text-foreground transition-colors">
                   帮助中心
                 </a>
               </li>
               <li>
-                <a href="#" className="hover:text-foreground transition-colors">
+                <a href="/help" className="hover:text-foreground transition-colors">
                   使用指南
                 </a>
               </li>
               <li>
-                <a href="#" className="hover:text-foreground transition-colors">
+                <a href="/help" className="hover:text-foreground transition-colors">
                   常见问题
                 </a>
               </li>
               <li>
-                <a href="#" className="hover:text-foreground transition-colors">
+                <a href="/help" className="hover:text-foreground transition-colors">
                   联系我们
                 </a>
               </li>

@@ -2129,7 +2129,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                     每天仅需4元，解锁无限顶级AI模型
                   </p>
                   <p className="text-xs text-emerald-600 mt-0.5 truncate">
-                    Gemini 3 Pro、ChatGPT 5.2、Claude Opus 4.5 等
+                    Gemini 3.1、ChatGPT 5.4、Claude Opus 4.6 等
                   </p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">

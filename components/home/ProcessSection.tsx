@@ -16,9 +16,9 @@ import { brandColors, slateColors, creamColors } from "@/lib/design-tokens"
 // ============================================
 
 const aiModels = [
-  "GPT-5.2",
-  "Claude 4.5", 
-  "Gemini 3 Pro",
+  "GPT-5.4",
+  "Claude 4.6",
+  "Gemini 3.1",
   "Math Expert Agent",
   "Writing Coach Agent",
   "Logic Analyzer",

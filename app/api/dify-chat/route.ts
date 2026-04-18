@@ -595,7 +595,7 @@ export async function POST(request: NextRequest) {
           'standard': '作文批改',
           'teaching-pro': '教学评助手',
           'claude-opus': 'Claude 对话',
-          'gpt-5': 'GPT-5 对话',
+          'gpt-5': 'GPT-5.4 对话',
           'gemini-pro': 'Gemini 对话',
           'banana-2-pro': 'Banana 绘图',
           'suno-v5': 'Suno 音乐',

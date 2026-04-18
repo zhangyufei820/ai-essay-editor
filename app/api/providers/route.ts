@@ -26,13 +26,13 @@ const AI_PROVIDERS: AIProvider[] = [
     models: [
       {
         id: "gpt-5",
-        name: "GPT-5",
+        name: "GPT-5.4",
         description: "最新旗舰模型，卓越的推理和创作能力",
         contextWindow: 128000,
       },
       {
         id: "gpt-5-mini",
-        name: "GPT-5 Mini",
+        name: "GPT-5.4 Mini",
         description: "快速高效的轻量级模型",
         contextWindow: 128000,
       },
@@ -47,7 +47,7 @@ const AI_PROVIDERS: AIProvider[] = [
     models: [
       {
         id: "claude-sonnet-4.5",
-        name: "Claude Sonnet 4.5",
+        name: "Claude Opus 4.6",
         description: "平衡性能和速度的最佳选择",
         contextWindow: 200000,
       },
