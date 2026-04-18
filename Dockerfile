@@ -55,5 +55,11 @@ RUN mkdir -p /app/.next/standalone/.next/cache/images && \
     ln -s /app/.next/static /app/.next/standalone/.next/static && \
     ln -s /app/public /app/.next/standalone/public
 
-# 启动命令 - 使用 standalone server.js 以正确加载包含 proxyClientMaxBodySize 的配置
+# 创建入口脚本来处理运行时目录创建（overlay 文件系统需要）
+RUN echo '#!/bin/sh\nmkdir -p /app/.next/standalone/.next/cache/images\nmkdir -p /app/.next/standalone/.next/cache/fetch-cache\nexec node .next/standalone/server.js' > /entrypoint.sh && chmod +x /entrypoint.sh
+
+# 启动命令 - 使用 entrypoint 脚本在运行时创建缓存目录
+ENTRYPOINT ["/entrypoint.sh"]
+
+# 启动命令 - 仅作备用（不会被执行，ENTRYPOINT 已覆盖）
 CMD ["node", ".next/standalone/server.js"]
