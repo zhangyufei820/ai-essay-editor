@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    width: 700px;
+    background: #0d1117;
+    font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+    padding: 24px;
+    color: #c9d1d9;
+    font-size: 13px;
+    line-height: 1.7;
+  }
+  .window {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .titlebar {
+    background: #21262d;
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid #30363d;
+  }
+  .dot { width: 12px; height: 12px; border-radius: 50%; }
+  .dot.red { background: #ff5f56; }
+  .dot.yellow { background: #ffbd2e; }
+  .dot.green { background: #27c93f; }
+  .title { margin-left: 8px; color: #8b949e; font-size: 12px; }
+  .body { padding: 16px 20px; }
+  .line { margin: 4px 0; }
+  .prompt { color: #7ee787; }
+  .cmd { color: #c9d1d9; }
+  .comment { color: #8b949e; font-style: italic; }
+  .success { color: #3fb950; }
+  .highlight { color: #a5d6ff; }
+  .key { background: #1f2937; border: 1px solid #374151; border-radius: 4px; padding: 1px 5px; color: #d1d5db; font-size: 11px; }
+  .label {
+    display: inline-block;
+    background: rgba(56, 139, 253, 0.15);
+    border: 1px solid rgba(56, 139, 253, 0.4);
+    color: #79c0ff;
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    margin-bottom: 10px;
+    font-family: sans-serif;
+  }
+</style>
+</head>
+<body>
+<div class="label">WSL2 终端操作示意</div>
+<div class="window">
+  <div class="titlebar">
+    <div class="dot red"></div>
+    <div class="dot yellow"></div>
+    <div class="dot green"></div>
+    <span class="title">zsh — 80x24</span>
+  </div>
+  <div class="body">
+    <div class="line"><span class="prompt">$</span> <span class="cmd">wsl --install</span></div>
+    <div class="line comment"># 安装 WSL2（需要管理员权限）</div>
+    <div class="line success">✓ 安装成功，请重启电脑</div>
+    <br>
+    <div class="line"><span class="prompt">$</span> <span class="cmd">sudo apt update && sudo apt install python3 python3-pip git -y</span></div>
+    <div class="line comment"># 装基础工具</div>
+    <br>
+    <div class="line"><span class="prompt">$</span> <span class="cmd">git clone https://github.com/NousResearch/hermes-agent.git</span></div>
+    <div class="line"><span class="prompt">$</span> <span class="cmd">cd hermes-agent && pip3 install -e . -i https://pypi.tuna.tsinghua.edu.cn/simple</span></div>
+    <br>
+    <div class="line comment"># 配置网络通道（把端口号换成你的）</div>
+    <div class="line"><span class="prompt">$</span> <span class="cmd">export host_ip=$(grep -m 1 nameserver /etc/resolv.conf | awk '{print $2}')</span></div>
+    <div class="line"><span class="prompt">$</span> <span class="cmd">export https_proxy="http://${host_ip}:<span class="highlight">你的端口</span>"</span></div>
+    <br>
+    <div class="line comment"># 以后每次启动只需输入：</div>
+    <div class="line success" style="font-size: 15px; font-weight: bold;">$ hm</div>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    width: 700px;
+    background: #0a0e27;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    padding: 30px;
+    color: #c9d1d9;
+  }
+  .title {
+    color: #fff;
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 24px;
+    text-align: center;
+  }
+  .steps {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .step {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .num {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .content {
+    flex: 1;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(99,102,241,0.3);
+    border-radius: 8px;
+    padding: 10px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .step-name {
+    color: #e2e8f0;
+    font-size: 13px;
+    font-weight: 500;
+  }
+  .step-detail {
+    color: #64748b;
+    font-size: 11px;
+  }
+  .check {
+    color: #4ade80;
+    font-size: 16px;
+    margin-left: 8px;
+  }
+  .arrow {
+    text-align: center;
+    color: #6366f1;
+    font-size: 16px;
+    margin-left: 5px;
+  }
+  .note {
+    margin-top: 20px;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 8px;
+    padding: 10px 16px;
+    color: #fca5a5;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+</style>
+</head>
+<body>
+<div class="title">安装流程 · 6 步完成</div>
+<div class="steps">
+  <div class="step">
+    <div class="num">1</div>
+    <div class="content">
+      <div>
+        <div class="step-name">管理员打开 PowerShell</div>
+        <div class="step-detail">搜索 PowerShell → 右键 → 以管理员运行</div>
+      </div>
+      <div class="check">✓</div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="num">2</div>
+    <div class="content">
+      <div>
+        <div class="step-name">安装 WSL2</div>
+        <div class="step-detail">wsl --install → 重启电脑</div>
+      </div>
+      <div class="check">✓</div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="num">3</div>
+    <div class="content">
+      <div>
+        <div class="step-name">开启网络加速工具的局域网权限</div>
+        <div class="step-detail">Surge / Stash / Clash 设置中开启 Allow LAN</div>
+      </div>
+      <div class="check">✓</div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="num">4</div>
+    <div class="content">
+      <div>
+        <div class="step-name">WSL 终端设置网络通道</div>
+        <div class="step-detail">export host_ip=$(grep nameserver ...) && export https_proxy=...</div>
+      </div>
+      <div class="check">✓</div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="num">5</div>
+    <div class="content">
+      <div>
+        <div class="step-name">装工具 + 下载 Hermes Agent</div>
+        <div class="step-detail">apt install python3 pip git → git clone → pip install -e .</div>
+      </div>
+      <div class="check">✓</div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="num">6</div>
+    <div class="content">
+      <div>
+        <div class="step-name">写进 ~/.bashrc，以后输入 hm 启动</div>
+        <div class="step-detail">配置永久别名和网络环境变量</div>
+      </div>
+      <div class="check">✓</div>
+    </div>
+  </div>
+</div>
+
+<div class="note">
+  ⚠️ 第 3 步最常被忽略——跳过这步后面会一直超时
+</div>
+</body>
+</html>
