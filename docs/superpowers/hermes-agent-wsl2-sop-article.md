@@ -26,6 +26,8 @@ wsl --install
 
 回车，等提示"正在请求操作"，点"是"。**然后必须重启电脑。**
 
+⚠️ **Windows 10 用户注意**：`wsl --install` 在旧版 Windows 10 上可能报"找不到命令"。先按 `Win + R`，输入 `winver` 看版本号。如果低于 1903，建议先到微软官网更新系统，或搜索"Windows 10 手动开启 WSL"。
+
 重启后一般会弹出一个黑色窗口在装 Ubuntu。稍等几分钟，装好后会让你输入 Ubuntu 的账号和密码，设一下就行。
 
 如果什么都没弹出来，再次打开 PowerShell，输入 `wsl` 回车，能进入 Linux 环境就说明装好了。
@@ -65,7 +67,7 @@ export http_proxy="http://${host_ip}:你的端口"
 WSL 自带的 Ubuntu 镜像非常干净，Python 和 Git 都没装，要手动补。
 
 ```bash
-sudo apt update && sudo apt install python3 python3-pip git -y
+sudo apt update && sudo apt install python3 python3-pip python3-dev build-essential git -y
 ```
 
 回车，可能要输入一次 Ubuntu 的密码（设好的那个），输入时屏幕不会显示字，正常，输完回车就行。
@@ -163,5 +165,7 @@ hm
 ---
 
 这套 SOP 把所有变量都固定了。只要硬件支持虚拟化，复制粘贴，不会红。
+
+环境配好了，AI 才是生产力；配不好，折腾环境就是最大的生产力流失。
 
 下次有人问你 Windows 怎么装 Hermes，直接把这篇甩给他。
