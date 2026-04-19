@@ -12,23 +12,27 @@
 ```
 wsl --install
 ```
-弹窗点"是"，然后**重启电脑**。
+点"是"，然后**重启电脑**。
+
+装好后会让你设Ubuntu账号密码，设一下就行。
 
 ---
 
-**第二步：让WSL能正常上网（这步最关键）**
+**第二步：让WSL能正常上网（这步卡死过90%的人）**
 
-打开你的网络加速工具 → 设置 → 开启"允许局域网"。
+打开加速工具 → 设置 → 开启"允许局域网"。
 
-然后在WSL终端粘贴这两行（自动识别电脑IP）：
+在Ubuntu终端粘贴这两行：
 ```bash
 export host_ip=$(grep -m 1 nameserver /etc/resolv.conf | awk '{print $2}')
 export https_proxy="http://${host_ip}:你的端口"
 export http_proxy="http://${host_ip}:你的端口"
 ```
-⚠️ 把"你的端口"换成真实端口号（一般是7897）
+⚠️ "你的端口"换成真实数字，常见是7897
 
-验证：输入 `curl -I https://www.google.com`，返回200就通了。
+验证：`curl -I https://www.google.com`，返回200就通了。
+
+**一直卡住？** 先回去检查加速工具的"允许局域网"有没有开。
 
 ---
 
@@ -36,6 +40,7 @@ export http_proxy="http://${host_ip}:你的端口"
 ```bash
 sudo apt update && sudo apt install python3 python3-pip git -y
 ```
+可能要让输入密码，屏幕不显示字，正常现
 
 ---
 
@@ -51,7 +56,7 @@ pip3 install -e . -i https://pypi.tuna.tsinghua.edu.cn/simple
 
 **第五步：一键启动配置**
 
-把下面这段粘贴进去，以后输入 `hm` 直接启动：
+以后每次只需输入 `hm` 就能用。把下面这段粘贴进去：
 ```bash
 cat >> ~/.bashrc <<EOF
 host_ip=\$(grep -m 1 nameserver /etc/resolv.conf | awk '{print \$2}')
@@ -66,15 +71,15 @@ source ~/.bashrc
 
 **搞定！**
 
-以后每次用，打开WSL终端，输入 `hm`，直接开始。
+打开Ubuntu终端，输入 `hm`，直接开始。
 
 ---
 
-**三个高频翻车点，提前避开：**
+**三个高频翻车点：**
 
 ① BIOS关了虚拟化 → 任务管理器看CPU那栏"虚拟化"是否已启用
 ② 网络不通 → 先把Windows防火墙临时关掉再测
-③ 模型填错 → Provider选Custom，填标准模型名如gpt-4o
+③ 模型连不上 → `hermes model` 重新配置一遍，URL和Key别填错
 
 ---
 
