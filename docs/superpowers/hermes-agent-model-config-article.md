@@ -6,129 +6,164 @@
 
 ---
 
-## 一条命令，进入配置
+## 先搞清楚你的情况：免费还是付费？
 
-装好 Hermes Agent 之后，模型接入只需要一条命令：
+这是最重要的选择题。选错了，要么连不上，要么花冤枉钱。
+
+**按优先级排序，四个方案：**
+
+| 优先级 | 方案 | 代表模型 | 费用 | 是否需要代理 |
+|--------|------|----------|------|-------------|
+| 🥇 第一梯队 | 硅基流动（等免费平台） | Qwen、DeepSeek 等 | **免费额度** | ❌ 不需要 |
+| 🥈 第二梯队 | 国产模型官方 | Kimi、MiniMax | 按量，有免费额度 | ❌ 不需要 |
+| 🥉 第三梯队 | 国内中转 API | Claude、GPT-4o、Gemini | 极低（≈官方 3-5 折） | ❌ 不需要 |
+| 第四梯队 | OpenRouter / 官方 | Claude、GPT-4o、DeepSeek | 按官方定价 | ⚠️ 需要 |
+
+**新用户建议**：从第一或第二梯队开始，零成本验证流程，确认通了再考虑付费。
+
+---
+
+## 方案一：硅基流动——零成本，模型多（推荐新手）
+
+硅基流动（siliconflow.com）是国内一家 AI 模型聚合平台，新用户送 Token，免费用 Qwen、DeepSeek 等主流模型。
+
+### 注册拿 Key
+
+1. 访问 `siliconflow.com`，注册账号
+2. 进入「API Keys」页面，点「创建」，复制 Key
+
+### 接入 Hermes
+
+硅基流动兼容 OpenAI 格式，用 Custom Endpoint 方式接入：
 
 ```bash
 hermes model
 ```
 
-回车，进入交互式向导。向导会依次问你三件事：
+向导里选 **Custom endpoint**（或 Custom API），然后：
 
-1. **选 Provider**：你要用哪家的模型？
-2. **填 API Key**：去对应平台复制一个 Key 粘贴进来
-3. **选模型**：从列表里选一个你要用的型号
+- **Base URL** 填：`https://api.siliconflow.cn/v1`
+- **API Key** 填：刚才复制的 Key
+- **模型** 填：`Qwen/Qwen2.5-72B-Instruct`（或从平台控制台复制具体模型名）
 
-整个流程不超过 2 分钟。
+### 验证
 
----
+```bash
+hermes "你好，请说出你的模型名称"
+```
 
-## 先搞清楚你的情况：国内还是国外？
-
-这是最重要的选择题。选错了，填完 Key 还是连不上。
-
-**国内用户，首选这两个——不需要代理，直接连：**
-
-| Provider | 代表模型 | 费用 |
-|----------|----------|------|
-| **Kimi（月之暗面）** | moonshot-v1-128k | 按量计费，新用户有免费额度 |
-| **MiniMax** | MiniMax-Text-01 | 按量计费，新用户有免费额度 |
-
-**有稳定网络加速工具的用户，可以解锁全部选择：**
-
-| Provider | 代表模型 | 适合场景 |
-|----------|----------|----------|
-| **OpenRouter** | Claude、GPT-4o、DeepSeek-R1 等 200+ 个 | 想一个平台用所有主流模型 |
-| **Nous Portal** | Hermes 3（70B / 405B）| 想用最原生的 Hermes 模型 |
-| **DeepSeek 官方** | DeepSeek-V3、DeepSeek-R1 | 推理任务，性价比高 |
+能回复，说明通了。
 
 ---
 
-## 方案一：Kimi 接入（国内直连，推荐新手）
+## 方案二：Kimi / MiniMax——国产官方，无需代理
 
-### 第一步：拿 API Key
+### Kimi 接入步骤
 
-打开浏览器，访问 `platform.moonshot.cn`，注册账号，进入「API Keys」页面，点「新建」，复制生成的 Key（以 `sk-` 开头）。
+**拿 Key**：访问 `platform.moonshot.cn` → 注册 → 「API Keys」→「新建」→ 复制（`sk-` 开头）
 
-⚠️ **Key 只显示一次，拿到之后先粘贴到记事本里**，不然页面一关就找不回来了。
+**接入**：
+```bash
+hermes model
+```
+选 **Kimi**，粘贴 Key，模型选 `moonshot-v1-128k`
 
-### 第二步：填入 Hermes
+**验证**：
+```bash
+hermes "你好，你是什么模型？"
+```
+
+### MiniMax 接入步骤
+
+**拿 Key**：访问 `minimax.io` → 注册 → 拿 Key
+
+**接入**：
+```bash
+hermes model
+```
+选 **MiniMax**，粘贴 Key，按向导选模型
+
+**验证同上。**
+
+⚠️ 两个平台都有免费额度，用完按量计费，适合小规模使用。
+
+---
+
+## 方案三：国内中转 API——用 Claude/GPT 但国内直连（付费但极便宜）
+
+有稳定需求（如每天几十条对话），中转 API 是最优解。国内有很多中转平台，特点：兼容 OpenAI 格式、国内直连、价格约为官方的 3-5 折。
+
+### 常见平台
+
+| 平台 | 地址 | 特点 |
+|------|------|------|
+| **硅基流动**（也有付费版） | siliconflow.com | 模型多，稳定 |
+| **高端复刻** | gaoduanfuke.com | 注册送 502 次 |
+| **PoloAPI** | poloai.top | 支持 Grok-3、Thinking |
+
+### 接入方式（和中转平台通用）
+
+拿到的 Key 通常是 OpenAI 格式，接入方法：
 
 ```bash
 hermes model
 ```
 
-向导出来后：
-- Provider 列表里选 **Kimi**
-- 粘贴刚才复制的 Key
-- 模型选 `moonshot-v1-128k`（128k 上下文，适合处理长文档）
+选 **Custom endpoint**，填：
 
-### 第三步：验证
+- **Base URL**：中转平台给你的地址（格式如 `https://api.xx.com/v1`）
+- **API Key**：粘贴你拿到的 Key
+- **模型名**：填你需要的模型，如 `gpt-4o`、`claude-3-5-sonnet-20241022`
+
+### 验证
 
 ```bash
-hermes "你好，请说出你用的是什么模型"
+hermes "你好"
 ```
 
-如果返回了 Kimi 的回复，说明接通了。
-
-✅ 验证成功：看到模型正常回复，没有报错。
+能回复，按量查账单即可。
 
 ---
 
-## 方案二：OpenRouter（一个账号，200+ 个模型）
+## 方案四：OpenRouter / Nous Portal——需要网络加速
 
-适合想灵活切换模型的用户。注册一次，Claude、GPT-4o、DeepSeek-R1 都能用。
+⚠️ 这两个方案需要你的网络加速工具（Surge / Stash / Clash）正常工作，能访问外网。如果"允许局域网"没开，或代理挂了，这步会报 `Connection timeout`。
 
-### 第一步：拿 API Key
+### OpenRouter
 
-访问 `openrouter.ai`，注册，进入「Keys」页面，点「Create Key」，复制。
-
-Key 格式以 `sk-or-` 开头，注意区分不同 provider 的 Key 格式。
-
-### 第二步：填入 Hermes
+注册 `openrouter.ai`，拿 Key（`sk-or-` 开头）。
 
 ```bash
 hermes model
 ```
+选 **OpenRouter**，粘贴 Key，选模型。
 
-选 **OpenRouter**，粘贴 Key，然后选模型。
+常用模型：
+- `deepseek/deepseek-r1`——推理强，价格低
+- `anthropic/claude-sonnet-4-5`——编程写作质量高
+- `openai/gpt-4o-mini`——速度快，便宜
 
-模型名格式是"提供商/模型名"，几个常用的：
+### Nous Portal（原生 Hermes）
 
-| 模型 | 适合干什么 |
-|------|----------|
-| `deepseek/deepseek-r1` | 推理、分析、解题，便宜 |
-| `anthropic/claude-sonnet-4-5` | 写作、编程，输出质量高 |
-| `openai/gpt-4o-mini` | 日常对话，速度快 |
-| `google/gemini-2.0-flash-001` | 长文档处理，免费额度大 |
-
-⚠️ **前提是你的网络加速工具可以连到 openrouter.ai**。如果填完 Key 报 `Connection timeout`，是网络问题，不是 Key 的问题。
-
----
-
-## 方案三：Nous Portal（原生 Hermes，订阅制）
-
-Hermes Agent 的原厂服务。按月订阅，不需要自己管 Key，模型是 Hermes 3（70B / 405B），函数调用能力是所有方案里最好的。
+订阅制，OAuth 登录，不需要手动填 Key。
 
 ```bash
 hermes model
 ```
-
-选 **Nous Portal**，会弹出一个 OAuth 登录链接，浏览器里登录 nousresearch.com 账号授权即可，不需要手动填 Key。
+选 **Nous Portal**，浏览器弹出授权页，登录 nousresearch.com 账号即可。
 
 ---
 
-## v0.8 新功能：对话中实时换模型
+## 进阶：v0.8 Live Model Switching——对话中实时换模型
 
-从 v0.8.0 开始，不用重启，可以在对话里直接切换底层模型：
+从 v0.8.0 开始，不用重启，直接在对话里换底层模型：
 
 ```
 /model openrouter deepseek/deepseek-r1
 /model kimi moonshot-v1-128k
 ```
 
-实际使用场景：用便宜模型处理数据整理，遇到需要深度推理的问题，一条命令切到 DeepSeek-R1，处理完再切回来。
+典型用法：便宜模型处理数据整理，遇到复杂推理问题，一条命令切到 DeepSeek-R1，处理完再切回来。
 
 ---
 
@@ -136,58 +171,58 @@ hermes model
 
 **1. 填了 Key，报 `AuthenticationError`**
 
-Key 填错了，或者有多余的空格。
+Key 填错了，或者有多余空格。先查配置：
 
-先查当前配置：
 ```bash
 hermes config list
 ```
 
-看 Key 有没有问题，重新设：
+重新设：
+
 ```bash
-hermes config set openrouter_api_key "sk-or-你的key"
+hermes config set openai_api_key "你的key"
 ```
 
 **2. 报 `ConnectionError: timeout`**
 
-这是网络问题，不是 Key 的问题。
-
-两个选项：
-- 换成 Kimi 或 MiniMax（国内直连，不需要代理）
-- 检查网络加速工具的"允许局域网"有没有开
+网络问题，不是 Key 的问题。三个解法：
+- 换用第一/二/三梯队方案（国内直连，不需要代理）
+- 检查加速工具的"允许局域网"有没有开
+- 重启 WSL：`wsl --shutdown`，重开终端重试
 
 **3. 报 `model not found`**
 
-模型名写错了。通过向导重新选，不要手动输模型名：
+模型名拼错了。用向导选，不要手打：
 
 ```bash
 hermes model
 ```
 
-**4. 配了好几个 Provider，不知道现在用的哪个**
+**4. 同时配了多个 Provider，不知道现在用哪个**
+
+直接问它：
 
 ```bash
-hermes "你是哪家的模型？"
+hermes "你是哪个模型？"
 ```
-
-它会告诉你。
 
 ---
 
 ## 开始第一次对话
 
-模型接好后，直接用：
-
 ```bash
 hm
 ```
 
-进入对话界面，输入第一条消息。
-
-Hermes 会从你的问题里学习，记录偏好，越用越懂你。
+进入对话，输入第一条消息。模型接好了，Hermes 会从你的问题里学习，越用越懂你。
 
 ---
 
-环境搭好，模型接通，才算真正准备好了。
+**四句话总结：**
 
-下一篇会写怎么把 Hermes 接入飞书、Telegram，让它变成团队里随时能用的 AI 助手。
+- 零成本起步 → 硅基流动免费额度
+- 国内官方 → Kimi 或 MiniMax（注册有免费额度）
+- 想用 Claude/GPT 但不想折腾代理 → 国内中转 API（≈官方 3-5 折）
+- 有代理 → OpenRouter / Nous Portal，选择更多
+
+下篇：把 Hermes 接入飞书、Telegram，让它变成团队里随时能用的 AI 助手。
