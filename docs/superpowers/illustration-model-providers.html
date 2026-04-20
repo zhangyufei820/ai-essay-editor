@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    width: 700px;
+    background: #0d1117;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    padding: 28px;
+    color: #c9d1d9;
+  }
+  .title {
+    color: #fff;
+    font-size: 16px;
+    font-weight: 700;
+    margin-bottom: 18px;
+  }
+  .subtitle { color: #7d8590; font-size: 12px; margin-top: 2px; }
+
+  .section-label {
+    font-size: 10px;
+    font-family: monospace;
+    padding: 2px 10px;
+    border-radius: 10px;
+    display: inline-block;
+    margin-bottom: 10px;
+    margin-top: 16px;
+  }
+  .label-green {
+    background: rgba(35, 134, 54, 0.15);
+    border: 1px solid rgba(35, 134, 54, 0.4);
+    color: #56d364;
+  }
+  .label-blue {
+    background: rgba(56, 139, 253, 0.15);
+    border: 1px solid rgba(56, 139, 253, 0.4);
+    color: #79c0ff;
+  }
+
+  .card {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 10px;
+  }
+  .card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background: #1c2128;
+    border-bottom: 1px solid #30363d;
+  }
+  .provider-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: #e6edf3;
+  }
+  .badge {
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 8px;
+    font-family: monospace;
+  }
+  .badge-green { background: rgba(35, 134, 54, 0.2); color: #56d364; border: 1px solid rgba(35, 134, 54, 0.4); }
+  .badge-yellow { background: rgba(210, 153, 34, 0.2); color: #e3b341; border: 1px solid rgba(210, 153, 34, 0.4); }
+  .badge-purple { background: rgba(163, 113, 247, 0.2); color: #d2a8ff; border: 1px solid rgba(163, 113, 247, 0.4); }
+
+  .card-body { padding: 12px 16px; }
+  .row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 6px;
+    align-items: baseline;
+  }
+  .row-key { color: #7d8590; font-size: 11px; width: 60px; flex-shrink: 0; }
+  .row-val { color: #c9d1d9; font-size: 12px; }
+  .row-val.code { font-family: monospace; color: #a5d6ff; font-size: 11px; }
+  .row-val.highlight { color: #56d364; }
+
+  .divider {
+    height: 1px;
+    background: #21262d;
+    margin: 6px 0;
+  }
+
+  .cmd-box {
+    margin-top: 16px;
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    padding: 14px 18px;
+  }
+  .cmd-title { color: #7d8590; font-size: 11px; margin-bottom: 8px; }
+  .cmd { font-family: monospace; color: #7ee787; font-size: 14px; }
+</style>
+</head>
+<body>
+
+<div class="title">选哪个模型 Provider？
+  <div class="subtitle">按需选择，Kimi/MiniMax 国内直连无需代理</div>
+</div>
+
+<div class="section-label label-green">🟢 国内直连（无需代理）</div>
+
+<div class="card">
+  <div class="card-header">
+    <span class="provider-name">Kimi · 月之暗面</span>
+    <span class="badge badge-green">国内直连</span>
+  </div>
+  <div class="card-body">
+    <div class="row"><span class="row-key">注册地址</span><span class="row-val">platform.moonshot.cn</span></div>
+    <div class="row"><span class="row-key">代表模型</span><span class="row-val code">moonshot-v1-128k</span></div>
+    <div class="row"><span class="row-key">上下文</span><span class="row-val highlight">128K Token（约 10 万汉字）</span></div>
+    <div class="row"><span class="row-key">费用</span><span class="row-val">按量计费，新用户有免费额度</span></div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <span class="provider-name">MiniMax</span>
+    <span class="badge badge-green">国内直连</span>
+  </div>
+  <div class="card-body">
+    <div class="row"><span class="row-key">注册地址</span><span class="row-val">minimax.io</span></div>
+    <div class="row"><span class="row-key">代表模型</span><span class="row-val code">MiniMax-Text-01</span></div>
+    <div class="row"><span class="row-key">特点</span><span class="row-val">多模态，文图音视频一体</span></div>
+    <div class="row"><span class="row-key">费用</span><span class="row-val">按量计费，新用户有免费额度</span></div>
+  </div>
+</div>
+
+<div class="section-label label-blue">🌐 需要网络加速（解锁全部模型）</div>
+
+<div class="card">
+  <div class="card-header">
+    <span class="provider-name">OpenRouter</span>
+    <span class="badge badge-blue">200+ 模型</span>
+  </div>
+  <div class="card-body">
+    <div class="row"><span class="row-key">注册地址</span><span class="row-val">openrouter.ai</span></div>
+    <div class="row"><span class="row-key">常用模型</span><span class="row-val code">deepseek/deepseek-r1</span></div>
+    <div class="row"><span class="row-key">&nbsp;</span><span class="row-val code">anthropic/claude-sonnet-4-5</span></div>
+    <div class="row"><span class="row-key">&nbsp;</span><span class="row-val code">openai/gpt-4o-mini</span></div>
+    <div class="row"><span class="row-key">特点</span><span class="row-val">一个 Key 用所有主流模型</span></div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <span class="provider-name">Nous Portal</span>
+    <span class="badge badge-purple">原生 Hermes</span>
+  </div>
+  <div class="card-body">
+    <div class="row"><span class="row-key">模型</span><span class="row-val code">Hermes 3（70B / 405B）</span></div>
+    <div class="row"><span class="row-key">接入方式</span><span class="row-val">OAuth 授权，无需手动填 Key</span></div>
+    <div class="row"><span class="row-key">费用</span><span class="row-val">订阅制，月付</span></div>
+    <div class="row"><span class="row-key">特点</span><span class="row-val highlight">函数调用能力最强</span></div>
+  </div>
+</div>
+
+<div class="cmd-box">
+  <div class="cmd-title">进入配置向导（任选上面任意一个 Provider）</div>
+  <div class="cmd">$ hermes model</div>
+</div>
+
+</body>
+</html>

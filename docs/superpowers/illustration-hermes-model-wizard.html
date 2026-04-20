@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    width: 680px;
+    background: #0d1117;
+    font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+    padding: 24px;
+    color: #c9d1d9;
+    font-size: 13px;
+    line-height: 1.7;
+  }
+  .window {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .titlebar {
+    background: #21262d;
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid #30363d;
+  }
+  .dot { width: 12px; height: 12px; border-radius: 50%; }
+  .dot.red { background: #ff5f56; }
+  .dot.yellow { background: #ffbd2e; }
+  .dot.green { background: #27c93f; }
+  .title { margin-left: 8px; color: #8b949e; font-size: 12px; }
+  .body { padding: 16px 20px; }
+  .line { margin: 3px 0; }
+  .prompt { color: #7ee787; }
+  .comment { color: #8b949e; font-style: italic; }
+  .success { color: #3fb950; }
+  .error { color: #f85149; }
+  .input { color: #a5d6ff; }
+  .output { color: #e6edf3; }
+  .dim { color: #7d8590; }
+  .label {
+    display: inline-block;
+    background: rgba(56, 139, 253, 0.15);
+    border: 1px solid rgba(56, 139, 253, 0.4);
+    color: #79c0ff;
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    margin-bottom: 10px;
+    font-family: sans-serif;
+  }
+  .step-divider {
+    border: none;
+    border-top: 1px dashed #21262d;
+    margin: 10px 0;
+  }
+  .step-note {
+    font-family: sans-serif;
+    font-size: 10px;
+    color: #7d8590;
+    margin-bottom: 6px;
+  }
+</style>
+</head>
+<body>
+<div class="label">hermes model 向导操作示意（以 Kimi 为例）</div>
+<div class="window">
+  <div class="titlebar">
+    <div class="dot red"></div>
+    <div class="dot yellow"></div>
+    <div class="dot green"></div>
+    <span class="title">Ubuntu — WSL2</span>
+  </div>
+  <div class="body">
+
+    <div class="step-note">Step 1 — 进入配置向导</div>
+    <div class="line"><span class="prompt">$</span> <span class="output">hermes model</span></div>
+    <br>
+    <div class="line"><span class="dim">? Select your LLM provider:</span></div>
+    <div class="line"><span class="dim">  ❯ Nous Portal</span></div>
+    <div class="line"><span class="input">  ❯ Kimi            ← 选这个</span></div>
+    <div class="line"><span class="dim">    OpenRouter</span></div>
+    <div class="line"><span class="dim">    OpenAI</span></div>
+    <div class="line"><span class="dim">    MiniMax</span></div>
+    <div class="line"><span class="dim">    DeepSeek</span></div>
+    <div class="line"><span class="dim">    Custom endpoint</span></div>
+
+    <hr class="step-divider">
+    <div class="step-note">Step 2 — 粘贴 API Key</div>
+    <div class="line"><span class="dim">? Enter your Kimi API key:</span></div>
+    <div class="line"><span class="input">  sk-xxxxxxxxxxxxxxxxxxxxxxxx</span></div>
+
+    <hr class="step-divider">
+    <div class="step-note">Step 3 — 选择模型</div>
+    <div class="line"><span class="dim">? Select model:</span></div>
+    <div class="line"><span class="input">  ❯ moonshot-v1-128k    ← 128K 上下文，推荐</span></div>
+    <div class="line"><span class="dim">    moonshot-v1-32k</span></div>
+    <div class="line"><span class="dim">    moonshot-v1-8k</span></div>
+
+    <hr class="step-divider">
+    <div class="step-note">配置完成</div>
+    <div class="line success">✓ Model configuration saved</div>
+    <div class="line success">✓ Provider: Kimi  |  Model: moonshot-v1-128k</div>
+    <br>
+    <div class="line comment"># 验证：发一条消息测试</div>
+    <div class="line"><span class="prompt">$</span> <span class="output">hermes "你好，你是什么模型？"</span></div>
+    <div class="line success">你好！我是 Kimi，使用 moonshot-v1-128k 模型...</div>
+
+  </div>
+</div>
+</body>
+</html>
