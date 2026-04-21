@@ -684,8 +684,8 @@ function BananaChatInterfaceInner() {
                         {/* User message */}
                         {message.role === "user" ? (
                           <div
-                            className="rounded-2xl px-4 py-3 text-white"
-                            style={{ backgroundColor: BANANA_COLOR, borderRadius: "18px 4px 18px 18px" }}
+                            className="rounded-2xl px-4 py-3 text-slate-700 border border-slate-200"
+                            style={{ backgroundColor: "#f8fafc", borderRadius: "18px 4px 18px 18px" }}
                           >
                             <div className="space-y-2">
                               {message.files && message.files.length > 0 && (

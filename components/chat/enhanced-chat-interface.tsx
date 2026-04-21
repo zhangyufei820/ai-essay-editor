@@ -2359,11 +2359,11 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                         "flex flex-col max-w-[85%] sm:max-w-[80%]",
                         message.role === "user" ? "items-end" : "items-start"
                       )}>
-                        {/* User message - Solid dark green background */}
+                        {/* User message - Neutral style with light background */}
                         {message.role === "user" ? (
                           <div
-                            className="rounded-2xl px-4 py-3 text-white"
-                            style={{ backgroundColor: "#052e16", borderRadius: "18px 4px 18px 18px" }}
+                            className="rounded-2xl px-4 py-3 text-slate-700 border border-slate-200"
+                            style={{ backgroundColor: "#f8fafc", borderRadius: "18px 4px 18px 18px" }}
                           >
                             <div className="space-y-2">
                               {/* Show uploaded files */}
