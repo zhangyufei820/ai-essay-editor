@@ -301,38 +301,70 @@ const InlineText = ({ text }: { text: string }) => {
 
 // MediaBlock 必须在 UltimateRenderer 之前定义
 // 🔥 支持图片、文件、PPT 渲染
+// 🔥 OpenClaw 媒体基础 URL（用于转换本地路径为 HTTP URL）
+const OPENCLAW_MEDIA_BASE = process.env.NEXT_PUBLIC_OPENCLAW_MEDIA_URL || 'http://43.154.111.156:18789/__openclaw__/media/'
+
 interface MediaItem {
   type: "image" | "file" | "ppt"
   url: string
   name?: string
+  localPath?: string // OpenClaw 本地路径
+}
+
+// 🔥 转换 OpenClaw 本地路径为 HTTP URL
+function convertOpenClawUrl(url: string): string {
+  // 如果已经是完整 URL，直接返回
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return url
+  }
+  // 如果是 OpenClaw 本地路径（如 /home/node/.openclaw/media/xxx）
+  if (url.includes('.openclaw/media/') || url.includes('tool-image-generation/')) {
+    // 提取文件名
+    const fileName = url.split('/').pop() || url
+    return `${OPENCLAW_MEDIA_BASE}${fileName}`
+  }
+  return url
 }
 
 const MediaBlock = ({ items }: { items: MediaItem[] }) => {
   if (!items || items.length === 0) return null
 
   return (
-    <div className="space-y-3 my-4">
+    <div className="space-y-4 my-4">
       {items.map((item, index) => {
         if (item.type === "image") {
-          // 图片渲染
+          // 🔥 使用 GPT Image 样式渲染图片
+          const imageUrl = convertOpenClawUrl(item.url)
           return (
-            <div key={index} className="relative rounded-xl overflow-hidden shadow-lg border border-slate-100">
+            <motion.div
+              key={index}
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.3 }}
+              className="relative rounded-2xl overflow-hidden shadow-xl border border-green-100"
+            >
               <img
-                src={item.url}
+                src={imageUrl}
                 alt={item.name || "Generated Image"}
                 className="w-full h-auto max-h-[500px] object-contain bg-slate-50"
                 loading="lazy"
               />
-              {item.name && (
-                <div className="absolute bottom-2 left-2 px-2 py-1 bg-black/60 text-white text-xs rounded-lg">
-                  {item.name}
-                </div>
-              )}
-            </div>
+              {/* 下载按钮 */}
+              <a
+                href={imageUrl}
+                download={item.name}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="absolute top-3 right-3 p-2 bg-white/90 backdrop-blur-sm rounded-lg shadow-lg hover:bg-white transition-all"
+              >
+                <Download className="w-4 h-4 text-slate-600" />
+              </a>
+            </motion.div>
           )
         } else if (item.type === "file") {
           // 文件下载链接
           const isPDF = item.url.toLowerCase().includes('.pdf')
+          const fileUrl = convertOpenClawUrl(item.url)
           return (
             <div
               key={index}
@@ -346,7 +378,7 @@ const MediaBlock = ({ items }: { items: MediaItem[] }) => {
                 <p className="text-xs text-slate-400">{isPDF ? "PDF 文档" : "文件"}</p>
               </div>
               <a
-                href={item.url}
+                href={fileUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 download={item.name}
@@ -358,11 +390,12 @@ const MediaBlock = ({ items }: { items: MediaItem[] }) => {
           )
         } else if (item.type === "ppt") {
           // PPT 预览（使用 Google Docs Viewer 或内联 iframe）
-          const googleViewerUrl = `https://docs.google.com/gview?url=${encodeURIComponent(item.url)}&embedded=true`
+          const pptUrl = convertOpenClawUrl(item.url)
+          const googleViewerUrl = `https://docs.google.com/gview?url=${encodeURIComponent(pptUrl)}&embedded=true`
           return (
-            <div key={index} className="rounded-xl overflow-hidden border border-slate-200">
-              <div className="bg-slate-100 px-4 py-2 border-b border-slate-200">
-                <span className="text-sm font-medium text-slate-600">📊 {item.name || "PPT 文档"}</span>
+            <div key={index} className="rounded-2xl overflow-hidden border border-green-100 shadow-xl">
+              <div className="bg-green-50 px-4 py-2 border-b border-green-100">
+                <span className="text-sm font-medium text-green-700">📊 {item.name || "PPT 文档"}</span>
               </div>
               <iframe
                 src={googleViewerUrl}
