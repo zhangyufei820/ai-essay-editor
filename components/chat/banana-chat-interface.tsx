@@ -24,6 +24,7 @@ import { createClient } from "@supabase/supabase-js"
 import { collapseSidebar, refreshCredits } from "@/components/app-sidebar"
 import { calculatePreviewCost } from "@/lib/pricing"
 import { UltimateRenderer } from "@/components/chat/UltimateRenderer"
+import { GridWaveLoader } from "@/components/chat/GridWaveLoader"
 
 const BRAND_GREEN = "#14532d"
 const BANANA_COLOR = "#14532d" // 使用网站主题深绿色
@@ -717,9 +718,8 @@ function BananaChatInterfaceInner() {
                           /* AI message - Flat, minimal */
                           <>
                             {isLoading && message.id === currentBotIdRef.current && !message.content ? (
-                              <div className="inline-flex items-center gap-1.5">
-                                <Sparkles className="w-3 h-3 text-slate-400 shrink-0" strokeWidth={1.5} />
-                                <span className="text-xs text-slate-400 font-normal tracking-wide">Thinking...</span>
+                              <div className="flex items-center justify-center py-4">
+                                <GridWaveLoader size={160} dotSize={5} backgroundColor="#1a1a1a" />
                               </div>
                             ) : (
                               <BananaRenderer
