@@ -435,47 +435,73 @@ function GptImage2ChatInterfaceInner() {
           throw new Error(`请求失败 (${res.status}): ${errorText.slice(0, 100)}`)
         }
 
-        // 🎨 GPT Image 2 使用 blocking 模式，直接解析 JSON
+        // 🎨 GPT Image 2 使用 async 模式，轮询任务状态
         try {
           const result = await res.json()
-          console.log(`🎨 [GPT Image 2] Blocking 响应:`, result)
+          console.log(`🎨 [GPT Image 2] Async 响应:`, result)
 
-          // Blocking 模式返回格式: { task_id, workflow_run_id, data: { outputs: {...} } }
-          if (result.data?.outputs) {
-            const outputs = result.data.outputs
+          // Async 模式返回格式: { task_id, workflow_run_id, status }
+          const taskId = result.task_id
+          if (!taskId) {
+            throw new Error(`Dify 任务提交失败: ${JSON.stringify(result)}`)
+          }
 
-            // 解析图片 URL
-            let imageUrl = ''
-            if (outputs.first_url) {
-              imageUrl = outputs.first_url
-            } else if (outputs.image_data_uri) {
-              imageUrl = outputs.image_data_uri
-            } else if (outputs.url) {
-              imageUrl = outputs.url
+          // 轮询任务状态
+          const maxPolls = 60  // 最多轮询60次
+          const pollInterval = 2000  // 每2秒轮询一次
+          let pollCount = 0
+          let taskResult = null
+
+          setMessages(p => p.map(m => m.id === botId ? { ...m, content: "正在生成图片..." } : m))
+
+          while (pollCount < maxPolls) {
+            await new Promise(resolve => setTimeout(resolve, pollInterval))
+
+            const pollRes = await fetch(`${API_BASE}/api/dify-chat/poll-task?task_id=${taskId}`)
+            if (!pollRes.ok) {
+              throw new Error(`轮询失败: ${pollRes.status}`)
             }
 
-            // 解析文本
-            if (outputs.status_code === 200 && outputs.raw_body) {
-              try {
-                const rawData = JSON.parse(outputs.raw_body)
-                if (rawData.data && Array.isArray(rawData.data)) {
-                  for (const item of rawData.data) {
-                    if (item.url) imageUrl = item.url
-                    if (item.revised_prompt) fullText += `提示词: ${item.revised_prompt}\n\n`
-                  }
+            taskResult = await pollRes.json()
+            console.log(`🎨 [GPT Image 2 轮询] ${pollCount + 1}/${maxPolls} 状态: ${taskResult.data?.status}`)
+
+            const status = taskResult.data?.status
+
+            if (status === "succeeded") {
+              // 任务完成，解析输出
+              const outputs = taskResult.data?.outputs
+              if (outputs) {
+                let imageUrl = outputs.first_url || outputs.image_data_uri || outputs.url || ""
+
+                if (outputs.status_code === 200 && outputs.raw_body) {
+                  try {
+                    const rawData = JSON.parse(outputs.raw_body)
+                    if (rawData.data && Array.isArray(rawData.data)) {
+                      for (const item of rawData.data) {
+                        if (item.url) imageUrl = item.url
+                        if (item.revised_prompt) fullText += `提示词: ${item.revised_prompt}\n\n`
+                      }
+                    }
+                  } catch (e) {}
                 }
-              } catch (e) {
-                // raw_body 解析失败，使用原始文本
-              }
-            }
 
-            if (imageUrl) {
-              fullText = `![Generated Image](${imageUrl})`
-            } else if (outputs.text || outputs.result) {
-              fullText = outputs.text || outputs.result
+                if (imageUrl) {
+                  fullText = `![Generated Image](${imageUrl})`
+                } else if (outputs.text || outputs.result) {
+                  fullText = outputs.text || outputs.result
+                }
+              }
+              break
+            } else if (status === "failed") {
+              throw new Error(`图片生成失败: ${taskResult.data?.error || "未知错误"}`)
             }
-          } else if (result.error) {
-            throw new Error(`Dify Error: ${result.error}`)
+            // running, pending 等状态继续轮询
+
+            pollCount++
+          }
+
+          if (!fullText && pollCount >= maxPolls) {
+            throw new Error("图片生成超时，请重试")
           }
 
           setMessages(p => p.map(m => m.id === botId ? { ...m, content: fullText } : m))

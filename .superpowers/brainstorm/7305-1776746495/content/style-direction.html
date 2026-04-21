@@ -1,0 +1,270 @@
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; }
+.page-header { text-align: center; padding: 30px 20px 10px; }
+.page-header h1 { font-size: 24px; color: #333; margin-bottom: 8px; }
+.page-header p { color: #666; font-size: 14px; }
+
+.showcase { display: flex; gap: 40px; justify-content: center; flex-wrap: wrap; padding: 20px; }
+.product-demo { width: 360px; }
+
+.demo-section { margin-bottom: 30px; }
+.demo-label { font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; padding-left: 4px; }
+
+.mock-bag { width: 280px; height: 340px; margin: 0 auto; border-radius: 4px; position: relative; overflow: hidden; display: flex; flex-direction: column; }
+.mock-inner-box { width: 200px; height: 140px; margin: 0 auto; border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+
+/* === 古典中国风 === */
+.classical-bag {
+  background: linear-gradient(160deg, #7B1111 0%, #8B0000 50%, #6B0000 100%);
+  box-shadow: 0 8px 30px rgba(139,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1);
+}
+.classical-bag::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: url("data:image/svg+xml,%3Csvg width='80' height='80' viewBox='0 0 80 80' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M40 8 Q60 25 40 45 Q20 25 40 8' fill='none' stroke='%23D4AF37' stroke-width='0.8' opacity='0.25'/%3E%3Cpath d='M40 35 Q55 48 40 62 Q25 48 40 35' fill='none' stroke='%23D4AF37' stroke-width='0.6' opacity='0.2'/%3E%3C/svg%3E");
+}
+.classical-bag::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: url("data:image/svg+xml,%3Csvg width='120' height='120' viewBox='0 0 120 120' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M60 10 C80 30 80 50 60 70 C40 50 40 30 60 10' fill='none' stroke='%23D4AF37' stroke-width='0.5' opacity='0.15'/%3E%3C/svg%3E");
+}
+.bag-top-fold { height: 30px; background: rgba(0,0,0,0.15); border-bottom: 2px solid rgba(212,175,55,0.3); }
+.bag-content { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; z-index: 1; padding: 20px; }
+.bag-handle { position: absolute; top: 50px; left: 50%; transform: translateX(-50%); width: 120px; height: 60px; border: 3px solid #D4AF37; border-bottom: none; border-radius: 60px 60px 0 0; }
+.classical-text-gold { color: #D4AF37; }
+.classical-decor-line { width: 80px; height: 2px; background: linear-gradient(90deg, transparent, #D4AF37, transparent); margin: 12px 0; }
+.classical-emboss-badge { position: absolute; bottom: 25px; width: 60px; height: 60px; border: 2px solid #D4AF37; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #D4AF37; opacity: 0.8; }
+.classical-inner-box {
+  background: linear-gradient(135deg, #8B0000, #A52A2A);
+  border: 3px solid #D4AF37;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.3);
+}
+.classical-inner-content { text-align: center; }
+.vacuum-icon { width: 40px; height: 40px; margin: 0 auto 8px; }
+
+/* === 乡土怀旧风 === */
+.rustic-bag {
+  background: linear-gradient(160deg, #D9C4A9 0%, #C9B896 50%, #BFA882 100%);
+  box-shadow: 0 8px 30px rgba(139,115,85,0.3);
+  border: 1px solid #A08B6E;
+}
+.rustic-bag::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: url("data:image/svg+xml,%3Csvg width='200' height='200' viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='30' cy='40' r='3' fill='%238B7355' opacity='0.15'/%3E%3Ccircle cx='80' cy='120' r='4' fill='%238B7355' opacity='0.1'/%3E%3Ccircle cx='150' cy='60' r='3' fill='%238B7355' opacity='0.12'/%3E%3Ccircle cx='170' cy='150' r='5' fill='%238B7355' opacity='0.08'/%3E%3C/svg%3E");
+}
+.rustic-text-brown { color: #5D3A1A; }
+.rustic-line { width: 60px; height: 3px; background: #8B5A2B; margin: 10px auto; border-radius: 2px; }
+.rustic-emboss-cow { width: 50px; height: 50px; margin: 0 auto 8px; opacity: 0.6; }
+.rustic-inner-box {
+  background: linear-gradient(135deg, #D2B48C, #C4A574);
+  border: 2px solid #8B7355;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
+}
+
+/* === 轻奢简约风 === */
+.premium-bag {
+  background: linear-gradient(160deg, #1a1a1a 0%, #2d2d2d 50%, #1a1a1a 100%);
+  box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+  border: 1px solid #3d3d3d;
+}
+.premium-bag::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cline x1='0' y1='50' x2='100' y2='50' stroke='%23C9A962' stroke-width='0.3' opacity='0.2'/%3E%3Cline x1='50' y1='0' x2='50' y2='100' stroke='%23C9A962' stroke-width='0.3' opacity='0.2'/%3E%3C/svg%3E");
+}
+.premium-text-gold { color: #C9A962; }
+.premium-line { width: 50px; height: 1px; background: #C9A962; margin: 10px auto; }
+.premium-emboss-area { position: absolute; bottom: 25px; left: 50%; transform: translateX(-50%); width: 80px; height: 40px; border: 1px solid #C9A962; opacity: 0.6; display: flex; align-items: center; justify-content: center; }
+.premium-inner-box {
+  background: linear-gradient(135deg, #1a1a1a, #333);
+  border: 2px solid #C9A962;
+}
+
+/* 标签 */
+.tag-row { display: flex; gap: 10px; justify-content: center; margin-top: 12px; flex-wrap: wrap; }
+.tag { font-size: 10px; padding: 4px 10px; border-radius: 20px; }
+.tag-red { background: rgba(139,0,0,0.2); color: #D4AF37; border: 1px solid rgba(212,175,55,0.3); }
+.tag-brown { background: rgba(93,58,26,0.15); color: #5D3A1A; border: 1px solid rgba(93,58,26,0.3); }
+.tag-black { background: rgba(201,169,98,0.15); color: #C9A962; border: 1px solid rgba(201,169,98,0.3); }
+</style>
+
+<div class="page-header">
+  <h1>酱牛肉包装设计方案</h1>
+  <p>内包装盒 + 手提袋 / 成本：内包 &lt;10元 / 手提袋 &lt;5元</p>
+</div>
+
+<div class="showcase">
+
+  <!-- 方案A：古典中国风 -->
+  <div class="product-demo">
+    <div class="demo-label">方案 A — 古典中国风</div>
+
+    <!-- 手提袋 -->
+    <div class="demo-section">
+      <div style="background:#fff;padding:20px;border-radius:8px;box-shadow:0 2px 12px rgba(0,0,0,0.08);">
+        <div class="mock-bag classical-bag">
+          <div class="bag-top-fold"></div>
+          <div class="bag-handle"></div>
+          <div class="bag-content">
+            <div style="font-size:10px;letter-spacing:2px;" class="classical-text-gold opacity08">地方特产</div>
+            <div style="font-size:26px;letter-spacing:6px;margin-top:4px;" class="classical-text-gold">酱牛肉</div>
+            <div class="classical-decor-line"></div>
+            <div style="font-size:11px;letter-spacing:1px;" class="classical-text-gold opacity07">传统工艺 · 精心制作</div>
+            <div class="classical-emboss-badge">特</div>
+          </div>
+        </div>
+        <div class="tag-row">
+          <span class="tag tag-red">浮雕云纹</span>
+          <span class="tag tag-red">金色烫印</span>
+          <span class="tag tag-red">朱红底色</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 内包装盒 -->
+    <div class="demo-section">
+      <div style="background:#fff;padding:20px;border-radius:8px;box-shadow:0 2px 12px rgba(0,0,0,0.08);">
+        <div class="mock-inner-box classical-inner-box">
+          <div class="classical-inner-content">
+            <svg class="vacuum-icon" viewBox="0 0 40 40" fill="none">
+              <rect x="5" y="10" width="30" height="20" rx="2" stroke="#D4AF37" stroke-width="1.5" fill="none"/>
+              <path d="M12 15 L28 15 M12 20 L25 20 M12 25 L22 25" stroke="#D4AF37" stroke-width="1" opacity="0.6"/>
+              <circle cx="32" cy="10" r="4" fill="#8B0000" stroke="#D4AF37"/>
+              <path d="M30 10 L34 10 M32 8 L32 12" stroke="#D4AF37" stroke-width="0.8"/>
+            </svg>
+            <div style="font-size:14px;color:#D4AF37;letter-spacing:3px;">酱牛肉</div>
+            <div style="font-size:9px;color:#D4AF37;opacity:0.7;margin-top:4px;">真空封装</div>
+          </div>
+        </div>
+        <div class="tag-row">
+          <span class="tag tag-red">深红天地盖</span>
+          <span class="tag tag-red">金色边框</span>
+        </div>
+      </div>
+    </div>
+
+    <p style="font-size:12px;color:#888;text-align:center;margin-top:8px;">调性：沉稳大气 · 文化底蕴 · 适合送礼</p>
+  </div>
+
+  <!-- 方案B：乡土怀旧风 -->
+  <div class="product-demo">
+    <div class="demo-label">方案 B — 乡土怀旧风</div>
+
+    <!-- 手提袋 -->
+    <div class="demo-section">
+      <div style="background:#fff;padding:20px;border-radius:8px;box-shadow:0 2px 12px rgba(0,0,0,0.08);">
+        <div class="mock-bag rustic-bag">
+          <div class="bag-top-fold" style="background:rgba(139,115,85,0.15);border-bottom:2px solid rgba(139,90,43,0.2);"></div>
+          <div style="position:absolute;top:48px;left:50%;transform:translateX(-50%);width:110px;height:55px;border:3px solid #8B5A2B;border-bottom:none;border-radius:55px 55px 0 0;"></div>
+          <div class="bag-content">
+            <div style="font-size:10px;letter-spacing:1px;" class="rustic-text-brown opacity07">TRADITIONAL SPECIALTY</div>
+            <div style="font-size:24px;margin-top:4px;font-family:Georgia,serif;" class="rustic-text-brown">酱牛肉</div>
+            <div class="rustic-line"></div>
+            <div style="font-size:10px;" class="rustic-text-brown opacity07">传承老手艺 · 真材实料</div>
+            <svg class="rustic-emboss-cow" viewBox="0 0 50 50" fill="#5D3A1A" opacity="0.5">
+              <ellipse cx="25" cy="30" rx="15" ry="12"/>
+              <circle cx="25" cy="18" r="10"/>
+              <circle cx="21" cy="16" r="2" fill="#C9B896"/>
+              <circle cx="29" cy="16" r="2" fill="#C9B896"/>
+              <path d="M15 12 Q12 6 18 8" fill="#5D3A1A"/>
+              <path d="M35 12 Q38 6 32 8" fill="#5D3A1A"/>
+            </svg>
+          </div>
+        </div>
+        <div class="tag-row">
+          <span class="tag tag-brown">牛皮纸</span>
+          <span class="tag tag-brown">手绘插画</span>
+          <span class="tag tag-brown">浮雕纹理</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 内包装盒 -->
+    <div class="demo-section">
+      <div style="background:#fff;padding:20px;border-radius:8px;box-shadow:0 2px 12px rgba(0,0,0,0.08);">
+        <div class="mock-inner-box rustic-inner-box">
+          <div style="text-align:center;">
+            <svg width="36" height="36" viewBox="0 0 50 50" fill="#5D3A1A" opacity="0.5" style="margin-bottom:6px;">
+              <ellipse cx="25" cy="30" rx="15" ry="12"/>
+              <circle cx="25" cy="18" r="10"/>
+              <path d="M15 12 Q12 6 18 8" fill="#5D3A1A"/>
+              <path d="M35 12 Q38 6 32 8" fill="#5D3A1A"/>
+            </svg>
+            <div style="font-size:14px;color:#5D3A1A;font-family:Georgia,serif;">酱牛肉</div>
+            <div style="font-size:9px;color:#5D3A1A;opacity:0.7;margin-top:4px;">抽真空 · 保新鲜</div>
+          </div>
+        </div>
+        <div class="tag-row">
+          <span class="tag tag-brown">牛皮底色</span>
+          <span class="tag tag-brown">木刻边框</span>
+        </div>
+      </div>
+    </div>
+
+    <p style="font-size:12px;color:#888;text-align:center;margin-top:8px;">调性：质朴温暖 · 地方特色 · 手工感强</p>
+  </div>
+
+  <!-- 方案C：轻奢简约风 -->
+  <div class="product-demo">
+    <div class="demo-label">方案 C — 轻奢简约风</div>
+
+    <!-- 手提袋 -->
+    <div class="demo-section">
+      <div style="background:#fff;padding:20px;border-radius:8px;box-shadow:0 2px 12px rgba(0,0,0,0.08);">
+        <div class="mock-bag premium-bag">
+          <div class="bag-top-fold" style="background:rgba(255,255,255,0.05);border-bottom:1px solid rgba(201,169,98,0.2);"></div>
+          <div style="position:absolute;top:50px;left:50%;transform:translateX(-50%);width:100px;height:50px;border:2px solid #C9A962;border-bottom:none;border-radius:50px 50px 0 0;"></div>
+          <div class="bag-content">
+            <div style="font-size:9px;letter-spacing:4px;" class="premium-text-gold opacity06">SPECIALTY</div>
+            <div style="font-size:28px;letter-spacing:4px;margin-top:6px;font-weight:300;" class="premium-text-gold">酱牛肉</div>
+            <div class="premium-line"></div>
+            <div style="font-size:10px;letter-spacing:1px;" class="premium-text-gold opacity07">PREMIUM CRAFT</div>
+            <div class="premium-emboss-area">
+              <span style="font-size:8px;letter-spacing:1px;" class="premium-text-gold">浮雕</span>
+            </div>
+          </div>
+        </div>
+        <div class="tag-row">
+          <span class="tag tag-black">哑光黑</span>
+          <span class="tag tag-black">金色烫线</span>
+          <span class="tag tag-black">浮雕工艺</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 内包装盒 -->
+    <div class="demo-section">
+      <div style="background:#fff;padding:20px;border-radius:8px;box-shadow:0 2px 12px rgba(0,0,0,0.08);">
+        <div class="mock-inner-box premium-inner-box" style="border:2px solid #C9A962;">
+          <div style="text-align:center;">
+            <div style="width:32px;height:32px;border:1px solid #C9A962;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 8px;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#C9A962" stroke-width="1.5">
+                <rect x="3" y="6" width="18" height="12" rx="1"/>
+                <path d="M7 10h10M7 14h6"/>
+              </svg>
+            </div>
+            <div style="font-size:14px;color:#C9A962;letter-spacing:3px;font-weight:300;">酱牛肉</div>
+            <div style="font-size:9px;color:#C9A962;opacity:0.6;margin-top:4px;">VACUUM SEALED</div>
+          </div>
+        </div>
+        <div class="tag-row">
+          <span class="tag tag-black">黑金配色</span>
+          <span class="tag tag-black">极简排版</span>
+        </div>
+      </div>
+    </div>
+
+    <p style="font-size:12px;color:#888;text-align:center;margin-top:8px;">调性：高级质感 · 简约大气 · 匹配88元定价</p>
+  </div>
+
+</div>
+
+<p style="text-align:center;color:#555;font-size:14px;padding:20px;">
+  请选择一个方案，或告诉我想要调整的方向（颜色/字体/工艺/元素）
+</p>

@@ -395,7 +395,7 @@ export async function POST(request: NextRequest) {
             const isGptImage2 = model === "gpt-image-2";
 
             if (isGptImage2) {
-                // GPT Image 2 参数格式
+                // GPT Image 2 参数格式 - 使用 async 模式避免超时
                 difyRequest = {
                     inputs: {
                         prompt: query || "",
@@ -403,7 +403,7 @@ export async function POST(request: NextRequest) {
                         size: inputs?.size || "1024x1024",
                         ...(inputs || {})
                     },
-                    response_mode: "blocking",  // 图片生成用 blocking 模式
+                    response_mode: "async",  // 异步模式，立即返回 task_id
                     user: userId || "default-user",
                 }
                 console.log(`🎨 [GPT Image 2] Workflow 请求体:`, JSON.stringify(difyRequest, null, 2))
@@ -557,11 +557,11 @@ export async function POST(request: NextRequest) {
         return new Response(JSON.stringify({ error: `Dify Error: ${errorText}` }), { status: response.status })
     }
 
-    // 🎨 GPT Image 2 使用 blocking 模式，直接返回 JSON
+    // 🎨 GPT Image 2 使用 async 模式，立即返回 task_id
     if (model === "gpt-image-2") {
-        console.log(`🎨 [GPT Image 2] 使用 blocking 模式，直接返回 JSON`)
+        console.log(`🎨 [GPT Image 2] 使用 async 模式，立即返回 task_id`)
         const result = await response.json()
-        return Response.json(result)
+        return Response.json(result)  // 返回 { task_id, workflow_run_id, status }
     }
 
     console.log(`✅ [Dify请求] 成功，开始流式传输...`)
