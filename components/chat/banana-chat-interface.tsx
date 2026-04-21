@@ -472,9 +472,9 @@ function BananaChatInterfaceInner() {
     const preview = userInputText.slice(0, 30)
     const { data: existing } = await supabase.from('chat_sessions').select('id').eq('id', sid).single()
     if (!existing) {
-        await supabase.from('chat_sessions').insert({ id: sid, user_id: userId, title: "图片生成", preview })
+        await supabase.from('chat_sessions').insert({ id: sid, user_id: userId, title: "图片生成", preview, ai_model: "banana-2-pro" })
     } else {
-        await supabase.from('chat_sessions').update({ preview }).eq('id', sid)
+        await supabase.from('chat_sessions').update({ preview, ai_model: "banana-2-pro" }).eq('id', sid)
     }
     await supabase.from('chat_messages').insert({ session_id: sid, role: "user", content: userInputText })
 

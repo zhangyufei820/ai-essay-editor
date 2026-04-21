@@ -438,9 +438,9 @@ function GptImage2ChatInterfaceInner() {
     const preview = userInputText.slice(0, 30)
     const { data: existing } = await supabase.from('chat_sessions').select('id').eq('id', sid).single()
     if (!existing) {
-        await supabase.from('chat_sessions').insert({ id: sid, user_id: userId, title: "GPT Image 2", preview })
+        await supabase.from('chat_sessions').insert({ id: sid, user_id: userId, title: "GPT Image 2", preview, ai_model: "gpt-image-2" })
     } else {
-        await supabase.from('chat_sessions').update({ preview }).eq('id', sid)
+        await supabase.from('chat_sessions').update({ preview, ai_model: "gpt-image-2" }).eq('id', sid)
     }
     await supabase.from('chat_messages').insert({ session_id: sid, role: "user", content: userInputText })
 
@@ -943,9 +943,12 @@ function GptImage2ChatInterfaceInner() {
                         onClick={() => {
                           // 🔥 如果是其他模型的会话，跳转到对应页面
                           if (session.ai_model && session.ai_model !== "gpt-image-2") {
+                            // 🔥 映射正确的路由
                             const modelRoute = session.ai_model === "banana-2-pro"
                               ? "/chat/banana-2-pro"
-                              : `/chat/${session.ai_model}`
+                              : session.ai_model === "gpt-image-2"
+                                ? "/chat/creative-image-gpt2"
+                                : `/chat/${session.ai_model}`
                             router.push(`${modelRoute}?id=${session.id}`)
                             return
                           }
