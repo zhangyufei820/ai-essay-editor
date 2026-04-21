@@ -299,6 +299,86 @@ const InlineText = ({ text }: { text: string }) => {
   );
 };
 
+// MediaBlock 必须在 UltimateRenderer 之前定义
+// 🔥 支持图片、文件、PPT 渲染
+interface MediaItem {
+  type: "image" | "file" | "ppt"
+  url: string
+  name?: string
+}
+
+const MediaBlock = ({ items }: { items: MediaItem[] }) => {
+  if (!items || items.length === 0) return null
+
+  return (
+    <div className="space-y-3 my-4">
+      {items.map((item, index) => {
+        if (item.type === "image") {
+          // 图片渲染
+          return (
+            <div key={index} className="relative rounded-xl overflow-hidden shadow-lg border border-slate-100">
+              <img
+                src={item.url}
+                alt={item.name || "Generated Image"}
+                className="w-full h-auto max-h-[500px] object-contain bg-slate-50"
+                loading="lazy"
+              />
+              {item.name && (
+                <div className="absolute bottom-2 left-2 px-2 py-1 bg-black/60 text-white text-xs rounded-lg">
+                  {item.name}
+                </div>
+              )}
+            </div>
+          )
+        } else if (item.type === "file") {
+          // 文件下载链接
+          const isPDF = item.url.toLowerCase().includes('.pdf')
+          return (
+            <div
+              key={index}
+              className="flex items-center gap-3 p-4 rounded-xl bg-slate-50 border border-slate-200 hover:bg-slate-100 transition-colors"
+            >
+              <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
+                <span className="text-blue-600 text-lg">{isPDF ? "📄" : "📎"}</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-slate-700 truncate">{item.name || "文件"}</p>
+                <p className="text-xs text-slate-400">{isPDF ? "PDF 文档" : "文件"}</p>
+              </div>
+              <a
+                href={item.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                download={item.name}
+                className="px-3 py-1.5 text-xs font-medium text-white bg-blue-500 rounded-lg hover:bg-blue-600 transition-colors shrink-0"
+              >
+                下载
+              </a>
+            </div>
+          )
+        } else if (item.type === "ppt") {
+          // PPT 预览（使用 Google Docs Viewer 或内联 iframe）
+          const googleViewerUrl = `https://docs.google.com/gview?url=${encodeURIComponent(item.url)}&embedded=true`
+          return (
+            <div key={index} className="rounded-xl overflow-hidden border border-slate-200">
+              <div className="bg-slate-100 px-4 py-2 border-b border-slate-200">
+                <span className="text-sm font-medium text-slate-600">📊 {item.name || "PPT 文档"}</span>
+              </div>
+              <iframe
+                src={googleViewerUrl}
+                className="w-full h-[400px] bg-white"
+                frameBorder="0"
+                title="PPT Preview"
+              />
+            </div>
+          )
+        }
+        return null
+      })}
+    </div>
+  )
+}
+
 // TableBlock 必须在 UltimateRenderer 之前定义
 // 🔥 增大表格字体：表头 text-base，表格内容 text-lg
 const TableBlock = ({ lines }: { lines: string[] }) => {
@@ -347,17 +427,74 @@ function UltimateRenderer({ content, isStreaming = false }: { content: string; i
   // 🧠 处理 <think> 标签：提取思考内容并折叠显示
   const thinkMatch = content.match(/<think>([\s\S]*?)<\/think>/i)
   const thinkContent = thinkMatch ? thinkMatch[1].trim() : null
-  const mainContent = content.replace(/<think>[\s\S]*?<\/think>/gi, '').trim()
-  
+
   // 如果只有 <think> 标签还没闭合（流式输出中）
   const hasOpenThink = content.includes('<think>') && !content.includes('</think>')
   const openThinkContent = hasOpenThink ? content.split('<think>')[1] : null
-  
+
+  // 🔥 提取媒体内容（图片、文件、PPT）
+  const mediaItems: MediaItem[] = []
+
+  // 匹配 ![alt](url) 图片格式
+  const imageRegex = /!\[([^\]]*)\]\(([^)]+)\)/g
+  let match
+  while ((match = imageRegex.exec(content)) !== null) {
+    mediaItems.push({
+      type: "image",
+      url: match[2],
+      name: match[1] || "图片"
+    })
+  }
+
+  // 匹配 [file](url) 文件格式
+  const fileRegex = /\[file\]\(([^)]+)\)/g
+  while ((match = fileRegex.exec(content)) !== null) {
+    const url = match[1]
+    const name = url.split('/').pop() || "文件"
+    mediaItems.push({
+      type: "file",
+      url,
+      name
+    })
+  }
+
+  // 匹配 [ppt](url) PPT格式
+  const pptRegex = /\[ppt\]\(([^)]+)\)/g
+  while ((match = pptRegex.exec(content)) !== null) {
+    const url = match[1]
+    const name = url.split('/').pop() || "PPT文档"
+    mediaItems.push({
+      type: "ppt",
+      url,
+      name
+    })
+  }
+
+  // 匹配 MEDIA: 前缀格式 (MEDIA:image:url, MEDIA:file:url, MEDIA:ppt:url)
+  const mediaPrefixRegex = /^MEDIA:(image|file|ppt):(.+)$/gm
+  while ((match = mediaPrefixRegex.exec(content)) !== null) {
+    const type = match[1] as "image" | "file" | "ppt"
+    const url = match[2]
+    const name = url.split('/').pop() || type
+    mediaItems.push({ type, url, name })
+  }
+
+  // 从主内容中移除媒体标记
+  let cleanContent = content
+    .replace(/!\[([^\]]*)\]\([^)]+\)/g, '')
+    .replace(/\[file\]\([^)]+\)/g, '')
+    .replace(/\[ppt\]\([^)]+\)/g, '')
+    .replace(/^MEDIA:(image|file|ppt):.+$/gm, '')
+    .trim()
+
   // 如果内容为空或只有思考内容
-  if (!mainContent && !thinkContent && !openThinkContent) {
+  if (!cleanContent && !thinkContent && !openThinkContent && mediaItems.length === 0) {
     return <span className="text-emerald-500 animate-cursor-blink">▍</span>;
   }
-  
+
+  // 🔥 从 cleanContent 中移除思考标签
+  const mainContent = cleanContent.replace(/<think>[\s\S]*?<\/think>/gi, '').trim()
+
   const lines = mainContent.split("\n");
   const renderedElements = [];
   let tableBuffer: string[] = [];
@@ -472,10 +609,13 @@ function UltimateRenderer({ content, isStreaming = false }: { content: string; i
     <div className="w-full overflow-hidden break-words">
       {/* 🧠 显示折叠的思考块（已完成的思考） */}
       {thinkContent && <ThinkingBlock content={thinkContent} isStreaming={false} />}
-      
+
       {/* 🧠 显示正在进行的思考（流式输出中） */}
       {openThinkContent && <ThinkingBlock content={openThinkContent} isStreaming={true} />}
-      
+
+      {/* 🔥 媒体内容（图片、文件、PPT） */}
+      {mediaItems.length > 0 && <MediaBlock items={mediaItems} />}
+
       {/* 主要内容 */}
       {renderedElements}
     </div>
