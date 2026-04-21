@@ -391,35 +391,53 @@ export async function POST(request: NextRequest) {
 
         if (isWorkflow) {
             // 🎨 Workflow API 格式
-            // 🔥 关键修复：init_image 需要是文件对象格式，而不是简单的文件ID字符串
-            difyRequest = {
-                inputs: {
-                    image_prompt: query || "",  // ✅ 文本提示词
-                    ...(inputs || {})           // 保留其他可能的输入
-                },
-                response_mode: "streaming",
-                user: userId || "default-user",
-            }
+            // GPT Image 2 使用 prompt/mode/size，Dify Banana 使用 image_prompt
+            const isGptImage2 = model === "gpt-image-2";
 
-            // 🔥 如果有文件，构造文件对象格式
-            if (fileIds && fileIds.length > 0) {
-                difyRequest.inputs.init_image = {
-                    type: 'image',
-                    transfer_method: 'local_file',
-                    upload_file_id: fileIds[0]
+            if (isGptImage2) {
+                // GPT Image 2 参数格式
+                difyRequest = {
+                    inputs: {
+                        prompt: query || "",
+                        mode: inputs?.mode || "generate",
+                        size: inputs?.size || "1024x1024",
+                        ...(inputs || {})
+                    },
+                    response_mode: "blocking",  // 图片生成用 blocking 模式
+                    user: userId || "default-user",
                 }
-                console.log(`🎨 [Banana] 使用文件对象:`, difyRequest.inputs.init_image)
-            }
+                console.log(`🎨 [GPT Image 2] Workflow 请求体:`, JSON.stringify(difyRequest, null, 2))
+            } else {
+                // Dify Banana 参数格式（image_prompt）
+                difyRequest = {
+                    inputs: {
+                        image_prompt: query || "",
+                        ...(inputs || {})
+                    },
+                    response_mode: "streaming",
+                    user: userId || "default-user",
+                }
 
-            // 🎨 传递尺寸参数（如果有）
-            if (imageSize) {
-                difyRequest.inputs.aspect_ratio = imageSize.ratio || "9:16"
-                difyRequest.inputs.image_width = imageSize.width || 1080
-                difyRequest.inputs.image_height = imageSize.height || 1920
-                console.log(`🎨 [Banana] 图片尺寸: ${imageSize.ratio} (${imageSize.width}x${imageSize.height})`)
-            }
+                // 🔥 如果有文件，构造文件对象格式
+                if (fileIds && fileIds.length > 0) {
+                    difyRequest.inputs.init_image = {
+                        type: 'image',
+                        transfer_method: 'local_file',
+                        upload_file_id: fileIds[0]
+                    }
+                    console.log(`🎨 [Banana] 使用文件对象:`, difyRequest.inputs.init_image)
+                }
 
-            console.log(`🎨 [Banana] Workflow 请求体:`, JSON.stringify(difyRequest, null, 2))
+                // 🎨 传递尺寸参数（如果有）
+                if (imageSize) {
+                    difyRequest.inputs.aspect_ratio = imageSize.ratio || "9:16"
+                    difyRequest.inputs.image_width = imageSize.width || 1080
+                    difyRequest.inputs.image_height = imageSize.height || 1920
+                    console.log(`🎨 [Banana] 图片尺寸: ${imageSize.ratio} (${imageSize.width}x${imageSize.height})`)
+                }
+
+                console.log(`🎨 [Banana] Workflow 请求体:`, JSON.stringify(difyRequest, null, 2))
+            }
         } else {
             // 💬 Chat API 格式
             difyRequest = {
