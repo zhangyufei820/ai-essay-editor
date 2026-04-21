@@ -396,11 +396,13 @@ export async function POST(request: NextRequest) {
 
             if (isGptImage2) {
                 // GPT Image 2 参数格式 - 使用 blocking 模式
+                // 🎨 正确传递尺寸参数
+                const gptImage2Size = imageSize ? `${imageSize.width}x${imageSize.height}` : "1024x1024"
                 difyRequest = {
                     inputs: {
                         prompt: query || "",
                         mode: inputs?.mode || "generate",
-                        size: inputs?.size || "1024x1024",
+                        size: gptImage2Size,
                         ...(inputs || {})
                     },
                     response_mode: "blocking",  // blocking 模式
