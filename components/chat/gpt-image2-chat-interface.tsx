@@ -580,7 +580,7 @@ function GptImage2ChatInterfaceInner() {
               <span className="text-sm font-medium text-slate-700">GPT Image 2</span>
             </div>
           </div>
-          <div className="md:hidden">
+          <div>
             {userId ? (
               <div className="flex items-center gap-2">
                 <span className="text-xs text-green-700 font-medium">{userCredits.toLocaleString()}</span>
