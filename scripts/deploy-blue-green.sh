@@ -101,13 +101,33 @@ check_current_status() {
 build_new_image() {
     local TAG=$1
     log "开始构建新镜像: ${PROJECT_NAME}:${TAG}..."
-    
-    # 构建镜像
-    docker build -t "${PROJECT_NAME}:${TAG}" . || error "镜像构建失败"
-    
+
+    # 从 .env.production 自动提取 Dockerfile 需要的构建参数
+    local BUILD_ARGS=""
+
+    # 检查 env 文件是否存在
+    if [ -f ".env.production" ]; then
+        # 提取 NEXT_PUBLIC_* 构建参数（与 Dockerfile ARG 对应）
+        for VAR in NEXT_PUBLIC_SUPABASE_URL NEXT_PUBLIC_SUPABASE_ANON_KEY NEXT_PUBLIC_AUTHING_APP_ID NEXT_PUBLIC_APP_URL NEXT_PUBLIC_API_BASE_URL NEXT_PUBLIC_CDN_URL; do
+            VALUE=$(grep "^${VAR}=" .env.production | cut -d'=' -f2- | tr -d '\r')
+            if [ -n "$VALUE" ]; then
+                BUILD_ARGS="${BUILD_ARGS} --build-arg ${VAR}=${VALUE}"
+                log "  [构建参数] ${VAR}=***（已提取）"
+            else
+                warning "  [构建参数] ${VAR} 未在 .env.production 中找到！"
+            fi
+        done
+    else
+        warning ".env.production 文件不存在，跳过自动提取构建参数"
+    fi
+
+    # 构建镜像（传入构建参数）
+    log "执行: docker build -t ${PROJECT_NAME}:${TAG} ${BUILD_ARGS} ."
+    eval docker build -t "${PROJECT_NAME}:${TAG}" ${BUILD_ARGS} . || error "镜像构建失败"
+
     # 同时打上 latest 标签
     docker tag "${PROJECT_NAME}:${TAG}" "${PROJECT_NAME}:latest"
-    
+
     success "新镜像构建完成: ${PROJECT_NAME}:${TAG}"
 }
 
