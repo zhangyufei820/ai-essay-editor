@@ -31,7 +31,7 @@ GREEN_PORT=3002
 
 # 健康检查配置
 HEALTH_CHECK_URL="http://localhost:"
-HEALTH_CHECK_PATH="/api/health"
+HEALTH_CHECK_PATH="/"
 HEALTH_CHECK_RETRIES=30
 HEALTH_CHECK_INTERVAL=2
 
@@ -156,7 +156,7 @@ start_new_container() {
         -e NODE_ENV=production \
         -e PORT=3000 \
         --env-file .env.production \
-        --health-cmd="curl -f http://localhost:3000/api/health || exit 1" \
+        --health-cmd="curl -f http://localhost:3000/ || exit 1" \
         --health-interval=10s \
         --health-timeout=5s \
         --health-retries=3 \
