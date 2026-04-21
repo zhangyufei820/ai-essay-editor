@@ -33,6 +33,8 @@ import type { ChatSession } from "./chat-sidebar"
 import { LoadingStateCard } from "@/components/ui/LoadingStateCard"
 import { ChatSkeleton } from "@/components/ui/chat-skeleton"
 import { motion, AnimatePresence } from "framer-motion"
+import { EnhancedMarkdown } from "./EnhancedMarkdown"
+import { UserMessageBubble } from "./UserMessageBubble"
 import katex from "katex"
 import { brandColors, slateColors } from "@/lib/design-tokens"
 import { LATEX_MACROS, renderLatex } from "@/lib/latex-constants"
@@ -2532,40 +2534,19 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                         "flex flex-col max-w-[85%] sm:max-w-[80%]",
                         message.role === "user" ? "items-end" : "items-start"
                       )}>
-                        {/* User message - Neutral style with light background */}
+                        {/* User message - 复制和编辑功能 */}
                         {message.role === "user" ? (
-                          <div
-                            className="rounded-2xl px-4 py-3 text-slate-700 border border-slate-200"
-                            style={{ backgroundColor: "#f8fafc", borderRadius: "18px 4px 18px 18px" }}
-                          >
-                            <div className="space-y-2">
-                              {/* Show uploaded files */}
-                              {message.files && message.files.length > 0 && (
-                                <div className="flex flex-wrap gap-2 mb-2">
-                                  {message.files.map((file, idx) => (
-                                    <motion.div
-                                      key={idx}
-                                      initial={{ opacity: 0, scale: 0.8 }}
-                                      animate={{ opacity: 1, scale: 1 }}
-                                      transition={{ duration: 0.3, delay: idx * 0.1 }}
-                                    >
-                                      {file.preview ? (
-                                        <div className="relative w-14 h-14 sm:w-16 sm:h-16 rounded-lg overflow-hidden border-2 border-white/30">
-                                          <img src={file.preview} alt={file.name} className="w-full h-full object-cover" />
-                                        </div>
-                                      ) : (
-                                        <div className="flex items-center gap-1.5 rounded-lg bg-white/20 px-2 py-1 text-xs">
-                                          <FileText className="h-3 w-3" />
-                                          <span className="max-w-[60px] truncate">{file.name}</span>
-                                        </div>
-                                      )}
-                                    </motion.div>
-                                  ))}
-                                </div>
-                              )}
-                              <div className="whitespace-pre-wrap text-sm sm:text-[15px]" style={{ lineHeight: 1.6 }}>{message.content}</div>
-                            </div>
-                          </div>
+                          <UserMessageBubble
+                            content={message.content}
+                            files={message.files}
+                            onEdit={(content) => setInput(content)}
+                            onSend={(content) => {
+                              setInput(content)
+                              // 自动提交
+                              const fakeEvent = { preventDefault: () => {} } as unknown as React.FormEvent
+                              onSubmit(fakeEvent)
+                            }}
+                          />
                         ) : (
                           // AI message - Flat, minimal container
                           <div className="w-full">
@@ -2620,9 +2601,8 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                                   }
 
                                   return (
-                                    <UltimateRenderer
+                                    <EnhancedMarkdown
                                       content={cleanLLMText(message.content)}
-                                      isStreaming={message.id === currentBotIdRef.current && showCursor && isLoading}
                                     />
                                   )
                                 })()}
