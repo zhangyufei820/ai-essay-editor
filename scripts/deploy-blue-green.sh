@@ -202,22 +202,41 @@ health_check() {
 
 switch_traffic() {
     local PORT=$1
-    
+
     log "准备切换流量到端口 ${PORT}..."
-    
-    # 这里根据实际部署方式切换流量
-    # 方式1: 如果使用 Nginx 反向代理
+
+    # OpenResty 配置路径（沈翔智学使用 1Panel 部署的 OpenResty）
+    local OPENRESTY_CONF_DIR="/opt/1panel/apps/openresty/openresty/conf/conf.d"
+    local OPENRESTY_CONTAINER="shenxiang-openresty"
+
+    # 方式1: OpenResty/Nginx 反向代理
+    if [ -d "$OPENRESTY_CONF_DIR" ]; then
+        log "检测到 OpenResty 配置，正在更新代理端口..."
+        # 更新所有 shenxiang 相关的代理配置
+        for conf in "$OPENRESTY_CONF_DIR"/shenxiang.school.conf "$OPENRESTY_CONF_DIR"/www.shenxiang.school.conf; do
+            if [ -f "$conf" ]; then
+                sed -i "s|proxy_pass http://127.0.0.1:[0-9]*;|proxy_pass http://127.0.0.1:${PORT};|g" "$conf"
+                log "已更新: $conf"
+            fi
+        done
+        # 通过容器重载 OpenResty
+        docker exec "$OPENRESTY_CONTAINER" nginx -s reload 2>/dev/null || docker exec "$OPENRESTY_CONTAINER" nginx -s reload
+        success "OpenResty 已更新代理到端口 ${PORT}"
+        return 0
+    fi
+
+    # 方式2: 传统 Nginx 配置
     if [ -f "/etc/nginx/conf.d/${PROJECT_NAME}.conf" ]; then
         log "检测到 Nginx 配置，正在更新代理端口..."
         sed -i "s/proxy_pass http:\/\/localhost:[0-9]*/proxy_pass http:\/\/localhost:${PORT}/" "/etc/nginx/conf.d/${PROJECT_NAME}.conf"
         nginx -s reload
         success "Nginx 已更新代理到端口 ${PORT}"
-    
-    # 方式2: 如果使用 Docker 端口映射（需要重启容器）
-    else
-        warning "未检测到 Nginx 配置"
-        log "请手动配置反向代理或负载均衡器指向端口 ${PORT}"
+        return 0
     fi
+
+    # 方式3: 未检测到反向代理配置
+    warning "未检测到 OpenResty/Nginx 配置"
+    log "请手动配置反向代理指向端口 ${PORT}"
 }
 
 # ============================================
