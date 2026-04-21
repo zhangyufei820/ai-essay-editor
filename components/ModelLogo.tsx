@@ -29,6 +29,8 @@ export type ModelKey =
   | "banzhuren"
   | "banana-2-pro"
   | "suno-v5"
+  | "banana"
+  | "gpt-image-2"
 
 interface ModelLogoConfig {
   /** SVG 文件路径（本地 /public 路径） */
@@ -109,6 +111,18 @@ const MODEL_LOGOS: Record<ModelKey, ModelLogoConfig> = {
   // 其他
   "open-claw": {
     LucideIcon: Sparkles,
+    brandColor: "#10A37F",
+  },
+
+  // 图像生成类
+  "banana": {
+    svgPath: "/logos/google-gemini-icon.svg",
+    useLocal: true,
+    brandColor: "#10A37F",
+  },
+  "gpt-image-2": {
+    svgPath: "/logos/chatgpt-icon.svg",
+    useLocal: true,
     brandColor: "#10A37F",
   },
 }

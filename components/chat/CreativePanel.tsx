@@ -10,6 +10,7 @@
 import { motion, AnimatePresence } from "framer-motion"
 import { X, Image, Video, Music, Sparkles } from "lucide-react"
 import { ArtisticThinkingIcon } from "@/components/icons/ArtisticThinkingIcons"
+import { ModelLogo, type ModelKey } from "@/components/ModelLogo"
 
 // ============================================
 // 🎨 Design Tokens - "智慧之光" 配色系统
@@ -79,6 +80,7 @@ interface CreativeOption {
   description: string
   badge?: string
   gradient: string
+  modelKey?: ModelKey
 }
 
 interface CreativePanelProps {
@@ -92,13 +94,23 @@ interface CreativePanelProps {
 
 const CREATIVE_OPTIONS: CreativeOption[] = [
   {
-    key: "image",
-    name: "图像生成",
+    key: "image-banana",
+    name: "banana",
     nameEn: "IMAGE",
     icon: Image,
     description: "AI 驱动的图像创作",
     badge: "热门",
     gradient: "linear-gradient(135deg, rgba(134, 239, 172, 0.15) 0%, rgba(99, 102, 241, 0.08) 100%)",
+    modelKey: "banana",
+  },
+  {
+    key: "image-gpt2",
+    name: "Gpt image 2",
+    nameEn: "IMAGE",
+    icon: Image,
+    description: "AI 驱动的图像创作",
+    gradient: "linear-gradient(135deg, rgba(134, 239, 172, 0.15) 0%, rgba(99, 102, 241, 0.08) 100%)",
+    modelKey: "gpt-image-2",
   },
   {
     key: "music",
@@ -426,13 +438,17 @@ function CreativeIslandCard({
           }}
           transition={{ duration: 0.3 }}
         >
-          <Icon
-            className="w-6 h-6"
-            style={{
-              color: TOKENS.primary[800],
-              strokeWidth: 1.5,
-            }}
-          />
+          {option.modelKey ? (
+            <ModelLogo modelKey={option.modelKey} size="lg" />
+          ) : (
+            <Icon
+              className="w-6 h-6"
+              style={{
+                color: TOKENS.primary[800],
+                strokeWidth: 1.5,
+              }}
+            />
+          )}
 
           {/* 悬停时图标微光 */}
           <motion.div

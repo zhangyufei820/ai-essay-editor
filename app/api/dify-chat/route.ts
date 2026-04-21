@@ -270,6 +270,10 @@ export async function POST(request: NextRequest) {
             targetApiKey = process.env.DIFY_AI_WRITING_PAPER_API_KEY;
             keySource = "DIFY_AI_WRITING_PAPER_API_KEY";
             break;
+        case "gpt-image-2":
+            targetApiKey = process.env.DIFY_GPT_IMAGE_API_KEY;
+            keySource = "DIFY_GPT_IMAGE_API_KEY";
+            break;
         // 如果是 Sono/Sora 可以在这里继续加 case
         default:
             // 如果没传 model 或者 model 是 standard，就用上面的默认 Key
