@@ -21,7 +21,7 @@ ENV NEXT_PUBLIC_CDN_URL=${NEXT_PUBLIC_CDN_URL}
 
 # 安装依赖（包括 devDependencies，用于构建阶段）
 COPY package*.json ./
-RUN npm install -g pnpm && pnpm install
+RUN npm ci
 
 # 复制源代码
 COPY . .
