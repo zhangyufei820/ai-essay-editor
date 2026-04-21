@@ -383,8 +383,8 @@ export async function POST(request: NextRequest) {
     const callDify = async (retryWithoutId = false) => {
         const currentConvId = retryWithoutId ? null : conversation_id;
 
-        // 🎨 Banana 2 Pro 使用 Workflow API，其他模型使用 Chat API
-        const isWorkflow = model === "banana-2-pro";
+        // 🎨 图片生成模型使用 Workflow API，其他模型使用 Chat API
+        const isWorkflow = model === "banana-2-pro" || model === "gpt-image-2";
         const apiEndpoint = isWorkflow ? "/workflows/run" : "/chat-messages";
 
         let difyRequest: DifyWorkflowRequest | DifyChatRequest;
