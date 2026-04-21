@@ -435,80 +435,53 @@ function GptImage2ChatInterfaceInner() {
           throw new Error(`请求失败 (${res.status}): ${errorText.slice(0, 100)}`)
         }
 
-        const reader = res.body?.getReader()
-        const decoder = new TextDecoder()
-        let buffer = ""
+        // 🎨 GPT Image 2 使用 blocking 模式，直接解析 JSON
+        try {
+          const result = await res.json()
+          console.log(`🎨 [GPT Image 2] Blocking 响应:`, result)
 
-        while (true) {
-            const { done, value } = await reader!.read()
-            if (done) break
+          // Blocking 模式返回格式: { task_id, workflow_run_id, data: { outputs: {...} } }
+          if (result.data?.outputs) {
+            const outputs = result.data.outputs
 
-            buffer += decoder.decode(value, { stream: true })
-            const lines = buffer.split("\n")
-            buffer = lines.pop() || ""
-
-            for (const line of lines) {
-                if (!line.startsWith("data: ")) continue
-                const data = line.slice(6).trim()
-                if (data === "[DONE]") continue
-
-                try {
-                    const json = JSON.parse(data)
-
-                    if (json.conversation_id && sessionIdRef.current !== json.conversation_id) {
-                        sessionIdRef.current = json.conversation_id
-                    }
-
-                    if (json.answer) {
-                        fullText += json.answer
-                        setMessages(p => p.map(m => m.id === botId ? { ...m, content: fullText } : m))
-                    }
-
-                    if (json.event === 'text_chunk' || json.event === 'agent_message') {
-                        const text = json.data?.text || json.text || ''
-                        if (text) {
-                            fullText += text
-                            setMessages(p => p.map(m => m.id === botId ? { ...m, content: fullText } : m))
-                        }
-                    }
-
-                    if (json.event === 'workflow_finished') {
-                        console.log(`🎨 [GPT Image 2前端] Workflow完成:`, json.data)
-
-                        if (json.data?.outputs) {
-                            const outputs = json.data.outputs
-
-                            if (outputs.text) {
-                                fullText = outputs.text
-                                setMessages(p => p.map(m => m.id === botId ? { ...m, content: fullText } : m))
-                            } else if (outputs.result) {
-                                fullText = outputs.result
-                                setMessages(p => p.map(m => m.id === botId ? { ...m, content: fullText } : m))
-                            }
-
-                            if (outputs.files && Array.isArray(outputs.files)) {
-                                for (const file of outputs.files) {
-                                    if (file.type === 'image' && file.url) {
-                                        fullText += `\n\n![Generated Image](${file.url})`
-                                    }
-                                }
-                                setMessages(p => p.map(m => m.id === botId ? { ...m, content: fullText } : m))
-                            }
-                        }
-                    }
-
-                    if (json.event === 'message_file') {
-                        console.log(`🎨 [GPT Image 2前端] 收到图片:`, json)
-                        if (json.type === 'image' && json.url) {
-                            fullText += `\n\n![Generated Image](${json.url})`
-                            setMessages(p => p.map(m => m.id === botId ? { ...m, content: fullText } : m))
-                        }
-                    }
-
-                } catch (e) {
-                    console.error(`🎨 [GPT Image 2前端] 解析失败:`, e, data)
-                }
+            // 解析图片 URL
+            let imageUrl = ''
+            if (outputs.first_url) {
+              imageUrl = outputs.first_url
+            } else if (outputs.image_data_uri) {
+              imageUrl = outputs.image_data_uri
+            } else if (outputs.url) {
+              imageUrl = outputs.url
             }
+
+            // 解析文本
+            if (outputs.status_code === 200 && outputs.raw_body) {
+              try {
+                const rawData = JSON.parse(outputs.raw_body)
+                if (rawData.data && Array.isArray(rawData.data)) {
+                  for (const item of rawData.data) {
+                    if (item.url) imageUrl = item.url
+                    if (item.revised_prompt) fullText += `提示词: ${item.revised_prompt}\n\n`
+                  }
+                }
+              } catch (e) {
+                // raw_body 解析失败，使用原始文本
+              }
+            }
+
+            if (imageUrl) {
+              fullText = `![Generated Image](${imageUrl})`
+            } else if (outputs.text || outputs.result) {
+              fullText = outputs.text || outputs.result
+            }
+          } else if (result.error) {
+            throw new Error(`Dify Error: ${result.error}`)
+          }
+
+          setMessages(p => p.map(m => m.id === botId ? { ...m, content: fullText } : m))
+        } catch (e) {
+          console.error(`🎨 [GPT Image 2前端] 解析失败:`, e)
+          throw e
         }
 
         if (fullText) {
