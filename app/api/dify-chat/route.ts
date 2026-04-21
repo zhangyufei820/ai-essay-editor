@@ -395,7 +395,7 @@ export async function POST(request: NextRequest) {
             const isGptImage2 = model === "gpt-image-2";
 
             if (isGptImage2) {
-                // GPT Image 2 参数格式 - 使用 async 模式避免超时
+                // GPT Image 2 参数格式 - 使用 blocking 模式
                 difyRequest = {
                     inputs: {
                         prompt: query || "",
@@ -403,7 +403,7 @@ export async function POST(request: NextRequest) {
                         size: inputs?.size || "1024x1024",
                         ...(inputs || {})
                     },
-                    response_mode: "async",  // 异步模式，立即返回 task_id
+                    response_mode: "blocking",  // blocking 模式
                     user: userId || "default-user",
                 }
                 console.log(`🎨 [GPT Image 2] Workflow 请求体:`, JSON.stringify(difyRequest, null, 2))
@@ -459,14 +459,14 @@ export async function POST(request: NextRequest) {
 
         console.log(`🔗 [API端点] ${apiEndpoint} | 模式: ${isWorkflow ? 'Workflow' : 'Chat'}`)
 
-        // 🔥 180秒兜底超时 AbortController
+        // 🔥 85秒超时（Cloudflare 524 超时是 100 秒，提前中断返回错误而不是 524）
         streamStatus.controller = new AbortController()
         streamStatus.timeoutId = setTimeout(() => {
             if (!streamStatus.firstByteReceived) {
-                console.warn(`⏰ [Dify超时] 180秒内未收到首字节，中断请求`)
+                console.warn(`⏰ [Dify超时] 85秒内未收到首字节，中断请求`)
                 streamStatus.controller?.abort()
             }
-        }, 180_000)
+        }, 85_000)
 
         try {
             console.warn(`🚀 [Dify请求] 开始请求 Dify... model=${model} endpoint=${DIFY_BASE_URL}${apiEndpoint}`)
