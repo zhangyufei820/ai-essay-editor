@@ -941,6 +941,15 @@ function GptImage2ChatInterfaceInner() {
                       <button
                         key={session.id}
                         onClick={() => {
+                          // 🔥 如果是其他模型的会话，跳转到对应页面
+                          if (session.ai_model && session.ai_model !== "gpt-image-2") {
+                            const modelRoute = session.ai_model === "banana-2-pro"
+                              ? "/chat/banana-2-pro"
+                              : `/chat/${session.ai_model}`
+                            router.push(`${modelRoute}?id=${session.id}`)
+                            return
+                          }
+                          // 同模型会话，正常加载
                           loadHistorySession(session.id)
                           setShowHistorySidebar(false)
                         }}
