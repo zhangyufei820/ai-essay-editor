@@ -15,7 +15,8 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import {
   Send, Paperclip, X, FileText, Copy, Loader2, Palette, User,
-  ChevronLeft, ArrowDown, Download, Share2, Sparkles, Wand2, Image as ImageIcon
+  ChevronLeft, ArrowDown, Download, Share2, Sparkles, Wand2, Image as ImageIcon,
+  History
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
@@ -66,6 +67,14 @@ type UploadedFile = {
   data: string
   preview?: string
   difyFileId?: string
+}
+
+type ChatSession = {
+  id: string
+  title: string
+  date: number
+  preview: string
+  ai_model: string
 }
 
 // 🎯 流式光标组件
@@ -151,6 +160,10 @@ function GptImage2ChatInterfaceInner() {
   const [selectedMode, setSelectedMode] = useState<ModeOption>(MODE_OPTIONS[0])
   const [selectedSize, setSelectedSize] = useState<SizeOption>(SIZE_OPTIONS[0])
 
+  // 🔥 历史会话侧边栏状态
+  const [showHistorySidebar, setShowHistorySidebar] = useState(false)
+  const [chatSessions, setChatSessions] = useState<ChatSession[]>([])
+
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
@@ -228,6 +241,40 @@ function GptImage2ChatInterfaceInner() {
       setIsLoading(false)
     }
   }
+
+  // 🔥 获取历史会话列表
+  const fetchChatSessions = async (uid: string) => {
+    try {
+      const res = await fetch(`/api/chat-session`, {
+        headers: { 'X-User-Id': uid }
+      })
+      if (!res.ok) return
+      const { sessions } = await res.json()
+      const safeSessionData = Array.isArray(sessions) ? sessions : []
+      if (safeSessionData.length > 0) {
+        const mapped = safeSessionData.map((s: any) => ({
+          id: s.id,
+          title: s.title || "新对话",
+          date: new Date(s.created_at).getTime(),
+          preview: s.preview || "",
+          ai_model: s.ai_model || "gpt-image-2"
+        }))
+        setChatSessions(mapped)
+      } else {
+        setChatSessions([])
+      }
+    } catch (err) {
+      console.error("❌ [历史会话] 查询异常:", err)
+      setChatSessions([])
+    }
+  }
+
+  // 🔥 当打开历史会话侧边栏时，重新获取会话列表
+  useEffect(() => {
+    if (showHistorySidebar && userId) {
+      fetchChatSessions(userId)
+    }
+  }, [showHistorySidebar, userId])
 
   const handleScroll = () => {
     if (scrollAreaRef.current) {
@@ -537,15 +584,29 @@ function GptImage2ChatInterfaceInner() {
             {userId ? (
               <div className="flex items-center gap-2">
                 <span className="text-xs text-green-700 font-medium">{userCredits.toLocaleString()}</span>
+                <button
+                  onClick={() => setShowHistorySidebar(true)}
+                  className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 transition-colors"
+                >
+                  <History className="h-4 w-4 text-slate-600" />
+                </button>
               </div>
             ) : (
-              <button
-                onClick={() => router.push("/login")}
-                className="px-3 py-1.5 text-xs font-medium text-white rounded-lg"
-                style={{ backgroundColor: BRAND_GREEN }}
-              >
-                登录
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => router.push("/login")}
+                  className="px-3 py-1.5 text-xs font-medium text-white rounded-lg"
+                  style={{ backgroundColor: BRAND_GREEN }}
+                >
+                  登录
+                </button>
+                <button
+                  onClick={() => setShowHistorySidebar(true)}
+                  className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 transition-colors"
+                >
+                  <History className="h-4 w-4 text-slate-600" />
+                </button>
+              </div>
             )}
           </div>
           <div className="hidden md:block w-16" />
@@ -553,6 +614,14 @@ function GptImage2ChatInterfaceInner() {
 
         {/* 滚动区域 */}
         <div className="flex-1 h-0 relative overflow-hidden">
+          {/* 🔥 移动端浮动历史按钮 */}
+          <button
+            onClick={() => setShowHistorySidebar(!showHistorySidebar)}
+            className="absolute top-3 right-3 z-40 flex items-center gap-1.5 px-3 py-2 bg-white/95 backdrop-blur-lg rounded-full shadow-lg border border-slate-100 md:hidden"
+          >
+            <History className="h-4 w-4 text-slate-600" />
+            <span className="text-xs font-medium text-slate-600">历史</span>
+          </button>
           <div
             ref={scrollAreaRef}
             onScroll={handleScroll}
@@ -831,6 +900,69 @@ function GptImage2ChatInterfaceInner() {
             )}
           </div>
         </div>
+
+        {/* 🔥 历史会话侧边栏 - 左侧滑出 */}
+        <AnimatePresence>
+          {showHistorySidebar && (
+            <>
+              {/* 遮罩层 */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 z-40 bg-black/20 backdrop-blur-sm"
+                onClick={() => setShowHistorySidebar(false)}
+              />
+              {/* 侧边栏 */}
+              <motion.div
+                initial={{ x: -280 }}
+                animate={{ x: 0 }}
+                exit={{ x: -280 }}
+                transition={{ duration: 0.3, ease: [0.32, 0.72, 0, 1] }}
+                className="fixed left-0 top-0 h-screen w-72 z-50 flex flex-col"
+                style={{ background: "#FDFBF7", boxShadow: "4px 0 24px rgba(0,0,0,0.12)" }}
+              >
+                {/* 头部 */}
+                <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-slate-100">
+                  <span className="text-sm font-semibold text-slate-700">历史会话</span>
+                  <button
+                    onClick={() => setShowHistorySidebar(false)}
+                    className="p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
+                  >
+                    <X className="h-4 w-4 text-slate-500" />
+                  </button>
+                </div>
+                {/* 会话列表 */}
+                <div className="flex-1 min-h-0 px-1 py-2 overflow-y-auto">
+                  {chatSessions.length === 0 ? (
+                    <div className="text-center py-8 text-slate-400 text-sm">暂无历史会话</div>
+                  ) : (
+                    chatSessions.map(session => (
+                      <button
+                        key={session.id}
+                        onClick={() => {
+                          loadHistorySession(session.id)
+                          setShowHistorySidebar(false)
+                        }}
+                        className={cn(
+                          "w-full text-left px-3 py-2.5 rounded-lg transition-all",
+                          currentSessionId === session.id
+                            ? "bg-[#14532d]/10 text-[#14532d]"
+                            : "hover:bg-slate-100 text-slate-600"
+                        )}
+                      >
+                        <div className="text-sm font-medium truncate">{session.title}</div>
+                        <div className="text-[10px] text-slate-400 mt-0.5">
+                          {new Date(session.date).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   )
