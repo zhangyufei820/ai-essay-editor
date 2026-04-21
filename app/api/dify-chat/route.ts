@@ -556,7 +556,14 @@ export async function POST(request: NextRequest) {
         
         return new Response(JSON.stringify({ error: `Dify Error: ${errorText}` }), { status: response.status })
     }
-    
+
+    // 🎨 GPT Image 2 使用 blocking 模式，直接返回 JSON
+    if (model === "gpt-image-2") {
+        console.log(`🎨 [GPT Image 2] 使用 blocking 模式，直接返回 JSON`)
+        const result = await response.json()
+        return Response.json(result)
+    }
+
     console.log(`✅ [Dify请求] 成功，开始流式传输...`)
 
     // --- 5. 流式响应 + 智能扣费 + Banana 图片转存 ---
