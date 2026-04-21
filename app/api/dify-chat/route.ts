@@ -459,14 +459,14 @@ export async function POST(request: NextRequest) {
 
         console.log(`🔗 [API端点] ${apiEndpoint} | 模式: ${isWorkflow ? 'Workflow' : 'Chat'}`)
 
-        // 🔥 85秒超时（Cloudflare 524 超时是 100 秒，提前中断返回错误而不是 524）
+        // 🔥 120秒超时（Cloudflare 524 超时是 100 秒，设置大于 100 秒让 Cloudflare 先超时）
         streamStatus.controller = new AbortController()
         streamStatus.timeoutId = setTimeout(() => {
             if (!streamStatus.firstByteReceived) {
-                console.warn(`⏰ [Dify超时] 85秒内未收到首字节，中断请求`)
+                console.warn(`⏰ [Dify超时] 120秒内未收到首字节，中断请求`)
                 streamStatus.controller?.abort()
             }
-        }, 85_000)
+        }, 120_000)
 
         try {
             console.warn(`🚀 [Dify请求] 开始请求 Dify... model=${model} endpoint=${DIFY_BASE_URL}${apiEndpoint}`)
@@ -493,7 +493,7 @@ export async function POST(request: NextRequest) {
             const err = error instanceof Error ? error : null
             if (err && (err.name === 'AbortError' || err.message.includes('abort'))) {
                 console.error(`❌ [Dify请求] 请求被中断（超时）:`, err.message)
-                throw new Error('请求超时：Dify 服务在 180 秒内未响应')
+                throw new Error('请求超时：Dify 服务在 120 秒内未响应')
             }
 
             throw error
