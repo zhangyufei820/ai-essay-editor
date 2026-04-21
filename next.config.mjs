@@ -131,7 +131,7 @@ const nextConfig = {
           },
           {
             key: 'Content-Security-Policy',
-            value: "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdn.authing.co https://cdn.shenxiang.school https://rnujdnmxufmzgjvmddla.supabase.co; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: https: blob:; connect-src 'self' https://rnujdnmxufmzgjvmddla.supabase.co https://api.xunhupay.com https://cdn.shenxiang.school wss:; font-src 'self' data: https://cdn.jsdelivr.net; frame-ancestors 'none'",
+            value: "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdn.authing.co https://cdn.shenxiang.school https://rnujdnmxufmzgjvmddla.supabase.co; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: https: blob:; connect-src 'self' https://core.authing.cn https://rnujdnmxufmzgjvmddla.supabase.co https://api.xunhupay.com https://cdn.shenxiang.school wss:; font-src 'self' data: https://cdn.jsdelivr.net; frame-ancestors 'none'",
           },
         ],
       },
