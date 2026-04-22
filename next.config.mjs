@@ -131,7 +131,7 @@ const nextConfig = {
           },
           {
             key: 'Content-Security-Policy',
-            value: "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdn.authing.co https://cdn.shenxiang.school https://rnujdnmxufmzgjvmddla.supabase.co https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdn.authing.co; img-src 'self' data: https: blob:; object-src 'self' https:; connect-src 'self' https://core.authing.cn https://*.authing.cn https://rnujdnmxufmzgjvmddla.supabase.co https://api.xunhupay.com https://cdn.shenxiang.school https://files.authing.co wss:; font-src 'self' data: https://cdn.jsdelivr.net; frame-ancestors 'none'",
+            value: "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdn.authing.co https://cdn.shenxiang.school https://rnujdnmxufmzgjvmddla.supabase.co https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdn.authing.co; img-src 'self' data: https: blob:; object-src 'self' https:; connect-src 'self' https://core.authing.cn https://*.authing.cn https://rnujdnmxufmzgjvmddla.supabase.co https://api.xunhupay.com https://cdn.shenxiang.school https://files.authing.co https://api.shenxiang.school wss:; font-src 'self' data: https://cdn.jsdelivr.net; frame-ancestors 'none'",
           },
         ],
       },
