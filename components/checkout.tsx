@@ -1,15 +1,18 @@
 "use client"
 
-import { useCallback, useState, useEffect } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { EmbeddedCheckout, EmbeddedCheckoutProvider } from "@stripe/react-stripe-js"
 import { loadStripe } from "@stripe/stripe-js"
-import { Loader2, AlertCircle } from "lucide-react"
-
-import { startCheckoutSession } from "@/app/actions/stripe"
+import { AlertCircle, Loader2 } from "lucide-react"
 
 const stripePromise = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
   ? loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY)
   : null
+
+type CheckoutSessionResponse = {
+  clientSecret?: string
+  error?: string
+}
 
 export default function Checkout({ productId }: { productId: string }) {
   const [isReady, setIsReady] = useState(false)
@@ -18,34 +21,49 @@ export default function Checkout({ productId }: { productId: string }) {
 
   const fetchClientSecret = useCallback(async () => {
     try {
-      const clientSecret = await startCheckoutSession(productId)
-      if (!clientSecret) {
-        throw new Error("无法创建支付会话")
+      const response = await fetch("/api/stripe/checkout-session", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ productId }),
+      })
+
+      const payload = await response.json() as CheckoutSessionResponse
+      if (!response.ok) {
+        throw new Error(payload.error || "Failed to create checkout session")
       }
-      return clientSecret
-    } catch (err: any) {
+
+      if (!payload.clientSecret) {
+        throw new Error("Failed to create checkout session")
+      }
+
+      return payload.clientSecret
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Checkout initialization failed"
       console.error("[v0] Stripe checkout error:", err)
-      setCheckoutError(err?.message || "支付初始化失败")
+      setCheckoutError(message)
       throw err
     }
   }, [productId])
 
   useEffect(() => {
     if (!process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY) {
-      setError("Stripe 未配置")
+      setError("Stripe is not configured")
       return
     }
+
     setIsReady(true)
   }, [])
 
   if (error || checkoutError) {
     return (
-      <div className="w-full p-4 bg-orange-50 border border-orange-200 rounded-lg flex items-start gap-3">
-        <AlertCircle className="h-5 w-5 text-orange-600 flex-shrink-0 mt-0.5" />
+      <div className="flex items-start gap-3 rounded-lg border border-orange-200 bg-orange-50 p-4 w-full">
+        <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-orange-600" />
         <div>
-          <p className="text-sm font-medium text-orange-800">Stripe 支付暂时不可用</p>
-          <p className="text-sm text-orange-700 mt-1">
-            {error || checkoutError || "请使用上方的迅虎支付宝或微信支付。"}
+          <p className="text-sm font-medium text-orange-800">Stripe checkout is unavailable</p>
+          <p className="mt-1 text-sm text-orange-700">
+            {error || checkoutError || "Please use the other payment methods above."}
           </p>
         </div>
       </div>
@@ -54,9 +72,9 @@ export default function Checkout({ productId }: { productId: string }) {
 
   if (!isReady || !stripePromise) {
     return (
-      <div className="w-full flex items-center justify-center py-8">
+      <div className="flex w-full items-center justify-center py-8">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-        <span className="ml-2 text-muted-foreground">加载支付组件...</span>
+        <span className="ml-2 text-muted-foreground">Loading checkout...</span>
       </div>
     )
   }
