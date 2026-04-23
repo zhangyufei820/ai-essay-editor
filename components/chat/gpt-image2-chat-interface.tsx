@@ -240,6 +240,7 @@ function GptImage2ChatInterfaceInner() {
 
   const [isNearBottom, setIsNearBottom] = useState(true)
   const [hasNewMessage, setHasNewMessage] = useState(false)
+  const [showHeroIntro, setShowHeroIntro] = useState(true)
   const tierOptionsForRatio = SIZE_OPTIONS.filter((option) => option.ratio === selectedSize.ratio)
   const actionLabel = selectedMode.key === "image-edit" ? "开始编辑" : "开始生成"
   const promptPlaceholder = selectedMode.key === "image-edit"
@@ -385,7 +386,12 @@ function GptImage2ChatInterfaceInner() {
       const isNear = scrollHeight - scrollTop - clientHeight < 100
       setIsNearBottom(isNear)
       if (isNear) setHasNewMessage(false)
+      if (scrollTop > 24 && showHeroIntro) setShowHeroIntro(false)
     }
+  }
+
+  const hideHeroIntro = () => {
+    if (showHeroIntro) setShowHeroIntro(false)
   }
 
   const scrollToBottom = () => {
@@ -734,7 +740,12 @@ function GptImage2ChatInterfaceInner() {
         </div>
 
         {/* 滚动区域 */}
-        <div className="flex-1 h-0 relative overflow-hidden">
+        <div
+          className={cn(
+            "relative overflow-hidden transition-[height,flex] duration-300",
+            messages.length === 0 && !showHeroIntro ? "h-0 flex-none" : "flex-1 h-0"
+          )}
+        >
           {/* 🔥 移动端浮动历史按钮 */}
           <button
             onClick={() => setShowHistorySidebar(!showHistorySidebar)}
@@ -750,6 +761,14 @@ function GptImage2ChatInterfaceInner() {
           >
             <div className="mx-auto max-w-5xl px-4 md:px-6 py-6 md:py-8">
               {messages.length === 0 ? (
+                <AnimatePresence initial={false}>
+                  {showHeroIntro && (
+                    <motion.div
+                      initial={{ opacity: 1, height: "auto", y: 0 }}
+                      exit={{ opacity: 0, height: 0, y: -16, marginBottom: 0 }}
+                      transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                      className="overflow-hidden"
+                    >
                 <div className="mx-auto max-w-3xl py-3 text-center">
                   <div className="inline-flex flex-wrap items-center justify-center gap-2 rounded-full border border-slate-200/80 bg-white/90 px-3 py-2 shadow-sm">
                     <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700">
@@ -776,6 +795,9 @@ function GptImage2ChatInterfaceInner() {
                     ))}
                   </div>
                 </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               ) : (
                 <div className="space-y-5">
                   {messages.map((message) => (
@@ -860,7 +882,14 @@ function GptImage2ChatInterfaceInner() {
         </div>
 
         {/* 输入框 */}
-        <div className="custom-scrollbar max-h-[58dvh] shrink-0 overflow-y-auto border-t border-slate-100 bg-white p-3 md:max-h-[54dvh] md:p-5">
+        <div
+          className={cn(
+            "custom-scrollbar border-t border-slate-100 bg-white p-3 md:p-5",
+            messages.length === 0 && !showHeroIntro
+              ? "flex-1 min-h-0 overflow-y-auto"
+              : "max-h-[58dvh] shrink-0 overflow-y-auto md:max-h-[54dvh]"
+          )}
+        >
           <div className="mx-auto max-w-4xl">
             <form
               onSubmit={onSubmit}
@@ -1099,6 +1128,8 @@ function GptImage2ChatInterfaceInner() {
                           ref={textareaRef}
                           value={input}
                           onChange={(e) => setInput(e.target.value)}
+                          onFocus={hideHeroIntro}
+                          onClick={hideHeroIntro}
                           onKeyDown={handleKeyDown}
                           placeholder={promptPlaceholder}
                           className="mt-3 min-h-[160px] max-h-[240px] resize-none border-0 bg-transparent px-0 py-0 text-[16px] leading-7 text-slate-700 placeholder:text-slate-400 focus-visible:ring-0 sm:min-h-[180px] sm:max-h-[280px]"
@@ -1114,6 +1145,8 @@ function GptImage2ChatInterfaceInner() {
                           <Textarea
                             value={editNotes}
                             onChange={(e) => setEditNotes(e.target.value)}
+                            onFocus={hideHeroIntro}
+                            onClick={hideHeroIntro}
                             placeholder="例如：保留人物表情与服饰，只调整背景、光影和整体商业感。"
                             className="mt-3 min-h-[92px] resize-none rounded-2xl border border-slate-200 bg-white px-3 py-3 text-sm leading-6 text-slate-700 placeholder:text-slate-400 focus-visible:ring-0"
                             disabled={isLoading}
