@@ -21,6 +21,10 @@ function getSupabaseAdmin() {
 }
 
 export async function GET(request: NextRequest) {
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
+
   try {
     const supabaseAdmin = getSupabaseAdmin()
     console.log('🔧 [初始化表] 开始检查数据库表...')

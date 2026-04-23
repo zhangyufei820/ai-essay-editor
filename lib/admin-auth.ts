@@ -3,15 +3,29 @@
  * Token 存储在 admin_tokens 表，表不存在时 fallback 到内存
  */
 import { createClient } from '@supabase/supabase-js'
+import { assertSecureTlsConfiguration } from '@/lib/runtime-security'
 
 // 内存 fallback（表不存在时使用）
 const memoryTokenStore = new Map<string, { expires: number }>()
 let useMemoryFallback = false
 
-const getSupabaseAdmin = () => createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+function getConfiguredAdminPassword(): string | null {
+  const adminPassword = process.env.ADMIN_PASSWORD?.trim()
+  return adminPassword ? adminPassword : null
+}
+
+export function isAdminPasswordConfigured(): boolean {
+  return getConfiguredAdminPassword() !== null
+}
+
+const getSupabaseAdmin = () => {
+  assertSecureTlsConfiguration()
+
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+}
 
 /**
  * 生成管理员 token
@@ -19,7 +33,13 @@ const getSupabaseAdmin = () => createClient(
  * @returns token 字符串或 null（如果密码错误）
  */
 export async function generateAdminToken(password: string): Promise<string | null> {
-  const adminPassword = process.env.ADMIN_PASSWORD || 'admin2026'
+  const adminPassword = getConfiguredAdminPassword()
+
+  if (!adminPassword) {
+    console.error('[AdminAuth] ADMIN_PASSWORD is not configured')
+    await logAdminAction('login_rejected', null, { reason: 'admin_password_not_configured' })
+    return null
+  }
   
   if (password !== adminPassword) {
     await logAdminAction('login_failed', null, { reason: '密码错误' })

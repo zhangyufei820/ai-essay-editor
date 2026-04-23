@@ -15,6 +15,7 @@ import {
   LUXURY_THRESHOLD,
   getModelDisplayName
 } from "@/lib/pricing"
+import { assertSecureTlsConfiguration } from "@/lib/runtime-security"
 
 export const runtime = "nodejs"
 // 🔥 增加超时时间到 300 秒（5分钟），支持长文本生成
@@ -163,6 +164,8 @@ function validateEssayCorrectionResponse(responseText: string, modelType: ModelT
 
 export async function POST(request: NextRequest) {
   try {
+    assertSecureTlsConfiguration()
+
     // IP 限流：30次/分钟
     const { getClientIP, checkIpRateLimit, createRateLimitResponse } = await import('@/lib/rate-limit')
     const ip = getClientIP(request)
@@ -191,9 +194,7 @@ export async function POST(request: NextRequest) {
       effectiveConvId = conversation_id.slice((modelPrefix + ":").length)
     }
     
-    // 🔥 调试：打印完整请求体
-    console.log(`🔍 [请求体] 完整内容:`, JSON.stringify(body, null, 2))
-    console.log(`🔍 [query字段] 值: "${query}" | 类型: ${typeof query} | 长度: ${query?.length || 0}`)
+    console.log(`🔍 [Dify-Chat] 接收请求: model=${model || "standard"} files=${fileIds?.length || 0}`)
     
     // 优先使用 header 中的 userId（更安全），其次使用 body 中的
     const userId = headerUserId || bodyUserId
@@ -280,8 +281,6 @@ export async function POST(request: NextRequest) {
             break;
     }
 
-    console.log(`🔑 [API Key] 使用: ${keySource} | 前缀: ${targetApiKey?.substring(0, 10)}...`)
-
     // 安全检查：防止忘配 Key
     if (!targetApiKey) {
         console.error(`❌ 严重错误: 模型 ${model} 的 API Key 未配置！环境变量 ${keySource} 为空`);
@@ -296,13 +295,7 @@ export async function POST(request: NextRequest) {
     
     // 🔥 Banana 专用调试日志
     if (model === "banana-2-pro") {
-      console.log(`🎨 [Banana Debug] 请求详情:`)
-      console.log(`  - 用户ID: ${userId}`)
-      console.log(`  - 查询内容: ${query?.slice(0, 100)}`)
-      console.log(`  - 文件数量: ${fileIds?.length || 0}`)
-      console.log(`  - Conversation ID: ${conversation_id || "新会话"}`)
-      console.log(`  - API Key: ${targetApiKey}`)
-      console.log(`  - Base URL: ${DIFY_BASE_URL}`)
+      console.log(`🎨 [Banana Debug] files=${fileIds?.length || 0} conversation=${conversation_id ? "reuse" : "new"}`)
     }
 
     // --- 2. 获取用户积分（用于预检查） ---
@@ -408,7 +401,7 @@ export async function POST(request: NextRequest) {
                     response_mode: "blocking",  // blocking 模式
                     user: userId || "default-user",
                 }
-                console.log(`🎨 [GPT Image 2] Workflow 请求体:`, JSON.stringify(difyRequest, null, 2))
+                console.log(`🎨 [GPT Image 2] Workflow request prepared: size=${gptImage2Size} mode=${inputs?.mode || "generate"}`)
             } else {
                 // Dify Banana 参数格式（image_prompt）
                 difyRequest = {
@@ -438,7 +431,7 @@ export async function POST(request: NextRequest) {
                     console.log(`🎨 [Banana] 图片尺寸: ${imageSize.ratio} (${imageSize.width}x${imageSize.height})`)
                 }
 
-                console.log(`🎨 [Banana] Workflow 请求体:`, JSON.stringify(difyRequest, null, 2))
+                console.log(`🎨 [Banana] Workflow request prepared: files=${fileIds?.length || 0} hasImageSize=${Boolean(imageSize)}`)
             }
         } else {
             // 💬 Chat API 格式
@@ -551,7 +544,6 @@ export async function POST(request: NextRequest) {
             status: response.status,
             statusText: response.statusText,
             error: errorText,
-            apiKey: targetApiKey?.substring(0, 20) + '...',
             baseUrl: DIFY_BASE_URL
           })
         }
