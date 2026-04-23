@@ -9,20 +9,20 @@
  * - 编辑功能：重新填充输入框
  */
 
-import { Copy, Check, Pencil, X } from 'lucide-react'
+import { Copy, Check, Pencil, X, FileText } from 'lucide-react'
 import { useState, useRef, useEffect } from 'react'
 import { cn } from '@/lib/utils'
-import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
 
 interface UserMessageBubbleProps {
   content: string
   files?: Array<{
     name: string
+    type?: string
     preview?: string
   }>
-  onEdit?: (content: string) => void
-  onSend?: (content: string) => void
+  onEdit?: (content: string, files?: UserMessageBubbleProps["files"]) => void
+  onSend?: (content: string, files?: UserMessageBubbleProps["files"]) => void
 }
 
 // 静奢风配色
@@ -63,8 +63,8 @@ export function UserMessageBubble({ content, files, onEdit, onSend }: UserMessag
   // 提交编辑
   const handleSubmitEdit = () => {
     if (editContent.trim() && editContent !== content) {
-      onEdit?.(editContent)
-      onSend?.(editContent)
+      onEdit?.(editContent, files)
+      onSend?.(editContent, files)
     }
     setIsEditing(false)
   }
@@ -88,45 +88,13 @@ export function UserMessageBubble({ content, files, onEdit, onSend }: UserMessag
   }
 
   return (
-    <div className="relative group w-full">
-      {/* 操作按钮 - 悬浮显示 */}
-      <AnimatePresence>
-        {!isEditing && (
-          <motion.div
-            initial={{ opacity: 0, y: -4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -4 }}
-            className="absolute -top-8 right-0 flex items-center gap-1 px-2 py-1 rounded-lg bg-white/95 backdrop-blur-sm shadow-md border border-gray-100 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
-          >
-            <button
-              onClick={handleCopy}
-              className="p-1.5 rounded hover:bg-gray-100 transition-colors"
-              title="复制"
-            >
-              {copied ? (
-                <Check className="w-3.5 h-3.5 text-green-500" />
-              ) : (
-                <Copy className="w-3.5 h-3.5 text-gray-500" />
-              )}
-            </button>
-            <button
-              onClick={handleEdit}
-              className="p-1.5 rounded hover:bg-gray-100 transition-colors"
-              title="重新编辑"
-            >
-              <Pencil className="w-3.5 h-3.5 text-gray-500" />
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* 消息内容 */}
+    <div className="w-full">
       <div
         className={cn(
           "rounded-2xl px-4 py-3 transition-all duration-200",
           isEditing
             ? "ring-2 ring-blue-500/50"
-            : "hover:shadow-md"
+            : "shadow-sm"
         )}
         style={{
           backgroundColor: BUBBLE_BG,
@@ -136,17 +104,20 @@ export function UserMessageBubble({ content, files, onEdit, onSend }: UserMessag
       >
         {/* 文件预览 */}
         {files && files.length > 0 && (
-          <div className="flex flex-wrap gap-2 mb-2">
+          <div className="mb-3 flex flex-wrap gap-2">
             {files.map((file, idx) => (
               <div
                 key={idx}
-                className="relative w-14 h-14 rounded-lg overflow-hidden border border-gray-200"
+                className="relative overflow-hidden rounded-xl border border-gray-200 bg-white/70"
               >
                 {file.preview ? (
-                  <img src={file.preview} alt={file.name} className="w-full h-full object-cover" />
+                  <div className="h-20 w-20">
+                    <img src={file.preview} alt={file.name} className="h-full w-full object-cover" />
+                  </div>
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center bg-gray-100 text-xs text-gray-500">
-                    📎
+                  <div className="flex min-w-[132px] items-center gap-2 px-3 py-2 text-xs text-gray-600">
+                    <FileText className="h-4 w-4 text-gray-400" />
+                    <span className="max-w-[84px] truncate">{file.name}</span>
                   </div>
                 )}
               </div>
@@ -190,6 +161,30 @@ export function UserMessageBubble({ content, files, onEdit, onSend }: UserMessag
           </div>
         )}
       </div>
+
+      {!isEditing && (
+        <div className="mt-2 flex items-center justify-end gap-2">
+          <button
+            onClick={handleCopy}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white/88 text-slate-500 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:text-slate-700"
+            title="复制消息"
+          >
+            {copied ? (
+              <Check className="h-4 w-4 text-emerald-600" />
+            ) : (
+              <Copy className="h-4 w-4" />
+            )}
+          </button>
+          <button
+            onClick={handleEdit}
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white/88 px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300"
+            title="编辑消息"
+          >
+            <Pencil className="h-4 w-4" />
+            编辑消息
+          </button>
+        </div>
+      )}
     </div>
   )
 }

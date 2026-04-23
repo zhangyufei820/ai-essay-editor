@@ -12,9 +12,10 @@ import type React from "react"
 import { useState, useRef, useEffect, Suspense } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import {
-  Send, Paperclip, X, FileText, Copy, Loader2, Palette, User,
+  Paperclip, X, FileText, Copy, Loader2, Palette, User,
   ChevronLeft, ArrowDown, Download, Share2, Sparkles, History
 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -24,6 +25,7 @@ import { createClient } from "@supabase/supabase-js"
 import { collapseSidebar, refreshCredits } from "@/components/app-sidebar"
 import { calculatePreviewCost } from "@/lib/pricing"
 import { UltimateRenderer } from "@/components/chat/UltimateRenderer"
+import { UserMessageBubble } from "@/components/chat/UserMessageBubble"
 import { GridWaveLoader } from "@/components/chat/GridWaveLoader"
 
 const BRAND_GREEN = "#14532d"
@@ -32,15 +34,59 @@ const BANANA_COLOR = "#14532d" // 使用网站主题深绿色
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || ''
 
 // 🎨 尺寸选项配置
+const RATIO_OPTIONS = ["1:1", "4:3", "3:2", "16:9", "9:16", "2:3", "3:4"] as const
+
+const SIZE_TIER_OPTIONS = [
+  { value: "standard", label: "标准" },
+  { value: "hd", label: "高清" },
+  { value: "2k", label: "2K" },
+  { value: "4k-experimental", label: "4K 实验" },
+] as const
+
 const SIZE_OPTIONS = [
-  { label: "16:9", value: "16:9", width: 1920, height: 1080 },
-  { label: "9:16", value: "9:16", width: 1080, height: 1920 },
-  { label: "1:1", value: "1:1", width: 1024, height: 1024 },
-  { label: "3:4", value: "3:4", width: 768, height: 1024 },
-  { label: "4:3", value: "4:3", width: 1024, height: 768 },
+  { value: "1-1-standard", ratio: "1:1", tier: "standard", tierLabel: "标准", width: 1024, height: 1024, apiValue: "1024x1024" },
+  { value: "1-1-hd", ratio: "1:1", tier: "hd", tierLabel: "高清", width: 1536, height: 1536, apiValue: "1536x1536" },
+  { value: "1-1-2k", ratio: "1:1", tier: "2k", tierLabel: "2K", width: 2048, height: 2048, apiValue: "2048x2048" },
+  { value: "1-1-4k", ratio: "1:1", tier: "4k-experimental", tierLabel: "4K 实验", width: 3072, height: 3072, apiValue: "3072x3072" },
+  { value: "4-3-standard", ratio: "4:3", tier: "standard", tierLabel: "标准", width: 1024, height: 768, apiValue: "1024x768" },
+  { value: "4-3-hd", ratio: "4:3", tier: "hd", tierLabel: "高清", width: 1440, height: 1080, apiValue: "1440x1080" },
+  { value: "4-3-2k", ratio: "4:3", tier: "2k", tierLabel: "2K", width: 2048, height: 1536, apiValue: "2048x1536" },
+  { value: "4-3-4k", ratio: "4:3", tier: "4k-experimental", tierLabel: "4K 实验", width: 2880, height: 2160, apiValue: "2880x2160" },
+  { value: "3-2-standard", ratio: "3:2", tier: "standard", tierLabel: "标准", width: 1152, height: 768, apiValue: "1152x768" },
+  { value: "3-2-hd", ratio: "3:2", tier: "hd", tierLabel: "高清", width: 1620, height: 1080, apiValue: "1620x1080" },
+  { value: "3-2-2k", ratio: "3:2", tier: "2k", tierLabel: "2K", width: 2304, height: 1536, apiValue: "2304x1536" },
+  { value: "3-2-4k", ratio: "3:2", tier: "4k-experimental", tierLabel: "4K 实验", width: 3240, height: 2160, apiValue: "3240x2160" },
+  { value: "16-9-standard", ratio: "16:9", tier: "standard", tierLabel: "标准", width: 1024, height: 576, apiValue: "1024x576" },
+  { value: "16-9-hd", ratio: "16:9", tier: "hd", tierLabel: "高清", width: 1920, height: 1080, apiValue: "1920x1080" },
+  { value: "16-9-2k", ratio: "16:9", tier: "2k", tierLabel: "2K", width: 2560, height: 1440, apiValue: "2560x1440" },
+  { value: "16-9-4k", ratio: "16:9", tier: "4k-experimental", tierLabel: "4K 实验", width: 3840, height: 2160, apiValue: "3840x2160" },
+  { value: "9-16-standard", ratio: "9:16", tier: "standard", tierLabel: "标准", width: 576, height: 1024, apiValue: "576x1024" },
+  { value: "9-16-hd", ratio: "9:16", tier: "hd", tierLabel: "高清", width: 1080, height: 1920, apiValue: "1080x1920" },
+  { value: "9-16-2k", ratio: "9:16", tier: "2k", tierLabel: "2K", width: 1440, height: 2560, apiValue: "1440x2560" },
+  { value: "9-16-4k", ratio: "9:16", tier: "4k-experimental", tierLabel: "4K 实验", width: 2160, height: 3840, apiValue: "2160x3840" },
+  { value: "2-3-standard", ratio: "2:3", tier: "standard", tierLabel: "标准", width: 768, height: 1152, apiValue: "768x1152" },
+  { value: "2-3-hd", ratio: "2:3", tier: "hd", tierLabel: "高清", width: 1080, height: 1620, apiValue: "1080x1620" },
+  { value: "2-3-2k", ratio: "2:3", tier: "2k", tierLabel: "2K", width: 1536, height: 2304, apiValue: "1536x2304" },
+  { value: "2-3-4k", ratio: "2:3", tier: "4k-experimental", tierLabel: "4K 实验", width: 2160, height: 3240, apiValue: "2160x3240" },
+  { value: "3-4-standard", ratio: "3:4", tier: "standard", tierLabel: "标准", width: 768, height: 1024, apiValue: "768x1024" },
+  { value: "3-4-hd", ratio: "3:4", tier: "hd", tierLabel: "高清", width: 1080, height: 1440, apiValue: "1080x1440" },
+  { value: "3-4-2k", ratio: "3:4", tier: "2k", tierLabel: "2K", width: 1536, height: 2048, apiValue: "1536x2048" },
+  { value: "3-4-4k", ratio: "3:4", tier: "4k-experimental", tierLabel: "4K 实验", width: 2160, height: 2880, apiValue: "2160x2880" },
 ] as const
 
 type SizeOption = typeof SIZE_OPTIONS[number]
+type SizeRatio = typeof RATIO_OPTIONS[number]
+type SizeTier = typeof SIZE_TIER_OPTIONS[number]["value"]
+
+const BANANA_PROMPT_PRESETS = [
+  "高端香氛广告图，琥珀色玻璃瓶，暖灰背景，电影级光影，国际品牌视觉",
+  "未来感厨房家电海报，银白金属材质，柔和反射，高级家居杂志风",
+  "极简护肤产品静物，玉石绿色瓶身，奶白背景，奢侈品广告质感",
+]
+
+function formatSizeLabel(apiValue: string) {
+  return apiValue.replace("x", "×")
+}
 
 // Supabase 初始化
 const supabase = createClient(
@@ -186,7 +232,10 @@ function BananaChatInterfaceInner() {
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
   const [uploadProgress, setUploadProgress] = useState<number>(0)
   const [isUploading, setIsUploading] = useState(false)
-  const [selectedSize, setSelectedSize] = useState<SizeOption>(SIZE_OPTIONS[1]) // 默认 9:16
+  const [selectedSize, setSelectedSize] = useState<SizeOption>(
+    SIZE_OPTIONS.find((option) => option.ratio === "9:16" && option.tier === "hd") ?? SIZE_OPTIONS[0]
+  )
+  const [showAdvancedSettings, setShowAdvancedSettings] = useState(false)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -198,6 +247,30 @@ function BananaChatInterfaceInner() {
   const [hasNewMessage, setHasNewMessage] = useState(false)
   const [showHistorySidebar, setShowHistorySidebar] = useState(false)
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([])
+  const tierOptionsForRatio = SIZE_OPTIONS.filter((option) => option.ratio === selectedSize.ratio)
+  const selectedSummary = `${selectedSize.ratio} · ${selectedSize.tierLabel} · ${formatSizeLabel(selectedSize.apiValue)}`
+  const promptPlaceholder = "描述你想生成的画面、品牌感、材质、灯光、构图与情绪，例如：极简护肤广告，柔和玉石绿瓶身，奶白背景，国际品牌 KV 风。"
+  const canSubmit = Boolean(input.trim())
+
+  const selectRatio = (ratio: SizeRatio) => {
+    const matchedSize =
+      SIZE_OPTIONS.find((option) => option.ratio === ratio && option.tier === selectedSize.tier) ||
+      SIZE_OPTIONS.find((option) => option.ratio === ratio)
+
+    if (matchedSize) {
+      setSelectedSize(matchedSize)
+    }
+  }
+
+  const selectTier = (tier: SizeTier) => {
+    const matchedSize =
+      SIZE_OPTIONS.find((option) => option.ratio === selectedSize.ratio && option.tier === tier) ||
+      SIZE_OPTIONS.find((option) => option.tier === tier)
+
+    if (matchedSize) {
+      setSelectedSize(matchedSize)
+    }
+  }
 
   // 用户初始化
   useEffect(() => {
@@ -416,14 +489,18 @@ function BananaChatInterfaceInner() {
 
   const removeFile = (i: number) => setUploadedFiles(p => p.filter((_, idx) => idx !== i))
 
-  const onSubmit = async (e: React.FormEvent) => {
+  const onSubmit = async (
+    e: React.FormEvent,
+    overrides?: { content?: string; files?: UploadedFile[] }
+  ) => {
     e.preventDefault()
     if (!userId) { 
       toast.error("请登录")
       return 
     }
     
-    const txt = (input || "").trim()
+    const activeFiles = overrides?.files ?? uploadedFiles
+    const txt = ((overrides?.content ?? input) || "").trim()
     if (!txt) return
     
     const cost = calculateCost()
@@ -451,7 +528,7 @@ function BananaChatInterfaceInner() {
 
     // 🔥 先保存用户输入的文本和文件
     const userInputText = txt
-    const userFiles = [...uploadedFiles]  // 🔥 保存文件副本用于显示
+    const userFiles = [...activeFiles]  // 🔥 保存文件副本用于显示
     
     const userMsg: Message = { 
       id: Date.now().toString(), 
@@ -463,7 +540,7 @@ function BananaChatInterfaceInner() {
     setInput("")
     
     // 提取文件ID
-    const fileIds = uploadedFiles.map(f => f.difyFileId).filter(Boolean) as string[]
+    const fileIds = activeFiles.map(f => f.difyFileId).filter(Boolean) as string[]
     
     // 清空已上传文件
     setUploadedFiles([])
@@ -499,9 +576,15 @@ function BananaChatInterfaceInner() {
               conversation_id: sessionIdRef.current, 
               model: "banana-2-pro",
               mode: "image",
+              inputs: {
+                mode: "image",
+                size: selectedSize.apiValue,
+                ratio: selectedSize.ratio,
+                tier: selectedSize.tier
+              },
               // 🎨 传递尺寸参数
               imageSize: {
-                ratio: selectedSize.value,
+                ratio: selectedSize.ratio,
                 width: selectedSize.width,
                 height: selectedSize.height
               }
@@ -659,18 +742,18 @@ function BananaChatInterfaceInner() {
       <div className="flex flex-1 flex-col h-full relative min-w-0">
         
         {/* 顶部导航栏 */}
-        <div className="flex items-center h-14 px-4 border-b border-slate-100 bg-white shrink-0">
+        <div className="flex items-center h-12 px-3 md:px-4 border-b border-slate-200/70 bg-white/90 backdrop-blur shrink-0">
           <button 
             onClick={handleBack}
-            className="flex items-center gap-1 text-slate-600 hover:text-slate-800 transition-colors"
+            className="flex items-center gap-1 rounded-xl px-2 py-1 text-slate-500 hover:bg-slate-100 hover:text-slate-800 transition-colors"
           >
             <ChevronLeft className="h-5 w-5" />
-            <span className="text-sm font-medium hidden sm:inline">返回</span>
+              <span className="text-sm font-medium hidden sm:inline">返回首页</span>
           </button>
-          <div className="flex-1 text-center md:text-left md:ml-4">
+          <div className="flex-1 text-center md:text-left md:ml-3">
             <div className="flex items-center justify-center md:justify-start gap-2">
               <span className="text-lg">🍌</span>
-              <span className="text-sm font-medium text-slate-700">Banana2 Pro 4K</span>
+              <span className="text-sm font-medium text-slate-700">Banana 2 Pro 图像创作</span>
             </div>
           </div>
           <div>
@@ -679,7 +762,7 @@ function BananaChatInterfaceInner() {
                 <span className="text-xs text-green-700 font-medium">{userCredits.toLocaleString()}</span>
                 <button
                   onClick={() => setShowHistorySidebar(true)}
-                  className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 transition-colors"
+                  className="p-1.5 rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors"
                 >
                   <History className="h-4 w-4 text-slate-600" />
                 </button>
@@ -688,14 +771,14 @@ function BananaChatInterfaceInner() {
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => router.push("/login")}
-                  className="px-3 py-1.5 text-xs font-medium text-white rounded-lg"
+                  className="px-3 py-1.5 text-xs font-medium text-white rounded-xl"
                   style={{ backgroundColor: BANANA_COLOR }}
                 >
                   登录
                 </button>
                 <button
                   onClick={() => setShowHistorySidebar(true)}
-                  className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 transition-colors"
+                  className="p-1.5 rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors"
                 >
                   <History className="h-4 w-4 text-slate-600" />
                 </button>
@@ -719,16 +802,31 @@ function BananaChatInterfaceInner() {
             onScroll={handleScroll}
             className="h-full overflow-y-auto custom-scrollbar"
           >
-            <div className="mx-auto max-w-4xl px-4 md:px-6 py-6 md:py-8">
+            <div className="mx-auto max-w-5xl px-4 md:px-6 py-6 md:py-8">
               {messages.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-16 text-center">
-                  <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-yellow-50">
-                    <span className="text-4xl">🍌</span>
+                <div className="mx-auto max-w-3xl py-3 text-center">
+                  <div className="inline-flex flex-wrap items-center justify-center gap-2 rounded-full border border-slate-200/80 bg-white/90 px-3 py-2 shadow-sm">
+                    <span className="inline-flex items-center gap-2 rounded-full bg-yellow-50 px-3 py-1 text-sm font-medium text-slate-700">
+                      <span className="text-base">🍌</span>
+                      Banana 2 Pro
+                    </span>
+                    <span className="rounded-full bg-emerald-50 px-3 py-1 text-sm font-medium text-emerald-800">{selectedSummary}</span>
                   </div>
-                  <h1 className="text-xl font-semibold text-slate-800 mb-2">AI 图片生成</h1>
-                  <p className="text-sm text-slate-500 max-w-md">
-                    描述你想要的图片，Banana2 Pro 4K 将为你创作高质量的 AI 图像
+                  <p className="mt-3 text-sm leading-7 text-slate-500">
+                    输入主体、材质、灯光、镜头和品牌气质，快速生成商业感更强的图像结果。
                   </p>
+                  <div className="mt-4 flex flex-wrap justify-center gap-2">
+                    {BANANA_PROMPT_PRESETS.map((prompt) => (
+                      <button
+                        key={prompt}
+                        type="button"
+                        onClick={() => setInput(prompt)}
+                        className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition-all duration-200 hover:border-emerald-200 hover:text-slate-800"
+                      >
+                        {prompt}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-5">
@@ -746,43 +844,31 @@ function BananaChatInterfaceInner() {
                       )}>
                         {/* User message */}
                         {message.role === "user" ? (
-                          <div
-                            className="rounded-2xl px-4 py-3 text-slate-700 border border-slate-200"
-                            style={{ backgroundColor: "#f8fafc", borderRadius: "18px 4px 18px 18px" }}
-                          >
-                            <div className="space-y-2">
-                              {message.files && message.files.length > 0 && (
-                                <div className="flex flex-wrap gap-2 mb-2">
-                                  {message.files.map((file, idx) => (
-                                    <motion.div
-                                      key={idx}
-                                      initial={{ opacity: 0, scale: 0.8 }}
-                                      animate={{ opacity: 1, scale: 1 }}
-                                      transition={{ duration: 0.3, delay: idx * 0.1 }}
-                                    >
-                                      {file.preview ? (
-                                        <div className="relative w-14 h-14 rounded-lg overflow-hidden border-2 border-white/30">
-                                          <img src={file.preview} alt={file.name} className="w-full h-full object-cover" />
-                                        </div>
-                                      ) : (
-                                        <div className="flex items-center gap-1.5 rounded-lg bg-white/20 px-2 py-1 text-xs">
-                                          <FileText className="h-3 w-3" />
-                                          <span className="max-w-[60px] truncate">{file.name}</span>
-                                        </div>
-                                      )}
-                                    </motion.div>
-                                  ))}
-                                </div>
-                              )}
-                              <div className="whitespace-pre-wrap text-sm" style={{ lineHeight: 1.6 }}>{message.content}</div>
-                            </div>
-                          </div>
+                          <UserMessageBubble
+                            content={message.content}
+                            files={message.files}
+                            onEdit={(content, files) => {
+                              setInput(content)
+                              setUploadedFiles((files as UploadedFile[]) ?? [])
+                            }}
+                            onSend={(content, files) => {
+                              setInput(content)
+                              setUploadedFiles((files as UploadedFile[]) ?? [])
+                              const fakeEvent = { preventDefault: () => {} } as unknown as React.FormEvent
+                              onSubmit(fakeEvent, { content, files: (files as UploadedFile[]) ?? [] })
+                            }}
+                          />
                         ) : (
                           /* AI message - Flat, minimal */
                           <>
                             {isLoading && message.id === currentBotIdRef.current && !message.content ? (
                               <div className="flex items-center justify-center py-4">
-                                <GridWaveLoader size={160} dotSize={5} backgroundColor="#1a1a1a" />
+                                <GridWaveLoader
+                                  size={320}
+                                  dotSize={4}
+                                  gap={9}
+                                  label="正在生成更细致的图像，请稍候。"
+                                />
                               </div>
                             ) : (
                               <BananaRenderer
@@ -831,100 +917,39 @@ function BananaChatInterfaceInner() {
         {/* 输入框 */}
         <div className="border-t border-slate-100 bg-white p-3 md:p-6 shrink-0">
           <div className="mx-auto max-w-4xl">
-            {/* 上传进度条 */}
-            {isUploading && (
-              <div className="mb-3 rounded-lg bg-slate-50 p-3 border border-slate-200">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-medium text-slate-600">上传中...</span>
-                  <span className="text-xs font-medium" style={{ color: BANANA_COLOR }}>{uploadProgress}%</span>
-                </div>
-                <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
-                  <motion.div
-                    className="h-full rounded-full"
-                    style={{ backgroundColor: BANANA_COLOR }}
-                    initial={{ width: 0 }}
-                    animate={{ width: `${uploadProgress}%` }}
-                    transition={{ duration: 0.3 }}
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* 文件预览区域 */}
-            {uploadedFiles.length > 0 && (
-              <div className="mb-3 flex flex-wrap gap-2">
-                {uploadedFiles.map((f, i) => (
-                  <div key={i} className="relative group">
-                    {f.preview ? (
-                      <div className="relative w-20 h-20 rounded-lg overflow-hidden border-2 border-slate-200">
-                        <img src={f.preview} alt={f.name} className="w-full h-full object-cover" />
-                        <button
-                          onClick={() => removeFile(i)}
-                          className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm border border-slate-200">
-                        <FileText className="h-4 w-4 text-green-600" />
-                        <span className="max-w-[100px] truncate text-slate-600">{f.name}</span>
-                        <button onClick={() => removeFile(i)} className="text-slate-400 hover:text-red-500">
-                          <X className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    )}
+            <form
+              onSubmit={onSubmit}
+              className="relative overflow-hidden rounded-[36px] border border-white/80 bg-white/90 shadow-[0_24px_60px_rgba(15,23,42,0.08)] backdrop-blur-xl transition-all duration-300 focus-within:-translate-y-0.5 focus-within:border-emerald-200/80 focus-within:shadow-[0_30px_90px_rgba(20,83,45,0.14)]"
+            >
+              <div className="pointer-events-none absolute inset-x-0 top-0 h-36 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.14),transparent_46%),radial-gradient(circle_at_top_right,rgba(250,204,21,0.12),transparent_38%)]" />
+              <div className="relative p-4 sm:p-6">
+                <div className="flex flex-col gap-3 border-b border-slate-200/70 pb-4 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="space-y-2">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-800">图像创作工作台</p>
+                      <p className="mt-1 text-sm text-slate-500">把输入提示作为主视觉中心，输出设置收束成一条轻量工具栏。</p>
+                    </div>
+                    <div className="inline-flex flex-wrap items-center gap-2 rounded-full border border-slate-200/80 bg-white/85 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
+                      <span className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-800 shadow-[0_8px_20px_rgba(16,185,129,0.12)]">
+                        <Sparkles className="h-4 w-4" />
+                        Banana 2 Pro
+                      </span>
+                      <span className="rounded-full px-4 py-2 text-sm font-medium text-slate-500">
+                        高质量图像生成
+                      </span>
+                    </div>
                   </div>
-                ))}
-              </div>
-            )}
 
-            <form onSubmit={onSubmit} className="relative rounded-[24px] bg-white shadow-lg border border-slate-200">
-              {/* 🎨 尺寸选择器 */}
-              <div className="px-3 pt-3 pb-2 border-b border-slate-100">
-                <div className="flex items-center gap-3">
-                  <span className="text-xs font-medium text-slate-400">尺寸</span>
-                  <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-full">
-                    {SIZE_OPTIONS.map((size) => (
-                      <button
-                        key={size.value}
-                        type="button"
-                        onClick={() => setSelectedSize(size)}
-                        className={cn(
-                          "px-3 py-1.5 text-xs font-medium rounded-full transition-all duration-200",
-                          selectedSize.value === size.value
-                            ? "bg-white text-slate-800 shadow-sm"
-                            : "text-slate-500 hover:text-slate-700"
-                        )}
-                      >
-                        {size.label}
-                      </button>
-                    ))}
+                  <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+                    <span className="rounded-full border border-emerald-200/80 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-800 shadow-sm shadow-emerald-100/70">
+                      {selectedSummary}
+                    </span>
+                    <span className="rounded-full border border-slate-200/80 bg-white/80 px-3 py-1.5 text-xs font-medium text-slate-500">
+                      Banana 图像工作流
+                    </span>
                   </div>
                 </div>
-              </div>
-              
-              <div className="flex items-end gap-2 p-3">
-                {/* 文件上传按钮 */}
-                <div className="flex flex-col items-center gap-1 shrink-0">
-                  <span className="text-[10px] font-medium text-slate-400">文件</span>
-                  <Button 
-                    type="button" 
-                    variant="ghost" 
-                    size="icon" 
-                    className="h-10 w-10 rounded-xl text-slate-400 hover:bg-slate-50" 
-                    onClick={() => {
-                      if (!userId) {
-                        toast.error("请先登录后再上传文件")
-                        return
-                      }
-                      fileInputRef.current?.click()
-                    }}
-                    disabled={isLoading}
-                  >
-                    <Paperclip className="h-5 w-5" />
-                  </Button>
-                </div>
+
                 <input 
                   ref={fileInputRef} 
                   type="file" 
@@ -934,35 +959,275 @@ function BananaChatInterfaceInner() {
                   onChange={handleFileUpload} 
                 />
 
-                <Textarea
-                  ref={textareaRef}
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder={userId ? "描述你想要的图片..." : "请先登录..."}
-                  className="min-h-[48px] max-h-[160px] flex-1 resize-none border-0 bg-transparent p-2 text-[15px] text-slate-700 placeholder:text-slate-400 focus-visible:ring-0"
-                  disabled={isLoading}
-                  rows={1}
-                />
-                
-                <div className="flex flex-col items-center gap-1 shrink-0">
-                  <span className="text-[10px] font-medium text-slate-400">发送</span>
-                  <Button 
-                    type="submit" 
-                    size="icon" 
-                    className="h-10 w-10 rounded-xl text-white shadow-lg hover:opacity-90 transition-all disabled:opacity-40"
-                    style={{ backgroundColor: BANANA_COLOR }}
-                    disabled={isLoading || !input.trim()}
-                  >
-                    {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
-                  </Button>
+                <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1.48fr)_280px]">
+                  <div className="rounded-[30px] border border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.97),rgba(247,249,251,0.95))] p-5 shadow-[0_20px_44px_rgba(15,23,42,0.06)] sm:p-6">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">从一句高质量提示词开始你的图像创作</h2>
+                        <p className="mt-2 max-w-2xl text-sm leading-7 text-slate-500">主体、品牌感、材质、灯光与构图越清晰，最终结果越接近成熟商业视觉。</p>
+                      </div>
+                      <div className="flex items-center gap-2 self-start">
+                        <span className="rounded-full bg-white px-3 py-1.5 text-[11px] font-medium text-slate-500 shadow-sm">
+                          Banana 2 Pro
+                        </span>
+                        <span className="rounded-full bg-emerald-50 px-3 py-1.5 text-[11px] font-medium text-emerald-700">
+                          已选 {selectedSize.ratio} · {selectedSize.tierLabel}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="mt-5 rounded-[24px] border border-slate-200/80 bg-slate-50/75 p-4">
+                      <div className="flex flex-wrap items-start gap-4">
+                        <div className="min-w-[200px] flex-1">
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="text-sm font-medium text-slate-700">比例</p>
+                            <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-medium text-slate-500">{selectedSize.ratio}</span>
+                          </div>
+                          <Select value={selectedSize.ratio} onValueChange={(value) => selectRatio(value as SizeRatio)}>
+                            <SelectTrigger className="mt-3 h-11 w-full rounded-2xl border-slate-200 bg-white px-4 text-left text-sm text-slate-700 shadow-sm">
+                              <SelectValue placeholder="选择比例" />
+                            </SelectTrigger>
+                            <SelectContent className="rounded-2xl border-slate-200 bg-white">
+                              {RATIO_OPTIONS.map((ratio) => (
+                                <SelectItem key={ratio} value={ratio} className="rounded-xl py-2.5 text-sm">
+                                  {ratio}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="min-w-[240px] flex-[1.2]">
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="text-sm font-medium text-slate-700">尺寸档位</p>
+                            <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-medium text-slate-500">
+                              {selectedSize.tierLabel} · {formatSizeLabel(selectedSize.apiValue)}
+                            </span>
+                          </div>
+                          <Select value={selectedSize.tier} onValueChange={(value) => selectTier(value as SizeTier)}>
+                            <SelectTrigger className="mt-3 h-11 w-full rounded-2xl border-slate-200 bg-white px-4 text-left text-sm text-slate-700 shadow-sm">
+                              <SelectValue placeholder="选择尺寸档位" />
+                            </SelectTrigger>
+                            <SelectContent className="rounded-2xl border-slate-200 bg-white">
+                              {SIZE_TIER_OPTIONS.map((tier) => {
+                                const option = tierOptionsForRatio.find((item) => item.tier === tier.value)
+                                if (!option) return null
+
+                                return (
+                                  <SelectItem key={tier.value} value={tier.value} className="rounded-xl py-2.5">
+                                    <div className="flex w-full items-center justify-between gap-3">
+                                      <span className="font-medium text-slate-700">{tier.label}</span>
+                                      <span className="text-xs text-slate-400">{formatSizeLabel(option.apiValue)}</span>
+                                    </div>
+                                  </SelectItem>
+                                )
+                              })}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="flex flex-1 min-w-[150px] justify-end">
+                          <button
+                            type="button"
+                            onClick={() => setShowAdvancedSettings((value) => !value)}
+                            className="inline-flex h-11 items-center rounded-2xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-600 transition-all duration-200 hover:border-slate-300 hover:text-slate-800"
+                          >
+                            {showAdvancedSettings ? "收起高级设置" : "高级设置"}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {isUploading && (
+                      <div className="mt-4 rounded-2xl border border-slate-200/80 bg-white/80 p-3">
+                        <div className="mb-2 flex items-center justify-between">
+                          <span className="text-xs font-medium text-slate-600">上传中...</span>
+                          <span className="text-xs font-medium" style={{ color: BANANA_COLOR }}>{uploadProgress}%</span>
+                        </div>
+                        <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
+                          <motion.div
+                            className="h-full rounded-full"
+                            style={{ backgroundColor: BANANA_COLOR }}
+                            initial={{ width: 0 }}
+                            animate={{ width: `${uploadProgress}%` }}
+                            transition={{ duration: 0.3 }}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {uploadedFiles.length > 0 && (
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {uploadedFiles.map((f, i) => (
+                          <div key={i} className="group relative">
+                            {f.preview ? (
+                              <div className="relative h-24 w-24 overflow-hidden rounded-[22px] border border-slate-200/80 bg-white shadow-sm">
+                                <img src={f.preview} alt={f.name} className="h-full w-full object-cover" />
+                                <button
+                                  onClick={() => removeFile(i)}
+                                  className="absolute right-1.5 top-1.5 rounded-full bg-black/55 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100"
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2 rounded-2xl border border-slate-200/80 bg-white px-3 py-2 text-sm shadow-sm">
+                                <FileText className="h-4 w-4 text-green-600" />
+                                <span className="max-w-[100px] truncate text-slate-600">{f.name}</span>
+                                <button onClick={() => removeFile(i)} className="text-slate-400 hover:text-red-500">
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="mt-5 rounded-[28px] border border-slate-200/80 bg-white/92 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] transition-all duration-200 focus-within:border-emerald-200 focus-within:shadow-[0_16px_36px_rgba(16,185,129,0.08)] sm:p-5">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-slate-800">创作提示词</p>
+                          <p className="mt-1 text-xs text-slate-500">描述你想生成的画面、风格、材质、灯光与构图。</p>
+                        </div>
+                        <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-medium text-slate-500">
+                          主输入区
+                        </span>
+                      </div>
+
+                      <div className="mt-4 rounded-[24px] border border-emerald-100/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.96))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_18px_40px_rgba(15,23,42,0.04)]">
+                        <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                          <div className="flex items-center gap-2">
+                            <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                            <p className="text-sm font-medium text-slate-700">在这里输入生成提示词</p>
+                          </div>
+                          <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-medium text-slate-400 shadow-sm">
+                            支持长文本
+                          </span>
+                        </div>
+
+                        <Textarea
+                          ref={textareaRef}
+                          value={input}
+                          onChange={(e) => setInput(e.target.value)}
+                          onKeyDown={handleKeyDown}
+                          placeholder={promptPlaceholder}
+                          className="mt-4 min-h-[220px] max-h-[360px] resize-none border-0 bg-transparent px-0 py-0 text-[16px] leading-8 text-slate-700 placeholder:text-slate-400 focus-visible:ring-0"
+                          disabled={isLoading}
+                          rows={8}
+                        />
+                      </div>
+
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {BANANA_PROMPT_PRESETS.map((prompt) => (
+                          <button
+                            key={prompt}
+                            type="button"
+                            onClick={() => setInput(prompt)}
+                            className="rounded-full border border-slate-200 bg-slate-50/80 px-3 py-1.5 text-xs font-medium text-slate-500 transition-all duration-200 hover:border-emerald-200 hover:bg-white hover:text-slate-700"
+                          >
+                            {prompt}
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="mt-5 flex flex-col gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            className="h-11 rounded-2xl border border-slate-200/80 bg-white px-4 text-sm font-medium text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                            onClick={() => {
+                              if (!userId) {
+                                toast.error("请先登录后再上传文件")
+                                return
+                              }
+                              fileInputRef.current?.click()
+                            }}
+                            disabled={isLoading}
+                          >
+                            <Paperclip className="mr-2 h-4 w-4" />
+                            添加参考图
+                          </Button>
+                          <span className="text-xs text-slate-500">
+                            {userId ? "参考图、画幅比例与输出尺寸会一起传入后端图像工作流。" : "登录后可上传参考图、保存记录并同步积分。"}
+                          </span>
+                        </div>
+
+                        <Button
+                          type="submit"
+                          className="h-12 rounded-2xl px-5 text-sm font-semibold text-white shadow-[0_14px_28px_rgba(20,83,45,0.22)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_18px_34px_rgba(20,83,45,0.28)] disabled:translate-y-0 disabled:opacity-40"
+                          style={{ backgroundColor: BANANA_COLOR }}
+                          disabled={isLoading || !canSubmit}
+                        >
+                          {isLoading ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              创作中...
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="mr-2 h-4 w-4" />
+                              开始创作
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="rounded-[26px] border border-slate-200/80 bg-white/82 p-4 shadow-[0_14px_36px_rgba(15,23,42,0.05)]">
+                      <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 p-3">
+                        <p className="text-sm font-medium text-slate-800">当前输出</p>
+                        <p className="mt-2 text-sm font-semibold text-slate-700">{formatSizeLabel(selectedSize.apiValue)}</p>
+                        <p className="mt-1 text-xs leading-6 text-slate-500">Banana 2 Pro · {selectedSize.ratio} · {selectedSize.tierLabel}</p>
+                      </div>
+                    </div>
+
+                    <div className="rounded-[26px] border border-slate-200/80 bg-white/82 p-4 shadow-[0_14px_36px_rgba(15,23,42,0.05)]">
+                      <button
+                        type="button"
+                        onClick={() => setShowAdvancedSettings((value) => !value)}
+                        className="flex w-full items-center justify-between gap-3 text-left"
+                      >
+                        <div>
+                          <p className="mt-2 text-base font-semibold text-slate-800">高级设置</p>
+                        </div>
+                        <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-medium text-slate-500">
+                          {showAdvancedSettings ? "收起" : "展开"}
+                        </span>
+                      </button>
+
+                      {showAdvancedSettings && (
+                        <div className="mt-4 space-y-3 border-t border-slate-100 pt-4">
+                          <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 p-3">
+                            <p className="mt-2 text-sm font-medium text-slate-700">Banana 2 Pro</p>
+                            <p className="mt-1 text-xs leading-6 text-slate-500">面向高质感商业视觉的图像生成工作流。</p>
+                          </div>
+                          <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 p-3">
+                            <p className="mt-2 text-sm font-medium text-slate-700">{selectedSize.tierLabel} · {formatSizeLabel(selectedSize.apiValue)}</p>
+                            <p className="mt-1 text-xs leading-6 text-slate-500">当前比例、尺寸档位与真实输出尺寸会同步写入 `inputs` 和 `imageSize`。</p>
+                          </div>
+                          <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 p-3">
+                            <p className="mt-2 text-sm font-medium text-slate-700">
+                              {uploadedFiles.length > 0 ? `已添加 ${uploadedFiles.length} 张参考图` : "暂未添加参考图"}
+                            </p>
+                            <p className="mt-1 text-xs leading-6 text-slate-500">可选上传参考图，让风格、材质或构图更接近你的目标。</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {!userId && (
+                      <div className="rounded-[24px] border border-slate-200/80 bg-slate-50/80 px-4 py-3 text-xs leading-6 text-slate-500">
+                        未登录状态下将无法开始创作，但你仍然可以先准备提示词、参考图和输出参数。
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </form>
-
-            {!userId && (
-              <p className="mt-3 text-center text-xs text-slate-400">未登录</p>
-            )}
           </div>
         </div>
 

@@ -12,6 +12,7 @@ import dynamic from 'next/dynamic'
 
 // 首屏组件 - 直接导入（关键路径）
 import { HeroSection } from '@/components/home'
+import { GptImagePromoModal } from '@/components/home'
 import { OpenClawSection } from '@/components/home'
 import { Calculator, HelpCircle, FileText, Sparkles, ArrowRight } from 'lucide-react'
 
@@ -84,6 +85,7 @@ function SectionSkeleton({ height = "400px" }: { height?: string }) {
 export default function Home() {
   return (
     <main className="min-h-screen bg-white">
+      <GptImagePromoModal />
       {/* Hero 区域 - 全屏首屏（关键路径，直接加载） */}
       <HeroSection />
 

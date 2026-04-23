@@ -1520,9 +1520,13 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     }
   }
 
-  const onSubmit = async (e: React.FormEvent) => {
+  const onSubmit = async (
+    e: React.FormEvent,
+    overrides?: { content?: string; files?: UploadedFile[] }
+  ) => {
     e.preventDefault(); if (!userId) { toast.error("请登录"); return }
-    const txt = (input || "").trim(); if (!txt && !uploadedFiles.length) return
+    const activeFiles = overrides?.files ?? uploadedFiles
+    const txt = ((overrides?.content ?? input) || "").trim(); if (!txt && !activeFiles.length) return
     
     console.log("📤 [onSubmit] 发送消息:", {
       model: selectedModel,
@@ -1547,7 +1551,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     setFileProcessing({ status: "idle", progress: 0, message: "" })
     setDynamicStatusMessage("")
     setIsLoading(true); setAnalysisStage(0); 
-    setIsComplexMode(uploadedFiles.length > 0 || txt.length > 150)
+    setIsComplexMode(activeFiles.length > 0 || txt.length > 150)
     
     // 🎯 重置工作流可视化状态
     resetWorkflow()
@@ -1585,7 +1589,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       id: Date.now().toString(), 
       role: "user", 
       content: txt || defaultPrompt,
-      files: uploadedFiles.length > 0 ? [...uploadedFiles] : undefined  // 🔥 携带文件信息
+      files: activeFiles.length > 0 ? [...activeFiles] : undefined  // 🔥 携带文件信息
     }
     setMessages(p => [...p, userMsg]); setInput(""); setUploadedFiles([])
     // 🔥 发送后自动滚动到消息底部，确保 AI 回复时能自动跟进
@@ -1692,7 +1696,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     
     let fullText = ""; let hasRec = false
     try {
-        const fileIds = uploadedFiles.map(f => f.difyFileId).filter(Boolean)
+        const fileIds = activeFiles.map(f => f.difyFileId).filter(Boolean)
         
         console.log("🚀 [API 请求] 发送到 /api/dify-chat:", {
           query: userMsg.content.slice(0, 50),
@@ -2539,12 +2543,16 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                           <UserMessageBubble
                             content={message.content}
                             files={message.files}
-                            onEdit={(content) => setInput(content)}
-                            onSend={(content) => {
+                            onEdit={(content, files) => {
+                              setInput(content)
+                              setUploadedFiles((files as UploadedFile[]) ?? [])
+                              setUploadedFiles((files as UploadedFile[]) ?? [])
+                            }}
+                            onSend={(content, files) => {
                               setInput(content)
                               // 自动提交
                               const fakeEvent = { preventDefault: () => {} } as unknown as React.FormEvent
-                              onSubmit(fakeEvent)
+                              onSubmit(fakeEvent, { content, files: (files as UploadedFile[]) ?? [] })
                             }}
                           />
                         ) : (
