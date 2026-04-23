@@ -208,57 +208,57 @@ export async function POST(request: NextRequest) {
     console.log(`🔄 [切换模型] 用户: ${userId} | 目标模型: ${model || "默认标准版"} | conversation_id: ${conversation_id || "新会话"}`)
 
     // --- 1. 钥匙分发中心 (彻底分离通道) ---
-    let targetApiKey = DEFAULT_DIFY_KEY; // 默认给标准版
+    let selectedCredential = DEFAULT_DIFY_KEY; // 默认给标准版
     let keySource = "DEFAULT_DIFY_KEY";
 
     // 根据前端传来的暗号，分发不同的钥匙
     switch (model) {
         case "teaching-pro":
-            targetApiKey = process.env.DIFY_TEACHING_PRO_API_KEY;
+            selectedCredential = process.env.DIFY_TEACHING_PRO_API_KEY;
             keySource = "DIFY_TEACHING_PRO_API_KEY";
             break;
         case "gpt-5":
-            targetApiKey = process.env.DIFY_API_KEY_GPT5;
+            selectedCredential = process.env.DIFY_API_KEY_GPT5;
             keySource = "DIFY_API_KEY_GPT5";
             break;
         case "claude-opus":
-            targetApiKey = process.env.DIFY_API_KEY_CLAUDE;
+            selectedCredential = process.env.DIFY_API_KEY_CLAUDE;
             keySource = "DIFY_API_KEY_CLAUDE";
             break;
         case "gemini-pro":
-            targetApiKey = process.env.DIFY_API_KEY_GEMINI;
+            selectedCredential = process.env.DIFY_API_KEY_GEMINI;
             keySource = "DIFY_API_KEY_GEMINI";
             break;
         case "banana-2-pro":
-            targetApiKey = process.env.DIFY_BANANA_API_KEY;
+            selectedCredential = process.env.DIFY_BANANA_API_KEY;
             keySource = "DIFY_BANANA_API_KEY";
             break;
         case "grok-4.2":
-            targetApiKey = process.env.DIFY_API_KEY_GROK42;
+            selectedCredential = process.env.DIFY_API_KEY_GROK42;
             keySource = "DIFY_API_KEY_GROK42";
             break;
         case "open-claw":
-            targetApiKey = process.env.DIFY_API_KEY_OPENCLAW;
+            selectedCredential = process.env.DIFY_API_KEY_OPENCLAW;
             keySource = "DIFY_API_KEY_OPENCLAW";
             break;
         case "quanquan-math":
-            targetApiKey = process.env.DIFY_QUANQUANMATH_API_KEY;
+            selectedCredential = process.env.DIFY_QUANQUANMATH_API_KEY;
             keySource = "DIFY_QUANQUANMATH_API_KEY";
             break;
         case "quanquan-english":
-            targetApiKey = process.env.DIFY_QUANQUANENGLISH_API_KEY;
+            selectedCredential = process.env.DIFY_QUANQUANENGLISH_API_KEY;
             keySource = "DIFY_QUANQUANENGLISH_API_KEY";
             break;
         case "beike-pro":
-            targetApiKey = process.env.DIFY_BEIKE_PRO_API_KEY;
+            selectedCredential = process.env.DIFY_BEIKE_PRO_API_KEY;
             keySource = "DIFY_BEIKE_PRO_API_KEY";
             break;
         case "banzhuren":
-            targetApiKey = process.env.DIFY_BANZHUREN_API_KEY;
+            selectedCredential = process.env.DIFY_BANZHUREN_API_KEY;
             keySource = "DIFY_BANZHUREN_API_KEY";
             break;
         case "ai-writing-paper":
-            targetApiKey = process.env.DIFY_AI_WRITING_PAPER_API_KEY;
+            selectedCredential = process.env.DIFY_AI_WRITING_PAPER_API_KEY;
             keySource = "DIFY_AI_WRITING_PAPER_API_KEY";
             break;
         case "zhongying-essay":
@@ -268,11 +268,11 @@ export async function POST(request: NextRequest) {
         case "resume-optimize":
         case "speech-defense":
         case "school-wechat":
-            targetApiKey = process.env.DIFY_AI_WRITING_PAPER_API_KEY;
+            selectedCredential = process.env.DIFY_AI_WRITING_PAPER_API_KEY;
             keySource = "DIFY_AI_WRITING_PAPER_API_KEY";
             break;
         case "gpt-image-2":
-            targetApiKey = process.env.DIFY_GPT_IMAGE_API_KEY;
+            selectedCredential = process.env.DIFY_GPT_IMAGE_API_KEY;
             keySource = "DIFY_GPT_IMAGE_API_KEY";
             break;
         // 如果是 Sono/Sora 可以在这里继续加 case
@@ -282,10 +282,10 @@ export async function POST(request: NextRequest) {
     }
 
     // 安全检查：防止忘配 Key
-    if (!targetApiKey) {
-        console.error(`❌ 严重错误: 模型 ${model} 的 API Key 未配置！环境变量 ${keySource} 为空`);
+    if (!selectedCredential) {
+        console.error(`❌ 严重错误: 模型 ${model} 的凭据未配置！环境变量 ${keySource} 为空`);
         return new Response(JSON.stringify({ 
-          error: `配置错误：${model} 模型的 API Key 未设置`,
+          error: `配置错误：${model} 模型凭据未设置`,
           details: `请在 Vercel 环境变量中配置 ${keySource}`
         }), { 
           status: 500,
@@ -469,7 +469,7 @@ export async function POST(request: NextRequest) {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    Authorization: `Bearer ${targetApiKey}`,
+                    Authorization: `Bearer ${selectedCredential}`,
                 },
                 body: JSON.stringify(difyRequest),
                 signal: streamStatus.controller.signal,
