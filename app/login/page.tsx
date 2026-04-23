@@ -25,6 +25,11 @@ function AuthingLoginComponent() {
     }
 
     if (guardRef.current) return
+    if (!appId) {
+      setLoadError('登录服务配置缺失：NEXT_PUBLIC_AUTHING_APP_ID 未设置')
+      setIsLoaded(true)
+      return
+    }
 
     // 2. 动态加载 Authing 样式
     const link = document.createElement('link')

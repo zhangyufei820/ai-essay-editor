@@ -738,7 +738,7 @@ function BananaChatInterfaceInner() {
   }
 
   return (
-    <div className="flex h-screen w-full bg-white overflow-hidden relative">
+    <div className="relative flex h-[100dvh] min-h-0 w-full overflow-hidden bg-white">
       <div className="flex flex-1 flex-col h-full relative min-w-0">
         
         {/* 顶部导航栏 */}
@@ -915,22 +915,22 @@ function BananaChatInterfaceInner() {
         </div>
 
         {/* 输入框 */}
-        <div className="border-t border-slate-100 bg-white p-3 md:p-6 shrink-0">
+        <div className="custom-scrollbar max-h-[58dvh] shrink-0 overflow-y-auto border-t border-slate-100 bg-white p-3 md:max-h-[54dvh] md:p-5">
           <div className="mx-auto max-w-4xl">
             <form
               onSubmit={onSubmit}
-              className="relative overflow-hidden rounded-[36px] border border-white/80 bg-white/90 shadow-[0_24px_60px_rgba(15,23,42,0.08)] backdrop-blur-xl transition-all duration-300 focus-within:-translate-y-0.5 focus-within:border-emerald-200/80 focus-within:shadow-[0_30px_90px_rgba(20,83,45,0.14)]"
+              className="relative overflow-hidden rounded-[32px] border border-white/80 bg-white/90 shadow-[0_18px_48px_rgba(15,23,42,0.08)] backdrop-blur-xl transition-all duration-300 focus-within:-translate-y-0.5 focus-within:border-emerald-200/80 focus-within:shadow-[0_24px_72px_rgba(20,83,45,0.12)]"
             >
-              <div className="pointer-events-none absolute inset-x-0 top-0 h-36 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.14),transparent_46%),radial-gradient(circle_at_top_right,rgba(250,204,21,0.12),transparent_38%)]" />
-              <div className="relative p-4 sm:p-6">
-                <div className="flex flex-col gap-3 border-b border-slate-200/70 pb-4 lg:flex-row lg:items-center lg:justify-between">
-                  <div className="space-y-2">
+              <div className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.14),transparent_46%),radial-gradient(circle_at_top_right,rgba(250,204,21,0.12),transparent_38%)]" />
+              <div className="relative p-4 sm:p-5">
+                <div className="flex flex-col gap-2.5 border-b border-slate-200/70 pb-3 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="space-y-1.5">
                     <div>
                       <p className="text-sm font-semibold text-slate-800">图像创作工作台</p>
-                      <p className="mt-1 text-sm text-slate-500">把输入提示作为主视觉中心，输出设置收束成一条轻量工具栏。</p>
+                      <p className="mt-1 text-[13px] leading-6 text-slate-500">把提示词放回视觉中心，设置项只保留为轻量辅助栏。</p>
                     </div>
                     <div className="inline-flex flex-wrap items-center gap-2 rounded-full border border-slate-200/80 bg-white/85 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
-                      <span className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-800 shadow-[0_8px_20px_rgba(16,185,129,0.12)]">
+                        <span className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3.5 py-2 text-sm font-medium text-emerald-800 shadow-[0_8px_20px_rgba(16,185,129,0.12)]">
                         <Sparkles className="h-4 w-4" />
                         Banana 2 Pro
                       </span>
@@ -941,10 +941,10 @@ function BananaChatInterfaceInner() {
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-                    <span className="rounded-full border border-emerald-200/80 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-800 shadow-sm shadow-emerald-100/70">
+                    <span className="rounded-full border border-emerald-200/80 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-800 shadow-sm shadow-emerald-100/70">
                       {selectedSummary}
                     </span>
-                    <span className="rounded-full border border-slate-200/80 bg-white/80 px-3 py-1.5 text-xs font-medium text-slate-500">
+                    <span className="rounded-full border border-slate-200/80 bg-white/80 px-3 py-1 text-xs font-medium text-slate-500">
                       Banana 图像工作流
                     </span>
                   </div>
@@ -959,24 +959,24 @@ function BananaChatInterfaceInner() {
                   onChange={handleFileUpload} 
                 />
 
-                <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1.48fr)_280px]">
-                  <div className="rounded-[30px] border border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.97),rgba(247,249,251,0.95))] p-5 shadow-[0_20px_44px_rgba(15,23,42,0.06)] sm:p-6">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="mt-4 grid items-start gap-3 xl:grid-cols-[minmax(0,1.48fr)_260px]">
+                  <div className="rounded-[28px] border border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.97),rgba(247,249,251,0.95))] p-4 shadow-[0_16px_36px_rgba(15,23,42,0.06)] sm:p-5">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                       <div>
-                        <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">从一句高质量提示词开始你的图像创作</h2>
-                        <p className="mt-2 max-w-2xl text-sm leading-7 text-slate-500">主体、品牌感、材质、灯光与构图越清晰，最终结果越接近成熟商业视觉。</p>
+                        <h2 className="mt-1 text-xl font-semibold tracking-tight text-slate-900 sm:text-[28px]">从一句高质量提示词开始你的图像创作</h2>
+                        <p className="mt-1.5 max-w-2xl text-[13px] leading-6 text-slate-500 sm:text-sm">主体、品牌感、材质、灯光与构图越清晰，最终结果越接近成熟商业视觉。</p>
                       </div>
                       <div className="flex items-center gap-2 self-start">
-                        <span className="rounded-full bg-white px-3 py-1.5 text-[11px] font-medium text-slate-500 shadow-sm">
+                        <span className="rounded-full bg-white px-3 py-1 text-[11px] font-medium text-slate-500 shadow-sm">
                           Banana 2 Pro
                         </span>
-                        <span className="rounded-full bg-emerald-50 px-3 py-1.5 text-[11px] font-medium text-emerald-700">
+                        <span className="rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-medium text-emerald-700">
                           已选 {selectedSize.ratio} · {selectedSize.tierLabel}
                         </span>
                       </div>
                     </div>
 
-                    <div className="mt-5 rounded-[24px] border border-slate-200/80 bg-slate-50/75 p-4">
+                    <div className="mt-4 rounded-[22px] border border-slate-200/80 bg-slate-50/75 p-3.5 sm:p-4">
                       <div className="flex flex-wrap items-start gap-4">
                         <div className="min-w-[200px] flex-1">
                           <div className="flex items-center justify-between gap-3">
@@ -1084,8 +1084,8 @@ function BananaChatInterfaceInner() {
                       </div>
                     )}
 
-                    <div className="mt-5 rounded-[28px] border border-slate-200/80 bg-white/92 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] transition-all duration-200 focus-within:border-emerald-200 focus-within:shadow-[0_16px_36px_rgba(16,185,129,0.08)] sm:p-5">
-                      <div className="flex items-center justify-between gap-3">
+                    <div className="mt-4 rounded-[26px] border border-slate-200/80 bg-white/92 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] transition-all duration-200 focus-within:border-emerald-200 focus-within:shadow-[0_16px_36px_rgba(16,185,129,0.08)] sm:p-5">
+                      <div className="flex items-start justify-between gap-3">
                         <div>
                           <p className="text-sm font-semibold text-slate-800">创作提示词</p>
                           <p className="mt-1 text-xs text-slate-500">描述你想生成的画面、风格、材质、灯光与构图。</p>
@@ -1095,8 +1095,8 @@ function BananaChatInterfaceInner() {
                         </span>
                       </div>
 
-                      <div className="mt-4 rounded-[24px] border border-emerald-100/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.96))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_18px_40px_rgba(15,23,42,0.04)]">
-                        <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                      <div className="mt-3 rounded-[22px] border border-emerald-100/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.96))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_18px_40px_rgba(15,23,42,0.04)]">
+                        <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-2.5">
                           <div className="flex items-center gap-2">
                             <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
                             <p className="text-sm font-medium text-slate-700">在这里输入生成提示词</p>
@@ -1112,13 +1112,13 @@ function BananaChatInterfaceInner() {
                           onChange={(e) => setInput(e.target.value)}
                           onKeyDown={handleKeyDown}
                           placeholder={promptPlaceholder}
-                          className="mt-4 min-h-[220px] max-h-[360px] resize-none border-0 bg-transparent px-0 py-0 text-[16px] leading-8 text-slate-700 placeholder:text-slate-400 focus-visible:ring-0"
+                          className="mt-3 min-h-[160px] max-h-[240px] resize-none border-0 bg-transparent px-0 py-0 text-[16px] leading-7 text-slate-700 placeholder:text-slate-400 focus-visible:ring-0 sm:min-h-[180px] sm:max-h-[280px]"
                           disabled={isLoading}
-                          rows={8}
+                          rows={6}
                         />
                       </div>
 
-                      <div className="mt-4 flex flex-wrap gap-2">
+                      <div className="mt-3 flex flex-wrap gap-2">
                         {BANANA_PROMPT_PRESETS.map((prompt) => (
                           <button
                             key={prompt}
@@ -1131,7 +1131,7 @@ function BananaChatInterfaceInner() {
                         ))}
                       </div>
 
-                      <div className="mt-5 flex flex-col gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="mt-4 flex flex-col gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
                         <div className="flex flex-wrap items-center gap-2">
                           <Button
                             type="button"
@@ -1176,8 +1176,8 @@ function BananaChatInterfaceInner() {
                     </div>
                   </div>
 
-                  <div className="space-y-3">
-                    <div className="rounded-[26px] border border-slate-200/80 bg-white/82 p-4 shadow-[0_14px_36px_rgba(15,23,42,0.05)]">
+                  <div className="space-y-2.5">
+                    <div className="rounded-[24px] border border-slate-200/80 bg-white/82 p-3.5 shadow-[0_10px_28px_rgba(15,23,42,0.05)]">
                       <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 p-3">
                         <p className="text-sm font-medium text-slate-800">当前输出</p>
                         <p className="mt-2 text-sm font-semibold text-slate-700">{formatSizeLabel(selectedSize.apiValue)}</p>
@@ -1185,7 +1185,7 @@ function BananaChatInterfaceInner() {
                       </div>
                     </div>
 
-                    <div className="rounded-[26px] border border-slate-200/80 bg-white/82 p-4 shadow-[0_14px_36px_rgba(15,23,42,0.05)]">
+                    <div className="rounded-[24px] border border-slate-200/80 bg-white/82 p-3.5 shadow-[0_10px_28px_rgba(15,23,42,0.05)]">
                       <button
                         type="button"
                         onClick={() => setShowAdvancedSettings((value) => !value)}

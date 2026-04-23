@@ -6,6 +6,7 @@ services:
       args:
         NEXT_PUBLIC_SUPABASE_URL: "https://rnujdnmxufmzgjvmddla.supabase.co"
         NEXT_PUBLIC_SUPABASE_ANON_KEY: "sb_publishable_J6ZjOA1cvNVJE0msWjvJEA_Y3MHr9LH"
+        NEXT_PUBLIC_AUTHING_APP_ID: ${NEXT_PUBLIC_AUTHING_APP_ID}
     container_name: ai-essay-editor-nextjs-dev
     restart: unless-stopped
     read_only: true

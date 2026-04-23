@@ -96,14 +96,14 @@ export function GptImagePromoModal() {
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/28 px-4 py-6 backdrop-blur-[8px]">
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/28 px-3 py-3 backdrop-blur-[8px] sm:px-4 sm:py-6">
       <div
         className="absolute inset-0"
         aria-hidden="true"
         onClick={dismissPromo}
       />
 
-      <div className="relative w-full max-w-3xl overflow-hidden rounded-[32px] border border-white/85 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(246,250,247,0.98))] shadow-[0_10px_24px_rgba(15,23,42,0.06),0_28px_80px_rgba(15,23,42,0.12),0_1px_0_rgba(255,255,255,0.75)_inset]">
+      <div className="relative flex max-h-[calc(100dvh-1.5rem)] w-full max-w-3xl flex-col overflow-hidden rounded-[28px] border border-white/85 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(246,250,247,0.98))] shadow-[0_10px_24px_rgba(15,23,42,0.06),0_28px_80px_rgba(15,23,42,0.12),0_1px_0_rgba(255,255,255,0.75)_inset] sm:max-h-[min(88dvh,920px)] sm:rounded-[32px]">
         <div className="pointer-events-none absolute inset-x-0 top-0 h-52 bg-[radial-gradient(circle_at_top_left,rgba(20,83,45,0.15),transparent_48%),radial-gradient(circle_at_top_right,rgba(34,197,94,0.08),transparent_34%)]" />
 
         <button
@@ -115,7 +115,8 @@ export function GptImagePromoModal() {
           <X className="h-4 w-4" />
         </button>
 
-        <div className="relative p-6 sm:p-8 md:p-10">
+        <div className="custom-scrollbar relative flex-1 overflow-y-auto">
+          <div className="p-5 pb-4 sm:p-8 sm:pb-5 md:p-10 md:pb-6">
           <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200/80 bg-emerald-50 px-3.5 py-1.5 text-sm font-medium text-emerald-900 shadow-[0_6px_18px_rgba(16,185,129,0.08)]">
             <Sparkles className="h-4 w-4" />
             GPT Image 2 新品体验计划
@@ -167,7 +168,11 @@ export function GptImagePromoModal() {
             ))}
           </div>
 
-          <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+          </div>
+        </div>
+
+        <div className="relative border-t border-white/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.78),rgba(246,250,247,0.96))] px-5 py-4 shadow-[0_-8px_24px_rgba(15,23,42,0.04)] backdrop-blur sm:px-8 sm:py-5 md:px-10">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
             <Button
               type="button"
               variant="outline"
