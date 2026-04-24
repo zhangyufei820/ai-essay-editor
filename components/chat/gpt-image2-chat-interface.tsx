@@ -142,7 +142,11 @@ function extractImageUrls(payload: unknown): string[] {
     visit(record.url)
     visit(record.first_url)
     visit(record.image_data_uri)
+    visit(record.image)
+    visit(record.images)
+    visit(record.file)
     visit(record.files)
+    visit(record.outputs)
     visit(record.data)
 
     if (typeof record.raw_body === "string") {
@@ -156,6 +160,89 @@ function extractImageUrls(payload: unknown): string[] {
 
   visit(payload)
   return Array.from(urls)
+}
+
+function extractWorkflowTextSegments(payload: unknown): string[] {
+  const segments: string[] = []
+  const seen = new Set<string>()
+
+  const push = (value: unknown, prefix?: string) => {
+    if (typeof value !== "string") return
+    const trimmed = value.trim()
+    if (!trimmed) return
+    const nextValue = prefix ? `${prefix}${trimmed}` : trimmed
+    if (!seen.has(nextValue)) {
+      seen.add(nextValue)
+      segments.push(nextValue)
+    }
+  }
+
+  const visit = (value: unknown) => {
+    if (!value) return
+
+    if (Array.isArray(value)) {
+      value.forEach(visit)
+      return
+    }
+
+    if (typeof value !== "object") return
+
+    const record = value as Record<string, unknown>
+    push(record.text)
+    push(record.result)
+    push(record.error, "Error: ")
+    push(record.revised_prompt, "Revised prompt: ")
+    visit(record.outputs)
+    visit(record.data)
+    visit(record.files)
+
+    if (typeof record.raw_body === "string") {
+      try {
+        visit(JSON.parse(record.raw_body))
+      } catch {
+        // Ignore malformed raw_body payloads and keep other fallbacks.
+      }
+    }
+  }
+
+  visit(payload)
+  return segments
+}
+
+function buildAssistantContentFromWorkflowResult(result: any) {
+  const payloads = [
+    result?.data?.outputs,
+    result?.data,
+    result?.outputs,
+    result,
+  ]
+
+  const imageUrls = payloads.flatMap((payload) => extractImageUrls(payload))
+  const uniqueImageUrls = Array.from(new Set(imageUrls))
+  const textSegments = payloads.flatMap((payload) => extractWorkflowTextSegments(payload))
+  const uniqueTextSegments = Array.from(new Set(textSegments))
+  const status = result?.data?.status || result?.status
+
+  if (uniqueImageUrls.length > 0) {
+    return [
+      ...uniqueTextSegments,
+      ...uniqueImageUrls.map((url) => `![Generated Image](${url})`)
+    ].join("\n\n")
+  }
+
+  if (uniqueTextSegments.length > 0) {
+    return uniqueTextSegments.join("\n\n")
+  }
+
+  if (typeof status === "string" && status !== "succeeded") {
+    return `图像工作流已结束，当前状态：${status}。`
+  }
+
+  if (result?.task_id || result?.workflow_run_id) {
+    return "图像任务已提交，但工作流暂未返回可展示的图片结果。"
+  }
+
+  return ""
 }
 
 // Supabase 初始化
@@ -305,6 +392,8 @@ function GptImage2ChatInterfaceInner() {
     ? hasPrompt && uploadedFiles.length > 0
     : hasPrompt
   const isLandingState = messages.length === 0 && showHeroIntro
+  const isWorkspaceFocused = messages.length === 0 && !showHeroIntro
+  const hasMessages = messages.length > 0
 
   const selectRatio = (ratio: SizeRatio) => {
     const matchedSize =
@@ -680,72 +769,10 @@ function GptImage2ChatInterfaceInner() {
           const result = await res.json()
           console.log(`🎨 [GPT Image 2] Blocking 响应:`, result)
 
-          // Blocking 模式返回格式: { task_id, workflow_run_id, data: { outputs: {...} } }
-          if (result.data?.outputs) {
-            const outputs = result.data.outputs
-
-            // 解析图片 URL
-            let imageUrl = outputs.first_url || outputs.image_data_uri || outputs.url || ""
-
-            // 解析文本
-            if (outputs.status_code === 200 && outputs.raw_body) {
-              try {
-                const rawData = JSON.parse(outputs.raw_body)
-                if (rawData.data && Array.isArray(rawData.data)) {
-                  for (const item of rawData.data) {
-                    if (item.url) imageUrl = item.url
-                    if (item.revised_prompt) fullText += `提示词: ${item.revised_prompt}\n\n`
-                  }
-                }
-              } catch (e) {}
-            }
-
-            if (imageUrl) {
-              fullText = `![Generated Image](${imageUrl})`
-            } else if (outputs.text || outputs.result) {
-              fullText = outputs.text || outputs.result
-            }
-          } else if (result.error) {
+          if (result.error) {
             throw new Error(`Dify Error: ${result.error}`)
           }
-
-          if (!fullText && result.data?.outputs) {
-            const outputs = result.data.outputs
-            const imageUrls = extractImageUrls(outputs)
-            const textSegments: string[] = []
-
-            if (outputs.status_code === 200 && outputs.raw_body) {
-              try {
-                const rawData = JSON.parse(outputs.raw_body)
-                if (rawData.data && Array.isArray(rawData.data)) {
-                  for (const item of rawData.data) {
-                    if (item.revised_prompt) {
-                      textSegments.push(`Revised prompt: ${item.revised_prompt}`)
-                    }
-                  }
-                }
-              } catch {}
-            }
-
-            if (typeof outputs.text === "string" && outputs.text.trim()) {
-              textSegments.push(outputs.text.trim())
-            } else if (typeof outputs.result === "string" && outputs.result.trim()) {
-              textSegments.push(outputs.result.trim())
-            }
-
-            if (imageUrls.length > 0) {
-              fullText = [
-                ...textSegments,
-                ...imageUrls.map((url) => `![Generated Image](${url})`)
-              ].join("\n\n")
-            } else if (textSegments.length > 0) {
-              fullText = textSegments.join("\n\n")
-            } else if (typeof result.data.status === "string" && result.data.status !== "succeeded") {
-              fullText = "Image task submitted, but the workflow has not returned a final image URL yet. Please refresh later or try again."
-            }
-          } else if (!fullText && (result.task_id || result.workflow_run_id)) {
-            fullText = "Image task submitted, but only a task id was returned. Please refresh later or try again."
-          }
+          fullText = buildAssistantContentFromWorkflowResult(result)
 
           setMessages(p => p.map(m => m.id === botId ? { ...m, content: fullText } : m))
         } catch (e) {
@@ -989,14 +1016,12 @@ function GptImage2ChatInterfaceInner() {
         <div
           className={cn(
             "custom-scrollbar border-t border-slate-100 bg-white p-3 md:p-5",
-            messages.length === 0 && !showHeroIntro
+            isWorkspaceFocused
               ? "flex-1 min-h-0 overflow-y-auto"
-              : isLandingState
-                ? "shrink-0"
-                : "max-h-[58dvh] shrink-0 overflow-y-auto md:max-h-[54dvh]"
+              : "shrink-0"
           )}
         >
-          <div className={cn("mx-auto", isLandingState ? "max-w-3xl" : "max-w-4xl")}>
+          <div className={cn("mx-auto", isLandingState ? "max-w-3xl" : "max-w-5xl", isWorkspaceFocused && "min-h-full flex items-center")}>
             {isLandingState ? (
               <div className="rounded-[32px] border border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.95))] p-4 shadow-[0_24px_64px_rgba(15,23,42,0.08)] sm:p-5">
                 <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-500">
@@ -1023,17 +1048,29 @@ function GptImage2ChatInterfaceInner() {
             ) : (
             <form
               onSubmit={onSubmit}
-              className="relative overflow-hidden rounded-[32px] border border-white/80 bg-white/90 shadow-[0_18px_48px_rgba(15,23,42,0.08)] backdrop-blur-xl transition-all duration-300 focus-within:-translate-y-0.5 focus-within:border-emerald-200/80 focus-within:shadow-[0_24px_72px_rgba(20,83,45,0.12)]"
+              className={cn(
+                "relative w-full overflow-hidden rounded-[32px] border border-white/80 bg-white/92 shadow-[0_18px_48px_rgba(15,23,42,0.08)] backdrop-blur-xl transition-all duration-300 focus-within:border-emerald-200/80 focus-within:shadow-[0_24px_72px_rgba(20,83,45,0.12)]",
+                hasMessages ? "max-w-none" : "max-w-4xl"
+              )}
             >
               <div className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.14),transparent_46%),radial-gradient(circle_at_top_right,rgba(226,232,240,0.8),transparent_38%)]" />
-              <div className="relative p-4 sm:p-5">
-                <div className="flex flex-col gap-2.5 border-b border-slate-200/70 pb-3 lg:flex-row lg:items-center lg:justify-between">
-                  <div className="space-y-1.5">
+              <div className="relative space-y-4 p-4 sm:p-5">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  className="hidden"
+                  accept="image/*"
+                  multiple
+                  onChange={handleFileUpload}
+                />
+
+                <div className="flex flex-col gap-3 border-b border-slate-200/70 pb-4 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="space-y-2">
                     <div>
-                      <p className="text-sm font-semibold text-slate-800">图像创作工作台</p>
-                      <p className="mt-1 text-[13px] leading-6 text-slate-500">把模式、尺寸和创作输入收在一张卡片里，直接开始生成。</p>
+                      <p className="text-sm font-semibold text-slate-800">全屏图像工作台</p>
+                      <p className="mt-1 text-[13px] leading-6 text-slate-500">{hasMessages ? "消息区保持全屏，参数和上传收进底部工作台。" : modeGuideDescription}</p>
                     </div>
-                    <div className="inline-flex flex-wrap items-center gap-2 rounded-full border border-slate-200/80 bg-white/85 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
+                    <div className="inline-flex flex-wrap items-center gap-2 rounded-full border border-slate-200/80 bg-white/90 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
                       {MODE_OPTIONS.map((mode) => {
                         const ModeIcon = mode.icon
 
@@ -1061,342 +1098,231 @@ function GptImage2ChatInterfaceInner() {
                     <span className="rounded-full border border-emerald-200/80 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-800 shadow-sm shadow-emerald-100/70">
                       {selectedSummary}
                     </span>
-                    <span className="rounded-full border border-slate-200/80 bg-white/80 px-3 py-1 text-xs font-medium text-slate-500">
-                      输出 {formatSizeLabel(selectedSize.apiValue)}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="h-11 rounded-2xl border border-slate-200/80 bg-white px-4 text-sm font-medium text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                      onClick={() => {
+                        if (!userId) {
+                          toast.error("请先登录后再上传文件")
+                          return
+                        }
+                        fileInputRef.current?.click()
+                      }}
+                      disabled={isLoading}
+                    >
+                      <Paperclip className="mr-2 h-4 w-4" />
+                      {selectedMode.key === "image-edit" ? "上传编辑参考图" : "添加参考图"}
+                    </Button>
+                    <button
+                      type="button"
+                      onClick={() => setShowAdvancedSettings((value) => !value)}
+                      className="inline-flex h-11 items-center rounded-2xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-600 transition-all duration-200 hover:border-slate-300 hover:text-slate-800"
+                    >
+                      {showAdvancedSettings ? "收起设置" : "尺寸与分辨率"}
+                    </button>
+                  </div>
+                </div>
+
+                {showAdvancedSettings && (
+                  <div className="grid gap-3 rounded-[28px] border border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,249,251,0.95))] p-4 shadow-[0_16px_36px_rgba(15,23,42,0.06)] md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_240px]">
+                    <div>
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-sm font-medium text-slate-700">比例</p>
+                        <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-medium text-slate-500">{selectedSize.ratio}</span>
+                      </div>
+                      <Select value={selectedSize.ratio} onValueChange={(value) => selectRatio(value as SizeRatio)}>
+                        <SelectTrigger className="mt-3 h-11 w-full rounded-2xl border-slate-200 bg-white px-4 text-left text-sm text-slate-700 shadow-sm">
+                          <SelectValue placeholder="选择比例" />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-2xl border-slate-200 bg-white">
+                          {RATIO_OPTIONS.map((ratio) => (
+                            <SelectItem key={ratio} value={ratio} className="rounded-xl py-2.5 text-sm">
+                              {ratio}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-sm font-medium text-slate-700">尺寸档位</p>
+                        <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-medium text-slate-500">
+                          {selectedSize.tierLabel} · {formatSizeLabel(selectedSize.apiValue)}
+                        </span>
+                      </div>
+                      <Select value={selectedSize.tier} onValueChange={(value) => selectTier(value as SizeTier)}>
+                        <SelectTrigger className="mt-3 h-11 w-full rounded-2xl border-slate-200 bg-white px-4 text-left text-sm text-slate-700 shadow-sm">
+                          <SelectValue placeholder="选择尺寸档位" />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-2xl border-slate-200 bg-white">
+                          {SIZE_TIER_OPTIONS.map((tier) => {
+                            const option = tierOptionsForRatio.find((item) => item.tier === tier.value)
+                            if (!option) return null
+
+                            return (
+                              <SelectItem key={tier.value} value={tier.value} className="rounded-xl py-2.5">
+                                <div className="flex w-full items-center justify-between gap-3">
+                                  <span className="font-medium text-slate-700">{tier.label}</span>
+                                  <span className="text-xs text-slate-400">{formatSizeLabel(option.apiValue)}</span>
+                                </div>
+                              </SelectItem>
+                            )
+                          })}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="rounded-[24px] border border-slate-200/80 bg-white/85 p-4">
+                      <p className="text-sm font-medium text-slate-800">当前输出</p>
+                      <p className="mt-2 text-sm font-semibold text-slate-700">{formatSizeLabel(selectedSize.apiValue)}</p>
+                      <p className="mt-1 text-xs leading-6 text-slate-500">{selectedMode.label} · {selectedSize.ratio} · {selectedSize.tierLabel}</p>
+                      <p className="mt-3 text-xs leading-6 text-slate-500">{selectionHint}</p>
+                    </div>
+                  </div>
+                )}
+
+                {selectedMode.key === "image-edit" && uploadedFiles.length === 0 && (
+                  <div className="rounded-[24px] border border-dashed border-emerald-200 bg-emerald-50/60 px-4 py-3 text-sm leading-6 text-slate-600">
+                    图像编辑模式需要至少 1 张参考图。点击右上角“上传编辑参考图”后再发送。
+                  </div>
+                )}
+
+                {isUploading && (
+                  <div className="rounded-2xl border border-slate-200/80 bg-white/80 p-3">
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className="text-xs font-medium text-slate-600">上传中...</span>
+                      <span className="text-xs font-medium" style={{ color: BRAND_GREEN }}>{uploadProgress}%</span>
+                    </div>
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
+                      <motion.div
+                        className="h-full rounded-full"
+                        style={{ backgroundColor: BRAND_GREEN }}
+                        initial={{ width: 0 }}
+                        animate={{ width: `${uploadProgress}%` }}
+                        transition={{ duration: 0.3 }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {uploadedFiles.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {uploadedFiles.map((f, i) => (
+                      <div key={i} className="group relative">
+                        {f.preview ? (
+                          <div className="relative h-20 w-20 overflow-hidden rounded-[20px] border border-slate-200/80 bg-white shadow-sm">
+                            <img src={f.preview} alt={f.name} className="h-full w-full object-cover" />
+                            <button
+                              type="button"
+                              onClick={() => removeFile(i)}
+                              className="absolute right-1.5 top-1.5 rounded-full bg-black/55 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2 rounded-2xl border border-slate-200/80 bg-white px-3 py-2 text-sm shadow-sm">
+                            <FileText className="h-4 w-4 text-green-600" />
+                            <span className="max-w-[120px] truncate text-slate-600">{f.name}</span>
+                            <button type="button" onClick={() => removeFile(i)} className="text-slate-400 hover:text-red-500">
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="rounded-[28px] border border-slate-200/80 bg-white/94 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.92)] transition-all duration-200 focus-within:border-emerald-200 focus-within:shadow-[0_16px_36px_rgba(16,185,129,0.08)] sm:p-5">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-800">{modeGuideTitle}</p>
+                      <p className="mt-1 text-xs leading-6 text-slate-500">
+                        {selectedMode.key === "image-edit" ? "参考图、主指令和补充要求会一起提交。" : "提示词、参考图和输出参数会一起提交到后端工作流。"}
+                      </p>
+                    </div>
+                    <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-medium text-slate-500">
+                      {formatSizeLabel(selectedSize.apiValue)}
                     </span>
                   </div>
-                </div>
 
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  className="hidden"
-                  accept="image/*"
-                  multiple
-                  onChange={handleFileUpload}
-                />
-
-                <div className="mt-4 grid items-start gap-3 xl:grid-cols-[minmax(0,1.48fr)_260px]">
-                  <div className="rounded-[28px] border border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.97),rgba(247,249,251,0.95))] p-4 shadow-[0_16px_36px_rgba(15,23,42,0.06)] sm:p-5">
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                      <div>
-                        <h2 className="mt-1 text-xl font-semibold tracking-tight text-slate-900 sm:text-[28px]">{modeGuideTitle}</h2>
-                        <p className="mt-1.5 max-w-2xl text-[13px] leading-6 text-slate-500 sm:text-sm">{modeGuideDescription}</p>
-                      </div>
-                      <div className="flex items-center gap-2 self-start">
-                        <span className="rounded-full bg-white px-3 py-1 text-[11px] font-medium text-slate-500 shadow-sm">
-                          GPT Image 2
-                        </span>
-                        <span className="rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-medium text-emerald-700">
-                          已选 {selectedSize.ratio} · {selectedSize.tierLabel}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="mt-4 rounded-[22px] border border-slate-200/80 bg-slate-50/75 p-3.5 sm:p-4">
-                      <div className="flex flex-wrap items-start gap-4">
-                        <div className="min-w-[200px] flex-1">
-                          <div className="flex items-center justify-between gap-3">
-                            <p className="text-sm font-medium text-slate-700">比例</p>
-                            <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-medium text-slate-500">{selectedSize.ratio}</span>
-                          </div>
-                          <Select value={selectedSize.ratio} onValueChange={(value) => selectRatio(value as SizeRatio)}>
-                            <SelectTrigger className="mt-3 h-11 w-full rounded-2xl border-slate-200 bg-white px-4 text-left text-sm text-slate-700 shadow-sm">
-                              <SelectValue placeholder="选择比例" />
-                            </SelectTrigger>
-                            <SelectContent className="rounded-2xl border-slate-200 bg-white">
-                              {RATIO_OPTIONS.map((ratio) => (
-                                <SelectItem key={ratio} value={ratio} className="rounded-xl py-2.5 text-sm">
-                                  {ratio}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        <div className="min-w-[240px] flex-[1.2]">
-                          <div className="flex items-center justify-between gap-3">
-                            <p className="text-sm font-medium text-slate-700">尺寸档位</p>
-                            <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-medium text-slate-500">
-                              {selectedSize.tierLabel} · {formatSizeLabel(selectedSize.apiValue)}
-                            </span>
-                          </div>
-                          <Select value={selectedSize.tier} onValueChange={(value) => selectTier(value as SizeTier)}>
-                            <SelectTrigger className="mt-3 h-11 w-full rounded-2xl border-slate-200 bg-white px-4 text-left text-sm text-slate-700 shadow-sm">
-                              <SelectValue placeholder="选择尺寸档位" />
-                            </SelectTrigger>
-                            <SelectContent className="rounded-2xl border-slate-200 bg-white">
-                              {SIZE_TIER_OPTIONS.map((tier) => {
-                                const option = tierOptionsForRatio.find((item) => item.tier === tier.value)
-                                if (!option) return null
-
-                                return (
-                                  <SelectItem key={tier.value} value={tier.value} className="rounded-xl py-2.5">
-                                    <div className="flex w-full items-center justify-between gap-3">
-                                      <span className="font-medium text-slate-700">{tier.label}</span>
-                                      <span className="text-xs text-slate-400">{formatSizeLabel(option.apiValue)}</span>
-                                    </div>
-                                  </SelectItem>
-                                )
-                              })}
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        <div className="flex flex-1 min-w-[150px] justify-end">
-                          <button
-                            type="button"
-                            onClick={() => setShowAdvancedSettings((value) => !value)}
-                            className="inline-flex h-11 items-center rounded-2xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-600 transition-all duration-200 hover:border-slate-300 hover:text-slate-800"
-                          >
-                            {showAdvancedSettings ? "收起高级设置" : "高级设置"}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-
-                    {selectedMode.key === "image-edit" && (
-                      <div className="mt-4 rounded-[24px] border border-dashed border-emerald-200 bg-emerald-50/60 p-4">
-                        <div className="flex flex-col gap-4">
-                          <div>
-                            <p className="text-sm font-semibold text-slate-800">参考图片</p>
-                            <p className="mt-1 text-sm leading-6 text-slate-500">图像编辑需要参考图和编辑指令双核心配合，先上传图片，再描述修改要求。</p>
-                          </div>
-                          <button
-                            type="button"
-                            className="flex min-h-[124px] w-full flex-col items-center justify-center rounded-[22px] border border-emerald-200/80 bg-white/85 px-5 py-5 text-center transition-all duration-200 hover:border-emerald-300 hover:bg-white"
-                            onClick={() => {
-                              if (!userId) {
-                                toast.error("请先登录后再上传文件")
-                                return
-                              }
-                              fileInputRef.current?.click()
-                            }}
-                            disabled={isLoading}
-                          >
-                            <Paperclip className="h-5 w-5 text-emerald-700" />
-                            <span className="mt-3 text-sm font-medium text-slate-800">上传编辑参考图</span>
-                            <span className="mt-1 text-xs leading-6 text-slate-500">例如保留主体、替换背景、强化材质、调整构图或提升品牌感。</span>
-                          </button>
-                        </div>
-                      </div>
+                  <Textarea
+                    ref={textareaRef}
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onFocus={hideHeroIntro}
+                    onClick={hideHeroIntro}
+                    onKeyDown={handleKeyDown}
+                    placeholder={promptPlaceholder}
+                    className={cn(
+                      "mt-4 resize-none rounded-[24px] border border-emerald-100/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.96))] px-4 py-4 text-[15px] leading-7 text-slate-700 placeholder:text-slate-400 shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_18px_40px_rgba(15,23,42,0.04)] focus-visible:ring-0",
+                      hasMessages ? "min-h-[112px] max-h-[220px]" : "min-h-[180px] max-h-[320px]"
                     )}
+                    disabled={isLoading}
+                    rows={hasMessages ? 4 : 6}
+                  />
 
-                    {isUploading && (
-                      <div className="mt-4 rounded-2xl border border-slate-200/80 bg-white/80 p-3">
-                        <div className="mb-2 flex items-center justify-between">
-                          <span className="text-xs font-medium text-slate-600">上传中...</span>
-                          <span className="text-xs font-medium" style={{ color: BRAND_GREEN }}>{uploadProgress}%</span>
-                        </div>
-                        <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
-                          <motion.div
-                            className="h-full rounded-full"
-                            style={{ backgroundColor: BRAND_GREEN }}
-                            initial={{ width: 0 }}
-                            animate={{ width: `${uploadProgress}%` }}
-                            transition={{ duration: 0.3 }}
-                          />
-                        </div>
-                      </div>
-                    )}
+                  {selectedMode.key === "image-edit" && (
+                    <Textarea
+                      value={editNotes}
+                      onChange={(e) => setEditNotes(e.target.value)}
+                      onFocus={hideHeroIntro}
+                      onClick={hideHeroIntro}
+                      placeholder="补充描述，例如：保留人物表情与服饰，只调整背景、光影和整体商业感。"
+                      className="mt-3 min-h-[88px] resize-none rounded-[22px] border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm leading-6 text-slate-700 placeholder:text-slate-400 focus-visible:ring-0"
+                      disabled={isLoading}
+                      rows={3}
+                    />
+                  )}
 
-                    {uploadedFiles.length > 0 && (
-                      <div className="mt-4 flex flex-wrap gap-2">
-                        {uploadedFiles.map((f, i) => (
-                          <div key={i} className="group relative">
-                            {f.preview ? (
-                              <div className="relative h-24 w-24 overflow-hidden rounded-[22px] border border-slate-200/80 bg-white shadow-sm">
-                                <img src={f.preview} alt={f.name} className="h-full w-full object-cover" />
-                                <button
-                                  onClick={() => removeFile(i)}
-                                  className="absolute right-1.5 top-1.5 rounded-full bg-black/55 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100"
-                                >
-                                  <X className="h-3 w-3" />
-                                </button>
-                              </div>
-                            ) : (
-                              <div className="flex items-center gap-2 rounded-2xl border border-slate-200/80 bg-white px-3 py-2 text-sm shadow-sm">
-                                <FileText className="h-4 w-4 text-green-600" />
-                                <span className="max-w-[100px] truncate text-slate-600">{f.name}</span>
-                                <button onClick={() => removeFile(i)} className="text-slate-400 hover:text-red-500">
-                                  <X className="h-3.5 w-3.5" />
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    <div className="mt-4 rounded-[26px] border border-slate-200/80 bg-white/92 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] transition-all duration-200 focus-within:border-emerald-200 focus-within:shadow-[0_16px_36px_rgba(16,185,129,0.08)] sm:p-5">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-semibold text-slate-800">{selectedMode.key === "image-edit" ? "编辑指令" : "创作提示词"}</p>
-                          <p className="mt-1 text-xs text-slate-500">
-                            {selectedMode.key === "image-edit" ? "告诉我如何修改这张图片，例如保留主体、清理背景、提升品牌感。" : "描述你想生成的画面、风格、材质、灯光与构图。"}
-                          </p>
-                        </div>
-                        <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-medium text-slate-500">
-                          主输入区
-                        </span>
-                      </div>
-
-                      <div className="mt-3 rounded-[22px] border border-emerald-100/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.96))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_18px_40px_rgba(15,23,42,0.04)]">
-                        <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-2.5">
-                          <div className="flex items-center gap-2">
-                            <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
-                            <p className="text-sm font-medium text-slate-700">
-                              {selectedMode.key === "image-edit" ? "在这里输入编辑要求" : "在这里输入生成提示词"}
-                            </p>
-                          </div>
-                          <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-medium text-slate-400 shadow-sm">
-                            支持长文本
-                          </span>
-                        </div>
-
-                        <Textarea
-                          ref={textareaRef}
-                          value={input}
-                          onChange={(e) => setInput(e.target.value)}
-                          onFocus={hideHeroIntro}
-                          onClick={hideHeroIntro}
-                          onKeyDown={handleKeyDown}
-                          placeholder={promptPlaceholder}
-                          className="mt-3 min-h-[160px] max-h-[240px] resize-none border-0 bg-transparent px-0 py-0 text-[16px] leading-7 text-slate-700 placeholder:text-slate-400 focus-visible:ring-0 sm:min-h-[180px] sm:max-h-[280px]"
-                          disabled={isLoading}
-                          rows={6}
-                        />
-                      </div>
-
-                      {selectedMode.key === "image-edit" && (
-                        <div className="mt-4 rounded-[22px] border border-slate-200/80 bg-slate-50/80 p-4">
-                          <p className="text-sm font-medium text-slate-700">补充描述</p>
-                          <p className="mt-1 text-xs leading-6 text-slate-500">可选填写，用于说明不希望修改的元素、细节偏好或材质要求。</p>
-                          <Textarea
-                            value={editNotes}
-                            onChange={(e) => setEditNotes(e.target.value)}
-                            onFocus={hideHeroIntro}
-                            onClick={hideHeroIntro}
-                            placeholder="例如：保留人物表情与服饰，只调整背景、光影和整体商业感。"
-                            className="mt-3 min-h-[92px] resize-none rounded-2xl border border-slate-200 bg-white px-3 py-3 text-sm leading-6 text-slate-700 placeholder:text-slate-400 focus-visible:ring-0"
-                            disabled={isLoading}
-                            rows={3}
-                          />
-                        </div>
-                      )}
-
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {heroPrompts.map((prompt) => (
-                          <button
-                            key={prompt}
-                            type="button"
-                            onClick={() => applyHeroPrompt(prompt)}
-                            className="rounded-full border border-slate-200 bg-slate-50/80 px-3 py-1.5 text-xs font-medium text-slate-500 transition-all duration-200 hover:border-emerald-200 hover:bg-white hover:text-slate-700"
-                          >
-                            {prompt}
-                          </button>
-                        ))}
-                      </div>
-
-                      <div className="mt-4 flex flex-col gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="flex flex-wrap items-center gap-2">
-                          {selectedMode.key !== "image-edit" && (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              className="h-11 rounded-2xl border border-slate-200/80 bg-white px-4 text-sm font-medium text-slate-600 hover:border-slate-300 hover:bg-slate-50"
-                              onClick={() => {
-                                if (!userId) {
-                                  toast.error("请先登录后再上传文件")
-                                  return
-                                }
-                                fileInputRef.current?.click()
-                              }}
-                              disabled={isLoading}
-                            >
-                              <Paperclip className="mr-2 h-4 w-4" />
-                              添加参考图
-                            </Button>
-                          )}
-                          <span className="text-xs text-slate-500">
-                            {selectionHint}
-                          </span>
-                        </div>
-
-                        <Button
-                          type="submit"
-                          className="h-12 rounded-2xl px-5 text-sm font-semibold text-white shadow-[0_14px_28px_rgba(20,83,45,0.22)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_18px_34px_rgba(20,83,45,0.28)] disabled:translate-y-0 disabled:opacity-40"
-                          style={{ backgroundColor: BRAND_GREEN }}
-                          disabled={isLoading || !canSubmit}
-                        >
-                          {isLoading ? (
-                            <>
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                              创作中...
-                            </>
-                          ) : (
-                            <>
-                              <Sparkles className="mr-2 h-4 w-4" />
-                              {actionLabel}
-                            </>
-                          )}
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2.5">
-                    <div className="rounded-[24px] border border-slate-200/80 bg-white/82 p-3.5 shadow-[0_10px_28px_rgba(15,23,42,0.05)]">
-                      <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 p-3">
-                        <p className="text-sm font-medium text-slate-800">当前输出</p>
-                        <p className="mt-2 text-sm font-semibold text-slate-700">{formatSizeLabel(selectedSize.apiValue)}</p>
-                        <p className="mt-1 text-xs leading-6 text-slate-500">{selectedMode.label} · {selectedSize.ratio} · {selectedSize.tierLabel}</p>
-                      </div>
-                    </div>
-
-                    <div className="rounded-[24px] border border-slate-200/80 bg-white/82 p-3.5 shadow-[0_10px_28px_rgba(15,23,42,0.05)]">
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {heroPrompts.map((prompt) => (
                       <button
+                        key={prompt}
                         type="button"
-                        onClick={() => setShowAdvancedSettings((value) => !value)}
-                        className="flex w-full items-center justify-between gap-3 text-left"
+                        onClick={() => applyHeroPrompt(prompt)}
+                        className="rounded-full border border-slate-200 bg-slate-50/80 px-3 py-1.5 text-xs font-medium text-slate-500 transition-all duration-200 hover:border-emerald-200 hover:bg-white hover:text-slate-700"
                       >
-                        <div>
-                          <p className="mt-2 text-base font-semibold text-slate-800">高级设置</p>
-                        </div>
-                        <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-medium text-slate-500">
-                          {showAdvancedSettings ? "收起" : "展开"}
-                        </span>
+                        {prompt}
                       </button>
+                    ))}
+                  </div>
 
-                      {showAdvancedSettings && (
-                        <div className="mt-4 space-y-3 border-t border-slate-100 pt-4">
-                          <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 p-3">
-                            <p className="mt-2 text-sm font-medium text-slate-700">{selectedMode.label}</p>
-                            <p className="mt-1 text-xs leading-6 text-slate-500">
-                              {selectedMode.key === "image-edit" ? "适合带参考图的局部或整体重绘。" : "适合从零开始生成新画面。"}
-                            </p>
-                          </div>
-                          <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 p-3">
-                            <p className="mt-2 text-sm font-medium text-slate-700">{selectedSize.tierLabel} · {formatSizeLabel(selectedSize.apiValue)}</p>
-                            <p className="mt-1 text-xs leading-6 text-slate-500">当前比例、尺寸档位和真实输出尺寸会同步进入后端工作流。</p>
-                          </div>
-                          <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 p-3">
-                            <p className="mt-2 text-sm font-medium text-slate-700">
-                              {uploadedFiles.length > 0 ? `已添加 ${uploadedFiles.length} 张参考图` : "暂未添加参考图"}
-                            </p>
-                            <p className="mt-1 text-xs leading-6 text-slate-500">{selectionHint}</p>
-                          </div>
-                        </div>
-                      )}
+                  <div className="mt-4 flex flex-col gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium text-slate-600">{selectedSummary}</p>
+                      <p className="text-xs leading-6 text-slate-500">{selectionHint}</p>
                     </div>
 
-                    {!userId && (
-                      <div className="rounded-[24px] border border-slate-200/80 bg-slate-50/80 px-4 py-3 text-xs leading-6 text-slate-500">
-                        未登录状态下将无法开始创作，但你仍然可以先准备提示词、参考图和输出参数。
-                      </div>
-                    )}
+                    <Button
+                      type="submit"
+                      className="h-12 rounded-2xl px-5 text-sm font-semibold text-white shadow-[0_14px_28px_rgba(20,83,45,0.22)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_18px_34px_rgba(20,83,45,0.28)] disabled:translate-y-0 disabled:opacity-40"
+                      style={{ backgroundColor: BRAND_GREEN }}
+                      disabled={isLoading || !canSubmit}
+                    >
+                      {isLoading ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          创作中...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="mr-2 h-4 w-4" />
+                          {actionLabel}
+                        </>
+                      )}
+                    </Button>
                   </div>
                 </div>
+
+                {!userId && (
+                  <div className="rounded-[24px] border border-slate-200/80 bg-slate-50/80 px-4 py-3 text-xs leading-6 text-slate-500">
+                    未登录状态下将无法开始创作，但你仍然可以先准备提示词、参考图和输出参数。
+                  </div>
+                )}
               </div>
             </form>
             )}

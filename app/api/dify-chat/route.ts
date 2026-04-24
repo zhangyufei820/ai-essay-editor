@@ -169,6 +169,115 @@ function validateEssayCorrectionResponse(responseText: string, modelType: ModelT
   return true
 }
 
+const WORKFLOW_TERMINAL_STATUSES = new Set([
+  "succeeded",
+  "failed",
+  "stopped",
+  "partial-succeeded",
+  "paused",
+])
+
+function isWorkflowTerminalStatus(status: unknown): status is string {
+  return typeof status === "string" && WORKFLOW_TERMINAL_STATUSES.has(status)
+}
+
+function extractWorkflowImageUrls(payload: unknown): string[] {
+  const urls = new Set<string>()
+
+  const visit = (value: unknown) => {
+    if (!value) return
+
+    if (typeof value === "string") {
+      if (value.startsWith("http://") || value.startsWith("https://") || value.startsWith("data:image/")) {
+        urls.add(value)
+      }
+      return
+    }
+
+    if (Array.isArray(value)) {
+      value.forEach(visit)
+      return
+    }
+
+    if (typeof value !== "object") return
+
+    const record = value as Record<string, unknown>
+    visit(record.url)
+    visit(record.first_url)
+    visit(record.image_data_uri)
+    visit(record.image)
+    visit(record.images)
+    visit(record.file)
+    visit(record.files)
+    visit(record.data)
+    visit(record.outputs)
+
+    if (typeof record.raw_body === "string") {
+      try {
+        visit(JSON.parse(record.raw_body))
+      } catch {
+        // Ignore malformed raw_body payloads and keep other fallbacks.
+      }
+    }
+  }
+
+  visit(payload)
+  return Array.from(urls)
+}
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+async function pollWorkflowRunDetail(params: {
+  workflowRunId: string
+  baseUrl: string
+  credential: string
+  maxWaitMs?: number
+  pollIntervalMs?: number
+}) {
+  const {
+    workflowRunId,
+    baseUrl,
+    credential,
+    maxWaitMs = 180_000,
+    pollIntervalMs = 2_000,
+  } = params
+
+  const deadline = Date.now() + maxWaitMs
+  let lastPayload: Record<string, unknown> | null = null
+
+  while (Date.now() < deadline) {
+    const detailResponse = await fetch(`${baseUrl}/workflows/run/${workflowRunId}`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${credential}`,
+      },
+      cache: "no-store",
+    })
+
+    if (!detailResponse.ok) {
+      const errorText = await detailResponse.text()
+      console.warn(`⚠️ [GPT Image 2] 查询工作流详情失败 status=${detailResponse.status} body=${errorText.slice(0, 200)}`)
+    } else {
+      const detail = await detailResponse.json()
+      lastPayload = detail
+
+      const status = typeof detail?.status === "string" ? detail.status : "unknown"
+      const imageCount = extractWorkflowImageUrls(detail?.outputs).length
+
+      console.log(`🔄 [GPT Image 2] 轮询工作流详情 status=${status} images=${imageCount}`)
+
+      if (imageCount > 0 || isWorkflowTerminalStatus(status)) {
+        return detail
+      }
+    }
+
+    await sleep(pollIntervalMs)
+  }
+
+  console.warn(`⏰ [GPT Image 2] 轮询工作流详情超时 workflow_run_id=${workflowRunId}`)
+  return lastPayload
+}
+
 export async function POST(request: NextRequest) {
   try {
     assertSecureTlsConfiguration()
@@ -411,11 +520,11 @@ export async function POST(request: NextRequest) {
                 }
                 difyRequest.inputs.mode = gptImage2Mode
                 if (fileIds && fileIds.length > 0) {
-                    difyRequest.inputs.init_image = {
+                    difyRequest.inputs.init_image = [{
                         type: "image",
                         transfer_method: "local_file",
                         upload_file_id: fileIds[0]
-                    }
+                    }]
                 }
 
                 console.log(`[GPT Image 2] Workflow request prepared: size=${gptImage2Size} mode=${gptImage2Mode} files=${fileIds?.length || 0}`)
@@ -432,11 +541,11 @@ export async function POST(request: NextRequest) {
 
                 // 🔥 如果有文件，构造文件对象格式
                 if (fileIds && fileIds.length > 0) {
-                    difyRequest.inputs.init_image = {
+                    difyRequest.inputs.init_image = [{
                         type: 'image',
                         transfer_method: 'local_file',
                         upload_file_id: fileIds[0]
-                    }
+                    }]
                     console.log(`🎨 [Banana] 使用文件对象:`, difyRequest.inputs.init_image)
                 }
 
@@ -578,9 +687,32 @@ export async function POST(request: NextRequest) {
 
     // 🎨 GPT Image 2 使用 async 模式，立即返回 task_id
     if (model === "gpt-image-2") {
-        console.log(`🎨 [GPT Image 2] 使用 async 模式，立即返回 task_id`)
         const result = await response.json()
-        return Response.json(result)  // 返回 { task_id, workflow_run_id, status }
+        const workflowRunId = result?.workflow_run_id
+        const inlineStatus = result?.data?.status
+        const inlineOutputs = result?.data?.outputs
+        const inlineImageCount = extractWorkflowImageUrls(inlineOutputs).length
+        const shouldPollWorkflowDetail =
+          typeof workflowRunId === "string" &&
+          (!inlineOutputs || inlineImageCount === 0 || !isWorkflowTerminalStatus(inlineStatus))
+
+        if (shouldPollWorkflowDetail) {
+          console.log(`🎨 [GPT Image 2] 首次响应未返回最终图片，开始轮询 workflow_run_id=${workflowRunId}`)
+          const workflowDetail = await pollWorkflowRunDetail({
+            workflowRunId,
+            baseUrl: DIFY_BASE_URL,
+            credential: selectedCredential,
+          })
+
+          if (workflowDetail) {
+            return Response.json({
+              ...result,
+              data: workflowDetail,
+            })
+          }
+        }
+
+        return Response.json(result)
     }
 
     console.log(`✅ [Dify请求] 成功，开始流式传输...`)

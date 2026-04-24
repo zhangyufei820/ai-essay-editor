@@ -50,3 +50,8 @@ logs
 
 # Next.js standalone 构建产物中的 env 文件（含生产密钥）
 .next/standalone/.env
+
+# Local agent / temp artifacts
+.codex-temp/
+.claude/deployment-memory.md
+.claude/scheduled_tasks.lock
