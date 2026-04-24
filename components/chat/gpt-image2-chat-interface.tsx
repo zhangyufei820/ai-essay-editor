@@ -394,6 +394,7 @@ function GptImage2ChatInterfaceInner() {
   const isLandingState = messages.length === 0 && showHeroIntro
   const isWorkspaceFocused = messages.length === 0 && !showHeroIntro
   const hasMessages = messages.length > 0
+  const isChatMode = hasMessages
   const advancedSettingsVisible = showAdvancedSettings || isLandingState
 
   const selectRatio = (ratio: SizeRatio) => {
@@ -669,6 +670,7 @@ function GptImage2ChatInterfaceInner() {
     }
 
     setIsLoading(true)
+    setShowAdvancedSettings(false)
     collapseSidebar()
 
     let sid = currentSessionId
@@ -1035,8 +1037,10 @@ function GptImage2ChatInterfaceInner() {
                 <div className="flex flex-col gap-3 border-b border-slate-200/70 pb-4 lg:flex-row lg:items-center lg:justify-between">
                   <div className="space-y-2">
                     <div>
-                      <p className="text-sm font-semibold text-slate-800">全屏图像工作台</p>
-                      <p className="mt-1 text-[13px] leading-6 text-slate-500">{hasMessages ? "消息区保持全屏，参数和上传收进底部工作台。" : modeGuideDescription}</p>
+                      <p className="text-sm font-semibold text-slate-800">{isChatMode ? "对话工作台" : "全屏图像工作台"}</p>
+                      <p className={cn("mt-1 text-[13px] leading-6 text-slate-500", isChatMode && "hidden sm:block")}>
+                        {isChatMode ? "已切换为对话创作模式，底部输入框继续保留上传、尺寸和分辨率设置。" : modeGuideDescription}
+                      </p>
                     </div>
                     <div className="inline-flex flex-wrap items-center gap-2 rounded-full border border-slate-200/80 bg-white/90 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
                       {MODE_OPTIONS.map((mode) => {
@@ -1204,11 +1208,14 @@ function GptImage2ChatInterfaceInner() {
                   </div>
                 )}
 
-                <div className="rounded-[28px] border border-slate-200/80 bg-white/94 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.92)] transition-all duration-200 focus-within:border-emerald-200 focus-within:shadow-[0_16px_36px_rgba(16,185,129,0.08)] sm:p-5">
+                <div className={cn(
+                  "rounded-[28px] border border-slate-200/80 bg-white/94 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.92)] transition-all duration-200 focus-within:border-emerald-200 focus-within:shadow-[0_16px_36px_rgba(16,185,129,0.08)]",
+                  isChatMode ? "sm:p-4" : "sm:p-5"
+                )}>
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div>
-                      <p className="text-sm font-semibold text-slate-800">{modeGuideTitle}</p>
-                      <p className="mt-1 text-xs leading-6 text-slate-500">
+                      <p className="text-sm font-semibold text-slate-800">{isChatMode ? "继续创作" : modeGuideTitle}</p>
+                      <p className={cn("mt-1 text-xs leading-6 text-slate-500", isChatMode && "hidden sm:block")}>
                         {selectedMode.key === "image-edit" ? "参考图、主指令和补充要求会一起提交。" : "提示词、参考图和输出参数会一起提交到后端工作流。"}
                       </p>
                     </div>
@@ -1225,10 +1232,10 @@ function GptImage2ChatInterfaceInner() {
                     placeholder={promptPlaceholder}
                     className={cn(
                       "mt-4 resize-none rounded-[24px] border border-emerald-100/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.96))] px-4 py-4 text-[15px] leading-7 text-slate-700 placeholder:text-slate-400 shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_18px_40px_rgba(15,23,42,0.04)] focus-visible:ring-0",
-                      hasMessages ? "min-h-[112px] max-h-[220px]" : "min-h-[180px] max-h-[320px]"
+                      isChatMode ? "min-h-[92px] max-h-[180px]" : "min-h-[180px] max-h-[320px]"
                     )}
                     disabled={isLoading}
-                    rows={hasMessages ? 4 : 6}
+                    rows={isChatMode ? 3 : 6}
                   />
 
                   {selectedMode.key === "image-edit" && (
@@ -1242,6 +1249,7 @@ function GptImage2ChatInterfaceInner() {
                     />
                   )}
 
+                  {!isChatMode && (
                   <div className="mt-3 flex flex-wrap gap-2">
                     {heroPrompts.map((prompt) => (
                       <button
@@ -1254,16 +1262,20 @@ function GptImage2ChatInterfaceInner() {
                       </button>
                     ))}
                   </div>
+                  )}
 
-                  <div className="mt-4 flex flex-col gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className={cn(
+                    "mt-4 flex flex-col gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between",
+                    isChatMode && "gap-2 sm:gap-3"
+                  )}>
                     <div className="space-y-1">
                       <p className="text-xs font-medium text-slate-600">{selectedSummary}</p>
-                      <p className="text-xs leading-6 text-slate-500">{selectionHint}</p>
+                      <p className={cn("text-xs leading-6 text-slate-500", isChatMode && "hidden sm:block")}>{selectionHint}</p>
                     </div>
 
                     <Button
                       type="submit"
-                      className="h-12 rounded-2xl px-5 text-sm font-semibold text-white shadow-[0_14px_28px_rgba(20,83,45,0.22)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_18px_34px_rgba(20,83,45,0.28)] disabled:translate-y-0 disabled:opacity-40"
+                      className="h-12 w-full justify-center whitespace-nowrap rounded-2xl px-5 text-sm font-semibold text-white shadow-[0_14px_28px_rgba(20,83,45,0.22)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_18px_34px_rgba(20,83,45,0.28)] disabled:translate-y-0 disabled:opacity-40 sm:w-auto sm:min-w-[160px]"
                       style={{ backgroundColor: BRAND_GREEN }}
                       disabled={isLoading || !canSubmit}
                     >
