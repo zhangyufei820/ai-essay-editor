@@ -19,6 +19,7 @@ export function ImageChatShell({
   userId,
   userCredits,
   onShowHistory,
+  children,
 }: ImageChatShellProps) {
   const router = useRouter()
 
