@@ -24,14 +24,14 @@ import { toast } from "sonner"
 import { motion, AnimatePresence } from "framer-motion"
 import { createClient } from "@supabase/supabase-js"
 import { collapseSidebar, refreshCredits } from "@/components/app-sidebar"
-import { calculatePreviewCost } from "@/lib/pricing"
+import { calculatePreviewCost, type ModelType } from "@/lib/pricing"
 import { UltimateRenderer } from "@/components/chat/UltimateRenderer"
 import { UserMessageBubble } from "@/components/chat/UserMessageBubble"
 import { ModelLogo } from "@/components/ModelLogo"
 import { GridWaveLoader } from "@/components/chat/GridWaveLoader"
+import { getApiUrl } from "@/lib/api-config"
 
 const BRAND_GREEN = "#14532d"
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || ''
 
 // 🎨 模式选项
 const MODE_OPTIONS = [
@@ -40,6 +40,10 @@ const MODE_OPTIONS = [
 ] as const
 
 type ModeOption = typeof MODE_OPTIONS[number]
+
+function toDifyImageMode(modeKey: ModeOption["key"]): "generate" | "edit" {
+  return modeKey === "image-edit" ? "edit" : "generate"
+}
 
 // 🎨 尺寸选项配置
 const RATIO_OPTIONS = ["1:1", "4:3", "3:2", "16:9", "9:16", "2:3", "3:4"] as const
@@ -111,6 +115,47 @@ function parseImageSize(apiValue: string) {
     width,
     height,
   }
+}
+
+function extractImageUrls(payload: unknown): string[] {
+  const urls = new Set<string>()
+
+  const visit = (value: unknown) => {
+    if (!value) return
+
+    if (typeof value === "string") {
+      if (value.startsWith("http://") || value.startsWith("https://") || value.startsWith("data:image/")) {
+        urls.add(value)
+      }
+      return
+    }
+
+    if (Array.isArray(value)) {
+      value.forEach(visit)
+      return
+    }
+
+    if (typeof value !== "object") return
+
+    const record = value as Record<string, unknown>
+
+    visit(record.url)
+    visit(record.first_url)
+    visit(record.image_data_uri)
+    visit(record.files)
+    visit(record.data)
+
+    if (typeof record.raw_body === "string") {
+      try {
+        visit(JSON.parse(record.raw_body))
+      } catch {
+        // Ignore malformed raw_body payloads and keep other fallbacks.
+      }
+    }
+  }
+
+  visit(payload)
+  return Array.from(urls)
 }
 
 // Supabase 初始化
@@ -255,7 +300,11 @@ function GptImage2ChatInterfaceInner() {
     ? "图像编辑模式会以参考图为基础，再结合你的编辑指令与输出参数生成结果。"
     : "文生图模式以提示词为核心，你也可以补充参考图来统一风格和氛围。"
   const heroPrompts = selectedMode.key === "image-edit" ? IMAGE_EDIT_PRESETS : TEXT_TO_IMAGE_PRESETS
-  const canSubmit = Boolean(input.trim() || (selectedMode.key === "image-edit" && editNotes.trim()))
+  const hasPrompt = Boolean(input.trim() || (selectedMode.key === "image-edit" && editNotes.trim()))
+  const canSubmit = selectedMode.key === "image-edit"
+    ? hasPrompt && uploadedFiles.length > 0
+    : hasPrompt
+  const isLandingState = messages.length === 0 && showHeroIntro
 
   const selectRatio = (ratio: SizeRatio) => {
     const matchedSize =
@@ -300,7 +349,7 @@ function GptImage2ChatInterfaceInner() {
 
   const fetchCredits = async (uid: string) => {
     try {
-      const res = await fetch(`${API_BASE}/api/user/credits?user_id=${encodeURIComponent(uid)}`)
+      const res = await fetch(getApiUrl(`/api/user/credits?user_id=${encodeURIComponent(uid)}`))
       if (res.ok) {
         const data = await res.json()
         setUserCredits(data.credits || 0)
@@ -386,12 +435,22 @@ function GptImage2ChatInterfaceInner() {
       const isNear = scrollHeight - scrollTop - clientHeight < 100
       setIsNearBottom(isNear)
       if (isNear) setHasNewMessage(false)
-      if (scrollTop > 24 && showHeroIntro) setShowHeroIntro(false)
+      if (scrollTop > 24 && showHeroIntro && messages.length > 0) setShowHeroIntro(false)
     }
   }
 
   const hideHeroIntro = () => {
     if (showHeroIntro) setShowHeroIntro(false)
+  }
+
+  const openWorkspace = () => {
+    hideHeroIntro()
+    setTimeout(() => textareaRef.current?.focus(), 0)
+  }
+
+  const applyHeroPrompt = (prompt: string) => {
+    setInput(prompt)
+    openWorkspace()
   }
 
   const scrollToBottom = () => {
@@ -410,7 +469,7 @@ function GptImage2ChatInterfaceInner() {
   const calculateCost = () => {
     if (!userId) return 0
     const isLuxury = userCredits > 1000
-    return calculatePreviewCost("gpt-image-2", {
+    return calculatePreviewCost("gpt-image-2" as ModelType, {
       isLuxury,
       estimatedInputTokens: input.length > 0 ? Math.ceil(input.length / 4) * 2 : undefined
     })
@@ -435,7 +494,7 @@ function GptImage2ChatInterfaceInner() {
         formData.append("file", file)
         formData.append("user", userId)
 
-        const res = await fetch(`${API_BASE}/api/dify-upload`, {
+        const res = await fetch(getApiUrl("/api/dify-upload"), {
           method: "POST",
           headers: {
             "X-User-Id": userId,
@@ -513,6 +572,11 @@ function GptImage2ChatInterfaceInner() {
       : primaryInput
     if (!txt) return
 
+    if (selectedMode.key === "image-edit" && activeFiles.length === 0) {
+      toast.error("Please upload a reference image before editing.")
+      return
+    }
+
     const cost = calculateCost()
     if (userCredits < cost) {
       toast.error("积分不足", {
@@ -572,7 +636,9 @@ function GptImage2ChatInterfaceInner() {
 
         const { width, height } = parseImageSize(selectedSize.apiValue)
 
-        const res = await fetch(`${API_BASE}/api/dify-chat`, {
+        const difyMode = toDifyImageMode(selectedMode.key)
+
+        const res = await fetch(getApiUrl("/api/dify-chat"), {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -584,9 +650,9 @@ function GptImage2ChatInterfaceInner() {
               userId,
               conversation_id: sessionIdRef.current,
               model: "gpt-image-2",
-              mode: selectedMode.key,
+              mode: difyMode,
               inputs: {
-                mode: selectedMode.key,
+                mode: difyMode,
                 size: selectedSize.apiValue,
                 ratio: selectedSize.ratio,
                 tier: selectedSize.tier
@@ -641,6 +707,44 @@ function GptImage2ChatInterfaceInner() {
             }
           } else if (result.error) {
             throw new Error(`Dify Error: ${result.error}`)
+          }
+
+          if (!fullText && result.data?.outputs) {
+            const outputs = result.data.outputs
+            const imageUrls = extractImageUrls(outputs)
+            const textSegments: string[] = []
+
+            if (outputs.status_code === 200 && outputs.raw_body) {
+              try {
+                const rawData = JSON.parse(outputs.raw_body)
+                if (rawData.data && Array.isArray(rawData.data)) {
+                  for (const item of rawData.data) {
+                    if (item.revised_prompt) {
+                      textSegments.push(`Revised prompt: ${item.revised_prompt}`)
+                    }
+                  }
+                }
+              } catch {}
+            }
+
+            if (typeof outputs.text === "string" && outputs.text.trim()) {
+              textSegments.push(outputs.text.trim())
+            } else if (typeof outputs.result === "string" && outputs.result.trim()) {
+              textSegments.push(outputs.result.trim())
+            }
+
+            if (imageUrls.length > 0) {
+              fullText = [
+                ...textSegments,
+                ...imageUrls.map((url) => `![Generated Image](${url})`)
+              ].join("\n\n")
+            } else if (textSegments.length > 0) {
+              fullText = textSegments.join("\n\n")
+            } else if (typeof result.data.status === "string" && result.data.status !== "succeeded") {
+              fullText = "Image task submitted, but the workflow has not returned a final image URL yet. Please refresh later or try again."
+            }
+          } else if (!fullText && (result.task_id || result.workflow_run_id)) {
+            fullText = "Image task submitted, but only a task id was returned. Please refresh later or try again."
           }
 
           setMessages(p => p.map(m => m.id === botId ? { ...m, content: fullText } : m))
@@ -787,7 +891,7 @@ function GptImage2ChatInterfaceInner() {
                       <button
                         key={prompt}
                         type="button"
-                        onClick={() => setInput(prompt)}
+                        onClick={() => applyHeroPrompt(prompt)}
                         className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition-all duration-200 hover:border-emerald-200 hover:text-slate-800"
                       >
                         {prompt}
@@ -887,10 +991,36 @@ function GptImage2ChatInterfaceInner() {
             "custom-scrollbar border-t border-slate-100 bg-white p-3 md:p-5",
             messages.length === 0 && !showHeroIntro
               ? "flex-1 min-h-0 overflow-y-auto"
-              : "max-h-[58dvh] shrink-0 overflow-y-auto md:max-h-[54dvh]"
+              : isLandingState
+                ? "shrink-0"
+                : "max-h-[58dvh] shrink-0 overflow-y-auto md:max-h-[54dvh]"
           )}
         >
-          <div className="mx-auto max-w-4xl">
+          <div className={cn("mx-auto", isLandingState ? "max-w-3xl" : "max-w-4xl")}>
+            {isLandingState ? (
+              <div className="rounded-[32px] border border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.95))] p-4 shadow-[0_24px_64px_rgba(15,23,42,0.08)] sm:p-5">
+                <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-500">
+                  <span className="rounded-full bg-emerald-50 px-3 py-1 text-emerald-800">{selectedMode.label}</span>
+                  <span className="rounded-full bg-slate-100 px-3 py-1">{selectedSize.ratio}</span>
+                  <span className="rounded-full bg-slate-100 px-3 py-1">{selectedSize.tierLabel}</span>
+                  <span className="rounded-full bg-slate-100 px-3 py-1">{formatSizeLabel(selectedSize.apiValue)}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={openWorkspace}
+                  className="mt-4 flex w-full flex-col items-start rounded-[28px] border border-emerald-200/70 bg-white px-5 py-5 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_16px_40px_rgba(20,83,45,0.08)] transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-[0_24px_52px_rgba(20,83,45,0.12)]"
+                >
+                  <span className="text-sm font-semibold text-slate-800">
+                    {selectedMode.key === "image-edit" ? "Click to open the full image editing workspace" : "Click to open the full image creation workspace"}
+                  </span>
+                  <span className="mt-2 text-[15px] leading-7 text-slate-500">
+                    {selectedMode.key === "image-edit"
+                      ? "Upload references, tune ratio and resolution, then edit inside a full-screen chat workspace."
+                      : "Switch to a full-screen chat workspace with prompt, uploads, ratio and resolution controls."}
+                  </span>
+                </button>
+              </div>
+            ) : (
             <form
               onSubmit={onSubmit}
               className="relative overflow-hidden rounded-[32px] border border-white/80 bg-white/90 shadow-[0_18px_48px_rgba(15,23,42,0.08)] backdrop-blur-xl transition-all duration-300 focus-within:-translate-y-0.5 focus-within:border-emerald-200/80 focus-within:shadow-[0_24px_72px_rgba(20,83,45,0.12)]"
@@ -1160,7 +1290,7 @@ function GptImage2ChatInterfaceInner() {
                           <button
                             key={prompt}
                             type="button"
-                            onClick={() => setInput(prompt)}
+                            onClick={() => applyHeroPrompt(prompt)}
                             className="rounded-full border border-slate-200 bg-slate-50/80 px-3 py-1.5 text-xs font-medium text-slate-500 transition-all duration-200 hover:border-emerald-200 hover:bg-white hover:text-slate-700"
                           >
                             {prompt}
@@ -1269,6 +1399,7 @@ function GptImage2ChatInterfaceInner() {
                 </div>
               </div>
             </form>
+            )}
           </div>
         </div>
 

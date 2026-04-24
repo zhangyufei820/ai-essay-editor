@@ -27,11 +27,11 @@ import { calculatePreviewCost } from "@/lib/pricing"
 import { UltimateRenderer } from "@/components/chat/UltimateRenderer"
 import { UserMessageBubble } from "@/components/chat/UserMessageBubble"
 import { GridWaveLoader } from "@/components/chat/GridWaveLoader"
+import { getApiUrl } from "@/lib/api-config"
 
 const BRAND_GREEN = "#14532d"
 const BANANA_COLOR = "#14532d" // 使用网站主题深绿色
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || ''
 
 // 🎨 尺寸选项配置
 const RATIO_OPTIONS = ["1:1", "4:3", "3:2", "16:9", "9:16", "2:3", "3:4"] as const
@@ -252,6 +252,7 @@ function BananaChatInterfaceInner() {
   const selectedSummary = `${selectedSize.ratio} · ${selectedSize.tierLabel} · ${formatSizeLabel(selectedSize.apiValue)}`
   const promptPlaceholder = "描述你想生成的画面、品牌感、材质、灯光、构图与情绪，例如：极简护肤广告，柔和玉石绿瓶身，奶白背景，国际品牌 KV 风。"
   const canSubmit = Boolean(input.trim())
+  const isLandingState = messages.length === 0 && showHeroIntro
 
   const selectRatio = (ratio: SizeRatio) => {
     const matchedSize =
@@ -297,7 +298,7 @@ function BananaChatInterfaceInner() {
 
   const fetchCredits = async (uid: string) => {
     try {
-      const res = await fetch(`${API_BASE}/api/user/credits?user_id=${encodeURIComponent(uid)}`)
+      const res = await fetch(getApiUrl(`/api/user/credits?user_id=${encodeURIComponent(uid)}`))
       if (res.ok) {
         const data = await res.json()
         setUserCredits(data.credits || 0)
@@ -385,12 +386,22 @@ function BananaChatInterfaceInner() {
       const isNear = scrollHeight - scrollTop - clientHeight < 100
       setIsNearBottom(isNear)
       if (isNear) setHasNewMessage(false)
-      if (scrollTop > 24 && showHeroIntro) setShowHeroIntro(false)
+      if (scrollTop > 24 && showHeroIntro && messages.length > 0) setShowHeroIntro(false)
     }
   }
 
   const hideHeroIntro = () => {
     if (showHeroIntro) setShowHeroIntro(false)
+  }
+
+  const openWorkspace = () => {
+    hideHeroIntro()
+    setTimeout(() => textareaRef.current?.focus(), 0)
+  }
+
+  const applyHeroPrompt = (prompt: string) => {
+    setInput(prompt)
+    openWorkspace()
   }
 
   const scrollToBottom = () => {
@@ -435,7 +446,7 @@ function BananaChatInterfaceInner() {
         formData.append("file", file)
         formData.append("user", userId)
         
-        const res = await fetch(`${API_BASE}/api/dify-upload`, {
+        const res = await fetch(getApiUrl("/api/dify-upload"), {
           method: "POST",
           headers: {
             "X-User-Id": userId,
@@ -569,7 +580,7 @@ function BananaChatInterfaceInner() {
     try {
         console.log(`🎨 [Banana前端] 准备发送请求，用户输入: "${userInputText}"`)
         
-        const res = await fetch(`${API_BASE}/api/dify-chat`, {
+        const res = await fetch(getApiUrl("/api/dify-chat"), {
             method: "POST", 
             headers: { 
               "Content-Type": "application/json",
@@ -839,7 +850,7 @@ function BananaChatInterfaceInner() {
                       <button
                         key={prompt}
                         type="button"
-                        onClick={() => setInput(prompt)}
+                        onClick={() => applyHeroPrompt(prompt)}
                         className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition-all duration-200 hover:border-emerald-200 hover:text-slate-800"
                       >
                         {prompt}
@@ -942,10 +953,32 @@ function BananaChatInterfaceInner() {
             "custom-scrollbar border-t border-slate-100 bg-white p-3 md:p-5",
             messages.length === 0 && !showHeroIntro
               ? "flex-1 min-h-0 overflow-y-auto"
-              : "max-h-[58dvh] shrink-0 overflow-y-auto md:max-h-[54dvh]"
+              : isLandingState
+                ? "shrink-0"
+                : "max-h-[58dvh] shrink-0 overflow-y-auto md:max-h-[54dvh]"
           )}
         >
-          <div className="mx-auto max-w-4xl">
+          <div className={cn("mx-auto", isLandingState ? "max-w-3xl" : "max-w-4xl")}>
+            {isLandingState ? (
+              <div className="rounded-[32px] border border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.95))] p-4 shadow-[0_24px_64px_rgba(15,23,42,0.08)] sm:p-5">
+                <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-500">
+                  <span className="rounded-full bg-emerald-50 px-3 py-1 text-emerald-800">Banana 2 Pro</span>
+                  <span className="rounded-full bg-slate-100 px-3 py-1">{selectedSize.ratio}</span>
+                  <span className="rounded-full bg-slate-100 px-3 py-1">{selectedSize.tierLabel}</span>
+                  <span className="rounded-full bg-slate-100 px-3 py-1">{formatSizeLabel(selectedSize.apiValue)}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={openWorkspace}
+                  className="mt-4 flex w-full flex-col items-start rounded-[28px] border border-emerald-200/70 bg-white px-5 py-5 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_16px_40px_rgba(20,83,45,0.08)] transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-[0_24px_52px_rgba(20,83,45,0.12)]"
+                >
+                  <span className="text-sm font-semibold text-slate-800">Click to open the full Banana image workspace</span>
+                  <span className="mt-2 text-[15px] leading-7 text-slate-500">
+                    Move into a full-screen chat workspace with prompt, uploads, ratio and resolution controls.
+                  </span>
+                </button>
+              </div>
+            ) : (
             <form
               onSubmit={onSubmit}
               className="relative overflow-hidden rounded-[32px] border border-white/80 bg-white/90 shadow-[0_18px_48px_rgba(15,23,42,0.08)] backdrop-blur-xl transition-all duration-300 focus-within:-translate-y-0.5 focus-within:border-emerald-200/80 focus-within:shadow-[0_24px_72px_rgba(20,83,45,0.12)]"
@@ -1154,7 +1187,7 @@ function BananaChatInterfaceInner() {
                           <button
                             key={prompt}
                             type="button"
-                            onClick={() => setInput(prompt)}
+                            onClick={() => applyHeroPrompt(prompt)}
                             className="rounded-full border border-slate-200 bg-slate-50/80 px-3 py-1.5 text-xs font-medium text-slate-500 transition-all duration-200 hover:border-emerald-200 hover:bg-white hover:text-slate-700"
                           >
                             {prompt}
@@ -1259,6 +1292,7 @@ function BananaChatInterfaceInner() {
                 </div>
               </div>
             </form>
+            )}
           </div>
         </div>
 

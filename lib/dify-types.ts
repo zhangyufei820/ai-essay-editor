@@ -50,7 +50,7 @@ export interface DifyChatRequest {
 
 export interface DifyWorkflowRequest {
   inputs: DifyWorkflowInputs
-  response_mode: "streaming"
+  response_mode: "streaming" | "blocking"
   user: string
 }
 

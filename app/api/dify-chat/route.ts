@@ -22,6 +22,13 @@ export const runtime = "nodejs"
 export const maxDuration = 300
 export const dynamic = "force-dynamic"
 
+function normalizeGptImageMode(mode: string | null | undefined): "generate" | "edit" {
+  if (mode === "edit" || mode === "image-edit") {
+    return "edit"
+  }
+  return "generate"
+}
+
 // 默认的基础配置
 const DIFY_BASE_URL = process.env.DIFY_INTERNAL_URL
   || process.env.DIFY_BASE_URL
@@ -391,17 +398,27 @@ export async function POST(request: NextRequest) {
                 // GPT Image 2 参数格式 - 使用 blocking 模式
                 // 🎨 正确传递尺寸参数
                 const gptImage2Size = imageSize ? `${imageSize.width}x${imageSize.height}` : "1024x1024"
+                const gptImage2Mode = normalizeGptImageMode(inputs?.mode)
                 difyRequest = {
                     inputs: {
                         prompt: query || "",
-                        mode: inputs?.mode || "generate",
+                        mode: gptImage2Mode,
                         size: gptImage2Size,
                         ...(inputs || {})
                     },
                     response_mode: "blocking",  // blocking 模式
                     user: userId || "default-user",
                 }
-                console.log(`🎨 [GPT Image 2] Workflow request prepared: size=${gptImage2Size} mode=${inputs?.mode || "generate"}`)
+                difyRequest.inputs.mode = gptImage2Mode
+                if (fileIds && fileIds.length > 0) {
+                    difyRequest.inputs.init_image = {
+                        type: "image",
+                        transfer_method: "local_file",
+                        upload_file_id: fileIds[0]
+                    }
+                }
+
+                console.log(`[GPT Image 2] Workflow request prepared: size=${gptImage2Size} mode=${gptImage2Mode} files=${fileIds?.length || 0}`)
             } else {
                 // Dify Banana 参数格式（image_prompt）
                 difyRequest = {
