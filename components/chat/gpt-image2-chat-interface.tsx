@@ -339,6 +339,9 @@ function GptImage2ChatInterfaceInner() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const urlSessionId = searchParams.get("id")
+  const initialPrompt = searchParams.get("prompt") ?? ""
+  const initialMode = searchParams.get("mode") ?? "text-to-image"
+  const initialSizeValue = searchParams.get("size") ?? "1:1"
 
   const [userId, setUserId] = useState<string>("")
   const [userAvatar, setUserAvatar] = useState<string>("")
@@ -348,7 +351,7 @@ function GptImage2ChatInterfaceInner() {
   const [currentSessionId, setCurrentSessionId] = useState<string>("")
 
   const [messages, setMessages] = useState<Message[]>([])
-  const [input, setInput] = useState("")
+  const [input, setInput] = useState(initialPrompt)
   const [isLoading, setIsLoading] = useState(false)
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
   const [uploadProgress, setUploadProgress] = useState<number>(0)
@@ -356,9 +359,12 @@ function GptImage2ChatInterfaceInner() {
   const [editNotes, setEditNotes] = useState("")
 
   // 🎨 新增：模式选择和尺寸选择
-  const [selectedMode, setSelectedMode] = useState<ModeOption>(MODE_OPTIONS[0])
-  const [selectedSize, setSelectedSize] = useState<SizeOption>(SIZE_OPTIONS[0])
-  const [showAdvancedSettings, setShowAdvancedSettings] = useState(false)
+  const [selectedMode, setSelectedMode] = useState<ModeOption>(
+    MODE_OPTIONS.find((mode) => mode.key === initialMode) ?? MODE_OPTIONS[0]
+  )
+  const [selectedSize, setSelectedSize] = useState<SizeOption>(
+    SIZE_OPTIONS.find((size) => size.value === initialSizeValue) ?? SIZE_OPTIONS[0]
+  )
 
   // 🔥 历史会话侧边栏状态
   const [showHistorySidebar, setShowHistorySidebar] = useState(false)
@@ -808,6 +814,17 @@ function GptImage2ChatInterfaceInner() {
       onSubmit(e as unknown as React.FormEvent)
     }
   }
+
+  const hasAutoSubmittedRef = useRef(false)
+
+  useEffect(() => {
+    if (!userId || !input.trim() || hasAutoSubmittedRef.current) {
+      return
+    }
+
+    hasAutoSubmittedRef.current = true
+    void onSubmit({ preventDefault() {} } as React.FormEvent)
+  }, [userId, input])
 
   const handleBack = () => {
     router.push("/")
