@@ -41,6 +41,9 @@ next-env.d.ts
 *.sublime-project
 *.sublime-workspace
 
+# Local worktrees
+.worktrees/
+
 # Logs
 logs
 *.log
