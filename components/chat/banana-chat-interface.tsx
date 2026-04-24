@@ -255,6 +255,7 @@ function BananaChatInterfaceInner() {
   const isLandingState = messages.length === 0 && showHeroIntro
   const isWorkspaceFocused = messages.length === 0 && !showHeroIntro
   const hasMessages = messages.length > 0
+  const advancedSettingsVisible = showAdvancedSettings || isLandingState
 
   const selectRatio = (ratio: SizeRatio) => {
     const matchedSize =
@@ -392,18 +393,9 @@ function BananaChatInterfaceInner() {
     }
   }
 
-  const hideHeroIntro = () => {
-    if (showHeroIntro) setShowHeroIntro(false)
-  }
-
-  const openWorkspace = () => {
-    hideHeroIntro()
-    setTimeout(() => textareaRef.current?.focus(), 0)
-  }
-
   const applyHeroPrompt = (prompt: string) => {
     setInput(prompt)
-    openWorkspace()
+    setTimeout(() => textareaRef.current?.focus(), 0)
   }
 
   const scrollToBottom = () => {
@@ -958,27 +950,7 @@ function BananaChatInterfaceInner() {
               : "shrink-0"
           )}
         >
-          <div className={cn("mx-auto", isLandingState ? "max-w-3xl" : "max-w-5xl", isWorkspaceFocused && "min-h-full flex items-center")}>
-            {isLandingState ? (
-              <div className="rounded-[32px] border border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.95))] p-4 shadow-[0_24px_64px_rgba(15,23,42,0.08)] sm:p-5">
-                <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-500">
-                  <span className="rounded-full bg-emerald-50 px-3 py-1 text-emerald-800">Banana 2 Pro</span>
-                  <span className="rounded-full bg-slate-100 px-3 py-1">{selectedSize.ratio}</span>
-                  <span className="rounded-full bg-slate-100 px-3 py-1">{selectedSize.tierLabel}</span>
-                  <span className="rounded-full bg-slate-100 px-3 py-1">{formatSizeLabel(selectedSize.apiValue)}</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={openWorkspace}
-                  className="mt-4 flex w-full flex-col items-start rounded-[28px] border border-emerald-200/70 bg-white px-5 py-5 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_16px_40px_rgba(20,83,45,0.08)] transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-[0_24px_52px_rgba(20,83,45,0.12)]"
-                >
-                  <span className="text-sm font-semibold text-slate-800">Click to open the full Banana image workspace</span>
-                  <span className="mt-2 text-[15px] leading-7 text-slate-500">
-                    Move into a full-screen chat workspace with prompt, uploads, ratio and resolution controls.
-                  </span>
-                </button>
-              </div>
-            ) : (
+          <div className={cn("mx-auto max-w-5xl", isWorkspaceFocused && "min-h-full flex items-center")}>
             <form
               onSubmit={onSubmit}
               className={cn(
@@ -1044,7 +1016,7 @@ function BananaChatInterfaceInner() {
                   </div>
                 </div>
 
-                {showAdvancedSettings && (
+                {advancedSettingsVisible && (
                   <div className="grid gap-3 rounded-[28px] border border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,249,251,0.95))] p-4 shadow-[0_16px_36px_rgba(15,23,42,0.06)] md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_240px]">
                     <div>
                       <div className="flex items-center justify-between gap-3">
@@ -1164,8 +1136,6 @@ function BananaChatInterfaceInner() {
                     ref={textareaRef}
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
-                    onFocus={hideHeroIntro}
-                    onClick={hideHeroIntro}
                     onKeyDown={handleKeyDown}
                     placeholder={promptPlaceholder}
                     className={cn(
@@ -1223,7 +1193,6 @@ function BananaChatInterfaceInner() {
                 )}
               </div>
             </form>
-            )}
           </div>
         </div>
 
