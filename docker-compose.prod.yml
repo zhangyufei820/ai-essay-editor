@@ -75,6 +75,8 @@ services:
       - DIFY_INTERNAL_URL=http://docker-api-1:5001/v1
       - DIFY_BASE_URL=http://docker-api-1:5001/v1
       - NEXT_PUBLIC_APP_URL=https://www.shenxiang.school
+    tmpfs:
+      - /app/.next/standalone/.next/cache
     networks:
       - shenxiang-net
       - docker_default
