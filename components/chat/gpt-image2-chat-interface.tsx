@@ -12,10 +12,9 @@ import type React from "react"
 import { useState, useRef, useEffect, Suspense } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import {
-  Paperclip, X, FileText, Copy, Loader2, Palette, User,
+  Send, Paperclip, X, FileText, Copy, Loader2, Palette, User,
   ChevronLeft, ArrowDown, Download, Share2, Sparkles, Wand2, Image as ImageIcon,
   History
 } from "lucide-react"
@@ -24,14 +23,14 @@ import { toast } from "sonner"
 import { motion, AnimatePresence } from "framer-motion"
 import { createClient } from "@supabase/supabase-js"
 import { collapseSidebar, refreshCredits } from "@/components/app-sidebar"
-import { calculatePreviewCost, type ModelType } from "@/lib/pricing"
+import { calculatePreviewCost } from "@/lib/pricing"
 import { UltimateRenderer } from "@/components/chat/UltimateRenderer"
-import { UserMessageBubble } from "@/components/chat/UserMessageBubble"
 import { ModelLogo } from "@/components/ModelLogo"
 import { GridWaveLoader } from "@/components/chat/GridWaveLoader"
-import { getApiUrl } from "@/lib/api-config"
+import { ImageChatComposer } from "@/components/chat/image-generation/image-chat-composer"
 
 const BRAND_GREEN = "#14532d"
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || ''
 
 // 🎨 模式选项
 const MODE_OPTIONS = [
@@ -41,209 +40,14 @@ const MODE_OPTIONS = [
 
 type ModeOption = typeof MODE_OPTIONS[number]
 
-function toDifyImageMode(modeKey: ModeOption["key"]): "generate" | "edit" {
-  return modeKey === "image-edit" ? "edit" : "generate"
-}
-
 // 🎨 尺寸选项配置
-const RATIO_OPTIONS = ["1:1", "4:3", "3:2", "16:9", "9:16", "2:3", "3:4"] as const
-
-const SIZE_TIER_OPTIONS = [
-  { value: "standard", label: "标准" },
-  { value: "hd", label: "高清" },
-  { value: "2k", label: "2K" },
-  { value: "4k-experimental", label: "4K 实验" },
-] as const
-
 const SIZE_OPTIONS = [
-  { value: "1-1-standard", ratio: "1:1", tier: "standard", tierLabel: "标准", apiValue: "1024x1024" },
-  { value: "1-1-hd", ratio: "1:1", tier: "hd", tierLabel: "高清", apiValue: "1536x1536" },
-  { value: "1-1-2k", ratio: "1:1", tier: "2k", tierLabel: "2K", apiValue: "2048x2048" },
-  { value: "1-1-4k", ratio: "1:1", tier: "4k-experimental", tierLabel: "4K 实验", apiValue: "3072x3072" },
-  { value: "4-3-standard", ratio: "4:3", tier: "standard", tierLabel: "标准", apiValue: "1024x768" },
-  { value: "4-3-hd", ratio: "4:3", tier: "hd", tierLabel: "高清", apiValue: "1440x1080" },
-  { value: "4-3-2k", ratio: "4:3", tier: "2k", tierLabel: "2K", apiValue: "2048x1536" },
-  { value: "4-3-4k", ratio: "4:3", tier: "4k-experimental", tierLabel: "4K 实验", apiValue: "2880x2160" },
-  { value: "3-2-standard", ratio: "3:2", tier: "standard", tierLabel: "标准", apiValue: "1152x768" },
-  { value: "3-2-hd", ratio: "3:2", tier: "hd", tierLabel: "高清", apiValue: "1620x1080" },
-  { value: "3-2-2k", ratio: "3:2", tier: "2k", tierLabel: "2K", apiValue: "2304x1536" },
-  { value: "3-2-4k", ratio: "3:2", tier: "4k-experimental", tierLabel: "4K 实验", apiValue: "3240x2160" },
-  { value: "16-9-standard", ratio: "16:9", tier: "standard", tierLabel: "标准", apiValue: "1024x576" },
-  { value: "16-9-hd", ratio: "16:9", tier: "hd", tierLabel: "高清", apiValue: "1920x1080" },
-  { value: "16-9-2k", ratio: "16:9", tier: "2k", tierLabel: "2K", apiValue: "2560x1440" },
-  { value: "16-9-4k", ratio: "16:9", tier: "4k-experimental", tierLabel: "4K 实验", apiValue: "3840x2160" },
-  { value: "9-16-standard", ratio: "9:16", tier: "standard", tierLabel: "标准", apiValue: "576x1024" },
-  { value: "9-16-hd", ratio: "9:16", tier: "hd", tierLabel: "高清", apiValue: "1080x1920" },
-  { value: "9-16-2k", ratio: "9:16", tier: "2k", tierLabel: "2K", apiValue: "1440x2560" },
-  { value: "9-16-4k", ratio: "9:16", tier: "4k-experimental", tierLabel: "4K 实验", apiValue: "2160x3840" },
-  { value: "2-3-standard", ratio: "2:3", tier: "standard", tierLabel: "标准", apiValue: "768x1152" },
-  { value: "2-3-hd", ratio: "2:3", tier: "hd", tierLabel: "高清", apiValue: "1080x1620" },
-  { value: "2-3-2k", ratio: "2:3", tier: "2k", tierLabel: "2K", apiValue: "1536x2304" },
-  { value: "2-3-4k", ratio: "2:3", tier: "4k-experimental", tierLabel: "4K 实验", apiValue: "2160x3240" },
-  { value: "3-4-standard", ratio: "3:4", tier: "standard", tierLabel: "标准", apiValue: "768x1024" },
-  { value: "3-4-hd", ratio: "3:4", tier: "hd", tierLabel: "高清", apiValue: "1080x1440" },
-  { value: "3-4-2k", ratio: "3:4", tier: "2k", tierLabel: "2K", apiValue: "1536x2048" },
-  { value: "3-4-4k", ratio: "3:4", tier: "4k-experimental", tierLabel: "4K 实验", apiValue: "2160x2880" },
+  { label: "1:1", value: "1:1", width: 1024, height: 1024 },
+  { label: "9:16", value: "9:16", width: 1024, height: 1536 },
+  { label: "4:3", value: "4:3", width: 1536, height: 1024 },
 ] as const
 
 type SizeOption = typeof SIZE_OPTIONS[number]
-type SizeRatio = typeof RATIO_OPTIONS[number]
-type SizeTier = typeof SIZE_TIER_OPTIONS[number]["value"]
-
-const TEXT_TO_IMAGE_PRESETS = [
-  "高端植物洗护广告图，墨绿色瓶身，暖白背景，国际品牌海报风",
-  "极简珠宝静物，柔和棚拍光，浅灰石材台面，奢侈品画册质感",
-  "未来感智能家居场景，浅雾白空间，电影级逆光，北欧极简构图",
-]
-
-const IMAGE_EDIT_PRESETS = [
-  "保留主体和构图，移除背景杂物，整体提升高级商业质感",
-  "保留人物面部特征，替换成干净品牌背景，增强光影层次",
-  "保持产品主体不变，改成国际品牌海报风，材质更通透精致",
-]
-
-function formatSizeLabel(apiValue: string) {
-  return apiValue.replace("x", "×")
-}
-
-function parseImageSize(apiValue: string) {
-  const [widthText, heightText] = apiValue.split("x")
-  const width = Number(widthText)
-  const height = Number(heightText)
-
-  return {
-    width,
-    height,
-  }
-}
-
-function extractImageUrls(payload: unknown): string[] {
-  const urls = new Set<string>()
-
-  const visit = (value: unknown) => {
-    if (!value) return
-
-    if (typeof value === "string") {
-      if (value.startsWith("http://") || value.startsWith("https://") || value.startsWith("data:image/")) {
-        urls.add(value)
-      }
-      return
-    }
-
-    if (Array.isArray(value)) {
-      value.forEach(visit)
-      return
-    }
-
-    if (typeof value !== "object") return
-
-    const record = value as Record<string, unknown>
-
-    visit(record.url)
-    visit(record.first_url)
-    visit(record.image_data_uri)
-    visit(record.image)
-    visit(record.images)
-    visit(record.file)
-    visit(record.files)
-    visit(record.outputs)
-    visit(record.data)
-
-    if (typeof record.raw_body === "string") {
-      try {
-        visit(JSON.parse(record.raw_body))
-      } catch {
-        // Ignore malformed raw_body payloads and keep other fallbacks.
-      }
-    }
-  }
-
-  visit(payload)
-  return Array.from(urls)
-}
-
-function extractWorkflowTextSegments(payload: unknown): string[] {
-  const segments: string[] = []
-  const seen = new Set<string>()
-
-  const push = (value: unknown, prefix?: string) => {
-    if (typeof value !== "string") return
-    const trimmed = value.trim()
-    if (!trimmed) return
-    const nextValue = prefix ? `${prefix}${trimmed}` : trimmed
-    if (!seen.has(nextValue)) {
-      seen.add(nextValue)
-      segments.push(nextValue)
-    }
-  }
-
-  const visit = (value: unknown) => {
-    if (!value) return
-
-    if (Array.isArray(value)) {
-      value.forEach(visit)
-      return
-    }
-
-    if (typeof value !== "object") return
-
-    const record = value as Record<string, unknown>
-    push(record.text)
-    push(record.result)
-    push(record.error, "Error: ")
-    push(record.revised_prompt, "Revised prompt: ")
-    visit(record.outputs)
-    visit(record.data)
-    visit(record.files)
-
-    if (typeof record.raw_body === "string") {
-      try {
-        visit(JSON.parse(record.raw_body))
-      } catch {
-        // Ignore malformed raw_body payloads and keep other fallbacks.
-      }
-    }
-  }
-
-  visit(payload)
-  return segments
-}
-
-function buildAssistantContentFromWorkflowResult(result: any) {
-  const payloads = [
-    result?.data?.outputs,
-    result?.data,
-    result?.outputs,
-    result,
-  ]
-
-  const imageUrls = payloads.flatMap((payload) => extractImageUrls(payload))
-  const uniqueImageUrls = Array.from(new Set(imageUrls))
-  const textSegments = payloads.flatMap((payload) => extractWorkflowTextSegments(payload))
-  const uniqueTextSegments = Array.from(new Set(textSegments))
-  const status = result?.data?.status || result?.status
-
-  if (uniqueImageUrls.length > 0) {
-    return [
-      ...uniqueTextSegments,
-      ...uniqueImageUrls.map((url) => `![Generated Image](${url})`)
-    ].join("\n\n")
-  }
-
-  if (uniqueTextSegments.length > 0) {
-    return uniqueTextSegments.join("\n\n")
-  }
-
-  if (typeof status === "string" && status !== "succeeded") {
-    return `图像工作流已结束，当前状态：${status}。`
-  }
-
-  if (result?.task_id || result?.workflow_run_id) {
-    return "图像任务已提交，但工作流暂未返回可展示的图片结果。"
-  }
-
-  return ""
-}
 
 // Supabase 初始化
 const supabase = createClient(
@@ -356,7 +160,6 @@ function GptImage2ChatInterfaceInner() {
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
   const [uploadProgress, setUploadProgress] = useState<number>(0)
   const [isUploading, setIsUploading] = useState(false)
-  const [editNotes, setEditNotes] = useState("")
 
   // 🎨 新增：模式选择和尺寸选择
   const [selectedMode, setSelectedMode] = useState<ModeOption>(
@@ -378,50 +181,6 @@ function GptImage2ChatInterfaceInner() {
 
   const [isNearBottom, setIsNearBottom] = useState(true)
   const [hasNewMessage, setHasNewMessage] = useState(false)
-  const [showHeroIntro, setShowHeroIntro] = useState(true)
-  const tierOptionsForRatio = SIZE_OPTIONS.filter((option) => option.ratio === selectedSize.ratio)
-  const actionLabel = selectedMode.key === "image-edit" ? "开始编辑" : "开始生成"
-  const promptPlaceholder = selectedMode.key === "image-edit"
-    ? "描述你想编辑的画面调整方向、风格、材质、灯光与构图，例如：保留人物主体，改成高级杂志封面风，柔和棚拍光。"
-    : "描述你想生成的画面、风格、材质、灯光与构图，例如：高端植物洗护广告图，墨绿色瓶身，暖白背景，国际品牌海报风。"
-  const selectedSummary = `${selectedSize.ratio} · ${selectedSize.tierLabel} · ${formatSizeLabel(selectedSize.apiValue)} · ${selectedMode.label}`
-  const selectionHint = selectedMode.key === "image-edit"
-    ? "上传参考图后，系统会将模式、尺寸与比例一并传给后端。"
-    : "系统会将当前模式、尺寸与比例一并传给后端生成链路。"
-  const modeGuideTitle = selectedMode.key === "image-edit" ? "上传参考图并写下编辑指令" : "输入提示词，开始你的图像创作"
-  const modeGuideDescription = selectedMode.key === "image-edit"
-    ? "图像编辑模式会以参考图为基础，再结合你的编辑指令与输出参数生成结果。"
-    : "文生图模式以提示词为核心，你也可以补充参考图来统一风格和氛围。"
-  const heroPrompts = selectedMode.key === "image-edit" ? IMAGE_EDIT_PRESETS : TEXT_TO_IMAGE_PRESETS
-  const hasPrompt = Boolean(input.trim() || (selectedMode.key === "image-edit" && editNotes.trim()))
-  const canSubmit = selectedMode.key === "image-edit"
-    ? hasPrompt && uploadedFiles.length > 0
-    : hasPrompt
-  const isLandingState = messages.length === 0 && showHeroIntro
-  const isWorkspaceFocused = messages.length === 0 && !showHeroIntro
-  const hasMessages = messages.length > 0
-  const isChatMode = hasMessages
-  const advancedSettingsVisible = showAdvancedSettings || isLandingState
-
-  const selectRatio = (ratio: SizeRatio) => {
-    const matchedSize =
-      SIZE_OPTIONS.find((option) => option.ratio === ratio && option.tier === selectedSize.tier) ||
-      SIZE_OPTIONS.find((option) => option.ratio === ratio)
-
-    if (matchedSize) {
-      setSelectedSize(matchedSize)
-    }
-  }
-
-  const selectTier = (tier: SizeTier) => {
-    const matchedSize =
-      SIZE_OPTIONS.find((option) => option.ratio === selectedSize.ratio && option.tier === tier) ||
-      SIZE_OPTIONS.find((option) => option.tier === tier)
-
-    if (matchedSize) {
-      setSelectedSize(matchedSize)
-    }
-  }
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -446,7 +205,7 @@ function GptImage2ChatInterfaceInner() {
 
   const fetchCredits = async (uid: string) => {
     try {
-      const res = await fetch(getApiUrl(`/api/user/credits?user_id=${encodeURIComponent(uid)}`))
+      const res = await fetch(`${API_BASE}/api/user/credits?user_id=${encodeURIComponent(uid)}`)
       if (res.ok) {
         const data = await res.json()
         setUserCredits(data.credits || 0)
@@ -532,13 +291,7 @@ function GptImage2ChatInterfaceInner() {
       const isNear = scrollHeight - scrollTop - clientHeight < 100
       setIsNearBottom(isNear)
       if (isNear) setHasNewMessage(false)
-      if (scrollTop > 24 && showHeroIntro && messages.length > 0) setShowHeroIntro(false)
     }
-  }
-
-  const applyHeroPrompt = (prompt: string) => {
-    setInput(prompt)
-    setTimeout(() => textareaRef.current?.focus(), 0)
   }
 
   const scrollToBottom = () => {
@@ -557,7 +310,7 @@ function GptImage2ChatInterfaceInner() {
   const calculateCost = () => {
     if (!userId) return 0
     const isLuxury = userCredits > 1000
-    return calculatePreviewCost("gpt-image-2" as ModelType, {
+    return calculatePreviewCost("gpt-image-2", {
       isLuxury,
       estimatedInputTokens: input.length > 0 ? Math.ceil(input.length / 4) * 2 : undefined
     })
@@ -582,7 +335,7 @@ function GptImage2ChatInterfaceInner() {
         formData.append("file", file)
         formData.append("user", userId)
 
-        const res = await fetch(getApiUrl("/api/dify-upload"), {
+        const res = await fetch(`${API_BASE}/api/dify-upload`, {
           method: "POST",
           headers: {
             "X-User-Id": userId,
@@ -641,29 +394,15 @@ function GptImage2ChatInterfaceInner() {
 
   const removeFile = (i: number) => setUploadedFiles(p => p.filter((_, idx) => idx !== i))
 
-  const onSubmit = async (
-    e: React.FormEvent,
-    overrides?: { content?: string; files?: UploadedFile[] }
-  ) => {
+  const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!userId) {
       toast.error("请登录")
       return
     }
 
-    const activeFiles = overrides?.files ?? uploadedFiles
-    const overrideContent = (overrides?.content || "").trim()
-    const primaryInput = ((overrides?.content ?? input) || "").trim()
-    const secondaryInput = (editNotes || "").trim()
-    const txt = overrideContent ? overrideContent : selectedMode.key === "image-edit"
-      ? [primaryInput, secondaryInput ? `补充要求：${secondaryInput}` : ""].filter(Boolean).join("\n\n")
-      : primaryInput
+    const txt = (input || "").trim()
     if (!txt) return
-
-    if (selectedMode.key === "image-edit" && activeFiles.length === 0) {
-      toast.error("Please upload a reference image before editing.")
-      return
-    }
 
     const cost = calculateCost()
     if (userCredits < cost) {
@@ -676,7 +415,6 @@ function GptImage2ChatInterfaceInner() {
     }
 
     setIsLoading(true)
-    setShowAdvancedSettings(false)
     collapseSidebar()
 
     let sid = currentSessionId
@@ -690,7 +428,7 @@ function GptImage2ChatInterfaceInner() {
     }
 
     const userInputText = txt
-    const userFiles = [...activeFiles]
+    const userFiles = [...uploadedFiles]
 
     const userMsg: Message = {
       id: Date.now().toString(),
@@ -700,9 +438,8 @@ function GptImage2ChatInterfaceInner() {
     }
     setMessages(p => [...p, userMsg])
     setInput("")
-    setEditNotes("")
 
-    const fileIds = activeFiles.map(f => f.difyFileId).filter(Boolean) as string[]
+    const fileIds = uploadedFiles.map(f => f.difyFileId).filter(Boolean) as string[]
 
     setUploadedFiles([])
 
@@ -723,11 +460,7 @@ function GptImage2ChatInterfaceInner() {
     try {
         console.log(`🎨 [GPT Image 2前端] 准备发送请求，用户输入: "${userInputText}"`)
 
-        const { width, height } = parseImageSize(selectedSize.apiValue)
-
-        const difyMode = toDifyImageMode(selectedMode.key)
-
-        const res = await fetch(getApiUrl("/api/dify-chat"), {
+        const res = await fetch(`${API_BASE}/api/dify-chat`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -739,17 +472,11 @@ function GptImage2ChatInterfaceInner() {
               userId,
               conversation_id: sessionIdRef.current,
               model: "gpt-image-2",
-              mode: difyMode,
-              inputs: {
-                mode: difyMode,
-                size: selectedSize.apiValue,
-                ratio: selectedSize.ratio,
-                tier: selectedSize.tier
-              },
+              mode: selectedMode.key,
               imageSize: {
-                ratio: selectedSize.ratio,
-                width,
-                height
+                ratio: selectedSize.value,
+                width: selectedSize.width,
+                height: selectedSize.height
               }
             })
         })
@@ -769,10 +496,34 @@ function GptImage2ChatInterfaceInner() {
           const result = await res.json()
           console.log(`🎨 [GPT Image 2] Blocking 响应:`, result)
 
-          if (result.error) {
+          // Blocking 模式返回格式: { task_id, workflow_run_id, data: { outputs: {...} } }
+          if (result.data?.outputs) {
+            const outputs = result.data.outputs
+
+            // 解析图片 URL
+            let imageUrl = outputs.first_url || outputs.image_data_uri || outputs.url || ""
+
+            // 解析文本
+            if (outputs.status_code === 200 && outputs.raw_body) {
+              try {
+                const rawData = JSON.parse(outputs.raw_body)
+                if (rawData.data && Array.isArray(rawData.data)) {
+                  for (const item of rawData.data) {
+                    if (item.url) imageUrl = item.url
+                    if (item.revised_prompt) fullText += `提示词: ${item.revised_prompt}\n\n`
+                  }
+                }
+              } catch (e) {}
+            }
+
+            if (imageUrl) {
+              fullText = `![Generated Image](${imageUrl})`
+            } else if (outputs.text || outputs.result) {
+              fullText = outputs.text || outputs.result
+            }
+          } else if (result.error) {
             throw new Error(`Dify Error: ${result.error}`)
           }
-          fullText = buildAssistantContentFromWorkflowResult(result)
 
           setMessages(p => p.map(m => m.id === botId ? { ...m, content: fullText } : m))
         } catch (e) {
@@ -831,22 +582,22 @@ function GptImage2ChatInterfaceInner() {
   }
 
   return (
-    <div className="relative flex h-[100dvh] min-h-0 w-full overflow-hidden bg-white">
+    <div className="flex h-screen w-full bg-white overflow-hidden relative">
       <div className="flex flex-1 flex-col h-full relative min-w-0">
 
         {/* 顶部导航栏 */}
-        <div className="flex items-center h-12 px-3 md:px-4 border-b border-slate-200/70 bg-white/90 backdrop-blur shrink-0">
+        <div className="flex items-center h-14 px-4 border-b border-slate-100 bg-white shrink-0">
           <button
             onClick={handleBack}
-            className="flex items-center gap-1 rounded-xl px-2 py-1 text-slate-500 hover:bg-slate-100 hover:text-slate-800 transition-colors"
+            className="flex items-center gap-1 text-slate-600 hover:text-slate-800 transition-colors"
           >
             <ChevronLeft className="h-5 w-5" />
-              <span className="text-sm font-medium hidden sm:inline">返回首页</span>
+            <span className="text-sm font-medium hidden sm:inline">返回</span>
           </button>
-          <div className="flex-1 text-center md:text-left md:ml-3">
+          <div className="flex-1 text-center md:text-left md:ml-4">
             <div className="flex items-center justify-center md:justify-start gap-2">
               <ModelLogo modelKey="gpt-image-2" size="lg" />
-              <span className="text-sm font-medium text-slate-700">GPT Image 2 图像创作</span>
+              <span className="text-sm font-medium text-slate-700">GPT Image 2</span>
             </div>
           </div>
           <div>
@@ -855,7 +606,7 @@ function GptImage2ChatInterfaceInner() {
                 <span className="text-xs text-green-700 font-medium">{userCredits.toLocaleString()}</span>
                 <button
                   onClick={() => setShowHistorySidebar(true)}
-                  className="p-1.5 rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+                  className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 transition-colors"
                 >
                   <History className="h-4 w-4 text-slate-600" />
                 </button>
@@ -864,30 +615,25 @@ function GptImage2ChatInterfaceInner() {
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => router.push("/login")}
-                  className="px-3 py-1.5 text-xs font-medium text-white rounded-xl"
+                  className="px-3 py-1.5 text-xs font-medium text-white rounded-lg"
                   style={{ backgroundColor: BRAND_GREEN }}
                 >
                   登录
                 </button>
                 <button
                   onClick={() => setShowHistorySidebar(true)}
-                  className="p-1.5 rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+                  className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 transition-colors"
                 >
                   <History className="h-4 w-4 text-slate-600" />
                 </button>
               </div>
             )}
           </div>
-          <div className="hidden md:block w-6" />
+          <div className="hidden md:block w-16" />
         </div>
 
         {/* 滚动区域 */}
-        <div
-          className={cn(
-            "relative overflow-hidden transition-[height,flex] duration-300",
-            messages.length === 0 && !showHeroIntro ? "h-0 flex-none" : "flex-1 h-0"
-          )}
-        >
+        <div className="flex-1 h-0 relative overflow-hidden">
           {/* 🔥 移动端浮动历史按钮 */}
           <button
             onClick={() => setShowHistorySidebar(!showHistorySidebar)}
@@ -901,45 +647,17 @@ function GptImage2ChatInterfaceInner() {
             onScroll={handleScroll}
             className="h-full overflow-y-auto custom-scrollbar"
           >
-            <div className="mx-auto max-w-5xl px-4 md:px-6 py-6 md:py-8">
+            <div className="mx-auto max-w-4xl px-4 md:px-6 py-6 md:py-8">
               {messages.length === 0 ? (
-                <AnimatePresence initial={false}>
-                  {showHeroIntro && (
-                    <motion.div
-                      initial={{ opacity: 1, height: "auto", y: 0 }}
-                      exit={{ opacity: 0, height: 0, y: -16, marginBottom: 0 }}
-                      transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-                      className="overflow-hidden"
-                    >
-                <div className="mx-auto max-w-3xl py-3 text-center">
-                  <div className="inline-flex flex-wrap items-center justify-center gap-2 rounded-full border border-slate-200/80 bg-white/90 px-3 py-2 shadow-sm">
-                    <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700">
-                      <ModelLogo modelKey="gpt-image-2" size="lg" />
-                      GPT Image 2
-                    </span>
-                    <span className="rounded-full bg-emerald-50 px-3 py-1 text-sm font-medium text-emerald-800">{selectedSummary}</span>
+                <div className="flex flex-col items-center justify-center py-16 text-center">
+                  <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-black/5">
+                    <ModelLogo modelKey="gpt-image-2" size="xl" />
                   </div>
-                  <p className="mt-3 text-sm leading-7 text-slate-500">
-                    {selectedMode.key === "image-edit"
-                      ? "上传参考图并输入编辑指令，生成新的图像结果。"
-                      : "描述你想生成的画面、风格、材质、灯光与构图，直接开始创作。"}
+                  <h1 className="text-xl font-semibold text-slate-800 mb-2">GPT Image 2</h1>
+                  <p className="text-sm text-slate-500 max-w-md">
+                    描述你想要的图片，AI 将为你创作高质量的图像
                   </p>
-                  <div className="mt-4 flex flex-wrap justify-center gap-2">
-                    {heroPrompts.map((prompt) => (
-                      <button
-                        key={prompt}
-                        type="button"
-                        onClick={() => applyHeroPrompt(prompt)}
-                        className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition-all duration-200 hover:border-emerald-200 hover:text-slate-800"
-                      >
-                        {prompt}
-                      </button>
-                    ))}
-                  </div>
                 </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
               ) : (
                 <div className="space-y-5">
                   {messages.map((message) => (
@@ -954,30 +672,42 @@ function GptImage2ChatInterfaceInner() {
                         message.role === "user" ? "items-end" : "items-start"
                       )}>
                         {message.role === "user" ? (
-                          <UserMessageBubble
-                            content={message.content}
-                            files={message.files}
-                            onEdit={(content, files) => {
-                              setInput(content)
-                              setUploadedFiles((files as UploadedFile[]) ?? [])
-                            }}
-                            onSend={(content, files) => {
-                              setInput(content)
-                              setUploadedFiles((files as UploadedFile[]) ?? [])
-                              const fakeEvent = { preventDefault: () => {} } as unknown as React.FormEvent
-                              onSubmit(fakeEvent, { content, files: (files as UploadedFile[]) ?? [] })
-                            }}
-                          />
+                          <div
+                            className="rounded-2xl px-4 py-3 text-slate-700 border border-slate-200"
+                            style={{ backgroundColor: "#f8fafc", borderRadius: "18px 4px 18px 18px" }}
+                          >
+                            <div className="space-y-2">
+                              {message.files && message.files.length > 0 && (
+                                <div className="flex flex-wrap gap-2 mb-2">
+                                  {message.files.map((file, idx) => (
+                                    <motion.div
+                                      key={idx}
+                                      initial={{ opacity: 0, scale: 0.8 }}
+                                      animate={{ opacity: 1, scale: 1 }}
+                                      transition={{ duration: 0.3, delay: idx * 0.1 }}
+                                    >
+                                      {file.preview ? (
+                                        <div className="relative w-14 h-14 rounded-lg overflow-hidden border-2 border-white/30">
+                                          <img src={file.preview} alt={file.name} className="w-full h-full object-cover" />
+                                        </div>
+                                      ) : (
+                                        <div className="flex items-center gap-1.5 rounded-lg bg-white/20 px-2 py-1 text-xs">
+                                          <FileText className="h-3 w-3" />
+                                          <span className="max-w-[60px] truncate">{file.name}</span>
+                                        </div>
+                                      )}
+                                    </motion.div>
+                                  ))}
+                                </div>
+                              )}
+                              <div className="whitespace-pre-wrap text-sm" style={{ lineHeight: 1.6 }}>{message.content}</div>
+                            </div>
+                          </div>
                         ) : (
                           <>
                             {isLoading && message.id === currentBotIdRef.current && !message.content ? (
                               <div className="flex items-center justify-center py-4">
-                                <GridWaveLoader
-                                  size={320}
-                                  dotSize={4}
-                                  gap={9}
-                                  label="正在生成更细致的图像，请稍候。"
-                                />
+                                <GridWaveLoader maxWidth={160} dotSize={5} backgroundColor="#1a1a1a" />
                               </div>
                             ) : (
                               <GptImage2Renderer
@@ -1024,300 +754,46 @@ function GptImage2ChatInterfaceInner() {
         </div>
 
         {/* 输入框 */}
-        <div
-          className={cn(
-            "custom-scrollbar border-t border-slate-100 bg-white p-3 md:p-5",
-            isWorkspaceFocused
-              ? "flex-1 min-h-0 overflow-y-auto"
-              : "shrink-0"
-          )}
-        >
-          <div className={cn("mx-auto max-w-5xl", isWorkspaceFocused && "min-h-full flex items-center")}>
-            <form
+        <div className="border-t border-slate-100 bg-white p-3 md:p-6 shrink-0">
+          <div className="mx-auto max-w-4xl">
+            <ImageChatComposer
+              modeOptions={MODE_OPTIONS.map(({ key, label }) => ({ key, label }))}
+              selectedModeKey={selectedMode.key}
+              onModeChange={(modeKey) => setSelectedMode(MODE_OPTIONS.find((mode) => mode.key === modeKey) ?? MODE_OPTIONS[0])}
+              sizeOptions={SIZE_OPTIONS.map(({ label, value, width, height }) => ({ label, value, width, height }))}
+              selectedSizeValue={selectedSize.value}
+              onSizeChange={(sizeValue) => setSelectedSize(SIZE_OPTIONS.find((size) => size.value === sizeValue) ?? SIZE_OPTIONS[0])}
+              input={input}
+              onInputChange={setInput}
+              onKeyDown={handleKeyDown}
               onSubmit={onSubmit}
-              className={cn(
-                "relative w-full overflow-hidden rounded-[32px] border border-white/80 bg-white/92 shadow-[0_18px_48px_rgba(15,23,42,0.08)] backdrop-blur-xl transition-all duration-300 focus-within:border-emerald-200/80 focus-within:shadow-[0_24px_72px_rgba(20,83,45,0.12)]",
-                hasMessages ? "max-w-none" : "max-w-4xl"
-              )}
-            >
-              <div className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.14),transparent_46%),radial-gradient(circle_at_top_right,rgba(226,232,240,0.8),transparent_38%)]" />
-              <div className="relative space-y-4 p-4 sm:p-5">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  className="hidden"
-                  accept="image/*"
-                  multiple
-                  onChange={handleFileUpload}
-                />
+              onUploadClick={() => {
+                if (!userId) {
+                  toast.error("请先登录后再上传文件")
+                  return
+                }
+                fileInputRef.current?.click()
+              }}
+              uploadedFiles={uploadedFiles}
+              onRemoveFile={removeFile}
+              isUploading={isUploading}
+              uploadProgress={uploadProgress}
+              isLoading={isLoading}
+              submitLabelColor={BRAND_GREEN}
+              placeholder={userId ? "继续描述你的图像需求..." : "请先登录..."}
+            />
+            <input
+              ref={fileInputRef}
+              type="file"
+              className="hidden"
+              accept="image/*"
+              multiple
+              onChange={handleFileUpload}
+            />
 
-                <div className="flex flex-col gap-3 border-b border-slate-200/70 pb-4 lg:flex-row lg:items-center lg:justify-between">
-                  <div className="space-y-2">
-                    <div>
-                      <p className="text-sm font-semibold text-slate-800">{isChatMode ? "对话工作台" : "全屏图像工作台"}</p>
-                      <p className={cn("mt-1 text-[13px] leading-6 text-slate-500", isChatMode && "hidden sm:block")}>
-                        {isChatMode ? "已切换为对话创作模式，底部输入框继续保留上传、尺寸和分辨率设置。" : modeGuideDescription}
-                      </p>
-                    </div>
-                    <div className="inline-flex flex-wrap items-center gap-2 rounded-full border border-slate-200/80 bg-white/90 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
-                      {MODE_OPTIONS.map((mode) => {
-                        const ModeIcon = mode.icon
-
-                        return (
-                          <button
-                            key={mode.key}
-                            type="button"
-                            onClick={() => setSelectedMode(mode)}
-                            className={cn(
-                              "inline-flex items-center gap-2 rounded-full px-3.5 py-2 text-sm font-medium transition-all duration-200",
-                              selectedMode.key === mode.key
-                                ? "border border-emerald-200 bg-emerald-50 text-emerald-800 shadow-[0_8px_20px_rgba(16,185,129,0.12)]"
-                                : "border border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-700"
-                            )}
-                          >
-                            <ModeIcon className="h-4 w-4" />
-                            {mode.label}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-                    <span className="rounded-full border border-emerald-200/80 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-800 shadow-sm shadow-emerald-100/70">
-                      {selectedSummary}
-                    </span>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      className="h-11 rounded-2xl border border-slate-200/80 bg-white px-4 text-sm font-medium text-slate-600 hover:border-slate-300 hover:bg-slate-50"
-                      onClick={() => {
-                        if (!userId) {
-                          toast.error("请先登录后再上传文件")
-                          return
-                        }
-                        fileInputRef.current?.click()
-                      }}
-                      disabled={isLoading}
-                    >
-                      <Paperclip className="mr-2 h-4 w-4" />
-                      {selectedMode.key === "image-edit" ? "上传编辑参考图" : "添加参考图"}
-                    </Button>
-                    <button
-                      type="button"
-                      onClick={() => setShowAdvancedSettings((value) => !value)}
-                      className="inline-flex h-11 items-center rounded-2xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-600 transition-all duration-200 hover:border-slate-300 hover:text-slate-800"
-                    >
-                      {showAdvancedSettings ? "收起设置" : "尺寸与分辨率"}
-                    </button>
-                  </div>
-                </div>
-
-                {advancedSettingsVisible && (
-                  <div className="grid gap-3 rounded-[28px] border border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,249,251,0.95))] p-4 shadow-[0_16px_36px_rgba(15,23,42,0.06)] md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_240px]">
-                    <div>
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="text-sm font-medium text-slate-700">比例</p>
-                        <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-medium text-slate-500">{selectedSize.ratio}</span>
-                      </div>
-                      <Select value={selectedSize.ratio} onValueChange={(value) => selectRatio(value as SizeRatio)}>
-                        <SelectTrigger className="mt-3 h-11 w-full rounded-2xl border-slate-200 bg-white px-4 text-left text-sm text-slate-700 shadow-sm">
-                          <SelectValue placeholder="选择比例" />
-                        </SelectTrigger>
-                        <SelectContent className="rounded-2xl border-slate-200 bg-white">
-                          {RATIO_OPTIONS.map((ratio) => (
-                            <SelectItem key={ratio} value={ratio} className="rounded-xl py-2.5 text-sm">
-                              {ratio}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div>
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="text-sm font-medium text-slate-700">尺寸档位</p>
-                        <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-medium text-slate-500">
-                          {selectedSize.tierLabel} · {formatSizeLabel(selectedSize.apiValue)}
-                        </span>
-                      </div>
-                      <Select value={selectedSize.tier} onValueChange={(value) => selectTier(value as SizeTier)}>
-                        <SelectTrigger className="mt-3 h-11 w-full rounded-2xl border-slate-200 bg-white px-4 text-left text-sm text-slate-700 shadow-sm">
-                          <SelectValue placeholder="选择尺寸档位" />
-                        </SelectTrigger>
-                        <SelectContent className="rounded-2xl border-slate-200 bg-white">
-                          {SIZE_TIER_OPTIONS.map((tier) => {
-                            const option = tierOptionsForRatio.find((item) => item.tier === tier.value)
-                            if (!option) return null
-
-                            return (
-                              <SelectItem key={tier.value} value={tier.value} className="rounded-xl py-2.5">
-                                <div className="flex w-full items-center justify-between gap-3">
-                                  <span className="font-medium text-slate-700">{tier.label}</span>
-                                  <span className="text-xs text-slate-400">{formatSizeLabel(option.apiValue)}</span>
-                                </div>
-                              </SelectItem>
-                            )
-                          })}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="rounded-[24px] border border-slate-200/80 bg-white/85 p-4">
-                      <p className="text-sm font-medium text-slate-800">当前输出</p>
-                      <p className="mt-2 text-sm font-semibold text-slate-700">{formatSizeLabel(selectedSize.apiValue)}</p>
-                      <p className="mt-1 text-xs leading-6 text-slate-500">{selectedMode.label} · {selectedSize.ratio} · {selectedSize.tierLabel}</p>
-                      <p className="mt-3 text-xs leading-6 text-slate-500">{selectionHint}</p>
-                    </div>
-                  </div>
-                )}
-
-                {selectedMode.key === "image-edit" && uploadedFiles.length === 0 && (
-                  <div className="rounded-[24px] border border-dashed border-emerald-200 bg-emerald-50/60 px-4 py-3 text-sm leading-6 text-slate-600">
-                    图像编辑模式需要至少 1 张参考图。点击右上角“上传编辑参考图”后再发送。
-                  </div>
-                )}
-
-                {isUploading && (
-                  <div className="rounded-2xl border border-slate-200/80 bg-white/80 p-3">
-                    <div className="mb-2 flex items-center justify-between">
-                      <span className="text-xs font-medium text-slate-600">上传中...</span>
-                      <span className="text-xs font-medium" style={{ color: BRAND_GREEN }}>{uploadProgress}%</span>
-                    </div>
-                    <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
-                      <motion.div
-                        className="h-full rounded-full"
-                        style={{ backgroundColor: BRAND_GREEN }}
-                        initial={{ width: 0 }}
-                        animate={{ width: `${uploadProgress}%` }}
-                        transition={{ duration: 0.3 }}
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {uploadedFiles.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {uploadedFiles.map((f, i) => (
-                      <div key={i} className="group relative">
-                        {f.preview ? (
-                          <div className="relative h-20 w-20 overflow-hidden rounded-[20px] border border-slate-200/80 bg-white shadow-sm">
-                            <img src={f.preview} alt={f.name} className="h-full w-full object-cover" />
-                            <button
-                              type="button"
-                              onClick={() => removeFile(i)}
-                              className="absolute right-1.5 top-1.5 rounded-full bg-black/55 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100"
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-2 rounded-2xl border border-slate-200/80 bg-white px-3 py-2 text-sm shadow-sm">
-                            <FileText className="h-4 w-4 text-green-600" />
-                            <span className="max-w-[120px] truncate text-slate-600">{f.name}</span>
-                            <button type="button" onClick={() => removeFile(i)} className="text-slate-400 hover:text-red-500">
-                              <X className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                <div className={cn(
-                  "rounded-[28px] border border-slate-200/80 bg-white/94 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.92)] transition-all duration-200 focus-within:border-emerald-200 focus-within:shadow-[0_16px_36px_rgba(16,185,129,0.08)]",
-                  isChatMode ? "sm:p-4" : "sm:p-5"
-                )}>
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
-                      <p className="text-sm font-semibold text-slate-800">{isChatMode ? "继续创作" : modeGuideTitle}</p>
-                      <p className={cn("mt-1 text-xs leading-6 text-slate-500", isChatMode && "hidden sm:block")}>
-                        {selectedMode.key === "image-edit" ? "参考图、主指令和补充要求会一起提交。" : "提示词、参考图和输出参数会一起提交到后端工作流。"}
-                      </p>
-                    </div>
-                    <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-medium text-slate-500">
-                      {formatSizeLabel(selectedSize.apiValue)}
-                    </span>
-                  </div>
-
-                  <Textarea
-                    ref={textareaRef}
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    placeholder={promptPlaceholder}
-                    className={cn(
-                      "mt-4 resize-none rounded-[24px] border border-emerald-100/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.96))] px-4 py-4 text-[15px] leading-7 text-slate-700 placeholder:text-slate-400 shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_18px_40px_rgba(15,23,42,0.04)] focus-visible:ring-0",
-                      isChatMode ? "min-h-[92px] max-h-[180px]" : "min-h-[180px] max-h-[320px]"
-                    )}
-                    disabled={isLoading}
-                    rows={isChatMode ? 3 : 6}
-                  />
-
-                  {selectedMode.key === "image-edit" && (
-                    <Textarea
-                      value={editNotes}
-                      onChange={(e) => setEditNotes(e.target.value)}
-                      placeholder="补充描述，例如：保留人物表情与服饰，只调整背景、光影和整体商业感。"
-                      className="mt-3 min-h-[88px] resize-none rounded-[22px] border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm leading-6 text-slate-700 placeholder:text-slate-400 focus-visible:ring-0"
-                      disabled={isLoading}
-                      rows={3}
-                    />
-                  )}
-
-                  {!isChatMode && (
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {heroPrompts.map((prompt) => (
-                      <button
-                        key={prompt}
-                        type="button"
-                        onClick={() => applyHeroPrompt(prompt)}
-                        className="rounded-full border border-slate-200 bg-slate-50/80 px-3 py-1.5 text-xs font-medium text-slate-500 transition-all duration-200 hover:border-emerald-200 hover:bg-white hover:text-slate-700"
-                      >
-                        {prompt}
-                      </button>
-                    ))}
-                  </div>
-                  )}
-
-                  <div className={cn(
-                    "mt-4 flex flex-col gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between",
-                    isChatMode && "gap-2 sm:gap-3"
-                  )}>
-                    <div className="space-y-1">
-                      <p className="text-xs font-medium text-slate-600">{selectedSummary}</p>
-                      <p className={cn("text-xs leading-6 text-slate-500", isChatMode && "hidden sm:block")}>{selectionHint}</p>
-                    </div>
-
-                    <Button
-                      type="submit"
-                      className="h-12 w-full justify-center whitespace-nowrap rounded-2xl px-5 text-sm font-semibold text-white shadow-[0_14px_28px_rgba(20,83,45,0.22)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_18px_34px_rgba(20,83,45,0.28)] disabled:translate-y-0 disabled:opacity-40 sm:w-auto sm:min-w-[160px]"
-                      style={{ backgroundColor: BRAND_GREEN }}
-                      disabled={isLoading || !canSubmit}
-                    >
-                      {isLoading ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          创作中...
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles className="mr-2 h-4 w-4" />
-                          {actionLabel}
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </div>
-
-                {!userId && (
-                  <div className="rounded-[24px] border border-slate-200/80 bg-slate-50/80 px-4 py-3 text-xs leading-6 text-slate-500">
-                    未登录状态下将无法开始创作，但你仍然可以先准备提示词、参考图和输出参数。
-                  </div>
-                )}
-              </div>
-            </form>
+            {!userId && (
+              <p className="mt-3 text-center text-xs text-slate-400">未登录</p>
+            )}
           </div>
         </div>
 
