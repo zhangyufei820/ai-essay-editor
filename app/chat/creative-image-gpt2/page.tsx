@@ -23,7 +23,7 @@ export default function CreativeImageGpt2Page() {
         onPromptChange={setPrompt}
         modes={config.modes}
         selectedModeKey={selectedModeKey}
-        onModeChange={setSelectedModeKey}
+        onModeChange={(modeKey: string) => setSelectedModeKey(modeKey as "text-to-image" | "image-edit")}
         sizeOptions={config.sizeOptions}
         selectedSizeValue={selectedSizeValue}
         onSizeChange={setSelectedSizeValue}
