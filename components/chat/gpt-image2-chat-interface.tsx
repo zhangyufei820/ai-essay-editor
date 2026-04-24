@@ -28,6 +28,7 @@ import { UltimateRenderer } from "@/components/chat/UltimateRenderer"
 import { ModelLogo } from "@/components/ModelLogo"
 import { GridWaveLoader } from "@/components/chat/GridWaveLoader"
 import { ImageChatComposer } from "@/components/chat/image-generation/image-chat-composer"
+import { getImageModelConfig } from "@/components/chat/image-generation/config"
 
 const BRAND_GREEN = "#14532d"
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || ''
@@ -41,11 +42,7 @@ const MODE_OPTIONS = [
 type ModeOption = typeof MODE_OPTIONS[number]
 
 // 🎨 尺寸选项配置
-const SIZE_OPTIONS = [
-  { label: "1:1", value: "1:1", width: 1024, height: 1024 },
-  { label: "9:16", value: "9:16", width: 1024, height: 1536 },
-  { label: "4:3", value: "4:3", width: 1536, height: 1024 },
-] as const
+const SIZE_OPTIONS = getImageModelConfig("gpt-image-2").sizeOptions
 
 type SizeOption = typeof SIZE_OPTIONS[number]
 
@@ -145,7 +142,7 @@ function GptImage2ChatInterfaceInner() {
   const urlSessionId = searchParams.get("id")
   const initialPrompt = searchParams.get("prompt") ?? ""
   const initialMode = searchParams.get("mode") ?? "text-to-image"
-  const initialSizeValue = searchParams.get("size") ?? "1:1"
+  const initialSizeValue = searchParams.get("size") ?? "1-1-standard"
 
   const [userId, setUserId] = useState<string>("")
   const [userAvatar, setUserAvatar] = useState<string>("")
@@ -166,7 +163,9 @@ function GptImage2ChatInterfaceInner() {
     MODE_OPTIONS.find((mode) => mode.key === initialMode) ?? MODE_OPTIONS[0]
   )
   const [selectedSize, setSelectedSize] = useState<SizeOption>(
-    SIZE_OPTIONS.find((size) => size.value === initialSizeValue) ?? SIZE_OPTIONS[0]
+    SIZE_OPTIONS.find((size) => size.value === initialSizeValue) ??
+    SIZE_OPTIONS.find((size) => size.ratio === initialSizeValue) ??
+    SIZE_OPTIONS[0]
   )
 
   // 🔥 历史会话侧边栏状态
@@ -474,7 +473,7 @@ function GptImage2ChatInterfaceInner() {
               model: "gpt-image-2",
               mode: selectedMode.key,
               imageSize: {
-                ratio: selectedSize.value,
+                ratio: selectedSize.ratio,
                 width: selectedSize.width,
                 height: selectedSize.height
               }
@@ -760,7 +759,7 @@ function GptImage2ChatInterfaceInner() {
               modeOptions={MODE_OPTIONS.map(({ key, label }) => ({ key, label }))}
               selectedModeKey={selectedMode.key}
               onModeChange={(modeKey) => setSelectedMode(MODE_OPTIONS.find((mode) => mode.key === modeKey) ?? MODE_OPTIONS[0])}
-              sizeOptions={SIZE_OPTIONS.map(({ label, value, width, height }) => ({ label, value, width, height }))}
+              sizeOptions={SIZE_OPTIONS.map((size) => ({ ...size }))}
               selectedSizeValue={selectedSize.value}
               onSizeChange={(sizeValue) => setSelectedSize(SIZE_OPTIONS.find((size) => size.value === sizeValue) ?? SIZE_OPTIONS[0])}
               input={input}

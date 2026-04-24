@@ -35,6 +35,31 @@ interface ImageChatComposerProps {
 }
 
 export function ImageChatComposer(props: ImageChatComposerProps) {
+  const selectedSize =
+    props.sizeOptions.find((size) => size.value === props.selectedSizeValue) ?? props.sizeOptions[0]
+  const ratioOptions = Array.from(new Set(props.sizeOptions.map((size) => size.ratio)))
+  const resolutionOptions = Array.from(
+    new Map(props.sizeOptions.map((size) => [size.tier, size.tierLabel])).entries()
+  ).map(([value, label]) => ({ value, label }))
+
+  const handleRatioChange = (ratio: string) => {
+    const nextSize =
+      props.sizeOptions.find((size) => size.ratio === ratio && size.tier === selectedSize.tier) ??
+      props.sizeOptions.find((size) => size.ratio === ratio) ??
+      props.sizeOptions[0]
+
+    props.onSizeChange(nextSize.value)
+  }
+
+  const handleResolutionChange = (tier: string) => {
+    const nextSize =
+      props.sizeOptions.find((size) => size.ratio === selectedSize.ratio && size.tier === tier) ??
+      props.sizeOptions.find((size) => size.tier === tier) ??
+      props.sizeOptions[0]
+
+    props.onSizeChange(nextSize.value)
+  }
+
   return (
     <>
       {props.isUploading ? (
@@ -108,19 +133,37 @@ export function ImageChatComposer(props: ImageChatComposerProps) {
             ) : null}
 
             <div className="flex items-center gap-1 rounded-full bg-slate-100 p-1">
-              {props.sizeOptions.map((size) => (
+              {ratioOptions.map((ratio) => (
                 <button
-                  key={size.value}
+                  key={ratio}
                   type="button"
-                  onClick={() => props.onSizeChange(size.value)}
+                  onClick={() => handleRatioChange(ratio)}
                   className={cn(
                     'rounded-full px-3 py-1.5 text-xs font-medium transition-all duration-200',
-                    props.selectedSizeValue === size.value
+                    selectedSize.ratio === ratio
                       ? 'bg-white text-slate-800 shadow-sm'
                       : 'text-slate-500 hover:text-slate-700'
                   )}
                 >
-                  {size.label}
+                  {ratio}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-1 rounded-full bg-slate-100 p-1">
+              {resolutionOptions.map((resolution) => (
+                <button
+                  key={resolution.value}
+                  type="button"
+                  onClick={() => handleResolutionChange(resolution.value)}
+                  className={cn(
+                    'rounded-full px-3 py-1.5 text-xs font-medium transition-all duration-200',
+                    selectedSize.tier === resolution.value
+                      ? 'bg-white text-slate-800 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-700'
+                  )}
+                >
+                  {resolution.label}
                 </button>
               ))}
             </div>

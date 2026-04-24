@@ -11,7 +11,13 @@ describe('image generation config', () => {
     expect(config.entryRoute).toBe('/chat/creative-image-gpt2')
     expect(config.chatRoute).toBe(GPT_IMAGE_2_CHAT_ROUTE)
     expect(config.modes.map((mode) => mode.key)).toEqual(['text-to-image', 'image-edit'])
-    expect(config.sizeOptions.map((size) => size.value)).toEqual(['1:1', '9:16', '4:3'])
+    expect(config.defaultSizeValue).toBe('1-1-standard')
+    expect(config.sizeOptions).toHaveLength(28)
+    expect(config.sizeOptions.find((size) => size.value === '16-9-4k-experimental')).toMatchObject({
+      ratio: '16:9',
+      tier: '4k-experimental',
+      apiValue: '3840x2160',
+    })
     expect(config.modes.some((mode) => mode.key === config.defaultModeKey)).toBe(true)
     expect(config.sizeOptions.some((size) => size.value === config.defaultSizeValue)).toBe(true)
   })
@@ -22,7 +28,13 @@ describe('image generation config', () => {
     expect(config.entryRoute).toBe('/chat/creative-image-banana')
     expect(config.chatRoute).toBe(BANANA_CHAT_ROUTE)
     expect(config.modes.map((mode) => mode.key)).toEqual(['image'])
-    expect(config.sizeOptions.map((size) => size.value)).toEqual(['16:9', '9:16', '1:1', '3:4', '4:3'])
+    expect(config.defaultSizeValue).toBe('9-16-hd')
+    expect(config.sizeOptions).toHaveLength(28)
+    expect(config.sizeOptions.find((size) => size.value === '9-16-hd')).toMatchObject({
+      ratio: '9:16',
+      tier: 'hd',
+      apiValue: '1080x1920',
+    })
     expect(config.modes.some((mode) => mode.key === config.defaultModeKey)).toBe(true)
     expect(config.sizeOptions.some((size) => size.value === config.defaultSizeValue)).toBe(true)
   })
@@ -35,6 +47,6 @@ describe('image generation config', () => {
     const nextConfig = getImageModelConfig('gpt-image-2')
 
     expect(nextConfig.modes[0].label).toBe('文生图')
-    expect(nextConfig.sizeOptions[0].value).toBe('1:1')
+    expect(nextConfig.sizeOptions[0].value).toBe('1-1-standard')
   })
 })

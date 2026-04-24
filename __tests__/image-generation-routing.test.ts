@@ -6,10 +6,10 @@ describe('buildImageChatRoute', () => {
       buildImageChatRoute('/chat/gpt-image-2', {
         prompt: '海边日落',
         mode: 'image-edit',
-        size: '1:1',
+        size: '1-1-hd',
         fileCount: 2,
       })
-    ).toBe('/chat/gpt-image-2?prompt=%E6%B5%B7%E8%BE%B9%E6%97%A5%E8%90%BD&mode=image-edit&size=1%3A1&files=2')
+    ).toBe('/chat/gpt-image-2?prompt=%E6%B5%B7%E8%BE%B9%E6%97%A5%E8%90%BD&mode=image-edit&size=1-1-hd&files=2')
   })
 
   it('omits empty values from the query string', () => {
@@ -17,9 +17,9 @@ describe('buildImageChatRoute', () => {
       buildImageChatRoute('/chat/banana-2-pro', {
         prompt: '',
         mode: 'image',
-        size: '9:16',
+        size: '9-16-hd',
         fileCount: 0,
       })
-    ).toBe('/chat/banana-2-pro?mode=image&size=9%3A16')
+    ).toBe('/chat/banana-2-pro?mode=image&size=9-16-hd')
   })
 })

@@ -25,6 +25,7 @@ import { calculatePreviewCost } from "@/lib/pricing"
 import { UltimateRenderer } from "@/components/chat/UltimateRenderer"
 import { GridWaveLoader } from "@/components/chat/GridWaveLoader"
 import { ImageChatComposer } from "@/components/chat/image-generation/image-chat-composer"
+import { getImageModelConfig } from "@/components/chat/image-generation/config"
 
 const BRAND_GREEN = "#14532d"
 const BANANA_COLOR = "#14532d" // 使用网站主题深绿色
@@ -32,13 +33,7 @@ const BANANA_COLOR = "#14532d" // 使用网站主题深绿色
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || ''
 
 // 🎨 尺寸选项配置
-const SIZE_OPTIONS = [
-  { label: "16:9", value: "16:9", width: 1920, height: 1080 },
-  { label: "9:16", value: "9:16", width: 1080, height: 1920 },
-  { label: "1:1", value: "1:1", width: 1024, height: 1024 },
-  { label: "3:4", value: "3:4", width: 768, height: 1024 },
-  { label: "4:3", value: "4:3", width: 1024, height: 768 },
-] as const
+const SIZE_OPTIONS = getImageModelConfig("banana-2-pro").sizeOptions
 
 type SizeOption = typeof SIZE_OPTIONS[number]
 
@@ -173,7 +168,7 @@ function BananaChatInterfaceInner() {
   const router = useRouter()
   const urlSessionId = searchParams.get("id")
   const initialPrompt = searchParams.get("prompt") ?? ""
-  const initialSizeValue = searchParams.get("size") ?? SIZE_OPTIONS[1].value
+  const initialSizeValue = searchParams.get("size") ?? "9-16-hd"
 
   const [userId, setUserId] = useState<string>("")
   const [userAvatar, setUserAvatar] = useState<string>("")
@@ -189,7 +184,9 @@ function BananaChatInterfaceInner() {
   const [uploadProgress, setUploadProgress] = useState<number>(0)
   const [isUploading, setIsUploading] = useState(false)
   const [selectedSize, setSelectedSize] = useState<SizeOption>(
-    SIZE_OPTIONS.find((s) => s.value === initialSizeValue) ?? SIZE_OPTIONS[1]
+    SIZE_OPTIONS.find((s) => s.value === initialSizeValue) ??
+    SIZE_OPTIONS.find((s) => s.ratio === initialSizeValue) ??
+    SIZE_OPTIONS[1]
   )
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -512,7 +509,7 @@ function BananaChatInterfaceInner() {
               mode: "image",
               // 🎨 传递尺寸参数
               imageSize: {
-                ratio: selectedSize.value,
+                ratio: selectedSize.ratio,
                 width: selectedSize.width,
                 height: selectedSize.height
               }
@@ -846,12 +843,7 @@ function BananaChatInterfaceInner() {
               modeOptions={[{ key: "image", label: "图像生成" }]}
               selectedModeKey="image"
               onModeChange={() => undefined}
-              sizeOptions={SIZE_OPTIONS.map(({ label, value, width, height }) => ({
-                label: label as string,
-                value: value as string,
-                width,
-                height,
-              }))}
+              sizeOptions={SIZE_OPTIONS.map((size) => ({ ...size }))}
               selectedSizeValue={selectedSize.value}
               onSizeChange={(sizeValue) =>
                 setSelectedSize(SIZE_OPTIONS.find((s) => s.value === sizeValue) ?? SIZE_OPTIONS[1])

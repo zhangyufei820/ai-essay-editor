@@ -41,6 +41,31 @@ export function ImageGenerationEntry({
   onSubmit,
   isSubmitting,
 }: ImageGenerationEntryProps) {
+  const selectedSize =
+    sizeOptions.find((size) => size.value === selectedSizeValue) ?? sizeOptions[0]
+  const ratioOptions = Array.from(new Set(sizeOptions.map((size) => size.ratio)))
+  const resolutionOptions = Array.from(
+    new Map(sizeOptions.map((size) => [size.tier, size.tierLabel])).entries()
+  ).map(([value, label]) => ({ value, label }))
+
+  const handleRatioChange = (ratio: string) => {
+    const nextSize =
+      sizeOptions.find((size) => size.ratio === ratio && size.tier === selectedSize.tier) ??
+      sizeOptions.find((size) => size.ratio === ratio) ??
+      sizeOptions[0]
+
+    onSizeChange(nextSize.value)
+  }
+
+  const handleResolutionChange = (tier: string) => {
+    const nextSize =
+      sizeOptions.find((size) => size.ratio === selectedSize.ratio && size.tier === tier) ??
+      sizeOptions.find((size) => size.tier === tier) ??
+      sizeOptions[0]
+
+    onSizeChange(nextSize.value)
+  }
+
   return (
     <div className="min-h-screen bg-white">
       <div className="mx-auto flex min-h-screen max-w-5xl flex-col px-4 py-8 md:px-6 md:py-12">
@@ -68,31 +93,55 @@ export function ImageGenerationEntry({
             ))}
           </div>
 
-          <div className="flex flex-wrap items-center justify-center gap-2">
-            {sizeOptions.map((size) => (
-              <button
-                key={size.value}
-                type="button"
-                onClick={() => onSizeChange(size.value)}
-                className={cn(
-                  'rounded-full border px-4 py-2 text-sm transition-colors',
-                  selectedSizeValue === size.value
-                    ? 'border-green-800 bg-green-50 text-green-900'
-                    : 'border-slate-200 bg-white text-slate-600'
-                )}
-              >
-                {size.label}
-              </button>
-            ))}
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              {ratioOptions.map((ratio) => (
+                <button
+                  key={ratio}
+                  type="button"
+                  onClick={() => handleRatioChange(ratio)}
+                  className={cn(
+                    'rounded-full border px-4 py-2 text-sm transition-colors',
+                    selectedSize.ratio === ratio
+                      ? 'border-green-800 bg-green-50 text-green-900'
+                      : 'border-slate-200 bg-white text-slate-600'
+                  )}
+                >
+                  {ratio}
+                </button>
+              ))}
+            </div>
 
-            <button
-              type="button"
-              onClick={onUploadClick}
-              className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-sm text-slate-600 transition-colors hover:bg-slate-50"
-            >
-              <Paperclip className="h-4 w-4" />
-              {uploadedFileCount > 0 ? `参考图 ${uploadedFileCount} 张` : '上传参考图'}
-            </button>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              {resolutionOptions.map((resolution) => (
+                <button
+                  key={resolution.value}
+                  type="button"
+                  onClick={() => handleResolutionChange(resolution.value)}
+                  className={cn(
+                    'rounded-full border px-4 py-2 text-sm transition-colors',
+                    selectedSize.tier === resolution.value
+                      ? 'border-slate-900 bg-slate-900 text-white'
+                      : 'border-slate-200 bg-white text-slate-600'
+                  )}
+                >
+                  {resolution.label}
+                </button>
+              ))}
+
+              <button
+                type="button"
+                onClick={onUploadClick}
+                className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-sm text-slate-600 transition-colors hover:bg-slate-50"
+              >
+                <Paperclip className="h-4 w-4" />
+                {uploadedFileCount > 0 ? `参考图 ${uploadedFileCount} 张` : '上传参考图'}
+              </button>
+            </div>
+
+            <div className="text-center text-xs text-slate-500">
+              当前输出：{selectedSize.ratio} · {selectedSize.tierLabel} · {selectedSize.apiValue}
+            </div>
           </div>
 
           <div className="rounded-3xl border border-slate-200 bg-white p-3 shadow-sm">
