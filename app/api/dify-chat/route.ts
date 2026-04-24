@@ -493,6 +493,14 @@ export async function POST(request: NextRequest) {
             })
             console.warn(`✅ [Dify请求] 响应到达 status=${response.status} body=${response.body === null ? 'null' : 'ReadableStream'}`)
 
+            if (model === "gpt-image-2" && !streamStatus.firstByteReceived) {
+                streamStatus.firstByteReceived = true
+                if (streamStatus.timeoutId) {
+                    clearTimeout(streamStatus.timeoutId)
+                    streamStatus.timeoutId = null
+                }
+            }
+
             return response
         } catch (error: unknown) {
             // 清理超时定时器
