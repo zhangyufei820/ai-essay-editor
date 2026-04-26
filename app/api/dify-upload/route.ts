@@ -264,6 +264,7 @@ export async function POST(request: NextRequest) {
     const gatewayResponse = await fetch(uploadUrl, {
       method: "POST",
       headers: {
+        "x-gateway-token": gatewayToken,
         Authorization: `Bearer ${gatewayToken}`,
       },
       body: gatewayFormData,
@@ -291,11 +292,31 @@ export async function POST(request: NextRequest) {
     }
 
     const gatewayData = await gatewayResponse.json()
+    if (gatewayData?.success === false) {
+      console.error("[Backend] Gateway upload returned failure:", {
+        fileName: safeFileName,
+        code: gatewayData.code,
+        message: gatewayData.message,
+      })
+
+      return new Response(
+        JSON.stringify({
+          error: "File upload to gateway failed",
+          details: gatewayData.message || "Gateway upload returned failure",
+          status: 502,
+        }),
+        {
+          status: 502,
+          headers: { "Content-Type": "application/json" },
+        },
+      )
+    }
+
     const gatewayFilename = gatewayData.data?.filename || gatewayData.filename || safeFileName
     const gatewayUrl =
       gatewayData.data?.url ||
       gatewayData.url ||
-      (gatewayFilename ? `${IMAGE_GATEWAY_URL.replace(/\/+$/, "")}/images/${encodeURIComponent(path.basename(gatewayFilename))}` : undefined)
+      (gatewayFilename ? `${IMAGE_GATEWAY_URL.replace(/\/+$/, "")}/images/uploads/${encodeURIComponent(path.basename(gatewayFilename))}` : undefined)
 
     if (!gatewayUrl) {
       console.error("[Backend] Gateway upload missing public URL:", {
