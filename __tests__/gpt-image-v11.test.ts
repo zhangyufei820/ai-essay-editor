@@ -4,6 +4,7 @@ import {
   buildDifyInputs,
   extractImageUrlsFromDifyResult,
   getAspectRatioForSize,
+  proxifyGeneratedImageUrl,
   resolveSizeForAspectRatio,
 } from "@/components/chat/image-generation/gpt-image-v11"
 
@@ -58,5 +59,12 @@ describe("GPT Image V11 parameter mapping", () => {
         },
       })
     ).toEqual(["https://example.com/a.png", "https://example.com/b.webp", "https://example.com/c.jpg"])
+  })
+
+  it("proxifies insecure image gateway URLs for HTTPS pages", () => {
+    expect(proxifyGeneratedImageUrl("http://43.154.111.156:8001/images/result.png")).toBe(
+      "/api/image-proxy?url=http%3A%2F%2F43.154.111.156%3A8001%2Fimages%2Fresult.png"
+    )
+    expect(proxifyGeneratedImageUrl("https://example.com/result.png")).toBe("https://example.com/result.png")
   })
 })

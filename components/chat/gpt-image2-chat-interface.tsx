@@ -58,6 +58,7 @@ import {
   getAspectRatioForSize,
   isLargeSize,
   isOriginalSize,
+  proxifyGeneratedImageUrl,
   resolveSizeForAspectRatio,
 } from "@/components/chat/image-generation/gpt-image-v11"
 
@@ -619,7 +620,7 @@ function GptImage2ChatInterfaceInner() {
         throw new Error(payload?.error || `upstream_error:${response.status}`)
       }
 
-      const imageUrls = parseDifyResult(payload)
+      const imageUrls = parseDifyResult(payload).map(proxifyGeneratedImageUrl)
       const sourceText =
         typeof payload?.answer === "string"
           ? payload.answer

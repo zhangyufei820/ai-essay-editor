@@ -297,3 +297,16 @@ export function extractImageUrlsFromDifyResult(payload: unknown): string[] {
   visit(payload)
   return Array.from(urls)
 }
+
+export function proxifyGeneratedImageUrl(url: string): string {
+  try {
+    const parsed = new URL(url)
+    if (parsed.protocol === "http:" && parsed.hostname === "43.154.111.156" && parsed.port === "8001" && parsed.pathname.startsWith("/images/")) {
+      return `/api/image-proxy?url=${encodeURIComponent(url)}`
+    }
+  } catch {
+    return url
+  }
+
+  return url
+}
