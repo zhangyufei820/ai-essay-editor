@@ -291,10 +291,35 @@ export async function POST(request: NextRequest) {
     }
 
     const gatewayData = await gatewayResponse.json()
+    const gatewayFilename = gatewayData.data?.filename || gatewayData.filename || safeFileName
+    const gatewayUrl =
+      gatewayData.data?.url ||
+      gatewayData.url ||
+      (gatewayFilename ? `${IMAGE_GATEWAY_URL.replace(/\/+$/, "")}/images/${encodeURIComponent(path.basename(gatewayFilename))}` : undefined)
+
+    if (!gatewayUrl) {
+      console.error("[Backend] Gateway upload missing public URL:", {
+        fileName: safeFileName,
+        responseKeys: Object.keys(gatewayData || {}),
+        dataKeys: Object.keys(gatewayData?.data || {}),
+      })
+
+      return new Response(
+        JSON.stringify({
+          error: "Gateway upload did not return a public image URL",
+          status: 502,
+        }),
+        {
+          status: 502,
+          headers: { "Content-Type": "application/json" },
+        },
+      )
+    }
+
     console.log("[Backend] Gateway upload success:", {
       fileName: safeFileName,
       userId,
-      gatewayUrl: gatewayData.data?.url
+      gatewayUrl,
     })
 
     // 返回网关上传结果（包含公网 URL）
@@ -304,12 +329,12 @@ export async function POST(request: NextRequest) {
       code: "ok",
       message: "文件上传成功",
       data: {
-        url: gatewayData.data?.url,        // 🔥 图片网关公网 URL（用于 reference_image_url）
+        url: gatewayUrl,                   // 🔥 图片网关公网 URL（用于 reference_image_url）
         filename: safeFileName,
         content_type: file.type,
         size: file.size,
       },
-      gatewayUrl: gatewayData.data?.url,   // 🔥 兼容字段
+      gatewayUrl,                          // 🔥 兼容字段
     }), {
       status: 200,
       headers: { "Content-Type": "application/json" },
