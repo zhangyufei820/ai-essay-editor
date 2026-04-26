@@ -108,17 +108,25 @@ function mapImageError(error: unknown): string {
 
   if (raw === "empty_prompt") return "提示词不能为空。"
   if (raw === "missing_edit_image") return "图片编辑模式需要上传原图。"
-  if (lower.includes("rate") || lower.includes("429")) return "上游图片接口限流，请稍后再试，或降低质量 / 切换模型。"
+  if (lower.includes("rate") || lower.includes("429")) return "图片服务请求较多，请稍后再试，或降低质量 / 切换模型。"
   if (raw.includes("未登录") || raw.includes("请先登录") || raw.includes("未授权") || lower.includes("unauthorized") || lower.includes("401")) {
     return "请先登录后再生成图片。"
   }
-  if (lower.includes("download_file_error")) return "网关无法下载上传图片，请重新上传。"
+  if (lower.includes("download_file_error")) return "无法读取上传图片，请重新上传。"
   if (lower.includes("network") || lower.includes("failed to fetch")) return "网络请求失败，请稍后重试。"
   if (lower.includes("upstream_error") || lower.includes("dify error") || lower.includes("500")) {
-    return "上游接口请求失败，可能是余额不足、模型不可用、尺寸不支持或参数不兼容。"
+    return "图片服务请求失败，可能是余额不足、模型不可用、尺寸不支持或参数不兼容。"
   }
 
-  return raw || "图片生成失败，请稍后重试。"
+  return sanitizeServiceWording(raw) || "图片生成失败，请稍后重试。"
+}
+
+function sanitizeServiceWording(text: string) {
+  return text
+    .replace(/Dify\s*API/gi, "图片服务")
+    .replace(/Dify/gi, "服务")
+    .replace(/图片网关/g, "图片服务")
+    .replace(/网关/g, "服务")
 }
 
 function parseDifyResult(payload: unknown) {
@@ -623,9 +631,9 @@ function GptImage2ChatInterfaceInner() {
       const imageUrls = parseDifyResult(payload).map(proxifyGeneratedImageUrl)
       const sourceText =
         typeof payload?.answer === "string"
-          ? payload.answer
+          ? sanitizeServiceWording(payload.answer)
           : typeof payload?.data?.outputs?.text === "string"
-            ? payload.data.outputs.text
+            ? sanitizeServiceWording(payload.data.outputs.text)
             : ""
 
       if (imageUrls.length === 0 && !sourceText) {
@@ -750,7 +758,7 @@ function GptImage2ChatInterfaceInner() {
               <div className="space-y-2">
                 <h1 className="text-xl font-semibold text-foreground">AI 图像工作台</h1>
                 <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
-                  支持文生图与上传图片编辑。日常推荐 gpt-image-1 + 1024×1024 + medium；需要 4K 或高质量作品时，选择 gpt-image-2，并使用 3840×2160 或 2160×3840。图片编辑时，系统会先上传原图，再自动传入 Dify。
+                  支持文生图与上传图片编辑。日常推荐 gpt-image-1 + 1024×1024 + medium；需要 4K 或高质量作品时，选择 gpt-image-2，并使用 3840×2160 或 2160×3840。图片编辑时，上传原图后系统会自动完成安全处理。
                 </p>
               </div>
             </div>
@@ -794,7 +802,7 @@ function GptImage2ChatInterfaceInner() {
                 <div>
                   <h2 className="text-sm font-semibold text-foreground">图片编辑素材</h2>
                   <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                    上传需要编辑的原图。系统会先上传到图片网关，再自动传入 Dify。
+                    上传需要编辑的原图，系统会自动完成安全处理。
                   </p>
                 </div>
 
@@ -836,7 +844,7 @@ function GptImage2ChatInterfaceInner() {
 
             <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="text-sm text-muted-foreground">
-                {mode === "image_edit" && !editImage ? "图片编辑模式需要上传原图。" : "参数已准备好，提交后由服务端安全调用 Dify。"}
+                {mode === "image_edit" && !editImage ? "图片编辑模式需要上传原图。" : "参数已准备好，提交后将开始生成。"}
               </div>
               <Button
                 type="submit"
@@ -892,7 +900,7 @@ function GptImage2ChatInterfaceInner() {
                   </div>
                 ) : (
                   <div className="rounded-xl border border-border bg-muted/40 p-4 text-sm leading-7 text-muted-foreground">
-                    {result.sourceText || "Dify 已返回结果，但没有检测到图片链接。"}
+                    {result.sourceText || "服务已返回结果，但没有检测到图片链接。"}
                   </div>
                 )}
 
