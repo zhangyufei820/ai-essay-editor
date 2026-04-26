@@ -50,7 +50,8 @@ describe('lib/pricing.ts v2.0 - 计费公式测试', () => {
   describe('模型配置', () => {
     const allModels: ModelType[] = [
       'standard', 'teaching-pro', 'gpt-5', 'claude-opus', 'gemini-pro',
-      'banana-2-pro', 'suno-v5', 'grok-4.2', 'open-claw'
+      'banana-2-pro', 'gpt-image-2', 'gpt-image-1.5', 'gpt-image-1', 'gpt-image-1-mini',
+      'suno-v5', 'grok-4.2', 'open-claw'
     ]
 
     test.each(allModels)('模型 %s 应有有效的配置', (model) => {
@@ -80,7 +81,7 @@ describe('lib/pricing.ts v2.0 - 计费公式测试', () => {
     })
 
     test('多媒体模型应有 fixedCost', () => {
-      const mediaModels: ModelType[] = ['banana-2-pro', 'suno-v5']
+      const mediaModels: ModelType[] = ['gpt-image-2', 'gpt-image-1.5', 'gpt-image-1', 'gpt-image-1-mini', 'suno-v5']
       mediaModels.forEach(model => {
         const config = MODEL_COSTS[model]
         expect(config.category).toBe('media')
@@ -118,16 +119,19 @@ describe('lib/pricing.ts v2.0 - 计费公式测试', () => {
       expect(cost).toBe(40)
     })
 
-    test('banana-2-pro 图片：固定 125 积分', () => {
+    test('banana-2-pro 图片：预估仅含 LLM 成本', () => {
       const cost = calculatePreviewCost('banana-2-pro')
-      // 50 / 0.4 = 125
-      expect(cost).toBe(125)
+      expect(cost).toBe(10)
     })
 
-    test('suno-v5 音乐：固定 250 积分', () => {
+    test('gpt-image-2 图片：固定 200 积分', () => {
+      const cost = calculatePreviewCost('gpt-image-2')
+      expect(cost).toBe(200)
+    })
+
+    test('suno-v5 音乐：固定成本加 token 成本后加 20% 利润', () => {
       const cost = calculatePreviewCost('suno-v5')
-      // 100 / 0.4 = 250
-      expect(cost).toBe(250)
+      expect(cost).toBe(102)
     })
 
     test('自定义输入 Token 数量', () => {
@@ -185,8 +189,13 @@ describe('lib/pricing.ts v2.0 - 计费公式测试', () => {
     })
 
     test('多媒体模型固定价格', () => {
-      expect(calculateActualCost('banana-2-pro')).toBe(125)
-      expect(calculateActualCost('suno-v5')).toBe(250)
+      expect(calculateActualCost('gpt-image-2')).toBe(200)
+      expect(calculateActualCost('suno-v5')).toBe(102)
+    })
+
+    test('banana-2-pro 无图像时仅按 token 计费，生成图像时叠加图像成本', () => {
+      expect(calculateActualCost('banana-2-pro')).toBe(10)
+      expect(calculateActualCost('banana-2-pro', { totalTokens: 500 }, { hasGeneratedImage: true })).toBe(100)
     })
 
     test('未知模型返回默认价格 20', () => {
@@ -219,13 +228,15 @@ describe('lib/pricing.ts v2.0 - 计费公式测试', () => {
       expect(getModelCategory('standard')).toBe('agent')
       expect(getModelCategory('teaching-pro')).toBe('agent')
       expect(getModelCategory('gpt-5')).toBe('standalone')
-      expect(getModelCategory('banana-2-pro')).toBe('media')
+      expect(getModelCategory('banana-2-pro')).toBe('standalone')
+      expect(getModelCategory('gpt-image-2')).toBe('media')
     })
 
     test('getTokenRate 返回正确的 Token 单价', () => {
       expect(getTokenRate('standard')).toBe(10)
       expect(getTokenRate('gpt-5')).toBe(20)
-      expect(getTokenRate('banana-2-pro')).toBe(0) // 多媒体无 Token 单价
+      expect(getTokenRate('banana-2-pro')).toBe(20)
+      expect(getTokenRate('gpt-image-2')).toBe(0)
     })
   })
 

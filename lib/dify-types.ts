@@ -38,7 +38,7 @@ export type DifyWorkflowInputs = Record<string, string | DifyImageObject | unkno
 export interface DifyChatRequest {
   inputs: Record<string, unknown>
   query: string
-  response_mode: "streaming"
+  response_mode: "streaming" | "blocking"
   user: string
   conversation_id?: string | null
   files?: DifyFileObject[]

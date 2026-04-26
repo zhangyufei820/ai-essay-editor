@@ -1,71 +1,87 @@
 "use client"
 
-/**
- * GPT Image 2 专用聊天界面
- * 特点：
- * 1. 文生图 / 图像编辑 模式切换
- * 2. 尺寸选择：1024x1024 (1:1)、1024x1536 (9:16)、1536x1024 (4:3)
- * 3. 流式输出文字描述 + 图片渲染
- */
-
 import type React from "react"
-import { useState, useRef, useEffect, Suspense } from "react"
-import { useSearchParams, useRouter } from "next/navigation"
+import { Suspense, useEffect, useMemo, useRef, useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
+import {
+  AlertCircle,
+  CheckCircle2,
+  ChevronDown,
+  ChevronLeft,
+  Copy,
+  Download,
+  FileImage,
+  History,
+  Image as ImageIcon,
+  Loader2,
+  RefreshCcw,
+  Sparkles,
+  Trash2,
+  UploadCloud,
+  Wand2,
+  X,
+  Zap,
+} from "lucide-react"
+import { createClient } from "@supabase/supabase-js"
+import { toast } from "sonner"
+
+import { ModelLogo } from "@/components/ModelLogo"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import {
-  Send, Paperclip, X, FileText, Copy, Loader2, Palette, User,
-  ChevronLeft, ArrowDown, Download, Share2, Sparkles, Wand2, Image as ImageIcon,
-  History
-} from "lucide-react"
-import { cn } from "@/lib/utils"
-import { toast } from "sonner"
-import { motion, AnimatePresence } from "framer-motion"
-import { createClient } from "@supabase/supabase-js"
 import { collapseSidebar, refreshCredits } from "@/components/app-sidebar"
-import { calculatePreviewCost } from "@/lib/pricing"
-import { UltimateRenderer } from "@/components/chat/UltimateRenderer"
-import { ModelLogo } from "@/components/ModelLogo"
-import { GridWaveLoader } from "@/components/chat/GridWaveLoader"
-import { ImageChatComposer } from "@/components/chat/image-generation/image-chat-composer"
-import { getImageModelConfig } from "@/components/chat/image-generation/config"
+import { extractUserId } from "@/lib/auth-user"
+import { cn } from "@/lib/utils"
+import {
+  ASPECT_RATIO_OPTIONS,
+  BACKGROUND_OPTIONS,
+  DEFAULT_IMAGE_INPUTS,
+  EDIT_MODE_DEFAULTS,
+  type GptImageInputs,
+  type GptImageModel,
+  type ImageAspectRatio,
+  type ImageBackground,
+  type ImageModeration,
+  type ImageOutputFormat,
+  type ImageQuality,
+  type ImageSize,
+  type ImageTaskMode,
+  MODERATION_OPTIONS,
+  MODE_OPTIONS,
+  MODEL_OPTIONS,
+  OUTPUT_FORMAT_OPTIONS,
+  QUALITY_OPTIONS,
+  SIZE_OPTIONS,
+  buildDifyInputs,
+  clampCompression,
+  clampImageCount,
+  extractImageUrlsFromDifyResult,
+  getAspectRatioForSize,
+  isLargeSize,
+  isOriginalSize,
+  resolveSizeForAspectRatio,
+} from "@/components/chat/image-generation/gpt-image-v11"
 
-const BRAND_GREEN = "#14532d"
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || ''
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || ""
+const BRAND_GREEN = "var(--brand-900)"
+const ACCEPTED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp"]
 
-// 🎨 模式选项
-const MODE_OPTIONS = [
-  { key: "text-to-image", label: "文生图", icon: Wand2 },
-  { key: "image-edit", label: "图像编辑", icon: ImageIcon },
-] as const
-
-type ModeOption = typeof MODE_OPTIONS[number]
-
-// 🎨 尺寸选项配置
-const SIZE_OPTIONS = getImageModelConfig("gpt-image-2").sizeOptions
-
-type SizeOption = typeof SIZE_OPTIONS[number]
-
-// Supabase 初始化
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
-type Message = {
-  id: string
-  role: "user" | "assistant"
-  content: string
-  files?: UploadedFile[]
+type UploadKind = "edit" | "mask"
+
+type SelectedImage = {
+  file: File
+  previewUrl: string
 }
 
-type UploadedFile = {
-  name: string
-  type: string
-  size: number
-  data: string
-  preview?: string
-  difyFileId?: string
+type ImageResult = {
+  imageUrls: string[]
+  sourceText: string
+  submittedInputs: GptImageInputs
+  prompt: string
 }
 
 type ChatSession = {
@@ -76,812 +92,1014 @@ type ChatSession = {
   ai_model: string
 }
 
-// 🎯 流式光标组件
-const StreamingCursor = () => (
-  <span className="inline-block ml-1 text-green-700 animate-pulse">▍</span>
-)
+function createObjectUrl(file: File) {
+  return URL.createObjectURL(file)
+}
 
-// 🖼️ 图片渲染组件
-function GptImage2Renderer({ content, isStreaming = false }: { content: string; isStreaming?: boolean }) {
-  if (!content) return <StreamingCursor />;
+function formatBytes(bytes: number) {
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+}
 
-  const imageRegex = /!\[([^\]]*)\]\(([^)]+)\)/g
-  const images: Array<{alt: string, url: string}> = []
-  let match
+function mapImageError(error: unknown): string {
+  const raw = error instanceof Error ? error.message : String(error || "")
+  const lower = raw.toLowerCase()
 
-  while ((match = imageRegex.exec(content)) !== null) {
-    images.push({
-      alt: match[1] || 'Generated Image',
-      url: match[2]
-    })
+  if (raw === "empty_prompt") return "提示词不能为空。"
+  if (raw === "missing_edit_image") return "图片编辑模式需要上传原图。"
+  if (lower.includes("rate") || lower.includes("429")) return "上游图片接口限流，请稍后再试，或降低质量 / 切换模型。"
+  if (raw.includes("未登录") || raw.includes("请先登录") || raw.includes("未授权") || lower.includes("unauthorized") || lower.includes("401")) {
+    return "请先登录后再生成图片。"
+  }
+  if (lower.includes("download_file_error")) return "网关无法下载上传图片，请重新上传。"
+  if (lower.includes("network") || lower.includes("failed to fetch")) return "网络请求失败，请稍后重试。"
+  if (lower.includes("upstream_error") || lower.includes("dify error") || lower.includes("500")) {
+    return "上游接口请求失败，可能是余额不足、模型不可用、尺寸不支持或参数不兼容。"
   }
 
-  const textContent = content.replace(imageRegex, '').trim()
+  return raw || "图片生成失败，请稍后重试。"
+}
+
+function parseDifyResult(payload: unknown) {
+  return extractImageUrlsFromDifyResult(payload)
+}
+
+function FieldLabel({ children, hint }: { children: React.ReactNode; hint?: string }) {
+  return (
+    <label className="space-y-1 text-sm font-medium text-foreground">
+      <span>{children}</span>
+      {hint ? <span className="block text-xs font-normal leading-relaxed text-muted-foreground">{hint}</span> : null}
+    </label>
+  )
+}
+
+function NativeSelect<T extends string>({
+  value,
+  onChange,
+  options,
+  disabledValues,
+}: {
+  value: T
+  onChange: (value: T) => void
+  options: Array<{ value: T; label: string; disabled?: boolean }>
+  disabledValues?: T[]
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(event) => onChange(event.target.value as T)}
+      className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+    >
+      {options.map((option) => (
+        <option
+          key={option.value}
+          value={option.value}
+          disabled={option.disabled || disabledValues?.includes(option.value)}
+        >
+          {option.label}
+        </option>
+      ))}
+    </select>
+  )
+}
+
+function UploadPanel({
+  title,
+  description,
+  image,
+  disabled,
+  onPick,
+  onRemove,
+}: {
+  title: string
+  description: string
+  image: SelectedImage | null
+  disabled?: boolean
+  onPick: (file: File) => void
+  onRemove: () => void
+}) {
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [isDragging, setIsDragging] = useState(false)
+
+  const pickFile = (file?: File) => {
+    if (!file) return
+    if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
+      toast.error("仅支持 png / jpg / jpeg / webp")
+      return
+    }
+    onPick(file)
+  }
 
   return (
-    <div className="space-y-4">
-      {textContent && (
-        <div className="text-slate-700 leading-relaxed">
-          <UltimateRenderer content={textContent} />
-          {isStreaming && !images.length && <StreamingCursor />}
-        </div>
+    <div
+      className={cn(
+        "rounded-xl border border-dashed bg-card p-4 transition",
+        isDragging ? "border-primary bg-primary/5" : "border-border",
+        disabled && "pointer-events-none opacity-50"
       )}
+      onDragOver={(event) => {
+        event.preventDefault()
+        setIsDragging(true)
+      }}
+      onDragLeave={() => setIsDragging(false)}
+      onDrop={(event) => {
+        event.preventDefault()
+        setIsDragging(false)
+        pickFile(event.dataTransfer.files?.[0])
+      }}
+    >
+      <input
+        ref={inputRef}
+        type="file"
+        accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"
+        className="hidden"
+        onChange={(event) => pickFile(event.target.files?.[0])}
+      />
 
-      {images.map((img, index) => (
-        <motion.div
-          key={index}
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.3 }}
-          className="relative rounded-2xl overflow-hidden shadow-xl border border-green-100"
+      {image ? (
+        <div className="flex gap-3">
+          <div className="h-24 w-24 shrink-0 overflow-hidden rounded-lg border border-border bg-muted">
+            <img src={image.previewUrl} alt={image.file.name} className="h-full w-full object-cover" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-foreground">{image.file.name}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{formatBytes(image.file.size)}</p>
+              </div>
+              <button type="button" onClick={onRemove} className="rounded-lg p-2 text-muted-foreground transition hover:bg-muted hover:text-destructive">
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => inputRef.current?.click()}>
+                <RefreshCcw className="mr-2 h-4 w-4" />
+                重新上传
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          className="flex w-full flex-col items-center justify-center rounded-lg px-4 py-7 text-center transition hover:bg-muted/60"
         >
-          <img
-            src={img.url}
-            alt={img.alt}
-            className="w-full h-auto"
-            loading="lazy"
-          />
-          <a
-            href={img.url}
-            download
-            target="_blank"
-            rel="noopener noreferrer"
-            className="absolute top-3 right-3 p-2 bg-white/90 backdrop-blur-sm rounded-lg shadow-lg hover:bg-white transition-all"
-          >
-            <Download className="w-4 h-4 text-slate-600" />
-          </a>
-        </motion.div>
-      ))}
+          <UploadCloud className="mb-3 h-7 w-7 text-primary" />
+          <span className="text-sm font-medium text-foreground">{title}</span>
+          <span className="mt-1 max-w-sm text-xs leading-relaxed text-muted-foreground">{description}</span>
+        </button>
+      )}
     </div>
   )
 }
 
+function CollapsibleSection({
+  title,
+  open,
+  onToggle,
+  children,
+}: {
+  title: string
+  open: boolean
+  onToggle: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <section className="rounded-xl border border-border bg-card">
+      <button type="button" onClick={onToggle} className="flex w-full items-center justify-between px-4 py-3 text-left">
+        <span className="text-sm font-semibold text-foreground">{title}</span>
+        <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition", open && "rotate-180")} />
+      </button>
+      {open ? <div className="border-t border-border px-4 py-4">{children}</div> : null}
+    </section>
+  )
+}
+
 function GptImage2ChatInterfaceInner() {
-  const searchParams = useSearchParams()
   const router = useRouter()
-  const urlSessionId = searchParams.get("id")
+  const searchParams = useSearchParams()
   const initialPrompt = searchParams.get("prompt") ?? ""
-  const initialMode = searchParams.get("mode") ?? "text-to-image"
-  const initialSizeValue = searchParams.get("size") ?? "1-1-standard"
+  const initialMode = searchParams.get("mode")
+  const initialSize = searchParams.get("size")
 
-  const [userId, setUserId] = useState<string>("")
-  const [userAvatar, setUserAvatar] = useState<string>("")
-  const [userCredits, setUserCredits] = useState<number>(0)
-  const [userDisplayName, setUserDisplayName] = useState<string>("")
-  const sessionIdRef = useRef<string | null>(null)
-  const [currentSessionId, setCurrentSessionId] = useState<string>("")
+  const initialInputs = useMemo(() => {
+    const base = initialMode === "image_edit" || initialMode === "image-edit"
+      ? EDIT_MODE_DEFAULTS
+      : DEFAULT_IMAGE_INPUTS
+    return {
+      ...base,
+      size: SIZE_OPTIONS.some((option) => option.value === initialSize) ? (initialSize as ImageSize) : base.size,
+    }
+  }, [initialMode, initialSize])
 
-  const [messages, setMessages] = useState<Message[]>([])
-  const [input, setInput] = useState(initialPrompt)
-  const [isLoading, setIsLoading] = useState(false)
-  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
-  const [uploadProgress, setUploadProgress] = useState<number>(0)
-  const [isUploading, setIsUploading] = useState(false)
-
-  // 🎨 新增：模式选择和尺寸选择
-  const [selectedMode, setSelectedMode] = useState<ModeOption>(
-    MODE_OPTIONS.find((mode) => mode.key === initialMode) ?? MODE_OPTIONS[0]
-  )
-  const [selectedSize, setSelectedSize] = useState<SizeOption>(
-    SIZE_OPTIONS.find((size) => size.value === initialSizeValue) ??
-    SIZE_OPTIONS.find((size) => size.ratio === initialSizeValue) ??
-    SIZE_OPTIONS[0]
-  )
-
-  // 🔥 历史会话侧边栏状态
+  const [userId, setUserId] = useState("")
+  const [userCredits, setUserCredits] = useState(0)
+  const [mode, setMode] = useState<ImageTaskMode>(initialInputs.mode)
+  const [prompt, setPrompt] = useState(initialPrompt)
+  const [model, setModel] = useState<GptImageModel>(initialInputs.model)
+  const [aspectRatio, setAspectRatio] = useState<ImageAspectRatio>(initialInputs.aspect_ratio)
+  const [size, setSize] = useState<ImageSize>(initialInputs.size)
+  const [quality, setQuality] = useState<ImageQuality>(initialInputs.quality)
+  const [outputFormat, setOutputFormat] = useState<ImageOutputFormat>(initialInputs.output_format)
+  const [outputCompression, setOutputCompression] = useState(initialInputs.output_compression)
+  const [background, setBackground] = useState<ImageBackground>(initialInputs.background)
+  const [moderation, setModeration] = useState<ImageModeration>(initialInputs.moderation)
+  const [count, setCount] = useState(initialInputs.n)
+  const [editImage, setEditImage] = useState<SelectedImage | null>(null)
+  const [maskImage, setMaskImage] = useState<SelectedImage | null>(null)
+  const [referenceGatewayUrl, setReferenceGatewayUrl] = useState("")
+  const [maskGatewayUrl, setMaskGatewayUrl] = useState("")
+  const [result, setResult] = useState<ImageResult | null>(null)
+  const [errorMessage, setErrorMessage] = useState("")
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submitStage, setSubmitStage] = useState("")
+  const [showLongRunningHint, setShowLongRunningHint] = useState(false)
+  const [advancedOpen, setAdvancedOpen] = useState(false)
+  const [maskOpen, setMaskOpen] = useState(false)
+  const [previewOpen, setPreviewOpen] = useState(false)
   const [showHistorySidebar, setShowHistorySidebar] = useState(false)
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([])
+  const [authChecked, setAuthChecked] = useState(false)
 
-  const messagesEndRef = useRef<HTMLDivElement>(null)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const scrollAreaRef = useRef<HTMLDivElement>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const currentBotIdRef = useRef<string | null>(null)
+  const currentSessionIdRef = useRef<string>("")
+  const hasAutoSubmittedRef = useRef(false)
 
-  const [isNearBottom, setIsNearBottom] = useState(true)
-  const [hasNewMessage, setHasNewMessage] = useState(false)
+  const currentInputsWithoutUrls = useMemo(
+    () => ({
+      aspect_ratio: aspectRatio,
+      size,
+      model,
+      quality,
+      output_format: outputFormat,
+      output_compression: outputCompression,
+      background,
+      moderation,
+      n: count,
+      mode,
+    }),
+    [aspectRatio, background, count, mode, model, moderation, outputCompression, outputFormat, quality, size]
+  )
+
+  const previewInputs = useMemo(
+    () => buildDifyInputs(currentInputsWithoutUrls, referenceGatewayUrl, maskGatewayUrl),
+    [currentInputsWithoutUrls, maskGatewayUrl, referenceGatewayUrl]
+  )
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const userStr = localStorage.getItem('currentUser')
-      if (userStr) {
-        try {
-          const user = JSON.parse(userStr)
-          const uid = user.id || user.sub || user.userId || ""
-          setUserId(uid)
-          if (user.user_metadata?.avatar_url) setUserAvatar(user.user_metadata.avatar_url)
+    const userStr = typeof window !== "undefined" ? localStorage.getItem("currentUser") : null
+    if (!userStr) {
+      setAuthChecked(true)
+      return
+    }
 
-          const displayName = user.phone || user.phone_number || user.email || user.nickname || user.username || user.user_metadata?.name || "用户"
-          setUserDisplayName(displayName)
-
-          if (uid) fetchCredits(uid)
-        } catch (e) {
-          console.error("❌ [用户初始化] 解析失败:", e)
-        }
-      }
+    try {
+      const user = JSON.parse(userStr)
+      const uid = extractUserId(user)
+      setUserId(uid)
+      if (uid) void fetchCredits(uid)
+    } catch {
+      toast.error("用户信息解析失败，请重新登录")
+    } finally {
+      setAuthChecked(true)
     }
   }, [])
+
+  useEffect(() => {
+    return () => {
+      if (editImage?.previewUrl) URL.revokeObjectURL(editImage.previewUrl)
+      if (maskImage?.previewUrl) URL.revokeObjectURL(maskImage.previewUrl)
+    }
+  }, [editImage?.previewUrl, maskImage?.previewUrl])
+
+  useEffect(() => {
+    if (showHistorySidebar && userId) void fetchChatSessions(userId)
+  }, [showHistorySidebar, userId])
 
   const fetchCredits = async (uid: string) => {
     try {
       const res = await fetch(`${API_BASE}/api/user/credits?user_id=${encodeURIComponent(uid)}`)
-      if (res.ok) {
-        const data = await res.json()
-        setUserCredits(data.credits || 0)
-      }
-    } catch (err) {
-      console.error("❌ [积分查询] 异常:", err)
+      if (!res.ok) return
+      const data = await res.json()
+      setUserCredits(data.credits || 0)
+    } catch {
+      // Credit display is helpful but should not block the image workspace.
     }
   }
 
-  useEffect(() => {
-    if (urlSessionId && urlSessionId !== currentSessionId) {
-       loadHistorySession(urlSessionId)
-    }
-  }, [urlSessionId])
-
-  const loadHistorySession = async (sid: string) => {
-    setIsLoading(true)
-    setMessages([])
-    try {
-      const { data, error } = await supabase
-        .from('chat_messages')
-        .select('*')
-        .eq('session_id', sid)
-        .order('created_at', { ascending: true })
-
-      if (error) throw error
-
-      if (data && data.length > 0) {
-        const historyMessages = data.map((m: any) => ({
-           id: m.id,
-           role: m.role,
-           content: m.content
-        }))
-        setMessages(historyMessages)
-        setCurrentSessionId(sid)
-        sessionIdRef.current = sid
-      }
-    } catch (e) {
-      console.error("加载历史会话失败:", e)
-      toast.error("加载历史会话失败")
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  // 🔥 获取历史会话列表
   const fetchChatSessions = async (uid: string) => {
     try {
-      const res = await fetch(`/api/chat-session`, {
-        headers: { 'X-User-Id': uid }
-      })
+      const res = await fetch("/api/chat-session", { headers: { "X-User-Id": uid } })
       if (!res.ok) return
       const { sessions } = await res.json()
-      const safeSessionData = Array.isArray(sessions) ? sessions : []
-      if (safeSessionData.length > 0) {
-        const mapped = safeSessionData.map((s: any) => ({
-          id: s.id,
-          title: s.title || "新对话",
-          date: new Date(s.created_at).getTime(),
-          preview: s.preview || "",
-          ai_model: s.ai_model || "gpt-image-2"
-        }))
-        setChatSessions(mapped)
-      } else {
-        setChatSessions([])
-      }
-    } catch (err) {
-      console.error("❌ [历史会话] 查询异常:", err)
+      const safeSessions = Array.isArray(sessions) ? sessions : []
+      setChatSessions(
+        safeSessions
+          .filter((session: any) => session.ai_model === "gpt-image-2")
+          .map((session: any) => ({
+            id: session.id,
+            title: session.title || "图像生成",
+            date: new Date(session.created_at).getTime(),
+            preview: session.preview || "",
+            ai_model: session.ai_model || "gpt-image-2",
+          }))
+      )
+    } catch {
       setChatSessions([])
     }
   }
 
-  // 🔥 当打开历史会话侧边栏时，重新获取会话列表
-  useEffect(() => {
-    if (showHistorySidebar && userId) {
-      fetchChatSessions(userId)
-    }
-  }, [showHistorySidebar, userId])
+  const applyMode = (nextMode: ImageTaskMode) => {
+    setMode(nextMode)
+    setReferenceGatewayUrl("")
+    setMaskGatewayUrl("")
 
-  const handleScroll = () => {
-    if (scrollAreaRef.current) {
-      const { scrollTop, scrollHeight, clientHeight } = scrollAreaRef.current
-      const isNear = scrollHeight - scrollTop - clientHeight < 100
-      setIsNearBottom(isNear)
-      if (isNear) setHasNewMessage(false)
+    if (nextMode === "image_edit") {
+      setModel("gpt-image-2")
+      setAspectRatio("auto")
+      setSize("original_4k")
+      setQuality("medium")
+      setOutputFormat("png")
+      setOutputCompression(100)
+      setBackground("auto")
+      setModeration("auto")
+      setCount(1)
+      return
+    }
+
+    if (isOriginalSize(size)) {
+      setSize("1024x1024")
+      setAspectRatio("1:1")
+      toast.info("保持原图比例尺寸仅适用于图片编辑模式，已切换为 1024×1024。")
     }
   }
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-    setHasNewMessage(false)
+  const applySize = (nextSize: ImageSize) => {
+    if (mode === "image_generate" && isOriginalSize(nextSize)) {
+      setSize("1024x1024")
+      setAspectRatio("1:1")
+      toast.info("保持原图比例尺寸仅适用于图片编辑模式，已切换为 1024×1024。")
+      return
+    }
+
+    setSize(nextSize)
+    const derivedRatio = getAspectRatioForSize(nextSize)
+    if (derivedRatio) setAspectRatio(derivedRatio)
+
+    if ((nextSize === "3840x2160" || nextSize === "2160x3840" || nextSize === "original_4k") && model !== "gpt-image-2") {
+      toast.warning("当前模型可能不支持 2K / 4K。建议切换到 GPT Image 2，或改用基础尺寸。", {
+        action: {
+          label: "使用 GPT Image 2",
+          onClick: () => setModel("gpt-image-2"),
+        },
+      })
+    }
   }
 
-  useEffect(() => {
-    if (isNearBottom) {
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-    } else if (messages.length > 0) {
-      setHasNewMessage(true)
-    }
-  }, [messages, isNearBottom])
+  const applyAspectRatio = (nextRatio: ImageAspectRatio) => {
+    setAspectRatio(nextRatio)
 
-  const calculateCost = () => {
-    if (!userId) return 0
-    const isLuxury = userCredits > 1000
-    return calculatePreviewCost("gpt-image-2", {
-      isLuxury,
-      estimatedInputTokens: input.length > 0 ? Math.ceil(input.length / 4) * 2 : undefined
+    const resolved = resolveSizeForAspectRatio(nextRatio, size)
+    if (resolved.size !== size) {
+      setSize(resolved.size)
+      if (resolved.message) toast.info(resolved.message)
+    }
+  }
+
+  const applyModel = (nextModel: GptImageModel) => {
+    setModel(nextModel)
+    if (nextModel === "gpt-image-2" && background === "transparent") {
+      setBackground("auto")
+      toast.info("gpt-image-2 当前不推荐透明背景，请使用 auto 或 opaque。")
+    }
+
+    if (nextModel !== "gpt-image-2" && isLargeSize(size)) {
+      toast.warning("当前模型可能不支持 2K / 4K。建议切换到 GPT Image 2，或改用基础尺寸。")
+    }
+  }
+
+  const handleImagePick = (kind: UploadKind, file: File) => {
+    const nextImage = { file, previewUrl: createObjectUrl(file) }
+    if (kind === "edit") {
+      if (editImage?.previewUrl) URL.revokeObjectURL(editImage.previewUrl)
+      setEditImage(nextImage)
+      setReferenceGatewayUrl("")
+      if (mode !== "image_edit") {
+        applyMode("image_edit")
+        toast.info("已切换到图片编辑模式。")
+      }
+      return
+    }
+
+    if (maskImage?.previewUrl) URL.revokeObjectURL(maskImage.previewUrl)
+    setMaskImage(nextImage)
+    setMaskGatewayUrl("")
+  }
+
+  const removeImage = (kind: UploadKind) => {
+    if (kind === "edit") {
+      if (editImage?.previewUrl) URL.revokeObjectURL(editImage.previewUrl)
+      setEditImage(null)
+      setReferenceGatewayUrl("")
+      return
+    }
+
+    if (maskImage?.previewUrl) URL.revokeObjectURL(maskImage.previewUrl)
+    setMaskImage(null)
+    setMaskGatewayUrl("")
+  }
+
+  async function uploadImageToGateway(file: File) {
+    if (!userId) throw new Error("请先登录后再上传图片。")
+
+    const formData = new FormData()
+    formData.append("file", file)
+    formData.append("user", userId)
+
+    const res = await fetch(`${API_BASE}/api/dify-upload`, {
+      method: "POST",
+      headers: {
+        "X-User-Id": userId,
+        "X-Model": "gpt-image-2",
+      },
+      body: formData,
     })
+
+    const json = await res.json().catch(() => ({}))
+
+    if (!res.ok || !json.success || !json.gatewayUrl) {
+      throw new Error(json.message || json.error || "图片上传失败")
+    }
+
+    return json.gatewayUrl as string
   }
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files
-    if (!files || !files.length) return
+  const submitImageTask = async (event?: React.FormEvent) => {
+    event?.preventDefault()
+    if (isSubmitting) return
 
     if (!userId) {
-      toast.error("请先登录后再上传文件")
+      const message = "请先登录后再生成图片。"
+      setErrorMessage(message)
+      toast.error(message)
       return
     }
 
-    setIsUploading(true)
-    setUploadProgress(0)
-
-    try {
-      const totalFiles = files.length
-      const uploadPromises = Array.from(files).map(async (file, index) => {
-        const formData = new FormData()
-        formData.append("file", file)
-        formData.append("user", userId)
-
-        const res = await fetch(`${API_BASE}/api/dify-upload`, {
-          method: "POST",
-          headers: {
-            "X-User-Id": userId,
-            "X-Model": "gpt-image-2"
-          },
-          body: formData
-        })
-
-        if (!res.ok) {
-          const errText = await res.text()
-          throw new Error(`上传失败: ${res.status} ${errText}`)
-        }
-
-        const data = await res.json()
-
-        setUploadProgress(Math.round(((index + 1) / totalFiles) * 100))
-
-        return new Promise<UploadedFile>((resolve) => {
-          if (file.type.startsWith("image/")) {
-            resolve({
-              name: file.name,
-              type: file.type,
-              size: file.size,
-              data: "",
-              difyFileId: data.id,
-              preview: URL.createObjectURL(file)
-            })
-          } else {
-            const reader = new FileReader()
-            reader.onload = e => resolve({
-              name: file.name,
-              type: file.type,
-              size: file.size,
-              data: e.target?.result as string,
-              difyFileId: data.id,
-              preview: undefined
-            })
-            reader.readAsDataURL(file)
-          }
-        })
-      })
-
-      const results = await Promise.all(uploadPromises)
-      setUploadedFiles(p => [...p, ...results])
-      toast.success("文件上传成功")
-    } catch (e: any) {
-      console.error("上传错误:", e)
-      toast.error("上传失败")
-    } finally {
-      setIsUploading(false)
-      setUploadProgress(0)
-    }
-
-    if (fileInputRef.current) fileInputRef.current.value = ""
-  }
-
-  const removeFile = (i: number) => setUploadedFiles(p => p.filter((_, idx) => idx !== i))
-
-  const onSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!userId) {
-      toast.error("请登录")
+    const cleanPrompt = prompt.trim()
+    if (!cleanPrompt) {
+      setErrorMessage(mapImageError("empty_prompt"))
+      toast.error("提示词不能为空。")
       return
     }
 
-    const txt = (input || "").trim()
-    if (!txt) return
-
-    const cost = calculateCost()
-    if (userCredits < cost) {
-      toast.error("积分不足", {
-        description: `需要 ${cost} 积分，当前 ${userCredits}`,
-        duration: 2000
-      })
-      setTimeout(() => router.push("/pricing"), 1500)
+    if (mode === "image_edit" && !editImage) {
+      setErrorMessage(mapImageError("missing_edit_image"))
+      toast.error("图片编辑模式需要上传原图。")
       return
     }
 
-    setIsLoading(true)
+    if (size === "original_4k" && model !== "gpt-image-2") {
+      toast.warning("非 GPT Image 2 会自动降级到基础尺寸。")
+    }
+
+    if ((size === "3840x2160" || size === "2160x3840" || size === "original_4k") && quality === "high") {
+      toast.info("4K 高质量生成可能耗时较长，请耐心等待。")
+    }
+
+    setIsSubmitting(true)
+    setErrorMessage("")
+    setResult(null)
+    setShowLongRunningHint(false)
     collapseSidebar()
 
-    let sid = currentSessionId
-    if (!sid && !urlSessionId) {
-        sid = Date.now().toString()
-        setCurrentSessionId(sid)
-        sessionIdRef.current = sid
-    } else if (urlSessionId) {
-        sid = urlSessionId
-        sessionIdRef.current = urlSessionId
-    }
+    const longRunningTimer = window.setTimeout(() => {
+      setShowLongRunningHint(true)
+    }, 60_000)
 
-    const userInputText = txt
-    const userFiles = [...uploadedFiles]
-
-    const userMsg: Message = {
-      id: Date.now().toString(),
-      role: "user",
-      content: userInputText,
-      files: userFiles
-    }
-    setMessages(p => [...p, userMsg])
-    setInput("")
-
-    const fileIds = uploadedFiles.map(f => f.difyFileId).filter(Boolean) as string[]
-
-    setUploadedFiles([])
-
-    const preview = userInputText.slice(0, 30)
-    const { data: existing } = await supabase.from('chat_sessions').select('id').eq('id', sid).single()
-    if (!existing) {
-        await supabase.from('chat_sessions').insert({ id: sid, user_id: userId, title: "GPT Image 2", preview, ai_model: "gpt-image-2" })
-    } else {
-        await supabase.from('chat_sessions').update({ preview, ai_model: "gpt-image-2" }).eq('id', sid)
-    }
-    await supabase.from('chat_messages').insert({ session_id: sid, role: "user", content: userInputText })
-
-    const botId = (Date.now()+1).toString()
-    currentBotIdRef.current = botId
-    setMessages(p => [...p, { id: botId, role: "assistant", content: "" }])
-
-    let fullText = ""
     try {
-        console.log(`🎨 [GPT Image 2前端] 准备发送请求，用户输入: "${userInputText}"`)
+      let referenceUrl = ""
+      let maskUrl = ""
 
-        const res = await fetch(`${API_BASE}/api/dify-chat`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "X-User-Id": userId
-            },
-            body: JSON.stringify({
-              query: userInputText,
-              fileIds: fileIds,
-              userId,
-              conversation_id: sessionIdRef.current,
-              model: "gpt-image-2",
-              mode: selectedMode.key,
-              imageSize: {
-                ratio: selectedSize.ratio,
-                width: selectedSize.width,
-                height: selectedSize.height
-              }
-            })
-        })
+      if (mode === "image_edit") {
+        setSubmitStage("正在上传图片")
+        referenceUrl = await uploadImageToGateway(editImage!.file)
+        setReferenceGatewayUrl(referenceUrl)
 
-        if (res.status === 401) {
-          toast.error("请先登录")
-          throw new Error("未授权")
+        if (maskImage) {
+          maskUrl = await uploadImageToGateway(maskImage.file)
+          setMaskGatewayUrl(maskUrl)
         }
-        if (res.status === 402) throw new Error("积分不足")
-        if (!res.ok) {
-          const errorText = await res.text()
-          throw new Error(`请求失败 (${res.status}): ${errorText.slice(0, 100)}`)
-        }
+      } else {
+        setReferenceGatewayUrl("")
+        setMaskGatewayUrl("")
+      }
 
-        // 🎨 GPT Image 2 使用 blocking 模式，直接解析 JSON
-        try {
-          const result = await res.json()
-          console.log(`🎨 [GPT Image 2] Blocking 响应:`, result)
+      const submittedInputs = buildDifyInputs(currentInputsWithoutUrls, referenceUrl, maskUrl)
 
-          // Blocking 模式返回格式: { task_id, workflow_run_id, data: { outputs: {...} } }
-          if (result.data?.outputs) {
-            const outputs = result.data.outputs
+      setSubmitStage("正在生成图片")
 
-            // 解析图片 URL
-            let imageUrl = outputs.first_url || outputs.image_data_uri || outputs.url || ""
+      const response = await fetch(`${API_BASE}/api/dify-chat`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-User-Id": userId,
+        },
+        body: JSON.stringify({
+          query: cleanPrompt,
+          inputs: submittedInputs,
+          userId,
+          conversation_id: currentSessionIdRef.current || undefined,
+          model: "gpt-image-2",
+        }),
+      })
 
-            // 解析文本
-            if (outputs.status_code === 200 && outputs.raw_body) {
-              try {
-                const rawData = JSON.parse(outputs.raw_body)
-                if (rawData.data && Array.isArray(rawData.data)) {
-                  for (const item of rawData.data) {
-                    if (item.url) imageUrl = item.url
-                    if (item.revised_prompt) fullText += `提示词: ${item.revised_prompt}\n\n`
-                  }
-                }
-              } catch (e) {}
-            }
+      const payload = await response.json().catch(async () => ({ answer: await response.text() }))
 
-            if (imageUrl) {
-              fullText = `![Generated Image](${imageUrl})`
-            } else if (outputs.text || outputs.result) {
-              fullText = outputs.text || outputs.result
-            }
-          } else if (result.error) {
-            throw new Error(`Dify Error: ${result.error}`)
-          }
+      if (!response.ok) {
+        throw new Error(payload?.error || `upstream_error:${response.status}`)
+      }
 
-          setMessages(p => p.map(m => m.id === botId ? { ...m, content: fullText } : m))
-        } catch (e) {
-          console.error(`🎨 [GPT Image 2前端] 解析失败:`, e)
-          throw e
-        }
+      const imageUrls = parseDifyResult(payload)
+      const sourceText =
+        typeof payload?.answer === "string"
+          ? payload.answer
+          : typeof payload?.data?.outputs?.text === "string"
+            ? payload.data.outputs.text
+            : ""
 
-        if (fullText) {
-          await supabase.from('chat_messages').insert({
-            session_id: sid,
-            role: "assistant",
-            content: fullText
-          })
-        }
+      if (imageUrls.length === 0 && !sourceText) {
+        throw new Error("upstream_error: empty image result")
+      }
 
-        setUserCredits(prev => prev - cost)
+      const nextResult = {
+        imageUrls,
+        sourceText,
+        submittedInputs,
+        prompt: cleanPrompt,
+      }
+      setResult(nextResult)
 
-    } catch (e: any) {
-        console.error("❌ [GPT Image 2 对话异常]:", e)
+      await saveGeneration(cleanPrompt, nextResult)
 
-        const errorMsg = e.message || "图片生成失败，请重试"
-        toast.error(errorMsg, {
-          duration: 5000,
-          description: `请查看控制台了解详情`
-        })
-
-        setMessages(p => p.filter(m => m.id !== botId))
-    } finally {
-      setIsLoading(false)
-      if (userId) fetchCredits(userId)
+      setPrompt("")
+      toast.success("图片任务已完成")
+      if (userId) void fetchCredits(userId)
       refreshCredits()
-      router.refresh()
+    } catch (error) {
+      const message = mapImageError(error)
+      setErrorMessage(message)
+      toast.error(message)
+    } finally {
+      window.clearTimeout(longRunningTimer)
+      setIsSubmitting(false)
+      setSubmitStage("")
     }
   }
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault()
-      onSubmit(e as unknown as React.FormEvent)
-    }
-  }
-
-  const hasAutoSubmittedRef = useRef(false)
 
   useEffect(() => {
-    if (!userId || !input.trim() || hasAutoSubmittedRef.current) {
-      return
-    }
+    if (!authChecked || !userId || hasAutoSubmittedRef.current) return
+    if (!initialPrompt.trim() || !prompt.trim()) return
+    if (mode === "image_edit" && !editImage) return
 
     hasAutoSubmittedRef.current = true
-    void onSubmit({ preventDefault() {} } as React.FormEvent)
-  }, [userId, input])
+    void submitImageTask()
+  }, [authChecked, editImage, initialPrompt, mode, prompt, userId])
 
-  const handleBack = () => {
-    router.push("/")
+  const saveGeneration = async (cleanPrompt: string, nextResult: ImageResult) => {
+    if (!userId) return
+
+    try {
+      const sid = currentSessionIdRef.current || Date.now().toString()
+      currentSessionIdRef.current = sid
+      const preview = cleanPrompt.slice(0, 40)
+      const content = nextResult.imageUrls.length > 0
+        ? nextResult.imageUrls.map((url) => `![Generated Image](${url})`).join("\n\n")
+        : nextResult.sourceText
+
+      const { data: existing } = await supabase.from("chat_sessions").select("id").eq("id", sid).single()
+
+      if (!existing) {
+        await supabase.from("chat_sessions").insert({
+          id: sid,
+          user_id: userId,
+          title: "图像生成",
+          preview,
+          ai_model: "gpt-image-2",
+        })
+      } else {
+        await supabase.from("chat_sessions").update({ preview, ai_model: "gpt-image-2" }).eq("id", sid)
+      }
+
+      await supabase.from("chat_messages").insert([
+        { session_id: sid, role: "user", content: cleanPrompt },
+        { session_id: sid, role: "assistant", content },
+      ])
+    } catch {
+      // History persistence should not make a successful image task fail.
+    }
   }
 
-  return (
-    <div className="flex h-screen w-full bg-white overflow-hidden relative">
-      <div className="flex flex-1 flex-col h-full relative min-w-0">
+  const copyText = async (text: string, successText = "已复制") => {
+    await navigator.clipboard.writeText(text)
+    toast.success(successText)
+  }
 
-        {/* 顶部导航栏 */}
-        <div className="flex items-center h-14 px-4 border-b border-slate-100 bg-white shrink-0">
+  const canSubmit = Boolean(userId) && Boolean(prompt.trim()) && !isSubmitting && (mode === "image_generate" || Boolean(editImage))
+
+  return (
+    <div className="min-h-screen bg-background text-foreground">
+      <header className="sticky top-0 z-30 border-b border-border bg-card/95 backdrop-blur">
+        <div className="mx-auto flex h-14 max-w-7xl items-center gap-3 px-4">
           <button
-            onClick={handleBack}
-            className="flex items-center gap-1 text-slate-600 hover:text-slate-800 transition-colors"
+            type="button"
+            onClick={() => router.push("/")}
+            className="rounded-lg p-2 text-muted-foreground transition hover:bg-muted hover:text-foreground"
+            aria-label="返回"
           >
             <ChevronLeft className="h-5 w-5" />
-            <span className="text-sm font-medium hidden sm:inline">返回</span>
           </button>
-          <div className="flex-1 text-center md:text-left md:ml-4">
-            <div className="flex items-center justify-center md:justify-start gap-2">
-              <ModelLogo modelKey="gpt-image-2" size="lg" />
-              <span className="text-sm font-medium text-slate-700">GPT Image 2</span>
+          <ModelLogo modelKey="gpt-image-2" size="lg" />
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm font-semibold">图像生成 / 图像编辑</div>
+            <div className="hidden text-xs text-muted-foreground sm:block">V11 Reference URL 工作流</div>
+          </div>
+          {userId ? (
+            <div className="hidden rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary sm:block">
+              {userCredits.toLocaleString()} 积分
+            </div>
+          ) : (
+            <Button size="sm" onClick={() => router.push("/login")} style={{ backgroundColor: BRAND_GREEN }}>
+              登录
+            </Button>
+          )}
+          <Button type="button" variant="outline" size="sm" onClick={() => setShowHistorySidebar(true)}>
+            <History className="mr-2 h-4 w-4" />
+            历史
+          </Button>
+        </div>
+      </header>
+
+      <main className="mx-auto grid max-w-7xl gap-5 px-4 py-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <section className="min-w-0 space-y-5">
+          <div className="rounded-xl border border-border bg-card p-5">
+            <div className="flex gap-4">
+              <div className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary sm:flex">
+                <Sparkles className="h-5 w-5" />
+              </div>
+              <div className="space-y-2">
+                <h1 className="text-xl font-semibold text-foreground">AI 图像工作台</h1>
+                <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
+                  支持文生图与上传图片编辑。日常推荐 gpt-image-1 + 1024×1024 + medium；需要 4K 或高质量作品时，选择 gpt-image-2，并使用 3840×2160 或 2160×3840。图片编辑时，系统会先上传原图，再自动传入 Dify。
+                </p>
+              </div>
             </div>
           </div>
-          <div>
-            {userId ? (
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-green-700 font-medium">{userCredits.toLocaleString()}</span>
-                <button
-                  onClick={() => setShowHistorySidebar(true)}
-                  className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 transition-colors"
-                >
-                  <History className="h-4 w-4 text-slate-600" />
-                </button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => router.push("/login")}
-                  className="px-3 py-1.5 text-xs font-medium text-white rounded-lg"
-                  style={{ backgroundColor: BRAND_GREEN }}
-                >
-                  登录
-                </button>
-                <button
-                  onClick={() => setShowHistorySidebar(true)}
-                  className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 transition-colors"
-                >
-                  <History className="h-4 w-4 text-slate-600" />
-                </button>
-              </div>
-            )}
-          </div>
-          <div className="hidden md:block w-16" />
-        </div>
 
-        {/* 滚动区域 */}
-        <div className="flex-1 h-0 relative overflow-hidden">
-          {/* 🔥 移动端浮动历史按钮 */}
-          <button
-            onClick={() => setShowHistorySidebar(!showHistorySidebar)}
-            className="absolute top-3 right-3 z-40 flex items-center gap-1.5 px-3 py-2 bg-white/95 backdrop-blur-lg rounded-full shadow-lg border border-slate-100 md:hidden"
-          >
-            <History className="h-4 w-4 text-slate-600" />
-            <span className="text-xs font-medium text-slate-600">历史</span>
-          </button>
-          <div
-            ref={scrollAreaRef}
-            onScroll={handleScroll}
-            className="h-full overflow-y-auto custom-scrollbar"
-          >
-            <div className="mx-auto max-w-4xl px-4 md:px-6 py-6 md:py-8">
-              {messages.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-16 text-center">
-                  <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-black/5">
-                    <ModelLogo modelKey="gpt-image-2" size="xl" />
-                  </div>
-                  <h1 className="text-xl font-semibold text-slate-800 mb-2">GPT Image 2</h1>
-                  <p className="text-sm text-slate-500 max-w-md">
-                    描述你想要的图片，AI 将为你创作高质量的图像
+          <form onSubmit={submitImageTask} className="space-y-5">
+            <div className="rounded-xl border border-border bg-card p-4">
+              <div className="mb-4 flex flex-wrap items-center gap-2">
+                <div className="flex rounded-lg bg-muted p-1">
+                  {MODE_OPTIONS.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => applyMode(option.value)}
+                      className={cn(
+                        "inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition",
+                        mode === option.value ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      {option.value === "image_generate" ? <Wand2 className="h-4 w-4" /> : <ImageIcon className="h-4 w-4" />}
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <FieldLabel>提示词</FieldLabel>
+                <Textarea
+                  value={prompt}
+                  onChange={(event) => setPrompt(event.target.value)}
+                  placeholder="请输入图片生成或图片编辑提示词，例如：不要改变图片元素，放大至4K。"
+                  className="min-h-[160px] resize-y rounded-xl border-border bg-background text-base leading-7"
+                  disabled={isSubmitting}
+                />
+              </div>
+            </div>
+
+            {mode === "image_edit" ? (
+              <div className="space-y-4 rounded-xl border border-border bg-card p-4">
+                <div>
+                  <h2 className="text-sm font-semibold text-foreground">图片编辑素材</h2>
+                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                    上传需要编辑的原图。系统会先上传到图片网关，再自动传入 Dify。
                   </p>
                 </div>
-              ) : (
-                <div className="space-y-5">
-                  {messages.map((message) => (
-                    <div key={message.id} className={cn("flex gap-3 group", message.role === "user" ? "justify-end" : "justify-start")}>
-                      {message.role === "assistant" && (
-                        <div className="flex w-6 h-6 shrink-0 items-center justify-center rounded-full mt-0.5 overflow-hidden">
-                          <ModelLogo modelKey="gpt-image-2" size="sm" />
-                        </div>
-                      )}
-                      <div className={cn(
-                        "flex flex-col max-w-[80%]",
-                        message.role === "user" ? "items-end" : "items-start"
-                      )}>
-                        {message.role === "user" ? (
-                          <div
-                            className="rounded-2xl px-4 py-3 text-slate-700 border border-slate-200"
-                            style={{ backgroundColor: "#f8fafc", borderRadius: "18px 4px 18px 18px" }}
-                          >
-                            <div className="space-y-2">
-                              {message.files && message.files.length > 0 && (
-                                <div className="flex flex-wrap gap-2 mb-2">
-                                  {message.files.map((file, idx) => (
-                                    <motion.div
-                                      key={idx}
-                                      initial={{ opacity: 0, scale: 0.8 }}
-                                      animate={{ opacity: 1, scale: 1 }}
-                                      transition={{ duration: 0.3, delay: idx * 0.1 }}
-                                    >
-                                      {file.preview ? (
-                                        <div className="relative w-14 h-14 rounded-lg overflow-hidden border-2 border-white/30">
-                                          <img src={file.preview} alt={file.name} className="w-full h-full object-cover" />
-                                        </div>
-                                      ) : (
-                                        <div className="flex items-center gap-1.5 rounded-lg bg-white/20 px-2 py-1 text-xs">
-                                          <FileText className="h-3 w-3" />
-                                          <span className="max-w-[60px] truncate">{file.name}</span>
-                                        </div>
-                                      )}
-                                    </motion.div>
-                                  ))}
-                                </div>
-                              )}
-                              <div className="whitespace-pre-wrap text-sm" style={{ lineHeight: 1.6 }}>{message.content}</div>
-                            </div>
+
+                <UploadPanel
+                  title="编辑图片"
+                  description="点击上传或拖拽图片到这里，支持 png / jpg / jpeg / webp。"
+                  image={editImage}
+                  disabled={isSubmitting}
+                  onPick={(file) => handleImagePick("edit", file)}
+                  onRemove={() => removeImage("edit")}
+                />
+
+                <CollapsibleSection title="蒙版图片，可选" open={maskOpen} onToggle={() => setMaskOpen((value) => !value)}>
+                  <UploadPanel
+                    title="蒙版图片"
+                    description="用于局部编辑。普通换风格、放大、增强清晰度不需要上传蒙版。"
+                    image={maskImage}
+                    disabled={isSubmitting}
+                    onPick={(file) => handleImagePick("mask", file)}
+                    onRemove={() => removeImage("mask")}
+                  />
+                </CollapsibleSection>
+              </div>
+            ) : null}
+
+            {errorMessage ? (
+              <div className="flex items-start gap-2 rounded-xl border border-destructive/20 bg-destructive/5 p-3 text-sm text-destructive">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>{errorMessage}</span>
+              </div>
+            ) : null}
+
+            {showLongRunningHint ? (
+              <div className="flex items-start gap-2 rounded-xl border border-primary/20 bg-primary/5 p-3 text-sm text-primary">
+                <Zap className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>图片生成仍在处理中，复杂图像可能需要更久。</span>
+              </div>
+            ) : null}
+
+            <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="text-sm text-muted-foreground">
+                {mode === "image_edit" && !editImage ? "图片编辑模式需要上传原图。" : "参数已准备好，提交后由服务端安全调用 Dify。"}
+              </div>
+              <Button
+                type="submit"
+                disabled={!canSubmit}
+                className="h-11 rounded-lg px-5 text-white"
+                style={{ backgroundColor: BRAND_GREEN }}
+              >
+                {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+                {isSubmitting ? submitStage || "处理中" : mode === "image_edit" ? "开始编辑" : "开始生成"}
+              </Button>
+            </div>
+          </form>
+
+          <section className="rounded-xl border border-border bg-card p-4">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-semibold text-foreground">结果展示</h2>
+                <p className="mt-1 text-xs text-muted-foreground">生成成功后可下载或复制图片地址。</p>
+              </div>
+              {result ? <CheckCircle2 className="h-5 w-5 text-primary" /> : null}
+            </div>
+
+            {isSubmitting ? (
+              <div className="flex min-h-[280px] flex-col items-center justify-center rounded-xl border border-border bg-muted/40 text-center">
+                <Loader2 className="mb-3 h-7 w-7 animate-spin text-primary" />
+                <p className="text-sm font-medium text-foreground">{submitStage || "正在处理"}</p>
+                <p className="mt-1 text-xs text-muted-foreground">请保持页面打开，复杂图片会多花一点时间。</p>
+              </div>
+            ) : result ? (
+              <div className="space-y-4">
+                {result.imageUrls.length > 0 ? (
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {result.imageUrls.map((url, index) => (
+                      <div key={`${url}-${index}`} className="overflow-hidden rounded-xl border border-border bg-background">
+                        <img src={url} alt={`生成结果 ${index + 1}`} className="aspect-square w-full object-contain bg-muted" />
+                        <div className="space-y-3 border-t border-border p-3">
+                          <p className="break-all text-xs text-muted-foreground">{url}</p>
+                          <div className="flex flex-wrap gap-2">
+                            <Button type="button" variant="outline" size="sm" asChild>
+                              <a href={url} download target="_blank" rel="noopener noreferrer">
+                                <Download className="mr-2 h-4 w-4" />
+                                下载
+                              </a>
+                            </Button>
+                            <Button type="button" variant="outline" size="sm" onClick={() => copyText(url, "图片地址已复制")}>
+                              <Copy className="mr-2 h-4 w-4" />
+                              复制图片地址
+                            </Button>
                           </div>
-                        ) : (
-                          <>
-                            {isLoading && message.id === currentBotIdRef.current && !message.content ? (
-                              <div className="flex items-center justify-center py-4">
-                                <GridWaveLoader maxWidth={160} dotSize={5} backgroundColor="#1a1a1a" />
-                              </div>
-                            ) : (
-                              <GptImage2Renderer
-                                content={message.content}
-                                isStreaming={message.id === currentBotIdRef.current && isLoading}
-                              />
-                            )}
-                          </>
-                        )}
-                      </div>
-                      {message.role === "user" && (
-                        <div className="flex w-6 h-6 shrink-0 items-center justify-center rounded-full bg-slate-200 mt-0.5 overflow-hidden">
-                          {userAvatar ? (
-                            <img src={userAvatar} alt="Me" className="h-full w-full object-cover" />
-                          ) : (
-                            <User className="h-3.5 w-3.5 text-slate-500" />
-                          )}
                         </div>
-                      )}
-                    </div>
-                  ))}
-                  <div ref={messagesEndRef} />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-border bg-muted/40 p-4 text-sm leading-7 text-muted-foreground">
+                    {result.sourceText || "Dify 已返回结果，但没有检测到图片链接。"}
+                  </div>
+                )}
+
+                <div className="grid gap-2 rounded-xl border border-border bg-muted/40 p-3 text-xs text-muted-foreground sm:grid-cols-5">
+                  <span>模式：{result.submittedInputs.mode === "image_edit" ? "图片编辑" : "文生图"}</span>
+                  <span>模型：{result.submittedInputs.model}</span>
+                  <span>尺寸：{result.submittedInputs.size}</span>
+                  <span>质量：{result.submittedInputs.quality}</span>
+                  <span>格式：{result.submittedInputs.output_format}</span>
                 </div>
+              </div>
+            ) : (
+              <div className="flex min-h-[280px] flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/30 text-center">
+                <FileImage className="mb-3 h-8 w-8 text-muted-foreground" />
+                <p className="text-sm font-medium text-foreground">还没有生成结果</p>
+                <p className="mt-1 max-w-sm text-xs leading-relaxed text-muted-foreground">填写提示词和参数后，结果会出现在这里。</p>
+              </div>
+            )}
+          </section>
+        </section>
+
+        <aside className="space-y-4 lg:sticky lg:top-[72px] lg:h-[calc(100vh-88px)] lg:overflow-y-auto">
+          <section className="rounded-xl border border-border bg-card p-4">
+            <h2 className="mb-4 text-sm font-semibold text-foreground">基础参数</h2>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <FieldLabel>图像模型</FieldLabel>
+                <NativeSelect value={model} onChange={applyModel} options={MODEL_OPTIONS} />
+                {model !== "gpt-image-2" && isLargeSize(size) ? (
+                  <div className="rounded-lg bg-amber-500/10 p-2 text-xs leading-relaxed text-amber-700 dark:text-amber-300">
+                    当前模型可能不支持 2K / 4K。建议切换到 GPT Image 2，或改用基础尺寸。
+                    {size === "original_4k" ? " 非 GPT Image 2 会自动降级到基础尺寸。" : null}
+                    <button type="button" onClick={() => setModel("gpt-image-2")} className="ml-2 font-semibold underline">
+                      使用 GPT Image 2
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="space-y-2">
+                <FieldLabel hint="画幅比例是辅助参数，真正输出尺寸由 size 决定。">画幅比例</FieldLabel>
+                <NativeSelect value={aspectRatio} onChange={applyAspectRatio} options={ASPECT_RATIO_OPTIONS} />
+              </div>
+
+              <div className="space-y-2">
+                <FieldLabel>图片尺寸</FieldLabel>
+                <NativeSelect
+                  value={size}
+                  onChange={applySize}
+                  options={SIZE_OPTIONS.map((option) => ({
+                    ...option,
+                    disabled: option.editOnly && mode === "image_generate",
+                  }))}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <FieldLabel>生成质量</FieldLabel>
+                <NativeSelect value={quality} onChange={setQuality} options={QUALITY_OPTIONS} />
+              </div>
+
+              <div className="space-y-2">
+                <FieldLabel>图片格式</FieldLabel>
+                <NativeSelect value={outputFormat} onChange={setOutputFormat} options={OUTPUT_FORMAT_OPTIONS} />
+              </div>
+
+              <div className="space-y-2">
+                <FieldLabel>生成张数</FieldLabel>
+                <input
+                  type="number"
+                  min={1}
+                  max={4}
+                  value={count}
+                  onChange={(event) => setCount(clampImageCount(Number(event.target.value)))}
+                  className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+                />
+              </div>
+            </div>
+          </section>
+
+          <CollapsibleSection title="高级参数" open={advancedOpen} onToggle={() => setAdvancedOpen((value) => !value)}>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <FieldLabel>压缩率</FieldLabel>
+                {outputFormat === "png" ? (
+                  <div className="rounded-lg bg-muted p-3 text-xs text-muted-foreground">PNG 格式下压缩率已禁用，提交时保留 100。</div>
+                ) : (
+                  <div className="space-y-2">
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      value={outputCompression}
+                      onChange={(event) => setOutputCompression(clampCompression(Number(event.target.value)))}
+                      className="w-full accent-primary"
+                    />
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={outputCompression}
+                      onChange={(event) => setOutputCompression(clampCompression(Number(event.target.value)))}
+                      className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground"
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <FieldLabel>背景模式</FieldLabel>
+                <NativeSelect
+                  value={background}
+                  onChange={setBackground}
+                  options={BACKGROUND_OPTIONS.map((option) => ({
+                    ...option,
+                    disabled: model === "gpt-image-2" && option.value === "transparent",
+                  }))}
+                />
+                {model === "gpt-image-2" ? (
+                  <p className="text-xs text-muted-foreground">gpt-image-2 当前不推荐透明背景，请使用 auto 或 opaque。</p>
+                ) : null}
+              </div>
+
+              <div className="space-y-2">
+                <FieldLabel>审核强度</FieldLabel>
+                <NativeSelect value={moderation} onChange={setModeration} options={MODERATION_OPTIONS} />
+              </div>
+            </div>
+          </CollapsibleSection>
+
+          <CollapsibleSection title="参数预览" open={previewOpen} onToggle={() => setPreviewOpen((value) => !value)}>
+            <div className="space-y-2 text-xs">
+              {[
+                ["mode", previewInputs.mode],
+                ["model", previewInputs.model],
+                ["aspect_ratio", previewInputs.aspect_ratio],
+                ["size", previewInputs.size],
+                ["quality", previewInputs.quality],
+                ["output_format", previewInputs.output_format],
+                ["output_compression", previewInputs.output_compression],
+                ["background", previewInputs.background],
+                ["moderation", previewInputs.moderation],
+                ["n", previewInputs.n],
+                ["reference_image_url 是否已生成", Boolean(previewInputs.reference_image_url)],
+                ["mask_image_url 是否已生成", Boolean(previewInputs.mask_image_url)],
+              ].map(([key, value]) => (
+                <div key={String(key)} className="flex items-center justify-between gap-3 rounded-lg bg-muted px-3 py-2">
+                  <span className="text-muted-foreground">{key}</span>
+                  <span className="font-mono text-foreground">{String(value)}</span>
+                </div>
+              ))}
+            </div>
+          </CollapsibleSection>
+        </aside>
+      </main>
+
+      {showHistorySidebar ? (
+        <div className="fixed inset-0 z-50">
+          <button
+            type="button"
+            aria-label="关闭历史"
+            className="absolute inset-0 bg-black/30"
+            onClick={() => setShowHistorySidebar(false)}
+          />
+          <div className="absolute right-0 top-0 flex h-full w-full max-w-sm flex-col border-l border-border bg-card shadow-xl">
+            <div className="flex items-center justify-between border-b border-border px-4 py-3">
+              <span className="text-sm font-semibold">历史图像任务</span>
+              <button type="button" className="rounded-lg p-2 hover:bg-muted" onClick={() => setShowHistorySidebar(false)}>
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-2">
+              {chatSessions.length === 0 ? (
+                <div className="py-10 text-center text-sm text-muted-foreground">暂无历史记录</div>
+              ) : (
+                chatSessions.map((session) => (
+                  <button
+                    key={session.id}
+                    type="button"
+                    className="w-full rounded-lg px-3 py-3 text-left transition hover:bg-muted"
+                    onClick={() => {
+                      currentSessionIdRef.current = session.id
+                      setPrompt(session.preview)
+                      setShowHistorySidebar(false)
+                    }}
+                  >
+                    <div className="truncate text-sm font-medium text-foreground">{session.title}</div>
+                    <div className="mt-1 truncate text-xs text-muted-foreground">{session.preview}</div>
+                  </button>
+                ))
               )}
             </div>
           </div>
-
-          {/* 新消息提示 */}
-          <AnimatePresence>
-            {hasNewMessage && (
-              <motion.button
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 10 }}
-                onClick={scrollToBottom}
-                className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 text-white text-sm rounded-full shadow-lg flex items-center gap-2"
-                style={{ backgroundColor: BRAND_GREEN }}
-              >
-                <ArrowDown className="w-4 h-4" />
-                新消息
-              </motion.button>
-            )}
-          </AnimatePresence>
         </div>
-
-        {/* 输入框 */}
-        <div className="border-t border-slate-100 bg-white p-3 md:p-6 shrink-0">
-          <div className="mx-auto max-w-4xl">
-            <ImageChatComposer
-              modeOptions={MODE_OPTIONS.map(({ key, label }) => ({ key, label }))}
-              selectedModeKey={selectedMode.key}
-              onModeChange={(modeKey) => setSelectedMode(MODE_OPTIONS.find((mode) => mode.key === modeKey) ?? MODE_OPTIONS[0])}
-              sizeOptions={SIZE_OPTIONS.map((size) => ({ ...size }))}
-              selectedSizeValue={selectedSize.value}
-              onSizeChange={(sizeValue) => setSelectedSize(SIZE_OPTIONS.find((size) => size.value === sizeValue) ?? SIZE_OPTIONS[0])}
-              input={input}
-              onInputChange={setInput}
-              onKeyDown={handleKeyDown}
-              onSubmit={onSubmit}
-              onUploadClick={() => {
-                if (!userId) {
-                  toast.error("请先登录后再上传文件")
-                  return
-                }
-                fileInputRef.current?.click()
-              }}
-              uploadedFiles={uploadedFiles}
-              onRemoveFile={removeFile}
-              isUploading={isUploading}
-              uploadProgress={uploadProgress}
-              isLoading={isLoading}
-              submitLabelColor={BRAND_GREEN}
-              placeholder={userId ? "继续描述你的图像需求..." : "请先登录..."}
-            />
-            <input
-              ref={fileInputRef}
-              type="file"
-              className="hidden"
-              accept="image/*"
-              multiple
-              onChange={handleFileUpload}
-            />
-
-            {!userId && (
-              <p className="mt-3 text-center text-xs text-slate-400">未登录</p>
-            )}
-          </div>
-        </div>
-
-        {/* 🔥 历史会话侧边栏 - 左侧滑出 */}
-        <AnimatePresence>
-          {showHistorySidebar && (
-            <>
-              {/* 遮罩层 */}
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="fixed inset-0 z-40 bg-black/20 backdrop-blur-sm"
-                onClick={() => setShowHistorySidebar(false)}
-              />
-              {/* 侧边栏 */}
-              <motion.div
-                initial={{ x: -280 }}
-                animate={{ x: 0 }}
-                exit={{ x: -280 }}
-                transition={{ duration: 0.3, ease: [0.32, 0.72, 0, 1] }}
-                className="fixed left-0 top-0 h-screen w-72 z-50 flex flex-col"
-                style={{ background: "#FDFBF7", boxShadow: "4px 0 24px rgba(0,0,0,0.12)" }}
-              >
-                {/* 头部 */}
-                <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-slate-100">
-                  <span className="text-sm font-semibold text-slate-700">历史会话</span>
-                  <button
-                    onClick={() => setShowHistorySidebar(false)}
-                    className="p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
-                  >
-                    <X className="h-4 w-4 text-slate-500" />
-                  </button>
-                </div>
-                {/* 会话列表 */}
-                <div className="flex-1 min-h-0 px-1 py-2 overflow-y-auto">
-                  {chatSessions.length === 0 ? (
-                    <div className="text-center py-8 text-slate-400 text-sm">暂无历史会话</div>
-                  ) : (
-                    chatSessions.map(session => (
-                      <button
-                        key={session.id}
-                        onClick={() => {
-                          // 🔥 如果是其他模型的会话，跳转到对应页面
-                          if (session.ai_model && session.ai_model !== "gpt-image-2") {
-                            // 🔥 映射正确的路由
-                            const modelRoute = session.ai_model === "banana-2-pro"
-                              ? "/chat/banana-2-pro"
-                              : session.ai_model === "gpt-image-2"
-                                ? "/chat/creative-image-gpt2"
-                                : `/chat/${session.ai_model}`
-                            router.push(`${modelRoute}?id=${session.id}`)
-                            return
-                          }
-                          // 同模型会话，正常加载
-                          loadHistorySession(session.id)
-                          setShowHistorySidebar(false)
-                        }}
-                        className={cn(
-                          "w-full text-left px-3 py-2.5 rounded-lg transition-all",
-                          currentSessionId === session.id
-                            ? "bg-[#14532d]/10 text-[#14532d]"
-                            : "hover:bg-slate-100 text-slate-600"
-                        )}
-                      >
-                        <div className="text-sm font-medium truncate">{session.title}</div>
-                        <div className="text-[10px] text-slate-400 mt-0.5">
-                          {new Date(session.date).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                        </div>
-                      </button>
-                    ))
-                  )}
-                </div>
-              </motion.div>
-            </>
-          )}
-        </AnimatePresence>
-      </div>
+      ) : null}
     </div>
   )
 }
 
 export function GptImage2ChatInterface() {
   return (
-    <Suspense fallback={
-      <div className="flex h-screen w-full items-center justify-center bg-white">
-        <Loader2 className="h-6 w-6 animate-spin" style={{ color: BRAND_GREEN }} />
-      </div>
-    }>
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-background">
+          <Loader2 className="h-6 w-6 animate-spin text-primary" />
+        </div>
+      }
+    >
       <GptImage2ChatInterfaceInner />
     </Suspense>
   )

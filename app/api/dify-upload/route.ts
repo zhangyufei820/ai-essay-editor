@@ -39,6 +39,10 @@ const MAX_FILE_SIZE_VERCEL = 100 * 1024 * 1024
 const DIFY_BASE_URL = process.env.DIFY_INTERNAL_URL
   || process.env.DIFY_BASE_URL
   || "https://api.dify.ai"
+
+// 🔥 图片网关配置
+const IMAGE_GATEWAY_URL = process.env.DIFY_IMAGE_GATEWAY_URL || "http://43.154.111.156:8001"
+
 // 🔥 作文批改（standard）使用专用的 ESSAY_CORRECTION_API_KEY
 const DEFAULT_DIFY_KEY = process.env.ESSAY_CORRECTION_API_KEY || process.env.DIFY_API_KEY
 
@@ -243,55 +247,69 @@ export async function POST(request: NextRequest) {
     // 🔥 根据模型选择正确的 API Key
     const targetModel = model || modelFromForm
     const targetApiKey = getApiKeyForModel(targetModel)
-    
+
     // ============================================
-    // 6. 转发到 Dify（内部已切到 COS 存储）
+    // 6. 上传到图片网关（而非直接上传到 Dify）
     // ============================================
     // 创建一个新的 FormData，使用安全的文件名
-    const difyFormData = new FormData()
-    // 注意：这里我们仍使用原始文件内容，但可以创建新 File 对象使用安全名称
+    const gatewayFormData = new FormData()
     const safeFile = new File([file], safeFileName, { type: file.type })
-    difyFormData.append("file", safeFile)
-    difyFormData.append("user", userId || "anonymous-user")
+    gatewayFormData.append("file", safeFile)
+    gatewayFormData.append("user", userId || "anonymous-user")
 
-    const uploadUrl = `${DIFY_BASE_URL}/files/upload`
+    // 🔥 使用图片网关认证令牌
+    const gatewayToken = process.env.DIFY_IMAGE_GATEWAY_TOKEN || DEFAULT_DIFY_KEY
+    const uploadUrl = `${IMAGE_GATEWAY_URL}/api/files/upload`
 
-    const response = await fetch(uploadUrl, {
+    const gatewayResponse = await fetch(uploadUrl, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${targetApiKey}`,
+        Authorization: `Bearer ${gatewayToken}`,
       },
-      body: difyFormData,
+      body: gatewayFormData,
     })
 
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error("[Backend] Dify upload failed:", {
-        status: response.status,
+    if (!gatewayResponse.ok) {
+      const errorText = await gatewayResponse.text()
+      console.error("[Backend] Gateway upload failed:", {
+        status: gatewayResponse.status,
         url: uploadUrl,
         error: errorText,
       })
 
       return new Response(
         JSON.stringify({
-          error: "File upload to Dify failed",
+          error: "File upload to gateway failed",
           details: errorText,
-          status: response.status,
+          status: gatewayResponse.status,
         }),
         {
-          status: response.status,
+          status: gatewayResponse.status,
           headers: { "Content-Type": "application/json" },
         },
       )
     }
 
-    const data = await response.json()
-    console.log("[Backend] Dify upload success:", { fileId: data.id, fileName: safeFileName, userId })
+    const gatewayData = await gatewayResponse.json()
+    console.log("[Backend] Gateway upload success:", {
+      fileName: safeFileName,
+      userId,
+      gatewayUrl: gatewayData.data?.url
+    })
 
-    // 返回 Dify 上传结果
+    // 返回网关上传结果（包含公网 URL）
+    // 前端应使用 gatewayUrl 作为 Dify inputs.reference_image_url
     return new Response(JSON.stringify({
-      ...data,
-      safeFileName,
+      success: true,
+      code: "ok",
+      message: "文件上传成功",
+      data: {
+        url: gatewayData.data?.url,        // 🔥 图片网关公网 URL（用于 reference_image_url）
+        filename: safeFileName,
+        content_type: file.type,
+        size: file.size,
+      },
+      gatewayUrl: gatewayData.data?.url,   // 🔥 兼容字段
     }), {
       status: 200,
       headers: { "Content-Type": "application/json" },

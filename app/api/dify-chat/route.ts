@@ -22,11 +22,79 @@ export const runtime = "nodejs"
 export const maxDuration = 300
 export const dynamic = "force-dynamic"
 
-function normalizeGptImageMode(mode: string | null | undefined): "generate" | "edit" {
-  if (mode === "edit" || mode === "image-edit") {
-    return "edit"
+type GptImageV11Inputs = {
+  aspect_ratio: string
+  size: string
+  model: string
+  quality: string
+  output_format: string
+  output_compression: number
+  background: string
+  moderation: string
+  n: number
+  mode: string
+  reference_image_url: string
+  mask_image_url: string
+}
+
+const GPT_IMAGE_V11_DEFAULT_INPUTS: GptImageV11Inputs = {
+  aspect_ratio: "1:1",
+  size: "1024x1024",
+  model: "gpt-image-1",
+  quality: "medium",
+  output_format: "png",
+  output_compression: 100,
+  background: "auto",
+  moderation: "auto",
+  n: 1,
+  mode: "image_generate",
+  reference_image_url: "",
+  mask_image_url: "",
+}
+
+const GPT_IMAGE_V11_ALLOWED = {
+  aspect_ratio: ["auto", "1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "21:9", "9:21", "2:1", "1:2", "3:1", "1:3"],
+  size: ["auto", "original_1k", "original_2k", "original_4k", "1024x1024", "1536x1024", "1024x1536", "2048x2048", "2048x1152", "1152x2048", "3840x2160", "2160x3840"],
+  model: ["gpt-image-2", "gpt-image-1.5", "gpt-image-1", "gpt-image-1-mini"],
+  quality: ["auto", "low", "medium", "high"],
+  output_format: ["png", "jpeg", "webp"],
+  background: ["auto", "opaque", "transparent"],
+  moderation: ["auto", "low"],
+  mode: ["image_generate", "image_edit"],
+} as const
+
+function clampNumber(value: unknown, min: number, max: number, fallback: number): number {
+  const numeric = typeof value === "number" ? value : Number(value)
+  if (!Number.isFinite(numeric)) return fallback
+  return Math.min(max, Math.max(min, Math.round(numeric)))
+}
+
+function pickEnum(value: unknown, allowed: readonly string[], fallback: string): string {
+  return typeof value === "string" && allowed.includes(value) ? value : fallback
+}
+
+function pickUrlString(value: unknown): string {
+  if (typeof value !== "string") return ""
+  return value.startsWith("http://") || value.startsWith("https://") ? value : ""
+}
+
+function buildGptImageV11Inputs(inputs: unknown): GptImageV11Inputs {
+  const record = inputs && typeof inputs === "object" ? inputs as Record<string, unknown> : {}
+
+  return {
+    aspect_ratio: pickEnum(record.aspect_ratio, GPT_IMAGE_V11_ALLOWED.aspect_ratio, GPT_IMAGE_V11_DEFAULT_INPUTS.aspect_ratio),
+    size: pickEnum(record.size, GPT_IMAGE_V11_ALLOWED.size, GPT_IMAGE_V11_DEFAULT_INPUTS.size),
+    model: pickEnum(record.model, GPT_IMAGE_V11_ALLOWED.model, GPT_IMAGE_V11_DEFAULT_INPUTS.model),
+    quality: pickEnum(record.quality, GPT_IMAGE_V11_ALLOWED.quality, GPT_IMAGE_V11_DEFAULT_INPUTS.quality),
+    output_format: pickEnum(record.output_format, GPT_IMAGE_V11_ALLOWED.output_format, GPT_IMAGE_V11_DEFAULT_INPUTS.output_format),
+    output_compression: clampNumber(record.output_compression, 0, 100, GPT_IMAGE_V11_DEFAULT_INPUTS.output_compression),
+    background: pickEnum(record.background, GPT_IMAGE_V11_ALLOWED.background, GPT_IMAGE_V11_DEFAULT_INPUTS.background),
+    moderation: pickEnum(record.moderation, GPT_IMAGE_V11_ALLOWED.moderation, GPT_IMAGE_V11_DEFAULT_INPUTS.moderation),
+    n: clampNumber(record.n, 1, 4, GPT_IMAGE_V11_DEFAULT_INPUTS.n),
+    mode: pickEnum(record.mode, GPT_IMAGE_V11_ALLOWED.mode, GPT_IMAGE_V11_DEFAULT_INPUTS.mode),
+    reference_image_url: pickUrlString(record.reference_image_url),
+    mask_image_url: pickUrlString(record.mask_image_url),
   }
-  return "generate"
 }
 
 // 默认的基础配置
@@ -492,89 +560,63 @@ export async function POST(request: NextRequest) {
     const callDify = async (retryWithoutId = false) => {
         const currentConvId = retryWithoutId ? null : conversation_id;
 
-        // 🎨 图片生成模型使用 Workflow API，其他模型使用 Chat API
-        const isWorkflow = model === "banana-2-pro" || model === "gpt-image-2";
+        // 🎨 Banana 继续使用 Workflow API；GPT Image V11 使用 Chatflow query + inputs。
+        const isWorkflow = model === "banana-2-pro";
         const apiEndpoint = isWorkflow ? "/workflows/run" : "/chat-messages";
 
         let difyRequest: DifyWorkflowRequest | DifyChatRequest;
 
         if (isWorkflow) {
-            // 🎨 Workflow API 格式
-            // GPT Image 2 使用 prompt/mode/size，Dify Banana 使用 image_prompt
-            const isGptImage2 = model === "gpt-image-2";
-
-            if (isGptImage2) {
-                // GPT Image 2 参数格式 - 使用 blocking 模式
-                // 🎨 正确传递尺寸参数
-                const gptImage2Size = imageSize ? `${imageSize.width}x${imageSize.height}` : "1024x1024"
-                const gptImage2Mode = normalizeGptImageMode(inputs?.mode)
-                difyRequest = {
-                    inputs: {
-                        prompt: query || "",
-                        mode: gptImage2Mode,
-                        size: gptImage2Size,
-                        ...(inputs || {})
-                    },
-                    response_mode: "blocking",  // blocking 模式
-                    user: userId || "default-user",
-                }
-                difyRequest.inputs.mode = gptImage2Mode
-                if (fileIds && fileIds.length > 0) {
-                    difyRequest.inputs.init_image = [{
-                        type: "image",
-                        transfer_method: "local_file",
-                        upload_file_id: fileIds[0]
-                    }]
-                }
-
-                console.log(`[GPT Image 2] Workflow request prepared: size=${gptImage2Size} mode=${gptImage2Mode} files=${fileIds?.length || 0}`)
-            } else {
-                // Dify Banana 参数格式（image_prompt）
-                difyRequest = {
-                    inputs: {
-                        image_prompt: query || "",
-                        ...(inputs || {})
-                    },
-                    response_mode: "streaming",
-                    user: userId || "default-user",
-                }
-
-                // 🔥 如果有文件，构造文件对象格式
-                if (fileIds && fileIds.length > 0) {
-                    difyRequest.inputs.init_image = [{
-                        type: 'image',
-                        transfer_method: 'local_file',
-                        upload_file_id: fileIds[0]
-                    }]
-                    console.log(`🎨 [Banana] 使用文件对象:`, difyRequest.inputs.init_image)
-                }
-
-                // 🎨 传递尺寸参数（如果有）
-                if (imageSize) {
-                    difyRequest.inputs.aspect_ratio = imageSize.ratio || "9:16"
-                    difyRequest.inputs.image_width = imageSize.width || 1080
-                    difyRequest.inputs.image_height = imageSize.height || 1920
-                    console.log(`🎨 [Banana] 图片尺寸: ${imageSize.ratio} (${imageSize.width}x${imageSize.height})`)
-                }
-
-                console.log(`🎨 [Banana] Workflow request prepared: files=${fileIds?.length || 0} hasImageSize=${Boolean(imageSize)}`)
+            // Dify Banana 参数格式（image_prompt）
+            difyRequest = {
+                inputs: {
+                    image_prompt: query || "",
+                    ...(inputs || {})
+                },
+                response_mode: "streaming",
+                user: userId || "default-user",
             }
+
+            // 🔥 如果有文件，构造文件对象格式
+            if (fileIds && fileIds.length > 0) {
+                difyRequest.inputs.init_image = [{
+                    type: 'image',
+                    transfer_method: 'local_file',
+                    upload_file_id: fileIds[0]
+                }]
+                console.log(`🎨 [Banana] 使用文件对象:`, difyRequest.inputs.init_image)
+            }
+
+            // 🎨 传递尺寸参数（如果有）
+            if (imageSize) {
+                difyRequest.inputs.aspect_ratio = imageSize.ratio || "9:16"
+                difyRequest.inputs.image_width = imageSize.width || 1080
+                difyRequest.inputs.image_height = imageSize.height || 1920
+                console.log(`🎨 [Banana] 图片尺寸: ${imageSize.ratio} (${imageSize.width}x${imageSize.height})`)
+            }
+
+            console.log(`🎨 [Banana] Workflow request prepared: files=${fileIds?.length || 0} hasImageSize=${Boolean(imageSize)}`)
         } else {
             // 💬 Chat API 格式
+            const isGptImage2 = model === "gpt-image-2"
             difyRequest = {
-                inputs: inputs || {},
+                inputs: isGptImage2 ? buildGptImageV11Inputs(inputs) : inputs || {},
                 query: query || "你好",
-                response_mode: "streaming",
+                response_mode: isGptImage2 ? "blocking" : "streaming",
                 user: userId || "default-user",
                 conversation_id: effectiveConvId !== undefined ? effectiveConvId : currentConvId,
             }
 
-            if (fileIds && fileIds.length > 0) {
+            if (!isGptImage2 && fileIds && fileIds.length > 0) {
                 difyRequest.files = fileIds.map((id: string) => ({
                     type: 'image',
                     transfer_method: 'local_file',
                     upload_file_id: id
                 }));
+            }
+
+            if (isGptImage2) {
+                console.log(`[GPT Image V11] Chatflow request prepared: mode=${difyRequest.inputs.mode} size=${difyRequest.inputs.size} reference=${Boolean(difyRequest.inputs.reference_image_url)} mask=${Boolean(difyRequest.inputs.mask_image_url)}`)
             }
         }
 
@@ -685,7 +727,7 @@ export async function POST(request: NextRequest) {
         return new Response(JSON.stringify({ error: `Dify Error: ${errorText}` }), { status: response.status })
     }
 
-    // 🎨 GPT Image 2 使用 async 模式，立即返回 task_id
+    // 🎨 GPT Image V11 使用 Chatflow blocking 响应；兼容少数返回 workflow_run_id 的场景。
     if (model === "gpt-image-2") {
         const result = await response.json()
         const workflowRunId = result?.workflow_run_id

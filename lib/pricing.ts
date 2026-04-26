@@ -25,6 +25,10 @@ export type ModelType =
   | "claude-opus"
   | "gemini-pro"
   | "banana-2-pro"
+  | "gpt-image-2"
+  | "gpt-image-1.5"
+  | "gpt-image-1"
+  | "gpt-image-1-mini"
   | "suno-v5"
   | "grok-4.2"
   | "open-claw"
@@ -223,6 +227,34 @@ export const MODEL_COSTS: Record<ModelType, ModelCostConfig> = {
     displayName: "Banana2 Pro 4K",
     mode: "image",
     estimatedTokens: 500  // 预估 LLM 对话消耗
+  },
+  "gpt-image-2": {
+    category: "media",
+    fixedCost: 80,
+    displayName: "GPT Image 2",
+    mode: "image",
+    estimatedTokens: 500
+  },
+  "gpt-image-1.5": {
+    category: "media",
+    fixedCost: 60,
+    displayName: "GPT Image 1.5",
+    mode: "image",
+    estimatedTokens: 500
+  },
+  "gpt-image-1": {
+    category: "media",
+    fixedCost: 40,
+    displayName: "GPT Image 1",
+    mode: "image",
+    estimatedTokens: 500
+  },
+  "gpt-image-1-mini": {
+    category: "media",
+    fixedCost: 20,
+    displayName: "GPT Image 1 Mini",
+    mode: "image",
+    estimatedTokens: 500
   },
   "suno-v5": { 
     category: "media",
