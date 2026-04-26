@@ -292,10 +292,10 @@ export function ChatInput({
   return (
     <div
       className={cn(
-        "relative rounded-3xl bg-white border transition-all duration-300",
+        "relative rounded-[24px] sm:rounded-3xl bg-white border transition-all duration-300 touch-manipulation",
         isFocused
-          ? "shadow-[0_8px_24px_rgba(0,0,0,0.10),0_20px_48px_rgba(0,0,0,0.15),0_32px_80px_rgba(0,0,0,0.18)] ring-1"
-          : "shadow-[0_4px_12px_rgba(0,0,0,0.06),0_12px_32px_rgba(0,0,0,0.10),0_24px_64px_rgba(0,0,0,0.12)]",
+          ? "shadow-[0_8px_24px_rgba(0,0,0,0.10)] ring-1 sm:shadow-[0_8px_24px_rgba(0,0,0,0.10),0_20px_48px_rgba(0,0,0,0.15),0_32px_80px_rgba(0,0,0,0.18)]"
+          : "shadow-[0_4px_18px_rgba(0,0,0,0.08)] sm:shadow-[0_4px_12px_rgba(0,0,0,0.06),0_12px_32px_rgba(0,0,0,0.10),0_24px_64px_rgba(0,0,0,0.12)]",
         className
       )}
       style={{ 
@@ -306,7 +306,10 @@ export function ChatInput({
       {/* 工具栏 */}
       {showModelSelector && (
         <div
-          className="flex items-center justify-between px-4 py-2 border-b"
+          className={cn(
+            "flex items-center justify-between gap-3 px-3 sm:px-4 py-1.5 sm:py-2 border-b",
+            isFocused && "max-sm:hidden"
+          )}
           style={{ borderColor: slateColors[50] }}
         >
           {/* 模型选择器 - 使用 ModelSelector 组件 */}
@@ -322,7 +325,7 @@ export function ChatInput({
             <button
               type="button"
               onClick={onModelClick}
-              className="flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors hover:bg-slate-50"
+              className="flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors hover:bg-slate-50 min-h-[36px]"
               aria-label="选择 AI 模型"
             >
               <div className="h-2 w-2 rounded-full" style={{ backgroundColor: modelColor }} />
@@ -338,7 +341,7 @@ export function ChatInput({
             type="button"
             variant="ghost"
             size="icon"
-            className="h-8 w-8 rounded-lg"
+            className="h-8 w-8 rounded-full sm:rounded-lg"
             onClick={() => fileInputRef.current?.click()}
             disabled={isLoading || disabled}
             aria-label="上传附件"
@@ -359,7 +362,7 @@ export function ChatInput({
             className="overflow-hidden"
           >
             <div 
-              className="flex gap-2 px-4 py-3 overflow-x-auto border-b scrollbar-thin"
+              className="flex gap-2 px-3 sm:px-4 py-3 overflow-x-auto border-b scrollbar-thin"
               style={{ borderColor: slateColors[50] }}
             >
               <AnimatePresence mode="popLayout">
@@ -378,10 +381,15 @@ export function ChatInput({
       </AnimatePresence>
 
       {/* 输入区域 */}
-      <div className="flex items-end gap-2 sm:gap-3 p-2 sm:p-3">
-        {/* 附件按钮（工具栏隐藏时显示） */}
-        {!showModelSelector && (
-          <div className="flex flex-col items-center gap-0.5 sm:gap-1 shrink-0">
+      <div
+        className={cn(
+          "flex items-end gap-1.5 sm:gap-3 p-2 sm:p-3",
+          isFocused && "max-sm:gap-1 max-sm:p-1.5"
+        )}
+      >
+        {/* 附件按钮（工具栏隐藏或移动端键盘态时显示） */}
+        {(!showModelSelector || isFocused) && (
+          <div className={cn("flex flex-col items-center gap-0.5 sm:gap-1 shrink-0", showModelSelector && "sm:hidden")}>
             <span className="text-[10px] font-medium hidden sm:block" style={{ color: slateColors[400] }}>
               文件上传
             </span>
@@ -389,7 +397,10 @@ export function ChatInput({
               type="button"
               variant="ghost"
               size="icon"
-              className="h-9 w-9 sm:h-10 sm:w-10 rounded-lg sm:rounded-xl"
+              className={cn(
+                "h-11 w-11 sm:h-10 sm:w-10 rounded-xl sm:rounded-xl touch-manipulation",
+                isFocused && "max-sm:h-9 max-sm:w-9 max-sm:rounded-full"
+              )}
               onClick={() => fileInputRef.current?.click()}
               disabled={isLoading || disabled}
               aria-label="上传附件"
@@ -400,7 +411,7 @@ export function ChatInput({
         )}
 
         {/* 语音输入按钮 */}
-        <div className="flex flex-col items-center gap-0.5 sm:gap-1 shrink-0">
+        <div className={cn("flex flex-col items-center gap-0.5 sm:gap-1 shrink-0", isFocused && "max-sm:hidden")}>
           <span className="text-[10px] font-medium hidden sm:block" style={{ color: slateColors[400] }}>
             {isListening ? "录音中" : "语音输入"}
           </span>
@@ -411,7 +422,7 @@ export function ChatInput({
             onClick={toggleVoiceInput}
             disabled={isLoading || disabled}
             className={cn(
-              "h-9 w-9 sm:h-10 sm:w-10 rounded-lg sm:rounded-xl flex items-center justify-center transition-all duration-200",
+              "h-10 w-10 sm:h-10 sm:w-10 rounded-full sm:rounded-xl flex items-center justify-center transition-all duration-200 touch-manipulation",
               isListening
                 ? "bg-red-500 text-white shadow-lg animate-pulse"
                 : "bg-slate-100 hover:bg-slate-200 text-slate-600"
@@ -437,8 +448,9 @@ export function ChatInput({
           placeholder={disabled ? "请先登录..." : placeholder}
           disabled={disabled || isLoading}
           className={cn(
-            "flex-1 min-h-[36px] sm:min-h-[48px] max-h-[120px] sm:max-h-[160px] resize-none border-0 bg-transparent",
-            "text-sm sm:text-[15px] leading-relaxed focus-visible:ring-0 p-1.5 sm:p-2"
+            "flex-1 min-h-[40px] sm:min-h-[48px] max-h-[132px] sm:max-h-[160px] resize-none border-0 bg-transparent",
+            "text-[15px] sm:text-[15px] leading-6 focus-visible:ring-0 px-2 py-1.5 sm:p-2",
+            isFocused && "max-sm:min-h-[38px] max-sm:max-h-[72px] max-sm:py-1"
           )}
           style={{ color: slateColors[700] }}
           rows={1}
@@ -456,8 +468,9 @@ export function ChatInput({
             disabled={!canSubmit}
             onClick={onSubmit}
             className={cn(
-              "h-9 w-9 sm:h-10 sm:w-10 rounded-lg sm:rounded-xl flex items-center justify-center",
+              "h-10 w-10 sm:h-10 sm:w-10 rounded-full sm:rounded-xl flex items-center justify-center touch-manipulation",
               "text-white transition-all duration-200",
+              isFocused && "max-sm:h-9 max-sm:w-9",
               !canSubmit && "opacity-40 cursor-not-allowed"
             )}
             style={{

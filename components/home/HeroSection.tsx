@@ -368,10 +368,10 @@ function ChatDemo() {
               className="flex items-start gap-3 mb-4 justify-end"
             >
               <div
-                className="rounded-2xl px-4 py-3"
-                style={{ backgroundColor: brandColors[600] }}
+                className="rounded-2xl border px-4 py-3"
+                style={{ backgroundColor: "#f7f7f5", borderColor: "#e6e3dc" }}
               >
-                <p className="text-sm text-white">
+                <p className="text-sm" style={{ color: "#2f3136" }}>
                   {demoConversation[2].content}
                 </p>
               </div>

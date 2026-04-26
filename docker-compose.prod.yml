@@ -74,6 +74,8 @@ services:
       - NODE_ENV=production
       - DIFY_INTERNAL_URL=http://docker-api-1:5001/v1
       - DIFY_BASE_URL=http://docker-api-1:5001/v1
+      - DIFY_IMAGE_GATEWAY_URL=http://dify-image-gateway:8001
+      - DIFY_IMAGE_GATEWAY_PUBLIC_URL=http://43.154.111.156:8001
       - NEXT_PUBLIC_APP_URL=https://www.shenxiang.school
     tmpfs:
       - /app/.next/standalone/.next/cache

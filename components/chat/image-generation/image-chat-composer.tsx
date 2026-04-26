@@ -109,9 +109,9 @@ export function ImageChatComposer(props: ImageChatComposerProps) {
         </div>
       ) : null}
 
-      <form onSubmit={props.onSubmit} className="relative rounded-[24px] border border-slate-200 bg-white shadow-lg">
-        <div className="border-b border-slate-100 px-3 pb-2 pt-3">
-          <div className="flex flex-wrap items-center gap-3">
+      <form onSubmit={props.onSubmit} className="relative rounded-[22px] md:rounded-[24px] border border-slate-200 bg-white shadow-lg">
+        <div className="border-b border-slate-100 px-2.5 md:px-3 pb-2 pt-2.5 md:pt-3">
+          <div className="flex flex-nowrap items-center gap-2 overflow-x-auto md:flex-wrap md:gap-3">
             {props.modeOptions.length > 1 ? (
               <div className="flex items-center gap-1 rounded-full bg-slate-100 p-1">
                 {props.modeOptions.map((mode) => (
@@ -120,7 +120,7 @@ export function ImageChatComposer(props: ImageChatComposerProps) {
                     type="button"
                     onClick={() => props.onModeChange(mode.key)}
                     className={cn(
-                      'rounded-full px-3 py-1.5 text-xs font-medium transition-all duration-200',
+                      'shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-all duration-200',
                       props.selectedModeKey === mode.key
                         ? 'bg-white text-slate-800 shadow-sm'
                         : 'text-slate-500 hover:text-slate-700'
@@ -132,14 +132,14 @@ export function ImageChatComposer(props: ImageChatComposerProps) {
               </div>
             ) : null}
 
-            <div className="flex items-center gap-1 rounded-full bg-slate-100 p-1">
+            <div className="flex shrink-0 items-center gap-1 rounded-full bg-slate-100 p-1">
               {ratioOptions.map((ratio) => (
                 <button
                   key={ratio}
                   type="button"
                   onClick={() => handleRatioChange(ratio)}
                   className={cn(
-                    'rounded-full px-3 py-1.5 text-xs font-medium transition-all duration-200',
+                    'shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-all duration-200',
                     selectedSize.ratio === ratio
                       ? 'bg-white text-slate-800 shadow-sm'
                       : 'text-slate-500 hover:text-slate-700'
@@ -150,14 +150,14 @@ export function ImageChatComposer(props: ImageChatComposerProps) {
               ))}
             </div>
 
-            <div className="flex items-center gap-1 rounded-full bg-slate-100 p-1">
+            <div className="flex shrink-0 items-center gap-1 rounded-full bg-slate-100 p-1">
               {resolutionOptions.map((resolution) => (
                 <button
                   key={resolution.value}
                   type="button"
                   onClick={() => handleResolutionChange(resolution.value)}
                   className={cn(
-                    'rounded-full px-3 py-1.5 text-xs font-medium transition-all duration-200',
+                    'shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-all duration-200',
                     selectedSize.tier === resolution.value
                       ? 'bg-white text-slate-800 shadow-sm'
                       : 'text-slate-500 hover:text-slate-700'
@@ -170,9 +170,9 @@ export function ImageChatComposer(props: ImageChatComposerProps) {
           </div>
         </div>
 
-        <div className="flex items-end gap-2 p-3">
-          <Button type="button" variant="ghost" size="icon" className="h-10 w-10 rounded-xl text-slate-400 hover:bg-slate-50" onClick={props.onUploadClick} disabled={props.isLoading}>
-            <Paperclip className="h-5 w-5" />
+        <div className="flex items-end gap-2 p-2.5 md:p-3">
+          <Button type="button" variant="ghost" size="icon" className="h-11 w-11 md:h-10 md:w-10 rounded-xl text-slate-400 hover:bg-slate-50 touch-manipulation" onClick={props.onUploadClick} disabled={props.isLoading}>
+            <Paperclip className="h-4 w-4 md:h-5 md:w-5" />
           </Button>
 
           <Textarea
@@ -180,7 +180,7 @@ export function ImageChatComposer(props: ImageChatComposerProps) {
             onChange={(event) => props.onInputChange(event.target.value)}
             onKeyDown={props.onKeyDown}
             placeholder={props.placeholder}
-            className="min-h-[48px] max-h-[160px] flex-1 resize-none border-0 bg-transparent p-2 text-[15px] text-slate-700 placeholder:text-slate-400 focus-visible:ring-0"
+            className="min-h-[44px] md:min-h-[48px] max-h-[140px] md:max-h-[160px] flex-1 resize-none border-0 bg-transparent p-2 text-[15px] text-slate-700 placeholder:text-slate-400 focus-visible:ring-0"
             disabled={props.isLoading}
             rows={1}
           />
@@ -188,7 +188,7 @@ export function ImageChatComposer(props: ImageChatComposerProps) {
           <Button
             type="submit"
             size="icon"
-            className="h-10 w-10 rounded-xl text-white shadow-lg transition-all hover:opacity-90 disabled:opacity-40"
+            className="h-11 w-11 md:h-10 md:w-10 rounded-xl text-white shadow-lg transition-all hover:opacity-90 disabled:opacity-40 touch-manipulation"
             style={{ backgroundColor: props.submitLabelColor }}
             disabled={props.isLoading || !props.input.trim()}
           >

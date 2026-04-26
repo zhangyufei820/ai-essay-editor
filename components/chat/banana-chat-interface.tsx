@@ -17,15 +17,17 @@ import {
   ChevronLeft, ArrowDown, Download, Share2, Sparkles, History
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { buildChatSessionRouteFromSession, normalizeChatSessionModel } from "@/lib/chat-session-routes"
 import { toast } from "sonner"
 import { motion, AnimatePresence } from "framer-motion"
 import { createClient } from "@supabase/supabase-js"
-import { collapseSidebar, refreshCredits } from "@/components/app-sidebar"
+import { collapseSidebar, refreshCredits, refreshSessionList } from "@/components/app-sidebar"
 import { calculatePreviewCost } from "@/lib/pricing"
 import { UltimateRenderer } from "@/components/chat/UltimateRenderer"
 import { GridWaveLoader } from "@/components/chat/GridWaveLoader"
 import { ImageChatComposer } from "@/components/chat/image-generation/image-chat-composer"
 import { getImageModelConfig } from "@/components/chat/image-generation/config"
+import { proxifyGeneratedImageDownloadUrl, proxifyGeneratedImagePreviewUrl } from "@/components/chat/image-generation/gpt-image-v11"
 
 const BRAND_GREEN = "#14532d"
 const BANANA_COLOR = "#14532d" // 使用网站主题深绿色
@@ -65,6 +67,8 @@ type ChatSession = {
   date: number
   preview: string
   ai_model: string
+  ai_provider?: string
+  processing_mode?: string
 }
 
 // 🎯 流式光标组件
@@ -111,14 +115,14 @@ function BananaRenderer({ content, isStreaming = false }: { content: string; isS
           className="relative rounded-2xl overflow-hidden shadow-xl border border-green-100"
         >
           <img 
-            src={img.url} 
+            src={proxifyGeneratedImagePreviewUrl(img.url, 900)} 
             alt={img.alt}
             className="w-full h-auto"
             loading="lazy"
           />
           {/* 下载按钮 */}
           <a
-            href={img.url}
+            href={proxifyGeneratedImageDownloadUrl(img.url)}
             download
             target="_blank"
             rel="noopener noreferrer"
@@ -166,7 +170,7 @@ const MobileUserInfo = ({
 function BananaChatInterfaceInner() {
   const searchParams = useSearchParams()
   const router = useRouter()
-  const urlSessionId = searchParams.get("id")
+  const urlSessionId = searchParams.get("sessionId") || searchParams.get("id")
   const initialPrompt = searchParams.get("prompt") ?? ""
   const initialSizeValue = searchParams.get("size") ?? "9-16-hd"
 
@@ -285,7 +289,9 @@ function BananaChatInterfaceInner() {
           title: s.title || "新对话",
           date: new Date(s.created_at).getTime(),
           preview: s.preview || "",
-          ai_model: s.ai_model || "banana-2-pro"
+          ai_model: s.ai_model || "banana-2-pro",
+          ai_provider: s.ai_provider || "",
+          processing_mode: s.processing_mode || "",
         }))
         setChatSessions(mapped)
       } else {
@@ -485,6 +491,7 @@ function BananaChatInterfaceInner() {
         await supabase.from('chat_sessions').update({ preview, ai_model: "banana-2-pro" }).eq('id', sid)
     }
     await supabase.from('chat_messages').insert({ session_id: sid, role: "user", content: userInputText })
+    refreshSessionList()
 
     const botId = (Date.now()+1).toString()
     currentBotIdRef.current = botId
@@ -714,48 +721,40 @@ function BananaChatInterfaceInner() {
 
         {/* 滚动区域 */}
         <div className="flex-1 h-0 relative overflow-hidden">
-          {/* 🔥 移动端浮动历史按钮 */}
-          <button
-            onClick={() => setShowHistorySidebar(!showHistorySidebar)}
-            className="absolute top-3 right-3 z-40 flex items-center gap-1.5 px-3 py-2 bg-white/95 backdrop-blur-lg rounded-full shadow-lg border border-slate-100 md:hidden"
-          >
-            <History className="h-4 w-4 text-slate-600" />
-            <span className="text-xs font-medium text-slate-600">历史</span>
-          </button>
           <div 
             ref={scrollAreaRef}
             onScroll={handleScroll}
-            className="h-full overflow-y-auto custom-scrollbar"
+            className="h-full overflow-y-auto custom-scrollbar pb-28 md:pb-0"
           >
-            <div className="mx-auto max-w-4xl px-4 md:px-6 py-6 md:py-8">
+            <div className="mx-auto max-w-4xl px-3 md:px-6 py-3 md:py-8">
               {messages.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-16 text-center">
-                  <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-yellow-50">
+                <div className="flex flex-col items-center justify-center py-10 md:py-16 text-center">
+                  <div className="mb-4 md:mb-6 flex h-14 w-14 md:h-16 md:w-16 items-center justify-center rounded-2xl bg-yellow-50">
                     <span className="text-4xl">🍌</span>
                   </div>
-                  <h1 className="text-xl font-semibold text-slate-800 mb-2">AI 图片生成</h1>
-                  <p className="text-sm text-slate-500 max-w-md">
+                  <h1 className="text-lg md:text-xl font-semibold text-slate-800 mb-2">AI 图片生成</h1>
+                  <p className="text-sm text-slate-500 max-w-md px-4">
                     描述你想要的图片，Banana2 Pro 4K 将为你创作高质量的 AI 图像
                   </p>
                 </div>
               ) : (
-                <div className="space-y-5">
+                <div className="space-y-3.5 md:space-y-5">
                   {messages.map((message) => (
-                    <div key={message.id} className={cn("flex gap-3 group", message.role === "user" ? "justify-end" : "justify-start")}>
+                    <div key={message.id} className={cn("flex gap-1.5 md:gap-3 group", message.role === "user" ? "justify-end" : "justify-start")}>
                       {message.role === "assistant" && (
-                        <div className="flex w-6 h-6 shrink-0 items-center justify-center rounded-full mt-0.5" style={{ backgroundColor: BANANA_COLOR }}>
-                          <span className="text-sm">🍌</span>
+                        <div className="flex w-6 h-6 md:w-7 md:h-7 shrink-0 items-center justify-center rounded-full mt-0.5" style={{ backgroundColor: BANANA_COLOR }}>
+                          <span className="text-xs md:text-sm">🍌</span>
                         </div>
                       )}
                       {/* Flat content container */}
                       <div className={cn(
-                        "flex flex-col max-w-[80%]",
+                        "flex flex-col max-w-[94%] md:max-w-[80%]",
                         message.role === "user" ? "items-end" : "items-start"
                       )}>
                         {/* User message */}
                         {message.role === "user" ? (
                           <div
-                            className="rounded-2xl px-4 py-3 text-slate-700 border border-slate-200"
+                            className="rounded-2xl px-3 py-2.5 md:px-4 md:py-3 text-slate-700 border border-slate-200"
                             style={{ backgroundColor: "#f8fafc", borderRadius: "18px 4px 18px 18px" }}
                           >
                             <div className="space-y-2">
@@ -782,7 +781,7 @@ function BananaChatInterfaceInner() {
                                   ))}
                                 </div>
                               )}
-                              <div className="whitespace-pre-wrap text-sm" style={{ lineHeight: 1.6 }}>{message.content}</div>
+                              <div className="whitespace-pre-wrap text-[13px] md:text-sm" style={{ lineHeight: 1.6 }}>{message.content}</div>
                             </div>
                           </div>
                         ) : (
@@ -790,7 +789,7 @@ function BananaChatInterfaceInner() {
                           <>
                             {isLoading && message.id === currentBotIdRef.current && !message.content ? (
                               <div className="flex items-center justify-center py-4">
-                                <GridWaveLoader maxWidth={160} dotSize={5} backgroundColor="#1a1a1a" />
+                                <GridWaveLoader maxWidth={220} dotSize={5} backgroundColor="#2F3136" />
                               </div>
                             ) : (
                               <BananaRenderer
@@ -837,7 +836,7 @@ function BananaChatInterfaceInner() {
         </div>
 
         {/* 输入框 */}
-        <div className="border-t border-slate-100 bg-white p-3 md:p-6 shrink-0">
+        <div className="fixed bottom-0 left-2 right-2 z-50 md:relative md:left-auto md:right-auto border-t border-slate-100 bg-white/95 backdrop-blur-md p-0 pb-safe md:p-6 shrink-0">
           <div className="mx-auto max-w-4xl">
             <ImageChatComposer
               modeOptions={[{ key: "image", label: "图像生成" }]}
@@ -922,11 +921,8 @@ function BananaChatInterfaceInner() {
                         key={session.id}
                         onClick={() => {
                           // 🔥 如果是其他模型的会话，跳转到对应页面
-                          if (session.ai_model && session.ai_model !== "banana-2-pro") {
-                            const modelRoute = session.ai_model === "gpt-image-2"
-                              ? "/chat/creative-image-gpt2"
-                              : `/chat/${session.ai_model}`
-                            router.push(`${modelRoute}?id=${session.id}`)
+                          if (normalizeChatSessionModel(session.ai_model) !== "banana-2-pro") {
+                            router.push(buildChatSessionRouteFromSession(session))
                             return
                           }
                           // 同模型会话，正常加载

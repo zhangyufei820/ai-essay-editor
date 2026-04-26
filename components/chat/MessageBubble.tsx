@@ -135,10 +135,10 @@ function UserAvatar({ avatar }: { avatar?: string }) {
 function AIAvatar() {
   return (
     <div
-      className="w-32 h-32 rounded-2xl flex items-center justify-center shrink-0"
+      className="w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center shrink-0"
       style={{ backgroundColor: CLAUDE_AVATAR_BG }}
     >
-      <Sparkles className="w-12 h-12 text-white" />
+      <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
     </div>
   )
 }
@@ -165,8 +165,8 @@ function CopyButton({ content, onCopy }: { content: string; onCopy?: () => void 
     <button
       onClick={handleCopy}
       className={cn(
-        "flex items-center gap-1 px-2 py-1 rounded text-xs transition-all duration-200",
-        "opacity-0 group-hover:opacity-100",
+        "flex items-center gap-1 px-2 py-1 rounded text-xs transition-all duration-200 min-h-9 touch-manipulation",
+        "opacity-100 md:opacity-0 md:group-hover:opacity-100",
         copied
           ? "text-emerald-600 bg-emerald-50"
           : "text-slate-400 hover:text-slate-600 hover:bg-slate-100"
@@ -234,14 +234,14 @@ function MarkdownContent({ content }: { content: string }) {
           const isConclusionPara = isConclusionParagraph(textContent)
 
           if (isConclusionPara) {
-            return (
-              <p
-                className="mb-1 last:mb-0 rounded-r"
-                style={{
-                  lineHeight: 1.6,
-                  color: CLAUDE_TEXT_COLOR,
-                  backgroundColor: "rgba(16, 185, 129, 0.08)",
-                  borderLeft: "3px solid #10B981",
+              return (
+                <p
+                  className="mb-1.5 last:mb-0 rounded-r text-[13px] sm:text-[14px]"
+                  style={{
+                    lineHeight: 1.6,
+                    color: CLAUDE_TEXT_COLOR,
+                    backgroundColor: "rgba(16, 185, 129, 0.08)",
+                    borderLeft: "3px solid #10B981",
                   borderRadius: "0 6px 6px 0",
                   padding: "6px 10px",
                 }}
@@ -252,23 +252,23 @@ function MarkdownContent({ content }: { content: string }) {
           }
 
           return (
-            <p className="mb-1 last:mb-0" style={{ lineHeight: 1.6, color: CLAUDE_TEXT_COLOR }}>
+            <p className="mb-1.5 last:mb-0 text-[13px] sm:text-[14px]" style={{ lineHeight: 1.6, color: CLAUDE_TEXT_COLOR }}>
               {children}
             </p>
           )
         },
         ul: ({ children }) => (
-          <ul className="list-disc pl-5 mb-1 space-y-0" style={{ lineHeight: 1.6 }}>
+          <ul className="list-disc pl-5 mb-1.5 space-y-0" style={{ lineHeight: 1.6 }}>
             {children}
           </ul>
         ),
         ol: ({ children }) => (
-          <ol className="list-decimal pl-5 mb-1 space-y-0" style={{ lineHeight: 1.6 }}>
+          <ol className="list-decimal pl-5 mb-1.5 space-y-0" style={{ lineHeight: 1.6 }}>
             {children}
           </ol>
         ),
         li: ({ children }) => (
-          <li style={{ lineHeight: 1.6, color: CLAUDE_TEXT_COLOR }}>
+          <li className="text-[13px] sm:text-[14px]" style={{ lineHeight: 1.6, color: CLAUDE_TEXT_COLOR }}>
             {children}
           </li>
         ),
@@ -277,7 +277,7 @@ function MarkdownContent({ content }: { content: string }) {
           if (isInline) {
             return (
               <code
-                className="px-1.5 py-0.5 rounded text-sm"
+                className="px-1.5 py-0.5 rounded text-[12px] sm:text-[13px]"
                 style={{
                   backgroundColor: slateColors[100],
                   color: CLAUDE_ACCENT_COLOR
@@ -288,7 +288,7 @@ function MarkdownContent({ content }: { content: string }) {
             )
           }
           return (
-            <code className={cn("block p-4 rounded-lg text-sm overflow-x-auto mb-3", className)}>
+            <code className={cn("block p-2.5 sm:p-4 rounded-lg text-[12px] sm:text-sm overflow-x-auto mb-2.5", className)}>
               {children}
             </code>
           )
@@ -320,7 +320,7 @@ function MarkdownContent({ content }: { content: string }) {
         ),
         h1: ({ children }) => (
           <h1
-            className="font-bold text-base mt-2 mb-1"
+            className="font-bold text-[14px] sm:text-base mt-2 mb-1"
             style={{ color: "#111827", lineHeight: 1.4 }}
           >
             {children}
@@ -328,7 +328,7 @@ function MarkdownContent({ content }: { content: string }) {
         ),
         h2: ({ children }) => (
           <h2
-            className="font-semibold text-sm mt-1.5 mb-0.5"
+            className="font-semibold text-[13px] sm:text-sm mt-1.5 mb-0.5"
             style={{ color: "#111827", lineHeight: 1.4 }}
           >
             {children}
@@ -336,7 +336,7 @@ function MarkdownContent({ content }: { content: string }) {
         ),
         h3: ({ children }) => (
           <h3
-            className="font-medium text-sm mt-1.5 mb-0.5"
+            className="font-medium text-[12px] sm:text-sm mt-1.5 mb-0.5"
             style={{ color: "#6B7280", lineHeight: 1.4 }}
           >
             {children}
@@ -344,7 +344,7 @@ function MarkdownContent({ content }: { content: string }) {
         ),
         h4: ({ children }) => (
           <h4
-            className="text-sm font-semibold pl-2 border-l-2 mt-1.5 mb-0.5"
+            className="text-[12px] sm:text-sm font-semibold pl-2 border-l-2 mt-1.5 mb-0.5"
             style={{ color: "#111827", borderColor: CLAUDE_ACCENT_COLOR, lineHeight: 1.4 }}
           >
             {children}
@@ -356,7 +356,7 @@ function MarkdownContent({ content }: { content: string }) {
             style={{
               borderColor: CLAUDE_ACCENT_COLOR,
               backgroundColor: slateColors[50],
-              lineHeight: 1.6
+              lineHeight: 1.55
             }}
           >
             {children}
@@ -386,9 +386,10 @@ const MessageBubble = memo(function MessageBubble({
 
   // User message style - transparent background, inherits page text color
   const userBubbleStyle = {
-    backgroundColor: "transparent",
-    color: "#374151",
-    borderRadius: "0",
+    backgroundColor: "#f7f7f5",
+    color: "#2f3136",
+    border: "1px solid #e6e3dc",
+    borderRadius: "18px 4px 18px 18px",
     maxWidth: "75%",
   }
 
@@ -406,7 +407,7 @@ const MessageBubble = memo(function MessageBubble({
       initial="hidden"
       animate="visible"
       className={cn(
-        "flex gap-3 group",
+        "flex gap-2.5 sm:gap-3 group",
         isUser ? "flex-row-reverse" : "flex-row",
         className
       )}
@@ -428,20 +429,20 @@ const MessageBubble = memo(function MessageBubble({
             {/* Flat bubble without heavy container styling */}
             <div
               className={cn(
-                isUser ? "px-1 py-1" : "px-0.5 py-1 sm:px-1 ai-message-bubble",
+                isUser ? "px-3 py-2.5 sm:px-4 sm:py-3 shadow-sm" : "px-0.5 py-0.5 sm:px-1 ai-message-bubble",
               )}
               style={isUser ? userBubbleStyle : assistantBubbleStyle}
             >
               {isUser ? (
                 <p
-                  className="whitespace-pre-wrap break-words text-sm"
+                  className="whitespace-pre-wrap break-words text-[13px] sm:text-sm"
                   style={{ lineHeight: 1.6 }}
                 >
                   {content}
                 </p>
               ) : (
                 <div
-                  className="text-sm ai-content-container"
+                  className="text-[13px] sm:text-sm ai-content-container"
                   style={{ lineHeight: 1.6, color: CLAUDE_TEXT_COLOR }}
                 >
                   <MarkdownContent content={content} />
@@ -452,8 +453,8 @@ const MessageBubble = memo(function MessageBubble({
             {/* Bottom action bar - Hidden by default, shows on hover */}
             <div
               className={cn(
-                "flex items-center gap-2 mt-1 px-1",
-                "opacity-0 group-hover:opacity-100 transition-opacity duration-200",
+                "flex flex-wrap items-center gap-2 mt-1 px-1",
+                "opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-200",
                 isUser ? "flex-row-reverse" : "flex-row"
               )}
             >

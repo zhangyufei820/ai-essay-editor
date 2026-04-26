@@ -18,6 +18,7 @@ import { Copy, Check } from 'lucide-react'
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import { motion, AnimatePresence } from 'framer-motion'
+import { proxifyGeneratedImagePreviewUrl } from '@/components/chat/image-generation/gpt-image-v11'
 
 // 静奢风配色
 const TEXT_COLOR = "#333333"
@@ -89,37 +90,37 @@ export function EnhancedMarkdown({ content, className }: EnhancedMarkdownProps) 
       className={cn("markdown-body", className)}
       style={{
         color: TEXT_COLOR,
-        lineHeight: 1.7,
-        fontSize: '15px',
+        lineHeight: 1.6,
+        fontSize: '13px',
       }}
     >
       <ReactMarkdown
         components={{
           // 标题样式
           h1: ({ children }) => (
-            <h1 className="text-xl font-bold mb-4 mt-6" style={{ color: TEXT_COLOR }}>
+            <h1 className="text-base sm:text-xl font-bold mb-2.5 sm:mb-4 mt-4 sm:mt-6" style={{ color: TEXT_COLOR, lineHeight: 1.35 }}>
               {children}
             </h1>
           ),
           h2: ({ children }) => (
-            <h2 className="text-lg font-semibold mb-3 mt-5" style={{ color: TEXT_COLOR }}>
+            <h2 className="text-sm sm:text-lg font-semibold mb-2 sm:mb-3 mt-3.5 sm:mt-5" style={{ color: TEXT_COLOR, lineHeight: 1.4 }}>
               {children}
             </h2>
           ),
           h3: ({ children }) => (
-            <h3 className="text-base font-semibold mb-2 mt-4" style={{ color: TEXT_COLOR }}>
+            <h3 className="text-[13px] sm:text-base font-semibold mb-1.5 mt-3 sm:mt-4" style={{ color: TEXT_COLOR, lineHeight: 1.4 }}>
               {children}
             </h3>
           ),
           h4: ({ children }) => (
-            <h4 className="text-sm font-semibold mb-2 mt-3" style={{ color: TEXT_COLOR }}>
+            <h4 className="text-[12px] sm:text-sm font-semibold mb-1.5 mt-2.5 sm:mt-3" style={{ color: TEXT_COLOR, lineHeight: 1.4 }}>
               {children}
             </h4>
           ),
 
           // 段落和文本
           p: ({ children }) => (
-            <p className="mb-3 leading-relaxed" style={{ lineHeight: 1.7 }}>
+            <p className="mb-2 sm:mb-2.5 leading-relaxed" style={{ lineHeight: 1.6 }}>
               {children}
             </p>
           ),
@@ -150,17 +151,17 @@ export function EnhancedMarkdown({ content, className }: EnhancedMarkdownProps) 
 
           // 列表
           ul: ({ children }) => (
-            <ul className="list-disc list-inside mb-3 space-y-1">
+            <ul className="list-disc list-inside mb-2 sm:mb-2.5 space-y-0.5 sm:space-y-1">
               {children}
             </ul>
           ),
           ol: ({ children }) => (
-            <ol className="list-decimal list-inside mb-3 space-y-1">
+            <ol className="list-decimal list-inside mb-2 sm:mb-2.5 space-y-0.5 sm:space-y-1">
               {children}
             </ol>
           ),
           li: ({ children }) => (
-            <li className="leading-relaxed" style={{ lineHeight: 1.7 }}>
+            <li className="leading-relaxed" style={{ lineHeight: 1.65 }}>
               {children}
             </li>
           ),
@@ -168,7 +169,7 @@ export function EnhancedMarkdown({ content, className }: EnhancedMarkdownProps) 
           // 引用
           blockquote: ({ children }) => (
             <blockquote
-              className="border-l-4 pl-4 my-3 italic"
+              className="border-l-4 pl-3 sm:pl-4 my-2 sm:my-3 italic"
               style={{
                 borderColor: BORDER_COLOR,
                 color: SECONDARY_COLOR,
@@ -182,9 +183,9 @@ export function EnhancedMarkdown({ content, className }: EnhancedMarkdownProps) 
           code: ({ className, children, ...props }) => {
             const isInline = !className
             if (isInline) {
-              return (
-                <code
-                  className="px-1.5 py-0.5 rounded text-sm font-mono"
+                return (
+                  <code
+                  className="px-1.5 py-0.5 rounded text-[12px] sm:text-sm font-mono"
                   style={{
                     backgroundColor: INLINE_CODE_BG,
                     color: "#d63384",
@@ -202,23 +203,23 @@ export function EnhancedMarkdown({ content, className }: EnhancedMarkdownProps) 
             const codeString = String(children).replace(/\n$/, '')
 
             return (
-              <div className="relative my-4 rounded-xl overflow-hidden shadow-lg">
+              <div className="relative my-2.5 sm:my-4 rounded-xl overflow-hidden shadow-lg">
                 {/* 语言标签 */}
                 {language && (
-                  <div className="absolute top-0 left-3 px-2 py-1 text-xs rounded-b-lg bg-white/10 text-gray-400">
+                  <div className="absolute top-0 left-3 px-2 py-1 text-[10px] sm:text-xs rounded-b-lg bg-white/10 text-gray-400">
                     {language}
                   </div>
                 )}
                 <CopyButton text={codeString} />
-                <SyntaxHighlighter
+                  <SyntaxHighlighter
                   style={oneDark}
                   language={language || 'text'}
                   PreTag="div"
                   customStyle={{
                     margin: 0,
-                    padding: '1.25rem',
+                    padding: '0.875rem',
                     backgroundColor: '#1e1e1e',
-                    fontSize: '0.875rem',
+                    fontSize: '0.78rem',
                     lineHeight: 1.6,
                     borderRadius: '0.75rem',
                   }}
@@ -233,7 +234,7 @@ export function EnhancedMarkdown({ content, className }: EnhancedMarkdownProps) 
 
           // 预格式化代码块
           pre: ({ children }) => (
-            <pre className="my-3">
+            <pre className="my-2 sm:my-3">
               {children}
             </pre>
           ),
@@ -246,16 +247,16 @@ export function EnhancedMarkdown({ content, className }: EnhancedMarkdownProps) 
           // 图片
           img: ({ src, alt }) => (
             <img
-              src={src}
+              src={src ? proxifyGeneratedImagePreviewUrl(String(src), 900) : src}
               alt={alt || '图片'}
-              className="rounded-xl max-w-full h-auto my-4 shadow-md"
+              className="rounded-xl max-w-full h-auto my-3 sm:my-4 shadow-md"
               loading="lazy"
             />
           ),
 
           // 表格
           table: ({ children }) => (
-            <div className="overflow-x-auto my-4">
+            <div className="overflow-x-auto my-3 sm:my-4">
               <table className="min-w-full divide-y divide-gray-200 border border-gray-200 rounded-lg">
                 {children}
               </table>

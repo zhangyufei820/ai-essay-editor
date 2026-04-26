@@ -41,7 +41,13 @@ const DIFY_BASE_URL = process.env.DIFY_INTERNAL_URL
   || "https://api.dify.ai"
 
 // 🔥 图片网关配置
-const IMAGE_GATEWAY_URL = process.env.DIFY_IMAGE_GATEWAY_URL || "http://43.154.111.156:8001"
+// 服务端优先使用 Docker 内网地址，返回给浏览器/Dify 的图片 URL 使用公网地址。
+const IMAGE_GATEWAY_URL = (process.env.DIFY_IMAGE_GATEWAY_URL || "http://dify-image-gateway:8001").replace(/\/+$/, "")
+const IMAGE_GATEWAY_PUBLIC_URL = (
+  process.env.DIFY_IMAGE_GATEWAY_PUBLIC_URL ||
+  process.env.NEXT_PUBLIC_DIFY_IMAGE_GATEWAY_URL ||
+  "http://43.154.111.156:8001"
+).replace(/\/+$/, "")
 
 // 🔥 作文批改（standard）使用专用的 ESSAY_CORRECTION_API_KEY
 const DEFAULT_DIFY_KEY = process.env.ESSAY_CORRECTION_API_KEY || process.env.DIFY_API_KEY
@@ -314,9 +320,9 @@ export async function POST(request: NextRequest) {
 
     const gatewayFilename = gatewayData.data?.filename || gatewayData.filename || safeFileName
     const gatewayUrl =
-      gatewayData.data?.url ||
-      gatewayData.url ||
-      (gatewayFilename ? `${IMAGE_GATEWAY_URL.replace(/\/+$/, "")}/images/uploads/${encodeURIComponent(path.basename(gatewayFilename))}` : undefined)
+      (gatewayFilename ? `${IMAGE_GATEWAY_PUBLIC_URL}/images/uploads/${encodeURIComponent(path.basename(gatewayFilename))}` : undefined) ||
+      gatewayData.data?.url?.replace(IMAGE_GATEWAY_URL, IMAGE_GATEWAY_PUBLIC_URL) ||
+      gatewayData.url?.replace(IMAGE_GATEWAY_URL, IMAGE_GATEWAY_PUBLIC_URL)
 
     if (!gatewayUrl) {
       console.error("[Backend] Gateway upload missing public URL:", {

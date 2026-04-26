@@ -1,5 +1,9 @@
 import type { Metadata } from 'next'
 
+// Pricing page should always render fresh to avoid stale RSC/action references
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 export const metadata: Metadata = {
   title: '价格方案 | 沈翔智学',
   description: '基础版28元/月起，解锁无限AI模型调用。提供多种会员套餐，适合不同学习需求。',

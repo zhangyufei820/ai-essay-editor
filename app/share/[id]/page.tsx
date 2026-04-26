@@ -151,9 +151,9 @@ function MessageItem({ role, content }: { role: 'user' | 'assistant', content: s
       <div className={cn(
         "relative rounded-2xl px-4 py-3",
         role === "user" 
-          ? "text-white max-w-[75%]" 
+          ? "max-w-[75%] border border-[#e6e3dc] bg-[#f7f7f5] text-[#2f3136]" 
           : "bg-slate-50 w-full max-w-full"
-      )} style={role === "user" ? { backgroundColor: BRAND_GREEN } : {}}>
+      )}>
         {role === "user" ? (
           <div className="whitespace-pre-wrap text-[15px] leading-relaxed">{content}</div>
         ) : (
@@ -297,7 +297,7 @@ export default function SharePage() {
           .header h1 { color: #14532d; font-size: 24px; margin-bottom: 8px; }
           .header p { color: #666; font-size: 12px; }
           .content { font-size: 14px; }
-          .user-message { background: #14532d; color: white; padding: 12px 16px; border-radius: 12px; margin: 16px 0; max-width: 80%; margin-left: auto; }
+          .user-message { background: #f7f7f5; color: #2f3136; border: 1px solid #e6e3dc; padding: 12px 16px; border-radius: 12px; margin: 16px 0; max-width: 80%; margin-left: auto; }
           .ai-message { background: #f5f5f5; padding: 16px; border-radius: 12px; margin: 16px 0; }
           .content h1 { font-size: 20px; color: #14532d; margin: 24px 0 12px; }
           .content h2 { font-size: 18px; color: #14532d; margin: 20px 0 10px; border-left: 3px solid #14532d; padding-left: 10px; }

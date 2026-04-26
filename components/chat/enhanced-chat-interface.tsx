@@ -15,6 +15,7 @@ import {
   Download, Share2, Printer, Mic, MicOff, Volume2, History
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { buildChatSessionRouteFromSession, isDedicatedChatSessionModel, resolveChatSessionRouteModel } from "@/lib/chat-session-routes"
 import { toast } from "sonner"
 import { MessageBubble } from "./MessageBubble"
 import { ChatInput } from "./ChatInput"
@@ -109,19 +110,19 @@ const MobileUserInfo = ({
 }) => (
   <button 
     onClick={onMenuClick}
-    className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-50 transition-colors"
+    className="inline-flex h-10 min-w-[40px] items-center justify-center rounded-full border border-slate-200/80 bg-white/90 px-2 shadow-sm backdrop-blur-sm transition-colors hover:bg-slate-50"
   >
     <div 
-      className="flex h-7 w-7 items-center justify-center rounded-lg text-white text-xs font-bold"
+      className="flex h-7 w-7 items-center justify-center rounded-full text-white text-[11px] font-semibold shrink-0"
       style={{ backgroundColor: BRAND_GREEN }}
     >
       {userName?.[0]?.toUpperCase() || "U"}
     </div>
-    <div className="flex flex-col items-start">
-      <span className="text-xs font-medium text-slate-700 max-w-[80px] truncate">
+    <div className="hidden sm:flex flex-col items-start min-w-0 pl-1">
+      <span className="text-xs font-medium text-slate-700 max-w-[72px] truncate leading-none">
         {userName || "用户"}
       </span>
-      <span className="text-[10px] text-emerald-600 font-medium">
+      <span className="text-[10px] text-emerald-600 font-medium leading-none">
         {credits.toLocaleString()} 积分
       </span>
     </div>
@@ -679,6 +680,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   // 🔥 新增：用户显示名称（手机号/邮箱）
   const [userDisplayName, setUserDisplayName] = useState<string>("")
   const sessionIdRef = useRef<string | null>(null)
+  const sessionModelRef = useRef<ModelType | null>(null)
   const [currentSessionId, setCurrentSessionId] = useState<string>("")
 
   // 🔥 修复：跟踪主动会话切换（侧边栏点击 vs URL 导航）
@@ -691,6 +693,25 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   const setSelectedModel = useSelectedModelStore((s) => s.setSelectedModel)
   const isManualSessionSwitchRef = useRef(false) // 仅用于 useEffect 闭包比较
   const [genMode, setGenMode] = useState<GenMode>("text")
+
+  const clearConversationState = () => {
+    sessionIdRef.current = null
+    sessionModelRef.current = null
+    setCurrentSessionId("")
+  }
+
+  const adoptConversationState = (conversationId: string | null, model: ModelType) => {
+    if (!conversationId) return
+    sessionIdRef.current = conversationId
+    sessionModelRef.current = model
+  }
+
+  const getConversationIdForRequest = (model: ModelType) => {
+    const conversationId = sessionIdRef.current
+    if (!conversationId) return null
+    if (sessionModelRef.current && sessionModelRef.current !== model) return null
+    return `${model}:${conversationId}`
+  }
   
   // 🎵 Suno V5 音乐生成模式（必选项）
   type SunoMode = "inspiration" | "custom" | "extend"
@@ -742,7 +763,9 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
           title: s.title || "新对话",
           date: new Date(s.created_at).getTime(), // 使用 created_at，因为表只有这个时间列
           preview: s.preview || "",
-          ai_model: s.ai_model || "standard"
+          ai_model: s.ai_model || "standard",
+          ai_provider: s.ai_provider || "",
+          processing_mode: s.processing_mode || "",
         }))
         console.log("📋 [历史会话] 映射后数据:", mapped.length, "条")
         setChatSessions(mapped)
@@ -907,8 +930,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 
       if (!urlSessionId) {
         setMessages([])
-        sessionIdRef.current = null
-        setCurrentSessionId("")
+        clearConversationState()
       }
     }
   }, [urlAgent, urlSessionId])
@@ -982,7 +1004,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         }))
         setMessages(historyMessages)
         setCurrentSessionId(sid)
-        sessionIdRef.current = sid
+        adoptConversationState(sid, (sessionData?.ai_model || initialModel || "standard") as ModelType)
       }
     } catch (e) {
       console.error("加载历史会话失败:", e)
@@ -1273,10 +1295,9 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 
   const handleModelChange = (model: ModelType) => {
     if (model !== selectedModel) {
-      sessionIdRef.current = null
-      setCurrentSessionId("")
+      clearConversationState()
       setMessages([])
-      console.log(`🔄 [模型切换] ${selectedModel} → ${model}，已清除会话`)
+      console.log(`🔄 [模型切换] ${selectedModel} → ${model}，已清除会话命名空间`)
     }
     
     if (model !== "standard") {
@@ -1566,15 +1587,15 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     if (!sid && !urlSessionId) {
         sid = Date.now().toString();
         setCurrentSessionId(sid);
-        sessionIdRef.current = sid;
+        adoptConversationState(sid, selectedModel);
     } else if (urlSessionId && !isModelSwitch) {
         sid = urlSessionId;
-        sessionIdRef.current = urlSessionId;
+        adoptConversationState(urlSessionId, selectedModel);
     } else {
         // 模型切换或无 session 的情况，生成新的
         sid = Date.now().toString();
         setCurrentSessionId(sid);
-        sessionIdRef.current = sid;
+        adoptConversationState(sid, selectedModel);
     }
 
     // 🔥 根据模型类型设置不同的默认提示词
@@ -1718,7 +1739,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
               fileIds, 
               userId, 
               // 🔥 Suno V5 使用 useSunoMusic 的 conversationId 保持会话连续性
-              conversation_id: selectedModel === "suno-v5" && sunoConversationId ? sunoConversationId : sessionIdRef.current, 
+              conversation_id: selectedModel === "suno-v5" && sunoConversationId ? sunoConversationId : getConversationIdForRequest(selectedModel), 
               model: selectedModel,
               mode: genMode,
               // 🔥 传递前端计算的成本，用于后端记录交易
@@ -1790,7 +1811,10 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                     }
                     
                     if (json.conversation_id && sessionIdRef.current !== json.conversation_id) {
-                        sessionIdRef.current = json.conversation_id
+                        const normalizedConversationId = json.conversation_id.startsWith(`${selectedModel}:`)
+                          ? json.conversation_id.slice((selectedModel + ":").length)
+                          : json.conversation_id
+                        adoptConversationState(normalizedConversationId, selectedModel)
                     }
 
                     // 🔥 处理 Chat API 的 answer 字段
@@ -2232,17 +2256,23 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                     </div>
                   ) : (
                     chatSessions.map(session => {
-                      const safeModel = session.ai_model || "standard"
+                      const safeModel = resolveChatSessionRouteModel(session)
                       return (
                         <button
                           key={session.id}
                           onClick={() => {
+                            const nextRoute = buildChatSessionRouteFromSession(session)
+                            if (isDedicatedChatSessionModel(safeModel)) {
+                              router.push(nextRoute)
+                              setShowHistorySidebar(false)
+                              return
+                            }
                             // 1. 标记为手动切换（store）
                             useSelectedModelStore.getState().markManualSessionSwitch()
                             // 2. 乐观更新：立即切换模型 Badge（store → 全局广播）
                             setSelectedModel(safeModel as ModelType)
                             // 3. 同步更新 URL（单向数据流起点）
-                            router.push(`/chat?sessionId=${session.id}&agent=${safeModel}`)
+                            router.push(nextRoute)
                             // 4. 关闭侧边栏
                             setShowHistorySidebar(false)
                             // loadHistorySession 由 URL 变化触发的 useEffect 统一调用
@@ -2295,7 +2325,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         
         {/* 🎯 升级引导横幅 - 非豪华会员常驻显示，用户手动关闭 */}
         <AnimatePresence>
-          {showUpgradeBanner && !isLuxury && (
+          {showUpgradeBanner && !isLuxury && !isMobile && (
             <motion.div
               initial={{ opacity: 0, y: -20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -2332,31 +2362,30 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
           )}
         </AnimatePresence>
 
-        {/* 🔥 顶部导航栏 - 移动端优化：增加高度和触摸区域 */}
-        <div className="flex items-center h-16 md:h-14 px-3 md:px-4 border-b border-slate-100 bg-white shrink-0 pt-safe">
+        {/* 🔥 顶部导航栏 - 移动端极简收紧 */}
+        <div className="flex items-center h-11 md:h-14 px-2 md:px-4 border-b border-slate-100/70 bg-white/90 backdrop-blur-sm shrink-0 pt-safe">
           <button
             onClick={() => {
               console.log("📋 [历史按钮] 点击! showHistorySidebar当前值:", showHistorySidebar)
               setShowHistorySidebar(!showHistorySidebar)
             }}
-            className="flex items-center gap-1 text-slate-600 hover:text-slate-800 transition-colors min-w-[44px] min-h-[44px] justify-center"
+            className="inline-flex items-center justify-center min-w-[40px] min-h-[40px] rounded-full text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-800"
           >
-            <History className="h-5 w-5" />
+            <History className="h-4 w-4" />
           </button>
           <button
             onClick={handleBack}
-            className="flex items-center gap-1 text-slate-600 hover:text-slate-800 transition-colors min-w-[44px] min-h-[44px] justify-center"
+            className="inline-flex items-center justify-center min-w-[40px] min-h-[40px] rounded-full text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-800"
           >
-            <ChevronLeft className="h-5 w-5" />
-            <span className="text-sm font-medium hidden sm:inline">返回</span>
+            <ChevronLeft className="h-4 w-4" />
           </button>
-          <div className="flex-1 text-center md:text-left md:ml-4">
+          <div className="flex-1 min-w-0 px-1 text-center md:text-left md:ml-2">
             <motion.span
               key={selectedModel}
               initial={{ opacity: 0, y: -4 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
-              className="text-sm md:text-base font-medium text-slate-700 inline-block"
+              className="inline-block max-w-[112px] truncate text-[12px] font-medium tracking-[-0.01em] text-slate-700 sm:max-w-none sm:text-sm md:text-base"
             >
               {modelConfig[selectedModel].name}
             </motion.span>
@@ -2372,7 +2401,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
             ) : (
               <button
                 onClick={() => router.push("/login")}
-                className="px-3 py-2 text-xs font-medium text-white rounded-lg min-h-[36px]"
+                className="inline-flex h-10 min-w-[40px] items-center justify-center rounded-full px-3 text-xs font-medium text-white"
                 style={{ backgroundColor: BRAND_GREEN }}
               >
                 登录
@@ -2385,20 +2414,12 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 
         {/* 🔥 滚动区域优化 */}
         <div className="flex-1 h-0 relative overflow-hidden">
-          {/* 🔥 移动端浮动历史按钮 - 位于右上角 */}
-          <button
-            onClick={() => setShowHistorySidebar(!showHistorySidebar)}
-            className="absolute top-3 right-3 z-40 flex items-center gap-1.5 px-3 py-2 bg-white/95 backdrop-blur-lg rounded-full shadow-lg border border-slate-100 md:hidden"
-          >
-            <History className="h-4 w-4 text-slate-600" />
-            <span className="text-xs font-medium text-slate-600">历史</span>
-          </button>
           <div
             ref={scrollAreaRef}
             onScroll={handleScroll}
-            className="h-full overflow-y-auto custom-scrollbar pb-0 md:pb-24"
+            className="h-full overflow-y-auto custom-scrollbar pb-28 md:pb-24"
           >
-            <div className="mx-auto max-w-6xl px-3 sm:px-4 md:px-6 lg:px-10 py-4 sm:py-6 md:py-8">
+              <div className="mx-auto max-w-6xl px-2.5 sm:px-4 md:px-6 lg:px-10 py-2.5 sm:py-6 md:py-8">
               {messages.length === 0 ? (
                 // 🔥 骨架屏：会话切换时显示对话块轮廓
                 isLoading && !currentBotIdRef.current ? (
@@ -2432,14 +2453,14 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                         if (!sid && !urlSessionId) {
                           sid = Date.now().toString()
                           setCurrentSessionId(sid)
-                          sessionIdRef.current = sid
+                          adoptConversationState(sid, selectedModel)
                         } else if (urlSessionId && !isModelSwitch) {
                           sid = urlSessionId
-                          sessionIdRef.current = urlSessionId
+                          adoptConversationState(urlSessionId, selectedModel)
                         } else {
                           sid = Date.now().toString()
                           setCurrentSessionId(sid)
-                          sessionIdRef.current = sid
+                          adoptConversationState(sid, selectedModel)
                         }
 
                         // 🔥 用户消息：显示歌词和音乐提示词（如果有）
@@ -2524,18 +2545,18 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                 </div>
                 )
                 ) : (
-                <div className="space-y-5 sm:space-y-6 pt-2 sm:pt-4 pb-24">
-                  {messages.map((message) => (
-                    <div key={message.id} className={cn("flex gap-2 sm:gap-3 group", message.role === "user" ? "justify-end" : "justify-start")}>
+                <div className="space-y-3 sm:space-y-5 pt-1 sm:pt-3 pb-28 md:pb-24">
+                    {messages.map((message) => (
+                      <div key={message.id} className={cn("flex gap-1 sm:gap-2 group/message", message.role === "user" ? "justify-end" : "justify-start")}>
                       {message.role === "assistant" && (
                         // Smaller AI avatar - 使用 ModelLogo
-                        <div className="flex w-8 h-8 sm:w-10 sm:h-10 shrink-0 items-center justify-center mt-0.5">
+                        <div className="flex w-7 h-7 sm:w-10 sm:h-10 shrink-0 items-center justify-center mt-0.5">
                           <ModelLogo modelKey={selectedModel as any} size="md" />
                         </div>
                       )}
                       {/* Flat content container - No heavy backgrounds or borders */}
                       <div className={cn(
-                        "flex flex-col max-w-[85%] sm:max-w-[80%]",
+                        "flex flex-col max-w-[94%] sm:max-w-[82%]",
                         message.role === "user" ? "items-end" : "items-start"
                       )}>
                         {/* User message - 复制和编辑功能 */}
@@ -2621,13 +2642,13 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                             {message.content && (
                               <div
                                 className={cn(
-                                  "flex items-center gap-1 mt-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                                    "flex flex-wrap items-center gap-0.5 mt-1.5 opacity-0 transition-opacity duration-150 group-hover/message:opacity-100 group-focus-within/message:opacity-100 group-active/message:opacity-100 md:mt-2 md:gap-1"
                                 )}
                               >
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  className="h-7 sm:h-8 gap-1 text-[10px] sm:text-xs text-slate-400 hover:text-slate-600 hover:bg-slate-100 px-2"
+                                    className="h-8 w-8 rounded-full p-0 text-slate-400 hover:text-slate-600 hover:bg-slate-100 touch-manipulation sm:h-8 sm:w-auto sm:px-2 sm:gap-1 sm:rounded-md sm:text-xs"
                                   onClick={() => navigator.clipboard.writeText(message.content).then(() => toast.success("已复制"))}
                                 >
                                   <Copy className="h-3 w-3" />
@@ -2636,7 +2657,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  className="h-7 sm:h-8 gap-1 text-[10px] sm:text-xs text-slate-400 hover:text-slate-600 hover:bg-slate-100 px-2"
+                                    className="h-8 w-8 rounded-full p-0 text-slate-400 hover:text-slate-600 hover:bg-slate-100 touch-manipulation sm:h-8 sm:w-auto sm:px-2 sm:gap-1 sm:rounded-md sm:text-xs"
                                   onClick={() => window.print()}
                                 >
                                   <Printer className="h-3 w-3" />
@@ -2645,7 +2666,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  className="h-7 sm:h-8 gap-1 text-[10px] sm:text-xs text-slate-400 hover:text-slate-600 hover:bg-slate-100 px-2"
+                                    className="h-8 w-8 rounded-full p-0 text-slate-400 hover:text-slate-600 hover:bg-slate-100 touch-manipulation sm:h-8 sm:w-auto sm:px-2 sm:gap-1 sm:rounded-md sm:text-xs"
                                   onClick={() => handleExportPDF(message.content)}
                                 >
                                   <Download className="h-3 w-3" />
@@ -2654,7 +2675,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  className="h-7 sm:h-8 gap-1 text-[10px] sm:text-xs text-slate-400 hover:text-slate-600 hover:bg-slate-100 px-2"
+                                    className="h-8 w-8 rounded-full p-0 text-slate-400 hover:text-slate-600 hover:bg-slate-100 touch-manipulation sm:h-8 sm:w-auto sm:px-2 sm:gap-1 sm:rounded-md sm:text-xs"
                                   onClick={() => handleShare()}
                                 >
                                   <Share2 className="h-3 w-3" />
@@ -2664,7 +2685,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                                   variant="ghost"
                                   size="sm"
                                   className={cn(
-                                    "h-7 sm:h-8 gap-1 text-[10px] sm:text-xs px-2",
+                                      "h-8 w-8 rounded-full p-0 touch-manipulation sm:h-8 sm:w-auto sm:px-2 sm:gap-1 sm:rounded-md sm:text-xs",
                                     isPlaying ? "text-emerald-600 bg-emerald-50 hover:bg-emerald-100" : "text-slate-400 hover:text-slate-600 hover:bg-slate-100"
                                   )}
                                   onClick={() => playAssistantMessage(message.content)}
@@ -2678,7 +2699,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                         )}
                       </div>
                       {message.role === "user" && (
-                        <div className="flex w-6 h-6 sm:w-7 sm:h-7 shrink-0 items-center justify-center rounded-full bg-slate-200 mt-0.5 overflow-hidden">
+                        <div className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-200 mt-0.5 sm:h-7 sm:w-7">
                           {userAvatar ? (
                             <img src={userAvatar} alt="Me" className="h-full w-full object-cover" />
                           ) : (
@@ -2761,7 +2782,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 
             {/* 🔥 输入框 - 使用 ChatInput 组件 - 移动端固定在底部 */}
             {(selectedModel !== "suno-v5" || messages.length > 0) && (
-            <div className="fixed bottom-0 left-0 right-0 z-50 md:relative mx-auto max-w-3xl w-full px-2 sm:px-0 pb-safe md:pb-0">
+            <div className="fixed bottom-0 left-2 right-2 sm:left-0 sm:right-0 z-50 md:relative mx-auto max-w-3xl w-auto sm:w-full px-0 pb-safe md:pb-0">
               <ChatInput
                 showModelSelector={true}
                 selectedModel={selectedModel}
@@ -2777,6 +2798,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                 isLoading={isLoading}
                 disabled={isLoading}
                 placeholder={userId ? "输入内容开始对话..." : "请先登录..."}
+                  className="shadow-[0_-4px_18px_rgba(0,0,0,0.06)] sm:shadow-[0_8px_24px_rgba(0,0,0,0.10)] border-slate-200/70 bg-white/95 backdrop-blur-md overflow-hidden"
                 onFileUpload={(files) => {
                   const target = { target: { files } } as unknown as React.ChangeEvent<HTMLInputElement>
                   handleFileUpload(target)

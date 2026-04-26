@@ -26,9 +26,9 @@ interface UserMessageBubbleProps {
 }
 
 // 静奢风配色
-const BUBBLE_BG = "#f8fafc"
-const BORDER_COLOR = "#e5e5e5"
-const TEXT_COLOR = "#333333"
+const BUBBLE_BG = "#f7f7f5"
+const BORDER_COLOR = "#e6e3dc"
+const TEXT_COLOR = "#2f3136"
 
 export function UserMessageBubble({ content, files, onEdit, onSend }: UserMessageBubbleProps) {
   const [copied, setCopied] = useState(false)
@@ -88,10 +88,10 @@ export function UserMessageBubble({ content, files, onEdit, onSend }: UserMessag
   }
 
   return (
-    <div className="w-full">
+    <div className="group w-full">
       <div
         className={cn(
-          "rounded-2xl px-4 py-3 transition-all duration-200",
+          "rounded-2xl px-3 py-2.5 sm:px-4 sm:py-3 transition-all duration-200",
           isEditing
             ? "ring-2 ring-blue-500/50"
             : "shadow-sm"
@@ -104,18 +104,18 @@ export function UserMessageBubble({ content, files, onEdit, onSend }: UserMessag
       >
         {/* 文件预览 */}
         {files && files.length > 0 && (
-          <div className="mb-3 flex flex-wrap gap-2">
+          <div className="mb-2 sm:mb-2.5 flex flex-wrap gap-1.5 sm:gap-2">
             {files.map((file, idx) => (
               <div
                 key={idx}
-                className="relative overflow-hidden rounded-xl border border-gray-200 bg-white/70"
+            className="relative overflow-hidden rounded-xl border border-[#e6e3dc] bg-white/70"
               >
                 {file.preview ? (
                   <div className="h-20 w-20">
                     <img src={file.preview} alt={file.name} className="h-full w-full object-cover" />
                   </div>
                 ) : (
-                  <div className="flex min-w-[132px] items-center gap-2 px-3 py-2 text-xs text-gray-600">
+                  <div className="flex min-w-[132px] items-center gap-2 px-3 py-2 text-[11px] sm:text-xs text-gray-600">
                     <FileText className="h-4 w-4 text-gray-400" />
                     <span className="max-w-[84px] truncate">{file.name}</span>
                   </div>
@@ -133,7 +133,7 @@ export function UserMessageBubble({ content, files, onEdit, onSend }: UserMessag
               value={editContent}
               onChange={(e) => setEditContent(e.target.value)}
               onKeyDown={handleKeyDown}
-              className="w-full min-h-[60px] max-h-[200px] p-2 text-sm resize-none rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+              className="w-full min-h-[60px] max-h-[200px] p-2 text-[13px] sm:text-sm resize-none rounded-lg border border-[#e6e3dc] bg-white/80 focus:outline-none focus:ring-2 focus:ring-[#14532d]/20"
               style={{ color: TEXT_COLOR }}
               placeholder="编辑消息..."
             />
@@ -146,7 +146,8 @@ export function UserMessageBubble({ content, files, onEdit, onSend }: UserMessag
               </button>
               <button
                 onClick={handleSubmitEdit}
-                className="px-3 py-1.5 text-xs text-white bg-blue-500 hover:bg-blue-600 rounded-lg transition-colors"
+                className="px-3 py-1.5 text-xs text-white rounded-lg transition-colors"
+                style={{ backgroundColor: "#14532d" }}
               >
                 发送
               </button>
@@ -154,7 +155,7 @@ export function UserMessageBubble({ content, files, onEdit, onSend }: UserMessag
           </div>
         ) : (
           <div
-            className="whitespace-pre-wrap text-sm"
+            className="whitespace-pre-wrap text-[13px] sm:text-sm"
             style={{ lineHeight: 1.6, color: TEXT_COLOR }}
           >
             {content}
@@ -163,25 +164,24 @@ export function UserMessageBubble({ content, files, onEdit, onSend }: UserMessag
       </div>
 
       {!isEditing && (
-        <div className="mt-2 flex items-center justify-end gap-2">
+        <div className="mt-1 flex items-center justify-end gap-1 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100 group-active:opacity-100 sm:mt-2 sm:gap-1.5">
           <button
             onClick={handleCopy}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white/88 text-slate-500 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:text-slate-700"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-400 transition-colors duration-150 hover:bg-slate-100 hover:text-slate-700 focus-visible:bg-slate-100 focus-visible:text-slate-700 focus-visible:outline-none touch-manipulation sm:h-9 sm:w-9"
             title="复制消息"
           >
             {copied ? (
-              <Check className="h-4 w-4 text-emerald-600" />
+              <Check className="h-3.5 w-3.5 text-emerald-600 sm:h-4 sm:w-4" />
             ) : (
-              <Copy className="h-4 w-4" />
+              <Copy className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
             )}
           </button>
           <button
             onClick={handleEdit}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white/88 px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-400 transition-colors duration-150 hover:bg-slate-100 hover:text-slate-700 focus-visible:bg-slate-100 focus-visible:text-slate-700 focus-visible:outline-none touch-manipulation sm:h-9 sm:w-9"
             title="编辑消息"
           >
-            <Pencil className="h-4 w-4" />
-            编辑消息
+            <Pencil className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
           </button>
         </div>
       )}

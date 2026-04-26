@@ -45,9 +45,16 @@ const EnhancedChatInterface = dynamic(
   }
 )
 
-// 🍌 动态导入 Banana 2 Pro 专用界面
-const BananaChatInterface = dynamic(
-  () => import("@/components/chat/banana-chat-interface").then(mod => ({ default: mod.BananaChatInterface })),
+// 🍌 Banana 2 Pro 使用与 GPT Image 2 一致的图像工作台界面
+const BananaImageWorkspace = dynamic(
+  () => import("@/components/chat/gpt-image2-chat-interface").then(mod => {
+    const ImageWorkspace = mod.GptImage2ChatInterface
+    return {
+      default: function BananaWorkspace() {
+        return <ImageWorkspace workspaceModel="banana-2-pro" />
+      },
+    }
+  }),
   {
     ssr: false,
     loading: () => (
@@ -73,11 +80,11 @@ export default function ModelChatPage() {
 
   // 🔥 根据模型选择不同的界面组件
   if (model === 'banana-2-pro') {
-    console.log('✅ [ModelChatPage] 使用 BananaChatInterface')
+    console.log('✅ [ModelChatPage] 使用 Banana 图像工作台')
     return (
       <main className="flex min-h-screen flex-col">
         <div className="flex-1">
-          <BananaChatInterface />
+          <BananaImageWorkspace />
         </div>
       </main>
     )

@@ -8,12 +8,14 @@ import { Badge } from "@/components/ui/badge"
 import { LoadingStateCard } from "@/components/ui/LoadingStateCard"
 import { MessageSquare, FileText, Clock } from "lucide-react"
 import Link from "next/link"
+import { buildChatSessionRouteFromSession } from "@/lib/chat-session-routes"
 
 type ChatSession = {
   id: string
   title: string
   processing_mode: string
   ai_provider: string
+  ai_model?: string
   created_at: string
 }
 
@@ -153,7 +155,7 @@ export default function HistoryPage() {
                       {new Date(session.created_at).toLocaleString("zh-CN")}
                     </div>
                     <Button variant="outline" size="sm" asChild>
-                      <Link href={`/chat?session=${session.id}`}>继续对话</Link>
+                      <Link href={buildChatSessionRouteFromSession(session)}>继续对话</Link>
                     </Button>
                   </Card>
                 ))

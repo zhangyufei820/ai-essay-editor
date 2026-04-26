@@ -298,15 +298,43 @@ export function extractImageUrlsFromDifyResult(payload: unknown): string[] {
   return Array.from(urls)
 }
 
-export function proxifyGeneratedImageUrl(url: string): string {
+type ImageProxyOptions = {
+  raw?: boolean
+  width?: number
+}
+
+export function buildImageProxyUrl(url: string, options: ImageProxyOptions = {}): string {
   try {
+    if (url.startsWith("/api/image-proxy?")) {
+      const params = new URLSearchParams(url.split("?")[1] || "")
+      if (options.raw) params.set("raw", "1")
+      else params.delete("raw")
+      if (options.width) params.set("w", String(options.width))
+      return `/api/image-proxy?${params.toString()}`
+    }
+
     const parsed = new URL(url)
     if (parsed.protocol === "http:" && parsed.hostname === "43.154.111.156" && parsed.port === "8001" && parsed.pathname.startsWith("/images/")) {
-      return `/api/image-proxy?url=${encodeURIComponent(url)}`
+      const params = new URLSearchParams({ url })
+      if (options.raw) params.set("raw", "1")
+      if (options.width) params.set("w", String(options.width))
+      return `/api/image-proxy?${params.toString()}`
     }
   } catch {
     return url
   }
 
   return url
+}
+
+export function proxifyGeneratedImageUrl(url: string): string {
+  return buildImageProxyUrl(url)
+}
+
+export function proxifyGeneratedImagePreviewUrl(url: string, width = 1600): string {
+  return buildImageProxyUrl(url, { width })
+}
+
+export function proxifyGeneratedImageDownloadUrl(url: string): string {
+  return buildImageProxyUrl(url, { raw: true })
 }

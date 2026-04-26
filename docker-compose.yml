@@ -23,6 +23,8 @@ services:
       - NODE_ENV=production
       - NEXT_PUBLIC_API_BASE_URL=
       - DIFY_INTERNAL_URL=http://docker-api-1:5001/v1
+      - DIFY_IMAGE_GATEWAY_URL=http://dify-image-gateway:8001
+      - DIFY_IMAGE_GATEWAY_PUBLIC_URL=http://43.154.111.156:8001
     volumes: []
     tmpfs:
       - /app/.next/standalone/.next/cache

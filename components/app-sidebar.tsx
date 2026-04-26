@@ -87,6 +87,7 @@ function AppSidebarInner() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const currentAgent = searchParams.get("agent")
+  const isChatRoute = pathname?.startsWith("/chat")
   
   // --- 状态管理 ---
   const [user, setUser] = useState<any>(null)
@@ -470,7 +471,7 @@ function AppSidebarInner() {
   return (
     <>
       {/* 🍎 移动端：顶部汉堡菜单按钮 */}
-      {isMobile && !isOpen && (
+      {isMobile && !isOpen && !isChatRoute && (
         <button
           onClick={() => setIsOpen(true)}
           className="fixed left-4 top-4 z-50 flex h-10 w-10 items-center justify-center rounded-xl bg-white shadow-md text-[#757575] hover:bg-[#F5F5F5] transition-all"

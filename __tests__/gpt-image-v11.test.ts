@@ -2,8 +2,11 @@ import {
   DEFAULT_IMAGE_INPUTS,
   EDIT_MODE_DEFAULTS,
   buildDifyInputs,
+  buildImageProxyUrl,
   extractImageUrlsFromDifyResult,
   getAspectRatioForSize,
+  proxifyGeneratedImageDownloadUrl,
+  proxifyGeneratedImagePreviewUrl,
   proxifyGeneratedImageUrl,
   resolveSizeForAspectRatio,
 } from "@/components/chat/image-generation/gpt-image-v11"
@@ -66,5 +69,18 @@ describe("GPT Image V11 parameter mapping", () => {
       "/api/image-proxy?url=http%3A%2F%2F43.154.111.156%3A8001%2Fimages%2Fresult.png"
     )
     expect(proxifyGeneratedImageUrl("https://example.com/result.png")).toBe("https://example.com/result.png")
+  })
+
+  it("builds optimized preview and raw download image proxy URLs", () => {
+    const source = "http://43.154.111.156:8001/images/result.png"
+    expect(proxifyGeneratedImagePreviewUrl(source, 1200)).toBe(
+      "/api/image-proxy?url=http%3A%2F%2F43.154.111.156%3A8001%2Fimages%2Fresult.png&w=1200"
+    )
+    expect(proxifyGeneratedImageDownloadUrl(source)).toBe(
+      "/api/image-proxy?url=http%3A%2F%2F43.154.111.156%3A8001%2Fimages%2Fresult.png&raw=1"
+    )
+    expect(buildImageProxyUrl("/api/image-proxy?url=http%3A%2F%2F43.154.111.156%3A8001%2Fimages%2Fresult.png", { width: 900 })).toBe(
+      "/api/image-proxy?url=http%3A%2F%2F43.154.111.156%3A8001%2Fimages%2Fresult.png&w=900"
+    )
   })
 })

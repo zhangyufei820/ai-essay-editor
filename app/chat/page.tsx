@@ -4,6 +4,7 @@ import { Suspense, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import { LoadingStateCard } from '@/components/ui/LoadingStateCard'
+import { buildChatSessionRoute, normalizeChatSessionModel } from '@/lib/chat-session-routes'
 
 // 动态导入 EnhancedChatInterface，禁用 SSR
 const EnhancedChatInterface = dynamic(
@@ -25,13 +26,15 @@ function ChatPageContent() {
 
   useEffect(() => {
     // 🔍 检查 URL 参数中的模型
-    const model = searchParams.get('model')
+    const model = searchParams.get('model') || searchParams.get('agent')
+    const sessionId = searchParams.get('sessionId') || searchParams.get('id') || searchParams.get('session')
+    const normalizedModel = normalizeChatSessionModel(model)
     console.log('🔍 [ChatPage] URL 参数 model:', model)
 
     // 🚀 如果是 banana-2-pro，自动跳转到专用页面
-    if (model === 'banana-2-pro') {
-      console.log('✅ [ChatPage] 检测到 banana-2-pro，跳转到专用页面')
-      router.push('/chat/banana-2-pro')
+    if (normalizedModel === 'banana-2-pro' || normalizedModel === 'gpt-image-2') {
+      console.log('✅ [ChatPage] 检测到专用模型，跳转到专用页面')
+      router.replace(sessionId ? buildChatSessionRoute(sessionId, normalizedModel) : `/chat/${normalizedModel}`)
     }
   }, [searchParams, router])
 

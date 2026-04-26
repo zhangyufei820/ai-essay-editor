@@ -84,6 +84,7 @@
     "remark-gfm": "^4.0.1",
     "remark-math": "^6.0.0",
     "server-only": "latest",
+    "sharp": "^0.34.5",
     "sonner": "latest",
     "stripe": "latest",
     "tailwind-merge": "^2.6.0",
