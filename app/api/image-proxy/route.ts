@@ -33,6 +33,28 @@ function getAllowedOrigins(): Set<string> {
   return origins
 }
 
+function getUpstreamImageUrl(target: URL): string {
+  const internalGateway = process.env.DIFY_IMAGE_GATEWAY_URL
+  if (!internalGateway) return target.toString()
+
+  try {
+    const internalOrigin = new URL(internalGateway).origin
+    const publicOrigins = new Set([
+      DEFAULT_GATEWAY_ORIGIN,
+      process.env.DIFY_IMAGE_GATEWAY_PUBLIC_URL,
+      process.env.NEXT_PUBLIC_DIFY_IMAGE_GATEWAY_URL,
+    ].filter(Boolean) as string[])
+
+    if (publicOrigins.has(target.origin)) {
+      return `${internalOrigin}${target.pathname}${target.search}`
+    }
+  } catch {
+    // Fall back to the requested URL if the internal gateway env is malformed.
+  }
+
+  return target.toString()
+}
+
 function parsePreviewWidth(value: string | null) {
   if (!value) return DEFAULT_PREVIEW_WIDTH
   const width = Number(value)
@@ -79,7 +101,7 @@ export async function GET(request: NextRequest) {
   const abort = createAbortSignal()
   let upstream: Response
   try {
-    upstream = await fetch(target.toString(), {
+    upstream = await fetch(getUpstreamImageUrl(target), {
       headers: {
         Accept: "image/avif,image/webp,image/png,image/jpeg,image/*",
       },
