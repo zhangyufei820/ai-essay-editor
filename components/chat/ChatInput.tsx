@@ -194,6 +194,7 @@ export function ChatInput({
   const [isFocused, setIsFocused] = useState(false)
   const [isListening, setIsListening] = useState(false)
   const recognitionRef = useRef<SpeechRecognition | null>(null)
+  const isMobileInputMode = isFocused || value.trim().length > 0
 
   // 自动调整高度
   useEffect(() => {
@@ -206,16 +207,24 @@ export function ChatInput({
 
   // 自动聚焦
   useEffect(() => {
-    if (!disabled && textareaRef.current) {
+    if (!disabled && textareaRef.current && window.innerWidth >= 768) {
       textareaRef.current.focus()
     }
   }, [disabled])
+
+  const handleSubmit = () => {
+    if (!canSubmit) return
+    textareaRef.current?.blur()
+    setIsFocused(false)
+    onSubmit()
+  }
 
   // 键盘事件处理
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       if (!isLoading && (value.trim() || uploadedFiles.length > 0)) {
-        onSubmit(e as unknown as React.FormEvent)
+        e.preventDefault()
+        handleSubmit()
       }
     }
   }
@@ -292,10 +301,10 @@ export function ChatInput({
   return (
     <div
       className={cn(
-        "relative rounded-[24px] sm:rounded-3xl bg-white border transition-all duration-300 touch-manipulation",
+        "relative rounded-[24px] border bg-white transition-all duration-300 touch-manipulation max-sm:rounded-[28px]",
         isFocused
-          ? "shadow-[0_8px_24px_rgba(0,0,0,0.10)] ring-1 sm:shadow-[0_8px_24px_rgba(0,0,0,0.10),0_20px_48px_rgba(0,0,0,0.15),0_32px_80px_rgba(0,0,0,0.18)]"
-          : "shadow-[0_4px_18px_rgba(0,0,0,0.08)] sm:shadow-[0_4px_12px_rgba(0,0,0,0.06),0_12px_32px_rgba(0,0,0,0.10),0_24px_64px_rgba(0,0,0,0.12)]",
+          ? "border-emerald-500/45 shadow-[0_8px_24px_rgba(15,118,86,0.10)] sm:shadow-[0_8px_24px_rgba(0,0,0,0.10),0_20px_48px_rgba(0,0,0,0.15)]"
+          : "border-slate-200/80 shadow-[0_10px_30px_rgba(15,23,42,0.08)] sm:shadow-[0_4px_12px_rgba(0,0,0,0.06),0_12px_32px_rgba(0,0,0,0.10)]",
         className
       )}
       style={{ 
@@ -307,7 +316,8 @@ export function ChatInput({
       {showModelSelector && (
         <div
           className={cn(
-            "flex items-center justify-between gap-3 px-3 sm:px-4 py-1.5 sm:py-2 border-b"
+            "flex items-center justify-between gap-3 border-b px-3 py-2 sm:px-4",
+            isMobileInputMode && "max-sm:hidden"
           )}
           style={{ borderColor: slateColors[50] }}
         >
@@ -382,8 +392,8 @@ export function ChatInput({
       {/* 输入区域 */}
       <div
         className={cn(
-          "flex items-end gap-1.5 sm:gap-3 p-2 sm:p-3",
-          isFocused && "max-sm:gap-1 max-sm:p-1.5"
+          "flex items-end gap-2 p-2 sm:gap-3 sm:p-3",
+          isMobileInputMode && "max-sm:p-1.5"
         )}
       >
         {/* 附件按钮（工具栏隐藏或移动端键盘态时显示） */}
@@ -410,7 +420,7 @@ export function ChatInput({
         )}
 
         {/* 语音输入按钮 */}
-        <div className={cn("flex flex-col items-center gap-0.5 sm:gap-1 shrink-0", isFocused && "max-sm:hidden")}>
+        <div className={cn("flex flex-col items-center gap-0.5 sm:gap-1 shrink-0", isMobileInputMode && "max-sm:hidden")}>
           <span className="text-[10px] font-medium hidden sm:block" style={{ color: slateColors[400] }}>
             {isListening ? "录音中" : "语音输入"}
           </span>
@@ -446,10 +456,11 @@ export function ChatInput({
           onBlur={() => setIsFocused(false)}
           placeholder={disabled ? "请先登录..." : placeholder}
           disabled={disabled || isLoading}
-          className={cn(
-            "flex-1 min-h-[40px] sm:min-h-[48px] max-h-[132px] sm:max-h-[160px] resize-none border-0 bg-transparent",
-            "text-[15px] sm:text-[15px] leading-6 focus-visible:ring-0 px-2 py-1.5 sm:p-2",
-            isFocused && "max-sm:min-h-[38px] max-sm:max-h-[72px] max-sm:py-1"
+            className={cn(
+            "flex-1 resize-none border-0 bg-transparent shadow-none",
+            "min-h-[44px] max-h-[132px] rounded-[18px] px-3 py-2 text-[16px] leading-6 sm:min-h-[48px] sm:max-h-[160px] sm:p-2 sm:text-[15px]",
+            "focus-visible:border-transparent focus-visible:ring-0",
+            isMobileInputMode && "max-sm:min-h-[42px] max-sm:max-h-[88px] max-sm:bg-slate-50/80 max-sm:px-3 max-sm:py-2"
           )}
           style={{ color: slateColors[700] }}
           rows={1}
@@ -465,11 +476,11 @@ export function ChatInput({
             whileHover={canSubmit ? { scale: 1.02, y: -1 } : {}}
             whileTap={canSubmit ? { scale: 0.98 } : {}}
             disabled={!canSubmit}
-            onClick={onSubmit}
+            onClick={handleSubmit}
             className={cn(
-              "h-10 w-10 sm:h-10 sm:w-10 rounded-full sm:rounded-xl flex items-center justify-center touch-manipulation",
+              "flex h-11 w-11 items-center justify-center rounded-full sm:h-10 sm:w-10 sm:rounded-xl touch-manipulation",
               "text-white transition-all duration-200",
-              isFocused && "max-sm:h-9 max-sm:w-9",
+              isMobileInputMode && "max-sm:h-10 max-sm:w-10",
               !canSubmit && "opacity-40 cursor-not-allowed"
             )}
             style={{

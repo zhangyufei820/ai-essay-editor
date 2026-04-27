@@ -2417,7 +2417,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
           <div
             ref={scrollAreaRef}
             onScroll={handleScroll}
-            className="h-full overflow-y-auto custom-scrollbar pb-4 md:pb-6"
+            className="h-full overflow-y-auto custom-scrollbar pb-32 md:pb-6"
           >
               <div className="mx-auto max-w-6xl px-2.5 sm:px-4 md:px-6 lg:px-10 py-2.5 sm:py-6 md:py-8">
               {messages.length === 0 ? (
@@ -2545,7 +2545,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                 </div>
                 )
                 ) : (
-                <div className="space-y-3 sm:space-y-5 pt-1 sm:pt-3 pb-4 md:pb-6">
+                <div className="space-y-3 sm:space-y-5 pt-1 sm:pt-3 pb-32 md:pb-6">
                     {messages.map((message) => (
                       <div key={message.id} className={cn("flex gap-1 sm:gap-2 group/message", message.role === "user" ? "justify-end" : "justify-start")}>
                       {message.role === "assistant" && (
@@ -2734,7 +2734,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         </div>
 
         {/* 🔥 输入框区域 - 移动端优化 */}
-        <div className="border-t border-slate-100 bg-white p-2 sm:p-3 md:p-6 shrink-0 z-20 safe-area-bottom">
+        <div className="fixed inset-x-0 bottom-0 z-30 shrink-0 border-t border-slate-100/80 bg-white/96 p-1.5 pb-[max(env(safe-area-inset-bottom),4px)] shadow-[0_-8px_24px_rgba(15,23,42,0.05)] backdrop-blur-md md:relative md:p-6 md:shadow-none">
           <div className="mx-auto max-w-5xl">
             {/* 🔥 上传进度条 - 移动端优化 */}
             {isUploading && (
@@ -2808,7 +2808,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
             )}
 
             {!userId && selectedModel !== "suno-v5" && (
-              <div className="mt-2 sm:mt-3 flex items-center justify-center gap-1 text-[10px] sm:text-xs">
+              <div className="mt-2 hidden items-center justify-center gap-1 text-[10px] sm:mt-3 sm:flex sm:text-xs">
                 <span className="text-slate-400">未登录，</span>
                 <Link
                   href="/auth/sign-up"
