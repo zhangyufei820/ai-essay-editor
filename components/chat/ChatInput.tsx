@@ -7,7 +7,7 @@
 
 "use client"
 
-import { useRef, useEffect, useState, type KeyboardEvent, type ChangeEvent } from "react"
+import { useRef, useEffect, useState, type KeyboardEvent, type ChangeEvent, type FormEvent } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Send, Paperclip, X, Loader2, ChevronDown, FileText, Image as ImageIcon, Mic, MicOff } from "lucide-react"
 import { Textarea } from "@/components/ui/textarea"
@@ -72,7 +72,7 @@ interface ChatInputProps {
   /** 值变化回调 */
   onChange: (value: string) => void
   /** 提交回调 */
-  onSubmit: () => void
+  onSubmit: (event: FormEvent) => void
   /** 文件上传回调 */
   onFileUpload?: (files: FileList) => void
   /** 已上传的文件列表 */
@@ -216,7 +216,7 @@ export function ChatInput({
     if (!canSubmit) return
     textareaRef.current?.blur()
     setIsFocused(false)
-    onSubmit()
+    onSubmit({ preventDefault: () => undefined } as FormEvent)
   }
 
   // 键盘事件处理
