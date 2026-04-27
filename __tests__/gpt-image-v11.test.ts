@@ -66,7 +66,7 @@ describe("GPT Image V11 parameter mapping", () => {
 
   it("proxifies insecure image gateway URLs for HTTPS pages", () => {
     expect(proxifyGeneratedImageUrl("http://43.154.111.156:8001/images/result.png")).toBe(
-      "/api/image-proxy?url=http%3A%2F%2F43.154.111.156%3A8001%2Fimages%2Fresult.png"
+      "/api/image-proxy/preview/image.webp?url=http%3A%2F%2F43.154.111.156%3A8001%2Fimages%2Fresult.png&format=webp"
     )
     expect(proxifyGeneratedImageUrl("https://example.com/result.png")).toBe("https://example.com/result.png")
   })
@@ -74,13 +74,13 @@ describe("GPT Image V11 parameter mapping", () => {
   it("builds optimized preview and raw download image proxy URLs", () => {
     const source = "http://43.154.111.156:8001/images/result.png"
     expect(proxifyGeneratedImagePreviewUrl(source, 1200)).toBe(
-      "/api/image-proxy?url=http%3A%2F%2F43.154.111.156%3A8001%2Fimages%2Fresult.png&w=1200"
+      "/api/image-proxy/preview/image.webp?url=http%3A%2F%2F43.154.111.156%3A8001%2Fimages%2Fresult.png&w=1200&format=webp"
     )
     expect(proxifyGeneratedImageDownloadUrl(source)).toBe(
-      "/api/image-proxy?url=http%3A%2F%2F43.154.111.156%3A8001%2Fimages%2Fresult.png&raw=1"
+      "/api/image-proxy/raw/image.png?url=http%3A%2F%2F43.154.111.156%3A8001%2Fimages%2Fresult.png&raw=1"
     )
     expect(buildImageProxyUrl("/api/image-proxy?url=http%3A%2F%2F43.154.111.156%3A8001%2Fimages%2Fresult.png", { width: 900 })).toBe(
-      "/api/image-proxy?url=http%3A%2F%2F43.154.111.156%3A8001%2Fimages%2Fresult.png&w=900"
+      "/api/image-proxy/preview/image.webp?url=http%3A%2F%2F43.154.111.156%3A8001%2Fimages%2Fresult.png&w=900&format=webp"
     )
   })
 })

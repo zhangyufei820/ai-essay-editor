@@ -303,10 +303,40 @@ type ImageProxyOptions = {
   width?: number
 }
 
+function getImageProxyExtension(url: string, raw?: boolean) {
+  if (!raw) return "webp"
+
+  try {
+    const pathname = new URL(url).pathname.toLowerCase()
+    if (pathname.endsWith(".jpg")) return "jpg"
+    if (pathname.endsWith(".jpeg")) return "jpg"
+    if (pathname.endsWith(".webp")) return "webp"
+    if (pathname.endsWith(".avif")) return "avif"
+    if (pathname.endsWith(".png")) return "png"
+  } catch {
+    // Fall through to the generated image default.
+  }
+
+  return "png"
+}
+
+function buildCacheableImageProxyUrl(url: string, options: ImageProxyOptions = {}): string {
+  const params = new URLSearchParams({ url })
+  if (options.raw) params.set("raw", "1")
+  if (options.width) params.set("w", String(options.width))
+  if (!options.raw) params.set("format", "webp")
+
+  const mode = options.raw ? "raw" : "preview"
+  const extension = getImageProxyExtension(url, options.raw)
+  return `/api/image-proxy/${mode}/image.${extension}?${params.toString()}`
+}
+
 export function buildImageProxyUrl(url: string, options: ImageProxyOptions = {}): string {
   try {
     if (url.startsWith("/api/image-proxy?")) {
       const params = new URLSearchParams(url.split("?")[1] || "")
+      const targetUrl = params.get("url")
+      if (targetUrl) return buildCacheableImageProxyUrl(targetUrl, options)
       if (options.raw) params.set("raw", "1")
       else params.delete("raw")
       if (options.width) params.set("w", String(options.width))
@@ -315,10 +345,7 @@ export function buildImageProxyUrl(url: string, options: ImageProxyOptions = {})
 
     const parsed = new URL(url)
     if (parsed.protocol === "http:" && parsed.hostname === "43.154.111.156" && parsed.port === "8001" && parsed.pathname.startsWith("/images/")) {
-      const params = new URLSearchParams({ url })
-      if (options.raw) params.set("raw", "1")
-      if (options.width) params.set("w", String(options.width))
-      return `/api/image-proxy?${params.toString()}`
+      return buildCacheableImageProxyUrl(url, options)
     }
   } catch {
     return url

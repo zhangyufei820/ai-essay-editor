@@ -1,4 +1,4 @@
-import { proxyImage } from "./proxy"
+import { proxyImage } from "../proxy"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
