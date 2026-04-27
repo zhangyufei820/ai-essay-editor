@@ -670,7 +670,7 @@ function BananaChatInterfaceInner() {
   }
 
   return (
-    <div className="flex h-screen w-full bg-white overflow-hidden relative">
+    <div className="flex h-[100dvh] w-full bg-white overflow-hidden relative">
       <div className="flex flex-1 flex-col h-full relative min-w-0">
         
         {/* 顶部导航栏 */}
@@ -724,7 +724,7 @@ function BananaChatInterfaceInner() {
           <div 
             ref={scrollAreaRef}
             onScroll={handleScroll}
-            className="h-full overflow-y-auto custom-scrollbar pb-28 md:pb-0"
+            className="h-full overflow-y-auto custom-scrollbar pb-4 md:pb-0"
           >
             <div className="mx-auto max-w-4xl px-3 md:px-6 py-3 md:py-8">
               {messages.length === 0 ? (
@@ -836,7 +836,7 @@ function BananaChatInterfaceInner() {
         </div>
 
         {/* 输入框 */}
-        <div className="fixed bottom-0 left-2 right-2 z-50 md:relative md:left-auto md:right-auto border-t border-slate-100 bg-white/95 backdrop-blur-md p-0 pb-safe md:p-6 shrink-0">
+        <div className="relative z-20 shrink-0 border-t border-slate-100 bg-white/95 p-2 pb-safe backdrop-blur-md md:p-6">
           <div className="mx-auto max-w-4xl">
             <ImageChatComposer
               modeOptions={[{ key: "image", label: "图像生成" }]}
@@ -898,7 +898,7 @@ function BananaChatInterfaceInner() {
                 animate={{ x: 0 }}
                 exit={{ x: -280 }}
                 transition={{ duration: 0.3, ease: [0.32, 0.72, 0, 1] }}
-                className="fixed left-0 top-0 h-screen w-72 z-50 flex flex-col"
+                className="fixed left-0 top-0 h-[100dvh] w-72 z-50 flex flex-col"
                 style={{ background: "#FDFBF7", boxShadow: "4px 0 24px rgba(0,0,0,0,12)" }}
               >
                 {/* 头部 */}
@@ -956,7 +956,7 @@ function BananaChatInterfaceInner() {
 export function BananaChatInterface() {
   return (
     <Suspense fallback={
-      <div className="flex h-screen w-full items-center justify-center bg-white">
+      <div className="flex h-[100dvh] w-full items-center justify-center bg-white">
         <Loader2 className="h-6 w-6 animate-spin" style={{ color: BANANA_COLOR }} />
       </div>
     }>

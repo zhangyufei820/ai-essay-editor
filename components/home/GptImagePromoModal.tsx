@@ -96,14 +96,14 @@ export function GptImagePromoModal() {
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/28 px-3 py-3 backdrop-blur-[8px] sm:px-4 sm:py-6">
+    <div className="fixed left-0 top-0 z-[120] flex h-[100dvh] w-[100dvw] max-w-[100dvw] items-center justify-center overflow-hidden bg-slate-950/28 px-3 py-3 backdrop-blur-[8px] sm:px-4 sm:py-6">
       <div
         className="absolute inset-0"
         aria-hidden="true"
         onClick={dismissPromo}
       />
 
-      <div className="relative flex max-h-[calc(100dvh-1.5rem)] w-full max-w-3xl flex-col overflow-hidden rounded-[28px] border border-white/85 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(246,250,247,0.98))] shadow-[0_10px_24px_rgba(15,23,42,0.06),0_28px_80px_rgba(15,23,42,0.12),0_1px_0_rgba(255,255,255,0.75)_inset] sm:max-h-[min(88dvh,920px)] sm:rounded-[32px]">
+      <div className="relative flex max-h-[calc(100dvh-1.5rem)] w-[calc(100dvw-1.5rem)] max-w-[calc(100dvw-1.5rem)] flex-col overflow-hidden rounded-[24px] border border-white/85 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(246,250,247,0.98))] shadow-[0_10px_24px_rgba(15,23,42,0.06),0_28px_80px_rgba(15,23,42,0.12),0_1px_0_rgba(255,255,255,0.75)_inset] sm:w-full sm:max-w-3xl sm:max-h-[min(88dvh,920px)] sm:rounded-[32px]">
         <div className="pointer-events-none absolute inset-x-0 top-0 h-52 bg-[radial-gradient(circle_at_top_left,rgba(20,83,45,0.15),transparent_48%),radial-gradient(circle_at_top_right,rgba(34,197,94,0.08),transparent_34%)]" />
 
         <button
@@ -123,7 +123,7 @@ export function GptImagePromoModal() {
           </div>
 
           <div className="mt-5 max-w-2xl">
-            <h2 className="text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">
+            <h2 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-4xl">
               绘见万象 | GPT Image 2 巅峰上线
             </h2>
             <p className="mt-3 text-base leading-8 text-slate-600 sm:text-lg">

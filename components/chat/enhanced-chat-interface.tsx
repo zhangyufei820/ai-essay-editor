@@ -2417,7 +2417,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
           <div
             ref={scrollAreaRef}
             onScroll={handleScroll}
-            className="h-full overflow-y-auto custom-scrollbar pb-28 md:pb-24"
+            className="h-full overflow-y-auto custom-scrollbar pb-4 md:pb-6"
           >
               <div className="mx-auto max-w-6xl px-2.5 sm:px-4 md:px-6 lg:px-10 py-2.5 sm:py-6 md:py-8">
               {messages.length === 0 ? (
@@ -2545,7 +2545,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                 </div>
                 )
                 ) : (
-                <div className="space-y-3 sm:space-y-5 pt-1 sm:pt-3 pb-28 md:pb-24">
+                <div className="space-y-3 sm:space-y-5 pt-1 sm:pt-3 pb-4 md:pb-6">
                     {messages.map((message) => (
                       <div key={message.id} className={cn("flex gap-1 sm:gap-2 group/message", message.role === "user" ? "justify-end" : "justify-start")}>
                       {message.role === "assistant" && (
@@ -2782,7 +2782,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 
             {/* 🔥 输入框 - 使用 ChatInput 组件 - 移动端固定在底部 */}
             {(selectedModel !== "suno-v5" || messages.length > 0) && (
-            <div className="fixed bottom-0 left-2 right-2 sm:left-0 sm:right-0 z-50 md:relative mx-auto max-w-3xl w-auto sm:w-full px-0 pb-safe md:pb-0">
+            <div className="relative z-20 mx-auto w-full max-w-3xl px-0">
               <ChatInput
                 showModelSelector={true}
                 selectedModel={selectedModel}

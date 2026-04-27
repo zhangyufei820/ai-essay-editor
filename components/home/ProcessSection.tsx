@@ -118,7 +118,7 @@ function AIModelMarquee() {
   const doubledModels = [...aiModels, ...aiModels]
   
   return (
-    <div className="mt-4 overflow-hidden relative">
+    <div className="mt-4 w-full max-w-full overflow-hidden relative">
       {/* 左侧渐变遮罩 */}
       <div 
         className="absolute left-0 top-0 bottom-0 w-8 z-10"
@@ -265,7 +265,7 @@ function MobileStepCard({ step, index, isLast }: { step: Step; index: number; is
       </div>
 
       {/* 右侧：内容 */}
-      <div className="flex-1 pb-8">
+      <div className="min-w-0 flex-1 pb-8">
         <div 
           className="w-14 h-14 rounded-xl flex items-center justify-center mb-4"
           style={{ backgroundColor: brandColors[50] }}

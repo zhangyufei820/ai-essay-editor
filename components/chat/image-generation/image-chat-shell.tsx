@@ -24,7 +24,7 @@ export function ImageChatShell({
   const router = useRouter()
 
   return (
-    <div className="flex h-screen w-full bg-white overflow-hidden relative">
+    <div className="flex h-[100dvh] w-full bg-white overflow-hidden relative">
       <div className="flex flex-1 flex-col h-full relative min-w-0">
         {/* 顶部导航栏 */}
         <div className="flex items-center h-11 md:h-14 px-2 md:px-4 border-b border-slate-100 bg-white shrink-0">
