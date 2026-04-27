@@ -12,10 +12,13 @@
  */
 
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { Copy, Check } from 'lucide-react'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { motion, AnimatePresence } from 'framer-motion'
 import { proxifyGeneratedImagePreviewUrl } from '@/components/chat/image-generation/gpt-image-v11'
@@ -31,6 +34,14 @@ const BORDER_COLOR = "#e5e5e5"
 interface EnhancedMarkdownProps {
   content: string
   className?: string
+}
+
+function normalizeMathDelimiters(text: string) {
+  return text
+    .replace(/\\\[/g, "\n$$\n")
+    .replace(/\\\]/g, "\n$$\n")
+    .replace(/\\\(/g, "$")
+    .replace(/\\\)/g, "$")
 }
 
 // 复制按钮组件
@@ -85,6 +96,8 @@ function CopyButton({ text }: { text: string }) {
 }
 
 export function EnhancedMarkdown({ content, className }: EnhancedMarkdownProps) {
+  const normalizedContent = useMemo(() => normalizeMathDelimiters(content), [content])
+
   return (
     <div
       className={cn("markdown-body", className)}
@@ -95,6 +108,8 @@ export function EnhancedMarkdown({ content, className }: EnhancedMarkdownProps) 
       }}
     >
       <ReactMarkdown
+        remarkPlugins={[remarkGfm, remarkMath]}
+        rehypePlugins={[rehypeKatex]}
         components={{
           // 标题样式
           h1: ({ children }) => (
@@ -289,7 +304,7 @@ export function EnhancedMarkdown({ content, className }: EnhancedMarkdownProps) 
           ),
         }}
       >
-        {content}
+        {normalizedContent}
       </ReactMarkdown>
     </div>
   )

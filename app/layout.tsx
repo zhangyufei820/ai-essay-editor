@@ -1,6 +1,7 @@
 import type React from "react"
 import type { Metadata, Viewport } from "next"
 import "./globals.css"
+import "katex/dist/katex.min.css"
 import { AppShell } from "@/components/app-shell"
 import { ClientBoot } from "@/components/client-boot"
 

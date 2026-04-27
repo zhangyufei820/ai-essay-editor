@@ -14,10 +14,5 @@ export const metadata: Metadata = {
 }
 
 export default function ChatLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <>
-      <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.45/dist/katex.min.css" />
-      {children}
-    </>
-  )
+  return <>{children}</>
 }

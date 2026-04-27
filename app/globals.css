@@ -1361,6 +1361,47 @@
  * 🔢 KaTeX 数学公式样式
  * ============================================ */
 
+.markdown-body .katex-display {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.25rem 0;
+}
+
+.markdown-body .katex-display > .katex {
+  white-space: nowrap;
+}
+
+.markdown-body .katex {
+  font-size: 1em;
+}
+
+.markdown-body table {
+  width: max-content;
+  min-width: 100%;
+}
+
+.markdown-body th,
+.markdown-body td {
+  white-space: nowrap;
+}
+
+@media (max-width: 639px) {
+  .markdown-body .katex {
+    font-size: 0.95em;
+  }
+
+  .markdown-body .katex-display {
+    margin: 0.5rem 0;
+  }
+
+  .markdown-body th,
+  .markdown-body td {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+}
+
 /* 行内公式间距 */
 .math-inline {
   margin: 0 0.15em;
