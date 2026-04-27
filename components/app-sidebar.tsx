@@ -30,11 +30,11 @@ const COLORS = {
   },
   // 🎨 侧边栏专用配色 - 基于主页风格的浅绿灰色
   sidebar: {
-    bg: "#F8FAF9",           // 主背景 - 带绿调的浅灰
-    bgGradient: "linear-gradient(180deg, #F0F7F4 0%, #F8FAF9 50%, #FAFBFA 100%)", // 渐变背景
+    bg: "#FFFFFF",           // 主背景 - 干净白底
+    bgGradient: "linear-gradient(180deg, #FFFFFF 0%, #FAFBFA 100%)", // 克制渐变背景
     cardBg: "#FFFFFF",       // 卡片背景
-    border: "#E2E8E4",       // 边框色 - 带绿调
-    divider: "#E5EBE7",      // 分割线
+    border: "#EEF1EE",       // 边框色 - 低对比
+    divider: "#EEF1EE",      // 分割线
   },
   gray: {
     50: "#FAFAFA",
@@ -505,7 +505,7 @@ function AppSidebarInner() {
         style={{ 
           background: COLORS.sidebar.bgGradient,
           borderColor: COLORS.sidebar.border,
-          boxShadow: isMobile ? "4px 0 24px rgba(0,0,0,0.12)" : "1px 0 8px rgba(0,0,0,0.04)"
+          boxShadow: isMobile ? "4px 0 24px rgba(0,0,0,0.12)" : "1px 0 0 rgba(15,23,42,0.04)"
         }}
       >
         {/* 🍎 移动端：关闭按钮 */}
@@ -518,10 +518,10 @@ function AppSidebarInner() {
           </button>
         )}
 
-        {/* 1. Logo 区域 - 🎨 呼吸间距，确保品牌标识有足够的视域空间 */}
-        <div className="flex items-center shrink-0 px-3 py-5">
+        {/* 1. Logo 区域 - 去掉图片白底贴片感 */}
+        <div className="flex items-center shrink-0 px-5 pt-6 pb-4">
           <Link href="/" onClick={handleNavClick} className="flex items-center w-full">
-            <img src="/images/design-mode/主页logo.jpg" alt="Logo" className="w-full h-auto object-contain" style={{ maxWidth: "180px" }} />
+            <img src="/images/design-mode/home-logo-transparent.png" alt="Logo" className="w-full h-auto object-contain" style={{ maxWidth: "160px" }} />
           </Link>
         </div>
 
@@ -549,7 +549,7 @@ function AppSidebarInner() {
         )}
 
         {/* --- 核心滚动区域 - 🎨 定制滚动条：3px宽，半透明浅灰，仅滚动时显示 --- */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden py-2 px-3"
+        <div className="flex-1 overflow-y-auto overflow-x-hidden py-3 px-4"
           style={{
             scrollbarWidth: 'thin',
             scrollbarColor: 'rgba(14, 58, 31, 0.15) transparent',
@@ -572,120 +572,130 @@ function AppSidebarInner() {
           `}</style>
           
           {/* 智能体专区入口 - OpenClaw 专区 */}
-          <div className="mt-8 mb-4 px-3">
+          <div className="mt-4 mb-2">
             <motion.button
               onClick={() => setIsAgentPanelOpen(true)}
-              className="w-full flex items-center gap-3 px-4 py-[9px] rounded-xl"
+              className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left"
               style={{
                 backgroundColor: "rgba(34, 197, 94, 0.08)",
-                border: "1px solid rgba(34, 197, 94, 0.2)",
-                boxShadow: "0 2px 8px rgba(34, 197, 94, 0.1), inset 0 1px 0 rgba(255,255,255,0.5)"
+                border: "1px solid rgba(34, 197, 94, 0.16)",
+                boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)"
               }}
               whileHover={{
-                scale: 1.03,
-                boxShadow: "0 4px 16px rgba(34, 197, 94, 0.2), 0 8px 24px rgba(34, 197, 94, 0.15), inset 0 1px 0 rgba(255,255,255,0.8)"
+                x: 2,
+                backgroundColor: "#FFFFFF",
+                borderColor: "rgba(34, 197, 94, 0.28)",
+                boxShadow: "0 4px 10px rgba(15, 23, 42, 0.06)"
               }}
-              whileTap={{ scale: 0.98 }}
-              transition={{ duration: 0.2 }}
+              whileTap={{ scale: 0.99 }}
+              transition={{ duration: 0.15 }}
             >
-              <Sparkles className="w-5 h-5" style={{ color: COLORS.primary.main }} />
-              <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: COLORS.primary.dark }}>
+              <Sparkles className="w-[18px] h-[18px]" style={{ color: COLORS.primary.main }} />
+              <span className="text-[12px] font-medium leading-none whitespace-nowrap" style={{ color: COLORS.primary.dark }}>
                 OpenClaw
               </span>
             </motion.button>
           </div>
 
           {/* C. 教育专区入口 - 包含所有教育智能体 */}
-          <div className="mb-4 px-3">
+          <div className="mb-2">
             <motion.button
               onClick={() => setIsEducationPanelOpen(true)}
-              className="w-full flex items-center gap-3 px-4 py-[9px] rounded-xl"
+              className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left"
               style={{
-                backgroundColor: "rgba(14, 58, 31, 0.04)",
-                border: "1px solid rgba(14, 58, 31, 0.08)",
-                boxShadow: "0 2px 8px rgba(14, 58, 31, 0.05), inset 0 1px 0 rgba(255,255,255,0.5)"
+                backgroundColor: "rgba(255, 255, 255, 0.78)",
+                border: "1px solid rgba(20, 83, 45, 0.08)",
+                boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)"
               }}
               whileHover={{
-                scale: 1.03,
-                boxShadow: "0 4px 16px rgba(14, 58, 31, 0.1), 0 8px 24px rgba(14, 58, 31, 0.08), inset 0 1px 0 rgba(255,255,255,0.8)"
+                x: 2,
+                backgroundColor: "#FFFFFF",
+                borderColor: "rgba(34, 197, 94, 0.22)",
+                boxShadow: "0 4px 10px rgba(15, 23, 42, 0.06)"
               }}
-              whileTap={{ scale: 0.98 }}
-              transition={{ duration: 0.2 }}
+              whileTap={{ scale: 0.99 }}
+              transition={{ duration: 0.15 }}
             >
-              <GraduationCap className="w-5 h-5" style={{ color: COLORS.primary.dark }} />
-              <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: COLORS.primary.dark }}>
+              <GraduationCap className="w-[18px] h-[18px]" style={{ color: COLORS.primary.dark }} />
+              <span className="text-[12px] font-medium leading-none whitespace-nowrap" style={{ color: COLORS.primary.dark }}>
                 教育专区
               </span>
             </motion.button>
           </div>
 
           {/* D. AI模型专区入口 */}
-          <div className="mb-4 px-3">
+          <div className="mb-2">
             <motion.button
               onClick={() => setIsModelPanelOpen(true)}
-              className="w-full flex items-center gap-3 px-4 py-[9px] rounded-xl"
+              className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left"
               style={{
-                backgroundColor: "rgba(14, 58, 31, 0.04)",
-                border: "1px solid rgba(14, 58, 31, 0.08)",
-                boxShadow: "0 2px 8px rgba(14, 58, 31, 0.05), inset 0 1px 0 rgba(255,255,255,0.5)"
+                backgroundColor: "rgba(255, 255, 255, 0.78)",
+                border: "1px solid rgba(20, 83, 45, 0.08)",
+                boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)"
               }}
               whileHover={{
-                scale: 1.03,
-                boxShadow: "0 4px 16px rgba(14, 58, 31, 0.1), 0 8px 24px rgba(14, 58, 31, 0.08), inset 0 1px 0 rgba(255,255,255,0.8)"
+                x: 2,
+                backgroundColor: "#FFFFFF",
+                borderColor: "rgba(34, 197, 94, 0.22)",
+                boxShadow: "0 4px 10px rgba(15, 23, 42, 0.06)"
               }}
-              whileTap={{ scale: 0.98 }}
-              transition={{ duration: 0.2 }}
+              whileTap={{ scale: 0.99 }}
+              transition={{ duration: 0.15 }}
             >
-              <Bot className="w-5 h-5" style={{ color: COLORS.primary.dark }} />
-              <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: COLORS.primary.dark }}>
+              <Bot className="w-[18px] h-[18px]" style={{ color: COLORS.primary.dark }} />
+              <span className="text-[12px] font-medium leading-none whitespace-nowrap" style={{ color: COLORS.primary.dark }}>
                 顶级模型专区
               </span>
             </motion.button>
           </div>
 
           {/* E. AI写作专区入口 */}
-          <div className="mb-4 px-3">
+          <div className="mb-2">
             <motion.button
               onClick={() => setIsAIPanelOpen(true)}
-              className="w-full flex items-center gap-3 px-4 py-[9px] rounded-xl"
+              className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left"
               style={{
-                backgroundColor: "rgba(0, 200, 150, 0.02)",
-                border: "1px solid rgba(0, 200, 150, 0.2)",
-                boxShadow: "0 2px 8px rgba(0, 200, 150, 0.1), inset 0 1px 0 rgba(255,255,255,0.5)"
+                backgroundColor: "rgba(255, 255, 255, 0.78)",
+                border: "1px solid rgba(20, 83, 45, 0.08)",
+                boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)"
               }}
               whileHover={{
-                scale: 1.03,
-                boxShadow: "0 4px 16px rgba(0, 200, 150, 0.2), 0 8px 24px rgba(0, 200, 150, 0.15), inset 0 1px 0 rgba(255,255,255,0.8)"
+                x: 2,
+                backgroundColor: "#FFFFFF",
+                borderColor: "rgba(0, 200, 150, 0.22)",
+                boxShadow: "0 4px 10px rgba(15, 23, 42, 0.06)"
               }}
-              whileTap={{ scale: 0.98 }}
-              transition={{ duration: 0.2 }}
+              whileTap={{ scale: 0.99 }}
+              transition={{ duration: 0.15 }}
             >
-              <Edit className="w-5 h-5" style={{ color: "#00C896" }} />
-              <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: COLORS.primary.dark }}>
+              <Edit className="w-[18px] h-[18px]" style={{ color: "#00A67D" }} />
+              <span className="text-[12px] font-medium leading-none whitespace-nowrap" style={{ color: COLORS.primary.dark }}>
                 AI写作专区
               </span>
             </motion.button>
           </div>
 
           {/* F. 多媒体专区入口 */}
-          <div className="mb-4 px-3">
+          <div className="mb-2">
             <motion.button
               onClick={() => setIsCreativePanelOpen(true)}
-              className="w-full flex items-center gap-3 px-4 py-[9px] rounded-xl"
+              className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left"
               style={{
-                backgroundColor: "rgba(0, 200, 150, 0.02)",
-                border: "1px solid rgba(0, 200, 150, 0.2)",
-                boxShadow: "0 2px 8px rgba(0, 200, 150, 0.1), inset 0 1px 0 rgba(255,255,255,0.5)"
+                backgroundColor: "rgba(255, 255, 255, 0.78)",
+                border: "1px solid rgba(20, 83, 45, 0.08)",
+                boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)"
               }}
               whileHover={{
-                scale: 1.03,
-                boxShadow: "0 4px 16px rgba(0, 200, 150, 0.2), 0 8px 24px rgba(0, 200, 150, 0.15), inset 0 1px 0 rgba(255,255,255,0.8)"
+                x: 2,
+                backgroundColor: "#FFFFFF",
+                borderColor: "rgba(0, 200, 150, 0.22)",
+                boxShadow: "0 4px 10px rgba(15, 23, 42, 0.06)"
               }}
-              whileTap={{ scale: 0.98 }}
-              transition={{ duration: 0.2 }}
+              whileTap={{ scale: 0.99 }}
+              transition={{ duration: 0.15 }}
             >
-              <Palette className="w-5 h-5" style={{ color: "#00C896" }} />
-              <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: COLORS.primary.dark }}>
+              <Palette className="w-[18px] h-[18px]" style={{ color: "#00A67D" }} />
+              <span className="text-[12px] font-medium leading-none whitespace-nowrap" style={{ color: COLORS.primary.dark }}>
                 多媒体专区
               </span>
             </motion.button>

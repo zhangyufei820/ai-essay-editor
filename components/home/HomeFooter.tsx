@@ -7,8 +7,7 @@
 "use client"
 
 import Link from "next/link"
-import { Sparkles } from "lucide-react"
-import { brandColors, slateColors, creamColors } from "@/lib/design-tokens"
+import { slateColors } from "@/lib/design-tokens"
 
 // 导航链接配置
 const footerLinks = {
@@ -44,8 +43,7 @@ const footerLinks = {
 export function HomeFooter() {
   return (
     <footer 
-      className="py-16 md:py-20"
-      style={{ backgroundColor: creamColors[200] }}
+      className="py-16 md:py-20 bg-white border-t border-slate-100"
     >
       <div className="max-w-7xl mx-auto px-4 md:px-6 lg:px-8">
         {/* 主内容 */}
@@ -54,9 +52,9 @@ export function HomeFooter() {
           <div className="col-span-2 md:col-span-1">
             <Link href="/" prefetch={false} className="inline-block mb-4">
               <img 
-                src="/images/design-mode/主页logo.jpg" 
+                src="/images/design-mode/home-logo-transparent.png"
                 alt="沈翔智学" 
-                className="h-12 w-auto object-contain"
+                className="h-10 w-auto object-contain"
               />
             </Link>
             <p 
