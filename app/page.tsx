@@ -11,10 +11,21 @@ import { Suspense } from 'react'
 import dynamic from 'next/dynamic'
 
 // 首屏组件 - 直接导入（关键路径）
-import { HeroSection } from '@/components/home'
-import { GptImagePromoModal } from '@/components/home'
-import { OpenClawSection } from '@/components/home'
+import { HeroSection } from '@/components/home/HeroSection'
 import { Calculator, HelpCircle, FileText, Sparkles, ArrowRight } from 'lucide-react'
+
+const GptImagePromoModal = dynamic(
+  () => import('@/components/home/GptImagePromoModal').then(mod => ({ default: mod.GptImagePromoModal })),
+  { ssr: false }
+)
+
+const OpenClawSection = dynamic(
+  () => import('@/components/home/OpenClawSection').then(mod => ({ default: mod.OpenClawSection })),
+  {
+    loading: () => <SectionSkeleton height="520px" />,
+    ssr: true
+  }
+)
 
 // 非首屏组件 - 动态导入（懒加载）
 const CapabilitiesSection = dynamic(

@@ -11,7 +11,6 @@ import { motion } from "framer-motion"
 import { useRouter } from "next/navigation"
 import { ArrowRight, Sparkles } from "lucide-react"
 import { brandColors, creamColors } from "@/lib/design-tokens"
-import Image from "next/image"
 
 // ============================================
 // 动画配置 - 从四周汇聚的强烈动画
@@ -194,12 +193,12 @@ export function CTASection() {
             variants={imageVariants}
           >
             <div className="relative w-full aspect-[16/9] md:aspect-[21/9] rounded-2xl overflow-hidden bg-white/10 shadow-2xl">
-              <Image
+              <img
                 src="/images/design-mode/首页主图.jpg"
                 alt="毕业学生"
-                fill
-                className="object-cover"
-                priority
+                className="h-full w-full object-cover"
+                loading="lazy"
+                decoding="async"
               />
             </div>
           </motion.div>

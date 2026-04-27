@@ -68,6 +68,8 @@ const nextConfig = {
     deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048],
     // 图片尺寸断点
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
+    // 让仍走 /_next/image 的优化结果在服务端缓存更久，CDN 侧由 headers() 继续兜底。
+    minimumCacheTTL: 31536000,
   },
 
   // ============================================
@@ -139,10 +141,38 @@ const nextConfig = {
       },
       // 静态资源缓存
       {
+        source: '/images/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
+          },
+        ],
+      },
+      {
         source: '/icons/:path*',
         headers: [
           {
             key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
+          },
+        ],
+      },
+      // Next 图片优化接口没有文件扩展名，Cloudflare 默认不一定按静态资源处理。
+      // 这里给 CDN 明确的边缘缓存信号；本地营销图会尽量直接走 /images 静态路径。
+      {
+        source: '/_next/image',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
+          },
+          {
+            key: 'CDN-Cache-Control',
+            value: 'public, max-age=31536000, immutable',
+          },
+          {
+            key: 'Cloudflare-CDN-Cache-Control',
             value: 'public, max-age=31536000, immutable',
           },
         ],

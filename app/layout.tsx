@@ -1,12 +1,8 @@
 import type React from "react"
 import type { Metadata, Viewport } from "next"
 import "./globals.css"
-import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"
-import { AppSidebar } from "@/components/app-sidebar"
-import { InstallPrompt } from "@/components/pwa/InstallPrompt"
-// ✅ 引入刚才新建的微信拦截组件
-import WxGuard from "@/components/WxGuard"
-import { AsyncStylesheet } from "@/components/AsyncStylesheet"
+import { AppShell } from "@/components/app-shell"
+import { ClientBoot } from "@/components/client-boot"
 
 // ============================================
 // Schema.org 结构化数据（模块级别常量，避免每次渲染重复创建对象）
@@ -153,18 +149,9 @@ export default function RootLayout({
           跳转到主要内容
         </a>
 
-        {/* ✅ WxGuard 放在最上方，确保它是 body 的第一个子元素 */}
-        <WxGuard />
+        <ClientBoot />
 
-        <SidebarProvider>
-          <AppSidebar />
-          <div id="main-content" className="flex flex-1 w-full flex-col min-h-screen">
-            {children}
-          </div>
-        </SidebarProvider>
-        
-        {/* PWA 安装提示 */}
-        <InstallPrompt />
+        <AppShell>{children}</AppShell>
         
       </body>
     </html>
