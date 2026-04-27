@@ -1,22 +1,33 @@
 "use client"
 
 import dynamic from "next/dynamic"
+import { usePathname } from "next/navigation"
 import type React from "react"
 
-import { SidebarProvider } from "@/components/ui/sidebar"
-
-const AppSidebar = dynamic(
-  () => import("@/components/app-sidebar").then((mod) => ({ default: mod.AppSidebar })),
+const AppChrome = dynamic(
+  () => import("@/components/app-chrome").then((mod) => ({ default: mod.AppChrome })),
   { ssr: false }
 )
 
+const APP_ROUTE_PREFIXES = [
+  "/admin",
+  "/chat",
+  "/credits",
+  "/history",
+  "/settings",
+]
+
 export function AppShell({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname()
+  const usesAppChrome = APP_ROUTE_PREFIXES.some((prefix) => pathname?.startsWith(prefix))
+
+  if (usesAppChrome) {
+    return <AppChrome>{children}</AppChrome>
+  }
+
   return (
-    <SidebarProvider>
-      <AppSidebar />
-      <div id="main-content" className="flex min-h-screen w-full flex-1 flex-col">
-        {children}
-      </div>
-    </SidebarProvider>
+    <div id="main-content" className="min-h-screen w-full">
+      {children}
+    </div>
   )
 }

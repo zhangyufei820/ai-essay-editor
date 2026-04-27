@@ -52,7 +52,7 @@ export function HomeFooter() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-12">
           {/* 品牌区 */}
           <div className="col-span-2 md:col-span-1">
-            <Link href="/" className="inline-block mb-4">
+            <Link href="/" prefetch={false} className="inline-block mb-4">
               <img 
                 src="/images/design-mode/主页logo.jpg" 
                 alt="沈翔智学" 
@@ -81,6 +81,7 @@ export function HomeFooter() {
                   <li key={linkIndex}>
                     <Link 
                       href={link.href}
+                      prefetch={false}
                       className="text-sm transition-colors hover:text-brand-600"
                       style={{ color: slateColors[500] }}
                     >
@@ -110,6 +111,7 @@ export function HomeFooter() {
           <div className="flex items-center gap-6">
             <Link
               href="/privacy"
+              prefetch={false}
               className="text-sm transition-colors hover:text-brand-600"
               style={{ color: slateColors[400] }}
             >
@@ -117,6 +119,7 @@ export function HomeFooter() {
             </Link>
             <Link
               href="/terms"
+              prefetch={false}
               className="text-sm transition-colors hover:text-brand-600"
               style={{ color: slateColors[400] }}
             >

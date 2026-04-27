@@ -125,9 +125,6 @@ export default function RootLayout({
         <link rel="apple-touch-icon" sizes="180x180" href="https://cdn.shenxiang.school/icons/icon-192x192.png" />
         <link rel="apple-touch-icon" sizes="167x167" href="https://cdn.shenxiang.school/icons/icon-192x192.png" />
 
-        {/* KaTeX CSS - 同步加载，确保公式排版正确 */}
-        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.45/dist/katex.min.css" />
-
         {/* Schema.org 结构化数据 - 网站信息 */}
         <script
           type="application/ld+json"

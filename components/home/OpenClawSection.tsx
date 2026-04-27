@@ -225,7 +225,7 @@ export function OpenClawSection() {
                   </p>
                 </div>
 
-                <Link href="/chat/open-claw">
+                <Link href="/chat/open-claw" prefetch={false}>
                   <motion.button
                     className="group relative h-12 px-8 text-base font-semibold rounded-2xl text-white overflow-hidden"
                     style={{

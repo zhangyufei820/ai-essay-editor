@@ -589,7 +589,7 @@ export function HeroSection() {
             transition={{ duration: 0.7, delay: 1.4, ease: [0.32, 0.72, 0, 1] }}
             className="flex flex-col sm:flex-row items-center justify-center gap-4"
           >
-            <Link href="/chat">
+            <Link href="/chat" prefetch={false}>
               <motion.button
                 className="group relative h-14 px-8 text-base font-bold rounded-2xl text-white overflow-hidden"
                 style={{
@@ -628,7 +628,7 @@ export function HeroSection() {
                 </span>
               </motion.button>
             </Link>
-            <Link href="/pricing">
+            <Link href="/pricing" prefetch={false}>
               <motion.button
                 className="group h-14 px-8 text-base font-semibold rounded-2xl border-2 bg-white/80 backdrop-blur-sm"
                 style={{
@@ -657,7 +657,7 @@ export function HeroSection() {
             transition={{ duration: 0.6, delay: 1.6, ease: [0.32, 0.72, 0, 1] }}
             className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4"
           >
-            <Link href="/chat?agent=quanquan-math">
+            <Link href="/chat?agent=quanquan-math" prefetch={false}>
               <motion.div
                 className="flex items-center gap-3 px-6 py-3 rounded-2xl bg-white border border-slate-200 shadow-sm cursor-pointer"
                 whileHover={{ scale: 1.05, boxShadow: "0 8px 24px rgba(0,0,0,0.12)" }}
@@ -671,7 +671,7 @@ export function HeroSection() {
                 </div>
               </motion.div>
             </Link>
-            <Link href="/chat/standard">
+            <Link href="/chat/standard" prefetch={false}>
               <motion.div
                 className="flex items-center gap-3 px-6 py-3 rounded-2xl bg-white border border-slate-200 shadow-sm cursor-pointer"
                 whileHover={{ scale: 1.05, boxShadow: "0 8px 24px rgba(0,0,0,0.12)" }}
