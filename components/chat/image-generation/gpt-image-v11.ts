@@ -365,3 +365,20 @@ export function proxifyGeneratedImagePreviewUrl(url: string, width = 1600): stri
 export function proxifyGeneratedImageDownloadUrl(url: string): string {
   return buildImageProxyUrl(url, { raw: true })
 }
+
+export function absolutizeGeneratedImageUrl(url: string): string {
+  if (/^https?:\/\//i.test(url)) return url
+
+  const configuredOrigin = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/+$/, "")
+  const runtimeOrigin = typeof window !== "undefined" ? window.location.origin : configuredOrigin
+
+  if (runtimeOrigin && url.startsWith("/")) {
+    return `${runtimeOrigin}${url}`
+  }
+
+  return url
+}
+
+export function getPublicGeneratedImageUrl(url: string, width = 1600): string {
+  return absolutizeGeneratedImageUrl(proxifyGeneratedImagePreviewUrl(url, width))
+}

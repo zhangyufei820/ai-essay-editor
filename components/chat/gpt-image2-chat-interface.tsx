@@ -60,6 +60,7 @@ import {
   getAspectRatioForSize,
   isLargeSize,
   isOriginalSize,
+  getPublicGeneratedImageUrl,
   proxifyGeneratedImageUrl,
   proxifyGeneratedImageDownloadUrl,
   proxifyGeneratedImagePreviewUrl,
@@ -1095,11 +1096,16 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
 
                     {item.imageUrls.length > 0 ? (
                       <div className="grid gap-3 md:gap-4 md:grid-cols-2">
-                        {item.imageUrls.map((url, index) => (
+                        {item.imageUrls.map((url, index) => {
+                          const publicImageUrl = getPublicGeneratedImageUrl(url, 900)
+
+                          return (
                           <div key={`${url}-${index}`} className="overflow-hidden rounded-xl border border-border bg-card">
                             <img src={proxifyGeneratedImagePreviewUrl(url, 900)} alt={`生成结果 ${index + 1}`} className="aspect-square w-full object-contain bg-muted" />
                             <div className="space-y-3 border-t border-border p-3">
-                              <p className="break-all text-xs text-muted-foreground">{url}</p>
+                              <a href={publicImageUrl} target="_blank" rel="noopener noreferrer" className="block break-all text-xs text-muted-foreground underline-offset-4 hover:underline">
+                                {publicImageUrl}
+                              </a>
                               <div className="flex flex-wrap gap-2">
                                 <Button type="button" variant="outline" size="sm" asChild>
                                   <a href={proxifyGeneratedImageDownloadUrl(url)} download target="_blank" rel="noopener noreferrer">
@@ -1107,14 +1113,15 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
                                     下载
                                   </a>
                                 </Button>
-                                <Button type="button" variant="outline" size="sm" onClick={() => copyText(url, "图片地址已复制")}>
+                                <Button type="button" variant="outline" size="sm" onClick={() => copyText(publicImageUrl, "图片地址已复制")}>
                                   <Copy className="mr-2 h-4 w-4" />
                                   复制图片地址
                                 </Button>
                               </div>
                             </div>
                           </div>
-                        ))}
+                          )
+                        })}
                       </div>
                     ) : (
                       <div className="rounded-xl border border-border bg-muted/40 p-4 text-sm leading-7 text-muted-foreground">
