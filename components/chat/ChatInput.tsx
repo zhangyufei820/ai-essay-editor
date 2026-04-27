@@ -7,7 +7,16 @@
 
 "use client"
 
-import { useRef, useEffect, useState, type KeyboardEvent, type ChangeEvent, type FormEvent } from "react"
+import {
+  useRef,
+  useEffect,
+  useState,
+  type KeyboardEvent,
+  type ChangeEvent,
+  type ClipboardEvent as ReactClipboardEvent,
+  type DragEvent as ReactDragEvent,
+  type FormEvent,
+} from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Send, Paperclip, X, Loader2, ChevronDown, FileText, Image as ImageIcon, Mic, MicOff } from "lucide-react"
 import { Textarea } from "@/components/ui/textarea"
@@ -103,6 +112,37 @@ interface ChatInputProps {
   className?: string
 }
 
+function createFileList(files: File[]): FileList | null {
+  if (files.length === 0 || typeof DataTransfer === "undefined") return null
+
+  const dataTransfer = new DataTransfer()
+  files.forEach((file) => dataTransfer.items.add(file))
+  return dataTransfer.files
+}
+
+function nameClipboardFile(file: File, index: number): File {
+  if (file.name) return file
+
+  const extension = file.type.split("/")[1]?.split("+")[0] || "png"
+  return new File([file], `pasted-image-${Date.now()}-${index}.${extension}`, {
+    type: file.type || "image/png",
+    lastModified: Date.now(),
+  })
+}
+
+function getClipboardFiles(dataTransfer: DataTransfer): File[] {
+  const directFiles = Array.from(dataTransfer.files)
+  if (directFiles.length > 0) {
+    return directFiles.map(nameClipboardFile)
+  }
+
+  return Array.from(dataTransfer.items)
+    .filter((item) => item.kind === "file")
+    .map((item) => item.getAsFile())
+    .filter((file): file is File => Boolean(file))
+    .map(nameClipboardFile)
+}
+
 // ============================================
 // 附件预览卡片
 // ============================================
@@ -192,8 +232,10 @@ export function ChatInput({
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isFocused, setIsFocused] = useState(false)
+  const [isDraggingFile, setIsDraggingFile] = useState(false)
   const [isListening, setIsListening] = useState(false)
   const recognitionRef = useRef<SpeechRecognition | null>(null)
+  const dragDepthRef = useRef(0)
   const isMobileInputMode = isFocused || value.trim().length > 0
 
   // 自动调整高度
@@ -236,6 +278,60 @@ export function ChatInput({
       // 清空 input 以便重复选择同一文件
       e.target.value = ""
     }
+  }
+
+  const uploadFiles = (files: File[]) => {
+    if (!onFileUpload || disabled || isLoading || files.length === 0) return false
+
+    const fileList = createFileList(files)
+    if (!fileList) return false
+
+    onFileUpload(fileList)
+    return true
+  }
+
+  const handlePaste = (event: ReactClipboardEvent<HTMLDivElement>) => {
+    const files = getClipboardFiles(event.clipboardData)
+    if (files.length === 0) return
+
+    uploadFiles(files)
+  }
+
+  const handleDragEnter = (event: ReactDragEvent<HTMLDivElement>) => {
+    if (!onFileUpload || disabled || isLoading) return
+
+    const hasFiles = Array.from(event.dataTransfer.types).includes("Files")
+    if (!hasFiles) return
+
+    event.preventDefault()
+    dragDepthRef.current += 1
+    setIsDraggingFile(true)
+  }
+
+  const handleDragOver = (event: ReactDragEvent<HTMLDivElement>) => {
+    if (!isDraggingFile) return
+
+    event.preventDefault()
+    event.dataTransfer.dropEffect = "copy"
+  }
+
+  const handleDragLeave = (event: ReactDragEvent<HTMLDivElement>) => {
+    if (!isDraggingFile) return
+
+    event.preventDefault()
+    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1)
+    if (dragDepthRef.current === 0) {
+      setIsDraggingFile(false)
+    }
+  }
+
+  const handleDrop = (event: ReactDragEvent<HTMLDivElement>) => {
+    if (!onFileUpload || disabled || isLoading) return
+
+    event.preventDefault()
+    dragDepthRef.current = 0
+    setIsDraggingFile(false)
+    uploadFiles(Array.from(event.dataTransfer.files))
   }
 
   // 语音输入处理
@@ -300,6 +396,11 @@ export function ChatInput({
 
   return (
     <div
+      onPaste={handlePaste}
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
       className={cn(
         "relative rounded-[24px] border bg-white transition-all duration-300 touch-manipulation max-sm:rounded-[28px]",
         isFocused
@@ -312,6 +413,19 @@ export function ChatInput({
         ['--ring-color' as string]: `${brandColors[900]}10`
       }}
     >
+      <AnimatePresence>
+        {isDraggingFile && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-[inherit] border border-dashed border-emerald-500/60 bg-emerald-50/80 text-sm font-medium text-emerald-800 backdrop-blur-sm"
+          >
+            松开即可上传文件
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* 工具栏 */}
       {showModelSelector && (
         <div
