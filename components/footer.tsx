@@ -8,7 +8,7 @@ export function Footer() {
           <div className="py-16 md:py-24">
             <div className="mb-4">
               <Image
-                src="/images/logo.png"
+                src="/images/design-mode/主页logo.jpg"
                 alt="沈翔智学"
                 width={220}
                 height={75}

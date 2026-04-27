@@ -54,7 +54,7 @@ export function HomeFooter() {
           <div className="col-span-2 md:col-span-1">
             <Link href="/" className="inline-block mb-4">
               <img 
-                src="/images/logo.png" 
+                src="/images/design-mode/主页logo.jpg" 
                 alt="沈翔智学" 
                 className="h-12 w-auto object-contain"
               />

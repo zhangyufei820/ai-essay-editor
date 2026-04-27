@@ -76,7 +76,7 @@ export function Header() {
       <nav className="container flex h-16 items-center justify-between px-4">
         <Link href="/" className="flex items-center gap-2">
           <Image
-            src="/images/logo.png"
+            src="/images/design-mode/主页logo.jpg"
             alt="沈翔智学"
             width={220}
             height={75}

@@ -520,7 +520,7 @@ function AppSidebarInner() {
         {/* 1. Logo 区域 - 🎨 呼吸间距，确保品牌标识有足够的视域空间 */}
         <div className="flex items-center shrink-0 px-3 py-5">
           <Link href="/" onClick={handleNavClick} className="flex items-center w-full">
-            <img src="/images/logo.png" alt="Logo" className="w-full h-auto object-contain" style={{ maxWidth: "180px" }} />
+            <img src="/images/design-mode/主页logo.jpg" alt="Logo" className="w-full h-auto object-contain" style={{ maxWidth: "180px" }} />
           </Link>
         </div>
 

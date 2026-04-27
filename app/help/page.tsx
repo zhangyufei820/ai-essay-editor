@@ -21,7 +21,7 @@ import { brandColors, slateColors, creamColors } from "@/lib/design-tokens"
 // 客服联系方式配置
 const contactInfo = {
   phone: "19132896773",
-  wechatQR: "/images/wechat-qr.jpg"
+  wechatQR: "/images/design-mode/站长微信.jpg"
 }
 
 // ============================================

@@ -279,7 +279,7 @@ export function Footer() {
               {/* Logo - 使用品牌图片 */}
               <div className="mb-4">
                 <img 
-                  src="/images/logo.png" 
+                  src="/images/design-mode/主页logo.jpg" 
                   alt="沈翔智学" 
                   className="h-12 w-auto object-contain"
                 />
@@ -314,7 +314,7 @@ export function Footer() {
               {/* Logo - 使用品牌图片 */}
               <div className="mb-4">
                 <img 
-                  src="/images/logo.png" 
+                  src="/images/design-mode/主页logo.jpg" 
                   alt="沈翔智学" 
                   className="h-10 w-auto object-contain"
                 />

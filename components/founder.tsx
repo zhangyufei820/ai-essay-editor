@@ -20,7 +20,7 @@ export function Founder() {
             <div className="flex justify-center items-start">
               <div className="relative w-64 h-64 rounded-lg overflow-hidden shadow-xl">
                 <Image
-                  src="/images/design-mode/image.png"
+                  src="/images/design-mode/首页主图.jpg"
                   alt="沈翔老师"
                   fill
                   className="object-cover grayscale"

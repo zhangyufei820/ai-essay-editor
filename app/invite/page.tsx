@@ -348,7 +348,7 @@ export default function InvitePage() {
       >
         <div className="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
-            <img src="/images/logo.png" alt="沈翔智学" className="h-10 w-auto" />
+            <img src="/images/design-mode/主页logo.jpg" alt="沈翔智学" className="h-10 w-auto" />
           </Link>
           <Button 
             variant="outline" 
