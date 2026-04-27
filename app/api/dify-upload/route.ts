@@ -48,6 +48,11 @@ const IMAGE_GATEWAY_PUBLIC_URL = (
   process.env.NEXT_PUBLIC_DIFY_IMAGE_GATEWAY_URL ||
   "http://43.154.111.156:8001"
 ).replace(/\/+$/, "")
+const PUBLIC_APP_URL = (
+  process.env.NEXT_PUBLIC_APP_URL ||
+  process.env.APP_URL ||
+  "https://shenxiang.school"
+).replace(/\/+$/, "")
 
 // 🔥 作文批改（standard）使用专用的 ESSAY_CORRECTION_API_KEY
 const DEFAULT_DIFY_KEY = process.env.ESSAY_CORRECTION_API_KEY || process.env.DIFY_API_KEY
@@ -130,6 +135,29 @@ function validateFileSize(file: File, maxSize: number = MAX_FILE_SIZE_VERCEL): {
  */
 function generateSafeFileName(originalExt: string): string {
   return `${randomUUID()}${originalExt}`
+}
+
+function getRequestOrigin(request: NextRequest): string {
+  const forwardedHost = request.headers.get("x-forwarded-host")
+  const host = forwardedHost || request.headers.get("host")
+  const forwardedProto = request.headers.get("x-forwarded-proto")
+
+  if (host) {
+    const proto = forwardedProto || (host.includes("localhost") ? "http" : "https")
+    return `${proto}://${host}`.replace(/\/+$/, "")
+  }
+
+  return PUBLIC_APP_URL
+}
+
+function buildModelAccessibleImageUrl(request: NextRequest, gatewayUrl: string): string {
+  const origin = PUBLIC_APP_URL || getRequestOrigin(request)
+  const params = new URLSearchParams({
+    url: gatewayUrl,
+    raw: "1",
+  })
+
+  return `${origin}/api/image-proxy/raw/image.png?${params.toString()}`
 }
 
 export async function POST(request: NextRequest) {
@@ -349,19 +377,23 @@ export async function POST(request: NextRequest) {
       gatewayUrl,
     })
 
-    // 返回网关上传结果（包含公网 URL）
-    // 前端应使用 gatewayUrl 作为 Dify inputs.reference_image_url
+    const modelUrl = buildModelAccessibleImageUrl(request, gatewayUrl)
+
+    // 返回图片结果：gatewayUrl 用于内部追踪，modelUrl 是给外部模型拉取的 HTTPS 地址。
     return new Response(JSON.stringify({
       success: true,
       code: "ok",
       message: "文件上传成功",
       data: {
-        url: gatewayUrl,                   // 🔥 图片网关公网 URL（用于 reference_image_url）
+        url: modelUrl,
+        gateway_url: gatewayUrl,
+        model_url: modelUrl,
         filename: safeFileName,
         content_type: file.type,
         size: file.size,
       },
-      gatewayUrl,                          // 🔥 兼容字段
+      gatewayUrl,
+      modelUrl,
     }), {
       status: 200,
       headers: { "Content-Type": "application/json" },

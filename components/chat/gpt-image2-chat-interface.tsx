@@ -671,11 +671,13 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
 
     const json = await res.json().catch(() => ({}))
 
-    if (!res.ok || !json.success || !json.gatewayUrl) {
+    const imageUrl = json.modelUrl || json.data?.model_url || json.data?.url || json.gatewayUrl
+
+    if (!res.ok || !json.success || !imageUrl) {
       throw new Error(json.message || json.error || "图片上传失败")
     }
 
-    return json.gatewayUrl as string
+    return imageUrl as string
   }
 
   const submitImageTask = async (event?: React.FormEvent) => {
