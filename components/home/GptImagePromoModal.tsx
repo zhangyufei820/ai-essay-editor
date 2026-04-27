@@ -41,6 +41,7 @@ export function GptImagePromoModal() {
 
   useEffect(() => {
     if (typeof window === "undefined") return
+    if (window.matchMedia("(max-width: 767px)").matches) return
 
     const currentUser = window.localStorage.getItem("currentUser")
     setHasUser(Boolean(currentUser))

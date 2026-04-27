@@ -88,6 +88,7 @@ function AppSidebarInner() {
   const router = useRouter()
   const currentAgent = searchParams.get("agent")
   const isChatRoute = pathname?.startsWith("/chat")
+  const isHomeRoute = pathname === "/"
   
   // --- 状态管理 ---
   const [user, setUser] = useState<any>(null)
@@ -176,7 +177,7 @@ function AppSidebarInner() {
     const checkScreenSize = () => {
       const mobile = window.innerWidth < 768
       setIsMobile(mobile)
-      if (mobile) setIsOpen(false)
+      if (mobile) setIsOpen(isHomeRoute)
       else setIsOpen(true)
     }
     checkScreenSize()
@@ -321,7 +322,7 @@ function AppSidebarInner() {
       document.removeEventListener("visibilitychange", handleVisibilityChange)
       document.removeEventListener("mousedown", handleClickOutside)
     }
-  }, [fetchCredits])
+  }, [fetchCredits, isHomeRoute])
 
   useEffect(() => {
     if (currentUserId) {

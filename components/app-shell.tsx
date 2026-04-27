@@ -19,7 +19,9 @@ const APP_ROUTE_PREFIXES = [
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
-  const usesAppChrome = APP_ROUTE_PREFIXES.some((prefix) => pathname?.startsWith(prefix))
+  const usesAppChrome =
+    pathname === "/" ||
+    APP_ROUTE_PREFIXES.some((prefix) => pathname?.startsWith(prefix))
 
   if (usesAppChrome) {
     return <AppChrome>{children}</AppChrome>

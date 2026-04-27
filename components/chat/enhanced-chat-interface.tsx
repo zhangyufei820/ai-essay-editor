@@ -2798,7 +2798,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                 isLoading={isLoading}
                 disabled={isLoading}
                 placeholder={userId ? "输入内容开始对话..." : "请先登录..."}
-                  className="shadow-[0_-4px_18px_rgba(0,0,0,0.06)] sm:shadow-[0_8px_24px_rgba(0,0,0,0.10)] border-slate-200/70 bg-white/95 backdrop-blur-md overflow-hidden"
+                  className="overflow-visible border-slate-200/70 bg-white/95 shadow-[0_-4px_18px_rgba(0,0,0,0.06)] backdrop-blur-md sm:shadow-[0_8px_24px_rgba(0,0,0,0.10)]"
                 onFileUpload={(files) => {
                   const target = { target: { files } } as unknown as React.ChangeEvent<HTMLInputElement>
                   handleFileUpload(target)

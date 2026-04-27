@@ -307,8 +307,7 @@ export function ChatInput({
       {showModelSelector && (
         <div
           className={cn(
-            "flex items-center justify-between gap-3 px-3 sm:px-4 py-1.5 sm:py-2 border-b",
-            isFocused && "max-sm:hidden"
+            "flex items-center justify-between gap-3 px-3 sm:px-4 py-1.5 sm:py-2 border-b"
           )}
           style={{ borderColor: slateColors[50] }}
         >
@@ -388,8 +387,8 @@ export function ChatInput({
         )}
       >
         {/* 附件按钮（工具栏隐藏或移动端键盘态时显示） */}
-        {(!showModelSelector || isFocused) && (
-          <div className={cn("flex flex-col items-center gap-0.5 sm:gap-1 shrink-0", showModelSelector && "sm:hidden")}>
+        {!showModelSelector && (
+          <div className="flex flex-col items-center gap-0.5 sm:gap-1 shrink-0">
             <span className="text-[10px] font-medium hidden sm:block" style={{ color: slateColors[400] }}>
               文件上传
             </span>
