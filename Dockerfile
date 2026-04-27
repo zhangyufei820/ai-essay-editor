@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1.7
+
 # ========== 构建阶段 ==========
 FROM node:20 AS builder
 
@@ -12,7 +14,6 @@ ARG NEXT_PUBLIC_API_BASE_URL
 ARG NEXT_PUBLIC_CDN_URL
 ARG NEXT_BUILD_ID
 ARG DEPLOYMENT_VERSION
-ARG NEXT_SERVER_ACTIONS_ENCRYPTION_KEY
 
 # 验证必填构建参数
 RUN if [ -z "${NEXT_PUBLIC_SUPABASE_URL}" ]; then \
@@ -31,7 +32,6 @@ ENV NEXT_PUBLIC_AUTHING_APP_ID=${NEXT_PUBLIC_AUTHING_APP_ID:-}
 ENV NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-https://www.shenxiang.school}
 ENV NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL:-https://api.shenxiang.school}
 ENV NEXT_PUBLIC_CDN_URL=${NEXT_PUBLIC_CDN_URL:-https://cdn.shenxiang.school}
-ENV NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=${NEXT_SERVER_ACTIONS_ENCRYPTION_KEY:-}
 
 # 安装依赖（包括 devDependencies，用于构建阶段）
 COPY package*.json ./
@@ -41,12 +41,14 @@ RUN npm ci
 COPY . .
 
 # 构建
-RUN BUILD_ID="${NEXT_BUILD_ID:-${DEPLOYMENT_VERSION:-}}" && \
+RUN --mount=type=secret,id=next_server_actions_encryption_key,required=true \
+    BUILD_ID="${NEXT_BUILD_ID:-${DEPLOYMENT_VERSION:-}}" && \
     if [ -z "$BUILD_ID" ]; then \
       BUILD_ID="$(tar cf - app components hooks lib public src styles package.json package-lock.json next.config.mjs middleware.ts tsconfig.json 2>/dev/null | sha256sum | cut -c1-16)"; \
     fi && \
+    SERVER_ACTIONS_KEY="$(cat /run/secrets/next_server_actions_encryption_key)" && \
     echo "Building Next.js deployment ${BUILD_ID}" && \
-    NEXT_BUILD_ID="$BUILD_ID" DEPLOYMENT_VERSION="$BUILD_ID" npm run build
+    NEXT_BUILD_ID="$BUILD_ID" DEPLOYMENT_VERSION="$BUILD_ID" NEXT_SERVER_ACTIONS_ENCRYPTION_KEY="$SERVER_ACTIONS_KEY" npm run build
 
 # ========== 生产阶段 ==========
 FROM node:20 AS runner

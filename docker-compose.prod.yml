@@ -61,7 +61,8 @@ services:
         NEXT_PUBLIC_AUTHING_APP_ID: ${NEXT_PUBLIC_AUTHING_APP_ID}
         NEXT_BUILD_ID: ${NEXT_BUILD_ID:-}
         DEPLOYMENT_VERSION: ${DEPLOYMENT_VERSION:-}
-        NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: ${NEXT_SERVER_ACTIONS_ENCRYPTION_KEY:-}
+      secrets:
+        - next_server_actions_encryption_key
     image: ai-essay-editor:latest
     container_name: shenxiang-nextjs
     restart: unless-stopped
@@ -102,3 +103,7 @@ networks:
     external: true
   docker_default:
     external: true
+
+secrets:
+  next_server_actions_encryption_key:
+    environment: NEXT_SERVER_ACTIONS_ENCRYPTION_KEY
