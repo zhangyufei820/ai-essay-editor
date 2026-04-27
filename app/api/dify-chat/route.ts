@@ -101,6 +101,8 @@ function buildGptImageV11Inputs(inputs: unknown): GptImageV11Inputs {
 const DIFY_BASE_URL = process.env.DIFY_INTERNAL_URL
   || process.env.DIFY_BASE_URL
   || "https://api.dify.ai/v1"
+const DEFAULT_DIFY_FIRST_BYTE_TIMEOUT_MS = 120_000
+const GPT_IMAGE_BLOCKING_TIMEOUT_MS = 300_000
 // 🔥 作文批改（standard）使用专用的 ESSAY_CORRECTION_API_KEY
 const DEFAULT_DIFY_KEY = process.env.ESSAY_CORRECTION_API_KEY || process.env.DIFY_API_KEY 
 
@@ -622,14 +624,18 @@ export async function POST(request: NextRequest) {
 
         console.log(`🔗 [API端点] ${apiEndpoint} | 模式: ${isWorkflow ? 'Workflow' : 'Chat'}`)
 
-        // 🔥 120秒超时（Cloudflare 524 超时是 100 秒，设置大于 100 秒让 Cloudflare 先超时）
+        const firstByteTimeoutMs = model === "gpt-image-2"
+          ? GPT_IMAGE_BLOCKING_TIMEOUT_MS
+          : DEFAULT_DIFY_FIRST_BYTE_TIMEOUT_MS
+
+        // GPT Image 使用 blocking 响应，复杂 4K/编辑任务经常超过 120 秒才返回首字节。
         streamStatus.controller = new AbortController()
         streamStatus.timeoutId = setTimeout(() => {
             if (!streamStatus.firstByteReceived) {
-                console.warn(`⏰ [Dify超时] 120秒内未收到首字节，中断请求`)
+                console.warn(`⏰ [Dify超时] ${Math.round(firstByteTimeoutMs / 1000)}秒内未收到首字节，中断请求 model=${model}`)
                 streamStatus.controller?.abort()
             }
-        }, 120_000)
+        }, firstByteTimeoutMs)
 
         try {
             console.warn(`🚀 [Dify请求] 开始请求 Dify... model=${model} endpoint=${DIFY_BASE_URL}${apiEndpoint}`)
@@ -664,7 +670,7 @@ export async function POST(request: NextRequest) {
             const err = error instanceof Error ? error : null
             if (err && (err.name === 'AbortError' || err.message.includes('abort'))) {
                 console.error(`❌ [Dify请求] 请求被中断（超时）:`, err.message)
-                throw new Error('请求超时：Dify 服务在 120 秒内未响应')
+                throw new Error(`请求超时：Dify 服务在 ${Math.round(firstByteTimeoutMs / 1000)} 秒内未响应`)
             }
 
             throw error
@@ -854,7 +860,7 @@ export async function POST(request: NextRequest) {
                 clearTimeout(streamStatus.timeoutId)
                 streamStatus.timeoutId = null
             }
-            console.warn(`✅ [首字节探测] Dify 流式数据开始传输，已取消 180s 超时定时器`)
+            console.warn(`✅ [首字节探测] Dify 流式数据开始传输，已取消首字节超时定时器`)
         }
 
         // 直接传递数据给前端

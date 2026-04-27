@@ -156,6 +156,9 @@ function mapImageError(error: unknown): string {
   }
   if (lower.includes("download_file_error")) return "无法读取上传图片，请重新上传。"
   if (lower.includes("network") || lower.includes("failed to fetch")) return "网络请求失败，请稍后重试。"
+  if (lower.includes("timeout") || raw.includes("超时") || lower.includes("504")) {
+    return "图片生成等待超时。复杂图像可能仍在上游处理中，请稍后重试，或先降低尺寸 / 质量。"
+  }
   if (lower.includes("upstream_error") || lower.includes("dify error") || lower.includes("500")) {
     return "图片服务请求失败，可能是余额不足、模型不可用、尺寸不支持或参数不兼容。"
   }
@@ -713,9 +716,14 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
     setShowLongRunningHint(false)
     collapseSidebar()
 
-    const longRunningTimer = window.setTimeout(() => {
-      setShowLongRunningHint(true)
-    }, 60_000)
+    const longRunningTimers = [
+      window.setTimeout(() => {
+        setShowLongRunningHint(true)
+      }, 60_000),
+      window.setTimeout(() => {
+        setSubmitStage("仍在生成图片，复杂任务通常需要 3-5 分钟")
+      }, 120_000),
+    ]
 
     try {
       let referenceUrl = ""
@@ -861,7 +869,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
       setErrorMessage(message)
       toast.error(message)
     } finally {
-      window.clearTimeout(longRunningTimer)
+      longRunningTimers.forEach((timer) => window.clearTimeout(timer))
       setIsSubmitting(false)
       setSubmitStage("")
     }
@@ -1045,7 +1053,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
             {showLongRunningHint ? (
               <div className="flex items-start gap-2 rounded-xl border border-primary/20 bg-primary/5 p-3 text-sm text-primary">
                 <Zap className="mt-0.5 h-4 w-4 shrink-0" />
-                <span>图片生成仍在处理中，复杂图像可能需要更久。</span>
+                <span>图片生成仍在处理中，复杂图像可能需要 3-5 分钟，请保持页面打开。</span>
               </div>
             ) : null}
 
