@@ -8,17 +8,25 @@
 // ============================================================
 
 /** Dify 文件对象（用于 Chat API attachments） */
-export interface DifyFileObject {
+export type DifyFileObject = {
   type: "image"
   transfer_method: "local_file"
   upload_file_id: string
+} | {
+  type: "image"
+  transfer_method: "remote_url"
+  url: string
 }
 
 /** Dify 图片输入对象（用于 Workflow API inputs） */
-export interface DifyImageObject {
+export type DifyImageObject = {
   type: "image"
   transfer_method: "local_file"
   upload_file_id: string
+} | {
+  type: "image"
+  transfer_method: "remote_url"
+  url: string
 }
 
 /** 图片尺寸参数 */

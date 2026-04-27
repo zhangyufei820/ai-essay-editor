@@ -20,6 +20,10 @@ interface UserMessageBubbleProps {
     name: string
     type?: string
     preview?: string
+    data?: string
+    gatewayUrl?: string
+    modelUrl?: string
+    difyFileId?: string
   }>
   onEdit?: (content: string, files?: UserMessageBubbleProps["files"]) => void
   onSend?: (content: string, files?: UserMessageBubbleProps["files"]) => void
@@ -62,7 +66,7 @@ export function UserMessageBubble({ content, files, onEdit, onSend }: UserMessag
 
   // 提交编辑
   const handleSubmitEdit = () => {
-    if (editContent.trim() && editContent !== content) {
+    if (editContent.trim()) {
       onEdit?.(editContent, files)
       onSend?.(editContent, files)
     }

@@ -136,7 +136,16 @@ const supabase = createClient(
 )
 
 // --- 类型定义 ---
-type UploadedFile = { name: string; type: string; size: number; data: string; preview?: string; difyFileId?: string }
+type UploadedFile = {
+  name: string
+  type: string
+  size: number
+  data: string
+  preview?: string
+  difyFileId?: string
+  gatewayUrl?: string
+  modelUrl?: string
+}
 // 🔥 消息类型 - 支持 metadata 存储音乐等附加数据，支持 files 显示上传的文件
 type Message = { 
   id: string
@@ -1408,6 +1417,8 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
             }
 
             const data = await res.json()
+            const gatewayUrl = data.gatewayUrl || data.data?.gateway_url
+            const modelUrl = data.modelUrl || data.data?.model_url || data.data?.url || gatewayUrl
             
             // 🔥 更新进度
             setUploadProgress(Math.round(((index + 1) / totalFiles) * 100))
@@ -1418,8 +1429,10 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                         name: fileToUpload.name, 
                         type: fileToUpload.type, 
                         size: fileToUpload.size, 
-                        data: "", 
+                        data: modelUrl || "",
                         difyFileId: data.id, 
+                        gatewayUrl,
+                        modelUrl,
                         preview: URL.createObjectURL(fileToUpload) 
                     });
                 } else {
@@ -1430,6 +1443,8 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                         size: fileToUpload.size, 
                         data: e.target?.result as string, 
                         difyFileId: data.id, 
+                        gatewayUrl,
+                        modelUrl,
                         preview: undefined 
                     });
                     reader.readAsDataURL(fileToUpload)
@@ -1718,6 +1733,10 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     let fullText = ""; let hasRec = false
     try {
         const fileIds = activeFiles.map(f => f.difyFileId).filter(Boolean)
+        const fileUrls = activeFiles
+          .filter((file) => file.type?.startsWith("image/"))
+          .map((file) => file.modelUrl || (/^https?:\/\//.test(file.data) ? file.data : "") || file.gatewayUrl || "")
+          .filter(Boolean)
         
         console.log("🚀 [API 请求] 发送到 /api/dify-chat:", {
           query: userMsg.content.slice(0, 50),
@@ -1725,7 +1744,8 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
           model: selectedModel,
           mode: genMode,
           sessionId: sessionIdRef.current,
-          fileCount: fileIds.length
+          fileCount: fileIds.length,
+          fileUrlCount: fileUrls.length
         })
         
         const res = await fetch(getApiUrl("/api/dify-chat"), {
@@ -1737,6 +1757,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
             body: JSON.stringify({ 
               query: userMsg.content, 
               fileIds, 
+              fileUrls,
               userId, 
               // 🔥 Suno V5 使用 useSunoMusic 的 conversationId 保持会话连续性
               conversation_id: selectedModel === "suno-v5" && sunoConversationId ? sunoConversationId : getConversationIdForRequest(selectedModel), 
@@ -2566,7 +2587,6 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                             files={message.files}
                             onEdit={(content, files) => {
                               setInput(content)
-                              setUploadedFiles((files as UploadedFile[]) ?? [])
                               setUploadedFiles((files as UploadedFile[]) ?? [])
                             }}
                             onSend={(content, files) => {

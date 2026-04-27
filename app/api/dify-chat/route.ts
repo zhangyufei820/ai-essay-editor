@@ -78,6 +78,13 @@ function pickUrlString(value: unknown): string {
   return value.startsWith("http://") || value.startsWith("https://") ? value : ""
 }
 
+function pickUrlStrings(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return value
+    .filter((item): item is string => typeof item === "string")
+    .filter((item) => item.startsWith("http://") || item.startsWith("https://"))
+}
+
 function buildGptImageV11Inputs(inputs: unknown): GptImageV11Inputs {
   const record = inputs && typeof inputs === "object" ? inputs as Record<string, unknown> : {}
 
@@ -364,6 +371,7 @@ export async function POST(request: NextRequest) {
     
     const body = await request.json()
     const { query, conversation_id, fileIds, userId: bodyUserId, inputs, model, imageSize, estimatedCost } = body
+    const fileUrls = pickUrlStrings(body.fileUrls)
 
     // 🔥 会话隔离修复：为每个模型创建独立的 conversation_id 命名空间
     // 防止多用户并发时不同模型复用同一个 conversation_id 导致 Dify 404 冲突
@@ -380,7 +388,7 @@ export async function POST(request: NextRequest) {
       effectiveConvId = conversation_id.slice((modelPrefix + ":").length)
     }
     
-    console.log(`🔍 [Dify-Chat] 接收请求: model=${model || "standard"} files=${fileIds?.length || 0}`)
+    console.log(`🔍 [Dify-Chat] 接收请求: model=${model || "standard"} files=${fileIds?.length || 0} urls=${fileUrls.length}`)
     
     // 优先使用 header 中的 userId（更安全），其次使用 body 中的
     const userId = headerUserId || bodyUserId
@@ -580,12 +588,18 @@ export async function POST(request: NextRequest) {
             }
 
             // 🔥 如果有文件，构造文件对象格式
-            if (fileIds && fileIds.length > 0) {
-                difyRequest.inputs.init_image = [{
-                    type: 'image',
-                    transfer_method: 'local_file',
-                    upload_file_id: fileIds[0]
-                }]
+            if ((fileIds && fileIds.length > 0) || fileUrls.length > 0) {
+                difyRequest.inputs.init_image = fileUrls[0]
+                  ? [{
+                      type: 'image',
+                      transfer_method: 'remote_url',
+                      url: fileUrls[0]
+                    }]
+                  : [{
+                      type: 'image',
+                      transfer_method: 'local_file',
+                      upload_file_id: fileIds[0]
+                    }]
                 console.log(`🎨 [Banana] 使用文件对象:`, difyRequest.inputs.init_image)
             }
 
@@ -609,12 +623,18 @@ export async function POST(request: NextRequest) {
                 conversation_id: effectiveConvId !== undefined ? effectiveConvId : currentConvId,
             }
 
-            if (!isGptImage2 && fileIds && fileIds.length > 0) {
-                difyRequest.files = fileIds.map((id: string) => ({
+            if (!isGptImage2 && ((fileIds && fileIds.length > 0) || fileUrls.length > 0)) {
+                const localFiles = (fileIds || []).map((id: string) => ({
                     type: 'image',
                     transfer_method: 'local_file',
                     upload_file_id: id
-                }));
+                } as const))
+                const remoteFiles = fileUrls.map((url) => ({
+                    type: 'image',
+                    transfer_method: 'remote_url',
+                    url
+                } as const))
+                difyRequest.files = [...localFiles, ...remoteFiles]
             }
 
             if (isGptImage2) {
