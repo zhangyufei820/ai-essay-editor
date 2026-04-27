@@ -4,6 +4,8 @@
 
 import { withSentryConfig } from '@sentry/nextjs';
 
+const deploymentVersion = process.env.DEPLOYMENT_VERSION || process.env.NEXT_BUILD_ID;
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // ============================================
@@ -13,12 +15,12 @@ const nextConfig = {
     ignoreBuildErrors: true,
   },
   output: 'standalone',
-
-  // ============================================
-  // Edge Middleware body size limit (default 10MB)
-  // 解决 /api/dify-upload 等大文件上传 10MB 限制问题
-  // ============================================
-  middlewareClientMaxBodySize: '100mb',
+  ...(deploymentVersion
+    ? {
+        deploymentId: deploymentVersion,
+        generateBuildId: async () => deploymentVersion,
+      }
+    : {}),
 
   // ============================================
   // API 配置：允许大文件上传（服务器自托管，无 Vercel 限制）

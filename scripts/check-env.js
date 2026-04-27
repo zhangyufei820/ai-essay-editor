@@ -34,6 +34,9 @@ const REQUIRED_VARS = [
 
   // 公用
   'NEXT_PUBLIC_APP_URL',
+
+  // Next.js multi-instance / rolling deployment consistency
+  'NEXT_SERVER_ACTIONS_ENCRYPTION_KEY',
 ];
 
 // 不应该是 fallback 默认值的变量
