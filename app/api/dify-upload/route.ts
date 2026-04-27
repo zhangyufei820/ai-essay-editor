@@ -36,9 +36,9 @@ const ALLOWED_EXTENSIONS = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".pdf", ".
 // ✅ 安全校验：docker-nginx-1 100M 上限
 const MAX_FILE_SIZE_VERCEL = 100 * 1024 * 1024
 
-const DIFY_BASE_URL = process.env.DIFY_INTERNAL_URL
+const DIFY_BASE_URL = (process.env.DIFY_INTERNAL_URL
   || process.env.DIFY_BASE_URL
-  || "https://api.dify.ai"
+  || "https://api.dify.ai/v1").replace(/\/+$/, "")
 
 // 🔥 图片网关配置
 // 服务端优先使用 Docker 内网地址，返回给浏览器/Dify 的图片 URL 使用公网地址。
@@ -158,6 +158,39 @@ function buildModelAccessibleImageUrl(request: NextRequest, gatewayUrl: string):
   })
 
   return `${origin}/api/image-proxy/raw/image.png?${params.toString()}`
+}
+
+function shouldUseImageGateway(model: string | null) {
+  return model === "gpt-image-2"
+}
+
+async function uploadFileToDify(file: File, userId: string, apiKey: string) {
+  const formData = new FormData()
+  formData.append("file", file)
+  formData.append("user", userId)
+
+  const response = await fetch(`${DIFY_BASE_URL}/files/upload`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: formData,
+  })
+
+  const bodyText = await response.text()
+  let payload: Record<string, unknown> = {}
+  try {
+    payload = JSON.parse(bodyText)
+  } catch {
+    payload = {}
+  }
+
+  if (!response.ok) {
+    throw new Error(`Dify upload failed: ${response.status} ${bodyText.slice(0, 200)}`)
+  }
+
+  const id = payload.id || (payload.data as Record<string, unknown> | undefined)?.id
+  return typeof id === "string" ? id : ""
 }
 
 export async function POST(request: NextRequest) {
@@ -281,13 +314,70 @@ export async function POST(request: NextRequest) {
     // 🔥 根据模型选择正确的 API Key
     const targetModel = model || modelFromForm
     const targetApiKey = getApiKeyForModel(targetModel)
+    if (!targetApiKey) {
+      return new Response(JSON.stringify({ error: "目标模型上传凭据未配置" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      })
+    }
+
+    const safeFile = new File([file], safeFileName, { type: file.type })
+
+    // 非 GPT Image 工作台必须走 Dify 原生 upload_file_id。
+    // OpenClaw、作文批改、教学模型等 Dify 应用不可靠支持 remote_url。
+    if (!shouldUseImageGateway(targetModel)) {
+      try {
+        const difyFileId = await uploadFileToDify(safeFile, userId, targetApiKey)
+        if (!difyFileId) {
+          throw new Error("Dify upload succeeded but did not return an upload_file_id")
+        }
+
+        console.log("[Backend] Dify upload success:", {
+          fileName: safeFileName,
+          userId,
+          model: targetModel,
+          difyFileId,
+        })
+
+        return new Response(JSON.stringify({
+          success: true,
+          code: "ok",
+          message: "文件上传成功",
+          id: difyFileId,
+          data: {
+            id: difyFileId,
+            filename: safeFileName,
+            content_type: file.type,
+            size: file.size,
+          },
+        }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        })
+      } catch (error) {
+        console.error("[Backend] Dify upload failed:", {
+          fileName: safeFileName,
+          userId,
+          model: targetModel,
+          error: error instanceof Error ? error.message : String(error),
+        })
+
+        return new Response(JSON.stringify({
+          error: "File upload to Dify failed",
+          details: error instanceof Error ? error.message : String(error),
+          status: 502,
+        }), {
+          status: 502,
+          headers: { "Content-Type": "application/json" },
+        })
+      }
+    }
 
     // ============================================
     // 6. 上传到图片网关（而非直接上传到 Dify）
     // ============================================
     // 创建一个新的 FormData，使用安全的文件名
     const gatewayFormData = new FormData()
-    const safeFile = new File([file], safeFileName, { type: file.type })
     gatewayFormData.append("file", safeFile)
     gatewayFormData.append("user", userId || "anonymous-user")
 

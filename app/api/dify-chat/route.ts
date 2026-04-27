@@ -371,6 +371,9 @@ export async function POST(request: NextRequest) {
     
     const body = await request.json()
     const { query, conversation_id, fileIds, userId: bodyUserId, inputs, model, imageSize, estimatedCost } = body
+    const difyFileIds = Array.isArray(fileIds)
+      ? fileIds.filter((id): id is string => typeof id === "string" && id.trim().length > 0)
+      : []
     const fileUrls = pickUrlStrings(body.fileUrls)
 
     // 🔥 会话隔离修复：为每个模型创建独立的 conversation_id 命名空间
@@ -388,7 +391,7 @@ export async function POST(request: NextRequest) {
       effectiveConvId = conversation_id.slice((modelPrefix + ":").length)
     }
     
-    console.log(`🔍 [Dify-Chat] 接收请求: model=${model || "standard"} files=${fileIds?.length || 0} urls=${fileUrls.length}`)
+    console.log(`🔍 [Dify-Chat] 接收请求: model=${model || "standard"} files=${difyFileIds.length} urls=${fileUrls.length}`)
     
     // 优先使用 header 中的 userId（更安全），其次使用 body 中的
     const userId = headerUserId || bodyUserId
@@ -397,6 +400,17 @@ export async function POST(request: NextRequest) {
     if (!userId) {
       console.warn("🚫 [Dify-Chat] 未授权访问被拦截")
       return new Response(JSON.stringify({ error: "未授权访问，请先登录" }), { status: 401 })
+    }
+
+    if (model !== "gpt-image-2" && fileUrls.length > 0 && difyFileIds.length === 0) {
+      console.warn(`🚫 [Dify-Chat] 非图片生成模型拒绝 remote_url 附件: model=${model || "standard"} urls=${fileUrls.length}`)
+      return new Response(
+        JSON.stringify({ error: "文件上传缺少 Dify 文件 ID，请重新上传文件后再试" }),
+        {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        },
+      )
     }
 
     console.log(`🔄 [切换模型] 用户: ${userId} | 目标模型: ${model || "默认标准版"} | conversation_id: ${conversation_id || "新会话"}`)
@@ -489,7 +503,7 @@ export async function POST(request: NextRequest) {
     
     // 🔥 Banana 专用调试日志
     if (model === "banana-2-pro") {
-      console.log(`🎨 [Banana Debug] files=${fileIds?.length || 0} conversation=${conversation_id ? "reuse" : "new"}`)
+      console.log(`🎨 [Banana Debug] files=${difyFileIds.length} conversation=${conversation_id ? "reuse" : "new"}`)
     }
 
     // --- 2. 获取用户积分（用于预检查） ---
@@ -588,18 +602,12 @@ export async function POST(request: NextRequest) {
             }
 
             // 🔥 如果有文件，构造文件对象格式
-            if ((fileIds && fileIds.length > 0) || fileUrls.length > 0) {
-                difyRequest.inputs.init_image = fileUrls[0]
-                  ? [{
-                      type: 'image',
-                      transfer_method: 'remote_url',
-                      url: fileUrls[0]
-                    }]
-                  : [{
-                      type: 'image',
-                      transfer_method: 'local_file',
-                      upload_file_id: fileIds[0]
-                    }]
+            if (difyFileIds.length > 0) {
+                difyRequest.inputs.init_image = [{
+                  type: 'image',
+                  transfer_method: 'local_file',
+                  upload_file_id: difyFileIds[0]
+                }]
                 console.log(`🎨 [Banana] 使用文件对象:`, difyRequest.inputs.init_image)
             }
 
@@ -611,7 +619,7 @@ export async function POST(request: NextRequest) {
                 console.log(`🎨 [Banana] 图片尺寸: ${imageSize.ratio} (${imageSize.width}x${imageSize.height})`)
             }
 
-            console.log(`🎨 [Banana] Workflow request prepared: files=${fileIds?.length || 0} hasImageSize=${Boolean(imageSize)}`)
+            console.log(`🎨 [Banana] Workflow request prepared: files=${difyFileIds.length} hasImageSize=${Boolean(imageSize)}`)
         } else {
             // 💬 Chat API 格式
             const isGptImage2 = model === "gpt-image-2"
@@ -623,18 +631,12 @@ export async function POST(request: NextRequest) {
                 conversation_id: effectiveConvId !== undefined ? effectiveConvId : currentConvId,
             }
 
-            if (!isGptImage2 && ((fileIds && fileIds.length > 0) || fileUrls.length > 0)) {
-                const localFiles = (fileIds || []).map((id: string) => ({
-                    type: 'image',
-                    transfer_method: 'local_file',
-                    upload_file_id: id
+            if (!isGptImage2 && difyFileIds.length > 0) {
+                difyRequest.files = difyFileIds.map((id: string) => ({
+                  type: 'image',
+                  transfer_method: 'local_file',
+                  upload_file_id: id
                 } as const))
-                const remoteFiles = fileUrls.map((url) => ({
-                    type: 'image',
-                    transfer_method: 'remote_url',
-                    url
-                } as const))
-                difyRequest.files = [...localFiles, ...remoteFiles]
             }
 
             if (isGptImage2) {
