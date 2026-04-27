@@ -94,44 +94,9 @@ function AnimatedText({ text, className, style, delay = 0 }: {
   style?: React.CSSProperties;
   delay?: number;
 }) {
-  const characters = text.split('')
-
   return (
     <span className={className} style={style}>
-      {characters.map((char, index) => {
-        const direction = getRandomDirection(index)
-        return (
-          <motion.span
-            key={index}
-            initial={{
-              opacity: 0,
-              x: direction.x,
-              y: direction.y,
-              scale: 0,
-              rotate: Math.random() * 360 - 180
-            }}
-            animate={{
-              opacity: 1,
-              x: 0,
-              y: 0,
-              scale: 1,
-              rotate: 0
-            }}
-            transition={{
-              duration: 0.8,
-              delay: delay + index * 0.05,
-              ease: [0.34, 1.56, 0.64, 1]
-            }}
-            className="inline-block"
-            style={{
-              display: char === ' ' ? 'inline' : 'inline-block',
-              whiteSpace: char === ' ' ? 'pre' : 'normal'
-            }}
-          >
-            {char === ' ' ? '\u00A0' : char}
-          </motion.span>
-        )
-      })}
+      {text}
     </span>
   )
 }
