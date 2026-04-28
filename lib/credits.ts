@@ -29,11 +29,27 @@ export async function getUserCredits(userId: string): Promise<UserCredits | null
     .from("user_credits")
     .select("credits, is_pro")
     .eq("user_id", userId)
-    .single()
+    .maybeSingle()
 
   if (error) {
     console.error("[积分系统] 获取用户积分失败:", error)
     return null
+  }
+
+  if (!data) {
+    console.log(`[积分系统] 用户 ${userId} 无积分记录，自动初始化 1000 积分`)
+    const { data: created, error: createError } = await supabase
+      .from("user_credits")
+      .upsert({ user_id: userId, credits: 1000, is_pro: false })
+      .select("credits, is_pro")
+      .single()
+
+    if (createError) {
+      console.error("[积分系统] 初始化用户积分失败:", createError)
+      return null
+    }
+
+    return created
   }
 
   return data

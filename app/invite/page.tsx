@@ -11,6 +11,7 @@ import {
 import { toast } from "sonner"
 import { createClient } from "@supabase/supabase-js"
 import { motion } from "framer-motion"
+import { ShenxiangInterfaceIcon } from "@/components/icons/ShenxiangInterfaceIcons"
 
 // 🎨 品牌色
 const BRAND_GREEN = "#4CAF50"
@@ -392,7 +393,7 @@ export default function InvitePage() {
               className="w-12 h-12 rounded-xl flex items-center justify-center"
               style={{ backgroundColor: BRAND_GREEN_LIGHT }}
             >
-              <Gift className="w-6 h-6" style={{ color: BRAND_GREEN }} />
+              <ShenxiangInterfaceIcon name="invite" size={34} />
             </div>
             <div>
               <h2 className="text-xl font-semibold text-slate-800">邀请好友，共享奖励</h2>
@@ -418,7 +419,7 @@ export default function InvitePage() {
                   </>
                 ) : (
                   <>
-                    <Copy className="w-4 h-4 mr-2" />
+                    <ShenxiangInterfaceIcon name="copy" size={20} />
                     复制链接
                   </>
                 )}
@@ -432,7 +433,7 @@ export default function InvitePage() {
             className="w-full h-12 text-base text-white"
             style={{ backgroundColor: BRAND_GREEN }}
           >
-            <Share2 className="w-5 h-5 mr-2" />
+            <ShenxiangInterfaceIcon name="share" size={24} />
             立即分享
           </Button>
 

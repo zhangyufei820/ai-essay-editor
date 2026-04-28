@@ -2,6 +2,8 @@ import type { NextRequest } from "next/server"
 import { randomUUID } from "crypto"
 import path from "path"
 import { getClientIP, checkIpRateLimit, createRateLimitResponse } from "@/lib/rate-limit"
+import { internalDifyFetch } from "@/lib/internal-dify-fetch"
+import { getDifyCredentialForModel } from "@/lib/dify-credentials"
 
 // ✅ 修改 1: 切换回 Node.js 运行时，以支持更大的文件和更稳定的上传
 export const runtime = "nodejs" 
@@ -59,27 +61,7 @@ const DEFAULT_DIFY_KEY = process.env.ESSAY_CORRECTION_API_KEY || process.env.DIF
 
 // 🔥 根据模型获取对应的 API Key（与 dify-chat 保持一致）
 function getApiKeyForModel(model: string | null): string {
-  switch (model) {
-    case "teaching-pro":
-      return process.env.DIFY_TEACHING_PRO_API_KEY || DEFAULT_DIFY_KEY || "";
-    case "gpt-5":
-      return process.env.DIFY_API_KEY_GPT5 || DEFAULT_DIFY_KEY || "";
-    case "claude-opus":
-      return process.env.DIFY_API_KEY_CLAUDE || DEFAULT_DIFY_KEY || "";
-    case "gemini-pro":
-      return process.env.DIFY_API_KEY_GEMINI || DEFAULT_DIFY_KEY || "";
-    case "banana":
-    case "banana-2-pro":
-      return process.env.DIFY_BANANA_API_KEY || DEFAULT_DIFY_KEY || "";
-    case "gpt-image-2":
-      return process.env.DIFY_GPT_IMAGE_API_KEY || DEFAULT_DIFY_KEY || "";
-    case "grok-4.2":
-      return process.env.DIFY_API_KEY_GROK42 || DEFAULT_DIFY_KEY || "";
-    case "open-claw":
-      return process.env.DIFY_API_KEY_OPENCLAW || DEFAULT_DIFY_KEY || "";
-    default:
-      return DEFAULT_DIFY_KEY || "";
-  }
+  return getDifyCredentialForModel(model, process.env, DEFAULT_DIFY_KEY).credential
 }
 
 // ============================================
@@ -169,7 +151,7 @@ async function uploadFileToDify(file: File, userId: string, apiKey: string) {
   formData.append("file", file)
   formData.append("user", userId)
 
-  const response = await fetch(`${DIFY_BASE_URL}/files/upload`, {
+  const response = await internalDifyFetch(`${DIFY_BASE_URL}/files/upload`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
@@ -385,7 +367,7 @@ export async function POST(request: NextRequest) {
     const gatewayToken = process.env.DIFY_IMAGE_GATEWAY_TOKEN || DEFAULT_DIFY_KEY
     const uploadUrl = `${IMAGE_GATEWAY_URL}/api/files/upload`
 
-    const gatewayResponse = await fetch(uploadUrl, {
+    const gatewayResponse = await internalDifyFetch(uploadUrl, {
       method: "POST",
       headers: {
         "x-gateway-token": gatewayToken,

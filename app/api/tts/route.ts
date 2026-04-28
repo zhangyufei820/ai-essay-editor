@@ -8,9 +8,12 @@
  */
 
 import { NextRequest, NextResponse } from "next/server"
+import { internalDifyFetch } from "@/lib/internal-dify-fetch"
 
 export const runtime = "nodejs"
 export const maxDuration = 60
+
+const TTS_NOT_ENABLED_STATUS = 501
 
 // Dify API 配置
 const DIFY_BASE_URL = process.env.DIFY_INTERNAL_URL
@@ -71,7 +74,7 @@ export async function POST(request: NextRequest) {
     const difyUrl = DIFY_BASE_URL.includes('/v1')
       ? `${DIFY_BASE_URL}/text-to-audio`
       : `${DIFY_BASE_URL}/v1/text-to-audio`
-    const difyResponse = await fetch(difyUrl, {
+    const difyResponse = await internalDifyFetch(difyUrl, {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${apiKey}`,
@@ -86,6 +89,13 @@ export async function POST(request: NextRequest) {
 
     if (!difyResponse.ok) {
       const errorText = await difyResponse.text()
+      if (errorText.toLowerCase().includes("tts is not enabled")) {
+        return NextResponse.json(
+          { error: "当前模型未开启语音朗读", code: "TTS_NOT_ENABLED" },
+          { status: TTS_NOT_ENABLED_STATUS }
+        )
+      }
+
       console.error("❌ [TTS] Dify API 错误:", difyResponse.status, errorText)
       return NextResponse.json(
         { error: "TTS 请求失败" },

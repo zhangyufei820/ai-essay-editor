@@ -41,7 +41,7 @@ import { brandColors, slateColors } from "@/lib/design-tokens"
 import { LATEX_MACROS, renderLatex } from "@/lib/latex-constants"
 import { cleanLLMText } from "@/lib/text-sanitizer"
 import { createClient } from "@supabase/supabase-js"
-import { collapseSidebar, refreshCredits, refreshSessionList, SESSION_LIST_REFRESH_EVENT } from "@/components/app-sidebar"
+import { collapseSidebar, navigateHomeWithSidebar, refreshCredits, refreshSessionList, SESSION_LIST_REFRESH_EVENT } from "@/components/app-sidebar"
 import { useSelectedModelStore } from "@/hooks/useSelectedModelStore"
 import { validateFileForUpload, MAX_FILE_SIZE } from "@/lib/upload-service"
 import { VoiceRecorder, getDifyTTS, uploadAudioToDify } from "@/lib/voice-service"
@@ -1552,7 +1552,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       toast.success("播放中...")
     } catch (error) {
       console.error("🔊 TTS 播放失败:", error)
-      toast.error("语音合成失败")
+      toast.error(error instanceof Error ? error.message : "语音合成失败")
     }
   }
 
@@ -1941,19 +1941,12 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 
   // 🔥 返回按钮
   const handleBack = () => {
-    router.push("/")
+    navigateHomeWithSidebar(router)
   }
 
-  // 📄 导出 PDF 功能（使用浏览器打印，支持 Markdown 渲染）
-  const handleExportPDF = (content: string) => {
+  // 📄 导出 PDF 功能（直接生成多页 PDF，避免移动端打印只保存第一页）
+  const handleExportPDF = async (content: string) => {
     try {
-      // 创建打印窗口
-      const printWindow = window.open('', '_blank')
-      if (!printWindow) {
-        toast.error("请允许弹出窗口以导出 PDF")
-        return
-      }
-      
       // 🔥 移除思考过程标签（<think>...</think>）
       const cleanContent = cleanLLMText(content.replace(/<think>[\s\S]*?<\/think>/gi, '').trim())
 
@@ -2058,9 +2051,89 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       }
       
       const htmlContent = convertMarkdownToHTML(renderMathInMarkdown(cleanContent))
-      
-      // 写入打印内容
-      printWindow.document.write(`
+
+      const reportStyles = `
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        .pdf-report {
+          width: 794px;
+          background: #fff;
+          color: #333;
+          font-family: 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', sans-serif;
+          line-height: 1.8;
+          padding: 40px;
+        }
+        .header {
+          text-align: center;
+          margin-bottom: 30px;
+          padding-bottom: 20px;
+          border-bottom: 2px solid #14532d;
+        }
+        .header h1 { color: #14532d; font-size: 24px; margin-bottom: 8px; }
+        .header p { color: #666; font-size: 12px; }
+        .content { font-size: 14px; }
+        .content h1 { font-size: 20px; color: #14532d; margin: 24px 0 12px; }
+        .content h2 { font-size: 18px; color: #14532d; margin: 20px 0 10px; border-left: 3px solid #14532d; padding-left: 10px; }
+        .content h3 { font-size: 16px; color: #14532d; margin: 16px 0 8px; }
+        .content h4 { font-size: 14px; color: #666; margin: 12px 0 6px; }
+        .content p { margin: 8px 0; text-indent: 0; }
+        .content strong { color: #14532d; font-weight: 600; }
+        .content ul { margin: 12px 0; padding-left: 24px; }
+        .content li { margin: 6px 0; }
+        .content blockquote {
+          margin: 12px 0;
+          padding: 12px 16px;
+          background: #f5f5f5;
+          border-left: 3px solid #14532d;
+          color: #555;
+        }
+        .content hr { margin: 20px 0; border: none; border-top: 1px solid #eee; }
+        .content table {
+          width: 100%;
+          border-collapse: collapse;
+          margin: 16px 0;
+          font-size: 13px;
+        }
+        .content th, .content td {
+          border: 1px solid #ddd;
+          padding: 8px 12px;
+          text-align: left;
+        }
+        .content th {
+          background: #f5f5f5;
+          font-weight: 600;
+          color: #333;
+        }
+        .content tr:nth-child(even) { background: #fafafa; }
+        .footer {
+          margin-top: 40px;
+          padding-top: 20px;
+          border-top: 1px solid #eee;
+          text-align: center;
+          color: #999;
+          font-size: 11px;
+        }
+        .katex-error { color: #B71C1C; font-size: 0.9em; }
+      `
+
+      const reportBody = `
+        <div class="pdf-report">
+          <div class="header">
+            <h1>沈翔智学 - AI 分析报告</h1>
+            <p>${new Date().toLocaleString('zh-CN')}</p>
+          </div>
+          <div class="content">${htmlContent}</div>
+          <div class="footer">由沈翔智学 AI 生成 · www.shenxiang.school</div>
+        </div>
+      `
+
+      const openPrintFallback = () => {
+        const printWindow = window.open('', '_blank')
+        if (!printWindow) {
+          toast.error("请允许弹出窗口以导出 PDF")
+          return
+        }
+
+        printWindow.document.write(`
         <!DOCTYPE html>
         <html>
         <head>
@@ -2068,89 +2141,116 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
           <title>沈翔智学 - AI 分析报告</title>
           <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.45/dist/katex.min.css">
           <style>
-            * { margin: 0; padding: 0; box-sizing: border-box; }
-            body { 
-              font-family: 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', sans-serif; 
-              padding: 40px; 
-              max-width: 800px; 
-              margin: 0 auto;
-              color: #333;
-              line-height: 1.8;
-            }
-            .header { 
-              text-align: center; 
-              margin-bottom: 30px; 
-              padding-bottom: 20px; 
-              border-bottom: 2px solid #14532d; 
-            }
-            .header h1 { color: #14532d; font-size: 24px; margin-bottom: 8px; }
-            .header p { color: #666; font-size: 12px; }
-            .content { font-size: 14px; }
-            .content h1 { font-size: 20px; color: #14532d; margin: 24px 0 12px; }
-            .content h2 { font-size: 18px; color: #14532d; margin: 20px 0 10px; border-left: 3px solid #14532d; padding-left: 10px; }
-            .content h3 { font-size: 16px; color: #14532d; margin: 16px 0 8px; }
-            .content h4 { font-size: 14px; color: #666; margin: 12px 0 6px; }
-            .content p { margin: 8px 0; text-indent: 0; }
-            .content strong { color: #14532d; font-weight: 600; }
-            .content ul { margin: 12px 0; padding-left: 24px; }
-            .content li { margin: 6px 0; }
-            .content blockquote { 
-              margin: 12px 0; 
-              padding: 12px 16px; 
-              background: #f5f5f5; 
-              border-left: 3px solid #14532d; 
-              color: #555;
-            }
-            .content hr { margin: 20px 0; border: none; border-top: 1px solid #eee; }
-            .content table { 
-              width: 100%; 
-              border-collapse: collapse; 
-              margin: 16px 0; 
-              font-size: 13px;
-            }
-            .content th, .content td { 
-              border: 1px solid #ddd; 
-              padding: 8px 12px; 
-              text-align: left; 
-            }
-            .content th { 
-              background: #f5f5f5; 
-              font-weight: 600; 
-              color: #333;
-            }
-            .content tr:nth-child(even) { background: #fafafa; }
-            .footer { 
-              margin-top: 40px; 
-              padding-top: 20px; 
-              border-top: 1px solid #eee; 
-              text-align: center; 
-              color: #999; 
-              font-size: 11px; 
-            }
+            body { margin: 0 auto; max-width: 800px; background: #fff; }
+            ${reportStyles}
             @media print {
-              body { padding: 20px; }
+              body { padding: 0; }
+              .pdf-report { width: auto; padding: 20px; }
             }
-            .katex-error { color: #B71C1C; font-size: 0.9em; }
           </style>
         </head>
         <body>
-          <div class="header">
-            <h1>沈翔智学 - AI 分析报告</h1>
-            <p>${new Date().toLocaleString('zh-CN')}</p>
-          </div>
-          <div class="content">${htmlContent}</div>
-          <div class="footer">由沈翔智学 AI 生成 · www.shenxiang.school</div>
+          ${reportBody}
         </body>
         </html>
       `)
-      printWindow.document.close()
-      
-      // 等待内容加载后打印
-      printWindow.onload = () => {
-        printWindow.print()
+        printWindow.document.close()
+        setTimeout(() => printWindow.print(), 500)
       }
-      
-      toast.success("已打开打印预览，请选择「保存为 PDF」")
+
+      let reportRoot: HTMLDivElement | null = null
+
+      try {
+        toast.info("正在生成 PDF...")
+        const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+          import("html2canvas"),
+          import("jspdf"),
+        ])
+
+        reportRoot = document.createElement("div")
+        reportRoot.innerHTML = `<style>${reportStyles}</style>${reportBody}`
+        Object.assign(reportRoot.style, {
+          position: "fixed",
+          left: "0",
+          top: "0",
+          width: "794px",
+          background: "#fff",
+          pointerEvents: "none",
+          transform: "translateX(-10000px)",
+          zIndex: "-1",
+        })
+        document.body.appendChild(reportRoot)
+
+        if ("fonts" in document) {
+          await document.fonts.ready
+        }
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+
+        const canvas = await html2canvas(reportRoot, {
+          backgroundColor: "#ffffff",
+          logging: false,
+          scale: Math.min(2, window.devicePixelRatio || 1.5),
+          useCORS: true,
+          windowWidth: reportRoot.scrollWidth,
+          windowHeight: reportRoot.scrollHeight,
+        })
+
+        const pdf = new jsPDF({ orientation: "p", unit: "pt", format: "a4", compress: true })
+        const pageWidth = pdf.internal.pageSize.getWidth()
+        const pageHeight = pdf.internal.pageSize.getHeight()
+        const margin = 24
+        const outputWidth = pageWidth - margin * 2
+        const outputHeight = pageHeight - margin * 2
+        const pageHeightPx = Math.floor((outputHeight / outputWidth) * canvas.width)
+        const pageCanvas = document.createElement("canvas")
+        const pageContext = pageCanvas.getContext("2d")
+
+        if (!pageContext) {
+          throw new Error("无法创建 PDF 分页画布")
+        }
+
+        pageCanvas.width = canvas.width
+        let sourceY = 0
+        let pageIndex = 0
+
+        while (sourceY < canvas.height) {
+          const sliceHeightPx = Math.min(pageHeightPx, canvas.height - sourceY)
+          pageCanvas.height = sliceHeightPx
+          pageContext.clearRect(0, 0, pageCanvas.width, pageCanvas.height)
+          pageContext.drawImage(
+            canvas,
+            0,
+            sourceY,
+            canvas.width,
+            sliceHeightPx,
+            0,
+            0,
+            pageCanvas.width,
+            sliceHeightPx,
+          )
+
+          if (pageIndex > 0) {
+            pdf.addPage()
+          }
+
+          const pageImage = pageCanvas.toDataURL("image/png")
+          const renderedHeight = (sliceHeightPx / canvas.width) * outputWidth
+          pdf.addImage(pageImage, "PNG", margin, margin, outputWidth, renderedHeight)
+
+          sourceY += sliceHeightPx
+          pageIndex += 1
+        }
+
+        const filenameDate = new Date().toISOString().slice(0, 10)
+        pdf.save(`沈翔智学-AI分析报告-${filenameDate}.pdf`)
+        toast.success("PDF 已生成")
+      } catch (pdfErr) {
+        console.error("直接生成 PDF 失败，回退到打印预览:", pdfErr)
+        openPrintFallback()
+        toast.info("直接生成 PDF 失败，已打开打印预览作为备选")
+      } finally {
+        reportRoot?.remove()
+      }
     } catch (err) {
       console.error("PDF 导出失败:", err)
       toast.error("PDF 导出失败，请重试")

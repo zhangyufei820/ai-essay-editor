@@ -86,6 +86,7 @@ const ThoughtItem: React.FC<ThoughtItemProps> = React.memo(({ label, status, ico
     </li>
   )
 })
+ThoughtItem.displayName = "ThoughtItem"
 
 // ============================================
 // 主组件 - GenSpark 风格极简抽屉

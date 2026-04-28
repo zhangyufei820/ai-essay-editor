@@ -4,7 +4,6 @@ import { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import Link from "next/link"
 import { 
-  HelpCircle, 
   BookOpen, 
   MessageCircle, 
   CreditCard, 
@@ -17,6 +16,7 @@ import {
   Phone
 } from "lucide-react"
 import { brandColors, slateColors, creamColors } from "@/lib/design-tokens"
+import { ShenxiangInterfaceIcon } from "@/components/icons/ShenxiangInterfaceIcons"
 
 // 客服联系方式配置
 const contactInfo = {
@@ -507,7 +507,7 @@ export default function HelpPage() {
           }}
           transition={{ duration: 3, repeat: Infinity }}
         >
-          <HelpCircle className="w-32 h-32 text-white" />
+          <ShenxiangInterfaceIcon name="help" size={130} />
         </motion.div>
         
         <div className="max-w-4xl mx-auto px-4 relative z-10">
@@ -555,7 +555,7 @@ export default function HelpPage() {
                 }}
                 transition={{ duration: 1, repeat: Infinity, repeatDelay: 2 }}
               >
-                <HelpCircle className="w-10 h-10 text-white" />
+                <ShenxiangInterfaceIcon name="help" size={46} />
               </motion.div>
               <h1 className="text-3xl md:text-4xl font-bold text-white">
                 帮助中心

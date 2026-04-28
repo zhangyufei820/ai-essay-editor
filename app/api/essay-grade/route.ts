@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getCorsHeaders, handleOptions } from '@/lib/cors'
+import { internalDifyFetch } from "@/lib/internal-dify-fetch"
 
 export const maxDuration = 60
 
@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
 
     try {
       // 🔥 调用作文批改 API - 流式响应
-      const response = await fetch(`${ESSAY_CORRECTION_BASE_URL}/chat-messages`, {
+      const response = await internalDifyFetch(`${ESSAY_CORRECTION_BASE_URL}/chat-messages`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -131,7 +131,6 @@ export async function POST(req: NextRequest) {
       // 🔥 返回流式响应
       return new Response(response.body?.pipeThrough(transformStream), {
         headers: { 
-          ...getCorsHeaders(req),
           "Content-Type": "text/event-stream",
           "Cache-Control": "no-cache",
           "Connection": "keep-alive"
@@ -239,7 +238,6 @@ export async function POST(req: NextRequest) {
     //   },
     //   {
     //     headers: {
-    //       "Access-Control-Allow-Origin": "*",
     //     },
     //   },
     // )
@@ -258,8 +256,4 @@ export async function POST(req: NextRequest) {
       { status: 500 },
     )
   }
-}
-
-export async function OPTIONS(req: NextRequest) {
-  return handleOptions(req)
 }

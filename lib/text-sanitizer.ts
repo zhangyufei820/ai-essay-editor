@@ -28,14 +28,16 @@ export function cleanLLMText(rawText: string): string {
   // 需要将其转为真正的换行符或 markdown 换行语法
   // ============================================
 
-  // 处理 literal \\n → actual newline
-  // 注意：在 JS 字符串中，要匹配字面量 "\\n"（反斜杠+n），需要用 "\\\\n"
-  // 但从 API 返回的文本中，如果显示为 "\n"（两个字符），那它就是字面量
-  // 这里处理用户看到的 "字面 \n" 问题：匹配 \\\\n 模式
-  text = text.replace(/\\n/g, "\n")
+  // 处理 literal \\n / \\t，但不能误伤 LaTeX 命令：\neq、\nabla、\text 等。
+  text = text.replace(/\\n(?![A-Za-z])/g, "\n")
+  text = text.replace(/\\t(?![A-Za-z])/g, "\t")
 
-  // 处理 literal \\t → actual tab
-  text = text.replace(/\\t/g, "\t")
+  // 部分模型会把数学定界符转义为 \$、\(、\[，需要还原后才能被 KaTeX 识别。
+  text = text.replace(/\\\$/g, "$")
+  text = text.replace(/\\\[/g, "$$")
+  text = text.replace(/\\\]/g, "$$")
+  text = text.replace(/\\\(/g, "$")
+  text = text.replace(/\\\)/g, "$")
 
   // ============================================
   // 2. 修复 LaTeX 双转义

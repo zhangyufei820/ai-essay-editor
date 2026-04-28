@@ -16,10 +16,12 @@ import {
   getModelDisplayName
 } from "@/lib/pricing"
 import { assertSecureTlsConfiguration } from "@/lib/runtime-security"
+import { internalDifyFetch } from "@/lib/internal-dify-fetch"
+import { getDifyCredentialForModel } from "@/lib/dify-credentials"
 
 export const runtime = "nodejs"
-// 🔥 增加超时时间到 300 秒（5分钟），支持长文本生成
-export const maxDuration = 300
+// 🔥 增加超时时间到 600 秒，支持图片生成网关的长任务重试
+export const maxDuration = 600
 export const dynamic = "force-dynamic"
 
 type GptImageV11Inputs = {
@@ -110,6 +112,8 @@ const DIFY_BASE_URL = process.env.DIFY_INTERNAL_URL
   || "https://api.dify.ai/v1"
 const DEFAULT_DIFY_FIRST_BYTE_TIMEOUT_MS = 120_000
 const GPT_IMAGE_BLOCKING_TIMEOUT_MS = 300_000
+const GPT_IMAGE_GATEWAY_TIMEOUT_MS = 540_000
+const IMAGE_GATEWAY_URL = (process.env.DIFY_IMAGE_GATEWAY_URL || "http://dify-image-gateway:8001").replace(/\/+$/, "")
 // 🔥 作文批改（standard）使用专用的 ESSAY_CORRECTION_API_KEY
 const DEFAULT_DIFY_KEY = process.env.ESSAY_CORRECTION_API_KEY || process.env.DIFY_API_KEY 
 
@@ -304,6 +308,146 @@ function extractWorkflowImageUrls(payload: unknown): string[] {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
+const DIFY_CONVERSATION_ID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+function normalizeDifyConversationId(value: unknown, modelPrefix: string): string | null {
+  if (typeof value !== "string") return null
+
+  const trimmed = value.trim()
+  if (!trimmed) return null
+
+  const separatorIndex = trimmed.indexOf(":")
+  if (separatorIndex > 0) {
+    const prefix = trimmed.slice(0, separatorIndex)
+    const candidate = trimmed.slice(separatorIndex + 1)
+    if (prefix !== modelPrefix) return null
+    return DIFY_CONVERSATION_ID_PATTERN.test(candidate) ? candidate : null
+  }
+
+  return DIFY_CONVERSATION_ID_PATTERN.test(trimmed) ? trimmed : null
+}
+
+async function shouldRetryDifyWithNewConversation(response: Response, conversationId: string | null) {
+  if (!conversationId) return false
+  if (response.status === 404) return true
+  if (response.status !== 400) return false
+
+  const text = await response.clone().text().catch(() => "")
+  const lower = text.toLowerCase()
+  const isConversationError =
+    lower.includes("conversation") &&
+    (
+      lower.includes("not found") ||
+      lower.includes("not_found") ||
+      lower.includes("not exists") ||
+      lower.includes("does not exist") ||
+      lower.includes("invalid")
+    )
+
+  return isConversationError
+}
+
+function createTimeoutSignal(timeoutMs: number) {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
+
+  return {
+    signal: controller.signal,
+    clear: () => clearTimeout(timeout),
+  }
+}
+
+function buildImageGatewayPayload(query: string, inputs: unknown) {
+  const imageInputs = buildGptImageV11Inputs(inputs)
+
+  return {
+    prompt: query || "生成图片",
+    mode: imageInputs.mode,
+    model: imageInputs.model,
+    size: imageInputs.size,
+    quality: imageInputs.quality,
+    n: imageInputs.n,
+    output_format: imageInputs.output_format,
+    output_compression: imageInputs.output_compression,
+    background: imageInputs.background,
+    moderation: imageInputs.moderation,
+    reference_image_urls: imageInputs.reference_image_url ? [imageInputs.reference_image_url] : [],
+    mask_image_url: imageInputs.mask_image_url,
+  }
+}
+
+function createImageGatewayResponse(payload: unknown) {
+  const record = payload && typeof payload === "object" ? payload as Record<string, unknown> : {}
+  const success = record.success !== false
+  const statusCode = typeof record.status_code === "number" ? record.status_code : success ? 200 : 502
+
+  if (!success) {
+    const message = typeof record.message === "string" ? record.message : "图片生成失败"
+    return Response.json({ error: message, data: record }, { status: statusCode >= 400 ? statusCode : 502 })
+  }
+
+  return Response.json({
+    answer: typeof record.message === "string" ? record.message : "图片生成成功",
+    data: {
+      status: "succeeded",
+      outputs: record,
+    },
+  })
+}
+
+async function callImageGatewayDirect(query: string, inputs: unknown) {
+  const gatewayToken = process.env.DIFY_IMAGE_GATEWAY_TOKEN || DEFAULT_DIFY_KEY || ""
+  const timeout = createTimeoutSignal(GPT_IMAGE_GATEWAY_TIMEOUT_MS)
+
+  try {
+    const response = await internalDifyFetch(`${IMAGE_GATEWAY_URL}/api/image/unified`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(gatewayToken
+          ? {
+              "x-gateway-token": gatewayToken,
+              Authorization: `Bearer ${gatewayToken}`,
+            }
+          : {}),
+      },
+      body: JSON.stringify(buildImageGatewayPayload(query, inputs)),
+      signal: timeout.signal,
+    })
+
+    const text = await response.text()
+    let payload: unknown = {}
+    try {
+      payload = JSON.parse(text)
+    } catch {
+      payload = { success: false, message: text.slice(0, 500), status_code: response.status }
+    }
+
+    if (!response.ok) {
+      return Response.json({ error: "图片服务请求失败", data: payload }, { status: response.status })
+    }
+
+    return createImageGatewayResponse(payload)
+  } catch (error) {
+    const err = error instanceof Error ? error : null
+    if (err?.name === "AbortError") {
+      return Response.json(
+        { error: "图片生成等待超时，请降低尺寸或质量后重试", code: "IMAGE_GATEWAY_TIMEOUT" },
+        { status: 504 },
+      )
+    }
+
+    console.error("❌ [GPT Image] 直连图片服务失败:", error)
+    return Response.json(
+      { error: "图片服务暂时不可用，请稍后重试" },
+      { status: 502 },
+    )
+  } finally {
+    timeout.clear()
+  }
+}
+
 async function pollWorkflowRunDetail(params: {
   workflowRunId: string
   baseUrl: string
@@ -323,7 +467,7 @@ async function pollWorkflowRunDetail(params: {
   let lastPayload: Record<string, unknown> | null = null
 
   while (Date.now() < deadline) {
-    const detailResponse = await fetch(`${baseUrl}/workflows/run/${workflowRunId}`, {
+    const detailResponse = await internalDifyFetch(`${baseUrl}/workflows/run/${workflowRunId}`, {
       method: "GET",
       headers: {
         Authorization: `Bearer ${credential}`,
@@ -376,20 +520,8 @@ export async function POST(request: NextRequest) {
       : []
     const fileUrls = pickUrlStrings(body.fileUrls)
 
-    // 🔥 会话隔离修复：为每个模型创建独立的 conversation_id 命名空间
-    // 防止多用户并发时不同模型复用同一个 conversation_id 导致 Dify 404 冲突
-    // 每个模型的 conversation_id 前缀为 "model_name:"，Dify 端可剥离前缀处理
     const modelPrefix = model || "standard"
-    let effectiveConvId = conversation_id
-    if (conversation_id && !conversation_id.startsWith(`${modelPrefix}:`)) {
-      // 检测到 conversation_id 来自不同模型（无当前模型前缀），说明发生了模型切换
-      // 为防止会话冲突，清除旧的 conversation_id，强制创建新会话
-      console.warn(`⚠️ [会话隔离] 检测到模型切换，conversation_id="${conversation_id}" 不属于当前模型 "${modelPrefix}"，强制创建新会话`)
-      effectiveConvId = null
-    } else if (conversation_id && conversation_id.startsWith(`${modelPrefix}:`)) {
-      // 当前模型前缀，剥离后发送给 Dify
-      effectiveConvId = conversation_id.slice((modelPrefix + ":").length)
-    }
+    let effectiveConvId = normalizeDifyConversationId(conversation_id, modelPrefix)
     
     console.log(`🔍 [Dify-Chat] 接收请求: model=${model || "standard"} files=${difyFileIds.length} urls=${fileUrls.length}`)
     
@@ -413,81 +545,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    console.log(`🔄 [切换模型] 用户: ${userId} | 目标模型: ${model || "默认标准版"} | conversation_id: ${conversation_id || "新会话"}`)
+    console.log(`🔄 [切换模型] 用户: ${userId} | 目标模型: ${model || "默认标准版"} | conversation=${effectiveConvId ? "reuse" : "new"}`)
 
     // --- 1. 钥匙分发中心 (彻底分离通道) ---
-    let selectedCredential = DEFAULT_DIFY_KEY; // 默认给标准版
-    let keySource = "DEFAULT_DIFY_KEY";
-
-    // 根据前端传来的暗号，分发不同的钥匙
-    switch (model) {
-        case "teaching-pro":
-            selectedCredential = process.env.DIFY_TEACHING_PRO_API_KEY;
-            keySource = "DIFY_TEACHING_PRO_API_KEY";
-            break;
-        case "gpt-5":
-            selectedCredential = process.env.DIFY_API_KEY_GPT5;
-            keySource = "DIFY_API_KEY_GPT5";
-            break;
-        case "claude-opus":
-            selectedCredential = process.env.DIFY_API_KEY_CLAUDE;
-            keySource = "DIFY_API_KEY_CLAUDE";
-            break;
-        case "gemini-pro":
-            selectedCredential = process.env.DIFY_API_KEY_GEMINI;
-            keySource = "DIFY_API_KEY_GEMINI";
-            break;
-        case "banana-2-pro":
-            selectedCredential = process.env.DIFY_BANANA_API_KEY;
-            keySource = "DIFY_BANANA_API_KEY";
-            break;
-        case "grok-4.2":
-            selectedCredential = process.env.DIFY_API_KEY_GROK42;
-            keySource = "DIFY_API_KEY_GROK42";
-            break;
-        case "open-claw":
-            selectedCredential = process.env.DIFY_API_KEY_OPENCLAW;
-            keySource = "DIFY_API_KEY_OPENCLAW";
-            break;
-        case "quanquan-math":
-            selectedCredential = process.env.DIFY_QUANQUANMATH_API_KEY;
-            keySource = "DIFY_QUANQUANMATH_API_KEY";
-            break;
-        case "quanquan-english":
-            selectedCredential = process.env.DIFY_QUANQUANENGLISH_API_KEY;
-            keySource = "DIFY_QUANQUANENGLISH_API_KEY";
-            break;
-        case "beike-pro":
-            selectedCredential = process.env.DIFY_BEIKE_PRO_API_KEY;
-            keySource = "DIFY_BEIKE_PRO_API_KEY";
-            break;
-        case "banzhuren":
-            selectedCredential = process.env.DIFY_BANZHUREN_API_KEY;
-            keySource = "DIFY_BANZHUREN_API_KEY";
-            break;
-        case "ai-writing-paper":
-            selectedCredential = process.env.DIFY_AI_WRITING_PAPER_API_KEY;
-            keySource = "DIFY_AI_WRITING_PAPER_API_KEY";
-            break;
-        case "zhongying-essay":
-        case "reading-report":
-        case "experiment-report":
-        case "study-abroad":
-        case "resume-optimize":
-        case "speech-defense":
-        case "school-wechat":
-            selectedCredential = process.env.DIFY_AI_WRITING_PAPER_API_KEY;
-            keySource = "DIFY_AI_WRITING_PAPER_API_KEY";
-            break;
-        case "gpt-image-2":
-            selectedCredential = process.env.DIFY_GPT_IMAGE_API_KEY;
-            keySource = "DIFY_GPT_IMAGE_API_KEY";
-            break;
-        // 如果是 Sono/Sora 可以在这里继续加 case
-        default:
-            // 如果没传 model 或者 model 是 standard，就用上面的默认 Key
-            break;
-    }
+    const { credential: selectedCredential, source: keySource } = getDifyCredentialForModel(model, process.env, DEFAULT_DIFY_KEY)
 
     // 安全检查：防止忘配 Key
     if (!selectedCredential) {
@@ -573,6 +634,11 @@ export async function POST(request: NextRequest) {
     
     console.log(`💰 [预检查] 用户: ${userId} | 模型: ${modelType} | 当前积分: ${currentCredits}`)
 
+    if (model === "gpt-image-2") {
+      console.log("🎨 [GPT Image] 使用直连图片网关，绕过 Dify HTTP 节点超时")
+      return await callImageGatewayDirect(query, inputs)
+    }
+
     // --- 3. 构造 Dify 请求函数 ---
     // 🔥 共享流状态：首字节探测 + 超时定时器（供 callDify 和 transformStream 共同访问）
     const streamStatus: {
@@ -582,7 +648,7 @@ export async function POST(request: NextRequest) {
     } = { firstByteReceived: false, timeoutId: null, controller: null }
 
     const callDify = async (retryWithoutId = false) => {
-        const currentConvId = retryWithoutId ? null : conversation_id;
+        const currentConvId = retryWithoutId ? null : effectiveConvId;
 
         // 🎨 Banana 继续使用 Workflow API；GPT Image V11 使用 Chatflow query + inputs。
         const isWorkflow = model === "banana-2-pro";
@@ -628,7 +694,7 @@ export async function POST(request: NextRequest) {
                 query: query || "你好",
                 response_mode: isGptImage2 ? "blocking" : "streaming",
                 user: userId || "default-user",
-                conversation_id: effectiveConvId !== undefined ? effectiveConvId : currentConvId,
+                conversation_id: currentConvId,
             }
 
             if (!isGptImage2 && difyFileIds.length > 0) {
@@ -661,7 +727,7 @@ export async function POST(request: NextRequest) {
 
         try {
             console.warn(`🚀 [Dify请求] 开始请求 Dify... model=${model} endpoint=${DIFY_BASE_URL}${apiEndpoint}`)
-            const response = await fetch(`${DIFY_BASE_URL}${apiEndpoint}`, {
+            const response = await internalDifyFetch(`${DIFY_BASE_URL}${apiEndpoint}`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -720,11 +786,12 @@ export async function POST(request: NextRequest) {
             console.log(`🎨 [Banana] Dify响应头:`, Object.fromEntries(response.headers.entries()))
         }
 
-        // 只有首次失败才重试，重试后仍失败则退出循环
-        if ((response.status === 404 || response.status === 400) && retryCount === 0) {
+        const shouldRetryWithNewConversation =
+          retryCount === 0 && await shouldRetryDifyWithNewConversation(response, effectiveConvId)
+
+        if (shouldRetryWithNewConversation) {
             retryCount++;
-            console.warn(`⚠️ [会话隔离] 会话 ID 冲突 (模型=${modelPrefix})，自动开启新会话重试...`);
-            // 强制清除 effectiveConvId，确保重试时创建全新会话
+            console.warn(`⚠️ [会话隔离] Dify conversation_id 失效 (模型=${modelPrefix})，自动开启新会话重试...`);
             effectiveConvId = null;
             continue;
         }

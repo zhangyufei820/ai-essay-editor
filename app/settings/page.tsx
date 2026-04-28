@@ -14,6 +14,7 @@ import {
 import { cn } from "@/lib/utils"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { ShenxiangInterfaceIcon } from "@/components/icons/ShenxiangInterfaceIcons"
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -289,16 +290,11 @@ export default function SettingsPage() {
                 {avatarUrl ? (
                   <img src={avatarUrl} alt="Avatar" className="h-full w-full object-cover" />
                 ) : (
-                  <span 
-                    className="text-2xl font-bold text-white flex items-center justify-center h-full w-full"
-                    style={{ backgroundColor: COLORS.primary.main }}
-                  >
-                    {displayName?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || "U"}
-                  </span>
+                  <ShenxiangInterfaceIcon name="user-avatar" size={54} />
                 )}
               </div>
               <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                <Camera className="h-6 w-6 text-white" />
+                <ShenxiangInterfaceIcon name="camera" size={28} />
               </div>
               {uploading && (
                 <div className="absolute inset-0 bg-white/80 rounded-full flex items-center justify-center">
@@ -339,7 +335,7 @@ export default function SettingsPage() {
               onClick={handleLogout}
               className="flex items-center gap-2 text-sm text-gray-400 hover:text-red-500 transition-colors"
             >
-              <LogOut className="h-4 w-4" />
+              <ShenxiangInterfaceIcon name="logout" size={22} />
               <span>退出登录</span>
             </button>
           </div>
@@ -373,7 +369,7 @@ export default function SettingsPage() {
           {/* 总可用积分 */}
           <div className="flex items-center justify-between py-3">
             <div className="flex items-center gap-2">
-              <Coins className="h-4 w-4" style={{ color: COLORS.primary.main }} />
+              <ShenxiangInterfaceIcon name="credits" size={22} />
               <span className="text-sm text-gray-600">总可用积分</span>
             </div>
             <span 
@@ -392,7 +388,7 @@ export default function SettingsPage() {
           {/* 邀请好友 */}
           <div className="flex items-center justify-between py-3 border-b border-gray-50">
             <div className="flex items-center gap-2">
-              <Users className="h-4 w-4" style={{ color: COLORS.gray[500] }} />
+              <ShenxiangInterfaceIcon name="invite" size={22} />
               <span className="text-sm text-gray-600">邀请好友</span>
             </div>
             <Link href="/invite">

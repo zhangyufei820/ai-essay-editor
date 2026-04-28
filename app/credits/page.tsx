@@ -3,9 +3,10 @@ import { getUserCredits, getUserReferralCode } from "@/lib/credits"
 import { redirect } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Gift, Share2, Coins, TrendingUp } from 'lucide-react'
+import { TrendingUp } from 'lucide-react'
 import Link from "next/link"
 import { CopyButton } from "@/components/credits/copy-button"
+import { ShenxiangInterfaceIcon } from "@/components/icons/ShenxiangInterfaceIcons"
 
 export const dynamic = 'force-dynamic'
 
@@ -42,7 +43,7 @@ export default async function CreditsPage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">当前积分</CardTitle>
-              <Coins className="h-4 w-4 text-muted-foreground" />
+              <ShenxiangInterfaceIcon name="credits" size={22} />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{credits?.credits || 0}</div>
@@ -64,7 +65,7 @@ export default async function CreditsPage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">推荐人数</CardTitle>
-              <Share2 className="h-4 w-4 text-muted-foreground" />
+              <ShenxiangInterfaceIcon name="share" size={22} />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{referralCount}</div>
@@ -76,7 +77,7 @@ export default async function CreditsPage() {
         <Card className="mb-8">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Gift className="h-5 w-5" />
+              <ShenxiangInterfaceIcon name="invite" size={24} />
               邀请好友，赚取积分
             </CardTitle>
             <CardDescription>每邀请一位好友注册，您将获得500积分，好友也将获得200积分奖励</CardDescription>

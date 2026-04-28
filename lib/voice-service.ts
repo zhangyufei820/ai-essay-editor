@@ -91,6 +91,10 @@ export async function getDifyTTS(
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ error: "TTS 请求失败" }))
+      if (response.status === 501 || error.code === "TTS_NOT_ENABLED") {
+        throw new Error("当前模型未开启语音朗读")
+      }
+
       throw new Error(error.error || "TTS 请求失败")
     }
 

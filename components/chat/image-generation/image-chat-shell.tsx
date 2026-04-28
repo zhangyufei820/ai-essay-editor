@@ -3,6 +3,7 @@
 import type React from 'react'
 import { ChevronLeft, History } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import { navigateHomeWithSidebar } from '@/components/app-sidebar'
 
 interface ImageChatShellProps {
   title: React.ReactNode
@@ -29,7 +30,7 @@ export function ImageChatShell({
         {/* 顶部导航栏 */}
         <div className="flex items-center h-11 md:h-14 px-2 md:px-4 border-b border-slate-100 bg-white shrink-0">
           <button
-            onClick={() => router.back()}
+            onClick={() => navigateHomeWithSidebar(router)}
             className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-full text-slate-600 hover:bg-slate-50 hover:text-slate-800 transition-colors"
           >
             <ChevronLeft className="h-4 w-4 md:h-5 md:w-5" />

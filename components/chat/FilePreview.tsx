@@ -6,7 +6,7 @@
 
 "use client"
 
-import { useEffect } from "react"
+import { createElement, useEffect } from "react"
 import { motion, AnimatePresence, type Easing } from "framer-motion"
 import { X, FileText, File, Image, Loader2, Check, AlertCircle, Music, Video } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -228,7 +228,6 @@ function DocumentPreviewCard({
   file: FileItem
   onRemove: () => void 
 }) {
-  const FileIcon = getFileIcon(file.type)
   const extension = getFileExtension(file.name)
 
   return (
@@ -238,7 +237,7 @@ function DocumentPreviewCard({
     )}>
       {/* 图标容器 */}
       <div className="w-10 h-10 rounded-lg bg-white border border-slate-100 flex items-center justify-center mx-auto mb-2 relative">
-        <FileIcon className="w-5 h-5 text-slate-500" />
+        {createElement(getFileIcon(file.type), { className: "w-5 h-5 text-slate-500" })}
         {/* 文件类型标签 */}
         {extension && (
           <span className="absolute -bottom-1 -right-1 px-1 py-0.5 text-[8px] font-bold bg-slate-200 text-slate-600 rounded">

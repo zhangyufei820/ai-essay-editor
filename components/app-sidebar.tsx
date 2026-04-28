@@ -6,18 +6,18 @@ import { useState, useEffect, useRef, Suspense, useCallback } from "react"
 import { motion } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import {
-  Settings, ChevronRight, ChevronDown,
-  Menu, X, LogOut, Zap, Coins,
-  Bot, GraduationCap, Brain,
-  Gift, HelpCircle, Sparkles, Palette, User, Edit
+  ChevronRight, ChevronDown,
+  Brain,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { ShenxiangInterfaceIcon } from "@/components/icons/ShenxiangInterfaceIcons"
 import { AgentPanel } from "./chat/AgentPanel"
 import { ModelPanel } from "./chat/ModelPanel"
 import { CreativePanel } from "./chat/CreativePanel"
 import { EducationPanel } from "./chat/EducationPanel"
 import { AIPanel } from "./chat/AIPanel"
 import { createClient } from "@supabase/supabase-js"
+import { shouldSidebarOpenForRoute } from "@/lib/app-chrome-routes"
 
 // --- 设计系统颜色常量 ---
 const COLORS = {
@@ -76,6 +76,8 @@ const supabase = createClient(
 
 // 🔥 全局状态：用于跨组件控制侧边栏折叠
 const SIDEBAR_COLLAPSE_EVENT = 'sidebar-collapse'
+// 🔥 全局状态：用于跨组件控制侧边栏展开
+const SIDEBAR_EXPAND_EVENT = 'sidebar-expand'
 // 🔥 全局事件：用于触发积分刷新
 const CREDITS_REFRESH_EVENT = 'credits-refresh'
 // 🔥 全局事件：用于触发会话列表刷新
@@ -88,7 +90,6 @@ function AppSidebarInner() {
   const router = useRouter()
   const currentAgent = searchParams.get("agent")
   const isChatRoute = pathname?.startsWith("/chat")
-  const isHomeRoute = pathname === "/"
   
   // --- 状态管理 ---
   const [user, setUser] = useState<any>(null)
@@ -177,8 +178,7 @@ function AppSidebarInner() {
     const checkScreenSize = () => {
       const mobile = window.innerWidth < 768
       setIsMobile(mobile)
-      if (mobile) setIsOpen(isHomeRoute)
-      else setIsOpen(true)
+      setIsOpen(shouldSidebarOpenForRoute(window.location.pathname, mobile))
     }
     checkScreenSize()
     window.addEventListener('resize', checkScreenSize)
@@ -188,6 +188,12 @@ function AppSidebarInner() {
       setIsOpen(false)
     }
     window.addEventListener(SIDEBAR_COLLAPSE_EVENT, handleCollapse)
+
+    const handleExpand = () => {
+      console.log("📥 [侧边栏] 收到展开指令")
+      setIsOpen(true)
+    }
+    window.addEventListener(SIDEBAR_EXPAND_EVENT, handleExpand)
 
     // 🔥 监听积分刷新事件
     const handleCreditsRefresh = () => {
@@ -317,12 +323,21 @@ function AppSidebarInner() {
     return () => {
       window.removeEventListener('resize', checkScreenSize)
       window.removeEventListener(SIDEBAR_COLLAPSE_EVENT, handleCollapse)
+      window.removeEventListener(SIDEBAR_EXPAND_EVENT, handleExpand)
       window.removeEventListener(CREDITS_REFRESH_EVENT, handleCreditsRefresh)
       window.removeEventListener(SESSION_LIST_REFRESH_EVENT, handleSessionListRefresh)
       document.removeEventListener("visibilitychange", handleVisibilityChange)
       document.removeEventListener("mousedown", handleClickOutside)
     }
-  }, [fetchCredits, isHomeRoute])
+  }, [fetchCredits])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const mobile = window.innerWidth < 768
+    setIsMobile(mobile)
+    setIsOpen(shouldSidebarOpenForRoute(pathname, mobile))
+  }, [pathname])
 
   useEffect(() => {
     if (currentUserId) {
@@ -477,7 +492,7 @@ function AppSidebarInner() {
           onClick={() => setIsOpen(true)}
           className="fixed left-4 top-4 z-50 flex h-10 w-10 items-center justify-center rounded-xl bg-white shadow-md text-[#757575] hover:bg-[#F5F5F5] transition-all"
         >
-          <Menu className="h-5 w-5" />
+          <ShenxiangInterfaceIcon name="menu" size={24} />
         </button>
       )}
 
@@ -514,7 +529,7 @@ function AppSidebarInner() {
             onClick={() => setIsOpen(false)}
             className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-lg text-[#9E9E9E] hover:text-[#616161] hover:bg-[#F5F5F5] transition-all z-50"
           >
-            <X className="h-5 w-5" />
+            <ShenxiangInterfaceIcon name="close" size={24} />
           </button>
         )}
 
@@ -532,7 +547,7 @@ function AppSidebarInner() {
             onClick={handleNavClick}
             className="px-3 mb-4 flex items-center justify-center gap-2 cursor-pointer hover:bg-gray-100/50 rounded-xl transition-all duration-300 py-1"
           >
-            <Coins className="h-4 w-4" style={{ color: COLORS.primary.main }} />
+            <ShenxiangInterfaceIcon name="credits" size={22} />
             <span
               className="text-sm font-semibold"
               style={{ color: COLORS.primary.dark }}
@@ -590,7 +605,7 @@ function AppSidebarInner() {
               whileTap={{ scale: 0.99 }}
               transition={{ duration: 0.15 }}
             >
-              <Sparkles className="w-[18px] h-[18px]" style={{ color: COLORS.primary.main }} />
+              <ShenxiangInterfaceIcon name="openclaw" size={22} />
               <span className="text-[12px] font-medium leading-none whitespace-nowrap" style={{ color: COLORS.primary.dark }}>
                 OpenClaw
               </span>
@@ -616,7 +631,7 @@ function AppSidebarInner() {
               whileTap={{ scale: 0.99 }}
               transition={{ duration: 0.15 }}
             >
-              <GraduationCap className="w-[18px] h-[18px]" style={{ color: COLORS.primary.dark }} />
+              <ShenxiangInterfaceIcon name="education" size={22} />
               <span className="text-[12px] font-medium leading-none whitespace-nowrap" style={{ color: COLORS.primary.dark }}>
                 教育专区
               </span>
@@ -642,7 +657,7 @@ function AppSidebarInner() {
               whileTap={{ scale: 0.99 }}
               transition={{ duration: 0.15 }}
             >
-              <Bot className="w-[18px] h-[18px]" style={{ color: COLORS.primary.dark }} />
+              <ShenxiangInterfaceIcon name="top-models" size={22} />
               <span className="text-[12px] font-medium leading-none whitespace-nowrap" style={{ color: COLORS.primary.dark }}>
                 顶级模型专区
               </span>
@@ -668,7 +683,7 @@ function AppSidebarInner() {
               whileTap={{ scale: 0.99 }}
               transition={{ duration: 0.15 }}
             >
-              <Edit className="w-[18px] h-[18px]" style={{ color: "#00A67D" }} />
+              <ShenxiangInterfaceIcon name="ai-writing" size={22} />
               <span className="text-[12px] font-medium leading-none whitespace-nowrap" style={{ color: COLORS.primary.dark }}>
                 AI写作专区
               </span>
@@ -694,7 +709,7 @@ function AppSidebarInner() {
               whileTap={{ scale: 0.99 }}
               transition={{ duration: 0.15 }}
             >
-              <Palette className="w-[18px] h-[18px]" style={{ color: "#00A67D" }} />
+              <ShenxiangInterfaceIcon name="creative" size={22} />
               <span className="text-[12px] font-medium leading-none whitespace-nowrap" style={{ color: COLORS.primary.dark }}>
                 多媒体专区
               </span>
@@ -722,7 +737,7 @@ function AppSidebarInner() {
                   animate={{ scale: [1, 1.2, 1], rotate: [0, 8, -8, 0] }}
                   transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
                 >
-                  <Gift className="w-4 h-4 text-[#10A37F]" strokeWidth={1.5} />
+                  <ShenxiangInterfaceIcon name="invite" size={22} />
                 </motion.div>
               </Link>
 
@@ -731,7 +746,7 @@ function AppSidebarInner() {
                 onClick={handleNavClick}
                 className="flex items-center justify-center p-2 rounded-xl transition-all duration-300 hover:bg-[#10A37F]/10 cursor-pointer"
               >
-                <HelpCircle className="w-4 h-4 text-gray-400 hover:text-gray-600 transition-colors duration-300" strokeWidth={1.5} />
+                <ShenxiangInterfaceIcon name="help" size={22} />
               </Link>
             </div>
           )}
@@ -752,7 +767,7 @@ function AppSidebarInner() {
                     onMouseEnter={(e) => e.currentTarget.style.backgroundColor = COLORS.gray[100]}
                     onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
                   >
-                    <Settings className="h-4 w-4" style={{ color: COLORS.gray[500] }} /> 
+                    <ShenxiangInterfaceIcon name="settings" size={22} />
                     账号设置
                   </div>
                 </Link>
@@ -763,7 +778,7 @@ function AppSidebarInner() {
                     onMouseEnter={(e) => e.currentTarget.style.backgroundColor = COLORS.gray[100]}
                     onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
                   >
-                    <Zap className="h-4 w-4" style={{ color: COLORS.gray[500] }} /> 
+                    <ShenxiangInterfaceIcon name="upgrade" size={22} />
                     升级会员
                   </div>
                 </Link>
@@ -781,7 +796,7 @@ function AppSidebarInner() {
                     e.currentTarget.style.color = COLORS.gray[600]
                   }}
                 >
-                  <LogOut className="h-4 w-4" /> 
+                  <ShenxiangInterfaceIcon name="logout" size={22} />
                   退出登录
                 </button>
               </div>
@@ -825,7 +840,7 @@ function AppSidebarInner() {
                 {getAvatarUrl() ? (
                   <img src={getAvatarUrl()} alt="User" className="h-full w-full object-cover rounded-lg" />
                 ) : (
-                  <User className="h-5 w-5" style={{ color: "#10A37F" }} strokeWidth={2} />
+                  <ShenxiangInterfaceIcon name="user-avatar" size={28} />
                 )}
               </div>
               {/* 昵称 + ID/手机号 */}
@@ -901,6 +916,21 @@ function AppSidebarInner() {
 export const collapseSidebar = () => {
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent(SIDEBAR_COLLAPSE_EVENT))
+  }
+}
+
+// 🔥 导出展开函数
+export const expandSidebar = () => {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(SIDEBAR_EXPAND_EVENT))
+  }
+}
+
+// 🔥 聊天页返回主页时确保左侧栏和积分入口恢复显示
+export const navigateHomeWithSidebar = (router: { push: (href: string) => void }) => {
+  router.push("/")
+  if (typeof window !== 'undefined') {
+    window.setTimeout(expandSidebar, 0)
   }
 }
 

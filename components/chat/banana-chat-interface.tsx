@@ -21,7 +21,7 @@ import { buildChatSessionRouteFromSession, normalizeChatSessionModel } from "@/l
 import { toast } from "sonner"
 import { motion, AnimatePresence } from "framer-motion"
 import { createClient } from "@supabase/supabase-js"
-import { collapseSidebar, refreshCredits, refreshSessionList } from "@/components/app-sidebar"
+import { collapseSidebar, navigateHomeWithSidebar, refreshCredits, refreshSessionList } from "@/components/app-sidebar"
 import { calculatePreviewCost } from "@/lib/pricing"
 import { UltimateRenderer } from "@/components/chat/UltimateRenderer"
 import { GridWaveLoader } from "@/components/chat/GridWaveLoader"
@@ -666,7 +666,7 @@ function BananaChatInterfaceInner() {
   }
 
   const handleBack = () => {
-    router.push("/")
+    navigateHomeWithSidebar(router)
   }
 
   return (

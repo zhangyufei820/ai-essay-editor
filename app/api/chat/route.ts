@@ -1,6 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
 import { getAPIConfig } from "@/lib/ai-utils"
-import { getCorsHeaders, handleOptions } from '@/lib/cors'
 import { calculateActualCost, type ModelType } from '@/lib/pricing'
 import { assertSecureTlsConfiguration } from '@/lib/runtime-security'
 
@@ -14,10 +13,6 @@ type ChatRequestBody = {
   files?: any[]
   extractedText?: string
   userId?: string
-}
-
-export async function OPTIONS(req: Request) {
-  return handleOptions(req)
 }
 
 async function deductCredit(userId: string, totalTokens: number, description: string) {
@@ -75,7 +70,6 @@ async function deductCredit(userId: string, totalTokens: number, description: st
 
 function createMeteredStreamResponse(
   upstreamResponse: Response,
-  req: Request,
   userId: string,
   description: string
 ) {
@@ -146,7 +140,6 @@ function createMeteredStreamResponse(
 
   return new Response(stream, {
     headers: {
-      ...getCorsHeaders(req),
       "Content-Type": "text/plain; charset=utf-8",
       "X-Vercel-AI-Data-Stream": "v1",
       "Cache-Control": "no-cache",
@@ -237,7 +230,7 @@ export async function POST(req: Request) {
         })
       }
 
-      return createMeteredStreamResponse(essayGradeResponse, req, userId, "使用 作文批改")
+      return createMeteredStreamResponse(essayGradeResponse, userId, "使用 作文批改")
     }
 
     const customConfig = getAPIConfig(req.headers.get("X-AI-Provider") || "openai")
@@ -327,7 +320,7 @@ export async function POST(req: Request) {
       })
     }
 
-    return createMeteredStreamResponse(response, req, userId, "使用 AI 对话")
+    return createMeteredStreamResponse(response, userId, "使用 AI 对话")
   } catch (error) {
     console.error("[v0] Chat API error:", error)
     return new Response(JSON.stringify({ error: "Internal server error" }), {

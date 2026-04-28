@@ -29,7 +29,7 @@ import { ModelLogo } from "@/components/ModelLogo"
 import { GridWaveLoader } from "@/components/chat/GridWaveLoader"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { collapseSidebar, refreshCredits, refreshSessionList } from "@/components/app-sidebar"
+import { collapseSidebar, navigateHomeWithSidebar, refreshCredits, refreshSessionList } from "@/components/app-sidebar"
 import { extractUserId } from "@/lib/auth-user"
 import { buildChatSessionRouteFromSession } from "@/lib/chat-session-routes"
 import { cn } from "@/lib/utils"
@@ -936,7 +936,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
         <div className="mx-auto flex h-11 md:h-14 max-w-7xl items-center gap-2 md:gap-3 px-2 md:px-4">
           <button
             type="button"
-            onClick={() => router.push("/")}
+            onClick={() => navigateHomeWithSidebar(router)}
             className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-full text-muted-foreground transition hover:bg-muted hover:text-foreground"
             aria-label="返回"
           >
