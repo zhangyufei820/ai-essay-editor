@@ -2,6 +2,9 @@ import { promises as fs } from "fs"
 import path from "path"
 import { NextRequest } from "next/server"
 
+import { createServerClient } from "@/lib/supabase/server"
+import { verifySignedOpenClawMediaPath } from "@/lib/openclaw-media-server"
+
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
@@ -34,8 +37,28 @@ function resolveMediaPath(segments: string[]) {
   return filePath
 }
 
+async function isAuthorized(request: NextRequest, mediaPath: string) {
+  const exp = request.nextUrl.searchParams.get("exp")
+  const sig = request.nextUrl.searchParams.get("sig")
+
+  if (verifySignedOpenClawMediaPath(mediaPath, exp, sig)) {
+    return true
+  }
+
+  try {
+    const supabase = await createServerClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    return Boolean(user)
+  } catch {
+    return false
+  }
+}
+
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ path?: string[] }> },
 ) {
   const { path: mediaPath = [] } = await params
@@ -45,6 +68,15 @@ export async function GET(
     return new Response("Bad Request", { status: 400 })
   }
 
+  if (!(await isAuthorized(request, mediaPath.join("/")))) {
+    return new Response("Unauthorized", {
+      status: 401,
+      headers: {
+        "Cache-Control": "private, no-store",
+      },
+    })
+  }
+
   try {
     const stat = await fs.stat(filePath)
     if (!stat.isFile()) {
@@ -52,12 +84,15 @@ export async function GET(
     }
 
     const bytes = await fs.readFile(filePath)
-    const contentType = MIME_TYPES[path.extname(filePath).toLowerCase()] || "application/octet-stream"
+    const contentType = MIME_TYPES[path.extname(filePath).toLowerCase()]
+    if (!contentType) {
+      return new Response("Unsupported Media Type", { status: 415 })
+    }
 
     return new Response(bytes, {
       headers: {
         "Content-Type": contentType,
-        "Cache-Control": "public, max-age=3600",
+        "Cache-Control": "private, max-age=3600",
         "X-Content-Type-Options": "nosniff",
       },
     })

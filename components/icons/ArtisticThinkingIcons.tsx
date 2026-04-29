@@ -119,4 +119,3 @@ export function ArtisticThinkingIconGroup({
 // ============================================
 
 export { MODEL_ICONS }
-export type { ModelIconKey }

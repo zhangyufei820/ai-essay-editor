@@ -12,7 +12,7 @@ import { useIsMobile } from "@/hooks/use-mobile"
 import {
   Send, Paperclip, X, FileText, Copy, Loader2, User, AlertCircle,
   ChevronDown, ChevronLeft, ArrowDown, Sparkles,
-  Download, Share2, Printer, Mic, MicOff, Volume2, History
+  Download, Share2, Printer, Mic, MicOff, Volume2, History, ExternalLink
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { buildChatSessionRouteFromSession, isDedicatedChatSessionModel, resolveChatSessionRouteModel } from "@/lib/chat-session-routes"
@@ -35,6 +35,7 @@ import { LoadingStateCard } from "@/components/ui/LoadingStateCard"
 import { ChatSkeleton } from "@/components/ui/chat-skeleton"
 import { motion, AnimatePresence } from "framer-motion"
 import { EnhancedMarkdown } from "./EnhancedMarkdown"
+import { OpenClawHtmlPreview } from "./OpenClawHtmlPreview"
 import { UserMessageBubble } from "./UserMessageBubble"
 import katex from "katex"
 import { brandColors, slateColors } from "@/lib/design-tokens"
@@ -48,9 +49,10 @@ import { VoiceRecorder, getDifyTTS, uploadAudioToDify } from "@/lib/voice-servic
 import { getApiUrl } from "@/lib/api-config"
 import { logger } from "@/lib/logger"
 import { ModelLogo } from "@/components/ModelLogo"
-import { 
-  calculatePreviewCost, 
-  ModelType, 
+import { getOpenClawAttachmentKind, isLikelyHtmlDocumentUrl, toPublicOpenClawMediaSignUrl, toPublicOpenClawWorkspaceUrl } from "@/lib/openclaw-media"
+import {
+  calculatePreviewCost,
+  ModelType,
   GenMode,
   MODEL_COSTS,
   DAILY_FREE_LIMIT,
@@ -93,26 +95,35 @@ const MODEL_DISPLAY_NAMES: Record<string, string> = {
   "school-wechat": "公众号",
 }
 
+type ModelUiConfig = {
+  name: string
+  modelKey: string
+  color: string
+  description: string
+  badge?: string
+  group: string
+}
+
 // 获取模型徽章颜色 — 强制归一：所有模型统一为翡翠绿 #10A37F
 function getModelBadgeColor(_modelKey: string): string {
   return "#10A37F"
 }
 
 // 🔥 移动端用户信息显示组件
-const MobileUserInfo = ({ 
-  userName, 
-  credits, 
-  onMenuClick 
-}: { 
+const MobileUserInfo = ({
+  userName,
+  credits,
+  onMenuClick
+}: {
   userName: string
   credits: number
-  onMenuClick: () => void 
+  onMenuClick: () => void
 }) => (
-  <button 
+  <button
     onClick={onMenuClick}
     className="inline-flex h-10 min-w-[40px] items-center justify-center rounded-full border border-slate-200/80 bg-white/90 px-2 shadow-sm backdrop-blur-sm transition-colors hover:bg-slate-50"
   >
-    <div 
+    <div
       className="flex h-7 w-7 items-center justify-center rounded-full text-white text-[11px] font-semibold shrink-0"
       style={{ backgroundColor: BRAND_GREEN }}
     >
@@ -147,7 +158,7 @@ type UploadedFile = {
   modelUrl?: string
 }
 // 🔥 消息类型 - 支持 metadata 存储音乐等附加数据，支持 files 显示上传的文件
-type Message = { 
+type Message = {
   id: string
   role: "user" | "assistant"
   content: string
@@ -167,6 +178,15 @@ type Message = {
   } | null
 }
 type FileProcessingState = { status: "idle" | "uploading" | "processing" | "recognizing" | "complete" | "error"; progress: number; message: string }
+type ProcessingContext = {
+  model: string
+  fileCount: number
+  promptLength: number
+  startedAt: number
+  requestId?: string
+  traceId?: string
+  stage?: string
+}
 
 // 🔥 上传状态动态消息数组
 const UPLOAD_STATUS_MESSAGES = {
@@ -202,7 +222,7 @@ function getRandomStatusMessage(status: FileProcessingState['status'], progress?
 function formatSunoResponse(fullText: string): string {
   // 1. 移除思考过程 <think>...</think>
   let content = fullText.replace(/<think>[\s\S]*?<\/think>/gi, '').trim()
-  
+
   // 2. 尝试提取 JSON 中的歌词
   const jsonMatch = content.match(/```json\s*([\s\S]*?)```/i)
   if (jsonMatch) {
@@ -211,56 +231,168 @@ function formatSunoResponse(fullText: string): string {
       const title = jsonData.title || ''
       const lyrics = jsonData.lyrics_plain_text || jsonData.lyrics || ''
       const stylePrompt = jsonData.style_prompt || ''
-      
+
       // 3. 格式化输出（Claude 风格：简洁、清晰）
       let formatted = ''
-      
+
       if (title) {
         formatted += `## 🎵 ${title}\n\n`
       }
-      
+
       if (stylePrompt) {
         formatted += `**风格提示词：**\n\`\`\`\n${stylePrompt}\n\`\`\`\n\n`
       }
-      
+
       if (lyrics) {
         formatted += `**完整歌词：**\n\n${lyrics}\n`
       }
-      
+
       // 添加任务 ID 提示（如果有）
       const taskIdMatch = fullText.match(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/i)
       if (taskIdMatch) {
         formatted += `\n---\n📝 任务ID: \`${taskIdMatch[1]}\`\n请回复 **"确认生成"** 开始生成音乐！`
       }
-      
+
       return formatted || content
     } catch (e) {
       // JSON 解析失败，返回原始内容
     }
   }
-  
+
   // 4. 如果没有 JSON，尝试提取歌词部分
   // 移除 Phase 分析等冗余内容
   const lyricsMatch = content.match(/\*\*(?:完整歌词|歌词)[：:]\*\*[\s\S]*?(?=\n\n(?:##|\*\*生成|$))/i)
   if (lyricsMatch) {
     return lyricsMatch[0]
   }
-  
+
   return content
 }
 
-// --- 辅助组件：极简思考动画 - 仅文字呼吸效果，无 SVG/图标 ---
-const SimpleBrainLoader = ({ showHint = false }: { showHint?: boolean }) => (
-  <div className="flex items-center gap-1.5">
-    <motion.span
-      animate={{ opacity: [0.4, 1, 0.4] }}
-      transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
-      className="text-xs text-slate-400 font-normal tracking-wide"
-    >
-      {showHint ? "正在深度思考中..." : "Thinking..."}
-    </motion.span>
-  </div>
-)
+function getChatErrorMessage(error: unknown, status?: number, model?: string): string {
+  const raw = error instanceof Error ? error.message : String(error || "")
+  const text = raw.toLowerCase()
+
+  if (status === 401 || /401|unauthorized|未授权|请先登录/.test(raw)) {
+    return "请先登录后再提交。"
+  }
+  if (status === 402 || /402|积分不足|余额不足|credit|balance/.test(raw)) {
+    return "积分不足，当前任务没有扣费。请充值或切换到免费额度可用的模型。"
+  }
+  if (/无权访问图片生成接口|permission|forbidden|403/.test(raw)) {
+    return "当前账号暂无图片生成权限，请切换模型，或联系客服开通后再试。"
+  }
+  if (/timeout|timed out|abort|aborted|超时/.test(text) || /超时|中断/.test(raw)) {
+    return "服务响应超时，已保留已生成内容。复杂文件或 OpenClaw 任务可能需要更久，请稍后重试。"
+  }
+  if (/file|upload|附件|上传/.test(text) || /文件|上传|附件/.test(raw)) {
+    return "文件未上传成功或附件无法被模型读取，请删除附件后重新上传再提交。"
+  }
+  if (model === "banana-2-pro") {
+    return "图片生成服务暂时不可用，可能是余额、模型、尺寸或参数不兼容导致。请稍后重试或调整提示词。"
+  }
+
+  return raw || "对话出错，请稍后重试。"
+}
+
+function buildChatErrorContent(message: string): string {
+  return [
+    "### 请求没有完成",
+    "",
+    message,
+    "",
+    "建议：检查登录状态、积分余额和附件上传状态；如果是 OpenClaw 或大文件任务，请稍后重试。"
+  ].join("\n")
+}
+
+function createClientRequestId(prefix = "chat") {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return `${prefix}_${crypto.randomUUID()}`
+  }
+  return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2)}`
+}
+
+const PENDING_TASK_STORAGE_KEY = "shenxiang.pendingAiTasks"
+
+function rememberPendingTask(task: { requestId: string; sessionId?: string; model: string; createdAt: number }) {
+  if (typeof window === "undefined") return
+  try {
+    const existing = JSON.parse(localStorage.getItem(PENDING_TASK_STORAGE_KEY) || "[]")
+    const tasks = Array.isArray(existing) ? existing : []
+    localStorage.setItem(PENDING_TASK_STORAGE_KEY, JSON.stringify([
+      task,
+      ...tasks.filter((item: any) => item?.requestId !== task.requestId),
+    ].slice(0, 10)))
+  } catch {
+    localStorage.setItem(PENDING_TASK_STORAGE_KEY, JSON.stringify([task]))
+  }
+}
+
+function forgetPendingTask(requestId: string) {
+  if (typeof window === "undefined") return
+  try {
+    const existing = JSON.parse(localStorage.getItem(PENDING_TASK_STORAGE_KEY) || "[]")
+    const tasks = Array.isArray(existing) ? existing : []
+    localStorage.setItem(PENDING_TASK_STORAGE_KEY, JSON.stringify(tasks.filter((item: any) => item?.requestId !== requestId)))
+  } catch {
+    localStorage.removeItem(PENDING_TASK_STORAGE_KEY)
+  }
+}
+
+function ProcessingStatusCard({
+  context,
+  showLongWaitHint
+}: {
+  context: ProcessingContext | null
+  showLongWaitHint: boolean
+}) {
+  const modelName = context?.model ? (MODEL_DISPLAY_NAMES[context.model] || context.model) : "AI"
+  const isOpenClaw = context?.model === "open-claw"
+  const hasFiles = Boolean(context?.fileCount)
+  const stageText = isOpenClaw
+    ? "OpenClaw 正在执行工具、读取文件或生成结果"
+    : hasFiles
+      ? "AI 正在读取附件并生成回答"
+      : "AI 正在生成回答"
+  const detailText = showLongWaitHint
+    ? "复杂任务通常需要 1-3 分钟，请保持页面打开。"
+    : hasFiles
+      ? `已接收 ${context?.fileCount ?? 0} 个附件，正在解析内容。`
+      : "请求已送达，正在等待首段内容返回。"
+
+  return (
+    <div className="w-full max-w-[720px] rounded-xl border border-emerald-100 bg-emerald-50/55 p-3 shadow-sm sm:p-4">
+      <div className="flex items-start gap-3">
+        <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-emerald-700 shadow-sm">
+          <Loader2 className="h-4 w-4 animate-spin" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-sm font-semibold text-slate-800">{stageText}</p>
+            <span className="rounded-full bg-white/80 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+              {modelName}
+            </span>
+          </div>
+          <p className="mt-1 text-xs leading-5 text-slate-600 sm:text-sm">{detailText}</p>
+          {context?.stage && (
+            <p className="mt-1 text-xs leading-5 text-slate-500">当前阶段：{context.stage}</p>
+          )}
+          {context?.traceId && (
+            <p className="mt-1 truncate text-[11px] leading-4 text-slate-400">追踪 ID：{context.traceId}</p>
+          )}
+          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white">
+            <motion.div
+              className="h-full rounded-full bg-emerald-600"
+              animate={{ x: ["-60%", "120%"] }}
+              transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
+              style={{ width: "48%" }}
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 // --- 辅助组件：文本渲染器 ---
 // LaTeX 渲染辅助函数 (已移至 lib/latex-constants.ts)
@@ -313,9 +445,6 @@ const InlineText = ({ text }: { text: string }) => {
 
 // MediaBlock 必须在 UltimateRenderer 之前定义
 // 🔥 支持图片、文件、PPT 渲染
-// 🔥 OpenClaw 媒体基础 URL（用于转换本地路径为 HTTP URL）
-const OPENCLAW_MEDIA_BASE = process.env.NEXT_PUBLIC_OPENCLAW_MEDIA_URL || 'http://43.154.111.156:18789/__openclaw__/media/'
-
 interface MediaItem {
   type: "image" | "file" | "ppt"
   url: string
@@ -326,15 +455,46 @@ interface MediaItem {
 // 🔥 转换 OpenClaw 本地路径为 HTTP URL
 function convertOpenClawUrl(url: string): string {
   // 如果已经是完整 URL，直接返回
-  if (url.startsWith('http://') || url.startsWith('https://')) {
+  if (url.startsWith("/api/openclaw-media") || url.startsWith("/api/openclaw-media-sign")) {
     return url
   }
-  // 如果是 OpenClaw 本地路径（如 /home/node/.openclaw/media/xxx）
-  if (url.includes('.openclaw/media/') || url.includes('tool-image-generation/')) {
-    // 提取文件名
-    const fileName = url.split('/').pop() || url
-    return `${OPENCLAW_MEDIA_BASE}${fileName}`
+
+  const localMediaPrefix = "/home/node/.openclaw/media/"
+  const localWorkspacePrefix = "/home/node/.openclaw/workspace/"
+  const gatewayMediaPrefix = "/__openclaw__/media/"
+  const gatewayWorkspacePrefix = "/__openclaw__/workspace/"
+
+  if (url.startsWith(localMediaPrefix)) {
+    return toPublicOpenClawMediaSignUrl(url.slice(localMediaPrefix.length))
   }
+
+  if (url.startsWith(localWorkspacePrefix)) {
+    return toPublicOpenClawWorkspaceUrl(url.slice(localWorkspacePrefix.length))
+  }
+
+  if (url.startsWith(gatewayMediaPrefix)) {
+    return toPublicOpenClawMediaSignUrl(url.slice(gatewayMediaPrefix.length))
+  }
+
+  if (url.startsWith(gatewayWorkspacePrefix)) {
+    return toPublicOpenClawWorkspaceUrl(url.slice(gatewayWorkspacePrefix.length))
+  }
+
+  try {
+    const parsed = new URL(url)
+    const mediaMatch = parsed.pathname.match(/^\/__openclaw__\/media\/(.+)$/)
+    if (mediaMatch?.[1]) {
+      return toPublicOpenClawMediaSignUrl(mediaMatch[1])
+    }
+
+    const workspaceMatch = parsed.pathname.match(/^\/__openclaw__\/workspace\/(.+)$/)
+    if (workspaceMatch?.[1]) {
+      return toPublicOpenClawWorkspaceUrl(workspaceMatch[1])
+    }
+  } catch {
+    // Keep the original string if it is not a valid absolute URL.
+  }
+
   return url
 }
 
@@ -344,9 +504,12 @@ const MediaBlock = ({ items }: { items: MediaItem[] }) => {
   return (
     <div className="space-y-4 my-4">
       {items.map((item, index) => {
-        if (item.type === "image") {
+        const publicUrl = convertOpenClawUrl(item.url)
+        const effectiveType = item.type === "image" ? getOpenClawAttachmentKind(publicUrl) : item.type
+
+        if (effectiveType === "image") {
           // 🔥 使用 GPT Image 样式渲染图片
-          const imageUrl = convertOpenClawUrl(item.url)
+          const imageUrl = publicUrl
           return (
             <motion.div
               key={index}
@@ -373,36 +536,48 @@ const MediaBlock = ({ items }: { items: MediaItem[] }) => {
               </a>
             </motion.div>
           )
-        } else if (item.type === "file") {
+        } else if (effectiveType === "file") {
           // 文件下载链接
-          const isPDF = item.url.toLowerCase().includes('.pdf')
-          const fileUrl = convertOpenClawUrl(item.url)
+          const isPDF = publicUrl.toLowerCase().includes('.pdf')
+          const isHtml = publicUrl.toLowerCase().includes('.html')
+          const fileUrl = publicUrl
+
+          if (isHtml || isLikelyHtmlDocumentUrl(fileUrl)) {
+            return (
+              <OpenClawHtmlPreview
+                key={index}
+                src={fileUrl}
+                title={item.name || "HTML 页面"}
+              />
+            )
+          }
+
           return (
             <div
               key={index}
-              className="flex items-center gap-3 p-4 rounded-xl bg-slate-50 border border-slate-200 hover:bg-slate-100 transition-colors"
+              className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 transition-colors hover:bg-slate-100"
             >
               <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
-                <span className="text-blue-600 text-lg">{isPDF ? "📄" : "📎"}</span>
+                <FileText className="h-5 w-5 text-blue-600" />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-slate-700 truncate">{item.name || "文件"}</p>
-                <p className="text-xs text-slate-400">{isPDF ? "PDF 文档" : "文件"}</p>
+                <p className="truncate text-xs text-slate-400">{isHtml ? "HTML 页面" : isPDF ? "PDF 文档" : "文件"}</p>
               </div>
               <a
                 href={fileUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                download={item.name}
-                className="px-3 py-1.5 text-xs font-medium text-white bg-blue-500 rounded-lg hover:bg-blue-600 transition-colors shrink-0"
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-blue-500 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-600"
               >
-                下载
+                <ExternalLink className="h-3.5 w-3.5" />
+                打开
               </a>
             </div>
           )
-        } else if (item.type === "ppt") {
+        } else if (effectiveType === "ppt") {
           // PPT 预览（使用 Google Docs Viewer 或内联 iframe）
-          const pptUrl = convertOpenClawUrl(item.url)
+          const pptUrl = publicUrl
           const googleViewerUrl = `https://docs.google.com/gview?url=${encodeURIComponent(pptUrl)}&embedded=true`
           return (
             <div key={index} className="rounded-2xl overflow-hidden border border-green-100 shadow-xl">
@@ -468,7 +643,7 @@ const ThinkingBlock = ({ content, isStreaming }: { content: string; isStreaming?
 
 function UltimateRenderer({ content, isStreaming = false }: { content: string; isStreaming?: boolean }) {
   if (!content) return <span className="text-emerald-500 animate-cursor-blink">▍</span>;
-  
+
   // 🧠 处理 <think> 标签：提取思考内容并折叠显示
   const thinkMatch = content.match(/<think>([\s\S]*?)<\/think>/i)
   const thinkContent = thinkMatch ? thinkMatch[1].trim() : null
@@ -548,7 +723,7 @@ function UltimateRenderer({ content, isStreaming = false }: { content: string; i
     const line = lines[i];
     const isTableLine = line.trim().startsWith("|") && line.includes("|");
     const isLastLine = i === lines.length - 1;
-    
+
     if (isTableLine) {
       tableBuffer.push(line);
       if (isLastLine || !lines[i + 1].trim().startsWith("|")) {
@@ -557,8 +732,8 @@ function UltimateRenderer({ content, isStreaming = false }: { content: string; i
       }
       continue;
     }
-    
-    
+
+
     // 🔥 再次增大字体：h1=3xl, h2=2xl, h3=xl, 正文=lg(18px)
     if (line.trim().startsWith("# ")) {
       renderedElements.push(
@@ -721,16 +896,16 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     if (sessionModelRef.current && sessionModelRef.current !== model) return null
     return `${model}:${conversationId}`
   }
-  
+
   // 🎵 Suno V5 音乐生成模式（必选项）
   type SunoMode = "inspiration" | "custom" | "extend"
   const [sunoMode, setSunoMode] = useState<SunoMode>("inspiration")
-  
+
   const [dailyUsage, setDailyUsage] = useState<number>(0)
   const DAILY_LIMIT = 20
 
-  const isLuxury = userCredits > 1000 
-  
+  const isLuxury = userCredits > 1000
+
   // 🎯 升级引导横幅状态（非豪华会员显示，发送消息后消失）
   const [showUpgradeBanner, setShowUpgradeBanner] = useState(true)
 
@@ -841,16 +1016,16 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     hasActiveTasks: hasSunoActiveTasks
   } = useSunoMusic()
 
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
+	  useEffect(() => {
+	    if (typeof window !== 'undefined') {
       const userStr = localStorage.getItem('currentUser')
       if (userStr) {
         try {
           const user = JSON.parse(userStr)
           const uid = user.id || user.sub || user.userId || user.user_id || ""
-          console.log("🔑 [用户初始化] 解析用户:", { 
-            id: user.id, 
-            sub: user.sub, 
+          console.log("🔑 [用户初始化] 解析用户:", {
+            id: user.id,
+            sub: user.sub,
             userId: user.userId,
             finalUid: uid,
             phone: user.phone,
@@ -858,16 +1033,17 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
           })
           setUserId(uid)
           if (user.user_metadata?.avatar_url) setUserAvatar(user.user_metadata.avatar_url)
-          
+
           // 🔥 设置用户显示名称：优先手机号 > 邮箱 > 用户名
           const displayName = user.phone || user.phone_number || user.email || user.nickname || user.username || user.user_metadata?.name || "用户"
           setUserDisplayName(displayName)
           console.log("👤 [用户初始化] 显示名称:", displayName)
-          
+
           if (uid) {
-            fetchCredits(uid)
-            fetchChatSessions(uid)
-          }
+	            fetchCredits(uid)
+	            fetchChatSessions(uid)
+	            recoverPendingTasks(uid)
+	          }
         } catch (e) {
           console.error("❌ [用户初始化] 解析失败:", e)
         }
@@ -875,7 +1051,50 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         console.warn("⚠️ [用户初始化] localStorage 中无 currentUser")
       }
     }
-  }, [])
+	  }, [])
+
+	  const recoverPendingTasks = async (uid: string) => {
+	    if (typeof window === "undefined") return
+	    try {
+	      const pending = JSON.parse(localStorage.getItem(PENDING_TASK_STORAGE_KEY) || "[]")
+	      const pendingTasks = Array.isArray(pending) ? pending : []
+	      if (pendingTasks.length === 0) return
+
+	      const recentPending = pendingTasks.filter((task: any) => {
+	        const ageMs = Date.now() - Number(task?.createdAt || 0)
+	        return task?.requestId && ageMs > 0 && ageMs < 24 * 60 * 60 * 1000
+	      })
+	      if (recentPending.length === 0) {
+	        localStorage.removeItem(PENDING_TASK_STORAGE_KEY)
+	        return
+	      }
+
+	      const res = await fetch(`/api/task-status?limit=10`, {
+	        headers: { "X-User-Id": uid },
+	      })
+	      if (!res.ok) return
+	      const payload = await res.json()
+	      const tasks = Array.isArray(payload.tasks) ? payload.tasks : []
+	      const activeTasks = tasks.filter((task: any) => ["queued", "running"].includes(task.status))
+	      const finishedRequestIds = new Set(tasks
+	        .filter((task: any) => ["succeeded", "failed", "timeout", "cancelled"].includes(task.status))
+	        .map((task: any) => task.request_id))
+
+	      for (const requestId of finishedRequestIds) {
+	        forgetPendingTask(String(requestId))
+	      }
+
+	      if (activeTasks.length > 0) {
+	        const task = activeTasks[0]
+	        toast.info("检测到未完成的长任务，已恢复状态", {
+	          description: task.stage || task.current_tool || "任务仍在处理中",
+	          duration: 5000,
+	        })
+	      }
+	    } catch (error) {
+	      console.warn("⚠️ [任务恢复] 查询失败:", error)
+	    }
+	  }
 
   const fetchCredits = async (uid: string) => {
     console.log("💰 [积分查询] 通过 API 查询用户:", uid)
@@ -912,7 +1131,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   }, [urlSessionId])
 
   const prevUrlAgentRef = useRef<string | null>(null)
-  
+
   useEffect(() => {
     const agentToModel: Record<string, ModelType> = {
       "standard": "standard",
@@ -1040,6 +1259,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   const [isUploading, setIsUploading] = useState(false)
   const [isComplexMode, setIsComplexMode] = useState(false)
   const [analysisStage, setAnalysisStage] = useState(0)
+  const [processingContext, setProcessingContext] = useState<ProcessingContext | null>(null)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -1052,7 +1272,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   const scrollAreaRef = useRef<HTMLDivElement>(null)
   // 🔥 记录当前正在处理的 AI 消息 ID
   const currentBotIdRef = useRef<string | null>(null)
-  
+
   // 🔥 智能滚动状态
   const [isNearBottom, setIsNearBottom] = useState(true)
   const [hasNewMessage, setHasNewMessage] = useState(false)
@@ -1136,7 +1356,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   }, [messages, isLoading, currentBotIdRef.current])
 
   // --- 模型配置（增强版：添加描述和标签） ---
-  const modelConfig = {
+  const modelConfig: Partial<Record<ModelType, ModelUiConfig>> = {
     "standard": {
       name: "作文批改",
       modelKey: "standard",
@@ -1209,6 +1429,35 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       description: "AI 图像生成",
       badge: "热门",
       group: "创意生成"
+    },
+    "gpt-image-2": {
+      name: "GPT Image 2",
+      modelKey: "gpt-image-2",
+      color: BRAND_GREEN,
+      description: "高质量图像生成与编辑",
+      badge: "推荐",
+      group: "创意生成",
+    },
+    "gpt-image-1.5": {
+      name: "GPT Image 1.5",
+      modelKey: "gpt-image-2",
+      color: BRAND_GREEN,
+      description: "图像生成与编辑",
+      group: "创意生成",
+    },
+    "gpt-image-1": {
+      name: "GPT Image 1",
+      modelKey: "gpt-image-2",
+      color: BRAND_GREEN,
+      description: "图像生成与编辑",
+      group: "创意生成",
+    },
+    "gpt-image-1-mini": {
+      name: "GPT Image 1 Mini",
+      modelKey: "gpt-image-2",
+      color: BRAND_GREEN,
+      description: "轻量图像生成",
+      group: "创意生成",
     },
     "suno-v5": {
       name: "Suno V5",
@@ -1291,52 +1540,65 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     },
   }
 
+  const getModelUiConfig = (model: ModelType): ModelUiConfig => {
+    return modelConfig[model] || {
+      name: MODEL_DISPLAY_NAMES[model] || getModelDisplayName(model),
+      modelKey: model,
+      color: BRAND_GREEN,
+      description: "AI 助手",
+      group: "AI模型",
+    }
+  }
+
   // 🔥 转换为 ModelSelector 需要的格式
   const modelList = Object.entries(modelConfig).map(([key, config]) => ({
     key,
-    name: config.name,
-    modelKey: (config as any).modelKey,
-    color: config.color,
-    description: config.description,
-    badge: (config as any).badge,
-    group: config.group
+    name: config!.name,
+    modelKey: config!.modelKey as any,
+    color: config!.color,
+    description: config!.description,
+    badge: config!.badge,
+    group: config!.group
   }))
 
-  const handleModelChange = (model: ModelType) => {
-    if (model !== selectedModel) {
+  const handleModelChange = (model: string) => {
+    if (!(model in MODEL_COSTS)) return
+    const nextModel = model as ModelType
+
+    if (nextModel !== selectedModel) {
       clearConversationState()
       setMessages([])
-      console.log(`🔄 [模型切换] ${selectedModel} → ${model}，已清除会话命名空间`)
+      console.log(`🔄 [模型切换] ${selectedModel} → ${nextModel}，已清除会话命名空间`)
     }
-    
-    if (model !== "standard") {
+
+    if (nextModel !== "standard") {
       if (isLuxury) {
-        toast.success(`已切换至 ${modelConfig[model].name}`)
+        toast.success(`已切换至 ${getModelUiConfig(nextModel).name}`)
       } else {
         if (dailyUsage < DAILY_LIMIT) {
-          toast.info(`已切换至 ${modelConfig[model].name}`, { description: `今日免费: ${dailyUsage}/${DAILY_LIMIT}` })
+          toast.info(`已切换至 ${getModelUiConfig(nextModel).name}`, { description: `今日免费: ${dailyUsage}/${DAILY_LIMIT}` })
         } else {
           toast.warning(`今日免费额度已用完`)
         }
       }
     }
-    
+
     // 🚀 Banana 2 Pro 使用专用页面，自动跳转
-    if (model === "banana-2-pro") {
+    if (nextModel === "banana-2-pro") {
       console.log('✅ [模型切换] 检测到 banana-2-pro，跳转到专用页面')
       router.push('/chat/banana-2-pro')
       return
     }
 
-    if (model === "suno-v5") setGenMode("music")
+    if (nextModel === "suno-v5") setGenMode("music")
     else setGenMode("text")
 
     // 🔥 记录用户上次使用的模型
-    lastUsedModelRef.current = model
-    setSelectedModel(model)
+    lastUsedModelRef.current = nextModel
+    setSelectedModel(nextModel)
 
     console.log(`🔄 [模型切换] 已切换至 ${model}`)
-    
+
     if (input === "" || input.startsWith("生成")) {
        setInput("")
     }
@@ -1356,32 +1618,32 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     console.log("📎 [handleFileUpload] 触发文件上传事件")
-    const files = event.target.files; 
+    const files = event.target.files;
     console.log("📎 [handleFileUpload] 选择的文件:", files?.length, files)
-    
+
     if (!files || !files.length) {
       console.log("📎 [handleFileUpload] 没有选择文件，退出")
       return;
     }
-    
+
     // 🔥 检查用户是否已登录
     if (!userId) {
       console.log("📎 [handleFileUpload] 用户未登录")
       toast.error("请先登录后再上传文件")
       return
     }
-    
+
     console.log("📎 [handleFileUpload] 开始上传，用户ID:", userId)
     setIsUploading(true)
     setUploadProgress(0)
     setFileProcessing({ status: "uploading", progress: 0, message: "正在处理..." })
     setDynamicStatusMessage(getRandomStatusMessage("uploading", 0))
-    
+
     try {
         const totalFiles = files.length
         const uploadPromises = Array.from(files).map(async (file, index) => {
             const fileToUpload = file;
-            
+
             // ============================================
             // 🔥 前端安全校验
             // ============================================
@@ -1419,39 +1681,39 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
             const data = await res.json()
             const gatewayUrl = data.gatewayUrl || data.data?.gateway_url
             const modelUrl = data.modelUrl || data.data?.model_url || data.data?.url || gatewayUrl
-            
+
             // 🔥 更新进度
             setUploadProgress(Math.round(((index + 1) / totalFiles) * 100))
-            
+
             return new Promise<UploadedFile>((resolve) => {
                 if (fileToUpload.type.startsWith("image/")) {
-                    resolve({ 
-                        name: fileToUpload.name, 
-                        type: fileToUpload.type, 
-                        size: fileToUpload.size, 
+                    resolve({
+                        name: fileToUpload.name,
+                        type: fileToUpload.type,
+                        size: fileToUpload.size,
                         data: modelUrl || "",
-                        difyFileId: data.id, 
+                        difyFileId: data.id,
                         gatewayUrl,
                         modelUrl,
-                        preview: URL.createObjectURL(fileToUpload) 
+                        preview: URL.createObjectURL(fileToUpload)
                     });
                 } else {
-                    const reader = new FileReader(); 
-                    reader.onload = e => resolve({ 
-                        name: fileToUpload.name, 
-                        type: fileToUpload.type, 
-                        size: fileToUpload.size, 
-                        data: e.target?.result as string, 
-                        difyFileId: data.id, 
+                    const reader = new FileReader();
+                    reader.onload = e => resolve({
+                        name: fileToUpload.name,
+                        type: fileToUpload.type,
+                        size: fileToUpload.size,
+                        data: e.target?.result as string,
+                        difyFileId: data.id,
                         gatewayUrl,
                         modelUrl,
-                        preview: undefined 
+                        preview: undefined
                     });
                     reader.readAsDataURL(fileToUpload)
                 }
             })
         });
-        
+
         const results = await Promise.all(uploadPromises);
         setUploadedFiles(p => [...p, ...results]);
         toast.success("文件上传成功")
@@ -1468,8 +1730,6 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     }
     if(fileInputRef.current) fileInputRef.current.value=""
   }
-
-  const removeFile = (i: number) => setUploadedFiles(p => p.filter((_, idx) => idx !== i))
 
   // ============================================
   // 🎤 语音输入功能
@@ -1563,7 +1823,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     e.preventDefault(); if (!userId) { toast.error("请登录"); return }
     const activeFiles = overrides?.files ?? uploadedFiles
     const txt = ((overrides?.content ?? input) || "").trim(); if (!txt && !activeFiles.length) return
-    
+
     console.log("📤 [onSubmit] 发送消息:", {
       model: selectedModel,
       mode: genMode,
@@ -1571,30 +1831,37 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       urlAgent,
       sessionId: sessionIdRef.current
     })
-    
+
     const cost = calculateCost()
     if (userCredits < cost) {
-      toast.error("积分不足", { 
+      toast.error("积分不足", {
         description: `需要 ${cost} 积分，当前 ${userCredits}`,
         duration: 2000
       })
-      setTimeout(() => {
-        router.push("/pricing")
-      }, 1500)
       return
     }
 
-    setFileProcessing({ status: "idle", progress: 0, message: "" })
-    setDynamicStatusMessage("")
-    setIsLoading(true); setAnalysisStage(0); 
-    setIsComplexMode(activeFiles.length > 0 || txt.length > 150)
-    
+	    const requestId = createClientRequestId(selectedModel === "gpt-image-2" ? "img" : selectedModel === "open-claw" ? "openclaw" : "chat")
+
+	    setFileProcessing({ status: "idle", progress: 0, message: "" })
+	    setDynamicStatusMessage("")
+	    setIsLoading(true); setAnalysisStage(0);
+	    setIsComplexMode(activeFiles.length > 0 || txt.length > 150)
+	    setProcessingContext({
+	      model: selectedModel,
+	      fileCount: activeFiles.length,
+	      promptLength: txt.length,
+	      startedAt: Date.now(),
+	      requestId,
+	      stage: "请求已提交"
+	    })
+
     // 🎯 重置工作流可视化状态
     resetWorkflow()
-    
+
     // 🔥 自动折叠侧边栏，进入专注模式
     collapseSidebar()
-    
+
     let sid = currentSessionId;
     // 🔥 修复：当模型切换时（sessionIdRef.current === null），即使 urlSessionId 存在也忽略
     // 否则会导致用旧模型的 session 去请求新模型
@@ -1621,9 +1888,9 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     }
     const defaultPrompt = defaultPrompts[selectedModel] || "请分析"
     // 🔥 将上传的文件附加到用户消息中
-    const userMsg: Message = { 
-      id: Date.now().toString(), 
-      role: "user", 
+    const userMsg: Message = {
+      id: Date.now().toString(),
+      role: "user",
       content: txt || defaultPrompt,
       files: activeFiles.length > 0 ? [...activeFiles] : undefined  // 🔥 携带文件信息
     }
@@ -1700,19 +1967,21 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         )
       } catch (err: any) {
         console.error("❌ [Suno V5] 生成失败:", err)
-        toast.error(err.message || "音乐生成失败")
-        setMessages(p => p.filter(m => m.id !== botId))
+        const errorMsg = getChatErrorMessage(err, undefined, selectedModel)
+        toast.error(errorMsg || "音乐生成失败")
+        setMessages(p => p.map(m => m.id === botId ? { ...m, content: buildChatErrorContent(errorMsg || "音乐生成失败") } : m))
       } finally {
         setIsLoading(false)
+        setProcessingContext(null)
         refreshCredits()
       }
-      
+
       return // 🔥 关键：Suno V5 处理完毕后直接返回，不执行后续逻辑
     }
     // ============================================
     // 🎵 Suno V5 特殊处理结束
     // ============================================
-    
+
     const preview = userMsg.content.slice(0, 30)
     const { data: existing } = await supabase.from('chat_sessions').select('id').eq('id', sid).single()
     if (!existing) {
@@ -1725,11 +1994,12 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     // 🔥 刷新侧边栏会话列表
     refreshSessionList()
 
-    const botId = (Date.now()+1).toString(); 
+	    const botId = (Date.now()+1).toString();
     // 🔥 记录当前正在处理的消息 ID
-    currentBotIdRef.current = botId
-    setMessages(p => [...p, { id: botId, role: "assistant", content: "" }])
-    
+	    currentBotIdRef.current = botId
+	    setMessages(p => [...p, { id: botId, role: "assistant", content: "" }])
+	    rememberPendingTask({ requestId, sessionId: sid, model: selectedModel, createdAt: Date.now() })
+
     let fullText = ""; let hasRec = false
     try {
         const fileIds = activeFiles.map(f => f.difyFileId).filter(Boolean)
@@ -1737,7 +2007,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
           .filter((file) => file.type?.startsWith("image/"))
           .map((file) => file.modelUrl || (/^https?:\/\//.test(file.data) ? file.data : "") || file.gatewayUrl || "")
           .filter(Boolean)
-        
+
         console.log("🚀 [API 请求] 发送到 /api/dify-chat:", {
           query: userMsg.content.slice(0, 50),
           userId,
@@ -1747,58 +2017,74 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
           fileCount: fileIds.length,
           fileUrlCount: fileUrls.length
         })
-        
-        const res = await fetch(getApiUrl("/api/dify-chat"), {
-            method: "POST", 
-            headers: { 
-              "Content-Type": "application/json",
-              "X-User-Id": userId
-            },
-            body: JSON.stringify({ 
-              query: userMsg.content, 
-              fileIds, 
+
+	        const res = await fetch(getApiUrl("/api/dify-chat"), {
+	            method: "POST",
+	            headers: {
+	              "Content-Type": "application/json",
+	              "X-User-Id": userId,
+	              "X-Request-Id": requestId
+	            },
+	            body: JSON.stringify({
+	              query: userMsg.content,
+              fileIds,
               fileUrls,
-              userId, 
+              userId,
               // 🔥 Suno V5 使用 useSunoMusic 的 conversationId 保持会话连续性
-              conversation_id: selectedModel === "suno-v5" && sunoConversationId ? sunoConversationId : getConversationIdForRequest(selectedModel), 
-              model: selectedModel,
-              mode: genMode,
-              // 🔥 传递前端计算的成本，用于后端记录交易
-              estimatedCost: cost
-            })
-        })
-        
+              conversation_id: getConversationIdForRequest(selectedModel),
+	              model: selectedModel,
+	              mode: genMode,
+	              requestId,
+	              sessionId: sid,
+	              messageId: botId,
+	              // 🔥 传递前端计算的成本，用于后端记录交易
+	              estimatedCost: cost
+	            })
+	        })
+	        const traceId = res.headers.get("X-Trace-Id") || undefined
+	        if (traceId) {
+	          setProcessingContext((context) => context?.requestId === requestId ? { ...context, traceId } : context)
+	        }
+
         console.log("📥 [API 响应] 状态码:", res.status)
         console.log("📥 [API 响应] Headers:", Object.fromEntries(res.headers.entries()))
-        
+
         if (res.status === 401) {
           toast.error("请先登录")
-          throw new Error("未授权")
+          throw new Error(getChatErrorMessage("未授权", res.status, selectedModel))
         }
-        if (res.status === 402) throw new Error("积分不足")
+        if (res.status === 402) throw new Error(getChatErrorMessage("积分不足", res.status, selectedModel))
         if (!res.ok) {
           const errorText = await res.text()
           console.error("❌ [API 错误] 状态码:", res.status)
           console.error("❌ [API 错误] 响应内容:", errorText)
-          
+
           // 🔥 尝试解析 JSON 错误信息
+          let parsedError: any = null
           try {
-            const errorJson = JSON.parse(errorText)
-            console.error("❌ [API 错误] 解析后:", errorJson)
-            throw new Error(errorJson.error || errorJson.details || `请求失败: ${res.status}`)
-          } catch (parseError) {
-            throw new Error(`请求失败 (${res.status}): ${errorText.slice(0, 100)}`)
+            parsedError = JSON.parse(errorText)
+            console.error("❌ [API 错误] 解析后:", parsedError)
+          } catch {
+            parsedError = null
           }
+          throw new Error(getChatErrorMessage(
+            parsedError?.error || parsedError?.details || errorText || `请求失败: ${res.status}`,
+            res.status,
+            selectedModel
+          ))
         }
-        
-        const reader = res.body?.getReader(); 
+
+        const reader = res.body?.getReader();
+        if (!reader) {
+          throw new Error("服务没有返回可读取的响应流")
+        }
         const decoder = new TextDecoder();
-        let buffer = ""; 
+        let buffer = "";
 
         while (true) {
-            const { done, value } = await reader!.read(); 
+            const { done, value } = await reader!.read();
             if (done) break;
-            
+
             buffer += decoder.decode(value, { stream: true });
             const lines = buffer.split("\n");
             buffer = lines.pop() || "";
@@ -1808,18 +2094,23 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                 const data = line.slice(6).trim(); if (data === "[DONE]") continue
                 try {
                     const json = JSON.parse(data)
-                    
+
                     // 🎯 工作流事件处理 - 传递给可视化 Hook
                     // 🔥 Dify SSE 格式：node_started 事件的数据在 json.data 中
-                    if (json.event) {
+	                    if (json.event) {
                       const nodeData = json.data || {}
                       const nodeTitle = nodeData.title || json.title
-                      
+
                       // 🔍 调试日志
-                      if (json.event === 'node_started' || json.event === 'node_finished') {
-                        console.log(`🔔 [SSE Event] ${json.event}: "${nodeTitle}"`, nodeData)
-                      }
-                      
+	                      if (json.event === 'node_started' || json.event === 'node_finished') {
+	                        console.log(`🔔 [SSE Event] ${json.event}: "${nodeTitle}"`, nodeData)
+	                      }
+	                      if (nodeTitle) {
+	                        setProcessingContext((context) => context?.requestId === requestId
+	                          ? { ...context, stage: String(nodeTitle), traceId: traceId || context.traceId }
+	                          : context)
+	                      }
+
                       handleSSEEvent({
                         event: json.event,
                         data: {
@@ -1830,7 +2121,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                         }
                       })
                     }
-                    
+
                     if (json.conversation_id && sessionIdRef.current !== json.conversation_id) {
                         const normalizedConversationId = json.conversation_id.startsWith(`${selectedModel}:`)
                           ? json.conversation_id.slice((selectedModel + ":").length)
@@ -1883,39 +2174,42 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                     console.error("❌ [流式解析] 解析事件失败:", e, "原始数据:", data)
                 }
             }
-        }
-        if (hasRec) await supabase.from('chat_messages').insert({ session_id: sid, role: "assistant", content: fullText })
-        
+	        }
+	        if (hasRec) await supabase.from('chat_messages').insert({ session_id: sid, role: "assistant", content: fullText })
+	        forgetPendingTask(requestId)
+
         setUserCredits(prev => prev - cost)
         if (selectedModel !== "standard" && !isLuxury && dailyUsage < DAILY_LIMIT) {
           setDailyUsage(prev => prev + 1)
         }
 
-    } catch (e: any) {
+	    } catch (e: any) {
         console.error("❌ [对话异常] 详细错误:", e)
         console.error("❌ [对话异常] 错误堆栈:", e.stack)
         console.error("❌ [对话异常] 模型:", selectedModel, "模式:", genMode)
-        
-        const errorMsg = e.message || "对话出错，请重试"
+
+        const errorMsg = getChatErrorMessage(e, undefined, selectedModel)
         toast.error(errorMsg, {
           description: selectedModel === "banana-2-pro" ? "图片生成失败，请检查提示词" : undefined,
           duration: 5000
         })
-        
+
         // 🔥 保留已生成的内容（如果 fullText 有内容，说明 AI 已经输出了部分内容）
         if (fullText.trim()) {
           // 保留消息并在末尾添加中断提示
-          setMessages(p => p.map(m => m.id === botId ? { ...m, content: fullText + "\n\n---\n*内容生成已中断* ✨" } : m))
+          setMessages(p => p.map(m => m.id === botId ? { ...m, content: `${fullText}\n\n---\n*内容生成已中断：${errorMsg}*` } : m))
           toast.error("内容生成中断，已保留已生成的部分", { duration: 4000 })
-        } else {
-          // 没有任何内容，正常移除空气泡
-          setMessages(p => p.filter(m => m.id !== botId))
-        }
-    } finally {
-      setIsLoading(false)
-      // 🔥 重置工作流状态（而非 markWorkflowComplete，否则会显示误导性的"已完成"节点）
+	        } else {
+	          // 没有任何内容时也保留错误消息，避免用户看到消息突然消失。
+	          setMessages(p => p.map(m => m.id === botId ? { ...m, content: buildChatErrorContent(errorMsg) } : m))
+	        }
+	        forgetPendingTask(requestId)
+	    } finally {
+	      setIsLoading(false)
+	      setProcessingContext(null)
+	      // 🔥 重置工作流状态（而非 markWorkflowComplete，否则会显示误导性的"已完成"节点）
       resetWorkflow()
-      
+
       // 🔥 积分刷新：对话结束后触发全局积分刷新
       console.log("🔄 [积分刷新] 对话结束，触发积分重新查询...")
       if (userId) {
@@ -1924,9 +2218,9 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       // 🔥 触发侧边栏积分刷新
       refreshCredits()
       console.log("✅ [积分刷新] 已触发全局积分刷新事件")
-      
+
       router.refresh()
-      
+
       // 🔥 移除自动切换回 standard 的逻辑，保持当前模型
       // if (genMode !== "text") {
       //   setGenMode("text")
@@ -1989,34 +2283,34 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       // 🔥 将 Markdown 转换为 HTML
       const convertMarkdownToHTML = (md: string): string => {
         let html = md
-        
+
         // 转换标题 (从 h4 到 h1，避免顺序问题)
         html = html.replace(/^#### (.+)$/gm, '<h4>$1</h4>')
         html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>')
         html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>')
         html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>')
-        
+
         // 转换粗体
         html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-        
+
         // 转换斜体
         html = html.replace(/\*(.+?)\*/g, '<em>$1</em>')
-        
+
         // 转换列表项
         html = html.replace(/^- (.+)$/gm, '<li>$1</li>')
-        
+
         // 转换分隔线
         html = html.replace(/^---$/gm, '<hr>')
-        
+
         // 转换引用
         html = html.replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>')
-        
+
         // 转换表格
         const tableRegex = /(\|.+\|[\r\n]+)+/g
         html = html.replace(tableRegex, (match) => {
           const rows = match.trim().split('\n').filter(row => row.trim() && !row.includes('---'))
           if (rows.length === 0) return match
-          
+
           let tableHTML = '<table>'
           rows.forEach((row, index) => {
             const cells = row.split('|').filter(cell => cell.trim())
@@ -2034,10 +2328,10 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
           tableHTML += '</tbody></table>'
           return tableHTML
         })
-        
+
         // 将连续的 <li> 包装在 <ul> 中
         html = html.replace(/(<li>.+<\/li>\n?)+/g, '<ul>$&</ul>')
-        
+
         // 转换普通段落（非空行且不是已转换的 HTML 标签）
         const lines = html.split('\n')
         html = lines.map(line => {
@@ -2046,10 +2340,10 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
           if (trimmed.startsWith('<')) return line
           return `<p>${line}</p>`
         }).join('\n')
-        
+
         return html
       }
-      
+
       const htmlContent = convertMarkdownToHTML(renderMathInMarkdown(cleanContent))
 
       const reportStyles = `
@@ -2259,11 +2553,11 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 
   // 🔗 分享功能 - 生成分享链接
   const [isSharing, setIsSharing] = useState(false)
-  
+
   // 🔥 分享整个对话
   const handleShare = async () => {
     console.log("🔗 [分享] 点击分享按钮, isSharing:", isSharing, "messages:", messages.length)
-    
+
     if (isSharing) {
       console.log("🔗 [分享] 正在分享中，跳过")
       return
@@ -2273,43 +2567,43 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       toast.error("没有可分享的内容")
       return
     }
-    
+
     setIsSharing(true)
     toast.info("正在生成分享链接...")
-    
+
     try {
       console.log("🔗 [分享] 发送 API 请求...")
       // 🔥 发送整个对话到 API
       const res = await fetch('/api/share', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           messages: messages.map(m => ({ role: m.role, content: m.content })),
           userId,
-          modelName: modelConfig[selectedModel].name
+          modelName: getModelUiConfig(selectedModel).name
         })
       })
-      
+
       console.log("🔗 [分享] API 响应状态:", res.status)
-      
+
       if (!res.ok) {
         const errText = await res.text()
         console.error("🔗 [分享] API 错误:", errText)
         throw new Error('创建分享失败')
       }
-      
+
       const data = await res.json()
       console.log("🔗 [分享] API 返回数据:", data)
       const shareUrl = data.shareUrl
-      
+
       // 复制链接到剪贴板
       await navigator.clipboard.writeText(shareUrl)
-      
+
       toast.success("分享链接已复制", {
         description: shareUrl,
         duration: 5000
       })
-      
+
       // 移动端尝试使用原生分享
       if (navigator.share) {
         try {
@@ -2322,7 +2616,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
           // 用户取消分享，忽略
         }
       }
-      
+
     } catch (err) {
       console.error("🔗 [分享] 失败:", err)
       toast.error("分享失败，请稍后重试")
@@ -2443,7 +2737,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       </AnimatePresence>
 
       <div className="flex flex-1 flex-col h-full relative min-w-0">
-        
+
         {/* 🎯 升级引导横幅 - 非豪华会员常驻显示，用户手动关闭 */}
         <AnimatePresence>
           {showUpgradeBanner && !isLuxury && !isMobile && (
@@ -2508,13 +2802,13 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
               transition={{ duration: 0.2, ease: "easeOut" }}
               className="inline-block max-w-[112px] truncate text-[12px] font-medium tracking-[-0.01em] text-slate-700 sm:max-w-none sm:text-sm md:text-base"
             >
-              {modelConfig[selectedModel].name}
+              {getModelUiConfig(selectedModel).name}
             </motion.span>
           </div>
           {/* 🔥 移动端用户信息显示 - 仅在移动端显示 */}
           <div className="md:hidden">
             {userId ? (
-              <MobileUserInfo 
+              <MobileUserInfo
                 userName={userDisplayName}
                 credits={userCredits}
                 onMenuClick={() => router.push("/settings")}
@@ -2550,24 +2844,23 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                   <div className="py-4 sm:py-6 animate-in fade-in duration-500">
                     <SunoProForm
                       onSubmit={async (formData) => {
-                        if (!userId) { 
+                        if (!userId) {
                           toast.error("请登录")
                           return
                         }
-                        
+
                         const cost = calculateCost()
                         if (userCredits < cost) {
-                          toast.error("积分不足", { 
+                          toast.error("积分不足", {
                             description: `需要 ${cost} 积分，当前 ${userCredits}`,
                             duration: 2000
                           })
-                          setTimeout(() => router.push("/pricing"), 1500)
                           return
                         }
 
                         setIsLoading(true)
                         collapseSidebar()
-                        
+
                         let sid = currentSessionId
                         // 🔥 修复：当模型切换时，即使 urlSessionId 存在也忽略
                         const isModelSwitch = sessionIdRef.current === null && currentSessionId;
@@ -2595,9 +2888,9 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                         if (formData.style_tags) {
                           userContent += `\n**风格标签**: ${formData.style_tags}`
                         }
-                        const userMsg: Message = { 
-                          id: Date.now().toString(), 
-                          role: "user", 
+                        const userMsg: Message = {
+                          id: Date.now().toString(),
+                          role: "user",
                           content: userContent
                         }
                         setMessages(p => [...p, userMsg])
@@ -2712,7 +3005,10 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                             )}
                             {/* Thinking state */}
                             {message.id === currentBotIdRef.current && isLoading && !message.content && !isFastTrack ? (
-                              <SimpleBrainLoader showHint={showDeepThinkingHint} />
+                              <ProcessingStatusCard
+                                context={processingContext}
+                                showLongWaitHint={showDeepThinkingHint}
+                              />
                             ) : (
                               <>
                                 {/* Content renderer */}
@@ -2762,7 +3058,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                             {message.content && (
                               <div
                                 className={cn(
-                                    "flex flex-wrap items-center gap-0.5 mt-1.5 opacity-0 transition-opacity duration-150 group-hover/message:opacity-100 group-focus-within/message:opacity-100 group-active/message:opacity-100 md:mt-2 md:gap-1"
+                                  "flex flex-wrap items-center gap-0.5 mt-1.5 opacity-100 transition-opacity duration-150 sm:opacity-0 sm:group-hover/message:opacity-100 sm:group-focus-within/message:opacity-100 sm:group-active/message:opacity-100 md:mt-2 md:gap-1"
                                 )}
                               >
                                 <Button
@@ -2834,7 +3130,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
               )}
             </div>
           </div>
-          
+
           {/* 🔥 新消息提示按钮 */}
           <AnimatePresence>
             {hasNewMessage && (
@@ -2888,19 +3184,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                 </div>
               </div>
             )}
-            {uploadedFiles.length > 0 && (
-              <div className="mb-2 sm:mb-3 flex flex-wrap gap-1.5 sm:gap-2">
-                {uploadedFiles.map((f, i) => (
-                  <div key={i} className="flex items-center gap-1.5 sm:gap-2 rounded-md sm:rounded-lg bg-slate-50 px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm">
-                    <FileText className="h-3.5 w-3.5 sm:h-4 sm:w-4" style={{ color: BRAND_GREEN }} />
-                    <span className="max-w-[80px] sm:max-w-[100px] truncate text-slate-600">{f.name}</span>
-                    <button onClick={() => removeFile(i)} className="text-slate-400 hover:text-red-500 min-w-[20px] min-h-[20px] flex items-center justify-center"><X className="h-3 w-3 sm:h-3.5 sm:w-3.5" /></button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* 🔥 输入框 - 使用 ChatInput 组件 - 移动端固定在底部 */}
+	            {/* 🔥 输入框 - 使用 ChatInput 组件 - 移动端固定在底部 */}
             {(selectedModel !== "suno-v5" || messages.length > 0) && (
             <div className="relative z-20 mx-auto w-full max-w-3xl px-0">
               <ChatInput
@@ -2908,8 +3192,8 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                 selectedModel={selectedModel}
                 models={modelList}
                 onModelChange={handleModelChange}
-                modelColor={modelConfig[selectedModel].color}
-                modelName={modelConfig[selectedModel].name}
+                modelColor={getModelUiConfig(selectedModel).color}
+                modelName={getModelUiConfig(selectedModel).name}
                 value={input}
                 onChange={setInput}
                 onSubmit={onSubmit}
@@ -2918,7 +3202,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                 isLoading={isLoading}
                 disabled={isLoading}
                 placeholder={userId ? "输入内容开始对话..." : "请先登录..."}
-                  className="overflow-visible border-slate-200/70 bg-white/95 shadow-[0_-4px_18px_rgba(0,0,0,0.06)] backdrop-blur-md sm:shadow-[0_8px_24px_rgba(0,0,0,0.10)]"
+                className="overflow-visible border-slate-200/70 bg-white/95 shadow-[0_-4px_18px_rgba(0,0,0,0.06)] backdrop-blur-md sm:shadow-[0_8px_24px_rgba(0,0,0,0.10)]"
                 onFileUpload={(files) => {
                   const target = { target: { files } } as unknown as React.ChangeEvent<HTMLInputElement>
                   handleFileUpload(target)

@@ -23,12 +23,13 @@ export default function EssayAnalyzer() {
   const saveToSupabase = async (essayResult: string) => {
     try {
       const { supabase } = await import("@/lib/supabase")
-      if (!supabase) {
+      const client = supabase.client
+      if (!client) {
         console.warn("[v0] Supabase not configured, skipping save")
         return
       }
 
-      const { error } = await supabase.from("submissions").insert({
+      const { error } = await client.from("submissions").insert({
         original_text: `File: ${fileName}`,
         ai_result: essayResult,
         status: "completed",

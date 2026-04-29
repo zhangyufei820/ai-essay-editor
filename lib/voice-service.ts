@@ -177,7 +177,6 @@ export class VoiceRecorder {
    */
   static isSupported(): boolean {
     return typeof window !== "undefined" &&
-      (navigator.mediaDevices?.getUserMedia !== undefined ||
-        navigator.getUserMedia !== undefined)
+      navigator.mediaDevices?.getUserMedia !== undefined
   }
 }

@@ -43,12 +43,32 @@ const thresholds = {
   INP: { good: 200, poor: 500 },
 }
 
+type PerformanceMetricName = keyof typeof thresholds
+
+interface LayoutShiftEntry extends PerformanceEntry {
+  value?: number
+  hadRecentInput?: boolean
+}
+
+interface PerformanceEventTimingEntry extends PerformanceEntry {
+  processingStart?: number
+  startTime: number
+}
+
+interface LargestContentfulPaintEntry extends PerformanceEntry {
+  startTime: number
+}
+
+interface PerformanceNavigationTimingWithResponseStart extends PerformanceNavigationTiming {
+  responseStart: number
+}
+
 // ============================================
 // 获取评级
 // ============================================
 
-function getRating(name: string, value: number): 'good' | 'needs-improvement' | 'poor' {
-  const threshold = thresholds[name as keyof typeof thresholds]
+function getRating(name: PerformanceMetricName, value: number): 'good' | 'needs-improvement' | 'poor' {
+  const threshold = thresholds[name]
   if (!threshold) return 'good'
   
   if (value <= threshold.good) return 'good'
@@ -92,43 +112,88 @@ export function usePerformance(options?: {
   useEffect(() => {
     if (!enabled || typeof window === 'undefined') return
 
-    // 动态导入 web-vitals
-    import('web-vitals').then(({ onCLS, onFCP, onFID, onINP, onLCP, onTTFB }) => {
-      onCLS((metric) => handleMetric({
-        ...metric,
-        rating: getRating('CLS', metric.value)
-      } as WebVitalsMetric))
-      
-      onFCP((metric) => handleMetric({
-        ...metric,
-        rating: getRating('FCP', metric.value)
-      } as WebVitalsMetric))
-      
-      onFID((metric) => handleMetric({
-        ...metric,
-        rating: getRating('FID', metric.value)
-      } as WebVitalsMetric))
-      
-      onINP((metric) => handleMetric({
-        ...metric,
-        rating: getRating('INP', metric.value)
-      } as WebVitalsMetric))
-      
-      onLCP((metric) => handleMetric({
-        ...metric,
-        rating: getRating('LCP', metric.value)
-      } as WebVitalsMetric))
-      
-      onTTFB((metric) => handleMetric({
-        ...metric,
-        rating: getRating('TTFB', metric.value)
-      } as WebVitalsMetric))
-    }).catch(() => {
-      // web-vitals 未安装，静默失败
-      if (debug) {
-        console.warn('[Performance] web-vitals not installed')
+    const observers: PerformanceObserver[] = []
+    const navigationEntry = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTimingWithResponseStart | undefined
+    const reportMetric = (name: PerformanceMetricName, value: number, delta = value) => {
+      handleMetric({
+        id: `${name}-${Date.now()}`,
+        name,
+        value,
+        delta,
+        rating: getRating(name, value),
+        navigationType: navigationEntry?.type || 'navigate',
+      })
+    }
+
+    if (navigationEntry?.responseStart !== undefined) {
+      reportMetric('TTFB', navigationEntry.responseStart)
+    }
+
+    const paintEntries = performance.getEntriesByType('paint')
+    const fcpEntry = paintEntries.find((entry) => entry.name === 'first-contentful-paint')
+    if (fcpEntry) {
+      reportMetric('FCP', fcpEntry.startTime)
+    }
+
+    const createObserver = (
+      type: PerformanceEntryList['0']['entryType'],
+      callback: (entries: PerformanceEntry[]) => void,
+    ) => {
+      if (typeof PerformanceObserver === 'undefined') return
+      try {
+        const observer = new PerformanceObserver((list) => callback(list.getEntries()))
+        observer.observe({ type, buffered: true })
+        observers.push(observer)
+      } catch {
+        if (debug) {
+          console.warn(`[Performance] Observer not supported for ${type}`)
+        }
+      }
+    }
+
+    createObserver('largest-contentful-paint', (entries) => {
+      const lastEntry = entries.at(-1) as LargestContentfulPaintEntry | undefined
+      if (lastEntry) {
+        reportMetric('LCP', lastEntry.startTime)
       }
     })
+
+    let clsValue = 0
+    createObserver('layout-shift', (entries) => {
+      for (const entry of entries as LayoutShiftEntry[]) {
+        if (!entry.hadRecentInput) {
+          clsValue += entry.value ?? 0
+        }
+      }
+      if (clsValue > 0) {
+        reportMetric('CLS', clsValue, clsValue)
+      }
+    })
+
+    createObserver('first-input', (entries) => {
+      const firstEntry = entries[0] as PerformanceEventTimingEntry | undefined
+      if (firstEntry?.processingStart !== undefined) {
+        reportMetric('FID', firstEntry.processingStart - firstEntry.startTime)
+      }
+    })
+
+    createObserver('event', (entries) => {
+      const interactionEntries = entries as PerformanceEventTimingEntry[]
+      const maxInteraction = interactionEntries.reduce((max, entry) => {
+        if (entry.processingStart === undefined) return max
+        return Math.max(max, entry.processingStart - entry.startTime)
+      }, 0)
+
+      if (maxInteraction > 0) {
+        reportMetric('INP', maxInteraction, maxInteraction)
+      }
+    })
+
+    return () => {
+      for (const observer of observers) {
+        observer.disconnect()
+      }
+    }
   }, [enabled, handleMetric, debug])
 
   // 获取当前指标

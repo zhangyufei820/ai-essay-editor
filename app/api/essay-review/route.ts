@@ -1,6 +1,41 @@
 import { generateText } from "ai"
+import { anthropic } from "@ai-sdk/anthropic"
+import { createGoogleGenerativeAI } from "@ai-sdk/google"
+import { createOpenAI, openai } from "@ai-sdk/openai"
 
 export const maxDuration = 60
+
+const googleProvider = createGoogleGenerativeAI({
+  apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GEMINI_API_KEY || "",
+})
+
+const xaiProvider = createOpenAI({
+  name: "xai",
+  baseURL: process.env.XAI_BASE_URL || "https://api.x.ai/v1",
+  apiKey: process.env.XAI_API_KEY || process.env.OPENAI_API_KEY || "",
+})
+
+const fireworksProvider = createOpenAI({
+  name: "fireworks",
+  baseURL: process.env.FIREWORKS_BASE_URL || "https://api.fireworks.ai/inference/v1",
+  apiKey: process.env.FIREWORKS_API_KEY || process.env.OPENAI_API_KEY || "",
+})
+
+function resolveLanguageModel(provider: string, modelName: string) {
+  switch (provider) {
+    case "anthropic":
+      return anthropic(modelName)
+    case "google":
+      return googleProvider(modelName)
+    case "xai":
+      return xaiProvider(modelName)
+    case "fireworks":
+      return fireworksProvider(modelName)
+    case "openai":
+    default:
+      return openai(modelName)
+  }
+}
 
 const ESSAY_REVIEW_PROMPT = `你是一位专业的作文批改师，融合了汪曾祺、王小波、简媜等文学大师的风格，并特别擅长徐贲式学者型论述文指导。
 
@@ -62,15 +97,7 @@ export async function POST(req: Request) {
   const provider = req.headers.get("X-AI-Provider") || "openai"
   const modelName = req.headers.get("X-AI-Model") || "gpt-5"
 
-  const modelMap: Record<string, string> = {
-    openai: `openai/${modelName}`,
-    anthropic: `anthropic/${modelName}`,
-    xai: `xai/${modelName}`,
-    google: `google/${modelName}`,
-    fireworks: `fireworks/${modelName}`,
-  }
-
-  const model = modelMap[provider] || `openai/${modelName}`
+  const model = resolveLanguageModel(provider, modelName)
 
   const userPrompt = `
 学生年级: ${grade || "未指定"}
@@ -83,12 +110,10 @@ ${essay}
 `
 
   const { text, usage } = await generateText({
-    model,
-    prompt: [
-      { role: "system", content: ESSAY_REVIEW_PROMPT },
-      { role: "user", content: userPrompt },
-    ],
-    maxOutputTokens: 4000,
+    model: model as any,
+    system: ESSAY_REVIEW_PROMPT,
+    prompt: userPrompt,
+    maxTokens: 4000,
     temperature: 0.7,
   })
 

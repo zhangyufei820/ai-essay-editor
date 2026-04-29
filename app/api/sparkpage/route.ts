@@ -1,7 +1,42 @@
 import { generateText } from "ai"
+import { anthropic } from "@ai-sdk/anthropic"
+import { createGoogleGenerativeAI } from "@ai-sdk/google"
+import { createOpenAI, openai } from "@ai-sdk/openai"
 import { NextResponse } from "next/server"
 
 export const maxDuration = 60
+
+const googleProvider = createGoogleGenerativeAI({
+  apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GEMINI_API_KEY || "",
+})
+
+const xaiProvider = createOpenAI({
+  name: "xai",
+  baseURL: process.env.XAI_BASE_URL || "https://api.x.ai/v1",
+  apiKey: process.env.XAI_API_KEY || process.env.OPENAI_API_KEY || "",
+})
+
+const fireworksProvider = createOpenAI({
+  name: "fireworks",
+  baseURL: process.env.FIREWORKS_BASE_URL || "https://api.fireworks.ai/inference/v1",
+  apiKey: process.env.FIREWORKS_API_KEY || process.env.OPENAI_API_KEY || "",
+})
+
+function resolveLanguageModel(provider: string, modelName: string) {
+  switch (provider) {
+    case "anthropic":
+      return anthropic(modelName)
+    case "google":
+      return googleProvider(modelName)
+    case "xai":
+      return xaiProvider(modelName)
+    case "fireworks":
+      return fireworksProvider(modelName)
+    case "openai":
+    default:
+      return openai(modelName)
+  }
+}
 
 export async function POST(req: Request) {
   try {
@@ -23,9 +58,9 @@ export async function POST(req: Request) {
 
     // 使用LLM生成结构化内容
     const { text } = await generateText({
-      model: `${provider}/${model}`,
+      model: resolveLanguageModel(provider, model) as any,
       prompt,
-      maxOutputTokens: 8000,
+      maxTokens: 8000,
       temperature: 0.7,
     })
 

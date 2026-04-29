@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js"
 export interface UserCredits {
   credits: number
   is_pro?: boolean
+  total_earned?: number
 }
 
 export interface CreditTransaction {
@@ -27,7 +28,7 @@ export async function getUserCredits(userId: string): Promise<UserCredits | null
 
   const { data, error } = await supabase
     .from("user_credits")
-    .select("credits, is_pro")
+    .select("credits, is_pro, total_earned")
     .eq("user_id", userId)
     .maybeSingle()
 
@@ -40,8 +41,8 @@ export async function getUserCredits(userId: string): Promise<UserCredits | null
     console.log(`[积分系统] 用户 ${userId} 无积分记录，自动初始化 1000 积分`)
     const { data: created, error: createError } = await supabase
       .from("user_credits")
-      .upsert({ user_id: userId, credits: 1000, is_pro: false })
-      .select("credits, is_pro")
+      .upsert({ user_id: userId, credits: 1000, is_pro: false, total_earned: 1000 })
+      .select("credits, is_pro, total_earned")
       .single()
 
     if (createError) {

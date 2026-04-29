@@ -16,7 +16,7 @@ export function NeuralFlowBackground({
   opacity = 0.4
 }: NeuralFlowBackgroundProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const animationRef = useRef<number>()
+  const animationRef = useRef<number | null>(null)
   const particlesRef = useRef<Array<{
     x: number
     y: number
@@ -139,7 +139,7 @@ export function NeuralFlowBackground({
     return () => {
       window.removeEventListener("resize", handleResize)
       window.removeEventListener("mousemove", handleMouseMove)
-      if (animationRef.current) {
+      if (animationRef.current !== null) {
         cancelAnimationFrame(animationRef.current)
       }
     }

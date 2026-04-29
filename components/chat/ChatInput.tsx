@@ -73,6 +73,7 @@ interface UploadedFile {
   name: string
   preview?: string
   type?: string
+  size?: number
 }
 
 interface ChatInputProps {
@@ -157,6 +158,11 @@ function FilePreviewCard({
   onRemove: (index: number) => void 
 }) {
   const isImage = file.type?.startsWith("image/") || file.preview
+  const sizeLabel = typeof file.size === "number" && file.size > 0
+    ? file.size < 1024 * 1024
+      ? `${(file.size / 1024).toFixed(1)} KB`
+      : `${(file.size / 1024 / 1024).toFixed(1)} MB`
+    : "已上传"
 
   return (
     <motion.div
@@ -165,7 +171,7 @@ function FilePreviewCard({
       animate={{ opacity: 1, scale: 1, x: 0 }}
       exit={{ opacity: 0, scale: 0.8, x: -20 }}
       transition={{ duration: 0.2 }}
-      className="relative flex items-center gap-2 rounded-lg px-3 py-2 shrink-0"
+      className="relative flex min-w-[180px] max-w-[240px] shrink-0 items-center gap-2 rounded-lg px-3 py-2"
       style={{ backgroundColor: slateColors[50] }}
     >
       {/* 文件图标/预览 */}
@@ -186,18 +192,22 @@ function FilePreviewCard({
         </div>
       )}
       
-      {/* 文件名 */}
-      <span 
-        className="text-sm max-w-[100px] truncate"
-        style={{ color: slateColors[600] }}
-      >
-        {file.name}
-      </span>
+      <div className="min-w-0 flex-1">
+        <span
+          className="block truncate text-sm font-medium leading-5"
+          style={{ color: slateColors[700] }}
+        >
+          {file.name}
+        </span>
+        <span className="block truncate text-[11px] leading-4 text-slate-400">
+          已上传 · {sizeLabel}
+        </span>
+      </div>
       
       {/* 删除按钮 */}
       <button
         onClick={() => onRemove(index)}
-        className="ml-1 p-0.5 rounded-full transition-colors hover:bg-red-100"
+        className="ml-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-red-100"
         aria-label={`移除文件 ${file.name}`}
       >
         <X className="h-3.5 w-3.5 text-slate-400 hover:text-red-500" />
@@ -484,8 +494,8 @@ export function ChatInput({
             transition={{ duration: 0.2 }}
             className="overflow-hidden"
           >
-            <div 
-              className="flex gap-2 px-3 sm:px-4 py-3 overflow-x-auto border-b scrollbar-thin"
+            <div
+              className="flex gap-2 overflow-x-auto border-b px-3 py-3 scrollbar-thin sm:px-4"
               style={{ borderColor: slateColors[50] }}
             >
               <AnimatePresence mode="popLayout">
@@ -507,7 +517,7 @@ export function ChatInput({
       <div
         className={cn(
           "flex items-end gap-2 p-2 sm:gap-3 sm:p-3",
-          isMobileInputMode && "max-sm:p-1.5"
+          isMobileInputMode && "max-sm:p-1.5 max-sm:pb-2"
         )}
       >
         {/* 附件按钮（工具栏隐藏或移动端键盘态时显示） */}
@@ -570,11 +580,11 @@ export function ChatInput({
           onBlur={() => setIsFocused(false)}
           placeholder={disabled ? "请先登录..." : placeholder}
           disabled={disabled || isLoading}
-            className={cn(
+          className={cn(
             "flex-1 resize-none border-0 bg-transparent shadow-none",
             "min-h-[44px] max-h-[132px] rounded-[18px] px-3 py-2 text-[16px] leading-6 sm:min-h-[48px] sm:max-h-[160px] sm:p-2 sm:text-[15px]",
             "focus-visible:border-transparent focus-visible:ring-0",
-            isMobileInputMode && "max-sm:min-h-[42px] max-sm:max-h-[88px] max-sm:bg-slate-50/80 max-sm:px-3 max-sm:py-2"
+            isMobileInputMode && "max-sm:min-h-[42px] max-sm:max-h-[112px] max-sm:bg-slate-50/80 max-sm:px-3 max-sm:py-2"
           )}
           style={{ color: slateColors[700] }}
           rows={1}

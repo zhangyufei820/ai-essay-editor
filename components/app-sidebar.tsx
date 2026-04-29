@@ -6,11 +6,12 @@ import { useState, useEffect, useRef, Suspense, useCallback } from "react"
 import { motion } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import {
-  ChevronRight, ChevronDown,
-  Brain,
+  Settings, ChevronRight, ChevronDown,
+  Menu, X, LogOut, Zap, Coins,
+  Bot, GraduationCap, Brain,
+  Gift, HelpCircle, Sparkles, Palette, User, Edit
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { ShenxiangInterfaceIcon } from "@/components/icons/ShenxiangInterfaceIcons"
 import { AgentPanel } from "./chat/AgentPanel"
 import { ModelPanel } from "./chat/ModelPanel"
 import { CreativePanel } from "./chat/CreativePanel"
@@ -492,7 +493,7 @@ function AppSidebarInner() {
           onClick={() => setIsOpen(true)}
           className="fixed left-4 top-4 z-50 flex h-10 w-10 items-center justify-center rounded-xl bg-white shadow-md text-[#757575] hover:bg-[#F5F5F5] transition-all"
         >
-          <ShenxiangInterfaceIcon name="menu" size={24} />
+          <Menu className="h-5 w-5" />
         </button>
       )}
 
@@ -529,7 +530,7 @@ function AppSidebarInner() {
             onClick={() => setIsOpen(false)}
             className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-lg text-[#9E9E9E] hover:text-[#616161] hover:bg-[#F5F5F5] transition-all z-50"
           >
-            <ShenxiangInterfaceIcon name="close" size={24} />
+            <X className="h-5 w-5" />
           </button>
         )}
 
@@ -547,7 +548,7 @@ function AppSidebarInner() {
             onClick={handleNavClick}
             className="px-3 mb-4 flex items-center justify-center gap-2 cursor-pointer hover:bg-gray-100/50 rounded-xl transition-all duration-300 py-1"
           >
-            <ShenxiangInterfaceIcon name="credits" size={22} />
+            <Coins className="h-4 w-4" style={{ color: COLORS.primary.main }} />
             <span
               className="text-sm font-semibold"
               style={{ color: COLORS.primary.dark }}
@@ -605,7 +606,7 @@ function AppSidebarInner() {
               whileTap={{ scale: 0.99 }}
               transition={{ duration: 0.15 }}
             >
-              <ShenxiangInterfaceIcon name="openclaw" size={22} />
+              <Sparkles className="w-[18px] h-[18px]" style={{ color: COLORS.primary.main }} />
               <span className="text-[12px] font-medium leading-none whitespace-nowrap" style={{ color: COLORS.primary.dark }}>
                 OpenClaw
               </span>
@@ -631,7 +632,7 @@ function AppSidebarInner() {
               whileTap={{ scale: 0.99 }}
               transition={{ duration: 0.15 }}
             >
-              <ShenxiangInterfaceIcon name="education" size={22} />
+              <GraduationCap className="w-[18px] h-[18px]" style={{ color: COLORS.primary.dark }} />
               <span className="text-[12px] font-medium leading-none whitespace-nowrap" style={{ color: COLORS.primary.dark }}>
                 教育专区
               </span>
@@ -657,7 +658,7 @@ function AppSidebarInner() {
               whileTap={{ scale: 0.99 }}
               transition={{ duration: 0.15 }}
             >
-              <ShenxiangInterfaceIcon name="top-models" size={22} />
+              <Bot className="w-[18px] h-[18px]" style={{ color: COLORS.primary.dark }} />
               <span className="text-[12px] font-medium leading-none whitespace-nowrap" style={{ color: COLORS.primary.dark }}>
                 顶级模型专区
               </span>
@@ -683,7 +684,7 @@ function AppSidebarInner() {
               whileTap={{ scale: 0.99 }}
               transition={{ duration: 0.15 }}
             >
-              <ShenxiangInterfaceIcon name="ai-writing" size={22} />
+              <Edit className="w-[18px] h-[18px]" style={{ color: "#00A67D" }} />
               <span className="text-[12px] font-medium leading-none whitespace-nowrap" style={{ color: COLORS.primary.dark }}>
                 AI写作专区
               </span>
@@ -709,7 +710,7 @@ function AppSidebarInner() {
               whileTap={{ scale: 0.99 }}
               transition={{ duration: 0.15 }}
             >
-              <ShenxiangInterfaceIcon name="creative" size={22} />
+              <Palette className="w-[18px] h-[18px]" style={{ color: "#00A67D" }} />
               <span className="text-[12px] font-medium leading-none whitespace-nowrap" style={{ color: COLORS.primary.dark }}>
                 多媒体专区
               </span>
@@ -737,7 +738,7 @@ function AppSidebarInner() {
                   animate={{ scale: [1, 1.2, 1], rotate: [0, 8, -8, 0] }}
                   transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
                 >
-                  <ShenxiangInterfaceIcon name="invite" size={22} />
+                  <Gift className="w-4 h-4 text-[#10A37F]" strokeWidth={1.5} />
                 </motion.div>
               </Link>
 
@@ -746,7 +747,7 @@ function AppSidebarInner() {
                 onClick={handleNavClick}
                 className="flex items-center justify-center p-2 rounded-xl transition-all duration-300 hover:bg-[#10A37F]/10 cursor-pointer"
               >
-                <ShenxiangInterfaceIcon name="help" size={22} />
+                <HelpCircle className="w-4 h-4 text-gray-400 hover:text-gray-600 transition-colors duration-300" strokeWidth={1.5} />
               </Link>
             </div>
           )}
@@ -767,7 +768,7 @@ function AppSidebarInner() {
                     onMouseEnter={(e) => e.currentTarget.style.backgroundColor = COLORS.gray[100]}
                     onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
                   >
-                    <ShenxiangInterfaceIcon name="settings" size={22} />
+                    <Settings className="h-4 w-4" style={{ color: COLORS.gray[500] }} />
                     账号设置
                   </div>
                 </Link>
@@ -778,7 +779,7 @@ function AppSidebarInner() {
                     onMouseEnter={(e) => e.currentTarget.style.backgroundColor = COLORS.gray[100]}
                     onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
                   >
-                    <ShenxiangInterfaceIcon name="upgrade" size={22} />
+                    <Zap className="h-4 w-4" style={{ color: COLORS.gray[500] }} />
                     升级会员
                   </div>
                 </Link>
@@ -796,7 +797,7 @@ function AppSidebarInner() {
                     e.currentTarget.style.color = COLORS.gray[600]
                   }}
                 >
-                  <ShenxiangInterfaceIcon name="logout" size={22} />
+                  <LogOut className="h-4 w-4" />
                   退出登录
                 </button>
               </div>
@@ -840,7 +841,7 @@ function AppSidebarInner() {
                 {getAvatarUrl() ? (
                   <img src={getAvatarUrl()} alt="User" className="h-full w-full object-cover rounded-lg" />
                 ) : (
-                  <ShenxiangInterfaceIcon name="user-avatar" size={28} />
+                  <User className="h-5 w-5" style={{ color: "#10A37F" }} strokeWidth={2} />
                 )}
               </div>
               {/* 昵称 + ID/手机号 */}

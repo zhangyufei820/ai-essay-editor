@@ -446,7 +446,6 @@ function BananaChatInterfaceInner() {
         description: `需要 ${cost} 积分，当前 ${userCredits}`,
         duration: 2000
       })
-      setTimeout(() => router.push("/pricing"), 1500)
       return
     }
 

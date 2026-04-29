@@ -25,6 +25,7 @@ describe("GPT Image V11 parameter mapping", () => {
       moderation: "auto",
       n: 1,
       reference_image_url: "",
+      reference_image_urls: [],
       mask_image_url: "",
     })
   })
@@ -36,6 +37,21 @@ describe("GPT Image V11 parameter mapping", () => {
       aspect_ratio: "auto",
       size: "original_4k",
       reference_image_url: "http://gateway/ref.png",
+      reference_image_urls: ["http://gateway/ref.png"],
+      mask_image_url: "http://gateway/mask.png",
+    })
+  })
+
+  it("maps multiple reference images for edit mode", () => {
+    expect(
+      buildDifyInputs(
+        EDIT_MODE_DEFAULTS,
+        ["http://gateway/ref-1.png", "http://gateway/ref-2.png"],
+        "http://gateway/mask.png",
+      ),
+    ).toMatchObject({
+      reference_image_url: "http://gateway/ref-1.png",
+      reference_image_urls: ["http://gateway/ref-1.png", "http://gateway/ref-2.png"],
       mask_image_url: "http://gateway/mask.png",
     })
   })
@@ -77,7 +93,13 @@ describe("GPT Image V11 parameter mapping", () => {
       "/api/image-proxy/preview/image.webp?url=http%3A%2F%2F43.154.111.156%3A8001%2Fimages%2Fresult.png&w=1200&format=webp"
     )
     expect(proxifyGeneratedImageDownloadUrl(source)).toBe(
-      "/api/image-proxy/raw/image.png?url=http%3A%2F%2F43.154.111.156%3A8001%2Fimages%2Fresult.png&raw=1"
+      "/api/image-proxy/raw/image.png?url=http%3A%2F%2F43.154.111.156%3A8001%2Fimages%2Fresult.png&raw=1&download=1"
+    )
+    expect(proxifyGeneratedImageDownloadUrl(source, "png")).toBe(
+      "/api/image-proxy/raw/image.png?url=http%3A%2F%2F43.154.111.156%3A8001%2Fimages%2Fresult.png&raw=1&download=1&format=png"
+    )
+    expect(proxifyGeneratedImageDownloadUrl(source, "jpeg")).toBe(
+      "/api/image-proxy/raw/image.jpg?url=http%3A%2F%2F43.154.111.156%3A8001%2Fimages%2Fresult.png&raw=1&download=1&format=jpeg"
     )
     expect(buildImageProxyUrl("/api/image-proxy?url=http%3A%2F%2F43.154.111.156%3A8001%2Fimages%2Fresult.png", { width: 900 })).toBe(
       "/api/image-proxy/preview/image.webp?url=http%3A%2F%2F43.154.111.156%3A8001%2Fimages%2Fresult.png&w=900&format=webp"

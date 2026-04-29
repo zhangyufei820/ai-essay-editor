@@ -4,6 +4,7 @@ import path from "path"
 import { getClientIP, checkIpRateLimit, createRateLimitResponse } from "@/lib/rate-limit"
 import { internalDifyFetch } from "@/lib/internal-dify-fetch"
 import { getDifyCredentialForModel } from "@/lib/dify-credentials"
+import { createRequestId, sanitizeForTrace } from "@/lib/ai-task-trace"
 
 // ✅ 修改 1: 切换回 Node.js 运行时，以支持更大的文件和更稳定的上传
 export const runtime = "nodejs" 
@@ -176,6 +177,7 @@ async function uploadFileToDify(file: File, userId: string, apiKey: string) {
 }
 
 export async function POST(request: NextRequest) {
+  const requestId = request.headers.get("X-Request-Id") || createRequestId("upload")
   // IP 限流：10次/分钟
   const ip = getClientIP(request)
   const limitResult = checkIpRateLimit(ip, 10)
@@ -187,7 +189,7 @@ export async function POST(request: NextRequest) {
   if (!DEFAULT_DIFY_KEY) {
     return new Response(JSON.stringify({ error: "Dify API key not configured" }), {
       status: 500,
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "X-Request-Id": requestId },
     })
   }
 
@@ -206,7 +208,7 @@ export async function POST(request: NextRequest) {
           hint: "请压缩文件后重试"
         }), {
           status: 413,
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", "X-Request-Id": requestId },
         })
       }
     }
@@ -229,7 +231,7 @@ export async function POST(request: NextRequest) {
     if (!file) {
       return new Response(JSON.stringify({ error: "未选择文件" }), {
         status: 400,
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "X-Request-Id": requestId },
       })
     }
 
@@ -237,7 +239,7 @@ export async function POST(request: NextRequest) {
     if (!userId) {
       return new Response(JSON.stringify({ error: "未授权访问，请先登录" }), {
         status: 401,
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "X-Request-Id": requestId },
       })
     }
 
@@ -253,7 +255,7 @@ export async function POST(request: NextRequest) {
         hint: "请压缩文件后重试"
       }), {
         status: 413,
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "X-Request-Id": requestId },
       })
     }
 
@@ -268,7 +270,7 @@ export async function POST(request: NextRequest) {
         code: "INVALID_FILE_TYPE"
       }), {
         status: 415,
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "X-Request-Id": requestId },
       })
     }
 
@@ -283,7 +285,7 @@ export async function POST(request: NextRequest) {
         code: "INVALID_EXTENSION"
       }), {
         status: 403,
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "X-Request-Id": requestId },
       })
     }
 
@@ -291,7 +293,7 @@ export async function POST(request: NextRequest) {
     // 5. 安全校验：生成安全的随机文件名
     // ============================================
     const safeFileName = generateSafeFileName(extCheck.safeExt!)
-    console.log(`[Upload] 安全校验通过: ${file.name} -> ${safeFileName} | 用户: ${userId} | 大小: ${(file.size / 1024 / 1024).toFixed(2)}MB`)
+	    console.log(`[Upload] 安全校验通过: ${file.name} -> ${safeFileName} | 用户: ${userId} | 大小: ${(file.size / 1024 / 1024).toFixed(2)}MB | requestId=${requestId}`)
 
     // 🔥 根据模型选择正确的 API Key
     const targetModel = model || modelFromForm
@@ -299,7 +301,7 @@ export async function POST(request: NextRequest) {
     if (!targetApiKey) {
       return new Response(JSON.stringify({ error: "目标模型上传凭据未配置" }), {
         status: 500,
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "X-Request-Id": requestId },
       })
     }
 
@@ -334,7 +336,7 @@ export async function POST(request: NextRequest) {
           },
         }), {
           status: 200,
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", "X-Request-Id": requestId },
         })
       } catch (error) {
         console.error("[Backend] Dify upload failed:", {
@@ -346,11 +348,11 @@ export async function POST(request: NextRequest) {
 
         return new Response(JSON.stringify({
           error: "File upload to Dify failed",
-          details: error instanceof Error ? error.message : String(error),
+          details: sanitizeForTrace(error instanceof Error ? error.message : String(error)),
           status: 502,
         }), {
           status: 502,
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", "X-Request-Id": requestId },
         })
       }
     }
@@ -381,18 +383,18 @@ export async function POST(request: NextRequest) {
       console.error("[Backend] Gateway upload failed:", {
         status: gatewayResponse.status,
         url: uploadUrl,
-        error: errorText,
+        error: sanitizeForTrace(errorText),
       })
 
       return new Response(
         JSON.stringify({
           error: "File upload to gateway failed",
-          details: errorText,
+          details: sanitizeForTrace(errorText),
           status: gatewayResponse.status,
         }),
         {
           status: gatewayResponse.status,
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", "X-Request-Id": requestId },
         },
       )
     }
@@ -413,7 +415,7 @@ export async function POST(request: NextRequest) {
         }),
         {
           status: 502,
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", "X-Request-Id": requestId },
         },
       )
     }
@@ -438,7 +440,7 @@ export async function POST(request: NextRequest) {
         }),
         {
           status: 502,
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", "X-Request-Id": requestId },
         },
       )
     }
@@ -468,18 +470,18 @@ export async function POST(request: NextRequest) {
       modelUrl,
     }), {
       status: 200,
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "X-Request-Id": requestId },
     })
   } catch (error) {
     console.error("[Backend] Upload error:", error)
     return new Response(
       JSON.stringify({
         error: "Internal server error",
-        details: error instanceof Error ? error.message : String(error),
+        details: sanitizeForTrace(error instanceof Error ? error.message : String(error)),
       }),
       {
         status: 500,
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "X-Request-Id": requestId },
       },
     )
   }

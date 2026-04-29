@@ -53,7 +53,7 @@ const TOKENS = {
 // 类型定义
 // ============================================
 
-interface Model {
+export interface Model {
   key: string
   name: string
   icon?: React.ComponentType<{ className?: string; style?: React.CSSProperties }> | string

@@ -45,6 +45,7 @@ export interface GptImageInputs {
   n: number
   mode: ImageTaskMode
   reference_image_url: string
+  reference_image_urls: string[]
   mask_image_url: string
 }
 
@@ -135,6 +136,7 @@ export const DEFAULT_IMAGE_INPUTS: GptImageInputs = {
   moderation: "auto",
   n: 1,
   reference_image_url: "",
+  reference_image_urls: [],
   mask_image_url: "",
 }
 
@@ -150,6 +152,7 @@ export const EDIT_MODE_DEFAULTS: GptImageInputs = {
   moderation: "auto",
   n: 1,
   reference_image_url: "",
+  reference_image_urls: [],
   mask_image_url: "",
 }
 
@@ -217,10 +220,16 @@ export function clampCompression(value: number): number {
 }
 
 export function buildDifyInputs(
-  values: Omit<GptImageInputs, "reference_image_url" | "mask_image_url">,
-  referenceImageUrl = "",
+  values: Omit<GptImageInputs, "reference_image_url" | "reference_image_urls" | "mask_image_url">,
+  referenceImageUrl: string | string[] = "",
   maskImageUrl = ""
 ): GptImageInputs {
+  const referenceImageUrls = Array.isArray(referenceImageUrl)
+    ? referenceImageUrl.filter(Boolean)
+    : referenceImageUrl
+      ? [referenceImageUrl]
+      : []
+
   return {
     aspect_ratio: values.aspect_ratio,
     size: values.size,
@@ -232,7 +241,8 @@ export function buildDifyInputs(
     moderation: values.moderation,
     n: clampImageCount(values.n),
     mode: values.mode,
-    reference_image_url: referenceImageUrl,
+    reference_image_url: referenceImageUrls[0] || "",
+    reference_image_urls: referenceImageUrls,
     mask_image_url: maskImageUrl,
   }
 }
@@ -301,9 +311,13 @@ export function extractImageUrlsFromDifyResult(payload: unknown): string[] {
 type ImageProxyOptions = {
   raw?: boolean
   width?: number
+  format?: ImageOutputFormat
+  download?: boolean
 }
 
-function getImageProxyExtension(url: string, raw?: boolean) {
+function getImageProxyExtension(url: string, raw?: boolean, format?: ImageOutputFormat) {
+  if (format === "jpeg") return "jpg"
+  if (format) return format
   if (!raw) return "webp"
 
   try {
@@ -323,16 +337,25 @@ function getImageProxyExtension(url: string, raw?: boolean) {
 function buildCacheableImageProxyUrl(url: string, options: ImageProxyOptions = {}): string {
   const params = new URLSearchParams({ url })
   if (options.raw) params.set("raw", "1")
+  if (options.download) params.set("download", "1")
   if (options.width) params.set("w", String(options.width))
-  if (!options.raw) params.set("format", "webp")
+  if (options.format) params.set("format", options.format)
+  else if (!options.raw) params.set("format", "webp")
 
   const mode = options.raw ? "raw" : "preview"
-  const extension = getImageProxyExtension(url, options.raw)
+  const extension = getImageProxyExtension(url, options.raw, options.format)
   return `/api/image-proxy/${mode}/image.${extension}?${params.toString()}`
 }
 
 export function buildImageProxyUrl(url: string, options: ImageProxyOptions = {}): string {
   try {
+    if (url.startsWith("/api/image-proxy/")) {
+      const params = new URLSearchParams(url.split("?")[1] || "")
+      const targetUrl = params.get("url")
+      if (targetUrl) return buildCacheableImageProxyUrl(targetUrl, options)
+      return url
+    }
+
     if (url.startsWith("/api/image-proxy?")) {
       const params = new URLSearchParams(url.split("?")[1] || "")
       const targetUrl = params.get("url")
@@ -362,8 +385,12 @@ export function proxifyGeneratedImagePreviewUrl(url: string, width = 1600): stri
   return buildImageProxyUrl(url, { width })
 }
 
-export function proxifyGeneratedImageDownloadUrl(url: string): string {
-  return buildImageProxyUrl(url, { raw: true })
+export function proxifyGeneratedImageDownloadUrl(url: string, format?: ImageOutputFormat): string {
+  return buildImageProxyUrl(url, { raw: true, format, download: true })
+}
+
+export function getPublicGeneratedImageDownloadUrl(url: string, format?: ImageOutputFormat): string {
+  return absolutizeGeneratedImageUrl(proxifyGeneratedImageDownloadUrl(url, format))
 }
 
 export function absolutizeGeneratedImageUrl(url: string): string {

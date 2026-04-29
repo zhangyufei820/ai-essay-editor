@@ -48,7 +48,7 @@ const SAFE_LATEX_PATTERN = /[^a-zA-Z0-9\\{}[\]()|=<>./,+*:;-]/g
 // 工具函数
 // ============================================
 
-const countBraces = (str: string, brace: "{") =>
+const countBraces = (str: string, brace: "{" | "}") =>
   str.split(brace).length - 1
 
 const countLBraces = (str: string) => countBraces(str, "{")

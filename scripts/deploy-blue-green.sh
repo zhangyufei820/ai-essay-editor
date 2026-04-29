@@ -103,7 +103,7 @@ build_new_image() {
     log "开始构建新镜像: ${PROJECT_NAME}:${TAG}..."
 
     # 从 .env.production 自动提取 Dockerfile 需要的构建参数
-    local BUILD_ARGS=""
+    local BUILD_ARGS=()
 
     # 检查 env 文件是否存在
     if [ -f ".env.production" ]; then
@@ -111,7 +111,7 @@ build_new_image() {
         for VAR in NEXT_PUBLIC_SUPABASE_URL NEXT_PUBLIC_SUPABASE_ANON_KEY NEXT_PUBLIC_AUTHING_APP_ID NEXT_PUBLIC_APP_URL NEXT_PUBLIC_API_BASE_URL NEXT_PUBLIC_CDN_URL; do
             VALUE=$(grep "^${VAR}=" .env.production | cut -d'=' -f2- | tr -d '\r')
             if [ -n "$VALUE" ]; then
-                BUILD_ARGS="${BUILD_ARGS} --build-arg ${VAR}=${VALUE}"
+                BUILD_ARGS+=(--build-arg "${VAR}=${VALUE}")
                 log "  [构建参数] ${VAR}=***（已提取）"
             else
                 warning "  [构建参数] ${VAR} 未在 .env.production 中找到！"
@@ -121,9 +121,22 @@ build_new_image() {
         warning ".env.production 文件不存在，跳过自动提取构建参数"
     fi
 
-    # 构建镜像（传入构建参数）
-    log "执行: docker build -t ${PROJECT_NAME}:${TAG} ${BUILD_ARGS} ."
-    eval docker build -t "${PROJECT_NAME}:${TAG}" ${BUILD_ARGS} . || error "镜像构建失败"
+    if [ -z "${NEXT_SERVER_ACTIONS_ENCRYPTION_KEY:-}" ] && [ -f ".env.production" ]; then
+        NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=$(grep "^NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=" .env.production | cut -d'=' -f2- | tr -d '\r')
+        export NEXT_SERVER_ACTIONS_ENCRYPTION_KEY
+    fi
+
+    if [ -z "${NEXT_SERVER_ACTIONS_ENCRYPTION_KEY:-}" ]; then
+        error "NEXT_SERVER_ACTIONS_ENCRYPTION_KEY 未配置，无法安全构建 Next.js"
+    fi
+
+    # 构建镜像（传入构建参数；不要把参数值写入日志，避免泄露密钥或公开配置）
+    log "执行: docker build -t ${PROJECT_NAME}:${TAG} --secret id=next_server_actions_encryption_key,env=NEXT_SERVER_ACTIONS_ENCRYPTION_KEY [build-args-redacted] ."
+    docker build \
+        -t "${PROJECT_NAME}:${TAG}" \
+        --secret id=next_server_actions_encryption_key,env=NEXT_SERVER_ACTIONS_ENCRYPTION_KEY \
+        "${BUILD_ARGS[@]}" \
+        . || error "镜像构建失败"
 
     # 同时打上 latest 标签
     docker tag "${PROJECT_NAME}:${TAG}" "${PROJECT_NAME}:latest"
@@ -152,15 +165,30 @@ start_new_container() {
     docker run -d \
         --name "${NEW_CONTAINER}" \
         --restart unless-stopped \
+        --read-only \
+        --memory 2g \
+        --cpus 1.0 \
+        --pids-limit 256 \
+        --network docker_default \
         -p "${NEW_PORT}:3000" \
         -e NODE_ENV=production \
         -e PORT=3000 \
+        -e DIFY_INTERNAL_URL=http://docker-api-1:5001/v1 \
+        -e DIFY_BASE_URL=http://docker-api-1:5001/v1 \
+        -e DIFY_IMAGE_GATEWAY_URL=http://dify-image-gateway:8001 \
+        -e DIFY_IMAGE_GATEWAY_PUBLIC_URL=http://43.154.111.156:8001 \
+        -e NEXT_PUBLIC_APP_URL=https://www.shenxiang.school \
         --env-file .env.production \
+        --tmpfs /app/.next/standalone/.next/cache \
+        -v /opt/1panel/apps/openclaw/openclaw/data/conf/media:/openclaw-media:ro \
+        -v /opt/1panel/apps/openclaw/openclaw/data/workspace:/openclaw-workspace:ro \
         --health-cmd="curl -f http://localhost:3000/ || exit 1" \
         --health-interval=10s \
         --health-timeout=5s \
         --health-retries=3 \
         "${PROJECT_NAME}:${TAG}" || error "新容器启动失败"
+
+    docker network connect shenxiang-net "${NEW_CONTAINER}" 2>/dev/null || true
     
     success "新容器已启动: ${NEW_CONTAINER}"
 }

@@ -58,18 +58,19 @@ import {
   clampImageCount,
   extractImageUrlsFromDifyResult,
   getAspectRatioForSize,
+  getPublicGeneratedImageDownloadUrl,
   isLargeSize,
   isOriginalSize,
-  getPublicGeneratedImageUrl,
-  proxifyGeneratedImageUrl,
   proxifyGeneratedImageDownloadUrl,
+  proxifyGeneratedImageUrl,
   proxifyGeneratedImagePreviewUrl,
   resolveSizeForAspectRatio,
 } from "@/components/chat/image-generation/gpt-image-v11"
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || ""
+const API_BASE = ""
 const BRAND_GREEN = "var(--brand-900)"
 const ACCEPTED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp"]
+const MAX_EDIT_IMAGE_UPLOADS = 10
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -88,6 +89,8 @@ type ImageResult = {
   sourceText: string
   submittedInputs: GptImageInputs
   prompt: string
+  requestId?: string
+  traceId?: string
 }
 
 type ChatSession = {
@@ -135,6 +138,13 @@ const WORKSPACE_COPY: Record<ImageWorkspaceModel, {
   },
 }
 
+function createClientRequestId(prefix = "img") {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return `${prefix}_${crypto.randomUUID()}`
+  }
+  return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2)}`
+}
+
 function createObjectUrl(file: File) {
   return URL.createObjectURL(file)
 }
@@ -178,9 +188,22 @@ function parseDifyResult(payload: unknown) {
   return extractImageUrlsFromDifyResult(payload)
 }
 
+async function readResponseJson(response: Response) {
+  const text = await response.text()
+  if (!text) return {}
+
+  try {
+    return JSON.parse(text)
+  } catch {
+    return { error: text }
+  }
+}
+
+const wait = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms))
+
 function extractMarkdownImageUrls(content: string) {
   return Array.from(content.matchAll(/!\[[^\]]*\]\(([^)]+)\)/g), (match) => match[1])
-    .filter(Boolean)
+    .filter((url): url is string => Boolean(url))
     .map(proxifyGeneratedImageUrl)
 }
 
@@ -341,6 +364,126 @@ function UploadPanel({
   )
 }
 
+function MultiImageUploadPanel({
+  title,
+  description,
+  images,
+  disabled,
+  onPick,
+  onRemove,
+  onClear,
+}: {
+  title: string
+  description: string
+  images: SelectedImage[]
+  disabled?: boolean
+  onPick: (files: File[]) => void
+  onRemove: (index: number) => void
+  onClear: () => void
+}) {
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [isDragging, setIsDragging] = useState(false)
+
+  const pickFiles = (fileList?: FileList | File[] | null) => {
+    if (!fileList) return
+    const files = Array.from(fileList)
+    if (files.length === 0) return
+
+    const invalidFile = files.find((file) => !ACCEPTED_IMAGE_TYPES.includes(file.type))
+    if (invalidFile) {
+      toast.error("仅支持 png / jpg / jpeg / webp")
+      return
+    }
+
+    onPick(files)
+  }
+
+  return (
+    <div
+      className={cn(
+        "rounded-xl border border-dashed bg-card p-4 transition",
+        isDragging ? "border-primary bg-primary/5" : "border-border",
+        disabled && "pointer-events-none opacity-50"
+      )}
+      onDragOver={(event) => {
+        event.preventDefault()
+        setIsDragging(true)
+      }}
+      onDragLeave={() => setIsDragging(false)}
+      onDrop={(event) => {
+        event.preventDefault()
+        setIsDragging(false)
+        pickFiles(event.dataTransfer.files)
+      }}
+    >
+      <input
+        ref={inputRef}
+        type="file"
+        multiple
+        accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"
+        className="hidden"
+        onChange={(event) => {
+          pickFiles(event.target.files)
+          event.currentTarget.value = ""
+        }}
+      />
+
+      {images.length > 0 ? (
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-foreground">{title}</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                已选择 {images.length} / {MAX_EDIT_IMAGE_UPLOADS} 张
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => inputRef.current?.click()} disabled={images.length >= MAX_EDIT_IMAGE_UPLOADS}>
+                <UploadCloud className="mr-2 h-4 w-4" />
+                继续添加
+              </Button>
+              <Button type="button" variant="outline" size="sm" onClick={onClear}>
+                <Trash2 className="mr-2 h-4 w-4" />
+                清空
+              </Button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+            {images.map((image, index) => (
+              <div key={`${image.file.name}-${image.file.lastModified}-${index}`} className="group relative overflow-hidden rounded-lg border border-border bg-muted">
+                <img src={image.previewUrl} alt={image.file.name} className="aspect-square w-full object-cover" />
+                <button
+                  type="button"
+                  onClick={() => onRemove(index)}
+                  className="absolute right-1.5 top-1.5 rounded-full bg-background/90 p-1.5 text-muted-foreground shadow transition hover:text-destructive"
+                  aria-label={`移除第 ${index + 1} 张图片`}
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+                <div className="absolute inset-x-0 bottom-0 bg-background/90 px-2 py-1">
+                  <p className="truncate text-[11px] text-foreground">{image.file.name}</p>
+                  <p className="text-[10px] text-muted-foreground">{formatBytes(image.file.size)}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          className="flex w-full flex-col items-center justify-center rounded-lg px-4 py-7 text-center transition hover:bg-muted/60"
+        >
+          <UploadCloud className="mb-3 h-7 w-7 text-primary" />
+          <span className="text-sm font-medium text-foreground">{title}</span>
+          <span className="mt-1 max-w-sm text-xs leading-relaxed text-muted-foreground">{description}</span>
+        </button>
+      )}
+    </div>
+  )
+}
+
 function CollapsibleSection({
   title,
   open,
@@ -396,9 +539,9 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
   const [background, setBackground] = useState<ImageBackground>(initialInputs.background)
   const [moderation, setModeration] = useState<ImageModeration>(initialInputs.moderation)
   const [count, setCount] = useState(initialInputs.n)
-  const [editImage, setEditImage] = useState<SelectedImage | null>(null)
+  const [editImages, setEditImages] = useState<SelectedImage[]>([])
   const [maskImage, setMaskImage] = useState<SelectedImage | null>(null)
-  const [referenceGatewayUrl, setReferenceGatewayUrl] = useState("")
+  const [referenceGatewayUrls, setReferenceGatewayUrls] = useState<string[]>([])
   const [maskGatewayUrl, setMaskGatewayUrl] = useState("")
   const [result, setResult] = useState<ImageResult | null>(null)
   const [historyResults, setHistoryResults] = useState<ImageResult[]>([])
@@ -415,6 +558,8 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
 
   const currentSessionIdRef = useRef<string>("")
   const hasAutoSubmittedRef = useRef(false)
+  const editImagesRef = useRef<SelectedImage[]>([])
+  const maskImageRef = useRef<SelectedImage | null>(null)
 
   const currentInputsWithoutUrls = useMemo(
     () => ({
@@ -433,8 +578,8 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
   )
 
   const previewInputs = useMemo(
-    () => buildDifyInputs(currentInputsWithoutUrls, referenceGatewayUrl, maskGatewayUrl),
-    [currentInputsWithoutUrls, maskGatewayUrl, referenceGatewayUrl]
+    () => buildDifyInputs(currentInputsWithoutUrls, referenceGatewayUrls, maskGatewayUrl),
+    [currentInputsWithoutUrls, maskGatewayUrl, referenceGatewayUrls]
   )
 
   useEffect(() => {
@@ -457,11 +602,19 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
   }, [])
 
   useEffect(() => {
+    editImagesRef.current = editImages
+  }, [editImages])
+
+  useEffect(() => {
+    maskImageRef.current = maskImage
+  }, [maskImage])
+
+  useEffect(() => {
     return () => {
-      if (editImage?.previewUrl) URL.revokeObjectURL(editImage.previewUrl)
-      if (maskImage?.previewUrl) URL.revokeObjectURL(maskImage.previewUrl)
+      editImagesRef.current.forEach((image) => URL.revokeObjectURL(image.previewUrl))
+      if (maskImageRef.current?.previewUrl) URL.revokeObjectURL(maskImageRef.current.previewUrl)
     }
-  }, [editImage?.previewUrl, maskImage?.previewUrl])
+  }, [])
 
   useEffect(() => {
     if (showHistorySidebar && userId) void fetchChatSessions(userId)
@@ -555,7 +708,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
   const applyMode = (nextMode: ImageTaskMode) => {
     if (isBananaWorkspace && nextMode === "image_edit") return
     setMode(nextMode)
-    setReferenceGatewayUrl("")
+    setReferenceGatewayUrls([])
     setMaskGatewayUrl("")
 
     if (nextMode === "image_edit") {
@@ -622,32 +775,56 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
     }
   }
 
+  const handleEditImagesPick = (files: File[]) => {
+    if (files.length === 0) return
+    setReferenceGatewayUrls([])
+    setEditImages((current) => {
+      const remainingSlots = MAX_EDIT_IMAGE_UPLOADS - current.length
+      if (remainingSlots <= 0) {
+        toast.error(`最多上传 ${MAX_EDIT_IMAGE_UPLOADS} 张参考图。`)
+        return current
+      }
+
+      const acceptedFiles = files.slice(0, remainingSlots)
+      if (files.length > remainingSlots) {
+        toast.warning(`最多上传 ${MAX_EDIT_IMAGE_UPLOADS} 张参考图，已保留前 ${remainingSlots} 张。`)
+      }
+
+      return [
+        ...current,
+        ...acceptedFiles.map((file) => ({ file, previewUrl: createObjectUrl(file) })),
+      ]
+    })
+
+    if (mode !== "image_edit") {
+      applyMode("image_edit")
+      toast.info("已切换到图片编辑模式。")
+    }
+  }
+
   const handleImagePick = (kind: UploadKind, file: File) => {
     const nextImage = { file, previewUrl: createObjectUrl(file) }
-    if (kind === "edit") {
-      if (editImage?.previewUrl) URL.revokeObjectURL(editImage.previewUrl)
-      setEditImage(nextImage)
-      setReferenceGatewayUrl("")
-      if (mode !== "image_edit") {
-        applyMode("image_edit")
-        toast.info("已切换到图片编辑模式。")
-      }
-      return
-    }
-
     if (maskImage?.previewUrl) URL.revokeObjectURL(maskImage.previewUrl)
     setMaskImage(nextImage)
     setMaskGatewayUrl("")
   }
 
-  const removeImage = (kind: UploadKind) => {
-    if (kind === "edit") {
-      if (editImage?.previewUrl) URL.revokeObjectURL(editImage.previewUrl)
-      setEditImage(null)
-      setReferenceGatewayUrl("")
-      return
-    }
+  const removeEditImage = (index: number) => {
+    setEditImages((current) => {
+      const target = current[index]
+      if (target?.previewUrl) URL.revokeObjectURL(target.previewUrl)
+      return current.filter((_, itemIndex) => itemIndex !== index)
+    })
+    setReferenceGatewayUrls([])
+  }
 
+  const clearEditImages = () => {
+    editImages.forEach((image) => URL.revokeObjectURL(image.previewUrl))
+    setEditImages([])
+    setReferenceGatewayUrls([])
+  }
+
+  const removeImage = (kind: UploadKind) => {
     if (maskImage?.previewUrl) URL.revokeObjectURL(maskImage.previewUrl)
     setMaskImage(null)
     setMaskGatewayUrl("")
@@ -680,6 +857,46 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
     return imageUrl as string
   }
 
+  async function pollImageTask(taskId: string, requestId: string) {
+    const startedAt = Date.now()
+    const maxWaitMs = 10 * 60 * 1000
+
+    while (Date.now() - startedAt < maxWaitMs) {
+      await wait(5_000)
+      setSubmitStage("图片仍在生成，正在检查结果")
+
+      const response = await fetch(`${API_BASE}/api/dify-chat?imageTaskId=${encodeURIComponent(taskId)}&requestId=${encodeURIComponent(requestId)}`, {
+        headers: {
+          "X-User-Id": userId,
+          "X-Request-Id": requestId,
+        },
+      })
+      const payload = await readResponseJson(response)
+
+      if (response.ok && payload?.status === "succeeded") {
+        return payload.result
+      }
+
+      if (payload?.status === "running") continue
+
+      const detailMessage =
+        typeof payload?.error === "string"
+          ? payload.error
+          : typeof payload?.data?.message === "string"
+            ? payload.data.message
+            : typeof payload?.data?.code === "string"
+              ? payload.data.code
+              : ""
+      const elapsedSuffix =
+        typeof payload?.elapsedMs === "number"
+          ? ` (${Math.max(1, Math.round(payload.elapsedMs / 1000))}s)`
+          : ""
+      throw new Error((detailMessage || `upstream_error:${response.status}`) + elapsedSuffix)
+    }
+
+    throw new Error("timeout")
+  }
+
   const submitImageTask = async (event?: React.FormEvent) => {
     event?.preventDefault()
     if (isSubmitting) return
@@ -698,9 +915,9 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
       return
     }
 
-    if (mode === "image_edit" && !editImage) {
+    if (mode === "image_edit" && editImages.length === 0) {
       setErrorMessage(mapImageError("missing_edit_image"))
-      toast.error("图片编辑模式需要上传原图。")
+      toast.error("图片编辑模式需要至少上传一张原图。")
       return
     }
 
@@ -712,7 +929,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
       toast.info("4K 高质量生成可能耗时较长，请耐心等待。")
     }
 
-    setIsSubmitting(true)
+	    setIsSubmitting(true)
     setErrorMessage("")
     setResult(null)
     setShowLongRunningHint(false)
@@ -727,44 +944,50 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
       }, 120_000),
     ]
 
-    try {
-      let referenceUrl = ""
+	    try {
+	      const requestId = createClientRequestId(workspaceModel === "gpt-image-2" ? "img" : "banana")
+	      let referenceUrls: string[] = []
       let maskUrl = ""
 
       if (!isBananaWorkspace && mode === "image_edit") {
         setSubmitStage("正在上传图片")
-        referenceUrl = await uploadImageToGateway(editImage!.file)
-        setReferenceGatewayUrl(referenceUrl)
+        referenceUrls = await Promise.all(editImages.map((image) => uploadImageToGateway(image.file)))
+        setReferenceGatewayUrls(referenceUrls)
 
         if (maskImage) {
           maskUrl = await uploadImageToGateway(maskImage.file)
           setMaskGatewayUrl(maskUrl)
         }
       } else {
-        setReferenceGatewayUrl("")
+        setReferenceGatewayUrls([])
         setMaskGatewayUrl("")
       }
 
-      const submittedInputs = buildDifyInputs(currentInputsWithoutUrls, referenceUrl, maskUrl)
+      const submittedInputs = buildDifyInputs(currentInputsWithoutUrls, referenceUrls, maskUrl)
 
       setSubmitStage("正在生成图片")
 
-      const response = await fetch(`${API_BASE}/api/dify-chat`, {
+	      const response = await fetch(`${API_BASE}/api/dify-chat`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-User-Id": userId,
-        },
+	        headers: {
+	          "Content-Type": "application/json",
+	          "X-User-Id": userId,
+	          "X-Request-Id": requestId,
+	        },
         body: JSON.stringify({
           query: cleanPrompt,
           inputs: submittedInputs,
           userId,
           conversation_id: currentSessionIdRef.current || undefined,
-          model: workspaceModel,
-          mode: "image",
-          imageSize: isBananaWorkspace ? resolveBananaImageSize(size, aspectRatio) : undefined,
-        }),
-      })
+	          model: workspaceModel,
+	          mode: "image",
+	          imageSize: isBananaWorkspace ? resolveBananaImageSize(size, aspectRatio) : undefined,
+	          async_image_task: !isBananaWorkspace,
+	          requestId,
+	          sessionId: currentSessionIdRef.current || undefined,
+	        }),
+	      })
+	      const traceId = response.headers.get("X-Trace-Id") || undefined
 
       let imageUrls: string[] = []
       let sourceText = ""
@@ -832,13 +1055,26 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
         imageUrls = extractMarkdownImageUrls(fullText)
         sourceText = sanitizeServiceWording(fullText)
       } else {
-        const payload = await response.json().catch(async () => ({ answer: await response.text() }))
+        let payload = await readResponseJson(response)
 
         if (!response.ok) {
-          throw new Error(payload?.error || `upstream_error:${response.status}`)
+          const detailMessage =
+            typeof payload?.data?.message === "string"
+              ? payload.data.message
+              : typeof payload?.data?.code === "string"
+                ? payload.data.code
+                : typeof payload?.error === "string"
+                  ? payload.error
+                  : ""
+          throw new Error(detailMessage || `upstream_error:${response.status}`)
         }
 
-        imageUrls = parseDifyResult(payload).map(proxifyGeneratedImageUrl)
+	        if (payload?.status === "running" && typeof payload?.imageTaskId === "string") {
+	          setSubmitStage("图片任务已提交，等待生成结果")
+	          payload = await pollImageTask(payload.imageTaskId, payload.requestId || requestId)
+	        }
+
+        imageUrls = parseDifyResult(payload)
         sourceText =
           typeof payload?.answer === "string"
             ? sanitizeServiceWording(payload.answer)
@@ -851,12 +1087,14 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
         throw new Error("upstream_error: empty image result")
       }
 
-      const nextResult = {
-        imageUrls,
-        sourceText,
-        submittedInputs,
-        prompt: cleanPrompt,
-      }
+	      const nextResult = {
+	        imageUrls,
+	        sourceText,
+	        submittedInputs,
+	        prompt: cleanPrompt,
+	        requestId,
+	        traceId,
+	      }
       setResult(nextResult)
       setHistoryResults((items) => [...items, nextResult])
 
@@ -868,6 +1106,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
       refreshCredits()
     } catch (error) {
       const message = mapImageError(error)
+      setShowLongRunningHint(false)
       setErrorMessage(message)
       toast.error(message)
     } finally {
@@ -880,11 +1119,11 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
   useEffect(() => {
     if (!authChecked || !userId || hasAutoSubmittedRef.current) return
     if (!initialPrompt.trim() || !prompt.trim()) return
-    if (mode === "image_edit" && !editImage) return
+    if (mode === "image_edit" && editImages.length === 0) return
 
     hasAutoSubmittedRef.current = true
     void submitImageTask()
-  }, [authChecked, editImage, initialPrompt, mode, prompt, userId])
+  }, [authChecked, editImages.length, initialPrompt, mode, prompt, userId])
 
   const saveGeneration = async (cleanPrompt: string, nextResult: ImageResult) => {
     if (!userId) return
@@ -927,7 +1166,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
     toast.success(successText)
   }
 
-  const canSubmit = Boolean(userId) && Boolean(prompt.trim()) && !isSubmitting && (mode === "image_generate" || Boolean(editImage))
+  const canSubmit = Boolean(userId) && Boolean(prompt.trim()) && !isSubmitting && (mode === "image_generate" || editImages.length > 0)
   const displayedResults = historyResults.length > 0 ? historyResults : result ? [result] : []
 
   return (
@@ -1019,17 +1258,18 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
                 <div>
                   <h2 className="text-sm font-semibold text-foreground">图片编辑素材</h2>
                   <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                    上传需要编辑的原图，系统会自动完成安全处理。
+                    上传需要编辑的原图，最多 {MAX_EDIT_IMAGE_UPLOADS} 张；蒙版只会作用在第一张图。
                   </p>
                 </div>
 
-                <UploadPanel
+                <MultiImageUploadPanel
                   title="编辑图片"
-                  description="点击上传或拖拽图片到这里，支持 png / jpg / jpeg / webp。"
-                  image={editImage}
+                  description={`点击上传或拖拽图片到这里，支持 png / jpg / jpeg / webp，最多 ${MAX_EDIT_IMAGE_UPLOADS} 张。`}
+                  images={editImages}
                   disabled={isSubmitting}
-                  onPick={(file) => handleImagePick("edit", file)}
-                  onRemove={() => removeImage("edit")}
+                  onPick={handleEditImagesPick}
+                  onRemove={removeEditImage}
+                  onClear={clearEditImages}
                 />
 
                 <CollapsibleSection title="蒙版图片，可选" open={maskOpen} onToggle={() => setMaskOpen((value) => !value)}>
@@ -1061,7 +1301,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
 
             <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-3 md:p-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="text-sm text-muted-foreground">
-                {mode === "image_edit" && !editImage ? "图片编辑模式需要上传原图。" : "参数已准备好，提交后将开始生成。"}
+                {mode === "image_edit" && editImages.length === 0 ? "图片编辑模式需要至少上传一张原图。" : "参数已准备好，提交后将开始生成。"}
               </div>
               <Button
                 type="submit"
@@ -1107,23 +1347,23 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
                     {item.imageUrls.length > 0 ? (
                       <div className="grid gap-3 md:gap-4 md:grid-cols-2">
                         {item.imageUrls.map((url, index) => {
-                          const publicImageUrl = getPublicGeneratedImageUrl(url, 900)
+                          const publicDownloadUrl = getPublicGeneratedImageDownloadUrl(url, item.submittedInputs.output_format)
 
                           return (
                           <div key={`${url}-${index}`} className="overflow-hidden rounded-xl border border-border bg-card">
                             <img src={proxifyGeneratedImagePreviewUrl(url, 900)} alt={`生成结果 ${index + 1}`} className="aspect-square w-full object-contain bg-muted" />
                             <div className="space-y-3 border-t border-border p-3">
-                              <a href={publicImageUrl} target="_blank" rel="noopener noreferrer" className="block break-all text-xs text-muted-foreground underline-offset-4 hover:underline">
-                                {publicImageUrl}
+                              <a href={publicDownloadUrl} target="_blank" rel="noopener noreferrer" className="block break-all text-xs text-muted-foreground underline-offset-4 hover:underline">
+                                {publicDownloadUrl}
                               </a>
                               <div className="flex flex-wrap gap-2">
                                 <Button type="button" variant="outline" size="sm" asChild>
-                                  <a href={proxifyGeneratedImageDownloadUrl(url)} download target="_blank" rel="noopener noreferrer">
+                                  <a href={proxifyGeneratedImageDownloadUrl(url, item.submittedInputs.output_format)} download target="_blank" rel="noopener noreferrer">
                                     <Download className="mr-2 h-4 w-4" />
                                     下载
                                   </a>
                                 </Button>
-                                <Button type="button" variant="outline" size="sm" onClick={() => copyText(publicImageUrl, "图片地址已复制")}>
+                                <Button type="button" variant="outline" size="sm" onClick={() => copyText(publicDownloadUrl, "图片地址已复制")}>
                                   <Copy className="mr-2 h-4 w-4" />
                                   复制图片地址
                                 </Button>

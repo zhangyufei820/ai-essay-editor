@@ -91,7 +91,6 @@
     "stripe": "latest",
     "tailwind-merge": "^2.6.0",
     "tailwindcss-animate": "^1.0.7",
-    "undici": "^7.25.0",
     "vaul": "^0.9.9",
     "zod": "3.25.76",
     "zustand": "^5.0.12"
@@ -103,8 +102,6 @@
     "@types/qrcode": "^1.5.5",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "eslint": "^9.39.4",
-    "eslint-config-next": "^16.2.4",
     "jest": "^30.2.0",
     "postcss": "^8.5",
     "tailwindcss": "^4.1.9",

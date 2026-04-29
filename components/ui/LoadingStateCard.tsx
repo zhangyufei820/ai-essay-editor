@@ -32,6 +32,12 @@ const PARTICLE_DATA = Array.from({ length: PARTICLE_COUNT }).map((_, i) => {
   }
 })
 
+interface LoadingStateCardProps {
+  modelKey?: string
+  className?: string
+  showHint?: boolean
+}
+
 // ============================================
 // Claude Code 风格 SVG 粒子动画
 // ============================================

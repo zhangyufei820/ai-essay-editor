@@ -13,6 +13,8 @@ const PRIVATE_HOST_PATTERN =
 const internalDifyAgent = new Agent({
   connections: Number(process.env.DIFY_AGENT_MAX_CONNECTIONS || 200),
   pipelining: 1,
+  headersTimeout: Number(process.env.DIFY_AGENT_HEADERS_TIMEOUT_MS || 600_000),
+  bodyTimeout: Number(process.env.DIFY_AGENT_BODY_TIMEOUT_MS || 600_000),
   keepAliveTimeout: Number(process.env.DIFY_AGENT_KEEPALIVE_MS || 15_000),
   keepAliveMaxTimeout: Number(process.env.DIFY_AGENT_KEEPALIVE_MAX_MS || 60_000),
 })

@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server"
 import { Readable } from "node:stream"
+import type { ReadableStream as NodeReadableStream } from "node:stream/web"
 import sharp from "sharp"
 
 const DEFAULT_GATEWAY_ORIGIN = "http://43.154.111.156:8001"
@@ -72,6 +73,20 @@ function pickOutputFormat(request: NextRequest): OutputFormat {
   return "jpeg"
 }
 
+function getDownloadFileExtension(format: OutputFormat | string) {
+  if (format === "jpeg") return "jpg"
+  return format
+}
+
+function normalizeContentFormat(contentType: string): OutputFormat | null {
+  const normalized = contentType.split(";")[0]?.trim().toLowerCase()
+  if (normalized === "image/webp") return "webp"
+  if (normalized === "image/avif") return "avif"
+  if (normalized === "image/jpeg" || normalized === "image/jpg") return "jpeg"
+  if (normalized === "image/png") return "png"
+  return null
+}
+
 function createAbortSignal() {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS)
@@ -87,6 +102,7 @@ function setCdnCacheHeaders(headers: Headers) {
 
 export async function proxyImage(request: NextRequest) {
   const rawUrl = request.nextUrl.searchParams.get("url")
+  const requestId = request.nextUrl.searchParams.get("requestId") || request.headers.get("X-Request-Id") || ""
 
   if (!rawUrl) {
     return new Response("Missing url", { status: 400 })
@@ -130,15 +146,31 @@ export async function proxyImage(request: NextRequest) {
   }
 
   const rawMode = request.nextUrl.searchParams.get("raw") === "1"
+  const downloadMode = request.nextUrl.searchParams.get("download") === "1"
+  const requestedFormat = request.nextUrl.searchParams.get("format")
   const headers = new Headers({
     "Content-Type": contentType,
   })
+  if (requestId) headers.set("X-Request-Id", requestId)
   setCdnCacheHeaders(headers)
 
   const contentLength = upstream.headers.get("content-length")
   if (contentLength) headers.set("Content-Length", contentLength)
 
-  if (rawMode) {
+  const upstreamFormat = normalizeContentFormat(contentType)
+  const requestedOutputFormat =
+    requestedFormat === "avif" || requestedFormat === "webp" || requestedFormat === "jpeg" || requestedFormat === "png"
+      ? requestedFormat
+      : null
+  const shouldPassthroughRaw = rawMode && (!requestedOutputFormat || requestedOutputFormat === upstreamFormat)
+
+  if (downloadMode) {
+    const extensionFromType = contentType.split("/")[1]?.split(";")[0] || "png"
+    const fileExtension = getDownloadFileExtension(requestedOutputFormat || extensionFromType)
+    headers.set("Content-Disposition", `attachment; filename="generated-image.${fileExtension}"`)
+  }
+
+  if (shouldPassthroughRaw) {
     return new Response(upstream.body, {
       status: 200,
       headers,
@@ -153,7 +185,10 @@ export async function proxyImage(request: NextRequest) {
   const format = pickOutputFormat(request)
   let pipeline = sharp({ animated: false })
     .rotate()
-    .resize({ width, height: width, fit: "inside", withoutEnlargement: true })
+
+  if (!rawMode) {
+    pipeline = pipeline.resize({ width, height: width, fit: "inside", withoutEnlargement: true })
+  }
 
   if (format === "avif") pipeline = pipeline.avif({ quality: 58, effort: 4 })
   if (format === "webp") pipeline = pipeline.webp({ quality: 78, effort: 4 })
@@ -164,8 +199,11 @@ export async function proxyImage(request: NextRequest) {
   headers.delete("Content-Length")
   headers.set("Vary", "Accept")
   headers.set("X-Image-Proxy-Mode", "optimized")
+  if (requestId) headers.set("X-Trace-Source", "image-proxy")
 
-  const optimizedStream = Readable.fromWeb(upstream.body as ReadableStream<Uint8Array>).pipe(pipeline)
+  const optimizedStream = Readable.fromWeb(
+    upstream.body as unknown as NodeReadableStream<Uint8Array>,
+  ).pipe(pipeline)
 
   return new Response(Readable.toWeb(optimizedStream) as ReadableStream<Uint8Array>, {
     status: 200,

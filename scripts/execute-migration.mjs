@@ -1,16 +1,19 @@
 import { createClient } from '@supabase/supabase-js'
 import fs from 'fs'
+import path from 'path'
 
-const SUPABASE_URL = 'https://rnujdnmxufmzgjvmddla.supabase.co'
-const SUPABASE_SERVICE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJudWpkbm14dWZtemdqdm1kZGxhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NDMxNTExMSwiZXhwIjoyMDc5ODkxMTExfQ.0UefAkv1Dg8UKn7RYuHmq-PJurRUMHLtjnnBptTkBmI'
-
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://rnujdnmxufmzgjvmddla.supabase.co'
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
+if (!SUPABASE_SERVICE_KEY) throw new Error('SUPABASE_SERVICE_ROLE_KEY is required')
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
 async function executeMigration() {
   console.log('🚀 开始执行数据库迁移\n')
   
   // 读取 SQL 文件
-  const sqlFile = '/Users/aixingren/ai-essay-editor/scripts/017_create_referral_tables.sql'
+  const sqlFile = process.argv[2]
+    ? path.resolve(process.argv[2])
+    : path.resolve('scripts/017_create_referral_tables.sql')
   const sql = fs.readFileSync(sqlFile, 'utf-8')
   
   console.log('📝 SQL 脚本内容:')

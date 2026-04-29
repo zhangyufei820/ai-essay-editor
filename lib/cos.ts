@@ -58,7 +58,7 @@ function getCosInstance(): COS | null {
   }
 
   if (!cosInstance) {
-    const cosOptions: COS.Options = {
+    const cosOptions: Record<string, string> = {
       SecretId: COS_CONFIG.SecretId,
       SecretKey: COS_CONFIG.SecretKey,
     }
