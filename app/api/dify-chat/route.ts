@@ -18,6 +18,7 @@ import {
 import { assertSecureTlsConfiguration } from "@/lib/runtime-security"
 import { internalDifyFetch } from "@/lib/internal-dify-fetch"
 import { getDifyCredentialForModel } from "@/lib/dify-credentials"
+import { rewriteOpenClawMediaReferences } from "@/lib/openclaw-media"
 
 export const runtime = "nodejs"
 // 🔥 增加超时时间到 600 秒，支持图片生成网关的长任务重试
@@ -952,12 +953,13 @@ export async function POST(request: NextRequest) {
             console.warn(`✅ [首字节探测] Dify 流式数据开始传输，已取消首字节超时定时器`)
         }
 
-        // 直接传递数据给前端
-        controller.enqueue(chunk)
-
         // 解析 chunk 提取 token 信息
         try {
           const text = new TextDecoder().decode(chunk)
+          const outputText = model === "open-claw" ? rewriteOpenClawMediaReferences(text) : text
+
+          // 传递数据给前端。OpenClaw 的本地媒体路径需要改写成本站可访问的代理 URL。
+          controller.enqueue(new TextEncoder().encode(outputText))
 
           // 🎨 Banana 调试：记录原始数据
           if (model === "banana-2-pro" && text.trim()) {
@@ -967,7 +969,7 @@ export async function POST(request: NextRequest) {
           // 🔥 追加到缓冲区，然后只处理完整的行
           // 完整的 SSE 数据行格式：data: {...}\n
           // 可能被 TCP 包分割成多块传输，需要跨 chunk 缓冲
-          jsonBuffer += text
+          jsonBuffer += outputText
 
           // 按换行分割，处理所有完整的行
           const lines = jsonBuffer.split("\n")
@@ -1107,6 +1109,7 @@ export async function POST(request: NextRequest) {
           }
         } catch (e) {
           console.error(`❌ [Transform] transform阶段异常:`, e)
+          controller.enqueue(chunk)
         }
       },
 

@@ -22,6 +22,7 @@ import { useMemo, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { motion, AnimatePresence } from 'framer-motion'
 import { proxifyGeneratedImagePreviewUrl } from '@/components/chat/image-generation/gpt-image-v11'
+import { rewriteOpenClawMediaReferences } from '@/lib/openclaw-media'
 
 // 静奢风配色
 const TEXT_COLOR = "#333333"
@@ -96,7 +97,10 @@ function CopyButton({ text }: { text: string }) {
 }
 
 export function EnhancedMarkdown({ content, className }: EnhancedMarkdownProps) {
-  const normalizedContent = useMemo(() => normalizeMathDelimiters(content), [content])
+  const normalizedContent = useMemo(
+    () => normalizeMathDelimiters(rewriteOpenClawMediaReferences(content)),
+    [content],
+  )
 
   return (
     <div

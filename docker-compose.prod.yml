@@ -83,6 +83,8 @@ services:
       - NEXT_PUBLIC_APP_URL=https://www.shenxiang.school
     tmpfs:
       - /app/.next/standalone/.next/cache
+    volumes:
+      - /opt/1panel/apps/openclaw/openclaw/data/conf/media:/openclaw-media:ro
     networks:
       - shenxiang-net
       - docker_default
