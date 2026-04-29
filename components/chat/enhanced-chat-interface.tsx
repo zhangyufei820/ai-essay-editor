@@ -362,10 +362,12 @@ function ProcessingStatusCard({
 
   return (
     <div className="w-full max-w-[720px] rounded-xl border border-emerald-100 bg-emerald-50/55 p-3 shadow-sm sm:p-4">
-      <div className="flex items-start gap-3">
-        <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-emerald-700 shadow-sm">
-          <Loader2 className="h-4 w-4 animate-spin" />
-        </div>
+      <div className={cn("flex items-start", isOpenClaw ? "gap-0" : "gap-3")}>
+        {!isOpenClaw && (
+          <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-emerald-700 shadow-sm">
+            <Loader2 className="h-4 w-4 animate-spin" />
+          </div>
+        )}
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-sm font-semibold text-slate-800">{stageText}</p>
@@ -2964,8 +2966,13 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                       <div key={message.id} className={cn("flex gap-1 sm:gap-2 group/message", message.role === "user" ? "justify-end" : "justify-start")}>
                       {message.role === "assistant" && (
                         // Smaller AI avatar - 使用 ModelLogo
-                        <div className="flex w-7 h-7 sm:w-10 sm:h-10 shrink-0 items-center justify-center mt-0.5">
-                          <ModelLogo modelKey={selectedModel as any} size="md" />
+                        <div
+                          className={cn(
+                            "mt-0.5 flex shrink-0 items-center justify-center",
+                            selectedModel === "open-claw" ? "h-12 w-12 sm:h-16 sm:w-16" : "h-7 w-7 sm:h-10 sm:w-10",
+                          )}
+                        >
+                          <ModelLogo modelKey={selectedModel as any} size={selectedModel === "open-claw" ? "xl" : "md"} />
                         </div>
                       )}
                       {/* Flat content container - No heavy backgrounds or borders */}

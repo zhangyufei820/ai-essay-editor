@@ -175,20 +175,32 @@ export function ModelLogo({
   const config = MODEL_LOGOS[modelKey]
   const sizeConfig = LOGO_SIZES[size]
   const brandColor = config?.brandColor || "#10A37F"
+  const containerClassName = [
+    "flex shrink-0 items-center justify-center",
+    sizeConfig.container,
+    showBg ? "rounded-lg" : "",
+    className || "",
+  ].filter(Boolean).join(" ")
+  const containerStyle = showBg
+    ? {
+        backgroundColor: `${brandColor}15`,
+        border: `1px solid ${brandColor}30`,
+        ...style,
+      }
+    : style
 
   // 有本地 SVG - 纯 SVG logo，显示原始颜色
   if (config?.svgPath && config?.useLocal) {
     return (
       <div
-        className={`flex items-center justify-center shrink-0 ${className || ""}`}
-        style={style}
+        className={containerClassName}
+        style={containerStyle}
       >
         <img
           src={config.svgPath}
           alt={`${modelKey.replace(/-/g, ' ')} logo`}
-          width={sizeConfig.iconSize}
-          height={sizeConfig.iconSize}
-          className="object-contain"
+          className="block h-full w-full object-contain"
+          loading="eager"
         />
       </div>
     )
@@ -199,8 +211,8 @@ export function ModelLogo({
     const IconComponent = config.LucideIcon
     return (
       <div
-        className={`flex items-center justify-center shrink-0 ${className || ""}`}
-        style={style}
+        className={containerClassName}
+        style={containerStyle}
       >
         <IconComponent
           size={sizeConfig.iconSize}
@@ -216,8 +228,8 @@ export function ModelLogo({
   // Fallback - 纯图标无背景
   return (
     <div
-      className={`flex items-center justify-center shrink-0 ${className || ""}`}
-      style={style}
+      className={containerClassName}
+      style={containerStyle}
     >
       <Sparkles
         size={sizeConfig.iconSize}
