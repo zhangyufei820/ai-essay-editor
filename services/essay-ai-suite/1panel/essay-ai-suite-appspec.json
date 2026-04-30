@@ -1,0 +1,219 @@
+{
+  "key": "essay-ai-suite",
+  "name": "Essay AI Suite",
+  "title": "Essay AI Suite",
+  "version": "0.1.0",
+  "description": {
+    "en": "Shared AI service suite for Dify essay grading, OCR, document extraction, and batch jobs.",
+    "es-es": "Shared AI service suite for Dify essay grading, OCR, document extraction, and batch jobs.",
+    "ja": "Shared AI service suite for Dify essay grading, OCR, document extraction, and batch jobs.",
+    "ms": "Shared AI service suite for Dify essay grading, OCR, document extraction, and batch jobs.",
+    "pt-br": "Shared AI service suite for Dify essay grading, OCR, document extraction, and batch jobs.",
+    "ru": "Shared AI service suite for Dify essay grading, OCR, document extraction, and batch jobs.",
+    "ko": "Shared AI service suite for Dify essay grading, OCR, document extraction, and batch jobs.",
+    "zh-Hant": "面向 Dify 的作文批改、OCR、文檔提取與批量任務公共 AI 服務套件。",
+    "zh": "面向 Dify 的作文批改、OCR、文档提取与批量任务公共 AI 服务套件。",
+    "tr": "Shared AI service suite for Dify essay grading, OCR, document extraction, and batch jobs."
+  },
+  "readme": {
+    "zh": {
+      "introduction": "是面向 Dify 的公共 AI 服务套件，用于将作文批改、批量任务、OCR、文档提取等重型能力从 Dify 工作流下沉到稳定的 HTTP 服务。",
+      "features": [
+        {
+          "title": "轻量 Dify 调用",
+          "description": "通过 HTTP 接口向 Dify 提供单篇批改、批量批改、OCR 和文档提取能力。"
+        },
+        {
+          "title": "批量任务稳定执行",
+          "description": "内置任务状态、进度、重试、超时和结果持久化。"
+        },
+        {
+          "title": "第三方 API 直连",
+          "description": "支持 OpenAI-compatible LLM、视觉 OCR 模型和外部文档解析服务。"
+        }
+      ]
+    },
+    "en": {
+      "introduction": "is a shared AI service suite for Dify apps. It moves essay grading, batch jobs, OCR, and document extraction out of complex Dify workflows into stable HTTP services.",
+      "features": [
+        {
+          "title": "Lightweight Dify Integration",
+          "description": "Provides HTTP endpoints for single essay grading, batch grading, OCR, and document extraction."
+        },
+        {
+          "title": "Stable Batch Jobs",
+          "description": "Includes job status, progress, retries, timeouts, and persisted results."
+        },
+        {
+          "title": "Direct Provider Calls",
+          "description": "Supports OpenAI-compatible LLMs, vision OCR models, and external document extraction APIs."
+        }
+      ]
+    }
+  },
+  "type": "tool",
+  "tags": ["AI", "Tool"],
+  "website": "https://shenxiang.school",
+  "document": "https://shenxiang.school",
+  "source_evidence": [
+    "services/essay-ai-suite/Dockerfile",
+    "services/essay-ai-suite/docker-compose.yml",
+    "services/essay-ai-suite/README.md"
+  ],
+  "notes": [
+    "The app package references ghcr.io/zhangyufei820/essay-ai-suite:0.1.0. The GitHub Actions workflow .github/workflows/essay-ai-suite-image.yml builds and pushes this image to GHCR."
+  ],
+  "architectures": ["amd64", "arm64"],
+  "services": [
+    {
+      "name": "essay-ai-suite",
+      "image": "ghcr.io/zhangyufei820/essay-ai-suite:0.1.0",
+      "primary": true,
+      "ports": [
+        {
+          "host_env": "PANEL_APP_PORT_HTTP",
+          "host_default": 3100,
+          "container": 3100,
+          "protocol": "tcp",
+          "label": "Web UI Port"
+        }
+      ],
+      "volumes": [
+        "./data:/app/data"
+      ],
+      "environment": {
+        "PORT": "3100",
+        "DATA_DIR": "/app/data",
+        "MAX_BATCH_SIZE": "${MAX_BATCH_SIZE}",
+        "WORKER_CONCURRENCY": "${WORKER_CONCURRENCY}",
+        "JOB_TIMEOUT_SECONDS": "${JOB_TIMEOUT_SECONDS}",
+        "MAX_RETRIES": "${MAX_RETRIES}",
+        "API_TOKEN": "${API_TOKEN}",
+        "LLM_API_BASE_URL": "${LLM_API_BASE_URL}",
+        "LLM_API_KEY": "${LLM_API_KEY}",
+        "LLM_MODEL": "${LLM_MODEL}",
+        "OCR_API_BASE_URL": "${OCR_API_BASE_URL}",
+        "OCR_API_KEY": "${OCR_API_KEY}",
+        "OCR_MODEL": "${OCR_MODEL}",
+        "DOC_EXTRACT_API_URL": "${DOC_EXTRACT_API_URL}",
+        "DOC_EXTRACT_API_KEY": "${DOC_EXTRACT_API_KEY}"
+      },
+      "healthcheck": {
+        "test": [
+          "CMD-SHELL",
+          "node -e \"fetch('http://127.0.0.1:3100/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""
+        ],
+        "interval": "30s",
+        "timeout": "5s",
+        "retries": 3
+      }
+    }
+  ],
+  "form_fields": [
+    {
+      "default": 20,
+      "envKey": "MAX_BATCH_SIZE",
+      "labelEn": "Max Batch Size",
+      "labelZh": "最大批量数量",
+      "required": true,
+      "type": "number"
+    },
+    {
+      "default": 2,
+      "envKey": "WORKER_CONCURRENCY",
+      "labelEn": "Worker Concurrency",
+      "labelZh": "并发任务数",
+      "required": true,
+      "type": "number"
+    },
+    {
+      "default": 180,
+      "envKey": "JOB_TIMEOUT_SECONDS",
+      "labelEn": "Job Timeout Seconds",
+      "labelZh": "任务超时秒数",
+      "required": true,
+      "type": "number"
+    },
+    {
+      "default": 1,
+      "envKey": "MAX_RETRIES",
+      "labelEn": "Max Retries",
+      "labelZh": "最大重试次数",
+      "required": true,
+      "type": "number"
+    },
+    {
+      "default": "",
+      "envKey": "API_TOKEN",
+      "labelEn": "API Token",
+      "labelZh": "API 令牌",
+      "random": true,
+      "required": false,
+      "type": "password"
+    },
+    {
+      "default": "",
+      "envKey": "LLM_API_BASE_URL",
+      "labelEn": "LLM Base URL",
+      "labelZh": "LLM Base URL",
+      "required": false,
+      "type": "text"
+    },
+    {
+      "default": "",
+      "envKey": "LLM_API_KEY",
+      "labelEn": "LLM API Key",
+      "labelZh": "LLM API Key",
+      "required": false,
+      "type": "password"
+    },
+    {
+      "default": "",
+      "envKey": "LLM_MODEL",
+      "labelEn": "LLM Model",
+      "labelZh": "LLM 模型",
+      "required": false,
+      "type": "text"
+    },
+    {
+      "default": "",
+      "envKey": "OCR_API_BASE_URL",
+      "labelEn": "OCR Base URL",
+      "labelZh": "OCR Base URL",
+      "required": false,
+      "type": "text"
+    },
+    {
+      "default": "",
+      "envKey": "OCR_API_KEY",
+      "labelEn": "OCR API Key",
+      "labelZh": "OCR API Key",
+      "required": false,
+      "type": "password"
+    },
+    {
+      "default": "",
+      "envKey": "OCR_MODEL",
+      "labelEn": "OCR Model",
+      "labelZh": "OCR 模型",
+      "required": false,
+      "type": "text"
+    },
+    {
+      "default": "",
+      "envKey": "DOC_EXTRACT_API_URL",
+      "labelEn": "Document Extract API URL",
+      "labelZh": "文档解析 API URL",
+      "required": false,
+      "type": "text"
+    },
+    {
+      "default": "",
+      "envKey": "DOC_EXTRACT_API_KEY",
+      "labelEn": "Document Extract API Key",
+      "labelZh": "文档解析 API Key",
+      "required": false,
+      "type": "password"
+    }
+  ]
+}

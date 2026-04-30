@@ -1,0 +1,242 @@
+additionalProperties:
+  formFields:
+    - default: 20
+      envKey: MAX_BATCH_SIZE
+      labelEn: "Max Batch Size"
+      labelZh: "最大批量数量"
+      required: true
+      type: number
+      label:
+        en: "Max Batch Size"
+        es-es: "Max Batch Size"
+        ja: "Max Batch Size"
+        ms: "Max Batch Size"
+        pt-br: "Max Batch Size"
+        ru: "Max Batch Size"
+        ko: "Max Batch Size"
+        zh-Hant: "最大批量数量"
+        zh: "最大批量数量"
+        tr: "Max Batch Size"
+    - default: 2
+      envKey: WORKER_CONCURRENCY
+      labelEn: "Worker Concurrency"
+      labelZh: "并发任务数"
+      required: true
+      type: number
+      label:
+        en: "Worker Concurrency"
+        es-es: "Worker Concurrency"
+        ja: "Worker Concurrency"
+        ms: "Worker Concurrency"
+        pt-br: "Worker Concurrency"
+        ru: "Worker Concurrency"
+        ko: "Worker Concurrency"
+        zh-Hant: "并发任务数"
+        zh: "并发任务数"
+        tr: "Worker Concurrency"
+    - default: 180
+      envKey: JOB_TIMEOUT_SECONDS
+      labelEn: "Job Timeout Seconds"
+      labelZh: "任务超时秒数"
+      required: true
+      type: number
+      label:
+        en: "Job Timeout Seconds"
+        es-es: "Job Timeout Seconds"
+        ja: "Job Timeout Seconds"
+        ms: "Job Timeout Seconds"
+        pt-br: "Job Timeout Seconds"
+        ru: "Job Timeout Seconds"
+        ko: "Job Timeout Seconds"
+        zh-Hant: "任务超时秒数"
+        zh: "任务超时秒数"
+        tr: "Job Timeout Seconds"
+    - default: 1
+      envKey: MAX_RETRIES
+      labelEn: "Max Retries"
+      labelZh: "最大重试次数"
+      required: true
+      type: number
+      label:
+        en: "Max Retries"
+        es-es: "Max Retries"
+        ja: "Max Retries"
+        ms: "Max Retries"
+        pt-br: "Max Retries"
+        ru: "Max Retries"
+        ko: "Max Retries"
+        zh-Hant: "最大重试次数"
+        zh: "最大重试次数"
+        tr: "Max Retries"
+    - default: ""
+      envKey: API_TOKEN
+      labelEn: "API Token"
+      labelZh: "API 令牌"
+      random: true
+      required: false
+      type: password
+      label:
+        en: "API Token"
+        es-es: "API Token"
+        ja: "API Token"
+        ms: "API Token"
+        pt-br: "API Token"
+        ru: "API Token"
+        ko: "API Token"
+        zh-Hant: "API 令牌"
+        zh: "API 令牌"
+        tr: "API Token"
+    - default: ""
+      envKey: LLM_API_BASE_URL
+      labelEn: "LLM Base URL"
+      labelZh: "LLM Base URL"
+      required: false
+      type: text
+      label:
+        en: "LLM Base URL"
+        es-es: "LLM Base URL"
+        ja: "LLM Base URL"
+        ms: "LLM Base URL"
+        pt-br: "LLM Base URL"
+        ru: "LLM Base URL"
+        ko: "LLM Base URL"
+        zh-Hant: "LLM Base URL"
+        zh: "LLM Base URL"
+        tr: "LLM Base URL"
+    - default: ""
+      envKey: LLM_API_KEY
+      labelEn: "LLM API Key"
+      labelZh: "LLM API Key"
+      required: false
+      type: password
+      label:
+        en: "LLM API Key"
+        es-es: "LLM API Key"
+        ja: "LLM API Key"
+        ms: "LLM API Key"
+        pt-br: "LLM API Key"
+        ru: "LLM API Key"
+        ko: "LLM API Key"
+        zh-Hant: "LLM API Key"
+        zh: "LLM API Key"
+        tr: "LLM API Key"
+    - default: ""
+      envKey: LLM_MODEL
+      labelEn: "LLM Model"
+      labelZh: "LLM 模型"
+      required: false
+      type: text
+      label:
+        en: "LLM Model"
+        es-es: "LLM Model"
+        ja: "LLM Model"
+        ms: "LLM Model"
+        pt-br: "LLM Model"
+        ru: "LLM Model"
+        ko: "LLM Model"
+        zh-Hant: "LLM 模型"
+        zh: "LLM 模型"
+        tr: "LLM Model"
+    - default: ""
+      envKey: OCR_API_BASE_URL
+      labelEn: "OCR Base URL"
+      labelZh: "OCR Base URL"
+      required: false
+      type: text
+      label:
+        en: "OCR Base URL"
+        es-es: "OCR Base URL"
+        ja: "OCR Base URL"
+        ms: "OCR Base URL"
+        pt-br: "OCR Base URL"
+        ru: "OCR Base URL"
+        ko: "OCR Base URL"
+        zh-Hant: "OCR Base URL"
+        zh: "OCR Base URL"
+        tr: "OCR Base URL"
+    - default: ""
+      envKey: OCR_API_KEY
+      labelEn: "OCR API Key"
+      labelZh: "OCR API Key"
+      required: false
+      type: password
+      label:
+        en: "OCR API Key"
+        es-es: "OCR API Key"
+        ja: "OCR API Key"
+        ms: "OCR API Key"
+        pt-br: "OCR API Key"
+        ru: "OCR API Key"
+        ko: "OCR API Key"
+        zh-Hant: "OCR API Key"
+        zh: "OCR API Key"
+        tr: "OCR API Key"
+    - default: ""
+      envKey: OCR_MODEL
+      labelEn: "OCR Model"
+      labelZh: "OCR 模型"
+      required: false
+      type: text
+      label:
+        en: "OCR Model"
+        es-es: "OCR Model"
+        ja: "OCR Model"
+        ms: "OCR Model"
+        pt-br: "OCR Model"
+        ru: "OCR Model"
+        ko: "OCR Model"
+        zh-Hant: "OCR 模型"
+        zh: "OCR 模型"
+        tr: "OCR Model"
+    - default: ""
+      envKey: DOC_EXTRACT_API_URL
+      labelEn: "Document Extract API URL"
+      labelZh: "文档解析 API URL"
+      required: false
+      type: text
+      label:
+        en: "Document Extract API URL"
+        es-es: "Document Extract API URL"
+        ja: "Document Extract API URL"
+        ms: "Document Extract API URL"
+        pt-br: "Document Extract API URL"
+        ru: "Document Extract API URL"
+        ko: "Document Extract API URL"
+        zh-Hant: "文档解析 API URL"
+        zh: "文档解析 API URL"
+        tr: "Document Extract API URL"
+    - default: ""
+      envKey: DOC_EXTRACT_API_KEY
+      labelEn: "Document Extract API Key"
+      labelZh: "文档解析 API Key"
+      required: false
+      type: password
+      label:
+        en: "Document Extract API Key"
+        es-es: "Document Extract API Key"
+        ja: "Document Extract API Key"
+        ms: "Document Extract API Key"
+        pt-br: "Document Extract API Key"
+        ru: "Document Extract API Key"
+        ko: "Document Extract API Key"
+        zh-Hant: "文档解析 API Key"
+        zh: "文档解析 API Key"
+        tr: "Document Extract API Key"
+    - default: 3100
+      envKey: PANEL_APP_PORT_HTTP
+      labelEn: "Web UI Port"
+      labelZh: "Web UI 端口"
+      label:
+        en: "Web UI Port"
+        es-es: "Puerto web"
+        ja: "Web UIポート"
+        ms: "Port Web UI"
+        pt-br: "Porta da Web UI"
+        ru: "Порт веб-интерфейса"
+        ko: "웹 UI 포트"
+        zh-Hant: "Web UI 埠"
+        zh: "Web UI 端口"
+        tr: "Web UI Bağlantı Noktası"
+      required: true
+      rule: paramPort
+      type: number

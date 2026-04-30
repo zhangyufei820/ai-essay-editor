@@ -1,0 +1,39 @@
+services:
+  essay-ai-suite:
+    image: ghcr.io/zhangyufei820/essay-ai-suite:0.1.0
+    container_name: "${CONTAINER_NAME}"
+    restart: always
+    networks:
+      - 1panel-network
+    ports:
+      - "${PANEL_APP_PORT_HTTP}:3100"
+    environment:
+      PORT: 3100
+      DATA_DIR: /app/data
+      MAX_BATCH_SIZE: "${MAX_BATCH_SIZE}"
+      WORKER_CONCURRENCY: "${WORKER_CONCURRENCY}"
+      JOB_TIMEOUT_SECONDS: "${JOB_TIMEOUT_SECONDS}"
+      MAX_RETRIES: "${MAX_RETRIES}"
+      API_TOKEN: "${API_TOKEN}"
+      LLM_API_BASE_URL: "${LLM_API_BASE_URL}"
+      LLM_API_KEY: "${LLM_API_KEY}"
+      LLM_MODEL: "${LLM_MODEL}"
+      OCR_API_BASE_URL: "${OCR_API_BASE_URL}"
+      OCR_API_KEY: "${OCR_API_KEY}"
+      OCR_MODEL: "${OCR_MODEL}"
+      DOC_EXTRACT_API_URL: "${DOC_EXTRACT_API_URL}"
+      DOC_EXTRACT_API_KEY: "${DOC_EXTRACT_API_KEY}"
+    volumes:
+      - ./data:/app/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "node -e \"fetch('http://127.0.0.1:3100/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    labels:
+      createdBy: Apps
+networks:
+  1panel-network:
+    external: true
