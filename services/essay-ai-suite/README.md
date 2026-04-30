@@ -62,6 +62,22 @@ LLM_MODEL=your-model
 
 Essay grading uses the versioned prompt template `essay-grading-v1` from `src/prompts/essay-grading-v1.ts`. API results include `provider`, `model`, and `prompt_version` so batch results can be audited later.
 
+## 1Panel Image Pull
+
+The generated 1Panel local app uses:
+
+```text
+ghcr.io/zhangyufei820/essay-ai-suite:0.1.0
+```
+
+If the GHCR package is private, log in on the 1Panel host before installing:
+
+```bash
+docker login ghcr.io -u zhangyufei820
+```
+
+Use a GitHub token with `read:packages` permission as the password. If the package is set to public in GitHub Packages, no login is required.
+
 ## Shared Capability Entrypoints
 
 Document extraction and OCR endpoints are now available as stable public contracts for Dify apps.
