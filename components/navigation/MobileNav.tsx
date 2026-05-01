@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element -- Dynamic/user-generated/external image surfaces: keep native img to preserve sizing, blob/data/proxy URLs, payment QR codes, and chat preview behavior. */
 /**
  * 📱 沈翔学校 - 移动端导航组件 (Mobile Navigation)
  * 

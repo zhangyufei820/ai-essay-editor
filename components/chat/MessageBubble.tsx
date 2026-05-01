@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element -- Dynamic/user-generated/external image surfaces: keep native img to preserve sizing, blob/data/proxy URLs, payment QR codes, and chat preview behavior. */
 /**
  * 💬 Message Bubble Component - Claude Style
  *
