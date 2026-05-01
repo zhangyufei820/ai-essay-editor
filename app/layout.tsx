@@ -9,12 +9,16 @@ import { ClientBoot } from "@/components/client-boot"
 // Schema.org 结构化数据（模块级别常量，避免每次渲染重复创建对象）
 // ============================================
 
+const SITE_TITLE = "沈翔智学｜AI作文批改 · 写作提分工具"
+const SITE_DESCRIPTION = "上传作文，AI逐段批改、指出问题、给出提分建议，帮助小学、初中、高中学生提升写作能力。"
+const SITE_KEYWORDS = "AI作文批改,作文批改,写作提分,作文润色,语文学习,智能教育,沈翔智学"
+
 const WEBSITE_SCHEMA = {
   "@context": "https://schema.org",
   "@type": "WebSite",
   name: "沈翔智学",
   url: "https://shenxiang.school",
-  description: "专业的AI作文批改专家，融合文学大师风格，为学生提供深度点评、创意建议和个性化指导",
+  description: SITE_DESCRIPTION,
   publisher: {
     "@type": "Organization",
     name: "沈翔智学",
@@ -36,7 +40,7 @@ const SOFTWARE_SCHEMA = {
   name: "沈翔智学",
   applicationCategory: "EducationApplication",
   operatingSystem: "Web",
-  description: "AI智能作文批改与润色平台，为学生提供专业的作文点评和个性化指导",
+  description: SITE_DESCRIPTION,
   url: "https://shenxiang.school",
   offers: {
     "@type": "AggregateOffer",
@@ -56,17 +60,17 @@ export const viewport: Viewport = {
 }
 
 export const metadata: Metadata = {
-  title: "沈翔智学智能体广场（含各学段中英文作文批改）",
-  description: "专业的AI作文批改专家，融合文学大师风格，为学生提供深度点评、创意建议和个性化指导",
-  keywords: "AI作文批改,人工智能辅导,语文学习,作文润色,智能教育,沈翔智学",
+  title: SITE_TITLE,
+  description: SITE_DESCRIPTION,
+  keywords: SITE_KEYWORDS,
   authors: [{ name: "沈翔智学" }],
   openGraph: {
     type: "website",
     locale: "zh_CN",
     url: "https://shenxiang.school",
     siteName: "沈翔智学",
-    title: "沈翔智学智能体广场（含各学段中英文作文批改）",
-    description: "专业的AI作文批改专家，融合文学大师风格，为学生提供深度点评、创意建议和个性化指导",
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
     images: [
       {
         url: "https://cdn.shenxiang.school/og-image.png",
@@ -80,8 +84,8 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     site: "@shenxiangschool",
     creator: "@shenxiangschool",
-    title: "沈翔智学智能体广场（含各学段中英文作文批改）",
-    description: "专业的AI作文批改专家，融合文学大师风格，为学生提供深度点评、创意建议和个性化指导",
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
     images: ["https://cdn.shenxiang.school/og-image.png"],
   },
   robots: {
@@ -92,7 +96,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "沈翔智学智能体",
+    title: "沈翔智学",
   },
   formatDetection: {
     telephone: false,
