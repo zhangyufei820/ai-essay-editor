@@ -9,6 +9,25 @@ export interface Product {
   productType?: 'membership' | 'credits' // 产品类型
 }
 
+export const MEMBERSHIP_CREDITS: Record<string, number> = {
+  basic: 2000,
+  pro: 5000,
+  premium: 12000,
+}
+
+export function getProductCredits(productId: string): number {
+  const directCredits = productId.match(/^credits-(\d+)$/)
+  if (directCredits) return Number(directCredits[1])
+  return MEMBERSHIP_CREDITS[productId] || 0
+}
+
+export function getProductPriceInCents(productId: string, billing: string = 'monthly'): number | null {
+  const product = PRODUCTS.find(p => p.id === productId)
+  if (!product) return null
+  const isAnnualMembership = billing === 'annual' && product.productType === 'membership'
+  return isAnnualMembership ? Math.round(product.priceInCents * 12 * 0.8) : product.priceInCents
+}
+
 // 产品目录 - 所有价格的唯一真实来源
 // [!!!] 修复：这里的 ID 必须与 pricing.tsx 中的 ID 完全匹配 [!!!]
 export const PRODUCTS: Product[] = [
@@ -108,4 +127,21 @@ export function isMembershipProduct(productId: string): boolean {
 // 辅助函数：检查用户是否有有效会员
 export function hasActiveMembership(membershipStatus: string | null): boolean {
   return membershipStatus === 'basic' || membershipStatus === 'pro' || membershipStatus === 'premium'
+}
+
+export function resolveMembershipStatus(source?: {
+  membership_status?: string | null
+  is_pro?: boolean | null
+} | null): string | null {
+  if (!source) return null
+
+  if (hasActiveMembership(source.membership_status || null)) {
+    return source.membership_status || null
+  }
+
+  if (source.is_pro) {
+    return 'pro'
+  }
+
+  return null
 }

@@ -1,22 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyAdminToken } from '@/lib/admin-auth';
+import { applyRateLimit } from '@/lib/rate-limit';
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { token } = body;
+    const rateLimited = applyRateLimit(request, { keyPrefix: 'admin-verify', maxRequests: 10 });
+    if (rateLimited) return rateLimited;
+
+    const token = request.headers.get('authorization')?.replace('Bearer ', '');
 
     if (!token) {
       return NextResponse.json(
         { valid: false, error: 'Token missing' },
-        { status: 400 }
+        { status: 401 }
       );
     }
 
     const isValid = await verifyAdminToken(token);
 
+    if (!isValid) {
+      return NextResponse.json(
+        { valid: false, error: 'Token invalid' },
+        { status: 403 }
+      );
+    }
+
     return NextResponse.json({
-      valid: isValid,
+      valid: true,
       timestamp: Date.now()
     });
   } catch (error) {

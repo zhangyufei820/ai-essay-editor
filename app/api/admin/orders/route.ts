@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url)
     const page = parseInt(searchParams.get('page') || '1')
     const pageSize = parseInt(searchParams.get('pageSize') || '50')
-    const status = searchParams.get('status') || 'paid'
+    const status = searchParams.get('status') || ''
 
     // 使用 Service Role Key 绕过 RLS
     const supabaseAdmin = createClient(
@@ -38,27 +38,36 @@ export async function GET(req: NextRequest) {
         product_name,
         product_id,
         amount,
+        credits_amount,
         payment_method,
         status,
         created_at,
         updated_at
       `)
-      .eq('status', status)
       .order('created_at', { ascending: false })
       .range((page - 1) * pageSize, page * pageSize - 1)
+
+    if (status) {
+      query = query.eq('status', status)
+    }
 
     const { data: orders, error: ordersError } = await query
 
     if (ordersError) {
       console.error('获取订单列表失败:', ordersError)
-      return NextResponse.json({ error: '获取订单列表失败', details: ordersError.message }, { status: 500 })
+      return NextResponse.json({ error: '获取订单列表失败，请稍后重试' }, { status: 500 })
     }
 
     // 获取订单总数（用于分页）
-    const { count: totalOrders, error: countError } = await supabaseAdmin
+    let countQuery = supabaseAdmin
       .from('orders')
       .select('*', { count: 'exact', head: true })
-      .eq('status', status)
+
+    if (status) {
+      countQuery = countQuery.eq('status', status)
+    }
+
+    const { count: totalOrders, error: countError } = await countQuery
 
     if (countError) {
       console.error('获取订单总数失败:', countError)
@@ -87,10 +96,11 @@ export async function GET(req: NextRequest) {
         product_name: order.product_name || '未知产品',
         product_id: order.product_id,
         amount: order.amount || 0,
+        credits_amount: order.credits_amount || 0,
         payment_method: order.payment_method,
         status: order.status,
         created_at: order.created_at,
-        paid_at: order.updated_at
+        updated_at: order.updated_at
       })) || [],
       pagination: {
         page,
@@ -101,10 +111,10 @@ export async function GET(req: NextRequest) {
       totalRevenue
     })
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('获取订单列表失败:', error)
     return NextResponse.json(
-      { error: '获取订单列表失败', details: error.message },
+      { error: '获取订单列表失败，请稍后重试' },
       { status: 500 }
     )
   }

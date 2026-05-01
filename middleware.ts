@@ -1,39 +1,6 @@
 import { updateSession } from "@/lib/supabase/middleware"
+import { applyCorsHeaders } from "@/lib/cors"
 import type { NextRequest } from "next/server"
-
-const ALLOWED_CORS_ORIGINS = new Set([
-  "https://shenxiang.school",
-  "https://www.shenxiang.school",
-  "https://api.shenxiang.school",
-  "http://localhost:3000",
-  "http://127.0.0.1:3000",
-])
-
-function applyCorsHeaders(response: Response, request: NextRequest) {
-  const origin = request.headers.get("origin")
-
-  if (origin && ALLOWED_CORS_ORIGINS.has(origin)) {
-    response.headers.set("Access-Control-Allow-Origin", origin)
-    response.headers.set("Access-Control-Allow-Credentials", "true")
-    response.headers.set("Vary", appendVary(response.headers.get("Vary"), "Origin"))
-  }
-
-  response.headers.set("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS")
-  response.headers.set(
-    "Access-Control-Allow-Headers",
-    request.headers.get("access-control-request-headers") ||
-      "Content-Type, Authorization, X-User-Id, X-Model",
-  )
-  response.headers.set("Access-Control-Max-Age", "86400")
-
-  return response
-}
-
-function appendVary(current: string | null, value: string) {
-  if (!current) return value
-  const parts = current.split(",").map((part) => part.trim().toLowerCase())
-  return parts.includes(value.toLowerCase()) ? current : `${current}, ${value}`
-}
 
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname

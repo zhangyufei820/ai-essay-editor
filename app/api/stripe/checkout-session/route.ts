@@ -1,19 +1,29 @@
 import { NextRequest, NextResponse } from "next/server"
 
 import { PRODUCTS } from "@/lib/products"
+import { applyRateLimit } from "@/lib/rate-limit"
 import { stripe } from "@/lib/stripe"
 
 type CheckoutSessionRequest = {
   productId?: string
+  userId?: string
 }
 
 export async function POST(request: NextRequest) {
   try {
+    const rateLimited = applyRateLimit(request, { keyPrefix: 'stripe-checkout', maxRequests: 10 })
+    if (rateLimited) return rateLimited
+
     const body = await request.json() as CheckoutSessionRequest
     const productId = typeof body.productId === "string" ? body.productId : ""
+    const userId = typeof body.userId === "string" ? body.userId : ""
 
     if (!productId) {
       return NextResponse.json({ error: "productId is required" }, { status: 400 })
+    }
+
+    if (!userId) {
+      return NextResponse.json({ error: "userId is required" }, { status: 400 })
     }
 
     if (!stripe) {
@@ -47,12 +57,16 @@ export async function POST(request: NextRequest) {
       ],
       mode: "payment",
       payment_method_types: ["card"],
+      client_reference_id: userId,
+      metadata: {
+        userId,
+        productId,
+      },
     })
 
     return NextResponse.json({ clientSecret: session.client_secret })
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Failed to create checkout session"
     console.error("[StripeCheckout] Session creation failed:", error)
-    return NextResponse.json({ error: message }, { status: 500 })
+    return NextResponse.json({ error: "Failed to create checkout session" }, { status: 500 })
   }
 }

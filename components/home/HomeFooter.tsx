@@ -26,7 +26,7 @@ const footerLinks = {
       { label: "帮助中心", href: "/help" },
       { label: "使用指南", href: "/help" },
       { label: "常见问题", href: "/help" },
-      { label: "联系我们", href: "/help" }
+      { label: "联系客服", href: "mailto:support@shenxiang.school" }
     ]
   },
   company: {
@@ -35,6 +35,7 @@ const footerLinks = {
       { label: "关于我们", href: "/about" },
       { label: "隐私政策", href: "/privacy" },
       { label: "服务条款", href: "/terms" },
+      { label: "退款政策", href: "/refund-policy" },
       { label: "用户协议", href: "/terms" }
     ]
   }
@@ -62,6 +63,12 @@ export function HomeFooter() {
               style={{ color: slateColors[500] }}
             >
               AI 驱动的智能学习平台，为每一位学生提供个性化的学习辅导体验。
+            </p>
+            <p
+              className="mt-3 text-xs leading-relaxed"
+              style={{ color: slateColors[500] }}
+            >
+              客服邮箱：support@shenxiang.school
             </p>
           </div>
 
@@ -122,6 +129,14 @@ export function HomeFooter() {
               style={{ color: slateColors[400] }}
             >
               服务条款
+            </Link>
+            <Link
+              href="/refund-policy"
+              prefetch={false}
+              className="text-sm transition-colors hover:text-brand-600"
+              style={{ color: slateColors[400] }}
+            >
+              退款政策
             </Link>
           </div>
         </div>

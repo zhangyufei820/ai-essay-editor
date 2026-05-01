@@ -88,6 +88,25 @@ export default function TermsPage() {
               <li>• 音乐创作：利用 AI 创作原创音乐</li>
               <li>• 其他相关 AI 教育服务</li>
             </ul>
+            <div className="mt-6 space-y-3" style={{ color: slateColors[600] }}>
+              <p>
+                付费服务的价格、积分数量、会员权益、模型消耗规则等，以
+                <Link href="/pricing" className="underline mx-1" style={{ color: brandColors[700] }}>
+                  价格方案
+                </Link>
+                页面和结账页实际展示为准。
+              </p>
+              <p>
+                支付成功后的权益到账，以订单状态以及账户内积分余额或会员状态为准。如支付成功但权益未到账，请保留订单号并联系 support@shenxiang.school。
+              </p>
+              <p>
+                退款规则、审核周期和到账时间以
+                <Link href="/refund-policy" className="underline mx-1" style={{ color: brandColors[700] }}>
+                  退款政策
+                </Link>
+                为准。
+              </p>
+            </div>
           </div>
         </section>
 
@@ -192,8 +211,9 @@ export default function TermsPage() {
             </div>
             <ul className="space-y-3" style={{ color: slateColors[600] }}>
               <li>• 我们不保证本服务将满足您的需求或期望</li>
-              <li>• 我们不保证本服务将 uninterrupted（不间断）、及时、安全或无错误</li>
+              <li>• 我们不保证本服务将始终不间断、及时、安全或无错误</li>
               <li>• 我们不保证通过本服务获得的任何信息或内容的准确性或完整性</li>
+              <li>• AI 输出内容仅供学习参考，可能存在错误、遗漏或不适用于特定场景，您需要自行判断和核验</li>
               <li>• 您应自行承担使用本服务的风险</li>
             </ul>
           </div>

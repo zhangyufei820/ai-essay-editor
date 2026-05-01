@@ -71,7 +71,25 @@ export async function GET(req: NextRequest) {
       ? new Set(todayActiveData.map(t => t.user_id)).size 
       : 0
 
-    // 5. 获取总营收 (已支付订单的金额总和)
+    // 5. 获取总订单数和已支付订单数
+    const { count: totalOrders, error: totalOrdersError } = await supabaseAdmin
+      .from('orders')
+      .select('*', { count: 'exact', head: true })
+
+    if (totalOrdersError) {
+      console.error('获取总订单数失败:', totalOrdersError)
+    }
+
+    const { count: paidOrders, error: paidOrdersError } = await supabaseAdmin
+      .from('orders')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'paid')
+
+    if (paidOrdersError) {
+      console.error('获取已支付订单数失败:', paidOrdersError)
+    }
+
+    // 6. 获取总营收 (已支付订单的金额总和)
     const { data: revenueData, error: revenueError } = await supabaseAdmin
       .from('orders')
       .select('amount')
@@ -85,7 +103,7 @@ export async function GET(req: NextRequest) {
       ? revenueData.reduce((sum, order) => sum + (order.amount || 0), 0)
       : 0
 
-    // 6. 获取今日营收 (今天已支付订单的金额总和)
+    // 7. 获取今日营收 (今天已支付订单的金额总和)
     const { data: todayRevenueData, error: todayRevenueError } = await supabaseAdmin
       .from('orders')
       .select('amount')
@@ -108,14 +126,16 @@ export async function GET(req: NextRequest) {
         todayNewUsers: todayNewUsers || 0,
         todayActiveUsers,
         totalRevenue,
-        todayRevenue
+        todayRevenue,
+        totalOrders: totalOrders || 0,
+        paidOrders: paidOrders || 0
       }
     })
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('获取统计数据失败:', error)
     return NextResponse.json(
-      { error: '获取统计数据失败', details: error.message },
+      { error: '获取统计数据失败，请稍后重试' },
       { status: 500 }
     )
   }

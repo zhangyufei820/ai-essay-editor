@@ -90,12 +90,28 @@ export default function PrivacyPage() {
                   <p>我们会自动收集您在使用服务过程中的行为数据，包括但不限于登录时间、功能使用情况、互动记录等。</p>
                 </div>
               </div>
+
+              <div className="flex items-start gap-3">
+                <Lock className="w-5 h-5 mt-1 shrink-0" style={{ color: brandColors[600] }} />
+                <div>
+                  <h3 className="font-semibold mb-1" style={{ color: slateColors[800] }}>订单与支付状态</h3>
+                  <p>当您购买积分、会员或其他付费服务时，我们会记录订单号、商品类型、支付状态、权益到账状态等必要信息。</p>
+                </div>
+              </div>
               
               <div className="flex items-start gap-3">
                 <Lock className="w-5 h-5 mt-1 shrink-0" style={{ color: brandColors[600] }} />
                 <div>
                   <h3 className="font-semibold mb-1" style={{ color: slateColors[800] }}>设备信息</h3>
                   <p>我们可能会收集您的设备信息，包括设备类型、操作系统、浏览器类型等，以优化服务体验。</p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3">
+                <UserCheck className="w-5 h-5 mt-1 shrink-0" style={{ color: brandColors[600] }} />
+                <div>
+                  <h3 className="font-semibold mb-1" style={{ color: slateColors[800] }}>客服沟通记录</h3>
+                  <p>当您通过邮件、电话或帮助中心联系我们时，我们可能会保存沟通内容、处理进度和反馈结果，用于解决问题和改进服务。</p>
                 </div>
               </div>
             </div>
@@ -111,6 +127,9 @@ export default function PrivacyPage() {
             <ul className="space-y-4" style={{ color: slateColors[600] }}>
               <li>• 提供、维护和改进我们的服务</li>
               <li>• 处理您的注册和登录请求</li>
+              <li>• 处理订单、核对支付状态、完成积分到账或会员权益开通</li>
+              <li>• 提供客服支持、处理退款申请和权益异常反馈</li>
+              <li>• 进行必要的安全风控、异常登录识别和滥用防范</li>
               <li>• 向您推送更新、优惠活动等信息</li>
               <li>• 响应您的咨询和反馈</li>
               <li>• 分析用户行为，优化产品体验</li>

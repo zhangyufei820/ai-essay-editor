@@ -3,16 +3,30 @@
 
 import * as Sentry from '@sentry/nextjs';
 
-// 检查 DSN 是否配置
-const dsn = process.env.SENTRY_DSN || process.env.NEXT_PUBLIC_SENTRY_DSN;
-if (!dsn || dsn.includes('examplePublicKey') || dsn.includes('o0.ingest.sentry.io')) {
+function isUsableSentryDsn(value: string | undefined) {
+  if (!value) return false
+
+  const normalized = value.trim().toLowerCase()
+  const placeholderTokens = ['example', 'placeholder', 'your_', 'your-', 'sentry_dsn', 'o0.ingest.sentry.io']
+  if (placeholderTokens.some((token) => normalized.includes(token))) return false
+
+  try {
+    const parsed = new URL(value)
+    return parsed.protocol === 'https:' && parsed.username.length > 0 && parsed.hostname.length > 0
+  } catch {
+    return false
+  }
+}
+
+// 服务端只读取服务端 DSN，避免把服务端密钥放入客户端公开变量。
+const dsn = process.env.SENTRY_DSN;
+if (!isUsableSentryDsn(dsn)) {
   // DSN 未配置或仍为占位符，跳过 Sentry 初始化
   if (process.env.NODE_ENV === 'development') {
     console.log('[Sentry] DSN not configured, skipping initialization')
   }
 } else {
   Sentry.init({
-    // ⚠️ 请替换为真实的 Sentry DSN
     dsn: dsn,
     
     // 环境

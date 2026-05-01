@@ -6,22 +6,15 @@
 
 'use client'
 
-import { useEffect } from 'react'
 import Link from 'next/link'
-import { Home, RefreshCw, Phone, MessageCircle } from 'lucide-react'
+import { Home, RefreshCw, Phone, MessageCircle, LifeBuoy } from 'lucide-react'
 
 export default function Error({
-  error,
   reset,
 }: {
   error: Error & { digest?: string }
   reset: () => void
 }) {
-  useEffect(() => {
-    // 记录错误到控制台（开发环境）
-    console.error('页面错误:', error)
-  }, [error])
-
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-4 text-center bg-white">
       {/* 错误图标 */}
@@ -51,7 +44,7 @@ export default function Error({
 
       {/* 描述 */}
       <p className="text-slate-500 mb-8 max-w-md">
-        服务器遇到了一些问题，请稍后再试。
+        当前页面暂时无法打开，请先尝试重新加载。
         <br />
         如果问题持续存在，请联系客服。
       </p>
@@ -71,6 +64,13 @@ export default function Error({
         >
           <Home className="w-4 h-4" />
           返回首页
+          </Link>
+        <Link
+          href="/pricing"
+          className="inline-flex items-center gap-2 px-5 py-2.5 bg-white text-slate-700 rounded-xl border border-slate-200 hover:bg-slate-50 transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"
+        >
+          <LifeBuoy className="w-4 h-4" />
+          访问帮助页
         </Link>
       </div>
 
@@ -88,24 +88,17 @@ export default function Error({
           <span className="text-slate-300 hidden sm:inline">|</span>
           <div className="flex items-center gap-1.5 text-slate-600">
             <MessageCircle className="w-4 h-4" aria-hidden="true" />
-            <span>微信扫码咨询</span>
+            <span>联系客服咨询</span>
           </div>
         </div>
-        {/* 微信二维码占位 */}
+        {/* 客服二维码占位 */}
         <div className="mt-2 p-3 bg-slate-50 rounded-lg border border-slate-200">
           <div className="w-24 h-24 bg-slate-200 rounded flex items-center justify-center text-slate-400 text-xs">
-            微信二维码
+            联系客服
           </div>
-          <p className="text-xs text-slate-400 mt-2">微信扫码添加客服</p>
+          <p className="text-xs text-slate-400 mt-2">可补充真实客服二维码</p>
         </div>
       </section>
-
-      {/* 错误 ID（仅开发环境显示） */}
-      {error.digest && (
-        <p className="mt-6 text-xs text-slate-300">
-          错误 ID: {error.digest}
-        </p>
-      )}
     </div>
   )
 }

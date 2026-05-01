@@ -1,4 +1,5 @@
 import Image from "next/image"
+import Link from "next/link"
 
 export function Footer() {
   return (
@@ -24,24 +25,24 @@ export function Footer() {
             <h3 className="font-semibold mb-4">产品</h3>
             <ul className="space-y-2 text-sm text-muted-foreground">
               <li>
-                <a href="#features" className="hover:text-foreground transition-colors">
+                <Link href="/ai-writing" className="hover:text-foreground transition-colors">
                   核心功能
-                </a>
+                </Link>
               </li>
               <li>
-                <a href="#writers" className="hover:text-foreground transition-colors">
+                <Link href="/essay" className="hover:text-foreground transition-colors">
                   大师风格
-                </a>
+                </Link>
               </li>
               <li>
-                <a href="#process" className="hover:text-foreground transition-colors">
+                <Link href="/chat?agent=standard" className="hover:text-foreground transition-colors">
                   批改流程
-                </a>
+                </Link>
               </li>
               <li>
-                <a href="#pricing" className="hover:text-foreground transition-colors">
+                <Link href="/pricing" className="hover:text-foreground transition-colors">
                   价格方案
-                </a>
+                </Link>
               </li>
             </ul>
           </div>
@@ -50,29 +51,53 @@ export function Footer() {
             <h3 className="font-semibold mb-4">支持</h3>
             <ul className="space-y-2 text-sm text-muted-foreground">
               <li>
-                <a href="/help" className="hover:text-foreground transition-colors">
+                <Link href="/help" className="hover:text-foreground transition-colors">
                   帮助中心
-                </a>
+                </Link>
               </li>
               <li>
-                <a href="/help" className="hover:text-foreground transition-colors">
+                <Link href="/help" className="hover:text-foreground transition-colors">
                   使用指南
-                </a>
+                </Link>
               </li>
               <li>
-                <a href="/help" className="hover:text-foreground transition-colors">
+                <Link href="/help" className="hover:text-foreground transition-colors">
                   常见问题
-                </a>
+                </Link>
               </li>
               <li>
-                <a href="/help" className="hover:text-foreground transition-colors">
+                <Link href="mailto:support@shenxiang.school" className="hover:text-foreground transition-colors">
                   联系我们
-                </a>
+                </Link>
               </li>
               <li>
-                <a href="/refund-policy" className="hover:text-foreground transition-colors">
+                <Link href="/refund-policy" className="hover:text-foreground transition-colors">
                   退款政策
-                </a>
+                </Link>
+              </li>
+            </ul>
+            <p className="mt-4 text-xs text-muted-foreground">
+              客服邮箱：support@shenxiang.school
+            </p>
+          </div>
+
+          <div>
+            <h3 className="font-semibold mb-4">法务</h3>
+            <ul className="space-y-2 text-sm text-muted-foreground">
+              <li>
+                <Link href="/privacy" className="hover:text-foreground transition-colors">
+                  隐私政策
+                </Link>
+              </li>
+              <li>
+                <Link href="/terms" className="hover:text-foreground transition-colors">
+                  服务条款
+                </Link>
+              </li>
+              <li>
+                <Link href="/refund-policy" className="hover:text-foreground transition-colors">
+                  退款政策
+                </Link>
               </li>
             </ul>
           </div>

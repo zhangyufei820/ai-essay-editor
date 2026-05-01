@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
-import { PRODUCTS, requiresMembership, hasActiveMembership } from "@/lib/products"; 
+import { PRODUCTS, requiresMembership, hasActiveMembership, resolveMembershipStatus, getProductCredits, getProductPriceInCents } from "@/lib/products"; 
 import { createClient } from '@supabase/supabase-js'
+import { applyRateLimit } from "@/lib/rate-limit";
 
 // 签名算法
 function gen_sign(params: any, appSecret: string) {
@@ -39,10 +40,15 @@ function getBaseUrl(request: Request): string {
 
 export async function GET(request: Request) {
   try {
+    const rateLimited = applyRateLimit(request, { keyPrefix: 'xunhupay-create', maxRequests: 10 });
+    if (rateLimited) return rateLimited;
+
     const APP_ID = process.env.XUNHUPAY_APPID;
     const APP_SECRET = process.env.XUNHUPAY_APPSECRET;
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     
-    if (!APP_ID || !APP_SECRET) {
+    if (!APP_ID || !APP_SECRET || !supabaseUrl || !serviceRoleKey) {
       console.error("❌ 支付配置缺失");
       return NextResponse.json({ error: "支付服务未配置" }, { status: 503 });
     }
@@ -68,18 +74,17 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "产品不存在" }, { status: 404 });
     }
 
-    // 根据计费周期计算价格
-    const isSubscription = ["basic", "pro", "premium"].includes(productId);
-    const annualDiscount = 0.8;
-    let finalPriceInCents = product.priceInCents;
-    if (billing === "annual" && isSubscription) {
-      finalPriceInCents = Math.round(product.priceInCents * 12 * annualDiscount);
+    // 根据服务端产品目录计算价格，前端传参不能决定金额
+    const finalPriceInCents = getProductPriceInCents(productId, billing);
+    if (finalPriceInCents === null) {
+      return NextResponse.json({ error: "产品不存在" }, { status: 404 });
     }
+    const creditsAmount = getProductCredits(productId);
 
     // 初始化 Supabase 客户端
     const supabaseAdmin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
+      supabaseUrl,
+      serviceRoleKey
     );
 
     // 检查产品是否需要会员资格
@@ -87,20 +92,20 @@ export async function GET(request: Request) {
       // 查询用户会员状态
       const { data: userCredits, error: creditsError } = await supabaseAdmin
         .from('user_credits')
-        .select('is_pro, membership_status')
+        .select('is_pro')
         .eq('user_id', userId)
-        .single();
+        .maybeSingle();
 
       if (creditsError) {
         console.error("❌ 查询用户会员状态失败:", creditsError);
         return NextResponse.json({ 
           error: "无法验证会员状态",
-          details: "请先登录或联系客服"
+          details: "请先登录后重试"
         }, { status: 500 });
       }
 
       // 检查用户是否有有效会员
-      const membershipStatus = userCredits?.membership_status || (userCredits?.is_pro ? 'pro' : null);
+      const membershipStatus = resolveMembershipStatus(userCredits);
       
       if (!hasActiveMembership(membershipStatus)) {
         console.log("❌ 用户无会员资格，无法购买积分充值包");
@@ -128,6 +133,8 @@ export async function GET(request: Request) {
         product_id: productId,
         product_name: product.name,
         amount: finalPriceInCents / 100,
+        credits_amount: creditsAmount,
+        billing_cycle: billing,
         status: 'pending',
         payment_method: 'xunhupay',
       });
@@ -172,21 +179,20 @@ export async function GET(request: Request) {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("❌ 迅虎返回错误:", response.status, errorText);
+      console.error("❌ 迅虎返回错误:", response.status, errorText.slice(0, 300));
       return NextResponse.json({ 
-        error: `迅虎支付返回错误: ${response.status}`,
-        details: errorText
+        error: "迅虎支付请求失败"
       }, { status: 500 });
     }
 
     const data = await response.json();
-    console.log("✅ 迅虎返回:", data);
+    console.log("✅ 迅虎返回:", { errcode: data?.errcode, hasUrl: Boolean(data?.url || data?.url_qrcode) });
 
     // 4. 检查返回结果
     if (data.errcode !== 0) {
       console.error("❌ 迅虎支付错误:", data);
       return NextResponse.json({ 
-        error: data.errmsg || "支付创建失败",
+        error: "支付创建失败",
         code: data.errcode
       }, { status: 500 });
     }
@@ -207,6 +213,6 @@ export async function GET(request: Request) {
 
   } catch (error: any) {
     console.error("❌ API Error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: "支付创建失败" }, { status: 500 });
   }
 }

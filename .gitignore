@@ -61,3 +61,5 @@ logs
 .superpowers/
 .claude/deployment-memory.md
 .claude/scheduled_tasks.lock
+# Local Codex memory / agent notes (not part of website release)
+.Codex/memory/*.md

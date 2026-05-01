@@ -4,6 +4,7 @@ export interface UserCredits {
   credits: number
   is_pro?: boolean
   total_earned?: number
+  total_spent?: number
 }
 
 export interface CreditTransaction {
@@ -14,21 +15,72 @@ export interface CreditTransaction {
   created_at: string
 }
 
+export interface CreditSummary {
+  total_earned: number
+  total_spent: number
+}
+
+export function summarizeCreditTransactions(
+  transactions: Array<Pick<CreditTransaction, 'amount'> | null | undefined>
+): CreditSummary {
+  return transactions.reduce<CreditSummary>((summary, transaction) => {
+    const amount = transaction?.amount || 0
+    if (amount > 0) {
+      summary.total_earned += amount
+    } else if (amount < 0) {
+      summary.total_spent += Math.abs(amount)
+    }
+    return summary
+  }, { total_earned: 0, total_spent: 0 })
+}
+
 // 🔥 使用 Service Role Key 创建管理员客户端（绕过所有 RLS）
 function getSupabaseAdmin() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !key) {
+    throw new Error("缺少 Supabase 配置")
+  }
+  return createClient(url, key)
+}
+
+async function loadCreditSummary(userId: string, currentBalance: number): Promise<CreditSummary> {
+  const supabase = getSupabaseAdmin()
+  const { data, error } = await supabase
+    .from("credit_transactions")
+    .select("amount")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: true })
+
+  if (error) {
+    console.error("[积分系统] 获取累计积分失败:", error)
+    return {
+      total_earned: currentBalance,
+      total_spent: 0,
+    }
+  }
+
+  const summary = summarizeCreditTransactions(data || [])
+
+  // 兼容历史老账号：如果没有任何交易流水，把当前余额视为累计获得
+  if ((data || []).length === 0 && currentBalance > 0) {
+    summary.total_earned = currentBalance
+  }
+
+  return summary
 }
 
 // 获取用户积分
-export async function getUserCredits(userId: string): Promise<UserCredits | null> {
+export async function getUserCredits(
+  userId: string,
+  options: { includeTotals?: boolean } = {},
+): Promise<UserCredits | null> {
   const supabase = getSupabaseAdmin()
+  const includeTotals = options.includeTotals ?? false
 
   const { data, error } = await supabase
     .from("user_credits")
-    .select("credits, is_pro, total_earned")
+    .select("credits, is_pro")
     .eq("user_id", userId)
     .maybeSingle()
 
@@ -41,8 +93,8 @@ export async function getUserCredits(userId: string): Promise<UserCredits | null
     console.log(`[积分系统] 用户 ${userId} 无积分记录，自动初始化 1000 积分`)
     const { data: created, error: createError } = await supabase
       .from("user_credits")
-      .upsert({ user_id: userId, credits: 1000, is_pro: false, total_earned: 1000 })
-      .select("credits, is_pro, total_earned")
+      .upsert({ user_id: userId, credits: 1000, is_pro: false })
+      .select("credits, is_pro")
       .single()
 
     if (createError) {
@@ -50,10 +102,26 @@ export async function getUserCredits(userId: string): Promise<UserCredits | null
       return null
     }
 
-    return created
+    if (!includeTotals) {
+      return created
+    }
+
+    return {
+      ...created,
+      total_earned: 1000,
+      total_spent: 0,
+    }
   }
 
-  return data
+  if (!includeTotals) {
+    return data
+  }
+
+  const summary = await loadCreditSummary(userId, data.credits || 0)
+  return {
+    ...data,
+    ...summary,
+  }
 }
 
 // 记录积分交易
@@ -64,8 +132,7 @@ async function recordTransaction(
   type: string,
   description: string,
   balanceBefore: number,
-  balanceAfter: number,
-  referenceId?: string
+  balanceAfter: number
 ): Promise<void> {
   try {
     await supabase.from("credit_transactions").insert({
@@ -73,7 +140,6 @@ async function recordTransaction(
       amount: amount,
       type: type,
       description: description,
-      reference_id: referenceId || null,
       balance_before: balanceBefore,
       balance_after: balanceAfter,
     })
@@ -92,6 +158,9 @@ export async function spendCredits(
   referenceId?: string
 ): Promise<boolean> {
   const supabase = getSupabaseAdmin()
+  if (referenceId) {
+    console.log(`[积分系统] 扣费参考ID: ${referenceId}`)
+  }
 
   // 检查积分是否足够
   const credits = await getUserCredits(userId)
@@ -131,7 +200,7 @@ export async function spendCredits(
   }
 
   // 记录交易
-  await recordTransaction(supabase, userId, -amount, type, description, balanceBefore, balanceAfter, referenceId)
+  await recordTransaction(supabase, userId, -amount, type, description, balanceBefore, balanceAfter)
   
   console.log(`[积分系统] 用户 ${userId} 消费 ${amount} 积分，余额: ${balanceAfter}`)
   return true
@@ -146,6 +215,9 @@ export async function addCredits(
   referenceId?: string,
 ): Promise<boolean> {
   const supabase = getSupabaseAdmin()
+  if (referenceId) {
+    console.log(`[积分系统] 入账参考ID: ${referenceId}`)
+  }
 
   let credits = await getUserCredits(userId)
   let balanceBefore = 0
@@ -194,7 +266,7 @@ export async function addCredits(
   }
 
   // 记录交易
-  await recordTransaction(supabase, userId, amount, type, description, balanceBefore, balanceAfter, referenceId)
+  await recordTransaction(supabase, userId, amount, type, description, balanceBefore, balanceAfter)
 
   console.log(`[积分系统] 用户 ${userId} 成功增加 ${amount} 积分，当前积分: ${balanceAfter}`)
   return true

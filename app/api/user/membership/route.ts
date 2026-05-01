@@ -8,6 +8,7 @@
 
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
+import { resolveMembershipStatus } from '@/lib/products'
 
 export const dynamic = 'force-dynamic'
 
@@ -105,11 +106,11 @@ async function checkMembership(userId: string) {
   let isPro = false, hasHighCredits = false
   let membershipStatus: string | null = null
   const { data: creditsData, error: creditsError } = await supabaseAdmin
-    .from('user_credits').select('credits, is_pro, membership_status, user_id').eq('user_id', userId).single()
+    .from('user_credits').select('credits, is_pro, user_id').eq('user_id', userId).maybeSingle()
   if (!creditsError && creditsData) {
     if (creditsData.is_pro === true) isPro = true
     if (creditsData.credits >= 1000) hasHighCredits = true
-    if (creditsData.membership_status) membershipStatus = creditsData.membership_status
+    membershipStatus = resolveMembershipStatus(creditsData)
   }
 
   const isPaidMember = isPro || orders.length > 0 || hasHighCredits
@@ -141,7 +142,8 @@ export async function GET(req: NextRequest) {
   try {
     return await checkMembership(userId)
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    const status = error?.message === '缺少 Supabase 配置' ? 503 : 500
+    return NextResponse.json({ error: status === 503 ? '会员服务未配置' : '查询会员状态失败' }, { status })
   }
 }
 
@@ -159,6 +161,7 @@ export async function POST(req: NextRequest) {
     if (!userId) return NextResponse.json({ error: '缺少 userId' }, { status: 400 })
     return await checkMembership(userId)
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    const status = error?.message === '缺少 Supabase 配置' ? 503 : 500
+    return NextResponse.json({ error: status === 503 ? '会员服务未配置' : '查询会员状态失败' }, { status })
   }
 }

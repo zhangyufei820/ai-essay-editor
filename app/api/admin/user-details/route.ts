@@ -76,8 +76,6 @@ export async function GET(req: NextRequest) {
           user_id: user.user_id,
           credits: user.credits || 0,
           is_pro: user.is_pro || false,
-          membership_status: user.membership_status || 'free',
-          created_at: user.created_at,
           updated_at: user.updated_at
         },
         transactions: transactions || [],
@@ -90,10 +88,10 @@ export async function GET(req: NextRequest) {
       }
     })
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('获取用户详情失败:', error)
     return NextResponse.json(
-      { error: '获取用户详情失败', details: error.message },
+      { error: '获取用户详情失败，请稍后重试' },
       { status: 500 }
     )
   }

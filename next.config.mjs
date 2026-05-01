@@ -12,8 +12,9 @@ const nextConfig = {
   // 构建配置
   // ============================================
   typescript: {
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: false,
   },
+  poweredByHeader: false,
   output: 'standalone',
   ...(deploymentVersion
     ? {
@@ -109,35 +110,55 @@ const nextConfig = {
   // 安全头
   // ============================================
   async headers() {
+    const securityHeaders = [
+      {
+        key: 'X-DNS-Prefetch-Control',
+        value: 'on',
+      },
+      {
+        key: 'X-Content-Type-Options',
+        value: 'nosniff',
+      },
+      {
+        key: 'X-Frame-Options',
+        value: 'DENY',
+      },
+      {
+        key: 'Referrer-Policy',
+        value: 'strict-origin-when-cross-origin',
+      },
+      {
+        key: 'Permissions-Policy',
+        value: 'camera=(), microphone=(), geolocation=(), payment=(self)',
+      },
+      {
+        key: 'Strict-Transport-Security',
+        value: 'max-age=31536000; includeSubDomains; preload',
+      },
+      {
+        key: 'Content-Security-Policy',
+        value: [
+          "default-src 'self'",
+          "base-uri 'self'",
+          "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://cdn.authing.co https://cdn.shenxiang.school https://static.cloudflareinsights.com https://js.stripe.com",
+          "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdn.authing.co",
+          "img-src 'self' data: blob: https:",
+          "font-src 'self' data: https://cdn.jsdelivr.net https://cdn.authing.co",
+          "connect-src 'self' https://shenxiang.school https://www.shenxiang.school https://api.shenxiang.school https://cdn.shenxiang.school https://*.supabase.co wss://*.supabase.co https://core.authing.cn https://*.authing.cn https://files.authing.co https://api.xunhupay.com https://*.stripe.com https://api.dify.ai https://www.vivaapi.cn wss:",
+          "media-src 'self' data: blob: https:",
+          "frame-src 'self' https://js.stripe.com https://hooks.stripe.com",
+          "object-src 'none'",
+          "frame-ancestors 'none'",
+          "form-action 'self' https://api.xunhupay.com https://*.stripe.com",
+          "upgrade-insecure-requests",
+        ].join('; '),
+      },
+    ]
+
     return [
       {
         source: '/:path*',
-        headers: [
-          {
-            key: 'X-DNS-Prefetch-Control',
-            value: 'on',
-          },
-          {
-            key: 'X-Content-Type-Options',
-            value: 'nosniff',
-          },
-          {
-            key: 'X-Frame-Options',
-            value: 'DENY',
-          },
-          {
-            key: 'Referrer-Policy',
-            value: 'strict-origin-when-cross-origin',
-          },
-          {
-            key: 'Permissions-Policy',
-            value: 'camera=(), microphone=(), geolocation=()',
-          },
-          {
-            key: 'Content-Security-Policy',
-            value: "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdn.authing.co https://cdn.shenxiang.school https://rnujdnmxufmzgjvmddla.supabase.co https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdn.authing.co; img-src 'self' data: https: blob:; object-src 'self' https:; connect-src 'self' https://core.authing.cn https://*.authing.cn https://rnujdnmxufmzgjvmddla.supabase.co https://api.xunhupay.com https://cdn.shenxiang.school https://files.authing.co https://api.shenxiang.school wss:; font-src 'self' data: https://cdn.jsdelivr.net; frame-ancestors 'none'",
-          },
-        ],
+        headers: securityHeaders,
       },
       // 静态资源缓存
       {
@@ -189,8 +210,12 @@ export default withSentryConfig(nextConfig, {
   widenClientFileUpload: true,
   // 在生产环境自动删除 console
   transpileClientSDK: true,
-  // 自动 treeshake Sentry 导入
-  automaticVercelMonitors: true,
+  // Next.js 16 + Turbopack 当前构建不会生成 Pages Router manifest。
+  // 禁用生产编译后 sourcemap/release 钩子，避免 Sentry 读取 pages-manifest.json 失败。
+  useRunAfterProductionCompileHook: false,
+  sourcemaps: {
+    disable: true,
+  },
 }, {
   // 报告所有 metadata 项以获得更好的调试
   tunnelRoute: '/monitoring',

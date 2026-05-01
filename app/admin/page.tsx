@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
-import { Users, CreditCard, BarChart3, Lock, Eye, EyeOff, RefreshCw, Search, DollarSign, TrendingUp, UserCheck, Activity } from "lucide-react"
+import { Users, CreditCard, BarChart3, Lock, Eye, EyeOff, RefreshCw, Search, DollarSign, TrendingUp, UserCheck, Activity, AlertCircle } from "lucide-react"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet"
 import { Badge } from "@/components/ui/badge"
 
@@ -16,14 +16,15 @@ interface StatsData {
   todayActiveUsers: number
   totalRevenue: number
   todayRevenue: number
+  totalOrders: number
+  paidOrders: number
 }
 
 interface UserData {
   user_id: string
   credits: number
   is_pro: boolean
-  membership_status: string
-  created_at: string
+  updated_at: string
   lastActiveAt: string
   transactionCount: number
 }
@@ -34,10 +35,11 @@ interface OrderData {
   user_id: string
   product_name: string
   amount: number
-  credits: number
+  credits_amount: number
+  payment_method?: string
   status: string
   created_at: string
-  paid_at: string
+  updated_at: string
 }
 
 interface UserDetails {
@@ -45,8 +47,6 @@ interface UserDetails {
     user_id: string
     credits: number
     is_pro: boolean
-    membership_status: string
-    created_at: string
     updated_at: string
   }
   transactions: Array<{
@@ -70,6 +70,8 @@ export default function AdminPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [activeTab, setActiveTab] = useState("overview")
   const [loading, setLoading] = useState(false)
+  const [errorMessage, setErrorMessage] = useState("")
+  const [userDetailsLoading, setUserDetailsLoading] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   
   // 数据状态
@@ -79,7 +81,9 @@ export default function AdminPage() {
     todayNewUsers: 0,
     todayActiveUsers: 0,
     totalRevenue: 0,
-    todayRevenue: 0
+    todayRevenue: 0,
+    totalOrders: 0,
+    paidOrders: 0
   })
   
   const [users, setUsers] = useState<UserData[]>([])
@@ -95,8 +99,7 @@ export default function AdminPage() {
       // 验证 token
       fetch('/api/admin/verify', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token })
+        headers: { 'Authorization': `Bearer ${token}` }
       })
       .then(res => res.json())
       .then(data => {
@@ -117,6 +120,7 @@ export default function AdminPage() {
   // 获取所有数据
   const fetchAllData = async () => {
     setLoading(true)
+    setErrorMessage("")
     try {
       await Promise.all([
         fetchStats(),
@@ -125,6 +129,7 @@ export default function AdminPage() {
       ])
     } catch (error) {
       console.error('获取数据失败:', error)
+      setErrorMessage("后台数据加载失败，请稍后重试；如果持续失败，请检查服务日志、环境变量和 Supabase 连接状态。")
     } finally {
       setLoading(false)
     }
@@ -139,13 +144,26 @@ export default function AdminPage() {
       const response = await fetch('/api/admin/stats', {
         headers: { 'Authorization': `Bearer ${token}` }
       })
-      
-      if (response.ok) {
-        const data = await response.json()
-        setStats(data.data)
+
+      if (!response.ok) {
+        throw new Error("stats request failed")
       }
+      
+      const data = await response.json()
+      setStats({
+        totalUsers: data.data?.totalUsers ?? 0,
+        memberUsers: data.data?.memberUsers ?? 0,
+        todayNewUsers: data.data?.todayNewUsers ?? 0,
+        todayActiveUsers: data.data?.todayActiveUsers ?? 0,
+        totalRevenue: data.data?.totalRevenue ?? 0,
+        todayRevenue: data.data?.todayRevenue ?? 0,
+        totalOrders: data.data?.totalOrders ?? 0,
+        paidOrders: data.data?.paidOrders ?? 0,
+      })
     } catch (error) {
       console.error('获取统计数据失败:', error)
+      setErrorMessage("统计数据加载失败，请刷新重试；仍失败时请检查后台接口和数据库连接。")
+      throw error
     }
   }
   
@@ -163,13 +181,17 @@ export default function AdminPage() {
       const response = await fetch(url.toString(), {
         headers: { 'Authorization': `Bearer ${token}` }
       })
-      
-      if (response.ok) {
-        const data = await response.json()
-        setUsers(data.data)
+
+      if (!response.ok) {
+        throw new Error("users request failed")
       }
+      
+      const data = await response.json()
+      setUsers(Array.isArray(data.data) ? data.data : [])
     } catch (error) {
       console.error('获取用户列表失败:', error)
+      setErrorMessage("用户列表加载失败，请刷新重试；搜索无结果时可清空关键词后再试。")
+      throw error
     }
   }
   
@@ -182,18 +204,26 @@ export default function AdminPage() {
       const response = await fetch('/api/admin/orders', {
         headers: { 'Authorization': `Bearer ${token}` }
       })
-      
-      if (response.ok) {
-        const data = await response.json()
-        setOrders(data.data)
+
+      if (!response.ok) {
+        throw new Error("orders request failed")
       }
+      
+      const data = await response.json()
+      setOrders(Array.isArray(data.data) ? data.data : [])
     } catch (error) {
       console.error('获取订单列表失败:', error)
+      setErrorMessage("订单记录加载失败，请检查支付回调、订单表和后台接口日志。")
+      throw error
     }
   }
   
   // 获取用户详情
   const fetchUserDetails = async (userId: string) => {
+    setUserDetailsLoading(true)
+    setErrorMessage("")
+    setUserDetails(null)
+    setUserDetailsOpen(true)
     try {
       const token = localStorage.getItem('admin_token')
       if (!token) return
@@ -201,14 +231,18 @@ export default function AdminPage() {
       const response = await fetch(`/api/admin/user-details?userId=${userId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
-      
-      if (response.ok) {
-        const data = await response.json()
-        setUserDetails(data.data)
-        setUserDetailsOpen(true)
+
+      if (!response.ok) {
+        throw new Error("user details request failed")
       }
+      
+      const data = await response.json()
+      setUserDetails(data.data)
     } catch (error) {
       console.error('获取用户详情失败:', error)
+      setErrorMessage("用户详情加载失败，请确认用户 ID 是否存在，并检查积分、订单和交易流水接口。")
+    } finally {
+      setUserDetailsLoading(false)
     }
   }
   
@@ -232,6 +266,7 @@ export default function AdminPage() {
       if (data.success && data.token) {
         localStorage.setItem('admin_token', data.token)
         setIsAuthenticated(true)
+        setErrorMessage("")
         fetchAllData()
       } else {
         alert(data.error || '密码错误')
@@ -242,9 +277,20 @@ export default function AdminPage() {
     }
   }
   
+  const getOrderStatusLabel = (status: string) => {
+    const labels: Record<string, string> = {
+      paid: '已支付',
+      pending: '待支付',
+      failed: '支付失败',
+      cancelled: '已取消',
+      refunded: '已退款',
+    }
+    return labels[status] || status || '未知状态'
+  }
+
   // 格式化日期
-  const formatDate = (dateString: string) => {
-    if (!dateString) return '-'
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return '暂无数据'
     return new Date(dateString).toLocaleString('zh-CN')
   }
   
@@ -332,6 +378,23 @@ export default function AdminPage() {
 
         {/* 主要内容区域 - Tab导航 */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+          {errorMessage && (
+            <div className="flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <div>
+                <p className="font-medium">后台数据暂时不可用</p>
+                <p className="mt-1">{errorMessage}</p>
+              </div>
+            </div>
+          )}
+
+          {loading && (
+            <div className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+              <RefreshCw className="h-4 w-4 animate-spin" />
+              正在加载后台数据，请稍候...
+            </div>
+          )}
+
           <TabsList className="grid w-full grid-cols-4 lg:w-[600px]">
             <TabsTrigger value="overview" className="flex items-center gap-2">
               <BarChart3 className="w-4 h-4" />
@@ -396,8 +459,9 @@ export default function AdminPage() {
                   <CardContent className="pt-6">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm text-gray-600">今日新增</p>
-                        <p className="text-3xl font-bold text-orange-600">{stats.todayNewUsers}</p>
+                        <p className="text-sm text-gray-600">订单数量</p>
+                        <p className="text-3xl font-bold text-orange-600">{stats.totalOrders.toLocaleString()}</p>
+                        <p className="mt-1 text-xs text-gray-500">已支付 {stats.paidOrders.toLocaleString()} 单</p>
                       </div>
                       <Activity className="w-10 h-10 text-orange-500" />
                     </div>
@@ -478,7 +542,7 @@ export default function AdminPage() {
                       onClick={() => setActiveTab("users")}
                     >
                       <Users className="w-4 h-4 mr-2" />
-                      管理用户
+                      查看用户
                     </Button>
                     <Button 
                       variant="outline" 
@@ -496,6 +560,9 @@ export default function AdminPage() {
                       <BarChart3 className="w-4 h-4 mr-2" />
                       数据分析
                     </Button>
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                      运营排查建议：先复制订单号、用户 ID 和支付时间，再联系客服或检查支付回调日志。
+                    </div>
                   </CardContent>
                 </Card>
               </div>
@@ -545,10 +612,10 @@ export default function AdminPage() {
                     <table className="w-full">
                       <thead>
                         <tr className="border-b">
-                          <th className="text-left py-3 px-4">用户ID</th>
+                          <th className="text-left py-3 px-4">用户 ID</th>
                           <th className="text-left py-3 px-4">积分</th>
                           <th className="text-left py-3 px-4">会员状态</th>
-                          <th className="text-left py-3 px-4">注册时间</th>
+                          <th className="text-left py-3 px-4">最近更新</th>
                           <th className="text-left py-3 px-4">最后活跃</th>
                           <th className="text-left py-3 px-4">交易次数</th>
                           <th className="text-left py-3 px-4">操作</th>
@@ -564,7 +631,7 @@ export default function AdminPage() {
                                 {user.is_pro ? "会员" : "免费"}
                               </Badge>
                             </td>
-                            <td className="py-3 px-4 text-gray-600 text-sm">{formatDate(user.created_at)}</td>
+                            <td className="py-3 px-4 text-gray-600 text-sm">{formatDate(user.updated_at)}</td>
                             <td className="py-3 px-4 text-gray-600 text-sm">{formatDate(user.lastActiveAt)}</td>
                             <td className="py-3 px-4">{user.transactionCount}</td>
                             <td className="py-3 px-4">
@@ -584,7 +651,7 @@ export default function AdminPage() {
                   
                   {users.length === 0 && (
                     <div className="text-center py-8 text-gray-500">
-                      暂无用户数据
+                      {loading ? "正在加载用户数据..." : "暂无用户数据。可清空搜索关键词后刷新，或检查用户表是否有记录。"}
                     </div>
                   )}
                 </CardContent>
@@ -604,12 +671,14 @@ export default function AdminPage() {
                     <thead>
                       <tr className="border-b">
                         <th className="text-left py-3 px-4">订单号</th>
-                        <th className="text-left py-3 px-4">用户ID</th>
+                        <th className="text-left py-3 px-4">用户 ID</th>
                         <th className="text-left py-3 px-4">产品</th>
                         <th className="text-left py-3 px-4">金额</th>
                         <th className="text-left py-3 px-4">积分</th>
+                        <th className="text-left py-3 px-4">支付方式</th>
                         <th className="text-left py-3 px-4">状态</th>
-                        <th className="text-left py-3 px-4">时间</th>
+                        <th className="text-left py-3 px-4">创建时间</th>
+                        <th className="text-left py-3 px-4">支付/更新时间</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -619,13 +688,15 @@ export default function AdminPage() {
                           <td className="py-3 px-4 font-mono text-sm">{order.user_id.slice(0, 8)}...</td>
                           <td className="py-3 px-4">{order.product_name}</td>
                           <td className="py-3 px-4 font-semibold text-green-600">{formatAmount(order.amount)}</td>
-                          <td className="py-3 px-4">{order.credits}</td>
+                          <td className="py-3 px-4">{order.credits_amount}</td>
+                          <td className="py-3 px-4">{order.payment_method || '暂无数据'}</td>
                           <td className="py-3 px-4">
                             <Badge variant={order.status === 'paid' ? 'default' : 'secondary'}>
-                              {order.status === 'paid' ? '已支付' : order.status}
+                              {getOrderStatusLabel(order.status)}
                             </Badge>
                           </td>
                           <td className="py-3 px-4 text-gray-600 text-sm">{formatDate(order.created_at)}</td>
+                          <td className="py-3 px-4 text-gray-600 text-sm">{formatDate(order.updated_at)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -634,7 +705,7 @@ export default function AdminPage() {
                 
                 {orders.length === 0 && (
                   <div className="text-center py-8 text-gray-500">
-                    暂无订单数据
+                    {loading ? "正在加载订单数据..." : "暂无订单。若支付成功但未显示，请保留订单号、支付时间和用户 ID，并检查支付回调和订单状态同步。"}
                   </div>
                 )}
               </CardContent>
@@ -738,7 +809,20 @@ export default function AdminPage() {
             </SheetDescription>
           </SheetHeader>
           
-          {userDetails && (
+          {userDetailsLoading && (
+            <div className="mt-6 flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+              <RefreshCw className="h-4 w-4 animate-spin" />
+              正在加载用户详情...
+            </div>
+          )}
+
+          {!userDetailsLoading && !userDetails && (
+            <div className="mt-6 rounded-lg border border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
+              暂无用户详情。请重新打开用户详情，或检查用户 ID、积分流水和订单记录是否存在。
+            </div>
+          )}
+
+          {!userDetailsLoading && userDetails && (
             <div className="space-y-6">
               {/* 用户基本信息 */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -776,8 +860,8 @@ export default function AdminPage() {
               <div className="bg-gray-50 p-4 rounded-lg">
                 <p className="text-sm text-gray-600 mb-1">用户ID</p>
                 <p className="font-mono text-sm">{userDetails.user.user_id}</p>
-                <p className="text-sm text-gray-600 mt-4 mb-1">注册时间</p>
-                <p className="text-sm">{formatDate(userDetails.user.created_at)}</p>
+                <p className="text-sm text-gray-600 mt-4 mb-1">最近更新时间</p>
+                <p className="text-sm">{formatDate(userDetails.user.updated_at)}</p>
               </div>
               
               {/* 最近交易记录 */}
@@ -810,6 +894,9 @@ export default function AdminPage() {
                       ))}
                     </tbody>
                   </table>
+                  {userDetails.transactions.length === 0 && (
+                    <div className="py-6 text-center text-sm text-gray-500">暂无交易记录</div>
+                  )}
                 </div>
               </div>
               
@@ -835,7 +922,7 @@ export default function AdminPage() {
                           <td className="py-2 px-4 font-semibold">{formatAmount(order.amount)}</td>
                           <td className="py-2 px-4">
                             <Badge variant={order.status === 'paid' ? 'default' : 'secondary'}>
-                              {order.status === 'paid' ? '已支付' : order.status}
+                              {getOrderStatusLabel(order.status)}
                             </Badge>
                           </td>
                           <td className="py-2 px-4 text-sm text-gray-600">{formatDate(order.created_at)}</td>
@@ -843,6 +930,9 @@ export default function AdminPage() {
                       ))}
                     </tbody>
                   </table>
+                  {userDetails.orders.length === 0 && (
+                    <div className="py-6 text-center text-sm text-gray-500">暂无订单</div>
+                  )}
                 </div>
               </div>
             </div>

@@ -186,4 +186,31 @@ export function createRateLimitResponse(retryAfter: number): Response {
   );
 }
 
+export type RateLimitOptions = {
+  keyPrefix?: string
+  maxRequests?: number
+  windowMs?: number
+}
+
+/**
+ * 在 API route 顶部调用的统一限流入口。
+ */
+export function applyRateLimit(
+  request: Request,
+  {
+    keyPrefix = 'post',
+    maxRequests = 30,
+    windowMs = 60 * 1000,
+  }: RateLimitOptions = {}
+): Response | null {
+  const ip = getClientIP(request)
+  const result = rateLimiter.check(`${keyPrefix}:${ip}`, maxRequests, windowMs)
+
+  if (!result.allowed) {
+    return createRateLimitResponse(result.retryAfter || 60)
+  }
+
+  return null
+}
+
 export default rateLimiter;

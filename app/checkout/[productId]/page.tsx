@@ -1,7 +1,7 @@
 "use client"
 
 import { notFound, useRouter, useSearchParams } from "next/navigation"
-import { PRODUCTS, requiresMembership, hasActiveMembership } from "@/lib/products"
+import { PRODUCTS, requiresMembership, hasActiveMembership, resolveMembershipStatus } from "@/lib/products"
 import { ArrowLeft, Loader2, LogIn, CheckCircle2, ExternalLink, AlertTriangle, Crown } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -43,15 +43,15 @@ function CheckoutFlow({ productId }: { productId: string }) {
           setUser(supabaseUser)
 
           // 查询用户会员状态
-          if (supabase) {
-            const { data: userCredits } = await supabase
-              .from('user_credits')
-              .select('is_pro, membership_status')
-              .eq('user_id', supabaseUser.id)
-              .single()
+            if (supabase) {
+              const { data: userCredits } = await supabase
+                .from('user_credits')
+                .select('is_pro')
+                .eq('user_id', supabaseUser.id)
+                .maybeSingle()
 
             if (userCredits) {
-              const status = userCredits.membership_status || (userCredits.is_pro ? 'pro' : null)
+              const status = resolveMembershipStatus(userCredits)
               setMembershipStatus(status)
             }
           }

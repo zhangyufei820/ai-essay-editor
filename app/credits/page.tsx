@@ -20,7 +20,7 @@ export default async function CreditsPage() {
     redirect("/auth/login")
   }
 
-  const credits = await getUserCredits(user.id)
+  const credits = await getUserCredits(user.id, { includeTotals: true })
   const referralCode = await getUserReferralCode(user.id)
 
   const { data: referrals } = await supabase

@@ -97,8 +97,7 @@ export async function GET(req: NextRequest) {
           user_id: user.user_id,
           credits: user.credits || 0,
           is_pro: user.is_pro || false,
-          membership_status: user.is_pro ? 'pro' : 'free',
-          created_at: user.updated_at,
+          updated_at: user.updated_at,
           lastActiveAt: lastTransaction?.created_at || user.updated_at,
           transactionCount: transactionCount || 0
         }
@@ -116,10 +115,10 @@ export async function GET(req: NextRequest) {
       }
     })
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('获取用户列表失败:', error)
     return NextResponse.json(
-      { error: '获取用户列表失败', details: error.message },
+      { error: '获取用户列表失败，请稍后重试' },
       { status: 500 }
     )
   }

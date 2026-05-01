@@ -55,10 +55,9 @@ export function verifyXunhupaySign(params: Record<string, any>): boolean {
 
   const calculatedSign = generateSign(paramsWithoutSign, xunhupayConfig.appSecret)
 
-  console.log("[迅虎支付签名验证] >>> 收到签名:", receivedSign)
-  console.log("[迅虎支付签名验证] >>> 计算签名:", calculatedSign)
-  console.log("[迅虎支付签名验证] >>> 使用appSecret:", xunhupayConfig.appSecret)
-  console.log("[迅虎支付签名验证] >>> 参与签名参数:", JSON.stringify(paramsWithoutSign))
+  console.log("[迅虎支付签名验证] >>> 收到签名:", receivedSign ? "[present]" : "[missing]")
+  console.log("[迅虎支付签名验证] >>> 计算签名:", calculatedSign ? "[computed]" : "[missing]")
+  console.log("[迅虎支付签名验证] >>> 参与签名参数字段:", Object.keys(paramsWithoutSign).sort().join(","))
   console.log("[迅虎支付签名验证] >>> 验证结果:", receivedSign === calculatedSign)
 
   return receivedSign === calculatedSign

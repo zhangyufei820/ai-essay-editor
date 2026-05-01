@@ -125,9 +125,9 @@ export default function RefundPolicyPage() {
           <div className="bg-white rounded-2xl p-8" style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
             <ol className="space-y-3" style={{ color: slateColors[600] }}>
               <li>1. 联系客服说明退款原因</li>
-              <li>2. 提供账户信息和购买凭证</li>
-              <li>3. 客服将在1-3个工作日内审核</li>
-              <li>4. 审核通过后，退款将在3-5个工作日内到账</li>
+              <li>2. 提供账号信息、订单号、支付凭证或支付时间，便于客服核对</li>
+              <li>3. 客服将在 1-3 个工作日内完成审核</li>
+              <li>4. 审核通过后，退款将原路退回，通常 3-5 个工作日内到账，具体以支付渠道处理时间为准</li>
             </ol>
           </div>
         </section>
@@ -143,17 +143,31 @@ export default function RefundPolicyPage() {
             </p>
             <ul className="space-y-3" style={{ color: slateColors[600] }}>
               <li>• 已使用超过50%积分的情况</li>
+              <li>• 已消耗的服务、已使用积分对应的部分可能无法退款</li>
               <li>• 购买时间超过7天的情况</li>
               <li>• 因个人原因（如忘记使用、改变主意等）超过7天申请</li>
               <li>• 服务已按照合同约定完成的情况</li>
+              <li>• 恶意滥用、异常刷量、违反服务条款或损害平台权益的情况</li>
             </ul>
+          </div>
+        </section>
+
+        {/* 支付异常处理 */}
+        <section className="mb-12">
+          <h2 className="text-2xl font-bold mb-6" style={{ color: slateColors[800] }}>
+            5. 支付成功但权益未到账
+          </h2>
+          <div className="bg-white rounded-2xl p-8" style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
+            <p className="text-lg leading-relaxed mb-4" style={{ color: slateColors[600] }}>
+              如果您已完成支付但积分、会员或其他权益未及时到账，请不要重复支付。请保存订单号、支付凭证或支付时间，并联系 support@shenxiang.school，我们会协助核对订单状态和权益到账情况。
+            </p>
           </div>
         </section>
 
         {/* 联系客服 */}
         <section className="mb-12">
           <h2 className="text-2xl font-bold mb-6" style={{ color: slateColors[800] }}>
-            5. 联系客服
+            6. 联系客服
           </h2>
           <div className="bg-white rounded-2xl p-8" style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
             <p className="text-lg mb-4" style={{ color: slateColors[600] }}>
@@ -170,7 +184,7 @@ export default function RefundPolicyPage() {
         {/* 政策说明 */}
         <section className="mb-12">
           <h2 className="text-2xl font-bold mb-6" style={{ color: slateColors[800] }}>
-            6. 政策说明
+            7. 政策说明
           </h2>
           <div className="bg-white rounded-2xl p-8" style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
             <p className="text-lg leading-relaxed" style={{ color: slateColors[600] }}>
@@ -190,6 +204,9 @@ export default function RefundPolicyPage() {
             </Link>
             <Link href="/terms" className="text-sm hover:underline" style={{ color: slateColors[600] }}>
               服务条款
+            </Link>
+            <Link href="mailto:support@shenxiang.school" className="text-sm hover:underline" style={{ color: slateColors[600] }}>
+              联系客服
             </Link>
             <Link href="/about" className="text-sm hover:underline" style={{ color: slateColors[600] }}>
               关于我们

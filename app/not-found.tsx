@@ -8,7 +8,7 @@
 import { useState, useCallback } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Home, ArrowLeft, Search, MessageSquare, Phone, ArrowRight } from 'lucide-react'
+import { Home, ArrowLeft, Search, MessageSquare, Phone, ArrowRight, LifeBuoy } from 'lucide-react'
 
 // 热门链接配置
 const POPULAR_LINKS = [
@@ -84,7 +84,14 @@ export default function NotFound() {
           className="inline-flex items-center gap-2 px-5 py-2.5 bg-green-900 text-white rounded-xl hover:bg-green-800 transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
         >
           <Home className="w-4 h-4" />
-          回到首页
+          返回首页
+        </Link>
+        <Link
+          href="/pricing"
+          className="inline-flex items-center gap-2 px-5 py-2.5 bg-white text-slate-700 rounded-xl border border-slate-200 hover:bg-slate-50 transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"
+        >
+          <LifeBuoy className="w-4 h-4" />
+          访问帮助页
         </Link>
         <button
           onClick={() => typeof window !== 'undefined' && window.history.back()}

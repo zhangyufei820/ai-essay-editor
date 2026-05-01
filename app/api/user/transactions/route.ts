@@ -3,10 +3,10 @@ import { createClient } from '@supabase/supabase-js'
 
 // 使用 Service Role Key 绕过 RLS - 延迟创建避免构建时错误
 function getSupabaseAdmin() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !key) throw new Error('缺少 Supabase 配置')
+  return createClient(url, key)
 }
 
 // 🔥 将数据库中的 type 映射为显示标签
@@ -87,9 +87,9 @@ export async function GET(request: NextRequest) {
     // 如果 credit_transactions 表没有数据，尝试从 orders 表构建记录
     console.log('📊 [积分记录] credit_transactions 无数据，尝试从 orders 构建')
 
-    const { data: orders, error: ordersError } = await supabaseAdmin
+    const { data: orders, error: _ordersError } = await supabaseAdmin
       .from('orders')
-      .select('*')
+      .select('id, user_id, product_name, amount, credits_amount, status, created_at, updated_at, order_no')
       .eq('user_id', userId)
       .eq('status', 'paid')
       .order('created_at', { ascending: false })
@@ -98,10 +98,10 @@ export async function GET(request: NextRequest) {
     const orderTransactions = (orders || []).map((order: any) => ({
       id: `order-${order.id}`,
       description: order.product_name || '购买积分',
-      amount: order.credits || 0,
+      amount: order.credits_amount || 0,
       type: '获得',
       credit_type: '购买积分',
-      created_at: order.paid_at || order.created_at,
+      created_at: order.updated_at || order.created_at,
     }))
 
     // 获取用户创建时间，添加注册赠送记录
@@ -128,10 +128,10 @@ export async function GET(request: NextRequest) {
     // 🔥 如果仍然没有数据，从 user_credits 表获取当前积分并生成一条记录
     if (allTransactions.length === 0) {
       const { data: userCredits } = await supabaseAdmin
-        .from('user_credits')
-        .select('credits, created_at, updated_at')
-        .eq('user_id', userId)
-        .single()
+      .from('user_credits')
+      .select('credits, updated_at')
+      .eq('user_id', userId)
+      .single()
       
       if (userCredits) {
         // 添加当前积分记录
@@ -141,7 +141,7 @@ export async function GET(request: NextRequest) {
           amount: userCredits.credits || 0,
           type: '获得',
           credit_type: '其他积分',
-          created_at: userCredits.updated_at || userCredits.created_at || new Date().toISOString(),
+          created_at: userCredits.updated_at || new Date().toISOString(),
         })
       }
     }
@@ -159,9 +159,10 @@ export async function GET(request: NextRequest) {
 
   } catch (error: any) {
     console.error('❌ [积分记录] 查询失败:', error)
+    const isConfigError = error?.message === '缺少 Supabase 配置'
     return NextResponse.json({ 
-      error: error.message || '查询失败',
+      error: isConfigError ? '积分记录服务未配置' : (error.message || '查询失败'),
       transactions: []
-    }, { status: 500 })
+    }, { status: isConfigError ? 503 : 500 })
   }
 }
