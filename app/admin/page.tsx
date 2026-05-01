@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -92,51 +92,8 @@ export default function AdminPage() {
   const [userDetails, setUserDetails] = useState<UserDetails | null>(null)
   const [userDetailsOpen, setUserDetailsOpen] = useState(false)
   
-  // 检查本地存储的 token 是否有效
-  useEffect(() => {
-    const token = localStorage.getItem('admin_token')
-    if (token) {
-      // 验证 token
-      fetch('/api/admin/verify', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }
-      })
-      .then(res => res.json())
-      .then(data => {
-        if (data.valid) {
-          setIsAuthenticated(true)
-          fetchAllData()
-        } else {
-          // Token 无效，清除本地存储
-          localStorage.removeItem('admin_token')
-        }
-      })
-      .catch(() => {
-        localStorage.removeItem('admin_token')
-      })
-    }
-  }, [])
-  
-  // 获取所有数据
-  const fetchAllData = async () => {
-    setLoading(true)
-    setErrorMessage("")
-    try {
-      await Promise.all([
-        fetchStats(),
-        fetchUsers(),
-        fetchOrders()
-      ])
-    } catch (error) {
-      console.error('获取数据失败:', error)
-      setErrorMessage("后台数据加载失败，请稍后重试；如果持续失败，请检查服务日志、环境变量和 Supabase 连接状态。")
-    } finally {
-      setLoading(false)
-    }
-  }
-  
   // 获取统计数据
-  const fetchStats = async () => {
+  const fetchStats = useCallback(async () => {
     try {
       const token = localStorage.getItem('admin_token')
       if (!token) return
@@ -165,10 +122,10 @@ export default function AdminPage() {
       setErrorMessage("统计数据加载失败，请刷新重试；仍失败时请检查后台接口和数据库连接。")
       throw error
     }
-  }
-  
+  }, [])
+
   // 获取用户列表
-  const fetchUsers = async (search?: string) => {
+  const fetchUsers = useCallback(async (search?: string) => {
     try {
       const token = localStorage.getItem('admin_token')
       if (!token) return
@@ -193,10 +150,10 @@ export default function AdminPage() {
       setErrorMessage("用户列表加载失败，请刷新重试；搜索无结果时可清空关键词后再试。")
       throw error
     }
-  }
-  
+  }, [])
+
   // 获取订单列表
-  const fetchOrders = async () => {
+  const fetchOrders = useCallback(async () => {
     try {
       const token = localStorage.getItem('admin_token')
       if (!token) return
@@ -216,7 +173,50 @@ export default function AdminPage() {
       setErrorMessage("订单记录加载失败，请检查支付回调、订单表和后台接口日志。")
       throw error
     }
-  }
+  }, [])
+
+  // 获取所有数据
+  const fetchAllData = useCallback(async () => {
+    setLoading(true)
+    setErrorMessage("")
+    try {
+      await Promise.all([
+        fetchStats(),
+        fetchUsers(),
+        fetchOrders()
+      ])
+    } catch (error) {
+      console.error('获取数据失败:', error)
+      setErrorMessage("后台数据加载失败，请稍后重试；如果持续失败，请检查服务日志、环境变量和 Supabase 连接状态。")
+    } finally {
+      setLoading(false)
+    }
+  }, [fetchStats, fetchUsers, fetchOrders])
+
+  // 检查本地存储的 token 是否有效
+  useEffect(() => {
+    const token = localStorage.getItem('admin_token')
+    if (token) {
+      // 验证 token
+      fetch('/api/admin/verify', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.valid) {
+          setIsAuthenticated(true)
+          fetchAllData()
+        } else {
+          // Token 无效，清除本地存储
+          localStorage.removeItem('admin_token')
+        }
+      })
+      .catch(() => {
+        localStorage.removeItem('admin_token')
+      })
+    }
+  }, [fetchAllData])
   
   // 获取用户详情
   const fetchUserDetails = async (userId: string) => {
