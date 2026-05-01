@@ -1,7 +1,7 @@
 "use client"
 
 import Image from "next/image"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -36,11 +36,7 @@ export default function InvitePage() {
   const [isPaidMember, setIsPaidMember] = useState(false)
   const [checkingMembership, setCheckingMembership] = useState(false)
 
-  useEffect(() => {
-    loadUserData()
-  }, [])
-
-  const loadUserData = async () => {
+  const loadUserData = useCallback(async () => {
     setIsLoading(true)
     
     // 从 localStorage 获取用户
@@ -165,7 +161,12 @@ export default function InvitePage() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [router])
+
+  useEffect(() => {
+    loadUserData()
+  }, [loadUserData])
+
 
   const generateReferralCode = (userId: string) => {
     const prefix = "SX"
