@@ -240,10 +240,11 @@ function BananaChatInterfaceInner() {
 
   // 加载历史会话
   useEffect(() => {
-    if (urlSessionId && urlSessionId !== currentSessionId) {
-       loadHistorySession(urlSessionId)
+    const activeSessionId = currentSessionId
+    if (urlSessionId && urlSessionId !== activeSessionId) {
+      loadHistorySession(urlSessionId)
     }
-  }, [urlSessionId])
+  }, [urlSessionId, currentSessionId])
 
   const loadHistorySession = async (sid: string) => {
     setIsLoading(true)

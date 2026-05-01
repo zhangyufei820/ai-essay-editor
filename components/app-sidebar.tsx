@@ -176,6 +176,32 @@ function AppSidebarInner() {
     }
   }, [])
 
+  const refreshSessionsForUser = useCallback(async (uid: string) => {
+    try {
+      const sessionRes = await fetch('/api/chat-session', {
+        headers: {
+          'X-User-Id': uid
+        }
+      })
+      if (sessionRes.ok) {
+        const sessionData = await sessionRes.json()
+        if (sessionData.sessions) {
+          setSessions(sessionData.sessions.map((s: any) => ({
+            id: s.id,
+            title: s.title || "新对话",
+            date: new Date(s.created_at).getTime(),
+            preview: s.preview || "",
+            ai_model: s.ai_model || "standard"
+          })))
+        }
+      } else {
+        console.warn("⚠️ [侧边栏] 会话查询失败:", sessionRes.status)
+      }
+    } catch (e) {
+      console.error("❌ [侧边栏] 会话查询异常:", e)
+    }
+  }, [])
+
   // --- 初始化逻辑 ---
   useEffect(() => {
     const checkScreenSize = () => {
@@ -227,20 +253,7 @@ function AppSidebarInner() {
             const uid = parsedUser.id || parsedUser.sub || parsedUser.userId || parsedUser.user_id
             if (uid) {
               // 直接调用 API 获取最新会话列表
-              fetch('/api/chat-session', {
-                headers: { 'X-User-Id': uid }
-              }).then(res => res.json()).then(data => {
-                if (data.sessions) {
-                  setSessions(data.sessions.map((s: any) => ({
-                    id: s.id,
-                    title: s.title || "新对话",
-                    date: new Date(s.created_at).getTime(),
-                    preview: s.preview || "",
-                    ai_model: s.ai_model || "standard"
-                  })))
-                  console.log("📋 [侧边栏] 会话列表已刷新:", data.sessions.length)
-                }
-              }).catch(err => console.error("❌ [侧边栏] 会话列表刷新失败:", err))
+              refreshSessionsForUser(uid)
             }
           } catch (e) { console.error(e) }
         }
@@ -292,29 +305,7 @@ function AppSidebarInner() {
         await fetchCredits(userId)
 
         // 使用 API 端点查询历史会话（绕过 RLS 限制）
-        try {
-          const sessionRes = await fetch('/api/chat-session', {
-            headers: {
-              'X-User-Id': userId
-            }
-          })
-          if (sessionRes.ok) {
-            const sessionData = await sessionRes.json()
-            if (sessionData.sessions) {
-              setSessions(sessionData.sessions.map((s: any) => ({
-                id: s.id,
-                title: s.title || "新对话",
-                date: new Date(s.created_at).getTime(),
-                preview: s.preview || "",
-                ai_model: s.ai_model || "standard"
-              })))
-            }
-          } else {
-            console.warn("⚠️ [侧边栏] 会话查询失败:", sessionRes.status)
-          }
-        } catch (e) {
-          console.error("❌ [侧边栏] 会话查询异常:", e)
-        }
+        await refreshSessionsForUser(userId)
       }
     }
     loadData()
@@ -332,7 +323,7 @@ function AppSidebarInner() {
       document.removeEventListener("visibilitychange", handleVisibilityChange)
       document.removeEventListener("mousedown", handleClickOutside)
     }
-  }, [fetchCredits])
+  }, [fetchCredits, refreshSessionsForUser])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -347,21 +338,9 @@ function AppSidebarInner() {
       console.log("🔄 [侧边栏] 路由变化，刷新积分和会话...")
       fetchCredits(currentUserId)
       // 🔥 刷新会话列表
-      fetch('/api/chat-session', {
-        headers: { 'X-User-Id': currentUserId }
-      }).then(res => res.json()).then(data => {
-        if (data.sessions) {
-          setSessions(data.sessions.map((s: any) => ({
-            id: s.id,
-            title: s.title || "新对话",
-            date: new Date(s.created_at).getTime(),
-            preview: s.preview || "",
-            ai_model: s.ai_model || "standard"
-          })))
-        }
-      }).catch(console.error)
+      refreshSessionsForUser(currentUserId)
     }
-  }, [pathname, searchParams, currentUserId])
+  }, [pathname, searchParams, currentUserId, fetchCredits, refreshSessionsForUser])
 
   // --- 交互处理 ---
   const handleLogout = async () => {
