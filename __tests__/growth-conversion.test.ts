@@ -1,0 +1,74 @@
+import fs from "fs"
+import path from "path"
+import sitemap from "@/app/sitemap"
+import { PRODUCTS, getProductPriceInCents } from "@/lib/products"
+
+const rootDir = path.resolve(__dirname, "..")
+
+function readProjectFile(relativePath: string) {
+  return fs.readFileSync(path.join(rootDir, relativePath), "utf8")
+}
+
+describe("Sprint 6 growth conversion guardrails", () => {
+  test("hero keeps concrete essay-correction positioning and real CTA routes", () => {
+    const source = readProjectFile("components/home/HeroSection.tsx")
+
+    expect(source).toContain("AI 作文批改 · 写作提分工具")
+    expect(source).toContain("免费体验批改")
+    expect(source).toContain('href="/chat"')
+    expect(source).toContain('href="/pricing"')
+    expect(source).toContain('href="/chat/standard"')
+    expect(source).not.toContain('href="#"')
+  })
+
+  test("pricing copy matches product catalog amounts and membership rules", () => {
+    const pricingSource = readProjectFile("components/pricing.tsx")
+    const checkoutSource = readProjectFile("app/checkout/[productId]/page.tsx")
+
+    for (const product of PRODUCTS) {
+      const monthlyYuan = product.priceInCents / 100
+      expect(getProductPriceInCents(product.id)).toBe(product.priceInCents)
+
+      if (product.productType === "membership") {
+        expect(pricingSource).toContain(`monthlyPrice: ${monthlyYuan}`)
+        expect(getProductPriceInCents(product.id, "annual")).toBe(Math.round(product.priceInCents * 12 * 0.8))
+      }
+
+      if (product.productType === "credits") {
+        expect(pricingSource).toContain(`credits: ${product.id.replace("credits-", "")}`)
+        expect(product.requiresMembership).toBe(true)
+      }
+    }
+
+    expect(pricingSource).toContain("积分充值包仅限会员购买")
+    expect(checkoutSource).toContain("年付已按月付 × 12 × 8 折计算")
+    expect(checkoutSource).toContain("积分充值包仅限会员购买")
+  })
+
+  test("payment success page points users to credits, writing, and support", () => {
+    const source = readProjectFile("app/payment/success/page.tsx")
+
+    expect(source).toContain("下一步建议")
+    expect(source).toContain("/settings")
+    expect(source).toContain("/chat/standard")
+    expect(source).toContain("mailto:support@shenxiang.school")
+    expect(source).not.toContain('href="#"')
+  })
+
+  test("sitemap contains public pages but excludes private and payment-state routes", () => {
+    const urls = sitemap().map((entry) => entry.url)
+    const joined = urls.join("\n")
+
+    expect(urls).toContain("https://shenxiang.school")
+    expect(urls).toContain("https://shenxiang.school/pricing")
+    expect(urls).toContain("https://shenxiang.school/refund-policy")
+
+    expect(joined).not.toMatch(/\/admin\b/)
+    expect(joined).not.toMatch(/\/login\b/)
+    expect(joined).not.toMatch(/\/auth\b/)
+    expect(joined).not.toMatch(/\/settings\b/)
+    expect(joined).not.toMatch(/\/credits\b/)
+    expect(joined).not.toMatch(/\/payment\b/)
+    expect(joined).not.toMatch(/\/checkout\b/)
+  })
+})

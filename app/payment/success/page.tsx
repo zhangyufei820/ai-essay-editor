@@ -168,10 +168,19 @@ function PaymentSuccessContent() {
           </Alert>
         )}
 
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="rounded-lg bg-green-50 p-4 text-sm text-green-900 space-y-2">
+          <p className="font-semibold">下一步建议：</p>
+          <ul className="list-disc pl-5 space-y-1">
+            <li>先到“账户权益”确认积分或会员状态。</li>
+            <li>权益到账后，回到 AI 作文批改继续写作。</li>
+            <li>如果 5 分钟后仍未到账，请保存订单号联系 support@shenxiang.school。</li>
+          </ul>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-3">
           {isSuccess ? (
             <Button asChild className="w-full">
-              <Link href="/chat">开始使用</Link>
+              <Link href="/chat/standard">继续作文批改</Link>
             </Button>
           ) : (
             <Button asChild className="w-full">
@@ -180,6 +189,9 @@ function PaymentSuccessContent() {
           )}
           <Button asChild variant="outline" className="w-full bg-transparent">
             <Link href="/settings">查看账户权益</Link>
+          </Button>
+          <Button asChild variant="outline" className="w-full bg-transparent">
+            <Link href="mailto:support@shenxiang.school">联系客服</Link>
           </Button>
         </div>
 

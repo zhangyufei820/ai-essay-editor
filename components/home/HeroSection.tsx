@@ -513,7 +513,7 @@ export function HeroSection() {
               }}
             >
               <Sparkles className="h-4 w-4" style={{ color: brandColors[600] }} />
-              AI 驱动的智能学习平台
+              AI 作文批改 · 写作提分工具
             </span>
           </motion.div>
 
@@ -540,9 +540,9 @@ export function HeroSection() {
             className="text-lg md:text-xl max-w-2xl mx-auto mb-8"
             style={{ color: slateColors[600] }}
           >
-            沈翔智学为每一位学生提供个性化的 AI 辅导体验，
+            上传作文，AI 逐段批改、指出问题、给出提分建议，
             <br className="hidden md:block" />
-            从作文批改到学习规划，全方位助力学业进步。
+            先免费体验批改，再按需选择套餐。
           </motion.p>
 
           
@@ -588,7 +588,7 @@ export function HeroSection() {
                 />
                 <span className="relative flex items-center">
                   <MessageSquare className="mr-2 h-5 w-5" />
-                  开始智能对话
+                  免费体验批改
                   <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
                 </span>
               </motion.button>
@@ -645,8 +645,8 @@ export function HeroSection() {
               >
                 <span className="text-2xl">&#x1F4A1;</span>
                 <div className="text-left">
-                  <div className="text-sm font-semibold text-slate-800">题目解析</div>
-                  <div className="text-xs text-slate-500">详细步骤讲解</div>
+                  <div className="text-sm font-semibold text-slate-800">作文批改</div>
+                  <div className="text-xs text-slate-500">逐段点评提分</div>
                 </div>
               </motion.div>
             </Link>

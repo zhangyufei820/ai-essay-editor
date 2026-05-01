@@ -191,10 +191,16 @@ function CheckoutFlow({ productId }: { productId: string }) {
                 </Badge>
               )}
             </div>
-            <div className="text-4xl font-bold text-primary mb-6">
+            <div className="text-4xl font-bold text-primary mb-3">
               ¥{(displayPrice / 100).toFixed(2)}
               <span className="text-lg text-muted-foreground ml-2">/ {billing === "annual" ? "年" : billing === "monthly" ? "月" : "次"}</span>
             </div>
+            {isSubscription && billing === "annual" && (
+              <p className="text-sm text-green-700 font-medium">年付已按月付 × 12 × 8 折计算，权益按月发放。</p>
+            )}
+            {product.productType === "credits" && (
+              <p className="text-sm text-amber-700 font-medium">积分充值包仅限会员购买，支付成功后永久有效。</p>
+            )}
           </div>
 
           {/* 会员限制提示 */}
@@ -243,7 +249,10 @@ function CheckoutFlow({ productId }: { productId: string }) {
           )}
 
           <div className="bg-card rounded-2xl shadow-lg p-8">
-            <h2 className="text-xl font-semibold mb-4">选择支付方式</h2>
+            <h2 className="text-xl font-semibold mb-2">选择支付方式</h2>
+            <p className="text-sm text-muted-foreground mb-4">
+              支付完成后会自动跳转到结果页；如权益未及时到账，请保存订单号并联系 support@shenxiang.school。
+            </p>
             
             {/* 如果需要会员但用户不是会员，禁用支付按钮 */}
             {needsMembership && !isUserMember && (

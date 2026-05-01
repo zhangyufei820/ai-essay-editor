@@ -96,8 +96,11 @@ export function Pricing({ currentSubscription }: { currentSubscription?: string 
       <div className="container px-4 mx-auto max-w-7xl">
         <div className="text-center mb-12">
           <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">选择最适合您的方案</h2>
-          <p className="text-lg text-gray-600 mb-8">
-            我们提供灵活的积分制，您可以根据需求选择最划算的订阅或一次性购买积分包。
+          <p className="text-lg text-gray-600 mb-3">
+            先用积分体验作文批改和 AI 对话，高频使用再开通会员套餐。所有金额与结账页保持一致。
+          </p>
+          <p className="text-sm text-gray-500 mb-8">
+            年付为月付 × 12 × 8 折；积分充值包仅限会员购买，支付成功后可在账户权益页查看到账情况。
           </p>
 
           <div className="flex items-center justify-center gap-4">
@@ -253,8 +256,8 @@ export function Pricing({ currentSubscription }: { currentSubscription?: string 
         <div className="max-w-4xl mx-auto">
           <h2 className="text-3xl font-bold text-center text-gray-900 mb-4">积分充值包 (单次付费)</h2>
           <p className="text-center text-gray-600 mb-8">
-            适合轻度或测试用户。购买的积分<span className="font-bold text-primary">永久有效</span>
-            ，可用于生成作文或兑换名师辅导。
+            适合会员加购。购买的积分<span className="font-bold text-primary">永久有效</span>
+            ，仅限已开通会员的账户购买，可用于生成作文或兑换名师辅导。
           </p>
 
           <Card className="overflow-hidden rounded-2xl border-2 border-gray-200 shadow-[0_4px_20px_rgb(0,0,0,0.08)]">
