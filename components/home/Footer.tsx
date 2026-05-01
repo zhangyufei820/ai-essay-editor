@@ -7,6 +7,7 @@
 
 "use client"
 
+import Image from "next/image"
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { motion, AnimatePresence } from "framer-motion"
@@ -279,9 +280,11 @@ export function Footer() {
             <div className="lg:col-span-1">
               {/* Logo - 使用品牌图片 */}
               <div className="mb-4">
-                <img 
+                <Image 
                   src="/images/design-mode/主页logo.jpg" 
                   alt="沈翔智学" 
+                  width={180}
+                  height={48}
                   className="h-12 w-auto object-contain"
                 />
               </div>
@@ -320,9 +323,11 @@ export function Footer() {
             <div className="mb-8">
               {/* Logo - 使用品牌图片 */}
               <div className="mb-4">
-                <img 
+                <Image 
                   src="/images/design-mode/主页logo.jpg" 
                   alt="沈翔智学" 
+                  width={150}
+                  height={40}
                   className="h-10 w-auto object-contain"
                 />
               </div>

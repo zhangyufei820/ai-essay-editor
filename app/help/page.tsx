@@ -1,5 +1,6 @@
 'use client'
 
+import Image from "next/image"
 import { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import Link from "next/link"
@@ -371,9 +372,11 @@ function ContactSection() {
             }}
             transition={{ duration: 2, repeat: Infinity }}
           >
-            <img
+            <Image
               src={contactInfo.wechatQR}
               alt="客服微信二维码"
+              width={160}
+              height={160}
               className="w-full h-full object-contain"
             />
           </motion.div>

@@ -7,6 +7,7 @@
 
 "use client"
 
+import Image from "next/image"
 import { motion } from "framer-motion"
 import { useRouter } from "next/navigation"
 import { ArrowRight, Sparkles } from "lucide-react"
@@ -193,12 +194,12 @@ export function CTASection() {
             variants={imageVariants}
           >
             <div className="relative w-full aspect-[16/9] md:aspect-[21/9] rounded-2xl overflow-hidden bg-white/10 shadow-2xl">
-              <img
+              <Image
                 src="/images/design-mode/首页主图.jpg"
                 alt="毕业学生"
-                className="h-full w-full object-cover"
-                loading="lazy"
-                decoding="async"
+                fill
+                sizes="(min-width: 768px) 896px, 100vw"
+                className="object-cover"
               />
             </div>
           </motion.div>

@@ -6,6 +6,7 @@
 
 "use client"
 
+import Image from "next/image"
 import Link from "next/link"
 import { slateColors } from "@/lib/design-tokens"
 
@@ -52,10 +53,13 @@ export function HomeFooter() {
           {/* 品牌区 */}
           <div className="col-span-2 md:col-span-1">
             <Link href="/" prefetch={false} className="inline-block mb-4">
-              <img 
+              <Image 
                 src="/images/design-mode/home-logo-transparent.png"
                 alt="沈翔智学" 
+                width={160}
+                height={40}
                 className="h-10 w-auto object-contain"
+                priority
               />
             </Link>
             <p 

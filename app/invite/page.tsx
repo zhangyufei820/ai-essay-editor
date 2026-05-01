@@ -1,5 +1,6 @@
 "use client"
 
+import Image from "next/image"
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
@@ -349,7 +350,7 @@ export default function InvitePage() {
       >
         <div className="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
-            <img src="/images/design-mode/主页logo.jpg" alt="沈翔智学" className="h-10 w-auto" />
+            <Image src="/images/design-mode/主页logo.jpg" alt="沈翔智学" width={150} height={40} className="h-10 w-auto" />
           </Link>
           <Button 
             variant="outline" 
