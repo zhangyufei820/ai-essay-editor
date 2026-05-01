@@ -365,7 +365,7 @@ function TestimonialCard({
             overflow: "hidden",
           }}
         >
-          "{testimonial.content}"
+          &ldquo;{testimonial.content}&rdquo;
         </p>
       </div>
 

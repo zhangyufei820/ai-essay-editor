@@ -121,7 +121,7 @@ export default function SignUpPage() {
                   <li>打开您的邮箱（请检查收件箱和垃圾邮件箱）</li>
                   <li>查找来自 Supabase 的确认邮件</li>
                   <li>
-                    点击邮件中的 <strong>"Confirm your mail"</strong> 链接
+                    点击邮件中的 <strong>&quot;Confirm your mail&quot;</strong> 链接
                   </li>
                   <li>完成邮箱验证后即可登录使用</li>
                 </ol>

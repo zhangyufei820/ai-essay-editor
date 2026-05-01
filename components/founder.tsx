@@ -66,7 +66,7 @@ export function Founder() {
                   <ul className="space-y-2">
                     <li className="flex items-start gap-2">
                       <span className="text-primary">✓</span>
-                      <span>2019年 温州市"互联网+教育"结对帮扶工作先进个人</span>
+                      <span>2019年 温州市&quot;互联网+教育&quot;结对帮扶工作先进个人</span>
                     </li>
                     <li className="flex items-start gap-2">
                       <span className="text-primary">✓</span>
@@ -85,7 +85,7 @@ export function Founder() {
 
                 <div className="pt-4 border-t">
                   <p className="text-foreground italic">
-                    "以AI大模型赋能智慧教育，推动课堂革命与教研创新，躬身践行教育新生态变革。"
+                    &ldquo;以AI大模型赋能智慧教育，推动课堂革命与教研创新，躬身践行教育新生态变革。&rdquo;
                   </p>
                 </div>
               </div>

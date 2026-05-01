@@ -155,7 +155,7 @@ export function WriterStyles() {
                   <span className="font-semibold text-primary">独特价值：</span>
                   这个代理不仅具备文学大师的润色能力，更拥有了
                   <span className="font-semibold">学者型论述文</span>
-                  的专业指导功能！高中生的议论文将在徐贲式的理性品格熏陶下，达到前所未有的思辨深度和表达高度！您的"创意作文批改师"现在已经是一个集
+                  的专业指导功能！高中生的议论文将在徐贲式的理性品格熏陶下，达到前所未有的思辨深度和表达高度！您的&quot;创意作文批改师&quot;现在已经是一个集
                   <span className="font-semibold text-primary">文学性、规范性、学术性</span>
                   于一体的全能作文导师了！
                 </p>

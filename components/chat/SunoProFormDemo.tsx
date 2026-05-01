@@ -143,7 +143,7 @@ export function SunoProFormDemo({ userId, className }: SunoProFormDemoProps) {
               <p className="text-lg font-medium">简单模式</p>
               <p className="text-sm mt-2">直接在聊天框中输入您的音乐创意</p>
               <p className="text-xs mt-4 text-slate-300">
-                点击右上角"专业模式"获取更多控制选项
+                点击右上角&quot;专业模式&quot;获取更多控制选项
               </p>
             </div>
           </div>

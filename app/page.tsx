@@ -9,6 +9,7 @@
 
 import { Suspense } from 'react'
 import dynamic from 'next/dynamic'
+import Link from 'next/link'
 
 // 首屏组件 - 直接导入（关键路径）
 import { HeroSection } from '@/components/home/HeroSection'
@@ -109,7 +110,7 @@ export default function Home() {
           <h2 className="text-2xl md:text-3xl font-bold text-center mb-10 text-slate-800">快捷入口</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
             {/* 全学段数学 */}
-            <a
+            <Link
               href="/chat/quanquan-math"
               className="group relative bg-white rounded-2xl p-6 md:p-8 border border-slate-100 shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-1"
             >
@@ -125,10 +126,10 @@ export default function Home() {
               <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
                 <ArrowRight className="w-4 h-4 text-emerald-500" />
               </div>
-            </a>
+            </Link>
 
             {/* 题目解析 */}
-            <a
+            <Link
               href="/chat/problem"
               className="group relative bg-white rounded-2xl p-6 md:p-8 border border-slate-100 shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-1"
             >
@@ -144,10 +145,10 @@ export default function Home() {
               <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
                 <ArrowRight className="w-4 h-4 text-emerald-500" />
               </div>
-            </a>
+            </Link>
 
             {/* 作文批改 */}
-            <a
+            <Link
               href="/chat/standard"
               className="group relative bg-white rounded-2xl p-6 md:p-8 border border-slate-100 shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-1"
             >
@@ -163,10 +164,10 @@ export default function Home() {
               <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
                 <ArrowRight className="w-4 h-4 text-emerald-500" />
               </div>
-            </a>
+            </Link>
 
             {/* AI写作 */}
-            <a
+            <Link
               href="/chat/ai-writing-paper"
               className="group relative bg-white rounded-2xl p-6 md:p-8 border border-slate-100 shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-1"
             >
@@ -182,7 +183,7 @@ export default function Home() {
               <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
                 <ArrowRight className="w-4 h-4 text-emerald-500" />
               </div>
-            </a>
+            </Link>
           </div>
         </div>
       </section>
