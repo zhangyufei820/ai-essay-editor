@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import Image from "next/image"
 import { usePathname, useSearchParams, useRouter } from "next/navigation"
 import { useState, useEffect, useRef, Suspense, useCallback } from "react"
 import { motion } from "framer-motion"
@@ -537,7 +538,15 @@ function AppSidebarInner() {
         {/* 1. Logo 区域 - 去掉图片白底贴片感 */}
         <div className="flex items-center shrink-0 px-5 pt-6 pb-4">
           <Link href="/" onClick={handleNavClick} className="flex items-center w-full">
-            <img src="/images/design-mode/home-logo-transparent.png" alt="Logo" className="w-full h-auto object-contain" style={{ maxWidth: "160px" }} />
+            <Image
+              src="/images/design-mode/home-logo-transparent.png"
+              alt="Logo"
+              width={160}
+              height={40}
+              className="w-full h-auto object-contain"
+              style={{ maxWidth: "160px" }}
+              priority
+            />
           </Link>
         </div>
 

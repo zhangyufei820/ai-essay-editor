@@ -1,6 +1,7 @@
 "use client"
 
 import React from "react"
+import Image from "next/image"
 import {
   FileCheck2,
   Sparkles,
@@ -196,11 +197,13 @@ export function ModelLogo({
         className={containerClassName}
         style={containerStyle}
       >
-        <img
+        <Image
           src={config.svgPath}
           alt={`${modelKey.replace(/-/g, ' ')} logo`}
+          width={sizeConfig.iconSize}
+          height={sizeConfig.iconSize}
           className="block h-full w-full object-contain"
-          loading="eager"
+          priority
         />
       </div>
     )
@@ -273,7 +276,7 @@ export function ModelLogoWithBg({
           ...style,
         }}
       >
-        <img
+        <Image
           src={config.svgPath}
           alt={`${modelKey.replace(/-/g, ' ')} logo`}
           width={sizeConfig.iconSize}
