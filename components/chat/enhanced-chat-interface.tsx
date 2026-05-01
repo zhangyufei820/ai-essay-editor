@@ -1356,7 +1356,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         }
       }
     }
-  }, [messages, isLoading, currentBotIdRef.current])
+  }, [messages, isLoading])
 
   // --- 模型配置（增强版：添加描述和标签） ---
   const modelConfig: Partial<Record<ModelType, ModelUiConfig>> = {

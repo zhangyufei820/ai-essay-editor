@@ -114,7 +114,7 @@ export function NeuralFlowBackground({
     })
 
     animationRef.current = requestAnimationFrame(draw)
-  }, [speed, opacity])
+  }, [speed])
 
   useEffect(() => {
     const canvas = canvasRef.current

@@ -27,10 +27,8 @@ export function MobiusInfinity({ size = 140, className = "" }: MobiusInfinityPro
     }
 
     return () => {
-      if (containerRef.current) {
-        const sparkles = containerRef.current.querySelectorAll(".mobius-sparkle")
-        sparkles.forEach((s) => s.remove())
-      }
+      const sparkles = container.querySelectorAll(".mobius-sparkle")
+      sparkles.forEach((s) => s.remove())
     }
   }, [])
 

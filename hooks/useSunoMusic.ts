@@ -451,12 +451,14 @@ export function useSunoMusic(): UseSunoMusicReturn {
   // 清理：组件卸载时停止所有轮询
   // ============================================
   useEffect(() => {
+    const pollingTimers = pollingTimersRef.current
+
     return () => {
-      pollingTimersRef.current.forEach((timer, taskId) => {
+      pollingTimers.forEach((timer, taskId) => {
         clearInterval(timer)
         console.log(`🧹 [Suno] 清理轮询: ${taskId}`)
       })
-      pollingTimersRef.current.clear()
+      pollingTimers.clear()
     }
   }, [])
 
