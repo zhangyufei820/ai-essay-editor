@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import crypto from "crypto";
 import {
   canPurchaseProductWithMembership,
@@ -15,6 +15,7 @@ import {
 } from "@/lib/products";
 import { createClient } from '@supabase/supabase-js'
 import { applyRateLimit } from "@/lib/rate-limit";
+import { requireUser } from "@/lib/auth/verified-user";
 
 // 签名算法
 function gen_sign(params: any, appSecret: string) {
@@ -50,10 +51,14 @@ function getBaseUrl(request: Request): string {
   return `${protocol}://${host}`;
 }
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
     const rateLimited = applyRateLimit(request, { keyPrefix: 'xunhupay-create', maxRequests: 10 });
     if (rateLimited) return rateLimited;
+
+    const auth = await requireUser(request)
+    if (auth.response) return auth.response
+    const verifiedUserId = auth.user!.id
 
     const APP_ID = process.env.XUNHUPAY_APPID;
     const APP_SECRET = process.env.XUNHUPAY_APPSECRET;
@@ -70,12 +75,13 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url);
     const productId = searchParams.get("productId");
-    const userId = searchParams.get("userId");
+    const requestedUserId = searchParams.get("userId");
     const billing = searchParams.get("billing") || "monthly";
 
-    if (!userId) {
-      return NextResponse.json({ error: "缺少用户ID" }, { status: 400 });
+    if (requestedUserId && requestedUserId !== verifiedUserId) {
+      return NextResponse.json({ error: "无权为该用户创建订单" }, { status: 403 });
     }
+    const userId = verifiedUserId
 
     if (!productId) {
       return NextResponse.json({ error: "缺少产品ID" }, { status: 400 });
@@ -179,7 +185,6 @@ export async function GET(request: Request) {
         product_name: product.name,
         amount: finalPriceInCents / 100,
         credits_amount: creditsAmount,
-        billing_cycle: billing,
         status: 'pending',
         payment_method: 'xunhupay',
       });

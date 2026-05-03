@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { requireUser } from '@/lib/auth/verified-user'
 
 // 使用 Service Role Key 绕过 RLS - 延迟创建避免构建时错误
 function getSupabaseAdmin() {
@@ -29,14 +30,16 @@ function mapTypeToLabel(type: string): string {
 
 export async function GET(request: NextRequest) {
   try {
+    const auth = await requireUser(request)
+    if (auth.response) return auth.response
     const { searchParams } = new URL(request.url)
-    const userId = searchParams.get('user_id')
-
-    if (!userId) {
-      return NextResponse.json({ error: '缺少 user_id 参数' }, { status: 400 })
+    const requestedUserId = searchParams.get('user_id')
+    if (requestedUserId && requestedUserId !== auth.user!.id) {
+      return NextResponse.json({ error: '无权查询该用户积分记录' }, { status: 403 })
     }
+    const userId = auth.user!.id
 
-    console.log('📊 [积分记录] 查询用户:', userId)
+    console.log('📊 [积分记录] 查询当前用户')
 
     // 🔥 先检查 credit_transactions 表是否存在
     let tableExists = true

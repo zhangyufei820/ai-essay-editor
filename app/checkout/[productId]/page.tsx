@@ -1,7 +1,7 @@
 "use client"
 
 import { notFound, useRouter, useSearchParams } from "next/navigation"
-import { PRODUCTS, requiresMembership, hasActiveMembership, resolveMembershipStatus, getProductPriceInCents } from "@/lib/products"
+import { PRODUCTS, requiresMembership, hasActiveMembership, getProductPriceInCents } from "@/lib/products"
 import { ArrowLeft, Loader2, LogIn, CheckCircle2, ExternalLink, AlertTriangle, Crown } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -10,6 +10,17 @@ import { BETA_CONFIG } from "@/lib/beta-config"
 import { use, useEffect, useState, Suspense } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+
+async function getVerifiedAuthHeaders(): Promise<Record<string, string>> {
+  const supabase = createClient()
+  if (supabase) {
+    const { data } = await supabase.auth.getSession()
+    if (data.session?.access_token) return { Authorization: `Bearer ${data.session.access_token}` }
+  }
+  if (typeof window === "undefined") return {}
+  const authingToken = localStorage.getItem("idToken") || localStorage.getItem("authingToken") || localStorage.getItem("accessToken")
+  return authingToken ? { Authorization: `Bearer ${authingToken}` } : {}
+}
 
 function CheckoutFlow({ productId }: { productId: string }) {
   const router = useRouter()
@@ -41,20 +52,6 @@ function CheckoutFlow({ productId }: { productId: string }) {
 
         if (supabaseUser) {
           setUser(supabaseUser)
-
-          // 查询用户会员状态
-            if (supabase) {
-              const { data: userCredits } = await supabase
-                .from('user_credits')
-                .select('is_pro')
-                .eq('user_id', supabaseUser.id)
-                .maybeSingle()
-
-            if (userCredits) {
-              const status = resolveMembershipStatus(userCredits)
-              setMembershipStatus(status)
-            }
-          }
         } else {
           const localUser = localStorage.getItem('currentUser')
           if (localUser) {
@@ -62,6 +59,13 @@ function CheckoutFlow({ productId }: { productId: string }) {
               setUser(JSON.parse(localUser))
             } catch (e) { console.error('解析本地用户信息失败:', e) }
           }
+        }
+        const membershipRes = await fetch('/api/user/membership', {
+          headers: await getVerifiedAuthHeaders(),
+        })
+        if (membershipRes.ok) {
+          const membership = await membershipRes.json()
+          setMembershipStatus(membership.type === "免费" ? null : membership.type)
         }
       } catch (error) {
         console.error('检查登录状态失败:', error)
@@ -101,10 +105,12 @@ function CheckoutFlow({ productId }: { productId: string }) {
           return
       }
 
-      const apiUrl = `/api/payment/xunhupay/create?productId=${productId}&type=${type}&billing=${billing}&userId=${userId}`
+      const apiUrl = `/api/payment/xunhupay/create?productId=${productId}&type=${type}&billing=${billing}`
       console.log("正在请求:", apiUrl);
       
-      const res = await fetch(apiUrl)
+      const res = await fetch(apiUrl, {
+        headers: await getVerifiedAuthHeaders(),
+      })
       const data = await res.json()
       
       console.log("API响应:", data);

@@ -9,6 +9,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { resolveMembershipStatus } from '@/lib/products'
+import { requireUser } from '@/lib/auth/verified-user'
 
 export const dynamic = 'force-dynamic'
 
@@ -134,9 +135,14 @@ async function checkMembership(userId: string) {
 
 // GET — query param: ?user_id=
 export async function GET(req: NextRequest) {
-  const userId = new URL(req.url).searchParams.get('user_id')
-  if (!userId) return NextResponse.json({ error: '缺少 userId' }, { status: 400 })
   try {
+    const auth = await requireUser(req)
+    if (auth.response) return auth.response
+    const requestedUserId = new URL(req.url).searchParams.get('user_id')
+    if (requestedUserId && requestedUserId !== auth.user!.id) {
+      return NextResponse.json({ error: '无权查询该用户会员状态' }, { status: 403 })
+    }
+    const userId = auth.user!.id
     return await checkMembership(userId)
   } catch (error: any) {
     const status = error?.message === '缺少 Supabase 配置' ? 503 : 500
@@ -154,9 +160,13 @@ export async function POST(req: NextRequest) {
     if (!limitResult.allowed) {
       return createRateLimitResponse(limitResult.retryAfter!)
     }
+    const auth = await requireUser(req)
+    if (auth.response) return auth.response
     const { userId } = await req.json()
-    if (!userId) return NextResponse.json({ error: '缺少 userId' }, { status: 400 })
-    return await checkMembership(userId)
+    if (userId && userId !== auth.user!.id) {
+      return NextResponse.json({ error: '无权查询该用户会员状态' }, { status: 403 })
+    }
+    return await checkMembership(auth.user!.id)
   } catch (error: any) {
     const status = error?.message === '缺少 Supabase 配置' ? 503 : 500
     return NextResponse.json({ error: status === 503 ? '会员服务未配置' : '查询会员状态失败' }, { status })

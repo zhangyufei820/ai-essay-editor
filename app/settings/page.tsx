@@ -22,6 +22,14 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
+async function getVerifiedAuthHeaders(): Promise<Record<string, string>> {
+  const { data } = await supabase.auth.getSession()
+  if (data.session?.access_token) return { Authorization: `Bearer ${data.session.access_token}` }
+  if (typeof window === "undefined") return {}
+  const authingToken = localStorage.getItem("idToken") || localStorage.getItem("authingToken") || localStorage.getItem("accessToken")
+  return authingToken ? { Authorization: `Bearer ${authingToken}` } : {}
+}
+
 // 设计系统颜色
 const COLORS = {
   primary: {
@@ -101,15 +109,16 @@ export default function SettingsPage() {
             
             const userId = localUser.id || localUser.sub || localUser.userId
             if (userId) {
+              const authHeaders = await getVerifiedAuthHeaders()
               // 获取积分
-              const creditsRes = await fetch(`/api/user/credits?user_id=${encodeURIComponent(userId)}`)
+              const creditsRes = await fetch(`/api/user/credits`, { headers: authHeaders })
               if (creditsRes.ok) {
                 const data = await creditsRes.json()
                 setCredits(data.credits || 0)
               }
               
               // 获取会员信息
-              const memberRes = await fetch(`/api/user/membership?user_id=${encodeURIComponent(userId)}`)
+              const memberRes = await fetch(`/api/user/membership`, { headers: authHeaders })
               if (memberRes.ok) {
                 const data = await memberRes.json()
                 setMembershipType(data.type || "免费")
@@ -142,7 +151,7 @@ export default function SettingsPage() {
   const fetchTransactions = async (userId: string) => {
     setLoadingTransactions(true)
     try {
-      const res = await fetch(`/api/user/transactions?user_id=${encodeURIComponent(userId)}`)
+      const res = await fetch(`/api/user/transactions`, { headers: await getVerifiedAuthHeaders() })
       if (res.ok) {
         const data = await res.json()
         setTransactions(data.transactions || [])
