@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
     const user = auth.user!
 
     const body = await request.json()
-    const { id, title, preview, processing_mode, ai_model } = body
+    const { id, title, preview, ai_model } = body
     const requestedId = typeof id === "string" && id.trim() ? id.trim() : null
     if (requestedId && !UUID_RE.test(requestedId)) {
       return NextResponse.json({ error: "会话 ID 格式无效" }, { status: 400 })
@@ -46,7 +46,6 @@ export async function POST(request: NextRequest) {
           .update({
             title: title || "新对话",
             preview: preview || null,
-            processing_mode,
             ai_model,
             updated_at: new Date().toISOString(),
           })
@@ -67,7 +66,6 @@ export async function POST(request: NextRequest) {
         user_id: user.id,
         title: title || "新对话",
         preview: preview || null,
-        processing_mode,
         ai_model,
       })
       .select()
@@ -107,7 +105,7 @@ export async function GET(request: NextRequest) {
     if (sessionId) {
       const { data: session, error: sessionError } = await supabase
         .from("chat_sessions")
-        .select("id,title,preview,ai_model,processing_mode,user_id,created_at,updated_at")
+        .select("id,title,preview,ai_model,user_id,created_at,updated_at")
         .eq("id", sessionId)
         .maybeSingle()
 
@@ -119,7 +117,7 @@ export async function GET(request: NextRequest) {
 
       const { data: messages, error: messagesError } = await supabase
         .from("chat_messages")
-        .select("id,role,content,metadata,created_at")
+        .select("id,role,content,created_at")
         .eq("session_id", sessionId)
         .order("created_at", { ascending: true })
 
@@ -130,7 +128,7 @@ export async function GET(request: NextRequest) {
 
     const { data: sessions, error } = await supabase
       .from("chat_sessions")
-      .select("id,title,preview,ai_model,processing_mode,created_at,updated_at")
+      .select("id,title,preview,ai_model,created_at,updated_at")
       .eq("user_id", user.id)
       .order("updated_at", { ascending: false })
       .limit(limit)

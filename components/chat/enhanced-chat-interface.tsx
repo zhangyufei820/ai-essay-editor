@@ -2391,14 +2391,19 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
           if (hasRec) {
             await persistUserMessagePromise
             const cardToSave = wordCard as FrontendWordCard | null
-            await saveMessageOnce(`${requestId}:assistant`, async () => {
-              await saveChatMessageViaApi({
-                sessionId: sid,
-                role: "assistant",
-                content: cardToSave ? JSON.stringify({ frontend_card_json: cardToSave }) : fullText,
-                metadata: { requestId, clientMessageId: botId }
+            try {
+              await saveMessageOnce(`${requestId}:assistant`, async () => {
+                await saveChatMessageViaApi({
+                  sessionId: sid,
+                  role: "assistant",
+                  content: cardToSave ? JSON.stringify({ frontend_card_json: cardToSave }) : fullText,
+                  metadata: { requestId, clientMessageId: botId }
+                })
               })
-            })
+            } catch (error) {
+              console.warn("⚠️ [消息保存] 助手消息后台保存失败:", error)
+              toast.warning("AI 已回复，但历史记录保存可能延迟")
+            }
           }
           if (selectedModel === "vocab-card" && sid && !hadUrlSessionId) {
             router.replace(buildChatSessionRoute(sid, selectedModel))
