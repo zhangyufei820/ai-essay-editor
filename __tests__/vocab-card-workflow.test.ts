@@ -80,6 +80,24 @@ describe("vocab-card workflow mapping", () => {
     expect(cleanVocabAnswer("前面<think>hidden</think>你好<thinking>secret</thinking>")).toBe("前面你好")
   })
 
+  it("suppresses internal classifier JSON instead of rendering it", () => {
+    const rawClassifierOutput = JSON.stringify({
+      intent: "chat",
+      target_word: "",
+      current_word: "",
+      level: "high",
+      style: "colorful",
+      language: "zh-CN",
+      reply_directly: false,
+      clarify_question: "",
+      student_need_cn: "打招呼",
+      teacher_tone: "friendly",
+    })
+
+    expect(cleanVocabAnswer(rawClassifierOutput)).toBe("")
+    expect(resolveVocabCardResult({ outputs: { answer: rawClassifierOutput } }).answer).toBe("")
+  })
+
   it("parses frontend_card_json and updates current word from the card", () => {
     const result = resolveVocabCardResult({
       outputs: {

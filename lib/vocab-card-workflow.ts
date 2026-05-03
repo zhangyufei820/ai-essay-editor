@@ -18,6 +18,16 @@ export type VocabCardResult = {
   currentWord: string
 }
 
+const INTERNAL_VOCAB_JSON_KEYS = [
+  "intent",
+  "target_word",
+  "current_word",
+  "reply_directly",
+  "clarify_question",
+  "student_need_cn",
+  "teacher_tone",
+]
+
 function text(value: unknown): string {
   return typeof value === "string" ? value.trim() : ""
 }
@@ -31,12 +41,35 @@ function hasOwn(record: Record<string, unknown>, key: string): boolean {
   return Object.prototype.hasOwnProperty.call(record, key)
 }
 
+function parseJsonObject(value: string): Record<string, unknown> | null {
+  try {
+    const parsed = JSON.parse(value)
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : null
+  } catch {
+    return null
+  }
+}
+
+function isInternalVocabJsonAnswer(value: string): boolean {
+  const trimmed = value.trim()
+  if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) return false
+
+  const parsed = parseJsonObject(trimmed)
+  if (!parsed) return false
+
+  return INTERNAL_VOCAB_JSON_KEYS.some((key) => hasOwn(parsed, key))
+}
+
 export function cleanVocabAnswer(value: unknown): string {
   if (!value) return ""
-  return String(value)
+  const cleaned = String(value)
     .replace(/<think>[\s\S]*?<\/think>/gi, "")
     .replace(/<thinking>[\s\S]*?<\/thinking>/gi, "")
     .trim()
+
+  return isInternalVocabJsonAnswer(cleaned) ? "" : cleaned
 }
 
 export function buildVocabCardWorkflowInputs({

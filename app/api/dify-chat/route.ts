@@ -28,7 +28,7 @@ import {
   sanitizeForTrace,
   updateTaskRun,
 } from "@/lib/ai-task-trace"
-import { buildVocabCardWorkflowInputs } from "@/lib/vocab-card-workflow"
+import { buildVocabCardWorkflowInputs, cleanVocabAnswer } from "@/lib/vocab-card-workflow"
 
 export const runtime = "nodejs"
 // 🔥 增加超时时间，支持 OpenClaw 大型 PPT 与图片生成网关的长任务重试
@@ -132,7 +132,7 @@ const WORKFLOW_MODELS = new Set(["banana-2-pro", "vocab-card"])
 function sanitizeVocabCardOutputs(outputs: unknown): Record<string, unknown> {
   const record = outputs && typeof outputs === "object" ? outputs as Record<string, unknown> : {}
   return {
-    answer: record.answer || "",
+    answer: cleanVocabAnswer(record.answer),
     frontend_card_json: record.frontend_card_json || "",
     current_word: record.current_word || "",
     word: record.word || "",
