@@ -16,11 +16,11 @@ ARG NEXT_BUILD_ID
 ARG DEPLOYMENT_VERSION
 
 # 验证必填构建参数
-RUN if [ -z "${NEXT_PUBLIC_SUPABASE_URL}" ]; then \
+RUN if [ -z "$NEXT_PUBLIC_SUPABASE_URL" ]; then \
       echo "ERROR: NEXT_PUBLIC_SUPABASE_URL is required for build"; \
       exit 1; \
     fi && \
-    if [ -z "${NEXT_PUBLIC_SUPABASE_ANON_KEY}" ]; then \
+    if [ -z "$NEXT_PUBLIC_SUPABASE_ANON_KEY" ]; then \
       echo "ERROR: NEXT_PUBLIC_SUPABASE_ANON_KEY is required for build"; \
       exit 1; \
     fi
