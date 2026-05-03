@@ -5,6 +5,7 @@ node_modules
 # 构建产物
 .next
 out
+services
 
 # 测试
 coverage

@@ -18,6 +18,7 @@ const SUPPORTED_MODELS = [
   'open-claw',       // Open Claw
   'quanquan-math',   // 全圈数学智能体
   'quanquan-english', // 全圈英语智能体
+  'vocab-card',      // 词境记忆卡
   'beike-pro',       // 备课助手Pro
   'banzhuren',       // 班主任智能体
   'ai-writing-paper', // 论文写作

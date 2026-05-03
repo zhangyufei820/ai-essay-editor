@@ -1,73 +1,43 @@
 /**
- * 🎤 语音服务 - Dify 原生语音支持
+ * 🎤 语音服务 - 服务器端语音网关
  *
  * 功能：
- * 1. 录音并上传到 Dify，获取 file_id
- * 2. 调用 Dify TTS 获取音频
+ * 1. 录音并通过语音网关转写文本
+ * 2. 调用语音网关 TTS 获取音频
  */
 
 import { getApiUrl } from "./api-config"
 
-// Dify API Key 获取函数
-const getDifyApiKey = (model?: string): string => {
-  if (typeof window === "undefined") return ""
-
-  // 根据模型获取对应的 API Key
-  switch (model) {
-    case "teaching-pro":
-      return process.env.NEXT_PUBLIC_DIFY_TEACHING_PRO_API_KEY || ""
-    case "gpt-5":
-      return process.env.NEXT_PUBLIC_DIFY_API_KEY_GPT5 || ""
-    case "claude-opus":
-      return process.env.NEXT_PUBLIC_DIFY_API_KEY_CLAUDE || ""
-    case "gemini-pro":
-      return process.env.NEXT_PUBLIC_DIFY_API_KEY_GEMINI || ""
-    case "grok-4.2":
-      return process.env.NEXT_PUBLIC_DIFY_API_KEY_GROK42 || ""
-    case "open-claw":
-      return process.env.NEXT_PUBLIC_DIFY_API_KEY_OPENCLAW || ""
-    default:
-      return process.env.NEXT_PUBLIC_ESSAY_CORRECTION_API_KEY || process.env.NEXT_PUBLIC_DIFY_API_KEY || ""
-  }
-}
-
 /**
- * 🎤 录音并上传到 Dify
+ * 🎤 录音并通过语音网关识别
  * @param audioBlob 录音数据
- * @param model 当前模型
- * @returns Dify file_id
+ * @param target 可选目标词/句，帮助识别
+ * @returns 识别文本
  */
-export async function uploadAudioToDify(
+export async function transcribeAudio(
   audioBlob: Blob,
-  model?: string
+  target?: string
 ): Promise<string> {
-  const apiKey = getDifyApiKey(model)
-
-  if (!apiKey) {
-    throw new Error("未配置 API Key")
-  }
-
   const formData = new FormData()
   formData.append("file", audioBlob, "recording.webm")
-  formData.append("user", "voice-user")
+  formData.append("language", "en")
+  if (target?.trim()) formData.append("target", target.trim())
 
-  const response = await fetch(getApiUrl("/api/dify-upload"), {
+  const response = await fetch(getApiUrl("/api/voice/stt"), {
     method: "POST",
-    headers: {
-      "X-User-Id": "voice-user",
-      "X-Model": model || ""
-    },
     body: formData
   })
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: "上传失败" }))
-    throw new Error(error.error || "音频上传失败")
+    const error = await response.json().catch(() => ({ error: "语音识别失败" }))
+    throw new Error(error.error || "语音识别失败")
   }
 
   const data = await response.json()
-  return data.id
+  return typeof data.text === "string" ? data.text : ""
 }
+
+export const uploadAudioToDify = transcribeAudio
 
 /**
  * 🔊 调用 TTS API 获取音频 URL
@@ -80,13 +50,13 @@ export async function getDifyTTS(
   model?: string
 ): Promise<string> {
   try {
-    // 使用本地 TTS API 路由
-    const response = await fetch(getApiUrl("/api/tts"), {
+    // 使用服务器端语音网关代理
+    const response = await fetch(getApiUrl("/api/voice/tts"), {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
       },
-      body: JSON.stringify({ text, model })
+      body: JSON.stringify({ text, model, format: "mp3" })
     })
 
     if (!response.ok) {

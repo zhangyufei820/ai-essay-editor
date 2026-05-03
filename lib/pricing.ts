@@ -34,6 +34,7 @@ export type ModelType =
   | "open-claw"
   | "quanquan-math"
   | "quanquan-english"
+  | "vocab-card"
   | "beike-pro"
   | "banzhuren"
   | "ai-writing-paper"
@@ -110,6 +111,13 @@ export const MODEL_COSTS: Record<ModelType, ModelCostConfig> = {
     displayName: "全学段英语智能体",
     mode: "text",
     estimatedTokens: 2000
+  },
+  "vocab-card": {
+    category: "agent",
+    tokenRate: AGENT_TOKEN_RATE,
+    displayName: "词境记忆卡",
+    mode: "text",
+    estimatedTokens: 1800
   },
   "beike-pro": {
     category: "agent",

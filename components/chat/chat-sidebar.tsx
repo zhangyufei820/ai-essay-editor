@@ -19,6 +19,7 @@ const MODEL_DISPLAY_NAMES: Record<string, string> = {
   "open-claw": "OpenClaw",
   "quanquan-math": "全科数学",
   "quanquan-english": "全科英语",
+  "vocab-card": "词境记忆卡",
   "beike-pro": "备课助手",
 }
 

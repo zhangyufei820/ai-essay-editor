@@ -16,7 +16,7 @@ import {
   Download, Share2, Printer, Mic, MicOff, Volume2, History, ExternalLink
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { buildChatSessionRouteFromSession, isDedicatedChatSessionModel, resolveChatSessionRouteModel } from "@/lib/chat-session-routes"
+import { buildChatSessionRoute, buildChatSessionRouteFromSession, isDedicatedChatSessionModel, resolveChatSessionRouteModel } from "@/lib/chat-session-routes"
 import { toast } from "sonner"
 import { MessageBubble } from "./MessageBubble"
 import { ChatInput } from "./ChatInput"
@@ -38,15 +38,19 @@ import { motion, AnimatePresence } from "framer-motion"
 import { EnhancedMarkdown } from "./EnhancedMarkdown"
 import { OpenClawHtmlPreview } from "./OpenClawHtmlPreview"
 import { UserMessageBubble } from "./UserMessageBubble"
+import { PremiumWordCard } from "./PremiumWordCard"
+import { VocabCardDifyForm, type VocabCardDifyInputs } from "./VocabCardDifyForm"
 import katex from "katex"
 import { brandColors, slateColors } from "@/lib/design-tokens"
 import { LATEX_MACROS, renderLatex } from "@/lib/latex-constants"
 import { cleanLLMText } from "@/lib/text-sanitizer"
+import { containsRawDifyWordCardPayload, normalizeDifyWordCardResponse, type FrontendWordCard } from "@/lib/word-card-normalizer"
+import { buildVocabCardWorkflowInputs, cleanVocabAnswer, resolveVocabCardResult } from "@/lib/vocab-card-workflow"
 import { createClient } from "@supabase/supabase-js"
 import { collapseSidebar, navigateHomeWithSidebar, refreshCredits, refreshSessionList, SESSION_LIST_REFRESH_EVENT } from "@/components/app-sidebar"
 import { useSelectedModelStore } from "@/hooks/useSelectedModelStore"
 import { validateFileForUpload, MAX_FILE_SIZE } from "@/lib/upload-service"
-import { VoiceRecorder, getDifyTTS, uploadAudioToDify } from "@/lib/voice-service"
+import { VoiceRecorder, getDifyTTS, transcribeAudio } from "@/lib/voice-service"
 import { getApiUrl } from "@/lib/api-config"
 import { logger } from "@/lib/logger"
 import { ModelLogo } from "@/components/ModelLogo"
@@ -83,6 +87,7 @@ const MODEL_DISPLAY_NAMES: Record<string, string> = {
   "open-claw": "OpenClaw",
   "quanquan-math": "全科数学",
   "quanquan-english": "全科英语",
+  "vocab-card": "词境记忆卡",
   "beike-pro": "备课助手",
   "banzhuren": "班主任助手",
   "suno-v5": "音乐",
@@ -165,7 +170,7 @@ type Message = {
   content: string
   files?: UploadedFile[]  // 🔥 新增：用户消息携带的文件
   metadata?: {
-    type?: "music"
+    type?: "music" | "word_card"
     taskId?: string
     songs?: Array<{
       id: number
@@ -176,7 +181,9 @@ type Message = {
       duration?: number
       errorMessage?: string
     }>
+    wordCard?: FrontendWordCard
   } | null
+  wordCard?: FrontendWordCard | null
 }
 type FileProcessingState = { status: "idle" | "uploading" | "processing" | "recognizing" | "complete" | "error"; progress: number; message: string }
 type ProcessingContext = {
@@ -885,6 +892,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     sessionIdRef.current = null
     sessionModelRef.current = null
     setCurrentSessionId("")
+    setCurrentWord("")
   }
 
   const adoptConversationState = (conversationId: string | null, model: ModelType) => {
@@ -1231,9 +1239,12 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
            id: m.id,
            role: m.role,
            content: m.content,
-           metadata: m.metadata || null  // 🔥 包含音乐等附加数据
+           metadata: m.metadata || null,  // 🔥 包含音乐等附加数据
+           wordCard: m.metadata?.wordCard || normalizeDifyWordCardResponse(m.content)
         }))
         setMessages(historyMessages)
+        const restoredCurrentWord = [...historyMessages].reverse().find((message) => message.wordCard?.word)?.wordCard?.word
+        setCurrentWord(restoredCurrentWord || "")
         setCurrentSessionId(sid)
         adoptConversationState(sid, (sessionData?.ai_model || initialModel || "standard") as ModelType)
       }
@@ -1250,6 +1261,13 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
+  const [vocabCardInputs, setVocabCardInputs] = useState<VocabCardDifyInputs>({
+    word: "",
+    level: "high",
+    style: "colorful",
+    language: "zh-CN",
+  })
+  const [currentWord, setCurrentWord] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   // 🔥 深度思考提示状态（15秒后显示）
   const [showDeepThinkingHint, setShowDeepThinkingHint] = useState(false)
@@ -1387,6 +1405,14 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       modelKey: "quanquan-english",
       color: BRAND_GREEN,
       description: "听说读写，全面覆盖",
+      group: "教育专用"
+    },
+    "vocab-card": {
+      name: "词境记忆卡",
+      modelKey: "vocab-card",
+      color: BRAND_GREEN,
+      description: "词根联想，卡片复习",
+      badge: "新",
       group: "教育专用"
     },
     "beike-pro": {
@@ -1746,18 +1772,13 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 
         if (audioBlob && audioBlob.size > 0) {
           toast.info("正在识别语音...")
-          const fileId = await uploadAudioToDify(audioBlob, selectedModel)
-
-          // 将音频文件添加到上传列表
-          const audioUrl = URL.createObjectURL(audioBlob)
-          setUploadedFiles(p => [...p, {
-            name: "录音.mp3",
-            type: "audio/mp3",
-            size: audioBlob.size,
-            data: audioUrl,
-            difyFileId: fileId
-          }])
-          toast.success("语音已识别并添加")
+          const transcript = await transcribeAudio(audioBlob, input)
+          if (transcript.trim()) {
+            setInput((prev) => [prev, transcript.trim()].filter(Boolean).join(prev.trim() ? " " : ""))
+            toast.success("语音已转为文字")
+          } else {
+            toast.warning("没有识别到清晰语音")
+          }
         }
       } catch (error) {
         console.error("🎤 停止录音失败:", error)
@@ -1825,7 +1846,31 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   ) => {
     e.preventDefault(); if (!userId) { toast.error("请登录"); return }
     const activeFiles = overrides?.files ?? uploadedFiles
-    const txt = ((overrides?.content ?? input) || "").trim(); if (!txt && !activeFiles.length) return
+    const txt = ((overrides?.content ?? input) || "").trim()
+    const isWordCardSubmit = selectedModel === "vocab-card"
+    const vocabUserMessage = isWordCardSubmit ? txt : ""
+    const vocabWord = isWordCardSubmit ? vocabCardInputs.word.trim() : ""
+    const vocabCurrentWord = isWordCardSubmit ? currentWord.trim() : ""
+
+    if (isWordCardSubmit && !vocabUserMessage && !vocabWord) {
+      toast.error("请输入想说的话，或填写一个英文单词")
+      return
+    }
+    if (!isWordCardSubmit && !txt && !activeFiles.length) return
+
+    const vocabWorkflowInputs = isWordCardSubmit
+      ? buildVocabCardWorkflowInputs({
+          query: vocabUserMessage,
+          inputs: {
+            user_message: vocabUserMessage,
+            word: vocabWord,
+            current_word: vocabCurrentWord,
+            level: vocabCardInputs.level,
+            style: vocabCardInputs.style,
+            language: vocabCardInputs.language,
+          },
+        })
+      : undefined
 
     console.log("📤 [onSubmit] 发送消息:", {
       model: selectedModel,
@@ -1866,6 +1911,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     collapseSidebar()
 
     let sid = currentSessionId;
+    const hadUrlSessionId = Boolean(urlSessionId)
     // 🔥 修复：当模型切换时（sessionIdRef.current === null），即使 urlSessionId 存在也忽略
     // 否则会导致用旧模型的 session 去请求新模型
     const isModelSwitch = sessionIdRef.current === null && currentSessionId;
@@ -1882,6 +1928,9 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         setCurrentSessionId(sid);
         adoptConversationState(sid, selectedModel);
     }
+    if (selectedModel === "vocab-card" && sid && !hadUrlSessionId && typeof window !== "undefined") {
+      window.history.replaceState(null, "", buildChatSessionRoute(sid, selectedModel))
+    }
 
     // 🔥 根据模型类型设置不同的默认提示词
     const defaultPrompts: Record<string, string> = {
@@ -1894,10 +1943,13 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     const userMsg: Message = {
       id: Date.now().toString(),
       role: "user",
-      content: txt || defaultPrompt,
+      content: isWordCardSubmit ? (vocabUserMessage || `学习单词：${vocabWord}`) : (txt || defaultPrompt),
       files: activeFiles.length > 0 ? [...activeFiles] : undefined  // 🔥 携带文件信息
     }
     setMessages(p => [...p, userMsg]); setInput(""); setUploadedFiles([])
+    if (isWordCardSubmit) {
+      setVocabCardInputs((previous) => ({ ...previous, word: "" }))
+    }
     // 🔥 发送后自动滚动到消息底部，确保 AI 回复时能自动跟进
     setTimeout(() => scrollToBottom(), 50)
 
@@ -1909,7 +1961,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 
       // 🔥 创建会话和保存用户消息（与普通对话一致）
       const preview = userMsg.content.slice(0, 30)
-      const { data: existing } = await supabase.from('chat_sessions').select('id').eq('id', sid).single()
+      const { data: existing } = await supabase.from('chat_sessions').select('id').eq('id', sid).maybeSingle()
       if (!existing) {
         await supabase.from('chat_sessions').insert({ id: sid, user_id: userId, title: "音乐创作", preview, ai_model: selectedModel })
       } else {
@@ -1986,7 +2038,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     // ============================================
 
     const preview = userMsg.content.slice(0, 30)
-    const { data: existing } = await supabase.from('chat_sessions').select('id').eq('id', sid).single()
+    const { data: existing } = await supabase.from('chat_sessions').select('id').eq('id', sid).maybeSingle()
     if (!existing) {
         await supabase.from('chat_sessions').insert({ id: sid, user_id: userId, title: userMsg.content.slice(0, 10)|| "作文", preview, ai_model: selectedModel })
     } else {
@@ -2004,6 +2056,40 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 	    rememberPendingTask({ requestId, sessionId: sid, model: selectedModel, createdAt: Date.now() })
 
     let fullText = ""; let hasRec = false
+    let wordCard: FrontendWordCard | null = null
+    const isWordCardRequest = selectedModel === "vocab-card"
+    const applyWordCard = (card: FrontendWordCard) => {
+      wordCard = card
+      hasRec = true
+      if (card.word) setCurrentWord(card.word)
+      setAnalysisStage(4)
+      triggerHandover()
+      setMessages(p => p.map(m => m.id === botId ? {
+        ...m,
+        content: card.word || "词境记忆卡",
+        metadata: { type: "word_card", wordCard: card },
+        wordCard: card
+      } : m))
+    }
+    const applyVocabResult = (result: any) => {
+      const resolved = resolveVocabCardResult(result, currentWord)
+      if (resolved.currentWord) {
+        setCurrentWord(resolved.currentWord)
+      }
+      if (resolved.frontendCard) {
+        applyWordCard(resolved.frontendCard)
+        return true
+      }
+      if (resolved.answer) {
+        fullText = resolved.answer
+        hasRec = true
+        setAnalysisStage(4)
+        triggerHandover()
+        setMessages(p => p.map(m => m.id === botId ? { ...m, content: resolved.answer } : m))
+        return true
+      }
+      return false
+    }
     try {
         const fileIds = activeFiles.map(f => f.difyFileId).filter(Boolean)
         const fileUrls = activeFiles
@@ -2029,7 +2115,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 	              "X-Request-Id": requestId
 	            },
 	            body: JSON.stringify({
-	              query: userMsg.content,
+	              query: isWordCardRequest ? vocabUserMessage : userMsg.content,
               fileIds,
               fileUrls,
               userId,
@@ -2037,6 +2123,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
               conversation_id: getConversationIdForRequest(selectedModel),
 	              model: selectedModel,
 	              mode: genMode,
+	              inputs: isWordCardRequest ? vocabWorkflowInputs : undefined,
 	              requestId,
 	              sessionId: sid,
 	              messageId: botId,
@@ -2132,8 +2219,23 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                         adoptConversationState(normalizedConversationId, selectedModel)
                     }
 
+                    if (isWordCardRequest) {
+                      applyVocabResult(json)
+                    }
+
                     // 🔥 处理 Chat API 的 answer 字段
                     if (json.answer) {
+                        if (isWordCardRequest) {
+                          const cleanedAnswer = cleanVocabAnswer(json.answer)
+                          if (cleanedAnswer) {
+                            fullText = cleanedAnswer
+                            hasRec = true
+                            setAnalysisStage(4)
+                            triggerHandover()
+                            setMessages(p => p.map(m => m.id === botId ? { ...m, content: cleanedAnswer } : m))
+                          }
+                          continue
+                        }
                         // 🔥 【关键】收到第一个 answer 时，强制触发 handover
                         // 确保光标在文字开始输出时立即显示
                         if (!hasRec) {
@@ -2151,6 +2253,17 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                     if ((json.event === 'text_chunk' || json.event === 'agent_message') && !json.answer) {
                         const text = json.data?.text || json.text || ''
                         if (text) {
+                            if (isWordCardRequest) {
+                              const cleanedAnswer = cleanVocabAnswer(text)
+                              if (cleanedAnswer) {
+                                fullText = cleanedAnswer
+                                hasRec = true
+                                setAnalysisStage(4)
+                                triggerHandover()
+                                setMessages(p => p.map(m => m.id === botId ? { ...m, content: cleanedAnswer } : m))
+                              }
+                              continue
+                            }
                             if (!hasRec) {
                               setAnalysisStage(4)
                               triggerHandover()
@@ -2165,6 +2278,10 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                     // 🔥 处理 workflow_finished 事件的输出文本（备用方案）
                     if (json.event === 'workflow_finished' && json.data?.outputs) {
                         const outputs = json.data.outputs
+                        if (isWordCardRequest) {
+                          applyVocabResult({ outputs })
+                          continue
+                        }
                         if (outputs.text && !hasRec) {
                             fullText = outputs.text
                             setMessages(p => p.map(m => m.id === botId ? { ...m, content: fullText } : m))
@@ -2178,7 +2295,27 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                 }
             }
 	        }
-	        if (hasRec) await supabase.from('chat_messages').insert({ session_id: sid, role: "assistant", content: fullText })
+	        if (isWordCardRequest && !wordCard) {
+	          const handledFallback = applyVocabResult(fullText)
+	          if (!handledFallback && !hasRec) {
+	            const friendlyError = "我没有收到可展示的回复，请再试一次。"
+	            setMessages(p => p.map(m => m.id === botId ? { ...m, content: friendlyError } : m))
+	            fullText = friendlyError
+	            hasRec = true
+	          }
+	        }
+	        if (hasRec) {
+	          const cardToSave = wordCard as FrontendWordCard | null
+	          await supabase.from('chat_messages').insert({
+	            session_id: sid,
+	            role: "assistant",
+	            content: cardToSave ? JSON.stringify({ frontend_card_json: cardToSave }) : fullText,
+	            metadata: undefined
+	          })
+	        }
+	        if (selectedModel === "vocab-card" && sid && !hadUrlSessionId) {
+	          router.replace(buildChatSessionRoute(sid, selectedModel))
+	        }
 	        forgetPendingTask(requestId)
 
         setUserCredits(prev => prev - cost)
@@ -2899,7 +3036,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                         setMessages(p => [...p, userMsg])
 
                         const preview = formData.title || formData.prompt.slice(0, 30)
-                        const { data: existing } = await supabase.from('chat_sessions').select('id').eq('id', sid).single()
+                        const { data: existing } = await supabase.from('chat_sessions').select('id').eq('id', sid).maybeSingle()
                         if (!existing) {
                           await supabase.from('chat_sessions').insert({ id: sid, user_id: userId, title: "音乐创作", preview, ai_model: selectedModel })
                         }
@@ -2951,6 +3088,25 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                       }}
                       isLoading={isLoading}
                       disabled={!userId || hasSunoActiveTasks}
+                    />
+                  </div>
+                ) : selectedModel === "vocab-card" ? (
+                  <div className="mx-auto flex min-h-full w-full max-w-4xl flex-col justify-start py-3 sm:py-5 md:py-6">
+                    <div className="mb-4 flex flex-col items-center text-center sm:mb-6">
+                      <div className="mb-3 sm:mb-4">
+                        <ModelLogo modelKey={selectedModel as any} size="xl" />
+                      </div>
+                      <h1 className="text-lg font-semibold text-slate-800 sm:text-xl">词境记忆卡</h1>
+                      <p className="mt-1 max-w-md text-xs leading-5 text-slate-500 sm:text-sm">
+                        先选学习阶段、卡片风格和输出语言，再输入单词生成记忆卡。
+                      </p>
+                    </div>
+                    <VocabCardDifyForm
+                      value={vocabCardInputs}
+                      onChange={setVocabCardInputs}
+                      disabled={isLoading}
+                      currentWord={currentWord}
+                      onClearCurrentWord={() => setCurrentWord("")}
                     />
                   </div>
                 ) : (
@@ -3050,6 +3206,31 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                                           />
                                         )}
                                       </>
+                                    )
+                                  }
+
+                                  const wordCard = message.wordCard || message.metadata?.wordCard || normalizeDifyWordCardResponse(message.content)
+                                  if (wordCard) {
+                                    return <PremiumWordCard data={wordCard} />
+                                  }
+                                  const vocabFallback = selectedModel === "vocab-card"
+                                    ? resolveVocabCardResult(message.content, currentWord)
+                                    : null
+                                  if (vocabFallback?.frontendCard) {
+                                    return <PremiumWordCard data={vocabFallback.frontendCard} />
+                                  }
+                                  if (vocabFallback?.answer) {
+                                    return (
+                                      <EnhancedMarkdown
+                                        content={cleanLLMText(vocabFallback.answer)}
+                                      />
+                                    )
+                                  }
+                                  if (selectedModel === "vocab-card" && containsRawDifyWordCardPayload(message.content)) {
+                                    return (
+                                      <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4 text-sm leading-6 text-amber-800">
+                                        我没有收到可展示的回复，请再试一次。
+                                      </div>
                                     )
                                   }
 
@@ -3209,7 +3390,11 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                 onRemoveFile={(i) => setUploadedFiles((p) => p.filter((_, idx) => idx !== i))}
                 isLoading={isLoading}
                 disabled={isLoading}
-                placeholder={userId ? "输入内容开始对话..." : "请先登录..."}
+                placeholder={userId
+                  ? selectedModel === "vocab-card"
+                    ? "例如：你好啊 / 我要学习 apple / 考我一下"
+                    : "输入内容开始对话..."
+                  : "请先登录..."}
                 className="overflow-visible border-slate-200/70 bg-white/95 shadow-[0_-4px_18px_rgba(0,0,0,0.06)] backdrop-blur-md sm:shadow-[0_8px_24px_rgba(0,0,0,0.10)]"
                 onFileUpload={(files) => {
                   const target = { target: { files } } as unknown as React.ChangeEvent<HTMLInputElement>

@@ -115,6 +115,13 @@ const EDUCATION_AGENTS: EducationAgent[] = [
     href: "/chat/quanquan-english",
   },
   {
+    key: "vocab-card",
+    name: "词境记忆卡",
+    description: "词根联想，卡片复习",
+    badge: "新",
+    href: "/chat/vocab-card",
+  },
+  {
     key: "beike-pro",
     name: "备课助手Pro",
     description: "智能备课，高效便捷",

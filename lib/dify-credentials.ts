@@ -32,6 +32,8 @@ export function getDifyCredentialForModel(
       return selectCredential(env.DIFY_QUANQUANMATH_API_KEY, "DIFY_QUANQUANMATH_API_KEY", defaultCredential)
     case "quanquan-english":
       return selectCredential(env.DIFY_QUANQUANENGLISH_API_KEY, "DIFY_QUANQUANENGLISH_API_KEY", defaultCredential)
+    case "vocab-card":
+      return selectCredential(env.DIFY_VOCAB_CARD_API_KEY, "DIFY_VOCAB_CARD_API_KEY", defaultCredential)
     case "beike-pro":
       return selectCredential(env.DIFY_BEIKE_PRO_API_KEY, "DIFY_BEIKE_PRO_API_KEY", defaultCredential)
     case "banzhuren":

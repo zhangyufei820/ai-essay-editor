@@ -26,6 +26,7 @@ export type ModelKey =
   | "open-claw"
   | "quanquan-math"
   | "quanquan-english"
+  | "vocab-card"
   | "beike-pro"
   | "banzhuren"
   | "banana-2-pro"
@@ -87,6 +88,10 @@ const MODEL_LOGOS: Record<ModelKey, ModelLogoConfig> = {
     brandColor: "#10A37F",
   },
   "quanquan-english": {
+    LucideIcon: Languages,
+    brandColor: "#10A37F",
+  },
+  "vocab-card": {
     LucideIcon: Languages,
     brandColor: "#10A37F",
   },

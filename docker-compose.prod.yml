@@ -81,6 +81,7 @@ services:
       - DIFY_IMAGE_GATEWAY_URL=http://dify-image-gateway:8001
       - DIFY_IMAGE_GATEWAY_PUBLIC_URL=http://43.154.111.156:8001
       - NEXT_PUBLIC_APP_URL=https://www.shenxiang.school
+      - VOICE_GATEWAY_URL=http://voice-gateway:8080
     tmpfs:
       - /app/.next/standalone/.next/cache
     volumes:
@@ -100,6 +101,43 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+
+  # ----------------------------------------------------------
+  # Voice Gateway - TTS / STT 内网语音服务
+  # ----------------------------------------------------------
+  voice-gateway:
+    build:
+      context: ./services/voice-gateway
+      dockerfile: Dockerfile
+    image: shenxiang-voice-gateway:latest
+    container_name: shenxiang-voice-gateway
+    restart: unless-stopped
+    read_only: true
+    mem_limit: 512m
+    cpus: 0.5
+    pids_limit: 128
+    env_file:
+      - .env.production
+    environment:
+      - NODE_ENV=production
+      - PORT=8080
+    tmpfs:
+      - /tmp
+    expose:
+      - "8080"
+    networks:
+      - shenxiang-net
+    logging:
+      driver: 'json-file'
+      options:
+        max-size: '10m'
+        max-file: '3'
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:8080/voice/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
 networks:
   shenxiang-net:

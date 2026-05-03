@@ -1137,7 +1137,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
         ? nextResult.imageUrls.map((url) => `![Generated Image](${url})`).join("\n\n")
         : nextResult.sourceText
 
-      const { data: existing } = await supabase.from("chat_sessions").select("id").eq("id", sid).single()
+      const { data: existing } = await supabase.from("chat_sessions").select("id").eq("id", sid).maybeSingle()
 
       if (!existing) {
         await supabase.from("chat_sessions").insert({

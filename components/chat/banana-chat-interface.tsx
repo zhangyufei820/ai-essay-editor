@@ -485,7 +485,7 @@ function BananaChatInterfaceInner() {
 
     // 创建会话
     const preview = userInputText.slice(0, 30)
-    const { data: existing } = await supabase.from('chat_sessions').select('id').eq('id', sid).single()
+    const { data: existing } = await supabase.from('chat_sessions').select('id').eq('id', sid).maybeSingle()
     if (!existing) {
         await supabase.from('chat_sessions').insert({ id: sid, user_id: userId, title: "图片生成", preview, ai_model: "banana-2-pro" })
     } else {

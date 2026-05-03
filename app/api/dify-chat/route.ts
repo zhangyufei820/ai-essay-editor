@@ -5,7 +5,6 @@ import {
   DifyWorkflowRequest,
   DifyImageObject,
   DifyFileObject,
-  DifyWorkflowInputs,
   DifyImageSize,
 } from "@/lib/dify-types"
 import {
@@ -29,6 +28,7 @@ import {
   sanitizeForTrace,
   updateTaskRun,
 } from "@/lib/ai-task-trace"
+import { buildVocabCardWorkflowInputs } from "@/lib/vocab-card-workflow"
 
 export const runtime = "nodejs"
 // 🔥 增加超时时间，支持 OpenClaw 大型 PPT 与图片生成网关的长任务重试
@@ -124,6 +124,21 @@ function buildGptImageV11Inputs(inputs: unknown): GptImageV11Inputs {
     reference_image_url: safeReferenceImageUrls[0] || "",
     reference_image_urls: safeReferenceImageUrls.slice(0, 10),
     mask_image_url: pickUrlString(record.mask_image_url),
+  }
+}
+
+const WORKFLOW_MODELS = new Set(["banana-2-pro", "vocab-card"])
+
+function sanitizeVocabCardOutputs(outputs: unknown): Record<string, unknown> {
+  const record = outputs && typeof outputs === "object" ? outputs as Record<string, unknown> : {}
+  return {
+    answer: record.answer || "",
+    frontend_card_json: record.frontend_card_json || "",
+    current_word: record.current_word || "",
+    word: record.word || "",
+    render_mode: record.render_mode || "",
+    audio_url: record.audio_url || "",
+    tts_status: record.tts_status || "",
   }
 }
 
@@ -936,25 +951,32 @@ export async function POST(request: NextRequest) {
     const callDify = async (retryWithoutId = false) => {
         const currentConvId = retryWithoutId ? null : effectiveConvId;
 
-        // 🎨 Banana 继续使用 Workflow API；GPT Image V11 使用 Chatflow query + inputs。
-        const isWorkflow = model === "banana-2-pro";
+        // 🎨 Banana 与词境记忆卡使用 Workflow API；GPT Image V11 使用 Chatflow query + inputs。
+        const isWorkflow = WORKFLOW_MODELS.has(model || "");
+        const isVocabCardWorkflow = model === "vocab-card";
         const apiEndpoint = isWorkflow ? "/workflows/run" : "/chat-messages";
 
         let difyRequest: DifyWorkflowRequest | DifyChatRequest;
 
         if (isWorkflow) {
             // Dify Banana 参数格式（image_prompt）
-            difyRequest = {
-                inputs: {
-                    image_prompt: query || "",
-                    ...(inputs || {})
-                },
-                response_mode: "streaming",
-                user: userId || "default-user",
-            }
+            difyRequest = isVocabCardWorkflow
+              ? {
+                  inputs: buildVocabCardWorkflowInputs({ query, inputs }),
+                  response_mode: "streaming",
+                  user: userId || "default-user",
+                }
+              : {
+                  inputs: {
+                      image_prompt: query || "",
+                      ...(inputs || {})
+                  },
+                  response_mode: "streaming",
+                  user: userId || "default-user",
+              }
 
             // 🔥 如果有文件，构造文件对象格式
-            if (difyFileIds.length > 0) {
+            if (!isVocabCardWorkflow && difyFileIds.length > 0) {
                 difyRequest.inputs.init_image = [{
                   type: 'image',
                   transfer_method: 'local_file',
@@ -964,14 +986,14 @@ export async function POST(request: NextRequest) {
             }
 
             // 🎨 传递尺寸参数（如果有）
-            if (imageSize) {
+            if (!isVocabCardWorkflow && imageSize) {
                 difyRequest.inputs.aspect_ratio = imageSize.ratio || "9:16"
                 difyRequest.inputs.image_width = imageSize.width || 1080
                 difyRequest.inputs.image_height = imageSize.height || 1920
                 console.log(`🎨 [Banana] 图片尺寸: ${imageSize.ratio} (${imageSize.width}x${imageSize.height})`)
             }
 
-            console.log(`🎨 [Banana] Workflow request prepared: files=${difyFileIds.length} hasImageSize=${Boolean(imageSize)}`)
+            console.log(`🎨 [Workflow] request prepared: model=${model} files=${difyFileIds.length} hasImageSize=${Boolean(imageSize)}`)
         } else {
             // 💬 Chat API 格式
             const isGptImage2 = model === "gpt-image-2"
@@ -1312,8 +1334,10 @@ export async function POST(request: NextRequest) {
           const text = new TextDecoder().decode(chunk)
           const outputText = model === "open-claw" ? rewriteOpenClawMediaReferencesWithSignedUrls(text) : text
 
-          // 传递数据给前端。OpenClaw 的本地媒体路径需要改写成本站可访问的代理 URL。
-          controller.enqueue(new TextEncoder().encode(outputText))
+          // 传递数据给前端。词境记忆卡会在解析后只转发结构化卡片事件，避免 raw JSON 出现在页面。
+          if (model !== "vocab-card") {
+            controller.enqueue(new TextEncoder().encode(outputText))
+          }
 
           // 🎨 Banana 调试：记录原始数据
           if (model === "banana-2-pro" && text.trim()) {
@@ -1356,6 +1380,9 @@ export async function POST(request: NextRequest) {
 	              if (json.event === 'node_started' || json.event === 'node_finished') {
 	                console.log(`🧠 [工作流节点] ${json.event}: ${json.data?.title || json.title || '未知节点'}`)
 	                const nodeData = json.data || {}
+                  if (model === "vocab-card") {
+                    controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(json)}\n\n`))
+                  }
 	                appendTaskNodeEvent(taskRun.id, {
 	                  event: json.event,
 	                  title: nodeData.title || json.title || "未知节点",
@@ -1368,6 +1395,12 @@ export async function POST(request: NextRequest) {
 	              // 提取 conversation_id
 	              if (json.conversation_id) {
 	                conversationId = json.conversation_id
+                  if (model === "vocab-card" && json.event !== "node_started" && json.event !== "node_finished") {
+                    controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({
+                      event: json.event || "conversation",
+                      conversation_id: conversationId,
+                    })}\n\n`))
+                  }
 	                updateTaskRun(taskRun.id, {
 	                  status: "running",
 	                  conversationId,
@@ -1428,7 +1461,25 @@ export async function POST(request: NextRequest) {
 	                const workflowRunId = json.data?.workflow_run_id || json.workflow_run_id
 	                if (json.data?.outputs) {
                   const outputs = json.data.outputs
-                  if (outputs.text) {
+                  if (model === "vocab-card") {
+                    const safeOutputs = sanitizeVocabCardOutputs(outputs)
+                    fullResponseText += JSON.stringify({ outputs: safeOutputs })
+                    hasReceivedContent = true
+                    console.log(`📚 [VocabCard] 收集到结构化 outputs`)
+                    controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({
+                      event: "workflow_finished",
+                      data: {
+                        ...json.data,
+                        outputs: safeOutputs,
+                      },
+                      outputs: safeOutputs,
+                      frontend_card_json: safeOutputs.frontend_card_json,
+                      current_word: safeOutputs.current_word,
+                      word: safeOutputs.word,
+                      answer: safeOutputs.answer,
+                      conversation_id: conversationId || undefined,
+                    })}\n\n`))
+                  } else if (outputs.text) {
                     fullResponseText += outputs.text
                     hasReceivedContent = true
                     console.log(`🎨 [Workflow完成] 收集到输出文本: ${outputs.text.substring(0, 50)}...`)
@@ -1437,6 +1488,11 @@ export async function POST(request: NextRequest) {
                     hasReceivedContent = true
 	                    console.log(`🎨 [Workflow完成] 收集到结果文本: ${outputs.result.substring(0, 50)}...`)
 	                  }
+	                }
+	                const workflowTokens =
+	                  Number(json.data?.total_tokens || json.total_tokens || json.data?.metadata?.usage?.total_tokens || 0)
+	                if (Number.isFinite(workflowTokens) && workflowTokens > 0) {
+	                  totalTokens = workflowTokens
 	                }
 	                updateTaskRun(taskRun.id, {
 	                  status: "succeeded",
