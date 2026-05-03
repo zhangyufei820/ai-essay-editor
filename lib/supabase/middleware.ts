@@ -73,6 +73,13 @@ export async function updateSession(request: NextRequest) {
       ? await supabase.auth.getUser(bearerToken)
       : await supabase.auth.getUser()
 
+    // Authing Bearer tokens are verified inside route handlers by requireUser().
+    // Middleware must not trust them as identity, but should let them reach the
+    // route-level Supabase/Authing verifier instead of blocking as Supabase-only.
+    if (!user && bearerToken) {
+      return supabaseResponse
+    }
+
     // 浏览器可以伪造 X-User-Id；受保护接口只能信任已验证的 Supabase session。
     if (!user) {
       console.warn(`🚫 [Middleware] 未授权访问被拦截: ${pathname}`)

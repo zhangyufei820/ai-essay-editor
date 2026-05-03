@@ -158,6 +158,15 @@ describe('Sprint 5 payment / credits / membership guards', () => {
     expect(clients).not.toContain("'X-User-Id'")
   })
 
+  it('lets Bearer requests reach route-level verified auth instead of Supabase-only middleware', () => {
+    const middleware = read('lib/supabase/middleware.ts')
+
+    expect(middleware).toContain('if (!user && bearerToken)')
+    expect(middleware).toContain('return supabaseResponse')
+    expect(middleware).toContain('Authing Bearer tokens are verified inside route handlers by requireUser()')
+    expect(middleware).not.toContain('request.headers.get("X-User-Id")')
+  })
+
   it('keeps Suno base and token deductions in unified billing audit metadata', () => {
     const source = read('app/api/suno/route.ts')
     expect(source).toContain('createBillingAuditMetadata')
