@@ -2090,6 +2090,14 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       }
       return false
     }
+    const hasVocabRenderablePayload = (json: any) => {
+      return Boolean(
+        json?.answer ||
+        json?.outputs ||
+        json?.frontend_card_json ||
+        json?.data?.outputs
+      )
+    }
     try {
         const fileIds = activeFiles.map(f => f.difyFileId).filter(Boolean)
         const fileUrls = activeFiles
@@ -2219,7 +2227,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                         adoptConversationState(normalizedConversationId, selectedModel)
                     }
 
-                    if (isWordCardRequest) {
+                    if (isWordCardRequest && hasVocabRenderablePayload(json)) {
                       applyVocabResult(json)
                     }
 
@@ -3226,7 +3234,11 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                                       />
                                     )
                                   }
-                                  if (selectedModel === "vocab-card" && containsRawDifyWordCardPayload(message.content)) {
+                                  if (
+                                    selectedModel === "vocab-card" &&
+                                    containsRawDifyWordCardPayload(message.content) &&
+                                    !(message.id === currentBotIdRef.current && isLoading)
+                                  ) {
                                     return (
                                       <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4 text-sm leading-6 text-amber-800">
                                         我没有收到可展示的回复，请再试一次。
