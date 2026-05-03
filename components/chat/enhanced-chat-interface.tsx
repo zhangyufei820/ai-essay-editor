@@ -343,6 +343,13 @@ async function saveMessageOnce(key: string, save: () => Promise<unknown>) {
   }
 }
 
+function createLocalSessionId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID()
+  }
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
 async function ensureChatSessionViaApi(params: {
   sessionId: string
   title: string
@@ -1950,7 +1957,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     // 否则会导致用旧模型的 session 去请求新模型
     const isModelSwitch = sessionIdRef.current === null && currentSessionId;
     if (!sid && !urlSessionId) {
-        sid = Date.now().toString();
+        sid = createLocalSessionId();
         setCurrentSessionId(sid);
         adoptConversationState(sid, selectedModel);
     } else if (urlSessionId && !isModelSwitch) {
@@ -1958,7 +1965,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         adoptConversationState(urlSessionId, selectedModel);
     } else {
         // 模型切换或无 session 的情况，生成新的
-        sid = Date.now().toString();
+        sid = createLocalSessionId();
         setCurrentSessionId(sid);
         adoptConversationState(sid, selectedModel);
     }
@@ -3074,14 +3081,14 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                         // 🔥 修复：当模型切换时，即使 urlSessionId 存在也忽略
                         const isModelSwitch = sessionIdRef.current === null && currentSessionId;
                         if (!sid && !urlSessionId) {
-                          sid = Date.now().toString()
+                          sid = createLocalSessionId()
                           setCurrentSessionId(sid)
                           adoptConversationState(sid, selectedModel)
                         } else if (urlSessionId && !isModelSwitch) {
                           sid = urlSessionId
                           adoptConversationState(urlSessionId, selectedModel)
                         } else {
-                          sid = Date.now().toString()
+                          sid = createLocalSessionId()
                           setCurrentSessionId(sid)
                           adoptConversationState(sid, selectedModel)
                         }

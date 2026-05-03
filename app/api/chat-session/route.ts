@@ -2,6 +2,8 @@ import { type NextRequest, NextResponse } from "next/server"
 import { createClient as createSupabaseClient } from "@supabase/supabase-js"
 import { requireUser } from "@/lib/auth/verified-user"
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
 export async function POST(request: NextRequest) {
   try {
     // IP 限流：30次/分钟
@@ -20,8 +22,11 @@ export async function POST(request: NextRequest) {
     const user = auth.user!
 
     const body = await request.json()
-    const { id, title, preview, processing_mode, ai_provider, ai_model } = body
+    const { id, title, preview, processing_mode, ai_model } = body
     const requestedId = typeof id === "string" && id.trim() ? id.trim() : null
+    if (requestedId && !UUID_RE.test(requestedId)) {
+      return NextResponse.json({ error: "会话 ID 格式无效" }, { status: 400 })
+    }
 
     const supabase = createServiceRoleClient()
     if (requestedId) {
@@ -42,7 +47,6 @@ export async function POST(request: NextRequest) {
             title: title || "新对话",
             preview: preview || null,
             processing_mode,
-            ai_provider,
             ai_model,
             updated_at: new Date().toISOString(),
           })
@@ -64,9 +68,7 @@ export async function POST(request: NextRequest) {
         title: title || "新对话",
         preview: preview || null,
         processing_mode,
-        ai_provider,
         ai_model,
-        date: Date.now(),
       })
       .select()
       .single()
@@ -105,7 +107,7 @@ export async function GET(request: NextRequest) {
     if (sessionId) {
       const { data: session, error: sessionError } = await supabase
         .from("chat_sessions")
-        .select("id,title,preview,ai_model,ai_provider,processing_mode,user_id,created_at,updated_at")
+        .select("id,title,preview,ai_model,processing_mode,user_id,created_at,updated_at")
         .eq("id", sessionId)
         .maybeSingle()
 
@@ -128,7 +130,7 @@ export async function GET(request: NextRequest) {
 
     const { data: sessions, error } = await supabase
       .from("chat_sessions")
-      .select("id,title,preview,ai_model,ai_provider,processing_mode,created_at,updated_at")
+      .select("id,title,preview,ai_model,processing_mode,created_at,updated_at")
       .eq("user_id", user.id)
       .order("updated_at", { ascending: false })
       .limit(limit)
