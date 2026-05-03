@@ -851,6 +851,34 @@ export async function POST(request: NextRequest) {
     }
 
     const imageInputsForBilling = model === "gpt-image-2" ? buildGptImageV11Inputs(inputs) : null
+    const billingModelType = imageInputsForBilling?.model as ModelType | undefined
+    if (imageInputsForBilling && (billingModelType || "gpt-image-2") === "gpt-image-2") {
+      const { data: userProfile } = await getSupabaseAdmin()
+        .from("user_profiles")
+        .select("email")
+        .eq("user_id", userId)
+        .maybeSingle()
+      const membershipStatus = await resolveActiveMembershipStatus(getSupabaseAdmin(), userId)
+
+      if (!canUseImage2({
+        user_id: userId,
+        email: typeof userProfile?.email === "string" ? userProfile.email : null,
+        membership_status: membershipStatus,
+      })) {
+        console.warn(`🚫 [媒体权限] 用户 ${userId} 无权限使用 ${billingModelType || "gpt-image-2"}`)
+        return new Response(
+          JSON.stringify({
+            error: "GPT Image 2 当前仅订阅用户可用，请升级会员后使用。",
+            message: "GPT Image 2 当前仅订阅用户可用，请升级会员后使用。",
+            requiredMembership: "basic",
+            allowlist: ["IMAGE2_WHITELIST_USER_IDS", "IMAGE2_WHITELIST_EMAILS"],
+            action: "请充值或升级会员",
+          }),
+          { status: 403, headers: { "Content-Type": "application/json" } },
+        )
+      }
+    }
+
     const taskRun = await createTaskRun({
       userId,
       sessionId: typeof sessionId === "string" ? sessionId : null,
@@ -955,37 +983,9 @@ export async function POST(request: NextRequest) {
     
     const currentCredits = userCredits?.credits || 0
     
-    const billingModelType = imageInputsForBilling?.model as ModelType | undefined
     const estimatedMinCost = imageInputsForBilling
       ? calculateActualCost(billingModelType || "gpt-image-2") * imageInputsForBilling.n
       : getMinimumRequiredCredits(modelType)
-
-    if (imageInputsForBilling && (billingModelType || "gpt-image-2") === "gpt-image-2") {
-      const { data: userProfile } = await getSupabaseAdmin()
-        .from("user_profiles")
-        .select("email")
-        .eq("user_id", userId)
-        .maybeSingle()
-      const membershipStatus = await resolveActiveMembershipStatus(getSupabaseAdmin(), userId)
-
-      if (!canUseImage2({
-        user_id: userId,
-        email: typeof userProfile?.email === "string" ? userProfile.email : null,
-        membership_status: membershipStatus,
-      })) {
-        console.warn(`🚫 [媒体权限] 用户 ${userId} 无权限使用 ${billingModelType || "gpt-image-2"}`)
-        return new Response(
-          JSON.stringify({
-            error: "GPT Image 2 当前仅订阅用户可用，请升级会员后使用。",
-            message: "GPT Image 2 当前仅订阅用户可用，请升级会员后使用。",
-            requiredMembership: "basic",
-            allowlist: ["IMAGE2_WHITELIST_USER_IDS", "IMAGE2_WHITELIST_EMAILS"],
-            action: "请充值或升级会员",
-          }),
-          { status: 403, headers: { "Content-Type": "application/json" } },
-        )
-      }
-    }
     
     if (currentCredits < estimatedMinCost) {
       console.warn(`🚫 [计费] 用户 ${userId} 积分不足: 当前 ${currentCredits}`)
