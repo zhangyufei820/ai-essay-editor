@@ -17,6 +17,7 @@ import {
 // ============================================
 
 export type ModelKey =
+  | "general-chat"
   | "standard"
   | "teaching-pro"
   | "gpt-5"
@@ -75,6 +76,10 @@ const MODEL_LOGOS: Record<ModelKey, ModelLogoConfig> = {
   },
 
   // 教育类智能体 - 使用 Lucide 线性图标，无背景
+  "general-chat": {
+    LucideIcon: Sparkles,
+    brandColor: "#10A37F",
+  },
   "standard": {
     LucideIcon: FileCheck2,
     brandColor: "#10A37F",

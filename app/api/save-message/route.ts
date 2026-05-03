@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@/lib/supabase/server"
+import { createClient as createSupabaseClient } from "@supabase/supabase-js"
+import { requireUser } from "@/lib/auth/verified-user"
 import { uploadBase64File } from "@/lib/storage"
 
 export async function POST(request: NextRequest) {
@@ -11,22 +12,35 @@ export async function POST(request: NextRequest) {
     if (!limitResult.allowed) {
       return createRateLimitResponse(limitResult.retryAfter!)
     }
-    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-      console.log("[v0] Supabase not configured, skipping message save")
-      return NextResponse.json({ message: { id: Date.now().toString() } }, { status: 200 })
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      console.warn("[v0] Supabase not configured, refusing message save")
+      return NextResponse.json({ error: "数据库未配置" }, { status: 503 })
     }
 
-    const supabase = await createServerClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return NextResponse.json({ error: "未登录" }, { status: 401 })
-    }
+    const auth = await requireUser(request)
+    if (auth.response) return auth.response
+    const user = auth.user!
 
     const body = await request.json()
     const { session_id, role, content, files, metadata } = body
+    if (!session_id || !role || typeof content !== "string") {
+      return NextResponse.json({ error: "参数不完整" }, { status: 400 })
+    }
+
+    const supabase = createServiceRoleClient()
+    const { data: session, error: sessionError } = await supabase
+      .from("chat_sessions")
+      .select("id,user_id")
+      .eq("id", session_id)
+      .maybeSingle()
+
+    if (sessionError) throw sessionError
+    if (!session) {
+      return NextResponse.json({ error: "会话不存在" }, { status: 404 })
+    }
+    if (session.user_id !== user.id) {
+      return NextResponse.json({ error: "无权访问该会话" }, { status: 403 })
+    }
 
     // 🔥 保存消息（支持 metadata 字段，用于存储音乐等附加数据）
     const { data: message, error: messageError } = await supabase
@@ -67,11 +81,22 @@ export async function POST(request: NextRequest) {
     }
 
     // 更新会话的updated_at
-    await supabase.from("chat_sessions").update({ updated_at: new Date().toISOString() }).eq("id", session_id)
+    await supabase
+      .from("chat_sessions")
+      .update({ updated_at: new Date().toISOString() })
+      .eq("id", session_id)
+      .eq("user_id", user.id)
 
     return NextResponse.json({ message })
   } catch (error) {
     console.error("[v0] Save message error:", error)
     return NextResponse.json({ error: "保存消息失败" }, { status: 500 })
   }
+}
+
+function createServiceRoleClient() {
+  return createSupabaseClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  )
 }

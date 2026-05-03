@@ -26,7 +26,7 @@ interface SelectedModelState {
 }
 
 export const useSelectedModelStore = create<SelectedModelState>((set) => ({
-  selectedModel: "standard",
+  selectedModel: "general-chat",
   isManualSessionSwitch: false,
 
   setSelectedModel: (model) =>

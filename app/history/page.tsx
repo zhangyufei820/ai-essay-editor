@@ -27,6 +27,12 @@ type EssayReview = {
   created_at: string
 }
 
+function getAuthHeaders(): Record<string, string> {
+  if (typeof window === "undefined") return {}
+  const token = localStorage.getItem("idToken") || localStorage.getItem("authingToken") || localStorage.getItem("accessToken")
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
 export default function HistoryPage() {
   const [sessions, setSessions] = useState<ChatSession[]>([])
   const [reviews, setReviews] = useState<EssayReview[]>([])
@@ -58,9 +64,8 @@ export default function HistoryPage() {
       if (userStr) {
         try {
           const user = JSON.parse(userStr)
-          console.log("[v0] History user object:", user)
           userId = user.id || user.sub || user.userId || user.user_id || ''
-          console.log("[v0] Extracted userId:", userId)
+          console.log("[v0] History local user parsed:", { hasId: Boolean(userId) })
         } catch (e) {
           console.error("[v0] Parse user error:", e)
         }
@@ -68,13 +73,8 @@ export default function HistoryPage() {
         console.log("[v0] No currentUser in localStorage")
       }
 
-      const headers: Record<string, string> = {}
-      if (userId) {
-        headers['X-User-Id'] = userId
-        console.log("[v0] Sending request with X-User-Id header")
-      } else {
-        console.log("[v0] No userId, sending request without auth header")
-      }
+      const headers = getAuthHeaders()
+      console.log("[v0] Loading history:", { hasAuthorization: Boolean(headers.Authorization) })
 
       const [sessionsRes, reviewsRes] = await Promise.all([
         fetch("/api/chat-session", { headers }),

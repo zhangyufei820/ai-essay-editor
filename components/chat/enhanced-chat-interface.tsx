@@ -150,6 +150,14 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
+async function getVerifiedAuthHeaders(): Promise<Record<string, string>> {
+  const { data } = await supabase.auth.getSession()
+  if (data.session?.access_token) return { Authorization: `Bearer ${data.session.access_token}` }
+  if (typeof window === "undefined") return {}
+  const authingToken = localStorage.getItem("idToken") || localStorage.getItem("authingToken") || localStorage.getItem("accessToken")
+  return authingToken ? { Authorization: `Bearer ${authingToken}` } : {}
+}
+
 // --- 类型定义 ---
 type UploadedFile = {
   name: string
@@ -322,6 +330,18 @@ function createClientRequestId(prefix = "chat") {
 }
 
 const PENDING_TASK_STORAGE_KEY = "shenxiang.pendingAiTasks"
+const savedMessageKeys = new Set<string>()
+
+async function saveMessageOnce(key: string, save: () => Promise<unknown>) {
+  if (savedMessageKeys.has(key)) return
+  savedMessageKeys.add(key)
+  try {
+    await save()
+  } catch (error) {
+    savedMessageKeys.delete(key)
+    throw error
+  }
+}
 
 function rememberPendingTask(task: { requestId: string; sessionId?: string; model: string; createdAt: number }) {
   if (typeof window === "undefined") return
@@ -859,7 +879,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   // 🔥 修复：跟踪主动会话切换（侧边栏点击 vs URL 导航）
   // 🔥 now in Zustand store: useSelectedModelStore
   // 🔥 修复：记录用户上次使用的模型（用于新建对话时恢复）
-  const lastUsedModelRef = useRef<ModelType>("standard")
+  const lastUsedModelRef = useRef<ModelType>("general-chat")
 
   // ✅ 全局状态：所有组件共享单一 selectedModel 真源
   const selectedModel = useSelectedModelStore((s) => s.selectedModel)
@@ -903,11 +923,10 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   // 🔥 获取历史会话列表（必须在 useEffect 之前定义，否则闭包调用时函数未定义）
   // 🔥 修复: 使用 API 路由代替直接 Supabase 查询，支持 Authing 用户
   const fetchChatSessions = async (uid: string) => {
-    console.log("📋 [历史会话] 开始查询, uid:", uid)
+    console.log("📋 [历史会话] 开始查询")
     try {
-      // 使用 API 路由，通过 X-User-Id 头传递用户 ID
       const res = await fetch(`/api/chat-session`, {
-        headers: { 'X-User-Id': uid }
+        headers: await getVerifiedAuthHeaders(),
       })
 
       console.log("📋 [历史会话] API 响应状态:", res.status)
@@ -1005,20 +1024,29 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 
 	  useEffect(() => {
 	    if (typeof window !== 'undefined') {
+      const initUser = async () => {
+        const { data: { user: verifiedUser } } = await supabase.auth.getUser()
+        if (verifiedUser?.id) {
+          setUserId(verifiedUser.id)
+          if (verifiedUser.user_metadata?.avatar_url) setUserAvatar(verifiedUser.user_metadata.avatar_url)
+          const displayName = verifiedUser.phone || verifiedUser.email || verifiedUser.user_metadata?.name || "用户"
+          setUserDisplayName(displayName)
+          fetchCredits(verifiedUser.id)
+          fetchChatSessions(verifiedUser.id)
+          recoverPendingTasks(verifiedUser.id)
+          return
+        }
+
       const userStr = localStorage.getItem('currentUser')
       if (userStr) {
         try {
           const user = JSON.parse(userStr)
           const uid = user.id || user.sub || user.userId || user.user_id || ""
           console.log("🔑 [用户初始化] 解析用户:", {
-            id: user.id,
-            sub: user.sub,
-            userId: user.userId,
-            finalUid: uid,
-            phone: user.phone,
-            email: user.email
+            hasId: Boolean(uid),
+            hasPhone: Boolean(user.phone || user.phone_number),
+            hasEmail: Boolean(user.email),
           })
-          setUserId(uid)
           if (user.user_metadata?.avatar_url) setUserAvatar(user.user_metadata.avatar_url)
 
           // 🔥 设置用户显示名称：优先手机号 > 邮箱 > 用户名
@@ -1026,17 +1054,23 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
           setUserDisplayName(displayName)
           console.log("👤 [用户初始化] 显示名称:", displayName)
 
-          if (uid) {
-	            fetchCredits(uid)
-	            fetchChatSessions(uid)
-	            recoverPendingTasks(uid)
-	          }
+          const authingToken = localStorage.getItem("idToken") || localStorage.getItem("authingToken") || localStorage.getItem("accessToken")
+          if (authingToken && uid) {
+            setUserId(uid)
+            fetchCredits(uid)
+            fetchChatSessions(uid)
+            recoverPendingTasks(uid)
+          } else {
+            console.warn("⚠️ [用户初始化] 检测到本地 Authing 用户，但缺少后端可验证 token，已禁用受保护对话请求")
+          }
         } catch (e) {
           console.error("❌ [用户初始化] 解析失败:", e)
         }
       } else {
         console.warn("⚠️ [用户初始化] localStorage 中无 currentUser")
       }
+      }
+      initUser().catch((error) => console.warn("⚠️ [用户初始化] verified session 查询失败:", error))
     }
 	  }, [])
 
@@ -1057,7 +1091,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 	      }
 
 	      const res = await fetch(`/api/task-status?limit=10`, {
-	        headers: { "X-User-Id": uid },
+	        headers: await getVerifiedAuthHeaders(),
 	      })
 	      if (!res.ok) return
 	      const payload = await res.json()
@@ -1084,28 +1118,21 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 	  }
 
   const fetchCredits = async (uid: string) => {
-    console.log("💰 [积分查询] 通过 API 查询用户:", uid)
+    console.log("💰 [积分查询] 通过 API 查询")
     try {
       // 🔥 使用 API 查询积分（绕过 RLS 限制）
-      const res = await fetch(`/api/user/credits?user_id=${encodeURIComponent(uid)}`)
+	      const res = await fetch(`/api/user/credits`, {
+          headers: await getVerifiedAuthHeaders(),
+        })
       if (res.ok) {
         const data = await res.json()
         console.log("✅ [积分查询] API 成功:", data.credits)
         setUserCredits(data.credits || 0)
       } else {
         console.error("❌ [积分查询] API 失败:", res.status)
-        // 备用：直接查询数据库
-        const { data, error } = await supabase.from('user_credits').select('credits').eq('user_id', uid).single()
-        if (!error && data) {
-          console.log("✅ [积分查询] 备用查询成功:", data.credits)
-          setUserCredits(data.credits)
-        }
       }
     } catch (err) {
       console.error("❌ [积分查询] 异常:", err)
-      // 备用：直接查询数据库
-      const { data } = await supabase.from('user_credits').select('credits').eq('user_id', uid).single()
-      if (data) setUserCredits(data.credits)
     }
   }
 
@@ -1122,6 +1149,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   useEffect(() => {
     const agentToModel: Record<string, ModelType> = {
       "standard": "standard",
+      "general-chat": "general-chat",
       "teaching-pro": "teaching-pro",
       "gpt-5": "gpt-5",
       "claude-opus": "claude-opus",
@@ -1132,7 +1160,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       "open-claw": "open-claw",
     }
 
-    const targetModel = urlAgent ? (agentToModel[urlAgent] || urlAgent as ModelType) : (initialModel || "standard")
+    const targetModel = urlAgent ? (agentToModel[urlAgent] || urlAgent as ModelType) : (initialModel || "general-chat")
 
     console.log(`🔗 [URL Sync] urlAgent=${urlAgent}, prevUrlAgent=${prevUrlAgentRef.current}, targetModel=${targetModel}`)
 
@@ -1184,7 +1212,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       if (sessionError) {
         console.warn("获取会话模型失败:", sessionError)
         // 🔥 即使查询失败，也尝试使用 initialModel 或默认值
-        const fallbackModel = initialModel || "standard"
+        const fallbackModel = initialModel || "general-chat"
         console.log(`🔄 [历史会话模型同步] 使用 fallback 模型: ${fallbackModel}`)
         setSelectedModel(fallbackModel as ModelType)
       } else {
@@ -1193,8 +1221,8 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         // store.isManualSessionSwitch 为 false 时表示 URL 导航，此时用 initialModel（保持分享链接兼容性）
         const isManual = useSelectedModelStore.getState().isManualSessionSwitch
         const targetModel = isManual
-          ? (sessionData?.ai_model || "standard")
-          : (initialModel || sessionData?.ai_model || "standard")
+          ? (sessionData?.ai_model || "general-chat")
+          : (initialModel || sessionData?.ai_model || "general-chat")
         console.log(`🔄 [历史会话模型同步] isManual=${isManual}, initialModel=${initialModel}, ai_model=${sessionData?.ai_model} → selectedModel=${targetModel}`)
         setSelectedModel(targetModel as ModelType)
         console.log(`✅ [历史会话模型同步] setSelectedModel 已调用: ${targetModel}`)
@@ -1222,7 +1250,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         const restoredCurrentWord = [...historyMessages].reverse().find((message) => message.wordCard?.word)?.wordCard?.word
         setCurrentWord(restoredCurrentWord || "")
         setCurrentSessionId(sid)
-        adoptConversationState(sid, (sessionData?.ai_model || initialModel || "standard") as ModelType)
+        adoptConversationState(sid, (sessionData?.ai_model || initialModel || "general-chat") as ModelType)
       }
     } catch (e) {
       console.error("加载历史会话失败:", e)
@@ -1354,6 +1382,14 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 
   // --- 模型配置（增强版：添加描述和标签） ---
   const modelConfig: Partial<Record<ModelType, ModelUiConfig>> = {
+    "general-chat": {
+      name: "通用对话",
+      modelKey: "general-chat",
+      color: BRAND_GREEN,
+      description: "轻量快速问答",
+      badge: "默认",
+      group: "AI模型"
+    },
     "standard": {
       name: "作文批改",
       modelKey: "standard",
@@ -1629,7 +1665,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       return
     }
 
-    console.log("📎 [handleFileUpload] 开始上传，用户ID:", userId)
+    console.log("📎 [handleFileUpload] 开始上传")
     setIsUploading(true)
     setUploadProgress(0)
     setFileProcessing({ status: "uploading", progress: 0, message: "正在处理..." })
@@ -1660,7 +1696,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
             const res = await fetch("/api/dify-upload", {
               method: "POST",
               headers: {
-                "X-User-Id": userId,
+                ...(await getVerifiedAuthHeaders()),
                 "X-Model": selectedModel || ""
               },
               body: formData
@@ -1811,6 +1847,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     e: React.FormEvent,
     overrides?: { content?: string; files?: UploadedFile[] }
   ) => {
+    const clickStartedAt = Date.now()
     e.preventDefault(); if (!userId) { toast.error("请登录"); return }
     const activeFiles = overrides?.files ?? uploadedFiles
     const txt = ((overrides?.content ?? input) || "").trim()
@@ -1842,7 +1879,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     console.log("📤 [onSubmit] 发送消息:", {
       model: selectedModel,
       mode: genMode,
-      query: txt.slice(0, 50) + "...",
+      promptLength: txt.length,
       urlAgent,
       sessionId: sessionIdRef.current
     })
@@ -1901,6 +1938,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 
     // 🔥 根据模型类型设置不同的默认提示词
     const defaultPrompts: Record<string, string> = {
+      "general-chat": "你好",
       "standard": "批改作文",
       "teaching-pro": "分析教学材料",
       "suno-v5": "创作一首歌曲",
@@ -1994,23 +2032,33 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     // 🎵 Suno V5 特殊处理结束
     // ============================================
 
-    const preview = userMsg.content.slice(0, 30)
-    const { data: existing } = await supabase.from('chat_sessions').select('id').eq('id', sid).maybeSingle()
-    if (!existing) {
-        await supabase.from('chat_sessions').insert({ id: sid, user_id: userId, title: userMsg.content.slice(0, 10)|| "作文", preview, ai_model: selectedModel })
-    } else {
-        await supabase.from('chat_sessions').update({ preview, ai_model: selectedModel }).eq('id', sid)
-    }
-    await supabase.from('chat_messages').insert({ session_id: sid, role: "user", content: userMsg.content })
-
-    // 🔥 刷新侧边栏会话列表
-    refreshSessionList()
-
 	    const botId = (Date.now()+1).toString();
     // 🔥 记录当前正在处理的消息 ID
 	    currentBotIdRef.current = botId
 	    setMessages(p => [...p, { id: botId, role: "assistant", content: "" }])
 	    rememberPendingTask({ requestId, sessionId: sid, model: selectedModel, createdAt: Date.now() })
+    const persistUserMessagePromise = (async () => {
+      try {
+        await saveMessageOnce(`${requestId}:user`, async () => {
+          const preview = userMsg.content.slice(0, 30)
+          const { data: existing } = await supabase.from('chat_sessions').select('id').eq('id', sid).maybeSingle()
+          if (!existing) {
+            await supabase.from('chat_sessions').insert({ id: sid, user_id: userId, title: userMsg.content.slice(0, 10) || "对话", preview, ai_model: selectedModel })
+          } else {
+            await supabase.from('chat_sessions').update({ preview, ai_model: selectedModel }).eq('id', sid)
+          }
+          await supabase.from('chat_messages').insert({
+            session_id: sid,
+            role: "user",
+            content: userMsg.content,
+            metadata: { requestId, clientMessageId: userMsg.id },
+          })
+        })
+      } catch (error) {
+        console.warn("⚠️ [消息保存] 用户消息后台保存失败:", error)
+        toast.warning("消息已发送，但历史记录保存可能延迟")
+      }
+    })()
 
     let fullText = ""; let hasRec = false
     let wordCard: FrontendWordCard | null = null
@@ -2063,8 +2111,8 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
           .filter(Boolean)
 
         console.log("🚀 [API 请求] 发送到 /api/dify-chat:", {
-          query: userMsg.content.slice(0, 50),
-          userId,
+          requestId,
+          promptLength: userMsg.content.length,
           model: selectedModel,
           mode: genMode,
           sessionId: sessionIdRef.current,
@@ -2072,18 +2120,27 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
           fileUrlCount: fileUrls.length
         })
 
+          const authHeaders = await getVerifiedAuthHeaders()
+          const requestStartedAt = Date.now()
+          const hasAuthorization = Boolean(authHeaders.Authorization)
+          console.debug("[ChatPerf]", {
+            requestId,
+            stage: "click_to_request_start",
+            elapsedMs: requestStartedAt - clickStartedAt,
+            model: selectedModel,
+          })
+
 	        const res = await fetch(getApiUrl("/api/dify-chat"), {
 	            method: "POST",
 	            headers: {
 	              "Content-Type": "application/json",
-	              "X-User-Id": userId,
+                ...authHeaders,
 	              "X-Request-Id": requestId
 	            },
 	            body: JSON.stringify({
 	              query: isWordCardRequest ? vocabUserMessage : userMsg.content,
               fileIds,
               fileUrls,
-              userId,
               // 🔥 Suno V5 使用 useSunoMusic 的 conversationId 保持会话连续性
               conversation_id: getConversationIdForRequest(selectedModel),
 	              model: selectedModel,
@@ -2094,13 +2151,25 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 	              messageId: botId,
 	            })
 	        })
+          console.debug("[ChatPerf]", {
+            requestId,
+            stage: "request_headers",
+            elapsedMs: Date.now() - requestStartedAt,
+            hasAuthorization,
+            hasCookie: false,
+            model: selectedModel,
+          })
 	        const traceId = res.headers.get("X-Trace-Id") || undefined
 	        if (traceId) {
 	          setProcessingContext((context) => context?.requestId === requestId ? { ...context, traceId } : context)
 	        }
 
         console.log("📥 [API 响应] 状态码:", res.status)
-        console.log("📥 [API 响应] Headers:", Object.fromEntries(res.headers.entries()))
+        console.log("📥 [API 响应] Header 摘要:", {
+          contentType: res.headers.get("content-type") || undefined,
+          hasTraceId: Boolean(traceId),
+          hasRequestId: Boolean(res.headers.get("X-Request-Id")),
+        })
 
         if (res.status === 401) {
           toast.error("请先登录")
@@ -2133,10 +2202,19 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         }
         const decoder = new TextDecoder();
         let buffer = "";
+        let firstChunkAt: number | null = null
 
         while (true) {
             const { done, value } = await reader!.read();
             if (done) break;
+            if (!firstChunkAt) {
+              firstChunkAt = Date.now()
+              console.debug("[ChatPerf]", {
+                requestId,
+                stage: "first_chunk",
+                elapsedMs: firstChunkAt - requestStartedAt,
+              })
+            }
 
             buffer += decoder.decode(value, { stream: true });
             const lines = buffer.split("\n");
@@ -2267,21 +2345,27 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 	            hasRec = true
 	          }
 	        }
+          console.debug("[ChatPerf]", {
+            requestId,
+            stage: "stream_end",
+            elapsedMs: Date.now() - requestStartedAt,
+          })
 	        if (hasRec) {
+            await persistUserMessagePromise
 	          const cardToSave = wordCard as FrontendWordCard | null
-	          await supabase.from('chat_messages').insert({
-	            session_id: sid,
-	            role: "assistant",
-	            content: cardToSave ? JSON.stringify({ frontend_card_json: cardToSave }) : fullText,
-	            metadata: undefined
-	          })
+	          await saveMessageOnce(`${requestId}:assistant`, async () => {
+              await supabase.from('chat_messages').insert({
+                session_id: sid,
+                role: "assistant",
+                content: cardToSave ? JSON.stringify({ frontend_card_json: cardToSave }) : fullText,
+                metadata: { requestId, clientMessageId: botId }
+              })
+            })
 	        }
 	        if (selectedModel === "vocab-card" && sid && !hadUrlSessionId) {
 	          router.replace(buildChatSessionRoute(sid, selectedModel))
 	        }
 	        forgetPendingTask(requestId)
-
-        await refreshCredits()
 
 	    } catch (e: any) {
         console.error("❌ [对话异常] 详细错误:", e)
@@ -2310,16 +2394,10 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 	      // 🔥 重置工作流状态（而非 markWorkflowComplete，否则会显示误导性的"已完成"节点）
       resetWorkflow()
 
-      // 🔥 积分刷新：对话结束后触发全局积分刷新
-      console.log("🔄 [积分刷新] 对话结束，触发积分重新查询...")
       if (userId) {
         fetchCredits(userId)
       }
-      // 🔥 触发侧边栏积分刷新
-      refreshCredits()
-      console.log("✅ [积分刷新] 已触发全局积分刷新事件")
-
-      router.refresh()
+      console.debug("[ChatPerf]", { requestId, stage: "post_stream_refresh", count: 1 })
 
       // 🔥 移除自动切换回 standard 的逻辑，保持当前模型
       // if (genMode !== "text") {

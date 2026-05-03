@@ -23,7 +23,7 @@ export function buildChatSessionRoute(sessionId: string, model?: string | null, 
 }
 
 export function normalizeChatSessionModel(model?: string | null) {
-  const normalized = (model || "standard").trim().replaceAll("_", "-")
+  const normalized = (model || "general-chat").trim().replaceAll("_", "-")
   const lower = normalized.toLowerCase()
 
   if (
@@ -50,7 +50,7 @@ export function normalizeChatSessionModel(model?: string | null) {
     return "banana-2-pro"
   }
 
-  return lower || "standard"
+  return lower || "general-chat"
 }
 
 export function resolveChatSessionRouteModel(session: ChatSessionRouteSource) {

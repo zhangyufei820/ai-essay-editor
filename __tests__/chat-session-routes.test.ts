@@ -38,4 +38,10 @@ describe('chat session routes', () => {
   it('keeps normal chat sessions on the generic chat page', () => {
     expect(buildChatSessionRoute('normal', 'teaching-pro')).toBe('/chat?sessionId=normal&agent=teaching-pro')
   })
+
+  it('defaults unspecified chat sessions to general-chat', () => {
+    expect(normalizeChatSessionModel(undefined)).toBe('general-chat')
+    expect(resolveChatSessionRouteModel({ id: 'new-chat' })).toBe('general-chat')
+    expect(buildChatSessionRoute('new-chat')).toBe('/chat?sessionId=new-chat&agent=general-chat')
+  })
 })

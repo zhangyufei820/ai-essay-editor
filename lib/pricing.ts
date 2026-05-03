@@ -21,6 +21,7 @@ import {
 } from "@/lib/billing-config"
 
 export type ModelType =
+  | "general-chat"
   | "standard"
   | "teaching-pro"
   | "gpt-5"
@@ -121,6 +122,7 @@ const TEXT_MODEL_DEFAULTS = {
 } as const
 
 export const MODEL_COSTS: Record<ModelType, ModelCostConfig> = {
+  "general-chat": { ...TEXT_MODEL_DEFAULTS, displayName: "通用轻量对话", estimatedInputTokens: 300, estimatedOutputTokens: 600 },
   standard: { ...TEXT_MODEL_DEFAULTS, displayName: "作文批改智能体" },
   "teaching-pro": { ...TEXT_MODEL_DEFAULTS, displayName: "教学评智能助手", estimatedInputTokens: 1000, estimatedOutputTokens: 1500 },
   "quanquan-math": { ...TEXT_MODEL_DEFAULTS, displayName: "全学段数学智能体" },
@@ -434,6 +436,7 @@ export function getMinimumRequiredCredits(model: ModelType): number {
 }
 
 export function getTextWorkflowKind(model: ModelType): TextWorkflowKind {
+  if (model === "general-chat") return "default_text"
   if (model === "standard") return "essay_correction"
 
   const shortAgents: ModelType[] = ["vocab-card", "quanquan-math", "quanquan-english"]

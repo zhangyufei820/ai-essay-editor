@@ -180,7 +180,13 @@ async function handleGenerate(query: string, userId: string, taskMode?: string, 
  */
 async function handleGeneratePro(formData: SunoProFormInputs, userId: string, conversationId?: string) {
   console.log('🎵 [Suno Proxy Pro] 开始生成音乐（阻塞模式）')
-  console.log('🎵 [Suno Proxy Pro] 参数:', JSON.stringify(formData, null, 2))
+  console.log('🎵 [Suno Proxy Pro] 参数摘要:', {
+    taskMode: formData.task_mode,
+    hasPrompt: Boolean(formData.prompt),
+    hasLyrics: Boolean(formData.lyrics),
+    hasStyleTags: Boolean(formData.style_tags),
+    hasTitle: Boolean(formData.title),
+  })
   const creditGuard = await ensureSunoCredits(userId)
   if (creditGuard) return creditGuard
   
@@ -221,7 +227,14 @@ async function handleGeneratePro(formData: SunoProFormInputs, userId: string, co
     inputs.end_at = Number(formData.end_at)
   }
   
-  console.log('🎵 [Suno Proxy Pro] 清洗后的 inputs:', inputs)
+  console.log('🎵 [Suno Proxy Pro] 清洗后的 inputs 摘要:', {
+    taskMode: inputs.task_mode,
+    mv: inputs.MV,
+    hasPrompt: Boolean(inputs.prompt),
+    hasStyleTags: Boolean(inputs.style_tags),
+    hasTitle: Boolean(inputs.title),
+    instrumental: inputs.instrumental,
+  })
   
   const response = await fetch(url, {
     method: 'POST',
@@ -349,10 +362,16 @@ async function ensureSunoCredits(userId: string) {
  */
 async function handleGenerateStreamingPro(formData: SunoProFormInputs, userId: string, conversationId?: string) {
   console.log('🎵 [Suno Proxy Pro] 开始生成音乐（流式模式）')
-  console.log('🎵 [Suno Proxy Pro] 原始参数:', JSON.stringify(formData, null, 2))
+  console.log('🎵 [Suno Proxy Pro] 原始参数摘要:', {
+    taskMode: formData.task_mode,
+    hasPrompt: Boolean(formData.prompt),
+    hasLyrics: Boolean(formData.lyrics),
+    hasStyleTags: Boolean(formData.style_tags),
+    hasTitle: Boolean(formData.title),
+  })
   
   // 🔥 检查并扣除积分
-  console.log('🎵 [Suno Proxy Pro] 检查用户积分, userId:', userId)
+  console.log('🎵 [Suno Proxy Pro] 检查用户积分')
   const creditGuard = await ensureSunoCredits(userId)
   if (creditGuard) return creditGuard
   
@@ -431,7 +450,7 @@ async function handleGenerateStreamingPro(formData: SunoProFormInputs, userId: s
   if (formData.negative_tags?.trim()) inputs.negative_tags = formData.negative_tags.trim()
   
   console.log('🎵 [Suno Proxy Pro] 最终 instrumental 在 inputs 中:', inputs.instrumental)
-  console.log('🎵 [Suno Proxy Pro] lyrics 和 prompt:', { lyrics: inputs.lyrics?.slice(0, 50), prompt: inputs.prompt?.slice(0, 50) })
+  console.log('🎵 [Suno Proxy Pro] lyrics 和 prompt 摘要:', { hasLyrics: Boolean(inputs.lyrics), hasPrompt: Boolean(inputs.prompt) })
   
   // 🔥 数字字段：只有在有值且大于0时才传递
   if (formData.continue_at && Number(formData.continue_at) > 0) {
@@ -441,7 +460,15 @@ async function handleGenerateStreamingPro(formData: SunoProFormInputs, userId: s
     inputs.end_at = Number(formData.end_at)
   }
   
-  console.log('🎵 [Suno Proxy Pro] 发送到 Dify 的 inputs:', JSON.stringify(inputs, null, 2))
+  console.log('🎵 [Suno Proxy Pro] 发送到 Dify 的 inputs 摘要:', {
+    taskMode: inputs.task_mode,
+    mv: inputs.MV,
+    hasLyrics: Boolean(inputs.lyrics),
+    hasPrompt: Boolean(inputs.prompt),
+    hasStyleTags: Boolean(inputs.style_tags),
+    hasTitle: Boolean(inputs.title),
+    instrumental: inputs.instrumental,
+  })
   
   const response = await fetch(url, {
     method: 'POST',

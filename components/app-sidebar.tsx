@@ -77,6 +77,14 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
+async function getVerifiedAuthHeaders(): Promise<Record<string, string>> {
+  const { data } = await supabase.auth.getSession()
+  if (data.session?.access_token) return { Authorization: `Bearer ${data.session.access_token}` }
+  if (typeof window === "undefined") return {}
+  const authingToken = localStorage.getItem("idToken") || localStorage.getItem("authingToken") || localStorage.getItem("accessToken")
+  return authingToken ? { Authorization: `Bearer ${authingToken}` } : {}
+}
+
 // 🔥 全局状态：用于跨组件控制侧边栏折叠
 const SIDEBAR_COLLAPSE_EVENT = 'sidebar-collapse'
 // 🔥 全局状态：用于跨组件控制侧边栏展开
@@ -126,11 +134,13 @@ function AppSidebarInner() {
   // 🔥 积分查询函数 - 使用专用 API（绕过 RLS 限制）
   const fetchCredits = useCallback(async (uid: string) => {
     if (!uid) return
-    console.log("🔍 [侧边栏] 通过 API 查询积分，用户ID:", uid)
+    console.log("🔍 [侧边栏] 通过 API 查询积分")
     
     try {
       // 使用专用 API 查询积分（使用 Service Role Key，绕过 RLS）
-      const res = await fetch(`/api/user/credits?user_id=${encodeURIComponent(uid)}`)
+      const res = await fetch(`/api/user/credits`, {
+        headers: await getVerifiedAuthHeaders(),
+      })
       
       if (res.ok) {
         const data = await res.json()
@@ -144,44 +154,16 @@ function AppSidebarInner() {
         const errorData = await res.json().catch(() => ({}))
         console.error("❌ [侧边栏] 积分 API 返回错误:", res.status, errorData)
         
-        // 如果 API 失败，尝试直接查询数据库作为备用
-        const { data: creditData } = await supabase
-          .from('user_credits')
-          .select('credits')
-          .eq('user_id', uid)
-          .maybeSingle()
-        
-        if (creditData) {
-          console.log("✅ [侧边栏] 备用查询成功:", creditData.credits)
-          setCredits(creditData.credits)
-        }
       }
     } catch (err) {
       console.error("❌ [侧边栏] 积分查询异常:", err)
-      
-      // 网络错误时尝试直接查询
-      try {
-        const { data: creditData } = await supabase
-          .from('user_credits')
-          .select('credits')
-          .eq('user_id', uid)
-          .maybeSingle()
-        
-        if (creditData) {
-          setCredits(creditData.credits)
-        }
-      } catch (e) {
-        console.error("❌ [侧边栏] 备用查询也失败:", e)
-      }
     }
   }, [])
 
   const refreshSessionsForUser = useCallback(async (uid: string) => {
     try {
       const sessionRes = await fetch('/api/chat-session', {
-        headers: {
-          'X-User-Id': uid
-        }
+        headers: await getVerifiedAuthHeaders(),
       })
       if (sessionRes.ok) {
         const sessionData = await sessionRes.json()
@@ -272,25 +254,31 @@ function AppSidebarInner() {
 
     const loadData = async () => {
       let userId = ""
+      const { data: { user: verifiedUser } } = await supabase.auth.getUser()
+      if (verifiedUser?.id) {
+        setUser(verifiedUser)
+        userId = verifiedUser.id
+        setCurrentUserId(userId)
+      }
       if (typeof window !== 'undefined') {
         const userStr = localStorage.getItem('currentUser')
-        console.log("🔍 [侧边栏] localStorage currentUser:", userStr?.substring(0, 200))
-        if (userStr) {
+        if (!userId && userStr) {
           try {
             const parsedUser = JSON.parse(userStr)
+            const authingToken = localStorage.getItem("idToken") || localStorage.getItem("authingToken") || localStorage.getItem("accessToken")
+            const authingUserId = parsedUser.id || parsedUser.sub || parsedUser.userId || parsedUser.user_id
             console.log("🔍 [侧边栏] 解析用户数据:", {
-              id: parsedUser.id,
-              sub: parsedUser.sub,
-              userId: parsedUser.userId,
-              user_id: parsedUser.user_id,
-              email: parsedUser.email,
-              phone: parsedUser.phone
+              hasId: Boolean(parsedUser.id || parsedUser.sub || parsedUser.userId || parsedUser.user_id),
+              hasEmail: Boolean(parsedUser.email),
+              hasPhone: Boolean(parsedUser.phone),
             })
             setUser(parsedUser)
-            // 🔥 扩展用户 ID 获取方式
-            userId = parsedUser.id || parsedUser.sub || parsedUser.userId || parsedUser.user_id || ""
-            console.log("🔍 [侧边栏] 最终用户ID:", userId)
-            setCurrentUserId(userId)
+            if (authingToken && authingUserId) {
+              userId = authingUserId
+              setCurrentUserId(userId)
+            } else {
+              console.warn("⚠️ [侧边栏] 检测到本地 Authing 用户，但缺少后端可验证 token，跳过受保护数据查询")
+            }
           } catch (e) { console.error("❌ [侧边栏] 解析用户数据失败:", e) }
         }
         
@@ -301,7 +289,7 @@ function AppSidebarInner() {
       }
 
       if (userId) {
-        console.log("🚀 [侧边栏] 开始查询积分，用户ID:", userId)
+        console.log("🚀 [侧边栏] 开始查询积分")
         await fetchCredits(userId)
 
         // 使用 API 端点查询历史会话（绕过 RLS 限制）

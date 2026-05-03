@@ -7,7 +7,8 @@ import { LoadingStateCard } from '@/components/ui/LoadingStateCard'
 // 🎯 支持的模型/智能体列表
 // 新增智能体时，只需在此处添加即可
 const SUPPORTED_MODELS = [
-  'standard',        // 作文批改（默认）
+  'standard',        // 作文批改
+  'general-chat',    // 通用轻量对话
   'teaching-pro',    // 教学评助手
   'gpt-5',           // ChatGPT 5.4
   'claude-opus',     // Claude opus4.6thinking
@@ -40,7 +41,7 @@ const EnhancedChatInterface = dynamic(
     ssr: false,
     loading: () => (
       <div className="min-h-screen flex items-center justify-center bg-white dark:bg-black">
-        <LoadingStateCard modelKey="standard" />
+        <LoadingStateCard modelKey="general-chat" />
       </div>
     )
   }

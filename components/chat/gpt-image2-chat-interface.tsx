@@ -79,6 +79,14 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
+async function getVerifiedAuthHeaders(): Promise<Record<string, string>> {
+  const { data } = await supabase.auth.getSession()
+  if (data.session?.access_token) return { Authorization: `Bearer ${data.session.access_token}` }
+  if (typeof window === "undefined") return {}
+  const authingToken = localStorage.getItem("idToken") || localStorage.getItem("authingToken") || localStorage.getItem("accessToken")
+  return authingToken ? { Authorization: `Bearer ${authingToken}` } : {}
+}
+
 type UploadKind = "edit" | "mask"
 
 type SelectedImage = {
@@ -633,7 +641,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
 
   const fetchCredits = async (uid: string) => {
     try {
-      const res = await fetch(`${API_BASE}/api/user/credits?user_id=${encodeURIComponent(uid)}`)
+      const res = await fetch(`${API_BASE}/api/user/credits`, { headers: await getVerifiedAuthHeaders() })
       if (!res.ok) return
       const data = await res.json()
       setUserCredits(data.credits || 0)
@@ -644,7 +652,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
 
   const fetchChatSessions = async (uid: string) => {
     try {
-      const res = await fetch("/api/chat-session", { headers: { "X-User-Id": uid } })
+      const res = await fetch("/api/chat-session", { headers: await getVerifiedAuthHeaders() })
       if (!res.ok) return
       const { sessions } = await res.json()
       const safeSessions = Array.isArray(sessions) ? sessions : []
@@ -846,7 +854,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
     const res = await fetch(`${API_BASE}/api/dify-upload`, {
       method: "POST",
       headers: {
-        "X-User-Id": userId,
+        ...(await getVerifiedAuthHeaders()),
         "X-Model": workspaceModel,
       },
       body: formData,
@@ -873,7 +881,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
 
       const response = await fetch(`${API_BASE}/api/dify-chat?imageTaskId=${encodeURIComponent(taskId)}&requestId=${encodeURIComponent(requestId)}`, {
         headers: {
-          "X-User-Id": userId,
+          ...(await getVerifiedAuthHeaders()),
           "X-Request-Id": requestId,
         },
       })
@@ -977,13 +985,12 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
         method: "POST",
 	        headers: {
 	          "Content-Type": "application/json",
-	          "X-User-Id": userId,
+	          ...(await getVerifiedAuthHeaders()),
 	          "X-Request-Id": requestId,
 	        },
         body: JSON.stringify({
           query: cleanPrompt,
           inputs: submittedInputs,
-          userId,
           conversation_id: currentSessionIdRef.current || undefined,
 	          model: workspaceModel,
 	          mode: "image",

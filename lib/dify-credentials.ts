@@ -11,6 +11,8 @@ export function getDifyCredentialForModel(
   defaultCredential = env.ESSAY_CORRECTION_API_KEY || env.DIFY_API_KEY || "",
 ): DifyCredentialSelection {
   switch (model) {
+    case "general-chat":
+      return selectGeneralChatCredential(env, defaultCredential)
     case "teaching-pro":
       return selectCredential(env.DIFY_TEACHING_PRO_API_KEY, "DIFY_TEACHING_PRO_API_KEY", defaultCredential)
     case "gpt-5":
@@ -50,6 +52,23 @@ export function getDifyCredentialForModel(
     default:
       return { credential: defaultCredential, source: "DEFAULT_DIFY_KEY" }
   }
+}
+
+function selectGeneralChatCredential(env: Env, defaultCredential: string): DifyCredentialSelection {
+  if (env.DIFY_GENERAL_CHAT_API_KEY) {
+    return { credential: env.DIFY_GENERAL_CHAT_API_KEY, source: "DIFY_GENERAL_CHAT_API_KEY" }
+  }
+
+  if (env.NODE_ENV === "production") {
+    console.warn("[Dify Credentials] DIFY_GENERAL_CHAT_API_KEY is required for general-chat in production")
+    return { credential: "", source: "DIFY_GENERAL_CHAT_API_KEY" }
+  }
+
+  const devFallback = env.DIFY_API_KEY_GPT5 || defaultCredential
+  if (devFallback) {
+    console.warn("[Dify Credentials] DIFY_GENERAL_CHAT_API_KEY missing; using local development fallback")
+  }
+  return selectCredential(devFallback, "DIFY_GENERAL_CHAT_API_KEY", defaultCredential)
 }
 
 function selectCredential(

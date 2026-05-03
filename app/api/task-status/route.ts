@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from "next/server"
+import { requireUser } from "@/lib/auth/verified-user"
 import { getTaskRunsForUser } from "@/lib/ai-task-trace"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 export async function GET(request: NextRequest) {
-  const userId = request.headers.get("X-User-Id")
-  if (!userId) {
-    return NextResponse.json({ error: "未授权访问，请先登录" }, { status: 401 })
-  }
+  const auth = await requireUser(request)
+  if (auth.response) return auth.response
+  const userId = auth.user!.id
 
   const requestId = request.nextUrl.searchParams.get("requestId")
   const sessionId = request.nextUrl.searchParams.get("sessionId")

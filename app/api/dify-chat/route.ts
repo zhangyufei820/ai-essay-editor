@@ -26,16 +26,18 @@ import {
   type ParsedDifyUsage,
 } from "@/lib/billing"
 import { assertSecureTlsConfiguration } from "@/lib/runtime-security"
+import { requireUser } from "@/lib/auth/verified-user"
 import { internalDifyFetch } from "@/lib/internal-dify-fetch"
 import { getDifyCredentialForModel } from "@/lib/dify-credentials"
 import { rewriteOpenClawMediaReferences } from "@/lib/openclaw-media"
 import { rewriteOpenClawMediaReferencesWithSignedUrls } from "@/lib/openclaw-media-server"
 import {
-  appendTaskNodeEvent,
   createRequestId,
+  createTraceId,
   createTaskRun,
   extractArtifactsFromText,
   extractArtifactsFromUnknown,
+  replaceTaskNodeEvents,
   sanitizeForTrace,
   updateTaskRun,
 } from "@/lib/ai-task-trace"
@@ -162,7 +164,7 @@ async function resolveActiveMembershipStatus(
     .maybeSingle()
 
   if (error) {
-    console.warn(`⚠️ [会员权限] 查询会员订单失败 user=${userId}:`, error.message)
+    console.warn("[会员权限] 查询会员订单失败:", error.message)
     return null
   }
 
@@ -185,6 +187,20 @@ function sanitizeVocabCardOutputs(outputs: unknown): Record<string, unknown> {
   }
 }
 
+function summarizeDifyEventForLog(json: Record<string, any>) {
+  const data = json.data && typeof json.data === "object" ? json.data as Record<string, any> : {}
+  const outputs = data.outputs && typeof data.outputs === "object" ? data.outputs as Record<string, any> : {}
+  return {
+    event: typeof json.event === "string" ? json.event : "unknown",
+    hasConversationId: typeof json.conversation_id === "string",
+    nodeTitle: typeof data.title === "string" ? data.title : typeof json.title === "string" ? json.title : undefined,
+    workflowRunId: typeof data.workflow_run_id === "string" || typeof json.workflow_run_id === "string" ? "present" : "missing",
+    hasAnswer: typeof json.answer === "string" && json.answer.length > 0,
+    outputKeys: Object.keys(outputs).slice(0, 10),
+    fileCount: Array.isArray(outputs.files) ? outputs.files.length : undefined,
+  }
+}
+
 // 默认的基础配置
 const DIFY_BASE_URL = process.env.DIFY_INTERNAL_URL
   || process.env.DIFY_BASE_URL
@@ -196,6 +212,25 @@ const GPT_IMAGE_GATEWAY_TIMEOUT_MS = 540_000
 const IMAGE_GATEWAY_URL = (process.env.DIFY_IMAGE_GATEWAY_URL || "http://dify-image-gateway:8001").replace(/\/+$/, "")
 // 🔥 作文批改（standard）使用专用的 ESSAY_CORRECTION_API_KEY
 const DEFAULT_DIFY_KEY = process.env.ESSAY_CORRECTION_API_KEY || process.env.DIFY_API_KEY 
+
+function nowMs() {
+  return Date.now()
+}
+
+function logPerf(requestId: string, stage: string, startedAt: number, extra: Record<string, unknown> = {}) {
+  console.info("[DifyPerf]", {
+    requestId,
+    stage,
+    elapsedMs: nowMs() - startedAt,
+    ...extra,
+  })
+}
+
+function fireAndForget(label: string, work: Promise<unknown>) {
+  work.catch((error) => {
+    console.warn(`[${label}] async task failed:`, error instanceof Error ? error.message : String(error))
+  })
+}
 
 // Supabase 客户端工厂函数（延迟创建避免构建时错误）
 function getSupabaseAdmin() {
@@ -602,7 +637,6 @@ async function startImageGatewayTask(params: {
 
   console.log("[GPT Image Task] persisted", {
     taskId,
-    userId: params.userId,
     promptLength: params.query.length,
     requestId: params.requestId,
     traceId: params.traceId,
@@ -617,9 +651,11 @@ export async function GET(request: NextRequest) {
     return Response.json({ error: "缺少图片任务 ID" }, { status: 400 })
   }
 
-  const headerUserId = request.headers.get("X-User-Id")
+  const auth = await requireUser(request)
+  if (auth.response) return auth.response
+  const userId = auth.user!.id
   const requestId = request.nextUrl.searchParams.get("requestId") || request.headers.get("X-Request-Id")
-  if (!headerUserId || !requestId) {
+  if (!requestId) {
     return Response.json({ error: "未授权访问，请先登录" }, { status: 401 })
   }
 
@@ -627,7 +663,7 @@ export async function GET(request: NextRequest) {
     .from("ai_task_runs")
     .select("id,user_id,upstream_task_id")
     .eq("id", requestId)
-    .eq("user_id", headerUserId)
+    .eq("user_id", userId)
     .maybeSingle()
 
   if (taskOwnerError) {
@@ -636,7 +672,7 @@ export async function GET(request: NextRequest) {
   }
 
   if (!taskOwner || (taskOwner.upstream_task_id && taskOwner.upstream_task_id !== taskId)) {
-    console.warn(`🚫 [GPT Image Task] 用户无权查询图片任务: user=${headerUserId}, requestId=${requestId}, taskId=${taskId}`)
+    console.warn(`🚫 [GPT Image Task] 用户无权查询图片任务: requestId=${requestId}, taskId=${taskId}`)
     return Response.json({ error: "无权访问该图片任务" }, { status: 403 })
   }
 
@@ -801,6 +837,7 @@ async function pollWorkflowRunDetail(params: {
 
 export async function POST(request: NextRequest) {
   try {
+    const apiStartedAt = nowMs()
     assertSecureTlsConfiguration()
 
     // IP 限流：30次/分钟
@@ -810,37 +847,32 @@ export async function POST(request: NextRequest) {
     if (!limitResult.allowed) {
       return createRateLimitResponse(limitResult.retryAfter!)
     }
-    // 🔐 从 header 获取用户身份（middleware 已验证）
-    const headerUserId = request.headers.get("X-User-Id")
+    const auth = await requireUser(request)
+    if (auth.response) return auth.response
     
     const body = await request.json()
-    const { query, conversation_id, fileIds, userId: bodyUserId, inputs, model, imageSize, async_image_task, sessionId, messageId } = body
+    const { query, conversation_id, fileIds, inputs, model, imageSize, async_image_task, sessionId, messageId } = body
     const difyFileIds = Array.isArray(fileIds)
       ? fileIds.filter((id): id is string => typeof id === "string" && id.trim().length > 0)
       : []
     const fileUrls = pickUrlStrings(body.fileUrls)
 
-    const modelPrefix = model || "standard"
-    const requestedModelType = (model || "standard") as ModelType
+    const modelPrefix = model || "general-chat"
+    const requestedModelType = (model || "general-chat") as ModelType
     const configuredMaxOutputTokens = getMaxOutputTokensForModel(requestedModelType)
     const limitedQuery = appendTextOutputLimitInstruction(query || "你好", requestedModelType)
     let effectiveConvId = normalizeDifyConversationId(conversation_id, modelPrefix)
     
-    console.log(`🔍 [Dify-Chat] 接收请求: model=${model || "standard"} files=${difyFileIds.length} urls=${fileUrls.length}`)
+    console.log(`🔍 [Dify-Chat] 接收请求: model=${model || "general-chat"} files=${difyFileIds.length} urls=${fileUrls.length}`)
     
-    // 优先使用 header 中的 userId（更安全），其次使用 body 中的
-    const userId = headerUserId || bodyUserId
-    
-    // 🔐 二次验证：确保有用户身份
-    if (!userId) {
-      console.warn("🚫 [Dify-Chat] 未授权访问被拦截")
-      return new Response(JSON.stringify({ error: "未授权访问，请先登录" }), { status: 401 })
-    }
+    const userId = auth.user!.id
 
     const requestId = request.headers.get("X-Request-Id") || body.requestId || createRequestId(model === "gpt-image-2" ? "img" : "chat")
+    logPerf(requestId, "api_enter", apiStartedAt, { model: model || "general-chat" })
+    logPerf(requestId, "auth_done", apiStartedAt)
     const taskKind = model === "gpt-image-2" ? "image" : model === "open-claw" ? "openclaw" : "dify"
     if (hasGptImageModelInput(inputs) && model !== "gpt-image-2") {
-      console.warn(`🚫 [媒体权限] 图片模型请求顶层 model 不匹配，拒绝绕过媒体计费: user=${userId}, model=${model || "empty"}`)
+      console.warn(`🚫 [媒体权限] 图片模型请求顶层 model 不匹配，拒绝绕过媒体计费: model=${model || "empty"}`)
       return new Response(
         JSON.stringify({
           error: "图片生成请求参数无效",
@@ -865,7 +897,7 @@ export async function POST(request: NextRequest) {
         email: typeof userProfile?.email === "string" ? userProfile.email : null,
         membership_status: membershipStatus,
       })) {
-        console.warn(`🚫 [媒体权限] 用户 ${userId} 无权限使用 ${billingModelType || "gpt-image-2"}`)
+        console.warn(`🚫 [媒体权限] 用户无权限使用 ${billingModelType || "gpt-image-2"}`)
         return new Response(
           JSON.stringify({
             error: "GPT Image 2 当前仅订阅用户可用，请升级会员后使用。",
@@ -879,11 +911,17 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const taskRun = await createTaskRun({
+    const taskRun = {
+      id: requestId,
+      requestId,
+      traceId: createTraceId(requestId),
+      persisted: false,
+    }
+    fireAndForget("AI Task Trace create", createTaskRun({
       userId,
       sessionId: typeof sessionId === "string" ? sessionId : null,
       messageId: typeof messageId === "string" ? messageId : null,
-      model: model || "standard",
+      model: model || "general-chat",
       kind: taskKind,
       requestId,
       stage: "请求已接收",
@@ -894,10 +932,28 @@ export async function POST(request: NextRequest) {
         max_output_tokens: configuredMaxOutputTokens,
         async_image_task: async_image_task === true,
       },
-    })
+    }))
+
+    if (typeof sessionId === "string" && sessionId.trim()) {
+      const { data: sessionOwner, error: sessionOwnerError } = await getSupabaseAdmin()
+        .from("chat_sessions")
+        .select("user_id")
+        .eq("id", sessionId)
+        .maybeSingle()
+
+      if (sessionOwnerError) {
+        console.error("[Dify-Chat] 会话 owner 校验失败:", sessionOwnerError.message)
+        return Response.json({ error: "会话权限校验失败" }, { status: 500 })
+      }
+
+      if (sessionOwner && sessionOwner.user_id !== userId) {
+        console.warn(`🚫 [Dify-Chat] 会话越权访问被拦截: requestId=${requestId}`)
+        return Response.json({ error: "无权访问该会话" }, { status: 403 })
+      }
+    }
 
     if (model !== "gpt-image-2" && fileUrls.length > 0 && difyFileIds.length === 0) {
-      console.warn(`🚫 [Dify-Chat] 非图片生成模型拒绝 remote_url 附件: model=${model || "standard"} urls=${fileUrls.length}`)
+      console.warn(`🚫 [Dify-Chat] 非图片生成模型拒绝 remote_url 附件: model=${model || "general-chat"} urls=${fileUrls.length}`)
       return new Response(
         JSON.stringify({ error: "文件上传缺少 Dify 文件 ID，请重新上传文件后再试" }),
         {
@@ -907,7 +963,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    console.log(`🔄 [切换模型] 用户: ${userId} | 目标模型: ${model || "默认标准版"} | conversation=${effectiveConvId ? "reuse" : "new"}`)
+    console.log(`🔄 [切换模型] 目标模型: ${model || "默认标准版"} | conversation=${effectiveConvId ? "reuse" : "new"}`)
 
     // --- 1. 钥匙分发中心 (彻底分离通道) ---
     const { credential: selectedCredential, source: keySource } = getDifyCredentialForModel(model, process.env, DEFAULT_DIFY_KEY)
@@ -933,7 +989,7 @@ export async function POST(request: NextRequest) {
     const modelType = requestedModelType
     
     // 🔍 详细日志：查询用户积分
-    console.log(`🔍 [积分查询] 开始查询用户: ${userId}`)
+    console.log("🔍 [积分查询] 开始查询")
     
     // 🔥 修复：只查询存在的字段 credits 和 user_id（移除不存在的 total_spent）
     let { data: userCredits, error: creditsError } = await getSupabaseAdmin()
@@ -945,7 +1001,7 @@ export async function POST(request: NextRequest) {
     // 🔥 关键修复：如果用户不存在，先创建积分记录（赠送 1000 积分，与注册逻辑一致）
     // 🔥 移除 total_spent 字段（数据库中不存在）
     if (creditsError?.code === "PGRST116") {
-      console.log(`🆕 [新用户] 用户 ${userId} 在 user_credits 表中不存在，自动创建积分记录，赠送 1000 积分`)
+      console.log("🆕 [新用户] user_credits 表中不存在，自动创建积分记录，赠送 1000 积分")
       
       const { data: newCredits, error: insertError } = await getSupabaseAdmin()
         .from("user_credits")
@@ -986,9 +1042,10 @@ export async function POST(request: NextRequest) {
     const estimatedMinCost = imageInputsForBilling
       ? calculateActualCost(billingModelType || "gpt-image-2") * imageInputsForBilling.n
       : getMinimumRequiredCredits(modelType)
+    logPerf(requestId, "credit_check_done", apiStartedAt, { requiredCredits: estimatedMinCost })
     
     if (currentCredits < estimatedMinCost) {
-      console.warn(`🚫 [计费] 用户 ${userId} 积分不足: 当前 ${currentCredits}`)
+      console.warn(`🚫 [计费] 用户积分不足: 当前 ${currentCredits}`)
       return new Response(
         JSON.stringify({
           error: "当前积分不足",
@@ -1001,7 +1058,7 @@ export async function POST(request: NextRequest) {
       )
     }
     
-    console.log(`💰 [预检查] 用户: ${userId} | 模型: ${modelType} | 当前积分: ${currentCredits}`)
+    console.log(`💰 [预检查] 模型: ${modelType} | 当前积分: ${currentCredits}`)
 
     if (model === "gpt-image-2") {
       const imageBillingModel = (billingModelType || "gpt-image-2") as ModelType
@@ -1220,13 +1277,14 @@ export async function POST(request: NextRequest) {
         }, firstByteTimeoutMs)
 
         try {
-            await updateTaskRun(taskRun.id, {
+            fireAndForget("AI Task Trace running", updateTaskRun(taskRun.id, {
               status: "running",
               stage: isWorkflow ? "工作流已提交" : "Dify 会话已提交",
               progress: 8,
               conversationId: currentConvId,
-            })
+            }))
             console.warn(`🚀 [Dify请求] 开始请求 Dify... model=${model} endpoint=${DIFY_BASE_URL}${apiEndpoint} requestId=${taskRun.requestId}`)
+            logPerf(taskRun.requestId, "dify_request_start", apiStartedAt, { endpoint: apiEndpoint })
             const response = await internalDifyFetch(`${DIFY_BASE_URL}${apiEndpoint}`, {
                 method: "POST",
                 headers: {
@@ -1290,7 +1348,11 @@ export async function POST(request: NextRequest) {
         console.warn(`📡 [Dify响应] body类型: ${typeof response.body} | body是否为null: ${response.body === null}`)
 
         if (model === "banana-2-pro") {
-            console.log(`🎨 [Banana] Dify响应头:`, Object.fromEntries(response.headers.entries()))
+            console.log(`🎨 [Banana] Dify响应头摘要:`, {
+              contentType: response.headers.get("content-type") || undefined,
+              hasRequestId: Boolean(response.headers.get("x-request-id")),
+              hasTraceId: Boolean(response.headers.get("x-trace-id")),
+            })
         }
 
         const shouldRetryWithNewConversation =
@@ -1321,7 +1383,11 @@ export async function POST(request: NextRequest) {
 
     if (!response.ok) {
         const errorText = await response.text()
-        console.error(`❌ Dify API 最终报错 (${model}):`, errorText)
+        console.error(`❌ Dify API 最终报错 (${model}):`, {
+          status: response.status,
+          bodyLength: errorText.length,
+          sanitizedBody: sanitizeForTrace(errorText),
+        })
         await updateTaskRun(taskRun.id, {
           status: "failed",
           stage: "Dify 返回错误",
@@ -1333,10 +1399,10 @@ export async function POST(request: NextRequest) {
         
         // 🔥 Banana 特殊错误处理
         if (model === "banana-2-pro") {
-          console.error(`🎨 [Banana错误] 完整错误信息:`, {
+          console.error(`🎨 [Banana错误] 响应摘要:`, {
             status: response.status,
             statusText: response.statusText,
-            error: errorText,
+            bodyLength: errorText.length,
             baseUrl: DIFY_BASE_URL
           })
         }
@@ -1425,6 +1491,13 @@ export async function POST(request: NextRequest) {
     let jsonBuffer = ""  // 🔥 JSON 行缓冲：跨 chunk 拼接不完整的 SSE 数据行
     let hasReceivedContent = false  // 🔥 标记是否收到了实际内容（用于判断是否扣费）
     let latestParsedUsage: ParsedDifyUsage | null = null
+    const bufferedNodeEvents: Array<{
+      event: string
+      title?: string
+      node_id?: string
+      status?: string
+      workflow_run_id?: string
+    }> = []
 
     // 🔥 扣费函数：流结束后根据实际 token 用量扣费
     const deductCredit = async () => {
@@ -1467,10 +1540,10 @@ export async function POST(request: NextRequest) {
           feature: bananaImageUrls.length > 0 ? "image" : "text",
           appId: keySource || null,
           workflowId: WORKFLOW_MODELS.has(model || "") ? (model || null) : null,
-          modelId: model || "standard",
+          modelId: model || "general-chat",
           requestedAppId: keySource || null,
           requestedWorkflowId: WORKFLOW_MODELS.has(model || "") ? (model || null) : null,
-          requestedModelId: model || "standard",
+          requestedModelId: model || "general-chat",
           upstreamProvider: null,
           upstreamModel: null,
           upstreamGroup: null,
@@ -1557,6 +1630,7 @@ export async function POST(request: NextRequest) {
                 streamStatus.timeoutId = null
             }
             console.warn(`✅ [首字节探测] Dify 流式数据开始传输，已取消首字节超时定时器`)
+            logPerf(taskRun.requestId, "dify_first_byte", apiStartedAt)
         }
 
         // 解析 chunk 提取 token 信息
@@ -1571,7 +1645,7 @@ export async function POST(request: NextRequest) {
 
           // 🎨 Banana 调试：记录原始数据
           if (model === "banana-2-pro" && text.trim()) {
-            console.log(`🎨 [Banana流式] 收到数据块:`, text.substring(0, 200))
+            console.log(`🎨 [Banana流式] 收到数据块:`, { bytes: chunk.byteLength })
           }
 
           // 🔥 追加到缓冲区，然后只处理完整的行
@@ -1603,7 +1677,7 @@ export async function POST(request: NextRequest) {
 
               // 🎨 Banana 调试：记录所有事件
               if (model === "banana-2-pro") {
-                console.log(`🎨 [Banana事件] ${json.event}:`, JSON.stringify(json).substring(0, 300))
+                console.log(`🎨 [Banana事件] 摘要:`, summarizeDifyEventForLog(json))
               }
 
 	              // 🧠 记录工作流节点事件（用于前端思考过程显示）
@@ -1613,13 +1687,15 @@ export async function POST(request: NextRequest) {
                   if (model === "vocab-card") {
                     controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(json)}\n\n`))
                   }
-	                appendTaskNodeEvent(taskRun.id, {
-	                  event: json.event,
-	                  title: nodeData.title || json.title || "未知节点",
-	                  node_id: nodeData.node_id || json.node_id,
-	                  status: nodeData.status || json.status,
-	                  workflow_run_id: nodeData.workflow_run_id || json.workflow_run_id,
-	                }).catch((error) => console.warn("[AI Task Trace] node append failed:", error))
+	                if (bufferedNodeEvents.length < 80) {
+	                  bufferedNodeEvents.push({
+	                    event: json.event,
+	                    title: nodeData.title || json.title || "未知节点",
+	                    node_id: nodeData.node_id || json.node_id,
+	                    status: nodeData.status || json.status,
+	                    workflow_run_id: nodeData.workflow_run_id || json.workflow_run_id,
+	                  })
+	                }
 	              }
 
 	              // 提取 conversation_id
@@ -1659,10 +1735,10 @@ export async function POST(request: NextRequest) {
                   const matches = json.answer.matchAll(imageRegex)
                   for (const match of matches) {
                     const imageUrl = match[1]
-                    if (!bananaImageUrls.includes(imageUrl)) {
-                      bananaImageUrls.push(imageUrl)
-                      console.log(`🎨 [Banana] 检测到图片 URL (message): ${imageUrl}`)
-                    }
+	                    if (!bananaImageUrls.includes(imageUrl)) {
+	                      bananaImageUrls.push(imageUrl)
+	                      console.log(`🎨 [Banana] 检测到图片 URL (message):`, { imageCount: bananaImageUrls.length })
+	                    }
                   }
                 }
               }
@@ -1671,9 +1747,9 @@ export async function POST(request: NextRequest) {
               if (json.event === "text_chunk" || json.event === "agent_message") {
                 const text = json.data?.text || json.text || ''
 	                if (text) {
-	                  fullResponseText += text
-	                  hasReceivedContent = true
-	                  console.log(`🎨 [Workflow文本] 收集到文本: ${text.substring(0, 50)}...`)
+		                  fullResponseText += text
+		                  hasReceivedContent = true
+		                  console.log(`🎨 [Workflow文本] 收集到文本:`, { length: text.length })
 	                  const artifacts = model === "open-claw" ? extractArtifactsFromText(fullResponseText) : []
 	                  if (artifacts.length > 0) {
 	                    updateTaskRun(taskRun.id, {
@@ -1709,15 +1785,15 @@ export async function POST(request: NextRequest) {
                       answer: safeOutputs.answer,
                       conversation_id: conversationId || undefined,
                     })}\n\n`))
-                  } else if (outputs.text) {
-                    fullResponseText += outputs.text
-                    hasReceivedContent = true
-                    console.log(`🎨 [Workflow完成] 收集到输出文本: ${outputs.text.substring(0, 50)}...`)
-                  } else if (outputs.result) {
-                    fullResponseText += outputs.result
-                    hasReceivedContent = true
-	                    console.log(`🎨 [Workflow完成] 收集到结果文本: ${outputs.result.substring(0, 50)}...`)
-	                  }
+	                  } else if (outputs.text) {
+	                    fullResponseText += outputs.text
+	                    hasReceivedContent = true
+	                    console.log(`🎨 [Workflow完成] 收集到输出文本:`, { length: String(outputs.text).length })
+	                  } else if (outputs.result) {
+	                    fullResponseText += outputs.result
+	                    hasReceivedContent = true
+		                    console.log(`🎨 [Workflow完成] 收集到结果文本:`, { length: String(outputs.result).length })
+		                  }
 	                }
 	                const parsedUsage = parseDifyUsage(json)
 	                latestParsedUsage = parsedUsage
@@ -1735,14 +1811,14 @@ export async function POST(request: NextRequest) {
 
               // 🎨 处理 message_file 事件（图片文件）
               if (json.event === "message_file" && model === "banana-2-pro") {
-                console.log(`🎨 [Banana] 收到 message_file 事件:`, JSON.stringify(json))
+                console.log(`🎨 [Banana] 收到 message_file 事件:`, summarizeDifyEventForLog(json))
 
                 // Dify 返回的图片文件格式：{ type: "image", url: "..." }
                 if (json.type === "image" && json.url) {
                   const imageUrl = json.url
-                  if (!bananaImageUrls.includes(imageUrl)) {
-                    bananaImageUrls.push(imageUrl)
-                    console.log(`🎨 [Banana] 检测到图片 URL (message_file): ${imageUrl}`)
+	                  if (!bananaImageUrls.includes(imageUrl)) {
+	                    bananaImageUrls.push(imageUrl)
+	                    console.log(`🎨 [Banana] 检测到图片 URL (message_file):`, { imageCount: bananaImageUrls.length })
 
                     // 🔥 立即将图片 URL 以 Markdown 格式添加到响应中
                     fullResponseText += `\n\n![Generated Image](${imageUrl})`
@@ -1752,16 +1828,16 @@ export async function POST(request: NextRequest) {
 
               // 🎨 处理 workflow_finished 事件（可能包含图片）
               if (json.event === "workflow_finished" && model === "banana-2-pro") {
-                console.log(`🎨 [Banana] 收到 workflow_finished 事件:`, JSON.stringify(json))
+                console.log(`🎨 [Banana] 收到 workflow_finished 事件:`, summarizeDifyEventForLog(json))
 
                 // 检查是否有输出文件
                 if (json.outputs && json.outputs.files) {
                   for (const file of json.outputs.files) {
                     if (file.type === "image" && file.url) {
                       const imageUrl = file.url
-                      if (!bananaImageUrls.includes(imageUrl)) {
-                        bananaImageUrls.push(imageUrl)
-                        console.log(`🎨 [Banana] 检测到图片 URL (workflow_finished): ${imageUrl}`)
+	                      if (!bananaImageUrls.includes(imageUrl)) {
+	                        bananaImageUrls.push(imageUrl)
+	                        console.log(`🎨 [Banana] 检测到图片 URL (workflow_finished):`, { imageCount: bananaImageUrls.length })
 
                         // 🔥 立即将图片 URL 以 Markdown 格式添加到响应中
                         fullResponseText += `\n\n![Generated Image](${imageUrl})`
@@ -1854,6 +1930,13 @@ export async function POST(request: NextRequest) {
 	            has_received_content: hasReceivedContent,
 	          },
 	        }).catch((error) => console.warn("[AI Task Trace] flush update failed:", error))
+	        if (bufferedNodeEvents.length > 0) {
+	          fireAndForget("AI Task Trace node batch", replaceTaskNodeEvents(taskRun.id, bufferedNodeEvents))
+	        }
+	        logPerf(taskRun.requestId, "stream_end", apiStartedAt, {
+	          responseLength: fullResponseText.length,
+	          nodeEvents: bufferedNodeEvents.length,
+	        })
 	      }
 
     })

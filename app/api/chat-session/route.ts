@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@/lib/supabase/server"
 import { createClient as createSupabaseClient } from "@supabase/supabase-js"
+import { requireUser } from "@/lib/auth/verified-user"
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,18 +15,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "数据库未配置" }, { status: 503 })
     }
 
-    const supabase = await createServerClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return NextResponse.json({ error: "未登录" }, { status: 401 })
-    }
+    const auth = await requireUser(request)
+    if (auth.response) return auth.response
+    const user = auth.user!
 
     const body = await request.json()
     const { title, processing_mode, ai_provider, ai_model } = body
 
+    const supabase = createServiceRoleClient()
     const { data: session, error } = await supabase
       .from("chat_sessions")
       .insert({
@@ -63,43 +59,19 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ sessions: [] }, { status: 200 })
     }
 
-    // 🔥 支持 X-User-Id 头（用于 Authing 用户）- 优先使用header
-    const userIdHeader = request.headers.get("X-User-Id")
-    console.log("📡 [chat-session API] X-User-Id:", userIdHeader, "| 有header:", !!userIdHeader)
+    const auth = await requireUser(request)
+    if (auth.response) return auth.response
+    const user = auth.user!
+    const limitParam = Number(request.nextUrl.searchParams.get("limit") || 30)
+    const limit = Number.isFinite(limitParam) ? Math.min(50, Math.max(1, Math.round(limitParam))) : 30
 
-    // 如果有 X-User-Id header，使用 Service Role Key 绕过 RLS
-    if (userIdHeader) {
-      const supabase = createServiceRoleClient()
-      const { data: sessions, error } = await supabase
-        .from("chat_sessions")
-        .select("*")
-        .eq("user_id", userIdHeader)
-        .order("created_at", { ascending: false })
-
-      console.log("📡 [chat-session API] 查询结果:", sessions?.length || 0, "条| error:", error)
-
-      if (error) {
-        console.error("[v0] Get sessions error (Service Role):", error)
-        throw error
-      }
-      return NextResponse.json({ sessions })
-    }
-
-    // 否则尝试 Supabase 认证
-    const supabase = await createServerClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return NextResponse.json({ error: "未登录" }, { status: 401 })
-    }
-
+    const supabase = createServiceRoleClient()
     const { data: sessions, error } = await supabase
       .from("chat_sessions")
-      .select("*")
+      .select("id,title,preview,ai_model,ai_provider,processing_mode,created_at,updated_at")
       .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
+      .order("updated_at", { ascending: false })
+      .limit(limit)
 
     if (error) throw error
 

@@ -1,8 +1,9 @@
 import { createClient } from '@supabase/supabase-js'
-import { NextResponse } from 'next/server'
+import { NextResponse, type NextRequest } from 'next/server'
 import { getClientIP, checkIpRateLimit, createRateLimitResponse } from '@/lib/rate-limit'
+import { requireUser } from '@/lib/auth/verified-user'
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   // IP 限流：30次/分钟
   const ip = getClientIP(request)
   const limitResult = checkIpRateLimit(ip, 30)
@@ -11,12 +12,16 @@ export async function POST(request: Request) {
   }
 
   try {
+    const auth = await requireUser(request)
+    if (auth.response) return auth.response
+
     // 1. 获取前端传来的用户信息
     const body = await request.json()
     const { user_id, email, nickname, avatar, phone } = body
 
-    if (!user_id) {
-      return NextResponse.json({ error: 'Missing user_id' }, { status: 400 })
+    const verifiedUserId = auth.user!.id
+    if (user_id && user_id !== verifiedUserId) {
+      return NextResponse.json({ error: 'User mismatch' }, { status: 403 })
     }
 
     // 🔐 安全验证：检查请求来源
@@ -45,11 +50,11 @@ export async function POST(request: Request) {
 
     // 方式2: 基本的 user_id 格式验证（防止注入攻击）
     // Authing 的 user_id 通常是 24 位十六进制字符串
-    const isValidUserId = /^[a-f0-9]{24}$/.test(user_id) || 
-                          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(user_id)
+    const isValidUserId = /^[a-f0-9]{24}$/.test(verifiedUserId) ||
+                          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(verifiedUserId)
     
     if (!isValidUserId) {
-      console.warn(`🚫 [Auth/Sync] 无效的 user_id 格式: ${user_id}`)
+      console.warn(`🚫 [Auth/Sync] 无效的 verified user_id 格式: ${verifiedUserId}`)
       return NextResponse.json({ error: 'Invalid user_id format' }, { status: 400 })
     }
 
@@ -63,20 +68,23 @@ export async function POST(request: Request) {
     const { data: existingUser } = await supabaseAdmin
       .from('user_profiles')
       .select('user_id')
-      .eq('user_id', user_id)
+      .eq('user_id', verifiedUserId)
       .single()
 
     // 4. 如果是新用户，执行初始化
     if (!existingUser) {
-      // 日志优化：如果是手机注册，email可能为空，所以打印 phone 或 user_id
-      console.log(`[Sync] 新用户 ${email || phone || user_id} 初始化中...`)
+      console.log("[Sync] 新用户初始化中", {
+        authProvider: auth.user!.provider,
+        hasEmail: Boolean(auth.user!.email || email),
+        hasPhone: Boolean(phone),
+      })
 
       // A. 插入个人资料
       const { error: profileError } = await supabaseAdmin
         .from('user_profiles')
         .insert({
-          user_id,
-          email: email || null, // 确保如果是手机注册，email 存为 null 而不是 undefined
+          user_id: verifiedUserId,
+          email: auth.user!.email || email || null, // 确保如果是手机注册，email 存为 null 而不是 undefined
           phone: phone || null, // 【修改点 2】: 将手机号写入数据库
           
           // 【修改点 3】: 智能昵称逻辑
@@ -96,7 +104,7 @@ export async function POST(request: Request) {
       const { error: creditError } = await supabaseAdmin
         .from('user_credits')
         .insert({
-          user_id,
+          user_id: verifiedUserId,
           credits: 1000, 
           is_pro: false
         })
@@ -107,17 +115,17 @@ export async function POST(request: Request) {
         const { error: upsertError } = await supabaseAdmin
           .from('user_credits')
           .upsert({
-            user_id,
+            user_id: verifiedUserId,
             credits: 1000, 
             is_pro: false
           })
         if (upsertError) {
           console.error('Upsert 积分也失败:', upsertError)
         } else {
-          console.log(`✅ [Sync] 用户 ${user_id} 积分 Upsert 成功`)
+          console.log("✅ [Sync] 用户积分 Upsert 成功")
         }
       } else {
-        console.log(`✅ [Sync] 用户 ${user_id} 赠送 1000 积分成功`)
+        console.log("✅ [Sync] 用户赠送 1000 积分成功")
       }
 
       return NextResponse.json({ success: true, message: 'New user initialized' })

@@ -5,6 +5,7 @@ import { getClientIP, checkIpRateLimit, createRateLimitResponse } from "@/lib/ra
 import { internalDifyFetch } from "@/lib/internal-dify-fetch"
 import { getDifyCredentialForModel } from "@/lib/dify-credentials"
 import { createRequestId, sanitizeForTrace } from "@/lib/ai-task-trace"
+import { requireUser } from "@/lib/auth/verified-user"
 
 // ✅ 修改 1: 切换回 Node.js 运行时，以支持更大的文件和更稳定的上传
 export const runtime = "nodejs" 
@@ -213,15 +214,14 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 🔐 从 header 获取用户身份（middleware 已验证）
-    const headerUserId = request.headers.get("X-User-Id")
+    const auth = await requireUser(request)
+    if (auth.response) return auth.response
     // 🔥 从 header 获取当前选择的模型
     const model = request.headers.get("X-Model") || null
 
     const formData = await request.formData()
     const file = formData.get("file") as File
-    // 优先使用 header 中的 userId，其次使用 formData 中的
-    const userId = headerUserId || formData.get("user") as string 
+    const userId = auth.user!.id
     // 也支持从 formData 获取模型（兼容旧版本）
     const modelFromForm = formData.get("model") as string | null
 

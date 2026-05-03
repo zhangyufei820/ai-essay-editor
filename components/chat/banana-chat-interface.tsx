@@ -46,6 +46,14 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
+async function getVerifiedAuthHeaders(): Promise<Record<string, string>> {
+  const { data } = await supabase.auth.getSession()
+  if (data.session?.access_token) return { Authorization: `Bearer ${data.session.access_token}` }
+  if (typeof window === "undefined") return {}
+  const authingToken = localStorage.getItem("idToken") || localStorage.getItem("authingToken") || localStorage.getItem("accessToken")
+  return authingToken ? { Authorization: `Bearer ${authingToken}` } : {}
+}
+
 type Message = { 
   id: string
   role: "user" | "assistant"
@@ -228,7 +236,7 @@ function BananaChatInterfaceInner() {
 
   const fetchCredits = async (uid: string) => {
     try {
-      const res = await fetch(`${API_BASE}/api/user/credits?user_id=${encodeURIComponent(uid)}`)
+      const res = await fetch(`${API_BASE}/api/user/credits`, { headers: await getVerifiedAuthHeaders() })
       if (res.ok) {
         const data = await res.json()
         setUserCredits(data.credits || 0)
@@ -280,7 +288,7 @@ function BananaChatInterfaceInner() {
   const fetchChatSessions = async (uid: string) => {
     try {
       const res = await fetch(`/api/chat-session`, {
-        headers: { 'X-User-Id': uid }
+        headers: await getVerifiedAuthHeaders()
       })
       if (!res.ok) return
       const { sessions } = await res.json()
@@ -365,7 +373,7 @@ function BananaChatInterfaceInner() {
         const res = await fetch(`${API_BASE}/api/dify-upload`, {
           method: "POST",
           headers: {
-            "X-User-Id": userId,
+            ...(await getVerifiedAuthHeaders()),
             "X-Model": "banana-2-pro"
           },
           body: formData
@@ -498,18 +506,20 @@ function BananaChatInterfaceInner() {
     
     let fullText = ""
     try {
-        console.log(`🎨 [Banana前端] 准备发送请求，用户输入: "${userInputText}"`)
+        console.log("🎨 [Banana前端] 准备发送请求", {
+          promptLength: userInputText.length,
+          fileCount: fileIds.length,
+        })
         
         const res = await fetch(`${API_BASE}/api/dify-chat`, {
             method: "POST", 
             headers: { 
               "Content-Type": "application/json",
-              "X-User-Id": userId
+              ...(await getVerifiedAuthHeaders())
             },
             body: JSON.stringify({ 
               query: userInputText,
               fileIds: fileIds, 
-              userId, 
               conversation_id: sessionIdRef.current, 
               model: "banana-2-pro",
               mode: "image",

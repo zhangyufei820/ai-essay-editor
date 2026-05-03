@@ -68,15 +68,13 @@ export async function updateSession(request: NextRequest) {
   const isProtectedApiRoute = PROTECTED_API_ROUTES.some(route => pathname.startsWith(route))
   
   if (isProtectedApiRoute) {
-    // 方式1: 检查 Supabase Session
-    const { data: { user } } = await supabase.auth.getUser()
-    
-    // 方式2: 检查 Authorization Header (用于前端传递的 userId)
-    const authHeader = request.headers.get("Authorization")
-    const userId = request.headers.get("X-User-Id")
-    
-    // 如果既没有 Supabase 用户，也没有有效的 userId header，则拒绝访问
-    if (!user && !userId) {
+    const bearerToken = request.headers.get("Authorization")?.match(/^Bearer\s+(.+)$/i)?.[1]?.trim()
+    const { data: { user } } = bearerToken
+      ? await supabase.auth.getUser(bearerToken)
+      : await supabase.auth.getUser()
+
+    // 浏览器可以伪造 X-User-Id；受保护接口只能信任已验证的 Supabase session。
+    if (!user) {
       console.warn(`🚫 [Middleware] 未授权访问被拦截: ${pathname}`)
       return NextResponse.json(
         { error: "未授权访问，请先登录", code: "UNAUTHORIZED" },
@@ -85,7 +83,7 @@ export async function updateSession(request: NextRequest) {
     }
     
     // 记录访问日志
-    console.log(`✅ [Middleware] 已授权访问: ${pathname} | User: ${user?.id || userId}`)
+    console.log(`✅ [Middleware] 已授权访问: ${pathname} | User: ${user.id}`)
   }
 
   return supabaseResponse

@@ -1,10 +1,11 @@
 import { createClient } from '@supabase/supabase-js'
-import { NextResponse } from 'next/server'
+import { NextResponse, type NextRequest } from 'next/server'
+import { requireUser } from '@/lib/auth/verified-user'
 
 /**
  * 🎯 用户积分 API
  * 
- * GET /api/user/credits?user_id=xxx - 查询积分
+ * GET /api/user/credits - 查询当前已验证用户积分
  * POST /api/user/credits - 已禁用。积分变更必须由后端业务 API 根据统一计费配置发起。
  * 
  * 使用 Service Role Key，绕过 RLS 限制
@@ -20,16 +21,13 @@ const getSupabaseAdmin = () => {
   return createClient(url, key)
 }
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url)
-    const userId = searchParams.get('user_id')
+    const auth = await requireUser(request)
+    if (auth.response) return auth.response
+    const userId = auth.user!.id
 
-    if (!userId) {
-      return NextResponse.json({ error: 'Missing user_id' }, { status: 400 })
-    }
-
-    console.log(`🔍 [积分API] 查询用户积分: ${userId}`)
+    console.log("🔍 [积分API] 查询用户积分")
 
     // 使用 Service Role Key 创建超级管理员客户端
     const supabaseAdmin = getSupabaseAdmin()
@@ -48,7 +46,7 @@ export async function GET(request: Request) {
 
     // 如果没有记录，自动创建
     if (!creditData) {
-      console.log(`🆕 [积分API] 用户 ${userId} 无积分记录，自动创建...`)
+      console.log("🆕 [积分API] 用户无积分记录，自动创建...")
       
       const { data: newData, error: insertError } = await supabaseAdmin
         .from('user_credits')

@@ -4,6 +4,21 @@ import React, { useEffect, useRef, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 
+function pickAuthingToken(user: Record<string, any>) {
+  const candidates = [
+    user.idToken,
+    user.id_token,
+    user.accessToken,
+    user.access_token,
+    user.token,
+    user.jwt,
+    user.authingToken,
+    typeof window !== 'undefined' ? localStorage.getItem('idToken') : null,
+    typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null,
+  ]
+  return candidates.find((value): value is string => typeof value === 'string' && value.split('.').length === 3) || ''
+}
+
 function AuthingLoginComponent() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -18,7 +33,8 @@ function AuthingLoginComponent() {
     // 1. 检查是否已经登录
     // 如果已经有用户信息，直接跳转，不再显示登录框
     const user = localStorage.getItem('currentUser')
-    if (user) {
+    const token = localStorage.getItem('idToken') || localStorage.getItem('authingToken') || localStorage.getItem('accessToken')
+    if (user && token) {
       const redirectPath = searchParams.get('redirect')
       router.replace(redirectPath || '/')
       return
@@ -59,17 +75,28 @@ function AuthingLoginComponent() {
 
       // ✅ 登录成功的处理逻辑
       guard.on('login', async (userInfo: any) => {
-        console.log('登录成功:', userInfo)
+        console.log('登录成功:', {
+          hasData: Boolean(userInfo?.data),
+          hasIdToken: Boolean(userInfo?.idToken || userInfo?.id_token || userInfo?.data?.idToken || userInfo?.data?.id_token),
+          hasAccessToken: Boolean(userInfo?.accessToken || userInfo?.access_token || userInfo?.data?.accessToken || userInfo?.data?.access_token),
+        })
 
         // [关键] 保存用户信息到浏览器，以便支付页面能看到
         const finalUser = userInfo.data || userInfo
         localStorage.setItem('currentUser', JSON.stringify(finalUser))
+        const authingToken = pickAuthingToken(finalUser)
+        if (authingToken) {
+          localStorage.setItem('authingToken', authingToken)
+        }
 
         // 可选：同步到你的后端数据库 (保留了你之前的逻辑)
         try {
           await fetch('/api/auth/sync', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              ...(authingToken ? { Authorization: `Bearer ${authingToken}` } : {}),
+            },
             body: JSON.stringify({
               user_id: finalUser.id || finalUser.sub,
               email: finalUser.email,

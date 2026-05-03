@@ -234,6 +234,33 @@ export async function appendTaskNodeEvent(id: string, event: Omit<TaskNodeEvent,
   if (error) console.warn("[AI Task Trace] append node skipped:", error.message)
 }
 
+export async function replaceTaskNodeEvents(id: string, events: Array<Omit<TaskNodeEvent, "created_at">>) {
+  const supabase = getSupabaseAdmin()
+  if (!supabase || taskTableAvailable === false || events.length === 0) return
+
+  const nodeEvents = events.slice(-80).map((event) => sanitizeForTrace({
+    ...event,
+    created_at: new Date().toISOString(),
+  }))
+
+  const latest = events[events.length - 1]
+  const { error } = await supabase
+    .from("ai_task_runs")
+    .update({
+      node_events: nodeEvents,
+      stage: latest?.title || latest?.event || "工作流事件已记录",
+      current_tool: latest?.title || null,
+      workflow_run_id: latest?.workflow_run_id || null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id)
+
+  if (error) {
+    if (error.code === "42P01") taskTableAvailable = false
+    console.warn("[AI Task Trace] batch node update skipped:", error.message)
+  }
+}
+
 export async function getTaskRunsForUser(params: {
   userId: string
   requestId?: string | null

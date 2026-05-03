@@ -54,7 +54,6 @@ export function EssayGrader() {
         const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || ''}/api/dify-upload`, {
           method: "POST",
           headers: {
-            "X-User-Id": "essay-correction-user",
             "X-Model": "essay-correction"
           },
           body: formData
