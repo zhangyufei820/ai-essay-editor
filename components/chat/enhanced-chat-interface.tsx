@@ -343,6 +343,54 @@ async function saveMessageOnce(key: string, save: () => Promise<unknown>) {
   }
 }
 
+async function ensureChatSessionViaApi(params: {
+  sessionId: string
+  title: string
+  preview: string
+  model: string
+}) {
+  const res = await fetch("/api/chat-session", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(await getVerifiedAuthHeaders()),
+    },
+    body: JSON.stringify({
+      id: params.sessionId,
+      title: params.title,
+      preview: params.preview,
+      ai_model: params.model,
+    }),
+  })
+  if (!res.ok) throw new Error(`chat_session_save_failed_${res.status}`)
+  return res.json()
+}
+
+async function saveChatMessageViaApi(params: {
+  sessionId: string
+  role: "user" | "assistant"
+  content: string
+  metadata?: Record<string, unknown>
+  files?: UploadedFile[]
+}) {
+  const res = await fetch("/api/save-message", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(await getVerifiedAuthHeaders()),
+    },
+    body: JSON.stringify({
+      session_id: params.sessionId,
+      role: params.role,
+      content: params.content,
+      files: params.files,
+      metadata: params.metadata,
+    }),
+  })
+  if (!res.ok) throw new Error(`chat_message_save_failed_${res.status}`)
+  return res.json()
+}
+
 function rememberPendingTask(task: { requestId: string; sessionId?: string; model: string; createdAt: number }) {
   if (typeof window === "undefined") return
   try {
@@ -1200,42 +1248,24 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     setIsLoading(true)
     setMessages([])
     try {
-      // 🔥 先获取会话信息（包括 ai_model）以同步模型状态
-      const { data: sessionData, error: sessionError } = await supabase
-        .from('chat_sessions')
-        .select('ai_model')
-        .eq('id', sid)
-        .single()
+      const res = await fetch(`/api/chat-session?sessionId=${encodeURIComponent(sid)}`, {
+        headers: await getVerifiedAuthHeaders(),
+      })
+      if (!res.ok) throw new Error(`history_session_load_failed_${res.status}`)
+      const { session: sessionData, messages: data } = await res.json()
 
       logger.debug(`📂 [loadHistorySession] ai_model=${sessionData?.ai_model}`)
 
-      if (sessionError) {
-        console.warn("获取会话模型失败:", sessionError)
-        // 🔥 即使查询失败，也尝试使用 initialModel 或默认值
-        const fallbackModel = initialModel || "general-chat"
-        console.log(`🔄 [历史会话模型同步] 使用 fallback 模型: ${fallbackModel}`)
-        setSelectedModel(fallbackModel as ModelType)
-      } else {
-        // 🔥 同步模型状态 - 当用户主动切换会话时，优先使用会话真实模型
-        // store.isManualSessionSwitch 为 true 时表示侧边栏点击，此时用 sessionData.ai_model
-        // store.isManualSessionSwitch 为 false 时表示 URL 导航，此时用 initialModel（保持分享链接兼容性）
-        const isManual = useSelectedModelStore.getState().isManualSessionSwitch
-        const targetModel = isManual
-          ? (sessionData?.ai_model || "general-chat")
-          : (initialModel || sessionData?.ai_model || "general-chat")
-        console.log(`🔄 [历史会话模型同步] isManual=${isManual}, initialModel=${initialModel}, ai_model=${sessionData?.ai_model} → selectedModel=${targetModel}`)
-        setSelectedModel(targetModel as ModelType)
-        console.log(`✅ [历史会话模型同步] setSelectedModel 已调用: ${targetModel}`)
-      }
-
-      // 🔥 加载消息
-      const { data, error } = await supabase
-        .from('chat_messages')
-        .select('*')
-        .eq('session_id', sid)
-        .order('created_at', { ascending: true })
-
-      if (error) throw error
+      // 🔥 同步模型状态 - 当用户主动切换会话时，优先使用会话真实模型
+      // store.isManualSessionSwitch 为 true 时表示侧边栏点击，此时用 sessionData.ai_model
+      // store.isManualSessionSwitch 为 false 时表示 URL 导航，此时用 initialModel（保持分享链接兼容性）
+      const isManual = useSelectedModelStore.getState().isManualSessionSwitch
+      const targetModel = isManual
+        ? (sessionData?.ai_model || "general-chat")
+        : (initialModel || sessionData?.ai_model || "general-chat")
+      console.log(`🔄 [历史会话模型同步] isManual=${isManual}, initialModel=${initialModel}, ai_model=${sessionData?.ai_model} → selectedModel=${targetModel}`)
+      setSelectedModel(targetModel as ModelType)
+      console.log(`✅ [历史会话模型同步] setSelectedModel 已调用: ${targetModel}`)
 
       if (data && data.length > 0) {
         // 🔥 加载消息时包含 metadata（用于恢复音乐数据）
@@ -2032,25 +2062,26 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     // 🎵 Suno V5 特殊处理结束
     // ============================================
 
-	    const botId = (Date.now()+1).toString();
+    const botId = (Date.now()+1).toString();
     // 🔥 记录当前正在处理的消息 ID
-	    currentBotIdRef.current = botId
-	    setMessages(p => [...p, { id: botId, role: "assistant", content: "" }])
-	    rememberPendingTask({ requestId, sessionId: sid, model: selectedModel, createdAt: Date.now() })
+    currentBotIdRef.current = botId
+    setMessages(p => [...p, { id: botId, role: "assistant", content: "" }])
+    rememberPendingTask({ requestId, sessionId: sid, model: selectedModel, createdAt: Date.now() })
     const persistUserMessagePromise = (async () => {
       try {
         await saveMessageOnce(`${requestId}:user`, async () => {
           const preview = userMsg.content.slice(0, 30)
-          const { data: existing } = await supabase.from('chat_sessions').select('id').eq('id', sid).maybeSingle()
-          if (!existing) {
-            await supabase.from('chat_sessions').insert({ id: sid, user_id: userId, title: userMsg.content.slice(0, 10) || "对话", preview, ai_model: selectedModel })
-          } else {
-            await supabase.from('chat_sessions').update({ preview, ai_model: selectedModel }).eq('id', sid)
-          }
-          await supabase.from('chat_messages').insert({
-            session_id: sid,
+          await ensureChatSessionViaApi({
+            sessionId: sid,
+            title: userMsg.content.slice(0, 10) || "对话",
+            preview,
+            model: selectedModel,
+          })
+          await saveChatMessageViaApi({
+            sessionId: sid,
             role: "user",
             content: userMsg.content,
+            files: activeFiles,
             metadata: { requestId, clientMessageId: userMsg.id },
           })
         })
@@ -2350,24 +2381,24 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
             stage: "stream_end",
             elapsedMs: Date.now() - requestStartedAt,
           })
-	        if (hasRec) {
+          if (hasRec) {
             await persistUserMessagePromise
-	          const cardToSave = wordCard as FrontendWordCard | null
-	          await saveMessageOnce(`${requestId}:assistant`, async () => {
-              await supabase.from('chat_messages').insert({
-                session_id: sid,
+            const cardToSave = wordCard as FrontendWordCard | null
+            await saveMessageOnce(`${requestId}:assistant`, async () => {
+              await saveChatMessageViaApi({
+                sessionId: sid,
                 role: "assistant",
                 content: cardToSave ? JSON.stringify({ frontend_card_json: cardToSave }) : fullText,
                 metadata: { requestId, clientMessageId: botId }
               })
             })
-	        }
-	        if (selectedModel === "vocab-card" && sid && !hadUrlSessionId) {
-	          router.replace(buildChatSessionRoute(sid, selectedModel))
-	        }
-	        forgetPendingTask(requestId)
+          }
+          if (selectedModel === "vocab-card" && sid && !hadUrlSessionId) {
+            router.replace(buildChatSessionRoute(sid, selectedModel))
+          }
+          forgetPendingTask(requestId)
 
-	    } catch (e: any) {
+    } catch (e: any) {
         console.error("❌ [对话异常] 详细错误:", e)
         console.error("❌ [对话异常] 错误堆栈:", e.stack)
         console.error("❌ [对话异常] 模型:", selectedModel, "模式:", genMode)
