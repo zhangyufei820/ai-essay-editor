@@ -9,11 +9,21 @@ import {
 } from "@/lib/dify-types"
 import {
   calculateActualCost,
+  appendTextOutputLimitInstruction,
+  getMaxOutputTokensForModel,
+  getMinimumRequiredCredits,
   ModelType,
-  MODEL_COSTS,
-  LUXURY_THRESHOLD,
-  getModelDisplayName
+  getModelDisplayName,
+  PRICING_VERSION,
+  shouldAuditHighConsumptionTextCall,
 } from "@/lib/pricing"
+import { recordBillingIssue } from "@/lib/credits"
+import {
+  chargeCreditsSafely as spendCredits,
+  createBillingLog as createBillingAuditMetadata,
+  parseDifyUsage,
+  type ParsedDifyUsage,
+} from "@/lib/billing"
 import { assertSecureTlsConfiguration } from "@/lib/runtime-security"
 import { internalDifyFetch } from "@/lib/internal-dify-fetch"
 import { getDifyCredentialForModel } from "@/lib/dify-credentials"
@@ -29,6 +39,7 @@ import {
   updateTaskRun,
 } from "@/lib/ai-task-trace"
 import { buildVocabCardWorkflowInputs, cleanVocabAnswer, extractVocabCardAudioUrl, extractVocabCardTtsStatus } from "@/lib/vocab-card-workflow"
+import { canUseImage2 } from "@/lib/permissions"
 
 export const runtime = "nodejs"
 // 🔥 增加超时时间，支持 OpenClaw 大型 PPT 与图片生成网关的长任务重试
@@ -752,13 +763,16 @@ export async function POST(request: NextRequest) {
     const headerUserId = request.headers.get("X-User-Id")
     
     const body = await request.json()
-    const { query, conversation_id, fileIds, userId: bodyUserId, inputs, model, imageSize, estimatedCost, async_image_task, sessionId, messageId } = body
+    const { query, conversation_id, fileIds, userId: bodyUserId, inputs, model, imageSize, async_image_task, sessionId, messageId } = body
     const difyFileIds = Array.isArray(fileIds)
       ? fileIds.filter((id): id is string => typeof id === "string" && id.trim().length > 0)
       : []
     const fileUrls = pickUrlStrings(body.fileUrls)
 
     const modelPrefix = model || "standard"
+    const requestedModelType = (model || "standard") as ModelType
+    const configuredMaxOutputTokens = getMaxOutputTokensForModel(requestedModelType)
+    const limitedQuery = appendTextOutputLimitInstruction(query || "你好", requestedModelType)
     let effectiveConvId = normalizeDifyConversationId(conversation_id, modelPrefix)
     
     console.log(`🔍 [Dify-Chat] 接收请求: model=${model || "standard"} files=${difyFileIds.length} urls=${fileUrls.length}`)
@@ -786,6 +800,7 @@ export async function POST(request: NextRequest) {
         file_count: difyFileIds.length,
         file_url_count: fileUrls.length,
         prompt_length: typeof query === "string" ? query.length : 0,
+        max_output_tokens: configuredMaxOutputTokens,
         async_image_task: async_image_task === true,
       },
     })
@@ -824,7 +839,7 @@ export async function POST(request: NextRequest) {
     }
 
     // --- 2. 获取用户积分（用于预检查） ---
-    const modelType = (model || "standard") as ModelType
+    const modelType = requestedModelType
     
     // 🔍 详细日志：查询用户积分
     console.log(`🔍 [积分查询] 开始查询用户: ${userId}`)
@@ -832,7 +847,7 @@ export async function POST(request: NextRequest) {
     // 🔥 修复：只查询存在的字段 credits 和 user_id（移除不存在的 total_spent）
     let { data: userCredits, error: creditsError } = await getSupabaseAdmin()
       .from("user_credits")
-      .select("credits, user_id")
+      .select("credits, user_id, is_pro")
       .eq("user_id", userId)
       .single()
     
@@ -877,13 +892,48 @@ export async function POST(request: NextRequest) {
     
     const currentCredits = userCredits?.credits || 0
     
-    // 预估最低消费（用于预检查）
-    const estimatedMinCost = 5  // 最低 5 积分
+    const imageInputsForBilling = model === "gpt-image-2" ? buildGptImageV11Inputs(inputs) : null
+    const billingModelType = imageInputsForBilling?.model as ModelType | undefined
+    const estimatedMinCost = imageInputsForBilling
+      ? calculateActualCost(billingModelType || "gpt-image-2") * imageInputsForBilling.n
+      : getMinimumRequiredCredits(modelType)
+
+    if (imageInputsForBilling && (billingModelType || "gpt-image-2") === "gpt-image-2") {
+      const { data: userProfile } = await getSupabaseAdmin()
+        .from("user_profiles")
+        .select("email")
+        .eq("user_id", userId)
+        .maybeSingle()
+
+      if (!canUseImage2({
+        user_id: userId,
+        email: typeof userProfile?.email === "string" ? userProfile.email : null,
+        is_pro: userCredits?.is_pro ?? null,
+      })) {
+        console.warn(`🚫 [媒体权限] 用户 ${userId} 无权限使用 ${billingModelType || "gpt-image-2"}`)
+        return new Response(
+          JSON.stringify({
+            error: "GPT Image 2 当前仅订阅用户可用，请升级会员后使用。",
+            message: "GPT Image 2 当前仅订阅用户可用，请升级会员后使用。",
+            requiredMembership: "basic",
+            allowlist: ["IMAGE2_WHITELIST_USER_IDS", "IMAGE2_WHITELIST_EMAILS"],
+            action: "请充值或升级会员",
+          }),
+          { status: 403, headers: { "Content-Type": "application/json" } },
+        )
+      }
+    }
     
     if (currentCredits < estimatedMinCost) {
       console.warn(`🚫 [计费] 用户 ${userId} 积分不足: 当前 ${currentCredits}`)
       return new Response(
-        JSON.stringify({ error: "积分不足", required: estimatedMinCost, current: currentCredits }), 
+        JSON.stringify({
+          error: "当前积分不足",
+          message: `当前功能至少需要 ${estimatedMinCost} 积分，当前剩余 ${currentCredits} 积分。请充值或升级会员后继续使用。`,
+          required: estimatedMinCost,
+          current: currentCredits,
+          action: "请充值或升级会员",
+        }),
         { status: 402 }
       )
     }
@@ -891,6 +941,36 @@ export async function POST(request: NextRequest) {
     console.log(`💰 [预检查] 用户: ${userId} | 模型: ${modelType} | 当前积分: ${currentCredits}`)
 
     if (model === "gpt-image-2") {
+      const imageBillingModel = (billingModelType || "gpt-image-2") as ModelType
+      const imageCount = imageInputsForBilling?.n || 1
+      const imageDescription = `图片生成 - ${getModelDisplayName(imageBillingModel)} x${imageCount}`
+      const imageBillingMetadata = createBillingAuditMetadata({
+        userId,
+        actionType: "image_generation",
+        feature: imageBillingModel === "gpt-image-2" ? "image2" : "image",
+        appId: keySource || "GPT_IMAGE_GATEWAY",
+        workflowId: null,
+        modelId: imageBillingModel,
+        requestedAppId: keySource || "GPT_IMAGE_GATEWAY",
+        requestedWorkflowId: null,
+        requestedModelId: imageBillingModel,
+        pricingVersion: PRICING_VERSION,
+        usageSource: "fixed",
+        estimated: false,
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0,
+        chargedCredits: estimatedMinCost,
+        requestId: taskRun.requestId,
+        conversationId: effectiveConvId || (typeof conversation_id === "string" ? conversation_id : null),
+        messageId: typeof messageId === "string" ? messageId : null,
+        rawProviderMetadata: {
+          imageCount,
+          fixedCreditsPerImage: calculateActualCost(imageBillingModel),
+          inputs: imageInputsForBilling,
+        },
+        description: imageDescription,
+      })
       console.log("🎨 [GPT Image] 使用直连图片网关，绕过 Dify HTTP 节点超时")
       if (async_image_task === true) {
         const taskId = await startImageGatewayTask({
@@ -900,6 +980,26 @@ export async function POST(request: NextRequest) {
           requestId: taskRun.id,
           traceId: taskRun.traceId,
         })
+
+        const charged = await spendCredits(
+          userId,
+          estimatedMinCost,
+          "image_generation",
+          imageDescription,
+          taskRun.requestId,
+          imageBillingMetadata,
+        )
+
+        if (!charged) {
+          await updateTaskRun(taskRun.id, {
+            status: "failed",
+            stage: "图片任务已提交但积分扣除失败",
+            progress: 100,
+            errorMessage: "积分扣除失败，请联系客服处理该图片任务",
+            errorCode: "IMAGE_CREDIT_DEDUCT_FAILED",
+          })
+          return Response.json({ error: "积分扣除失败，请联系客服处理该图片任务" }, { status: 500 })
+        }
 
         return Response.json(
           {
@@ -920,6 +1020,24 @@ export async function POST(request: NextRequest) {
       const directResponse = await callImageGatewayDirect(query, inputs)
       if (directResponse.ok) {
         const payload = await directResponse.clone().json().catch(() => ({}))
+        const charged = await spendCredits(
+          userId,
+          estimatedMinCost,
+          "image_generation",
+          imageDescription,
+          taskRun.requestId,
+          imageBillingMetadata,
+        )
+        if (!charged) {
+          await updateTaskRun(taskRun.id, {
+            status: "failed",
+            stage: "图片生成完成但积分扣除失败",
+            progress: 100,
+            errorMessage: "积分扣除失败，本次结果未结算",
+            errorCode: "IMAGE_CREDIT_DEDUCT_FAILED",
+          })
+          return Response.json({ error: "积分扣除失败，本次结果未结算" }, { status: 500 })
+        }
         await updateTaskRun(taskRun.id, {
           status: "succeeded",
           stage: "图片生成完成",
@@ -964,13 +1082,13 @@ export async function POST(request: NextRequest) {
             // Dify Banana 参数格式（image_prompt）
             difyRequest = isVocabCardWorkflow
               ? {
-                  inputs: buildVocabCardWorkflowInputs({ query, inputs }),
+                  inputs: buildVocabCardWorkflowInputs({ query: limitedQuery, inputs }),
                   response_mode: "streaming",
                   user: userId || "default-user",
                 }
               : {
                   inputs: {
-                      image_prompt: query || "",
+                      image_prompt: limitedQuery,
                       ...(inputs || {})
                   },
                   response_mode: "streaming",
@@ -1001,7 +1119,7 @@ export async function POST(request: NextRequest) {
             const isGptImage2 = model === "gpt-image-2"
             difyRequest = {
                 inputs: isGptImage2 ? buildGptImageV11Inputs(inputs) : inputs || {},
-                query: query || "你好",
+                query: isGptImage2 ? (query || "你好") : limitedQuery,
                 response_mode: isGptImage2 ? "blocking" : "streaming",
                 user: userId || "default-user",
                 conversation_id: currentConvId,
@@ -1236,55 +1354,33 @@ export async function POST(request: NextRequest) {
     // --- 5. 流式响应 + 智能扣费 + Banana 图片转存 ---
     // 创建一个 TransformStream 来处理流式数据并在结束时扣费
     let totalTokens = 0
+    let promptTokens = 0
+    let completionTokens = 0
     let conversationId = ""
     let fullResponseText = ""  // 🔥 收集完整响应内容用于验证
     let bananaImageUrls: string[] = []  // 🎨 收集 Banana 生成的图片 URL
     let jsonBuffer = ""  // 🔥 JSON 行缓冲：跨 chunk 拼接不完整的 SSE 数据行
     let hasReceivedContent = false  // 🔥 标记是否收到了实际内容（用于判断是否扣费）
+    let latestParsedUsage: ParsedDifyUsage | null = null
 
     // 🔥 扣费函数：流结束后根据实际 token 用量扣费
     const deductCredit = async () => {
       if (!userId) return
       try {
-        const supabaseAdmin = getSupabaseAdmin()
-
-        // 计算实际扣费
+        // 计算实际扣费；文本统一按输入/输出 token 分开计费，不读取 Dify price 字段。
         const currentCost = calculateActualCost(
           model as ModelType,
-          { totalTokens },
-          { hasGeneratedImage: bananaImageUrls.length > 0 }
+          { totalTokens, inputTokens: promptTokens, outputTokens: completionTokens },
+          {
+            hasGeneratedImage: bananaImageUrls.length > 0,
+            hasOutputContent: hasReceivedContent,
+          }
         )
 
-        // 获取当前积分
-        const { data } = await supabaseAdmin
-          .from('user_credits')
-          .select('credits')
-          .eq('user_id', userId)
-          .single()
-
-        if (!data) {
-          console.error("[Billing] 无法获取用户积分信息")
+        if (currentCost <= 0) {
+          console.warn("[Billing] 缺少 prompt_tokens / completion_tokens，跳过文本扣费")
           return
         }
-
-        const currentCredits = data.credits
-        const newCredits = Math.max(0, currentCredits - currentCost)
-
-        // 🔥 使用条件更新防止并发竞态
-        const updateResult = await supabaseAdmin
-          .from('user_credits')
-          .update({ credits: newCredits })
-          .eq('user_id', userId)
-          .eq('credits', currentCredits)  // 🔥 关键：只有在积分未变时才更新
-          .select('credits')
-          .single()
-
-        if (updateResult.error || !updateResult.data) {
-          console.error("[Billing] 扣费更新失败或被并发跳过:", updateResult.error)
-          return
-        }
-
-        console.log(`[Billing] 扣费成功 (-${currentCost}积分，${totalTokens} tokens)，用户 ${userId} 剩余: ${newCredits}`)
 
         // 🔥 记录到 credit_transactions 表
         const reasonMap: Record<string, string> = {
@@ -1300,19 +1396,88 @@ export async function POST(request: NextRequest) {
         const reason = reasonMap[model as string] || `使用 ${getModelDisplayName(model as ModelType)}`
         const description = bananaImageUrls.length > 0
           ? `${reason} (生成 ${bananaImageUrls.length} 张图片)`
-          : reason
+          : `${reason} (输入 ${promptTokens} tokens / 输出 ${completionTokens} tokens)`
 
-        const { error: txError } = await supabaseAdmin.from('credit_transactions').insert({
-          user_id: userId,
-          amount: -currentCost,
-          type: 'consume',
+        const billingMetadata = createBillingAuditMetadata({
+          userId,
+          actionType: "consume",
+          feature: bananaImageUrls.length > 0 ? "image" : "text",
+          appId: keySource || null,
+          workflowId: WORKFLOW_MODELS.has(model || "") ? (model || null) : null,
+          modelId: model || "standard",
+          requestedAppId: keySource || null,
+          requestedWorkflowId: WORKFLOW_MODELS.has(model || "") ? (model || null) : null,
+          requestedModelId: model || "standard",
+          upstreamProvider: null,
+          upstreamModel: null,
+          upstreamGroup: null,
+          upstreamRequestId: null,
+          usageSource: latestParsedUsage?.usageSource,
+          estimated: latestParsedUsage?.estimated ?? false,
+          promptTokens,
+          completionTokens,
+          totalTokens,
+          chargedCredits: currentCost,
+          rawProviderMetadata: latestParsedUsage
+            ? {
+                usage: latestParsedUsage.rawUsage || null,
+                finishReason: latestParsedUsage.finishReason || null,
+                latency: latestParsedUsage.latency ?? null,
+                timeToFirstToken: latestParsedUsage.timeToFirstToken ?? null,
+                usageSource: latestParsedUsage.usageSource,
+                estimated: latestParsedUsage.estimated,
+                maxOutputTokens: configuredMaxOutputTokens,
+              }
+            : {
+                maxOutputTokens: configuredMaxOutputTokens,
+              },
+          rawUsageJson: latestParsedUsage?.rawUsage || null,
+          finishReason: latestParsedUsage?.finishReason || null,
+          latency: latestParsedUsage?.latency ?? null,
+          timeToFirstToken: latestParsedUsage?.timeToFirstToken ?? null,
+          conversationId: conversationId || null,
+          requestId: taskRun.requestId,
           description,
-          balance_before: currentCredits,
-          balance_after: newCredits
         })
-
-        if (txError) {
-          console.error("[Billing] 记录交易失败:", txError)
+        if (shouldAuditHighConsumptionTextCall(modelType, completionTokens, currentCost)) {
+          console.warn("[Billing Audit] 高消耗文本调用:", {
+            requestId: taskRun.requestId,
+            model,
+            promptTokens,
+            completionTokens,
+            totalTokens,
+            currentCost,
+            maxOutputTokens: configuredMaxOutputTokens,
+          })
+          await updateTaskRun(taskRun.id, {
+            metadata: {
+              high_consumption_text_call: true,
+              max_output_tokens: configuredMaxOutputTokens,
+              prompt_tokens: promptTokens,
+              completion_tokens: completionTokens,
+              total_tokens: totalTokens,
+              charged_credits: currentCost,
+            },
+          }).catch((error) => console.warn("[Billing Audit] high consumption trace update failed:", error))
+        }
+        const success = await spendCredits(
+          userId,
+          currentCost,
+          "consume",
+          description,
+          taskRun.requestId,
+          billingMetadata,
+        )
+        if (!success) {
+          console.error("[Billing] 扣费失败或积分不足")
+          await recordBillingIssue(
+            userId,
+            currentCost,
+            "billing_failed",
+            `异常账单：${description}`,
+            taskRun.requestId,
+            billingMetadata,
+          )
         }
       } catch (e) {
         console.error("[Billing] 扣费失败:", e)
@@ -1491,11 +1656,11 @@ export async function POST(request: NextRequest) {
 	                    console.log(`🎨 [Workflow完成] 收集到结果文本: ${outputs.result.substring(0, 50)}...`)
 	                  }
 	                }
-	                const workflowTokens =
-	                  Number(json.data?.total_tokens || json.total_tokens || json.data?.metadata?.usage?.total_tokens || 0)
-	                if (Number.isFinite(workflowTokens) && workflowTokens > 0) {
-	                  totalTokens = workflowTokens
-	                }
+	                const parsedUsage = parseDifyUsage(json)
+	                latestParsedUsage = parsedUsage
+	                if (parsedUsage.totalTokens > 0) totalTokens = parsedUsage.totalTokens
+	                if (parsedUsage.promptTokens > 0) promptTokens = parsedUsage.promptTokens
+	                if (parsedUsage.completionTokens > 0) completionTokens = parsedUsage.completionTokens
 	                updateTaskRun(taskRun.id, {
 	                  status: "succeeded",
 	                  stage: "工作流已完成",
@@ -1543,15 +1708,19 @@ export async function POST(request: NextRequest) {
                 }
               }
 
-              // 提取 token 使用量（Dify 在 message_end 事件中返回）
-	              if (json.event === "message_end" && json.metadata?.usage) {
-	                totalTokens = json.metadata.usage.total_tokens || 0
-	                console.log(`📊 [Token统计] 总Token: ${totalTokens}`)
+	              // 提取 token 使用量（Dify 在 message_end 事件中返回）
+		              if (json.event === "message_end" && json.metadata?.usage) {
+		                const parsedUsage = parseDifyUsage(json)
+		                latestParsedUsage = parsedUsage
+		                totalTokens = parsedUsage.totalTokens
+		                promptTokens = parsedUsage.promptTokens
+		                completionTokens = parsedUsage.completionTokens
+		                console.log(`📊 [Token统计] 输入: ${promptTokens}, 输出: ${completionTokens}, 总Token: ${totalTokens}`)
 	                updateTaskRun(taskRun.id, {
 	                  status: "running",
 	                  stage: "消息生成完成，正在结算",
 	                  progress: 95,
-	                  metadata: { total_tokens: totalTokens },
+	                  metadata: { total_tokens: totalTokens, prompt_tokens: promptTokens, completion_tokens: completionTokens },
 	                }).catch((error) => console.warn("[AI Task Trace] message_end update failed:", error))
 	              }
             } catch (e) {
@@ -1585,9 +1754,13 @@ export async function POST(request: NextRequest) {
               if (json.conversation_id) {
                 conversationId = json.conversation_id
               }
-              if (json.metadata?.usage?.total_tokens) {
-                totalTokens = json.metadata.usage.total_tokens
-              }
+	              if (json.metadata?.usage) {
+	                const parsedUsage = parseDifyUsage(json)
+	                latestParsedUsage = parsedUsage
+	                totalTokens = parsedUsage.totalTokens
+	                promptTokens = parsedUsage.promptTokens
+	                completionTokens = parsedUsage.completionTokens
+	              }
             } catch (e) {
               // 流结束时的最后数据仍然不完整，静默忽略
               console.warn(`⚠️ [Flush] 缓冲区剩余数据解析失败:`, e)
@@ -1596,11 +1769,11 @@ export async function POST(request: NextRequest) {
         }
 
         // 🔥 流结束，触发扣费（仅当有实际内容时才扣费）
-        console.log(`💰 [Billing] 流结束，实际使用 ${totalTokens} tokens，内容长度: ${fullResponseText.length}，hasReceivedContent: ${hasReceivedContent}`)
-	        if (hasReceivedContent && totalTokens > 0) {
+        console.log(`💰 [Billing] 流结束，输入 ${promptTokens} tokens，输出 ${completionTokens} tokens，总 ${totalTokens} tokens，内容长度: ${fullResponseText.length}，hasReceivedContent: ${hasReceivedContent}`)
+	        if (hasReceivedContent && (promptTokens > 0 || completionTokens > 0 || bananaImageUrls.length > 0)) {
 	          deductCredit().catch(e => console.error("[Billing] 扣费异步异常:", e))
 	        } else {
-	          console.warn(`⚠️ [Billing] 流结束但无实际内容，不扣费`)
+	          console.warn(`⚠️ [Billing] 流结束但无可结算 token，不扣费`)
 	        }
 	        updateTaskRun(taskRun.id, {
 	          status: hasReceivedContent ? "succeeded" : "failed",
@@ -1612,6 +1785,8 @@ export async function POST(request: NextRequest) {
 	          errorCode: hasReceivedContent ? null : "EMPTY_STREAM",
 	          metadata: {
 	            total_tokens: totalTokens,
+	            prompt_tokens: promptTokens,
+	            completion_tokens: completionTokens,
 	            response_length: fullResponseText.length,
 	            has_received_content: hasReceivedContent,
 	          },

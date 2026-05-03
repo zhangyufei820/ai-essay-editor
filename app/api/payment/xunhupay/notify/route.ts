@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 import { verifyXunhupaySign } from "@/lib/xunhupay"
-import { getProductCredits, getProductPriceInCents, isMembershipProduct } from "@/lib/products"
+import { getProductCredits, getProductPriceInCents, isCreditsProduct, isMembershipProduct, isPurchasableProduct } from "@/lib/products"
 
 // 🔥 使用 Service Role Key 创建管理员客户端（绕过所有 RLS）
 function getSupabaseAdmin() {
@@ -17,6 +17,29 @@ function parseAmountInCents(value: unknown): number | null {
   const amount = Number.parseFloat(String(value || ""))
   if (!Number.isFinite(amount) || amount <= 0) return null
   return Math.round(amount * 100)
+}
+
+function parseOrderSnapshotAmountInCents(value: unknown): number | null {
+  const amount = Number.parseFloat(String(value ?? ""))
+  if (!Number.isFinite(amount) || amount <= 0) return null
+  return Math.round(amount * 100)
+}
+
+async function restoreClaimedOrderToPending(supabase: any, orderNo: string, reason: string) {
+  const { error } = await supabase
+    .from("orders")
+    .update({
+      status: "pending",
+      updated_at: new Date().toISOString()
+    })
+    .eq("order_no", orderNo)
+    .eq("status", "processing")
+
+  if (error) {
+    console.error(`[迅虎支付] 恢复订单 pending 失败: order=${orderNo}, reason=${reason}`, error)
+  } else {
+    console.warn(`[迅虎支付] 已恢复订单为 pending，等待幂等重试: order=${orderNo}, reason=${reason}`)
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -90,11 +113,21 @@ export async function POST(request: NextRequest) {
       console.log("[迅虎支付] 订单已支付，跳过处理")
       return new NextResponse("success", { status: 200 })
     }
+    if (order.status !== "pending") {
+      console.warn("[迅虎支付] 订单状态非 pending，拒绝重复或异常回调:", order.status)
+      return new NextResponse("fail", { status: 200 })
+    }
 
-    const expectedAmountInCents = getProductPriceInCents(order.product_id, order.billing_cycle || "monthly")
+    const snapshotAmountInCents = parseOrderSnapshotAmountInCents(order.amount)
+    const currentCatalogAmountInCents = getProductPriceInCents(order.product_id, order.billing_cycle || "monthly")
+    const expectedAmountInCents = snapshotAmountInCents ?? currentCatalogAmountInCents
     const paidAmountInCents = parseAmountInCents(total_fee)
+    if (!isPurchasableProduct(order.product_id) || (!isMembershipProduct(order.product_id) && !isCreditsProduct(order.product_id))) {
+      console.error("[迅虎支付] 产品类型非法或不可购买，拒绝处理:", order.product_id)
+      return new NextResponse("fail", { status: 200 })
+    }
     if (expectedAmountInCents === null) {
-      console.error("[迅虎支付] 未知产品，拒绝处理:", order.product_id)
+      console.error("[迅虎支付] 未知产品或不可购买产品，拒绝处理:", order.product_id)
       return new NextResponse("fail", { status: 200 })
     }
     if (paidAmountInCents !== expectedAmountInCents) {
@@ -102,14 +135,34 @@ export async function POST(request: NextRequest) {
       return new NextResponse("fail", { status: 200 })
     }
 
-    const credits = Number(order.credits_amount || getProductCredits(order.product_id))
+    const snapshotCredits = Number(order.credits_amount || 0)
+    const catalogCredits = getProductCredits(order.product_id)
+    const credits = snapshotCredits > 0 ? snapshotCredits : catalogCredits
     const expectedCredits = getProductCredits(order.product_id)
     const isPro = isMembershipProduct(order.product_id)
-    if (!credits || credits !== expectedCredits) {
-      console.error(`[迅虎支付] 积分数量不匹配，拒绝处理: order=${orderNo}, credits=${credits}, expected=${expectedCredits}`)
+    if (!credits || (!snapshotCredits && credits !== expectedCredits)) {
+      console.error(`[迅虎支付] 积分数量不匹配，拒绝处理: order=${orderNo}, credits=${credits}, expected=${expectedCredits}, snapshot=${snapshotCredits}`)
       return new NextResponse("fail", { status: 200 })
     }
-    console.log(`[迅虎支付] 产品校验通过: ${order.product_id} → 积分=${credits}, isPro=${isPro}`)
+    console.log(`[迅虎支付] 产品校验通过: ${order.product_id} → 积分=${credits}, isPro=${isPro}, amountSnapshot=${snapshotAmountInCents}`)
+
+    // 先抢占 pending 订单，避免并发重复回调在加积分前同时通过校验。
+    const { data: claimedOrder, error: claimOrderError } = await supabase
+      .from("orders")
+      .update({
+        status: "processing",
+        trade_no: tradeNo,
+        updated_at: new Date().toISOString()
+      })
+      .eq("order_no", orderNo)
+      .eq("status", "pending")
+      .select("id")
+      .maybeSingle()
+
+    if (claimOrderError || !claimedOrder) {
+      console.error("[迅虎支付] 订单抢占失败或状态已变化:", claimOrderError)
+      return new NextResponse("fail", { status: 200 })
+    }
 
     // 🔥 查询用户当前积分记录
     const { data: currentCredits, error: creditsError } = await supabase
@@ -118,13 +171,17 @@ export async function POST(request: NextRequest) {
       .eq("user_id", order.user_id)
       .maybeSingle()
 
+    let balanceBefore = currentCredits?.credits || 0
+    let balanceAfter = balanceBefore + credits
+
     if (currentCredits) {
       // 更新现有记录
-      const newCredits = currentCredits.credits + credits
+      const newCredits = balanceAfter
       
       // 🛡️ 积分上限校验
       if (newCredits > MAX_CREDITS) {
         console.error(`[迅虎支付] ⚠️ 积分超限拒绝: userId=${order.user_id}, newCredits=${newCredits} > MAX=${MAX_CREDITS}`)
+        await restoreClaimedOrderToPending(supabase, orderNo, "credits_limit_exceeded")
         return new NextResponse("fail", { status: 200 })
       }
       
@@ -132,7 +189,7 @@ export async function POST(request: NextRequest) {
       
       console.log(`[迅虎支付] 更新用户积分: ${currentCredits.credits} → ${newCredits}, is_pro: ${currentCredits.is_pro} → ${newIsPro}`)
       
-      const { error: updateError } = await supabase
+      const { data: updatedCredits, error: updateError } = await supabase
         .from("user_credits")
         .update({
           credits: newCredits,
@@ -140,9 +197,13 @@ export async function POST(request: NextRequest) {
           updated_at: new Date().toISOString()
         })
         .eq("user_id", order.user_id)
+        .eq("credits", currentCredits.credits)
+        .select("credits")
+        .maybeSingle()
 
-        if (updateError) {
+      if (updateError || !updatedCredits || updatedCredits.credits !== newCredits) {
         console.error("[迅虎支付] 更新积分失败:", updateError)
+        await restoreClaimedOrderToPending(supabase, orderNo, "credits_update_failed")
         return new NextResponse("fail", { status: 200 })
       }
       console.log(`[迅虎支付] ✅ 用户 ${order.user_id} 积分更新成功`)
@@ -174,10 +235,12 @@ export async function POST(request: NextRequest) {
           
           if (upsertError) {
             console.error("[迅虎支付] upsert 也失败:", upsertError)
+            await restoreClaimedOrderToPending(supabase, orderNo, "credits_upsert_failed")
             return new NextResponse("fail", { status: 200 })
           }
           console.log("[迅虎支付] ✅ upsert 成功")
         } else {
+          await restoreClaimedOrderToPending(supabase, orderNo, "credits_insert_failed")
           return new NextResponse("fail", { status: 200 })
         }
       } else {
@@ -192,8 +255,8 @@ export async function POST(request: NextRequest) {
         amount: credits,
         type: "purchase",
         description: `购买${order.product_name}获得${credits}积分`,
-        balance_before: currentCredits?.credits || 0,
-        balance_after: (currentCredits?.credits || 0) + credits
+        balance_before: balanceBefore,
+        balance_after: balanceAfter
       })
     } catch (txError) {
       console.log("[迅虎支付] 记录交易流水失败（不影响主流程）:", txError)
@@ -208,7 +271,7 @@ export async function POST(request: NextRequest) {
         updated_at: new Date().toISOString()
       })
       .eq("order_no", orderNo)
-      .eq("status", "pending")
+      .eq("status", "processing")
       .select("id")
       .maybeSingle()
 

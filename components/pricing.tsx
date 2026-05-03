@@ -6,71 +6,17 @@ import { Badge } from "@/components/ui/badge"
 import { Check } from "lucide-react"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import { PRODUCT_CATALOG, getCatalogPriceInCents } from "@/lib/billing-config"
 
-const subscriptionPlans = [
-  {
-    id: "basic",
-    name: "基础版",
-    description: "适合入门体验",
-    monthlyPrice: 28,
-    annualPrice: 268.8,
-    credits: 2000,
-    essaysPerMonth: 13,
-    features: [
-      { text: "每月 2,000 积分", highlight: true },
-      { text: "(约可批改 13 篇作文)", subtext: true },
-      { text: "调用所有 AI 模型" },
-      { text: "标准生成速度" },
-      { text: "社区支持" },
-      { text: "调用专业智能体" },
-    ],
-    popular: false,
-  },
-  {
-    id: "pro",
-    name: "专业版",
-    description: "适合高频学生",
-    monthlyPrice: 68,
-    annualPrice: 652.8,
-    credits: 5000,
-    essaysPerMonth: 33,
-    features: [
-      { text: "每月 5,000 积分", highlight: true },
-      { text: "(约可批改 33 篇作文)", subtext: true },
-      { text: "调用所有 AI 模型" },
-      { text: "优先生成速度", highlight: true },
-      { text: "高级润色工具", highlight: true },
-      { text: "调用专业智能体", highlight: true },
-    ],
-    popular: true,
-  },
-  {
-    id: "premium",
-    name: "豪华版",
-    description: "适合重度用户/教育者",
-    monthlyPrice: 128,
-    annualPrice: 1228.8,
-    credits: 12000,
-    essaysPerMonth: 80,
-    features: [
-      { text: "每月 12,000 积分", highlight: true },
-      { text: "(约可批改 80 篇作文)", subtext: true },
-      { text: "调用三大顶尖模型 (Claude, Gemini, ChatGPT)", highlight: true },
-      { text: "最高优先速度", highlight: true },
-      { text: "高级润色工具" },
-      { text: "无限次 AI 对话", highlight: true },
-      { text: "调用专业智能体", highlight: true },
-    ],
-    popular: false,
-  },
-]
+const subscriptionPlans = PRODUCT_CATALOG.filter((product) => product.productType === "membership")
+const creditPacks = PRODUCT_CATALOG.filter((product) => product.productType === "credits")
 
-const creditPacks = [
-  { credits: 500, price: 5, discount: null },
-  { credits: 1000, price: 10, discount: null },
-  { credits: 5000, price: 48, discount: "96折" },
-  { credits: 10000, price: 90, discount: "9折" },
-]
+function getCreditPackAccessText(productId: string): string {
+  if (productId === "credits-500" || productId === "credits-1000") return "订阅用户可买"
+  if (productId === "credits-5000") return "专业版及以上可买"
+  if (productId === "credits-10000") return "豪华版及以上可买"
+  return "按账户权限购买"
+}
 
 export function Pricing({ currentSubscription }: { currentSubscription?: string }) {
   const [isAnnual, setIsAnnual] = useState(false)
@@ -87,8 +33,8 @@ export function Pricing({ currentSubscription }: { currentSubscription?: string 
 
   const isSubscribedPlan = (planId: string) => Boolean(currentSubscription && planId === currentSubscription)
 
-  const handleCreditPurchase = (credits: number, price: number) => {
-    router.push(`/checkout/credits-${credits}?price=${price}`)
+  const handleCreditPurchase = (productId: string) => {
+    router.push(`/checkout/${productId}`)
   }
 
   return (
@@ -100,7 +46,7 @@ export function Pricing({ currentSubscription }: { currentSubscription?: string 
             先用积分体验作文批改和 AI 对话，高频使用再开通会员套餐。所有金额与结账页保持一致。
           </p>
           <p className="text-sm text-gray-500 mb-8">
-            年付为月付 × 12 × 8 折；积分充值包仅限会员购买，支付成功后可在账户权益页查看到账情况。
+            年付为月付 × 12 × 8 折；企业版 / 校园版请联系商务。支付成功后可在账户权益页查看到账情况。
           </p>
 
           <div className="flex items-center justify-center gap-4">
@@ -165,22 +111,22 @@ export function Pricing({ currentSubscription }: { currentSubscription?: string 
 
                 <div className="mb-6">
                   <span className={`text-5xl font-extrabold ${isCurrentPlan ? "text-gray-400" : "text-gray-900"}`}>
-                    {isAnnual ? plan.annualPrice : plan.monthlyPrice}
+                    {((getCatalogPriceInCents(plan.id, isAnnual ? "annual" : "monthly") || 0) / 100).toFixed(isAnnual ? 1 : 0)}
                   </span>
                   <span className={`text-lg font-medium ${isCurrentPlan ? "text-gray-400" : "text-gray-600"}`}>{isAnnual ? " 元/年" : " 元/月"}</span>
                 </div>
 
                 {isAnnual && !isCurrentPlan && (
                   <p className="text-green-600 font-medium h-6 mb-4 text-sm">
-                    (折合 {(plan.annualPrice / 12).toFixed(1)} 元/月)
+                    (折合 {(((getCatalogPriceInCents(plan.id, "annual") || 0) / 100) / 12).toFixed(1)} 元/月)
                   </p>
                 )}
 
                 <ul className={`space-y-3 mb-8 flex-grow ${isCurrentPlan ? "text-gray-400" : "text-gray-700"}`}>
                   {plan.features.map((feature, idx) => (
-                    <li key={idx} className={`flex items-start ${feature.subtext ? "pl-7 text-sm" : ""}`}>
-                      {!feature.subtext && <Check className={`w-5 h-5 mr-3 flex-shrink-0 mt-0.5 ${isCurrentPlan ? "text-gray-400" : "text-primary"}`} />}
-                      <span className={feature.highlight ? "font-semibold" : ""}>{feature.text}</span>
+                    <li key={idx} className="flex items-start">
+                      <Check className={`w-5 h-5 mr-3 flex-shrink-0 mt-0.5 ${isCurrentPlan ? "text-gray-400" : "text-primary"}`} />
+                      <span className={idx === 0 ? "font-semibold" : ""}>{feature}</span>
                     </li>
                   ))}
                 </ul>
@@ -257,7 +203,7 @@ export function Pricing({ currentSubscription }: { currentSubscription?: string 
           <h2 className="text-3xl font-bold text-center text-gray-900 mb-4">积分充值包 (单次付费)</h2>
           <p className="text-center text-gray-600 mb-8">
             适合会员加购。购买的积分<span className="font-bold text-primary">永久有效</span>
-            ，仅限已开通会员的账户购买，可用于生成作文或兑换名师辅导。
+            ，不同积分包按会员等级开放，可用于文本生成、图片生成和音乐创作等积分服务。
           </p>
 
           <Card className="overflow-hidden rounded-2xl border-2 border-gray-200 shadow-[0_4px_20px_rgb(0,0,0,0.08)]">
@@ -267,29 +213,25 @@ export function Pricing({ currentSubscription }: { currentSubscription?: string 
                   <tr>
                     <th className="px-6 py-4 text-sm font-bold text-gray-700">积分包</th>
                     <th className="px-6 py-4 text-sm font-bold text-gray-700">价格</th>
-                    <th className="px-6 py-4 text-sm font-bold text-gray-700">优惠</th>
+                    <th className="px-6 py-4 text-sm font-bold text-gray-700">购买条件</th>
                     <th className="px-6 py-4 text-sm font-bold text-gray-700 text-right">操作</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {creditPacks.map((pack) => (
-                    <tr key={pack.credits} className="hover:bg-gray-50 transition-colors">
+                    <tr key={pack.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-6 py-5 font-semibold text-gray-900">{pack.credits} 积分</td>
-                      <td className="px-6 py-5 text-gray-800 font-medium">{pack.price} 元</td>
+                      <td className="px-6 py-5 text-gray-800 font-medium">{((getCatalogPriceInCents(pack.id) || 0) / 100).toFixed(0)} 元</td>
                       <td className="px-6 py-5">
-                        {pack.discount ? (
-                          <span className="text-green-600 font-bold bg-green-50 px-3 py-1 rounded-full text-sm">
-                            {pack.discount}
-                          </span>
-                        ) : (
-                          <span className="text-gray-400">-</span>
-                        )}
+                        <span className="text-green-700 font-bold bg-green-50 px-3 py-1 rounded-full text-sm">
+                          {getCreditPackAccessText(pack.id)}
+                        </span>
                       </td>
                       <td className="px-6 py-5 text-right">
                         <Button
                           size="sm"
                           className="bg-primary/10 hover:bg-primary/20 text-primary border-2 border-primary/30 hover:border-primary/50 font-semibold rounded-lg px-6 shadow-sm hover:shadow-md transition-all"
-                          onClick={() => handleCreditPurchase(pack.credits, pack.price)}
+                          onClick={() => handleCreditPurchase(pack.id)}
                         >
                           购买
                         </Button>
@@ -307,46 +249,68 @@ export function Pricing({ currentSubscription }: { currentSubscription?: string 
           <p className="text-gray-700 leading-relaxed mb-6">
             <span className="font-bold text-gray-900">问：积分是如何消耗的？</span>
             <br />
-            答：积分按实际使用的 Token 数量计费，不同功能消耗不同。我们的系统会智能调用 Gemini、Claude、GPT
-            三个模型以确保最佳输出质量。积分可用于 AI 服务或兑换增值服务。
+            答：文本生成按实际输入和输出内容计费。输入和输出都会消耗积分，输出越长，消耗越多。系统会在模型返回完成后，根据实际 token 用量扣除积分。
           </p>
           <ul className="space-y-3 text-gray-700">
             <li className="flex items-start">
               <Check className="w-5 h-5 text-primary mr-3 flex-shrink-0 mt-0.5" />
               <span>
-                <span className="font-bold text-gray-900">作文批改 (单次):</span> 约{" "}
-                <span className="font-bold text-primary">150 积分</span>
-                <span className="font-semibold text-gray-700 text-sm ml-1">(按实际 Token 消耗计费)</span>
+                <span className="font-bold text-gray-900">输入内容:</span>{" "}
+                <span className="font-bold text-primary">5 积分 / 1K tokens</span>
               </span>
             </li>
             <li className="flex items-start">
               <Check className="w-5 h-5 text-primary mr-3 flex-shrink-0 mt-0.5" />
               <span>
-                <span className="font-bold text-gray-900">AI 对话 (单次):</span> 约{" "}
-                <span className="font-bold text-primary">15-30 积分</span>
-                <span className="font-semibold text-gray-700 text-sm ml-1">(根据对话长度浮动)</span>
+                <span className="font-bold text-gray-900">输出内容:</span>{" "}
+                <span className="font-bold text-primary">20 积分 / 1K tokens</span>
               </span>
             </li>
             <li className="flex items-start">
               <Check className="w-5 h-5 text-primary mr-3 flex-shrink-0 mt-0.5" />
               <span>
-                <span className="font-bold text-gray-900">高级模型 (GPT/Claude/Gemini):</span> 约{" "}
-                <span className="font-bold text-primary">30-40 积分</span>
-                <span className="font-semibold text-gray-700 text-sm ml-1">(单次对话)</span>
+                <span className="font-bold text-gray-900">无实际输出内容:</span>{" "}
+                <span className="font-bold text-primary">不扣文本生成费用</span>
               </span>
             </li>
             <li className="flex items-start">
               <Check className="w-5 h-5 text-primary mr-3 flex-shrink-0 mt-0.5" />
               <span>
-                <span className="font-bold text-gray-900">兑换名师辅导 (1次):</span> 消耗{" "}
-                <span className="font-bold text-primary">1000 积分</span>
-                <span className="font-semibold text-gray-700 text-sm ml-1">(专业版/豪华版包含免费次数)</span>
+                <span className="font-bold text-gray-900">长文写作 / 作文批改 / 论文报告:</span>{" "}
+                <span className="font-bold text-primary">通常会消耗更多积分</span>
               </span>
             </li>
           </ul>
-          <p className="text-gray-700 font-semibold text-sm mt-4">
-            💡 提示：实际消耗根据输入输出的 Token 数量计算，以上为参考值。智能体服务 10积分/1K Token，独立模型 20积分/1K Token。
-          </p>
+          <div className="mt-6 rounded-xl border border-gray-200 bg-white p-5 text-sm text-gray-700 leading-relaxed">
+            <p className="font-bold text-gray-900 mb-3">图片和音乐如何扣费？</p>
+            <ul className="space-y-2">
+              <li>• GPT Image 2：订阅用户可用，白名单用户可测试，按固定积分扣费。</li>
+              <li>• GPT Image 1.5 / 1 / Mini：按对应固定积分扣费。</li>
+              <li>• Suno：约 100 积分起，实际可能包含文本 token 补扣。</li>
+            </ul>
+          </div>
+          <div className="mt-6 rounded-xl border border-gray-200 bg-white p-5 text-sm text-gray-700 leading-relaxed">
+            <p className="font-bold text-gray-900 mb-3">作文批改通常消耗多少？</p>
+            <p>
+              作文批改按实际输入和生成内容计费。输入和输出都会消耗积分，输出内容越详细，消耗积分越多。
+            </p>
+            <div className="grid gap-2 sm:grid-cols-3 mt-4">
+              <div className="rounded-lg bg-gray-50 px-3 py-2">
+                <span className="block font-semibold text-gray-900">短作文批改</span>
+                <span>约 100~300 积分</span>
+              </div>
+              <div className="rounded-lg bg-gray-50 px-3 py-2">
+                <span className="block font-semibold text-gray-900">普通作文批改</span>
+                <span>约 300~600 积分</span>
+              </div>
+              <div className="rounded-lg bg-gray-50 px-3 py-2">
+                <span className="block font-semibold text-gray-900">长作文或详细批改</span>
+                <span>可能 600 积分以上</span>
+              </div>
+            </div>
+            <p className="mt-4">以上为预计积分区间，不是固定价格。实际消耗会随作文长度、批改详细程度和生成内容多少变化。</p>
+          </div>
+          <p className="text-gray-700 font-semibold text-sm mt-4">提示：文本价格不按模型名称分档，用户侧只按输入和输出 token 用量结算积分。</p>
           
           {/* 支持链接 */}
           <div className="mt-8 pt-6 border-t border-gray-200">

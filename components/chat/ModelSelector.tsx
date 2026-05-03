@@ -244,7 +244,7 @@ export function ModelSelector({
               transition={{ duration: 2.5, repeat: Infinity }}
             />
 
-            {/* 标题和免费额度 */}
+            {/* 标题 */}
             <div
               className="flex items-center justify-between px-4 py-3"
               style={{ borderBottom: "1px solid rgba(14, 58, 31, 0.04)" }}
@@ -255,14 +255,6 @@ export function ModelSelector({
               >
                 选 择 模 型
               </span>
-              {dailyFreeInfo && (
-                <span
-                  className="text-[10px]"
-                  style={{ color: TOKENS.text.tertiary, letterSpacing: "0.5px" }}
-                >
-                  今日免费: {dailyFreeInfo.total - dailyFreeInfo.used}/{dailyFreeInfo.total}
-                </span>
-              )}
             </div>
 
             {/* 可滚动的模型列表 */}

@@ -94,11 +94,11 @@ export async function POST(request: NextRequest) {
       // 🎁 给新用户发放注册积分（如果需要）
       if (userId) {
         try {
-          const { addCredits, createUserReferralCode } = await import("@/lib/credits")
+          const { getUserCredits, createUserReferralCode } = await import("@/lib/credits")
           
-          // 1. 发放注册积分
-          await addCredits(userId, 1000, "signup_bonus", "🎉 注册成功，获得 1000 积分新人礼包")
-          console.log(`[v0] 新用户积分发放成功`)
+          // 1. 初始化新人积分。getUserCredits 会为缺失记录创建 1000 积分且 is_pro=false。
+          await getUserCredits(userId)
+          console.log(`[v0] 新用户积分初始化成功`)
           
           // 2. 为新用户创建推荐码
           await createUserReferralCode(userId)

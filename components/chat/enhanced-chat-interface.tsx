@@ -60,8 +60,6 @@ import {
   ModelType,
   GenMode,
   MODEL_COSTS,
-  DAILY_FREE_LIMIT,
-  LUXURY_THRESHOLD,
   getModelDisplayName
 } from "@/lib/pricing"
 import {
@@ -285,7 +283,10 @@ function getChatErrorMessage(error: unknown, status?: number, model?: string): s
     return "请先登录后再提交。"
   }
   if (status === 402 || /402|积分不足|余额不足|credit|balance/.test(raw)) {
-    return "积分不足，当前任务没有扣费。请充值或切换到免费额度可用的模型。"
+    return "积分不足，当前任务没有扣费。请充值或升级会员后继续使用。"
+  }
+  if (raw.includes("GPT Image 2 当前仅订阅用户可用") || raw.includes("仅订阅用户可用")) {
+    return "GPT Image 2 当前仅订阅用户可用，请升级会员后使用。"
   }
   if (/无权访问图片生成接口|permission|forbidden|403/.test(raw)) {
     return "当前账号暂无图片生成权限，请切换模型，或联系客服开通后再试。"
@@ -890,9 +891,6 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   type SunoMode = "inspiration" | "custom" | "extend"
   const [sunoMode, setSunoMode] = useState<SunoMode>("inspiration")
 
-  const [dailyUsage, setDailyUsage] = useState<number>(0)
-  const DAILY_LIMIT = 20
-
   const isLuxury = userCredits > 1000
 
   // 🎯 升级引导横幅状态（非豪华会员显示，发送消息后消失）
@@ -1470,7 +1468,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       name: "Suno V5",
       modelKey: "suno-v5",
       color: BRAND_GREEN,
-      description: "AI 音乐创作",
+      description: "AI 音乐创作，约 100 积分起",
       group: "创意生成"
     },
     "grok-4.2": {
@@ -1579,15 +1577,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     }
 
     if (nextModel !== "standard") {
-      if (isLuxury) {
-        toast.success(`已切换至 ${getModelUiConfig(nextModel).name}`)
-      } else {
-        if (dailyUsage < DAILY_LIMIT) {
-          toast.info(`已切换至 ${getModelUiConfig(nextModel).name}`, { description: `今日免费: ${dailyUsage}/${DAILY_LIMIT}` })
-        } else {
-          toast.warning(`今日免费额度已用完`)
-        }
-      }
+      toast.success(`已切换至 ${getModelUiConfig(nextModel).name}`)
     }
 
     // 🚀 Banana 2 Pro 使用专用页面，自动跳转
@@ -1614,7 +1604,6 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   const calculateCost = () => {
     if (!userId) return 0
     return calculatePreviewCost(selectedModel, {
-      isLuxury,
       estimatedInputTokens: input.length > 0 ? Math.ceil(input.length / 4) * 2 : undefined
     })
   }
@@ -1983,17 +1972,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
               content: fullText
             })
 
-            // 🔥 扣除积分（调用 API）
-            try {
-              await fetch('/api/user/credits', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId, amount: -cost, reason: 'suno-v5' })
-              })
-            } catch (e) {
-              console.error("❌ [积分扣除] 失败:", e)
-            }
-            setUserCredits(prev => prev - cost)
+            await refreshCredits()
 
             console.log("✅ [Suno V5] 音乐生成任务已提交")
           }
@@ -2113,8 +2092,6 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 	              requestId,
 	              sessionId: sid,
 	              messageId: botId,
-	              // 🔥 传递前端计算的成本，用于后端记录交易
-	              estimatedCost: cost
 	            })
 	        })
 	        const traceId = res.headers.get("X-Trace-Id") || undefined
@@ -2304,10 +2281,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 	        }
 	        forgetPendingTask(requestId)
 
-        setUserCredits(prev => prev - cost)
-        if (selectedModel !== "standard" && !isLuxury && dailyUsage < DAILY_LIMIT) {
-          setDailyUsage(prev => prev + 1)
-        }
+        await refreshCredits()
 
 	    } catch (e: any) {
         console.error("❌ [对话异常] 详细错误:", e)
@@ -2876,10 +2850,10 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
               <div className="mx-auto max-w-3xl flex items-center justify-between gap-4">
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-emerald-800">
-                    每天仅需4元，解锁无限顶级AI模型
+                    每天仅需4元，获得每月 12,000 积分
                   </p>
                   <p className="text-xs text-emerald-600 mt-0.5 truncate">
-                    Gemini 3.1、ChatGPT 5.4、Claude Opus 4.6 等
+                    可用于作文批改、备课、论文写作等文本工作流
                   </p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">

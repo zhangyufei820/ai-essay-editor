@@ -5,7 +5,6 @@
  */
 
 export { HeroSection } from './HeroSection'
-export { GptImagePromoModal } from './GptImagePromoModal'
 export { OpenClawSection } from './OpenClawSection'
 export { CapabilitiesSection } from './CapabilitiesSection'
 export { ProcessSection } from './ProcessSection'

@@ -1,147 +1,88 @@
-export interface Product {
-  id: string
-  name: string
-  description: string
-  priceInCents: number // 价格（单位：分）
-  features: string[]
-  popular?: boolean
-  requiresMembership?: boolean // 是否需要会员才能购买
-  productType?: 'membership' | 'credits' // 产品类型
-}
+import {
+  PRODUCT_CATALOG,
+  getCatalogCredits,
+  getCatalogProduct,
+  getCatalogPriceInCents,
+  isCatalogMembershipProduct,
+  isCatalogCreditsProduct,
+  type MembershipTier,
+  type ProductCatalogItem,
+} from "@/lib/billing-config"
+import {
+  isSubscribedUser,
+  resolveMembershipStatus,
+  canUseImage2,
+} from "@/lib/permissions"
 
-export const MEMBERSHIP_CREDITS: Record<string, number> = {
-  basic: 2000,
-  pro: 5000,
-  premium: 12000,
+export type Product = Omit<ProductCatalogItem, "credits">
+export type { MembershipTier }
+export { canUseImage2, isSubscribedUser, resolveMembershipStatus }
+export const hasActiveMembership = isSubscribedUser
+
+export const MEMBERSHIP_CREDITS: Record<string, number> = Object.fromEntries(
+  PRODUCT_CATALOG
+    .filter((product) => product.productType === "membership")
+    .map((product) => [product.id, product.credits]),
+)
+
+export const PRODUCTS: Product[] = PRODUCT_CATALOG.map(({ credits, ...product }) => product)
+
+export function getProductById(productId: string): ProductCatalogItem | undefined {
+  return getCatalogProduct(productId)
 }
 
 export function getProductCredits(productId: string): number {
-  const directCredits = productId.match(/^credits-(\d+)$/)
-  if (directCredits) return Number(directCredits[1])
-  return MEMBERSHIP_CREDITS[productId] || 0
+  return getCatalogCredits(productId)
 }
 
-export function getProductPriceInCents(productId: string, billing: string = 'monthly'): number | null {
-  const product = PRODUCTS.find(p => p.id === productId)
-  if (!product) return null
-  const isAnnualMembership = billing === 'annual' && product.productType === 'membership'
-  return isAnnualMembership ? Math.round(product.priceInCents * 12 * 0.8) : product.priceInCents
+export function getProductPriceInCents(productId: string, billing: string = "monthly"): number | null {
+  return getCatalogPriceInCents(productId, billing)
 }
 
-// 产品目录 - 所有价格的唯一真实来源
-// [!!!] 修复：这里的 ID 必须与 pricing.tsx 中的 ID 完全匹配 [!!!]
-export const PRODUCTS: Product[] = [
-  // --- 订阅方案 (来自 pricing.tsx) ---
-  {
-    id: "basic",
-    name: "基础版",
-    description: "适合入门体验",
-    priceInCents: 2800, // 28 元 * 100
-    features: ["每月 2,000 积分", "调用所有 AI 模型", "标准生成速度", "社区支持", "调用专业智能体"],
-    productType: 'membership',
-  },
-  {
-    id: "pro",
-    name: "专业版",
-    description: "适合高频学生",
-    priceInCents: 6800, // 68 元 * 100
-    features: [
-      "每月 5,000 积分",
-      "调用所有 AI 模型",
-      "优先生成速度",
-      "高级润色工具",
-      "名师辅导 (1次/月)",
-      "调用专业智能体",
-    ],
-    popular: true,
-    productType: 'membership',
-  },
-  {
-    id: "premium",
-    name: "豪华版",
-    description: "适合重度用户/教育者",
-    priceInCents: 12800, // 128 元 * 100
-    features: [
-      "每月 12,000 积分",
-      "调用三大顶尖模型",
-      "最高优先速度",
-      "高级润色工具",
-      "名师辅导 (2次/月)",
-      "无限次 AI 对话",
-      "调用专业智能体",
-    ],
-    productType: 'membership',
-  },
-
-  // --- 积分充值包 (来自 pricing.tsx) ---
-  // 注意：积分充值包仅限会员购买
-  {
-    id: "credits-500",
-    name: "500 积分充值包",
-    description: "永久有效，仅限会员购买",
-    priceInCents: 500, // 5 元 * 100
-    features: ["500 积分", "永久有效", "可用于生成作文或兑换辅导", "⚠️ 仅限会员购买"],
-    requiresMembership: true,
-    productType: 'credits',
-  },
-  {
-    id: "credits-1000",
-    name: "1000 积分充值包",
-    description: "永久有效，仅限会员购买",
-    priceInCents: 1000, // 10 元 * 100
-    features: ["1000 积分", "永久有效", "可用于生成作文或兑换辅导", "⚠️ 仅限会员购买"],
-    requiresMembership: true,
-    productType: 'credits',
-  },
-  {
-    id: "credits-5000",
-    name: "5000 积分充值包",
-    description: "永久有效 (96折优惠)，仅限会员购买",
-    priceInCents: 4800, // 48 元 * 100
-    features: ["5000 积分", "永久有效", "可用于生成作文或兑换辅导", "⚠️ 仅限会员购买"],
-    requiresMembership: true,
-    productType: 'credits',
-  },
-  {
-    id: "credits-10000",
-    name: "10000 积分充值包",
-    description: "永久有效 (9折优惠)，仅限会员购买",
-    priceInCents: 9000, // 90 元 * 100
-    features: ["10000 积分", "永久有效", "可用于生成作文或兑换辅导", "⚠️ 仅限会员购买"],
-    requiresMembership: true,
-    productType: 'credits',
-  },
-]
-
-// 辅助函数：检查产品是否需要会员
 export function requiresMembership(productId: string): boolean {
-  const product = PRODUCTS.find(p => p.id === productId)
-  return product?.requiresMembership === true
+  return PRODUCT_CATALOG.find((product) => product.id === productId)?.requiresMembership === true
 }
 
-// 辅助函数：检查用户是否是会员
+export function isCreditsProduct(productId: string): boolean {
+  return isCatalogCreditsProduct(productId)
+}
+
 export function isMembershipProduct(productId: string): boolean {
-  return ['basic', 'pro', 'premium'].includes(productId)
+  return isCatalogMembershipProduct(productId)
 }
 
-// 辅助函数：检查用户是否有有效会员
-export function hasActiveMembership(membershipStatus: string | null): boolean {
-  return membershipStatus === 'basic' || membershipStatus === 'pro' || membershipStatus === 'premium'
+export function isPurchasableProduct(productId: string): boolean {
+  const product = getCatalogProduct(productId)
+  return Boolean(product && product.purchasable !== false && (product.productType === "membership" || product.productType === "credits"))
 }
 
-export function resolveMembershipStatus(source?: {
-  membership_status?: string | null
-  is_pro?: boolean | null
-} | null): string | null {
-  if (!source) return null
+export function getAllowedMemberships(productId: string): MembershipTier[] {
+  const product = getCatalogProduct(productId)
+  if (!product?.requiresMembership) return []
+  return product.allowedMemberships || ["basic", "pro", "premium", "enterprise", "campus"]
+}
 
-  if (hasActiveMembership(source.membership_status || null)) {
-    return source.membership_status || null
+export function canPurchaseProductWithMembership(productId: string, membershipStatus: string | null): boolean {
+  const product = getCatalogProduct(productId)
+  if (!product || product.purchasable === false) return false
+  if (!product.requiresMembership) return true
+  if (!isSubscribedUser(membershipStatus)) return false
+  return getAllowedMemberships(productId).includes(membershipStatus as MembershipTier)
+}
+
+export function validateProductPurchase(
+  productId: string,
+  membershipStatus: string | null,
+): { ok: true; product: ProductCatalogItem } | { ok: false; error: string; status: number } {
+  const product = getProductById(productId)
+  if (!product) {
+    return { ok: false, error: "产品不存在", status: 404 }
   }
-
-  if (source.is_pro) {
-    return 'pro'
+  if (!isPurchasableProduct(productId)) {
+    return { ok: false, error: "该产品暂不支持在线购买", status: 400 }
   }
-
-  return null
+  if (!canPurchaseProductWithMembership(productId, membershipStatus)) {
+    return { ok: false, error: "当前会员等级无权购买该积分包", status: 403 }
+  }
+  return { ok: true, product }
 }

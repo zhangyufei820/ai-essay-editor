@@ -1,6 +1,18 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
-import { PRODUCTS, requiresMembership, hasActiveMembership, resolveMembershipStatus, getProductCredits, getProductPriceInCents } from "@/lib/products"; 
+import {
+  canPurchaseProductWithMembership,
+  getAllowedMemberships,
+  getProductById,
+  getProductCredits,
+  getProductPriceInCents,
+  isCreditsProduct,
+  isMembershipProduct,
+  isPurchasableProduct,
+  requiresMembership,
+  resolveMembershipStatus,
+  validateProductPurchase,
+} from "@/lib/products";
 import { createClient } from '@supabase/supabase-js'
 import { applyRateLimit } from "@/lib/rate-limit";
 
@@ -69,9 +81,12 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "缺少产品ID" }, { status: 400 });
     }
 
-    const product = PRODUCTS.find((p) => p.id === productId);
+    const product = getProductById(productId);
     if (!product) {
       return NextResponse.json({ error: "产品不存在" }, { status: 404 });
+    }
+    if (!isPurchasableProduct(productId) || (!isMembershipProduct(productId) && !isCreditsProduct(productId))) {
+      return NextResponse.json({ error: "产品类型不支持在线购买" }, { status: 400 });
     }
 
     // 根据服务端产品目录计算价格，前端传参不能决定金额
@@ -86,6 +101,8 @@ export async function GET(request: Request) {
       supabaseUrl,
       serviceRoleKey
     );
+
+    let membershipStatus: string | null = null
 
     // 检查产品是否需要会员资格
     if (requiresMembership(productId)) {
@@ -104,19 +121,47 @@ export async function GET(request: Request) {
         }, { status: 500 });
       }
 
-      // 检查用户是否有有效会员
-      const membershipStatus = resolveMembershipStatus(userCredits);
-      
-      if (!hasActiveMembership(membershipStatus)) {
+      const { data: latestMembershipOrder, error: membershipOrderError } = await supabaseAdmin
+        .from('orders')
+        .select('product_id')
+        .eq('user_id', userId)
+        .eq('status', 'paid')
+        .in('product_id', ['basic', 'pro', 'premium', 'enterprise', 'campus'])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (membershipOrderError) {
+        console.error("❌ 查询会员订单失败:", membershipOrderError);
+        return NextResponse.json({
+          error: "无法验证会员等级",
+          details: "请稍后重试或联系客服"
+        }, { status: 500 });
+      }
+
+      membershipStatus = latestMembershipOrder?.product_id || resolveMembershipStatus(userCredits);
+      if (!canPurchaseProductWithMembership(productId, membershipStatus)) {
+        const allowedMemberships = getAllowedMemberships(productId)
         console.log("❌ 用户无会员资格，无法购买积分充值包");
         return NextResponse.json({ 
-          error: "积分充值包仅限会员购买",
-          details: "请先订阅会员套餐（基础版/专业版/豪华版）后再购买积分充值包",
-          requiresMembership: true
+          error: allowedMemberships.includes('basic') ? "积分充值包仅限会员购买" : "当前会员等级暂不支持购买该充值包",
+          details: allowedMemberships.includes('premium')
+            ? "该充值包仅限豪华版、企业版或校园版会员购买。"
+            : allowedMemberships.includes('pro')
+              ? "该充值包仅限专业版、豪华版、企业版或校园版会员购买。"
+              : "请先订阅会员套餐后再购买积分充值包。",
+          requiresMembership: true,
+          requiredMemberships: allowedMemberships,
+          currentMembership: membershipStatus,
         }, { status: 403 });
       }
 
       console.log(`✅ 用户会员验证通过: ${membershipStatus}`);
+    }
+
+    const purchaseValidation = validateProductPurchase(productId, membershipStatus)
+    if (!purchaseValidation.ok) {
+      return NextResponse.json({ error: purchaseValidation.error }, { status: purchaseValidation.status })
     }
     
     const price = (finalPriceInCents / 100).toFixed(2);

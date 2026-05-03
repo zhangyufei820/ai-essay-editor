@@ -1,12 +1,28 @@
 import { createClient } from '@supabase/supabase-js'
 import { getAPIConfig } from "@/lib/ai-utils"
-import { calculateActualCost, type ModelType } from '@/lib/pricing'
+import {
+  PRICING_VERSION,
+  appendTextOutputLimitInstruction,
+  calculateActualCost,
+  getMaxOutputTokensForModel,
+  getMinimumRequiredCredits,
+  shouldAuditHighConsumptionTextCall,
+  type ModelType,
+} from '@/lib/pricing'
 import { assertSecureTlsConfiguration } from '@/lib/runtime-security'
+import { recordBillingIssue } from '@/lib/credits'
+import {
+  chargeCreditsSafely as spendCredits,
+  createBillingLog as createBillingAuditMetadata,
+  parseDifyUsage,
+  type ParsedDifyUsage,
+} from '@/lib/billing'
 
 export const maxDuration = 60
 
 const CHAT_MODEL: ModelType = "standard"
-const MIN_REQUIRED_CREDITS = 5
+const MIN_REQUIRED_CREDITS = getMinimumRequiredCredits(CHAT_MODEL)
+const CHAT_MAX_OUTPUT_TOKENS = getMaxOutputTokensForModel(CHAT_MODEL)
 
 type ChatRequestBody = {
   messages: any[]
@@ -15,57 +31,93 @@ type ChatRequestBody = {
   userId?: string
 }
 
-async function deductCredit(userId: string, totalTokens: number, description: string) {
-  const supabaseAdmin = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
+async function deductCredit(
+  userId: string,
+  usage: { totalTokens: number; promptTokens: number; completionTokens: number },
+  description: string,
+  parsedUsage?: ParsedDifyUsage | null,
+) {
+  const currentCost = calculateActualCost(
+    CHAT_MODEL,
+    {
+      totalTokens: usage.totalTokens,
+      inputTokens: usage.promptTokens,
+      outputTokens: usage.completionTokens,
+    },
+    { hasOutputContent: true },
   )
-
-  const currentCost = calculateActualCost(CHAT_MODEL, { totalTokens })
-  const { data } = await supabaseAdmin
-    .from('user_credits')
-    .select('credits')
-    .eq('user_id', userId)
-    .single()
-
-  if (!data) {
-    console.error("[Billing] Missing credit row during deduction")
+  if (currentCost <= 0) {
+    console.warn("[Billing] Skip charging because prompt/completion tokens are missing")
     return
   }
 
-  const currentCredits = data.credits
-  const newCredits = Math.max(0, currentCredits - currentCost)
-
-  const updateResult = await supabaseAdmin
-    .from('user_credits')
-    .update({ credits: newCredits })
-    .eq('user_id', userId)
-    .eq('credits', currentCredits)
-    .select('credits')
-    .single()
-
-  if (updateResult.error || !updateResult.data) {
-    console.error("[Billing] Deduction update failed:", updateResult.error)
-    return
-  }
-
-  const { error: txError } = await supabaseAdmin
-    .from('credit_transactions')
-    .insert({
-      user_id: userId,
-      amount: -currentCost,
-      type: 'consume',
-      description,
-      balance_before: currentCredits,
-      balance_after: newCredits,
+  const billingMetadata = createBillingAuditMetadata({
+    userId,
+    actionType: "consume",
+    feature: "text",
+    appId: "ESSAY_CORRECTION_API_KEY",
+    workflowId: null,
+    modelId: CHAT_MODEL,
+    requestedAppId: "ESSAY_CORRECTION_API_KEY",
+    requestedWorkflowId: null,
+    requestedModelId: CHAT_MODEL,
+    upstreamProvider: null,
+    upstreamModel: null,
+    upstreamGroup: null,
+    upstreamRequestId: null,
+    rawProviderMetadata: parsedUsage
+      ? {
+          usage: parsedUsage.rawUsage || null,
+          finishReason: parsedUsage.finishReason || null,
+          latency: parsedUsage.latency ?? null,
+          timeToFirstToken: parsedUsage.timeToFirstToken ?? null,
+          usageSource: parsedUsage.usageSource,
+          estimated: parsedUsage.estimated,
+          maxOutputTokens: CHAT_MAX_OUTPUT_TOKENS,
+        }
+      : { maxOutputTokens: CHAT_MAX_OUTPUT_TOKENS },
+    usageSource: parsedUsage?.usageSource,
+    estimated: parsedUsage?.estimated ?? false,
+    promptTokens: usage.promptTokens,
+    completionTokens: usage.completionTokens,
+    totalTokens: usage.totalTokens,
+    chargedCredits: currentCost,
+    rawUsageJson: parsedUsage?.rawUsage || null,
+    finishReason: parsedUsage?.finishReason || null,
+    latency: parsedUsage?.latency ?? null,
+    timeToFirstToken: parsedUsage?.timeToFirstToken ?? null,
+    description,
+  })
+  const chargeDescription = `${description} (输入 ${usage.promptTokens} tokens / 输出 ${usage.completionTokens} tokens)`
+  if (shouldAuditHighConsumptionTextCall(CHAT_MODEL, usage.completionTokens, currentCost)) {
+    console.warn("[Billing Audit] 高消耗文本调用:", {
+      model: CHAT_MODEL,
+      promptTokens: usage.promptTokens,
+      completionTokens: usage.completionTokens,
+      totalTokens: usage.totalTokens,
+      currentCost,
+      maxOutputTokens: CHAT_MAX_OUTPUT_TOKENS,
     })
-
-  if (txError) {
-    console.error("[Billing] Transaction log failed:", txError)
-    return
   }
-
-  console.log(`[Billing] Charged ${currentCost} credits for ${totalTokens} tokens, user=${userId}, remaining=${newCredits}`)
+  const success = await spendCredits(
+    userId,
+    currentCost,
+    "consume",
+    chargeDescription,
+    undefined,
+    billingMetadata,
+  )
+  if (!success) {
+    console.error("[Billing] Deferred deduction failed or insufficient credits")
+    await recordBillingIssue(
+      userId,
+      currentCost,
+      "billing_failed",
+      `异常账单：${chargeDescription}`,
+      undefined,
+      billingMetadata,
+    )
+  }
 }
 
 function createMeteredStreamResponse(
@@ -76,8 +128,11 @@ function createMeteredStreamResponse(
   const encoder = new TextEncoder()
   const decoder = new TextDecoder()
   let totalTokens = 0
+  let promptTokens = 0
+  let completionTokens = 0
   let hasReceivedContent = false
   let buffer = ""
+  let latestParsedUsage: ParsedDifyUsage | null = null
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -112,8 +167,12 @@ function createMeteredStreamResponse(
                 controller.enqueue(encoder.encode(aiSDKChunk))
               }
 
-              if (data.event === "message_end" && data.metadata?.usage?.total_tokens) {
-                totalTokens = data.metadata.usage.total_tokens
+              if (data.event === "message_end" && data.metadata?.usage) {
+                const parsedUsage = parseDifyUsage(data)
+                latestParsedUsage = parsedUsage
+                totalTokens = parsedUsage.totalTokens
+                promptTokens = parsedUsage.promptTokens
+                completionTokens = parsedUsage.completionTokens
               }
             } catch {
               continue
@@ -125,12 +184,12 @@ function createMeteredStreamResponse(
         controller.enqueue(encoder.encode(finishChunk))
         controller.close()
 
-        if (hasReceivedContent && totalTokens > 0) {
-          void deductCredit(userId, totalTokens, description).catch((error) => {
+        if (hasReceivedContent && (promptTokens > 0 || completionTokens > 0)) {
+          void deductCredit(userId, { totalTokens, promptTokens, completionTokens }, description, latestParsedUsage).catch((error) => {
             console.error("[Billing] Deferred deduction failed:", error)
           })
         } else {
-          console.warn(`[Billing] Skip charging, hasReceivedContent=${hasReceivedContent}, totalTokens=${totalTokens}`)
+          console.warn(`[Billing] Skip charging, hasReceivedContent=${hasReceivedContent}, promptTokens=${promptTokens}, completionTokens=${completionTokens}`)
         }
       } catch (error) {
         controller.error(error)
@@ -203,7 +262,11 @@ export async function POST(req: Request) {
 
     if (creditData.credits < MIN_REQUIRED_CREDITS) {
       return new Response(JSON.stringify({
-        error: `积分不足，至少需要 ${MIN_REQUIRED_CREDITS} 积分才能发起请求，当前剩余 ${creditData.credits} 积分。`,
+        error: "当前积分不足",
+        message: `当前功能至少需要 ${MIN_REQUIRED_CREDITS} 积分，当前剩余 ${creditData.credits} 积分。请充值或升级会员后继续使用。`,
+        required: MIN_REQUIRED_CREDITS,
+        current: creditData.credits,
+        action: "请充值或升级会员",
       }), {
         status: 402,
         headers: { "Content-Type": "application/json" },
@@ -296,6 +359,9 @@ export async function POST(req: Request) {
       return { role: msg.role, content: textContent }
     })
 
+    const lastMessageContent = apiMessages[apiMessages.length - 1]?.content
+    const queryText = typeof lastMessageContent === "string" ? lastMessageContent : JSON.stringify(lastMessageContent || "")
+
     const response = await fetch(`${customConfig.baseURL}/chat-messages`, {
       method: "POST",
       headers: {
@@ -303,7 +369,7 @@ export async function POST(req: Request) {
         Authorization: `Bearer ${customConfig.apiKey}`,
       },
       body: JSON.stringify({
-        query: apiMessages[apiMessages.length - 1]?.content || "",
+        query: appendTextOutputLimitInstruction(queryText, CHAT_MODEL),
         conversation_id: "",
         response_mode: "streaming",
         user: userId,

@@ -33,6 +33,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { collapseSidebar, navigateHomeWithSidebar, refreshCredits, refreshSessionList } from "@/components/app-sidebar"
 import { extractUserId } from "@/lib/auth-user"
 import { buildChatSessionRouteFromSession } from "@/lib/chat-session-routes"
+import { calculatePreviewCost } from "@/lib/pricing"
 import { cn } from "@/lib/utils"
 import {
   ASPECT_RATIO_OPTIONS,
@@ -164,6 +165,9 @@ function mapImageError(error: unknown): string {
   if (lower.includes("rate") || lower.includes("429")) return "图片服务请求较多，请稍后再试，或降低质量 / 切换模型。"
   if (raw.includes("未登录") || raw.includes("请先登录") || raw.includes("未授权") || lower.includes("unauthorized") || lower.includes("401")) {
     return "请先登录后再生成图片。"
+  }
+  if (raw.includes("仅订阅用户可用") || raw.includes("白名单") || lower.includes("forbidden") || lower.includes("403")) {
+    return "GPT Image 2 当前仅订阅用户可用，请升级会员后使用。"
   }
   if (lower.includes("download_file_error")) return "无法读取上传图片，请重新上传。"
   if (lower.includes("network") || lower.includes("failed to fetch")) return "网络请求失败，请稍后重试。"
@@ -582,6 +586,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
     () => buildDifyInputs(currentInputsWithoutUrls, referenceGatewayUrls, maskGatewayUrl),
     [currentInputsWithoutUrls, maskGatewayUrl, referenceGatewayUrls]
   )
+  const estimatedImageCost = calculatePreviewCost(isBananaWorkspace ? "banana-2-pro" : model) * count
 
   useEffect(() => {
     const userStr = typeof window !== "undefined" ? localStorage.getItem("currentUser") : null
@@ -1216,6 +1221,9 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
                 <h1 className="text-xl font-semibold text-foreground">{copy.heroTitle}</h1>
                 <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
                   {copy.heroDescription}
+                </p>
+                <p className="text-xs font-medium text-primary">
+                  预计消耗：{isBananaWorkspace ? `约 ${estimatedImageCost} 积分起` : `${estimatedImageCost} 积分 / 次`}，实际扣费以后端配置为准。
                 </p>
               </div>
             </div>

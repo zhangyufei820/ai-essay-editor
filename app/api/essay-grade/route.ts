@@ -1,11 +1,14 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { internalDifyFetch } from "@/lib/internal-dify-fetch"
+import { appendTextOutputLimitInstruction, getMaxOutputTokensForModel, type ModelType } from "@/lib/pricing"
 
 export const maxDuration = 60
 
 // 使用专门的作文批改环境变量
 const ESSAY_CORRECTION_API_KEY = process.env.ESSAY_CORRECTION_API_KEY
 const ESSAY_CORRECTION_BASE_URL = process.env.ESSAY_CORRECTION_BASE_URL
+const ESSAY_MODEL: ModelType = "standard"
+const ESSAY_MAX_OUTPUT_TOKENS = getMaxOutputTokensForModel(ESSAY_MODEL)
 
 export async function POST(req: NextRequest) {
   console.log("[作文批改] ===== API 调用开始 =====")
@@ -60,10 +63,12 @@ export async function POST(req: NextRequest) {
         genre: genre || "记叙文",
         background: background || "课外习作"
       },
-      query: essayText || "请批改上传的作文图片",
+      query: appendTextOutputLimitInstruction(essayText || "请批改上传的作文图片", ESSAY_MODEL),
       response_mode: "streaming", // 🔥 改为流式响应，支持思考过程显示
       user: "essay-correction-user"
     }
+
+    console.log("[作文批改] 输出上限约束:", { maxOutputTokens: ESSAY_MAX_OUTPUT_TOKENS })
 
     // 🔥 添加文件支持
     if (fileIds && fileIds.length > 0) {

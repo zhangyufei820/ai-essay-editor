@@ -63,3 +63,6 @@ logs
 .claude/scheduled_tasks.lock
 # Local Codex memory / agent notes (not part of website release)
 .Codex/memory/*.md
+
+# Local standalone service workspace, not part of the website billing release
+/services/word-card-api/

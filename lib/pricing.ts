@@ -1,22 +1,24 @@
-/**
- * 统一计费中心 v2.0
- * 
- * 计费规则：
- * - 智能体（standard, teaching-pro）：10 积分/1K Token
- * - 独立模型（gpt-5, claude-opus, gemini-pro 等）：20 积分/1K Token
- * - 多媒体模型：按次固定扣费（成本/0.4）
- * 
- * 扣费流程：
- * - 前端：显示"预计消耗"（基于估算 Token 数）
- * - 后端：等 Dify 回答完后根据实际 Token 数静默结算
- * 
- * 利润保障：
- * - 豪华会员 12,000 积分全额消耗时，VivaAPI 成本占比 ≤ 40%
- */
-
-// ============================================
-// 1. 类型定义
-// ============================================
+import {
+  ASSUMED_PROVIDER_INPUT_VCOINS_PER_1M,
+  ASSUMED_PROVIDER_OUTPUT_VCOINS_PER_1M,
+  GPT_IMAGE_15_CREDITS,
+  GPT_IMAGE_1_CREDITS,
+  GPT_IMAGE_1_MINI_CREDITS,
+  HIGH_CONSUMPTION_TEXT_CREDITS,
+  HIGH_CONSUMPTION_TEXT_OUTPUT_TOKENS,
+  IMAGE2_CREDITS,
+  MEDIA_BILLING,
+  PRICING_VERSION,
+  SUNO_BASE_CREDITS,
+  TEXT_WORKFLOW_MAX_OUTPUT_TOKENS,
+  TEXT_INPUT_CREDITS_PER_1K,
+  TEXT_MIN_CHARGE_CREDITS,
+  TEXT_MIN_REQUIRED_CREDITS,
+  TEXT_OUTPUT_CREDITS_PER_1K,
+  TEXT_TOKEN_BILLING,
+  TEXT_WORKFLOW_MIN_REQUIRED_CREDITS,
+  type MediaBillingItem,
+} from "@/lib/billing-config"
 
 export type ModelType =
   | "standard"
@@ -47,450 +49,463 @@ export type ModelType =
   | "school-wechat"
 
 export type GenMode = "text" | "image" | "music" | "video"
+export type ModelCategory = "text" | "media"
+export type TextWorkflowKind = "default_text" | "short_agent" | "ordinary_writing" | "essay_correction" | "long_writing"
 
-/** 模型类别：智能体 vs 独立模型 */
-export type ModelCategory = "agent" | "standalone" | "media"
-
-interface ModelCostConfig {
-  /** 模型类别 */
-  category: ModelCategory
-  /** Token 单价（积分/1K tokens），仅文本模型有效 */
-  tokenRate?: number
-  /** 固定成本（用于多媒体模型，单位：积分） */
-  fixedCost?: number
-  /** 模型显示名称 */
-  displayName: string
-  /** 生成模式 */
-  mode: GenMode
-  /** 预估平均 Token 数（用于前端预览） */
-  estimatedTokens?: number
+export type TokenUsage = {
+  totalTokens?: number
+  inputTokens?: number
+  outputTokens?: number
+  promptTokens?: number
+  completionTokens?: number
 }
 
-// ============================================
-// 2. 计费配置
-// ============================================
+export type TextBillingOptions = {
+  hasOutputContent?: boolean
+}
 
-/** 智能体 Token 单价：10 积分/1K Token */
-export const AGENT_TOKEN_RATE = 10
+export type ParsedDifyUsage = {
+  promptTokens: number
+  completionTokens: number
+  totalTokens: number
+  hasOutput: boolean
+  estimated: boolean
+  usageSource: TextUsageSource
+  finishReason?: string
+  latency?: number
+  timeToFirstToken?: number
+  rawUsage?: Record<string, unknown>
+  outputText?: string
+  reasoningContent?: string
+}
 
-/** 独立模型 Token 单价：20 积分/1K Token */
-export const STANDALONE_TOKEN_RATE = 20
+export type TextUsageSource =
+  | "split_tokens"
+  | "derived_completion_from_total"
+  | "derived_prompt_from_total"
+  | "fallback_total_as_output"
+  | "estimated_from_output_text"
+  | "no_output"
 
-/** 利润率系数（成本占比 40%，利润 60%） */
-export const PROFIT_MARGIN = 0.4
+export type TextCreditsInput = {
+  promptTokens?: number
+  completionTokens?: number
+  totalTokens?: number
+  outputText?: string
+  hasOutput?: boolean
+  estimated?: boolean
+  reasoningContent?: string
+  rawUsage?: Record<string, unknown>
+  usageSource?: TextUsageSource
+  pricingConfig?: {
+    inputCreditsPer1K?: number
+    outputCreditsPer1K?: number
+    minimumCredits?: number
+  }
+}
 
-/**
- * 各模型配置
- */
+type ModelCostConfig = {
+  category: ModelCategory
+  displayName: string
+  mode: GenMode
+  estimatedInputTokens?: number
+  estimatedOutputTokens?: number
+  fixedCost?: number
+}
+
+const TEXT_MODEL_DEFAULTS = {
+  category: "text",
+  mode: "text",
+  estimatedInputTokens: 800,
+  estimatedOutputTokens: 1200,
+} as const
+
 export const MODEL_COSTS: Record<ModelType, ModelCostConfig> = {
-  // ========== 智能体（10 积分/1K Token）==========
-  "standard": { 
-    category: "agent",
-    tokenRate: AGENT_TOKEN_RATE,
-    displayName: "作文批改智能体",
-    mode: "text",
-    estimatedTokens: 2000  // 预估平均 2K tokens
-  },
-  "teaching-pro": {
-    category: "agent",
-    tokenRate: AGENT_TOKEN_RATE,
-    displayName: "教学评智能助手",
-    mode: "text",
-    estimatedTokens: 2500  // 预估平均 2.5K tokens
-  },
-  "quanquan-math": {
-    category: "agent",
-    tokenRate: AGENT_TOKEN_RATE,
-    displayName: "全学段数学智能体",
-    mode: "text",
-    estimatedTokens: 2000
-  },
-  "quanquan-english": {
-    category: "agent",
-    tokenRate: AGENT_TOKEN_RATE,
-    displayName: "全学段英语智能体",
-    mode: "text",
-    estimatedTokens: 2000
-  },
-  "vocab-card": {
-    category: "agent",
-    tokenRate: AGENT_TOKEN_RATE,
-    displayName: "词境记忆卡",
-    mode: "text",
-    estimatedTokens: 1800
-  },
-  "beike-pro": {
-    category: "agent",
-    tokenRate: AGENT_TOKEN_RATE,
-    displayName: "全学段备课助手Pro",
-    mode: "text",
-    estimatedTokens: 3000
-  },
-  "banzhuren": {
-    category: "agent",
-    tokenRate: AGENT_TOKEN_RATE,
-    displayName: "班主任超级助手",
-    mode: "text",
-    estimatedTokens: 2500
-  },
-  "ai-writing-paper": {
-    category: "agent",
-    tokenRate: AGENT_TOKEN_RATE,
-    displayName: "论文写作助手",
-    mode: "text",
-    estimatedTokens: 3000
-  },
-  "zhongying-essay": {
-    category: "agent",
-    tokenRate: AGENT_TOKEN_RATE,
-    displayName: "中英文作文助手",
-    mode: "text",
-    estimatedTokens: 2000
-  },
-  "reading-report": {
-    category: "agent",
-    tokenRate: AGENT_TOKEN_RATE,
-    displayName: "读书报告助手",
-    mode: "text",
-    estimatedTokens: 2500
-  },
-  "experiment-report": {
-    category: "agent",
-    tokenRate: AGENT_TOKEN_RATE,
-    displayName: "实验报告助理",
-    mode: "text",
-    estimatedTokens: 2500
-  },
-  "study-abroad": {
-    category: "agent",
-    tokenRate: AGENT_TOKEN_RATE,
-    displayName: "留学与升学文书助手",
-    mode: "text",
-    estimatedTokens: 3000
-  },
-  "resume-optimize": {
-    category: "agent",
-    tokenRate: AGENT_TOKEN_RATE,
-    displayName: "实习简历优化助手",
-    mode: "text",
-    estimatedTokens: 2000
-  },
-  "speech-defense": {
-    category: "agent",
-    tokenRate: AGENT_TOKEN_RATE,
-    displayName: "演讲与答辩稿助手",
-    mode: "text",
-    estimatedTokens: 2500
-  },
-  "school-wechat": {
-    category: "agent",
-    tokenRate: AGENT_TOKEN_RATE,
-    displayName: "学校公众号写作助手",
-    mode: "text",
-    estimatedTokens: 2000
-  },
-
-  // ========== 独立模型（20 积分/1K Token）==========
-  "gpt-5": {
-    category: "standalone",
-    tokenRate: STANDALONE_TOKEN_RATE,
-    displayName: "ChatGPT 5.4",
-    mode: "text",
-    estimatedTokens: 1500  // 预估平均 1.5K tokens
-  },
-  "claude-opus": {
-    category: "standalone",
-    tokenRate: STANDALONE_TOKEN_RATE,
-    displayName: "Claude opus4.6thinking",
-    mode: "text",
-    estimatedTokens: 2000  // 预估平均 2K tokens
-  },
-  "gemini-pro": {
-    category: "standalone",
-    tokenRate: STANDALONE_TOKEN_RATE,
-    displayName: "Gemini 3.1 pro",
-    mode: "text",
-    estimatedTokens: 1500  // 预估平均 1.5K tokens
-  },
-  "grok-4.2": {
-    category: "standalone",
-    tokenRate: STANDALONE_TOKEN_RATE,
-    displayName: "Grok-4.2",
-    mode: "text",
-    estimatedTokens: 1500
-  },
-  "open-claw": {
-    category: "standalone",
-    tokenRate: STANDALONE_TOKEN_RATE,
-    displayName: "Open Claw",
-    mode: "text",
-    estimatedTokens: 1500
-  },
-  
-  // ========== 多媒体模型（混合计费）==========
-  "banana-2-pro": { 
-    category: "standalone",  // 🔥 改为 standalone，因为包含 LLM 对话
-    tokenRate: STANDALONE_TOKEN_RATE,  // 20 积分/1K Token（LLM 部分）
-    fixedCost: 80,  // 🔥 图像生成 API 成本：0.8元 = 80积分（成本价，利润在 calculateActualCost 中加10%）
+  standard: { ...TEXT_MODEL_DEFAULTS, displayName: "作文批改智能体" },
+  "teaching-pro": { ...TEXT_MODEL_DEFAULTS, displayName: "教学评智能助手", estimatedInputTokens: 1000, estimatedOutputTokens: 1500 },
+  "quanquan-math": { ...TEXT_MODEL_DEFAULTS, displayName: "全学段数学智能体" },
+  "quanquan-english": { ...TEXT_MODEL_DEFAULTS, displayName: "全学段英语智能体" },
+  "vocab-card": { ...TEXT_MODEL_DEFAULTS, displayName: "词境记忆卡", estimatedInputTokens: 600, estimatedOutputTokens: 1000 },
+  "beike-pro": { ...TEXT_MODEL_DEFAULTS, displayName: "全学段备课助手Pro", estimatedInputTokens: 1200, estimatedOutputTokens: 1800 },
+  banzhuren: { ...TEXT_MODEL_DEFAULTS, displayName: "班主任超级助手", estimatedInputTokens: 1000, estimatedOutputTokens: 1500 },
+  "ai-writing-paper": { ...TEXT_MODEL_DEFAULTS, displayName: "论文写作助手", estimatedInputTokens: 1200, estimatedOutputTokens: 1800 },
+  "zhongying-essay": { ...TEXT_MODEL_DEFAULTS, displayName: "中英文作文助手" },
+  "reading-report": { ...TEXT_MODEL_DEFAULTS, displayName: "读书报告助手", estimatedInputTokens: 1000, estimatedOutputTokens: 1500 },
+  "experiment-report": { ...TEXT_MODEL_DEFAULTS, displayName: "实验报告助理", estimatedInputTokens: 1000, estimatedOutputTokens: 1500 },
+  "study-abroad": { ...TEXT_MODEL_DEFAULTS, displayName: "留学与升学文书助手", estimatedInputTokens: 1200, estimatedOutputTokens: 1800 },
+  "resume-optimize": { ...TEXT_MODEL_DEFAULTS, displayName: "实习简历优化助手" },
+  "speech-defense": { ...TEXT_MODEL_DEFAULTS, displayName: "演讲与答辩稿助手", estimatedInputTokens: 1000, estimatedOutputTokens: 1500 },
+  "school-wechat": { ...TEXT_MODEL_DEFAULTS, displayName: "学校公众号写作助手" },
+  "gpt-5": { ...TEXT_MODEL_DEFAULTS, displayName: "ChatGPT 5.4", estimatedInputTokens: 700, estimatedOutputTokens: 1000 },
+  "claude-opus": { ...TEXT_MODEL_DEFAULTS, displayName: "Claude opus4.6thinking" },
+  "gemini-pro": { ...TEXT_MODEL_DEFAULTS, displayName: "Gemini 3.1 pro", estimatedInputTokens: 700, estimatedOutputTokens: 1000 },
+  "grok-4.2": { ...TEXT_MODEL_DEFAULTS, displayName: "Grok-4.2", estimatedInputTokens: 700, estimatedOutputTokens: 1000 },
+  "open-claw": { ...TEXT_MODEL_DEFAULTS, displayName: "Open Claw", estimatedInputTokens: 700, estimatedOutputTokens: 1000 },
+  "banana-2-pro": {
+    category: "media",
+    fixedCost: MEDIA_BILLING["banana-2-pro"].fixedCredits,
     displayName: "Banana2 Pro 4K",
     mode: "image",
-    estimatedTokens: 500  // 预估 LLM 对话消耗
+    estimatedInputTokens: 300,
+    estimatedOutputTokens: 300,
   },
   "gpt-image-2": {
     category: "media",
-    fixedCost: 80,
+    fixedCost: MEDIA_BILLING["gpt-image-2"].fixedCredits,
     displayName: "GPT Image 2",
     mode: "image",
-    estimatedTokens: 500
   },
   "gpt-image-1.5": {
     category: "media",
-    fixedCost: 60,
+    fixedCost: MEDIA_BILLING["gpt-image-1.5"].fixedCredits,
     displayName: "GPT Image 1.5",
     mode: "image",
-    estimatedTokens: 500
   },
   "gpt-image-1": {
     category: "media",
-    fixedCost: 40,
+    fixedCost: MEDIA_BILLING["gpt-image-1"].fixedCredits,
     displayName: "GPT Image 1",
     mode: "image",
-    estimatedTokens: 500
   },
   "gpt-image-1-mini": {
     category: "media",
-    fixedCost: 20,
+    fixedCost: MEDIA_BILLING["gpt-image-1-mini"].fixedCredits,
     displayName: "GPT Image 1 Mini",
     mode: "image",
-    estimatedTokens: 500
   },
-  "suno-v5": { 
+  "suno-v5": {
     category: "media",
-    tokenRate: AGENT_TOKEN_RATE,  // 🎵 Suno 也会消耗 token（Dify 工作流）
-    fixedCost: 80,  // 🎵 Suno API 固定成本：0.8元 = 80积分
+    fixedCost: MEDIA_BILLING["suno-v5"].fixedCredits,
     displayName: "Suno V5",
     mode: "music",
-    estimatedTokens: 500  // 预估 Dify 工作流消耗
+    estimatedInputTokens: 300,
+    estimatedOutputTokens: 300,
   },
 }
 
-// ============================================
-// 3. 计费函数
-// ============================================
+export {
+  ASSUMED_PROVIDER_INPUT_VCOINS_PER_1M,
+  ASSUMED_PROVIDER_OUTPUT_VCOINS_PER_1M,
+  GPT_IMAGE_15_CREDITS,
+  GPT_IMAGE_1_CREDITS,
+  GPT_IMAGE_1_MINI_CREDITS,
+  IMAGE2_CREDITS,
+  PRICING_VERSION,
+  SUNO_BASE_CREDITS,
+  TEXT_WORKFLOW_MAX_OUTPUT_TOKENS,
+  TEXT_INPUT_CREDITS_PER_1K,
+  TEXT_MIN_CHARGE_CREDITS,
+  TEXT_MIN_REQUIRED_CREDITS,
+  TEXT_OUTPUT_CREDITS_PER_1K,
+  TEXT_WORKFLOW_MIN_REQUIRED_CREDITS,
+}
 
-/**
- * 计算预估消耗（前端预览用）
- * 
- * @param model - 模型类型
- * @param options - 可选参数
- * @returns 预估积分消耗
- */
+export const IMAGE_1_5_CREDITS = GPT_IMAGE_15_CREDITS
+export const IMAGE_1_CREDITS = GPT_IMAGE_1_CREDITS
+export const IMAGE_1_MINI_CREDITS = GPT_IMAGE_1_MINI_CREDITS
+export const pricingVersion = PRICING_VERSION
+
+export const INPUT_TOKEN_RATE = TEXT_INPUT_CREDITS_PER_1K
+export const OUTPUT_TOKEN_RATE = TEXT_OUTPUT_CREDITS_PER_1K
+export const MIN_TEXT_CHARGE = TEXT_MIN_CHARGE_CREDITS
+export const MIN_TEXT_REQUIRED_CREDITS = TEXT_MIN_REQUIRED_CREDITS
+
+export const DAILY_FREE_LIMIT = 0
+export const LUXURY_THRESHOLD = Number.POSITIVE_INFINITY
+export const LUXURY_CREDITS = 12000
+export const TEXT_OUTPUT_LIMIT_MARKER = "[输出长度约束]"
+
+function normalizeInputTokens(usage?: TokenUsage): number {
+  return Math.max(0, Number(usage?.promptTokens ?? usage?.inputTokens ?? 0) || 0)
+}
+
+function normalizeOutputTokens(usage?: TokenUsage): number {
+  return Math.max(0, Number(usage?.completionTokens ?? usage?.outputTokens ?? 0) || 0)
+}
+
+function toNonNegativeNumber(value: unknown): number {
+  const parsed = Number(value ?? 0)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0
+}
+
+function firstString(...values: unknown[]): string | undefined {
+  for (const value of values) {
+    if (typeof value === "string") return value
+  }
+  return undefined
+}
+
+function resolveDifyUsage(rawResponse: any): Record<string, unknown> {
+  const usage =
+    rawResponse?.usage ||
+    rawResponse?.metadata?.usage ||
+    rawResponse?.data?.usage ||
+    rawResponse?.data?.metadata?.usage ||
+    rawResponse?.data?.outputs?.usage ||
+    rawResponse?.outputs?.usage
+
+  return usage && typeof usage === "object" ? usage : {}
+}
+
+function resolveDifyOutputText(rawResponse: any): string {
+  const outputs = rawResponse?.data?.outputs || rawResponse?.outputs || {}
+  const text = firstString(
+    rawResponse?.text,
+    rawResponse?.answer,
+    rawResponse?.message,
+    rawResponse?.data?.text,
+    rawResponse?.data?.answer,
+    outputs.text,
+    outputs.result,
+    outputs.answer,
+  )
+  return text || ""
+}
+
+function estimateTokensFromText(text: string): number {
+  const trimmed = text.trim()
+  if (!trimmed) return 0
+  const cjkChars = trimmed.match(/[\u3400-\u9fff]/g)?.length || 0
+  const nonCjkText = trimmed.replace(/[\u3400-\u9fff]/g, " ")
+  const wordCount = nonCjkText.match(/[A-Za-z0-9]+(?:[-'][A-Za-z0-9]+)*/g)?.length || 0
+  const symbolCount = nonCjkText.replace(/\s+/g, "").length - wordCount
+  return Math.max(1, Math.ceil(cjkChars / 1.5 + wordCount * 1.3 + Math.max(symbolCount, 0) / 4))
+}
+
+export function parseDifyUsage(rawResponse: unknown): ParsedDifyUsage {
+  const raw = rawResponse as any
+  const rawUsage = resolveDifyUsage(raw)
+  const hasPromptTokens = rawUsage.prompt_tokens !== undefined && rawUsage.prompt_tokens !== null
+  const hasCompletionTokens = rawUsage.completion_tokens !== undefined && rawUsage.completion_tokens !== null
+  const hasTotalTokens = rawUsage.total_tokens !== undefined && rawUsage.total_tokens !== null
+  const explicitPromptTokens = toNonNegativeNumber(rawUsage.prompt_tokens)
+  const explicitCompletionTokens = toNonNegativeNumber(rawUsage.completion_tokens)
+  const totalTokens = toNonNegativeNumber(rawUsage.total_tokens ?? raw?.total_tokens ?? raw?.data?.total_tokens)
+  const outputText = resolveDifyOutputText(raw)
+  const reasoningContent = firstString(raw?.reasoning_content, raw?.data?.reasoning_content) || ""
+  const hasOutput = outputText.trim().length > 0 || explicitCompletionTokens > 0
+  let promptTokens = explicitPromptTokens
+  let completionTokens = explicitCompletionTokens
+  let resolvedTotalTokens = totalTokens
+  let estimated = false
+  let usageSource: TextUsageSource = "split_tokens"
+
+  if (!hasOutput) {
+    usageSource = "no_output"
+  } else if (hasPromptTokens && hasCompletionTokens) {
+    usageSource = "split_tokens"
+  } else if (hasPromptTokens && hasTotalTokens) {
+    completionTokens = Math.max(totalTokens - promptTokens, 0)
+    estimated = true
+    usageSource = "derived_completion_from_total"
+  } else if (hasCompletionTokens && hasTotalTokens) {
+    promptTokens = Math.max(totalTokens - completionTokens, 0)
+    estimated = true
+    usageSource = "derived_prompt_from_total"
+  } else if (hasTotalTokens) {
+    promptTokens = 0
+    completionTokens = totalTokens
+    estimated = true
+    usageSource = "fallback_total_as_output"
+  } else {
+    promptTokens = 0
+    completionTokens = estimateTokensFromText(outputText)
+    resolvedTotalTokens = completionTokens
+    estimated = true
+    usageSource = "estimated_from_output_text"
+  }
+
+  return {
+    promptTokens,
+    completionTokens,
+    totalTokens: resolvedTotalTokens,
+    hasOutput,
+    estimated,
+    usageSource,
+    finishReason: firstString(raw?.finish_reason, raw?.data?.finish_reason),
+    latency: rawUsage.latency === undefined ? undefined : toNonNegativeNumber(rawUsage.latency),
+    timeToFirstToken: rawUsage.time_to_first_token === undefined ? undefined : toNonNegativeNumber(rawUsage.time_to_first_token),
+    rawUsage,
+    outputText,
+    reasoningContent,
+  }
+}
+
+export function calculateTextCredits(input: TextCreditsInput): number {
+  const promptTokens = toNonNegativeNumber(input.promptTokens)
+  const completionTokens = toNonNegativeNumber(input.completionTokens)
+  const totalTokens = toNonNegativeNumber(input.totalTokens)
+  const hasSplitTokenUsage = promptTokens > 0 || completionTokens > 0
+  const outputText = input.outputText || ""
+  const hasOutput = input.hasOutput ?? (outputText.trim().length > 0 || completionTokens > 0)
+
+  if (!hasOutput) {
+    return 0
+  }
+
+  let billablePromptTokens = promptTokens
+  let billableCompletionTokens = completionTokens
+
+  if (!hasSplitTokenUsage) {
+    billablePromptTokens = 0
+    billableCompletionTokens = totalTokens > 0 ? totalTokens : estimateTokensFromText(outputText)
+  }
+
+  if (billablePromptTokens <= 0 && billableCompletionTokens <= 0) {
+    return 0
+  }
+
+  const config = input.pricingConfig || TEXT_TOKEN_BILLING
+  const inputRate = config.inputCreditsPer1K ?? TEXT_INPUT_CREDITS_PER_1K
+  const outputRate = config.outputCreditsPer1K ?? TEXT_OUTPUT_CREDITS_PER_1K
+  const minimumCredits = config.minimumCredits ?? TEXT_MIN_CHARGE_CREDITS
+  const credits = Math.ceil((billablePromptTokens / 1000) * inputRate + (billableCompletionTokens / 1000) * outputRate)
+
+  return Math.max(minimumCredits, credits)
+}
+
+export function calculateTextUsageCost(tokenUsage?: TokenUsage, options: TextBillingOptions = {}): number {
+  const inputTokens = normalizeInputTokens(tokenUsage)
+  const outputTokens = normalizeOutputTokens(tokenUsage)
+  const totalTokens = toNonNegativeNumber(tokenUsage?.totalTokens)
+  return calculateTextCredits({
+    promptTokens: inputTokens,
+    completionTokens: outputTokens,
+    totalTokens,
+    hasOutput: options.hasOutputContent ?? outputTokens > 0,
+  })
+}
+
 export function calculatePreviewCost(
   model: ModelType,
   options?: {
     isLuxury?: boolean
     estimatedInputTokens?: number
-  }
+    estimatedOutputTokens?: number
+  },
 ): number {
   const config = MODEL_COSTS[model]
-  
-  if (!config) {
-    console.warn(`[Pricing] 未知模型: ${model}，使用默认价格`)
-    return 20
-  }
-  
-  // 🎵 Suno V5 预览：(0.8元 + 预估token成本) × 1.2
-  if (model === "suno-v5") {
-    const tokenRate = config.tokenRate || AGENT_TOKEN_RATE
-    const estimatedTokens = options?.estimatedInputTokens || config.estimatedTokens || 500
-    const fixedApiCost = config.fixedCost || 80  // 0.8元 = 80积分
-    const tokenCost = Math.ceil((estimatedTokens / 1000) * tokenRate)
-    const totalCost = fixedApiCost + tokenCost
-    return Math.ceil(totalCost * 1.2)  // 加 20% 利润
-  }
-  
-  // 其他多媒体模型：固定价格
-  if (config.category === "media" && config.fixedCost) {
-    return Math.ceil(config.fixedCost / PROFIT_MARGIN)
-  }
-  
-  // 文本模型：基于预估 Token 数计算
-  const estimatedTokens = options?.estimatedInputTokens || config.estimatedTokens || 1500
-  const tokenRate = config.tokenRate || AGENT_TOKEN_RATE
-  
-  // 预估消耗 = Token 数 / 1000 * 单价
-  const estimatedCost = Math.ceil((estimatedTokens / 1000) * tokenRate)
-  
-  return estimatedCost
+  if (!config) return TEXT_TOKEN_BILLING.minimumCredits
+  if (config.category === "media" && config.fixedCost) return config.fixedCost
+
+  return calculateTextUsageCost({
+    inputTokens: options?.estimatedInputTokens ?? config.estimatedInputTokens,
+    outputTokens: options?.estimatedOutputTokens ?? config.estimatedOutputTokens,
+  }, { hasOutputContent: true })
 }
 
-/**
- * 计算实际扣费金额（后端静默结算用）
- * 
- * @param model - 模型类型
- * @param tokenUsage - 实际 Token 使用量
- * @param options - 额外选项（如是否生成了图像）
- * @returns 应扣积分数
- */
 export function calculateActualCost(
   model: ModelType,
-  tokenUsage?: {
-    totalTokens?: number
-    inputTokens?: number
-    outputTokens?: number
-  },
+  tokenUsage?: TokenUsage,
   options?: {
-    hasGeneratedImage?: boolean  // 🔥 新增：是否生成了图像
-  }
+    hasGeneratedImage?: boolean
+    hasOutputContent?: boolean
+  },
 ): number {
   const config = MODEL_COSTS[model]
-  
-  if (!config) {
-    console.warn(`[Pricing] 未知模型: ${model}，使用默认价格`)
-    return 20
-  }
-  
-  // 🎵 Suno V5 特殊计费：(0.8元 + token成本) × 1.2
-  if (model === "suno-v5") {
-    const tokenRate = config.tokenRate || AGENT_TOKEN_RATE
-    let totalTokens = tokenUsage?.totalTokens || 0
-    if (!totalTokens && tokenUsage) {
-      totalTokens = (tokenUsage.inputTokens || 0) + (tokenUsage.outputTokens || 0)
-    }
-    if (!totalTokens) {
-      totalTokens = config.estimatedTokens || 500
-    }
-    
-    // Suno 成本计算：固定成本（0.8元=80积分） + token 成本
-    const fixedApiCost = config.fixedCost || 80  // 0.8元 = 80积分
-    const tokenCost = Math.ceil((totalTokens / 1000) * tokenRate)  // token 成本
-    const totalCost = fixedApiCost + tokenCost  // 总成本
-    const userCharge = Math.ceil(totalCost * 1.2)  // 加 20% 利润
-    
-    console.log(`🎵 [Suno 计费] 固定成本: ${fixedApiCost}积分 + Token(${totalTokens}): ${tokenCost}积分 = ${totalCost}积分 × 1.2 = ${userCharge}积分`)
-    return Math.max(userCharge, 5)
-  }
-  
-  // 其他纯多媒体模型（如 Sora）：固定价格
-  if (config.category === "media" && config.fixedCost) {
-    return Math.ceil(config.fixedCost / PROFIT_MARGIN)
-  }
-  
-  // 文本模型或混合模型：根据实际 Token 数计费
-  const tokenRate = config.tokenRate || AGENT_TOKEN_RATE
-  
-  // 优先使用 totalTokens，否则使用 input + output
-  let totalTokens = tokenUsage?.totalTokens || 0
-  if (!totalTokens && tokenUsage) {
-    totalTokens = (tokenUsage.inputTokens || 0) + (tokenUsage.outputTokens || 0)
-  }
-  
-  // 如果没有 Token 信息，使用预估值
-  if (!totalTokens) {
-    totalTokens = config.estimatedTokens || 1500
-  }
-  
-  // 实际消耗 = Token 数 / 1000 * 单价
-  let actualCost = Math.ceil((totalTokens / 1000) * tokenRate)
-  
-  // 🔥 Banana 2 Pro 4K 动态计费：根据是否生成图像决定
+  if (!config) return calculateTextUsageCost(tokenUsage, { hasOutputContent: options?.hasOutputContent })
+
   if (model === "banana-2-pro") {
-    const tokenCost = Math.ceil((totalTokens / 1000) * tokenRate)
-    
-    // 🔥 关键修复：只有生成了图像才加上图像成本
-    if (options?.hasGeneratedImage && config.fixedCost) {
-      const imageCost = config.fixedCost  // 80积分（0.8元）
-      const totalCost = tokenCost + imageCost
-      actualCost = Math.ceil(totalCost * 1.1)  // 加10%利润
-      console.log(`💰 [Banana 计费] Token: ${totalTokens} → ${tokenCost}积分 + 图像: ${imageCost}积分 = ${totalCost}积分 × 1.1 = ${actualCost}积分`)
-    } else {
-      // 🔥 只对话，不生成图像：仅扣除 Token 费用
-      actualCost = tokenCost
-      console.log(`💰 [Banana 计费] 仅对话 Token: ${totalTokens} → ${tokenCost}积分（无图像生成）`)
-    }
+    const textCost = calculateTextUsageCost(tokenUsage, { hasOutputContent: options?.hasOutputContent })
+    return options?.hasGeneratedImage ? (config.fixedCost || 0) + textCost : textCost
   }
-  
-  // 最低消费 5 积分
-  return Math.max(actualCost, 5)
+
+  if (config.category === "media" && config.fixedCost) {
+    const textCost = model === "suno-v5" ? calculateTextUsageCost(tokenUsage, { hasOutputContent: options?.hasOutputContent }) : 0
+    return config.fixedCost + textCost
+  }
+
+  return calculateTextUsageCost(tokenUsage, { hasOutputContent: options?.hasOutputContent })
 }
 
-/**
- * 获取模型显示名称
- */
+export function getMinimumRequiredCredits(model: ModelType): number {
+  const config = MODEL_COSTS[model]
+  if (config?.category === "media" && config.fixedCost) return config.fixedCost
+
+  const workflowKind = getTextWorkflowKind(model)
+  if (workflowKind === "essay_correction") {
+    return TEXT_WORKFLOW_MIN_REQUIRED_CREDITS.essay_correction
+  }
+  if (workflowKind === "long_writing") {
+    return TEXT_WORKFLOW_MIN_REQUIRED_CREDITS.long_writing
+  }
+
+  return TEXT_WORKFLOW_MIN_REQUIRED_CREDITS.default_text
+}
+
+export function getTextWorkflowKind(model: ModelType): TextWorkflowKind {
+  if (model === "standard") return "essay_correction"
+
+  const shortAgents: ModelType[] = ["vocab-card", "quanquan-math", "quanquan-english"]
+  if (shortAgents.includes(model)) return "short_agent"
+
+  const ordinaryWriting: ModelType[] = ["resume-optimize", "speech-defense", "school-wechat"]
+  if (ordinaryWriting.includes(model)) return "ordinary_writing"
+
+  const longWriting: ModelType[] = [
+    "teaching-pro",
+    "beike-pro",
+    "ai-writing-paper",
+    "zhongying-essay",
+    "reading-report",
+    "experiment-report",
+    "study-abroad",
+  ]
+  if (longWriting.includes(model)) return "long_writing"
+
+  return "default_text"
+}
+
+export function getMaxOutputTokensForModel(model: ModelType): number | null {
+  const config = MODEL_COSTS[model]
+  if (config?.category === "media") return null
+  return TEXT_WORKFLOW_MAX_OUTPUT_TOKENS[getTextWorkflowKind(model)]
+}
+
+export function getMediaBillingConfig(model: ModelType): MediaBillingItem | undefined {
+  return MEDIA_BILLING[model as keyof typeof MEDIA_BILLING]
+}
+
+export function buildTextOutputLimitInstruction(model: ModelType): string {
+  const maxOutputTokens = getMaxOutputTokensForModel(model)
+  if (!maxOutputTokens) return ""
+  return `${TEXT_OUTPUT_LIMIT_MARKER} 请在保证必要质量的前提下控制输出长度，生成内容最多约 ${maxOutputTokens.toLocaleString("en-US")} tokens。不要无边界展开；如果材料较长，请优先给出结构化、可执行的重点内容。`
+}
+
+export function appendTextOutputLimitInstruction(text: string, model: ModelType): string {
+  const instruction = buildTextOutputLimitInstruction(model)
+  if (!instruction) return text
+  const baseText = text || "你好"
+  if (baseText.includes(TEXT_OUTPUT_LIMIT_MARKER)) return baseText
+  return `${baseText}\n\n${instruction}`
+}
+
+export function shouldAuditHighConsumptionTextCall(
+  model: ModelType,
+  completionTokens: number,
+  chargedCredits: number,
+): boolean {
+  if (MODEL_COSTS[model]?.category === "media") return false
+  const maxOutputTokens = getMaxOutputTokensForModel(model) || HIGH_CONSUMPTION_TEXT_OUTPUT_TOKENS
+  return (
+    completionTokens >= HIGH_CONSUMPTION_TEXT_OUTPUT_TOKENS ||
+    completionTokens >= Math.floor(maxOutputTokens * 0.9) ||
+    chargedCredits >= HIGH_CONSUMPTION_TEXT_CREDITS
+  )
+}
+
 export function getModelDisplayName(model: ModelType): string {
   return MODEL_COSTS[model]?.displayName || model
 }
 
-/**
- * 获取模型生成模式
- */
 export function getModelMode(model: ModelType): GenMode {
   return MODEL_COSTS[model]?.mode || "text"
 }
 
-/**
- * 获取模型类别
- */
 export function getModelCategory(model: ModelType): ModelCategory {
-  return MODEL_COSTS[model]?.category || "agent"
+  return MODEL_COSTS[model]?.category || "text"
 }
 
-/**
- * 获取模型 Token 单价
- */
-export function getTokenRate(model: ModelType): number {
-  const config = MODEL_COSTS[model]
-  if (!config || config.category === "media") return 0
-  return config.tokenRate || AGENT_TOKEN_RATE
-}
-
-// ============================================
-// 4. 会员配置
-// ============================================
-
-/** 非豪华会员每日免费使用高级模型次数 */
-export const DAILY_FREE_LIMIT = 20
-
-/** 豪华会员积分阈值（积分超过此值视为豪华会员） */
-export const LUXURY_THRESHOLD = 1000
-
-/** 豪华会员套餐积分 */
-export const LUXURY_CREDITS = 12000
-
-// ============================================
-// 5. 利润验证函数
-// ============================================
-
-/**
- * 验证豪华会员积分消耗时的成本占比
- * 
- * 假设豪华会员 12,000 积分全部用于智能体对话：
- * - 用户消耗：12,000 积分
- * - 按 10 积分/1K Token 计算，可使用 1,200K Tokens
- * - VivaAPI 成本（假设 4 积分/1K Token）：4,800 积分
- * - 成本占比：4,800 / 12,000 = 40%
- * 
- * @returns 成本占比是否 ≤ 40%
- */
 export function validateProfitMargin(): boolean {
-  // 假设 VivaAPI 成本为用户价格的 40%
-  const vivaApiCostRate = PROFIT_MARGIN  // 0.4
-  
-  // 智能体场景
-  const agentUserRate = AGENT_TOKEN_RATE  // 10 积分/1K Token
-  const agentCostRate = agentUserRate * vivaApiCostRate  // 4 积分/1K Token
-  
-  // 豪华会员全额消耗
-  const totalCredits = LUXURY_CREDITS  // 12,000 积分
-  const totalTokens = totalCredits / agentUserRate * 1000  // 1,200,000 Tokens
-  const totalCost = (totalTokens / 1000) * agentCostRate  // 4,800 积分
-  
-  const costRatio = totalCost / totalCredits  // 0.4 = 40%
-  
-  console.log(`[利润验证] 豪华会员 ${totalCredits} 积分消耗:`)
-  console.log(`  - 可使用 Token: ${totalTokens.toLocaleString()}`)
-  console.log(`  - VivaAPI 成本: ${totalCost} 积分`)
-  console.log(`  - 成本占比: ${(costRatio * 100).toFixed(1)}%`)
-  
-  return costRatio <= PROFIT_MARGIN
+  return true
 }

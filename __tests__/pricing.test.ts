@@ -1,282 +1,296 @@
-/**
- * lib/pricing.ts 单元测试 v2.0
- * 
- * 计费规则：
- * - 智能体（standard, teaching-pro）：10 积分/1K Token
- * - 独立模型（gpt-5, claude-opus, gemini-pro）：20 积分/1K Token
- * - 多媒体模型：按次固定扣费（成本/0.4）
- */
-
 import {
-  calculatePreviewCost,
-  calculateActualCost,
+  ASSUMED_PROVIDER_INPUT_VCOINS_PER_1M,
+  ASSUMED_PROVIDER_OUTPUT_VCOINS_PER_1M,
+  INPUT_TOKEN_RATE,
+  MIN_TEXT_CHARGE,
   MODEL_COSTS,
-  PROFIT_MARGIN,
-  ModelType,
-  DAILY_FREE_LIMIT,
-  LUXURY_THRESHOLD,
-  LUXURY_CREDITS,
-  AGENT_TOKEN_RATE,
-  STANDALONE_TOKEN_RATE,
-  getModelDisplayName,
-  getModelMode,
-  getModelCategory,
-  getTokenRate,
-  validateProfitMargin,
+  OUTPUT_TOKEN_RATE,
+  PRICING_VERSION,
+  appendTextOutputLimitInstruction,
+  calculateActualCost,
+  calculatePreviewCost,
+  calculateTextUsageCost,
+  getMaxOutputTokensForModel,
+  getMediaBillingConfig,
+  getMinimumRequiredCredits,
+  IMAGE_1_5_CREDITS,
+  IMAGE_1_CREDITS,
+  IMAGE_1_MINI_CREDITS,
+  IMAGE2_CREDITS,
+  SUNO_BASE_CREDITS,
+  pricingVersion,
+  shouldAuditHighConsumptionTextCall,
+  type ModelType,
 } from '../lib/pricing'
+import {
+  calculateImageCredits,
+  calculateSunoCredits,
+  calculateTextCredits,
+  checkMinimumBalance,
+  estimateTokensFromText,
+  parseDifyUsage,
+} from '../lib/billing'
 
-describe('lib/pricing.ts v2.0 - 计费公式测试', () => {
-  
-  // ============================================
-  // 1. Token 单价配置测试
-  // ============================================
-  describe('Token 单价配置', () => {
-    test('智能体 Token 单价应为 10 积分/1K Token', () => {
-      expect(AGENT_TOKEN_RATE).toBe(10)
-    })
+describe('统一计费配置', () => {
+  it('uses split input/output token billing for every text model', () => {
+    expect(INPUT_TOKEN_RATE).toBe(5)
+    expect(OUTPUT_TOKEN_RATE).toBe(20)
+    expect(MIN_TEXT_CHARGE).toBe(5)
 
-    test('独立模型 Token 单价应为 20 积分/1K Token', () => {
-      expect(STANDALONE_TOKEN_RATE).toBe(20)
-    })
-
-    test('利润率系数应为 0.4（成本占比 40%）', () => {
-      expect(PROFIT_MARGIN).toBe(0.4)
-    })
-  })
-
-  // ============================================
-  // 2. 模型配置测试
-  // ============================================
-  describe('模型配置', () => {
-    const allModels: ModelType[] = [
-      'standard', 'teaching-pro', 'gpt-5', 'claude-opus', 'gemini-pro',
-      'banana-2-pro', 'gpt-image-2', 'gpt-image-1.5', 'gpt-image-1', 'gpt-image-1-mini',
-      'suno-v5', 'grok-4.2', 'open-claw'
-    ]
-
-    test.each(allModels)('模型 %s 应有有效的配置', (model) => {
-      const config = MODEL_COSTS[model]
-      expect(config).toBeDefined()
-      expect(config.displayName).toBeTruthy()
-      expect(['text', 'image', 'music', 'video']).toContain(config.mode)
-      expect(['agent', 'standalone', 'media']).toContain(config.category)
-    })
-
-    test('智能体模型应有正确的 tokenRate', () => {
-      const agents: ModelType[] = ['standard', 'teaching-pro']
-      agents.forEach(model => {
-        const config = MODEL_COSTS[model]
-        expect(config.category).toBe('agent')
-        expect(config.tokenRate).toBe(AGENT_TOKEN_RATE)
-      })
-    })
-
-    test('独立模型应有正确的 tokenRate', () => {
-      const standalones: ModelType[] = ['gpt-5', 'claude-opus', 'gemini-pro', 'grok-4.2', 'open-claw']
-      standalones.forEach(model => {
-        const config = MODEL_COSTS[model]
-        expect(config.category).toBe('standalone')
-        expect(config.tokenRate).toBe(STANDALONE_TOKEN_RATE)
-      })
-    })
-
-    test('多媒体模型应有 fixedCost', () => {
-      const mediaModels: ModelType[] = ['gpt-image-2', 'gpt-image-1.5', 'gpt-image-1', 'gpt-image-1-mini', 'suno-v5']
-      mediaModels.forEach(model => {
-        const config = MODEL_COSTS[model]
-        expect(config.category).toBe('media')
-        expect(config.fixedCost).toBeGreaterThan(0)
-      })
+    const textModels: ModelType[] = ['standard', 'teaching-pro', 'gpt-5', 'claude-opus', 'gemini-pro', 'open-claw']
+    textModels.forEach((model) => {
+      expect(MODEL_COSTS[model].category).toBe('text')
+      expect(calculateActualCost(model, { inputTokens: 1000, outputTokens: 1000 }, { hasOutputContent: true })).toBe(25)
     })
   })
 
-  // ============================================
-  // 3. calculatePreviewCost 测试（前端预估）
-  // ============================================
-  describe('calculatePreviewCost - 前端预估消耗', () => {
-    
-    test('standard 智能体：预估 2K tokens → 20 积分', () => {
-      const cost = calculatePreviewCost('standard')
-      // 2000 tokens / 1000 * 10 = 20
-      expect(cost).toBe(20)
+  it('keeps provider cost assumptions for audit without affecting user billing', () => {
+    expect(ASSUMED_PROVIDER_INPUT_VCOINS_PER_1M).toBe(30)
+    expect(ASSUMED_PROVIDER_OUTPUT_VCOINS_PER_1M).toBe(150)
+    expect(PRICING_VERSION).toMatch(/^text-split-v\d{4}-\d{2}-\d{2}$/)
+    expect(pricingVersion).toBe(PRICING_VERSION)
+
+    expect(calculateTextUsageCost(
+      { inputTokens: 1000, outputTokens: 1000 },
+      { hasOutputContent: true },
+    )).toBe(25)
+  })
+
+  it('parses Dify usage without trusting zero price fields', () => {
+    const parsed = parseDifyUsage({
+      text: '生成完成',
+      reasoning_content: '',
+      usage: {
+        completion_price: '0',
+        completion_tokens: 88,
+        currency: 'USD',
+        latency: 2.874,
+        prompt_price: '0',
+        prompt_tokens: 669,
+        time_to_first_token: 2.003,
+        total_price: '0',
+        total_tokens: 757,
+      },
+      finish_reason: 'stop',
     })
 
-    test('teaching-pro 智能体：预估 2.5K tokens → 25 积分', () => {
-      const cost = calculatePreviewCost('teaching-pro')
-      // 2500 tokens / 1000 * 10 = 25
-      expect(cost).toBe(25)
+    expect(parsed).toMatchObject({
+      promptTokens: 669,
+      completionTokens: 88,
+      totalTokens: 757,
+      hasOutput: true,
+      estimated: false,
+      finishReason: 'stop',
+      latency: 2.874,
+      timeToFirstToken: 2.003,
+    })
+    expect(parsed.rawUsage?.total_price).toBe('0')
+  })
+
+  it('calculates text credits from prompt and completion tokens, never price fields', () => {
+    expect(calculateTextCredits({
+      promptTokens: 669,
+      completionTokens: 88,
+      totalTokens: 757,
+      outputText: '生成完成',
+      rawUsage: { total_price: '0', prompt_price: '0', completion_price: '0' },
+    })).toBe(6)
+  })
+
+  it('uses total tokens only as an estimated fallback when split token counts are unavailable', () => {
+    const parsed = parseDifyUsage({
+      answer: 'fallback text',
+      metadata: {
+        usage: {
+          total_tokens: 757,
+          total_price: '0',
+        },
+      },
+      finish_reason: 'stop',
     })
 
-    test('gpt-5 独立模型：预估 1.5K tokens → 30 积分', () => {
-      const cost = calculatePreviewCost('gpt-5')
-      // 1500 tokens / 1000 * 20 = 30
-      expect(cost).toBe(30)
+    expect(parsed).toMatchObject({
+      promptTokens: 0,
+      completionTokens: 757,
+      totalTokens: 757,
+      hasOutput: true,
+      estimated: true,
+      usageSource: 'fallback_total_as_output',
+    })
+    expect(calculateTextCredits(parsed)).toBe(16)
+  })
+
+  it('fills missing completion tokens from total minus prompt tokens', () => {
+    const parsed = parseDifyUsage({
+      answer: 'partial usage',
+      usage: {
+        prompt_tokens: 600,
+        total_tokens: 900,
+      },
     })
 
-    test('claude-opus 独立模型：预估 2K tokens → 40 积分', () => {
-      const cost = calculatePreviewCost('claude-opus')
-      // 2000 tokens / 1000 * 20 = 40
-      expect(cost).toBe(40)
+    expect(parsed).toMatchObject({
+      promptTokens: 600,
+      completionTokens: 300,
+      totalTokens: 900,
+      estimated: true,
+      usageSource: 'derived_completion_from_total',
+    })
+    expect(calculateTextCredits(parsed)).toBe(9)
+  })
+
+  it('fills missing prompt tokens from total minus completion tokens', () => {
+    const parsed = parseDifyUsage({
+      answer: 'partial usage',
+      usage: {
+        completion_tokens: 300,
+        total_tokens: 900,
+      },
     })
 
-    test('banana-2-pro 图片：预估仅含 LLM 成本', () => {
-      const cost = calculatePreviewCost('banana-2-pro')
-      expect(cost).toBe(10)
+    expect(parsed).toMatchObject({
+      promptTokens: 600,
+      completionTokens: 300,
+      totalTokens: 900,
+      estimated: true,
+      usageSource: 'derived_prompt_from_total',
+    })
+    expect(calculateTextCredits(parsed)).toBe(9)
+  })
+
+  it('estimates output tokens from text when usage is missing', () => {
+    const parsed = parseDifyUsage({
+      text: '这是一个没有 usage 的返回，但包含实际输出内容。',
     })
 
-    test('gpt-image-2 图片：固定 200 积分', () => {
-      const cost = calculatePreviewCost('gpt-image-2')
-      expect(cost).toBe(200)
+    expect(parsed.promptTokens).toBe(0)
+    expect(parsed.completionTokens).toBeGreaterThan(0)
+    expect(parsed).toMatchObject({
+      totalTokens: parsed.completionTokens,
+      hasOutput: true,
+      estimated: true,
+      usageSource: 'estimated_from_output_text',
+    })
+    expect(calculateTextCredits(parsed)).toBe(5)
+  })
+
+  it('does not charge empty outputs or reasoning-only metadata separately', () => {
+    expect(parseDifyUsage({
+      text: '',
+      reasoning_content: '',
+      usage: { prompt_tokens: 669, completion_tokens: 0, total_tokens: 669 },
+    })).toMatchObject({
+      hasOutput: false,
+      usageSource: 'no_output',
     })
 
-    test('suno-v5 音乐：固定成本加 token 成本后加 20% 利润', () => {
-      const cost = calculatePreviewCost('suno-v5')
-      expect(cost).toBe(102)
-    })
+    expect(calculateTextCredits({
+      promptTokens: 669,
+      completionTokens: 0,
+      totalTokens: 669,
+      outputText: '',
+      usageSource: 'no_output',
+    })).toBe(0)
 
-    test('自定义输入 Token 数量', () => {
-      const cost = calculatePreviewCost('standard', { estimatedInputTokens: 5000 })
-      // 5000 tokens / 1000 * 10 = 50
-      expect(cost).toBe(50)
+    expect(calculateTextCredits({
+      promptTokens: 669,
+      completionTokens: 0,
+      totalTokens: 669,
+      outputText: '',
+      reasoningContent: 'internal reasoning trace',
+      usageSource: 'no_output',
+    })).toBe(0)
+  })
+
+  it('charges total_tokens alone as output tokens when output exists', () => {
+    expect(calculateTextCredits({
+      totalTokens: 3000,
+      outputText: 'fallback text',
+    })).toBe(60)
+    expect(calculateTextUsageCost({ totalTokens: 3000 }, { hasOutputContent: true })).toBe(60)
+    expect(calculateActualCost('standard', { totalTokens: 3000 }, { hasOutputContent: true })).toBe(60)
+  })
+
+  it('estimates direct text credits from output text when token usage is unavailable', () => {
+    expect(calculateTextCredits({
+      outputText: '这是一个没有 token usage 的直接扣费调用。',
+    })).toBe(5)
+  })
+
+  it('applies the 5 credit minimum only when split token usage and output content exist', () => {
+    expect(calculateTextUsageCost({ inputTokens: 10, outputTokens: 0 })).toBe(0)
+    expect(calculateTextUsageCost({ inputTokens: 10, outputTokens: 0 }, { hasOutputContent: false })).toBe(0)
+    expect(calculateTextUsageCost({ inputTokens: 10, outputTokens: 0 }, { hasOutputContent: true })).toBe(5)
+    expect(calculateTextUsageCost({ inputTokens: 0, outputTokens: 10 })).toBe(5)
+    expect(calculateTextUsageCost({ inputTokens: 2000, outputTokens: 1000 }, { hasOutputContent: true })).toBe(30)
+  })
+
+  it('keeps multimedia fixed charges in the same backend config path', () => {
+    expect(IMAGE2_CREDITS).toBe(260)
+    expect(IMAGE_1_5_CREDITS).toBe(200)
+    expect(IMAGE_1_CREDITS).toBe(150)
+    expect(IMAGE_1_MINI_CREDITS).toBe(80)
+    expect(SUNO_BASE_CREDITS).toBe(100)
+    expect(calculateActualCost('gpt-image-2')).toBe(260)
+    expect(calculateActualCost('gpt-image-1.5')).toBe(200)
+    expect(calculateActualCost('gpt-image-1')).toBe(150)
+    expect(calculateActualCost('gpt-image-1-mini')).toBe(80)
+    expect(calculateActualCost('suno-v5')).toBe(100)
+    expect(calculateActualCost('suno-v5', { inputTokens: 1000, outputTokens: 1000 }, { hasOutputContent: true })).toBe(125)
+    expect(calculateImageCredits('gpt-image-2', 2)).toBe(520)
+    expect(calculateSunoCredits({ inputTokens: 1000, outputTokens: 1000 }, { hasOutputContent: true })).toBe(125)
+    expect(getMediaBillingConfig('gpt-image-2')).toMatchObject({
+      fixedCredits: 260,
+      minimumMembership: 'basic',
+      allowlistUserIdsEnv: 'IMAGE2_WHITELIST_USER_IDS',
+      allowlistEmailsEnv: 'IMAGE2_WHITELIST_EMAILS',
+    })
+    expect(getMediaBillingConfig('banana-2-pro')).toMatchObject({
+      baseCredits: 150,
+      riskMultiplier: 1.1,
+      fixedCredits: 165,
     })
   })
 
-  // ============================================
-  // 4. calculateActualCost 测试（后端静默扣费）
-  // ============================================
-  describe('calculateActualCost - 后端静默扣费', () => {
-    
-    test('智能体 1000 tokens → 10 积分', () => {
-      const cost = calculateActualCost('standard', { totalTokens: 1000 })
-      // 1000 / 1000 * 10 = 10
-      expect(cost).toBe(10)
-    })
-
-    test('智能体 2500 tokens → 25 积分', () => {
-      const cost = calculateActualCost('teaching-pro', { totalTokens: 2500 })
-      // 2500 / 1000 * 10 = 25
-      expect(cost).toBe(25)
-    })
-
-    test('独立模型 1000 tokens → 20 积分', () => {
-      const cost = calculateActualCost('gpt-5', { totalTokens: 1000 })
-      // 1000 / 1000 * 20 = 20
-      expect(cost).toBe(20)
-    })
-
-    test('独立模型 3000 tokens → 60 积分', () => {
-      const cost = calculateActualCost('claude-opus', { totalTokens: 3000 })
-      // 3000 / 1000 * 20 = 60
-      expect(cost).toBe(60)
-    })
-
-    test('最低消费 5 积分', () => {
-      const cost = calculateActualCost('standard', { totalTokens: 100 })
-      // 100 / 1000 * 10 = 1，但最低 5
-      expect(cost).toBe(5)
-    })
-
-    test('使用 inputTokens + outputTokens', () => {
-      const cost = calculateActualCost('gpt-5', { inputTokens: 500, outputTokens: 500 })
-      // (500 + 500) / 1000 * 20 = 20
-      expect(cost).toBe(20)
-    })
-
-    test('无 Token 信息时使用预估值', () => {
-      const cost = calculateActualCost('standard')
-      // 使用预估 2000 tokens: 2000 / 1000 * 10 = 20
-      expect(cost).toBe(20)
-    })
-
-    test('多媒体模型固定价格', () => {
-      expect(calculateActualCost('gpt-image-2')).toBe(200)
-      expect(calculateActualCost('suno-v5')).toBe(102)
-    })
-
-    test('banana-2-pro 无图像时仅按 token 计费，生成图像时叠加图像成本', () => {
-      expect(calculateActualCost('banana-2-pro')).toBe(10)
-      expect(calculateActualCost('banana-2-pro', { totalTokens: 500 }, { hasGeneratedImage: true })).toBe(100)
-    })
-
-    test('未知模型返回默认价格 20', () => {
-      const cost = calculateActualCost('unknown-model' as ModelType)
-      expect(cost).toBe(20)
-    })
+  it('adds Banana image cost only when an image is generated', () => {
+    expect(calculateActualCost('banana-2-pro', { inputTokens: 1000, outputTokens: 1000 }, { hasOutputContent: true })).toBe(25)
+    expect(calculateActualCost('banana-2-pro', { inputTokens: 1000, outputTokens: 1000 }, { hasGeneratedImage: true, hasOutputContent: true })).toBe(190)
   })
 
-  // ============================================
-  // 5. 辅助函数测试
-  // ============================================
-  describe('辅助函数', () => {
-    test('getModelDisplayName 返回正确的显示名称', () => {
-      expect(getModelDisplayName('standard')).toBe('作文批改智能体')
-      expect(getModelDisplayName('teaching-pro')).toBe('教学评智能助手')
-      expect(getModelDisplayName('gpt-5')).toBe('ChatGPT 5.4')
-      expect(getModelDisplayName('claude-opus')).toBe('Claude opus4.6thinking')
-      expect(getModelDisplayName('gemini-pro')).toBe('Gemini 3.1 pro')
-      expect(getModelDisplayName('grok-4.2')).toBe('Grok-4.2')
-      expect(getModelDisplayName('open-claw')).toBe('Open Claw')
-    })
-
-    test('getModelMode 返回正确的生成模式', () => {
-      expect(getModelMode('standard')).toBe('text')
-      expect(getModelMode('banana-2-pro')).toBe('image')
-      expect(getModelMode('suno-v5')).toBe('music')
-    })
-
-    test('getModelCategory 返回正确的模型类别', () => {
-      expect(getModelCategory('standard')).toBe('agent')
-      expect(getModelCategory('teaching-pro')).toBe('agent')
-      expect(getModelCategory('gpt-5')).toBe('standalone')
-      expect(getModelCategory('banana-2-pro')).toBe('standalone')
-      expect(getModelCategory('gpt-image-2')).toBe('media')
-    })
-
-    test('getTokenRate 返回正确的 Token 单价', () => {
-      expect(getTokenRate('standard')).toBe(10)
-      expect(getTokenRate('gpt-5')).toBe(20)
-      expect(getTokenRate('banana-2-pro')).toBe(20)
-      expect(getTokenRate('gpt-image-2')).toBe(0)
-    })
+  it('uses backend minimums for request preflight and preview labels', () => {
+    expect(getMinimumRequiredCredits('gpt-5')).toBe(20)
+    expect(getMinimumRequiredCredits('standard')).toBe(100)
+    expect(getMinimumRequiredCredits('ai-writing-paper')).toBe(100)
+    expect(getMinimumRequiredCredits('study-abroad')).toBe(100)
+    expect(getMinimumRequiredCredits('gpt-image-2')).toBe(260)
+    expect(getMinimumRequiredCredits('suno-v5')).toBe(100)
+    expect(calculatePreviewCost('standard')).toBeGreaterThanOrEqual(5)
+    expect(calculatePreviewCost('gpt-image-2')).toBe(260)
+    expect(checkMinimumBalance(19, 'gpt-5')).toMatchObject({ ok: false, requiredCredits: 20, currentCredits: 19 })
+    expect(checkMinimumBalance(100, 'standard')).toMatchObject({ ok: true, requiredCredits: 100, currentCredits: 100 })
+    expect(estimateTokensFromText('这是一个 token 估算测试')).toBeGreaterThan(0)
   })
 
-  // ============================================
-  // 6. 会员配置测试
-  // ============================================
-  describe('会员配置', () => {
-    test('DAILY_FREE_LIMIT 应为 20', () => {
-      expect(DAILY_FREE_LIMIT).toBe(20)
-    })
-
-    test('LUXURY_THRESHOLD 应为 1000', () => {
-      expect(LUXURY_THRESHOLD).toBe(1000)
-    })
-
-    test('LUXURY_CREDITS 应为 12000', () => {
-      expect(LUXURY_CREDITS).toBe(12000)
-    })
+  it('configures output limits by text workflow class', () => {
+    expect(getMaxOutputTokensForModel('gpt-5')).toBe(4000)
+    expect(getMaxOutputTokensForModel('vocab-card')).toBe(3000)
+    expect(getMaxOutputTokensForModel('resume-optimize')).toBe(8000)
+    expect(getMaxOutputTokensForModel('standard')).toBe(25000)
+    expect(getMaxOutputTokensForModel('ai-writing-paper')).toBe(20000)
+    expect(getMaxOutputTokensForModel('gpt-image-2')).toBeNull()
   })
 
-  // ============================================
-  // 7. 利润验证测试
-  // ============================================
-  describe('利润验证', () => {
-    test('validateProfitMargin 应返回 true（成本 ≤ 40%）', () => {
-      const result = validateProfitMargin()
-      expect(result).toBe(true)
-    })
+  it('adds prompt-based output length constraints without duplicating them', () => {
+    const constrained = appendTextOutputLimitInstruction('请批改作文', 'standard')
+    expect(constrained).toContain('[输出长度约束]')
+    expect(constrained).toContain('25,000 tokens')
+    expect(appendTextOutputLimitInstruction(constrained, 'standard')).toBe(constrained)
+    expect(appendTextOutputLimitInstruction('画一张图', 'gpt-image-2')).toBe('画一张图')
+  })
 
-    test('豪华会员 12000 积分全用于智能体时成本验证', () => {
-      // 12000 积分 / 10 积分每1K Token = 1200K Tokens
-      // 成本 = 1200K * 4 积分/1K Token = 4800 积分
-      // 成本占比 = 4800 / 12000 = 40%
-      const totalCredits = LUXURY_CREDITS
-      const tokensUsable = (totalCredits / AGENT_TOKEN_RATE) * 1000
-      const costPerKToken = AGENT_TOKEN_RATE * PROFIT_MARGIN
-      const totalCost = (tokensUsable / 1000) * costPerKToken
-      const costRatio = totalCost / totalCredits
-      
-      expect(costRatio).toBeLessThanOrEqual(0.4)
-    })
+  it('flags high-consumption text calls for audit', () => {
+    expect(shouldAuditHighConsumptionTextCall('standard', 24000, 485)).toBe(true)
+    expect(shouldAuditHighConsumptionTextCall('gpt-5', 1000, 25)).toBe(false)
+    expect(shouldAuditHighConsumptionTextCall('gpt-image-2', 30000, 600)).toBe(false)
   })
 })

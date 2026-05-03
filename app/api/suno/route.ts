@@ -12,11 +12,16 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { uploadToCos, isCdnUrl, isCosConfigured } from '@/lib/cos'
-import { spendCredits, getUserCredits } from '@/lib/credits'
+import { recordBillingIssue, getUserCredits } from '@/lib/credits'
+import {
+  chargeCreditsSafely as spendCredits,
+  createBillingLog as createBillingAuditMetadata,
+  parseDifyUsage,
+  type ParsedDifyUsage,
+} from '@/lib/billing'
+import { PRICING_VERSION, SUNO_BASE_CREDITS, calculateActualCost } from '@/lib/pricing'
 
-// 🔥 Suno 音乐生成计费配置
-const SUNO_BASE_CREDITS = 100           // 基础费用（Suno API 调用）
-const TOKEN_TO_CREDITS_RATIO = 0.01     // Token 转积分比例：100 tokens = 1 积分
+const SUNO_MODEL = "suno-v5" as const
 
 export const dynamic = 'force-dynamic'
 
@@ -120,6 +125,8 @@ export async function POST(req: NextRequest) {
 // 生成音乐（阻塞模式）
 async function handleGenerate(query: string, userId: string, taskMode?: string, conversationId?: string) {
   console.log('🎵 [Suno Proxy] 开始生成音乐（阻塞模式）, taskMode:', taskMode, 'conversationId:', conversationId)
+  const creditGuard = await ensureSunoCredits(userId)
+  if (creditGuard) return creditGuard
   
   const url = `${SUNO_BASE_URL}/chat-messages`
   
@@ -153,6 +160,12 @@ async function handleGenerate(query: string, userId: string, taskMode?: string, 
 
   const data = await response.json()
   console.log('✅ [Suno Proxy] 生成成功:', data.answer?.slice(0, 100))
+  const chargeDescription = `🎵 AI 音乐创作 - ${taskMode || '灵感'} 模式（基础费用）`
+  const charged = await chargeSunoBaseCredits(userId, chargeDescription, conversationId)
+  if (!charged) {
+    await recordSunoBillingFailure(userId, chargeDescription, conversationId)
+    return NextResponse.json({ error: '积分扣除失败，请重试', code: 'CREDITS_DEDUCT_FAILED' }, { status: 500 })
+  }
   
   return NextResponse.json(data)
 }
@@ -168,6 +181,8 @@ async function handleGenerate(query: string, userId: string, taskMode?: string, 
 async function handleGeneratePro(formData: SunoProFormInputs, userId: string, conversationId?: string) {
   console.log('🎵 [Suno Proxy Pro] 开始生成音乐（阻塞模式）')
   console.log('🎵 [Suno Proxy Pro] 参数:', JSON.stringify(formData, null, 2))
+  const creditGuard = await ensureSunoCredits(userId)
+  if (creditGuard) return creditGuard
   
   const url = `${SUNO_BASE_URL}/chat-messages`
   
@@ -234,8 +249,98 @@ async function handleGeneratePro(formData: SunoProFormInputs, userId: string, co
 
   const data = await response.json()
   console.log('✅ [Suno Proxy Pro] 生成成功:', data.answer?.slice(0, 100))
+  const chargeDescription = `🎵 AI 音乐创作 - ${formData.task_mode} 模式（基础费用）`
+  const charged = await chargeSunoBaseCredits(userId, chargeDescription, conversationId)
+  if (!charged) {
+    await recordSunoBillingFailure(userId, chargeDescription, conversationId)
+    return NextResponse.json({ error: '积分扣除失败，请重试', code: 'CREDITS_DEDUCT_FAILED' }, { status: 500 })
+  }
   
   return NextResponse.json(data)
+}
+
+async function chargeSunoBaseCredits(userId: string, description: string, conversationId?: string) {
+  if (!userId) return false
+  return spendCredits(
+    userId,
+    SUNO_BASE_CREDITS,
+    'suno_music',
+    description,
+    conversationId,
+    createBillingAuditMetadata({
+      userId,
+      actionType: 'suno_music',
+      feature: 'suno',
+      appId: 'SUNO_GENERATE_API_KEY',
+      workflowId: null,
+      modelId: SUNO_MODEL,
+      requestedAppId: 'SUNO_GENERATE_API_KEY',
+      requestedWorkflowId: null,
+      requestedModelId: SUNO_MODEL,
+      usageSource: 'fixed',
+      estimated: false,
+      promptTokens: 0,
+      completionTokens: 0,
+      totalTokens: 0,
+      chargedCredits: SUNO_BASE_CREDITS,
+      conversationId: conversationId || null,
+      requestId: conversationId || null,
+      rawProviderMetadata: {
+        baseCredits: SUNO_BASE_CREDITS,
+      },
+      description,
+    }),
+  )
+}
+
+async function recordSunoBillingFailure(userId: string, description: string, conversationId?: string) {
+  await recordBillingIssue(
+    userId,
+    SUNO_BASE_CREDITS,
+    'billing_failed',
+    `异常账单：${description}`,
+    conversationId,
+    createBillingAuditMetadata({
+      userId,
+      actionType: 'billing_failed',
+      feature: 'suno',
+      appId: 'SUNO_GENERATE_API_KEY',
+      workflowId: null,
+      modelId: SUNO_MODEL,
+      requestedAppId: 'SUNO_GENERATE_API_KEY',
+      requestedWorkflowId: null,
+      requestedModelId: SUNO_MODEL,
+      upstreamProvider: null,
+      upstreamModel: null,
+      upstreamGroup: null,
+      upstreamRequestId: null,
+      rawProviderMetadata: null,
+      usageSource: 'fixed',
+      estimated: false,
+      promptTokens: 0,
+      completionTokens: 0,
+      totalTokens: 0,
+      chargedCredits: SUNO_BASE_CREDITS,
+      conversationId: conversationId || null,
+      requestId: conversationId || null,
+      description,
+    }),
+  )
+}
+
+async function ensureSunoCredits(userId: string) {
+  const userCredits = await getUserCredits(userId)
+  if (!userCredits || userCredits.credits < SUNO_BASE_CREDITS) {
+    return NextResponse.json({
+      error: '当前积分不足',
+      message: `当前功能至少需要 ${SUNO_BASE_CREDITS} 积分，当前剩余 ${userCredits?.credits || 0} 积分。请充值或升级会员后继续使用。`,
+      code: 'INSUFFICIENT_CREDITS',
+      required: SUNO_BASE_CREDITS,
+      current: userCredits?.credits || 0,
+      action: '请充值或升级会员',
+    }, { status: 402 })
+  }
+  return null
 }
 
 /**
@@ -248,35 +353,14 @@ async function handleGenerateStreamingPro(formData: SunoProFormInputs, userId: s
   
   // 🔥 检查并扣除积分
   console.log('🎵 [Suno Proxy Pro] 检查用户积分, userId:', userId)
-  const userCredits = await getUserCredits(userId)
+  const creditGuard = await ensureSunoCredits(userId)
+  if (creditGuard) return creditGuard
   
-  if (!userCredits) {
-    console.error('❌ [Suno Proxy Pro] 无法获取用户积分')
-    return NextResponse.json({ 
-      error: '无法获取用户积分信息',
-      code: 'CREDITS_NOT_FOUND'
-    }, { status: 400 })
-  }
-  
-  console.log('🎵 [Suno Proxy Pro] 当前积分:', userCredits.credits, '需要消耗:', SUNO_BASE_CREDITS)
-  
-  if (userCredits.credits < SUNO_BASE_CREDITS) {
-    console.error('❌ [Suno Proxy Pro] 积分不足')
-    return NextResponse.json({ 
-      error: `积分不足，需要 ${SUNO_BASE_CREDITS} 积分，当前余额 ${userCredits.credits}`,
-      code: 'INSUFFICIENT_CREDITS',
-      required: SUNO_BASE_CREDITS,
-      current: userCredits.credits
-    }, { status: 402 })
-  }
-  
-  // 🔥 扣除基础积分（流式结束后会补扣 Token 费用）
-  const spendSuccess = await spendCredits(
-    userId, 
-    SUNO_BASE_CREDITS, 
-    'suno_music', 
+  // 🔥 扣除基础积分（流式结束后按输入/输出 token 补扣文本费用）
+  const spendSuccess = await chargeSunoBaseCredits(
+    userId,
     `🎵 AI 音乐创作 - ${formData.task_mode} 模式（基础费用）`,
-    conversationId
+    conversationId,
   )
   
   if (!spendSuccess) {
@@ -287,7 +371,7 @@ async function handleGenerateStreamingPro(formData: SunoProFormInputs, userId: s
     }, { status: 500 })
   }
   
-  console.log('✅ [Suno Proxy Pro] 基础积分扣除成功，剩余:', userCredits.credits - SUNO_BASE_CREDITS)
+  console.log('✅ [Suno Proxy Pro] 基础积分扣除成功')
   
   const url = `${SUNO_BASE_URL}/chat-messages`
   
@@ -416,6 +500,10 @@ async function processStreamWithTokenBilling(
   
   let buffer = ''
   let totalTokens = 0
+  let promptTokens = 0
+  let completionTokens = 0
+  let hasReceivedContent = false
+  let latestParsedUsage: ParsedDifyUsage | null = null
   
   try {
     while (true) {
@@ -441,15 +529,24 @@ async function processStreamWithTokenBilling(
             const jsonStr = line.slice(6).trim()
             if (jsonStr && jsonStr !== '[DONE]') {
               const event = JSON.parse(jsonStr)
+              if (
+                (event.event === 'message' && event.answer) ||
+                (event.event === 'workflow_finished' && event.data?.outputs)
+              ) {
+                hasReceivedContent = true
+              }
               
-              // 🔥 检查 message_end 事件，获取 token 使用量
-              if (event.event === 'message_end' && event.metadata?.usage) {
-                const usage = event.metadata.usage
-                totalTokens = usage.total_tokens || 0
-                console.log('💰 [Token 计费] 检测到使用量:', {
+	              // 🔥 检查 message_end 事件，获取 token 使用量
+		              if (event.event === 'message_end' && event.metadata?.usage) {
+		                const parsedUsage = parseDifyUsage(event)
+		                latestParsedUsage = parsedUsage
+		                totalTokens = parsedUsage.totalTokens
+	                promptTokens = parsedUsage.promptTokens
+	                completionTokens = parsedUsage.completionTokens
+	                console.log('💰 [Token 计费] 检测到使用量:', {
                   total_tokens: totalTokens,
-                  prompt_tokens: usage.prompt_tokens,
-                  completion_tokens: usage.completion_tokens
+                  prompt_tokens: promptTokens,
+                  completion_tokens: completionTokens
                 })
               }
             }
@@ -465,32 +562,85 @@ async function processStreamWithTokenBilling(
     await writer.close()
     
     // 🔥 流结束后，根据 Token 使用量补扣积分
-    if (totalTokens > 0) {
-      const tokenCredits = Math.ceil(totalTokens * TOKEN_TO_CREDITS_RATIO)
+    if (promptTokens > 0 || completionTokens > 0) {
+      const tokenCredits = calculateActualCost(
+        SUNO_MODEL,
+        { totalTokens, inputTokens: promptTokens, outputTokens: completionTokens },
+        { hasOutputContent: hasReceivedContent },
+      ) - SUNO_BASE_CREDITS
       
       if (tokenCredits > 0) {
         console.log('💰 [Token 计费] 补扣积分:', {
           totalTokens,
           tokenCredits,
-          ratio: TOKEN_TO_CREDITS_RATIO
+          promptTokens,
+          completionTokens,
         })
         
+        const chargeDescription = `🎵 AI 音乐创作 - ${taskMode} 模式（输入 ${promptTokens} tokens / 输出 ${completionTokens} tokens）`
+        const billingMetadata = createBillingAuditMetadata({
+          userId,
+          actionType: 'suno_llm_token',
+          feature: 'suno',
+          appId: "SUNO_GENERATE_API_KEY",
+          workflowId: null,
+          modelId: SUNO_MODEL,
+          requestedAppId: "SUNO_GENERATE_API_KEY",
+          requestedWorkflowId: null,
+          requestedModelId: SUNO_MODEL,
+          upstreamProvider: null,
+          upstreamModel: null,
+          upstreamGroup: null,
+          upstreamRequestId: null,
+          rawProviderMetadata: latestParsedUsage
+            ? {
+                usage: latestParsedUsage.rawUsage || null,
+                finishReason: latestParsedUsage.finishReason || null,
+                latency: latestParsedUsage.latency ?? null,
+                timeToFirstToken: latestParsedUsage.timeToFirstToken ?? null,
+                usageSource: latestParsedUsage.usageSource,
+                estimated: latestParsedUsage.estimated,
+              }
+            : null,
+          usageSource: latestParsedUsage?.usageSource,
+          estimated: latestParsedUsage?.estimated ?? false,
+          promptTokens,
+          completionTokens,
+          totalTokens,
+          chargedCredits: tokenCredits,
+          rawUsageJson: latestParsedUsage?.rawUsage || null,
+          finishReason: latestParsedUsage?.finishReason || null,
+          latency: latestParsedUsage?.latency ?? null,
+          timeToFirstToken: latestParsedUsage?.timeToFirstToken ?? null,
+          conversationId: conversationId || null,
+          requestId: conversationId || null,
+          description: chargeDescription,
+        })
         const success = await spendCredits(
           userId,
           tokenCredits,
           'suno_llm_token',
-          `🎵 AI 音乐创作 - ${taskMode} 模式（LLM Token: ${totalTokens}）`,
-          conversationId
+          chargeDescription,
+          conversationId,
+          billingMetadata,
         )
         
         if (success) {
           console.log('✅ [Token 计费] Token 积分补扣成功:', tokenCredits)
         } else {
           console.error('❌ [Token 计费] Token 积分补扣失败')
+          await recordBillingIssue(
+            userId,
+            tokenCredits,
+            'billing_failed',
+            `异常账单：${chargeDescription}`,
+            conversationId,
+            billingMetadata,
+          )
         }
       }
     } else {
-      console.log('💰 [Token 计费] 无 LLM Token 消耗（可能跳过了 LLM）')
+      console.log('💰 [Token 计费] 无可结算 LLM Token 消耗（可能跳过了 LLM）')
     }
   }
 }
@@ -498,6 +648,8 @@ async function processStreamWithTokenBilling(
 // 🔥 生成音乐（流式模式）
 async function handleGenerateStreaming(query: string, userId: string, taskMode?: string, conversationId?: string) {
   console.log('🎵 [Suno Proxy] 开始生成音乐（流式模式）, taskMode:', taskMode, 'conversationId:', conversationId)
+  const creditGuard = await ensureSunoCredits(userId)
+  if (creditGuard) return creditGuard
   
   const url = `${SUNO_BASE_URL}/chat-messages`
   
@@ -529,7 +681,14 @@ async function handleGenerateStreaming(query: string, userId: string, taskMode?:
     }, { status: response.status })
   }
 
-  // 🔥 直接转发流式响应
+  const chargeDescription = `🎵 AI 音乐创作 - ${taskMode || '灵感'} 模式（基础费用）`
+  const charged = await chargeSunoBaseCredits(userId, chargeDescription, conversationId)
+  if (!charged) {
+    await recordSunoBillingFailure(userId, chargeDescription, conversationId)
+    return NextResponse.json({ error: '积分扣除失败，请重试', code: 'CREDITS_DEDUCT_FAILED' }, { status: 500 })
+  }
+
+  // 🔥 转发流式响应；简单模式没有 LLM 补扣，基础费用来自后端统一配置。
   const headers = new Headers()
   headers.set('Content-Type', 'text/event-stream')
   headers.set('Cache-Control', 'no-cache')

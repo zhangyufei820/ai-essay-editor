@@ -103,17 +103,16 @@ async function checkMembership(userId: string) {
   }
 
   // 策略5: 检查 is_pro 字段和 membership_status
-  let isPro = false, hasHighCredits = false
+  let isPro = false
   let membershipStatus: string | null = null
   const { data: creditsData, error: creditsError } = await supabaseAdmin
     .from('user_credits').select('credits, is_pro, user_id').eq('user_id', userId).maybeSingle()
   if (!creditsError && creditsData) {
     if (creditsData.is_pro === true) isPro = true
-    if (creditsData.credits >= 1000) hasHighCredits = true
     membershipStatus = resolveMembershipStatus(creditsData)
   }
 
-  const isPaidMember = isPro || orders.length > 0 || hasHighCredits
+  const isPaidMember = isPro || orders.length > 0
 
   // 从订单或用户积分记录中获取订阅类型
   let type = "免费"
@@ -123,8 +122,6 @@ async function checkMembership(userId: string) {
   } else if (isPro && membershipStatus) {
     // 检查用户积分记录中的会员标识
     type = membershipStatus
-  } else if (hasHighCredits) {
-    type = "premium"
   }
 
   return NextResponse.json({

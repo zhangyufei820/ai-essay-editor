@@ -15,11 +15,6 @@ import Link from 'next/link'
 import { HeroSection } from '@/components/home/HeroSection'
 import { Calculator, HelpCircle, FileText, Sparkles, ArrowRight } from 'lucide-react'
 
-const GptImagePromoModal = dynamic(
-  () => import('@/components/home/GptImagePromoModal').then(mod => ({ default: mod.GptImagePromoModal })),
-  { ssr: false }
-)
-
 const OpenClawSection = dynamic(
   () => import('@/components/home/OpenClawSection').then(mod => ({ default: mod.OpenClawSection })),
   {
@@ -97,7 +92,6 @@ function SectionSkeleton({ height = "400px" }: { height?: string }) {
 export default function Home() {
   return (
     <main className="min-h-screen bg-white">
-      <GptImagePromoModal />
       {/* Hero 区域 - 全屏首屏（关键路径，直接加载） */}
       <HeroSection />
 

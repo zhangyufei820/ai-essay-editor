@@ -42,6 +42,7 @@ UPDATE orders SET credits_amount = 10000 WHERE product_id = 'credits-10000' AND 
 
 -- 为 credit_transactions 表添加缺失字段
 ALTER TABLE credit_transactions ADD COLUMN IF NOT EXISTS order_id INTEGER;
+ALTER TABLE credit_transactions ADD COLUMN IF NOT EXISTS billing_metadata JSONB;
 
 -- 创建索引
 CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);
@@ -90,6 +91,20 @@ SELECT
   COUNT(*)::TEXT || ' 个订单已设置 credits_amount'
 FROM orders WHERE credits_amount IS NOT NULL;
 ```
+
+### 本次上线前必执行迁移：计费审计字段
+
+本次计费重构会把 Dify usage、token 用量、定价版本、扣费来源、请求 ID 等审计信息写入 `credit_transactions.billing_metadata`。
+
+生产上线前请先在 Supabase SQL Editor 执行：
+
+```sql
+-- scripts/019_add_billing_metadata_to_credit_transactions.sql
+ALTER TABLE credit_transactions
+  ADD COLUMN IF NOT EXISTS billing_metadata JSONB;
+```
+
+该迁移是幂等的，可重复执行；不会修改或删除现有积分流水。若未执行，后端仍会回退写入基础流水，但详细计费审计字段会丢失。
 
 4. **点击 "Run" 执行**
 

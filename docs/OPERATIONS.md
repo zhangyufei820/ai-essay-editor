@@ -18,6 +18,7 @@ npm test -- __tests__/health-routes.test.ts __tests__/operations-pages.test.ts _
 
 - 确认 `.env.production` 已在服务器上存在，但不要覆盖已有生产文件。
 - 确认 Supabase URL、匿名 Key、服务端 Key、支付配置、Dify API 配置均已按变量名填写。
+- 执行数据库迁移 `scripts/019_add_billing_metadata_to_credit_transactions.sql`，为 `credit_transactions` 添加 `billing_metadata JSONB` 审计字段。
 - 确认没有把真实 API key、token、password、service role key、数据库连接串提交到代码或文档。
 - 确认 `npm run build` 通过，关键页面能本地访问。
 - 确认 `/api/health` 返回 `status: ok`，`/health` 能打开运维说明页。

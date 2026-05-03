@@ -1,7 +1,7 @@
 "use client"
 
 import { notFound, useRouter, useSearchParams } from "next/navigation"
-import { PRODUCTS, requiresMembership, hasActiveMembership, resolveMembershipStatus } from "@/lib/products"
+import { PRODUCTS, requiresMembership, hasActiveMembership, resolveMembershipStatus, getProductPriceInCents } from "@/lib/products"
 import { ArrowLeft, Loader2, LogIn, CheckCircle2, ExternalLink, AlertTriangle, Crown } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -74,16 +74,8 @@ function CheckoutFlow({ productId }: { productId: string }) {
 
   if (!product) { notFound() }
 
-  // 🔥 根据计费周期计算显示价格
-  // 年付 = 月付 × 12（可以设置折扣）
-  const isSubscription = ["basic", "pro", "premium"].includes(productId)
-  const annualDiscount = 0.8 // 年付8折优惠
-  
-  let displayPrice = product.priceInCents
-  if (billing === "annual" && isSubscription) {
-    // 年付价格 = 月付 × 12 × 折扣
-    displayPrice = Math.round(product.priceInCents * 12 * annualDiscount)
-  }
+  const isSubscription = product.productType === "membership"
+  const displayPrice = getProductPriceInCents(productId, billing) || product.priceInCents
   
   const checkoutUrl = `/checkout/${productId}?billing=${billing}`
   const loginRedirectUrl = `/login?redirect=${encodeURIComponent(checkoutUrl)}`
@@ -199,7 +191,9 @@ function CheckoutFlow({ productId }: { productId: string }) {
               <p className="text-sm text-green-700 font-medium">年付已按月付 × 12 × 8 折计算，权益按月发放。</p>
             )}
             {product.productType === "credits" && (
-              <p className="text-sm text-amber-700 font-medium">积分充值包仅限会员购买，支付成功后永久有效。</p>
+              <p className="text-sm text-amber-700 font-medium">
+                积分充值包永久有效。500 / 1,000 积分包订阅用户可买；5,000 积分包专业版及以上可买；10,000 积分包豪华版及以上可买。
+              </p>
             )}
           </div>
 
@@ -210,7 +204,7 @@ function CheckoutFlow({ productId }: { productId: string }) {
               <AlertDescription className="text-amber-900">
                 <div className="font-semibold mb-2">⚠️ 积分充值包仅限会员购买</div>
                 <p className="text-sm mb-3">
-                  您需要先订阅会员套餐（基础版/专业版/豪华版）才能购买积分充值包。
+                  500 / 1,000 积分包订阅用户可买；5,000 积分包专业版及以上可买；10,000 积分包豪华版及以上可买。
                 </p>
                 <Link href="/#pricing">
                   <Button size="sm" variant="default" className="bg-amber-600 hover:bg-amber-700">

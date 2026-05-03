@@ -337,9 +337,7 @@ function BananaChatInterfaceInner() {
 
   const calculateCost = () => {
     if (!userId) return 0
-    const isLuxury = userCredits > 1000
     return calculatePreviewCost("banana-2-pro", {
-      isLuxury,
       estimatedInputTokens: input.length > 0 ? Math.ceil(input.length / 4) * 2 : undefined
     })
   }
@@ -629,7 +627,7 @@ function BananaChatInterfaceInner() {
           })
         }
         
-        setUserCredits(prev => prev - cost)
+        await refreshCredits()
 
     } catch (e: any) {
         console.error("❌ [Banana 对话异常]:", e)

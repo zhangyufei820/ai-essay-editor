@@ -56,6 +56,7 @@ export async function GET(request: NextRequest) {
             type TEXT NOT NULL,
             description TEXT,
             reference_id TEXT,
+            billing_metadata JSONB,
             balance_before INTEGER,
             balance_after INTEGER,
             created_at TIMESTAMPTZ DEFAULT NOW()
@@ -81,6 +82,7 @@ CREATE TABLE IF NOT EXISTS credit_transactions (
   type TEXT NOT NULL,
   description TEXT,
   reference_id TEXT,
+  billing_metadata JSONB,
   balance_before INTEGER,
   balance_after INTEGER,
   created_at TIMESTAMPTZ DEFAULT NOW()

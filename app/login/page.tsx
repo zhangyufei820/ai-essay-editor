@@ -54,7 +54,7 @@ function AuthingLoginComponent() {
       try {
         const guard = new Guard({
           appId,
-          mode: 'normal', // 使用普通模式，不强制跳转
+          mode: 'normal', // Authing 标准登录模式，不强制跳转
         })
 
       // ✅ 登录成功的处理逻辑

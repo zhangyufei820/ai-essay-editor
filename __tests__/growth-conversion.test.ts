@@ -27,22 +27,27 @@ describe("Sprint 6 growth conversion guardrails", () => {
 
     for (const product of PRODUCTS) {
       const monthlyYuan = product.priceInCents / 100
+      if (product.purchasable === false) {
+        expect(getProductPriceInCents(product.id)).toBeNull()
+        continue
+      }
       expect(getProductPriceInCents(product.id)).toBe(product.priceInCents)
 
       if (product.productType === "membership") {
-        expect(pricingSource).toContain(`monthlyPrice: ${monthlyYuan}`)
+        expect(pricingSource).toContain("getCatalogPriceInCents(plan.id")
         expect(getProductPriceInCents(product.id, "annual")).toBe(Math.round(product.priceInCents * 12 * 0.8))
       }
 
       if (product.productType === "credits") {
-        expect(pricingSource).toContain(`credits: ${product.id.replace("credits-", "")}`)
+        expect(pricingSource).toContain("{pack.credits} 积分")
         expect(product.requiresMembership).toBe(true)
       }
     }
 
-    expect(pricingSource).toContain("积分充值包仅限会员购买")
+    expect(pricingSource).toContain("订阅用户可买")
+    expect(pricingSource).toContain("专业版及以上可买")
     expect(checkoutSource).toContain("年付已按月付 × 12 × 8 折计算")
-    expect(checkoutSource).toContain("积分充值包仅限会员购买")
+    expect(checkoutSource).toContain("10,000 积分包豪华版及以上可买")
   })
 
   test("payment success page points users to credits, writing, and support", () => {

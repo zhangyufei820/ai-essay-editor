@@ -2,6 +2,7 @@ import { generateText } from "ai"
 import { anthropic } from "@ai-sdk/anthropic"
 import { createGoogleGenerativeAI } from "@ai-sdk/google"
 import { createOpenAI, openai } from "@ai-sdk/openai"
+import { getMaxOutputTokensForModel, shouldAuditHighConsumptionTextCall } from "@/lib/pricing"
 
 export const maxDuration = 60
 
@@ -79,6 +80,8 @@ const ESSAY_REVIEW_PROMPT = `你是一位专业的作文批改师，融合了汪
 
 请用温暖、专业、富有启发性的语言进行批改。对于论述文，要特别注重培养学生的理性思维和批判能力。`
 
+const ESSAY_REVIEW_MAX_OUTPUT_TOKENS = getMaxOutputTokensForModel("standard") || 12000
+
 export async function POST(req: Request) {
   // IP 限流：30次/分钟
   const { getClientIP, checkIpRateLimit, createRateLimitResponse } = await import('@/lib/rate-limit')
@@ -113,9 +116,19 @@ ${essay}
     model: model as any,
     system: ESSAY_REVIEW_PROMPT,
     prompt: userPrompt,
-    maxTokens: 4000,
+    maxTokens: ESSAY_REVIEW_MAX_OUTPUT_TOKENS,
     temperature: 0.7,
   })
+
+  const completionTokens = Number((usage as any)?.completionTokens ?? (usage as any)?.outputTokens ?? 0) || 0
+  if (shouldAuditHighConsumptionTextCall("standard", completionTokens, 0)) {
+    console.warn("[Billing Audit] 高消耗作文批改调用:", {
+      provider,
+      modelName,
+      completionTokens,
+      maxOutputTokens: ESSAY_REVIEW_MAX_OUTPUT_TOKENS,
+    })
+  }
 
   return Response.json({
     review: text,

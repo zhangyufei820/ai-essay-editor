@@ -30,7 +30,7 @@ export default async function CreditsPage() {
     .eq("status", "completed")
 
   const referralCount = referrals?.length || 0
-  const referralEarnings = referralCount * 500
+  const referralEarnings = referralCount * 1000
 
   const shareUrl = `${process.env.NEXT_PUBLIC_SITE_URL || "https://your-domain.com"}/auth/sign-up?ref=${referralCode}`
 
@@ -47,7 +47,7 @@ export default async function CreditsPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{credits?.credits || 0}</div>
-              <p className="text-xs text-muted-foreground mt-1">可用于AI对话和作文批改</p>
+              <p className="text-xs text-muted-foreground mt-1">可用于文本生成、图片和音乐创作</p>
             </CardContent>
           </Card>
 
@@ -80,7 +80,7 @@ export default async function CreditsPage() {
               <ShenxiangInterfaceIcon name="invite" size={24} />
               邀请好友，赚取积分
             </CardTitle>
-            <CardDescription>每邀请一位好友注册，您将获得500积分，好友也将获得200积分奖励</CardDescription>
+            <CardDescription>每邀请一位好友注册，双方各获得 1000 积分；邀请者累计奖励上限为 50000 积分。</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
@@ -120,16 +120,28 @@ export default async function CreditsPage() {
           <CardContent>
             <div className="space-y-3 text-sm">
               <div className="flex justify-between">
-                <span>AI对话（每条消息）</span>
-                <span className="font-medium">10积分</span>
+                <span>输入内容</span>
+                <span className="font-medium">5积分 / 1K</span>
               </div>
               <div className="flex justify-between">
-                <span>作文批改（每次）</span>
-                <span className="font-medium">50积分</span>
+                <span>输出内容</span>
+                <span className="font-medium">20积分 / 1K</span>
               </div>
               <div className="flex justify-between">
-                <span>文档处理（每个文件）</span>
-                <span className="font-medium">20积分</span>
+                <span>无实际输出内容</span>
+                <span className="font-medium">不扣文本生成费用</span>
+              </div>
+              <div className="rounded-md bg-muted/50 p-3 leading-relaxed">
+                <p className="font-medium">系统会在模型返回完成后，根据实际 token 用量扣除积分。</p>
+                <p className="text-muted-foreground mt-1">
+                  长文写作、作文批改、论文报告等功能通常会消耗更多积分。短作文批改约 100~300 积分，普通作文约 300~600 积分，长作文或详细批改可能消耗更多。
+                </p>
+              </div>
+              <div className="rounded-md bg-muted/50 p-3 leading-relaxed">
+                <p className="font-medium">图片和音乐</p>
+                <p className="text-muted-foreground mt-1">
+                  GPT Image 2 订阅用户可用，白名单用户可测试，按固定积分扣费；GPT Image 1.5 / 1 / Mini 按对应固定积分扣费；Suno 约 100 积分起，实际可能包含 token 补扣。
+                </p>
               </div>
               <div className="flex justify-between">
                 <span>注册赠送</span>
@@ -137,11 +149,11 @@ export default async function CreditsPage() {
               </div>
               <div className="flex justify-between">
                 <span>推荐好友</span>
-                <span className="font-medium text-green-600">+500积分</span>
+                <span className="font-medium text-green-600">+1000积分</span>
               </div>
               <div className="flex justify-between">
                 <span>被推荐注册</span>
-                <span className="font-medium text-green-600">+200积分</span>
+                <span className="font-medium text-green-600">+1000积分</span>
               </div>
             </div>
 

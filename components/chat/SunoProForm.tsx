@@ -742,7 +742,7 @@ export function SunoProForm({ onSubmit, isLoading = false, disabled = false }: S
         {/* 底部装饰 */}
         <div className="mt-6 flex items-center justify-center gap-2 text-xs text-gray-400 dark:text-gray-500">
           <div className="w-8 h-[1px] bg-gradient-to-r from-transparent to-gray-300 dark:to-gray-700" />
-          <span>Powered by Suno AI</span>
+          <span>Powered by Suno AI · 约 100 积分起</span>
           <div className="w-8 h-[1px] bg-gradient-to-l from-transparent to-gray-300 dark:to-gray-700" />
         </div>
       </div>

@@ -110,8 +110,8 @@ export default function RefundPolicyPage() {
           <div className="bg-white rounded-2xl p-8" style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
             <ul className="space-y-3" style={{ color: slateColors[600] }}>
               <li>• 已使用的积分不可退款</li>
-              <li>• 积分可用于作文批改、润色、创意建议等服务</li>
-              <li>• 积分有效期为自购买之日起一年</li>
+              <li>• 积分可用于文本 AI、作文批改、图片生成、音乐创作等服务</li>
+              <li>• 积分充值包购买的积分永久有效，活动赠送积分按活动规则执行</li>
               <li>• 积分不可转让或兑换现金</li>
             </ul>
           </div>
