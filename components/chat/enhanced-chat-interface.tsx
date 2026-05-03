@@ -357,48 +357,26 @@ function ProcessingStatusCard({
   const modelName = context?.model ? (MODEL_DISPLAY_NAMES[context.model] || context.model) : "AI"
   const isOpenClaw = context?.model === "open-claw"
   const hasFiles = Boolean(context?.fileCount)
-  const stageText = isOpenClaw
+  const statusText = isOpenClaw
     ? "OpenClaw 正在执行工具、读取文件或生成结果"
     : hasFiles
       ? "AI 正在读取附件并生成回答"
       : "AI 正在生成回答"
-  const detailText = showLongWaitHint
-    ? "复杂任务通常需要 1-3 分钟，请保持页面打开。"
-    : hasFiles
-      ? `已接收 ${context?.fileCount ?? 0} 个附件，正在解析内容。`
-      : "请求已送达，正在等待首段内容返回。"
+  const stageText = context?.stage || (showLongWaitHint ? "处理时间稍长，请保持页面打开" : "")
 
   return (
-    <div className="w-full max-w-[720px] rounded-xl border border-emerald-100 bg-emerald-50/55 p-3 shadow-sm sm:p-4">
-      <div className={cn("flex items-start", isOpenClaw ? "gap-0" : "gap-3")}>
-        {!isOpenClaw && (
-          <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-emerald-700 shadow-sm">
-            <Loader2 className="h-4 w-4 animate-spin" />
-          </div>
-        )}
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="text-sm font-semibold text-slate-800">{stageText}</p>
-            <span className="rounded-full bg-white/80 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
-              {modelName}
-            </span>
-          </div>
-          <p className="mt-1 text-xs leading-5 text-slate-600 sm:text-sm">{detailText}</p>
-          {context?.stage && (
-            <p className="mt-1 text-xs leading-5 text-slate-500">当前阶段：{context.stage}</p>
-          )}
-          {context?.traceId && (
-            <p className="mt-1 truncate text-[11px] leading-4 text-slate-400">追踪 ID：{context.traceId}</p>
-          )}
-          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white">
-            <motion.div
-              className="h-full rounded-full bg-emerald-600"
-              animate={{ x: ["-60%", "120%"] }}
-              transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
-              style={{ width: "48%" }}
-            />
-          </div>
+    <div className="inline-flex max-w-[560px] items-center gap-2 rounded-full bg-slate-50 px-3 py-2 text-slate-500">
+      {!isOpenClaw && <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-slate-400" />}
+      <div className="min-w-0">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <span className="truncate text-xs font-medium text-slate-600">{statusText}</span>
+          <span className="shrink-0 rounded-full bg-white px-1.5 py-0.5 text-[10px] font-medium text-slate-400">
+            {modelName}
+          </span>
         </div>
+        {stageText && (
+          <p className="mt-0.5 max-w-[420px] truncate text-[11px] leading-4 text-slate-400">{stageText}</p>
+        )}
       </div>
     </div>
   )

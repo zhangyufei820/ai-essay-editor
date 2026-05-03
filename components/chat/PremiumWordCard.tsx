@@ -1,6 +1,6 @@
 "use client"
 
-import type React from "react"
+import { useEffect, useMemo, useState, type ReactNode } from "react"
 import { BookOpen, CheckCircle2, Headphones, Lightbulb, RotateCcw, Sparkles, SpellCheck, Volume2, XCircle } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { FrontendWordCard } from "@/lib/word-card-normalizer"
@@ -26,10 +26,10 @@ function Section({
   tone,
   children
 }: {
-  icon: React.ReactNode
+  icon: ReactNode
   title: string
   tone: string
-  children: React.ReactNode
+  children: ReactNode
 }) {
   return (
     <section className={cn("rounded-2xl border p-4 shadow-sm sm:p-5", tone)}>
@@ -44,7 +44,7 @@ function Section({
   )
 }
 
-function Pill({ children, className }: { children: React.ReactNode; className?: string }) {
+function Pill({ children, className }: { children: ReactNode; className?: string }) {
   if (!children) return null
   return (
     <span className={cn("inline-flex items-center rounded-full border bg-white/85 px-2.5 py-1 text-xs font-medium text-slate-700 shadow-sm", className)}>
@@ -77,11 +77,58 @@ export function PremiumWordCard({ data }: PremiumWordCardProps) {
   const badges = data.ui?.badges || {}
   const ipa = hero.ipa || pronunciation.ipa || {}
   const audio = pronunciation.audio || {}
-  const audioUrl = text(audio.audio_url || pronunciation.audio_url)
-  const audioFailed = audio.status === "failed" || !audioUrl
+  const initialAudioUrl = text(audio.audio_url || pronunciation.audio_url)
+  const fallbackTtsText = useMemo(() => text(pronunciation.tts_text || data.word), [pronunciation.tts_text, data.word])
+  const [generatedAudioUrl, setGeneratedAudioUrl] = useState("")
+  const [isGeneratingAudio, setIsGeneratingAudio] = useState(false)
+  const [audioError, setAudioError] = useState("")
+  const audioUrl = initialAudioUrl || generatedAudioUrl
+  const audioFailed = audio.status === "failed" || (!audioUrl && Boolean(audioError))
   const partOfSpeech = list(hero.part_of_speech).map(text).filter(Boolean).join(" / ")
   const examTags = list(hero.exam_tags || hero.frequency?.exam_tags).map(text).filter(Boolean)
   const qualityPassed = Boolean(quality.passed)
+
+  useEffect(() => {
+    if (initialAudioUrl || !fallbackTtsText) return
+
+    const controller = new AbortController()
+    let objectUrl = ""
+
+    async function generateAudio() {
+      setIsGeneratingAudio(true)
+      setAudioError("")
+      try {
+        const response = await fetch("/api/voice/tts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: fallbackTtsText, word: data.word, format: "mp3" }),
+          signal: controller.signal,
+        })
+
+        if (!response.ok) {
+          const payload = await response.json().catch(() => ({}))
+          throw new Error(payload.error || "语音生成失败")
+        }
+
+        const audioBlob = await response.blob()
+        objectUrl = URL.createObjectURL(audioBlob)
+        setGeneratedAudioUrl(objectUrl)
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          setAudioError(error instanceof Error ? error.message : "语音生成失败")
+        }
+      } finally {
+        if (!controller.signal.aborted) setIsGeneratingAudio(false)
+      }
+    }
+
+    generateAudio()
+
+    return () => {
+      controller.abort()
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [initialAudioUrl, fallbackTtsText, data.word])
 
   return (
     <article className="w-full max-w-4xl overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/70">
@@ -123,9 +170,13 @@ export function PremiumWordCard({ data }: PremiumWordCardProps) {
               <audio className="mt-1 w-full" controls src={audioUrl}>
                 <track kind="captions" />
               </audio>
+            ) : isGeneratingAudio ? (
+              <div className="rounded-xl border border-sky-100 bg-white/75 p-3 text-sm text-slate-600">
+                正在生成单词发音...
+              </div>
             ) : (
               <div className="rounded-xl border border-sky-100 bg-white/75 p-3 text-sm text-slate-600">
-                音频暂未生成，单词卡片仍可正常学习。
+                {audioError ? `音频生成失败：${audioError}` : "音频暂未生成，单词卡片仍可正常学习。"}
               </div>
             )}
           </div>
@@ -207,7 +258,12 @@ export function PremiumWordCard({ data }: PremiumWordCardProps) {
           </Pill>
           {text(quality.score) && <Pill>评分 {text(quality.score)}</Pill>}
           {text(badges.quality) && <Pill>{text(badges.quality)}</Pill>}
-          {text(badges.tts) && <Pill><Volume2 className="mr-1 h-3.5 w-3.5" />{text(badges.tts)}</Pill>}
+          {(text(badges.tts) || audioUrl || isGeneratingAudio) && (
+            <Pill>
+              <Volume2 className="mr-1 h-3.5 w-3.5" />
+              {audioUrl ? "音频已生成" : isGeneratingAudio ? "音频生成中" : text(badges.tts)}
+            </Pill>
+          )}
         </div>
         {text(quality.summary_cn) && <p className="mt-2 text-sm leading-6 text-slate-600">{text(quality.summary_cn)}</p>}
       </footer>
