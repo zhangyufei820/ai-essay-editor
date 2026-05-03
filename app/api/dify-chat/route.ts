@@ -17,6 +17,7 @@ import {
   PRICING_VERSION,
   shouldAuditHighConsumptionTextCall,
 } from "@/lib/pricing"
+import { canUseImage2, isSubscribedUser } from "@/lib/permissions"
 import { recordBillingIssue } from "@/lib/credits"
 import {
   chargeCreditsSafely as spendCredits,
@@ -39,7 +40,6 @@ import {
   updateTaskRun,
 } from "@/lib/ai-task-trace"
 import { buildVocabCardWorkflowInputs, cleanVocabAnswer, extractVocabCardAudioUrl, extractVocabCardTtsStatus } from "@/lib/vocab-card-workflow"
-import { canUseImage2 } from "@/lib/permissions"
 
 export const runtime = "nodejs"
 // 🔥 增加超时时间，支持 OpenClaw 大型 PPT 与图片生成网关的长任务重试
@@ -139,6 +139,36 @@ function buildGptImageV11Inputs(inputs: unknown): GptImageV11Inputs {
 }
 
 const WORKFLOW_MODELS = new Set(["banana-2-pro", "vocab-card"])
+const MEMBERSHIP_PRODUCT_IDS = ["basic", "pro", "premium", "enterprise", "campus"]
+
+function hasGptImageModelInput(inputs: unknown): boolean {
+  if (!inputs || typeof inputs !== "object") return false
+  const rawModel = (inputs as Record<string, unknown>).model
+  return typeof rawModel === "string" && GPT_IMAGE_V11_ALLOWED.model.some((model) => model === rawModel)
+}
+
+async function resolveActiveMembershipStatus(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  userId: string,
+): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("orders")
+    .select("product_id")
+    .eq("user_id", userId)
+    .eq("status", "paid")
+    .in("product_id", MEMBERSHIP_PRODUCT_IDS)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (error) {
+    console.warn(`⚠️ [会员权限] 查询会员订单失败 user=${userId}:`, error.message)
+    return null
+  }
+
+  const productId = typeof data?.product_id === "string" ? data.product_id : null
+  return isSubscribedUser(productId) ? productId : null
+}
 
 function sanitizeVocabCardOutputs(outputs: unknown): Record<string, unknown> {
   const record = outputs && typeof outputs === "object" ? outputs as Record<string, unknown> : {}
@@ -589,6 +619,27 @@ export async function GET(request: NextRequest) {
 
   const headerUserId = request.headers.get("X-User-Id")
   const requestId = request.nextUrl.searchParams.get("requestId") || request.headers.get("X-Request-Id")
+  if (!headerUserId || !requestId) {
+    return Response.json({ error: "未授权访问，请先登录" }, { status: 401 })
+  }
+
+  const { data: taskOwner, error: taskOwnerError } = await getSupabaseAdmin()
+    .from("ai_task_runs")
+    .select("id,user_id,upstream_task_id")
+    .eq("id", requestId)
+    .eq("user_id", headerUserId)
+    .maybeSingle()
+
+  if (taskOwnerError) {
+    console.error("[GPT Image Task] 权限校验失败:", taskOwnerError)
+    return Response.json({ error: "图片任务权限校验失败" }, { status: 500 })
+  }
+
+  if (!taskOwner || (taskOwner.upstream_task_id && taskOwner.upstream_task_id !== taskId)) {
+    console.warn(`🚫 [GPT Image Task] 用户无权查询图片任务: user=${headerUserId}, requestId=${requestId}, taskId=${taskId}`)
+    return Response.json({ error: "无权访问该图片任务" }, { status: 403 })
+  }
+
   const gatewayToken = process.env.DIFY_IMAGE_GATEWAY_TOKEN || DEFAULT_DIFY_KEY || ""
   const response = await internalDifyFetch(`${IMAGE_GATEWAY_URL}/api/image/tasks/${encodeURIComponent(taskId)}`, {
     headers: {
@@ -788,6 +839,18 @@ export async function POST(request: NextRequest) {
 
     const requestId = request.headers.get("X-Request-Id") || body.requestId || createRequestId(model === "gpt-image-2" ? "img" : "chat")
     const taskKind = model === "gpt-image-2" ? "image" : model === "open-claw" ? "openclaw" : "dify"
+    if (hasGptImageModelInput(inputs) && model !== "gpt-image-2") {
+      console.warn(`🚫 [媒体权限] 图片模型请求顶层 model 不匹配，拒绝绕过媒体计费: user=${userId}, model=${model || "empty"}`)
+      return new Response(
+        JSON.stringify({
+          error: "图片生成请求参数无效",
+          message: "图片生成必须通过图片工作台提交，不能伪装为普通文本请求。",
+        }),
+        { status: 400, headers: { "Content-Type": "application/json" } },
+      )
+    }
+
+    const imageInputsForBilling = model === "gpt-image-2" ? buildGptImageV11Inputs(inputs) : null
     const taskRun = await createTaskRun({
       userId,
       sessionId: typeof sessionId === "string" ? sessionId : null,
@@ -892,7 +955,6 @@ export async function POST(request: NextRequest) {
     
     const currentCredits = userCredits?.credits || 0
     
-    const imageInputsForBilling = model === "gpt-image-2" ? buildGptImageV11Inputs(inputs) : null
     const billingModelType = imageInputsForBilling?.model as ModelType | undefined
     const estimatedMinCost = imageInputsForBilling
       ? calculateActualCost(billingModelType || "gpt-image-2") * imageInputsForBilling.n
@@ -904,11 +966,12 @@ export async function POST(request: NextRequest) {
         .select("email")
         .eq("user_id", userId)
         .maybeSingle()
+      const membershipStatus = await resolveActiveMembershipStatus(getSupabaseAdmin(), userId)
 
       if (!canUseImage2({
         user_id: userId,
         email: typeof userProfile?.email === "string" ? userProfile.email : null,
-        is_pro: userCredits?.is_pro ?? null,
+        membership_status: membershipStatus,
       })) {
         console.warn(`🚫 [媒体权限] 用户 ${userId} 无权限使用 ${billingModelType || "gpt-image-2"}`)
         return new Response(

@@ -81,7 +81,7 @@ describe('credits helpers', () => {
     })
   })
 
-  it('derives active membership from is_pro when membership_status is missing', () => {
+  it('keeps legacy is_pro membership derivation outside Image 2 permissions', () => {
     expect(resolveMembershipStatus({ is_pro: true })).toBe('pro')
     expect(resolveMembershipStatus({ is_pro: false })).toBeNull()
     expect(resolveMembershipStatus({ membership_status: 'premium' })).toBe('premium')
@@ -98,7 +98,8 @@ describe('credits helpers', () => {
 
     expect(parseAllowlistEnv(' admin@example.com, , test@example.com ')).toEqual(['admin@example.com', 'test@example.com'])
     expect(canUseImage2(null)).toBe(false)
-    expect(canUseImage2({ user_id: 'u1', is_pro: true })).toBe(true)
+    expect(canUseImage2({ user_id: 'u1', is_pro: true })).toBe(false)
+    expect(canUseImage2({ user_id: 'u1', membership_status: 'basic' })).toBe(true)
     expect(canUseImage2({ user_id: 'u2', membership_status: 'campus' })).toBe(true)
     expect(canUseImage2({ user_id: 'test-user' })).toBe(true)
     expect(canUseImage2({ user_id: 'legacy-user' })).toBe(true)
