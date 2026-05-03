@@ -57,9 +57,23 @@ function parseJsonObject(value: string): Record<string, unknown> | null {
   }
 }
 
+function parseJsonValue(value: string): unknown {
+  try {
+    return JSON.parse(value)
+  } catch {
+    return null
+  }
+}
+
 function isInternalVocabJsonAnswer(value: string): boolean {
   const trimmed = value.trim()
   if (trimmed === "true" || trimmed === "false" || trimmed === "null") return true
+  if (
+    (trimmed.startsWith("{") && trimmed.endsWith("}")) ||
+    (trimmed.startsWith("[") && trimmed.endsWith("]"))
+  ) {
+    return parseJsonValue(trimmed) !== null
+  }
   if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) return false
 
   const parsed = parseJsonObject(trimmed)
@@ -77,6 +91,81 @@ export function cleanVocabAnswer(value: unknown): string {
     .trim()
 
   return isInternalVocabJsonAnswer(cleaned) ? "" : cleaned
+}
+
+function readRecord(value: unknown): Record<string, unknown> {
+  if (typeof value === "string") {
+    const parsed = parseJsonObject(value.trim())
+    return parsed || {}
+  }
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {}
+}
+
+function findStringByKeys(value: unknown, keys: string[], depth = 0): string {
+  if (depth > 4 || !value) return ""
+  const record = readRecord(value)
+  if (!Object.keys(record).length) return ""
+
+  for (const key of keys) {
+    const candidate = record[key]
+    if (typeof candidate === "string" && candidate.trim()) return candidate.trim()
+  }
+
+  for (const nested of Object.values(record)) {
+    if (nested && typeof nested === "object") {
+      const found = findStringByKeys(nested, keys, depth + 1)
+      if (found) return found
+    }
+  }
+
+  return ""
+}
+
+export function extractVocabCardAudioUrl(outputs: Record<string, any>): string {
+  const url = findStringByKeys(outputs, ["audio_url", "audioUrl", "audio", "url", "file_url"])
+  return /^https?:\/\//.test(url) || url.startsWith("/") ? url : ""
+}
+
+export function extractVocabCardTtsStatus(outputs: Record<string, any>, audioUrl = extractVocabCardAudioUrl(outputs)): string {
+  return (
+    findStringByKeys(outputs, ["tts_status", "audio_status"]) ||
+    findStringByKeys(outputs.tts_response, ["status"]) ||
+    (audioUrl ? "success" : "")
+  )
+}
+
+export function mergeVocabCardOutputAudio(card: FrontendWordCard | null, outputs: Record<string, any>): FrontendWordCard | null {
+  if (!card) return null
+
+  const audioUrl = extractVocabCardAudioUrl(outputs)
+  const ttsStatus = extractVocabCardTtsStatus(outputs, audioUrl)
+  if (!audioUrl && !ttsStatus) return card
+
+  const sections = card.sections || {}
+  const pronunciation = sections.pronunciation || {}
+  const audio = pronunciation.audio || {}
+
+  return {
+    ...card,
+    sections: {
+      ...sections,
+      pronunciation: {
+        ...pronunciation,
+        audio: {
+          ...audio,
+          audio_url: audioUrl || audio.audio_url || pronunciation.audio_url,
+          status: ttsStatus || audio.status,
+        },
+      },
+    },
+    ui: {
+      ...(card.ui || {}),
+      badges: {
+        ...(card.ui?.badges || {}),
+        tts: card.ui?.badges?.tts || (audioUrl ? "音频已生成" : undefined),
+      },
+    },
+  }
 }
 
 export function buildVocabCardWorkflowInputs({
@@ -145,7 +234,7 @@ export function parseFrontendWordCard(value: unknown): FrontendWordCard | null {
 
 export function resolveVocabCardResult(result: any, previousCurrentWord = ""): VocabCardResult {
   const outputs = getVocabOutputs(result)
-  const frontendCard = parseFrontendWordCard(outputs.frontend_card_json)
+  const frontendCard = mergeVocabCardOutputAudio(parseFrontendWordCard(outputs.frontend_card_json), outputs)
   const answer = cleanVocabAnswer(outputs.answer || outputs.text || outputs.result)
   const nextCurrentWord =
     text(outputs.current_word) ||

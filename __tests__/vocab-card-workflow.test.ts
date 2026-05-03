@@ -114,6 +114,19 @@ describe("vocab-card workflow mapping", () => {
     expect(resolveVocabCardResult({ outputs: { answer: rawCardOutput } }).answer).toBe("")
   })
 
+  it("suppresses quality report JSON instead of rendering it", () => {
+    const qualityReport = JSON.stringify({
+      passed: false,
+      score: "58",
+      issues: [{ field: "spelling.spelling_formula", severity: "high" }],
+      rewrite_required: true,
+      summary_cn: "这张卡片存在高级拼写问题，必须修改后再展示。",
+    })
+
+    expect(cleanVocabAnswer(qualityReport)).toBe("")
+    expect(resolveVocabCardResult({ outputs: { answer: qualityReport } }).answer).toBe("")
+  })
+
   it("parses frontend_card_json and updates current word from the card", () => {
     const result = resolveVocabCardResult({
       outputs: {
@@ -124,6 +137,24 @@ describe("vocab-card workflow mapping", () => {
 
     expect(result.frontendCard?.word).toBe("apple")
     expect(result.currentWord).toBe("apple")
+  })
+
+  it("merges workflow tts_response audio into frontend card", () => {
+    const result = resolveVocabCardResult({
+      outputs: {
+        frontend_card_json: JSON.stringify(frontendCard),
+        tts_response: {
+          status: "success",
+          data: {
+            audio_url: "https://cdn.example.com/apple.mp3",
+          },
+        },
+      },
+    })
+
+    expect(result.frontendCard?.sections?.pronunciation?.audio?.audio_url).toBe("https://cdn.example.com/apple.mp3")
+    expect(result.frontendCard?.sections?.pronunciation?.audio?.status).toBe("success")
+    expect(result.frontendCard?.ui?.badges?.tts).toBe("音频已生成")
   })
 
   it("preserves previous current word when chat answer omits current_word", () => {

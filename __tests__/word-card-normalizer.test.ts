@@ -38,6 +38,21 @@ describe("word-card normalizer", () => {
     expect(normalizeDifyWordCardResponse({ frontend_card_json: frontendCard })?.word).toBe("necessary")
   })
 
+  it("merges top-level tts_response into parsed frontend card", () => {
+    const card = normalizeDifyWordCardResponse({
+      outputs: {
+        frontend_card_json: JSON.stringify(frontendCard),
+        tts_response: {
+          status: "success",
+          audio_url: "https://cdn.example.com/necessary.mp3"
+        }
+      }
+    })
+
+    expect(card?.sections?.pronunciation?.audio?.audio_url).toBe("https://cdn.example.com/necessary.mp3")
+    expect(card?.sections?.pronunciation?.audio?.status).toBe("success")
+  })
+
   it("does not render internal card_json_text as a frontend card", () => {
     const result = {
       outputs: {

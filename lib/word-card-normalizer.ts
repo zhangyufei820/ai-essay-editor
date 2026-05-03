@@ -1,4 +1,4 @@
-import { getVocabOutputs, parseFrontendWordCard } from "@/lib/vocab-card-workflow"
+import { getVocabOutputs, mergeVocabCardOutputAudio, parseFrontendWordCard } from "@/lib/vocab-card-workflow"
 
 export type FrontendWordCard = {
   schema_version: string
@@ -70,9 +70,19 @@ export function convertCardJsonToFrontendCard(cardData: any): FrontendWordCard |
     rawCard.audio?.audio_url,
     pronunciation.audio?.audio_url,
     pronunciation.audio_url,
-    cardData?.audio_url
+    cardData?.audio_url,
+    cardData?.tts_response?.audio_url,
+    cardData?.tts_response?.url,
+    cardData?.tts_response?.data?.audio_url,
+    cardData?.tts_response?.data?.url
   )
-  const audioStatus = firstDefined(rawCard.audio?.status, pronunciation.audio?.status, cardData?.tts_status)
+  const audioStatus = firstDefined(
+    rawCard.audio?.status,
+    pronunciation.audio?.status,
+    cardData?.tts_status,
+    cardData?.tts_response?.status,
+    audioUrl ? "success" : undefined
+  )
 
   return {
     schema_version: "word_card_frontend_v1",
@@ -148,5 +158,8 @@ export function normalizeDifyWordCardResponse(result: any): FrontendWordCard | n
   const source = parsedResult || result
   const outputs = getVocabOutputs(source)
 
-  return parseFrontendWordCard(outputs?.frontend_card_json || source?.frontend_card_json)
+  return mergeVocabCardOutputAudio(
+    parseFrontendWordCard(outputs?.frontend_card_json || source?.frontend_card_json),
+    outputs
+  )
 }
