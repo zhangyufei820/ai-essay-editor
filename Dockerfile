@@ -15,16 +15,6 @@ ARG NEXT_PUBLIC_CDN_URL
 ARG NEXT_BUILD_ID
 ARG DEPLOYMENT_VERSION
 
-# 验证必填构建参数
-RUN if [ -z "$NEXT_PUBLIC_SUPABASE_URL" ]; then \
-      echo "ERROR: NEXT_PUBLIC_SUPABASE_URL is required for build"; \
-      exit 1; \
-    fi && \
-    if [ -z "$NEXT_PUBLIC_SUPABASE_ANON_KEY" ]; then \
-      echo "ERROR: NEXT_PUBLIC_SUPABASE_ANON_KEY is required for build"; \
-      exit 1; \
-    fi
-
 # 设置环境变量（构建时需要）
 ENV NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
 ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
@@ -32,6 +22,9 @@ ENV NEXT_PUBLIC_AUTHING_APP_ID=${NEXT_PUBLIC_AUTHING_APP_ID:-}
 ENV NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-https://www.shenxiang.school}
 ENV NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL:-https://api.shenxiang.school}
 ENV NEXT_PUBLIC_CDN_URL=${NEXT_PUBLIC_CDN_URL:-https://cdn.shenxiang.school}
+
+# 验证必填构建参数。用 process.env 读取，避免 Docker build 日志展开具体 key 值。
+RUN node -e "for (const key of ['NEXT_PUBLIC_SUPABASE_URL','NEXT_PUBLIC_SUPABASE_ANON_KEY']) { if (!process.env[key]) { console.error('ERROR: ' + key + ' is required for build'); process.exit(1) } }"
 
 # 安装依赖（包括 devDependencies，用于构建阶段）
 COPY package*.json ./
