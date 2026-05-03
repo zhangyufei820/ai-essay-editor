@@ -955,6 +955,11 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     sessionModelRef.current = model
   }
 
+  const clearDifyConversationState = () => {
+    sessionIdRef.current = null
+    sessionModelRef.current = null
+  }
+
   const getConversationIdForRequest = (model: ModelType) => {
     const conversationId = sessionIdRef.current
     if (!conversationId) return null
@@ -1273,6 +1278,8 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       console.log(`🔄 [历史会话模型同步] isManual=${isManual}, initialModel=${initialModel}, ai_model=${sessionData?.ai_model} → selectedModel=${targetModel}`)
       setSelectedModel(targetModel as ModelType)
       console.log(`✅ [历史会话模型同步] setSelectedModel 已调用: ${targetModel}`)
+      setCurrentSessionId(sid)
+      clearDifyConversationState()
 
       if (data && data.length > 0) {
         // 🔥 加载消息时包含 metadata（用于恢复音乐数据）
@@ -1286,8 +1293,6 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         setMessages(historyMessages)
         const restoredCurrentWord = [...historyMessages].reverse().find((message) => message.wordCard?.word)?.wordCard?.word
         setCurrentWord(restoredCurrentWord || "")
-        setCurrentSessionId(sid)
-        adoptConversationState(sid, (sessionData?.ai_model || initialModel || "general-chat") as ModelType)
       }
     } catch (e) {
       console.error("加载历史会话失败:", e)
@@ -1959,15 +1964,16 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     if (!sid && !urlSessionId) {
         sid = createLocalSessionId();
         setCurrentSessionId(sid);
-        adoptConversationState(sid, selectedModel);
+        clearDifyConversationState();
     } else if (urlSessionId && !isModelSwitch) {
         sid = urlSessionId;
-        adoptConversationState(urlSessionId, selectedModel);
+        setCurrentSessionId(urlSessionId);
+        clearDifyConversationState();
     } else {
         // 模型切换或无 session 的情况，生成新的
         sid = createLocalSessionId();
         setCurrentSessionId(sid);
-        adoptConversationState(sid, selectedModel);
+        clearDifyConversationState();
     }
     if (selectedModel === "vocab-card" && sid && !hadUrlSessionId && typeof window !== "undefined") {
       window.history.replaceState(null, "", buildChatSessionRoute(sid, selectedModel))
@@ -3088,14 +3094,15 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                         if (!sid && !urlSessionId) {
                           sid = createLocalSessionId()
                           setCurrentSessionId(sid)
-                          adoptConversationState(sid, selectedModel)
+                          clearDifyConversationState()
                         } else if (urlSessionId && !isModelSwitch) {
                           sid = urlSessionId
-                          adoptConversationState(urlSessionId, selectedModel)
+                          setCurrentSessionId(urlSessionId)
+                          clearDifyConversationState()
                         } else {
                           sid = createLocalSessionId()
                           setCurrentSessionId(sid)
-                          adoptConversationState(sid, selectedModel)
+                          clearDifyConversationState()
                         }
 
                         // 🔥 用户消息：显示歌词和音乐提示词（如果有）
