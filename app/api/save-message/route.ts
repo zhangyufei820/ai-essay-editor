@@ -79,13 +79,6 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 更新会话的updated_at
-    await supabase
-      .from("chat_sessions")
-      .update({ updated_at: new Date().toISOString() })
-      .eq("id", session_id)
-      .eq("user_id", user.id)
-
     return NextResponse.json({ message })
   } catch (error) {
     console.error("[v0] Save message error:", error)

@@ -47,7 +47,6 @@ export async function POST(request: NextRequest) {
             title: title || "新对话",
             preview: preview || null,
             ai_model,
-            updated_at: new Date().toISOString(),
           })
           .eq("id", requestedId)
           .eq("user_id", user.id)
@@ -105,7 +104,7 @@ export async function GET(request: NextRequest) {
     if (sessionId) {
       const { data: session, error: sessionError } = await supabase
         .from("chat_sessions")
-        .select("id,title,preview,ai_model,user_id,created_at,updated_at")
+        .select("id,title,preview,ai_model,user_id,created_at")
         .eq("id", sessionId)
         .maybeSingle()
 
@@ -128,9 +127,9 @@ export async function GET(request: NextRequest) {
 
     const { data: sessions, error } = await supabase
       .from("chat_sessions")
-      .select("id,title,preview,ai_model,created_at,updated_at")
+      .select("id,title,preview,ai_model,created_at")
       .eq("user_id", user.id)
-      .order("updated_at", { ascending: false })
+      .order("created_at", { ascending: false })
       .limit(limit)
 
     if (error) throw error
