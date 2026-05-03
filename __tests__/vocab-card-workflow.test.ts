@@ -98,6 +98,22 @@ describe("vocab-card workflow mapping", () => {
     expect(resolveVocabCardResult({ outputs: { answer: rawClassifierOutput } }).answer).toBe("")
   })
 
+  it("suppresses workflow booleans and raw internal card JSON", () => {
+    const rawCardOutput = JSON.stringify({
+      card: {
+        word: "apple",
+        meaning: { primary_cn: "苹果" },
+      },
+      quality_control: { final_passed: true },
+      card_design: { theme: "colorful" },
+    })
+
+    expect(cleanVocabAnswer(true)).toBe("")
+    expect(cleanVocabAnswer("true")).toBe("")
+    expect(cleanVocabAnswer(rawCardOutput)).toBe("")
+    expect(resolveVocabCardResult({ outputs: { answer: rawCardOutput } }).answer).toBe("")
+  })
+
   it("parses frontend_card_json and updates current word from the card", () => {
     const result = resolveVocabCardResult({
       outputs: {

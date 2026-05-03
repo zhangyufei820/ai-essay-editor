@@ -2228,7 +2228,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                     }
 
                     if (isWordCardRequest && hasVocabRenderablePayload(json)) {
-                      applyVocabResult(json)
+                      if (applyVocabResult(json)) continue
                     }
 
                     // 🔥 处理 Chat API 的 answer 字段

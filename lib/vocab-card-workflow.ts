@@ -26,6 +26,11 @@ const INTERNAL_VOCAB_JSON_KEYS = [
   "clarify_question",
   "student_need_cn",
   "teacher_tone",
+  "card",
+  "quality_control",
+  "card_design",
+  "root_confidence",
+  "related_words",
 ]
 
 function text(value: unknown): string {
@@ -54,6 +59,7 @@ function parseJsonObject(value: string): Record<string, unknown> | null {
 
 function isInternalVocabJsonAnswer(value: string): boolean {
   const trimmed = value.trim()
+  if (trimmed === "true" || trimmed === "false" || trimmed === "null") return true
   if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) return false
 
   const parsed = parseJsonObject(trimmed)
@@ -64,6 +70,7 @@ function isInternalVocabJsonAnswer(value: string): boolean {
 
 export function cleanVocabAnswer(value: unknown): string {
   if (!value) return ""
+  if (typeof value !== "string" && typeof value !== "number") return ""
   const cleaned = String(value)
     .replace(/<think>[\s\S]*?<\/think>/gi, "")
     .replace(/<thinking>[\s\S]*?<\/thinking>/gi, "")
