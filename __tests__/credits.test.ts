@@ -114,6 +114,16 @@ describe('credits helpers', () => {
     else process.env.GPT_IMAGE_2_ALLOWLIST = oldLegacy
   })
 
+  it('lets Image 2 server permissions fall back to persisted subscription flags', () => {
+    const routeSource = readFileSync(path.join(process.cwd(), 'app/api/dify-chat/route.ts'), 'utf8')
+
+    expect(routeSource).toContain('.from("orders")')
+    expect(routeSource).toContain('.in("product_id", MEMBERSHIP_PRODUCT_IDS)')
+    expect(routeSource).toContain('.from("user_credits")')
+    expect(routeSource).toContain('.select("is_pro")')
+    expect(routeSource).toContain('resolveMembershipStatus({ is_pro: creditData?.is_pro })')
+  })
+
   it('keeps email OTP signup at one 1000-credit initialization without marking subscription', () => {
     const routeSource = readFileSync(
       path.join(process.cwd(), 'app/api/auth/verify-email-otp/route.ts'),

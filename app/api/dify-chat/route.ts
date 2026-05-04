@@ -17,7 +17,7 @@ import {
   PRICING_VERSION,
   shouldAuditHighConsumptionTextCall,
 } from "@/lib/pricing"
-import { canUseImage2, isSubscribedUser } from "@/lib/permissions"
+import { canUseImage2, isSubscribedUser, resolveMembershipStatus } from "@/lib/permissions"
 import { recordBillingIssue } from "@/lib/credits"
 import {
   chargeCreditsSafely as spendCredits,
@@ -169,7 +169,22 @@ async function resolveActiveMembershipStatus(
   }
 
   const productId = typeof data?.product_id === "string" ? data.product_id : null
-  return isSubscribedUser(productId) ? productId : null
+  if (isSubscribedUser(productId)) {
+    return productId
+  }
+
+  const { data: creditData, error: creditError } = await supabase
+    .from("user_credits")
+    .select("is_pro")
+    .eq("user_id", userId)
+    .maybeSingle()
+
+  if (creditError) {
+    console.warn("[会员权限] 查询会员标记失败:", creditError.message)
+    return null
+  }
+
+  return resolveMembershipStatus({ is_pro: creditData?.is_pro })
 }
 
 function sanitizeVocabCardOutputs(outputs: unknown): Record<string, unknown> {
