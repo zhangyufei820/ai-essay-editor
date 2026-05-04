@@ -28,6 +28,7 @@
 - `app/page.tsx`：首页快捷入口展示层结构与 skeleton 可访问性；链接路径保持不变。
 - `components/app-chrome.tsx`：主内容背景 class。
 - `components/header.tsx`：导航样式与 aria；原用户/积分读取逻辑、Supabase 调用、菜单状态保持不变。
+- `components/home/HeroSection.tsx`：Hero 展示层布局、卡片视觉、图标与背景；原链接目标、动画状态与演示流程保持不变。
 - `components/home/CTASection.tsx`：CTA 样式、focus 与容器。
 - `components/home/CapabilitiesSection.tsx`：卡片与标题视觉。
 - `components/home/ProcessSection.tsx`：流程区视觉。
@@ -49,6 +50,7 @@
 
 - `app/page.tsx`：把四个快捷入口重复 JSX 收敛为 `quickEntries.map`。该数组保留了原 href、标题、描述、图标与渲染结果语义，未改变导航目标或用户流程。
 - `components/header.tsx`：文件内包含 auth/credits 查询逻辑，但本次只修改 className、aria-label/aria-expanded 和布局容器；未改 Supabase、状态、事件或跳转逻辑。
+- `components/home/HeroSection.tsx`：文件内包含演示动画的本地 UI 状态和 `router` 引用，本次未修改业务跳转目标或数据请求；新增 `Calculator` 仅替换 emoji 展示。
 
 ## 明确保留的业务边界
 

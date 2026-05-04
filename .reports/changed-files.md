@@ -8,6 +8,7 @@
 - `components/header.tsx`
 - `components/home/CTASection.tsx`
 - `components/home/CapabilitiesSection.tsx`
+- `components/home/HeroSection.tsx`
 - `components/home/ProcessSection.tsx`
 - `components/ui/EmptyState.tsx`
 - `components/ui/ErrorState.tsx`
@@ -41,5 +42,6 @@
 - 优化 Header 的 sticky 质感、桌面导航胶囊组、移动菜单、icon button aria。
 - 优化 AppChrome 背景 surface。
 - 优化首页快捷入口为数据驱动的展示层结构，增强响应式、focus 和 hover。
+- 第二轮增强首页 Hero：桌面左文案右演示、移动端单列、降低重阴影、替换首屏 emoji 为 lucide 图标。
 - 收敛首页 Capabilities/Process/CTA 的标题、阴影、section 容器和按钮 focus。
 - 优化 Empty/Error/Loading 状态组件的视觉层级、主色使用和可访问性。

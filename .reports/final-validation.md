@@ -11,6 +11,14 @@
 - `git diff --check`：通过，无 whitespace/error marker 问题。
 - `npm run deploy:check`：失败，缺失 `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY`，部署门禁阻断。
 
+## 第二轮首屏增强验证
+
+- 修改范围：`components/home/HeroSection.tsx` 与验收/验证报告。
+- `npm test -- --runInBand`：通过。30 个 test suites、162 个 tests。
+- `npm run build`：通过。
+- 逻辑边界：未改 API、auth、hooks、server actions、数据库、表单提交或 validation。
+- 部署状态：仍未部署，原因同上。
+
 ## Baseline 对比
 
 - lint：baseline 已失败，本次未新增 lint 失败类型。

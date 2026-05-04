@@ -13,7 +13,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useState, useEffect, useCallback } from "react"
 import {
-  ArrowRight, Sparkles, MessageSquare, ChevronDown, Send, Paperclip, FileText, X
+  ArrowRight, Sparkles, MessageSquare, ChevronDown, Send, Paperclip, FileText, X, Calculator
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { brandColors, slateColors, creamColors } from "@/lib/design-tokens"
@@ -227,15 +227,13 @@ function ChatDemo() {
       initial={{ opacity: 0, y: 40, rotate: -1 }}
       animate={{ opacity: 1, y: 0, rotate: 0 }}
       transition={{ duration: 0.8, delay: 0.5, ease: [0.32, 0.72, 0, 1] }}
-      className="rounded-3xl overflow-hidden max-w-2xl mx-auto relative"
+      className="relative mx-auto w-full max-w-xl overflow-hidden rounded-[28px] border border-white/80"
       style={{
         backgroundColor: 'white',
-        transform: "rotate(-1deg)",
         boxShadow: `
           0 2px 4px rgba(0, 0, 0, 0.02),
-          0 8px 16px rgba(0, 0, 0, 0.04),
-          0 20px 40px rgba(0, 0, 0, 0.06),
-          0 40px 80px rgba(34, 197, 94, 0.08),
+          0 16px 40px rgba(20, 83, 45, 0.10),
+          0 40px 90px rgba(34, 197, 94, 0.14),
           inset 0 1px 0 rgba(255,255,255,0.8)
         `
       }}
@@ -465,8 +463,10 @@ export function HeroSection() {
   const router = useRouter()
   return (
     <section
-      className="relative min-h-screen flex flex-col items-center justify-center overflow-hidden py-20"
-      style={{ backgroundColor: creamColors[100] }}
+      className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden px-4 py-16 sm:px-6 lg:px-8"
+      style={{
+        background: `linear-gradient(135deg, ${creamColors[50]} 0%, #ffffff 45%, ${brandColors[50]} 100%)`
+      }}
     >
       {/* 背景装饰 - 渐变光晕 */}
       <motion.div
@@ -494,10 +494,9 @@ export function HeroSection() {
         />
       </motion.div>
 
-      {/* 主内容 - 垂直布局 */}
-      <div className="relative z-10 max-w-4xl mx-auto px-4 md:px-6 lg:px-8">
-        {/* 上半部分：文字内容 */}
-        <div className="text-center mb-16">
+      {/* 主内容 */}
+      <div className="relative z-10 mx-auto grid w-full max-w-7xl items-center gap-10 lg:grid-cols-[1.02fr_0.98fr] lg:gap-14">
+        <div className="text-center lg:text-left">
           {/* 标签 */}
           <motion.div
             initial={{ opacity: 0, y: -30 }}
@@ -506,10 +505,11 @@ export function HeroSection() {
             className="mb-6"
           >
             <span
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium"
+              className="inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold shadow-sm"
               style={{
-                backgroundColor: brandColors[50],
-                color: brandColors[700]
+                backgroundColor: "rgba(255,255,255,0.82)",
+                borderColor: brandColors[200],
+                color: brandColors[800]
               }}
             >
               <Sparkles className="h-4 w-4" style={{ color: brandColors[600] }} />
@@ -517,12 +517,11 @@ export function HeroSection() {
             </span>
           </motion.div>
 
-          {/* 主标题 - 每个字从四面八方汇聚，超大字体突出显示，强烈立体感 */}
           <h1
-            className="text-5xl md:text-6xl lg:text-8xl font-black tracking-tight mb-8"
+            className="mb-7 text-5xl font-black leading-[1.05] tracking-normal md:text-6xl lg:text-7xl"
             style={{
               color: brandColors[900],
-              textShadow: '0 6px 12px rgba(0,0,0,0.15), 0 3px 6px rgba(0,0,0,0.1), 0 1px 3px rgba(0,0,0,0.08)'
+              textShadow: '0 1px 0 rgba(255,255,255,0.9)'
             }}
           >
             <AnimatedText text="让 AI 成为你的" delay={0.2} />
@@ -537,7 +536,7 @@ export function HeroSection() {
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 1.2, ease: [0.32, 0.72, 0, 1] }}
-            className="text-lg md:text-xl max-w-2xl mx-auto mb-8"
+            className="mx-auto mb-8 max-w-2xl text-lg leading-8 md:text-xl lg:mx-0"
             style={{ color: slateColors[600] }}
           >
             上传作文，AI 逐段批改、指出问题、给出提分建议，
@@ -547,12 +546,11 @@ export function HeroSection() {
 
           
 
-          {/* CTA 按钮组 - 🎨 增强渐变和发光效果 */}
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 1.4, ease: [0.32, 0.72, 0, 1] }}
-            className="flex flex-col sm:flex-row items-center justify-center gap-4"
+            className="flex flex-col items-center justify-center gap-4 sm:flex-row lg:justify-start"
           >
             <Link href="/chat" prefetch={false}>
               <motion.button
@@ -620,16 +618,18 @@ export function HeroSection() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 1.6, ease: [0.32, 0.72, 0, 1] }}
-            className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4"
+            className="mt-8 grid gap-3 sm:grid-cols-2 lg:max-w-xl"
           >
             <Link href="/chat?agent=quanquan-math" prefetch={false}>
               <motion.div
-                className="flex items-center gap-3 px-6 py-3 rounded-2xl bg-white border border-slate-200 shadow-sm cursor-pointer"
+                className="flex cursor-pointer items-center gap-3 rounded-2xl border border-primary/15 bg-white/85 px-5 py-4 text-left shadow-sm backdrop-blur transition-colors hover:border-primary/30"
                 whileHover={{ scale: 1.05, boxShadow: "0 8px 24px rgba(0,0,0,0.12)" }}
                 whileTap={{ scale: 0.98 }}
                 transition={{ duration: 0.2 }}
               >
-                <span className="text-2xl">&#x1F4D0;</span>
+                <span className="flex size-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <Calculator className="size-5" />
+                </span>
                 <div className="text-left">
                   <div className="text-sm font-semibold text-slate-800">全学段数学</div>
                   <div className="text-xs text-slate-500">数学问题解答</div>
@@ -638,12 +638,14 @@ export function HeroSection() {
             </Link>
             <Link href="/chat/standard" prefetch={false}>
               <motion.div
-                className="flex items-center gap-3 px-6 py-3 rounded-2xl bg-white border border-slate-200 shadow-sm cursor-pointer"
+                className="flex cursor-pointer items-center gap-3 rounded-2xl border border-primary/15 bg-white/85 px-5 py-4 text-left shadow-sm backdrop-blur transition-colors hover:border-primary/30"
                 whileHover={{ scale: 1.05, boxShadow: "0 8px 24px rgba(0,0,0,0.12)" }}
                 whileTap={{ scale: 0.98 }}
                 transition={{ duration: 0.2 }}
               >
-                <span className="text-2xl">&#x1F4A1;</span>
+                <span className="flex size-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <FileText className="size-5" />
+                </span>
                 <div className="text-left">
                   <div className="text-sm font-semibold text-slate-800">作文批改</div>
                   <div className="text-xs text-slate-500">逐段点评提分</div>
@@ -653,8 +655,10 @@ export function HeroSection() {
           </motion.div>
         </div>
 
-        {/* 下半部分：对话框演示（循环播放） */}
-        <ChatDemo />
+        <div className="relative">
+          <div className="absolute -inset-6 rounded-[36px] bg-primary/10 blur-3xl" />
+          <ChatDemo />
+        </div>
       </div>
     </section>
   )
