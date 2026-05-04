@@ -463,7 +463,7 @@ export function HeroSection() {
   const router = useRouter()
   return (
     <section
-      className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden px-4 py-16 sm:px-6 lg:px-8"
+      className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden px-4 py-12 sm:px-6 lg:px-8 xl:py-16"
       style={{
         background: `linear-gradient(135deg, ${creamColors[50]} 0%, #ffffff 45%, ${brandColors[50]} 100%)`
       }}
@@ -495,8 +495,8 @@ export function HeroSection() {
       </motion.div>
 
       {/* 主内容 */}
-      <div className="relative z-10 mx-auto grid w-full max-w-7xl items-center gap-10 lg:grid-cols-[1.02fr_0.98fr] lg:gap-14">
-        <div className="text-center lg:text-left">
+      <div className="relative z-10 mx-auto grid w-full max-w-6xl items-center gap-10 xl:grid-cols-[minmax(0,0.96fr)_minmax(360px,0.72fr)] xl:gap-10 2xl:max-w-7xl 2xl:grid-cols-[minmax(0,1fr)_minmax(440px,0.8fr)] 2xl:gap-14">
+        <div className="mx-auto w-full max-w-3xl text-center xl:mx-0 xl:text-left">
           {/* 标签 */}
           <motion.div
             initial={{ opacity: 0, y: -30 }}
@@ -518,7 +518,7 @@ export function HeroSection() {
           </motion.div>
 
           <h1
-            className="mb-7 text-5xl font-black leading-[1.05] tracking-normal md:text-6xl lg:text-7xl"
+            className="mb-7 text-4xl font-black leading-[1.08] tracking-normal sm:text-5xl lg:text-6xl 2xl:text-7xl"
             style={{
               color: brandColors[900],
               textShadow: '0 1px 0 rgba(255,255,255,0.9)'
@@ -533,7 +533,7 @@ export function HeroSection() {
 
           {/* 副标题 */}
           <p
-            className="mx-auto mb-8 max-w-2xl text-base leading-7 md:text-lg md:leading-8 lg:mx-0 lg:text-xl"
+            className="mx-auto mb-8 max-w-2xl text-base leading-7 md:text-lg md:leading-8 xl:mx-0 xl:text-xl"
             style={{ color: slateColors[600] }}
           >
             上传作文，AI 逐段批改、指出问题、给出提分建议，
@@ -543,7 +543,7 @@ export function HeroSection() {
 
           
 
-          <div className="flex flex-col items-center justify-center gap-4 sm:flex-row lg:justify-start">
+          <div className="flex flex-col items-center justify-center gap-4 sm:flex-row xl:justify-start">
             <Link href="/chat" prefetch={false}>
               <motion.button
                 className="group relative h-14 px-8 text-base font-bold rounded-2xl text-white overflow-hidden"
@@ -606,7 +606,7 @@ export function HeroSection() {
           </div>
 
           {/* 快捷入口 */}
-          <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:max-w-xl">
+          <div className="mx-auto mt-8 grid max-w-xl gap-3 sm:grid-cols-2 xl:mx-0">
             <Link href="/chat?agent=quanquan-math" prefetch={false}>
               <motion.div
                 className="flex cursor-pointer items-center gap-3 rounded-2xl border border-primary/15 bg-white/85 px-5 py-4 text-left shadow-sm backdrop-blur transition-colors hover:border-primary/30"
@@ -642,8 +642,8 @@ export function HeroSection() {
           </div>
         </div>
 
-        <div className="relative">
-          <div className="absolute -inset-6 rounded-[36px] bg-primary/10 blur-3xl" />
+        <div className="relative hidden min-w-0 xl:block">
+          <div className="absolute -inset-4 rounded-[36px] bg-primary/10 blur-3xl 2xl:-inset-6" />
           <ChatDemo />
         </div>
       </div>
