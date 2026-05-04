@@ -16,10 +16,12 @@
 ## 部署前记录
 
 - 当前本地分支：`ui-layout-refactor-keep-logic`
-- 部署前 commit：`08b5e6f96e5beb0e72cf330fa0a12adfd6a0ad80`
+- 部署前基线 commit：`08b5e6f96e5beb0e72cf330fa0a12adfd6a0ad80`
+- 当前待部署 UI 重构 commit：`b2de2ceb4019fec2b18677851d24446f4adaeda4`
 - 当前工作区还有非本次改动：`.claude/scheduled_tasks.json`、`.claude/scheduled_tasks.lock`
 - 构建产物：`.next/`
 - 本地 build：通过。
+- 最新部署门禁检查：失败，`.env.production` 缺失 `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY`。
 
 ## 健康检查
 
@@ -37,7 +39,8 @@
 
 ```bash
 git checkout main
-git revert <本次UI重构commit>
+git revert b2de2ce
+git revert 02676af
 ```
 
 若使用 Git 部署到服务器：
