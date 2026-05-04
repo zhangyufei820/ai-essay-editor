@@ -9,7 +9,6 @@
 import { AlertCircle, RefreshCw, Home, ArrowLeft, WifiOff, ServerCrash, Lock } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { brandColors } from "@/lib/design-tokens"
 
 // ============================================
 // 类型定义
@@ -98,24 +97,24 @@ export function ErrorState({
 
   return (
     <div className={cn(
-      "flex flex-col items-center justify-center py-16 px-4 text-center",
+      "flex flex-col items-center justify-center rounded-2xl border border-border/70 bg-card/85 py-16 px-4 text-center shadow-sm",
       className
     )}>
       {/* 图标 */}
       <div className={cn(
-        "w-16 h-16 rounded-full flex items-center justify-center mb-6",
+        "w-16 h-16 rounded-2xl flex items-center justify-center mb-6 shadow-sm",
         config.iconBg
       )}>
         <Icon className={cn("w-8 h-8", config.iconColor)} />
       </div>
 
       {/* 标题 */}
-      <h2 className="text-xl font-semibold text-slate-800 mb-2">
+      <h2 className="text-xl font-semibold text-foreground mb-2">
         {title || config.title}
       </h2>
 
       {/* 描述 */}
-      <p className="text-slate-500 mb-8 max-w-md">
+      <p className="text-muted-foreground mb-8 max-w-md leading-6">
         {description || config.description}
       </p>
 
@@ -124,8 +123,7 @@ export function ErrorState({
         {showRefresh && (
           <button
             onClick={onRetry || (() => window.location.reload())}
-            className="inline-flex items-center gap-2 px-4 py-2 text-white rounded-xl hover:opacity-90 transition-colors"
-            style={{ backgroundColor: brandColors[900] }}
+            className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-primary-foreground shadow-sm transition-all hover:bg-primary/90 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
             <RefreshCw className="w-4 h-4" />
             重试
@@ -135,7 +133,7 @@ export function ErrorState({
         {showBack && (
           <button
             onClick={() => router.back()}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-xl hover:bg-slate-200 transition-colors"
+            className="inline-flex items-center gap-2 rounded-xl bg-secondary px-4 py-2 text-secondary-foreground transition-colors hover:bg-secondary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
             <ArrowLeft className="w-4 h-4" />
             返回
@@ -145,7 +143,7 @@ export function ErrorState({
         {showHome && (
           <button
             onClick={() => router.push("/")}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-xl hover:bg-slate-200 transition-colors"
+            className="inline-flex items-center gap-2 rounded-xl bg-secondary px-4 py-2 text-secondary-foreground transition-colors hover:bg-secondary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
             <Home className="w-4 h-4" />
             回到首页
@@ -155,8 +153,7 @@ export function ErrorState({
         {type === "auth" && (
           <button
             onClick={() => router.push("/login")}
-            className="inline-flex items-center gap-2 px-4 py-2 text-white rounded-xl hover:opacity-90 transition-colors"
-            style={{ backgroundColor: brandColors[900] }}
+            className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-primary-foreground shadow-sm transition-all hover:bg-primary/90 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
             去登录
           </button>

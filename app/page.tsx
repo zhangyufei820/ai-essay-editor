@@ -76,13 +76,15 @@ const HomeFooter = dynamic(
 function SectionSkeleton({ height = "400px" }: { height?: string }) {
   return (
     <div 
-      className="w-full animate-pulse bg-gradient-to-b from-slate-50 to-white"
+      className="w-full animate-pulse bg-gradient-to-b from-[var(--color-surface-soft)] to-white"
       style={{ height }}
+      role="status"
+      aria-label="内容加载中"
     >
-      <div className="max-w-6xl mx-auto px-4 py-16">
-        <div className="h-8 bg-slate-100 rounded-lg w-1/3 mx-auto mb-8" />
-        <div className="h-4 bg-slate-100 rounded w-2/3 mx-auto mb-4" />
-        <div className="h-4 bg-slate-100 rounded w-1/2 mx-auto" />
+      <div className="mx-auto max-w-6xl px-4 py-16">
+        <div className="mx-auto mb-8 h-8 w-1/3 rounded-lg bg-muted" />
+        <div className="mx-auto mb-4 h-4 w-2/3 rounded bg-muted" />
+        <div className="mx-auto h-4 w-1/2 rounded bg-muted" />
       </div>
     </div>
   )
@@ -90,6 +92,33 @@ function SectionSkeleton({ height = "400px" }: { height?: string }) {
 
 
 export default function Home() {
+  const quickEntries = [
+    {
+      href: "/chat/quanquan-math",
+      title: "全学段数学",
+      description: "数学问题解答",
+      icon: Calculator,
+    },
+    {
+      href: "/chat/problem",
+      title: "题目解析",
+      description: "分步详细讲解",
+      icon: HelpCircle,
+    },
+    {
+      href: "/chat/standard",
+      title: "作文批改",
+      description: "专业点评建议",
+      icon: FileText,
+    },
+    {
+      href: "/chat/ai-writing-paper",
+      title: "创意写作",
+      description: "激发创作灵感",
+      icon: Sparkles,
+    },
+  ]
+
   return (
     <main className="min-h-screen bg-white">
       {/* Hero 区域 - 全屏首屏（关键路径，直接加载） */}
@@ -99,85 +128,39 @@ export default function Home() {
       <OpenClawSection />
 
       {/* 🔥 快捷入口卡片 */}
-      <section className="py-16 md:py-20 bg-white">
-        <div className="max-w-6xl mx-auto px-4 md:px-6">
-          <h2 className="text-2xl md:text-3xl font-bold text-center mb-10 text-slate-800">快捷入口</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
-            {/* 全学段数学 */}
-            <Link
-              href="/chat/quanquan-math"
-              className="group relative bg-white rounded-2xl p-6 md:p-8 border border-slate-100 shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-1"
-            >
-              <div className="flex flex-col items-center gap-4">
-                <div className="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-gradient-to-br from-emerald-50 to-green-50 flex items-center justify-center group-hover:scale-110 transition-transform">
-                  <Calculator className="w-7 h-7 md:w-8 md:h-8 text-emerald-600" />
-                </div>
-                <div className="text-center">
-                  <h3 className="font-semibold text-slate-800 mb-1">全学段数学</h3>
-                  <p className="text-xs text-slate-400 hidden md:block">数学问题解答</p>
-                </div>
-              </div>
-              <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                <ArrowRight className="w-4 h-4 text-emerald-500" />
-              </div>
-            </Link>
+      <section className="sx-section bg-white">
+        <div className="sx-container">
+          <div className="mb-10 text-center md:mb-12">
+            <span className="mb-3 inline-flex rounded-full border border-primary/15 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+              高频工具
+            </span>
+            <h2 className="sx-section-title">快捷入口</h2>
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4 md:gap-6">
+            {quickEntries.map((entry) => {
+              const Icon = entry.icon
 
-            {/* 题目解析 */}
-            <Link
-              href="/chat/problem"
-              className="group relative bg-white rounded-2xl p-6 md:p-8 border border-slate-100 shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-1"
-            >
-              <div className="flex flex-col items-center gap-4">
-                <div className="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-gradient-to-br from-emerald-50 to-green-50 flex items-center justify-center group-hover:scale-110 transition-transform">
-                  <HelpCircle className="w-7 h-7 md:w-8 md:h-8 text-emerald-600" />
-                </div>
-                <div className="text-center">
-                  <h3 className="font-semibold text-slate-800 mb-1">题目解析</h3>
-                  <p className="text-xs text-slate-400 hidden md:block">分步详细讲解</p>
-                </div>
-              </div>
-              <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                <ArrowRight className="w-4 h-4 text-emerald-500" />
-              </div>
-            </Link>
-
-            {/* 作文批改 */}
-            <Link
-              href="/chat/standard"
-              className="group relative bg-white rounded-2xl p-6 md:p-8 border border-slate-100 shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-1"
-            >
-              <div className="flex flex-col items-center gap-4">
-                <div className="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-gradient-to-br from-emerald-50 to-green-50 flex items-center justify-center group-hover:scale-110 transition-transform">
-                  <FileText className="w-7 h-7 md:w-8 md:h-8 text-emerald-600" />
-                </div>
-                <div className="text-center">
-                  <h3 className="font-semibold text-slate-800 mb-1">作文批改</h3>
-                  <p className="text-xs text-slate-400 hidden md:block">专业点评建议</p>
-                </div>
-              </div>
-              <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                <ArrowRight className="w-4 h-4 text-emerald-500" />
-              </div>
-            </Link>
-
-            {/* AI写作 */}
-            <Link
-              href="/chat/ai-writing-paper"
-              className="group relative bg-white rounded-2xl p-6 md:p-8 border border-slate-100 shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-1"
-            >
-              <div className="flex flex-col items-center gap-4">
-                <div className="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-gradient-to-br from-emerald-50 to-green-50 flex items-center justify-center group-hover:scale-110 transition-transform">
-                  <Sparkles className="w-7 h-7 md:w-8 md:h-8 text-emerald-600" />
-                </div>
-                <div className="text-center">
-                  <h3 className="font-semibold text-slate-800 mb-1">创意写作</h3>
-                  <p className="text-xs text-slate-400 hidden md:block">激发创作灵感</p>
-                </div>
-              </div>
-              <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                <ArrowRight className="w-4 h-4 text-emerald-500" />
-              </div>
-            </Link>
+              return (
+                <Link
+                  key={entry.href}
+                  href={entry.href}
+                  className="group sx-card sx-card-interactive relative min-h-[154px] overflow-hidden p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:p-5 md:min-h-[184px] md:p-6"
+                >
+                  <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
+                    <div className="flex size-14 items-center justify-center rounded-2xl border border-primary/15 bg-primary/10 shadow-sm transition-transform duration-200 group-hover:scale-105 md:size-16">
+                      <Icon className="size-7 text-primary md:size-8" />
+                    </div>
+                    <div>
+                      <h3 className="mb-1 text-sm font-bold text-foreground sm:text-base">{entry.title}</h3>
+                      <p className="hidden text-xs leading-5 text-muted-foreground md:block">{entry.description}</p>
+                    </div>
+                  </div>
+                  <div className="absolute right-3 top-3 rounded-full bg-primary/10 p-1.5 opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-visible:opacity-100">
+                    <ArrowRight className="size-4 text-primary" />
+                  </div>
+                </Link>
+              )
+            })}
           </div>
         </div>
       </section>

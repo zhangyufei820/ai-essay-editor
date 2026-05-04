@@ -95,7 +95,7 @@ function CapabilityCard({ capability, index }: { capability: Capability; index: 
     <motion.div
       variants={itemVariants}
       whileHover={{ y: -4, transition: { duration: 0.2 } }}
-      className="group relative bg-white rounded-[20px] p-8 border transition-all duration-300 hover:shadow-lg"
+      className="group sx-card sx-card-interactive relative p-6 md:p-8"
       style={{ 
         borderColor: slateColors[100]
       }}
@@ -111,14 +111,14 @@ function CapabilityCard({ capability, index }: { capability: Capability; index: 
         className="w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-300"
         style={{ 
           backgroundColor: brandColors[50],
-          boxShadow: `0 6px 20px ${brandColors[200]}80, 0 3px 8px ${brandColors[100]}60`
+          boxShadow: `0 8px 20px ${brandColors[200]}55`
         }}
       >
         <Icon 
           className="w-7 h-7 transition-transform duration-300 group-hover:scale-110" 
           style={{ 
             color: brandColors[700],
-            filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.1))'
+            filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.08))'
           }} 
         />
       </div>
@@ -158,10 +158,10 @@ export function CapabilitiesSection() {
   return (
     <section 
       id="capabilities" 
-      className="py-24 md:py-32"
+      className="sx-section"
       style={{ backgroundColor: creamColors[50] }}
     >
-      <div className="max-w-6xl mx-auto px-4 md:px-6">
+      <div className="sx-container">
         {/* 板块标题 */}
         <motion.div
           initial="hidden"
@@ -188,11 +188,8 @@ export function CapabilitiesSection() {
           
           {/* 主标题 - 强烈立体感 */}
           <h2 
-            className="text-3xl md:text-4xl lg:text-5xl font-black"
-            style={{ 
-              color: slateColors[900],
-              textShadow: '0 4px 8px rgba(0,0,0,0.15), 0 2px 4px rgba(0,0,0,0.1)'
-            }}
+            className="sx-section-title"
+            style={{ color: slateColors[900] }}
           >
             让学习更高效、更智能
           </h2>

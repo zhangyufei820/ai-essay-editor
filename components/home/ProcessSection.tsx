@@ -185,7 +185,7 @@ function DesktopStepCard({ step, index }: { step: Step; index: number }) {
     >
       {/* 步骤编号 */}
       <div 
-        className="w-12 h-12 rounded-full text-white font-bold text-lg flex items-center justify-center mb-6 shadow-lg"
+        className="w-12 h-12 rounded-full text-white font-bold text-lg flex items-center justify-center mb-6 shadow-md"
         style={{ backgroundColor: brandColors[900] }}
       >
         {step.number}
@@ -196,14 +196,14 @@ function DesktopStepCard({ step, index }: { step: Step; index: number }) {
         className="w-20 h-20 rounded-2xl flex items-center justify-center mb-6"
         style={{ 
           backgroundColor: brandColors[50],
-          boxShadow: `0 8px 24px ${brandColors[200]}80, 0 4px 10px ${brandColors[100]}60`
+          boxShadow: `0 8px 22px ${brandColors[200]}55`
         }}
       >
         <Icon 
           className="w-10 h-10" 
           style={{ 
             color: brandColors[700],
-            filter: 'drop-shadow(0 3px 6px rgba(0,0,0,0.12))'
+            filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.1))'
           }} 
         />
       </div>
@@ -298,8 +298,8 @@ function MobileStepCard({ step, index, isLast }: { step: Step; index: number; is
 
 export function ProcessSection() {
   return (
-    <section id="process" className="py-24 md:py-32" style={{ backgroundColor: creamColors[100] }}>
-      <div className="max-w-6xl mx-auto px-4 md:px-6">
+    <section id="process" className="sx-section" style={{ backgroundColor: creamColors[100] }}>
+      <div className="sx-container">
         {/* 板块标题 */}
         <motion.div
           initial="hidden"
@@ -318,11 +318,8 @@ export function ProcessSection() {
           
           {/* 主标题 - 强烈立体感 */}
           <h2 
-            className="text-3xl md:text-4xl lg:text-5xl font-black mb-4"
-            style={{ 
-              color: slateColors[900],
-              textShadow: '0 4px 8px rgba(0,0,0,0.15), 0 2px 4px rgba(0,0,0,0.1)'
-            }}
+            className="sx-section-title mb-4"
+            style={{ color: slateColors[900] }}
           >
             三步开启深度进化
           </h2>
