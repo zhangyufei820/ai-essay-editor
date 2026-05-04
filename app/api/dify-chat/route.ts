@@ -1119,7 +1119,7 @@ export async function POST(request: NextRequest) {
         const charged = await spendCredits(
           userId,
           estimatedMinCost,
-          "image_generation",
+          "consume",
           imageDescription,
           taskRun.requestId,
           imageBillingMetadata,
@@ -1158,7 +1158,7 @@ export async function POST(request: NextRequest) {
         const charged = await spendCredits(
           userId,
           estimatedMinCost,
-          "image_generation",
+          "consume",
           imageDescription,
           taskRun.requestId,
           imageBillingMetadata,
