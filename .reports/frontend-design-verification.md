@@ -32,3 +32,4 @@
 - 可维护性：通过。首屏快捷入口去除 emoji，统一到 lucide 图标体系。
 - 功能风险：低。链接 href 保持原值：`/chat`、`/pricing`、`/chat?agent=quanquan-math`、`/chat/standard`。
 - Production-grade UI：通过。首屏打开即可感知变化，视觉层级比上一轮更明确。
+- Mobile safety：通过。首屏关键说明、CTA 与快捷入口不再初始隐藏；手机端不会因为 Framer Motion hydration/延迟导致首屏只有标题或空白。

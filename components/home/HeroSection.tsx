@@ -532,26 +532,18 @@ export function HeroSection() {
           </h1>
 
           {/* 副标题 */}
-          <motion.p
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, delay: 1.2, ease: [0.32, 0.72, 0, 1] }}
-            className="mx-auto mb-8 max-w-2xl text-lg leading-8 md:text-xl lg:mx-0"
+          <p
+            className="mx-auto mb-8 max-w-2xl text-base leading-7 md:text-lg md:leading-8 lg:mx-0 lg:text-xl"
             style={{ color: slateColors[600] }}
           >
             上传作文，AI 逐段批改、指出问题、给出提分建议，
             <br className="hidden md:block" />
             先免费体验批改，再按需选择套餐。
-          </motion.p>
+          </p>
 
           
 
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, delay: 1.4, ease: [0.32, 0.72, 0, 1] }}
-            className="flex flex-col items-center justify-center gap-4 sm:flex-row lg:justify-start"
-          >
+          <div className="flex flex-col items-center justify-center gap-4 sm:flex-row lg:justify-start">
             <Link href="/chat" prefetch={false}>
               <motion.button
                 className="group relative h-14 px-8 text-base font-bold rounded-2xl text-white overflow-hidden"
@@ -611,15 +603,10 @@ export function HeroSection() {
                 查看套餐价格
               </motion.button>
             </Link>
-          </motion.div>
+          </div>
 
           {/* 快捷入口 */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 1.6, ease: [0.32, 0.72, 0, 1] }}
-            className="mt-8 grid gap-3 sm:grid-cols-2 lg:max-w-xl"
-          >
+          <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:max-w-xl">
             <Link href="/chat?agent=quanquan-math" prefetch={false}>
               <motion.div
                 className="flex cursor-pointer items-center gap-3 rounded-2xl border border-primary/15 bg-white/85 px-5 py-4 text-left shadow-sm backdrop-blur transition-colors hover:border-primary/30"
@@ -652,7 +639,7 @@ export function HeroSection() {
                 </div>
               </motion.div>
             </Link>
-          </motion.div>
+          </div>
         </div>
 
         <div className="relative">
