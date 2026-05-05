@@ -5,6 +5,7 @@ import { verifyAuthingJwt } from "@/lib/auth/authing-jwt"
 export type VerifiedUser = {
   id: string
   email?: string | null
+  phone?: string | null
   provider?: "supabase" | "authing"
 }
 
@@ -46,6 +47,7 @@ export async function getVerifiedUser(request: NextRequest): Promise<VerifiedUse
       return {
         id: user.id,
         email: user.email,
+        phone: user.phone,
         provider: "supabase",
       }
     }
@@ -59,6 +61,7 @@ export async function getVerifiedUser(request: NextRequest): Promise<VerifiedUse
   return {
     id: authingPayload.sub,
     email: authingPayload.email,
+    phone: authingPayload.phone_number || authingPayload.phone,
     provider: "authing",
   }
 }

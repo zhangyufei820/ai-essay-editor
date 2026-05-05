@@ -7,11 +7,24 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { BETA_CONFIG } from "@/lib/beta-config"
+import { extractUserId } from "@/lib/auth-user"
 import { use, useEffect, useState, Suspense } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 
 async function getVerifiedAuthHeaders(): Promise<Record<string, string>> {
+  if (typeof window !== "undefined") {
+    const authingToken = localStorage.getItem("idToken") || localStorage.getItem("authingToken") || localStorage.getItem("accessToken")
+    try {
+      const currentUserId = extractUserId(JSON.parse(localStorage.getItem("currentUser") || "null"))
+      if (authingToken && /^[a-f0-9]{24}$/i.test(currentUserId)) {
+        return { Authorization: `Bearer ${authingToken}` }
+      }
+    } catch {
+      // Fall through to the verified Supabase session check.
+    }
+  }
+
   const supabase = createClient()
   if (supabase) {
     const { data } = await supabase.auth.getSession()

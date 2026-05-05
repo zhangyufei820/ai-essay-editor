@@ -119,9 +119,12 @@ describe('credits helpers', () => {
 
     expect(routeSource).toContain('.from("orders")')
     expect(routeSource).toContain('.in("product_id", MEMBERSHIP_PRODUCT_IDS)')
+    expect(routeSource).toContain('resolveMembershipCandidateUserIds')
+    expect(routeSource).toContain('.from("user_profiles")')
+    expect(routeSource).toContain('.in("user_id", candidateUserIds)')
     expect(routeSource).toContain('.from("user_credits")')
     expect(routeSource).toContain('.select("is_pro")')
-    expect(routeSource).toContain('resolveMembershipStatus({ is_pro: creditData?.is_pro })')
+    expect(routeSource).toContain('resolveMembershipStatus({ is_pro: subscribedCredit?.is_pro })')
   })
 
   it('keeps email OTP signup at one 1000-credit initialization without marking subscription', () => {

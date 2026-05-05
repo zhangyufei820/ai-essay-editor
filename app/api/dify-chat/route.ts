@@ -143,6 +143,11 @@ function buildGptImageV11Inputs(inputs: unknown): GptImageV11Inputs {
 const WORKFLOW_MODELS = new Set(["banana-2-pro", "vocab-card"])
 const MEMBERSHIP_PRODUCT_IDS = ["basic", "pro", "premium", "enterprise", "campus"]
 
+type MembershipIdentity = {
+  email?: string | null
+  phone?: string | null
+}
+
 function hasGptImageModelInput(inputs: unknown): boolean {
   if (!inputs || typeof inputs !== "object") return false
   const rawModel = (inputs as Record<string, unknown>).model
@@ -152,11 +157,14 @@ function hasGptImageModelInput(inputs: unknown): boolean {
 async function resolveActiveMembershipStatus(
   supabase: ReturnType<typeof getSupabaseAdmin>,
   userId: string,
+  identity: MembershipIdentity = {},
 ): Promise<string | null> {
+  const candidateUserIds = await resolveMembershipCandidateUserIds(supabase, userId, identity)
+
   const { data, error } = await supabase
     .from("orders")
     .select("product_id")
-    .eq("user_id", userId)
+    .in("user_id", candidateUserIds)
     .eq("status", "paid")
     .in("product_id", MEMBERSHIP_PRODUCT_IDS)
     .order("created_at", { ascending: false })
@@ -176,15 +184,91 @@ async function resolveActiveMembershipStatus(
   const { data: creditData, error: creditError } = await supabase
     .from("user_credits")
     .select("is_pro")
-    .eq("user_id", userId)
-    .maybeSingle()
+    .in("user_id", candidateUserIds)
 
   if (creditError) {
     console.warn("[会员权限] 查询会员标记失败:", creditError.message)
     return null
   }
 
-  return resolveMembershipStatus({ is_pro: creditData?.is_pro })
+  const subscribedCredit = Array.isArray(creditData)
+    ? creditData.find((row) => resolveMembershipStatus({ is_pro: row?.is_pro }))
+    : null
+  return resolveMembershipStatus({ is_pro: subscribedCredit?.is_pro })
+}
+
+function normalizeContactEmail(email?: string | null): string | null {
+  const normalized = email?.trim().toLowerCase()
+  return normalized || null
+}
+
+function normalizeContactPhone(phone?: string | null): string | null {
+  const normalized = String(phone || "").replace(/\D/g, "")
+  return normalized.length >= 6 ? normalized : null
+}
+
+async function resolveMembershipCandidateUserIds(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  userId: string,
+  identity: MembershipIdentity,
+): Promise<string[]> {
+  const candidates = new Set<string>([userId])
+  const emails = new Set<string>()
+  const phones = new Set<string>()
+
+  const authEmail = normalizeContactEmail(identity.email)
+  const authPhone = normalizeContactPhone(identity.phone)
+  if (authEmail) emails.add(authEmail)
+  if (authPhone) phones.add(authPhone)
+
+  const { data: currentProfile, error: currentProfileError } = await supabase
+    .from("user_profiles")
+    .select("email, phone")
+    .eq("user_id", userId)
+    .maybeSingle()
+
+  if (currentProfileError) {
+    console.warn("[会员权限] 查询当前用户资料失败:", currentProfileError.message)
+  } else {
+    const profileEmail = normalizeContactEmail(currentProfile?.email)
+    const profilePhone = normalizeContactPhone(currentProfile?.phone)
+    if (profileEmail) emails.add(profileEmail)
+    if (profilePhone) phones.add(profilePhone)
+  }
+
+  for (const email of emails) {
+    const { data, error } = await supabase
+      .from("user_profiles")
+      .select("user_id")
+      .ilike("email", email)
+      .limit(10)
+
+    if (error) {
+      console.warn("[会员权限] 按邮箱关联用户失败:", error.message)
+      continue
+    }
+    data?.forEach((profile) => {
+      if (typeof profile?.user_id === "string" && profile.user_id) candidates.add(profile.user_id)
+    })
+  }
+
+  for (const phone of phones) {
+    const { data, error } = await supabase
+      .from("user_profiles")
+      .select("user_id")
+      .like("phone", `%${phone}%`)
+      .limit(10)
+
+    if (error) {
+      console.warn("[会员权限] 按手机号关联用户失败:", error.message)
+      continue
+    }
+    data?.forEach((profile) => {
+      if (typeof profile?.user_id === "string" && profile.user_id) candidates.add(profile.user_id)
+    })
+  }
+
+  return [...candidates]
 }
 
 function sanitizeVocabCardOutputs(outputs: unknown): Record<string, unknown> {
@@ -905,11 +989,14 @@ export async function POST(request: NextRequest) {
         .select("email")
         .eq("user_id", userId)
         .maybeSingle()
-      const membershipStatus = await resolveActiveMembershipStatus(getSupabaseAdmin(), userId)
+      const membershipStatus = await resolveActiveMembershipStatus(getSupabaseAdmin(), userId, {
+        email: auth.user!.email,
+        phone: auth.user!.phone,
+      })
 
       if (!canUseImage2({
         user_id: userId,
-        email: typeof userProfile?.email === "string" ? userProfile.email : null,
+        email: typeof userProfile?.email === "string" ? userProfile.email : auth.user!.email,
         membership_status: membershipStatus,
       })) {
         console.warn(`🚫 [媒体权限] 用户无权限使用 ${billingModelType || "gpt-image-2"}`)
