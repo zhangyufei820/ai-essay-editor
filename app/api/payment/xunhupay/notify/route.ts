@@ -33,7 +33,7 @@ async function restoreClaimedOrderToPending(supabase: any, orderNo: string, reas
       updated_at: new Date().toISOString()
     })
     .eq("order_no", orderNo)
-    .eq("status", "processing")
+    .eq("status", "paid")
 
   if (error) {
     console.error(`[迅虎支付] 恢复订单 pending 失败: order=${orderNo}, reason=${reason}`, error)
@@ -146,11 +146,12 @@ export async function POST(request: NextRequest) {
     }
     console.log(`[迅虎支付] 产品校验通过: ${order.product_id} → 积分=${credits}, isPro=${isPro}, amountSnapshot=${snapshotAmountInCents}`)
 
-    // 先抢占 pending 订单，避免并发重复回调在加积分前同时通过校验。
+    // 生产 orders 约束只允许 pending/paid/cancelled/refunded，直接用 paid 抢占 pending 订单。
+    // 这样重复回调会在权益入账前被原子挡住，避免重复加积分。
     const { data: claimedOrder, error: claimOrderError } = await supabase
       .from("orders")
       .update({
-        status: "processing",
+        status: "paid",
         trade_no: tradeNo,
         updated_at: new Date().toISOString()
       })
@@ -260,24 +261,6 @@ export async function POST(request: NextRequest) {
       })
     } catch (txError) {
       console.log("[迅虎支付] 记录交易流水失败（不影响主流程）:", txError)
-    }
-
-    // 积分处理成功后再把订单从 pending 条件更新为 paid，保证重复回调幂等
-    const { data: paidOrder, error: updateOrderError } = await supabase
-      .from("orders")
-      .update({
-        status: "paid",
-        trade_no: tradeNo,
-        updated_at: new Date().toISOString()
-      })
-      .eq("order_no", orderNo)
-      .eq("status", "processing")
-      .select("id")
-      .maybeSingle()
-
-    if (updateOrderError || !paidOrder) {
-      console.error("[迅虎支付] 更新订单失败或订单状态已变化:", updateOrderError)
-      return new NextResponse("fail", { status: 200 })
     }
 
     console.log(`[迅虎支付] ✅ 订单 ${orderNo} 处理完成`)
