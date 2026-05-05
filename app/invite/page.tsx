@@ -13,6 +13,7 @@ import { toast } from "sonner"
 import { createClient } from "@supabase/supabase-js"
 import { motion } from "framer-motion"
 import { ShenxiangInterfaceIcon } from "@/components/icons/ShenxiangInterfaceIcons"
+import { getVerifiedAuthHeaders } from "@/lib/client-auth"
 
 // 🎨 品牌色
 const BRAND_GREEN = "#4CAF50"
@@ -34,7 +35,6 @@ export default function InvitePage() {
   const [copied, setCopied] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isPaidMember, setIsPaidMember] = useState(false)
-  const [checkingMembership, setCheckingMembership] = useState(false)
 
   const loadUserData = useCallback(async () => {
     setIsLoading(true)
@@ -104,55 +104,23 @@ export default function InvitePage() {
           setTotalReward(0)
         }
 
-        // 🔥 使用后端 API 检查会员状态（绕过 RLS）
-        // 尝试多种可能的用户 ID
-        const possibleUserIds = [
-          userId,
-          parsedUser.id,
-          parsedUser.sub,
-          parsedUser.userId,
-          parsedUser.user_id,
-          parsedUser._id,
-          // 尝试用户的手机号或邮箱
-          parsedUser.phone,
-          parsedUser.email,
-          parsedUser.phone_number,
-          parsedUser.mobile
-        ].filter(Boolean)
-        
-        // 去重
-        const uniqueUserIds = [...new Set(possibleUserIds)]
-        
-        console.log('🔍 [邀请页] 尝试的用户 ID 列表:', uniqueUserIds)
-        
-        let membershipFound = false
-        
-        for (const tryUserId of uniqueUserIds) {
-          if (membershipFound) break
-          
-          try {
-            console.log('🔍 [邀请页] 尝试用户 ID:', tryUserId)
-            const response = await fetch('/api/user/membership', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ userId: tryUserId })
-            })
-            const result = await response.json()
-            console.log('🔍 [邀请页] 会员检查结果:', result)
-            
-            if (result.isPaidMember === true) {
-              membershipFound = true
-              setIsPaidMember(true)
-              console.log('🔍 [邀请页] ✅ 找到会员状态，用户 ID:', tryUserId)
-              break
-            }
-          } catch (e) {
-            console.error('会员检查失败:', e)
+        // 🔥 使用已验证的登录态检查当前用户会员状态，避免把邮箱/手机号误当 userId 触发 403。
+        try {
+          const response = await fetch('/api/user/membership', {
+            headers: await getVerifiedAuthHeaders(parsedUser)
+          })
+          const result = await response.json()
+          console.log('🔍 [邀请页] 会员检查结果:', { ok: response.ok, isPaidMember: result.isPaidMember, type: result.type })
+
+          if (response.ok && result.isPaidMember === true) {
+            setIsPaidMember(true)
+            console.log('🔍 [邀请页] ✅ 找到会员状态')
+          } else {
+            setIsPaidMember(false)
+            console.log('🔍 [邀请页] ❌ 未找到会员状态')
           }
-        }
-        
-        if (!membershipFound) {
-          console.log('🔍 [邀请页] ❌ 未找到会员状态')
+        } catch (e) {
+          console.error('会员检查失败:', e)
           setIsPaidMember(false)
         }
       }

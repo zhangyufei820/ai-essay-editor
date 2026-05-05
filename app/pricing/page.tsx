@@ -3,6 +3,7 @@
 import { Pricing } from "@/components/pricing" // 复用你已有的组件
 import { Footer } from "@/components/footer"
 import { useEffect, useState } from "react"
+import { getVerifiedAuthHeaders } from "@/lib/client-auth"
 
 export default function PricingPage() {
   const [currentSubscription, setCurrentSubscription] = useState<string | undefined>(undefined)
@@ -15,7 +16,9 @@ export default function PricingPage() {
           const user = JSON.parse(localUser)
           const userId = user.id || user.sub || user.userId
           if (userId) {
-            const res = await fetch(`/api/user/membership?user_id=${encodeURIComponent(userId)}`)
+            const res = await fetch(`/api/user/membership?user_id=${encodeURIComponent(userId)}`, {
+              headers: await getVerifiedAuthHeaders(user),
+            })
             if (res.ok) {
               const data = await res.json()
               // type 为 "免费" 时不传，让组件不显示任何订阅状态
