@@ -21,6 +21,9 @@ export async function GET(
 
   const signedUrl = createSignedOpenClawMediaUrl(mediaPath.join("/"))
   const redirectUrl = new URL(signedUrl, request.url)
+  if (request.nextUrl.searchParams.get("download") === "1") {
+    redirectUrl.searchParams.set("download", "1")
+  }
 
   return NextResponse.redirect(redirectUrl, {
     status: 307,

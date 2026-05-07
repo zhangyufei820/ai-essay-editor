@@ -575,6 +575,14 @@ function convertOpenClawUrl(url: string): string {
   return url
 }
 
+function withDownloadParam(url: string): string {
+  const hashIndex = url.indexOf("#")
+  const base = hashIndex >= 0 ? url.slice(0, hashIndex) : url
+  const hash = hashIndex >= 0 ? url.slice(hashIndex) : ""
+  const separator = base.includes("?") ? "&" : "?"
+  return `${base}${separator}download=1${hash}`
+}
+
 const MediaBlock = ({ items }: { items: MediaItem[] }) => {
   if (!items || items.length === 0) return null
 
@@ -618,6 +626,7 @@ const MediaBlock = ({ items }: { items: MediaItem[] }) => {
           const isPDF = publicUrl.toLowerCase().includes('.pdf')
           const isHtml = publicUrl.toLowerCase().includes('.html')
           const fileUrl = publicUrl
+          const downloadUrl = withDownloadParam(fileUrl)
 
           if (isHtml || isLikelyHtmlDocumentUrl(fileUrl)) {
             return (
@@ -641,15 +650,29 @@ const MediaBlock = ({ items }: { items: MediaItem[] }) => {
                 <p className="text-sm font-medium text-slate-700 truncate">{item.name || "文件"}</p>
                 <p className="truncate text-xs text-slate-400">{isHtml ? "HTML 页面" : isPDF ? "PDF 文档" : "文件"}</p>
               </div>
-              <a
-                href={fileUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-blue-500 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-600"
-              >
-                <ExternalLink className="h-3.5 w-3.5" />
-                打开
-              </a>
+              <div className="flex shrink-0 items-center gap-2">
+                {isPDF && (
+                  <a
+                    href={fileUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm transition-colors hover:bg-slate-100"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    打开
+                  </a>
+                )}
+                <a
+                  href={downloadUrl}
+                  download={item.name}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-blue-500 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-600"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  下载
+                </a>
+              </div>
             </div>
           )
         } else if (effectiveType === "ppt") {

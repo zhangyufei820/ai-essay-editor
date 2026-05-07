@@ -18,7 +18,7 @@ import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
-import { Copy, Check, ExternalLink, FileText } from 'lucide-react'
+import { Copy, Check, Download, FileText } from 'lucide-react'
 import { Children, isValidElement, memo, useMemo, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -55,12 +55,21 @@ function safeDecodeURIComponent(value: string) {
   }
 }
 
+function withDownloadParam(url: string): string {
+  const hashIndex = url.indexOf("#")
+  const base = hashIndex >= 0 ? url.slice(0, hashIndex) : url
+  const hash = hashIndex >= 0 ? url.slice(hashIndex) : ""
+  const separator = base.includes("?") ? "&" : "?"
+  return `${base}${separator}download=1${hash}`
+}
+
 function MarkdownFileCard({ src, alt }: { src: string; alt?: string }) {
   const label = alt?.trim() || safeDecodeURIComponent(src.split("/").pop()?.split(/[?#]/, 1)[0] || "打开文件")
 
   return (
     <a
-      href={src}
+      href={withDownloadParam(src)}
+      download={label}
       target="_blank"
       rel="noopener noreferrer"
       className="my-3 flex max-w-full items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-slate-700 no-underline transition-colors hover:bg-slate-100"
@@ -72,7 +81,7 @@ function MarkdownFileCard({ src, alt }: { src: string; alt?: string }) {
         <span className="block truncate text-sm font-medium">{label}</span>
         <span className="block truncate text-xs text-slate-500">{src}</span>
       </span>
-      <ExternalLink className="h-4 w-4 shrink-0 text-slate-400" />
+      <Download className="h-4 w-4 shrink-0 text-slate-400" />
     </a>
   )
 }
