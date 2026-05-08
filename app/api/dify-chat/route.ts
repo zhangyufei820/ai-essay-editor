@@ -1593,6 +1593,9 @@ export async function POST(request: NextRequest) {
     let jsonBuffer = ""  // 🔥 JSON 行缓冲：跨 chunk 拼接不完整的 SSE 数据行
     let hasReceivedContent = false  // 🔥 标记是否收到了实际内容（用于判断是否扣费）
     let latestParsedUsage: ParsedDifyUsage | null = null
+    let clientAborted = false
+    let taskCompleted = false
+    let workflowNodeFailure: { message: string; code: string } | null = null
     const bufferedNodeEvents: Array<{
       event: string
       title?: string
@@ -1786,6 +1789,7 @@ export async function POST(request: NextRequest) {
 	              if (json.event === 'node_started' || json.event === 'node_finished') {
 	                console.log(`🧠 [工作流节点] ${json.event}: ${json.data?.title || json.title || '未知节点'}`)
 	                const nodeData = json.data || {}
+                  const nodeStatus = String(nodeData.status || json.status || "").toLowerCase()
                   if (model === "vocab-card") {
                     controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(json)}\n\n`))
                   }
@@ -1798,6 +1802,29 @@ export async function POST(request: NextRequest) {
 	                    workflow_run_id: nodeData.workflow_run_id || json.workflow_run_id,
 	                  })
 	                }
+                  if (json.event === "node_finished" && ["failed", "error"].includes(nodeStatus)) {
+                    const title = nodeData.title || json.title || "OpenClaw 节点"
+                    const errorMessage = String(
+                      nodeData.error ||
+                      nodeData.error_message ||
+                      json.error ||
+                      json.message ||
+                      `${title} 执行失败`
+                    )
+                    workflowNodeFailure = {
+                      message: errorMessage,
+                      code: model === "open-claw" ? "OPENCLAW_NODE_FAILED" : "DIFY_NODE_FAILED",
+                    }
+                    updateTaskRun(taskRun.id, {
+                      status: "failed",
+                      stage: `${title} 执行失败`,
+                      progress: 100,
+                      workflowRunId: nodeData.workflow_run_id || json.workflow_run_id || null,
+                      errorMessage,
+                      errorCode: workflowNodeFailure.code,
+                      sanitizedError: sanitizeForTrace({ node: title, status: nodeStatus, error: errorMessage }) as Record<string, unknown>,
+                    }).catch((error) => console.warn("[AI Task Trace] node failure update failed:", error))
+                  }
 	              }
 
 	              // 提取 conversation_id
@@ -1981,6 +2008,10 @@ export async function POST(request: NextRequest) {
       },
 
       async flush(controller) {
+        if (clientAborted) {
+          console.warn("[Stream] 客户端连接已中断，跳过成功结算")
+          return
+        }
         // 🔥 处理缓冲区中剩余的未完成 JSON（流结束时的最后一条数据）
         if (jsonBuffer.trim().length > 0) {
           const line = jsonBuffer.trim()
@@ -2011,25 +2042,28 @@ export async function POST(request: NextRequest) {
 
         // 🔥 流结束，触发扣费（仅当有实际内容时才扣费）
         console.log(`💰 [Billing] 流结束，输入 ${promptTokens} tokens，输出 ${completionTokens} tokens，总 ${totalTokens} tokens，内容长度: ${fullResponseText.length}，hasReceivedContent: ${hasReceivedContent}`)
-	        if (hasReceivedContent && (promptTokens > 0 || completionTokens > 0 || bananaImageUrls.length > 0)) {
+	        if (!workflowNodeFailure && hasReceivedContent && (promptTokens > 0 || completionTokens > 0 || bananaImageUrls.length > 0)) {
 	          deductCredit().catch(e => console.error("[Billing] 扣费异步异常:", e))
 	        } else {
 	          console.warn(`⚠️ [Billing] 流结束但无可结算 token，不扣费`)
 	        }
+          const finalFailed = Boolean(workflowNodeFailure) || !hasReceivedContent
+          taskCompleted = true
 	        updateTaskRun(taskRun.id, {
-	          status: hasReceivedContent ? "succeeded" : "failed",
-	          stage: hasReceivedContent ? "任务完成" : "流结束但没有返回内容",
+	          status: finalFailed ? "failed" : "succeeded",
+	          stage: workflowNodeFailure ? "OpenClaw 上游节点执行失败" : hasReceivedContent ? "任务完成" : "流结束但没有返回内容",
 	          progress: 100,
 	          conversationId: conversationId || undefined,
 	          artifacts: extractArtifactsFromText(fullResponseText),
-	          errorMessage: hasReceivedContent ? null : "流结束但没有返回内容",
-	          errorCode: hasReceivedContent ? null : "EMPTY_STREAM",
+	          errorMessage: workflowNodeFailure?.message || (hasReceivedContent ? null : "流结束但没有返回内容"),
+	          errorCode: workflowNodeFailure?.code || (hasReceivedContent ? null : "EMPTY_STREAM"),
 	          metadata: {
 	            total_tokens: totalTokens,
 	            prompt_tokens: promptTokens,
 	            completion_tokens: completionTokens,
 	            response_length: fullResponseText.length,
 	            has_received_content: hasReceivedContent,
+              node_failure: workflowNodeFailure,
 	          },
 	        }).catch((error) => console.warn("[AI Task Trace] flush update failed:", error))
 	        if (bufferedNodeEvents.length > 0) {
@@ -2049,6 +2083,28 @@ export async function POST(request: NextRequest) {
       console.error(`❌ [Stream错误] pipeThrough返回undefined! response.body=${response.body === null ? 'null' : 'not-null'}`)
       return new Response(JSON.stringify({ error: "Dify响应体为空，服务端流处理失败" }), { status: 502 })
     }
+    request.signal.addEventListener("abort", () => {
+      if (taskCompleted) return
+      clientAborted = true
+      if (streamStatus.timeoutId) {
+        clearTimeout(streamStatus.timeoutId)
+        streamStatus.timeoutId = null
+      }
+      streamStatus.controller?.abort()
+      updateTaskRun(taskRun.id, {
+        status: "cancelled",
+        stage: "客户端连接中断",
+        progress: hasReceivedContent ? 80 : 100,
+        conversationId: conversationId || undefined,
+        errorMessage: "浏览器或网络连接在 OpenClaw 长任务完成前中断",
+        errorCode: "CLIENT_STREAM_ABORTED",
+        metadata: {
+          response_length: fullResponseText.length,
+          has_received_content: hasReceivedContent,
+          model,
+        },
+      }).catch((error) => console.warn("[AI Task Trace] client abort update failed:", error))
+    }, { once: true })
 	    console.warn(`✅ [Stream开始] 开始返回流式响应给前端，body locked: ${transformedBody.locked}`)
 	    return new Response(transformedBody, {
 	        headers: {

@@ -313,7 +313,13 @@ function getChatErrorMessage(error: unknown, status?: number, model?: string): s
     return "当前账号暂无图片生成权限，请切换模型，或联系客服开通后再试。"
   }
   if (/timeout|timed out|abort|aborted|超时/.test(text) || /超时|中断/.test(raw)) {
+    if (model === "open-claw") {
+      return "OpenClaw 上游模型响应超时或任务被中断。复杂图片/大文件任务可能排队较久，请稍后重试。"
+    }
     return "服务响应超时，已保留已生成内容。复杂文件或 OpenClaw 任务可能需要更久，请稍后重试。"
+  }
+  if (model === "open-claw" && /network error|failed to fetch|load failed|networkerror|网络/.test(text)) {
+    return "OpenClaw 长任务连接中断，可能是上游模型超时或浏览器网络断开。当前任务没有正常完成，请稍后重试。"
   }
   if (/file|upload|附件|上传/.test(text) || /文件|上传|附件/.test(raw)) {
     return "文件未上传成功或附件无法被模型读取，请删除附件后重新上传再提交。"
@@ -333,6 +339,33 @@ function buildChatErrorContent(message: string): string {
     "",
     "建议：检查登录状态、积分余额和附件上传状态；如果是 OpenClaw 或大文件任务，请稍后重试。"
   ].join("\n")
+}
+
+async function getTaskFailureMessage(requestId: string, model: string): Promise<string | null> {
+  if (!requestId || model !== "open-claw") return null
+  try {
+    const res = await fetch(`/api/task-status?requestId=${encodeURIComponent(requestId)}&limit=1`, {
+      headers: await getVerifiedAuthHeaders(),
+    })
+    if (!res.ok) return null
+    const payload = await res.json()
+    const task = Array.isArray(payload.tasks) ? payload.tasks[0] : null
+    if (!task) return null
+
+    const stage = typeof task.stage === "string" ? task.stage : ""
+    const detail = typeof task.error_message === "string" ? task.error_message : ""
+    if (["failed", "timeout", "cancelled"].includes(task.status)) {
+      if (detail) return detail
+      if (stage) return `OpenClaw 任务未完成：${stage}`
+      return "OpenClaw 任务没有正常完成。"
+    }
+    if (["queued", "running"].includes(task.status)) {
+      return stage ? `OpenClaw 任务仍在处理中：${stage}` : "OpenClaw 任务仍在处理中，请稍后刷新会话查看结果。"
+    }
+  } catch (error) {
+    console.warn("⚠️ [任务状态] 查询失败:", error)
+  }
+  return null
 }
 
 function createClientRequestId(prefix = "chat") {
@@ -2457,7 +2490,8 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         console.error("❌ [对话异常] 错误堆栈:", e.stack)
         console.error("❌ [对话异常] 模型:", selectedModel, "模式:", genMode)
 
-        const errorMsg = getChatErrorMessage(e, undefined, selectedModel)
+        const taskFailureMessage = await getTaskFailureMessage(requestId, selectedModel)
+        const errorMsg = taskFailureMessage || getChatErrorMessage(e, undefined, selectedModel)
         toast.error(errorMsg, {
           description: selectedModel === "banana-2-pro" ? "图片生成失败，请检查提示词" : undefined,
           duration: 5000
