@@ -2077,12 +2077,63 @@ export async function POST(request: NextRequest) {
 
     })
 
+    const addOpenClawHeartbeat = (body: ReadableStream<Uint8Array>) => {
+      if (model !== "open-claw") return body
+
+      const encoder = new TextEncoder()
+      let reader: ReadableStreamDefaultReader<Uint8Array> | null = null
+      let heartbeatId: ReturnType<typeof setInterval> | null = null
+      let closed = false
+
+      const stopHeartbeat = () => {
+        closed = true
+        if (heartbeatId) {
+          clearInterval(heartbeatId)
+          heartbeatId = null
+        }
+      }
+
+      return new ReadableStream<Uint8Array>({
+        start(controller) {
+          reader = body.getReader()
+          heartbeatId = setInterval(() => {
+            if (closed) return
+            try {
+              controller.enqueue(encoder.encode(`: openclaw-keepalive ${Date.now()}\n\n`))
+            } catch {
+              stopHeartbeat()
+            }
+          }, 15_000)
+
+          ;(async () => {
+            try {
+              while (true) {
+                const { done, value } = await reader!.read()
+                if (done) break
+                if (value) controller.enqueue(value)
+              }
+              stopHeartbeat()
+              controller.close()
+            } catch (error) {
+              stopHeartbeat()
+              controller.error(error)
+            }
+          })()
+        },
+        async cancel(reason) {
+          stopHeartbeat()
+          await reader?.cancel(reason).catch(() => undefined)
+        },
+      })
+    }
+
     // 返回经过 transform 处理的流
     const transformedBody = response.body?.pipeThrough(transformStream)
     if (!transformedBody) {
       console.error(`❌ [Stream错误] pipeThrough返回undefined! response.body=${response.body === null ? 'null' : 'not-null'}`)
       return new Response(JSON.stringify({ error: "Dify响应体为空，服务端流处理失败" }), { status: 502 })
     }
+    const responseBody = addOpenClawHeartbeat(transformedBody)
     request.signal.addEventListener("abort", () => {
       if (taskCompleted) return
       clientAborted = true
@@ -2106,7 +2157,7 @@ export async function POST(request: NextRequest) {
       }).catch((error) => console.warn("[AI Task Trace] client abort update failed:", error))
     }, { once: true })
 	    console.warn(`✅ [Stream开始] 开始返回流式响应给前端，body locked: ${transformedBody.locked}`)
-	    return new Response(transformedBody, {
+	    return new Response(responseBody, {
 	        headers: {
 	          "Content-Type": "text/event-stream",
 	          "X-Request-Id": taskRun.requestId,
