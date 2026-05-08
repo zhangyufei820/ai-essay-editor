@@ -29,6 +29,7 @@ import { GridWaveLoader } from "@/components/chat/GridWaveLoader"
 import { ImageChatComposer } from "@/components/chat/image-generation/image-chat-composer"
 import { getImageModelConfig } from "@/components/chat/image-generation/config"
 import { proxifyGeneratedImageDownloadUrl, proxifyGeneratedImagePreviewUrl } from "@/components/chat/image-generation/gpt-image-v11"
+import { extractUserId } from "@/lib/auth-user"
 
 const BRAND_GREEN = "#14532d"
 const BANANA_COLOR = "#14532d" // 使用网站主题深绿色
@@ -47,6 +48,18 @@ const supabase = createClient(
 )
 
 async function getVerifiedAuthHeaders(): Promise<Record<string, string>> {
+  if (typeof window !== "undefined") {
+    const authingToken = localStorage.getItem("idToken") || localStorage.getItem("authingToken") || localStorage.getItem("accessToken")
+    try {
+      const currentUserId = extractUserId(JSON.parse(localStorage.getItem("currentUser") || "null"))
+      if (authingToken && /^[a-f0-9]{24}$/i.test(currentUserId)) {
+        return { Authorization: `Bearer ${authingToken}` }
+      }
+    } catch {
+      // Fall through to the verified Supabase session check.
+    }
+  }
+
   const { data } = await supabase.auth.getSession()
   if (data.session?.access_token) return { Authorization: `Bearer ${data.session.access_token}` }
   if (typeof window === "undefined") return {}
