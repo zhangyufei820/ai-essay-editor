@@ -7,6 +7,7 @@ import { Menu, X, Coins, User, ChevronDown } from "lucide-react"
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { createClient } from "@/lib/supabase/client"
+import { getVerifiedAuthHeaders } from "@/lib/client-auth"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import Image from "next/image"
 
@@ -18,21 +19,38 @@ export function Header() {
   useEffect(() => {
     const supabase = createClient()
 
+    const fetchCredits = async (activeUser?: unknown) => {
+      try {
+        const response = await fetch("/api/user/credits", {
+          headers: await getVerifiedAuthHeaders(activeUser),
+        })
+        if (!response.ok) return
+        const data = await response.json()
+        setCredits(data.credits || 0)
+      } catch (error) {
+        console.error("[Header] 获取积分失败:", error)
+      }
+    }
+
+    const localUser = window.localStorage.getItem("currentUser")
+    if (localUser) {
+      try {
+        const parsedUser = JSON.parse(localUser)
+        setUser(parsedUser)
+        fetchCredits(parsedUser)
+      } catch {
+        window.localStorage.removeItem("currentUser")
+      }
+    }
+
     if (!supabase) {
       return
     }
 
     supabase.auth.getUser().then(({ data: { user } }) => {
-      setUser(user)
+      if (user) setUser(user)
       if (user) {
-        supabase
-          .from("user_credits")
-          .select("credits")
-          .eq("user_id", user.id)
-          .single()
-          .then(({ data }) => {
-            if (data) setCredits(data.credits)
-          })
+        fetchCredits(user)
       }
     })
 
@@ -41,15 +59,20 @@ export function Header() {
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null)
       if (session?.user) {
-        supabase
-          .from("user_credits")
-          .select("credits")
-          .eq("user_id", session.user.id)
-          .single()
-          .then(({ data }) => {
-            if (data) setCredits(data.credits)
-          })
+        fetchCredits(session.user)
       } else {
+        const storedUser = window.localStorage.getItem("currentUser")
+        if (storedUser) {
+          try {
+            const parsedUser = JSON.parse(storedUser)
+            setUser(parsedUser)
+            fetchCredits(parsedUser)
+            return
+          } catch {
+            window.localStorage.removeItem("currentUser")
+          }
+        }
+        setUser(null)
         setCredits(null)
       }
     })
