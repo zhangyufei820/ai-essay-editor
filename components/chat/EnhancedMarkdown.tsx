@@ -47,6 +47,14 @@ function normalizeMathDelimiters(text: string) {
     .replace(/\\\)/g, "$")
 }
 
+function stripOpenClawDownloadLinks(text: string) {
+  return text
+    .replace(/^\s*(?:[📄📎⬇️🔗]\s*)?\[([^\]]*(?:下载\s*Word|Word\s*格式|下载文档|下载文件)[^\]]*)\]\(([^)]*(?:\/api\/openclaw-media|\/api\/openclaw-media-sign|__openclaw__)[^)]*)\)\s*$/gim, "")
+    .replace(/^\s*(?:[📄📎⬇️🔗]\s*)?\[([^\]]+)\]\(([^)]*(?:\/api\/openclaw-media|\/api\/openclaw-media-sign|__openclaw__)[^)]*\.(?:docx?|pdf)(?:[?#][^)]*)?)\)\s*$/gim, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+}
+
 function safeDecodeURIComponent(value: string) {
   try {
     return decodeURIComponent(value)
@@ -151,7 +159,7 @@ function CopyButton({ text }: { text: string }) {
 
 export const EnhancedMarkdown = memo(function EnhancedMarkdown({ content, className }: EnhancedMarkdownProps) {
   const normalizedContent = useMemo(
-    () => normalizeMathDelimiters(rewriteOpenClawMediaReferences(content)),
+    () => stripOpenClawDownloadLinks(normalizeMathDelimiters(rewriteOpenClawMediaReferences(content))),
     [content],
   )
 
