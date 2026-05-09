@@ -73,6 +73,7 @@ const API_BASE = ""
 const BRAND_GREEN = "var(--brand-900)"
 const ACCEPTED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp"]
 const MAX_EDIT_IMAGE_UPLOADS = 10
+const FOUR_K_IMAGE_SIZES = new Set<ImageSize>(["3840x2160", "2160x3840", "original_4k"])
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -607,6 +608,12 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
     [currentInputsWithoutUrls, maskGatewayUrl, referenceGatewayUrls]
   )
   const estimatedImageCost = calculatePreviewCost(isBananaWorkspace ? "banana-2-pro" : model) * count
+  const shouldDowngradeHighRiskImage2 =
+    !isBananaWorkspace &&
+    model === "gpt-image-2" &&
+    FOUR_K_IMAGE_SIZES.has(size) &&
+    quality === "high" &&
+    (mode === "image_edit" || count > 1)
 
   useEffect(() => {
     const userStr = typeof window !== "undefined" ? localStorage.getItem("currentUser") : null
@@ -989,7 +996,24 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
         setMaskGatewayUrl("")
       }
 
-      const submittedInputs = buildDifyInputs(currentInputsWithoutUrls, referenceUrls, maskUrl)
+      let submitInputsWithoutUrls = currentInputsWithoutUrls
+      if (shouldDowngradeHighRiskImage2) {
+        const nextCount = count > 1 ? 1 : count
+        submitInputsWithoutUrls = {
+          ...currentInputsWithoutUrls,
+          quality: "medium",
+          n: nextCount,
+        }
+        setQuality("medium")
+        if (nextCount !== count) setCount(nextCount)
+        toast.warning(
+          count > 1
+            ? "4K 高质量多图任务容易被上游限流，已自动改为 medium 且生成 1 张。"
+            : "4K 高质量图片编辑容易失败，已自动改为 medium 后提交。"
+        )
+      }
+
+      const submittedInputs = buildDifyInputs(submitInputsWithoutUrls, referenceUrls, maskUrl)
 
       setSubmitStage("正在生成图片")
 
@@ -1324,6 +1348,15 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
               <div className="flex items-start gap-2 rounded-xl border border-primary/20 bg-primary/5 p-3 text-sm text-primary">
                 <Zap className="mt-0.5 h-4 w-4 shrink-0" />
                 <span>图片生成仍在处理中，复杂图像可能需要 3-5 分钟，请保持页面打开。</span>
+              </div>
+            ) : null}
+
+            {shouldDowngradeHighRiskImage2 ? (
+              <div className="flex items-start gap-2 rounded-xl border border-amber-500/25 bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-200">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>
+                  4K 高质量{mode === "image_edit" ? "图片编辑" : "多图生成"}上游失败率较高，提交时会自动改为 medium{count > 1 ? " 且只生成 1 张" : ""}。
+                </span>
               </div>
             ) : null}
 

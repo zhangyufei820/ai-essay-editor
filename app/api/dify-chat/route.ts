@@ -19,6 +19,7 @@ import {
 } from "@/lib/pricing"
 import { canUseImage2, isSubscribedUser, resolveMembershipStatus } from "@/lib/permissions"
 import { recordBillingIssue } from "@/lib/credits"
+import { refundImageTaskCredits } from "@/lib/image-task-refunds"
 import {
   chargeCreditsSafely as spendCredits,
   createBillingLog as createBillingAuditMetadata,
@@ -320,6 +321,7 @@ const DEFAULT_DIFY_FIRST_BYTE_TIMEOUT_MS = 120_000
 const OPENCLAW_FIRST_BYTE_TIMEOUT_MS = 900_000
 const GPT_IMAGE_BLOCKING_TIMEOUT_MS = 300_000
 const GPT_IMAGE_GATEWAY_TIMEOUT_MS = 540_000
+const GPT_IMAGE_ASYNC_TASK_MAX_AGE_MS = 15 * 60 * 1000
 const IMAGE_GATEWAY_URL = (process.env.DIFY_IMAGE_GATEWAY_URL || "http://dify-image-gateway:8001").replace(/\/+$/, "")
 // 🔥 作文批改（standard）使用专用的 ESSAY_CORRECTION_API_KEY
 const DEFAULT_DIFY_KEY = process.env.ESSAY_CORRECTION_API_KEY || process.env.DIFY_API_KEY 
@@ -772,7 +774,7 @@ export async function GET(request: NextRequest) {
 
   const { data: taskOwner, error: taskOwnerError } = await getSupabaseAdmin()
     .from("ai_task_runs")
-    .select("id,user_id,upstream_task_id")
+    .select("id,user_id,upstream_task_id,status,created_at")
     .eq("id", requestId)
     .eq("user_id", userId)
     .maybeSingle()
@@ -785,6 +787,43 @@ export async function GET(request: NextRequest) {
   if (!taskOwner || (taskOwner.upstream_task_id && taskOwner.upstream_task_id !== taskId)) {
     console.warn(`🚫 [GPT Image Task] 用户无权查询图片任务: requestId=${requestId}, taskId=${taskId}`)
     return Response.json({ error: "无权访问该图片任务" }, { status: 403 })
+  }
+
+  const createdAtMs = taskOwner.created_at ? new Date(taskOwner.created_at).getTime() : NaN
+  const taskAgeMs = Number.isFinite(createdAtMs) ? Date.now() - createdAtMs : 0
+  if ((taskOwner.status === "queued" || taskOwner.status === "running") && taskAgeMs > GPT_IMAGE_ASYNC_TASK_MAX_AGE_MS) {
+    const refund = await refundImageTaskCredits({
+      userId,
+      requestId,
+      reason: "图片异步任务轮询超时",
+      errorCode: "IMAGE_TASK_POLL_TIMEOUT",
+    })
+    await updateTaskRun(requestId, {
+      status: "timeout",
+      stage: "图片任务超时，已自动退回积分",
+      progress: 100,
+      upstreamTaskId: taskId,
+      errorMessage: "图片任务长时间未完成，系统已自动结束并尝试退回积分",
+      errorCode: "IMAGE_TASK_POLL_TIMEOUT",
+      metadata: {
+        elapsed_ms: taskAgeMs,
+        gateway_status: "timeout",
+        refund_status: refund.status,
+        refund_amount: refund.amount || 0,
+        refund_reference_id: refund.refundReferenceId || null,
+      },
+    })
+    return Response.json(
+      {
+        status: "failed",
+        taskId,
+        requestId,
+        elapsedMs: taskAgeMs,
+        error: "图片任务超时，已自动退回积分",
+        refund,
+      },
+      { status: 504 },
+    )
   }
 
   const gatewayToken = process.env.DIFY_IMAGE_GATEWAY_TOKEN || DEFAULT_DIFY_KEY || ""
@@ -801,6 +840,13 @@ export async function GET(request: NextRequest) {
   const task = await response.json().catch(() => ({}))
 
   if (!response.ok || task?.code === "task_not_found") {
+    const refund = await refundImageTaskCredits({
+      userId,
+      requestId,
+      reason: "图片任务不存在或已过期",
+      errorCode: "IMAGE_TASK_NOT_FOUND",
+      statusCode: response.status || 404,
+    })
     if (requestId) {
       await updateTaskRun(requestId, {
         status: "failed",
@@ -810,9 +856,14 @@ export async function GET(request: NextRequest) {
         errorMessage: "图片任务不存在或已过期",
         errorCode: "IMAGE_TASK_NOT_FOUND",
         sanitizedError: sanitizeForTrace(task) as Record<string, unknown>,
+        metadata: {
+          refund_status: refund.status,
+          refund_amount: refund.amount || 0,
+          refund_reference_id: refund.refundReferenceId || null,
+        },
       })
     }
-    return Response.json({ error: "图片任务不存在或已过期" }, { status: response.status || 404 })
+    return Response.json({ error: "图片任务不存在或已过期", refund }, { status: response.status || 404 })
   }
 
   const elapsedMs = typeof task?.elapsed_ms === "number" ? task.elapsed_ms : 0
@@ -845,6 +896,13 @@ export async function GET(request: NextRequest) {
   if (task?.status === "failed") {
     const errorMessage = typeof task?.error === "string" ? task.error : "图片服务请求失败"
     const statusCode = typeof task?.status_code === "number" && task.status_code >= 400 ? task.status_code : 502
+    const refund = await refundImageTaskCredits({
+      userId,
+      requestId,
+      reason: errorMessage,
+      errorCode: "IMAGE_TASK_FAILED",
+      statusCode,
+    })
     if (requestId) {
       await updateTaskRun(requestId, {
         status: "failed",
@@ -858,6 +916,9 @@ export async function GET(request: NextRequest) {
           elapsed_ms: elapsedMs,
           gateway_status: task?.status,
           status_code: statusCode,
+          refund_status: refund.status,
+          refund_amount: refund.amount || 0,
+          refund_reference_id: refund.refundReferenceId || null,
         },
       })
     }
@@ -869,6 +930,7 @@ export async function GET(request: NextRequest) {
         elapsedMs,
         error: errorMessage,
         data: task?.error_payload || {},
+        refund,
       },
       { status: statusCode },
     )
