@@ -19,6 +19,8 @@ export type SettleStaleImageTasksResult = {
   scanned: number
   settled: number
   refunded: number
+  failedScanned: number
+  failedSettled: number
   results: ImageTaskRefundResult[]
   errors: string[]
 }
@@ -289,6 +291,8 @@ export async function settleStaleImageTasks(options: {
     scanned: 0,
     settled: 0,
     refunded: 0,
+    failedScanned: 0,
+    failedSettled: 0,
     results: [],
     errors: [],
   }
@@ -359,6 +363,78 @@ export async function settleStaleImageTasks(options: {
       result.refunded += 1
     }
     result.results.push(refund)
+  }
+
+  const remainingLimit = Math.max(0, limit - result.scanned)
+  if (remainingLimit === 0) return result
+
+  const { data: failedTasks, error: failedError } = await supabase
+    .from("ai_task_runs")
+    .select("id,user_id,error_message,error_code,metadata,created_at,updated_at")
+    .eq("model", "gpt-image-2")
+    .eq("status", "failed")
+    .in("error_code", ["IMAGE_TASK_FAILED", "IMAGE_TASK_NOT_FOUND", "IMAGE_TASK_POLL_TIMEOUT"])
+    .lt("created_at", cutoff)
+    .order("created_at", { ascending: true })
+    .limit(remainingLimit)
+
+  if (failedError) {
+    result.errors.push(failedError.message)
+    return result
+  }
+
+  result.failedScanned = failedTasks?.length || 0
+
+  for (const task of failedTasks || []) {
+    const metadata = task.metadata && typeof task.metadata === "object"
+      ? task.metadata as Record<string, unknown>
+      : {}
+    if (typeof metadata.refund_status === "string") continue
+
+    const requestId = String(task.id || "")
+    const userId = String(task.user_id || "")
+    if (!requestId || !userId) continue
+
+    const refund = options.dryRun
+      ? {
+          status: "no_charge_found" as const,
+          requestId,
+          userId,
+          message: "dry run",
+        }
+      : await refundImageTaskCredits({
+          userId,
+          requestId,
+          reason: String(task.error_message || "图片生成失败"),
+          errorCode: String(task.error_code || "IMAGE_TASK_FAILED"),
+          statusCode: typeof metadata.status_code === "number" ? metadata.status_code : undefined,
+        })
+
+    result.failedSettled += 1
+    if (refund.status === "refunded" || refund.status === "already_refunded") {
+      result.refunded += 1
+    }
+    result.results.push(refund)
+
+    if (!options.dryRun) {
+      const { error: updateError } = await supabase
+        .from("ai_task_runs")
+        .update({
+          metadata: {
+            ...metadata,
+            refund_status: refund.status,
+            refund_amount: refund.amount || 0,
+            refund_reference_id: refund.refundReferenceId || null,
+            refund_checked_at: new Date().toISOString(),
+          },
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", requestId)
+
+      if (updateError) {
+        result.errors.push(`${requestId}: ${updateError.message}`)
+      }
+    }
   }
 
   return result
