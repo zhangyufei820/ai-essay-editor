@@ -143,6 +143,17 @@ function buildGptImageV11Inputs(inputs: unknown): GptImageV11Inputs {
 const WORKFLOW_MODELS = new Set(["banana-2-pro", "vocab-card"])
 const MEMBERSHIP_PRODUCT_IDS = ["basic", "pro", "premium", "enterprise", "campus"]
 
+function appendOpenClawInlineOutputInstruction(query: string) {
+  return [
+    query || "请分析",
+    "",
+    "【输出方式强制要求】",
+    "如果用户要求润色、改写、批改、论文修改、作文修改、总结或整理文档，请在最终回答中直接输出可复制的完整正文。",
+    "不要只生成或返回 doc/docx/pdf 文件、下载链接、附件卡片，或只回复“已保存到文件”。",
+    "如确实需要同时生成文件，文件链接只能放在回答末尾；聊天正文里必须先完整呈现修改后的内容。",
+  ].join("\n")
+}
+
 type MembershipIdentity = {
   email?: string | null
   phone?: string | null
@@ -960,6 +971,7 @@ export async function POST(request: NextRequest) {
     const requestedModelType = (model || "general-chat") as ModelType
     const configuredMaxOutputTokens = getMaxOutputTokensForModel(requestedModelType)
     const limitedQuery = appendTextOutputLimitInstruction(query || "你好", requestedModelType)
+    const effectiveQuery = model === "open-claw" ? appendOpenClawInlineOutputInstruction(limitedQuery) : limitedQuery
     let effectiveConvId = normalizeDifyConversationId(conversation_id, modelPrefix)
     
     console.log(`🔍 [Dify-Chat] 接收请求: model=${model || "general-chat"} files=${difyFileIds.length} urls=${fileUrls.length}`)
@@ -1304,13 +1316,13 @@ export async function POST(request: NextRequest) {
             // Dify Banana 参数格式（image_prompt）
             difyRequest = isVocabCardWorkflow
               ? {
-                  inputs: buildVocabCardWorkflowInputs({ query: limitedQuery, inputs }),
+                  inputs: buildVocabCardWorkflowInputs({ query: effectiveQuery, inputs }),
                   response_mode: "streaming",
                   user: userId || "default-user",
                 }
               : {
                   inputs: {
-                      image_prompt: limitedQuery,
+                      image_prompt: effectiveQuery,
                       ...(inputs || {})
                   },
                   response_mode: "streaming",
@@ -1341,7 +1353,7 @@ export async function POST(request: NextRequest) {
             const isGptImage2 = model === "gpt-image-2"
             difyRequest = {
                 inputs: isGptImage2 ? buildGptImageV11Inputs(inputs) : inputs || {},
-                query: isGptImage2 ? (query || "你好") : limitedQuery,
+                query: isGptImage2 ? (query || "你好") : effectiveQuery,
                 response_mode: isGptImage2 ? "blocking" : "streaming",
                 user: userId || "default-user",
                 conversation_id: currentConvId,
