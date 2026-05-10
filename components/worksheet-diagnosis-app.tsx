@@ -7,7 +7,9 @@ import { createClient } from "@supabase/supabase-js"
 import {
   ClipboardCheck,
   Copy,
+  Download,
   FileImage,
+  ImageIcon,
   Loader2,
   MessageSquareText,
   Sparkles,
@@ -26,6 +28,10 @@ import {
   WORKSHEET_REPORT_IMAGE_CREDITS,
   calculateWorksheetDiagnosisCredits,
 } from "@/lib/billing-config"
+import {
+  extractImageUrlsFromDifyResult,
+  proxifyGeneratedImageUrl,
+} from "@/components/chat/image-generation/gpt-image-v11"
 
 type UploadedWorksheet = {
   name: string
@@ -72,6 +78,11 @@ type AnalyzeStreamEvent =
     }
   }
 
+type ReportImageResult = {
+  imageUrls: string[]
+  requestId: string
+}
+
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -103,12 +114,25 @@ function formatBytes(bytes: number) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`
 }
 
-function createClientRequestId() {
+function createClientRequestId(prefix = "worksheet") {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-    return `worksheet_${crypto.randomUUID()}`
+    return `${prefix}_${crypto.randomUUID()}`
   }
-  return `worksheet_${Date.now()}_${Math.random().toString(16).slice(2)}`
+  return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2)}`
 }
+
+async function readResponseJson(response: Response) {
+  const text = await response.text()
+  if (!text) return {}
+
+  try {
+    return JSON.parse(text)
+  } catch {
+    return { error: text }
+  }
+}
+
+const wait = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms))
 
 export function WorksheetDiagnosisApp() {
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -122,6 +146,10 @@ export function WorksheetDiagnosisApp() {
   const [analyzeProgress, setAnalyzeProgress] = useState("")
   const [result, setResult] = useState<AnalyzeResponse | null>(null)
   const [errorMessage, setErrorMessage] = useState("")
+  const [isGeneratingPoster, setIsGeneratingPoster] = useState(false)
+  const [posterStage, setPosterStage] = useState("")
+  const [posterResult, setPosterResult] = useState<ReportImageResult | null>(null)
+  const [posterError, setPosterError] = useState("")
 
   const canAnalyze = worksheets.length > 0 && !isUploading && !isAnalyzing
   const diagnosisCredits = calculateWorksheetDiagnosisCredits(Math.max(1, worksheets.length))
@@ -203,6 +231,8 @@ export function WorksheetDiagnosisApp() {
     setIsAnalyzing(true)
     setAnalyzeProgress("正在准备诊断")
     setResult(null)
+    setPosterResult(null)
+    setPosterError("")
     setErrorMessage("")
 
     try {
@@ -278,16 +308,117 @@ export function WorksheetDiagnosisApp() {
     }
   }
 
-  const copyRenderPrompt = async () => {
-    if (!result?.renderPrompt) return
-    await navigator.clipboard.writeText(result.renderPrompt)
-    toast.success("海报内容草稿已复制")
-  }
-
   const copyParentMessage = async () => {
     if (!result?.diagnosis.parent_message) return
     await navigator.clipboard.writeText(result.diagnosis.parent_message)
     toast.success("家长沟通话术已复制")
+  }
+
+  const keepDiagnosisOnly = () => {
+    toast.success("已保留诊断结果，可继续查看或重新上传试卷。")
+  }
+
+  const pollPosterTask = async (taskId: string, requestId: string) => {
+    const startedAt = Date.now()
+    const maxWaitMs = 10 * 60 * 1000
+
+    while (Date.now() - startedAt < maxWaitMs) {
+      await wait(5_000)
+      setPosterStage("海报正在生成，正在检查结果")
+
+      const response = await fetch(`/api/dify-chat?imageTaskId=${encodeURIComponent(taskId)}&requestId=${encodeURIComponent(requestId)}`, {
+        headers: {
+          ...(await getVerifiedAuthHeaders()),
+          "X-Request-Id": requestId,
+        },
+      })
+      const payload = await readResponseJson(response)
+
+      if (response.ok && payload?.status === "succeeded") {
+        return payload.result
+      }
+
+      if (payload?.status === "running") continue
+
+      const detailMessage =
+        typeof payload?.error === "string"
+          ? payload.error
+          : typeof payload?.data?.message === "string"
+            ? payload.data.message
+            : typeof payload?.data?.code === "string"
+              ? payload.data.code
+              : ""
+      const refundHint = payload?.refund?.status === "refunded" ? "，本次海报积分已自动退回" : ""
+      throw new Error(`${detailMessage || `海报生成失败：${response.status}`}${refundHint}`)
+    }
+
+    throw new Error("海报生成等待超时，请稍后在记录中查看或重试。")
+  }
+
+  const generatePoster = async () => {
+    if (!result?.renderPrompt || isGeneratingPoster) return
+
+    setIsGeneratingPoster(true)
+    setPosterStage("正在提交海报生成任务")
+    setPosterError("")
+    setPosterResult(null)
+
+    try {
+      const requestId = createClientRequestId("poster")
+      const response = await fetch("/api/dify-chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(await getVerifiedAuthHeaders()),
+          "X-Request-Id": requestId,
+        },
+        body: JSON.stringify({
+          query: result.renderPrompt,
+          inputs: {
+            aspect_ratio: "3:4",
+            size: "1024x1536",
+            model: "gpt-image-2",
+            quality: "medium",
+            output_format: "png",
+            output_compression: 100,
+            background: "opaque",
+            moderation: "auto",
+            n: 1,
+            mode: "image_generate",
+          },
+          model: "gpt-image-2",
+          mode: "image",
+          async_image_task: true,
+          requestId,
+        }),
+      })
+      let payload = await readResponseJson(response)
+
+      if (!response.ok) {
+        throw new Error(payload.error || payload.message || `海报生成失败：${response.status}`)
+      }
+
+      if (payload?.status === "running" && typeof payload?.imageTaskId === "string") {
+        setPosterStage("海报任务已提交，等待生成结果")
+        payload = await pollPosterTask(payload.imageTaskId, payload.requestId || requestId)
+      }
+
+      const imageUrls = extractImageUrlsFromDifyResult(payload).map(proxifyGeneratedImageUrl)
+      if (imageUrls.length === 0) throw new Error("海报生成完成但没有返回图片，请稍后重试。")
+
+      setPosterResult({
+        imageUrls,
+        requestId,
+      })
+      toast.success("诊断海报已生成")
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "海报生成失败"
+      setPosterError(message)
+      toast.error(message)
+    } finally {
+      setIsGeneratingPoster(false)
+      setPosterStage("")
+    }
   }
 
   return (
@@ -455,24 +586,50 @@ export function WorksheetDiagnosisApp() {
                     <div>
                       <p className="text-sm font-semibold text-primary">下一步</p>
                       <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                        先复制话术发给家长；需要做成图片时，再复制海报草稿继续生成。
+                        诊断已完成，可以先查看文字诊断，也可以继续生成适合转发的诊断海报。
                       </p>
                     </div>
                     <div className="flex flex-col gap-2 sm:flex-row">
-                      <Button variant="outline" onClick={copyParentMessage} className="h-10 rounded-2xl">
-                        <Copy className="mr-2 size-4" />
-                        复制家长话术
+                      <Button variant="outline" onClick={keepDiagnosisOnly} className="h-10 rounded-2xl">
+                        <ClipboardCheck className="mr-2 size-4" />
+                        只看诊断
                       </Button>
-                      <Button onClick={copyRenderPrompt} className="h-10 rounded-2xl">
-                        <Sparkles className="mr-2 size-4" />
-                        复制海报草稿
+                      <Button onClick={generatePoster} disabled={isGeneratingPoster} className="h-10 rounded-2xl">
+                        {isGeneratingPoster ? <Loader2 className="mr-2 size-4 animate-spin" /> : <ImageIcon className="mr-2 size-4" />}
+                        {isGeneratingPoster ? "生成中" : "生成诊断海报"}
                       </Button>
                     </div>
                   </div>
                   <p className="mt-3 text-xs text-muted-foreground">
-                    自动生成诊断海报预计另需 {WORKSHEET_REPORT_IMAGE_CREDITS} 积分，接入后会在这里直接生成。
+                    生成海报预计另需 {WORKSHEET_REPORT_IMAGE_CREDITS} 积分，失败会按图片任务规则自动退回。
                   </p>
+                  {posterStage ? <p className="mt-3 text-sm font-medium text-primary">{posterStage}</p> : null}
+                  {posterError ? <p className="mt-3 text-sm text-red-600">{posterError}</p> : null}
                 </div>
+
+                {posterResult?.imageUrls.length ? (
+                  <div className="rounded-2xl border border-primary/15 bg-white p-5">
+                    <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                      <div>
+                        <p className="text-sm font-semibold text-primary">诊断海报</p>
+                        <p className="mt-1 text-sm text-muted-foreground">可下载后转发给家长或保存到相册。</p>
+                      </div>
+                      <a
+                        href={posterResult.imageUrls[0]}
+                        download
+                        className="inline-flex h-10 items-center justify-center rounded-2xl border border-border px-4 text-sm font-semibold transition hover:bg-muted"
+                      >
+                        <Download className="mr-2 size-4" />
+                        下载海报
+                      </a>
+                    </div>
+                    <img
+                      src={posterResult.imageUrls[0]}
+                      alt="诊断海报"
+                      className="mx-auto max-h-[720px] w-full max-w-md rounded-2xl border object-contain"
+                    />
+                  </div>
+                ) : null}
 
                 <div className="rounded-2xl bg-primary/5 p-5">
                   <p className="text-sm font-semibold text-primary">整体判断</p>
@@ -514,8 +671,16 @@ export function WorksheetDiagnosisApp() {
                 </div>
 
                 <div className="rounded-2xl border border-primary/15 bg-white p-5">
-                  <p className="text-sm font-semibold text-primary">家长沟通话术</p>
-                  <p className="mt-2 leading-7 text-foreground">{result.diagnosis.parent_message || "暂无家长话术。"}</p>
+                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-primary">家长沟通话术</p>
+                      <p className="mt-2 leading-7 text-foreground">{result.diagnosis.parent_message || "暂无家长话术。"}</p>
+                    </div>
+                    <Button variant="outline" onClick={copyParentMessage} className="h-10 shrink-0 rounded-2xl">
+                      <Copy className="mr-2 size-4" />
+                      复制
+                    </Button>
+                  </div>
                 </div>
               </div>
             )}
