@@ -21,7 +21,7 @@ function mapAnalyzeError(error: unknown) {
     return {
       status: 504,
       body: {
-        error: "Dify 工作流执行超时，请先减少图片数量或降低图片大小后重试。",
+        error: "诊断等待超时，请先减少图片数量或压缩图片后重试。",
         code: "DIFY_WORKFLOW_TIMEOUT",
       },
     }
@@ -31,8 +31,18 @@ function mapAnalyzeError(error: unknown) {
     return {
       status: 500,
       body: {
-        error: "错题诊断 Dify 应用密钥未配置。",
+        error: "错题诊断服务暂未启用，请联系管理员处理。",
         code: "DIFY_WORKSHEET_DIAGNOSIS_KEY_MISSING",
+      },
+    }
+  }
+
+  if (/workflow not published/i.test(message)) {
+    return {
+      status: 503,
+      body: {
+        error: "错题诊断服务还未启用，请稍后再试。",
+        code: "WORKSHEET_DIAGNOSIS_NOT_READY",
       },
     }
   }
@@ -40,9 +50,8 @@ function mapAnalyzeError(error: unknown) {
   return {
     status: 502,
     body: {
-      error: "错题诊断工作流暂时不可用，请稍后重试。",
+      error: "错题诊断服务暂时不可用，请稍后重试。",
       code: "DIFY_WORKFLOW_FAILED",
-      detail: message.slice(0, 300),
     },
   }
 }
@@ -87,7 +96,7 @@ export async function POST(request: NextRequest) {
     if (workflow.status && workflow.status !== "succeeded") {
       return NextResponse.json(
         {
-          error: "Dify 工作流未成功完成。",
+          error: "错题诊断服务暂时不可用，请稍后重试。",
           code: "DIFY_WORKFLOW_NOT_SUCCEEDED",
           status: workflow.status,
           workflowRunId: workflow.workflowRunId,

@@ -90,6 +90,7 @@ export function WorksheetDiagnosisApp() {
   const [isUploading, setIsUploading] = useState(false)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [result, setResult] = useState<AnalyzeResponse | null>(null)
+  const [errorMessage, setErrorMessage] = useState("")
 
   const canAnalyze = worksheets.length > 0 && !isUploading && !isAnalyzing
 
@@ -114,6 +115,7 @@ export function WorksheetDiagnosisApp() {
     }
 
     setIsUploading(true)
+    setErrorMessage("")
     try {
       const headers = await getVerifiedAuthHeaders()
       const uploaded: UploadedWorksheet[] = []
@@ -134,7 +136,7 @@ export function WorksheetDiagnosisApp() {
 
         const payload = await response.json().catch(() => ({}))
         if (!response.ok || !payload.id) {
-          throw new Error(payload.error || payload.details || `上传失败：${response.status}`)
+          throw new Error(payload.error || "图片上传失败，请稍后重试。")
         }
 
         uploaded.push({
@@ -168,6 +170,7 @@ export function WorksheetDiagnosisApp() {
     if (!canAnalyze) return
     setIsAnalyzing(true)
     setResult(null)
+    setErrorMessage("")
 
     try {
       const response = await fetch("/api/worksheet-diagnosis/analyze", {
@@ -197,7 +200,9 @@ export function WorksheetDiagnosisApp() {
       setResult(payload)
       toast.success("错题诊断已完成")
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "诊断失败")
+      const message = error instanceof Error ? error.message : "诊断失败"
+      setErrorMessage(message)
+      toast.error(message)
     } finally {
       setIsAnalyzing(false)
     }
@@ -344,7 +349,15 @@ export function WorksheetDiagnosisApp() {
             <CardDescription>{result ? styleLabel : "上传试卷后，会生成结构化诊断和家长沟通话术。"}</CardDescription>
           </CardHeader>
           <CardContent>
-            {!result ? (
+            {errorMessage ? (
+              <div className="flex min-h-[420px] flex-col items-center justify-center rounded-2xl border border-red-100 bg-red-50/70 px-6 text-center">
+                <X className="mb-4 size-10 text-red-500" />
+                <p className="font-semibold text-red-700">请求没有完成</p>
+                <p className="mt-2 max-w-sm text-sm leading-6 text-red-600">
+                  {errorMessage}
+                </p>
+              </div>
+            ) : !result ? (
               <div className="flex min-h-[420px] flex-col items-center justify-center rounded-2xl border border-dashed bg-muted/20 text-center">
                 <ClipboardCheck className="mb-4 size-10 text-muted-foreground" />
                 <p className="font-semibold text-foreground">等待诊断</p>
