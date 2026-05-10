@@ -206,7 +206,7 @@ export function WorksheetDiagnosisApp() {
   const copyRenderPrompt = async () => {
     if (!result?.renderPrompt) return
     await navigator.clipboard.writeText(result.renderPrompt)
-    toast.success("海报生成提示词已复制")
+    toast.success("海报内容草稿已复制")
   }
 
   return (
@@ -221,7 +221,7 @@ export function WorksheetDiagnosisApp() {
             拍一张卷子，生成家长看得懂的学习反馈
           </h1>
           <p className="mt-4 max-w-2xl text-base leading-7 text-muted-foreground md:text-lg">
-            Dify 负责识别卷面与学习诊断，网站负责上传、鉴权与结果展示。确认诊断后，可继续交给 GPT Image 2 生成反馈海报。
+            自动识别卷面与错题证据，整理主要问题、解决方案和训练建议，生成适合家长沟通的反馈草稿。
           </p>
 
           <div className="mt-8 grid gap-4 sm:grid-cols-3">
@@ -261,7 +261,7 @@ export function WorksheetDiagnosisApp() {
             >
               {isUploading ? <Loader2 className="size-7 animate-spin text-primary" /> : <FileImage className="size-7 text-primary" />}
               <span className="text-sm font-semibold text-foreground">
-                {isUploading ? "正在上传到 Dify" : "点击上传试卷图片"}
+                {isUploading ? "正在上传图片" : "点击上传试卷图片"}
               </span>
             </button>
 
@@ -330,7 +330,7 @@ export function WorksheetDiagnosisApp() {
             </div>
             <Button onClick={analyze} disabled={!canAnalyze} className="h-12 w-full rounded-2xl">
               {isAnalyzing ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Sparkles className="mr-2 size-4" />}
-              {isAnalyzing ? "Dify 正在诊断" : "开始诊断"}
+              {isAnalyzing ? "正在诊断" : "开始诊断"}
             </Button>
           </CardContent>
         </Card>
@@ -341,7 +341,7 @@ export function WorksheetDiagnosisApp() {
               <MessageSquareText className="size-5 text-primary" />
               诊断结果
             </CardTitle>
-            <CardDescription>{result ? `${styleLabel} · ${result.workflowRunId || result.requestId}` : "上传试卷后，Dify 会返回结构化诊断。"}</CardDescription>
+            <CardDescription>{result ? styleLabel : "上传试卷后，会生成结构化诊断和家长沟通话术。"}</CardDescription>
           </CardHeader>
           <CardContent>
             {!result ? (
@@ -356,7 +356,7 @@ export function WorksheetDiagnosisApp() {
               <div className="space-y-6">
                 <div className="rounded-2xl bg-primary/5 p-5">
                   <p className="text-sm font-semibold text-primary">整体判断</p>
-                  <p className="mt-2 leading-7 text-foreground">{result.diagnosis.overall_summary || "Dify 未返回整体判断。"}</p>
+                  <p className="mt-2 leading-7 text-foreground">{result.diagnosis.overall_summary || "暂未生成整体判断。"}</p>
                 </div>
 
                 <ResultList title="主要问题" items={result.diagnosis.main_issues} />
@@ -395,7 +395,7 @@ export function WorksheetDiagnosisApp() {
 
                 <Button variant="outline" onClick={copyRenderPrompt} className="h-11 rounded-2xl">
                   <Copy className="mr-2 size-4" />
-                  复制海报生成提示词
+                  复制海报内容草稿
                 </Button>
               </div>
             )}
