@@ -22,6 +22,10 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { extractUserId } from "@/lib/auth-user"
+import {
+  WORKSHEET_REPORT_IMAGE_CREDITS,
+  calculateWorksheetDiagnosisCredits,
+} from "@/lib/billing-config"
 
 type UploadedWorksheet = {
   name: string
@@ -47,6 +51,11 @@ type AnalyzeResponse = {
   workflowRunId?: string
   diagnosis: Diagnosis
   renderPrompt: string
+  billing?: {
+    chargedCredits: number
+    refunded?: boolean
+    imageCount?: number
+  }
 }
 
 const supabase = createClient(
@@ -80,6 +89,13 @@ function formatBytes(bytes: number) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`
 }
 
+function createClientRequestId() {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return `worksheet_${crypto.randomUUID()}`
+  }
+  return `worksheet_${Date.now()}_${Math.random().toString(16).slice(2)}`
+}
+
 export function WorksheetDiagnosisApp() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [subject, setSubject] = useState("数学")
@@ -93,6 +109,7 @@ export function WorksheetDiagnosisApp() {
   const [errorMessage, setErrorMessage] = useState("")
 
   const canAnalyze = worksheets.length > 0 && !isUploading && !isAnalyzing
+  const diagnosisCredits = calculateWorksheetDiagnosisCredits(Math.max(1, worksheets.length))
 
   const styleLabel = useMemo(() => ({
     parent: "家长沟通版",
@@ -177,6 +194,7 @@ export function WorksheetDiagnosisApp() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "X-Request-Id": createClientRequestId(),
           ...(await getVerifiedAuthHeaders()),
         },
         body: JSON.stringify({
@@ -198,7 +216,7 @@ export function WorksheetDiagnosisApp() {
       }
 
       setResult(payload)
-      toast.success("错题诊断已完成")
+      toast.success(`错题诊断已完成，已消耗 ${payload.billing?.chargedCredits || diagnosisCredits} 积分`)
     } catch (error) {
       const message = error instanceof Error ? error.message : "诊断失败"
       setErrorMessage(message)
@@ -337,6 +355,10 @@ export function WorksheetDiagnosisApp() {
               {isAnalyzing ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Sparkles className="mr-2 size-4" />}
               {isAnalyzing ? "正在诊断" : "开始诊断"}
             </Button>
+            <div className="rounded-2xl border border-primary/10 bg-primary/5 px-4 py-3 text-sm leading-6 text-muted-foreground">
+              <p className="font-semibold text-foreground">本次诊断：{diagnosisCredits} 积分</p>
+              <p>生成诊断草稿后，如继续生成海报，预计另需 {WORKSHEET_REPORT_IMAGE_CREDITS} 积分。</p>
+            </div>
           </CardContent>
         </Card>
 
@@ -370,6 +392,11 @@ export function WorksheetDiagnosisApp() {
                 <div className="rounded-2xl bg-primary/5 p-5">
                   <p className="text-sm font-semibold text-primary">整体判断</p>
                   <p className="mt-2 leading-7 text-foreground">{result.diagnosis.overall_summary || "暂未生成整体判断。"}</p>
+                  {result.billing?.chargedCredits ? (
+                    <p className="mt-3 text-xs font-medium text-primary">
+                      已消耗 {result.billing.chargedCredits} 积分
+                    </p>
+                  ) : null}
                 </div>
 
                 <ResultList title="主要问题" items={result.diagnosis.main_issues} />

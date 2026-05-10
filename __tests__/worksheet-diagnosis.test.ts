@@ -3,6 +3,10 @@ import {
   buildWorksheetReportRenderPrompt,
   parseWorksheetDiagnosis,
 } from "@/lib/worksheet-diagnosis"
+import {
+  WORKSHEET_REPORT_IMAGE_CREDITS,
+  calculateWorksheetDiagnosisCredits,
+} from "@/lib/billing-config"
 
 describe("worksheet diagnosis Dify contract", () => {
   it("builds workflow inputs with Dify image files", () => {
@@ -58,5 +62,14 @@ describe("worksheet diagnosis Dify contract", () => {
     expect(prompt).toContain("家长沟通版")
     expect(prompt).toContain("审题不完整")
     expect(prompt).toContain("不要编造题目")
+    expect(prompt).toContain("1080x1440")
+  })
+
+  it("calculates worksheet diagnosis fixed credits by image count", () => {
+    expect(calculateWorksheetDiagnosisCredits(1)).toBe(80)
+    expect(calculateWorksheetDiagnosisCredits(2)).toBe(110)
+    expect(calculateWorksheetDiagnosisCredits(6)).toBe(230)
+    expect(calculateWorksheetDiagnosisCredits(20)).toBe(230)
+    expect(WORKSHEET_REPORT_IMAGE_CREDITS).toBe(260)
   })
 })

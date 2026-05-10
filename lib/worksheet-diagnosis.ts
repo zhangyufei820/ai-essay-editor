@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { WORKSHEET_DIAGNOSIS_MAX_IMAGES } from "@/lib/billing-config"
 
 export const WORKSHEET_DIAGNOSIS_SCHEMA_VERSION = "worksheet-diagnosis-v1"
 
@@ -19,7 +20,7 @@ const DifyImageInputSchema = z.object({
 }, "image must contain upload_file_id or url")
 
 export const WorksheetDiagnosisRequestSchema = z.object({
-  images: z.array(DifyImageInputSchema).min(1).max(6),
+  images: z.array(DifyImageInputSchema).min(1).max(WORKSHEET_DIAGNOSIS_MAX_IMAGES),
   subject: z.string().trim().min(1).max(40).default("数学"),
   grade: z.string().trim().max(40).optional().default(""),
   reportStyle: z.enum(WORKSHEET_REPORT_STYLES).default("parent"),
@@ -154,7 +155,7 @@ export function buildWorksheetReportRenderPrompt(diagnosis: WorksheetDiagnosis, 
     `报告风格：${styleLabel}`,
     "",
     "设计要求：",
-    "1. 竖版信息图，适合手机截图和家长群转发。",
+    "1. 3:4 竖版信息图，建议输出 1080x1440，适合手机截图和家长群转发。",
     "2. 分区包含：主要问题、卷面证据、解决方案、7天训练计划、家长沟通话术。",
     "3. 中文必须准确可读，不要编造题目、分数或证据。",
     "4. 语气温和专业，不使用智力、人格、心理疾病等标签。",

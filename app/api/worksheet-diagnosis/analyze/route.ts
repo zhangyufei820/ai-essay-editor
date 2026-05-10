@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireUser } from "@/lib/auth/verified-user"
 import { createRequestId } from "@/lib/ai-task-trace"
+import { createBillingLog, chargeCreditsSafely } from "@/lib/billing"
+import { calculateWorksheetDiagnosisCredits } from "@/lib/billing-config"
+import { addCredits, getUserCredits, type BillingAuditMetadata } from "@/lib/credits"
 import { getDifyCredentialForModel } from "@/lib/dify-credentials"
 import { runDifyWorkflow } from "@/lib/dify-workflow-client"
 import { getClientIP, checkIpRateLimit, createRateLimitResponse } from "@/lib/rate-limit"
@@ -56,8 +59,43 @@ function mapAnalyzeError(error: unknown) {
   }
 }
 
+async function refundWorksheetDiagnosisCredits(input: {
+  userId: string
+  requestId: string
+  amount: number
+  reason: string
+  metadata?: BillingAuditMetadata
+}) {
+  if (input.amount <= 0) return false
+
+  return addCredits(
+    input.userId,
+    input.amount,
+    "refund",
+    `错题诊断失败自动退回积分：${input.amount}`,
+    `refund:${input.requestId}`,
+    createBillingLog({
+      ...(input.metadata || {}),
+      actionType: "worksheet_diagnosis_refund",
+      feature: "worksheet-diagnosis",
+      usageSource: "fixed",
+      estimated: true,
+      chargedCredits: input.amount,
+      requestId: input.requestId,
+      rawProviderMetadata: {
+        ...(input.metadata?.rawProviderMetadata || {}),
+        refundReason: input.reason,
+      },
+    }),
+  )
+}
+
 export async function POST(request: NextRequest) {
   const requestId = request.headers.get("X-Request-Id") || createRequestId("worksheet")
+  let chargedCredits = 0
+  let wasCharged = false
+  let billingMetadata: BillingAuditMetadata | undefined
+  let userIdForRefund = ""
 
   const ip = getClientIP(request)
   const limitResult = checkIpRateLimit(ip, 20)
@@ -65,6 +103,7 @@ export async function POST(request: NextRequest) {
 
   const auth = await requireUser(request)
   if (auth.response) return auth.response
+  userIdForRefund = auth.user!.id
 
   try {
     const json = await request.json()
@@ -84,6 +123,59 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    chargedCredits = calculateWorksheetDiagnosisCredits(parsed.data.images.length)
+    const credits = await getUserCredits(auth.user!.id)
+    if (!credits || credits.credits < chargedCredits) {
+      return NextResponse.json(
+        {
+          error: `当前积分不足，本次诊断需要 ${chargedCredits} 积分。`,
+          code: "INSUFFICIENT_CREDITS",
+          requiredCredits: chargedCredits,
+          currentCredits: credits?.credits ?? 0,
+        },
+        { status: 402, headers: { "X-Request-Id": requestId } },
+      )
+    }
+
+    billingMetadata = createBillingLog({
+      userId: auth.user!.id,
+      actionType: "worksheet_diagnosis",
+      feature: "worksheet-diagnosis",
+      modelId: "worksheet-diagnosis",
+      usageSource: "fixed",
+      estimated: true,
+      chargedCredits,
+      requestId,
+      description: `错题诊断：${parsed.data.images.length} 张试卷图片`,
+      rawProviderMetadata: {
+        imageCount: parsed.data.images.length,
+        reportStyle: parsed.data.reportStyle,
+        subject: parsed.data.subject,
+        grade: parsed.data.grade || null,
+      },
+    })
+
+    wasCharged = await chargeCreditsSafely(
+      auth.user!.id,
+      chargedCredits,
+      "worksheet_diagnosis",
+      `错题诊断：${parsed.data.images.length} 张试卷图片`,
+      requestId,
+      billingMetadata,
+    )
+
+    if (!wasCharged) {
+      return NextResponse.json(
+        {
+          error: `当前积分不足，本次诊断需要 ${chargedCredits} 积分。`,
+          code: "INSUFFICIENT_CREDITS",
+          requiredCredits: chargedCredits,
+          currentCredits: credits.credits,
+        },
+        { status: 402, headers: { "X-Request-Id": requestId } },
+      )
+    }
+
     const credential = getDifyCredentialForModel("worksheet-diagnosis")
     const workflow = await runDifyWorkflow({
       apiKey: credential.credential,
@@ -94,12 +186,25 @@ export async function POST(request: NextRequest) {
     })
 
     if (workflow.status && workflow.status !== "succeeded") {
+      const refunded = await refundWorksheetDiagnosisCredits({
+        userId: auth.user!.id,
+        requestId,
+        amount: chargedCredits,
+        reason: `workflow_status_${workflow.status}`,
+        metadata: billingMetadata,
+      })
+      wasCharged = !refunded
+
       return NextResponse.json(
         {
           error: "错题诊断服务暂时不可用，请稍后重试。",
           code: "DIFY_WORKFLOW_NOT_SUCCEEDED",
           status: workflow.status,
           workflowRunId: workflow.workflowRunId,
+          billing: {
+            chargedCredits,
+            refunded,
+          },
         },
         { status: 502, headers: { "X-Request-Id": requestId } },
       )
@@ -117,16 +222,41 @@ export async function POST(request: NextRequest) {
         diagnosis,
         renderPrompt,
         rawOutputs: workflow.outputs,
+        billing: {
+          chargedCredits,
+          refunded: false,
+          imageCount: parsed.data.images.length,
+        },
       },
       { headers: { "X-Request-Id": requestId } },
     )
   } catch (error) {
+    const refunded = wasCharged
+      ? await refundWorksheetDiagnosisCredits({
+        userId: userIdForRefund,
+        requestId,
+        amount: chargedCredits,
+        reason: error instanceof Error ? error.message : String(error),
+        metadata: billingMetadata,
+      })
+      : false
+    wasCharged = wasCharged && !refunded
+
     console.error("[WorksheetDiagnosis] analyze failed", {
       requestId,
       message: error instanceof Error ? error.message : String(error),
+      refunded,
     })
     const mapped = mapAnalyzeError(error)
-    return NextResponse.json(mapped.body, {
+    return NextResponse.json({
+      ...mapped.body,
+      billing: chargedCredits > 0
+        ? {
+          chargedCredits,
+          refunded,
+        }
+        : undefined,
+    }, {
       status: mapped.status,
       headers: { "X-Request-Id": requestId },
     })

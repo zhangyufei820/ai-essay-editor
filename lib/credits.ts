@@ -462,6 +462,7 @@ export async function addCredits(
   type: string,
   description: string,
   referenceId?: string,
+  billingMetadata?: BillingAuditMetadata,
 ): Promise<boolean> {
   const supabase = getSupabaseAdmin()
   if (referenceId) {
@@ -515,7 +516,7 @@ export async function addCredits(
   }
 
   // 记录交易
-  await recordTransaction(supabase, userId, amount, type, description, balanceBefore, balanceAfter, referenceId)
+  await recordTransaction(supabase, userId, amount, type, description, balanceBefore, balanceAfter, referenceId, billingMetadata)
 
   console.log(`[积分系统] 用户 ${userId} 成功增加 ${amount} 积分，当前积分: ${balanceAfter}`)
   return true
