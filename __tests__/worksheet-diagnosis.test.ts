@@ -1,4 +1,5 @@
 import {
+  WorksheetDiagnosisRequestSchema,
   buildWorksheetDiagnosisInputs,
   buildWorksheetReportRenderPrompt,
   parseWorksheetDiagnosis,
@@ -37,6 +38,25 @@ describe("worksheet diagnosis Dify contract", () => {
       report_style: "parent",
       output_schema_version: "worksheet-diagnosis-v1",
     })
+  })
+
+  it("defaults blank subject to math", () => {
+    const request = WorksheetDiagnosisRequestSchema.parse({
+      images: [
+        {
+          type: "image",
+          transfer_method: "local_file",
+          upload_file_id: "file-1",
+        },
+      ],
+      subject: "   ",
+      grade: "",
+      reportStyle: "parent",
+      extraContext: "",
+    })
+    const parsed = buildWorksheetDiagnosisInputs(request)
+
+    expect(parsed.subject).toBe("数学")
   })
 
   it("parses fenced JSON from Dify outputs", () => {

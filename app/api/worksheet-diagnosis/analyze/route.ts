@@ -117,9 +117,17 @@ export async function POST(request: NextRequest) {
     const parsed = WorksheetDiagnosisRequestSchema.safeParse(json)
 
     if (!parsed.success) {
+      const imageIssue = parsed.error.issues.find((issue) => issue.path[0] === "images")
+      const subjectIssue = parsed.error.issues.find((issue) => issue.path[0] === "subject")
+      const error = imageIssue
+        ? "请至少上传一张试卷图片。"
+        : subjectIssue
+          ? "学科名称过长，请控制在 40 个字以内。"
+          : "请求参数不完整，请检查后重试。"
+
       return NextResponse.json(
         {
-          error: "请求参数不完整，请至少上传一张试卷图片。",
+          error,
           code: "BAD_WORKSHEET_DIAGNOSIS_REQUEST",
           issues: parsed.error.issues.map((issue) => ({
             path: issue.path.join("."),

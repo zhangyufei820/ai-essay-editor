@@ -9,6 +9,12 @@ export const WORKSHEET_REPORT_STYLES = [
   "student",
 ] as const
 
+const DefaultSubjectSchema = z.preprocess((value) => {
+  if (typeof value !== "string") return value
+  const trimmed = value.trim()
+  return trimmed || "数学"
+}, z.string().min(1).max(40).default("数学"))
+
 const DifyImageInputSchema = z.object({
   type: z.literal("image").optional(),
   transfer_method: z.enum(["local_file", "remote_url"]),
@@ -21,7 +27,7 @@ const DifyImageInputSchema = z.object({
 
 export const WorksheetDiagnosisRequestSchema = z.object({
   images: z.array(DifyImageInputSchema).min(1).max(WORKSHEET_DIAGNOSIS_MAX_IMAGES),
-  subject: z.string().trim().min(1).max(40).default("数学"),
+  subject: DefaultSubjectSchema,
   grade: z.string().trim().max(40).optional().default(""),
   reportStyle: z.enum(WORKSHEET_REPORT_STYLES).default("parent"),
   extraContext: z.string().trim().max(1000).optional().default(""),

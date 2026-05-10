@@ -219,7 +219,7 @@ export function WorksheetDiagnosisApp() {
             transfer_method: "local_file",
             upload_file_id: file.difyFileId,
           })),
-          subject,
+          subject: subject.trim() || "数学",
           grade,
           reportStyle,
           extraContext,
