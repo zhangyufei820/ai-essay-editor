@@ -2,7 +2,7 @@
 
 /* eslint-disable @next/next/no-img-element -- User uploaded worksheet previews need native object URLs. */
 
-import { useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { createClient } from "@supabase/supabase-js"
 import {
   ClipboardCheck,
@@ -30,6 +30,7 @@ import {
 } from "@/lib/billing-config"
 import {
   extractImageUrlsFromDifyResult,
+  proxifyGeneratedImageDownloadUrl,
   proxifyGeneratedImageUrl,
 } from "@/components/chat/image-generation/gpt-image-v11"
 
@@ -80,6 +81,7 @@ type AnalyzeStreamEvent =
 
 type ReportImageResult = {
   imageUrls: string[]
+  downloadUrl: string
   requestId: string
 }
 
@@ -134,6 +136,13 @@ async function readResponseJson(response: Response) {
 
 const wait = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms))
 
+function formatElapsed(seconds: number) {
+  if (seconds < 60) return `${seconds}s`
+  const minutes = Math.floor(seconds / 60)
+  const rest = seconds % 60
+  return rest ? `${minutes}m ${rest}s` : `${minutes}m`
+}
+
 export function WorksheetDiagnosisApp() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [subject, setSubject] = useState("数学")
@@ -144,10 +153,14 @@ export function WorksheetDiagnosisApp() {
   const [isUploading, setIsUploading] = useState(false)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [analyzeProgress, setAnalyzeProgress] = useState("")
+  const [analyzeStartedAt, setAnalyzeStartedAt] = useState<number | null>(null)
+  const [analyzeElapsedSeconds, setAnalyzeElapsedSeconds] = useState(0)
   const [result, setResult] = useState<AnalyzeResponse | null>(null)
   const [errorMessage, setErrorMessage] = useState("")
   const [isGeneratingPoster, setIsGeneratingPoster] = useState(false)
   const [posterStage, setPosterStage] = useState("")
+  const [posterStartedAt, setPosterStartedAt] = useState<number | null>(null)
+  const [posterElapsedSeconds, setPosterElapsedSeconds] = useState(0)
   const [posterResult, setPosterResult] = useState<ReportImageResult | null>(null)
   const [posterError, setPosterError] = useState("")
 
@@ -159,6 +172,22 @@ export function WorksheetDiagnosisApp() {
     teacher: "教师反馈版",
     student: "学生自查版",
   }[reportStyle]), [reportStyle])
+
+  useEffect(() => {
+    if (!isAnalyzing || !analyzeStartedAt) return
+    const timer = window.setInterval(() => {
+      setAnalyzeElapsedSeconds(Math.max(0, Math.floor((Date.now() - analyzeStartedAt) / 1000)))
+    }, 1000)
+    return () => window.clearInterval(timer)
+  }, [analyzeStartedAt, isAnalyzing])
+
+  useEffect(() => {
+    if (!isGeneratingPoster || !posterStartedAt) return
+    const timer = window.setInterval(() => {
+      setPosterElapsedSeconds(Math.max(0, Math.floor((Date.now() - posterStartedAt) / 1000)))
+    }, 1000)
+    return () => window.clearInterval(timer)
+  }, [isGeneratingPoster, posterStartedAt])
 
   const uploadFiles = async (files: FileList | null) => {
     if (!files?.length) return
@@ -230,6 +259,8 @@ export function WorksheetDiagnosisApp() {
     if (!canAnalyze) return
     setIsAnalyzing(true)
     setAnalyzeProgress("正在准备诊断")
+    setAnalyzeStartedAt(Date.now())
+    setAnalyzeElapsedSeconds(0)
     setResult(null)
     setPosterResult(null)
     setPosterError("")
@@ -305,6 +336,7 @@ export function WorksheetDiagnosisApp() {
     } finally {
       setIsAnalyzing(false)
       setAnalyzeProgress("")
+      setAnalyzeStartedAt(null)
     }
   }
 
@@ -360,6 +392,8 @@ export function WorksheetDiagnosisApp() {
 
     setIsGeneratingPoster(true)
     setPosterStage("正在提交海报生成任务")
+    setPosterStartedAt(Date.now())
+    setPosterElapsedSeconds(0)
     setPosterError("")
     setPosterResult(null)
 
@@ -403,11 +437,13 @@ export function WorksheetDiagnosisApp() {
         payload = await pollPosterTask(payload.imageTaskId, payload.requestId || requestId)
       }
 
-      const imageUrls = extractImageUrlsFromDifyResult(payload).map(proxifyGeneratedImageUrl)
+      const rawImageUrls = extractImageUrlsFromDifyResult(payload)
+      const imageUrls = rawImageUrls.map(proxifyGeneratedImageUrl)
       if (imageUrls.length === 0) throw new Error("海报生成完成但没有返回图片，请稍后重试。")
 
       setPosterResult({
         imageUrls,
+        downloadUrl: proxifyGeneratedImageDownloadUrl(rawImageUrls[0] || imageUrls[0], "png"),
         requestId,
       })
       toast.success("诊断海报已生成")
@@ -418,6 +454,7 @@ export function WorksheetDiagnosisApp() {
     } finally {
       setIsGeneratingPoster(false)
       setPosterStage("")
+      setPosterStartedAt(null)
     }
   }
 
@@ -545,7 +582,10 @@ export function WorksheetDiagnosisApp() {
               {isAnalyzing ? "正在诊断" : "开始诊断"}
             </Button>
             {isAnalyzing && analyzeProgress ? (
-              <p className="text-center text-sm text-muted-foreground">{analyzeProgress}</p>
+              <div className="rounded-2xl border border-primary/10 bg-primary/5 px-4 py-3 text-center text-sm text-muted-foreground">
+                <p className="font-medium text-primary">{analyzeProgress}</p>
+                <p className="mt-1">已等待 {formatElapsed(analyzeElapsedSeconds)}，通常需要 60-90 秒。</p>
+              </div>
             ) : null}
             <div className="rounded-2xl border border-primary/10 bg-primary/5 px-4 py-3 text-sm leading-6 text-muted-foreground">
               <p className="font-semibold text-foreground">本次诊断：{diagnosisCredits} 积分</p>
@@ -571,6 +611,14 @@ export function WorksheetDiagnosisApp() {
                   {errorMessage}
                 </p>
               </div>
+            ) : isAnalyzing && !result ? (
+              <ProgressPanel
+                title="正在诊断"
+                message={analyzeProgress || "正在识别卷面并生成诊断。"}
+                elapsedSeconds={analyzeElapsedSeconds}
+                estimate="通常需要 60-90 秒，复杂卷面可能更久。"
+                steps={["上传完成", "识别卷面", "生成诊断"]}
+              />
             ) : !result ? (
               <div className="flex min-h-[420px] flex-col items-center justify-center rounded-2xl border border-dashed bg-muted/20 text-center">
                 <ClipboardCheck className="mb-4 size-10 text-muted-foreground" />
@@ -603,7 +651,22 @@ export function WorksheetDiagnosisApp() {
                   <p className="mt-3 text-xs text-muted-foreground">
                     生成海报预计另需 {WORKSHEET_REPORT_IMAGE_CREDITS} 积分，失败会按图片任务规则自动退回。
                   </p>
-                  {posterStage ? <p className="mt-3 text-sm font-medium text-primary">{posterStage}</p> : null}
+                  {posterStage ? (
+                    <div className="mt-4 rounded-2xl border border-primary/10 bg-white/70 p-4">
+                      <div className="flex items-center gap-3">
+                        <Loader2 className="size-4 animate-spin text-primary" />
+                        <div>
+                          <p className="text-sm font-medium text-primary">{posterStage}</p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            已等待 {formatElapsed(posterElapsedSeconds)}，通常需要 1-3 分钟。
+                          </p>
+                        </div>
+                      </div>
+                      <div className="mt-3 h-2 overflow-hidden rounded-full bg-primary/10">
+                        <div className="h-full w-2/3 animate-pulse rounded-full bg-primary/50" />
+                      </div>
+                    </div>
+                  ) : null}
                   {posterError ? <p className="mt-3 text-sm text-red-600">{posterError}</p> : null}
                 </div>
 
@@ -615,8 +678,8 @@ export function WorksheetDiagnosisApp() {
                         <p className="mt-1 text-sm text-muted-foreground">可下载后转发给家长或保存到相册。</p>
                       </div>
                       <a
-                        href={posterResult.imageUrls[0]}
-                        download
+                        href={posterResult.downloadUrl}
+                        download="worksheet-diagnosis-poster.png"
                         className="inline-flex h-10 items-center justify-center rounded-2xl border border-border px-4 text-sm font-semibold transition hover:bg-muted"
                       >
                         <Download className="mr-2 size-4" />
@@ -706,6 +769,46 @@ function ResultList({ title, items }: { title: string; items?: string[] }) {
       ) : (
         <p className="text-sm text-muted-foreground">暂无内容。</p>
       )}
+    </div>
+  )
+}
+
+function ProgressPanel({
+  title,
+  message,
+  elapsedSeconds,
+  estimate,
+  steps,
+}: {
+  title: string
+  message: string
+  elapsedSeconds: number
+  estimate: string
+  steps: string[]
+}) {
+  return (
+    <div className="flex min-h-[420px] flex-col items-center justify-center rounded-2xl border border-dashed bg-primary/5 px-6 text-center">
+      <div className="mb-5 flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+        <Loader2 className="size-6 animate-spin" />
+      </div>
+      <p className="font-semibold text-foreground">{title}</p>
+      <p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">{message}</p>
+      <p className="mt-2 text-xs text-muted-foreground">已等待 {formatElapsed(elapsedSeconds)}，{estimate}</p>
+
+      <div className="mt-6 grid w-full max-w-xl gap-3 sm:grid-cols-3">
+        {steps.map((step, index) => (
+          <div key={step} className="rounded-2xl border border-primary/10 bg-white px-4 py-3 text-left">
+            <div className="mb-2 flex size-7 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
+              {index + 1}
+            </div>
+            <p className="text-sm font-semibold text-foreground">{step}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-6 h-2 w-full max-w-md overflow-hidden rounded-full bg-primary/10">
+        <div className="h-full w-2/3 animate-pulse rounded-full bg-primary/50" />
+      </div>
     </div>
   )
 }
