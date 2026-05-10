@@ -13,11 +13,9 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useState, useEffect, useCallback } from "react"
 import {
-  ArrowRight, Sparkles, MessageSquare, ChevronDown, Send, Paperclip, FileText, X, Calculator
+  ArrowRight, Sparkles, Send, Paperclip, FileText, X, ClipboardCheck
 } from "lucide-react"
-import { Button } from "@/components/ui/button"
 import { brandColors, slateColors, creamColors } from "@/lib/design-tokens"
-import { cn } from "@/lib/utils"
 
 
 // ============================================
@@ -27,20 +25,20 @@ import { cn } from "@/lib/utils"
 const demoConversation = [
   {
     type: "ai",
-    content: "你好！我是沈翔智学 AI 助手。我可以帮你批改作文、解答问题、制定学习计划。有什么我可以帮助你的吗？"
+    content: "你好！我是沈翔智学 AI 助手。我可以帮你批改作文，也能把试卷错题整理成家长反馈图。"
   },
   {
     type: "file",
-    fileName: "我的作文.jpg",
+    fileName: "数学卷子.jpg",
     fileSize: "2.3 MB"
   },
   {
     type: "user",
-    content: "帮我批改一下这篇作文"
+    content: "分析错题并生成家长反馈"
   },
   {
     type: "ai",
-    content: "好的！我已收到你的作文图片。正在从结构、语言、内容等多个维度进行专业分析..."
+    content: "好的，我会先识别卷面与错题，再整理主要问题、解决方案和 7 天训练建议。"
   }
 ]
 
@@ -186,7 +184,7 @@ function ChatDemo() {
 
           addTimer(() => {
             setIsTyping(true)
-            const userText = "帮我批改一下这篇作文"
+            const userText = "分析错题并生成家长反馈"
             let i = 0
             addInterval(() => {
               if (i < userText.length) {
@@ -311,7 +309,7 @@ function ChatDemo() {
                 </div>
                 <div>
                   <p className="text-sm font-medium" style={{ color: slateColors[700] }}>
-                    我的作文.jpg
+                    数学卷子.jpg
                   </p>
                   <p className="text-xs" style={{ color: slateColors[400] }}>
                     2.3 MB
@@ -392,7 +390,7 @@ function ChatDemo() {
                 </div>
                 <div className="flex-1">
                   <p className="text-sm font-medium" style={{ color: slateColors[700] }}>
-                    我的作文.jpg
+                    数学卷子.jpg
                   </p>
                   <div className="flex items-center gap-2 mt-1">
                     <motion.div
@@ -513,7 +511,7 @@ export function HeroSection() {
               }}
             >
               <Sparkles className="h-4 w-4" style={{ color: brandColors[600] }} />
-              AI 作文批改 · 写作提分工具
+              AI 作文批改 · 错题诊断海报
             </span>
           </motion.div>
 
@@ -524,10 +522,10 @@ export function HeroSection() {
               textShadow: '0 1px 0 rgba(255,255,255,0.9)'
             }}
           >
-            <AnimatedText text="让 AI 成为你的" delay={0.2} />
+            <AnimatedText text="拍作文与卷子" delay={0.2} />
             <br />
             <span className="relative inline-block">
-              <AnimatedText text="专属学习伙伴" delay={0.8} />
+              <AnimatedText text="生成专业反馈" delay={0.8} />
             </span>
           </h1>
 
@@ -536,15 +534,15 @@ export function HeroSection() {
             className="mx-auto mb-8 max-w-2xl text-base leading-7 md:text-lg md:leading-8 xl:mx-0 xl:text-xl"
             style={{ color: slateColors[600] }}
           >
-            上传作文，AI 逐段批改、指出问题、给出提分建议，
+            作文逐段批改，试卷错题诊断，一键整理成家长看得懂的反馈，
             <br className="hidden md:block" />
-            先免费体验批改，再按需选择套餐。
+            从“发现问题”到“训练建议”都能直接落地。
           </p>
 
           
 
           <div className="flex flex-col items-center justify-center gap-4 sm:flex-row xl:justify-start">
-            <Link href="/chat" prefetch={false}>
+            <Link href="/worksheet-diagnosis" prefetch={false}>
               <motion.button
                 className="group relative h-14 px-8 text-base font-bold rounded-2xl text-white overflow-hidden"
                 style={{
@@ -577,13 +575,13 @@ export function HeroSection() {
                   }}
                 />
                 <span className="relative flex items-center">
-                  <MessageSquare className="mr-2 h-5 w-5" />
-                  免费体验批改
+                  <ClipboardCheck className="mr-2 h-5 w-5" />
+                  生成错题诊断
                   <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
                 </span>
               </motion.button>
             </Link>
-            <Link href="/pricing" prefetch={false}>
+            <Link href="/chat/standard" prefetch={false}>
               <motion.button
                 className="group h-14 px-8 text-base font-semibold rounded-2xl border-2 bg-white/80 backdrop-blur-sm"
                 style={{
@@ -600,14 +598,14 @@ export function HeroSection() {
                 whileTap={{ scale: 0.98 }}
                 transition={{ duration: 0.2 }}
               >
-                查看套餐价格
+                作文批改
               </motion.button>
             </Link>
           </div>
 
           {/* 快捷入口 */}
           <div className="mx-auto mt-8 grid max-w-xl gap-3 sm:grid-cols-2 xl:mx-0">
-            <Link href="/chat?agent=quanquan-math" prefetch={false}>
+            <Link href="/worksheet-diagnosis" prefetch={false}>
               <motion.div
                 className="flex cursor-pointer items-center gap-3 rounded-2xl border border-primary/15 bg-white/85 px-5 py-4 text-left shadow-sm backdrop-blur transition-colors hover:border-primary/30"
                 whileHover={{ scale: 1.05, boxShadow: "0 8px 24px rgba(0,0,0,0.12)" }}
@@ -615,11 +613,11 @@ export function HeroSection() {
                 transition={{ duration: 0.2 }}
               >
                 <span className="flex size-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                  <Calculator className="size-5" />
+                  <ClipboardCheck className="size-5" />
                 </span>
                 <div className="text-left">
-                  <div className="text-sm font-semibold text-slate-800">全学段数学</div>
-                  <div className="text-xs text-slate-500">数学问题解答</div>
+                  <div className="text-sm font-semibold text-slate-800">错题诊断海报</div>
+                  <div className="text-xs text-slate-500">拍卷子给家长反馈</div>
                 </div>
               </motion.div>
             </Link>

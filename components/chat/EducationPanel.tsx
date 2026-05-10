@@ -90,9 +90,17 @@ interface EducationPanelProps {
 
 const EDUCATION_AGENTS: EducationAgent[] = [
   {
+    key: "worksheet-diagnosis",
+    name: "错题诊断海报",
+    description: "拍卷子生成家长反馈",
+    badge: "推荐",
+    href: "/worksheet-diagnosis",
+  },
+  {
     key: "standard",
     name: "作文批改",
     description: "专业作文分析与点评",
+    badge: "主打",
     href: "/chat/standard",
   },
   {

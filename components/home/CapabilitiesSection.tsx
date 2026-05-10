@@ -8,7 +8,7 @@
 "use client"
 
 import { motion } from "framer-motion"
-import { FileText, Calendar, MessageCircle, BarChart, type LucideIcon } from "lucide-react"
+import { FileText, Calendar, MessageCircle, BarChart, ClipboardCheck, type LucideIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { brandColors, slateColors, creamColors } from "@/lib/design-tokens"
 
@@ -23,6 +23,11 @@ interface Capability {
 }
 
 const capabilities: Capability[] = [
+  {
+    icon: ClipboardCheck,
+    title: "错题诊断海报",
+    description: "上传试卷图片，AI 自动识别错题、归因学习问题，并生成适合家长沟通的训练建议"
+  },
   {
     icon: FileText,
     title: "智能作文批改",

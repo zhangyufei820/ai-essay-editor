@@ -45,6 +45,18 @@ describe("Dify credential selection", () => {
     })
   })
 
+  it("uses the dedicated worksheet diagnosis workflow key when configured", () => {
+    const selection = getDifyCredentialForModel("worksheet-diagnosis", {
+      DIFY_WORKSHEET_DIAGNOSIS_API_KEY: "worksheet-key",
+      ESSAY_CORRECTION_API_KEY: "default-key",
+    })
+
+    expect(selection).toEqual({
+      credential: "worksheet-key",
+      source: "DIFY_WORKSHEET_DIAGNOSIS_API_KEY",
+    })
+  })
+
   it("does not silently fall back to a heavy key for general-chat in production", () => {
     const selection = getDifyCredentialForModel("general-chat", {
       NODE_ENV: "production",

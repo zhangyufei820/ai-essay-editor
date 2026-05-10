@@ -13,7 +13,7 @@ import Link from 'next/link'
 
 // 首屏组件 - 直接导入（关键路径）
 import { HeroSection } from '@/components/home/HeroSection'
-import { Calculator, HelpCircle, FileText, Sparkles, ArrowRight } from 'lucide-react'
+import { ClipboardCheck, HelpCircle, FileText, Sparkles, ArrowRight } from 'lucide-react'
 
 const OpenClawSection = dynamic(
   () => import('@/components/home/OpenClawSection').then(mod => ({ default: mod.OpenClawSection })),
@@ -94,10 +94,10 @@ function SectionSkeleton({ height = "400px" }: { height?: string }) {
 export default function Home() {
   const quickEntries = [
     {
-      href: "/chat/quanquan-math",
-      title: "全学段数学",
-      description: "数学问题解答",
-      icon: Calculator,
+      href: "/worksheet-diagnosis",
+      title: "错题诊断海报",
+      description: "拍卷子生成反馈",
+      icon: ClipboardCheck,
     },
     {
       href: "/chat/problem",
@@ -106,7 +106,7 @@ export default function Home() {
       icon: HelpCircle,
     },
     {
-      href: "/chat/standard",
+      href: "/essay",
       title: "作文批改",
       description: "专业点评建议",
       icon: FileText,

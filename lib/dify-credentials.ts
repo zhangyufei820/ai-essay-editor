@@ -40,6 +40,8 @@ export function getDifyCredentialForModel(
       return selectCredential(env.DIFY_BEIKE_PRO_API_KEY, "DIFY_BEIKE_PRO_API_KEY", defaultCredential)
     case "banzhuren":
       return selectCredential(env.DIFY_BANZHUREN_API_KEY, "DIFY_BANZHUREN_API_KEY", defaultCredential)
+    case "worksheet-diagnosis":
+      return selectCredential(env.DIFY_WORKSHEET_DIAGNOSIS_API_KEY, "DIFY_WORKSHEET_DIAGNOSIS_API_KEY", defaultCredential)
     case "ai-writing-paper":
     case "zhongying-essay":
     case "reading-report":

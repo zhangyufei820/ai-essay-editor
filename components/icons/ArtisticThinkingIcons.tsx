@@ -14,7 +14,8 @@ import {
   Calculator,
   Languages,
   LayoutDashboard,
-  UsersRound
+  UsersRound,
+  ClipboardCheck
 } from "lucide-react"
 
 // ============================================
@@ -29,6 +30,7 @@ export type ModelIconKey =
   | "vocab-card"      // 词境记忆卡
   | "beike-pro"       // 备课助手
   | "banzhuren"       // 班主任助手
+  | "worksheet-diagnosis" // 错题诊断海报
 
 const MODEL_ICONS: Record<ModelIconKey, React.ElementType> = {
   "standard": FileCheck2,
@@ -38,6 +40,7 @@ const MODEL_ICONS: Record<ModelIconKey, React.ElementType> = {
   "vocab-card": Languages,
   "beike-pro": LayoutDashboard,
   "banzhuren": UsersRound,
+  "worksheet-diagnosis": ClipboardCheck,
 }
 
 // ============================================
