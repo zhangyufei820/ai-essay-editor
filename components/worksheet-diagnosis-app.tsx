@@ -58,6 +58,20 @@ type AnalyzeResponse = {
   }
 }
 
+type AnalyzeStreamEvent =
+  | ({ type: "progress"; message?: string } & Partial<AnalyzeResponse>)
+  | ({ type: "result" } & AnalyzeResponse)
+  | {
+    type: "error"
+    error?: string
+    code?: string
+    status?: number | string
+    billing?: {
+      chargedCredits: number
+      refunded?: boolean
+    }
+  }
+
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -105,6 +119,7 @@ export function WorksheetDiagnosisApp() {
   const [worksheets, setWorksheets] = useState<UploadedWorksheet[]>([])
   const [isUploading, setIsUploading] = useState(false)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [analyzeProgress, setAnalyzeProgress] = useState("")
   const [result, setResult] = useState<AnalyzeResponse | null>(null)
   const [errorMessage, setErrorMessage] = useState("")
 
@@ -186,6 +201,7 @@ export function WorksheetDiagnosisApp() {
   const analyze = async () => {
     if (!canAnalyze) return
     setIsAnalyzing(true)
+    setAnalyzeProgress("正在准备诊断")
     setResult(null)
     setErrorMessage("")
 
@@ -210,11 +226,46 @@ export function WorksheetDiagnosisApp() {
         }),
       })
 
+      const contentType = response.headers.get("Content-Type") || ""
+      if (contentType.includes("application/x-ndjson") && response.body) {
+        if (!response.ok) throw new Error(`诊断失败：${response.status}`)
+        const reader = response.body.getReader()
+        const decoder = new TextDecoder()
+        let buffer = ""
+        let finalPayload: AnalyzeResponse | null = null
+
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+
+          buffer += decoder.decode(value, { stream: true })
+          const lines = buffer.split("\n")
+          buffer = lines.pop() || ""
+
+          for (const line of lines) {
+            if (!line.trim()) continue
+            const event = JSON.parse(line) as AnalyzeStreamEvent
+            if (event.type === "progress") {
+              setAnalyzeProgress(event.message || "正在诊断")
+            } else if (event.type === "result") {
+              finalPayload = event
+            } else if (event.type === "error") {
+              const refundHint = event.billing?.refunded ? "，本次积分已自动退回" : ""
+              throw new Error(`${event.error || `诊断失败：${event.status || event.code || "服务异常"}`}${refundHint}`)
+            }
+          }
+        }
+
+        if (!finalPayload) throw new Error("诊断没有返回结果，请稍后重试。")
+        setResult(finalPayload)
+        toast.success(`错题诊断已完成，已消耗 ${finalPayload.billing?.chargedCredits || diagnosisCredits} 积分`)
+        return
+      }
+
       const payload = await response.json().catch(() => ({}))
       if (!response.ok) {
         throw new Error(payload.error || `诊断失败：${response.status}`)
       }
-
       setResult(payload)
       toast.success(`错题诊断已完成，已消耗 ${payload.billing?.chargedCredits || diagnosisCredits} 积分`)
     } catch (error) {
@@ -223,6 +274,7 @@ export function WorksheetDiagnosisApp() {
       toast.error(message)
     } finally {
       setIsAnalyzing(false)
+      setAnalyzeProgress("")
     }
   }
 
@@ -355,6 +407,9 @@ export function WorksheetDiagnosisApp() {
               {isAnalyzing ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Sparkles className="mr-2 size-4" />}
               {isAnalyzing ? "正在诊断" : "开始诊断"}
             </Button>
+            {isAnalyzing && analyzeProgress ? (
+              <p className="text-center text-sm text-muted-foreground">{analyzeProgress}</p>
+            ) : null}
             <div className="rounded-2xl border border-primary/10 bg-primary/5 px-4 py-3 text-sm leading-6 text-muted-foreground">
               <p className="font-semibold text-foreground">本次诊断：{diagnosisCredits} 积分</p>
               <p>生成诊断草稿后，如继续生成海报，预计另需 {WORKSHEET_REPORT_IMAGE_CREDITS} 积分。</p>

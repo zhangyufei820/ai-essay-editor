@@ -59,6 +59,13 @@ function mapAnalyzeError(error: unknown) {
   }
 }
 
+function writeStreamEvent(
+  controller: ReadableStreamDefaultController<Uint8Array>,
+  event: Record<string, unknown>,
+) {
+  controller.enqueue(new TextEncoder().encode(`${JSON.stringify(event)}\n`))
+}
+
 async function refundWorksheetDiagnosisCredits(input: {
   userId: string
   requestId: string
@@ -93,9 +100,9 @@ async function refundWorksheetDiagnosisCredits(input: {
 export async function POST(request: NextRequest) {
   const requestId = request.headers.get("X-Request-Id") || createRequestId("worksheet")
   let chargedCredits = 0
-  let wasCharged = false
   let billingMetadata: BillingAuditMetadata | undefined
   let userIdForRefund = ""
+  const startedAt = Date.now()
 
   const ip = getClientIP(request)
   const limitResult = checkIpRateLimit(ip, 20)
@@ -155,7 +162,7 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    wasCharged = await chargeCreditsSafely(
+    const wasCharged = await chargeCreditsSafely(
       auth.user!.id,
       chargedCredits,
       "worksheet_diagnosis",
@@ -176,87 +183,147 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const credential = getDifyCredentialForModel("worksheet-diagnosis")
-    const workflow = await runDifyWorkflow({
-      apiKey: credential.credential,
-      user: auth.user!.id,
-      inputs: buildWorksheetDiagnosisInputs(parsed.data),
-      responseMode: "blocking",
-      timeoutMs: Number(process.env.DIFY_WORKSHEET_DIAGNOSIS_TIMEOUT_MS || 120_000),
+    console.log("[WorksheetDiagnosis] analyze started", {
+      requestId,
+      userId: auth.user!.id,
+      imageCount: parsed.data.images.length,
+      chargedCredits,
     })
 
-    if (workflow.status && workflow.status !== "succeeded") {
-      const refunded = await refundWorksheetDiagnosisCredits({
-        userId: auth.user!.id,
-        requestId,
-        amount: chargedCredits,
-        reason: `workflow_status_${workflow.status}`,
-        metadata: billingMetadata,
-      })
-      wasCharged = !refunded
-
-      return NextResponse.json(
-        {
-          error: "错题诊断服务暂时不可用，请稍后重试。",
-          code: "DIFY_WORKFLOW_NOT_SUCCEEDED",
-          status: workflow.status,
-          workflowRunId: workflow.workflowRunId,
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        let settled = false
+        writeStreamEvent(controller, {
+          type: "progress",
+          requestId,
+          message: "已开始诊断，请稍候。",
           billing: {
             chargedCredits,
-            refunded,
+            refunded: false,
+            imageCount: parsed.data.images.length,
           },
-        },
-        { status: 502, headers: { "X-Request-Id": requestId } },
-      )
-    }
+        })
 
-    const diagnosis = parseWorksheetDiagnosis(workflow.outputs)
-    const renderPrompt = buildWorksheetReportRenderPrompt(diagnosis, parsed.data.reportStyle)
+        const heartbeat = setInterval(() => {
+          if (settled) return
+          writeStreamEvent(controller, {
+            type: "progress",
+            requestId,
+            elapsedMs: Date.now() - startedAt,
+            message: "正在识别卷面并生成诊断。",
+          })
+        }, 10_000)
 
-    return NextResponse.json(
-      {
-        ok: true,
-        requestId,
-        workflowRunId: workflow.workflowRunId,
-        taskId: workflow.taskId,
-        diagnosis,
-        renderPrompt,
-        rawOutputs: workflow.outputs,
-        billing: {
-          chargedCredits,
-          refunded: false,
-          imageCount: parsed.data.images.length,
-        },
+        ;(async () => {
+          try {
+            const credential = getDifyCredentialForModel("worksheet-diagnosis")
+            const workflow = await runDifyWorkflow({
+              apiKey: credential.credential,
+              user: auth.user!.id,
+              inputs: buildWorksheetDiagnosisInputs(parsed.data),
+              responseMode: "blocking",
+              timeoutMs: Number(process.env.DIFY_WORKSHEET_DIAGNOSIS_TIMEOUT_MS || 120_000),
+            })
+
+            if (workflow.status && workflow.status !== "succeeded") {
+              const refunded = await refundWorksheetDiagnosisCredits({
+                userId: auth.user!.id,
+                requestId,
+                amount: chargedCredits,
+                reason: `workflow_status_${workflow.status}`,
+                metadata: billingMetadata,
+              })
+
+              writeStreamEvent(controller, {
+                type: "error",
+                requestId,
+                error: "错题诊断服务暂时不可用，请稍后重试。",
+                code: "DIFY_WORKFLOW_NOT_SUCCEEDED",
+                status: workflow.status,
+                workflowRunId: workflow.workflowRunId,
+                billing: {
+                  chargedCredits,
+                  refunded,
+                },
+              })
+              return
+            }
+
+            const diagnosis = parseWorksheetDiagnosis(workflow.outputs)
+            const renderPrompt = buildWorksheetReportRenderPrompt(diagnosis, parsed.data.reportStyle)
+            console.log("[WorksheetDiagnosis] analyze completed", {
+              requestId,
+              workflowRunId: workflow.workflowRunId,
+              elapsedMs: Date.now() - startedAt,
+            })
+
+            writeStreamEvent(controller, {
+              type: "result",
+              ok: true,
+              requestId,
+              workflowRunId: workflow.workflowRunId,
+              taskId: workflow.taskId,
+              diagnosis,
+              renderPrompt,
+              rawOutputs: workflow.outputs,
+              billing: {
+                chargedCredits,
+                refunded: false,
+                imageCount: parsed.data.images.length,
+              },
+            })
+          } catch (error) {
+            const refunded = await refundWorksheetDiagnosisCredits({
+              userId: userIdForRefund,
+              requestId,
+              amount: chargedCredits,
+              reason: error instanceof Error ? error.message : String(error),
+              metadata: billingMetadata,
+            })
+
+            console.error("[WorksheetDiagnosis] analyze failed", {
+              requestId,
+              message: error instanceof Error ? error.message : String(error),
+              elapsedMs: Date.now() - startedAt,
+              refunded,
+            })
+            const mapped = mapAnalyzeError(error)
+            writeStreamEvent(controller, {
+              type: "error",
+              requestId,
+              ...mapped.body,
+              status: mapped.status,
+              billing: {
+                chargedCredits,
+                refunded,
+              },
+            })
+          } finally {
+            settled = true
+            clearInterval(heartbeat)
+            controller.close()
+          }
+        })()
       },
-      { headers: { "X-Request-Id": requestId } },
-    )
-  } catch (error) {
-    const refunded = wasCharged
-      ? await refundWorksheetDiagnosisCredits({
-        userId: userIdForRefund,
-        requestId,
-        amount: chargedCredits,
-        reason: error instanceof Error ? error.message : String(error),
-        metadata: billingMetadata,
-      })
-      : false
-    wasCharged = wasCharged && !refunded
+    })
 
+    return new Response(stream, {
+      status: 200,
+      headers: {
+        "Content-Type": "application/x-ndjson; charset=utf-8",
+        "Cache-Control": "no-cache, no-transform",
+        "X-Accel-Buffering": "no",
+        "X-Request-Id": requestId,
+      },
+    })
+  } catch (error) {
     console.error("[WorksheetDiagnosis] analyze failed", {
       requestId,
       message: error instanceof Error ? error.message : String(error),
-      refunded,
+      elapsedMs: Date.now() - startedAt,
     })
     const mapped = mapAnalyzeError(error)
-    return NextResponse.json({
-      ...mapped.body,
-      billing: chargedCredits > 0
-        ? {
-          chargedCredits,
-          refunded,
-        }
-        : undefined,
-    }, {
+    return NextResponse.json(mapped.body, {
       status: mapped.status,
       headers: { "X-Request-Id": requestId },
     })
