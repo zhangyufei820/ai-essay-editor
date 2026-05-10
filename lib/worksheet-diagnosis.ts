@@ -125,6 +125,9 @@ export function buildWorksheetDiagnosisInputs(input: WorksheetDiagnosisRequest) 
       "Return strict JSON only.",
       "Use keys: schema_version, subject, grade_hint, overall_summary, main_issues, evidence, solutions, training_plan, parent_message, cautions.",
       "Every diagnosis point must be supported by visible worksheet evidence.",
+      "The parent_message field means parent-teacher communication suggestion, not a message to the student.",
+      "Keep parent_message neutral, factual, and suitable even if a student accidentally sees it.",
+      "Avoid blaming labels, anxiety-inducing wording, or phrases like 'your child is poor at'. Prefer 'student currently shows...' and 'we can coordinate...'.",
       "Do not add medical or psychological labels.",
     ].join("\n"),
   }
@@ -151,7 +154,7 @@ export function parseWorksheetDiagnosis(outputs: Record<string, unknown>): Works
 
 export function buildWorksheetReportRenderPrompt(diagnosis: WorksheetDiagnosis, style: WorksheetDiagnosisRequest["reportStyle"]) {
   const styleLabel = {
-    parent: "家长沟通版：温和、清晰、可转发",
+    parent: "家校沟通版：中性、清晰、适合家长与老师沟通",
     teacher: "教师反馈版：证据明确、结构严谨",
     student: "学生自查版：行动清单突出、语气鼓励",
   }[style]
@@ -161,11 +164,12 @@ export function buildWorksheetReportRenderPrompt(diagnosis: WorksheetDiagnosis, 
     `报告风格：${styleLabel}`,
     "",
     "设计要求：",
-    "1. 3:4 竖版信息图，建议输出 1080x1440，适合手机截图和家长群转发。",
-    "2. 分区包含：主要问题、卷面证据、解决方案、7天训练计划、家长沟通话术。",
+    "1. 3:4 竖版信息图，建议输出 1080x1440，适合手机截图和家校沟通。",
+    "2. 分区包含：整体观察、主要问题、卷面证据、解决方案、7天训练计划、家校沟通建议。",
     "3. 中文必须准确可读，不要编造题目、分数或证据。",
-    "4. 语气温和专业，不使用智力、人格、心理疾病等标签。",
-    "5. 视觉上清晰克制，使用问题/建议/行动三类颜色区分。",
+    "4. 语气中性专业，不使用智力、人格、心理疾病等标签，不出现会让学生产生压力的责备式表达。",
+    "5. 所有分区同级呈现，不做主次高低排序；标题统一使用品牌主色识别。",
+    "6. 视觉上清晰克制，采用成熟教育科技产品风格，避免花哨装饰。",
     "",
     "诊断 JSON：",
     JSON.stringify(diagnosis, null, 2),

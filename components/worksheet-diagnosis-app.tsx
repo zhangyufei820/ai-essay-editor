@@ -2,7 +2,7 @@
 
 /* eslint-disable @next/next/no-img-element -- User uploaded worksheet previews need native object URLs. */
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { createClient } from "@supabase/supabase-js"
 import {
   ClipboardCheck,
@@ -168,7 +168,7 @@ export function WorksheetDiagnosisApp() {
   const diagnosisCredits = calculateWorksheetDiagnosisCredits(Math.max(1, worksheets.length))
 
   const styleLabel = useMemo(() => ({
-    parent: "家长沟通版",
+    parent: "家校沟通版",
     teacher: "教师反馈版",
     student: "学生自查版",
   }[reportStyle]), [reportStyle])
@@ -343,7 +343,7 @@ export function WorksheetDiagnosisApp() {
   const copyParentMessage = async () => {
     if (!result?.diagnosis.parent_message) return
     await navigator.clipboard.writeText(result.diagnosis.parent_message)
-    toast.success("家长沟通话术已复制")
+    toast.success("家校沟通建议已复制")
   }
 
   const keepDiagnosisOnly = () => {
@@ -467,10 +467,10 @@ export function WorksheetDiagnosisApp() {
             错题诊断海报
           </div>
           <h1 className="max-w-3xl text-3xl font-black leading-tight text-foreground md:text-5xl">
-            拍一张卷子，生成家长看得懂的学习反馈
+            拍一张卷子，生成家校沟通诊断报告
           </h1>
           <p className="mt-4 max-w-2xl text-base leading-7 text-muted-foreground md:text-lg">
-            自动识别卷面与错题证据，整理主要问题、解决方案和训练建议，生成适合家长沟通的反馈草稿。
+            自动识别卷面与错题证据，整理观察结论、解决方案和训练建议，生成适合家长与老师沟通的报告。
           </p>
 
           <div className="mt-8 grid gap-4 sm:grid-cols-3">
@@ -561,7 +561,7 @@ export function WorksheetDiagnosisApp() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="parent">家长沟通版</SelectItem>
+                  <SelectItem value="parent">家校沟通版</SelectItem>
                   <SelectItem value="teacher">教师反馈版</SelectItem>
                   <SelectItem value="student">学生自查版</SelectItem>
                 </SelectContent>
@@ -600,7 +600,7 @@ export function WorksheetDiagnosisApp() {
               <MessageSquareText className="size-5 text-primary" />
               诊断结果
             </CardTitle>
-            <CardDescription>{result ? styleLabel : "上传试卷后，会生成结构化诊断和家长沟通话术。"}</CardDescription>
+            <CardDescription>{result ? styleLabel : "上传试卷后，会生成结构化诊断和家校沟通建议。"}</CardDescription>
           </CardHeader>
           <CardContent>
             {errorMessage ? (
@@ -624,7 +624,7 @@ export function WorksheetDiagnosisApp() {
                 <ClipboardCheck className="mb-4 size-10 text-muted-foreground" />
                 <p className="font-semibold text-foreground">等待诊断</p>
                 <p className="mt-2 max-w-sm text-sm leading-6 text-muted-foreground">
-                  结果会包含主要问题、卷面证据、解决方案、训练计划和家长沟通话术。
+                  结果会包含观察结论、主要问题、卷面证据、解决方案、训练计划和家校沟通建议。
                 </p>
               </div>
             ) : (
@@ -634,7 +634,7 @@ export function WorksheetDiagnosisApp() {
                     <div>
                       <p className="text-sm font-semibold text-primary">下一步</p>
                       <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                        诊断已完成，可以先查看文字诊断，也可以继续生成适合转发的诊断海报。
+                        诊断已完成，可以先查看文字报告，也可以继续生成适合家校沟通的诊断海报。
                       </p>
                     </div>
                     <div className="flex flex-col gap-2 sm:flex-row">
@@ -675,7 +675,7 @@ export function WorksheetDiagnosisApp() {
                     <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                       <div>
                         <p className="text-sm font-semibold text-primary">诊断海报</p>
-                        <p className="mt-1 text-sm text-muted-foreground">可下载后转发给家长或保存到相册。</p>
+                        <p className="mt-1 text-sm text-muted-foreground">可下载后用于家校沟通或保存到相册。</p>
                       </div>
                       <a
                         href={posterResult.downloadUrl}
@@ -694,8 +694,8 @@ export function WorksheetDiagnosisApp() {
                   </div>
                 ) : null}
 
-                <div className="rounded-2xl bg-primary/5 p-5">
-                  <p className="text-sm font-semibold text-primary">整体判断</p>
+                <div className="rounded-2xl border border-border bg-white p-5 shadow-sm">
+                  <SectionTitle>整体观察</SectionTitle>
                   <p className="mt-2 leading-7 text-foreground">{result.diagnosis.overall_summary || "暂未生成整体判断。"}</p>
                   {result.billing?.chargedCredits ? (
                     <p className="mt-3 text-xs font-medium text-primary">
@@ -708,10 +708,10 @@ export function WorksheetDiagnosisApp() {
                 <ResultList title="解决方案" items={result.diagnosis.solutions} />
 
                 <div>
-                  <h3 className="mb-3 text-base font-bold">卷面证据</h3>
+                  <SectionTitle className="mb-3">卷面证据</SectionTitle>
                   <div className="space-y-3">
                     {result.diagnosis.evidence?.length ? result.diagnosis.evidence.map((item, index) => (
-                      <div key={index} className="rounded-2xl border bg-white p-4">
+                      <div key={index} className="rounded-2xl border border-border bg-white p-4 shadow-sm">
                         <p className="font-semibold">{item.question || `证据 ${index + 1}`}</p>
                         <p className="mt-1 text-sm leading-6 text-muted-foreground">{item.reason}</p>
                         {item.quote ? <p className="mt-2 rounded-xl bg-muted/60 px-3 py-2 text-xs text-muted-foreground">{item.quote}</p> : null}
@@ -721,10 +721,10 @@ export function WorksheetDiagnosisApp() {
                 </div>
 
                 <div>
-                  <h3 className="mb-3 text-base font-bold">训练计划</h3>
+                  <SectionTitle className="mb-3">训练计划</SectionTitle>
                   <div className="grid gap-3 md:grid-cols-2">
                     {result.diagnosis.training_plan?.length ? result.diagnosis.training_plan.map((item, index) => (
-                      <div key={index} className="rounded-2xl border bg-white p-4">
+                      <div key={index} className="rounded-2xl border border-border bg-white p-4 shadow-sm">
                         <p className="font-semibold">{item.title || `训练 ${index + 1}`}</p>
                         <p className="mt-1 text-sm leading-6 text-muted-foreground">{item.action}</p>
                         {item.frequency ? <p className="mt-2 text-xs font-medium text-primary">{item.frequency}</p> : null}
@@ -733,11 +733,11 @@ export function WorksheetDiagnosisApp() {
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-primary/15 bg-white p-5">
+                <div className="rounded-2xl border border-border bg-white p-5 shadow-sm">
                   <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                     <div>
-                      <p className="text-sm font-semibold text-primary">家长沟通话术</p>
-                      <p className="mt-2 leading-7 text-foreground">{result.diagnosis.parent_message || "暂无家长话术。"}</p>
+                      <SectionTitle>家校沟通建议</SectionTitle>
+                      <p className="mt-2 leading-7 text-foreground">{result.diagnosis.parent_message || "暂无家校沟通建议。"}</p>
                     </div>
                     <Button variant="outline" onClick={copyParentMessage} className="h-10 shrink-0 rounded-2xl">
                       <Copy className="mr-2 size-4" />
@@ -757,11 +757,11 @@ export function WorksheetDiagnosisApp() {
 function ResultList({ title, items }: { title: string; items?: string[] }) {
   return (
     <div>
-      <h3 className="mb-3 text-base font-bold">{title}</h3>
+      <SectionTitle className="mb-3">{title}</SectionTitle>
       {items?.length ? (
         <div className="grid gap-3 md:grid-cols-2">
           {items.map((item, index) => (
-            <div key={`${title}-${index}`} className="rounded-2xl border bg-white p-4 text-sm leading-6 text-foreground">
+            <div key={`${title}-${index}`} className="rounded-2xl border border-border bg-white p-4 text-sm leading-6 text-foreground shadow-sm">
               {item}
             </div>
           ))}
@@ -770,6 +770,15 @@ function ResultList({ title, items }: { title: string; items?: string[] }) {
         <p className="text-sm text-muted-foreground">暂无内容。</p>
       )}
     </div>
+  )
+}
+
+function SectionTitle({ children, className = "" }: { children: ReactNode; className?: string }) {
+  return (
+    <h3 className={`flex items-center gap-2 text-sm font-bold text-primary ${className}`}>
+      <span className="h-4 w-1 rounded-full bg-primary" />
+      {children}
+    </h3>
   )
 }
 

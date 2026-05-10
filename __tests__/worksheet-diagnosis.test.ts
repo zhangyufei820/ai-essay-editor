@@ -79,10 +79,11 @@ describe("worksheet diagnosis Dify contract", () => {
     })
 
     const prompt = buildWorksheetReportRenderPrompt(diagnosis, "parent")
-    expect(prompt).toContain("家长沟通版")
+    expect(prompt).toContain("家校沟通版")
     expect(prompt).toContain("审题不完整")
     expect(prompt).toContain("不要编造题目")
     expect(prompt).toContain("1080x1440")
+    expect(prompt).toContain("所有分区同级呈现")
   })
 
   it("calculates worksheet diagnosis fixed credits by image count", () => {
