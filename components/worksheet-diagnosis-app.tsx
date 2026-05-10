@@ -284,6 +284,12 @@ export function WorksheetDiagnosisApp() {
     toast.success("海报内容草稿已复制")
   }
 
+  const copyParentMessage = async () => {
+    if (!result?.diagnosis.parent_message) return
+    await navigator.clipboard.writeText(result.diagnosis.parent_message)
+    toast.success("家长沟通话术已复制")
+  }
+
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
       <section className="grid gap-6 lg:grid-cols-[minmax(0,0.92fr)_minmax(360px,0.58fr)]">
@@ -444,6 +450,30 @@ export function WorksheetDiagnosisApp() {
               </div>
             ) : (
               <div className="space-y-6">
+                <div className="rounded-2xl border border-primary/15 bg-primary/5 p-5">
+                  <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-primary">下一步</p>
+                      <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                        先复制话术发给家长；需要做成图片时，再复制海报草稿继续生成。
+                      </p>
+                    </div>
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <Button variant="outline" onClick={copyParentMessage} className="h-10 rounded-2xl">
+                        <Copy className="mr-2 size-4" />
+                        复制家长话术
+                      </Button>
+                      <Button onClick={copyRenderPrompt} className="h-10 rounded-2xl">
+                        <Sparkles className="mr-2 size-4" />
+                        复制海报草稿
+                      </Button>
+                    </div>
+                  </div>
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    自动生成诊断海报预计另需 {WORKSHEET_REPORT_IMAGE_CREDITS} 积分，接入后会在这里直接生成。
+                  </p>
+                </div>
+
                 <div className="rounded-2xl bg-primary/5 p-5">
                   <p className="text-sm font-semibold text-primary">整体判断</p>
                   <p className="mt-2 leading-7 text-foreground">{result.diagnosis.overall_summary || "暂未生成整体判断。"}</p>
@@ -487,11 +517,6 @@ export function WorksheetDiagnosisApp() {
                   <p className="text-sm font-semibold text-primary">家长沟通话术</p>
                   <p className="mt-2 leading-7 text-foreground">{result.diagnosis.parent_message || "暂无家长话术。"}</p>
                 </div>
-
-                <Button variant="outline" onClick={copyRenderPrompt} className="h-11 rounded-2xl">
-                  <Copy className="mr-2 size-4" />
-                  复制海报内容草稿
-                </Button>
               </div>
             )}
           </CardContent>
