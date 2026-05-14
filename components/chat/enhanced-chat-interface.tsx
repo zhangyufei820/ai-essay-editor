@@ -37,6 +37,8 @@ import { LoadingStateCard } from "@/components/ui/LoadingStateCard"
 import { ChatSkeleton } from "@/components/ui/chat-skeleton"
 import { motion, AnimatePresence } from "framer-motion"
 import { EnhancedMarkdown } from "./EnhancedMarkdown"
+import { AssistantEyeAvatar } from "./AssistantEyeAvatar"
+import { EmpathicEyeLoader } from "./EmpathicEyeLoader"
 import { OpenClawHtmlPreview } from "./OpenClawHtmlPreview"
 import { UserMessageBubble } from "./UserMessageBubble"
 import { PremiumWordCard } from "./PremiumWordCard"
@@ -55,6 +57,7 @@ import { VoiceRecorder, getDifyTTS, transcribeAudio } from "@/lib/voice-service"
 import { getApiUrl } from "@/lib/api-config"
 import { logger } from "@/lib/logger"
 import { ModelLogo } from "@/components/ModelLogo"
+import { navigationModelConfig } from "@/lib/navigation-models"
 import { getOpenClawAttachmentKind, isLikelyHtmlDocumentUrl, toPublicOpenClawMediaSignUrl, toPublicOpenClawWorkspaceUrl } from "@/lib/openclaw-media"
 import {
   calculatePreviewCost,
@@ -495,8 +498,12 @@ function ProcessingStatusCard({
   const stageText = context?.stage || (showLongWaitHint ? "处理时间稍长，请保持页面打开" : "")
 
   return (
-    <div className="inline-flex max-w-[560px] items-center gap-2 rounded-full bg-slate-50 px-3 py-2 text-slate-500">
-      {!isOpenClaw && <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-slate-400" />}
+    <div className="inline-flex max-w-[620px] items-center gap-3 rounded-2xl bg-white/70 px-2.5 py-2 text-slate-500 shadow-sm ring-1 ring-emerald-100/70 backdrop-blur">
+      <EmpathicEyeLoader
+        longWait={showLongWaitHint || isOpenClaw}
+        label={statusText}
+        className="shrink-0 scale-[0.58]"
+      />
       <div className="min-w-0">
         <div className="flex min-w-0 items-center gap-1.5">
           <span className="truncate text-xs font-medium text-slate-600">{statusText}</span>
@@ -1509,7 +1516,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   }, [messages, isLoading])
 
   // --- 模型配置（增强版：添加描述和标签） ---
-  const modelConfig: Partial<Record<ModelType, ModelUiConfig>> = {
+  const fallbackModelConfig: Partial<Record<ModelType, ModelUiConfig>> = {
     "general-chat": {
       name: "通用对话",
       modelKey: "general-chat",
@@ -1715,6 +1722,11 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       description: "校园宣传与活动稿件撰写",
       group: "AI写作"
     },
+  }
+
+  const modelConfig: Partial<Record<ModelType, ModelUiConfig>> = {
+    ...fallbackModelConfig,
+    ...navigationModelConfig,
   }
 
   const getModelUiConfig = (model: ModelType): ModelUiConfig => {
@@ -3321,14 +3333,17 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                     {messages.map((message) => (
                       <div key={message.id} className={cn("flex gap-1 sm:gap-2 group/message", message.role === "user" ? "justify-end" : "justify-start")}>
                       {message.role === "assistant" && (
-                        // Smaller AI avatar - 使用 ModelLogo
+                        // Smaller AI avatar - expressive assistant SVG.
                         <div
                           className={cn(
                             "mt-0.5 flex shrink-0 items-center justify-center",
-                            selectedModel === "open-claw" ? "h-12 w-12 sm:h-16 sm:w-16" : "h-7 w-7 sm:h-10 sm:w-10",
+                            selectedModel === "open-claw" ? "h-16 w-16 sm:h-[72px] sm:w-[72px]" : "h-11 w-11 sm:h-12 sm:w-12",
                           )}
                         >
-                          <ModelLogo modelKey={selectedModel as any} size={selectedModel === "open-claw" ? "xl" : "md"} />
+                          <AssistantEyeAvatar
+                            size={selectedModel === "open-claw" ? "xl" : "md"}
+                            isActive={message.id === currentBotIdRef.current && isLoading}
+                          />
                         </div>
                       )}
                       {/* Flat content container - No heavy backgrounds or borders */}

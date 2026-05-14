@@ -2,7 +2,6 @@
 /* eslint-disable @next/next/no-img-element -- Dynamic/user-generated/external image surfaces: keep native img to preserve sizing, blob/data/proxy URLs, payment QR codes, and chat preview behavior. */
 
 import Link from "next/link"
-import Image from "next/image"
 import { usePathname, useSearchParams, useRouter } from "next/navigation"
 import { useState, useEffect, useRef, Suspense, useCallback } from "react"
 import { motion } from "framer-motion"
@@ -516,20 +515,7 @@ function AppSidebarInner() {
           </button>
         )}
 
-        {/* 1. Logo 区域 - 去掉图片白底贴片感 */}
-        <div className="flex items-center shrink-0 px-5 pt-6 pb-4">
-          <Link href="/" onClick={handleNavClick} className="flex items-center w-full">
-            <Image
-              src="/images/design-mode/home-logo-transparent.png"
-              alt="Logo"
-              width={160}
-              height={40}
-              className="w-full h-auto object-contain"
-              style={{ maxWidth: "160px" }}
-              priority
-            />
-          </Link>
-        </div>
+        <div className="h-4 shrink-0" />
 
         {/* 2. 积分显示 - 可点击跳转 */}
         {user && (
