@@ -11,9 +11,9 @@ import { Textarea } from "@/components/ui/textarea"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useIsMobile } from "@/hooks/use-mobile"
 import {
-  Send, Paperclip, X, FileText, Copy, Loader2, User, AlertCircle,
+  Send, Paperclip, X, FileText, Loader2, User, AlertCircle,
   ChevronDown, ChevronLeft, ArrowDown, Sparkles,
-  Download, Share2, Printer, Mic, MicOff, Volume2, History, ExternalLink
+  Download, Mic, MicOff, History, ExternalLink
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { extractUserId } from "@/lib/auth-user"
@@ -24,7 +24,6 @@ import { ChatInput } from "./ChatInput"
 import { EmptyState } from "./EmptyState"
 import { AIStatusIndicator } from "@/components/ai/AIStatusIndicator"
 import { ModelSelector } from "./ModelSelector"
-import { WorkflowVisualizer } from "./WorkflowVisualizer"
 import { MathInline, MathBlock } from "./UltimateRenderer"
 import { useWorkflowVisualizer } from "@/hooks/useWorkflowVisualizer"
 // 🎵 Suno 音乐生成相关导入
@@ -38,7 +37,6 @@ import { ChatSkeleton } from "@/components/ui/chat-skeleton"
 import { motion, AnimatePresence } from "framer-motion"
 import { EnhancedMarkdown } from "./EnhancedMarkdown"
 import { AssistantEyeAvatar } from "./AssistantEyeAvatar"
-import { EmpathicEyeLoader } from "./EmpathicEyeLoader"
 import { OpenClawHtmlPreview } from "./OpenClawHtmlPreview"
 import { UserMessageBubble } from "./UserMessageBubble"
 import { PremiumWordCard } from "./PremiumWordCard"
@@ -498,12 +496,7 @@ function ProcessingStatusCard({
   const stageText = context?.stage || (showLongWaitHint ? "处理时间稍长，请保持页面打开" : "")
 
   return (
-    <div className="inline-flex max-w-[620px] items-center gap-3 rounded-2xl bg-white/70 px-2.5 py-2 text-slate-500 shadow-sm ring-1 ring-emerald-100/70 backdrop-blur">
-      <EmpathicEyeLoader
-        longWait={showLongWaitHint || isOpenClaw}
-        label={statusText}
-        className="shrink-0 scale-[0.58]"
-      />
+    <div className="inline-flex max-w-[560px] flex-col rounded-2xl bg-white/70 px-4 py-3 text-slate-500 shadow-sm ring-1 ring-emerald-100/70 backdrop-blur">
       <div className="min-w-0">
         <div className="flex min-w-0 items-center gap-1.5">
           <span className="truncate text-xs font-medium text-slate-600">{statusText}</span>
@@ -1140,18 +1133,10 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 
   // 🎯 工作流可视化 Hook (GenSpark 1:1 复刻版)
   const {
-    workflowState,
-    isProcessing: isWorkflowProcessing,
-    isThinking,
-    isGenerating,
     isFastTrack,
     showCursor,
     handleSSEEvent,
     resetWorkflow,
-    toggleExpanded,
-    getSummaryText,
-    markWorkflowComplete,
-    currentRunningText,
     triggerHandover
   } = useWorkflowVisualizer()
 
@@ -3370,17 +3355,6 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                         ) : (
                           // AI message - Flat, minimal container
                           <div className="w-full">
-                            {/* Workflow visualization - Only show when processing */}
-                            {message.id === currentBotIdRef.current && (isWorkflowProcessing || workflowState.nodes.length > 0) && !isMobile && (
-                              <WorkflowVisualizer
-                                workflowState={workflowState}
-                                isThinking={isThinking}
-                                isGenerating={isGenerating}
-                                onToggle={toggleExpanded}
-                                currentRunningText={currentRunningText}
-                                className="mb-3"
-                              />
-                            )}
                             {/* Thinking state */}
                             {message.id === currentBotIdRef.current && isLoading && !message.content && !isFastTrack ? (
                               <ProcessingStatusCard
@@ -3474,8 +3448,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                                     className="h-8 w-8 rounded-full p-0 text-slate-400 hover:text-slate-600 hover:bg-slate-100 touch-manipulation sm:h-8 sm:w-auto sm:px-2 sm:gap-1 sm:rounded-md sm:text-xs"
                                   onClick={() => navigator.clipboard.writeText(message.content).then(() => toast.success("已复制"))}
                                 >
-                                  <Copy className="h-3 w-3" />
-                                  <span className="hidden sm:inline">复制</span>
+                                  复制
                                 </Button>
                                 <Button
                                   variant="ghost"
@@ -3483,8 +3456,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                                     className="h-8 w-8 rounded-full p-0 text-slate-400 hover:text-slate-600 hover:bg-slate-100 touch-manipulation sm:h-8 sm:w-auto sm:px-2 sm:gap-1 sm:rounded-md sm:text-xs"
                                   onClick={() => window.print()}
                                 >
-                                  <Printer className="h-3 w-3" />
-                                  <span className="hidden sm:inline">打印</span>
+                                  打印
                                 </Button>
                                 <Button
                                   variant="ghost"
@@ -3492,8 +3464,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                                     className="h-8 w-8 rounded-full p-0 text-slate-400 hover:text-slate-600 hover:bg-slate-100 touch-manipulation sm:h-8 sm:w-auto sm:px-2 sm:gap-1 sm:rounded-md sm:text-xs"
                                   onClick={() => handleExportPDF(message.content)}
                                 >
-                                  <Download className="h-3 w-3" />
-                                  <span className="hidden sm:inline">导出</span>
+                                  导出
                                 </Button>
                                 <Button
                                   variant="ghost"
@@ -3501,8 +3472,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                                     className="h-8 w-8 rounded-full p-0 text-slate-400 hover:text-slate-600 hover:bg-slate-100 touch-manipulation sm:h-8 sm:w-auto sm:px-2 sm:gap-1 sm:rounded-md sm:text-xs"
                                   onClick={() => handleShare()}
                                 >
-                                  <Share2 className="h-3 w-3" />
-                                  <span className="hidden sm:inline">分享</span>
+                                  分享
                                 </Button>
                                 <Button
                                   variant="ghost"
@@ -3513,8 +3483,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                                   )}
                                   onClick={() => playAssistantMessage(message.content)}
                                 >
-                                  <Volume2 className="h-3 w-3" />
-                                  <span className="hidden sm:inline">{isPlaying ? "停止" : "朗读"}</span>
+                                  {isPlaying ? "停止" : "朗读"}
                                 </Button>
                               </div>
                             )}
