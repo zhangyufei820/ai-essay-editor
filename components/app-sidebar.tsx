@@ -11,7 +11,7 @@ import {
   Settings, ChevronRight, ChevronDown,
   Menu, X, LogOut, Zap, Coins,
   Bot, GraduationCap, Brain,
-  Gift, HelpCircle, Sparkles, Palette, User, Edit
+  Gift, HelpCircle, Sparkles, Palette, User, Edit, FlaskConical
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { AgentPanel } from "./chat/AgentPanel"
@@ -577,6 +577,33 @@ function AppSidebarInner() {
             }
           `}</style>
           
+          {/* PhET 互动实验室入口 */}
+          <div className="mt-4 mb-2">
+            <Link href="/lab" onClick={handleNavClick}>
+              <motion.div
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left"
+                style={{
+                  backgroundColor: "rgba(34, 197, 94, 0.08)",
+                  border: "1px solid rgba(34, 197, 94, 0.16)",
+                  boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)"
+                }}
+                whileHover={{
+                  x: 2,
+                  backgroundColor: "#FFFFFF",
+                  borderColor: "rgba(34, 197, 94, 0.28)",
+                  boxShadow: "0 4px 10px rgba(15, 23, 42, 0.06)"
+                }}
+                whileTap={{ scale: 0.99 }}
+                transition={{ duration: 0.15 }}
+              >
+                <FlaskConical className="w-[18px] h-[18px]" style={{ color: COLORS.primary.main }} />
+                <span className="text-[12px] font-medium leading-none whitespace-nowrap" style={{ color: COLORS.primary.dark }}>
+                  互动实验室
+                </span>
+              </motion.div>
+            </Link>
+          </div>
+
           {/* 智能体专区入口 - OpenClaw 专区 */}
           <div className="mt-4 mb-2">
             <motion.button

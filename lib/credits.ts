@@ -545,7 +545,7 @@ export async function getCreditTransactions(userId: string, limit: number = 50):
 export async function getUserReferralCode(userId: string): Promise<string | null> {
   const supabase = getSupabaseAdmin()
 
-  const { data, error } = await supabase.from("referral_codes").select("code").eq("user_id", userId).single()
+  const { data, error } = await supabase.from("referral_codes").select("code").eq("user_id", userId).maybeSingle()
 
   if (error) {
     console.error("[积分系统] 获取推荐码失败:", error)
@@ -638,6 +638,11 @@ export async function handleReferralSignup(newUserId: string, referralCode: stri
 // 创建用户推荐码
 export async function createUserReferralCode(userId: string): Promise<string | null> {
   const supabase = getSupabaseAdmin()
+
+  const existingCode = await getUserReferralCode(userId)
+  if (existingCode) {
+    return existingCode
+  }
   
   // 生成推荐码
   const prefix = "SX"

@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { readFileSync } from 'fs'
 import path from 'path'
-import { createBillingAuditMetadata, getUserCredits, summarizeCreditTransactions } from '@/lib/credits'
+import { createBillingAuditMetadata, createUserReferralCode, getUserCredits, summarizeCreditTransactions } from '@/lib/credits'
 import { hasActiveMembership, resolveMembershipStatus } from '@/lib/products'
 import { canUseImage2, parseAllowlistEnv } from '@/lib/permissions'
 
@@ -215,5 +215,25 @@ describe('credits helpers', () => {
     expect(source).toContain('.select("credits")')
     expect(source).toContain('.maybeSingle()')
     expect(source).toContain('recordTransaction(')
+  })
+
+  it('reuses an existing referral code instead of rotating shared invite links', async () => {
+    const referralCodeQuery = makeChain({
+      data: { code: 'SXOLDABC123' },
+      error: null,
+    })
+    const supabaseMock = {
+      from: jest.fn((table: string) => {
+        if (table === 'referral_codes') return referralCodeQuery
+        throw new Error(`Unexpected table: ${table}`)
+      }),
+    }
+
+    ;(createClient as jest.Mock).mockReturnValue(supabaseMock)
+
+    await expect(createUserReferralCode('user-abc123')).resolves.toBe('SXOLDABC123')
+
+    expect(referralCodeQuery.maybeSingle).toHaveBeenCalled()
+    expect(referralCodeQuery.upsert).not.toHaveBeenCalled()
   })
 })

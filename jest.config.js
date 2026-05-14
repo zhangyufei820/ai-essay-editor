@@ -6,7 +6,7 @@ module.exports = {
     '^@/(.*)$': '<rootDir>/$1',
   },
   testMatch: ['**/__tests__/**/*.test.ts'],
-  testPathIgnorePatterns: ['/node_modules/', '/.next/', '/.claude/'],
+  testPathIgnorePatterns: ['/node_modules/', '/.next/', '/.claude/', '/.cleanup-backups/'],
   transform: {
     '^.+\\.tsx?$': ['ts-jest', {
       tsconfig: {

@@ -155,6 +155,13 @@ export function Header() {
           </DropdownMenu>
 
           <Link
+            href="/lab"
+            className="flex h-9 items-center rounded-full px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            互动实验室
+          </Link>
+
+          <Link
             href="/teacher"
             className="flex h-9 items-center rounded-full px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
@@ -272,6 +279,9 @@ export function Header() {
             </Link>
             <Link href="/chat" className="block rounded-lg px-3 py-2 text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => setMobileMenuOpen(false)}>
               作文批改
+            </Link>
+            <Link href="/lab" className="block rounded-lg px-3 py-2 text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => setMobileMenuOpen(false)}>
+              互动实验室
             </Link>
 
             <Link

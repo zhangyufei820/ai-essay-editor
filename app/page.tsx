@@ -13,7 +13,16 @@ import Link from 'next/link'
 
 // 首屏组件 - 直接导入（关键路径）
 import { HeroSection } from '@/components/home/HeroSection'
+import { Header } from '@/components/header'
 import { ClipboardCheck, HelpCircle, FileText, Sparkles, ArrowRight } from 'lucide-react'
+
+const PhetLabSection = dynamic(
+  () => import('@/components/home/PhetLabSection').then(mod => ({ default: mod.PhetLabSection })),
+  {
+    loading: () => <SectionSkeleton height="520px" />,
+    ssr: true
+  }
+)
 
 const OpenClawSection = dynamic(
   () => import('@/components/home/OpenClawSection').then(mod => ({ default: mod.OpenClawSection })),
@@ -120,9 +129,14 @@ export default function Home() {
   ]
 
   return (
+    <>
+    <Header />
     <main className="min-h-screen bg-white">
       {/* Hero 区域 - 全屏首屏（关键路径，直接加载） */}
       <HeroSection />
+
+      {/* PhET 互动实验室 */}
+      <PhetLabSection />
 
       {/* OpenClaw 专区 */}
       <OpenClawSection />
@@ -190,5 +204,6 @@ export default function Home() {
         <HomeFooter />
       </Suspense>
     </main>
+    </>
   )
 }
