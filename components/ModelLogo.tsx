@@ -9,6 +9,7 @@ import {
   Languages,
   LayoutDashboard,
   UsersRound,
+  BrainCircuit,
   type LucideProps,
 } from "lucide-react"
 
@@ -30,6 +31,7 @@ export type ModelKey =
   | "vocab-card"
   | "beike-pro"
   | "banzhuren"
+  | "all-in-one-agent"
   | "banana-2-pro"
   | "suno-v5"
   | "banana"
@@ -106,6 +108,10 @@ const MODEL_LOGOS: Record<ModelKey, ModelLogoConfig> = {
   },
   "banzhuren": {
     LucideIcon: UsersRound,
+    brandColor: "#10A37F",
+  },
+  "all-in-one-agent": {
+    LucideIcon: BrainCircuit,
     brandColor: "#10A37F",
   },
 

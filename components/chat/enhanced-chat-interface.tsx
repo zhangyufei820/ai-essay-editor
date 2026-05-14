@@ -89,6 +89,7 @@ const MODEL_DISPLAY_NAMES: Record<string, string> = {
   "vocab-card": "词境记忆卡",
   "beike-pro": "备课助手",
   "banzhuren": "班主任助手",
+  "all-in-one-agent": "全能智能体",
   "suno-v5": "音乐",
   "ai-writing-paper": "论文写作",
   "zhongying-essay": "中英文作文",
@@ -108,6 +109,13 @@ type ModelUiConfig = {
   badge?: string
   group: string
 }
+
+const ALL_IN_ONE_AGENT_PROMPTS = [
+  "生成一个二次函数 y=x² 开口方向变化的动画，要求有坐标轴、关键标注和中文讲解。",
+  "帮我把这张图片改成适合课堂展示的教学插图，风格清晰、干净、适合投影。",
+  "根据我上传的文件，提炼重点并生成一份课堂讲解提纲和练习题。",
+  "我想做一个数学概念可视化，请先帮我完善提示词，再生成可执行方案。",
+]
 
 // 获取模型徽章颜色 — 强制归一：所有模型统一为翡翠绿 #10A37F
 function getModelBadgeColor(_modelKey: string): string {
@@ -1003,7 +1011,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   // 🔥 修复：跟踪主动会话切换（侧边栏点击 vs URL 导航）
   // 🔥 now in Zustand store: useSelectedModelStore
   // 🔥 修复：记录用户上次使用的模型（用于新建对话时恢复）
-  const lastUsedModelRef = useRef<ModelType>("general-chat")
+  const lastUsedModelRef = useRef<ModelType>((effectiveAgent as ModelType) || "general-chat")
 
   // ✅ 全局状态：所有组件共享单一 selectedModel 真源
   const selectedModel = useSelectedModelStore((s) => s.selectedModel)
@@ -1287,6 +1295,12 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       "suno-v5": "suno-v5",
       "grok-4.2": "grok-4.2",
       "open-claw": "open-claw",
+      "all-in-one-agent": "all-in-one-agent",
+      "quanquan-math": "quanquan-math",
+      "quanquan-english": "quanquan-english",
+      "vocab-card": "vocab-card",
+      "beike-pro": "beike-pro",
+      "banzhuren": "banzhuren",
     }
 
     const targetModel = urlAgent ? (agentToModel[urlAgent] || urlAgent as ModelType) : (initialModel || "general-chat")
@@ -1297,6 +1311,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       prevUrlAgentRef.current = urlAgent
 
       console.log(`🔄 [强制模型同步] → ${targetModel}`)
+      lastUsedModelRef.current = targetModel
       setSelectedModel(targetModel)
       setGenMode("text")
 
@@ -1312,17 +1327,19 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   useEffect(() => {
     if (initialModel && initialModel !== selectedModel && !urlSessionId) {
       console.log(`🔄 [模型同步] initialModel=${initialModel} → selectedModel=${initialModel}`)
+      lastUsedModelRef.current = initialModel
       setSelectedModel(initialModel)
     }
   }, [initialModel, urlSessionId])
 
   // 🔥 当 urlSessionId 为空时（新建对话），恢复用户上次使用的模型或默认模型
   useEffect(() => {
+    if (initialModel || urlAgent) return
     if (!urlSessionId && selectedModel !== lastUsedModelRef.current) {
       logger.debug(`🔄 [新建对话模型恢复] ${selectedModel} → ${lastUsedModelRef.current}`)
       setSelectedModel(lastUsedModelRef.current)
     }
-  }, [urlSessionId])
+  }, [initialModel, urlAgent, urlSessionId])
 
   const loadHistorySession = async (sid: string) => {
     logger.debug(`📂 [loadHistorySession] 开始加载会话: ${sid}`)
@@ -1550,6 +1567,14 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       modelKey: "banzhuren",
       color: BRAND_GREEN,
       description: "班级管理，家校沟通",
+      group: "教育专用"
+    },
+    "all-in-one-agent": {
+      name: "全能超级智能体",
+      modelKey: "all-in-one-agent",
+      color: BRAND_GREEN,
+      description: "动画、图片、文件全能创作",
+      badge: "新",
       group: "教育专用"
     },
     "gpt-5": {
@@ -3272,7 +3297,23 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                   <div className="mb-4 sm:mb-6">
                     <ModelLogo modelKey={selectedModel as any} size="xl" />
                   </div>
-                  <h1 className="text-lg sm:text-xl font-semibold text-slate-800 px-4">欢迎使用沈翔智学</h1>
+                  <h1 className="text-lg sm:text-xl font-semibold text-slate-800 px-4">
+                    {selectedModel === "all-in-one-agent" ? "全能超级智能体" : "欢迎使用沈翔智学"}
+                  </h1>
+                  {selectedModel === "all-in-one-agent" && (
+                    <div className="mt-5 grid w-full max-w-2xl grid-cols-1 gap-2 px-4 text-left sm:grid-cols-2">
+                      {ALL_IN_ONE_AGENT_PROMPTS.map((prompt) => (
+                        <button
+                          key={prompt}
+                          type="button"
+                          onClick={() => setInput(prompt)}
+                          className="rounded-lg border border-emerald-100 bg-white px-3 py-2.5 text-left text-xs leading-5 text-slate-600 shadow-sm transition hover:border-emerald-200 hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
+                        >
+                          {prompt}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 )
                 ) : (
@@ -3555,6 +3596,8 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                 placeholder={userId
                   ? selectedModel === "vocab-card"
                     ? "例如：你好啊 / 我要学习 apple / 考我一下"
+                    : selectedModel === "all-in-one-agent"
+                      ? "描述你想生成的动画、图片或要处理的文件..."
                     : "输入内容开始对话..."
                   : "请先登录..."}
                 className="overflow-visible border-slate-200/70 bg-white/95 shadow-[0_-4px_18px_rgba(0,0,0,0.06)] backdrop-blur-md sm:shadow-[0_8px_24px_rgba(0,0,0,0.10)]"

@@ -143,6 +143,7 @@ function buildGptImageV11Inputs(inputs: unknown): GptImageV11Inputs {
 
 const WORKFLOW_MODELS = new Set(["banana-2-pro", "vocab-card"])
 const MEMBERSHIP_PRODUCT_IDS = ["basic", "pro", "premium", "enterprise", "campus"]
+const ALL_IN_ONE_AGENT_MODEL = "all-in-one-agent"
 
 function appendOpenClawInlineOutputInstruction(query: string) {
   return [
@@ -154,6 +155,40 @@ function appendOpenClawInlineOutputInstruction(query: string) {
     "不要生成“下载Word格式”“下载文档”“Word格式”等下载链接，也不要把结果保存为 Word 后让用户下载。",
     "除非用户明确要求导出文件，否则最终回答只能包含对话框内可阅读、可复制的文本正文。",
   ].join("\n")
+}
+
+function buildAllInOneAgentWorkflowInputs(query: string, inputs: unknown, fileUrls: string[]) {
+  const record = inputs && typeof inputs === "object" ? inputs as Record<string, unknown> : {}
+  const rawQuality = typeof record.quality === "string" ? record.quality : "low"
+  const quality = ["low", "medium", "high"].includes(rawQuality) ? rawQuality : "low"
+  const rawDuration = typeof record.duration_seconds === "number"
+    ? record.duration_seconds
+    : Number(record.duration_seconds)
+  const imageUrlsText = fileUrls.join("\n")
+  const prompt = query || "请根据用户需求生成内容"
+
+  return {
+    ...record,
+    raw_prompt: fileUrls.length > 0
+      ? `${prompt}\n\n已上传原始图片，请必须基于这些图片进行改图或优化，不要说没有收到附件，也不要生成与原图无关的通用图片。原图地址：\n${imageUrlsText}`
+      : prompt,
+    prompt,
+    query: prompt,
+    style: typeof record.style === "string" && record.style.trim() ? record.style : "auto",
+    duration_seconds: Number.isFinite(rawDuration) && rawDuration > 0 ? String(Math.min(120, Math.max(1, rawDuration))) : "auto",
+    quality,
+    has_uploaded_images: fileUrls.length > 0 ? "true" : "false",
+    uploaded_image_count: String(fileUrls.length),
+    file_urls: imageUrlsText,
+    file_url: fileUrls[0] || "",
+    image_urls: imageUrlsText,
+    images: fileUrls.map((url) => ({ type: "image", url })),
+    reference_image_urls: imageUrlsText,
+    reference_image_url: fileUrls[0] || "",
+    input_image_url: fileUrls[0] || "",
+    source_image_url: fileUrls[0] || "",
+    source_images: imageUrlsText,
+  }
 }
 
 type MembershipIdentity = {
@@ -535,6 +570,121 @@ function extractWorkflowImageUrls(payload: unknown): string[] {
 }
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+function safeJsonParse(value: string): unknown | null {
+  try {
+    return JSON.parse(value)
+  } catch {
+    return null
+  }
+}
+
+function extractJsonObjectsFromText(text: string): unknown[] {
+  const objects: unknown[] = []
+  let depth = 0
+  let start = -1
+  let inString = false
+  let escaped = false
+
+  for (let index = 0; index < text.length; index++) {
+    const char = text[index]
+    if (inString) {
+      if (escaped) {
+        escaped = false
+      } else if (char === "\\") {
+        escaped = true
+      } else if (char === '"') {
+        inString = false
+      }
+      continue
+    }
+
+    if (char === '"') {
+      inString = true
+      continue
+    }
+
+    if (char === "{") {
+      if (depth === 0) start = index
+      depth++
+      continue
+    }
+
+    if (char === "}" && depth > 0) {
+      depth--
+      if (depth === 0 && start >= 0) {
+        const parsed = safeJsonParse(text.slice(start, index + 1))
+        if (parsed) objects.push(parsed)
+        start = -1
+      }
+    }
+  }
+
+  return objects
+}
+
+function looksLikeAllInOneControlPayload(value: string) {
+  const trimmed = value.trim()
+  if (!trimmed) return false
+  return /^(?:animation|video|image|ppt|presentation|workflow|tool|artifact|parameters?)\s*\{/i.test(trimmed)
+    || /^\{[\s\S]*"(?:output_mode|parameters_to_animate|axes_config|animation_style|duration_seconds|quality|task_id|skill_name|status|success)"[\s\S]*\}$/.test(trimmed)
+}
+
+function shouldStreamAllInOneAnswer(event: Record<string, unknown>) {
+  const answer = typeof event.answer === "string" ? event.answer : ""
+  if (!answer.trim() || looksLikeAllInOneControlPayload(answer)) return false
+  const selector = Array.isArray(event.from_variable_selector)
+    ? event.from_variable_selector.filter((item): item is string => typeof item === "string").join(".")
+    : ""
+  return !selector.includes("quick_reply_answer_node") && !selector.includes("frontend_input_node")
+}
+
+function extractDisplayTextFromUnknown(value: unknown): string[] {
+  if (!value) return []
+  if (typeof value === "string") {
+    const parsed = safeJsonParse(value)
+    if (parsed && parsed !== value) return extractDisplayTextFromUnknown(parsed)
+    return [value]
+  }
+  if (Array.isArray(value)) return value.flatMap(extractDisplayTextFromUnknown)
+  if (typeof value !== "object") return []
+
+  const record = value as Record<string, unknown>
+  return ["result", "answer", "text", "markdown", "content", "message", "outputs", "data"]
+    .flatMap((key) => extractDisplayTextFromUnknown(record[key]))
+}
+
+function stripInternalFileReferences(markdown: string) {
+  return markdown
+    .replace(/`?(?:\/workspace|\/tmp|\/opt|\/app|file:\/\/|generated\/)[^\s`)]+`?/g, "已在对话中整理为可展示内容")
+    .replace(/^\s*[-*]?\s*(?:视频文件|文件结果|输出文件|本地文件|文件路径)\s*[:：]\s*已在对话中整理为可展示内容\s*$/gim, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+}
+
+function normalizeAllInOneAgentDisplay(rawText: string) {
+  const parsedValues = [
+    safeJsonParse(rawText),
+    ...extractJsonObjectsFromText(rawText),
+  ].filter(Boolean)
+
+  const textCandidates = parsedValues.length > 0
+    ? parsedValues.flatMap(extractDisplayTextFromUnknown)
+    : [rawText]
+
+  const rawDisplayText = textCandidates
+    .map((text) => text.trim())
+    .filter((text) => !looksLikeAllInOneControlPayload(text))
+    .filter(Boolean)
+    .sort((a, b) => b.length - a.length)[0] || (parsedValues.length > 0 || looksLikeAllInOneControlPayload(rawText) ? "" : rawText)
+
+  const displayText = stripInternalFileReferences(rawDisplayText)
+  return displayText || "任务已提交，但上游还没有返回可直接展示的内容。请稍后重试，或换一个更明确的生成要求。"
+}
+
+function enqueueSseAnswer(controller: TransformStreamDefaultController<Uint8Array>, answer: string) {
+  controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ event: "message", answer })}\n\n`))
+}
 
 const DIFY_CONVERSATION_ID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -1034,6 +1184,7 @@ export async function POST(request: NextRequest) {
     const requestedModelType = (model || "general-chat") as ModelType
     const configuredMaxOutputTokens = getMaxOutputTokensForModel(requestedModelType)
     const limitedQuery = appendTextOutputLimitInstruction(query || "你好", requestedModelType)
+    const isAllInOneAgent = model === ALL_IN_ONE_AGENT_MODEL
     const effectiveQuery = model === "open-claw" ? appendOpenClawInlineOutputInstruction(limitedQuery) : limitedQuery
     let effectiveConvId = normalizeDifyConversationId(conversation_id, modelPrefix)
     
@@ -1044,7 +1195,7 @@ export async function POST(request: NextRequest) {
     const requestId = request.headers.get("X-Request-Id") || body.requestId || createRequestId(model === "gpt-image-2" ? "img" : "chat")
     logPerf(requestId, "api_enter", apiStartedAt, { model: model || "general-chat" })
     logPerf(requestId, "auth_done", apiStartedAt)
-    const taskKind = model === "gpt-image-2" ? "image" : model === "open-claw" ? "openclaw" : "dify"
+    const taskKind = model === "gpt-image-2" ? "image" : model === "open-claw" ? "openclaw" : isAllInOneAgent ? "workflow" : "dify"
     if (hasGptImageModelInput(inputs) && model !== "gpt-image-2") {
       console.warn(`🚫 [媒体权限] 图片模型请求顶层 model 不匹配，拒绝绕过媒体计费: model=${model || "empty"}`)
       return new Response(
@@ -1129,7 +1280,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    if (model !== "gpt-image-2" && fileUrls.length > 0 && difyFileIds.length === 0) {
+    if (model !== "gpt-image-2" && !isAllInOneAgent && fileUrls.length > 0 && difyFileIds.length === 0) {
       console.warn(`🚫 [Dify-Chat] 非图片生成模型拒绝 remote_url 附件: model=${model || "general-chat"} urls=${fileUrls.length}`)
       return new Response(
         JSON.stringify({ error: "文件上传缺少 Dify 文件 ID，请重新上传文件后再试" }),
@@ -1415,7 +1566,11 @@ export async function POST(request: NextRequest) {
             // 💬 Chat API 格式
             const isGptImage2 = model === "gpt-image-2"
             difyRequest = {
-                inputs: isGptImage2 ? buildGptImageV11Inputs(inputs) : inputs || {},
+                inputs: isGptImage2
+                  ? buildGptImageV11Inputs(inputs)
+                  : isAllInOneAgent
+                    ? buildAllInOneAgentWorkflowInputs(effectiveQuery, inputs, fileUrls)
+                    : inputs || {},
                 query: isGptImage2 ? (query || "你好") : effectiveQuery,
                 response_mode: isGptImage2 ? "blocking" : "streaming",
                 user: userId || "default-user",
@@ -1440,7 +1595,7 @@ export async function POST(request: NextRequest) {
 
         const firstByteTimeoutMs = model === "gpt-image-2"
           ? GPT_IMAGE_BLOCKING_TIMEOUT_MS
-          : model === "open-claw"
+          : model === "open-claw" || isAllInOneAgent
             ? OPENCLAW_FIRST_BYTE_TIMEOUT_MS
             : DEFAULT_DIFY_FIRST_BYTE_TIMEOUT_MS
 
@@ -1671,6 +1826,8 @@ export async function POST(request: NextRequest) {
     let clientAborted = false
     let taskCompleted = false
     let workflowNodeFailure: { message: string; code: string } | null = null
+    let allInOneDisplaySent = false
+    let allInOneStreamedAnswer = false
     const bufferedNodeEvents: Array<{
       event: string
       title?: string
@@ -1708,6 +1865,7 @@ export async function POST(request: NextRequest) {
           'banana-2-pro': 'Banana 绘图',
           'suno-v5': 'Suno 音乐',
           'open-claw': 'Open Claw 对话',
+          'all-in-one-agent': '全能超级智能体',
         }
         const reason = reasonMap[model as string] || `使用 ${getModelDisplayName(model as ModelType)}`
         const description = bananaImageUrls.length > 0
@@ -1817,9 +1975,15 @@ export async function POST(request: NextRequest) {
         try {
           const text = new TextDecoder().decode(chunk)
           const outputText = model === "open-claw" ? rewriteOpenClawMediaReferencesWithSignedUrls(text) : text
+          const shouldBufferForDisplay = isAllInOneAgent
+          const enqueueAllInOneDisplayOnce = (rawValue: string) => {
+            if (!shouldBufferForDisplay || allInOneDisplaySent || !rawValue.trim()) return
+            allInOneDisplaySent = true
+            enqueueSseAnswer(controller, normalizeAllInOneAgentDisplay(rawValue))
+          }
 
           // 传递数据给前端。词境记忆卡会在解析后只转发结构化卡片事件，避免 raw JSON 出现在页面。
-          if (model !== "vocab-card") {
+          if (model !== "vocab-card" && !shouldBufferForDisplay) {
             controller.enqueue(new TextEncoder().encode(outputText))
           }
 
@@ -1922,6 +2086,10 @@ export async function POST(request: NextRequest) {
 	              if (json.event === "message" && json.answer) {
 	                fullResponseText += json.answer
 	                hasReceivedContent = true
+                  if (shouldBufferForDisplay && shouldStreamAllInOneAnswer(json)) {
+                    allInOneStreamedAnswer = true
+                    enqueueSseAnswer(controller, json.answer)
+                  }
 	                const artifacts = model === "open-claw" ? extractArtifactsFromText(fullResponseText) : []
 	                if (artifacts.length > 0) {
 	                  updateTaskRun(taskRun.id, {
@@ -1993,10 +2161,16 @@ export async function POST(request: NextRequest) {
 	                    fullResponseText += outputs.text
 	                    hasReceivedContent = true
 	                    console.log(`🎨 [Workflow完成] 收集到输出文本:`, { length: String(outputs.text).length })
+                      if (shouldBufferForDisplay && !allInOneStreamedAnswer) {
+                        enqueueAllInOneDisplayOnce(String(outputs.text))
+                      }
 	                  } else if (outputs.result) {
 	                    fullResponseText += outputs.result
 	                    hasReceivedContent = true
 		                    console.log(`🎨 [Workflow完成] 收集到结果文本:`, { length: String(outputs.result).length })
+                      if (shouldBufferForDisplay && !allInOneStreamedAnswer) {
+                        enqueueAllInOneDisplayOnce(String(outputs.result))
+                      }
 		                  }
 	                }
 	                const parsedUsage = parseDifyUsage(json)
@@ -2028,6 +2202,10 @@ export async function POST(request: NextRequest) {
                     fullResponseText += `\n\n![Generated Image](${imageUrl})`
                   }
                 }
+              }
+
+              if (shouldBufferForDisplay && json.event === "message_end" && fullResponseText.trim() && !allInOneStreamedAnswer) {
+                enqueueAllInOneDisplayOnce(fullResponseText)
               }
 
               // 🎨 处理 workflow_finished 事件（可能包含图片）
@@ -2116,6 +2294,10 @@ export async function POST(request: NextRequest) {
         }
 
         // 🔥 流结束，触发扣费（仅当有实际内容时才扣费）
+        if (isAllInOneAgent && fullResponseText.trim() && !allInOneDisplaySent && !allInOneStreamedAnswer) {
+          allInOneDisplaySent = true
+          enqueueSseAnswer(controller, normalizeAllInOneAgentDisplay(fullResponseText))
+        }
         console.log(`💰 [Billing] 流结束，输入 ${promptTokens} tokens，输出 ${completionTokens} tokens，总 ${totalTokens} tokens，内容长度: ${fullResponseText.length}，hasReceivedContent: ${hasReceivedContent}`)
 	        if (!workflowNodeFailure && hasReceivedContent && (promptTokens > 0 || completionTokens > 0 || bananaImageUrls.length > 0)) {
 	          deductCredit().catch(e => console.error("[Billing] 扣费异步异常:", e))
@@ -2152,13 +2334,14 @@ export async function POST(request: NextRequest) {
 
     })
 
-    const addOpenClawHeartbeat = (body: ReadableStream<Uint8Array>) => {
-      if (model !== "open-claw") return body
+    const addLongTaskHeartbeat = (body: ReadableStream<Uint8Array>) => {
+      if (model !== "open-claw" && !isAllInOneAgent) return body
 
       const encoder = new TextEncoder()
       let reader: ReadableStreamDefaultReader<Uint8Array> | null = null
       let heartbeatId: ReturnType<typeof setInterval> | null = null
       let closed = false
+      const heartbeatLabel = isAllInOneAgent ? "all-in-one-keepalive" : "openclaw-keepalive"
 
       const stopHeartbeat = () => {
         closed = true
@@ -2174,7 +2357,7 @@ export async function POST(request: NextRequest) {
           heartbeatId = setInterval(() => {
             if (closed) return
             try {
-              controller.enqueue(encoder.encode(`: openclaw-keepalive ${Date.now()}\n\n`))
+              controller.enqueue(encoder.encode(`: ${heartbeatLabel} ${Date.now()}\n\n`))
             } catch {
               stopHeartbeat()
             }
@@ -2208,7 +2391,7 @@ export async function POST(request: NextRequest) {
       console.error(`❌ [Stream错误] pipeThrough返回undefined! response.body=${response.body === null ? 'null' : 'not-null'}`)
       return new Response(JSON.stringify({ error: "Dify响应体为空，服务端流处理失败" }), { status: 502 })
     }
-    const responseBody = addOpenClawHeartbeat(transformedBody)
+    const responseBody = addLongTaskHeartbeat(transformedBody)
     request.signal.addEventListener("abort", () => {
       if (taskCompleted) return
       clientAborted = true

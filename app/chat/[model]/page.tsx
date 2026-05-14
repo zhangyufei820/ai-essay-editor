@@ -22,6 +22,7 @@ const SUPPORTED_MODELS = [
   'vocab-card',      // 词境记忆卡
   'beike-pro',       // 备课助手Pro
   'banzhuren',       // 班主任智能体
+  'all-in-one-agent', // 全能超级智能体
   'ai-writing-paper', // 论文写作
   'zhongying-essay', // 中英文作文
   'reading-report',   // 读书报告
