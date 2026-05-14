@@ -1,5 +1,5 @@
 import type { Metadata } from "next"
-import { PhetSimBrowser } from "@/components/phet/PhetSimBrowser"
+import { PhetSimBrowserLoader } from "@/components/phet/PhetSimBrowserLoader"
 
 export const metadata: Metadata = {
   title: "互动实验室 | 沈翔智学",
@@ -20,7 +20,7 @@ export default function LabPage() {
           </div>
         </header>
 
-        <PhetSimBrowser />
+        <PhetSimBrowserLoader />
       </section>
     </main>
   )

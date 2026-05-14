@@ -38,6 +38,15 @@ NEXT_PUBLIC_SENTRY_DSN="https://<public-key>@<org>.ingest.sentry.io/<project-id>
 - 检查频率：1-5 分钟
 - 告警方式：短信、邮件、企业微信或飞书
 - 告警条件：HTTP 非 200、超时、返回内容不包含 `ok`
+- 超时建议：10 秒
+- 误报抑制：连续 2-3 次失败再告警
+
+当前阶段先接入外部 `/api/health` 可用性监控和人工巡检，不新增服务器监控容器。端口、Docker、磁盘和性能基线见：
+
+- `docs/SERVER-TOPOLOGY.md`
+- `docs/SERVER-CLEANUP-SOP.md`
+- `docs/BACKUP-RESTORE-SOP.md`
+- `docs/PERFORMANCE-BASELINE.md`
 
 ## 告警后先看什么
 
@@ -46,3 +55,4 @@ NEXT_PUBLIC_SENTRY_DSN="https://<public-key>@<org>.ingest.sentry.io/<project-id>
 - `/`、`/pricing`、`/admin` 是否可访问。
 - 应用日志是否有连续错误。
 - Supabase、支付回调和环境变量是否异常。
+- 服务器磁盘和 Docker 缓存是否异常增长：`bash scripts/server-audit.sh`。
