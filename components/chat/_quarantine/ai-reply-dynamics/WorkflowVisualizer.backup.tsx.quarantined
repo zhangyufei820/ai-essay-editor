@@ -13,6 +13,8 @@
 
 "use client"
 
+// Quarantined: old backup workflow visualizer. See README.md in this directory.
+
 import { memo, useEffect, useState, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { ChevronDown, Check, Loader2, AlertCircle, Sparkles } from "lucide-react"

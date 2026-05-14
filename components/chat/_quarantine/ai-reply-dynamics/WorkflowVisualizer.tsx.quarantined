@@ -11,6 +11,8 @@
 
 "use client"
 
+// Quarantined: old AI reply workflow visualizer. See README.md in this directory.
+
 import React from "react"
 import { ThoughtDrawer } from "./ThoughtDrawer"
 import { WorkflowState } from "@/lib/workflow-visual-config"

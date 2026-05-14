@@ -1,5 +1,7 @@
 "use client"
 
+// Quarantined: old AI reply loading animation. See README.md in this directory.
+
 import type { CSSProperties } from "react"
 
 type EyeShape = {

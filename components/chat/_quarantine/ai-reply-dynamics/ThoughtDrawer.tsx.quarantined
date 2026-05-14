@@ -14,6 +14,8 @@
 
 "use client"
 
+// Quarantined: old AI reply workflow drawer. See README.md in this directory.
+
 import React from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Check, ChevronDown, Loader2 } from "lucide-react"
