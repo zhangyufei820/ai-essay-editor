@@ -42,8 +42,8 @@ const nextConfig = {
   // 图片优化配置
   // ============================================
   images: {
-    // 启用图片优化（生产环境）
-    unoptimized: process.env.NODE_ENV === 'development',
+    // 关闭 Next.js 图片优化，交给 OpenResty / Cloudflare 缓存和优化链路处理。
+    unoptimized: true,
     // 支持的图片格式
     formats: ['image/avif', 'image/webp'],
     // 远程图片域名白名单
