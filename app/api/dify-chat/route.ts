@@ -2422,6 +2422,8 @@ export async function POST(request: NextRequest) {
 	    return new Response(responseBody, {
 	        headers: {
 	          "Content-Type": "text/event-stream",
+	          "Cache-Control": "no-cache",
+	          "Connection": "keep-alive",
 	          "X-Request-Id": taskRun.requestId,
 	          "X-Trace-Id": taskRun.traceId,
 	        },
