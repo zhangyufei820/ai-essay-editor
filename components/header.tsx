@@ -20,6 +20,8 @@ const navGroups = [
 ]
 
 const directNavItems = [
+  { name: "学习看板", href: "/dashboard" },
+  { name: "闪卡复习", href: "/flashcards" },
   { name: "互动实验室", href: "/lab" },
   { name: "OpenClaw", href: "/chat/open-claw" },
 ]

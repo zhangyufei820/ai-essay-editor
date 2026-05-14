@@ -1,0 +1,144 @@
+app:
+  description: 一个通用教师智能体 Chatflow，通过 custom_system_prompt 输入动态切换不同教师创建的智能体。
+  icon: 👩‍🏫
+  icon_background: '#E3F2FD'
+  mode: chat
+  name: Teacher Custom Agent
+  use_icon_as_answer_icon: false
+dependencies: []
+kind: app
+version: 0.3.0
+workflow:
+  conversation_variables: []
+  environment_variables: []
+  features:
+    file_upload:
+      enabled: false
+    opening_statement: ''
+    retriever_resource:
+      enabled: false
+    sensitive_word_avoidance:
+      enabled: false
+    speech_to_text:
+      enabled: false
+    suggested_questions: []
+    suggested_questions_after_answer:
+      enabled: false
+    text_to_speech:
+      enabled: false
+  graph:
+    edges:
+      - data:
+          isInIteration: false
+          sourceType: start
+          targetType: llm
+        id: start-source-teacher-chat-target
+        source: start
+        sourceHandle: source
+        target: teacher-chat
+        targetHandle: target
+        type: custom
+      - data:
+          isInIteration: false
+          sourceType: llm
+          targetType: answer
+        id: teacher-chat-source-answer-target
+        source: teacher-chat
+        sourceHandle: source
+        target: answer
+        targetHandle: target
+        type: custom
+    nodes:
+      - data:
+          desc: 输入教师自定义系统提示词
+          selected: false
+          title: Start
+          type: start
+          variables:
+            - label: Custom System Prompt
+              max_length: 12000
+              options: []
+              required: true
+              type: paragraph
+              variable: custom_system_prompt
+        height: 90
+        id: start
+        position:
+          x: 80
+          y: 280
+        positionAbsolute:
+          x: 80
+          y: 280
+        selected: false
+        sourcePosition: right
+        targetPosition: left
+        type: custom
+        width: 244
+      - data:
+          context:
+            enabled: false
+            variable_selector: []
+          desc: 使用动态 system prompt 与学生对话
+          memory:
+            query_prompt_template: ''
+            role_prefix:
+              assistant: ''
+              user: ''
+            window:
+              enabled: true
+              size: 8
+          model:
+            completion_params:
+              temperature: 0.7
+            mode: chat
+            name: gpt-5
+            provider: openai
+          prompt_template:
+            - id: system-prompt
+              role: system
+              text: '{{#start.custom_system_prompt#}}'
+            - id: user-prompt
+              role: user
+              text: '{{#sys.query#}}'
+          selected: false
+          title: Teacher Chat
+          type: llm
+          variables: []
+          vision:
+            enabled: false
+        height: 98
+        id: teacher-chat
+        position:
+          x: 384
+          y: 280
+        positionAbsolute:
+          x: 384
+          y: 280
+        selected: false
+        sourcePosition: right
+        targetPosition: left
+        type: custom
+        width: 244
+      - data:
+          answer: '{{#teacher-chat.text#}}'
+          desc: 返回教师智能体回答
+          selected: false
+          title: Answer
+          type: answer
+        height: 90
+        id: answer
+        position:
+          x: 688
+          y: 280
+        positionAbsolute:
+          x: 688
+          y: 280
+        selected: false
+        sourcePosition: right
+        targetPosition: left
+        type: custom
+        width: 244
+    viewport:
+      x: 0
+      y: 0
+      zoom: 0.9

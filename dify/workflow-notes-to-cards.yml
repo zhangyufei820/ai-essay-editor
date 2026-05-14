@@ -1,0 +1,232 @@
+app:
+  description: 将学生笔记自动转化为结构化闪卡，支持多学科、多难度等级
+  icon: 📝
+  icon_background: '#E8F5E9'
+  mode: workflow
+  name: Notes to Flashcards
+  use_icon_as_answer_icon: false
+dependencies: []
+kind: app
+version: 0.3.0
+workflow:
+  conversation_variables: []
+  environment_variables: []
+  features:
+    file_upload:
+      allowed_file_extensions: []
+      allowed_file_types: []
+      allowed_file_upload_methods:
+        - local_file
+        - remote_url
+      enabled: false
+      fileUploadConfig:
+        audio_file_size_limit: 50
+        batch_count_limit: 5
+        file_size_limit: 15
+        image_file_size_limit: 10
+        video_file_size_limit: 100
+        workflow_file_upload_limit: 10
+      image:
+        enabled: false
+        number_limits: 3
+        transfer_methods:
+          - local_file
+          - remote_url
+      number_limits: 3
+    opening_statement: ''
+    retriever_resource:
+      enabled: false
+    sensitive_word_avoidance:
+      enabled: false
+    speech_to_text:
+      enabled: false
+    suggested_questions: []
+    suggested_questions_after_answer:
+      enabled: false
+    text_to_speech:
+      enabled: false
+      language: ''
+      voice: ''
+  graph:
+    edges:
+      - data:
+          isInIteration: false
+          sourceType: start
+          targetType: llm
+        id: start-source-generate-cards-target
+        source: start
+        sourceHandle: source
+        target: generate-cards
+        targetHandle: target
+        type: custom
+      - data:
+          isInIteration: false
+          sourceType: llm
+          targetType: end
+        id: generate-cards-source-end-target
+        source: generate-cards
+        sourceHandle: source
+        target: end
+        targetHandle: target
+        type: custom
+    nodes:
+      - data:
+          desc: 输入学生笔记和生成参数
+          selected: false
+          title: Start
+          type: start
+          variables:
+            - label: 笔记文本
+              max_length: 8000
+              options: []
+              required: true
+              type: paragraph
+              variable: notes_content
+            - label: 学科
+              options:
+                - math
+                - english
+                - physics
+                - chemistry
+                - biology
+                - history
+                - geography
+                - politics
+                - other
+              required: true
+              type: select
+              variable: subject
+            - default: 10
+              label: 生成数量
+              max: 30
+              min: 3
+              options: []
+              required: false
+              type: number
+              variable: card_count
+            - default: basic
+              label: 难度等级
+              options:
+                - basic
+                - intermediate
+                - advanced
+              required: false
+              type: select
+              variable: difficulty_level
+        height: 116
+        id: start
+        position:
+          x: 80
+          y: 280
+        positionAbsolute:
+          x: 80
+          y: 280
+        selected: false
+        sourcePosition: right
+        targetPosition: left
+        type: custom
+        width: 244
+      - data:
+          context:
+            enabled: false
+            variable_selector: []
+          desc: 从笔记中生成结构化闪卡 JSON
+          memory:
+            query_prompt_template: ''
+            role_prefix:
+              assistant: ''
+              user: ''
+            window:
+              enabled: false
+              size: 10
+          model:
+            completion_params:
+              max_tokens: 2000
+              response_format:
+                type: json_object
+              temperature: 0.4
+            mode: chat
+            name: gpt-5
+            provider: openai
+          prompt_template:
+            - id: system-prompt
+              role: system
+              text: |
+                你是一个专业的教育闪卡生成器，面向中国中学生（初中和高中）。
+
+                任务：从用户提供的笔记中提取关键知识点，生成 {{#start.card_count#}} 张结构化闪卡。
+
+                输出格式（严格 JSON 数组，不要任何其他文字）：
+                [
+                  {
+                    "question": "问题（简洁明确，一句话）",
+                    "answer": "答案（精确，1-3句话，含关键公式或要点）",
+                    "difficulty": 1到5的整数,
+                    "tags": ["知识点标签"],
+                    "type": "fact 或 concept 或 formula 或 process 或 comparison"
+                  }
+                ]
+
+                生成规则：
+                1. 每张卡片聚焦一个独立知识点
+                2. 问题要具体，避免太宽泛（错误："什么是力？" 正确："牛顿第二定律的表达式是什么？"）
+                3. 答案精确，包含关键词和公式，方便自测
+                4. 难度标准：1=纯识记，2=简单理解，3=应用，4=分析，5=综合
+                5. 题目类型分布：fact 30%, concept 30%, formula/process 30%, comparison 10%
+                6. 适配用户指定的 {{#start.difficulty_level#}} 难度等级
+                7. 数学/物理/化学公式用 LaTeX 格式，如 $F=ma$、$H_2O$
+                8. 全部使用中文出题和回答
+                9. 严格输出 JSON 数组，不要 markdown 代码块，不要解释性文字
+            - id: user-prompt
+              role: user
+              text: |
+                笔记内容：{{#start.notes_content#}}
+                学科：{{#start.subject#}}
+                生成数量：{{#start.card_count#}}
+                难度：{{#start.difficulty_level#}}
+          selected: false
+          title: Generate Flashcards
+          type: llm
+          variables: []
+          vision:
+            enabled: false
+        height: 98
+        id: generate-cards
+        position:
+          x: 384
+          y: 280
+        positionAbsolute:
+          x: 384
+          y: 280
+        selected: false
+        sourcePosition: right
+        targetPosition: left
+        type: custom
+        width: 244
+      - data:
+          desc: 输出闪卡 JSON 字符串
+          outputs:
+            - value_selector:
+                - generate-cards
+                - text
+              variable: cards_json
+          selected: false
+          title: End
+          type: end
+        height: 90
+        id: end
+        position:
+          x: 688
+          y: 280
+        positionAbsolute:
+          x: 688
+          y: 280
+        selected: false
+        sourcePosition: right
+        targetPosition: left
+        type: custom
+        width: 244
+    viewport:
+      x: 0
+      y: 0
+      zoom: 0.9

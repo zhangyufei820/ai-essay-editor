@@ -22,7 +22,9 @@ import {
   CreditCard,
   Settings,
   LogOut,
-  ChevronRight
+  ChevronRight,
+  BarChart3,
+  Layers3
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { brandColors } from "@/lib/design-tokens"
@@ -34,6 +36,8 @@ import { brandColors } from "@/lib/design-tokens"
 const bottomNavItems = [
   { href: "/", icon: Home, label: "首页" },
   { href: "/chat", icon: MessageSquare, label: "对话" },
+  { href: "/dashboard", icon: BarChart3, label: "看板" },
+  { href: "/flashcards", icon: Layers3, label: "闪卡" },
   { href: "/pricing", icon: CreditCard, label: "价格" },
   { href: "/settings", icon: User, label: "我的" }
 ]
@@ -41,6 +45,8 @@ const bottomNavItems = [
 const menuItems = [
   { href: "/", label: "首页", icon: Home },
   { href: "/chat", label: "AI 对话", icon: MessageSquare },
+  { href: "/dashboard", label: "学习看板", icon: BarChart3 },
+  { href: "/flashcards", label: "闪卡复习", icon: Layers3 },
   { href: "/pricing", label: "价格方案", icon: CreditCard },
   { href: "/settings", label: "设置", icon: Settings }
 ]
