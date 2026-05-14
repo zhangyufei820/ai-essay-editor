@@ -1,4 +1,4 @@
-export type ImageGenerationModel = 'gpt-image-2' | 'banana-2-pro'
+export type ImageGenerationModel = 'gpt-image-2' | 'gemini-image'
 
 export type ImageModeKey = 'text-to-image' | 'image-edit' | 'image'
 export type ImageResolutionTier = 'standard' | 'hd' | '2k' | '4k-experimental'
@@ -22,7 +22,7 @@ export interface ImageSizeOption {
 export interface ImageModelConfig {
   model: ImageGenerationModel
   title: string
-  modelKey: 'gpt-image-2' | 'banana-2-pro'
+  modelKey: 'gpt-image-2' | 'gemini-image'
   entryRoute: string
   chatRoute: string
   defaultPromptPlaceholder: string

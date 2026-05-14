@@ -249,14 +249,14 @@ export const navigationModelGroups: NavigationModelGroup[] = [
     label: "多媒体专区",
     items: [
       {
-        key: "banana-2-pro",
-        name: "Banana2 Pro 4K",
-        description: "AI 图像生成",
-        href: "/chat/banana-2-pro",
+        key: "gemini-image",
+        name: "Gemini 图像",
+        description: "Google Gemini 文生图与图像编辑",
+        href: "/chat/gemini-image",
         group: "创意生成",
         color: BRAND_GREEN,
-        modelKey: "banana-2-pro",
-        badge: "热门",
+        modelKey: "gemini-image",
+        badge: "新",
       },
       {
         key: "gpt-image-2",

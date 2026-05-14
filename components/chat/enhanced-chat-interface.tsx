@@ -82,7 +82,7 @@ const MODEL_DISPLAY_NAMES: Record<string, string> = {
   "gpt-5": "GPT-5",
   "claude-opus": "Claude",
   "gemini-pro": "Gemini",
-  "banana-2-pro": "Banana",
+  "gemini-image": "Gemini 图像",
   "grok-4.2": "Grok",
   "open-claw": "OpenClaw",
   "quanquan-math": "全科数学",
@@ -333,7 +333,7 @@ function getChatErrorMessage(error: unknown, status?: number, model?: string): s
   if (/file|upload|附件|上传/.test(text) || /文件|上传|附件/.test(raw)) {
     return "文件未上传成功或附件无法被模型读取，请删除附件后重新上传再提交。"
   }
-  if (model === "banana-2-pro") {
+  if (model === "gemini-image") {
     return "图片生成服务暂时不可用，可能是余额、模型、尺寸或参数不兼容导致。请稍后重试或调整提示词。"
   }
 
@@ -1283,7 +1283,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       "gpt-5": "gpt-5",
       "claude-opus": "claude-opus",
       "gemini-pro": "gemini-pro",
-      "banana-2-pro": "banana-2-pro",
+      "gemini-image": "gemini-image",
       "suno-v5": "suno-v5",
       "grok-4.2": "grok-4.2",
       "open-claw": "open-claw",
@@ -1591,12 +1591,12 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       description: "多模态理解",
       group: "AI模型"
     },
-    "banana-2-pro": {
-      name: "Banana2 Pro 4K",
-      modelKey: "banana-2-pro",
+    "gemini-image": {
+      name: "Gemini 图像",
+      modelKey: "gemini-image",
       color: BRAND_GREEN,
-      description: "AI 图像生成",
-      badge: "热门",
+      description: "Google Gemini 文生图与图像编辑",
+      badge: "新",
       group: "创意生成"
     },
     "gpt-image-2": {
@@ -1749,10 +1749,10 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       toast.success(`已切换至 ${getModelUiConfig(nextModel).name}`)
     }
 
-    // 🚀 Banana 2 Pro 使用专用页面，自动跳转
-    if (nextModel === "banana-2-pro") {
-      console.log('✅ [模型切换] 检测到 banana-2-pro，跳转到专用页面')
-      router.push('/chat/banana-2-pro')
+    // 🚀 Gemini 图像使用专用页面，自动跳转
+    if (nextModel === "gemini-image") {
+      console.log('✅ [模型切换] 检测到 gemini-image，跳转到专用页面')
+      router.push('/chat/gemini-image')
       return
     }
 
@@ -2515,7 +2515,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         const taskFailureMessage = await getTaskFailureMessage(requestId, selectedModel)
         const errorMsg = taskFailureMessage || getChatErrorMessage(e, undefined, selectedModel)
         toast.error(errorMsg, {
-          description: selectedModel === "banana-2-pro" ? "图片生成失败，请检查提示词" : undefined,
+          description: selectedModel === "gemini-image" ? "图片生成失败，请检查提示词" : undefined,
           duration: 5000
         })
 

@@ -13,7 +13,7 @@ const SUPPORTED_MODELS = [
   'gpt-5',           // ChatGPT 5.4
   'claude-opus',     // Claude opus4.6thinking
   'gemini-pro',      // Gemini 3.1 pro
-  'banana-2-pro',    // Banana 2 Pro (图像)
+  'gemini-image',    // Gemini 图像
   'suno-v5',         // Suno V5 (音乐)
   'grok-4.2',        // Grok-4.2
   'open-claw',       // Open Claw
@@ -48,13 +48,13 @@ const EnhancedChatInterface = dynamic(
   }
 )
 
-// 🍌 Banana 2 Pro 使用与 GPT Image 2 一致的图像工作台界面
-const BananaImageWorkspace = dynamic(
+// Gemini 图像使用与 GPT Image 2 一致的图像工作台界面
+const GeminiImageWorkspace = dynamic(
   () => import("@/components/chat/gpt-image2-chat-interface").then(mod => {
     const ImageWorkspace = mod.GptImage2ChatInterface
     return {
-      default: function BananaWorkspace() {
-        return <ImageWorkspace workspaceModel="banana-2-pro" />
+      default: function GeminiWorkspace() {
+        return <ImageWorkspace workspaceModel="gemini-image" />
       },
     }
   }),
@@ -62,7 +62,7 @@ const BananaImageWorkspace = dynamic(
     ssr: false,
     loading: () => (
       <div className="min-h-screen flex items-center justify-center bg-white dark:bg-black">
-        <LoadingStateCard modelKey="banana-2-pro" />
+        <LoadingStateCard modelKey="gemini-image" />
       </div>
     )
   }
@@ -74,7 +74,7 @@ export default function ModelChatPage() {
 
   // 🔍 调试日志
   console.log('🔍 [ModelChatPage] 当前模型:', model)
-  console.log('🔍 [ModelChatPage] 是否为 banana-2-pro:', model === 'banana-2-pro')
+  console.log('🔍 [ModelChatPage] 是否为 gemini-image:', model === 'gemini-image')
 
   // 验证模型是否支持
   if (!SUPPORTED_MODELS.includes(model as SupportedModel)) {
@@ -82,12 +82,12 @@ export default function ModelChatPage() {
   }
 
   // 🔥 根据模型选择不同的界面组件
-  if (model === 'banana-2-pro') {
-    console.log('✅ [ModelChatPage] 使用 Banana 图像工作台')
+  if (model === 'gemini-image') {
+    console.log('✅ [ModelChatPage] 使用 Gemini 图像工作台')
     return (
       <main className="flex min-h-screen flex-col">
         <div className="flex-1">
-          <BananaImageWorkspace />
+          <GeminiImageWorkspace />
         </div>
       </main>
     )

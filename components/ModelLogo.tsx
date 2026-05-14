@@ -40,6 +40,7 @@ export type ModelKey =
   | "banzhuren"
   | "all-in-one-agent"
   | "banana-2-pro"
+  | "gemini-image"
   | "suno-v5"
   | "banana"
   | "gpt-image-2"
@@ -167,6 +168,11 @@ const MODEL_LOGOS: Record<ModelKey, ModelLogoConfig> = {
   // 创意生成类
   "banana-2-pro": {
     LucideIcon: Sparkles,
+    brandColor: "#10A37F",
+  },
+  "gemini-image": {
+    svgPath: "/logos/google-gemini-icon.svg",
+    useLocal: true,
     brandColor: "#10A37F",
   },
   "suno-v5": {
@@ -409,7 +415,7 @@ const SECTION_CONFIG: Record<string, { modelKey: ModelKey; showBg: boolean }> = 
   agent: { modelKey: "open-claw", showBg: false },
   education: { modelKey: "teaching-pro", showBg: false },
   "ai-model": { modelKey: "gpt-5", showBg: false },
-  creative: { modelKey: "banana-2-pro", showBg: false },
+  creative: { modelKey: "gemini-image", showBg: false },
 }
 
 export function SectionLogo({ type, size = "sm", className, style }: SectionLogoProps) {

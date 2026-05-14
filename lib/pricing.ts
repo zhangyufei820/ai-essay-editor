@@ -4,6 +4,7 @@ import {
   GPT_IMAGE_15_CREDITS,
   GPT_IMAGE_1_CREDITS,
   GPT_IMAGE_1_MINI_CREDITS,
+  GEMINI_IMAGE_CREDITS,
   HIGH_CONSUMPTION_TEXT_CREDITS,
   HIGH_CONSUMPTION_TEXT_OUTPUT_TOKENS,
   IMAGE2_CREDITS,
@@ -27,6 +28,7 @@ export type ModelType =
   | "gpt-5"
   | "claude-opus"
   | "gemini-pro"
+  | "gemini-image"
   | "banana-2-pro"
   | "gpt-image-2"
   | "gpt-image-1.5"
@@ -153,6 +155,14 @@ export const MODEL_COSTS: Record<ModelType, ModelCostConfig> = {
     estimatedInputTokens: 300,
     estimatedOutputTokens: 300,
   },
+  "gemini-image": {
+    category: "media",
+    fixedCost: MEDIA_BILLING["gemini-image"].fixedCredits,
+    displayName: "Gemini 图像",
+    mode: "image",
+    estimatedInputTokens: 300,
+    estimatedOutputTokens: 300,
+  },
   "gpt-image-2": {
     category: "media",
     fixedCost: MEDIA_BILLING["gpt-image-2"].fixedCredits,
@@ -193,6 +203,7 @@ export {
   GPT_IMAGE_15_CREDITS,
   GPT_IMAGE_1_CREDITS,
   GPT_IMAGE_1_MINI_CREDITS,
+  GEMINI_IMAGE_CREDITS,
   IMAGE2_CREDITS,
   PRICING_VERSION,
   SUNO_BASE_CREDITS,
@@ -409,7 +420,7 @@ export function calculateActualCost(
   const config = MODEL_COSTS[model]
   if (!config) return calculateTextUsageCost(tokenUsage, { hasOutputContent: options?.hasOutputContent })
 
-  if (model === "banana-2-pro") {
+  if (model === "banana-2-pro" || model === "gemini-image") {
     const textCost = calculateTextUsageCost(tokenUsage, { hasOutputContent: options?.hasOutputContent })
     return options?.hasGeneratedImage ? (config.fixedCost || 0) + textCost : textCost
   }

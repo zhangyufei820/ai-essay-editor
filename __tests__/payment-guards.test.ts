@@ -150,7 +150,6 @@ describe('Sprint 5 payment / credits / membership guards', () => {
     const clients = [
       read('components/chat/enhanced-chat-interface.tsx'),
       read('components/chat/gpt-image2-chat-interface.tsx'),
-      read('components/chat/banana-chat-interface.tsx'),
       read('app/history/page.tsx'),
       read('components/essay-grader.tsx'),
     ].join('\n')

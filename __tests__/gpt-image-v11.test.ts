@@ -1,6 +1,7 @@
 import {
   DEFAULT_IMAGE_INPUTS,
   EDIT_MODE_DEFAULTS,
+  GEMINI_IMAGE_DEFAULT_INPUTS,
   buildDifyInputs,
   buildImageProxyUrl,
   extractImageUrlsFromDifyResult,
@@ -23,10 +24,21 @@ describe("GPT Image V11 parameter mapping", () => {
       output_compression: 100,
       background: "auto",
       moderation: "auto",
+      provider: "openai",
       n: 1,
       reference_image_url: "",
       reference_image_urls: [],
       mask_image_url: "",
+    })
+  })
+
+  it("keeps Gemini image count in the Dify inputs", () => {
+    expect(buildDifyInputs({ ...GEMINI_IMAGE_DEFAULT_INPUTS, n: 3 })).toMatchObject({
+      provider: "google",
+      model: "gemini-3.1-flash-image-preview",
+      image_size: "1K",
+      response_modalities: ["TEXT", "IMAGE"],
+      n: 3,
     })
   })
 
@@ -103,6 +115,9 @@ describe("GPT Image V11 parameter mapping", () => {
     )
     expect(buildImageProxyUrl("/api/image-proxy?url=http%3A%2F%2F43.154.111.156%3A8001%2Fimages%2Fresult.png", { width: 900 })).toBe(
       "/api/image-proxy/preview/image.webp?url=http%3A%2F%2F43.154.111.156%3A8001%2Fimages%2Fresult.png&w=900&format=webp"
+    )
+    expect(buildImageProxyUrl("https://shenxiang.school/api/image-proxy/raw/image.png?url=http%3A%2F%2F43.154.111.156%3A8002%2Fimages%2Fresult.png")).toBe(
+      "/api/image-proxy/preview/image.webp?url=http%3A%2F%2F43.154.111.156%3A8002%2Fimages%2Fresult.png&format=webp"
     )
   })
 })

@@ -14,12 +14,12 @@ describe('buildImageChatRoute', () => {
 
   it('omits empty values from the query string', () => {
     expect(
-      buildImageChatRoute('/chat/banana-2-pro', {
+      buildImageChatRoute('/chat/gemini-image', {
         prompt: '',
-        mode: 'image',
-        size: '9-16-hd',
+        mode: 'text-to-image',
+        size: '1-1-hd',
         fileCount: 0,
       })
-    ).toBe('/chat/banana-2-pro?mode=image&size=9-16-hd')
+    ).toBe('/chat/gemini-image?mode=text-to-image&size=1-1-hd')
   })
 })

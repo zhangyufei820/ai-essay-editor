@@ -17,6 +17,7 @@ import {
   IMAGE_1_CREDITS,
   IMAGE_1_MINI_CREDITS,
   IMAGE2_CREDITS,
+  GEMINI_IMAGE_CREDITS,
   SUNO_BASE_CREDITS,
   pricingVersion,
   shouldAuditHighConsumptionTextCall,
@@ -230,11 +231,13 @@ describe('统一计费配置', () => {
     expect(IMAGE_1_5_CREDITS).toBe(200)
     expect(IMAGE_1_CREDITS).toBe(150)
     expect(IMAGE_1_MINI_CREDITS).toBe(80)
+    expect(GEMINI_IMAGE_CREDITS).toBe(165)
     expect(SUNO_BASE_CREDITS).toBe(100)
     expect(calculateActualCost('gpt-image-2')).toBe(260)
     expect(calculateActualCost('gpt-image-1.5')).toBe(200)
     expect(calculateActualCost('gpt-image-1')).toBe(150)
     expect(calculateActualCost('gpt-image-1-mini')).toBe(80)
+    expect(calculateActualCost('gemini-image')).toBe(0)
     expect(calculateActualCost('suno-v5')).toBe(100)
     expect(calculateActualCost('suno-v5', { inputTokens: 1000, outputTokens: 1000 }, { hasOutputContent: true })).toBe(125)
     expect(calculateImageCredits('gpt-image-2', 2)).toBe(520)
@@ -250,11 +253,18 @@ describe('统一计费配置', () => {
       riskMultiplier: 1.1,
       fixedCredits: 165,
     })
+    expect(getMediaBillingConfig('gemini-image')).toMatchObject({
+      baseCredits: 150,
+      riskMultiplier: 1.1,
+      fixedCredits: 165,
+    })
   })
 
-  it('adds Banana image cost only when an image is generated', () => {
+  it('adds workflow image cost only when an image is generated', () => {
     expect(calculateActualCost('banana-2-pro', { inputTokens: 1000, outputTokens: 1000 }, { hasOutputContent: true })).toBe(25)
     expect(calculateActualCost('banana-2-pro', { inputTokens: 1000, outputTokens: 1000 }, { hasGeneratedImage: true, hasOutputContent: true })).toBe(190)
+    expect(calculateActualCost('gemini-image', { inputTokens: 1000, outputTokens: 1000 }, { hasOutputContent: true })).toBe(25)
+    expect(calculateActualCost('gemini-image', { inputTokens: 1000, outputTokens: 1000 }, { hasGeneratedImage: true, hasOutputContent: true })).toBe(190)
   })
 
   it('uses backend minimums for request preflight and preview labels', () => {
@@ -263,9 +273,11 @@ describe('统一计费配置', () => {
     expect(getMinimumRequiredCredits('ai-writing-paper')).toBe(100)
     expect(getMinimumRequiredCredits('study-abroad')).toBe(100)
     expect(getMinimumRequiredCredits('gpt-image-2')).toBe(260)
+    expect(getMinimumRequiredCredits('gemini-image')).toBe(165)
     expect(getMinimumRequiredCredits('suno-v5')).toBe(100)
     expect(calculatePreviewCost('standard')).toBeGreaterThanOrEqual(5)
     expect(calculatePreviewCost('gpt-image-2')).toBe(260)
+    expect(calculatePreviewCost('gemini-image')).toBe(165)
     expect(checkMinimumBalance(19, 'gpt-5')).toMatchObject({ ok: false, requiredCredits: 20, currentCredits: 19 })
     expect(checkMinimumBalance(100, 'standard')).toMatchObject({ ok: true, requiredCredits: 100, currentCredits: 100 })
     expect(estimateTokensFromText('这是一个 token 估算测试')).toBeGreaterThan(0)

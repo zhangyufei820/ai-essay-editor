@@ -141,7 +141,7 @@ function buildGptImageV11Inputs(inputs: unknown): GptImageV11Inputs {
   }
 }
 
-const WORKFLOW_MODELS = new Set(["banana-2-pro", "vocab-card"])
+const WORKFLOW_MODELS = new Set(["banana-2-pro", "gemini-image", "vocab-card"])
 const MEMBERSHIP_PRODUCT_IDS = ["basic", "pro", "premium", "enterprise", "campus"]
 const ALL_IN_ONE_AGENT_MODEL = "all-in-one-agent"
 
@@ -1521,13 +1521,14 @@ export async function POST(request: NextRequest) {
 
         // 🎨 Banana 与词境记忆卡使用 Workflow API；GPT Image V11 使用 Chatflow query + inputs。
         const isWorkflow = WORKFLOW_MODELS.has(model || "");
+        const isWorkflowImageModel = model === "banana-2-pro" || model === "gemini-image";
         const isVocabCardWorkflow = model === "vocab-card";
         const apiEndpoint = isWorkflow ? "/workflows/run" : "/chat-messages";
 
         let difyRequest: DifyWorkflowRequest | DifyChatRequest;
 
         if (isWorkflow) {
-            // Dify Banana 参数格式（image_prompt）
+            // Dify 图像工作流参数格式（image_prompt）
             difyRequest = isVocabCardWorkflow
               ? {
                   inputs: buildVocabCardWorkflowInputs({ query: effectiveQuery, inputs }),
@@ -1819,7 +1820,8 @@ export async function POST(request: NextRequest) {
     let completionTokens = 0
     let conversationId = ""
     let fullResponseText = ""  // 🔥 收集完整响应内容用于验证
-    let bananaImageUrls: string[] = []  // 🎨 收集 Banana 生成的图片 URL
+    let workflowImageUrls: string[] = []  // 🎨 收集工作流图像模型生成的图片 URL
+    const isWorkflowImageModel = model === "banana-2-pro" || model === "gemini-image"
     let jsonBuffer = ""  // 🔥 JSON 行缓冲：跨 chunk 拼接不完整的 SSE 数据行
     let hasReceivedContent = false  // 🔥 标记是否收到了实际内容（用于判断是否扣费）
     let latestParsedUsage: ParsedDifyUsage | null = null
@@ -1845,7 +1847,7 @@ export async function POST(request: NextRequest) {
           model as ModelType,
           { totalTokens, inputTokens: promptTokens, outputTokens: completionTokens },
           {
-            hasGeneratedImage: bananaImageUrls.length > 0,
+            hasGeneratedImage: workflowImageUrls.length > 0,
             hasOutputContent: hasReceivedContent,
           }
         )
@@ -1863,19 +1865,20 @@ export async function POST(request: NextRequest) {
           'gpt-5': 'GPT-5.4 对话',
           'gemini-pro': 'Gemini 对话',
           'banana-2-pro': 'Banana 绘图',
+          'gemini-image': 'Gemini 图像',
           'suno-v5': 'Suno 音乐',
           'open-claw': 'Open Claw 对话',
           'all-in-one-agent': '全能超级智能体',
         }
         const reason = reasonMap[model as string] || `使用 ${getModelDisplayName(model as ModelType)}`
-        const description = bananaImageUrls.length > 0
-          ? `${reason} (生成 ${bananaImageUrls.length} 张图片)`
+        const description = workflowImageUrls.length > 0
+          ? `${reason} (生成 ${workflowImageUrls.length} 张图片)`
           : `${reason} (输入 ${promptTokens} tokens / 输出 ${completionTokens} tokens)`
 
         const billingMetadata = createBillingAuditMetadata({
           userId,
           actionType: "consume",
-          feature: bananaImageUrls.length > 0 ? "image" : "text",
+          feature: workflowImageUrls.length > 0 ? "image" : "text",
           appId: keySource || null,
           workflowId: WORKFLOW_MODELS.has(model || "") ? (model || null) : null,
           modelId: model || "general-chat",
@@ -1988,8 +1991,8 @@ export async function POST(request: NextRequest) {
           }
 
           // 🎨 Banana 调试：记录原始数据
-          if (model === "banana-2-pro" && text.trim()) {
-            console.log(`🎨 [Banana流式] 收到数据块:`, { bytes: chunk.byteLength })
+          if (isWorkflowImageModel && text.trim()) {
+            console.log(`🎨 [WorkflowImage流式] 收到数据块:`, { model, bytes: chunk.byteLength })
           }
 
           // 🔥 追加到缓冲区，然后只处理完整的行
@@ -2020,8 +2023,8 @@ export async function POST(request: NextRequest) {
               const json = JSON.parse(data)
 
               // 🎨 Banana 调试：记录所有事件
-              if (model === "banana-2-pro") {
-                console.log(`🎨 [Banana事件] 摘要:`, summarizeDifyEventForLog(json))
+              if (isWorkflowImageModel) {
+                console.log(`🎨 [WorkflowImage事件] 摘要:`, summarizeDifyEventForLog(json))
               }
 
 	              // 🧠 记录工作流节点事件（用于前端思考过程显示）
@@ -2100,16 +2103,16 @@ export async function POST(request: NextRequest) {
 	                  }).catch((error) => console.warn("[AI Task Trace] artifact update failed:", error))
 	                }
 
-                // 🎨 Banana 图片检测：提取图片 URL
-                if (model === "banana-2-pro") {
+                // 🎨 工作流图片检测：提取图片 URL
+                if (isWorkflowImageModel) {
                   // 匹配 Markdown 图片格式：![alt](url)
                   const imageRegex = /!\[.*?\]\((https?:\/\/[^\)]+)\)/g
                   const matches = json.answer.matchAll(imageRegex)
                   for (const match of matches) {
                     const imageUrl = match[1]
-	                    if (!bananaImageUrls.includes(imageUrl)) {
-	                      bananaImageUrls.push(imageUrl)
-	                      console.log(`🎨 [Banana] 检测到图片 URL (message):`, { imageCount: bananaImageUrls.length })
+	                    if (!workflowImageUrls.includes(imageUrl)) {
+	                      workflowImageUrls.push(imageUrl)
+	                      console.log(`🎨 [WorkflowImage] 检测到图片 URL (message):`, { model, imageCount: workflowImageUrls.length })
 	                    }
                   }
                 }
@@ -2188,15 +2191,15 @@ export async function POST(request: NextRequest) {
 	              }
 
               // 🎨 处理 message_file 事件（图片文件）
-              if (json.event === "message_file" && model === "banana-2-pro") {
-                console.log(`🎨 [Banana] 收到 message_file 事件:`, summarizeDifyEventForLog(json))
+              if (json.event === "message_file" && isWorkflowImageModel) {
+                console.log(`🎨 [WorkflowImage] 收到 message_file 事件:`, summarizeDifyEventForLog(json))
 
                 // Dify 返回的图片文件格式：{ type: "image", url: "..." }
                 if (json.type === "image" && json.url) {
                   const imageUrl = json.url
-	                  if (!bananaImageUrls.includes(imageUrl)) {
-	                    bananaImageUrls.push(imageUrl)
-	                    console.log(`🎨 [Banana] 检测到图片 URL (message_file):`, { imageCount: bananaImageUrls.length })
+	                  if (!workflowImageUrls.includes(imageUrl)) {
+	                    workflowImageUrls.push(imageUrl)
+	                    console.log(`🎨 [WorkflowImage] 检测到图片 URL (message_file):`, { model, imageCount: workflowImageUrls.length })
 
                     // 🔥 立即将图片 URL 以 Markdown 格式添加到响应中
                     fullResponseText += `\n\n![Generated Image](${imageUrl})`
@@ -2209,17 +2212,18 @@ export async function POST(request: NextRequest) {
               }
 
               // 🎨 处理 workflow_finished 事件（可能包含图片）
-              if (json.event === "workflow_finished" && model === "banana-2-pro") {
-                console.log(`🎨 [Banana] 收到 workflow_finished 事件:`, summarizeDifyEventForLog(json))
+              if (json.event === "workflow_finished" && isWorkflowImageModel) {
+                console.log(`🎨 [WorkflowImage] 收到 workflow_finished 事件:`, summarizeDifyEventForLog(json))
 
                 // 检查是否有输出文件
-                if (json.outputs && json.outputs.files) {
-                  for (const file of json.outputs.files) {
+                const workflowFiles = json.outputs?.files || json.data?.outputs?.files || []
+                if (Array.isArray(workflowFiles)) {
+                  for (const file of workflowFiles) {
                     if (file.type === "image" && file.url) {
                       const imageUrl = file.url
-	                      if (!bananaImageUrls.includes(imageUrl)) {
-	                        bananaImageUrls.push(imageUrl)
-	                        console.log(`🎨 [Banana] 检测到图片 URL (workflow_finished):`, { imageCount: bananaImageUrls.length })
+	                      if (!workflowImageUrls.includes(imageUrl)) {
+	                        workflowImageUrls.push(imageUrl)
+	                        console.log(`🎨 [WorkflowImage] 检测到图片 URL (workflow_finished):`, { model, imageCount: workflowImageUrls.length })
 
                         // 🔥 立即将图片 URL 以 Markdown 格式添加到响应中
                         fullResponseText += `\n\n![Generated Image](${imageUrl})`
@@ -2299,7 +2303,7 @@ export async function POST(request: NextRequest) {
           enqueueSseAnswer(controller, normalizeAllInOneAgentDisplay(fullResponseText))
         }
         console.log(`💰 [Billing] 流结束，输入 ${promptTokens} tokens，输出 ${completionTokens} tokens，总 ${totalTokens} tokens，内容长度: ${fullResponseText.length}，hasReceivedContent: ${hasReceivedContent}`)
-	        if (!workflowNodeFailure && hasReceivedContent && (promptTokens > 0 || completionTokens > 0 || bananaImageUrls.length > 0)) {
+	        if (!workflowNodeFailure && hasReceivedContent && (promptTokens > 0 || completionTokens > 0 || workflowImageUrls.length > 0)) {
 	          deductCredit().catch(e => console.error("[Billing] 扣费异步异常:", e))
 	        } else {
 	          console.warn(`⚠️ [Billing] 流结束但无可结算 token，不扣费`)
