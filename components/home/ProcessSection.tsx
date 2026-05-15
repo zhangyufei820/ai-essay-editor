@@ -1,32 +1,14 @@
 /**
  * 📝 沈翔学校 - 使用流程区域
  * 
- * 展示多智能体协同的三步学习流程。
- * 包含跑马灯式的 AI 模型展示。
+ * 展示从上传材料到复盘提升的三步学习流程。
  */
 
 "use client"
 
 import { motion } from "framer-motion"
-import { Camera, Cpu, Lightbulb, type LucideIcon } from "lucide-react"
+import { Camera, CheckCircle2, Lightbulb, type LucideIcon } from "lucide-react"
 import { brandColors, slateColors, creamColors } from "@/lib/design-tokens"
-
-// ============================================
-// AI 模型列表（跑马灯展示）
-// ============================================
-
-const aiModels = [
-  "GPT-5.4",
-  "Claude 4.6",
-  "Gemini 3.1",
-  "Math Expert Agent",
-  "Writing Coach Agent",
-  "Logic Analyzer",
-  "DeepSeek V3",
-  "Qwen 3.0",
-  "Essay Master Agent",
-  "Grammar Expert",
-]
 
 // ============================================
 // 流程步骤配置
@@ -37,28 +19,26 @@ interface Step {
   icon: LucideIcon
   title: string
   description: string
-  hasMarquee?: boolean
 }
 
 const steps: Step[] = [
   {
     number: "01",
     icon: Camera,
-    title: "全维感知：多模态灵感接入",
-    description: "拍照、文档或语音，支持全场景信息输入。多模态识别技术精准捕捉每一个知识点，让你的学习痕迹无缝同步，化琐碎为系统。"
+    title: "上传材料",
+    description: "作文、试卷、题目或学习问题都可以作为入口，先把真实学习现场放进来。"
   },
   {
     number: "02",
-    icon: Cpu,
-    title: "集群调度：多智能体深度协同",
-    description: "瞬间调动全球顶尖模型集群。根据任务属性自动指派垂直领域 Agent，通过多轮博弈与思维链推理，为你输出多维度、高精度的深度解析。",
-    hasMarquee: true
+    icon: CheckCircle2,
+    title: "生成反馈",
+    description: "AI 把问题、原因、修改方向和训练建议整理成清晰清单，减少来回解释。"
   },
   {
     number: "03",
     icon: Lightbulb,
-    title: "知识内化：个性化成长全案",
-    description: "超越标准答案。基于 Agent 的深度洞察，为你生成量身定制的反馈闭环。不仅解决当下难题，更通过思路拆解与弱项强化，实现能力的跨越式进化。"
+    title: "复盘提升",
+    description: "学生按建议修改和练习，家长、老师也能基于同一份反馈继续跟进。"
   }
 ]
 
@@ -110,64 +90,6 @@ const lineVariants = {
 }
 
 // ============================================
-// 跑马灯组件
-// ============================================
-
-function AIModelMarquee() {
-  // 复制两份实现无缝滚动
-  const doubledModels = [...aiModels, ...aiModels]
-  
-  return (
-    <div className="mt-4 w-full max-w-full overflow-hidden relative">
-      {/* 左侧渐变遮罩 */}
-      <div 
-        className="absolute left-0 top-0 bottom-0 w-8 z-10"
-        style={{ 
-          background: `linear-gradient(to right, ${brandColors[50]}, transparent)`
-        }}
-      />
-      {/* 右侧渐变遮罩 */}
-      <div 
-        className="absolute right-0 top-0 bottom-0 w-8 z-10"
-        style={{ 
-          background: `linear-gradient(to left, ${brandColors[50]}, transparent)`
-        }}
-      />
-      
-      <motion.div
-        animate={{ x: [0, -50 * aiModels.length] }}
-        transition={{
-          x: {
-            repeat: Infinity,
-            repeatType: "loop",
-            duration: 20,
-            ease: "linear",
-          },
-        }}
-        className="flex gap-3 whitespace-nowrap"
-      >
-        {doubledModels.map((model, index) => (
-          <span
-            key={index}
-            className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium"
-            style={{ 
-              backgroundColor: brandColors[100],
-              color: brandColors[800]
-            }}
-          >
-            <span 
-              className="w-1.5 h-1.5 rounded-full mr-2"
-              style={{ backgroundColor: brandColors[500] }}
-            />
-            {model}
-          </span>
-        ))}
-      </motion.div>
-    </div>
-  )
-}
-
-// ============================================
 // 桌面端步骤卡片
 // ============================================
 
@@ -191,19 +113,17 @@ function DesktopStepCard({ step, index }: { step: Step; index: number }) {
         {step.number}
       </div>
 
-      {/* 图标 - 增强阴影立体感 */}
+      {/* 图标 */}
       <div 
-        className="w-20 h-20 rounded-2xl flex items-center justify-center mb-6"
+        className="mb-6 flex size-16 items-center justify-center rounded-lg border border-primary/15 bg-primary/10"
         style={{ 
-          backgroundColor: brandColors[50],
-          boxShadow: `0 8px 22px ${brandColors[200]}55`
+          backgroundColor: brandColors[50]
         }}
       >
         <Icon 
-          className="w-10 h-10" 
+          className="size-8"
           style={{ 
-            color: brandColors[700],
-            filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.1))'
+            color: brandColors[700]
           }} 
         />
       </div>
@@ -224,8 +144,6 @@ function DesktopStepCard({ step, index }: { step: Step; index: number }) {
         {step.description}
       </p>
 
-      {/* 跑马灯（仅第二步显示） */}
-      {step.hasMarquee && <AIModelMarquee />}
     </motion.div>
   )
 }
@@ -285,8 +203,6 @@ function MobileStepCard({ step, index, isLast }: { step: Step; index: number; is
           {step.description}
         </p>
         
-        {/* 跑马灯（仅第二步显示） */}
-        {step.hasMarquee && <AIModelMarquee />}
       </div>
     </motion.div>
   )
@@ -313,7 +229,7 @@ export function ProcessSection() {
             className="text-sm font-medium uppercase tracking-wider mb-4 block"
             style={{ color: brandColors[700] }}
           >
-            集合全球智慧
+            学习闭环
           </span>
           
           {/* 主标题 - 强烈立体感 */}
@@ -321,7 +237,7 @@ export function ProcessSection() {
             className="sx-section-title mb-4"
             style={{ color: slateColors[900] }}
           >
-            三步开启深度进化
+            从发现问题到真正改进
           </h2>
 
           {/* 副标题 */}
@@ -329,7 +245,7 @@ export function ProcessSection() {
             className="text-lg md:text-xl max-w-2xl mx-auto"
             style={{ color: slateColors[500] }}
           >
-            多智能体协同，定义未来学习新范式
+            首页不再讲复杂模型编排，只呈现学生每天能用上的路径。
           </p>
         </motion.div>
 
