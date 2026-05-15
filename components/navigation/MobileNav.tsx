@@ -1,4 +1,3 @@
-/* eslint-disable @next/next/no-img-element -- Dynamic/user-generated/external image surfaces: keep native img to preserve sizing, blob/data/proxy URLs, payment QR codes, and chat preview behavior. */
 /**
  * 📱 沈翔学校 - 移动端导航组件 (Mobile Navigation)
  * 
@@ -14,7 +13,6 @@ import { motion, AnimatePresence } from "framer-motion"
 import { 
   Home, 
   MessageSquare, 
-  BookOpen, 
   User, 
   Menu, 
   X,
@@ -24,7 +22,13 @@ import {
   LogOut,
   ChevronRight,
   BarChart3,
-  Layers3
+  Layers3,
+  FolderOpen,
+  GraduationCap,
+  Wrench,
+  Compass,
+  Share2,
+  ClipboardCheck
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { brandColors } from "@/lib/design-tokens"
@@ -36,9 +40,8 @@ import { brandColors } from "@/lib/design-tokens"
 const bottomNavItems = [
   { href: "/", icon: Home, label: "首页" },
   { href: "/chat", icon: MessageSquare, label: "对话" },
-  { href: "/dashboard", icon: BarChart3, label: "看板" },
+  { href: "/worksheet-diagnosis", icon: ClipboardCheck, label: "诊断" },
   { href: "/flashcards", icon: Layers3, label: "闪卡" },
-  { href: "/pricing", icon: CreditCard, label: "价格" },
   { href: "/settings", icon: User, label: "我的" }
 ]
 
@@ -46,7 +49,12 @@ const menuItems = [
   { href: "/", label: "首页", icon: Home },
   { href: "/chat", label: "AI 对话", icon: MessageSquare },
   { href: "/dashboard", label: "学习看板", icon: BarChart3 },
+  { href: "/folder", label: "个人资料夹", icon: FolderOpen },
   { href: "/flashcards", label: "闪卡复习", icon: Layers3 },
+  { href: "/explore", label: "创作广场", icon: Compass },
+  { href: "/my/shares", label: "我的分享", icon: Share2 },
+  { href: "/teacher/agents", label: "教师平台", icon: GraduationCap },
+  { href: "/tools", label: "工具中心", icon: Wrench },
   { href: "/pricing", label: "价格方案", icon: CreditCard },
   { href: "/settings", label: "设置", icon: Settings }
 ]
@@ -223,15 +231,7 @@ export function HamburgerMenu({ user, onLogout }: HamburgerMenuProps) {
                 <div className="p-4 border-b border-slate-100">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-brand-100 flex items-center justify-center">
-                      {user.avatar ? (
-                        <img 
-                          src={user.avatar} 
-                          alt={user.name} 
-                          className="w-full h-full rounded-full object-cover"
-                        />
-                      ) : (
-                        <User className="w-5 h-5 text-brand-700" />
-                      )}
+                      <User className="w-5 h-5 text-brand-700" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-slate-800 truncate">
