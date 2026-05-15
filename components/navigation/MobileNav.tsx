@@ -12,22 +12,19 @@ import Link from "next/link"
 import { motion, AnimatePresence } from "framer-motion"
 import { 
   Home, 
+  FileText,
+  Calculator,
+  Bot,
+  Tag,
+  HelpCircle,
   MessageSquare, 
   User, 
   Menu, 
   X,
   Sparkles,
-  CreditCard,
-  Settings,
   LogOut,
   ChevronRight,
-  BarChart3,
   Layers3,
-  FolderOpen,
-  GraduationCap,
-  Wrench,
-  Compass,
-  Share2,
   ClipboardCheck
 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -46,17 +43,12 @@ const bottomNavItems = [
 ]
 
 const menuItems = [
-  { href: "/", label: "首页", icon: Home },
-  { href: "/chat", label: "AI 对话", icon: MessageSquare },
-  { href: "/dashboard", label: "学习看板", icon: BarChart3 },
-  { href: "/folder", label: "个人资料夹", icon: FolderOpen },
-  { href: "/flashcards", label: "闪卡复习", icon: Layers3 },
-  { href: "/explore", label: "创作广场", icon: Compass },
-  { href: "/my/shares", label: "我的分享", icon: Share2 },
-  { href: "/teacher/agents", label: "教师平台", icon: GraduationCap },
-  { href: "/tools", label: "工具中心", icon: Wrench },
-  { href: "/pricing", label: "价格方案", icon: CreditCard },
-  { href: "/settings", label: "设置", icon: Settings }
+  { name: "首页", href: "/", icon: Home },
+  { name: "作文批改", href: "/chat/standard", icon: FileText },
+  { name: "数学答疑", href: "/chat/quanquan-math", icon: Calculator },
+  { name: "AI 助手", href: "/chat/open-claw", icon: Bot },
+  { name: "定价", href: "/pricing", icon: Tag },
+  { name: "帮助", href: "/help", icon: HelpCircle },
 ]
 
 // ============================================
@@ -80,7 +72,7 @@ export function MobileBottomNav() {
               className={cn(
                 "flex flex-col items-center justify-center flex-1 h-full",
                 "transition-colors duration-200",
-                isActive ? "text-brand-700" : "text-slate-400"
+                isActive ? "text-emerald-700" : "text-slate-400"
               )}
             >
               <motion.div
@@ -90,7 +82,7 @@ export function MobileBottomNav() {
                 <item.icon 
                   className={cn(
                     "w-6 h-6 mb-1 transition-all duration-200",
-                    isActive && "fill-brand-100 stroke-brand-700"
+                    isActive && "fill-emerald-100 stroke-emerald-700"
                   )} 
                   strokeWidth={isActive ? 2.5 : 2}
                 />
@@ -108,7 +100,7 @@ export function MobileBottomNav() {
               
               <span className={cn(
                 "text-[10px] font-medium transition-colors duration-200",
-                isActive ? "text-brand-700" : "text-slate-400"
+                isActive ? "text-emerald-700" : "text-slate-400"
               )}>
                 {item.label}
               </span>
@@ -215,7 +207,7 @@ export function HamburgerMenu({ user, onLogout }: HamburgerMenuProps) {
               {/* 头部 */}
               <div className="flex items-center justify-between p-4 border-b border-slate-100 pt-safe">
                 <div className="flex items-center gap-2">
-                  <Sparkles className="w-5 h-5 text-brand-700" />
+                  <Sparkles className="w-5 h-5 text-emerald-700" />
                   <span className="font-semibold text-slate-800">沈翔学校</span>
                 </div>
                 <button
@@ -230,8 +222,8 @@ export function HamburgerMenu({ user, onLogout }: HamburgerMenuProps) {
               {user && (
                 <div className="p-4 border-b border-slate-100">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-brand-100 flex items-center justify-center">
-                      <User className="w-5 h-5 text-brand-700" />
+                    <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center">
+                      <User className="w-5 h-5 text-emerald-700" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-slate-800 truncate">
@@ -264,18 +256,18 @@ export function HamburgerMenu({ user, onLogout }: HamburgerMenuProps) {
                         className={cn(
                           "flex items-center gap-3 px-6 py-4 text-base transition-colors",
                           isActive
-                            ? "text-brand-700 bg-brand-50 border-r-2 border-brand-700"
+                            ? "text-emerald-700 bg-emerald-50 border-r-2 border-emerald-700"
                             : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
                         )}
                       >
                         <item.icon className={cn(
                           "w-5 h-5",
-                          isActive ? "text-brand-700" : "text-slate-400"
+                          isActive ? "text-emerald-700" : "text-slate-400"
                         )} />
-                        <span className="flex-1">{item.label}</span>
+                        <span className="flex-1">{item.name}</span>
                         <ChevronRight className={cn(
                           "w-4 h-4 transition-transform",
-                          isActive ? "text-brand-700" : "text-slate-300"
+                          isActive ? "text-emerald-700" : "text-slate-300"
                         )} />
                       </Link>
                     </motion.div>
@@ -300,7 +292,7 @@ export function HamburgerMenu({ user, onLogout }: HamburgerMenuProps) {
                   <Link
                     href="/login"
                     onClick={() => setIsOpen(false)}
-                    className="block w-full py-3 text-center text-white bg-brand-900 rounded-xl font-medium hover:bg-brand-800 transition-colors"
+                    className="block w-full py-3 text-center text-white bg-emerald-900 rounded-xl font-medium hover:bg-emerald-800 transition-colors"
                   >
                     登录 / 注册
                   </Link>
