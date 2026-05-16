@@ -29,12 +29,83 @@ function getPureNumbers(str: any) {
   return String(str).replace(/\D/g, '')
 }
 
-async function checkMembership(userId: string) {
+function collectIdentifierValues(values: Array<unknown>) {
+  const identifiers = new Set<string>()
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) {
+      identifiers.add(value.trim())
+    }
+  }
+  return Array.from(identifiers)
+}
+
+async function resolveRelatedUserIds(supabaseAdmin: any, userId: string, identifiers: string[]) {
+  const related = new Set<string>([userId])
+  const searchValues = collectIdentifierValues([
+    userId,
+    ...identifiers,
+  ])
+
+  for (const value of searchValues) {
+    const digits = getPureNumbers(value)
+    const shouldSearchByDigits = digits.length >= 6
+
+    if (shouldSearchByDigits) {
+      const { data: { users }, error: listError } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 })
+      if (!listError && users) {
+        for (const user of users) {
+          const candidates = [
+            getPureNumbers(user.phone),
+            getPureNumbers(user.email),
+            getPureNumbers(user.user_metadata?.phone),
+            getPureNumbers(user.user_metadata?.mobile),
+          ]
+          if (candidates.some(candidate => candidate && (candidate.includes(digits) || digits.includes(candidate)))) {
+            related.add(user.id)
+          }
+        }
+      }
+    }
+
+    for (const table of ['profiles', 'user_profiles']) {
+      const { data } = await supabaseAdmin
+        .from(table)
+        .select(table === 'profiles' ? 'id, phone, email' : 'user_id, phone, email')
+        .or(`phone.eq.${value},phone.ilike.%${value}%,email.eq.${value}`)
+        .limit(20)
+
+      for (const row of data || []) {
+        const relatedId = table === 'profiles' ? row.id : row.user_id
+        if (relatedId) related.add(relatedId)
+      }
+
+      if (shouldSearchByDigits) {
+        const { data: phoneRows } = await supabaseAdmin
+          .from(table)
+          .select(table === 'profiles' ? 'id, phone, email' : 'user_id, phone, email')
+          .ilike('phone', `%${digits}%`)
+          .limit(20)
+
+        for (const row of phoneRows || []) {
+          const relatedId = table === 'profiles' ? row.id : row.user_id
+          if (relatedId) related.add(relatedId)
+        }
+      }
+    }
+  }
+
+  return Array.from(related)
+}
+
+async function checkMembership(userId: string, identifiers: string[] = []) {
   const supabaseAdmin = getSupabaseAdmin()
+  const relatedUserIds = await resolveRelatedUserIds(supabaseAdmin, userId, identifiers)
 
   // 策略1: 直接用原始 userId 查询订单
   let orders: any[] = []
-  const variants = [userId, userId?.toLowerCase?.(), userId?.toUpperCase?.()].filter(Boolean)
+  const variants = relatedUserIds
+    .flatMap(id => [id, id?.toLowerCase?.(), id?.toUpperCase?.()])
+    .filter(Boolean)
 
   for (const tryId of variants) {
     const { data, error } = await supabaseAdmin
@@ -50,15 +121,20 @@ async function checkMembership(userId: string) {
 
   // 策略2: 订单号模糊匹配
   if (!orders.length) {
-    const { data, error } = await supabaseAdmin
-      .from('orders')
-      .select('id, status, amount, product_name, product_id, created_at, order_no, user_id')
-      .like('order_no', `%_${userId}`)
-      .eq('status', 'paid')
-      .gt('amount', 0)
-      .order('created_at', { ascending: false })
-      .limit(5)
-    if (!error && data?.length) orders = data
+    for (const relatedUserId of relatedUserIds) {
+      const { data, error } = await supabaseAdmin
+        .from('orders')
+        .select('id, status, amount, product_name, product_id, created_at, order_no, user_id')
+        .like('order_no', `%_${relatedUserId}`)
+        .eq('status', 'paid')
+        .gt('amount', 0)
+        .order('created_at', { ascending: false })
+        .limit(5)
+      if (!error && data?.length) {
+        orders = data
+        break
+      }
+    }
   }
 
   // 策略3: 非 UUID 则按手机/邮箱匹配 Supabase 用户
@@ -106,14 +182,20 @@ async function checkMembership(userId: string) {
   // 策略5: 检查 is_pro 字段和 membership_status
   let isPro = false
   let membershipStatus: string | null = null
-  const { data: creditsData, error: creditsError } = await supabaseAdmin
-    .from('user_credits').select('credits, is_pro, user_id').eq('user_id', userId).maybeSingle()
-  if (!creditsError && creditsData) {
-    if (creditsData.is_pro === true) isPro = true
-    membershipStatus = resolveMembershipStatus(creditsData)
+  let creditsUserId: string | null = null
+  for (const relatedUserId of relatedUserIds) {
+    const { data: creditsData, error: creditsError } = await supabaseAdmin
+      .from('user_credits').select('credits, is_pro, user_id').eq('user_id', relatedUserId).maybeSingle()
+    if (!creditsError && creditsData) {
+      if (creditsData.is_pro === true) isPro = true
+      membershipStatus = resolveMembershipStatus(creditsData)
+      creditsUserId = creditsData.user_id
+      if (isPro) break
+    }
   }
 
   const isPaidMember = isPro || orders.length > 0
+  const membershipUserId = orders[0]?.user_id || creditsUserId || userId
 
   // 从订单或用户积分记录中获取订阅类型
   let type = "免费"
@@ -129,6 +211,8 @@ async function checkMembership(userId: string) {
     isPaidMember,
     orderCount: orders.length,
     latestOrder: orders[0] || null,
+    userId: membershipUserId,
+    relatedUserIds,
     type // 返回订阅类型: "免费", "basic", "pro", "premium"
   })
 }
@@ -142,8 +226,12 @@ export async function GET(req: NextRequest) {
     if (requestedUserId && requestedUserId !== auth.user!.id) {
       return NextResponse.json({ error: '无权查询该用户会员状态' }, { status: 403 })
     }
-    const userId = auth.user!.id
-    return await checkMembership(userId)
+    return await checkMembership(auth.user!.id, [
+      auth.user!.phone || '',
+      auth.user!.email || '',
+      typeof auth.user!.metadata?.phone === 'string' ? auth.user!.metadata.phone : '',
+      typeof auth.user!.metadata?.mobile === 'string' ? auth.user!.metadata.mobile : '',
+    ])
   } catch (error: any) {
     const status = error?.message === '缺少 Supabase 配置' ? 503 : 500
     return NextResponse.json({ error: status === 503 ? '会员服务未配置' : '查询会员状态失败' }, { status })
@@ -166,7 +254,12 @@ export async function POST(req: NextRequest) {
     if (userId && userId !== auth.user!.id) {
       return NextResponse.json({ error: '无权查询该用户会员状态' }, { status: 403 })
     }
-    return await checkMembership(auth.user!.id)
+    return await checkMembership(auth.user!.id, [
+      auth.user!.phone || '',
+      auth.user!.email || '',
+      typeof auth.user!.metadata?.phone === 'string' ? auth.user!.metadata.phone : '',
+      typeof auth.user!.metadata?.mobile === 'string' ? auth.user!.metadata.mobile : '',
+    ])
   } catch (error: any) {
     const status = error?.message === '缺少 Supabase 配置' ? 503 : 500
     return NextResponse.json({ error: status === 503 ? '会员服务未配置' : '查询会员状态失败' }, { status })

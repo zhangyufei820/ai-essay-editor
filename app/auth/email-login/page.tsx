@@ -16,6 +16,7 @@ export default function EmailLoginPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const redirect = searchParams.get("redirect") || "/chat"
+  const referralCode = searchParams.get("ref") || (typeof window !== "undefined" ? sessionStorage.getItem("pendingReferralCode") : null)
 
   const [email, setEmail] = useState("")
   const [otp, setOtp] = useState("")
@@ -31,6 +32,12 @@ export default function EmailLoginPage() {
       return () => clearTimeout(timer)
     }
   }, [countdown])
+
+  useEffect(() => {
+    if (referralCode && typeof window !== "undefined") {
+      sessionStorage.setItem("pendingReferralCode", referralCode)
+    }
+  }, [referralCode])
 
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -71,7 +78,7 @@ export default function EmailLoginPage() {
       const response = await fetch("/api/auth/verify-email-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, code: otp }),
+        body: JSON.stringify({ email, code: otp, referralCode }),
       })
 
       const data = await response.json()
@@ -83,6 +90,9 @@ export default function EmailLoginPage() {
       // 🔥 如果返回了登录链接，直接跳转完成登录
       if (data.redirectUrl) {
         console.log("[Email Login] 跳转到登录链接")
+        if (typeof window !== "undefined") {
+          sessionStorage.removeItem("pendingReferralCode")
+        }
         window.location.href = data.redirectUrl
         return
       }
@@ -95,6 +105,10 @@ export default function EmailLoginPage() {
 
       router.push(redirect)
       router.refresh()
+
+      if (typeof window !== "undefined") {
+        sessionStorage.removeItem("pendingReferralCode")
+      }
     } catch (err: any) {
       setError(err.message || "验证码错误，请重试")
     } finally {

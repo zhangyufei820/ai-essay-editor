@@ -7,6 +7,7 @@ export type VerifiedUser = {
   email?: string | null
   phone?: string | null
   provider?: "supabase" | "authing"
+  metadata?: Record<string, unknown>
 }
 
 function createRequestSupabaseClient(request: NextRequest) {
@@ -49,6 +50,7 @@ export async function getVerifiedUser(request: NextRequest): Promise<VerifiedUse
         email: user.email,
         phone: user.phone,
         provider: "supabase",
+        metadata: user.user_metadata || {},
       }
     }
   }

@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { getClientIP, checkIpRateLimit, createRateLimitResponse } from '@/lib/rate-limit'
 import { requireUser } from '@/lib/auth/verified-user'
+import { handleReferralSignup } from '@/lib/credits'
 
 export async function POST(request: NextRequest) {
   // IP 限流：30次/分钟
@@ -17,7 +18,7 @@ export async function POST(request: NextRequest) {
 
     // 1. 获取前端传来的用户信息
     const body = await request.json()
-    const { user_id, email, nickname, avatar, phone } = body
+    const { user_id, email, nickname, avatar, phone, referralCode } = body
 
     const verifiedUserId = auth.user!.id
     if (user_id && user_id !== verifiedUserId) {
@@ -126,6 +127,25 @@ export async function POST(request: NextRequest) {
         }
       } else {
         console.log("✅ [Sync] 用户赠送 1000 积分成功")
+      }
+
+      const resolvedReferralCode =
+        referralCode ||
+        (auth.user?.metadata && typeof auth.user.metadata.referral_code === "string"
+          ? auth.user.metadata.referral_code
+          : null)
+
+      if (resolvedReferralCode) {
+        try {
+          const referralSuccess = await handleReferralSignup(verifiedUserId, resolvedReferralCode)
+          if (referralSuccess) {
+            console.log("✅ [Sync] 推荐注册奖励处理成功")
+          } else {
+            console.warn("[Sync] 推荐注册奖励处理失败，用户初始化已继续")
+          }
+        } catch (referralError) {
+          console.error("[Sync] 推荐注册奖励异常:", referralError)
+        }
       }
 
       return NextResponse.json({ success: true, message: 'New user initialized' })

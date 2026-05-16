@@ -138,6 +138,29 @@ describe('credits helpers', () => {
     expect(routeSource).toContain('is_pro=false')
   })
 
+  it('threads referral processing through all first-login auth entry points', () => {
+    const syncSource = readFileSync(path.join(process.cwd(), 'app/api/auth/sync/route.ts'), 'utf8')
+    const callbackSource = readFileSync(path.join(process.cwd(), 'app/auth/callback/route.ts'), 'utf8')
+    const emailOtpSource = readFileSync(
+      path.join(process.cwd(), 'app/api/auth/verify-email-otp/route.ts'),
+      'utf8',
+    )
+
+    expect(syncSource).toContain('handleReferralSignup')
+    expect(syncSource).toContain('referralCode')
+    expect(callbackSource).toContain('handleReferralSignup')
+    expect(callbackSource).toContain('referral_code')
+    expect(emailOtpSource).toContain('handleReferralSignup')
+    expect(emailOtpSource).toContain('referralCode')
+  })
+
+  it('blocks invite-page fallback referral codes that are not persisted server-side', () => {
+    const inviteSource = readFileSync(path.join(process.cwd(), 'app/invite/page.tsx'), 'utf8')
+
+    expect(inviteSource).not.toContain('使用本地推荐码')
+    expect(inviteSource).not.toContain('generateReferralCode(userId)')
+  })
+
   it('builds unified billing audit metadata for credit transaction logs', () => {
     const metadata = createBillingAuditMetadata({
       userId: 'user-1',

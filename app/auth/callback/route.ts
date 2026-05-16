@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
+import { handleReferralSignup } from "@/lib/credits"
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)
@@ -21,6 +22,22 @@ export async function GET(request: Request) {
     const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
 
     if (!exchangeError) {
+      try {
+        const { data } = await supabase.auth.getUser()
+        const referralCode = data.user?.user_metadata?.referral_code
+
+        if (data.user?.id && typeof referralCode === "string" && referralCode.trim()) {
+          const referralSuccess = await handleReferralSignup(data.user.id, referralCode.trim())
+          if (referralSuccess) {
+            console.log("[Auth Callback] 推荐注册奖励处理成功")
+          } else {
+            console.warn("[Auth Callback] 推荐注册奖励处理失败")
+          }
+        }
+      } catch (referralError) {
+        console.error("[Auth Callback] 推荐注册奖励处理异常:", referralError)
+      }
+
       return NextResponse.redirect(`${origin}${next}`)
     }
 
