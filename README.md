@@ -1,5 +1,7 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+项目安全与身份系统演进请看：[长期路线图](docs/ROADMAP.md)。
+
 ## Getting Started
 
 First, run the development server:
