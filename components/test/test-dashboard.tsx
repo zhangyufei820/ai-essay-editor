@@ -28,7 +28,7 @@ export function TestDashboard() {
     {
       id: "payment",
       name: "支付测试",
-      description: "测试支付宝、微信支付、Stripe集成",
+      description: "测试微信支付、Stripe集成",
       status: testResults.payment || "pending",
     },
     {

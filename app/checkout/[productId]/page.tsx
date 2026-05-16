@@ -100,7 +100,7 @@ function CheckoutFlow({ productId }: { productId: string }) {
   // ==========================================
   // 强力跳转修复版
   // ==========================================
-  const handlePayment = async (type: "alipay" | "wechat") => {
+  const handlePayment = async () => {
     setManualPayUrl(null); // 重置
     if (!user) {
       router.push(loginRedirectUrl)
@@ -118,7 +118,7 @@ function CheckoutFlow({ productId }: { productId: string }) {
           return
       }
 
-      const apiUrl = `/api/payment/xunhupay/create?productId=${productId}&type=${type}&billing=${billing}`
+      const apiUrl = `/api/payment/xunhupay/create?productId=${productId}&type=wechat&billing=${billing}`
       console.log("正在请求:", apiUrl);
       
       const res = await fetch(apiUrl, {
@@ -262,9 +262,9 @@ function CheckoutFlow({ productId }: { productId: string }) {
           )}
 
           <div className="bg-card rounded-2xl shadow-lg p-8">
-            <h2 className="text-xl font-semibold mb-2">选择支付方式</h2>
+            <h2 className="text-xl font-semibold mb-2">扫码支付</h2>
             <p className="text-sm text-muted-foreground mb-4">
-              支付完成后会自动跳转到结果页；如权益未及时到账，请保存订单号并联系 support@shenxiang.school。
+              使用微信扫码完成支付。支付完成后会自动跳转到结果页；如权益未及时到账，请保存订单号并联系 support@shenxiang.school。
             </p>
             
             {/* 如果需要会员但用户不是会员，禁用支付按钮 */}
@@ -274,28 +274,11 @@ function CheckoutFlow({ productId }: { productId: string }) {
               </div>
             )}
             
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-              
+            <div className="grid grid-cols-1 gap-4 mb-6">
               <Button
                 variant="outline"
                 className="h-auto py-4 flex flex-col items-center gap-2"
-                onClick={() => handlePayment("alipay")}
-                disabled={!BETA_CONFIG.payment.xunhupay || isPaying || (needsMembership && !isUserMember)} 
-              >
-                {isPaying ? <Loader2 className="h-6 w-6 animate-spin text-primary" /> : (
-                  <>
-                  <svg className="h-8 w-8" viewBox="0 0 24 24" fill={BETA_CONFIG.payment.xunhupay ? "#1677FF" : "#999"}>
-                    <path d="M18.277 3H5.723A2.723 2.723 0 003 5.723v12.554A2.723 2.723 0 005.723 21h12.554A2.723 2.723 0 0021 18.277V5.723A2.723 2.723 0 0018.277 3zm1.305 13.739c-1.134.452-2.344.804-3.604 1.044-.975-1.127-1.82-2.408-2.504-3.808h3.208v-1.283h-3.77v-1.095h3.77V10.31h-3.77V9.215h3.77V7.932h-8.285v1.283h3.77v1.095h-3.77v1.287h3.77v1.283h-3.77c-.684 1.4-1.529 2.681-2.504 3.808-1.26-.24-2.47-.592-3.604-1.044v-2.168h8.285v-1.283H4.418V9.215h8.285V7.932H4.418V5.723c0-.753.61-1.363 1.363-1.363h12.438c.753 0 1.363.61 1.363 1.363v11.016z" />
-                  </svg>
-                  <span className="font-medium text-sm">支付宝</span>
-                  </>
-                )}
-              </Button>
-
-              <Button
-                variant="outline"
-                className="h-auto py-4 flex flex-col items-center gap-2"
-                onClick={() => handlePayment("wechat")}
+                onClick={() => handlePayment()}
                 disabled={!BETA_CONFIG.payment.xunhupay || isPaying || (needsMembership && !isUserMember)}
               >
                 {isPaying ? <Loader2 className="h-6 w-6 animate-spin text-primary" /> : (

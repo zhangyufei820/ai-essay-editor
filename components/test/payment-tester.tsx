@@ -6,8 +6,18 @@ import { Badge } from "@/components/ui/badge"
 import { ExternalLink, CheckCircle2, AlertCircle } from "lucide-react"
 import Link from "next/link"
 
+type PaymentMethod = {
+  name: string
+  status: "available" | "needs-config"
+  description: string
+  testUrl: string
+  configRequired: boolean
+  features: string[]
+  envVars?: string[]
+}
+
 export function PaymentTester({ onResult }: { onResult: (result: "pass" | "fail") => void }) {
-  const paymentMethods = [
+  const paymentMethods: PaymentMethod[] = [
     {
       name: "Stripe支付",
       status: "available",
@@ -17,21 +27,11 @@ export function PaymentTester({ onResult }: { onResult: (result: "pass" | "fail"
       features: ["信用卡", "借记卡", "Apple Pay", "Google Pay"],
     },
     {
-      name: "支付宝支付",
-      status: "needs-config",
-      description: "需要支付宝开放平台企业认证",
-      testUrl: "/checkout/standard",
-      configRequired: true,
-      envVars: ["ALIPAY_APP_ID", "ALIPAY_PRIVATE_KEY", "ALIPAY_PUBLIC_KEY"],
-      features: ["扫码支付", "网页支付"],
-    },
-    {
       name: "微信支付",
-      status: "needs-config",
-      description: "需要微信支付商户平台认证",
+      status: "available",
+      description: "已通过迅虎支付通道接入微信扫码支付",
       testUrl: "/checkout/standard",
-      configRequired: true,
-      envVars: ["WECHAT_PAY_MCH_ID", "WECHAT_PAY_API_KEY"],
+      configRequired: false,
       features: ["Native扫码", "H5支付"],
     },
   ]
@@ -85,7 +85,7 @@ export function PaymentTester({ onResult }: { onResult: (result: "pass" | "fail"
           <h4 className="font-medium text-sm">重要提示</h4>
           <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
             <li>Stripe支持测试模式，可以使用测试卡号进行测试</li>
-            <li>支付宝和微信支付需要真实的商户账号</li>
+            <li>微信支付需要真实的商户账号和回调配置</li>
             <li>测试时请使用小额订单（如0.01元）</li>
             <li>确保配置了正确的回调URL</li>
           </ul>

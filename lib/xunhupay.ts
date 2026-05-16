@@ -81,7 +81,8 @@ export function createXunhupayOrder(params: {
     time: Math.floor(Date.now() / 1000).toString(),
     notify_url: xunhupayConfig.notifyUrl,
     return_url: xunhupayConfig.returnUrl,
-    type: params.paymentType || "alipay", // 默认支付宝
+    // 当前线上仅启用微信支付通道，留 alipay 作为未来开放支付宝时的接口占位
+    type: params.paymentType || "wechat",
     nonce_str: crypto.randomBytes(16).toString("hex"),
   }
 

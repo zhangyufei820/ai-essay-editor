@@ -67,4 +67,22 @@ describe("P0/P1 security audit guardrails", () => {
     expect(read("lib/credits.ts")).toContain('.eq("credits", credits.credits)')
     expect(read("lib/xunhupay.ts")).not.toContain("收到完整参数")
   })
+
+  it("does not ship the wechat-pay placeholder code", () => {
+    expect(fs.existsSync(path.join(root, "lib/wechat-pay.ts"))).toBe(false)
+    expect(fs.existsSync(path.join(root, "app/payment/wechat"))).toBe(false)
+    expect(fs.existsSync(path.join(root, "app/api/payment/wechat"))).toBe(false)
+  })
+
+  it("keeps xunhupay channel intact (real payment path)", () => {
+    expect(fs.existsSync(path.join(root, "lib/xunhupay.ts"))).toBe(true)
+    expect(fs.existsSync(path.join(root, "app/api/payment/xunhupay/create/route.ts"))).toBe(true)
+    expect(fs.existsSync(path.join(root, "app/api/payment/xunhupay/notify/route.ts"))).toBe(true)
+  })
+
+  it("checkout page only offers wechat button", () => {
+    const src = read("app/checkout/[productId]/page.tsx")
+    expect(src).not.toMatch(/handlePayment\(["']alipay["']\)/)
+    expect(src).toMatch(/handlePayment\(\)/)
+  })
 })
