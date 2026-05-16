@@ -1,9 +1,13 @@
 import { handleReferralSignup } from "@/lib/credits"
+import { requireUser } from "@/lib/auth/verified-user"
 import { createClient } from "@supabase/supabase-js"
 import { NextResponse } from "next/server"
+import type { NextRequest } from "next/server"
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    const auth = await requireUser(request)
+    if (auth.response) return auth.response
     // IP 限流：30次/分钟
     const { getClientIP, checkIpRateLimit, createRateLimitResponse } = await import('@/lib/rate-limit')
     const ip = getClientIP(request)
@@ -11,10 +15,11 @@ export async function POST(request: Request) {
     if (!limitResult.allowed) {
       return createRateLimitResponse(limitResult.retryAfter!)
     }
-    const { userId, referralCode } = await request.json()
+    const { referralCode } = await request.json()
+    const userId = auth.user!.id
 
-    if (!userId || !referralCode) {
-      return NextResponse.json({ error: "Missing userId or referralCode" }, { status: 400 })
+    if (!referralCode) {
+      return NextResponse.json({ error: "Missing referralCode" }, { status: 400 })
     }
 
     console.log(`[推荐处理] 处理推荐注册: userId=${userId}, referralCode=${referralCode}`)

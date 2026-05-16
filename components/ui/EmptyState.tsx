@@ -7,7 +7,6 @@
 "use client"
 
 import { cn } from "@/lib/utils"
-import { brandColors } from "@/lib/design-tokens"
 import { LucideIcon, Inbox, FileText, MessageSquare, Search, Users, Calendar } from "lucide-react"
 
 // ============================================
@@ -54,8 +53,8 @@ const emptyConfig: Record<EmptyType, { icon: LucideIcon; iconBg: string; iconCol
   },
   messages: {
     icon: MessageSquare,
-    iconBg: `bg-[${brandColors[50]}]`,
-    iconColor: `text-[${brandColors[600]}]`
+    iconBg: "bg-primary/10",
+    iconColor: "text-primary"
   },
   files: {
     icon: FileText,
@@ -99,13 +98,13 @@ export function EmptyState({
 
   return (
     <div className={cn(
-      "flex flex-col items-center justify-center text-center",
+      "flex flex-col items-center justify-center rounded-2xl border border-border/70 bg-card/80 text-center shadow-sm",
       compact ? "py-8 px-4" : "py-16 px-4",
       className
     )}>
       {/* 图标 */}
       <div className={cn(
-        "rounded-full flex items-center justify-center mb-4",
+        "rounded-2xl flex items-center justify-center mb-4 shadow-sm",
         compact ? "w-12 h-12" : "w-16 h-16",
         config.iconBg
       )}>
@@ -117,7 +116,7 @@ export function EmptyState({
 
       {/* 标题 */}
       <h3 className={cn(
-        "font-semibold text-slate-800 mb-1",
+        "font-semibold text-foreground mb-1",
         compact ? "text-base" : "text-lg"
       )}>
         {title}
@@ -126,7 +125,7 @@ export function EmptyState({
       {/* 描述 */}
       {description && (
         <p className={cn(
-          "text-slate-500 max-w-md",
+          "text-muted-foreground max-w-md leading-6",
           compact ? "text-sm mb-4" : "text-base mb-6"
         )}>
           {description}
@@ -140,10 +139,9 @@ export function EmptyState({
             <button
               onClick={action.onClick}
               className={cn(
-                "inline-flex items-center gap-2 text-white rounded-xl hover:opacity-90 transition-colors",
+                "inline-flex items-center gap-2 rounded-xl bg-primary text-primary-foreground shadow-sm transition-all hover:bg-primary/90 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                 compact ? "px-3 py-1.5 text-sm" : "px-4 py-2"
               )}
-              style={{ backgroundColor: brandColors[900] }}
             >
               {ActionIcon && <ActionIcon className="w-4 h-4" />}
               {action.label}
@@ -154,7 +152,7 @@ export function EmptyState({
             <button
               onClick={secondaryAction.onClick}
               className={cn(
-                "inline-flex items-center gap-2 bg-slate-100 text-slate-700 rounded-xl hover:bg-slate-200 transition-colors",
+                "inline-flex items-center gap-2 rounded-xl bg-secondary text-secondary-foreground transition-colors hover:bg-secondary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                 compact ? "px-3 py-1.5 text-sm" : "px-4 py-2"
               )}
             >

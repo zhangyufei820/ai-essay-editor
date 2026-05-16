@@ -2,7 +2,7 @@ import { promises as fs } from "fs"
 import path from "path"
 import { NextRequest } from "next/server"
 
-import { createServerClient } from "@/lib/supabase/server"
+import { requireUser } from "@/lib/auth/verified-user"
 import { verifySignedOpenClawMediaPath } from "@/lib/openclaw-media-server"
 
 export const runtime = "nodejs"
@@ -11,16 +11,47 @@ export const dynamic = "force-dynamic"
 const MEDIA_ROOT = process.env.OPENCLAW_MEDIA_ROOT || "/openclaw-media"
 
 const MIME_TYPES: Record<string, string> = {
+  ".csv": "text/csv; charset=utf-8",
+  ".doc": "application/msword",
+  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   ".png": "image/png",
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
   ".webp": "image/webp",
   ".gif": "image/gif",
   ".svg": "image/svg+xml",
+  ".html": "text/html; charset=utf-8",
+  ".htm": "text/html; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".md": "text/markdown; charset=utf-8",
   ".mp3": "audio/mpeg",
-  ".wav": "audio/wav",
   ".mp4": "video/mp4",
   ".pdf": "application/pdf",
+  ".ppt": "application/vnd.ms-powerpoint",
+  ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  ".txt": "text/plain; charset=utf-8",
+  ".wav": "audio/wav",
+  ".xls": "application/vnd.ms-excel",
+  ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  ".zip": "application/zip",
+}
+
+const DOWNLOAD_EXTENSIONS = new Set([
+  ".csv",
+  ".doc",
+  ".docx",
+  ".md",
+  ".ppt",
+  ".pptx",
+  ".txt",
+  ".xls",
+  ".xlsx",
+  ".zip",
+])
+
+function contentDisposition(filePath: string, disposition: "inline" | "attachment") {
+  const filename = path.basename(filePath).replace(/[\u0000-\u001f"\\]/g, "_")
+  return `${disposition}; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`
 }
 
 function resolveMediaPath(segments: string[]) {
@@ -38,23 +69,16 @@ function resolveMediaPath(segments: string[]) {
 }
 
 async function isAuthorized(request: NextRequest, mediaPath: string) {
+  const auth = await requireUser(request)
+  if (!auth.user) return false
+
   const exp = request.nextUrl.searchParams.get("exp")
   const sig = request.nextUrl.searchParams.get("sig")
 
-  if (verifySignedOpenClawMediaPath(mediaPath, exp, sig)) {
+  if (verifySignedOpenClawMediaPath(mediaPath, exp, sig, auth.user.id)) {
     return true
   }
-
-  try {
-    const supabase = await createServerClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    return Boolean(user)
-  } catch {
-    return false
-  }
+  return false
 }
 
 export async function GET(
@@ -88,10 +112,16 @@ export async function GET(
     if (!contentType) {
       return new Response("Unsupported Media Type", { status: 415 })
     }
+    const extension = path.extname(filePath).toLowerCase()
+    const disposition = request.nextUrl.searchParams.get("download") === "1" || DOWNLOAD_EXTENSIONS.has(extension)
+      ? "attachment"
+      : "inline"
 
     return new Response(bytes, {
       headers: {
         "Content-Type": contentType,
+        "Content-Disposition": contentDisposition(filePath, disposition),
+        "Content-Length": String(stat.size),
         "Cache-Control": "private, max-age=3600",
         "X-Content-Type-Options": "nosniff",
       },

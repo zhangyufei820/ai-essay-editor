@@ -42,8 +42,8 @@ const nextConfig = {
   // 图片优化配置
   // ============================================
   images: {
-    // 启用图片优化（生产环境）
-    unoptimized: process.env.NODE_ENV === 'development',
+    // 关闭 Next.js 图片优化，交给 OpenResty / Cloudflare 缓存和优化链路处理。
+    unoptimized: true,
     // 支持的图片格式
     formats: ['image/avif', 'image/webp'],
     // 远程图片域名白名单
@@ -63,6 +63,10 @@ const nextConfig = {
       {
         protocol: 'https',
         hostname: 'api.shenxiang.school',
+      },
+      {
+        protocol: 'https',
+        hostname: 'phet.colorado.edu',
       },
     ],
     // 设备尺寸断点
@@ -140,13 +144,13 @@ const nextConfig = {
         value: [
           "default-src 'self'",
           "base-uri 'self'",
-          "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://cdn.authing.co https://cdn.shenxiang.school https://static.cloudflareinsights.com https://js.stripe.com",
+          "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdn.authing.co https://cdn.shenxiang.school https://static.cloudflareinsights.com https://js.stripe.com",
           "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdn.authing.co",
           "img-src 'self' data: blob: https:",
           "font-src 'self' data: https://cdn.jsdelivr.net https://cdn.authing.co",
           "connect-src 'self' https://shenxiang.school https://www.shenxiang.school https://api.shenxiang.school https://cdn.shenxiang.school https://*.supabase.co wss://*.supabase.co https://core.authing.cn https://*.authing.cn https://files.authing.co https://api.xunhupay.com https://*.stripe.com https://api.dify.ai https://www.vivaapi.cn wss:",
           "media-src 'self' data: blob: https:",
-          "frame-src 'self' https://js.stripe.com https://hooks.stripe.com",
+          "frame-src 'self' https://js.stripe.com https://hooks.stripe.com https://phet.colorado.edu",
           "object-src 'none'",
           "frame-ancestors 'none'",
           "form-action 'self' https://api.xunhupay.com https://*.stripe.com",

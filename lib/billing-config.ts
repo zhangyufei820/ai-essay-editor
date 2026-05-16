@@ -71,7 +71,21 @@ export const GPT_IMAGE_1_MINI_CREDITS = 80
 export const BANANA2_PRO_IMAGE_BASE_CREDITS = 150
 export const BANANA2_PRO_IMAGE_RISK_MULTIPLIER = 1.1
 export const BANANA2_PRO_IMAGE_CREDITS = Math.ceil(BANANA2_PRO_IMAGE_BASE_CREDITS * BANANA2_PRO_IMAGE_RISK_MULTIPLIER)
+export const GEMINI_IMAGE_CREDITS = BANANA2_PRO_IMAGE_CREDITS
 export const SUNO_BASE_CREDITS = 100
+export const WORKSHEET_DIAGNOSIS_MAX_IMAGES = 6
+export const WORKSHEET_DIAGNOSIS_BASE_CREDITS = 80
+export const WORKSHEET_DIAGNOSIS_EXTRA_IMAGE_CREDITS = 30
+export const WORKSHEET_REPORT_IMAGE_CREDITS = IMAGE2_CREDITS
+export const WORKSHEET_REPORT_REGENERATE_CREDITS = 160
+
+export function calculateWorksheetDiagnosisCredits(imageCount: number): number {
+  const safeCount = Math.min(
+    WORKSHEET_DIAGNOSIS_MAX_IMAGES,
+    Math.max(1, Math.floor(Number(imageCount) || 1)),
+  )
+  return WORKSHEET_DIAGNOSIS_BASE_CREDITS + Math.max(0, safeCount - 1) * WORKSHEET_DIAGNOSIS_EXTRA_IMAGE_CREDITS
+}
 
 export const BILLING_CONFIG = {
   pricingVersion: PRICING_VERSION,
@@ -180,6 +194,11 @@ export const BILLING_CONFIG = {
   media: {
     "banana-2-pro": {
       fixedCredits: BANANA2_PRO_IMAGE_CREDITS,
+      baseCredits: BANANA2_PRO_IMAGE_BASE_CREDITS,
+      riskMultiplier: BANANA2_PRO_IMAGE_RISK_MULTIPLIER,
+    },
+    "gemini-image": {
+      fixedCredits: GEMINI_IMAGE_CREDITS,
       baseCredits: BANANA2_PRO_IMAGE_BASE_CREDITS,
       riskMultiplier: BANANA2_PRO_IMAGE_RISK_MULTIPLIER,
     },

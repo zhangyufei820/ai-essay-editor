@@ -2,7 +2,6 @@
 /* eslint-disable @next/next/no-img-element -- Dynamic/user-generated/external image surfaces: keep native img to preserve sizing, blob/data/proxy URLs, payment QR codes, and chat preview behavior. */
 
 import Link from "next/link"
-import Image from "next/image"
 import { usePathname, useSearchParams, useRouter } from "next/navigation"
 import { useState, useEffect, useRef, Suspense, useCallback } from "react"
 import { motion } from "framer-motion"
@@ -11,7 +10,7 @@ import {
   Settings, ChevronRight, ChevronDown,
   Menu, X, LogOut, Zap, Coins,
   Bot, GraduationCap, Brain,
-  Gift, HelpCircle, Sparkles, Palette, User, Edit
+  Gift, HelpCircle, Sparkles, Palette, User, Edit, FlaskConical, BarChart3, Layers3
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { AgentPanel } from "./chat/AgentPanel"
@@ -21,6 +20,7 @@ import { EducationPanel } from "./chat/EducationPanel"
 import { AIPanel } from "./chat/AIPanel"
 import { createClient } from "@supabase/supabase-js"
 import { shouldSidebarOpenForRoute } from "@/lib/app-chrome-routes"
+import { extractUserId } from "@/lib/auth-user"
 
 // --- 设计系统颜色常量 ---
 const COLORS = {
@@ -78,6 +78,18 @@ const supabase = createClient(
 )
 
 async function getVerifiedAuthHeaders(): Promise<Record<string, string>> {
+  if (typeof window !== "undefined") {
+    const authingToken = localStorage.getItem("idToken") || localStorage.getItem("authingToken") || localStorage.getItem("accessToken")
+    try {
+      const currentUserId = extractUserId(JSON.parse(localStorage.getItem("currentUser") || "null"))
+      if (authingToken && /^[a-f0-9]{24}$/i.test(currentUserId)) {
+        return { Authorization: `Bearer ${authingToken}` }
+      }
+    } catch {
+      // Fall through to the verified Supabase session check.
+    }
+  }
+
   const { data } = await supabase.auth.getSession()
   if (data.session?.access_token) return { Authorization: `Bearer ${data.session.access_token}` }
   if (typeof window === "undefined") return {}
@@ -503,20 +515,7 @@ function AppSidebarInner() {
           </button>
         )}
 
-        {/* 1. Logo 区域 - 去掉图片白底贴片感 */}
-        <div className="flex items-center shrink-0 px-5 pt-6 pb-4">
-          <Link href="/" onClick={handleNavClick} className="flex items-center w-full">
-            <Image
-              src="/images/design-mode/home-logo-transparent.png"
-              alt="Logo"
-              width={160}
-              height={40}
-              className="w-full h-auto object-contain"
-              style={{ maxWidth: "160px" }}
-              priority
-            />
-          </Link>
-        </div>
+        <div className="h-4 shrink-0" />
 
         {/* 2. 积分显示 - 可点击跳转 */}
         {user && (
@@ -564,6 +563,87 @@ function AppSidebarInner() {
             }
           `}</style>
           
+          {/* 学习看板入口 */}
+          <div className="mt-4 mb-2">
+            <Link href="/dashboard" onClick={handleNavClick}>
+              <motion.div
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left"
+                style={{
+                  backgroundColor: "rgba(34, 197, 94, 0.08)",
+                  border: "1px solid rgba(34, 197, 94, 0.16)",
+                  boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)"
+                }}
+                whileHover={{
+                  x: 2,
+                  backgroundColor: "#FFFFFF",
+                  borderColor: "rgba(34, 197, 94, 0.28)",
+                  boxShadow: "0 4px 10px rgba(15, 23, 42, 0.06)"
+                }}
+                whileTap={{ scale: 0.99 }}
+                transition={{ duration: 0.15 }}
+              >
+                <BarChart3 className="w-[18px] h-[18px]" style={{ color: COLORS.primary.main }} />
+                <span className="text-[12px] font-medium leading-none whitespace-nowrap" style={{ color: COLORS.primary.dark }}>
+                  学习看板
+                </span>
+              </motion.div>
+            </Link>
+          </div>
+
+          {/* 闪卡复习入口 */}
+          <div className="mb-2">
+            <Link href="/flashcards" onClick={handleNavClick}>
+              <motion.div
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left"
+                style={{
+                  backgroundColor: "rgba(34, 197, 94, 0.08)",
+                  border: "1px solid rgba(34, 197, 94, 0.16)",
+                  boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)"
+                }}
+                whileHover={{
+                  x: 2,
+                  backgroundColor: "#FFFFFF",
+                  borderColor: "rgba(34, 197, 94, 0.28)",
+                  boxShadow: "0 4px 10px rgba(15, 23, 42, 0.06)"
+                }}
+                whileTap={{ scale: 0.99 }}
+                transition={{ duration: 0.15 }}
+              >
+                <Layers3 className="w-[18px] h-[18px]" style={{ color: COLORS.primary.main }} />
+                <span className="text-[12px] font-medium leading-none whitespace-nowrap" style={{ color: COLORS.primary.dark }}>
+                  闪卡复习
+                </span>
+              </motion.div>
+            </Link>
+          </div>
+
+          {/* PhET 互动实验室入口 */}
+          <div className="mb-2">
+            <Link href="/lab" onClick={handleNavClick}>
+              <motion.div
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left"
+                style={{
+                  backgroundColor: "rgba(34, 197, 94, 0.08)",
+                  border: "1px solid rgba(34, 197, 94, 0.16)",
+                  boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)"
+                }}
+                whileHover={{
+                  x: 2,
+                  backgroundColor: "#FFFFFF",
+                  borderColor: "rgba(34, 197, 94, 0.28)",
+                  boxShadow: "0 4px 10px rgba(15, 23, 42, 0.06)"
+                }}
+                whileTap={{ scale: 0.99 }}
+                transition={{ duration: 0.15 }}
+              >
+                <FlaskConical className="w-[18px] h-[18px]" style={{ color: COLORS.primary.main }} />
+                <span className="text-[12px] font-medium leading-none whitespace-nowrap" style={{ color: COLORS.primary.dark }}>
+                  互动实验室
+                </span>
+              </motion.div>
+            </Link>
+          </div>
+
           {/* 智能体专区入口 - OpenClaw 专区 */}
           <div className="mt-4 mb-2">
             <motion.button

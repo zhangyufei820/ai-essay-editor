@@ -1,53 +1,132 @@
-import { createServerClient } from "@/lib/supabase/server"
-import { getUserCredits, getUserReferralCode } from "@/lib/credits"
-import { redirect } from 'next/navigation'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { TrendingUp } from 'lucide-react'
+"use client"
+
+import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { CopyButton } from "@/components/credits/copy-button"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ShenxiangInterfaceIcon } from "@/components/icons/ShenxiangInterfaceIcons"
+import { getVerifiedAuthHeaders } from "@/lib/client-auth"
+import { createClient } from "@/lib/supabase/client"
+import { TrendingUp } from "lucide-react"
 
-export const dynamic = 'force-dynamic'
+type CreditTransaction = {
+  id: string | number
+  description: string
+  amount: number
+  type: string
+  credit_type: string
+  created_at: string
+}
 
-export default async function CreditsPage() {
-  const supabase = await createServerClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+export const dynamic = "force-dynamic"
 
-  if (!user) {
-    redirect("/auth/login")
+export default function CreditsPage() {
+  const [isAuthed, setIsAuthed] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [credits, setCredits] = useState(0)
+  const [isPro, setIsPro] = useState(false)
+  const [transactions, setTransactions] = useState<CreditTransaction[]>([])
+
+  useEffect(() => {
+    let mounted = true
+
+    async function loadCredits() {
+      const supabase = createClient()
+      const localUserRaw = window.localStorage.getItem("currentUser")
+      const localUser = localUserRaw ? JSON.parse(localUserRaw) : null
+      const { data: sessionData } = supabase
+        ? await supabase.auth.getSession()
+        : { data: { session: null } }
+      const activeUser = localUser || sessionData.session?.user
+
+      if (!activeUser) {
+        if (mounted) {
+          setIsAuthed(false)
+          setLoading(false)
+        }
+        return
+      }
+
+      const headers = await getVerifiedAuthHeaders(activeUser)
+      const [creditsResponse, transactionsResponse] = await Promise.all([
+        fetch("/api/user/credits", { headers }),
+        fetch("/api/user/transactions", { headers }),
+      ])
+
+      if (!mounted) return
+
+      setIsAuthed(true)
+      if (creditsResponse.ok) {
+        const data = await creditsResponse.json()
+        setCredits(data.credits || 0)
+        setIsPro(Boolean(data.is_pro))
+      }
+      if (transactionsResponse.ok) {
+        const data = await transactionsResponse.json()
+        setTransactions(data.transactions || [])
+      }
+      setLoading(false)
+    }
+
+    loadCredits().catch((error) => {
+      console.error("[CreditsPage] 加载积分失败:", error)
+      if (mounted) setLoading(false)
+    })
+
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  const totalEarned = useMemo(
+    () => transactions.reduce((sum, item) => sum + Math.max(0, item.amount || 0), 0),
+    [transactions],
+  )
+  const totalSpent = useMemo(
+    () => transactions.reduce((sum, item) => sum + Math.abs(Math.min(0, item.amount || 0)), 0),
+    [transactions],
+  )
+
+  if (loading) {
+    return (
+      <div className="container mx-auto px-4 py-10">
+        <div className="mx-auto max-w-4xl text-sm text-muted-foreground">正在读取积分...</div>
+      </div>
+    )
   }
 
-  const credits = await getUserCredits(user.id, { includeTotals: true })
-  const referralCode = await getUserReferralCode(user.id)
-
-  const { data: referrals } = await supabase
-    .from("referrals")
-    .select("*")
-    .eq("referrer_id", user.id)
-    .eq("status", "completed")
-
-  const referralCount = referrals?.length || 0
-  const referralEarnings = referralCount * 1000
-
-  const shareUrl = `${process.env.NEXT_PUBLIC_SITE_URL || "https://your-domain.com"}/auth/sign-up?ref=${referralCode}`
+  if (!isAuthed) {
+    return (
+      <div className="container mx-auto px-4 py-10">
+        <Card className="mx-auto max-w-md">
+          <CardHeader>
+            <CardTitle>请先登录</CardTitle>
+            <CardDescription>登录后查看你的积分余额和使用记录。</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button asChild className="w-full">
+              <Link href="/auth/login">去登录</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   return (
-    <div className="container mx-auto py-10 px-4">
-      <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold mb-8">我的积分</h1>
+    <div className="container mx-auto px-4 py-10">
+      <div className="mx-auto max-w-4xl">
+        <h1 className="mb-8 text-3xl font-bold">我的积分</h1>
 
-        <div className="grid gap-6 md:grid-cols-3 mb-8">
+        <div className="mb-8 grid gap-6 md:grid-cols-3">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">当前积分</CardTitle>
               <ShenxiangInterfaceIcon name="credits" size={22} />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{credits?.credits || 0}</div>
-              <p className="text-xs text-muted-foreground mt-1">可用于文本生成、图片和音乐创作</p>
+              <div className="text-2xl font-bold">{credits}</div>
+              <p className="mt-1 text-xs text-muted-foreground">可用于文本生成、图片和音乐创作</p>
             </CardContent>
           </Card>
 
@@ -57,110 +136,48 @@ export default async function CreditsPage() {
               <TrendingUp className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{credits?.total_earned || 0}</div>
-              <p className="text-xs text-muted-foreground mt-1">包括注册和推荐奖励</p>
+              <div className="text-2xl font-bold">{totalEarned}</div>
+              <p className="mt-1 text-xs text-muted-foreground">按积分流水统计</p>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">推荐人数</CardTitle>
-              <ShenxiangInterfaceIcon name="share" size={22} />
+              <CardTitle className="text-sm font-medium">累计消耗</CardTitle>
+              <ShenxiangInterfaceIcon name="history" size={22} />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{referralCount}</div>
-              <p className="text-xs text-muted-foreground mt-1">已获得 {referralEarnings} 积分</p>
+              <div className="text-2xl font-bold">{totalSpent}</div>
+              <p className="mt-1 text-xs text-muted-foreground">{isPro ? "会员账户" : "普通账户"}</p>
             </CardContent>
           </Card>
         </div>
 
-        <Card className="mb-8">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <ShenxiangInterfaceIcon name="invite" size={24} />
-              邀请好友，赚取积分
-            </CardTitle>
-            <CardDescription>每邀请一位好友注册，双方各获得 1000 积分；邀请者累计奖励上限为 50000 积分。</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm font-medium">您的专属推荐码</label>
-                <div className="flex gap-2 mt-2">
-                  <input
-                    type="text"
-                    value={referralCode || ""}
-                    readOnly
-                    className="flex-1 px-3 py-2 border rounded-md bg-muted"
-                  />
-                  <CopyButton text={referralCode || ""} />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-sm font-medium">推荐链接</label>
-                <div className="flex gap-2 mt-2">
-                  <input
-                    type="text"
-                    value={shareUrl}
-                    readOnly
-                    className="flex-1 px-3 py-2 border rounded-md bg-muted text-sm"
-                  />
-                  <CopyButton text={shareUrl} label="复制链接" />
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
         <Card>
           <CardHeader>
-            <CardTitle>积分使用说明</CardTitle>
+            <CardTitle>积分明细</CardTitle>
+            <CardDescription>最近 50 条积分变动记录</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3 text-sm">
-              <div className="flex justify-between">
-                <span>输入内容</span>
-                <span className="font-medium">5积分 / 1K</span>
-              </div>
-              <div className="flex justify-between">
-                <span>输出内容</span>
-                <span className="font-medium">20积分 / 1K</span>
-              </div>
-              <div className="flex justify-between">
-                <span>无实际输出内容</span>
-                <span className="font-medium">不扣文本生成费用</span>
-              </div>
-              <div className="rounded-md bg-muted/50 p-3 leading-relaxed">
-                <p className="font-medium">系统会在模型返回完成后，根据实际 token 用量扣除积分。</p>
-                <p className="text-muted-foreground mt-1">
-                  长文写作、作文批改、论文报告等功能通常会消耗更多积分。短作文批改约 100~300 积分，普通作文约 300~600 积分，长作文或详细批改可能消耗更多。
-                </p>
-              </div>
-              <div className="rounded-md bg-muted/50 p-3 leading-relaxed">
-                <p className="font-medium">图片和音乐</p>
-                <p className="text-muted-foreground mt-1">
-                  GPT Image 2 订阅用户可用，白名单用户可测试，按固定积分扣费；GPT Image 1.5 / 1 / Mini 按对应固定积分扣费；Suno 约 100 积分起，实际可能包含 token 补扣。
-                </p>
-              </div>
-              <div className="flex justify-between">
-                <span>注册赠送</span>
-                <span className="font-medium text-green-600">+1000积分</span>
-              </div>
-              <div className="flex justify-between">
-                <span>推荐好友</span>
-                <span className="font-medium text-green-600">+1000积分</span>
-              </div>
-              <div className="flex justify-between">
-                <span>被推荐注册</span>
-                <span className="font-medium text-green-600">+1000积分</span>
-              </div>
-            </div>
-
-            <div className="mt-6">
-              <Link href="/chat">
-                <Button className="w-full">开始使用</Button>
-              </Link>
+            <div className="space-y-3">
+              {transactions.length === 0 ? (
+                <p className="text-sm text-muted-foreground">暂无积分记录</p>
+              ) : (
+                transactions.map((item) => (
+                  <div key={item.id} className="flex items-center justify-between border-b pb-3 last:border-b-0">
+                    <div>
+                      <p className="text-sm font-medium">{item.description || item.credit_type}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(item.created_at).toLocaleString("zh-CN")}
+                      </p>
+                    </div>
+                    <div className={item.amount >= 0 ? "font-semibold text-green-600" : "font-semibold text-red-600"}>
+                      {item.amount >= 0 ? "+" : ""}
+                      {item.amount}
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </CardContent>
         </Card>

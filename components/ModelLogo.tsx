@@ -9,6 +9,14 @@ import {
   Languages,
   LayoutDashboard,
   UsersRound,
+  BrainCircuit,
+  BookOpenText,
+  ClipboardList,
+  FilePenLine,
+  GraduationCap,
+  IdCard,
+  MessageSquareQuote,
+  Newspaper,
   type LucideProps,
 } from "lucide-react"
 
@@ -30,10 +38,20 @@ export type ModelKey =
   | "vocab-card"
   | "beike-pro"
   | "banzhuren"
+  | "all-in-one-agent"
   | "banana-2-pro"
+  | "gemini-image"
   | "suno-v5"
   | "banana"
   | "gpt-image-2"
+  | "ai-writing-paper"
+  | "zhongying-essay"
+  | "reading-report"
+  | "experiment-report"
+  | "study-abroad"
+  | "resume-optimize"
+  | "speech-defense"
+  | "school-wechat"
 
 interface ModelLogoConfig {
   /** SVG 文件路径（本地 /public 路径） */
@@ -108,10 +126,53 @@ const MODEL_LOGOS: Record<ModelKey, ModelLogoConfig> = {
     LucideIcon: UsersRound,
     brandColor: "#10A37F",
   },
+  "all-in-one-agent": {
+    LucideIcon: BrainCircuit,
+    brandColor: "#10A37F",
+  },
+
+  // AI 写作类
+  "ai-writing-paper": {
+    LucideIcon: FilePenLine,
+    brandColor: "#10A37F",
+  },
+  "zhongying-essay": {
+    LucideIcon: BookOpenText,
+    brandColor: "#10A37F",
+  },
+  "reading-report": {
+    LucideIcon: BookOpenText,
+    brandColor: "#10A37F",
+  },
+  "experiment-report": {
+    LucideIcon: ClipboardList,
+    brandColor: "#10A37F",
+  },
+  "study-abroad": {
+    LucideIcon: GraduationCap,
+    brandColor: "#10A37F",
+  },
+  "resume-optimize": {
+    LucideIcon: IdCard,
+    brandColor: "#10A37F",
+  },
+  "speech-defense": {
+    LucideIcon: MessageSquareQuote,
+    brandColor: "#10A37F",
+  },
+  "school-wechat": {
+    LucideIcon: Newspaper,
+    brandColor: "#10A37F",
+  },
 
   // 创意生成类
   "banana-2-pro": {
     LucideIcon: Sparkles,
+    brandColor: "#10A37F",
+  },
+  "gemini-image": {
+    svgPath: "/logos/google-gemini-icon.svg",
+    useLocal: true,
     brandColor: "#10A37F",
   },
   "suno-v5": {
@@ -354,7 +415,7 @@ const SECTION_CONFIG: Record<string, { modelKey: ModelKey; showBg: boolean }> = 
   agent: { modelKey: "open-claw", showBg: false },
   education: { modelKey: "teaching-pro", showBg: false },
   "ai-model": { modelKey: "gpt-5", showBg: false },
-  creative: { modelKey: "banana-2-pro", showBg: false },
+  creative: { modelKey: "gemini-image", showBg: false },
 }
 
 export function SectionLogo({ type, size = "sm", className, style }: SectionLogoProps) {

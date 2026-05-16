@@ -31,8 +31,8 @@ function ChatPageContent() {
     const normalizedModel = normalizeChatSessionModel(model)
     console.log('🔍 [ChatPage] URL 参数 model:', model)
 
-    // 🚀 如果是 banana-2-pro，自动跳转到专用页面
-    if (normalizedModel === 'banana-2-pro' || normalizedModel === 'gpt-image-2') {
+    // 🚀 专用图像模型自动跳转到独立工作台
+    if (normalizedModel === 'gemini-image' || normalizedModel === 'gpt-image-2') {
       console.log('✅ [ChatPage] 检测到专用模型，跳转到专用页面')
       router.replace(sessionId ? buildChatSessionRoute(sessionId, normalizedModel) : `/chat/${normalizedModel}`)
     }

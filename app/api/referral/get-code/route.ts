@@ -1,8 +1,13 @@
 import { createUserReferralCode } from "@/lib/credits"
+import { requireUser } from "@/lib/auth/verified-user"
+import { checkMembership } from "@/app/api/user/membership/route"
 import { NextResponse } from "next/server"
+import type { NextRequest } from "next/server"
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    const auth = await requireUser(request)
+    if (auth.response) return auth.response
     // IP 限流：30次/分钟
     const { getClientIP, checkIpRateLimit, createRateLimitResponse } = await import('@/lib/rate-limit')
     const ip = getClientIP(request)
@@ -10,10 +15,21 @@ export async function POST(request: Request) {
     if (!limitResult.allowed) {
       return createRateLimitResponse(limitResult.retryAfter!)
     }
-    const { userId } = await request.json()
+    const { userId: requestedUserId } = await request.json().catch(() => ({}))
+    let userId = auth.user!.id
 
-    if (!userId) {
-      return NextResponse.json({ error: "Missing userId" }, { status: 400 })
+    if (requestedUserId && requestedUserId !== userId) {
+      const membershipResponse = await checkMembership(userId, [
+        auth.user!.phone || '',
+        auth.user!.email || '',
+        typeof auth.user!.metadata?.phone === 'string' ? auth.user!.metadata.phone : '',
+        typeof auth.user!.metadata?.mobile === 'string' ? auth.user!.metadata.mobile : '',
+      ])
+      const membership = await membershipResponse.json().catch(() => null)
+      if (membership?.userId !== requestedUserId && !membership?.relatedUserIds?.includes(requestedUserId)) {
+        return NextResponse.json({ error: "Cannot create referral code for another user" }, { status: 403 })
+      }
+      userId = requestedUserId
     }
 
     console.log(`[推荐码API] 获取或创建推荐码，用户ID: ${userId}`)

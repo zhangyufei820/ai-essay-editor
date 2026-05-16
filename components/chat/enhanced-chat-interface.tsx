@@ -5,17 +5,21 @@ import type React from "react"
 import { useState, useRef, useEffect, Suspense, useCallback } from "react"
 import Link from "next/link"
 import { useSearchParams, useRouter } from "next/navigation"
+import DOMPurify from "isomorphic-dompurify"
 
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useIsMobile } from "@/hooks/use-mobile"
 import {
-  Send, Paperclip, X, FileText, Copy, Loader2, User, AlertCircle,
+  Send, Paperclip, X, FileText, Loader2, User, AlertCircle,
   ChevronDown, ChevronLeft, ArrowDown, Sparkles,
-  Download, Share2, Printer, Mic, MicOff, Volume2, History, ExternalLink
+  Download, Mic, MicOff, History, ExternalLink,
+  FileSearch, ListChecks, ShieldCheck, ScanText,
+  type LucideIcon
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { extractUserId } from "@/lib/auth-user"
 import { buildChatSessionRoute, buildChatSessionRouteFromSession, isDedicatedChatSessionModel, resolveChatSessionRouteModel } from "@/lib/chat-session-routes"
 import { toast } from "sonner"
 import { MessageBubble } from "./MessageBubble"
@@ -23,7 +27,6 @@ import { ChatInput } from "./ChatInput"
 import { EmptyState } from "./EmptyState"
 import { AIStatusIndicator } from "@/components/ai/AIStatusIndicator"
 import { ModelSelector } from "./ModelSelector"
-import { WorkflowVisualizer } from "./WorkflowVisualizer"
 import { MathInline, MathBlock } from "./UltimateRenderer"
 import { useWorkflowVisualizer } from "@/hooks/useWorkflowVisualizer"
 // 🎵 Suno 音乐生成相关导入
@@ -36,6 +39,7 @@ import { LoadingStateCard } from "@/components/ui/LoadingStateCard"
 import { ChatSkeleton } from "@/components/ui/chat-skeleton"
 import { motion, AnimatePresence } from "framer-motion"
 import { EnhancedMarkdown } from "./EnhancedMarkdown"
+import { AssistantEyeAvatar } from "./AssistantEyeAvatar"
 import { OpenClawHtmlPreview } from "./OpenClawHtmlPreview"
 import { UserMessageBubble } from "./UserMessageBubble"
 import { PremiumWordCard } from "./PremiumWordCard"
@@ -46,6 +50,7 @@ import { LATEX_MACROS, renderLatex } from "@/lib/latex-constants"
 import { cleanLLMText } from "@/lib/text-sanitizer"
 import { containsRawDifyWordCardPayload, normalizeDifyWordCardResponse, type FrontendWordCard } from "@/lib/word-card-normalizer"
 import { buildVocabCardWorkflowInputs, cleanVocabAnswer, resolveVocabCardResult } from "@/lib/vocab-card-workflow"
+import { resolveChatAgentParam } from "@/lib/teacher-agent-route"
 import { createClient } from "@supabase/supabase-js"
 import { collapseSidebar, navigateHomeWithSidebar, refreshCredits, refreshSessionList, SESSION_LIST_REFRESH_EVENT } from "@/components/app-sidebar"
 import { useSelectedModelStore } from "@/hooks/useSelectedModelStore"
@@ -54,6 +59,7 @@ import { VoiceRecorder, getDifyTTS, transcribeAudio } from "@/lib/voice-service"
 import { getApiUrl } from "@/lib/api-config"
 import { logger } from "@/lib/logger"
 import { ModelLogo } from "@/components/ModelLogo"
+import { navigationModelConfig } from "@/lib/navigation-models"
 import { getOpenClawAttachmentKind, isLikelyHtmlDocumentUrl, toPublicOpenClawMediaSignUrl, toPublicOpenClawWorkspaceUrl } from "@/lib/openclaw-media"
 import {
   calculatePreviewCost,
@@ -62,6 +68,7 @@ import {
   MODEL_COSTS,
   getModelDisplayName
 } from "@/lib/pricing"
+import type { WorkflowState, WorkflowNodeStatus } from "@/lib/workflow-visual-config"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -80,7 +87,7 @@ const MODEL_DISPLAY_NAMES: Record<string, string> = {
   "gpt-5": "GPT-5",
   "claude-opus": "Claude",
   "gemini-pro": "Gemini",
-  "banana-2-pro": "Banana",
+  "gemini-image": "Gemini 图像",
   "grok-4.2": "Grok",
   "open-claw": "OpenClaw",
   "quanquan-math": "全科数学",
@@ -88,6 +95,7 @@ const MODEL_DISPLAY_NAMES: Record<string, string> = {
   "vocab-card": "词境记忆卡",
   "beike-pro": "备课助手",
   "banzhuren": "班主任助手",
+  "all-in-one-agent": "全能智能体",
   "suno-v5": "音乐",
   "ai-writing-paper": "论文写作",
   "zhongying-essay": "中英文作文",
@@ -97,6 +105,7 @@ const MODEL_DISPLAY_NAMES: Record<string, string> = {
   "resume-optimize": "简历优化",
   "speech-defense": "演讲答辩",
   "school-wechat": "公众号",
+  "teacher-agent": "教师智能体",
 }
 
 type ModelUiConfig = {
@@ -107,6 +116,13 @@ type ModelUiConfig = {
   badge?: string
   group: string
 }
+
+const ALL_IN_ONE_AGENT_PROMPTS = [
+  "生成一个二次函数 y=x² 开口方向变化的动画，要求有坐标轴、关键标注和中文讲解。",
+  "帮我把这张图片改成适合课堂展示的教学插图，风格清晰、干净、适合投影。",
+  "根据我上传的文件，提炼重点并生成一份课堂讲解提纲和练习题。",
+  "我想做一个数学概念可视化，请先帮我完善提示词，再生成可执行方案。",
+]
 
 // 获取模型徽章颜色 — 强制归一：所有模型统一为翡翠绿 #10A37F
 function getModelBadgeColor(_modelKey: string): string {
@@ -151,6 +167,18 @@ const supabase = createClient(
 )
 
 async function getVerifiedAuthHeaders(): Promise<Record<string, string>> {
+  if (typeof window !== "undefined") {
+    const authingToken = localStorage.getItem("idToken") || localStorage.getItem("authingToken") || localStorage.getItem("accessToken")
+    try {
+      const currentUserId = extractUserId(JSON.parse(localStorage.getItem("currentUser") || "null"))
+      if (authingToken && /^[a-f0-9]{24}$/i.test(currentUserId)) {
+        return { Authorization: `Bearer ${authingToken}` }
+      }
+    } catch {
+      // Fall through to the verified Supabase session check.
+    }
+  }
+
   const { data } = await supabase.auth.getSession()
   if (data.session?.access_token) return { Authorization: `Bearer ${data.session.access_token}` }
   if (typeof window === "undefined") return {}
@@ -300,12 +328,18 @@ function getChatErrorMessage(error: unknown, status?: number, model?: string): s
     return "当前账号暂无图片生成权限，请切换模型，或联系客服开通后再试。"
   }
   if (/timeout|timed out|abort|aborted|超时/.test(text) || /超时|中断/.test(raw)) {
+    if (model === "open-claw") {
+      return "OpenClaw 上游模型响应超时或任务被中断。复杂图片/大文件任务可能排队较久，请稍后重试。"
+    }
     return "服务响应超时，已保留已生成内容。复杂文件或 OpenClaw 任务可能需要更久，请稍后重试。"
+  }
+  if (model === "open-claw" && /network error|failed to fetch|load failed|networkerror|网络/.test(text)) {
+    return "OpenClaw 长任务连接中断，可能是上游模型超时或浏览器网络断开。当前任务没有正常完成，请稍后重试。"
   }
   if (/file|upload|附件|上传/.test(text) || /文件|上传|附件/.test(raw)) {
     return "文件未上传成功或附件无法被模型读取，请删除附件后重新上传再提交。"
   }
-  if (model === "banana-2-pro") {
+  if (model === "gemini-image") {
     return "图片生成服务暂时不可用，可能是余额、模型、尺寸或参数不兼容导致。请稍后重试或调整提示词。"
   }
 
@@ -320,6 +354,33 @@ function buildChatErrorContent(message: string): string {
     "",
     "建议：检查登录状态、积分余额和附件上传状态；如果是 OpenClaw 或大文件任务，请稍后重试。"
   ].join("\n")
+}
+
+async function getTaskFailureMessage(requestId: string, model: string): Promise<string | null> {
+  if (!requestId || model !== "open-claw") return null
+  try {
+    const res = await fetch(`/api/task-status?requestId=${encodeURIComponent(requestId)}&limit=1`, {
+      headers: await getVerifiedAuthHeaders(),
+    })
+    if (!res.ok) return null
+    const payload = await res.json()
+    const task = Array.isArray(payload.tasks) ? payload.tasks[0] : null
+    if (!task) return null
+
+    const stage = typeof task.stage === "string" ? task.stage : ""
+    const detail = typeof task.error_message === "string" ? task.error_message : ""
+    if (["failed", "timeout", "cancelled"].includes(task.status)) {
+      if (detail) return detail
+      if (stage) return `OpenClaw 任务未完成：${stage}`
+      return "OpenClaw 任务没有正常完成。"
+    }
+    if (["queued", "running"].includes(task.status)) {
+      return stage ? `OpenClaw 任务仍在处理中：${stage}` : "OpenClaw 任务仍在处理中，请稍后刷新会话查看结果。"
+    }
+  } catch (error) {
+    console.warn("⚠️ [任务状态] 查询失败:", error)
+  }
+  return null
 }
 
 function createClientRequestId(prefix = "chat") {
@@ -425,37 +486,163 @@ function forgetPendingTask(requestId: string) {
 
 function ProcessingStatusCard({
   context,
-  showLongWaitHint
+  showLongWaitHint,
+  workflowState,
+  currentRunningText,
 }: {
   context: ProcessingContext | null
   showLongWaitHint: boolean
+  workflowState: WorkflowState
+  currentRunningText: string
 }) {
   const modelName = context?.model ? (MODEL_DISPLAY_NAMES[context.model] || context.model) : "AI"
   const isOpenClaw = context?.model === "open-claw"
   const hasFiles = Boolean(context?.fileCount)
+  const promptLength = context?.promptLength || 0
+  const startedAt = context?.startedAt || Date.now()
+  const elapsedSeconds = Math.max(1, Math.round((Date.now() - startedAt) / 1000))
+  const realNodes = workflowState.nodes.map((node) => ({
+    id: node.id,
+    label: node.config.label,
+    detail: node.status === "running"
+      ? currentRunningText || node.config.runningTexts?.[node.currentTextIndex] || "正在处理..."
+      : node.status === "completed"
+        ? "已完成"
+        : node.status === "error"
+          ? "需要重新尝试"
+          : "等待执行",
+    status: node.status,
+    icon: node.config.icon,
+  }))
+  const fallbackSteps = buildDefaultProcessingSteps({
+    hasFiles,
+    fileCount: context?.fileCount || 0,
+    promptLength,
+    stage: context?.stage || "",
+    isOpenClaw,
+  })
+  const steps = realNodes.length > 0 ? realNodes : fallbackSteps
+  const completedCount = steps.filter((step) => step.status === "completed").length
+  const progress = Math.max(
+    12,
+    Math.min(92, Math.round(((completedCount + (steps.some((step) => step.status === "running") ? 0.45 : 0.15)) / Math.max(steps.length, 1)) * 100)),
+  )
   const statusText = isOpenClaw
-    ? "OpenClaw 正在执行工具、读取文件或生成结果"
+    ? "正在调度工具与资料"
     : hasFiles
-      ? "AI 正在读取附件并生成回答"
-      : "AI 正在生成回答"
-  const stageText = context?.stage || (showLongWaitHint ? "处理时间稍长，请保持页面打开" : "")
+      ? "正在读取资料并规划回答"
+      : "正在组织高质量回复"
+  const stageText = context?.stage || currentRunningText || (showLongWaitHint ? "处理时间稍长，请保持页面打开" : "正在建立回答结构")
+  const runningStep = steps.find((step) => step.status === "running" || step.status === "preparing") || steps[0]
+  const completedStep = [...steps].reverse().find((step) => step.status === "completed")
+  const nextStep = steps.find((step) => step.status === "pending")
+  const traceLines = [
+    completedStep ? { marker: "ok", text: completedStep.label, detail: completedStep.detail } : null,
+    runningStep ? { marker: "run", text: runningStep.label, detail: runningStep.detail || stageText } : null,
+    nextStep ? { marker: "wait", text: nextStep.label, detail: nextStep.detail } : null,
+  ].filter(Boolean).slice(0, 3) as Array<{ marker: "ok" | "run" | "wait"; text: string; detail: string }>
 
   return (
-    <div className="inline-flex max-w-[560px] items-center gap-2 rounded-full bg-slate-50 px-3 py-2 text-slate-500">
-      {!isOpenClaw && <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-slate-400" />}
-      <div className="min-w-0">
-        <div className="flex min-w-0 items-center gap-1.5">
-          <span className="truncate text-xs font-medium text-slate-600">{statusText}</span>
-          <span className="shrink-0 rounded-full bg-white px-1.5 py-0.5 text-[10px] font-medium text-slate-400">
-            {modelName}
-          </span>
-        </div>
-        {stageText && (
-          <p className="mt-0.5 max-w-[420px] truncate text-[11px] leading-4 text-slate-400">{stageText}</p>
-        )}
+    <section
+      aria-live="polite"
+      className="w-fit max-w-full rounded-lg border border-slate-200/80 bg-slate-50/80 px-3 py-2 font-mono text-[11px] leading-5 text-slate-600 shadow-none"
+    >
+      <div className="flex min-w-0 items-center gap-2 border-b border-slate-200/70 pb-1.5">
+        <span className="relative flex h-2 w-2 shrink-0">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-40" />
+          <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-600" />
+        </span>
+        <span className="shrink-0 font-semibold text-slate-700">ai.plan</span>
+        <span className="min-w-0 truncate text-slate-500">{statusText}</span>
+        <span className="ml-auto shrink-0 text-slate-400">{elapsedSeconds}s</span>
       </div>
-    </div>
+      <div className="mt-1.5 space-y-0.5">
+        {traceLines.map((line, index) => (
+          <div key={`${line.marker}-${line.text}-${index}`} className="flex min-w-0 items-start gap-1.5">
+            <span
+              className={cn(
+                "mt-px w-4 shrink-0 text-right",
+                line.marker === "ok" && "text-emerald-700",
+                line.marker === "run" && "text-slate-700",
+                line.marker === "wait" && "text-slate-400",
+              )}
+            >
+              {line.marker === "ok" ? "✓" : line.marker === "run" ? "›" : "·"}
+            </span>
+            <span className="min-w-0 truncate">
+              <span className="text-slate-700">{line.text}</span>
+              {line.detail && <span className="text-slate-400"> {" — "}{line.detail}</span>}
+            </span>
+          </div>
+        ))}
+      </div>
+      <div className="mt-1.5 h-px overflow-hidden rounded-full bg-slate-200">
+        <motion.div
+          className="h-full rounded-full bg-emerald-600"
+          initial={{ width: "8%" }}
+          animate={{ width: `${progress}%` }}
+          transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+        />
+      </div>
+      <p className="mt-1 truncate text-[10px] leading-4 text-slate-400">
+        {modelName} · {hasFiles ? `${context?.fileCount || 0} files` : "text"} · keep_intent=true
+      </p>
+    </section>
   )
+}
+
+type ProcessingStep = {
+  id: string
+  label: string
+  detail: string
+  status: WorkflowNodeStatus
+  icon: LucideIcon
+}
+
+function buildDefaultProcessingSteps({
+  hasFiles,
+  fileCount,
+  promptLength,
+  stage,
+  isOpenClaw,
+}: {
+  hasFiles: boolean
+  fileCount: number
+  promptLength: number
+  stage: string
+  isOpenClaw: boolean
+}): ProcessingStep[] {
+  const activeDetail = stage || (hasFiles ? "正在读取图片与文字线索" : "正在理解你的问题")
+  return [
+    {
+      id: "receive",
+      label: hasFiles ? "接收学习资料" : "理解任务意图",
+      detail: hasFiles ? `已接收 ${fileCount} 个附件，建立资料上下文` : "提取问题目标与约束",
+      status: "completed",
+      icon: hasFiles ? FileSearch : ScanText,
+    },
+    {
+      id: "inspect",
+      label: hasFiles ? "识别图文信息" : "拆解回答目标",
+      detail: activeDetail,
+      status: "running",
+      icon: ScanText,
+    },
+    {
+      id: "plan",
+      label: "制定回答结构",
+      detail: promptLength > 120 ? "材料较长，优先整理层次和关键点" : "规划开头、依据与结论顺序",
+      status: "preparing",
+      icon: ListChecks,
+    },
+    {
+      id: "verify",
+      label: isOpenClaw ? "工具结果核验" : "一致性检查",
+      detail: "检查是否贴合题目、避免空泛回答",
+      status: "pending",
+      icon: ShieldCheck,
+    },
+  ]
 }
 
 // --- 辅助组件：文本渲染器 ---
@@ -562,6 +749,14 @@ function convertOpenClawUrl(url: string): string {
   return url
 }
 
+function withDownloadParam(url: string): string {
+  const hashIndex = url.indexOf("#")
+  const base = hashIndex >= 0 ? url.slice(0, hashIndex) : url
+  const hash = hashIndex >= 0 ? url.slice(hashIndex) : ""
+  const separator = base.includes("?") ? "&" : "?"
+  return `${base}${separator}download=1${hash}`
+}
+
 const MediaBlock = ({ items }: { items: MediaItem[] }) => {
   if (!items || items.length === 0) return null
 
@@ -605,6 +800,7 @@ const MediaBlock = ({ items }: { items: MediaItem[] }) => {
           const isPDF = publicUrl.toLowerCase().includes('.pdf')
           const isHtml = publicUrl.toLowerCase().includes('.html')
           const fileUrl = publicUrl
+          const downloadUrl = withDownloadParam(fileUrl)
 
           if (isHtml || isLikelyHtmlDocumentUrl(fileUrl)) {
             return (
@@ -628,15 +824,29 @@ const MediaBlock = ({ items }: { items: MediaItem[] }) => {
                 <p className="text-sm font-medium text-slate-700 truncate">{item.name || "文件"}</p>
                 <p className="truncate text-xs text-slate-400">{isHtml ? "HTML 页面" : isPDF ? "PDF 文档" : "文件"}</p>
               </div>
-              <a
-                href={fileUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-blue-500 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-600"
-              >
-                <ExternalLink className="h-3.5 w-3.5" />
-                打开
-              </a>
+              <div className="flex shrink-0 items-center gap-2">
+                {isPDF && (
+                  <a
+                    href={fileUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm transition-colors hover:bg-slate-100"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    打开
+                  </a>
+                )}
+                <a
+                  href={downloadUrl}
+                  download={item.name}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-blue-500 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-600"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  下载
+                </a>
+              </div>
             </div>
           )
         } else if (effectiveType === "ppt") {
@@ -916,8 +1126,10 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   const router = useRouter()
   const urlSessionId = searchParams.get("sessionId")
   const urlAgent = searchParams.get("agent")
+  const resolvedUrlAgent = resolveChatAgentParam(urlAgent)
+  const teacherAgentShareCode = resolvedUrlAgent.teacherAgentShareCode
   // 🔥 优先使用 initialModel prop（来自动态路由），其次使用 URL 参数
-  const effectiveAgent = initialModel || urlAgent
+  const effectiveAgent = initialModel || resolvedUrlAgent.model || urlAgent
 
   // 🔥 检测手机端
   const isMobile = useIsMobile()
@@ -934,7 +1146,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   // 🔥 修复：跟踪主动会话切换（侧边栏点击 vs URL 导航）
   // 🔥 now in Zustand store: useSelectedModelStore
   // 🔥 修复：记录用户上次使用的模型（用于新建对话时恢复）
-  const lastUsedModelRef = useRef<ModelType>("general-chat")
+  const lastUsedModelRef = useRef<ModelType>((effectiveAgent as ModelType) || "general-chat")
 
   // ✅ 全局状态：所有组件共享单一 selectedModel 真源
   const selectedModel = useSelectedModelStore((s) => s.selectedModel)
@@ -1057,17 +1269,11 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   // 🎯 工作流可视化 Hook (GenSpark 1:1 复刻版)
   const {
     workflowState,
-    isProcessing: isWorkflowProcessing,
-    isThinking,
-    isGenerating,
     isFastTrack,
     showCursor,
+    currentRunningText,
     handleSSEEvent,
     resetWorkflow,
-    toggleExpanded,
-    getSummaryText,
-    markWorkflowComplete,
-    currentRunningText,
     triggerHandover
   } = useWorkflowVisualizer()
 
@@ -1207,27 +1413,15 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   const prevUrlAgentRef = useRef<string | null>(null)
 
   useEffect(() => {
-    const agentToModel: Record<string, ModelType> = {
-      "standard": "standard",
-      "general-chat": "general-chat",
-      "teaching-pro": "teaching-pro",
-      "gpt-5": "gpt-5",
-      "claude-opus": "claude-opus",
-      "gemini-pro": "gemini-pro",
-      "banana-2-pro": "banana-2-pro",
-      "suno-v5": "suno-v5",
-      "grok-4.2": "grok-4.2",
-      "open-claw": "open-claw",
-    }
+    const targetModel = urlAgent ? (resolvedUrlAgent.model || "general-chat") : (initialModel || "general-chat")
 
-    const targetModel = urlAgent ? (agentToModel[urlAgent] || urlAgent as ModelType) : (initialModel || "general-chat")
-
-    console.log(`🔗 [URL Sync] urlAgent=${urlAgent}, prevUrlAgent=${prevUrlAgentRef.current}, targetModel=${targetModel}`)
+    console.log(`🔗 [URL Sync] urlAgent=${urlAgent}, prevUrlAgent=${prevUrlAgentRef.current}, targetModel=${targetModel}, teacherAgent=${teacherAgentShareCode || ""}`)
 
     if (urlAgent !== prevUrlAgentRef.current) {
       prevUrlAgentRef.current = urlAgent
 
       console.log(`🔄 [强制模型同步] → ${targetModel}`)
+      lastUsedModelRef.current = targetModel
       setSelectedModel(targetModel)
       setGenMode("text")
 
@@ -1236,24 +1430,26 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         clearConversationState()
       }
     }
-  }, [urlAgent, urlSessionId])
+  }, [initialModel, resolvedUrlAgent.model, setSelectedModel, teacherAgentShareCode, urlAgent, urlSessionId])
 
   // 🔥 当路由参数 initialModel 变化时，同步更新 selectedModel
   // 但如果是加载历史会话（urlSessionId 存在），则跳过，由 loadHistorySession 处理模型同步
   useEffect(() => {
     if (initialModel && initialModel !== selectedModel && !urlSessionId) {
       console.log(`🔄 [模型同步] initialModel=${initialModel} → selectedModel=${initialModel}`)
+      lastUsedModelRef.current = initialModel
       setSelectedModel(initialModel)
     }
   }, [initialModel, urlSessionId])
 
   // 🔥 当 urlSessionId 为空时（新建对话），恢复用户上次使用的模型或默认模型
   useEffect(() => {
+    if (initialModel || urlAgent) return
     if (!urlSessionId && selectedModel !== lastUsedModelRef.current) {
       logger.debug(`🔄 [新建对话模型恢复] ${selectedModel} → ${lastUsedModelRef.current}`)
       setSelectedModel(lastUsedModelRef.current)
     }
-  }, [urlSessionId])
+  }, [initialModel, urlAgent, urlSessionId])
 
   const loadHistorySession = async (sid: string) => {
     logger.debug(`📂 [loadHistorySession] 开始加载会话: ${sid}`)
@@ -1423,7 +1619,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   }, [messages, isLoading])
 
   // --- 模型配置（增强版：添加描述和标签） ---
-  const modelConfig: Partial<Record<ModelType, ModelUiConfig>> = {
+  const fallbackModelConfig: Partial<Record<ModelType, ModelUiConfig>> = {
     "general-chat": {
       name: "通用对话",
       modelKey: "general-chat",
@@ -1483,6 +1679,14 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       description: "班级管理，家校沟通",
       group: "教育专用"
     },
+    "all-in-one-agent": {
+      name: "全能超级智能体",
+      modelKey: "all-in-one-agent",
+      color: BRAND_GREEN,
+      description: "动画、图片、文件全能创作",
+      badge: "新",
+      group: "教育专用"
+    },
     "gpt-5": {
       name: "ChatGPT 5.4",
       modelKey: "gpt-5",
@@ -1505,12 +1709,12 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       description: "多模态理解",
       group: "AI模型"
     },
-    "banana-2-pro": {
-      name: "Banana2 Pro 4K",
-      modelKey: "banana-2-pro",
+    "gemini-image": {
+      name: "Gemini 图像",
+      modelKey: "gemini-image",
       color: BRAND_GREEN,
-      description: "AI 图像生成",
-      badge: "热门",
+      description: "Google Gemini 文生图与图像编辑",
+      badge: "新",
       group: "创意生成"
     },
     "gpt-image-2": {
@@ -1623,6 +1827,11 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     },
   }
 
+  const modelConfig: Partial<Record<ModelType, ModelUiConfig>> = {
+    ...fallbackModelConfig,
+    ...navigationModelConfig,
+  }
+
   const getModelUiConfig = (model: ModelType): ModelUiConfig => {
     return modelConfig[model] || {
       name: MODEL_DISPLAY_NAMES[model] || getModelDisplayName(model),
@@ -1658,10 +1867,10 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       toast.success(`已切换至 ${getModelUiConfig(nextModel).name}`)
     }
 
-    // 🚀 Banana 2 Pro 使用专用页面，自动跳转
-    if (nextModel === "banana-2-pro") {
-      console.log('✅ [模型切换] 检测到 banana-2-pro，跳转到专用页面')
-      router.push('/chat/banana-2-pro')
+    // 🚀 Gemini 图像使用专用页面，自动跳转
+    if (nextModel === "gemini-image") {
+      console.log('✅ [模型切换] 检测到 gemini-image，跳转到专用页面')
+      router.push('/chat/gemini-image')
       return
     }
 
@@ -1920,6 +2129,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 
     console.log("📤 [onSubmit] 发送消息:", {
       model: selectedModel,
+      teacherAgentShareCode,
       mode: genMode,
       promptLength: txt.length,
       urlAgent,
@@ -1935,7 +2145,8 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       return
     }
 
-	    const requestId = createClientRequestId(selectedModel === "gpt-image-2" ? "img" : selectedModel === "open-claw" ? "openclaw" : "chat")
+    const isTeacherAgentSubmit = Boolean(teacherAgentShareCode)
+	    const requestId = createClientRequestId(isTeacherAgentSubmit ? "teacher-agent" : selectedModel === "gpt-image-2" ? "img" : selectedModel === "open-claw" ? "openclaw" : "chat")
 
 	    setFileProcessing({ status: "idle", progress: 0, message: "" })
 	    setDynamicStatusMessage("")
@@ -2154,10 +2365,11 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
           .map((file) => file.modelUrl || (/^https?:\/\//.test(file.data) ? file.data : "") || file.gatewayUrl || "")
           .filter(Boolean)
 
-        console.log("🚀 [API 请求] 发送到 /api/dify-chat:", {
+        console.log("🚀 [API 请求] 发送到聊天 API:", {
           requestId,
           promptLength: userMsg.content.length,
           model: selectedModel,
+          teacherAgent: isTeacherAgentSubmit,
           mode: genMode,
           sessionId: sessionIdRef.current,
           fileCount: fileIds.length,
@@ -2174,14 +2386,21 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
             model: selectedModel,
           })
 
-	        const res = await fetch(getApiUrl("/api/dify-chat"), {
+	        const res = await fetch(getApiUrl(isTeacherAgentSubmit ? "/api/agent-chat" : "/api/dify-chat"), {
 	            method: "POST",
 	            headers: {
 	              "Content-Type": "application/json",
                 ...authHeaders,
 	              "X-Request-Id": requestId
 	            },
-	            body: JSON.stringify({
+	            body: JSON.stringify(isTeacherAgentSubmit ? {
+                message: userMsg.content,
+                agent_share_code: teacherAgentShareCode,
+                conversation_id: sessionIdRef.current,
+                requestId,
+                sessionId: sid,
+                messageId: botId,
+              } : {
 	              query: isWordCardRequest ? vocabUserMessage : userMsg.content,
               fileIds,
               fileUrls,
@@ -2421,9 +2640,10 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         console.error("❌ [对话异常] 错误堆栈:", e.stack)
         console.error("❌ [对话异常] 模型:", selectedModel, "模式:", genMode)
 
-        const errorMsg = getChatErrorMessage(e, undefined, selectedModel)
+        const taskFailureMessage = await getTaskFailureMessage(requestId, selectedModel)
+        const errorMsg = taskFailureMessage || getChatErrorMessage(e, undefined, selectedModel)
         toast.error(errorMsg, {
-          description: selectedModel === "banana-2-pro" ? "图片生成失败，请检查提示词" : undefined,
+          description: selectedModel === "gemini-image" ? "图片生成失败，请检查提示词" : undefined,
           duration: 5000
         })
 
@@ -2481,6 +2701,8 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
             return katex.renderToString(math.trim(), {
               displayMode: true,
               throwOnError: false,
+              trust: false,
+              strict: "ignore",
               macros: LATEX_MACROS,
             })
           } catch (e) {
@@ -2496,6 +2718,8 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
             return katex.renderToString(math.trim(), {
               displayMode: false,
               throwOnError: false,
+              trust: false,
+              strict: "ignore",
               macros: LATEX_MACROS,
             })
           } catch (e) {
@@ -2572,6 +2796,11 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       }
 
       const htmlContent = convertMarkdownToHTML(renderMathInMarkdown(cleanContent))
+      const safeHtmlContent = DOMPurify.sanitize(htmlContent, {
+        ALLOWED_TAGS: ['h1','h2','h3','h4','p','br','hr','ul','ol','li','strong','em','code','pre','blockquote','a','img','table','thead','tbody','tr','th','td','span','div'],
+        ALLOWED_ATTR: ['href','src','alt','title','class','colspan','rowspan'],
+        ALLOWED_URI_REGEXP: /^(?:https?|mailto):/i,
+      })
 
       const reportStyles = `
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -2642,7 +2871,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
             <h1>沈翔智学 - AI 分析报告</h1>
             <p>${new Date().toLocaleString('zh-CN')}</p>
           </div>
-          <div class="content">${htmlContent}</div>
+          <div class="content">${safeHtmlContent}</div>
           <div class="footer">由沈翔智学 AI 生成 · www.shenxiang.school</div>
         </div>
       `
@@ -2803,7 +3032,10 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       // 🔥 发送整个对话到 API
       const res = await fetch('/api/share', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(await getVerifiedAuthHeaders()),
+        },
         body: JSON.stringify({
           messages: messages.map(m => ({ role: m.role, content: m.content })),
           userId,
@@ -3202,7 +3434,23 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                   <div className="mb-4 sm:mb-6">
                     <ModelLogo modelKey={selectedModel as any} size="xl" />
                   </div>
-                  <h1 className="text-lg sm:text-xl font-semibold text-slate-800 px-4">欢迎使用沈翔智学</h1>
+                  <h1 className="text-lg sm:text-xl font-semibold text-slate-800 px-4">
+                    {selectedModel === "all-in-one-agent" ? "全能超级智能体" : "欢迎使用沈翔智学"}
+                  </h1>
+                  {selectedModel === "all-in-one-agent" && (
+                    <div className="mt-5 grid w-full max-w-2xl grid-cols-1 gap-2 px-4 text-left sm:grid-cols-2">
+                      {ALL_IN_ONE_AGENT_PROMPTS.map((prompt) => (
+                        <button
+                          key={prompt}
+                          type="button"
+                          onClick={() => setInput(prompt)}
+                          className="rounded-lg border border-emerald-100 bg-white px-3 py-2.5 text-left text-xs leading-5 text-slate-600 shadow-sm transition hover:border-emerald-200 hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
+                        >
+                          {prompt}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 )
                 ) : (
@@ -3210,14 +3458,17 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                     {messages.map((message) => (
                       <div key={message.id} className={cn("flex gap-1 sm:gap-2 group/message", message.role === "user" ? "justify-end" : "justify-start")}>
                       {message.role === "assistant" && (
-                        // Smaller AI avatar - 使用 ModelLogo
+                        // Smaller AI avatar - expressive assistant SVG.
                         <div
                           className={cn(
                             "mt-0.5 flex shrink-0 items-center justify-center",
-                            selectedModel === "open-claw" ? "h-12 w-12 sm:h-16 sm:w-16" : "h-7 w-7 sm:h-10 sm:w-10",
+                            selectedModel === "open-claw" ? "h-16 w-16 sm:h-[72px] sm:w-[72px]" : "h-11 w-11 sm:h-12 sm:w-12",
                           )}
                         >
-                          <ModelLogo modelKey={selectedModel as any} size={selectedModel === "open-claw" ? "xl" : "md"} />
+                          <AssistantEyeAvatar
+                            size={selectedModel === "open-claw" ? "xl" : "md"}
+                            isActive={message.id === currentBotIdRef.current && isLoading}
+                          />
                         </div>
                       )}
                       {/* Flat content container - No heavy backgrounds or borders */}
@@ -3243,26 +3494,17 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                           />
                         ) : (
                           // AI message - Flat, minimal container
-                          <div className="w-full">
-                            {/* Workflow visualization - Only show when processing */}
-                            {message.id === currentBotIdRef.current && (isWorkflowProcessing || workflowState.nodes.length > 0) && !isMobile && (
-                              <WorkflowVisualizer
-                                workflowState={workflowState}
-                                isThinking={isThinking}
-                                isGenerating={isGenerating}
-                                onToggle={toggleExpanded}
-                                currentRunningText={currentRunningText}
-                                className="mb-3"
-                              />
-                            )}
-                            {/* Thinking state */}
-                            {message.id === currentBotIdRef.current && isLoading && !message.content && !isFastTrack ? (
+                          <div className="w-full space-y-3">
+                            {message.id === currentBotIdRef.current && isLoading && !isFastTrack && (
                               <ProcessingStatusCard
                                 context={processingContext}
                                 showLongWaitHint={showDeepThinkingHint}
+                                workflowState={workflowState}
+                                currentRunningText={currentRunningText}
                               />
-                            ) : (
-                              <>
+                            )}
+                            {(message.content || !(message.id === currentBotIdRef.current && isLoading && !isFastTrack)) && (
+                              <div>
                                 {/* Content renderer */}
                                 {(() => {
                                   const musicTask = getTaskByMessageId(message.id)
@@ -3332,7 +3574,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                                     />
                                   )
                                 })()}
-                              </>
+                              </div>
                             )}
 
                             {/* Action toolbar - Subtle, shows on hover */}
@@ -3348,8 +3590,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                                     className="h-8 w-8 rounded-full p-0 text-slate-400 hover:text-slate-600 hover:bg-slate-100 touch-manipulation sm:h-8 sm:w-auto sm:px-2 sm:gap-1 sm:rounded-md sm:text-xs"
                                   onClick={() => navigator.clipboard.writeText(message.content).then(() => toast.success("已复制"))}
                                 >
-                                  <Copy className="h-3 w-3" />
-                                  <span className="hidden sm:inline">复制</span>
+                                  复制
                                 </Button>
                                 <Button
                                   variant="ghost"
@@ -3357,8 +3598,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                                     className="h-8 w-8 rounded-full p-0 text-slate-400 hover:text-slate-600 hover:bg-slate-100 touch-manipulation sm:h-8 sm:w-auto sm:px-2 sm:gap-1 sm:rounded-md sm:text-xs"
                                   onClick={() => window.print()}
                                 >
-                                  <Printer className="h-3 w-3" />
-                                  <span className="hidden sm:inline">打印</span>
+                                  打印
                                 </Button>
                                 <Button
                                   variant="ghost"
@@ -3366,8 +3606,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                                     className="h-8 w-8 rounded-full p-0 text-slate-400 hover:text-slate-600 hover:bg-slate-100 touch-manipulation sm:h-8 sm:w-auto sm:px-2 sm:gap-1 sm:rounded-md sm:text-xs"
                                   onClick={() => handleExportPDF(message.content)}
                                 >
-                                  <Download className="h-3 w-3" />
-                                  <span className="hidden sm:inline">导出</span>
+                                  导出
                                 </Button>
                                 <Button
                                   variant="ghost"
@@ -3375,8 +3614,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                                     className="h-8 w-8 rounded-full p-0 text-slate-400 hover:text-slate-600 hover:bg-slate-100 touch-manipulation sm:h-8 sm:w-auto sm:px-2 sm:gap-1 sm:rounded-md sm:text-xs"
                                   onClick={() => handleShare()}
                                 >
-                                  <Share2 className="h-3 w-3" />
-                                  <span className="hidden sm:inline">分享</span>
+                                  分享
                                 </Button>
                                 <Button
                                   variant="ghost"
@@ -3387,8 +3625,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                                   )}
                                   onClick={() => playAssistantMessage(message.content)}
                                 >
-                                  <Volume2 className="h-3 w-3" />
-                                  <span className="hidden sm:inline">{isPlaying ? "停止" : "朗读"}</span>
+                                  {isPlaying ? "停止" : "朗读"}
                                 </Button>
                               </div>
                             )}
@@ -3485,6 +3722,8 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                 placeholder={userId
                   ? selectedModel === "vocab-card"
                     ? "例如：你好啊 / 我要学习 apple / 考我一下"
+                    : selectedModel === "all-in-one-agent"
+                      ? "描述你想生成的动画、图片或要处理的文件..."
                     : "输入内容开始对话..."
                   : "请先登录..."}
                 className="overflow-visible border-slate-200/70 bg-white/95 shadow-[0_-4px_18px_rgba(0,0,0,0.06)] backdrop-blur-md sm:shadow-[0_8px_24px_rgba(0,0,0,0.10)]"

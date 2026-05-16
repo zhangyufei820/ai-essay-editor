@@ -2,6 +2,8 @@ import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 import { emailOTPStore } from "@/lib/email-otp-store"
 import { getClientIP, checkIpRateLimit, createRateLimitResponse } from "@/lib/rate-limit"
+import { handleReferralSignup } from "@/lib/credits"
+import { createServerClient } from "@/lib/supabase/server"
 
 export async function POST(request: NextRequest) {
   // IP 限流：10次/分钟
@@ -12,7 +14,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { email, code } = await request.json()
+    const { email, code, referralCode } = await request.json()
 
     if (!email || !code) {
       return NextResponse.json({ error: "缺少必要参数" }, { status: 400 })
@@ -21,7 +23,7 @@ export async function POST(request: NextRequest) {
     const normalizedEmail = email.toLowerCase()
     const normalizedCode = code.trim()
 
-    console.log(`[v0] 验证请求: email=${normalizedEmail}, code=${normalizedCode}`)
+    console.log(`[v0] 验证请求: email=${normalizedEmail}`)
 
     const otpData = emailOTPStore.get(normalizedEmail)
 
@@ -38,7 +40,7 @@ export async function POST(request: NextRequest) {
 
     // 验证码不匹配
     if (otpData.code !== normalizedCode) {
-      console.log(`[v0] 验证码不匹配: 期望 ${otpData.code}, 收到 ${normalizedCode}`)
+      console.log(`[v0] 验证码不匹配: email=${normalizedEmail}`)
       emailOTPStore.incrementAttempts(normalizedEmail)
       return NextResponse.json({ error: "验证码错误" }, { status: 400 })
     }
@@ -80,6 +82,7 @@ export async function POST(request: NextRequest) {
         email_confirm: true, // 🔥 自动确认邮箱，无需再发确认邮件
         user_metadata: {
           display_name: normalizedEmail.split("@")[0],
+          ...(referralCode ? { referral_code: referralCode } : {}),
         },
       })
 
@@ -103,6 +106,15 @@ export async function POST(request: NextRequest) {
           // 2. 为新用户创建推荐码
           await createUserReferralCode(userId)
           console.log(`[v0] 新用户推荐码创建成功`)
+
+          if (referralCode) {
+            const referralSuccess = await handleReferralSignup(userId, referralCode)
+            if (referralSuccess) {
+              console.log(`[v0] 新用户推荐奖励处理成功`)
+            } else {
+              console.warn(`[v0] 新用户推荐奖励处理失败`)
+            }
+          }
         } catch (creditsError) {
           console.error("[v0] 积分或推荐码处理失败:", creditsError)
           // 不影响登录流程
@@ -124,15 +136,28 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "登录失败，请重试" }, { status: 500 })
     }
 
-    emailOTPStore.delete(normalizedEmail)
-    console.log(`[v0] 验证成功，返回登录链接`)
+    const tokenHash = linkData.properties?.hashed_token
+    if (!tokenHash) {
+      return NextResponse.json({ error: "登录失败，请重试" }, { status: 500 })
+    }
 
-    // 🔥 返回登录链接给前端，前端跳转完成登录
+    const supabase = await createServerClient()
+    const { error: verifyError } = await supabase.auth.verifyOtp({
+      type: "magiclink",
+      token_hash: tokenHash,
+    })
+
+    if (verifyError) {
+      console.error("[v0] 服务端建立会话失败:", verifyError.message)
+      return NextResponse.json({ error: "登录失败，请重试" }, { status: 500 })
+    }
+
+    emailOTPStore.delete(normalizedEmail)
+    console.log(`[v0] 验证成功，已建立 httpOnly 会话`)
+
     return NextResponse.json({
       success: true,
       message: "验证成功",
-      // 返回登录链接中的 token 部分
-      redirectUrl: linkData.properties?.action_link || null,
       needsEmailConfirmation: false,
     })
   } catch (error: any) {

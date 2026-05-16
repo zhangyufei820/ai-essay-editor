@@ -332,6 +332,8 @@ export function renderLatexWithCorrection(
       return katex.renderToString(result.corrected, {
         displayMode,
         throwOnError: false,
+        trust: false,
+        strict: "ignore",
         errorColor: "#B71C1C",
         macros: activeMacros,
       })
@@ -342,6 +344,8 @@ export function renderLatexWithCorrection(
       return katex.renderToString(safeLatex || "\\text{Error}", {
         displayMode,
         throwOnError: false,
+        trust: false,
+        strict: "ignore",
         errorColor: "#B71C1C",
         macros: activeMacros,
       })

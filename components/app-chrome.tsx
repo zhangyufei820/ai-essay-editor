@@ -14,7 +14,7 @@ export function AppChrome({ children }: { children: React.ReactNode }) {
   return (
     <SidebarProvider>
       <AppSidebar />
-      <div id="main-content" className="flex min-h-screen w-full flex-1 flex-col">
+      <div id="main-content" className="flex min-h-screen w-full flex-1 flex-col bg-[var(--color-surface-soft)]">
         {children}
       </div>
     </SidebarProvider>

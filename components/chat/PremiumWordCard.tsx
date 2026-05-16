@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react"
 import { BookOpen, CheckCircle2, Headphones, Lightbulb, RotateCcw, Sparkles, SpellCheck, Volume2, XCircle } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { getVerifiedAuthHeaders } from "@/lib/client-auth"
 import type { FrontendWordCard } from "@/lib/word-card-normalizer"
 
 type PremiumWordCardProps = {
@@ -100,7 +101,10 @@ export function PremiumWordCard({ data }: PremiumWordCardProps) {
       try {
         const response = await fetch("/api/voice/tts", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            ...(await getVerifiedAuthHeaders()),
+          },
           body: JSON.stringify({ text: fallbackTtsText, word: data.word, format: "mp3" }),
           signal: controller.signal,
         })

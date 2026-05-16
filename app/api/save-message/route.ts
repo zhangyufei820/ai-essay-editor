@@ -59,8 +59,13 @@ export async function POST(request: NextRequest) {
     if (files && files.length > 0) {
       for (const file of files) {
         try {
-          // 上传文件到Vercel Blob
-          const storageUrl = await uploadBase64File(file.data, file.name, file.type, user.id)
+          const fileData = typeof file.data === "string" ? file.data : ""
+          if (!fileData) continue
+
+          // 已经通过 /api/dify-upload 得到的公网/代理 URL 直接保存，不再按 base64 解码。
+          const storageUrl = /^https?:\/\//i.test(fileData) || fileData.startsWith("/")
+            ? fileData
+            : await uploadBase64File(fileData, file.name, file.type, user.id)
 
           // 保存文件元数据
           await supabase.from("uploaded_files").insert({

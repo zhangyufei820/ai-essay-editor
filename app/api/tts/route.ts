@@ -9,6 +9,7 @@
 
 import { NextRequest, NextResponse } from "next/server"
 import { internalDifyFetch } from "@/lib/internal-dify-fetch"
+import { requireUser } from "@/lib/auth/verified-user"
 
 export const runtime = "nodejs"
 export const maxDuration = 60
@@ -44,6 +45,8 @@ function getDifyApiKey(model?: string): string {
 
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireUser(request)
+    if (auth.response) return auth.response
     // IP 限流：30次/分钟
     const { getClientIP, checkIpRateLimit, createRateLimitResponse } = await import('@/lib/rate-limit')
     const ip = getClientIP(request)
@@ -112,7 +115,7 @@ export async function POST(request: NextRequest) {
       headers: {
         "Content-Type": "audio/mpeg",
         "Content-Length": audioBuffer.byteLength.toString(),
-        "Cache-Control": "public, max-age=3600"
+        "Cache-Control": "private, no-store"
       }
     })
   } catch (error) {

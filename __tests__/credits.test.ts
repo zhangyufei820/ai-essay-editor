@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { readFileSync } from 'fs'
 import path from 'path'
-import { createBillingAuditMetadata, getUserCredits, summarizeCreditTransactions } from '@/lib/credits'
+import { createBillingAuditMetadata, createUserReferralCode, getUserCredits, summarizeCreditTransactions } from '@/lib/credits'
 import { hasActiveMembership, resolveMembershipStatus } from '@/lib/products'
 import { canUseImage2, parseAllowlistEnv } from '@/lib/permissions'
 
@@ -114,6 +114,19 @@ describe('credits helpers', () => {
     else process.env.GPT_IMAGE_2_ALLOWLIST = oldLegacy
   })
 
+  it('lets Image 2 server permissions fall back to persisted subscription flags', () => {
+    const routeSource = readFileSync(path.join(process.cwd(), 'app/api/dify-chat/route.ts'), 'utf8')
+
+    expect(routeSource).toContain('.from("orders")')
+    expect(routeSource).toContain('.in("product_id", MEMBERSHIP_PRODUCT_IDS)')
+    expect(routeSource).toContain('resolveMembershipCandidateUserIds')
+    expect(routeSource).toContain('.from("user_profiles")')
+    expect(routeSource).toContain('.in("user_id", candidateUserIds)')
+    expect(routeSource).toContain('.from("user_credits")')
+    expect(routeSource).toContain('.select("is_pro")')
+    expect(routeSource).toContain('resolveMembershipStatus({ is_pro: subscribedCredit?.is_pro })')
+  })
+
   it('keeps email OTP signup at one 1000-credit initialization without marking subscription', () => {
     const routeSource = readFileSync(
       path.join(process.cwd(), 'app/api/auth/verify-email-otp/route.ts'),
@@ -123,6 +136,29 @@ describe('credits helpers', () => {
     expect(routeSource).toContain('getUserCredits(userId)')
     expect(routeSource).not.toContain('addCredits(userId, 1000, "signup_bonus"')
     expect(routeSource).toContain('is_pro=false')
+  })
+
+  it('threads referral processing through all first-login auth entry points', () => {
+    const syncSource = readFileSync(path.join(process.cwd(), 'app/api/auth/sync/route.ts'), 'utf8')
+    const callbackSource = readFileSync(path.join(process.cwd(), 'app/auth/callback/route.ts'), 'utf8')
+    const emailOtpSource = readFileSync(
+      path.join(process.cwd(), 'app/api/auth/verify-email-otp/route.ts'),
+      'utf8',
+    )
+
+    expect(syncSource).toContain('handleReferralSignup')
+    expect(syncSource).toContain('referralCode')
+    expect(callbackSource).toContain('handleReferralSignup')
+    expect(callbackSource).toContain('referral_code')
+    expect(emailOtpSource).toContain('handleReferralSignup')
+    expect(emailOtpSource).toContain('referralCode')
+  })
+
+  it('blocks invite-page fallback referral codes that are not persisted server-side', () => {
+    const inviteSource = readFileSync(path.join(process.cwd(), 'app/invite/page.tsx'), 'utf8')
+
+    expect(inviteSource).not.toContain('使用本地推荐码')
+    expect(inviteSource).not.toContain('generateReferralCode(userId)')
   })
 
   it('builds unified billing audit metadata for credit transaction logs', () => {
@@ -202,5 +238,25 @@ describe('credits helpers', () => {
     expect(source).toContain('.select("credits")')
     expect(source).toContain('.maybeSingle()')
     expect(source).toContain('recordTransaction(')
+  })
+
+  it('reuses an existing referral code instead of rotating shared invite links', async () => {
+    const referralCodeQuery = makeChain({
+      data: { code: 'SXOLDABC123' },
+      error: null,
+    })
+    const supabaseMock = {
+      from: jest.fn((table: string) => {
+        if (table === 'referral_codes') return referralCodeQuery
+        throw new Error(`Unexpected table: ${table}`)
+      }),
+    }
+
+    ;(createClient as jest.Mock).mockReturnValue(supabaseMock)
+
+    await expect(createUserReferralCode('user-abc123')).resolves.toBe('SXOLDABC123')
+
+    expect(referralCodeQuery.maybeSingle).toHaveBeenCalled()
+    expect(referralCodeQuery.upsert).not.toHaveBeenCalled()
   })
 })

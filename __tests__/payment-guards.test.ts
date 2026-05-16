@@ -56,18 +56,19 @@ describe('Sprint 5 payment / credits / membership guards', () => {
 
   it('xunhupay callback rejects bad signatures and validates amount / credits before granting权益', () => {
     const source = read('app/api/payment/xunhupay/notify/route.ts')
-    expect(source).toContain('签名验证失败，拒绝处理订单')
+    expect(source).toContain('logger.error("[xunhupay] invalid signature")')
     expect(source).toContain('return new NextResponse("fail", { status: 400 })')
     expect(source).toContain('parseOrderSnapshotAmountInCents(order.amount)')
     expect(source).toContain('paidAmountInCents !== expectedAmountInCents')
     expect(source).toContain('const credits = snapshotCredits > 0 ? snapshotCredits : catalogCredits')
     expect(source).toContain('credits !== expectedCredits')
     expect(source).toContain('isPurchasableProduct(order.product_id)')
-    expect(source).toContain('status: "processing"')
+    expect(source).toContain('直接用 paid 抢占 pending 订单')
+    expect(source).toContain('status: "paid"')
     expect(source).toContain('.eq("status", "pending")')
-    expect(source).toContain('.eq("status", "processing")')
     expect(source).toContain('newCredits > MAX_CREDITS')
     expect(source).toContain('restoreClaimedOrderToPending')
+    expect(source).toContain('.eq("status", "paid")')
     expect(source).toContain('.eq("credits", currentCredits.credits)')
     expect(source).toContain('.select("credits")')
     expect(source).not.toContain('签名验证失败，但继续处理订单')
@@ -149,7 +150,6 @@ describe('Sprint 5 payment / credits / membership guards', () => {
     const clients = [
       read('components/chat/enhanced-chat-interface.tsx'),
       read('components/chat/gpt-image2-chat-interface.tsx'),
-      read('components/chat/banana-chat-interface.tsx'),
       read('app/history/page.tsx'),
       read('components/essay-grader.tsx'),
     ].join('\n')

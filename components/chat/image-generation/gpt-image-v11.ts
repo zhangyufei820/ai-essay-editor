@@ -1,5 +1,6 @@
 export type ImageTaskMode = "image_generate" | "image_edit"
-export type GptImageModel = "gpt-image-2" | "gpt-image-1.5" | "gpt-image-1" | "gpt-image-1-mini"
+export type GeminiImageModel = "gemini-3.1-flash-image-preview" | "gemini-3-pro-image-preview"
+export type GptImageModel = "gpt-image-2" | "gpt-image-1.5" | "gpt-image-1" | "gpt-image-1-mini" | GeminiImageModel
 export type ImageAspectRatio =
   | "auto"
   | "1:1"
@@ -15,8 +16,18 @@ export type ImageAspectRatio =
   | "1:2"
   | "3:1"
   | "1:3"
+  | "4:5"
+  | "5:4"
+  | "4:1"
+  | "1:4"
+  | "8:1"
+  | "1:8"
 export type ImageSize =
   | "auto"
+  | "512"
+  | "1K"
+  | "2K"
+  | "4K"
   | "original_1k"
   | "original_2k"
   | "original_4k"
@@ -34,8 +45,10 @@ export type ImageBackground = "auto" | "opaque" | "transparent"
 export type ImageModeration = "auto" | "low"
 
 export interface GptImageInputs {
+  provider?: "openai" | "google"
   aspect_ratio: ImageAspectRatio
   size: ImageSize
+  image_size?: "auto" | "512" | "1K" | "2K" | "4K"
   model: GptImageModel
   quality: ImageQuality
   output_format: ImageOutputFormat
@@ -44,6 +57,7 @@ export interface GptImageInputs {
   moderation: ImageModeration
   n: number
   mode: ImageTaskMode
+  response_modalities?: string[]
   reference_image_url: string
   reference_image_urls: string[]
   mask_image_url: string
@@ -68,6 +82,11 @@ export const MODEL_OPTIONS: Option<GptImageModel>[] = [
   { label: "GPT Image 1 Mini｜快速测试，低成本", value: "gpt-image-1-mini" },
 ]
 
+export const GEMINI_MODEL_OPTIONS: Option<GeminiImageModel>[] = [
+  { label: "Gemini 3.1 Flash Image｜速度快，支持超宽比例", value: "gemini-3.1-flash-image-preview" },
+  { label: "Gemini 3 Pro Image｜更强理解与画面质量", value: "gemini-3-pro-image-preview" },
+]
+
 export const ASPECT_RATIO_OPTIONS: Option<ImageAspectRatio>[] = [
   { label: "自动", value: "auto" },
   { label: "正方形 1:1", value: "1:1" },
@@ -85,6 +104,22 @@ export const ASPECT_RATIO_OPTIONS: Option<ImageAspectRatio>[] = [
   { label: "超高竖图 1:3", value: "1:3" },
 ]
 
+export const GEMINI_ASPECT_RATIO_OPTIONS: Option<ImageAspectRatio>[] = [
+  { label: "正方形 1:1", value: "1:1" },
+  { label: "横图 16:9", value: "16:9" },
+  { label: "竖图 9:16", value: "9:16" },
+  { label: "横图 4:3", value: "4:3" },
+  { label: "竖图 3:4", value: "3:4" },
+  { label: "横图 3:2", value: "3:2" },
+  { label: "竖图 2:3", value: "2:3" },
+  { label: "竖图 4:5", value: "4:5" },
+  { label: "横图 5:4", value: "5:4" },
+  { label: "超宽横图 4:1", value: "4:1" },
+  { label: "超高竖图 1:4", value: "1:4" },
+  { label: "极宽横图 8:1", value: "8:1" },
+  { label: "极高竖图 1:8", value: "1:8" },
+]
+
 export const SIZE_OPTIONS: Option<ImageSize>[] = [
   { label: "自动选择", value: "auto" },
   { label: "保持原图比例，标准清晰度｜图片编辑专用", value: "original_1k", editOnly: true },
@@ -98,6 +133,14 @@ export const SIZE_OPTIONS: Option<ImageSize>[] = [
   { label: "2K 竖图 1152×2048", value: "1152x2048" },
   { label: "4K 横图 3840×2160", value: "3840x2160" },
   { label: "4K 竖图 2160×3840", value: "2160x3840" },
+]
+
+export const GEMINI_IMAGE_SIZE_OPTIONS: Option<ImageSize>[] = [
+  { label: "自动选择", value: "auto" },
+  { label: "512｜快速预览", value: "512" },
+  { label: "1K｜默认推荐", value: "1K" },
+  { label: "2K｜高清", value: "2K" },
+  { label: "4K｜高质量", value: "4K" },
 ]
 
 export const QUALITY_OPTIONS: Option<ImageQuality>[] = [
@@ -125,6 +168,7 @@ export const MODERATION_OPTIONS: Option<ImageModeration>[] = [
 ]
 
 export const DEFAULT_IMAGE_INPUTS: GptImageInputs = {
+  provider: "openai",
   mode: "image_generate",
   model: "gpt-image-1",
   aspect_ratio: "1:1",
@@ -141,6 +185,7 @@ export const DEFAULT_IMAGE_INPUTS: GptImageInputs = {
 }
 
 export const EDIT_MODE_DEFAULTS: GptImageInputs = {
+  provider: "openai",
   mode: "image_edit",
   model: "gpt-image-2",
   aspect_ratio: "auto",
@@ -154,6 +199,30 @@ export const EDIT_MODE_DEFAULTS: GptImageInputs = {
   reference_image_url: "",
   reference_image_urls: [],
   mask_image_url: "",
+}
+
+export const GEMINI_IMAGE_DEFAULT_INPUTS: GptImageInputs = {
+  provider: "google",
+  mode: "image_generate",
+  model: "gemini-3.1-flash-image-preview",
+  aspect_ratio: "1:1",
+  size: "1K",
+  image_size: "1K",
+  quality: "medium",
+  output_format: "png",
+  output_compression: 100,
+  background: "auto",
+  moderation: "auto",
+  n: 1,
+  response_modalities: ["TEXT", "IMAGE"],
+  reference_image_url: "",
+  reference_image_urls: [],
+  mask_image_url: "",
+}
+
+export const GEMINI_IMAGE_EDIT_DEFAULTS: GptImageInputs = {
+  ...GEMINI_IMAGE_DEFAULT_INPUTS,
+  mode: "image_edit",
 }
 
 const SIZE_TO_RATIO: Partial<Record<ImageSize, ImageAspectRatio>> = {
@@ -172,7 +241,7 @@ export function isOriginalSize(size: ImageSize): boolean {
 }
 
 export function isLargeSize(size: ImageSize): boolean {
-  return size === "2048x2048" || size === "2048x1152" || size === "1152x2048" || size === "3840x2160" || size === "2160x3840" || size === "original_4k"
+  return size === "2K" || size === "4K" || size === "2048x2048" || size === "2048x1152" || size === "1152x2048" || size === "3840x2160" || size === "2160x3840" || size === "original_4k"
 }
 
 export function getAspectRatioForSize(size: ImageSize): ImageAspectRatio | null {
@@ -230,7 +299,30 @@ export function buildDifyInputs(
       ? [referenceImageUrl]
       : []
 
+  if (String(values.model).startsWith("gemini-")) {
+    const geminiSize = (values.image_size || values.size || "1K") as "auto" | "512" | "1K" | "2K" | "4K"
+    return {
+      provider: "google",
+      aspect_ratio: values.aspect_ratio,
+      size: geminiSize,
+      image_size: geminiSize,
+      model: values.model,
+      quality: values.quality,
+      output_format: values.output_format,
+      output_compression: clampCompression(values.output_compression),
+      background: values.background,
+      moderation: values.moderation,
+      n: clampImageCount(values.n),
+      mode: values.mode,
+      response_modalities: ["TEXT", "IMAGE"],
+      reference_image_url: referenceImageUrls[0] || "",
+      reference_image_urls: referenceImageUrls,
+      mask_image_url: "",
+    }
+  }
+
   return {
+    provider: values.provider || "openai",
     aspect_ratio: values.aspect_ratio,
     size: values.size,
     model: values.model,
@@ -349,6 +441,11 @@ function buildCacheableImageProxyUrl(url: string, options: ImageProxyOptions = {
 
 export function buildImageProxyUrl(url: string, options: ImageProxyOptions = {}): string {
   try {
+    const absoluteProxyMatch = url.match(/^https?:\/\/[^/]+(\/api\/image-proxy\/?.*)$/i)
+    if (absoluteProxyMatch) {
+      return buildImageProxyUrl(absoluteProxyMatch[1], options)
+    }
+
     if (url.startsWith("/api/image-proxy/")) {
       const params = new URLSearchParams(url.split("?")[1] || "")
       const targetUrl = params.get("url")
@@ -367,7 +464,7 @@ export function buildImageProxyUrl(url: string, options: ImageProxyOptions = {})
     }
 
     const parsed = new URL(url)
-    if (parsed.protocol === "http:" && parsed.hostname === "43.154.111.156" && parsed.port === "8001" && parsed.pathname.startsWith("/images/")) {
+    if (parsed.protocol === "http:" && parsed.hostname === "43.154.111.156" && (parsed.port === "8001" || parsed.port === "8002") && parsed.pathname.startsWith("/images/")) {
       return buildCacheableImageProxyUrl(url, options)
     }
   } catch {

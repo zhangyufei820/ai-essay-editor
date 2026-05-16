@@ -10,12 +10,20 @@ const WORKSPACE_ROOT = process.env.OPENCLAW_WORKSPACE_ROOT || "/openclaw-workspa
 const MIME_TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
   ".css": "text/css; charset=utf-8",
+  ".csv": "text/csv; charset=utf-8",
+  ".doc": "application/msword",
+  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   ".js": "text/javascript; charset=utf-8",
   ".mjs": "text/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8",
+  ".md": "text/markdown; charset=utf-8",
   ".pdf": "application/pdf",
   ".ppt": "application/vnd.ms-powerpoint",
   ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  ".txt": "text/plain; charset=utf-8",
+  ".xls": "application/vnd.ms-excel",
+  ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  ".zip": "application/zip",
   ".png": "image/png",
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
@@ -26,6 +34,24 @@ const MIME_TYPES: Record<string, string> = {
 }
 
 const ALLOWED_EXTENSIONS = new Set(Object.keys(MIME_TYPES))
+
+const DOWNLOAD_EXTENSIONS = new Set([
+  ".csv",
+  ".doc",
+  ".docx",
+  ".md",
+  ".ppt",
+  ".pptx",
+  ".txt",
+  ".xls",
+  ".xlsx",
+  ".zip",
+])
+
+function contentDisposition(filePath: string, disposition: "inline" | "attachment") {
+  const filename = path.basename(filePath).replace(/[\u0000-\u001f"\\]/g, "_")
+  return `${disposition}; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`
+}
 
 function resolveWorkspaceAssetPath(segments: string[]) {
   if (segments.some((segment) => !segment || segment === "." || segment === ".." || segment.includes("/") || segment.includes("\\"))) {
@@ -73,7 +99,7 @@ async function findWorkspaceAssetPath(segments: string[]) {
 }
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ path?: string[] }> },
 ) {
   const { path: assetPath = [] } = await params
@@ -85,12 +111,27 @@ export async function GET(
 
   const bytes = await fs.readFile(filePath)
   const extension = path.extname(filePath).toLowerCase()
+  const disposition = request.nextUrl.searchParams.get("download") === "1" || DOWNLOAD_EXTENSIONS.has(extension) || extension === ".js"
+    ? "attachment"
+    : "inline"
+  const headers: Record<string, string> = {
+    "Content-Type": MIME_TYPES[extension] || "application/octet-stream",
+    "Content-Disposition": contentDisposition(filePath, disposition),
+    "Content-Length": String(bytes.length),
+    "Cache-Control": "public, max-age=300",
+    "X-Content-Type-Options": "nosniff",
+  }
+  if (extension === ".html" || extension === ".htm") {
+    headers["Content-Security-Policy"] = [
+      "sandbox",
+      "default-src 'none'",
+      "img-src 'self' data: https:",
+      "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
+      "font-src 'self' data: https://cdn.jsdelivr.net",
+    ].join("; ")
+  }
 
   return new Response(bytes, {
-    headers: {
-      "Content-Type": MIME_TYPES[extension] || "application/octet-stream",
-      "Cache-Control": "public, max-age=300",
-      "X-Content-Type-Options": "nosniff",
-    },
+    headers,
   })
 }

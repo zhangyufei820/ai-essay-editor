@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
+import { safeInternalRedirectPath } from '@/lib/security/redirect'
 
 function pickAuthingToken(user: Record<string, any>) {
   const candidates = [
@@ -25,9 +26,16 @@ function AuthingLoginComponent() {
 
   // 从环境变量读取 Authing App ID
   const appId = process.env.NEXT_PUBLIC_AUTHING_APP_ID || ''
+  const referralCode = searchParams.get('ref') || (typeof window !== 'undefined' ? sessionStorage.getItem('pendingReferralCode') : null)
   const guardRef = useRef<any>(null)
   const [isLoaded, setIsLoaded] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (referralCode && typeof window !== 'undefined') {
+      sessionStorage.setItem('pendingReferralCode', referralCode)
+    }
+  }, [referralCode])
 
   useEffect(() => {
     // 1. 检查是否已经登录
@@ -35,7 +43,7 @@ function AuthingLoginComponent() {
     const user = localStorage.getItem('currentUser')
     const token = localStorage.getItem('idToken') || localStorage.getItem('authingToken') || localStorage.getItem('accessToken')
     if (user && token) {
-      const redirectPath = searchParams.get('redirect')
+      const redirectPath = safeInternalRedirectPath(searchParams.get('redirect'))
       router.replace(redirectPath || '/')
       return
     }
@@ -104,20 +112,24 @@ function AuthingLoginComponent() {
               avatar: finalUser.photo,
               // ✨ [新增] 同步手机号
               // Authing 返回的手机号字段可能是 phone 或 phone_number
-              phone: finalUser.phone || finalUser.phone_number
+              phone: finalUser.phone || finalUser.phone_number,
+              referralCode,
             })
           })
         } catch(e) {
           console.error('同步失败', e)
         }
 
+        if (typeof window !== 'undefined') {
+          sessionStorage.removeItem('pendingReferralCode')
+        }
+
         // [关键] 登录后跳转回刚才的页面（比如支付页）
-        const redirectPath = searchParams.get('redirect')
+        const redirectPath = safeInternalRedirectPath(searchParams.get('redirect'))
 
         if (redirectPath) {
           console.log('正在返回之前的页面:', redirectPath)
-          // 使用 decodeURIComponent 确保网址格式正确
-          router.replace(decodeURIComponent(redirectPath))
+          router.replace(redirectPath)
         } else {
           router.replace('/')
         }
@@ -138,7 +150,7 @@ function AuthingLoginComponent() {
       setLoadError(`加载登录模块失败: ${error?.message || '请检查网络后刷新重试'}`)
       setIsLoaded(true)
     })
-  }, [appId, router, searchParams, isLoaded])
+  }, [appId, router, searchParams, isLoaded, referralCode])
 
   return (
     <div style={{

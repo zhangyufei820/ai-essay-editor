@@ -18,11 +18,7 @@ CREATE TABLE IF NOT EXISTS invite_code_usage (
   used_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 插入公测邀请码（无限使用）
-INSERT INTO invite_codes (code, max_uses, is_active) VALUES
-  ('BETA2024', 999999, true),
-  ('WELCOME', 999999, true),
-  ('TEST123', 999999, true);
+-- 不在迁移中预置真实可用邀请码；请在 Supabase Studio 或受控后台按需创建。
 
 -- 启用行级安全
 ALTER TABLE invite_codes ENABLE ROW LEVEL SECURITY;

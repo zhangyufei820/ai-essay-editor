@@ -33,6 +33,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { collapseSidebar, navigateHomeWithSidebar, refreshCredits, refreshSessionList } from "@/components/app-sidebar"
 import { extractUserId } from "@/lib/auth-user"
 import { buildChatSessionRouteFromSession } from "@/lib/chat-session-routes"
+import type { ModelType } from "@/lib/pricing"
 import { calculatePreviewCost } from "@/lib/pricing"
 import { cn } from "@/lib/utils"
 import {
@@ -40,6 +41,11 @@ import {
   BACKGROUND_OPTIONS,
   DEFAULT_IMAGE_INPUTS,
   EDIT_MODE_DEFAULTS,
+  GEMINI_ASPECT_RATIO_OPTIONS,
+  GEMINI_IMAGE_DEFAULT_INPUTS,
+  GEMINI_IMAGE_EDIT_DEFAULTS,
+  GEMINI_IMAGE_SIZE_OPTIONS,
+  GEMINI_MODEL_OPTIONS,
   type GptImageInputs,
   type GptImageModel,
   type ImageAspectRatio,
@@ -73,6 +79,8 @@ const API_BASE = ""
 const BRAND_GREEN = "var(--brand-900)"
 const ACCEPTED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp"]
 const MAX_EDIT_IMAGE_UPLOADS = 10
+const FOUR_K_IMAGE_SIZES = new Set<ImageSize>(["3840x2160", "2160x3840", "original_4k"])
+const GEMINI_FLASH_ONLY_ASPECT_RATIOS = new Set<ImageAspectRatio>(["4:1", "1:4", "8:1", "1:8"])
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -80,6 +88,18 @@ const supabase = createClient(
 )
 
 async function getVerifiedAuthHeaders(): Promise<Record<string, string>> {
+  if (typeof window !== "undefined") {
+    const authingToken = localStorage.getItem("idToken") || localStorage.getItem("authingToken") || localStorage.getItem("accessToken")
+    try {
+      const currentUserId = extractUserId(JSON.parse(localStorage.getItem("currentUser") || "null"))
+      if (authingToken && /^[a-f0-9]{24}$/i.test(currentUserId)) {
+        return { Authorization: `Bearer ${authingToken}` }
+      }
+    } catch {
+      // Fall through to the verified Supabase session check.
+    }
+  }
+
   const { data } = await supabase.auth.getSession()
   if (data.session?.access_token) return { Authorization: `Bearer ${data.session.access_token}` }
   if (typeof window === "undefined") return {}
@@ -113,7 +133,7 @@ type ChatSession = {
   processing_mode?: string
 }
 
-type ImageWorkspaceModel = "gpt-image-2" | "banana-2-pro"
+type ImageWorkspaceModel = "gpt-image-2" | "banana-2-pro" | "gemini-image"
 
 type GptImage2ChatInterfaceProps = {
   workspaceModel?: ImageWorkspaceModel
@@ -145,6 +165,15 @@ const WORKSPACE_COPY: Record<ImageWorkspaceModel, {
     resultTitle: "结果展示",
     loadingLabel: "Banana2 Pro 正在生成图像，请稍候。",
     saveTitle: "图片生成",
+  },
+  "gemini-image": {
+    title: "Gemini 图像",
+    subtitle: "Google Gemini 图像生成与编辑",
+    heroTitle: "Gemini 图像工作台",
+    heroDescription: "恢复新版 Gemini 图像生成入口，支持文生图、参考图编辑、画幅比例、尺寸和生成张数控制。适合快速创意草图、课程配图和图片重绘。",
+    resultTitle: "Gemini 结果展示",
+    loadingLabel: "Gemini 正在生成图像，请稍候。",
+    saveTitle: "Gemini 图像生成",
   },
 }
 
@@ -523,6 +552,8 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
   const router = useRouter()
   const searchParams = useSearchParams()
   const isBananaWorkspace = workspaceModel === "banana-2-pro"
+  const isGeminiWorkspace = workspaceModel === "gemini-image"
+  const isWorkflowImageWorkspace = isBananaWorkspace || isGeminiWorkspace
   const copy = WORKSPACE_COPY[workspaceModel]
   const urlSessionId = searchParams.get("sessionId") || searchParams.get("id")
   const initialPrompt = searchParams.get("prompt") ?? ""
@@ -530,14 +561,17 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
   const initialSize = searchParams.get("size")
 
   const initialInputs = useMemo(() => {
-    const base = !isBananaWorkspace && (initialMode === "image_edit" || initialMode === "image-edit")
-      ? EDIT_MODE_DEFAULTS
-      : DEFAULT_IMAGE_INPUTS
+    const wantsEdit = initialMode === "image_edit" || initialMode === "image-edit"
+    const base = isGeminiWorkspace
+      ? wantsEdit ? GEMINI_IMAGE_EDIT_DEFAULTS : GEMINI_IMAGE_DEFAULT_INPUTS
+      : !isBananaWorkspace && wantsEdit
+        ? EDIT_MODE_DEFAULTS
+        : DEFAULT_IMAGE_INPUTS
     return {
       ...base,
-      size: SIZE_OPTIONS.some((option) => option.value === initialSize) ? (initialSize as ImageSize) : base.size,
+      size: [...SIZE_OPTIONS, ...GEMINI_IMAGE_SIZE_OPTIONS].some((option) => option.value === initialSize) ? (initialSize as ImageSize) : base.size,
     }
-  }, [initialMode, initialSize, isBananaWorkspace])
+  }, [initialMode, initialSize, isBananaWorkspace, isGeminiWorkspace])
 
   const [userId, setUserId] = useState("")
   const [userCredits, setUserCredits] = useState(0)
@@ -576,8 +610,10 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
 
   const currentInputsWithoutUrls = useMemo(
     () => ({
+      provider: isGeminiWorkspace ? "google" as const : "openai" as const,
       aspect_ratio: aspectRatio,
       size,
+      image_size: isGeminiWorkspace ? size as "auto" | "512" | "1K" | "2K" | "4K" : undefined,
       model,
       quality,
       output_format: outputFormat,
@@ -586,15 +622,27 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
       moderation,
       n: count,
       mode,
+      response_modalities: isGeminiWorkspace ? ["TEXT", "IMAGE"] : undefined,
     }),
-    [aspectRatio, background, count, mode, model, moderation, outputCompression, outputFormat, quality, size]
+    [aspectRatio, background, count, isGeminiWorkspace, mode, model, moderation, outputCompression, outputFormat, quality, size]
   )
 
   const previewInputs = useMemo(
     () => buildDifyInputs(currentInputsWithoutUrls, referenceGatewayUrls, maskGatewayUrl),
     [currentInputsWithoutUrls, maskGatewayUrl, referenceGatewayUrls]
   )
-  const estimatedImageCost = calculatePreviewCost(isBananaWorkspace ? "banana-2-pro" : model) * count
+  const billingPreviewModel: ModelType = isGeminiWorkspace
+    ? "gemini-image"
+    : isBananaWorkspace
+      ? "banana-2-pro"
+      : (model as Extract<ModelType, "gpt-image-2" | "gpt-image-1.5" | "gpt-image-1" | "gpt-image-1-mini">)
+  const estimatedImageCost = calculatePreviewCost(billingPreviewModel) * count
+  const shouldDowngradeHighRiskImage2 =
+    !isWorkflowImageWorkspace &&
+    model === "gpt-image-2" &&
+    FOUR_K_IMAGE_SIZES.has(size) &&
+    quality === "high" &&
+    (mode === "image_edit" || count > 1)
 
   useEffect(() => {
     const userStr = typeof window !== "undefined" ? localStorage.getItem("currentUser") : null
@@ -726,9 +774,9 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
     setMaskGatewayUrl("")
 
     if (nextMode === "image_edit") {
-      setModel("gpt-image-2")
-      setAspectRatio("auto")
-      setSize("original_4k")
+      setModel(isGeminiWorkspace ? "gemini-3.1-flash-image-preview" : "gpt-image-2")
+      setAspectRatio(isGeminiWorkspace ? "1:1" : "auto")
+      setSize(isGeminiWorkspace ? "1K" : "original_4k")
       setQuality("medium")
       setOutputFormat("png")
       setOutputCompression(100)
@@ -746,6 +794,13 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
   }
 
   const applySize = (nextSize: ImageSize) => {
+    if (isGeminiWorkspace) {
+      setSize(nextSize)
+      if (nextSize === "512") toast.info("512 适合快速预览，正式出图建议使用 1K 或 2K。")
+      if (nextSize === "4K") toast.info("4K 生成可能耗时较长，请保持页面打开。")
+      return
+    }
+
     if (mode === "image_generate" && isOriginalSize(nextSize)) {
       setSize("1024x1024")
       setAspectRatio("1:1")
@@ -768,6 +823,15 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
   }
 
   const applyAspectRatio = (nextRatio: ImageAspectRatio) => {
+    if (isGeminiWorkspace) {
+      setAspectRatio(nextRatio)
+      if (GEMINI_FLASH_ONLY_ASPECT_RATIOS.has(nextRatio) && model !== "gemini-3.1-flash-image-preview") {
+        setModel("gemini-3.1-flash-image-preview")
+        toast.info("超宽/超高比例已切换到 Gemini 3.1 Flash Image。")
+      }
+      return
+    }
+
     setAspectRatio(nextRatio)
 
     const resolved = resolveSizeForAspectRatio(nextRatio, size)
@@ -779,6 +843,12 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
 
   const applyModel = (nextModel: GptImageModel) => {
     setModel(nextModel)
+    if (isGeminiWorkspace && nextModel === "gemini-3-pro-image-preview" && GEMINI_FLASH_ONLY_ASPECT_RATIOS.has(aspectRatio)) {
+      setAspectRatio("1:1")
+      toast.info("Gemini 3 Pro 暂不使用超宽/超高比例，已切换为 1:1。")
+      return
+    }
+
     if (nextModel === "gpt-image-2" && background === "transparent") {
       setBackground("auto")
       toast.info("gpt-image-2 当前不推荐透明背景，请使用 auto 或 opaque。")
@@ -959,7 +1029,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
     ]
 
 	    try {
-	      const requestId = createClientRequestId(workspaceModel === "gpt-image-2" ? "img" : "banana")
+      const requestId = createClientRequestId(workspaceModel === "gpt-image-2" ? "img" : isGeminiWorkspace ? "gemini" : "banana")
 	      let referenceUrls: string[] = []
       let maskUrl = ""
 
@@ -968,7 +1038,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
         referenceUrls = await Promise.all(editImages.map((image) => uploadImageToGateway(image.file)))
         setReferenceGatewayUrls(referenceUrls)
 
-        if (maskImage) {
+        if (!isGeminiWorkspace && maskImage) {
           maskUrl = await uploadImageToGateway(maskImage.file)
           setMaskGatewayUrl(maskUrl)
         }
@@ -977,7 +1047,24 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
         setMaskGatewayUrl("")
       }
 
-      const submittedInputs = buildDifyInputs(currentInputsWithoutUrls, referenceUrls, maskUrl)
+      let submitInputsWithoutUrls = currentInputsWithoutUrls
+      if (shouldDowngradeHighRiskImage2) {
+        const nextCount = count > 1 ? 1 : count
+        submitInputsWithoutUrls = {
+          ...currentInputsWithoutUrls,
+          quality: "medium",
+          n: nextCount,
+        }
+        setQuality("medium")
+        if (nextCount !== count) setCount(nextCount)
+        toast.warning(
+          count > 1
+            ? "4K 高质量多图任务容易被上游限流，已自动改为 medium 且生成 1 张。"
+            : "4K 高质量图片编辑容易失败，已自动改为 medium 后提交。"
+        )
+      }
+
+      const submittedInputs = buildDifyInputs(submitInputsWithoutUrls, referenceUrls, maskUrl)
 
       setSubmitStage("正在生成图片")
 
@@ -995,7 +1082,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
 	          model: workspaceModel,
 	          mode: "image",
 	          imageSize: isBananaWorkspace ? resolveBananaImageSize(size, aspectRatio) : undefined,
-	          async_image_task: !isBananaWorkspace,
+	          async_image_task: workspaceModel === "gpt-image-2",
 	          requestId,
 	          sessionId: currentSessionIdRef.current || undefined,
 	        }),
@@ -1005,7 +1092,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
       let imageUrls: string[] = []
       let sourceText = ""
 
-      if (isBananaWorkspace) {
+      if (isWorkflowImageWorkspace) {
         if (!response.ok) {
           const errorText = await response.text()
           throw new Error(`upstream_error:${response.status}:${errorText.slice(0, 120)}`)
@@ -1048,7 +1135,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
                 const outputs = json.data?.outputs || json.outputs
                 if (outputs?.text) fullText = outputs.text
                 if (outputs?.result) fullText = outputs.result
-                const files = outputs?.files || []
+                const files = outputs?.files || outputs?.images || []
                 for (const file of files) {
                   if (file?.type === "image" && file.url) {
                     fullText += `\n\n![Generated Image](${file.url})`
@@ -1230,7 +1317,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
                   {copy.heroDescription}
                 </p>
                 <p className="text-xs font-medium text-primary">
-                  预计消耗：{isBananaWorkspace ? `约 ${estimatedImageCost} 积分起` : `${estimatedImageCost} 积分 / 次`}，实际扣费以后端配置为准。
+                  预计消耗：{isWorkflowImageWorkspace ? `约 ${estimatedImageCost} 积分起` : `${estimatedImageCost} 积分 / 次`}，实际扣费以后端配置为准。
                 </p>
               </div>
             </div>
@@ -1274,7 +1361,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
                 <div>
                   <h2 className="text-sm font-semibold text-foreground">图片编辑素材</h2>
                   <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                    上传需要编辑的原图，最多 {MAX_EDIT_IMAGE_UPLOADS} 张；蒙版只会作用在第一张图。
+                    上传需要编辑的原图，最多 {MAX_EDIT_IMAGE_UPLOADS} 张{isGeminiWorkspace ? "。" : "；蒙版只会作用在第一张图。"}
                   </p>
                 </div>
 
@@ -1288,7 +1375,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
                   onClear={clearEditImages}
                 />
 
-                <CollapsibleSection title="蒙版图片，可选" open={maskOpen} onToggle={() => setMaskOpen((value) => !value)}>
+                {!isGeminiWorkspace ? <CollapsibleSection title="蒙版图片，可选" open={maskOpen} onToggle={() => setMaskOpen((value) => !value)}>
                   <UploadPanel
                     title="蒙版图片"
                     description="用于局部编辑。普通换风格、放大、增强清晰度不需要上传蒙版。"
@@ -1297,7 +1384,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
                     onPick={(file) => handleImagePick("mask", file)}
                     onRemove={() => removeImage("mask")}
                   />
-                </CollapsibleSection>
+                </CollapsibleSection> : null}
               </div>
             ) : null}
 
@@ -1312,6 +1399,15 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
               <div className="flex items-start gap-2 rounded-xl border border-primary/20 bg-primary/5 p-3 text-sm text-primary">
                 <Zap className="mt-0.5 h-4 w-4 shrink-0" />
                 <span>图片生成仍在处理中，复杂图像可能需要 3-5 分钟，请保持页面打开。</span>
+              </div>
+            ) : null}
+
+            {shouldDowngradeHighRiskImage2 ? (
+              <div className="flex items-start gap-2 rounded-xl border border-amber-500/25 bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-200">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>
+                  4K 高质量{mode === "image_edit" ? "图片编辑" : "多图生成"}上游失败率较高，提交时会自动改为 medium{count > 1 ? " 且只生成 1 张" : ""}。
+                </span>
               </div>
             ) : null}
 
@@ -1397,7 +1493,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
 
                     <div className="grid gap-2 rounded-xl border border-border bg-muted/40 p-3 text-xs text-muted-foreground sm:grid-cols-5">
                       <span>模式：{item.submittedInputs.mode === "image_edit" ? "图片编辑" : "文生图"}</span>
-                      <span>模型：{isBananaWorkspace ? "banana-2-pro" : item.submittedInputs.model}</span>
+                      <span>模型：{isGeminiWorkspace ? "gemini-image" : isBananaWorkspace ? "banana-2-pro" : item.submittedInputs.model}</span>
                       <span>尺寸：{item.submittedInputs.size}</span>
                       <span>质量：{item.submittedInputs.quality}</span>
                       <span>格式：{item.submittedInputs.output_format}</span>
@@ -1422,8 +1518,8 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
               {!isBananaWorkspace ? (
                 <div className="space-y-2">
                   <FieldLabel>图像模型</FieldLabel>
-                  <NativeSelect value={model} onChange={applyModel} options={MODEL_OPTIONS} />
-                  {model !== "gpt-image-2" && isLargeSize(size) ? (
+                  <NativeSelect value={model} onChange={applyModel} options={isGeminiWorkspace ? GEMINI_MODEL_OPTIONS : MODEL_OPTIONS} />
+                  {!isGeminiWorkspace && model !== "gpt-image-2" && isLargeSize(size) ? (
                     <div className="rounded-lg bg-amber-500/10 p-2 text-xs leading-relaxed text-amber-700 dark:text-amber-300">
                       当前模型可能不支持 2K / 4K。建议切换到 GPT Image 2，或改用基础尺寸。
                       {size === "original_4k" ? " 非 GPT Image 2 会自动降级到基础尺寸。" : null}
@@ -1437,7 +1533,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
 
               <div className="space-y-2">
                 <FieldLabel hint="画幅比例是辅助参数，真正输出尺寸由 size 决定。">画幅比例</FieldLabel>
-                <NativeSelect value={aspectRatio} onChange={applyAspectRatio} options={ASPECT_RATIO_OPTIONS} />
+                <NativeSelect value={aspectRatio} onChange={applyAspectRatio} options={isGeminiWorkspace ? GEMINI_ASPECT_RATIO_OPTIONS : ASPECT_RATIO_OPTIONS} />
               </div>
 
               <div className="space-y-2">
@@ -1445,14 +1541,14 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
                 <NativeSelect
                   value={size}
                   onChange={applySize}
-                  options={SIZE_OPTIONS.filter((option) => !isBananaWorkspace || !option.editOnly).map((option) => ({
+                  options={(isGeminiWorkspace ? GEMINI_IMAGE_SIZE_OPTIONS : SIZE_OPTIONS).filter((option) => !isBananaWorkspace || !option.editOnly).map((option) => ({
                     ...option,
                     disabled: option.editOnly && mode === "image_generate",
                   }))}
                 />
               </div>
 
-              {!isBananaWorkspace ? (
+              {!isWorkflowImageWorkspace ? (
                 <>
                   <div className="space-y-2">
                     <FieldLabel>生成质量</FieldLabel>
@@ -1480,7 +1576,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
             </div>
           </section>
 
-          {!isBananaWorkspace ? (
+          {!isWorkflowImageWorkspace ? (
             <CollapsibleSection title="高级参数" open={advancedOpen} onToggle={() => setAdvancedOpen((value) => !value)}>
               <div className="space-y-4">
                 <div className="space-y-2">
@@ -1536,9 +1632,9 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
             <div className="space-y-2 text-xs">
               {[
                 ["mode", previewInputs.mode],
-                ["model", isBananaWorkspace ? "banana-2-pro" : previewInputs.model],
+                ["model", isGeminiWorkspace ? "gemini-image" : isBananaWorkspace ? "banana-2-pro" : previewInputs.model],
                 ["aspect_ratio", previewInputs.aspect_ratio],
-                ["size", previewInputs.size],
+                ["size", isGeminiWorkspace ? previewInputs.image_size || previewInputs.size : previewInputs.size],
                 ["quality", previewInputs.quality],
                 ["output_format", previewInputs.output_format],
                 ["output_compression", previewInputs.output_compression],

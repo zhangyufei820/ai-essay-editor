@@ -10,14 +10,15 @@ function readProjectFile(relativePath: string) {
 }
 
 describe("Sprint 6 growth conversion guardrails", () => {
-  test("hero keeps concrete essay-correction positioning and real CTA routes", () => {
+  test("hero keeps concrete correction positioning and real CTA routes", () => {
     const source = readProjectFile("components/home/HeroSection.tsx")
 
-    expect(source).toContain("AI 作文批改 · 写作提分工具")
-    expect(source).toContain("免费体验批改")
-    expect(source).toContain('href="/chat"')
-    expect(source).toContain('href="/pricing"')
-    expect(source).toContain('href="/chat/standard"')
+    // 2026-05-16 sprint 6 之后 Hero 已改为双 CTA，断言收紧到真实功能入口语义层。
+    expect(source).toContain("上传作文批改")
+    expect(source).toContain("拍卷诊断错题")
+    expect(source).toContain("作文批改报告")
+    expect(source).toMatch(/href:\s*["']\/worksheet-diagnosis["']/)
+    expect(source).toMatch(/href:\s*["']\/chat\/standard["']/)
     expect(source).not.toContain('href="#"')
   })
 

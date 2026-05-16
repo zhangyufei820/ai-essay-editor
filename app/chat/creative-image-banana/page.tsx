@@ -1,9 +1,5 @@
-import { GptImage2ChatInterface } from "@/components/chat/gpt-image2-chat-interface"
+import { redirect } from "next/navigation"
 
 export default function CreativeImageBananaPage() {
-  return (
-    <main className="min-h-screen">
-      <GptImage2ChatInterface workspaceModel="banana-2-pro" />
-    </main>
-  )
+  redirect("/chat/gemini-image")
 }

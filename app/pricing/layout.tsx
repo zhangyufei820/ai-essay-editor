@@ -1,8 +1,7 @@
 import type { Metadata } from 'next'
 
-// Pricing page should always render fresh to avoid stale RSC/action references
-export const dynamic = 'force-dynamic'
-export const revalidate = 0
+export const dynamic = 'force-static'
+export const revalidate = 300
 
 export const metadata: Metadata = {
   title: '价格方案 | 沈翔智学',

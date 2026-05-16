@@ -2,6 +2,8 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { getClientIP, checkIpRateLimit, createRateLimitResponse } from '@/lib/rate-limit'
 import { requireUser } from '@/lib/auth/verified-user'
+import { handleReferralSignup } from '@/lib/credits'
+import { rejectUntrustedOrigin } from '@/lib/security/request'
 
 export async function POST(request: NextRequest) {
   // IP 限流：30次/分钟
@@ -17,36 +19,15 @@ export async function POST(request: NextRequest) {
 
     // 1. 获取前端传来的用户信息
     const body = await request.json()
-    const { user_id, email, nickname, avatar, phone } = body
+    const { user_id, email, nickname, avatar, phone, referralCode } = body
 
     const verifiedUserId = auth.user!.id
     if (user_id && user_id !== verifiedUserId) {
       return NextResponse.json({ error: 'User mismatch' }, { status: 403 })
     }
 
-    // 🔐 安全验证：检查请求来源
-    // 方式1: 检查 Referer 头，确保请求来自本站
-    const referer = request.headers.get('referer') || ''
-    const origin = request.headers.get('origin') || ''
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
-    
-    // 🔥 修复：支持 Vercel 部署域名验证
-    // Vercel 部署的域名格式：*.vercel.app 或自定义域名
-    const isValidOrigin = referer.startsWith(appUrl) ||
-                          origin.startsWith(appUrl) ||
-                          referer.includes('localhost') ||
-                          origin.includes('localhost') ||
-                          referer.includes('vercel.app') ||
-                          origin.includes('vercel.app') ||
-                          referer.includes('shenxiangzhixue') ||
-                          origin.includes('shenxiangzhixue') ||
-                          referer.includes('shenxiang.school') ||
-                          origin.includes('shenxiang.school')
-    
-    if (!isValidOrigin) {
-      console.warn(`🚫 [Auth/Sync] 可疑请求来源被拦截: referer=${referer}, origin=${origin}`)
-      return NextResponse.json({ error: 'Invalid request origin' }, { status: 403 })
-    }
+    const originRejected = rejectUntrustedOrigin(request)
+    if (originRejected) return originRejected
 
     // 方式2: 基本的 user_id 格式验证（防止注入攻击）
     // Authing 的 user_id 通常是 24 位十六进制字符串
@@ -126,6 +107,25 @@ export async function POST(request: NextRequest) {
         }
       } else {
         console.log("✅ [Sync] 用户赠送 1000 积分成功")
+      }
+
+      const resolvedReferralCode =
+        referralCode ||
+        (auth.user?.metadata && typeof auth.user.metadata.referral_code === "string"
+          ? auth.user.metadata.referral_code
+          : null)
+
+      if (resolvedReferralCode) {
+        try {
+          const referralSuccess = await handleReferralSignup(verifiedUserId, resolvedReferralCode)
+          if (referralSuccess) {
+            console.log("✅ [Sync] 推荐注册奖励处理成功")
+          } else {
+            console.warn("[Sync] 推荐注册奖励处理失败，用户初始化已继续")
+          }
+        } catch (referralError) {
+          console.error("[Sync] 推荐注册奖励异常:", referralError)
+        }
       }
 
       return NextResponse.json({ success: true, message: 'New user initialized' })

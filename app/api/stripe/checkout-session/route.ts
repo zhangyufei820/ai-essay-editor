@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 
 import { PRODUCTS } from "@/lib/products"
+import { requireUser } from "@/lib/auth/verified-user"
 import { applyRateLimit } from "@/lib/rate-limit"
 import { stripe } from "@/lib/stripe"
 
@@ -16,14 +17,12 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json() as CheckoutSessionRequest
     const productId = typeof body.productId === "string" ? body.productId : ""
-    const userId = typeof body.userId === "string" ? body.userId : ""
+    const auth = await requireUser(request)
+    if (auth.response) return auth.response
+    const userId = auth.user!.id
 
     if (!productId) {
       return NextResponse.json({ error: "productId is required" }, { status: 400 })
-    }
-
-    if (!userId) {
-      return NextResponse.json({ error: "userId is required" }, { status: 400 })
     }
 
     if (!stripe) {

@@ -3,6 +3,8 @@ import { anthropic } from "@ai-sdk/anthropic"
 import { createGoogleGenerativeAI } from "@ai-sdk/google"
 import { createOpenAI, openai } from "@ai-sdk/openai"
 import { getMaxOutputTokensForModel, shouldAuditHighConsumptionTextCall } from "@/lib/pricing"
+import type { NextRequest } from "next/server"
+import { requireUser } from "@/lib/auth/verified-user"
 
 export const maxDuration = 60
 
@@ -82,7 +84,10 @@ const ESSAY_REVIEW_PROMPT = `你是一位专业的作文批改师，融合了汪
 
 const ESSAY_REVIEW_MAX_OUTPUT_TOKENS = getMaxOutputTokensForModel("standard") || 12000
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+  const auth = await requireUser(req)
+  if (auth.response) return auth.response
+
   // IP 限流：30次/分钟
   const { getClientIP, checkIpRateLimit, createRateLimitResponse } = await import('@/lib/rate-limit')
   const ip = getClientIP(req)

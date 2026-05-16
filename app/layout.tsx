@@ -4,6 +4,7 @@ import "./globals.css"
 import "katex/dist/katex.min.css"
 import { AppShell } from "@/components/app-shell"
 import { ClientBoot } from "@/components/client-boot"
+import { Toaster } from "sonner"
 
 // ============================================
 // Schema.org 结构化数据（模块级别常量，避免每次渲染重复创建对象）
@@ -154,6 +155,7 @@ export default function RootLayout({
         <ClientBoot />
 
         <AppShell>{children}</AppShell>
+        <Toaster richColors position="top-right" />
         
       </body>
     </html>

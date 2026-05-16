@@ -1,7 +1,7 @@
 import {
   getImageModelConfig,
   GPT_IMAGE_2_CHAT_ROUTE,
-  BANANA_CHAT_ROUTE,
+  GEMINI_IMAGE_CHAT_ROUTE,
 } from '@/components/chat/image-generation/config'
 
 describe('image generation config', () => {
@@ -22,18 +22,18 @@ describe('image generation config', () => {
     expect(config.sizeOptions.some((size) => size.value === config.defaultSizeValue)).toBe(true)
   })
 
-  it('returns Banana config with image mode and fixed size choices', () => {
-    const config = getImageModelConfig('banana-2-pro')
+  it('returns Gemini image config with generation and edit modes', () => {
+    const config = getImageModelConfig('gemini-image')
 
-    expect(config.entryRoute).toBe('/chat/creative-image-banana')
-    expect(config.chatRoute).toBe(BANANA_CHAT_ROUTE)
-    expect(config.modes.map((mode) => mode.key)).toEqual(['image'])
-    expect(config.defaultSizeValue).toBe('9-16-hd')
+    expect(config.entryRoute).toBe('/chat/creative-image-gemini')
+    expect(config.chatRoute).toBe(GEMINI_IMAGE_CHAT_ROUTE)
+    expect(config.modes.map((mode) => mode.key)).toEqual(['text-to-image', 'image-edit'])
+    expect(config.defaultSizeValue).toBe('1-1-hd')
     expect(config.sizeOptions).toHaveLength(28)
-    expect(config.sizeOptions.find((size) => size.value === '9-16-hd')).toMatchObject({
-      ratio: '9:16',
+    expect(config.sizeOptions.find((size) => size.value === '1-1-hd')).toMatchObject({
+      ratio: '1:1',
       tier: 'hd',
-      apiValue: '1080x1920',
+      apiValue: '1536x1536',
     })
     expect(config.modes.some((mode) => mode.key === config.defaultModeKey)).toBe(true)
     expect(config.sizeOptions.some((size) => size.value === config.defaultSizeValue)).toBe(true)

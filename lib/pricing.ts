@@ -4,6 +4,7 @@ import {
   GPT_IMAGE_15_CREDITS,
   GPT_IMAGE_1_CREDITS,
   GPT_IMAGE_1_MINI_CREDITS,
+  GEMINI_IMAGE_CREDITS,
   HIGH_CONSUMPTION_TEXT_CREDITS,
   HIGH_CONSUMPTION_TEXT_OUTPUT_TOKENS,
   IMAGE2_CREDITS,
@@ -27,6 +28,7 @@ export type ModelType =
   | "gpt-5"
   | "claude-opus"
   | "gemini-pro"
+  | "gemini-image"
   | "banana-2-pro"
   | "gpt-image-2"
   | "gpt-image-1.5"
@@ -40,6 +42,7 @@ export type ModelType =
   | "vocab-card"
   | "beike-pro"
   | "banzhuren"
+  | "all-in-one-agent"
   | "ai-writing-paper"
   | "zhongying-essay"
   | "reading-report"
@@ -48,6 +51,7 @@ export type ModelType =
   | "resume-optimize"
   | "speech-defense"
   | "school-wechat"
+  | "teacher-agent"
 
 export type GenMode = "text" | "image" | "music" | "video"
 export type ModelCategory = "text" | "media"
@@ -130,6 +134,7 @@ export const MODEL_COSTS: Record<ModelType, ModelCostConfig> = {
   "vocab-card": { ...TEXT_MODEL_DEFAULTS, displayName: "词境记忆卡", estimatedInputTokens: 600, estimatedOutputTokens: 1000 },
   "beike-pro": { ...TEXT_MODEL_DEFAULTS, displayName: "全学段备课助手Pro", estimatedInputTokens: 1200, estimatedOutputTokens: 1800 },
   banzhuren: { ...TEXT_MODEL_DEFAULTS, displayName: "班主任超级助手", estimatedInputTokens: 1000, estimatedOutputTokens: 1500 },
+  "all-in-one-agent": { ...TEXT_MODEL_DEFAULTS, displayName: "全能超级智能体", estimatedInputTokens: 1200, estimatedOutputTokens: 1800 },
   "ai-writing-paper": { ...TEXT_MODEL_DEFAULTS, displayName: "论文写作助手", estimatedInputTokens: 1200, estimatedOutputTokens: 1800 },
   "zhongying-essay": { ...TEXT_MODEL_DEFAULTS, displayName: "中英文作文助手" },
   "reading-report": { ...TEXT_MODEL_DEFAULTS, displayName: "读书报告助手", estimatedInputTokens: 1000, estimatedOutputTokens: 1500 },
@@ -138,6 +143,7 @@ export const MODEL_COSTS: Record<ModelType, ModelCostConfig> = {
   "resume-optimize": { ...TEXT_MODEL_DEFAULTS, displayName: "实习简历优化助手" },
   "speech-defense": { ...TEXT_MODEL_DEFAULTS, displayName: "演讲与答辩稿助手", estimatedInputTokens: 1000, estimatedOutputTokens: 1500 },
   "school-wechat": { ...TEXT_MODEL_DEFAULTS, displayName: "学校公众号写作助手" },
+  "teacher-agent": { ...TEXT_MODEL_DEFAULTS, displayName: "教师自定义智能体", estimatedInputTokens: 700, estimatedOutputTokens: 1000 },
   "gpt-5": { ...TEXT_MODEL_DEFAULTS, displayName: "ChatGPT 5.4", estimatedInputTokens: 700, estimatedOutputTokens: 1000 },
   "claude-opus": { ...TEXT_MODEL_DEFAULTS, displayName: "Claude opus4.6thinking" },
   "gemini-pro": { ...TEXT_MODEL_DEFAULTS, displayName: "Gemini 3.1 pro", estimatedInputTokens: 700, estimatedOutputTokens: 1000 },
@@ -147,6 +153,14 @@ export const MODEL_COSTS: Record<ModelType, ModelCostConfig> = {
     category: "media",
     fixedCost: MEDIA_BILLING["banana-2-pro"].fixedCredits,
     displayName: "Banana2 Pro 4K",
+    mode: "image",
+    estimatedInputTokens: 300,
+    estimatedOutputTokens: 300,
+  },
+  "gemini-image": {
+    category: "media",
+    fixedCost: MEDIA_BILLING["gemini-image"].fixedCredits,
+    displayName: "Gemini 图像",
     mode: "image",
     estimatedInputTokens: 300,
     estimatedOutputTokens: 300,
@@ -191,6 +205,7 @@ export {
   GPT_IMAGE_15_CREDITS,
   GPT_IMAGE_1_CREDITS,
   GPT_IMAGE_1_MINI_CREDITS,
+  GEMINI_IMAGE_CREDITS,
   IMAGE2_CREDITS,
   PRICING_VERSION,
   SUNO_BASE_CREDITS,
@@ -407,7 +422,7 @@ export function calculateActualCost(
   const config = MODEL_COSTS[model]
   if (!config) return calculateTextUsageCost(tokenUsage, { hasOutputContent: options?.hasOutputContent })
 
-  if (model === "banana-2-pro") {
+  if (model === "banana-2-pro" || model === "gemini-image") {
     const textCost = calculateTextUsageCost(tokenUsage, { hasOutputContent: options?.hasOutputContent })
     return options?.hasGeneratedImage ? (config.fixedCost || 0) + textCost : textCost
   }

@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { addCredits } from '@/lib/credits'
+import { requireUser } from '@/lib/auth/verified-user'
 
 // 🔥 允许的 HTTP 方法
 export const dynamic = 'force-dynamic'
@@ -46,6 +47,8 @@ export async function POST(request: NextRequest) {
   console.log('🔗 [Share API] 收到分享请求')
   
   try {
+    const auth = await requireUser(request)
+    if (auth.response) return auth.response
     // IP 限流：30次/分钟
     const { getClientIP, checkIpRateLimit, createRateLimitResponse } = await import('@/lib/rate-limit')
     const ip = getClientIP(request)
@@ -54,7 +57,8 @@ export async function POST(request: NextRequest) {
       return createRateLimitResponse(limitResult.retryAfter!)
     }
     const body = await request.json()
-    const { messages, userId, modelName } = body
+    const { messages, modelName } = body
+    const userId = auth.user!.id
     
     console.log('🔗 [Share API] 请求参数:', {
       hasMessages: !!messages,

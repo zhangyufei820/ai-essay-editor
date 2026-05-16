@@ -13,6 +13,7 @@ import { toast } from "sonner"
 import { createClient } from "@supabase/supabase-js"
 import { motion } from "framer-motion"
 import { ShenxiangInterfaceIcon } from "@/components/icons/ShenxiangInterfaceIcons"
+import { getVerifiedAuthHeaders } from "@/lib/client-auth"
 
 // 🎨 品牌色
 const BRAND_GREEN = "#4CAF50"
@@ -34,7 +35,6 @@ export default function InvitePage() {
   const [copied, setCopied] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isPaidMember, setIsPaidMember] = useState(false)
-  const [checkingMembership, setCheckingMembership] = useState(false)
 
   const loadUserData = useCallback(async () => {
     setIsLoading(true)
@@ -56,12 +56,38 @@ export default function InvitePage() {
       console.log('🔍 [邀请页] 完整用户对象:', JSON.stringify(parsedUser, null, 2))
 
       if (userId) {
+        let referralOwnerId = userId
+
+        // 🔥 使用已验证的登录态检查当前用户会员状态，并接住同手机号多身份导致的会员归属漂移。
+        try {
+          const response = await fetch('/api/user/membership', {
+            headers: await getVerifiedAuthHeaders(parsedUser)
+          })
+          const result = await response.json()
+          console.log('🔍 [邀请页] 会员检查结果:', { ok: response.ok, isPaidMember: result.isPaidMember, type: result.type, userId: result.userId })
+
+          if (response.ok && result.isPaidMember === true) {
+            setIsPaidMember(true)
+            referralOwnerId = result.userId || result.latestOrder?.user_id || userId
+            console.log('🔍 [邀请页] ✅ 找到会员状态')
+          } else {
+            setIsPaidMember(false)
+            console.log('🔍 [邀请页] ❌ 未找到会员状态')
+          }
+        } catch (e) {
+          console.error('会员检查失败:', e)
+          setIsPaidMember(false)
+        }
+
         // 🔥 通过后端 API 获取或创建推荐码（确保存入数据库）
         try {
           const refResponse = await fetch('/api/referral/get-code', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId })
+            headers: {
+              'Content-Type': 'application/json',
+              ...(await getVerifiedAuthHeaders()),
+            },
+            body: JSON.stringify({ userId: referralOwnerId })
           })
           const refResult = await refResponse.json()
           
@@ -70,15 +96,12 @@ export default function InvitePage() {
             setInviteCount(refResult.uses || 0)
             console.log('🔍 [邀请页] 推荐码获取成功:', refResult.code, '使用次数:', refResult.uses)
           } else {
-            // 降级：使用本地生成的推荐码
-            const localCode = generateReferralCode(userId)
-            setReferralCode(localCode)
-            console.log('🔍 [邀请页] API 获取失败，使用本地推荐码:', localCode)
+            setReferralCode("")
+            console.warn('🔍 [邀请页] 推荐码获取失败，已阻止生成不可追踪的邀请链接')
           }
         } catch (e) {
-          const localCode = generateReferralCode(userId)
-          setReferralCode(localCode)
-          console.log('🔍 [邀请页] 推荐码 API 不可用，使用本地推荐码')
+          setReferralCode("")
+          console.warn('🔍 [邀请页] 推荐码 API 不可用，已阻止生成不可追踪的邀请链接')
         }
 
         // 🔥 获取邀请奖励总额（从 referrals 表）
@@ -86,7 +109,7 @@ export default function InvitePage() {
           const { data: referrals, error } = await supabase
             .from('referrals')
             .select('reward_credits')
-            .eq('referrer_id', userId)
+            .eq('referrer_id', referralOwnerId)
             .eq('status', 'completed')
 
           if (error) {
@@ -103,58 +126,6 @@ export default function InvitePage() {
           console.log('🔍 [邀请页] 邀请奖励表查询异常:', e)
           setTotalReward(0)
         }
-
-        // 🔥 使用后端 API 检查会员状态（绕过 RLS）
-        // 尝试多种可能的用户 ID
-        const possibleUserIds = [
-          userId,
-          parsedUser.id,
-          parsedUser.sub,
-          parsedUser.userId,
-          parsedUser.user_id,
-          parsedUser._id,
-          // 尝试用户的手机号或邮箱
-          parsedUser.phone,
-          parsedUser.email,
-          parsedUser.phone_number,
-          parsedUser.mobile
-        ].filter(Boolean)
-        
-        // 去重
-        const uniqueUserIds = [...new Set(possibleUserIds)]
-        
-        console.log('🔍 [邀请页] 尝试的用户 ID 列表:', uniqueUserIds)
-        
-        let membershipFound = false
-        
-        for (const tryUserId of uniqueUserIds) {
-          if (membershipFound) break
-          
-          try {
-            console.log('🔍 [邀请页] 尝试用户 ID:', tryUserId)
-            const response = await fetch('/api/user/membership', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ userId: tryUserId })
-            })
-            const result = await response.json()
-            console.log('🔍 [邀请页] 会员检查结果:', result)
-            
-            if (result.isPaidMember === true) {
-              membershipFound = true
-              setIsPaidMember(true)
-              console.log('🔍 [邀请页] ✅ 找到会员状态，用户 ID:', tryUserId)
-              break
-            }
-          } catch (e) {
-            console.error('会员检查失败:', e)
-          }
-        }
-        
-        if (!membershipFound) {
-          console.log('🔍 [邀请页] ❌ 未找到会员状态')
-          setIsPaidMember(false)
-        }
       }
     } catch (e) {
       console.error("加载用户数据失败:", e)
@@ -168,18 +139,16 @@ export default function InvitePage() {
   }, [loadUserData])
 
 
-  const generateReferralCode = (userId: string) => {
-    const prefix = "SX"
-    const suffix = userId.slice(-6).toUpperCase()
-    const random = Math.random().toString(36).substring(2, 5).toUpperCase()
-    return `${prefix}${random}${suffix}`
-  }
-
   const inviteLink = typeof window !== 'undefined' 
-    ? `${window.location.origin}/auth/sign-up?ref=${referralCode}`
+    ? `${window.location.origin}/auth/sign-up?ref=${encodeURIComponent(referralCode)}`
     : ''
 
   const handleCopy = async () => {
+    if (!referralCode) {
+      toast.error("推荐码尚未生成，请稍后重试")
+      return
+    }
+
     try {
       await navigator.clipboard.writeText(inviteLink)
       setCopied(true)
@@ -194,6 +163,11 @@ export default function InvitePage() {
 
   // 🔥 核心逻辑：点击"立即分享"按钮
   const handleShareClick = async () => {
+    if (!referralCode) {
+      toast.error("推荐码尚未生成，请稍后重试")
+      return
+    }
+
     console.log('🔍 [分享] 点击分享按钮, isPaidMember:', isPaidMember)
     
     // 如果是会员，执行分享
@@ -413,6 +387,7 @@ export default function InvitePage() {
                 onClick={handleCopy}
                 className="shrink-0 text-white px-6"
                 style={{ backgroundColor: BRAND_GREEN }}
+                disabled={!referralCode}
               >
                 {copied ? (
                   <>
@@ -434,6 +409,7 @@ export default function InvitePage() {
             onClick={handleShareClick}
             className="w-full h-12 text-base text-white"
             style={{ backgroundColor: BRAND_GREEN }}
+            disabled={!referralCode}
           >
             <ShenxiangInterfaceIcon name="share" size={24} />
             立即分享

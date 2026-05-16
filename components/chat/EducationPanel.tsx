@@ -90,9 +90,24 @@ interface EducationPanelProps {
 
 const EDUCATION_AGENTS: EducationAgent[] = [
   {
+    key: "all-in-one-agent",
+    name: "全能超级智能体",
+    description: "动画、图片、文件全能创作",
+    badge: "推荐",
+    href: "/chat/all-in-one-agent",
+  },
+  {
+    key: "worksheet-diagnosis",
+    name: "错题诊断海报",
+    description: "拍卷子生成家长反馈",
+    badge: "推荐",
+    href: "/worksheet-diagnosis",
+  },
+  {
     key: "standard",
     name: "作文批改",
     description: "专业作文分析与点评",
+    badge: "主打",
     href: "/chat/standard",
   },
   {

@@ -6,7 +6,7 @@ import type {
 } from './types'
 
 export const GPT_IMAGE_2_CHAT_ROUTE = '/chat/gpt-image-2'
-export const BANANA_CHAT_ROUTE = '/chat/banana-2-pro'
+export const GEMINI_IMAGE_CHAT_ROUTE = '/chat/gemini-image'
 
 const SIZE_TIER_LABELS: Record<ImageResolutionTier, string> = {
   standard: '标准',
@@ -64,7 +64,7 @@ const GPT_IMAGE_2_SIZE_OPTIONS = [
   createSizeOption('3:4', '4k-experimental', 2160, 2880),
 ]
 
-const BANANA_SIZE_OPTIONS = [
+const GEMINI_SIZE_OPTIONS = [
   createSizeOption('1:1', 'standard', 1024, 1024),
   createSizeOption('1:1', 'hd', 1536, 1536),
   createSizeOption('1:1', '2k', 2048, 2048),
@@ -112,18 +112,21 @@ const MODEL_CONFIGS: Record<ImageGenerationModel, ImageModelConfig> = {
     defaultSizeValue: '1-1-standard',
     defaultModeKey: 'text-to-image',
   },
-  'banana-2-pro': {
-    model: 'banana-2-pro',
-    title: 'Banana2 Pro 4K',
-    modelKey: 'banana-2-pro',
-    entryRoute: '/chat/creative-image-banana',
-    chatRoute: BANANA_CHAT_ROUTE,
-    defaultPromptPlaceholder: '描述你想生成的图片...',
+  'gemini-image': {
+    model: 'gemini-image',
+    title: 'Gemini 图像',
+    modelKey: 'gemini-image',
+    entryRoute: '/chat/creative-image-gemini',
+    chatRoute: GEMINI_IMAGE_CHAT_ROUTE,
+    defaultPromptPlaceholder: '描述你想生成或编辑的图片...',
     ctaLabel: '开始生成',
-    modes: [{ key: 'image', label: '图像生成' }],
-    sizeOptions: BANANA_SIZE_OPTIONS,
-    defaultSizeValue: '9-16-hd',
-    defaultModeKey: 'image',
+    modes: [
+      { key: 'text-to-image', label: '文生图' },
+      { key: 'image-edit', label: '图像编辑' },
+    ],
+    sizeOptions: GEMINI_SIZE_OPTIONS,
+    defaultSizeValue: '1-1-hd',
+    defaultModeKey: 'text-to-image',
   },
 }
 

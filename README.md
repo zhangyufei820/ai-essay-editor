@@ -1,8 +1,12 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+项目安全与身份系统演进请看：[长期路线图](docs/ROADMAP.md)。
+
 ## Getting Started
 
 First, run the development server:
+
+> 运行 docker compose 前请确保 .env 已填充 NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY。
 
 ```bash
 npm run dev

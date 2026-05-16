@@ -17,8 +17,9 @@ import {
   PRICING_VERSION,
   shouldAuditHighConsumptionTextCall,
 } from "@/lib/pricing"
-import { canUseImage2, isSubscribedUser } from "@/lib/permissions"
+import { canUseImage2, isSubscribedUser, resolveMembershipStatus } from "@/lib/permissions"
 import { recordBillingIssue } from "@/lib/credits"
+import { refundImageTaskCredits } from "@/lib/image-task-refunds"
 import {
   chargeCreditsSafely as spendCredits,
   createBillingLog as createBillingAuditMetadata,
@@ -140,8 +141,60 @@ function buildGptImageV11Inputs(inputs: unknown): GptImageV11Inputs {
   }
 }
 
-const WORKFLOW_MODELS = new Set(["banana-2-pro", "vocab-card"])
+const WORKFLOW_MODELS = new Set(["banana-2-pro", "gemini-image", "vocab-card"])
 const MEMBERSHIP_PRODUCT_IDS = ["basic", "pro", "premium", "enterprise", "campus"]
+const ALL_IN_ONE_AGENT_MODEL = "all-in-one-agent"
+
+function appendOpenClawInlineOutputInstruction(query: string) {
+  return [
+    query || "请分析",
+    "",
+    "【输出方式强制要求】",
+    "如果用户要求润色、改写、批改、论文修改、作文修改、总结或整理文档，请在最终回答中直接输出可复制的完整正文。",
+    "不要只生成或返回 doc/docx/pdf 文件、下载链接、附件卡片，或只回复“已保存到文件”。",
+    "不要生成“下载Word格式”“下载文档”“Word格式”等下载链接，也不要把结果保存为 Word 后让用户下载。",
+    "除非用户明确要求导出文件，否则最终回答只能包含对话框内可阅读、可复制的文本正文。",
+  ].join("\n")
+}
+
+function buildAllInOneAgentWorkflowInputs(query: string, inputs: unknown, fileUrls: string[]) {
+  const record = inputs && typeof inputs === "object" ? inputs as Record<string, unknown> : {}
+  const rawQuality = typeof record.quality === "string" ? record.quality : "low"
+  const quality = ["low", "medium", "high"].includes(rawQuality) ? rawQuality : "low"
+  const rawDuration = typeof record.duration_seconds === "number"
+    ? record.duration_seconds
+    : Number(record.duration_seconds)
+  const imageUrlsText = fileUrls.join("\n")
+  const prompt = query || "请根据用户需求生成内容"
+
+  return {
+    ...record,
+    raw_prompt: fileUrls.length > 0
+      ? `${prompt}\n\n已上传原始图片，请必须基于这些图片进行改图或优化，不要说没有收到附件，也不要生成与原图无关的通用图片。原图地址：\n${imageUrlsText}`
+      : prompt,
+    prompt,
+    query: prompt,
+    style: typeof record.style === "string" && record.style.trim() ? record.style : "auto",
+    duration_seconds: Number.isFinite(rawDuration) && rawDuration > 0 ? String(Math.min(120, Math.max(1, rawDuration))) : "auto",
+    quality,
+    has_uploaded_images: fileUrls.length > 0 ? "true" : "false",
+    uploaded_image_count: String(fileUrls.length),
+    file_urls: imageUrlsText,
+    file_url: fileUrls[0] || "",
+    image_urls: imageUrlsText,
+    images: fileUrls.map((url) => ({ type: "image", url })),
+    reference_image_urls: imageUrlsText,
+    reference_image_url: fileUrls[0] || "",
+    input_image_url: fileUrls[0] || "",
+    source_image_url: fileUrls[0] || "",
+    source_images: imageUrlsText,
+  }
+}
+
+type MembershipIdentity = {
+  email?: string | null
+  phone?: string | null
+}
 
 function hasGptImageModelInput(inputs: unknown): boolean {
   if (!inputs || typeof inputs !== "object") return false
@@ -152,11 +205,14 @@ function hasGptImageModelInput(inputs: unknown): boolean {
 async function resolveActiveMembershipStatus(
   supabase: ReturnType<typeof getSupabaseAdmin>,
   userId: string,
+  identity: MembershipIdentity = {},
 ): Promise<string | null> {
+  const candidateUserIds = await resolveMembershipCandidateUserIds(supabase, userId, identity)
+
   const { data, error } = await supabase
     .from("orders")
     .select("product_id")
-    .eq("user_id", userId)
+    .in("user_id", candidateUserIds)
     .eq("status", "paid")
     .in("product_id", MEMBERSHIP_PRODUCT_IDS)
     .order("created_at", { ascending: false })
@@ -169,7 +225,98 @@ async function resolveActiveMembershipStatus(
   }
 
   const productId = typeof data?.product_id === "string" ? data.product_id : null
-  return isSubscribedUser(productId) ? productId : null
+  if (isSubscribedUser(productId)) {
+    return productId
+  }
+
+  const { data: creditData, error: creditError } = await supabase
+    .from("user_credits")
+    .select("is_pro")
+    .in("user_id", candidateUserIds)
+
+  if (creditError) {
+    console.warn("[会员权限] 查询会员标记失败:", creditError.message)
+    return null
+  }
+
+  const subscribedCredit = Array.isArray(creditData)
+    ? creditData.find((row) => resolveMembershipStatus({ is_pro: row?.is_pro }))
+    : null
+  return resolveMembershipStatus({ is_pro: subscribedCredit?.is_pro })
+}
+
+function normalizeContactEmail(email?: string | null): string | null {
+  const normalized = email?.trim().toLowerCase()
+  return normalized || null
+}
+
+function normalizeContactPhone(phone?: string | null): string | null {
+  const normalized = String(phone || "").replace(/\D/g, "")
+  return normalized.length >= 6 ? normalized : null
+}
+
+async function resolveMembershipCandidateUserIds(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  userId: string,
+  identity: MembershipIdentity,
+): Promise<string[]> {
+  const candidates = new Set<string>([userId])
+  const emails = new Set<string>()
+  const phones = new Set<string>()
+
+  const authEmail = normalizeContactEmail(identity.email)
+  const authPhone = normalizeContactPhone(identity.phone)
+  if (authEmail) emails.add(authEmail)
+  if (authPhone) phones.add(authPhone)
+
+  const { data: currentProfile, error: currentProfileError } = await supabase
+    .from("user_profiles")
+    .select("email, phone")
+    .eq("user_id", userId)
+    .maybeSingle()
+
+  if (currentProfileError) {
+    console.warn("[会员权限] 查询当前用户资料失败:", currentProfileError.message)
+  } else {
+    const profileEmail = normalizeContactEmail(currentProfile?.email)
+    const profilePhone = normalizeContactPhone(currentProfile?.phone)
+    if (profileEmail) emails.add(profileEmail)
+    if (profilePhone) phones.add(profilePhone)
+  }
+
+  for (const email of emails) {
+    const { data, error } = await supabase
+      .from("user_profiles")
+      .select("user_id")
+      .ilike("email", email)
+      .limit(10)
+
+    if (error) {
+      console.warn("[会员权限] 按邮箱关联用户失败:", error.message)
+      continue
+    }
+    data?.forEach((profile) => {
+      if (typeof profile?.user_id === "string" && profile.user_id) candidates.add(profile.user_id)
+    })
+  }
+
+  for (const phone of phones) {
+    const { data, error } = await supabase
+      .from("user_profiles")
+      .select("user_id")
+      .like("phone", `%${phone}%`)
+      .limit(10)
+
+    if (error) {
+      console.warn("[会员权限] 按手机号关联用户失败:", error.message)
+      continue
+    }
+    data?.forEach((profile) => {
+      if (typeof profile?.user_id === "string" && profile.user_id) candidates.add(profile.user_id)
+    })
+  }
+
+  return [...candidates]
 }
 
 function sanitizeVocabCardOutputs(outputs: unknown): Record<string, unknown> {
@@ -209,6 +356,7 @@ const DEFAULT_DIFY_FIRST_BYTE_TIMEOUT_MS = 120_000
 const OPENCLAW_FIRST_BYTE_TIMEOUT_MS = 900_000
 const GPT_IMAGE_BLOCKING_TIMEOUT_MS = 300_000
 const GPT_IMAGE_GATEWAY_TIMEOUT_MS = 540_000
+const GPT_IMAGE_ASYNC_TASK_MAX_AGE_MS = 15 * 60 * 1000
 const IMAGE_GATEWAY_URL = (process.env.DIFY_IMAGE_GATEWAY_URL || "http://dify-image-gateway:8001").replace(/\/+$/, "")
 // 🔥 作文批改（standard）使用专用的 ESSAY_CORRECTION_API_KEY
 const DEFAULT_DIFY_KEY = process.env.ESSAY_CORRECTION_API_KEY || process.env.DIFY_API_KEY 
@@ -423,6 +571,121 @@ function extractWorkflowImageUrls(payload: unknown): string[] {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
+function safeJsonParse(value: string): unknown | null {
+  try {
+    return JSON.parse(value)
+  } catch {
+    return null
+  }
+}
+
+function extractJsonObjectsFromText(text: string): unknown[] {
+  const objects: unknown[] = []
+  let depth = 0
+  let start = -1
+  let inString = false
+  let escaped = false
+
+  for (let index = 0; index < text.length; index++) {
+    const char = text[index]
+    if (inString) {
+      if (escaped) {
+        escaped = false
+      } else if (char === "\\") {
+        escaped = true
+      } else if (char === '"') {
+        inString = false
+      }
+      continue
+    }
+
+    if (char === '"') {
+      inString = true
+      continue
+    }
+
+    if (char === "{") {
+      if (depth === 0) start = index
+      depth++
+      continue
+    }
+
+    if (char === "}" && depth > 0) {
+      depth--
+      if (depth === 0 && start >= 0) {
+        const parsed = safeJsonParse(text.slice(start, index + 1))
+        if (parsed) objects.push(parsed)
+        start = -1
+      }
+    }
+  }
+
+  return objects
+}
+
+function looksLikeAllInOneControlPayload(value: string) {
+  const trimmed = value.trim()
+  if (!trimmed) return false
+  return /^(?:animation|video|image|ppt|presentation|workflow|tool|artifact|parameters?)\s*\{/i.test(trimmed)
+    || /^\{[\s\S]*"(?:output_mode|parameters_to_animate|axes_config|animation_style|duration_seconds|quality|task_id|skill_name|status|success)"[\s\S]*\}$/.test(trimmed)
+}
+
+function shouldStreamAllInOneAnswer(event: Record<string, unknown>) {
+  const answer = typeof event.answer === "string" ? event.answer : ""
+  if (!answer.trim() || looksLikeAllInOneControlPayload(answer)) return false
+  const selector = Array.isArray(event.from_variable_selector)
+    ? event.from_variable_selector.filter((item): item is string => typeof item === "string").join(".")
+    : ""
+  return !selector.includes("quick_reply_answer_node") && !selector.includes("frontend_input_node")
+}
+
+function extractDisplayTextFromUnknown(value: unknown): string[] {
+  if (!value) return []
+  if (typeof value === "string") {
+    const parsed = safeJsonParse(value)
+    if (parsed && parsed !== value) return extractDisplayTextFromUnknown(parsed)
+    return [value]
+  }
+  if (Array.isArray(value)) return value.flatMap(extractDisplayTextFromUnknown)
+  if (typeof value !== "object") return []
+
+  const record = value as Record<string, unknown>
+  return ["result", "answer", "text", "markdown", "content", "message", "outputs", "data"]
+    .flatMap((key) => extractDisplayTextFromUnknown(record[key]))
+}
+
+function stripInternalFileReferences(markdown: string) {
+  return markdown
+    .replace(/`?(?:\/workspace|\/tmp|\/opt|\/app|file:\/\/|generated\/)[^\s`)]+`?/g, "已在对话中整理为可展示内容")
+    .replace(/^\s*[-*]?\s*(?:视频文件|文件结果|输出文件|本地文件|文件路径)\s*[:：]\s*已在对话中整理为可展示内容\s*$/gim, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+}
+
+function normalizeAllInOneAgentDisplay(rawText: string) {
+  const parsedValues = [
+    safeJsonParse(rawText),
+    ...extractJsonObjectsFromText(rawText),
+  ].filter(Boolean)
+
+  const textCandidates = parsedValues.length > 0
+    ? parsedValues.flatMap(extractDisplayTextFromUnknown)
+    : [rawText]
+
+  const rawDisplayText = textCandidates
+    .map((text) => text.trim())
+    .filter((text) => !looksLikeAllInOneControlPayload(text))
+    .filter(Boolean)
+    .sort((a, b) => b.length - a.length)[0] || (parsedValues.length > 0 || looksLikeAllInOneControlPayload(rawText) ? "" : rawText)
+
+  const displayText = stripInternalFileReferences(rawDisplayText)
+  return displayText || "任务已提交，但上游还没有返回可直接展示的内容。请稍后重试，或换一个更明确的生成要求。"
+}
+
+function enqueueSseAnswer(controller: TransformStreamDefaultController<Uint8Array>, answer: string) {
+  controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ event: "message", answer })}\n\n`))
+}
+
 const DIFY_CONVERSATION_ID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
@@ -536,7 +799,7 @@ function createImageGatewayResponse(payload: unknown) {
 }
 
 async function callImageGatewayDirect(query: string, inputs: unknown) {
-  const gatewayToken = process.env.DIFY_IMAGE_GATEWAY_TOKEN || DEFAULT_DIFY_KEY || ""
+  const gatewayToken = process.env.DIFY_IMAGE_GATEWAY_TOKEN || ""
   const timeout = createTimeoutSignal(GPT_IMAGE_GATEWAY_TIMEOUT_MS)
 
   try {
@@ -594,7 +857,7 @@ async function startImageGatewayTask(params: {
   requestId: string
   traceId: string
 }) {
-  const gatewayToken = process.env.DIFY_IMAGE_GATEWAY_TOKEN || DEFAULT_DIFY_KEY || ""
+  const gatewayToken = process.env.DIFY_IMAGE_GATEWAY_TOKEN || ""
   const response = await internalDifyFetch(`${IMAGE_GATEWAY_URL}/api/image/tasks`, {
     method: "POST",
     headers: {
@@ -661,7 +924,7 @@ export async function GET(request: NextRequest) {
 
   const { data: taskOwner, error: taskOwnerError } = await getSupabaseAdmin()
     .from("ai_task_runs")
-    .select("id,user_id,upstream_task_id")
+    .select("id,user_id,upstream_task_id,status,created_at")
     .eq("id", requestId)
     .eq("user_id", userId)
     .maybeSingle()
@@ -676,7 +939,44 @@ export async function GET(request: NextRequest) {
     return Response.json({ error: "无权访问该图片任务" }, { status: 403 })
   }
 
-  const gatewayToken = process.env.DIFY_IMAGE_GATEWAY_TOKEN || DEFAULT_DIFY_KEY || ""
+  const createdAtMs = taskOwner.created_at ? new Date(taskOwner.created_at).getTime() : NaN
+  const taskAgeMs = Number.isFinite(createdAtMs) ? Date.now() - createdAtMs : 0
+  if ((taskOwner.status === "queued" || taskOwner.status === "running") && taskAgeMs > GPT_IMAGE_ASYNC_TASK_MAX_AGE_MS) {
+    const refund = await refundImageTaskCredits({
+      userId,
+      requestId,
+      reason: "图片异步任务轮询超时",
+      errorCode: "IMAGE_TASK_POLL_TIMEOUT",
+    })
+    await updateTaskRun(requestId, {
+      status: "timeout",
+      stage: "图片任务超时，已自动退回积分",
+      progress: 100,
+      upstreamTaskId: taskId,
+      errorMessage: "图片任务长时间未完成，系统已自动结束并尝试退回积分",
+      errorCode: "IMAGE_TASK_POLL_TIMEOUT",
+      metadata: {
+        elapsed_ms: taskAgeMs,
+        gateway_status: "timeout",
+        refund_status: refund.status,
+        refund_amount: refund.amount || 0,
+        refund_reference_id: refund.refundReferenceId || null,
+      },
+    })
+    return Response.json(
+      {
+        status: "failed",
+        taskId,
+        requestId,
+        elapsedMs: taskAgeMs,
+        error: "图片任务超时，已自动退回积分",
+        refund,
+      },
+      { status: 504 },
+    )
+  }
+
+  const gatewayToken = process.env.DIFY_IMAGE_GATEWAY_TOKEN || ""
   const response = await internalDifyFetch(`${IMAGE_GATEWAY_URL}/api/image/tasks/${encodeURIComponent(taskId)}`, {
     headers: {
       ...(gatewayToken
@@ -690,6 +990,13 @@ export async function GET(request: NextRequest) {
   const task = await response.json().catch(() => ({}))
 
   if (!response.ok || task?.code === "task_not_found") {
+    const refund = await refundImageTaskCredits({
+      userId,
+      requestId,
+      reason: "图片任务不存在或已过期",
+      errorCode: "IMAGE_TASK_NOT_FOUND",
+      statusCode: response.status || 404,
+    })
     if (requestId) {
       await updateTaskRun(requestId, {
         status: "failed",
@@ -699,9 +1006,14 @@ export async function GET(request: NextRequest) {
         errorMessage: "图片任务不存在或已过期",
         errorCode: "IMAGE_TASK_NOT_FOUND",
         sanitizedError: sanitizeForTrace(task) as Record<string, unknown>,
+        metadata: {
+          refund_status: refund.status,
+          refund_amount: refund.amount || 0,
+          refund_reference_id: refund.refundReferenceId || null,
+        },
       })
     }
-    return Response.json({ error: "图片任务不存在或已过期" }, { status: response.status || 404 })
+    return Response.json({ error: "图片任务不存在或已过期", refund }, { status: response.status || 404 })
   }
 
   const elapsedMs = typeof task?.elapsed_ms === "number" ? task.elapsed_ms : 0
@@ -734,6 +1046,13 @@ export async function GET(request: NextRequest) {
   if (task?.status === "failed") {
     const errorMessage = typeof task?.error === "string" ? task.error : "图片服务请求失败"
     const statusCode = typeof task?.status_code === "number" && task.status_code >= 400 ? task.status_code : 502
+    const refund = await refundImageTaskCredits({
+      userId,
+      requestId,
+      reason: errorMessage,
+      errorCode: "IMAGE_TASK_FAILED",
+      statusCode,
+    })
     if (requestId) {
       await updateTaskRun(requestId, {
         status: "failed",
@@ -747,6 +1066,9 @@ export async function GET(request: NextRequest) {
           elapsed_ms: elapsedMs,
           gateway_status: task?.status,
           status_code: statusCode,
+          refund_status: refund.status,
+          refund_amount: refund.amount || 0,
+          refund_reference_id: refund.refundReferenceId || null,
         },
       })
     }
@@ -758,6 +1080,7 @@ export async function GET(request: NextRequest) {
         elapsedMs,
         error: errorMessage,
         data: task?.error_payload || {},
+        refund,
       },
       { status: statusCode },
     )
@@ -861,6 +1184,8 @@ export async function POST(request: NextRequest) {
     const requestedModelType = (model || "general-chat") as ModelType
     const configuredMaxOutputTokens = getMaxOutputTokensForModel(requestedModelType)
     const limitedQuery = appendTextOutputLimitInstruction(query || "你好", requestedModelType)
+    const isAllInOneAgent = model === ALL_IN_ONE_AGENT_MODEL
+    const effectiveQuery = model === "open-claw" ? appendOpenClawInlineOutputInstruction(limitedQuery) : limitedQuery
     let effectiveConvId = normalizeDifyConversationId(conversation_id, modelPrefix)
     
     console.log(`🔍 [Dify-Chat] 接收请求: model=${model || "general-chat"} files=${difyFileIds.length} urls=${fileUrls.length}`)
@@ -870,7 +1195,7 @@ export async function POST(request: NextRequest) {
     const requestId = request.headers.get("X-Request-Id") || body.requestId || createRequestId(model === "gpt-image-2" ? "img" : "chat")
     logPerf(requestId, "api_enter", apiStartedAt, { model: model || "general-chat" })
     logPerf(requestId, "auth_done", apiStartedAt)
-    const taskKind = model === "gpt-image-2" ? "image" : model === "open-claw" ? "openclaw" : "dify"
+    const taskKind = model === "gpt-image-2" ? "image" : model === "open-claw" ? "openclaw" : isAllInOneAgent ? "workflow" : "dify"
     if (hasGptImageModelInput(inputs) && model !== "gpt-image-2") {
       console.warn(`🚫 [媒体权限] 图片模型请求顶层 model 不匹配，拒绝绕过媒体计费: model=${model || "empty"}`)
       return new Response(
@@ -890,11 +1215,14 @@ export async function POST(request: NextRequest) {
         .select("email")
         .eq("user_id", userId)
         .maybeSingle()
-      const membershipStatus = await resolveActiveMembershipStatus(getSupabaseAdmin(), userId)
+      const membershipStatus = await resolveActiveMembershipStatus(getSupabaseAdmin(), userId, {
+        email: auth.user!.email,
+        phone: auth.user!.phone,
+      })
 
       if (!canUseImage2({
         user_id: userId,
-        email: typeof userProfile?.email === "string" ? userProfile.email : null,
+        email: typeof userProfile?.email === "string" ? userProfile.email : auth.user!.email,
         membership_status: membershipStatus,
       })) {
         console.warn(`🚫 [媒体权限] 用户无权限使用 ${billingModelType || "gpt-image-2"}`)
@@ -952,7 +1280,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    if (model !== "gpt-image-2" && fileUrls.length > 0 && difyFileIds.length === 0) {
+    if (model !== "gpt-image-2" && !isAllInOneAgent && fileUrls.length > 0 && difyFileIds.length === 0) {
       console.warn(`🚫 [Dify-Chat] 非图片生成模型拒绝 remote_url 附件: model=${model || "general-chat"} urls=${fileUrls.length}`)
       return new Response(
         JSON.stringify({ error: "文件上传缺少 Dify 文件 ID，请重新上传文件后再试" }),
@@ -1104,7 +1432,7 @@ export async function POST(request: NextRequest) {
         const charged = await spendCredits(
           userId,
           estimatedMinCost,
-          "image_generation",
+          "consume",
           imageDescription,
           taskRun.requestId,
           imageBillingMetadata,
@@ -1143,7 +1471,7 @@ export async function POST(request: NextRequest) {
         const charged = await spendCredits(
           userId,
           estimatedMinCost,
-          "image_generation",
+          "consume",
           imageDescription,
           taskRun.requestId,
           imageBillingMetadata,
@@ -1193,22 +1521,23 @@ export async function POST(request: NextRequest) {
 
         // 🎨 Banana 与词境记忆卡使用 Workflow API；GPT Image V11 使用 Chatflow query + inputs。
         const isWorkflow = WORKFLOW_MODELS.has(model || "");
+        const isWorkflowImageModel = model === "banana-2-pro" || model === "gemini-image";
         const isVocabCardWorkflow = model === "vocab-card";
         const apiEndpoint = isWorkflow ? "/workflows/run" : "/chat-messages";
 
         let difyRequest: DifyWorkflowRequest | DifyChatRequest;
 
         if (isWorkflow) {
-            // Dify Banana 参数格式（image_prompt）
+            // Dify 图像工作流参数格式（image_prompt）
             difyRequest = isVocabCardWorkflow
               ? {
-                  inputs: buildVocabCardWorkflowInputs({ query: limitedQuery, inputs }),
+                  inputs: buildVocabCardWorkflowInputs({ query: effectiveQuery, inputs }),
                   response_mode: "streaming",
                   user: userId || "default-user",
                 }
               : {
                   inputs: {
-                      image_prompt: limitedQuery,
+                      image_prompt: effectiveQuery,
                       ...(inputs || {})
                   },
                   response_mode: "streaming",
@@ -1238,8 +1567,12 @@ export async function POST(request: NextRequest) {
             // 💬 Chat API 格式
             const isGptImage2 = model === "gpt-image-2"
             difyRequest = {
-                inputs: isGptImage2 ? buildGptImageV11Inputs(inputs) : inputs || {},
-                query: isGptImage2 ? (query || "你好") : limitedQuery,
+                inputs: isGptImage2
+                  ? buildGptImageV11Inputs(inputs)
+                  : isAllInOneAgent
+                    ? buildAllInOneAgentWorkflowInputs(effectiveQuery, inputs, fileUrls)
+                    : inputs || {},
+                query: isGptImage2 ? (query || "你好") : effectiveQuery,
                 response_mode: isGptImage2 ? "blocking" : "streaming",
                 user: userId || "default-user",
                 conversation_id: currentConvId,
@@ -1263,7 +1596,7 @@ export async function POST(request: NextRequest) {
 
         const firstByteTimeoutMs = model === "gpt-image-2"
           ? GPT_IMAGE_BLOCKING_TIMEOUT_MS
-          : model === "open-claw"
+          : model === "open-claw" || isAllInOneAgent
             ? OPENCLAW_FIRST_BYTE_TIMEOUT_MS
             : DEFAULT_DIFY_FIRST_BYTE_TIMEOUT_MS
 
@@ -1487,10 +1820,16 @@ export async function POST(request: NextRequest) {
     let completionTokens = 0
     let conversationId = ""
     let fullResponseText = ""  // 🔥 收集完整响应内容用于验证
-    let bananaImageUrls: string[] = []  // 🎨 收集 Banana 生成的图片 URL
+    let workflowImageUrls: string[] = []  // 🎨 收集工作流图像模型生成的图片 URL
+    const isWorkflowImageModel = model === "banana-2-pro" || model === "gemini-image"
     let jsonBuffer = ""  // 🔥 JSON 行缓冲：跨 chunk 拼接不完整的 SSE 数据行
     let hasReceivedContent = false  // 🔥 标记是否收到了实际内容（用于判断是否扣费）
     let latestParsedUsage: ParsedDifyUsage | null = null
+    let clientAborted = false
+    let taskCompleted = false
+    let workflowNodeFailure: { message: string; code: string } | null = null
+    let allInOneDisplaySent = false
+    let allInOneStreamedAnswer = false
     const bufferedNodeEvents: Array<{
       event: string
       title?: string
@@ -1508,7 +1847,7 @@ export async function POST(request: NextRequest) {
           model as ModelType,
           { totalTokens, inputTokens: promptTokens, outputTokens: completionTokens },
           {
-            hasGeneratedImage: bananaImageUrls.length > 0,
+            hasGeneratedImage: workflowImageUrls.length > 0,
             hasOutputContent: hasReceivedContent,
           }
         )
@@ -1526,18 +1865,20 @@ export async function POST(request: NextRequest) {
           'gpt-5': 'GPT-5.4 对话',
           'gemini-pro': 'Gemini 对话',
           'banana-2-pro': 'Banana 绘图',
+          'gemini-image': 'Gemini 图像',
           'suno-v5': 'Suno 音乐',
           'open-claw': 'Open Claw 对话',
+          'all-in-one-agent': '全能超级智能体',
         }
         const reason = reasonMap[model as string] || `使用 ${getModelDisplayName(model as ModelType)}`
-        const description = bananaImageUrls.length > 0
-          ? `${reason} (生成 ${bananaImageUrls.length} 张图片)`
+        const description = workflowImageUrls.length > 0
+          ? `${reason} (生成 ${workflowImageUrls.length} 张图片)`
           : `${reason} (输入 ${promptTokens} tokens / 输出 ${completionTokens} tokens)`
 
         const billingMetadata = createBillingAuditMetadata({
           userId,
           actionType: "consume",
-          feature: bananaImageUrls.length > 0 ? "image" : "text",
+          feature: workflowImageUrls.length > 0 ? "image" : "text",
           appId: keySource || null,
           workflowId: WORKFLOW_MODELS.has(model || "") ? (model || null) : null,
           modelId: model || "general-chat",
@@ -1636,16 +1977,22 @@ export async function POST(request: NextRequest) {
         // 解析 chunk 提取 token 信息
         try {
           const text = new TextDecoder().decode(chunk)
-          const outputText = model === "open-claw" ? rewriteOpenClawMediaReferencesWithSignedUrls(text) : text
+          const outputText = model === "open-claw" ? rewriteOpenClawMediaReferencesWithSignedUrls(text, undefined, userId) : text
+          const shouldBufferForDisplay = isAllInOneAgent
+          const enqueueAllInOneDisplayOnce = (rawValue: string) => {
+            if (!shouldBufferForDisplay || allInOneDisplaySent || !rawValue.trim()) return
+            allInOneDisplaySent = true
+            enqueueSseAnswer(controller, normalizeAllInOneAgentDisplay(rawValue))
+          }
 
           // 传递数据给前端。词境记忆卡会在解析后只转发结构化卡片事件，避免 raw JSON 出现在页面。
-          if (model !== "vocab-card") {
+          if (model !== "vocab-card" && !shouldBufferForDisplay) {
             controller.enqueue(new TextEncoder().encode(outputText))
           }
 
           // 🎨 Banana 调试：记录原始数据
-          if (model === "banana-2-pro" && text.trim()) {
-            console.log(`🎨 [Banana流式] 收到数据块:`, { bytes: chunk.byteLength })
+          if (isWorkflowImageModel && text.trim()) {
+            console.log(`🎨 [WorkflowImage流式] 收到数据块:`, { model, bytes: chunk.byteLength })
           }
 
           // 🔥 追加到缓冲区，然后只处理完整的行
@@ -1676,14 +2023,15 @@ export async function POST(request: NextRequest) {
               const json = JSON.parse(data)
 
               // 🎨 Banana 调试：记录所有事件
-              if (model === "banana-2-pro") {
-                console.log(`🎨 [Banana事件] 摘要:`, summarizeDifyEventForLog(json))
+              if (isWorkflowImageModel) {
+                console.log(`🎨 [WorkflowImage事件] 摘要:`, summarizeDifyEventForLog(json))
               }
 
 	              // 🧠 记录工作流节点事件（用于前端思考过程显示）
 	              if (json.event === 'node_started' || json.event === 'node_finished') {
 	                console.log(`🧠 [工作流节点] ${json.event}: ${json.data?.title || json.title || '未知节点'}`)
 	                const nodeData = json.data || {}
+                  const nodeStatus = String(nodeData.status || json.status || "").toLowerCase()
                   if (model === "vocab-card") {
                     controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(json)}\n\n`))
                   }
@@ -1696,6 +2044,29 @@ export async function POST(request: NextRequest) {
 	                    workflow_run_id: nodeData.workflow_run_id || json.workflow_run_id,
 	                  })
 	                }
+                  if (json.event === "node_finished" && ["failed", "error"].includes(nodeStatus)) {
+                    const title = nodeData.title || json.title || "OpenClaw 节点"
+                    const errorMessage = String(
+                      nodeData.error ||
+                      nodeData.error_message ||
+                      json.error ||
+                      json.message ||
+                      `${title} 执行失败`
+                    )
+                    workflowNodeFailure = {
+                      message: errorMessage,
+                      code: model === "open-claw" ? "OPENCLAW_NODE_FAILED" : "DIFY_NODE_FAILED",
+                    }
+                    updateTaskRun(taskRun.id, {
+                      status: "failed",
+                      stage: `${title} 执行失败`,
+                      progress: 100,
+                      workflowRunId: nodeData.workflow_run_id || json.workflow_run_id || null,
+                      errorMessage,
+                      errorCode: workflowNodeFailure.code,
+                      sanitizedError: sanitizeForTrace({ node: title, status: nodeStatus, error: errorMessage }) as Record<string, unknown>,
+                    }).catch((error) => console.warn("[AI Task Trace] node failure update failed:", error))
+                  }
 	              }
 
 	              // 提取 conversation_id
@@ -1718,6 +2089,10 @@ export async function POST(request: NextRequest) {
 	              if (json.event === "message" && json.answer) {
 	                fullResponseText += json.answer
 	                hasReceivedContent = true
+                  if (shouldBufferForDisplay && shouldStreamAllInOneAnswer(json)) {
+                    allInOneStreamedAnswer = true
+                    enqueueSseAnswer(controller, json.answer)
+                  }
 	                const artifacts = model === "open-claw" ? extractArtifactsFromText(fullResponseText) : []
 	                if (artifacts.length > 0) {
 	                  updateTaskRun(taskRun.id, {
@@ -1728,16 +2103,16 @@ export async function POST(request: NextRequest) {
 	                  }).catch((error) => console.warn("[AI Task Trace] artifact update failed:", error))
 	                }
 
-                // 🎨 Banana 图片检测：提取图片 URL
-                if (model === "banana-2-pro") {
+                // 🎨 工作流图片检测：提取图片 URL
+                if (isWorkflowImageModel) {
                   // 匹配 Markdown 图片格式：![alt](url)
                   const imageRegex = /!\[.*?\]\((https?:\/\/[^\)]+)\)/g
                   const matches = json.answer.matchAll(imageRegex)
                   for (const match of matches) {
                     const imageUrl = match[1]
-	                    if (!bananaImageUrls.includes(imageUrl)) {
-	                      bananaImageUrls.push(imageUrl)
-	                      console.log(`🎨 [Banana] 检测到图片 URL (message):`, { imageCount: bananaImageUrls.length })
+	                    if (!workflowImageUrls.includes(imageUrl)) {
+	                      workflowImageUrls.push(imageUrl)
+	                      console.log(`🎨 [WorkflowImage] 检测到图片 URL (message):`, { model, imageCount: workflowImageUrls.length })
 	                    }
                   }
                 }
@@ -1789,10 +2164,16 @@ export async function POST(request: NextRequest) {
 	                    fullResponseText += outputs.text
 	                    hasReceivedContent = true
 	                    console.log(`🎨 [Workflow完成] 收集到输出文本:`, { length: String(outputs.text).length })
+                      if (shouldBufferForDisplay && !allInOneStreamedAnswer) {
+                        enqueueAllInOneDisplayOnce(String(outputs.text))
+                      }
 	                  } else if (outputs.result) {
 	                    fullResponseText += outputs.result
 	                    hasReceivedContent = true
 		                    console.log(`🎨 [Workflow完成] 收集到结果文本:`, { length: String(outputs.result).length })
+                      if (shouldBufferForDisplay && !allInOneStreamedAnswer) {
+                        enqueueAllInOneDisplayOnce(String(outputs.result))
+                      }
 		                  }
 	                }
 	                const parsedUsage = parseDifyUsage(json)
@@ -1810,15 +2191,15 @@ export async function POST(request: NextRequest) {
 	              }
 
               // 🎨 处理 message_file 事件（图片文件）
-              if (json.event === "message_file" && model === "banana-2-pro") {
-                console.log(`🎨 [Banana] 收到 message_file 事件:`, summarizeDifyEventForLog(json))
+              if (json.event === "message_file" && isWorkflowImageModel) {
+                console.log(`🎨 [WorkflowImage] 收到 message_file 事件:`, summarizeDifyEventForLog(json))
 
                 // Dify 返回的图片文件格式：{ type: "image", url: "..." }
                 if (json.type === "image" && json.url) {
                   const imageUrl = json.url
-	                  if (!bananaImageUrls.includes(imageUrl)) {
-	                    bananaImageUrls.push(imageUrl)
-	                    console.log(`🎨 [Banana] 检测到图片 URL (message_file):`, { imageCount: bananaImageUrls.length })
+	                  if (!workflowImageUrls.includes(imageUrl)) {
+	                    workflowImageUrls.push(imageUrl)
+	                    console.log(`🎨 [WorkflowImage] 检测到图片 URL (message_file):`, { model, imageCount: workflowImageUrls.length })
 
                     // 🔥 立即将图片 URL 以 Markdown 格式添加到响应中
                     fullResponseText += `\n\n![Generated Image](${imageUrl})`
@@ -1826,18 +2207,23 @@ export async function POST(request: NextRequest) {
                 }
               }
 
+              if (shouldBufferForDisplay && json.event === "message_end" && fullResponseText.trim() && !allInOneStreamedAnswer) {
+                enqueueAllInOneDisplayOnce(fullResponseText)
+              }
+
               // 🎨 处理 workflow_finished 事件（可能包含图片）
-              if (json.event === "workflow_finished" && model === "banana-2-pro") {
-                console.log(`🎨 [Banana] 收到 workflow_finished 事件:`, summarizeDifyEventForLog(json))
+              if (json.event === "workflow_finished" && isWorkflowImageModel) {
+                console.log(`🎨 [WorkflowImage] 收到 workflow_finished 事件:`, summarizeDifyEventForLog(json))
 
                 // 检查是否有输出文件
-                if (json.outputs && json.outputs.files) {
-                  for (const file of json.outputs.files) {
+                const workflowFiles = json.outputs?.files || json.data?.outputs?.files || []
+                if (Array.isArray(workflowFiles)) {
+                  for (const file of workflowFiles) {
                     if (file.type === "image" && file.url) {
                       const imageUrl = file.url
-	                      if (!bananaImageUrls.includes(imageUrl)) {
-	                        bananaImageUrls.push(imageUrl)
-	                        console.log(`🎨 [Banana] 检测到图片 URL (workflow_finished):`, { imageCount: bananaImageUrls.length })
+	                      if (!workflowImageUrls.includes(imageUrl)) {
+	                        workflowImageUrls.push(imageUrl)
+	                        console.log(`🎨 [WorkflowImage] 检测到图片 URL (workflow_finished):`, { model, imageCount: workflowImageUrls.length })
 
                         // 🔥 立即将图片 URL 以 Markdown 格式添加到响应中
                         fullResponseText += `\n\n![Generated Image](${imageUrl})`
@@ -1879,6 +2265,10 @@ export async function POST(request: NextRequest) {
       },
 
       async flush(controller) {
+        if (clientAborted) {
+          console.warn("[Stream] 客户端连接已中断，跳过成功结算")
+          return
+        }
         // 🔥 处理缓冲区中剩余的未完成 JSON（流结束时的最后一条数据）
         if (jsonBuffer.trim().length > 0) {
           const line = jsonBuffer.trim()
@@ -1908,26 +2298,33 @@ export async function POST(request: NextRequest) {
         }
 
         // 🔥 流结束，触发扣费（仅当有实际内容时才扣费）
+        if (isAllInOneAgent && fullResponseText.trim() && !allInOneDisplaySent && !allInOneStreamedAnswer) {
+          allInOneDisplaySent = true
+          enqueueSseAnswer(controller, normalizeAllInOneAgentDisplay(fullResponseText))
+        }
         console.log(`💰 [Billing] 流结束，输入 ${promptTokens} tokens，输出 ${completionTokens} tokens，总 ${totalTokens} tokens，内容长度: ${fullResponseText.length}，hasReceivedContent: ${hasReceivedContent}`)
-	        if (hasReceivedContent && (promptTokens > 0 || completionTokens > 0 || bananaImageUrls.length > 0)) {
+	        if (!workflowNodeFailure && hasReceivedContent && (promptTokens > 0 || completionTokens > 0 || workflowImageUrls.length > 0)) {
 	          deductCredit().catch(e => console.error("[Billing] 扣费异步异常:", e))
 	        } else {
 	          console.warn(`⚠️ [Billing] 流结束但无可结算 token，不扣费`)
 	        }
+          const finalFailed = Boolean(workflowNodeFailure) || !hasReceivedContent
+          taskCompleted = true
 	        updateTaskRun(taskRun.id, {
-	          status: hasReceivedContent ? "succeeded" : "failed",
-	          stage: hasReceivedContent ? "任务完成" : "流结束但没有返回内容",
+	          status: finalFailed ? "failed" : "succeeded",
+	          stage: workflowNodeFailure ? "OpenClaw 上游节点执行失败" : hasReceivedContent ? "任务完成" : "流结束但没有返回内容",
 	          progress: 100,
 	          conversationId: conversationId || undefined,
 	          artifacts: extractArtifactsFromText(fullResponseText),
-	          errorMessage: hasReceivedContent ? null : "流结束但没有返回内容",
-	          errorCode: hasReceivedContent ? null : "EMPTY_STREAM",
+	          errorMessage: workflowNodeFailure?.message || (hasReceivedContent ? null : "流结束但没有返回内容"),
+	          errorCode: workflowNodeFailure?.code || (hasReceivedContent ? null : "EMPTY_STREAM"),
 	          metadata: {
 	            total_tokens: totalTokens,
 	            prompt_tokens: promptTokens,
 	            completion_tokens: completionTokens,
 	            response_length: fullResponseText.length,
 	            has_received_content: hasReceivedContent,
+              node_failure: workflowNodeFailure,
 	          },
 	        }).catch((error) => console.warn("[AI Task Trace] flush update failed:", error))
 	        if (bufferedNodeEvents.length > 0) {
@@ -1941,16 +2338,92 @@ export async function POST(request: NextRequest) {
 
     })
 
+    const addLongTaskHeartbeat = (body: ReadableStream<Uint8Array>) => {
+      if (model !== "open-claw" && !isAllInOneAgent) return body
+
+      const encoder = new TextEncoder()
+      let reader: ReadableStreamDefaultReader<Uint8Array> | null = null
+      let heartbeatId: ReturnType<typeof setInterval> | null = null
+      let closed = false
+      const heartbeatLabel = isAllInOneAgent ? "all-in-one-keepalive" : "openclaw-keepalive"
+
+      const stopHeartbeat = () => {
+        closed = true
+        if (heartbeatId) {
+          clearInterval(heartbeatId)
+          heartbeatId = null
+        }
+      }
+
+      return new ReadableStream<Uint8Array>({
+        start(controller) {
+          reader = body.getReader()
+          heartbeatId = setInterval(() => {
+            if (closed) return
+            try {
+              controller.enqueue(encoder.encode(`: ${heartbeatLabel} ${Date.now()}\n\n`))
+            } catch {
+              stopHeartbeat()
+            }
+          }, 15_000)
+
+          ;(async () => {
+            try {
+              while (true) {
+                const { done, value } = await reader!.read()
+                if (done) break
+                if (value) controller.enqueue(value)
+              }
+              stopHeartbeat()
+              controller.close()
+            } catch (error) {
+              stopHeartbeat()
+              controller.error(error)
+            }
+          })()
+        },
+        async cancel(reason) {
+          stopHeartbeat()
+          await reader?.cancel(reason).catch(() => undefined)
+        },
+      })
+    }
+
     // 返回经过 transform 处理的流
     const transformedBody = response.body?.pipeThrough(transformStream)
     if (!transformedBody) {
       console.error(`❌ [Stream错误] pipeThrough返回undefined! response.body=${response.body === null ? 'null' : 'not-null'}`)
       return new Response(JSON.stringify({ error: "Dify响应体为空，服务端流处理失败" }), { status: 502 })
     }
+    const responseBody = addLongTaskHeartbeat(transformedBody)
+    request.signal.addEventListener("abort", () => {
+      if (taskCompleted) return
+      clientAborted = true
+      if (streamStatus.timeoutId) {
+        clearTimeout(streamStatus.timeoutId)
+        streamStatus.timeoutId = null
+      }
+      streamStatus.controller?.abort()
+      updateTaskRun(taskRun.id, {
+        status: "cancelled",
+        stage: "客户端连接中断",
+        progress: hasReceivedContent ? 80 : 100,
+        conversationId: conversationId || undefined,
+        errorMessage: "浏览器或网络连接在 OpenClaw 长任务完成前中断",
+        errorCode: "CLIENT_STREAM_ABORTED",
+        metadata: {
+          response_length: fullResponseText.length,
+          has_received_content: hasReceivedContent,
+          model,
+        },
+      }).catch((error) => console.warn("[AI Task Trace] client abort update failed:", error))
+    }, { once: true })
 	    console.warn(`✅ [Stream开始] 开始返回流式响应给前端，body locked: ${transformedBody.locked}`)
-	    return new Response(transformedBody, {
+	    return new Response(responseBody, {
 	        headers: {
 	          "Content-Type": "text/event-stream",
+	          "Cache-Control": "no-cache",
+	          "Connection": "keep-alive",
 	          "X-Request-Id": taskRun.requestId,
 	          "X-Trace-Id": taskRun.traceId,
 	        },

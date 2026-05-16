@@ -10,6 +10,7 @@
 npm run lint
 npm run build
 npm test -- __tests__/health-routes.test.ts __tests__/operations-pages.test.ts __tests__/monitoring-docs.test.ts
+npm run perf:baseline -- --base-url=https://shenxiang.school --iterations=3
 ```
 
 如果任一命令失败，先修复失败原因，再考虑上线。
@@ -36,6 +37,13 @@ npm test -- __tests__/health-routes.test.ts __tests__/operations-pages.test.ts _
 - `/admin`
 - `/health`
 - `/api/health`
+
+性能和服务器治理按以下文档执行：
+
+- `docs/SERVER-TOPOLOGY.md`
+- `docs/SERVER-CLEANUP-SOP.md`
+- `docs/BACKUP-RESTORE-SOP.md`
+- `docs/PERFORMANCE-BASELINE.md`
 
 `/admin` 应确认登录、概览、用户列表、订单记录可以正常加载；不要降低后台鉴权要求。
 

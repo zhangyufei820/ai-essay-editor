@@ -67,8 +67,8 @@ services:
     container_name: shenxiang-nextjs
     restart: unless-stopped
     read_only: true
-    mem_limit: 2g
-    cpus: 1.0
+    mem_limit: 3g
+    cpus: 2.0
     pids_limit: 256
     ports:
       - "127.0.0.1:3000:3000"
@@ -76,12 +76,18 @@ services:
       - .env.production
     environment:
       - NODE_ENV=production
+      - NODE_OPTIONS=--max-old-space-size=2560
       - DIFY_INTERNAL_URL=http://docker-api-1:5001/v1
       - DIFY_BASE_URL=http://docker-api-1:5001/v1
       - DIFY_IMAGE_GATEWAY_URL=http://dify-image-gateway:8001
       - DIFY_IMAGE_GATEWAY_PUBLIC_URL=http://43.154.111.156:8001
       - NEXT_PUBLIC_APP_URL=https://www.shenxiang.school
       - VOICE_GATEWAY_URL=http://voice-gateway:8080
+    deploy:
+      resources:
+        reservations:
+          cpus: '1'
+          memory: 2G
     tmpfs:
       - /app/.next/standalone/.next/cache
     volumes:

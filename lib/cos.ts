@@ -46,6 +46,58 @@ const COS_CONFIG = {
   DifyStorageEndpoint: DIFY_STORAGE_ENDPOINT,
 }
 
+const DEFAULT_ALLOWED_SOURCE_HOST_SUFFIXES = [
+  "suno.ai",
+  "suno.com",
+  "dify.ai",
+  "shenxiang.school",
+  "tencentcos.cn",
+  "myqcloud.com",
+  "cloudfront.net",
+]
+
+function getAllowedSourceHostSuffixes() {
+  const configured = process.env.COS_ALLOWED_SOURCE_HOSTS
+    ?.split(",")
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean)
+  return configured?.length ? configured : DEFAULT_ALLOWED_SOURCE_HOST_SUFFIXES
+}
+
+function isPrivateOrLocalHostname(hostname: string) {
+  const normalized = hostname.toLowerCase()
+  if (normalized === "localhost" || normalized.endsWith(".localhost")) return true
+  if (/^(127\.|10\.|0\.0\.0\.0$)/.test(normalized)) return true
+  if (/^169\.254\./.test(normalized)) return true
+  if (/^192\.168\./.test(normalized)) return true
+  if (/^172\.(1[6-9]|2\d|3[0-1])\./.test(normalized)) return true
+  if (normalized === "::1" || normalized.startsWith("fc") || normalized.startsWith("fd")) return true
+  return false
+}
+
+function assertAllowedSourceUrl(sourceUrl: string) {
+  let url: URL
+  try {
+    url = new URL(sourceUrl)
+  } catch {
+    throw new Error("无效的远程资源 URL")
+  }
+
+  if (url.protocol !== "https:" && url.protocol !== "http:") {
+    throw new Error("不支持的远程资源协议")
+  }
+
+  const hostname = url.hostname.toLowerCase()
+  if (isPrivateOrLocalHostname(hostname)) {
+    throw new Error("拒绝访问内网或本机资源")
+  }
+
+  const allowed = getAllowedSourceHostSuffixes().some((suffix) => hostname === suffix || hostname.endsWith(`.${suffix}`))
+  if (!allowed) {
+    throw new Error(`远程资源域名不在允许列表: ${hostname}`)
+  }
+}
+
 // 创建 COS 实例（延迟初始化，支持内网 Endpoint）
 let cosInstance: COS | null = null
 
@@ -194,6 +246,7 @@ export async function uploadToCos(
   fileExtension?: string
 ): Promise<UploadResult> {
   console.log('📤 [COS] 开始上传:', { sourceUrl: sourceUrl.slice(0, 80), modelName })
+  assertAllowedSourceUrl(sourceUrl)
   
   // 检查 COS 实例
   const cos = getCosInstance()

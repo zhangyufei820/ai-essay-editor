@@ -79,17 +79,6 @@ export default function SignUpPage() {
 
       if (error) throw error
 
-      if (referralCode && data.user) {
-        await fetch("/api/referral/process", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            userId: data.user.id,
-            referralCode,
-          }),
-        })
-      }
-
       console.log("[v0] Sign up successful, showing email confirmation screen")
       setEmailSent(true)
     } catch (error: unknown) {

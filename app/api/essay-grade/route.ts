@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { internalDifyFetch } from "@/lib/internal-dify-fetch"
 import { appendTextOutputLimitInstruction, getMaxOutputTokensForModel, type ModelType } from "@/lib/pricing"
+import { requireUser } from "@/lib/auth/verified-user"
 
 export const maxDuration = 60
 
@@ -14,6 +15,8 @@ export async function POST(req: NextRequest) {
   console.log("[作文批改] ===== API 调用开始 =====")
 
   try {
+    const auth = await requireUser(req)
+    if (auth.response) return auth.response
     // ==========================================
     // 限流检查
     // ==========================================

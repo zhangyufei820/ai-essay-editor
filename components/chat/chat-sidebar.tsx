@@ -14,7 +14,7 @@ const MODEL_DISPLAY_NAMES: Record<string, string> = {
   "gpt-5": "GPT-5",
   "claude-opus": "Claude",
   "gemini-pro": "Gemini",
-  "banana-2-pro": "Banana",
+  "gemini-image": "Gemini 图像",
   "grok-4.2": "Grok",
   "open-claw": "OpenClaw",
   "quanquan-math": "全科数学",

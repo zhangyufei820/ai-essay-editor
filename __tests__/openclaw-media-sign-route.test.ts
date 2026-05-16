@@ -1,5 +1,12 @@
 jest.mock("@/lib/openclaw-media-server", () => ({
-  createSignedOpenClawMediaUrl: jest.fn((mediaPath: string) => `/api/openclaw-media/${mediaPath}?exp=123&sig=testsig`),
+  createSignedOpenClawMediaUrl: jest.fn((mediaPath: string, _ttl: unknown, userId: string) => `/api/openclaw-media/${mediaPath}?exp=123&sig=testsig&user=${userId}`),
+}))
+
+jest.mock("@/lib/auth/verified-user", () => ({
+  requireUser: jest.fn(async () => ({
+    user: { id: "user-1" },
+    response: null,
+  })),
 }))
 
 import { NextRequest } from "next/server"
@@ -15,7 +22,7 @@ describe("openclaw media sign route", () => {
 
     expect(response.status).toBe(307)
     expect(response.headers.get("location")).toBe(
-      "https://www.shenxiang.school/api/openclaw-media/tool-image-generation/image-1.png?exp=123&sig=testsig",
+      "https://www.shenxiang.school/api/openclaw-media/tool-image-generation/image-1.png?exp=123&sig=testsig&user=user-1",
     )
     expect(response.headers.get("cache-control")).toBe("private, no-store")
   })

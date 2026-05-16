@@ -135,14 +135,14 @@ export function CTASection() {
   const router = useRouter()
 
   return (
-    <section className="py-24 md:py-32 overflow-hidden" style={{ backgroundColor: creamColors[100] }}>
-      <div className="max-w-5xl mx-auto px-4 md:px-6">
+    <section className="sx-section overflow-hidden" style={{ backgroundColor: creamColors[100] }}>
+      <div className="mx-auto w-[min(100%-2rem,64rem)]">
         <motion.div
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, margin: "-100px" }}
           variants={containerVariants}
-          className="relative rounded-3xl overflow-hidden"
+          className="relative overflow-hidden rounded-[28px] border border-white/10 shadow-2xl"
           style={{
             background: `linear-gradient(135deg, ${brandColors[900]} 0%, ${brandColors[800]} 50%, ${brandColors[900]} 100%)`
           }}
@@ -266,7 +266,7 @@ export function CTASection() {
             >
               <button
                 onClick={() => router.push("/chat")}
-                className="inline-flex items-center gap-2 px-8 py-4 bg-white font-semibold rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300 group"
+                className="group inline-flex items-center gap-2 rounded-2xl bg-white px-8 py-4 font-semibold shadow-lg transition-all duration-300 hover:shadow-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-green-900"
                 style={{ color: brandColors[900] }}
               >
                 <motion.span
@@ -298,7 +298,7 @@ export function CTASection() {
               {/* 副CTA按钮 */}
               <button
                 onClick={() => router.push("/pricing")}
-                className="inline-flex items-center gap-2 px-6 py-3 border-2 border-white/30 text-white font-medium rounded-xl hover:bg-white/10 transition-all duration-300 mt-4"
+                className="mt-4 inline-flex items-center gap-2 rounded-2xl border border-white/30 px-6 py-3 font-medium text-white transition-all duration-300 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-green-900"
               >
                 查看价格方案
               </button>

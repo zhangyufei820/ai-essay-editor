@@ -55,8 +55,8 @@ function ClaudeThinkingDots() {
     >
       <defs>
         <radialGradient id="glow" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor="#10A37F" stopOpacity="0.3" />
-          <stop offset="100%" stopColor="#10A37F" stopOpacity="0" />
+          <stop offset="0%" stopColor="#43A047" stopOpacity="0.3" />
+          <stop offset="100%" stopColor="#43A047" stopOpacity="0" />
         </radialGradient>
       </defs>
 
@@ -83,7 +83,7 @@ function ClaudeThinkingDots() {
           cx={p.x}
           cy={p.y}
           r={2}
-          fill="#10A37F"
+          fill="#43A047"
           style={{
             animationName: "particlePulse",
             animationDuration: PARTICLE_ANIMATION_DURATION,
@@ -109,7 +109,7 @@ export function LoadingStateCard({
 }: LoadingStateCardProps) {
   return (
     <div
-      className={`inline-flex flex-col gap-1 ${className || ""}`}
+      className={`inline-flex flex-col gap-1 rounded-xl border border-border/70 bg-card/80 px-3 py-2 shadow-sm ${className || ""}`}
       role="status"
       aria-label={showHint ? "AI 正在深度思考中" : "AI 思考中"}
     >
@@ -118,14 +118,14 @@ export function LoadingStateCard({
         <ClaudeThinkingDots />
 
         {/* 思考文字 */}
-        <span className="text-xs text-slate-400 font-normal tracking-wide leading-none">
+        <span className="text-xs text-muted-foreground font-normal tracking-wide leading-none">
           {showHint ? "AI 正在深度思考中..." : "Thinking..."}
         </span>
       </div>
 
       {/* 深度提示行 */}
       {showHint && (
-        <span className="text-xs text-slate-400 font-normal tracking-wide ml-10 leading-none">
+        <span className="text-xs text-muted-foreground font-normal tracking-wide ml-10 leading-none">
           这可能需要一点时间，请耐心等待...
         </span>
       )}

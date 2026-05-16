@@ -5,6 +5,7 @@
  */
 
 export { HeroSection } from './HeroSection'
+export { PhetLabSection } from './PhetLabSection'
 export { OpenClawSection } from './OpenClawSection'
 export { CapabilitiesSection } from './CapabilitiesSection'
 export { ProcessSection } from './ProcessSection'

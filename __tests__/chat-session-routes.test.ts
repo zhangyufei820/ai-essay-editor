@@ -15,10 +15,12 @@ describe('chat session routes', () => {
     expect(buildChatSessionRoute('session 1', 'gpt-image-1')).toBe('/chat/gpt-image-2?sessionId=session%201')
   })
 
-  it('routes Banana aliases to the Banana chat', () => {
-    expect(normalizeChatSessionModel('creative-image-banana')).toBe('banana-2-pro')
-    expect(normalizeChatSessionModel('banana')).toBe('banana-2-pro')
-    expect(buildChatSessionRoute('abc', 'banana')).toBe('/chat/banana-2-pro?sessionId=abc')
+  it('routes Gemini image aliases and old Banana aliases to the Gemini image chat', () => {
+    expect(normalizeChatSessionModel('creative-image-gemini')).toBe('gemini-image')
+    expect(normalizeChatSessionModel('google-gemini-image')).toBe('gemini-image')
+    expect(normalizeChatSessionModel('creative-image-banana')).toBe('gemini-image')
+    expect(normalizeChatSessionModel('banana')).toBe('gemini-image')
+    expect(buildChatSessionRoute('abc', 'banana')).toBe('/chat/gemini-image?sessionId=abc')
   })
 
   it('infers old GPT Image records from non-model metadata', () => {

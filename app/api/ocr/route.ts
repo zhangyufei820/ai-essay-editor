@@ -1,9 +1,12 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { requireUser } from "@/lib/auth/verified-user"
 
-export const runtime = "edge"
+export const runtime = "nodejs"
 
 export async function POST(req: NextRequest) {
   try {
+    const auth = await requireUser(req)
+    if (auth.response) return auth.response
     // IP 限流：30次/分钟
     const { getClientIP, checkIpRateLimit, createRateLimitResponse } = await import('@/lib/rate-limit')
     const ip = getClientIP(req)

@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
+import { requireUser } from '@/lib/auth/verified-user'
 
 // 🔥 移除 edge runtime，使用 Node.js runtime 以支持 admin API
 export const dynamic = 'force-dynamic'
@@ -22,15 +23,12 @@ function isUUID(str: string) {
 }
 
 // 暴力提取纯数字 (把 +86, -, 空格全部干掉)
-function getPureNumbers(str: any) {
-  if (!str) return ""
-  return String(str).replace(/\D/g, '') 
-}
-
 export async function POST(req: NextRequest) {
   console.log('[Admin Update] 收到更新请求')
   
   try {
+    const auth = await requireUser(req)
+    if (auth.response) return auth.response
     // IP 限流：30次/分钟
     const { getClientIP, checkIpRateLimit, createRateLimitResponse } = await import('@/lib/rate-limit')
     const ip = getClientIP(req)
@@ -39,85 +37,52 @@ export async function POST(req: NextRequest) {
       return createRateLimitResponse(limitResult.retryAfter!)
     }
     const supabaseAdmin = getSupabaseAdmin()
-    let { userId, name, avatarUrl } = await req.json()
+    let { userId: requestedUserId, name, avatarUrl } = await req.json()
+    let userId = auth.user!.id
 
     console.log('[Admin Update] 请求参数:', { userId: userId?.slice(0, 10), name, hasAvatar: !!avatarUrl })
 
-    if (!userId) {
-      return NextResponse.json({ error: "缺少 User ID" }, { status: 400 })
+    if (requestedUserId && requestedUserId !== userId) {
+      return NextResponse.json({ error: "无权更新其他用户资料" }, { status: 403 })
     }
 
     console.log(`[Admin Update] 正在寻找用户: ${userId}`)
 
-    // 1. 如果传进来的是 UUID，直接更新
-    if (isUUID(userId)) {
-        console.log('[Admin Update] 检测到 UUID 格式，直接更新')
-    } 
-    // 2. 如果不是 UUID，开启【全网通缉】模式
-    else {
-      const searchTarget = getPureNumbers(userId) // 目标号码纯数字：15881822773
-      
-      console.log(`[Admin Update] 启动模糊搜索，目标特征码: ${searchTarget}`)
-      
-      // 获取前 1000 个用户
-      const { data: { users }, error: listError } = await supabaseAdmin.auth.admin.listUsers({
-        perPage: 1000 
-      })
-      
-      if (listError) {
-        console.error('[Admin Update] 获取用户列表失败:', listError)
-        throw listError
-      }
+    // 1. 先更新数据库中的 profile，避免依赖 auth.users 的 UUID 假设
+    const { error: profileUpdateError } = await supabaseAdmin
+      .from('user_profiles')
+      .upsert({
+        user_id: userId,
+        nickname: name,
+        avatar_url: avatarUrl || null,
+      }, { onConflict: 'user_id' })
 
-      // 🕵️‍♂️ 深度比对
-      const targetUser = users.find((u: any) => {
-        // A. 检查标准手机号字段
-        const dbPhone = getPureNumbers(u.phone)
-        // B. 检查邮箱字段 (有些人用手机号当邮箱注册)
-        const dbEmail = getPureNumbers(u.email)
-        // C. 检查元数据里的字段
-        const metaPhone = getPureNumbers(u.user_metadata?.phone || u.user_metadata?.mobile || "")
-
-        // 比对逻辑：只要任何一个字段包含了目标号码（或者被包含），就认为是这个人
-        if (dbPhone.includes(searchTarget) || searchTarget.includes(dbPhone)) return true
-        if (dbEmail.includes(searchTarget) || searchTarget.includes(dbEmail)) return true
-        if (metaPhone.includes(searchTarget)) return true
-        
-        return false
-      })
-
-      if (targetUser) {
-        console.log(`[Admin Update] ✅ 找到目标! 真实ID: ${targetUser.id}, 手机: ${targetUser.phone}`)
-        userId = targetUser.id // 替换为真实的 UUID
-      } else {
-        // 🛑 调试信息：如果找不到，打印前3个用户看看长什么样，方便排查
-        console.error(`[Admin Update] ❌ 遍历了 ${users.length} 个用户仍未找到。`)
-        if (users.length > 0) {
-            console.log("数据库里的用户样本:", users.slice(0, 3).map((u: any) => ({ id: u.id, phone: u.phone, email: u.email })))
-        }
-        
-        return NextResponse.json({ 
-            error: `后端未找到账号 ${userId}。可能是数据库中存储的格式差异，请查看后端日志。` 
-        }, { status: 404 })
-      }
+    if (profileUpdateError) {
+      console.error("Supabase profile 更新失败:", profileUpdateError)
+      return NextResponse.json({ error: profileUpdateError.message }, { status: 500 })
     }
 
-    // 3. 执行强制更新
     console.log('[Admin Update] 执行更新:', { userId, name, hasAvatar: !!avatarUrl })
-    
-    const { data, error } = await supabaseAdmin.auth.admin.updateUserById(
-      userId,
-      {
-        user_metadata: {
-          name: name,
-          avatar_url: avatarUrl
-        }
-      }
-    )
 
-    if (error) {
-      console.error("Supabase 更新失败:", error)
-      return NextResponse.json({ error: error.message }, { status: 500 })
+    let data: any = { user: { id: userId } }
+
+    // 2. 如果是 Supabase UUID，再同步 auth.users 元数据
+    if (isUUID(userId)) {
+      const authUpdate = await supabaseAdmin.auth.admin.updateUserById(
+        userId,
+        {
+          user_metadata: {
+            name: name,
+            avatar_url: avatarUrl
+          }
+        }
+      )
+
+      if (authUpdate.error) {
+        console.error("Supabase 更新失败:", authUpdate.error)
+        return NextResponse.json({ error: authUpdate.error.message }, { status: 500 })
+      }
+      data = authUpdate.data
     }
 
     console.log(`[Admin Update] ✅ 更新成功!`)

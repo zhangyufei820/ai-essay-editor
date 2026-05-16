@@ -3,9 +3,10 @@
 ## ⚠️ 强制要求
 
 **在执行任何任务前，你必须：**
-1. 阅读 [.Codex/memory/2026-04-04-skill-usage-guide.md](.Codex/memory/2026-04-04-skill-usage-guide.md)
-2. 遵循其中的安全准则（第一章）
-3. 按照技能调用流程执行任务
+1. 阅读 [docs/CODEX-SKILL-SOP.md](docs/CODEX-SKILL-SOP.md)：SOP 管流程、skill 调用和安全红线。
+2. 阅读 [docs/PROJECT-ARCHITECTURE.md](docs/PROJECT-ARCHITECTURE.md)：Architecture 管地图、系统边界和请求链路。
+3. 若任务涉及线上故障、部署、监控、回滚或生产环境，阅读 [docs/RUNBOOK.md](docs/RUNBOOK.md)。
+4. 按 SOP 明确本次任务类型、调用的 skill、读取的文件、验证命令和安全注意。
 
 ---
 
@@ -19,10 +20,11 @@
 
 | 文件 | 路径 |
 |------|------|
-| 技能指导书 | `.Codex/memory/2026-04-04-skill-usage-guide.md` |
-| 安全准则 | `.Codex/memory/security-guardrails.md` |
-| 服务器架构 | `.Codex/memory/2026-04-02-server-architecture.md` |
-| SOP 工作流 | `.Codex/memory/2026-04-02-sop-workflow.md` |
+| Skill SOP / 流程 | `docs/CODEX-SKILL-SOP.md` |
+| 项目架构地图 | `docs/PROJECT-ARCHITECTURE.md` |
+| 线上事故 Runbook | `docs/RUNBOOK.md` |
+| 运维手册 | `docs/OPERATIONS.md` |
+| 监控说明 | `docs/MONITORING.md` |
 
 ## 快速命令
 
@@ -48,4 +50,4 @@ cd /data/ai-essay-editor && git pull && docker build
 - 持久化数据 (.db, PostgreSQL)
 - 网关配置 (OpenResty/Nginx)
 
-详见指导书第一章"生产环境安全准则"
+详见 `docs/CODEX-SKILL-SOP.md` 的“安全红线”章节。

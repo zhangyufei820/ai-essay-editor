@@ -176,18 +176,29 @@ export async function GET(request: NextRequest) {
 
     // 1. 在数据库中创建订单记录
 
-    const { error: orderError } = await supabaseAdmin
+    const orderPayload = {
+      order_no: tradeOrderId,
+      user_id: userId,
+      product_id: productId,
+      product_name: product.name,
+      amount: finalPriceInCents / 100,
+      credits_amount: creditsAmount,
+      billing_cycle: billing,
+      status: 'pending',
+      payment_method: 'xunhupay',
+    }
+
+    let { error: orderError } = await supabaseAdmin
       .from('orders')
-      .insert({
-        order_no: tradeOrderId,
-        user_id: userId,
-        product_id: productId,
-        product_name: product.name,
-        amount: finalPriceInCents / 100,
-        credits_amount: creditsAmount,
-        status: 'pending',
-        payment_method: 'xunhupay',
-      });
+      .insert(orderPayload);
+
+    if (orderError && String(orderError.message || "").includes("billing_cycle")) {
+      const { billing_cycle, ...fallbackOrderPayload } = orderPayload
+      const retry = await supabaseAdmin
+        .from('orders')
+        .insert(fallbackOrderPayload)
+      orderError = retry.error
+    }
 
     if (orderError) {
       console.error("❌ 创建订单失败:", orderError);
