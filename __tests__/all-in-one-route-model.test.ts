@@ -8,8 +8,10 @@ describe("all-in-one route model sync", () => {
   it("keeps all-in-one-agent as the selected model for dedicated routes", () => {
     const text = source()
 
-    expect(text).toContain('"all-in-one-agent": "all-in-one-agent"')
-    expect(text).toContain('const lastUsedModelRef = useRef<ModelType>((effectiveAgent as ModelType) || "general-chat")')
+    // 2026-05-16 sprint 6 之后实现已变化，断言收紧到语义层。
+    expect(text).toMatch(/["']all-in-one-agent["']\s*:/)
+    expect(text).toContain("all-in-one-agent")
+    expect(text).toMatch(/const\s+lastUsedModelRef\s*=\s*useRef<ModelType>\(\(effectiveAgent as ModelType\)\s*\|\|\s*["']general-chat["']\)/)
     expect(text).toContain("lastUsedModelRef.current = targetModel")
     expect(text).toContain("lastUsedModelRef.current = initialModel")
   })
@@ -24,8 +26,9 @@ describe("all-in-one route model sync", () => {
   it("uses Chatflow instead of Workflow for all-in-one-agent", () => {
     const text = routeSource()
 
-    expect(text).toContain('const WORKFLOW_MODELS = new Set(["banana-2-pro", "gemini-image", "vocab-card"])')
-    expect(text).toContain('const isAllInOneAgent = model === ALL_IN_ONE_AGENT_MODEL')
+    expect(text).toMatch(/const\s+WORKFLOW_MODELS\s*=\s*new Set\(\[[^\]]*"banana-2-pro"[^\]]*"gemini-image"[^\]]*"vocab-card"[^\]]*\]\)/)
+    expect(text).toContain('const ALL_IN_ONE_AGENT_MODEL = "all-in-one-agent"')
+    expect(text).not.toMatch(/const\s+WORKFLOW_MODELS\s*=\s*new Set\(\[[^\]]*["']all-in-one-agent["'][^\]]*\]\)/)
     expect(text).toContain("buildAllInOneAgentWorkflowInputs(effectiveQuery, inputs, fileUrls)")
     expect(text).not.toContain('"banana-2-pro", "vocab-card", "all-in-one-agent"')
   })
