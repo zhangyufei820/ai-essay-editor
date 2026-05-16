@@ -167,17 +167,8 @@ export function CTASection() {
               }}
             />
 
-            {/* 动态光效 */}
-            <motion.div
-              animate={{
-                opacity: [0.1, 0.3, 0.1],
-                scale: [1, 1.2, 1],
-              }}
-              transition={{
-                duration: 3,
-                repeat: Infinity,
-                ease: "easeInOut"
-              }}
+            {/* 静态光效 */}
+            <div
               className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 rounded-full"
               style={{ 
                 background: `radial-gradient(circle, ${brandColors[500]}40 0%, transparent 70%)`
@@ -214,19 +205,7 @@ export function CTASection() {
               variants={iconVariants}
               className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-white/10 backdrop-blur-sm mb-6"
             >
-              <motion.div
-                animate={{ 
-                  rotate: [0, 10, -10, 0],
-                  scale: [1, 1.1, 1]
-                }}
-                transition={{ 
-                  duration: 2, 
-                  repeat: Infinity, 
-                  ease: "easeInOut" 
-                }}
-              >
-                <Sparkles className="w-7 h-7 text-white" />
-              </motion.div>
+              <Sparkles className="w-7 h-7 text-white" />
             </motion.div>
 
             {/* 主标题 - 从左侧飞入 */}
@@ -269,30 +248,10 @@ export function CTASection() {
                 className="group inline-flex items-center gap-2 rounded-2xl bg-white px-8 py-4 font-semibold shadow-lg transition-all duration-300 hover:shadow-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-green-900"
                 style={{ color: brandColors[900] }}
               >
-                <motion.span
-                  animate={{
-                    scale: [1, 1.02, 1]
-                  }}
-                  transition={{
-                    duration: 1.5,
-                    repeat: Infinity,
-                    ease: "easeInOut"
-                  }}
-                >
-                  免费开始使用
-                </motion.span>
-                <motion.div
-                  animate={{
-                    x: [0, 5, 0]
-                  }}
-                  transition={{
-                    duration: 1,
-                    repeat: Infinity,
-                    ease: "easeInOut"
-                  }}
-                >
+                <span>免费开始使用</span>
+                <span className="transition-transform duration-200 group-hover:translate-x-1">
                   <ArrowRight className="w-5 h-5" />
-                </motion.div>
+                </span>
               </button>
               
               {/* 副CTA按钮 */}
