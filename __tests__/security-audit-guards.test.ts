@@ -21,10 +21,6 @@ describe("P0/P1 security audit guardrails", () => {
       "app/api/ocr/route.ts",
       "app/api/essay-grade/route.ts",
       "app/api/essay-review/route.ts",
-      "app/api/sparkpage/route.ts",
-      "app/api/document-process/route.ts",
-      "app/api/web-search/route.ts",
-      "app/api/presentation/route.ts",
     ]
 
     for (const route of routes) {
@@ -96,5 +92,18 @@ describe("P0/P1 security audit guardrails", () => {
     const src = read("docker-compose.yml")
     expect(src).not.toMatch(/https:\/\/[a-z0-9]+\.supabase\.co/)
     expect(src).not.toContain(["sb", "publishable_"].join("_"))
+  })
+
+  it("removes dead code surfaces", () => {
+    const dead = [
+      "app/api/web-search/route.ts",
+      "app/api/document-process/route.ts",
+      "app/api/presentation/route.ts",
+      "app/test",
+      "components/AsyncStylesheet.tsx",
+    ]
+    for (const p of dead) {
+      expect(fs.existsSync(path.join(root, p))).toBe(false)
+    }
   })
 })

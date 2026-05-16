@@ -6,7 +6,7 @@ export default function robots(): MetadataRoute.Robots {
       {
         userAgent: '*',
         allow: '/',
-        disallow: ['/admin', '/login', '/auth', '/settings', '/credits', '/checkout'],
+        disallow: ['/admin', '/login', '/auth', '/settings', '/credits', '/checkout', '/share', '/payment', '/invite'],
       },
     ],
     sitemap: 'https://shenxiang.school/sitemap.xml',
