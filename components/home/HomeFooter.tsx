@@ -4,9 +4,11 @@
  * 包含链接导航、版权信息和社交媒体。
  */
 
+"use client"
+
 import Image from "next/image"
 import Link from "next/link"
-import { slateColors } from "@/lib/design-tokens"
+import { brandColors, slateColors } from "@/lib/design-tokens"
 
 // 导航链接配置
 const footerLinks = {
@@ -52,7 +54,7 @@ export function HomeFooter() {
           <div className="col-span-2 md:col-span-1">
             <Link href="/" prefetch={false} className="inline-block mb-4">
               <Image 
-                src="/images/design-mode/home-logo-transparent.png"
+                src="/images/design-mode/site-logo.png"
                 alt="沈翔智学" 
                 width={160}
                 height={40}
@@ -89,8 +91,14 @@ export function HomeFooter() {
                     <Link 
                       href={link.href}
                       prefetch={false}
-                      className="text-sm transition-colors hover:text-brand-600"
+                      className="text-sm transition-colors"
                       style={{ color: slateColors[500] }}
+                      onMouseEnter={(event) => {
+                        event.currentTarget.style.color = brandColors[600]
+                      }}
+                      onMouseLeave={(event) => {
+                        event.currentTarget.style.color = slateColors[500]
+                      }}
                     >
                       {link.label}
                     </Link>
@@ -119,24 +127,42 @@ export function HomeFooter() {
             <Link
               href="/privacy"
               prefetch={false}
-              className="text-sm transition-colors hover:text-brand-600"
+              className="text-sm transition-colors"
               style={{ color: slateColors[400] }}
+              onMouseEnter={(event) => {
+                event.currentTarget.style.color = brandColors[600]
+              }}
+              onMouseLeave={(event) => {
+                event.currentTarget.style.color = slateColors[400]
+              }}
             >
               隐私政策
             </Link>
             <Link
               href="/terms"
               prefetch={false}
-              className="text-sm transition-colors hover:text-brand-600"
+              className="text-sm transition-colors"
               style={{ color: slateColors[400] }}
+              onMouseEnter={(event) => {
+                event.currentTarget.style.color = brandColors[600]
+              }}
+              onMouseLeave={(event) => {
+                event.currentTarget.style.color = slateColors[400]
+              }}
             >
               服务条款
             </Link>
             <Link
               href="/refund-policy"
               prefetch={false}
-              className="text-sm transition-colors hover:text-brand-600"
+              className="text-sm transition-colors"
               style={{ color: slateColors[400] }}
+              onMouseEnter={(event) => {
+                event.currentTarget.style.color = brandColors[600]
+              }}
+              onMouseLeave={(event) => {
+                event.currentTarget.style.color = slateColors[400]
+              }}
             >
               退款政策
             </Link>

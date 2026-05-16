@@ -4,16 +4,20 @@
  * 首页首屏聚焦公开站点转化：上传学习材料，获得可执行反馈。
  */
 
-import Image from "next/image"
+"use client"
+
 import Link from "next/link"
+import { motion } from "framer-motion"
 import {
   ArrowRight,
+  BookOpenCheck,
+  Camera,
+  CheckCircle2,
+  FileText,
   PenLine,
   ShieldCheck,
   Sparkles,
 } from "lucide-react"
-import { FadeIn } from "@/components/motion/FadeIn"
-import { SampleReportTrigger } from "@/components/home/SampleReportDialog"
 import { cn } from "@/lib/utils"
 
 const heroMetrics = [
@@ -31,18 +35,18 @@ const heroActions = [
     primary: true,
   },
   {
-    title: "看一份示例",
-    description: "免登录预览效果",
-    icon: Sparkles,
+    href: "/worksheet-diagnosis",
+    title: "拍卷诊断错题",
+    description: "看薄弱点和训练建议",
+    icon: Camera,
     primary: false,
   },
 ] as const
 
-const quickLinks = [
-  {
-    href: "/worksheet-diagnosis",
-    title: "拍卷诊断错题",
-  },
+const feedbackRows = [
+  { label: "原文问题", value: "中心句出现太晚，开头缺少明确观点" },
+  { label: "AI 修改", value: "先点明立意，再补充一处生活细节" },
+  { label: "训练建议", value: "今天完成 1 段开头重写和 3 句表达替换" },
 ] as const
 
 export function HeroSection() {
@@ -52,7 +56,13 @@ export function HeroSection() {
       <div className="absolute inset-x-0 bottom-0 -z-10 h-28 bg-gradient-to-t from-[var(--color-surface-soft)] to-transparent" />
 
       <div className="sx-container grid items-center gap-8 py-8 pb-12 sm:py-10 md:py-14 lg:min-h-[calc(100svh-72px)] lg:grid-cols-[minmax(0,0.95fr)_minmax(360px,0.62fr)] lg:gap-14">
-        <FadeIn className="max-w-3xl pt-1 sm:pt-2">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5, ease: [0.33, 1, 0.68, 1] }}
+          className="max-w-3xl pt-1 sm:pt-2"
+        >
           <span className="inline-flex max-w-full items-center gap-2 rounded-full border border-primary/20 bg-white/85 px-3 py-1.5 text-xs font-semibold text-primary shadow-sm backdrop-blur">
             <ShieldCheck className="h-4 w-4" />
             <span className="min-w-0 truncate">面向学生、家长和老师的 AI 学习反馈</span>
@@ -73,16 +83,6 @@ export function HeroSection() {
           <div className="mt-7 grid max-w-full gap-3 sm:mt-8 sm:grid-cols-2">
             {heroActions.map((action) => {
               const Icon = action.icon
-
-              if (!("href" in action)) {
-                return (
-                  <SampleReportTrigger
-                    key={action.title}
-                    label={action.title}
-                    description={action.description}
-                  />
-                )
-              }
 
               return (
                 <Link
@@ -124,21 +124,6 @@ export function HeroSection() {
             })}
           </div>
 
-          <div className="mt-4 flex flex-wrap items-center gap-2 text-sm text-slate-600">
-            <span className="font-semibold text-emerald-950">快捷入口</span>
-            {quickLinks.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                prefetch={false}
-                className="inline-flex items-center gap-1 rounded-full border border-emerald-950/10 bg-white/72 px-3 py-1.5 font-medium text-slate-700 transition hover:border-primary/30 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                {link.title}
-                <ArrowRight className="size-3.5" />
-              </Link>
-            ))}
-          </div>
-
           <div className="mt-8 grid gap-4 border-t border-emerald-950/10 pt-6 sm:grid-cols-3">
             {heroMetrics.map((metric) => (
               <div key={metric.label}>
@@ -147,26 +132,102 @@ export function HeroSection() {
               </div>
             ))}
           </div>
-        </FadeIn>
+        </motion.div>
 
-        <FadeIn y={24} delay={0.08} className="hidden lg:block">
-          <div className="relative aspect-[4/5] overflow-hidden rounded-2xl border border-white/70 shadow-2xl">
-            <Image
-              src="/images/home/sample-report.jpg"
-              alt="学生作文批改报告示例（已脱敏）"
-              fill
-              sizes="(min-width: 1024px) 480px, 100vw"
-              priority
-              className="object-cover"
-            />
-            <div className="absolute bottom-4 left-4 right-4 rounded-lg bg-white/95 px-4 py-3 backdrop-blur">
-              <div className="text-xs text-slate-500">真实学生作文 · 已脱敏</div>
-              <div className="mt-1 text-sm font-bold text-emerald-950">
-                五年级《我的妈妈》· AI 评分 8.5/10
+        <motion.div
+          initial={{ opacity: 0, y: 24 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.55, delay: 0.08, ease: [0.33, 1, 0.68, 1] }}
+          className="hidden lg:block"
+        >
+          <div className="rounded-2xl border border-white/70 bg-white/88 p-5 shadow-xl backdrop-blur">
+            <div className="overflow-hidden rounded-xl border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-cream-50 p-5">
+              <div className="flex items-center justify-between">
+                <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-primary shadow-sm">
+                  <Sparkles className="size-3.5" />
+                  完整学习报告预览
+                </span>
+                <span className="rounded-full bg-primary px-3 py-1 text-xs font-semibold text-white">
+                  AI 已整理
+                </span>
+              </div>
+
+              <div className="mt-5 grid grid-cols-[0.78fr_1fr] gap-4">
+                <div className="rounded-lg border border-emerald-100 bg-white p-3 shadow-sm">
+                  <div className="mb-3 flex items-center gap-2 text-xs font-semibold text-slate-500">
+                    <Camera className="size-4 text-primary" />
+                    上传原图
+                  </div>
+                  <div className="space-y-2">
+                    <div className="h-2.5 rounded-full bg-slate-200" />
+                    <div className="h-2.5 w-10/12 rounded-full bg-slate-200" />
+                    <div className="h-2.5 w-11/12 rounded-full bg-slate-200" />
+                    <div className="h-2.5 w-8/12 rounded-full bg-slate-200" />
+                  </div>
+                  <div className="mt-4 h-16 rounded-md border border-dashed border-emerald-200 bg-emerald-50/70" />
+                </div>
+
+                <div className="rounded-lg border border-emerald-100 bg-white p-3 shadow-sm">
+                  <div className="mb-3 flex items-center gap-2 text-xs font-semibold text-slate-500">
+                    <PenLine className="size-4 text-primary" />
+                    修改后内容
+                  </div>
+                  <h2 className="text-lg font-bold leading-tight text-emerald-950">
+                    从图片上传到修改稿，一屏读完
+                  </h2>
+                  <div className="mt-3 space-y-2">
+                    <div className="h-2 rounded-full bg-emerald-200" />
+                    <div className="h-2 w-11/12 rounded-full bg-emerald-100" />
+                    <div className="h-2 w-9/12 rounded-full bg-emerald-100" />
+                  </div>
+                  <div className="mt-4 rounded-md bg-primary/10 px-3 py-2 text-xs font-semibold text-primary">
+                    已生成可阅读排版
+                  </div>
+                </div>
               </div>
             </div>
+
+            <div className="mt-5 flex items-center justify-between border-b border-border pb-4">
+              <div className="flex items-center gap-3">
+                <span className="flex size-11 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                  <BookOpenCheck className="size-5" />
+                </span>
+                <div>
+                  <div className="text-sm font-bold text-emerald-950">作文批改报告</div>
+                  <div className="text-xs text-slate-500">原图、原文、修改版都保留</div>
+                </div>
+              </div>
+              <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+                完整排版
+              </span>
+            </div>
+
+            <div className="space-y-3 py-5">
+              {feedbackRows.map((item) => (
+                <div key={item.label} className="flex items-start gap-3 rounded-lg bg-slate-50 p-3">
+                  <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                    <CheckCircle2 className="size-4" />
+                  </span>
+                  <div>
+                    <div className="text-sm font-semibold text-slate-900">{item.label}</div>
+                    <div className="mt-1 text-sm leading-6 text-slate-600">{item.value}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="rounded-lg border border-primary/15 bg-primary/5 p-4">
+              <div className="flex items-center gap-2 text-sm font-semibold text-emerald-950">
+                <FileText className="size-4 text-primary" />
+                清晰报告，适合阅读和分享
+              </div>
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                展示上传图片和 AI 修改后的完整内容，适合阅读、收藏和分享。
+              </p>
+            </div>
           </div>
-        </FadeIn>
+        </motion.div>
       </div>
     </section>
   )
