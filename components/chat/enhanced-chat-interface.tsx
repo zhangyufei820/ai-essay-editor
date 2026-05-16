@@ -14,7 +14,7 @@ import {
   Send, Paperclip, X, FileText, Loader2, User, AlertCircle,
   ChevronDown, ChevronLeft, ArrowDown, Sparkles,
   Download, Mic, MicOff, History, ExternalLink,
-  CheckCircle2, CircleDashed, FileSearch, ListChecks, ShieldCheck, ScanText, BrainCircuit,
+  FileSearch, ListChecks, ShieldCheck, ScanText,
   type LucideIcon
 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -597,7 +597,6 @@ function ProcessingStatusCard({
   })
   const steps = realNodes.length > 0 ? realNodes : fallbackSteps
   const completedCount = steps.filter((step) => step.status === "completed").length
-  const activeIndex = Math.max(0, steps.findIndex((step) => step.status === "running" || step.status === "preparing"))
   const progress = Math.max(
     12,
     Math.min(92, Math.round(((completedCount + (steps.some((step) => step.status === "running") ? 0.45 : 0.15)) / Math.max(steps.length, 1)) * 100)),
@@ -608,61 +607,60 @@ function ProcessingStatusCard({
       ? "正在读取资料并规划回答"
       : "正在组织高质量回复"
   const stageText = context?.stage || currentRunningText || (showLongWaitHint ? "处理时间稍长，请保持页面打开" : "正在建立回答结构")
+  const runningStep = steps.find((step) => step.status === "running" || step.status === "preparing") || steps[0]
+  const completedStep = [...steps].reverse().find((step) => step.status === "completed")
+  const nextStep = steps.find((step) => step.status === "pending")
+  const traceLines = [
+    completedStep ? { marker: "ok", text: completedStep.label, detail: completedStep.detail } : null,
+    runningStep ? { marker: "run", text: runningStep.label, detail: runningStep.detail || stageText } : null,
+    nextStep ? { marker: "wait", text: nextStep.label, detail: nextStep.detail } : null,
+  ].filter(Boolean).slice(0, 3) as Array<{ marker: "ok" | "run" | "wait"; text: string; detail: string }>
 
   return (
     <section
       aria-live="polite"
-      className="w-full max-w-[680px] overflow-hidden rounded-2xl border border-emerald-100/80 bg-white/95 text-slate-700 shadow-[0_16px_40px_rgba(15,23,42,0.08)] backdrop-blur"
+      className="w-fit max-w-full rounded-lg border border-slate-200/80 bg-slate-50/80 px-3 py-2 font-mono text-[11px] leading-5 text-slate-600 shadow-none"
     >
-      <div className="border-b border-emerald-50 bg-[linear-gradient(180deg,#f6fff9_0%,#ffffff_100%)] px-4 py-3 sm:px-5">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-emerald-900 text-white shadow-sm">
-                <BrainCircuit className="h-4 w-4" />
-              </span>
-              <div className="min-w-0">
-                <p className="text-sm font-semibold leading-5 text-slate-900">AI 任务规划中</p>
-                <p className="mt-0.5 truncate text-xs leading-4 text-slate-500">{statusText}</p>
-              </div>
-            </div>
-          </div>
-          <div className="flex shrink-0 flex-col items-end gap-1 text-right">
-            <span className="rounded-full border border-emerald-100 bg-white px-2 py-0.5 text-[11px] font-medium text-emerald-800">
-              {modelName}
-            </span>
-            <span className="text-[10px] text-slate-400">{elapsedSeconds}s</span>
-          </div>
-        </div>
-        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-emerald-50">
-          <motion.div
-            className="h-full rounded-full bg-emerald-700"
-            initial={{ width: "8%" }}
-            animate={{ width: `${progress}%` }}
-            transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-          />
-        </div>
-        <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-500">{stageText}</p>
+      <div className="flex min-w-0 items-center gap-2 border-b border-slate-200/70 pb-1.5">
+        <span className="relative flex h-2 w-2 shrink-0">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-40" />
+          <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-600" />
+        </span>
+        <span className="shrink-0 font-semibold text-slate-700">ai.plan</span>
+        <span className="min-w-0 truncate text-slate-500">{statusText}</span>
+        <span className="ml-auto shrink-0 text-slate-400">{elapsedSeconds}s</span>
       </div>
-      <div className="grid gap-2 px-3 py-3 sm:px-4">
-        {steps.map((step, index) => (
-          <ProcessingStepRow
-            key={step.id}
-            step={step}
-            active={index === activeIndex}
-          />
+      <div className="mt-1.5 space-y-0.5">
+        {traceLines.map((line, index) => (
+          <div key={`${line.marker}-${line.text}-${index}`} className="flex min-w-0 items-start gap-1.5">
+            <span
+              className={cn(
+                "mt-px w-4 shrink-0 text-right",
+                line.marker === "ok" && "text-emerald-700",
+                line.marker === "run" && "text-slate-700",
+                line.marker === "wait" && "text-slate-400",
+              )}
+            >
+              {line.marker === "ok" ? "✓" : line.marker === "run" ? "›" : "·"}
+            </span>
+            <span className="min-w-0 truncate">
+              <span className="text-slate-700">{line.text}</span>
+              {line.detail && <span className="text-slate-400"> {" — "}{line.detail}</span>}
+            </span>
+          </div>
         ))}
       </div>
-      <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 bg-slate-50/70 px-4 py-2.5 text-[11px] leading-4 text-slate-500">
-        <span className="inline-flex items-center gap-1">
-          <ShieldCheck className="h-3.5 w-3.5 text-emerald-700" />
-          保持原题意图
-        </span>
-        <span className="h-1 w-1 rounded-full bg-slate-300" />
-        <span>{hasFiles ? `已接收 ${context?.fileCount || 0} 个附件` : "无附件模式"}</span>
-        <span className="h-1 w-1 rounded-full bg-slate-300" />
-        <span>回答生成后会自动切入正文</span>
+      <div className="mt-1.5 h-px overflow-hidden rounded-full bg-slate-200">
+        <motion.div
+          className="h-full rounded-full bg-emerald-600"
+          initial={{ width: "8%" }}
+          animate={{ width: `${progress}%` }}
+          transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+        />
       </div>
+      <p className="mt-1 truncate text-[10px] leading-4 text-slate-400">
+        {modelName} · {hasFiles ? `${context?.fileCount || 0} files` : "text"} · keep_intent=true
+      </p>
     </section>
   )
 }
@@ -719,70 +717,6 @@ function buildDefaultProcessingSteps({
       icon: ShieldCheck,
     },
   ]
-}
-
-function ProcessingStepRow({
-  step,
-  active,
-}: {
-  step: ProcessingStep
-  active: boolean
-}) {
-  const Icon = step.icon
-  const isDone = step.status === "completed"
-  const isRunning = step.status === "running" || step.status === "preparing"
-  const isError = step.status === "error"
-
-  return (
-    <div
-      className={cn(
-        "flex items-start gap-3 rounded-xl border px-3 py-2.5 transition-colors",
-        isError
-          ? "border-red-100 bg-red-50"
-          : active || isRunning
-            ? "border-emerald-100 bg-emerald-50/70"
-            : "border-slate-100 bg-white",
-      )}
-    >
-      <span
-        className={cn(
-          "mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg",
-          isError
-            ? "bg-red-100 text-red-600"
-            : isDone
-              ? "bg-emerald-800 text-white"
-              : isRunning
-                ? "bg-white text-emerald-800 shadow-sm ring-1 ring-emerald-100"
-                : "bg-slate-100 text-slate-400",
-        )}
-      >
-        {isDone ? (
-          <CheckCircle2 className="h-4 w-4" />
-        ) : isRunning ? (
-          <motion.span
-            animate={{ rotate: 360 }}
-            transition={{ repeat: Infinity, duration: 1.6, ease: "linear" }}
-            className="inline-flex"
-          >
-            <CircleDashed className="h-4 w-4" />
-          </motion.span>
-        ) : (
-          <Icon className="h-4 w-4" />
-        )}
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="flex min-w-0 items-center gap-2">
-          <p className="truncate text-sm font-medium leading-5 text-slate-800">{step.label}</p>
-          {isRunning && (
-            <span className="shrink-0 rounded-full bg-white px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
-              进行中
-            </span>
-          )}
-        </div>
-        <p className="mt-0.5 line-clamp-2 text-xs leading-5 text-slate-500">{step.detail}</p>
-      </div>
-    </div>
-  )
 }
 
 // --- 辅助组件：文本渲染器 ---
