@@ -45,11 +45,10 @@ interface Stat {
 // ============================================
 
 const stats: Stat[] = [
-  // TODO: 接入真实数据 API（/api/stats），目前使用静态展示值
-  { id: "users", value: 10000, suffix: "+", label: "累计服务学生", icon: Users },
-  { id: "satisfaction", value: 98, suffix: "%", label: "用户满意度", icon: ThumbsUp },
-  { id: "essays", value: 500, suffix: "万+", label: "作文批改次数", icon: FileText },
-  { id: "service", value: "24/7", suffix: "", label: "全天候服务", icon: Clock, isText: true }
+  { id: "source", value: "原图", suffix: "", label: "上传材料完整保留", icon: Users, isText: true },
+  { id: "revision", value: "改稿", suffix: "", label: "批改与修改可对照", icon: ThumbsUp, isText: true },
+  { id: "practice", value: "建议", suffix: "", label: "错因和训练方向清楚", icon: FileText, isText: true },
+  { id: "review", value: "复盘", suffix: "", label: "家长老师继续跟进", icon: Clock, isText: true }
 ]
 
 // ============================================

@@ -1,7 +1,6 @@
 import type { Metadata } from 'next'
 
 export const dynamic = 'force-static'
-export const revalidate = 300
 
 export const metadata: Metadata = {
   title: '价格方案 | 沈翔智学',

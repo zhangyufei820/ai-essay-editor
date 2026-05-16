@@ -11,6 +11,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import { X, Image, Video, Music, Sparkles } from "lucide-react"
 import { ArtisticThinkingIcon } from "@/components/icons/ArtisticThinkingIcons"
 import { ModelLogo, type ModelKey } from "@/components/ModelLogo"
+import { PanelQuickActions } from "@/components/chat/PanelQuickActions"
 
 // ============================================
 // 🎨 Design Tokens - "智慧之光" 配色系统
@@ -254,6 +255,8 @@ export function CreativePanel({ isOpen, onClose }: CreativePanelProps) {
                 <X className="w-4.5 h-4.5" style={{ color: TOKENS.text.secondary }} />
               </motion.button>
             </motion.div>
+
+            <PanelQuickActions onClose={onClose} />
 
             {/* 创作选项 - 浮动岛屿网格 */}
             <div className="flex-1 overflow-y-auto px-5 pb-6">

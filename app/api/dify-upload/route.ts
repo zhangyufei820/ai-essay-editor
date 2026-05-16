@@ -144,8 +144,10 @@ function buildModelAccessibleImageUrl(request: NextRequest, gatewayUrl: string):
   return `${origin}/api/image-proxy/raw/image.png?${params.toString()}`
 }
 
+const IMAGE_GATEWAY_UPLOAD_MODELS = new Set(["gpt-image-2", "gemini-image"])
+
 function shouldUseImageGateway(model: string | null) {
-  return model === "gpt-image-2"
+  return Boolean(model && IMAGE_GATEWAY_UPLOAD_MODELS.has(model))
 }
 
 async function uploadFileToDify(file: File, userId: string, apiKey: string) {
@@ -366,7 +368,7 @@ export async function POST(request: NextRequest) {
     gatewayFormData.append("user", userId || "anonymous-user")
 
     // 🔥 使用图片网关认证令牌
-    const gatewayToken = process.env.DIFY_IMAGE_GATEWAY_TOKEN || DEFAULT_DIFY_KEY
+    const gatewayToken = targetApiKey
     const uploadUrl = `${IMAGE_GATEWAY_URL}/api/files/upload`
 
     const gatewayResponse = await internalDifyFetch(uploadUrl, {

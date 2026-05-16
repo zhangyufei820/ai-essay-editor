@@ -22,10 +22,9 @@ export function getDifyCredentialForModel(
     case "gemini-pro":
       return selectCredential(env.DIFY_API_KEY_GEMINI, "DIFY_API_KEY_GEMINI", defaultCredential)
     case "gemini-image":
-      return selectRequiredProductionCredential(
-        env.DIFY_GEMINI_IMAGE_API_KEY,
-        "DIFY_GEMINI_IMAGE_API_KEY",
-        env,
+      return selectCredential(
+        env.GEMINI_IMAGE_GATEWAY_TOKEN || env.DIFY_IMAGE_GATEWAY_TOKEN,
+        env.GEMINI_IMAGE_GATEWAY_TOKEN ? "GEMINI_IMAGE_GATEWAY_TOKEN" : "DIFY_IMAGE_GATEWAY_TOKEN",
         defaultCredential,
       )
     case "banana":

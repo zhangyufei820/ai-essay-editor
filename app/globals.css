@@ -284,6 +284,8 @@
     @apply bg-background text-foreground;
     font-size: var(--text-base);
     line-height: var(--leading-base);
+    width: 100%;
+    max-width: 100%;
     overflow-x: hidden;
     text-rendering: optimizeLegibility;
   }
@@ -326,13 +328,17 @@
 
 @layer components {
   .sx-container {
-    width: min(100% - 2rem, var(--container-page));
+    width: 100%;
+    max-width: var(--container-page);
     margin-inline: auto;
+    padding-inline: 1rem;
   }
 
   .sx-container-wide {
-    width: min(100% - 2rem, var(--container-wide));
+    width: 100%;
+    max-width: var(--container-wide);
     margin-inline: auto;
+    padding-inline: 1rem;
   }
 
   .sx-section {
@@ -374,12 +380,34 @@
     transform: translateY(-2px);
   }
 
+  .sx-mobile-action-card {
+    width: calc(100vw - 2rem);
+    max-width: 100%;
+  }
+
   .sx-focus {
     outline: none;
   }
 
   .sx-focus:focus-visible {
     box-shadow: var(--shadow-focus);
+  }
+}
+
+@media (min-width: 640px) {
+  .sx-mobile-action-card {
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .sx-container,
+  .sx-container-wide {
+    padding-inline: 0.75rem;
+  }
+
+  .sx-section {
+    padding-block: 3rem;
   }
 }
 

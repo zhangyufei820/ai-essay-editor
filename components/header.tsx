@@ -1,35 +1,50 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
-import { Menu, X, Coins, User, ChevronDown } from "lucide-react"
+import { Menu, X, Coins, User } from "lucide-react"
 import { useState, useEffect } from "react"
 import Link from "next/link"
+import { usePathname } from "next/navigation"
+import type { User as SupabaseUser } from "@supabase/supabase-js"
+import { Logo } from "@/components/brand/Logo"
 import { createClient } from "@/lib/supabase/client"
 import { getVerifiedAuthHeaders } from "@/lib/client-auth"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { navigationModelGroups } from "@/lib/navigation-models"
+import { cn } from "@/lib/utils"
 
-const navGroups = [
-  ...navigationModelGroups.filter((group) => group.key !== "creative" && group.key !== "models"),
-  {
-    key: "models",
-    label: "顶级模型专区",
-    items: navigationModelGroups.find((group) => group.key === "models")?.items.filter((item) => item.key !== "open-claw") || [],
-  },
-  ...navigationModelGroups.filter((group) => group.key === "creative"),
-]
+type StoredHeaderUser = {
+  email?: string
+}
 
-const directNavItems = [
-  { name: "学习看板", href: "/dashboard" },
-  { name: "闪卡复习", href: "/flashcards" },
-  { name: "互动实验室", href: "/lab" },
-  { name: "OpenClaw", href: "/chat/open-claw" },
-]
+type HeaderUser = SupabaseUser | StoredHeaderUser
+
+const navItems = [
+  { name: "作文批改", href: "/chat/standard" },
+  { name: "数学答疑", href: "/chat/quanquan-math" },
+  { name: "AI 助手", href: "/chat/open-claw" },
+  { name: "定价", href: "/pricing" },
+  { name: "帮助", href: "/help" },
+] as const
+
+function parseStoredUser(value: string | null): HeaderUser | null {
+  if (!value) return null
+
+  try {
+    const parsed = JSON.parse(value) as unknown
+    if (parsed && typeof parsed === "object") {
+      return parsed as StoredHeaderUser
+    }
+  } catch {
+    window.localStorage.removeItem("currentUser")
+  }
+
+  return null
+}
 
 export function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [user, setUser] = useState<any>(null)
+  const [user, setUser] = useState<HeaderUser | null>(null)
   const [credits, setCredits] = useState<number | null>(null)
+  const pathname = usePathname()
 
   useEffect(() => {
     const supabase = createClient()
@@ -47,15 +62,10 @@ export function Header() {
       }
     }
 
-    const localUser = window.localStorage.getItem("currentUser")
-    if (localUser) {
-      try {
-        const parsedUser = JSON.parse(localUser)
-        setUser(parsedUser)
-        fetchCredits(parsedUser)
-      } catch {
-        window.localStorage.removeItem("currentUser")
-      }
+    const storedUser = parseStoredUser(window.localStorage.getItem("currentUser"))
+    if (storedUser) {
+      setUser(storedUser)
+      fetchCredits(storedUser)
     }
 
     if (!supabase) {
@@ -76,16 +86,11 @@ export function Header() {
       if (session?.user) {
         fetchCredits(session.user)
       } else {
-        const storedUser = window.localStorage.getItem("currentUser")
+        const storedUser = parseStoredUser(window.localStorage.getItem("currentUser"))
         if (storedUser) {
-          try {
-            const parsedUser = JSON.parse(storedUser)
-            setUser(parsedUser)
-            fetchCredits(parsedUser)
-            return
-          } catch {
-            window.localStorage.removeItem("currentUser")
-          }
+          setUser(storedUser)
+          fetchCredits(storedUser)
+          return
         }
         setUser(null)
         setCredits(null)
@@ -97,66 +102,56 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/80 bg-background/90 backdrop-blur-xl supports-[backdrop-filter]:bg-background/75">
-      <nav className="mx-auto flex h-[72px] w-full max-w-7xl items-center justify-end gap-4 px-4 sm:px-6">
-        <div className="hidden items-center gap-1 rounded-full border border-border/70 bg-card/80 p-1 shadow-sm md:flex">
-          {directNavItems.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="flex h-9 items-center rounded-full px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              {item.name}
-            </Link>
-          ))}
+      <nav className="mx-auto flex h-[72px] w-full max-w-7xl items-center justify-between gap-4 px-4 sm:px-6">
+        <Link href="/" aria-label="沈翔智学首页" className="flex shrink-0 items-center">
+          <Logo size="sm" variant="full" className="h-[42px] w-[104px] sm:w-[118px]" />
+        </Link>
 
-          {navGroups.map((group) => (
-            <DropdownMenu key={group.key}>
-              <DropdownMenuTrigger className="flex h-9 items-center gap-1 rounded-full px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                {group.label}
-                <ChevronDown className="h-4 w-4" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="max-h-[70vh] min-w-64 overflow-y-auto">
-                {group.items.map((item) => (
-                  <DropdownMenuItem key={`${group.key}-${item.href}`} asChild>
-                    <Link href={item.href} className="flex flex-col items-start gap-0.5 py-2">
-                      <span className="text-sm font-medium">{item.name}</span>
-                      {"description" in item && item.description ? (
-                        <span className="text-xs text-muted-foreground">{item.description}</span>
-                      ) : null}
-                    </Link>
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ))}
+        <div className="hidden items-center gap-7 md:flex">
+          {navItems.map((item) => {
+            const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`)
+
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={cn(
+                  "text-sm font-medium text-muted-foreground transition-colors hover:text-foreground",
+                  isActive && "text-primary"
+                )}
+              >
+                {item.name}
+              </Link>
+            )
+          })}
         </div>
 
         <div className="hidden items-center gap-3 md:flex">
           {user ? (
             <>
-              <Link href="/credits">
-                <Button variant="ghost" size="sm" className="gap-2 rounded-full">
+              <Button asChild variant="ghost" size="sm" className="gap-2 rounded-full">
+                <Link href="/credits">
                   <Coins className="h-4 w-4" />
                   {credits !== null ? credits : "..."} 积分
-                </Button>
-              </Link>
-              <Link href="/credits">
-                <Button variant="outline" size="sm" className="gap-2 rounded-full bg-transparent">
+                </Link>
+              </Button>
+              <Button asChild variant="outline" size="sm" className="gap-2 rounded-full bg-transparent">
+                <Link href="/credits">
                   <User className="h-4 w-4" />
                   我的账户
-                </Button>
-              </Link>
+                </Link>
+              </Button>
             </>
           ) : (
             <>
-              <Link href="/auth/login">
-                <Button variant="ghost" size="sm" className="rounded-full">
+              <Button asChild variant="ghost" size="sm" className="rounded-full">
+                <Link href="/auth/login">
                   登录
-                </Button>
-              </Link>
-              <Link href="/auth/sign-up">
-                <Button size="sm" className="rounded-full px-4">立即注册</Button>
-              </Link>
+                </Link>
+              </Button>
+              <Button asChild size="sm" className="rounded-full px-4">
+                <Link href="/auth/sign-up">立即注册</Link>
+              </Button>
             </>
           )}
         </div>
@@ -173,64 +168,57 @@ export function Header() {
 
       {mobileMenuOpen && (
         <div className="border-t border-border bg-background/98 shadow-lg md:hidden">
-          <div className="mx-auto max-w-7xl space-y-4 px-4 py-6">
-            {navGroups.map((group) => (
-              <div key={group.key} className="space-y-2">
-                <div className="font-semibold text-sm text-muted-foreground">{group.label}</div>
-                {group.items.map((item) => (
+          <div className="mx-auto max-w-7xl px-4 py-5">
+            <div className="grid gap-1">
+              {navItems.map((item) => {
+                const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`)
+
+                return (
                   <Link
-                    key={`${group.key}-${item.href}`}
+                    key={item.href}
                     href={item.href}
-                    className="block rounded-lg px-3 py-2 text-sm hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     onClick={() => setMobileMenuOpen(false)}
+                    className={cn(
+                      "rounded-lg px-3 py-3 text-sm font-medium transition-colors",
+                      isActive
+                        ? "bg-primary/10 text-primary"
+                        : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                    )}
                   >
                     {item.name}
                   </Link>
-                ))}
-              </div>
-            ))}
-            <div className="space-y-2">
-              <div className="font-semibold text-sm text-muted-foreground">快速入口</div>
-              {directNavItems.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className="block rounded-lg px-3 py-2 text-sm hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  {item.name}
-                </Link>
-              ))}
+                )
+              })}
             </div>
 
-            <div className="flex flex-col gap-2 border-t pt-4">
+            <div className="mt-4 flex flex-col gap-2 border-t pt-4">
               {user ? (
                 <>
-                  <Link href="/credits">
-                    <Button variant="ghost" size="sm" className="w-full justify-start gap-2">
+                  <Button asChild variant="ghost" size="sm" className="w-full justify-start gap-2">
+                    <Link href="/credits" onClick={() => setMobileMenuOpen(false)}>
                       <Coins className="h-4 w-4" />
                       {credits !== null ? credits : "..."} 积分
-                    </Button>
-                  </Link>
-                  <Link href="/credits">
-                    <Button variant="outline" size="sm" className="w-full gap-2 bg-transparent">
+                    </Link>
+                  </Button>
+                  <Button asChild variant="outline" size="sm" className="w-full gap-2 bg-transparent">
+                    <Link href="/credits" onClick={() => setMobileMenuOpen(false)}>
                       <User className="h-4 w-4" />
                       我的账户
-                    </Button>
-                  </Link>
+                    </Link>
+                  </Button>
                 </>
               ) : (
                 <>
-                  <Link href="/auth/login">
-                    <Button variant="ghost" size="sm" className="w-full">
+                  <Button asChild variant="ghost" size="sm" className="w-full">
+                    <Link href="/auth/login" onClick={() => setMobileMenuOpen(false)}>
                       登录
-                    </Button>
-                  </Link>
-                  <Link href="/auth/sign-up">
-                    <Button size="sm" className="w-full">
+                    </Link>
+                  </Button>
+                  <Button asChild size="sm" className="w-full">
+                    <Link href="/auth/sign-up" onClick={() => setMobileMenuOpen(false)}>
                       立即注册
-                    </Button>
-                  </Link>
+                    </Link>
+                  </Button>
                 </>
               )}
             </div>

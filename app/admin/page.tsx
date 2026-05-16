@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
-import { Users, CreditCard, BarChart3, Lock, Eye, EyeOff, RefreshCw, Search, DollarSign, TrendingUp, UserCheck, Activity, AlertCircle } from "lucide-react"
+import { Users, CreditCard, BarChart3, Lock, Eye, EyeOff, RefreshCw, Search, DollarSign, TrendingUp, UserCheck, Activity, AlertCircle, Share2 } from "lucide-react"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet"
 import { Badge } from "@/components/ui/badge"
 
@@ -73,6 +73,11 @@ export default function AdminPage() {
   const [errorMessage, setErrorMessage] = useState("")
   const [userDetailsLoading, setUserDetailsLoading] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
+  const [shareCode, setShareCode] = useState("")
+  const [shareStatus, setShareStatus] = useState<"published" | "under_review" | "hidden">("published")
+  const [shareFeatured, setShareFeatured] = useState(false)
+  const [sharePinned, setSharePinned] = useState(false)
+  const [shareAdminMessage, setShareAdminMessage] = useState("")
   
   // 数据状态
   const [stats, setStats] = useState<StatsData>({
@@ -251,6 +256,40 @@ export default function AdminPage() {
     e.preventDefault()
     fetchUsers(searchQuery)
   }
+
+  const updateShareModeration = async () => {
+    const code = shareCode.trim()
+    if (!code) {
+      setShareAdminMessage("请先输入分享码，例如 /share/ 后面的那一段。")
+      return
+    }
+
+    try {
+      setLoading(true)
+      setShareAdminMessage("")
+      const token = localStorage.getItem('admin_token')
+      const response = await fetch(`/api/admin/share/${encodeURIComponent(code)}`, {
+        method: "PUT",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          status: shareStatus,
+          is_featured: shareFeatured,
+          is_pinned: sharePinned,
+        }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data?.error || "更新分享内容失败")
+      const rewardText = data.reward?.awarded ? `，已发放精选奖励 ${data.reward.credits} 积分` : ""
+      setShareAdminMessage(`已更新：${data.share?.title || code}${rewardText}`)
+    } catch (error) {
+      setShareAdminMessage(error instanceof Error ? error.message : "更新分享内容失败")
+    } finally {
+      setLoading(false)
+    }
+  }
   
   // 处理登录
   const handleLogin = async (e: React.FormEvent) => {
@@ -395,7 +434,7 @@ export default function AdminPage() {
             </div>
           )}
 
-          <TabsList className="grid w-full grid-cols-4 lg:w-[600px]">
+          <TabsList className="grid w-full grid-cols-5 lg:w-[760px]">
             <TabsTrigger value="overview" className="flex items-center gap-2">
               <BarChart3 className="w-4 h-4" />
               概览
@@ -407,6 +446,10 @@ export default function AdminPage() {
             <TabsTrigger value="orders" className="flex items-center gap-2">
               <CreditCard className="w-4 h-4" />
               订单记录
+            </TabsTrigger>
+            <TabsTrigger value="shares" className="flex items-center gap-2">
+              <Share2 className="w-4 h-4" />
+              分享管理
             </TabsTrigger>
             <TabsTrigger value="stats" className="flex items-center gap-2">
               <TrendingUp className="w-4 h-4" />
@@ -708,6 +751,79 @@ export default function AdminPage() {
                     {loading ? "正在加载订单数据..." : "暂无订单。若支付成功但未显示，请保留订单号、支付时间和用户 ID，并检查支付回调和订单状态同步。"}
                   </div>
                 )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* 分享管理 Tab */}
+          <TabsContent value="shares">
+            <Card>
+              <CardHeader>
+                <CardTitle>创作广场分享管理</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                  这里用于处理创作广场内容精选、置顶、下线和恢复。输入分享链接中 <span className="font-mono">/share/</span> 后面的分享码即可操作。
+                </div>
+                <div className="grid gap-4 md:grid-cols-[1fr_180px]">
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-gray-700">分享码</label>
+                    <Input
+                      value={shareCode}
+                      onChange={(event) => setShareCode(event.target.value)}
+                      placeholder="例如 AbC123XyZ9"
+                      className="font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-gray-700">状态</label>
+                    <select
+                      value={shareStatus}
+                      onChange={(event) => setShareStatus(event.target.value as "published" | "under_review" | "hidden")}
+                      className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                    >
+                      <option value="published">公开展示</option>
+                      <option value="under_review">待审核</option>
+                      <option value="hidden">下线隐藏</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-4">
+                  <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={shareFeatured}
+                      onChange={(event) => setShareFeatured(event.target.checked)}
+                      className="h-4 w-4 rounded border-gray-300"
+                    />
+                    标记为精选
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={sharePinned}
+                      onChange={(event) => setSharePinned(event.target.checked)}
+                      className="h-4 w-4 rounded border-gray-300"
+                    />
+                    置顶展示
+                  </label>
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button onClick={updateShareModeration} disabled={loading}>
+                    {loading ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Share2 className="mr-2 h-4 w-4" />}
+                    更新分享
+                  </Button>
+                  {shareCode.trim() ? (
+                    <Button variant="outline" asChild>
+                      <a href={`/share/${shareCode.trim()}`} target="_blank" rel="noreferrer">打开分享页</a>
+                    </Button>
+                  ) : null}
+                </div>
+                {shareAdminMessage ? (
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                    {shareAdminMessage}
+                  </div>
+                ) : null}
               </CardContent>
             </Card>
           </TabsContent>

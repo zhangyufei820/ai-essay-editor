@@ -2,7 +2,6 @@ import { createClient } from '@supabase/supabase-js'
 import { getAPIConfig } from "@/lib/ai-utils"
 import {
   PRICING_VERSION,
-  appendTextOutputLimitInstruction,
   calculateActualCost,
   getMaxOutputTokensForModel,
   getMinimumRequiredCredits,
@@ -369,7 +368,7 @@ export async function POST(req: Request) {
         Authorization: `Bearer ${customConfig.apiKey}`,
       },
       body: JSON.stringify({
-        query: appendTextOutputLimitInstruction(queryText, CHAT_MODEL),
+        query: queryText,
         conversation_id: "",
         response_mode: "streaming",
         user: userId,

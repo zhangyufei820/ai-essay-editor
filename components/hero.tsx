@@ -51,16 +51,16 @@ export function Hero() {
 
           <div className="mt-12 grid grid-cols-3 gap-8 border-t border-border pt-8">
             <div>
-              <div className="text-3xl font-bold text-primary">10,000+</div>
-              <div className="text-sm text-muted-foreground">学生用户</div>
+              <div className="text-3xl font-bold text-primary">作文</div>
+              <div className="text-sm text-muted-foreground">逐段批改</div>
             </div>
             <div>
-              <div className="text-3xl font-bold text-primary">50,000+</div>
-              <div className="text-sm text-muted-foreground">批改作文</div>
+              <div className="text-3xl font-bold text-primary">错题</div>
+              <div className="text-sm text-muted-foreground">归因复盘</div>
             </div>
             <div>
-              <div className="text-3xl font-bold text-primary">98%</div>
-              <div className="text-sm text-muted-foreground">满意度</div>
+              <div className="text-3xl font-bold text-primary">报告</div>
+              <div className="text-sm text-muted-foreground">清晰呈现</div>
             </div>
           </div>
         </div>

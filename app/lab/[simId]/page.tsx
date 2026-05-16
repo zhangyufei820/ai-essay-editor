@@ -8,7 +8,6 @@ import { PhetSimEmbed } from "@/components/phet/PhetSimEmbed"
 import { PhetCompleteButton } from "@/components/phet/PhetCompleteButton"
 import {
   buildPhetChatHref,
-  buildPhetLearningPlanTask,
   getDifficultyLabel,
   getPhetSim,
   getRelatedPhetSims,
@@ -35,7 +34,6 @@ export default async function PhetSimPage({ params }: PageProps) {
   if (!sim) notFound()
 
   const related = getRelatedPhetSims(sim, 4)
-  const planTask = buildPhetLearningPlanTask(sim)
 
   return (
     <main className="min-h-screen bg-[#F7FAF9] text-emerald-950 dark:bg-slate-950 dark:text-emerald-50">
@@ -112,7 +110,7 @@ export default async function PhetSimPage({ params }: PageProps) {
                 <PhetCompleteButton simId={sim.id} />
               </div>
               <p className="mt-3 text-xs leading-5 text-slate-500">
-                学习计划任务格式：{planTask.type} / {planTask.sim_id}
+                完成实验后，可以继续生成闪卡、测验或动画讲解，用于课后复盘。
               </p>
             </section>
           </aside>

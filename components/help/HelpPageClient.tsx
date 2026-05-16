@@ -22,7 +22,7 @@ import { ShenxiangInterfaceIcon } from "@/components/icons/ShenxiangInterfaceIco
 // 客服联系方式配置
 const contactInfo = {
   phone: "19132896773",
-  wechatQR: "/images/design-mode/站长微信.jpg"
+  wechatQR: "/images/design-mode/wechat-qr.jpg"
 }
 
 // ============================================
@@ -582,7 +582,7 @@ export function HelpPageClient() {
               animate={{ opacity: 1 }}
               transition={{ delay: 0.5, duration: 0.5 }}
             >
-              这里是沈翔智学的使用指南和问题解答，
+              查找沈翔智学的使用指南和常见问题，
               <br className="hidden md:block" />
               如果没有找到答案，请联系我们的客服。
             </motion.p>

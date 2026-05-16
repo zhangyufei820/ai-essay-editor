@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient as createSupabaseClient } from "@supabase/supabase-js"
 import { requireUser } from "@/lib/auth/verified-user"
-import { uploadBase64File } from "@/lib/storage"
+import { canPersistUploadedFiles, uploadBase64File } from "@/lib/storage"
 
 export async function POST(request: NextRequest) {
   try {
@@ -62,10 +62,21 @@ export async function POST(request: NextRequest) {
           const fileData = typeof file.data === "string" ? file.data : ""
           if (!fileData) continue
 
+          const isStoredUrl = /^https?:\/\//i.test(fileData) || fileData.startsWith("/")
+
           // 已经通过 /api/dify-upload 得到的公网/代理 URL 直接保存，不再按 base64 解码。
-          const storageUrl = /^https?:\/\//i.test(fileData) || fileData.startsWith("/")
-            ? fileData
-            : await uploadBase64File(fileData, file.name, file.type, user.id)
+          // 当前生产不把 cdn.shenxiang.school 作为可用持久化链路；没有 Blob/COS 直出能力时，
+          // base64 附件只参与本轮发送，不写入 uploaded_files，避免反复产生上传失败日志。
+          if (!isStoredUrl && !canPersistUploadedFiles()) {
+            console.warn("[v0] Skip uploaded file metadata: persistent storage is not configured", {
+              userId: user.id,
+              sessionId: session_id,
+              fileName: file.name,
+            })
+            continue
+          }
+
+          const storageUrl = isStoredUrl ? fileData : await uploadBase64File(fileData, file.name, file.type, user.id)
 
           // 保存文件元数据
           await supabase.from("uploaded_files").insert({

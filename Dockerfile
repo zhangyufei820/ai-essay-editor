@@ -71,12 +71,12 @@ ENTRYPOINT []
 
 # Next.js standalone 模式：静态文件在 .next/static/ 但 standalone server 在 .next/standalone/
 # 需要创建符号链接让 server.js 能找到静态文件和 public 文件
-RUN mkdir -p /app/.next/standalone/.next/cache/images && \
+RUN mkdir -p /app/.next/cache/images /app/.next/cache/fetch-cache /app/.next/standalone/.next/cache/images /app/.next/standalone/.next/cache/fetch-cache && \
     ln -s /app/.next/static /app/.next/standalone/.next/static && \
     ln -s /app/public /app/.next/standalone/public
 
 # 运行时创建缓存目录（overlay 文件系统需要启动时可写）
-RUN echo '#!/bin/sh\nmkdir -p /app/.next/standalone/.next/cache/images /app/.next/standalone/.next/cache/fetch-cache\nexec "$@"' > /entrypoint.sh && chmod +x /entrypoint.sh
+RUN echo '#!/bin/sh\nmkdir -p /app/.next/cache/images /app/.next/cache/fetch-cache /app/.next/standalone/.next/cache/images /app/.next/standalone/.next/cache/fetch-cache\nexec "$@"' > /entrypoint.sh && chmod +x /entrypoint.sh
 
 # 启动命令 - 使用 ENTRYPOINT 覆盖默认 CMD
 ENTRYPOINT ["/entrypoint.sh"]

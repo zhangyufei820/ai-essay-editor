@@ -1,5 +1,4 @@
 import { NextResponse, type NextRequest } from "next/server"
-import { requireUser } from "@/lib/auth/verified-user"
 import { spendCredits } from "@/lib/credits"
 import {
   createDeckName,
@@ -10,16 +9,13 @@ import {
 } from "@/lib/flashcards"
 import { runDifyWorkflow } from "@/lib/dify-workflow-client"
 import { getSupabaseAdmin } from "@/lib/supabase-admin"
+import { requireLearningUserId } from "@/lib/learning-user"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const GENERATION_COST = 1
 
-function isUuid(value: string) {
-  return UUID_PATTERN.test(value)
-}
 
 function normalizeNotes(value: unknown) {
   return typeof value === "string" ? value.trim() : ""
@@ -46,16 +42,9 @@ async function incrementAiGenerationCount(userId: string) {
 
 export async function POST(request: NextRequest) {
   try {
-    const auth = await requireUser(request)
+    const auth = await requireLearningUserId(request)
     if (auth.response) return auth.response
-
-    const userId = auth.user!.id
-    if (!isUuid(userId)) {
-      return NextResponse.json(
-        { error: "闪卡生成功能仅支持已同步的 Supabase 用户账号", code: "UNSUPPORTED_USER_ID" },
-        { status: 400 },
-      )
-    }
+    const userId = auth.userId!
 
     let body: Record<string, unknown>
     try {

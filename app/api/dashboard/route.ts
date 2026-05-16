@@ -1,20 +1,14 @@
 import { NextResponse, type NextRequest } from "next/server"
-import { requireUser } from "@/lib/auth/verified-user"
 import { getSupabaseAdmin } from "@/lib/supabase-admin"
+import { requireLearningUserId } from "@/lib/learning-user"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
-
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 type LearningSession = {
   started_at: string | null
   duration_seconds: number | null
   xp_earned: number | null
-}
-
-function isUuid(value: string) {
-  return UUID_PATTERN.test(value)
 }
 
 function dateKey(date: Date) {
@@ -31,16 +25,9 @@ function lastSevenDays() {
 
 export async function GET(request: NextRequest) {
   try {
-    const auth = await requireUser(request)
+    const auth = await requireLearningUserId(request)
     if (auth.response) return auth.response
-
-    const userId = auth.user!.id
-    if (!isUuid(userId)) {
-      return NextResponse.json(
-        { error: "学习看板仅支持已同步的 Supabase 用户账号", code: "UNSUPPORTED_USER_ID" },
-        { status: 400 },
-      )
-    }
+    const userId = auth.userId!
 
     const supabase = getSupabaseAdmin()
     const since = new Date()

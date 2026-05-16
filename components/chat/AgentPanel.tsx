@@ -10,6 +10,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import { X } from "lucide-react"
 import { ModelLogo } from "@/components/ModelLogo"
 import { ArtisticThinkingIcon } from "@/components/icons/ArtisticThinkingIcons"
+import { PanelQuickActions } from "@/components/chat/PanelQuickActions"
 
 // ============================================
 // 🎨 Design Tokens - "智慧之光" 配色系统
@@ -208,6 +209,8 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
                 <X className="w-4.5 h-4.5" style={{ color: TOKENS.text.secondary }} />
               </motion.button>
             </motion.div>
+
+            <PanelQuickActions onClose={onClose} />
 
             {/* OpenClaw 主卡片 */}
             <div className="flex-1 overflow-y-auto px-5 pb-6">

@@ -9,9 +9,9 @@ import {
 } from "@/lib/dify-types"
 import {
   calculateActualCost,
-  appendTextOutputLimitInstruction,
   getMaxOutputTokensForModel,
   getMinimumRequiredCredits,
+  getMediaBillingConfig,
   ModelType,
   getModelDisplayName,
   PRICING_VERSION,
@@ -50,8 +50,10 @@ export const maxDuration = 900
 export const dynamic = "force-dynamic"
 
 type GptImageV11Inputs = {
+  provider?: string
   aspect_ratio: string
   size: string
+  image_size?: string
   model: string
   quality: string
   output_format: string
@@ -60,6 +62,7 @@ type GptImageV11Inputs = {
   moderation: string
   n: number
   mode: string
+  response_modalities?: string[]
   reference_image_url: string
   reference_image_urls: string[]
   mask_image_url: string
@@ -82,9 +85,9 @@ const GPT_IMAGE_V11_DEFAULT_INPUTS: GptImageV11Inputs = {
 }
 
 const GPT_IMAGE_V11_ALLOWED = {
-  aspect_ratio: ["auto", "1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "21:9", "9:21", "2:1", "1:2", "3:1", "1:3"],
-  size: ["auto", "original_1k", "original_2k", "original_4k", "1024x1024", "1536x1024", "1024x1536", "2048x2048", "2048x1152", "1152x2048", "3840x2160", "2160x3840"],
-  model: ["gpt-image-2", "gpt-image-1.5", "gpt-image-1", "gpt-image-1-mini"],
+  aspect_ratio: ["auto", "1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "21:9", "9:21", "2:1", "1:2", "3:1", "1:3", "4:5", "5:4", "4:1", "1:4", "8:1", "1:8"],
+  size: ["auto", "512", "1K", "2K", "4K", "original_1k", "original_2k", "original_4k", "1024x1024", "1536x1024", "1024x1536", "2048x2048", "2048x1152", "1152x2048", "3840x2160", "2160x3840"],
+  model: ["gpt-image-2", "gpt-image-1.5", "gpt-image-1", "gpt-image-1-mini", "gemini-3.1-flash-image-preview", "gemini-3-pro-image-preview"],
   quality: ["auto", "low", "medium", "high"],
   output_format: ["png", "jpeg", "webp"],
   background: ["auto", "opaque", "transparent"],
@@ -125,8 +128,10 @@ function buildGptImageV11Inputs(inputs: unknown): GptImageV11Inputs {
       : []
 
   return {
+    provider: typeof record.provider === "string" ? record.provider : undefined,
     aspect_ratio: pickEnum(record.aspect_ratio, GPT_IMAGE_V11_ALLOWED.aspect_ratio, GPT_IMAGE_V11_DEFAULT_INPUTS.aspect_ratio),
     size: pickEnum(record.size, GPT_IMAGE_V11_ALLOWED.size, GPT_IMAGE_V11_DEFAULT_INPUTS.size),
+    image_size: pickEnum(record.image_size, GPT_IMAGE_V11_ALLOWED.size, ""),
     model: pickEnum(record.model, GPT_IMAGE_V11_ALLOWED.model, GPT_IMAGE_V11_DEFAULT_INPUTS.model),
     quality: pickEnum(record.quality, GPT_IMAGE_V11_ALLOWED.quality, GPT_IMAGE_V11_DEFAULT_INPUTS.quality),
     output_format: pickEnum(record.output_format, GPT_IMAGE_V11_ALLOWED.output_format, GPT_IMAGE_V11_DEFAULT_INPUTS.output_format),
@@ -135,13 +140,16 @@ function buildGptImageV11Inputs(inputs: unknown): GptImageV11Inputs {
     moderation: pickEnum(record.moderation, GPT_IMAGE_V11_ALLOWED.moderation, GPT_IMAGE_V11_DEFAULT_INPUTS.moderation),
     n: clampNumber(record.n, 1, 4, GPT_IMAGE_V11_DEFAULT_INPUTS.n),
     mode: pickEnum(record.mode, GPT_IMAGE_V11_ALLOWED.mode, GPT_IMAGE_V11_DEFAULT_INPUTS.mode),
+    response_modalities: Array.isArray(record.response_modalities)
+      ? record.response_modalities.filter((item): item is string => typeof item === "string")
+      : undefined,
     reference_image_url: safeReferenceImageUrls[0] || "",
     reference_image_urls: safeReferenceImageUrls.slice(0, 10),
     mask_image_url: pickUrlString(record.mask_image_url),
   }
 }
 
-const WORKFLOW_MODELS = new Set(["banana-2-pro", "gemini-image", "vocab-card"])
+const WORKFLOW_MODELS = new Set(["banana-2-pro", "vocab-card"])
 const MEMBERSHIP_PRODUCT_IDS = ["basic", "pro", "premium", "enterprise", "campus"]
 const ALL_IN_ONE_AGENT_MODEL = "all-in-one-agent"
 
@@ -358,6 +366,11 @@ const GPT_IMAGE_BLOCKING_TIMEOUT_MS = 300_000
 const GPT_IMAGE_GATEWAY_TIMEOUT_MS = 540_000
 const GPT_IMAGE_ASYNC_TASK_MAX_AGE_MS = 15 * 60 * 1000
 const IMAGE_GATEWAY_URL = (process.env.DIFY_IMAGE_GATEWAY_URL || "http://dify-image-gateway:8001").replace(/\/+$/, "")
+const GEMINI_IMAGE_GATEWAY_URL = (
+  process.env.GEMINI_IMAGE_GATEWAY_URL
+  || process.env.DIFY_GEMINI_IMAGE_GATEWAY_URL
+  || "http://gemini-image-gateway:8002"
+).replace(/\/+$/, "")
 // 🔥 作文批改（standard）使用专用的 ESSAY_CORRECTION_API_KEY
 const DEFAULT_DIFY_KEY = process.env.ESSAY_CORRECTION_API_KEY || process.env.DIFY_API_KEY 
 
@@ -630,9 +643,17 @@ function looksLikeAllInOneControlPayload(value: string) {
     || /^\{[\s\S]*"(?:output_mode|parameters_to_animate|axes_config|animation_style|duration_seconds|quality|task_id|skill_name|status|success)"[\s\S]*\}$/.test(trimmed)
 }
 
+function looksLikeInternalControlPayload(value: string) {
+  const trimmed = value.trim()
+  if (!trimmed) return false
+
+  return looksLikeAllInOneControlPayload(trimmed)
+    || /^\{[\s\S]*"(?:技能|skill|skill_key|tool_name|agent_key|handler)"[\s\S]*\}$/.test(trimmed)
+}
+
 function shouldStreamAllInOneAnswer(event: Record<string, unknown>) {
   const answer = typeof event.answer === "string" ? event.answer : ""
-  if (!answer.trim() || looksLikeAllInOneControlPayload(answer)) return false
+  if (!answer.trim() || looksLikeInternalControlPayload(answer)) return false
   const selector = Array.isArray(event.from_variable_selector)
     ? event.from_variable_selector.filter((item): item is string => typeof item === "string").join(".")
     : ""
@@ -662,7 +683,81 @@ function stripInternalFileReferences(markdown: string) {
     .trim()
 }
 
+function stripInternalControlJsonObjects(text: string) {
+  let cleaned = text
+    .replace(/```(?:json)?\s*\{[\s\S]*?"(?:技能|skill|skill_key|tool_name|agent_key|handler)"[\s\S]*?\}\s*```/gi, "")
+    .replace(/\{[\s\S]*?"(?:技能|skill|skill_key|tool_name|agent_key|handler)"[\s\S]*?\}/gi, "")
+
+  for (const value of extractJsonObjectsFromText(text)) {
+    const serialized = JSON.stringify(value)
+    if (looksLikeInternalControlPayload(serialized)) {
+      cleaned = cleaned.replace(serialized, "")
+    }
+  }
+
+  return cleaned.replace(/\n{3,}/g, "\n\n").trim()
+}
+
+function parseJsonLikeText(text: string): unknown | null {
+  const trimmed = text.trim()
+  const fencedMatch = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i)
+  const jsonText = fencedMatch ? fencedMatch[1].trim() : trimmed
+  if (!jsonText.startsWith("{") || !jsonText.endsWith("}")) return null
+  return safeJsonParse(jsonText)
+}
+
+function formatStructuredValueForDisplay(value: unknown): string {
+  if (typeof value === "string") return value.trim()
+  if (typeof value === "number" || typeof value === "boolean") return String(value)
+  if (Array.isArray(value)) {
+    return value
+      .map(formatStructuredValueForDisplay)
+      .filter(Boolean)
+      .map((item) => `- ${item.replace(/\n/g, "\n  ")}`)
+      .join("\n")
+  }
+  if (value && typeof value === "object") {
+    return Object.entries(value as Record<string, unknown>)
+      .map(([key, item]) => {
+        const formatted = formatStructuredValueForDisplay(item)
+        return formatted ? `- ${key}: ${formatted.replace(/\n/g, "\n  ")}` : ""
+      })
+      .filter(Boolean)
+      .join("\n")
+  }
+  return ""
+}
+
+function formatStructuredJsonForDisplay(text: string): string | null {
+  const parsed = parseJsonLikeText(text)
+  if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") return null
+
+  const record = parsed as Record<string, unknown>
+  if (Object.keys(record).some((key) => /^(?:技能|skill|skill_key|tool_name|agent_key|handler)$/i.test(key))) {
+    return null
+  }
+
+  const sections = Object.entries(record)
+    .map(([key, value]) => {
+      const formatted = formatStructuredValueForDisplay(value)
+      return formatted ? `### ${key}\n\n${formatted}` : ""
+    })
+    .filter(Boolean)
+
+  return sections.length > 0 ? sections.join("\n\n") : null
+}
+
 function normalizeAllInOneAgentDisplay(rawText: string) {
+  const structuredDisplay = formatStructuredJsonForDisplay(rawText)
+  if (structuredDisplay) {
+    return stripInternalFileReferences(structuredDisplay)
+  }
+
+  const textWithoutControlPayload = stripInternalControlJsonObjects(rawText)
+  if (textWithoutControlPayload && textWithoutControlPayload !== rawText) {
+    return stripInternalFileReferences(textWithoutControlPayload)
+  }
+
   const parsedValues = [
     safeJsonParse(rawText),
     ...extractJsonObjectsFromText(rawText),
@@ -674,9 +769,9 @@ function normalizeAllInOneAgentDisplay(rawText: string) {
 
   const rawDisplayText = textCandidates
     .map((text) => text.trim())
-    .filter((text) => !looksLikeAllInOneControlPayload(text))
+    .filter((text) => !looksLikeInternalControlPayload(text))
     .filter(Boolean)
-    .sort((a, b) => b.length - a.length)[0] || (parsedValues.length > 0 || looksLikeAllInOneControlPayload(rawText) ? "" : rawText)
+    .sort((a, b) => b.length - a.length)[0] || (parsedValues.length > 0 || looksLikeInternalControlPayload(rawText) ? "" : rawText)
 
   const displayText = stripInternalFileReferences(rawDisplayText)
   return displayText || "任务已提交，但上游还没有返回可直接展示的内容。请稍后重试，或换一个更明确的生成要求。"
@@ -738,12 +833,20 @@ function createTimeoutSignal(timeoutMs: number) {
 
 function buildImageGatewayPayload(query: string, inputs: unknown) {
   const imageInputs = buildGptImageV11Inputs(inputs)
+  const isGeminiImage = imageInputs.model.startsWith("gemini-") || imageInputs.provider === "google"
 
   return {
     prompt: query || "生成图片",
     mode: imageInputs.mode,
     model: imageInputs.model,
     size: imageInputs.size,
+    ...(isGeminiImage
+      ? {
+          aspect_ratio: imageInputs.aspect_ratio,
+          image_size: imageInputs.image_size || imageInputs.size || "1K",
+          response_modalities: imageInputs.response_modalities || ["TEXT", "IMAGE"],
+        }
+      : {}),
     quality: imageInputs.quality,
     n: imageInputs.n,
     output_format: imageInputs.output_format,
@@ -798,12 +901,29 @@ function createImageGatewayResponse(payload: unknown) {
   })
 }
 
-async function callImageGatewayDirect(query: string, inputs: unknown) {
-  const gatewayToken = process.env.DIFY_IMAGE_GATEWAY_TOKEN || DEFAULT_DIFY_KEY || ""
+function getImageGatewayConfig(model: string | null | undefined) {
+  if (model === "gemini-image") {
+    return {
+      url: GEMINI_IMAGE_GATEWAY_URL,
+      token: process.env.GEMINI_IMAGE_GATEWAY_TOKEN || process.env.DIFY_IMAGE_GATEWAY_TOKEN || DEFAULT_DIFY_KEY || "",
+      label: "Gemini Image Gateway",
+    }
+  }
+
+  return {
+    url: IMAGE_GATEWAY_URL,
+    token: process.env.DIFY_IMAGE_GATEWAY_TOKEN || DEFAULT_DIFY_KEY || "",
+    label: "GPT Image Gateway",
+  }
+}
+
+async function callImageGatewayDirect(query: string, inputs: unknown, model?: string | null) {
+  const gateway = getImageGatewayConfig(model)
+  const gatewayToken = gateway.token
   const timeout = createTimeoutSignal(GPT_IMAGE_GATEWAY_TIMEOUT_MS)
 
   try {
-    const response = await internalDifyFetch(`${IMAGE_GATEWAY_URL}/api/image/unified`, {
+    const response = await internalDifyFetch(`${gateway.url}/api/image/unified`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -840,7 +960,7 @@ async function callImageGatewayDirect(query: string, inputs: unknown) {
       )
     }
 
-    console.error("❌ [GPT Image] 直连图片服务失败:", error)
+    console.error(`❌ [${gateway.label}] 直连图片服务失败:`, error)
     return Response.json(
       { error: "图片服务暂时不可用，请稍后重试" },
       { status: 502 },
@@ -853,12 +973,14 @@ async function callImageGatewayDirect(query: string, inputs: unknown) {
 async function startImageGatewayTask(params: {
   query: string
   inputs: unknown
+  model?: string | null
   userId: string
   requestId: string
   traceId: string
 }) {
-  const gatewayToken = process.env.DIFY_IMAGE_GATEWAY_TOKEN || DEFAULT_DIFY_KEY || ""
-  const response = await internalDifyFetch(`${IMAGE_GATEWAY_URL}/api/image/tasks`, {
+  const gateway = getImageGatewayConfig(params.model)
+  const gatewayToken = gateway.token
+  const response = await internalDifyFetch(`${gateway.url}/api/image/tasks`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -1183,20 +1305,21 @@ export async function POST(request: NextRequest) {
     const modelPrefix = model || "general-chat"
     const requestedModelType = (model || "general-chat") as ModelType
     const configuredMaxOutputTokens = getMaxOutputTokensForModel(requestedModelType)
-    const limitedQuery = appendTextOutputLimitInstruction(query || "你好", requestedModelType)
+    const rawQuery = query || "你好"
     const isAllInOneAgent = model === ALL_IN_ONE_AGENT_MODEL
-    const effectiveQuery = model === "open-claw" ? appendOpenClawInlineOutputInstruction(limitedQuery) : limitedQuery
+    const effectiveQuery = model === "open-claw" ? appendOpenClawInlineOutputInstruction(rawQuery) : rawQuery
     let effectiveConvId = normalizeDifyConversationId(conversation_id, modelPrefix)
     
     console.log(`🔍 [Dify-Chat] 接收请求: model=${model || "general-chat"} files=${difyFileIds.length} urls=${fileUrls.length}`)
     
     const userId = auth.user!.id
 
-    const requestId = request.headers.get("X-Request-Id") || body.requestId || createRequestId(model === "gpt-image-2" ? "img" : "chat")
+    const isDirectImageGatewayModel = model === "gpt-image-2" || model === "gemini-image"
+    const requestId = request.headers.get("X-Request-Id") || body.requestId || createRequestId(isDirectImageGatewayModel ? "img" : "chat")
     logPerf(requestId, "api_enter", apiStartedAt, { model: model || "general-chat" })
     logPerf(requestId, "auth_done", apiStartedAt)
-    const taskKind = model === "gpt-image-2" ? "image" : model === "open-claw" ? "openclaw" : isAllInOneAgent ? "workflow" : "dify"
-    if (hasGptImageModelInput(inputs) && model !== "gpt-image-2") {
+    const taskKind = isDirectImageGatewayModel ? "image" : model === "open-claw" ? "openclaw" : isAllInOneAgent ? "workflow" : "dify"
+    if (hasGptImageModelInput(inputs) && !isDirectImageGatewayModel) {
       console.warn(`🚫 [媒体权限] 图片模型请求顶层 model 不匹配，拒绝绕过媒体计费: model=${model || "empty"}`)
       return new Response(
         JSON.stringify({
@@ -1207,8 +1330,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const imageInputsForBilling = model === "gpt-image-2" ? buildGptImageV11Inputs(inputs) : null
-    const billingModelType = imageInputsForBilling?.model as ModelType | undefined
+    const imageInputsForBilling = isDirectImageGatewayModel ? buildGptImageV11Inputs(inputs) : null
+    const billingModelType = (model === "gemini-image" ? "gemini-image" : imageInputsForBilling?.model) as ModelType | undefined
     if (imageInputsForBilling && (billingModelType || "gpt-image-2") === "gpt-image-2") {
       const { data: userProfile } = await getSupabaseAdmin()
         .from("user_profiles")
@@ -1280,7 +1403,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    if (model !== "gpt-image-2" && !isAllInOneAgent && fileUrls.length > 0 && difyFileIds.length === 0) {
+    if (!isDirectImageGatewayModel && !isAllInOneAgent && fileUrls.length > 0 && difyFileIds.length === 0) {
       console.warn(`🚫 [Dify-Chat] 非图片生成模型拒绝 remote_url 附件: model=${model || "general-chat"} urls=${fileUrls.length}`)
       return new Response(
         JSON.stringify({ error: "文件上传缺少 Dify 文件 ID，请重新上传文件后再试" }),
@@ -1368,7 +1491,7 @@ export async function POST(request: NextRequest) {
     const currentCredits = userCredits?.credits || 0
     
     const estimatedMinCost = imageInputsForBilling
-      ? calculateActualCost(billingModelType || "gpt-image-2") * imageInputsForBilling.n
+      ? (getMediaBillingConfig(billingModelType || "gpt-image-2")?.fixedCredits || calculateActualCost(billingModelType || "gpt-image-2")) * imageInputsForBilling.n
       : getMinimumRequiredCredits(modelType)
     logPerf(requestId, "credit_check_done", apiStartedAt, { requiredCredits: estimatedMinCost })
     
@@ -1388,14 +1511,14 @@ export async function POST(request: NextRequest) {
     
     console.log(`💰 [预检查] 模型: ${modelType} | 当前积分: ${currentCredits}`)
 
-    if (model === "gpt-image-2") {
-      const imageBillingModel = (billingModelType || "gpt-image-2") as ModelType
+    if (isDirectImageGatewayModel) {
+      const imageBillingModel = (model === "gemini-image" ? "gemini-image" : billingModelType || "gpt-image-2") as ModelType
       const imageCount = imageInputsForBilling?.n || 1
       const imageDescription = `图片生成 - ${getModelDisplayName(imageBillingModel)} x${imageCount}`
       const imageBillingMetadata = createBillingAuditMetadata({
         userId,
         actionType: "image_generation",
-        feature: imageBillingModel === "gpt-image-2" ? "image2" : "image",
+        feature: imageBillingModel === "gpt-image-2" ? "image2" : imageBillingModel === "gemini-image" ? "gemini-image" : "image",
         appId: keySource || "GPT_IMAGE_GATEWAY",
         workflowId: null,
         modelId: imageBillingModel,
@@ -1419,11 +1542,12 @@ export async function POST(request: NextRequest) {
         },
         description: imageDescription,
       })
-      console.log("🎨 [GPT Image] 使用直连图片网关，绕过 Dify HTTP 节点超时")
+      console.log(`🎨 [${model === "gemini-image" ? "Gemini Image" : "GPT Image"}] 使用直连图片网关，绕过 Dify HTTP 节点超时`)
       if (async_image_task === true) {
         const taskId = await startImageGatewayTask({
           query,
           inputs,
+          model,
           userId,
           requestId: taskRun.id,
           traceId: taskRun.traceId,
@@ -1465,7 +1589,7 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      const directResponse = await callImageGatewayDirect(query, inputs)
+      const directResponse = await callImageGatewayDirect(query, inputs, model)
       if (directResponse.ok) {
         const payload = await directResponse.clone().json().catch(() => ({}))
         const charged = await spendCredits(
@@ -1828,6 +1952,7 @@ export async function POST(request: NextRequest) {
     let clientAborted = false
     let taskCompleted = false
     let workflowNodeFailure: { message: string; code: string } | null = null
+    const shouldBufferForDisplay = isAllInOneAgent
     let allInOneDisplaySent = false
     let allInOneStreamedAnswer = false
     const bufferedNodeEvents: Array<{
@@ -1978,7 +2103,6 @@ export async function POST(request: NextRequest) {
         try {
           const text = new TextDecoder().decode(chunk)
           const outputText = model === "open-claw" ? rewriteOpenClawMediaReferencesWithSignedUrls(text) : text
-          const shouldBufferForDisplay = isAllInOneAgent
           const enqueueAllInOneDisplayOnce = (rawValue: string) => {
             if (!shouldBufferForDisplay || allInOneDisplaySent || !rawValue.trim()) return
             allInOneDisplaySent = true
@@ -2089,7 +2213,7 @@ export async function POST(request: NextRequest) {
 	              if (json.event === "message" && json.answer) {
 	                fullResponseText += json.answer
 	                hasReceivedContent = true
-                  if (shouldBufferForDisplay && shouldStreamAllInOneAnswer(json)) {
+                  if (shouldBufferForDisplay && model !== "banzhuren" && shouldStreamAllInOneAnswer(json)) {
                     allInOneStreamedAnswer = true
                     enqueueSseAnswer(controller, json.answer)
                   }
@@ -2298,7 +2422,7 @@ export async function POST(request: NextRequest) {
         }
 
         // 🔥 流结束，触发扣费（仅当有实际内容时才扣费）
-        if (isAllInOneAgent && fullResponseText.trim() && !allInOneDisplaySent && !allInOneStreamedAnswer) {
+        if (shouldBufferForDisplay && fullResponseText.trim() && !allInOneDisplaySent && !allInOneStreamedAnswer) {
           allInOneDisplaySent = true
           enqueueSseAnswer(controller, normalizeAllInOneAgentDisplay(fullResponseText))
         }

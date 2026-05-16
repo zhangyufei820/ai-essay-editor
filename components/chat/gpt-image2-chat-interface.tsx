@@ -150,7 +150,7 @@ const WORKSPACE_COPY: Record<ImageWorkspaceModel, {
 }> = {
   "gpt-image-2": {
     title: "图像生成 / 图像编辑",
-    subtitle: "V11 Reference URL 工作流",
+    subtitle: "",
     heroTitle: "AI 图像工作台",
     heroDescription: "支持文生图与上传图片编辑。日常推荐 gpt-image-1 + 1024×1024 + medium；需要 4K 或高质量作品时，选择 gpt-image-2，并使用 3840×2160 或 2160×3840。图片编辑时，上传原图后系统会自动完成安全处理。",
     resultTitle: "结果展示",
@@ -553,7 +553,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
   const searchParams = useSearchParams()
   const isBananaWorkspace = workspaceModel === "banana-2-pro"
   const isGeminiWorkspace = workspaceModel === "gemini-image"
-  const isWorkflowImageWorkspace = isBananaWorkspace || isGeminiWorkspace
+  const isWorkflowImageWorkspace = isBananaWorkspace
   const copy = WORKSPACE_COPY[workspaceModel]
   const urlSessionId = searchParams.get("sessionId") || searchParams.get("id")
   const initialPrompt = searchParams.get("prompt") ?? ""
@@ -1286,7 +1286,9 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
           </div>
           <div className="min-w-0 flex-1">
             <div className="truncate text-[12px] font-semibold md:text-sm">{copy.title}</div>
-            <div className="hidden text-xs text-muted-foreground sm:block">{copy.subtitle}</div>
+            {copy.subtitle ? (
+              <div className="hidden text-xs text-muted-foreground sm:block">{copy.subtitle}</div>
+            ) : null}
           </div>
           {userId ? (
             <div className="hidden rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary sm:block">

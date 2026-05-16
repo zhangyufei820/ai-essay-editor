@@ -9,7 +9,7 @@ export function Footer() {
           <div className="py-16 md:py-24">
             <div className="mb-4">
               <Image
-                src="/images/design-mode/主页logo.jpg"
+                src="/images/design-mode/site-logo.png"
                 alt="沈翔智学"
                 width={220}
                 height={75}

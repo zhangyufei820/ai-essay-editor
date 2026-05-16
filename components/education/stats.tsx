@@ -1,9 +1,9 @@
 export function Stats() {
   const stats = [
-    { value: "10万+", label: "活跃学生" },
-    { value: "5000+", label: "认证教师" },
-    { value: "100万+", label: "批改作业" },
-    { value: "98%", label: "满意度" },
+    { value: "作文", label: "逐段批改" },
+    { value: "错题", label: "归因诊断" },
+    { value: "答疑", label: "分步讲解" },
+    { value: "复习", label: "闪卡沉淀" },
   ]
 
   return (

@@ -1,15 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server"
-import { requireUser } from "@/lib/auth/verified-user"
 import { getSupabaseAdmin } from "@/lib/supabase-admin"
+import { requireLearningUserId } from "@/lib/learning-user"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
-function isUuid(value: string) {
-  return UUID_PATTERN.test(value)
-}
 
 function asNonEmptyString(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null
@@ -25,24 +20,11 @@ function asFileSize(value: unknown) {
   return Math.floor(numeric)
 }
 
-function ensureLearningUserId(userId: string) {
-  if (!isUuid(userId)) {
-    return NextResponse.json(
-      { error: "学习资料夹仅支持已同步的 Supabase 用户账号", code: "UNSUPPORTED_USER_ID" },
-      { status: 400 },
-    )
-  }
-  return null
-}
-
 export async function GET(request: NextRequest) {
   try {
-    const auth = await requireUser(request)
+    const auth = await requireLearningUserId(request)
     if (auth.response) return auth.response
-
-    const userId = auth.user!.id
-    const unsupported = ensureLearningUserId(userId)
-    if (unsupported) return unsupported
+    const userId = auth.userId!
 
     const supabase = getSupabaseAdmin()
     const { data, error, count } = await supabase
@@ -70,12 +52,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const auth = await requireUser(request)
+    const auth = await requireLearningUserId(request)
     if (auth.response) return auth.response
-
-    const userId = auth.user!.id
-    const unsupported = ensureLearningUserId(userId)
-    if (unsupported) return unsupported
+    const userId = auth.userId!
 
     let body: Record<string, unknown>
     try {

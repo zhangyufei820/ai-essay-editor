@@ -1,14 +1,14 @@
 /**
  * 📝 沈翔学校 - 能力展示区域
  * 
- * 展示沈翔学校的核心 AI 能力，借鉴 LIM London 的品牌基因可视化理念。
- * 使用 Framer Motion 实现滚动触发动画。
+ * 展示首页保留的高频学习入口。
  */
 
 "use client"
 
 import { motion } from "framer-motion"
-import { FileText, Calendar, MessageCircle, BarChart, ClipboardCheck, type LucideIcon } from "lucide-react"
+import Link from "next/link"
+import { ArrowRight, FileText, HelpCircle, ClipboardCheck, Layers3, type LucideIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { brandColors, slateColors, creamColors } from "@/lib/design-tokens"
 
@@ -20,34 +20,34 @@ interface Capability {
   icon: LucideIcon
   title: string
   description: string
+  href: string
 }
 
 const capabilities: Capability[] = [
   {
     icon: ClipboardCheck,
     title: "错题诊断海报",
-    description: "上传试卷图片，AI 自动识别错题、归因学习问题，并生成适合家长沟通的训练建议"
+    description: "上传试卷图片，AI 归因错题并生成适合家长沟通的训练建议。",
+    href: "/worksheet-diagnosis",
   },
   {
     icon: FileText,
     title: "智能作文批改",
-    description: "AI 深度分析作文结构、语言表达、逻辑思维，提供专业批改建议与优化方向"
+    description: "从结构、表达、立意到修改方向，给出逐段点评。",
+    href: "/essay",
   },
   {
-    icon: Calendar,
-    title: "个性化学习规划",
-    description: "根据你的学习目标和当前进度，智能制定专属学习计划，高效达成目标"
+    icon: HelpCircle,
+    title: "题目解析",
+    description: "拍题或输入题干，获得可复盘的分步讲解。",
+    href: "/chat/problem",
   },
   {
-    icon: MessageCircle,
-    title: "24小时智能答疑",
-    description: "随时随地提问，AI 导师即时解答学习疑惑，不再为难题困扰"
+    icon: Layers3,
+    title: "闪卡复习",
+    description: "把知识点沉淀成复习卡片，跟踪掌握状态。",
+    href: "/flashcards",
   },
-  {
-    icon: BarChart,
-    title: "学习数据分析",
-    description: "可视化学习进度与成长轨迹，精准洞察知识薄弱点，针对性提升"
-  }
 ]
 
 // ============================================
@@ -93,64 +93,41 @@ const titleVariants = {
 // 能力卡片组件
 // ============================================
 
-function CapabilityCard({ capability, index }: { capability: Capability; index: number }) {
+function CapabilityCard({ capability }: { capability: Capability }) {
   const Icon = capability.icon
   
   return (
     <motion.div
       variants={itemVariants}
-      whileHover={{ y: -4, transition: { duration: 0.2 } }}
-      className="group sx-card sx-card-interactive relative p-6 md:p-8"
-      style={{ 
-        borderColor: slateColors[100]
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.borderColor = brandColors[200]
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.borderColor = slateColors[100]
-      }}
+      className="h-full"
     >
-      {/* 图标区 - 增强阴影立体感 */}
-      <div 
-        className="w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-300"
-        style={{ 
-          backgroundColor: brandColors[50],
-          boxShadow: `0 8px 20px ${brandColors[200]}55`
-        }}
+      <Link
+        href={capability.href}
+        prefetch={false}
+        className={cn(
+          "group sx-card sx-card-interactive flex h-full flex-col p-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:p-7"
+        )}
+        style={{ borderColor: slateColors[100] }}
       >
-        <Icon 
-          className="w-7 h-7 transition-transform duration-300 group-hover:scale-110" 
-          style={{ 
-            color: brandColors[700],
-            filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.08))'
-          }} 
-        />
-      </div>
+        <div
+          className="flex size-12 items-center justify-center rounded-lg border border-primary/15 bg-primary/10 text-primary transition-colors duration-200 group-hover:bg-primary group-hover:text-primary-foreground"
+        >
+          <Icon className="size-6" />
+        </div>
 
-      {/* 标题 */}
-      <h3 
-        className="mt-6 text-xl font-semibold"
-        style={{ color: slateColors[800] }}
-      >
-        {capability.title}
-      </h3>
+        <h3 className="mt-5 text-lg font-bold" style={{ color: slateColors[800] }}>
+          {capability.title}
+        </h3>
 
-      {/* 描述 */}
-      <p 
-        className="mt-3 text-base leading-relaxed line-clamp-3"
-        style={{ color: slateColors[500] }}
-      >
-        {capability.description}
-      </p>
+        <p className="mt-3 flex-1 text-sm leading-7" style={{ color: slateColors[500] }}>
+          {capability.description}
+        </p>
 
-      {/* 悬停装饰渐变 */}
-      <div 
-        className="absolute inset-0 rounded-[20px] opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
-        style={{
-          background: `linear-gradient(135deg, ${brandColors[50]}50 0%, transparent 100%)`
-        }}
-      />
+        <span className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-primary">
+          进入使用
+          <ArrowRight className="size-4 transition-transform duration-200 group-hover:translate-x-1" />
+        </span>
+      </Link>
     </motion.div>
   )
 }
@@ -173,7 +150,7 @@ export function CapabilitiesSection() {
           whileInView="visible"
           viewport={{ once: true, margin: "-100px" }}
           variants={titleVariants}
-          className="text-center mb-16"
+          className="text-center mb-12"
         >
           {/* 小标题（eyebrow） */}
           <span 
@@ -196,8 +173,11 @@ export function CapabilitiesSection() {
             className="sx-section-title"
             style={{ color: slateColors[900] }}
           >
-            让学习更高效、更智能
+            从高频学习场景开始
           </h2>
+          <p className="sx-section-copy mx-auto mt-4 max-w-2xl">
+            围绕作文、错题、答疑和复习，把学生每天遇到的问题整理成清晰可执行的反馈。
+          </p>
         </motion.div>
 
         {/* 能力卡片网格 */}
@@ -206,13 +186,12 @@ export function CapabilitiesSection() {
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, margin: "-100px" }}
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 md:gap-8"
+          className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
         >
-          {capabilities.map((capability, index) => (
+          {capabilities.map((capability) => (
             <CapabilityCard 
-              key={index} 
-              capability={capability} 
-              index={index} 
+              key={capability.href}
+              capability={capability}
             />
           ))}
         </motion.div>

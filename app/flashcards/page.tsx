@@ -8,6 +8,7 @@ import rehypeKatex from "rehype-katex"
 import { ArrowLeft, CheckCircle2, Loader2, RotateCcw, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
+import { ShareDialog } from "@/components/sharing/ShareDialog"
 import { getVerifiedAuthHeaders } from "@/lib/client-auth"
 
 const SUBJECT_OPTIONS = [
@@ -29,6 +30,19 @@ type Flashcard = {
   difficulty?: number | null
   tags?: string[] | null
   subject?: string | null
+}
+
+type GeneratedDeck = {
+  deck_name: string
+  subject: string
+  cards: Array<{
+    question?: string
+    answer?: string
+    difficulty?: number
+    tags?: string[]
+    type?: string
+  }>
+  count: number
 }
 
 function MarkdownMath({ content }: { content: string }) {
@@ -59,6 +73,7 @@ function GenerateCardsPanel({ onGenerated }: { onGenerated: () => Promise<void> 
   const [count, setCount] = useState(10)
   const [submitting, setSubmitting] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+  const [lastGenerated, setLastGenerated] = useState<GeneratedDeck | null>(null)
 
   async function handleGenerate() {
     if (!notes.trim()) {
@@ -85,6 +100,12 @@ function GenerateCardsPanel({ onGenerated }: { onGenerated: () => Promise<void> 
       const payload = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(payload?.error || "生成闪卡失败")
       setNotes("")
+      setLastGenerated({
+        deck_name: payload.deck_name || `${subject}-${new Date().toISOString().slice(0, 10)}`,
+        subject,
+        cards: Array.isArray(payload.cards) ? payload.cards : [],
+        count: Number(payload.count || 0),
+      })
       setMessage(`已生成 ${payload.count || 0} 张闪卡`)
       await onGenerated()
     } catch (error) {
@@ -144,6 +165,20 @@ function GenerateCardsPanel({ onGenerated }: { onGenerated: () => Promise<void> 
               生成闪卡
             </Button>
             {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
+            {lastGenerated ? (
+              <ShareDialog
+                title={lastGenerated.deck_name}
+                contentType="flashcard_deck"
+                contentData={{
+                  deck_name: lastGenerated.deck_name,
+                  total_cards: lastGenerated.count,
+                  cards: lastGenerated.cards,
+                }}
+                description={`我用 AI 生成了 ${lastGenerated.count} 张复习闪卡，适合课后自测。`}
+                subject={lastGenerated.subject}
+                tags={["闪卡", "复习"]}
+              />
+            ) : null}
           </div>
         ) : null}
       </CardContent>

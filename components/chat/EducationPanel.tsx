@@ -10,6 +10,7 @@
 import { motion, AnimatePresence } from "framer-motion"
 import { X, GraduationCap } from "lucide-react"
 import { ArtisticThinkingIcon } from "@/components/icons/ArtisticThinkingIcons"
+import { PanelQuickActions } from "@/components/chat/PanelQuickActions"
 
 // ============================================
 // 🎨 Design Tokens - "智慧之光" 配色系统
@@ -282,6 +283,8 @@ export function EducationPanel({ isOpen, onClose }: EducationPanelProps) {
                 <X className="w-4.5 h-4.5" style={{ color: TOKENS.text.secondary }} />
               </motion.button>
             </motion.div>
+
+            <PanelQuickActions onClose={onClose} />
 
             {/* 教育智能体网格 */}
             <div className="flex-1 overflow-y-auto px-5 pb-6">

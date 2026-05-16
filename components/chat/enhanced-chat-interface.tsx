@@ -13,7 +13,9 @@ import { useIsMobile } from "@/hooks/use-mobile"
 import {
   Send, Paperclip, X, FileText, Loader2, User, AlertCircle,
   ChevronDown, ChevronLeft, ArrowDown, Sparkles,
-  Download, Mic, MicOff, History, ExternalLink
+  Download, Mic, MicOff, History, ExternalLink,
+  CheckCircle2, CircleDashed, FileSearch, ListChecks, ShieldCheck, ScanText, BrainCircuit,
+  type LucideIcon
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { extractUserId } from "@/lib/auth-user"
@@ -47,6 +49,7 @@ import { LATEX_MACROS, renderLatex } from "@/lib/latex-constants"
 import { cleanLLMText } from "@/lib/text-sanitizer"
 import { containsRawDifyWordCardPayload, normalizeDifyWordCardResponse, type FrontendWordCard } from "@/lib/word-card-normalizer"
 import { buildVocabCardWorkflowInputs, cleanVocabAnswer, resolveVocabCardResult } from "@/lib/vocab-card-workflow"
+import { resolveChatAgentParam } from "@/lib/teacher-agent-route"
 import { createClient } from "@supabase/supabase-js"
 import { collapseSidebar, navigateHomeWithSidebar, refreshCredits, refreshSessionList, SESSION_LIST_REFRESH_EVENT } from "@/components/app-sidebar"
 import { useSelectedModelStore } from "@/hooks/useSelectedModelStore"
@@ -64,6 +67,7 @@ import {
   MODEL_COSTS,
   getModelDisplayName
 } from "@/lib/pricing"
+import type { WorkflowState, WorkflowNodeStatus } from "@/lib/workflow-visual-config"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -100,6 +104,7 @@ const MODEL_DISPLAY_NAMES: Record<string, string> = {
   "resume-optimize": "简历优化",
   "speech-defense": "演讲答辩",
   "school-wechat": "公众号",
+  "teacher-agent": "教师智能体",
 }
 
 type ModelUiConfig = {
@@ -117,6 +122,81 @@ const ALL_IN_ONE_AGENT_PROMPTS = [
   "根据我上传的文件，提炼重点并生成一份课堂讲解提纲和练习题。",
   "我想做一个数学概念可视化，请先帮我完善提示词，再生成可执行方案。",
 ]
+
+function looksLikeInternalRoutingPayload(text: string) {
+  const trimmed = text.trim()
+  if (!trimmed) return false
+
+  return /^\{[\s\S]*"(?:技能|skill|skill_key|tool_name|agent_key|handler)"[\s\S]*\}$/.test(trimmed)
+    || /^```(?:json)?\s*\{[\s\S]*"(?:技能|skill|skill_key|tool_name|agent_key|handler)"[\s\S]*?\}\s*```$/i.test(trimmed)
+}
+
+function stripInternalRoutingPayload(text: string) {
+  return text
+    .replace(/```(?:json)?\s*\{[\s\S]*?"(?:技能|skill|skill_key|tool_name|agent_key|handler)"[\s\S]*?\}\s*```/gi, "")
+    .replace(/^\s*\{[\s\S]*?"(?:技能|skill|skill_key|tool_name|agent_key|handler)"[\s\S]*?\}\s*$/gim, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+}
+
+function parseJsonLikeText(text: string): unknown {
+  const trimmed = text.trim()
+  const fencedMatch = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i)
+  const jsonText = fencedMatch ? fencedMatch[1].trim() : trimmed
+  if (!jsonText.startsWith("{") || !jsonText.endsWith("}")) return null
+
+  try {
+    return JSON.parse(jsonText) as unknown
+  } catch {
+    return null
+  }
+}
+
+function formatStructuredValue(value: unknown): string {
+  if (typeof value === "string") return value.trim()
+  if (typeof value === "number" || typeof value === "boolean") return String(value)
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => formatStructuredValue(item))
+      .filter(Boolean)
+      .map((item) => `- ${item.replace(/\n/g, "\n  ")}`)
+      .join("\n")
+  }
+  if (value && typeof value === "object") {
+    return Object.entries(value as Record<string, unknown>)
+      .map(([key, item]) => {
+        const formatted = formatStructuredValue(item)
+        return formatted ? `- ${key}: ${formatted.replace(/\n/g, "\n  ")}` : ""
+      })
+      .filter(Boolean)
+      .join("\n")
+  }
+  return ""
+}
+
+function formatStructuredJsonForDisplay(text: string) {
+  const parsed = parseJsonLikeText(text)
+  if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") return null
+
+  const record = parsed as Record<string, unknown>
+  if (Object.keys(record).some((key) => /^(?:技能|skill|skill_key|tool_name|agent_key|handler)$/i.test(key))) {
+    return null
+  }
+
+  const sections = Object.entries(record)
+    .map(([key, value]) => {
+      const formatted = formatStructuredValue(value)
+      return formatted ? `### ${key}\n\n${formatted}` : ""
+    })
+    .filter(Boolean)
+
+  return sections.length > 0 ? sections.join("\n\n") : null
+}
+
+function getRenderableAssistantChunk(text: string) {
+  if (!text.trim() || looksLikeInternalRoutingPayload(text)) return ""
+  return formatStructuredJsonForDisplay(text) || stripInternalRoutingPayload(text)
+}
 
 // 获取模型徽章颜色 — 强制归一：所有模型统一为翡翠绿 #10A37F
 function getModelBadgeColor(_modelKey: string): string {
@@ -480,33 +560,226 @@ function forgetPendingTask(requestId: string) {
 
 function ProcessingStatusCard({
   context,
-  showLongWaitHint
+  showLongWaitHint,
+  workflowState,
+  currentRunningText,
 }: {
   context: ProcessingContext | null
   showLongWaitHint: boolean
+  workflowState: WorkflowState
+  currentRunningText: string
 }) {
   const modelName = context?.model ? (MODEL_DISPLAY_NAMES[context.model] || context.model) : "AI"
   const isOpenClaw = context?.model === "open-claw"
   const hasFiles = Boolean(context?.fileCount)
+  const promptLength = context?.promptLength || 0
+  const startedAt = context?.startedAt || Date.now()
+  const elapsedSeconds = Math.max(1, Math.round((Date.now() - startedAt) / 1000))
+  const realNodes = workflowState.nodes.map((node) => ({
+    id: node.id,
+    label: node.config.label,
+    detail: node.status === "running"
+      ? currentRunningText || node.config.runningTexts?.[node.currentTextIndex] || "正在处理..."
+      : node.status === "completed"
+        ? "已完成"
+        : node.status === "error"
+          ? "需要重新尝试"
+          : "等待执行",
+    status: node.status,
+    icon: node.config.icon,
+  }))
+  const fallbackSteps = buildDefaultProcessingSteps({
+    hasFiles,
+    fileCount: context?.fileCount || 0,
+    promptLength,
+    stage: context?.stage || "",
+    isOpenClaw,
+  })
+  const steps = realNodes.length > 0 ? realNodes : fallbackSteps
+  const completedCount = steps.filter((step) => step.status === "completed").length
+  const activeIndex = Math.max(0, steps.findIndex((step) => step.status === "running" || step.status === "preparing"))
+  const progress = Math.max(
+    12,
+    Math.min(92, Math.round(((completedCount + (steps.some((step) => step.status === "running") ? 0.45 : 0.15)) / Math.max(steps.length, 1)) * 100)),
+  )
   const statusText = isOpenClaw
-    ? "OpenClaw 正在执行工具、读取文件或生成结果"
+    ? "正在调度工具与资料"
     : hasFiles
-      ? "AI 正在读取附件并生成回答"
-      : "AI 正在生成回答"
-  const stageText = context?.stage || (showLongWaitHint ? "处理时间稍长，请保持页面打开" : "")
+      ? "正在读取资料并规划回答"
+      : "正在组织高质量回复"
+  const stageText = context?.stage || currentRunningText || (showLongWaitHint ? "处理时间稍长，请保持页面打开" : "正在建立回答结构")
 
   return (
-    <div className="inline-flex max-w-[560px] flex-col rounded-2xl bg-white/70 px-4 py-3 text-slate-500 shadow-sm ring-1 ring-emerald-100/70 backdrop-blur">
-      <div className="min-w-0">
-        <div className="flex min-w-0 items-center gap-1.5">
-          <span className="truncate text-xs font-medium text-slate-600">{statusText}</span>
-          <span className="shrink-0 rounded-full bg-white px-1.5 py-0.5 text-[10px] font-medium text-slate-400">
-            {modelName}
-          </span>
+    <section
+      aria-live="polite"
+      className="w-full max-w-[680px] overflow-hidden rounded-2xl border border-emerald-100/80 bg-white/95 text-slate-700 shadow-[0_16px_40px_rgba(15,23,42,0.08)] backdrop-blur"
+    >
+      <div className="border-b border-emerald-50 bg-[linear-gradient(180deg,#f6fff9_0%,#ffffff_100%)] px-4 py-3 sm:px-5">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-emerald-900 text-white shadow-sm">
+                <BrainCircuit className="h-4 w-4" />
+              </span>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold leading-5 text-slate-900">AI 任务规划中</p>
+                <p className="mt-0.5 truncate text-xs leading-4 text-slate-500">{statusText}</p>
+              </div>
+            </div>
+          </div>
+          <div className="flex shrink-0 flex-col items-end gap-1 text-right">
+            <span className="rounded-full border border-emerald-100 bg-white px-2 py-0.5 text-[11px] font-medium text-emerald-800">
+              {modelName}
+            </span>
+            <span className="text-[10px] text-slate-400">{elapsedSeconds}s</span>
+          </div>
         </div>
-        {stageText && (
-          <p className="mt-0.5 max-w-[420px] truncate text-[11px] leading-4 text-slate-400">{stageText}</p>
+        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-emerald-50">
+          <motion.div
+            className="h-full rounded-full bg-emerald-700"
+            initial={{ width: "8%" }}
+            animate={{ width: `${progress}%` }}
+            transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+          />
+        </div>
+        <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-500">{stageText}</p>
+      </div>
+      <div className="grid gap-2 px-3 py-3 sm:px-4">
+        {steps.map((step, index) => (
+          <ProcessingStepRow
+            key={step.id}
+            step={step}
+            active={index === activeIndex}
+          />
+        ))}
+      </div>
+      <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 bg-slate-50/70 px-4 py-2.5 text-[11px] leading-4 text-slate-500">
+        <span className="inline-flex items-center gap-1">
+          <ShieldCheck className="h-3.5 w-3.5 text-emerald-700" />
+          保持原题意图
+        </span>
+        <span className="h-1 w-1 rounded-full bg-slate-300" />
+        <span>{hasFiles ? `已接收 ${context?.fileCount || 0} 个附件` : "无附件模式"}</span>
+        <span className="h-1 w-1 rounded-full bg-slate-300" />
+        <span>回答生成后会自动切入正文</span>
+      </div>
+    </section>
+  )
+}
+
+type ProcessingStep = {
+  id: string
+  label: string
+  detail: string
+  status: WorkflowNodeStatus
+  icon: LucideIcon
+}
+
+function buildDefaultProcessingSteps({
+  hasFiles,
+  fileCount,
+  promptLength,
+  stage,
+  isOpenClaw,
+}: {
+  hasFiles: boolean
+  fileCount: number
+  promptLength: number
+  stage: string
+  isOpenClaw: boolean
+}): ProcessingStep[] {
+  const activeDetail = stage || (hasFiles ? "正在读取图片与文字线索" : "正在理解你的问题")
+  return [
+    {
+      id: "receive",
+      label: hasFiles ? "接收学习资料" : "理解任务意图",
+      detail: hasFiles ? `已接收 ${fileCount} 个附件，建立资料上下文` : "提取问题目标与约束",
+      status: "completed",
+      icon: hasFiles ? FileSearch : ScanText,
+    },
+    {
+      id: "inspect",
+      label: hasFiles ? "识别图文信息" : "拆解回答目标",
+      detail: activeDetail,
+      status: "running",
+      icon: ScanText,
+    },
+    {
+      id: "plan",
+      label: "制定回答结构",
+      detail: promptLength > 120 ? "材料较长，优先整理层次和关键点" : "规划开头、依据与结论顺序",
+      status: "preparing",
+      icon: ListChecks,
+    },
+    {
+      id: "verify",
+      label: isOpenClaw ? "工具结果核验" : "一致性检查",
+      detail: "检查是否贴合题目、避免空泛回答",
+      status: "pending",
+      icon: ShieldCheck,
+    },
+  ]
+}
+
+function ProcessingStepRow({
+  step,
+  active,
+}: {
+  step: ProcessingStep
+  active: boolean
+}) {
+  const Icon = step.icon
+  const isDone = step.status === "completed"
+  const isRunning = step.status === "running" || step.status === "preparing"
+  const isError = step.status === "error"
+
+  return (
+    <div
+      className={cn(
+        "flex items-start gap-3 rounded-xl border px-3 py-2.5 transition-colors",
+        isError
+          ? "border-red-100 bg-red-50"
+          : active || isRunning
+            ? "border-emerald-100 bg-emerald-50/70"
+            : "border-slate-100 bg-white",
+      )}
+    >
+      <span
+        className={cn(
+          "mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg",
+          isError
+            ? "bg-red-100 text-red-600"
+            : isDone
+              ? "bg-emerald-800 text-white"
+              : isRunning
+                ? "bg-white text-emerald-800 shadow-sm ring-1 ring-emerald-100"
+                : "bg-slate-100 text-slate-400",
         )}
+      >
+        {isDone ? (
+          <CheckCircle2 className="h-4 w-4" />
+        ) : isRunning ? (
+          <motion.span
+            animate={{ rotate: 360 }}
+            transition={{ repeat: Infinity, duration: 1.6, ease: "linear" }}
+            className="inline-flex"
+          >
+            <CircleDashed className="h-4 w-4" />
+          </motion.span>
+        ) : (
+          <Icon className="h-4 w-4" />
+        )}
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex min-w-0 items-center gap-2">
+          <p className="truncate text-sm font-medium leading-5 text-slate-800">{step.label}</p>
+          {isRunning && (
+            <span className="shrink-0 rounded-full bg-white px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
+              进行中
+            </span>
+          )}
+        </div>
+        <p className="mt-0.5 line-clamp-2 text-xs leading-5 text-slate-500">{step.detail}</p>
       </div>
     </div>
   )
@@ -784,14 +1057,20 @@ const ThinkingBlock = ({ content, isStreaming }: { content: string; isStreaming?
 
 function UltimateRenderer({ content, isStreaming = false }: { content: string; isStreaming?: boolean }) {
   if (!content) return <span className="text-emerald-500 animate-cursor-blink">▍</span>;
+  const displayContent = formatStructuredJsonForDisplay(content) || stripInternalRoutingPayload(content)
+  if (!displayContent) {
+    return isStreaming
+      ? <span className="text-emerald-500 animate-cursor-blink">▍</span>
+      : <span className="text-sm text-slate-500">正在整理可读结果，请稍后重试或补充更多信息。</span>
+  }
 
   // 🧠 处理 <think> 标签：提取思考内容并折叠显示
-  const thinkMatch = content.match(/<think>([\s\S]*?)<\/think>/i)
+  const thinkMatch = displayContent.match(/<think>([\s\S]*?)<\/think>/i)
   const thinkContent = thinkMatch ? thinkMatch[1].trim() : null
 
   // 如果只有 <think> 标签还没闭合（流式输出中）
-  const hasOpenThink = content.includes('<think>') && !content.includes('</think>')
-  const openThinkContent = hasOpenThink ? content.split('<think>')[1] : null
+  const hasOpenThink = displayContent.includes('<think>') && !displayContent.includes('</think>')
+  const openThinkContent = hasOpenThink ? displayContent.split('<think>')[1] : null
 
   // 🔥 提取媒体内容（图片、文件、PPT）
   const mediaItems: MediaItem[] = []
@@ -799,7 +1078,7 @@ function UltimateRenderer({ content, isStreaming = false }: { content: string; i
   // 匹配 ![alt](url) 图片格式
   const imageRegex = /!\[([^\]]*)\]\(([^)]+)\)/g
   let match
-  while ((match = imageRegex.exec(content)) !== null) {
+  while ((match = imageRegex.exec(displayContent)) !== null) {
     mediaItems.push({
       type: "image",
       url: match[2],
@@ -809,7 +1088,7 @@ function UltimateRenderer({ content, isStreaming = false }: { content: string; i
 
   // 匹配 [file](url) 文件格式
   const fileRegex = /\[file\]\(([^)]+)\)/g
-  while ((match = fileRegex.exec(content)) !== null) {
+  while ((match = fileRegex.exec(displayContent)) !== null) {
     const url = match[1]
     const name = url.split('/').pop() || "文件"
     mediaItems.push({
@@ -821,7 +1100,7 @@ function UltimateRenderer({ content, isStreaming = false }: { content: string; i
 
   // 匹配 [ppt](url) PPT格式
   const pptRegex = /\[ppt\]\(([^)]+)\)/g
-  while ((match = pptRegex.exec(content)) !== null) {
+  while ((match = pptRegex.exec(displayContent)) !== null) {
     const url = match[1]
     const name = url.split('/').pop() || "PPT文档"
     mediaItems.push({
@@ -833,7 +1112,7 @@ function UltimateRenderer({ content, isStreaming = false }: { content: string; i
 
   // 匹配 MEDIA: 前缀格式 (MEDIA:image:url, MEDIA:file:url, MEDIA:ppt:url)
   const mediaPrefixRegex = /^MEDIA:(image|file|ppt):(.+)$/gm
-  while ((match = mediaPrefixRegex.exec(content)) !== null) {
+  while ((match = mediaPrefixRegex.exec(displayContent)) !== null) {
     const type = match[1] as "image" | "file" | "ppt"
     const url = match[2]
     const name = url.split('/').pop() || type
@@ -841,7 +1120,7 @@ function UltimateRenderer({ content, isStreaming = false }: { content: string; i
   }
 
   // 从主内容中移除媒体标记
-  let cleanContent = content
+  let cleanContent = displayContent
     .replace(/!\[([^\]]*)\]\([^)]+\)/g, '')
     .replace(/\[file\]\([^)]+\)/g, '')
     .replace(/\[ppt\]\([^)]+\)/g, '')
@@ -993,8 +1272,10 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   const router = useRouter()
   const urlSessionId = searchParams.get("sessionId")
   const urlAgent = searchParams.get("agent")
+  const resolvedUrlAgent = resolveChatAgentParam(urlAgent)
+  const teacherAgentShareCode = resolvedUrlAgent.teacherAgentShareCode
   // 🔥 优先使用 initialModel prop（来自动态路由），其次使用 URL 参数
-  const effectiveAgent = initialModel || urlAgent
+  const effectiveAgent = initialModel || resolvedUrlAgent.model || urlAgent
 
   // 🔥 检测手机端
   const isMobile = useIsMobile()
@@ -1133,8 +1414,10 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 
   // 🎯 工作流可视化 Hook (GenSpark 1:1 复刻版)
   const {
+    workflowState,
     isFastTrack,
     showCursor,
+    currentRunningText,
     handleSSEEvent,
     resetWorkflow,
     triggerHandover
@@ -1276,28 +1559,9 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   const prevUrlAgentRef = useRef<string | null>(null)
 
   useEffect(() => {
-    const agentToModel: Record<string, ModelType> = {
-      "standard": "standard",
-      "general-chat": "general-chat",
-      "teaching-pro": "teaching-pro",
-      "gpt-5": "gpt-5",
-      "claude-opus": "claude-opus",
-      "gemini-pro": "gemini-pro",
-      "gemini-image": "gemini-image",
-      "suno-v5": "suno-v5",
-      "grok-4.2": "grok-4.2",
-      "open-claw": "open-claw",
-      "all-in-one-agent": "all-in-one-agent",
-      "quanquan-math": "quanquan-math",
-      "quanquan-english": "quanquan-english",
-      "vocab-card": "vocab-card",
-      "beike-pro": "beike-pro",
-      "banzhuren": "banzhuren",
-    }
+    const targetModel = urlAgent ? (resolvedUrlAgent.model || "general-chat") : (initialModel || "general-chat")
 
-    const targetModel = urlAgent ? (agentToModel[urlAgent] || urlAgent as ModelType) : (initialModel || "general-chat")
-
-    console.log(`🔗 [URL Sync] urlAgent=${urlAgent}, prevUrlAgent=${prevUrlAgentRef.current}, targetModel=${targetModel}`)
+    console.log(`🔗 [URL Sync] urlAgent=${urlAgent}, prevUrlAgent=${prevUrlAgentRef.current}, targetModel=${targetModel}, teacherAgent=${teacherAgentShareCode || ""}`)
 
     if (urlAgent !== prevUrlAgentRef.current) {
       prevUrlAgentRef.current = urlAgent
@@ -1312,7 +1576,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         clearConversationState()
       }
     }
-  }, [urlAgent, urlSessionId])
+  }, [initialModel, resolvedUrlAgent.model, setSelectedModel, teacherAgentShareCode, urlAgent, urlSessionId])
 
   // 🔥 当路由参数 initialModel 变化时，同步更新 selectedModel
   // 但如果是加载历史会话（urlSessionId 存在），则跳过，由 loadHistorySession 处理模型同步
@@ -1777,6 +2041,48 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     })
   }
 
+  const createShareableImageDataUrl = (file: File): Promise<string> => {
+    if (!file.type.startsWith("image/") || typeof window === "undefined") {
+      return Promise.resolve("")
+    }
+
+    return new Promise((resolve) => {
+      const objectUrl = URL.createObjectURL(file)
+      const image = new window.Image()
+
+      image.onload = () => {
+        try {
+          const maxEdge = 1280
+          const scale = Math.min(1, maxEdge / Math.max(image.naturalWidth || 1, image.naturalHeight || 1))
+          const canvas = document.createElement("canvas")
+          canvas.width = Math.max(1, Math.round((image.naturalWidth || 1) * scale))
+          canvas.height = Math.max(1, Math.round((image.naturalHeight || 1) * scale))
+          const context = canvas.getContext("2d")
+
+          if (!context) {
+            resolve("")
+            return
+          }
+
+          context.drawImage(image, 0, 0, canvas.width, canvas.height)
+          resolve(canvas.toDataURL("image/jpeg", 0.82))
+        } catch (error) {
+          console.warn("[Upload] 生成图片分享预览失败:", error)
+          resolve("")
+        } finally {
+          URL.revokeObjectURL(objectUrl)
+        }
+      }
+
+      image.onerror = () => {
+        URL.revokeObjectURL(objectUrl)
+        resolve("")
+      }
+
+      image.src = objectUrl
+    })
+  }
+
   // ============================================
   // 🔥 大文件上传：使用通用上传服务
   // ============================================
@@ -1844,6 +2150,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
             }
 
             const data = await res.json()
+            const difyFileId = typeof data.id === "string" ? data.id : data.data?.id
             const gatewayUrl = data.gatewayUrl || data.data?.gateway_url
             const modelUrl = data.modelUrl || data.data?.model_url || data.data?.url || gatewayUrl
 
@@ -1852,16 +2159,20 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 
             return new Promise<UploadedFile>((resolve) => {
                 if (fileToUpload.type.startsWith("image/")) {
-                    resolve({
+                    createShareableImageDataUrl(fileToUpload).then((sharePreviewDataUrl) => {
+                      const previewUrl = URL.createObjectURL(fileToUpload)
+                      resolve({
                         name: fileToUpload.name,
                         type: fileToUpload.type,
                         size: fileToUpload.size,
-                        data: modelUrl || "",
-                        difyFileId: data.id,
+                        data: modelUrl || gatewayUrl || sharePreviewDataUrl,
+                        difyFileId,
                         gatewayUrl,
                         modelUrl,
-                        preview: URL.createObjectURL(fileToUpload)
-                    });
+                        preview: previewUrl
+                      });
+                    })
+                    return
                 } else {
                     const reader = new FileReader();
                     reader.onload = e => resolve({
@@ -1869,7 +2180,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                         type: fileToUpload.type,
                         size: fileToUpload.size,
                         data: e.target?.result as string,
-                        difyFileId: data.id,
+                        difyFileId,
                         gatewayUrl,
                         modelUrl,
                         preview: undefined
@@ -2011,6 +2322,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 
     console.log("📤 [onSubmit] 发送消息:", {
       model: selectedModel,
+      teacherAgentShareCode,
       mode: genMode,
       promptLength: txt.length,
       urlAgent,
@@ -2026,7 +2338,8 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       return
     }
 
-	    const requestId = createClientRequestId(selectedModel === "gpt-image-2" ? "img" : selectedModel === "open-claw" ? "openclaw" : "chat")
+    const isTeacherAgentSubmit = Boolean(teacherAgentShareCode)
+	    const requestId = createClientRequestId(isTeacherAgentSubmit ? "teacher-agent" : selectedModel === "gpt-image-2" ? "img" : selectedModel === "open-claw" ? "openclaw" : "chat")
 
 	    setFileProcessing({ status: "idle", progress: 0, message: "" })
 	    setDynamicStatusMessage("")
@@ -2245,10 +2558,11 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
           .map((file) => file.modelUrl || (/^https?:\/\//.test(file.data) ? file.data : "") || file.gatewayUrl || "")
           .filter(Boolean)
 
-        console.log("🚀 [API 请求] 发送到 /api/dify-chat:", {
+        console.log("🚀 [API 请求] 发送到聊天 API:", {
           requestId,
           promptLength: userMsg.content.length,
           model: selectedModel,
+          teacherAgent: isTeacherAgentSubmit,
           mode: genMode,
           sessionId: sessionIdRef.current,
           fileCount: fileIds.length,
@@ -2265,14 +2579,21 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
             model: selectedModel,
           })
 
-	        const res = await fetch(getApiUrl("/api/dify-chat"), {
+	        const res = await fetch(getApiUrl(isTeacherAgentSubmit ? "/api/agent-chat" : "/api/dify-chat"), {
 	            method: "POST",
 	            headers: {
 	              "Content-Type": "application/json",
                 ...authHeaders,
 	              "X-Request-Id": requestId
 	            },
-	            body: JSON.stringify({
+	            body: JSON.stringify(isTeacherAgentSubmit ? {
+                message: userMsg.content,
+                agent_share_code: teacherAgentShareCode,
+                conversation_id: sessionIdRef.current,
+                requestId,
+                sessionId: sid,
+                messageId: botId,
+              } : {
 	              query: isWordCardRequest ? vocabUserMessage : userMsg.content,
               fileIds,
               fileUrls,
@@ -2401,8 +2722,13 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 
                     // 🔥 处理 Chat API 的 answer 字段
                     if (json.answer) {
+                        const renderableAnswer = getRenderableAssistantChunk(json.answer)
+                        if (!renderableAnswer) {
+                          console.warn("[Answer] 跳过内部路由 JSON，不展示给用户")
+                          continue
+                        }
                         if (isWordCardRequest) {
-                          const cleanedAnswer = cleanVocabAnswer(json.answer)
+                          const cleanedAnswer = cleanVocabAnswer(renderableAnswer)
                           if (cleanedAnswer) {
                             fullText = cleanedAnswer
                             hasRec = true
@@ -2420,7 +2746,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                           console.log("✍️ [Answer] 收到第一个 answer，触发 handover")
                         }
                         hasRec = true
-                        fullText += json.answer
+                        fullText += renderableAnswer
                         setMessages(p => p.map(m => m.id === botId ? { ...m, content: fullText } : m))
                     }
 
@@ -2429,8 +2755,13 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                     if ((json.event === 'text_chunk' || json.event === 'agent_message') && !json.answer) {
                         const text = json.data?.text || json.text || ''
                         if (text) {
+                            const renderableText = getRenderableAssistantChunk(text)
+                            if (!renderableText) {
+                              console.warn("[TextChunk] 跳过内部路由 JSON，不展示给用户")
+                              continue
+                            }
                             if (isWordCardRequest) {
-                              const cleanedAnswer = cleanVocabAnswer(text)
+                              const cleanedAnswer = cleanVocabAnswer(renderableText)
                               if (cleanedAnswer) {
                                 fullText = cleanedAnswer
                                 hasRec = true
@@ -2446,7 +2777,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                               console.log("✍️ [TextChunk] 收到第一个文本块，触发 handover")
                             }
                             hasRec = true
-                            fullText += text
+                            fullText += renderableText
                             setMessages(p => p.map(m => m.id === botId ? { ...m, content: fullText } : m))
                         }
                     }
@@ -2458,11 +2789,13 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                           applyVocabResult({ outputs })
                           continue
                         }
-                        if (outputs.text && !hasRec) {
-                            fullText = outputs.text
+                        const outputText = typeof outputs.text === "string" ? getRenderableAssistantChunk(outputs.text) : ""
+                        const outputResult = typeof outputs.result === "string" ? getRenderableAssistantChunk(outputs.result) : ""
+                        if (outputText && !hasRec) {
+                            fullText = outputText
                             setMessages(p => p.map(m => m.id === botId ? { ...m, content: fullText } : m))
-                        } else if (outputs.result && !hasRec) {
-                            fullText = outputs.result
+                        } else if (outputResult && !hasRec) {
+                            fullText = outputResult
                             setMessages(p => p.map(m => m.id === botId ? { ...m, content: fullText } : m))
                         }
                     }
@@ -2480,6 +2813,19 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 	            hasRec = true
 	          }
 	        }
+          if (selectedModel === "banzhuren" && hasRec) {
+            const formattedFinalAnswer = formatStructuredJsonForDisplay(fullText) || stripInternalRoutingPayload(fullText)
+            if (formattedFinalAnswer && formattedFinalAnswer !== fullText) {
+              fullText = formattedFinalAnswer
+              setMessages(p => p.map(m => m.id === botId ? { ...m, content: formattedFinalAnswer } : m))
+            }
+          }
+          if (selectedModel === "banzhuren" && !hasRec) {
+            const friendlyFallback = "我已识别到这是家校沟通场景，但上游没有返回完整逐字稿。请补充学生情况、家长关注点或沟通目标，我会重新整理成可直接使用的逐字稿。"
+            setMessages(p => p.map(m => m.id === botId ? { ...m, content: friendlyFallback } : m))
+            fullText = friendlyFallback
+            hasRec = true
+          }
           console.debug("[ChatPerf]", {
             requestId,
             stage: "stream_end",
@@ -2895,11 +3241,26 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       // 🔥 发送整个对话到 API
       const res = await fetch('/api/share', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(await getVerifiedAuthHeaders()),
+        },
         body: JSON.stringify({
-          messages: messages.map(m => ({ role: m.role, content: m.content })),
+          messages: messages.map(m => ({
+            role: m.role,
+            content: m.content,
+            files: m.files?.map(file => ({
+              name: file.name,
+              type: file.type,
+              size: file.size,
+              data: file.data,
+              difyFileId: file.difyFileId,
+              gatewayUrl: file.gatewayUrl,
+              modelUrl: file.modelUrl,
+            })) || [],
+          })),
           userId,
-          modelName: getModelUiConfig(selectedModel).name
+          modelName: getModelUiConfig(selectedModel).name,
         })
       })
 
@@ -2928,7 +3289,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         try {
           await navigator.share({
             title: '沈翔智学 - AI 分析报告',
-            text: '查看我的 AI 对话',
+            text: '查看我的 AI 学习作品',
             url: shareUrl
           })
         } catch (err) {
@@ -3354,15 +3715,17 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                           />
                         ) : (
                           // AI message - Flat, minimal container
-                          <div className="w-full">
-                            {/* Thinking state */}
-                            {message.id === currentBotIdRef.current && isLoading && !message.content && !isFastTrack ? (
+                          <div className="w-full space-y-3">
+                            {message.id === currentBotIdRef.current && isLoading && !isFastTrack && (
                               <ProcessingStatusCard
                                 context={processingContext}
                                 showLongWaitHint={showDeepThinkingHint}
+                                workflowState={workflowState}
+                                currentRunningText={currentRunningText}
                               />
-                            ) : (
-                              <>
+                            )}
+                            {(message.content || !(message.id === currentBotIdRef.current && isLoading && !isFastTrack)) && (
+                              <div>
                                 {/* Content renderer */}
                                 {(() => {
                                   const musicTask = getTaskByMessageId(message.id)
@@ -3432,7 +3795,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                                     />
                                   )
                                 })()}
-                              </>
+                              </div>
                             )}
 
                             {/* Action toolbar - Subtle, shows on hover */}

@@ -6,6 +6,7 @@ node_modules
 .next
 out
 services
+backups
 
 # 测试
 coverage

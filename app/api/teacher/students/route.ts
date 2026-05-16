@@ -1,15 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server"
-import { requireUser } from "@/lib/auth/verified-user"
 import { getSupabaseAdmin } from "@/lib/supabase-admin"
+import { isSupabaseUuid, requireLearningUserId } from "@/lib/learning-user"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
-
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
-function isUuid(value: string) {
-  return UUID_PATTERN.test(value)
-}
 
 function text(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : ""
@@ -17,7 +11,7 @@ function text(value: unknown) {
 
 async function resolveStudentId(body: Record<string, unknown>) {
   const studentId = text(body.student_id)
-  if (studentId) return isUuid(studentId) ? studentId : null
+  if (studentId) return isSupabaseUuid(studentId) ? studentId : null
 
   const email = text(body.student_email).toLowerCase()
   if (!email) return null
@@ -29,10 +23,9 @@ async function resolveStudentId(body: Record<string, unknown>) {
 
 export async function POST(request: NextRequest) {
   try {
-    const auth = await requireUser(request)
+    const auth = await requireLearningUserId(request)
     if (auth.response) return auth.response
-    const teacherId = auth.user!.id
-    if (!isUuid(teacherId)) return NextResponse.json({ error: "教师账号未同步到 Supabase" }, { status: 400 })
+    const teacherId = auth.userId!
 
     let body: Record<string, unknown>
     try {
@@ -65,14 +58,14 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    const auth = await requireUser(request)
+    const auth = await requireLearningUserId(request)
     if (auth.response) return auth.response
 
     const supabase = getSupabaseAdmin()
     const { data: bindings, error } = await supabase
       .from("teacher_students")
       .select("student_id, class_name, joined_at")
-      .eq("teacher_id", auth.user!.id)
+      .eq("teacher_id", auth.userId!)
       .order("joined_at", { ascending: false })
 
     if (error) throw error
@@ -105,7 +98,7 @@ export async function GET(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const auth = await requireUser(request)
+    const auth = await requireLearningUserId(request)
     if (auth.response) return auth.response
 
     let body: Record<string, unknown>
@@ -116,12 +109,12 @@ export async function DELETE(request: NextRequest) {
     }
 
     const studentId = text(body.student_id)
-    if (!isUuid(studentId)) return NextResponse.json({ error: "student_id 参数无效" }, { status: 400 })
+    if (!isSupabaseUuid(studentId)) return NextResponse.json({ error: "student_id 参数无效" }, { status: 400 })
 
     const { error } = await getSupabaseAdmin()
       .from("teacher_students")
       .delete()
-      .eq("teacher_id", auth.user!.id)
+      .eq("teacher_id", auth.userId!)
       .eq("student_id", studentId)
 
     if (error) throw error

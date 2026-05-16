@@ -4,6 +4,7 @@ import type { ReadableStream as NodeReadableStream } from "node:stream/web"
 import sharp from "sharp"
 
 const DEFAULT_GATEWAY_ORIGIN = "http://43.154.111.156:8001"
+const DEFAULT_GEMINI_GATEWAY_ORIGIN = "http://43.154.111.156:8002"
 const MAX_IMAGE_BYTES = 25 * 1024 * 1024
 const DEFAULT_PREVIEW_WIDTH = 1600
 const MAX_PREVIEW_WIDTH = 3840
@@ -13,11 +14,14 @@ const IMAGE_CACHE_CONTROL = "public, max-age=31536000, immutable"
 type OutputFormat = "webp" | "avif" | "jpeg" | "png"
 
 function getAllowedOrigins(): Set<string> {
-  const origins = new Set([DEFAULT_GATEWAY_ORIGIN])
+  const origins = new Set([DEFAULT_GATEWAY_ORIGIN, DEFAULT_GEMINI_GATEWAY_ORIGIN])
   const configuredGateways = [
     process.env.DIFY_IMAGE_GATEWAY_URL,
     process.env.DIFY_IMAGE_GATEWAY_PUBLIC_URL,
     process.env.NEXT_PUBLIC_DIFY_IMAGE_GATEWAY_URL,
+    process.env.GEMINI_IMAGE_GATEWAY_URL,
+    process.env.GEMINI_IMAGE_GATEWAY_PUBLIC_URL,
+    process.env.NEXT_PUBLIC_GEMINI_IMAGE_GATEWAY_URL,
   ]
 
   for (const configuredGateway of configuredGateways) {
@@ -33,22 +37,37 @@ function getAllowedOrigins(): Set<string> {
 }
 
 function getUpstreamImageUrl(target: URL): string {
-  const internalGateway = process.env.DIFY_IMAGE_GATEWAY_URL
-  if (!internalGateway) return target.toString()
+  const gatewayConfigs = [
+    {
+      internalGateway: process.env.GEMINI_IMAGE_GATEWAY_URL,
+      publicOrigins: [
+        DEFAULT_GEMINI_GATEWAY_ORIGIN,
+        process.env.GEMINI_IMAGE_GATEWAY_PUBLIC_URL,
+        process.env.NEXT_PUBLIC_GEMINI_IMAGE_GATEWAY_URL,
+      ],
+    },
+    {
+      internalGateway: process.env.DIFY_IMAGE_GATEWAY_URL,
+      publicOrigins: [
+        DEFAULT_GATEWAY_ORIGIN,
+        process.env.DIFY_IMAGE_GATEWAY_PUBLIC_URL,
+        process.env.NEXT_PUBLIC_DIFY_IMAGE_GATEWAY_URL,
+      ],
+    },
+  ]
 
-  try {
-    const internalOrigin = new URL(internalGateway).origin
-    const publicOrigins = new Set([
-      DEFAULT_GATEWAY_ORIGIN,
-      process.env.DIFY_IMAGE_GATEWAY_PUBLIC_URL,
-      process.env.NEXT_PUBLIC_DIFY_IMAGE_GATEWAY_URL,
-    ].filter(Boolean) as string[])
+  for (const { internalGateway, publicOrigins } of gatewayConfigs) {
+    if (!internalGateway) continue
+    try {
+      const internalOrigin = new URL(internalGateway).origin
+      const allowedPublicOrigins = new Set(publicOrigins.filter(Boolean) as string[])
 
-    if (publicOrigins.has(target.origin)) {
-      return `${internalOrigin}${target.pathname}${target.search}`
+      if (allowedPublicOrigins.has(target.origin)) {
+        return `${internalOrigin}${target.pathname}${target.search}`
+      }
+    } catch {
+      // Fall back to the requested URL if a gateway env is malformed.
     }
-  } catch {
-    // Fall back to the requested URL if the internal gateway env is malformed.
   }
 
   return target.toString()

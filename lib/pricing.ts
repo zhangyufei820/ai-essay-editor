@@ -51,6 +51,7 @@ export type ModelType =
   | "resume-optimize"
   | "speech-defense"
   | "school-wechat"
+  | "teacher-agent"
 
 export type GenMode = "text" | "image" | "music" | "video"
 export type ModelCategory = "text" | "media"
@@ -142,6 +143,7 @@ export const MODEL_COSTS: Record<ModelType, ModelCostConfig> = {
   "resume-optimize": { ...TEXT_MODEL_DEFAULTS, displayName: "实习简历优化助手" },
   "speech-defense": { ...TEXT_MODEL_DEFAULTS, displayName: "演讲与答辩稿助手", estimatedInputTokens: 1000, estimatedOutputTokens: 1500 },
   "school-wechat": { ...TEXT_MODEL_DEFAULTS, displayName: "学校公众号写作助手" },
+  "teacher-agent": { ...TEXT_MODEL_DEFAULTS, displayName: "教师自定义智能体", estimatedInputTokens: 700, estimatedOutputTokens: 1000 },
   "gpt-5": { ...TEXT_MODEL_DEFAULTS, displayName: "ChatGPT 5.4", estimatedInputTokens: 700, estimatedOutputTokens: 1000 },
   "claude-opus": { ...TEXT_MODEL_DEFAULTS, displayName: "Claude opus4.6thinking" },
   "gemini-pro": { ...TEXT_MODEL_DEFAULTS, displayName: "Gemini 3.1 pro", estimatedInputTokens: 700, estimatedOutputTokens: 1000 },
@@ -483,17 +485,13 @@ export function getMediaBillingConfig(model: ModelType): MediaBillingItem | unde
 }
 
 export function buildTextOutputLimitInstruction(model: ModelType): string {
-  const maxOutputTokens = getMaxOutputTokensForModel(model)
-  if (!maxOutputTokens) return ""
-  return `${TEXT_OUTPUT_LIMIT_MARKER} 请在保证必要质量的前提下控制输出长度，生成内容最多约 ${maxOutputTokens.toLocaleString("en-US")} tokens。不要无边界展开；如果材料较长，请优先给出结构化、可执行的重点内容。`
+  void model
+  return ""
 }
 
 export function appendTextOutputLimitInstruction(text: string, model: ModelType): string {
-  const instruction = buildTextOutputLimitInstruction(model)
-  if (!instruction) return text
-  const baseText = text || "你好"
-  if (baseText.includes(TEXT_OUTPUT_LIMIT_MARKER)) return baseText
-  return `${baseText}\n\n${instruction}`
+  void model
+  return text
 }
 
 export function shouldAuditHighConsumptionTextCall(

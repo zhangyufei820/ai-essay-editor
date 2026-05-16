@@ -1,227 +1,129 @@
-import { createClient } from '@supabase/supabase-js'
-import { NextRequest, NextResponse } from 'next/server'
-import { addCredits } from '@/lib/credits'
+import { NextResponse, type NextRequest } from "next/server"
+import { getSupabaseAdmin } from "@/lib/supabase-admin"
+import { requireLearningUserId } from "@/lib/learning-user"
+import {
+  awardShareCredits,
+  generateUniqueShareCode,
+  normalizeSharePayload,
+  publicShareSelect,
+  type SharedContentRow,
+  toPublicShare,
+} from "@/lib/sharing"
 
-// 🔥 允许的 HTTP 方法
-export const dynamic = 'force-dynamic'
+export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
 
-// 🎁 分享奖励配置
-const SHARE_REWARD_CONFIG = {
-  CREDITS_PER_SHARE: 1000,    // 每次分享双方各获得积分
-  MAX_DAILY_SHARES: 5,        // 每天最多获得奖励的分享次数
-}
+export async function GET(request: NextRequest) {
+  try {
+    const auth = await requireLearningUserId(request)
+    if (auth.response) return auth.response
+    const userId = auth.userId!
 
-// 生成短链接 ID（8位随机字符）
-function generateShareId(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789'
-  let result = ''
-  for (let i = 0; i < 8; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length))
+    const supabase = getSupabaseAdmin()
+    const { data, error, count } = await supabase
+      .from("shared_contents")
+      .select(publicShareSelect(), { count: "exact" })
+      .eq("user_id", userId)
+      .neq("status", "hidden")
+      .order("created_at", { ascending: false })
+      .limit(100)
+
+    if (error) {
+      console.error("[Share] list failed:", error)
+      return NextResponse.json({ error: "获取我的分享失败" }, { status: 500 })
+    }
+
+    return NextResponse.json({ shares: (data || []).map((row: any) => toPublicShare(row)), total_count: count || 0 })
+  } catch (error) {
+    console.error("[Share] GET exception:", error)
+    const isConfigError = error instanceof Error && error.message === "缺少 Supabase 配置"
+    return NextResponse.json(
+      { error: isConfigError ? "分享服务未配置" : "获取我的分享失败" },
+      { status: isConfigError ? 503 : 500 },
+    )
   }
-  return result
-}
-
-// 从对话中提取标题
-function extractTitle(messages: Array<{role: string, content: string}>): string {
-  // 从用户第一条消息提取
-  const firstUserMsg = messages.find(m => m.role === 'user')
-  if (firstUserMsg) {
-    return firstUserMsg.content.slice(0, 30).replace(/\n/g, ' ') + (firstUserMsg.content.length > 30 ? '...' : '')
-  }
-  
-  // 从 AI 回复中提取标题
-  const firstAiMsg = messages.find(m => m.role === 'assistant')
-  if (firstAiMsg) {
-    const h1Match = firstAiMsg.content.match(/^#\s+(.+)$/m)
-    if (h1Match) return h1Match[1].slice(0, 50)
-    
-    const h2Match = firstAiMsg.content.match(/^##\s+(.+)$/m)
-    if (h2Match) return h2Match[1].slice(0, 50)
-  }
-  
-  return 'AI 对话分享'
 }
 
 export async function POST(request: NextRequest) {
-  console.log('🔗 [Share API] 收到分享请求')
-  
   try {
-    // IP 限流：30次/分钟
-    const { getClientIP, checkIpRateLimit, createRateLimitResponse } = await import('@/lib/rate-limit')
-    const ip = getClientIP(request)
-    const limitResult = checkIpRateLimit(ip, 30)
-    if (!limitResult.allowed) {
-      return createRateLimitResponse(limitResult.retryAfter!)
-    }
-    const body = await request.json()
-    const { messages, userId, modelName } = body
-    
-    console.log('🔗 [Share API] 请求参数:', {
-      hasMessages: !!messages,
-      messagesCount: messages?.length,
-      userId: userId?.slice(0, 8) + '...',
-      modelName
-    })
+    const auth = await requireLearningUserId(request)
+    if (auth.response) return auth.response
+    const userId = auth.userId!
 
-    // 🔥 支持两种格式：messages 数组（对话）或 content 字符串（单条内容）
-    let contentToSave: string
-    let title: string
-
-    if (messages && Array.isArray(messages) && messages.length > 0) {
-      // 新格式：保存整个对话
-      contentToSave = JSON.stringify({
-        type: 'conversation',
-        modelName: modelName || '沈翔智学',
-        messages: messages
-      })
-      title = extractTitle(messages)
-    } else if (body.content && typeof body.content === 'string') {
-      // 兼容旧格式：单条内容
-      contentToSave = JSON.stringify({
-        type: 'single',
-        content: body.content
-      })
-      title = body.content.slice(0, 30).replace(/\n/g, ' ') + '...'
-    } else {
-      console.error('🔗 [Share API] 内容为空')
-      return NextResponse.json({ error: '内容不能为空' }, { status: 400 })
+    let body: Record<string, unknown>
+    try {
+      body = await request.json()
+    } catch {
+      return NextResponse.json({ error: "请求体格式错误" }, { status: 400 })
     }
 
-    // 🔥 检查环境变量
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    
-    console.log('🔗 [Share API] 环境变量检查:', {
-      hasSupabaseUrl: !!supabaseUrl,
-      hasServiceRoleKey: !!serviceRoleKey,
-      serviceRoleKeyLength: serviceRoleKey?.length
-    })
-    
-    if (!supabaseUrl || !serviceRoleKey) {
-      console.error('🔗 [Share API] 缺少环境变量')
-      return NextResponse.json({ error: '服务配置错误' }, { status: 500 })
+    const payload = normalizeSharePayload(body)
+    if (!payload.title || !payload.contentData || Object.keys(payload.contentData).length === 0) {
+      return NextResponse.json({ error: "分享标题和内容不能为空" }, { status: 400 })
     }
 
-    // 使用 Service Role Key 创建管理员客户端
-    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey)
-
-    // 生成唯一的分享 ID
-    let shareId = generateShareId()
-    let attempts = 0
-    const maxAttempts = 5
-
-    // 确保 ID 唯一
-    while (attempts < maxAttempts) {
-      const { data: existing } = await supabaseAdmin
-        .from('shared_content')
-        .select('share_id')
-        .eq('share_id', shareId)
-        .single()
-
-      if (!existing) break
-      shareId = generateShareId()
-      attempts++
-    }
-
-    // 插入分享记录
-    console.log('🔗 [Share API] 准备插入数据:', { shareId, title, contentLength: contentToSave.length })
-    
-    const { data, error } = await supabaseAdmin
-      .from('shared_content')
+    const supabase = getSupabaseAdmin()
+    const shareCode = await generateUniqueShareCode(supabase)
+    const { data, error } = await supabase
+      .from("shared_contents")
       .insert({
-        share_id: shareId,
-        content: contentToSave,
-        title: title,
-        user_id: userId || null,
-        view_count: 0
+        user_id: userId,
+        content_type: payload.contentType,
+        title: payload.title,
+        description: payload.description,
+        content_data: payload.contentData,
+        thumbnail_url: payload.thumbnailUrl,
+        preview_text: payload.previewText,
+        subject: payload.subject,
+        tags: payload.tags,
+        ai_model_used: payload.aiModelUsed,
+        visibility: payload.visibility,
+        share_code: shareCode,
+        status: "published",
       })
-      .select()
+      .select(publicShareSelect())
       .single()
 
     if (error) {
-      console.error('🔗 [Share API] 创建分享失败:', {
-        code: error.code,
-        message: error.message,
-        details: error.details,
-        hint: error.hint
-      })
-      
-      // 🔥 特殊处理：表不存在的错误
-      if (error.code === '42P01' || error.message?.includes('does not exist')) {
-        return NextResponse.json({ 
-          error: '分享功能暂未开放，请联系管理员',
-          detail: '数据库表未创建'
-        }, { status: 503 })
+      console.error("[Share] create failed:", error)
+      if (error.code === "42P01") {
+        return NextResponse.json({ error: "分享数据表尚未创建，请先执行迁移" }, { status: 503 })
       }
-      
-      return NextResponse.json({ error: '创建分享失败: ' + error.message }, { status: 500 })
-    }
-    
-    console.log('🔗 [Share API] 分享创建成功:', { shareId, title })
-
-    // 🎁 发放分享积分奖励
-    let creditsRewarded = 0
-    let rewardMessage = ''
-    
-    if (userId) {
-      try {
-        // 检查今天已经获得奖励的分享次数
-        const today = new Date()
-        today.setHours(0, 0, 0, 0)
-        
-        const { data: todayShares, error: countError } = await supabaseAdmin
-          .from('shared_content')
-          .select('id, created_at')
-          .eq('user_id', userId)
-          .gte('created_at', today.toISOString())
-        
-        const todayShareCount = todayShares?.length || 0
-        
-        console.log('🎁 [Share API] 今日分享次数:', todayShareCount, '/ 最大:', SHARE_REWARD_CONFIG.MAX_DAILY_SHARES)
-        
-        if (todayShareCount <= SHARE_REWARD_CONFIG.MAX_DAILY_SHARES) {
-          // 发放积分
-          const success = await addCredits(
-            userId, 
-            SHARE_REWARD_CONFIG.CREDITS_PER_SHARE, 
-            'share_reward',
-            `📤 分享对话获得 ${SHARE_REWARD_CONFIG.CREDITS_PER_SHARE} 积分奖励`,
-            shareId
-          )
-          
-          if (success) {
-            creditsRewarded = SHARE_REWARD_CONFIG.CREDITS_PER_SHARE
-            rewardMessage = `🎉 分享成功！获得 ${creditsRewarded} 积分奖励（今日 ${todayShareCount}/${SHARE_REWARD_CONFIG.MAX_DAILY_SHARES}）`
-            console.log('🎁 [Share API] 积分发放成功:', creditsRewarded)
-          }
-        } else {
-          rewardMessage = `分享成功！今日积分奖励已达上限（${SHARE_REWARD_CONFIG.MAX_DAILY_SHARES}次）`
-          console.log('🎁 [Share API] 今日奖励已达上限')
-        }
-      } catch (rewardError) {
-        console.error('🎁 [Share API] 积分发放异常:', rewardError)
-        // 积分发放失败不影响分享功能
-      }
+      return NextResponse.json({ error: "创建分享失败" }, { status: 500 })
     }
 
-    // 构建分享链接
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://www.shenxiang.school'
-    const shareUrl = `${baseUrl}/share/${shareId}`
-
-    return NextResponse.json({
-      success: true,
-      shareId,
-      shareUrl,
-      title,
-      // 🎁 返回积分奖励信息
-      reward: {
-        credits: creditsRewarded,
-        message: rewardMessage
-      }
+    const share = data as unknown as SharedContentRow
+    const reward = await awardShareCredits(
+      supabase,
+      userId,
+      share.id,
+      "create_share",
+      5,
+      "分享到创作广场奖励",
+    ).catch((rewardError) => {
+      console.error("[Share] reward failed:", rewardError)
+      return { awarded: false, credits: 0, reason: "reward_error" }
     })
 
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.shenxiang.school"
+    return NextResponse.json({
+      success: true,
+      shareCode: share.share_code,
+      shareId: share.share_code,
+      shareUrl: `${baseUrl}/share/${share.share_code}`,
+      share: toPublicShare(share),
+      reward: {
+        credits: reward.credits,
+        awarded: reward.awarded,
+        message: reward.awarded ? `分享成功，获得 ${reward.credits} 积分` : "分享成功",
+      },
+    }, { status: 201 })
   } catch (error) {
-    console.error('[Share API Error]', error)
-    return NextResponse.json({ error: '服务器错误' }, { status: 500 })
+    console.error("[Share] POST exception:", error)
+    const isConfigError = error instanceof Error && error.message === "缺少 Supabase 配置"
+    return NextResponse.json(
+      { error: isConfigError ? "分享服务未配置" : "创建分享失败" },
+      { status: isConfigError ? 503 : 500 },
+    )
   }
 }

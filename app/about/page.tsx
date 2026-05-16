@@ -189,7 +189,7 @@ export default function AboutPage() {
                 <div>
                   <h3 className="font-semibold" style={{ color: slateColors[800] }}>2026年 — 生态扩展</h3>
                   <p className="text-sm mt-1" style={{ color: slateColors[500] }}>
-                    推出 OpenClaw 通用助手、备课助手 Pro、班主任助手等垂直智能体，服务超过 10,000+ 学生用户
+                    推出 OpenClaw 通用助手、备课助手 Pro、班主任助手等垂直智能体，覆盖更多学习与教学场景
                   </p>
                 </div>
               </div>

@@ -11,8 +11,17 @@ import {
   proxifyGeneratedImageUrl,
   resolveSizeForAspectRatio,
 } from "@/components/chat/image-generation/gpt-image-v11"
+import { readFileSync } from "fs"
+import path from "path"
 
 describe("GPT Image V11 parameter mapping", () => {
+  it("keeps Gemini image on the direct JSON response branch", () => {
+    const source = readFileSync(path.join(process.cwd(), "components/chat/gpt-image2-chat-interface.tsx"), "utf8")
+
+    expect(source).toContain('const isWorkflowImageWorkspace = isBananaWorkspace')
+    expect(source).not.toContain('const isWorkflowImageWorkspace = isBananaWorkspace || isGeminiWorkspace')
+  })
+
   it("builds complete default text-to-image inputs", () => {
     expect(buildDifyInputs(DEFAULT_IMAGE_INPUTS)).toEqual({
       mode: "image_generate",

@@ -10,9 +10,10 @@ import {
   Settings, ChevronRight, ChevronDown,
   Menu, X, LogOut, Zap, Coins,
   Bot, GraduationCap, Brain,
-  Gift, HelpCircle, Sparkles, Palette, User, Edit, FlaskConical, BarChart3, Layers3
+  Gift, HelpCircle, Sparkles, Palette, User, Edit, FlaskConical, BarChart3, Layers3, FolderOpen, Wrench, Compass, Share2
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { Logo } from "@/components/brand/Logo"
 import { AgentPanel } from "./chat/AgentPanel"
 import { ModelPanel } from "./chat/ModelPanel"
 import { CreativePanel } from "./chat/CreativePanel"
@@ -517,6 +518,18 @@ function AppSidebarInner() {
 
         <div className="h-4 shrink-0" />
 
+        {/* 品牌标识 */}
+        <div className="shrink-0 px-2 pb-5 pt-1">
+          <Link
+            href="/"
+            onClick={handleNavClick}
+            className="flex min-h-[88px] items-center justify-center rounded-2xl px-1 py-2 transition-colors hover:bg-white/80"
+            aria-label="返回沈翔智学首页"
+          >
+            <Logo size="lg" variant="full" />
+          </Link>
+        </div>
+
         {/* 2. 积分显示 - 可点击跳转 */}
         {user && (
           <Link
@@ -590,6 +603,33 @@ function AppSidebarInner() {
             </Link>
           </div>
 
+          {/* 个人资料夹入口 */}
+          <div className="mb-2">
+            <Link href="/folder" onClick={handleNavClick}>
+              <motion.div
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left"
+                style={{
+                  backgroundColor: "rgba(34, 197, 94, 0.08)",
+                  border: "1px solid rgba(34, 197, 94, 0.16)",
+                  boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)"
+                }}
+                whileHover={{
+                  x: 2,
+                  backgroundColor: "#FFFFFF",
+                  borderColor: "rgba(34, 197, 94, 0.28)",
+                  boxShadow: "0 4px 10px rgba(15, 23, 42, 0.06)"
+                }}
+                whileTap={{ scale: 0.99 }}
+                transition={{ duration: 0.15 }}
+              >
+                <FolderOpen className="w-[18px] h-[18px]" style={{ color: COLORS.primary.main }} />
+                <span className="text-[12px] font-medium leading-none whitespace-nowrap" style={{ color: COLORS.primary.dark }}>
+                  个人资料夹
+                </span>
+              </motion.div>
+            </Link>
+          </div>
+
           {/* 闪卡复习入口 */}
           <div className="mb-2">
             <Link href="/flashcards" onClick={handleNavClick}>
@@ -612,6 +652,114 @@ function AppSidebarInner() {
                 <Layers3 className="w-[18px] h-[18px]" style={{ color: COLORS.primary.main }} />
                 <span className="text-[12px] font-medium leading-none whitespace-nowrap" style={{ color: COLORS.primary.dark }}>
                   闪卡复习
+                </span>
+              </motion.div>
+            </Link>
+          </div>
+
+          {/* 教师平台入口 */}
+          <div className="mb-2">
+            <Link href="/teacher/agents" onClick={handleNavClick}>
+              <motion.div
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left"
+                style={{
+                  backgroundColor: "rgba(34, 197, 94, 0.08)",
+                  border: "1px solid rgba(34, 197, 94, 0.16)",
+                  boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)"
+                }}
+                whileHover={{
+                  x: 2,
+                  backgroundColor: "#FFFFFF",
+                  borderColor: "rgba(34, 197, 94, 0.28)",
+                  boxShadow: "0 4px 10px rgba(15, 23, 42, 0.06)"
+                }}
+                whileTap={{ scale: 0.99 }}
+                transition={{ duration: 0.15 }}
+              >
+                <GraduationCap className="w-[18px] h-[18px]" style={{ color: COLORS.primary.main }} />
+                <span className="text-[12px] font-medium leading-none whitespace-nowrap" style={{ color: COLORS.primary.dark }}>
+                  教师平台
+                </span>
+              </motion.div>
+            </Link>
+          </div>
+
+          {/* 工具中心入口 */}
+          <div className="mb-2">
+            <Link href="/tools" onClick={handleNavClick}>
+              <motion.div
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left"
+                style={{
+                  backgroundColor: "rgba(34, 197, 94, 0.08)",
+                  border: "1px solid rgba(34, 197, 94, 0.16)",
+                  boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)"
+                }}
+                whileHover={{
+                  x: 2,
+                  backgroundColor: "#FFFFFF",
+                  borderColor: "rgba(34, 197, 94, 0.28)",
+                  boxShadow: "0 4px 10px rgba(15, 23, 42, 0.06)"
+                }}
+                whileTap={{ scale: 0.99 }}
+                transition={{ duration: 0.15 }}
+              >
+                <Wrench className="w-[18px] h-[18px]" style={{ color: COLORS.primary.main }} />
+                <span className="text-[12px] font-medium leading-none whitespace-nowrap" style={{ color: COLORS.primary.dark }}>
+                  工具中心
+                </span>
+              </motion.div>
+            </Link>
+          </div>
+
+          {/* 创作广场入口 */}
+          <div className="mb-2">
+            <Link href="/explore" onClick={handleNavClick}>
+              <motion.div
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left"
+                style={{
+                  backgroundColor: "rgba(34, 197, 94, 0.08)",
+                  border: "1px solid rgba(34, 197, 94, 0.16)",
+                  boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)"
+                }}
+                whileHover={{
+                  x: 2,
+                  backgroundColor: "#FFFFFF",
+                  borderColor: "rgba(34, 197, 94, 0.28)",
+                  boxShadow: "0 4px 10px rgba(15, 23, 42, 0.06)"
+                }}
+                whileTap={{ scale: 0.99 }}
+                transition={{ duration: 0.15 }}
+              >
+                <Compass className="w-[18px] h-[18px]" style={{ color: COLORS.primary.main }} />
+                <span className="text-[12px] font-medium leading-none whitespace-nowrap" style={{ color: COLORS.primary.dark }}>
+                  创作广场
+                </span>
+              </motion.div>
+            </Link>
+          </div>
+
+          {/* 我的分享入口 */}
+          <div className="mb-2">
+            <Link href="/my/shares" onClick={handleNavClick}>
+              <motion.div
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left"
+                style={{
+                  backgroundColor: "rgba(34, 197, 94, 0.08)",
+                  border: "1px solid rgba(34, 197, 94, 0.16)",
+                  boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)"
+                }}
+                whileHover={{
+                  x: 2,
+                  backgroundColor: "#FFFFFF",
+                  borderColor: "rgba(34, 197, 94, 0.28)",
+                  boxShadow: "0 4px 10px rgba(15, 23, 42, 0.06)"
+                }}
+                whileTap={{ scale: 0.99 }}
+                transition={{ duration: 0.15 }}
+              >
+                <Share2 className="w-[18px] h-[18px]" style={{ color: COLORS.primary.main }} />
+                <span className="text-[12px] font-medium leading-none whitespace-nowrap" style={{ color: COLORS.primary.dark }}>
+                  我的分享
                 </span>
               </motion.div>
             </Link>

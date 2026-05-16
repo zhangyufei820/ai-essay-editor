@@ -7,6 +7,7 @@
 import { motion, AnimatePresence } from "framer-motion"
 import Link from "next/link"
 import { X, BookOpen, FileText, Pen, GraduationCap, FlaskConical, Briefcase, Mic, Newspaper } from "lucide-react"
+import { PanelQuickActions } from "@/components/chat/PanelQuickActions"
 
 const TOKENS = {
   primary: {
@@ -241,6 +242,8 @@ export function AIPanel({ isOpen, onClose }: AIPanelProps) {
                 <X className="w-4.5 h-4.5" style={{ color: TOKENS.text.secondary }} />
               </motion.button>
             </motion.div>
+
+            <PanelQuickActions onClose={onClose} />
 
             {/* 智能体网格 */}
             <div className="flex-1 overflow-y-auto px-5 pb-6">

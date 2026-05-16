@@ -7,6 +7,7 @@ import {
   OUTPUT_TOKEN_RATE,
   PRICING_VERSION,
   appendTextOutputLimitInstruction,
+  buildTextOutputLimitInstruction,
   calculateActualCost,
   calculatePreviewCost,
   calculateTextUsageCost,
@@ -292,11 +293,11 @@ describe('统一计费配置', () => {
     expect(getMaxOutputTokensForModel('gpt-image-2')).toBeNull()
   })
 
-  it('adds prompt-based output length constraints without duplicating them', () => {
+  it('does not inject prompt-based output length constraints', () => {
     const constrained = appendTextOutputLimitInstruction('请批改作文', 'standard')
-    expect(constrained).toContain('[输出长度约束]')
-    expect(constrained).toContain('25,000 tokens')
-    expect(appendTextOutputLimitInstruction(constrained, 'standard')).toBe(constrained)
+    expect(constrained).toBe('请批改作文')
+    expect(constrained).not.toContain('[输出长度约束]')
+    expect(buildTextOutputLimitInstruction('standard')).toBe('')
     expect(appendTextOutputLimitInstruction('画一张图', 'gpt-image-2')).toBe('画一张图')
   })
 

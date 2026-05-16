@@ -20,30 +20,29 @@ describe("Dify credential selection", () => {
     })
   })
 
-  it("uses the dedicated Gemini image workflow key when configured", () => {
+  it("uses the dedicated Gemini image gateway token when configured", () => {
     const selection = getDifyCredentialForModel("gemini-image", {
-      DIFY_GEMINI_IMAGE_API_KEY: "gemini-image-key",
+      GEMINI_IMAGE_GATEWAY_TOKEN: "gemini-image-token",
       ESSAY_CORRECTION_API_KEY: "default-key",
     })
 
     expect(selection).toEqual({
-      credential: "gemini-image-key",
-      source: "DIFY_GEMINI_IMAGE_API_KEY",
+      credential: "gemini-image-token",
+      source: "GEMINI_IMAGE_GATEWAY_TOKEN",
     })
   })
 
-  it("does not silently fall back for Gemini image in production", () => {
+  it("falls back to the shared image gateway token for Gemini image", () => {
     const selection = getDifyCredentialForModel("gemini-image", {
       NODE_ENV: "production",
-      DIFY_API_KEY: "chat-key",
+      DIFY_IMAGE_GATEWAY_TOKEN: "shared-image-token",
       ESSAY_CORRECTION_API_KEY: "default-key",
     })
 
     expect(selection).toEqual({
-      credential: "",
-      source: "DIFY_GEMINI_IMAGE_API_KEY",
+      credential: "shared-image-token",
+      source: "DIFY_IMAGE_GATEWAY_TOKEN",
     })
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("DIFY_GEMINI_IMAGE_API_KEY is required"))
   })
 
   it("falls back to the default credential when a model-specific key is missing", () => {

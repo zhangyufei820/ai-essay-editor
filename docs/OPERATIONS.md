@@ -45,6 +45,25 @@ npm run perf:baseline -- --base-url=https://shenxiang.school --iterations=3
 - `docs/BACKUP-RESTORE-SOP.md`
 - `docs/PERFORMANCE-BASELINE.md`
 
+## BuildKit 缓存清理
+
+构建缓存是当前服务器最容易增长的可再生成对象。清理它不会删除运行中容器、业务镜像、Docker 卷、数据库或上传资源；影响只是下一次 Docker 构建可能变慢。
+
+建议每周或磁盘使用率超过 70% 时执行：
+
+```bash
+cd /data/ai-essay-editor
+KEEP_HOURS=24 bash scripts/cleanup-build-cache.sh
+```
+
+清理后必须检查：
+
+```bash
+docker ps | grep shenxiang-nextjs
+curl -fsS http://127.0.0.1:3000/api/health
+df -h / /data
+```
+
 `/admin` 应确认登录、概览、用户列表、订单记录可以正常加载；不要降低后台鉴权要求。
 
 ## 支付问题排查
