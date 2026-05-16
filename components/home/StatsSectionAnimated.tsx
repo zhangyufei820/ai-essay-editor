@@ -11,21 +11,7 @@ import { useEffect, useRef, useState, type ElementType } from "react"
 import { motion, useInView, useScroll, useTransform } from "framer-motion"
 import { Users, ThumbsUp, FileText, Clock } from "lucide-react"
 import { cn } from "@/lib/utils"
-
-// ============================================
-// 设计系统颜色常量
-// ============================================
-
-const COLORS = {
-  primary: {
-    dark: "#2E7D32",
-    darker: "#1B5E20",
-  },
-  white: "#FFFFFF",
-  divider: "rgba(255,255,255,0.2)",
-  iconColor: "rgba(255,255,255,0.85)",
-  labelColor: "rgba(255,255,255,0.9)",
-}
+import { brandColors } from "@/lib/design-tokens"
 
 // ============================================
 // 类型定义
@@ -180,7 +166,7 @@ function StatItem({
       <div className="mb-4">
         <Icon 
           className="w-6 h-6 mx-auto"
-          style={{ color: COLORS.iconColor }}
+          style={{ color: "rgba(255,255,255,0.85)" }}
         />
       </div>
 
@@ -188,7 +174,7 @@ function StatItem({
       <div 
         className="text-4xl md:text-5xl lg:text-[56px] font-bold mb-3"
         style={{ 
-          color: COLORS.white,
+          color: "white",
           fontFamily: "'Roboto Mono', monospace",
           fontWeight: 700,
           textShadow: "0 2px 4px rgba(0,0,0,0.2)",
@@ -206,7 +192,7 @@ function StatItem({
       <p 
         className="text-sm"
         style={{ 
-          color: COLORS.labelColor,
+          color: "rgba(255,255,255,0.9)",
           fontSize: "14px",
           fontWeight: 400,
           letterSpacing: "0.5px",
@@ -239,7 +225,7 @@ export function StatsSectionAnimated() {
       ref={containerRef}
       className="relative overflow-hidden"
       style={{ 
-        background: `linear-gradient(135deg, ${COLORS.primary.dark} 0%, ${COLORS.primary.darker} 100%)`,
+        background: `linear-gradient(135deg, ${brandColors[700]} 0%, ${brandColors[900]} 100%)`,
       }}
     >
       {/* SVG背景装饰 - 带视差效果 */}
@@ -274,7 +260,7 @@ export function StatsSectionAnimated() {
                   className="absolute right-0 top-1/2 -translate-y-1/2 h-16"
                   style={{
                     width: "1px",
-                    backgroundColor: COLORS.divider,
+                    backgroundColor: "rgba(255,255,255,0.2)",
                     transform: "translateX(20px) translateY(-50%)",
                   }}
                 />
@@ -311,7 +297,7 @@ export function StatsSectionAnimated() {
               <div className="mb-3">
                 <stat.icon 
                   className="w-5 h-5 mx-auto"
-                  style={{ color: COLORS.iconColor }}
+                  style={{ color: "rgba(255,255,255,0.85)" }}
                 />
               </div>
 
@@ -319,7 +305,7 @@ export function StatsSectionAnimated() {
               <div 
                 className="text-[40px] font-bold mb-2"
                 style={{ 
-                  color: COLORS.white,
+                  color: "white",
                   fontFamily: "'Roboto Mono', monospace",
                   fontWeight: 700,
                   textShadow: "0 2px 4px rgba(0,0,0,0.2)",
@@ -337,7 +323,7 @@ export function StatsSectionAnimated() {
               <p 
                 className="text-sm"
                 style={{ 
-                  color: COLORS.labelColor,
+                  color: "rgba(255,255,255,0.9)",
                   fontSize: "14px",
                   fontWeight: 400,
                   letterSpacing: "0.5px",
