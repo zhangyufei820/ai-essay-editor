@@ -13,13 +13,14 @@ describe("Sprint 6 growth conversion guardrails", () => {
   test("hero keeps concrete correction positioning and real CTA routes", () => {
     const source = readProjectFile("components/home/HeroSection.tsx")
 
-    // 2026-05-16 sprint 6 之后 Hero 已改为双 CTA，断言收紧到真实功能入口语义层。
     expect(source).toContain("上传作文批改")
     expect(source).toContain("拍卷诊断错题")
-    expect(source).toContain("作文批改报告")
     expect(source).toMatch(/href:\s*["']\/worksheet-diagnosis["']/)
     expect(source).toMatch(/href:\s*["']\/chat\/standard["']/)
     expect(source).not.toContain('href="#"')
+    expect(source).not.toContain("完整学习报告预览")
+    expect(source).not.toContain("从图片上传到修改稿，一屏读完")
+    expect(source).not.toContain("作文批改报告")
   })
 
   test("pricing copy matches product catalog amounts and membership rules", () => {

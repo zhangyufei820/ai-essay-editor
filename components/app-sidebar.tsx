@@ -605,7 +605,7 @@ function AppSidebarInner() {
 
           {/* 个人资料夹入口 */}
           <div className="mb-2">
-            <Link href="/folder" onClick={handleNavClick}>
+            <Link href="/history" onClick={handleNavClick}>
               <motion.div
                 className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left"
                 style={{
@@ -659,7 +659,7 @@ function AppSidebarInner() {
 
           {/* 教师平台入口 */}
           <div className="mb-2">
-            <Link href="/teacher/agents" onClick={handleNavClick}>
+            <Link href="/teacher" onClick={handleNavClick}>
               <motion.div
                 className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left"
                 style={{
@@ -686,7 +686,7 @@ function AppSidebarInner() {
 
           {/* 工具中心入口 */}
           <div className="mb-2">
-            <Link href="/tools" onClick={handleNavClick}>
+            <Link href="/dashboard" onClick={handleNavClick}>
               <motion.div
                 className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left"
                 style={{
@@ -713,7 +713,7 @@ function AppSidebarInner() {
 
           {/* 创作广场入口 */}
           <div className="mb-2">
-            <Link href="/explore" onClick={handleNavClick}>
+            <Link href="/chat/open-claw" onClick={handleNavClick}>
               <motion.div
                 className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left"
                 style={{
@@ -740,7 +740,7 @@ function AppSidebarInner() {
 
           {/* 我的分享入口 */}
           <div className="mb-2">
-            <Link href="/my/shares" onClick={handleNavClick}>
+            <Link href="/invite" onClick={handleNavClick}>
               <motion.div
                 className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left"
                 style={{
