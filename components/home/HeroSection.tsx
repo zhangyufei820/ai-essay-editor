@@ -16,6 +16,7 @@ import {
   Sparkles,
 } from "lucide-react"
 import { FadeIn } from "@/components/motion/FadeIn"
+import { SampleReportTrigger } from "@/components/home/SampleReportDialog"
 import { cn } from "@/lib/utils"
 
 const heroMetrics = [
@@ -33,11 +34,17 @@ const heroActions = [
     primary: true,
   },
   {
+    title: "看一份示例",
+    description: "免登录预览效果",
+    icon: Sparkles,
+    primary: false,
+  },
+] as const
+
+const quickLinks = [
+  {
     href: "/worksheet-diagnosis",
     title: "拍卷诊断错题",
-    description: "看薄弱点和训练建议",
-    icon: Camera,
-    primary: false,
   },
 ] as const
 
@@ -75,6 +82,16 @@ export function HeroSection() {
           <div className="mt-7 grid max-w-full gap-3 sm:mt-8 sm:grid-cols-2">
             {heroActions.map((action) => {
               const Icon = action.icon
+
+              if (!("href" in action)) {
+                return (
+                  <SampleReportTrigger
+                    key={action.title}
+                    label={action.title}
+                    description={action.description}
+                  />
+                )
+              }
 
               return (
                 <Link
@@ -114,6 +131,21 @@ export function HeroSection() {
                 </Link>
               )
             })}
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-center gap-2 text-sm text-slate-600">
+            <span className="font-semibold text-emerald-950">快捷入口</span>
+            {quickLinks.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                prefetch={false}
+                className="inline-flex items-center gap-1 rounded-full border border-emerald-950/10 bg-white/72 px-3 py-1.5 font-medium text-slate-700 transition hover:border-primary/30 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {link.title}
+                <ArrowRight className="size-3.5" />
+              </Link>
+            ))}
           </div>
 
           <div className="mt-8 grid gap-4 border-t border-emerald-950/10 pt-6 sm:grid-cols-3">
