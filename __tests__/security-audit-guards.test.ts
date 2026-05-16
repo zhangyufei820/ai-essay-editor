@@ -85,4 +85,10 @@ describe("P0/P1 security audit guardrails", () => {
     expect(src).not.toMatch(/handlePayment\(["']alipay["']\)/)
     expect(src).toMatch(/handlePayment\(\)/)
   })
+
+  it("share page sanitizes printable markdown via DOMPurify", () => {
+    const src = read("app/share/[id]/page.tsx")
+    expect(src).toContain("DOMPurify.sanitize")
+    expect(src).not.toMatch(/printWindow\.document\.write\([^)]*htmlContent\)/)
+  })
 })

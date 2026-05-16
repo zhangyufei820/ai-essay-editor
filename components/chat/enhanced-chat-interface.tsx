@@ -5,6 +5,7 @@ import type React from "react"
 import { useState, useRef, useEffect, Suspense, useCallback } from "react"
 import Link from "next/link"
 import { useSearchParams, useRouter } from "next/navigation"
+import DOMPurify from "isomorphic-dompurify"
 
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -2795,6 +2796,11 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       }
 
       const htmlContent = convertMarkdownToHTML(renderMathInMarkdown(cleanContent))
+      const safeHtmlContent = DOMPurify.sanitize(htmlContent, {
+        ALLOWED_TAGS: ['h1','h2','h3','h4','p','br','hr','ul','ol','li','strong','em','code','pre','blockquote','a','img','table','thead','tbody','tr','th','td','span','div'],
+        ALLOWED_ATTR: ['href','src','alt','title','class','colspan','rowspan'],
+        ALLOWED_URI_REGEXP: /^(?:https?|mailto):/i,
+      })
 
       const reportStyles = `
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -2865,7 +2871,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
             <h1>沈翔智学 - AI 分析报告</h1>
             <p>${new Date().toLocaleString('zh-CN')}</p>
           </div>
-          <div class="content">${htmlContent}</div>
+          <div class="content">${safeHtmlContent}</div>
           <div class="footer">由沈翔智学 AI 生成 · www.shenxiang.school</div>
         </div>
       `

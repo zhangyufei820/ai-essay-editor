@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createBrowserClient } from '@/lib/supabase/client'
+import DOMPurify from 'isomorphic-dompurify'
 import { GraduationCap, Copy, Download, ArrowLeft, Eye, Calendar, Loader2, User, Sparkles, Gift } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
@@ -284,6 +285,12 @@ export default function SharePage() {
       htmlContent = convertMarkdownToHTML(parsedData.content)
     }
 
+    const safe = DOMPurify.sanitize(htmlContent, {
+      ALLOWED_TAGS: ['h1','h2','h3','h4','p','br','hr','ul','ol','li','strong','em','code','pre','blockquote','a','img','table','thead','tbody','tr','th','td','span','div'],
+      ALLOWED_ATTR: ['href','src','alt','title','class','colspan','rowspan'],
+      ALLOWED_URI_REGEXP: /^(?:https?|mailto):/i,
+    })
+
     printWindow.document.write(`
       <!DOCTYPE html>
       <html>
@@ -316,7 +323,7 @@ export default function SharePage() {
           <h1>${parsedData.modelName || '沈翔智学'} - AI 对话</h1>
           <p>${new Date().toLocaleString('zh-CN')}</p>
         </div>
-        <div class="content">${htmlContent}</div>
+        <div class="content">${safe}</div>
         <div class="footer">由沈翔智学 AI 生成 · www.shenxiang.school</div>
       </body>
       </html>
