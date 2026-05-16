@@ -1,4 +1,5 @@
 import crypto from "crypto"
+import { logger } from "@/lib/logger"
 
 export interface XunhupayConfig {
   appId: string
@@ -41,24 +42,28 @@ export function verifyXunhupaySign(params: Record<string, any>): boolean {
   // 迅虎支付回调中的签名字段可能是 hash 或 sign
   const receivedSign = (params.hash || params.sign || "").toLowerCase()
 
-  console.log("[迅虎支付签名验证] >>>>> 收到参数字段:", Object.keys(params).sort().join(","))
-  console.log("[迅虎支付签名验证] >>>>> 签名字段:", params.hash ? "hash[present]" : params.sign ? "sign[present]" : "[missing]")
-
-  if (!receivedSign) {
-    console.log("[迅虎支付签名验证] 未找到签名字段")
-    return false
-  }
-
   const paramsWithoutSign = { ...params }
   delete paramsWithoutSign.sign
   delete paramsWithoutSign.hash
 
+  if (!receivedSign) {
+    logger.info("[xunhupay] verify", {
+      fields: Object.keys(params).sort().join(","),
+      hasSign: false,
+      paramsForSignFields: Object.keys(paramsWithoutSign).sort().join(","),
+      result: false,
+    })
+    return false
+  }
+
   const calculatedSign = generateSign(paramsWithoutSign, xunhupayConfig.appSecret)
 
-  console.log("[迅虎支付签名验证] >>> 收到签名:", receivedSign ? "[present]" : "[missing]")
-  console.log("[迅虎支付签名验证] >>> 计算签名:", calculatedSign ? "[computed]" : "[missing]")
-  console.log("[迅虎支付签名验证] >>> 参与签名参数字段:", Object.keys(paramsWithoutSign).sort().join(","))
-  console.log("[迅虎支付签名验证] >>> 验证结果:", receivedSign === calculatedSign)
+  logger.info("[xunhupay] verify", {
+    fields: Object.keys(params).sort().join(","),
+    hasSign: Boolean(params.hash || params.sign),
+    paramsForSignFields: Object.keys(paramsWithoutSign).sort().join(","),
+    result: receivedSign === calculatedSign,
+  })
 
   return receivedSign === calculatedSign
 }

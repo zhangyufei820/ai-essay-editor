@@ -56,7 +56,7 @@ describe('Sprint 5 payment / credits / membership guards', () => {
 
   it('xunhupay callback rejects bad signatures and validates amount / credits before granting权益', () => {
     const source = read('app/api/payment/xunhupay/notify/route.ts')
-    expect(source).toContain('签名验证失败，拒绝处理订单')
+    expect(source).toContain('logger.error("[xunhupay] invalid signature")')
     expect(source).toContain('return new NextResponse("fail", { status: 400 })')
     expect(source).toContain('parseOrderSnapshotAmountInCents(order.amount)')
     expect(source).toContain('paidAmountInCents !== expectedAmountInCents')
