@@ -10,7 +10,6 @@ function getSigningSecret() {
   return (
     process.env.OPENCLAW_MEDIA_SIGNING_SECRET ||
     process.env.NEXT_SERVER_ACTIONS_ENCRYPTION_KEY ||
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
     ""
   )
 }
@@ -22,26 +21,43 @@ function signPayload(payload: string) {
   return createHmac("sha256", secret).update(payload).digest("hex")
 }
 
-export function createSignedOpenClawMediaUrl(mediaPath: string, expiresInSeconds = DEFAULT_OPENCLAW_MEDIA_TTL_SECONDS) {
+function signingPayload(mediaPath: string, exp: number, userId: string) {
+  return `${userId}:${mediaPath}:${exp}`
+}
+
+export function createSignedOpenClawMediaUrl(
+  mediaPath: string,
+  expiresInSeconds = DEFAULT_OPENCLAW_MEDIA_TTL_SECONDS,
+  userId: string,
+) {
   const exp = Math.floor(Date.now() / 1000) + expiresInSeconds
   const baseUrl = toPublicOpenClawMediaUrl(mediaPath)
-  const sig = signPayload(`${mediaPath}:${exp}`)
+  const sig = signPayload(signingPayload(mediaPath, exp, userId))
 
   if (!sig) return baseUrl
   return `${baseUrl}?exp=${exp}&sig=${sig}`
 }
 
-export function rewriteOpenClawMediaReferencesWithSignedUrls(text: string, expiresInSeconds = DEFAULT_OPENCLAW_MEDIA_TTL_SECONDS) {
+export function rewriteOpenClawMediaReferencesWithSignedUrls(
+  text: string,
+  expiresInSeconds = DEFAULT_OPENCLAW_MEDIA_TTL_SECONDS,
+  userId: string,
+) {
   return text
     .replace(/https?:\/\/(?:43\.154\.111\.156|shenxiang\.school|www\.shenxiang\.school|api\.shenxiang\.school|localhost|127\.0\.0\.1)(?::18789)?\/__openclaw__\/media\/([^\s)"'<>`]+)/g, (_match, mediaPath: string) =>
-      createSignedOpenClawMediaUrl(mediaPath, expiresInSeconds),
+      createSignedOpenClawMediaUrl(mediaPath, expiresInSeconds, userId),
     )
     .replace(/\/home\/node\/\.openclaw\/media\/([^\s)"'<>`]+)/g, (_match, mediaPath: string) =>
-      createSignedOpenClawMediaUrl(mediaPath, expiresInSeconds),
+      createSignedOpenClawMediaUrl(mediaPath, expiresInSeconds, userId),
     )
 }
 
-export function verifySignedOpenClawMediaPath(mediaPath: string, exp: string | null, sig: string | null) {
+export function verifySignedOpenClawMediaPath(
+  mediaPath: string,
+  exp: string | null,
+  sig: string | null,
+  userId: string,
+) {
   if (!exp || !sig) return false
 
   const expNumber = Number(exp)
@@ -49,7 +65,7 @@ export function verifySignedOpenClawMediaPath(mediaPath: string, exp: string | n
     return false
   }
 
-  const expected = signPayload(`${mediaPath}:${expNumber}`)
+  const expected = signPayload(signingPayload(mediaPath, expNumber, userId))
   if (!expected) return false
 
   const provided = Buffer.from(sig, "hex")

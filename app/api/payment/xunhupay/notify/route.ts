@@ -73,7 +73,13 @@ export async function POST(request: NextRequest) {
       }
     }
     
-    console.log("[迅虎支付] 收到回调:", JSON.stringify(body))
+    console.log("[迅虎支付] 收到回调:", {
+      trade_order_id: body.trade_order_id,
+      status: body.status,
+      transaction_id: body.transaction_id ? "[present]" : "[missing]",
+      total_fee: body.total_fee,
+      hasSign: Boolean(body.hash || body.sign),
+    })
     console.log("[迅虎支付] Content-Type:", contentType)
 
     // 验证签名：失败必须拒绝，不能继续加积分

@@ -1,5 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
+import { type NextRequest } from "next/server"
 import { getAPIConfig } from "@/lib/ai-utils"
+import { requireUser } from "@/lib/auth/verified-user"
 import {
   PRICING_VERSION,
   appendTextOutputLimitInstruction,
@@ -207,9 +209,11 @@ function createMeteredStreamResponse(
   })
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
     assertSecureTlsConfiguration()
+    const auth = await requireUser(req)
+    if (auth.response) return auth.response
 
     const { getClientIP, checkIpRateLimit, checkUserRateLimit, createRateLimitResponse } = await import('@/lib/rate-limit')
     const ip = getClientIP(req)
@@ -220,14 +224,8 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json() as ChatRequestBody
-    const { messages, files, extractedText, userId } = body
-
-    if (!userId) {
-      return new Response(JSON.stringify({ error: "未登录，无法使用" }), {
-        status: 401,
-        headers: { "Content-Type": "application/json" },
-      })
-    }
+    const { messages, files, extractedText } = body
+    const userId = auth.user!.id
 
     const userLimitResult = checkUserRateLimit(userId)
     if (!userLimitResult.allowed) {
@@ -276,7 +274,11 @@ export async function POST(req: Request) {
     if (extractedText && extractedText.length > 100) {
       const essayGradeResponse = await fetch(`${req.url.replace("/api/chat", "/api/essay-grade")}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(req.headers.get("authorization") ? { Authorization: req.headers.get("authorization")! } : {}),
+          ...(req.headers.get("cookie") ? { Cookie: req.headers.get("cookie")! } : {}),
+        },
         body: JSON.stringify({
           essayText: extractedText,
           gradeLevel: "初中",

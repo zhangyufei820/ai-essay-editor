@@ -1,4 +1,5 @@
 import type { NextRequest } from "next/server"
+import { NextResponse } from "next/server"
 import { randomUUID } from "crypto"
 import path from "path"
 import { getClientIP, checkIpRateLimit, createRateLimitResponse } from "@/lib/rate-limit"
@@ -50,7 +51,7 @@ const IMAGE_GATEWAY_URL = (process.env.DIFY_IMAGE_GATEWAY_URL || "http://dify-im
 const IMAGE_GATEWAY_PUBLIC_URL = (
   process.env.DIFY_IMAGE_GATEWAY_PUBLIC_URL ||
   process.env.NEXT_PUBLIC_DIFY_IMAGE_GATEWAY_URL ||
-  "http://43.154.111.156:8001"
+  "https://api.shenxiang.school"
 ).replace(/\/+$/, "")
 const PUBLIC_APP_URL = (
   process.env.NEXT_PUBLIC_APP_URL ||
@@ -366,7 +367,10 @@ export async function POST(request: NextRequest) {
     gatewayFormData.append("user", userId || "anonymous-user")
 
     // 🔥 使用图片网关认证令牌
-    const gatewayToken = process.env.DIFY_IMAGE_GATEWAY_TOKEN || DEFAULT_DIFY_KEY
+    const gatewayToken = process.env.DIFY_IMAGE_GATEWAY_TOKEN
+    if (!gatewayToken) {
+      return NextResponse.json({ error: "图片网关未配置" }, { status: 503 })
+    }
     const uploadUrl = `${IMAGE_GATEWAY_URL}/api/files/upload`
 
     const gatewayResponse = await internalDifyFetch(uploadUrl, {

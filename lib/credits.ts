@@ -502,15 +502,18 @@ export async function addCredits(
   const balanceAfter = credits.credits + amount
 
   // 增加积分
-  const { error: updateError } = await supabase
+  const { data: updatedCreditRow, error: updateError } = await supabase
     .from("user_credits")
     .update({
       credits: balanceAfter,
       updated_at: new Date().toISOString(),
     })
     .eq("user_id", userId)
+    .eq("credits", credits.credits)
+    .select("user_id")
+    .maybeSingle()
 
-  if (updateError) {
+  if (updateError || !updatedCreditRow) {
     console.error("[积分系统] 增加积分失败:", updateError)
     return false
   }

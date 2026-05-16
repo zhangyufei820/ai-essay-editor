@@ -329,6 +329,11 @@ export default function SharePage() {
   // Markdown 转 HTML
   function convertMarkdownToHTML(md: string): string {
     let html = md
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;')
     html = html.replace(/^#### (.+)$/gm, '<h4>$1</h4>')
     html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>')
     html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>')

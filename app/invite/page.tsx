@@ -83,7 +83,10 @@ export default function InvitePage() {
         try {
           const refResponse = await fetch('/api/referral/get-code', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              ...(await getVerifiedAuthHeaders()),
+            },
             body: JSON.stringify({ userId: referralOwnerId })
           })
           const refResult = await refResponse.json()

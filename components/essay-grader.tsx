@@ -14,6 +14,7 @@ import { Loader2, Upload, FileText, X } from "lucide-react"
 import { UltimateRenderer } from "@/components/chat/UltimateRenderer"
 import { motion } from "framer-motion"
 import { toast } from "sonner"
+import { getVerifiedAuthHeaders } from "@/lib/client-auth"
 
 type UploadedFile = { 
   name: string
@@ -132,6 +133,7 @@ export function EssayGrader() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          ...(await getVerifiedAuthHeaders()),
         },
         body: JSON.stringify({
           essayText,

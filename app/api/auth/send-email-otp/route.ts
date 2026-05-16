@@ -1,10 +1,11 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { randomInt } from "crypto"
 import { emailOTPStore } from "@/lib/email-otp-store"
 import { getClientIP, checkIpRateLimit, createRateLimitResponse } from "@/lib/rate-limit"
 
 // 生成6位数字验证码
 function generateOTP(): string {
-  return Math.floor(100000 + Math.random() * 900000).toString()
+  return randomInt(100000, 1000000).toString()
 }
 
 // 发送邮件（开发模式直接返回验证码，生产模式使用 Resend）
@@ -22,8 +23,8 @@ async function sendOTPEmail(email: string, code: string): Promise<{ success: boo
     const resendApiKey = process.env.RESEND_API_KEY
 
     if (!resendApiKey) {
-      console.warn("未配置 RESEND_API_KEY，返回验证码供测试")
-      return { success: true, devCode: code }
+      console.warn("未配置 RESEND_API_KEY，生产环境拒绝发送验证码")
+      return { success: false }
     }
 
     const response = await fetch("https://api.resend.com/emails", {

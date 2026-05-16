@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
+import { safeInternalRedirectPath } from '@/lib/security/redirect'
 
 function pickAuthingToken(user: Record<string, any>) {
   const candidates = [
@@ -42,7 +43,7 @@ function AuthingLoginComponent() {
     const user = localStorage.getItem('currentUser')
     const token = localStorage.getItem('idToken') || localStorage.getItem('authingToken') || localStorage.getItem('accessToken')
     if (user && token) {
-      const redirectPath = searchParams.get('redirect')
+      const redirectPath = safeInternalRedirectPath(searchParams.get('redirect'))
       router.replace(redirectPath || '/')
       return
     }
@@ -124,12 +125,11 @@ function AuthingLoginComponent() {
         }
 
         // [关键] 登录后跳转回刚才的页面（比如支付页）
-        const redirectPath = searchParams.get('redirect')
+        const redirectPath = safeInternalRedirectPath(searchParams.get('redirect'))
 
         if (redirectPath) {
           console.log('正在返回之前的页面:', redirectPath)
-          // 使用 decodeURIComponent 确保网址格式正确
-          router.replace(decodeURIComponent(redirectPath))
+          router.replace(redirectPath)
         } else {
           router.replace('/')
         }

@@ -41,11 +41,11 @@ export function verifyXunhupaySign(params: Record<string, any>): boolean {
   // 迅虎支付回调中的签名字段可能是 hash 或 sign
   const receivedSign = (params.hash || params.sign || "").toLowerCase()
 
-  console.log("[迅虎支付签名验证] >>>>> 收到完整参数:", JSON.stringify(params))
-  console.log("[迅虎支付签名验证] >>>>> hash字段:", params.hash, "sign字段:", params.sign)
+  console.log("[迅虎支付签名验证] >>>>> 收到参数字段:", Object.keys(params).sort().join(","))
+  console.log("[迅虎支付签名验证] >>>>> 签名字段:", params.hash ? "hash[present]" : params.sign ? "sign[present]" : "[missing]")
 
   if (!receivedSign) {
-    console.log("[迅虎支付签名验证] 未找到签名字段, params:", JSON.stringify(params))
+    console.log("[迅虎支付签名验证] 未找到签名字段")
     return false
   }
 

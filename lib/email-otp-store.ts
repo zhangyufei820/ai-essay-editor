@@ -41,9 +41,7 @@ export const emailOTPStore = {
       createdAt: Date.now(),
     }
     otpStore.set(normalizedEmail, data)
-    console.log(
-      `[v0] 存储验证码: ${normalizedEmail}, code: ${code}, expires: ${new Date(data.expiresAt).toISOString()}`,
-    )
+    console.log(`[v0] 存储验证码: ${normalizedEmail}, expires: ${new Date(data.expiresAt).toISOString()}`)
     console.log(`[v0] 当前存储的邮箱数量: ${otpStore.size}`)
   },
 
@@ -51,7 +49,6 @@ export const emailOTPStore = {
   get(email: string): OTPData | undefined {
     const normalizedEmail = email.toLowerCase()
     console.log(`[v0] 查询验证码: ${normalizedEmail}`)
-    console.log(`[v0] 当前存储: ${JSON.stringify([...otpStore.entries()])}`)
 
     const data = otpStore.get(normalizedEmail)
 
@@ -67,7 +64,7 @@ export const emailOTPStore = {
       return undefined
     }
 
-    console.log(`[v0] 找到验证码: ${normalizedEmail}, code: ${data.code}`)
+    console.log(`[v0] 找到验证码: ${normalizedEmail}`)
     return data
   },
 

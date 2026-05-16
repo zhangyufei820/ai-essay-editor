@@ -799,7 +799,7 @@ function createImageGatewayResponse(payload: unknown) {
 }
 
 async function callImageGatewayDirect(query: string, inputs: unknown) {
-  const gatewayToken = process.env.DIFY_IMAGE_GATEWAY_TOKEN || DEFAULT_DIFY_KEY || ""
+  const gatewayToken = process.env.DIFY_IMAGE_GATEWAY_TOKEN || ""
   const timeout = createTimeoutSignal(GPT_IMAGE_GATEWAY_TIMEOUT_MS)
 
   try {
@@ -857,7 +857,7 @@ async function startImageGatewayTask(params: {
   requestId: string
   traceId: string
 }) {
-  const gatewayToken = process.env.DIFY_IMAGE_GATEWAY_TOKEN || DEFAULT_DIFY_KEY || ""
+  const gatewayToken = process.env.DIFY_IMAGE_GATEWAY_TOKEN || ""
   const response = await internalDifyFetch(`${IMAGE_GATEWAY_URL}/api/image/tasks`, {
     method: "POST",
     headers: {
@@ -976,7 +976,7 @@ export async function GET(request: NextRequest) {
     )
   }
 
-  const gatewayToken = process.env.DIFY_IMAGE_GATEWAY_TOKEN || DEFAULT_DIFY_KEY || ""
+  const gatewayToken = process.env.DIFY_IMAGE_GATEWAY_TOKEN || ""
   const response = await internalDifyFetch(`${IMAGE_GATEWAY_URL}/api/image/tasks/${encodeURIComponent(taskId)}`, {
     headers: {
       ...(gatewayToken
@@ -1977,7 +1977,7 @@ export async function POST(request: NextRequest) {
         // 解析 chunk 提取 token 信息
         try {
           const text = new TextDecoder().decode(chunk)
-          const outputText = model === "open-claw" ? rewriteOpenClawMediaReferencesWithSignedUrls(text) : text
+          const outputText = model === "open-claw" ? rewriteOpenClawMediaReferencesWithSignedUrls(text, undefined, userId) : text
           const shouldBufferForDisplay = isAllInOneAgent
           const enqueueAllInOneDisplayOnce = (rawValue: string) => {
             if (!shouldBufferForDisplay || allInOneDisplaySent || !rawValue.trim()) return

@@ -2,7 +2,7 @@ import { promises as fs } from "fs"
 import path from "path"
 import { NextRequest } from "next/server"
 
-import { createServerClient } from "@/lib/supabase/server"
+import { requireUser } from "@/lib/auth/verified-user"
 import { verifySignedOpenClawMediaPath } from "@/lib/openclaw-media-server"
 
 export const runtime = "nodejs"
@@ -69,23 +69,16 @@ function resolveMediaPath(segments: string[]) {
 }
 
 async function isAuthorized(request: NextRequest, mediaPath: string) {
+  const auth = await requireUser(request)
+  if (!auth.user) return false
+
   const exp = request.nextUrl.searchParams.get("exp")
   const sig = request.nextUrl.searchParams.get("sig")
 
-  if (verifySignedOpenClawMediaPath(mediaPath, exp, sig)) {
+  if (verifySignedOpenClawMediaPath(mediaPath, exp, sig, auth.user.id)) {
     return true
   }
-
-  try {
-    const supabase = await createServerClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    return Boolean(user)
-  } catch {
-    return false
-  }
+  return false
 }
 
 export async function GET(

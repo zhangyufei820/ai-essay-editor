@@ -5,12 +5,17 @@
 
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
+import { verifyAdminToken } from '@/lib/admin-auth'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {
-  if (process.env.NODE_ENV === 'production') {
+  if (process.env.ENABLE_DEBUG_ROUTES !== 'true') {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
+  const token = req.headers.get('authorization')?.replace(/^Bearer\s+/i, '')
+  if (!token || !(await verifyAdminToken(token))) {
+    return NextResponse.json({ error: '未授权' }, { status: 401 })
   }
 
   try {

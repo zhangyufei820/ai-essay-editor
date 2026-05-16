@@ -111,17 +111,27 @@ export async function GET(
 
   const bytes = await fs.readFile(filePath)
   const extension = path.extname(filePath).toLowerCase()
-  const disposition = request.nextUrl.searchParams.get("download") === "1" || DOWNLOAD_EXTENSIONS.has(extension)
+  const disposition = request.nextUrl.searchParams.get("download") === "1" || DOWNLOAD_EXTENSIONS.has(extension) || extension === ".js"
     ? "attachment"
     : "inline"
+  const headers: Record<string, string> = {
+    "Content-Type": MIME_TYPES[extension] || "application/octet-stream",
+    "Content-Disposition": contentDisposition(filePath, disposition),
+    "Content-Length": String(bytes.length),
+    "Cache-Control": "public, max-age=300",
+    "X-Content-Type-Options": "nosniff",
+  }
+  if (extension === ".html" || extension === ".htm") {
+    headers["Content-Security-Policy"] = [
+      "sandbox",
+      "default-src 'none'",
+      "img-src 'self' data: https:",
+      "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
+      "font-src 'self' data: https://cdn.jsdelivr.net",
+    ].join("; ")
+  }
 
   return new Response(bytes, {
-    headers: {
-      "Content-Type": MIME_TYPES[extension] || "application/octet-stream",
-      "Content-Disposition": contentDisposition(filePath, disposition),
-      "Content-Length": String(bytes.length),
-      "Cache-Control": "public, max-age=300",
-      "X-Content-Type-Options": "nosniff",
-    },
+    headers,
   })
 }

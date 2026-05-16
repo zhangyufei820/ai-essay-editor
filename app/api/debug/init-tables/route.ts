@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { verifyAdminToken } from '@/lib/admin-auth'
 
 // 延迟创建 Supabase Admin 客户端
 function getSupabaseAdmin() {
@@ -21,8 +22,12 @@ function getSupabaseAdmin() {
 }
 
 export async function GET(request: NextRequest) {
-  if (process.env.NODE_ENV === 'production') {
+  if (process.env.ENABLE_DEBUG_ROUTES !== 'true') {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
+  const token = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '')
+  if (!token || !(await verifyAdminToken(token))) {
+    return NextResponse.json({ error: '未授权' }, { status: 401 })
   }
 
   try {

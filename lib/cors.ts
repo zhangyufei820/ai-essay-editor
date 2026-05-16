@@ -42,7 +42,7 @@ export function applyCorsHeaders(response: Response, request: NextRequest) {
   response.headers.set(
     "Access-Control-Allow-Headers",
     request.headers.get("access-control-request-headers") ||
-      "Content-Type, Authorization, X-User-Id, X-Model",
+      "Content-Type, Authorization, X-Model",
   )
   response.headers.set("Access-Control-Max-Age", "86400")
 

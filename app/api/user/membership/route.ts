@@ -97,7 +97,7 @@ async function resolveRelatedUserIds(supabaseAdmin: any, userId: string, identif
   return Array.from(related)
 }
 
-async function checkMembership(userId: string, identifiers: string[] = []) {
+export async function checkMembership(userId: string, identifiers: string[] = []) {
   const supabaseAdmin = getSupabaseAdmin()
   const relatedUserIds = await resolveRelatedUserIds(supabaseAdmin, userId, identifiers)
 

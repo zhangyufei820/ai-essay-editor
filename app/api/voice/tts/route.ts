@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { requireUser } from "@/lib/auth/verified-user"
 import { getClientIP, checkIpRateLimit, createRateLimitResponse } from "@/lib/rate-limit"
 import { resolveVoiceTtsPayload } from "@/lib/voice-tts-request"
 
@@ -17,6 +18,9 @@ function getPronunciationInstructions(text: string) {
 }
 
 export async function POST(request: NextRequest) {
+  const auth = await requireUser(request)
+  if (auth.response) return auth.response
+
   const ip = getClientIP(request)
   const limitResult = checkIpRateLimit(ip, 30)
   if (!limitResult.allowed) {
@@ -58,7 +62,7 @@ export async function POST(request: NextRequest) {
       headers: {
         "Content-Type": response.headers.get("content-type") || "audio/mpeg",
         "Content-Length": audio.byteLength.toString(),
-        "Cache-Control": "public, max-age=86400",
+        "Cache-Control": "private, no-store",
       },
     })
   } catch (error) {

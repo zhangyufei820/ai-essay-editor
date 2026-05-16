@@ -3,7 +3,7 @@
 import type React from "react"
 import { useState, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { createClient } from "@/lib/supabase/client"
+import { safeInternalRedirectPath } from "@/lib/security/redirect"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -15,7 +15,7 @@ import { Mail, ArrowLeft, Info, KeyRound } from "lucide-react"
 export default function EmailLoginPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const redirect = searchParams.get("redirect") || "/chat"
+  const redirect = safeInternalRedirectPath(searchParams.get("redirect"), "/chat")
   const referralCode = searchParams.get("ref") || (typeof window !== "undefined" ? sessionStorage.getItem("pendingReferralCode") : null)
 
   const [email, setEmail] = useState("")
@@ -85,22 +85,6 @@ export default function EmailLoginPage() {
 
       if (!response.ok) {
         throw new Error(data.error || "验证失败")
-      }
-
-      // 🔥 如果返回了登录链接，直接跳转完成登录
-      if (data.redirectUrl) {
-        console.log("[Email Login] 跳转到登录链接")
-        if (typeof window !== "undefined") {
-          sessionStorage.removeItem("pendingReferralCode")
-        }
-        window.location.href = data.redirectUrl
-        return
-      }
-
-      // 兼容旧流程
-      const supabase = createClient()
-      if (supabase) {
-        await supabase.auth.refreshSession()
       }
 
       router.push(redirect)

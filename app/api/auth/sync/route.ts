@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { getClientIP, checkIpRateLimit, createRateLimitResponse } from '@/lib/rate-limit'
 import { requireUser } from '@/lib/auth/verified-user'
 import { handleReferralSignup } from '@/lib/credits'
+import { rejectUntrustedOrigin } from '@/lib/security/request'
 
 export async function POST(request: NextRequest) {
   // IP 限流：30次/分钟
@@ -25,29 +26,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'User mismatch' }, { status: 403 })
     }
 
-    // 🔐 安全验证：检查请求来源
-    // 方式1: 检查 Referer 头，确保请求来自本站
-    const referer = request.headers.get('referer') || ''
-    const origin = request.headers.get('origin') || ''
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
-    
-    // 🔥 修复：支持 Vercel 部署域名验证
-    // Vercel 部署的域名格式：*.vercel.app 或自定义域名
-    const isValidOrigin = referer.startsWith(appUrl) ||
-                          origin.startsWith(appUrl) ||
-                          referer.includes('localhost') ||
-                          origin.includes('localhost') ||
-                          referer.includes('vercel.app') ||
-                          origin.includes('vercel.app') ||
-                          referer.includes('shenxiangzhixue') ||
-                          origin.includes('shenxiangzhixue') ||
-                          referer.includes('shenxiang.school') ||
-                          origin.includes('shenxiang.school')
-    
-    if (!isValidOrigin) {
-      console.warn(`🚫 [Auth/Sync] 可疑请求来源被拦截: referer=${referer}, origin=${origin}`)
-      return NextResponse.json({ error: 'Invalid request origin' }, { status: 403 })
-    }
+    const originRejected = rejectUntrustedOrigin(request)
+    if (originRejected) return originRejected
 
     // 方式2: 基本的 user_id 格式验证（防止注入攻击）
     // Authing 的 user_id 通常是 24 位十六进制字符串

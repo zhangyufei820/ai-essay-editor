@@ -11,6 +11,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { requireUser } from '@/lib/auth/verified-user'
 import { uploadToCos, isCdnUrl, isCosConfigured } from '@/lib/cos'
 import { recordBillingIssue, getUserCredits } from '@/lib/credits'
 import {
@@ -54,6 +55,8 @@ export async function POST(req: NextRequest) {
   if (!SUNO_QUERY_API_KEY) throw new Error("SUNO_QUERY_API_KEY 未配置")
 
   try {
+    const auth = await requireUser(req)
+    if (auth.response) return auth.response
     // IP 限流：30次/分钟
     const { getClientIP, checkIpRateLimit, createRateLimitResponse } = await import('@/lib/rate-limit')
     const ip = getClientIP(req)
@@ -65,7 +68,7 @@ export async function POST(req: NextRequest) {
     const { 
       action, 
       query, 
-      userId, 
+      userId: _requestedUserId, 
       taskId, 
       streaming, 
       taskMode, 
@@ -77,7 +80,7 @@ export async function POST(req: NextRequest) {
     // 🔥 调试日志：打印原始参数
     console.log('🎵 [Suno Proxy] 参数:', { 
       action, 
-      userId: userId?.slice(0, 8), 
+      userId: auth.user!.id.slice(0, 8), 
       hasQuery: !!query, 
       taskId, 
       streaming, 
@@ -91,9 +94,9 @@ export async function POST(req: NextRequest) {
       if (proFormData) {
         console.log('🎵 [Suno Proxy] 使用专业模式参数:', proFormData)
         if (streaming) {
-          return await handleGenerateStreamingPro(proFormData, userId, conversationId)
+          return await handleGenerateStreamingPro(proFormData, auth.user!.id, conversationId)
         }
-        return await handleGeneratePro(proFormData, userId, conversationId)
+        return await handleGeneratePro(proFormData, auth.user!.id, conversationId)
       }
       
       // 🔥 简单模式：兼容旧逻辑
@@ -107,12 +110,12 @@ export async function POST(req: NextRequest) {
       console.log('🎵 [Suno Proxy] 简单模式 - 转换 taskMode:', taskMode, '->', safeTaskMode)
       
       if (streaming) {
-        return await handleGenerateStreaming(query, userId, safeTaskMode, conversationId)
+        return await handleGenerateStreaming(query, auth.user!.id, safeTaskMode, conversationId)
       }
-      return await handleGenerate(query, userId, safeTaskMode, conversationId)
+      return await handleGenerate(query, auth.user!.id, safeTaskMode, conversationId)
     } else if (action === 'query') {
       // 查询状态
-      return await handleQuery(taskId, userId)
+      return await handleQuery(taskId, auth.user!.id)
     } else {
       return NextResponse.json({ error: '无效的 action' }, { status: 400 })
     }

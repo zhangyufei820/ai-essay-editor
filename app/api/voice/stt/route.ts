@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { requireUser } from "@/lib/auth/verified-user"
 import { getClientIP, checkIpRateLimit, createRateLimitResponse } from "@/lib/rate-limit"
 
 export const runtime = "nodejs"
@@ -18,6 +19,9 @@ const ALLOWED_AUDIO_TYPES = new Set([
 ])
 
 export async function POST(request: NextRequest) {
+  const auth = await requireUser(request)
+  if (auth.response) return auth.response
+
   const ip = getClientIP(request)
   const limitResult = checkIpRateLimit(ip, 20)
   if (!limitResult.allowed) {

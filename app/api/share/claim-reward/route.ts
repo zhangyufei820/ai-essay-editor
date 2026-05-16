@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { addCredits } from '@/lib/credits'
 import { getClientIP, checkIpRateLimit, createRateLimitResponse } from '@/lib/rate-limit'
+import { requireUser } from '@/lib/auth/verified-user'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,10 +23,13 @@ export async function POST(request: NextRequest) {
   console.log('🎁 [Share Reward] 收到领取奖励请求')
   
   try {
+    const auth = await requireUser(request)
+    if (auth.response) return auth.response
     const body = await request.json()
-    const { shareId, viewerId } = body
+    const { shareId } = body
+    const viewerId = auth.user!.id
     
-    if (!shareId || !viewerId) {
+    if (!shareId) {
       return NextResponse.json({ error: '缺少必要参数' }, { status: 400 })
     }
 

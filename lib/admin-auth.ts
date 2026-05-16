@@ -3,6 +3,7 @@
  * Token 存储在 admin_tokens 表，表不存在时 fallback 到内存
  */
 import { createClient } from '@supabase/supabase-js'
+import { randomBytes, timingSafeEqual } from 'crypto'
 import { assertSecureTlsConfiguration } from '@/lib/runtime-security'
 
 // 内存 fallback（表不存在时使用）
@@ -41,15 +42,16 @@ export async function generateAdminToken(password: string): Promise<string | nul
     return null
   }
   
-  if (password !== adminPassword) {
+  const passwordBytes = Buffer.from(password)
+  const expectedBytes = Buffer.from(adminPassword)
+  const passwordMatches = passwordBytes.length === expectedBytes.length && timingSafeEqual(passwordBytes, expectedBytes)
+  if (!passwordMatches) {
     await logAdminAction('login_failed', null, { reason: '密码错误' })
     return null
   }
   
   const timestamp = Date.now()
-  const random = Math.random().toString(36).substring(2)
-  const tokenData = `${timestamp}:${random}`
-  const token = `admin_${btoa(tokenData)}`
+  const token = `admin_${randomBytes(32).toString('base64url')}`
   const expiresAt = new Date(timestamp + 24 * 60 * 60 * 1000).toISOString()
   
   if (useMemoryFallback) {

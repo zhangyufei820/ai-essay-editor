@@ -7,6 +7,7 @@
  */
 
 import { getApiUrl } from "./api-config"
+import { getVerifiedAuthHeaders } from "./client-auth"
 
 /**
  * 🎤 录音并通过语音网关识别
@@ -25,6 +26,7 @@ export async function transcribeAudio(
 
   const response = await fetch(getApiUrl("/api/voice/stt"), {
     method: "POST",
+    headers: await getVerifiedAuthHeaders(),
     body: formData
   })
 
@@ -54,7 +56,8 @@ export async function getDifyTTS(
     const response = await fetch(getApiUrl("/api/voice/tts"), {
       method: "POST",
       headers: {
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        ...(await getVerifiedAuthHeaders()),
       },
       body: JSON.stringify({ text, model, format: "mp3" })
     })

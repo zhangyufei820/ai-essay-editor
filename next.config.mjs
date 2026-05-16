@@ -144,7 +144,7 @@ const nextConfig = {
         value: [
           "default-src 'self'",
           "base-uri 'self'",
-          "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://cdn.authing.co https://cdn.shenxiang.school https://static.cloudflareinsights.com https://js.stripe.com",
+          "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdn.authing.co https://cdn.shenxiang.school https://static.cloudflareinsights.com https://js.stripe.com",
           "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdn.authing.co",
           "img-src 'self' data: blob: https:",
           "font-src 'self' data: https://cdn.jsdelivr.net https://cdn.authing.co",

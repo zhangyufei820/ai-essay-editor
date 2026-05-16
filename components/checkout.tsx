@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react"
 import { EmbeddedCheckout, EmbeddedCheckoutProvider } from "@stripe/react-stripe-js"
 import { loadStripe } from "@stripe/stripe-js"
 import { AlertCircle, Loader2 } from "lucide-react"
+import { getVerifiedAuthHeaders } from "@/lib/client-auth"
 
 const stripePromise = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
   ? loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY)
@@ -25,6 +26,7 @@ export default function Checkout({ productId }: { productId: string }) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          ...(await getVerifiedAuthHeaders()),
         },
         body: JSON.stringify({ productId }),
       })

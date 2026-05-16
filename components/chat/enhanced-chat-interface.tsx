@@ -2700,6 +2700,8 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
             return katex.renderToString(math.trim(), {
               displayMode: true,
               throwOnError: false,
+              trust: false,
+              strict: "ignore",
               macros: LATEX_MACROS,
             })
           } catch (e) {
@@ -2715,6 +2717,8 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
             return katex.renderToString(math.trim(), {
               displayMode: false,
               throwOnError: false,
+              trust: false,
+              strict: "ignore",
               macros: LATEX_MACROS,
             })
           } catch (e) {
@@ -3022,7 +3026,10 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       // 🔥 发送整个对话到 API
       const res = await fetch('/api/share', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(await getVerifiedAuthHeaders()),
+        },
         body: JSON.stringify({
           messages: messages.map(m => ({ role: m.role, content: m.content })),
           userId,
