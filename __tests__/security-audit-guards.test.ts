@@ -94,11 +94,8 @@ describe("P0/P1 security audit guardrails", () => {
     expect(src).not.toContain(["sb", "publishable_"].join("_"))
   })
 
-  it("removes dead code surfaces", () => {
+  it("does not restore unrelated dead code surfaces", () => {
     const dead = [
-      "app/api/web-search/route.ts",
-      "app/api/document-process/route.ts",
-      "app/api/presentation/route.ts",
       "app/test",
       "components/AsyncStylesheet.tsx",
     ]

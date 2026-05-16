@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server"
-import { requireUser } from "@/lib/auth/verified-user"
 import { getSupabaseAdmin } from "@/lib/supabase-admin"
+import { requireLearningUserId } from "@/lib/learning-user"
 import {
   generateSystemPrompt,
   normalizeTeacherAgentStyle,
@@ -34,11 +34,11 @@ export async function GET(
   context: { params: Promise<{ agentId: string }> | { agentId: string } },
 ) {
   try {
-    const auth = await requireUser(request)
+    const auth = await requireLearningUserId(request)
     if (auth.response) return auth.response
 
     const { agentId } = await context.params
-    const { data, error } = await loadOwnedAgent(agentId, auth.user!.id)
+    const { data, error } = await loadOwnedAgent(agentId, auth.userId!)
     if (error) throw error
     if (!data) return NextResponse.json({ error: "智能体不存在" }, { status: 404 })
     return NextResponse.json({ agent: data })
@@ -56,11 +56,11 @@ export async function PUT(
   context: { params: Promise<{ agentId: string }> | { agentId: string } },
 ) {
   try {
-    const auth = await requireUser(request)
+    const auth = await requireLearningUserId(request)
     if (auth.response) return auth.response
 
     const { agentId } = await context.params
-    const { data: existing, error: loadError } = await loadOwnedAgent(agentId, auth.user!.id)
+    const { data: existing, error: loadError } = await loadOwnedAgent(agentId, auth.userId!)
     if (loadError) throw loadError
     if (!existing) return NextResponse.json({ error: "智能体不存在" }, { status: 404 })
 
@@ -107,7 +107,7 @@ export async function PUT(
       .from("teacher_agents")
       .update(patch)
       .eq("id", agentId)
-      .eq("teacher_id", auth.user!.id)
+      .eq("teacher_id", auth.userId!)
       .select("*")
       .single()
 
@@ -127,7 +127,7 @@ export async function DELETE(
   context: { params: Promise<{ agentId: string }> | { agentId: string } },
 ) {
   try {
-    const auth = await requireUser(request)
+    const auth = await requireLearningUserId(request)
     if (auth.response) return auth.response
 
     const { agentId } = await context.params
@@ -135,7 +135,7 @@ export async function DELETE(
       .from("teacher_agents")
       .update({ status: "archived" })
       .eq("id", agentId)
-      .eq("teacher_id", auth.user!.id)
+      .eq("teacher_id", auth.userId!)
 
     if (error) throw error
     return NextResponse.json({ success: true })

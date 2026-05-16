@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto"
 import { NextResponse, type NextRequest } from "next/server"
-import { requireUser } from "@/lib/auth/verified-user"
 import { getSupabaseAdmin } from "@/lib/supabase-admin"
+import { requireLearningUserId } from "@/lib/learning-user"
 import {
   generateSystemPrompt,
   normalizeTeacherAgentStyle,
@@ -11,11 +11,6 @@ import {
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
-function isUuid(value: string) {
-  return UUID_PATTERN.test(value)
-}
 
 function text(value: unknown, fallback = "") {
   return typeof value === "string" && value.trim() ? value.trim() : fallback
@@ -43,12 +38,9 @@ async function createShareCode() {
 
 export async function POST(request: NextRequest) {
   try {
-    const auth = await requireUser(request)
+    const auth = await requireLearningUserId(request)
     if (auth.response) return auth.response
-    const teacherId = auth.user!.id
-    if (!isUuid(teacherId)) {
-      return NextResponse.json({ error: "教师智能体仅支持已同步的 Supabase 用户账号" }, { status: 400 })
-    }
+    const teacherId = auth.userId!
 
     let body: Record<string, unknown>
     try {
@@ -113,13 +105,13 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    const auth = await requireUser(request)
+    const auth = await requireLearningUserId(request)
     if (auth.response) return auth.response
 
     const { data, error } = await getSupabaseAdmin()
       .from("teacher_agents")
       .select("*")
-      .eq("teacher_id", auth.user!.id)
+      .eq("teacher_id", auth.userId!)
       .neq("status", "archived")
       .order("created_at", { ascending: false })
 

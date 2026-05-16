@@ -21,15 +21,21 @@ describe("home shell shape", () => {
     expect(hero).not.toContain("作文批改报告")
   })
 
-  it("sidebar links point to live routes", () => {
+  it("sidebar keeps the ae3e5c0 learning workspace routes", () => {
     const sidebar = read("components/app-sidebar.tsx")
 
-    for (const deadHref of ["/folder", "/tools", "/explore", "/my/shares", "/teacher/agents"]) {
-      expect(sidebar).not.toContain(`href=\"${deadHref}\"`)
+    for (const href of ["/folder", "/teacher/agents", "/tools", "/explore", "/my/shares", "/dashboard", "/flashcards"]) {
+      expect(sidebar).toContain(`href=\"${href}\"`)
     }
 
-    for (const liveHref of ["/history", "/dashboard", "/chat/open-claw", "/invite", "/teacher", "/flashcards"]) {
-      expect(sidebar).toContain(`href=\"${liveHref}\"`)
+    for (const relPath of [
+      "app/folder/page.tsx",
+      "app/teacher/agents/page.tsx",
+      "app/tools/page.tsx",
+      "app/explore/page.tsx",
+      "app/my/shares/page.tsx",
+    ]) {
+      expect(fs.existsSync(path.join(root, relPath))).toBe(true)
     }
   })
 })
