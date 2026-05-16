@@ -8,7 +8,6 @@ import {
   BookOpen, 
   MessageCircle, 
   CreditCard, 
-  User, 
   FileText,
   ChevronDown,
   ChevronUp,
@@ -22,7 +21,8 @@ import { ShenxiangInterfaceIcon } from "@/components/icons/ShenxiangInterfaceIco
 // 客服联系方式配置
 const contactInfo = {
   phone: "19132896773",
-  wechatQR: "/images/design-mode/站长微信.jpg"
+  email: "support@shenxiang.school",
+  wechatQR: "/images/design-mode/站长微信.jpg",
 }
 
 // ============================================
@@ -31,82 +31,56 @@ const contactInfo = {
 
 const faqCategories = [
   {
-    title: "快速入门",
+    title: "开始使用",
     icon: BookOpen,
     questions: [
       {
-        q: "如何开始使用沈翔智学？",
-        a: "1. 首先在首页登录或注册账号\n2. 登录后即可进入主界面\n3. 选择想要使用的 AI 功能（如作文批改、智能对话等）\n4. 开始你的 AI 学习之旅！"
+        q: "我第一次来，应该先做什么？",
+        a: "先登录账号，再从首页选择你想用的功能。最常用的是作文批改、智能对话和图片生成。"
       },
       {
-        q: "有哪些 AI 功能可以体验？",
-        a: "沈翔智学提供多种 AI 功能：\n\n• 作文批改：上传作文图片，AI 自动批改并提供修改建议\n• 智能对话：与全球顶尖三大模型进行对话\n• 学习规划：制定个性化的学习计划\n• 图片生成：输入描述生成精美图片\n• 音乐创作：利用 AI 创作原创音乐"
+        q: "我找不到功能入口怎么办？",
+        a: "先回到首页，再看顶部菜单或底部导航。你也可以直接进入对应页面，比如作文批改、积分页或价格页。"
       },
       {
-        q: "如何联系客服？",
-        a: "你可以通过以下方式联系我们：\n\n• 微信：扫码下方二维码添加客服微信\n• 电话：19132896773\n• 邮件：support@shenxiang.school\n\n我们工作时间为：周一至周五 9:00-18:00"
+        q: "这个网站主要能帮我做什么？",
+        a: "可以帮你批改作文、回答问题、整理学习内容、生成图片，也可以查看积分和购买套餐。"
       }
     ]
   },
   {
-    title: "账户与登录",
-    icon: User,
-    questions: [
-      {
-        q: "支持哪些登录方式？",
-        a: "我们支持多种登录方式：\n\n• 手机号 + 验证码登录\n• 邮箱 + 验证码登录\n• 微信一键登录\n\n建议使用微信登录，最为便捷！"
-      },
-      {
-        q: "忘记密码怎么办？",
-        a: "如果你忘记了密码，可以通过以下方式找回：\n\n1. 在登录页面点击「忘记密码」\n2. 输入注册时的手机号或邮箱\n3. 获取验证码\n4. 设置新密码\n\n如果是微信登录用户，请直接在微信中重新授权。"
-      },
-      {
-        q: "如何修改个人资料？",
-        a: "登录后，点击页面右上角的头像，进入「设置」页面，你可以修改：\n\n• 头像\n• 昵称\n• 绑定手机号/邮箱\n• 其他个人信息"
-      }
-    ]
-  },
-  {
-    title: "积分与会员",
+    title: "账号和积分",
     icon: CreditCard,
     questions: [
       {
-        q: "积分有什么用？",
-        a: "积分是沈翔智学的虚拟货币，可以用于：\n\n• 使用文本 AI、作文批改、图片生成、音乐创作等付费功能\n• 兑换平台增值服务\n• 参与平台活动\n\n新用户注册即送 1000 积分。"
+        q: "怎么查看我的积分？",
+        a: "登录后进入积分页或设置页，就能看到当前余额和使用记录。"
       },
       {
-        q: "如何获得更多积分？",
-        a: "获取积分的主要方式：\n\n• 订阅会员套餐：基础版 28 元/月到账 2,000 积分，专业版 68 元/月到账 5,000 积分，豪华版 128 元/月到账 12,000 积分\n• 购买积分包：500 积分 5 元、1,000 积分 10 元，订阅用户可买；5,000 积分 48 元，专业版及以上可买；10,000 积分 108 元，豪华版及以上可买\n• 企业版 / 校园版：联系商务\n• 邀请好友注册，双方各得 1000 积分，邀请者累计奖励上限 50000 积分\n• 分享奖励按平台活动规则发放"
+        q: "付完钱以后，积分没到账怎么办？",
+        a: "先刷新页面，等几分钟再看。如果还是没有到账，请保留订单号和支付时间，联系客服电话或邮箱。"
       },
       {
-        q: "文本 AI 如何扣费？",
-        a: "文本生成按实际输入和输出内容计费：\n\n• 输入内容：5 积分 / 1K tokens\n• 输出内容：20 积分 / 1K tokens\n• 输入和输出都会消耗积分\n• 输出越长，消耗越多\n• 系统会在模型返回完成后，根据实际 token 用量扣除积分\n• 无实际输出内容不扣文本生成费用\n• 长文写作、作文批改、论文报告等功能通常会消耗更多积分"
-      },
-      {
-        q: "作文批改如何消耗积分？",
-        a: "作文批改按实际输入和生成内容计费。输入和输出都会消耗积分，输出内容越详细，消耗积分越多。\n\n通常可以参考以下区间：\n\n• 短作文批改：约 100~300 积分\n• 普通作文批改：约 300~600 积分\n• 长作文或详细批改：可能 600 积分以上\n\n以上是预计积分区间，不是固定价格。实际消耗会随作文长度、批改详细程度和生成内容多少变化。"
-      },
-      {
-        q: "图片和音乐如何扣费？",
-        a: "图片和音乐按功能规则消耗积分：\n\n• GPT Image 2：订阅用户可用，白名单用户可测试，按固定积分扣费\n• GPT Image 1.5 / 1 / Mini：按对应固定积分扣费\n• Suno：约 100 积分起，实际可能包含 token 补扣\n\n余额不足时系统会提示充值或升级会员。"
+        q: "我余额不够了怎么办？",
+        a: "可以先去价格页看看适合你的套餐或积分包，再按需要购买。"
       }
     ]
   },
   {
-    title: "使用技巧",
+    title: "上传和结果",
     icon: MessageCircle,
     questions: [
       {
-        q: "作文批改支持哪些格式？",
-        a: "目前支持上传：\n\n• JPG 图片\n• PNG 图片\n• PDF 文档\n• Word 文档 (.docx)\n• TXT 文本\n\n建议上传清晰的作文图片，AI 识别更准确！"
+        q: "可以上传哪些文件？",
+        a: "常见的图片、PDF、Word 和 TXT 都可以。作文照片尽量拍清楚一点，效果会更好。"
       },
       {
-        q: "上传文件大小有限制吗？",
-        a: "为保证服务质量，我们做了以下限制：\n\n• 小文件（<5MB）：可直接上传\n• 大文件（>5MB）：需配置直连服务器\n\n如果上传大文件失败，建议将文件压缩或分割后上传。"
+        q: "文件太大怎么办？",
+        a: "可以先压缩图片，或者把文件拆小一点，再重新上传。"
       },
       {
-        q: "AI 回答不满意怎么办？",
-        a: "如果 AI 的回答不够理想，你可以：\n\n• 点击「重新生成」按钮获取新答案\n• 调整问题描述，更清晰地表达需求\n• 提供更多上下文信息\n• 换一个提问方式\n\n我们会持续优化 AI 模型，感谢你的反馈！"
+        q: "AI 的结果不够好，怎么办？",
+        a: "可以换一种说法，补充更多信息，再试一次。必要时也可以重新生成。"
       }
     ]
   }
@@ -168,23 +142,23 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
 
 function QuickLinks() {
   const links = [
-    { 
-      title: "价格方案", 
-      desc: "查看会员套餐和积分价格",
-      href: "/pricing",
-      icon: CreditCard 
-    },
-    { 
-      title: "开始对话", 
-      desc: "体验 AI 智能对话",
+    {
+      title: "开始使用",
+      desc: "先去首页或对话页试试",
       href: "/chat",
-      icon: MessageCircle 
+      icon: MessageCircle
     },
-    { 
-      title: "账户设置", 
-      desc: "管理个人资料",
-      href: "/settings",
-      icon: User 
+    {
+      title: "查看积分",
+      desc: "看余额和使用记录",
+      href: "/credits",
+      icon: CreditCard
+    },
+    {
+      title: "价格方案",
+      desc: "了解套餐和购买方式",
+      href: "/pricing",
+      icon: FileText
     }
   ]
 
@@ -355,7 +329,9 @@ function ContactSection() {
           联系客服
         </h3>
         <p style={{ color: slateColors[600] }}>
-          扫描下方二维码添加客服微信，或拨打客服电话
+          如果你刚开始用网站，先看上面的常见问题。
+          <br />
+          还没解决，再联系人工客服。
         </p>
       </motion.div>
       
@@ -434,6 +410,7 @@ function ContactSection() {
             {contactInfo.phone}
           </motion.a>
           <span className="text-sm mt-1" style={{ color: slateColors[500] }}>工作日 9:00-18:00</span>
+          <span className="text-sm mt-1" style={{ color: slateColors[500] }}>{contactInfo.email}</span>
         </motion.div>
       </motion.div>
 
@@ -450,7 +427,7 @@ function ContactSection() {
           whileTap={{ scale: 0.95 }}
         >
           <Link
-            href="/chat"
+            href={`mailto:${contactInfo.email}`}
             className="inline-flex items-center gap-2 px-6 py-3 font-medium rounded-xl transition-colors"
             style={{
               backgroundColor: brandColors[600],
@@ -459,7 +436,7 @@ function ContactSection() {
             }}
           >
             <MessageCircle className="w-5 h-5" />
-            在线客服
+            发送邮件联系
           </Link>
         </motion.div>
       </motion.div>
@@ -582,9 +559,9 @@ export function HelpPageClient() {
               animate={{ opacity: 1 }}
               transition={{ delay: 0.5, duration: 0.5 }}
             >
-              这里是沈翔智学的使用指南和问题解答，
+              这里整理了最常见的问题，
               <br className="hidden md:block" />
-              如果没有找到答案，请联系我们的客服。
+              适合第一次使用网站的人快速查看。
             </motion.p>
           </motion.div>
         </div>

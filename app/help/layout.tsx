@@ -2,10 +2,10 @@ import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
   title: '帮助中心 | 沈翔智学',
-  description: '常见问题解答、使用教程、账户管理帮助。快速找到您需要的问题答案。',
+  description: '给初学者看的帮助页面，快速了解如何开始使用、查看积分和联系客服。',
   openGraph: {
-    title: '沈翔智学 - 帮助中心 | 常见问题解答',
-    description: '常见问题解答、使用教程、账户管理帮助...',
+    title: '沈翔智学 - 帮助中心',
+    description: '给初学者看的帮助页面，快速了解如何开始使用、查看积分和联系客服。',
     url: 'https://shenxiang.school/help',
   },
   alternates: {
@@ -17,55 +17,55 @@ const FAQ_SCHEMA = {
   '@context': 'https://schema.org',
   '@type': 'FAQPage',
   'name': '沈翔智学帮助中心',
-  'description': '常见问题解答、使用教程、账户管理帮助',
+  'description': '给初学者看的帮助页面，快速了解如何开始使用、查看积分和联系客服。',
   'url': 'https://shenxiang.school/help',
   'mainEntity': [
     {
       '@type': 'Question',
-      'name': '如何开始使用沈翔智学？',
+      'name': '我第一次来，应该先做什么？',
       'acceptedAnswer': {
         '@type': 'Answer',
-        'text': '1. 首先在首页登录或注册账号\n2. 登录后即可进入主界面\n3. 选择想要使用的 AI 功能（如作文批改、智能对话等）\n4. 开始你的 AI 学习之旅！',
+        'text': '先登录账号，再从首页选择你想用的功能。最常用的是作文批改、智能对话和图片生成。',
       },
     },
     {
       '@type': 'Question',
-      'name': '支持哪些登录方式？',
+      'name': '我找不到功能入口怎么办？',
       'acceptedAnswer': {
         '@type': 'Answer',
-        'text': '支持手机号+验证码登录、邮箱+验证码登录、微信一键登录。建议使用微信登录，最为便捷！',
+        'text': '先回到首页，再看顶部菜单或底部导航。你也可以直接进入对应页面，比如作文批改、积分页或价格页。',
       },
     },
     {
       '@type': 'Question',
-      'name': '积分有什么用？',
+      'name': '怎么查看我的积分？',
       'acceptedAnswer': {
         '@type': 'Answer',
-        'text': '积分是沈翔智学的虚拟货币，可以用于文本 AI、作文批改、图片生成、音乐创作等付费功能。新用户注册即送 1000 积分。',
+        'text': '登录后进入积分页或设置页，就能看到当前余额和使用记录。',
       },
     },
     {
       '@type': 'Question',
-      'name': '文本 AI 如何扣费？',
+      'name': '付完钱以后，积分没到账怎么办？',
       'acceptedAnswer': {
         '@type': 'Answer',
-        'text': '文本生成按实际输入和输出内容计费：输入内容 5 积分 / 1K tokens，输出内容 20 积分 / 1K tokens。输入和输出都会消耗积分，输出越长消耗越多。系统会在模型返回完成后，根据实际 token 用量扣除积分；无实际输出内容不扣文本生成费用。',
+        'text': '先刷新页面，等几分钟再看。如果还是没有到账，请保留订单号和支付时间，联系客服电话或邮箱。',
       },
     },
     {
       '@type': 'Question',
-      'name': '作文批改如何消耗积分？',
+      'name': '可以上传哪些文件？',
       'acceptedAnswer': {
         '@type': 'Answer',
-        'text': '作文批改按实际输入和生成内容计费。输入和输出都会消耗积分，输出内容越详细，消耗积分越多。短作文批改通常约 100~300 积分，普通作文批改通常约 300~600 积分，长作文或详细批改可能 600 积分以上。以上不是固定价格，实际消耗会随内容变化。',
+        'text': '常见的图片、PDF、Word 和 TXT 都可以。作文照片尽量拍清楚一点，效果会更好。',
       },
     },
     {
       '@type': 'Question',
-      'name': '作文批改支持哪些格式？',
+      'name': 'AI 的结果不够好，怎么办？',
       'acceptedAnswer': {
         '@type': 'Answer',
-        'text': '目前支持上传 JPG 图片、PNG 图片、PDF 文档、Word 文档 (.docx)、TXT 文本。建议上传清晰的作文图片，AI 识别更准确！',
+        'text': '可以换一种说法，补充更多信息，再试一次。必要时也可以重新生成。',
       },
     },
     {
@@ -73,7 +73,7 @@ const FAQ_SCHEMA = {
       'name': '如何联系客服？',
       'acceptedAnswer': {
         '@type': 'Answer',
-        'text': '微信：扫码下方二维码添加客服微信\\n电话：19132896773\\n邮件：support@shenxiang.school\\n工作时间为：周一至周五 9:00-18:00',
+        'text': '微信：扫码下方二维码添加客服微信\\n电话：19132896773\\n邮件：support@shenxiang.school\\n工作时间：周一至周五 9:00-18:00',
       },
     },
   ],
