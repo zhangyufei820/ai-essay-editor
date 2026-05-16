@@ -1,12 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server"
-import { requireUser } from "@/lib/auth/verified-user"
+import { requireLearningUserId } from "@/lib/learning-user"
 import { sm2 } from "@/lib/spaced-repetition"
 import { getSupabaseAdmin } from "@/lib/supabase-admin"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
-
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 type FlashcardRow = {
   id: string
@@ -45,16 +43,9 @@ async function incrementReviewedCount(userId: string) {
 
 export async function POST(request: NextRequest) {
   try {
-    const auth = await requireUser(request)
+    const auth = await requireLearningUserId(request)
     if (auth.response) return auth.response
-
-    const userId = auth.user!.id
-    if (!UUID_PATTERN.test(userId)) {
-      return NextResponse.json(
-        { error: "闪卡复习仅支持已同步的 Supabase 用户账号", code: "UNSUPPORTED_USER_ID" },
-        { status: 400 },
-      )
-    }
+    const userId = auth.userId!
 
     let body: Record<string, unknown>
     try {
