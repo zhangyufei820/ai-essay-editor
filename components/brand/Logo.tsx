@@ -4,6 +4,7 @@
  * 支持多种尺寸和变体的品牌标识。
  */
 
+import Image from "next/image"
 import { cn } from "@/lib/utils"
 import { brandColors } from "@/lib/design-tokens"
 
@@ -29,6 +30,13 @@ const sizeMap = {
   md: { icon: 32, text: 18, gap: 8 },
   lg: { icon: 40, text: 22, gap: 10 },
   xl: { icon: 56, text: 28, gap: 12 },
+} as const
+
+const imageSizeMap = {
+  sm: { width: 132, height: 54 },
+  md: { width: 176, height: 72 },
+  lg: { width: 210, height: 86 },
+  xl: { width: 252, height: 104 },
 } as const
 
 // ============================================
@@ -154,7 +162,7 @@ function LogoText({ size, className }: { size: number; className?: string }) {
         color: brandColors[900],
       }}
     >
-      沈翔学校
+      沈翔智学
     </span>
   )
 }
@@ -165,6 +173,28 @@ function LogoText({ size, className }: { size: number; className?: string }) {
 
 export function Logo({ size = "md", variant = "full", className }: LogoProps) {
   const dimensions = sizeMap[size]
+  const imageDimensions = imageSizeMap[size]
+
+  if (variant === "full") {
+    return (
+      <span
+        className={cn("relative block overflow-hidden", className)}
+        style={{
+          width: imageDimensions.width,
+          height: imageDimensions.height,
+        }}
+      >
+        <Image
+          src="/images/design-mode/site-logo.png"
+          alt="沈翔智学"
+          width={imageDimensions.width}
+          height={imageDimensions.height}
+          className="h-full w-full object-contain"
+          priority={size === "lg" || size === "xl"}
+        />
+      </span>
+    )
+  }
 
   if (variant === "icon") {
     return (
@@ -182,16 +212,7 @@ export function Logo({ size = "md", variant = "full", className }: LogoProps) {
     )
   }
 
-  // variant === "full"
-  return (
-    <div
-      className={cn("inline-flex items-center", className)}
-      style={{ gap: `${dimensions.gap}px` }}
-    >
-      <LogoIcon size={dimensions.icon} />
-      <LogoText size={dimensions.text} />
-    </div>
-  )
+  return null
 }
 
 // 默认导出
