@@ -13,10 +13,11 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-[var(--color-surface-soft)]">
       <HeroSection />
+      {/* <TrustStrip /> */}
+      <StatsSection />
       <CapabilitiesSection />
       <ProcessSection />
       <TestimonialsSection />
-      <StatsSection />
       <CTASection />
       <HomeFooter />
     </main>
