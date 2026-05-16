@@ -4,8 +4,10 @@
  * 展示从上传材料到复盘提升的三步学习流程。
  */
 
+"use client"
+
+import { motion } from "framer-motion"
 import { Camera, CheckCircle2, Lightbulb, type LucideIcon } from "lucide-react"
-import { FadeIn } from "@/components/motion/FadeIn"
 import { brandColors, slateColors, creamColors } from "@/lib/design-tokens"
 
 // ============================================
@@ -41,6 +43,53 @@ const steps: Step[] = [
 ]
 
 // ============================================
+// 动画配置
+// ============================================
+
+const titleVariants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.6, ease: [0.33, 1, 0.68, 1] as const }
+  }
+}
+
+const stepVariants = {
+  hidden: { opacity: 0, y: 30 },
+  visible: (index: number) => ({
+    opacity: 1,
+    y: 0,
+    transition: { 
+      delay: index * 0.2, 
+      duration: 0.5,
+      ease: [0.33, 1, 0.68, 1] as const
+    }
+  })
+}
+
+const mobileStepVariants = {
+  hidden: { opacity: 0, x: -20 },
+  visible: (index: number) => ({
+    opacity: 1,
+    x: 0,
+    transition: { 
+      delay: index * 0.15, 
+      duration: 0.5,
+      ease: [0.33, 1, 0.68, 1] as const
+    }
+  })
+}
+
+const lineVariants = {
+  hidden: { scaleX: 0 },
+  visible: {
+    scaleX: 1,
+    transition: { delay: 0.3, duration: 0.8, ease: [0.33, 1, 0.68, 1] as const }
+  }
+}
+
+// ============================================
 // 桌面端步骤卡片
 // ============================================
 
@@ -48,7 +97,14 @@ function DesktopStepCard({ step, index }: { step: Step; index: number }) {
   const Icon = step.icon
   
   return (
-    <FadeIn y={30} delay={index * 0.2} className="flex flex-col items-center text-center relative z-10 w-1/3 px-4">
+    <motion.div
+      custom={index}
+      initial="hidden"
+      whileInView="visible"
+      viewport={{ once: true }}
+      variants={stepVariants}
+      className="flex flex-col items-center text-center relative z-10 w-1/3 px-4"
+    >
       {/* 步骤编号 */}
       <div 
         className="w-12 h-12 rounded-full text-white font-bold text-lg flex items-center justify-center mb-6 shadow-md"
@@ -88,7 +144,7 @@ function DesktopStepCard({ step, index }: { step: Step; index: number }) {
         {step.description}
       </p>
 
-    </FadeIn>
+    </motion.div>
   )
 }
 
@@ -100,7 +156,14 @@ function MobileStepCard({ step, index, isLast }: { step: Step; index: number; is
   const Icon = step.icon
   
   return (
-    <FadeIn y={20} delay={index * 0.15} className="flex gap-4">
+    <motion.div
+      custom={index}
+      initial="hidden"
+      whileInView="visible"
+      viewport={{ once: true }}
+      variants={mobileStepVariants}
+      className="flex gap-4"
+    >
       {/* 左侧：编号和连接线 */}
       <div className="flex flex-col items-center">
         <div 
@@ -141,7 +204,7 @@ function MobileStepCard({ step, index, isLast }: { step: Step; index: number; is
         </p>
         
       </div>
-    </FadeIn>
+    </motion.div>
   )
 }
 
@@ -154,7 +217,13 @@ export function ProcessSection() {
     <section id="process" className="sx-section" style={{ backgroundColor: creamColors[100] }}>
       <div className="sx-container">
         {/* 板块标题 */}
-        <FadeIn className="text-center mb-16 md:mb-20">
+        <motion.div
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true }}
+          variants={titleVariants}
+          className="text-center mb-16 md:mb-20"
+        >
           {/* 小标题 */}
           <span 
             className="text-sm font-medium uppercase tracking-wider mb-4 block"
@@ -176,16 +245,18 @@ export function ProcessSection() {
             className="text-lg md:text-xl max-w-2xl mx-auto"
             style={{ color: slateColors[500] }}
           >
-            首页不再讲复杂模型编排，只呈现学生每天能用上的路径。
+            把学习材料、AI 反馈和后续练习串成一条清楚的学习路径。
           </p>
-        </FadeIn>
+        </motion.div>
 
         {/* 流程步骤 - 桌面端 */}
         <div className="hidden md:flex items-start justify-between relative">
           {/* 连接线 */}
-          <FadeIn
-            y={0}
-            delay={0.3}
+          <motion.div 
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true }}
+            variants={lineVariants}
             className="absolute top-16 left-[20%] right-[20%] h-0.5 origin-left"
             style={{ 
               background: `linear-gradient(to right, ${brandColors[200]}, ${brandColors[300]}, ${brandColors[200]})`

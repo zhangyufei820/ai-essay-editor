@@ -112,12 +112,18 @@ export function OpenClawSection() {
               boxShadow: `0 0 30px ${brandColors[600]}20`,
             }}
           >
-            <div
+            <motion.div
               className="w-1.5 h-1.5 rounded-full"
-              style={{
-                backgroundColor: brandColors[600],
-                boxShadow: `0 0 8px ${brandColors[600]}`,
+              animate={{
+                boxShadow: [
+                  `0 0 6px ${brandColors[600]}`,
+                  `0 0 12px ${brandColors[600]}`,
+                  `0 0 6px ${brandColors[600]}`,
+                ],
+                opacity: [0.7, 1, 0.7],
               }}
+              transition={{ duration: 2, repeat: Infinity }}
+              style={{ backgroundColor: brandColors[600] }}
             />
             <span
               className="text-xs font-medium uppercase tracking-wider"
@@ -170,12 +176,16 @@ export function OpenClawSection() {
             }}
           >
             {/* 背景光晕 */}
-            <div
+            <motion.div
               className="absolute top-0 left-1/2 -translate-x-1/2 w-[400px] h-[400px] rounded-full blur-3xl pointer-events-none"
               style={{
                 background: `radial-gradient(circle, ${brandColors[200]}30 0%, transparent 70%)`,
-                opacity: 0.55,
               }}
+              animate={{
+                scale: [1, 1.1, 1],
+                opacity: [0.5, 0.8, 0.5],
+              }}
+              transition={{ duration: 4, repeat: Infinity }}
             />
 
             <div className="relative z-10 flex flex-col md:flex-row items-center gap-8">
@@ -193,12 +203,16 @@ export function OpenClawSection() {
                 >
                   <Bot className="w-10 h-10 text-white" />
                   {/* 呼吸光效 */}
-                  <div
+                  <motion.div
                     className="absolute inset-0 rounded-2xl"
                     style={{
                       boxShadow: `0 0 30px ${brandColors[600]}50`,
-                      opacity: 0.45,
                     }}
+                    animate={{
+                      opacity: [0.3, 0.6, 0.3],
+                      scale: [1, 1.05, 1],
+                    }}
+                    transition={{ duration: 2, repeat: Infinity }}
                   />
                 </motion.div>
 

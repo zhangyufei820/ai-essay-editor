@@ -4,10 +4,11 @@
  * 展示首页保留的高频学习入口。
  */
 
+"use client"
+
+import { motion } from "framer-motion"
 import Link from "next/link"
 import { ArrowRight, FileText, HelpCircle, ClipboardCheck, Layers3, type LucideIcon } from "lucide-react"
-import { FadeIn } from "@/components/motion/FadeIn"
-import { Stagger } from "@/components/motion/Stagger"
 import { cn } from "@/lib/utils"
 import { brandColors, slateColors, creamColors } from "@/lib/design-tokens"
 
@@ -50,6 +51,45 @@ const capabilities: Capability[] = [
 ]
 
 // ============================================
+// 动画配置
+// ============================================
+
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { 
+      staggerChildren: 0.1,
+      delayChildren: 0.1
+    }
+  }
+}
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { 
+      duration: 0.5, 
+      ease: [0.33, 1, 0.68, 1] as const
+    }
+  }
+}
+
+const titleVariants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { 
+      duration: 0.6,
+      ease: [0.33, 1, 0.68, 1] as const
+    }
+  }
+}
+
+// ============================================
 // 能力卡片组件
 // ============================================
 
@@ -57,33 +97,38 @@ function CapabilityCard({ capability }: { capability: Capability }) {
   const Icon = capability.icon
   
   return (
-    <Link
-      href={capability.href}
-      prefetch={false}
-      className={cn(
-        "group sx-card sx-card-interactive flex h-full flex-col p-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:p-7"
-      )}
-      style={{ borderColor: slateColors[100] }}
+    <motion.div
+      variants={itemVariants}
+      className="h-full"
     >
-      <div
-        className="flex size-12 items-center justify-center rounded-lg border border-primary/15 bg-primary/10 text-primary transition-colors duration-200 group-hover:bg-primary group-hover:text-primary-foreground"
+      <Link
+        href={capability.href}
+        prefetch={false}
+        className={cn(
+          "group sx-card sx-card-interactive flex h-full flex-col p-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:p-7"
+        )}
+        style={{ borderColor: slateColors[100] }}
       >
-        <Icon className="size-6" />
-      </div>
+        <div
+          className="flex size-12 items-center justify-center rounded-lg border border-primary/15 bg-primary/10 text-primary transition-colors duration-200 group-hover:bg-primary group-hover:text-primary-foreground"
+        >
+          <Icon className="size-6" />
+        </div>
 
-      <h3 className="mt-5 text-lg font-bold" style={{ color: slateColors[800] }}>
-        {capability.title}
-      </h3>
+        <h3 className="mt-5 text-lg font-bold" style={{ color: slateColors[800] }}>
+          {capability.title}
+        </h3>
 
-      <p className="mt-3 flex-1 text-sm leading-7" style={{ color: slateColors[500] }}>
-        {capability.description}
-      </p>
+        <p className="mt-3 flex-1 text-sm leading-7" style={{ color: slateColors[500] }}>
+          {capability.description}
+        </p>
 
-      <span className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-primary">
-        进入使用
-        <ArrowRight className="size-4 transition-transform duration-200 group-hover:translate-x-1" />
-      </span>
-    </Link>
+        <span className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-primary">
+          进入使用
+          <ArrowRight className="size-4 transition-transform duration-200 group-hover:translate-x-1" />
+        </span>
+      </Link>
+    </motion.div>
   )
 }
 
@@ -100,7 +145,13 @@ export function CapabilitiesSection() {
     >
       <div className="sx-container">
         {/* 板块标题 */}
-        <FadeIn className="text-center mb-12">
+        <motion.div
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, margin: "-100px" }}
+          variants={titleVariants}
+          className="text-center mb-12"
+        >
           {/* 小标题（eyebrow） */}
           <span 
             className="inline-flex items-center gap-3 text-sm font-medium uppercase tracking-wider mb-4"
@@ -122,22 +173,28 @@ export function CapabilitiesSection() {
             className="sx-section-title"
             style={{ color: slateColors[900] }}
           >
-            首页只保留最常用的学习动作
+            从高频学习场景开始
           </h2>
           <p className="sx-section-copy mx-auto mt-4 max-w-2xl">
-            不把所有 AI 能力一次性摊开，而是先帮学生完成最容易产生结果的四件事。
+            围绕作文、错题、答疑和复习，把学生每天遇到的问题整理成清晰可执行的反馈。
           </p>
-        </FadeIn>
+        </motion.div>
 
         {/* 能力卡片网格 */}
-        <Stagger className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <motion.div
+          variants={containerVariants}
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, margin: "-100px" }}
+          className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
+        >
           {capabilities.map((capability) => (
             <CapabilityCard 
               key={capability.href}
               capability={capability}
             />
           ))}
-        </Stagger>
+        </motion.div>
       </div>
     </section>
   )
