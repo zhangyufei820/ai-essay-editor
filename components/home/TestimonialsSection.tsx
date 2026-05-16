@@ -4,10 +4,8 @@
  * 使用少量高信号评价建立信任，避免首页信息过载。
  */
 
-"use client"
-
-import { motion } from "framer-motion"
 import { Quote, Star } from "lucide-react"
+import { FadeIn } from "@/components/motion/FadeIn"
 import { brandColors, slateColors } from "@/lib/design-tokens"
 
 interface Testimonial {
@@ -38,30 +36,11 @@ const testimonials: Testimonial[] = [
   },
 ] as const
 
-const cardVariants = {
-  hidden: { opacity: 0, y: 20 },
-  visible: (index: number) => ({
-    opacity: 1,
-    y: 0,
-    transition: {
-      delay: index * 0.08,
-      duration: 0.45,
-      ease: [0.33, 1, 0.68, 1] as const,
-    },
-  }),
-}
-
 export function TestimonialsSection() {
   return (
     <section id="testimonials" className="sx-section bg-white">
       <div className="sx-container">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.5, ease: [0.33, 1, 0.68, 1] }}
-          className="mb-12 text-center"
-        >
+        <FadeIn className="mb-12 text-center">
           <span
             className="mb-4 inline-flex rounded-full border px-3 py-1 text-xs font-semibold"
             style={{
@@ -78,45 +57,43 @@ export function TestimonialsSection() {
           <p className="sx-section-copy mx-auto mt-4 max-w-2xl">
             评价区只保留三个代表性视角：学生、家长和老师。
           </p>
-        </motion.div>
+        </FadeIn>
 
         <div className="grid gap-4 md:grid-cols-3">
           {testimonials.map((testimonial, index) => (
-            <motion.article
+            <FadeIn
               key={testimonial.id}
-              custom={index}
-              initial="hidden"
-              whileInView="visible"
-              viewport={{ once: true, margin: "-80px" }}
-              variants={cardVariants}
-              className="sx-card flex min-h-[260px] flex-col p-6"
+              delay={index * 0.08}
+              className="h-full"
             >
-              <div className="mb-5 flex items-center justify-between">
-                <Quote className="size-6 text-primary" />
-                <div className="flex gap-1" aria-label="五星评价">
-                  {Array.from({ length: 5 }).map((_, starIndex) => (
-                    <Star
-                      key={starIndex}
-                      className="size-4 text-primary"
-                      fill={brandColors[600]}
-                    />
-                  ))}
+              <article className="sx-card flex min-h-[260px] flex-col p-6">
+                <div className="mb-5 flex items-center justify-between">
+                  <Quote className="size-6 text-primary" />
+                  <div className="flex gap-1" aria-label="五星评价">
+                    {Array.from({ length: 5 }).map((_, starIndex) => (
+                      <Star
+                        key={starIndex}
+                        className="size-4 text-primary"
+                        fill={brandColors[600]}
+                      />
+                    ))}
+                  </div>
                 </div>
-              </div>
 
-              <p className="flex-1 text-base leading-8" style={{ color: slateColors[700] }}>
-                &ldquo;{testimonial.content}&rdquo;
-              </p>
+                <p className="flex-1 text-base leading-8" style={{ color: slateColors[700] }}>
+                  &ldquo;{testimonial.content}&rdquo;
+                </p>
 
-              <div className="mt-6 border-t border-border pt-5">
-                <div className="text-sm font-bold" style={{ color: slateColors[900] }}>
-                  {testimonial.author}
+                <div className="mt-6 border-t border-border pt-5">
+                  <div className="text-sm font-bold" style={{ color: slateColors[900] }}>
+                    {testimonial.author}
+                  </div>
+                  <div className="mt-1 text-sm" style={{ color: slateColors[500] }}>
+                    {testimonial.roleLabel}
+                  </div>
                 </div>
-                <div className="mt-1 text-sm" style={{ color: slateColors[500] }}>
-                  {testimonial.roleLabel}
-                </div>
-              </div>
-            </motion.article>
+              </article>
+            </FadeIn>
           ))}
         </div>
       </div>

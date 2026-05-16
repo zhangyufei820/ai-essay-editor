@@ -4,8 +4,6 @@
  * 包含链接导航、版权信息和社交媒体。
  */
 
-"use client"
-
 import Image from "next/image"
 import Link from "next/link"
 import { slateColors } from "@/lib/design-tokens"

@@ -4,10 +4,7 @@
  * 首页首屏聚焦公开站点转化：上传学习材料，获得可执行反馈。
  */
 
-"use client"
-
 import Link from "next/link"
-import { motion } from "framer-motion"
 import {
   ArrowRight,
   BookOpenCheck,
@@ -18,6 +15,7 @@ import {
   ShieldCheck,
   Sparkles,
 } from "lucide-react"
+import { FadeIn } from "@/components/motion/FadeIn"
 import { cn } from "@/lib/utils"
 
 const heroMetrics = [
@@ -56,13 +54,7 @@ export function HeroSection() {
       <div className="absolute inset-x-0 bottom-0 -z-10 h-28 bg-gradient-to-t from-[var(--color-surface-soft)] to-transparent" />
 
       <div className="sx-container grid items-center gap-8 py-8 pb-12 sm:py-10 md:py-14 lg:min-h-[calc(100svh-72px)] lg:grid-cols-[minmax(0,0.95fr)_minmax(360px,0.62fr)] lg:gap-14">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.5, ease: [0.33, 1, 0.68, 1] }}
-          className="max-w-3xl pt-1 sm:pt-2"
-        >
+        <FadeIn className="max-w-3xl pt-1 sm:pt-2">
           <span className="inline-flex max-w-full items-center gap-2 rounded-full border border-primary/20 bg-white/85 px-3 py-1.5 text-xs font-semibold text-primary shadow-sm backdrop-blur">
             <ShieldCheck className="h-4 w-4" />
             <span className="min-w-0 truncate">面向学生、家长和老师的 AI 学习反馈</span>
@@ -132,15 +124,9 @@ export function HeroSection() {
               </div>
             ))}
           </div>
-        </motion.div>
+        </FadeIn>
 
-        <motion.div
-          initial={{ opacity: 0, y: 24 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.55, delay: 0.08, ease: [0.33, 1, 0.68, 1] }}
-          className="hidden lg:block"
-        >
+        <FadeIn y={24} delay={0.08} className="hidden lg:block">
           <div className="rounded-2xl border border-white/70 bg-white/88 p-5 shadow-xl backdrop-blur">
             <div className="overflow-hidden rounded-xl border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-cream-50 p-5">
               <div className="flex items-center justify-between">
@@ -227,7 +213,7 @@ export function HeroSection() {
               </p>
             </div>
           </div>
-        </motion.div>
+        </FadeIn>
       </div>
     </section>
   )
