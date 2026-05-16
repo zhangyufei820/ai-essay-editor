@@ -345,6 +345,40 @@ npm test -- __tests__/credits.test.ts __tests__/payment-guards.test.ts __tests__
 - 网络变更必须验证相关容器互通。
 - 新增端口、环境变量、卷挂载时必须同步更新文档和回滚说明。
 
+#### 生产工作区卫生与隔离规则
+
+生产项目目录 `root@43.154.111.156:/data/ai-essay-editor` 必须保持可解释状态，禁止长期留下散落的未提交源码、备份文件或临时目录。任何人或 Codex 在部署前后看到生产工作区非 clean 时，必须先归类处理，而不是继续叠加修改。
+
+生产机只允许两种 Git 状态：
+
+1. 正式部署分支 + `git status --short` 为空。
+2. `codex/prod-quarantine-*` 隔离分支 + `git status --short` 为空。
+
+禁止把以下文件或目录留在项目 Git 工作区内：
+
+- `.cleanup-backups/`
+- `.deploy-backups/`
+- `tmp-codex-upload/`
+- `*.backup-*`
+- `*.bak`
+- 任何包含 `.env.production`、真实密钥、生产配置快照的备份文件。
+
+临时备份、部署前快照、线上排障备份必须放到仓库外：
+
+```bash
+/data/ai-essay-editor-quarantine/<YYYYMMDD-purpose>/
+```
+
+如果生产机已有无法立即判断归属的真实源码改动，必须按以下流程隔离：
+
+1. 先把备份/临时/可能含密钥的文件移出项目目录，放入 `/data/ai-essay-editor-quarantine/<stamp>/`。
+2. 在生产仓库创建隔离分支：`codex/prod-quarantine-<YYYYMMDD>`。
+3. 将剩余真实源码改动提交为一个清晰的隔离提交，例如 `chore: quarantine production workspace changes`。
+4. 推送隔离分支到远端，或从本机拉取该分支后推送，确保同事能通过 Git/PR 查看。
+5. 完成后生产机必须回到 clean 状态，并记录当前分支、commit、备份目录和健康检查结果。
+
+后续部署时，禁止再用“工作区有大量未提交改动”作为最终报告结论；必须给出具体归类和处置结果。若未获授权处理，应至少报告阻塞原因和建议隔离命令。
+
 ### Sentry / 线上错误 / 监控
 
 调用链：
