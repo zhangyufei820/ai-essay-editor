@@ -7,7 +7,7 @@ import {
   ScrollAreaV2 as ScrollArea
 } from "@/components/ui/v2"
 import { useEffect, useState } from "react"
-import { LoadingStateCard } from "@/components/ui/LoadingStateCard"
+import { LoadingStateV2 } from "@/components/ui/v2"
 import { MessageSquare, FileText, Clock } from "lucide-react"
 import Link from "next/link"
 import { buildChatSessionRouteFromSession } from "@/lib/chat-session-routes"
@@ -114,7 +114,7 @@ export default function HistoryPage() {
   if (loading) {
     return (
       <div className="container mx-auto flex min-h-screen items-center justify-center">
-        <LoadingStateCard modelKey="standard" />
+        <LoadingStateV2 label="历史记录加载中..." size="md" />
       </div>
     )
   }
@@ -136,14 +136,14 @@ export default function HistoryPage() {
             <div className="space-y-3">
               {!isLoggedIn ? (
                 <Card className="p-8 text-center">
-                  <p className="text-muted-foreground mb-4">请先登录后查看历史记录</p>
+                  <p className="text-[var(--ink-500)] mb-4">请先登录后查看历史记录</p>
                   <Button asChild>
                     <Link href="/login">去登录</Link>
                   </Button>
                 </Card>
               ) : sessions.length === 0 ? (
                 <Card className="p-8 text-center">
-                  <p className="text-muted-foreground">暂无聊天记录</p>
+                  <p className="text-[var(--ink-500)]">暂无聊天记录</p>
                 </Card>
               ) : (
                 sessions.map((session) => (
@@ -152,7 +152,7 @@ export default function HistoryPage() {
                       <h3 className="font-medium">{session.title}</h3>
                       <Badge variant="ghost">{session.processing_mode}</Badge>
                     </div>
-                    <div className="mb-3 flex items-center gap-2 text-sm text-muted-foreground">
+                    <div className="mb-3 flex items-center gap-2 text-sm text-[var(--ink-500)]">
                       <Clock className="h-3 w-3" />
                       {new Date(session.created_at).toLocaleString("zh-CN")}
                     </div>
@@ -178,7 +178,7 @@ export default function HistoryPage() {
             <div className="space-y-3">
               {reviews.length === 0 ? (
                 <Card className="p-8 text-center">
-                  <p className="text-muted-foreground">暂无批改记录</p>
+                  <p className="text-[var(--ink-500)]">暂无批改记录</p>
                 </Card>
               ) : (
                 reviews.map((review) => (
@@ -191,7 +191,7 @@ export default function HistoryPage() {
                         </Badge>
                       )}
                     </div>
-                    <div className="mb-3 flex items-center gap-2 text-sm text-muted-foreground">
+                    <div className="mb-3 flex items-center gap-2 text-sm text-[var(--ink-500)]">
                       <Badge variant="ghost">{review.writer_style}</Badge>
                       <Clock className="h-3 w-3" />
                       {new Date(review.created_at).toLocaleString("zh-CN")}

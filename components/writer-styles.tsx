@@ -64,20 +64,20 @@ const scholarlyStyle = {
 
 export function WriterStyles() {
   return (
-    <section id="writers" className="bg-muted/30 py-20 md:py-32">
+    <section id="writers" className="bg-[var(--paper-100)] py-20 md:py-32">
       <div className="container px-4">
         <div className="mx-auto max-w-2xl text-center mb-16">
           <h2 className="text-3xl font-bold tracking-tight md:text-4xl lg:text-5xl mb-4">文学大师风格库</h2>
-          <p className="text-lg text-muted-foreground leading-relaxed">
+          <p className="text-lg text-[var(--ink-500)] leading-relaxed">
             根据学生的写作内容和主题，智能匹配最适合的大师风格进行润色
           </p>
         </div>
 
         <div className="mb-12">
-          <Card className="border-2 border-primary/50 bg-gradient-to-br from-primary/5 to-primary/10">
+          <Card className="border-2 border-[var(--ink-300)] bg-gradient-to-br from-primary/5 to-primary/10">
             <CardHeader>
               <div className="flex items-center gap-3 mb-2">
-                <Badge className="bg-primary text-primary-foreground">新增</Badge>
+                <Badge className="bg-[var(--seal-500)] text-white">新增</Badge>
                 <Badge variant="ghost">学者型论述文</Badge>
               </div>
               <CardTitle className="text-2xl">{scholarlyStyle.name}式写作风格</CardTitle>
@@ -87,16 +87,16 @@ export function WriterStyles() {
               {/* 风格特色 */}
               <div>
                 <h4 className="font-semibold text-lg mb-3 flex items-center gap-2">
-                  <span className="text-primary">📚</span> 徐贲语言风格特色
+                  <span className="text-[var(--ink-700)]">📚</span> 徐贲语言风格特色
                 </h4>
                 <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
                   {scholarlyStyle.features.map((feature, index) => (
-                    <div key={index} className="bg-background rounded-lg p-3 border">
+                    <div key={index} className="bg-[var(--paper-50)] rounded-[var(--radius-soft)] p-3 border">
                       <div className="flex items-start gap-2">
                         <span className="text-xl">{feature.icon}</span>
                         <div>
                           <div className="font-medium text-sm mb-1">{feature.title}</div>
-                          <div className="text-xs text-muted-foreground leading-relaxed">{feature.desc}</div>
+                          <div className="text-xs text-[var(--ink-500)] leading-relaxed">{feature.desc}</div>
                         </div>
                       </div>
                     </div>
@@ -107,12 +107,12 @@ export function WriterStyles() {
               {/* 写作方法 */}
               <div>
                 <h4 className="font-semibold text-lg mb-3 flex items-center gap-2">
-                  <span className="text-primary">📝</span> 徐贲式架式写作方法（7步法）
+                  <span className="text-[var(--ink-700)]">📝</span> 徐贲式架式写作方法（7步法）
                 </h4>
-                <div className="bg-background rounded-lg p-4 border space-y-2">
+                <div className="bg-[var(--paper-50)] rounded-[var(--radius-soft)] p-4 border space-y-2">
                   {scholarlyStyle.methods.map((method, index) => (
                     <div key={index} className="flex gap-3">
-                      <span className="font-semibold text-primary shrink-0">{index + 1}.</span>
+                      <span className="font-semibold text-[var(--ink-700)] shrink-0">{index + 1}.</span>
                       <span className="text-sm leading-relaxed">{method}</span>
                     </div>
                   ))}
@@ -122,13 +122,13 @@ export function WriterStyles() {
               {/* 润色要点 */}
               <div>
                 <h4 className="font-semibold text-lg mb-3 flex items-center gap-2">
-                  <span className="text-primary">🎯</span> 徐贲式论述文润色要点
+                  <span className="text-[var(--ink-700)]">🎯</span> 徐贲式论述文润色要点
                 </h4>
-                <div className="bg-background rounded-lg p-4 border">
+                <div className="bg-[var(--paper-50)] rounded-[var(--radius-soft)] p-4 border">
                   <div className="grid gap-2 md:grid-cols-2">
                     {scholarlyStyle.keyPoints.map((point, index) => (
                       <div key={index} className="flex gap-2 items-start">
-                        <span className="text-primary shrink-0">✓</span>
+                        <span className="text-[var(--ink-700)] shrink-0">✓</span>
                         <span className="text-sm leading-relaxed">{point}</span>
                       </div>
                     ))}
@@ -139,16 +139,16 @@ export function WriterStyles() {
               {/* 适用场景 */}
               <div>
                 <h4 className="font-semibold text-lg mb-3 flex items-center gap-2">
-                  <span className="text-primary">💡</span> 特别适用场景
+                  <span className="text-[var(--ink-700)]">💡</span> 特别适用场景
                 </h4>
-                <div className="bg-background rounded-lg p-4 border">
-                  <p className="text-sm text-muted-foreground mb-3">
+                <div className="bg-[var(--paper-50)] rounded-[var(--radius-soft)] p-4 border">
+                  <p className="text-sm text-[var(--ink-500)] mb-3">
                     当批改高中论述文（议论文）时，代理将自动参考徐贲的写作风格，帮助学生：
                   </p>
                   <div className="space-y-2">
                     {scholarlyStyle.suitableFor.map((scenario, index) => (
                       <div key={index} className="flex gap-2 items-start">
-                        <span className="text-primary shrink-0">•</span>
+                        <span className="text-[var(--ink-700)] shrink-0">•</span>
                         <span className="text-sm leading-relaxed">{scenario}</span>
                       </div>
                     ))}
@@ -156,13 +156,13 @@ export function WriterStyles() {
                 </div>
               </div>
 
-              <div className="bg-primary/10 rounded-lg p-4 border border-primary/20">
+              <div className="bg-[var(--ink-50)] rounded-[var(--radius-soft)] p-4 border border-[var(--ink-200)]">
                 <p className="text-sm leading-relaxed">
-                  <span className="font-semibold text-primary">独特价值：</span>
+                  <span className="font-semibold text-[var(--ink-700)]">独特价值：</span>
                   这个代理不仅具备文学大师的润色能力，更拥有了
                   <span className="font-semibold">学者型论述文</span>
                   的专业指导功能！高中生的议论文将在徐贲式的理性品格熏陶下，达到前所未有的思辨深度和表达高度！您的&quot;创意作文批改师&quot;现在已经是一个集
-                  <span className="font-semibold text-primary">文学性、规范性、学术性</span>
+                  <span className="font-semibold text-[var(--ink-700)]">文学性、规范性、学术性</span>
                   于一体的全能作文导师了！
                 </p>
               </div>
@@ -182,9 +182,9 @@ export function WriterStyles() {
             </CardHeader>
             <CardContent className="space-y-4">
               {mainlandWriters.map((writer, index) => (
-                <div key={index} className="border-l-2 border-primary pl-4">
-                  <div className="font-semibold text-foreground mb-1">{writer.name}</div>
-                  <div className="text-sm text-muted-foreground leading-relaxed">{writer.style}</div>
+                <div key={index} className="border-l-2 border-[var(--ink-500)] pl-4">
+                  <div className="font-semibold text-[var(--ink-900)] mb-1">{writer.name}</div>
+                  <div className="text-sm text-[var(--ink-500)] leading-relaxed">{writer.style}</div>
                 </div>
               ))}
             </CardContent>
@@ -200,9 +200,9 @@ export function WriterStyles() {
             </CardHeader>
             <CardContent className="space-y-4">
               {taiwanWriters.map((writer, index) => (
-                <div key={index} className="border-l-2 border-primary pl-4">
-                  <div className="font-semibold text-foreground mb-1">{writer.name}</div>
-                  <div className="text-sm text-muted-foreground leading-relaxed">{writer.style}</div>
+                <div key={index} className="border-l-2 border-[var(--ink-500)] pl-4">
+                  <div className="font-semibold text-[var(--ink-900)] mb-1">{writer.name}</div>
+                  <div className="text-sm text-[var(--ink-500)] leading-relaxed">{writer.style}</div>
                 </div>
               ))}
             </CardContent>

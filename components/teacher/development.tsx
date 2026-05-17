@@ -30,11 +30,11 @@ const developmentPaths = [
 
 export function TeacherDevelopment() {
   return (
-    <section className="py-20 bg-muted/30">
+    <section className="py-20 bg-[var(--paper-100)]">
       <div className="container mx-auto px-4">
         <div className="mb-12 text-center">
           <h2 className="mb-4 text-4xl font-bold tracking-tight text-balance font-[var(--font-display)]">专业发展路径</h2>
-          <p className="mx-auto max-w-2xl text-lg text-muted-foreground text-pretty">系统化的教师专业发展课程体系</p>
+          <p className="mx-auto max-w-2xl text-lg text-[var(--ink-500)] text-pretty">系统化的教师专业发展课程体系</p>
         </div>
 
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
@@ -46,11 +46,11 @@ export function TeacherDevelopment() {
                   <Icon className="h-6 w-6" />
                 </div>
                 <h3 className="mb-3 text-xl font-bold">{path.title}</h3>
-                <p className="mb-4 text-sm text-muted-foreground leading-relaxed">{path.description}</p>
+                <p className="mb-4 text-sm text-[var(--ink-500)] leading-relaxed">{path.description}</p>
                 <div className="space-y-2">
                   {path.courses.map((course) => (
                     <div key={course} className="flex items-center text-sm">
-                      <span className="mr-2 h-1.5 w-1.5 rounded-full bg-primary" />
+                      <span className="mr-2 h-1.5 w-1.5 rounded-full bg-[var(--seal-500)]" />
                       {course}
                     </div>
                   ))}

@@ -18,7 +18,7 @@ export function Stats() {
               <div className="mb-3 text-5xl font-bold bg-gradient-to-br from-primary to-primary/60 bg-clip-text text-transparent transition-all duration-300 group-hover:scale-110">
                 {stat.value}
               </div>
-              <div className="text-sm font-medium text-muted-foreground">{stat.label}</div>
+              <div className="text-sm font-medium text-[var(--ink-500)]">{stat.label}</div>
             </div>
           ))}
         </div>

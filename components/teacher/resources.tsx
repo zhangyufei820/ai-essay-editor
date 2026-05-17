@@ -39,7 +39,7 @@ export function TeacherResources() {
       <div className="container mx-auto px-4">
         <div className="mb-12 text-center">
           <h2 className="mb-4 text-4xl font-bold tracking-tight text-balance font-[var(--font-display)]">教学资源库</h2>
-          <p className="mx-auto max-w-2xl text-lg text-muted-foreground text-pretty">
+          <p className="mx-auto max-w-2xl text-lg text-[var(--ink-500)] text-pretty">
             海量优质教学资源，覆盖全学段全学科
           </p>
         </div>
@@ -48,13 +48,13 @@ export function TeacherResources() {
           {resourceTypes.map((resource) => {
             const Icon = resource.icon
             return (
-              <Card key={resource.title} className="border-2 p-6 transition-all hover:border-primary hover:shadow-lg">
+              <Card key={resource.title} className="border-2 p-6 transition-all hover:border-[var(--ink-500)] hover:shadow-lg">
                 <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-[var(--radius-soft)] bg-[var(--ink-50)] text-[var(--ink-600)]">
                   <Icon className="h-6 w-6" />
                 </div>
                 <div className="mb-2 text-2xl font-bold text-[var(--ink-600)]">{resource.count}</div>
                 <h3 className="mb-2 text-xl font-bold">{resource.title}</h3>
-                <p className="mb-4 text-sm text-muted-foreground leading-relaxed">{resource.description}</p>
+                <p className="mb-4 text-sm text-[var(--ink-500)] leading-relaxed">{resource.description}</p>
                 <Button variant="outline" size="sm" className="w-full bg-transparent" asChild>
                   <Link href={resource.href}>浏览资源</Link>
                 </Button>

@@ -10,6 +10,7 @@ import {
   ScrollAreaV2 as ScrollArea,
   TextareaV2 as Textarea
 } from "@/components/ui/v2"
+import { LoadingStateV2, SkeletonV2 as Skeleton } from "@/components/ui/v2"
 /* eslint-disable @next/next/no-img-element -- Dynamic/user-generated/external image surfaces: keep native img to preserve sizing, blob/data/proxy URLs, payment QR codes, and chat preview behavior. */
 
 import type React from "react"
@@ -43,8 +44,6 @@ import { useSunoMusic, extractTaskId, removeTaskIdFromText, type SunoProFormData
 import { TASK_ID_REGEX } from "@/lib/suno-config"
 import { SunoProForm, type SunoFormData } from "./SunoProForm"
 import type { ChatSession } from "./chat-sidebar"
-import { LoadingStateCard } from "@/components/ui/LoadingStateCard"
-import { ChatSkeleton } from "@/components/ui/chat-skeleton"
 import { motion, AnimatePresence } from "framer-motion"
 import { EnhancedMarkdown } from "./EnhancedMarkdown"
 import { AssistantEyeAvatar } from "./AssistantEyeAvatar"
@@ -60,7 +59,7 @@ import { containsRawDifyWordCardPayload, normalizeDifyWordCardResponse, type Fro
 import { buildVocabCardWorkflowInputs, cleanVocabAnswer, resolveVocabCardResult } from "@/lib/vocab-card-workflow"
 import { resolveChatAgentParam } from "@/lib/teacher-agent-route"
 import { createClient } from "@supabase/supabase-js"
-import { collapseSidebar, navigateHomeWithSidebar, refreshCredits, refreshSessionList, SESSION_LIST_REFRESH_EVENT } from "@/components/app-sidebar"
+import { collapseSidebar, navigateHomeWithSidebar, refreshCredits, refreshSessionList, SESSION_LIST_REFRESH_EVENT } from "@/lib/workspace-events"
 import { useSelectedModelStore } from "@/hooks/useSelectedModelStore"
 import { validateFileForUpload, MAX_FILE_SIZE } from "@/lib/upload-service"
 import { VoiceRecorder, getDifyTTS, transcribeAudio } from "@/lib/voice-service"
@@ -79,7 +78,7 @@ import {
 import type { WorkflowState, WorkflowNodeStatus } from "@/lib/workflow-visual-config"
 
 // 🔥 品牌深绿色（参考主页标题）
-const BRAND_GREEN = "#14532d"
+const BRAND_GREEN = "var(--ink-700)"
 
 // 模型 key 到显示名称的映射
 const MODEL_DISPLAY_NAMES: Record<string, string> = {
@@ -142,19 +141,19 @@ const MobileUserInfo = ({
 }) => (
   <button
     onClick={onMenuClick}
-    className="inline-flex h-10 min-w-[40px] items-center justify-center rounded-full border border-slate-200/80 bg-white/90 px-2 shadow-sm backdrop-blur-sm transition-colors hover:bg-slate-50"
+    className="inline-flex h-10 min-w-[40px] items-center justify-center rounded-[var(--radius-pill)] border border-[var(--paper-200)]/80 bg-[var(--paper-50)]/90 px-2 shadow-sm backdrop-blur-sm transition-colors hover:bg-[var(--paper-50)]"
   >
     <div
-      className="flex h-7 w-7 items-center justify-center rounded-full text-white text-[11px] font-semibold shrink-0"
+      className="flex h-7 w-7 items-center justify-center rounded-[var(--radius-pill)] text-white text-[11px] font-semibold shrink-0"
       style={{ backgroundColor: BRAND_GREEN }}
     >
       {userName?.[0]?.toUpperCase() || "U"}
     </div>
     <div className="hidden sm:flex flex-col items-start min-w-0 pl-1">
-      <span className="text-xs font-medium text-slate-700 max-w-[72px] truncate leading-none">
+      <span className="text-xs font-medium text-[var(--ink-700)] max-w-[72px] truncate leading-none">
         {userName || "用户"}
       </span>
-      <span className="text-[10px] text-emerald-600 font-medium leading-none">
+      <span className="text-[10px] text-[var(--ink-600)] font-medium leading-none">
         {credits.toLocaleString()} 积分
       </span>
     </div>
@@ -166,6 +165,26 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
+
+function ChatSkeleton() {
+  return (
+    <div className="flex flex-col gap-6 px-3 py-6 sm:px-4 md:px-6 lg:px-10">
+      {[false, true, false, false].map((isUser, index) => (
+        <div key={index} className={cn("flex gap-3", isUser && "flex-row-reverse")}>
+          <Skeleton className="size-12 shrink-0 rounded-[var(--radius-soft)] bg-[var(--paper-200)]" />
+          <div className="flex max-w-[75%] flex-1 flex-col gap-2">
+            <Skeleton className={cn("h-4 w-24 rounded-[var(--radius-pill)] bg-[var(--paper-200)]", isUser && "ml-auto")} />
+            <div className={cn("space-y-2 rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-[var(--paper-100)] p-3", isUser && "ml-auto w-full")}>
+              <Skeleton className="h-3 rounded-[var(--radius-pill)] bg-[var(--paper-200)]" />
+              <Skeleton className="h-3 w-5/6 rounded-[var(--radius-pill)] bg-[var(--paper-200)]" />
+              <Skeleton className="h-3 w-4/6 rounded-[var(--radius-pill)] bg-[var(--paper-200)]" />
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
 
 async function getVerifiedAuthHeaders(): Promise<Record<string, string>> {
   if (typeof window !== "undefined") {
@@ -546,16 +565,16 @@ function ProcessingStatusCard({
   return (
     <section
       aria-live="polite"
-      className="w-fit max-w-full rounded-lg border border-slate-200/80 bg-slate-50/80 px-3 py-2 font-mono text-[11px] leading-5 text-slate-600 shadow-none"
+      className="w-fit max-w-full rounded-[var(--radius-soft)] border border-[var(--paper-200)]/80 bg-[var(--paper-50)]/80 px-3 py-2 font-mono text-[11px] leading-5 text-[var(--ink-600)] shadow-none"
     >
-      <div className="flex min-w-0 items-center gap-2 border-b border-slate-200/70 pb-1.5">
+      <div className="flex min-w-0 items-center gap-2 border-b border-[var(--paper-200)]/70 pb-1.5">
         <span className="relative flex h-2 w-2 shrink-0">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-40" />
-          <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-600" />
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-[var(--radius-pill)] bg-[var(--seal-500)] opacity-40" />
+          <span className="relative inline-flex h-2 w-2 rounded-[var(--radius-pill)] bg-[var(--ink-600)]" />
         </span>
-        <span className="shrink-0 font-semibold text-slate-700">ai.plan</span>
-        <span className="min-w-0 truncate text-slate-500">{statusText}</span>
-        <span className="ml-auto shrink-0 text-slate-400">{elapsedSeconds}s</span>
+        <span className="shrink-0 font-semibold text-[var(--ink-700)]">ai.plan</span>
+        <span className="min-w-0 truncate text-[var(--ink-500)]">{statusText}</span>
+        <span className="ml-auto shrink-0 text-[var(--ink-400)]">{elapsedSeconds}s</span>
       </div>
       <div className="mt-1.5 space-y-0.5">
         {traceLines.map((line, index) => (
@@ -563,29 +582,29 @@ function ProcessingStatusCard({
             <span
               className={cn(
                 "mt-px w-4 shrink-0 text-right",
-                line.marker === "ok" && "text-emerald-700",
-                line.marker === "run" && "text-slate-700",
-                line.marker === "wait" && "text-slate-400",
+                line.marker === "ok" && "text-[var(--ink-700)]",
+                line.marker === "run" && "text-[var(--ink-700)]",
+                line.marker === "wait" && "text-[var(--ink-400)]",
               )}
             >
               {line.marker === "ok" ? "✓" : line.marker === "run" ? "›" : "·"}
             </span>
             <span className="min-w-0 truncate">
-              <span className="text-slate-700">{line.text}</span>
-              {line.detail && <span className="text-slate-400"> {" — "}{line.detail}</span>}
+              <span className="text-[var(--ink-700)]">{line.text}</span>
+              {line.detail && <span className="text-[var(--ink-400)]"> {" — "}{line.detail}</span>}
             </span>
           </div>
         ))}
       </div>
-      <div className="mt-1.5 h-px overflow-hidden rounded-full bg-slate-200">
+      <div className="mt-1.5 h-px overflow-hidden rounded-[var(--radius-pill)] bg-[var(--paper-200)]">
         <motion.div
-          className="h-full rounded-full bg-emerald-600"
+          className="h-full rounded-[var(--radius-pill)] bg-[var(--ink-600)]"
           initial={{ width: "8%" }}
           animate={{ width: `${progress}%` }}
           transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
         />
       </div>
-      <p className="mt-1 truncate text-[10px] leading-4 text-slate-400">
+      <p className="mt-1 truncate text-[10px] leading-4 text-[var(--ink-400)]">
         {modelName} · {hasFiles ? `${context?.fileCount || 0} files` : "text"} · keep_intent=true
       </p>
     </section>
@@ -776,12 +795,12 @@ const MediaBlock = ({ items }: { items: MediaItem[] }) => {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.3 }}
-              className="relative rounded-2xl overflow-hidden shadow-xl border border-green-100"
+              className="relative rounded-[var(--radius-sharp)] overflow-hidden shadow-xl border border-[var(--ink-100)]"
             >
               <img
                 src={imageUrl}
                 alt={item.name || "Generated Image"}
-                className="w-full h-auto max-h-[500px] object-contain bg-slate-50"
+                className="w-full h-auto max-h-[500px] object-contain bg-[var(--paper-50)]"
                 loading="lazy"
               />
               {/* 下载按钮 */}
@@ -790,9 +809,9 @@ const MediaBlock = ({ items }: { items: MediaItem[] }) => {
                 download={item.name}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="absolute top-3 right-3 p-2 bg-white/90 backdrop-blur-sm rounded-lg shadow-lg hover:bg-white transition-all"
+                className="absolute top-3 right-3 p-2 bg-[var(--paper-50)]/90 backdrop-blur-sm rounded-[var(--radius-soft)] shadow-lg hover:bg-[var(--paper-50)] transition-all"
               >
-                <Download className="w-4 h-4 text-slate-600" />
+                <Download className="w-4 h-4 text-[var(--ink-600)]" />
               </a>
             </motion.div>
           )
@@ -816,14 +835,14 @@ const MediaBlock = ({ items }: { items: MediaItem[] }) => {
           return (
             <div
               key={index}
-              className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 transition-colors hover:bg-slate-100"
+              className="flex items-center gap-3 rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-[var(--paper-50)] p-4 transition-colors hover:bg-[var(--paper-100)]"
             >
-              <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
+              <div className="w-10 h-10 rounded-[var(--radius-soft)] bg-blue-100 flex items-center justify-center shrink-0">
                 <FileText className="h-5 w-5 text-blue-600" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-slate-700 truncate">{item.name || "文件"}</p>
-                <p className="truncate text-xs text-slate-400">{isHtml ? "HTML 页面" : isPDF ? "PDF 文档" : "文件"}</p>
+                <p className="text-sm font-medium text-[var(--ink-700)] truncate">{item.name || "文件"}</p>
+                <p className="truncate text-xs text-[var(--ink-400)]">{isHtml ? "HTML 页面" : isPDF ? "PDF 文档" : "文件"}</p>
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 {isPDF && (
@@ -831,7 +850,7 @@ const MediaBlock = ({ items }: { items: MediaItem[] }) => {
                     href={fileUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm transition-colors hover:bg-slate-100"
+                    className="inline-flex items-center gap-1.5 rounded-[var(--radius-soft)] bg-[var(--paper-50)] px-3 py-1.5 text-xs font-medium text-[var(--ink-600)] shadow-sm transition-colors hover:bg-[var(--paper-100)]"
                   >
                     <ExternalLink className="h-3.5 w-3.5" />
                     打开
@@ -842,7 +861,7 @@ const MediaBlock = ({ items }: { items: MediaItem[] }) => {
                   download={item.name}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-blue-500 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-600"
+                  className="inline-flex items-center gap-1.5 rounded-[var(--radius-soft)] bg-blue-500 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-600"
                 >
                   <Download className="h-3.5 w-3.5" />
                   下载
@@ -855,13 +874,13 @@ const MediaBlock = ({ items }: { items: MediaItem[] }) => {
           const pptUrl = publicUrl
           const googleViewerUrl = `https://docs.google.com/gview?url=${encodeURIComponent(pptUrl)}&embedded=true`
           return (
-            <div key={index} className="rounded-2xl overflow-hidden border border-green-100 shadow-xl">
-              <div className="bg-green-50 px-4 py-2 border-b border-green-100">
-                <span className="text-sm font-medium text-green-700">📊 {item.name || "PPT 文档"}</span>
+            <div key={index} className="rounded-[var(--radius-sharp)] overflow-hidden border border-[var(--ink-100)] shadow-xl">
+              <div className="bg-[var(--ink-50)] px-4 py-2 border-b border-[var(--ink-100)]">
+                <span className="text-sm font-medium text-[var(--ink-700)]">📊 {item.name || "PPT 文档"}</span>
               </div>
               <iframe
                 src={googleViewerUrl}
-                className="w-full h-[400px] bg-white"
+                className="w-full h-[400px] bg-[var(--paper-50)]"
                 frameBorder="0"
                 title="PPT Preview"
               />
@@ -884,11 +903,11 @@ const TableBlock = ({ lines }: { lines: string[] }) => {
     if (!headerLine) return null;
     const headers = headerLine.split("|").filter(c => c.trim()).map(c => c.trim());
     return (
-      <div className="my-6 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className="my-6 overflow-hidden rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-[var(--paper-50)] shadow-sm">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-slate-200">
-            <thead className="bg-slate-50"><tr>{headers.map((h, i) => (<th key={i} className="px-5 py-4 text-left text-base font-semibold text-slate-700 tracking-wide">{h}</th>))}</tr></thead>
-            <tbody className="divide-y divide-slate-100">{bodyLines.map((line, i) => { const cells = line.split("|").filter(c => c.trim()).map(c => c.trim()); return (<tr key={i} className="hover:bg-slate-50/50 transition-colors">{cells.map((cell, j) => (<td key={j} className="px-3 sm:px-5 py-3 sm:py-4 text-sm sm:text-base text-slate-700 leading-relaxed"><InlineText text={cell} /></td>))}</tr>); })}</tbody>
+            <thead className="bg-[var(--paper-50)]"><tr>{headers.map((h, i) => (<th key={i} className="px-5 py-4 text-left text-base font-semibold text-[var(--ink-700)] tracking-wide">{h}</th>))}</tr></thead>
+            <tbody className="divide-y divide-slate-100">{bodyLines.map((line, i) => { const cells = line.split("|").filter(c => c.trim()).map(c => c.trim()); return (<tr key={i} className="hover:bg-[var(--paper-50)]/50 transition-colors">{cells.map((cell, j) => (<td key={j} className="px-3 sm:px-5 py-3 sm:py-4 text-sm sm:text-base text-[var(--ink-700)] leading-relaxed"><InlineText text={cell} /></td>))}</tr>); })}</tbody>
           </table>
         </div>
       </div>
@@ -898,7 +917,7 @@ const TableBlock = ({ lines }: { lines: string[] }) => {
 
 // 🎯 GenSpark 风格终端光标
 const StreamingCursor = () => (
-  <span className="streaming-cursor inline-block ml-1 text-emerald-500 animate-cursor-blink">▍</span>
+  <span className="streaming-cursor inline-block ml-1 text-[var(--ink-500)] animate-cursor-blink">▍</span>
 )
 
 // 🧠 可折叠的思考块组件 - 简化版，只有加载中时显示简单转圈
@@ -917,7 +936,7 @@ const ThinkingBlock = ({ content, isStreaming }: { content: string; isStreaming?
 }
 
 function UltimateRenderer({ content, isStreaming = false }: { content: string; isStreaming?: boolean }) {
-  if (!content) return <span className="text-emerald-500 animate-cursor-blink">▍</span>;
+  if (!content) return <span className="text-[var(--ink-500)] animate-cursor-blink">▍</span>;
 
   // 🧠 处理 <think> 标签：提取思考内容并折叠显示
   const thinkMatch = content.match(/<think>([\s\S]*?)<\/think>/i)
@@ -984,7 +1003,7 @@ function UltimateRenderer({ content, isStreaming = false }: { content: string; i
 
   // 如果内容为空或只有思考内容
   if (!cleanContent && !thinkContent && !openThinkContent && mediaItems.length === 0) {
-    return <span className="text-emerald-500 animate-cursor-blink">▍</span>;
+    return <span className="text-[var(--ink-500)] animate-cursor-blink">▍</span>;
   }
 
   // 🔥 从 cleanContent 中移除思考标签
@@ -1012,15 +1031,15 @@ function UltimateRenderer({ content, isStreaming = false }: { content: string; i
     // 🔥 再次增大字体：h1=3xl, h2=2xl, h3=xl, 正文=lg(18px)
     if (line.trim().startsWith("# ")) {
       renderedElements.push(
-        <h1 key={i} className="mt-6 sm:mt-10 mb-3 sm:mb-5 text-xl sm:text-2xl font-bold text-slate-800">
+        <h1 key={i} className="mt-6 sm:mt-10 mb-3 sm:mb-5 text-xl sm:text-2xl font-bold text-[var(--ink-800)]">
           {line.replace(/^#\s+/, "")}
           {isLastLine && isStreaming && <StreamingCursor />}
         </h1>
       );
     } else if (line.trim().startsWith("## ")) {
       renderedElements.push(
-        <h2 key={i} className={`mt-6 sm:mt-8 mb-2 sm:mb-4 text-lg sm:text-xl font-semibold text-slate-700 flex items-center gap-2`}>
-          <span className={`w-1.5 h-7 bg-[${BRAND_GREEN}] rounded-full`}></span>
+        <h2 key={i} className={`mt-6 sm:mt-8 mb-2 sm:mb-4 text-lg sm:text-xl font-semibold text-[var(--ink-700)] flex items-center gap-2`}>
+          <span className={`w-1.5 h-7 bg-[${BRAND_GREEN}] rounded-[var(--radius-pill)]`}></span>
           {line.replace(/^##\s+/, "")}
           {isLastLine && isStreaming && <StreamingCursor />}
         </h2>
@@ -1035,7 +1054,7 @@ function UltimateRenderer({ content, isStreaming = false }: { content: string; i
     } else if (line.trim().startsWith("#### ")) {
       // 🔥 支持 #### 四级标题
       renderedElements.push(
-        <h4 key={i} className="mt-4 sm:mt-5 mb-1 sm:mb-2 text-base sm:text-lg font-semibold text-slate-700">
+        <h4 key={i} className="mt-4 sm:mt-5 mb-1 sm:mb-2 text-base sm:text-lg font-semibold text-[var(--ink-700)]">
           {line.replace(/^####\s+/, "")}
           {isLastLine && isStreaming && <StreamingCursor />}
         </h4>
@@ -1044,8 +1063,8 @@ function UltimateRenderer({ content, isStreaming = false }: { content: string; i
       // 🔥 支持 - 和 * 两种无序列表格式
       const listContent = line.trim().replace(/^[-*]\s+/, "")
       renderedElements.push(
-        <div key={i} className="flex gap-2 sm:gap-3 ml-1 my-2 sm:my-3 text-sm sm:text-base text-slate-700 leading-relaxed">
-          <div className={`mt-3 w-2 h-2 rounded-full bg-[${BRAND_GREEN}]/60 shrink-0`}></div>
+        <div key={i} className="flex gap-2 sm:gap-3 ml-1 my-2 sm:my-3 text-sm sm:text-base text-[var(--ink-700)] leading-relaxed">
+          <div className={`mt-3 w-2 h-2 rounded-[var(--radius-pill)] bg-[${BRAND_GREEN}]/60 shrink-0`}></div>
           <span>
             <InlineText text={listContent} />
             {isLastLine && isStreaming && <StreamingCursor />}
@@ -1059,7 +1078,7 @@ function UltimateRenderer({ content, isStreaming = false }: { content: string; i
         const num = numMatch[1]
         const listContent = numMatch[2]
         renderedElements.push(
-          <div key={i} className="flex gap-2 sm:gap-3 ml-1 my-2 sm:my-3 text-sm sm:text-base text-slate-700 leading-relaxed">
+          <div key={i} className="flex gap-2 sm:gap-3 ml-1 my-2 sm:my-3 text-sm sm:text-base text-[var(--ink-700)] leading-relaxed">
             <span className={`text-[${BRAND_GREEN}] font-semibold shrink-0`}>{num}.</span>
             <span>
               <InlineText text={listContent} />
@@ -1071,14 +1090,14 @@ function UltimateRenderer({ content, isStreaming = false }: { content: string; i
     } else if (line.trim().startsWith("> ")) {
       renderedElements.push(
         <blockquote key={i} className={`my-3 sm:my-5 border-l-3 border-[${BRAND_GREEN}] bg-[${BRAND_GREEN}]/5 px-3 sm:px-5 py-2 sm:py-4 rounded-r-xl`}>
-          <div className="text-sm sm:text-base text-slate-700 leading-relaxed">
+          <div className="text-sm sm:text-base text-[var(--ink-700)] leading-relaxed">
             <InlineText text={line.replace(/^> /, "")} />
             {isLastLine && isStreaming && <StreamingCursor />}
           </div>
         </blockquote>
       );
     } else if (line.trim() === "---") {
-      renderedElements.push(<div key={i} className="py-5"><div className="h-px bg-slate-200"></div></div>);
+      renderedElements.push(<div key={i} className="py-5"><div className="h-px bg-[var(--paper-200)]"></div></div>);
     } else if (line.trim() === "") {
       renderedElements.push(<div key={i} className="h-5"></div>);
     } else if (line.trim().startsWith("$$") && line.trim().endsWith("$$")) {
@@ -1093,7 +1112,7 @@ function UltimateRenderer({ content, isStreaming = false }: { content: string; i
       }
     } else {
       renderedElements.push(
-        <p key={i} className="text-sm sm:text-base leading-relaxed sm:leading-[1.9] text-slate-700 my-2 sm:my-3">
+        <p key={i} className="text-sm sm:text-base leading-relaxed sm:leading-[1.9] text-[var(--ink-700)] my-2 sm:my-3">
           <InlineText text={line} />
           {isLastLine && isStreaming && <StreamingCursor />}
         </p>
@@ -3086,7 +3105,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   }
 
   return (
-    <div className="flex h-[100dvh] w-full bg-white overflow-hidden relative">
+    <div className="flex h-[100dvh] w-full bg-[var(--paper-50)] overflow-hidden relative">
       {/* 🔥 历史会话侧边栏 - 左侧滑出 */}
       <AnimatePresence>
         {showHistorySidebar && (
@@ -3112,13 +3131,13 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
               }}
             >
               {/* 头部 */}
-              <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-slate-100">
-                <span className="text-sm font-semibold text-slate-700">历史会话</span>
+              <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-[var(--paper-100)]">
+                <span className="text-sm font-semibold text-[var(--ink-700)]">历史会话</span>
                 <button
                   onClick={() => setShowHistorySidebar(false)}
-                  className="p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
+                  className="p-1.5 rounded-[var(--radius-soft)] hover:bg-[var(--paper-100)] transition-colors"
                 >
-                  <X className="h-4 w-4 text-slate-500" />
+                  <X className="h-4 w-4 text-[var(--ink-500)]" />
                 </button>
               </div>
 
@@ -3126,7 +3145,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
               <ScrollArea className="flex-1 min-h-0 px-1 scrollbar-thin">
                 <div className="p-2 space-y-1 h-full">
                   {chatSessions.length === 0 ? (
-                    <div className="text-center py-8 text-slate-400 text-sm">
+                    <div className="text-center py-8 text-[var(--ink-400)] text-sm">
                       暂无历史会话
                     </div>
                   ) : (
@@ -3153,10 +3172,10 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                             // loadHistorySession 由 URL 变化触发的 useEffect 统一调用
                           }}
                           className={cn(
-                            "w-full text-left px-3 py-2.5 rounded-lg transition-all",
+                            "w-full text-left px-3 py-2.5 rounded-[var(--radius-soft)] transition-all",
                             currentSessionId === session.id
                               ? "bg-[#10A37F]/10 text-[#10A37F]"
-                              : "hover:bg-slate-100 text-slate-600"
+                              : "hover:bg-[var(--paper-100)] text-[var(--ink-600)]"
                           )}
                         >
                           <div className="flex items-center justify-between gap-2">
@@ -3165,7 +3184,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                               {/* 模型徽章 */}
                               {safeModel !== "standard" && (
                                 <span
-                                  className="text-[9px] px-1.5 py-0.5 rounded-full font-medium shrink-0"
+                                  className="text-[9px] px-1.5 py-0.5 rounded-[var(--radius-pill)] font-medium shrink-0"
                                   style={{
                                     backgroundColor: `${getModelBadgeColor(safeModel)}18`,
                                     color: getModelBadgeColor(safeModel)
@@ -3175,7 +3194,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                                 </span>
                               )}
                             </div>
-                            <div className="text-[10px] text-slate-400 shrink-0">
+                            <div className="text-[10px] text-[var(--ink-400)] shrink-0">
                               {new Date(session.date).toLocaleString('zh-CN', {
                                 month: '2-digit',
                                 day: '2-digit',
@@ -3184,7 +3203,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                               })}
                             </div>
                           </div>
-                          <div className="text-xs text-slate-400 truncate mt-0.5">{session.preview}</div>
+                          <div className="text-xs text-[var(--ink-400)] truncate mt-0.5">{session.preview}</div>
                         </button>
                       )
                     })
@@ -3205,21 +3224,21 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
               initial={{ opacity: 0, y: -20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20, height: 0 }}
-              className="bg-gradient-to-r from-emerald-50 to-green-50 border-b border-emerald-100 px-4 py-3 shrink-0"
+              className="bg-gradient-to-r from-emerald-50 to-green-50 border-b border-[var(--ink-100)] px-4 py-3 shrink-0"
             >
               <div className="mx-auto max-w-3xl flex items-center justify-between gap-4">
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-emerald-800">
+                  <p className="text-sm font-medium text-[var(--ink-800)]">
                     每天仅需4元，获得每月 12,000 积分
                   </p>
-                  <p className="text-xs text-emerald-600 mt-0.5 truncate">
+                  <p className="text-xs text-[var(--ink-600)] mt-0.5 truncate">
                     可用于作文批改、备课、论文写作等文本工作流
                   </p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <Button
                     size="sm"
-                    className="h-8 px-4 text-white text-xs font-medium rounded-full shadow-sm hover:opacity-90 transition-all"
+                    className="h-8 px-4 text-white text-xs font-medium rounded-[var(--radius-pill)] shadow-sm hover:opacity-90 transition-all"
                     style={{ backgroundColor: BRAND_GREEN }}
                     onClick={() => router.push("/pricing")}
                   >
@@ -3227,7 +3246,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                   </Button>
                   <button
                     onClick={() => setShowUpgradeBanner(false)}
-                    className="p-1 text-emerald-400 hover:text-emerald-600 transition-colors"
+                    className="p-1 text-emerald-400 hover:text-[var(--ink-600)] transition-colors"
                   >
                     <X className="h-4 w-4" />
                   </button>
@@ -3238,19 +3257,19 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         </AnimatePresence>
 
         {/* 🔥 顶部导航栏 - 移动端极简收紧 */}
-        <div className="flex items-center h-11 md:h-14 px-2 md:px-4 border-b border-slate-100/70 bg-white/90 backdrop-blur-sm shrink-0 pt-safe">
+        <div className="flex items-center h-11 md:h-14 px-2 md:px-4 border-b border-[var(--paper-100)]/70 bg-[var(--paper-50)]/90 backdrop-blur-sm shrink-0 pt-safe">
           <button
             onClick={() => {
               console.log("📋 [历史按钮] 点击! showHistorySidebar当前值:", showHistorySidebar)
               setShowHistorySidebar(!showHistorySidebar)
             }}
-            className="inline-flex items-center justify-center min-w-[40px] min-h-[40px] rounded-full text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-800"
+            className="inline-flex items-center justify-center min-w-[40px] min-h-[40px] rounded-[var(--radius-pill)] text-[var(--ink-500)] transition-colors hover:bg-[var(--paper-50)] hover:text-[var(--ink-800)]"
           >
             <History className="h-4 w-4" />
           </button>
           <button
             onClick={handleBack}
-            className="inline-flex items-center justify-center min-w-[40px] min-h-[40px] rounded-full text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-800"
+            className="inline-flex items-center justify-center min-w-[40px] min-h-[40px] rounded-[var(--radius-pill)] text-[var(--ink-500)] transition-colors hover:bg-[var(--paper-50)] hover:text-[var(--ink-800)]"
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
@@ -3260,7 +3279,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
               initial={{ opacity: 0, y: -4 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
-              className="inline-block max-w-[112px] truncate text-[12px] font-medium tracking-[-0.01em] text-slate-700 sm:max-w-none sm:text-sm md:text-base"
+              className="inline-block max-w-[112px] truncate text-[12px] font-medium tracking-[-0.01em] text-[var(--ink-700)] sm:max-w-none sm:text-sm md:text-base"
             >
               {getModelUiConfig(selectedModel).name}
             </motion.span>
@@ -3276,7 +3295,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
             ) : (
               <button
                 onClick={() => router.push("/login")}
-                className="inline-flex h-10 min-w-[40px] items-center justify-center rounded-full px-3 text-xs font-medium text-white"
+                className="inline-flex h-10 min-w-[40px] items-center justify-center rounded-[var(--radius-pill)] px-3 text-xs font-medium text-white"
                 style={{ backgroundColor: BRAND_GREEN }}
               >
                 登录
@@ -3417,8 +3436,8 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                       <div className="mb-3 sm:mb-4">
                         <ModelLogo modelKey={selectedModel as any} size="xl" />
                       </div>
-                      <h1 className="text-lg font-semibold text-slate-800 sm:text-xl">词境记忆卡</h1>
-                      <p className="mt-1 max-w-md text-xs leading-5 text-slate-500 sm:text-sm">
+                      <h1 className="text-lg font-semibold text-[var(--ink-800)] sm:text-xl">词境记忆卡</h1>
+                      <p className="mt-1 max-w-md text-xs leading-5 text-[var(--ink-500)] sm:text-sm">
                         先选学习阶段、卡片风格和输出语言，再输入单词生成记忆卡。
                       </p>
                     </div>
@@ -3435,7 +3454,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                   <div className="mb-4 sm:mb-6">
                     <ModelLogo modelKey={selectedModel as any} size="xl" />
                   </div>
-                  <h1 className="text-lg sm:text-xl font-semibold text-slate-800 px-4">
+                  <h1 className="text-lg sm:text-xl font-semibold text-[var(--ink-800)] px-4">
                     {selectedModel === "all-in-one-agent" ? "全能超级智能体" : "欢迎使用沈翔智学"}
                   </h1>
                   {selectedModel === "all-in-one-agent" && (
@@ -3445,7 +3464,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                           key={prompt}
                           type="button"
                           onClick={() => setInput(prompt)}
-                          className="rounded-lg border border-emerald-100 bg-white px-3 py-2.5 text-left text-xs leading-5 text-slate-600 shadow-sm transition hover:border-emerald-200 hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
+                          className="rounded-[var(--radius-soft)] border border-[var(--ink-100)] bg-[var(--paper-50)] px-3 py-2.5 text-left text-xs leading-5 text-[var(--ink-600)] shadow-sm transition hover:border-[var(--ink-200)] hover:bg-[var(--ink-50)] focus:outline-none focus:ring-2 focus:ring-[var(--ink-500)] focus:ring-offset-2"
                         >
                           {prompt}
                         </button>
@@ -3563,7 +3582,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                                     !(message.id === currentBotIdRef.current && isLoading)
                                   ) {
                                     return (
-                                      <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4 text-sm leading-6 text-amber-800">
+                                      <div className="rounded-[var(--radius-sharp)] border border-amber-100 bg-amber-50 p-4 text-sm leading-6 text-amber-800">
                                         我没有收到可展示的回复，请再试一次。
                                       </div>
                                     )
@@ -3588,7 +3607,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                    className="h-8 w-8 rounded-full p-0 text-slate-400 hover:text-slate-600 hover:bg-slate-100 touch-manipulation sm:h-8 sm:w-auto sm:px-2 sm:gap-1 sm:rounded-md sm:text-xs"
+                                    className="h-8 w-8 rounded-[var(--radius-pill)] p-0 text-[var(--ink-400)] hover:text-[var(--ink-600)] hover:bg-[var(--paper-100)] touch-manipulation sm:h-8 sm:w-auto sm:px-2 sm:gap-1 sm:rounded-[var(--radius-soft)] sm:text-xs"
                                   onClick={() => navigator.clipboard.writeText(message.content).then(() => toast.success("已复制"))}
                                 >
                                   复制
@@ -3596,7 +3615,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                    className="h-8 w-8 rounded-full p-0 text-slate-400 hover:text-slate-600 hover:bg-slate-100 touch-manipulation sm:h-8 sm:w-auto sm:px-2 sm:gap-1 sm:rounded-md sm:text-xs"
+                                    className="h-8 w-8 rounded-[var(--radius-pill)] p-0 text-[var(--ink-400)] hover:text-[var(--ink-600)] hover:bg-[var(--paper-100)] touch-manipulation sm:h-8 sm:w-auto sm:px-2 sm:gap-1 sm:rounded-[var(--radius-soft)] sm:text-xs"
                                   onClick={() => window.print()}
                                 >
                                   打印
@@ -3604,7 +3623,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                    className="h-8 w-8 rounded-full p-0 text-slate-400 hover:text-slate-600 hover:bg-slate-100 touch-manipulation sm:h-8 sm:w-auto sm:px-2 sm:gap-1 sm:rounded-md sm:text-xs"
+                                    className="h-8 w-8 rounded-[var(--radius-pill)] p-0 text-[var(--ink-400)] hover:text-[var(--ink-600)] hover:bg-[var(--paper-100)] touch-manipulation sm:h-8 sm:w-auto sm:px-2 sm:gap-1 sm:rounded-[var(--radius-soft)] sm:text-xs"
                                   onClick={() => handleExportPDF(message.content)}
                                 >
                                   导出
@@ -3612,7 +3631,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                    className="h-8 w-8 rounded-full p-0 text-slate-400 hover:text-slate-600 hover:bg-slate-100 touch-manipulation sm:h-8 sm:w-auto sm:px-2 sm:gap-1 sm:rounded-md sm:text-xs"
+                                    className="h-8 w-8 rounded-[var(--radius-pill)] p-0 text-[var(--ink-400)] hover:text-[var(--ink-600)] hover:bg-[var(--paper-100)] touch-manipulation sm:h-8 sm:w-auto sm:px-2 sm:gap-1 sm:rounded-[var(--radius-soft)] sm:text-xs"
                                   onClick={() => handleShare()}
                                 >
                                   分享
@@ -3621,8 +3640,8 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                                   variant="ghost"
                                   size="sm"
                                   className={cn(
-                                      "h-8 w-8 rounded-full p-0 touch-manipulation sm:h-8 sm:w-auto sm:px-2 sm:gap-1 sm:rounded-md sm:text-xs",
-                                    isPlaying ? "text-emerald-600 bg-emerald-50 hover:bg-emerald-100" : "text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                                      "h-8 w-8 rounded-[var(--radius-pill)] p-0 touch-manipulation sm:h-8 sm:w-auto sm:px-2 sm:gap-1 sm:rounded-[var(--radius-soft)] sm:text-xs",
+                                    isPlaying ? "text-[var(--ink-600)] bg-[var(--ink-50)] hover:bg-[var(--ink-100)]" : "text-[var(--ink-400)] hover:text-[var(--ink-600)] hover:bg-[var(--paper-100)]"
                                   )}
                                   onClick={() => playAssistantMessage(message.content)}
                                 >
@@ -3634,11 +3653,11 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                         )}
                       </div>
                       {message.role === "user" && (
-                        <div className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-200 mt-0.5 sm:h-7 sm:w-7">
+                        <div className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-[var(--radius-pill)] bg-[var(--paper-200)] mt-0.5 sm:h-7 sm:w-7">
                           {userAvatar ? (
                             <img src={userAvatar} alt="Me" className="h-full w-full object-cover" />
                           ) : (
-                            <User className="h-3.5 w-3.5 text-slate-500" />
+                            <User className="h-3.5 w-3.5 text-[var(--ink-500)]" />
                           )}
                         </div>
                       )}
@@ -3658,7 +3677,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 10 }}
                 onClick={scrollToBottom}
-                className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 text-white text-sm rounded-full shadow-lg flex items-center gap-2 hover:opacity-90 transition-all"
+                className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 text-white text-sm rounded-[var(--radius-pill)] shadow-lg flex items-center gap-2 hover:opacity-90 transition-all"
                 style={{ backgroundColor: BRAND_GREEN }}
               >
                 <ArrowDown className="w-4 h-4" />
@@ -3669,18 +3688,18 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         </div>
 
         {/* 🔥 输入框区域 - 移动端优化 */}
-        <div className="fixed inset-x-0 bottom-0 z-30 shrink-0 border-t border-slate-100/80 bg-white/96 p-1.5 pb-[max(env(safe-area-inset-bottom),4px)] shadow-[0_-8px_24px_rgba(15,23,42,0.05)] backdrop-blur-md md:relative md:p-6 md:shadow-none">
+        <div className="fixed inset-x-0 bottom-0 z-30 shrink-0 border-t border-[var(--paper-100)]/80 bg-[var(--paper-50)]/96 p-1.5 pb-[max(env(safe-area-inset-bottom),4px)] shadow-[0_-8px_24px_rgba(15,23,42,0.05)] backdrop-blur-md md:relative md:p-6 md:shadow-none">
           <div className="mx-auto max-w-5xl">
             {/* 🔥 上传进度条 - 移动端优化 */}
             {isUploading && (
-              <div className="mb-2 sm:mb-3 rounded-lg sm:rounded-xl bg-slate-50 p-2 sm:p-3 border border-slate-200 animate-in slide-in-from-bottom-2">
+              <div className="mb-2 sm:mb-3 rounded-[var(--radius-soft)] sm:rounded-[var(--radius-sharp)] bg-[var(--paper-50)] p-2 sm:p-3 border border-[var(--paper-200)] animate-in slide-in-from-bottom-2">
                 <div className="flex items-center justify-between mb-1.5 sm:mb-2">
-                  <span className="text-[10px] sm:text-xs font-medium text-slate-600">上传中...</span>
+                  <span className="text-[10px] sm:text-xs font-medium text-[var(--ink-600)]">上传中...</span>
                   <span className="text-[10px] sm:text-xs font-medium" style={{ color: BRAND_GREEN }}>{uploadProgress}%</span>
                 </div>
-                <div className="w-full h-1.5 sm:h-2 bg-slate-200 rounded-full overflow-hidden">
+                <div className="w-full h-1.5 sm:h-2 bg-[var(--paper-200)] rounded-[var(--radius-pill)] overflow-hidden">
                   <motion.div
-                    className="h-full rounded-full"
+                    className="h-full rounded-[var(--radius-pill)]"
                     style={{ backgroundColor: BRAND_GREEN }}
                     initial={{ width: 0 }}
                     animate={{ width: `${uploadProgress}%` }}
@@ -3690,15 +3709,15 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
               </div>
             )}
             {fileProcessing.status !== "idle" && !isUploading && (
-              <div className="mb-2 sm:mb-3 rounded-lg sm:rounded-xl bg-slate-50 p-2 sm:p-3 animate-in slide-in-from-bottom-2">
+              <div className="mb-2 sm:mb-3 rounded-[var(--radius-soft)] sm:rounded-[var(--radius-sharp)] bg-[var(--paper-50)] p-2 sm:p-3 animate-in slide-in-from-bottom-2">
                 <div className="flex items-center gap-1.5 sm:gap-2">
-                  {fileProcessing.status === "error" ? <AlertCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-red-500" /> : <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin" style={{ color: BRAND_GREEN }} />}
+                  {fileProcessing.status === "error" ? <AlertCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-[var(--seal-500)]" /> : <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin" style={{ color: BRAND_GREEN }} />}
                   {dynamicStatusMessage ? (
                     <p className="text-xs sm:text-sm bg-gradient-to-r from-emerald-600 to-green-500 bg-clip-text text-transparent animate-pulse font-medium">
                       {dynamicStatusMessage}
                     </p>
                   ) : (
-                    <p className="text-xs sm:text-sm text-slate-600">{fileProcessing.message}</p>
+                    <p className="text-xs sm:text-sm text-[var(--ink-600)]">{fileProcessing.message}</p>
                   )}
                 </div>
               </div>
@@ -3727,7 +3746,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                       ? "描述你想生成的动画、图片或要处理的文件..."
                     : "输入内容开始对话..."
                   : "请先登录..."}
-                className="overflow-visible border-slate-200/70 bg-white/95 shadow-[0_-4px_18px_rgba(0,0,0,0.06)] backdrop-blur-md sm:shadow-[0_8px_24px_rgba(0,0,0,0.10)]"
+                className="overflow-visible border-[var(--paper-200)]/70 bg-[var(--paper-50)]/95 shadow-[0_-4px_18px_rgba(0,0,0,0.06)] backdrop-blur-md sm:shadow-[0_8px_24px_rgba(0,0,0,0.10)]"
                 onFileUpload={(files) => {
                   const target = { target: { files } } as unknown as React.ChangeEvent<HTMLInputElement>
                   handleFileUpload(target)
@@ -3738,14 +3757,14 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 
             {!userId && selectedModel !== "suno-v5" && (
               <div className="mt-2 hidden items-center justify-center gap-1 text-[10px] sm:mt-3 sm:flex sm:text-xs">
-                <span className="text-slate-400">未登录，</span>
+                <span className="text-[var(--ink-400)]">未登录，</span>
                 <Link
                   href="/auth/sign-up"
-                  className="text-green-700 hover:text-green-600 font-medium underline-offset-2 hover:underline focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-1 rounded px-1"
+                  className="text-[var(--ink-700)] hover:text-[var(--ink-600)] font-medium underline-offset-2 hover:underline focus:outline-none focus:ring-2 focus:ring-[var(--ink-500)] focus:ring-offset-1 rounded px-1"
                 >
                   立即注册
                 </Link>
-                <span className="text-slate-400">开始对话</span>
+                <span className="text-[var(--ink-400)]">开始对话</span>
               </div>
             )}
           </div>
@@ -3763,7 +3782,7 @@ export interface EnhancedChatInterfaceProps {
 export function EnhancedChatInterface(props: EnhancedChatInterfaceProps) {
   const { initialModel } = props
   return (
-    <Suspense fallback={<div className="flex h-[100dvh] w-full items-center justify-center bg-white"><LoadingStateCard modelKey="standard" /></div>}>
+    <Suspense fallback={<div className="flex h-[100dvh] w-full items-center justify-center bg-[var(--paper-50)]"><LoadingStateV2 label="AI 正在思考..." size="md" /></div>}>
       <ChatInterfaceInner initialModel={initialModel} />
     </Suspense>
   )

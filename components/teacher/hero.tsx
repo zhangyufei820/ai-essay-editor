@@ -18,7 +18,7 @@ export function TeacherHero() {
             <span className="text-[var(--ink-600)]">专业成长的引擎</span>
           </h1>
 
-          <p className="mx-auto mb-10 max-w-2xl text-lg text-muted-foreground text-pretty leading-relaxed md:text-xl">
+          <p className="mx-auto mb-10 max-w-2xl text-lg text-[var(--ink-500)] text-pretty leading-relaxed md:text-xl">
             为教师提供丰富的教学资源、专业发展课程、教研协作工具和认证体系， 助力每一位教师在职业道路上持续精进。
           </p>
 

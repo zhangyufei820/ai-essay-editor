@@ -132,29 +132,29 @@ function PaymentSuccessContent() {
         {orderNo && (
           <div className="rounded-[var(--radius-soft)] border bg-[var(--paper-50)]/70 p-4 text-sm space-y-3">
             <div className="flex items-center justify-between gap-4">
-              <span className="text-muted-foreground">订单号</span>
+              <span className="text-[var(--ink-500)]">订单号</span>
               <span className="font-mono text-right break-all">{order?.orderNo || orderNo}</span>
             </div>
             <div className="flex items-center justify-between gap-4">
-              <span className="text-muted-foreground">支付状态</span>
+              <span className="text-[var(--ink-500)]">支付状态</span>
               <Badge variant={isSuccess ? "ink" : isFailure ? "seal" : "paper"}>
                 {isSuccess ? "已支付" : isPending ? "确认中" : "未完成"}
               </Badge>
             </div>
             <div className="flex items-center justify-between gap-4">
-              <span className="text-muted-foreground">购买内容</span>
+              <span className="text-[var(--ink-500)]">购买内容</span>
               <span>{order?.productName || "--"}</span>
             </div>
             <div className="flex items-center justify-between gap-4">
-              <span className="text-muted-foreground">支付金额</span>
+              <span className="text-[var(--ink-500)]">支付金额</span>
               <span>{formatCurrency(order?.amount)}</span>
             </div>
             <div className="flex items-center justify-between gap-4">
-              <span className="text-muted-foreground">到账积分</span>
+              <span className="text-[var(--ink-500)]">到账积分</span>
               <span>{typeof order?.creditsAmount === "number" ? `${order.creditsAmount} 积分` : "--"}</span>
             </div>
             <div className="flex items-center justify-between gap-4">
-              <span className="text-muted-foreground">到账时间</span>
+              <span className="text-[var(--ink-500)]">到账时间</span>
               <span>{formatTime(order?.paidAt || order?.updatedAt)}</span>
             </div>
           </div>

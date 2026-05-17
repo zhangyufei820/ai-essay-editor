@@ -36,7 +36,7 @@ export function PricingPageClient() {
   }, [])
 
   return (
-    <main className="min-h-screen bg-gray-50">
+    <main className="min-h-screen bg-[var(--paper-50)]">
       {/* 我们可以给顶部加一点留白，让它看起来不像直接贴在顶部的 */}
       <div className="pt-10">
         <Pricing currentSubscription={currentSubscription} />

@@ -100,12 +100,12 @@ export default function SignUpPage() {
       <div className="flex min-h-screen w-full items-center justify-center p-6 md:p-10 bg-gradient-to-br from-green-50 to-blue-50">
         <Card className="w-full max-w-md">
           <CardHeader className="text-center space-y-4">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
-              <CheckCircle2 className="h-10 w-10 text-green-600" />
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[var(--ink-100)]">
+              <CheckCircle2 className="h-10 w-10 text-[var(--ink-600)]" />
             </div>
             <CardTitle className="text-2xl">注册成功！</CardTitle>
             <CardDescription className="text-base">
-              我们已向 <strong className="text-foreground">{email}</strong> 发送了确认邮件
+              我们已向 <strong className="text-[var(--ink-900)]">{email}</strong> 发送了确认邮件
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -124,7 +124,7 @@ export default function SignUpPage() {
               </AlertDescription>
             </Alert>
 
-            <div className="rounded-lg bg-blue-50 border border-blue-200 p-4 space-y-2">
+            <div className="rounded-[var(--radius-soft)] bg-blue-50 border border-blue-200 p-4 space-y-2">
               <div className="flex items-start gap-2">
                 <Info className="h-4 w-4 text-blue-600 mt-0.5" />
                 <div>
@@ -155,7 +155,7 @@ export default function SignUpPage() {
             <CardTitle className="text-2xl">注册账户</CardTitle>
             <CardDescription>
               创建您的创意作文批改师账户
-              {referralCode && <span className="block mt-2 text-green-600">🎉 使用推荐码注册，额外获得200积分！</span>}
+              {referralCode && <span className="block mt-2 text-[var(--ink-600)]">🎉 使用推荐码注册，额外获得200积分！</span>}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -215,17 +215,17 @@ export default function SignUpPage() {
                   />
                 </div>
 
-                <div className="rounded-lg bg-green-50 p-3 text-sm">
-                  <p className="font-medium text-green-900">🎁 注册即送1000积分</p>
-                  <p className="text-green-700 mt-1">可用于AI对话、作文批改等功能</p>
+                <div className="rounded-[var(--radius-soft)] bg-[var(--ink-50)] p-3 text-sm">
+                  <p className="font-medium text-[var(--ink-900)]">🎁 注册即送1000积分</p>
+                  <p className="text-[var(--ink-700)] mt-1">可用于AI对话、作文批改等功能</p>
                 </div>
 
-                {error && <p className="text-sm text-red-500">{error}</p>}
+                {error && <p className="text-sm text-[var(--seal-500)]">{error}</p>}
                 <Button type="submit" className="w-full" disabled={isLoading}>
                   {isLoading ? "注册中..." : "立即注册"}
                 </Button>
 
-                <p className="text-xs text-muted-foreground text-center">注册即表示您同意我们的服务条款和隐私政策</p>
+                <p className="text-xs text-[var(--ink-500)] text-center">注册即表示您同意我们的服务条款和隐私政策</p>
               </div>
             </form>
 

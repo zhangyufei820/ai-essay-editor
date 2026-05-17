@@ -32,7 +32,7 @@ export default function SignUpSuccessPage() {
               </AlertDescription>
             </Alert>
 
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-[var(--ink-500)]">
               如果收不到确认邮件，请检查垃圾邮件文件夹，或联系管理员手动激活您的账户。
             </p>
 

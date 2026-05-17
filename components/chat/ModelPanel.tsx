@@ -208,7 +208,7 @@ export function ModelPanel({ isOpen, onClose }: ModelPanelProps) {
                 {/* 智慧光环 */}
                 <div className="relative">
                   <div
-                    className="w-10 h-10 rounded-xl flex items-center justify-center"
+                    className="w-10 h-10 rounded-[var(--radius-sharp)] flex items-center justify-center"
                     style={{
                       background: "linear-gradient(135deg, #0d3a1f 0%, #14532d 100%)",
                       boxShadow: "0 4px 20px rgba(14, 58, 31, 0.25), 0 0 40px rgba(134, 239, 172, 0.1)",
@@ -218,7 +218,7 @@ export function ModelPanel({ isOpen, onClose }: ModelPanelProps) {
                   </div>
                   {/* 呼吸光环 */}
                   <motion.div
-                    className="absolute inset-0 rounded-xl"
+                    className="absolute inset-0 rounded-[var(--radius-sharp)]"
                     style={{
                       background: "transparent",
                       boxShadow: "0 0 20px rgba(134, 239, 172, 0.3)",
@@ -246,7 +246,7 @@ export function ModelPanel({ isOpen, onClose }: ModelPanelProps) {
 
               <motion.button
                 onClick={onClose}
-                className="w-9 h-9 rounded-xl flex items-center justify-center transition-colors"
+                className="w-9 h-9 rounded-[var(--radius-sharp)] flex items-center justify-center transition-colors"
                 style={{ background: "rgba(14, 58, 31, 0.04)" }}
                 whileHover={{ background: "rgba(14, 58, 31, 0.08)" }}
                 whileTap={{ scale: 0.95 }}
@@ -287,7 +287,7 @@ export function ModelPanel({ isOpen, onClose }: ModelPanelProps) {
               transition={{ delay: 0.6 }}
             >
               <motion.div
-                className="py-4 px-4 rounded-2xl text-center"
+                className="py-4 px-4 rounded-[var(--radius-sharp)] text-center"
                 style={{
                   background: "linear-gradient(135deg, rgba(134, 239, 172, 0.06) 0%, rgba(134, 239, 172, 0.02) 100%)",
                   border: "1px solid rgba(134, 239, 172, 0.1)",
@@ -340,7 +340,7 @@ function FloatingIslandCard({
     <motion.a
       href={`/chat/${model.key}`}
       onClick={onClick}
-      className="group relative block p-5 rounded-2xl overflow-hidden cursor-pointer"
+      className="group relative block p-5 rounded-[var(--radius-sharp)] overflow-hidden cursor-pointer"
       style={{
         // 玻璃态 - rgba(255,255,255,0.6) + backdrop-blur(20px)
         background: "rgba(255, 255, 255, 0.60)",
@@ -360,7 +360,7 @@ function FloatingIslandCard({
       {/* 推荐状态 - 极光光晕 */}
       {isRecommended && (
         <motion.div
-          className="absolute inset-0 rounded-2xl pointer-events-none"
+          className="absolute inset-0 rounded-[var(--radius-sharp)] pointer-events-none"
           style={{
             background: "radial-gradient(ellipse at center, rgba(134, 239, 172, 0.12) 0%, transparent 70%)",
           }}
@@ -392,7 +392,7 @@ function FloatingIslandCard({
 
       {/* 图标容器 - 使用 ModelLogo 或 Lucide 图标 */}
       <motion.div
-        className="relative w-12 h-12 rounded-xl flex items-center justify-center mb-3.5"
+        className="relative w-12 h-12 rounded-[var(--radius-sharp)] flex items-center justify-center mb-3.5"
         style={{
           background: isRecommended
             ? "linear-gradient(135deg, rgba(134, 239, 172, 0.15) 0%, rgba(134, 239, 172, 0.05) 100%)"
@@ -423,7 +423,7 @@ function FloatingIslandCard({
 
         {/* 悬停时图标微光 */}
         <motion.div
-          className="absolute inset-0 rounded-xl pointer-events-none"
+          className="absolute inset-0 rounded-[var(--radius-sharp)] pointer-events-none"
           style={{
             background: "radial-gradient(circle at center, rgba(134, 239, 172, 0.2) 0%, transparent 70%)",
             opacity: 0,

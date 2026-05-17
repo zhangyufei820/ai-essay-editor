@@ -16,11 +16,11 @@ export default function Error({
   reset: () => void
 }) {
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-4 text-center bg-white">
+    <div className="min-h-screen flex flex-col items-center justify-center px-4 text-center bg-[var(--paper-50)]">
       {/* 错误图标 */}
-      <div className="mb-6 p-4 bg-green-50 rounded-full">
+      <div className="mb-6 p-4 bg-[var(--ink-50)] rounded-full">
         <svg
-          className="w-16 h-16 text-green-900"
+          className="w-16 h-16 text-[var(--ink-900)]"
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -37,13 +37,13 @@ export default function Error({
       {/* 标题 */}
       <h1
         id="main-content"
-        className="text-2xl md:text-3xl font-bold text-slate-800 mb-4"
+        className="text-2xl md:text-3xl font-bold text-[var(--ink-800)] mb-4"
       >
         哎呀，出了点小问题
       </h1>
 
       {/* 描述 */}
-      <p className="text-slate-500 mb-8 max-w-md">
+      <p className="text-[var(--ink-500)] mb-8 max-w-md">
         当前页面暂时无法打开，请先尝试重新加载。
         <br />
         如果问题持续存在，请联系客服。
@@ -53,21 +53,21 @@ export default function Error({
       <div className="flex flex-wrap items-center justify-center gap-3 mb-10">
         <button
           onClick={reset}
-          className="inline-flex items-center gap-2 px-5 py-2.5 bg-green-900 text-white rounded-xl hover:bg-green-800 transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+          className="inline-flex items-center gap-2 px-5 py-2.5 bg-[var(--ink-900)] text-white rounded-[var(--radius-sharp)] hover:bg-[var(--ink-800)] transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-[var(--ink-500)] focus:ring-offset-2"
         >
           <RefreshCw className="w-4 h-4" />
           重新加载
         </button>
         <Link
           href="/"
-          className="inline-flex items-center gap-2 px-5 py-2.5 bg-slate-100 text-slate-700 rounded-xl hover:bg-slate-200 transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"
+          className="inline-flex items-center gap-2 px-5 py-2.5 bg-[var(--paper-100)] text-[var(--ink-700)] rounded-[var(--radius-sharp)] hover:bg-[var(--paper-200)] transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"
         >
           <Home className="w-4 h-4" />
           返回首页
           </Link>
         <Link
           href="/pricing"
-          className="inline-flex items-center gap-2 px-5 py-2.5 bg-white text-slate-700 rounded-xl border border-slate-200 hover:bg-slate-50 transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"
+          className="inline-flex items-center gap-2 px-5 py-2.5 bg-[var(--paper-50)] text-[var(--ink-700)] rounded-[var(--radius-sharp)] border border-[var(--paper-200)] hover:bg-[var(--paper-50)] transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"
         >
           <LifeBuoy className="w-4 h-4" />
           访问帮助页
@@ -75,28 +75,28 @@ export default function Error({
       </div>
 
       {/* 客服联系方式 */}
-      <section className="flex flex-col items-center gap-4 text-sm text-slate-400" aria-label="联系客服">
-        <p className="text-slate-500 font-medium">需要帮助？</p>
+      <section className="flex flex-col items-center gap-4 text-sm text-[var(--ink-400)]" aria-label="联系客服">
+        <p className="text-[var(--ink-500)] font-medium">需要帮助？</p>
         <div className="flex flex-col sm:flex-row items-center gap-4">
           <a
             href="tel:19132896773"
-            className="inline-flex items-center gap-1.5 text-green-700 hover:text-green-600 transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 rounded px-2 py-1"
+            className="inline-flex items-center gap-1.5 text-[var(--ink-700)] hover:text-[var(--ink-600)] transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-[var(--ink-500)] focus:ring-offset-2 rounded px-2 py-1"
           >
             <Phone className="w-4 h-4" aria-hidden="true" />
             19132896773
           </a>
           <span className="text-slate-300 hidden sm:inline">|</span>
-          <div className="flex items-center gap-1.5 text-slate-600">
+          <div className="flex items-center gap-1.5 text-[var(--ink-600)]">
             <MessageCircle className="w-4 h-4" aria-hidden="true" />
             <span>联系客服咨询</span>
           </div>
         </div>
         {/* 客服二维码占位 */}
-        <div className="mt-2 p-3 bg-slate-50 rounded-lg border border-slate-200">
-          <div className="w-24 h-24 bg-slate-200 rounded flex items-center justify-center text-slate-400 text-xs">
+        <div className="mt-2 p-3 bg-[var(--paper-50)] rounded-[var(--radius-soft)] border border-[var(--paper-200)]">
+          <div className="w-24 h-24 bg-[var(--paper-200)] rounded flex items-center justify-center text-[var(--ink-400)] text-xs">
             联系客服
           </div>
-          <p className="text-xs text-slate-400 mt-2">可补充真实客服二维码</p>
+          <p className="text-xs text-[var(--ink-400)] mt-2">可补充真实客服二维码</p>
         </div>
       </section>
     </div>

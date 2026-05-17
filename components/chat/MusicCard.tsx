@@ -112,7 +112,7 @@ export function MusicCard({
   if (globalStatus === "ERROR" && !hasReadySlot) {
     return (
       <div className={cn(
-        "relative overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm",
+        "relative overflow-hidden rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-[var(--paper-50)] shadow-sm",
         className
       )}>
         <ErrorState message={errorMessage} onRetry={onRetry} />
@@ -123,7 +123,7 @@ export function MusicCard({
   return (
     <div
       className={cn(
-        "relative overflow-hidden rounded-2xl border border-slate-100 bg-gradient-to-br from-slate-50/80 to-white shadow-sm",
+        "relative overflow-hidden rounded-[var(--radius-sharp)] border border-[var(--paper-100)] bg-gradient-to-br from-slate-50/80 to-white shadow-sm",
         "transition-all duration-300",
         className
       )}
@@ -132,16 +132,16 @@ export function MusicCard({
         {/* 🔥 简洁标题 */}
         <div className="flex items-center gap-3 mb-5">
           <div 
-            className="flex h-10 w-10 items-center justify-center rounded-xl"
+            className="flex h-10 w-10 items-center justify-center rounded-[var(--radius-sharp)]"
             style={{ backgroundColor: `${BRAND_GREEN}10` }}
           >
             <Sparkles className="h-5 w-5" style={{ color: BRAND_GREEN }} />
           </div>
           <div>
-            <h3 className="text-base font-semibold text-slate-800">
+            <h3 className="text-base font-semibold text-[var(--ink-800)]">
               由 Suno V5 生成
             </h3>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <p className="text-xs text-[var(--ink-400)] mt-0.5">
               为您创作了 2 个版本
             </p>
           </div>
@@ -177,7 +177,7 @@ function SongSlotRenderer({
           initial={{ opacity: 0, y: 5 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -5 }}
-          className="rounded-2xl bg-slate-50/80 border border-slate-100 p-6"
+          className="rounded-[var(--radius-sharp)] bg-[var(--paper-50)]/80 border border-[var(--paper-100)] p-6"
         >
           <LoadingState version={version} />
         </motion.div>
@@ -208,16 +208,16 @@ function SongSlotRenderer({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="flex items-center gap-4 p-6 rounded-2xl bg-red-50/50 border border-red-100"
+          className="flex items-center gap-4 p-6 rounded-[var(--radius-sharp)] bg-red-50/50 border border-red-100"
         >
-          <div className="h-20 w-20 rounded-xl bg-red-100/50 flex items-center justify-center shrink-0">
+          <div className="h-20 w-20 rounded-[var(--radius-sharp)] bg-red-100/50 flex items-center justify-center shrink-0">
             <AlertCircle className="h-8 w-8 text-red-400" />
           </div>
           <div className="flex-1">
-            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-red-100 text-red-600">
+            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-red-100 text-[var(--seal-600)]">
               版本 {version}
             </span>
-            <p className="text-sm text-red-500 mt-2">{slot.errorMessage || "生成失败"}</p>
+            <p className="text-sm text-[var(--seal-500)] mt-2">{slot.errorMessage || "生成失败"}</p>
           </div>
         </motion.div>
       )}
@@ -233,7 +233,7 @@ function LoadingState({ version }: { version: number }) {
   return (
     <div className="flex items-center gap-6">
       {/* 封面占位 */}
-      <div className="relative h-32 w-32 rounded-xl bg-gradient-to-br from-slate-100 to-slate-50 flex items-center justify-center shrink-0 overflow-hidden">
+      <div className="relative h-32 w-32 rounded-[var(--radius-sharp)] bg-gradient-to-br from-slate-100 to-slate-50 flex items-center justify-center shrink-0 overflow-hidden">
         <Music className="h-12 w-12 text-slate-300" />
         <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent animate-shimmer" />
       </div>
@@ -269,7 +269,7 @@ function LoadingState({ version }: { version: number }) {
         <p className="text-sm font-medium" style={{ color: BRAND_GREEN }}>
           音乐正在创作中...
         </p>
-        <p className="text-xs text-slate-400 mt-1">
+        <p className="text-xs text-[var(--ink-400)] mt-1">
           请耐心等待，约需 30-60 秒
         </p>
       </div>
@@ -415,7 +415,7 @@ function PremiumMusicPlayer({
   const progress = audioDuration > 0 ? (currentTime / audioDuration) * 100 : 0
 
   return (
-    <div className="rounded-2xl bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 overflow-hidden shadow-xl">
+    <div className="rounded-[var(--radius-sharp)] bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 overflow-hidden shadow-xl">
       <audio ref={audioRef} src={audioUrl} preload="metadata" />
       
       {/* 🔥 主体布局：左封面 + 右歌词 */}
@@ -433,7 +433,7 @@ function PremiumMusicPlayer({
           </div>
           
           {/* 🔥 大封面 */}
-          <div className="relative w-40 h-40 rounded-xl overflow-hidden shadow-2xl mb-4">
+          <div className="relative w-40 h-40 rounded-[var(--radius-sharp)] overflow-hidden shadow-2xl mb-4">
             {coverUrl ? (
               <img
                 src={coverUrl}
@@ -492,9 +492,9 @@ function PremiumMusicPlayer({
               className="p-2 rounded-full hover:bg-slate-700/50 transition-colors"
             >
               {isMuted ? (
-                <VolumeX className="h-4 w-4 text-slate-400" />
+                <VolumeX className="h-4 w-4 text-[var(--ink-400)]" />
               ) : (
-                <Volume2 className="h-4 w-4 text-slate-400" />
+                <Volume2 className="h-4 w-4 text-[var(--ink-400)]" />
               )}
             </button>
             
@@ -504,9 +504,9 @@ function PremiumMusicPlayer({
               className="p-2 rounded-full hover:bg-slate-700/50 transition-colors disabled:opacity-50"
             >
               {isDownloading ? (
-                <Loader2 className="h-4 w-4 text-slate-400 animate-spin" />
+                <Loader2 className="h-4 w-4 text-[var(--ink-400)] animate-spin" />
               ) : (
-                <Download className="h-4 w-4 text-slate-400" />
+                <Download className="h-4 w-4 text-[var(--ink-400)]" />
               )}
             </button>
           </div>
@@ -528,10 +528,10 @@ function PremiumMusicPlayer({
                     data-index={index}
                     onClick={() => seekTo(line.time)}
                     className={cn(
-                      "text-center cursor-pointer transition-all duration-300 px-4 py-1 rounded-lg",
+                      "text-center cursor-pointer transition-all duration-300 px-4 py-1 rounded-[var(--radius-soft)]",
                       index === currentLyricIndex
                         ? "text-white text-lg font-medium scale-105"
-                        : "text-slate-500 text-sm hover:text-slate-300"
+                        : "text-[var(--ink-500)] text-sm hover:text-slate-300"
                     )}
                     style={{
                       color: index === currentLyricIndex ? BRAND_GREEN : undefined,
@@ -545,9 +545,9 @@ function PremiumMusicPlayer({
             ) : (
               <div className="h-full flex items-center justify-center">
                 <div className="text-center">
-                  <Music className="h-12 w-12 text-slate-600 mx-auto mb-3" />
-                  <p className="text-slate-500 text-sm">暂无歌词</p>
-                  <p className="text-slate-600 text-xs mt-1">享受纯音乐体验</p>
+                  <Music className="h-12 w-12 text-[var(--ink-600)] mx-auto mb-3" />
+                  <p className="text-[var(--ink-500)] text-sm">暂无歌词</p>
+                  <p className="text-[var(--ink-600)] text-xs mt-1">享受纯音乐体验</p>
                 </div>
               </div>
             )}
@@ -558,7 +558,7 @@ function PremiumMusicPlayer({
       {/* 🔥 底部：音频波形进度条 */}
       <div className="px-5 pb-4">
         {/* 时间显示 */}
-        <div className="flex justify-between text-xs text-slate-500 mb-2">
+        <div className="flex justify-between text-xs text-[var(--ink-500)] mb-2">
           <span>{formatTime(currentTime)}</span>
           <span>{formatTime(audioDuration)}</span>
         </div>
@@ -600,7 +600,7 @@ function PremiumMusicPlayer({
           
           {/* 进度指示器 */}
           <div
-            className="absolute top-0 bottom-0 w-0.5 bg-white shadow-lg transition-all"
+            className="absolute top-0 bottom-0 w-0.5 bg-[var(--paper-50)] shadow-lg transition-all"
             style={{ left: `${progress}%` }}
           />
         </div>
@@ -628,24 +628,24 @@ function ErrorState({
       className="flex flex-col items-center justify-center p-8 min-h-[180px]"
     >
       <div 
-        className="flex h-12 w-12 items-center justify-center rounded-xl mb-4"
+        className="flex h-12 w-12 items-center justify-center rounded-[var(--radius-sharp)] mb-4"
         style={{ backgroundColor: "#fef2f2" }}
       >
-        <AlertCircle className="h-6 w-6 text-red-500" />
+        <AlertCircle className="h-6 w-6 text-[var(--seal-500)]" />
       </div>
 
-      <p className="text-sm font-medium text-slate-700 mb-1">
+      <p className="text-sm font-medium text-[var(--ink-700)] mb-1">
         音乐生成失败
       </p>
       
-      <p className="text-xs text-slate-400 text-center mb-4 max-w-[200px]">
+      <p className="text-xs text-[var(--ink-400)] text-center mb-4 max-w-[200px]">
         {message || "请稍后重试"}
       </p>
 
       {onRetry && (
         <button
           onClick={onRetry}
-          className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white rounded-lg hover:opacity-90 transition-all"
+          className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white rounded-[var(--radius-soft)] hover:opacity-90 transition-all"
           style={{ backgroundColor: BRAND_GREEN }}
         >
           <RefreshCw className="h-4 w-4" />

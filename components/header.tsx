@@ -101,7 +101,7 @@ export function Header() {
   }, [])
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-border/80 bg-background/90 backdrop-blur-xl supports-[backdrop-filter]:bg-background/75">
+    <header className="sticky top-0 z-50 w-full border-b border-[var(--paper-200)]/80 bg-[var(--paper-50)]/90 backdrop-blur-xl supports-[backdrop-filter]:bg-[var(--paper-50)]/75">
       <nav className="mx-auto flex h-[72px] w-full max-w-7xl items-center justify-between gap-4 px-4 sm:px-6">
         <Link href="/" aria-label="沈翔智学首页" className="flex shrink-0 items-center">
           <Logo size="sm" variant="full" className="h-[42px] w-[104px] sm:w-[118px]" />
@@ -116,8 +116,8 @@ export function Header() {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "text-sm font-medium text-muted-foreground transition-colors hover:text-foreground",
-                  isActive && "text-primary"
+                  "text-sm font-medium text-[var(--ink-500)] transition-colors hover:text-[var(--ink-900)]",
+                  isActive && "text-[var(--ink-700)]"
                 )}
               >
                 {item.name}
@@ -157,7 +157,7 @@ export function Header() {
         </div>
 
         <button
-          className="inline-flex size-10 items-center justify-center rounded-full border border-border bg-card text-foreground shadow-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:hidden"
+          className="inline-flex size-10 items-center justify-center rounded-full border border-[var(--paper-200)] bg-[var(--paper-50)] text-[var(--ink-900)] shadow-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ink-500)] md:hidden"
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
           aria-label={mobileMenuOpen ? "关闭导航菜单" : "打开导航菜单"}
           aria-expanded={mobileMenuOpen}
@@ -167,7 +167,7 @@ export function Header() {
       </nav>
 
       {mobileMenuOpen && (
-        <div className="border-t border-border bg-background/98 shadow-lg md:hidden">
+        <div className="border-t border-[var(--paper-200)] bg-[var(--paper-50)]/95 shadow-lg md:hidden">
           <div className="mx-auto max-w-7xl px-4 py-5">
             <div className="grid gap-1">
               {navItems.map((item) => {
@@ -179,10 +179,10 @@ export function Header() {
                     href={item.href}
                     onClick={() => setMobileMenuOpen(false)}
                     className={cn(
-                      "rounded-lg px-3 py-3 text-sm font-medium transition-colors",
+                      "rounded-[var(--radius-soft)] px-3 py-3 text-sm font-medium transition-colors",
                       isActive
-                        ? "bg-primary/10 text-primary"
-                        : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                        ? "bg-[var(--ink-50)] text-[var(--ink-700)]"
+                        : "text-[var(--ink-500)] hover:bg-accent hover:text-[var(--ink-900)]"
                     )}
                   >
                     {item.name}

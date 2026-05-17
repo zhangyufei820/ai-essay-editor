@@ -112,12 +112,12 @@ export default function EmailLoginPage() {
       <div className="flex min-h-screen w-full items-center justify-center p-4 bg-gradient-to-br from-green-50 to-blue-50">
         <Card className="w-full max-w-md">
           <CardHeader className="text-center space-y-4">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
-              <KeyRound className="h-10 w-10 text-green-600" />
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[var(--ink-100)]">
+              <KeyRound className="h-10 w-10 text-[var(--ink-600)]" />
             </div>
             <CardTitle className="text-2xl">输入验证码</CardTitle>
             <CardDescription className="text-base">
-              验证码已发送至 <strong className="text-foreground">{email}</strong>
+              验证码已发送至 <strong className="text-[var(--ink-900)]">{email}</strong>
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -159,7 +159,7 @@ export default function EmailLoginPage() {
               </Alert>
 
               {error && (
-                <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-600">{error}</div>
+                <div className="rounded-[var(--radius-soft)] bg-red-50 border border-red-200 p-3 text-sm text-[var(--seal-600)]">{error}</div>
               )}
 
               <Button type="submit" className="w-full" disabled={loading || otp.length !== 6} size="lg">
@@ -184,7 +184,7 @@ export default function EmailLoginPage() {
               </div>
 
               {countdown > 0 ? (
-                <p className="text-center text-sm text-muted-foreground">{countdown}秒后可重新发送</p>
+                <p className="text-center text-sm text-[var(--ink-500)]">{countdown}秒后可重新发送</p>
               ) : (
                 <Button
                   type="button"
@@ -208,8 +208,8 @@ export default function EmailLoginPage() {
       <div className="w-full max-w-sm space-y-4">
         <Card>
           <CardHeader className="text-center space-y-2">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-green-100">
-              <Mail className="h-7 w-7 text-green-600" />
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[var(--ink-100)]">
+              <Mail className="h-7 w-7 text-[var(--ink-600)]" />
             </div>
             <CardTitle className="text-2xl">邮箱验证码登录</CardTitle>
             <CardDescription>输入邮箱获取验证码，无需密码</CardDescription>
@@ -230,22 +230,22 @@ export default function EmailLoginPage() {
                 />
               </div>
 
-              <Alert className="bg-green-50 border-green-200">
-                <Info className="h-4 w-4 text-green-600" />
-                <AlertDescription className="text-xs text-green-800">
+              <Alert className="bg-[var(--ink-50)] border-[var(--ink-200)]">
+                <Info className="h-4 w-4 text-[var(--ink-600)]" />
+                <AlertDescription className="text-xs text-[var(--ink-800)]">
                   我们会向您的邮箱发送6位数字验证码，输入验证码即可完成登录。
                 </AlertDescription>
               </Alert>
 
               {error && (
-                <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-600">{error}</div>
+                <div className="rounded-[var(--radius-soft)] bg-red-50 border border-red-200 p-3 text-sm text-[var(--seal-600)]">{error}</div>
               )}
 
               <Button type="submit" className="w-full" disabled={loading} size="lg">
                 {loading ? "发送中..." : "获取验证码"}
               </Button>
 
-              <div className="text-center text-sm text-muted-foreground">
+              <div className="text-center text-sm text-[var(--ink-500)]">
                 <Link href="/auth/login" className="hover:underline inline-flex items-center gap-1">
                   <ArrowLeft className="h-4 w-4" />
                   返回登录
@@ -255,8 +255,8 @@ export default function EmailLoginPage() {
           </CardContent>
         </Card>
 
-        <div className="space-y-2 text-center text-sm text-muted-foreground">
-          <p className="font-semibold text-green-600">公测期间完全免费</p>
+        <div className="space-y-2 text-center text-sm text-[var(--ink-500)]">
+          <p className="font-semibold text-[var(--ink-600)]">公测期间完全免费</p>
           <p className="text-xs">首次登录即送 1000 积分</p>
         </div>
       </div>

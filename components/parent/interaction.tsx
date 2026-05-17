@@ -25,21 +25,21 @@ const activities = [
     icon: MessageSquare,
     title: "学习讨论",
     description: "围绕学习内容展开深度讨论，提升思维能力",
-    color: "bg-[var(--ink-50)]0/10 text-[var(--ink-600)]",
+    color: "bg-[var(--seal-500)]/10 text-[var(--ink-600)]",
   },
 ]
 
 export function ParentInteraction() {
   return (
-    <section className="py-20 lg:py-32 bg-muted/30">
+    <section className="py-20 lg:py-32 bg-[var(--paper-100)]">
       <div className="container px-4">
         <div className="mx-auto max-w-2xl text-center mb-16">
           <h2 className="mb-4 text-3xl font-bold lg:text-4xl font-[var(--font-display)]">亲子互动学习</h2>
-          <p className="text-lg text-muted-foreground">通过多样化的互动方式，增进亲子关系，让学习成为快乐的家庭活动</p>
+          <p className="text-lg text-[var(--ink-500)]">通过多样化的互动方式，增进亲子关系，让学习成为快乐的家庭活动</p>
         </div>
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-12">
           {activities.map((activity) => (
-            <Card key={activity.title} className="border-border/50 hover:shadow-lg transition-all">
+            <Card key={activity.title} className="border-[var(--paper-200)]/50 hover:shadow-lg transition-all">
               <CardContent className="p-6 text-center">
                 <div
                   className={`mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full ${activity.color}`}
@@ -47,7 +47,7 @@ export function ParentInteraction() {
                   <activity.icon className="h-8 w-8" />
                 </div>
                 <h3 className="mb-2 text-lg font-semibold">{activity.title}</h3>
-                <p className="text-sm text-muted-foreground">{activity.description}</p>
+                <p className="text-sm text-[var(--ink-500)]">{activity.description}</p>
               </CardContent>
             </Card>
           ))}

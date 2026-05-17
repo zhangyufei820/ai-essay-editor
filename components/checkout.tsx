@@ -60,7 +60,7 @@ export default function Checkout({ productId }: { productId: string }) {
 
   if (error || checkoutError) {
     return (
-      <div className="flex items-start gap-3 rounded-lg border border-orange-200 bg-orange-50 p-4 w-full">
+      <div className="flex items-start gap-3 rounded-[var(--radius-soft)] border border-orange-200 bg-orange-50 p-4 w-full">
         <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-orange-600" />
         <div>
           <p className="text-sm font-medium text-orange-800">Stripe checkout is unavailable</p>
@@ -75,8 +75,8 @@ export default function Checkout({ productId }: { productId: string }) {
   if (!isReady || !stripePromise) {
     return (
       <div className="flex w-full items-center justify-center py-8">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-        <span className="ml-2 text-muted-foreground">Loading checkout...</span>
+        <Loader2 className="h-6 w-6 animate-spin text-[var(--ink-500)]" />
+        <span className="ml-2 text-[var(--ink-500)]">Loading checkout...</span>
       </div>
     )
   }

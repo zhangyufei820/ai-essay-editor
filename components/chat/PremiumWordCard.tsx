@@ -33,12 +33,12 @@ function Section({
   children: ReactNode
 }) {
   return (
-    <section className={cn("rounded-2xl border p-4 shadow-sm sm:p-5", tone)}>
+    <section className={cn("rounded-[var(--radius-sharp)] border p-4 shadow-sm sm:p-5", tone)}>
       <div className="mb-3 flex items-center gap-2">
-        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/80 text-slate-700 shadow-sm">
+        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--paper-50)]/80 text-[var(--ink-700)] shadow-sm">
           {icon}
         </div>
-        <h3 className="text-base font-semibold text-slate-900">{title}</h3>
+        <h3 className="text-base font-semibold text-[var(--ink-900)]">{title}</h3>
       </div>
       {children}
     </section>
@@ -48,7 +48,7 @@ function Section({
 function Pill({ children, className }: { children: ReactNode; className?: string }) {
   if (!children) return null
   return (
-    <span className={cn("inline-flex items-center rounded-full border bg-white/85 px-2.5 py-1 text-xs font-medium text-slate-700 shadow-sm", className)}>
+    <span className={cn("inline-flex items-center rounded-full border bg-[var(--paper-50)]/85 px-2.5 py-1 text-xs font-medium text-[var(--ink-700)] shadow-sm", className)}>
       {children}
     </span>
   )
@@ -58,9 +58,9 @@ function Field({ label, value }: { label: string; value: any }) {
   const display = text(value)
   if (!display) return null
   return (
-    <div className="rounded-xl bg-white/70 p-3">
-      <div className="text-xs font-medium text-slate-500">{label}</div>
-      <div className="mt-1 text-sm leading-6 text-slate-800">{display}</div>
+    <div className="rounded-[var(--radius-sharp)] bg-[var(--paper-50)]/70 p-3">
+      <div className="text-xs font-medium text-[var(--ink-500)]">{label}</div>
+      <div className="mt-1 text-sm leading-6 text-[var(--ink-800)]">{display}</div>
     </div>
   )
 }
@@ -135,24 +135,24 @@ export function PremiumWordCard({ data }: PremiumWordCardProps) {
   }, [initialAudioUrl, fallbackTtsText, data.word])
 
   return (
-    <article className="w-full max-w-4xl overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/70">
+    <article className="w-full max-w-4xl overflow-hidden rounded-3xl border border-[var(--paper-200)] bg-[var(--paper-50)] shadow-xl shadow-slate-200/70">
       <header className="relative overflow-hidden bg-gradient-to-br from-emerald-500 via-teal-500 to-sky-500 px-5 py-6 text-white sm:px-7 sm:py-8">
-        <div className="absolute right-4 top-4 flex h-16 w-16 items-center justify-center rounded-3xl bg-white/15 text-3xl font-black shadow-inner backdrop-blur">
+        <div className="absolute right-4 top-4 flex h-16 w-16 items-center justify-center rounded-3xl bg-[var(--paper-50)]/15 text-3xl font-black shadow-inner backdrop-blur">
           {text(hero.icon) || "Aa"}
         </div>
         <div className="max-w-[calc(100%-5rem)]">
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="break-words text-4xl font-black leading-none tracking-normal sm:text-5xl">{data.word}</h2>
-            {partOfSpeech && <Pill className="border-white/30 bg-white/20 text-white">{partOfSpeech}</Pill>}
+            {partOfSpeech && <Pill className="border-white/30 bg-[var(--paper-50)]/20 text-white">{partOfSpeech}</Pill>}
           </div>
           <p className="mt-3 text-xl font-semibold leading-7">{text(hero.primary_cn)}</p>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-white/90 sm:text-base">{text(hero.simple_en)}</p>
         </div>
         <div className="mt-5 flex flex-wrap gap-2">
-          {text(ipa.us) && <Pill className="border-white/30 bg-white/20 text-white">美 {text(ipa.us)}</Pill>}
-          {text(ipa.uk) && <Pill className="border-white/30 bg-white/20 text-white">英 {text(ipa.uk)}</Pill>}
-          {text(hero.frequency?.rank_label) && <Pill className="border-white/30 bg-white/20 text-white">{text(hero.frequency.rank_label)}</Pill>}
-          {examTags.map((tag) => <Pill key={tag} className="border-white/30 bg-white/20 text-white">{tag}</Pill>)}
+          {text(ipa.us) && <Pill className="border-white/30 bg-[var(--paper-50)]/20 text-white">美 {text(ipa.us)}</Pill>}
+          {text(ipa.uk) && <Pill className="border-white/30 bg-[var(--paper-50)]/20 text-white">英 {text(ipa.uk)}</Pill>}
+          {text(hero.frequency?.rank_label) && <Pill className="border-white/30 bg-[var(--paper-50)]/20 text-white">{text(hero.frequency.rank_label)}</Pill>}
+          {examTags.map((tag) => <Pill key={tag} className="border-white/30 bg-[var(--paper-50)]/20 text-white">{tag}</Pill>)}
         </div>
       </header>
 
@@ -175,11 +175,11 @@ export function PremiumWordCard({ data }: PremiumWordCardProps) {
                 <track kind="captions" />
               </audio>
             ) : isGeneratingAudio ? (
-              <div className="rounded-xl border border-sky-100 bg-white/75 p-3 text-sm text-slate-600">
+              <div className="rounded-[var(--radius-sharp)] border border-sky-100 bg-[var(--paper-50)]/75 p-3 text-sm text-[var(--ink-600)]">
                 正在生成单词发音...
               </div>
             ) : (
-              <div className="rounded-xl border border-sky-100 bg-white/75 p-3 text-sm text-slate-600">
+              <div className="rounded-[var(--radius-sharp)] border border-sky-100 bg-[var(--paper-50)]/75 p-3 text-sm text-[var(--ink-600)]">
                 {audioError ? `音频生成失败：${audioError}` : "音频暂未生成，单词卡片仍可正常学习。"}
               </div>
             )}
@@ -217,12 +217,12 @@ export function PremiumWordCard({ data }: PremiumWordCardProps) {
           </div>
         </Section>
 
-        <Section icon={<BookOpen className="h-4 w-4" />} title="例句" tone="border-emerald-100 bg-emerald-50">
+        <Section icon={<BookOpen className="h-4 w-4" />} title="例句" tone="border-[var(--ink-100)] bg-[var(--ink-50)]">
           <div className="grid gap-3">
             {examples.map((example, index) => (
-              <div key={index} className="rounded-2xl border border-emerald-100 bg-white/80 p-3 shadow-sm">
-                <p className="text-sm font-semibold leading-6 text-slate-900">{text(example.en || example.english || example.sentence)}</p>
-                <p className="mt-1 text-sm leading-6 text-slate-600">{text(example.cn || example.zh || example.translation)}</p>
+              <div key={index} className="rounded-[var(--radius-sharp)] border border-[var(--ink-100)] bg-[var(--paper-50)]/80 p-3 shadow-sm">
+                <p className="text-sm font-semibold leading-6 text-[var(--ink-900)]">{text(example.en || example.english || example.sentence)}</p>
+                <p className="mt-1 text-sm leading-6 text-[var(--ink-600)]">{text(example.cn || example.zh || example.translation)}</p>
                 {text(example.difficulty) && <Pill className="mt-2">{text(example.difficulty)}</Pill>}
               </div>
             ))}
@@ -238,7 +238,7 @@ export function PremiumWordCard({ data }: PremiumWordCardProps) {
             {list(review.self_check_questions).length > 0 && (
               <div className="grid gap-2">
                 {list(review.self_check_questions).map((question, index) => (
-                  <div key={index} className="rounded-xl bg-white/70 px-3 py-2 text-sm leading-6 text-slate-700">{text(question)}</div>
+                  <div key={index} className="rounded-[var(--radius-sharp)] bg-[var(--paper-50)]/70 px-3 py-2 text-sm leading-6 text-[var(--ink-700)]">{text(question)}</div>
                 ))}
               </div>
             )}
@@ -254,9 +254,9 @@ export function PremiumWordCard({ data }: PremiumWordCardProps) {
         </Section>
       </div>
 
-      <footer className="border-t border-slate-100 bg-slate-50 px-4 py-4 sm:px-6">
+      <footer className="border-t border-[var(--paper-100)] bg-[var(--paper-50)] px-4 py-4 sm:px-6">
         <div className="flex flex-wrap items-center gap-2">
-          <Pill className={qualityPassed ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"}>
+          <Pill className={qualityPassed ? "border-[var(--ink-200)] bg-[var(--ink-50)] text-[var(--ink-700)]" : "border-amber-200 bg-amber-50 text-amber-700"}>
             {qualityPassed ? <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> : <XCircle className="mr-1 h-3.5 w-3.5" />}
             {qualityPassed ? "最终复检通过，可以展示" : "需要继续核验"}
           </Pill>
@@ -269,7 +269,7 @@ export function PremiumWordCard({ data }: PremiumWordCardProps) {
             </Pill>
           )}
         </div>
-        {text(quality.summary_cn) && <p className="mt-2 text-sm leading-6 text-slate-600">{text(quality.summary_cn)}</p>}
+        {text(quality.summary_cn) && <p className="mt-2 text-sm leading-6 text-[var(--ink-600)]">{text(quality.summary_cn)}</p>}
       </footer>
     </article>
   )

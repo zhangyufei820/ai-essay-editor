@@ -118,7 +118,7 @@ function RemoveButton({ onClick }: { onClick: () => void }) {
 
 function ProgressOverlay({ progress }: { progress?: number }) {
   return (
-    <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center rounded-xl">
+    <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center rounded-[var(--radius-sharp)]">
       <Loader2 className="w-5 h-5 text-white animate-spin" />
       {progress !== undefined && (
         <span className="text-xs text-white mt-1.5 font-medium">
@@ -151,9 +151,9 @@ function CompleteOverlay() {
       initial={{ opacity: 0, scale: 0.5 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0 }}
-      className="absolute inset-0 bg-green-500/20 flex items-center justify-center rounded-xl"
+      className="absolute inset-0 bg-[var(--seal-500)]/20 flex items-center justify-center rounded-[var(--radius-sharp)]"
     >
-      <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center">
+      <div className="w-8 h-8 rounded-full bg-[var(--seal-500)] flex items-center justify-center">
         <Check className="w-5 h-5 text-white" />
       </div>
     </motion.div>
@@ -166,10 +166,10 @@ function CompleteOverlay() {
 
 function ErrorOverlay() {
   return (
-    <div className="absolute inset-0 bg-red-500/10 flex items-center justify-center border-2 border-red-400 rounded-xl">
+    <div className="absolute inset-0 bg-red-500/10 flex items-center justify-center border-2 border-red-400 rounded-[var(--radius-sharp)]">
       <div className="text-center">
-        <AlertCircle className="w-6 h-6 text-red-500 mx-auto" />
-        <span className="text-[10px] text-red-500 mt-1 block">上传失败</span>
+        <AlertCircle className="w-6 h-6 text-[var(--seal-500)] mx-auto" />
+        <span className="text-[10px] text-[var(--seal-500)] mt-1 block">上传失败</span>
       </div>
     </div>
   )
@@ -187,7 +187,7 @@ function ImagePreviewCard({
   onRemove: () => void 
 }) {
   return (
-    <div className="relative w-[120px] h-[80px] rounded-xl overflow-hidden bg-slate-100 group">
+    <div className="relative w-[120px] h-[80px] rounded-[var(--radius-sharp)] overflow-hidden bg-[var(--paper-100)] group">
       <img
         src={file.preview}
         alt={file.name}
@@ -233,37 +233,37 @@ function DocumentPreviewCard({
 
   return (
     <div className={cn(
-      "relative w-[120px] p-3 rounded-xl bg-slate-50 border group",
-      file.status === "error" ? "border-red-300" : "border-slate-100"
+      "relative w-[120px] p-3 rounded-[var(--radius-sharp)] bg-[var(--paper-50)] border group",
+      file.status === "error" ? "border-red-300" : "border-[var(--paper-100)]"
     )}>
       {/* 图标容器 */}
-      <div className="w-10 h-10 rounded-lg bg-white border border-slate-100 flex items-center justify-center mx-auto mb-2 relative">
-        {createElement(getFileIcon(file.type), { className: "w-5 h-5 text-slate-500" })}
+      <div className="w-10 h-10 rounded-[var(--radius-soft)] bg-[var(--paper-50)] border border-[var(--paper-100)] flex items-center justify-center mx-auto mb-2 relative">
+        {createElement(getFileIcon(file.type), { className: "w-5 h-5 text-[var(--ink-500)]" })}
         {/* 文件类型标签 */}
         {extension && (
-          <span className="absolute -bottom-1 -right-1 px-1 py-0.5 text-[8px] font-bold bg-slate-200 text-slate-600 rounded">
+          <span className="absolute -bottom-1 -right-1 px-1 py-0.5 text-[8px] font-bold bg-[var(--paper-200)] text-[var(--ink-600)] rounded">
             {extension}
           </span>
         )}
       </div>
       
       {/* 文件名 */}
-      <p className="text-xs text-slate-600 text-center truncate" title={file.name}>
+      <p className="text-xs text-[var(--ink-600)] text-center truncate" title={file.name}>
         {file.name}
       </p>
       
       {/* 文件大小 */}
-      <p className="text-[10px] text-slate-400 text-center mt-0.5">
+      <p className="text-[10px] text-[var(--ink-400)] text-center mt-0.5">
         {formatFileSize(file.size)}
       </p>
 
       {/* 上传状态指示器 */}
       {file.status === "uploading" && (
-        <div className="absolute inset-0 bg-white/80 rounded-xl flex items-center justify-center">
+        <div className="absolute inset-0 bg-[var(--paper-50)]/80 rounded-[var(--radius-sharp)] flex items-center justify-center">
           <div className="text-center">
             <Loader2 className="w-5 h-5 animate-spin mx-auto" style={{ color: brandColors[600] }} />
             {file.progress !== undefined && (
-              <span className="text-[10px] text-slate-500 mt-1 block">{file.progress}%</span>
+              <span className="text-[10px] text-[var(--ink-500)] mt-1 block">{file.progress}%</span>
             )}
           </div>
         </div>
@@ -278,7 +278,7 @@ function DocumentPreviewCard({
             exit={{ opacity: 0 }}
             className="absolute top-2 right-2"
           >
-            <div className="w-4 h-4 rounded-full bg-green-500 flex items-center justify-center">
+            <div className="w-4 h-4 rounded-full bg-[var(--seal-500)] flex items-center justify-center">
               <Check className="w-2.5 h-2.5 text-white" />
             </div>
           </motion.div>
@@ -288,7 +288,7 @@ function DocumentPreviewCard({
       {/* 错误状态 */}
       {file.status === "error" && (
         <div className="absolute top-2 right-2">
-          <AlertCircle className="w-4 h-4 text-red-500" />
+          <AlertCircle className="w-4 h-4 text-[var(--seal-500)]" />
         </div>
       )}
 

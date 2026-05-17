@@ -40,10 +40,10 @@ interface AnimatedButtonProps extends Omit<HTMLMotionProps<"button">, "size"> {
 // ============================================
 
 const sizeStyles = {
-  sm: "h-8 px-3 text-sm gap-1.5 rounded-lg",
-  md: "h-10 px-4 text-sm gap-2 rounded-xl",
-  lg: "h-12 px-6 text-base gap-2.5 rounded-xl",
-  xl: "h-14 px-8 text-lg gap-3 rounded-2xl"
+  sm: "h-8 px-3 text-sm gap-1.5 rounded-[var(--radius-soft)]",
+  md: "h-10 px-4 text-sm gap-2 rounded-[var(--radius-sharp)]",
+  lg: "h-12 px-6 text-base gap-2.5 rounded-[var(--radius-sharp)]",
+  xl: "h-14 px-8 text-lg gap-3 rounded-[var(--radius-sharp)]"
 }
 
 const variantStyles = {
@@ -54,13 +54,13 @@ const variantStyles = {
     "shadow-brand-900/20 hover:shadow-brand-900/30"
   ),
   secondary: cn(
-    "bg-white text-brand-900",
+    "bg-[var(--paper-50)] text-brand-900",
     "border border-brand-200",
     "hover:border-brand-300 hover:bg-brand-50"
   ),
   ghost: cn(
-    "bg-transparent text-slate-600",
-    "hover:text-slate-900 hover:bg-slate-100"
+    "bg-transparent text-[var(--ink-600)]",
+    "hover:text-[var(--ink-900)] hover:bg-[var(--paper-100)]"
   ),
   outline: cn(
     "bg-transparent text-brand-900",
@@ -132,7 +132,7 @@ export const AnimatedButton = forwardRef<HTMLButtonElement, AnimatedButtonProps>
         {/* 发光效果 - 仅 glow 变体 */}
         {variant === "glow" && !isDisabled && (
           <motion.span
-            className="absolute inset-0 rounded-xl"
+            className="absolute inset-0 rounded-[var(--radius-sharp)]"
             style={{ backgroundColor: brandColors[500] }}
             animate={{
               opacity: [0, 0.15, 0],
@@ -149,7 +149,7 @@ export const AnimatedButton = forwardRef<HTMLButtonElement, AnimatedButtonProps>
         {/* 成功状态背景 */}
         {showSuccess && (
           <motion.span
-            className="absolute inset-0 rounded-xl bg-green-500"
+            className="absolute inset-0 rounded-[var(--radius-sharp)] bg-[var(--seal-500)]"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}

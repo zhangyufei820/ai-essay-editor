@@ -45,7 +45,7 @@ const footerLinks = {
 export function HomeFooter() {
   return (
     <footer 
-      className="py-16 md:py-20 bg-white border-t border-slate-100"
+      className="py-16 md:py-20 bg-[var(--paper-50)] border-t border-[var(--paper-100)]"
     >
       <div className="max-w-7xl mx-auto px-4 md:px-6 lg:px-8">
         {/* 主内容 */}

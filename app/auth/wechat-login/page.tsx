@@ -23,13 +23,13 @@ export default function WeChatLoginPage() {
           <CardDescription>功能开发中</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="rounded-lg bg-amber-50 border border-amber-200 p-4">
+          <div className="rounded-[var(--radius-soft)] bg-amber-50 border border-amber-200 p-4">
             <p className="text-sm text-amber-800">微信登录功能正在配置中，微信开放平台企业认证通过后即可使用。</p>
           </div>
 
           <div className="space-y-2">
-            <p className="text-sm text-muted-foreground">公测期间，请使用以下方式登录：</p>
-            <ul className="text-sm text-muted-foreground list-disc list-inside space-y-1">
+            <p className="text-sm text-[var(--ink-500)]">公测期间，请使用以下方式登录：</p>
+            <ul className="text-sm text-[var(--ink-500)] list-disc list-inside space-y-1">
               <li>邮箱注册登录（推荐）</li>
               <li>注册即送1000积分</li>
               <li>可立即体验所有AI功能</li>
@@ -41,7 +41,7 @@ export default function WeChatLoginPage() {
           </Link>
 
           <div className="text-center text-sm">
-            <Link href="/auth/sign-up" className="text-primary hover:underline">
+            <Link href="/auth/sign-up" className="text-[var(--ink-700)] hover:underline">
               还没有账户？立即注册
             </Link>
           </div>

@@ -96,7 +96,7 @@ export default function CreditsPage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-[var(--paper-50)] px-4 py-10 font-[var(--font-sans-v2)]">
-        <div className="mx-auto max-w-4xl text-sm text-muted-foreground">正在读取积分...</div>
+        <div className="mx-auto max-w-4xl text-sm text-[var(--ink-500)]">正在读取积分...</div>
       </div>
     )
   }
@@ -132,18 +132,18 @@ export default function CreditsPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{credits}</div>
-              <p className="mt-1 text-xs text-muted-foreground">可用于文本生成、图片和音乐创作</p>
+              <p className="mt-1 text-xs text-[var(--ink-500)]">可用于文本生成、图片和音乐创作</p>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">累计获得</CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+              <TrendingUp className="h-4 w-4 text-[var(--ink-500)]" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{totalEarned}</div>
-              <p className="mt-1 text-xs text-muted-foreground">按积分流水统计</p>
+              <p className="mt-1 text-xs text-[var(--ink-500)]">按积分流水统计</p>
             </CardContent>
           </Card>
 
@@ -154,7 +154,7 @@ export default function CreditsPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{totalSpent}</div>
-              <p className="mt-1 text-xs text-muted-foreground">{isPro ? "会员账户" : "普通账户"}</p>
+              <p className="mt-1 text-xs text-[var(--ink-500)]">{isPro ? "会员账户" : "普通账户"}</p>
             </CardContent>
           </Card>
         </div>
@@ -167,13 +167,13 @@ export default function CreditsPage() {
           <CardContent>
             <div className="space-y-3">
               {transactions.length === 0 ? (
-                <p className="text-sm text-muted-foreground">暂无积分记录</p>
+                <p className="text-sm text-[var(--ink-500)]">暂无积分记录</p>
               ) : (
                 transactions.map((item) => (
                   <div key={item.id} className="flex items-center justify-between border-b pb-3 last:border-b-0">
                     <div>
                       <p className="text-sm font-medium">{item.description || item.credit_type}</p>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-xs text-[var(--ink-500)]">
                         {new Date(item.created_at).toLocaleString("zh-CN")}
                       </p>
                     </div>

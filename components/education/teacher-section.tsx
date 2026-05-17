@@ -32,7 +32,7 @@ export function TeacherSection() {
         <div className="grid gap-12 lg:grid-cols-2 lg:gap-16 items-center">
           {/* Left: Content */}
           <div>
-            <div className="mb-6 inline-flex items-center gap-2 rounded-full bg-primary/10 px-4 py-2 text-sm font-medium text-primary shadow-md">
+            <div className="mb-6 inline-flex items-center gap-2 rounded-full bg-[var(--ink-50)] px-4 py-2 text-sm font-medium text-[var(--ink-700)] shadow-md">
               <Users className="h-4 w-4" />
               教师专业发展
             </div>
@@ -40,10 +40,10 @@ export function TeacherSection() {
             <h2 className="mb-6 text-4xl font-bold tracking-tight text-balance">
               赋能教师
               <br />
-              <span className="text-primary">成就卓越教育</span>
+              <span className="text-[var(--ink-700)]">成就卓越教育</span>
             </h2>
 
-            <p className="mb-8 text-lg text-muted-foreground leading-relaxed">
+            <p className="mb-8 text-lg text-[var(--ink-500)] leading-relaxed">
               为教师提供全方位的专业发展支持，包括教学资源、技能提升、教研协作和职业认证。
               让每一位教师都能在专业道路上持续成长，为学生提供更优质的教育。
             </p>
@@ -65,15 +65,15 @@ export function TeacherSection() {
               return (
                 <Card 
                   key={feature.title} 
-                  className="group relative overflow-hidden rounded-2xl border-2 border-border/50 bg-card p-6 shadow-lg transition-all duration-300 hover:border-primary hover:shadow-xl hover:scale-[1.02]"
+                  className="group relative overflow-hidden rounded-[var(--radius-sharp)] border-2 border-[var(--paper-200)]/50 bg-[var(--paper-50)] p-6 shadow-lg transition-all duration-300 hover:border-[var(--ink-500)] hover:shadow-xl hover:scale-[1.02]"
                 >
                   <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
                   <div className="relative">
-                    <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 text-primary shadow-md transition-all duration-300 group-hover:scale-110">
+                    <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-[var(--radius-sharp)] bg-gradient-to-br from-primary/20 to-primary/10 text-[var(--ink-700)] shadow-md transition-all duration-300 group-hover:scale-110">
                       <Icon className="h-6 w-6" />
                     </div>
                     <h3 className="mb-2 text-lg font-bold">{feature.title}</h3>
-                    <p className="text-sm text-muted-foreground leading-relaxed">{feature.description}</p>
+                    <p className="text-sm text-[var(--ink-500)] leading-relaxed">{feature.description}</p>
                   </div>
                 </Card>
               )

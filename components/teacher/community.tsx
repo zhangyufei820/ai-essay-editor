@@ -31,7 +31,7 @@ export function TeacherCommunity() {
       <div className="container mx-auto px-4">
         <div className="mb-12 text-center">
           <h2 className="mb-4 text-4xl font-bold tracking-tight text-balance font-[var(--font-display)]">教研协作社区</h2>
-          <p className="mx-auto max-w-2xl text-lg text-muted-foreground text-pretty">连接全国教师，共同探索教育创新</p>
+          <p className="mx-auto max-w-2xl text-lg text-[var(--ink-500)] text-pretty">连接全国教师，共同探索教育创新</p>
         </div>
 
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-12">
@@ -43,7 +43,7 @@ export function TeacherCommunity() {
                   <Icon className="h-7 w-7" />
                 </div>
                 <h3 className="mb-2 text-lg font-bold">{feature.title}</h3>
-                <p className="text-sm text-muted-foreground leading-relaxed">{feature.description}</p>
+                <p className="text-sm text-[var(--ink-500)] leading-relaxed">{feature.description}</p>
               </Card>
             )
           })}

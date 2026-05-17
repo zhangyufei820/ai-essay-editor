@@ -59,7 +59,7 @@ export function MobileBottomNav() {
   const pathname = usePathname()
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-100 bg-white/95 pb-safe backdrop-blur-lg md:hidden">
+    <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-[var(--paper-100)] bg-[var(--paper-50)]/95 pb-safe backdrop-blur-lg md:hidden">
       <div className="mx-auto flex min-h-16 max-w-md items-center justify-around px-1">
         {bottomNavItems.map((item) => {
           const isActive = pathname === item.href || 
@@ -70,9 +70,9 @@ export function MobileBottomNav() {
               key={item.href}
               href={item.href}
               className={cn(
-                "flex min-h-14 flex-1 flex-col items-center justify-center rounded-xl",
+                "flex min-h-14 flex-1 flex-col items-center justify-center rounded-[var(--radius-sharp)]",
                 "transition-colors duration-200",
-                isActive ? "text-emerald-700" : "text-slate-400"
+                isActive ? "text-[var(--ink-700)]" : "text-[var(--ink-400)]"
               )}
             >
               <motion.div
@@ -100,7 +100,7 @@ export function MobileBottomNav() {
               
               <span className={cn(
                 "text-[10px] font-medium transition-colors duration-200",
-                isActive ? "text-emerald-700" : "text-slate-400"
+                isActive ? "text-[var(--ink-700)]" : "text-[var(--ink-400)]"
               )}>
                 {item.label}
               </span>
@@ -153,7 +153,7 @@ export function HamburgerMenu({ user, onLogout }: HamburgerMenuProps) {
       {/* 触发按钮 */}
       <motion.button
         onClick={() => setIsOpen(!isOpen)}
-        className="p-2 text-slate-600 hover:text-slate-900 md:hidden rounded-lg hover:bg-slate-100 transition-colors"
+        className="p-2 text-[var(--ink-600)] hover:text-[var(--ink-900)] md:hidden rounded-[var(--radius-soft)] hover:bg-[var(--paper-100)] transition-colors"
         aria-label={isOpen ? "关闭菜单" : "打开菜单"}
         whileTap={{ scale: 0.95 }}
       >
@@ -202,17 +202,17 @@ export function HamburgerMenu({ user, onLogout }: HamburgerMenuProps) {
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
-              className="fixed bottom-0 right-0 top-0 z-50 flex w-[min(86vw,320px)] flex-col bg-white shadow-2xl md:hidden"
+              className="fixed bottom-0 right-0 top-0 z-50 flex w-[min(86vw,320px)] flex-col bg-[var(--paper-50)] shadow-2xl md:hidden"
             >
               {/* 头部 */}
-              <div className="flex items-center justify-between p-4 border-b border-slate-100 pt-safe">
+              <div className="flex items-center justify-between p-4 border-b border-[var(--paper-100)] pt-safe">
                 <div className="flex items-center gap-2">
-                  <Sparkles className="w-5 h-5 text-emerald-700" />
-                  <span className="font-semibold text-slate-800">沈翔学校</span>
+                  <Sparkles className="w-5 h-5 text-[var(--ink-700)]" />
+                  <span className="font-semibold text-[var(--ink-800)]">沈翔学校</span>
                 </div>
                 <button
                   onClick={() => setIsOpen(false)}
-                  className="p-2 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-50 transition-colors"
+                  className="p-2 text-[var(--ink-400)] hover:text-[var(--ink-600)] rounded-[var(--radius-soft)] hover:bg-[var(--paper-50)] transition-colors"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -220,16 +220,16 @@ export function HamburgerMenu({ user, onLogout }: HamburgerMenuProps) {
 
               {/* 用户信息 */}
               {user && (
-                <div className="p-4 border-b border-slate-100">
+                <div className="p-4 border-b border-[var(--paper-100)]">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center">
-                      <User className="w-5 h-5 text-emerald-700" />
+                    <div className="w-10 h-10 rounded-full bg-[var(--ink-100)] flex items-center justify-center">
+                      <User className="w-5 h-5 text-[var(--ink-700)]" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium text-slate-800 truncate">
+                      <p className="font-medium text-[var(--ink-800)] truncate">
                         {user.name || "用户"}
                       </p>
-                      <p className="text-sm text-slate-500 truncate">
+                      <p className="text-sm text-[var(--ink-500)] truncate">
                         {user.email}
                       </p>
                     </div>
@@ -256,18 +256,18 @@ export function HamburgerMenu({ user, onLogout }: HamburgerMenuProps) {
                         className={cn(
                           "flex items-center gap-3 px-6 py-4 text-base transition-colors",
                           isActive
-                            ? "text-emerald-700 bg-emerald-50 border-r-2 border-emerald-700"
-                            : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                            ? "text-[var(--ink-700)] bg-[var(--ink-50)] border-r-2 border-emerald-700"
+                            : "text-[var(--ink-600)] hover:text-[var(--ink-900)] hover:bg-[var(--paper-50)]"
                         )}
                       >
                         <item.icon className={cn(
                           "w-5 h-5",
-                          isActive ? "text-emerald-700" : "text-slate-400"
+                          isActive ? "text-[var(--ink-700)]" : "text-[var(--ink-400)]"
                         )} />
                         <span className="flex-1">{item.label}</span>
                         <ChevronRight className={cn(
                           "w-4 h-4 transition-transform",
-                          isActive ? "text-emerald-700" : "text-slate-300"
+                          isActive ? "text-[var(--ink-700)]" : "text-slate-300"
                         )} />
                       </Link>
                     </motion.div>
@@ -276,14 +276,14 @@ export function HamburgerMenu({ user, onLogout }: HamburgerMenuProps) {
               </nav>
 
               {/* 底部操作区 */}
-              <div className="p-4 border-t border-slate-100 pb-safe space-y-3">
+              <div className="p-4 border-t border-[var(--paper-100)] pb-safe space-y-3">
                 {user ? (
                   <button
                     onClick={() => {
                       setIsOpen(false)
                       onLogout?.()
                     }}
-                    className="flex items-center justify-center gap-2 w-full py-3 text-slate-600 bg-slate-100 rounded-xl font-medium hover:bg-slate-200 transition-colors"
+                    className="flex items-center justify-center gap-2 w-full py-3 text-[var(--ink-600)] bg-[var(--paper-100)] rounded-[var(--radius-sharp)] font-medium hover:bg-[var(--paper-200)] transition-colors"
                   >
                     <LogOut className="w-4 h-4" />
                     退出登录
@@ -292,7 +292,7 @@ export function HamburgerMenu({ user, onLogout }: HamburgerMenuProps) {
                   <Link
                     href="/login"
                     onClick={() => setIsOpen(false)}
-                    className="block w-full py-3 text-center text-white bg-emerald-900 rounded-xl font-medium hover:bg-emerald-800 transition-colors"
+                    className="block w-full py-3 text-center text-white bg-[var(--ink-900)] rounded-[var(--radius-sharp)] font-medium hover:bg-[var(--ink-800)] transition-colors"
                   >
                     登录 / 注册
                   </Link>

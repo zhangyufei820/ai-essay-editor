@@ -30,7 +30,7 @@ import { toast } from "sonner"
 
 import { ModelLogo } from "@/components/ModelLogo"
 import { GridWaveLoader } from "@/components/chat/GridWaveLoader"
-import { collapseSidebar, navigateHomeWithSidebar, refreshCredits, refreshSessionList } from "@/components/app-sidebar"
+import { collapseSidebar, navigateHomeWithSidebar, refreshCredits, refreshSessionList } from "@/lib/workspace-events"
 import { extractUserId } from "@/lib/auth-user"
 import { buildChatSessionRouteFromSession } from "@/lib/chat-session-routes"
 import type { ModelType } from "@/lib/pricing"
@@ -270,16 +270,16 @@ function resolveBananaImageSize(size: ImageSize, aspectRatio: ImageAspectRatio) 
 
 function FieldLabel({ children, hint }: { children: React.ReactNode; hint?: string }) {
   return (
-    <label className="space-y-1 text-sm font-medium text-foreground">
+    <label className="space-y-1 text-sm font-medium text-[var(--ink-900)]">
       <span>{children}</span>
-      {hint ? <span className="block text-xs font-normal leading-relaxed text-muted-foreground">{hint}</span> : null}
+      {hint ? <span className="block text-xs font-normal leading-relaxed text-[var(--ink-500)]">{hint}</span> : null}
     </label>
   )
 }
 
 function BadgeLikeLabel({ children }: { children: React.ReactNode }) {
   return (
-    <span className="shrink-0 rounded-full bg-primary/10 px-2 py-1 text-xs font-medium text-primary">
+    <span className="shrink-0 rounded-[var(--radius-pill)] bg-[var(--ink-50)] px-2 py-1 text-xs font-medium text-[var(--ink-700)]">
       {children}
     </span>
   )
@@ -300,7 +300,7 @@ function NativeSelect<T extends string>({
     <select
       value={value}
       onChange={(event) => onChange(event.target.value as T)}
-      className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+      className="h-10 w-full rounded-[var(--radius-soft)] border border-[var(--paper-200)] bg-[var(--paper-50)] px-3 text-sm text-[var(--ink-900)] outline-none transition focus:border-[var(--ink-500)] focus:ring-2 focus:ring-[var(--ink-200)]"
     >
       {options.map((option) => (
         <option
@@ -345,8 +345,8 @@ function UploadPanel({
   return (
     <div
       className={cn(
-        "rounded-xl border border-dashed bg-card p-4 transition",
-        isDragging ? "border-primary bg-primary/5" : "border-border",
+        "rounded-[var(--radius-sharp)] border border-dashed bg-[var(--paper-50)] p-4 transition",
+        isDragging ? "border-[var(--ink-500)] bg-[var(--ink-50)]" : "border-[var(--paper-200)]",
         disabled && "pointer-events-none opacity-50"
       )}
       onDragOver={(event) => {
@@ -370,16 +370,16 @@ function UploadPanel({
 
       {image ? (
         <div className="flex gap-3">
-          <div className="h-24 w-24 shrink-0 overflow-hidden rounded-lg border border-border bg-muted">
+          <div className="h-24 w-24 shrink-0 overflow-hidden rounded-[var(--radius-soft)] border border-[var(--paper-200)] bg-[var(--paper-100)]">
             <img src={image.previewUrl} alt={image.file.name} className="h-full w-full object-cover" />
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="truncate text-sm font-medium text-foreground">{image.file.name}</p>
-                <p className="mt-1 text-xs text-muted-foreground">{formatBytes(image.file.size)}</p>
+                <p className="truncate text-sm font-medium text-[var(--ink-900)]">{image.file.name}</p>
+                <p className="mt-1 text-xs text-[var(--ink-500)]">{formatBytes(image.file.size)}</p>
               </div>
-              <button type="button" onClick={onRemove} className="rounded-lg p-2 text-muted-foreground transition hover:bg-muted hover:text-destructive">
+              <button type="button" onClick={onRemove} className="rounded-[var(--radius-soft)] p-2 text-[var(--ink-500)] transition hover:bg-[var(--paper-100)] hover:text-[var(--seal-500)]">
                 <Trash2 className="h-4 w-4" />
               </button>
             </div>
@@ -395,11 +395,11 @@ function UploadPanel({
         <button
           type="button"
           onClick={() => inputRef.current?.click()}
-          className="flex w-full flex-col items-center justify-center rounded-lg px-4 py-7 text-center transition hover:bg-muted/60"
+          className="flex w-full flex-col items-center justify-center rounded-[var(--radius-soft)] px-4 py-7 text-center transition hover:bg-[var(--paper-100)]"
         >
-          <UploadCloud className="mb-3 h-7 w-7 text-primary" />
-          <span className="text-sm font-medium text-foreground">{title}</span>
-          <span className="mt-1 max-w-sm text-xs leading-relaxed text-muted-foreground">{description}</span>
+          <UploadCloud className="mb-3 h-7 w-7 text-[var(--ink-700)]" />
+          <span className="text-sm font-medium text-[var(--ink-900)]">{title}</span>
+          <span className="mt-1 max-w-sm text-xs leading-relaxed text-[var(--ink-500)]">{description}</span>
         </button>
       )}
     </div>
@@ -443,8 +443,8 @@ function MultiImageUploadPanel({
   return (
     <div
       className={cn(
-        "rounded-xl border border-dashed bg-card p-4 transition",
-        isDragging ? "border-primary bg-primary/5" : "border-border",
+        "rounded-[var(--radius-sharp)] border border-dashed bg-[var(--paper-50)] p-4 transition",
+        isDragging ? "border-[var(--ink-500)] bg-[var(--ink-50)]" : "border-[var(--paper-200)]",
         disabled && "pointer-events-none opacity-50"
       )}
       onDragOver={(event) => {
@@ -474,8 +474,8 @@ function MultiImageUploadPanel({
         <div className="space-y-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <p className="text-sm font-semibold text-foreground">{title}</p>
-              <p className="mt-1 text-xs text-muted-foreground">
+              <p className="text-sm font-semibold text-[var(--ink-900)]">{title}</p>
+              <p className="mt-1 text-xs text-[var(--ink-500)]">
                 已选择 {images.length} / {MAX_EDIT_IMAGE_UPLOADS} 张
               </p>
             </div>
@@ -493,19 +493,19 @@ function MultiImageUploadPanel({
 
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
             {images.map((image, index) => (
-              <div key={`${image.file.name}-${image.file.lastModified}-${index}`} className="group relative overflow-hidden rounded-lg border border-border bg-muted">
+              <div key={`${image.file.name}-${image.file.lastModified}-${index}`} className="group relative overflow-hidden rounded-[var(--radius-soft)] border border-[var(--paper-200)] bg-[var(--paper-100)]">
                 <img src={image.previewUrl} alt={image.file.name} className="aspect-square w-full object-cover" />
                 <button
                   type="button"
                   onClick={() => onRemove(index)}
-                  className="absolute right-1.5 top-1.5 rounded-full bg-background/90 p-1.5 text-muted-foreground shadow transition hover:text-destructive"
+                  className="absolute right-1.5 top-1.5 rounded-[var(--radius-pill)] bg-[var(--paper-50)]/90 p-1.5 text-[var(--ink-500)] shadow transition hover:text-[var(--seal-500)]"
                   aria-label={`移除第 ${index + 1} 张图片`}
                 >
                   <X className="h-3.5 w-3.5" />
                 </button>
-                <div className="absolute inset-x-0 bottom-0 bg-background/90 px-2 py-1">
-                  <p className="truncate text-[11px] text-foreground">{image.file.name}</p>
-                  <p className="text-[10px] text-muted-foreground">{formatBytes(image.file.size)}</p>
+                <div className="absolute inset-x-0 bottom-0 bg-[var(--paper-50)]/90 px-2 py-1">
+                  <p className="truncate text-[11px] text-[var(--ink-900)]">{image.file.name}</p>
+                  <p className="text-[10px] text-[var(--ink-500)]">{formatBytes(image.file.size)}</p>
                 </div>
               </div>
             ))}
@@ -515,11 +515,11 @@ function MultiImageUploadPanel({
         <button
           type="button"
           onClick={() => inputRef.current?.click()}
-          className="flex w-full flex-col items-center justify-center rounded-lg px-4 py-7 text-center transition hover:bg-muted/60"
+          className="flex w-full flex-col items-center justify-center rounded-[var(--radius-soft)] px-4 py-7 text-center transition hover:bg-[var(--paper-100)]"
         >
-          <UploadCloud className="mb-3 h-7 w-7 text-primary" />
-          <span className="text-sm font-medium text-foreground">{title}</span>
-          <span className="mt-1 max-w-sm text-xs leading-relaxed text-muted-foreground">{description}</span>
+          <UploadCloud className="mb-3 h-7 w-7 text-[var(--ink-700)]" />
+          <span className="text-sm font-medium text-[var(--ink-900)]">{title}</span>
+          <span className="mt-1 max-w-sm text-xs leading-relaxed text-[var(--ink-500)]">{description}</span>
         </button>
       )}
     </div>
@@ -538,12 +538,12 @@ function CollapsibleSection({
   children: React.ReactNode
 }) {
   return (
-    <section className="rounded-xl border border-border bg-card">
+    <section className="rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-[var(--paper-50)]">
       <button type="button" onClick={onToggle} className="flex w-full items-center justify-between px-4 py-3 text-left">
-        <span className="text-sm font-semibold text-foreground">{title}</span>
-        <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition", open && "rotate-180")} />
+        <span className="text-sm font-semibold text-[var(--ink-900)]">{title}</span>
+        <ChevronDown className={cn("h-4 w-4 text-[var(--ink-500)] transition", open && "rotate-180")} />
       </button>
-      {open ? <div className="border-t border-border px-4 py-4">{children}</div> : null}
+      {open ? <div className="border-t border-[var(--paper-200)] px-4 py-4">{children}</div> : null}
     </section>
   )
 }
@@ -1270,13 +1270,13 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
   const displayedResults = historyResults.length > 0 ? historyResults : result ? [result] : []
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <header className="sticky top-0 z-30 border-b border-border bg-card/95 backdrop-blur">
+    <div className="min-h-screen bg-[var(--paper-50)] text-[var(--ink-900)]">
+      <header className="sticky top-0 z-30 border-b border-[var(--paper-200)] bg-[var(--paper-50)]/95 backdrop-blur">
         <div className="mx-auto flex h-11 md:h-14 max-w-7xl items-center gap-2 md:gap-3 px-2 md:px-4">
           <button
             type="button"
             onClick={() => navigateHomeWithSidebar(router)}
-            className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-full text-muted-foreground transition hover:bg-muted hover:text-foreground"
+            className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-[var(--radius-pill)] text-[var(--ink-500)] transition hover:bg-[var(--paper-100)] hover:text-[var(--ink-900)]"
             aria-label="返回"
           >
             <ChevronLeft className="h-4 w-4 md:h-5 md:w-5" />
@@ -1286,18 +1286,18 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
           </div>
           <div className="min-w-0 flex-1">
             <div className="truncate text-[12px] font-semibold md:text-sm">{copy.title}</div>
-            <div className="hidden text-xs text-muted-foreground sm:block">{copy.subtitle}</div>
+            <div className="hidden text-xs text-[var(--ink-500)] sm:block">{copy.subtitle}</div>
           </div>
           {userId ? (
-            <div className="hidden rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary sm:block">
+            <div className="hidden rounded-[var(--radius-pill)] bg-[var(--ink-50)] px-3 py-1 text-xs font-medium text-[var(--ink-700)] sm:block">
               {userCredits.toLocaleString()} 积分
             </div>
           ) : (
-            <Button size="sm" onClick={() => router.push("/login")} className="h-9 rounded-full px-3 text-xs" style={{ backgroundColor: BRAND_GREEN }}>
+            <Button size="sm" onClick={() => router.push("/login")} className="h-9 rounded-[var(--radius-pill)] px-3 text-xs" style={{ backgroundColor: BRAND_GREEN }}>
               登录
             </Button>
           )}
-          <Button type="button" variant="outline" size="sm" onClick={() => setShowHistorySidebar(true)} className="h-9 min-w-9 rounded-full px-2 md:px-3">
+          <Button type="button" variant="outline" size="sm" onClick={() => setShowHistorySidebar(true)} className="h-9 min-w-9 rounded-[var(--radius-pill)] px-2 md:px-3">
             <History className="h-4 w-4 md:mr-2" />
             <span className="hidden md:inline">历史</span>
           </Button>
@@ -1306,17 +1306,17 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
 
       <main className="mx-auto grid max-w-7xl gap-3 md:gap-5 px-3 md:px-4 py-3 md:py-5 lg:grid-cols-[minmax(0,1fr)_360px]">
         <section className="min-w-0 space-y-3 md:space-y-5">
-          <div className="hidden rounded-xl border border-border bg-card p-5 md:block">
+          <div className="hidden rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-[var(--paper-50)] p-5 md:block">
             <div className="flex gap-4">
-              <div className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary sm:flex">
+              <div className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-[var(--radius-sharp)] bg-[var(--ink-50)] text-[var(--ink-700)] sm:flex">
                 <Sparkles className="h-5 w-5" />
               </div>
               <div className="space-y-2">
-                <h1 className="text-xl font-semibold text-foreground">{copy.heroTitle}</h1>
-                <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
+                <h1 className="text-xl font-semibold text-[var(--ink-900)]">{copy.heroTitle}</h1>
+                <p className="max-w-3xl text-sm leading-6 text-[var(--ink-500)]">
                   {copy.heroDescription}
                 </p>
-                <p className="text-xs font-medium text-primary">
+                <p className="text-xs font-medium text-[var(--ink-700)]">
                   预计消耗：{isWorkflowImageWorkspace ? `约 ${estimatedImageCost} 积分起` : `${estimatedImageCost} 积分 / 次`}，实际扣费以后端配置为准。
                 </p>
               </div>
@@ -1324,9 +1324,9 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
           </div>
 
           <form onSubmit={submitImageTask} className="space-y-3 md:space-y-5">
-            <div className="rounded-xl border border-border bg-card p-3 md:p-4">
+            <div className="rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-[var(--paper-50)] p-3 md:p-4">
               <div className="mb-3 md:mb-4 flex flex-wrap items-center gap-2">
-                <div className="flex rounded-lg bg-muted p-1">
+                <div className="flex rounded-[var(--radius-soft)] bg-[var(--paper-100)] p-1">
                   {(isBananaWorkspace ? MODE_OPTIONS.filter((option) => option.value === "image_generate") : MODE_OPTIONS).map((option) => (
                     <button
                       key={option.value}
@@ -1334,7 +1334,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
                       onClick={() => applyMode(option.value)}
                       className={cn(
                         "inline-flex min-h-9 items-center gap-2 rounded-md px-3 py-1.5 md:py-2 text-sm font-medium transition",
-                        mode === option.value ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                        mode === option.value ? "bg-[var(--paper-50)] text-[var(--ink-900)] shadow-sm" : "text-[var(--ink-500)] hover:text-[var(--ink-900)]"
                       )}
                     >
                       {option.value === "image_generate" ? <Wand2 className="h-4 w-4" /> : <ImageIcon className="h-4 w-4" />}
@@ -1350,17 +1350,17 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
                   value={prompt}
                   onChange={(event) => setPrompt(event.target.value)}
                   placeholder="请输入图片生成或图片编辑提示词，例如：不要改变图片元素，放大至4K。"
-                  className="min-h-[112px] md:min-h-[160px] resize-y rounded-xl border-border bg-background text-[15px] md:text-base leading-6 md:leading-7"
+                  className="min-h-[112px] md:min-h-[160px] resize-y rounded-[var(--radius-sharp)] border-[var(--paper-200)] bg-[var(--paper-50)] text-[15px] md:text-base leading-6 md:leading-7"
                   disabled={isSubmitting}
                 />
               </div>
             </div>
 
             {!isBananaWorkspace && mode === "image_edit" ? (
-              <div className="space-y-3 md:space-y-4 rounded-xl border border-border bg-card p-3 md:p-4">
+              <div className="space-y-3 md:space-y-4 rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-[var(--paper-50)] p-3 md:p-4">
                 <div>
-                  <h2 className="text-sm font-semibold text-foreground">图片编辑素材</h2>
-                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                  <h2 className="text-sm font-semibold text-[var(--ink-900)]">图片编辑素材</h2>
+                  <p className="mt-1 text-xs leading-relaxed text-[var(--ink-500)]">
                     上传需要编辑的原图，最多 {MAX_EDIT_IMAGE_UPLOADS} 张{isGeminiWorkspace ? "。" : "；蒙版只会作用在第一张图。"}
                   </p>
                 </div>
@@ -1389,21 +1389,21 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
             ) : null}
 
             {errorMessage ? (
-              <div className="flex items-start gap-2 rounded-xl border border-destructive/20 bg-destructive/5 p-3 text-sm text-destructive">
+              <div className="flex items-start gap-2 rounded-[var(--radius-sharp)] border border-[var(--seal-200)] bg-[var(--seal-50)] p-3 text-sm text-[var(--seal-500)]">
                 <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
                 <span>{errorMessage}</span>
               </div>
             ) : null}
 
             {showLongRunningHint ? (
-              <div className="flex items-start gap-2 rounded-xl border border-primary/20 bg-primary/5 p-3 text-sm text-primary">
+              <div className="flex items-start gap-2 rounded-[var(--radius-sharp)] border border-[var(--ink-200)] bg-[var(--ink-50)] p-3 text-sm text-[var(--ink-700)]">
                 <Zap className="mt-0.5 h-4 w-4 shrink-0" />
                 <span>图片生成仍在处理中，复杂图像可能需要 3-5 分钟，请保持页面打开。</span>
               </div>
             ) : null}
 
             {shouldDowngradeHighRiskImage2 ? (
-              <div className="flex items-start gap-2 rounded-xl border border-amber-500/25 bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-200">
+              <div className="flex items-start gap-2 rounded-[var(--radius-sharp)] border border-amber-500/25 bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-200">
                 <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
                 <span>
                   4K 高质量{mode === "image_edit" ? "图片编辑" : "多图生成"}上游失败率较高，提交时会自动改为 medium{count > 1 ? " 且只生成 1 张" : ""}。
@@ -1411,14 +1411,14 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
               </div>
             ) : null}
 
-            <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-3 md:p-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="text-sm text-muted-foreground">
+            <div className="flex flex-col gap-3 rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-[var(--paper-50)] p-3 md:p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="text-sm text-[var(--ink-500)]">
                 {mode === "image_edit" && editImages.length === 0 ? "图片编辑模式需要至少上传一张原图。" : "参数已准备好，提交后将开始生成。"}
               </div>
               <Button
                 type="submit"
                 disabled={!canSubmit}
-                className="h-11 rounded-lg px-5 text-white"
+                className="h-11 rounded-[var(--radius-soft)] px-5 text-white"
                 style={{ backgroundColor: BRAND_GREEN }}
               >
                 {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
@@ -1427,30 +1427,30 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
             </div>
           </form>
 
-          <section className="rounded-xl border border-border bg-card p-3 md:p-4">
+          <section className="rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-[var(--paper-50)] p-3 md:p-4">
             <div className="mb-3 md:mb-4 flex items-center justify-between">
               <div>
-                <h2 className="text-sm font-semibold text-foreground">{copy.resultTitle}</h2>
-                <p className="mt-1 text-xs text-muted-foreground">生成成功后可下载或复制图片地址。</p>
+                <h2 className="text-sm font-semibold text-[var(--ink-900)]">{copy.resultTitle}</h2>
+                <p className="mt-1 text-xs text-[var(--ink-500)]">生成成功后可下载或复制图片地址。</p>
               </div>
-              {result ? <CheckCircle2 className="h-5 w-5 text-primary" /> : null}
+              {result ? <CheckCircle2 className="h-5 w-5 text-[var(--ink-700)]" /> : null}
             </div>
 
             {isSubmitting ? (
-              <div className="flex min-h-[320px] md:min-h-[460px] flex-col items-center justify-center rounded-xl border border-border bg-muted/30 p-4 text-center">
+              <div className="flex min-h-[320px] md:min-h-[460px] flex-col items-center justify-center rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-[var(--paper-100)] p-4 text-center">
                 <GridWaveLoader maxWidth={400} label={copy.loadingLabel} />
-                <p className="mt-4 text-sm font-medium text-foreground">{submitStage || "正在处理"}</p>
-                <p className="mt-1 text-xs text-muted-foreground">请保持页面打开，复杂图片会多花一点时间。</p>
+                <p className="mt-4 text-sm font-medium text-[var(--ink-900)]">{submitStage || "正在处理"}</p>
+                <p className="mt-1 text-xs text-[var(--ink-500)]">请保持页面打开，复杂图片会多花一点时间。</p>
               </div>
             ) : displayedResults.length > 0 ? (
               <div className="space-y-5">
                 {displayedResults.map((item, itemIndex) => (
-                  <article key={`${item.prompt}-${itemIndex}`} className="space-y-4 rounded-xl border border-border bg-background p-3 md:p-4">
+                  <article key={`${item.prompt}-${itemIndex}`} className="space-y-4 rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-[var(--paper-50)] p-3 md:p-4">
                     {displayedResults.length > 1 ? (
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <div className="text-xs font-medium text-muted-foreground">第 {itemIndex + 1} 次生成</div>
-                          {item.prompt ? <p className="mt-1 truncate text-sm text-foreground">{item.prompt}</p> : null}
+                          <div className="text-xs font-medium text-[var(--ink-500)]">第 {itemIndex + 1} 次生成</div>
+                          {item.prompt ? <p className="mt-1 truncate text-sm text-[var(--ink-900)]">{item.prompt}</p> : null}
                         </div>
                         {itemIndex === displayedResults.length - 1 ? <BadgeLikeLabel>最新</BadgeLikeLabel> : null}
                       </div>
@@ -1462,10 +1462,10 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
                           const publicDownloadUrl = getPublicGeneratedImageDownloadUrl(url, item.submittedInputs.output_format)
 
                           return (
-                          <div key={`${url}-${index}`} className="overflow-hidden rounded-xl border border-border bg-card">
-                            <img src={proxifyGeneratedImagePreviewUrl(url, 900)} alt={`生成结果 ${index + 1}`} className="aspect-square w-full object-contain bg-muted" />
-                            <div className="space-y-3 border-t border-border p-3">
-                              <a href={publicDownloadUrl} target="_blank" rel="noopener noreferrer" className="block break-all text-xs text-muted-foreground underline-offset-4 hover:underline">
+                          <div key={`${url}-${index}`} className="overflow-hidden rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-[var(--paper-50)]">
+                            <img src={proxifyGeneratedImagePreviewUrl(url, 900)} alt={`生成结果 ${index + 1}`} className="aspect-square w-full object-contain bg-[var(--paper-100)]" />
+                            <div className="space-y-3 border-t border-[var(--paper-200)] p-3">
+                              <a href={publicDownloadUrl} target="_blank" rel="noopener noreferrer" className="block break-all text-xs text-[var(--ink-500)] underline-offset-4 hover:underline">
                                 {publicDownloadUrl}
                               </a>
                               <div className="flex flex-wrap gap-2">
@@ -1486,12 +1486,12 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
                         })}
                       </div>
                     ) : (
-                      <div className="rounded-xl border border-border bg-muted/40 p-4 text-sm leading-7 text-muted-foreground">
+                      <div className="rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-[var(--paper-100)] p-4 text-sm leading-7 text-[var(--ink-500)]">
                         {item.sourceText || "服务已返回结果，但没有检测到图片链接。"}
                       </div>
                     )}
 
-                    <div className="grid gap-2 rounded-xl border border-border bg-muted/40 p-3 text-xs text-muted-foreground sm:grid-cols-5">
+                    <div className="grid gap-2 rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-[var(--paper-100)] p-3 text-xs text-[var(--ink-500)] sm:grid-cols-5">
                       <span>模式：{item.submittedInputs.mode === "image_edit" ? "图片编辑" : "文生图"}</span>
                       <span>模型：{isGeminiWorkspace ? "gemini-image" : isBananaWorkspace ? "banana-2-pro" : item.submittedInputs.model}</span>
                       <span>尺寸：{item.submittedInputs.size}</span>
@@ -1502,25 +1502,25 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
                 ))}
               </div>
             ) : (
-              <div className="flex min-h-[220px] md:min-h-[280px] flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/30 text-center">
-                <FileImage className="mb-3 h-8 w-8 text-muted-foreground" />
-                <p className="text-sm font-medium text-foreground">还没有生成结果</p>
-                <p className="mt-1 max-w-sm text-xs leading-relaxed text-muted-foreground">填写提示词和参数后，结果会出现在这里。</p>
+              <div className="flex min-h-[220px] md:min-h-[280px] flex-col items-center justify-center rounded-[var(--radius-sharp)] border border-dashed border-[var(--paper-200)] bg-[var(--paper-100)] text-center">
+                <FileImage className="mb-3 h-8 w-8 text-[var(--ink-500)]" />
+                <p className="text-sm font-medium text-[var(--ink-900)]">还没有生成结果</p>
+                <p className="mt-1 max-w-sm text-xs leading-relaxed text-[var(--ink-500)]">填写提示词和参数后，结果会出现在这里。</p>
               </div>
             )}
           </section>
         </section>
 
         <aside className="space-y-3 md:space-y-4 lg:sticky lg:top-[72px] lg:h-[calc(100vh-88px)] lg:overflow-y-auto">
-          <section className="rounded-xl border border-border bg-card p-4">
-            <h2 className="mb-4 text-sm font-semibold text-foreground">基础参数</h2>
+          <section className="rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-[var(--paper-50)] p-4">
+            <h2 className="mb-4 text-sm font-semibold text-[var(--ink-900)]">基础参数</h2>
             <div className="space-y-4">
               {!isBananaWorkspace ? (
                 <div className="space-y-2">
                   <FieldLabel>图像模型</FieldLabel>
                   <NativeSelect value={model} onChange={applyModel} options={isGeminiWorkspace ? GEMINI_MODEL_OPTIONS : MODEL_OPTIONS} />
                   {!isGeminiWorkspace && model !== "gpt-image-2" && isLargeSize(size) ? (
-                    <div className="rounded-lg bg-amber-500/10 p-2 text-xs leading-relaxed text-amber-700 dark:text-amber-300">
+                    <div className="rounded-[var(--radius-soft)] bg-amber-500/10 p-2 text-xs leading-relaxed text-amber-700 dark:text-amber-300">
                       当前模型可能不支持 2K / 4K。建议切换到 GPT Image 2，或改用基础尺寸。
                       {size === "original_4k" ? " 非 GPT Image 2 会自动降级到基础尺寸。" : null}
                       <button type="button" onClick={() => setModel("gpt-image-2")} className="ml-2 font-semibold underline">
@@ -1570,7 +1570,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
                   max={4}
                   value={count}
                   onChange={(event) => setCount(clampImageCount(Number(event.target.value)))}
-                  className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+                  className="h-10 w-full rounded-[var(--radius-soft)] border border-[var(--paper-200)] bg-[var(--paper-50)] px-3 text-sm text-[var(--ink-900)] outline-none transition focus:border-[var(--ink-500)] focus:ring-2 focus:ring-[var(--ink-200)]"
                 />
               </div>
             </div>
@@ -1582,7 +1582,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
                 <div className="space-y-2">
                   <FieldLabel>压缩率</FieldLabel>
                   {outputFormat === "png" ? (
-                    <div className="rounded-lg bg-muted p-3 text-xs text-muted-foreground">PNG 格式下压缩率已禁用，提交时保留 100。</div>
+                    <div className="rounded-[var(--radius-soft)] bg-[var(--paper-100)] p-3 text-xs text-[var(--ink-500)]">PNG 格式下压缩率已禁用，提交时保留 100。</div>
                   ) : (
                     <div className="space-y-2">
                       <input
@@ -1591,7 +1591,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
                         max={100}
                         value={outputCompression}
                         onChange={(event) => setOutputCompression(clampCompression(Number(event.target.value)))}
-                        className="w-full accent-primary"
+                        className="w-full accent-[var(--seal-500)]"
                       />
                       <input
                         type="number"
@@ -1599,7 +1599,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
                         max={100}
                         value={outputCompression}
                         onChange={(event) => setOutputCompression(clampCompression(Number(event.target.value)))}
-                        className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground"
+                        className="h-10 w-full rounded-[var(--radius-soft)] border border-[var(--paper-200)] bg-[var(--paper-50)] px-3 text-sm text-[var(--ink-900)]"
                       />
                     </div>
                   )}
@@ -1616,7 +1616,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
                     }))}
                   />
                   {model === "gpt-image-2" ? (
-                    <p className="text-xs text-muted-foreground">gpt-image-2 当前不推荐透明背景，请使用 auto 或 opaque。</p>
+                    <p className="text-xs text-[var(--ink-500)]">gpt-image-2 当前不推荐透明背景，请使用 auto 或 opaque。</p>
                   ) : null}
                 </div>
 
@@ -1644,9 +1644,9 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
                 ["reference_image_url 是否已生成", Boolean(previewInputs.reference_image_url)],
                 ["mask_image_url 是否已生成", Boolean(previewInputs.mask_image_url)],
               ].map(([key, value]) => (
-                <div key={String(key)} className="flex items-center justify-between gap-3 rounded-lg bg-muted px-3 py-2">
-                  <span className="text-muted-foreground">{key}</span>
-                  <span className="font-mono text-foreground">{String(value)}</span>
+                <div key={String(key)} className="flex items-center justify-between gap-3 rounded-[var(--radius-soft)] bg-[var(--paper-100)] px-3 py-2">
+                  <span className="text-[var(--ink-500)]">{key}</span>
+                  <span className="font-mono text-[var(--ink-900)]">{String(value)}</span>
                 </div>
               ))}
             </div>
@@ -1662,29 +1662,29 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
             className="absolute inset-0 bg-black/30"
             onClick={() => setShowHistorySidebar(false)}
           />
-          <div className="absolute right-0 top-0 flex h-full w-full max-w-sm flex-col border-l border-border bg-card shadow-xl">
-            <div className="flex items-center justify-between border-b border-border px-4 py-3">
+          <div className="absolute right-0 top-0 flex h-full w-full max-w-sm flex-col border-l border-[var(--paper-200)] bg-[var(--paper-50)] shadow-xl">
+            <div className="flex items-center justify-between border-b border-[var(--paper-200)] px-4 py-3">
               <span className="text-sm font-semibold">历史会话</span>
-              <button type="button" className="rounded-lg p-2 hover:bg-muted" onClick={() => setShowHistorySidebar(false)}>
+              <button type="button" className="rounded-[var(--radius-soft)] p-2 hover:bg-[var(--paper-100)]" onClick={() => setShowHistorySidebar(false)}>
                 <X className="h-4 w-4" />
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-2">
               {chatSessions.length === 0 ? (
-                <div className="py-10 text-center text-sm text-muted-foreground">暂无历史记录</div>
+                <div className="py-10 text-center text-sm text-[var(--ink-500)]">暂无历史记录</div>
               ) : (
                 chatSessions.map((session) => (
                   <button
                     key={session.id}
                     type="button"
-                    className="w-full rounded-lg px-3 py-3 text-left transition hover:bg-muted"
+                    className="w-full rounded-[var(--radius-soft)] px-3 py-3 text-left transition hover:bg-[var(--paper-100)]"
                     onClick={() => {
                       router.push(buildChatSessionRouteFromSession(session))
                       setShowHistorySidebar(false)
                     }}
                   >
-                    <div className="truncate text-sm font-medium text-foreground">{session.title}</div>
-                    <div className="mt-1 truncate text-xs text-muted-foreground">{session.preview}</div>
+                    <div className="truncate text-sm font-medium text-[var(--ink-900)]">{session.title}</div>
+                    <div className="mt-1 truncate text-xs text-[var(--ink-500)]">{session.preview}</div>
                   </button>
                 ))
               )}
@@ -1700,8 +1700,8 @@ export function GptImage2ChatInterface({ workspaceModel = "gpt-image-2" }: GptIm
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-screen items-center justify-center bg-background">
-          <Loader2 className="h-6 w-6 animate-spin text-primary" />
+        <div className="flex min-h-screen items-center justify-center bg-[var(--paper-50)]">
+          <Loader2 className="h-6 w-6 animate-spin text-[var(--ink-700)]" />
         </div>
       }
     >

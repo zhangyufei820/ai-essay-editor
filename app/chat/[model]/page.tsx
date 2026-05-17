@@ -2,7 +2,7 @@
 
 import dynamic from 'next/dynamic'
 import { useParams, notFound } from 'next/navigation'
-import { LoadingStateCard } from '@/components/ui/LoadingStateCard'
+import { LoadingStateV2 } from '@/components/ui/v2'
 
 // 🎯 支持的模型/智能体列表
 // 新增智能体时，只需在此处添加即可
@@ -41,8 +41,8 @@ const EnhancedChatInterface = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="min-h-screen flex items-center justify-center bg-white dark:bg-black">
-        <LoadingStateCard modelKey="general-chat" />
+      <div className="min-h-screen flex items-center justify-center bg-[var(--paper-50)]">
+        <LoadingStateV2 label="AI 正在思考..." size="md" />
       </div>
     )
   }
@@ -61,8 +61,8 @@ const GeminiImageWorkspace = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="min-h-screen flex items-center justify-center bg-white dark:bg-black">
-        <LoadingStateCard modelKey="gemini-image" />
+      <div className="min-h-screen flex items-center justify-center bg-[var(--paper-50)]">
+        <LoadingStateV2 label="图像工作台加载中..." size="md" />
       </div>
     )
   }

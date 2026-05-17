@@ -5,9 +5,13 @@ const APP_ROUTE_PREFIXES = [
   "/flashcards",
   "/folder",
   "/history",
+  "/invite",
+  "/lab",
+  "/my/shares",
   "/settings",
   "/teacher",
   "/tools",
+  "/worksheet-diagnosis",
 ] as const
 
 export function usesAppChrome(pathname: string | null | undefined) {

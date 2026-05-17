@@ -3,7 +3,7 @@
 import { Suspense, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import dynamic from 'next/dynamic'
-import { LoadingStateCard } from '@/components/ui/LoadingStateCard'
+import { LoadingStateV2 } from '@/components/ui/v2'
 import { buildChatSessionRoute, normalizeChatSessionModel } from '@/lib/chat-session-routes'
 
 // 动态导入 EnhancedChatInterface，禁用 SSR
@@ -12,8 +12,8 @@ const EnhancedChatInterface = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="min-h-screen flex items-center justify-center bg-white dark:bg-black">
-        <LoadingStateCard modelKey="standard" />
+      <div className="min-h-screen flex items-center justify-center bg-[var(--paper-50)]">
+        <LoadingStateV2 label="AI 正在思考..." size="md" />
       </div>
     )
   }
@@ -51,8 +51,8 @@ function ChatPageContent() {
 export default function ChatPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-white dark:bg-black">
-        <LoadingStateCard modelKey="standard" />
+      <div className="min-h-screen flex items-center justify-center bg-[var(--paper-50)]">
+        <LoadingStateV2 label="AI 正在思考..." size="md" />
       </div>
     }>
       <ChatPageContent />

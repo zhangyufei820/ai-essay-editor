@@ -192,7 +192,7 @@ export function AIPanel({ isOpen, onClose }: AIPanelProps) {
                 {/* 智慧光环 */}
                 <div className="relative">
                   <div
-                    className="w-10 h-10 rounded-xl flex items-center justify-center"
+                    className="w-10 h-10 rounded-[var(--radius-sharp)] flex items-center justify-center"
                     style={{
                       background: "linear-gradient(135deg, #0d3a1f 0%, #14532d 100%)",
                       boxShadow: "0 4px 20px rgba(14, 58, 31, 0.25), 0 0 40px rgba(134, 239, 172, 0.1)",
@@ -202,7 +202,7 @@ export function AIPanel({ isOpen, onClose }: AIPanelProps) {
                   </div>
                   {/* 呼吸光环 */}
                   <motion.div
-                    className="absolute inset-0 rounded-xl"
+                    className="absolute inset-0 rounded-[var(--radius-sharp)]"
                     style={{
                       background: "transparent",
                       boxShadow: "0 0 20px rgba(134, 239, 172, 0.3)",
@@ -230,7 +230,7 @@ export function AIPanel({ isOpen, onClose }: AIPanelProps) {
 
               <motion.button
                 onClick={onClose}
-                className="w-9 h-9 rounded-xl flex items-center justify-center transition-colors"
+                className="w-9 h-9 rounded-[var(--radius-sharp)] flex items-center justify-center transition-colors"
                 style={{ background: "rgba(14, 58, 31, 0.04)" }}
                 whileHover={{ background: "rgba(14, 58, 31, 0.08)" }}
                 whileTap={{ scale: 0.95 }}
@@ -271,7 +271,7 @@ export function AIPanel({ isOpen, onClose }: AIPanelProps) {
               transition={{ delay: 0.6 }}
             >
               <motion.div
-                className="py-4 px-4 rounded-2xl text-center"
+                className="py-4 px-4 rounded-[var(--radius-sharp)] text-center"
                 style={{
                   background: "linear-gradient(135deg, rgba(134, 239, 172, 0.06) 0%, rgba(134, 239, 172, 0.02) 100%)",
                   border: "1px solid rgba(134, 239, 172, 0.1)",
@@ -317,7 +317,7 @@ function WritingIslandCard({
     <motion.a
       href={agent.href}
       onClick={onClick}
-      className="group relative block p-5 rounded-2xl overflow-hidden cursor-pointer"
+      className="group relative block p-5 rounded-[var(--radius-sharp)] overflow-hidden cursor-pointer"
       style={{
         background: "rgba(255, 255, 255, 0.60)",
         backdropFilter: "blur(20px)",
@@ -334,7 +334,7 @@ function WritingIslandCard({
     >
       {/* 图标容器 */}
       <motion.div
-        className="relative w-12 h-12 rounded-xl flex items-center justify-center mb-3.5"
+        className="relative w-12 h-12 rounded-[var(--radius-sharp)] flex items-center justify-center mb-3.5"
         style={{
           background: "linear-gradient(135deg, rgba(134, 239, 172, 0.15) 0%, rgba(134, 239, 172, 0.05) 100%)",
           border: "1px solid rgba(134, 239, 172, 0.2)",

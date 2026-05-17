@@ -51,7 +51,7 @@ const MathBlock = memo(function MathBlock({ formula }: { formula: string }) {
   return (
     <div
       dangerouslySetInnerHTML={{ __html: html }}
-      className="math-block my-8 overflow-x-auto rounded-lg"
+      className="math-block my-8 overflow-x-auto rounded-[var(--radius-soft)]"
       style={{
         display: "block",
         textAlign: "center",
@@ -138,7 +138,7 @@ const TableBlock = memo(function TableBlock({ lines }: { lines: string[] }) {
     const headers = headerLine.split("|").filter(c => c.trim()).map(c => c.trim())
 
     return (
-      <div className="my-4 overflow-hidden rounded-lg border" style={{ borderColor: slateColors[200] }}>
+      <div className="my-4 overflow-hidden rounded-[var(--radius-soft)] border" style={{ borderColor: slateColors[200] }}>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y" style={{ borderColor: slateColors[200] }}>
             <thead style={{ backgroundColor: slateColors[50] }}>
@@ -160,7 +160,7 @@ const TableBlock = memo(function TableBlock({ lines }: { lines: string[] }) {
                 return (
                   <tr
                     key={i}
-                    className="transition-colors hover:bg-slate-50/50"
+                    className="transition-colors hover:bg-[var(--paper-50)]/50"
                   >
                     {cells.map((cell, j) => (
                       <td

@@ -1,22 +1,38 @@
 "use client"
 
-import dynamic from "next/dynamic"
+import { usePathname } from "next/navigation"
 import type React from "react"
 
-import { SidebarProvider } from "@/components/ui/sidebar"
+import { WorkspaceShell } from "@/components/v2-chrome"
 
-const AppSidebar = dynamic(
-  () => import("@/components/app-sidebar").then((mod) => ({ default: mod.AppSidebar })),
-  { ssr: false }
-)
+const PAGE_TITLES: Array<[string, string]> = [
+  ["/admin", "管理后台"],
+  ["/credits", "积分中心"],
+  ["/dashboard", "学习看板"],
+  ["/flashcards", "闪卡复习"],
+  ["/folder", "资料夹"],
+  ["/history", "历史记录"],
+  ["/invite", "邀请好友"],
+  ["/lab", "互动实验室"],
+  ["/my/shares", "我的分享"],
+  ["/settings", "个人中心"],
+  ["/teacher/agents", "教师智能体"],
+  ["/teacher", "教师专区"],
+  ["/tools", "工具箱"],
+  ["/worksheet-diagnosis", "拍卷诊断"],
+]
+
+function resolvePageTitle(pathname: string | null) {
+  const match = PAGE_TITLES.find(([prefix]) => pathname === prefix || pathname?.startsWith(`${prefix}/`))
+  return match?.[1] ?? "工作台"
+}
 
 export function AppChrome({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname()
+
   return (
-    <SidebarProvider>
-      <AppSidebar />
-      <div id="main-content" className="flex min-h-screen w-full flex-1 flex-col bg-[var(--color-surface-soft)]">
-        {children}
-      </div>
-    </SidebarProvider>
+    <WorkspaceShell pageTitle={resolvePageTitle(pathname)}>
+      {children}
+    </WorkspaceShell>
   )
 }

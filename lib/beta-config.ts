@@ -29,8 +29,8 @@ export function getFeatureStatus(enabled: boolean): {
   if (enabled) {
     return {
       text: "可用",
-      color: "text-green-600",
-      badge: "bg-green-100 text-green-700",
+      color: "text-[var(--ink-600)]",
+      badge: "bg-[var(--ink-100)] text-[var(--ink-700)]",
     }
   }
   return {

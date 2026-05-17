@@ -40,7 +40,7 @@ export function Features() {
       <div className="container mx-auto px-4">
         <div className="mb-12 text-center">
           <h2 className="mb-4 text-4xl font-bold tracking-tight text-balance">核心功能</h2>
-          <p className="mx-auto max-w-2xl text-lg text-muted-foreground text-pretty">
+          <p className="mx-auto max-w-2xl text-lg text-[var(--ink-500)] text-pretty">
             AI驱动的智能教育平台，为学习和教学提供全方位支持
           </p>
         </div>
@@ -51,15 +51,15 @@ export function Features() {
             return (
               <Card 
                 key={feature.title} 
-                className="group relative overflow-hidden rounded-2xl border-2 border-border/50 bg-card p-8 shadow-lg transition-all duration-300 hover:border-primary hover:shadow-2xl hover:scale-[1.02] hover:-translate-y-1"
+                className="group relative overflow-hidden rounded-[var(--radius-sharp)] border-2 border-[var(--paper-200)]/50 bg-[var(--paper-50)] p-8 shadow-lg transition-all duration-300 hover:border-[var(--ink-500)] hover:shadow-2xl hover:scale-[1.02] hover:-translate-y-1"
               >
                 <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
                 <div className="relative">
-                  <div className="mb-6 inline-flex h-14 w-14 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 text-primary shadow-md transition-all duration-300 group-hover:scale-110 group-hover:shadow-lg">
+                  <div className="mb-6 inline-flex h-14 w-14 items-center justify-center rounded-[var(--radius-sharp)] bg-gradient-to-br from-primary/20 to-primary/10 text-[var(--ink-700)] shadow-md transition-all duration-300 group-hover:scale-110 group-hover:shadow-lg">
                     <Icon className="h-7 w-7" />
                   </div>
                   <h3 className="mb-3 text-xl font-bold">{feature.title}</h3>
-                  <p className="text-sm text-muted-foreground leading-relaxed">{feature.description}</p>
+                  <p className="text-sm text-[var(--ink-500)] leading-relaxed">{feature.description}</p>
                 </div>
               </Card>
             )

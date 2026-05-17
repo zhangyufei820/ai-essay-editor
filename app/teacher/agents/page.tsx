@@ -233,13 +233,13 @@ export default function TeacherAgentsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[var(--paper-50)] px-4 py-6 dark:bg-background sm:px-6 lg:px-8">
+    <main className="min-h-screen bg-[var(--paper-50)] px-4 py-6 dark:bg-[var(--paper-50)] sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl space-y-6">
         <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-sm font-medium text-[var(--ink-700)] dark:text-[var(--ink-200)]">教师平台</p>
             <h1 className="mt-1 text-2xl font-semibold tracking-normal sm:text-3xl font-[var(--font-display)]">自主创建 AI 智能体</h1>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--ink-500)]">
               使用四大模板或自定义 Prompt 创建教学智能体，一键生成分享码，并绑定学生查看学习进度和资料夹。
             </p>
           </div>
@@ -256,7 +256,7 @@ export default function TeacherAgentsPage() {
         ) : null}
         {message ? (
           <Card>
-            <CardContent className="py-4 text-sm text-muted-foreground">{message}</CardContent>
+            <CardContent className="py-4 text-sm text-[var(--ink-500)]">{message}</CardContent>
           </Card>
         ) : null}
 
@@ -276,15 +276,15 @@ export default function TeacherAgentsPage() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="template">模板</Label>
-                  <select id="template" value={form.template} onChange={(event) => setForm((value) => ({ ...value, template: event.target.value }))} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
+                  <select id="template" value={form.template} onChange={(event) => setForm((value) => ({ ...value, template: event.target.value }))} className="h-10 w-full rounded-md border border-input bg-[var(--paper-50)] px-3 text-sm">
                     {TEMPLATES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
                   </select>
-                  <p className="text-xs text-muted-foreground">{selectedTemplate.description}</p>
+                  <p className="text-xs text-[var(--ink-500)]">{selectedTemplate.description}</p>
                 </div>
                 <div className="grid grid-cols-3 gap-3">
                   <div className="space-y-2">
                     <Label htmlFor="subject">学科</Label>
-                    <select id="subject" value={form.subject} onChange={(event) => setForm((value) => ({ ...value, subject: event.target.value }))} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
+                    <select id="subject" value={form.subject} onChange={(event) => setForm((value) => ({ ...value, subject: event.target.value }))} className="h-10 w-full rounded-md border border-input bg-[var(--paper-50)] px-3 text-sm">
                       {SUBJECTS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                     </select>
                   </div>
@@ -294,7 +294,7 @@ export default function TeacherAgentsPage() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="style">风格</Label>
-                    <select id="style" value={form.style} onChange={(event) => setForm((value) => ({ ...value, style: event.target.value }))} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
+                    <select id="style" value={form.style} onChange={(event) => setForm((value) => ({ ...value, style: event.target.value }))} className="h-10 w-full rounded-md border border-input bg-[var(--paper-50)] px-3 text-sm">
                       {STYLES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                     </select>
                   </div>
@@ -332,24 +332,24 @@ export default function TeacherAgentsPage() {
               <CardContent>
                 {loading ? (
                   <div className="space-y-3">
-                    {Array.from({ length: 3 }).map((_, index) => <div key={index} className="h-24 animate-pulse rounded-[var(--radius-sharp)] bg-muted/40" />)}
+                    {Array.from({ length: 3 }).map((_, index) => <div key={index} className="h-24 animate-pulse rounded-[var(--radius-sharp)] bg-[var(--paper-100)]" />)}
                   </div>
                 ) : agents.length ? (
                   <div className="grid gap-3 lg:grid-cols-2">
                     {agents.map((agent) => (
-                      <Card key={agent.id} className="rounded-[var(--radius-sharp)] border-border/70">
+                      <Card key={agent.id} className="rounded-[var(--radius-sharp)] border-[var(--paper-200)]/70">
                         <CardContent className="space-y-3 py-4">
                           <div className="flex items-start justify-between gap-3">
                             <div>
                               <div className="font-semibold">{agent.name}</div>
-                              <div className="mt-1 text-xs text-muted-foreground">{templateLabel(agent.template)} · {subjectLabel(agent.subject)} · {agent.grade || "中学"}</div>
+                              <div className="mt-1 text-xs text-[var(--ink-500)]">{templateLabel(agent.template)} · {subjectLabel(agent.subject)} · {agent.grade || "中学"}</div>
                             </div>
                             <Button variant="ghost" size="icon" onClick={() => deleteAgent(agent.id)} aria-label="归档智能体">
                               <Trash2 className="size-4" />
                             </Button>
                           </div>
-                          {agent.description ? <p className="text-sm text-muted-foreground">{agent.description}</p> : null}
-                          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                          {agent.description ? <p className="text-sm text-[var(--ink-500)]">{agent.description}</p> : null}
+                          <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--ink-500)]">
                             <Share2 className="size-4" />
                             <span>share_code: {agent.share_code}</span>
                           </div>
@@ -367,7 +367,7 @@ export default function TeacherAgentsPage() {
                     ))}
                   </div>
                 ) : (
-                  <div className="rounded-[var(--radius-sharp)] border border-dashed py-12 text-center text-sm text-muted-foreground">还没有智能体，先创建一个给学生使用。</div>
+                  <div className="rounded-[var(--radius-sharp)] border border-dashed py-12 text-center text-sm text-[var(--ink-500)]">还没有智能体，先创建一个给学生使用。</div>
                 )}
               </CardContent>
             </Card>
@@ -393,19 +393,19 @@ export default function TeacherAgentsPage() {
                 {students.length ? (
                   <div className="grid gap-3 lg:grid-cols-2">
                     {students.map((student) => (
-                      <Card key={student.student_id} className="rounded-[var(--radius-sharp)] border-border/70">
+                      <Card key={student.student_id} className="rounded-[var(--radius-sharp)] border-[var(--paper-200)]/70">
                         <CardContent className="space-y-3 py-4">
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
                               <div className="truncate font-medium">{student.student_id}</div>
-                              <div className="mt-1 text-xs text-muted-foreground">{student.class_name || "未分班"}</div>
+                              <div className="mt-1 text-xs text-[var(--ink-500)]">{student.class_name || "未分班"}</div>
                             </div>
                             <Button variant="ghost" size="sm" onClick={() => unbindStudent(student.student_id)}>解绑</Button>
                           </div>
                           <div className="grid grid-cols-3 gap-2 text-center text-sm">
-                            <div className="rounded-[var(--radius-soft)] bg-muted/50 p-2"><div className="font-semibold">{student.progress?.level || 1}</div><div className="text-xs text-muted-foreground">等级</div></div>
-                            <div className="rounded-[var(--radius-soft)] bg-muted/50 p-2"><div className="font-semibold">{student.progress?.total_xp || 0}</div><div className="text-xs text-muted-foreground">XP</div></div>
-                            <div className="rounded-[var(--radius-soft)] bg-muted/50 p-2"><div className="font-semibold">{student.progress?.current_streak || 0}</div><div className="text-xs text-muted-foreground">连续</div></div>
+                            <div className="rounded-[var(--radius-soft)] bg-[var(--paper-100)]/50 p-2"><div className="font-semibold">{student.progress?.level || 1}</div><div className="text-xs text-[var(--ink-500)]">等级</div></div>
+                            <div className="rounded-[var(--radius-soft)] bg-[var(--paper-100)]/50 p-2"><div className="font-semibold">{student.progress?.total_xp || 0}</div><div className="text-xs text-[var(--ink-500)]">XP</div></div>
+                            <div className="rounded-[var(--radius-soft)] bg-[var(--paper-100)]/50 p-2"><div className="font-semibold">{student.progress?.current_streak || 0}</div><div className="text-xs text-[var(--ink-500)]">连续</div></div>
                           </div>
                           <Button asChild size="sm" variant="outline" className="w-full">
                             <Link href={`/teacher/students/${student.student_id}`}>查看进度和资料夹</Link>
@@ -415,7 +415,7 @@ export default function TeacherAgentsPage() {
                     ))}
                   </div>
                 ) : (
-                  <div className="rounded-[var(--radius-sharp)] border border-dashed py-10 text-center text-sm text-muted-foreground">还没有绑定学生。</div>
+                  <div className="rounded-[var(--radius-sharp)] border border-dashed py-10 text-center text-sm text-[var(--ink-500)]">还没有绑定学生。</div>
                 )}
               </CardContent>
             </Card>

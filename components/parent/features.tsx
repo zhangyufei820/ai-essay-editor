@@ -40,17 +40,17 @@ export function ParentFeatures() {
       <div className="container px-4">
         <div className="mx-auto max-w-2xl text-center mb-16">
           <h2 className="mb-4 text-3xl font-bold lg:text-4xl font-[var(--font-display)]">核心功能</h2>
-          <p className="text-lg text-muted-foreground">全方位支持家长参与孩子的学习过程，建立高质量的家庭教育环境</p>
+          <p className="text-lg text-[var(--ink-500)]">全方位支持家长参与孩子的学习过程，建立高质量的家庭教育环境</p>
         </div>
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {features.map((feature) => (
-            <Card key={feature.title} className="border-border/50 hover:border-primary/50 transition-colors">
+            <Card key={feature.title} className="border-[var(--paper-200)]/50 hover:border-[var(--ink-300)] transition-colors">
               <CardContent className="p-6">
                 <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-[var(--radius-soft)] bg-[var(--ink-50)]">
                   <feature.icon className="h-6 w-6 text-[var(--ink-600)]" />
                 </div>
                 <h3 className="mb-2 text-lg font-semibold">{feature.title}</h3>
-                <p className="text-sm text-muted-foreground">{feature.description}</p>
+                <p className="text-sm text-[var(--ink-500)]">{feature.description}</p>
               </CardContent>
             </Card>
           ))}

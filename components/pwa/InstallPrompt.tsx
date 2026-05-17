@@ -139,33 +139,33 @@ export function InstallPrompt() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 50, scale: 0.95 }}
             transition={{ type: "spring", damping: 25, stiffness: 300 }}
-            className="fixed bottom-20 left-4 right-4 md:left-auto md:right-4 md:w-80 bg-white rounded-2xl shadow-xl border border-slate-100 p-4 z-50"
+            className="fixed bottom-20 left-4 right-4 md:left-auto md:right-4 md:w-80 bg-[var(--paper-50)] rounded-[var(--radius-sharp)] shadow-xl border border-[var(--paper-100)] p-4 z-50"
           >
             <div className="flex items-start gap-3">
               <div 
-                className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+                className="w-10 h-10 rounded-[var(--radius-sharp)] flex items-center justify-center shrink-0"
                 style={{ backgroundColor: `${brandColors[50]}` }}
               >
                 <Download className="w-5 h-5" style={{ color: brandColors[700] }} />
               </div>
               <div className="flex-1 min-w-0">
-                <h3 className="font-semibold text-slate-800 text-sm">
+                <h3 className="font-semibold text-[var(--ink-800)] text-sm">
                   安装沈翔学校
                 </h3>
-                <p className="text-xs text-slate-500 mt-1">
+                <p className="text-xs text-[var(--ink-500)] mt-1">
                   添加到主屏幕，获得更好的体验
                 </p>
                 <div className="flex gap-2 mt-3">
                   <button
                     onClick={handleInstall}
-                    className="px-3 py-1.5 text-xs font-medium text-white rounded-lg hover:opacity-90 transition-colors"
+                    className="px-3 py-1.5 text-xs font-medium text-white rounded-[var(--radius-soft)] hover:opacity-90 transition-colors"
                     style={{ backgroundColor: brandColors[900] }}
                   >
                     安装
                   </button>
                   <button
                     onClick={handleLater}
-                    className="px-3 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors"
+                    className="px-3 py-1.5 text-xs font-medium text-[var(--ink-600)] bg-[var(--paper-100)] rounded-[var(--radius-soft)] hover:bg-[var(--paper-200)] transition-colors"
                   >
                     稍后再说
                   </button>
@@ -173,7 +173,7 @@ export function InstallPrompt() {
               </div>
               <button
                 onClick={handleDismiss}
-                className="text-slate-400 hover:text-slate-600 p-1 -mr-1 -mt-1"
+                className="text-[var(--ink-400)] hover:text-[var(--ink-600)] p-1 -mr-1 -mt-1"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -190,43 +190,43 @@ export function InstallPrompt() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 50, scale: 0.95 }}
             transition={{ type: "spring", damping: 25, stiffness: 300 }}
-            className="fixed bottom-20 left-4 right-4 md:left-auto md:right-4 md:w-80 bg-white rounded-2xl shadow-xl border border-slate-100 p-4 z-50"
+            className="fixed bottom-20 left-4 right-4 md:left-auto md:right-4 md:w-80 bg-[var(--paper-50)] rounded-[var(--radius-sharp)] shadow-xl border border-[var(--paper-100)] p-4 z-50"
           >
             <div className="flex items-start gap-3">
               <div 
-                className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+                className="w-10 h-10 rounded-[var(--radius-sharp)] flex items-center justify-center shrink-0"
                 style={{ backgroundColor: `${brandColors[50]}` }}
               >
                 <Smartphone className="w-5 h-5" style={{ color: brandColors[700] }} />
               </div>
               <div className="flex-1 min-w-0">
-                <h3 className="font-semibold text-slate-800 text-sm">
+                <h3 className="font-semibold text-[var(--ink-800)] text-sm">
                   添加到主屏幕
                 </h3>
                 <div className="mt-2 space-y-2">
-                  <div className="flex items-center gap-2 text-xs text-slate-600">
-                    <span className="w-5 h-5 rounded bg-slate-100 flex items-center justify-center text-[10px] font-medium">1</span>
+                  <div className="flex items-center gap-2 text-xs text-[var(--ink-600)]">
+                    <span className="w-5 h-5 rounded bg-[var(--paper-100)] flex items-center justify-center text-[10px] font-medium">1</span>
                     <span>点击底部</span>
                     <Share className="w-4 h-4 text-blue-500" />
                     <span>分享按钮</span>
                   </div>
-                  <div className="flex items-center gap-2 text-xs text-slate-600">
-                    <span className="w-5 h-5 rounded bg-slate-100 flex items-center justify-center text-[10px] font-medium">2</span>
+                  <div className="flex items-center gap-2 text-xs text-[var(--ink-600)]">
+                    <span className="w-5 h-5 rounded bg-[var(--paper-100)] flex items-center justify-center text-[10px] font-medium">2</span>
                     <span>选择</span>
-                    <Plus className="w-4 h-4 text-slate-500" />
+                    <Plus className="w-4 h-4 text-[var(--ink-500)]" />
                     <span>添加到主屏幕</span>
                   </div>
                 </div>
                 <button
                   onClick={handleLater}
-                  className="mt-3 px-3 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors"
+                  className="mt-3 px-3 py-1.5 text-xs font-medium text-[var(--ink-600)] bg-[var(--paper-100)] rounded-[var(--radius-soft)] hover:bg-[var(--paper-200)] transition-colors"
                 >
                   知道了
                 </button>
               </div>
               <button
                 onClick={handleDismiss}
-                className="text-slate-400 hover:text-slate-600 p-1 -mr-1 -mt-1"
+                className="text-[var(--ink-400)] hover:text-[var(--ink-600)] p-1 -mr-1 -mt-1"
               >
                 <X className="w-4 h-4" />
               </button>

@@ -70,13 +70,13 @@ function SkeletonDashboard() {
     <div className="space-y-6 animate-pulse">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {Array.from({ length: 4 }).map((_, index) => (
-          <div key={index} className="h-28 rounded-[var(--radius-sharp)] border border-border/70 bg-muted/40" />
+          <div key={index} className="h-28 rounded-[var(--radius-sharp)] border border-[var(--paper-200)]/70 bg-[var(--paper-100)]" />
         ))}
       </div>
-      <div className="h-80 rounded-[var(--radius-sharp)] border border-border/70 bg-muted/40" />
+      <div className="h-80 rounded-[var(--radius-sharp)] border border-[var(--paper-200)]/70 bg-[var(--paper-100)]" />
       <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
-        <div className="h-72 rounded-[var(--radius-sharp)] border border-border/70 bg-muted/40" />
-        <div className="h-72 rounded-[var(--radius-sharp)] border border-border/70 bg-muted/40" />
+        <div className="h-72 rounded-[var(--radius-sharp)] border border-[var(--paper-200)]/70 bg-[var(--paper-100)]" />
+        <div className="h-72 rounded-[var(--radius-sharp)] border border-[var(--paper-200)]/70 bg-[var(--paper-100)]" />
       </div>
     </div>
   )
@@ -97,9 +97,9 @@ function StatCard({
     <Card className="gap-3 rounded-[var(--radius-sharp)] py-5">
       <CardContent className="flex items-start justify-between gap-3 px-4 sm:px-5">
         <div className="min-w-0">
-          <p className="text-xs font-medium text-muted-foreground">{label}</p>
-          <p className="mt-2 text-2xl font-semibold tracking-normal text-foreground">{value}</p>
-          <p className="mt-1 text-xs text-muted-foreground">{detail}</p>
+          <p className="text-xs font-medium text-[var(--ink-500)]">{label}</p>
+          <p className="mt-2 text-2xl font-semibold tracking-normal text-[var(--ink-900)]">{value}</p>
+          <p className="mt-1 text-xs text-[var(--ink-500)]">{detail}</p>
         </div>
         <div className="flex size-10 shrink-0 items-center justify-center rounded-[var(--radius-soft)] bg-[var(--ink-50)] text-[var(--ink-700)] dark:bg-[var(--ink-900)]/50 dark:text-[var(--ink-200)]">
           {icon}
@@ -156,14 +156,14 @@ export default function DashboardPage() {
   const dailyGoalPercent = clampPercent((todayXp / 100) * 100)
 
   return (
-    <main className="min-h-screen bg-[var(--paper-50)] px-4 py-6 text-foreground dark:bg-[var(--paper-50)] sm:px-6 lg:px-8">
+    <main className="min-h-screen bg-[var(--paper-50)] px-4 py-6 text-[var(--ink-900)] dark:bg-[var(--paper-50)] sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl space-y-6">
         <header className="flex flex-col gap-2">
           <p className="text-sm font-medium text-[var(--ink-700)] dark:text-[var(--ink-200)]">学习看板</p>
           <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
             <div>
               <h1 className="text-2xl font-semibold tracking-normal sm:text-3xl font-[var(--font-display)]">今天的学习状态</h1>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--ink-500)]">
                 查看 XP、连续打卡、待复习闪卡和最近薄弱点。
               </p>
             </div>
@@ -179,7 +179,7 @@ export default function DashboardPage() {
           <Card className="rounded-[var(--radius-sharp)]">
             <CardContent className="py-10">
               <p className="font-medium text-destructive">{error}</p>
-              <p className="mt-2 text-sm text-muted-foreground">请确认已登录，或稍后刷新重试。</p>
+              <p className="mt-2 text-sm text-[var(--ink-500)]">请确认已登录，或稍后刷新重试。</p>
             </CardContent>
           </Card>
         ) : null}
@@ -226,7 +226,7 @@ export default function DashboardPage() {
                     const height = Math.max(8, Math.round((day.minutes / maxMinutes) * 100))
                     return (
                       <div key={day.date} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-2">
-                        <span className="text-xs tabular-nums text-muted-foreground">{day.minutes} 分</span>
+                        <span className="text-xs tabular-nums text-[var(--ink-500)]">{day.minutes} 分</span>
                         <div className="flex h-44 w-full items-end rounded-t-lg bg-[var(--ink-50)] dark:bg-[var(--ink-900)]/30">
                           <div
                             className="w-full rounded-t-lg bg-[var(--ink-500)] transition-[height] duration-300"
@@ -234,7 +234,7 @@ export default function DashboardPage() {
                             aria-label={`${day.date} 学习 ${day.minutes} 分钟`}
                           />
                         </div>
-                        <span className="text-xs text-muted-foreground">{formatDateLabel(day.date)}</span>
+                        <span className="text-xs text-[var(--ink-500)]">{formatDateLabel(day.date)}</span>
                       </div>
                     )
                   })}
@@ -254,12 +254,12 @@ export default function DashboardPage() {
                         <div key={subject} className="grid grid-cols-[72px_1fr_44px] items-center gap-3">
                           <span className="text-sm font-medium">{SUBJECT_NAMES[subject] || subject}</span>
                           <Progress value={clampPercent(value)} className="h-2 bg-[var(--paper-200)] dark:bg-[var(--ink-800)]" />
-                          <span className="text-right text-sm tabular-nums text-muted-foreground">{clampPercent(value)}%</span>
+                          <span className="text-right text-sm tabular-nums text-[var(--ink-500)]">{clampPercent(value)}%</span>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <p className="rounded-[var(--radius-soft)] border border-dashed border-border bg-muted/30 p-5 text-sm text-muted-foreground">
+                    <p className="rounded-[var(--radius-soft)] border border-dashed border-[var(--paper-200)] bg-[var(--paper-100)] p-5 text-sm text-[var(--ink-500)]">
                       暂无数据，开始学习后这里会显示你的掌握度
                     </p>
                   )}
@@ -274,18 +274,18 @@ export default function DashboardPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-5">
-                  <Link href="/flashcards" className="flex items-center justify-between rounded-[var(--radius-soft)] border border-border/70 p-4 transition-colors hover:bg-accent">
+                  <Link href="/flashcards" className="flex items-center justify-between rounded-[var(--radius-soft)] border border-[var(--paper-200)]/70 p-4 transition-colors hover:bg-accent">
                     <span className="font-medium">{data.due_cards_count} 张闪卡待复习</span>
                     <span className="text-sm text-[var(--ink-700)] dark:text-[var(--ink-200)]">去复习</span>
                   </Link>
-                  <Link href="#" className="flex items-center justify-between rounded-[var(--radius-soft)] border border-border/70 p-4 transition-colors hover:bg-accent">
+                  <Link href="#" className="flex items-center justify-between rounded-[var(--radius-soft)] border border-[var(--paper-200)]/70 p-4 transition-colors hover:bg-accent">
                     <span className="font-medium">{data.recent_mistakes.length} 道错题待巩固</span>
-                    <span className="text-sm text-muted-foreground">稍后开放</span>
+                    <span className="text-sm text-[var(--ink-500)]">稍后开放</span>
                   </Link>
                   <div className="space-y-2">
                     <div className="flex items-center justify-between text-sm">
                       <span className="font-medium">每日目标</span>
-                      <span className="text-muted-foreground">{Math.min(todayXp, 100)} / 100 XP</span>
+                      <span className="text-[var(--ink-500)]">{Math.min(todayXp, 100)} / 100 XP</span>
                     </div>
                     <Progress value={dailyGoalPercent} className="h-2 bg-[var(--paper-200)] dark:bg-[var(--ink-800)]" />
                   </div>
@@ -302,8 +302,8 @@ export default function DashboardPage() {
                   <div className="divide-y divide-border/70">
                     {data.recent_mistakes.slice(0, 5).map((mistake, index) => (
                       <div key={mistake.id || index} className="grid gap-2 py-4 sm:grid-cols-[140px_1fr] sm:items-start">
-                        <div className="text-sm text-muted-foreground">
-                          <span className="font-medium text-foreground">{SUBJECT_NAMES[mistake.subject || ""] || mistake.subject || "其他"}</span>
+                        <div className="text-sm text-[var(--ink-500)]">
+                          <span className="font-medium text-[var(--ink-900)]">{SUBJECT_NAMES[mistake.subject || ""] || mistake.subject || "其他"}</span>
                           {mistake.topic ? <span className="ml-2">{mistake.topic}</span> : null}
                         </div>
                         <p className="text-sm leading-6">{(mistake.question || "").slice(0, 50)}{(mistake.question || "").length > 50 ? "..." : ""}</p>

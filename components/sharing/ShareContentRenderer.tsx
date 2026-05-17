@@ -120,7 +120,7 @@ function InlineText({ text }: { text: string }) {
     <>
       {parts.map((part, index) => {
         if (part.startsWith("**") && part.endsWith("**")) {
-          return <strong key={index} className="font-semibold text-emerald-900">{part.slice(2, -2)}</strong>
+          return <strong key={index} className="font-semibold text-[var(--ink-900)]">{part.slice(2, -2)}</strong>
         }
         return <span key={index}>{part.replace(/`([^`]+)`/g, "$1")}</span>
       })}
@@ -136,16 +136,16 @@ function renderTable(lines: string[], key: string) {
   if (!rows.length) return null
   const [head, ...body] = rows
   return (
-    <div key={key} className="my-5 overflow-hidden rounded-xl border border-emerald-100 bg-white shadow-sm">
+    <div key={key} className="my-5 overflow-hidden rounded-[var(--radius-sharp)] border border-[var(--ink-100)] bg-[var(--paper-50)] shadow-sm">
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-emerald-100 text-sm">
-          <thead className="bg-emerald-50">
-            <tr>{head.map((cell, index) => <th key={index} className="px-4 py-3 text-left font-semibold text-emerald-950"><InlineText text={cell} /></th>)}</tr>
+          <thead className="bg-[var(--ink-50)]">
+            <tr>{head.map((cell, index) => <th key={index} className="px-4 py-3 text-left font-semibold text-[var(--ink-900)]"><InlineText text={cell} /></th>)}</tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {body.map((row, rowIndex) => (
               <tr key={rowIndex} className="align-top">
-                {row.map((cell, cellIndex) => <td key={cellIndex} className="px-4 py-3 leading-6 text-slate-700"><InlineText text={cell} /></td>)}
+                {row.map((cell, cellIndex) => <td key={cellIndex} className="px-4 py-3 leading-6 text-[var(--ink-700)]"><InlineText text={cell} /></td>)}
               </tr>
             ))}
           </tbody>
@@ -166,10 +166,10 @@ function renderFormattedContent(text: string) {
     const items = listItems
     listItems = []
     nodes.push(
-      <ul key={`list-${nodes.length}`} className="my-4 space-y-2 rounded-xl bg-slate-50 px-5 py-4 text-sm leading-7 text-slate-700">
+      <ul key={`list-${nodes.length}`} className="my-4 space-y-2 rounded-[var(--radius-sharp)] bg-[var(--paper-50)] px-5 py-4 text-sm leading-7 text-[var(--ink-700)]">
         {items.map((item, index) => (
           <li key={index} className="flex gap-3">
-            <span className="mt-3 size-1.5 shrink-0 rounded-full bg-emerald-600" />
+            <span className="mt-3 size-1.5 shrink-0 rounded-full bg-[var(--ink-600)]" />
             <span><InlineText text={item} /></span>
           </li>
         ))}
@@ -200,27 +200,27 @@ function renderFormattedContent(text: string) {
     }
     if (/^---+$/.test(line)) {
       flushList()
-      nodes.push(<hr key={`hr-${index}`} className="my-6 border-emerald-100" />)
+      nodes.push(<hr key={`hr-${index}`} className="my-6 border-[var(--ink-100)]" />)
       return
     }
     if (line.startsWith("### ")) {
       flushList()
-      nodes.push(<h2 key={index} className="mt-7 border-l-4 border-emerald-600 pl-3 text-xl font-semibold text-slate-950"><InlineText text={line.replace(/^###\s+/, "")} /></h2>)
+      nodes.push(<h2 key={index} className="mt-7 border-l-4 border-emerald-600 pl-3 text-xl font-semibold text-[var(--ink-900)]"><InlineText text={line.replace(/^###\s+/, "")} /></h2>)
       return
     }
     if (line.startsWith("#### ")) {
       flushList()
-      nodes.push(<h3 key={index} className="mt-5 text-base font-semibold text-emerald-900"><InlineText text={line.replace(/^####\s+/, "")} /></h3>)
+      nodes.push(<h3 key={index} className="mt-5 text-base font-semibold text-[var(--ink-900)]"><InlineText text={line.replace(/^####\s+/, "")} /></h3>)
       return
     }
     if (line.startsWith("## ")) {
       flushList()
-      nodes.push(<h2 key={index} className="mt-7 border-l-4 border-emerald-600 pl-3 text-xl font-semibold text-slate-950"><InlineText text={line.replace(/^##\s+/, "")} /></h2>)
+      nodes.push(<h2 key={index} className="mt-7 border-l-4 border-emerald-600 pl-3 text-xl font-semibold text-[var(--ink-900)]"><InlineText text={line.replace(/^##\s+/, "")} /></h2>)
       return
     }
     if (line.startsWith("# ")) {
       flushList()
-      nodes.push(<h2 key={index} className="mt-7 text-2xl font-bold text-slate-950"><InlineText text={line.replace(/^#\s+/, "")} /></h2>)
+      nodes.push(<h2 key={index} className="mt-7 text-2xl font-bold text-[var(--ink-900)]"><InlineText text={line.replace(/^#\s+/, "")} /></h2>)
       return
     }
     const listMatch = line.match(/^[-*]\s+(.+)$/) || line.match(/^\d+\.\s+(.+)$/)
@@ -229,19 +229,19 @@ function renderFormattedContent(text: string) {
       return
     }
     flushList()
-    nodes.push(<p key={index} className="my-3 text-base leading-8 text-slate-700"><InlineText text={line} /></p>)
+    nodes.push(<p key={index} className="my-3 text-base leading-8 text-[var(--ink-700)]"><InlineText text={line} /></p>)
   })
 
   flushTable()
   flushList()
-  return nodes.length ? nodes : <p className="text-base leading-8 text-slate-700">暂无可展示内容。</p>
+  return nodes.length ? nodes : <p className="text-base leading-8 text-[var(--ink-700)]">暂无可展示内容。</p>
 }
 
 function TextBlock({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-5">
-      <h3 className="flex items-center gap-2 text-base font-semibold text-slate-950">
-        <FileText className="size-4 text-emerald-700" />
+    <section className="rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-[var(--paper-50)] p-5">
+      <h3 className="flex items-center gap-2 text-base font-semibold text-[var(--ink-900)]">
+        <FileText className="size-4 text-[var(--ink-700)]" />
         {title}
       </h3>
       <div className="mt-3">{children}</div>
@@ -251,20 +251,20 @@ function TextBlock({ title, children }: { title: string; children: ReactNode }) 
 
 function HtmlCover({ share }: { share: Share }) {
   return (
-    <div className="flex aspect-[16/10] min-h-[260px] flex-col justify-between rounded-2xl border border-emerald-100 bg-[linear-gradient(135deg,#f7faf7_0%,#ecfdf5_55%,#fff7ed_100%)] p-6 shadow-sm">
+    <div className="flex aspect-[16/10] min-h-[260px] flex-col justify-between rounded-[var(--radius-sharp)] border border-[var(--ink-100)] bg-[linear-gradient(135deg,#f7faf7_0%,#ecfdf5_55%,#fff7ed_100%)] p-6 shadow-sm">
       <div className="flex items-center justify-between">
-        <span className="rounded-full bg-white px-3 py-1 text-sm font-medium text-emerald-700 shadow-sm">{share.subject_label || "AI 学习作品"}</span>
-        <Sparkles className="size-6 text-emerald-700" />
+        <span className="rounded-full bg-[var(--paper-50)] px-3 py-1 text-sm font-medium text-[var(--ink-700)] shadow-sm">{share.subject_label || "AI 学习作品"}</span>
+        <Sparkles className="size-6 text-[var(--ink-700)]" />
       </div>
       <div>
-        <p className="text-sm font-semibold text-emerald-800">沈翔智学 · 作品分享</p>
-        <h2 className="mt-3 max-w-2xl text-3xl font-bold leading-tight text-slate-950">{share.title}</h2>
-        <p className="mt-4 max-w-2xl text-base leading-7 text-slate-600">{share.preview_text || "查看用户上传内容与 AI 修改后的完整排版。"}</p>
+        <p className="text-sm font-semibold text-[var(--ink-800)]">沈翔智学 · 作品分享</p>
+        <h2 className="mt-3 max-w-2xl text-3xl font-bold leading-tight text-[var(--ink-900)]">{share.title}</h2>
+        <p className="mt-4 max-w-2xl text-base leading-7 text-[var(--ink-600)]">{share.preview_text || "查看用户上传内容与 AI 修改后的完整排版。"}</p>
       </div>
       <div className="grid grid-cols-3 gap-2">
         <span className="h-2 rounded-full bg-emerald-300" />
         <span className="h-2 rounded-full bg-amber-200" />
-        <span className="h-2 rounded-full bg-slate-200" />
+        <span className="h-2 rounded-full bg-[var(--paper-200)]" />
       </div>
     </div>
   )
@@ -274,7 +274,7 @@ function MainVisual({ share }: { share: Share }) {
   const imageUrl = getMainImageUrl(share)
   if (!imageUrl) return <HtmlCover share={share} />
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
+    <div className="overflow-hidden rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-[var(--paper-50)]">
       <div className="relative aspect-[16/10]">
         <Image src={imageUrl} alt={`${share.title} 主图`} fill className="object-contain" unoptimized />
       </div>
@@ -287,7 +287,7 @@ function UploadedImageGallery({ images }: { images: UploadedImage[] }) {
   return (
     <div className="grid gap-3 sm:grid-cols-2">
       {images.slice(1, 5).map((image) => (
-        <div key={image.url} className="relative aspect-[4/3] overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+        <div key={image.url} className="relative aspect-[4/3] overflow-hidden rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-[var(--paper-50)]">
           <Image src={image.url} alt={image.name} fill className="object-contain" unoptimized />
         </div>
       ))}
@@ -299,10 +299,10 @@ function FlashcardPreview({ cards = [] }: { cards?: Array<{ question?: string; a
   return (
     <div className="grid gap-3 sm:grid-cols-2">
       {cards.slice(0, 6).map((card, index) => (
-        <div key={index} className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-4">
-          <p className="text-xs font-medium text-emerald-700">Q{index + 1}</p>
-          <p className="mt-2 font-medium text-slate-900">{card.question || "闪卡问题"}</p>
-          <p className="mt-3 text-sm text-slate-600">{card.answer || "闪卡答案"}</p>
+        <div key={index} className="rounded-[var(--radius-sharp)] border border-[var(--ink-100)] bg-[var(--ink-50)]/60 p-4">
+          <p className="text-xs font-medium text-[var(--ink-700)]">Q{index + 1}</p>
+          <p className="mt-2 font-medium text-[var(--ink-900)]">{card.question || "闪卡问题"}</p>
+          <p className="mt-3 text-sm text-[var(--ink-600)]">{card.answer || "闪卡答案"}</p>
         </div>
       ))}
     </div>
@@ -321,7 +321,7 @@ function WorkArticle({ share }: { share: Share }) {
       <UploadedImageGallery images={uploadedImages} />
       {originalText ? (
         <TextBlock title="用户上传内容识别">
-          <div className="max-h-[360px] overflow-auto rounded-xl bg-slate-50 p-4 text-sm leading-7 text-slate-700 whitespace-pre-wrap">
+          <div className="max-h-[360px] overflow-auto rounded-[var(--radius-sharp)] bg-[var(--paper-50)] p-4 text-sm leading-7 text-[var(--ink-700)] whitespace-pre-wrap">
             {originalText}
           </div>
         </TextBlock>
@@ -341,16 +341,16 @@ export function ShareContentRenderer({ share }: { share: Share }) {
     return (
       <div className="space-y-4">
         {imageUrl ? (
-          <div className="relative aspect-[4/3] overflow-hidden rounded-xl bg-slate-100">
+          <div className="relative aspect-[4/3] overflow-hidden rounded-[var(--radius-sharp)] bg-[var(--paper-100)]">
             <Image src={imageUrl} alt={share.title} fill className="object-contain" unoptimized />
           </div>
         ) : (
-          <div className="flex aspect-[4/3] items-center justify-center rounded-xl bg-slate-100 text-slate-400">
+          <div className="flex aspect-[4/3] items-center justify-center rounded-[var(--radius-sharp)] bg-[var(--paper-100)] text-[var(--ink-400)]">
             <ImageIcon className="size-10" />
           </div>
         )}
         <TextBlock title="创作说明">
-          <p className="text-base leading-8 text-slate-700">{String(data.prompt_used || data.prompt || data.ai_result || share.preview_text || "未记录提示词")}</p>
+          <p className="text-base leading-8 text-[var(--ink-700)]">{String(data.prompt_used || data.prompt || data.ai_result || share.preview_text || "未记录提示词")}</p>
         </TextBlock>
       </div>
     )
@@ -359,7 +359,7 @@ export function ShareContentRenderer({ share }: { share: Share }) {
   if (share.content_type === "flashcard_deck") {
     return (
       <div className="space-y-4">
-        <div className="flex items-center gap-3 rounded-xl bg-emerald-50 p-4 text-emerald-800">
+        <div className="flex items-center gap-3 rounded-[var(--radius-sharp)] bg-[var(--ink-50)] p-4 text-[var(--ink-800)]">
           <BookOpenCheck className="size-6" />
           <div>
             <p className="font-semibold">{String(data.deck_name || share.title)}</p>
@@ -374,10 +374,10 @@ export function ShareContentRenderer({ share }: { share: Share }) {
   if (share.content_type === "manim_video") {
     return (
       <div className="space-y-4">
-        {data.video_url ? <video src={String(data.video_url)} controls className="w-full rounded-xl bg-black" /> : null}
+        {data.video_url ? <video src={String(data.video_url)} controls className="w-full rounded-[var(--radius-sharp)] bg-black" /> : null}
         <TextBlock title="数学动画说明">
-          <div className="flex items-center gap-2 font-medium text-slate-900"><Video className="size-4" />{String(data.topic || share.title)}</div>
-          <p className="mt-2 text-base leading-8 text-slate-700">{share.preview_text}</p>
+          <div className="flex items-center gap-2 font-medium text-[var(--ink-900)]"><Video className="size-4" />{String(data.topic || share.title)}</div>
+          <p className="mt-2 text-base leading-8 text-[var(--ink-700)]">{share.preview_text}</p>
         </TextBlock>
       </div>
     )
@@ -386,10 +386,10 @@ export function ShareContentRenderer({ share }: { share: Share }) {
   if (share.content_type === "ppt_summary") {
     return (
       <TextBlock title="PPT 摘要">
-        <div className="flex items-center gap-2 font-medium text-slate-900"><Presentation className="size-4" />{String(data.original_filename || share.title)}</div>
-        <p className="mt-3 text-base leading-8 text-slate-700">{String(data.summary || share.preview_text || "")}</p>
+        <div className="flex items-center gap-2 font-medium text-[var(--ink-900)]"><Presentation className="size-4" />{String(data.original_filename || share.title)}</div>
+        <p className="mt-3 text-base leading-8 text-[var(--ink-700)]">{String(data.summary || share.preview_text || "")}</p>
         {Array.isArray(data.key_points) ? (
-          <ul className="mt-3 list-disc space-y-1 pl-5 text-sm leading-7 text-slate-700">
+          <ul className="mt-3 list-disc space-y-1 pl-5 text-sm leading-7 text-[var(--ink-700)]">
             {data.key_points.slice(0, 8).map((item, index) => <li key={index}>{String(item)}</li>)}
           </ul>
         ) : null}
@@ -400,9 +400,9 @@ export function ShareContentRenderer({ share }: { share: Share }) {
   if (share.content_type === "quiz_result") {
     return (
       <TextBlock title="练习结果">
-        <div className="flex items-center gap-2 font-medium text-slate-900"><Trophy className="size-4" />练习结果</div>
-        <p className="mt-2 text-2xl font-semibold text-emerald-700">{Number(data.score || 0)} 分</p>
-        <p className="mt-2 text-base leading-8 text-slate-700">答对 {Number(data.correct_count || 0)} / {Number(data.total_questions || 0)} 题</p>
+        <div className="flex items-center gap-2 font-medium text-[var(--ink-900)]"><Trophy className="size-4" />练习结果</div>
+        <p className="mt-2 text-2xl font-semibold text-[var(--ink-700)]">{Number(data.score || 0)} 分</p>
+        <p className="mt-2 text-base leading-8 text-[var(--ink-700)]">答对 {Number(data.correct_count || 0)} / {Number(data.total_questions || 0)} 题</p>
       </TextBlock>
     )
   }
@@ -412,8 +412,8 @@ export function ShareContentRenderer({ share }: { share: Share }) {
 
   return (
     <TextBlock title="内容预览">
-      <div className="flex items-center gap-2 font-medium text-slate-900"><MessageSquareText className="size-4" />学习作品</div>
-      <p className="mt-2 whitespace-pre-wrap text-base leading-8 text-slate-700">{share.preview_text || JSON.stringify(data, null, 2)}</p>
+      <div className="flex items-center gap-2 font-medium text-[var(--ink-900)]"><MessageSquareText className="size-4" />学习作品</div>
+      <p className="mt-2 whitespace-pre-wrap text-base leading-8 text-[var(--ink-700)]">{share.preview_text || JSON.stringify(data, null, 2)}</p>
     </TextBlock>
   )
 }

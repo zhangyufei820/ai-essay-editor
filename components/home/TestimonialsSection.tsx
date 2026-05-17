@@ -53,7 +53,7 @@ const cardVariants = {
 
 export function TestimonialsSection() {
   return (
-    <section id="testimonials" className="sx-section bg-white">
+    <section id="testimonials" className="sx-section bg-[var(--paper-50)]">
       <div className="sx-container">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -92,12 +92,12 @@ export function TestimonialsSection() {
               className="sx-card flex min-h-[260px] flex-col p-6"
             >
               <div className="mb-5 flex items-center justify-between">
-                <Quote className="size-6 text-primary" />
+                <Quote className="size-6 text-[var(--ink-700)]" />
                 <div className="flex gap-1" aria-label="五星评价">
                   {Array.from({ length: 5 }).map((_, starIndex) => (
                     <Star
                       key={starIndex}
-                      className="size-4 text-primary"
+                      className="size-4 text-[var(--ink-700)]"
                       fill={brandColors[600]}
                     />
                   ))}
@@ -108,7 +108,7 @@ export function TestimonialsSection() {
                 &ldquo;{testimonial.content}&rdquo;
               </p>
 
-              <div className="mt-6 border-t border-border pt-5">
+              <div className="mt-6 border-t border-[var(--paper-200)] pt-5">
                 <div className="text-sm font-bold" style={{ color: slateColors[900] }}>
                   {testimonial.author}
                 </div>

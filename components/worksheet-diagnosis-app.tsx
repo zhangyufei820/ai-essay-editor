@@ -471,34 +471,34 @@ export function WorksheetDiagnosisApp() {
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
       <section className="grid gap-6 lg:grid-cols-[minmax(0,0.92fr)_minmax(360px,0.58fr)]">
-        <div className="rounded-3xl border border-primary/10 bg-white p-6 shadow-sm md:p-8">
-          <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/10 px-3 py-1 text-sm font-semibold text-primary">
+        <div className="rounded-3xl border border-[var(--ink-100)] bg-[var(--paper-50)] p-6 shadow-sm md:p-8">
+          <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-[var(--ink-100)] bg-[var(--ink-50)] px-3 py-1 text-sm font-semibold text-[var(--ink-700)]">
             <ClipboardCheck className="size-4" />
             错题诊断海报
           </div>
-          <h1 className="max-w-3xl text-3xl font-black leading-tight text-foreground md:text-5xl">
+          <h1 className="max-w-3xl text-3xl font-black leading-tight text-[var(--ink-900)] md:text-5xl">
             拍一张卷子，生成家校沟通诊断报告
           </h1>
-          <p className="mt-4 max-w-2xl text-base leading-7 text-muted-foreground md:text-lg">
+          <p className="mt-4 max-w-2xl text-base leading-7 text-[var(--ink-500)] md:text-lg">
             自动识别卷面与错题证据，整理观察结论、解决方案和训练建议，生成适合家长与老师沟通的报告。
           </p>
 
           <div className="mt-8 grid gap-4 sm:grid-cols-3">
             {["识别错题证据", "归因学习问题", "生成训练建议"].map((item, index) => (
-              <div key={item} className="rounded-2xl border border-border bg-muted/30 p-4">
-                <div className="mb-3 flex size-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <div key={item} className="rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-[var(--paper-100)] p-4">
+                <div className="mb-3 flex size-9 items-center justify-center rounded-[var(--radius-sharp)] bg-[var(--ink-50)] text-[var(--ink-700)]">
                   {index + 1}
                 </div>
-                <p className="font-semibold text-foreground">{item}</p>
+                <p className="font-semibold text-[var(--ink-900)]">{item}</p>
               </div>
             ))}
           </div>
         </div>
 
-        <Card className="rounded-3xl border-primary/10">
+        <Card className="rounded-3xl border-[var(--ink-100)]">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Upload className="size-5 text-primary" />
+              <Upload className="size-5 text-[var(--ink-700)]" />
               上传试卷
             </CardTitle>
             <CardDescription>支持 1-6 张图片，建议每张图片只拍一页。</CardDescription>
@@ -516,10 +516,10 @@ export function WorksheetDiagnosisApp() {
               type="button"
               onClick={() => fileInputRef.current?.click()}
               disabled={isUploading || worksheets.length >= 6}
-              className="flex min-h-[138px] w-full flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-primary/30 bg-primary/5 px-4 text-center transition hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60"
+              className="flex min-h-[138px] w-full flex-col items-center justify-center gap-3 rounded-[var(--radius-sharp)] border border-dashed border-[var(--ink-300)] bg-[var(--ink-50)] px-4 text-center transition hover:bg-[var(--ink-50)] disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {isUploading ? <Loader2 className="size-7 animate-spin text-primary" /> : <FileImage className="size-7 text-primary" />}
-              <span className="text-sm font-semibold text-foreground">
+              {isUploading ? <Loader2 className="size-7 animate-spin text-[var(--ink-700)]" /> : <FileImage className="size-7 text-[var(--ink-700)]" />}
+              <span className="text-sm font-semibold text-[var(--ink-900)]">
                 {isUploading ? "正在上传图片" : "点击上传试卷图片"}
               </span>
             </button>
@@ -527,7 +527,7 @@ export function WorksheetDiagnosisApp() {
             {worksheets.length > 0 && (
               <div className="grid grid-cols-2 gap-3">
                 {worksheets.map((file, index) => (
-                  <div key={`${file.difyFileId}-${index}`} className="group relative overflow-hidden rounded-xl border bg-muted">
+                  <div key={`${file.difyFileId}-${index}`} className="group relative overflow-hidden rounded-[var(--radius-sharp)] border bg-[var(--paper-100)]">
                     <img src={file.previewUrl} alt={file.name} className="aspect-[4/3] w-full object-cover" />
                     <button
                       type="button"
@@ -537,9 +537,9 @@ export function WorksheetDiagnosisApp() {
                     >
                       <X className="size-4" />
                     </button>
-                    <div className="bg-white px-2 py-1">
+                    <div className="bg-[var(--paper-50)] px-2 py-1">
                       <p className="truncate text-xs font-medium">{file.name}</p>
-                      <p className="text-[11px] text-muted-foreground">{formatBytes(file.size)}</p>
+                      <p className="text-[11px] text-[var(--ink-500)]">{formatBytes(file.size)}</p>
                     </div>
                   </div>
                 ))}
@@ -587,18 +587,18 @@ export function WorksheetDiagnosisApp() {
                 className="min-h-[104px]"
               />
             </div>
-            <Button onClick={analyze} disabled={!canAnalyze} className="h-12 w-full rounded-2xl">
+            <Button onClick={analyze} disabled={!canAnalyze} className="h-12 w-full rounded-[var(--radius-sharp)]">
               {isAnalyzing ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Sparkles className="mr-2 size-4" />}
               {isAnalyzing ? "正在诊断" : "开始诊断"}
             </Button>
             {isAnalyzing && analyzeProgress ? (
-              <div className="rounded-2xl border border-primary/10 bg-primary/5 px-4 py-3 text-center text-sm text-muted-foreground">
-                <p className="font-medium text-primary">{analyzeProgress}</p>
+              <div className="rounded-[var(--radius-sharp)] border border-[var(--ink-100)] bg-[var(--ink-50)] px-4 py-3 text-center text-sm text-[var(--ink-500)]">
+                <p className="font-medium text-[var(--ink-700)]">{analyzeProgress}</p>
                 <p className="mt-1">已等待 {formatElapsed(analyzeElapsedSeconds)}，通常需要 60-90 秒。</p>
               </div>
             ) : null}
-            <div className="rounded-2xl border border-primary/10 bg-primary/5 px-4 py-3 text-sm leading-6 text-muted-foreground">
-              <p className="font-semibold text-foreground">本次诊断：{diagnosisCredits} 积分</p>
+            <div className="rounded-[var(--radius-sharp)] border border-[var(--ink-100)] bg-[var(--ink-50)] px-4 py-3 text-sm leading-6 text-[var(--ink-500)]">
+              <p className="font-semibold text-[var(--ink-900)]">本次诊断：{diagnosisCredits} 积分</p>
               <p>生成诊断草稿后，如继续生成海报，预计另需 {WORKSHEET_REPORT_IMAGE_CREDITS} 积分。</p>
             </div>
           </CardContent>
@@ -607,17 +607,17 @@ export function WorksheetDiagnosisApp() {
         <Card className="min-h-[560px] rounded-3xl">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <MessageSquareText className="size-5 text-primary" />
+              <MessageSquareText className="size-5 text-[var(--ink-700)]" />
               诊断结果
             </CardTitle>
             <CardDescription>{result ? styleLabel : "上传试卷后，会生成结构化诊断和家校沟通建议。"}</CardDescription>
           </CardHeader>
           <CardContent>
             {errorMessage ? (
-              <div className="flex min-h-[420px] flex-col items-center justify-center rounded-2xl border border-red-100 bg-red-50/70 px-6 text-center">
-                <X className="mb-4 size-10 text-red-500" />
+              <div className="flex min-h-[420px] flex-col items-center justify-center rounded-[var(--radius-sharp)] border border-red-100 bg-red-50/70 px-6 text-center">
+                <X className="mb-4 size-10 text-[var(--seal-500)]" />
                 <p className="font-semibold text-red-700">请求没有完成</p>
-                <p className="mt-2 max-w-sm text-sm leading-6 text-red-600">
+                <p className="mt-2 max-w-sm text-sm leading-6 text-[var(--seal-600)]">
                   {errorMessage}
                 </p>
               </div>
@@ -630,67 +630,67 @@ export function WorksheetDiagnosisApp() {
                 steps={["上传完成", "识别卷面", "生成诊断"]}
               />
             ) : !result ? (
-              <div className="flex min-h-[420px] flex-col items-center justify-center rounded-2xl border border-dashed bg-muted/20 text-center">
-                <ClipboardCheck className="mb-4 size-10 text-muted-foreground" />
-                <p className="font-semibold text-foreground">等待诊断</p>
-                <p className="mt-2 max-w-sm text-sm leading-6 text-muted-foreground">
+              <div className="flex min-h-[420px] flex-col items-center justify-center rounded-[var(--radius-sharp)] border border-dashed bg-[var(--paper-100)]/20 text-center">
+                <ClipboardCheck className="mb-4 size-10 text-[var(--ink-500)]" />
+                <p className="font-semibold text-[var(--ink-900)]">等待诊断</p>
+                <p className="mt-2 max-w-sm text-sm leading-6 text-[var(--ink-500)]">
                   结果会包含观察结论、主要问题、卷面证据、解决方案、训练计划和家校沟通建议。
                 </p>
               </div>
             ) : (
               <div className="space-y-6">
-                <div className="rounded-2xl border border-primary/15 bg-primary/5 p-5">
+                <div className="rounded-[var(--radius-sharp)] border border-[var(--ink-100)] bg-[var(--ink-50)] p-5">
                   <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                     <div>
-                      <p className="text-sm font-semibold text-primary">下一步</p>
-                      <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                      <p className="text-sm font-semibold text-[var(--ink-700)]">下一步</p>
+                      <p className="mt-1 text-sm leading-6 text-[var(--ink-500)]">
                         诊断已完成，可以先查看文字报告，也可以继续生成适合家校沟通的诊断海报。
                       </p>
                     </div>
                     <div className="flex flex-col gap-2 sm:flex-row">
-                      <Button variant="outline" onClick={keepDiagnosisOnly} className="h-10 rounded-2xl">
+                      <Button variant="outline" onClick={keepDiagnosisOnly} className="h-10 rounded-[var(--radius-sharp)]">
                         <ClipboardCheck className="mr-2 size-4" />
                         只看诊断
                       </Button>
-                      <Button onClick={generatePoster} disabled={isGeneratingPoster} className="h-10 rounded-2xl">
+                      <Button onClick={generatePoster} disabled={isGeneratingPoster} className="h-10 rounded-[var(--radius-sharp)]">
                         {isGeneratingPoster ? <Loader2 className="mr-2 size-4 animate-spin" /> : <ImageIcon className="mr-2 size-4" />}
                         {isGeneratingPoster ? "生成中" : "生成诊断海报"}
                       </Button>
                     </div>
                   </div>
-                  <p className="mt-3 text-xs text-muted-foreground">
+                  <p className="mt-3 text-xs text-[var(--ink-500)]">
                     生成海报预计另需 {WORKSHEET_REPORT_IMAGE_CREDITS} 积分，失败会按图片任务规则自动退回。
                   </p>
                   {posterStage ? (
-                    <div className="mt-4 rounded-2xl border border-primary/10 bg-white/70 p-4">
+                    <div className="mt-4 rounded-[var(--radius-sharp)] border border-[var(--ink-100)] bg-[var(--paper-50)]/70 p-4">
                       <div className="flex items-center gap-3">
-                        <Loader2 className="size-4 animate-spin text-primary" />
+                        <Loader2 className="size-4 animate-spin text-[var(--ink-700)]" />
                         <div>
-                          <p className="text-sm font-medium text-primary">{posterStage}</p>
-                          <p className="mt-1 text-xs text-muted-foreground">
+                          <p className="text-sm font-medium text-[var(--ink-700)]">{posterStage}</p>
+                          <p className="mt-1 text-xs text-[var(--ink-500)]">
                             已等待 {formatElapsed(posterElapsedSeconds)}，通常需要 1-3 分钟。
                           </p>
                         </div>
                       </div>
-                      <div className="mt-3 h-2 overflow-hidden rounded-full bg-primary/10">
-                        <div className="h-full w-2/3 animate-pulse rounded-full bg-primary/50" />
+                      <div className="mt-3 h-2 overflow-hidden rounded-full bg-[var(--ink-50)]">
+                        <div className="h-full w-2/3 animate-pulse rounded-full bg-[var(--seal-500)]" />
                       </div>
                     </div>
                   ) : null}
-                  {posterError ? <p className="mt-3 text-sm text-red-600">{posterError}</p> : null}
+                  {posterError ? <p className="mt-3 text-sm text-[var(--seal-600)]">{posterError}</p> : null}
                 </div>
 
                 {posterResult?.imageUrls.length ? (
-                  <div className="rounded-2xl border border-primary/15 bg-white p-5">
+                  <div className="rounded-[var(--radius-sharp)] border border-[var(--ink-100)] bg-[var(--paper-50)] p-5">
                     <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                       <div>
-                        <p className="text-sm font-semibold text-primary">诊断海报</p>
-                        <p className="mt-1 text-sm text-muted-foreground">可下载后用于家校沟通或保存到相册。</p>
+                        <p className="text-sm font-semibold text-[var(--ink-700)]">诊断海报</p>
+                        <p className="mt-1 text-sm text-[var(--ink-500)]">可下载后用于家校沟通或保存到相册。</p>
                       </div>
                       <a
                         href={posterResult.downloadUrl}
                         download="worksheet-diagnosis-poster.png"
-                        className="inline-flex h-10 items-center justify-center rounded-2xl border border-border px-4 text-sm font-semibold transition hover:bg-muted"
+                        className="inline-flex h-10 items-center justify-center rounded-[var(--radius-sharp)] border border-[var(--paper-200)] px-4 text-sm font-semibold transition hover:bg-[var(--paper-100)]"
                       >
                         <Download className="mr-2 size-4" />
                         下载海报
@@ -699,16 +699,16 @@ export function WorksheetDiagnosisApp() {
                     <img
                       src={posterResult.imageUrls[0]}
                       alt="诊断海报"
-                      className="mx-auto max-h-[720px] w-full max-w-md rounded-2xl border object-contain"
+                      className="mx-auto max-h-[720px] w-full max-w-md rounded-[var(--radius-sharp)] border object-contain"
                     />
                   </div>
                 ) : null}
 
-                <div className="rounded-2xl border border-border bg-white p-5 shadow-sm">
+                <div className="rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-[var(--paper-50)] p-5 shadow-sm">
                   <SectionTitle>整体观察</SectionTitle>
-                  <p className="mt-2 leading-7 text-foreground">{result.diagnosis.overall_summary || "暂未生成整体判断。"}</p>
+                  <p className="mt-2 leading-7 text-[var(--ink-900)]">{result.diagnosis.overall_summary || "暂未生成整体判断。"}</p>
                   {result.billing?.chargedCredits ? (
-                    <p className="mt-3 text-xs font-medium text-primary">
+                    <p className="mt-3 text-xs font-medium text-[var(--ink-700)]">
                       已消耗 {result.billing.chargedCredits} 积分
                     </p>
                   ) : null}
@@ -721,12 +721,12 @@ export function WorksheetDiagnosisApp() {
                   <SectionTitle className="mb-3">卷面证据</SectionTitle>
                   <div className="space-y-3">
                     {result.diagnosis.evidence?.length ? result.diagnosis.evidence.map((item, index) => (
-                      <div key={index} className="rounded-2xl border border-border bg-white p-4 shadow-sm">
+                      <div key={index} className="rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-[var(--paper-50)] p-4 shadow-sm">
                         <p className="font-semibold">{item.question || `证据 ${index + 1}`}</p>
-                        <p className="mt-1 text-sm leading-6 text-muted-foreground">{item.reason}</p>
-                        {item.quote ? <p className="mt-2 rounded-xl bg-muted/60 px-3 py-2 text-xs text-muted-foreground">{item.quote}</p> : null}
+                        <p className="mt-1 text-sm leading-6 text-[var(--ink-500)]">{item.reason}</p>
+                        {item.quote ? <p className="mt-2 rounded-[var(--radius-sharp)] bg-[var(--paper-100)] px-3 py-2 text-xs text-[var(--ink-500)]">{item.quote}</p> : null}
                       </div>
-                    )) : <p className="text-sm text-muted-foreground">暂无证据。</p>}
+                    )) : <p className="text-sm text-[var(--ink-500)]">暂无证据。</p>}
                   </div>
                 </div>
 
@@ -734,22 +734,22 @@ export function WorksheetDiagnosisApp() {
                   <SectionTitle className="mb-3">训练计划</SectionTitle>
                   <div className="grid gap-3 md:grid-cols-2">
                     {result.diagnosis.training_plan?.length ? result.diagnosis.training_plan.map((item, index) => (
-                      <div key={index} className="rounded-2xl border border-border bg-white p-4 shadow-sm">
+                      <div key={index} className="rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-[var(--paper-50)] p-4 shadow-sm">
                         <p className="font-semibold">{item.title || `训练 ${index + 1}`}</p>
-                        <p className="mt-1 text-sm leading-6 text-muted-foreground">{item.action}</p>
-                        {item.frequency ? <p className="mt-2 text-xs font-medium text-primary">{item.frequency}</p> : null}
+                        <p className="mt-1 text-sm leading-6 text-[var(--ink-500)]">{item.action}</p>
+                        {item.frequency ? <p className="mt-2 text-xs font-medium text-[var(--ink-700)]">{item.frequency}</p> : null}
                       </div>
-                    )) : <p className="text-sm text-muted-foreground">暂无训练计划。</p>}
+                    )) : <p className="text-sm text-[var(--ink-500)]">暂无训练计划。</p>}
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-border bg-white p-5 shadow-sm">
+                <div className="rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-[var(--paper-50)] p-5 shadow-sm">
                   <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                     <div>
                       <SectionTitle>家校沟通建议</SectionTitle>
-                      <p className="mt-2 leading-7 text-foreground">{result.diagnosis.parent_message || "暂无家校沟通建议。"}</p>
+                      <p className="mt-2 leading-7 text-[var(--ink-900)]">{result.diagnosis.parent_message || "暂无家校沟通建议。"}</p>
                     </div>
-                    <Button variant="outline" onClick={copyParentMessage} className="h-10 shrink-0 rounded-2xl">
+                    <Button variant="outline" onClick={copyParentMessage} className="h-10 shrink-0 rounded-[var(--radius-sharp)]">
                       <Copy className="mr-2 size-4" />
                       复制
                     </Button>
@@ -771,13 +771,13 @@ function ResultList({ title, items }: { title: string; items?: string[] }) {
       {items?.length ? (
         <div className="grid gap-3 md:grid-cols-2">
           {items.map((item, index) => (
-            <div key={`${title}-${index}`} className="rounded-2xl border border-border bg-white p-4 text-sm leading-6 text-foreground shadow-sm">
+            <div key={`${title}-${index}`} className="rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-[var(--paper-50)] p-4 text-sm leading-6 text-[var(--ink-900)] shadow-sm">
               {item}
             </div>
           ))}
         </div>
       ) : (
-        <p className="text-sm text-muted-foreground">暂无内容。</p>
+        <p className="text-sm text-[var(--ink-500)]">暂无内容。</p>
       )}
     </div>
   )
@@ -785,8 +785,8 @@ function ResultList({ title, items }: { title: string; items?: string[] }) {
 
 function SectionTitle({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
-    <h3 className={`flex items-center gap-2 text-sm font-bold text-primary ${className}`}>
-      <span className="h-4 w-1 rounded-full bg-primary" />
+    <h3 className={`flex items-center gap-2 text-sm font-bold text-[var(--ink-700)] ${className}`}>
+      <span className="h-4 w-1 rounded-full bg-[var(--seal-500)]" />
       {children}
     </h3>
   )
@@ -806,27 +806,27 @@ function ProgressPanel({
   steps: string[]
 }) {
   return (
-    <div className="flex min-h-[420px] flex-col items-center justify-center rounded-2xl border border-dashed bg-primary/5 px-6 text-center">
-      <div className="mb-5 flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+    <div className="flex min-h-[420px] flex-col items-center justify-center rounded-[var(--radius-sharp)] border border-dashed bg-[var(--ink-50)] px-6 text-center">
+      <div className="mb-5 flex size-12 items-center justify-center rounded-[var(--radius-sharp)] bg-[var(--ink-50)] text-[var(--ink-700)]">
         <Loader2 className="size-6 animate-spin" />
       </div>
-      <p className="font-semibold text-foreground">{title}</p>
-      <p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">{message}</p>
-      <p className="mt-2 text-xs text-muted-foreground">已等待 {formatElapsed(elapsedSeconds)}，{estimate}</p>
+      <p className="font-semibold text-[var(--ink-900)]">{title}</p>
+      <p className="mt-2 max-w-md text-sm leading-6 text-[var(--ink-500)]">{message}</p>
+      <p className="mt-2 text-xs text-[var(--ink-500)]">已等待 {formatElapsed(elapsedSeconds)}，{estimate}</p>
 
       <div className="mt-6 grid w-full max-w-xl gap-3 sm:grid-cols-3">
         {steps.map((step, index) => (
-          <div key={step} className="rounded-2xl border border-primary/10 bg-white px-4 py-3 text-left">
-            <div className="mb-2 flex size-7 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
+          <div key={step} className="rounded-[var(--radius-sharp)] border border-[var(--ink-100)] bg-[var(--paper-50)] px-4 py-3 text-left">
+            <div className="mb-2 flex size-7 items-center justify-center rounded-full bg-[var(--ink-50)] text-xs font-bold text-[var(--ink-700)]">
               {index + 1}
             </div>
-            <p className="text-sm font-semibold text-foreground">{step}</p>
+            <p className="text-sm font-semibold text-[var(--ink-900)]">{step}</p>
           </div>
         ))}
       </div>
 
-      <div className="mt-6 h-2 w-full max-w-md overflow-hidden rounded-full bg-primary/10">
-        <div className="h-full w-2/3 animate-pulse rounded-full bg-primary/50" />
+      <div className="mt-6 h-2 w-full max-w-md overflow-hidden rounded-full bg-[var(--ink-50)]">
+        <div className="h-full w-2/3 animate-pulse rounded-full bg-[var(--seal-500)]" />
       </div>
     </div>
   )

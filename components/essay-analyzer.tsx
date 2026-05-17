@@ -150,15 +150,15 @@ export default function EssayAnalyzer() {
       <div className="mx-auto max-w-7xl">
         {/* Header */}
         <div className="mb-8 text-center">
-          <h1 className="text-3xl sm:text-4xl font-bold text-slate-800 mb-2">AI 作文智能批改</h1>
-          <p className="text-slate-600">上传作文图片或文档，获取专业的AI批改建议</p>
+          <h1 className="text-3xl sm:text-4xl font-bold text-[var(--ink-800)] mb-2">AI 作文智能批改</h1>
+          <p className="text-[var(--ink-600)]">上传作文图片或文档，获取专业的AI批改建议</p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Left Panel - Upload & Result (lg:col-span-8) */}
           <div className="lg:col-span-8 space-y-6">
             {/* Upload Area - Using native div with Tailwind */}
-            <div className="bg-white rounded-xl border-2 border-slate-200 shadow-lg p-6">
+            <div className="bg-[var(--paper-50)] rounded-[var(--radius-sharp)] border-2 border-[var(--paper-200)] shadow-lg p-6">
               <input
                 ref={fileInputRef}
                 type="file"
@@ -170,12 +170,12 @@ export default function EssayAnalyzer() {
               <div
                 onClick={status === "idle" ? triggerFileInput : undefined}
                 className={`
-                  border-2 border-dashed rounded-xl p-12 text-center
+                  border-2 border-dashed rounded-[var(--radius-sharp)] p-12 text-center
                   transition-all duration-200
                   ${
                     status === "idle"
                       ? "border-blue-300 bg-blue-50/50 hover:border-blue-400 hover:bg-blue-50 cursor-pointer"
-                      : "border-slate-300 bg-slate-50 cursor-not-allowed"
+                      : "border-slate-300 bg-[var(--paper-50)] cursor-not-allowed"
                   }
                 `}
               >
@@ -186,23 +186,23 @@ export default function EssayAnalyzer() {
                       <div className="absolute inset-0 bg-blue-500/20 rounded-full animate-ping" />
                     </div>
                   ) : status === "completed" ? (
-                    <CheckCircle2 className="w-16 h-16 text-emerald-600" />
+                    <CheckCircle2 className="w-16 h-16 text-[var(--ink-600)]" />
                   ) : (
                     <Upload className="w-16 h-16 text-blue-600" />
                   )}
 
                   <div>
-                    <p className="text-lg font-semibold text-slate-800 mb-1">
+                    <p className="text-lg font-semibold text-[var(--ink-800)] mb-1">
                       {status === "idle" && "点击上传作文文件"}
                       {status === "uploading" && "正在上传文件..."}
                       {status === "processing" && "AI批改进行中..."}
                       {status === "completed" && "批改完成！"}
                     </p>
-                    <p className="text-sm text-slate-600">{fileName || "支持 JPG、PNG、PDF、Word 格式"}</p>
+                    <p className="text-sm text-[var(--ink-600)]">{fileName || "支持 JPG、PNG、PDF、Word 格式"}</p>
                   </div>
 
                   {status === "idle" && (
-                    <button className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors shadow-sm">
+                    <button className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-[var(--radius-soft)] transition-colors shadow-sm">
                       选择文件
                     </button>
                   )}
@@ -211,10 +211,10 @@ export default function EssayAnalyzer() {
             </div>
 
             {/* Result Area - Using native div scrollable area */}
-            <div className="bg-white rounded-xl border-2 border-slate-200 shadow-lg p-6">
-              <div className="flex items-center gap-2 mb-4 pb-4 border-b border-slate-200">
+            <div className="bg-[var(--paper-50)] rounded-[var(--radius-sharp)] border-2 border-[var(--paper-200)] shadow-lg p-6">
+              <div className="flex items-center gap-2 mb-4 pb-4 border-b border-[var(--paper-200)]">
                 <FileText className="w-5 h-5 text-blue-600" />
-                <h2 className="text-lg font-semibold text-slate-800">批改结果</h2>
+                <h2 className="text-lg font-semibold text-[var(--ink-800)]">批改结果</h2>
               </div>
 
               <div className="max-h-[600px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100">
@@ -223,7 +223,7 @@ export default function EssayAnalyzer() {
                     <ReactMarkdown>{result}</ReactMarkdown>
                   </div>
                 ) : (
-                  <div className="flex items-center justify-center min-h-[400px] text-slate-400">
+                  <div className="flex items-center justify-center min-h-[400px] text-[var(--ink-400)]">
                     <div className="text-center">
                       <FileText className="w-12 h-12 mx-auto mb-3 opacity-50" />
                       <p className="text-sm">
@@ -258,7 +258,7 @@ export default function EssayAnalyzer() {
 
           {/* Right Panel - Log Console (lg:col-span-4) */}
           <div className="lg:col-span-4">
-            <div className="bg-slate-900 rounded-xl border-2 border-slate-700 shadow-lg p-6 h-full">
+            <div className="bg-slate-900 rounded-[var(--radius-sharp)] border-2 border-slate-700 shadow-lg p-6 h-full">
               <div className="flex items-center gap-2 mb-4 pb-4 border-b border-slate-700">
                 <Clock className="w-5 h-5 text-emerald-400" />
                 <h2 className="text-lg font-semibold text-white">系统日志</h2>
@@ -268,7 +268,7 @@ export default function EssayAnalyzer() {
               <div className="h-[calc(100vh-280px)] min-h-[400px] overflow-y-auto font-mono text-xs space-y-2 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-slate-800">
                 {logs.length === 0 ? (
                   <div className="flex items-center justify-center h-32">
-                    <p className="text-slate-500 text-center">等待操作...</p>
+                    <p className="text-[var(--ink-500)] text-center">等待操作...</p>
                   </div>
                 ) : (
                   <>
@@ -292,14 +292,14 @@ export default function EssayAnalyzer() {
                 )}
 
                 {status === "completed" && (
-                  <div className="mt-4 flex items-center gap-2 p-3 bg-emerald-900/30 border border-emerald-700 rounded-lg">
+                  <div className="mt-4 flex items-center gap-2 p-3 bg-[var(--ink-900)]/30 border border-emerald-700 rounded-[var(--radius-soft)]">
                     <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
                     <span className="text-sm font-medium text-emerald-300">所有任务已完成</span>
                   </div>
                 )}
 
                 {status === "processing" && (
-                  <div className="mt-4 flex items-center gap-2 p-3 bg-blue-900/30 border border-blue-700 rounded-lg">
+                  <div className="mt-4 flex items-center gap-2 p-3 bg-blue-900/30 border border-blue-700 rounded-[var(--radius-soft)]">
                     <Loader2 className="w-5 h-5 text-blue-400 animate-spin shrink-0" />
                     <span className="text-sm font-medium text-blue-300">正在处理中...</span>
                   </div>

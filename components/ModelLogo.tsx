@@ -250,7 +250,7 @@ export function ModelLogo({
   const containerClassName = [
     "flex shrink-0 items-center justify-center",
     sizeConfig.container,
-    showBg ? "rounded-lg" : "",
+    showBg ? "rounded-[var(--radius-soft)]" : "",
     className || "",
   ].filter(Boolean).join(" ")
   const containerStyle = showBg
@@ -340,7 +340,7 @@ export function ModelLogoWithBg({
   if (config?.svgPath && config?.useLocal) {
     return (
       <div
-        className={`flex items-center justify-center shrink-0 rounded-lg ${sizeConfig.container} ${className || ""}`}
+        className={`flex items-center justify-center shrink-0 rounded-[var(--radius-soft)] ${sizeConfig.container} ${className || ""}`}
         style={{
           backgroundColor: `${brandColor}15`,
           border: `1px solid ${brandColor}30`,
@@ -363,7 +363,7 @@ export function ModelLogoWithBg({
     const IconComponent = config.LucideIcon
     return (
       <div
-        className={`flex items-center justify-center shrink-0 rounded-lg ${sizeConfig.container} ${className || ""}`}
+        className={`flex items-center justify-center shrink-0 rounded-[var(--radius-soft)] ${sizeConfig.container} ${className || ""}`}
         style={{
           backgroundColor: `${brandColor}15`,
           border: `1px solid ${brandColor}30`,
@@ -383,7 +383,7 @@ export function ModelLogoWithBg({
   // Fallback
   return (
     <div
-      className={`flex items-center justify-center shrink-0 rounded-lg ${sizeConfig.container} ${className || ""}`}
+      className={`flex items-center justify-center shrink-0 rounded-[var(--radius-soft)] ${sizeConfig.container} ${className || ""}`}
       style={{
         backgroundColor: `${brandColor}15`,
         border: `1px solid ${brandColor}30`,

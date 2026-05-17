@@ -115,7 +115,7 @@ function DesktopStepCard({ step, index }: { step: Step; index: number }) {
 
       {/* 图标 */}
       <div 
-        className="mb-6 flex size-16 items-center justify-center rounded-lg border border-primary/15 bg-primary/10"
+        className="mb-6 flex size-16 items-center justify-center rounded-[var(--radius-soft)] border border-[var(--ink-100)] bg-[var(--ink-50)]"
         style={{ 
           backgroundColor: brandColors[50]
         }}
@@ -185,7 +185,7 @@ function MobileStepCard({ step, index, isLast }: { step: Step; index: number; is
       {/* 右侧：内容 */}
       <div className="min-w-0 flex-1 pb-8">
         <div 
-          className="w-14 h-14 rounded-xl flex items-center justify-center mb-4"
+          className="w-14 h-14 rounded-[var(--radius-sharp)] flex items-center justify-center mb-4"
           style={{ backgroundColor: brandColors[50] }}
         >
           <Icon className="w-7 h-7" style={{ color: brandColors[700] }} />

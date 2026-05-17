@@ -51,7 +51,7 @@ export function PhetSimEmbed({
   return (
     <div
       ref={containerRef}
-      className={cn("overflow-hidden rounded-lg border border-emerald-900/10 bg-white shadow-sm dark:border-emerald-200/10 dark:bg-slate-950", className)}
+      className={cn("overflow-hidden rounded-[var(--radius-soft)] border border-emerald-900/10 bg-[var(--paper-50)] shadow-sm dark:border-[var(--ink-200)]/10 dark:bg-slate-950", className)}
       style={{ width }}
     >
       {showControls ? (
@@ -69,10 +69,10 @@ export function PhetSimEmbed({
       <div className="relative aspect-[4/3] w-full min-h-[320px] sm:min-h-[420px]" style={{ height }}>
         {isLoading && !hasError ? <PhetSimSkeleton className="absolute inset-0 z-10 rounded-none" /> : null}
         {hasError ? (
-          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-white p-6 text-center dark:bg-slate-950">
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-[var(--paper-50)] p-6 text-center dark:bg-slate-950">
             <AlertCircle className="mb-3 h-10 w-10 text-amber-500" />
-            <h2 className="text-base font-semibold text-slate-950 dark:text-white">实验加载失败</h2>
-            <p className="mt-2 max-w-md text-sm leading-6 text-slate-600 dark:text-slate-300">
+            <h2 className="text-base font-semibold text-[var(--ink-900)] dark:text-white">实验加载失败</h2>
+            <p className="mt-2 max-w-md text-sm leading-6 text-[var(--ink-600)] dark:text-slate-300">
               可能是网络或 PhET 资源临时不可用。可以重试，或切换中英文版本。
             </p>
             <Button type="button" className="mt-5" onClick={retry}>重试</Button>

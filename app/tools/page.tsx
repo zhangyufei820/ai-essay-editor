@@ -21,11 +21,11 @@ type ToolResult = {
 
 function JsonBlock({ value }: { value: unknown }) {
   if (typeof value === "string") {
-    return <div className="whitespace-pre-wrap rounded-[var(--radius-soft)] bg-muted/50 p-3 text-sm leading-6">{value}</div>
+    return <div className="whitespace-pre-wrap rounded-[var(--radius-soft)] bg-[var(--paper-100)]/50 p-3 text-sm leading-6">{value}</div>
   }
 
   return (
-    <pre className="max-h-96 overflow-auto rounded-[var(--radius-soft)] bg-muted/50 p-3 text-xs leading-5">
+    <pre className="max-h-96 overflow-auto rounded-[var(--radius-soft)] bg-[var(--paper-100)]/50 p-3 text-xs leading-5">
       {JSON.stringify(value, null, 2)}
     </pre>
   )
@@ -145,13 +145,13 @@ export default function ToolsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[var(--paper-50)] px-4 py-6 dark:bg-background sm:px-6 lg:px-8">
+    <main className="min-h-screen bg-[var(--paper-50)] px-4 py-6 dark:bg-[var(--paper-50)] sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl space-y-6">
         <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-sm font-medium text-[var(--ink-700)] dark:text-[var(--ink-200)]">工具中心</p>
             <h1 className="mt-1 text-2xl font-semibold tracking-normal sm:text-3xl font-[var(--font-display)]">所有后端工具都有前端入口</h1>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--ink-500)]">
               文档处理、图片 OCR、网页搜索、演示文稿和综合报告统一放在这里；音乐、语音和上传能力在聊天页对应模型中使用。
             </p>
           </div>
@@ -248,7 +248,7 @@ export default function ToolsPage() {
             </CardHeader>
             <CardContent>
               {result ? <JsonBlock value={result.content} /> : (
-                <div className="rounded-[var(--radius-soft)] border border-dashed py-16 text-center text-sm text-muted-foreground">
+                <div className="rounded-[var(--radius-soft)] border border-dashed py-16 text-center text-sm text-[var(--ink-500)]">
                   运行左侧任意工具后，结果会显示在这里。
                 </div>
               )}

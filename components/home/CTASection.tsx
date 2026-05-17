@@ -53,7 +53,7 @@ export function CTASection() {
           </div>
 
           <div className="relative z-10 p-6 md:p-8">
-            <div className="relative w-full aspect-[16/9] md:aspect-[21/9] rounded-2xl overflow-hidden bg-white/10 shadow-2xl">
+            <div className="relative w-full aspect-[16/9] md:aspect-[21/9] rounded-[var(--radius-sharp)] overflow-hidden bg-[var(--paper-50)]/10 shadow-2xl">
               <Image
                 src="/images/design-mode/site-main.jpg"
                 alt="沈翔智学 AI 学习伙伴"
@@ -65,7 +65,7 @@ export function CTASection() {
           </div>
 
           <div className="relative z-10 px-6 md:px-8 pb-10 md:pb-16 text-center">
-            <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-white/10 backdrop-blur-sm mb-6">
+            <div className="inline-flex items-center justify-center w-14 h-14 rounded-[var(--radius-sharp)] bg-[var(--paper-50)]/10 backdrop-blur-sm mb-6">
               <Sparkles className="w-7 h-7 text-white" />
             </div>
 
@@ -84,7 +84,7 @@ export function CTASection() {
               <Link
                 href="/chat"
                 prefetch={false}
-                className="inline-flex items-center gap-2 rounded-2xl bg-white px-8 py-4 font-semibold shadow-lg transition-all duration-200 hover:scale-[1.02] hover:shadow-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-green-900"
+                className="inline-flex items-center gap-2 rounded-[var(--radius-sharp)] bg-[var(--paper-50)] px-8 py-4 font-semibold shadow-lg transition-all duration-200 hover:scale-[1.02] hover:shadow-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-green-900"
                 style={{ color: brandColors[900] }}
               >
                 免费开始使用
@@ -94,7 +94,7 @@ export function CTASection() {
               <Link
                 href="/pricing"
                 prefetch={false}
-                className="inline-flex items-center gap-2 rounded-2xl border border-white/30 px-6 py-3 font-medium text-white transition-colors duration-200 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-green-900"
+                className="inline-flex items-center gap-2 rounded-[var(--radius-sharp)] border border-white/30 px-6 py-3 font-medium text-white transition-colors duration-200 hover:bg-[var(--paper-50)]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-green-900"
               >
                 查看价格方案
               </Link>

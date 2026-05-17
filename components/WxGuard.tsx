@@ -68,12 +68,12 @@ export default function WxGuard() {
         已停止访问该网页
       </h2>
       
-      <p className="mb-8 text-gray-400 max-w-md text-sm leading-relaxed">
+      <p className="mb-8 text-[var(--ink-400)] max-w-md text-sm leading-relaxed">
         检测到您正在使用微信/QQ访问。
         <br />
         由于平台安全限制，请点击右上角菜单
         <br />
-        选择 <span className="mx-1 inline-block rounded bg-white/10 px-2 py-0.5 font-bold text-white">在浏览器打开</span> 以继续使用。
+        选择 <span className="mx-1 inline-block rounded bg-[var(--paper-50)]/10 px-2 py-0.5 font-bold text-white">在浏览器打开</span> 以继续使用。
       </p>
 
       {/* 指引箭头示意图 - 添加了动画效果 */}

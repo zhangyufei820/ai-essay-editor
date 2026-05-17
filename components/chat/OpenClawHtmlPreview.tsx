@@ -170,26 +170,26 @@ export const OpenClawHtmlPreview = memo(function OpenClawHtmlPreview({
   }, [src])
 
   return (
-    <div className={cn("my-3 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm", className)}>
-      <div className="flex items-center gap-3 border-b border-slate-100 bg-slate-50 px-3 py-2">
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-white text-slate-500">
+    <div className={cn("my-3 overflow-hidden rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-[var(--paper-50)] shadow-sm", className)}>
+      <div className="flex items-center gap-3 border-b border-[var(--paper-100)] bg-[var(--paper-50)] px-3 py-2">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[var(--paper-50)] text-[var(--ink-500)]">
           <FileText className="h-4 w-4" />
         </span>
-        <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-700">{label}</span>
+        <span className="min-w-0 flex-1 truncate text-sm font-medium text-[var(--ink-700)]">{label}</span>
         <a
           href={src}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white px-2.5 py-1.5 text-xs font-medium text-slate-600 no-underline shadow-sm transition-colors hover:bg-slate-100"
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-[var(--paper-50)] px-2.5 py-1.5 text-xs font-medium text-[var(--ink-600)] no-underline shadow-sm transition-colors hover:bg-[var(--paper-100)]"
         >
           <ExternalLink className="h-3.5 w-3.5" />
           打开
         </a>
       </div>
 
-      <div className={cn("relative w-full bg-slate-100", primaryImage ? "min-h-[180px]" : "aspect-[4/3] sm:aspect-video")}>
+      <div className={cn("relative w-full bg-[var(--paper-100)]", primaryImage ? "min-h-[180px]" : "aspect-[4/3] sm:aspect-video")}>
         {status === "loading" && (
-          <div className="flex min-h-[220px] items-center justify-center text-slate-500">
+          <div className="flex min-h-[220px] items-center justify-center text-[var(--ink-500)]">
             <Loader2 className="h-5 w-5 animate-spin" />
           </div>
         )}
@@ -198,7 +198,7 @@ export const OpenClawHtmlPreview = memo(function OpenClawHtmlPreview({
           <img
             src={proxifyGeneratedImagePreviewUrl(primaryImage.src, 1200)}
             alt={primaryImage.alt || label || "OpenClaw 生成图片"}
-            className="max-h-[640px] w-full object-contain bg-slate-50"
+            className="max-h-[640px] w-full object-contain bg-[var(--paper-50)]"
             loading="lazy"
           />
         )}
@@ -208,13 +208,13 @@ export const OpenClawHtmlPreview = memo(function OpenClawHtmlPreview({
             srcDoc={html}
             title={label}
             sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"
-            className="h-full w-full border-0 bg-white"
+            className="h-full w-full border-0 bg-[var(--paper-50)]"
             loading="lazy"
           />
         )}
 
         {status === "error" && (
-          <div className="absolute inset-0 flex items-center justify-center px-4 text-center text-sm text-slate-500">
+          <div className="absolute inset-0 flex items-center justify-center px-4 text-center text-sm text-[var(--ink-500)]">
             无法内嵌预览，请打开查看。
           </div>
         )}

@@ -53,18 +53,18 @@ export function HeroSection() {
           transition={{ duration: 0.5, ease: [0.33, 1, 0.68, 1] }}
           className="max-w-3xl pt-1 sm:pt-2"
         >
-          <span className="inline-flex max-w-full items-center gap-2 rounded-full border border-primary/20 bg-white/85 px-3 py-1.5 text-xs font-semibold text-primary shadow-sm backdrop-blur">
+          <span className="inline-flex max-w-full items-center gap-2 rounded-full border border-[var(--ink-200)] bg-[var(--paper-50)]/85 px-3 py-1.5 text-xs font-semibold text-[var(--ink-700)] shadow-sm backdrop-blur">
             <ShieldCheck className="h-4 w-4" />
             <span className="min-w-0 truncate">面向学生、家长和老师的 AI 学习反馈</span>
           </span>
 
-          <h1 className="mt-6 max-w-3xl text-[1.95rem] font-black leading-[1.12] text-emerald-950 sm:mt-7 sm:text-5xl lg:text-6xl">
+          <h1 className="mt-6 max-w-3xl text-[1.95rem] font-black leading-[1.12] text-[var(--ink-900)] sm:mt-7 sm:text-5xl lg:text-6xl">
             上传作文或试卷，
-            <span className="block text-primary">生成看得懂的</span>
-            <span className="block text-primary">提分报告。</span>
+            <span className="block text-[var(--ink-700)]">生成看得懂的</span>
+            <span className="block text-[var(--ink-700)]">提分报告。</span>
           </h1>
 
-          <p className="mt-5 max-w-2xl text-base leading-7 text-slate-700 sm:leading-8 md:mt-6 md:text-lg">
+          <p className="mt-5 max-w-2xl text-base leading-7 text-[var(--ink-700)] sm:leading-8 md:mt-6 md:text-lg">
             <span className="block">上传图片，AI 会整理批改结果。</span>
             <span className="block">修改建议和训练任务也会生成。</span>
             <span className="block">孩子知道怎么改，家长能看懂进展。</span>
@@ -81,18 +81,18 @@ export function HeroSection() {
                   prefetch={false}
                   style={{ width: "calc(100vw - 2rem)", maxWidth: "100%" }}
                   className={cn(
-                    "sx-mobile-action-card group mr-4 flex min-h-[84px] min-w-0 cursor-pointer items-center gap-3 overflow-hidden rounded-lg border p-3 shadow-sm transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:mr-0 sm:min-h-[92px] sm:gap-4 sm:p-4",
+                    "sx-mobile-action-card group mr-4 flex min-h-[84px] min-w-0 cursor-pointer items-center gap-3 overflow-hidden rounded-[var(--radius-soft)] border p-3 shadow-sm transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ink-500)] sm:mr-0 sm:min-h-[92px] sm:gap-4 sm:p-4",
                     action.primary
-                      ? "border-primary bg-primary text-primary-foreground hover:bg-primary/90"
-                      : "border-border bg-white/88 text-foreground backdrop-blur hover:border-primary/30 hover:bg-white"
+                      ? "border-[var(--ink-500)] bg-[var(--seal-500)] text-white hover:bg-[var(--ink-700)]/90"
+                      : "border-[var(--paper-200)] bg-[var(--paper-50)]/88 text-[var(--ink-900)] backdrop-blur hover:border-[var(--ink-300)] hover:bg-[var(--paper-50)]"
                   )}
                 >
                   <span
                     className={cn(
-                      "flex size-11 shrink-0 items-center justify-center rounded-lg border transition duration-200 sm:size-12",
+                      "flex size-11 shrink-0 items-center justify-center rounded-[var(--radius-soft)] border transition duration-200 sm:size-12",
                       action.primary
-                        ? "border-white/25 bg-white/15"
-                        : "border-primary/15 bg-primary/10 text-primary"
+                        ? "border-white/25 bg-[var(--paper-50)]/15"
+                        : "border-[var(--ink-100)] bg-[var(--ink-50)] text-[var(--ink-700)]"
                     )}
                   >
                     <Icon className="size-5 sm:size-6" />
@@ -102,7 +102,7 @@ export function HeroSection() {
                     <span
                       className={cn(
                         "mt-1 block text-sm leading-5",
-                        action.primary ? "text-white/82" : "text-muted-foreground"
+                        action.primary ? "text-white/82" : "text-[var(--ink-500)]"
                       )}
                     >
                       {action.description}
@@ -117,8 +117,8 @@ export function HeroSection() {
           <div className="mt-8 grid gap-4 border-t border-emerald-950/10 pt-6 sm:grid-cols-3">
             {heroMetrics.map((metric) => (
               <div key={metric.label}>
-                <div className="text-sm font-semibold text-emerald-950">{metric.label}</div>
-                <div className="mt-1 text-sm text-slate-600">{metric.value}</div>
+                <div className="text-sm font-semibold text-[var(--ink-900)]">{metric.label}</div>
+                <div className="mt-1 text-sm text-[var(--ink-600)]">{metric.value}</div>
               </div>
             ))}
           </div>

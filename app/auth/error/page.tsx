@@ -24,14 +24,14 @@ export default async function ErrorPage({
         <Card>
           <CardHeader className="text-center space-y-4">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-red-100">
-              <AlertCircle className="h-7 w-7 text-red-600" />
+              <AlertCircle className="h-7 w-7 text-[var(--seal-600)]" />
             </div>
             <CardTitle className="text-2xl">登录遇到问题</CardTitle>
-            <CardDescription className="font-mono text-xs bg-muted px-2 py-1 rounded">{errorCode}</CardDescription>
-            {errorDescription && <p className="text-sm text-muted-foreground">{errorDescription}</p>}
+            <CardDescription className="font-mono text-xs bg-[var(--paper-100)] px-2 py-1 rounded">{errorCode}</CardDescription>
+            {errorDescription && <p className="text-sm text-[var(--ink-500)]">{errorDescription}</p>}
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800">
+            <div className="rounded-[var(--radius-soft)] bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800">
               <p className="font-medium mb-1">可能的原因：</p>
               <ul className="list-disc list-inside space-y-1 text-xs">
                 <li>登录链接已过期（有效期1小时）</li>
@@ -41,7 +41,7 @@ export default async function ErrorPage({
               </ul>
             </div>
 
-            <div className="rounded-lg bg-blue-50 border border-blue-200 p-3 text-sm text-blue-800">
+            <div className="rounded-[var(--radius-soft)] bg-blue-50 border border-blue-200 p-3 text-sm text-blue-800">
               <div className="flex items-start gap-2 mb-2">
                 <Settings className="h-4 w-4 mt-0.5 flex-shrink-0" />
                 <p className="font-medium">管理员配置检查</p>

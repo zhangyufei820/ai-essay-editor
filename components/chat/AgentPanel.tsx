@@ -159,7 +159,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
                 {/* 智慧光环 */}
                 <div className="relative">
                   <div
-                    className="w-10 h-10 rounded-xl flex items-center justify-center"
+                    className="w-10 h-10 rounded-[var(--radius-sharp)] flex items-center justify-center"
                     style={{
                       background: "linear-gradient(135deg, #0d3a1f 0%, #14532d 100%)",
                       boxShadow: "0 4px 20px rgba(14, 58, 31, 0.25), 0 0 40px rgba(134, 239, 172, 0.1)",
@@ -169,7 +169,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
                   </div>
                   {/* 呼吸光环 */}
                   <motion.div
-                    className="absolute inset-0 rounded-xl"
+                    className="absolute inset-0 rounded-[var(--radius-sharp)]"
                     style={{
                       background: "transparent",
                       boxShadow: "0 0 20px rgba(134, 239, 172, 0.3)",
@@ -197,7 +197,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
 
               <motion.button
                 onClick={onClose}
-                className="w-9 h-9 rounded-xl flex items-center justify-center transition-colors"
+                className="w-9 h-9 rounded-[var(--radius-sharp)] flex items-center justify-center transition-colors"
                 style={{ background: "rgba(14, 58, 31, 0.04)" }}
                 whileHover={{ background: "rgba(14, 58, 31, 0.08)" }}
                 whileTap={{ scale: 0.95 }}
@@ -225,7 +225,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
 
               {/* 特性说明 */}
               <motion.div
-                className="mt-6 p-4 rounded-2xl"
+                className="mt-6 p-4 rounded-[var(--radius-sharp)]"
                 style={{
                   background: "linear-gradient(135deg, rgba(134, 239, 172, 0.06) 0%, rgba(134, 239, 172, 0.02) 100%)",
                   border: "1px solid rgba(134, 239, 172, 0.1)",
@@ -236,7 +236,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
               >
                 <div className="flex items-start gap-3">
                   <motion.div
-                    className="w-8 h-8 rounded-lg flex items-center justify-center"
+                    className="w-8 h-8 rounded-[var(--radius-soft)] flex items-center justify-center"
                     style={{
                       background: "linear-gradient(135deg, rgba(134, 239, 172, 0.15) 0%, rgba(134, 239, 172, 0.05) 100%)",
                     }}
@@ -285,7 +285,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
               transition={{ delay: 0.6 }}
             >
               <motion.div
-                className="py-4 px-4 rounded-2xl text-center"
+                className="py-4 px-4 rounded-[var(--radius-sharp)] text-center"
                 style={{
                   background: "linear-gradient(135deg, rgba(134, 239, 172, 0.06) 0%, rgba(134, 239, 172, 0.02) 100%)",
                   border: "1px solid rgba(134, 239, 172, 0.1)",
@@ -329,7 +329,7 @@ function OpenClawCard({ onClick }: { onClick: () => void }) {
     <motion.a
       href="/chat/open-claw"
       onClick={onClick}
-      className="group relative block p-6 rounded-2xl overflow-hidden cursor-pointer"
+      className="group relative block p-6 rounded-[var(--radius-sharp)] overflow-hidden cursor-pointer"
       style={{
         background: "rgba(255, 255, 255, 0.60)",
         backdropFilter: "blur(20px)",
@@ -346,7 +346,7 @@ function OpenClawCard({ onClick }: { onClick: () => void }) {
     >
       {/* 推荐状态光晕 */}
       <motion.div
-        className="absolute inset-0 rounded-2xl pointer-events-none"
+        className="absolute inset-0 rounded-[var(--radius-sharp)] pointer-events-none"
         style={{
           background: "radial-gradient(ellipse at center, rgba(134, 239, 172, 0.12) 0%, transparent 70%)",
         }}
@@ -378,7 +378,7 @@ function OpenClawCard({ onClick }: { onClick: () => void }) {
       <div className="flex flex-col items-center text-center">
         {/* 图标 */}
         <motion.div
-          className="relative w-16 h-16 rounded-2xl flex items-center justify-center mb-4"
+          className="relative w-16 h-16 rounded-[var(--radius-sharp)] flex items-center justify-center mb-4"
           style={{
             background: "linear-gradient(135deg, rgba(134, 239, 172, 0.15) 0%, rgba(134, 239, 172, 0.05) 100%)",
             border: "1px solid rgba(134, 239, 172, 0.2)",
@@ -395,7 +395,7 @@ function OpenClawCard({ onClick }: { onClick: () => void }) {
 
           {/* 悬停时图标微光 */}
           <motion.div
-            className="absolute inset-0 rounded-2xl pointer-events-none"
+            className="absolute inset-0 rounded-[var(--radius-sharp)] pointer-events-none"
             style={{
               background: "radial-gradient(circle at center, rgba(134, 239, 172, 0.2) 0%, transparent 70%)",
               opacity: 0,

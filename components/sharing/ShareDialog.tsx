@@ -114,12 +114,12 @@ export function ShareDialog({
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium">可见性</label>
-            <select value={visibility} onChange={(event) => setVisibility(event.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
+            <select value={visibility} onChange={(event) => setVisibility(event.target.value)} className="h-10 w-full rounded-md border border-input bg-[var(--paper-50)] px-3 text-sm">
               <option value="public">公开</option>
               <option value="unlisted">仅链接可见</option>
             </select>
           </div>
-          <div className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">分享后可获得 +5 积分，社交奖励每日上限 30 积分。</div>
+          <div className="rounded-[var(--radius-sharp)] bg-[var(--ink-50)] px-4 py-3 text-sm text-[var(--ink-800)]">分享后可获得 +5 积分，社交奖励每日上限 30 积分。</div>
           <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
             {shareUrl ? (
               <Button type="button" variant="outline" onClick={copyLink}>
@@ -132,7 +132,7 @@ export function ShareDialog({
               {shareUrl ? "再次分享" : "分享"}
             </Button>
           </div>
-          {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
+          {message ? <p className="text-sm text-[var(--ink-500)]">{message}</p> : null}
         </div>
       </DialogContent>
     </Dialog>

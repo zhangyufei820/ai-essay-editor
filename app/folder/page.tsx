@@ -139,7 +139,7 @@ export default function FolderPage() {
           <div>
             <p className="text-sm font-medium text-[var(--ink-700)] dark:text-[var(--ink-200)]">个人资料夹</p>
             <h1 className="mt-1 text-2xl font-semibold tracking-normal sm:text-3xl font-[var(--font-display)]">学习资料统一管理</h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--ink-500)]">
               保存课堂笔记、资料链接和学习文件记录，后续可用于生成闪卡、错题复习和教师查看。
             </p>
           </div>
@@ -186,7 +186,7 @@ export default function FolderPage() {
                       id="file_type"
                       value={form.file_type}
                       onChange={(event) => setForm((value) => ({ ...value, file_type: event.target.value }))}
-                      className="h-10 w-full rounded-[var(--radius-soft)] border border-input bg-background px-3 text-sm"
+                      className="h-10 w-full rounded-[var(--radius-soft)] border border-input bg-[var(--paper-50)] px-3 text-sm"
                     >
                       <option value="note">笔记</option>
                       <option value="link">链接</option>
@@ -201,7 +201,7 @@ export default function FolderPage() {
                       id="subject"
                       value={form.subject}
                       onChange={(event) => setForm((value) => ({ ...value, subject: event.target.value }))}
-                      className="h-10 w-full rounded-[var(--radius-soft)] border border-input bg-background px-3 text-sm"
+                      className="h-10 w-full rounded-[var(--radius-soft)] border border-input bg-[var(--paper-50)] px-3 text-sm"
                     >
                       {SUBJECTS.map(([value, label]) => (
                         <option key={value} value={value}>{label}</option>
@@ -222,14 +222,14 @@ export default function FolderPage() {
                   {submitting ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
                   加入资料夹
                 </Button>
-                {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
+                {message ? <p className="text-sm text-[var(--ink-500)]">{message}</p> : null}
               </form>
             </CardContent>
           </Card>
 
           <section className="space-y-4">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <div className="flex items-center gap-2 text-sm text-[var(--ink-500)]">
                 <FolderOpen className="size-4" />
                 共 {totalCount} 条资料
               </div>
@@ -238,14 +238,14 @@ export default function FolderPage() {
             {loading ? (
               <div className="grid gap-3">
                 {Array.from({ length: 4 }).map((_, index) => (
-                  <div key={index} className="h-24 animate-pulse rounded-[var(--radius-sharp)] border bg-muted/40" />
+                  <div key={index} className="h-24 animate-pulse rounded-[var(--radius-sharp)] border bg-[var(--paper-100)]" />
                 ))}
               </div>
             ) : files.length ? (
               <div className="space-y-5">
                 {Object.entries(grouped).map(([subject, subjectFiles]) => (
                   <div key={subject} className="space-y-3">
-                    <h2 className="text-sm font-semibold text-muted-foreground font-[var(--font-display)]">{subjectLabel(subject)}</h2>
+                    <h2 className="text-sm font-semibold text-[var(--ink-500)] font-[var(--font-display)]">{subjectLabel(subject)}</h2>
                     <div className="grid gap-3 md:grid-cols-2">
                       {subjectFiles.map((file) => (
                         <Card key={file.id} className="rounded-[var(--radius-sharp)]">
@@ -255,10 +255,10 @@ export default function FolderPage() {
                             </div>
                             <div className="min-w-0 flex-1">
                               <div className="truncate font-medium">{file.filename}</div>
-                              <div className="mt-1 text-xs text-muted-foreground">
+                              <div className="mt-1 text-xs text-[var(--ink-500)]">
                                 {file.file_type} · {formatSize(file.file_size)} · {file.status || "uploaded"}
                               </div>
-                              <div className="mt-2 truncate text-xs text-muted-foreground">{file.storage_path}</div>
+                              <div className="mt-2 truncate text-xs text-[var(--ink-500)]">{file.storage_path}</div>
                             </div>
                           </CardContent>
                         </Card>
@@ -273,7 +273,7 @@ export default function FolderPage() {
                   <FolderOpen className="size-10 text-[var(--ink-600)]" />
                   <div>
                     <h2 className="font-semibold font-[var(--font-display)]">资料夹还是空的</h2>
-                    <p className="mt-1 text-sm text-muted-foreground">先添加一条笔记或资料链接，后续就能用于生成闪卡。</p>
+                    <p className="mt-1 text-sm text-[var(--ink-500)]">先添加一条笔记或资料链接，后续就能用于生成闪卡。</p>
                   </div>
                 </CardContent>
               </Card>

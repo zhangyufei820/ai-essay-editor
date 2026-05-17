@@ -191,7 +191,7 @@ export function ModelSelector({
       <motion.button
         onClick={() => !disabled && setIsOpen(!isOpen)}
         disabled={disabled}
-        className="flex items-center gap-1.5 rounded-[var(--radius-pill)] border border-[var(--paper-300)] bg-white px-3 py-1.5 text-[var(--ink-800)] font-[var(--font-sans-v2)] transition-all duration-200"
+        className="flex items-center gap-1.5 rounded-[var(--radius-pill)] border border-[var(--paper-300)] bg-[var(--paper-50)] px-3 py-1.5 text-[var(--ink-800)] font-[var(--font-sans-v2)] transition-all duration-200"
         whileTap={{ scale: 0.97 }}
       >
         {/* 模型名称 */}

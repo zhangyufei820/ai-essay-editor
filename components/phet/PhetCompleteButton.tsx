@@ -65,7 +65,7 @@ export function PhetCompleteButton({ simId }: { simId: string }) {
         {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
         完成学习
       </Button>
-      {message ? <p className="text-center text-xs text-emerald-700 dark:text-emerald-300">{message}</p> : null}
+      {message ? <p className="text-center text-xs text-[var(--ink-700)] dark:text-emerald-300">{message}</p> : null}
     </div>
   )
 }

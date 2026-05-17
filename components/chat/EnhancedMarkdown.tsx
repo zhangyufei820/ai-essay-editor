@@ -80,16 +80,16 @@ function MarkdownFileCard({ src, alt }: { src: string; alt?: string }) {
       download={label}
       target="_blank"
       rel="noopener noreferrer"
-      className="my-3 flex max-w-full items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-slate-700 no-underline transition-colors hover:bg-slate-100"
+      className="my-3 flex max-w-full items-center gap-3 rounded-[var(--radius-soft)] border border-[var(--paper-200)] bg-[var(--paper-50)] px-3 py-2.5 text-[var(--ink-700)] no-underline transition-colors hover:bg-[var(--paper-100)]"
     >
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-white text-slate-500">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[var(--paper-50)] text-[var(--ink-500)]">
         <FileText className="h-4 w-4" />
       </span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-medium">{label}</span>
-        <span className="block truncate text-xs text-slate-500">{src}</span>
+        <span className="block truncate text-xs text-[var(--ink-500)]">{src}</span>
       </span>
-      <Download className="h-4 w-4 shrink-0 text-slate-400" />
+      <Download className="h-4 w-4 shrink-0 text-[var(--ink-400)]" />
     </a>
   )
 }
@@ -124,9 +124,9 @@ function CopyButton({ text }: { text: string }) {
     <button
       onClick={handleCopy}
       className={cn(
-        "absolute top-2 right-2 p-2 rounded-lg transition-all duration-200",
-        "hover:bg-white/20 backdrop-blur-sm",
-        copied ? "bg-green-500/20 text-green-400" : "bg-white/10 text-gray-400 hover:text-white"
+        "absolute top-2 right-2 p-2 rounded-[var(--radius-soft)] transition-all duration-200",
+        "hover:bg-[var(--paper-50)]/20 backdrop-blur-sm",
+        copied ? "bg-[var(--seal-500)]/20 text-green-400" : "bg-[var(--paper-50)]/10 text-[var(--ink-400)] hover:text-white"
       )}
       title={copied ? "已复制!" : "复制代码"}
     >
@@ -181,7 +181,7 @@ export const EnhancedMarkdown = memo(function EnhancedMarkdown({ content, classN
         components={{
           // 标题样式
 	          h1: ({ children }) => (
-	            <h1 className="mb-3 mt-6 border-b border-slate-200 pb-2 text-xl font-bold sm:mb-4 sm:mt-8 sm:text-2xl" style={{ color: TEXT_COLOR, lineHeight: 1.35 }}>
+	            <h1 className="mb-3 mt-6 border-b border-[var(--paper-200)] pb-2 text-xl font-bold sm:mb-4 sm:mt-8 sm:text-2xl" style={{ color: TEXT_COLOR, lineHeight: 1.35 }}>
 	              {children}
 	            </h1>
 	          ),
@@ -208,7 +208,7 @@ export const EnhancedMarkdown = memo(function EnhancedMarkdown({ content, classN
             }
 
             return (
-	              <p className="mb-3 leading-7 text-slate-700 sm:mb-3.5" style={{ lineHeight: 1.72 }}>
+	              <p className="mb-3 leading-7 text-[var(--ink-700)] sm:mb-3.5" style={{ lineHeight: 1.72 }}>
 	                {children}
 	              </p>
             )
@@ -228,7 +228,7 @@ export const EnhancedMarkdown = memo(function EnhancedMarkdown({ content, classN
                 <img
                   src={proxifyGeneratedImagePreviewUrl(rawHref, 900)}
                   alt={label || "图片"}
-                  className="rounded-xl max-w-full h-auto my-3 sm:my-4 shadow-md"
+                  className="rounded-[var(--radius-sharp)] max-w-full h-auto my-3 sm:my-4 shadow-md"
                   loading="lazy"
                 />
               )
@@ -270,7 +270,7 @@ export const EnhancedMarkdown = memo(function EnhancedMarkdown({ content, classN
 	            </ol>
 	          ),
 	          li: ({ children }) => (
-	            <li className="pl-1 leading-7 text-slate-700" style={{ lineHeight: 1.72 }}>
+	            <li className="pl-1 leading-7 text-[var(--ink-700)]" style={{ lineHeight: 1.72 }}>
 	              {children}
 	            </li>
           ),
@@ -278,7 +278,7 @@ export const EnhancedMarkdown = memo(function EnhancedMarkdown({ content, classN
           // 引用
           blockquote: ({ children }) => (
             <blockquote
-	              className="my-4 rounded-r-lg border-l-4 bg-slate-50 px-3 py-2.5 pl-4 sm:px-4"
+	              className="my-4 rounded-r-lg border-l-4 bg-[var(--paper-50)] px-3 py-2.5 pl-4 sm:px-4"
               style={{
                 borderColor: BORDER_COLOR,
                 color: SECONDARY_COLOR,
@@ -312,10 +312,10 @@ export const EnhancedMarkdown = memo(function EnhancedMarkdown({ content, classN
             const codeString = String(children).replace(/\n$/, '')
 
             return (
-              <div className="relative my-2.5 sm:my-4 rounded-xl overflow-hidden shadow-lg">
+              <div className="relative my-2.5 sm:my-4 rounded-[var(--radius-sharp)] overflow-hidden shadow-lg">
                 {/* 语言标签 */}
                 {language && (
-                  <div className="absolute top-0 left-3 px-2 py-1 text-[10px] sm:text-xs rounded-b-lg bg-white/10 text-gray-400">
+                  <div className="absolute top-0 left-3 px-2 py-1 text-[10px] sm:text-xs rounded-b-lg bg-[var(--paper-50)]/10 text-[var(--ink-400)]">
                     {language}
                   </div>
                 )}
@@ -350,7 +350,7 @@ export const EnhancedMarkdown = memo(function EnhancedMarkdown({ content, classN
 
           // 水平线
           hr: () => (
-            <hr className="my-6 border-gray-200" />
+            <hr className="my-6 border-[var(--paper-200)]" />
           ),
 
           // 图片
@@ -370,7 +370,7 @@ export const EnhancedMarkdown = memo(function EnhancedMarkdown({ content, classN
               <img
                 src={proxifyGeneratedImagePreviewUrl(rawSrc, 900)}
                 alt={alt || '图片'}
-                className="rounded-xl max-w-full h-auto my-3 sm:my-4 shadow-md"
+                className="rounded-[var(--radius-sharp)] max-w-full h-auto my-3 sm:my-4 shadow-md"
                 loading="lazy"
               />
             )
@@ -378,29 +378,29 @@ export const EnhancedMarkdown = memo(function EnhancedMarkdown({ content, classN
 
           // 表格
           table: ({ children }) => (
-	              <div className="my-4 overflow-x-auto rounded-lg border border-slate-200 sm:my-5">
+	              <div className="my-4 overflow-x-auto rounded-[var(--radius-soft)] border border-[var(--paper-200)] sm:my-5">
 	              <table className="min-w-full divide-y divide-slate-200 text-left">
                 {children}
               </table>
             </div>
           ),
           thead: ({ children }) => (
-	            <thead className="bg-slate-50">
+	            <thead className="bg-[var(--paper-50)]">
               {children}
             </thead>
           ),
           tbody: ({ children }) => (
-	            <tbody className="divide-y divide-slate-200 bg-white">
+	            <tbody className="divide-y divide-slate-200 bg-[var(--paper-50)]">
               {children}
             </tbody>
           ),
           tr: ({ children }) => (
-	            <tr className="transition-colors hover:bg-slate-50">
+	            <tr className="transition-colors hover:bg-[var(--paper-50)]">
               {children}
             </tr>
           ),
           th: ({ children }) => (
-	            <th className="whitespace-nowrap px-4 py-3 text-sm font-semibold text-slate-800">
+	            <th className="whitespace-nowrap px-4 py-3 text-sm font-semibold text-[var(--ink-800)]">
               {children}
             </th>
           ),

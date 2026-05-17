@@ -187,7 +187,7 @@ function CheckoutFlow({ productId }: { productId: string }) {
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
       <div className="container mx-auto px-4 py-8">
-        <Link href="/#pricing" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-8">
+        <Link href="/#pricing" className="inline-flex items-center gap-2 text-sm text-[var(--ink-500)] hover:text-[var(--ink-900)] mb-8">
           <ArrowLeft className="h-4 w-4" /> 返回定价
         </Link>
 
@@ -196,7 +196,7 @@ function CheckoutFlow({ productId }: { productId: string }) {
             <div className="flex items-start justify-between mb-4">
               <div>
                 <h1 className="text-3xl font-bold mb-2 font-[var(--font-display)]">{product.name}</h1>
-                <p className="text-muted-foreground">{product.description}</p>
+                <p className="text-[var(--ink-500)]">{product.description}</p>
               </div>
               {needsMembership && (
                 <Badge variant="paper" className="flex items-center gap-1">
@@ -207,7 +207,7 @@ function CheckoutFlow({ productId }: { productId: string }) {
             </div>
             <div className="text-4xl font-bold text-[var(--ink-600)] mb-3">
               ¥{(displayPrice / 100).toFixed(2)}
-              <span className="text-lg text-muted-foreground ml-2">/ {billing === "annual" ? "年" : billing === "monthly" ? "月" : "次"}</span>
+              <span className="text-lg text-[var(--ink-500)] ml-2">/ {billing === "annual" ? "年" : billing === "monthly" ? "月" : "次"}</span>
             </div>
             {isSubscription && billing === "annual" && (
               <p className="text-sm text-[var(--ink-700)] font-medium">年付已按月付 × 12 × 8 折计算，权益按月发放。</p>
@@ -266,13 +266,13 @@ function CheckoutFlow({ productId }: { productId: string }) {
 
           <div className="bg-[var(--paper-50)] rounded-[var(--radius-sharp)] shadow-lg p-8">
             <h2 className="text-xl font-semibold mb-2 font-[var(--font-display)]">扫码支付</h2>
-            <p className="text-sm text-muted-foreground mb-4">
+            <p className="text-sm text-[var(--ink-500)] mb-4">
               使用微信扫码完成支付。支付完成后会自动跳转到结果页；如权益未及时到账，请保存订单号并联系 support@shenxiang.school。
             </p>
             
             {/* 如果需要会员但用户不是会员，禁用支付按钮 */}
             {needsMembership && !isUserMember && (
-              <div className="mb-4 p-4 bg-muted rounded-[var(--radius-soft)] text-center text-muted-foreground">
+              <div className="mb-4 p-4 bg-[var(--paper-100)] rounded-[var(--radius-soft)] text-center text-[var(--ink-500)]">
                 请先订阅会员后再购买积分充值包
               </div>
             )}
@@ -308,7 +308,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ productId: 
       <div className="min-h-screen bg-gradient-to-b from-background to-muted/20 flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="h-8 w-8 animate-spin text-[var(--ink-600)]" />
-          <p className="text-muted-foreground">正在加载...</p>
+          <p className="text-[var(--ink-500)]">正在加载...</p>
         </div>
       </div>
     }>

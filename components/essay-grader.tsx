@@ -238,7 +238,7 @@ export function EssayGrader() {
       {/* Header */}
       <div className="text-center space-y-4">
         <h1 className="text-4xl font-bold text-balance">创意作文批改师</h1>
-        <p className="text-lg text-muted-foreground text-balance">融合文学大师风格，为您的作文提供专业的批改与润色</p>
+        <p className="text-lg text-[var(--ink-500)] text-balance">融合文学大师风格，为您的作文提供专业的批改与润色</p>
       </div>
 
       {/* Input Section */}
@@ -261,14 +261,14 @@ export function EssayGrader() {
             
             {/* 🔥 上传进度条 */}
             {isUploading && (
-              <div className="rounded-lg bg-slate-50 p-3 border border-slate-200">
+              <div className="rounded-[var(--radius-soft)] bg-[var(--paper-50)] p-3 border border-[var(--paper-200)]">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-medium text-slate-600">上传中...</span>
-                  <span className="text-xs font-medium text-green-700">{uploadProgress}%</span>
+                  <span className="text-xs font-medium text-[var(--ink-600)]">上传中...</span>
+                  <span className="text-xs font-medium text-[var(--ink-700)]">{uploadProgress}%</span>
                 </div>
-                <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
+                <div className="w-full h-2 bg-[var(--paper-200)] rounded-full overflow-hidden">
                   <motion.div
-                    className="h-full rounded-full bg-green-700"
+                    className="h-full rounded-full bg-[var(--ink-700)]"
                     initial={{ width: 0 }}
                     animate={{ width: `${uploadProgress}%` }}
                     transition={{ duration: 0.3 }}
@@ -283,7 +283,7 @@ export function EssayGrader() {
                 {uploadedFiles.map((f, i) => (
                   <div key={i} className="relative group">
                     {f.preview ? (
-                      <div className="relative w-20 h-20 rounded-lg overflow-hidden border-2 border-slate-200">
+                      <div className="relative w-20 h-20 rounded-[var(--radius-soft)] overflow-hidden border-2 border-[var(--paper-200)]">
                         <img src={f.preview} alt={f.name} className="w-full h-full object-cover" />
                         <button
                           onClick={() => removeFile(i)}
@@ -293,10 +293,10 @@ export function EssayGrader() {
                         </button>
                       </div>
                     ) : (
-                      <div className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm border border-slate-200">
-                        <FileText className="h-4 w-4 text-green-600" />
-                        <span className="max-w-[100px] truncate text-slate-600">{f.name}</span>
-                        <button onClick={() => removeFile(i)} className="text-slate-400 hover:text-red-500">
+                      <div className="flex items-center gap-2 rounded-[var(--radius-soft)] bg-[var(--paper-50)] px-3 py-2 text-sm border border-[var(--paper-200)]">
+                        <FileText className="h-4 w-4 text-[var(--ink-600)]" />
+                        <span className="max-w-[100px] truncate text-[var(--ink-600)]">{f.name}</span>
+                        <button onClick={() => removeFile(i)} className="text-[var(--ink-400)] hover:text-[var(--seal-500)]">
                           <X className="h-3.5 w-3.5" />
                         </button>
                       </div>

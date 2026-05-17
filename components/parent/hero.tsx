@@ -15,7 +15,7 @@ export function ParentHero() {
             家长专区
             <span className="block text-[var(--ink-600)]">陪伴孩子，共同学习</span>
           </h1>
-          <p className="mb-8 text-lg text-muted-foreground lg:text-xl leading-relaxed">
+          <p className="mb-8 text-lg text-[var(--ink-500)] lg:text-xl leading-relaxed">
             通过AI技术赋能家庭教育，建立良好的亲子学习关系，
             <br className="hidden lg:block" />
             见证孩子的每一步成长，共创美好学习体验
@@ -39,21 +39,21 @@ export function ParentHero() {
                 <Users className="h-6 w-6 text-[var(--ink-600)]" />
               </div>
               <div className="text-sm font-medium">亲子互动</div>
-              <div className="text-xs text-muted-foreground">增进亲子关系</div>
+              <div className="text-xs text-[var(--ink-500)]">增进亲子关系</div>
             </div>
             <div className="flex flex-col items-center gap-2">
               <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--ink-50)]">
                 <TrendingUp className="h-6 w-6 text-[var(--ink-600)]" />
               </div>
               <div className="text-sm font-medium">成长追踪</div>
-              <div className="text-xs text-muted-foreground">见证每步成长</div>
+              <div className="text-xs text-[var(--ink-500)]">见证每步成长</div>
             </div>
             <div className="flex flex-col items-center gap-2">
               <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--ink-50)]">
                 <Sparkles className="h-6 w-6 text-[var(--ink-600)]" />
               </div>
               <div className="text-sm font-medium">AI共学</div>
-              <div className="text-xs text-muted-foreground">智能学习助手</div>
+              <div className="text-xs text-[var(--ink-500)]">智能学习助手</div>
             </div>
           </div>
         </div>

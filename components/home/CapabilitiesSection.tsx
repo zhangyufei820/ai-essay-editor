@@ -105,12 +105,12 @@ function CapabilityCard({ capability }: { capability: Capability }) {
         href={capability.href}
         prefetch={false}
         className={cn(
-          "group sx-card sx-card-interactive flex h-full flex-col p-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:p-7"
+          "group sx-card sx-card-interactive flex h-full flex-col p-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ink-500)] md:p-7"
         )}
         style={{ borderColor: slateColors[100] }}
       >
         <div
-          className="flex size-12 items-center justify-center rounded-lg border border-primary/15 bg-primary/10 text-primary transition-colors duration-200 group-hover:bg-primary group-hover:text-primary-foreground"
+          className="flex size-12 items-center justify-center rounded-[var(--radius-soft)] border border-[var(--ink-100)] bg-[var(--ink-50)] text-[var(--ink-700)] transition-colors duration-200 group-hover:bg-[var(--seal-500)] group-hover:text-white"
         >
           <Icon className="size-6" />
         </div>
@@ -123,7 +123,7 @@ function CapabilityCard({ capability }: { capability: Capability }) {
           {capability.description}
         </p>
 
-        <span className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-primary">
+        <span className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-[var(--ink-700)]">
           进入使用
           <ArrowRight className="size-4 transition-transform duration-200 group-hover:translate-x-1" />
         </span>

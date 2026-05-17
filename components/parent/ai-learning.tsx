@@ -39,7 +39,7 @@ export function ParentAI() {
             AI赋能教育
           </div>
           <h2 className="mb-4 text-3xl font-bold lg:text-4xl font-[var(--font-display)]">AI共同学习</h2>
-          <p className="text-lg text-muted-foreground">
+          <p className="text-lg text-[var(--ink-500)]">
             利用人工智能技术，为家长和孩子提供智能化的学习支持，
             <br className="hidden lg:block" />
             让学习更高效、更有趣、更个性化
@@ -50,14 +50,14 @@ export function ParentAI() {
           {aiFeatures.map((feature) => (
             <Card
               key={feature.title}
-              className="border-border/50 hover:border-primary/50 hover:shadow-lg transition-all"
+              className="border-[var(--paper-200)]/50 hover:border-[var(--ink-300)] hover:shadow-lg transition-all"
             >
               <CardContent className="p-6">
                 <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-[var(--radius-sharp)] bg-gradient-to-br from-[var(--ink-50)] to-[var(--paper-50)]">
                   <feature.icon className="h-7 w-7 text-[var(--ink-600)]" />
                 </div>
                 <h3 className="mb-2 text-xl font-semibold">{feature.title}</h3>
-                <p className="mb-4 text-sm text-muted-foreground">{feature.description}</p>
+                <p className="mb-4 text-sm text-[var(--ink-500)]">{feature.description}</p>
                 <div className="flex flex-wrap gap-2">
                   {feature.features.map((item) => (
                     <span key={item} className="rounded-full bg-[var(--ink-50)] px-3 py-1 text-xs font-medium text-[var(--ink-600)]">
@@ -74,7 +74,7 @@ export function ParentAI() {
           <div className="text-center">
             <MessageCircle className="mx-auto mb-4 h-12 w-12 text-[var(--ink-600)]" />
             <h3 className="mb-3 text-2xl font-bold">开启AI学习之旅</h3>
-            <p className="mb-6 text-muted-foreground">与孩子一起体验AI技术带来的学习革新，共同成长，共享快乐</p>
+            <p className="mb-6 text-[var(--ink-500)]">与孩子一起体验AI技术带来的学习革新，共同成长，共享快乐</p>
             <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
               <Link href="/chat">
                 <Button size="lg" className="w-full sm:w-auto gap-2">

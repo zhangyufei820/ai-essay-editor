@@ -16,7 +16,7 @@ const categories = [
     title: "数学",
     icon: Calculator,
     subjects: ["代数", "几何", "微积分", "统计学", "线性代数"],
-    color: "text-green-600 bg-green-50 dark:bg-green-950/30",
+    color: "text-[var(--ink-600)] bg-[var(--ink-50)] dark:bg-green-950/30",
     href: "/subjects/math",
   },
   {
@@ -24,7 +24,7 @@ const categories = [
     title: "自然科学",
     icon: Atom,
     subjects: ["物理", "化学", "生物", "地球科学", "天文学"],
-    color: "text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30",
+    color: "text-[var(--ink-600)] bg-[var(--ink-50)] dark:bg-emerald-950/30",
     href: "/subjects/science",
   },
   {
@@ -40,7 +40,7 @@ const categories = [
     title: "人文社科",
     icon: Globe2,
     subjects: ["历史", "地理", "政治", "哲学", "经济学"],
-    color: "text-red-600 bg-red-50 dark:bg-red-950/30",
+    color: "text-[var(--seal-600)] bg-red-50 dark:bg-red-950/30",
     href: "/subjects/social",
   },
   {
@@ -48,7 +48,7 @@ const categories = [
     title: "艺术与创造",
     icon: Palette,
     subjects: ["美术", "音乐", "设计", "创意写作", "表演"],
-    color: "text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30",
+    color: "text-[var(--ink-600)] bg-[var(--ink-50)] dark:bg-emerald-950/30",
     href: "/subjects/arts",
   },
 ]
@@ -59,7 +59,7 @@ export function SubjectCategories() {
       <div className="container mx-auto px-4">
         <div className="mb-12 text-center">
           <h2 className="mb-4 text-4xl font-bold tracking-tight text-balance">学科分类</h2>
-          <p className="mx-auto max-w-2xl text-lg text-muted-foreground text-pretty">
+          <p className="mx-auto max-w-2xl text-lg text-[var(--ink-500)] text-pretty">
             涵盖所有主要学科领域，提供专业的学习辅导
           </p>
         </div>
@@ -69,11 +69,11 @@ export function SubjectCategories() {
             const Icon = category.icon
             return (
               <Link key={category.id} href={category.href}>
-                <Card className="group relative h-full overflow-hidden rounded-2xl border-2 border-border/50 bg-card p-8 shadow-lg transition-all duration-300 hover:border-primary hover:shadow-2xl hover:scale-[1.02] hover:-translate-y-1">
+                <Card className="group relative h-full overflow-hidden rounded-[var(--radius-sharp)] border-2 border-[var(--paper-200)]/50 bg-[var(--paper-50)] p-8 shadow-lg transition-all duration-300 hover:border-[var(--ink-500)] hover:shadow-2xl hover:scale-[1.02] hover:-translate-y-1">
                   <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
                   <div className="relative">
                     <div
-                      className={`mb-6 inline-flex h-16 w-16 items-center justify-center rounded-xl shadow-md transition-all duration-300 group-hover:scale-110 group-hover:shadow-lg ${category.color}`}
+                      className={`mb-6 inline-flex h-16 w-16 items-center justify-center rounded-[var(--radius-sharp)] shadow-md transition-all duration-300 group-hover:scale-110 group-hover:shadow-lg ${category.color}`}
                     >
                       <Icon className="h-8 w-8" />
                     </div>
@@ -82,8 +82,8 @@ export function SubjectCategories() {
 
                     <ul className="space-y-2.5">
                       {category.subjects.map((subject) => (
-                        <li key={subject} className="flex items-center text-sm text-muted-foreground">
-                          <span className="mr-2.5 h-1.5 w-1.5 rounded-full bg-primary shadow-sm" />
+                        <li key={subject} className="flex items-center text-sm text-[var(--ink-500)]">
+                          <span className="mr-2.5 h-1.5 w-1.5 rounded-full bg-[var(--seal-500)] shadow-sm" />
                           {subject}
                         </li>
                       ))}

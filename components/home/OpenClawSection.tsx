@@ -193,7 +193,7 @@ export function OpenClawSection() {
               <div className="flex flex-col items-center md:items-start gap-4 flex-1">
                 {/* OpenClaw 图标 */}
                 <motion.div
-                  className="relative w-20 h-20 rounded-2xl flex items-center justify-center"
+                  className="relative w-20 h-20 rounded-[var(--radius-sharp)] flex items-center justify-center"
                   style={{
                     background: `linear-gradient(135deg, ${brandColors[600]} 0%, ${brandColors[700]} 100%)`,
                     boxShadow: `0 8px 30px ${brandColors[600]}40`,
@@ -204,7 +204,7 @@ export function OpenClawSection() {
                   <Bot className="w-10 h-10 text-white" />
                   {/* 呼吸光效 */}
                   <motion.div
-                    className="absolute inset-0 rounded-2xl"
+                    className="absolute inset-0 rounded-[var(--radius-sharp)]"
                     style={{
                       boxShadow: `0 0 30px ${brandColors[600]}50`,
                     }}
@@ -227,7 +227,7 @@ export function OpenClawSection() {
 
                 <Link href="/chat/open-claw" prefetch={false}>
                   <motion.button
-                    className="group relative h-12 px-8 text-base font-semibold rounded-2xl text-white overflow-hidden"
+                    className="group relative h-12 px-8 text-base font-semibold rounded-[var(--radius-sharp)] text-white overflow-hidden"
                     style={{
                       background: `linear-gradient(135deg, ${brandColors[600]} 0%, ${brandColors[700]} 100%)`,
                       boxShadow: `0 4px 20px ${brandColors[600]}40`,
@@ -252,7 +252,7 @@ export function OpenClawSection() {
                 {FEATURES.map((feature, index) => (
                   <motion.div
                     key={index}
-                    className="p-4 rounded-xl"
+                    className="p-4 rounded-[var(--radius-sharp)]"
                     style={{
                       background: `${brandColors[50]}`,
                       border: `1px solid ${brandColors[100]}`,

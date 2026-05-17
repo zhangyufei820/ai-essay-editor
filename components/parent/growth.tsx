@@ -13,7 +13,7 @@ export function ParentGrowth() {
         <div className="grid gap-12 lg:grid-cols-2 lg:items-center">
           <div>
             <h2 className="mb-6 text-3xl font-bold lg:text-4xl font-[var(--font-display)]">学生成长追踪</h2>
-            <p className="mb-8 text-lg text-muted-foreground leading-relaxed">
+            <p className="mb-8 text-lg text-[var(--ink-500)] leading-relaxed">
               实时掌握孩子的学习动态和成长轨迹，通过数据化分析， 科学指导孩子的学习发展，见证每一个进步的瞬间。
             </p>
             <div className="space-y-6">
@@ -23,7 +23,7 @@ export function ParentGrowth() {
                 </div>
                 <div>
                   <h3 className="mb-1 font-semibold">学习进度可视化</h3>
-                  <p className="text-sm text-muted-foreground">直观展示孩子在各学科的学习进度和掌握程度</p>
+                  <p className="text-sm text-[var(--ink-500)]">直观展示孩子在各学科的学习进度和掌握程度</p>
                 </div>
               </div>
               <div className="flex gap-4">
@@ -32,7 +32,7 @@ export function ParentGrowth() {
                 </div>
                 <div>
                   <h3 className="mb-1 font-semibold">能力发展分析</h3>
-                  <p className="text-sm text-muted-foreground">分析孩子的思维能力、创造力和学习习惯的发展趋势</p>
+                  <p className="text-sm text-[var(--ink-500)]">分析孩子的思维能力、创造力和学习习惯的发展趋势</p>
                 </div>
               </div>
               <div className="flex gap-4">
@@ -41,13 +41,13 @@ export function ParentGrowth() {
                 </div>
                 <div>
                   <h3 className="mb-1 font-semibold">成就里程碑</h3>
-                  <p className="text-sm text-muted-foreground">记录孩子的重要学习成就，留下珍贵的成长记忆</p>
+                  <p className="text-sm text-[var(--ink-500)]">记录孩子的重要学习成就，留下珍贵的成长记忆</p>
                 </div>
               </div>
             </div>
           </div>
           <div className="grid gap-4">
-            <Card className="border-border/50">
+            <Card className="border-[var(--paper-200)]/50">
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-base">
                   <Star className="h-5 w-5 text-yellow-500" />
@@ -57,21 +57,21 @@ export function ParentGrowth() {
               <CardContent>
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">完成作业</span>
+                    <span className="text-[var(--ink-500)]">完成作业</span>
                     <span className="font-semibold">15/15</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">阅读时长</span>
+                    <span className="text-[var(--ink-500)]">阅读时长</span>
                     <span className="font-semibold">8.5小时</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">学习专注度</span>
+                    <span className="text-[var(--ink-500)]">学习专注度</span>
                     <span className="font-semibold text-[var(--ink-600)]">优秀</span>
                   </div>
                 </div>
               </CardContent>
             </Card>
-            <Card className="border-border/50">
+            <Card className="border-[var(--paper-200)]/50">
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-base">
                   <BookOpen className="h-5 w-5 text-blue-500" />
@@ -85,8 +85,8 @@ export function ParentGrowth() {
                       <span>语文</span>
                       <span className="text-[var(--ink-600)]">+12%</span>
                     </div>
-                    <div className="h-2 rounded-full bg-muted">
-                      <div className="h-2 rounded-full bg-[var(--ink-50)]0" style={{ width: "85%" }} />
+                    <div className="h-2 rounded-full bg-[var(--paper-100)]">
+                      <div className="h-2 rounded-full bg-[var(--seal-500)]" style={{ width: "85%" }} />
                     </div>
                   </div>
                   <div>
@@ -94,7 +94,7 @@ export function ParentGrowth() {
                       <span>数学</span>
                       <span className="text-[var(--ink-600)]">+8%</span>
                     </div>
-                    <div className="h-2 rounded-full bg-muted">
+                    <div className="h-2 rounded-full bg-[var(--paper-100)]">
                       <div className="h-2 rounded-full bg-blue-500" style={{ width: "78%" }} />
                     </div>
                   </div>
@@ -103,14 +103,14 @@ export function ParentGrowth() {
                       <span>英语</span>
                       <span className="text-[var(--ink-600)]">+15%</span>
                     </div>
-                    <div className="h-2 rounded-full bg-muted">
-                      <div className="h-2 rounded-full bg-[var(--ink-50)]0" style={{ width: "82%" }} />
+                    <div className="h-2 rounded-full bg-[var(--paper-100)]">
+                      <div className="h-2 rounded-full bg-[var(--seal-500)]" style={{ width: "82%" }} />
                     </div>
                   </div>
                 </div>
               </CardContent>
             </Card>
-            <Card className="border-border/50">
+            <Card className="border-[var(--paper-200)]/50">
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-base">
                   <Target className="h-5 w-5 text-orange-500" />
@@ -118,17 +118,17 @@ export function ParentGrowth() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <ul className="space-y-2 text-sm text-muted-foreground">
+                <ul className="space-y-2 text-sm text-[var(--ink-500)]">
                   <li className="flex items-start gap-2">
-                    <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+                    <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--seal-500)]" />
                     完成数学第三单元复习
                   </li>
                   <li className="flex items-start gap-2">
-                    <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+                    <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--seal-500)]" />
                     阅读《西游记》前10章
                   </li>
                   <li className="flex items-start gap-2">
-                    <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+                    <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--seal-500)]" />
                     练习英语口语对话
                   </li>
                 </ul>
