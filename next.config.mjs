@@ -150,7 +150,7 @@ const nextConfig = {
           "font-src 'self' data: https://cdn.jsdelivr.net https://cdn.authing.co https://fonts.gstatic.cn",
           "connect-src 'self' https://shenxiang.school https://www.shenxiang.school https://api.shenxiang.school https://cdn.shenxiang.school https://*.supabase.co wss://*.supabase.co https://core.authing.cn https://*.authing.cn https://files.authing.co https://api.xunhupay.com https://*.stripe.com https://api.dify.ai https://www.vivaapi.cn wss:",
           "media-src 'self' data: blob: https:",
-          "frame-src 'self' https://js.stripe.com https://hooks.stripe.com https://phet.colorado.edu",
+          "frame-src 'self' https://js.stripe.com https://hooks.stripe.com https://phet.colorado.edu https://www.tripo3d.ai https://tripo3d.ai",
           "object-src 'none'",
           "frame-ancestors 'none'",
           "form-action 'self' https://api.xunhupay.com https://*.stripe.com",
