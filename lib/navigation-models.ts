@@ -83,6 +83,15 @@ export const navigationModelGroups: NavigationModelGroup[] = [
         badge: "新",
       },
       {
+        key: "problem",
+        name: "题目解析",
+        description: "题干拆解与分步讲解",
+        href: "/chat/problem",
+        group: "教育专用",
+        color: BRAND_GREEN,
+        modelKey: "problem",
+      },
+      {
         key: "beike-pro",
         name: "备课助手Pro",
         description: "智能备课，高效便捷",
@@ -267,6 +276,15 @@ export const navigationModelGroups: NavigationModelGroup[] = [
         color: BRAND_GREEN,
         modelKey: "gpt-image-2",
         badge: "推荐",
+      },
+      {
+        key: "gpt-image-1",
+        name: "GPT Image 1",
+        description: "标准图像生成与编辑",
+        href: "/chat/gpt-image-1",
+        group: "创意生成",
+        color: BRAND_GREEN,
+        modelKey: "gpt-image-1",
       },
       {
         key: "suno-v5",

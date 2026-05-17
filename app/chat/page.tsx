@@ -32,7 +32,7 @@ function ChatPageContent() {
     console.log('🔍 [ChatPage] URL 参数 model:', model)
 
     // 🚀 专用图像模型自动跳转到独立工作台
-    if (normalizedModel === 'gemini-image' || normalizedModel === 'gpt-image-2') {
+    if (normalizedModel === 'gemini-image' || normalizedModel === 'gpt-image-2' || normalizedModel === 'banana-2-pro') {
       console.log('✅ [ChatPage] 检测到专用模型，跳转到专用页面')
       router.replace(sessionId ? buildChatSessionRoute(sessionId, normalizedModel) : `/chat/${normalizedModel}`)
     }

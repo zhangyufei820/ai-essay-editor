@@ -24,7 +24,22 @@ const MODEL_DISPLAY_NAMES: Record<string, string> = {
   "quanquan-math": "全科数学",
   "quanquan-english": "全科英语",
   "vocab-card": "词境记忆卡",
+  "problem": "题目解析",
   "beike-pro": "备课助手",
+  "banzhuren": "班主任助手",
+  "all-in-one-agent": "全能智能体",
+  "suno-v5": "音乐",
+  "banana-2-pro": "Banana 2 Pro",
+  "gpt-image-2": "GPT Image 2",
+  "gpt-image-1": "GPT Image 1",
+  "ai-writing-paper": "论文写作",
+  "zhongying-essay": "中英文作文",
+  "reading-report": "读书报告",
+  "experiment-report": "实验报告",
+  "study-abroad": "留学文书",
+  "resume-optimize": "简历优化",
+  "speech-defense": "演讲答辩",
+  "school-wechat": "公众号",
 }
 
 // 获取模型徽章颜色

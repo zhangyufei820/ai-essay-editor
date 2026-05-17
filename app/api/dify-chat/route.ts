@@ -202,6 +202,10 @@ function hasGptImageModelInput(inputs: unknown): boolean {
   return typeof rawModel === "string" && GPT_IMAGE_V11_ALLOWED.model.some((model) => model === rawModel)
 }
 
+function isGptImageGatewayModel(model: unknown): model is "gpt-image-2" | "gpt-image-1" {
+  return model === "gpt-image-2" || model === "gpt-image-1"
+}
+
 async function resolveActiveMembershipStatus(
   supabase: ReturnType<typeof getSupabaseAdmin>,
   userId: string,
@@ -1192,11 +1196,12 @@ export async function POST(request: NextRequest) {
     
     const userId = auth.user!.id
 
-    const requestId = request.headers.get("X-Request-Id") || body.requestId || createRequestId(model === "gpt-image-2" ? "img" : "chat")
+    const isGptImageGatewayRequest = isGptImageGatewayModel(model)
+    const requestId = request.headers.get("X-Request-Id") || body.requestId || createRequestId(isGptImageGatewayRequest ? "img" : "chat")
     logPerf(requestId, "api_enter", apiStartedAt, { model: model || "general-chat" })
     logPerf(requestId, "auth_done", apiStartedAt)
-    const taskKind = model === "gpt-image-2" ? "image" : model === "open-claw" ? "openclaw" : isAllInOneAgent ? "workflow" : "dify"
-    if (hasGptImageModelInput(inputs) && model !== "gpt-image-2") {
+    const taskKind = isGptImageGatewayRequest ? "image" : model === "open-claw" ? "openclaw" : isAllInOneAgent ? "workflow" : "dify"
+    if (hasGptImageModelInput(inputs) && !isGptImageGatewayRequest) {
       console.warn(`🚫 [媒体权限] 图片模型请求顶层 model 不匹配，拒绝绕过媒体计费: model=${model || "empty"}`)
       return new Response(
         JSON.stringify({
@@ -1207,7 +1212,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const imageInputsForBilling = model === "gpt-image-2" ? buildGptImageV11Inputs(inputs) : null
+    const imageInputsForBilling = isGptImageGatewayRequest ? buildGptImageV11Inputs(inputs) : null
     const billingModelType = imageInputsForBilling?.model as ModelType | undefined
     if (imageInputsForBilling && (billingModelType || "gpt-image-2") === "gpt-image-2") {
       const { data: userProfile } = await getSupabaseAdmin()
@@ -1280,7 +1285,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    if (model !== "gpt-image-2" && !isAllInOneAgent && fileUrls.length > 0 && difyFileIds.length === 0) {
+    if (!isGptImageGatewayRequest && !isAllInOneAgent && fileUrls.length > 0 && difyFileIds.length === 0) {
       console.warn(`🚫 [Dify-Chat] 非图片生成模型拒绝 remote_url 附件: model=${model || "general-chat"} urls=${fileUrls.length}`)
       return new Response(
         JSON.stringify({ error: "文件上传缺少 Dify 文件 ID，请重新上传文件后再试" }),
@@ -1388,7 +1393,7 @@ export async function POST(request: NextRequest) {
     
     console.log(`💰 [预检查] 模型: ${modelType} | 当前积分: ${currentCredits}`)
 
-    if (model === "gpt-image-2") {
+    if (isGptImageGatewayRequest) {
       const imageBillingModel = (billingModelType || "gpt-image-2") as ModelType
       const imageCount = imageInputsForBilling?.n || 1
       const imageDescription = `图片生成 - ${getModelDisplayName(imageBillingModel)} x${imageCount}`
@@ -1565,7 +1570,7 @@ export async function POST(request: NextRequest) {
             console.log(`🎨 [Workflow] request prepared: model=${model} files=${difyFileIds.length} hasImageSize=${Boolean(imageSize)}`)
         } else {
             // 💬 Chat API 格式
-            const isGptImage2 = model === "gpt-image-2"
+            const isGptImage2 = isGptImageGatewayRequest
             difyRequest = {
                 inputs: isGptImage2
                   ? buildGptImageV11Inputs(inputs)
@@ -1594,7 +1599,7 @@ export async function POST(request: NextRequest) {
 
         console.log(`🔗 [API端点] ${apiEndpoint} | 模式: ${isWorkflow ? 'Workflow' : 'Chat'}`)
 
-        const firstByteTimeoutMs = model === "gpt-image-2"
+        const firstByteTimeoutMs = isGptImageGatewayRequest
           ? GPT_IMAGE_BLOCKING_TIMEOUT_MS
           : model === "open-claw" || isAllInOneAgent
             ? OPENCLAW_FIRST_BYTE_TIMEOUT_MS
@@ -1629,7 +1634,7 @@ export async function POST(request: NextRequest) {
             })
             console.warn(`✅ [Dify请求] 响应到达 status=${response.status} body=${response.body === null ? 'null' : 'ReadableStream'}`)
 
-            if (model === "gpt-image-2" && !streamStatus.firstByteReceived) {
+            if (isGptImageGatewayRequest && !streamStatus.firstByteReceived) {
                 streamStatus.firstByteReceived = true
                 if (streamStatus.timeoutId) {
                     clearTimeout(streamStatus.timeoutId)
@@ -1744,7 +1749,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 🎨 GPT Image V11 使用 Chatflow blocking 响应；兼容少数返回 workflow_run_id 的场景。
-    if (model === "gpt-image-2") {
+    if (isGptImageGatewayRequest) {
 	        const result = await response.json()
 	        const workflowRunId = result?.workflow_run_id
         const inlineStatus = result?.data?.status

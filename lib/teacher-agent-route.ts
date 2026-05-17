@@ -17,6 +17,7 @@ const AGENT_TO_MODEL: Record<string, ModelType> = {
   "quanquan-math": "quanquan-math",
   "quanquan-english": "quanquan-english",
   "vocab-card": "vocab-card",
+  problem: "problem",
   "beike-pro": "beike-pro",
   banzhuren: "banzhuren",
   "ai-writing-paper": "ai-writing-paper",
@@ -27,6 +28,9 @@ const AGENT_TO_MODEL: Record<string, ModelType> = {
   "resume-optimize": "resume-optimize",
   "speech-defense": "speech-defense",
   "school-wechat": "school-wechat",
+  "banana-2-pro": "banana-2-pro",
+  "gpt-image-2": "gpt-image-2",
+  "gpt-image-1": "gpt-image-1",
 }
 
 const TEACHER_SHARE_CODE_PATTERN = /^[a-zA-Z0-9]{6,32}$/

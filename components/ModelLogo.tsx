@@ -36,6 +36,7 @@ export type ModelKey =
   | "quanquan-math"
   | "quanquan-english"
   | "vocab-card"
+  | "problem"
   | "beike-pro"
   | "banzhuren"
   | "all-in-one-agent"
@@ -44,6 +45,7 @@ export type ModelKey =
   | "suno-v5"
   | "banana"
   | "gpt-image-2"
+  | "gpt-image-1"
   | "ai-writing-paper"
   | "zhongying-essay"
   | "reading-report"
@@ -116,6 +118,10 @@ const MODEL_LOGOS: Record<ModelKey, ModelLogoConfig> = {
   },
   "vocab-card": {
     LucideIcon: Languages,
+    brandColor: "#10A37F",
+  },
+  "problem": {
+    LucideIcon: ClipboardList,
     brandColor: "#10A37F",
   },
   "beike-pro": {
@@ -193,6 +199,11 @@ const MODEL_LOGOS: Record<ModelKey, ModelLogoConfig> = {
     brandColor: "#10A37F",
   },
   "gpt-image-2": {
+    svgPath: "/logos/chatgpt-icon.svg",
+    useLocal: true,
+    brandColor: "#10A37F",
+  },
+  "gpt-image-1": {
     svgPath: "/logos/chatgpt-icon.svg",
     useLocal: true,
     brandColor: "#10A37F",

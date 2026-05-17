@@ -146,7 +146,7 @@ function buildModelAccessibleImageUrl(request: NextRequest, gatewayUrl: string):
 }
 
 function shouldUseImageGateway(model: string | null) {
-  return model === "gpt-image-2"
+  return model === "gpt-image-2" || model === "gpt-image-1"
 }
 
 async function uploadFileToDify(file: File, userId: string, apiKey: string) {

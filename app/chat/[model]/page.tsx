@@ -14,12 +14,16 @@ const SUPPORTED_MODELS = [
   'claude-opus',     // Claude opus4.6thinking
   'gemini-pro',      // Gemini 3.1 pro
   'gemini-image',    // Gemini 图像
+  'banana-2-pro',    // Banana 2 Pro
+  'gpt-image-2',     // GPT Image 2
+  'gpt-image-1',     // GPT Image 1
   'suno-v5',         // Suno V5 (音乐)
   'grok-4.2',        // Grok-4.2
   'open-claw',       // Open Claw
   'quanquan-math',   // 全圈数学智能体
   'quanquan-english', // 全圈英语智能体
   'vocab-card',      // 词境记忆卡
+  'problem',         // 题目解析
   'beike-pro',       // 备课助手Pro
   'banzhuren',       // 班主任智能体
   'all-in-one-agent', // 全能超级智能体
@@ -68,6 +72,18 @@ const GeminiImageWorkspace = dynamic(
   }
 )
 
+const ImageWorkspace = dynamic(
+  () => import("@/components/chat/gpt-image2-chat-interface").then(mod => ({ default: mod.GptImage2ChatInterface })),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="min-h-screen flex items-center justify-center bg-[var(--paper-50)]">
+        <LoadingStateV2 label="图像工作台加载中..." size="md" />
+      </div>
+    )
+  }
+)
+
 export default function ModelChatPage() {
   const params = useParams()
   const model = params.model as string
@@ -88,6 +104,17 @@ export default function ModelChatPage() {
       <main className="flex min-h-screen flex-col">
         <div className="flex-1">
           <GeminiImageWorkspace />
+        </div>
+      </main>
+    )
+  }
+
+  if (model === 'gpt-image-2' || model === 'gpt-image-1' || model === 'banana-2-pro') {
+    console.log('✅ [ModelChatPage] 使用图像工作台')
+    return (
+      <main className="flex min-h-screen flex-col">
+        <div className="flex-1">
+          <ImageWorkspace workspaceModel={model === 'banana-2-pro' ? 'banana-2-pro' : 'gpt-image-2'} />
         </div>
       </main>
     )

@@ -50,13 +50,15 @@ interface SunoProFormInputs {
 export async function POST(req: NextRequest) {
   console.log('🎵 [Suno Proxy] 收到请求')
 
-  // 运行时校验（而非模块加载时 throw，避免 Edge Runtime 初始化失败）
-  if (!SUNO_GENERATE_API_KEY) throw new Error("SUNO_GENERATE_API_KEY 未配置")
-  if (!SUNO_QUERY_API_KEY) throw new Error("SUNO_QUERY_API_KEY 未配置")
-
   try {
     const auth = await requireUser(req)
     if (auth.response) return auth.response
+
+    // 运行时校验放在鉴权之后，未登录请求应优先得到 401，而不是配置错误 500。
+    if (!SUNO_GENERATE_API_KEY || !SUNO_QUERY_API_KEY) {
+      return NextResponse.json({ error: "Suno API key 未配置" }, { status: 503 })
+    }
+
     // IP 限流：30次/分钟
     const { getClientIP, checkIpRateLimit, createRateLimitResponse } = await import('@/lib/rate-limit')
     const ip = getClientIP(req)

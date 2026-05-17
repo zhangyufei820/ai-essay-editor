@@ -40,6 +40,7 @@ export type ModelType =
   | "quanquan-math"
   | "quanquan-english"
   | "vocab-card"
+  | "problem"
   | "beike-pro"
   | "banzhuren"
   | "all-in-one-agent"
@@ -132,6 +133,7 @@ export const MODEL_COSTS: Record<ModelType, ModelCostConfig> = {
   "quanquan-math": { ...TEXT_MODEL_DEFAULTS, displayName: "全学段数学智能体" },
   "quanquan-english": { ...TEXT_MODEL_DEFAULTS, displayName: "全学段英语智能体" },
   "vocab-card": { ...TEXT_MODEL_DEFAULTS, displayName: "词境记忆卡", estimatedInputTokens: 600, estimatedOutputTokens: 1000 },
+  problem: { ...TEXT_MODEL_DEFAULTS, displayName: "题目解析智能体", estimatedInputTokens: 600, estimatedOutputTokens: 1000 },
   "beike-pro": { ...TEXT_MODEL_DEFAULTS, displayName: "全学段备课助手Pro", estimatedInputTokens: 1200, estimatedOutputTokens: 1800 },
   banzhuren: { ...TEXT_MODEL_DEFAULTS, displayName: "班主任超级助手", estimatedInputTokens: 1000, estimatedOutputTokens: 1500 },
   "all-in-one-agent": { ...TEXT_MODEL_DEFAULTS, displayName: "全能超级智能体", estimatedInputTokens: 1200, estimatedOutputTokens: 1800 },

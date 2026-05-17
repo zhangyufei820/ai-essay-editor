@@ -19,6 +19,10 @@ export function buildChatSessionRoute(sessionId: string, model?: string | null, 
     return `/chat/gemini-image?sessionId=${safeSessionId}`
   }
 
+  if (safeModel === "banana-2-pro") {
+    return `/chat/banana-2-pro?sessionId=${safeSessionId}`
+  }
+
   return `/chat?sessionId=${safeSessionId}&agent=${encodeURIComponent(safeModel)}`
 }
 
@@ -45,13 +49,18 @@ export function normalizeChatSessionModel(model?: string | null) {
     lower === "gemini-image" ||
     lower === "google-gemini-image" ||
     lower === "creative-image-gemini" ||
-    lower === "gemini-image-generation" ||
+    lower === "gemini-image-generation"
+  ) {
+    return "gemini-image"
+  }
+
+  if (
     lower === "banana-2-pro" ||
     lower === "banana2-pro" ||
     lower === "creative-image-banana" ||
     lower === "banana"
   ) {
-    return "gemini-image"
+    return "banana-2-pro"
   }
 
   return lower || "general-chat"
@@ -59,7 +68,7 @@ export function normalizeChatSessionModel(model?: string | null) {
 
 export function resolveChatSessionRouteModel(session: ChatSessionRouteSource) {
   const normalized = normalizeChatSessionModel(session.ai_model)
-  if (normalized === "gpt-image-2" || normalized === "gemini-image") return normalized
+  if (normalized === "gpt-image-2" || normalized === "gemini-image" || normalized === "banana-2-pro") return normalized
 
   const fields = [
     session.ai_model,
@@ -88,14 +97,19 @@ export function resolveChatSessionRouteModel(session: ChatSessionRouteSource) {
     fields.includes("google image") ||
     fields.includes("google gemini") ||
     fields.includes("gemini 图像") ||
-    fields.includes("谷歌图像") ||
+    fields.includes("谷歌图像")
+  ) {
+    return "gemini-image"
+  }
+
+  if (
     fields.includes("banana") ||
     fields.includes("香蕉") ||
     fields.includes("banana2") ||
     fields.includes("banana 2") ||
     fields.includes("图片生成")
   ) {
-    return "gemini-image"
+    return "banana-2-pro"
   }
 
   if (session.ai_model?.trim()) return normalized
@@ -114,5 +128,5 @@ export function buildChatSessionRouteFromSession(session: ChatSessionRouteSource
 
 export function isDedicatedChatSessionModel(model?: string | null) {
   const normalized = normalizeChatSessionModel(model)
-  return normalized === "gpt-image-2" || normalized === "gemini-image"
+  return normalized === "gpt-image-2" || normalized === "gemini-image" || normalized === "banana-2-pro"
 }
