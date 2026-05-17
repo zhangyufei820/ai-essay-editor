@@ -46,6 +46,7 @@ import { SunoProForm, type SunoFormData } from "./SunoProForm"
 import type { ChatSession } from "./chat-sidebar"
 import { motion, AnimatePresence } from "framer-motion"
 import { EnhancedMarkdown } from "./EnhancedMarkdown"
+import { EssayReviewTemplate } from "@/components/chat/v2/templates"
 import { AssistantEyeAvatar } from "./AssistantEyeAvatar"
 import { OpenClawHtmlPreview } from "./OpenClawHtmlPreview"
 import { UserMessageBubble } from "./UserMessageBubble"
@@ -55,6 +56,7 @@ import katex from "katex"
 import { brandColors, slateColors } from "@/lib/design-tokens"
 import { LATEX_MACROS, renderLatex } from "@/lib/latex-constants"
 import { cleanLLMText } from "@/lib/text-sanitizer"
+import { parseEssayReview } from "@/lib/parse-essay-review"
 import { containsRawDifyWordCardPayload, normalizeDifyWordCardResponse, type FrontendWordCard } from "@/lib/word-card-normalizer"
 import { buildVocabCardWorkflowInputs, cleanVocabAnswer, resolveVocabCardResult } from "@/lib/vocab-card-workflow"
 import { resolveChatAgentParam } from "@/lib/teacher-agent-route"
@@ -3592,9 +3594,17 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                                     )
                                   }
 
+                                  const cleanContent = cleanLLMText(message.content)
+                                  const essayReviewArtifact = selectedModel === "standard"
+                                    ? parseEssayReview(cleanContent)
+                                    : null
+                                  if (essayReviewArtifact) {
+                                    return <EssayReviewTemplate artifact={essayReviewArtifact} />
+                                  }
+
                                   return (
                                     <EnhancedMarkdown
-                                      content={cleanLLMText(message.content)}
+                                      content={cleanContent}
                                     />
                                   )
                                 })()}
@@ -3602,7 +3612,10 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                             )}
 
                             {/* Action toolbar - Subtle, shows on hover */}
-                            {message.content && (
+                            {message.content && !(
+                              selectedModel === "standard" &&
+                              parseEssayReview(cleanLLMText(message.content))
+                            ) && (
                               <div
                                 className={cn(
                                   "flex flex-wrap items-center gap-0.5 mt-1.5 opacity-100 transition-opacity duration-150 sm:opacity-0 sm:group-hover/message:opacity-100 sm:group-focus-within/message:opacity-100 sm:group-active/message:opacity-100 md:mt-2 md:gap-1"
