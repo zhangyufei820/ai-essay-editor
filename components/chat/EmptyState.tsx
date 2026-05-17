@@ -38,7 +38,7 @@ export function EmptyState({ onSelectPrompt, onSuggestionClick, className }: Emp
   }
 
   return (
-    <div className={cn("mx-auto w-full max-w-3xl px-4 py-12 md:py-20", className)}>
+    <div className={cn("mx-auto box-border w-full max-w-3xl px-4 py-12 md:py-20", className)}>
       <InkReveal as="div" className="text-center mb-10">
         <div className="mx-auto mb-4 flex size-14 items-center justify-center rounded-full bg-[var(--ink-50)] text-[var(--ink-600)]">
           <PenLine className="size-6" />

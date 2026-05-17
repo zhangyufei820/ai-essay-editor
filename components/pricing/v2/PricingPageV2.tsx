@@ -68,18 +68,18 @@ export function PricingPageV2({ currentPlan, className }: PricingPageV2Props) {
   return (
     <div
       data-slot="v2-pricing-page"
-      className={cn("mx-auto w-full max-w-6xl px-4 py-10 md:px-6 md:py-20 font-[var(--font-sans-v2)]", className)}
+      className={cn("mx-auto box-border w-full max-w-6xl overflow-hidden px-4 py-10 md:px-6 md:py-20 font-[var(--font-sans-v2)]", className)}
     >
       <InkReveal as="header" className="text-center mb-12">
         <h1 className="font-[var(--font-display)] text-[clamp(32px,5vw,48px)] font-black leading-[1.1] text-[var(--ink-800)]">
           选择适合你的方案
         </h1>
-        <p className="mt-3 text-[15px] leading-[1.7] text-[var(--ink-600)] max-w-lg mx-auto">
+        <p className="mx-auto mt-3 max-w-full px-1 text-[15px] leading-[1.7] text-[var(--ink-600)] break-words sm:max-w-lg">
           所有方案包含 22 个智能体。按月计费，随时取消。年付享 8 折。
         </p>
       </InkReveal>
 
-      <InkStagger stagger={0.1} className="grid gap-6 md:grid-cols-3">
+      <InkStagger stagger={0.1} className="grid min-w-0 gap-6 md:grid-cols-3">
         {PLANS.map((plan) => (
           <InkStaggerItem key={plan.id}>
             <PlanCard plan={plan} isCurrent={currentPlan === plan.id} />
@@ -95,7 +95,7 @@ function PlanCard({ plan, isCurrent }: { plan: Plan; isCurrent?: boolean }) {
     <CardV2
       variant={plan.recommended ? "elevated" : "paper"}
       className={cn(
-        "relative h-full",
+        "relative h-full min-w-0",
         plan.recommended && "ring-2 ring-[var(--seal-500)] ring-offset-2 ring-offset-[var(--paper-50)]"
       )}
     >
@@ -129,7 +129,7 @@ function PlanCard({ plan, isCurrent }: { plan: Plan; isCurrent?: boolean }) {
 
       <div className="px-5 pb-6 sm:px-6">
         {isCurrent ? (
-          <ButtonV2 variant="outline" size="lg" className="w-full" disabled>
+          <ButtonV2 variant="outline" size="lg" className="box-border w-full" disabled>
             <Crown className="size-4" />
             当前方案
           </ButtonV2>
@@ -138,7 +138,7 @@ function PlanCard({ plan, isCurrent }: { plan: Plan; isCurrent?: boolean }) {
             asChild
             variant={plan.recommended ? "seal" : "primary"}
             size="lg"
-            className="w-full"
+            className="box-border w-full"
           >
             <Link href={`/checkout/${plan.id}`} prefetch={false}>
               {plan.cta}

@@ -50,7 +50,7 @@ export function HeroV2() {
         }}
       />
 
-      <div className="mx-auto grid w-full max-w-7xl items-center gap-10 px-4 py-10 md:px-6 md:py-16 lg:grid-cols-[minmax(0,1fr)_minmax(360px,520px)] lg:gap-16 lg:py-24">
+      <div className="mx-auto box-border grid w-full max-w-7xl items-center gap-10 px-4 py-10 md:px-6 md:py-16 lg:grid-cols-[minmax(0,1fr)_minmax(360px,520px)] lg:gap-16 lg:py-24">
         {/* 左侧：文字 + CTA */}
         <InkReveal as="div" className="max-w-2xl">
           {/* 信誉徽章 */}
@@ -83,8 +83,8 @@ export function HeroV2() {
           </p>
 
           {/* 双 CTA */}
-          <div className="mt-8 flex flex-wrap gap-3">
-            <ButtonV2 asChild variant="primary" size="lg" className="group">
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+            <ButtonV2 asChild variant="primary" size="lg" className="group box-border w-full sm:w-auto">
               <Link href="/chat/standard" prefetch={false}>
                 <PenLine className="size-4" aria-hidden="true" />
                 上传作文批改
@@ -92,7 +92,7 @@ export function HeroV2() {
               </Link>
             </ButtonV2>
 
-            <ButtonV2 asChild variant="outline" size="lg">
+            <ButtonV2 asChild variant="outline" size="lg" className="box-border w-full sm:w-auto">
               <Link href="/worksheet-diagnosis" prefetch={false}>
                 <Camera className="size-4" aria-hidden="true" />
                 拍卷诊断错题
