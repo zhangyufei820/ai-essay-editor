@@ -15,6 +15,8 @@ import { motion, type Easing } from "framer-motion"
 import { Copy, Check, User, Sparkles, ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { AssistantMessageV2 } from "@/components/chat/v2"
+import { EssayReviewTemplate } from "@/components/chat/v2/templates"
+import { parseEssayReview } from "@/lib/parse-essay-review"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import remarkMath from "remark-math"
@@ -55,6 +57,7 @@ interface MessageBubbleProps {
   avatar?: string
   onCopy?: () => void
   className?: string
+  model?: string
 }
 
 // ============================================
@@ -382,8 +385,13 @@ const MessageBubble = memo(function MessageBubble({
   avatar,
   onCopy,
   className,
+  model,
 }: MessageBubbleProps) {
   const isUser = role === "user"
+  const essayReviewArtifact = useMemo(() => {
+    if (isUser || model !== "standard") return null
+    return parseEssayReview(content)
+  }, [content, isUser, model])
 
   // User message style - transparent background, inherits page text color
   const userBubbleStyle = {
@@ -432,24 +440,32 @@ const MessageBubble = memo(function MessageBubble({
                 </p>
               </div>
             ) : (
-              <AssistantMessageV2
-                message={{
-                  id: timestamp?.toISOString() || "assistant-message",
-                  role: "assistant",
-                  content,
-                  streaming: isStreaming,
-                  createdAt: timestamp?.toISOString(),
-                }}
-                renderMarkdown={() => (
-                  <div
-                    className="text-[13px] sm:text-sm ai-content-container"
-                    style={{ lineHeight: 1.6, color: CLAUDE_TEXT_COLOR }}
-                  >
-                    <MarkdownContent content={content} />
-                  </div>
-                )}
-                onCopy={() => onCopy?.()}
-              />
+              essayReviewArtifact ? (
+                <EssayReviewTemplate
+                  artifact={essayReviewArtifact}
+                  onCopy={() => onCopy?.()}
+                />
+              ) : (
+                <AssistantMessageV2
+                  message={{
+                    id: timestamp?.toISOString() || "assistant-message",
+                    role: "assistant",
+                    content,
+                    streaming: isStreaming,
+                    createdAt: timestamp?.toISOString(),
+                    model,
+                  }}
+                  renderMarkdown={() => (
+                    <div
+                      className="text-[13px] sm:text-sm ai-content-container"
+                      style={{ lineHeight: 1.6, color: CLAUDE_TEXT_COLOR }}
+                    >
+                      <MarkdownContent content={content} />
+                    </div>
+                  )}
+                  onCopy={() => onCopy?.()}
+                />
+              )
             )}
 
             {/* Bottom action bar - Hidden by default, shows on hover */}
