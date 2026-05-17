@@ -20,7 +20,7 @@
 "use client"
 
 import { motion, useReducedMotion } from "framer-motion"
-import type { CSSProperties, ReactNode } from "react"
+import type { CSSProperties, ElementType, ReactNode } from "react"
 
 // ============================================
 // 缓动曲线（与 lib/design-tokens.ts v2Easing 对齐）
@@ -56,7 +56,7 @@ export function InkReveal({
   const shouldReduceMotion = useReducedMotion()
 
   if (shouldReduceMotion) {
-    const StaticTag = as as keyof JSX.IntrinsicElements
+    const StaticTag = as as ElementType
     return (
       <StaticTag className={className} style={style}>
         {children}

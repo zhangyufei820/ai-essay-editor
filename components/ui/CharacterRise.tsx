@@ -1,13 +1,14 @@
 'use client'
 
-import { useEffect, useRef, useState, JSX } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import type { ElementType } from 'react'
 import { cn } from '@/lib/utils'
 
 interface CharacterRiseProps {
   text: string
   className?: string
   delayPerChar?: number
-  as?: keyof JSX.IntrinsicElements
+  as?: ElementType
 }
 
 export function CharacterRise({ 
@@ -38,7 +39,6 @@ export function CharacterRise({
   }, [])
 
   return (
-    // @ts-expect-error - dynamic component ref
     <Component ref={ref} className={cn('character-rise-group', className)}>
       {text.split('').map((char, index) => (
         <span

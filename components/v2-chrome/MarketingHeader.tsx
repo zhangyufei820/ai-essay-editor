@@ -22,7 +22,7 @@ import { cn } from "@/lib/utils"
 import { ButtonV2 } from "@/components/ui/v2/button"
 import { SheetV2, SheetV2Content, SheetV2Trigger } from "@/components/ui/v2/sheet"
 
-const NAV_ITEMS = [
+const NAV_ITEMS: ReadonlyArray<{ label: string; href: string }> = [
   { label: "智能体", href: "/chat" },
   { label: "拍卷诊断", href: "/worksheet-diagnosis" },
   { label: "创作广场", href: "/explore" },
