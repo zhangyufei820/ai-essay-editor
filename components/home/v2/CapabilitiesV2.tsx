@@ -83,13 +83,13 @@ export function CapabilitiesV2() {
       <div className="mx-auto w-full max-w-7xl px-4 py-16 md:px-6 md:py-24">
         <div className="mb-10 max-w-2xl">
           <p className="text-[12px] font-semibold uppercase tracking-wider text-[var(--ink-500)] font-[var(--font-sans-v2)]">
-            高频学习动作
+            核心学习场景
           </p>
           <h2 className="mt-2 font-[var(--font-display)] text-[clamp(28px,4vw,40px)] font-bold leading-[1.2] text-[var(--ink-800)]">
-            首页只保留最常用的 4 件事
+            从作文到错题，先解决最常用的 4 件事
           </h2>
           <p className="mt-3 text-[15px] leading-[1.7] text-[var(--ink-500)] font-[var(--font-sans-v2)]">
-            不把所有 AI 能力一次性摊开，而是先帮学生完成最容易产生结果的动作。
+            围绕每天会遇到的学习任务，把反馈、修改和复习整理成清晰步骤。
           </p>
         </div>
 
