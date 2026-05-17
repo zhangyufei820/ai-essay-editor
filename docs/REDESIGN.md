@@ -246,3 +246,14 @@ Gemini 像实验室。
 - 动画必须使用 `InkMotion` 原语，禁止再写新的 framer-motion 装饰循环
 - 引入新组件必须填写 PR 描述里的 "v2 设计语言对照"：颜色 / 字体 / 圆角 / 阴影 / 动画分别用了哪个 token
 - 任何视觉破坏需要先经过本文档评审才能合并
+
+## 字体优化（待执行）
+
+当前通过 Google Fonts .cn 镜像加载完整字符集（~3MB）。
+后续优化方案：
+1. 用 fonttools 的 pyftsubset 提取 H1/H2 常用 1500 字 → 子集 woff2 约 60KB
+2. 上传到 cdn.shenxiang.school/fonts/
+3. 改 layout.tsx 的 <link> 为 <style>@font-face{...}</style> 本地引用
+4. 正文字体（Noto Sans SC）保持 Google Fonts CDN（正文字大全集才能支持任意输入）
+
+预期收益：首屏 LCP 减少 200-400ms（宋体标题不再等 CDN）
