@@ -249,11 +249,35 @@ Gemini 像实验室。
 
 ## 字体优化（待执行）
 
-当前通过 Google Fonts .cn 镜像加载完整字符集（~3MB）。
-后续优化方案：
-1. 用 fonttools 的 pyftsubset 提取 H1/H2 常用 1500 字 → 子集 woff2 约 60KB
-2. 上传到 cdn.shenxiang.school/fonts/
-3. 改 layout.tsx 的 <link> 为 <style>@font-face{...}</style> 本地引用
-4. 正文字体（Noto Sans SC）保持 Google Fonts CDN（正文字大全集才能支持任意输入）
+当前通过 Google Fonts `.cn` 镜像加载完整字符集（Noto Serif SC 约 3MB）。
 
-预期收益：首屏 LCP 减少 200-400ms（宋体标题不再等 CDN）
+### 优化方案
+
+1. **子集化宋体**：用 `fonttools` 的 `pyftsubset` 提取首屏 H1/H2 常用 1500 字
+   → 子集 woff2 约 60KB
+2. **上传到 CDN**：`cdn.shenxiang.school/fonts/noto-serif-sc-subset.woff2`
+3. **改 layout.tsx**：把 `<link>` 改为 `<style>@font-face{...}</style>` 本地引用
+4. **正文字体保持 CDN**：Noto Sans SC 正文需要全字符集支持任意输入
+
+### 预期收益
+
+- 首屏 LCP 减少 200-400ms（宋体标题不再等 CDN 响应）
+- 无网络时宋体不会 fallback 到系统宋体（避免 FOUT）
+
+### 执行命令参考
+
+```bash
+pip install fonttools brotli
+pyftsubset NotoSerifSC-Bold.otf \
+  --text-file=common-1500-chars.txt \
+  --output-file=noto-serif-sc-bold-subset.woff2 \
+  --flavor=woff2 \
+  --layout-features='*'
+```
+
+### 状态
+
+- [ ] 生成子集字体
+- [ ] 上传 CDN
+- [ ] 改 `layout.tsx`
+- [ ] 验证 LCP 提升
