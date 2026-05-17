@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
+import { LoginPageV2 } from "@/components/auth/v2/LoginPageV2"
 import { safeInternalRedirectPath } from '@/lib/security/redirect'
 
 function pickAuthingToken(user: Record<string, any>) {
@@ -153,17 +154,7 @@ function AuthingLoginComponent() {
   }, [appId, router, searchParams, isLoaded, referralCode])
 
   return (
-    <div style={{
-      height: '100vh',
-      display: 'flex',
-      flexDirection: 'column',
-      justifyContent: 'center',
-      alignItems: 'center',
-      backgroundColor: '#f5f5f5'
-    }}>
-      {/* 登录框容器 */}
-      <div id="authing-guard-container" style={{ minHeight: '500px', width: '100%', maxWidth: '400px' }}></div>
-
+    <>
       {/* 加载状态 */}
       {!isLoaded && !loadError && (
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '20px', color: '#666' }}>
@@ -200,15 +191,17 @@ function AuthingLoginComponent() {
           </button>
         </div>
       )}
-    </div>
+    </>
   )
 }
 
 // 必须使用 Suspense 包裹，否则在 Next.js 新版本中可能会报错
 export default function LoginPage() {
   return (
-    <Suspense fallback={<div style={{ height: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>加载中...</div>}>
-      <AuthingLoginComponent />
-    </Suspense>
+    <LoginPageV2>
+      <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>加载中...</div>}>
+        <AuthingLoginComponent />
+      </Suspense>
+    </LoginPageV2>
   )
 }
