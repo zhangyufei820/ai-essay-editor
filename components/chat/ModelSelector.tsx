@@ -1,57 +1,22 @@
-/**
- * 🎯 沈翔智学 - 模型选择器组件 (Model Selector)
- *
- * "无痕切换"设计 - 扇形放射 / 流体滑出
- * 关键词：视觉缝合、层级引导、极光微光
- */
-
 "use client"
 
-import { useState, useRef, useEffect } from "react"
-import { Check, ChevronDown } from "lucide-react"
-import { motion, AnimatePresence } from "framer-motion"
+import type React from "react"
+// v2: Sheet 画廊替代原 dropdown
+
+import { useEffect, useMemo, useState } from "react"
+import { ChevronDown, Lock } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { ModelLogo } from "@/components/ModelLogo"
+import {
+  SheetV2,
+  SheetV2Content,
+  SheetV2Trigger,
+  SheetV2Header,
+  SheetV2Title,
+  SheetV2Description,
+  BadgeV2,
+} from "@/components/ui/v2"
+import { AGENT_REGISTRY, AGENT_GROUPS, listAgentsByGroup } from "@/components/chat/v2/agent-registry"
 import type { ModelKey } from "@/components/ModelLogo"
-
-// ============================================
-// 🎨 Design Tokens - 与 AgentPanel 保持一致
-// ============================================
-
-const TOKENS = {
-  primary: "var(--ink-700)",
-  primaryDeep: "var(--ink-900)",
-  primaryLight: "var(--ink-600)",
-  aurora: "var(--seal-500)",
-  auroraSoft: "var(--seal-50)",
-
-  surface: {
-    white: "var(--paper-50)",
-    50: "var(--paper-50)",
-    100: "var(--paper-100)",
-  },
-
-  text: {
-    primary: "var(--ink-900)",
-    secondary: "var(--ink-600)",
-    tertiary: "var(--ink-400)",
-  },
-
-  glass: {
-    light: "color-mix(in srgb, var(--paper-50) 85%, transparent)",
-    medium: "color-mix(in srgb, var(--paper-50) 65%, transparent)",
-    heavy: "color-mix(in srgb, var(--paper-50) 35%, transparent)",
-  },
-
-  shadow: {
-    soft: "var(--shadow-paper)",
-    glow: "var(--shadow-paper)",
-  }
-} as const
-
-// ============================================
-// 类型定义
-// ============================================
 
 export interface Model {
   key: string
@@ -61,7 +26,6 @@ export interface Model {
   description?: string
   badge?: string
   group?: string
-  /** 使用 ModelLogo 组件渲染图标 */
   modelKey?: ModelKey
 }
 
@@ -75,77 +39,8 @@ interface ModelSelectorProps {
     used: number
     total: number
   }
+  isMember?: boolean
 }
-
-// ============================================
-// Badge 组件 - 呼吸光点/呼吸描边风格
-// ============================================
-
-function ModelBadge({ text }: { text: string }) {
-  // 推荐：绿色呼吸光点，替代文字标签
-  if (text === "推荐") {
-    return (
-      <motion.span
-        className="relative w-2 h-2 rounded-full"
-        style={{ backgroundColor: TOKENS.aurora }}
-        animate={{
-          boxShadow: [
-            "0 0 4px color-mix(in srgb, var(--seal-500) 40%, transparent)",
-            "0 0 8px color-mix(in srgb, var(--seal-500) 60%, transparent)",
-            "0 0 4px color-mix(in srgb, var(--seal-500) 40%, transparent)",
-          ],
-          opacity: [0.7, 1, 0.7],
-        }}
-        transition={{ duration: 2, repeat: Infinity }}
-      />
-    )
-  }
-
-  const getBadgeStyle = (badgeText: string) => {
-    switch (badgeText) {
-      case "新":
-        return {
-          border: "1px solid var(--paper-200)",
-          color: TOKENS.text.secondary,
-          background: "var(--paper-200)",
-        }
-      case "热门":
-        return {
-          border: "1px solid var(--paper-200)",
-          color: TOKENS.text.secondary,
-          background: "var(--paper-200)",
-        }
-      case "Pro":
-        return {
-          border: "1px solid var(--paper-200)",
-          color: TOKENS.text.secondary,
-          background: "var(--paper-200)",
-        }
-      default:
-        return {
-          border: "1px solid var(--paper-200)",
-          color: TOKENS.text.tertiary,
-          background: "transparent",
-        }
-    }
-  }
-
-  const style = getBadgeStyle(text)
-
-  return (
-    <motion.span
-      className="relative px-2 py-0.5 text-[10px] font-medium rounded-full tracking-wider"
-      style={style}
-      transition={{ duration: 0.2 }}
-    >
-      {text}
-    </motion.span>
-  )
-}
-
-// ============================================
-// 模型选择器主组件 - 流体滑出设计
-// ============================================
 
 export function ModelSelector({
   selectedModel,
@@ -153,274 +48,147 @@ export function ModelSelector({
   models,
   disabled,
   className,
-  dailyFreeInfo
+  dailyFreeInfo,
+  isMember = true,
 }: ModelSelectorProps) {
-  const [isOpen, setIsOpen] = useState(false)
-  const containerRef = useRef<HTMLDivElement>(null)
-  const currentModel = models.find(m => m.key === selectedModel)
+  const [open, setOpen] = useState(false)
 
-  // 点击外部关闭
+  const current = useMemo(() => {
+    return AGENT_REGISTRY[selectedModel] ?? models.find((item) => item.key === selectedModel) ?? null
+  }, [models, selectedModel])
+
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setIsOpen(false)
-      }
+    if (!open) return
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false)
     }
-    document.addEventListener("mousedown", handleClickOutside)
-    return () => document.removeEventListener("mousedown", handleClickOutside)
-  }, [])
-
-  // 按分组组织模型
-  const groupedModels = models.reduce((acc, model) => {
-    const group = model.group || "默认"
-    if (!acc[group]) acc[group] = []
-    acc[group].push(model)
-    return acc
-  }, {} as Record<string, Model[]>)
-
-  const groups = Object.keys(groupedModels)
-
-  const handleSelect = (modelKey: string) => {
-    onModelChange(modelKey)
-    setIsOpen(false)
-  }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [open])
 
   return (
-    <div ref={containerRef} className={cn("relative", className)}>
-      {/* 触发按钮 - 透明背景，仅文字+图标，由外层毛玻璃容器提供样式 */}
-      <motion.button
-        onClick={() => !disabled && setIsOpen(!isOpen)}
-        disabled={disabled}
-        className="flex items-center gap-1.5 rounded-[var(--radius-pill)] border border-[var(--paper-300)] bg-[var(--paper-50)] px-3 py-1.5 text-[var(--ink-800)] font-[var(--font-sans-v2)] transition-all duration-200"
-        whileTap={{ scale: 0.97 }}
-      >
-        {/* 模型名称 */}
-        <span
-          className="text-xs font-medium text-[var(--ink-800)]"
-          style={{ letterSpacing: "0.2px" }}
+    <SheetV2 open={open} onOpenChange={setOpen}>
+      <SheetV2Trigger asChild>
+        <button
+          type="button"
+          disabled={disabled}
+          className={cn(
+            "inline-flex items-center gap-1.5 px-3 py-1 rounded-[var(--radius-pill)]",
+            "border border-[var(--paper-300)] bg-[var(--paper-50)]",
+            "text-[13px] font-medium text-[var(--ink-700)] font-[var(--font-sans-v2)]",
+            "hover:bg-[var(--ink-50)] hover:border-[var(--ink-300)] transition-colors duration-200",
+            "disabled:cursor-not-allowed disabled:opacity-60",
+            className
+          )}
         >
-          {currentModel?.name || "选择模型"}
-        </span>
+          <span className="text-[var(--ink-500)]">智能体：</span>
+          <span className="truncate">{current?.name ?? "通用对话"}</span>
+          <ChevronDown className="size-3.5 text-[var(--ink-400)]" />
+        </button>
+      </SheetV2Trigger>
 
-        {/* 下拉箭头 */}
-        <motion.div
-          animate={{ rotate: isOpen ? 180 : 0 }}
-          transition={{ duration: 0.2, ease: "easeOut" }}
-        >
-          <ChevronDown
-            className="w-3 h-3 text-[var(--ink-600)]/60"
-            style={{ strokeWidth: 2 }}
-          />
-        </motion.div>
-      </motion.button>
-
-      {/* 流体滑出面板 - 向上呼出 */}
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: 8, scaleY: 0.95 }}
-            animate={{ opacity: 1, y: 0, scaleY: 1 }}
-            exit={{ opacity: 0, y: 8, scaleY: 0.95 }}
-            transition={{ duration: 0.25, ease: [0.32, 0.72, 0, 1] }}
-            className="absolute bottom-full left-0 mb-2 z-50 origin-bottom w-[340px] max-w-[calc(100vw-32px)]"
-            style={{
-              borderRadius: "16px",
-              background: TOKENS.glass.light,
-              backdropFilter: "blur(20px) saturate(180%)",
-              WebkitBackdropFilter: "blur(20px) saturate(180%)",
-              border: "1px solid var(--paper-200)",
-              boxShadow: TOKENS.shadow.glow,
-            }}
-          >
-            {/* 顶部极光光条 */}
-            <motion.div
-              className="absolute top-0 left-0 right-0 h-px"
-              style={{
-                background: "linear-gradient(90deg, transparent 0%, var(--seal-500) 50%, transparent 100%)",
-              }}
-              animate={{
-                opacity: [0.5, 1, 0.5],
-              }}
-              transition={{ duration: 2.5, repeat: Infinity }}
-            />
-
-            {/* 标题 */}
-            <div
-              className="flex items-center justify-between px-4 py-3"
-              style={{ borderBottom: "1px solid var(--paper-200)" }}
-            >
-              <span
-                className="text-xs font-medium tracking-wider"
-                style={{ color: TOKENS.text.secondary, letterSpacing: "1px" }}
-              >
-                选 择 模 型
-              </span>
+      <SheetV2Content side="right" className="w-[92vw] max-w-2xl">
+        <SheetV2Header>
+          <SheetV2Title>选择智能体</SheetV2Title>
+          <SheetV2Description>
+            按任务分组 · 全部 22 个
+          </SheetV2Description>
+          {dailyFreeInfo ? (
+            <div className="text-[11px] text-[var(--ink-400)] font-[var(--font-mono-v2)]">
+              今日免费额度：{dailyFreeInfo.used}/{dailyFreeInfo.total}
             </div>
+          ) : null}
+        </SheetV2Header>
 
-            {/* 可滚动的模型列表 */}
-            <div
-              className="overflow-y-auto p-3"
-              style={{ maxHeight: "360px" }}
-            >
-              {groups.map((group, groupIndex) => (
-                <div key={group}>
-                  {/* 分组标题 - 弱化处理 */}
-                  {group !== "默认" && (
-                    <motion.div
-                      className="flex items-center gap-2 mb-2"
-                      style={{
-                        marginTop: groupIndex > 0 ? "12px" : "0",
-                      }}
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: groupIndex * 0.05 }}
-                    >
-                      {/* 左侧细线 */}
-                      <div
-                        className="w-4 h-px"
-                        style={{ background: "linear-gradient(90deg, var(--ink-300), transparent)" }}
-                      />
-                      <span
-                        className="text-[10px] font-medium uppercase tracking-widest"
-                        style={{
-                          color: TOKENS.text.tertiary,
-                          letterSpacing: "2px",
+        <div className="flex-1 overflow-auto px-6 py-4 font-[var(--font-sans-v2)]">
+          {AGENT_GROUPS.map((group) => {
+            const items = listAgentsByGroup(group.key)
+            if (items.length === 0) return null
+
+            return (
+              <section key={group.key} className="mb-6">
+                <h3 className="mb-3 text-[12px] font-semibold uppercase tracking-wider text-[var(--ink-500)]">
+                  {group.label}
+                </h3>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {items.map((agent) => {
+                    const locked = Boolean(agent.memberOnly && !isMember)
+                    const active = agent.model === selectedModel
+                    const Icon = agent.icon
+
+                    return (
+                      <button
+                        key={agent.model}
+                        type="button"
+                        onClick={() => {
+                          if (locked) return
+                          onModelChange(agent.model)
+                          setOpen(false)
                         }}
+                        disabled={locked}
+                        className={cn(
+                          "group relative flex items-start gap-3 rounded-[var(--radius-soft)] p-3 text-left border transition-colors duration-200",
+                          active
+                            ? "bg-[var(--ink-50)] border-[var(--ink-300)]"
+                            : "border-[var(--paper-200)] bg-white hover:bg-[var(--ink-50)]/60",
+                          locked && "opacity-50 cursor-not-allowed"
+                        )}
                       >
-                        {group}
-                      </span>
-                    </motion.div>
-                  )}
+                        <div
+                          className={cn(
+                            "flex size-9 shrink-0 items-center justify-center rounded-[var(--radius-soft)]",
+                            active
+                              ? "bg-[var(--ink-700)] text-white"
+                              : "bg-[var(--ink-50)] text-[var(--ink-700)]"
+                          )}
+                        >
+                          {Icon ? <Icon className="size-4" /> : null}
+                        </div>
 
-                  {/* 模型列表 - 卡片式 */}
-                  <div className="space-y-1">
-                    {groupedModels[group].map((model) => (
-                      <ModelMenuItem
-                        key={model.key}
-                        model={model}
-                        isSelected={selectedModel === model.key}
-                        onClick={() => handleSelect(model.key)}
-                      />
-                    ))}
-                  </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-[var(--font-display)] text-[14px] font-bold text-[var(--ink-800)]">
+                              {agent.name}
+                            </span>
+                            {agent.memberOnly ? (
+                              <BadgeV2 variant="seal">
+                                <Lock className="size-2.5 mr-0.5" />
+                                会员
+                              </BadgeV2>
+                            ) : null}
+                          </div>
+                          <p className="mt-0.5 text-[12px] leading-[1.5] text-[var(--ink-500)] line-clamp-2">
+                            {agent.description}
+                          </p>
+                          {agent.priceLabel ? (
+                            <p className="mt-1 text-[11px] text-[var(--ink-400)] font-[var(--font-mono-v2)]">
+                              {agent.priceLabel}
+                            </p>
+                          ) : null}
+                        </div>
+
+                        {active ? (
+                          <span
+                            className="absolute right-3 top-3 size-1.5 rounded-full bg-[var(--seal-500)]"
+                            aria-hidden="true"
+                          />
+                        ) : null}
+                      </button>
+                    )
+                  })}
                 </div>
-              ))}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  )
-}
-
-// ============================================
-// 模型菜单项组件 - 浮动岛屿风格
-// ============================================
-
-function ModelMenuItem({
-  model,
-  isSelected,
-  onClick
-}: {
-  model: Model
-  isSelected: boolean
-  onClick: () => void
-}) {
-  const Icon = model.icon
-  const isStringIcon = typeof Icon === 'string'
-  const hasModelLogo = !!model.modelKey
-
-  return (
-    <motion.button
-      onClick={onClick}
-      className="w-full flex items-center gap-3 rounded-[var(--radius-sharp)] cursor-pointer transition-all duration-200"
-      style={{
-        height: "48px",
-        padding: "0 12px",
-        background: isSelected
-          ? "linear-gradient(135deg, var(--seal-50) 0%, var(--paper-50) 100%)"
-          : "transparent",
-        border: isSelected
-          ? "1px solid var(--seal-500)"
-          : "1px solid transparent",
-      }}
-      whileHover={{
-        background: isSelected
-          ? "linear-gradient(135deg, var(--seal-50) 0%, var(--paper-50) 100%)"
-          : "var(--paper-100)",
-      }}
-      whileTap={{ scale: 0.98 }}
-    >
-      {/* 模型图标 - 使用 ModelLogo 或 Lucide 图标 */}
-      <div
-        className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-soft)] shrink-0"
-        style={{
-          background: isSelected
-            ? "var(--seal-50)"
-            : "var(--paper-200)",
-          border: isSelected
-            ? "1px solid var(--seal-500)"
-            : "1px solid var(--paper-200)",
-        }}
-      >
-        {hasModelLogo ? (
-          <ModelLogo modelKey={model.modelKey!} size="md" />
-        ) : isStringIcon ? (
-          <span className="text-sm">{Icon}</span>
-        ) : Icon ? (
-          <Icon
-            className="h-4 w-4"
-            style={{
-              color: isSelected ? TOKENS.primaryLight : TOKENS.text.secondary,
-              strokeWidth: 1.5,
-            }}
-          />
-        ) : null}
-      </div>
-
-      {/* 模型信息 */}
-      <div className="flex-1 min-w-0 text-left">
-        <div className="flex items-center gap-1.5">
-          <span
-            className="text-xs font-medium"
-            style={{
-              fontWeight: 500,
-              color: isSelected ? TOKENS.text.primary : TOKENS.text.secondary,
-              letterSpacing: "0.2px",
-            }}
-          >
-            {model.name}
-          </span>
-          {model.badge && <ModelBadge text={model.badge} />}
+              </section>
+            )
+          })}
         </div>
-        {model.description && (
-          <p
-            className="text-[10px] truncate mt-0.5"
-            style={{
-              fontWeight: 400,
-              color: TOKENS.text.tertiary,
-            }}
-          >
-            {model.description}
-          </p>
-        )}
-      </div>
-
-      {/* 选中图标 - 极光微光 */}
-      {isSelected && (
-        <motion.div
-          initial={{ scale: 0, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ duration: 0.2, ease: "easeOut" }}
-        >
-          <Check
-            className="w-4 h-4 shrink-0"
-            style={{ color: TOKENS.primaryLight, strokeWidth: 2 }}
-          />
-        </motion.div>
-      )}
-    </motion.button>
+      </SheetV2Content>
+    </SheetV2>
   )
 }
 
 export default ModelSelector
+
+/*
+Legacy dropdown implementation preserved in git history for rollback.
+Use `git show HEAD^:components/chat/ModelSelector.tsx` if you need the exact pre-v2 version.
+*/
