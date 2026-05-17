@@ -11,7 +11,7 @@
  * 三种且仅三种 size：sm / default / lg
  *
  * 按下交互：
- *   - 不使用 active:scale-95（取消传统 SaaS 弹性）
+ *   - 不使用缩放式按压反馈（取消传统 SaaS 弹性）
  *   - primary / seal: translateY(1px) + 阴影内陷 = 印章按下感
  *   - outline / ghost: 仅微调底色
  */

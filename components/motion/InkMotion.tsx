@@ -10,7 +10,7 @@
  * 设计原则：
  *   - 全部尊重 prefers-reduced-motion（命中即直接降级为静态 div）
  *   - 缓动函数统一来自 lib/design-tokens v2Easing
- *   - 不使用 framer-motion 的 repeat: Infinity
+ *   - 不使用 framer-motion 的无限重复配置
  *   - 不引入任何粒子 / 光晕 / 脉冲
  *
  * 使用：
