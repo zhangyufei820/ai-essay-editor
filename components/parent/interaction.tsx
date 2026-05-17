@@ -7,7 +7,7 @@ const activities = [
     icon: Heart,
     title: "情感沟通",
     description: "学习如何与孩子进行有效的情感交流，建立信任关系",
-    color: "bg-red-500/10 text-red-600",
+    color: "bg-red-500/10 text-[var(--seal-500)]",
   },
   {
     icon: Smile,
@@ -25,7 +25,7 @@ const activities = [
     icon: MessageSquare,
     title: "学习讨论",
     description: "围绕学习内容展开深度讨论，提升思维能力",
-    color: "bg-green-500/10 text-green-600",
+    color: "bg-[var(--ink-50)]0/10 text-[var(--ink-600)]",
   },
 ]
 
@@ -34,7 +34,7 @@ export function ParentInteraction() {
     <section className="py-20 lg:py-32 bg-muted/30">
       <div className="container px-4">
         <div className="mx-auto max-w-2xl text-center mb-16">
-          <h2 className="mb-4 text-3xl font-bold lg:text-4xl">亲子互动学习</h2>
+          <h2 className="mb-4 text-3xl font-bold lg:text-4xl font-[var(--font-display)]">亲子互动学习</h2>
           <p className="text-lg text-muted-foreground">通过多样化的互动方式，增进亲子关系，让学习成为快乐的家庭活动</p>
         </div>
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-12">

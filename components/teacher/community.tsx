@@ -30,7 +30,7 @@ export function TeacherCommunity() {
     <section className="py-20">
       <div className="container mx-auto px-4">
         <div className="mb-12 text-center">
-          <h2 className="mb-4 text-4xl font-bold tracking-tight text-balance">教研协作社区</h2>
+          <h2 className="mb-4 text-4xl font-bold tracking-tight text-balance font-[var(--font-display)]">教研协作社区</h2>
           <p className="mx-auto max-w-2xl text-lg text-muted-foreground text-pretty">连接全国教师，共同探索教育创新</p>
         </div>
 
@@ -39,7 +39,7 @@ export function TeacherCommunity() {
             const Icon = feature.icon
             return (
               <Card key={feature.title} className="border-2 p-6 text-center">
-                <div className="mx-auto mb-4 inline-flex h-14 w-14 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <div className="mx-auto mb-4 inline-flex h-14 w-14 items-center justify-center rounded-[var(--radius-sharp)] bg-[var(--ink-50)] text-[var(--ink-600)]">
                   <Icon className="h-7 w-7" />
                 </div>
                 <h3 className="mb-2 text-lg font-bold">{feature.title}</h3>

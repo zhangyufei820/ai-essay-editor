@@ -122,7 +122,7 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
   return (
     <div 
       className="border-b last:border-b-0"
-      style={{ borderColor: slateColors[100] }}
+      style={{ borderColor: "var(--paper-200)" }}
     >
       <button
         onClick={() => setIsOpen(!isOpen)}
@@ -130,14 +130,14 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
       >
         <span 
           className="font-medium pr-4"
-          style={{ color: slateColors[800], fontSize: '15px' }}
+          style={{ color: "var(--ink-800)", fontSize: '15px' }}
         >
           {question}
         </span>
         {isOpen ? (
-          <ChevronUp className="w-5 h-5 shrink-0" style={{ color: brandColors[600] }} />
+          <ChevronUp className="w-5 h-5 shrink-0" style={{ color: "var(--ink-600)" }} />
         ) : (
-          <ChevronDown className="w-5 h-5 shrink-0" style={{ color: slateColors[400] }} />
+          <ChevronDown className="w-5 h-5 shrink-0" style={{ color: "var(--ink-400)" }} />
         )}
       </button>
       <AnimatePresence>
@@ -151,7 +151,7 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
           >
             <div 
               className="pb-5 text-sm leading-relaxed whitespace-pre-line"
-              style={{ color: slateColors[600] }}
+              style={{ color: "var(--ink-600)" }}
             >
               {answer}
             </div>
@@ -217,28 +217,28 @@ function QuickLinks() {
         >
           <Link
             href={link.href}
-            className="flex items-center gap-4 p-4 rounded-xl transition-all h-full"
+            className="flex items-center gap-4 p-4 rounded-[var(--radius-sharp)] transition-all h-full"
             style={{ 
               backgroundColor: 'white',
               boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
             }}
           >
             <motion.div 
-              className="w-12 h-12 rounded-xl flex items-center justify-center"
-              style={{ backgroundColor: brandColors[50] }}
+              className="w-12 h-12 rounded-[var(--radius-sharp)] flex items-center justify-center"
+              style={{ backgroundColor: "var(--ink-50)" }}
               whileHover={{ rotate: 10 }}
             >
-              <link.icon className="w-6 h-6" style={{ color: brandColors[600] }} />
+              <link.icon className="w-6 h-6" style={{ color: "var(--ink-600)" }} />
             </motion.div>
             <div>
-              <h3 className="font-medium" style={{ color: slateColors[800] }}>
+              <h3 className="font-medium" style={{ color: "var(--ink-800)" }}>
                 {link.title}
               </h3>
-              <p className="text-sm" style={{ color: slateColors[500] }}>
+              <p className="text-sm" style={{ color: "var(--ink-500)" }}>
                 {link.desc}
               </p>
             </div>
-            <ExternalLink className="w-4 h-4 ml-auto" style={{ color: slateColors[400] }} />
+            <ExternalLink className="w-4 h-4 ml-auto" style={{ color: "var(--ink-400)" }} />
           </Link>
         </motion.div>
       ))}
@@ -284,18 +284,18 @@ function CategorySection({
         transition={{ duration: 0.4, delay: index * 0.1 + 0.2 }}
       >
         <motion.div 
-          className="w-10 h-10 rounded-xl flex items-center justify-center"
-          style={{ backgroundColor: brandColors[100] }}
+          className="w-10 h-10 rounded-[var(--radius-sharp)] flex items-center justify-center"
+          style={{ backgroundColor: "var(--ink-50)" }}
           whileHover={{ rotate: 90, scale: 1.1 }}
         >
-          <Icon className="w-5 h-5" style={{ color: brandColors[600] }} />
+          <Icon className="w-5 h-5" style={{ color: "var(--ink-600)" }} />
         </motion.div>
-        <h2 className="text-xl font-semibold" style={{ color: slateColors[800] }}>
+        <h2 className="text-xl font-semibold font-[var(--font-display)]" style={{ color: "var(--ink-800)" }}>
           {title}
         </h2>
       </motion.div>
       <div 
-        className="bg-white rounded-2xl p-6"
+        className="bg-[var(--paper-50)] rounded-[var(--radius-sharp)] p-6"
         style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}
       >
         {questions.map((item, qIndex) => (
@@ -321,10 +321,10 @@ function CategorySection({
 function ContactSection() {
   return (
     <motion.div
-      className="rounded-2xl p-8"
+      className="rounded-[var(--radius-sharp)] p-8"
       style={{
-        background: `linear-gradient(135deg, ${brandColors[50]} 0%, ${brandColors[100]}50 100%)`,
-        border: `1px solid ${brandColors[200]}40`
+        background: "linear-gradient(135deg, var(--ink-50) 0%, var(--paper-50) 100%)",
+        border: "1px solid var(--ink-200)"
       }}
       initial={{ opacity: 0, y: 30, scale: 0.95 }}
       whileInView={{ opacity: 1, y: 0, scale: 1 }}
@@ -349,12 +349,12 @@ function ContactSection() {
             repeatDelay: 3
           }}
         >
-          <MessageCircle className="w-12 h-12 mx-auto mb-4" style={{ color: brandColors[600] }} />
+          <MessageCircle className="w-12 h-12 mx-auto mb-4" style={{ color: "var(--ink-600)" }} />
         </motion.div>
-        <h3 className="text-xl font-semibold mb-2" style={{ color: brandColors[800] }}>
+        <h3 className="text-xl font-semibold mb-2" style={{ color: "var(--ink-800)" }}>
           联系客服
         </h3>
-        <p style={{ color: slateColors[600] }}>
+        <p style={{ color: "var(--ink-600)" }}>
           扫描下方二维码添加客服微信，或拨打客服电话
         </p>
       </motion.div>
@@ -374,7 +374,7 @@ function ContactSection() {
           transition={{ type: "spring", stiffness: 300 }}
         >
           <motion.div
-            className="w-40 h-40 md:w-48 md:h-48 bg-white rounded-xl p-2 shadow-lg mb-3"
+            className="w-40 h-40 md:w-48 md:h-48 bg-[var(--paper-50)] rounded-[var(--radius-sharp)] p-2 shadow-lg mb-3"
             animate={{
               boxShadow: [
                 "0 4px 20px rgba(0,0,0,0.1)",
@@ -392,13 +392,13 @@ function ContactSection() {
               className="w-full h-full object-contain"
             />
           </motion.div>
-          <span className="font-medium" style={{ color: brandColors[700] }}>扫码添加客服微信</span>
+          <span className="font-medium" style={{ color: "var(--ink-700)" }}>扫码添加客服微信</span>
         </motion.div>
         
         {/* 分隔线（移动端不显示） */}
         <motion.div
           className="hidden md:block w-px h-32"
-          style={{ backgroundColor: brandColors[200] }}
+          style={{ backgroundColor: "var(--ink-200)" }}
           initial={{ scaleY: 0 }}
           whileInView={{ scaleY: 1 }}
           viewport={{ once: true }}
@@ -413,7 +413,7 @@ function ContactSection() {
         >
           <motion.div
             className="w-16 h-16 rounded-full flex items-center justify-center mb-3"
-            style={{ backgroundColor: brandColors[100] }}
+            style={{ backgroundColor: "var(--ink-50)" }}
             animate={{
               boxShadow: [
                 "0 0 0 0 rgba(34, 197, 94, 0.2)",
@@ -422,18 +422,18 @@ function ContactSection() {
             }}
             transition={{ duration: 1.5, repeat: Infinity }}
           >
-            <Phone className="w-8 h-8" style={{ color: brandColors[600] }} />
+            <Phone className="w-8 h-8" style={{ color: "var(--ink-600)" }} />
           </motion.div>
           <motion.a
             href={`tel:${contactInfo.phone}`}
             className="text-2xl font-bold flex items-center gap-2 hover:underline"
-            style={{ color: brandColors[700] }}
+            style={{ color: "var(--ink-700)" }}
             whileHover={{ scale: 1.05 }}
           >
             <Phone className="w-5 h-5" />
             {contactInfo.phone}
           </motion.a>
-          <span className="text-sm mt-1" style={{ color: slateColors[500] }}>工作日 9:00-18:00</span>
+          <span className="text-sm mt-1" style={{ color: "var(--ink-500)" }}>工作日 9:00-18:00</span>
         </motion.div>
       </motion.div>
 
@@ -451,11 +451,11 @@ function ContactSection() {
         >
           <Link
             href="/chat"
-            className="inline-flex items-center gap-2 px-6 py-3 font-medium rounded-xl transition-colors"
+            className="inline-flex items-center gap-2 px-6 py-3 font-medium rounded-[var(--radius-sharp)] transition-colors"
             style={{
-              backgroundColor: brandColors[600],
+              backgroundColor: "var(--seal-500)",
               color: "white",
-              boxShadow: `0 4px 12px ${brandColors[600]}40`
+              boxShadow: "var(--shadow-paper)"
             }}
           >
             <MessageCircle className="w-5 h-5" />
@@ -473,12 +473,12 @@ function ContactSection() {
 
 export function HelpPageClient() {
   return (
-    <main className="min-h-screen" style={{ backgroundColor: creamColors[100] }}>
+    <main className="min-h-screen bg-[var(--paper-50)] font-[var(--font-sans-v2)] text-[var(--ink-900)]">
       {/* 顶部背景 - 渐变到透明的有机光影流 */}
       <div
         className="relative py-16 md:py-20 overflow-hidden"
         style={{
-          background: `linear-gradient(180deg, ${brandColors[700]} 0%, ${brandColors[800]}60 50%, transparent 100%)`
+          background: "linear-gradient(180deg, var(--ink-700) 0%, color-mix(in srgb, var(--ink-800) 60%, transparent) 50%, transparent 100%)"
         }}
       >
         {/* 动态背景装饰 - 有机光影流 */}
@@ -493,7 +493,7 @@ export function HelpPageClient() {
               key={i}
               className="absolute w-64 h-64 rounded-full"
               style={{
-                background: `radial-gradient(circle, ${brandColors[400]}15 0%, transparent 70%)`,
+                background: `radial-gradient(circle, var(--ink-400)15 0%, transparent 70%)`,
                 left: `${20 + i * 20}%`,
                 top: `${10 + (i % 3) * 30}%`,
               }}
@@ -572,7 +572,7 @@ export function HelpPageClient() {
               >
                 <ShenxiangInterfaceIcon name="help" size={46} />
               </motion.div>
-              <h1 className="text-3xl md:text-4xl font-bold text-white">
+              <h1 className="text-3xl md:text-4xl font-bold text-white font-[var(--font-display)]">
                 帮助中心
               </h1>
             </motion.div>
@@ -605,7 +605,7 @@ export function HelpPageClient() {
           >
             <motion.path 
               d="M0 60 C240 30 480 0 720 0 C960 0 1200 30 1440 60 L1440 60 L0 60Z" 
-              fill={creamColors[100]}
+              fill="var(--paper-50)"
               initial={{ pathLength: 0 }}
               animate={{ pathLength: 1 }}
               transition={{ duration: 1.5, delay: 0.5 }}
@@ -637,7 +637,7 @@ export function HelpPageClient() {
       {/* 底部导航 */}
       <motion.div 
         className="border-t"
-        style={{ borderColor: slateColors[100], backgroundColor: 'white' }}
+        style={{ borderColor: "var(--paper-200)", backgroundColor: "var(--paper-50)" }}
         initial={{ opacity: 0 }}
         whileInView={{ opacity: 1 }}
         viewport={{ once: true }}
@@ -670,9 +670,9 @@ export function HelpPageClient() {
                   hidden: { opacity: 0, y: 10 },
                   visible: { opacity: 1, y: 0 }
                 }}
-                whileHover={{ scale: 1.1, color: brandColors[600] }}
+                whileHover={{ scale: 1.1, color: "var(--ink-600)" }}
               >
-                <Link href={item.href} className="text-sm hover:underline" style={{ color: slateColors[600] }}>
+                <Link href={item.href} className="text-sm hover:underline" style={{ color: "var(--ink-600)" }}>
                   {item.text}
                 </Link>
               </motion.div>
@@ -680,7 +680,7 @@ export function HelpPageClient() {
           </motion.div>
           <motion.p 
             className="text-center text-sm mt-4"
-            style={{ color: slateColors[400] }}
+            style={{ color: "var(--ink-400)" }}
             initial={{ opacity: 0 }}
             whileInView={{ opacity: 1 }}
             viewport={{ once: true }}

@@ -33,7 +33,7 @@ export function TeacherDevelopment() {
     <section className="py-20 bg-muted/30">
       <div className="container mx-auto px-4">
         <div className="mb-12 text-center">
-          <h2 className="mb-4 text-4xl font-bold tracking-tight text-balance">专业发展路径</h2>
+          <h2 className="mb-4 text-4xl font-bold tracking-tight text-balance font-[var(--font-display)]">专业发展路径</h2>
           <p className="mx-auto max-w-2xl text-lg text-muted-foreground text-pretty">系统化的教师专业发展课程体系</p>
         </div>
 
@@ -42,7 +42,7 @@ export function TeacherDevelopment() {
             const Icon = path.icon
             return (
               <Card key={path.title} className="border-2 p-6">
-                <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-[var(--radius-soft)] bg-[var(--ink-50)] text-[var(--ink-600)]">
                   <Icon className="h-6 w-6" />
                 </div>
                 <h3 className="mb-3 text-xl font-bold">{path.title}</h3>

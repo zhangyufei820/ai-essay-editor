@@ -34,11 +34,11 @@ export function ParentAI() {
     <section className="py-20 lg:py-32 bg-gradient-to-b from-primary/5 to-background">
       <div className="container px-4">
         <div className="mx-auto max-w-2xl text-center mb-16">
-          <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-primary/10 px-4 py-2 text-sm font-medium text-primary">
+          <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-[var(--ink-50)] px-4 py-2 text-sm font-medium text-[var(--ink-600)]">
             <Sparkles className="h-4 w-4" />
             AI赋能教育
           </div>
-          <h2 className="mb-4 text-3xl font-bold lg:text-4xl">AI共同学习</h2>
+          <h2 className="mb-4 text-3xl font-bold lg:text-4xl font-[var(--font-display)]">AI共同学习</h2>
           <p className="text-lg text-muted-foreground">
             利用人工智能技术，为家长和孩子提供智能化的学习支持，
             <br className="hidden lg:block" />
@@ -53,14 +53,14 @@ export function ParentAI() {
               className="border-border/50 hover:border-primary/50 hover:shadow-lg transition-all"
             >
               <CardContent className="p-6">
-                <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/5">
-                  <feature.icon className="h-7 w-7 text-primary" />
+                <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-[var(--radius-sharp)] bg-gradient-to-br from-[var(--ink-50)] to-[var(--paper-50)]">
+                  <feature.icon className="h-7 w-7 text-[var(--ink-600)]" />
                 </div>
                 <h3 className="mb-2 text-xl font-semibold">{feature.title}</h3>
                 <p className="mb-4 text-sm text-muted-foreground">{feature.description}</p>
                 <div className="flex flex-wrap gap-2">
                   {feature.features.map((item) => (
-                    <span key={item} className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+                    <span key={item} className="rounded-full bg-[var(--ink-50)] px-3 py-1 text-xs font-medium text-[var(--ink-600)]">
                       {item}
                     </span>
                   ))}
@@ -70,9 +70,9 @@ export function ParentAI() {
           ))}
         </div>
 
-        <div className="mx-auto max-w-3xl rounded-2xl bg-gradient-to-r from-primary/10 via-primary/5 to-primary/10 p-8 lg:p-12">
+        <div className="mx-auto max-w-3xl rounded-[var(--radius-sharp)] bg-gradient-to-r from-[var(--ink-50)] via-[var(--paper-50)] to-[var(--ink-50)] p-8 lg:p-12">
           <div className="text-center">
-            <MessageCircle className="mx-auto mb-4 h-12 w-12 text-primary" />
+            <MessageCircle className="mx-auto mb-4 h-12 w-12 text-[var(--ink-600)]" />
             <h3 className="mb-3 text-2xl font-bold">开启AI学习之旅</h3>
             <p className="mb-6 text-muted-foreground">与孩子一起体验AI技术带来的学习革新，共同成长，共享快乐</p>
             <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">

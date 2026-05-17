@@ -12,14 +12,14 @@ export function ParentGrowth() {
       <div className="container px-4">
         <div className="grid gap-12 lg:grid-cols-2 lg:items-center">
           <div>
-            <h2 className="mb-6 text-3xl font-bold lg:text-4xl">学生成长追踪</h2>
+            <h2 className="mb-6 text-3xl font-bold lg:text-4xl font-[var(--font-display)]">学生成长追踪</h2>
             <p className="mb-8 text-lg text-muted-foreground leading-relaxed">
               实时掌握孩子的学习动态和成长轨迹，通过数据化分析， 科学指导孩子的学习发展，见证每一个进步的瞬间。
             </p>
             <div className="space-y-6">
               <div className="flex gap-4">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                  <TrendingUp className="h-5 w-5 text-primary" />
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-soft)] bg-[var(--ink-50)]">
+                  <TrendingUp className="h-5 w-5 text-[var(--ink-600)]" />
                 </div>
                 <div>
                   <h3 className="mb-1 font-semibold">学习进度可视化</h3>
@@ -27,8 +27,8 @@ export function ParentGrowth() {
                 </div>
               </div>
               <div className="flex gap-4">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                  <LineChart className="h-5 w-5 text-primary" />
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-soft)] bg-[var(--ink-50)]">
+                  <LineChart className="h-5 w-5 text-[var(--ink-600)]" />
                 </div>
                 <div>
                   <h3 className="mb-1 font-semibold">能力发展分析</h3>
@@ -36,8 +36,8 @@ export function ParentGrowth() {
                 </div>
               </div>
               <div className="flex gap-4">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                  <Award className="h-5 w-5 text-primary" />
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-soft)] bg-[var(--ink-50)]">
+                  <Award className="h-5 w-5 text-[var(--ink-600)]" />
                 </div>
                 <div>
                   <h3 className="mb-1 font-semibold">成就里程碑</h3>
@@ -66,7 +66,7 @@ export function ParentGrowth() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">学习专注度</span>
-                    <span className="font-semibold text-green-600">优秀</span>
+                    <span className="font-semibold text-[var(--ink-600)]">优秀</span>
                   </div>
                 </div>
               </CardContent>
@@ -83,16 +83,16 @@ export function ParentGrowth() {
                   <div>
                     <div className="mb-1 flex justify-between text-sm">
                       <span>语文</span>
-                      <span className="text-green-600">+12%</span>
+                      <span className="text-[var(--ink-600)]">+12%</span>
                     </div>
                     <div className="h-2 rounded-full bg-muted">
-                      <div className="h-2 rounded-full bg-green-500" style={{ width: "85%" }} />
+                      <div className="h-2 rounded-full bg-[var(--ink-50)]0" style={{ width: "85%" }} />
                     </div>
                   </div>
                   <div>
                     <div className="mb-1 flex justify-between text-sm">
                       <span>数学</span>
-                      <span className="text-green-600">+8%</span>
+                      <span className="text-[var(--ink-600)]">+8%</span>
                     </div>
                     <div className="h-2 rounded-full bg-muted">
                       <div className="h-2 rounded-full bg-blue-500" style={{ width: "78%" }} />
@@ -101,10 +101,10 @@ export function ParentGrowth() {
                   <div>
                     <div className="mb-1 flex justify-between text-sm">
                       <span>英语</span>
-                      <span className="text-green-600">+15%</span>
+                      <span className="text-[var(--ink-600)]">+15%</span>
                     </div>
                     <div className="h-2 rounded-full bg-muted">
-                      <div className="h-2 rounded-full bg-emerald-500" style={{ width: "82%" }} />
+                      <div className="h-2 rounded-full bg-[var(--ink-50)]0" style={{ width: "82%" }} />
                     </div>
                   </div>
                 </div>
