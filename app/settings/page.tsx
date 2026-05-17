@@ -17,6 +17,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { ShenxiangInterfaceIcon } from "@/components/icons/ShenxiangInterfaceIcons"
 import { extractUserId } from "@/lib/auth-user"
+import { ProfilePageV2 } from "@/components/settings/v2/ProfilePageV2"
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -283,332 +284,35 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F9FAFB]">
-      {/* 顶部导航 */}
-      <div className="bg-white border-b border-gray-100 px-4 py-3 sticky top-0 z-10">
-        <div className="max-w-3xl mx-auto flex items-center justify-between">
-          <button 
-            onClick={() => router.back()}
-            className="flex items-center gap-1 text-gray-600 hover:text-gray-800 transition-colors"
-          >
-            <ChevronLeft className="h-5 w-5" />
-            <span className="text-sm font-medium">返回</span>
-          </button>
-          <h1 className="text-lg font-semibold text-gray-900">设置</h1>
-          <div className="w-16" />
-        </div>
-      </div>
-
-      <div className="max-w-3xl mx-auto p-4 space-y-4">
-        
-        {/* 🔥 用户信息卡片 */}
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-          <div className="flex items-center gap-4">
-            {/* 头像 */}
-            <div 
-              className="relative group cursor-pointer" 
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <div className="h-16 w-16 rounded-full overflow-hidden border-2 border-gray-100 shadow-sm bg-gray-100 flex items-center justify-center">
-                {avatarUrl ? (
-                  <img src={avatarUrl} alt="Avatar" className="h-full w-full object-cover" />
-                ) : (
-                  <ShenxiangInterfaceIcon name="user-avatar" size={54} />
-                )}
-              </div>
-              <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                <ShenxiangInterfaceIcon name="camera" size={28} />
-              </div>
-              {uploading && (
-                <div className="absolute inset-0 bg-white/80 rounded-full flex items-center justify-center">
-                  <Loader2 className="h-6 w-6 animate-spin" style={{ color: COLORS.primary.main }} />
-                </div>
-              )}
-            </div>
-            <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleUploadAvatar} />
-            
-            {/* 用户信息 */}
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-1">
-                <Input 
-                  value={displayName} 
-                  onChange={(e) => setDisplayName(e.target.value)} 
-                  placeholder="设置昵称"
-                  className="h-8 text-base font-semibold border-0 p-0 focus-visible:ring-0 bg-transparent"
-                />
-              </div>
-              <p className="text-sm text-gray-500">{user?.email || user?.phone || "-"}</p>
-            </div>
-            
-            {/* 保存按钮 */}
-            <Button 
-              onClick={handleSave} 
-              disabled={loading} 
-              size="sm"
-              className="text-white"
-              style={{ backgroundColor: COLORS.primary.main }}
-            >
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "保存"}
-            </Button>
-          </div>
-          
-          {/* 退出登录 */}
-          <div className="mt-4 pt-4 border-t border-gray-100">
-            <button 
-              onClick={handleLogout}
-              className="flex items-center gap-2 text-sm text-gray-400 hover:text-red-500 transition-colors"
-            >
-              <ShenxiangInterfaceIcon name="logout" size={22} />
-              <span>退出登录</span>
-            </button>
-          </div>
-        </div>
-
-        {/* 🔥 所订阅的会员套餐卡片 */}
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-          <h3 className="text-sm font-semibold text-gray-900 mb-4">所订阅的会员套餐</h3>
-
-          {/* 当前订阅套餐 */}
-          <div className="flex items-center justify-between py-3 border-b border-gray-50">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-600">当前方案</span>
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="text-sm font-medium text-gray-900">{membershipType}</span>
-              {membershipType === "免费" && (
-                <Link href="/pricing">
-                  <Button
-                    size="sm"
-                    className="h-7 px-3 text-white text-xs font-medium rounded-full"
-                    style={{ backgroundColor: COLORS.blue }}
-                  >
-                    升级
-                  </Button>
-                </Link>
-              )}
-            </div>
-          </div>
-          
-          {/* 总可用积分 */}
-          <div className="flex items-center justify-between py-3">
-            <div className="flex items-center gap-2">
-              <ShenxiangInterfaceIcon name="credits" size={22} />
-              <span className="text-sm text-gray-600">总可用积分</span>
-            </div>
-            <span 
-              className="text-xl font-bold"
-              style={{ color: COLORS.primary.main }}
-            >
-              {credits.toLocaleString()}
-            </span>
-          </div>
-        </div>
-
-        {/* 🔥 邀请系统卡片 */}
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-          <h3 className="text-sm font-semibold text-gray-900 mb-4">邀请系统</h3>
-          
-          {/* 邀请好友 */}
-          <div className="flex items-center justify-between py-3 border-b border-gray-50">
-            <div className="flex items-center gap-2">
-              <ShenxiangInterfaceIcon name="invite" size={22} />
-              <span className="text-sm text-gray-600">邀请好友</span>
-            </div>
-            <Link href="/invite">
-              <Button 
-                size="sm" 
-                className="h-7 px-3 text-white text-xs font-medium rounded-full"
-                style={{ backgroundColor: COLORS.primary.main }}
-              >
-                立即邀请
-              </Button>
-            </Link>
-          </div>
-          
-          {/* 累计邀请 */}
-          <div className="flex items-center justify-between py-3 border-b border-gray-50">
-            <span className="text-sm text-gray-600">累计邀请</span>
-            <span className="text-sm font-medium text-gray-900">{inviteCount} 人</span>
-          </div>
-          
-          {/* 累计奖励 */}
-          <div className="flex items-center justify-between py-3">
-            <span className="text-sm text-gray-600">累计奖励</span>
-            <span className="text-sm font-medium text-gray-900">{inviteRewards.toLocaleString()} 积分</span>
-          </div>
-        </div>
-
-        {/* 🔥 使用记录卡片 */}
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-          <h3 className="text-sm font-semibold text-gray-900 mb-4">使用记录</h3>
-          
-          {loadingTransactions ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin" style={{ color: COLORS.primary.main }} />
-            </div>
-          ) : transactions.length === 0 ? (
-            <div className="text-center py-8 text-gray-400 text-sm">
-              暂无积分变化记录
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {transactions.slice(0, 10).map((t) => {
-                const typeColors = CREDIT_TYPE_COLORS[t.credit_type] || CREDIT_TYPE_COLORS["其他积分"]
-                return (
-                  <div key={t.id} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-gray-700 truncate">{t.description}</p>
-                      <p className="text-xs text-gray-400">{formatDate(t.created_at)}</p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span 
-                        className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium"
-                        style={{ backgroundColor: typeColors.bg, color: typeColors.text }}
-                      >
-                        {t.credit_type}
-                      </span>
-                      <span 
-                        className="text-sm font-semibold min-w-[60px] text-right"
-                        style={{ color: t.amount > 0 ? COLORS.primary.main : COLORS.red }}
-                      >
-                        {t.amount > 0 ? `+${t.amount}` : t.amount}
-                      </span>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* 🔥 账号安全卡片 */}
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-          <h3 className="text-sm font-semibold text-gray-900 mb-4">账号安全</h3>
-          
-          {/* 邮箱/手机验证 */}
-          <div className="flex items-center justify-between py-3 border-b border-gray-50">
-            <div className="flex items-center gap-2">
-              {user?.email ? (
-                <Mail className="h-4 w-4" style={{ color: COLORS.gray[500] }} />
-              ) : (
-                <Phone className="h-4 w-4" style={{ color: COLORS.gray[500] }} />
-              )}
-              <span className="text-sm text-gray-600">
-                {user?.email ? "邮箱" : "手机"}
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-500">
-                {user?.email || user?.phone || "-"}
-              </span>
-              <span className="flex items-center gap-1 text-xs" style={{ color: COLORS.primary.main }}>
-                <CheckCircle className="h-3.5 w-3.5" />
-                已验证
-              </span>
-            </div>
-          </div>
-          
-          {/* 登录方式 */}
-          <div className="flex items-center justify-between py-3">
-            <span className="text-sm text-gray-600">登录方式</span>
-            <span className="text-sm text-gray-500">{getLoginMethod()}</span>
-          </div>
-        </div>
-
-        {/* 🔥 隐私与数据卡片 */}
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-          <h3 className="text-sm font-semibold text-gray-900 mb-4">隐私与数据</h3>
-          
-          {/* 导出数据 */}
-          <div className="flex items-center justify-between py-3 border-b border-gray-50">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-600">导出我的数据</span>
-            </div>
-            <Button 
-              size="sm"
-              className="h-7 px-3 text-white text-xs font-medium rounded-full"
-              style={{ backgroundColor: COLORS.blue }}
-              onClick={() => setShowDataExportDialog(true)}
-            >
-              导出
-            </Button>
-          </div>
-          
-          {/* 删除账户 */}
-          <div className="flex items-center justify-between py-3">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-600">删除我的账户</span>
-            </div>
-            <Button 
-              size="sm"
-              className="h-7 px-3 text-white text-xs font-medium rounded-full"
-              style={{ backgroundColor: COLORS.red }}
-              onClick={() => setShowDeleteAccountDialog(true)}
-            >
-              删除
-            </Button>
-          </div>
-        </div>
-
-        {/* 调试信息 */}
-        {debugError && (
-          <div className="rounded-lg bg-red-50 p-4 border border-red-200 flex items-start gap-3">
-            <AlertCircle className="h-5 w-5 text-red-600 mt-0.5" />
-            <div className="text-sm text-red-800 break-all font-mono">{debugError}</div>
-          </div>
-        )}
-
-        {/* 数据导出对话框 */}
-        {showDataExportDialog && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-              <h3 className="text-lg font-semibold mb-4">导出数据</h3>
-              <p className="text-sm text-gray-600 mb-6">
-                如需导出您的个人数据，请联系客服：19132896773
-              </p>
-              <div className="flex justify-end">
-                <Button 
-                  onClick={() => setShowDataExportDialog(false)}
-                  className="text-white"
-                  style={{ backgroundColor: COLORS.blue }}
-                >
-                  我知道了
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* 删除账户对话框 */}
-        {showDeleteAccountDialog && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-              <h3 className="text-lg font-semibold mb-4">删除账户</h3>
-              <p className="text-sm text-gray-600 mb-6">
-                账户删除操作不可逆。如需删除账户，请联系客服处理。
-              </p>
-              <div className="flex justify-end gap-2">
-                <Button 
-                  variant="outline"
-                  onClick={() => setShowDeleteAccountDialog(false)}
-                >
-                  取消
-                </Button>
-                <Button 
-                  onClick={() => {
-                    setShowDeleteAccountDialog(false)
-                    toast.success("请联系客服处理账户删除")
-                  }}
-                  className="text-white"
-                  style={{ backgroundColor: COLORS.red }}
-                >
-                  确认删除
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
+    <ProfilePageV2
+      user={{
+        name: user?.name || user?.nickname || user?.display_name,
+        email: user?.email,
+        avatar: avatarUrl || user?.photo || user?.avatar_url,
+        credits: credits,
+        memberTier: membershipType || undefined,
+        memberDaysLeft: undefined,
+      }}
+      stats={{
+        essaysReviewed: undefined,
+        flashcardsMastered: undefined,
+        mistakesArchived: undefined,
+        experimentsCompleted: undefined,
+        streakDays: undefined,
+      }}
+      achievements={[
+        { label: "首次批改", earned: true },
+        { label: "连续7天", earned: false },
+        { label: "1000积分", earned: credits >= 1000 },
+        { label: "邀请好友", earned: false },
+        { label: "闪卡100张", earned: false },
+        { label: "创作分享", earned: false },
+      ]}
+      onLogout={() => {
+        supabase?.auth.signOut()
+        localStorage.clear()
+        window.location.href = "/login"
+      }}
+    />
   )
 }
