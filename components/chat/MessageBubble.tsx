@@ -10,12 +10,13 @@
 
 "use client"
 
-import { memo, useMemo, useState } from "react"
+import { memo, useEffect, useMemo, useRef, useState } from "react"
 import { motion, type Easing } from "framer-motion"
-import { Copy, Check, User, Sparkles, ChevronDown } from "lucide-react"
+import { ChevronDown, ChevronUp, Copy, FileDown, MessageCircle, Share2, Sparkles, User, Volume2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { AssistantMessageV2 } from "@/components/chat/v2"
 import { EssayReviewTemplate } from "@/components/chat/v2/templates"
+import { InkBrush } from "@/components/motion/InkMotion"
 import { parseEssayReview } from "@/lib/parse-essay-review"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
@@ -27,6 +28,7 @@ const CLAUDE_TEXT_COLOR = "var(--ink-700)"
 const CLAUDE_SECONDARY_COLOR = "var(--ink-500)"
 const CLAUDE_ACCENT_COLOR = "var(--seal-500)"
 const CLAUDE_AVATAR_BG = "var(--ink-600)"
+const MAX_VISIBLE_HEIGHT = 600
 
 // Conclusion detection - hoisted to module scope to avoid recreation per render
 const CONCLUSION_KEYWORDS = ["综上所述", "答案是", "结论是", "所以", "因此", "总之", "故", "可得"] as const
@@ -81,33 +83,6 @@ const assistantMessageVariants = {
 }
 
 // ============================================
-// Streaming Cursor
-// ============================================
-
-function StreamingCursor() {
-  return (
-    <motion.div
-      animate={{ opacity: [0.4, 1, 0.4] }}
-      transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
-      className="inline-flex items-center gap-1"
-    >
-      <span className="text-sm font-medium" style={{ color: CLAUDE_AVATAR_BG }}>
-        Thinking
-      </span>
-      <motion.div
-        animate={{ opacity: [1, 0, 1] }}
-        transition={{ duration: 0.6, repeat: Infinity, ease: "easeInOut", delay: 0.2 }}
-        className="flex gap-0.5"
-      >
-        <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: CLAUDE_AVATAR_BG }} />
-        <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: CLAUDE_AVATAR_BG }} />
-        <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: CLAUDE_AVATAR_BG }} />
-      </motion.div>
-    </motion.div>
-  )
-}
-
-// ============================================
 // User Avatar
 // ============================================
 
@@ -144,50 +119,6 @@ function AIAvatar() {
     >
       <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
     </div>
-  )
-}
-
-// ============================================
-// Copy Button - Subtle, shows on hover
-// ============================================
-
-function CopyButton({ content, onCopy }: { content: string; onCopy?: () => void }) {
-  const [copied, setCopied] = useState(false)
-
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(content)
-      setCopied(true)
-      onCopy?.()
-      setTimeout(() => setCopied(false), 2000)
-    } catch (err) {
-      console.error("Copy failed:", err)
-    }
-  }
-
-  return (
-    <button
-      onClick={handleCopy}
-      className={cn(
-        "flex items-center gap-1 px-2 py-1 rounded text-xs transition-all duration-200 min-h-9 touch-manipulation",
-        "opacity-100 md:opacity-0 md:group-hover:opacity-100",
-        copied
-          ? "text-[var(--seal-500)] bg-[var(--seal-50)]"
-          : "text-[var(--ink-400)] hover:text-[var(--ink-600)] hover:bg-[var(--paper-100)]"
-      )}
-    >
-      {copied ? (
-        <>
-          <Check className="w-3 h-3" />
-          <span>Copied</span>
-        </>
-      ) : (
-        <>
-          <Copy className="w-3 h-3" />
-          <span>Copy</span>
-        </>
-      )}
-    </button>
   )
 }
 
@@ -240,14 +171,10 @@ function MarkdownContent({ content }: { content: string }) {
           if (isConclusionPara) {
               return (
                 <p
-                  className="mb-1.5 last:mb-0 rounded-r text-[13px] sm:text-[14px]"
+                  className="my-3 rounded-r-[var(--radius-soft)] border-l-[3px] border-[var(--seal-500)] bg-[var(--seal-50)]/60 px-4 py-3 text-[13px] sm:text-[14px]"
                   style={{
                     lineHeight: 1.6,
                     color: CLAUDE_TEXT_COLOR,
-                    backgroundColor: "var(--seal-50)",
-                    borderLeft: "3px solid var(--seal-500)",
-                  borderRadius: "0 6px 6px 0",
-                  padding: "6px 10px",
                 }}
               >
                 {children}
@@ -373,6 +300,101 @@ function MarkdownContent({ content }: { content: string }) {
   )
 }
 
+interface MessageActions {
+  onCopy: () => void
+  onExportPDF: () => void
+  onShare: () => void
+  onAskFollowup: () => void
+  onPlayAudio: () => void
+}
+
+function MessageActionToolbar({ actions }: { actions: MessageActions }) {
+  const buttons = [
+    { label: "复制", icon: Copy, onClick: actions.onCopy },
+    { label: "朗读", icon: Volume2, onClick: actions.onPlayAudio },
+    { label: "分享", icon: Share2, onClick: actions.onShare },
+    { label: "导出 PDF", icon: FileDown, onClick: actions.onExportPDF },
+    { label: "继续追问", icon: MessageCircle, onClick: actions.onAskFollowup },
+  ] as const
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 border-t border-[var(--paper-200)] bg-[var(--paper-50)] px-4 py-3 sm:px-6">
+      {buttons.map(({ label, icon: Icon, onClick }) => (
+        <button
+          key={label}
+          type="button"
+          onClick={onClick}
+          className="inline-flex min-h-9 items-center gap-1.5 rounded-[var(--radius-pill)] px-2.5 py-1.5 text-[12px] font-medium text-[var(--ink-600)] transition-colors hover:bg-[var(--ink-50)] hover:text-[var(--ink-800)] focus-visible:outline-none focus-visible:[box-shadow:var(--shadow-focus-ink)]"
+        >
+          <Icon className="size-3.5" aria-hidden="true" />
+          {label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function AssistantMarkdownCard({
+  content,
+  actions,
+  templateType,
+}: {
+  content: string
+  actions: MessageActions
+  templateType: string
+}) {
+  const contentRef = useRef<HTMLDivElement>(null)
+  const [collapsed, setCollapsed] = useState(true)
+  const [isLong, setIsLong] = useState(false)
+
+  useEffect(() => {
+    setCollapsed(true)
+    const frame = requestAnimationFrame(() => {
+      setIsLong((contentRef.current?.scrollHeight ?? 0) > MAX_VISIBLE_HEIGHT)
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [content])
+
+  return (
+    <article
+      data-slot="v2-message-bubble-markdown"
+      data-template={templateType}
+      className="w-full max-w-3xl overflow-hidden rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-white text-[var(--ink-900)] shadow-[var(--shadow-paper)]"
+    >
+      <div
+        ref={contentRef}
+        className="relative px-5 py-5 sm:px-8 sm:py-7"
+        style={isLong && collapsed ? { maxHeight: MAX_VISIBLE_HEIGHT, overflow: "hidden" } : undefined}
+      >
+        <div
+          className="text-[13px] sm:text-sm ai-content-container"
+          style={{ lineHeight: 1.6, color: CLAUDE_TEXT_COLOR }}
+        >
+          <MarkdownContent content={content} />
+        </div>
+      </div>
+
+      {isLong ? (
+        <div className="relative border-t border-[var(--paper-200)] bg-white px-5 sm:px-8">
+          {collapsed ? (
+            <div className="pointer-events-none absolute inset-x-0 -top-20 h-20 bg-gradient-to-t from-white to-transparent" />
+          ) : null}
+          <button
+            type="button"
+            onClick={() => setCollapsed((value) => !value)}
+            className="relative z-10 flex w-full items-center justify-center gap-1.5 py-2 text-[13px] font-medium text-[var(--ink-600)] transition-colors hover:text-[var(--ink-800)] focus-visible:outline-none focus-visible:[box-shadow:var(--shadow-focus-ink)]"
+          >
+            {collapsed ? <ChevronDown className="size-4" /> : <ChevronUp className="size-4" />}
+            {collapsed ? "展开全文" : "收起"}
+          </button>
+        </div>
+      ) : null}
+
+      <MessageActionToolbar actions={actions} />
+    </article>
+  )
+}
+
 // ============================================
 // Main Component
 // ============================================
@@ -393,6 +415,39 @@ const MessageBubble = memo(function MessageBubble({
     if (isUser || !isEssayModel) return null
     return parseEssayReview(content)
   }, [content, isUser, model])
+  const templateType = useMemo(() => {
+    if (isUser) return "user"
+    if (essayReviewArtifact) return "essay-review"
+    // Future extension points:
+    // if (model === "vocab-card") return "vocab-card"
+    // if (model === "suno-v5") return "music-card"
+    // if (model?.includes("gpt-image") || model === "banana-2-pro") return "image-gallery"
+    return "markdown"
+  }, [essayReviewArtifact, isUser, model])
+  const actions = useMemo<MessageActions>(() => ({
+    onCopy: async () => {
+      try {
+        await navigator.clipboard.writeText(content)
+        onCopy?.()
+      } catch (err) {
+        console.error("Copy failed:", err)
+      }
+    },
+    onExportPDF: () => {
+      window.print()
+    },
+    onShare: () => {
+      if (navigator.share) {
+        navigator.share({ title: "沈翔智学 AI 回复", text: content.slice(0, 200) }).catch(() => {})
+      }
+    },
+    onAskFollowup: () => {
+      window.dispatchEvent(new Event("focus-chat-input"))
+    },
+    onPlayAudio: () => {
+      window.dispatchEvent(new CustomEvent("play-chat-message-audio", { detail: { text: content } }))
+    },
+  }), [content, onCopy])
 
   // User message style - transparent background, inherits page text color
   const userBubbleStyle = {
@@ -414,11 +469,50 @@ const MessageBubble = memo(function MessageBubble({
         className
       )}
     >
-      {/* AI 流式输出中：仅显示 Thinking 动画，无头像无气泡 */}
-      {isStreaming && !isUser ? (
-        <div className="flex items-center py-2">
-          <StreamingCursor />
+      {/* AI 流式输出中：空内容显示毛笔思考，有内容则正常渲染并追加笔触指示 */}
+      {isStreaming && !isUser && !content ? (
+        <div className="flex items-center gap-3 px-4 py-4">
+          <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[var(--ink-600)]">
+            <Sparkles className="size-3.5 text-white" />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <InkBrush className="h-4 w-20 text-[var(--ink-500)]" />
+            <span className="text-[12px] text-[var(--ink-400)] font-[var(--font-sans-v2)]">
+              AI 正在组织回复...
+            </span>
+          </div>
         </div>
+      ) : isStreaming && !isUser && content ? (
+        <>
+          <div className="flex-shrink-0 mt-1">
+            <AIAvatar />
+          </div>
+          <div className="flex flex-1 flex-col items-start">
+            <AssistantMessageV2
+              message={{
+                id: "streaming",
+                role: "assistant",
+                content,
+                streaming: true,
+                model,
+              }}
+              renderMarkdown={() => (
+                <div
+                  className="text-[13px] sm:text-sm ai-content-container"
+                  style={{ lineHeight: 1.6, color: CLAUDE_TEXT_COLOR }}
+                >
+                  <MarkdownContent content={content} />
+                </div>
+              )}
+            />
+            <div className="mt-2 flex items-center gap-2 px-1">
+              <InkBrush className="h-3 w-12 text-[var(--ink-400)]" />
+              <span className="text-[11px] text-[var(--ink-400)] font-[var(--font-mono-v2)]">
+                生成中...
+              </span>
+            </div>
+          </div>
+        </>
       ) : (
         <>
           {/* Avatar */}
@@ -444,27 +538,16 @@ const MessageBubble = memo(function MessageBubble({
               essayReviewArtifact ? (
                 <EssayReviewTemplate
                   artifact={essayReviewArtifact}
-                  onCopy={() => onCopy?.()}
+                  onCopy={actions.onCopy}
+                  onExportPDF={actions.onExportPDF}
+                  onShare={actions.onShare}
+                  onAskFollowup={actions.onAskFollowup}
                 />
               ) : (
-                <AssistantMessageV2
-                  message={{
-                    id: timestamp?.toISOString() || "assistant-message",
-                    role: "assistant",
-                    content,
-                    streaming: isStreaming,
-                    createdAt: timestamp?.toISOString(),
-                    model,
-                  }}
-                  renderMarkdown={() => (
-                    <div
-                      className="text-[13px] sm:text-sm ai-content-container"
-                      style={{ lineHeight: 1.6, color: CLAUDE_TEXT_COLOR }}
-                    >
-                      <MarkdownContent content={content} />
-                    </div>
-                  )}
-                  onCopy={() => onCopy?.()}
+                <AssistantMarkdownCard
+                  content={content}
+                  actions={actions}
+                  templateType={templateType}
                 />
               )
             )}
