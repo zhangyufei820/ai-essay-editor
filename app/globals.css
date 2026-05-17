@@ -1745,6 +1745,23 @@
   font-family: var(--font-hand);
 }
 
+/* Tailwind v4 treats `font-[var(...)]` as font-weight; v2 components use it as font-family. */
+.font-\[var\(--font-display\)\] {
+  font-family: var(--font-display);
+}
+
+.font-\[var\(--font-sans-v2\)\] {
+  font-family: var(--font-sans-v2);
+}
+
+.font-\[var\(--font-mono-v2\)\] {
+  font-family: var(--font-mono-v2);
+}
+
+.font-\[var\(--font-hand\)\] {
+  font-family: var(--font-hand);
+}
+
 /* === 阴影（v2 墨色调） === */
 
 @utility shadow-paper {
