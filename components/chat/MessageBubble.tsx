@@ -60,6 +60,7 @@ interface MessageBubbleProps {
   onCopy?: () => void
   className?: string
   model?: string
+  showAvatar?: boolean
 }
 
 // ============================================
@@ -408,6 +409,7 @@ const MessageBubble = memo(function MessageBubble({
   onCopy,
   className,
   model,
+  showAvatar = true,
 }: MessageBubbleProps) {
   const isUser = role === "user"
   const essayReviewArtifact = useMemo(() => {
@@ -472,9 +474,11 @@ const MessageBubble = memo(function MessageBubble({
       {/* AI 流式输出中：空内容显示毛笔思考，有内容则正常渲染并追加笔触指示 */}
       {isStreaming && !isUser && !content ? (
         <div className="flex items-center gap-3 px-4 py-4">
-          <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[var(--ink-600)]">
-            <Sparkles className="size-3.5 text-white" />
-          </div>
+          {showAvatar ? (
+            <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[var(--ink-600)]">
+              <Sparkles className="size-3.5 text-white" />
+            </div>
+          ) : null}
           <div className="flex flex-col gap-1.5">
             <InkBrush className="h-4 w-20 text-[var(--ink-500)]" />
             <span className="text-[12px] text-[var(--ink-400)] font-[var(--font-sans-v2)]">
@@ -484,9 +488,11 @@ const MessageBubble = memo(function MessageBubble({
         </div>
       ) : isStreaming && !isUser && content ? (
         <>
-          <div className="flex-shrink-0 mt-1">
-            <AIAvatar />
-          </div>
+          {showAvatar ? (
+            <div className="flex-shrink-0 mt-1">
+              <AIAvatar />
+            </div>
+          ) : null}
           <div className="flex flex-1 flex-col items-start">
             <AssistantMessageV2
               message={{
@@ -516,9 +522,11 @@ const MessageBubble = memo(function MessageBubble({
       ) : (
         <>
           {/* Avatar */}
-          <div className="flex-shrink-0 mt-1">
-            {isUser ? <UserAvatar avatar={avatar} /> : <AIAvatar />}
-          </div>
+          {showAvatar ? (
+            <div className="flex-shrink-0 mt-1">
+              {isUser ? <UserAvatar avatar={avatar} /> : <AIAvatar />}
+            </div>
+          ) : null}
 
           {/* Message Content */}
           <div className={cn("flex flex-col", isUser ? "items-end" : "items-start")}>

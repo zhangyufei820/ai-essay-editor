@@ -3521,7 +3521,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                         ) : (
                           // AI message - Flat, minimal container
                           <div className="w-full space-y-3">
-                            {message.id === currentBotIdRef.current && isLoading && !isFastTrack && (
+                            {message.id === currentBotIdRef.current && isLoading && !isFastTrack && !message.content && (
                               <ProcessingStatusCard
                                 context={processingContext}
                                 showLongWaitHint={showDeepThinkingHint}
@@ -3603,65 +3603,10 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                                       model={selectedModel}
                                       onCopy={() => navigator.clipboard.writeText(cleanContent)}
                                       timestamp={message.timestamp ? new Date(message.timestamp) : undefined}
+                                      showAvatar={false}
                                     />
                                   )
                                 })()}
-                              </div>
-                            )}
-
-                            {/* Action toolbar - Subtle, shows on hover */}
-                            {message.content && !(
-                              selectedModel === "standard" &&
-                              parseEssayReview(cleanLLMText(message.content))
-                            ) && (
-                              <div
-                                className={cn(
-                                  "flex flex-wrap items-center gap-0.5 mt-1.5 opacity-100 transition-opacity duration-150 sm:opacity-0 sm:group-hover/message:opacity-100 sm:group-focus-within/message:opacity-100 sm:group-active/message:opacity-100 md:mt-2 md:gap-1"
-                                )}
-                              >
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                    className="h-8 w-8 rounded-[var(--radius-pill)] p-0 text-[var(--ink-400)] hover:text-[var(--ink-600)] hover:bg-[var(--paper-100)] touch-manipulation sm:h-8 sm:w-auto sm:px-2 sm:gap-1 sm:rounded-[var(--radius-soft)] sm:text-xs"
-                                  onClick={() => navigator.clipboard.writeText(message.content).then(() => toast.success("已复制"))}
-                                >
-                                  复制
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                    className="h-8 w-8 rounded-[var(--radius-pill)] p-0 text-[var(--ink-400)] hover:text-[var(--ink-600)] hover:bg-[var(--paper-100)] touch-manipulation sm:h-8 sm:w-auto sm:px-2 sm:gap-1 sm:rounded-[var(--radius-soft)] sm:text-xs"
-                                  onClick={() => window.print()}
-                                >
-                                  打印
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                    className="h-8 w-8 rounded-[var(--radius-pill)] p-0 text-[var(--ink-400)] hover:text-[var(--ink-600)] hover:bg-[var(--paper-100)] touch-manipulation sm:h-8 sm:w-auto sm:px-2 sm:gap-1 sm:rounded-[var(--radius-soft)] sm:text-xs"
-                                  onClick={() => handleExportPDF(message.content)}
-                                >
-                                  导出
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                    className="h-8 w-8 rounded-[var(--radius-pill)] p-0 text-[var(--ink-400)] hover:text-[var(--ink-600)] hover:bg-[var(--paper-100)] touch-manipulation sm:h-8 sm:w-auto sm:px-2 sm:gap-1 sm:rounded-[var(--radius-soft)] sm:text-xs"
-                                  onClick={() => handleShare()}
-                                >
-                                  分享
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className={cn(
-                                      "h-8 w-8 rounded-[var(--radius-pill)] p-0 touch-manipulation sm:h-8 sm:w-auto sm:px-2 sm:gap-1 sm:rounded-[var(--radius-soft)] sm:text-xs",
-                                    isPlaying ? "text-[var(--ink-600)] bg-[var(--ink-50)] hover:bg-[var(--ink-100)]" : "text-[var(--ink-400)] hover:text-[var(--ink-600)] hover:bg-[var(--paper-100)]"
-                                  )}
-                                  onClick={() => playAssistantMessage(message.content)}
-                                >
-                                  {isPlaying ? "停止" : "朗读"}
-                                </Button>
                               </div>
                             )}
                           </div>

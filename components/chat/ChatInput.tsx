@@ -263,6 +263,20 @@ export function ChatInput({
     }
   }, [disabled])
 
+  // v2 message toolbar: "继续追问" focuses the composer.
+  useEffect(() => {
+    const handleFocusChatInput = () => {
+      if (disabled || !textareaRef.current) return
+
+      textareaRef.current.focus()
+      textareaRef.current.scrollIntoView({ block: "nearest", behavior: "smooth" })
+      setIsFocused(true)
+    }
+
+    window.addEventListener("focus-chat-input", handleFocusChatInput)
+    return () => window.removeEventListener("focus-chat-input", handleFocusChatInput)
+  }, [disabled])
+
   const handleSubmit = () => {
     if (!canSubmit) return
     textareaRef.current?.blur()
