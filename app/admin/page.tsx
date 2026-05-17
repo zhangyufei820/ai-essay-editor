@@ -314,7 +314,7 @@ export default function AdminPage() {
   // 如果未认证，显示登录界面
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-[var(--paper-50)] flex items-center justify-center p-4">
         <Card className="w-full max-w-md">
           <CardHeader>
             <CardTitle className="text-2xl font-bold text-center flex items-center justify-center gap-2">
@@ -340,7 +340,7 @@ export default function AdminPage() {
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--ink-500)] hover:text-[var(--ink-700)]"
                   >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -358,13 +358,13 @@ export default function AdminPage() {
 
   // 管理员界面
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-[var(--paper-50)] p-6">
       <div className="max-w-7xl mx-auto">
         {/* 头部 */}
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">管理后台</h1>
-            <p className="text-gray-600 mt-1">AI作文编辑器管理系统</p>
+            <h1 className="text-3xl font-bold text-[var(--ink-900)] font-[var(--font-display)]">管理后台</h1>
+            <p className="text-[var(--ink-600)] mt-1">AI作文编辑器管理系统</p>
           </div>
           <div className="flex items-center gap-4">
             <Button
@@ -391,7 +391,7 @@ export default function AdminPage() {
         {/* 主要内容区域 - Tab导航 */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           {errorMessage && (
-            <div className="flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+            <div className="flex items-start gap-3 rounded-[var(--radius-soft)] border border-[var(--seal-500)]/30 bg-[var(--seal-50)] px-4 py-3 text-sm text-[var(--seal-500)]">
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
               <div>
                 <p className="font-medium">后台数据暂时不可用</p>
@@ -401,7 +401,7 @@ export default function AdminPage() {
           )}
 
           {loading && (
-            <div className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+            <div className="flex items-center gap-2 rounded-[var(--radius-soft)] border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
               <RefreshCw className="h-4 w-4 animate-spin" />
               正在加载后台数据，请稍候...
             </div>
@@ -435,7 +435,7 @@ export default function AdminPage() {
                   <CardContent className="pt-6">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm text-gray-600">总用户数</p>
+                        <p className="text-sm text-[var(--ink-600)]">总用户数</p>
                         <p className="text-3xl font-bold">{stats.totalUsers.toLocaleString()}</p>
                       </div>
                       <Users className="w-10 h-10 text-blue-500" />
@@ -447,10 +447,10 @@ export default function AdminPage() {
                   <CardContent className="pt-6">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm text-gray-600">会员用户</p>
-                        <p className="text-3xl font-bold text-green-600">{stats.memberUsers.toLocaleString()}</p>
+                        <p className="text-sm text-[var(--ink-600)]">会员用户</p>
+                        <p className="text-3xl font-bold text-[var(--ink-600)]">{stats.memberUsers.toLocaleString()}</p>
                       </div>
-                      <UserCheck className="w-10 h-10 text-green-500" />
+                      <UserCheck className="w-10 h-10 text-[var(--ink-500)]" />
                     </div>
                   </CardContent>
                 </Card>
@@ -459,7 +459,7 @@ export default function AdminPage() {
                   <CardContent className="pt-6">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm text-gray-600">总营收</p>
+                        <p className="text-sm text-[var(--ink-600)]">总营收</p>
                         <p className="text-3xl font-bold text-purple-600">{formatAmount(stats.totalRevenue)}</p>
                       </div>
                       <DollarSign className="w-10 h-10 text-purple-500" />
@@ -471,9 +471,9 @@ export default function AdminPage() {
                   <CardContent className="pt-6">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm text-gray-600">订单数量</p>
+                        <p className="text-sm text-[var(--ink-600)]">订单数量</p>
                         <p className="text-3xl font-bold text-orange-600">{stats.totalOrders.toLocaleString()}</p>
-                        <p className="mt-1 text-xs text-gray-500">已支付 {stats.paidOrders.toLocaleString()} 单</p>
+                        <p className="mt-1 text-xs text-[var(--ink-500)]">已支付 {stats.paidOrders.toLocaleString()} 单</p>
                       </div>
                       <Activity className="w-10 h-10 text-orange-500" />
                     </div>
@@ -489,16 +489,16 @@ export default function AdminPage() {
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="flex justify-between items-center">
-                      <span className="text-gray-600">新增用户</span>
+                      <span className="text-[var(--ink-600)]">新增用户</span>
                       <span className="font-bold text-lg">{stats.todayNewUsers}</span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-gray-600">活跃用户</span>
+                      <span className="text-[var(--ink-600)]">活跃用户</span>
                       <span className="font-bold text-lg">{stats.todayActiveUsers}</span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-gray-600">今日营收</span>
-                      <span className="font-bold text-lg text-green-600">{formatAmount(stats.todayRevenue)}</span>
+                      <span className="text-[var(--ink-600)]">今日营收</span>
+                      <span className="font-bold text-lg text-[var(--ink-600)]">{formatAmount(stats.todayRevenue)}</span>
                     </div>
                   </CardContent>
                 </Card>
@@ -510,30 +510,30 @@ export default function AdminPage() {
                   <CardContent className="space-y-4">
                     <div>
                       <div className="flex justify-between mb-1">
-                        <span className="text-sm text-gray-600">会员转化率</span>
-                        <span className="text-sm font-semibold text-green-600">
+                        <span className="text-sm text-[var(--ink-600)]">会员转化率</span>
+                        <span className="text-sm font-semibold text-[var(--ink-600)]">
                           {stats.totalUsers > 0 
                             ? ((stats.memberUsers / stats.totalUsers) * 100).toFixed(1)
                             : 0}%
                         </span>
                       </div>
-                      <div className="w-full bg-gray-200 rounded-full h-3">
+                      <div className="w-full bg-[var(--paper-200)] rounded-full h-3">
                         <div 
-                          className="bg-green-500 h-3 rounded-full transition-all duration-500"
+                          className="bg-[var(--ink-500)] h-3 rounded-full transition-all duration-500"
                           style={{ width: `${stats.totalUsers > 0 ? (stats.memberUsers / stats.totalUsers) * 100 : 0}%` }}
                         />
                       </div>
                     </div>
                     <div>
                       <div className="flex justify-between mb-1">
-                        <span className="text-sm text-gray-600">用户活跃度</span>
+                        <span className="text-sm text-[var(--ink-600)]">用户活跃度</span>
                         <span className="text-sm font-semibold text-blue-600">
                           {stats.totalUsers > 0 
                             ? ((stats.todayActiveUsers / stats.totalUsers) * 100).toFixed(1)
                             : 0}%
                         </span>
                       </div>
-                      <div className="w-full bg-gray-200 rounded-full h-3">
+                      <div className="w-full bg-[var(--paper-200)] rounded-full h-3">
                         <div 
                           className="bg-blue-500 h-3 rounded-full transition-all duration-500"
                           style={{ width: `${stats.totalUsers > 0 ? (stats.todayActiveUsers / stats.totalUsers) * 100 : 0}%` }}
@@ -572,7 +572,7 @@ export default function AdminPage() {
                       <BarChart3 className="w-4 h-4 mr-2" />
                       数据分析
                     </Button>
-                    <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                    <div className="rounded-[var(--radius-soft)] border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
                       运营排查建议：先复制订单号、用户 ID 和支付时间，再联系客服或检查支付回调日志。
                     </div>
                   </CardContent>
@@ -589,7 +589,7 @@ export default function AdminPage() {
                 <CardContent className="pt-6">
                   <form onSubmit={handleSearch} className="flex gap-4">
                     <div className="relative flex-1">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ink-400)] w-4 h-4" />
                       <Input
                         placeholder="搜索用户ID..."
                         value={searchQuery}
@@ -635,7 +635,7 @@ export default function AdminPage() {
                       </thead>
                       <tbody>
                         {users.map((user) => (
-                          <tr key={user.user_id} className="border-b hover:bg-gray-50">
+                          <tr key={user.user_id} className="border-b hover:bg-[var(--paper-50)]">
                             <td className="py-3 px-4 font-mono text-sm">{user.user_id.slice(0, 8)}...</td>
                             <td className="py-3 px-4 font-semibold">{user.credits}</td>
                             <td className="py-3 px-4">
@@ -643,8 +643,8 @@ export default function AdminPage() {
                                 {user.is_pro ? "会员" : "免费"}
                               </Badge>
                             </td>
-                            <td className="py-3 px-4 text-gray-600 text-sm">{formatDate(user.updated_at)}</td>
-                            <td className="py-3 px-4 text-gray-600 text-sm">{formatDate(user.lastActiveAt)}</td>
+                            <td className="py-3 px-4 text-[var(--ink-600)] text-sm">{formatDate(user.updated_at)}</td>
+                            <td className="py-3 px-4 text-[var(--ink-600)] text-sm">{formatDate(user.lastActiveAt)}</td>
                             <td className="py-3 px-4">{user.transactionCount}</td>
                             <td className="py-3 px-4">
                               <Button 
@@ -662,7 +662,7 @@ export default function AdminPage() {
                   </div>
                   
                   {users.length === 0 && (
-                    <div className="text-center py-8 text-gray-500">
+                    <div className="text-center py-8 text-[var(--ink-500)]">
                       {loading ? "正在加载用户数据..." : "暂无用户数据。可清空搜索关键词后刷新，或检查用户表是否有记录。"}
                     </div>
                   )}
@@ -695,11 +695,11 @@ export default function AdminPage() {
                     </thead>
                     <tbody>
                       {orders.map((order) => (
-                        <tr key={order.id} className="border-b hover:bg-gray-50">
+                        <tr key={order.id} className="border-b hover:bg-[var(--paper-50)]">
                           <td className="py-3 px-4 font-mono text-sm">{order.order_no}</td>
                           <td className="py-3 px-4 font-mono text-sm">{order.user_id.slice(0, 8)}...</td>
                           <td className="py-3 px-4">{order.product_name}</td>
-                          <td className="py-3 px-4 font-semibold text-green-600">{formatAmount(order.amount)}</td>
+                          <td className="py-3 px-4 font-semibold text-[var(--ink-600)]">{formatAmount(order.amount)}</td>
                           <td className="py-3 px-4">{order.credits_amount}</td>
                           <td className="py-3 px-4">{order.payment_method || '暂无数据'}</td>
                           <td className="py-3 px-4">
@@ -707,8 +707,8 @@ export default function AdminPage() {
                               {getOrderStatusLabel(order.status)}
                             </Badge>
                           </td>
-                          <td className="py-3 px-4 text-gray-600 text-sm">{formatDate(order.created_at)}</td>
-                          <td className="py-3 px-4 text-gray-600 text-sm">{formatDate(order.updated_at)}</td>
+                          <td className="py-3 px-4 text-[var(--ink-600)] text-sm">{formatDate(order.created_at)}</td>
+                          <td className="py-3 px-4 text-[var(--ink-600)] text-sm">{formatDate(order.updated_at)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -716,7 +716,7 @@ export default function AdminPage() {
                 </div>
                 
                 {orders.length === 0 && (
-                  <div className="text-center py-8 text-gray-500">
+                  <div className="text-center py-8 text-[var(--ink-500)]">
                     {loading ? "正在加载订单数据..." : "暂无订单。若支付成功但未显示，请保留订单号、支付时间和用户 ID，并检查支付回调和订单状态同步。"}
                   </div>
                 )}
@@ -733,14 +733,14 @@ export default function AdminPage() {
                     <CardTitle>营收分析</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <div className="flex justify-between items-center p-4 bg-green-50 rounded-lg">
+                    <div className="flex justify-between items-center p-4 bg-[var(--ink-50)] rounded-[var(--radius-soft)]">
                       <div>
-                        <p className="text-sm text-green-800">总营收</p>
-                        <p className="text-2xl font-bold text-green-600">{formatAmount(stats.totalRevenue)}</p>
+                        <p className="text-sm text-[var(--ink-800)]">总营收</p>
+                        <p className="text-2xl font-bold text-[var(--ink-600)]">{formatAmount(stats.totalRevenue)}</p>
                       </div>
-                      <DollarSign className="w-8 h-8 text-green-500" />
+                      <DollarSign className="w-8 h-8 text-[var(--ink-500)]" />
                     </div>
-                    <div className="flex justify-between items-center p-4 bg-blue-50 rounded-lg">
+                    <div className="flex justify-between items-center p-4 bg-blue-50 rounded-[var(--radius-soft)]">
                       <div>
                         <p className="text-sm text-blue-800">今日营收</p>
                         <p className="text-2xl font-bold text-blue-600">{formatAmount(stats.todayRevenue)}</p>
@@ -755,14 +755,14 @@ export default function AdminPage() {
                     <CardTitle>用户增长</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <div className="flex justify-between items-center p-4 bg-purple-50 rounded-lg">
+                    <div className="flex justify-between items-center p-4 bg-purple-50 rounded-[var(--radius-soft)]">
                       <div>
                         <p className="text-sm text-purple-800">总用户</p>
                         <p className="text-2xl font-bold text-purple-600">{stats.totalUsers}</p>
                       </div>
                       <Users className="w-8 h-8 text-purple-500" />
                     </div>
-                    <div className="flex justify-between items-center p-4 bg-orange-50 rounded-lg">
+                    <div className="flex justify-between items-center p-4 bg-orange-50 rounded-[var(--radius-soft)]">
                       <div>
                         <p className="text-sm text-orange-800">今日新增</p>
                         <p className="text-2xl font-bold text-orange-600">{stats.todayNewUsers}</p>
@@ -779,29 +779,29 @@ export default function AdminPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="text-center p-6 border rounded-lg">
+                    <div className="text-center p-6 border rounded-[var(--radius-soft)]">
                       <div className="text-4xl font-bold text-blue-600 mb-2">
                         {stats.totalUsers > 0 
                           ? ((stats.memberUsers / stats.totalUsers) * 100).toFixed(1)
                           : 0}%
                       </div>
-                      <p className="text-gray-600">会员转化率</p>
+                      <p className="text-[var(--ink-600)]">会员转化率</p>
                     </div>
-                    <div className="text-center p-6 border rounded-lg">
-                      <div className="text-4xl font-bold text-green-600 mb-2">
+                    <div className="text-center p-6 border rounded-[var(--radius-soft)]">
+                      <div className="text-4xl font-bold text-[var(--ink-600)] mb-2">
                         {stats.totalUsers > 0 
                           ? ((stats.todayActiveUsers / stats.totalUsers) * 100).toFixed(1)
                           : 0}%
                       </div>
-                      <p className="text-gray-600">用户活跃度</p>
+                      <p className="text-[var(--ink-600)]">用户活跃度</p>
                     </div>
-                    <div className="text-center p-6 border rounded-lg">
+                    <div className="text-center p-6 border rounded-[var(--radius-soft)]">
                       <div className="text-4xl font-bold text-purple-600 mb-2">
                         {stats.totalRevenue > 0 && stats.totalUsers > 0
                           ? formatAmount(Math.round(stats.totalRevenue / stats.totalUsers))
                           : formatAmount(0)}
                       </div>
-                      <p className="text-gray-600">用户平均价值</p>
+                      <p className="text-[var(--ink-600)]">用户平均价值</p>
                     </div>
                   </div>
                 </CardContent>
@@ -822,14 +822,14 @@ export default function AdminPage() {
           </SheetHeader>
           
           {userDetailsLoading && (
-            <div className="mt-6 flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+            <div className="mt-6 flex items-center gap-2 rounded-[var(--radius-soft)] border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
               <RefreshCw className="h-4 w-4 animate-spin" />
               正在加载用户详情...
             </div>
           )}
 
           {!userDetailsLoading && !userDetails && (
-            <div className="mt-6 rounded-lg border border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
+            <div className="mt-6 rounded-[var(--radius-soft)] border border-[var(--paper-200)] bg-[var(--paper-50)] px-4 py-6 text-center text-sm text-[var(--ink-500)]">
               暂无用户详情。请重新打开用户详情，或检查用户 ID、积分流水和订单记录是否存在。
             </div>
           )}
@@ -841,7 +841,7 @@ export default function AdminPage() {
                 <Card>
                   <CardContent className="pt-6">
                     <div className="text-center">
-                      <p className="text-sm text-gray-600">积分</p>
+                      <p className="text-sm text-[var(--ink-600)]">积分</p>
                       <p className="text-3xl font-bold">{userDetails.user.credits}</p>
                     </div>
                   </CardContent>
@@ -849,7 +849,7 @@ export default function AdminPage() {
                 <Card>
                   <CardContent className="pt-6">
                     <div className="text-center">
-                      <p className="text-sm text-gray-600">会员状态</p>
+                      <p className="text-sm text-[var(--ink-600)]">会员状态</p>
                       <Badge variant={userDetails.user.is_pro ? "ink" : "paper"} className="mt-2">
                         {userDetails.user.is_pro ? "会员" : "免费"}
                       </Badge>
@@ -859,8 +859,8 @@ export default function AdminPage() {
                 <Card>
                   <CardContent className="pt-6">
                     <div className="text-center">
-                      <p className="text-sm text-gray-600">总消费</p>
-                      <p className="text-3xl font-bold text-green-600">
+                      <p className="text-sm text-[var(--ink-600)]">总消费</p>
+                      <p className="text-3xl font-bold text-[var(--ink-600)]">
                         {formatAmount(userDetails.stats.totalSpent)}
                       </p>
                     </div>
@@ -869,20 +869,20 @@ export default function AdminPage() {
               </div>
               
               {/* 用户ID和注册时间 */}
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <p className="text-sm text-gray-600 mb-1">用户ID</p>
+              <div className="bg-[var(--paper-50)] p-4 rounded-[var(--radius-soft)]">
+                <p className="text-sm text-[var(--ink-600)] mb-1">用户ID</p>
                 <p className="font-mono text-sm">{userDetails.user.user_id}</p>
-                <p className="text-sm text-gray-600 mt-4 mb-1">最近更新时间</p>
+                <p className="text-sm text-[var(--ink-600)] mt-4 mb-1">最近更新时间</p>
                 <p className="text-sm">{formatDate(userDetails.user.updated_at)}</p>
               </div>
               
               {/* 最近交易记录 */}
               <div>
                 <h3 className="text-lg font-semibold mb-4">最近交易记录</h3>
-                <div className="border rounded-lg overflow-hidden">
+                <div className="border rounded-[var(--radius-soft)] overflow-hidden">
                   <table className="w-full">
                     <thead>
-                      <tr className="bg-gray-50">
+                      <tr className="bg-[var(--paper-50)]">
                         <th className="text-left py-2 px-4">类型</th>
                         <th className="text-left py-2 px-4">数量</th>
                         <th className="text-left py-2 px-4">描述</th>
@@ -896,18 +896,18 @@ export default function AdminPage() {
                             <Badge variant="ghost">{transaction.type}</Badge>
                           </td>
                           <td className="py-2 px-4 font-semibold">
-                            <span className={transaction.amount > 0 ? 'text-green-600' : 'text-red-600'}>
+                            <span className={transaction.amount > 0 ? 'text-[var(--ink-600)]' : 'text-[var(--seal-500)]'}>
                               {transaction.amount > 0 ? '+' : ''}{transaction.amount}
                             </span>
                           </td>
                           <td className="py-2 px-4 text-sm">{transaction.description || '-'}</td>
-                          <td className="py-2 px-4 text-sm text-gray-600">{formatDate(transaction.created_at)}</td>
+                          <td className="py-2 px-4 text-sm text-[var(--ink-600)]">{formatDate(transaction.created_at)}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                   {userDetails.transactions.length === 0 && (
-                    <div className="py-6 text-center text-sm text-gray-500">暂无交易记录</div>
+                    <div className="py-6 text-center text-sm text-[var(--ink-500)]">暂无交易记录</div>
                   )}
                 </div>
               </div>
@@ -915,10 +915,10 @@ export default function AdminPage() {
               {/* 最近订单 */}
               <div>
                 <h3 className="text-lg font-semibold mb-4">最近订单</h3>
-                <div className="border rounded-lg overflow-hidden">
+                <div className="border rounded-[var(--radius-soft)] overflow-hidden">
                   <table className="w-full">
                     <thead>
-                      <tr className="bg-gray-50">
+                      <tr className="bg-[var(--paper-50)]">
                         <th className="text-left py-2 px-4">订单号</th>
                         <th className="text-left py-2 px-4">产品</th>
                         <th className="text-left py-2 px-4">金额</th>
@@ -937,13 +937,13 @@ export default function AdminPage() {
                               {getOrderStatusLabel(order.status)}
                             </Badge>
                           </td>
-                          <td className="py-2 px-4 text-sm text-gray-600">{formatDate(order.created_at)}</td>
+                          <td className="py-2 px-4 text-sm text-[var(--ink-600)]">{formatDate(order.created_at)}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                   {userDetails.orders.length === 0 && (
-                    <div className="py-6 text-center text-sm text-gray-500">暂无订单</div>
+                    <div className="py-6 text-center text-sm text-[var(--ink-500)]">暂无订单</div>
                   )}
                 </div>
               </div>

@@ -55,25 +55,25 @@ export default function MySharesPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f7faf7] px-4 py-6 sm:px-6 lg:px-8">
+    <main className="min-h-screen bg-[var(--paper-50)] px-4 py-6 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl space-y-6">
         <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="text-sm font-medium text-emerald-700">我的分享</p>
-            <h1 className="mt-1 text-2xl font-semibold tracking-normal sm:text-3xl">管理已发布作品</h1>
-            <p className="mt-2 text-sm text-slate-600">查看、复制或下线你分享到创作广场的内容。</p>
+            <p className="text-sm font-medium text-[var(--ink-700)]">我的分享</p>
+            <h1 className="mt-1 text-2xl font-semibold tracking-normal sm:text-3xl font-[var(--font-display)]">管理已发布作品</h1>
+            <p className="mt-2 text-sm text-[var(--ink-600)]">查看、复制或下线你分享到创作广场的内容。</p>
           </div>
           <Button asChild>
             <Link href="/explore">进入创作广场</Link>
           </Button>
         </header>
 
-        {message ? <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600">{message}</div> : null}
-        {loading ? <div className="rounded-xl border border-slate-200 bg-white p-10 text-center text-slate-500"><Loader2 className="mx-auto mb-2 size-5 animate-spin" />加载中</div> : null}
+        {message ? <div className="rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-[var(--paper-50)] p-4 text-sm text-[var(--ink-600)]">{message}</div> : null}
+        {loading ? <div className="rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-[var(--paper-50)] p-10 text-center text-[var(--ink-500)]"><Loader2 className="mx-auto mb-2 size-5 animate-spin" />加载中</div> : null}
         {!loading && shares.length === 0 ? (
-          <div className="rounded-xl border border-slate-200 bg-white p-10 text-center">
+          <div className="rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-[var(--paper-50)] p-10 text-center">
             <p className="font-medium">还没有分享作品</p>
-            <p className="mt-2 text-sm text-slate-600">从聊天、闪卡或图片生成结果中点击“分享到创作广场”。</p>
+            <p className="mt-2 text-sm text-[var(--ink-600)]">从聊天、闪卡或图片生成结果中点击“分享到创作广场”。</p>
           </div>
         ) : null}
 

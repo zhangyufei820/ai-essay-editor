@@ -116,11 +116,11 @@ function PaymentSuccessContent() {
       <CardHeader className="text-center">
         <div className="flex justify-center mb-4">
           {isSuccess ? (
-            <CheckCircle className="h-16 w-16 text-green-600" />
+            <CheckCircle className="h-16 w-16 text-[var(--ink-600)]" />
           ) : isPending ? (
             <Clock className="h-16 w-16 text-amber-500" />
           ) : (
-            <AlertCircle className="h-16 w-16 text-red-500" />
+            <AlertCircle className="h-16 w-16 text-[var(--seal-500)]" />
           )}
         </div>
         <CardTitle className="text-2xl">
@@ -130,7 +130,7 @@ function PaymentSuccessContent() {
       </CardHeader>
       <CardContent className="space-y-4">
         {orderNo && (
-          <div className="rounded-lg border bg-white/70 p-4 text-sm space-y-3">
+          <div className="rounded-[var(--radius-soft)] border bg-[var(--paper-50)]/70 p-4 text-sm space-y-3">
             <div className="flex items-center justify-between gap-4">
               <span className="text-muted-foreground">订单号</span>
               <span className="font-mono text-right break-all">{order?.orderNo || orderNo}</span>
@@ -176,7 +176,7 @@ function PaymentSuccessContent() {
           </Alert>
         )}
 
-        <div className="rounded-lg bg-green-50 p-4 text-sm text-green-900 space-y-2">
+        <div className="rounded-[var(--radius-soft)] bg-[var(--ink-50)] p-4 text-sm text-[var(--ink-900)] space-y-2">
           <p className="font-semibold">下一步建议：</p>
           <ul className="list-disc pl-5 space-y-1">
             <li>先到“账户权益”确认积分或会员状态。</li>

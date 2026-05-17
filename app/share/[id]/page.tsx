@@ -20,7 +20,7 @@ const InlineText = ({ text }: { text: string }) => {
     <>
       {parts.map((part, index) => {
         if (part.startsWith("**") && part.endsWith("**")) {
-          return <strong key={index} className="font-semibold text-emerald-800">{part.slice(2, -2)}</strong>
+          return <strong key={index} className="font-semibold text-[var(--ink-800)]">{part.slice(2, -2)}</strong>
         }
         return <span key={index}>{part}</span>
       })}
@@ -36,13 +36,13 @@ const TableBlock = ({ lines }: { lines: string[] }) => {
     if (!headerLine) return null
     const headers = headerLine.split("|").filter(c => c.trim()).map(c => c.trim())
     return (
-      <div className="my-4 overflow-hidden rounded-xl border border-slate-200 bg-white">
+      <div className="my-4 overflow-hidden rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-[var(--paper-50)]">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-slate-200">
-            <thead className="bg-slate-50">
+            <thead className="bg-[var(--paper-50)]">
               <tr>
                 {headers.map((h, i) => (
-                  <th key={i} className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">{h}</th>
+                  <th key={i} className="px-4 py-3 text-left text-xs font-semibold text-[var(--ink-600)] uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -50,9 +50,9 @@ const TableBlock = ({ lines }: { lines: string[] }) => {
               {bodyLines.map((line, i) => {
                 const cells = line.split("|").filter(c => c.trim()).map(c => c.trim())
                 return (
-                  <tr key={i} className="hover:bg-slate-50/50 transition-colors">
+                  <tr key={i} className="hover:bg-[var(--paper-50)]/50 transition-colors">
                     {cells.map((cell, j) => (
-                      <td key={j} className="px-4 py-3 text-sm text-slate-600">
+                      <td key={j} className="px-4 py-3 text-sm text-[var(--ink-600)]">
                         <InlineText text={cell} />
                       </td>
                     ))}
@@ -93,45 +93,45 @@ function ContentRenderer({ content }: { content: string }) {
 
     if (line.trim().startsWith("# ")) {
       renderedElements.push(
-        <h1 key={i} className="mt-8 mb-4 text-2xl font-bold text-slate-800">
+        <h1 key={i} className="mt-8 mb-4 text-2xl font-bold text-[var(--ink-800)] font-[var(--font-display)]">
           {line.replace(/^#\s+/, "")}
         </h1>
       )
     } else if (line.trim().startsWith("## ")) {
       renderedElements.push(
-        <h2 key={i} className="mt-6 mb-3 text-xl font-semibold text-slate-700 flex items-center gap-2">
-          <span className="w-1 h-5 bg-emerald-600 rounded-full"></span>
+        <h2 key={i} className="mt-6 mb-3 text-xl font-semibold text-[var(--ink-700)] flex items-center gap-2 font-[var(--font-display)]">
+          <span className="w-1 h-5 bg-[var(--ink-600)] rounded-full"></span>
           {line.replace(/^##\s+/, "")}
         </h2>
       )
     } else if (line.trim().startsWith("### ")) {
       renderedElements.push(
-        <h3 key={i} className="mt-5 mb-2 text-lg font-semibold text-emerald-800">
+        <h3 key={i} className="mt-5 mb-2 text-lg font-semibold text-[var(--ink-800)]">
           {line.replace(/^###\s+/, "")}
         </h3>
       )
     } else if (line.trim().startsWith("- ")) {
       renderedElements.push(
-        <div key={i} className="flex gap-2.5 ml-1 my-2 text-base text-slate-600 leading-relaxed">
-          <div className="mt-2 w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></div>
+        <div key={i} className="flex gap-2.5 ml-1 my-2 text-base text-[var(--ink-600)] leading-relaxed">
+          <div className="mt-2 w-1.5 h-1.5 rounded-full bg-[var(--ink-500)] shrink-0"></div>
           <span><InlineText text={line.replace(/^- /, "")} /></span>
         </div>
       )
     } else if (line.trim().startsWith("> ")) {
       renderedElements.push(
-        <blockquote key={i} className="my-4 border-l-3 border-emerald-500 bg-emerald-50 px-4 py-3 rounded-r-xl">
-          <div className="text-base text-slate-600 leading-relaxed">
+        <blockquote key={i} className="my-4 border-l-3 border-[var(--seal-500)] bg-[var(--ink-50)] px-4 py-3 rounded-r-[var(--radius-sharp)]">
+          <div className="text-base text-[var(--ink-600)] leading-relaxed">
             <InlineText text={line.replace(/^> /, "")} />
           </div>
         </blockquote>
       )
     } else if (line.trim() === "---") {
-      renderedElements.push(<div key={i} className="py-4"><div className="h-px bg-slate-200"></div></div>)
+      renderedElements.push(<div key={i} className="py-4"><div className="h-px bg-[var(--paper-200)]"></div></div>)
     } else if (line.trim() === "") {
       renderedElements.push(<div key={i} className="h-3"></div>)
     } else {
       renderedElements.push(
-        <p key={i} className="text-base leading-[1.8] text-slate-600 my-2">
+        <p key={i} className="text-base leading-[1.8] text-[var(--ink-600)] my-2">
           <InlineText text={line} />
         </p>
       )
@@ -145,15 +145,15 @@ function MessageItem({ role, content }: { role: 'user' | 'assistant', content: s
   return (
     <div className={cn("flex gap-3", role === "user" ? "justify-end" : "justify-start")}>
       {role === "assistant" && (
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-white mt-1" style={{ backgroundColor: BRAND_GREEN }}>
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-sharp)] text-white mt-1" style={{ backgroundColor: BRAND_GREEN }}>
           <Sparkles className="h-4 w-4" />
         </div>
       )}
       <div className={cn(
-        "relative rounded-2xl px-4 py-3",
+        "relative rounded-[var(--radius-sharp)] px-4 py-3",
         role === "user" 
           ? "max-w-[75%] border border-[#e6e3dc] bg-[#f7f7f5] text-[#2f3136]" 
-          : "bg-slate-50 w-full max-w-full"
+          : "bg-[var(--paper-50)] w-full max-w-full"
       )}>
         {role === "user" ? (
           <div className="whitespace-pre-wrap text-[15px] leading-relaxed">{content}</div>
@@ -162,8 +162,8 @@ function MessageItem({ role, content }: { role: 'user' | 'assistant', content: s
         )}
       </div>
       {role === "user" && (
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-slate-200 mt-1">
-          <User className="h-4 w-4 text-slate-500" />
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-sharp)] bg-[var(--paper-200)] mt-1">
+          <User className="h-4 w-4 text-[var(--ink-500)]" />
         </div>
       )}
     </div>
@@ -363,10 +363,10 @@ export default function SharePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <div className="min-h-screen bg-[var(--paper-50)] flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
-          <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
-          <p className="text-slate-500">加载中...</p>
+          <Loader2 className="h-8 w-8 animate-spin text-[var(--ink-600)]" />
+          <p className="text-[var(--ink-500)]">加载中...</p>
         </div>
       </div>
     )
@@ -374,14 +374,14 @@ export default function SharePage() {
 
   if (error || !shareData || !parsedData) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <div className="min-h-screen bg-[var(--paper-50)] flex items-center justify-center">
         <div className="text-center">
-          <div className="mb-4 flex h-16 w-16 mx-auto items-center justify-center rounded-2xl bg-red-100">
-            <GraduationCap className="h-8 w-8 text-red-500" />
+          <div className="mb-4 flex h-16 w-16 mx-auto items-center justify-center rounded-[var(--radius-sharp)] bg-[var(--seal-50)]">
+            <GraduationCap className="h-8 w-8 text-[var(--seal-500)]" />
           </div>
-          <h1 className="text-xl font-semibold text-slate-800 mb-2">内容不存在</h1>
-          <p className="text-slate-500 mb-6">{error || '该分享链接无效或已过期'}</p>
-          <Button onClick={() => router.push('/')} className="bg-emerald-600 hover:bg-emerald-700">
+          <h1 className="text-xl font-semibold text-[var(--ink-800)] mb-2 font-[var(--font-display)]">内容不存在</h1>
+          <p className="text-[var(--ink-500)] mb-6">{error || '该分享链接无效或已过期'}</p>
+          <Button onClick={() => router.push('/')} className="bg-[var(--ink-600)] hover:bg-[var(--ink-700)]">
             返回首页
           </Button>
         </div>
@@ -390,20 +390,20 @@ export default function SharePage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-[var(--paper-50)]">
       {/* 顶部导航 */}
-      <header className="sticky top-0 z-50 bg-white border-b border-slate-200 shadow-sm">
+      <header className="sticky top-0 z-50 bg-[var(--paper-50)] border-b border-[var(--paper-200)] shadow-sm">
         <div className="max-w-4xl mx-auto px-4 h-14 flex items-center justify-between">
           <button
             onClick={() => router.push('/')}
-            className="flex items-center gap-2 text-slate-600 hover:text-slate-800 transition-colors"
+            className="flex items-center gap-2 text-[var(--ink-600)] hover:text-[var(--ink-800)] transition-colors"
           >
             <ArrowLeft className="h-5 w-5" />
             <span className="text-sm font-medium">返回首页</span>
           </button>
           <div className="flex items-center gap-2">
-            <GraduationCap className="h-6 w-6 text-emerald-600" />
-            <span className="font-semibold text-slate-800">沈翔智学</span>
+            <GraduationCap className="h-6 w-6 text-[var(--ink-600)]" />
+            <span className="font-semibold text-[var(--ink-800)]">沈翔智学</span>
           </div>
         </div>
       </header>
@@ -411,7 +411,7 @@ export default function SharePage() {
       {/* 主内容 */}
       <main className="max-w-4xl mx-auto px-4 py-8">
         {/* 标题卡片 */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 mb-6">
+        <div className="bg-[var(--paper-50)] rounded-[var(--radius-sharp)] shadow-sm border border-[var(--paper-200)] p-6 mb-6">
           <div className="flex items-center gap-2 mb-2">
             {parsedData.modelName && (
               <span className="px-2 py-0.5 text-xs font-medium rounded-full text-white" style={{ backgroundColor: BRAND_GREEN }}>
@@ -424,8 +424,8 @@ export default function SharePage() {
               </span>
             )}
           </div>
-          <h1 className="text-xl font-bold text-slate-800 mb-4">{shareData.title || 'AI 对话'}</h1>
-          <div className="flex items-center gap-4 text-sm text-slate-500">
+          <h1 className="text-xl font-bold text-[var(--ink-800)] mb-4 font-[var(--font-display)]">{shareData.title || 'AI 对话'}</h1>
+          <div className="flex items-center gap-4 text-sm text-[var(--ink-500)]">
             <div className="flex items-center gap-1.5">
               <Calendar className="h-4 w-4" />
               <span>{new Date(shareData.created_at).toLocaleDateString('zh-CN')}</span>
@@ -438,7 +438,7 @@ export default function SharePage() {
         </div>
 
         {/* 内容卡片 */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 md:p-8">
+        <div className="bg-[var(--paper-50)] rounded-[var(--radius-sharp)] shadow-sm border border-[var(--paper-200)] p-6 md:p-8">
           {/* 🔥 根据类型渲染不同内容 */}
           {parsedData.type === 'conversation' && parsedData.messages ? (
             <div className="space-y-6">
@@ -451,7 +451,7 @@ export default function SharePage() {
           )}
 
           {/* 操作按钮 */}
-          <div className="mt-8 pt-6 border-t border-slate-200 flex items-center justify-end gap-3">
+          <div className="mt-8 pt-6 border-t border-[var(--paper-200)] flex items-center justify-end gap-3">
             <Button
               variant="outline"
               size="sm"
@@ -475,8 +475,8 @@ export default function SharePage() {
 
         {/* 底部品牌 */}
         <div className="mt-8 text-center">
-          <p className="text-sm text-slate-400">
-            由 <a href="https://www.shenxiang.school" className="text-emerald-600 hover:underline">沈翔智学</a> AI 生成
+          <p className="text-sm text-[var(--ink-400)]">
+            由 <a href="https://www.shenxiang.school" className="text-[var(--ink-600)] hover:underline">沈翔智学</a> AI 生成
           </p>
         </div>
       </main>

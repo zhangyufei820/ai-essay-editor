@@ -179,7 +179,7 @@ function CheckoutFlow({ productId }: { productId: string }) {
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-background to-muted/20 flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <Loader2 className="h-8 w-8 animate-spin text-[var(--ink-600)]" />
       </div>
     )
   }
@@ -192,10 +192,10 @@ function CheckoutFlow({ productId }: { productId: string }) {
         </Link>
 
         <div className="max-w-4xl mx-auto">
-          <div className="bg-card rounded-2xl shadow-lg p-8 mb-8">
+          <div className="bg-[var(--paper-50)] rounded-[var(--radius-sharp)] shadow-lg p-8 mb-8">
             <div className="flex items-start justify-between mb-4">
               <div>
-                <h1 className="text-3xl font-bold mb-2">{product.name}</h1>
+                <h1 className="text-3xl font-bold mb-2 font-[var(--font-display)]">{product.name}</h1>
                 <p className="text-muted-foreground">{product.description}</p>
               </div>
               {needsMembership && (
@@ -205,12 +205,12 @@ function CheckoutFlow({ productId }: { productId: string }) {
                 </Badge>
               )}
             </div>
-            <div className="text-4xl font-bold text-primary mb-3">
+            <div className="text-4xl font-bold text-[var(--ink-600)] mb-3">
               ¥{(displayPrice / 100).toFixed(2)}
               <span className="text-lg text-muted-foreground ml-2">/ {billing === "annual" ? "年" : billing === "monthly" ? "月" : "次"}</span>
             </div>
             {isSubscription && billing === "annual" && (
-              <p className="text-sm text-green-700 font-medium">年付已按月付 × 12 × 8 折计算，权益按月发放。</p>
+              <p className="text-sm text-[var(--ink-700)] font-medium">年付已按月付 × 12 × 8 折计算，权益按月发放。</p>
             )}
             {product.productType === "credits" && (
               <p className="text-sm text-amber-700 font-medium">
@@ -240,9 +240,9 @@ function CheckoutFlow({ productId }: { productId: string }) {
 
           {/* 会员身份确认 */}
           {needsMembership && isUserMember && (
-            <Alert className="mb-6 border-green-200 bg-green-50">
-              <CheckCircle2 className="h-4 w-4 text-green-600" />
-              <AlertDescription className="text-green-900">
+            <Alert className="mb-6 border-[var(--ink-200)] bg-[var(--ink-50)]">
+              <CheckCircle2 className="h-4 w-4 text-[var(--ink-600)]" />
+              <AlertDescription className="text-[var(--ink-900)]">
                 <div className="flex items-center gap-2">
                   <Crown className="h-4 w-4" />
                   <span className="font-semibold">您是 {membershipStatus?.toUpperCase()} 会员，可以购买积分充值包</span>
@@ -253,9 +253,9 @@ function CheckoutFlow({ productId }: { productId: string }) {
 
           {/* 如果自动跳转失败，显示这个手动支付框 */}
           {manualPayUrl && (
-             <Alert className="mb-6 border-green-200 bg-green-50">
-              <CheckCircle2 className="h-4 w-4 text-green-600" />
-              <AlertDescription className="text-green-900 flex items-center gap-2">
+             <Alert className="mb-6 border-[var(--ink-200)] bg-[var(--ink-50)]">
+              <CheckCircle2 className="h-4 w-4 text-[var(--ink-600)]" />
+              <AlertDescription className="text-[var(--ink-900)] flex items-center gap-2">
                 支付链接已生成！如果浏览器未自动跳转，请点击：
                 <a href={manualPayUrl} className="font-bold underline flex items-center" target="_blank" rel="noopener noreferrer">
                   立即前往支付 <ExternalLink className="h-3 w-3 ml-1"/>
@@ -264,15 +264,15 @@ function CheckoutFlow({ productId }: { productId: string }) {
             </Alert>
           )}
 
-          <div className="bg-card rounded-2xl shadow-lg p-8">
-            <h2 className="text-xl font-semibold mb-2">扫码支付</h2>
+          <div className="bg-[var(--paper-50)] rounded-[var(--radius-sharp)] shadow-lg p-8">
+            <h2 className="text-xl font-semibold mb-2 font-[var(--font-display)]">扫码支付</h2>
             <p className="text-sm text-muted-foreground mb-4">
               使用微信扫码完成支付。支付完成后会自动跳转到结果页；如权益未及时到账，请保存订单号并联系 support@shenxiang.school。
             </p>
             
             {/* 如果需要会员但用户不是会员，禁用支付按钮 */}
             {needsMembership && !isUserMember && (
-              <div className="mb-4 p-4 bg-muted rounded-lg text-center text-muted-foreground">
+              <div className="mb-4 p-4 bg-muted rounded-[var(--radius-soft)] text-center text-muted-foreground">
                 请先订阅会员后再购买积分充值包
               </div>
             )}
@@ -284,7 +284,7 @@ function CheckoutFlow({ productId }: { productId: string }) {
                 onClick={() => handlePayment()}
                 disabled={!BETA_CONFIG.payment.xunhupay || isPaying || (needsMembership && !isUserMember)}
               >
-                {isPaying ? <Loader2 className="h-6 w-6 animate-spin text-primary" /> : (
+                {isPaying ? <Loader2 className="h-6 w-6 animate-spin text-[var(--ink-600)]" /> : (
                   <>
                   <svg className="h-8 w-8" viewBox="0 0 24 24" fill={BETA_CONFIG.payment.xunhupay ? "#07C160" : "#999"}>
                     <path d="M8.691 2.188C3.891 2.188 0 5.476 0 9.53c0 2.212 1.17 4.203 3.002 5.55a.59.59 0 0 1 .213.665l-.39 1.48c-.019.07-.048.141-.048.213 0 .163.13.295.29.295a.326.326 0 0 0 .167-.054l1.903-1.114a.864.864 0 0 1 .717-.098 10.16 10.16 0 0 0 2.837.403c.276 0 .543-.027.811-.05-.857-2.578.157-4.972 1.932-6.446 1.703-1.415 3.882-1.98 5.853-1.838-.576-3.583-4.196-6.348-8.596-6.348zM5.785 5.991c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 0 1-1.162 1.178A1.17 1.17 0 0 1 4.623 7.17c0-.651.52-1.18 1.162-1.18zm5.813 0c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 0 1-1.162 1.178 1.17 1.17 0 0 1-1.162-1.178c0-.651.52-1.18 1.162-1.18zm5.34 2.867c-1.797-.052-3.746.512-5.28 1.786-1.72 1.428-2.687 3.72-1.78 6.22.942 2.453 3.666 4.229 6.884 4.229.826 0 1.622-.12 2.361-.336a.722.722 0 0 1 .598.082l1.584.926a.272.272 0 0 0 .14.047c.134 0 .24-.111.24-.247 0-.06-.023-.12-.038-.177l-.327-1.233a.582.582 0 0 1-.023-.156.49.49 0 0 1 .201-.398C23.024 18.48 24 16.82 24 14.98c0-3.21-2.931-5.837-6.656-6.088V8.89c-.135-.01-.27-.027-.407-.03zm-2.53 3.274c.535 0 .969.44.969.982a.976.976 0 0 1-.969.983.976.976 0 0 1-.969-.983c0-.542.434-.982.969-.982zm4.844 0c.535 0 .969.44.969.982a.976.976 0 0 1-.969.983.976.976 0 0 1-.969-.983c0-.542.434-.982.969-.982z" />

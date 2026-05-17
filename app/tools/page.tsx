@@ -21,11 +21,11 @@ type ToolResult = {
 
 function JsonBlock({ value }: { value: unknown }) {
   if (typeof value === "string") {
-    return <div className="whitespace-pre-wrap rounded-lg bg-muted/50 p-3 text-sm leading-6">{value}</div>
+    return <div className="whitespace-pre-wrap rounded-[var(--radius-soft)] bg-muted/50 p-3 text-sm leading-6">{value}</div>
   }
 
   return (
-    <pre className="max-h-96 overflow-auto rounded-lg bg-muted/50 p-3 text-xs leading-5">
+    <pre className="max-h-96 overflow-auto rounded-[var(--radius-soft)] bg-muted/50 p-3 text-xs leading-5">
       {JSON.stringify(value, null, 2)}
     </pre>
   )
@@ -145,12 +145,12 @@ export default function ToolsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f7faf7] px-4 py-6 dark:bg-background sm:px-6 lg:px-8">
+    <main className="min-h-screen bg-[var(--paper-50)] px-4 py-6 dark:bg-background sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl space-y-6">
         <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300">工具中心</p>
-            <h1 className="mt-1 text-2xl font-semibold tracking-normal sm:text-3xl">所有后端工具都有前端入口</h1>
+            <p className="text-sm font-medium text-[var(--ink-700)] dark:text-[var(--ink-200)]">工具中心</p>
+            <h1 className="mt-1 text-2xl font-semibold tracking-normal sm:text-3xl font-[var(--font-display)]">所有后端工具都有前端入口</h1>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
               文档处理、图片 OCR、网页搜索、演示文稿和综合报告统一放在这里；音乐、语音和上传能力在聊天页对应模型中使用。
             </p>
@@ -162,9 +162,9 @@ export default function ToolsPage() {
 
         <div className="grid gap-6 xl:grid-cols-[1fr_420px]">
           <div className="grid gap-4 lg:grid-cols-2">
-            <Card className="rounded-xl">
+            <Card className="rounded-[var(--radius-sharp)]">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base"><FileText className="size-5 text-emerald-600" />文档处理</CardTitle>
+                <CardTitle className="flex items-center gap-2 text-base"><FileText className="size-5 text-[var(--ink-600)]" />文档处理</CardTitle>
               </CardHeader>
               <CardContent>
                 <form className="space-y-3" onSubmit={runDocumentProcess}>
@@ -178,9 +178,9 @@ export default function ToolsPage() {
               </CardContent>
             </Card>
 
-            <Card className="rounded-xl">
+            <Card className="rounded-[var(--radius-sharp)]">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base"><Wand2 className="size-5 text-emerald-600" />图片 OCR</CardTitle>
+                <CardTitle className="flex items-center gap-2 text-base"><Wand2 className="size-5 text-[var(--ink-600)]" />图片 OCR</CardTitle>
               </CardHeader>
               <CardContent>
                 <form className="space-y-3" onSubmit={runOcr}>
@@ -194,9 +194,9 @@ export default function ToolsPage() {
               </CardContent>
             </Card>
 
-            <Card className="rounded-xl">
+            <Card className="rounded-[var(--radius-sharp)]">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base"><Presentation className="size-5 text-emerald-600" />演示文稿</CardTitle>
+                <CardTitle className="flex items-center gap-2 text-base"><Presentation className="size-5 text-[var(--ink-600)]" />演示文稿</CardTitle>
               </CardHeader>
               <CardContent>
                 <form className="space-y-3" onSubmit={runPresentation}>
@@ -210,9 +210,9 @@ export default function ToolsPage() {
               </CardContent>
             </Card>
 
-            <Card className="rounded-xl">
+            <Card className="rounded-[var(--radius-sharp)]">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base"><Search className="size-5 text-emerald-600" />网页搜索</CardTitle>
+                <CardTitle className="flex items-center gap-2 text-base"><Search className="size-5 text-[var(--ink-600)]" />网页搜索</CardTitle>
               </CardHeader>
               <CardContent>
                 <form className="space-y-3" onSubmit={runSearch}>
@@ -226,9 +226,9 @@ export default function ToolsPage() {
               </CardContent>
             </Card>
 
-            <Card className="rounded-xl lg:col-span-2">
+            <Card className="rounded-[var(--radius-sharp)] lg:col-span-2">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base"><Sparkles className="size-5 text-emerald-600" />Sparkpage 综合报告</CardTitle>
+                <CardTitle className="flex items-center gap-2 text-base"><Sparkles className="size-5 text-[var(--ink-600)]" />Sparkpage 综合报告</CardTitle>
               </CardHeader>
               <CardContent>
                 <form className="grid gap-3 md:grid-cols-[1fr_auto]" onSubmit={runSparkpage}>
@@ -242,13 +242,13 @@ export default function ToolsPage() {
             </Card>
           </div>
 
-          <Card className="rounded-xl">
+          <Card className="rounded-[var(--radius-sharp)]">
             <CardHeader>
               <CardTitle className="text-base">{result?.title || "结果预览"}</CardTitle>
             </CardHeader>
             <CardContent>
               {result ? <JsonBlock value={result.content} /> : (
-                <div className="rounded-lg border border-dashed py-16 text-center text-sm text-muted-foreground">
+                <div className="rounded-[var(--radius-soft)] border border-dashed py-16 text-center text-sm text-muted-foreground">
                   运行左侧任意工具后，结果会显示在这里。
                 </div>
               )}
