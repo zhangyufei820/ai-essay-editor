@@ -15,8 +15,24 @@ import {
   SheetV2Description,
   BadgeV2,
 } from "@/components/ui/v2"
-import { AGENT_REGISTRY, AGENT_GROUPS, listAgentsByGroup } from "@/components/chat/v2/agent-registry"
+import { AGENT_REGISTRY } from "@/components/chat/v2/agent-registry"
 import type { ModelKey } from "@/components/ModelLogo"
+import { ModelLogo } from "@/components/ModelLogo"
+
+const GROUP_LABELS: Record<string, string> = {
+  "教育专用": "教育专区",
+  "AI模型": "顶级模型专区",
+  "AI写作": "AI写作专区",
+  "创意生成": "多媒体专区",
+  general: "通用",
+  writing: "写作类",
+  teaching: "教学类",
+  subject: "学科类",
+  creative: "创作类",
+  默认: "其他",
+}
+
+const GROUP_ORDER = ["教育专用", "AI模型", "AI写作", "创意生成", "general", "writing", "teaching", "subject", "creative", "默认"]
 
 export interface Model {
   key: string
@@ -57,6 +73,29 @@ export function ModelSelector({
     return AGENT_REGISTRY[selectedModel] ?? models.find((item) => item.key === selectedModel) ?? null
   }, [models, selectedModel])
 
+  const modelGroups = useMemo(() => {
+    const seen = new Set<string>()
+    const grouped = new Map<string, Model[]>()
+
+    for (const model of models) {
+      if (seen.has(model.key)) continue
+      seen.add(model.key)
+      const group = model.group || AGENT_REGISTRY[model.key]?.group || "默认"
+      const items = grouped.get(group) ?? []
+      items.push(model)
+      grouped.set(group, items)
+    }
+
+    return Array.from(grouped.entries()).sort(([a], [b]) => {
+      const aIndex = GROUP_ORDER.indexOf(a)
+      const bIndex = GROUP_ORDER.indexOf(b)
+      if (aIndex === -1 && bIndex === -1) return a.localeCompare(b, "zh-CN")
+      if (aIndex === -1) return 1
+      if (bIndex === -1) return -1
+      return aIndex - bIndex
+    })
+  }, [models])
+
   useEffect(() => {
     if (!open) return
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -91,7 +130,7 @@ export function ModelSelector({
         <SheetV2Header>
           <SheetV2Title>选择智能体</SheetV2Title>
           <SheetV2Description>
-            按任务分组 · 全部 22 个
+            按任务分组 · 全部 {models.length} 个
           </SheetV2Description>
           {dailyFreeInfo ? (
             <div className="text-[11px] text-[var(--ink-400)] font-[var(--font-mono-v2)]">
@@ -101,28 +140,30 @@ export function ModelSelector({
         </SheetV2Header>
 
         <div className="flex-1 overflow-auto px-6 py-4 font-[var(--font-sans-v2)]">
-          {AGENT_GROUPS.map((group) => {
-            const items = listAgentsByGroup(group.key)
+          {modelGroups.map(([group, items]) => {
             if (items.length === 0) return null
 
             return (
-              <section key={group.key} className="mb-6">
+              <section key={group} className="mb-6">
                 <h3 className="mb-3 text-[12px] font-semibold uppercase tracking-wider text-[var(--ink-500)]">
-                  {group.label}
+                  {GROUP_LABELS[group] ?? group}
                 </h3>
                 <div className="grid gap-2 sm:grid-cols-2">
-                  {items.map((agent) => {
-                    const locked = Boolean(agent.memberOnly && !isMember)
-                    const active = agent.model === selectedModel
-                    const Icon = agent.icon
+                  {items.map((model) => {
+                    const registryAgent = AGENT_REGISTRY[model.key]
+                    const locked = Boolean(registryAgent?.memberOnly && !isMember)
+                    const active = model.key === selectedModel
+                    const Icon = registryAgent?.icon
+                    const FallbackIcon = typeof model.icon === "string" ? null : model.icon
+                    const stringIcon = typeof model.icon === "string" ? model.icon : null
 
                     return (
                       <button
-                        key={agent.model}
+                        key={model.key}
                         type="button"
                         onClick={() => {
                           if (locked) return
-                          onModelChange(agent.model)
+                          onModelChange(model.key)
                           setOpen(false)
                         }}
                         disabled={locked}
@@ -142,27 +183,40 @@ export function ModelSelector({
                               : "bg-[var(--ink-50)] text-[var(--ink-700)]"
                           )}
                         >
-                          {Icon ? <Icon className="size-4" /> : null}
+                          {Icon ? (
+                            <Icon className="size-4" />
+                          ) : model.modelKey ? (
+                            <ModelLogo modelKey={model.modelKey} size="sm" />
+                          ) : FallbackIcon ? (
+                            <FallbackIcon className="size-4" />
+                          ) : stringIcon ? (
+                            <span className="text-[13px]">{stringIcon}</span>
+                          ) : null}
                         </div>
 
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1.5">
                             <span className="font-[var(--font-display)] text-[14px] font-bold text-[var(--ink-800)]">
-                              {agent.name}
+                              {registryAgent?.name ?? model.name}
                             </span>
-                            {agent.memberOnly ? (
+                            {registryAgent?.memberOnly ? (
                               <BadgeV2 variant="seal">
                                 <Lock className="size-2.5 mr-0.5" />
                                 会员
                               </BadgeV2>
                             ) : null}
+                            {model.badge ? (
+                              <BadgeV2 variant={model.badge === "推荐" ? "seal" : "paper"}>
+                                {model.badge}
+                              </BadgeV2>
+                            ) : null}
                           </div>
                           <p className="mt-0.5 text-[12px] leading-[1.5] text-[var(--ink-500)] line-clamp-2">
-                            {agent.description}
+                            {registryAgent?.description ?? model.description ?? "AI 助手"}
                           </p>
-                          {agent.priceLabel ? (
+                          {registryAgent?.priceLabel ? (
                             <p className="mt-1 text-[11px] text-[var(--ink-400)] font-[var(--font-mono-v2)]">
-                              {agent.priceLabel}
+                              {registryAgent.priceLabel}
                             </p>
                           ) : null}
                         </div>
