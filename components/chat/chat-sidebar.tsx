@@ -124,8 +124,8 @@ export function ChatSidebar({
                       className={cn(
                         "relative flex w-full items-center gap-3 rounded-[var(--radius-soft)] px-3 py-4 text-left transition-all duration-200",
                         currentSessionId === session.id
-                          ? "bg-[var(--paper-50)] text-[var(--ink-700)] shadow-sm ring-1 ring-[var(--paper-200)]"
-                          : "text-[var(--ink-600)] hover:bg-[var(--paper-200)]/50 hover:text-[var(--ink-900)]"
+                          ? "bg-[var(--ink-50)] text-[var(--ink-800)] shadow-sm ring-1 ring-[var(--paper-200)] font-semibold"
+                          : "text-[var(--ink-600)] hover:bg-[var(--ink-50)] hover:text-[var(--ink-800)]"
                       )}
                     >
                       {currentSessionId === session.id ? (
@@ -139,7 +139,7 @@ export function ChatSidebar({
                       <div className="flex flex-1 flex-col overflow-hidden">
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-2 min-w-0">
-                            <span className="truncate text-sm font-medium">
+                            <span className="truncate text-[14px] font-[var(--font-sans-v2)]">
                               {session.title || "新对话"}
                             </span>
                             {session.ai_model && session.ai_model !== "standard" && (
@@ -150,11 +150,11 @@ export function ChatSidebar({
                               </span>
                             )}
                           </div>
-                          <span className="text-[10px] text-[var(--ink-400)] font-normal shrink-0">
+                          <span className="font-[var(--font-mono-v2)] text-[11px] text-[var(--ink-400)] font-normal shrink-0">
                             {formatTime(session.date)}
                           </span>
                         </div>
-                        <span className="truncate text-[10px] text-[var(--ink-400)] font-normal mt-0.5">
+                        <span className="truncate text-[11px] text-[var(--ink-400)] font-normal mt-0.5">
                           {session.preview || "无预览内容"}
                         </span>
                       </div>
