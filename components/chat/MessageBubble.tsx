@@ -389,7 +389,8 @@ const MessageBubble = memo(function MessageBubble({
 }: MessageBubbleProps) {
   const isUser = role === "user"
   const essayReviewArtifact = useMemo(() => {
-    if (isUser || model !== "standard") return null
+    const isEssayModel = model === "standard" || model === "essay-correction"
+    if (isUser || !isEssayModel) return null
     return parseEssayReview(content)
   }, [content, isUser, model])
 

@@ -36,14 +36,14 @@ function extractInlineItems(markdown: string, labels: string[]) {
 }
 
 function parseScore(markdown: string): EssayReviewArtifact["score"] | undefined {
-  const ratio = markdown.match(/(?:评分|得分|总分)\s*[：:]?\s*(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)/i)
+  const ratio = markdown.match(/(?:评分|得分|总分)?\s*[：:]?\s*(\d+(?:\.\d+)?)\s*[/／]\s*(\d+(?:\.\d+)?)/i)
   if (ratio) {
     return { value: Number(ratio[1]), total: Number(ratio[2]) }
   }
 
-  const score = markdown.match(/(?:评分|得分|总分)\s*[：:]?\s*(\d+(?:\.\d+)?)\s*分/i)
+  const score = markdown.match(/(?:评分|得分|总分)?\s*[：:]?\s*(\d+(?:\.\d+)?)\s*分/i)
   if (score) {
-    return { value: Number(score[1]), total: 100 }
+    return { value: Number(score[1]), total: 10 }
   }
 
   return undefined
