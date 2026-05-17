@@ -1,5 +1,4 @@
 import type { Metadata } from 'next'
-import { WorkspaceShell } from "@/components/v2-chrome"
 
 export const metadata: Metadata = {
   title: 'AI 对话 | 沈翔智学',
@@ -15,9 +14,5 @@ export const metadata: Metadata = {
 }
 
 export default function ChatLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <WorkspaceShell pageTitle="AI 对话">
-      {children}
-    </WorkspaceShell>
-  )
+  return children
 }
