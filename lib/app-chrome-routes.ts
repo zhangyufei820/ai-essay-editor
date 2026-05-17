@@ -1,6 +1,5 @@
 const APP_ROUTE_PREFIXES = [
   "/admin",
-  "/chat",
   "/credits",
   "/dashboard",
   "/flashcards",
