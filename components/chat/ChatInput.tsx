@@ -411,11 +411,11 @@ export function ChatInput({
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
       className={cn(
+        className,
         "relative mx-auto w-full max-w-3xl rounded-[var(--radius-card)] border border-[var(--paper-200)] bg-white shadow-[var(--shadow-paper)] touch-manipulation",
         "transition-[border-color,box-shadow] duration-200",
         "focus-within:border-[var(--ink-500)] focus-within:[box-shadow:var(--shadow-focus-ink)]",
-        isFocused && "border-[var(--ink-500)]",
-        className
+        isFocused && "border-[var(--ink-500)]"
       )}
       style={{ 
         ['--ring-color' as string]: "var(--ink-500)"
