@@ -27,34 +27,34 @@ import { extractUserId } from "@/lib/auth-user"
 // --- 设计系统颜色常量 ---
 const COLORS = {
   primary: {
-    main: "#22C55E",      // 主品牌色（更鲜艳的绿色）
-    dark: "#15803D",      // 深色（选中文字）
-    darker: "#14532D",    // 更深色（标题）
-    light: "#DCFCE7",     // 浅色背景
-    hover: "rgba(34, 197, 94, 0.12)", // 选中态背景
+    main: "var(--ink-600)",
+    dark: "var(--ink-700)",
+    darker: "var(--ink-900)",
+    light: "var(--ink-50)",
+    hover: "color-mix(in srgb, var(--ink-600) 12%, transparent)",
   },
-  // 🎨 侧边栏专用配色 - 基于主页风格的浅绿灰色
+  seal: "var(--seal-500)",
   sidebar: {
-    bg: "#FFFFFF",           // 主背景 - 干净白底
-    bgGradient: "linear-gradient(180deg, #FFFFFF 0%, #FAFBFA 100%)", // 克制渐变背景
-    cardBg: "#FFFFFF",       // 卡片背景
-    border: "#EEF1EE",       // 边框色 - 低对比
-    divider: "#EEF1EE",      // 分割线
+    bg: "var(--paper-50)",
+    bgGradient: "linear-gradient(180deg, var(--paper-50) 0%, var(--paper-100) 100%)",
+    cardBg: "var(--paper-50)",
+    border: "var(--paper-200)",
+    divider: "var(--paper-200)",
   },
   gray: {
-    50: "#FAFAFA",
-    100: "#F5F5F5",
-    200: "#E5E7EB",
-    300: "#D1D5DB",
-    400: "#9CA3AF",
-    500: "#6B7280",
-    600: "#4B5563",
-    700: "#374151",
-    800: "#1F2937",
-    900: "#111827",
+    50: "var(--paper-50)",
+    100: "var(--paper-100)",
+    200: "var(--paper-200)",
+    300: "var(--ink-300)",
+    400: "var(--ink-400)",
+    500: "var(--ink-500)",
+    600: "var(--ink-600)",
+    700: "var(--ink-700)",
+    800: "var(--ink-800)",
+    900: "var(--ink-900)",
   },
-  error: "#EF4444",
-  divider: "#E5EBE7",
+  error: "var(--seal-500)",
+  divider: "var(--paper-200)",
 }
 
 // 🎨 文字阴影样式
@@ -395,13 +395,13 @@ function AppSidebarInner() {
       onClick={onClick || handleNavClick}
       className={cn(
         "relative flex items-center gap-4 px-4 py-[14px] transition-all", // 间距拉大15%
-        "rounded-xl",
+        "rounded-[var(--radius-sharp)]",
         isActive
           ? "font-bold"
-          : "font-semibold hover:bg-white/80"
+          : "font-semibold hover:bg-[var(--paper-100)]"
       )}
       style={isActive ? {
-        backgroundColor: "rgba(34, 197, 94, 0.15)", // 15%-20% 不透明度
+        backgroundColor: "var(--ink-50)",
         color: COLORS.primary.dark
       } : {
         color: COLORS.gray[700],
@@ -413,13 +413,13 @@ function AppSidebarInner() {
         <motion.div
           className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-7 rounded-r-full"
           style={{
-            backgroundColor: COLORS.primary.main,
+            backgroundColor: COLORS.seal,
           }}
           animate={{
             boxShadow: [
-              `0 0 8px ${COLORS.primary.main}40`,
-              `0 0 16px ${COLORS.primary.main}60`,
-              `0 0 8px ${COLORS.primary.main}40`,
+              "0 0 8px color-mix(in srgb, var(--seal-500) 40%, transparent)",
+              "0 0 16px color-mix(in srgb, var(--seal-500) 60%, transparent)",
+              "0 0 8px color-mix(in srgb, var(--seal-500) 40%, transparent)",
             ],
           }}
           transition={{ duration: 2.5, repeat: Infinity }}
@@ -431,7 +431,7 @@ function AppSidebarInner() {
         className="h-[18px] w-[18px] shrink-0"
         style={{
           color: isActive ? COLORS.primary.dark : COLORS.gray[600],
-          filter: isActive ? `drop-shadow(0 1px 3px ${COLORS.primary.main}30)` : "none"
+          filter: isActive ? "drop-shadow(0 1px 3px color-mix(in srgb, var(--seal-500) 30%, transparent))" : "none"
         }}
         fill={isActive ? "currentColor" : "none"}
         strokeWidth={isActive ? 0 : 1.5}
@@ -455,9 +455,9 @@ function AppSidebarInner() {
           }}
           animate={{
             boxShadow: [
-              `0 0 4px ${COLORS.primary.main}60`,
-              `0 0 8px ${COLORS.primary.main}80`,
-              `0 0 4px ${COLORS.primary.main}60`,
+              "0 0 4px color-mix(in srgb, var(--seal-500) 60%, transparent)",
+              "0 0 8px color-mix(in srgb, var(--seal-500) 80%, transparent)",
+              "0 0 4px color-mix(in srgb, var(--seal-500) 60%, transparent)",
             ],
             opacity: [0.7, 1, 0.7],
           }}
@@ -474,7 +474,7 @@ function AppSidebarInner() {
       {isMobile && !isOpen && !isChatRoute && (
         <button
           onClick={() => setIsOpen(true)}
-          className="fixed left-4 top-4 z-50 flex h-10 w-10 items-center justify-center rounded-xl bg-white shadow-md text-[#757575] hover:bg-[#F5F5F5] transition-all"
+          className="fixed left-4 top-4 z-50 flex h-10 w-10 items-center justify-center rounded-[var(--radius-sharp)] bg-[var(--paper-50)] shadow-md text-[var(--ink-500)] hover:bg-[var(--paper-100)] transition-all"
         >
           <Menu className="h-5 w-5" />
         </button>
@@ -511,7 +511,7 @@ function AppSidebarInner() {
         {isMobile && (
           <button
             onClick={() => setIsOpen(false)}
-            className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-lg text-[#9E9E9E] hover:text-[#616161] hover:bg-[#F5F5F5] transition-all z-50"
+            className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-[var(--radius-soft)] text-[var(--ink-400)] hover:text-[var(--ink-600)] hover:bg-[var(--paper-100)] transition-all z-50"
           >
             <X className="h-5 w-5" />
           </button>
@@ -524,7 +524,7 @@ function AppSidebarInner() {
           <Link
             href="/"
             onClick={handleNavClick}
-            className="flex min-h-[88px] items-center justify-center rounded-2xl px-1 py-2 transition-colors hover:bg-white/80"
+            className="flex min-h-[88px] items-center justify-center rounded-[var(--radius-sharp)] px-1 py-2 transition-colors hover:bg-[var(--paper-50)]/80"
             aria-label="返回沈翔智学首页"
           >
             <Logo size="lg" variant="full" />
@@ -536,7 +536,7 @@ function AppSidebarInner() {
           <Link
             href="/credits"
             onClick={handleNavClick}
-            className="px-3 mb-4 flex items-center justify-center gap-2 cursor-pointer hover:bg-gray-100/50 rounded-xl transition-all duration-300 py-1"
+            className="px-3 mb-4 flex items-center justify-center gap-2 cursor-pointer hover:bg-[var(--paper-100)] rounded-[var(--radius-sharp)] transition-all duration-300 py-1"
           >
             <Coins className="h-4 w-4" style={{ color: COLORS.primary.main }} />
             <span
@@ -581,16 +581,16 @@ function AppSidebarInner() {
           <div className="mt-4 mb-2">
             <Link href="/dashboard" onClick={handleNavClick}>
               <motion.div
-                className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left"
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-[var(--radius-soft)] text-left"
                 style={{
-                  backgroundColor: "rgba(34, 197, 94, 0.08)",
-                  border: "1px solid rgba(34, 197, 94, 0.16)",
+                  backgroundColor: "var(--ink-50)",
+                  border: "1px solid var(--ink-200)",
                   boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)"
                 }}
                 whileHover={{
                   x: 2,
-                  backgroundColor: "#FFFFFF",
-                  borderColor: "rgba(34, 197, 94, 0.28)",
+                  backgroundColor: "var(--paper-50)",
+                  borderColor: "var(--ink-200)",
                   boxShadow: "0 4px 10px rgba(15, 23, 42, 0.06)"
                 }}
                 whileTap={{ scale: 0.99 }}
@@ -608,16 +608,16 @@ function AppSidebarInner() {
           <div className="mb-2">
             <Link href="/folder" onClick={handleNavClick}>
               <motion.div
-                className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left"
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-[var(--radius-soft)] text-left"
                 style={{
-                  backgroundColor: "rgba(34, 197, 94, 0.08)",
-                  border: "1px solid rgba(34, 197, 94, 0.16)",
+                  backgroundColor: "var(--ink-50)",
+                  border: "1px solid var(--ink-200)",
                   boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)"
                 }}
                 whileHover={{
                   x: 2,
-                  backgroundColor: "#FFFFFF",
-                  borderColor: "rgba(34, 197, 94, 0.28)",
+                  backgroundColor: "var(--paper-50)",
+                  borderColor: "var(--ink-200)",
                   boxShadow: "0 4px 10px rgba(15, 23, 42, 0.06)"
                 }}
                 whileTap={{ scale: 0.99 }}
@@ -635,16 +635,16 @@ function AppSidebarInner() {
           <div className="mb-2">
             <Link href="/flashcards" onClick={handleNavClick}>
               <motion.div
-                className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left"
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-[var(--radius-soft)] text-left"
                 style={{
-                  backgroundColor: "rgba(34, 197, 94, 0.08)",
-                  border: "1px solid rgba(34, 197, 94, 0.16)",
+                  backgroundColor: "var(--ink-50)",
+                  border: "1px solid var(--ink-200)",
                   boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)"
                 }}
                 whileHover={{
                   x: 2,
-                  backgroundColor: "#FFFFFF",
-                  borderColor: "rgba(34, 197, 94, 0.28)",
+                  backgroundColor: "var(--paper-50)",
+                  borderColor: "var(--ink-200)",
                   boxShadow: "0 4px 10px rgba(15, 23, 42, 0.06)"
                 }}
                 whileTap={{ scale: 0.99 }}
@@ -662,16 +662,16 @@ function AppSidebarInner() {
           <div className="mb-2">
             <Link href="/teacher/agents" onClick={handleNavClick}>
               <motion.div
-                className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left"
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-[var(--radius-soft)] text-left"
                 style={{
-                  backgroundColor: "rgba(34, 197, 94, 0.08)",
-                  border: "1px solid rgba(34, 197, 94, 0.16)",
+                  backgroundColor: "var(--ink-50)",
+                  border: "1px solid var(--ink-200)",
                   boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)"
                 }}
                 whileHover={{
                   x: 2,
-                  backgroundColor: "#FFFFFF",
-                  borderColor: "rgba(34, 197, 94, 0.28)",
+                  backgroundColor: "var(--paper-50)",
+                  borderColor: "var(--ink-200)",
                   boxShadow: "0 4px 10px rgba(15, 23, 42, 0.06)"
                 }}
                 whileTap={{ scale: 0.99 }}
@@ -689,16 +689,16 @@ function AppSidebarInner() {
           <div className="mb-2">
             <Link href="/tools" onClick={handleNavClick}>
               <motion.div
-                className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left"
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-[var(--radius-soft)] text-left"
                 style={{
-                  backgroundColor: "rgba(34, 197, 94, 0.08)",
-                  border: "1px solid rgba(34, 197, 94, 0.16)",
+                  backgroundColor: "var(--ink-50)",
+                  border: "1px solid var(--ink-200)",
                   boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)"
                 }}
                 whileHover={{
                   x: 2,
-                  backgroundColor: "#FFFFFF",
-                  borderColor: "rgba(34, 197, 94, 0.28)",
+                  backgroundColor: "var(--paper-50)",
+                  borderColor: "var(--ink-200)",
                   boxShadow: "0 4px 10px rgba(15, 23, 42, 0.06)"
                 }}
                 whileTap={{ scale: 0.99 }}
@@ -716,16 +716,16 @@ function AppSidebarInner() {
           <div className="mb-2">
             <Link href="/explore" onClick={handleNavClick}>
               <motion.div
-                className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left"
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-[var(--radius-soft)] text-left"
                 style={{
-                  backgroundColor: "rgba(34, 197, 94, 0.08)",
-                  border: "1px solid rgba(34, 197, 94, 0.16)",
+                  backgroundColor: "var(--ink-50)",
+                  border: "1px solid var(--ink-200)",
                   boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)"
                 }}
                 whileHover={{
                   x: 2,
-                  backgroundColor: "#FFFFFF",
-                  borderColor: "rgba(34, 197, 94, 0.28)",
+                  backgroundColor: "var(--paper-50)",
+                  borderColor: "var(--ink-200)",
                   boxShadow: "0 4px 10px rgba(15, 23, 42, 0.06)"
                 }}
                 whileTap={{ scale: 0.99 }}
@@ -743,16 +743,16 @@ function AppSidebarInner() {
           <div className="mb-2">
             <Link href="/my/shares" onClick={handleNavClick}>
               <motion.div
-                className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left"
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-[var(--radius-soft)] text-left"
                 style={{
-                  backgroundColor: "rgba(34, 197, 94, 0.08)",
-                  border: "1px solid rgba(34, 197, 94, 0.16)",
+                  backgroundColor: "var(--ink-50)",
+                  border: "1px solid var(--ink-200)",
                   boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)"
                 }}
                 whileHover={{
                   x: 2,
-                  backgroundColor: "#FFFFFF",
-                  borderColor: "rgba(34, 197, 94, 0.28)",
+                  backgroundColor: "var(--paper-50)",
+                  borderColor: "var(--ink-200)",
                   boxShadow: "0 4px 10px rgba(15, 23, 42, 0.06)"
                 }}
                 whileTap={{ scale: 0.99 }}
@@ -770,16 +770,16 @@ function AppSidebarInner() {
           <div className="mb-2">
             <Link href="/lab" onClick={handleNavClick}>
               <motion.div
-                className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left"
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-[var(--radius-soft)] text-left"
                 style={{
-                  backgroundColor: "rgba(34, 197, 94, 0.08)",
-                  border: "1px solid rgba(34, 197, 94, 0.16)",
+                  backgroundColor: "var(--ink-50)",
+                  border: "1px solid var(--ink-200)",
                   boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)"
                 }}
                 whileHover={{
                   x: 2,
-                  backgroundColor: "#FFFFFF",
-                  borderColor: "rgba(34, 197, 94, 0.28)",
+                  backgroundColor: "var(--paper-50)",
+                  borderColor: "var(--ink-200)",
                   boxShadow: "0 4px 10px rgba(15, 23, 42, 0.06)"
                 }}
                 whileTap={{ scale: 0.99 }}
@@ -797,16 +797,16 @@ function AppSidebarInner() {
           <div className="mt-4 mb-2">
             <motion.button
               onClick={() => setIsAgentPanelOpen(true)}
-              className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left"
+              className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-[var(--radius-soft)] text-left"
               style={{
-                backgroundColor: "rgba(34, 197, 94, 0.08)",
-                border: "1px solid rgba(34, 197, 94, 0.16)",
+                backgroundColor: "var(--ink-50)",
+                border: "1px solid var(--ink-200)",
                 boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)"
               }}
               whileHover={{
                 x: 2,
-                backgroundColor: "#FFFFFF",
-                borderColor: "rgba(34, 197, 94, 0.28)",
+                backgroundColor: "var(--paper-50)",
+                borderColor: "var(--ink-200)",
                 boxShadow: "0 4px 10px rgba(15, 23, 42, 0.06)"
               }}
               whileTap={{ scale: 0.99 }}
@@ -823,16 +823,16 @@ function AppSidebarInner() {
           <div className="mb-2">
             <motion.button
               onClick={() => setIsEducationPanelOpen(true)}
-              className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left"
+              className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-[var(--radius-soft)] text-left"
               style={{
-                backgroundColor: "rgba(255, 255, 255, 0.78)",
-                border: "1px solid rgba(20, 83, 45, 0.08)",
+                backgroundColor: "color-mix(in srgb, var(--paper-50) 78%, transparent)",
+                border: "1px solid var(--paper-200)",
                 boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)"
               }}
               whileHover={{
                 x: 2,
-                backgroundColor: "#FFFFFF",
-                borderColor: "rgba(34, 197, 94, 0.22)",
+                backgroundColor: "var(--paper-50)",
+                borderColor: "var(--ink-200)",
                 boxShadow: "0 4px 10px rgba(15, 23, 42, 0.06)"
               }}
               whileTap={{ scale: 0.99 }}
@@ -849,16 +849,16 @@ function AppSidebarInner() {
           <div className="mb-2">
             <motion.button
               onClick={() => setIsModelPanelOpen(true)}
-              className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left"
+              className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-[var(--radius-soft)] text-left"
               style={{
-                backgroundColor: "rgba(255, 255, 255, 0.78)",
-                border: "1px solid rgba(20, 83, 45, 0.08)",
+                backgroundColor: "color-mix(in srgb, var(--paper-50) 78%, transparent)",
+                border: "1px solid var(--paper-200)",
                 boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)"
               }}
               whileHover={{
                 x: 2,
-                backgroundColor: "#FFFFFF",
-                borderColor: "rgba(34, 197, 94, 0.22)",
+                backgroundColor: "var(--paper-50)",
+                borderColor: "var(--ink-200)",
                 boxShadow: "0 4px 10px rgba(15, 23, 42, 0.06)"
               }}
               whileTap={{ scale: 0.99 }}
@@ -875,22 +875,22 @@ function AppSidebarInner() {
           <div className="mb-2">
             <motion.button
               onClick={() => setIsAIPanelOpen(true)}
-              className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left"
+              className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-[var(--radius-soft)] text-left"
               style={{
-                backgroundColor: "rgba(255, 255, 255, 0.78)",
-                border: "1px solid rgba(20, 83, 45, 0.08)",
+                backgroundColor: "color-mix(in srgb, var(--paper-50) 78%, transparent)",
+                border: "1px solid var(--paper-200)",
                 boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)"
               }}
               whileHover={{
                 x: 2,
-                backgroundColor: "#FFFFFF",
-                borderColor: "rgba(0, 200, 150, 0.22)",
+                backgroundColor: "var(--paper-50)",
+                borderColor: "var(--ink-200)",
                 boxShadow: "0 4px 10px rgba(15, 23, 42, 0.06)"
               }}
               whileTap={{ scale: 0.99 }}
               transition={{ duration: 0.15 }}
             >
-              <Edit className="w-[18px] h-[18px]" style={{ color: "#00A67D" }} />
+              <Edit className="w-[18px] h-[18px]" style={{ color: COLORS.primary.main }} />
               <span className="text-[12px] font-medium leading-none whitespace-nowrap" style={{ color: COLORS.primary.dark }}>
                 AI写作专区
               </span>
@@ -901,22 +901,22 @@ function AppSidebarInner() {
           <div className="mb-2">
             <motion.button
               onClick={() => setIsCreativePanelOpen(true)}
-              className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left"
+              className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-[var(--radius-soft)] text-left"
               style={{
-                backgroundColor: "rgba(255, 255, 255, 0.78)",
-                border: "1px solid rgba(20, 83, 45, 0.08)",
+                backgroundColor: "color-mix(in srgb, var(--paper-50) 78%, transparent)",
+                border: "1px solid var(--paper-200)",
                 boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)"
               }}
               whileHover={{
                 x: 2,
-                backgroundColor: "#FFFFFF",
-                borderColor: "rgba(0, 200, 150, 0.22)",
+                backgroundColor: "var(--paper-50)",
+                borderColor: "var(--ink-200)",
                 boxShadow: "0 4px 10px rgba(15, 23, 42, 0.06)"
               }}
               whileTap={{ scale: 0.99 }}
               transition={{ duration: 0.15 }}
             >
-              <Palette className="w-[18px] h-[18px]" style={{ color: "#00A67D" }} />
+              <Palette className="w-[18px] h-[18px]" style={{ color: COLORS.primary.main }} />
               <span className="text-[12px] font-medium leading-none whitespace-nowrap" style={{ color: COLORS.primary.dark }}>
                 多媒体专区
               </span>
@@ -930,7 +930,7 @@ function AppSidebarInner() {
           ref={menuRef}
         >
           {/* 100% 宽度极细分割线 */}
-          {user && <div className="h-px w-full bg-gray-100/50 mb-3" />}
+          {user && <div className="h-px w-full bg-[var(--paper-200)] mb-3" />}
 
           {/* 🎁 邀请和帮助按钮 - 极简化 */}
           {user && (
@@ -938,22 +938,22 @@ function AppSidebarInner() {
               <Link
                 href="/invite"
                 onClick={handleNavClick}
-                className="flex items-center justify-center p-2 rounded-xl transition-all duration-300 hover:bg-[#10A37F]/10 cursor-pointer"
+                className="flex items-center justify-center p-2 rounded-[var(--radius-sharp)] transition-all duration-300 hover:bg-[var(--ink-50)] cursor-pointer"
               >
                 <motion.div
                   animate={{ scale: [1, 1.2, 1], rotate: [0, 8, -8, 0] }}
                   transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
                 >
-                  <Gift className="w-4 h-4 text-[#10A37F]" strokeWidth={1.5} />
+                  <Gift className="w-4 h-4 text-[var(--ink-600)]" strokeWidth={1.5} />
                 </motion.div>
               </Link>
 
               <Link
                 href="/help"
                 onClick={handleNavClick}
-                className="flex items-center justify-center p-2 rounded-xl transition-all duration-300 hover:bg-[#10A37F]/10 cursor-pointer"
+                className="flex items-center justify-center p-2 rounded-[var(--radius-sharp)] transition-all duration-300 hover:bg-[var(--ink-50)] cursor-pointer"
               >
-                <HelpCircle className="w-4 h-4 text-gray-400 hover:text-gray-600 transition-colors duration-300" strokeWidth={1.5} />
+                <HelpCircle className="w-4 h-4 text-[var(--ink-400)] hover:text-[var(--ink-600)] transition-colors duration-300" strokeWidth={1.5} />
               </Link>
             </div>
           )}
@@ -963,13 +963,13 @@ function AppSidebarInner() {
           {/* 🍎 弹出菜单 - 在用户头像右侧弹出 */}
           {showUserMenu && (
             <div 
-              className="absolute left-full bottom-0 ml-2 w-48 bg-white rounded-xl shadow-lg border animate-in fade-in slide-in-from-left-2 duration-200 z-[100]"
+              className="absolute left-full bottom-0 ml-2 w-48 bg-[var(--paper-50)] rounded-[var(--radius-sharp)] shadow-lg border animate-in fade-in slide-in-from-left-2 duration-200 z-[100]"
               style={{ borderColor: COLORS.gray[200] }}
             >
               <div className="p-1.5">
                 <Link href="/settings" onClick={() => setShowUserMenu(false)}>
                   <div 
-                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm cursor-pointer transition-colors"
+                    className="flex w-full items-center gap-3 rounded-[var(--radius-soft)] px-3 py-2.5 text-sm cursor-pointer transition-colors"
                     style={{ color: COLORS.gray[700] }}
                     onMouseEnter={(e) => e.currentTarget.style.backgroundColor = COLORS.gray[100]}
                     onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
@@ -980,7 +980,7 @@ function AppSidebarInner() {
                 </Link>
                 <Link href="/pricing" onClick={() => setShowUserMenu(false)}>
                   <div 
-                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm cursor-pointer transition-colors"
+                    className="flex w-full items-center gap-3 rounded-[var(--radius-soft)] px-3 py-2.5 text-sm cursor-pointer transition-colors"
                     style={{ color: COLORS.gray[700] }}
                     onMouseEnter={(e) => e.currentTarget.style.backgroundColor = COLORS.gray[100]}
                     onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
@@ -992,7 +992,7 @@ function AppSidebarInner() {
                 <div className="my-1 h-px mx-2" style={{ backgroundColor: COLORS.divider }} />
                 <button 
                   onClick={handleLogout} 
-                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors"
+                  className="flex w-full items-center gap-3 rounded-[var(--radius-soft)] px-3 py-2.5 text-sm transition-colors"
                   style={{ color: COLORS.gray[600] }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.backgroundColor = COLORS.gray[100]
@@ -1020,10 +1020,10 @@ function AppSidebarInner() {
                 setShowUserMenu(!showUserMenu)
               }}
               className={cn(
-                "flex items-center w-full rounded-xl transition-all duration-200 overflow-hidden h-14 p-2.5 gap-3 cursor-pointer select-none"
+                "flex items-center w-full rounded-[var(--radius-sharp)] transition-all duration-200 overflow-hidden h-14 p-2.5 gap-3 cursor-pointer select-none"
               )}
               style={{ 
-                backgroundColor: showUserMenu ? "rgba(34, 197, 94, 0.08)" : "transparent",
+                backgroundColor: showUserMenu ? "var(--ink-50)" : "transparent",
                 boxShadow: showUserMenu ? "0 2px 8px rgba(0,0,0,0.04)" : "none"
               }}
               onMouseEnter={(e) => {
@@ -1041,13 +1041,13 @@ function AppSidebarInner() {
             >
               {/* 扁平化头像 */}
               <div
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg pointer-events-none"
-                style={{ backgroundColor: "rgba(16, 163, 127, 0.1)" }}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-soft)] pointer-events-none"
+                style={{ backgroundColor: "var(--ink-50)" }}
               >
                 {getAvatarUrl() ? (
-                  <img src={getAvatarUrl()} alt="User" className="h-full w-full object-cover rounded-lg" />
+                  <img src={getAvatarUrl()} alt="User" className="h-full w-full object-cover rounded-[var(--radius-soft)]" />
                 ) : (
-                  <User className="h-5 w-5" style={{ color: "#10A37F" }} strokeWidth={2} />
+                  <User className="h-5 w-5" style={{ color: COLORS.primary.main }} strokeWidth={2} />
                 )}
               </div>
               {/* 昵称 + ID/手机号 */}
@@ -1055,7 +1055,7 @@ function AppSidebarInner() {
                 <span className="text-sm font-semibold w-full text-left truncate" style={{ color: COLORS.gray[800] }}>
                   {getDisplayName()}
                 </span>
-                <span className="text-xs text-gray-400 w-full text-left truncate">
+                <span className="text-xs text-[var(--ink-400)] w-full text-left truncate">
                   {getUserId().slice(0, 8)}...
                 </span>
               </div>
@@ -1073,10 +1073,10 @@ function AppSidebarInner() {
                 handleNavClick()
                 router.push('/login')
               }}
-              className="w-full flex items-center justify-center gap-2 text-white font-semibold rounded-lg h-11 transition-all hover:opacity-90"
+              className="w-full flex items-center justify-center gap-2 text-white font-semibold rounded-[var(--radius-soft)] h-11 transition-all hover:opacity-90"
               style={{
-                backgroundColor: COLORS.primary.main,
-                boxShadow: `0 4px 12px ${COLORS.primary.main}40`
+                backgroundColor: COLORS.seal,
+                boxShadow: "var(--shadow-paper)"
               }}
             >
               登录 / 注册
@@ -1159,7 +1159,7 @@ export const refreshSessionList = () => {
 
 export function AppSidebar() {
   return (
-    <Suspense fallback={<div className="hidden md:block md:w-64 h-screen bg-white border-r border-gray-200" />}>
+    <Suspense fallback={<div className="hidden md:block md:w-64 h-screen bg-[var(--paper-50)] border-r border-[var(--paper-200)]" />}>
       <AppSidebarInner />
     </Suspense>
   )
