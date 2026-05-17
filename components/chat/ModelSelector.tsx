@@ -126,7 +126,7 @@ export function ModelSelector({
         </button>
       </SheetV2Trigger>
 
-      <SheetV2Content side="right" className="w-[92vw] max-w-2xl">
+      <SheetV2Content side="left" className="w-[92vw] max-w-2xl">
         <SheetV2Header>
           <SheetV2Title>选择智能体</SheetV2Title>
           <SheetV2Description>

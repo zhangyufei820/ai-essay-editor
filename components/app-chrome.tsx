@@ -6,7 +6,6 @@ import { useEffect, useMemo, useState, type ReactNode } from "react"
 import { WorkspaceShell } from "@/components/v2-chrome"
 import type { WorkspaceSidebarSection } from "@/components/v2-chrome"
 import { getVerifiedAuthHeaders } from "@/lib/client-auth"
-import { navigationModelGroups } from "@/lib/navigation-models"
 
 type WorkspaceUser = { name?: string; avatar?: string; credits?: number } | null
 
@@ -80,16 +79,9 @@ function buildSidebarSections(): WorkspaceSidebarSection[] {
         { label: "拍卷诊断", href: "/worksheet-diagnosis" },
         { label: "闪卡复习", href: "/flashcards" },
         { label: "互动实验室", href: "/lab" },
+        { label: "教师平台", href: "/teacher/agents" },
       ],
     },
-    ...navigationModelGroups.map((group) => ({
-      title: group.label,
-      items: group.items.map((item) => ({
-        label: item.name,
-        href: item.href,
-        badge: item.badge,
-      })),
-    })),
     {
       title: "我的",
       items: [
