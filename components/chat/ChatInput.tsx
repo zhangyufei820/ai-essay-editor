@@ -22,7 +22,6 @@ import {
 import { motion, AnimatePresence } from "framer-motion"
 import { Send, Paperclip, X, Loader2, ChevronDown, FileText, Image as ImageIcon, Mic, MicOff } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { brandColors, slateColors } from "@/lib/design-tokens"
 import { ModelSelector, type Model } from "./ModelSelector"
 
 // ============================================
@@ -171,8 +170,8 @@ function FilePreviewCard({
       animate={{ opacity: 1, scale: 1, x: 0 }}
       exit={{ opacity: 0, scale: 0.8, x: -20 }}
       transition={{ duration: 0.2 }}
-      className="relative flex min-w-[180px] max-w-[240px] shrink-0 items-center gap-2 rounded-lg px-3 py-2"
-      style={{ backgroundColor: slateColors[50] }}
+      className="relative flex min-w-[180px] max-w-[240px] shrink-0 items-center gap-2 rounded-[var(--radius-soft)] px-3 py-2"
+      style={{ backgroundColor: "var(--paper-50)" }}
     >
       {/* 文件图标/预览 */}
       {isImage && file.preview ? (
@@ -186,20 +185,20 @@ function FilePreviewCard({
       ) : (
         <div 
           className="h-8 w-8 rounded flex items-center justify-center shrink-0"
-          style={{ backgroundColor: `${brandColors[600]}15` }}
+          style={{ backgroundColor: "color-mix(in srgb, var(--ink-600) 15%, transparent)" }}
         >
-          <FileText className="h-4 w-4" style={{ color: brandColors[600] }} />
+          <FileText className="h-4 w-4" style={{ color: "var(--ink-600)" }} />
         </div>
       )}
       
       <div className="min-w-0 flex-1">
         <span
           className="block truncate text-sm font-medium leading-5"
-          style={{ color: slateColors[700] }}
+          style={{ color: "var(--ink-700)" }}
         >
           {file.name}
         </span>
-        <span className="block truncate text-[11px] leading-4 text-slate-400">
+        <span className="block truncate text-[11px] leading-4 text-[var(--ink-400)]">
           已上传 · {sizeLabel}
         </span>
       </div>
@@ -207,10 +206,10 @@ function FilePreviewCard({
       {/* 删除按钮 */}
       <button
         onClick={() => onRemove(index)}
-        className="ml-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-red-100"
+        className="ml-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-[var(--seal-50)]"
         aria-label={`移除文件 ${file.name}`}
       >
-        <X className="h-3.5 w-3.5 text-slate-400 hover:text-red-500" />
+        <X className="h-3.5 w-3.5 text-[var(--ink-400)] hover:text-[var(--seal-500)]" />
       </button>
     </motion.div>
   )
@@ -234,7 +233,7 @@ export function ChatInput({
   selectedModel,
   onModelClick,
   showModelSelector = false,
-  modelColor = brandColors[900],
+  modelColor = "var(--ink-900)",
   models = [],
   onModelChange,
   className
@@ -412,15 +411,15 @@ export function ChatInput({
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
       className={cn(
-        "relative rounded-[24px] border bg-white transition-all duration-300 touch-manipulation max-sm:rounded-[28px]",
+        "relative rounded-[var(--radius-card)] border bg-[var(--paper-50)] shadow-[var(--shadow-paper)] transition-all duration-300 touch-manipulation",
+        "focus-within:border-[var(--ink-500)] focus-within:[box-shadow:var(--shadow-focus-ink)]",
         isFocused
-          ? "border-emerald-500/45 shadow-[0_8px_24px_rgba(15,118,86,0.10)] sm:shadow-[0_8px_24px_rgba(0,0,0,0.10),0_20px_48px_rgba(0,0,0,0.15)]"
-          : "border-slate-200/80 shadow-[0_10px_30px_rgba(15,23,42,0.08)] sm:shadow-[0_4px_12px_rgba(0,0,0,0.06),0_12px_32px_rgba(0,0,0,0.10)]",
+          ? "border-[var(--ink-500)]"
+          : "border-[var(--paper-200)]",
         className
       )}
       style={{ 
-        borderColor: isFocused ? `${brandColors[900]}20` : slateColors[100],
-        ['--ring-color' as string]: `${brandColors[900]}10`
+        ['--ring-color' as string]: "var(--ink-500)"
       }}
     >
       <AnimatePresence>
@@ -429,7 +428,7 @@ export function ChatInput({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-[inherit] border border-dashed border-emerald-500/60 bg-emerald-50/80 text-sm font-medium text-emerald-800 backdrop-blur-sm"
+            className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-[inherit] border border-dashed border-[var(--ink-500)]/60 bg-[var(--ink-50)]/80 text-sm font-medium text-[var(--ink-800)] backdrop-blur-sm"
           >
             松开即可上传文件
           </motion.div>
@@ -443,7 +442,7 @@ export function ChatInput({
             "flex items-center justify-between gap-3 border-b px-3 py-2 sm:px-4",
             isMobileInputMode && "max-sm:hidden"
           )}
-          style={{ borderColor: slateColors[50] }}
+          style={{ borderColor: "var(--paper-50)" }}
         >
           {/* 模型选择器 - 使用 ModelSelector 组件 */}
           {models.length > 0 && selectedModel && onModelChange ? (
@@ -458,14 +457,14 @@ export function ChatInput({
             <button
               type="button"
               onClick={onModelClick}
-              className="flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors hover:bg-slate-50 min-h-[36px]"
+              className="flex items-center gap-2 px-2 py-1.5 rounded-[var(--radius-soft)] transition-colors hover:bg-[var(--paper-50)] min-h-[36px]"
               aria-label="选择 AI 模型"
             >
               <div className="h-2 w-2 rounded-full" style={{ backgroundColor: modelColor }} />
-              <span className="text-xs font-medium" style={{ color: slateColors[600] }}>
+              <span className="text-xs font-medium" style={{ color: "var(--ink-600)" }}>
                 {modelName || "选择模型"}
               </span>
-              <ChevronDown className="h-3 w-3 opacity-50" style={{ color: slateColors[400] }} />
+              <ChevronDown className="h-3 w-3 opacity-50" style={{ color: "var(--ink-400)" }} />
             </button>
           )}
 
@@ -474,12 +473,12 @@ export function ChatInput({
             type="button"
             variant="ghost"
             size="icon"
-            className="h-8 w-8 rounded-full sm:rounded-lg"
+            className="h-8 w-8 rounded-full sm:rounded-[var(--radius-soft)]"
             onClick={() => fileInputRef.current?.click()}
             disabled={isLoading || disabled}
             aria-label="上传附件"
           >
-            <Paperclip className="h-4 w-4" style={{ color: slateColors[400] }} />
+            <Paperclip className="h-4 w-4" style={{ color: "var(--ink-400)" }} />
           </Button>
         </div>
       )}
@@ -496,7 +495,7 @@ export function ChatInput({
           >
             <div
               className="flex gap-2 overflow-x-auto border-b px-3 py-3 scrollbar-thin sm:px-4"
-              style={{ borderColor: slateColors[50] }}
+              style={{ borderColor: "var(--paper-50)" }}
             >
               <AnimatePresence mode="popLayout">
                 {uploadedFiles.map((file, index) => (
@@ -523,7 +522,7 @@ export function ChatInput({
         {/* 附件按钮（工具栏隐藏或移动端键盘态时显示） */}
         {!showModelSelector && (
           <div className="flex flex-col items-center gap-0.5 sm:gap-1 shrink-0">
-            <span className="text-[10px] font-medium hidden sm:block" style={{ color: slateColors[400] }}>
+            <span className="text-[10px] font-medium hidden sm:block" style={{ color: "var(--ink-400)" }}>
               文件上传
             </span>
             <Button
@@ -531,21 +530,21 @@ export function ChatInput({
               variant="ghost"
               size="icon"
               className={cn(
-                "h-11 w-11 sm:h-10 sm:w-10 rounded-xl sm:rounded-xl touch-manipulation",
+                "h-11 w-11 sm:h-10 sm:w-10 rounded-[var(--radius-sharp)] sm:rounded-[var(--radius-sharp)] touch-manipulation",
                 isFocused && "max-sm:h-9 max-sm:w-9 max-sm:rounded-full"
               )}
               onClick={() => fileInputRef.current?.click()}
               disabled={isLoading || disabled}
               aria-label="上传附件"
             >
-              <Paperclip className="h-4 w-4 sm:h-5 sm:w-5" style={{ color: slateColors[400] }} />
+              <Paperclip className="h-4 w-4 sm:h-5 sm:w-5" style={{ color: "var(--ink-400)" }} />
             </Button>
           </div>
         )}
 
         {/* 语音输入按钮 */}
         <div className={cn("flex flex-col items-center gap-0.5 sm:gap-1 shrink-0", isMobileInputMode && "max-sm:hidden")}>
-          <span className="text-[10px] font-medium hidden sm:block" style={{ color: slateColors[400] }}>
+          <span className="text-[10px] font-medium hidden sm:block" style={{ color: "var(--ink-400)" }}>
             {isListening ? "录音中" : "语音输入"}
           </span>
           <motion.button
@@ -555,10 +554,10 @@ export function ChatInput({
             onClick={toggleVoiceInput}
             disabled={isLoading || disabled}
             className={cn(
-              "h-10 w-10 sm:h-10 sm:w-10 rounded-full sm:rounded-xl flex items-center justify-center transition-all duration-200 touch-manipulation",
+              "h-10 w-10 sm:h-10 sm:w-10 rounded-full sm:rounded-[var(--radius-sharp)] flex items-center justify-center transition-all duration-200 touch-manipulation",
               isListening
-                ? "bg-red-500 text-white shadow-lg animate-pulse"
-                : "bg-slate-100 hover:bg-slate-200 text-slate-600"
+                ? "bg-[var(--seal-500)] text-white shadow-lg animate-pulse"
+                : "bg-[var(--paper-100)] hover:bg-[var(--paper-200)] text-[var(--ink-600)]"
             )}
             aria-label={isListening ? "停止录音" : "开始语音输入"}
           >
@@ -584,15 +583,15 @@ export function ChatInput({
             "flex-1 resize-none border-0 bg-transparent shadow-none",
             "min-h-[44px] max-h-[132px] rounded-[18px] px-3 py-2 text-[16px] leading-6 sm:min-h-[48px] sm:max-h-[160px] sm:p-2 sm:text-[15px]",
             "focus-visible:border-transparent focus-visible:ring-0",
-            isMobileInputMode && "max-sm:min-h-[42px] max-sm:max-h-[112px] max-sm:bg-slate-50/80 max-sm:px-3 max-sm:py-2"
+            isMobileInputMode && "max-sm:min-h-[42px] max-sm:max-h-[112px] max-sm:bg-[var(--paper-50)]/80 max-sm:px-3 max-sm:py-2"
           )}
-          style={{ color: slateColors[700] }}
+          style={{ color: "var(--ink-700)" }}
           rows={1}
         />
 
         {/* 发送按钮 */}
         <div className="flex flex-col items-center gap-0.5 sm:gap-1 shrink-0">
-          <span className="text-[10px] font-medium hidden sm:block" style={{ color: slateColors[400] }}>
+          <span className="text-[10px] font-medium hidden sm:block" style={{ color: "var(--ink-400)" }}>
             发送
           </span>
           <motion.button
@@ -602,15 +601,15 @@ export function ChatInput({
             disabled={!canSubmit}
             onClick={handleSubmit}
             className={cn(
-              "flex h-11 w-11 items-center justify-center rounded-full sm:h-10 sm:w-10 sm:rounded-xl touch-manipulation",
+              "flex h-11 w-11 items-center justify-center rounded-full sm:h-10 sm:w-10 sm:rounded-[var(--radius-sharp)] touch-manipulation",
               "text-white transition-all duration-200",
               isMobileInputMode && "max-sm:h-10 max-sm:w-10",
               !canSubmit && "opacity-40 cursor-not-allowed"
             )}
             style={{
-              backgroundColor: brandColors[900],
+              backgroundColor: canSubmit ? "var(--seal-500)" : "var(--ink-300)",
               boxShadow: canSubmit
-                ? `0 4px 12px ${brandColors[900]}40`
+                ? "var(--shadow-seal)"
                 : "none"
             }}
             aria-label="发送消息"

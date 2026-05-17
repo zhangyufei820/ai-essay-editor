@@ -14,17 +14,17 @@ import { memo, useMemo, useState } from "react"
 import { motion, type Easing } from "framer-motion"
 import { Copy, Check, User, Sparkles, ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { slateColors } from "@/lib/design-tokens"
+import { AssistantMessageV2 } from "@/components/chat/v2"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import remarkMath from "remark-math"
 import rehypeKatex from "rehype-katex"
 
-// Claude style colors
-const CLAUDE_TEXT_COLOR = "#374151"
-const CLAUDE_SECONDARY_COLOR = "#6B7280"
-const CLAUDE_ACCENT_COLOR = "#10A37F" // 沈翔绿
-const CLAUDE_AVATAR_BG = "#10B981" // Emerald green
+// v2 墨砚 token colors
+const CLAUDE_TEXT_COLOR = "var(--ink-700)"
+const CLAUDE_SECONDARY_COLOR = "var(--ink-500)"
+const CLAUDE_ACCENT_COLOR = "var(--seal-500)"
+const CLAUDE_AVATAR_BG = "var(--ink-600)"
 
 // Conclusion detection - hoisted to module scope to avoid recreation per render
 const CONCLUSION_KEYWORDS = ["综上所述", "答案是", "结论是", "所以", "因此", "总之", "故", "可得"] as const
@@ -122,9 +122,9 @@ function UserAvatar({ avatar }: { avatar?: string }) {
   return (
     <div
       className="w-7 h-7 rounded-full flex items-center justify-center"
-      style={{ backgroundColor: slateColors[200] }}
+      style={{ backgroundColor: "var(--paper-200)" }}
     >
-      <User className="w-3.5 h-3.5" style={{ color: slateColors[500] }} />
+      <User className="w-3.5 h-3.5" style={{ color: "var(--ink-500)" }} />
     </div>
   )
 }
@@ -169,8 +169,8 @@ function CopyButton({ content, onCopy }: { content: string; onCopy?: () => void 
         "flex items-center gap-1 px-2 py-1 rounded text-xs transition-all duration-200 min-h-9 touch-manipulation",
         "opacity-100 md:opacity-0 md:group-hover:opacity-100",
         copied
-          ? "text-emerald-600 bg-emerald-50"
-          : "text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+          ? "text-[var(--seal-500)] bg-[var(--seal-50)]"
+          : "text-[var(--ink-400)] hover:text-[var(--ink-600)] hover:bg-[var(--paper-100)]"
       )}
     >
       {copied ? (
@@ -201,7 +201,7 @@ function Timestamp({ date }: { date: Date }) {
   return (
     <span
       className="text-xs"
-      style={{ color: slateColors[400] }}
+      style={{ color: "var(--ink-400)" }}
     >
       {formatted}
     </span>
@@ -241,8 +241,8 @@ function MarkdownContent({ content }: { content: string }) {
                   style={{
                     lineHeight: 1.6,
                     color: CLAUDE_TEXT_COLOR,
-                    backgroundColor: "rgba(16, 185, 129, 0.08)",
-                    borderLeft: "3px solid #10B981",
+                    backgroundColor: "var(--seal-50)",
+                    borderLeft: "3px solid var(--seal-500)",
                   borderRadius: "0 6px 6px 0",
                   padding: "6px 10px",
                 }}
@@ -280,7 +280,7 @@ function MarkdownContent({ content }: { content: string }) {
               <code
                 className="px-1.5 py-0.5 rounded text-[12px] sm:text-[13px]"
                 style={{
-                  backgroundColor: slateColors[100],
+                  backgroundColor: "var(--paper-100)",
                   color: CLAUDE_ACCENT_COLOR
                 }}
               >
@@ -289,15 +289,15 @@ function MarkdownContent({ content }: { content: string }) {
             )
           }
           return (
-            <code className={cn("block p-2.5 sm:p-4 rounded-lg text-[12px] sm:text-sm overflow-x-auto mb-2.5", className)}>
+            <code className={cn("block p-2.5 sm:p-4 rounded-[var(--radius-soft)] text-[12px] sm:text-sm overflow-x-auto mb-2.5", className)}>
               {children}
             </code>
           )
         },
         pre: ({ children }) => (
           <pre
-            className="rounded-lg overflow-hidden mb-2"
-            style={{ backgroundColor: slateColors[900] }}
+            className="rounded-[var(--radius-soft)] overflow-hidden mb-2"
+            style={{ backgroundColor: "var(--ink-900)" }}
           >
             {children}
           </pre>
@@ -322,7 +322,7 @@ function MarkdownContent({ content }: { content: string }) {
         h1: ({ children }) => (
           <h1
             className="font-bold text-[14px] sm:text-base mt-2 mb-1"
-            style={{ color: "#111827", lineHeight: 1.4 }}
+            style={{ color: "var(--ink-900)", lineHeight: 1.4 }}
           >
             {children}
           </h1>
@@ -330,7 +330,7 @@ function MarkdownContent({ content }: { content: string }) {
         h2: ({ children }) => (
           <h2
             className="font-semibold text-[13px] sm:text-sm mt-1.5 mb-0.5"
-            style={{ color: "#111827", lineHeight: 1.4 }}
+            style={{ color: "var(--ink-900)", lineHeight: 1.4 }}
           >
             {children}
           </h2>
@@ -338,7 +338,7 @@ function MarkdownContent({ content }: { content: string }) {
         h3: ({ children }) => (
           <h3
             className="font-medium text-[12px] sm:text-sm mt-1.5 mb-0.5"
-            style={{ color: "#6B7280", lineHeight: 1.4 }}
+            style={{ color: "var(--ink-500)", lineHeight: 1.4 }}
           >
             {children}
           </h3>
@@ -346,7 +346,7 @@ function MarkdownContent({ content }: { content: string }) {
         h4: ({ children }) => (
           <h4
             className="text-[12px] sm:text-sm font-semibold pl-2 border-l-2 mt-1.5 mb-0.5"
-            style={{ color: "#111827", borderColor: CLAUDE_ACCENT_COLOR, lineHeight: 1.4 }}
+            style={{ color: "var(--ink-900)", borderColor: CLAUDE_ACCENT_COLOR, lineHeight: 1.4 }}
           >
             {children}
           </h4>
@@ -356,7 +356,7 @@ function MarkdownContent({ content }: { content: string }) {
             className="border-l-4 px-3 py-1.5 my-1 rounded-r"
             style={{
               borderColor: CLAUDE_ACCENT_COLOR,
-              backgroundColor: slateColors[50],
+              backgroundColor: "var(--paper-50)",
               lineHeight: 1.55
             }}
           >
@@ -387,19 +387,11 @@ const MessageBubble = memo(function MessageBubble({
 
   // User message style - transparent background, inherits page text color
   const userBubbleStyle = {
-    backgroundColor: "#f7f7f5",
-    color: "#2f3136",
-    border: "1px solid #e6e3dc",
-    borderRadius: "18px 4px 18px 18px",
+    backgroundColor: "var(--ink-700)",
+    color: "white",
+    border: "1px solid var(--ink-700)",
+    borderRadius: "var(--radius-soft)",
     maxWidth: "75%",
-  }
-
-  // AI message style - Flat, minimal, almost no container
-  const assistantBubbleStyle = {
-    backgroundColor: "transparent",
-    color: CLAUDE_TEXT_COLOR,
-    borderRadius: "0",
-    maxWidth: "88%",
   }
 
   return (
@@ -427,45 +419,47 @@ const MessageBubble = memo(function MessageBubble({
 
           {/* Message Content */}
           <div className={cn("flex flex-col", isUser ? "items-end" : "items-start")}>
-            {/* Flat bubble without heavy container styling */}
-            <div
-              className={cn(
-                isUser ? "px-3 py-2.5 sm:px-4 sm:py-3 shadow-sm" : "px-0.5 py-0.5 sm:px-1 ai-message-bubble",
-              )}
-              style={isUser ? userBubbleStyle : assistantBubbleStyle}
-            >
-              {isUser ? (
+            {isUser ? (
+              <div
+                className="px-3 py-2.5 sm:px-4 sm:py-3 shadow-[var(--shadow-paper)]"
+                style={userBubbleStyle}
+              >
                 <p
                   className="whitespace-pre-wrap break-words text-[13px] sm:text-sm"
                   style={{ lineHeight: 1.6 }}
                 >
                   {content}
                 </p>
-              ) : (
-                <div
-                  className="text-[13px] sm:text-sm ai-content-container"
-                  style={{ lineHeight: 1.6, color: CLAUDE_TEXT_COLOR }}
-                >
-                  <MarkdownContent content={content} />
-                </div>
-              )}
-            </div>
+              </div>
+            ) : (
+              <AssistantMessageV2
+                message={{
+                  id: timestamp?.toISOString() || "assistant-message",
+                  role: "assistant",
+                  content,
+                  streaming: isStreaming,
+                  createdAt: timestamp?.toISOString(),
+                }}
+                renderMarkdown={() => (
+                  <div
+                    className="text-[13px] sm:text-sm ai-content-container"
+                    style={{ lineHeight: 1.6, color: CLAUDE_TEXT_COLOR }}
+                  >
+                    <MarkdownContent content={content} />
+                  </div>
+                )}
+                onCopy={() => onCopy?.()}
+              />
+            )}
 
             {/* Bottom action bar - Hidden by default, shows on hover */}
-            <div
-              className={cn(
-                "flex flex-wrap items-center gap-2 mt-1 px-1",
-                "opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-200",
-                isUser ? "flex-row-reverse" : "flex-row"
-              )}
-            >
-              {timestamp && <Timestamp date={timestamp} />}
-
-              {/* Copy button for AI messages */}
-              {!isUser && !isStreaming && content && (
-                <CopyButton content={content} onCopy={onCopy} />
-              )}
-            </div>
+            {isUser ? (
+              <div
+                className="flex flex-row-reverse flex-wrap items-center gap-2 mt-1 px-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-200"
+              >
+                {timestamp && <Timestamp date={timestamp} />}
+              </div>
+            ) : null}
           </div>
         </>
       )}

@@ -46,33 +46,33 @@ async function getVerifiedAuthHeaders(): Promise<Record<string, string>> {
 // 设计系统颜色
 const COLORS = {
   primary: {
-    main: "#22C55E",
-    dark: "#15803D",
-    light: "#DCFCE7",
+    main: "var(--ink-600)",
+    dark: "var(--ink-700)",
+    light: "var(--ink-50)",
   },
   gray: {
-    50: "#FAFAFA",
-    100: "#F5F5F5",
-    200: "#E5E7EB",
-    300: "#D1D5DB",
-    400: "#9CA3AF",
-    500: "#6B7280",
-    600: "#4B5563",
-    700: "#374151",
-    800: "#1F2937",
+    50: "var(--paper-50)",
+    100: "var(--paper-100)",
+    200: "var(--paper-200)",
+    300: "var(--ink-300)",
+    400: "var(--ink-400)",
+    500: "var(--ink-500)",
+    600: "var(--ink-600)",
+    700: "var(--ink-700)",
+    800: "var(--ink-800)",
   },
-  blue: "#3B82F6",
-  red: "#EF4444",
+  blue: "var(--ink-600)",
+  red: "var(--seal-500)",
 }
 
 // 积分类型标签颜色
 const CREDIT_TYPE_COLORS: Record<string, { bg: string; text: string }> = {
-  "注册积分": { bg: "#1F2937", text: "#FFFFFF" },
-  "邀请积分": { bg: "#FEF3C7", text: "#92400E" },
-  "每日积分": { bg: "#DBEAFE", text: "#1E40AF" },
-  "其他积分": { bg: "#F3F4F6", text: "#374151" },
-  "购买积分": { bg: "#D1FAE5", text: "#065F46" },
-  "消耗积分": { bg: "#FEE2E2", text: "#991B1B" },
+  "注册积分": { bg: "var(--ink-900)", text: "white" },
+  "邀请积分": { bg: "var(--seal-50)", text: "var(--seal-600)" },
+  "每日积分": { bg: "var(--ink-50)", text: "var(--ink-700)" },
+  "其他积分": { bg: "var(--paper-100)", text: "var(--ink-700)" },
+  "购买积分": { bg: "var(--ink-50)", text: "var(--ink-700)" },
+  "消耗积分": { bg: "var(--seal-50)", text: "var(--seal-500)" },
 }
 
 // 积分变化记录类型

@@ -204,7 +204,7 @@ export default function TermsPage() {
           </h2>
           <div className="bg-[var(--paper-50)] rounded-[var(--radius-sharp)] p-8" style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
             <div className="flex items-start gap-3 mb-4">
-              <AlertTriangle className="w-6 h-6 shrink-0" style={{ color: '#f59e0b' }} />
+              <AlertTriangle className="w-6 h-6 shrink-0" style={{ color: "var(--seal-500)" }} />
               <p className="text-lg" style={{ color: "var(--ink-600)" }}>
                 本服务按「现状」提供，不提供任何明示或暗示的保证。
               </p>

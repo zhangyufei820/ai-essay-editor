@@ -30,10 +30,10 @@ interface UserMessageBubbleProps {
   onSend?: (content: string, files?: UserMessageBubbleProps["files"]) => void
 }
 
-// 静奢风配色
-const BUBBLE_BG = "#f7f7f5"
-const BORDER_COLOR = "#e6e3dc"
-const TEXT_COLOR = "#2f3136"
+// v2 墨砚配色
+const BUBBLE_BG = "var(--ink-700)"
+const BORDER_COLOR = "var(--ink-700)"
+const TEXT_COLOR = "white"
 
 export function UserMessageBubble({ content, files, onEdit, onSend }: UserMessageBubbleProps) {
   const [copied, setCopied] = useState(false)
@@ -96,15 +96,14 @@ export function UserMessageBubble({ content, files, onEdit, onSend }: UserMessag
     <div className="group w-full">
       <div
         className={cn(
-          "rounded-2xl px-3 py-2.5 sm:px-4 sm:py-3 transition-all duration-200",
+          "rounded-[var(--radius-soft)] px-3 py-2.5 sm:px-4 sm:py-3 transition-all duration-200",
           isEditing
             ? "ring-2 ring-blue-500/50"
-            : "shadow-sm"
+            : "shadow-[var(--shadow-paper)]"
         )}
         style={{
           backgroundColor: BUBBLE_BG,
-          border: `1px solid ${isEditing ? '#3b82f6' : BORDER_COLOR}`,
-          borderRadius: '18px 4px 18px 18px',
+          border: `1px solid ${isEditing ? 'var(--seal-500)' : BORDER_COLOR}`,
         }}
       >
         {/* 文件预览 */}
@@ -113,15 +112,15 @@ export function UserMessageBubble({ content, files, onEdit, onSend }: UserMessag
             {files.map((file, idx) => (
               <div
                 key={idx}
-            className="relative overflow-hidden rounded-xl border border-[#e6e3dc] bg-white/70"
+            className="relative overflow-hidden rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-[var(--paper-50)]/70"
               >
                 {file.preview ? (
                   <div className="h-20 w-20">
                     <img src={file.preview} alt={file.name} className="h-full w-full object-cover" />
                   </div>
                 ) : (
-                  <div className="flex min-w-[132px] items-center gap-2 px-3 py-2 text-[11px] sm:text-xs text-gray-600">
-                    <FileText className="h-4 w-4 text-gray-400" />
+                  <div className="flex min-w-[132px] items-center gap-2 px-3 py-2 text-[11px] sm:text-xs text-[var(--ink-600)]">
+                    <FileText className="h-4 w-4 text-[var(--ink-400)]" />
                     <span className="max-w-[84px] truncate">{file.name}</span>
                   </div>
                 )}
@@ -138,21 +137,21 @@ export function UserMessageBubble({ content, files, onEdit, onSend }: UserMessag
               value={editContent}
               onChange={(e) => setEditContent(e.target.value)}
               onKeyDown={handleKeyDown}
-              className="w-full min-h-[60px] max-h-[200px] p-2 text-[13px] sm:text-sm resize-none rounded-lg border border-[#e6e3dc] bg-white/80 focus:outline-none focus:ring-2 focus:ring-[#14532d]/20"
+              className="w-full min-h-[60px] max-h-[200px] p-2 text-[13px] sm:text-sm resize-none rounded-[var(--radius-soft)] border border-[var(--paper-200)] bg-[var(--paper-50)]/80 focus:outline-none focus:ring-2 focus:ring-[var(--ink-500)]/20"
               style={{ color: TEXT_COLOR }}
               placeholder="编辑消息..."
             />
             <div className="flex items-center justify-end gap-2">
               <button
                 onClick={handleCancelEdit}
-                className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                className="px-3 py-1.5 text-xs text-[var(--ink-500)] hover:text-[var(--ink-700)] hover:bg-[var(--paper-100)] rounded-[var(--radius-pill)] transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
               <button
                 onClick={handleSubmitEdit}
-                className="px-3 py-1.5 text-xs text-white rounded-lg transition-colors"
-                style={{ backgroundColor: "#14532d" }}
+                className="px-3 py-1.5 text-xs text-white rounded-[var(--radius-pill)] transition-colors"
+                style={{ backgroundColor: "var(--seal-500)" }}
               >
                 发送
               </button>
@@ -172,18 +171,18 @@ export function UserMessageBubble({ content, files, onEdit, onSend }: UserMessag
         <div className="mt-1 flex items-center justify-end gap-1 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100 group-active:opacity-100 sm:mt-2 sm:gap-1.5">
           <button
             onClick={handleCopy}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-400 transition-colors duration-150 hover:bg-slate-100 hover:text-slate-700 focus-visible:bg-slate-100 focus-visible:text-slate-700 focus-visible:outline-none touch-manipulation sm:h-9 sm:w-9"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[var(--ink-400)] transition-colors duration-150 hover:bg-[var(--paper-100)] hover:text-[var(--ink-700)] focus-visible:bg-[var(--paper-100)] focus-visible:text-[var(--ink-700)] focus-visible:outline-none touch-manipulation sm:h-9 sm:w-9"
             title="复制消息"
           >
             {copied ? (
-              <Check className="h-3.5 w-3.5 text-emerald-600 sm:h-4 sm:w-4" />
+              <Check className="h-3.5 w-3.5 text-[var(--seal-500)] sm:h-4 sm:w-4" />
             ) : (
               <Copy className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
             )}
           </button>
           <button
             onClick={handleEdit}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-400 transition-colors duration-150 hover:bg-slate-100 hover:text-slate-700 focus-visible:bg-slate-100 focus-visible:text-slate-700 focus-visible:outline-none touch-manipulation sm:h-9 sm:w-9"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[var(--ink-400)] transition-colors duration-150 hover:bg-[var(--paper-100)] hover:text-[var(--ink-700)] focus-visible:bg-[var(--paper-100)] focus-visible:text-[var(--ink-700)] focus-visible:outline-none touch-manipulation sm:h-9 sm:w-9"
             title="编辑消息"
           >
             <Pencil className="h-3.5 w-3.5 sm:h-4 sm:w-4" />

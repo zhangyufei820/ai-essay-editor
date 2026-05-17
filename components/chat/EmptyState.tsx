@@ -17,21 +17,21 @@ import { cn } from "@/lib/utils"
 
 const COLORS = {
   primary: {
-    main: "#4CAF50",
-    dark: "#2E7D32",
-    light: "#E8F5E9",
-    lighter: "#F1F8E9",
+    main: "var(--ink-600)",
+    dark: "var(--ink-700)",
+    light: "var(--ink-50)",
+    lighter: "var(--paper-50)",
   },
   gray: {
-    50: "#FAFAFA",
-    100: "#F5F5F5",
-    200: "#EEEEEE",
-    400: "#BDBDBD",
-    500: "#9E9E9E",
-    600: "#757575",
-    700: "#616161",
-    800: "#424242",
-    900: "#212121",
+    50: "var(--paper-50)",
+    100: "var(--paper-100)",
+    200: "var(--paper-200)",
+    400: "var(--ink-400)",
+    500: "var(--ink-500)",
+    600: "var(--ink-600)",
+    700: "var(--ink-700)",
+    800: "var(--ink-800)",
+    900: "var(--ink-900)",
   },
 }
 
@@ -150,7 +150,7 @@ function QuickStartCardItem({
       whileTap={{ scale: 0.95 }}
       onClick={onClick}
       className={cn(
-        "relative flex flex-col items-start p-4 rounded-xl text-left",
+        "relative flex flex-col items-start p-4 rounded-[var(--radius-sharp)] text-left",
         "cursor-pointer overflow-hidden",
         "transition-all duration-200 ease-out",
         "focus:outline-none focus:ring-2 focus:ring-offset-2"
@@ -204,7 +204,7 @@ export function EmptyState({
       animate="visible"
       variants={containerVariants}
       className={cn(
-        "flex flex-col items-center justify-start",
+        "flex flex-col items-center justify-start bg-[var(--paper-50)]",
         "pt-[15vh] pb-8 px-4",
         "w-full h-full",
         className
@@ -238,7 +238,7 @@ export function EmptyState({
 
         {/* 主标题 - 字间距0.1em，透明度85%，谦逊优雅 */}
         <h1
-          className="text-2xl font-medium mb-2"
+          className="text-2xl font-medium mb-2 font-[var(--font-display)]"
           style={{
             color: COLORS.gray[900],
             fontWeight: 500,

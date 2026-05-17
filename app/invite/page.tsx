@@ -16,9 +16,9 @@ import { ShenxiangInterfaceIcon } from "@/components/icons/ShenxiangInterfaceIco
 import { getVerifiedAuthHeaders } from "@/lib/client-auth"
 
 // 🎨 品牌色
-const BRAND_GREEN = "#4CAF50"
-const BRAND_GREEN_DARK = "#2E7D32"
-const BRAND_GREEN_LIGHT = "#E8F5E9"
+const BRAND_GREEN = "var(--ink-600)"
+const BRAND_GREEN_DARK = "var(--ink-800)"
+const BRAND_GREEN_LIGHT = "var(--ink-50)"
 
 // Supabase 客户端
 const supabase = createClient(
@@ -495,7 +495,7 @@ export default function InvitePage() {
             <div className="flex gap-4 p-4 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-[var(--radius-sharp)]">
               <div 
                 className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white font-bold text-sm"
-                style={{ backgroundColor: "#10B981" }}
+                style={{ backgroundColor: "var(--ink-600)" }}
               >
                 2
               </div>
@@ -511,7 +511,7 @@ export default function InvitePage() {
             <div className="flex gap-4 p-4 bg-gradient-to-r from-teal-50 to-cyan-50 rounded-[var(--radius-sharp)]">
               <div 
                 className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white font-bold text-sm"
-                style={{ backgroundColor: "#14B8A6" }}
+                style={{ backgroundColor: "var(--ink-600)" }}
               >
                 3
               </div>

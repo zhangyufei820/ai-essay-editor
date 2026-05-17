@@ -19,33 +19,33 @@ import type { ModelKey } from "@/components/ModelLogo"
 // ============================================
 
 const TOKENS = {
-  primary: "#0d3a1f",
-  primaryDeep: "#052e16",
-  primaryLight: "#14532d",
-  aurora: "#86EFAC",
-  auroraSoft: "rgba(134, 239, 172, 0.15)",
+  primary: "var(--ink-700)",
+  primaryDeep: "var(--ink-900)",
+  primaryLight: "var(--ink-600)",
+  aurora: "var(--seal-500)",
+  auroraSoft: "var(--seal-50)",
 
   surface: {
-    white: "#FEFEFA",
-    50: "#F8FAF8",
-    100: "#F1F5F3",
+    white: "var(--paper-50)",
+    50: "var(--paper-50)",
+    100: "var(--paper-100)",
   },
 
   text: {
-    primary: "rgba(14, 58, 31, 0.90)",
-    secondary: "rgba(14, 58, 31, 0.60)",
-    tertiary: "rgba(14, 58, 31, 0.40)",
+    primary: "var(--ink-900)",
+    secondary: "var(--ink-600)",
+    tertiary: "var(--ink-400)",
   },
 
   glass: {
-    light: "rgba(255, 255, 255, 0.70)",
-    medium: "rgba(255, 255, 255, 0.50)",
-    heavy: "rgba(255, 255, 255, 0.25)",
+    light: "color-mix(in srgb, var(--paper-50) 85%, transparent)",
+    medium: "color-mix(in srgb, var(--paper-50) 65%, transparent)",
+    heavy: "color-mix(in srgb, var(--paper-50) 35%, transparent)",
   },
 
   shadow: {
-    soft: "0 4px 24px rgba(14, 58, 31, 0.04), 0 8px 48px rgba(14, 58, 31, 0.02)",
-    glow: "0 0 40px rgba(14, 58, 31, 0.08), 0 0 80px rgba(14, 58, 31, 0.04)",
+    soft: "var(--shadow-paper)",
+    glow: "var(--shadow-paper)",
   }
 } as const
 
@@ -90,9 +90,9 @@ function ModelBadge({ text }: { text: string }) {
         style={{ backgroundColor: TOKENS.aurora }}
         animate={{
           boxShadow: [
-            "0 0 4px rgba(134, 239, 172, 0.4)",
-            "0 0 8px rgba(134, 239, 172, 0.6)",
-            "0 0 4px rgba(134, 239, 172, 0.4)",
+            "0 0 4px color-mix(in srgb, var(--seal-500) 40%, transparent)",
+            "0 0 8px color-mix(in srgb, var(--seal-500) 60%, transparent)",
+            "0 0 4px color-mix(in srgb, var(--seal-500) 40%, transparent)",
           ],
           opacity: [0.7, 1, 0.7],
         }}
@@ -105,25 +105,25 @@ function ModelBadge({ text }: { text: string }) {
     switch (badgeText) {
       case "新":
         return {
-          border: "1px solid rgba(14, 58, 31, 0.15)",
+          border: "1px solid var(--paper-200)",
           color: TOKENS.text.secondary,
-          background: "rgba(14, 58, 31, 0.04)",
+          background: "var(--paper-200)",
         }
       case "热门":
         return {
-          border: "1px solid rgba(14, 58, 31, 0.15)",
+          border: "1px solid var(--paper-200)",
           color: TOKENS.text.secondary,
-          background: "rgba(14, 58, 31, 0.04)",
+          background: "var(--paper-200)",
         }
       case "Pro":
         return {
-          border: "1px solid rgba(14, 58, 31, 0.15)",
+          border: "1px solid var(--paper-200)",
           color: TOKENS.text.secondary,
-          background: "rgba(14, 58, 31, 0.04)",
+          background: "var(--paper-200)",
         }
       default:
         return {
-          border: "1px solid rgba(14, 58, 31, 0.1)",
+          border: "1px solid var(--paper-200)",
           color: TOKENS.text.tertiary,
           background: "transparent",
         }
@@ -191,12 +191,12 @@ export function ModelSelector({
       <motion.button
         onClick={() => !disabled && setIsOpen(!isOpen)}
         disabled={disabled}
-        className="flex items-center gap-1.5 transition-all duration-200"
+        className="flex items-center gap-1.5 rounded-[var(--radius-pill)] border border-[var(--paper-300)] bg-white px-3 py-1.5 text-[var(--ink-800)] font-[var(--font-sans-v2)] transition-all duration-200"
         whileTap={{ scale: 0.97 }}
       >
         {/* 模型名称 */}
         <span
-          className="text-xs font-medium text-emerald-700"
+          className="text-xs font-medium text-[var(--ink-800)]"
           style={{ letterSpacing: "0.2px" }}
         >
           {currentModel?.name || "选择模型"}
@@ -208,7 +208,7 @@ export function ModelSelector({
           transition={{ duration: 0.2, ease: "easeOut" }}
         >
           <ChevronDown
-            className="w-3 h-3 text-emerald-600/60"
+            className="w-3 h-3 text-[var(--ink-600)]/60"
             style={{ strokeWidth: 2 }}
           />
         </motion.div>
@@ -228,7 +228,7 @@ export function ModelSelector({
               background: TOKENS.glass.light,
               backdropFilter: "blur(20px) saturate(180%)",
               WebkitBackdropFilter: "blur(20px) saturate(180%)",
-              border: "1px solid rgba(14, 58, 31, 0.06)",
+              border: "1px solid var(--paper-200)",
               boxShadow: TOKENS.shadow.glow,
             }}
           >
@@ -236,7 +236,7 @@ export function ModelSelector({
             <motion.div
               className="absolute top-0 left-0 right-0 h-px"
               style={{
-                background: "linear-gradient(90deg, transparent 0%, rgba(134, 239, 172, 0.5) 30%, rgba(134, 239, 172, 0.8) 50%, rgba(134, 239, 172, 0.5) 70%, transparent 100%)",
+                background: "linear-gradient(90deg, transparent 0%, var(--seal-500) 50%, transparent 100%)",
               }}
               animate={{
                 opacity: [0.5, 1, 0.5],
@@ -247,7 +247,7 @@ export function ModelSelector({
             {/* 标题 */}
             <div
               className="flex items-center justify-between px-4 py-3"
-              style={{ borderBottom: "1px solid rgba(14, 58, 31, 0.04)" }}
+              style={{ borderBottom: "1px solid var(--paper-200)" }}
             >
               <span
                 className="text-xs font-medium tracking-wider"
@@ -278,7 +278,7 @@ export function ModelSelector({
                       {/* 左侧细线 */}
                       <div
                         className="w-4 h-px"
-                        style={{ background: "linear-gradient(90deg, rgba(14, 58, 31, 0.3), transparent)" }}
+                        style={{ background: "linear-gradient(90deg, var(--ink-300), transparent)" }}
                       />
                       <span
                         className="text-[10px] font-medium uppercase tracking-widest"
@@ -333,34 +333,34 @@ function ModelMenuItem({
   return (
     <motion.button
       onClick={onClick}
-      className="w-full flex items-center gap-3 rounded-xl cursor-pointer transition-all duration-200"
+      className="w-full flex items-center gap-3 rounded-[var(--radius-sharp)] cursor-pointer transition-all duration-200"
       style={{
         height: "48px",
         padding: "0 12px",
         background: isSelected
-          ? "linear-gradient(135deg, rgba(134, 239, 172, 0.08) 0%, rgba(134, 239, 172, 0.04) 100%)"
+          ? "linear-gradient(135deg, var(--seal-50) 0%, var(--paper-50) 100%)"
           : "transparent",
         border: isSelected
-          ? "1px solid rgba(134, 239, 172, 0.15)"
+          ? "1px solid var(--seal-500)"
           : "1px solid transparent",
       }}
       whileHover={{
         background: isSelected
-          ? "linear-gradient(135deg, rgba(134, 239, 172, 0.1) 0%, rgba(134, 239, 172, 0.05) 100%)"
-          : "rgba(14, 58, 31, 0.02)",
+          ? "linear-gradient(135deg, var(--seal-50) 0%, var(--paper-50) 100%)"
+          : "var(--paper-100)",
       }}
       whileTap={{ scale: 0.98 }}
     >
       {/* 模型图标 - 使用 ModelLogo 或 Lucide 图标 */}
       <div
-        className="flex h-8 w-8 items-center justify-center rounded-lg shrink-0"
+        className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-soft)] shrink-0"
         style={{
           background: isSelected
-            ? "rgba(134, 239, 172, 0.12)"
-            : "rgba(14, 58, 31, 0.04)",
+            ? "var(--seal-50)"
+            : "var(--paper-200)",
           border: isSelected
-            ? "1px solid rgba(134, 239, 172, 0.15)"
-            : "1px solid rgba(14, 58, 31, 0.04)",
+            ? "1px solid var(--seal-500)"
+            : "1px solid var(--paper-200)",
         }}
       >
         {hasModelLogo ? (

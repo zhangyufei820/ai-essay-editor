@@ -10,7 +10,7 @@ import { GraduationCap, Copy, Download, ArrowLeft, Eye, Calendar, Loader2, User,
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 
-const BRAND_GREEN = "#14532d"
+const BRAND_GREEN = "var(--ink-700)"
 
 // Markdown 渲染组件
 const InlineText = ({ text }: { text: string }) => {
@@ -151,8 +151,8 @@ function MessageItem({ role, content }: { role: 'user' | 'assistant', content: s
       )}
       <div className={cn(
         "relative rounded-[var(--radius-sharp)] px-4 py-3",
-        role === "user" 
-          ? "max-w-[75%] border border-[#e6e3dc] bg-[#f7f7f5] text-[#2f3136]" 
+        role === "user"
+          ? "max-w-[75%] border border-[var(--paper-200)] bg-[var(--ink-700)] text-white"
           : "bg-[var(--paper-50)] w-full max-w-full"
       )}>
         {role === "user" ? (
@@ -183,7 +183,7 @@ export default function SharePage() {
     view_count: number
     created_at: string
   } | null>(null)
-  
+
   // 🔥 解析后的对话数据
   const [parsedData, setParsedData] = useState<{
     type: 'conversation' | 'single'
@@ -213,7 +213,7 @@ export default function SharePage() {
         }
 
         setShareData(data)
-        
+
         // 🔥 解析内容
         try {
           const parsed = JSON.parse(data.content)
@@ -247,16 +247,16 @@ export default function SharePage() {
 
   const handleCopy = async () => {
     if (!parsedData) return
-    
+
     let textToCopy = ''
     if (parsedData.type === 'conversation' && parsedData.messages) {
-      textToCopy = parsedData.messages.map(m => 
+      textToCopy = parsedData.messages.map(m =>
         `${m.role === 'user' ? '用户' : 'AI'}：${m.content}`
       ).join('\n\n')
     } else if (parsedData.content) {
       textToCopy = parsedData.content
     }
-    
+
     await navigator.clipboard.writeText(textToCopy)
     toast.success('已复制到剪贴板')
   }
@@ -272,7 +272,7 @@ export default function SharePage() {
 
     // 🔥 根据类型生成不同的 HTML
     let htmlContent = ''
-    
+
     if (parsedData.type === 'conversation' && parsedData.messages) {
       htmlContent = parsedData.messages.map(m => {
         if (m.role === 'user') {
@@ -299,23 +299,23 @@ export default function SharePage() {
         <title>${shareData?.title || '沈翔智学 - AI 对话'}</title>
         <style>
           * { margin: 0; padding: 0; box-sizing: border-box; }
-          body { font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif; padding: 40px; max-width: 800px; margin: 0 auto; color: #333; line-height: 1.8; }
-          .header { text-align: center; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 2px solid #14532d; }
-          .header h1 { color: #14532d; font-size: 24px; margin-bottom: 8px; }
-          .header p { color: #666; font-size: 12px; }
+          body { font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif; padding: 40px; max-width: 800px; margin: 0 auto; color: var(--ink-800); line-height: 1.8; }
+          .header { text-align: center; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 2px solid var(--ink-700); }
+          .header h1 { color: var(--ink-700); font-size: 24px; margin-bottom: 8px; }
+          .header p { color: var(--ink-500); font-size: 12px; }
           .content { font-size: 14px; }
-          .user-message { background: #f7f7f5; color: #2f3136; border: 1px solid #e6e3dc; padding: 12px 16px; border-radius: 12px; margin: 16px 0; max-width: 80%; margin-left: auto; }
-          .ai-message { background: #f5f5f5; padding: 16px; border-radius: 12px; margin: 16px 0; }
-          .content h1 { font-size: 20px; color: #14532d; margin: 24px 0 12px; }
-          .content h2 { font-size: 18px; color: #14532d; margin: 20px 0 10px; border-left: 3px solid #14532d; padding-left: 10px; }
-          .content h3 { font-size: 16px; color: #14532d; margin: 16px 0 8px; }
+          .user-message { background: var(--ink-700); color: white; border: 1px solid var(--paper-200); padding: 12px 16px; border-radius: 12px; margin: 16px 0; max-width: 80%; margin-left: auto; }
+          .ai-message { background: var(--paper-100); padding: 16px; border-radius: 12px; margin: 16px 0; }
+          .content h1 { font-size: 20px; color: var(--ink-700); margin: 24px 0 12px; }
+          .content h2 { font-size: 18px; color: var(--ink-700); margin: 20px 0 10px; border-left: 3px solid var(--ink-700); padding-left: 10px; }
+          .content h3 { font-size: 16px; color: var(--ink-700); margin: 16px 0 8px; }
           .content p { margin: 8px 0; }
-          .content strong { color: #14532d; font-weight: 600; }
+          .content strong { color: var(--ink-700); font-weight: 600; }
           .content ul { margin: 12px 0; padding-left: 24px; }
           .content li { margin: 6px 0; }
-          .content blockquote { margin: 12px 0; padding: 12px 16px; background: #f5f5f5; border-left: 3px solid #14532d; }
-          .content hr { margin: 20px 0; border: none; border-top: 1px solid #eee; }
-          .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee; text-align: center; color: #999; font-size: 11px; }
+          .content blockquote { margin: 12px 0; padding: 12px 16px; background: var(--paper-100); border-left: 3px solid var(--ink-700); }
+          .content hr { margin: 20px 0; border: none; border-top: 1px solid var(--paper-200); }
+          .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--paper-200); text-align: center; color: var(--ink-400); font-size: 11px; }
         </style>
       </head>
       <body>

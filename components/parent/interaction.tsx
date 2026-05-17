@@ -7,7 +7,7 @@ const activities = [
     icon: Heart,
     title: "情感沟通",
     description: "学习如何与孩子进行有效的情感交流，建立信任关系",
-    color: "bg-red-500/10 text-[var(--seal-500)]",
+    color: "bg-[var(--seal-50)] text-[var(--seal-500)]",
   },
   {
     icon: Smile,

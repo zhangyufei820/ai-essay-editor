@@ -27,9 +27,9 @@ const MODEL_DISPLAY_NAMES: Record<string, string> = {
   "beike-pro": "备课助手",
 }
 
-// 获取模型徽章颜色 — 硬编码翡翠绿 #10A37F
+// 获取模型徽章颜色
 function getModelBadgeColor(_modelKey: string): string {
-  return "#10A37F"
+  return "var(--seal-500)"
 }
 
 // ✅ 保持类型定义导出，确保父组件不报错
@@ -69,15 +69,15 @@ export function ChatSidebar({
 
   return (
     // 移除 w-72，让父容器控制宽度，避免双重滚动条
-    <div className="flex h-full w-full flex-col bg-[#FDFBF7]">
+    <div className="flex h-full w-full flex-col bg-[var(--paper-50)] font-[var(--font-sans-v2)]">
       
       {/* 1. 顶部固定区域：醒目的大按钮 */}
       <div className="p-4 pb-2">
         <Button 
           onClick={onNewChat}
-          className="w-full justify-start gap-3 rounded-xl bg-[#0F766E] py-7 text-white shadow-md hover:bg-[#0d655d] hover:shadow-lg transition-all"
+          className="w-full justify-start gap-3 rounded-[var(--radius-sharp)] bg-[var(--seal-500)] py-7 text-white shadow-md hover:bg-[var(--seal-600)] hover:shadow-lg transition-all"
         >
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/20">
+          <div className="flex h-10 w-10 items-center justify-center rounded-[var(--radius-soft)] bg-[var(--paper-50)]/20">
             <Plus className="h-6 w-6" />
           </div>
           <div className="flex flex-col items-start text-left">
@@ -92,11 +92,11 @@ export function ChatSidebar({
         <div className="space-y-6 py-4">
           {sessions.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center opacity-60 px-4">
-              <div className="mb-3 rounded-full bg-slate-100 p-3">
-                <MessageSquare className="h-6 w-6 text-slate-400" />
+              <div className="mb-3 rounded-full bg-[var(--paper-100)] p-3">
+                <MessageSquare className="h-6 w-6 text-[var(--ink-400)]" />
               </div>
-              <p className="text-sm font-medium text-slate-600">暂无历史记录</p>
-              <p className="text-xs text-slate-400 mt-1">点击上方按钮开始第一次批改吧！</p>
+              <p className="text-sm font-medium text-[var(--ink-600)]">暂无历史记录</p>
+              <p className="text-xs text-[var(--ink-400)] mt-1">点击上方按钮开始第一次批改吧！</p>
             </div>
           ) : (
             // 直接按时间倒序排列，无分组
@@ -107,15 +107,18 @@ export function ChatSidebar({
                     <button
                       onClick={() => onSelectSession(session.id)}
                       className={cn(
-                        "relative flex w-full items-center gap-3 rounded-lg px-3 py-4 text-left transition-all duration-200",
+                        "relative flex w-full items-center gap-3 rounded-[var(--radius-soft)] px-3 py-4 text-left transition-all duration-200",
                         currentSessionId === session.id
-                          ? "bg-white text-[#0F766E] shadow-sm ring-1 ring-[#E5E0D6]"
-                          : "text-slate-600 hover:bg-slate-200/50 hover:text-slate-900"
+                          ? "bg-[var(--paper-50)] text-[var(--ink-700)] shadow-sm ring-1 ring-[var(--paper-200)]"
+                          : "text-[var(--ink-600)] hover:bg-[var(--paper-200)]/50 hover:text-[var(--ink-900)]"
                       )}
                     >
+                      {currentSessionId === session.id ? (
+                        <span className="absolute left-1 top-1/2 size-1.5 -translate-y-1/2 rounded-full bg-[var(--seal-500)]" />
+                      ) : null}
                       <MessageSquare className={cn(
                         "h-4 w-4 shrink-0 transition-colors",
-                        currentSessionId === session.id ? "text-[#0F766E]" : "text-slate-400 group-hover:text-slate-500"
+                        currentSessionId === session.id ? "text-[var(--ink-700)]" : "text-[var(--ink-400)] group-hover:text-[var(--ink-500)]"
                       )} />
 
                       <div className="flex flex-1 flex-col overflow-hidden">
@@ -126,17 +129,17 @@ export function ChatSidebar({
                             </span>
                             {session.ai_model && session.ai_model !== "standard" && (
                               <span
-                                className="text-[9px] px-1.5 py-0.5 rounded-full font-medium shrink-0 bg-emerald-500/10 text-emerald-600"
+                                className="text-[9px] px-1.5 py-0.5 rounded-full font-medium shrink-0 bg-[var(--ink-500)]/10 text-[var(--ink-600)]"
                               >
                                 {MODEL_DISPLAY_NAMES[session.ai_model] || session.ai_model}
                               </span>
                             )}
                           </div>
-                          <span className="text-[10px] text-slate-400 font-normal shrink-0">
+                          <span className="text-[10px] text-[var(--ink-400)] font-normal shrink-0">
                             {formatTime(session.date)}
                           </span>
                         </div>
-                        <span className="truncate text-[10px] text-slate-400 font-normal mt-0.5">
+                        <span className="truncate text-[10px] text-[var(--ink-400)] font-normal mt-0.5">
                           {session.preview || "无预览内容"}
                         </span>
                       </div>
@@ -145,8 +148,8 @@ export function ChatSidebar({
                   <TooltipContent side="right" className="max-w-xs p-3">
                     <div className="space-y-1">
                       <p className="font-medium text-sm">{session.title || "新对话"}</p>
-                      <p className="text-xs text-slate-500">{formatTime(session.date)}</p>
-                      <p className="text-xs text-slate-600 mt-2 border-t pt-2">
+                      <p className="text-xs text-[var(--ink-500)]">{formatTime(session.date)}</p>
+                      <p className="text-xs text-[var(--ink-600)] mt-2 border-t pt-2">
                         {session.preview || "无预览内容"}
                       </p>
                     </div>
@@ -165,7 +168,7 @@ export function ChatSidebar({
                         onDeleteSession(session.id);
                       }
                     }}
-                    className="rounded-md p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors bg-white/80 backdrop-blur-sm shadow-sm"
+                    className="rounded-md p-1.5 text-[var(--ink-400)] hover:bg-[var(--seal-50)] hover:text-[var(--seal-500)] transition-colors bg-[var(--paper-50)]/80 backdrop-blur-sm shadow-sm"
                     title="删除记录"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
