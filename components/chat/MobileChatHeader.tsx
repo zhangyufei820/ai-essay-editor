@@ -94,7 +94,7 @@ export function MobileChatHeader({
           </span>
         )}
         <div className="flex flex-col items-center min-w-0">
-          <span className="text-sm font-medium font-[var(--font-display)] text-[var(--ink-700)] truncate max-w-[140px]">
+          <span className="font-[var(--font-display)] text-[16px] font-bold text-[var(--ink-800)] truncate max-w-[140px]">
             {modelName}
           </span>
           {isLoading && (
@@ -113,7 +113,7 @@ export function MobileChatHeader({
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <motion.button 
-            className="p-2 text-[var(--ink-400)] hover:text-[var(--ink-600)] rounded-[var(--radius-soft)] hover:bg-[var(--paper-100)] transition-colors"
+            className="p-2 text-[var(--ink-500)] hover:text-[var(--ink-600)] rounded-[var(--radius-soft)] hover:bg-[var(--paper-100)] transition-colors"
             whileTap={{ scale: 0.95 }}
           >
             <MoreVertical className="h-5 w-5" />
@@ -185,7 +185,7 @@ export function SimpleChatHeader({
       </motion.button>
       
       <div className="flex-1 flex flex-col items-center justify-center min-w-0">
-        <span className="text-sm font-medium font-[var(--font-display)] text-[var(--ink-700)] truncate max-w-[160px]">
+        <span className="font-[var(--font-display)] text-[16px] font-bold text-[var(--ink-800)] truncate max-w-[160px]">
           {title}
         </span>
         {subtitle && (
