@@ -1,11 +1,13 @@
 import { shouldSidebarOpenForRoute, usesAppChrome } from '@/lib/app-chrome-routes'
 
 describe('app chrome routes', () => {
-  it('wraps legacy app routes with the sidebar chrome but leaves public and v2-shell routes alone', () => {
+  it('wraps workspace routes with the sidebar chrome but leaves public routes alone', () => {
     expect(usesAppChrome('/')).toBe(false)
-    expect(usesAppChrome('/chat/standard')).toBe(false)
+    expect(usesAppChrome('/chat/standard')).toBe(true)
     expect(usesAppChrome('/credits')).toBe(true)
+    expect(usesAppChrome('/explore')).toBe(true)
     expect(usesAppChrome('/folder')).toBe(true)
+    expect(usesAppChrome('/my/shares')).toBe(true)
     expect(usesAppChrome('/teacher/agents')).toBe(true)
     expect(usesAppChrome('/tools')).toBe(true)
     expect(usesAppChrome('/about')).toBe(false)
@@ -16,9 +18,9 @@ describe('app chrome routes', () => {
     expect(shouldSidebarOpenForRoute('/', false)).toBe(false)
   })
 
-  it('keeps chat out of the legacy sidebar while desktop app routes keep the sidebar visible', () => {
+  it('keeps the sidebar closed on mobile and visible for desktop workspace routes', () => {
     expect(shouldSidebarOpenForRoute('/chat/standard', true)).toBe(false)
-    expect(shouldSidebarOpenForRoute('/chat/standard', false)).toBe(false)
+    expect(shouldSidebarOpenForRoute('/chat/standard', false)).toBe(true)
     expect(shouldSidebarOpenForRoute('/credits', false)).toBe(true)
   })
 })
