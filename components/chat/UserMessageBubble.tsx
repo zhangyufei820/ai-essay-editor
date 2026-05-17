@@ -30,11 +30,6 @@ interface UserMessageBubbleProps {
   onSend?: (content: string, files?: UserMessageBubbleProps["files"]) => void
 }
 
-// v2 墨砚配色
-const BUBBLE_BG = "var(--ink-700)"
-const BORDER_COLOR = "var(--ink-700)"
-const TEXT_COLOR = "white"
-
 export function UserMessageBubble({ content, files, onEdit, onSend }: UserMessageBubbleProps) {
   const [copied, setCopied] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
@@ -96,15 +91,11 @@ export function UserMessageBubble({ content, files, onEdit, onSend }: UserMessag
     <div className="group w-full">
       <div
         className={cn(
-          "rounded-[var(--radius-soft)] px-3 py-2.5 sm:px-4 sm:py-3 transition-all duration-200",
+          "rounded-[var(--radius-soft)] bg-[var(--ink-700)] px-4 py-3 text-white shadow-[var(--shadow-paper)] transition-all duration-200",
           isEditing
-            ? "ring-2 ring-blue-500/50"
-            : "shadow-[var(--shadow-paper)]"
+            ? "border border-[var(--seal-500)] ring-2 ring-[var(--seal-500)]/30"
+            : "border border-[var(--ink-700)]"
         )}
-        style={{
-          backgroundColor: BUBBLE_BG,
-          border: `1px solid ${isEditing ? 'var(--seal-500)' : BORDER_COLOR}`,
-        }}
       >
         {/* 文件预览 */}
         {files && files.length > 0 && (
@@ -138,7 +129,7 @@ export function UserMessageBubble({ content, files, onEdit, onSend }: UserMessag
               onChange={(e) => setEditContent(e.target.value)}
               onKeyDown={handleKeyDown}
               className="w-full min-h-[60px] max-h-[200px] p-2 text-[13px] sm:text-sm resize-none rounded-[var(--radius-soft)] border border-[var(--paper-200)] bg-[var(--paper-50)]/80 focus:outline-none focus:ring-2 focus:ring-[var(--ink-500)]/20"
-              style={{ color: TEXT_COLOR }}
+              style={{ color: "white" }}
               placeholder="编辑消息..."
             />
             <div className="flex items-center justify-end gap-2">
@@ -160,7 +151,7 @@ export function UserMessageBubble({ content, files, onEdit, onSend }: UserMessag
         ) : (
           <div
             className="whitespace-pre-wrap text-[13px] sm:text-sm"
-            style={{ lineHeight: 1.6, color: TEXT_COLOR }}
+            style={{ lineHeight: 1.6 }}
           >
             {content}
           </div>
