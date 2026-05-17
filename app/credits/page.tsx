@@ -95,7 +95,7 @@ export default function CreditsPage() {
 
   if (loading) {
     return (
-      <div className="container mx-auto px-4 py-10">
+      <div className="min-h-screen bg-[var(--paper-50)] px-4 py-10 font-[var(--font-sans-v2)]">
         <div className="mx-auto max-w-4xl text-sm text-muted-foreground">正在读取积分...</div>
       </div>
     )
@@ -103,7 +103,7 @@ export default function CreditsPage() {
 
   if (!isAuthed) {
     return (
-      <div className="container mx-auto px-4 py-10">
+      <div className="min-h-screen bg-[var(--paper-50)] px-4 py-10 font-[var(--font-sans-v2)]">
         <Card className="mx-auto max-w-md">
           <CardHeader>
             <CardTitle>请先登录</CardTitle>
@@ -122,7 +122,7 @@ export default function CreditsPage() {
   return (
     <div className="container mx-auto px-4 py-10">
       <div className="mx-auto max-w-4xl">
-        <h1 className="mb-8 text-3xl font-bold">我的积分</h1>
+        <h1 className="mb-8 text-3xl font-bold font-[var(--font-display)]">我的积分</h1>
 
         <div className="mb-8 grid gap-6 md:grid-cols-3">
           <Card>
@@ -177,7 +177,7 @@ export default function CreditsPage() {
                         {new Date(item.created_at).toLocaleString("zh-CN")}
                       </p>
                     </div>
-                    <div className={item.amount >= 0 ? "font-semibold text-green-600" : "font-semibold text-red-600"}>
+                    <div className={item.amount >= 0 ? "font-semibold text-[var(--ink-600)]" : "font-semibold text-[var(--seal-500)]"}>
                       {item.amount >= 0 ? "+" : ""}
                       {item.amount}
                     </div>

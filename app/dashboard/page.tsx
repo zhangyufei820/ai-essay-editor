@@ -70,13 +70,13 @@ function SkeletonDashboard() {
     <div className="space-y-6 animate-pulse">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {Array.from({ length: 4 }).map((_, index) => (
-          <div key={index} className="h-28 rounded-xl border border-border/70 bg-muted/40" />
+          <div key={index} className="h-28 rounded-[var(--radius-sharp)] border border-border/70 bg-muted/40" />
         ))}
       </div>
-      <div className="h-80 rounded-xl border border-border/70 bg-muted/40" />
+      <div className="h-80 rounded-[var(--radius-sharp)] border border-border/70 bg-muted/40" />
       <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
-        <div className="h-72 rounded-xl border border-border/70 bg-muted/40" />
-        <div className="h-72 rounded-xl border border-border/70 bg-muted/40" />
+        <div className="h-72 rounded-[var(--radius-sharp)] border border-border/70 bg-muted/40" />
+        <div className="h-72 rounded-[var(--radius-sharp)] border border-border/70 bg-muted/40" />
       </div>
     </div>
   )
@@ -94,14 +94,14 @@ function StatCard({
   detail: string
 }) {
   return (
-    <Card className="gap-3 rounded-xl py-5">
+    <Card className="gap-3 rounded-[var(--radius-sharp)] py-5">
       <CardContent className="flex items-start justify-between gap-3 px-4 sm:px-5">
         <div className="min-w-0">
           <p className="text-xs font-medium text-muted-foreground">{label}</p>
           <p className="mt-2 text-2xl font-semibold tracking-normal text-foreground">{value}</p>
           <p className="mt-1 text-xs text-muted-foreground">{detail}</p>
         </div>
-        <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
+        <div className="flex size-10 shrink-0 items-center justify-center rounded-[var(--radius-soft)] bg-[var(--ink-50)] text-[var(--ink-700)] dark:bg-[var(--ink-900)]/50 dark:text-[var(--ink-200)]">
           {icon}
         </div>
       </CardContent>
@@ -156,13 +156,13 @@ export default function DashboardPage() {
   const dailyGoalPercent = clampPercent((todayXp / 100) * 100)
 
   return (
-    <main className="min-h-screen bg-[#f7faf7] px-4 py-6 text-foreground dark:bg-background sm:px-6 lg:px-8">
+    <main className="min-h-screen bg-[var(--paper-50)] px-4 py-6 text-foreground dark:bg-[var(--paper-50)] sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl space-y-6">
         <header className="flex flex-col gap-2">
-          <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300">学习看板</p>
+          <p className="text-sm font-medium text-[var(--ink-700)] dark:text-[var(--ink-200)]">学习看板</p>
           <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
             <div>
-              <h1 className="text-2xl font-semibold tracking-normal sm:text-3xl">今天的学习状态</h1>
+              <h1 className="text-2xl font-semibold tracking-normal sm:text-3xl font-[var(--font-display)]">今天的学习状态</h1>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
                 查看 XP、连续打卡、待复习闪卡和最近薄弱点。
               </p>
@@ -176,7 +176,7 @@ export default function DashboardPage() {
         {loading ? <SkeletonDashboard /> : null}
 
         {!loading && error ? (
-          <Card className="rounded-xl">
+          <Card className="rounded-[var(--radius-sharp)]">
             <CardContent className="py-10">
               <p className="font-medium text-destructive">{error}</p>
               <p className="mt-2 text-sm text-muted-foreground">请确认已登录，或稍后刷新重试。</p>
@@ -213,10 +213,10 @@ export default function DashboardPage() {
               />
             </section>
 
-            <Card className="rounded-xl">
+            <Card className="rounded-[var(--radius-sharp)]">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-lg">
-                  <BarChart3 className="size-5 text-emerald-700 dark:text-emerald-300" />
+                  <BarChart3 className="size-5 text-[var(--ink-700)] dark:text-[var(--ink-200)]" />
                   学习时长趋势
                 </CardTitle>
               </CardHeader>
@@ -227,9 +227,9 @@ export default function DashboardPage() {
                     return (
                       <div key={day.date} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-2">
                         <span className="text-xs tabular-nums text-muted-foreground">{day.minutes} 分</span>
-                        <div className="flex h-44 w-full items-end rounded-t-lg bg-emerald-50 dark:bg-emerald-950/30">
+                        <div className="flex h-44 w-full items-end rounded-t-lg bg-[var(--ink-50)] dark:bg-[var(--ink-900)]/30">
                           <div
-                            className="w-full rounded-t-lg bg-emerald-500 transition-[height] duration-300"
+                            className="w-full rounded-t-lg bg-[var(--ink-500)] transition-[height] duration-300"
                             style={{ height: `${height}%` }}
                             aria-label={`${day.date} 学习 ${day.minutes} 分钟`}
                           />
@@ -243,7 +243,7 @@ export default function DashboardPage() {
             </Card>
 
             <section className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
-              <Card className="rounded-xl">
+              <Card className="rounded-[var(--radius-sharp)]">
                 <CardHeader>
                   <CardTitle className="text-lg">各科掌握度</CardTitle>
                 </CardHeader>
@@ -253,32 +253,32 @@ export default function DashboardPage() {
                       {masteryEntries.map(([subject, value]) => (
                         <div key={subject} className="grid grid-cols-[72px_1fr_44px] items-center gap-3">
                           <span className="text-sm font-medium">{SUBJECT_NAMES[subject] || subject}</span>
-                          <Progress value={clampPercent(value)} className="h-2 bg-slate-200 dark:bg-slate-800" />
+                          <Progress value={clampPercent(value)} className="h-2 bg-[var(--paper-200)] dark:bg-[var(--ink-800)]" />
                           <span className="text-right text-sm tabular-nums text-muted-foreground">{clampPercent(value)}%</span>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <p className="rounded-lg border border-dashed border-border bg-muted/30 p-5 text-sm text-muted-foreground">
+                    <p className="rounded-[var(--radius-soft)] border border-dashed border-border bg-muted/30 p-5 text-sm text-muted-foreground">
                       暂无数据，开始学习后这里会显示你的掌握度
                     </p>
                   )}
                 </CardContent>
               </Card>
 
-              <Card className="rounded-xl">
+              <Card className="rounded-[var(--radius-sharp)]">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-lg">
-                    <Target className="size-5 text-emerald-700 dark:text-emerald-300" />
+                    <Target className="size-5 text-[var(--ink-700)] dark:text-[var(--ink-200)]" />
                     今日待办
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-5">
-                  <Link href="/flashcards" className="flex items-center justify-between rounded-lg border border-border/70 p-4 transition-colors hover:bg-accent">
+                  <Link href="/flashcards" className="flex items-center justify-between rounded-[var(--radius-soft)] border border-border/70 p-4 transition-colors hover:bg-accent">
                     <span className="font-medium">{data.due_cards_count} 张闪卡待复习</span>
-                    <span className="text-sm text-emerald-700 dark:text-emerald-300">去复习</span>
+                    <span className="text-sm text-[var(--ink-700)] dark:text-[var(--ink-200)]">去复习</span>
                   </Link>
-                  <Link href="#" className="flex items-center justify-between rounded-lg border border-border/70 p-4 transition-colors hover:bg-accent">
+                  <Link href="#" className="flex items-center justify-between rounded-[var(--radius-soft)] border border-border/70 p-4 transition-colors hover:bg-accent">
                     <span className="font-medium">{data.recent_mistakes.length} 道错题待巩固</span>
                     <span className="text-sm text-muted-foreground">稍后开放</span>
                   </Link>
@@ -287,13 +287,13 @@ export default function DashboardPage() {
                       <span className="font-medium">每日目标</span>
                       <span className="text-muted-foreground">{Math.min(todayXp, 100)} / 100 XP</span>
                     </div>
-                    <Progress value={dailyGoalPercent} className="h-2 bg-slate-200 dark:bg-slate-800" />
+                    <Progress value={dailyGoalPercent} className="h-2 bg-[var(--paper-200)] dark:bg-[var(--ink-800)]" />
                   </div>
                 </CardContent>
               </Card>
             </section>
 
-            <Card className="rounded-xl">
+            <Card className="rounded-[var(--radius-sharp)]">
               <CardHeader>
                 <CardTitle className="text-lg">错题热点</CardTitle>
               </CardHeader>
@@ -311,7 +311,7 @@ export default function DashboardPage() {
                     ))}
                   </div>
                 ) : (
-                  <p className="rounded-lg bg-emerald-50 p-5 text-sm font-medium text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200">
+                  <p className="rounded-[var(--radius-soft)] bg-[var(--ink-50)] p-5 text-sm font-medium text-[var(--ink-800)] dark:bg-[var(--ink-900)]/40 dark:text-[var(--ink-100)]">
                     太棒了，暂无错题！
                   </p>
                 )}

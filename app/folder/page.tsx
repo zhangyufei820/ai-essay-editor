@@ -133,12 +133,12 @@ export default function FolderPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f7faf7] px-4 py-6 dark:bg-background sm:px-6 lg:px-8">
+    <main className="min-h-screen bg-[var(--paper-50)] px-4 py-6 dark:bg-[var(--paper-50)] sm:px-6 lg:px-8">
       <div className="mx-auto max-w-6xl space-y-6">
         <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300">个人资料夹</p>
-            <h1 className="mt-1 text-2xl font-semibold tracking-normal sm:text-3xl">学习资料统一管理</h1>
+            <p className="text-sm font-medium text-[var(--ink-700)] dark:text-[var(--ink-200)]">个人资料夹</p>
+            <h1 className="mt-1 text-2xl font-semibold tracking-normal sm:text-3xl font-[var(--font-display)]">学习资料统一管理</h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
               保存课堂笔记、资料链接和学习文件记录，后续可用于生成闪卡、错题复习和教师查看。
             </p>
@@ -161,10 +161,10 @@ export default function FolderPage() {
         ) : null}
 
         <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
-          <Card className="rounded-xl">
+          <Card className="rounded-[var(--radius-sharp)]">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
-                <Plus className="size-5 text-emerald-600" />
+                <Plus className="size-5 text-[var(--ink-600)]" />
                 添加资料
               </CardTitle>
             </CardHeader>
@@ -186,7 +186,7 @@ export default function FolderPage() {
                       id="file_type"
                       value={form.file_type}
                       onChange={(event) => setForm((value) => ({ ...value, file_type: event.target.value }))}
-                      className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                      className="h-10 w-full rounded-[var(--radius-soft)] border border-input bg-background px-3 text-sm"
                     >
                       <option value="note">笔记</option>
                       <option value="link">链接</option>
@@ -201,7 +201,7 @@ export default function FolderPage() {
                       id="subject"
                       value={form.subject}
                       onChange={(event) => setForm((value) => ({ ...value, subject: event.target.value }))}
-                      className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                      className="h-10 w-full rounded-[var(--radius-soft)] border border-input bg-background px-3 text-sm"
                     >
                       {SUBJECTS.map(([value, label]) => (
                         <option key={value} value={value}>{label}</option>
@@ -238,19 +238,19 @@ export default function FolderPage() {
             {loading ? (
               <div className="grid gap-3">
                 {Array.from({ length: 4 }).map((_, index) => (
-                  <div key={index} className="h-24 animate-pulse rounded-xl border bg-muted/40" />
+                  <div key={index} className="h-24 animate-pulse rounded-[var(--radius-sharp)] border bg-muted/40" />
                 ))}
               </div>
             ) : files.length ? (
               <div className="space-y-5">
                 {Object.entries(grouped).map(([subject, subjectFiles]) => (
                   <div key={subject} className="space-y-3">
-                    <h2 className="text-sm font-semibold text-muted-foreground">{subjectLabel(subject)}</h2>
+                    <h2 className="text-sm font-semibold text-muted-foreground font-[var(--font-display)]">{subjectLabel(subject)}</h2>
                     <div className="grid gap-3 md:grid-cols-2">
                       {subjectFiles.map((file) => (
-                        <Card key={file.id} className="rounded-xl">
+                        <Card key={file.id} className="rounded-[var(--radius-sharp)]">
                           <CardContent className="flex gap-3 py-4">
-                            <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
+                            <div className="flex size-10 shrink-0 items-center justify-center rounded-[var(--radius-soft)] bg-[var(--ink-50)] text-[var(--ink-700)] dark:bg-[var(--ink-900)]/50 dark:text-[var(--ink-200)]">
                               <FileText className="size-5" />
                             </div>
                             <div className="min-w-0 flex-1">
@@ -268,11 +268,11 @@ export default function FolderPage() {
                 ))}
               </div>
             ) : (
-              <Card className="rounded-xl">
+              <Card className="rounded-[var(--radius-sharp)]">
                 <CardContent className="flex flex-col items-center gap-3 py-14 text-center">
-                  <FolderOpen className="size-10 text-emerald-600" />
+                  <FolderOpen className="size-10 text-[var(--ink-600)]" />
                   <div>
-                    <h2 className="font-semibold">资料夹还是空的</h2>
+                    <h2 className="font-semibold font-[var(--font-display)]">资料夹还是空的</h2>
                     <p className="mt-1 text-sm text-muted-foreground">先添加一条笔记或资料链接，后续就能用于生成闪卡。</p>
                   </div>
                 </CardContent>

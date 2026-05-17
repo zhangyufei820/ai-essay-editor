@@ -121,14 +121,14 @@ export default function HistoryPage() {
 
   return (
     <div className="container mx-auto px-4 py-8 ml-14 sm:ml-0">
-      <h1 className="mb-8 text-3xl font-bold">历史记录</h1>
+      <h1 className="mb-8 text-3xl font-bold font-[var(--font-display)]">历史记录</h1>
 
       <div className="grid gap-8 lg:grid-cols-2">
         {/* 聊天会话历史 */}
         <div>
           <div className="mb-4 flex items-center gap-2">
             <MessageSquare className="h-5 w-5" />
-            <h2 className="text-xl font-semibold">聊天会话</h2>
+            <h2 className="text-xl font-semibold font-[var(--font-display)]">聊天会话</h2>
             <Badge variant="paper">{sessions.length}</Badge>
           </div>
 
@@ -170,7 +170,7 @@ export default function HistoryPage() {
         <div>
           <div className="mb-4 flex items-center gap-2">
             <FileText className="h-5 w-5" />
-            <h2 className="text-xl font-semibold">作文批改</h2>
+            <h2 className="text-xl font-semibold font-[var(--font-display)]">作文批改</h2>
             <Badge variant="paper">{reviews.length}</Badge>
           </div>
 

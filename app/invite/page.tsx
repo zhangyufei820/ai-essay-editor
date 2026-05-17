@@ -228,24 +228,24 @@ export default function InvitePage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 via-white to-emerald-50">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 via-[var(--paper-50)] to-emerald-50">
         <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 border-4 border-green-200 border-t-green-600 rounded-full animate-spin"></div>
-          <p className="text-slate-500">加载中...</p>
+          <div className="w-12 h-12 border-4 border-[var(--ink-200)] border-t-[var(--ink-600)] rounded-full animate-spin"></div>
+          <p className="text-[var(--ink-500)]">加载中...</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="relative min-h-screen overflow-hidden" style={{ background: "#F8FAF8" }}>
+    <div className="relative min-h-screen overflow-hidden font-[var(--font-sans-v2)] text-[var(--ink-900)]" >
       {/* 🌊 有机光流背景层 */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         {/* 底层渐变 */}
         <div
           className="absolute inset-0"
           style={{
-            background: `linear-gradient(180deg, ${BRAND_GREEN_DARK} 0%, ${BRAND_GREEN}20 40%, #F8FAF8 100%)`,
+            background: "linear-gradient(180deg, var(--ink-50) 0%, var(--paper-50) 100%)",
           }}
         />
 
@@ -331,7 +331,7 @@ export default function InvitePage() {
             variant="outline" 
             size="sm"
             onClick={() => router.back()}
-            className="text-slate-600"
+            className="text-[var(--ink-600)]"
           >
             <ChevronLeft className="w-4 h-4 mr-1" />
             返回
@@ -348,11 +348,11 @@ export default function InvitePage() {
         >
           <div className="inline-flex items-center gap-2 mb-4">
             <PartyPopper className="w-8 h-8 text-amber-500" />
-            <h1 className="text-3xl md:text-4xl font-bold text-slate-800">
+            <h1 className="text-3xl md:text-4xl font-bold text-[var(--ink-800)] font-[var(--font-display)]">
               邀请好友获取 <span style={{ color: BRAND_GREEN }}>50000</span> 免费积分
             </h1>
           </div>
-          <p className="text-slate-500 text-lg">
+          <p className="text-[var(--ink-500)] text-lg">
             分享学习的快乐，一起成长进步
           </p>
         </motion.div>
@@ -362,25 +362,25 @@ export default function InvitePage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="bg-white rounded-2xl shadow-lg border border-slate-100 p-6 md:p-8 mb-8"
+          className="bg-[var(--paper-50)] rounded-[var(--radius-sharp)] shadow-lg border border-[var(--paper-200)] p-6 md:p-8 mb-8"
         >
           <div className="flex items-center gap-3 mb-6">
             <div 
-              className="w-12 h-12 rounded-xl flex items-center justify-center"
+              className="w-12 h-12 rounded-[var(--radius-sharp)] flex items-center justify-center"
               style={{ backgroundColor: BRAND_GREEN_LIGHT }}
             >
               <ShenxiangInterfaceIcon name="invite" size={34} />
             </div>
             <div>
-              <h2 className="text-xl font-semibold text-slate-800">邀请好友，共享奖励</h2>
-              <p className="text-sm text-slate-500">分享给好友，双方各得 1000 积分</p>
+              <h2 className="text-xl font-semibold text-[var(--ink-800)] font-[var(--font-display)]">邀请好友，共享奖励</h2>
+              <p className="text-sm text-[var(--ink-500)]">分享给好友，双方各得 1000 积分</p>
             </div>
           </div>
 
           {/* 邀请链接输入框（会员可见） */}
           {isPaidMember && (
             <div className="flex gap-3 mb-6">
-              <div className="flex-1 bg-slate-50 rounded-xl px-4 py-3 text-slate-600 text-sm truncate border border-slate-200">
+              <div className="flex-1 bg-[var(--paper-50)] rounded-[var(--radius-sharp)] px-4 py-3 text-[var(--ink-600)] text-sm truncate border border-[var(--paper-200)]">
                 {inviteLink}
               </div>
               <Button
@@ -417,7 +417,7 @@ export default function InvitePage() {
 
           {/* 非会员提示 */}
           {!isPaidMember && (
-            <p className="text-center text-sm text-slate-400 mt-4">
+            <p className="text-center text-sm text-[var(--ink-400)] mt-4">
               成为会员后即可获得专属邀请链接
             </p>
           )}
@@ -426,23 +426,23 @@ export default function InvitePage() {
           {isPaidMember && (
             <>
               <div className="mt-8 grid grid-cols-2 gap-4">
-                <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-4 text-center">
+                <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-[var(--radius-sharp)] p-4 text-center">
                   <div className="text-3xl font-bold" style={{ color: BRAND_GREEN_DARK }}>{inviteCount}</div>
-                  <div className="text-sm text-slate-500 mt-1">已邀请好友</div>
+                  <div className="text-sm text-[var(--ink-500)] mt-1">已邀请好友</div>
                 </div>
-                <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl p-4 text-center">
+                <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-[var(--radius-sharp)] p-4 text-center">
                   <div className="text-3xl font-bold text-amber-600">{totalReward}</div>
-                  <div className="text-sm text-slate-500 mt-1">已获得积分</div>
+                  <div className="text-sm text-[var(--ink-500)] mt-1">已获得积分</div>
                 </div>
               </div>
 
               {/* 进度条 */}
               <div className="mt-6">
                 <div className="flex justify-between text-sm mb-2">
-                  <span className="text-slate-500">邀请奖励进度</span>
+                  <span className="text-[var(--ink-500)]">邀请奖励进度</span>
                   <span style={{ color: BRAND_GREEN }}>{totalReward} / 50000</span>
                 </div>
-                <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
+                <div className="h-3 bg-[var(--paper-100)] rounded-full overflow-hidden">
                   <motion.div 
                     initial={{ width: 0 }}
                     animate={{ width: `${progressPercent}%` }}
@@ -452,7 +452,7 @@ export default function InvitePage() {
                   />
                 </div>
                 {remainingReward > 0 && (
-                  <p className="text-xs text-slate-400 mt-2 text-center">
+                  <p className="text-xs text-[var(--ink-400)] mt-2 text-center">
                     还可获得 {remainingReward} 积分奖励
                   </p>
                 )}
@@ -466,17 +466,17 @@ export default function InvitePage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="bg-white rounded-2xl shadow-lg border border-slate-100 p-6 md:p-8"
+          className="bg-[var(--paper-50)] rounded-[var(--radius-sharp)] shadow-lg border border-[var(--paper-200)] p-6 md:p-8"
         >
           <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 rounded-lg bg-green-50 flex items-center justify-center">
-              <Heart className="w-5 h-5 text-green-500" />
+            <div className="w-10 h-10 rounded-[var(--radius-soft)] bg-[var(--ink-50)] flex items-center justify-center">
+              <Heart className="w-5 h-5 text-[var(--ink-500)]" />
             </div>
-            <h2 className="text-xl font-semibold text-slate-800">温馨提示</h2>
+            <h2 className="text-xl font-semibold text-[var(--ink-800)] font-[var(--font-display)]">温馨提示</h2>
           </div>
 
           <div className="space-y-4">
-            <div className="flex gap-4 p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl">
+            <div className="flex gap-4 p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-[var(--radius-sharp)]">
               <div 
                 className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white font-bold text-sm"
                 style={{ backgroundColor: BRAND_GREEN }}
@@ -484,15 +484,15 @@ export default function InvitePage() {
                 1
               </div>
               <div>
-                <h3 className="font-medium text-slate-800 mb-1">双向奖励，共同受益</h3>
-                <p className="text-sm text-slate-600">
+                <h3 className="font-medium text-[var(--ink-800)] mb-1">双向奖励，共同受益</h3>
+                <p className="text-sm text-[var(--ink-600)]">
                   每成功邀请一位好友注册，<strong>您和好友都将获得 1000 积分</strong>。
                   分享知识的同时，也收获满满的奖励！
                 </p>
               </div>
             </div>
 
-            <div className="flex gap-4 p-4 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-xl">
+            <div className="flex gap-4 p-4 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-[var(--radius-sharp)]">
               <div 
                 className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white font-bold text-sm"
                 style={{ backgroundColor: "#10B981" }}
@@ -500,15 +500,15 @@ export default function InvitePage() {
                 2
               </div>
               <div>
-                <h3 className="font-medium text-slate-800 mb-1">丰厚上限，持续邀请</h3>
-                <p className="text-sm text-slate-600">
+                <h3 className="font-medium text-[var(--ink-800)] mb-1">丰厚上限，持续邀请</h3>
+                <p className="text-sm text-[var(--ink-600)]">
                   邀请奖励上限为 <strong>50000 积分</strong>，相当于可以免费邀请 50 位好友！
                   积分可用于所有 AI 智能服务。
                 </p>
               </div>
             </div>
 
-            <div className="flex gap-4 p-4 bg-gradient-to-r from-teal-50 to-cyan-50 rounded-xl">
+            <div className="flex gap-4 p-4 bg-gradient-to-r from-teal-50 to-cyan-50 rounded-[var(--radius-sharp)]">
               <div 
                 className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white font-bold text-sm"
                 style={{ backgroundColor: "#14B8A6" }}
@@ -516,8 +516,8 @@ export default function InvitePage() {
                 3
               </div>
               <div>
-                <h3 className="font-medium text-slate-800 mb-1">会员专属福利</h3>
-                <p className="text-sm text-slate-600">
+                <h3 className="font-medium text-[var(--ink-800)] mb-1">会员专属福利</h3>
+                <p className="text-sm text-[var(--ink-600)]">
                   邀请功能为付费会员专属。成为会员后，即可开启邀请之旅，
                   与更多朋友一起体验 AI 智能学习的乐趣！
                 </p>
@@ -526,8 +526,8 @@ export default function InvitePage() {
           </div>
 
           {/* 底部装饰 */}
-          <div className="mt-8 pt-6 border-t border-slate-100 text-center">
-            <div className="flex items-center justify-center gap-2 text-slate-400 text-sm">
+          <div className="mt-8 pt-6 border-t border-[var(--paper-200)] text-center">
+            <div className="flex items-center justify-center gap-2 text-[var(--ink-400)] text-sm">
               <Sparkles className="w-4 h-4" />
               <span>知识因分享而更有价值</span>
               <Sparkles className="w-4 h-4" />
