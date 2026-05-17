@@ -411,11 +411,10 @@ export function ChatInput({
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
       className={cn(
-        "relative rounded-[var(--radius-card)] border bg-[var(--paper-50)] shadow-[var(--shadow-paper)] transition-all duration-300 touch-manipulation",
+        "relative mx-auto w-full max-w-3xl rounded-[var(--radius-card)] border border-[var(--paper-200)] bg-white shadow-[var(--shadow-paper)] touch-manipulation",
+        "transition-[border-color,box-shadow] duration-200",
         "focus-within:border-[var(--ink-500)] focus-within:[box-shadow:var(--shadow-focus-ink)]",
-        isFocused
-          ? "border-[var(--ink-500)]"
-          : "border-[var(--paper-200)]",
+        isFocused && "border-[var(--ink-500)]",
         className
       )}
       style={{ 
@@ -457,14 +456,14 @@ export function ChatInput({
             <button
               type="button"
               onClick={onModelClick}
-              className="flex items-center gap-2 px-2 py-1.5 rounded-[var(--radius-soft)] transition-colors hover:bg-[var(--paper-50)] min-h-[36px]"
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-[var(--radius-pill)] border border-[var(--paper-300)] bg-[var(--paper-50)] text-[13px] font-medium text-[var(--ink-700)] font-[var(--font-sans-v2)] hover:bg-[var(--ink-50)] hover:border-[var(--ink-300)] transition-colors duration-200"
               aria-label="选择 AI 模型"
             >
               <div className="h-2 w-2 rounded-full" style={{ backgroundColor: modelColor }} />
-              <span className="text-xs font-medium" style={{ color: "var(--ink-600)" }}>
+              <span>
                 {modelName || "选择模型"}
               </span>
-              <ChevronDown className="h-3 w-3 opacity-50" style={{ color: "var(--ink-400)" }} />
+              <ChevronDown className="h-3 w-3 text-[var(--ink-400)]" />
             </button>
           )}
 
@@ -473,12 +472,12 @@ export function ChatInput({
             type="button"
             variant="ghost"
             size="icon"
-            className="h-8 w-8 rounded-full sm:rounded-[var(--radius-soft)]"
+            className="h-8 w-8 rounded-full text-[var(--ink-600)] hover:bg-[var(--ink-50)] sm:rounded-[var(--radius-soft)]"
             onClick={() => fileInputRef.current?.click()}
             disabled={isLoading || disabled}
             aria-label="上传附件"
           >
-            <Paperclip className="h-4 w-4" style={{ color: "var(--ink-400)" }} />
+            <Paperclip className="h-4 w-4" />
           </Button>
         </div>
       )}
@@ -522,7 +521,7 @@ export function ChatInput({
         {/* 附件按钮（工具栏隐藏或移动端键盘态时显示） */}
         {!showModelSelector && (
           <div className="flex flex-col items-center gap-0.5 sm:gap-1 shrink-0">
-            <span className="text-[10px] font-medium hidden sm:block" style={{ color: "var(--ink-400)" }}>
+            <span className="hidden text-[11px] text-[var(--ink-400)] font-[var(--font-mono-v2)] sm:block">
               文件上传
             </span>
             <Button
@@ -530,21 +529,21 @@ export function ChatInput({
               variant="ghost"
               size="icon"
               className={cn(
-                "h-11 w-11 sm:h-10 sm:w-10 rounded-[var(--radius-sharp)] sm:rounded-[var(--radius-sharp)] touch-manipulation",
+                "h-11 w-11 sm:h-10 sm:w-10 rounded-[var(--radius-sharp)] sm:rounded-[var(--radius-sharp)] touch-manipulation text-[var(--ink-600)] hover:bg-[var(--ink-50)]",
                 isFocused && "max-sm:h-9 max-sm:w-9 max-sm:rounded-full"
               )}
               onClick={() => fileInputRef.current?.click()}
               disabled={isLoading || disabled}
               aria-label="上传附件"
             >
-              <Paperclip className="h-4 w-4 sm:h-5 sm:w-5" style={{ color: "var(--ink-400)" }} />
+              <Paperclip className="h-4 w-4 sm:h-5 sm:w-5" />
             </Button>
           </div>
         )}
 
         {/* 语音输入按钮 */}
         <div className={cn("flex flex-col items-center gap-0.5 sm:gap-1 shrink-0", isMobileInputMode && "max-sm:hidden")}>
-          <span className="text-[10px] font-medium hidden sm:block" style={{ color: "var(--ink-400)" }}>
+          <span className="hidden text-[11px] text-[var(--ink-400)] font-[var(--font-mono-v2)] sm:block">
             {isListening ? "录音中" : "语音输入"}
           </span>
           <motion.button
@@ -557,7 +556,7 @@ export function ChatInput({
               "h-10 w-10 sm:h-10 sm:w-10 rounded-full sm:rounded-[var(--radius-sharp)] flex items-center justify-center transition-all duration-200 touch-manipulation",
               isListening
                 ? "bg-[var(--seal-500)] text-white shadow-lg animate-pulse"
-                : "bg-[var(--paper-100)] hover:bg-[var(--paper-200)] text-[var(--ink-600)]"
+                : "text-[var(--ink-600)] hover:bg-[var(--ink-50)]"
             )}
             aria-label={isListening ? "停止录音" : "开始语音输入"}
           >
@@ -591,7 +590,7 @@ export function ChatInput({
 
         {/* 发送按钮 */}
         <div className="flex flex-col items-center gap-0.5 sm:gap-1 shrink-0">
-          <span className="text-[10px] font-medium hidden sm:block" style={{ color: "var(--ink-400)" }}>
+          <span className="hidden text-[11px] text-[var(--ink-400)] font-[var(--font-mono-v2)] sm:block">
             发送
           </span>
           <motion.button
@@ -602,16 +601,12 @@ export function ChatInput({
             onClick={handleSubmit}
             className={cn(
               "flex h-11 w-11 items-center justify-center rounded-full sm:h-10 sm:w-10 sm:rounded-[var(--radius-sharp)] touch-manipulation",
-              "text-white transition-all duration-200",
+              "bg-[var(--seal-500)] text-white transition-all duration-200 hover:bg-[var(--seal-600)]",
+              "active:translate-y-[1px] active:shadow-[inset_0_1px_2px_rgba(142,45,34,0.45)]",
+              "disabled:opacity-50 disabled:bg-[var(--paper-300)]",
               isMobileInputMode && "max-sm:h-10 max-sm:w-10",
-              !canSubmit && "opacity-40 cursor-not-allowed"
+              !canSubmit && "cursor-not-allowed"
             )}
-            style={{
-              backgroundColor: canSubmit ? "var(--seal-500)" : "var(--ink-300)",
-              boxShadow: canSubmit
-                ? "var(--shadow-seal)"
-                : "none"
-            }}
             aria-label="发送消息"
           >
             {isLoading ? (
