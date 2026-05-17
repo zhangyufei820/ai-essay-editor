@@ -1,13 +1,21 @@
 "use client"
 
+import {
+  AlertV2 as Alert,
+  AlertV2Description as AlertDescription,
+  AlertV2Title as AlertTitle,
+  BadgeV2 as Badge,
+  ButtonV2 as Button,
+  CardV2 as Card,
+  CardV2Content as CardContent,
+  CardV2Description as CardDescription,
+  CardV2Header as CardHeader,
+  CardV2Title as CardTitle
+} from "@/components/ui/v2"
 import { Suspense, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { AlertCircle, CheckCircle, Clock, Loader2, RefreshCw } from "lucide-react"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
 type OrderStatus = "loading" | "paid" | "pending" | "failed" | "not_found" | "unauthorized" | "error"
 
@@ -129,7 +137,7 @@ function PaymentSuccessContent() {
             </div>
             <div className="flex items-center justify-between gap-4">
               <span className="text-muted-foreground">支付状态</span>
-              <Badge variant={isSuccess ? "default" : isFailure ? "destructive" : "secondary"}>
+              <Badge variant={isSuccess ? "ink" : isFailure ? "seal" : "paper"}>
                 {isSuccess ? "已支付" : isPending ? "确认中" : "未完成"}
               </Badge>
             </div>
@@ -153,7 +161,7 @@ function PaymentSuccessContent() {
         )}
 
         {status === "unauthorized" && (
-          <Alert variant="destructive">
+          <Alert variant="error">
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>需要登录</AlertTitle>
             <AlertDescription>为了保护订单隐私，订单结果只允许本人查看。</AlertDescription>
@@ -161,7 +169,7 @@ function PaymentSuccessContent() {
         )}
 
         {isFailure && status !== "unauthorized" && (
-          <Alert variant="destructive">
+          <Alert variant="error">
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>如果已经扣款，不要重复支付</AlertTitle>
             <AlertDescription>请保存订单号，联系 support@shenxiang.school，我们会帮你核对。</AlertDescription>

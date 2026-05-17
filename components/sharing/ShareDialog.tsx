@@ -1,11 +1,18 @@
 "use client"
 
+import {
+  ButtonV2 as Button,
+  DialogV2 as Dialog,
+  DialogV2Content as DialogContent,
+  DialogV2Description as DialogDescription,
+  DialogV2Header as DialogHeader,
+  DialogV2Title as DialogTitle,
+  DialogV2Trigger as DialogTrigger,
+  InputV2 as Input,
+  TextareaV2 as Textarea
+} from "@/components/ui/v2"
 import { useState } from "react"
 import { Copy, Loader2, Share2 } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
 import { getVerifiedAuthHeaders } from "@/lib/client-auth"
 
 type ShareDialogProps = {

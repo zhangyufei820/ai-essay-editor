@@ -1,4 +1,4 @@
-import { Button } from "@/components/ui/button"
+import { ButtonV2 as Button } from "@/components/ui/v2"
 import { Award, BookOpen, Users } from "lucide-react"
 import Link from "next/link"
 

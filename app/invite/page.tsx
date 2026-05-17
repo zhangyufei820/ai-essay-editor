@@ -1,10 +1,10 @@
 "use client"
 
+import { ButtonV2 as Button } from "@/components/ui/v2"
 import Image from "next/image"
 import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { Button } from "@/components/ui/button"
 import { 
   Gift, Copy, Check, ChevronLeft, Heart, Sparkles, 
   PartyPopper, Share2

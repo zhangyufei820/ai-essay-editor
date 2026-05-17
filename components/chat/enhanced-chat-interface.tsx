@@ -1,4 +1,15 @@
 "use client"
+
+import {
+  ButtonV2 as Button,
+  DropdownMenuV2 as DropdownMenu,
+  DropdownMenuV2Content as DropdownMenuContent,
+  DropdownMenuV2Item as DropdownMenuItem,
+  DropdownMenuV2Label as DropdownMenuLabel,
+  DropdownMenuV2Trigger as DropdownMenuTrigger,
+  ScrollAreaV2 as ScrollArea,
+  TextareaV2 as Textarea
+} from "@/components/ui/v2"
 /* eslint-disable @next/next/no-img-element -- Dynamic/user-generated/external image surfaces: keep native img to preserve sizing, blob/data/proxy URLs, payment QR codes, and chat preview behavior. */
 
 import type React from "react"
@@ -7,9 +18,6 @@ import Link from "next/link"
 import { useSearchParams, useRouter } from "next/navigation"
 import DOMPurify from "isomorphic-dompurify"
 
-import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { useIsMobile } from "@/hooks/use-mobile"
 import {
   Send, Paperclip, X, FileText, Loader2, User, AlertCircle,
@@ -69,13 +77,6 @@ import {
   getModelDisplayName
 } from "@/lib/pricing"
 import type { WorkflowState, WorkflowNodeStatus } from "@/lib/workflow-visual-config"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuLabel
-} from "@/components/ui/dropdown-menu"
 
 // 🔥 品牌深绿色（参考主页标题）
 const BRAND_GREEN = "#14532d"

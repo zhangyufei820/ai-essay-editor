@@ -1,10 +1,14 @@
 "use client"
 
-import { Button } from "@/components/ui/button"
+import {
+  ButtonV2 as Button,
+  ScrollAreaV2 as ScrollArea,
+  TooltipV2 as Tooltip,
+  TooltipV2Content as TooltipContent,
+  TooltipV2Trigger as TooltipTrigger
+} from "@/components/ui/v2"
 import { Plus, MessageSquare, Trash2, MoreHorizontal } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { format } from "date-fns"
 
 // 模型 key 到显示名称的映射

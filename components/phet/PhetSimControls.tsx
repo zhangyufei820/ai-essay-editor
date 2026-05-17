@@ -1,8 +1,8 @@
 "use client"
 
+import { ButtonV2 as Button } from "@/components/ui/v2"
 import { ArrowLeft, Languages, Maximize2, RotateCcw } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { Button } from "@/components/ui/button"
 import type { PhetLocale } from "@/lib/phet/phet-utils"
 
 export function PhetSimControls({
@@ -27,7 +27,7 @@ export function PhetSimControls({
       <div className="flex items-center gap-2">
         <Button
           type="button"
-          variant={locale === "zh_CN" ? "default" : "outline"}
+          variant={locale === "zh_CN" ? "primary" : "outline"}
           size="sm"
           onClick={() => onLocaleChange("zh_CN")}
         >
@@ -36,7 +36,7 @@ export function PhetSimControls({
         </Button>
         <Button
           type="button"
-          variant={locale === "en" ? "default" : "outline"}
+          variant={locale === "en" ? "primary" : "outline"}
           size="sm"
           onClick={() => onLocaleChange("en")}
         >

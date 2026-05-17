@@ -1,3 +1,4 @@
+import { ButtonV2 as Button } from "@/components/ui/v2"
 /**
  * 🎵 Suno V5 工作流可视化 UI 组件
  * 
@@ -33,7 +34,6 @@ import {
   Hash
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
 
 // ============================================
 // 类型定义

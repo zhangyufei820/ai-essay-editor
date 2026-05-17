@@ -1,15 +1,26 @@
 "use client"
+
+import {
+  ButtonV2 as Button,
+  CardV2 as Card,
+  CardV2Content as CardContent,
+  CardV2Description as CardDescription,
+  CardV2Header as CardHeader,
+  CardV2Title as CardTitle,
+  InputV2 as Input,
+  LabelV2 as Label,
+  SelectV2 as Select,
+  SelectV2Content as SelectContent,
+  SelectV2Item as SelectItem,
+  SelectV2Trigger as SelectTrigger,
+  SelectV2Value as SelectValue,
+  TextareaV2 as Textarea
+} from "@/components/ui/v2"
 /* eslint-disable @next/next/no-img-element -- Dynamic/user-generated/external image surfaces: keep native img to preserve sizing, blob/data/proxy URLs, payment QR codes, and chat preview behavior. */
 
 import type React from "react"
 
 import { useState, useRef } from "react"
-import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Loader2, Upload, FileText, X } from "lucide-react"
 import { UltimateRenderer } from "@/components/chat/UltimateRenderer"
 import { motion } from "framer-motion"

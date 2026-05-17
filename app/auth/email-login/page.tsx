@@ -1,14 +1,21 @@
 "use client"
 
+import {
+  AlertV2 as Alert,
+  AlertV2Description as AlertDescription,
+  ButtonV2 as Button,
+  CardV2 as Card,
+  CardV2Content as CardContent,
+  CardV2Description as CardDescription,
+  CardV2Header as CardHeader,
+  CardV2Title as CardTitle,
+  InputV2 as Input,
+  LabelV2 as Label
+} from "@/components/ui/v2"
 import type React from "react"
 import { useState, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { safeInternalRedirectPath } from "@/lib/security/redirect"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Alert, AlertDescription } from "@/components/ui/alert"
 import Link from "next/link"
 import { Mail, ArrowLeft, Info, KeyRound } from "lucide-react"
 

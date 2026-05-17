@@ -1,8 +1,8 @@
 "use client"
 
+import { BadgeV2 as Badge } from "@/components/ui/v2"
 import Image from "next/image"
 import { Clock, GraduationCap, Star } from "lucide-react"
-import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 import { getDifficultyLabel, getSubjectLabel } from "@/lib/phet/phet-utils"
 import type { PhetSim } from "@/lib/phet/sims-catalog"
@@ -37,8 +37,8 @@ export function PhetSimCard({ sim, onClick, showBadge = false, badgeLabel }: Phe
       </div>
       <div className="flex flex-1 flex-col p-4">
         <div className="mb-3 flex flex-wrap items-center gap-2">
-          <Badge variant="secondary">{getSubjectLabel(sim.subject)}</Badge>
-          <Badge variant="outline">{getDifficultyLabel(sim.difficulty)}</Badge>
+          <Badge variant="paper">{getSubjectLabel(sim.subject)}</Badge>
+          <Badge variant="ghost">{getDifficultyLabel(sim.difficulty)}</Badge>
         </div>
         <h3 className="text-base font-semibold text-slate-950 dark:text-white">{sim.name_zh}</h3>
         <p className="mt-1 text-xs text-slate-500">{sim.name_en}</p>

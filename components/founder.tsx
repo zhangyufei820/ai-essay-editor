@@ -1,6 +1,5 @@
+import { BadgeV2 as Badge, CardV2 as Card } from "@/components/ui/v2"
 import Image from "next/image"
-import { Card } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 
 export function Founder() {
   return (

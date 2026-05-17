@@ -1,8 +1,11 @@
 "use client"
 
-import { Card, CardContent } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
+import {
+  BadgeV2 as Badge,
+  ButtonV2 as Button,
+  CardV2 as Card,
+  CardV2Content as CardContent
+} from "@/components/ui/v2"
 import { Check } from "lucide-react"
 import { useState } from "react"
 import { useRouter } from "next/navigation"

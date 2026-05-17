@@ -1,3 +1,4 @@
+import { ButtonV2 as Button, SwitchV2 as Switch } from "@/components/ui/v2"
 /**
  * 🎵 Suno V5 专业模式表单 - Apple Music 风格版
  * 
@@ -35,8 +36,6 @@ import {
   Hash
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
-import { Switch } from "@/components/ui/switch"
 
 // ============================================
 // 类型定义

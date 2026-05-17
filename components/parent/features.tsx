@@ -1,4 +1,4 @@
-import { Card, CardContent } from "@/components/ui/card"
+import { CardV2 as Card, CardV2Content as CardContent } from "@/components/ui/v2"
 import { BookOpen, MessageCircle, BarChart3, Award, Calendar, Bell } from "lucide-react"
 
 const features = [

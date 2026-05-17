@@ -1,9 +1,8 @@
+import { BadgeV2 as Badge, ButtonV2 as Button } from "@/components/ui/v2"
 import type { Metadata } from "next"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { ArrowRight, BookOpen, ClipboardList, Film, Target } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { PhetSimEmbed } from "@/components/phet/PhetSimEmbed"
 import { PhetCompleteButton } from "@/components/phet/PhetCompleteButton"
 import {
@@ -55,8 +54,8 @@ export default async function PhetSimPage({ params }: PageProps) {
             <section className="rounded-lg border border-emerald-900/10 bg-white p-5 shadow-sm dark:border-emerald-200/10 dark:bg-slate-900">
               <div className="mb-3 flex flex-wrap gap-2">
                 <Badge>{getSubjectLabel(sim.subject)}</Badge>
-                <Badge variant="outline">{getDifficultyLabel(sim.difficulty)}</Badge>
-                <Badge variant="secondary">{sim.grade_range[0]}-{sim.grade_range[1]} 年级</Badge>
+                <Badge variant="ghost">{getDifficultyLabel(sim.difficulty)}</Badge>
+                <Badge variant="paper">{sim.grade_range[0]}-{sim.grade_range[1]} 年级</Badge>
               </div>
               <h1 className="text-2xl font-semibold tracking-normal">{sim.name_zh}</h1>
               <p className="mt-1 text-sm text-slate-500">{sim.name_en}</p>

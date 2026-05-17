@@ -1,4 +1,4 @@
-import { Card } from "@/components/ui/card"
+import { CardV2 as Card } from "@/components/ui/v2"
 import { Atom, BookA, Calculator, Globe2, Palette, TestTube } from 'lucide-react'
 import Link from "next/link"
 

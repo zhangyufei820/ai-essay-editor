@@ -1,3 +1,10 @@
+import {
+  DropdownMenuV2 as DropdownMenu,
+  DropdownMenuV2Content as DropdownMenuContent,
+  DropdownMenuV2Item as DropdownMenuItem,
+  DropdownMenuV2Separator as DropdownMenuSeparator,
+  DropdownMenuV2Trigger as DropdownMenuTrigger
+} from "@/components/ui/v2"
 /**
  * 📱 沈翔学校 - 移动端聊天头部组件 (Mobile Chat Header)
  * 
@@ -11,13 +18,6 @@ import { motion } from "framer-motion"
 import { ChevronLeft, MoreVertical, Trash2, Share2, Settings } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { brandColors } from "@/lib/design-tokens"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator
-} from "@/components/ui/dropdown-menu"
 
 // ============================================
 // 类型定义

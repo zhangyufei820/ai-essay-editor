@@ -1,4 +1,4 @@
-import { Card } from "@/components/ui/card"
+import { CardV2 as Card } from "@/components/ui/v2"
 import { GraduationCap, TrendingUp, Award, Target } from "lucide-react"
 
 const developmentPaths = [

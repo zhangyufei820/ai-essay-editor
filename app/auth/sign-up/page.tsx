@@ -1,17 +1,24 @@
 "use client"
 
+import {
+  AlertV2 as Alert,
+  AlertV2Description as AlertDescription,
+  ButtonV2 as Button,
+  CardV2 as Card,
+  CardV2Content as CardContent,
+  CardV2Description as CardDescription,
+  CardV2Header as CardHeader,
+  CardV2Title as CardTitle,
+  InputV2 as Input,
+  LabelV2 as Label
+} from "@/components/ui/v2"
 import type React from "react"
 
 import { createClient } from "@/lib/supabase/client"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useState } from "react"
 import { CheckCircle2, Mail, Info } from "lucide-react"
-import { Alert, AlertDescription } from "@/components/ui/alert"
 
 export default function SignUpPage() {
   const searchParams = useSearchParams()

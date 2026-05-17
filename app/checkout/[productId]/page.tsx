@@ -1,16 +1,19 @@
 "use client"
 
+import {
+  AlertV2 as Alert,
+  AlertV2Description as AlertDescription,
+  BadgeV2 as Badge,
+  ButtonV2 as Button
+} from "@/components/ui/v2"
 import { notFound, useRouter, useSearchParams } from "next/navigation"
 import { PRODUCTS, requiresMembership, hasActiveMembership, getProductPriceInCents } from "@/lib/products"
 import { ArrowLeft, Loader2, LogIn, CheckCircle2, ExternalLink, AlertTriangle, Crown } from "lucide-react"
 import Link from "next/link"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { BETA_CONFIG } from "@/lib/beta-config"
 import { extractUserId } from "@/lib/auth-user"
 import { use, useEffect, useState, Suspense } from "react"
 import { createClient } from "@/lib/supabase/client"
-import { Alert, AlertDescription } from "@/components/ui/alert"
 
 async function getVerifiedAuthHeaders(): Promise<Record<string, string>> {
   if (typeof window !== "undefined") {
@@ -196,7 +199,7 @@ function CheckoutFlow({ productId }: { productId: string }) {
                 <p className="text-muted-foreground">{product.description}</p>
               </div>
               {needsMembership && (
-                <Badge variant="secondary" className="flex items-center gap-1">
+                <Badge variant="paper" className="flex items-center gap-1">
                   <Crown className="h-3 w-3" />
                   会员专享
                 </Badge>
@@ -226,7 +229,7 @@ function CheckoutFlow({ productId }: { productId: string }) {
                   500 / 1,000 积分包订阅用户可买；5,000 积分包专业版及以上可买；10,000 积分包豪华版及以上可买。
                 </p>
                 <Link href="/#pricing">
-                  <Button size="sm" variant="default" className="bg-amber-600 hover:bg-amber-700">
+                  <Button size="sm" variant="primary" className="bg-amber-600 hover:bg-amber-700">
                     <Crown className="h-4 w-4 mr-2" />
                     立即订阅会员
                   </Button>

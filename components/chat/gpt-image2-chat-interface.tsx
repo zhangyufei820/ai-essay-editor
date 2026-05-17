@@ -1,4 +1,6 @@
 "use client"
+
+import { ButtonV2 as Button, TextareaV2 as Textarea } from "@/components/ui/v2"
 /* eslint-disable @next/next/no-img-element -- Dynamic/user-generated/external image surfaces: keep native img to preserve sizing, blob/data/proxy URLs, payment QR codes, and chat preview behavior. */
 
 import type React from "react"
@@ -28,8 +30,6 @@ import { toast } from "sonner"
 
 import { ModelLogo } from "@/components/ModelLogo"
 import { GridWaveLoader } from "@/components/chat/GridWaveLoader"
-import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
 import { collapseSidebar, navigateHomeWithSidebar, refreshCredits, refreshSessionList } from "@/components/app-sidebar"
 import { extractUserId } from "@/lib/auth-user"
 import { buildChatSessionRouteFromSession } from "@/lib/chat-session-routes"

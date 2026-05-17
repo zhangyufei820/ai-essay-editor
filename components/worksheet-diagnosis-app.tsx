@@ -1,5 +1,21 @@
 "use client"
 
+import {
+  ButtonV2 as Button,
+  CardV2 as Card,
+  CardV2Content as CardContent,
+  CardV2Description as CardDescription,
+  CardV2Header as CardHeader,
+  CardV2Title as CardTitle,
+  InputV2 as Input,
+  LabelV2 as Label,
+  SelectV2 as Select,
+  SelectV2Content as SelectContent,
+  SelectV2Item as SelectItem,
+  SelectV2Trigger as SelectTrigger,
+  SelectV2Value as SelectValue,
+  TextareaV2 as Textarea
+} from "@/components/ui/v2"
 /* eslint-disable @next/next/no-img-element -- User uploaded worksheet previews need native object URLs. */
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
@@ -17,12 +33,6 @@ import {
   X,
 } from "lucide-react"
 import { toast } from "sonner"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Textarea } from "@/components/ui/textarea"
 import { extractUserId } from "@/lib/auth-user"
 import {
   WORKSHEET_REPORT_IMAGE_CREDITS,

@@ -1,10 +1,12 @@
 "use client"
 
+import {
+  BadgeV2 as Badge,
+  ButtonV2 as Button,
+  CardV2 as Card,
+  ScrollAreaV2 as ScrollArea
+} from "@/components/ui/v2"
 import { useEffect, useState } from "react"
-import { Card } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { Badge } from "@/components/ui/badge"
 import { LoadingStateCard } from "@/components/ui/LoadingStateCard"
 import { MessageSquare, FileText, Clock } from "lucide-react"
 import Link from "next/link"
@@ -127,7 +129,7 @@ export default function HistoryPage() {
           <div className="mb-4 flex items-center gap-2">
             <MessageSquare className="h-5 w-5" />
             <h2 className="text-xl font-semibold">聊天会话</h2>
-            <Badge variant="secondary">{sessions.length}</Badge>
+            <Badge variant="paper">{sessions.length}</Badge>
           </div>
 
           <ScrollArea className="h-[600px]">
@@ -148,7 +150,7 @@ export default function HistoryPage() {
                   <Card key={session.id} className="p-4">
                     <div className="mb-2 flex items-start justify-between">
                       <h3 className="font-medium">{session.title}</h3>
-                      <Badge variant="outline">{session.processing_mode}</Badge>
+                      <Badge variant="ghost">{session.processing_mode}</Badge>
                     </div>
                     <div className="mb-3 flex items-center gap-2 text-sm text-muted-foreground">
                       <Clock className="h-3 w-3" />
@@ -169,7 +171,7 @@ export default function HistoryPage() {
           <div className="mb-4 flex items-center gap-2">
             <FileText className="h-5 w-5" />
             <h2 className="text-xl font-semibold">作文批改</h2>
-            <Badge variant="secondary">{reviews.length}</Badge>
+            <Badge variant="paper">{reviews.length}</Badge>
           </div>
 
           <ScrollArea className="h-[600px]">
@@ -184,13 +186,13 @@ export default function HistoryPage() {
                     <div className="mb-2 flex items-start justify-between">
                       <p className="line-clamp-2 text-sm">{review.original_text}</p>
                       {review.score && (
-                        <Badge variant="default" className="ml-2">
+                        <Badge variant="ink" className="ml-2">
                           {review.score}分
                         </Badge>
                       )}
                     </div>
                     <div className="mb-3 flex items-center gap-2 text-sm text-muted-foreground">
-                      <Badge variant="outline">{review.writer_style}</Badge>
+                      <Badge variant="ghost">{review.writer_style}</Badge>
                       <Clock className="h-3 w-3" />
                       {new Date(review.created_at).toLocaleString("zh-CN")}
                     </div>

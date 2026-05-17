@@ -1,13 +1,18 @@
 "use client"
 
+import {
+  ButtonV2 as Button,
+  CardV2 as Card,
+  CardV2Content as CardContent,
+  CardV2Header as CardHeader,
+  CardV2Title as CardTitle,
+  InputV2 as Input,
+  LabelV2 as Label,
+  TextareaV2 as Textarea
+} from "@/components/ui/v2"
 import { useEffect, useMemo, useState, type FormEvent } from "react"
 import Link from "next/link"
 import { Bot, Copy, Loader2, Plus, RefreshCw, Share2, Trash2, Users } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import { getVerifiedAuthHeaders } from "@/lib/client-auth"
 
 const TEMPLATES = [

@@ -1,9 +1,15 @@
 "use client"
 
+import {
+  ButtonV2 as Button,
+  CardV2 as Card,
+  CardV2Content as CardContent,
+  CardV2Description as CardDescription,
+  CardV2Header as CardHeader,
+  CardV2Title as CardTitle
+} from "@/components/ui/v2"
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ShenxiangInterfaceIcon } from "@/components/icons/ShenxiangInterfaceIcons"
 import { getVerifiedAuthHeaders } from "@/lib/client-auth"
 import { createClient } from "@/lib/supabase/client"

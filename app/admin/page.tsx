@@ -1,13 +1,25 @@
 "use client"
 
+import {
+  BadgeV2 as Badge,
+  ButtonV2 as Button,
+  CardV2 as Card,
+  CardV2Content as CardContent,
+  CardV2Header as CardHeader,
+  CardV2Title as CardTitle,
+  InputV2 as Input,
+  SheetV2 as Sheet,
+  SheetV2Content as SheetContent,
+  SheetV2Description as SheetDescription,
+  SheetV2Header as SheetHeader,
+  SheetV2Title as SheetTitle,
+  TabsV2 as Tabs,
+  TabsV2Content as TabsContent,
+  TabsV2List as TabsList,
+  TabsV2Trigger as TabsTrigger
+} from "@/components/ui/v2"
 import { useState, useEffect, useCallback } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Input } from "@/components/ui/input"
 import { Users, CreditCard, BarChart3, Lock, Eye, EyeOff, RefreshCw, Search, DollarSign, TrendingUp, UserCheck, Activity, AlertCircle } from "lucide-react"
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet"
-import { Badge } from "@/components/ui/badge"
 
 interface StatsData {
   totalUsers: number
@@ -627,7 +639,7 @@ export default function AdminPage() {
                             <td className="py-3 px-4 font-mono text-sm">{user.user_id.slice(0, 8)}...</td>
                             <td className="py-3 px-4 font-semibold">{user.credits}</td>
                             <td className="py-3 px-4">
-                              <Badge variant={user.is_pro ? "default" : "secondary"}>
+                              <Badge variant={user.is_pro ? "ink" : "paper"}>
                                 {user.is_pro ? "会员" : "免费"}
                               </Badge>
                             </td>
@@ -691,7 +703,7 @@ export default function AdminPage() {
                           <td className="py-3 px-4">{order.credits_amount}</td>
                           <td className="py-3 px-4">{order.payment_method || '暂无数据'}</td>
                           <td className="py-3 px-4">
-                            <Badge variant={order.status === 'paid' ? 'default' : 'secondary'}>
+                            <Badge variant={order.status === 'paid' ? 'ink' : 'paper'}>
                               {getOrderStatusLabel(order.status)}
                             </Badge>
                           </td>
@@ -838,7 +850,7 @@ export default function AdminPage() {
                   <CardContent className="pt-6">
                     <div className="text-center">
                       <p className="text-sm text-gray-600">会员状态</p>
-                      <Badge variant={userDetails.user.is_pro ? "default" : "secondary"} className="mt-2">
+                      <Badge variant={userDetails.user.is_pro ? "ink" : "paper"} className="mt-2">
                         {userDetails.user.is_pro ? "会员" : "免费"}
                       </Badge>
                     </div>
@@ -881,7 +893,7 @@ export default function AdminPage() {
                       {userDetails.transactions.slice(0, 10).map((transaction) => (
                         <tr key={transaction.id} className="border-t">
                           <td className="py-2 px-4">
-                            <Badge variant="outline">{transaction.type}</Badge>
+                            <Badge variant="ghost">{transaction.type}</Badge>
                           </td>
                           <td className="py-2 px-4 font-semibold">
                             <span className={transaction.amount > 0 ? 'text-green-600' : 'text-red-600'}>
@@ -921,7 +933,7 @@ export default function AdminPage() {
                           <td className="py-2 px-4">{order.product_name}</td>
                           <td className="py-2 px-4 font-semibold">{formatAmount(order.amount)}</td>
                           <td className="py-2 px-4">
-                            <Badge variant={order.status === 'paid' ? 'default' : 'secondary'}>
+                            <Badge variant={order.status === 'paid' ? 'ink' : 'paper'}>
                               {getOrderStatusLabel(order.status)}
                             </Badge>
                           </td>

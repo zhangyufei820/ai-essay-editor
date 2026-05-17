@@ -1,11 +1,12 @@
 "use client"
+
+import { ButtonV2 as Button } from "@/components/ui/v2"
 /* eslint-disable @next/next/no-img-element -- Dynamic/user-generated/external image surfaces: keep native img to preserve sizing, blob/data/proxy URLs, payment QR codes, and chat preview behavior. */
 
 import Link from "next/link"
 import { usePathname, useSearchParams, useRouter } from "next/navigation"
 import { useState, useEffect, useRef, Suspense, useCallback } from "react"
 import { motion } from "framer-motion"
-import { Button } from "@/components/ui/button"
 import {
   Settings, ChevronRight, ChevronDown,
   Menu, X, LogOut, Zap, Coins,

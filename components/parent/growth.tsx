@@ -1,4 +1,9 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  CardV2 as Card,
+  CardV2Content as CardContent,
+  CardV2Header as CardHeader,
+  CardV2Title as CardTitle
+} from "@/components/ui/v2"
 import { TrendingUp, LineChart, Award, Star, BookOpen, Target } from "lucide-react"
 
 export function ParentGrowth() {

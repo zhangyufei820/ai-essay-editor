@@ -1,9 +1,9 @@
 "use client"
 
+import { ButtonV2 as Button } from "@/components/ui/v2"
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { Copy, Loader2, Trash2 } from "lucide-react"
-import { Button } from "@/components/ui/button"
 import { ContentCard, type ContentCardShare } from "@/components/sharing/ContentCard"
 import { getVerifiedAuthHeaders } from "@/lib/client-auth"
 

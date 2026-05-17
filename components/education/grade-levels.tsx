@@ -1,4 +1,4 @@
-import { Card } from "@/components/ui/card"
+import { CardV2 as Card } from "@/components/ui/v2"
 import { Baby, BookOpen, GraduationCap, School } from 'lucide-react'
 import Link from "next/link"
 

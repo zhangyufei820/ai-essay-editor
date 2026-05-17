@@ -1,6 +1,12 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 
+import {
+  BadgeV2 as Badge,
+  CardV2 as Card,
+  CardV2Content as CardContent,
+  CardV2Description as CardDescription,
+  CardV2Header as CardHeader,
+  CardV2Title as CardTitle
+} from "@/components/ui/v2"
 const mainlandWriters = [
   { name: "汪曾祺", style: "淡雅从容，生活化细节，诗意盎然的散文笔调" },
   { name: "王小波", style: "幽默机智，理性思辨，独特的黑色幽默风格" },
@@ -72,7 +78,7 @@ export function WriterStyles() {
             <CardHeader>
               <div className="flex items-center gap-3 mb-2">
                 <Badge className="bg-primary text-primary-foreground">新增</Badge>
-                <Badge variant="outline">学者型论述文</Badge>
+                <Badge variant="ghost">学者型论述文</Badge>
               </div>
               <CardTitle className="text-2xl">{scholarlyStyle.name}式写作风格</CardTitle>
               <CardDescription className="text-base">{scholarlyStyle.description}</CardDescription>
@@ -169,7 +175,7 @@ export function WriterStyles() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Badge variant="secondary">大陆</Badge>
+                <Badge variant="paper">大陆</Badge>
                 著名作家风格
               </CardTitle>
               <CardDescription>语言表达风格独特，作品有思想深度</CardDescription>
@@ -187,7 +193,7 @@ export function WriterStyles() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Badge variant="secondary">台湾</Badge>
+                <Badge variant="paper">台湾</Badge>
                 著名作家风格
               </CardTitle>
               <CardDescription>全网搜索参考，融入经典作品表达方式</CardDescription>

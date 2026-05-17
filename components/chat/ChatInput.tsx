@@ -1,3 +1,4 @@
+import { ButtonV2 as Button, TextareaV2 as Textarea } from "@/components/ui/v2"
 /* eslint-disable @next/next/no-img-element -- Dynamic/user-generated/external image surfaces: keep native img to preserve sizing, blob/data/proxy URLs, payment QR codes, and chat preview behavior. */
 /**
  * 📝 沈翔学校 - 聊天输入组件 (ChatInput)
@@ -20,8 +21,6 @@ import {
 } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Send, Paperclip, X, Loader2, ChevronDown, FileText, Image as ImageIcon, Mic, MicOff } from "lucide-react"
-import { Textarea } from "@/components/ui/textarea"
-import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { brandColors, slateColors } from "@/lib/design-tokens"
 import { ModelSelector, type Model } from "./ModelSelector"

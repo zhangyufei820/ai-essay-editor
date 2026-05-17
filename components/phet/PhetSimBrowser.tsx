@@ -1,10 +1,9 @@
 "use client"
 
+import { ButtonV2 as Button, InputV2 as Input } from "@/components/ui/v2"
 import { useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Search } from "lucide-react"
-import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
 import {
   filterPhetSims,
   getRecommendedPhetSims,

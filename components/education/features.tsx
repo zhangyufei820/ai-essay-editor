@@ -1,4 +1,4 @@
-import { Card } from "@/components/ui/card"
+import { CardV2 as Card } from "@/components/ui/v2"
 import { Bot, FileText, LineChart, Sparkles, Target, Zap } from 'lucide-react'
 
 const features = [

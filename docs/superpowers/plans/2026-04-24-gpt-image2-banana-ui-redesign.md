@@ -306,8 +306,7 @@ export interface ImageGenerationEntryProps {
 `components/chat/image-generation/image-generation-entry.tsx`
 ```tsx
 import { Loader2, Paperclip } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
+import { ButtonV2 as Button, TextareaV2 as Textarea } from '@/components/ui/v2'
 import { cn } from '@/lib/utils'
 import type { ImageGenerationEntryProps } from './image-generation-entry'
 
@@ -617,8 +616,7 @@ git commit -m "feat: add GPT Image 2 fullscreen chat route"
 import type React from 'react'
 import { Loader2, Paperclip, Send, X, FileText } from 'lucide-react'
 import { motion } from 'framer-motion'
-import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
+import { ButtonV2 as Button, TextareaV2 as Textarea } from '@/components/ui/v2'
 import { cn } from '@/lib/utils'
 import type { ImageModeOption, ImageSizeOption } from './types'
 

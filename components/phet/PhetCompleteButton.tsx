@@ -1,9 +1,9 @@
 "use client"
 
+import { ButtonV2 as Button } from "@/components/ui/v2"
 import { useEffect, useMemo, useState } from "react"
 import { CheckCircle2, Loader2 } from "lucide-react"
 import { toast } from "sonner"
-import { Button } from "@/components/ui/button"
 import { getVerifiedAuthHeaders } from "@/lib/client-auth"
 
 export function PhetCompleteButton({ simId }: { simId: string }) {

@@ -1,5 +1,11 @@
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
+import {
+  ButtonV2 as Button,
+  CardV2 as Card,
+  CardV2Content as CardContent,
+  CardV2Description as CardDescription,
+  CardV2Header as CardHeader,
+  CardV2Title as CardTitle
+} from "@/components/ui/v2"
 import Link from "next/link"
 import { AlertCircle, Settings, ExternalLink } from "lucide-react"
 

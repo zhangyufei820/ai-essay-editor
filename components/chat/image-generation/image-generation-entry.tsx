@@ -1,8 +1,7 @@
 'use client'
 
+import { ButtonV2 as Button, TextareaV2 as Textarea } from "@/components/ui/v2"
 import { Loader2, Paperclip } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import type { ImageModeOption, ImageSizeOption } from './types'
 

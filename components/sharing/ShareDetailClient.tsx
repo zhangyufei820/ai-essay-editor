@@ -1,9 +1,9 @@
 "use client"
 
+import { ButtonV2 as Button } from "@/components/ui/v2"
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
 import { ArrowLeft, Copy, Heart, Loader2, MessageCircle, Share2 } from "lucide-react"
-import { Button } from "@/components/ui/button"
 import { ShareContentRenderer } from "@/components/sharing/ShareContentRenderer"
 import { getVerifiedAuthHeaders } from "@/lib/client-auth"
 
@@ -154,7 +154,7 @@ export function ShareDetailClient({ initialShare }: { initialShare: ShareDetail 
         <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7">
           <ShareContentRenderer share={share} />
           <div className="mt-6 border-t border-slate-100 pt-5">
-            <Button onClick={handleLike} variant={share.is_liked ? "default" : "outline"}>
+            <Button onClick={handleLike} variant={share.is_liked ? "primary" : "outline"}>
               <Heart className={`mr-2 size-4 ${share.is_liked ? "fill-current" : ""}`} />
               {share.is_liked ? "已点赞" : "点赞"} · {share.like_count}
             </Button>

@@ -1,11 +1,16 @@
 "use client"
 
+import {
+  ButtonV2 as Button,
+  CardV2 as Card,
+  CardV2Content as CardContent,
+  CardV2Header as CardHeader,
+  CardV2Title as CardTitle,
+  ProgressV2 as Progress
+} from "@/components/ui/v2"
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { BarChart3, BookOpenCheck, Gem, Target, TrendingUp, Flame } from "lucide-react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Progress } from "@/components/ui/progress"
-import { Button } from "@/components/ui/button"
 import { getVerifiedAuthHeaders } from "@/lib/client-auth"
 
 const SUBJECT_NAMES: Record<string, string> = {

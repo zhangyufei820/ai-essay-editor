@@ -1,10 +1,9 @@
 "use client"
+
+import { ButtonV2 as Button, InputV2 as Input, LabelV2 as Label } from "@/components/ui/v2"
 /* eslint-disable @next/next/no-img-element -- Dynamic/user-generated/external image surfaces: keep native img to preserve sizing, blob/data/proxy URLs, payment QR codes, and chat preview behavior. */
 
 import { useState, useEffect, useRef } from "react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { createClient } from "@supabase/supabase-js"
 import { toast } from "sonner"
 import { 

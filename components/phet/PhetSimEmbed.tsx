@@ -1,8 +1,8 @@
 "use client"
 
+import { ButtonV2 as Button } from "@/components/ui/v2"
 import { useMemo, useRef, useState } from "react"
 import { AlertCircle } from "lucide-react"
-import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { buildPhetSimUrl, type PhetLocale } from "@/lib/phet/phet-utils"
 import { PhetSimControls } from "@/components/phet/PhetSimControls"

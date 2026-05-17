@@ -1,12 +1,12 @@
 'use client'
 
+import { ButtonV2 as Button } from "@/components/ui/v2"
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createBrowserClient } from '@/lib/supabase/client'
 import DOMPurify from 'isomorphic-dompurify'
 import { GraduationCap, Copy, Download, ArrowLeft, Eye, Calendar, Loader2, User, Sparkles, Gift } from 'lucide-react'
-import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 

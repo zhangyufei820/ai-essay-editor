@@ -1,6 +1,6 @@
 "use client"
 
-import { Button } from "@/components/ui/button"
+import { ButtonV2 as Button } from "@/components/ui/v2"
 import { useState } from "react"
 
 export function CopyButton({ text, label = "复制" }: { text: string; label?: string }) {
