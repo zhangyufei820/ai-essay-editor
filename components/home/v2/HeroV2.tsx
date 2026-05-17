@@ -22,7 +22,6 @@ import { ButtonV2 } from "@/components/ui/v2/button"
 import { ScoreSeal } from "@/components/ui/v2/seal"
 import { InkReveal } from "@/components/motion/InkMotion"
 import { cn } from "@/lib/utils"
-import { HomeInkFlowBackground } from "./HomeInkFlowBackground"
 
 const HERO_METRICS = [
   { label: "上传材料", value: "作文 / 试卷 / 错题" },
@@ -48,10 +47,8 @@ export function HeroV2() {
           backgroundImage:
             "radial-gradient(circle at 80% 0%, rgba(63, 90, 66, 0.04) 0%, transparent 60%)," +
             "radial-gradient(circle at 0% 100%, rgba(178, 58, 44, 0.03) 0%, transparent 50%)",
-          }}
+        }}
       />
-
-      <HomeInkFlowBackground className="-z-10 opacity-80 [mask-image:linear-gradient(90deg,transparent,black_18%,black_88%,transparent)]" />
 
       <div className="mx-auto box-border grid w-full max-w-7xl items-center gap-10 px-4 py-10 md:px-6 md:py-16 lg:grid-cols-[minmax(0,1fr)_minmax(360px,520px)] lg:gap-16 lg:py-24">
         {/* 左侧：文字 + CTA */}
