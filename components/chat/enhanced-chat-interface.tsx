@@ -46,7 +46,6 @@ import { SunoProForm, type SunoFormData } from "./SunoProForm"
 import type { ChatSession } from "./chat-sidebar"
 import { motion, AnimatePresence } from "framer-motion"
 import { EnhancedMarkdown } from "./EnhancedMarkdown"
-import { EssayReviewTemplate } from "@/components/chat/v2/templates"
 import { AssistantEyeAvatar } from "./AssistantEyeAvatar"
 import { OpenClawHtmlPreview } from "./OpenClawHtmlPreview"
 import { UserMessageBubble } from "./UserMessageBubble"
@@ -228,6 +227,7 @@ type Message = {
   id: string
   role: "user" | "assistant"
   content: string
+  timestamp?: string | Date
   files?: UploadedFile[]  // 🔥 新增：用户消息携带的文件
   metadata?: {
     type?: "music" | "word_card"
@@ -3595,16 +3595,14 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                                   }
 
                                   const cleanContent = cleanLLMText(message.content)
-                                  const essayReviewArtifact = selectedModel === "standard"
-                                    ? parseEssayReview(cleanContent)
-                                    : null
-                                  if (essayReviewArtifact) {
-                                    return <EssayReviewTemplate artifact={essayReviewArtifact} />
-                                  }
-
                                   return (
-                                    <EnhancedMarkdown
+                                    <MessageBubble
+                                      role="assistant"
                                       content={cleanContent}
+                                      isStreaming={message.id === currentBotIdRef.current && showCursor && isLoading}
+                                      model={selectedModel}
+                                      onCopy={() => navigator.clipboard.writeText(cleanContent)}
+                                      timestamp={message.timestamp ? new Date(message.timestamp) : undefined}
                                     />
                                   )
                                 })()}
