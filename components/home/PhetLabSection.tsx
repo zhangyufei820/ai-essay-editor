@@ -64,24 +64,24 @@ export function PhetLabSection() {
           className="grid gap-4"
         >
           <div className="grid gap-4 sm:grid-cols-3">
-            <div className="rounded-[var(--radius-soft)] border border-emerald-900/10 bg-[var(--ink-50)] p-4">
+            <div className="rounded-[var(--radius-soft)] border border-[var(--ink-900)]/10 bg-[var(--ink-50)] p-4">
               <Atom className="mb-3 h-6 w-6 text-[var(--ink-700)]" />
               <div className="text-2xl font-bold text-[var(--ink-900)]">30</div>
               <p className="mt-1 text-sm text-[var(--ink-600)]">数学/物理实验</p>
             </div>
-            <div className="rounded-[var(--radius-soft)] border border-emerald-900/10 bg-[var(--paper-50)] p-4">
+            <div className="rounded-[var(--radius-soft)] border border-[var(--ink-900)]/10 bg-[var(--paper-50)] p-4">
               <Calculator className="mb-3 h-6 w-6 text-[var(--ink-700)]" />
               <div className="text-2xl font-bold text-[var(--ink-900)]">K-12</div>
               <p className="mt-1 text-sm text-[var(--ink-600)]">按年级筛选</p>
             </div>
-            <div className="rounded-[var(--radius-soft)] border border-emerald-900/10 bg-[var(--paper-50)] p-4">
+            <div className="rounded-[var(--radius-soft)] border border-[var(--ink-900)]/10 bg-[var(--paper-50)] p-4">
               <BadgeCheck className="mb-3 h-6 w-6 text-[var(--ink-700)]" />
               <div className="text-2xl font-bold text-[var(--ink-900)]">15</div>
               <p className="mt-1 text-sm text-[var(--ink-600)]">完成奖励积分</p>
             </div>
           </div>
 
-          <div className="rounded-[var(--radius-soft)] border border-emerald-900/10 bg-[var(--paper-50)] p-5 shadow-sm">
+          <div className="rounded-[var(--radius-soft)] border border-[var(--ink-900)]/10 bg-[var(--paper-50)] p-5 shadow-sm">
             <div className="mb-4 flex items-center justify-between gap-3">
               <h3 className="text-base font-semibold text-[var(--ink-900)]">热门实验</h3>
               <Link href="/lab" className="text-sm font-medium text-[var(--ink-700)] hover:text-[var(--ink-700)]/80">

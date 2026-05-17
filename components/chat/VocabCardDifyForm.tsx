@@ -84,7 +84,7 @@ function OptionGroup({ icon, title, variable, value, options, onChange, tone }: 
                 "rounded-[var(--radius-sharp)] border px-3 py-2 text-left transition-all",
                 "min-w-[88px] flex-1 sm:min-w-[96px] sm:flex-none",
                 selected
-                  ? "border-emerald-500 bg-[var(--ink-50)] text-[var(--ink-900)] shadow-sm ring-2 ring-emerald-100"
+                  ? "border-[var(--ink-500)] bg-[var(--ink-50)] text-[var(--ink-900)] shadow-sm ring-2 ring-[var(--ink-100)]"
                   : "border-[var(--paper-200)] bg-[var(--paper-50)] text-[var(--ink-600)] hover:border-[var(--ink-200)] hover:bg-[var(--paper-50)]"
               )}
               aria-pressed={selected}
@@ -118,7 +118,7 @@ export function VocabCardDifyForm({
   }
 
   return (
-    <div className="mb-3 rounded-3xl border border-[var(--ink-100)] bg-gradient-to-br from-white via-emerald-50/70 to-sky-50/70 p-3 shadow-lg shadow-emerald-100/50 sm:mb-4 sm:p-4">
+    <div className="mb-3 rounded-3xl border border-[var(--ink-100)] bg-[var(--paper-50)] p-3 shadow-lg shadow-[var(--ink-100)]/50 sm:mb-4 sm:p-4">
       <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h2 className="text-base font-bold text-[var(--ink-900)]">单词卡片设置</h2>
@@ -157,7 +157,7 @@ export function VocabCardDifyForm({
             onChange={(event) => updateValue("word", event.target.value)}
             placeholder="英文单词，例如 apple"
             disabled={disabled}
-            className="mt-2 h-11 w-full rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-[var(--paper-50)] px-3 text-sm text-[var(--ink-900)] outline-none transition placeholder:text-[var(--ink-400)] focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 disabled:cursor-not-allowed disabled:bg-[var(--paper-50)] disabled:text-[var(--ink-400)]"
+            className="mt-2 h-11 w-full rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-[var(--paper-50)] px-3 text-sm text-[var(--ink-900)] outline-none transition placeholder:text-[var(--ink-400)] focus:border-[var(--ink-400)] focus:ring-2 focus:ring-[var(--ink-100)] disabled:cursor-not-allowed disabled:bg-[var(--paper-50)] disabled:text-[var(--ink-400)]"
           />
         </section>
         <OptionGroup

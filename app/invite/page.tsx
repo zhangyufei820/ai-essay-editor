@@ -228,7 +228,7 @@ export default function InvitePage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 via-[var(--paper-50)] to-emerald-50">
+      <div className="min-h-screen flex items-center justify-center bg-[var(--paper-50)]">
         <div className="flex flex-col items-center gap-4">
           <div className="w-12 h-12 border-4 border-[var(--ink-200)] border-t-[var(--ink-600)] rounded-full animate-spin"></div>
           <p className="text-[var(--ink-500)]">加载中...</p>
@@ -426,7 +426,7 @@ export default function InvitePage() {
           {isPaidMember && (
             <>
               <div className="mt-8 grid grid-cols-2 gap-4">
-                <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-[var(--radius-sharp)] p-4 text-center">
+                <div className="bg-[var(--ink-50)] rounded-[var(--radius-sharp)] p-4 text-center">
                   <div className="text-3xl font-bold" style={{ color: BRAND_GREEN_DARK }}>{inviteCount}</div>
                   <div className="text-sm text-[var(--ink-500)] mt-1">已邀请好友</div>
                 </div>
@@ -476,7 +476,7 @@ export default function InvitePage() {
           </div>
 
           <div className="space-y-4">
-            <div className="flex gap-4 p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-[var(--radius-sharp)]">
+            <div className="flex gap-4 p-4 bg-[var(--ink-50)] rounded-[var(--radius-sharp)]">
               <div 
                 className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white font-bold text-sm"
                 style={{ backgroundColor: BRAND_GREEN }}
@@ -492,7 +492,7 @@ export default function InvitePage() {
               </div>
             </div>
 
-            <div className="flex gap-4 p-4 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-[var(--radius-sharp)]">
+            <div className="flex gap-4 p-4 bg-[var(--ink-50)] rounded-[var(--radius-sharp)]">
               <div 
                 className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white font-bold text-sm"
                 style={{ backgroundColor: "var(--ink-600)" }}

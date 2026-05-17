@@ -126,7 +126,7 @@ function CopyButton({ text }: { text: string }) {
       className={cn(
         "absolute top-2 right-2 p-2 rounded-[var(--radius-soft)] transition-all duration-200",
         "hover:bg-[var(--paper-50)]/20 backdrop-blur-sm",
-        copied ? "bg-[var(--seal-500)]/20 text-green-400" : "bg-[var(--paper-50)]/10 text-[var(--ink-400)] hover:text-white"
+        copied ? "bg-[var(--seal-500)]/20 text-[var(--ink-400)]" : "bg-[var(--paper-50)]/10 text-[var(--ink-400)] hover:text-white"
       )}
       title={copied ? "已复制!" : "复制代码"}
     >
@@ -186,7 +186,7 @@ export const EnhancedMarkdown = memo(function EnhancedMarkdown({ content, classN
 	            </h1>
 	          ),
 	          h2: ({ children }) => (
-	            <h2 className="mb-2.5 mt-5 border-l-4 border-emerald-700 pl-3 text-lg font-semibold sm:mb-3 sm:mt-7 sm:text-xl" style={{ color: TEXT_COLOR, lineHeight: 1.4 }}>
+	            <h2 className="mb-2.5 mt-5 border-l-4 border-[var(--ink-700)] pl-3 text-lg font-semibold sm:mb-3 sm:mt-7 sm:text-xl" style={{ color: TEXT_COLOR, lineHeight: 1.4 }}>
 	              {children}
 	            </h2>
 	          ),

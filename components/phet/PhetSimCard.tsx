@@ -19,9 +19,9 @@ export function PhetSimCard({ sim, onClick, showBadge = false, badgeLabel }: Phe
     <button
       type="button"
       onClick={() => onClick(sim)}
-      className="group flex h-full min-h-[360px] flex-col overflow-hidden rounded-[var(--radius-soft)] border border-emerald-900/10 bg-[var(--paper-50)] text-left shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-500/40 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-[var(--ink-200)]/10 dark:bg-slate-950"
+      className="group flex h-full min-h-[360px] flex-col overflow-hidden rounded-[var(--radius-soft)] border border-[var(--ink-900)]/10 bg-[var(--paper-50)] text-left shadow-sm transition hover:-translate-y-0.5 hover:border-[var(--ink-500)]/40 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ink-500)] dark:border-[var(--ink-200)]/10 dark:bg-slate-950"
     >
-      <div className="relative aspect-[4/3] overflow-hidden bg-[var(--ink-50)] dark:bg-emerald-950/30">
+      <div className="relative aspect-[4/3] overflow-hidden bg-[var(--ink-50)] dark:bg-[var(--ink-900)]/30">
         <Image
           src={sim.thumbnail}
           alt={`${sim.name_zh} 缩略图`}
@@ -45,7 +45,7 @@ export function PhetSimCard({ sim, onClick, showBadge = false, badgeLabel }: Phe
         <p className="mt-3 line-clamp-3 text-sm leading-6 text-[var(--ink-600)] dark:text-slate-300">{sim.description_zh}</p>
         <div className="mt-3 flex flex-wrap gap-1.5">
           {sim.topics.slice(0, 4).map((topic) => (
-            <span key={topic} className="rounded-md bg-[var(--ink-50)] px-2 py-1 text-xs text-[var(--ink-800)] dark:bg-emerald-950 dark:text-emerald-200">
+            <span key={topic} className="rounded-md bg-[var(--ink-50)] px-2 py-1 text-xs text-[var(--ink-800)] dark:bg-[var(--ink-900)] dark:text-[var(--ink-200)]">
               {topic}
             </span>
           ))}

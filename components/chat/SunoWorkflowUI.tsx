@@ -117,7 +117,7 @@ const StepIndicator = ({ stage }: { stage: WorkflowStage }) => {
               transition={{ delay: index * 0.1 }}
               className={cn(
                 "flex items-center gap-2 px-3 py-2 rounded-full text-xs font-medium transition-all",
-                isActive && "bg-[var(--seal-500)] text-white shadow-lg shadow-emerald-500/30",
+                isActive && "bg-[var(--seal-500)] text-white shadow-lg shadow-[var(--ink-500)]/30",
                 isCompleted && "bg-[var(--ink-100)] text-[var(--ink-700)]",
                 !isActive && !isCompleted && "bg-[var(--paper-100)] text-[var(--ink-400)]"
               )}
@@ -128,7 +128,7 @@ const StepIndicator = ({ stage }: { stage: WorkflowStage }) => {
             {index < steps.length - 1 && (
               <ChevronRight className={cn(
                 "h-4 w-4 transition-colors",
-                isCompleted ? "text-emerald-400" : "text-slate-300"
+                isCompleted ? "text-[var(--ink-400)]" : "text-slate-300"
               )} />
             )}
           </React.Fragment>
@@ -162,7 +162,7 @@ const ComposingAnimation = () => (
         transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
       />
       {/* 中心图标 */}
-      <div className="absolute inset-4 flex items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-teal-500 shadow-lg">
+      <div className="absolute inset-4 flex items-center justify-center rounded-full bg-[var(--ink-600)] shadow-lg">
         <motion.div
           animate={{ scale: [1, 1.1, 1] }}
           transition={{ duration: 1.5, repeat: Infinity }}
@@ -206,9 +206,9 @@ const LyricsPreviewCard = ({
     className="bg-gradient-to-br from-slate-50 to-white rounded-[var(--radius-sharp)] border border-[var(--paper-200)] overflow-hidden"
   >
     {/* 标题栏 */}
-    <div className="px-5 py-4 border-b border-[var(--paper-100)] bg-gradient-to-r from-emerald-50 to-teal-50">
+    <div className="px-5 py-4 border-b border-[var(--paper-100)] bg-[var(--ink-50)]">
       <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-[var(--radius-sharp)] bg-gradient-to-br from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/30">
+        <div className="flex h-10 w-10 items-center justify-center rounded-[var(--radius-sharp)] bg-[var(--ink-600)] text-white shadow-lg shadow-[var(--ink-500)]/30">
           <FileText className="h-5 w-5" />
         </div>
         <div>
@@ -269,7 +269,7 @@ const LyricsPreviewCard = ({
       </Button>
       <Button
         onClick={onConfirm}
-        className="flex-1 h-11 rounded-[var(--radius-sharp)] bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/30 hover:shadow-xl hover:shadow-emerald-500/40 transition-all"
+        className="flex-1 h-11 rounded-[var(--radius-sharp)] bg-[var(--ink-600)] text-white shadow-lg shadow-[var(--ink-500)]/30 hover:shadow-xl hover:shadow-[var(--ink-500)]/40 transition-all"
       >
         <CheckCircle2 className="h-4 w-4 mr-2" />
         确认生成
@@ -327,7 +327,7 @@ const GenerationProgressCard = ({
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-gradient-to-br from-emerald-50 to-emerald-50 rounded-[var(--radius-sharp)] border border-[var(--ink-200)] p-6"
+      className="bg-[var(--ink-50)] rounded-[var(--radius-sharp)] border border-[var(--ink-200)] p-6"
     >
       {/* 进度圆环 */}
       <div className="flex items-center gap-6">

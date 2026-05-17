@@ -114,7 +114,7 @@ export function HeroSection() {
             })}
           </div>
 
-          <div className="mt-8 grid gap-4 border-t border-emerald-950/10 pt-6 sm:grid-cols-3">
+          <div className="mt-8 grid gap-4 border-t border-[var(--ink-900)]/10 pt-6 sm:grid-cols-3">
             {heroMetrics.map((metric) => (
               <div key={metric.label}>
                 <div className="text-sm font-semibold text-[var(--ink-900)]">{metric.label}</div>

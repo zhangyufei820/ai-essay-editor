@@ -16,7 +16,7 @@ const categories = [
     title: "数学",
     icon: Calculator,
     subjects: ["代数", "几何", "微积分", "统计学", "线性代数"],
-    color: "text-[var(--ink-600)] bg-[var(--ink-50)] dark:bg-green-950/30",
+    color: "text-[var(--ink-600)] bg-[var(--ink-50)] dark:bg-[var(--ink-900)]/30",
     href: "/subjects/math",
   },
   {
@@ -24,7 +24,7 @@ const categories = [
     title: "自然科学",
     icon: Atom,
     subjects: ["物理", "化学", "生物", "地球科学", "天文学"],
-    color: "text-[var(--ink-600)] bg-[var(--ink-50)] dark:bg-emerald-950/30",
+    color: "text-[var(--ink-600)] bg-[var(--ink-50)] dark:bg-[var(--ink-900)]/30",
     href: "/subjects/science",
   },
   {
@@ -48,7 +48,7 @@ const categories = [
     title: "艺术与创造",
     icon: Palette,
     subjects: ["美术", "音乐", "设计", "创意写作", "表演"],
-    color: "text-[var(--ink-600)] bg-[var(--ink-50)] dark:bg-emerald-950/30",
+    color: "text-[var(--ink-600)] bg-[var(--ink-50)] dark:bg-[var(--ink-900)]/30",
     href: "/subjects/arts",
   },
 ]

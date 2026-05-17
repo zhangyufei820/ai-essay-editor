@@ -44,7 +44,7 @@ function GeneratedCover({ share }: { share: ContentCardShare }) {
         </p>
       </div>
       <div className="grid grid-cols-3 gap-2 text-[10px] text-[var(--ink-900)]/65">
-        <span className="h-1.5 rounded-full bg-emerald-200" />
+        <span className="h-1.5 rounded-full bg-[var(--ink-200)]" />
         <span className="h-1.5 rounded-full bg-amber-200" />
         <span className="h-1.5 rounded-full bg-[var(--paper-200)]" />
       </div>

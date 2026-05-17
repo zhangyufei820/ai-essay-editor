@@ -19,7 +19,7 @@ export function PhetSimControls({
   const router = useRouter()
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-900/10 bg-[var(--paper-50)]/92 px-3 py-2 backdrop-blur dark:border-[var(--ink-200)]/10 dark:bg-slate-950/92">
+    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--ink-900)]/10 bg-[var(--paper-50)]/92 px-3 py-2 backdrop-blur dark:border-[var(--ink-200)]/10 dark:bg-slate-950/92">
       <Button type="button" variant="ghost" size="sm" onClick={() => router.push("/lab")}>
         <ArrowLeft className="h-4 w-4" />
         返回实验室

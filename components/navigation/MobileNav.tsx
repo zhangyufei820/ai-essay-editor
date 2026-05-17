@@ -82,7 +82,7 @@ export function MobileBottomNav() {
                 <item.icon 
                   className={cn(
                     "w-6 h-6 mb-1 transition-all duration-200",
-                    isActive && "fill-emerald-100 stroke-emerald-700"
+                    isActive && "fill-[var(--ink-100)] stroke-[var(--ink-700)]"
                   )} 
                   strokeWidth={isActive ? 2.5 : 2}
                 />
@@ -256,7 +256,7 @@ export function HamburgerMenu({ user, onLogout }: HamburgerMenuProps) {
                         className={cn(
                           "flex items-center gap-3 px-6 py-4 text-base transition-colors",
                           isActive
-                            ? "text-[var(--ink-700)] bg-[var(--ink-50)] border-r-2 border-emerald-700"
+                            ? "text-[var(--ink-700)] bg-[var(--ink-50)] border-r-2 border-[var(--ink-700)]"
                             : "text-[var(--ink-600)] hover:text-[var(--ink-900)] hover:bg-[var(--paper-50)]"
                         )}
                       >

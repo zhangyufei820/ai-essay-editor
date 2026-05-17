@@ -6,7 +6,7 @@
  * 设计规范：
  * - 使用 ThoughtDrawer 组件实现极简折叠抽屉
  * - 快速通道模式下不显示任何思考UI
- * - 配色沿用 Emerald Green (#10b981) 体系
+ * - 配色沿用 Ink Green (var(--ink-600)) 体系
  */
 
 "use client"

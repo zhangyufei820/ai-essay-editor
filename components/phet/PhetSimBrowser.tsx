@@ -53,7 +53,7 @@ export function PhetSimBrowser({
 
   return (
     <div className="space-y-7">
-      <section className="rounded-[var(--radius-soft)] border border-emerald-900/10 bg-[var(--paper-50)] p-4 shadow-sm dark:border-[var(--ink-200)]/10 dark:bg-slate-950">
+      <section className="rounded-[var(--radius-soft)] border border-[var(--ink-900)]/10 bg-[var(--paper-50)] p-4 shadow-sm dark:border-[var(--ink-200)]/10 dark:bg-slate-950">
         <div className="grid gap-3 lg:grid-cols-[1fr_160px_160px_160px_160px]">
           <label className="relative block">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--ink-400)]" />
@@ -92,7 +92,7 @@ export function PhetSimBrowser({
       {recommended.length > 0 ? (
         <section>
           <div className="mb-3 flex items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold text-[var(--ink-900)] dark:text-emerald-50">推荐实验</h2>
+            <h2 className="text-lg font-semibold text-[var(--ink-900)] dark:text-[var(--ink-50)]">推荐实验</h2>
             <Button type="button" variant="ghost" size="sm" onClick={() => setSortMode("recommended")}>查看推荐排序</Button>
           </div>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -106,7 +106,7 @@ export function PhetSimBrowser({
       <section>
         <div className="mb-3 flex items-end justify-between gap-3">
           <div>
-            <h2 className="text-lg font-semibold text-[var(--ink-900)] dark:text-emerald-50">全部实验</h2>
+            <h2 className="text-lg font-semibold text-[var(--ink-900)] dark:text-[var(--ink-50)]">全部实验</h2>
             <p className="mt-1 text-sm text-[var(--ink-500)]">共 {sims.length} 个匹配结果</p>
           </div>
         </div>
@@ -117,7 +117,7 @@ export function PhetSimBrowser({
             ))}
           </div>
         ) : (
-          <div className="rounded-[var(--radius-soft)] border border-dashed border-emerald-900/20 bg-[var(--paper-50)] p-10 text-center text-[var(--ink-500)] dark:border-[var(--ink-200)]/10 dark:bg-slate-950">
+          <div className="rounded-[var(--radius-soft)] border border-dashed border-[var(--ink-900)]/20 bg-[var(--paper-50)] p-10 text-center text-[var(--ink-500)] dark:border-[var(--ink-200)]/10 dark:bg-slate-950">
             没有找到匹配的实验，换个关键词或筛选条件试试。
           </div>
         )}

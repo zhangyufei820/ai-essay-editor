@@ -24,8 +24,8 @@ const TOKENS = {
     200: "#bbf7d0",
     300: "#86efac",
     400: "#4ade80",
-    500: "#22c55e",
-    600: "#16a34a",
+    500: "var(--ink-500)",
+    600: "var(--ink-600)",
     700: "#15803d",
     800: "#14532d",  // 核心色
     900: "#0d3a1f",  // 深邃色
@@ -413,7 +413,7 @@ function FloatingIslandCard({
           <Icon
             className="w-5.5 h-5.5"
             style={{
-              color: "#10A37F",
+              color: "var(--ink-600)",
               strokeWidth: 1.5,
             }}
           />

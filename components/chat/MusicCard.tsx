@@ -445,7 +445,7 @@ function PremiumMusicPlayer({
                 style={{ animationDuration: '8s' }}
               />
             ) : (
-              <div className="w-full h-full bg-gradient-to-br from-emerald-600 to-green-800 flex items-center justify-center">
+              <div className="w-full h-full bg-[var(--ink-700)] flex items-center justify-center">
                 <Music className="h-16 w-16 text-white/60" />
               </div>
             )}

@@ -166,19 +166,19 @@ export function Pricing({ currentSubscription }: { currentSubscription?: string 
                   
                   <div className="grid grid-cols-2 gap-4 mb-6">
                     <div className="flex items-center gap-2">
-                      <Check className="w-5 h-5 text-green-400" />
+                      <Check className="w-5 h-5 text-[var(--ink-400)]" />
                       <span className="text-gray-200">批量账号</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Check className="w-5 h-5 text-green-400" />
+                      <Check className="w-5 h-5 text-[var(--ink-400)]" />
                       <span className="text-gray-200">管理后台</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Check className="w-5 h-5 text-green-400" />
+                      <Check className="w-5 h-5 text-[var(--ink-400)]" />
                       <span className="text-gray-200">专属客服</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Check className="w-5 h-5 text-green-400" />
+                      <Check className="w-5 h-5 text-[var(--ink-400)]" />
                       <span className="text-gray-200">定制功能</span>
                     </div>
                   </div>

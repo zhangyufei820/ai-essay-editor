@@ -6,7 +6,7 @@
  * 
  * 设计规范：
  * - 块状光标（Block Cursor）
- * - 使用 emerald-500 绿色
+ * - 使用 ink-500 绿色
  * - 1s 闪烁动画
  */
 
@@ -50,7 +50,7 @@ export const StreamingCursor: React.FC<StreamingCursorProps> = ({
 export const streamingCursorStyles = `
 /* GenSpark 风格流式光标 */
 .streaming-cursor {
-  color: #10b981; /* emerald-500 */
+  color: var(--ink-600); /* ink-500 */
   animation: cursor-blink 1s step-end infinite;
   margin-left: 1px;
   font-weight: normal;
@@ -74,7 +74,7 @@ export const streamingCursorStyles = `
 
 /* 暗色模式 */
 .dark .streaming-cursor {
-  color: #34d399; /* emerald-400 */
+  color: var(--ink-400); /* ink-400 */
 }
 `
 

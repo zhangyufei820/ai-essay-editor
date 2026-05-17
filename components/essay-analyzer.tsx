@@ -260,7 +260,7 @@ export default function EssayAnalyzer() {
           <div className="lg:col-span-4">
             <div className="bg-slate-900 rounded-[var(--radius-sharp)] border-2 border-slate-700 shadow-lg p-6 h-full">
               <div className="flex items-center gap-2 mb-4 pb-4 border-b border-slate-700">
-                <Clock className="w-5 h-5 text-emerald-400" />
+                <Clock className="w-5 h-5 text-[var(--ink-400)]" />
                 <h2 className="text-lg font-semibold text-white">系统日志</h2>
               </div>
 
@@ -275,7 +275,7 @@ export default function EssayAnalyzer() {
                     {logs.map((log, index) => {
                       const isSuccess = log.startsWith("✓")
                       const isError = log.startsWith("✗")
-                      const color = isSuccess ? "text-emerald-400" : isError ? "text-red-400" : "text-slate-300"
+                      const color = isSuccess ? "text-[var(--ink-400)]" : isError ? "text-red-400" : "text-slate-300"
 
                       return (
                         <div
@@ -292,9 +292,9 @@ export default function EssayAnalyzer() {
                 )}
 
                 {status === "completed" && (
-                  <div className="mt-4 flex items-center gap-2 p-3 bg-[var(--ink-900)]/30 border border-emerald-700 rounded-[var(--radius-soft)]">
-                    <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-                    <span className="text-sm font-medium text-emerald-300">所有任务已完成</span>
+                  <div className="mt-4 flex items-center gap-2 p-3 bg-[var(--ink-900)]/30 border border-[var(--ink-700)] rounded-[var(--radius-soft)]">
+                    <CheckCircle2 className="w-5 h-5 text-[var(--ink-400)] shrink-0" />
+                    <span className="text-sm font-medium text-[var(--ink-300)]">所有任务已完成</span>
                   </div>
                 )}
 

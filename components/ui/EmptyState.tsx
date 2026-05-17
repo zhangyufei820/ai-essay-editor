@@ -63,8 +63,8 @@ const emptyConfig: Record<EmptyType, { icon: LucideIcon; iconBg: string; iconCol
   },
   search: {
     icon: Search,
-    iconBg: "bg-emerald-50",
-    iconColor: "text-emerald-500"
+    iconBg: "bg-[var(--ink-50)]",
+    iconColor: "text-[var(--ink-500)]"
   },
   users: {
     icon: Users,
@@ -73,8 +73,8 @@ const emptyConfig: Record<EmptyType, { icon: LucideIcon; iconBg: string; iconCol
   },
   events: {
     icon: Calendar,
-    iconBg: "bg-green-50",
-    iconColor: "text-green-500"
+    iconBg: "bg-[var(--ink-50)]",
+    iconColor: "text-[var(--ink-500)]"
   }
 }
 

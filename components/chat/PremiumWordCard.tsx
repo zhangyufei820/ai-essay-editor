@@ -136,7 +136,7 @@ export function PremiumWordCard({ data }: PremiumWordCardProps) {
 
   return (
     <article className="w-full max-w-4xl overflow-hidden rounded-3xl border border-[var(--paper-200)] bg-[var(--paper-50)] shadow-xl shadow-slate-200/70">
-      <header className="relative overflow-hidden bg-gradient-to-br from-emerald-500 via-teal-500 to-sky-500 px-5 py-6 text-white sm:px-7 sm:py-8">
+      <header className="relative overflow-hidden bg-[var(--ink-600)] px-5 py-6 text-white sm:px-7 sm:py-8">
         <div className="absolute right-4 top-4 flex h-16 w-16 items-center justify-center rounded-3xl bg-[var(--paper-50)]/15 text-3xl font-black shadow-inner backdrop-blur">
           {text(hero.icon) || "Aa"}
         </div>

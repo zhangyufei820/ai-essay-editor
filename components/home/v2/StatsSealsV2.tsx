@@ -5,7 +5,7 @@
  *   [批改]  [上线]  [覆盖]  [响应]
  *   10K+    2 年    K12-高中  60s
  *
- * 替换原 emerald 渐变背景 + 数字滚动 → 极简纸面排版
+ * 替换原 ink token背景 + 数字滚动 → 极简纸面排版
  */
 
 import * as React from "react"

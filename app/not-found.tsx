@@ -31,7 +31,7 @@ export default function NotFound() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-4 text-center bg-[var(--paper-50)]">
       {/* 大数字 */}
-      <div className="text-[120px] md:text-[180px] font-bold text-green-100 leading-none select-none">
+      <div className="text-[120px] md:text-[180px] font-bold text-[var(--ink-100)] leading-none select-none">
         404
       </div>
 

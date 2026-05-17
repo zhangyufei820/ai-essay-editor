@@ -184,7 +184,7 @@ export function ShareDetailClient({ initialShare }: { initialShare: ShareDetail 
         <section className="rounded-[var(--radius-sharp)] bg-[var(--ink-900)] p-6 text-white sm:flex sm:items-center sm:justify-between">
           <div>
             <p className="text-xl font-semibold">{cta.text}</p>
-            <p className="mt-2 text-sm text-emerald-100">注册后即可体验沈翔智学的 AI 学习工具。</p>
+            <p className="mt-2 text-sm text-[var(--ink-100)]">注册后即可体验沈翔智学的 AI 学习工具。</p>
           </div>
           <Button asChild className="mt-4 bg-[var(--paper-50)] text-[var(--ink-900)] hover:bg-[var(--ink-50)] sm:mt-0">
             <Link href={cta.href}>立即体验</Link>

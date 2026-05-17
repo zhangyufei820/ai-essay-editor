@@ -130,9 +130,9 @@ const ALL_IN_ONE_AGENT_PROMPTS = [
   "我想做一个数学概念可视化，请先帮我完善提示词，再生成可执行方案。",
 ]
 
-// 获取模型徽章颜色 — 强制归一：所有模型统一为翡翠绿 #10A37F
+// 获取模型徽章颜色 — 强制归一：所有模型统一为翡翠绿 var(--ink-600)
 function getModelBadgeColor(_modelKey: string): string {
-  return "#10A37F"
+  return "var(--ink-600)"
 }
 
 // 🔥 移动端用户信息显示组件
@@ -932,7 +932,7 @@ const ThinkingBlock = ({ content, isStreaming }: { content: string; isStreaming?
   if (isStreaming) {
     return (
       <div className="my-2 flex items-center justify-center">
-        <Loader2 className="w-4 h-4 animate-spin text-[#10A37F]" strokeWidth={2} />
+        <Loader2 className="w-4 h-4 animate-spin text-[var(--ink-600)]" strokeWidth={2} />
       </div>
     )
   }
@@ -3180,7 +3180,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                           className={cn(
                             "w-full text-left px-3 py-2.5 rounded-[var(--radius-soft)] transition-all",
                             currentSessionId === session.id
-                              ? "bg-[#10A37F]/10 text-[#10A37F]"
+                              ? "bg-[var(--ink-600)]/10 text-[var(--ink-600)]"
                               : "hover:bg-[var(--paper-100)] text-[var(--ink-600)]"
                           )}
                         >
@@ -3230,7 +3230,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
               initial={{ opacity: 0, y: -20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20, height: 0 }}
-              className="bg-gradient-to-r from-emerald-50 to-green-50 border-b border-[var(--ink-100)] px-4 py-3 shrink-0"
+              className="bg-[var(--ink-50)] border-b border-[var(--ink-100)] px-4 py-3 shrink-0"
             >
               <div className="mx-auto max-w-3xl flex items-center justify-between gap-4">
                 <div className="flex-1 min-w-0">
@@ -3252,7 +3252,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                   </Button>
                   <button
                     onClick={() => setShowUpgradeBanner(false)}
-                    className="p-1 text-emerald-400 hover:text-[var(--ink-600)] transition-colors"
+                    className="p-1 text-[var(--ink-400)] hover:text-[var(--ink-600)] transition-colors"
                   >
                     <X className="h-4 w-4" />
                   </button>
@@ -3730,7 +3730,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                 <div className="flex items-center gap-1.5 sm:gap-2">
                   {fileProcessing.status === "error" ? <AlertCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-[var(--seal-500)]" /> : <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin" style={{ color: BRAND_GREEN }} />}
                   {dynamicStatusMessage ? (
-                    <p className="text-xs sm:text-sm bg-gradient-to-r from-emerald-600 to-green-500 bg-clip-text text-transparent animate-pulse font-medium">
+                    <p className="text-xs sm:text-sm text-[var(--ink-600)] animate-pulse font-medium">
                       {dynamicStatusMessage}
                     </p>
                   ) : (

@@ -15,8 +15,8 @@ const TOKENS = {
     200: "#bbf7d0",
     300: "#86efac",
     400: "#4ade80",
-    500: "#22c55e",
-    600: "#16a34a",
+    500: "var(--ink-500)",
+    600: "var(--ink-600)",
     700: "#15803d",
     800: "#14532d",
     900: "#0d3a1f",
@@ -345,14 +345,14 @@ function WritingIslandCard({
         }}
         transition={{ duration: 0.3 }}
       >
-        {agent.key === "ai-writing-paper" && <FileText className="w-6 h-6" style={{ color: "#10A37F" }} />}
-        {agent.key === "zhongying-essay" && <Pen className="w-6 h-6" style={{ color: "#10A37F" }} />}
-        {agent.key === "reading-report" && <BookOpen className="w-6 h-6" style={{ color: "#10A37F" }} />}
-        {agent.key === "experiment-report" && <FlaskConical className="w-6 h-6" style={{ color: "#10A37F" }} />}
-        {agent.key === "study-abroad" && <GraduationCap className="w-6 h-6" style={{ color: "#10A37F" }} />}
-        {agent.key === "resume-optimize" && <Briefcase className="w-6 h-6" style={{ color: "#10A37F" }} />}
-        {agent.key === "speech-defense" && <Mic className="w-6 h-6" style={{ color: "#10A37F" }} />}
-        {agent.key === "school-wechat" && <Newspaper className="w-6 h-6" style={{ color: "#10A37F" }} />}
+        {agent.key === "ai-writing-paper" && <FileText className="w-6 h-6" style={{ color: "var(--ink-600)" }} />}
+        {agent.key === "zhongying-essay" && <Pen className="w-6 h-6" style={{ color: "var(--ink-600)" }} />}
+        {agent.key === "reading-report" && <BookOpen className="w-6 h-6" style={{ color: "var(--ink-600)" }} />}
+        {agent.key === "experiment-report" && <FlaskConical className="w-6 h-6" style={{ color: "var(--ink-600)" }} />}
+        {agent.key === "study-abroad" && <GraduationCap className="w-6 h-6" style={{ color: "var(--ink-600)" }} />}
+        {agent.key === "resume-optimize" && <Briefcase className="w-6 h-6" style={{ color: "var(--ink-600)" }} />}
+        {agent.key === "speech-defense" && <Mic className="w-6 h-6" style={{ color: "var(--ink-600)" }} />}
+        {agent.key === "school-wechat" && <Newspaper className="w-6 h-6" style={{ color: "var(--ink-600)" }} />}
       </motion.div>
 
       {/* 中文名 */}

@@ -23,8 +23,8 @@ const TOKENS = {
     200: "#bbf7d0",
     300: "#86efac",
     400: "#4ade80",
-    500: "#22c55e",
-    600: "#16a34a",
+    500: "var(--ink-500)",
+    600: "var(--ink-600)",
     700: "#15803d",
     800: "#14532d",  // 核心色
     900: "#0d3a1f",  // 深邃色
@@ -360,7 +360,7 @@ function OpenClawCard({ onClick }: { onClick: () => void }) {
       <motion.div
         className="absolute top-3 right-3 z-20 px-2 py-0.5 rounded-full text-[9px] font-medium"
         style={{
-          background: "linear-gradient(135deg, #22c55e 0%, #16a34a 100%)",
+          background: "linear-gradient(135deg, var(--ink-500) 0%, var(--ink-600) 100%)",
           color: "white",
         }}
         animate={{
@@ -433,7 +433,7 @@ function OpenClawCard({ onClick }: { onClick: () => void }) {
         <motion.div
           className="mt-4 px-4 py-2 rounded-full text-xs font-medium"
           style={{
-            background: "linear-gradient(135deg, #22c55e 0%, #16a34a 100%)",
+            background: "linear-gradient(135deg, var(--ink-500) 0%, var(--ink-600) 100%)",
             color: "white",
           }}
           whileHover={{

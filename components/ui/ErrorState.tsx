@@ -58,8 +58,8 @@ const errorConfig: Record<ErrorType, { icon: typeof AlertCircle; title: string; 
     icon: ServerCrash,
     title: "服务器开小差了",
     description: "我们正在努力修复，请稍后再试",
-    iconBg: "bg-emerald-50",
-    iconColor: "text-emerald-500"
+    iconBg: "bg-[var(--ink-50)]",
+    iconColor: "text-[var(--ink-500)]"
   },
   auth: {
     icon: Lock,

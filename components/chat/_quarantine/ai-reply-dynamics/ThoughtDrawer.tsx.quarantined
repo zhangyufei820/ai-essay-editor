@@ -6,7 +6,7 @@
  * 设计规范：
  * - 折叠态：高度约 36-40px，极简单行，浅灰/浅绿背景
  * - 展开态：极简垂直列表（无卡片背景，无阴影，无边框）
- * - 配色：bg-gray-50 或 bg-emerald-50/30，文字 text-gray-500/600
+ * - 配色：bg-gray-50 或 bg-[var(--ink-50)]/30，文字 text-gray-500/600
  * - 禁止显示"总编辑"、"快速回复"等触发节点
  * 
  * 🔥 关键：删除所有卡片/时间轴样式，只保留极简列表
@@ -59,7 +59,7 @@ const ThoughtItem: React.FC<ThoughtItemProps> = React.memo(({ label, status, ico
     <li className="flex items-center gap-2.5 py-1.5">
       {/* 状态图标 */}
       {isCompleted ? (
-        <div className="flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500">
+        <div className="flex h-4 w-4 items-center justify-center rounded-full bg-[var(--ink-500)]">
           <Check className="h-2.5 w-2.5 text-white" strokeWidth={3} />
         </div>
       ) : isRunning ? (
@@ -68,7 +68,7 @@ const ThoughtItem: React.FC<ThoughtItemProps> = React.memo(({ label, status, ico
           transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
           className="flex h-4 w-4 items-center justify-center"
         >
-          <Loader2 className="h-3.5 w-3.5 text-emerald-600" />
+          <Loader2 className="h-3.5 w-3.5 text-[var(--ink-600)]" />
         </motion.div>
       ) : (
         <div className="flex h-4 w-4 items-center justify-center">
@@ -80,7 +80,7 @@ const ThoughtItem: React.FC<ThoughtItemProps> = React.memo(({ label, status, ico
       <span className={cn(
         "text-sm",
         isCompleted && "text-gray-600",
-        isRunning && "text-emerald-600 font-medium",
+        isRunning && "text-[var(--ink-600)] font-medium",
         !isCompleted && !isRunning && "text-gray-400"
       )}>
         {label}
@@ -148,7 +148,7 @@ export const ThoughtDrawer: React.FC<ThoughtDrawerProps> = ({
         transition={{ duration: 0.15 }}
         className={cn("flex items-center justify-center", className)}
       >
-        <Loader2 className="h-4 w-4 animate-spin text-[#10A37F]" strokeWidth={2} />
+        <Loader2 className="h-4 w-4 animate-spin text-[var(--ink-600)]" strokeWidth={2} />
       </motion.div>
     )
   }
@@ -173,9 +173,9 @@ export const ThoughtDrawer: React.FC<ThoughtDrawerProps> = ({
         <div className="flex items-center gap-2">
           {/* 左侧状态图标 - 简单Loading */}
           {isThinking && !isGenerating ? (
-            <Loader2 className="h-4 w-4 animate-spin text-[#10A37F]" strokeWidth={2} />
+            <Loader2 className="h-4 w-4 animate-spin text-[var(--ink-600)]" strokeWidth={2} />
           ) : (
-            <div className="flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500">
+            <div className="flex h-4 w-4 items-center justify-center rounded-full bg-[var(--ink-500)]">
               <Check className="h-2.5 w-2.5 text-white" strokeWidth={3} />
             </div>
           )}

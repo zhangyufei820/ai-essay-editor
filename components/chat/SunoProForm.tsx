@@ -110,12 +110,12 @@ const GlassCard = ({ title, icon, children, defaultOpen = true, badge }: GlassCa
           className="w-full flex items-center justify-between p-4 hover:bg-[var(--paper-50)]/30 dark:hover:bg-[var(--paper-50)]/5 transition-all duration-200"
         >
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-[var(--radius-sharp)] bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-lg shadow-emerald-500/20">
+            <div className="flex h-10 w-10 items-center justify-center rounded-[var(--radius-sharp)] bg-[var(--ink-600)] text-white shadow-lg shadow-[var(--ink-500)]/20">
               {icon}
             </div>
             <span className="font-semibold text-[var(--ink-800)] dark:text-white">{title}</span>
             {badge && (
-              <span className="px-2 py-0.5 text-xs font-medium bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-full">
+              <span className="px-2 py-0.5 text-xs font-medium bg-[var(--ink-600)] text-white rounded-full">
                 {badge}
               </span>
             )}
@@ -169,7 +169,7 @@ const ModeButton = ({ icon, title, subtitle, selected, onClick }: ModeButtonProp
       "relative flex flex-col items-center justify-center p-4 rounded-[var(--radius-sharp)] transition-all duration-300",
       "border-2",
       selected
-        ? "border-emerald-500/50 bg-gradient-to-br from-emerald-500/10 to-emerald-600/10 shadow-lg shadow-emerald-500/10"
+        ? "border-[var(--ink-500)]/50 bg-gradient-to-br from-[var(--ink-500)]/10 to-[var(--ink-600)]/10 shadow-lg shadow-[var(--ink-500)]/10"
         : "border-[var(--paper-200)]/50 dark:border-gray-700/50 bg-[var(--paper-50)]/40 dark:bg-gray-800/40 hover:bg-[var(--paper-50)]/60 dark:hover:bg-gray-800/60"
     )}
     whileHover={{ scale: 1.02 }}
@@ -179,7 +179,7 @@ const ModeButton = ({ icon, title, subtitle, selected, onClick }: ModeButtonProp
       className={cn(
         "flex h-12 w-12 items-center justify-center rounded-[var(--radius-sharp)] mb-2 transition-all duration-300",
         selected 
-          ? "bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-lg shadow-emerald-500/30" 
+          ? "bg-[var(--ink-600)] text-white shadow-lg shadow-[var(--ink-500)]/30" 
           : "bg-[var(--paper-100)] dark:bg-gray-700 text-[var(--ink-500)] dark:text-[var(--ink-400)]"
       )}
     >
@@ -187,7 +187,7 @@ const ModeButton = ({ icon, title, subtitle, selected, onClick }: ModeButtonProp
     </motion.div>
     <span className={cn(
       "font-medium text-sm",
-      selected ? "text-[var(--ink-600)] dark:text-emerald-400" : "text-[var(--ink-700)] dark:text-gray-300"
+      selected ? "text-[var(--ink-600)] dark:text-[var(--ink-400)]" : "text-[var(--ink-700)] dark:text-gray-300"
     )}>
       {title}
     </span>
@@ -197,7 +197,7 @@ const ModeButton = ({ icon, title, subtitle, selected, onClick }: ModeButtonProp
       <motion.div
         initial={{ scale: 0 }}
         animate={{ scale: 1 }}
-        className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 shadow-lg"
+        className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--ink-600)] shadow-lg"
       >
         <svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
@@ -298,7 +298,7 @@ const GenderSelector = ({ value, onChange, disabled }: GenderSelectorProps) => (
           "flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-[var(--radius-sharp)] transition-all duration-200",
           "border-2",
           value === option.val
-            ? "border-emerald-500/50 bg-[var(--seal-500)]/10 text-[var(--ink-600)] dark:text-emerald-400"
+            ? "border-[var(--ink-500)]/50 bg-[var(--seal-500)]/10 text-[var(--ink-600)] dark:text-[var(--ink-400)]"
             : "border-[var(--paper-200)]/50 dark:border-gray-700/50 bg-[var(--paper-50)]/40 dark:bg-gray-800/40 text-[var(--ink-600)] dark:text-gray-300",
           disabled && "opacity-50 cursor-not-allowed"
         )}
@@ -339,7 +339,7 @@ const ModelSelector = ({ value, onChange }: ModelSelectorProps) => (
           "flex-1 py-2.5 px-3 rounded-[var(--radius-sharp)] text-sm font-medium transition-all duration-200",
           "border-2",
           value === model.value
-            ? "border-emerald-500/50 bg-[var(--seal-500)]/10 text-[var(--ink-600)] dark:text-emerald-400"
+            ? "border-[var(--ink-500)]/50 bg-[var(--seal-500)]/10 text-[var(--ink-600)] dark:text-[var(--ink-400)]"
             : "border-[var(--paper-200)]/50 dark:border-gray-700/50 bg-[var(--paper-50)]/40 dark:bg-gray-800/40 text-[var(--ink-600)] dark:text-gray-300 hover:bg-[var(--paper-50)]/60"
         )}
         whileHover={{ scale: 1.02 }}
@@ -414,7 +414,7 @@ export function SunoProForm({ onSubmit, isLoading = false, disabled = false }: S
   return (
     <div className="relative w-full max-w-2xl mx-auto">
       {/* 背景装饰 */}
-      <div className="absolute -inset-4 bg-gradient-to-r from-emerald-500/20 via-emerald-600/20 to-emerald-600/20 rounded-3xl blur-3xl opacity-50" />
+      <div className="absolute -inset-4 bg-gradient-to-r from-[var(--ink-500)]/20 via-[var(--ink-600)]/20 to-[var(--ink-600)]/20 rounded-3xl blur-3xl opacity-50" />
       
       <div className="relative rounded-3xl p-6 bg-[var(--paper-50)]/80 dark:bg-gray-900/80 backdrop-blur-2xl border border-white/50 dark:border-gray-800/50 shadow-2xl shadow-gray-200/50 dark:shadow-black/20">
         
@@ -430,14 +430,14 @@ export function SunoProForm({ onSubmit, isLoading = false, disabled = false }: S
               "relative rounded-[var(--radius-sharp)] p-5 transition-all duration-300",
               "bg-[var(--paper-50)]/60 dark:bg-gray-800/60 backdrop-blur-sm",
               willUseLLM 
-                ? "border-2 border-emerald-600/40 shadow-lg shadow-emerald-600/10" 
+                ? "border-2 border-[var(--ink-600)]/40 shadow-lg shadow-[var(--ink-600)]/10" 
                 : "border-2 border-[var(--paper-200)]/50 dark:border-gray-700/50"
             )}>
               <label className="flex items-center gap-2 text-sm text-[var(--ink-700)] dark:text-gray-200 mb-3">
                 <PenLine className="h-4 w-4 text-[var(--ink-500)]" />
                 <span className="font-bold text-base">歌词</span>
                 {willUseLLM && (
-                  <span className="ml-auto px-2 py-0.5 text-xs bg-gradient-to-r from-emerald-600 to-emerald-500 text-white rounded-full flex items-center gap-1">
+                  <span className="ml-auto px-2 py-0.5 text-xs bg-[var(--ink-600)] text-white rounded-full flex items-center gap-1">
                     <Sparkles className="h-3 w-3" />
                     AI 将优化
                   </span>
@@ -695,8 +695,8 @@ export function SunoProForm({ onSubmit, isLoading = false, disabled = false }: S
                 "w-full h-14 rounded-[var(--radius-sharp)] font-semibold text-base transition-all duration-300",
                 "text-white shadow-xl",
                 willUseLLM 
-                  ? "bg-gradient-to-r from-emerald-600 via-emerald-500 to-emerald-600 shadow-emerald-600/30 hover:shadow-emerald-600/50"
-                  : "bg-gradient-to-r from-emerald-500 via-emerald-600 to-emerald-500 shadow-emerald-500/30 hover:shadow-emerald-500/50",
+                  ? "bg-[var(--ink-600)] shadow-[var(--ink-600)]/30 hover:shadow-[var(--ink-600)]/50"
+                  : "bg-[var(--ink-600)] shadow-[var(--ink-500)]/30 hover:shadow-[var(--ink-500)]/50",
                 "bg-[length:200%_auto] hover:bg-right",
                 "disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-none"
               )}
@@ -724,7 +724,7 @@ export function SunoProForm({ onSubmit, isLoading = false, disabled = false }: S
             
             <p className="text-xs text-center mt-3 text-[var(--ink-500)] dark:text-[var(--ink-400)]">
               {willUseLLM ? (
-                <span className="text-[var(--ink-600)] dark:text-emerald-400">
+                <span className="text-[var(--ink-600)] dark:text-[var(--ink-400)]">
                   ✨ AI 将根据歌词自动生成最佳风格
                 </span>
               ) : formData.prompt.trim() ? (

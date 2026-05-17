@@ -51,7 +51,7 @@ export function PhetSimEmbed({
   return (
     <div
       ref={containerRef}
-      className={cn("overflow-hidden rounded-[var(--radius-soft)] border border-emerald-900/10 bg-[var(--paper-50)] shadow-sm dark:border-[var(--ink-200)]/10 dark:bg-slate-950", className)}
+      className={cn("overflow-hidden rounded-[var(--radius-soft)] border border-[var(--ink-900)]/10 bg-[var(--paper-50)] shadow-sm dark:border-[var(--ink-200)]/10 dark:bg-slate-950", className)}
       style={{ width }}
     >
       {showControls ? (

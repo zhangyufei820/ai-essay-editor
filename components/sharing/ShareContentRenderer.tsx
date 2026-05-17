@@ -138,7 +138,7 @@ function renderTable(lines: string[], key: string) {
   return (
     <div key={key} className="my-5 overflow-hidden rounded-[var(--radius-sharp)] border border-[var(--ink-100)] bg-[var(--paper-50)] shadow-sm">
       <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-emerald-100 text-sm">
+        <table className="min-w-full divide-y divide-[var(--ink-100)] text-sm">
           <thead className="bg-[var(--ink-50)]">
             <tr>{head.map((cell, index) => <th key={index} className="px-4 py-3 text-left font-semibold text-[var(--ink-900)]"><InlineText text={cell} /></th>)}</tr>
           </thead>
@@ -205,7 +205,7 @@ function renderFormattedContent(text: string) {
     }
     if (line.startsWith("### ")) {
       flushList()
-      nodes.push(<h2 key={index} className="mt-7 border-l-4 border-emerald-600 pl-3 text-xl font-semibold text-[var(--ink-900)]"><InlineText text={line.replace(/^###\s+/, "")} /></h2>)
+      nodes.push(<h2 key={index} className="mt-7 border-l-4 border-[var(--ink-600)] pl-3 text-xl font-semibold text-[var(--ink-900)]"><InlineText text={line.replace(/^###\s+/, "")} /></h2>)
       return
     }
     if (line.startsWith("#### ")) {
@@ -215,7 +215,7 @@ function renderFormattedContent(text: string) {
     }
     if (line.startsWith("## ")) {
       flushList()
-      nodes.push(<h2 key={index} className="mt-7 border-l-4 border-emerald-600 pl-3 text-xl font-semibold text-[var(--ink-900)]"><InlineText text={line.replace(/^##\s+/, "")} /></h2>)
+      nodes.push(<h2 key={index} className="mt-7 border-l-4 border-[var(--ink-600)] pl-3 text-xl font-semibold text-[var(--ink-900)]"><InlineText text={line.replace(/^##\s+/, "")} /></h2>)
       return
     }
     if (line.startsWith("# ")) {
@@ -262,7 +262,7 @@ function HtmlCover({ share }: { share: Share }) {
         <p className="mt-4 max-w-2xl text-base leading-7 text-[var(--ink-600)]">{share.preview_text || "查看用户上传内容与 AI 修改后的完整排版。"}</p>
       </div>
       <div className="grid grid-cols-3 gap-2">
-        <span className="h-2 rounded-full bg-emerald-300" />
+        <span className="h-2 rounded-full bg-[var(--ink-300)]" />
         <span className="h-2 rounded-full bg-amber-200" />
         <span className="h-2 rounded-full bg-[var(--paper-200)]" />
       </div>
