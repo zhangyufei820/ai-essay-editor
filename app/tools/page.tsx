@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/v2"
 import { useState, type FormEvent } from "react"
 import Link from "next/link"
-import { FileText, Loader2, Presentation, Search, Sparkles, Wand2 } from "lucide-react"
+import { ArrowUpRight, Box, FileText, Loader2, Presentation, Search, Sparkles, Wand2 } from "lucide-react"
 
 type ToolResult = {
   title: string
@@ -159,6 +159,30 @@ export default function ToolsPage() {
             <Link href="/chat/suno-v5">音乐创作</Link>
           </Button>
         </header>
+
+        <Card className="rounded-[var(--radius-sharp)] border-[var(--paper-200)] bg-white shadow-[var(--shadow-paper)]">
+          <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <span className="flex size-11 shrink-0 items-center justify-center rounded-[var(--radius-soft)] bg-[var(--ink-50)] text-[var(--ink-700)]">
+                <Box className="size-5" aria-hidden="true" />
+              </span>
+              <div>
+                <h2 className="font-[var(--font-display)] text-xl font-bold text-[var(--ink-900)]">
+                  Tripo3D 模型生成
+                </h2>
+                <p className="mt-1 text-sm leading-6 text-[var(--ink-500)]">
+                  找回原多媒体专区的 3D 应用入口，支持从文字或图片开始生成 3D 模型。
+                </p>
+              </div>
+            </div>
+            <Button asChild variant="outline" className="w-full sm:w-auto">
+              <Link href="/tools/tripo3d">
+                进入 3D 工具
+                <ArrowUpRight className="size-4" aria-hidden="true" />
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
 
         <div className="grid gap-6 xl:grid-cols-[1fr_420px]">
           <div className="grid gap-4 lg:grid-cols-2">

@@ -8,7 +8,7 @@
 "use client"
 
 import { motion, AnimatePresence } from "framer-motion"
-import { X, Image, Video, Music, Sparkles } from "lucide-react"
+import { X, Image, Box, Music, Sparkles } from "lucide-react"
 import { ArtisticThinkingIcon } from "@/components/icons/ArtisticThinkingIcons"
 import { ModelLogo, type ModelKey } from "@/components/ModelLogo"
 
@@ -81,6 +81,7 @@ interface CreativeOption {
   badge?: string
   gradient: string
   modelKey?: ModelKey
+  href?: string
 }
 
 interface CreativePanelProps {
@@ -119,6 +120,16 @@ const CREATIVE_OPTIONS: CreativeOption[] = [
     icon: Music,
     description: "AI 作曲与音效创作",
     gradient: "linear-gradient(135deg, rgba(245, 158, 11, 0.12) 0%, rgba(134, 239, 172, 0.08) 100%)",
+  },
+  {
+    key: "tripo3d",
+    name: "Tripo3D",
+    nameEn: "3D",
+    icon: Box,
+    description: "文字 / 图片生成 3D 模型",
+    badge: "3D",
+    gradient: "linear-gradient(135deg, rgba(63, 90, 66, 0.12) 0%, rgba(178, 58, 44, 0.08) 100%)",
+    href: "/tools/tripo3d",
   },
 ]
 
@@ -374,7 +385,7 @@ function CreativeIslandCard({
 
   return (
     <motion.a
-      href={`/chat/creative-${option.key}`}
+      href={option.href ?? `/chat/creative-${option.key}`}
       onClick={onClick}
       className="group relative block p-5 rounded-[var(--radius-sharp)] overflow-hidden cursor-pointer"
       style={{
