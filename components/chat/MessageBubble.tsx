@@ -12,7 +12,7 @@
 
 import { memo, useEffect, useMemo, useRef, useState } from "react"
 import { motion, type Easing } from "framer-motion"
-import { ChevronDown, ChevronUp } from "lucide-react"
+import { ChevronDown, ChevronUp, ThumbsDown, ThumbsUp } from "lucide-react"
 import { IconAllInOne, IconCopy, IconExportPdf, IconFollowup, IconHistory, IconListen, IconShare, IconUser } from "@/components/icons/v2"
 import { cn } from "@/lib/utils"
 import { AssistantMessageV2 } from "@/components/chat/v2"
@@ -397,6 +397,10 @@ interface MessageActions {
 }
 
 function MessageActionToolbar({ actions }: { actions: MessageActions }) {
+  function handleFeedback(type: "up" | "down") {
+    toast.success(type === "up" ? "感谢反馈！" : "我们会改进")
+  }
+
   const buttons = [
     { label: "复制", icon: IconCopy, onClick: actions.onCopy },
     { label: "朗读", icon: IconListen, onClick: actions.onPlayAudio },
@@ -419,6 +423,24 @@ function MessageActionToolbar({ actions }: { actions: MessageActions }) {
           {label}
         </button>
       ))}
+      <div className="ml-auto flex items-center gap-1">
+        <button
+          type="button"
+          onClick={() => handleFeedback("up")}
+          title="有帮助"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-[var(--radius-pill)] text-[var(--ink-500)] transition-colors hover:bg-[var(--ink-50)] hover:text-[var(--ink-800)] focus-visible:outline-none focus-visible:[box-shadow:var(--shadow-focus-ink)]"
+        >
+          <ThumbsUp className="size-3.5" aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          onClick={() => handleFeedback("down")}
+          title="不满意"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-[var(--radius-pill)] text-[var(--ink-500)] transition-colors hover:bg-[var(--ink-50)] hover:text-[var(--ink-800)] focus-visible:outline-none focus-visible:[box-shadow:var(--shadow-focus-ink)]"
+        >
+          <ThumbsDown className="size-3.5" aria-hidden="true" />
+        </button>
+      </div>
     </div>
   )
 }
