@@ -41,6 +41,7 @@ export interface ChatWorkspaceV2Props {
   /** 发送消息（业务侧接 SSE） */
   onSend?: (text: string) => void
   onAttach?: () => void
+  onCamera?: () => void
   onRecord?: () => void
   attachments?: Array<{ id: string; name: string; size?: number }>
   onRemoveAttachment?: (id: string) => void
@@ -66,6 +67,7 @@ export function ChatWorkspaceV2({
   isStreaming,
   onSend,
   onAttach,
+  onCamera,
   onRecord,
   attachments,
   onRemoveAttachment,
@@ -148,6 +150,7 @@ export function ChatWorkspaceV2({
           isStreaming={isStreaming}
           onSend={onSend}
           onAttach={onAttach}
+          onCamera={onCamera ?? onAttach}
           onRecord={onRecord}
           attachments={attachments}
           onRemoveAttachment={onRemoveAttachment}

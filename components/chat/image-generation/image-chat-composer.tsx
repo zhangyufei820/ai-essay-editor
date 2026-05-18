@@ -4,7 +4,7 @@ import { ButtonV2 as Button, TextareaV2 as Textarea } from "@/components/ui/v2"
 /* eslint-disable @next/next/no-img-element -- Dynamic/user-generated/external image surfaces: keep native img to preserve sizing, blob/data/proxy URLs, payment QR codes, and chat preview behavior. */
 
 import type React from 'react'
-import { Loader2, X } from 'lucide-react'
+import { Camera, Loader2, X } from 'lucide-react'
 import { IconEssay, IconSend, IconUpload } from "@/components/icons/v2"
 import { motion } from 'framer-motion'
 import { cn } from '@/lib/utils'
@@ -175,6 +175,18 @@ export function ImageChatComposer(props: ImageChatComposerProps) {
         <div className="flex items-end gap-2 p-2.5 md:p-3">
           <Button type="button" variant="ghost" size="icon" className="h-11 w-11 md:h-10 md:w-10 rounded-[var(--radius-sharp)] text-[var(--ink-400)] hover:bg-[var(--paper-50)] touch-manipulation" onClick={props.onUploadClick} disabled={props.isLoading}>
             <IconUpload className="h-4 w-4 md:h-5 md:w-5" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-11 w-11 rounded-[var(--radius-sharp)] text-[var(--ink-500)] hover:bg-[var(--paper-50)] touch-manipulation md:h-10 md:w-10"
+            onClick={props.onUploadClick}
+            disabled={props.isLoading}
+            aria-label="拍照上传参考图"
+            title="拍照上传参考图"
+          >
+            <Camera className="h-4 w-4 md:h-5 md:w-5" />
           </Button>
 
           <Textarea

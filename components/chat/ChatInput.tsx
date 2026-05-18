@@ -20,10 +20,12 @@ import {
   type FormEvent,
 } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { X, Loader2, ChevronDown, CornerDownLeft } from "lucide-react"
+import { Camera, Volume2, X, Loader2, ChevronDown, CornerDownLeft } from "lucide-react"
 import { IconEssay, IconMic, IconUpload } from "@/components/icons/v2"
 import { cn } from "@/lib/utils"
 import { ModelSelector, type Model } from "./ModelSelector"
+import { getDifyTTS } from "@/lib/voice-service"
+import { toast } from "sonner"
 
 // ============================================
 // Web Speech API 类型定义
@@ -241,9 +243,19 @@ export function ChatInput({
 }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const cameraInputRef = useRef<HTMLInputElement>(null)
+  const cameraVideoRef = useRef<HTMLVideoElement>(null)
+  const cameraCanvasRef = useRef<HTMLCanvasElement>(null)
+  const cameraStreamRef = useRef<MediaStream | null>(null)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
   const [isFocused, setIsFocused] = useState(false)
   const [isDraggingFile, setIsDraggingFile] = useState(false)
   const [isListening, setIsListening] = useState(false)
+  const [isSpeaking, setIsSpeaking] = useState(false)
+  const [isPreparingSpeech, setIsPreparingSpeech] = useState(false)
+  const [isCameraOpen, setIsCameraOpen] = useState(false)
+  const [isCameraReady, setIsCameraReady] = useState(false)
+  const [cameraError, setCameraError] = useState("")
   const recognitionRef = useRef<SpeechRecognition | null>(null)
   const dragDepthRef = useRef(0)
   const isMobileInputMode = isFocused || value.trim().length > 0
@@ -304,6 +316,29 @@ export function ChatInput({
     }
   }
 
+  const stopCamera = () => {
+    cameraStreamRef.current?.getTracks().forEach((track) => track.stop())
+    cameraStreamRef.current = null
+    setIsCameraReady(false)
+  }
+
+  const closeCamera = () => {
+    stopCamera()
+    setIsCameraOpen(false)
+    setCameraError("")
+  }
+
+  const openCamera = () => {
+    if (disabled || isLoading || !onFileUpload) return
+
+    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+      cameraInputRef.current?.click()
+      return
+    }
+
+    setIsCameraOpen(true)
+  }
+
   const uploadFiles = (files: File[]) => {
     if (!onFileUpload || disabled || isLoading || files.length === 0) return false
 
@@ -312,6 +347,88 @@ export function ChatInput({
 
     onFileUpload(fileList)
     return true
+  }
+
+  useEffect(() => {
+    if (!isCameraOpen) return
+
+    let isActive = true
+
+    const startCamera = async () => {
+      try {
+        setCameraError("")
+        setIsCameraReady(false)
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: "environment" } },
+          audio: false,
+        })
+
+        if (!isActive) {
+          stream.getTracks().forEach((track) => track.stop())
+          return
+        }
+
+        cameraStreamRef.current = stream
+        if (cameraVideoRef.current) {
+          cameraVideoRef.current.srcObject = stream
+          await cameraVideoRef.current.play()
+          setIsCameraReady(true)
+        }
+      } catch (error) {
+        console.error("相机启动失败:", error)
+        setCameraError("无法打开摄像头，请检查浏览器权限，或改用系统拍照/相册。")
+      }
+    }
+
+    startCamera()
+
+    return () => {
+      isActive = false
+      stopCamera()
+    }
+  }, [isCameraOpen])
+
+  const captureCameraPhoto = async () => {
+    const video = cameraVideoRef.current
+    const canvas = cameraCanvasRef.current
+    if (!video || !canvas || !onFileUpload) return
+
+    const width = video.videoWidth || 1280
+    const height = video.videoHeight || 720
+    canvas.width = width
+    canvas.height = height
+
+    const context = canvas.getContext("2d")
+    if (!context) {
+      toast.error("相机画面处理失败")
+      return
+    }
+
+    context.drawImage(video, 0, 0, width, height)
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.92))
+    if (!blob) {
+      toast.error("拍照失败，请重试")
+      return
+    }
+
+    const file = new File([blob], `camera-${Date.now()}.jpg`, {
+      type: "image/jpeg",
+      lastModified: Date.now(),
+    })
+
+    if (uploadFiles([file])) {
+      closeCamera()
+    }
+  }
+
+  const stopAudioPlayback = () => {
+    const audio = audioRef.current
+    if (!audio) return
+
+    audio.pause()
+    if (audio.src.startsWith("blob:")) URL.revokeObjectURL(audio.src)
+    audioRef.current = null
+    setIsSpeaking(false)
   }
 
   const handlePaste = (event: ReactClipboardEvent<HTMLDivElement>) => {
@@ -412,8 +529,44 @@ export function ChatInput({
       if (recognitionRef.current) {
         recognitionRef.current.abort()
       }
+      stopAudioPlayback()
+      stopCamera()
     }
   }, [])
+
+  const playInputText = async () => {
+    const text = value.trim()
+    if (!text) {
+      toast.info("请输入要朗读的文字")
+      return
+    }
+
+    if (isSpeaking) {
+      stopAudioPlayback()
+      return
+    }
+
+    try {
+      setIsPreparingSpeech(true)
+      const audioUrl = await getDifyTTS(text, selectedModel)
+      const audio = new Audio(audioUrl)
+      audioRef.current = audio
+      audio.onended = () => {
+        setIsSpeaking(false)
+        if (audioUrl.startsWith("blob:")) URL.revokeObjectURL(audioUrl)
+      }
+      audio.onerror = () => {
+        setIsSpeaking(false)
+        toast.error("语音播放失败")
+      }
+      await audio.play()
+      setIsSpeaking(true)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "语音合成失败")
+    } finally {
+      setIsPreparingSpeech(false)
+    }
+  }
 
   // 是否可以提交
   const canSubmit = !isLoading && !disabled && (value.trim() || uploadedFiles.length > 0)
@@ -556,8 +709,76 @@ export function ChatInput({
                 <IconUpload className="h-4 w-4 sm:h-5 sm:w-5" />
               </Button>
             </div>
+            <div className="flex flex-col items-center gap-0.5 sm:gap-1">
+              <span className="hidden text-[11px] text-[var(--ink-400)] font-[var(--font-mono-v2)] sm:block">
+                拍照
+              </span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className={cn(
+                  "h-11 w-11 sm:h-10 sm:w-10 rounded-[var(--radius-sharp)] touch-manipulation text-[var(--ink-600)] hover:bg-[var(--ink-50)]",
+                  isFocused && "max-sm:h-9 max-sm:w-9 max-sm:rounded-full"
+                )}
+                onClick={openCamera}
+                disabled={isLoading || disabled || !onFileUpload}
+                aria-label="拍照上传"
+                title="拍照上传"
+              >
+                <Camera className="h-4 w-4 sm:h-5 sm:w-5" />
+              </Button>
+            </div>
           </div>
         )}
+
+        {showModelSelector ? (
+          <div className="flex shrink-0 flex-col items-center gap-0.5 sm:gap-1">
+            <span className="hidden text-[11px] text-[var(--ink-400)] font-[var(--font-mono-v2)] sm:block">
+              拍照
+            </span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-10 w-10 rounded-full text-[var(--ink-600)] hover:bg-[var(--ink-50)] sm:rounded-[var(--radius-sharp)]"
+              onClick={openCamera}
+              disabled={isLoading || disabled || !onFileUpload}
+              aria-label="拍照上传"
+              title="拍照上传"
+            >
+              <Camera className="h-4 w-4 sm:h-5 sm:w-5" />
+            </Button>
+          </div>
+        ) : null}
+
+        <div className="flex flex-col items-center gap-0.5 sm:gap-1 shrink-0">
+          <span className="hidden text-[11px] text-[var(--ink-400)] font-[var(--font-mono-v2)] sm:block">
+            {isPreparingSpeech ? "合成中" : isSpeaking ? "播放中" : "朗读"}
+          </span>
+          <motion.button
+            type="button"
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={playInputText}
+            disabled={isLoading || disabled || isPreparingSpeech || !value.trim()}
+            className={cn(
+              "h-10 w-10 rounded-full sm:rounded-[var(--radius-sharp)] flex items-center justify-center transition-all duration-200 touch-manipulation",
+              isSpeaking
+                ? "bg-[var(--ink-700)] text-white shadow-lg"
+                : "text-[var(--ink-600)] hover:bg-[var(--ink-50)]",
+              (!value.trim() || isPreparingSpeech) && "opacity-50"
+            )}
+            aria-label={isSpeaking ? "停止朗读" : "朗读输入文字"}
+            title={isSpeaking ? "停止朗读" : "朗读输入文字"}
+          >
+            {isPreparingSpeech ? (
+              <Loader2 className="h-4 w-4 animate-spin sm:h-5 sm:w-5" />
+            ) : (
+              <Volume2 className="h-4 w-4 sm:h-5 sm:w-5" />
+            )}
+          </motion.button>
+        </div>
 
         {/* 语音输入按钮 */}
         <div className={cn("flex flex-col items-center gap-0.5 sm:gap-1 shrink-0", isMobileInputMode && "max-sm:hidden")}>
@@ -646,6 +867,78 @@ export function ChatInput({
         onChange={handleFileChange}
         aria-label="文件上传"
       />
+      <input
+        ref={cameraInputRef}
+        type="file"
+        className="hidden"
+        accept="image/*"
+        capture="environment"
+        onChange={handleFileChange}
+        aria-label="拍照上传"
+      />
+      <AnimatePresence>
+        {isCameraOpen ? (
+          <motion.div
+            className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-3 sm:items-center"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            role="dialog"
+            aria-modal="true"
+            aria-label="拍照上传"
+          >
+            <motion.div
+              className="w-full max-w-lg overflow-hidden rounded-[var(--radius-card)] bg-white shadow-2xl"
+              initial={{ y: 24, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 24, opacity: 0 }}
+            >
+              <div className="flex items-center justify-between border-b border-[var(--paper-100)] px-4 py-3">
+                <div>
+                  <p className="text-sm font-semibold text-[var(--ink-800)]">拍照上传</p>
+                  <p className="text-xs text-[var(--ink-500)]">支持手机摄像头和电脑摄像头</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeCamera}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-full text-[var(--ink-500)] hover:bg-[var(--paper-100)]"
+                  aria-label="关闭相机"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="bg-black">
+                {cameraError ? (
+                  <div className="flex min-h-[280px] flex-col items-center justify-center gap-3 px-6 text-center text-white">
+                    <Camera className="h-8 w-8 opacity-80" />
+                    <p className="text-sm leading-6">{cameraError}</p>
+                    <Button type="button" variant="outline" size="sm" onClick={() => cameraInputRef.current?.click()}>
+                      打开系统拍照/相册
+                    </Button>
+                  </div>
+                ) : (
+                  <video
+                    ref={cameraVideoRef}
+                    className="aspect-[4/3] w-full bg-black object-cover"
+                    playsInline
+                    muted
+                  />
+                )}
+                <canvas ref={cameraCanvasRef} className="hidden" />
+              </div>
+              <div className="flex items-center justify-between gap-3 px-4 py-3">
+                <Button type="button" variant="ghost" onClick={() => cameraInputRef.current?.click()}>
+                  从相册选择
+                </Button>
+                <Button type="button" onClick={captureCameraPhoto} disabled={!isCameraReady || Boolean(cameraError)}>
+                  <Camera className="mr-2 h-4 w-4" />
+                  拍照使用
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
     </div>
   )
 }

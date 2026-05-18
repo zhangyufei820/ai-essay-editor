@@ -6,7 +6,7 @@ import { ButtonV2 as Button, TextareaV2 as Textarea } from "@/components/ui/v2"
 import type React from "react"
 import { Suspense, useEffect, useMemo, useRef, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { ChevronDown, ChevronLeft, FileImage, Image as ImageIcon, Loader2, Trash2, UploadCloud, Wand2, X } from "lucide-react"
+import { Camera, ChevronDown, ChevronLeft, FileImage, Image as ImageIcon, Loader2, Trash2, Wand2, X } from "lucide-react"
 import { IconAllInOne, IconCopy, IconExportPdf, IconHistory, IconInkDot, IconSealCheck } from "@/components/icons/v2"
 import { createClient } from "@supabase/supabase-js"
 import { toast } from "sonner"
@@ -347,6 +347,7 @@ function UploadPanel({
         ref={inputRef}
         type="file"
         accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"
+        capture="environment"
         className="hidden"
         onChange={(event) => pickFile(event.target.files?.[0])}
       />
@@ -380,7 +381,7 @@ function UploadPanel({
           onClick={() => inputRef.current?.click()}
           className="flex w-full flex-col items-center justify-center rounded-[var(--radius-soft)] px-4 py-7 text-center transition hover:bg-[var(--paper-100)]"
         >
-          <UploadCloud className="mb-3 h-7 w-7 text-[var(--ink-700)]" />
+          <Camera className="mb-3 h-7 w-7 text-[var(--ink-700)]" />
           <span className="text-sm font-medium text-[var(--ink-900)]">{title}</span>
           <span className="mt-1 max-w-sm text-xs leading-relaxed text-[var(--ink-500)]">{description}</span>
         </button>
@@ -446,6 +447,7 @@ function MultiImageUploadPanel({
         type="file"
         multiple
         accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"
+        capture="environment"
         className="hidden"
         onChange={(event) => {
           pickFiles(event.target.files)
@@ -464,7 +466,7 @@ function MultiImageUploadPanel({
             </div>
             <div className="flex flex-wrap gap-2">
               <Button type="button" variant="outline" size="sm" onClick={() => inputRef.current?.click()} disabled={images.length >= MAX_EDIT_IMAGE_UPLOADS}>
-                <UploadCloud className="mr-2 h-4 w-4" />
+                <Camera className="mr-2 h-4 w-4" />
                 继续添加
               </Button>
               <Button type="button" variant="outline" size="sm" onClick={onClear}>
@@ -500,7 +502,7 @@ function MultiImageUploadPanel({
           onClick={() => inputRef.current?.click()}
           className="flex w-full flex-col items-center justify-center rounded-[var(--radius-soft)] px-4 py-7 text-center transition hover:bg-[var(--paper-100)]"
         >
-          <UploadCloud className="mb-3 h-7 w-7 text-[var(--ink-700)]" />
+          <Camera className="mb-3 h-7 w-7 text-[var(--ink-700)]" />
           <span className="text-sm font-medium text-[var(--ink-900)]">{title}</span>
           <span className="mt-1 max-w-sm text-xs leading-relaxed text-[var(--ink-500)]">{description}</span>
         </button>

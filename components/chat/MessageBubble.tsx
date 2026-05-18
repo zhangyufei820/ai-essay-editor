@@ -40,8 +40,6 @@ import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import remarkMath from "remark-math"
 import rehypeKatex from "rehype-katex"
-import html2canvas from "html2canvas"
-import { jsPDF } from "jspdf"
 
 // v2 墨砚 token colors
 const AI_TEXT_COLOR = "var(--ink-800)"
@@ -107,29 +105,6 @@ function parseFlashcards(content: string): FlashcardArtifact | null {
     .filter((card) => card.front && card.back)
 
   return cards.length ? { type: "flashcard", cards: cards.slice(0, 20) } : null
-}
-
-async function exportEssayReviewAsPDF(element: HTMLElement, title: string) {
-  const canvas = await html2canvas(element, { scale: 2, useCORS: true })
-  const imgData = canvas.toDataURL("image/png")
-  const pdf = new jsPDF("p", "mm", "a4")
-  const pdfWidth = pdf.internal.pageSize.getWidth()
-  const pageHeight = pdf.internal.pageSize.getHeight()
-  const imgHeight = (canvas.height * pdfWidth) / canvas.width
-  let position = 0
-  let remainingHeight = imgHeight
-
-  pdf.addImage(imgData, "PNG", 0, position, pdfWidth, imgHeight)
-  remainingHeight -= pageHeight
-
-  while (remainingHeight > 0) {
-    position = remainingHeight - imgHeight
-    pdf.addPage()
-    pdf.addImage(imgData, "PNG", 0, position, pdfWidth, imgHeight)
-    remainingHeight -= pageHeight
-  }
-
-  pdf.save(`${title}.pdf`)
 }
 
 // Extract text content from React children for keyword detection
@@ -643,7 +618,6 @@ const MessageBubble = memo(function MessageBubble({
   showAvatar = true,
 }: MessageBubbleProps) {
   const isUser = role === "user"
-  const essayRef = useRef<HTMLDivElement>(null)
   const essayReviewArtifact = useMemo(() => {
     const isEssayModel = model === "standard" || model === "essay-correction"
     if (isUser || !isEssayModel) return null
@@ -679,12 +653,6 @@ const MessageBubble = memo(function MessageBubble({
     onExportPDF: async () => {
       try {
         toast.info("正在生成完整 PDF...")
-        if (essayRef.current && templateType === "essay-review") {
-          await exportEssayReviewAsPDF(essayRef.current, "沈翔智学-作文批改报告")
-          toast.success("PDF 已生成")
-          return
-        }
-
         await exportChatContentToPDF(content, {
           title: essayReviewArtifact ? "沈翔智学 - 作文批改报告" : "沈翔智学 - AI 分析报告",
           filenamePrefix: essayReviewArtifact ? "沈翔智学-作文批改报告" : "沈翔智学-AI分析报告",
@@ -799,7 +767,7 @@ const MessageBubble = memo(function MessageBubble({
                 switch (templateType) {
                   case "essay-review":
                     return (
-                      <div ref={essayRef} className="w-full max-w-none overflow-hidden rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-white shadow-[var(--shadow-paper)]">
+                      <div className="w-full max-w-none overflow-hidden rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-white shadow-[var(--shadow-paper)]">
                         <EssayReviewTemplate
                           artifact={essayReviewArtifact!}
                           onCopy={actions.onCopy}

@@ -2155,10 +2155,12 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   // ============================================
   // 🔊 TTS 语音播放功能
   // ============================================
-  const playAssistantMessage = async (content: string) => {
+  const playAssistantMessage = useCallback(async (content: string) => {
     if (isPlaying) {
       // 停止播放
-      audioRef.current?.pause()
+      const currentAudio = audioRef.current
+      currentAudio?.pause()
+      if (currentAudio?.src.startsWith("blob:")) URL.revokeObjectURL(currentAudio.src)
       audioRef.current = null
       setIsPlaying(false)
       return
@@ -2168,20 +2170,47 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       toast.info("正在生成语音...")
       const audioUrl = await getDifyTTS(content, selectedModel)
 
-      audioRef.current = new Audio(audioUrl)
-      audioRef.current.onended = () => setIsPlaying(false)
-      audioRef.current.onerror = () => {
+      const audio = new Audio(audioUrl)
+      audioRef.current = audio
+      audio.onended = () => {
+        setIsPlaying(false)
+        if (audioUrl.startsWith("blob:")) URL.revokeObjectURL(audioUrl)
+      }
+      audio.onerror = () => {
         setIsPlaying(false)
         toast.error("音频播放失败")
+        if (audioUrl.startsWith("blob:")) URL.revokeObjectURL(audioUrl)
       }
-      await audioRef.current.play()
+      await audio.play()
       setIsPlaying(true)
       toast.success("播放中...")
     } catch (error) {
       console.error("🔊 TTS 播放失败:", error)
       toast.error(error instanceof Error ? error.message : "语音合成失败")
     }
-  }
+  }, [isPlaying, selectedModel])
+
+  useEffect(() => {
+    const handlePlayMessageAudio = (event: Event) => {
+      const text = (event as CustomEvent<{ text?: string }>).detail?.text?.trim()
+      if (!text) return
+      void playAssistantMessage(text)
+    }
+
+    window.addEventListener("play-chat-message-audio", handlePlayMessageAudio)
+    return () => {
+      window.removeEventListener("play-chat-message-audio", handlePlayMessageAudio)
+    }
+  }, [playAssistantMessage])
+
+  useEffect(() => {
+    return () => {
+      const audio = audioRef.current
+      audio?.pause()
+      if (audio?.src.startsWith("blob:")) URL.revokeObjectURL(audio.src)
+      audioRef.current = null
+    }
+  }, [])
 
   const onSubmit = async (
     e: React.FormEvent,

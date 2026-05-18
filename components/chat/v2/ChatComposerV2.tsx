@@ -12,7 +12,7 @@
 "use client"
 
 import * as React from "react"
-import { X } from "lucide-react"
+import { Camera, X } from "lucide-react"
 import { IconMic, IconSend, IconUpload } from "@/components/icons/v2"
 import { cn } from "@/lib/utils"
 import { TextareaV2 } from "@/components/ui/v2/textarea"
@@ -27,6 +27,8 @@ export interface ChatComposerV2Props {
   onSend?: (text: string) => void
   /** 上传按钮回调 */
   onAttach?: () => void
+  /** 相机按钮回调 */
+  onCamera?: () => void
   /** 录音按钮回调 */
   onRecord?: () => void
   /** 已选附件 */
@@ -42,6 +44,7 @@ export function ChatComposerV2({
   isStreaming,
   onSend,
   onAttach,
+  onCamera,
   onRecord,
   attachments,
   onRemoveAttachment,
@@ -108,6 +111,15 @@ export function ChatComposerV2({
           disabled={disabled}
         >
           <IconUpload className="size-4" />
+        </ButtonV2>
+        <ButtonV2
+          variant="ghost"
+          size="icon-sm"
+          onClick={onCamera ?? onAttach}
+          aria-label="拍照上传"
+          disabled={disabled || (!onCamera && !onAttach)}
+        >
+          <Camera className="size-4" />
         </ButtonV2>
         <ButtonV2
           variant="ghost"
