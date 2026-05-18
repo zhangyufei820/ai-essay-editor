@@ -6,6 +6,7 @@ import { memo, useEffect, useMemo, useState } from "react"
 
 import { proxifyGeneratedImagePreviewUrl } from "@/components/chat/image-generation/gpt-image-v11"
 import { extractPrimaryImageFromOpenClawHtml, type OpenClawPrimaryImage } from "@/lib/openclaw-html"
+import { rewriteOpenClawMediaReferences } from "@/lib/openclaw-media"
 import { cn } from "@/lib/utils"
 import { IconEssay } from "@/components/icons/v2"
 
@@ -49,6 +50,23 @@ function escapeHtmlAttribute(value: string) {
 function sameSiteUrl(value: string) {
   try {
     const parsed = new URL(value, window.location.origin)
+    const trustedAppHosts = new Set([
+      "shenxiang.school",
+      "www.shenxiang.school",
+      "api.shenxiang.school",
+      "cloudflare.shenxiang.school",
+      "localhost",
+      "127.0.0.1",
+    ])
+    if (
+      parsed.origin !== window.location.origin &&
+      trustedAppHosts.has(parsed.hostname) &&
+      (parsed.pathname.startsWith("/api/openclaw-media") ||
+        parsed.pathname.startsWith("/api/openclaw-media-sign") ||
+        parsed.pathname.startsWith("/slides/"))
+    ) {
+      return new URL(`${parsed.pathname}${parsed.search}${parsed.hash}`, window.location.origin)
+    }
     if (parsed.origin !== window.location.origin) return null
     return parsed
   } catch {
@@ -140,9 +158,11 @@ export const OpenClawHtmlPreview = memo(function OpenClawHtmlPreview({
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading")
 
   const label = useMemo(() => fileLabel(src, title), [src, title])
+  const normalizedSrc = useMemo(() => rewriteOpenClawMediaReferences(src), [src])
+  const openHref = useMemo(() => sameSiteUrl(normalizedSrc)?.toString() || normalizedSrc, [normalizedSrc])
 
   useEffect(() => {
-    const target = sameSiteUrl(src)
+    const target = sameSiteUrl(normalizedSrc)
     if (!target) {
       setStatus("error")
       return
@@ -168,7 +188,7 @@ export const OpenClawHtmlPreview = memo(function OpenClawHtmlPreview({
     return () => {
       cancelled = true
     }
-  }, [src])
+  }, [normalizedSrc])
 
   return (
     <div className={cn("my-3 overflow-hidden rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-[var(--paper-50)] shadow-sm", className)}>
@@ -178,7 +198,7 @@ export const OpenClawHtmlPreview = memo(function OpenClawHtmlPreview({
         </span>
         <span className="min-w-0 flex-1 truncate text-sm font-medium text-[var(--ink-700)]">{label}</span>
         <a
-          href={src}
+          href={openHref}
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-[var(--paper-50)] px-2.5 py-1.5 text-xs font-medium text-[var(--ink-600)] no-underline shadow-sm transition-colors hover:bg-[var(--paper-100)]"

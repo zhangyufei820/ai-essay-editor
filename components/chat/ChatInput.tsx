@@ -20,8 +20,8 @@ import {
   type FormEvent,
 } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { X, Loader2, ChevronDown, Image as ImageIcon } from "lucide-react"
-import { IconDiagnosis, IconEssay, IconMic, IconSend, IconUpload } from "@/components/icons/v2"
+import { X, Loader2, ChevronDown, CornerDownLeft, Camera } from "lucide-react"
+import { IconDiagnosis, IconEssay, IconMic, IconUpload } from "@/components/icons/v2"
 import { cn } from "@/lib/utils"
 import { ModelSelector, type Model } from "./ModelSelector"
 
@@ -489,10 +489,10 @@ export function ChatInput({
       onDrop={handleDrop}
       className={cn(
         className,
-        "relative mx-auto w-full max-w-3xl rounded-[var(--radius-card)] border border-[var(--ink-600)] bg-white shadow-[var(--shadow-paper)] touch-manipulation",
+        "relative mx-auto w-full max-w-3xl rounded-[var(--radius-card)] border border-[var(--paper-200)] bg-white shadow-[0_18px_46px_rgba(14,27,17,0.14),0_4px_12px_rgba(14,27,17,0.08)] touch-manipulation",
         "transition-[border-color,box-shadow] duration-200",
-        "focus-within:border-[var(--ink-700)] focus-within:[box-shadow:var(--shadow-focus-ink)]",
-        isFocused && "border-[var(--ink-700)]"
+        "focus-within:border-[var(--ink-300)] focus-within:shadow-[0_22px_60px_rgba(14,27,17,0.16),0_6px_16px_rgba(14,27,17,0.10)]",
+        isFocused && "border-[var(--ink-300)]"
       )}
       style={{ 
         ['--ring-color' as string]: "var(--ink-500)"
@@ -610,7 +610,7 @@ export function ChatInput({
               disabled={isLoading || disabled}
               aria-label="打开相机拍照"
             >
-              <IconDiagnosis className="h-4 w-4" />
+              <Camera className="h-4 w-4" />
             </Button>
             <Button
               type="button"
@@ -734,6 +734,28 @@ export function ChatInput({
           </motion.button>
         </div>
 
+        {showModelSelector && (
+          <div className="flex flex-col items-center gap-0.5 sm:gap-1 shrink-0">
+            <span className="hidden text-[11px] text-[var(--ink-400)] font-[var(--font-mono-v2)] sm:block">
+              拍照
+            </span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className={cn(
+                "h-10 w-10 rounded-full sm:rounded-[var(--radius-sharp)] touch-manipulation text-[var(--ink-600)] hover:bg-[var(--ink-50)]",
+                isFocused && "max-sm:h-9 max-sm:w-9"
+              )}
+              onClick={handleOpenCamera}
+              disabled={isLoading || disabled}
+              aria-label="打开相机拍照"
+            >
+              <Camera className="h-4 w-4 sm:h-5 sm:w-5" />
+            </Button>
+          </div>
+        )}
+
         {/* 文本输入框 */}
         <Textarea
           ref={textareaRef}
@@ -747,7 +769,7 @@ export function ChatInput({
           className={cn(
             "flex-1 resize-none border-0 bg-transparent shadow-none",
             "min-h-[44px] max-h-[132px] rounded-[18px] px-3 py-2 text-[16px] leading-6 sm:min-h-[48px] sm:max-h-[160px] sm:p-2 sm:text-[15px]",
-            "focus-visible:border-transparent focus-visible:ring-0",
+            "focus-visible:border-transparent focus-visible:ring-0 focus-visible:[box-shadow:none]",
             isMobileInputMode && "max-sm:min-h-[42px] max-sm:max-h-[112px] max-sm:bg-[var(--paper-50)]/80 max-sm:px-3 max-sm:py-2"
           )}
           style={{ color: "var(--ink-700)" }}
@@ -778,7 +800,7 @@ export function ChatInput({
             {isLoading ? (
               <Loader2 className="h-5 w-5 animate-spin" />
             ) : (
-              <IconSend className="h-5 w-5" />
+              <CornerDownLeft className="h-5 w-5" />
             )}
           </motion.button>
         </div>

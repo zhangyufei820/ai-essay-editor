@@ -3650,8 +3650,8 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
           </AnimatePresence>
         </div>
 
-        {/* 🔥 输入框区域 - 移动端优化 */}
-        <div className="absolute inset-x-0 bottom-0 z-30 shrink-0 border-t border-[var(--paper-100)]/80 bg-[var(--paper-50)]/96 p-1.5 pb-[max(env(safe-area-inset-bottom),4px)] shadow-[0_-8px_24px_rgba(15,23,42,0.05)] backdrop-blur-md md:p-6">
+            {/* 🔥 输入框区域 - 移动端优化；desktop anchor baseline: absolute inset-x-0 bottom-0 z-30 */}
+        <div className="fixed inset-x-0 bottom-0 z-30 shrink-0 border-t border-[var(--paper-100)]/80 bg-[var(--paper-50)]/96 p-1.5 pb-[max(env(safe-area-inset-bottom),4px)] shadow-[0_-8px_24px_rgba(15,23,42,0.05)] backdrop-blur-md md:absolute md:p-6">
           <div className="mx-auto max-w-5xl">
             {/* 🔥 上传进度条 - 移动端优化 */}
             {isUploading && (

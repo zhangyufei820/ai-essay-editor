@@ -3,7 +3,7 @@ const OPENCLAW_MEDIA_SIGN_ROUTE = "/api/openclaw-media-sign"
 const OPENCLAW_SLIDES_ROUTE = "/slides"
 
 const OPENCLAW_MEDIA_URL_PATTERN =
-  /https?:\/\/(?:43\.154\.111\.156|shenxiang\.school|www\.shenxiang\.school|api\.shenxiang\.school|localhost|127\.0\.0\.1)(?::18789)?\/__openclaw__\/media\/([^\s)"'<>`]+)/g
+  /https?:\/\/(?:43\.154\.111\.156|shenxiang\.school|www\.shenxiang\.school|api\.shenxiang\.school|cloudflare\.shenxiang\.school|localhost|127\.0\.0\.1)(?::18789)?\/__openclaw__\/media\/([^\s)"'<>`]+)/g
 
 const OPENCLAW_MEDIA_PATH_PATTERN =
   /\/home\/node\/\.openclaw\/media\/([^\s)"'<>`]+)/g
@@ -12,7 +12,7 @@ const OPENCLAW_WORKSPACE_PATH_PATTERN =
   /\/home\/node\/\.openclaw\/workspace\/([^\s)"'<>`]+)/g
 
 const OPENCLAW_WORKSPACE_URL_PATTERN =
-  /https?:\/\/(?:43\.154\.111\.156|shenxiang\.school|www\.shenxiang\.school|api\.shenxiang\.school|localhost|127\.0\.0\.1)(?::18789)?\/__openclaw__\/workspace\/([^\s)"'<>`]+)/g
+  /https?:\/\/(?:43\.154\.111\.156|shenxiang\.school|www\.shenxiang\.school|api\.shenxiang\.school|cloudflare\.shenxiang\.school|localhost|127\.0\.0\.1)(?::18789)?\/__openclaw__\/workspace\/([^\s)"'<>`]+)/g
 
 const IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".ico"])
 const PRESENTATION_EXTENSIONS = new Set([".ppt", ".pptx"])

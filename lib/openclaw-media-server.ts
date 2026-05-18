@@ -44,7 +44,7 @@ export function rewriteOpenClawMediaReferencesWithSignedUrls(
   userId: string,
 ) {
   return text
-    .replace(/https?:\/\/(?:43\.154\.111\.156|shenxiang\.school|www\.shenxiang\.school|api\.shenxiang\.school|localhost|127\.0\.0\.1)(?::18789)?\/__openclaw__\/media\/([^\s)"'<>`]+)/g, (_match, mediaPath: string) =>
+    .replace(/https?:\/\/(?:43\.154\.111\.156|shenxiang\.school|www\.shenxiang\.school|api\.shenxiang\.school|cloudflare\.shenxiang\.school|localhost|127\.0\.0\.1)(?::18789)?\/__openclaw__\/media\/([^\s)"'<>`]+)/g, (_match, mediaPath: string) =>
       createSignedOpenClawMediaUrl(mediaPath, expiresInSeconds, userId),
     )
     .replace(/\/home\/node\/\.openclaw\/media\/([^\s)"'<>`]+)/g, (_match, mediaPath: string) =>
