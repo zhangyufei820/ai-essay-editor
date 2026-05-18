@@ -14,8 +14,8 @@ describe("Sprint 6 growth conversion guardrails", () => {
     const source = readProjectFile("components/home/HeroSection.tsx")
 
     expect(source).toContain("上传作文批改")
-    expect(source).toContain("拍卷诊断错题")
-    expect(source).toMatch(/href:\s*["']\/worksheet-diagnosis["']/)
+    expect(source).toContain("智能体广场")
+    expect(source).toMatch(/href:\s*["']\/agents["']/)
     expect(source).toMatch(/href:\s*["']\/chat\/standard["']/)
     expect(source).not.toContain('href="#"')
     expect(source).not.toContain("完整学习报告预览")

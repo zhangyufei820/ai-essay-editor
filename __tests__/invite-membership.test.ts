@@ -10,7 +10,7 @@ describe("invite membership sharing guard", () => {
 
     expect(source).toContain("getVerifiedAuthHeaders")
     expect(source).toContain("headers: await getVerifiedAuthHeaders(parsedUser)")
-    expect(source).toContain("fetch('/api/user/membership'")
+    expect(source).toMatch(/fetch\(["']\/api\/user\/membership["']/)
     expect(source).not.toContain("possibleUserIds")
     expect(source).not.toContain("parsedUser.phone")
     expect(source).not.toContain("parsedUser.email")

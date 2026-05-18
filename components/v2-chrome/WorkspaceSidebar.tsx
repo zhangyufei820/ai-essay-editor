@@ -76,6 +76,35 @@ export function WorkspaceSidebar({
   className,
 }: WorkspaceSidebarProps) {
   const pathname = usePathname()
+  const renderItemContent = (item: WorkspaceSidebarItem, active: boolean) => {
+    const Icon = item.icon
+
+    return (
+      <>
+        {active ? (
+          <span
+            className="absolute left-0 top-1/2 -translate-y-1/2 size-1.5 rounded-full bg-[var(--seal-500)]"
+            aria-hidden="true"
+          />
+        ) : null}
+        {Icon ? (
+          <Icon className="size-4 shrink-0" aria-hidden="true" />
+        ) : (
+          <span className="size-4" aria-hidden="true" />
+        )}
+        {!collapsed ? (
+          <>
+            <span className="flex-1 truncate">{item.label}</span>
+            {item.badge ? (
+              <span className="text-[11px] px-1.5 py-0.5 rounded-[var(--radius-pill)] bg-[var(--seal-50)] text-[var(--seal-600)] font-mono">
+                {item.badge}
+              </span>
+            ) : null}
+          </>
+        ) : null}
+      </>
+    )
+  }
 
   return (
     <aside
@@ -113,46 +142,45 @@ export function WorkspaceSidebar({
             ) : null}
             <ul className="space-y-0.5">
               {section.items.map((item) => {
-                const Icon = item.icon
-                const active = item.href === "/chat"
+                const external = /^https?:\/\//.test(item.href)
+                const active = external
+                  ? false
+                  : item.href === "/chat"
                   ? pathname === item.href
                   : pathname === item.href || pathname?.startsWith(`${item.href}/`)
+                const itemClassName = cn(
+                  "group relative flex items-center gap-3 px-3 py-2 rounded-[var(--radius-soft)] text-[14px]",
+                  "transition-colors duration-200",
+                  active
+                    ? "bg-[var(--ink-50)] text-[var(--ink-800)] font-semibold"
+                    : "text-[var(--ink-600)] hover:bg-[var(--ink-50)]/60 hover:text-[var(--ink-700)]"
+                )
+
+                if (external) {
+                  return (
+                    <li key={item.href}>
+                      <a
+                        href={item.href}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={onItemClick}
+                        className={itemClassName}
+                      >
+                        {renderItemContent(item, active)}
+                      </a>
+                    </li>
+                  )
+                }
+
                 return (
                   <li key={item.href}>
                     <Link
                       href={item.href}
                       prefetch={false}
                       onClick={onItemClick}
-                      className={cn(
-                        "group relative flex items-center gap-3 px-3 py-2 rounded-[var(--radius-soft)] text-[14px]",
-                        "transition-colors duration-200",
-                        active
-                          ? "bg-[var(--ink-50)] text-[var(--ink-800)] font-semibold"
-                          : "text-[var(--ink-600)] hover:bg-[var(--ink-50)]/60 hover:text-[var(--ink-700)]"
-                      )}
+                      className={itemClassName}
                     >
-                      {/* active 指示朱印红圆点 */}
-                      {active ? (
-                        <span
-                          className="absolute left-0 top-1/2 -translate-y-1/2 size-1.5 rounded-full bg-[var(--seal-500)]"
-                          aria-hidden="true"
-                        />
-                      ) : null}
-                      {Icon ? (
-                        <Icon className="size-4 shrink-0" aria-hidden="true" />
-                      ) : (
-                        <span className="size-4" aria-hidden="true" />
-                      )}
-                      {!collapsed ? (
-                        <>
-                          <span className="flex-1 truncate">{item.label}</span>
-                          {item.badge ? (
-                            <span className="text-[11px] px-1.5 py-0.5 rounded-[var(--radius-pill)] bg-[var(--seal-50)] text-[var(--seal-600)] font-mono">
-                              {item.badge}
-                            </span>
-                          ) : null}
-                        </>
-                      ) : null}
+                      {renderItemContent(item, active)}
                     </Link>
                   </li>
                 )

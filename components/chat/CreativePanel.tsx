@@ -11,6 +11,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import { X, Image, Box, Music, Sparkles } from "lucide-react"
 import { ArtisticThinkingIcon } from "@/components/icons/ArtisticThinkingIcons"
 import { ModelLogo, type ModelKey } from "@/components/ModelLogo"
+import { TRIPO3D_EXTERNAL_URL } from "@/lib/tripo3d"
 
 // ============================================
 // 🎨 Design Tokens - "智慧之光" 配色系统
@@ -129,7 +130,7 @@ const CREATIVE_OPTIONS: CreativeOption[] = [
     description: "文字 / 图片生成 3D 模型",
     badge: "3D",
     gradient: "linear-gradient(135deg, rgba(63, 90, 66, 0.12) 0%, rgba(178, 58, 44, 0.08) 100%)",
-    href: "/tools/tripo3d",
+    href: TRIPO3D_EXTERNAL_URL,
   },
 ]
 
@@ -382,10 +383,13 @@ function CreativeIslandCard({
 }) {
   const Icon = option.icon
   const isHot = option.badge === "热门"
+  const isExternal = option.href ? /^https?:\/\//.test(option.href) : false
 
   return (
     <motion.a
       href={option.href ?? `/chat/creative-${option.key}`}
+      target={isExternal ? "_blank" : undefined}
+      rel={isExternal ? "noreferrer" : undefined}
       onClick={onClick}
       className="group relative block p-5 rounded-[var(--radius-sharp)] overflow-hidden cursor-pointer"
       style={{

@@ -13,6 +13,7 @@ import {
 import { useState, type FormEvent } from "react"
 import Link from "next/link"
 import { ArrowUpRight, Box, FileText, Loader2, Presentation, Search, Sparkles, Wand2 } from "lucide-react"
+import { TRIPO3D_EXTERNAL_URL } from "@/lib/tripo3d"
 
 type ToolResult = {
   title: string
@@ -176,10 +177,10 @@ export default function ToolsPage() {
               </div>
             </div>
             <Button asChild variant="outline" className="w-full sm:w-auto">
-              <Link href="/tools/tripo3d">
-                进入 3D 工具
+              <a href={TRIPO3D_EXTERNAL_URL} target="_blank" rel="noreferrer">
+                新网页打开
                 <ArrowUpRight className="size-4" aria-hidden="true" />
-              </Link>
+              </a>
             </Button>
           </CardContent>
         </Card>
