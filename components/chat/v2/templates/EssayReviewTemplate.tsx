@@ -15,6 +15,8 @@ import { Sparkles } from "lucide-react"
 import { IconCopy, IconExportPdf, IconFollowup, IconShare } from "@/components/icons/v2"
 import { ButtonV2 } from "@/components/ui/v2/button"
 import { ScoreSeal, SealStamp } from "@/components/ui/v2/seal"
+import { EnhancedMarkdown } from "@/components/chat/EnhancedMarkdown"
+import { cleanLLMText } from "@/lib/text-sanitizer"
 import { cn } from "@/lib/utils"
 import type { EssayReviewArtifact } from "../types"
 
@@ -169,6 +171,18 @@ export function EssayReviewTemplate({
           </h2>
           <div className="mt-4 whitespace-pre-line rounded-[var(--radius-soft)] bg-[var(--paper-100)] p-4 text-[15px] leading-[1.9] text-[var(--ink-800)]">
             {artifact.finalDraft}
+          </div>
+        </section>
+      ) : null}
+
+      {/* 完整模型返回 */}
+      {artifact.rawMarkdown ? (
+        <section className="border-b border-[var(--paper-200)] px-6 py-6 sm:px-8 sm:py-8">
+          <h2 className="font-[var(--font-display)] text-[18px] font-bold text-[var(--ink-800)]">
+            完整批改内容
+          </h2>
+          <div className="mt-4 rounded-[var(--radius-soft)] bg-[var(--paper-50)] px-4 py-3">
+            <EnhancedMarkdown content={cleanLLMText(artifact.rawMarkdown)} />
           </div>
         </section>
       ) : null}

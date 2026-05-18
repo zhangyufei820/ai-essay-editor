@@ -17,9 +17,11 @@ import { IconCopy, IconExportPdf, IconFollowup, IconListen, IconShare, IconUser 
 import { cn } from "@/lib/utils"
 import { AssistantMessageV2 } from "@/components/chat/v2"
 import { EssayReviewTemplate } from "@/components/chat/v2/templates"
+import { exportChatContentToPDF } from "@/lib/chat-pdf-export"
 import { InkBrush } from "@/components/motion/InkMotion"
 import { parseEssayReview } from "@/lib/parse-essay-review"
 import { splitThinkingContent } from "@/lib/think-content"
+import { toast } from "sonner"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import remarkMath from "remark-math"
@@ -490,8 +492,18 @@ const MessageBubble = memo(function MessageBubble({
         console.error("Copy failed:", err)
       }
     },
-    onExportPDF: () => {
-      window.print()
+    onExportPDF: async () => {
+      try {
+        toast.info("正在生成完整 PDF...")
+        await exportChatContentToPDF(content, {
+          title: essayReviewArtifact ? "沈翔智学 - 作文批改报告" : "沈翔智学 - AI 分析报告",
+          filenamePrefix: essayReviewArtifact ? "沈翔智学-作文批改报告" : "沈翔智学-AI分析报告",
+        })
+        toast.success("PDF 已生成")
+      } catch (err) {
+        console.error("PDF export failed:", err)
+        toast.error("PDF 导出失败，请重试")
+      }
     },
     onShare: () => {
       if (navigator.share) {
@@ -504,7 +516,7 @@ const MessageBubble = memo(function MessageBubble({
     onPlayAudio: () => {
       window.dispatchEvent(new CustomEvent("play-chat-message-audio", { detail: { text: content } }))
     },
-  }), [content, onCopy])
+  }), [content, essayReviewArtifact, onCopy])
 
   // User message style - transparent background, inherits page text color
   const userBubbleStyle = {
