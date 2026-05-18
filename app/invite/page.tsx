@@ -1,26 +1,17 @@
 "use client"
 
-import { ButtonV2 as Button } from "@/components/ui/v2"
-import Image from "next/image"
-import { useState, useEffect, useCallback } from "react"
-import { useRouter } from "next/navigation"
+import * as React from "react"
 import Link from "next/link"
-import { 
-  Gift, Copy, Check, ChevronLeft, Heart, Sparkles, 
-  PartyPopper, Share2
-} from "lucide-react"
+import { useRouter } from "next/navigation"
+import { ArrowLeft, Check, Copy, Gift, Lock, Share2, Sparkles, Users } from "lucide-react"
 import { toast } from "sonner"
 import { createClient } from "@supabase/supabase-js"
-import { motion } from "framer-motion"
-import { ShenxiangInterfaceIcon } from "@/components/icons/ShenxiangInterfaceIcons"
+import { BadgeV2 as Badge, ButtonV2 as Button, CardV2 as Card, LoadingStateV2, ProgressV2 } from "@/components/ui/v2"
 import { getVerifiedAuthHeaders } from "@/lib/client-auth"
 
-// 🎨 品牌色
-const BRAND_GREEN = "var(--ink-600)"
-const BRAND_GREEN_DARK = "var(--ink-800)"
-const BRAND_GREEN_LIGHT = "var(--ink-50)"
+const REWARD_LIMIT = 50000
+const REWARD_PER_INVITE = 1000
 
-// Supabase 客户端
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -28,120 +19,89 @@ const supabase = createClient(
 
 export default function InvitePage() {
   const router = useRouter()
-  const [user, setUser] = useState<any>(null)
-  const [referralCode, setReferralCode] = useState<string>("")
-  const [inviteCount, setInviteCount] = useState<number>(0)
-  const [totalReward, setTotalReward] = useState<number>(0)
-  const [copied, setCopied] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
-  const [isPaidMember, setIsPaidMember] = useState(false)
+  const [referralCode, setReferralCode] = React.useState("")
+  const [inviteCount, setInviteCount] = React.useState(0)
+  const [totalReward, setTotalReward] = React.useState(0)
+  const [copied, setCopied] = React.useState(false)
+  const [isLoading, setIsLoading] = React.useState(true)
+  const [isPaidMember, setIsPaidMember] = React.useState(false)
 
-  const loadUserData = useCallback(async () => {
+  const loadUserData = React.useCallback(async () => {
     setIsLoading(true)
-    
-    // 从 localStorage 获取用户
-    const userStr = localStorage.getItem('currentUser')
+    const userStr = localStorage.getItem("currentUser")
     if (!userStr) {
-      router.push('/login')
+      router.push("/login")
       return
     }
 
     try {
       const parsedUser = JSON.parse(userStr)
       const userId = parsedUser.id || parsedUser.sub || parsedUser.userId
-      setUser(parsedUser)
-      
-      console.log('🔍 [邀请页] 开始加载用户数据')
-      console.log('🔍 [邀请页] 用户 ID:', userId)
-      console.log('🔍 [邀请页] 完整用户对象:', JSON.stringify(parsedUser, null, 2))
+      let referralOwnerId = userId
 
       if (userId) {
-        let referralOwnerId = userId
-
-        // 🔥 使用已验证的登录态检查当前用户会员状态，并接住同手机号多身份导致的会员归属漂移。
         try {
-          const response = await fetch('/api/user/membership', {
-            headers: await getVerifiedAuthHeaders(parsedUser)
+          const response = await fetch("/api/user/membership", {
+            headers: await getVerifiedAuthHeaders(parsedUser),
           })
           const result = await response.json()
-          console.log('🔍 [邀请页] 会员检查结果:', { ok: response.ok, isPaidMember: result.isPaidMember, type: result.type, userId: result.userId })
-
           if (response.ok && result.isPaidMember === true) {
             setIsPaidMember(true)
             referralOwnerId = result.userId || result.latestOrder?.user_id || userId
-            console.log('🔍 [邀请页] ✅ 找到会员状态')
           } else {
             setIsPaidMember(false)
-            console.log('🔍 [邀请页] ❌ 未找到会员状态')
           }
-        } catch (e) {
-          console.error('会员检查失败:', e)
+        } catch {
           setIsPaidMember(false)
         }
 
-        // 🔥 通过后端 API 获取或创建推荐码（确保存入数据库）
         try {
-          const refResponse = await fetch('/api/referral/get-code', {
-            method: 'POST',
+          const refResponse = await fetch("/api/referral/get-code", {
+            method: "POST",
             headers: {
-              'Content-Type': 'application/json',
+              "Content-Type": "application/json",
               ...(await getVerifiedAuthHeaders()),
             },
-            body: JSON.stringify({ userId: referralOwnerId })
+            body: JSON.stringify({ userId: referralOwnerId }),
           })
           const refResult = await refResponse.json()
-          
           if (refResult.code) {
             setReferralCode(refResult.code)
             setInviteCount(refResult.uses || 0)
-            console.log('🔍 [邀请页] 推荐码获取成功:', refResult.code, '使用次数:', refResult.uses)
           } else {
             setReferralCode("")
-            console.warn('🔍 [邀请页] 推荐码获取失败，已阻止生成不可追踪的邀请链接')
           }
-        } catch (e) {
+        } catch {
           setReferralCode("")
-          console.warn('🔍 [邀请页] 推荐码 API 不可用，已阻止生成不可追踪的邀请链接')
         }
 
-        // 🔥 获取邀请奖励总额（从 referrals 表）
         try {
-          const { data: referrals, error } = await supabase
-            .from('referrals')
-            .select('reward_credits')
-            .eq('referrer_id', referralOwnerId)
-            .eq('status', 'completed')
+          const { data: referrals } = await supabase
+            .from("referrals")
+            .select("reward_credits")
+            .eq("referrer_id", referralOwnerId)
+            .eq("status", "completed")
 
-          if (error) {
-            console.log('🔍 [邀请页] 查询 referrals 表失败:', error)
-          } else if (referrals && referrals.length > 0) {
-            const total = referrals.reduce((sum, r) => sum + (r.reward_credits || 0), 0)
-            setTotalReward(total)
-            console.log('🔍 [邀请页] 邀请奖励总额:', total, '邀请数:', referrals.length)
-          } else {
-            console.log('🔍 [邀请页] 暂无邀请记录')
-            setTotalReward(0)
-          }
-        } catch (e) {
-          console.log('🔍 [邀请页] 邀请奖励表查询异常:', e)
+          const total = (referrals || []).reduce((sum, row) => sum + (row.reward_credits || 0), 0)
+          setTotalReward(total)
+        } catch {
           setTotalReward(0)
         }
       }
-    } catch (e) {
-      console.error("加载用户数据失败:", e)
+    } catch {
+      toast.error("邀请数据加载失败，请刷新后重试")
     } finally {
       setIsLoading(false)
     }
   }, [router])
 
-  useEffect(() => {
+  React.useEffect(() => {
     loadUserData()
   }, [loadUserData])
 
-
-  const inviteLink = typeof window !== 'undefined' 
+  const inviteLink = typeof window !== "undefined"
     ? `${window.location.origin}/auth/sign-up?ref=${encodeURIComponent(referralCode)}`
-    : ''
+    : ""
 
   const handleCopy = async () => {
     if (!referralCode) {
@@ -152,389 +112,172 @@ export default function InvitePage() {
     try {
       await navigator.clipboard.writeText(inviteLink)
       setCopied(true)
-      toast.success("邀请链接已复制！", {
-        description: "快去分享给好友吧 🎉"
-      })
+      toast.success("邀请链接已复制")
       setTimeout(() => setCopied(false), 2000)
-    } catch (e) {
+    } catch {
       toast.error("复制失败，请手动复制")
     }
   }
 
-  // 🔥 核心逻辑：点击"立即分享"按钮
   const handleShareClick = async () => {
     if (!referralCode) {
       toast.error("推荐码尚未生成，请稍后重试")
       return
     }
 
-    console.log('🔍 [分享] 点击分享按钮, isPaidMember:', isPaidMember)
-    
-    // 如果是会员，执行分享
-    if (isPaidMember) {
-      // 检测是否在微信浏览器中
-      const isWechat = /MicroMessenger/i.test(navigator.userAgent)
-      console.log('🔍 [分享] 是否微信浏览器:', isWechat)
-      
-      // 微信浏览器中直接复制链接（微信有自己的分享机制）
-      if (isWechat) {
-        handleCopy()
-        toast.success("链接已复制！", {
-          description: "请点击右上角「...」分享给好友"
+    if (!isPaidMember) {
+      toast.info("成为会员后即可分享邀请链接")
+      setTimeout(() => router.push("/pricing"), 500)
+      return
+    }
+
+    const isWechat = /MicroMessenger/i.test(navigator.userAgent)
+    if (isWechat) {
+      await handleCopy()
+      toast.success("链接已复制，请从微信右上角分享")
+      return
+    }
+
+    const canShare = typeof navigator !== "undefined" &&
+      typeof navigator.share === "function" &&
+      navigator.canShare?.({ url: inviteLink, text: "沈翔智学邀请" })
+
+    if (canShare) {
+      try {
+        await navigator.share({
+          title: "沈翔智学邀请",
+          text: `我在用沈翔智学。通过我的邀请链接注册，我们都能获得 ${REWARD_PER_INVITE} 积分奖励。`,
+          url: inviteLink,
         })
-        return
-      }
-      
-      // 检查 Web Share API 是否可用
-      const canShare = typeof navigator !== 'undefined' && 
-                       typeof navigator.share === 'function' &&
-                       navigator.canShare?.({ url: inviteLink, text: '测试' })
-      
-      console.log('🔍 [分享] Web Share API 可用:', canShare)
-      
-      if (canShare) {
-        try {
-          await navigator.share({
-            title: '沈翔智学 - 邀请你一起学习',
-            text: `我在用沈翔智学，AI智能批改作文超好用！用我的邀请链接注册，我们都能获得1000积分奖励！`,
-            url: inviteLink
-          })
-          console.log('🔍 [分享] 分享成功')
-        } catch (e: any) {
-          console.log('🔍 [分享] 分享失败或取消:', e?.message || e)
-          // 用户取消分享或分享失败，改为复制
-          if (e?.name !== 'AbortError') {
-            handleCopy()
-          }
-        }
-      } else {
-        // Web Share API 不可用，直接复制
-        console.log('🔍 [分享] Web Share API 不可用，执行复制')
-        handleCopy()
+      } catch (error: any) {
+        if (error?.name !== "AbortError") await handleCopy()
       }
     } else {
-      // 非会员，跳转到订阅页面
-      toast.info("成为会员后即可分享邀请链接", {
-        description: "正在跳转到订阅页面..."
-      })
-      setTimeout(() => {
-        router.push('/pricing')
-      }, 500)
+      await handleCopy()
     }
   }
 
-  const remainingReward = 50000 - totalReward
-  const progressPercent = Math.min((totalReward / 50000) * 100, 100)
+  const remainingReward = Math.max(0, REWARD_LIMIT - totalReward)
+  const progressPercent = Math.min((totalReward / REWARD_LIMIT) * 100, 100)
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[var(--paper-50)]">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 border-4 border-[var(--ink-200)] border-t-[var(--ink-600)] rounded-full animate-spin"></div>
-          <p className="text-[var(--ink-500)]">加载中...</p>
-        </div>
-      </div>
+      <main className="flex min-h-screen items-center justify-center bg-[var(--paper-50)]">
+        <LoadingStateV2 label="正在加载邀请数据..." />
+      </main>
     )
   }
 
   return (
-    <div className="relative min-h-screen overflow-hidden font-[var(--font-sans-v2)] text-[var(--ink-900)]" >
-      {/* 🌊 有机光流背景层 */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        {/* 底层渐变 */}
-        <div
-          className="absolute inset-0"
-          style={{
-            background: "linear-gradient(180deg, var(--ink-50) 0%, var(--paper-50) 100%)",
-          }}
-        />
+    <main className="min-h-screen bg-[var(--paper-50)] px-4 py-6 font-[var(--font-sans-v2)] text-[var(--ink-900)] md:px-6 md:py-10">
+      <div className="mx-auto w-full max-w-6xl">
+        <header className="mb-6 flex items-center justify-between gap-3">
+          <Button variant="ghost" asChild>
+            <Link href="/">
+              <ArrowLeft className="size-4" aria-hidden="true" />
+              返回首页
+            </Link>
+          </Button>
+          <Badge variant={isPaidMember ? "seal" : "paper"}>
+            {isPaidMember ? "会员邀请权益已开启" : "会员专属邀请权益"}
+          </Badge>
+        </header>
 
-        {/* 光流元素 1 */}
-        <motion.div
-          className="absolute w-96 h-96 rounded-full blur-3xl"
-          style={{
-            background: `radial-gradient(circle, ${BRAND_GREEN}15 0%, transparent 70%)`,
-            top: "-10%",
-            right: "-10%",
-          }}
-          animate={{
-            y: [0, -60, 0],
-            x: [0, 30, 0],
-            scale: [1, 1.2, 1],
-            opacity: [0.3, 0.6, 0.3],
-          }}
-          transition={{
-            duration: 10,
-            ease: "linear",
-            repeat: Infinity,
-          }}
-        />
+        <section className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+          <Card className="overflow-hidden border-[var(--ink-200)] bg-[linear-gradient(180deg,var(--ink-50),var(--paper-50))] shadow-[0_24px_80px_rgba(16,55,35,0.12)]">
+            <div className="p-6 md:p-8">
+              <span className="inline-flex items-center gap-1.5 rounded-[var(--radius-pill)] border border-[var(--ink-200)] bg-[var(--paper-50)] px-3 py-1.5 text-[12px] font-semibold text-[var(--ink-700)]">
+                <Gift className="size-3.5" aria-hidden="true" />
+                邀请奖励
+              </span>
+              <h1 className="mt-5 max-w-2xl font-[var(--font-display)] text-[clamp(32px,5vw,52px)] font-black leading-[1.08] text-[var(--ink-900)]">
+                邀请好友加入沈翔智学，双方各得 {REWARD_PER_INVITE} 积分。
+              </h1>
+              <p className="mt-4 max-w-2xl text-[15px] leading-[1.85] text-[var(--ink-600)] sm:text-[16px]">
+                专属邀请链接会自动绑定你的账号。好友完成注册后，奖励将进入双方积分账户，最高可累计 {REWARD_LIMIT} 积分。
+              </p>
 
-        {/* 光流元素 2 */}
-        <motion.div
-          className="absolute w-80 h-80 rounded-full blur-3xl"
-          style={{
-            background: `radial-gradient(circle, ${BRAND_GREEN_LIGHT}80 0%, transparent 70%)`,
-            bottom: "10%",
-            left: "-15%",
-          }}
-          animate={{
-            y: [0, 50, 0],
-            x: [0, -25, 0],
-            scale: [1, 1.15, 1],
-            opacity: [0.4, 0.7, 0.4],
-          }}
-          transition={{
-            duration: 12,
-            ease: "linear",
-            repeat: Infinity,
-          }}
-        />
+              <div className="mt-7 rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-[var(--paper-50)] p-4">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[12px] font-semibold uppercase tracking-wider text-[var(--ink-500)]">专属链接</p>
+                    <p className="mt-1 text-[13px] text-[var(--ink-500)]">
+                      {isPaidMember ? "复制或直接分享给好友" : "开通会员后可生成并分享"}
+                    </p>
+                  </div>
+                  {!isPaidMember ? <Lock className="size-5 text-[var(--ink-400)]" aria-hidden="true" /> : null}
+                </div>
+                <div className="flex flex-col gap-3 sm:flex-row">
+                  <div className="min-h-11 flex-1 rounded-[var(--radius-soft)] border border-[var(--paper-300)] bg-[var(--paper-100)] px-4 py-3 text-[13px] text-[var(--ink-600)]">
+                    <p className="truncate">{isPaidMember && referralCode ? inviteLink : "会员专属邀请链接"}</p>
+                  </div>
+                  <Button variant="outline" onClick={handleCopy} disabled={!isPaidMember || !referralCode}>
+                    {copied ? <Check className="size-4" aria-hidden="true" /> : <Copy className="size-4" aria-hidden="true" />}
+                    {copied ? "已复制" : "复制"}
+                  </Button>
+                  <Button onClick={handleShareClick} disabled={!referralCode}>
+                    <Share2 className="size-4" aria-hidden="true" />
+                    {isPaidMember ? "立即分享" : "开通后分享"}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </Card>
 
-        {/* 光流元素 3 */}
-        <motion.div
-          className="absolute w-64 h-64 rounded-full blur-2xl"
-          style={{
-            background: `radial-gradient(circle, ${BRAND_GREEN}10 0%, transparent 70%)`,
-            top: "30%",
-            left: "20%",
-          }}
-          animate={{
-            y: [0, -40, 0],
-            x: [0, 20, 0],
-            scale: [1, 1.1, 1],
-            opacity: [0.2, 0.5, 0.2],
-          }}
-          transition={{
-            duration: 8,
-            ease: "linear",
-            repeat: Infinity,
-          }}
-        />
+          <div className="grid gap-4">
+            <Card className="p-5">
+              <div className="flex items-center gap-3">
+                <div className="flex size-10 items-center justify-center rounded-[var(--radius-soft)] border border-[var(--ink-200)] bg-[var(--ink-50)] text-[var(--ink-700)]">
+                  <Users className="size-5" aria-hidden="true" />
+                </div>
+                <div>
+                  <p className="text-[12px] font-semibold text-[var(--ink-500)]">已邀请好友</p>
+                  <p className="font-[var(--font-display)] text-[28px] font-black text-[var(--ink-800)]">{inviteCount}</p>
+                </div>
+              </div>
+            </Card>
+            <Card className="p-5">
+              <div className="flex items-center gap-3">
+                <div className="flex size-10 items-center justify-center rounded-[var(--radius-soft)] border border-[var(--ink-200)] bg-[var(--ink-50)] text-[var(--ink-700)]">
+                  <Sparkles className="size-5" aria-hidden="true" />
+                </div>
+                <div>
+                  <p className="text-[12px] font-semibold text-[var(--ink-500)]">已获得积分</p>
+                  <p className="font-[var(--font-display)] text-[28px] font-black text-[var(--ink-800)]">{totalReward}</p>
+                </div>
+              </div>
+              <div className="mt-5">
+                <div className="mb-2 flex items-center justify-between text-[12px] text-[var(--ink-500)]">
+                  <span>奖励进度</span>
+                  <span>{totalReward} / {REWARD_LIMIT}</span>
+                </div>
+                <ProgressV2 value={progressPercent} />
+                <p className="mt-2 text-[12px] text-[var(--ink-400)]">
+                  还可获得 {remainingReward} 积分
+                </p>
+              </div>
+            </Card>
+          </div>
+        </section>
+
+        <section className="mt-5 grid gap-4 md:grid-cols-3">
+          <RuleCard index="1" title="会员专属链接" description="系统会为会员生成可追踪的邀请码，避免奖励丢失。" />
+          <RuleCard index="2" title="双方获得积分" description={`好友通过链接注册后，你和好友各获得 ${REWARD_PER_INVITE} 积分。`} />
+          <RuleCard index="3" title="奖励自动累计" description={`邀请奖励最高累计 ${REWARD_LIMIT} 积分，可用于站内 AI 服务。`} />
+        </section>
       </div>
+    </main>
+  )
+}
 
-      {/* 顶部导航 - 玻璃态 */}
-      <header
-        className="sticky top-0 z-50 border-b"
-        style={{
-          background: "rgba(255, 255, 255, 0.70)",
-          backdropFilter: "blur(20px) saturate(180%)",
-          WebkitBackdropFilter: "blur(20px) saturate(180%)",
-          borderColor: "rgba(14, 58, 31, 0.04)",
-        }}
-      >
-        <div className="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <Image src="/images/design-mode/主页logo.jpg" alt="沈翔智学" width={150} height={40} className="h-10 w-auto" />
-          </Link>
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={() => router.back()}
-            className="text-[var(--ink-600)]"
-          >
-            <ChevronLeft className="w-4 h-4 mr-1" />
-            返回
-          </Button>
-        </div>
-      </header>
-
-      <main className="max-w-4xl mx-auto px-4 py-8 md:py-12">
-        {/* 🎉 主标题区域 */}
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-center mb-10"
-        >
-          <div className="inline-flex items-center gap-2 mb-4">
-            <PartyPopper className="w-8 h-8 text-amber-500" />
-            <h1 className="text-3xl md:text-4xl font-bold text-[var(--ink-800)] font-[var(--font-display)]">
-              邀请好友获取 <span style={{ color: BRAND_GREEN }}>50000</span> 免费积分
-            </h1>
-          </div>
-          <p className="text-[var(--ink-500)] text-lg">
-            分享学习的快乐，一起成长进步
-          </p>
-        </motion.div>
-
-        {/* 🎁 邀请链接卡片 */}
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="bg-[var(--paper-50)] rounded-[var(--radius-sharp)] shadow-lg border border-[var(--paper-200)] p-6 md:p-8 mb-8"
-        >
-          <div className="flex items-center gap-3 mb-6">
-            <div 
-              className="w-12 h-12 rounded-[var(--radius-sharp)] flex items-center justify-center"
-              style={{ backgroundColor: BRAND_GREEN_LIGHT }}
-            >
-              <ShenxiangInterfaceIcon name="invite" size={34} />
-            </div>
-            <div>
-              <h2 className="text-xl font-semibold text-[var(--ink-800)] font-[var(--font-display)]">邀请好友，共享奖励</h2>
-              <p className="text-sm text-[var(--ink-500)]">分享给好友，双方各得 1000 积分</p>
-            </div>
-          </div>
-
-          {/* 邀请链接输入框（会员可见） */}
-          {isPaidMember && (
-            <div className="flex gap-3 mb-6">
-              <div className="flex-1 bg-[var(--paper-50)] rounded-[var(--radius-sharp)] px-4 py-3 text-[var(--ink-600)] text-sm truncate border border-[var(--paper-200)]">
-                {inviteLink}
-              </div>
-              <Button
-                onClick={handleCopy}
-                className="shrink-0 text-white px-6"
-                style={{ backgroundColor: BRAND_GREEN }}
-                disabled={!referralCode}
-              >
-                {copied ? (
-                  <>
-                    <Check className="w-4 h-4 mr-2" />
-                    已复制
-                  </>
-                ) : (
-                  <>
-                    <ShenxiangInterfaceIcon name="copy" size={20} />
-                    复制链接
-                  </>
-                )}
-              </Button>
-            </div>
-          )}
-
-          {/* 🔥 核心按钮：始终显示"立即分享" */}
-          <Button
-            onClick={handleShareClick}
-            className="w-full h-12 text-base text-white"
-            style={{ backgroundColor: BRAND_GREEN }}
-            disabled={!referralCode}
-          >
-            <ShenxiangInterfaceIcon name="share" size={24} />
-            立即分享
-          </Button>
-
-          {/* 非会员提示 */}
-          {!isPaidMember && (
-            <p className="text-center text-sm text-[var(--ink-400)] mt-4">
-              成为会员后即可获得专属邀请链接
-            </p>
-          )}
-
-          {/* 邀请统计（会员可见） */}
-          {isPaidMember && (
-            <>
-              <div className="mt-8 grid grid-cols-2 gap-4">
-                <div className="bg-[var(--ink-50)] rounded-[var(--radius-sharp)] p-4 text-center">
-                  <div className="text-3xl font-bold" style={{ color: BRAND_GREEN_DARK }}>{inviteCount}</div>
-                  <div className="text-sm text-[var(--ink-500)] mt-1">已邀请好友</div>
-                </div>
-                <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-[var(--radius-sharp)] p-4 text-center">
-                  <div className="text-3xl font-bold text-amber-600">{totalReward}</div>
-                  <div className="text-sm text-[var(--ink-500)] mt-1">已获得积分</div>
-                </div>
-              </div>
-
-              {/* 进度条 */}
-              <div className="mt-6">
-                <div className="flex justify-between text-sm mb-2">
-                  <span className="text-[var(--ink-500)]">邀请奖励进度</span>
-                  <span style={{ color: BRAND_GREEN }}>{totalReward} / 50000</span>
-                </div>
-                <div className="h-3 bg-[var(--paper-100)] rounded-full overflow-hidden">
-                  <motion.div 
-                    initial={{ width: 0 }}
-                    animate={{ width: `${progressPercent}%` }}
-                    transition={{ duration: 1, ease: "easeOut" }}
-                    className="h-full rounded-full"
-                    style={{ backgroundColor: BRAND_GREEN }}
-                  />
-                </div>
-                {remainingReward > 0 && (
-                  <p className="text-xs text-[var(--ink-400)] mt-2 text-center">
-                    还可获得 {remainingReward} 积分奖励
-                  </p>
-                )}
-              </div>
-            </>
-          )}
-        </motion.div>
-
-        {/* 📋 规则说明卡片 */}
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="bg-[var(--paper-50)] rounded-[var(--radius-sharp)] shadow-lg border border-[var(--paper-200)] p-6 md:p-8"
-        >
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 rounded-[var(--radius-soft)] bg-[var(--ink-50)] flex items-center justify-center">
-              <Heart className="w-5 h-5 text-[var(--ink-500)]" />
-            </div>
-            <h2 className="text-xl font-semibold text-[var(--ink-800)] font-[var(--font-display)]">温馨提示</h2>
-          </div>
-
-          <div className="space-y-4">
-            <div className="flex gap-4 p-4 bg-[var(--ink-50)] rounded-[var(--radius-sharp)]">
-              <div 
-                className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white font-bold text-sm"
-                style={{ backgroundColor: BRAND_GREEN }}
-              >
-                1
-              </div>
-              <div>
-                <h3 className="font-medium text-[var(--ink-800)] mb-1">双向奖励，共同受益</h3>
-                <p className="text-sm text-[var(--ink-600)]">
-                  每成功邀请一位好友注册，<strong>您和好友都将获得 1000 积分</strong>。
-                  分享知识的同时，也收获满满的奖励！
-                </p>
-              </div>
-            </div>
-
-            <div className="flex gap-4 p-4 bg-[var(--ink-50)] rounded-[var(--radius-sharp)]">
-              <div 
-                className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white font-bold text-sm"
-                style={{ backgroundColor: "var(--ink-600)" }}
-              >
-                2
-              </div>
-              <div>
-                <h3 className="font-medium text-[var(--ink-800)] mb-1">丰厚上限，持续邀请</h3>
-                <p className="text-sm text-[var(--ink-600)]">
-                  邀请奖励上限为 <strong>50000 积分</strong>，相当于可以免费邀请 50 位好友！
-                  积分可用于所有 AI 智能服务。
-                </p>
-              </div>
-            </div>
-
-            <div className="flex gap-4 p-4 bg-gradient-to-r from-teal-50 to-cyan-50 rounded-[var(--radius-sharp)]">
-              <div 
-                className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white font-bold text-sm"
-                style={{ backgroundColor: "var(--ink-600)" }}
-              >
-                3
-              </div>
-              <div>
-                <h3 className="font-medium text-[var(--ink-800)] mb-1">会员专属福利</h3>
-                <p className="text-sm text-[var(--ink-600)]">
-                  邀请功能为付费会员专属。成为会员后，即可开启邀请之旅，
-                  与更多朋友一起体验 AI 智能学习的乐趣！
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* 底部装饰 */}
-          <div className="mt-8 pt-6 border-t border-[var(--paper-200)] text-center">
-            <div className="flex items-center justify-center gap-2 text-[var(--ink-400)] text-sm">
-              <Sparkles className="w-4 h-4" />
-              <span>知识因分享而更有价值</span>
-              <Sparkles className="w-4 h-4" />
-            </div>
-          </div>
-        </motion.div>
-      </main>
-    </div>
+function RuleCard({ index, title, description }: { index: string; title: string; description: string }) {
+  return (
+    <Card className="p-5">
+      <div className="mb-4 flex size-8 items-center justify-center rounded-full bg-[var(--ink-700)] text-[13px] font-bold text-white">
+        {index}
+      </div>
+      <h2 className="font-[var(--font-display)] text-[18px] font-bold text-[var(--ink-800)]">{title}</h2>
+      <p className="mt-2 text-[13px] leading-[1.7] text-[var(--ink-500)]">{description}</p>
+    </Card>
   )
 }

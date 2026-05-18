@@ -173,7 +173,8 @@ const MODEL_LOGOS: Record<ModelKey, ModelLogoConfig> = {
 
   // 创意生成类
   "banana-2-pro": {
-    LucideIcon: Sparkles,
+    svgPath: "/logos/google-gemini-icon.svg",
+    useLocal: true,
     brandColor: "#10A37F",
   },
   "gemini-image": {

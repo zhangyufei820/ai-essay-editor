@@ -40,8 +40,8 @@ export const AGENT_REGISTRY: Record<string, AgentDefinition> = {
   },
   "general-chat": {
     model: "general-chat",
-    name: "通用对话",
-    description: "日常学习问答",
+    name: "网站助手",
+    description: "功能入口、套餐权益和使用建议",
     group: "general",
     artifactType: "markdown",
     priceLabel: "按字数计费",
