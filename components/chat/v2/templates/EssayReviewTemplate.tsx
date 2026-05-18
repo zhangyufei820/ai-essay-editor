@@ -14,6 +14,7 @@ import * as React from "react"
 import { IconAllInOne, IconCopy, IconExportPdf, IconFollowup, IconShare } from "@/components/icons/v2"
 import { ButtonV2 } from "@/components/ui/v2/button"
 import { ScoreSeal, SealStamp } from "@/components/ui/v2/seal"
+import { TabsV2, TabsV2Content, TabsV2List, TabsV2Trigger } from "@/components/ui/v2/tabs"
 import { EnhancedMarkdown } from "@/components/chat/EnhancedMarkdown"
 import { cleanLLMText } from "@/lib/text-sanitizer"
 import { cn } from "@/lib/utils"
@@ -151,9 +152,14 @@ export function EssayReviewTemplate({
                 {artifact.trainingTasks.map((t, idx) => (
                   <li
                     key={idx}
-                    className="rounded-[var(--radius-soft)] bg-[var(--seal-50)]/60 px-3 py-2 text-[14px] leading-[1.7] text-[var(--seal-600)]"
+                    className="flex items-start gap-2.5 rounded-[var(--radius-soft)] bg-[var(--seal-50)]/60 px-3 py-2 text-[14px] leading-[1.7] text-[var(--seal-600)]"
                   >
-                    {t}
+                    <input
+                      type="checkbox"
+                      className="mt-1 size-4 shrink-0 rounded-[var(--radius-sharp)] accent-[var(--seal-500)]"
+                      aria-label={`完成：${t}`}
+                    />
+                    <span>{t}</span>
                   </li>
                 ))}
               </ul>
@@ -168,9 +174,22 @@ export function EssayReviewTemplate({
           <h2 className="font-[var(--font-display)] text-[18px] font-bold text-[var(--ink-800)]">
             四、修改后定稿
           </h2>
-          <div className="mt-4 whitespace-pre-line rounded-[var(--radius-soft)] bg-[var(--paper-100)] p-4 text-[15px] leading-[1.9] text-[var(--ink-800)]">
-            {artifact.finalDraft}
-          </div>
+          <TabsV2 defaultValue="revised" className="mt-4">
+            <TabsV2List>
+              <TabsV2Trigger value="original">原文</TabsV2Trigger>
+              <TabsV2Trigger value="revised">修改稿</TabsV2Trigger>
+            </TabsV2List>
+            <TabsV2Content value="original">
+              <div className="whitespace-pre-line rounded-[var(--radius-soft)] bg-[var(--paper-100)] p-4 text-[15px] leading-[1.9] text-[var(--ink-800)]">
+                {artifact.originalText || "（原文未提供）"}
+              </div>
+            </TabsV2Content>
+            <TabsV2Content value="revised">
+              <div className="whitespace-pre-line rounded-[var(--radius-soft)] bg-[var(--paper-100)] p-4 text-[15px] leading-[1.9] text-[var(--ink-800)]">
+                {artifact.finalDraft}
+              </div>
+            </TabsV2Content>
+          </TabsV2>
         </section>
       ) : null}
 

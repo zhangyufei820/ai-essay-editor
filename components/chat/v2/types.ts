@@ -46,6 +46,7 @@ export interface EssayReviewArtifact {
   diagnosis?: Array<{ title: string; detail: string }>
   suggestions?: string[]
   trainingTasks?: string[]
+  originalText?: string
   finalDraft?: string
   rawMarkdown?: string
 }
