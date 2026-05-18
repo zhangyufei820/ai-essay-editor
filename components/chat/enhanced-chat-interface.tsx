@@ -284,6 +284,30 @@ function toVocabCardArtifact(data: FrontendWordCard): VocabCardArtifact {
     raw: JSON.stringify(data),
   }
 }
+
+function startOfDay(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
+}
+
+function isDifferentDay(current?: string | Date, previous?: string | Date) {
+  if (!current) return false
+  if (!previous) return true
+  const currentDate = new Date(current)
+  const previousDate = new Date(previous)
+  if (Number.isNaN(currentDate.getTime()) || Number.isNaN(previousDate.getTime())) return false
+  return startOfDay(currentDate) !== startOfDay(previousDate)
+}
+
+function formatDateLabel(date: string | Date | undefined) {
+  if (!date) return ""
+  const d = new Date(date)
+  if (Number.isNaN(d.getTime())) return ""
+  const now = new Date()
+  const diffDays = Math.floor((startOfDay(now) - startOfDay(d)) / 86400000)
+  if (diffDays === 0) return "今天"
+  if (diffDays === 1) return "昨天"
+  return `${d.getMonth() + 1}月${d.getDate()}日`
+}
 type FileProcessingState = { status: "idle" | "uploading" | "processing" | "recognizing" | "complete" | "error"; progress: number; message: string }
 type ProcessingContext = {
   model: string
@@ -3549,8 +3573,18 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                 )
                 ) : (
                 <div className="space-y-3 sm:space-y-5 pt-1 sm:pt-3 pb-32 md:pb-6">
-                    {messages.map((message) => (
-                      <div key={message.id} className={cn("flex gap-1 sm:gap-2 group/message", message.role === "user" ? "justify-end" : "justify-start")}>
+                    {messages.map((message, index) => (
+                      <div key={message.id}>
+                      {isDifferentDay(message.timestamp, messages[index - 1]?.timestamp) ? (
+                        <div className="flex items-center gap-3 py-4">
+                          <div className="h-px flex-1 bg-[var(--paper-200)]" />
+                          <span className="font-[var(--font-mono-v2)] text-[11px] text-[var(--ink-400)]">
+                            {formatDateLabel(message.timestamp)}
+                          </span>
+                          <div className="h-px flex-1 bg-[var(--paper-200)]" />
+                        </div>
+                      ) : null}
+                      <div className={cn("flex gap-1 sm:gap-2 group/message", message.role === "user" ? "justify-end" : "justify-start")}>
                       {message.role === "assistant" && (
                         // Smaller AI avatar - expressive assistant SVG.
                         <div
@@ -3693,6 +3727,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                           )}
                         </div>
                       )}
+                    </div>
                     </div>
                   ))}
                   <div ref={messagesEndRef} />
