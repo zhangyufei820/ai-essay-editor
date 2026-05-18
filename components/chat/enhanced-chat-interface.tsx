@@ -48,7 +48,8 @@ import { EnhancedMarkdown } from "./EnhancedMarkdown"
 import { AssistantEyeAvatar } from "./AssistantEyeAvatar"
 import { OpenClawHtmlPreview } from "./OpenClawHtmlPreview"
 import { UserMessageBubble } from "./UserMessageBubble"
-import { PremiumWordCard } from "./PremiumWordCard"
+import { VocabCardTemplate } from "@/components/chat/v2/templates"
+import type { VocabCardArtifact } from "@/components/chat/v2/types"
 import { VocabCardDifyForm, type VocabCardDifyInputs } from "./VocabCardDifyForm"
 import katex from "katex"
 import { brandColors, slateColors } from "@/lib/design-tokens"
@@ -243,6 +244,45 @@ type Message = {
     wordCard?: FrontendWordCard
   } | null
   wordCard?: FrontendWordCard | null
+}
+
+function textValue(value: unknown): string {
+  if (value === undefined || value === null) return ""
+  if (typeof value === "string" || typeof value === "number") return String(value)
+  return ""
+}
+
+function listValues(value: unknown): unknown[] {
+  if (!value) return []
+  return Array.isArray(value) ? value : [value]
+}
+
+function toVocabCardArtifact(data: FrontendWordCard): VocabCardArtifact {
+  const hero = data.hero || {}
+  const sections = data.sections || {}
+  const pronunciation = sections.pronunciation || {}
+  const ipa = hero.ipa || pronunciation.ipa || {}
+  const examples = listValues(sections.examples?.items || sections.examples?.examples || sections.examples)
+    .map((example) => {
+      if (typeof example === "string") return example
+      if (!example || typeof example !== "object") return ""
+      const record = example as Record<string, unknown>
+      return [textValue(record.en || record.english || record.sentence), textValue(record.cn || record.zh || record.translation)]
+        .filter(Boolean)
+        .join(" - ")
+    })
+    .filter(Boolean)
+    .slice(0, 5)
+
+  return {
+    type: "vocab-card",
+    word: textValue(data.word),
+    pronunciation: textValue(ipa.us || ipa.uk || pronunciation.ipa),
+    meaning: textValue(hero.primary_cn || data.card?.meaning?.primary_cn || data.card?.translation),
+    examples,
+    story: textValue(sections.memory_story?.story_cn || sections.memoryStory?.story_cn || data.card?.story?.story_cn),
+    raw: JSON.stringify(data),
+  }
 }
 type FileProcessingState = { status: "idle" | "uploading" | "processing" | "recognizing" | "complete" | "error"; progress: number; message: string }
 type ProcessingContext = {
@@ -3597,13 +3637,13 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 
                                   const wordCard = message.wordCard || message.metadata?.wordCard || normalizeDifyWordCardResponse(message.content)
                                   if (wordCard) {
-                                    return <PremiumWordCard data={wordCard} />
+                                    return <VocabCardTemplate artifact={toVocabCardArtifact(wordCard)} />
                                   }
                                   const vocabFallback = selectedModel === "vocab-card"
                                     ? resolveVocabCardResult(message.content, currentWord)
                                     : null
                                   if (vocabFallback?.frontendCard) {
-                                    return <PremiumWordCard data={vocabFallback.frontendCard} />
+                                    return <VocabCardTemplate artifact={toVocabCardArtifact(vocabFallback.frontendCard)} />
                                   }
                                   if (vocabFallback?.answer) {
                                     return (
