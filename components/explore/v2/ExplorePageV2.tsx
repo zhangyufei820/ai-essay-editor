@@ -101,7 +101,7 @@ export function ExplorePageV2({ className }: { className?: string }) {
             也把你的创作放进广场。
           </h1>
           <p className="mt-4 max-w-2xl text-[15px] leading-[1.8] text-[var(--ink-600)] sm:text-[16px]">
-            这里汇总公开分享的作文批改、图像作品、闪卡和智能体对话。作品来自用户真实创作，不再是空白占位页。
+            这里汇总公开分享的作文批改、图像作品、闪卡和智能体对话。每一份作品都来自真实学习与创作现场。
           </p>
         </div>
         <div className="flex items-end gap-3 md:flex-col md:justify-end">

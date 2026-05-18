@@ -6,12 +6,18 @@ import {
   CardV2Content as CardContent,
   CardV2Header as CardHeader,
   CardV2Title as CardTitle,
+  DialogV2 as Dialog,
+  DialogV2Content as DialogContent,
+  DialogV2Description as DialogDescription,
+  DialogV2Footer as DialogFooter,
+  DialogV2Header as DialogHeader,
+  DialogV2Title as DialogTitle,
   InputV2 as Input,
   LabelV2 as Label
 } from "@/components/ui/v2"
 import { useEffect, useMemo, useState, type FormEvent } from "react"
 import Link from "next/link"
-import { Loader2, Plus } from "lucide-react"
+import { ExternalLink, Loader2, Plus } from "lucide-react"
 import { IconEssay, IconFolder, IconHistory } from "@/components/icons/v2"
 import { getVerifiedAuthHeaders } from "@/lib/client-auth"
 
@@ -50,6 +56,23 @@ function formatSize(value?: number | null) {
   return `${(value / 1024 / 1024).toFixed(1)} MB`
 }
 
+function isExternalPath(value?: string | null) {
+  return Boolean(value && /^https?:\/\//i.test(value))
+}
+
+function formatDate(value?: string | null) {
+  if (!value) return "未记录"
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return "未记录"
+  return date.toLocaleString("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  })
+}
+
 export default function FolderPage() {
   const [files, setFiles] = useState<UserFile[]>([])
   const [totalCount, setTotalCount] = useState(0)
@@ -57,6 +80,7 @@ export default function FolderPage() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
+  const [selectedFile, setSelectedFile] = useState<UserFile | null>(null)
   const [form, setForm] = useState({
     filename: "",
     file_type: "note",
@@ -249,8 +273,32 @@ export default function FolderPage() {
                     <h2 className="text-sm font-semibold text-[var(--ink-500)] font-[var(--font-display)]">{subjectLabel(subject)}</h2>
                     <div className="grid gap-3 md:grid-cols-2">
                       {subjectFiles.map((file) => (
-                        <Card key={file.id} className="rounded-[var(--radius-sharp)]">
-                          <CardContent className="flex gap-3 py-4">
+                        <Card
+                          key={file.id}
+                          className="rounded-[var(--radius-sharp)] transition-all hover:-translate-y-0.5 hover:border-[var(--ink-200)] hover:shadow-[0_14px_34px_rgba(14,27,17,0.10)]"
+                        >
+                          <CardContent
+                            className="flex cursor-pointer gap-3 py-4"
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => {
+                              if (isExternalPath(file.storage_path)) {
+                                window.open(file.storage_path, "_blank", "noopener,noreferrer")
+                                return
+                              }
+                              setSelectedFile(file)
+                            }}
+                            onKeyDown={(event) => {
+                              if (event.key !== "Enter" && event.key !== " ") return
+                              event.preventDefault()
+                              if (isExternalPath(file.storage_path)) {
+                                window.open(file.storage_path, "_blank", "noopener,noreferrer")
+                                return
+                              }
+                              setSelectedFile(file)
+                            }}
+                            aria-label={`打开资料 ${file.filename}`}
+                          >
                             <div className="flex size-10 shrink-0 items-center justify-center rounded-[var(--radius-soft)] bg-[var(--ink-50)] text-[var(--ink-700)] dark:bg-[var(--ink-900)]/50 dark:text-[var(--ink-200)]">
                               <IconEssay className="size-5" />
                             </div>
@@ -259,7 +307,13 @@ export default function FolderPage() {
                               <div className="mt-1 text-xs text-[var(--ink-500)]">
                                 {file.file_type} · {formatSize(file.file_size)} · {file.status || "uploaded"}
                               </div>
-                              <div className="mt-2 truncate text-xs text-[var(--ink-500)]">{file.storage_path}</div>
+                              <div className="mt-2 flex items-center gap-1 truncate text-xs text-[var(--ink-500)]">
+                                <span className="truncate">{file.storage_path}</span>
+                                {isExternalPath(file.storage_path) ? <ExternalLink className="size-3 shrink-0" aria-hidden="true" /> : null}
+                              </div>
+                              <div className="mt-3 text-xs font-medium text-[var(--ink-700)]">
+                                {isExternalPath(file.storage_path) ? "打开链接" : "查看详情"}
+                              </div>
                             </div>
                           </CardContent>
                         </Card>
@@ -282,6 +336,56 @@ export default function FolderPage() {
           </section>
         </div>
       </div>
+      <Dialog open={Boolean(selectedFile)} onOpenChange={(open) => !open && setSelectedFile(null)}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>{selectedFile?.filename || "资料详情"}</DialogTitle>
+            <DialogDescription>
+              查看这条资料记录的位置、类型和创建信息。
+            </DialogDescription>
+          </DialogHeader>
+          {selectedFile ? (
+            <div className="space-y-4 text-sm">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-[var(--radius-soft)] bg-[var(--paper-100)] p-3">
+                  <p className="text-xs text-[var(--ink-500)]">类型</p>
+                  <p className="mt-1 font-medium text-[var(--ink-800)]">{selectedFile.file_type}</p>
+                </div>
+                <div className="rounded-[var(--radius-soft)] bg-[var(--paper-100)] p-3">
+                  <p className="text-xs text-[var(--ink-500)]">学科</p>
+                  <p className="mt-1 font-medium text-[var(--ink-800)]">{subjectLabel(selectedFile.subject)}</p>
+                </div>
+                <div className="rounded-[var(--radius-soft)] bg-[var(--paper-100)] p-3">
+                  <p className="text-xs text-[var(--ink-500)]">大小</p>
+                  <p className="mt-1 font-medium text-[var(--ink-800)]">{formatSize(selectedFile.file_size)}</p>
+                </div>
+                <div className="rounded-[var(--radius-soft)] bg-[var(--paper-100)] p-3">
+                  <p className="text-xs text-[var(--ink-500)]">创建时间</p>
+                  <p className="mt-1 font-medium text-[var(--ink-800)]">{formatDate(selectedFile.created_at)}</p>
+                </div>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-[var(--ink-500)]">资料链接或位置</p>
+                <div className="mt-2 break-all rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-[var(--paper-50)] p-3 text-[var(--ink-700)]">
+                  {selectedFile.storage_path}
+                </div>
+              </div>
+            </div>
+          ) : null}
+          <DialogFooter>
+            {selectedFile && isExternalPath(selectedFile.storage_path) ? (
+              <Button asChild>
+                <a href={selectedFile.storage_path} target="_blank" rel="noreferrer">
+                  打开链接
+                  <ExternalLink className="ml-2 size-4" aria-hidden="true" />
+                </a>
+              </Button>
+            ) : (
+              <Button type="button" onClick={() => setSelectedFile(null)}>知道了</Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </main>
   )
 }
