@@ -157,17 +157,16 @@ function UserAvatar({ avatar }: { avatar?: string }) {
       <img
         src={avatar}
         alt="User avatar"
-        className="w-7 h-7 rounded-full object-cover"
+        className="h-7 w-7 rounded-full object-cover"
       />
     )
   }
 
   return (
     <div
-      className="w-7 h-7 rounded-full flex items-center justify-center"
-      style={{ backgroundColor: "var(--paper-200)" }}
+      className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--paper-200)]"
     >
-      <IconUser className="w-3.5 h-3.5" style={{ color: "var(--ink-500)" }} />
+      <IconUser className="h-3.5 w-3.5 text-[var(--ink-500)]" />
     </div>
   )
 }
@@ -179,8 +178,7 @@ function UserAvatar({ avatar }: { avatar?: string }) {
 function AIAvatar() {
   return (
     <div
-      className="w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center shrink-0"
-      style={{ backgroundColor: CLAUDE_AVATAR_BG }}
+      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--ink-700)] sm:h-10 sm:w-10"
     >
       <IconAllInOne className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
     </div>
