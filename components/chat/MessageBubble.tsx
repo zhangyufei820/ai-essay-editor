@@ -18,6 +18,7 @@ import { AssistantMessageV2 } from "@/components/chat/v2"
 import { EssayReviewTemplate } from "@/components/chat/v2/templates"
 import { InkBrush } from "@/components/motion/InkMotion"
 import { parseEssayReview } from "@/lib/parse-essay-review"
+import { splitThinkingContent } from "@/lib/think-content"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import remarkMath from "remark-math"
@@ -335,18 +336,54 @@ function MessageActionToolbar({ actions }: { actions: MessageActions }) {
   )
 }
 
+function ThinkingDisclosure({
+  content,
+  isStreaming,
+}: {
+  content: string
+  isStreaming?: boolean
+}) {
+  const [open, setOpen] = useState(Boolean(isStreaming))
+
+  return (
+    <div className="mb-4 overflow-hidden rounded-[var(--radius-soft)] border border-[var(--ink-100)] bg-[var(--ink-50)]">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-[13px] font-semibold text-[var(--ink-700)] transition-colors hover:bg-[var(--ink-50)] focus-visible:outline-none focus-visible:[box-shadow:var(--shadow-focus-ink)]"
+      >
+        <span className="inline-flex items-center gap-2">
+          <Sparkles className="size-3.5" aria-hidden="true" />
+          思考过程
+          {isStreaming ? <span className="text-[11px] text-[var(--ink-400)]">生成中</span> : null}
+        </span>
+        {open ? <ChevronUp className="size-4" aria-hidden="true" /> : <ChevronDown className="size-4" aria-hidden="true" />}
+      </button>
+      {open ? (
+        <div className="border-t border-[var(--ink-100)] px-4 py-3 text-[12px] leading-6 text-[var(--ink-600)]">
+          <MarkdownContent content={content} />
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 function AssistantMarkdownCard({
   content,
   actions,
   templateType,
+  isStreaming,
 }: {
   content: string
   actions: MessageActions
   templateType: string
+  isStreaming?: boolean
 }) {
   const contentRef = useRef<HTMLDivElement>(null)
   const [collapsed, setCollapsed] = useState(true)
   const [isLong, setIsLong] = useState(false)
+  const parsedContent = useMemo(() => splitThinkingContent(content), [content])
+  const answerContent = parsedContent.answer || (parsedContent.hasOpenThinking ? "" : content)
 
   useEffect(() => {
     setCollapsed(true)
@@ -371,7 +408,24 @@ function AssistantMarkdownCard({
           className="text-[13px] sm:text-sm ai-content-container"
           style={{ lineHeight: 1.6, color: CLAUDE_TEXT_COLOR }}
         >
-          <MarkdownContent content={content} />
+          {parsedContent.hasThinking ? (
+            <ThinkingDisclosure
+              content={parsedContent.thinking}
+              isStreaming={isStreaming && parsedContent.hasOpenThinking}
+            />
+          ) : null}
+          {answerContent ? (
+            <div>
+              {parsedContent.hasThinking ? (
+                <div className="mb-3 inline-flex rounded-[var(--radius-pill)] border border-[var(--paper-200)] bg-[var(--paper-100)] px-2.5 py-1 text-[11px] font-semibold text-[var(--ink-500)]">
+                  正式回答
+                </div>
+              ) : null}
+              <MarkdownContent content={answerContent} />
+            </div>
+          ) : isStreaming ? (
+            <span className="text-[var(--ink-500)]">正在整理正式回答...</span>
+          ) : null}
         </div>
       </div>
 
@@ -556,6 +610,7 @@ const MessageBubble = memo(function MessageBubble({
                   content={content}
                   actions={actions}
                   templateType={templateType}
+                  isStreaming={isStreaming}
                 />
               )
             )}

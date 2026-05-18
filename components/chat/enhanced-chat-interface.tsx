@@ -3321,7 +3321,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
           <div
             ref={scrollAreaRef}
             onScroll={handleScroll}
-            className="h-full overflow-y-auto custom-scrollbar pb-32 md:pb-6"
+            className="h-full overflow-y-auto custom-scrollbar pb-40 md:pb-44"
           >
               <div className="mx-auto max-w-6xl px-2.5 sm:px-4 md:px-6 lg:px-10 py-2.5 sm:py-6 md:py-8">
               {messages.length === 0 ? (
@@ -3652,7 +3652,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         </div>
 
         {/* 🔥 输入框区域 - 移动端优化 */}
-        <div className="fixed inset-x-0 bottom-0 z-30 shrink-0 border-t border-[var(--paper-100)]/80 bg-[var(--paper-50)]/96 p-1.5 pb-[max(env(safe-area-inset-bottom),4px)] shadow-[0_-8px_24px_rgba(15,23,42,0.05)] backdrop-blur-md md:relative md:p-6 md:shadow-none">
+        <div className="absolute inset-x-0 bottom-0 z-30 shrink-0 border-t border-[var(--paper-100)]/80 bg-[var(--paper-50)]/96 p-1.5 pb-[max(env(safe-area-inset-bottom),4px)] shadow-[0_-8px_24px_rgba(15,23,42,0.05)] backdrop-blur-md md:p-6">
           <div className="mx-auto max-w-5xl">
             {/* 🔥 上传进度条 - 移动端优化 */}
             {isUploading && (
