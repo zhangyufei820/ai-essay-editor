@@ -9,8 +9,8 @@
 
 import { motion, AnimatePresence } from "framer-motion"
 import { X } from "lucide-react"
-import { ArtisticThinkingIcon } from "@/components/icons/ArtisticThinkingIcons"
 import { ModelLogo } from "@/components/ModelLogo"
+import { IconAllInOne } from "@/components/icons/v2"
 
 // ============================================
 // 🎨 Design Tokens - "智慧之光" 配色系统
@@ -176,7 +176,7 @@ export function ModelPanel({ isOpen, onClose }: ModelPanelProps) {
                 opacity: [0.5, 1, 0.5],
                 scaleX: [0.8, 1, 0.8],
               }}
-              transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+              transition={{ duration: 3, repeat: 0, ease: "easeInOut" }}
             />
 
             {/* 扫描光效 */}
@@ -214,7 +214,7 @@ export function ModelPanel({ isOpen, onClose }: ModelPanelProps) {
                       boxShadow: "0 4px 20px rgba(14, 58, 31, 0.25), 0 0 40px rgba(134, 239, 172, 0.1)",
                     }}
                   >
-                    <ArtisticThinkingIcon modelKey="teaching-pro" size={20} />
+                    <IconAllInOne className="h-5 w-5" />
                   </div>
                   {/* 呼吸光环 */}
                   <motion.div
@@ -224,7 +224,7 @@ export function ModelPanel({ isOpen, onClose }: ModelPanelProps) {
                       boxShadow: "0 0 20px rgba(134, 239, 172, 0.3)",
                     }}
                     animate={{ opacity: [0.3, 0.7, 0.3], scale: [1, 1.1, 1] }}
-                    transition={{ duration: 2.5, repeat: Infinity }}
+                    transition={{ duration: 2.5, repeat: 0 }}
                   />
                 </div>
 
@@ -299,7 +299,7 @@ export function ModelPanel({ isOpen, onClose }: ModelPanelProps) {
                     "0 0 20px rgba(134, 239, 172, 0.05)",
                   ],
                 }}
-                transition={{ duration: 4, repeat: Infinity }}
+                transition={{ duration: 4, repeat: 0 }}
               >
                 <p
                   className="text-xs tracking-[3px]"
@@ -367,7 +367,7 @@ function FloatingIslandCard({
           animate={{
             opacity: [0.5, 0.8, 0.5],
           }}
-          transition={{ duration: 2, repeat: Infinity }}
+          transition={{ duration: 2, repeat: 0 }}
         />
       )}
 
@@ -386,7 +386,7 @@ function FloatingIslandCard({
             ],
             opacity: [0.7, 1, 0.7],
           }}
-          transition={{ duration: 2, repeat: Infinity }}
+          transition={{ duration: 2, repeat: 0 }}
         />
       )}
 

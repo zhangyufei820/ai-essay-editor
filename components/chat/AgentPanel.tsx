@@ -9,7 +9,7 @@
 import { motion, AnimatePresence } from "framer-motion"
 import { X } from "lucide-react"
 import { ModelLogo } from "@/components/ModelLogo"
-import { ArtisticThinkingIcon } from "@/components/icons/ArtisticThinkingIcons"
+import { IconAllInOne } from "@/components/icons/v2"
 
 // ============================================
 // 🎨 Design Tokens - "智慧之光" 配色系统
@@ -127,7 +127,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
                 opacity: [0.5, 1, 0.5],
                 scaleX: [0.8, 1, 0.8],
               }}
-              transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+              transition={{ duration: 3, repeat: 0, ease: "easeInOut" }}
             />
 
             {/* 扫描光效 */}
@@ -175,7 +175,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
                       boxShadow: "0 0 20px rgba(134, 239, 172, 0.3)",
                     }}
                     animate={{ opacity: [0.3, 0.7, 0.3], scale: [1, 1.1, 1] }}
-                    transition={{ duration: 2.5, repeat: Infinity }}
+                    transition={{ duration: 2.5, repeat: 0 }}
                   />
                 </div>
 
@@ -247,9 +247,9 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
                         "0 0 10px rgba(134, 239, 172, 0.1)",
                       ],
                     }}
-                    transition={{ duration: 3, repeat: Infinity }}
+                    transition={{ duration: 3, repeat: 0 }}
                   >
-                    <ArtisticThinkingIcon modelKey="teaching-pro" size={20} />
+                    <IconAllInOne className="h-5 w-5" />
                   </motion.div>
                   <div>
                     <p className="text-xs font-medium" style={{ color: TOKENS.text.primary }}>
@@ -297,7 +297,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
                     "0 0 20px rgba(134, 239, 172, 0.05)",
                   ],
                 }}
-                transition={{ duration: 4, repeat: Infinity }}
+                transition={{ duration: 4, repeat: 0 }}
               >
                 <p
                   className="text-xs tracking-[3px]"
@@ -353,7 +353,7 @@ function OpenClawCard({ onClick }: { onClick: () => void }) {
         animate={{
           opacity: [0.5, 0.8, 0.5],
         }}
-        transition={{ duration: 2, repeat: Infinity }}
+        transition={{ duration: 2, repeat: 0 }}
       />
 
       {/* 推荐标签 */}
@@ -370,7 +370,7 @@ function OpenClawCard({ onClick }: { onClick: () => void }) {
             "0 0 6px rgba(34, 197, 94, 0.4)",
           ],
         }}
-        transition={{ duration: 2, repeat: Infinity }}
+        transition={{ duration: 2, repeat: 0 }}
       >
         推荐
       </motion.div>

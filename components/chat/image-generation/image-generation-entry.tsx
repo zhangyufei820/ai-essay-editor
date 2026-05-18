@@ -103,7 +103,7 @@ export function ImageGenerationEntry({
                   className={cn(
                     'rounded-full border px-4 py-2 text-sm transition-colors',
                     selectedSize.ratio === ratio
-                      ? 'border-green-800 bg-[var(--ink-50)] text-[var(--ink-900)]'
+                      ? 'border-[var(--ink-200)] bg-[var(--ink-50)] text-[var(--ink-900)]'
                       : 'border-[var(--paper-200)] bg-[var(--paper-50)] text-[var(--ink-600)]'
                   )}
                 >

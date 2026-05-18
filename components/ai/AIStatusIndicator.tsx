@@ -65,7 +65,7 @@ function ThinkingDots({ dotSize, gap }: { dotSize: number; gap: number }) {
           }}
           transition={{
             duration: 0.8,
-            repeat: Infinity,
+            repeat: 0,
             ease: [0.45, 0, 0.55, 1] as Easing,
             delay: i * 0.15,
           }}
@@ -101,7 +101,7 @@ function RespondingPulse({ containerSize }: { containerSize: number }) {
         }}
         transition={{
           duration: 1.2,
-          repeat: Infinity,
+          repeat: 0,
           ease: [0.33, 1, 0.68, 1] as Easing,
         }}
         className="absolute"
@@ -121,7 +121,7 @@ function RespondingPulse({ containerSize }: { containerSize: number }) {
         }}
         transition={{
           duration: 1.2,
-          repeat: Infinity,
+          repeat: 0,
           ease: [0.33, 1, 0.68, 1] as Easing,
           delay: 0.4,
         }}
@@ -141,7 +141,7 @@ function RespondingPulse({ containerSize }: { containerSize: number }) {
         }}
         transition={{
           duration: 0.6,
-          repeat: Infinity,
+          repeat: 0,
           ease: [0.45, 0, 0.55, 1] as Easing,
         }}
         style={{

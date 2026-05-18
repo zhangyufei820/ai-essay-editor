@@ -440,7 +440,7 @@ function AppSidebarInner() {
               "0 0 8px color-mix(in srgb, var(--seal-500) 40%, transparent)",
             ],
           }}
-          transition={{ duration: 2.5, repeat: Infinity }}
+          transition={{ duration: 2.5, repeat: 0 }}
         />
       )}
 
@@ -479,7 +479,7 @@ function AppSidebarInner() {
             ],
             opacity: [0.7, 1, 0.7],
           }}
-          transition={{ duration: 2, repeat: Infinity }}
+          transition={{ duration: 2, repeat: 0 }}
         />
       )}
     </Link>
@@ -960,7 +960,7 @@ function AppSidebarInner() {
               >
                 <motion.div
                   animate={{ scale: [1, 1.2, 1], rotate: [0, 8, -8, 0] }}
-                  transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+                  transition={{ duration: 1.5, repeat: 0, ease: "easeInOut" }}
                 >
                   <IconInvite className="w-4 h-4 text-[var(--ink-600)]" />
                 </motion.div>

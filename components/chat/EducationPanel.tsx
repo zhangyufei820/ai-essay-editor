@@ -8,9 +8,20 @@
 "use client"
 
 import { motion, AnimatePresence } from "framer-motion"
+import type { ComponentType } from "react"
 import { X } from "lucide-react"
-import { IconTeaching } from "@/components/icons/v2"
-import { ArtisticThinkingIcon } from "@/components/icons/ArtisticThinkingIcons"
+import {
+  IconAllInOne,
+  IconBanzhuren,
+  IconBeike,
+  IconDiagnosis,
+  IconEnglish,
+  IconEssay,
+  IconMath,
+  IconTeaching,
+  IconVocab,
+  type InkIconProps,
+} from "@/components/icons/v2"
 
 // ============================================
 // 🎨 Design Tokens - "智慧之光" 配色系统
@@ -151,6 +162,18 @@ const EDUCATION_AGENTS: EducationAgent[] = [
   },
 ]
 
+const EDUCATION_AGENT_ICONS: Record<string, ComponentType<InkIconProps>> = {
+  "all-in-one-agent": IconAllInOne,
+  "worksheet-diagnosis": IconDiagnosis,
+  standard: IconEssay,
+  "teaching-pro": IconTeaching,
+  "quanquan-math": IconMath,
+  "quanquan-english": IconEnglish,
+  "vocab-card": IconVocab,
+  "beike-pro": IconBeike,
+  banzhuren: IconBanzhuren,
+}
+
 // ============================================
 // 教育专区面板组件
 // ============================================
@@ -202,7 +225,7 @@ export function EducationPanel({ isOpen, onClose }: EducationPanelProps) {
                 opacity: [0.5, 1, 0.5],
                 scaleX: [0.8, 1, 0.8],
               }}
-              transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+              transition={{ duration: 3, repeat: 0, ease: "easeInOut" }}
             />
 
             {/* 扫描光效 */}
@@ -250,7 +273,7 @@ export function EducationPanel({ isOpen, onClose }: EducationPanelProps) {
                       boxShadow: "0 0 20px rgba(134, 239, 172, 0.3)",
                     }}
                     animate={{ opacity: [0.3, 0.7, 0.3], scale: [1, 1.1, 1] }}
-                    transition={{ duration: 2.5, repeat: Infinity }}
+                    transition={{ duration: 2.5, repeat: 0 }}
                   />
                 </div>
 
@@ -325,7 +348,7 @@ export function EducationPanel({ isOpen, onClose }: EducationPanelProps) {
                     "0 0 20px rgba(134, 239, 172, 0.05)",
                   ],
                 }}
-                transition={{ duration: 4, repeat: Infinity }}
+                transition={{ duration: 4, repeat: 0 }}
               >
                 <p
                   className="text-xs tracking-[3px]"
@@ -360,6 +383,7 @@ function FloatingIslandCard({
   onClick: () => void
 }) {
   const isRecommended = agent.badge === "推荐"
+  const AgentIcon = EDUCATION_AGENT_ICONS[agent.key] ?? IconTeaching
 
   return (
     <motion.a
@@ -390,7 +414,7 @@ function FloatingIslandCard({
           animate={{
             opacity: [0.5, 0.8, 0.5],
           }}
-          transition={{ duration: 2, repeat: Infinity }}
+          transition={{ duration: 2, repeat: 0 }}
         />
       )}
 
@@ -409,7 +433,7 @@ function FloatingIslandCard({
             ],
             opacity: [0.7, 1, 0.7],
           }}
-          transition={{ duration: 2, repeat: Infinity }}
+          transition={{ duration: 2, repeat: 0 }}
         />
       )}
 
@@ -432,11 +456,7 @@ function FloatingIslandCard({
         }}
         transition={{ duration: 0.3 }}
       >
-        <ArtisticThinkingIcon
-          modelKey={agent.key as any}
-          size={24}
-          style={{ color: "var(--ink-600)" }}
-        />
+        <AgentIcon className="h-6 w-6 text-[var(--ink-600)]" />
 
         {/* 悬停时图标微光 */}
         <motion.div
