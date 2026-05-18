@@ -92,10 +92,10 @@ export function UserMessageBubble({ content, files, onEdit, onSend }: UserMessag
     <div className="group w-full">
       <div
         className={cn(
-          "rounded-[var(--radius-soft)] bg-transparent px-1 py-1 text-[var(--ink-800)] transition-all duration-200",
+          "rounded-[var(--radius-soft)] bg-[var(--ink-50)] px-4 py-3 text-[var(--ink-800)] shadow-sm transition-all duration-200",
           isEditing
             ? "border border-[var(--seal-500)] ring-2 ring-[var(--seal-500)]/30"
-            : "border border-transparent"
+            : "border border-[var(--paper-200)]"
         )}
       >
         {/* 文件预览 */}

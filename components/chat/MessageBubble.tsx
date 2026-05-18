@@ -551,15 +551,6 @@ const MessageBubble = memo(function MessageBubble({
     },
   }), [content, essayReviewArtifact, onCopy, onShare])
 
-  // User message style - transparent background, inherits page text color
-  const userBubbleStyle = {
-    backgroundColor: "transparent",
-    color: "var(--ink-800)",
-    border: "0",
-    borderRadius: "var(--radius-soft)",
-    maxWidth: "75%",
-  }
-
   return (
     <motion.div
       variants={isUser ? userMessageVariants : assistantMessageVariants}
@@ -631,7 +622,7 @@ const MessageBubble = memo(function MessageBubble({
           {/* Message Content */}
           <div className={cn("flex flex-col", isUser ? "items-end" : "w-full items-start")}>
             {isUser ? (
-              <div className="px-1 py-1 sm:px-1.5 sm:py-1" style={userBubbleStyle}>
+              <div className="max-w-[75%] rounded-[var(--radius-soft)] border border-[var(--paper-200)] bg-[var(--ink-50)] px-4 py-3 text-[var(--ink-800)] shadow-sm">
                 <p
                   className="whitespace-pre-wrap break-words text-[13px] sm:text-sm"
                   style={{ lineHeight: 1.6 }}
