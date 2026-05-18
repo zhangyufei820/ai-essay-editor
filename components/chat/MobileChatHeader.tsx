@@ -15,8 +15,8 @@ import {
 
 import { useRouter } from "next/navigation"
 import { motion } from "framer-motion"
-import { ChevronLeft, MoreVertical, Trash2, Settings } from "lucide-react"
-import { IconShare } from "@/components/icons/v2"
+import { ChevronLeft, MoreVertical, Trash2 } from "lucide-react"
+import { IconSettings, IconShare } from "@/components/icons/v2"
 import { cn } from "@/lib/utils"
 
 // ============================================
@@ -136,7 +136,7 @@ export function MobileChatHeader({
           {(onClearChat || onShare) && onSettings && <DropdownMenuSeparator />}
           {onSettings && (
             <DropdownMenuItem onClick={onSettings}>
-              <Settings className="w-4 h-4 mr-2" />
+              <IconSettings className="w-4 h-4 mr-2" />
               设置
             </DropdownMenuItem>
           )}

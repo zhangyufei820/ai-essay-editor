@@ -12,8 +12,8 @@
 
 import { memo, useEffect, useMemo, useRef, useState } from "react"
 import { motion, type Easing } from "framer-motion"
-import { ChevronDown, ChevronUp, Sparkles } from "lucide-react"
-import { IconCopy, IconExportPdf, IconFollowup, IconListen, IconShare, IconUser } from "@/components/icons/v2"
+import { ChevronDown, ChevronUp } from "lucide-react"
+import { IconAllInOne, IconCopy, IconExportPdf, IconFollowup, IconListen, IconShare, IconUser } from "@/components/icons/v2"
 import { cn } from "@/lib/utils"
 import { AssistantMessageV2 } from "@/components/chat/v2"
 import { EssayReviewTemplate } from "@/components/chat/v2/templates"
@@ -122,7 +122,7 @@ function AIAvatar() {
       className="w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center shrink-0"
       style={{ backgroundColor: CLAUDE_AVATAR_BG }}
     >
-      <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+      <IconAllInOne className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
     </div>
   )
 }
@@ -356,7 +356,7 @@ function ThinkingDisclosure({
         className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-[13px] font-semibold text-[var(--ink-700)] transition-colors hover:bg-[var(--ink-50)] focus-visible:outline-none focus-visible:[box-shadow:var(--shadow-focus-ink)]"
       >
         <span className="inline-flex items-center gap-2">
-          <Sparkles className="size-3.5" aria-hidden="true" />
+          <IconAllInOne className="size-3.5" aria-hidden="true" />
           思考过程
           {isStreaming ? <span className="text-[11px] text-[var(--ink-400)]">生成中</span> : null}
         </span>
@@ -543,7 +543,7 @@ const MessageBubble = memo(function MessageBubble({
         <div className="flex items-center gap-3 px-4 py-4">
           {showAvatar ? (
             <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[var(--ink-700)]">
-              <Sparkles className="size-3.5 text-white" />
+              <IconAllInOne className="size-3.5 text-white" />
             </div>
           ) : null}
           <div className="flex flex-col gap-1.5">

@@ -8,19 +8,28 @@ import { usePathname, useSearchParams, useRouter } from "next/navigation"
 import { useState, useEffect, useRef, Suspense, useCallback } from "react"
 import { motion } from "framer-motion"
 import {
-  Settings, ChevronRight, ChevronDown,
-  Menu, X, Zap,
-  Bot, Brain,
-  Gift, Sparkles, Palette, Edit, FlaskConical, BarChart3, FolderOpen, Wrench, Compass
+  ChevronRight, ChevronDown,
+  Menu, X,
 } from "lucide-react"
 import {
+  IconAllInOne,
+  IconChat,
   IconCredits,
+  IconDashboard,
+  IconEssay,
+  IconExplore,
   IconFlashcard,
+  IconFolder,
+  IconInvite,
+  IconLab,
   IconLogout,
+  IconMember,
   IconProblem,
+  IconSettings,
   IconShare,
   IconTeaching,
   IconUser,
+  IconWriting,
 } from "@/components/icons/v2"
 import { cn } from "@/lib/utils"
 import { Logo } from "@/components/brand/Logo"
@@ -605,7 +614,7 @@ function AppSidebarInner() {
                 whileTap={{ scale: 0.99 }}
                 transition={{ duration: 0.15 }}
               >
-                <BarChart3 className="w-[18px] h-[18px]" style={{ color: COLORS.primary.main }} />
+                <IconDashboard className="w-[18px] h-[18px]" style={{ color: COLORS.primary.main }} />
                 <span className="text-[12px] font-medium leading-none whitespace-nowrap" style={{ color: COLORS.primary.dark }}>
                   学习看板
                 </span>
@@ -632,7 +641,7 @@ function AppSidebarInner() {
                 whileTap={{ scale: 0.99 }}
                 transition={{ duration: 0.15 }}
               >
-                <FolderOpen className="w-[18px] h-[18px]" style={{ color: COLORS.primary.main }} />
+                <IconFolder className="w-[18px] h-[18px]" style={{ color: COLORS.primary.main }} />
                 <span className="text-[12px] font-medium leading-none whitespace-nowrap" style={{ color: COLORS.primary.dark }}>
                   个人资料夹
                 </span>
@@ -713,7 +722,7 @@ function AppSidebarInner() {
                 whileTap={{ scale: 0.99 }}
                 transition={{ duration: 0.15 }}
               >
-                <Wrench className="w-[18px] h-[18px]" style={{ color: COLORS.primary.main }} />
+                <IconSettings className="w-[18px] h-[18px]" style={{ color: COLORS.primary.main }} />
                 <span className="text-[12px] font-medium leading-none whitespace-nowrap" style={{ color: COLORS.primary.dark }}>
                   工具中心
                 </span>
@@ -740,7 +749,7 @@ function AppSidebarInner() {
                 whileTap={{ scale: 0.99 }}
                 transition={{ duration: 0.15 }}
               >
-                <Compass className="w-[18px] h-[18px]" style={{ color: COLORS.primary.main }} />
+                <IconExplore className="w-[18px] h-[18px]" style={{ color: COLORS.primary.main }} />
                 <span className="text-[12px] font-medium leading-none whitespace-nowrap" style={{ color: COLORS.primary.dark }}>
                   创作广场
                 </span>
@@ -794,7 +803,7 @@ function AppSidebarInner() {
                 whileTap={{ scale: 0.99 }}
                 transition={{ duration: 0.15 }}
               >
-                <FlaskConical className="w-[18px] h-[18px]" style={{ color: COLORS.primary.main }} />
+                <IconLab className="w-[18px] h-[18px]" style={{ color: COLORS.primary.main }} />
                 <span className="text-[12px] font-medium leading-none whitespace-nowrap" style={{ color: COLORS.primary.dark }}>
                   互动实验室
                 </span>
@@ -821,7 +830,7 @@ function AppSidebarInner() {
               whileTap={{ scale: 0.99 }}
               transition={{ duration: 0.15 }}
             >
-              <Sparkles className="w-[18px] h-[18px]" style={{ color: COLORS.primary.main }} />
+              <IconAllInOne className="w-[18px] h-[18px]" style={{ color: COLORS.primary.main }} />
               <span className="text-[12px] font-medium leading-none whitespace-nowrap" style={{ color: COLORS.primary.dark }}>
                 OpenClaw
               </span>
@@ -873,7 +882,7 @@ function AppSidebarInner() {
               whileTap={{ scale: 0.99 }}
               transition={{ duration: 0.15 }}
             >
-              <Bot className="w-[18px] h-[18px]" style={{ color: COLORS.primary.dark }} />
+              <IconChat className="w-[18px] h-[18px]" style={{ color: COLORS.primary.dark }} />
               <span className="text-[12px] font-medium leading-none whitespace-nowrap" style={{ color: COLORS.primary.dark }}>
                 顶级模型专区
               </span>
@@ -899,7 +908,7 @@ function AppSidebarInner() {
               whileTap={{ scale: 0.99 }}
               transition={{ duration: 0.15 }}
             >
-              <Edit className="w-[18px] h-[18px]" style={{ color: COLORS.primary.main }} />
+              <IconEssay className="w-[18px] h-[18px]" style={{ color: COLORS.primary.main }} />
               <span className="text-[12px] font-medium leading-none whitespace-nowrap" style={{ color: COLORS.primary.dark }}>
                 AI写作专区
               </span>
@@ -925,7 +934,7 @@ function AppSidebarInner() {
               whileTap={{ scale: 0.99 }}
               transition={{ duration: 0.15 }}
             >
-              <Palette className="w-[18px] h-[18px]" style={{ color: COLORS.primary.main }} />
+              <IconWriting className="w-[18px] h-[18px]" style={{ color: COLORS.primary.main }} />
               <span className="text-[12px] font-medium leading-none whitespace-nowrap" style={{ color: COLORS.primary.dark }}>
                 多媒体专区
               </span>
@@ -953,7 +962,7 @@ function AppSidebarInner() {
                   animate={{ scale: [1, 1.2, 1], rotate: [0, 8, -8, 0] }}
                   transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
                 >
-                  <Gift className="w-4 h-4 text-[var(--ink-600)]" strokeWidth={1.5} />
+                  <IconInvite className="w-4 h-4 text-[var(--ink-600)]" />
                 </motion.div>
               </Link>
 
@@ -983,7 +992,7 @@ function AppSidebarInner() {
                     onMouseEnter={(e) => e.currentTarget.style.backgroundColor = COLORS.gray[100]}
                     onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
                   >
-                    <Settings className="h-4 w-4" style={{ color: COLORS.gray[500] }} />
+                    <IconSettings className="h-4 w-4" style={{ color: COLORS.gray[500] }} />
                     账号设置
                   </div>
                 </Link>
@@ -994,7 +1003,7 @@ function AppSidebarInner() {
                     onMouseEnter={(e) => e.currentTarget.style.backgroundColor = COLORS.gray[100]}
                     onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
                   >
-                    <Zap className="h-4 w-4" style={{ color: COLORS.gray[500] }} />
+                    <IconMember className="h-4 w-4" style={{ color: COLORS.gray[500] }} />
                     升级会员
                   </div>
                 </Link>

@@ -20,8 +20,8 @@ import {
   type FormEvent,
 } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { X, Loader2, ChevronDown, FileText, Image as ImageIcon, MicOff, Camera } from "lucide-react"
-import { IconMic, IconSend, IconUpload } from "@/components/icons/v2"
+import { X, Loader2, ChevronDown, Image as ImageIcon } from "lucide-react"
+import { IconDiagnosis, IconEssay, IconMic, IconSend, IconUpload } from "@/components/icons/v2"
 import { cn } from "@/lib/utils"
 import { ModelSelector, type Model } from "./ModelSelector"
 
@@ -188,7 +188,7 @@ function FilePreviewCard({
           className="h-8 w-8 rounded flex items-center justify-center shrink-0"
           style={{ backgroundColor: "color-mix(in srgb, var(--ink-600) 15%, transparent)" }}
         >
-          <FileText className="h-4 w-4" style={{ color: "var(--ink-600)" }} />
+          <IconEssay className="h-4 w-4" style={{ color: "var(--ink-600)" }} />
         </div>
       )}
       
@@ -527,7 +527,7 @@ export function ChatInput({
             >
               <div className="flex items-center justify-between border-b border-[var(--paper-200)] px-4 py-3">
                 <div className="flex items-center gap-2 text-sm font-semibold text-[var(--ink-800)]">
-                  <Camera className="h-4 w-4" />
+                  <IconDiagnosis className="h-4 w-4" />
                   拍照上传
                 </div>
                 <button
@@ -558,7 +558,7 @@ export function ChatInput({
                   onClick={handleCapturePhoto}
                   className="gap-2 bg-[var(--ink-700)] text-white hover:bg-[var(--ink-800)]"
                 >
-                  <Camera className="h-4 w-4" />
+                  <IconDiagnosis className="h-4 w-4" />
                   使用照片
                 </Button>
               </div>
@@ -610,7 +610,7 @@ export function ChatInput({
               disabled={isLoading || disabled}
               aria-label="打开相机拍照"
             >
-              <Camera className="h-4 w-4" />
+              <IconDiagnosis className="h-4 w-4" />
             </Button>
             <Button
               type="button"
@@ -682,7 +682,7 @@ export function ChatInput({
                 disabled={isLoading || disabled}
                 aria-label="打开相机拍照"
               >
-                <Camera className="h-4 w-4 sm:h-5 sm:w-5" />
+                <IconDiagnosis className="h-4 w-4 sm:h-5 sm:w-5" />
               </Button>
             </div>
             <div className="flex flex-col items-center gap-0.5 sm:gap-1">
@@ -727,7 +727,7 @@ export function ChatInput({
             aria-label={isListening ? "停止录音" : "开始语音输入"}
           >
             {isListening ? (
-              <MicOff className="h-4 w-4 sm:h-5 sm:w-5" />
+              <IconMic className="h-4 w-4 opacity-50 sm:h-5 sm:w-5" />
             ) : (
               <IconMic className="h-4 w-4 sm:h-5 sm:w-5" />
             )}

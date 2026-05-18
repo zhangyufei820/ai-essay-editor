@@ -1,14 +1,14 @@
 "use client"
 
 import Link from "next/link"
-import { Blocks, ChevronRight } from "lucide-react"
+import { ChevronRight } from "lucide-react"
 import { IconAllInOne, IconEssay, IconMath } from "@/components/icons/v2"
 import { cn } from "@/lib/utils"
 import { InkReveal, InkStagger, InkStaggerItem } from "@/components/motion/InkMotion"
 
 const QUICK_AGENTS = [
   { href: "/chat/standard", icon: IconEssay, name: "作文批改", desc: "逐段点评 + 升格", price: "100积分/次" },
-  { href: "/agents", icon: Blocks, name: "智能体广场", desc: "全部学习入口", price: "按需选择" },
+  { href: "/agents", icon: IconAllInOne, name: "智能体广场", desc: "全部学习入口", price: "按需选择" },
   { href: "/chat/quanquan-math", icon: IconMath, name: "数学解题", desc: "分步讲解", price: "20积分起" },
   { href: "/chat/all-in-one-agent", icon: IconAllInOne, name: "全能智能体", desc: "自动选择工具", price: "按token" },
 ] as const
