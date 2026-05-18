@@ -12,12 +12,26 @@
 
 import { memo, useEffect, useMemo, useRef, useState } from "react"
 import { motion, type Easing } from "framer-motion"
-import { ChevronDown, ChevronUp } from "lucide-react"
-import { IconAllInOne, IconCopy, IconExportPdf, IconFollowup, IconListen, IconShare, IconUser } from "@/components/icons/v2"
+import { ChevronDown, ChevronUp, ThumbsDown, ThumbsUp } from "lucide-react"
+import { IconAllInOne, IconCopy, IconExportPdf, IconFollowup, IconHistory, IconListen, IconShare, IconUser } from "@/components/icons/v2"
 import { cn } from "@/lib/utils"
 import { AssistantMessageV2 } from "@/components/chat/v2"
-import { EssayReviewTemplate } from "@/components/chat/v2/templates"
+import {
+  EssayReviewTemplate,
+  FlashcardTemplate,
+  VocabCardTemplate,
+  WorksheetPosterTemplate,
+} from "@/components/chat/v2/templates"
+import type { FlashcardArtifact, VocabCardArtifact, WorksheetDiagnosisArtifact } from "@/components/chat/v2/types"
 import { exportChatContentToPDF } from "@/lib/chat-pdf-export"
+import {
+  SheetV2,
+  SheetV2Content,
+  SheetV2Description,
+  SheetV2Header,
+  SheetV2Title,
+  SheetV2Trigger,
+} from "@/components/ui/v2/sheet"
 import { InkBrush } from "@/components/motion/InkMotion"
 import { parseEssayReview } from "@/lib/parse-essay-review"
 import { splitThinkingContent } from "@/lib/think-content"
@@ -26,12 +40,13 @@ import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import remarkMath from "remark-math"
 import rehypeKatex from "rehype-katex"
+import html2canvas from "html2canvas"
+import { jsPDF } from "jspdf"
 
 // v2 墨砚 token colors
-const CLAUDE_TEXT_COLOR = "var(--ink-800)"
+const AI_TEXT_COLOR = "var(--ink-800)"
 const CLAUDE_SECONDARY_COLOR = "var(--ink-500)"
 const CLAUDE_ACCENT_COLOR = "var(--ink-700)"
-const CLAUDE_AVATAR_BG = "var(--ink-700)"
 const MAX_VISIBLE_HEIGHT = 600
 
 // Conclusion detection - hoisted to module scope to avoid recreation per render
@@ -39,6 +54,82 @@ const CONCLUSION_KEYWORDS = ["综上所述", "答案是", "结论是", "所以",
 
 function isConclusionParagraph(text: string): boolean {
   return CONCLUSION_KEYWORDS.some(keyword => text.includes(keyword))
+}
+
+function parseLineList(block: string) {
+  return block
+    .split("\n")
+    .map((line) => line.replace(/^[\s\-*•\d.、)）]+/, "").trim())
+    .filter(Boolean)
+}
+
+function parseVocabCard(content: string): VocabCardArtifact | null {
+  const word = content.match(/^#+\s*(\S+)/m)?.[1] || content.match(/单词[：:]\s*(\S+)/)?.[1] || ""
+  if (!word) return null
+
+  const examplesBlock = content.match(/例句[：:][\s\S]*?(?=\n#|\n\n|$)/)?.[0] || ""
+
+  return {
+    type: "vocab-card",
+    word,
+    meaning: content.match(/释义[：:]\s*([^\n]+)/)?.[1]?.trim() || "",
+    pronunciation: content.match(/音标[：:]\s*([^\n]+)/)?.[1]?.trim() || "",
+    examples: parseLineList(examplesBlock).slice(0, 5),
+    story: content.match(/(?:记忆故事|记忆|故事)[：:]\s*([\s\S]*?)(?=\n#|$)/)?.[1]?.trim() || "",
+    raw: content,
+  }
+}
+
+function parseWorksheetPoster(content: string): WorksheetDiagnosisArtifact {
+  const weakBlock = content.match(/(?:薄弱点|错题|弱点)[：:：]?\s*([\s\S]*?)(?=\n#|\n\n(?:训练|计划)|$)/)?.[1] || ""
+  const trainingBlock = content.match(/(?:训练计划|今日训练|训练)[：:：]?\s*([\s\S]*?)(?=\n#|$)/)?.[1] || ""
+
+  return {
+    type: "worksheet-diagnosis",
+    subject: content.match(/科目[：:]\s*([^\n]+)/)?.[1]?.trim(),
+    grade: content.match(/年级[：:]\s*([^\n]+)/)?.[1]?.trim(),
+    totalQuestions: Number(content.match(/总题数[：:]\s*(\d+)/)?.[1]) || undefined,
+    wrongCount: Number(content.match(/(?:错题|错误)[：:]\s*(\d+)/)?.[1]) || undefined,
+    weakPoints: parseLineList(weakBlock).slice(0, 5).map((topic) => ({
+      topic,
+      wrongOf: content.match(/(?:错|错误)\s*(\d+\s*\/\s*\d+|\d+)/)?.[1] || "—",
+    })),
+    trainingPlan: parseLineList(trainingBlock).length
+      ? [{ topic: "今日训练", tasks: parseLineList(trainingBlock).slice(0, 6) }]
+      : undefined,
+    rawMarkdown: content,
+  }
+}
+
+function parseFlashcards(content: string): FlashcardArtifact | null {
+  const cards = [...content.matchAll(/(?:^|\n)[-*]\s*(.+?)\s*(?:=>|->|：|:)\s*(.+?)(?=\n|$)/g)]
+    .map((match) => ({ front: match[1].trim(), back: match[2].trim() }))
+    .filter((card) => card.front && card.back)
+
+  return cards.length ? { type: "flashcard", cards: cards.slice(0, 20) } : null
+}
+
+async function exportEssayReviewAsPDF(element: HTMLElement, title: string) {
+  const canvas = await html2canvas(element, { scale: 2, useCORS: true })
+  const imgData = canvas.toDataURL("image/png")
+  const pdf = new jsPDF("p", "mm", "a4")
+  const pdfWidth = pdf.internal.pageSize.getWidth()
+  const pageHeight = pdf.internal.pageSize.getHeight()
+  const imgHeight = (canvas.height * pdfWidth) / canvas.width
+  let position = 0
+  let remainingHeight = imgHeight
+
+  pdf.addImage(imgData, "PNG", 0, position, pdfWidth, imgHeight)
+  remainingHeight -= pageHeight
+
+  while (remainingHeight > 0) {
+    position = remainingHeight - imgHeight
+    pdf.addPage()
+    pdf.addImage(imgData, "PNG", 0, position, pdfWidth, imgHeight)
+    remainingHeight -= pageHeight
+  }
+
+  pdf.save(`${title}.pdf`)
 }
 
 // Extract text content from React children for keyword detection
@@ -98,17 +189,16 @@ function UserAvatar({ avatar }: { avatar?: string }) {
       <img
         src={avatar}
         alt="User avatar"
-        className="w-7 h-7 rounded-full object-cover"
+        className="h-7 w-7 rounded-full object-cover"
       />
     )
   }
 
   return (
     <div
-      className="w-7 h-7 rounded-full flex items-center justify-center"
-      style={{ backgroundColor: "var(--paper-200)" }}
+      className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--paper-200)]"
     >
-      <IconUser className="w-3.5 h-3.5" style={{ color: "var(--ink-500)" }} />
+      <IconUser className="h-3.5 w-3.5 text-[var(--ink-500)]" />
     </div>
   )
 }
@@ -120,8 +210,7 @@ function UserAvatar({ avatar }: { avatar?: string }) {
 function AIAvatar() {
   return (
     <div
-      className="w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center shrink-0"
-      style={{ backgroundColor: CLAUDE_AVATAR_BG }}
+      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--ink-700)] sm:h-10 sm:w-10"
     >
       <IconAllInOne className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
     </div>
@@ -180,7 +269,7 @@ function MarkdownContent({ content }: { content: string }) {
                   className="my-3 rounded-r-[var(--radius-soft)] border-l-[3px] border-[var(--ink-700)] bg-[var(--ink-50)]/70 px-4 py-3 text-[13px] sm:text-[14px]"
                   style={{
                     lineHeight: 1.6,
-                    color: CLAUDE_TEXT_COLOR,
+                    color: AI_TEXT_COLOR,
                 }}
               >
                 {children}
@@ -189,7 +278,7 @@ function MarkdownContent({ content }: { content: string }) {
           }
 
           return (
-            <p className="mb-1.5 last:mb-0 text-[13px] sm:text-[14px]" style={{ lineHeight: 1.6, color: CLAUDE_TEXT_COLOR }}>
+            <p className="mb-1.5 last:mb-0 text-[13px] sm:text-[14px]" style={{ lineHeight: 1.6, color: AI_TEXT_COLOR }}>
               {children}
             </p>
           )
@@ -205,7 +294,7 @@ function MarkdownContent({ content }: { content: string }) {
           </ol>
         ),
         li: ({ children }) => (
-          <li className="text-[13px] sm:text-[14px]" style={{ lineHeight: 1.6, color: CLAUDE_TEXT_COLOR }}>
+          <li className="text-[13px] sm:text-[14px]" style={{ lineHeight: 1.6, color: AI_TEXT_COLOR }}>
             {children}
           </li>
         ),
@@ -239,7 +328,7 @@ function MarkdownContent({ content }: { content: string }) {
           </pre>
         ),
         strong: ({ children }) => (
-          <strong className="font-semibold" style={{ color: CLAUDE_TEXT_COLOR }}>
+          <strong className="font-semibold" style={{ color: AI_TEXT_COLOR }}>
             {children}
           </strong>
         ),
@@ -312,15 +401,21 @@ interface MessageActions {
   onShare: () => void
   onAskFollowup: () => void
   onPlayAudio: () => void
+  onRegenerate: () => void
 }
 
 function MessageActionToolbar({ actions }: { actions: MessageActions }) {
+  function handleFeedback(type: "up" | "down") {
+    toast.success(type === "up" ? "感谢反馈！" : "我们会改进")
+  }
+
   const buttons = [
     { label: "复制", icon: IconCopy, onClick: actions.onCopy },
     { label: "朗读", icon: IconListen, onClick: actions.onPlayAudio },
     { label: "分享", icon: IconShare, onClick: actions.onShare },
     { label: "导出 PDF", icon: IconExportPdf, onClick: actions.onExportPDF },
     { label: "继续追问", icon: IconFollowup, onClick: actions.onAskFollowup },
+    { label: "重新生成", icon: IconHistory, onClick: actions.onRegenerate },
   ] as const
 
   return (
@@ -336,6 +431,56 @@ function MessageActionToolbar({ actions }: { actions: MessageActions }) {
           {label}
         </button>
       ))}
+      <SheetV2>
+        <SheetV2Trigger asChild>
+          <button
+            type="button"
+            className="inline-flex min-h-9 items-center gap-1.5 rounded-[var(--radius-pill)] px-2.5 py-1.5 text-[12px] font-medium text-[var(--ink-600)] transition-colors hover:bg-[var(--ink-50)] hover:text-[var(--ink-800)] focus-visible:outline-none focus-visible:[box-shadow:var(--shadow-focus-ink)]"
+          >
+            <IconExportPdf className="size-3.5" aria-hidden="true" />
+            查看产物
+          </button>
+        </SheetV2Trigger>
+        <SheetV2Content side="right" className="w-[88vw] max-w-sm">
+          <SheetV2Header>
+            <SheetV2Title>已生成产物</SheetV2Title>
+            <SheetV2Description>当前回复可导出的学习材料。</SheetV2Description>
+          </SheetV2Header>
+          <div className="px-6 pb-6">
+            <ul className="space-y-2">
+              <li className="flex items-center gap-2 rounded-[var(--radius-soft)] border border-[var(--paper-200)] bg-white/70 px-3 py-2 text-[13px] text-[var(--ink-700)]">
+                <IconExportPdf className="size-4 text-[var(--seal-500)]" />
+                <span className="min-w-0 flex-1 truncate">AI 回复导出 PDF</span>
+                <button
+                  type="button"
+                  onClick={actions.onExportPDF}
+                  className="shrink-0 text-[var(--ink-500)] transition-colors hover:text-[var(--ink-800)] focus-visible:outline-none focus-visible:[box-shadow:var(--shadow-focus-ink)]"
+                >
+                  下载
+                </button>
+              </li>
+            </ul>
+          </div>
+        </SheetV2Content>
+      </SheetV2>
+      <div className="ml-auto flex items-center gap-1">
+        <button
+          type="button"
+          onClick={() => handleFeedback("up")}
+          title="有帮助"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-[var(--radius-pill)] text-[var(--ink-500)] transition-colors hover:bg-[var(--ink-50)] hover:text-[var(--ink-800)] focus-visible:outline-none focus-visible:[box-shadow:var(--shadow-focus-ink)]"
+        >
+          <ThumbsUp className="size-3.5" aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          onClick={() => handleFeedback("down")}
+          title="不满意"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-[var(--radius-pill)] text-[var(--ink-500)] transition-colors hover:bg-[var(--ink-50)] hover:text-[var(--ink-800)] focus-visible:outline-none focus-visible:[box-shadow:var(--shadow-focus-ink)]"
+        >
+          <ThumbsDown className="size-3.5" aria-hidden="true" />
+        </button>
+      </div>
     </div>
   )
 }
@@ -436,7 +581,7 @@ function AssistantMarkdownCard({
       >
         <div
           className="text-[13px] sm:text-sm ai-content-container"
-          style={{ lineHeight: 1.6, color: CLAUDE_TEXT_COLOR }}
+          style={{ lineHeight: 1.6, color: AI_TEXT_COLOR }}
         >
           {parsedContent.hasThinking ? (
             <ThinkingDisclosure
@@ -498,6 +643,7 @@ const MessageBubble = memo(function MessageBubble({
   showAvatar = true,
 }: MessageBubbleProps) {
   const isUser = role === "user"
+  const essayRef = useRef<HTMLDivElement>(null)
   const essayReviewArtifact = useMemo(() => {
     const isEssayModel = model === "standard" || model === "essay-correction"
     if (isUser || !isEssayModel) return null
@@ -506,12 +652,21 @@ const MessageBubble = memo(function MessageBubble({
   const templateType = useMemo(() => {
     if (isUser) return "user"
     if (essayReviewArtifact) return "essay-review"
-    // Future extension points:
-    // if (model === "vocab-card") return "vocab-card"
-    // if (model === "suno-v5") return "music-card"
-    // if (model?.includes("gpt-image") || model === "banana-2-pro") return "image-gallery"
+    if (model === "vocab-card") return "vocab-card"
+    if (model === "flashcard") return "flashcard"
+    if (model === "suno-v5") return "music-card"
+    if (model?.includes("gpt-image") || model === "banana-2-pro" || model === "gemini-image") return "image-gallery"
+    if (model === "worksheet-diagnosis") return "worksheet-poster"
     return "markdown"
   }, [essayReviewArtifact, isUser, model])
+  const vocabCardArtifact = useMemo(
+    () => templateType === "vocab-card" ? parseVocabCard(content) : null,
+    [content, templateType]
+  )
+  const flashcardArtifact = useMemo(
+    () => templateType === "flashcard" ? parseFlashcards(content) : null,
+    [content, templateType]
+  )
   const actions = useMemo<MessageActions>(() => ({
     onCopy: async () => {
       try {
@@ -524,6 +679,12 @@ const MessageBubble = memo(function MessageBubble({
     onExportPDF: async () => {
       try {
         toast.info("正在生成完整 PDF...")
+        if (essayRef.current && templateType === "essay-review") {
+          await exportEssayReviewAsPDF(essayRef.current, "沈翔智学-作文批改报告")
+          toast.success("PDF 已生成")
+          return
+        }
+
         await exportChatContentToPDF(content, {
           title: essayReviewArtifact ? "沈翔智学 - 作文批改报告" : "沈翔智学 - AI 分析报告",
           filenamePrefix: essayReviewArtifact ? "沈翔智学-作文批改报告" : "沈翔智学-AI分析报告",
@@ -549,16 +710,10 @@ const MessageBubble = memo(function MessageBubble({
     onPlayAudio: () => {
       window.dispatchEvent(new CustomEvent("play-chat-message-audio", { detail: { text: content } }))
     },
-  }), [content, essayReviewArtifact, onCopy, onShare])
-
-  // User message style - transparent background, inherits page text color
-  const userBubbleStyle = {
-    backgroundColor: "transparent",
-    color: "var(--ink-800)",
-    border: "0",
-    borderRadius: "var(--radius-soft)",
-    maxWidth: "75%",
-  }
+    onRegenerate: () => {
+      window.dispatchEvent(new CustomEvent("regenerate-last-message"))
+    },
+  }), [content, essayReviewArtifact, onCopy, onShare, templateType])
 
   return (
     <motion.div
@@ -605,7 +760,7 @@ const MessageBubble = memo(function MessageBubble({
               renderMarkdown={() => (
                 <div
                   className="text-[13px] sm:text-sm ai-content-container"
-                  style={{ lineHeight: 1.6, color: CLAUDE_TEXT_COLOR }}
+                  style={{ lineHeight: 1.6, color: AI_TEXT_COLOR }}
                 >
                   <MarkdownContent content={content} />
                 </div>
@@ -631,7 +786,7 @@ const MessageBubble = memo(function MessageBubble({
           {/* Message Content */}
           <div className={cn("flex flex-col", isUser ? "items-end" : "w-full items-start")}>
             {isUser ? (
-              <div className="px-1 py-1 sm:px-1.5 sm:py-1" style={userBubbleStyle}>
+              <div className="max-w-[75%] rounded-[var(--radius-soft)] border border-[var(--paper-200)] bg-[var(--ink-50)] px-4 py-3 text-[var(--ink-800)] shadow-sm">
                 <p
                   className="whitespace-pre-wrap break-words text-[13px] sm:text-sm"
                   style={{ lineHeight: 1.6 }}
@@ -640,25 +795,50 @@ const MessageBubble = memo(function MessageBubble({
                 </p>
               </div>
             ) : (
-              essayReviewArtifact ? (
-                <div className="w-full max-w-none overflow-hidden rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-white shadow-[var(--shadow-paper)]">
-                  <EssayReviewTemplate
-                    artifact={essayReviewArtifact}
-                    onCopy={actions.onCopy}
-                    onExportPDF={actions.onExportPDF}
-                    onShare={actions.onShare}
-                    onAskFollowup={actions.onAskFollowup}
-                  />
-                  {!isStreaming ? <ShareRewardCallout onShare={actions.onShare} /> : null}
-                </div>
-              ) : (
-                <AssistantMarkdownCard
-                  content={content}
-                  actions={actions}
-                  templateType={templateType}
-                  isStreaming={isStreaming}
-                />
-              )
+              (() => {
+                switch (templateType) {
+                  case "essay-review":
+                    return (
+                      <div ref={essayRef} className="w-full max-w-none overflow-hidden rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-white shadow-[var(--shadow-paper)]">
+                        <EssayReviewTemplate
+                          artifact={essayReviewArtifact!}
+                          onCopy={actions.onCopy}
+                          onExportPDF={actions.onExportPDF}
+                          onShare={actions.onShare}
+                          onAskFollowup={actions.onAskFollowup}
+                        />
+                        {!isStreaming ? <ShareRewardCallout onShare={actions.onShare} /> : null}
+                      </div>
+                    )
+                  case "vocab-card":
+                    return vocabCardArtifact ? (
+                      <VocabCardTemplate
+                        artifact={vocabCardArtifact}
+                        onPlayAudio={actions.onPlayAudio}
+                      />
+                    ) : (
+                      <AssistantMarkdownCard content={content} actions={actions} templateType={templateType} isStreaming={isStreaming} />
+                    )
+                  case "worksheet-poster":
+                    return (
+                      <WorksheetPosterTemplate
+                        artifact={parseWorksheetPoster(content)}
+                        onDownload={actions.onExportPDF}
+                        onShare={actions.onShare}
+                      />
+                    )
+                  case "flashcard":
+                    return flashcardArtifact ? (
+                      <FlashcardTemplate artifact={flashcardArtifact} />
+                    ) : (
+                      <AssistantMarkdownCard content={content} actions={actions} templateType={templateType} isStreaming={isStreaming} />
+                    )
+                  case "music-card":
+                  case "image-gallery":
+                  default:
+                    return <AssistantMarkdownCard content={content} actions={actions} templateType={templateType} isStreaming={isStreaming} />
+                }
+              })()
             )}
 
             {/* Bottom action bar - Hidden by default, shows on hover */}

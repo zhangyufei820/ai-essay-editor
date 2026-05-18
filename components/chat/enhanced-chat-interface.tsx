@@ -48,7 +48,8 @@ import { EnhancedMarkdown } from "./EnhancedMarkdown"
 import { AssistantEyeAvatar } from "./AssistantEyeAvatar"
 import { OpenClawHtmlPreview } from "./OpenClawHtmlPreview"
 import { UserMessageBubble } from "./UserMessageBubble"
-import { PremiumWordCard } from "./PremiumWordCard"
+import { VocabCardTemplate } from "@/components/chat/v2/templates"
+import type { VocabCardArtifact } from "@/components/chat/v2/types"
 import { VocabCardDifyForm, type VocabCardDifyInputs } from "./VocabCardDifyForm"
 import katex from "katex"
 import { brandColors, slateColors } from "@/lib/design-tokens"
@@ -243,6 +244,69 @@ type Message = {
     wordCard?: FrontendWordCard
   } | null
   wordCard?: FrontendWordCard | null
+}
+
+function textValue(value: unknown): string {
+  if (value === undefined || value === null) return ""
+  if (typeof value === "string" || typeof value === "number") return String(value)
+  return ""
+}
+
+function listValues(value: unknown): unknown[] {
+  if (!value) return []
+  return Array.isArray(value) ? value : [value]
+}
+
+function toVocabCardArtifact(data: FrontendWordCard): VocabCardArtifact {
+  const hero = data.hero || {}
+  const sections = data.sections || {}
+  const pronunciation = sections.pronunciation || {}
+  const ipa = hero.ipa || pronunciation.ipa || {}
+  const examples = listValues(sections.examples?.items || sections.examples?.examples || sections.examples)
+    .map((example) => {
+      if (typeof example === "string") return example
+      if (!example || typeof example !== "object") return ""
+      const record = example as Record<string, unknown>
+      return [textValue(record.en || record.english || record.sentence), textValue(record.cn || record.zh || record.translation)]
+        .filter(Boolean)
+        .join(" - ")
+    })
+    .filter(Boolean)
+    .slice(0, 5)
+
+  return {
+    type: "vocab-card",
+    word: textValue(data.word),
+    pronunciation: textValue(ipa.us || ipa.uk || pronunciation.ipa),
+    meaning: textValue(hero.primary_cn || data.card?.meaning?.primary_cn || data.card?.translation),
+    examples,
+    story: textValue(sections.memory_story?.story_cn || sections.memoryStory?.story_cn || data.card?.story?.story_cn),
+    raw: JSON.stringify(data),
+  }
+}
+
+function startOfDay(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
+}
+
+function isDifferentDay(current?: string | Date, previous?: string | Date) {
+  if (!current) return false
+  if (!previous) return true
+  const currentDate = new Date(current)
+  const previousDate = new Date(previous)
+  if (Number.isNaN(currentDate.getTime()) || Number.isNaN(previousDate.getTime())) return false
+  return startOfDay(currentDate) !== startOfDay(previousDate)
+}
+
+function formatDateLabel(date: string | Date | undefined) {
+  if (!date) return ""
+  const d = new Date(date)
+  if (Number.isNaN(d.getTime())) return ""
+  const now = new Date()
+  const diffDays = Math.floor((startOfDay(now) - startOfDay(d)) / 86400000)
+  if (diffDays === 0) return "今天"
+  if (diffDays === 1) return "昨天"
+  return `${d.getMonth() + 1}月${d.getDate()}日`
 }
 type FileProcessingState = { status: "idle" | "uploading" | "processing" | "recognizing" | "complete" | "error"; progress: number; message: string }
 type ProcessingContext = {
@@ -2701,6 +2765,30 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     }
   }
 
+  useEffect(() => {
+    const handleRegenerate = () => {
+      if (isLoading) {
+        toast.info("当前回复还在生成中")
+        return
+      }
+
+      const lastUserMessage = [...messages].reverse().find((message) => message.role === "user")
+      if (!lastUserMessage) {
+        toast.info("还没有可重新生成的消息")
+        return
+      }
+
+      const fakeEvent = { preventDefault: () => {} } as unknown as React.FormEvent
+      onSubmit(fakeEvent, {
+        content: lastUserMessage.content,
+        files: lastUserMessage.files,
+      })
+    }
+
+    window.addEventListener("regenerate-last-message", handleRegenerate)
+    return () => window.removeEventListener("regenerate-last-message", handleRegenerate)
+  }, [isLoading, messages, onSubmit])
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); onSubmit(e as unknown as React.FormEvent) }
   }
@@ -3485,8 +3573,18 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                 )
                 ) : (
                 <div className="space-y-3 sm:space-y-5 pt-1 sm:pt-3 pb-32 md:pb-6">
-                    {messages.map((message) => (
-                      <div key={message.id} className={cn("flex gap-1 sm:gap-2 group/message", message.role === "user" ? "justify-end" : "justify-start")}>
+                    {messages.map((message, index) => (
+                      <div key={message.id}>
+                      {isDifferentDay(message.timestamp, messages[index - 1]?.timestamp) ? (
+                        <div className="flex items-center gap-3 py-4">
+                          <div className="h-px flex-1 bg-[var(--paper-200)]" />
+                          <span className="font-[var(--font-mono-v2)] text-[11px] text-[var(--ink-400)]">
+                            {formatDateLabel(message.timestamp)}
+                          </span>
+                          <div className="h-px flex-1 bg-[var(--paper-200)]" />
+                        </div>
+                      ) : null}
+                      <div className={cn("flex gap-1 sm:gap-2 group/message", message.role === "user" ? "justify-end" : "justify-start")}>
                       {message.role === "assistant" && (
                         // Smaller AI avatar - expressive assistant SVG.
                         <div
@@ -3573,13 +3671,13 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 
                                   const wordCard = message.wordCard || message.metadata?.wordCard || normalizeDifyWordCardResponse(message.content)
                                   if (wordCard) {
-                                    return <PremiumWordCard data={wordCard} />
+                                    return <VocabCardTemplate artifact={toVocabCardArtifact(wordCard)} />
                                   }
                                   const vocabFallback = selectedModel === "vocab-card"
                                     ? resolveVocabCardResult(message.content, currentWord)
                                     : null
                                   if (vocabFallback?.frontendCard) {
-                                    return <PremiumWordCard data={vocabFallback.frontendCard} />
+                                    return <VocabCardTemplate artifact={toVocabCardArtifact(vocabFallback.frontendCard)} />
                                   }
                                   if (vocabFallback?.answer) {
                                     return (
@@ -3629,6 +3727,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                           )}
                         </div>
                       )}
+                    </div>
                     </div>
                   ))}
                   <div ref={messagesEndRef} />

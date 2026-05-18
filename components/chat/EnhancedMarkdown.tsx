@@ -31,7 +31,7 @@ import { getOpenClawAttachmentKind, isLikelyHtmlDocumentUrl, rewriteOpenClawMedi
 const TEXT_COLOR = "#333333"
 const SECONDARY_COLOR = "#666666"
 const CODE_BG = "#f5f5f5"
-const CODE_TEXT = "#e6e6e6"
+const CODE_TEXT = "var(--paper-100)"
 const INLINE_CODE_BG = "#f0f0f0"
 const BORDER_COLOR = "#e5e5e5"
 
@@ -328,7 +328,8 @@ export const EnhancedMarkdown = memo(function EnhancedMarkdown({ content, classN
                   customStyle={{
                     margin: 0,
                     padding: '0.875rem',
-                    backgroundColor: '#1e1e1e',
+                    backgroundColor: 'var(--ink-900)',
+                    color: CODE_TEXT,
                     fontSize: '0.78rem',
                     lineHeight: 1.6,
                     borderRadius: '0.75rem',

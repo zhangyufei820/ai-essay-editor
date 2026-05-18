@@ -91,6 +91,7 @@ export function parseEssayReview(markdown: string): EssayReviewArtifact | null {
     ? listItems(trainingBlock)
     : extractInlineItems(text, ["训练"])
 
+  const originalText = sectionBlock(text, ["原文", "学生原文", "作文原文"])
   const finalDraft = sectionBlock(text, ["修改后定稿", "最终定稿", "升格范文", "范文"])
 
   if (!score && diagnosis.length === 0 && suggestions.length === 0 && trainingTasks.length === 0) {
@@ -105,6 +106,7 @@ export function parseEssayReview(markdown: string): EssayReviewArtifact | null {
     diagnosis: diagnosis.length ? diagnosis : undefined,
     suggestions: suggestions.length ? suggestions : undefined,
     trainingTasks: trainingTasks.length ? trainingTasks : undefined,
+    originalText: originalText || undefined,
     finalDraft: finalDraft || undefined,
     rawMarkdown: text,
   }
