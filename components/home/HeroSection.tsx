@@ -10,7 +10,7 @@ import Link from "next/link"
 import { motion } from "framer-motion"
 import {
   ArrowRight,
-  Camera,
+  Blocks,
   PenLine,
   ShieldCheck,
 } from "lucide-react"
@@ -31,10 +31,10 @@ const heroActions = [
     primary: true,
   },
   {
-    href: "/worksheet-diagnosis",
-    title: "拍卷诊断错题",
-    description: "看薄弱点和训练建议",
-    icon: Camera,
+    href: "/agents",
+    title: "智能体广场",
+    description: "选择全部学习智能体",
+    icon: Blocks,
     primary: false,
   },
 ] as const

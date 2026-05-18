@@ -13,9 +13,9 @@ const FOOTER_LINKS = {
   product: {
     title: "产品",
     links: [
-      { label: "全部智能体", href: "/chat" },
+      { label: "智能体广场", href: "/agents" },
       { label: "作文批改", href: "/chat/standard" },
-      { label: "拍卷诊断", href: "/worksheet-diagnosis" },
+      { label: "AI 对话", href: "/chat" },
       { label: "闪卡复习", href: "/flashcards" },
       { label: "互动实验室", href: "/lab" },
     ],

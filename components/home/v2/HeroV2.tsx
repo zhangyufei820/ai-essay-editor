@@ -17,7 +17,7 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { ArrowRight, Camera, FileText, ShieldCheck, Sparkles, PenLine } from "lucide-react"
+import { ArrowRight, Blocks, FileText, ShieldCheck, Sparkles, PenLine } from "lucide-react"
 import { ButtonV2 } from "@/components/ui/v2/button"
 import { ScoreSeal } from "@/components/ui/v2/seal"
 import { InkReveal } from "@/components/motion/InkMotion"
@@ -93,9 +93,9 @@ export function HeroV2() {
             </ButtonV2>
 
             <ButtonV2 asChild variant="outline" size="lg" className="box-border w-full sm:w-auto">
-              <Link href="/worksheet-diagnosis" prefetch={false}>
-                <Camera className="size-4" aria-hidden="true" />
-                拍卷诊断错题
+              <Link href="/agents" prefetch={false}>
+                <Blocks className="size-4" aria-hidden="true" />
+                智能体广场
               </Link>
             </ButtonV2>
           </div>

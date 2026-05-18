@@ -51,6 +51,8 @@ interface ModelSelectorProps {
   models: Model[]
   disabled?: boolean
   className?: string
+  triggerPrefix?: string
+  triggerLabel?: string
   dailyFreeInfo?: {
     used: number
     total: number
@@ -64,6 +66,8 @@ export function ModelSelector({
   models,
   disabled,
   className,
+  triggerPrefix = "智能体：",
+  triggerLabel,
   dailyFreeInfo,
   isMember = true,
 }: ModelSelectorProps) {
@@ -120,8 +124,8 @@ export function ModelSelector({
             className
           )}
         >
-          <span className="text-[var(--ink-500)]">智能体：</span>
-          <span className="truncate">{current?.name ?? "通用对话"}</span>
+          {triggerPrefix ? <span className="text-[var(--ink-500)]">{triggerPrefix}</span> : null}
+          <span className="truncate">{triggerLabel ?? current?.name ?? "通用对话"}</span>
           <ChevronDown className="size-3.5 text-[var(--ink-400)]" />
         </button>
       </SheetV2Trigger>

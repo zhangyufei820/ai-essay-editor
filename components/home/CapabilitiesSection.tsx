@@ -8,7 +8,7 @@
 
 import { motion } from "framer-motion"
 import Link from "next/link"
-import { ArrowRight, FileText, HelpCircle, ClipboardCheck, Layers3, type LucideIcon } from "lucide-react"
+import { ArrowRight, FileText, HelpCircle, Blocks, Layers3, type LucideIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { brandColors, slateColors, creamColors } from "@/lib/design-tokens"
 
@@ -25,10 +25,10 @@ interface Capability {
 
 const capabilities: Capability[] = [
   {
-    icon: ClipboardCheck,
-    title: "错题诊断海报",
-    description: "上传试卷图片，AI 归因错题并生成适合家长沟通的训练建议。",
-    href: "/worksheet-diagnosis",
+    icon: Blocks,
+    title: "智能体广场",
+    description: "按写作、学科、教学与创作场景，快速挑选适合的 AI 智能体。",
+    href: "/agents",
   },
   {
     icon: FileText,

@@ -1893,10 +1893,10 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       toast.success(`已切换至 ${getModelUiConfig(nextModel).name}`)
     }
 
-    // 🚀 Gemini 图像使用专用页面，自动跳转
-    if (nextModel === "gemini-image") {
-      console.log('✅ [模型切换] 检测到 gemini-image，跳转到专用页面')
-      router.push('/chat/gemini-image')
+    // 🚀 图像模型使用独立工作台，避免落回通用 AI 对话画面
+    if (nextModel === "gemini-image" || nextModel === "gpt-image-2" || nextModel === "banana-2-pro") {
+      console.log('✅ [模型切换] 检测到图像模型，跳转到专用页面')
+      router.push(`/chat/${nextModel}`)
       return
     }
 
@@ -3281,14 +3281,27 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
           </button>
           <div className="flex-1 min-w-0 px-1 text-center md:text-left md:ml-2">
             <motion.span
-              key={selectedModel}
+              key="ai-chat-title"
               initial={{ opacity: 0, y: -4 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
-              className="inline-block max-w-[112px] truncate text-[12px] font-medium tracking-[-0.01em] text-[var(--ink-700)] sm:max-w-none sm:text-sm md:text-base"
+              className="inline-block truncate text-[12px] font-medium tracking-[-0.01em] text-[var(--ink-700)] sm:text-sm md:text-base"
             >
-              {getModelUiConfig(selectedModel).name}
+              AI 对话
             </motion.span>
+            <ModelSelector
+              selectedModel={selectedModel}
+              models={modelList}
+              onModelChange={handleModelChange}
+              disabled={isLoading}
+              isMember={isLuxury}
+              triggerPrefix=""
+              triggerLabel="智能体广场"
+              className="ml-2 hidden h-8 align-middle md:inline-flex"
+            />
+            <span className="ml-2 hidden max-w-[180px] truncate align-middle text-[12px] text-[var(--ink-400)] md:inline-block">
+              当前：{getModelUiConfig(selectedModel).name}
+            </span>
           </div>
           {/* 🔥 移动端用户信息显示 - 仅在移动端显示 */}
           <div className="md:hidden">

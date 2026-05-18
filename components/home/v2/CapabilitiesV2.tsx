@@ -2,7 +2,7 @@
  * 🖌 v2 首页 · 能力卡四联
  *
  * 4 张能力卡片，每张代表一个高频学习动作：
- *   - 错题诊断海报  /worksheet-diagnosis
+ *   - 智能体广场    /agents
  *   - 智能作文批改  /chat/standard
  *   - 题目解析     /chat/quanquan-math
  *   - 闪卡复习     /flashcards
@@ -16,7 +16,7 @@ import * as React from "react"
 import Link from "next/link"
 import {
   ArrowRight,
-  ClipboardCheck,
+  Blocks,
   FileText,
   HelpCircle,
   Layers3,
@@ -41,11 +41,11 @@ interface Capability {
 
 const CAPABILITIES: Capability[] = [
   {
-    href: "/worksheet-diagnosis",
-    title: "错题诊断海报",
-    description: "上传试卷图片，AI 归因错题并生成适合家长沟通的训练建议。",
-    icon: ClipboardCheck,
-    priceLabel: "首次免费",
+    href: "/agents",
+    title: "智能体广场",
+    description: "按写作、学科、教学与创作场景，快速挑选适合的 AI 智能体。",
+    icon: Blocks,
+    priceLabel: "全部入口",
     priceTone: "seal",
   },
   {
@@ -86,7 +86,7 @@ export function CapabilitiesV2() {
             核心学习场景
           </p>
           <h2 className="mt-2 font-[var(--font-display)] text-[clamp(28px,4vw,40px)] font-bold leading-[1.2] text-[var(--ink-800)]">
-            从作文到错题，先解决最常用的 4 件事
+            从作文到智能体，把常用学习动作收进一个入口
           </h2>
           <p className="mt-3 text-[15px] leading-[1.7] text-[var(--ink-500)] font-[var(--font-sans-v2)]">
             围绕每天会遇到的学习任务，把反馈、修改和复习整理成清晰步骤。

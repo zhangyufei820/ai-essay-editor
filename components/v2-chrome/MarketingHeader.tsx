@@ -24,7 +24,7 @@ import { SheetV2, SheetV2Content, SheetV2Trigger } from "@/components/ui/v2/shee
 
 const NAV_ITEMS: ReadonlyArray<{ label: string; href: string }> = [
   { label: "智能体", href: "/chat" },
-  { label: "拍卷诊断", href: "/worksheet-diagnosis" },
+  { label: "智能体广场", href: "/agents" },
   { label: "创作广场", href: "/explore" },
   { label: "套餐", href: "/pricing" },
   { label: "帮助", href: "/help" },
@@ -40,7 +40,46 @@ export interface MarketingHeaderProps {
 export function MarketingHeader({ user, className }: MarketingHeaderProps) {
   const [scrolled, setScrolled] = React.useState(false)
   const [open, setOpen] = React.useState(false)
+  const [localUser, setLocalUser] = React.useState<MarketingHeaderProps["user"]>(user ?? null)
   const pathname = usePathname()
+  const activeUser = user ?? localUser
+
+  React.useEffect(() => {
+    if (user) {
+      setLocalUser(user)
+      return
+    }
+
+    function readStoredUser() {
+      try {
+        const raw = window.localStorage.getItem("currentUser")
+        const token =
+          window.localStorage.getItem("idToken") ||
+          window.localStorage.getItem("authingToken") ||
+          window.localStorage.getItem("accessToken")
+        if (!raw || !token) {
+          setLocalUser(null)
+          return
+        }
+
+        const parsed = JSON.parse(raw)
+        setLocalUser({
+          name: parsed.nickname || parsed.name || parsed.username || parsed.email || parsed.phone || "我的账户",
+          avatar: parsed.avatar || parsed.avatar_url || parsed.photo || parsed.picture || parsed.user_metadata?.avatar_url,
+        })
+      } catch {
+        setLocalUser(null)
+      }
+    }
+
+    readStoredUser()
+    window.addEventListener("storage", readStoredUser)
+    window.addEventListener("focus", readStoredUser)
+    return () => {
+      window.removeEventListener("storage", readStoredUser)
+      window.removeEventListener("focus", readStoredUser)
+    }
+  }, [user])
 
   React.useEffect(() => {
     function onScroll() {
@@ -107,10 +146,10 @@ export function MarketingHeader({ user, className }: MarketingHeaderProps) {
 
         {/* 右侧 CTA */}
         <div className="ml-auto flex items-center gap-2">
-          {user ? (
+          {activeUser ? (
             <Link href="/settings" prefetch={false} className="hidden md:flex items-center gap-2">
               <span className="font-[var(--font-sans-v2)] text-[14px] text-[var(--ink-700)]">
-                {user.name ?? "我的账户"}
+                {activeUser.name ?? "我的账户"}
               </span>
             </Link>
           ) : (
@@ -171,13 +210,13 @@ export function MarketingHeader({ user, className }: MarketingHeaderProps) {
 
                 <div className="mt-auto px-6 pb-6 flex flex-col gap-3">
                   <ButtonV2 asChild variant="primary" size="lg" className="w-full">
-                    <Link href="/chat/standard" prefetch={false} onClick={() => setOpen(false)}>
+                    <Link href={activeUser ? "/chat/standard" : "/login"} prefetch={false} onClick={() => setOpen(false)}>
                       开始使用
                     </Link>
                   </ButtonV2>
                   <ButtonV2 asChild variant="outline" size="lg" className="w-full">
-                    <Link href="/login" prefetch={false} onClick={() => setOpen(false)}>
-                      登录
+                    <Link href={activeUser ? "/settings" : "/login"} prefetch={false} onClick={() => setOpen(false)}>
+                      {activeUser ? "我的账户" : "登录"}
                     </Link>
                   </ButtonV2>
                 </div>

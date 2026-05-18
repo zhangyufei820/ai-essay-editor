@@ -1,13 +1,13 @@
 "use client"
 
 import Link from "next/link"
-import { PenLine, Camera, Calculator, Award, ChevronRight } from "lucide-react"
+import { PenLine, Blocks, Calculator, Award, ChevronRight } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { InkReveal, InkStagger, InkStaggerItem } from "@/components/motion/InkMotion"
 
 const QUICK_AGENTS = [
   { href: "/chat/standard", icon: PenLine, name: "作文批改", desc: "逐段点评 + 升格", price: "100积分/次" },
-  { href: "/worksheet-diagnosis", icon: Camera, name: "拍卷诊断", desc: "错题归因 + 海报", price: "首次免费" },
+  { href: "/agents", icon: Blocks, name: "智能体广场", desc: "全部学习入口", price: "按需选择" },
   { href: "/chat/quanquan-math", icon: Calculator, name: "数学解题", desc: "分步讲解", price: "20积分起" },
   { href: "/chat/all-in-one-agent", icon: Award, name: "全能智能体", desc: "自动选择工具", price: "按token" },
 ] as const

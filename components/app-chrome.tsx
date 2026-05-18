@@ -11,6 +11,7 @@ type WorkspaceUser = { name?: string; avatar?: string; credits?: number } | null
 
 const PAGE_TITLES: Array<[string, string]> = [
   ["/admin", "管理后台"],
+  ["/agents", "智能体广场"],
   ["/chat", "AI 对话"],
   ["/credits", "积分中心"],
   ["/dashboard", "学习看板"],
@@ -76,7 +77,7 @@ function buildSidebarSections(): WorkspaceSidebarSection[] {
       title: "学习",
       items: [
         { label: "对话", href: "/chat" },
-        { label: "拍卷诊断", href: "/worksheet-diagnosis" },
+        { label: "智能体广场", href: "/agents" },
         { label: "闪卡复习", href: "/flashcards" },
         { label: "互动实验室", href: "/lab" },
         { label: "教师平台", href: "/teacher/agents" },
