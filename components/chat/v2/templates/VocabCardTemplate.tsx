@@ -7,7 +7,7 @@
 "use client"
 
 import * as React from "react"
-import { Volume2 } from "lucide-react"
+import { IconListen } from "@/components/icons/v2"
 import { ButtonV2 } from "@/components/ui/v2/button"
 import { SealStamp } from "@/components/ui/v2/seal"
 import { cn } from "@/lib/utils"
@@ -61,7 +61,7 @@ export function VocabCardTemplate({
                 onClick={onPlayAudio}
                 aria-label="播放发音"
               >
-                <Volume2 className="size-4" />
+                <IconListen className="size-4" />
               </ButtonV2>
             ) : null}
           </div>

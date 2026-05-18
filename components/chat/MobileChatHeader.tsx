@@ -15,7 +15,8 @@ import {
 
 import { useRouter } from "next/navigation"
 import { motion } from "framer-motion"
-import { ChevronLeft, MoreVertical, Trash2, Share2, Settings } from "lucide-react"
+import { ChevronLeft, MoreVertical, Trash2, Settings } from "lucide-react"
+import { IconShare } from "@/components/icons/v2"
 import { cn } from "@/lib/utils"
 
 // ============================================
@@ -128,7 +129,7 @@ export function MobileChatHeader({
           )}
           {onShare && (
             <DropdownMenuItem onClick={onShare}>
-              <Share2 className="w-4 h-4 mr-2" />
+              <IconShare className="w-4 h-4 mr-2" />
               分享对话
             </DropdownMenuItem>
           )}

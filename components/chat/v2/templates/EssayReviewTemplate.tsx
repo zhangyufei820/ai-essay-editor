@@ -11,7 +11,8 @@
 "use client"
 
 import * as React from "react"
-import { Copy, FileDown, Share2, MessageCircle, Sparkles } from "lucide-react"
+import { Sparkles } from "lucide-react"
+import { IconCopy, IconExportPdf, IconFollowup, IconShare } from "@/components/icons/v2"
 import { ButtonV2 } from "@/components/ui/v2/button"
 import { ScoreSeal, SealStamp } from "@/components/ui/v2/seal"
 import { cn } from "@/lib/utils"
@@ -175,17 +176,17 @@ export function EssayReviewTemplate({
       {/* 工具栏 */}
       <footer className="flex flex-wrap items-center gap-2 px-6 py-4 sm:px-8 bg-[var(--paper-50)]">
         <ButtonV2 variant="ghost" size="sm" onClick={onCopy}>
-          <Copy className="size-3.5" aria-hidden="true" /> 复制
+          <IconCopy className="size-3.5" aria-hidden="true" /> 复制
         </ButtonV2>
         <ButtonV2 variant="seal" size="sm" onClick={onExportPDF}>
-          <FileDown className="size-3.5" aria-hidden="true" /> 导出 PDF
+          <IconExportPdf className="size-3.5" aria-hidden="true" /> 导出 PDF
         </ButtonV2>
         <ButtonV2 variant="outline" size="sm" onClick={onShare}>
-          <Share2 className="size-3.5" aria-hidden="true" /> 分享
+          <IconShare className="size-3.5" aria-hidden="true" /> 分享
         </ButtonV2>
         {onAskFollowup ? (
           <ButtonV2 variant="ghost" size="sm" onClick={onAskFollowup}>
-            <MessageCircle className="size-3.5" aria-hidden="true" /> 继续追问
+            <IconFollowup className="size-3.5" aria-hidden="true" /> 继续追问
           </ButtonV2>
         ) : null}
       </footer>

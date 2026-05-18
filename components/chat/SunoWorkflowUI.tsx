@@ -23,7 +23,6 @@ import {
   AlertCircle,
   RefreshCw,
   Edit3,
-  Send,
   Play,
   Clock,
   Wand2,
@@ -33,6 +32,7 @@ import {
   Mic2,
   Hash
 } from "lucide-react"
+import { IconSend } from "@/components/icons/v2"
 import { cn } from "@/lib/utils"
 
 // ============================================
@@ -295,7 +295,7 @@ const SubmittingAnimation = () => (
         transition={{ duration: 1.5, repeat: Infinity }}
       />
       <div className="absolute inset-0 flex items-center justify-center">
-        <Send className="h-7 w-7 text-[var(--ink-600)]" />
+        <IconSend className="h-7 w-7 text-[var(--ink-600)]" />
       </div>
     </div>
     

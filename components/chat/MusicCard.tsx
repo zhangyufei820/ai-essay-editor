@@ -14,19 +14,17 @@
 import React, { useState, useRef, useEffect, useMemo } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { 
-  Music, 
   Play, 
   Pause, 
-  Volume2, 
   VolumeX,
   AlertCircle,
-  Download,
   RefreshCw,
   Sparkles,
   Loader2,
   SkipBack,
   SkipForward
 } from "lucide-react"
+import { IconExportPdf, IconListen, IconMusic } from "@/components/icons/v2"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import type { MusicGenerationStatus, SongSlot } from "@/lib/suno-config"
@@ -234,7 +232,7 @@ function LoadingState({ version }: { version: number }) {
     <div className="flex items-center gap-6">
       {/* 封面占位 */}
       <div className="relative h-32 w-32 rounded-[var(--radius-sharp)] bg-gradient-to-br from-slate-100 to-slate-50 flex items-center justify-center shrink-0 overflow-hidden">
-        <Music className="h-12 w-12 text-slate-300" />
+        <IconMusic className="h-12 w-12 text-slate-300" />
         <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent animate-shimmer" />
       </div>
       
@@ -446,7 +444,7 @@ function PremiumMusicPlayer({
               />
             ) : (
               <div className="w-full h-full bg-[var(--ink-700)] flex items-center justify-center">
-                <Music className="h-16 w-16 text-white/60" />
+                <IconMusic className="h-16 w-16 text-white/60" />
               </div>
             )}
             
@@ -494,7 +492,7 @@ function PremiumMusicPlayer({
               {isMuted ? (
                 <VolumeX className="h-4 w-4 text-[var(--ink-400)]" />
               ) : (
-                <Volume2 className="h-4 w-4 text-[var(--ink-400)]" />
+                <IconListen className="h-4 w-4 text-[var(--ink-400)]" />
               )}
             </button>
             
@@ -506,7 +504,7 @@ function PremiumMusicPlayer({
               {isDownloading ? (
                 <Loader2 className="h-4 w-4 text-[var(--ink-400)] animate-spin" />
               ) : (
-                <Download className="h-4 w-4 text-[var(--ink-400)]" />
+                <IconExportPdf className="h-4 w-4 text-[var(--ink-400)]" />
               )}
             </button>
           </div>
@@ -545,7 +543,7 @@ function PremiumMusicPlayer({
             ) : (
               <div className="h-full flex items-center justify-center">
                 <div className="text-center">
-                  <Music className="h-12 w-12 text-[var(--ink-600)] mx-auto mb-3" />
+                  <IconMusic className="h-12 w-12 text-[var(--ink-600)] mx-auto mb-3" />
                   <p className="text-[var(--ink-500)] text-sm">暂无歌词</p>
                   <p className="text-[var(--ink-600)] text-xs mt-1">享受纯音乐体验</p>
                 </div>

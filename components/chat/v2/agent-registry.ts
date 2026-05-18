@@ -5,27 +5,23 @@
  * 与 lib/dify-credentials.ts 等业务侧的 model key 对齐。
  */
 
+import { Sparkles, Image as ImageIcon } from "lucide-react"
 import {
-  PenLine,
-  GraduationCap,
-  Sparkles,
-  Image as ImageIcon,
-  Music,
-  Calculator,
-  BookOpen,
-  HelpCircle,
-  Layers3,
-  Clipboard,
-  Users,
-  ScrollText,
-  Award,
-  Lightbulb,
-  Globe,
-  Briefcase,
-  Mic,
-  Megaphone,
-  type LucideIcon,
-} from "lucide-react"
+  IconAllInOne,
+  IconBanzhuren,
+  IconDiagnosis,
+  IconEnglish,
+  IconEssay,
+  IconFollowup,
+  IconMath,
+  IconMic,
+  IconMusic,
+  IconOpenClaw,
+  IconProblem,
+  IconTeaching,
+  IconVocab,
+  IconWriting,
+} from "@/components/icons/v2"
 import type { AgentDefinition } from "./types"
 
 export const AGENT_REGISTRY: Record<string, AgentDefinition> = {
@@ -36,7 +32,7 @@ export const AGENT_REGISTRY: Record<string, AgentDefinition> = {
     group: "writing",
     artifactType: "essay-review",
     priceLabel: "100 积分/次",
-    icon: PenLine as LucideIcon,
+    icon: IconEssay,
   },
   "general-chat": {
     model: "general-chat",
@@ -45,7 +41,7 @@ export const AGENT_REGISTRY: Record<string, AgentDefinition> = {
     group: "general",
     artifactType: "markdown",
     priceLabel: "按字数计费",
-    icon: Sparkles as LucideIcon,
+    icon: Sparkles,
   },
   "teaching-pro": {
     model: "teaching-pro",
@@ -55,7 +51,7 @@ export const AGENT_REGISTRY: Record<string, AgentDefinition> = {
     artifactType: "markdown",
     priceLabel: "100 积分起",
     memberOnly: false,
-    icon: GraduationCap as LucideIcon,
+    icon: IconTeaching,
   },
   "ai-writing-paper": {
     model: "ai-writing-paper",
@@ -64,7 +60,7 @@ export const AGENT_REGISTRY: Record<string, AgentDefinition> = {
     group: "writing",
     artifactType: "markdown",
     priceLabel: "100 积分起",
-    icon: ScrollText as LucideIcon,
+    icon: IconWriting,
   },
   "zhongying-essay": {
     model: "zhongying-essay",
@@ -73,7 +69,7 @@ export const AGENT_REGISTRY: Record<string, AgentDefinition> = {
     group: "writing",
     artifactType: "markdown",
     priceLabel: "100 积分起",
-    icon: BookOpen as LucideIcon,
+    icon: IconEnglish,
   },
   "reading-report": {
     model: "reading-report",
@@ -82,7 +78,7 @@ export const AGENT_REGISTRY: Record<string, AgentDefinition> = {
     group: "writing",
     artifactType: "markdown",
     priceLabel: "100 积分起",
-    icon: BookOpen as LucideIcon,
+    icon: IconEssay,
   },
   "experiment-report": {
     model: "experiment-report",
@@ -91,7 +87,7 @@ export const AGENT_REGISTRY: Record<string, AgentDefinition> = {
     group: "writing",
     artifactType: "markdown",
     priceLabel: "100 积分起",
-    icon: Lightbulb as LucideIcon,
+    icon: IconDiagnosis,
   },
   "study-abroad": {
     model: "study-abroad",
@@ -100,7 +96,7 @@ export const AGENT_REGISTRY: Record<string, AgentDefinition> = {
     group: "writing",
     artifactType: "markdown",
     priceLabel: "100 积分起",
-    icon: Globe as LucideIcon,
+    icon: IconWriting,
   },
   "resume-optimize": {
     model: "resume-optimize",
@@ -109,7 +105,7 @@ export const AGENT_REGISTRY: Record<string, AgentDefinition> = {
     group: "writing",
     artifactType: "markdown",
     priceLabel: "20 积分起",
-    icon: Briefcase as LucideIcon,
+    icon: IconWriting,
   },
   "speech-defense": {
     model: "speech-defense",
@@ -118,7 +114,7 @@ export const AGENT_REGISTRY: Record<string, AgentDefinition> = {
     group: "writing",
     artifactType: "markdown",
     priceLabel: "20 积分起",
-    icon: Mic as LucideIcon,
+    icon: IconMic,
   },
   "school-wechat": {
     model: "school-wechat",
@@ -127,7 +123,7 @@ export const AGENT_REGISTRY: Record<string, AgentDefinition> = {
     group: "writing",
     artifactType: "markdown",
     priceLabel: "20 积分起",
-    icon: Megaphone as LucideIcon,
+    icon: IconFollowup,
   },
   "beike-pro": {
     model: "beike-pro",
@@ -136,7 +132,7 @@ export const AGENT_REGISTRY: Record<string, AgentDefinition> = {
     group: "teaching",
     artifactType: "markdown",
     priceLabel: "100 积分起",
-    icon: GraduationCap as LucideIcon,
+    icon: IconTeaching,
   },
   banzhuren: {
     model: "banzhuren",
@@ -145,7 +141,7 @@ export const AGENT_REGISTRY: Record<string, AgentDefinition> = {
     group: "teaching",
     artifactType: "markdown",
     priceLabel: "100 积分起",
-    icon: Users as LucideIcon,
+    icon: IconBanzhuren,
   },
   "quanquan-math": {
     model: "quanquan-math",
@@ -154,7 +150,7 @@ export const AGENT_REGISTRY: Record<string, AgentDefinition> = {
     group: "subject",
     artifactType: "markdown",
     priceLabel: "20 积分起",
-    icon: Calculator as LucideIcon,
+    icon: IconMath,
   },
   "quanquan-english": {
     model: "quanquan-english",
@@ -163,7 +159,7 @@ export const AGENT_REGISTRY: Record<string, AgentDefinition> = {
     group: "subject",
     artifactType: "markdown",
     priceLabel: "20 积分起",
-    icon: BookOpen as LucideIcon,
+    icon: IconEnglish,
   },
   "vocab-card": {
     model: "vocab-card",
@@ -172,7 +168,7 @@ export const AGENT_REGISTRY: Record<string, AgentDefinition> = {
     group: "subject",
     artifactType: "vocab-card",
     priceLabel: "20 积分起",
-    icon: Layers3 as LucideIcon,
+    icon: IconVocab,
   },
   problem: {
     model: "problem",
@@ -181,7 +177,7 @@ export const AGENT_REGISTRY: Record<string, AgentDefinition> = {
     group: "subject",
     artifactType: "markdown",
     priceLabel: "按字数计费",
-    icon: HelpCircle as LucideIcon,
+    icon: IconProblem,
   },
   "open-claw": {
     model: "open-claw",
@@ -190,7 +186,7 @@ export const AGENT_REGISTRY: Record<string, AgentDefinition> = {
     group: "creative",
     artifactType: "markdown",
     priceLabel: "高级模型",
-    icon: Clipboard as LucideIcon,
+    icon: IconOpenClaw,
   },
   "banana-2-pro": {
     model: "banana-2-pro",
@@ -199,7 +195,7 @@ export const AGENT_REGISTRY: Record<string, AgentDefinition> = {
     group: "creative",
     artifactType: "markdown",
     priceLabel: "165 积分/张",
-    icon: ImageIcon as LucideIcon,
+    icon: ImageIcon,
   },
   "gpt-image-2": {
     model: "gpt-image-2",
@@ -209,7 +205,7 @@ export const AGENT_REGISTRY: Record<string, AgentDefinition> = {
     artifactType: "markdown",
     priceLabel: "260 积分/张",
     memberOnly: true,
-    icon: ImageIcon as LucideIcon,
+    icon: ImageIcon,
   },
   "gpt-image-1": {
     model: "gpt-image-1",
@@ -218,7 +214,7 @@ export const AGENT_REGISTRY: Record<string, AgentDefinition> = {
     group: "creative",
     artifactType: "markdown",
     priceLabel: "150 积分/张",
-    icon: ImageIcon as LucideIcon,
+    icon: ImageIcon,
   },
   "suno-v5": {
     model: "suno-v5",
@@ -227,7 +223,7 @@ export const AGENT_REGISTRY: Record<string, AgentDefinition> = {
     group: "creative",
     artifactType: "markdown",
     priceLabel: "100 积分起",
-    icon: Music as LucideIcon,
+    icon: IconMusic,
   },
   "all-in-one-agent": {
     model: "all-in-one-agent",
@@ -236,7 +232,7 @@ export const AGENT_REGISTRY: Record<string, AgentDefinition> = {
     group: "general",
     artifactType: "markdown",
     priceLabel: "按 Token 计费",
-    icon: Award as LucideIcon,
+    icon: IconAllInOne,
   },
 }
 

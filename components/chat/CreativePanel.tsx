@@ -8,7 +8,8 @@
 "use client"
 
 import { motion, AnimatePresence } from "framer-motion"
-import { X, Image, Box, Music, Sparkles } from "lucide-react"
+import { X, Image, Box, Sparkles } from "lucide-react"
+import { IconMusic } from "@/components/icons/v2"
 import { ArtisticThinkingIcon } from "@/components/icons/ArtisticThinkingIcons"
 import { ModelLogo, type ModelKey } from "@/components/ModelLogo"
 import { TRIPO3D_EXTERNAL_URL } from "@/lib/tripo3d"
@@ -118,7 +119,7 @@ const CREATIVE_OPTIONS: CreativeOption[] = [
     key: "music",
     name: "音乐生成",
     nameEn: "MUSIC",
-    icon: Music,
+    icon: IconMusic,
     description: "AI 作曲与音效创作",
     gradient: "linear-gradient(135deg, rgba(245, 158, 11, 0.12) 0%, rgba(134, 239, 172, 0.08) 100%)",
   },

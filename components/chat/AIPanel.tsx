@@ -6,7 +6,8 @@
 
 import { motion, AnimatePresence } from "framer-motion"
 import Link from "next/link"
-import { X, BookOpen, FileText, Pen, GraduationCap, FlaskConical, Briefcase, Mic, Newspaper } from "lucide-react"
+import { X, FileText, Pen, FlaskConical, Briefcase, Newspaper } from "lucide-react"
+import { IconEnglish, IconEssay, IconMic, IconTeaching } from "@/components/icons/v2"
 
 const TOKENS = {
   primary: {
@@ -198,7 +199,7 @@ export function AIPanel({ isOpen, onClose }: AIPanelProps) {
                       boxShadow: "0 4px 20px rgba(14, 58, 31, 0.25), 0 0 40px rgba(134, 239, 172, 0.1)",
                     }}
                   >
-                    <BookOpen className="w-5 h-5 text-white" />
+                    <IconEssay className="w-5 h-5 text-white" />
                   </div>
                   {/* 呼吸光环 */}
                   <motion.div
@@ -347,11 +348,11 @@ function WritingIslandCard({
       >
         {agent.key === "ai-writing-paper" && <FileText className="w-6 h-6" style={{ color: "var(--ink-600)" }} />}
         {agent.key === "zhongying-essay" && <Pen className="w-6 h-6" style={{ color: "var(--ink-600)" }} />}
-        {agent.key === "reading-report" && <BookOpen className="w-6 h-6" style={{ color: "var(--ink-600)" }} />}
+        {agent.key === "reading-report" && <IconEnglish className="w-6 h-6" style={{ color: "var(--ink-600)" }} />}
         {agent.key === "experiment-report" && <FlaskConical className="w-6 h-6" style={{ color: "var(--ink-600)" }} />}
-        {agent.key === "study-abroad" && <GraduationCap className="w-6 h-6" style={{ color: "var(--ink-600)" }} />}
+        {agent.key === "study-abroad" && <IconTeaching className="w-6 h-6" style={{ color: "var(--ink-600)" }} />}
         {agent.key === "resume-optimize" && <Briefcase className="w-6 h-6" style={{ color: "var(--ink-600)" }} />}
-        {agent.key === "speech-defense" && <Mic className="w-6 h-6" style={{ color: "var(--ink-600)" }} />}
+        {agent.key === "speech-defense" && <IconMic className="w-6 h-6" style={{ color: "var(--ink-600)" }} />}
         {agent.key === "school-wechat" && <Newspaper className="w-6 h-6" style={{ color: "var(--ink-600)" }} />}
       </motion.div>
 

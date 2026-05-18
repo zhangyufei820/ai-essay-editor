@@ -12,7 +12,8 @@
 import * as React from "react"
 import Link from "next/link"
 import Image from "next/image"
-import { Menu, Coins } from "lucide-react"
+import { Menu } from "lucide-react"
+import { IconCredits } from "@/components/icons/v2"
 import { cn } from "@/lib/utils"
 import { ButtonV2 } from "@/components/ui/v2/button"
 import { AvatarV2, AvatarV2Image, AvatarV2Fallback } from "@/components/ui/v2/avatar"
@@ -85,7 +86,7 @@ export function WorkspaceTopBar({
             className="hidden sm:inline-flex items-center gap-1.5 px-3 h-8 rounded-[var(--radius-pill)] border border-[var(--paper-300)] bg-[var(--paper-100)] hover:bg-[var(--ink-50)] transition-colors duration-200"
             aria-label={`积分余额 ${user.credits}`}
           >
-            <Coins className="size-3.5 text-[var(--ink-600)]" />
+            <IconCredits className="size-3.5 text-[var(--ink-600)]" />
             <span className="font-[var(--font-mono-v2)] text-[13px] font-bold text-[var(--ink-800)] tabular-nums">
               {user.credits.toLocaleString()}
             </span>

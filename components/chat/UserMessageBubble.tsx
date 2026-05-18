@@ -10,7 +10,8 @@
  * - 编辑功能：重新填充输入框
  */
 
-import { Copy, Check, Pencil, X, FileText } from 'lucide-react'
+import { Check, Pencil, X, FileText } from 'lucide-react'
+import { IconCopy } from "@/components/icons/v2"
 import { useState, useRef, useEffect } from 'react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -168,7 +169,7 @@ export function UserMessageBubble({ content, files, onEdit, onSend }: UserMessag
             {copied ? (
               <Check className="h-3.5 w-3.5 text-[var(--seal-500)] sm:h-4 sm:w-4" />
             ) : (
-              <Copy className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              <IconCopy className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
             )}
           </button>
           <button

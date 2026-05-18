@@ -4,7 +4,8 @@ import { ButtonV2 as Button, TextareaV2 as Textarea } from "@/components/ui/v2"
 /* eslint-disable @next/next/no-img-element -- Dynamic/user-generated/external image surfaces: keep native img to preserve sizing, blob/data/proxy URLs, payment QR codes, and chat preview behavior. */
 
 import type React from 'react'
-import { Loader2, Paperclip, Send, X, FileText } from 'lucide-react'
+import { Loader2, X, FileText } from 'lucide-react'
+import { IconSend, IconUpload } from "@/components/icons/v2"
 import { motion } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import type { ImageModeOption, ImageSizeOption } from './types'
@@ -173,7 +174,7 @@ export function ImageChatComposer(props: ImageChatComposerProps) {
 
         <div className="flex items-end gap-2 p-2.5 md:p-3">
           <Button type="button" variant="ghost" size="icon" className="h-11 w-11 md:h-10 md:w-10 rounded-[var(--radius-sharp)] text-[var(--ink-400)] hover:bg-[var(--paper-50)] touch-manipulation" onClick={props.onUploadClick} disabled={props.isLoading}>
-            <Paperclip className="h-4 w-4 md:h-5 md:w-5" />
+            <IconUpload className="h-4 w-4 md:h-5 md:w-5" />
           </Button>
 
           <Textarea
@@ -193,7 +194,7 @@ export function ImageChatComposer(props: ImageChatComposerProps) {
             style={{ backgroundColor: props.submitLabelColor }}
             disabled={props.isLoading || !props.input.trim()}
           >
-            {props.isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
+            {props.isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <IconSend className="h-5 w-5" />}
           </Button>
         </div>
       </form>

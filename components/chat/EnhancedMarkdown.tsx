@@ -18,7 +18,8 @@ import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
-import { Copy, Check, Download, FileText } from 'lucide-react'
+import { Check, FileText } from 'lucide-react'
+import { IconCopy, IconExportPdf } from "@/components/icons/v2"
 import { Children, isValidElement, memo, useMemo, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -89,7 +90,7 @@ function MarkdownFileCard({ src, alt }: { src: string; alt?: string }) {
         <span className="block truncate text-sm font-medium">{label}</span>
         <span className="block truncate text-xs text-[var(--ink-500)]">{src}</span>
       </span>
-      <Download className="h-4 w-4 shrink-0 text-[var(--ink-400)]" />
+      <IconExportPdf className="h-4 w-4 shrink-0 text-[var(--ink-400)]" />
     </a>
   )
 }
@@ -149,7 +150,7 @@ function CopyButton({ text }: { text: string }) {
             exit={{ scale: 0.8, opacity: 0 }}
             transition={{ duration: 0.15 }}
           >
-            <Copy className="w-4 h-4" />
+            <IconCopy className="w-4 h-4" />
           </motion.div>
         )}
       </AnimatePresence>

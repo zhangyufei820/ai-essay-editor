@@ -7,7 +7,8 @@
 "use client"
 
 import * as React from "react"
-import { Award, BookOpen, Calendar, Coins, Crown, LogOut } from "lucide-react"
+import { Calendar } from "lucide-react"
+import { IconCredits, IconEssay, IconFlashcard, IconLogout, IconMember, IconSealStar } from "@/components/icons/v2"
 import { cn } from "@/lib/utils"
 import { ButtonV2 } from "@/components/ui/v2/button"
 import { CardV2, CardV2Content } from "@/components/ui/v2/card"
@@ -74,7 +75,7 @@ export function ProfilePageV2({
             {/* 会员状态 */}
             {user?.memberTier ? (
               <BadgeV2 variant="seal">
-                <Crown className="size-3" />
+                <IconMember className="size-3" />
                 {user.memberTier}
                 {user.memberDaysLeft ? ` · ${user.memberDaysLeft}天` : ""}
               </BadgeV2>
@@ -82,7 +83,7 @@ export function ProfilePageV2({
 
             {/* 积分 */}
             <div className="mt-2 flex items-center gap-2 text-[var(--ink-700)]">
-              <Coins className="size-4" />
+              <IconCredits className="size-4" />
               <span className="font-[var(--font-mono-v2)] text-[18px] font-bold tabular-nums">
                 {user?.credits?.toLocaleString() ?? 0}
               </span>
@@ -91,7 +92,7 @@ export function ProfilePageV2({
 
             {/* 退出 */}
             <ButtonV2 variant="ghost" size="sm" onClick={onLogout} className="mt-4">
-              <LogOut className="size-3.5" />
+              <IconLogout className="size-3.5" />
               退出登录
             </ButtonV2>
           </CardV2Content>
@@ -105,10 +106,10 @@ export function ProfilePageV2({
                 学习档案
               </h3>
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-                <ArchiveStat icon={<BookOpen className="size-4" />} label="已批改作文" value={stats?.essaysReviewed ?? 0} />
-                <ArchiveStat icon={<Award className="size-4" />} label="已掌握闪卡" value={stats?.flashcardsMastered ?? 0} />
+                <ArchiveStat icon={<IconEssay className="size-4" />} label="已批改作文" value={stats?.essaysReviewed ?? 0} />
+                <ArchiveStat icon={<IconFlashcard className="size-4" />} label="已掌握闪卡" value={stats?.flashcardsMastered ?? 0} />
                 <ArchiveStat icon={<Calendar className="size-4" />} label="错题归档" value={stats?.mistakesArchived ?? 0} />
-                <ArchiveStat icon={<Award className="size-4" />} label="实验完成" value={stats?.experimentsCompleted ?? 0} />
+                <ArchiveStat icon={<IconSealStar className="size-4" />} label="实验完成" value={stats?.experimentsCompleted ?? 0} />
               </div>
             </CardV2Content>
           </CardV2>

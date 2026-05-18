@@ -12,7 +12,8 @@
 
 import { memo, useEffect, useMemo, useRef, useState } from "react"
 import { motion, type Easing } from "framer-motion"
-import { ChevronDown, ChevronUp, Copy, FileDown, MessageCircle, Share2, Sparkles, User, Volume2 } from "lucide-react"
+import { ChevronDown, ChevronUp, Sparkles } from "lucide-react"
+import { IconCopy, IconExportPdf, IconFollowup, IconListen, IconShare, IconUser } from "@/components/icons/v2"
 import { cn } from "@/lib/utils"
 import { AssistantMessageV2 } from "@/components/chat/v2"
 import { EssayReviewTemplate } from "@/components/chat/v2/templates"
@@ -104,7 +105,7 @@ function UserAvatar({ avatar }: { avatar?: string }) {
       className="w-7 h-7 rounded-full flex items-center justify-center"
       style={{ backgroundColor: "var(--paper-200)" }}
     >
-      <User className="w-3.5 h-3.5" style={{ color: "var(--ink-500)" }} />
+      <IconUser className="w-3.5 h-3.5" style={{ color: "var(--ink-500)" }} />
     </div>
   )
 }
@@ -312,11 +313,11 @@ interface MessageActions {
 
 function MessageActionToolbar({ actions }: { actions: MessageActions }) {
   const buttons = [
-    { label: "复制", icon: Copy, onClick: actions.onCopy },
-    { label: "朗读", icon: Volume2, onClick: actions.onPlayAudio },
-    { label: "分享", icon: Share2, onClick: actions.onShare },
-    { label: "导出 PDF", icon: FileDown, onClick: actions.onExportPDF },
-    { label: "继续追问", icon: MessageCircle, onClick: actions.onAskFollowup },
+    { label: "复制", icon: IconCopy, onClick: actions.onCopy },
+    { label: "朗读", icon: IconListen, onClick: actions.onPlayAudio },
+    { label: "分享", icon: IconShare, onClick: actions.onShare },
+    { label: "导出 PDF", icon: IconExportPdf, onClick: actions.onExportPDF },
+    { label: "继续追问", icon: IconFollowup, onClick: actions.onAskFollowup },
   ] as const
 
   return (

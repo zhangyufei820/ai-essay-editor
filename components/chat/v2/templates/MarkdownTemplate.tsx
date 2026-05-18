@@ -6,7 +6,7 @@
  */
 
 import * as React from "react"
-import { Copy, FileDown } from "lucide-react"
+import { IconCopy, IconExportPdf } from "@/components/icons/v2"
 import { cn } from "@/lib/utils"
 import { ButtonV2 } from "@/components/ui/v2/button"
 import type { RawMarkdownArtifact } from "../types"
@@ -49,10 +49,10 @@ export function MarkdownTemplate({
 
       <div className="flex flex-wrap items-center gap-2 border-t border-[var(--paper-200)] px-6 py-3 sm:px-8 bg-[var(--paper-50)]">
         <ButtonV2 variant="ghost" size="sm" onClick={onCopy}>
-          <Copy className="size-3.5" /> 复制
+          <IconCopy className="size-3.5" /> 复制
         </ButtonV2>
         <ButtonV2 variant="outline" size="sm" onClick={onExportPDF}>
-          <FileDown className="size-3.5" /> 导出 PDF
+          <IconExportPdf className="size-3.5" /> 导出 PDF
         </ButtonV2>
       </div>
     </article>

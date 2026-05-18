@@ -1,7 +1,8 @@
 "use client"
 
 import { ButtonV2 as Button } from "@/components/ui/v2"
-import { Menu, X, Coins, User } from "lucide-react"
+import { Menu, X } from "lucide-react"
+import { IconCredits, IconUser } from "@/components/icons/v2"
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
@@ -131,13 +132,13 @@ export function Header() {
             <>
               <Button asChild variant="ghost" size="sm" className="gap-2 rounded-full">
                 <Link href="/credits">
-                  <Coins className="h-4 w-4" />
+                  <IconCredits className="h-4 w-4" />
                   {credits !== null ? credits : "..."} 积分
                 </Link>
               </Button>
               <Button asChild variant="outline" size="sm" className="gap-2 rounded-full bg-transparent">
                 <Link href="/credits">
-                  <User className="h-4 w-4" />
+                  <IconUser className="h-4 w-4" />
                   我的账户
                 </Link>
               </Button>
@@ -196,13 +197,13 @@ export function Header() {
                 <>
                   <Button asChild variant="ghost" size="sm" className="w-full justify-start gap-2">
                     <Link href="/credits" onClick={() => setMobileMenuOpen(false)}>
-                      <Coins className="h-4 w-4" />
+                      <IconCredits className="h-4 w-4" />
                       {credits !== null ? credits : "..."} 积分
                     </Link>
                   </Button>
                   <Button asChild variant="outline" size="sm" className="w-full gap-2 bg-transparent">
                     <Link href="/credits" onClick={() => setMobileMenuOpen(false)}>
-                      <User className="h-4 w-4" />
+                      <IconUser className="h-4 w-4" />
                       我的账户
                     </Link>
                   </Button>

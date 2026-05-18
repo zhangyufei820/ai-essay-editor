@@ -1,7 +1,8 @@
 'use client'
 
 import { ButtonV2 as Button, TextareaV2 as Textarea } from "@/components/ui/v2"
-import { Loader2, Paperclip } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
+import { IconUpload } from "@/components/icons/v2"
 import { cn } from '@/lib/utils'
 import type { ImageModeOption, ImageSizeOption } from './types'
 
@@ -133,7 +134,7 @@ export function ImageGenerationEntry({
                 onClick={onUploadClick}
                 className="inline-flex items-center gap-2 rounded-full border border-[var(--paper-200)] px-4 py-2 text-sm text-[var(--ink-600)] transition-colors hover:bg-[var(--paper-50)]"
               >
-                <Paperclip className="h-4 w-4" />
+                <IconUpload className="h-4 w-4" />
                 {uploadedFileCount > 0 ? `参考图 ${uploadedFileCount} 张` : '上传参考图'}
               </button>
             </div>

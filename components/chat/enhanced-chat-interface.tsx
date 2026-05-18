@@ -21,12 +21,13 @@ import DOMPurify from "isomorphic-dompurify"
 
 import { useIsMobile } from "@/hooks/use-mobile"
 import {
-  Send, Paperclip, X, FileText, Loader2, User, AlertCircle,
+  X, FileText, Loader2, AlertCircle,
   ChevronDown, ChevronLeft, ArrowDown, Sparkles,
-  Download, Mic, MicOff, History, ExternalLink,
+  MicOff, History, ExternalLink,
   FileSearch, ListChecks, ShieldCheck, ScanText,
   type LucideIcon
 } from "lucide-react"
+import { IconExportPdf, IconUser } from "@/components/icons/v2"
 import { cn } from "@/lib/utils"
 import { extractUserId } from "@/lib/auth-user"
 import { buildChatSessionRoute, buildChatSessionRouteFromSession, isDedicatedChatSessionModel, resolveChatSessionRouteModel } from "@/lib/chat-session-routes"
@@ -817,7 +818,7 @@ const MediaBlock = ({ items }: { items: MediaItem[] }) => {
                 rel="noopener noreferrer"
                 className="absolute top-3 right-3 p-2 bg-[var(--paper-50)]/90 backdrop-blur-sm rounded-[var(--radius-soft)] shadow-lg hover:bg-[var(--paper-50)] transition-all"
               >
-                <Download className="w-4 h-4 text-[var(--ink-600)]" />
+                <IconExportPdf className="w-4 h-4 text-[var(--ink-600)]" />
               </a>
             </motion.div>
           )
@@ -869,7 +870,7 @@ const MediaBlock = ({ items }: { items: MediaItem[] }) => {
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1.5 rounded-[var(--radius-soft)] bg-blue-500 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-600"
                 >
-                  <Download className="h-3.5 w-3.5" />
+                  <IconExportPdf className="h-3.5 w-3.5" />
                   下载
                 </a>
               </div>
@@ -3621,7 +3622,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                           {userAvatar ? (
                             <img src={userAvatar} alt="Me" className="h-full w-full object-cover" />
                           ) : (
-                            <User className="h-3.5 w-3.5 text-[var(--ink-500)]" />
+                            <IconUser className="h-3.5 w-3.5 text-[var(--ink-500)]" />
                           )}
                         </div>
                       )}

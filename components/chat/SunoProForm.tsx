@@ -22,19 +22,17 @@ import {
   Sparkles, 
   ChevronDown,
   Mic2,
-  Send,
   Sliders,
-  PenLine,
   Lightbulb,
   Wand2,
   RefreshCw,
-  Volume2,
   VolumeX,
   Clock,
   Target,
   FileText,
   Hash
 } from "lucide-react"
+import { IconEssay, IconListen, IconSend } from "@/components/icons/v2"
 import { cn } from "@/lib/utils"
 
 // ============================================
@@ -434,7 +432,7 @@ export function SunoProForm({ onSubmit, isLoading = false, disabled = false }: S
                 : "border-2 border-[var(--paper-200)]/50 dark:border-gray-700/50"
             )}>
               <label className="flex items-center gap-2 text-sm text-[var(--ink-700)] dark:text-gray-200 mb-3">
-                <PenLine className="h-4 w-4 text-[var(--ink-500)]" />
+                <IconEssay className="h-4 w-4 text-[var(--ink-500)]" />
                 <span className="font-bold text-base">歌词</span>
                 {willUseLLM && (
                   <span className="ml-auto px-2 py-0.5 text-xs bg-[var(--ink-600)] text-white rounded-full flex items-center gap-1">
@@ -630,7 +628,7 @@ export function SunoProForm({ onSubmit, isLoading = false, disabled = false }: S
                   {formData.instrumental ? (
                     <VolumeX className="h-5 w-5 text-[var(--ink-500)]" />
                   ) : (
-                    <Volume2 className="h-5 w-5 text-[var(--ink-500)]" />
+                    <IconListen className="h-5 w-5 text-[var(--ink-500)]" />
                   )}
                 </div>
                 <div>
@@ -715,7 +713,7 @@ export function SunoProForm({ onSubmit, isLoading = false, disabled = false }: S
                   className="flex items-center justify-center gap-2"
                   whileHover={{ scale: 1.02 }}
                 >
-                  <Send className="h-5 w-5" />
+                  <IconSend className="h-5 w-5" />
                   <span>开始创作</span>
                   <Sparkles className="h-4 w-4" />
                 </motion.div>

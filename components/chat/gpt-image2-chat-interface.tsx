@@ -11,8 +11,6 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronLeft,
-  Copy,
-  Download,
   FileImage,
   History,
   Image as ImageIcon,
@@ -25,6 +23,7 @@ import {
   X,
   Zap,
 } from "lucide-react"
+import { IconCopy, IconExportPdf } from "@/components/icons/v2"
 import { createClient } from "@supabase/supabase-js"
 import { toast } from "sonner"
 
@@ -1471,12 +1470,12 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
                               <div className="flex flex-wrap gap-2">
                                 <Button type="button" variant="outline" size="sm" asChild>
                                   <a href={proxifyGeneratedImageDownloadUrl(url, item.submittedInputs.output_format)} download target="_blank" rel="noopener noreferrer">
-                                    <Download className="mr-2 h-4 w-4" />
+                                    <IconExportPdf className="mr-2 h-4 w-4" />
                                     下载
                                   </a>
                                 </Button>
                                 <Button type="button" variant="outline" size="sm" onClick={() => copyText(publicDownloadUrl, "图片地址已复制")}>
-                                  <Copy className="mr-2 h-4 w-4" />
+                                  <IconCopy className="mr-2 h-4 w-4" />
                                   复制图片地址
                                 </Button>
                               </div>

@@ -11,7 +11,8 @@
 "use client"
 
 import * as React from "react"
-import { Download, Share2, AlertTriangle } from "lucide-react"
+import { AlertTriangle } from "lucide-react"
+import { IconExportPdf, IconShare } from "@/components/icons/v2"
 import { ButtonV2 } from "@/components/ui/v2/button"
 import { SealStamp } from "@/components/ui/v2/seal"
 import { cn } from "@/lib/utils"
@@ -131,11 +132,11 @@ export function WorksheetPosterTemplate({
       {/* 工具栏 */}
       <footer className="flex flex-wrap items-center gap-2 px-6 py-4 bg-[var(--paper-100)]">
         <ButtonV2 variant="seal" size="sm" onClick={onDownload}>
-          <Download className="size-3.5" aria-hidden="true" />
+          <IconExportPdf className="size-3.5" aria-hidden="true" />
           下载海报
         </ButtonV2>
         <ButtonV2 variant="outline" size="sm" onClick={onShare}>
-          <Share2 className="size-3.5" aria-hidden="true" />
+          <IconShare className="size-3.5" aria-hidden="true" />
           分享给家长
         </ButtonV2>
       </footer>

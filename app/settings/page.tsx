@@ -6,11 +6,6 @@ import { ButtonV2 as Button, InputV2 as Input, LabelV2 as Label } from "@/compon
 import { useState, useEffect, useRef } from "react"
 import { createClient } from "@supabase/supabase-js"
 import { toast } from "sonner"
-import { 
-  Loader2, Upload, Camera, AlertCircle, User, Settings, BarChart3, 
-  Zap, Coins, Gift, Users, CheckCircle, Mail, Phone, LogOut,
-  ChevronRight, ArrowUpRight, ChevronLeft
-} from "lucide-react"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
 import { useRouter } from "next/navigation"

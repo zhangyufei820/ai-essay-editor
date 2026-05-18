@@ -12,7 +12,8 @@
 "use client"
 
 import * as React from "react"
-import { Paperclip, Mic, Send, X } from "lucide-react"
+import { X } from "lucide-react"
+import { IconMic, IconSend, IconUpload } from "@/components/icons/v2"
 import { cn } from "@/lib/utils"
 import { TextareaV2 } from "@/components/ui/v2/textarea"
 import { ButtonV2 } from "@/components/ui/v2/button"
@@ -106,7 +107,7 @@ export function ChatComposerV2({
           aria-label="上传文件"
           disabled={disabled}
         >
-          <Paperclip className="size-4" />
+          <IconUpload className="size-4" />
         </ButtonV2>
         <ButtonV2
           variant="ghost"
@@ -115,7 +116,7 @@ export function ChatComposerV2({
           aria-label="语音输入"
           disabled={disabled}
         >
-          <Mic className="size-4" />
+          <IconMic className="size-4" />
         </ButtonV2>
 
         <TextareaV2
@@ -140,7 +141,7 @@ export function ChatComposerV2({
           aria-label="发送"
           disabled={disabled || !text.trim()}
         >
-          {isStreaming ? <BrushDots /> : <Send className="size-4" />}
+          {isStreaming ? <BrushDots /> : <IconSend className="size-4" />}
         </ButtonV2>
       </div>
 

@@ -20,7 +20,8 @@ import {
   type FormEvent,
 } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Send, Paperclip, X, Loader2, ChevronDown, FileText, Image as ImageIcon, Mic, MicOff } from "lucide-react"
+import { X, Loader2, ChevronDown, FileText, Image as ImageIcon, MicOff } from "lucide-react"
+import { IconMic, IconSend, IconUpload } from "@/components/icons/v2"
 import { cn } from "@/lib/utils"
 import { ModelSelector, type Model } from "./ModelSelector"
 
@@ -491,7 +492,7 @@ export function ChatInput({
             disabled={isLoading || disabled}
             aria-label="上传附件"
           >
-            <Paperclip className="h-4 w-4" />
+            <IconUpload className="h-4 w-4" />
           </Button>
         </div>
       )}
@@ -550,7 +551,7 @@ export function ChatInput({
               disabled={isLoading || disabled}
               aria-label="上传附件"
             >
-              <Paperclip className="h-4 w-4 sm:h-5 sm:w-5" />
+              <IconUpload className="h-4 w-4 sm:h-5 sm:w-5" />
             </Button>
           </div>
         )}
@@ -577,7 +578,7 @@ export function ChatInput({
             {isListening ? (
               <MicOff className="h-4 w-4 sm:h-5 sm:w-5" />
             ) : (
-              <Mic className="h-4 w-4 sm:h-5 sm:w-5" />
+              <IconMic className="h-4 w-4 sm:h-5 sm:w-5" />
             )}
           </motion.button>
         </div>
@@ -626,7 +627,7 @@ export function ChatInput({
             {isLoading ? (
               <Loader2 className="h-5 w-5 animate-spin" />
             ) : (
-              <Send className="h-5 w-5" />
+              <IconSend className="h-5 w-5" />
             )}
           </motion.button>
         </div>

@@ -9,10 +9,19 @@ import { useState, useEffect, useRef, Suspense, useCallback } from "react"
 import { motion } from "framer-motion"
 import {
   Settings, ChevronRight, ChevronDown,
-  Menu, X, LogOut, Zap, Coins,
-  Bot, GraduationCap, Brain,
-  Gift, HelpCircle, Sparkles, Palette, User, Edit, FlaskConical, BarChart3, Layers3, FolderOpen, Wrench, Compass, Share2
+  Menu, X, Zap,
+  Bot, Brain,
+  Gift, Sparkles, Palette, Edit, FlaskConical, BarChart3, FolderOpen, Wrench, Compass
 } from "lucide-react"
+import {
+  IconCredits,
+  IconFlashcard,
+  IconLogout,
+  IconProblem,
+  IconShare,
+  IconTeaching,
+  IconUser,
+} from "@/components/icons/v2"
 import { cn } from "@/lib/utils"
 import { Logo } from "@/components/brand/Logo"
 import { AgentPanel } from "./chat/AgentPanel"
@@ -538,7 +547,7 @@ function AppSidebarInner() {
             onClick={handleNavClick}
             className="px-3 mb-4 flex items-center justify-center gap-2 cursor-pointer hover:bg-[var(--paper-100)] rounded-[var(--radius-sharp)] transition-all duration-300 py-1"
           >
-            <Coins className="h-4 w-4" style={{ color: COLORS.primary.main }} />
+            <IconCredits className="h-4 w-4" style={{ color: COLORS.primary.main }} />
             <span
               className="text-sm font-semibold"
               style={{ color: COLORS.primary.dark }}
@@ -650,7 +659,7 @@ function AppSidebarInner() {
                 whileTap={{ scale: 0.99 }}
                 transition={{ duration: 0.15 }}
               >
-                <Layers3 className="w-[18px] h-[18px]" style={{ color: COLORS.primary.main }} />
+                <IconFlashcard className="w-[18px] h-[18px]" style={{ color: COLORS.primary.main }} />
                 <span className="text-[12px] font-medium leading-none whitespace-nowrap" style={{ color: COLORS.primary.dark }}>
                   闪卡复习
                 </span>
@@ -677,7 +686,7 @@ function AppSidebarInner() {
                 whileTap={{ scale: 0.99 }}
                 transition={{ duration: 0.15 }}
               >
-                <GraduationCap className="w-[18px] h-[18px]" style={{ color: COLORS.primary.main }} />
+                <IconTeaching className="w-[18px] h-[18px]" style={{ color: COLORS.primary.main }} />
                 <span className="text-[12px] font-medium leading-none whitespace-nowrap" style={{ color: COLORS.primary.dark }}>
                   教师平台
                 </span>
@@ -758,7 +767,7 @@ function AppSidebarInner() {
                 whileTap={{ scale: 0.99 }}
                 transition={{ duration: 0.15 }}
               >
-                <Share2 className="w-[18px] h-[18px]" style={{ color: COLORS.primary.main }} />
+                <IconShare className="w-[18px] h-[18px]" style={{ color: COLORS.primary.main }} />
                 <span className="text-[12px] font-medium leading-none whitespace-nowrap" style={{ color: COLORS.primary.dark }}>
                   我的分享
                 </span>
@@ -838,7 +847,7 @@ function AppSidebarInner() {
               whileTap={{ scale: 0.99 }}
               transition={{ duration: 0.15 }}
             >
-              <GraduationCap className="w-[18px] h-[18px]" style={{ color: COLORS.primary.dark }} />
+              <IconTeaching className="w-[18px] h-[18px]" style={{ color: COLORS.primary.dark }} />
               <span className="text-[12px] font-medium leading-none whitespace-nowrap" style={{ color: COLORS.primary.dark }}>
                 教育专区
               </span>
@@ -953,7 +962,7 @@ function AppSidebarInner() {
                 onClick={handleNavClick}
                 className="flex items-center justify-center p-2 rounded-[var(--radius-sharp)] transition-all duration-300 hover:bg-[var(--ink-50)] cursor-pointer"
               >
-                <HelpCircle className="w-4 h-4 text-[var(--ink-400)] hover:text-[var(--ink-600)] transition-colors duration-300" strokeWidth={1.5} />
+                <IconProblem className="w-4 h-4 text-[var(--ink-400)] hover:text-[var(--ink-600)] transition-colors duration-300" />
               </Link>
             </div>
           )}
@@ -1003,7 +1012,7 @@ function AppSidebarInner() {
                     e.currentTarget.style.color = COLORS.gray[600]
                   }}
                 >
-                  <LogOut className="h-4 w-4" />
+                  <IconLogout className="h-4 w-4" />
                   退出登录
                 </button>
               </div>
@@ -1047,7 +1056,7 @@ function AppSidebarInner() {
                 {getAvatarUrl() ? (
                   <img src={getAvatarUrl()} alt="User" className="h-full w-full object-cover rounded-[var(--radius-soft)]" />
                 ) : (
-                  <User className="h-5 w-5" style={{ color: COLORS.primary.main }} strokeWidth={2} />
+                  <IconUser className="h-5 w-5" style={{ color: COLORS.primary.main }} />
                 )}
               </div>
               {/* 昵称 + ID/手机号 */}

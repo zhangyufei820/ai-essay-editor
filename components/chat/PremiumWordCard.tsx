@@ -1,7 +1,8 @@
 "use client"
 
 import { useEffect, useMemo, useState, type ReactNode } from "react"
-import { BookOpen, CheckCircle2, Headphones, Lightbulb, RotateCcw, Sparkles, SpellCheck, Volume2, XCircle } from "lucide-react"
+import { CheckCircle2, Headphones, Lightbulb, RotateCcw, Sparkles, SpellCheck, XCircle } from "lucide-react"
+import { IconEnglish, IconListen } from "@/components/icons/v2"
 import { cn } from "@/lib/utils"
 import { getVerifiedAuthHeaders } from "@/lib/client-auth"
 import type { FrontendWordCard } from "@/lib/word-card-normalizer"
@@ -217,7 +218,7 @@ export function PremiumWordCard({ data }: PremiumWordCardProps) {
           </div>
         </Section>
 
-        <Section icon={<BookOpen className="h-4 w-4" />} title="例句" tone="border-[var(--ink-100)] bg-[var(--ink-50)]">
+        <Section icon={<IconEnglish className="h-4 w-4" />} title="例句" tone="border-[var(--ink-100)] bg-[var(--ink-50)]">
           <div className="grid gap-3">
             {examples.map((example, index) => (
               <div key={index} className="rounded-[var(--radius-sharp)] border border-[var(--ink-100)] bg-[var(--paper-50)]/80 p-3 shadow-sm">
@@ -264,7 +265,7 @@ export function PremiumWordCard({ data }: PremiumWordCardProps) {
           {text(badges.quality) && <Pill>{text(badges.quality)}</Pill>}
           {(text(badges.tts) || audioUrl || isGeneratingAudio) && (
             <Pill>
-              <Volume2 className="mr-1 h-3.5 w-3.5" />
+              <IconListen className="mr-1 h-3.5 w-3.5" />
               {audioUrl ? "音频已生成" : isGeneratingAudio ? "音频生成中" : text(badges.tts)}
             </Pill>
           )}

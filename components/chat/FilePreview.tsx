@@ -9,7 +9,8 @@
 
 import { createElement, useEffect } from "react"
 import { motion, AnimatePresence, type Easing } from "framer-motion"
-import { X, FileText, File, Image, Loader2, Check, AlertCircle, Music, Video } from "lucide-react"
+import { X, FileText, File, Image, Loader2, Check, AlertCircle, Video } from "lucide-react"
+import { IconMusic } from "@/components/icons/v2"
 import { cn } from "@/lib/utils"
 import { brandColors } from "@/lib/design-tokens"
 
@@ -39,7 +40,7 @@ interface FilePreviewProps {
 function getFileIcon(type: string) {
   if (type.startsWith("image/")) return Image
   if (type.startsWith("video/")) return Video
-  if (type.startsWith("audio/")) return Music
+  if (type.startsWith("audio/")) return IconMusic
   if (type.includes("pdf")) return FileText
   return File
 }
