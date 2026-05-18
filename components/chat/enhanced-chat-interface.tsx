@@ -3280,15 +3280,6 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
             <ChevronLeft className="h-4 w-4" />
           </button>
           <div className="flex-1 min-w-0 px-1 text-center md:text-left md:ml-2">
-            <motion.span
-              key="ai-chat-title"
-              initial={{ opacity: 0, y: -4 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.2, ease: "easeOut" }}
-              className="inline-block truncate text-[12px] font-medium tracking-[-0.01em] text-[var(--ink-700)] sm:text-sm md:text-base"
-            >
-              AI 对话
-            </motion.span>
             <ModelSelector
               selectedModel={selectedModel}
               models={modelList}
@@ -3297,7 +3288,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
               isMember={isLuxury}
               triggerPrefix=""
               triggerLabel="智能体广场"
-              className="ml-2 hidden h-8 align-middle md:inline-flex"
+              className="hidden h-8 align-middle md:inline-flex"
             />
             <span className="ml-2 hidden max-w-[180px] truncate align-middle text-[12px] text-[var(--ink-400)] md:inline-block">
               当前：{getModelUiConfig(selectedModel).name}

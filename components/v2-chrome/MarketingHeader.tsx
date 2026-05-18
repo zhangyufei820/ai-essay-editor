@@ -23,7 +23,6 @@ import { ButtonV2 } from "@/components/ui/v2/button"
 import { SheetV2, SheetV2Content, SheetV2Trigger } from "@/components/ui/v2/sheet"
 
 const NAV_ITEMS: ReadonlyArray<{ label: string; href: string }> = [
-  { label: "智能体", href: "/chat" },
   { label: "智能体广场", href: "/agents" },
   { label: "创作广场", href: "/explore" },
   { label: "套餐", href: "/pricing" },
