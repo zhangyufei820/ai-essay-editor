@@ -13,7 +13,7 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react"
 import { motion, type Easing } from "framer-motion"
 import { ChevronDown, ChevronUp } from "lucide-react"
-import { IconAllInOne, IconCopy, IconExportPdf, IconFollowup, IconListen, IconShare, IconUser } from "@/components/icons/v2"
+import { IconAllInOne, IconCopy, IconExportPdf, IconFollowup, IconHistory, IconListen, IconShare, IconUser } from "@/components/icons/v2"
 import { cn } from "@/lib/utils"
 import { AssistantMessageV2 } from "@/components/chat/v2"
 import {
@@ -369,6 +369,7 @@ interface MessageActions {
   onShare: () => void
   onAskFollowup: () => void
   onPlayAudio: () => void
+  onRegenerate: () => void
 }
 
 function MessageActionToolbar({ actions }: { actions: MessageActions }) {
@@ -378,6 +379,7 @@ function MessageActionToolbar({ actions }: { actions: MessageActions }) {
     { label: "分享", icon: IconShare, onClick: actions.onShare },
     { label: "导出 PDF", icon: IconExportPdf, onClick: actions.onExportPDF },
     { label: "继续追问", icon: IconFollowup, onClick: actions.onAskFollowup },
+    { label: "重新生成", icon: IconHistory, onClick: actions.onRegenerate },
   ] as const
 
   return (
@@ -614,6 +616,9 @@ const MessageBubble = memo(function MessageBubble({
     },
     onPlayAudio: () => {
       window.dispatchEvent(new CustomEvent("play-chat-message-audio", { detail: { text: content } }))
+    },
+    onRegenerate: () => {
+      window.dispatchEvent(new CustomEvent("regenerate-last-message"))
     },
   }), [content, essayReviewArtifact, onCopy, onShare])
 

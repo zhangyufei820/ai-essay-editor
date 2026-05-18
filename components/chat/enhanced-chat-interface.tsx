@@ -2701,6 +2701,30 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     }
   }
 
+  useEffect(() => {
+    const handleRegenerate = () => {
+      if (isLoading) {
+        toast.info("当前回复还在生成中")
+        return
+      }
+
+      const lastUserMessage = [...messages].reverse().find((message) => message.role === "user")
+      if (!lastUserMessage) {
+        toast.info("还没有可重新生成的消息")
+        return
+      }
+
+      const fakeEvent = { preventDefault: () => {} } as unknown as React.FormEvent
+      onSubmit(fakeEvent, {
+        content: lastUserMessage.content,
+        files: lastUserMessage.files,
+      })
+    }
+
+    window.addEventListener("regenerate-last-message", handleRegenerate)
+    return () => window.removeEventListener("regenerate-last-message", handleRegenerate)
+  }, [isLoading, messages, onSubmit])
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); onSubmit(e as unknown as React.FormEvent) }
   }
