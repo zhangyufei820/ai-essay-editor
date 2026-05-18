@@ -16,7 +16,13 @@ import { ChevronDown, ChevronUp } from "lucide-react"
 import { IconAllInOne, IconCopy, IconExportPdf, IconFollowup, IconListen, IconShare, IconUser } from "@/components/icons/v2"
 import { cn } from "@/lib/utils"
 import { AssistantMessageV2 } from "@/components/chat/v2"
-import { EssayReviewTemplate } from "@/components/chat/v2/templates"
+import {
+  EssayReviewTemplate,
+  FlashcardTemplate,
+  VocabCardTemplate,
+  WorksheetPosterTemplate,
+} from "@/components/chat/v2/templates"
+import type { FlashcardArtifact, VocabCardArtifact, WorksheetDiagnosisArtifact } from "@/components/chat/v2/types"
 import { exportChatContentToPDF } from "@/lib/chat-pdf-export"
 import { InkBrush } from "@/components/motion/InkMotion"
 import { parseEssayReview } from "@/lib/parse-essay-review"
@@ -39,6 +45,59 @@ const CONCLUSION_KEYWORDS = ["综上所述", "答案是", "结论是", "所以",
 
 function isConclusionParagraph(text: string): boolean {
   return CONCLUSION_KEYWORDS.some(keyword => text.includes(keyword))
+}
+
+function parseLineList(block: string) {
+  return block
+    .split("\n")
+    .map((line) => line.replace(/^[\s\-*•\d.、)）]+/, "").trim())
+    .filter(Boolean)
+}
+
+function parseVocabCard(content: string): VocabCardArtifact | null {
+  const word = content.match(/^#+\s*(\S+)/m)?.[1] || content.match(/单词[：:]\s*(\S+)/)?.[1] || ""
+  if (!word) return null
+
+  const examplesBlock = content.match(/例句[：:][\s\S]*?(?=\n#|\n\n|$)/)?.[0] || ""
+
+  return {
+    type: "vocab-card",
+    word,
+    meaning: content.match(/释义[：:]\s*([^\n]+)/)?.[1]?.trim() || "",
+    pronunciation: content.match(/音标[：:]\s*([^\n]+)/)?.[1]?.trim() || "",
+    examples: parseLineList(examplesBlock).slice(0, 5),
+    story: content.match(/(?:记忆故事|记忆|故事)[：:]\s*([\s\S]*?)(?=\n#|$)/)?.[1]?.trim() || "",
+    raw: content,
+  }
+}
+
+function parseWorksheetPoster(content: string): WorksheetDiagnosisArtifact {
+  const weakBlock = content.match(/(?:薄弱点|错题|弱点)[：:：]?\s*([\s\S]*?)(?=\n#|\n\n(?:训练|计划)|$)/)?.[1] || ""
+  const trainingBlock = content.match(/(?:训练计划|今日训练|训练)[：:：]?\s*([\s\S]*?)(?=\n#|$)/)?.[1] || ""
+
+  return {
+    type: "worksheet-diagnosis",
+    subject: content.match(/科目[：:]\s*([^\n]+)/)?.[1]?.trim(),
+    grade: content.match(/年级[：:]\s*([^\n]+)/)?.[1]?.trim(),
+    totalQuestions: Number(content.match(/总题数[：:]\s*(\d+)/)?.[1]) || undefined,
+    wrongCount: Number(content.match(/(?:错题|错误)[：:]\s*(\d+)/)?.[1]) || undefined,
+    weakPoints: parseLineList(weakBlock).slice(0, 5).map((topic) => ({
+      topic,
+      wrongOf: content.match(/(?:错|错误)\s*(\d+\s*\/\s*\d+|\d+)/)?.[1] || "—",
+    })),
+    trainingPlan: parseLineList(trainingBlock).length
+      ? [{ topic: "今日训练", tasks: parseLineList(trainingBlock).slice(0, 6) }]
+      : undefined,
+    rawMarkdown: content,
+  }
+}
+
+function parseFlashcards(content: string): FlashcardArtifact | null {
+  const cards = [...content.matchAll(/(?:^|\n)[-*]\s*(.+?)\s*(?:=>|->|：|:)\s*(.+?)(?=\n|$)/g)]
+    .map((match) => ({ front: match[1].trim(), back: match[2].trim() }))
+    .filter((card) => card.front && card.back)
+
+  return cards.length ? { type: "flashcard", cards: cards.slice(0, 20) } : null
 }
 
 // Extract text content from React children for keyword detection
@@ -506,12 +565,21 @@ const MessageBubble = memo(function MessageBubble({
   const templateType = useMemo(() => {
     if (isUser) return "user"
     if (essayReviewArtifact) return "essay-review"
-    // Future extension points:
-    // if (model === "vocab-card") return "vocab-card"
-    // if (model === "suno-v5") return "music-card"
-    // if (model?.includes("gpt-image") || model === "banana-2-pro") return "image-gallery"
+    if (model === "vocab-card") return "vocab-card"
+    if (model === "flashcard") return "flashcard"
+    if (model === "suno-v5") return "music-card"
+    if (model?.includes("gpt-image") || model === "banana-2-pro" || model === "gemini-image") return "image-gallery"
+    if (model === "worksheet-diagnosis") return "worksheet-poster"
     return "markdown"
   }, [essayReviewArtifact, isUser, model])
+  const vocabCardArtifact = useMemo(
+    () => templateType === "vocab-card" ? parseVocabCard(content) : null,
+    [content, templateType]
+  )
+  const flashcardArtifact = useMemo(
+    () => templateType === "flashcard" ? parseFlashcards(content) : null,
+    [content, templateType]
+  )
   const actions = useMemo<MessageActions>(() => ({
     onCopy: async () => {
       try {
@@ -631,25 +699,50 @@ const MessageBubble = memo(function MessageBubble({
                 </p>
               </div>
             ) : (
-              essayReviewArtifact ? (
-                <div className="w-full max-w-none overflow-hidden rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-white shadow-[var(--shadow-paper)]">
-                  <EssayReviewTemplate
-                    artifact={essayReviewArtifact}
-                    onCopy={actions.onCopy}
-                    onExportPDF={actions.onExportPDF}
-                    onShare={actions.onShare}
-                    onAskFollowup={actions.onAskFollowup}
-                  />
-                  {!isStreaming ? <ShareRewardCallout onShare={actions.onShare} /> : null}
-                </div>
-              ) : (
-                <AssistantMarkdownCard
-                  content={content}
-                  actions={actions}
-                  templateType={templateType}
-                  isStreaming={isStreaming}
-                />
-              )
+              (() => {
+                switch (templateType) {
+                  case "essay-review":
+                    return (
+                      <div className="w-full max-w-none overflow-hidden rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-white shadow-[var(--shadow-paper)]">
+                        <EssayReviewTemplate
+                          artifact={essayReviewArtifact!}
+                          onCopy={actions.onCopy}
+                          onExportPDF={actions.onExportPDF}
+                          onShare={actions.onShare}
+                          onAskFollowup={actions.onAskFollowup}
+                        />
+                        {!isStreaming ? <ShareRewardCallout onShare={actions.onShare} /> : null}
+                      </div>
+                    )
+                  case "vocab-card":
+                    return vocabCardArtifact ? (
+                      <VocabCardTemplate
+                        artifact={vocabCardArtifact}
+                        onPlayAudio={actions.onPlayAudio}
+                      />
+                    ) : (
+                      <AssistantMarkdownCard content={content} actions={actions} templateType={templateType} isStreaming={isStreaming} />
+                    )
+                  case "worksheet-poster":
+                    return (
+                      <WorksheetPosterTemplate
+                        artifact={parseWorksheetPoster(content)}
+                        onDownload={actions.onExportPDF}
+                        onShare={actions.onShare}
+                      />
+                    )
+                  case "flashcard":
+                    return flashcardArtifact ? (
+                      <FlashcardTemplate artifact={flashcardArtifact} />
+                    ) : (
+                      <AssistantMarkdownCard content={content} actions={actions} templateType={templateType} isStreaming={isStreaming} />
+                    )
+                  case "music-card":
+                  case "image-gallery":
+                  default:
+                    return <AssistantMarkdownCard content={content} actions={actions} templateType={templateType} isStreaming={isStreaming} />
+                }
+              })()
             )}
 
             {/* Bottom action bar - Hidden by default, shows on hover */}
