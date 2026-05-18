@@ -17,11 +17,12 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { ArrowRight, Blocks, FileText, ShieldCheck, Sparkles, PenLine } from "lucide-react"
+import { ArrowRight, Blocks } from "lucide-react"
 import { ButtonV2 } from "@/components/ui/v2/button"
 import { ScoreSeal } from "@/components/ui/v2/seal"
 import { InkReveal } from "@/components/motion/InkMotion"
 import { cn } from "@/lib/utils"
+import { IconAllInOne, IconEssay, IconSealCheck } from "@/components/icons/v2"
 
 const HERO_METRICS = [
   { label: "上传材料", value: "作文 / 试卷 / 错题" },
@@ -55,7 +56,7 @@ export function HeroV2() {
         <InkReveal as="div" className="max-w-2xl">
           {/* 信誉徽章 */}
           <span className="inline-flex items-center gap-1.5 rounded-[var(--radius-pill)] border border-[var(--ink-200)] bg-[var(--paper-100)] px-3 py-1.5 text-[12px] font-semibold text-[var(--ink-700)] font-[var(--font-sans-v2)]">
-            <ShieldCheck className="size-3.5" aria-hidden="true" />
+            <IconSealCheck className="size-3.5" aria-hidden="true" />
             面向学生、家长、老师的 AI 学习反馈
           </span>
 
@@ -86,7 +87,7 @@ export function HeroV2() {
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
             <ButtonV2 asChild variant="primary" size="lg" className="group box-border w-full sm:w-auto">
               <Link href="/chat/standard" prefetch={false}>
-                <PenLine className="size-4" aria-hidden="true" />
+                <IconEssay className="size-4" aria-hidden="true" />
                 上传作文批改
                 <ArrowRight className="size-4 transition-transform duration-200 group-hover:translate-x-0.5" aria-hidden="true" />
               </Link>
@@ -146,7 +147,7 @@ function ReportPreview() {
         {/* 顶部装饰 */}
         <div className="border-b border-[var(--paper-200)] bg-[var(--paper-50)] px-5 py-4">
           <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--ink-500)] font-[var(--font-sans-v2)]">
-            <FileText className="size-3.5" />
+            <IconEssay className="size-3.5" />
             作文批改报告 · 已脱敏示例
           </div>
         </div>
@@ -212,7 +213,7 @@ function ReportPreview() {
 function PreviewRow({ label, content }: { label: string; content: string }) {
   return (
     <div className="flex items-start gap-3 rounded-[var(--radius-soft)] bg-[var(--paper-100)] px-3 py-2.5">
-      <Sparkles className="mt-0.5 size-3 shrink-0 text-[var(--seal-500)]" aria-hidden="true" />
+      <IconAllInOne className="mt-0.5 size-3 shrink-0 text-[var(--seal-500)]" aria-hidden="true" />
       <div className="min-w-0 flex-1">
         <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-500)] font-[var(--font-sans-v2)]">
           {label}

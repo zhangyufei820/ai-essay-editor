@@ -15,24 +15,8 @@ import { ButtonV2 as Button } from "@/components/ui/v2"
 
 import React, { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { 
-  Music4, 
-  Sparkles, 
-  Loader2, 
-  CheckCircle2, 
-  AlertCircle,
-  RefreshCw,
-  Edit3,
-  Play,
-  Clock,
-  Wand2,
-  FileText,
-  ChevronRight,
-  ArrowRight,
-  Mic2,
-  Hash
-} from "lucide-react"
-import { IconSend } from "@/components/icons/v2"
+import { Music4, Loader2, Edit3, Play, Wand2, ChevronRight, ArrowRight, Mic2, Hash } from "lucide-react"
+import { IconAllInOne, IconEssay, IconHistory, IconInkDot, IconSealCheck, IconSend } from "@/components/icons/v2"
 import { cn } from "@/lib/utils"
 
 // ============================================
@@ -81,8 +65,8 @@ interface SunoWorkflowUIProps {
 
 const steps = [
   { id: 1, label: "输入创意", icon: Wand2 },
-  { id: 2, label: "歌词创作", icon: FileText },
-  { id: 3, label: "确认预览", icon: CheckCircle2 },
+  { id: 2, label: "歌词创作", icon: IconEssay },
+  { id: 3, label: "确认预览", icon: IconSealCheck },
   { id: 4, label: "生成音乐", icon: Music4 },
 ]
 
@@ -167,7 +151,7 @@ const ComposingAnimation = () => (
           animate={{ scale: [1, 1.1, 1] }}
           transition={{ duration: 1.5, repeat: Infinity }}
         >
-          <FileText className="h-6 w-6 text-white" />
+          <IconEssay className="h-6 w-6 text-white" />
         </motion.div>
       </div>
     </div>
@@ -181,7 +165,7 @@ const ComposingAnimation = () => (
       animate={{ opacity: [0.5, 1, 0.5] }}
       transition={{ duration: 2, repeat: Infinity }}
     >
-      <Sparkles className="h-3.5 w-3.5" />
+      <IconAllInOne className="h-3.5 w-3.5" />
       <span>灵感涌现中</span>
     </motion.div>
   </motion.div>
@@ -209,7 +193,7 @@ const LyricsPreviewCard = ({
     <div className="px-5 py-4 border-b border-[var(--paper-100)] bg-[var(--ink-50)]">
       <div className="flex items-center gap-3">
         <div className="flex h-10 w-10 items-center justify-center rounded-[var(--radius-sharp)] bg-[var(--ink-600)] text-white shadow-lg shadow-[var(--ink-500)]/30">
-          <FileText className="h-5 w-5" />
+          <IconEssay className="h-5 w-5" />
         </div>
         <div>
           <h3 className="font-semibold text-[var(--ink-800)]">
@@ -271,7 +255,7 @@ const LyricsPreviewCard = ({
         onClick={onConfirm}
         className="flex-1 h-11 rounded-[var(--radius-sharp)] bg-[var(--ink-600)] text-white shadow-lg shadow-[var(--ink-500)]/30 hover:shadow-xl hover:shadow-[var(--ink-500)]/40 transition-all"
       >
-        <CheckCircle2 className="h-4 w-4 mr-2" />
+        <IconSealCheck className="h-4 w-4 mr-2" />
         确认生成
       </Button>
     </div>
@@ -346,7 +330,7 @@ const GenerationProgressCard = ({
           <p className="text-xs text-[var(--ink-500)] mb-2">{progress.message || `任务ID: ${progress.taskId.slice(0, 8)}...`}</p>
           {progress.estimatedTime && (
             <div className="flex items-center gap-1 text-xs text-[var(--ink-600)]">
-              <Clock className="h-3 w-3" />
+              <IconHistory className="h-3 w-3" />
               <span>预计 {progress.estimatedTime} 秒</span>
             </div>
           )}
@@ -354,7 +338,7 @@ const GenerationProgressCard = ({
       </div>
       {onCheckStatus && progress.status !== "success" && (
         <Button variant="outline" size="sm" onClick={onCheckStatus} className="mt-4 w-full">
-          <RefreshCw className="h-4 w-4 mr-2" />查询进度
+          <IconHistory className="h-4 w-4 mr-2" />查询进度
         </Button>
       )}
     </motion.div>
@@ -389,9 +373,9 @@ export const SunoWorkflowUI: React.FC<SunoWorkflowUIProps> = ({
         )}
         {stage === "error" && (
           <motion.div key="error" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-8">
-            <AlertCircle className="h-12 w-12 mx-auto text-[var(--seal-500)] mb-4" />
+            <IconInkDot className="h-12 w-12 mx-auto text-[var(--seal-500)] mb-4" />
             <h3 className="text-lg font-semibold text-[var(--ink-800)] mb-2">出错了</h3>
-            <Button onClick={onRetry} variant="outline"><RefreshCw className="h-4 w-4 mr-2" />重试</Button>
+            <Button onClick={onRetry} variant="outline"><IconHistory className="h-4 w-4 mr-2" />重试</Button>
           </motion.div>
         )}
       </AnimatePresence>

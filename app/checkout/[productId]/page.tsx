@@ -8,12 +8,13 @@ import {
 } from "@/components/ui/v2"
 import { notFound, useRouter, useSearchParams } from "next/navigation"
 import { PRODUCTS, requiresMembership, hasActiveMembership, getProductPriceInCents } from "@/lib/products"
-import { ArrowLeft, Loader2, LogIn, CheckCircle2, ExternalLink, AlertTriangle, Crown } from "lucide-react"
+import { ArrowLeft, Loader2, LogIn, ExternalLink } from "lucide-react"
 import Link from "next/link"
 import { BETA_CONFIG } from "@/lib/beta-config"
 import { extractUserId } from "@/lib/auth-user"
 import { use, useEffect, useState, Suspense } from "react"
 import { createClient } from "@/lib/supabase/client"
+import { IconInkDot, IconMember, IconSealCheck } from "@/components/icons/v2"
 
 async function getVerifiedAuthHeaders(): Promise<Record<string, string>> {
   if (typeof window !== "undefined") {
@@ -200,7 +201,7 @@ function CheckoutFlow({ productId }: { productId: string }) {
               </div>
               {needsMembership && (
                 <Badge variant="paper" className="flex items-center gap-1">
-                  <Crown className="h-3 w-3" />
+                  <IconMember className="h-3 w-3" />
                   会员专享
                 </Badge>
               )}
@@ -222,7 +223,7 @@ function CheckoutFlow({ productId }: { productId: string }) {
           {/* 会员限制提示 */}
           {needsMembership && !isUserMember && (
             <Alert className="mb-6 border-amber-200 bg-amber-50">
-              <AlertTriangle className="h-4 w-4 text-amber-600" />
+              <IconInkDot className="h-4 w-4 text-amber-600" />
               <AlertDescription className="text-amber-900">
                 <div className="font-semibold mb-2">⚠️ 积分充值包仅限会员购买</div>
                 <p className="text-sm mb-3">
@@ -230,7 +231,7 @@ function CheckoutFlow({ productId }: { productId: string }) {
                 </p>
                 <Link href="/#pricing">
                   <Button size="sm" variant="primary" className="bg-amber-600 hover:bg-amber-700">
-                    <Crown className="h-4 w-4 mr-2" />
+                    <IconMember className="h-4 w-4 mr-2" />
                     立即订阅会员
                   </Button>
                 </Link>
@@ -241,10 +242,10 @@ function CheckoutFlow({ productId }: { productId: string }) {
           {/* 会员身份确认 */}
           {needsMembership && isUserMember && (
             <Alert className="mb-6 border-[var(--ink-200)] bg-[var(--ink-50)]">
-              <CheckCircle2 className="h-4 w-4 text-[var(--ink-600)]" />
+              <IconSealCheck className="h-4 w-4 text-[var(--ink-600)]" />
               <AlertDescription className="text-[var(--ink-900)]">
                 <div className="flex items-center gap-2">
-                  <Crown className="h-4 w-4" />
+                  <IconMember className="h-4 w-4" />
                   <span className="font-semibold">您是 {membershipStatus?.toUpperCase()} 会员，可以购买积分充值包</span>
                 </div>
               </AlertDescription>
@@ -254,7 +255,7 @@ function CheckoutFlow({ productId }: { productId: string }) {
           {/* 如果自动跳转失败，显示这个手动支付框 */}
           {manualPayUrl && (
              <Alert className="mb-6 border-[var(--ink-200)] bg-[var(--ink-50)]">
-              <CheckCircle2 className="h-4 w-4 text-[var(--ink-600)]" />
+              <IconSealCheck className="h-4 w-4 text-[var(--ink-600)]" />
               <AlertDescription className="text-[var(--ink-900)] flex items-center gap-2">
                 支付链接已生成！如果浏览器未自动跳转，请点击：
                 <a href={manualPayUrl} className="font-bold underline flex items-center" target="_blank" rel="noopener noreferrer">

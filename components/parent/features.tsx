@@ -1,24 +1,25 @@
 import { CardV2 as Card, CardV2Content as CardContent } from "@/components/ui/v2"
-import { BookOpen, MessageCircle, BarChart3, Award, Calendar, Bell } from "lucide-react"
+import { Calendar, Bell } from "lucide-react"
+import { IconDashboard, IconEnglish, IconFollowup, IconSealStar } from "@/components/icons/v2"
 
 const features = [
   {
-    icon: BookOpen,
+    icon: IconEnglish,
     title: "共同阅读计划",
     description: "与孩子一起制定阅读目标，分享阅读心得，培养阅读习惯",
   },
   {
-    icon: MessageCircle,
+    icon: IconFollowup,
     title: "学习陪伴对话",
     description: "通过AI辅助，开展有效的学习讨论，增进亲子沟通",
   },
   {
-    icon: BarChart3,
+    icon: IconDashboard,
     title: "学习数据分析",
     description: "实时了解孩子学习进度和薄弱环节，科学规划学习路径",
   },
   {
-    icon: Award,
+    icon: IconSealStar,
     title: "成就激励系统",
     description: "记录孩子的每一次进步，及时给予鼓励和认可",
   },

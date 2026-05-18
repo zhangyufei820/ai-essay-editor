@@ -8,16 +8,18 @@
 
 import { motion } from "framer-motion"
 import Link from "next/link"
-import { ArrowRight, FileText, HelpCircle, Blocks, Layers3, type LucideIcon } from "lucide-react"
+import type { ComponentType } from "react"
+import { ArrowRight } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { brandColors, slateColors, creamColors } from "@/lib/design-tokens"
+import { IconAllInOne, IconEssay, IconFlashcard, IconProblem } from "@/components/icons/v2"
 
 // ============================================
 // 能力配置
 // ============================================
 
 interface Capability {
-  icon: LucideIcon
+  icon: ComponentType<any>
   title: string
   description: string
   href: string
@@ -25,25 +27,25 @@ interface Capability {
 
 const capabilities: Capability[] = [
   {
-    icon: Blocks,
+    icon: IconAllInOne,
     title: "智能体广场",
     description: "按写作、学科、教学与创作场景，快速挑选适合的 AI 智能体。",
     href: "/agents",
   },
   {
-    icon: FileText,
+    icon: IconEssay,
     title: "智能作文批改",
     description: "从结构、表达、立意到修改方向，给出逐段点评。",
     href: "/essay",
   },
   {
-    icon: HelpCircle,
+    icon: IconProblem,
     title: "题目解析",
     description: "拍题或输入题干，获得可复盘的分步讲解。",
     href: "/chat/problem",
   },
   {
-    icon: Layers3,
+    icon: IconFlashcard,
     title: "闪卡复习",
     description: "把知识点沉淀成复习卡片，跟踪掌握状态。",
     href: "/flashcards",

@@ -20,18 +20,7 @@ import {
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { createClient } from "@supabase/supabase-js"
-import {
-  ClipboardCheck,
-  Copy,
-  Download,
-  FileImage,
-  ImageIcon,
-  Loader2,
-  MessageSquareText,
-  Sparkles,
-  Upload,
-  X,
-} from "lucide-react"
+import { FileImage, ImageIcon, Loader2, MessageSquareText, Upload, X } from "lucide-react"
 import { toast } from "sonner"
 import { extractUserId } from "@/lib/auth-user"
 import {
@@ -43,6 +32,7 @@ import {
   proxifyGeneratedImageDownloadUrl,
   proxifyGeneratedImageUrl,
 } from "@/components/chat/image-generation/gpt-image-v11"
+import { IconAllInOne, IconCopy, IconDiagnosis, IconExportPdf } from "@/components/icons/v2"
 
 type UploadedWorksheet = {
   name: string
@@ -473,7 +463,7 @@ export function WorksheetDiagnosisApp() {
       <section className="grid gap-6 lg:grid-cols-[minmax(0,0.92fr)_minmax(360px,0.58fr)]">
         <div className="rounded-3xl border border-[var(--ink-100)] bg-[var(--paper-50)] p-6 shadow-sm md:p-8">
           <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-[var(--ink-100)] bg-[var(--ink-50)] px-3 py-1 text-sm font-semibold text-[var(--ink-700)]">
-            <ClipboardCheck className="size-4" />
+            <IconDiagnosis className="size-4" />
             错题诊断海报
           </div>
           <h1 className="max-w-3xl text-3xl font-black leading-tight text-[var(--ink-900)] md:text-5xl">
@@ -588,7 +578,7 @@ export function WorksheetDiagnosisApp() {
               />
             </div>
             <Button onClick={analyze} disabled={!canAnalyze} className="h-12 w-full rounded-[var(--radius-sharp)]">
-              {isAnalyzing ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Sparkles className="mr-2 size-4" />}
+              {isAnalyzing ? <Loader2 className="mr-2 size-4 animate-spin" /> : <IconAllInOne className="mr-2 size-4" />}
               {isAnalyzing ? "正在诊断" : "开始诊断"}
             </Button>
             {isAnalyzing && analyzeProgress ? (
@@ -631,7 +621,7 @@ export function WorksheetDiagnosisApp() {
               />
             ) : !result ? (
               <div className="flex min-h-[420px] flex-col items-center justify-center rounded-[var(--radius-sharp)] border border-dashed bg-[var(--paper-100)]/20 text-center">
-                <ClipboardCheck className="mb-4 size-10 text-[var(--ink-500)]" />
+                <IconDiagnosis className="mb-4 size-10 text-[var(--ink-500)]" />
                 <p className="font-semibold text-[var(--ink-900)]">等待诊断</p>
                 <p className="mt-2 max-w-sm text-sm leading-6 text-[var(--ink-500)]">
                   结果会包含观察结论、主要问题、卷面证据、解决方案、训练计划和家校沟通建议。
@@ -649,7 +639,7 @@ export function WorksheetDiagnosisApp() {
                     </div>
                     <div className="flex flex-col gap-2 sm:flex-row">
                       <Button variant="outline" onClick={keepDiagnosisOnly} className="h-10 rounded-[var(--radius-sharp)]">
-                        <ClipboardCheck className="mr-2 size-4" />
+                        <IconDiagnosis className="mr-2 size-4" />
                         只看诊断
                       </Button>
                       <Button onClick={generatePoster} disabled={isGeneratingPoster} className="h-10 rounded-[var(--radius-sharp)]">
@@ -692,7 +682,7 @@ export function WorksheetDiagnosisApp() {
                         download="worksheet-diagnosis-poster.png"
                         className="inline-flex h-10 items-center justify-center rounded-[var(--radius-sharp)] border border-[var(--paper-200)] px-4 text-sm font-semibold transition hover:bg-[var(--paper-100)]"
                       >
-                        <Download className="mr-2 size-4" />
+                        <IconExportPdf className="mr-2 size-4" />
                         下载海报
                       </a>
                     </div>
@@ -750,7 +740,7 @@ export function WorksheetDiagnosisApp() {
                       <p className="mt-2 leading-7 text-[var(--ink-900)]">{result.diagnosis.parent_message || "暂无家校沟通建议。"}</p>
                     </div>
                     <Button variant="outline" onClick={copyParentMessage} className="h-10 shrink-0 rounded-[var(--radius-sharp)]">
-                      <Copy className="mr-2 size-4" />
+                      <IconCopy className="mr-2 size-4" />
                       复制
                     </Button>
                   </div>

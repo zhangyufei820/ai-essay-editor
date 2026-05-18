@@ -11,8 +11,9 @@ import Image from "next/image"
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { motion, AnimatePresence } from "framer-motion"
-import { GraduationCap, ArrowUp, ChevronDown, ChevronUp } from "lucide-react"
+import { ArrowUp, ChevronDown, ChevronUp } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { IconTeaching } from "@/components/icons/v2"
 
 // ============================================
 // 设计系统颜色常量

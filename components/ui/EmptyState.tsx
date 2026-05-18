@@ -7,7 +7,9 @@
 "use client"
 
 import { cn } from "@/lib/utils"
-import { LucideIcon, Inbox, FileText, MessageSquare, Search, Users, Calendar } from "lucide-react"
+import type { ComponentType } from "react"
+import { Inbox, Search, Calendar } from "lucide-react"
+import { IconBanzhuren, IconChat, IconEssay } from "@/components/icons/v2"
 
 // ============================================
 // 类型定义
@@ -19,7 +21,7 @@ interface EmptyStateProps {
   /** 空状态类型 */
   type?: EmptyType
   /** 自定义图标 */
-  icon?: LucideIcon
+  icon?: ComponentType<any>
   /** 标题 */
   title: string
   /** 描述 */
@@ -28,7 +30,7 @@ interface EmptyStateProps {
   action?: {
     label: string
     onClick: () => void
-    icon?: LucideIcon
+    icon?: ComponentType<any>
   }
   /** 次要操作 */
   secondaryAction?: {
@@ -45,19 +47,19 @@ interface EmptyStateProps {
 // 空状态配置
 // ============================================
 
-const emptyConfig: Record<EmptyType, { icon: LucideIcon; iconBg: string; iconColor: string }> = {
+const emptyConfig: Record<EmptyType, { icon: ComponentType<any>; iconBg: string; iconColor: string }> = {
   default: {
     icon: Inbox,
     iconBg: "bg-slate-100",
     iconColor: "text-slate-400"
   },
   messages: {
-    icon: MessageSquare,
+    icon: IconChat,
     iconBg: "bg-primary/10",
     iconColor: "text-primary"
   },
   files: {
-    icon: FileText,
+    icon: IconEssay,
     iconBg: "bg-blue-50",
     iconColor: "text-blue-500"
   },
@@ -67,7 +69,7 @@ const emptyConfig: Record<EmptyType, { icon: LucideIcon; iconBg: string; iconCol
     iconColor: "text-[var(--ink-500)]"
   },
   users: {
-    icon: Users,
+    icon: IconBanzhuren,
     iconBg: "bg-orange-50",
     iconColor: "text-orange-500"
   },

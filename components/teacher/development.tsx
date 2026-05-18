@@ -1,9 +1,10 @@
 import { CardV2 as Card } from "@/components/ui/v2"
-import { GraduationCap, TrendingUp, Award, Target } from "lucide-react"
+import { TrendingUp } from "lucide-react"
+import { IconProgress, IconSealStar, IconTeaching } from "@/components/icons/v2"
 
 const developmentPaths = [
   {
-    icon: GraduationCap,
+    icon: IconTeaching,
     title: "教学技能提升",
     description: "课堂管理、教学方法、学生评价等核心技能培训",
     courses: ["课堂互动技巧", "差异化教学", "教学评价方法"],
@@ -15,13 +16,13 @@ const developmentPaths = [
     courses: ["新课标解读", "学科前沿研究", "教材分析"],
   },
   {
-    icon: Target,
+    icon: IconProgress,
     title: "教研能力",
     description: "教学研究、论文写作、课题申报指导",
     courses: ["教研方法", "论文写作", "课题研究"],
   },
   {
-    icon: Award,
+    icon: IconSealStar,
     title: "专业认证",
     description: "教师资格认证、学科专业认证、教学能力认证",
     courses: ["教师资格", "学科认证", "骨干教师"],

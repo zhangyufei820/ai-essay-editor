@@ -2,7 +2,8 @@
 
 import Image from "next/image"
 import type { ReactNode } from "react"
-import { BookOpenCheck, FileText, ImageIcon, MessageSquareText, Presentation, Sparkles, Trophy, Video } from "lucide-react"
+import { ImageIcon, MessageSquareText, Presentation, Video } from "lucide-react"
+import { IconAllInOne, IconEnglish, IconEssay, IconSealStar } from "@/components/icons/v2"
 
 type ShareContentData = Record<string, unknown>
 
@@ -241,7 +242,7 @@ function TextBlock({ title, children }: { title: string; children: ReactNode }) 
   return (
     <section className="rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-[var(--paper-50)] p-5">
       <h3 className="flex items-center gap-2 text-base font-semibold text-[var(--ink-900)]">
-        <FileText className="size-4 text-[var(--ink-700)]" />
+        <IconEssay className="size-4 text-[var(--ink-700)]" />
         {title}
       </h3>
       <div className="mt-3">{children}</div>
@@ -254,7 +255,7 @@ function HtmlCover({ share }: { share: Share }) {
     <div className="flex aspect-[16/10] min-h-[260px] flex-col justify-between rounded-[var(--radius-sharp)] border border-[var(--ink-100)] bg-[linear-gradient(135deg,#f7faf7_0%,#ecfdf5_55%,#fff7ed_100%)] p-6 shadow-sm">
       <div className="flex items-center justify-between">
         <span className="rounded-full bg-[var(--paper-50)] px-3 py-1 text-sm font-medium text-[var(--ink-700)] shadow-sm">{share.subject_label || "AI 学习作品"}</span>
-        <Sparkles className="size-6 text-[var(--ink-700)]" />
+        <IconAllInOne className="size-6 text-[var(--ink-700)]" />
       </div>
       <div>
         <p className="text-sm font-semibold text-[var(--ink-800)]">沈翔智学 · 作品分享</p>
@@ -360,7 +361,7 @@ export function ShareContentRenderer({ share }: { share: Share }) {
     return (
       <div className="space-y-4">
         <div className="flex items-center gap-3 rounded-[var(--radius-sharp)] bg-[var(--ink-50)] p-4 text-[var(--ink-800)]">
-          <BookOpenCheck className="size-6" />
+          <IconEnglish className="size-6" />
           <div>
             <p className="font-semibold">{String(data.deck_name || share.title)}</p>
             <p className="text-sm">共 {Number(data.total_cards || (Array.isArray(data.cards) ? data.cards.length : 0))} 张闪卡</p>
@@ -400,7 +401,7 @@ export function ShareContentRenderer({ share }: { share: Share }) {
   if (share.content_type === "quiz_result") {
     return (
       <TextBlock title="练习结果">
-        <div className="flex items-center gap-2 font-medium text-[var(--ink-900)]"><Trophy className="size-4" />练习结果</div>
+        <div className="flex items-center gap-2 font-medium text-[var(--ink-900)]"><IconSealStar className="size-4" />练习结果</div>
         <p className="mt-2 text-2xl font-semibold text-[var(--ink-700)]">{Number(data.score || 0)} 分</p>
         <p className="mt-2 text-base leading-8 text-[var(--ink-700)]">答对 {Number(data.correct_count || 0)} / {Number(data.total_questions || 0)} 题</p>
       </TextBlock>

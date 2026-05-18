@@ -2,9 +2,10 @@
 
 import Link from "next/link"
 import { motion } from "framer-motion"
-import { ArrowRight, Atom, BadgeCheck, Calculator, FlaskConical } from "lucide-react"
+import { ArrowRight, Atom, BadgeCheck } from "lucide-react"
 import { PHET_SIMS } from "@/lib/phet/sims-catalog"
 import { brandColors, slateColors } from "@/lib/design-tokens"
+import { IconLab, IconMath } from "@/components/icons/v2"
 
 const featuredSims = PHET_SIMS.filter((sim) =>
   ["forces-and-motion-basics", "density", "area-builder"].includes(sim.id),
@@ -28,7 +29,7 @@ export function PhetLabSection() {
           transition={{ duration: 0.55 }}
         >
           <span className="mb-5 inline-flex items-center gap-2 rounded-full border border-[var(--ink-100)] bg-[var(--ink-50)] px-3 py-1 text-xs font-semibold text-[var(--ink-700)]">
-            <FlaskConical className="h-3.5 w-3.5" />
+            <IconLab className="h-3.5 w-3.5" />
             PhET 互动实验
           </span>
           <h2 className="text-3xl font-bold leading-tight text-[var(--ink-900)] md:text-5xl">
@@ -70,7 +71,7 @@ export function PhetLabSection() {
               <p className="mt-1 text-sm text-[var(--ink-600)]">数学/物理实验</p>
             </div>
             <div className="rounded-[var(--radius-soft)] border border-[var(--ink-900)]/10 bg-[var(--paper-50)] p-4">
-              <Calculator className="mb-3 h-6 w-6 text-[var(--ink-700)]" />
+              <IconMath className="mb-3 h-6 w-6 text-[var(--ink-700)]" />
               <div className="text-2xl font-bold text-[var(--ink-900)]">K-12</div>
               <p className="mt-1 text-sm text-[var(--ink-600)]">按年级筛选</p>
             </div>

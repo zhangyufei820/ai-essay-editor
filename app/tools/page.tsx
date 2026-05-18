@@ -10,8 +10,9 @@ import {
   LabelV2 as Label,
   TextareaV2 as Textarea
 } from "@/components/ui/v2"
-import { useState, type FormEvent, type ReactNode } from "react"
-import { FileText, Loader2, Presentation, Search, Sparkles, Wand2, type LucideIcon } from "lucide-react"
+import { useState, type ComponentType, type FormEvent, type ReactNode } from "react"
+import { Loader2, Presentation, Search, Wand2 } from "lucide-react"
+import { IconAllInOne, IconEssay } from "@/components/icons/v2"
 
 type ToolResult = {
   title: string
@@ -41,7 +42,7 @@ function ToolCard({
   index: string
   title: string
   description: string
-  icon: LucideIcon
+  icon: ComponentType<any>
   children: ReactNode
   featured?: boolean
 }) {
@@ -217,7 +218,7 @@ export default function ToolsPage() {
 
         <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
           <div className="grid min-w-0 gap-4 lg:grid-cols-2">
-            <ToolCard index="01" title="文档处理" description="上传学习资料，提取可继续加工的文本。" icon={FileText}>
+            <ToolCard index="01" title="文档处理" description="上传学习资料，提取可继续加工的文本。" icon={IconEssay}>
               <form className="space-y-3" onSubmit={runDocumentProcess}>
                 <Label htmlFor="document-file">上传 PDF / Word / 图片 / 文本</Label>
                 <Input id="document-file" type="file" onChange={(event) => setDocumentFile(event.target.files?.[0] || null)} />
@@ -261,7 +262,7 @@ export default function ToolsPage() {
               </form>
             </ToolCard>
 
-            <ToolCard index="05" title="Sparkpage 综合报告" description="输入主题，生成更完整的资料整理和综合分析结果。" icon={Sparkles} featured>
+            <ToolCard index="05" title="Sparkpage 综合报告" description="输入主题，生成更完整的资料整理和综合分析结果。" icon={IconAllInOne} featured>
               <form className="grid gap-3 md:grid-cols-[1fr_auto]" onSubmit={runSparkpage}>
                 <Input value={sparkQuery} onChange={(event) => setSparkQuery(event.target.value)} placeholder="输入要综合分析的主题" />
                 <Button type="submit" disabled={busy === "spark"}>
@@ -280,7 +281,7 @@ export default function ToolsPage() {
                   <CardTitle className="mt-1 text-lg text-[var(--ink-900)]">{result?.title || "结果预览"}</CardTitle>
                 </div>
                 <span className="flex size-9 items-center justify-center rounded-[var(--radius-soft)] border border-[var(--ink-100)] bg-[var(--paper-50)] text-[var(--ink-700)]">
-                  <Sparkles className="size-4" aria-hidden="true" />
+                  <IconAllInOne className="size-4" aria-hidden="true" />
                 </span>
               </div>
             </CardHeader>
@@ -288,7 +289,7 @@ export default function ToolsPage() {
               {result ? <JsonBlock value={result.content} /> : (
                 <div className="flex min-h-[340px] flex-col items-center justify-center rounded-[var(--radius-soft)] border border-dashed border-[var(--paper-300)] bg-[linear-gradient(180deg,rgba(255,255,255,0.56),rgba(247,244,235,0.42))] px-6 text-center">
                   <span className="mb-4 flex size-12 items-center justify-center rounded-[var(--radius-soft)] border border-[var(--ink-100)] bg-[var(--ink-50)] text-[var(--ink-700)]">
-                    <Sparkles className="size-5" aria-hidden="true" />
+                    <IconAllInOne className="size-5" aria-hidden="true" />
                   </span>
                   <p className="font-[var(--font-display)] text-lg font-bold text-[var(--ink-800)]">等待生成结果</p>
                   <p className="mt-2 max-w-56 text-sm leading-6 text-[var(--ink-500)]">

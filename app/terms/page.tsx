@@ -1,8 +1,9 @@
 'use client'
 
 import Link from "next/link"
-import { ArrowLeft, FileText, AlertTriangle, CheckCircle, XCircle } from "lucide-react"
+import { ArrowLeft, CheckCircle, XCircle } from "lucide-react"
 import { brandColors, slateColors, creamColors } from "@/lib/design-tokens"
+import { IconEssay, IconInkDot } from "@/components/icons/v2"
 
 export default function TermsPage() {
   return (
@@ -26,7 +27,7 @@ export default function TermsPage() {
           
           {/* 标题 */}
           <div className="flex items-center gap-4 mb-4">
-            <FileText className="w-10 h-10 text-white" />
+            <IconEssay className="w-10 h-10 text-white" />
             <h1 className="text-3xl md:text-4xl font-bold text-white font-[var(--font-display)]">
               服务条款
             </h1>
@@ -204,7 +205,7 @@ export default function TermsPage() {
           </h2>
           <div className="bg-[var(--paper-50)] rounded-[var(--radius-sharp)] p-8" style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
             <div className="flex items-start gap-3 mb-4">
-              <AlertTriangle className="w-6 h-6 shrink-0" style={{ color: "var(--seal-500)" }} />
+              <IconInkDot className="w-6 h-6 shrink-0" style={{ color: "var(--seal-500)" }} />
               <p className="text-lg" style={{ color: "var(--ink-600)" }}>
                 本服务按「现状」提供，不提供任何明示或暗示的保证。
               </p>

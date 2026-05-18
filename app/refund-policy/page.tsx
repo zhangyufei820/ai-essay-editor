@@ -1,8 +1,9 @@
 'use client'
 
 import Link from "next/link"
-import { ArrowLeft, RefreshCw, AlertCircle, Clock, CreditCard } from "lucide-react"
+import { ArrowLeft, CreditCard } from "lucide-react"
 import { brandColors, slateColors, creamColors } from "@/lib/design-tokens"
+import { IconHistory, IconInkDot } from "@/components/icons/v2"
 
 export default function RefundPolicyPage() {
   return (
@@ -26,7 +27,7 @@ export default function RefundPolicyPage() {
           
           {/* 标题 */}
           <div className="flex items-center gap-4 mb-4">
-            <RefreshCw className="w-10 h-10 text-white" />
+            <IconHistory className="w-10 h-10 text-white" />
             <h1 className="text-3xl md:text-4xl font-bold text-white font-[var(--font-display)]">
               退款政策
             </h1>
@@ -76,7 +77,7 @@ export default function RefundPolicyPage() {
           <div className="bg-[var(--paper-50)] rounded-[var(--radius-sharp)] p-8" style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
             <div className="space-y-4" style={{ color: "var(--ink-600)" }}>
               <div className="flex items-start gap-3">
-                <Clock className="w-5 h-5 mt-1 shrink-0" style={{ color: "var(--ink-600)" }} />
+                <IconHistory className="w-5 h-5 mt-1 shrink-0" style={{ color: "var(--ink-600)" }} />
                 <div>
                   <h3 className="font-semibold mb-1" style={{ color: "var(--ink-800)" }}>适用条件</h3>
                   <p>自购买之日起7天内，如果您对我们的服务不满意，可以申请无理由退款。</p>
@@ -84,7 +85,7 @@ export default function RefundPolicyPage() {
               </div>
               
               <div className="flex items-start gap-3">
-                <AlertCircle className="w-5 h-5 mt-1 shrink-0" style={{ color: "var(--ink-600)" }} />
+                <IconInkDot className="w-5 h-5 mt-1 shrink-0" style={{ color: "var(--ink-600)" }} />
                 <div>
                   <h3 className="font-semibold mb-1" style={{ color: "var(--ink-800)" }}>使用限制</h3>
                   <p>若您的积分使用量未超过购买总量的50%，可以申请全额退款。</p>

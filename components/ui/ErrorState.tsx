@@ -6,9 +6,11 @@
 
 "use client"
 
-import { AlertCircle, RefreshCw, Home, ArrowLeft, WifiOff, ServerCrash, Lock } from "lucide-react"
+import type { ComponentType } from "react"
+import { ArrowLeft, WifiOff, ServerCrash, Lock } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
+import { IconHistory, IconInkDot, IconLogoMark } from "@/components/icons/v2"
 
 // ============================================
 // 类型定义
@@ -39,9 +41,9 @@ interface ErrorStateProps {
 // 错误配置
 // ============================================
 
-const errorConfig: Record<ErrorType, { icon: typeof AlertCircle; title: string; description: string; iconBg: string; iconColor: string }> = {
+const errorConfig: Record<ErrorType, { icon: ComponentType<any>; title: string; description: string; iconBg: string; iconColor: string }> = {
   default: {
-    icon: AlertCircle,
+    icon: IconInkDot,
     title: "出了点问题",
     description: "请稍后再试",
     iconBg: "bg-red-50",
@@ -69,7 +71,7 @@ const errorConfig: Record<ErrorType, { icon: typeof AlertCircle; title: string; 
     iconColor: "text-blue-500"
   },
   notFound: {
-    icon: AlertCircle,
+    icon: IconInkDot,
     title: "内容不存在",
     description: "您访问的内容可能已被删除或移动",
     iconBg: "bg-slate-100",
@@ -125,7 +127,7 @@ export function ErrorState({
             onClick={onRetry || (() => window.location.reload())}
             className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-primary-foreground shadow-sm transition-all hover:bg-primary/90 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
-            <RefreshCw className="w-4 h-4" />
+            <IconHistory className="w-4 h-4" />
             重试
           </button>
         )}
@@ -145,7 +147,7 @@ export function ErrorState({
             onClick={() => router.push("/")}
             className="inline-flex items-center gap-2 rounded-xl bg-secondary px-4 py-2 text-secondary-foreground transition-colors hover:bg-secondary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
-            <Home className="w-4 h-4" />
+            <IconLogoMark className="w-4 h-4" />
             回到首页
           </button>
         )}

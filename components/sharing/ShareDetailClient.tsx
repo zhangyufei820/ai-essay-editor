@@ -3,9 +3,10 @@
 import { ButtonV2 as Button } from "@/components/ui/v2"
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
-import { ArrowLeft, Copy, Heart, Loader2, MessageCircle, Share2 } from "lucide-react"
+import { ArrowLeft, Heart, Loader2 } from "lucide-react"
 import { ShareContentRenderer } from "@/components/sharing/ShareContentRenderer"
 import { getVerifiedAuthHeaders } from "@/lib/client-auth"
+import { IconCopy, IconFollowup, IconShare } from "@/components/icons/v2"
 
 type ShareDetail = {
   id: string
@@ -127,11 +128,11 @@ export function ShareDetailClient({ initialShare }: { initialShare: ShareDetail 
           </Link>
           <div className="flex gap-2">
             <Button variant="outline" onClick={copyLink}>
-              <Copy className="mr-2 size-4" />
+              <IconCopy className="mr-2 size-4" />
               复制链接
             </Button>
             <Button variant="outline" onClick={copyLink}>
-              <Share2 className="mr-2 size-4" />
+              <IconShare className="mr-2 size-4" />
               分享
             </Button>
           </div>
@@ -162,7 +163,7 @@ export function ShareDetailClient({ initialShare }: { initialShare: ShareDetail 
         </section>
 
         <section className="rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-[var(--paper-50)] p-5 sm:p-7">
-          <h2 className="flex items-center gap-2 text-lg font-semibold"><MessageCircle className="size-5" />评论</h2>
+          <h2 className="flex items-center gap-2 text-lg font-semibold"><IconFollowup className="size-5" />评论</h2>
           <div className="mt-4 space-y-3">
             {comments.length ? comments.map((comment) => (
               <div key={comment.id} className="rounded-[var(--radius-sharp)] bg-[var(--paper-50)] p-4">

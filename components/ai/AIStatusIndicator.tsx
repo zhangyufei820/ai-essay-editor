@@ -1,15 +1,16 @@
 /**
  * 🤖 沈翔学校 - AI 状态指示器 (AI Status Indicator)
- * 
+ *
  * 专属的 AI 状态指示器，替代普通的加载动画。
  */
 
 "use client"
 
 import { motion, AnimatePresence, type Easing } from "framer-motion"
-import { Check, AlertCircle } from "lucide-react"
+import { Check } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { brandColors, slateColors } from "@/lib/design-tokens"
+import { IconInkDot } from "@/components/icons/v2"
 
 // ============================================
 // 类型定义
@@ -88,7 +89,7 @@ function RespondingPulse({ containerSize }: { containerSize: number }) {
   const size = containerSize * 0.4
 
   return (
-    <div 
+    <div
       className="relative flex items-center justify-center"
       style={{ width: containerSize, height: containerSize }}
     >
@@ -111,7 +112,7 @@ function RespondingPulse({ containerSize }: { containerSize: number }) {
           border: `2px solid ${brandColors[600]}`,
         }}
       />
-      
+
       {/* 扩散圆环 2 */}
       <motion.div
         animate={{
@@ -132,7 +133,7 @@ function RespondingPulse({ containerSize }: { containerSize: number }) {
           border: `2px solid ${brandColors[600]}`,
         }}
       />
-      
+
       {/* 中心圆点 */}
       <motion.div
         animate={{
@@ -162,7 +163,7 @@ function IdleIndicator({ containerSize }: { containerSize: number }) {
   const size = containerSize * 0.5
 
   return (
-    <div 
+    <div
       className="flex items-center justify-center"
       style={{ width: containerSize, height: containerSize }}
     >
@@ -191,19 +192,19 @@ function CompleteIndicator({ containerSize }: { containerSize: number }) {
       exit={{ scale: 0, opacity: 0 }}
       transition={{ duration: 0.3, ease: [0.34, 1.56, 0.64, 1] }}
       className="flex items-center justify-center"
-      style={{ 
-        width: containerSize, 
+      style={{
+        width: containerSize,
         height: containerSize,
         borderRadius: "50%",
         background: brandColors[100],
       }}
     >
-      <Check 
-        style={{ 
-          width: containerSize * 0.5, 
+      <Check
+        style={{
+          width: containerSize * 0.5,
           height: containerSize * 0.5,
           color: brandColors[700],
-        }} 
+        }}
       />
     </motion.div>
   )
@@ -220,19 +221,19 @@ function ErrorIndicator({ containerSize }: { containerSize: number }) {
       animate={{ scale: 1, opacity: 1 }}
       transition={{ duration: 0.3, ease: [0.34, 1.56, 0.64, 1] }}
       className="flex items-center justify-center"
-      style={{ 
-        width: containerSize, 
+      style={{
+        width: containerSize,
         height: containerSize,
         borderRadius: "50%",
         background: "#fef2f2",
       }}
     >
-      <AlertCircle 
-        style={{ 
-          width: containerSize * 0.5, 
+      <IconInkDot
+        style={{
+          width: containerSize * 0.5,
           height: containerSize * 0.5,
           color: "#ef4444",
-        }} 
+        }}
       />
     </motion.div>
   )
@@ -278,15 +279,15 @@ export function AIStatusIndicator({
           exit={{ opacity: 0, scale: 0.8 }}
           transition={{ duration: 0.2 }}
           className="flex items-center justify-center"
-          style={{ 
-            minWidth: dimensions.container, 
-            minHeight: dimensions.container 
+          style={{
+            minWidth: dimensions.container,
+            minHeight: dimensions.container
           }}
         >
           {renderIndicator()}
         </motion.div>
       </AnimatePresence>
-      
+
       {showText && text && (
         <motion.span
           initial={{ opacity: 0, x: -5 }}

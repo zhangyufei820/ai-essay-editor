@@ -11,8 +11,7 @@
 "use client"
 
 import * as React from "react"
-import { Sparkles } from "lucide-react"
-import { IconCopy, IconExportPdf, IconFollowup, IconShare } from "@/components/icons/v2"
+import { IconAllInOne, IconCopy, IconExportPdf, IconFollowup, IconShare } from "@/components/icons/v2"
 import { ButtonV2 } from "@/components/ui/v2/button"
 import { ScoreSeal, SealStamp } from "@/components/ui/v2/seal"
 import { EnhancedMarkdown } from "@/components/chat/EnhancedMarkdown"
@@ -135,7 +134,7 @@ export function EssayReviewTemplate({
               <ul className="mt-4 space-y-2">
                 {artifact.suggestions.map((s, idx) => (
                   <li key={idx} className="flex items-start gap-2 text-[14px] leading-[1.7] text-[var(--ink-700)]">
-                    <Sparkles className="mt-0.5 size-3 shrink-0 text-[var(--seal-500)]" aria-hidden="true" />
+                    <IconAllInOne className="mt-0.5 size-3 shrink-0 text-[var(--seal-500)]" aria-hidden="true" />
                     <span>{s}</span>
                   </li>
                 ))}

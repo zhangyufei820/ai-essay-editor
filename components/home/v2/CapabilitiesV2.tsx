@@ -14,14 +14,7 @@
 
 import * as React from "react"
 import Link from "next/link"
-import {
-  ArrowRight,
-  Blocks,
-  FileText,
-  HelpCircle,
-  Layers3,
-  type LucideIcon,
-} from "lucide-react"
+import { ArrowRight } from "lucide-react"
 import { cn } from "@/lib/utils"
 import {
   CardV2,
@@ -29,12 +22,13 @@ import {
 } from "@/components/ui/v2/card"
 import { BadgeV2 } from "@/components/ui/v2/badge"
 import { InkStagger, InkStaggerItem } from "@/components/motion/InkMotion"
+import { IconAllInOne, IconEssay, IconFlashcard, IconProblem } from "@/components/icons/v2"
 
 interface Capability {
   href: string
   title: string
   description: string
-  icon: LucideIcon
+  icon: React.ComponentType<any>
   priceLabel: string
   priceTone: "ink" | "seal"
 }
@@ -44,7 +38,7 @@ const CAPABILITIES: Capability[] = [
     href: "/agents",
     title: "智能体广场",
     description: "按写作、学科、教学与创作场景，快速挑选适合的 AI 智能体。",
-    icon: Blocks,
+    icon: IconAllInOne,
     priceLabel: "全部入口",
     priceTone: "seal",
   },
@@ -52,7 +46,7 @@ const CAPABILITIES: Capability[] = [
     href: "/chat/standard",
     title: "智能作文批改",
     description: "从结构、表达、立意到修改方向，给出逐段点评。",
-    icon: FileText,
+    icon: IconEssay,
     priceLabel: "100 积分/次",
     priceTone: "ink",
   },
@@ -60,7 +54,7 @@ const CAPABILITIES: Capability[] = [
     href: "/chat/quanquan-math",
     title: "题目解析",
     description: "拍题或输入题干，获得可复盘的分步讲解。",
-    icon: HelpCircle,
+    icon: IconProblem,
     priceLabel: "按字数计费",
     priceTone: "ink",
   },
@@ -68,7 +62,7 @@ const CAPABILITIES: Capability[] = [
     href: "/flashcards",
     title: "闪卡复习",
     description: "把知识点沉淀成复习卡片，跟踪掌握状态。",
-    icon: Layers3,
+    icon: IconFlashcard,
     priceLabel: "免费",
     priceTone: "ink",
   },

@@ -2,7 +2,7 @@ import { BadgeV2 as Badge, ButtonV2 as Button } from "@/components/ui/v2"
 import type { Metadata } from "next"
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import { ArrowRight, BookOpen, ClipboardList, Film, Target } from "lucide-react"
+import { ArrowRight, ClipboardList, Film } from "lucide-react"
 import { PhetSimEmbed } from "@/components/phet/PhetSimEmbed"
 import { PhetCompleteButton } from "@/components/phet/PhetCompleteButton"
 import {
@@ -13,6 +13,7 @@ import {
   getRelatedPhetSims,
   getSubjectLabel,
 } from "@/lib/phet/phet-utils"
+import { IconEnglish, IconProgress } from "@/components/icons/v2"
 
 type PageProps = {
   params: Promise<{ simId: string }>
@@ -71,7 +72,7 @@ export default async function PhetSimPage({ params }: PageProps) {
 
             <section className="rounded-[var(--radius-soft)] border border-[var(--ink-900)]/10 bg-[var(--paper-50)] p-5 shadow-sm dark:border-[var(--ink-200)]/10 dark:bg-slate-900">
               <h2 className="mb-3 flex items-center gap-2 text-base font-semibold">
-                <Target className="h-4 w-4 text-[var(--ink-600)]" />
+                <IconProgress className="h-4 w-4 text-[var(--ink-600)]" />
                 学习目标
               </h2>
               <ul className="space-y-2 text-sm leading-6 text-[var(--ink-600)] dark:text-slate-300">
@@ -90,7 +91,7 @@ export default async function PhetSimPage({ params }: PageProps) {
               <div className="grid gap-2">
                 <Button asChild variant="outline" className="justify-between">
                   <Link href={buildPhetChatHref(sim, "flashcards")}>
-                    <span className="inline-flex items-center gap-2"><BookOpen className="h-4 w-4" /> 生成闪卡</span>
+                    <span className="inline-flex items-center gap-2"><IconEnglish className="h-4 w-4" /> 生成闪卡</span>
                     <ArrowRight className="h-4 w-4" />
                   </Link>
                 </Button>

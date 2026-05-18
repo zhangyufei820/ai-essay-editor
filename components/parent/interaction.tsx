@@ -1,6 +1,7 @@
 import { ButtonV2 as Button, CardV2 as Card, CardV2Content as CardContent } from "@/components/ui/v2"
-import { Heart, Smile, Target, MessageSquare } from "lucide-react"
+import { Heart, Smile } from "lucide-react"
 import Link from "next/link"
+import { IconChat, IconProgress } from "@/components/icons/v2"
 
 const activities = [
   {
@@ -16,13 +17,13 @@ const activities = [
     color: "bg-yellow-500/10 text-yellow-600",
   },
   {
-    icon: Target,
+    icon: IconProgress,
     title: "目标设定",
     description: "与孩子共同制定学习目标，培养目标意识和执行力",
     color: "bg-blue-500/10 text-blue-600",
   },
   {
-    icon: MessageSquare,
+    icon: IconChat,
     title: "学习讨论",
     description: "围绕学习内容展开深度讨论，提升思维能力",
     color: "bg-[var(--seal-500)]/10 text-[var(--ink-600)]",

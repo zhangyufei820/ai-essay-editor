@@ -1,8 +1,9 @@
 "use client"
 
 import type React from "react"
-import { BookOpenCheck, Languages, Palette, X } from "lucide-react"
+import { Languages, X } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { IconEnglish, IconWriting } from "@/components/icons/v2"
 
 export type VocabCardDifyInputs = {
   word: string
@@ -161,7 +162,7 @@ export function VocabCardDifyForm({
           />
         </section>
         <OptionGroup
-          icon={<BookOpenCheck className="h-4 w-4 text-[var(--ink-700)]" />}
+          icon={<IconEnglish className="h-4 w-4 text-[var(--ink-700)]" />}
           title="学习阶段"
           variable="level"
           value={value.level}
@@ -170,7 +171,7 @@ export function VocabCardDifyForm({
           tone="bg-[var(--ink-50)]"
         />
         <OptionGroup
-          icon={<Palette className="h-4 w-4 text-fuchsia-700" />}
+          icon={<IconWriting className="h-4 w-4 text-fuchsia-700" />}
           title="卡片风格"
           variable="style"
           value={value.style}

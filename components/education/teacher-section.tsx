@@ -1,10 +1,11 @@
 import { ButtonV2 as Button, CardV2 as Card } from "@/components/ui/v2"
-import { Award, BookOpen, TrendingUp, Users } from 'lucide-react'
+import { TrendingUp } from "lucide-react"
 import Link from "next/link"
+import { IconBanzhuren, IconEnglish, IconSealStar } from "@/components/icons/v2"
 
 const teacherFeatures = [
   {
-    icon: BookOpen,
+    icon: IconEnglish,
     title: "教学资源库",
     description: "海量优质教案、课件、试题资源",
   },
@@ -14,12 +15,12 @@ const teacherFeatures = [
     description: "教学技能提升、学科前沿动态",
   },
   {
-    icon: Users,
+    icon: IconBanzhuren,
     title: "教研协作",
     description: "跨校交流、集体备课、经验分享",
   },
   {
-    icon: Award,
+    icon: IconSealStar,
     title: "认证体系",
     description: "专业发展证书、教学能力认证",
   },
@@ -33,7 +34,7 @@ export function TeacherSection() {
           {/* Left: Content */}
           <div>
             <div className="mb-6 inline-flex items-center gap-2 rounded-full bg-[var(--ink-50)] px-4 py-2 text-sm font-medium text-[var(--ink-700)] shadow-md">
-              <Users className="h-4 w-4" />
+              <IconBanzhuren className="h-4 w-4" />
               教师专业发展
             </div>
 

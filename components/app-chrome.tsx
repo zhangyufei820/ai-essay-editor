@@ -1,10 +1,10 @@
 "use client"
 
-import { Box, Image, Wrench } from "lucide-react"
+import { Box, Image } from "lucide-react"
 import { usePathname } from "next/navigation"
 import { useEffect, useMemo, useState, type ReactNode } from "react"
 
-import { IconMusic } from "@/components/icons/v2"
+import { IconMusic, IconSettings } from "@/components/icons/v2"
 import { WorkspaceShell } from "@/components/v2-chrome"
 import type { WorkspaceSidebarSection } from "@/components/v2-chrome"
 import { getVerifiedAuthHeaders } from "@/lib/client-auth"
@@ -92,7 +92,7 @@ export function buildSidebarSections(): WorkspaceSidebarSection[] {
         { label: "GPT Image 2", href: "/chat/gpt-image-2", icon: Image, badge: "图像" },
         { label: "Suno V5 音乐", href: "/chat/suno-v5", icon: IconMusic, badge: "音乐" },
         { label: "Tripo3D 模型生成", href: TRIPO3D_EXTERNAL_URL, icon: Box, badge: "3D" },
-        { label: "全部工具", href: "/tools", icon: Wrench },
+        { label: "全部工具", href: "/tools", icon: IconSettings },
       ],
     },
     {

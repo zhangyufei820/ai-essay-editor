@@ -8,8 +8,9 @@
 import Image from "next/image"
 import Link from "next/link"
 import { motion } from "framer-motion"
-import { ArrowRight, Sparkles } from "lucide-react"
+import { ArrowRight } from "lucide-react"
 import { brandColors, creamColors } from "@/lib/design-tokens"
+import { IconAllInOne } from "@/components/icons/v2"
 
 const containerVariants = {
   hidden: { opacity: 0, y: 30 },
@@ -66,7 +67,7 @@ export function CTASection() {
 
           <div className="relative z-10 px-6 md:px-8 pb-10 md:pb-16 text-center">
             <div className="inline-flex items-center justify-center w-14 h-14 rounded-[var(--radius-sharp)] bg-[var(--paper-50)]/10 backdrop-blur-sm mb-6">
-              <Sparkles className="w-7 h-7 text-white" />
+              <IconAllInOne className="w-7 h-7 text-white" />
             </div>
 
             <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-4">

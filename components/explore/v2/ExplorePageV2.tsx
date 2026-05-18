@@ -3,8 +3,8 @@
 import * as React from "react"
 import Image from "next/image"
 import Link from "next/link"
-import { ArrowRight, Eye, Heart, RefreshCw } from "lucide-react"
-import { IconAllInOne, IconFollowup, IconShare } from "@/components/icons/v2"
+import { ArrowRight, Eye, Heart } from "lucide-react"
+import { IconAllInOne, IconFollowup, IconHistory, IconShare } from "@/components/icons/v2"
 import { cn } from "@/lib/utils"
 import { ButtonV2 } from "@/components/ui/v2/button"
 import { BadgeV2 } from "@/components/ui/v2/badge"
@@ -154,7 +154,7 @@ export function ExplorePageV2({ className }: { className?: string }) {
             </button>
           ))}
           <ButtonV2 variant="ghost" size="icon-sm" onClick={loadItems} aria-label="刷新创作广场">
-            <RefreshCw className="size-4" aria-hidden="true" />
+            <IconHistory className="size-4" aria-hidden="true" />
           </ButtonV2>
         </div>
       </div>

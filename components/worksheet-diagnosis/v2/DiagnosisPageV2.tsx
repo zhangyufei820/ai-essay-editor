@@ -11,10 +11,11 @@
 "use client"
 
 import * as React from "react"
-import { Camera, Upload } from "lucide-react"
+import { Upload } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ButtonV2 } from "@/components/ui/v2/button"
 import { InkReveal } from "@/components/motion/InkMotion"
+import { IconDiagnosis } from "@/components/icons/v2"
 
 export interface DiagnosisPageV2Props {
   /** 上传回调（交给业务侧） */
@@ -137,7 +138,7 @@ export function DiagnosisPageV2({
         >
           <div className="flex size-14 items-center justify-center rounded-full bg-[var(--ink-50)] text-[var(--ink-700)]">
             {files.length > 0 ? (
-              <Camera className="size-6" />
+              <IconDiagnosis className="size-6" />
             ) : (
               <Upload className="size-6" />
             )}

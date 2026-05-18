@@ -8,9 +8,10 @@
 
 import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Download, X, Smartphone, Share, Plus } from "lucide-react"
+import { X, Smartphone, Share, Plus } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { brandColors } from "@/lib/design-tokens"
+import { IconExportPdf } from "@/components/icons/v2"
 
 // ============================================
 // 类型定义
@@ -146,7 +147,7 @@ export function InstallPrompt() {
                 className="w-10 h-10 rounded-[var(--radius-sharp)] flex items-center justify-center shrink-0"
                 style={{ backgroundColor: `${brandColors[50]}` }}
               >
-                <Download className="w-5 h-5" style={{ color: brandColors[700] }} />
+                <IconExportPdf className="w-5 h-5" style={{ color: brandColors[700] }} />
               </div>
               <div className="flex-1 min-w-0">
                 <h3 className="font-semibold text-[var(--ink-800)] text-sm">

@@ -15,7 +15,6 @@
 "use client"
 
 import * as React from "react"
-import { Sparkles } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { InkBrush, InkReveal } from "@/components/motion/InkMotion"
 import { LoadingStateV2 } from "@/components/ui/v2/loading-state"
@@ -27,6 +26,7 @@ import {
   WorksheetPosterTemplate,
 } from "./templates"
 import type { ChatMessageV2 } from "./types"
+import { IconAllInOne } from "@/components/icons/v2"
 
 export interface AssistantMessageV2Props {
   message: ChatMessageV2
@@ -105,7 +105,7 @@ export function AssistantMessageV2({
 function AgentBadge() {
   return (
     <div className="mb-2 inline-flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-[var(--ink-500)] font-[var(--font-sans-v2)] font-semibold">
-      <Sparkles className="size-3 text-[var(--seal-500)]" aria-hidden="true" />
+      <IconAllInOne className="size-3 text-[var(--seal-500)]" aria-hidden="true" />
       沈翔智学 · AI 输出
     </div>
   )

@@ -8,16 +8,8 @@
 "use client"
 
 import React from "react"
-import { 
-  FileCheck2,
-  Sparkles,
-  Calculator,
-  Languages,
-  LayoutDashboard,
-  UsersRound,
-  ClipboardCheck,
-  BrainCircuit
-} from "lucide-react"
+import { FileCheck2, Languages, LayoutDashboard, UsersRound, BrainCircuit } from "lucide-react"
+import { IconAllInOne, IconDiagnosis, IconMath } from "@/components/icons/v2"
 
 // ============================================
 // Model to Icon Mapping
@@ -36,14 +28,14 @@ export type ModelIconKey =
 
 const MODEL_ICONS: Record<ModelIconKey, React.ElementType> = {
   "standard": FileCheck2,
-  "teaching-pro": Sparkles,
-  "quanquan-math": Calculator,
+  "teaching-pro": IconAllInOne,
+  "quanquan-math": IconMath,
   "quanquan-english": Languages,
   "vocab-card": Languages,
   "beike-pro": LayoutDashboard,
   "banzhuren": UsersRound,
   "all-in-one-agent": BrainCircuit,
-  "worksheet-diagnosis": ClipboardCheck,
+  "worksheet-diagnosis": IconDiagnosis,
 }
 
 // ============================================

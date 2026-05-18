@@ -1,6 +1,7 @@
 import Link from "next/link"
 import Image from "next/image"
-import { Eye, FileText, Heart, MessageCircle, Sparkles } from "lucide-react"
+import { Eye, Heart } from "lucide-react"
+import { IconAllInOne, IconEssay, IconFollowup } from "@/components/icons/v2"
 
 export type ContentCardShare = {
   share_code: string
@@ -31,11 +32,11 @@ function GeneratedCover({ share }: { share: ContentCardShare }) {
         <span className="rounded-full bg-[var(--paper-50)]/80 px-3 py-1 text-xs font-medium text-[var(--ink-700)] shadow-sm">
           {share.type_label || "学习作品"}
         </span>
-        <Sparkles className="size-5 text-[var(--ink-700)]" />
+        <IconAllInOne className="size-5 text-[var(--ink-700)]" />
       </div>
       <div className="rounded-[var(--radius-sharp)] border border-white/80 bg-[var(--paper-50)]/80 p-4 shadow-sm backdrop-blur">
         <div className="mb-3 flex items-center gap-2 text-[var(--ink-800)]">
-          <FileText className="size-4" />
+          <IconEssay className="size-4" />
           <span className="text-xs font-semibold">AI 完整修改稿</span>
         </div>
         <p className="line-clamp-3 text-lg font-semibold leading-snug text-[var(--ink-900)]">{share.title}</p>
@@ -76,7 +77,7 @@ export function ContentCard({ share }: { share: ContentCardShare }) {
           <span>{formatDate(share.created_at)}</span>
           <div className="flex items-center gap-3">
             <span className="inline-flex items-center gap-1"><Heart className="size-3.5" />{share.like_count || 0}</span>
-            <span className="inline-flex items-center gap-1"><MessageCircle className="size-3.5" />{share.comment_count || 0}</span>
+            <span className="inline-flex items-center gap-1"><IconFollowup className="size-3.5" />{share.comment_count || 0}</span>
             <span className="inline-flex items-center gap-1"><Eye className="size-3.5" />{share.view_count || 0}</span>
           </div>
         </div>

@@ -10,25 +10,10 @@ import { useState, useEffect } from "react"
 import { usePathname } from "next/navigation"
 import Link from "next/link"
 import { motion, AnimatePresence } from "framer-motion"
-import { 
-  Home, 
-  MessageSquare, 
-  User, 
-  Menu, 
-  X,
-  Sparkles,
-  LogOut,
-  ChevronRight,
-  Layers3,
-  ClipboardCheck,
-  FileText,
-  Calculator,
-  Bot,
-  Tag,
-  HelpCircle
-} from "lucide-react"
+import { Home, Menu, X, ChevronRight, Tag } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { brandColors } from "@/lib/design-tokens"
+import { IconAllInOne, IconChat, IconDiagnosis, IconEssay, IconFlashcard, IconLogout, IconMath, IconProblem, IconUser } from "@/components/icons/v2"
 
 // ============================================
 // 导航项配置
@@ -36,19 +21,19 @@ import { brandColors } from "@/lib/design-tokens"
 
 const bottomNavItems = [
   { href: "/", icon: Home, label: "首页" },
-  { href: "/chat", icon: MessageSquare, label: "对话" },
-  { href: "/worksheet-diagnosis", icon: ClipboardCheck, label: "诊断" },
-  { href: "/flashcards", icon: Layers3, label: "闪卡" },
-  { href: "/settings", icon: User, label: "我的" }
+  { href: "/chat", icon: IconChat, label: "对话" },
+  { href: "/worksheet-diagnosis", icon: IconDiagnosis, label: "诊断" },
+  { href: "/flashcards", icon: IconFlashcard, label: "闪卡" },
+  { href: "/settings", icon: IconUser, label: "我的" }
 ]
 
 const menuItems = [
   { href: "/", label: "首页", icon: Home },
-  { href: "/chat/standard", label: "作文批改", icon: FileText },
-  { href: "/chat/quanquan-math", label: "数学答疑", icon: Calculator },
-  { href: "/chat/open-claw", label: "AI 助手", icon: Bot },
+  { href: "/chat/standard", label: "作文批改", icon: IconEssay },
+  { href: "/chat/quanquan-math", label: "数学答疑", icon: IconMath },
+  { href: "/chat/open-claw", label: "AI 助手", icon: IconAllInOne },
   { href: "/pricing", label: "定价", icon: Tag },
-  { href: "/help", label: "帮助", icon: HelpCircle }
+  { href: "/help", label: "帮助", icon: IconProblem }
 ]
 
 // ============================================
@@ -207,7 +192,7 @@ export function HamburgerMenu({ user, onLogout }: HamburgerMenuProps) {
               {/* 头部 */}
               <div className="flex items-center justify-between p-4 border-b border-[var(--paper-100)] pt-safe">
                 <div className="flex items-center gap-2">
-                  <Sparkles className="w-5 h-5 text-[var(--ink-700)]" />
+                  <IconAllInOne className="w-5 h-5 text-[var(--ink-700)]" />
                   <span className="font-semibold text-[var(--ink-800)]">沈翔学校</span>
                 </div>
                 <button
@@ -223,7 +208,7 @@ export function HamburgerMenu({ user, onLogout }: HamburgerMenuProps) {
                 <div className="p-4 border-b border-[var(--paper-100)]">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-[var(--ink-100)] flex items-center justify-center">
-                      <User className="w-5 h-5 text-[var(--ink-700)]" />
+                      <IconUser className="w-5 h-5 text-[var(--ink-700)]" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-[var(--ink-800)] truncate">
@@ -285,7 +270,7 @@ export function HamburgerMenu({ user, onLogout }: HamburgerMenuProps) {
                     }}
                     className="flex items-center justify-center gap-2 w-full py-3 text-[var(--ink-600)] bg-[var(--paper-100)] rounded-[var(--radius-sharp)] font-medium hover:bg-[var(--paper-200)] transition-colors"
                   >
-                    <LogOut className="w-4 h-4" />
+                    <IconLogout className="w-4 h-4" />
                     退出登录
                   </button>
                 ) : (

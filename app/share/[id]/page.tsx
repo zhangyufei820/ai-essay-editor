@@ -6,9 +6,10 @@ import { useParams, useRouter } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createBrowserClient } from '@/lib/supabase/client'
 import DOMPurify from 'isomorphic-dompurify'
-import { GraduationCap, Copy, Download, ArrowLeft, Eye, Calendar, Loader2, User, Sparkles, Gift } from 'lucide-react'
+import { ArrowLeft, Eye, Calendar, Loader2 } from "lucide-react"
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { IconAllInOne, IconCopy, IconExportPdf, IconInvite, IconTeaching, IconUser } from "@/components/icons/v2"
 
 const BRAND_GREEN = "var(--ink-700)"
 
@@ -146,7 +147,7 @@ function MessageItem({ role, content }: { role: 'user' | 'assistant', content: s
     <div className={cn("flex gap-3", role === "user" ? "justify-end" : "justify-start")}>
       {role === "assistant" && (
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-sharp)] text-white mt-1" style={{ backgroundColor: BRAND_GREEN }}>
-          <Sparkles className="h-4 w-4" />
+          <IconAllInOne className="h-4 w-4" />
         </div>
       )}
       <div className={cn(
@@ -163,7 +164,7 @@ function MessageItem({ role, content }: { role: 'user' | 'assistant', content: s
       </div>
       {role === "user" && (
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-sharp)] bg-[var(--paper-200)] mt-1">
-          <User className="h-4 w-4 text-[var(--ink-500)]" />
+          <IconUser className="h-4 w-4 text-[var(--ink-500)]" />
         </div>
       )}
     </div>
@@ -377,7 +378,7 @@ export default function SharePage() {
       <div className="min-h-screen bg-[var(--paper-50)] flex items-center justify-center">
         <div className="text-center">
           <div className="mb-4 flex h-16 w-16 mx-auto items-center justify-center rounded-[var(--radius-sharp)] bg-[var(--seal-50)]">
-            <GraduationCap className="h-8 w-8 text-[var(--seal-500)]" />
+            <IconTeaching className="h-8 w-8 text-[var(--seal-500)]" />
           </div>
           <h1 className="text-xl font-semibold text-[var(--ink-800)] mb-2 font-[var(--font-display)]">内容不存在</h1>
           <p className="text-[var(--ink-500)] mb-6">{error || '该分享链接无效或已过期'}</p>
@@ -402,7 +403,7 @@ export default function SharePage() {
             <span className="text-sm font-medium">返回首页</span>
           </button>
           <div className="flex items-center gap-2">
-            <GraduationCap className="h-6 w-6 text-[var(--ink-600)]" />
+            <IconTeaching className="h-6 w-6 text-[var(--ink-600)]" />
             <span className="font-semibold text-[var(--ink-800)]">沈翔智学</span>
           </div>
         </div>
@@ -458,7 +459,7 @@ export default function SharePage() {
               onClick={handleCopy}
               className="gap-2"
             >
-              <Copy className="h-4 w-4" />
+              <IconCopy className="h-4 w-4" />
               复制内容
             </Button>
             <Button
@@ -467,7 +468,7 @@ export default function SharePage() {
               onClick={handleExportPDF}
               className="gap-2"
             >
-              <Download className="h-4 w-4" />
+              <IconExportPdf className="h-4 w-4" />
               导出 PDF
             </Button>
           </div>

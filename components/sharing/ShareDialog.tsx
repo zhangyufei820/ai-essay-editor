@@ -12,8 +12,9 @@ import {
   TextareaV2 as Textarea
 } from "@/components/ui/v2"
 import { useState } from "react"
-import { Copy, Loader2, Share2 } from "lucide-react"
+import { Loader2 } from "lucide-react"
 import { getVerifiedAuthHeaders } from "@/lib/client-auth"
+import { IconCopy, IconShare } from "@/components/icons/v2"
 
 type ShareDialogProps = {
   trigger?: React.ReactNode
@@ -93,7 +94,7 @@ export function ShareDialog({
       <DialogTrigger asChild>
         {trigger || (
           <Button variant="outline">
-            <Share2 className="mr-2 size-4" />
+            <IconShare className="mr-2 size-4" />
             分享到创作广场
           </Button>
         )}
@@ -123,12 +124,12 @@ export function ShareDialog({
           <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
             {shareUrl ? (
               <Button type="button" variant="outline" onClick={copyLink}>
-                <Copy className="mr-2 size-4" />
+                <IconCopy className="mr-2 size-4" />
                 复制链接
               </Button>
             ) : null}
             <Button type="button" onClick={handleShare} disabled={submitting || !shareTitle.trim()}>
-              {submitting ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Share2 className="mr-2 size-4" />}
+              {submitting ? <Loader2 className="mr-2 size-4 animate-spin" /> : <IconShare className="mr-2 size-4" />}
               {shareUrl ? "再次分享" : "分享"}
             </Button>
           </div>

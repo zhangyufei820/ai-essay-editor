@@ -21,11 +21,12 @@ import {
 import type React from "react"
 
 import { useState, useRef } from "react"
-import { Loader2, Upload, FileText, X } from "lucide-react"
+import { Loader2, Upload, X } from "lucide-react"
 import { UltimateRenderer } from "@/components/chat/UltimateRenderer"
 import { motion } from "framer-motion"
 import { toast } from "sonner"
 import { getVerifiedAuthHeaders } from "@/lib/client-auth"
+import { IconEssay } from "@/components/icons/v2"
 
 type UploadedFile = { 
   name: string
@@ -294,7 +295,7 @@ export function EssayGrader() {
                       </div>
                     ) : (
                       <div className="flex items-center gap-2 rounded-[var(--radius-soft)] bg-[var(--paper-50)] px-3 py-2 text-sm border border-[var(--paper-200)]">
-                        <FileText className="h-4 w-4 text-[var(--ink-600)]" />
+                        <IconEssay className="h-4 w-4 text-[var(--ink-600)]" />
                         <span className="max-w-[100px] truncate text-[var(--ink-600)]">{f.name}</span>
                         <button onClick={() => removeFile(i)} className="text-[var(--ink-400)] hover:text-[var(--seal-500)]">
                           <X className="h-3.5 w-3.5" />
@@ -327,7 +328,7 @@ export function EssayGrader() {
                 </Label>
               </div>
               <Button variant="outline" size="sm" disabled>
-                <FileText className="w-4 h-4 mr-2" />
+                <IconEssay className="w-4 h-4 mr-2" />
                 上传文档 (即将推出)
               </Button>
             </div>

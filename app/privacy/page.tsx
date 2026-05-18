@@ -1,7 +1,8 @@
 'use client'
 
 import Link from "next/link"
-import { ArrowLeft, Shield, Lock, Eye, UserCheck } from "lucide-react"
+import { ArrowLeft, Lock, Eye, UserCheck } from "lucide-react"
+import { IconSealCheck } from "@/components/icons/v2"
 import { brandColors, slateColors, creamColors } from "@/lib/design-tokens"
 
 export default function PrivacyPage() {
@@ -26,7 +27,7 @@ export default function PrivacyPage() {
           
           {/* 标题 */}
           <div className="flex items-center gap-4 mb-4">
-            <Shield className="w-10 h-10 text-white" />
+            <IconSealCheck className="w-10 h-10 text-white" />
             <h1 className="text-3xl md:text-4xl font-bold text-white font-[var(--font-display)]">
               隐私政策
             </h1>

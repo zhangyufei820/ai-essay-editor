@@ -9,13 +9,14 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { Check, Crown } from "lucide-react"
+import { Check } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ButtonV2 } from "@/components/ui/v2/button"
 import { CardV2, CardV2Content, CardV2Header, CardV2Title } from "@/components/ui/v2/card"
 import { BadgeV2 } from "@/components/ui/v2/badge"
 import { SealStamp } from "@/components/ui/v2/seal"
 import { InkReveal, InkStagger, InkStaggerItem } from "@/components/motion/InkMotion"
+import { IconMember } from "@/components/icons/v2"
 
 interface Plan {
   id: string
@@ -130,7 +131,7 @@ function PlanCard({ plan, isCurrent }: { plan: Plan; isCurrent?: boolean }) {
       <div className="px-5 pb-6 sm:px-6">
         {isCurrent ? (
           <ButtonV2 variant="outline" size="lg" className="box-border w-full" disabled>
-            <Crown className="size-4" />
+            <IconMember className="size-4" />
             当前方案
           </ButtonV2>
         ) : (

@@ -1,10 +1,11 @@
 import { ButtonV2 as Button, CardV2 as Card } from "@/components/ui/v2"
-import { FileText, Presentation, ClipboardList, BookOpen } from "lucide-react"
+import { Presentation, ClipboardList } from "lucide-react"
 import Link from "next/link"
+import { IconEnglish, IconEssay } from "@/components/icons/v2"
 
 const resourceTypes = [
   {
-    icon: FileText,
+    icon: IconEssay,
     title: "教案库",
     count: "10,000+",
     description: "各学科优质教案模板",
@@ -25,7 +26,7 @@ const resourceTypes = [
     href: "/teacher/resources/tests",
   },
   {
-    icon: BookOpen,
+    icon: IconEnglish,
     title: "教学案例",
     count: "5,000+",
     description: "优秀教学实践分享",

@@ -5,13 +5,13 @@
  */
 
 import * as React from "react"
-import { Camera, CheckCircle2, Lightbulb, type LucideIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { InkReveal } from "@/components/motion/InkMotion"
+import { IconDiagnosis, IconProblem, IconSealCheck } from "@/components/icons/v2"
 
 interface Step {
   number: string
-  icon: LucideIcon
+  icon: React.ComponentType<any>
   title: string
   description: string
 }
@@ -19,19 +19,19 @@ interface Step {
 const STEPS: Step[] = [
   {
     number: "01",
-    icon: Camera,
+    icon: IconDiagnosis,
     title: "上传材料",
     description: "作文、试卷、题目或学习问题都可以作为入口。",
   },
   {
     number: "02",
-    icon: CheckCircle2,
+    icon: IconSealCheck,
     title: "生成反馈",
     description: "AI 把问题、原因、修改方向和训练建议整理成清晰清单。",
   },
   {
     number: "03",
-    icon: Lightbulb,
+    icon: IconProblem,
     title: "复盘提升",
     description: "学生按建议修改和练习，家长老师都能基于同一份反馈跟进。",
   },

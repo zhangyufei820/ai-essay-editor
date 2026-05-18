@@ -8,8 +8,8 @@ import {
   CardV2Header as CardHeader,
   CardV2Title as CardTitle
 } from "@/components/ui/v2"
-import { AlertCircle } from "lucide-react"
 import Link from "next/link"
+import { IconInkDot } from "@/components/icons/v2"
 
 export default function WeChatLoginPage() {
   return (
@@ -17,7 +17,7 @@ export default function WeChatLoginPage() {
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <AlertCircle className="h-5 w-5 text-amber-600" />
+            <IconInkDot className="h-5 w-5 text-amber-600" />
             微信登录
           </CardTitle>
           <CardDescription>功能开发中</CardDescription>

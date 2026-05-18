@@ -7,10 +7,11 @@
 "use client"
 
 import * as React from "react"
-import { ChevronLeft, ChevronRight, RotateCcw } from "lucide-react"
+import { ChevronLeft, ChevronRight } from "lucide-react"
 import { ButtonV2 } from "@/components/ui/v2/button"
 import { cn } from "@/lib/utils"
 import type { FlashcardArtifact } from "../types"
+import { IconHistory } from "@/components/icons/v2"
 
 export interface FlashcardTemplateProps {
   artifact: FlashcardArtifact
@@ -111,7 +112,7 @@ export function FlashcardTemplate({ artifact, className }: FlashcardTemplateProp
           onClick={() => setFlipped((v) => !v)}
           aria-label="翻面"
         >
-          <RotateCcw className="size-3.5" />
+          <IconHistory className="size-3.5" />
           翻面
         </ButtonV2>
         <ButtonV2 variant="primary" size="sm" onClick={next} aria-label="下一张">

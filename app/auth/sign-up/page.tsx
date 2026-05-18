@@ -18,7 +18,7 @@ import { createClient } from "@/lib/supabase/client"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useState } from "react"
-import { CheckCircle2, Mail, Info } from "lucide-react"
+import { IconInkDot, IconInvite, IconSealCheck } from "@/components/icons/v2"
 
 export default function SignUpPage() {
   const searchParams = useSearchParams()
@@ -101,7 +101,7 @@ export default function SignUpPage() {
         <Card className="w-full max-w-md">
           <CardHeader className="text-center space-y-4">
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[var(--ink-100)]">
-              <CheckCircle2 className="h-10 w-10 text-[var(--ink-600)]" />
+              <IconSealCheck className="h-10 w-10 text-[var(--ink-600)]" />
             </div>
             <CardTitle className="text-2xl">注册成功！</CardTitle>
             <CardDescription className="text-base">
@@ -110,7 +110,7 @@ export default function SignUpPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <Alert>
-              <Mail className="h-4 w-4" />
+              <IconInvite className="h-4 w-4" />
               <AlertDescription className="space-y-2">
                 <p className="font-semibold">请按以下步骤完成注册：</p>
                 <ol className="list-decimal list-inside space-y-1 ml-2 text-sm">
@@ -126,7 +126,7 @@ export default function SignUpPage() {
 
             <div className="rounded-[var(--radius-soft)] bg-blue-50 border border-blue-200 p-4 space-y-2">
               <div className="flex items-start gap-2">
-                <Info className="h-4 w-4 text-blue-600 mt-0.5" />
+                <IconInkDot className="h-4 w-4 text-blue-600 mt-0.5" />
                 <div>
                   <p className="text-sm font-medium text-blue-900">温馨提示</p>
                   <ul className="text-sm text-blue-700 space-y-1 mt-1">

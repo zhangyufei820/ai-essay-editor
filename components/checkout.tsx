@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useState } from "react"
 import { EmbeddedCheckout, EmbeddedCheckoutProvider } from "@stripe/react-stripe-js"
 import { loadStripe } from "@stripe/stripe-js"
-import { AlertCircle, Loader2 } from "lucide-react"
+import { Loader2 } from "lucide-react"
 import { getVerifiedAuthHeaders } from "@/lib/client-auth"
+import { IconInkDot } from "@/components/icons/v2"
 
 const stripePromise = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
   ? loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY)
@@ -61,7 +62,7 @@ export default function Checkout({ productId }: { productId: string }) {
   if (error || checkoutError) {
     return (
       <div className="flex items-start gap-3 rounded-[var(--radius-soft)] border border-orange-200 bg-orange-50 p-4 w-full">
-        <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-orange-600" />
+        <IconInkDot className="mt-0.5 h-5 w-5 flex-shrink-0 text-orange-600" />
         <div>
           <p className="text-sm font-medium text-orange-800">Stripe checkout is unavailable</p>
           <p className="mt-1 text-sm text-orange-700">

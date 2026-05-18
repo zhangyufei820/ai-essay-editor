@@ -1,15 +1,16 @@
 import { ButtonV2 as Button, CardV2 as Card } from "@/components/ui/v2"
-import { Users, MessageSquare, Calendar, Share2 } from "lucide-react"
+import { Calendar } from "lucide-react"
 import Link from "next/link"
+import { IconBanzhuren, IconChat, IconShare } from "@/components/icons/v2"
 
 const communityFeatures = [
   {
-    icon: Users,
+    icon: IconBanzhuren,
     title: "教研小组",
     description: "跨校组建教研小组，共同备课、研讨教学",
   },
   {
-    icon: MessageSquare,
+    icon: IconChat,
     title: "经验交流",
     description: "分享教学心得、解决教学难题、互相学习",
   },
@@ -19,7 +20,7 @@ const communityFeatures = [
     description: "定期举办线上教研活动、专家讲座",
   },
   {
-    icon: Share2,
+    icon: IconShare,
     title: "资源共享",
     description: "优质资源共建共享，促进教育均衡发展",
   },

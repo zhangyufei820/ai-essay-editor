@@ -8,13 +8,9 @@
 
 import Link from "next/link"
 import { motion } from "framer-motion"
-import {
-  ArrowRight,
-  Blocks,
-  PenLine,
-  ShieldCheck,
-} from "lucide-react"
+import { ArrowRight, Blocks } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { IconEssay, IconSealCheck } from "@/components/icons/v2"
 
 const heroMetrics = [
   { label: "上传材料", value: "作文 / 试卷 / 错题" },
@@ -27,7 +23,7 @@ const heroActions = [
     href: "/chat/standard",
     title: "上传作文批改",
     description: "逐段点评，保留原文",
-    icon: PenLine,
+    icon: IconEssay,
     primary: true,
   },
   {
@@ -54,7 +50,7 @@ export function HeroSection() {
           className="max-w-3xl pt-1 sm:pt-2"
         >
           <span className="inline-flex max-w-full items-center gap-2 rounded-full border border-[var(--ink-200)] bg-[var(--paper-50)]/85 px-3 py-1.5 text-xs font-semibold text-[var(--ink-700)] shadow-sm backdrop-blur">
-            <ShieldCheck className="h-4 w-4" />
+            <IconSealCheck className="h-4 w-4" />
             <span className="min-w-0 truncate">面向学生、家长和老师的 AI 学习反馈</span>
           </span>
 

@@ -8,11 +8,12 @@
 import { useState, useCallback } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Home, ArrowLeft, Search, MessageSquare, Phone, ArrowRight, LifeBuoy } from 'lucide-react'
+import { Home, ArrowLeft, Search, Phone, ArrowRight, LifeBuoy } from "lucide-react"
+import { IconChat } from "@/components/icons/v2"
 
 // 热门链接配置
 const POPULAR_LINKS = [
-  { href: '/chat', label: 'AI 对话', icon: MessageSquare, desc: 'GPT·Claude·Gemini' },
+  { href: '/chat', label: 'AI 对话', icon: IconChat, desc: 'GPT·Claude·Gemini' },
   { href: '/essay', label: '作文批改', icon: Search, desc: 'AI 专业点评' },
   { href: '/pricing', label: '价格方案', icon: Search, desc: '了解会员权益' },
 ]

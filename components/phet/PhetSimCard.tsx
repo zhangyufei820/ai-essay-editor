@@ -2,10 +2,11 @@
 
 import { BadgeV2 as Badge } from "@/components/ui/v2"
 import Image from "next/image"
-import { Clock, GraduationCap, Star } from "lucide-react"
+import { Star } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { getDifficultyLabel, getSubjectLabel } from "@/lib/phet/phet-utils"
 import type { PhetSim } from "@/lib/phet/sims-catalog"
+import { IconHistory, IconTeaching } from "@/components/icons/v2"
 
 interface PhetSimCardProps {
   sim: PhetSim
@@ -52,11 +53,11 @@ export function PhetSimCard({ sim, onClick, showBadge = false, badgeLabel }: Phe
         </div>
         <div className="mt-auto flex flex-wrap items-center justify-between gap-3 pt-4 text-xs text-[var(--ink-500)]">
           <span className="inline-flex items-center gap-1">
-            <GraduationCap className="h-3.5 w-3.5" />
+            <IconTeaching className="h-3.5 w-3.5" />
             {sim.grade_range[0]}-{sim.grade_range[1]} 年级
           </span>
           <span className="inline-flex items-center gap-1">
-            <Clock className="h-3.5 w-3.5" />
+            <IconHistory className="h-3.5 w-3.5" />
             {sim.duration_minutes} 分钟
           </span>
           <span className="inline-flex items-center gap-0.5 text-amber-500">

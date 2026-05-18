@@ -4,7 +4,8 @@ import {
   CardV2Header as CardHeader,
   CardV2Title as CardTitle
 } from "@/components/ui/v2"
-import { TrendingUp, LineChart, Award, Star, BookOpen, Target } from "lucide-react"
+import { TrendingUp, LineChart, Star } from "lucide-react"
+import { IconEnglish, IconProgress, IconSealStar } from "@/components/icons/v2"
 
 export function ParentGrowth() {
   return (
@@ -37,7 +38,7 @@ export function ParentGrowth() {
               </div>
               <div className="flex gap-4">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-soft)] bg-[var(--ink-50)]">
-                  <Award className="h-5 w-5 text-[var(--ink-600)]" />
+                  <IconSealStar className="h-5 w-5 text-[var(--ink-600)]" />
                 </div>
                 <div>
                   <h3 className="mb-1 font-semibold">成就里程碑</h3>
@@ -74,7 +75,7 @@ export function ParentGrowth() {
             <Card className="border-[var(--paper-200)]/50">
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-base">
-                  <BookOpen className="h-5 w-5 text-blue-500" />
+                  <IconEnglish className="h-5 w-5 text-blue-500" />
                   学科进步
                 </CardTitle>
               </CardHeader>
@@ -113,7 +114,7 @@ export function ParentGrowth() {
             <Card className="border-[var(--paper-200)]/50">
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-base">
-                  <Target className="h-5 w-5 text-orange-500" />
+                  <IconProgress className="h-5 w-5 text-orange-500" />
                   下周学习目标
                 </CardTitle>
               </CardHeader>

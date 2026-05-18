@@ -8,8 +8,9 @@
 
 import { motion } from "framer-motion"
 import Link from "next/link"
-import { Bot, Sparkles, ArrowRight } from "lucide-react"
+import { ArrowRight } from "lucide-react"
 import { brandColors, slateColors } from "@/lib/design-tokens"
+import { IconAllInOne } from "@/components/icons/v2"
 
 // ============================================
 // OpenClaw 区域配置
@@ -201,7 +202,7 @@ export function OpenClawSection() {
                   whileHover={{ scale: 1.05 }}
                   transition={{ duration: 0.2 }}
                 >
-                  <Bot className="w-10 h-10 text-white" />
+                  <IconAllInOne className="w-10 h-10 text-white" />
                   {/* 呼吸光效 */}
                   <motion.div
                     className="absolute inset-0 rounded-[var(--radius-sharp)]"
@@ -267,7 +268,7 @@ export function OpenClawSection() {
                     }}
                   >
                     <div className="flex items-center gap-2 mb-2">
-                      <Sparkles className="w-4 h-4" style={{ color: brandColors[600] }} />
+                      <IconAllInOne className="w-4 h-4" style={{ color: brandColors[600] }} />
                       <span className="text-sm font-medium" style={{ color: brandColors[700] }}>
                         {feature.title}
                       </span>

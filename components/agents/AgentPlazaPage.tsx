@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { ArrowRight, Compass, Lock, Sparkles } from "lucide-react"
+import { ArrowRight, Lock } from "lucide-react"
 import { MarketingShell } from "@/components/v2-chrome"
 import { ModelLogo, type ModelKey } from "@/components/ModelLogo"
 import { BadgeV2 } from "@/components/ui/v2/badge"
@@ -10,6 +10,7 @@ import { CardV2, CardV2Content } from "@/components/ui/v2/card"
 import { AGENT_GROUPS, AGENT_REGISTRY, listAgentsByGroup } from "@/components/chat/v2/agent-registry"
 import type { AgentDefinition } from "@/components/chat/v2/types"
 import { cn } from "@/lib/utils"
+import { IconAllInOne, IconExplore } from "@/components/icons/v2"
 
 const HIDDEN_FROM_PLAZA = new Set(["gpt-image-1"])
 
@@ -67,7 +68,7 @@ export function AgentPlazaPage() {
         <div className="mx-auto grid w-full max-w-7xl gap-8 px-4 py-12 md:px-6 md:py-16 lg:grid-cols-[1.08fr_0.92fr] lg:items-end">
           <div>
             <span className="inline-flex items-center gap-1.5 rounded-[var(--radius-pill)] border border-[var(--ink-200)] bg-[var(--paper-50)] px-3 py-1.5 text-[12px] font-semibold text-[var(--ink-700)] shadow-[var(--shadow-paper)] font-[var(--font-sans-v2)]">
-              <Sparkles className="size-3.5" aria-hidden="true" />
+              <IconAllInOne className="size-3.5" aria-hidden="true" />
               沈翔智学智能体广场
             </span>
             <h1 className="mt-5 max-w-3xl font-[var(--font-display)] text-[clamp(34px,5vw,58px)] font-black leading-[1.06] text-[var(--ink-900)]">
@@ -90,7 +91,7 @@ export function AgentPlazaPage() {
                   {visibleAgentCount} 个可用智能体
                 </h2>
               </div>
-              <Compass className="size-5 text-[var(--ink-500)]" aria-hidden="true" />
+              <IconExplore className="size-5 text-[var(--ink-500)]" aria-hidden="true" />
             </div>
             <div className="mt-4 grid grid-cols-2 gap-2 text-[12px] text-[var(--ink-600)] font-[var(--font-sans-v2)]">
               {AGENT_GROUPS.map((group) => {

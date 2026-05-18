@@ -11,8 +11,8 @@ import {
 } from "@/components/ui/v2"
 import { useEffect, useMemo, useState, type FormEvent } from "react"
 import Link from "next/link"
-import { Loader2, Plus, RefreshCw } from "lucide-react"
-import { IconEssay, IconFolder } from "@/components/icons/v2"
+import { Loader2, Plus } from "lucide-react"
+import { IconEssay, IconFolder, IconHistory } from "@/components/icons/v2"
 import { getVerifiedAuthHeaders } from "@/lib/client-auth"
 
 const SUBJECTS = [
@@ -146,7 +146,7 @@ export default function FolderPage() {
           </div>
           <div className="flex gap-2">
             <Button variant="outline" onClick={loadFiles}>
-              <RefreshCw className="mr-2 size-4" />
+              <IconHistory className="mr-2 size-4" />
               刷新
             </Button>
             <Button asChild>

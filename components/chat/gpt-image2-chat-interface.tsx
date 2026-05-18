@@ -6,18 +6,7 @@ import { ButtonV2 as Button, TextareaV2 as Textarea } from "@/components/ui/v2"
 import type React from "react"
 import { Suspense, useEffect, useMemo, useRef, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import {
-  ChevronDown,
-  ChevronLeft,
-  FileImage,
-  Image as ImageIcon,
-  Loader2,
-  RefreshCcw,
-  Trash2,
-  UploadCloud,
-  Wand2,
-  X,
-} from "lucide-react"
+import { ChevronDown, ChevronLeft, FileImage, Image as ImageIcon, Loader2, Trash2, UploadCloud, Wand2, X } from "lucide-react"
 import { IconAllInOne, IconCopy, IconExportPdf, IconHistory, IconInkDot, IconSealCheck } from "@/components/icons/v2"
 import { createClient } from "@supabase/supabase-js"
 import { toast } from "sonner"
@@ -379,7 +368,7 @@ function UploadPanel({
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
               <Button type="button" variant="outline" size="sm" onClick={() => inputRef.current?.click()}>
-                <RefreshCcw className="mr-2 h-4 w-4" />
+                <IconHistory className="mr-2 h-4 w-4" />
                 重新上传
               </Button>
             </div>

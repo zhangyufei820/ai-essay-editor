@@ -7,7 +7,8 @@ import {
   CardV2Title as CardTitle
 } from "@/components/ui/v2"
 import Link from "next/link"
-import { AlertCircle, Settings, ExternalLink } from "lucide-react"
+import { ExternalLink } from "lucide-react"
+import { IconInkDot, IconSettings } from "@/components/icons/v2"
 
 export default async function ErrorPage({
   searchParams,
@@ -24,7 +25,7 @@ export default async function ErrorPage({
         <Card>
           <CardHeader className="text-center space-y-4">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-red-100">
-              <AlertCircle className="h-7 w-7 text-[var(--seal-600)]" />
+              <IconInkDot className="h-7 w-7 text-[var(--seal-600)]" />
             </div>
             <CardTitle className="text-2xl">登录遇到问题</CardTitle>
             <CardDescription className="font-mono text-xs bg-[var(--paper-100)] px-2 py-1 rounded">{errorCode}</CardDescription>
@@ -43,7 +44,7 @@ export default async function ErrorPage({
 
             <div className="rounded-[var(--radius-soft)] bg-blue-50 border border-blue-200 p-3 text-sm text-blue-800">
               <div className="flex items-start gap-2 mb-2">
-                <Settings className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                <IconSettings className="h-4 w-4 mt-0.5 flex-shrink-0" />
                 <p className="font-medium">管理员配置检查</p>
               </div>
               <p className="text-xs mb-2">请确保Supabase控制台中已正确配置：</p>

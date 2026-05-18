@@ -1,6 +1,7 @@
 import { CardV2 as Card } from "@/components/ui/v2"
-import { Atom, BookA, Calculator, Globe2, Palette, TestTube } from 'lucide-react'
+import { Atom, BookA, Globe2, TestTube } from "lucide-react"
 import Link from "next/link"
+import { IconMath, IconWriting } from "@/components/icons/v2"
 
 const categories = [
   {
@@ -14,7 +15,7 @@ const categories = [
   {
     id: "math",
     title: "数学",
-    icon: Calculator,
+    icon: IconMath,
     subjects: ["代数", "几何", "微积分", "统计学", "线性代数"],
     color: "text-[var(--ink-600)] bg-[var(--ink-50)] dark:bg-[var(--ink-900)]/30",
     href: "/subjects/math",
@@ -46,7 +47,7 @@ const categories = [
   {
     id: "arts",
     title: "艺术与创造",
-    icon: Palette,
+    icon: IconWriting,
     subjects: ["美术", "音乐", "设计", "创意写作", "表演"],
     color: "text-[var(--ink-600)] bg-[var(--ink-50)] dark:bg-[var(--ink-900)]/30",
     href: "/subjects/arts",

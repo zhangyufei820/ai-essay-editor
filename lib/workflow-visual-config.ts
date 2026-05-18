@@ -14,11 +14,9 @@
  * - 并行节点支持：多个节点可同时显示为 running 状态，营造"多核并发"视觉效果
  */
 
-import { 
-  Scan, Eye, Filter, FileText, Layers, Cpu, Brain, Sparkles, CheckCircle, Link,
-  GitBranch, FileSearch, Database, Scale, BookOpen, UserCheck, Layout,
-  type LucideIcon 
-} from "lucide-react"
+import type React from "react"
+import { Scan, Eye, Filter, Layers, Cpu, CheckCircle, Link, GitBranch, Database, Scale, UserCheck, Layout } from "lucide-react"
+import { IconAllInOne, IconEnglish, IconEssay } from "@/components/icons/v2"
 
 // ============================================
 // 类型定义
@@ -39,7 +37,7 @@ export interface WorkflowNodeConfig {
   /** UI 显示的名称 */
   label: string
   /** 图标名称 */
-  icon: LucideIcon
+  icon: React.ComponentType<any>
   /** 触发类型 */
   triggerType: TriggerType
   /** 是否隐藏（不显示在思考列表中） */
@@ -114,7 +112,7 @@ export const NODE_VISUAL_MAP: Record<string, WorkflowNodeConfig> = {
   },
   '文档提取器': { 
     label: '非结构化资源解析', 
-    icon: FileText,
+    icon: IconEssay,
     triggerType: 'thinking',
     runningTexts: [
       '解析文档结构...',
@@ -199,7 +197,7 @@ export const NODE_VISUAL_MAP: Record<string, WorkflowNodeConfig> = {
   },
   '教案分析': {
     label: '教学结构解构分析',
-    icon: BookOpen,
+    icon: IconEnglish,
     triggerType: 'thinking',
     runningTexts: [
       '正在解构教学设计...',
@@ -236,26 +234,26 @@ export const NODE_VISUAL_MAP: Record<string, WorkflowNodeConfig> = {
   // --- 隐形触发节点 (不显示，仅用于触发逻辑) ---
   '总编辑': { 
     label: '总编辑',
-    icon: Brain,
+    icon: IconAllInOne,
     triggerType: 'HANDOVER',
     hidden: true 
   },
   '快速回复': { 
     label: '快速回复',
-    icon: Sparkles,
+    icon: IconAllInOne,
     triggerType: 'FAST_TRACK',
     hidden: true 
   },
   // 🎓 教学评助手 - 快速通道
   '极速回复': { 
     label: '极速回复',
-    icon: Sparkles,
+    icon: IconAllInOne,
     triggerType: 'FAST_TRACK',
     hidden: true 
   },
   '直接回复': {
     label: '直接回复',
-    icon: Sparkles,
+    icon: IconAllInOne,
     triggerType: 'HANDOVER',
     hidden: true
   },

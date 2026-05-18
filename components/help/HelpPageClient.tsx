@@ -4,20 +4,10 @@ import Image from "next/image"
 import { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import Link from "next/link"
-import { 
-  BookOpen, 
-  MessageCircle, 
-  CreditCard, 
-  User, 
-  FileText,
-  ChevronDown,
-  ChevronUp,
-  ArrowLeft,
-  ExternalLink,
-  Phone
-} from "lucide-react"
+import { CreditCard, ChevronDown, ChevronUp, ArrowLeft, ExternalLink, Phone } from "lucide-react"
 import { brandColors, slateColors, creamColors } from "@/lib/design-tokens"
 import { ShenxiangInterfaceIcon } from "@/components/icons/ShenxiangInterfaceIcons"
+import { IconEnglish, IconEssay, IconFollowup, IconUser } from "@/components/icons/v2"
 
 // 客服联系方式配置
 const contactInfo = {
@@ -32,7 +22,7 @@ const contactInfo = {
 const faqCategories = [
   {
     title: "快速入门",
-    icon: BookOpen,
+    icon: IconEnglish,
     questions: [
       {
         q: "如何开始使用沈翔智学？",
@@ -50,7 +40,7 @@ const faqCategories = [
   },
   {
     title: "账户与登录",
-    icon: User,
+    icon: IconUser,
     questions: [
       {
         q: "支持哪些登录方式？",
@@ -94,7 +84,7 @@ const faqCategories = [
   },
   {
     title: "使用技巧",
-    icon: MessageCircle,
+    icon: IconFollowup,
     questions: [
       {
         q: "作文批改支持哪些格式？",
@@ -120,7 +110,7 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
   const [isOpen, setIsOpen] = useState(false)
 
   return (
-    <div 
+    <div
       className="border-b last:border-b-0"
       style={{ borderColor: "var(--paper-200)" }}
     >
@@ -128,7 +118,7 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
         onClick={() => setIsOpen(!isOpen)}
         className="w-full flex items-center justify-between py-5 text-left"
       >
-        <span 
+        <span
           className="font-medium pr-4"
           style={{ color: "var(--ink-800)", fontSize: '15px' }}
         >
@@ -149,7 +139,7 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
             transition={{ duration: 0.2 }}
             className="overflow-hidden"
           >
-            <div 
+            <div
               className="pb-5 text-sm leading-relaxed whitespace-pre-line"
               style={{ color: "var(--ink-600)" }}
             >
@@ -168,28 +158,28 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
 
 function QuickLinks() {
   const links = [
-    { 
-      title: "价格方案", 
+    {
+      title: "价格方案",
       desc: "查看会员套餐和积分价格",
       href: "/pricing",
-      icon: CreditCard 
+      icon: CreditCard
     },
-    { 
-      title: "开始对话", 
+    {
+      title: "开始对话",
       desc: "体验 AI 智能对话",
       href: "/chat",
-      icon: MessageCircle 
+      icon: IconFollowup
     },
-    { 
-      title: "账户设置", 
+    {
+      title: "账户设置",
       desc: "管理个人资料",
       href: "/settings",
-      icon: User 
+      icon: IconUser
     }
   ]
 
   return (
-    <motion.div 
+    <motion.div
       className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-12"
       initial="hidden"
       whileInView="visible"
@@ -207,8 +197,8 @@ function QuickLinks() {
           key={link.href}
           variants={{
             hidden: { opacity: 0, y: 30 },
-            visible: { 
-              opacity: 1, 
+            visible: {
+              opacity: 1,
               y: 0,
               transition: { duration: 0.5, ease: "easeOut" }
             }
@@ -218,12 +208,12 @@ function QuickLinks() {
           <Link
             href={link.href}
             className="flex items-center gap-4 p-4 rounded-[var(--radius-sharp)] transition-all h-full"
-            style={{ 
+            style={{
               backgroundColor: 'white',
               boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
             }}
           >
-            <motion.div 
+            <motion.div
               className="w-12 h-12 rounded-[var(--radius-sharp)] flex items-center justify-center"
               style={{ backgroundColor: "var(--ink-50)" }}
               whileHover={{ rotate: 10 }}
@@ -250,40 +240,40 @@ function QuickLinks() {
 // 分类组件 - 动画版本
 // ============================================
 
-function CategorySection({ 
-  title, 
-  icon: Icon, 
+function CategorySection({
+  title,
+  icon: Icon,
   questions,
   index
-}: { 
+}: {
   title: string
   icon: any
   questions: { q: string; a: string }[]
   index: number
 }) {
   return (
-    <motion.div 
+    <motion.div
       className="mb-12"
       initial="hidden"
       whileInView="visible"
       viewport={{ once: true, margin: "-50px" }}
       variants={{
         hidden: { opacity: 0, y: 40 },
-        visible: { 
-          opacity: 1, 
+        visible: {
+          opacity: 1,
           y: 0,
           transition: { duration: 0.6, ease: "easeOut", delay: index * 0.1 }
         }
       }}
     >
-      <motion.div 
+      <motion.div
         className="flex items-center gap-3 mb-6"
         initial={{ x: -20, opacity: 0 }}
         whileInView={{ x: 0, opacity: 1 }}
         viewport={{ once: true }}
         transition={{ duration: 0.4, delay: index * 0.1 + 0.2 }}
       >
-        <motion.div 
+        <motion.div
           className="w-10 h-10 rounded-[var(--radius-sharp)] flex items-center justify-center"
           style={{ backgroundColor: "var(--ink-50)" }}
           whileHover={{ rotate: 90, scale: 1.1 }}
@@ -294,7 +284,7 @@ function CategorySection({
           {title}
         </h2>
       </motion.div>
-      <div 
+      <div
         className="bg-[var(--paper-50)] rounded-[var(--radius-sharp)] p-6"
         style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}
       >
@@ -349,7 +339,7 @@ function ContactSection() {
             repeatDelay: 3
           }}
         >
-          <MessageCircle className="w-12 h-12 mx-auto mb-4" style={{ color: "var(--ink-600)" }} />
+          <IconFollowup className="w-12 h-12 mx-auto mb-4" style={{ color: "var(--ink-600)" }} />
         </motion.div>
         <h3 className="text-xl font-semibold mb-2" style={{ color: "var(--ink-800)" }}>
           联系客服
@@ -358,9 +348,9 @@ function ContactSection() {
           扫描下方二维码添加客服微信，或拨打客服电话
         </p>
       </motion.div>
-      
+
       {/* 联系方式展示 */}
-      <motion.div 
+      <motion.div
         className="flex flex-col md:flex-row items-center justify-center gap-8 md:gap-12"
         initial={{ opacity: 0 }}
         whileInView={{ opacity: 1 }}
@@ -394,7 +384,7 @@ function ContactSection() {
           </motion.div>
           <span className="font-medium" style={{ color: "var(--ink-700)" }}>扫码添加客服微信</span>
         </motion.div>
-        
+
         {/* 分隔线（移动端不显示） */}
         <motion.div
           className="hidden md:block w-px h-32"
@@ -458,7 +448,7 @@ function ContactSection() {
               boxShadow: "var(--shadow-paper)"
             }}
           >
-            <MessageCircle className="w-5 h-5" />
+            <IconFollowup className="w-5 h-5" />
             在线客服
           </Link>
         </motion.div>
@@ -488,7 +478,7 @@ export function HelpPageClient() {
         >
           <ShenxiangInterfaceIcon name="help" size={130} />
         </motion.div>
-        
+
         <div className="max-w-4xl mx-auto px-4 relative z-10">
           {/* 返回按钮 */}
           <motion.div
@@ -496,7 +486,7 @@ export function HelpPageClient() {
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.5 }}
           >
-            <Link 
+            <Link
               href="/"
               className="mb-8 inline-flex items-center gap-2 text-[var(--ink-500)] transition-colors hover:text-[var(--ink-800)]"
             >
@@ -509,16 +499,16 @@ export function HelpPageClient() {
               </motion.span>
             </Link>
           </motion.div>
-          
+
           {/* 标题 */}
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.2 }}
           >
-            <motion.div 
+            <motion.div
               className="flex items-center gap-4 mb-4"
-              animate={{ 
+              animate={{
                 textShadow: [
                   "0 0 0 rgba(0,0,0,0)",
                   "0 0 0 rgba(0,0,0,0)",
@@ -528,7 +518,7 @@ export function HelpPageClient() {
               transition={{ duration: 2, repeat: Infinity }}
             >
               <motion.div
-                animate={{ 
+                animate={{
                   rotate: [0, 10, -10, 0],
                   scale: [1, 1.1, 1]
                 }}
@@ -540,7 +530,7 @@ export function HelpPageClient() {
                 帮助中心
               </h1>
             </motion.div>
-            <motion.p 
+            <motion.p
               className="max-w-2xl text-lg leading-8 text-[var(--ink-600)]"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -575,7 +565,7 @@ export function HelpPageClient() {
       </div>
 
       {/* 底部导航 */}
-      <motion.div 
+      <motion.div
         className="border-t"
         style={{ borderColor: "var(--paper-200)", backgroundColor: "var(--paper-50)" }}
         initial={{ opacity: 0 }}
@@ -584,7 +574,7 @@ export function HelpPageClient() {
         transition={{ duration: 0.5 }}
       >
         <div className="max-w-4xl mx-auto px-4 py-8">
-          <motion.div 
+          <motion.div
             className="flex flex-wrap justify-center gap-6"
             initial="hidden"
             whileInView="visible"
@@ -618,7 +608,7 @@ export function HelpPageClient() {
               </motion.div>
             ))}
           </motion.div>
-          <motion.p 
+          <motion.p
             className="text-center text-sm mt-4"
             style={{ color: "var(--ink-400)" }}
             initial={{ opacity: 0 }}

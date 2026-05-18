@@ -17,22 +17,8 @@ import { ButtonV2 as Button, SwitchV2 as Switch } from "@/components/ui/v2"
 
 import React, { useState, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { 
-  Music4, 
-  Sparkles, 
-  ChevronDown,
-  Mic2,
-  Sliders,
-  Lightbulb,
-  Wand2,
-  RefreshCw,
-  VolumeX,
-  Clock,
-  Target,
-  FileText,
-  Hash
-} from "lucide-react"
-import { IconEssay, IconListen, IconSend } from "@/components/icons/v2"
+import { Music4, ChevronDown, Mic2, Sliders, Wand2, VolumeX, Hash } from "lucide-react"
+import { IconAllInOne, IconEssay, IconHistory, IconListen, IconProblem, IconProgress, IconSend } from "@/components/icons/v2"
 import { cn } from "@/lib/utils"
 
 // ============================================
@@ -264,7 +250,7 @@ const GlassInput = ({
     )}
     {hint && (
       <p className="text-xs text-[var(--ink-500)] dark:text-[var(--ink-400)] flex items-center gap-1">
-        <Lightbulb className="h-3 w-3" />
+        <IconProblem className="h-3 w-3" />
         {hint}
       </p>
     )}
@@ -436,7 +422,7 @@ export function SunoProForm({ onSubmit, isLoading = false, disabled = false }: S
                 <span className="font-bold text-base">歌词</span>
                 {willUseLLM && (
                   <span className="ml-auto px-2 py-0.5 text-xs bg-[var(--ink-600)] text-white rounded-full flex items-center gap-1">
-                    <Sparkles className="h-3 w-3" />
+                    <IconAllInOne className="h-3 w-3" />
                     AI 将优化
                   </span>
                 )}
@@ -467,7 +453,7 @@ export function SunoProForm({ onSubmit, isLoading = false, disabled = false }: S
           >
             <div className="relative rounded-[var(--radius-sharp)] p-5 bg-[var(--paper-50)]/60 dark:bg-gray-800/60 backdrop-blur-sm border-2 border-[var(--paper-200)]/50 dark:border-gray-700/50">
               <label className="flex items-center gap-2 text-sm text-[var(--ink-700)] dark:text-gray-200 mb-1">
-                <Lightbulb className="h-4 w-4 text-[var(--ink-500)]" />
+                <IconProblem className="h-4 w-4 text-[var(--ink-500)]" />
                 <span className="font-bold text-base">音乐提示词</span>
                 <span className="text-xs font-normal text-[var(--ink-400)]">（可选，填写后跳过 AI 优化）</span>
               </label>
@@ -506,14 +492,14 @@ export function SunoProForm({ onSubmit, isLoading = false, disabled = false }: S
               </label>
               <div className="grid grid-cols-3 gap-3">
                 <ModeButton
-                  icon={<Sparkles className="h-5 w-5" />}
+                  icon={<IconAllInOne className="h-5 w-5" />}
                   title="普通"
                   subtitle="从零创作"
                   selected={formData.task_mode === "Normal"}
                   onClick={() => updateField("task_mode", "Normal")}
                 />
                 <ModeButton
-                  icon={<RefreshCw className="h-5 w-5" />}
+                  icon={<IconHistory className="h-5 w-5" />}
                   title="续写"
                   subtitle="延长歌曲"
                   selected={formData.task_mode === "Extend"}
@@ -532,7 +518,7 @@ export function SunoProForm({ onSubmit, isLoading = false, disabled = false }: S
             {/* 模型版本 */}
             <div>
               <label className="flex items-center gap-2 text-sm font-medium text-[var(--ink-700)] dark:text-gray-200 mb-3">
-                <Sparkles className="h-4 w-4 text-[var(--ink-500)]" />
+                <IconAllInOne className="h-4 w-4 text-[var(--ink-500)]" />
                 模型版本
               </label>
               <ModelSelector
@@ -552,7 +538,7 @@ export function SunoProForm({ onSubmit, isLoading = false, disabled = false }: S
                 >
                   <GlassInput
                     label="目标任务 ID"
-                    icon={<Target className="h-4 w-4 text-[var(--ink-500)]" />}
+                    icon={<IconProgress className="h-4 w-4 text-[var(--ink-500)]" />}
                     value={formData.target_id}
                     onChange={(v) => updateField("target_id", v)}
                     placeholder="输入要续写/翻唱的歌曲任务 ID"
@@ -573,7 +559,7 @@ export function SunoProForm({ onSubmit, isLoading = false, disabled = false }: S
                 >
                   <GlassInput
                     label="续写起点（秒）"
-                    icon={<Clock className="h-4 w-4 text-[var(--ink-500)]" />}
+                    icon={<IconHistory className="h-4 w-4 text-[var(--ink-500)]" />}
                     value={formData.continue_at?.toString() || ""}
                     onChange={(v) => updateField("continue_at", v ? Number(v) : null)}
                     placeholder="例如：30"
@@ -586,12 +572,12 @@ export function SunoProForm({ onSubmit, isLoading = false, disabled = false }: S
           {/* 🎨 更多选项 */}
           <GlassCard
             title="更多选项"
-            icon={<FileText className="h-5 w-5" />}
+            icon={<IconEssay className="h-5 w-5" />}
             defaultOpen={false}
           >
             <GlassInput
               label="歌曲标题"
-              icon={<FileText className="h-4 w-4 text-[var(--ink-500)]" />}
+              icon={<IconEssay className="h-4 w-4 text-[var(--ink-500)]" />}
               value={formData.title}
               onChange={(v) => updateField("title", v)}
               placeholder="例如：夏日清风"
@@ -672,7 +658,7 @@ export function SunoProForm({ onSubmit, isLoading = false, disabled = false }: S
             {/* 结束时间 */}
             <GlassInput
               label="结束时间（秒）"
-              icon={<Clock className="h-4 w-4 text-[var(--ink-500)]" />}
+              icon={<IconHistory className="h-4 w-4 text-[var(--ink-500)]" />}
               value={formData.end_at?.toString() || ""}
               onChange={(v) => updateField("end_at", v ? Number(v) : null)}
               placeholder="留空则自动生成完整歌曲"
@@ -715,7 +701,7 @@ export function SunoProForm({ onSubmit, isLoading = false, disabled = false }: S
                 >
                   <IconSend className="h-5 w-5" />
                   <span>开始创作</span>
-                  <Sparkles className="h-4 w-4" />
+                  <IconAllInOne className="h-4 w-4" />
                 </motion.div>
               )}
             </Button>

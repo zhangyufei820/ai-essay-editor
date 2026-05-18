@@ -13,18 +13,8 @@
 
 import React, { useState, useRef, useEffect, useMemo } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { 
-  Play, 
-  Pause, 
-  VolumeX,
-  AlertCircle,
-  RefreshCw,
-  Sparkles,
-  Loader2,
-  SkipBack,
-  SkipForward
-} from "lucide-react"
-import { IconExportPdf, IconListen, IconMusic } from "@/components/icons/v2"
+import { Play, Pause, VolumeX, Loader2, SkipBack, SkipForward } from "lucide-react"
+import { IconAllInOne, IconExportPdf, IconHistory, IconInkDot, IconListen, IconMusic } from "@/components/icons/v2"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import type { MusicGenerationStatus, SongSlot } from "@/lib/suno-config"
@@ -133,7 +123,7 @@ export function MusicCard({
             className="flex h-10 w-10 items-center justify-center rounded-[var(--radius-sharp)]"
             style={{ backgroundColor: `${BRAND_GREEN}10` }}
           >
-            <Sparkles className="h-5 w-5" style={{ color: BRAND_GREEN }} />
+            <IconAllInOne className="h-5 w-5" style={{ color: BRAND_GREEN }} />
           </div>
           <div>
             <h3 className="text-base font-semibold text-[var(--ink-800)]">
@@ -209,7 +199,7 @@ function SongSlotRenderer({
           className="flex items-center gap-4 p-6 rounded-[var(--radius-sharp)] bg-red-50/50 border border-red-100"
         >
           <div className="h-20 w-20 rounded-[var(--radius-sharp)] bg-red-100/50 flex items-center justify-center shrink-0">
-            <AlertCircle className="h-8 w-8 text-red-400" />
+            <IconInkDot className="h-8 w-8 text-red-400" />
           </div>
           <div className="flex-1">
             <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-red-100 text-[var(--seal-600)]">
@@ -629,7 +619,7 @@ function ErrorState({
         className="flex h-12 w-12 items-center justify-center rounded-[var(--radius-sharp)] mb-4"
         style={{ backgroundColor: "#fef2f2" }}
       >
-        <AlertCircle className="h-6 w-6 text-[var(--seal-500)]" />
+        <IconInkDot className="h-6 w-6 text-[var(--seal-500)]" />
       </div>
 
       <p className="text-sm font-medium text-[var(--ink-700)] mb-1">
@@ -646,7 +636,7 @@ function ErrorState({
           className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white rounded-[var(--radius-soft)] hover:opacity-90 transition-all"
           style={{ backgroundColor: BRAND_GREEN }}
         >
-          <RefreshCw className="h-4 w-4" />
+          <IconHistory className="h-4 w-4" />
           重新生成
         </button>
       )}

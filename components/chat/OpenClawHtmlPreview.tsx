@@ -1,12 +1,13 @@
 "use client"
 /* eslint-disable @next/next/no-img-element -- Dynamic/user-generated/external image surfaces: keep native img to preserve sizing, blob/data/proxy URLs, payment QR codes, and chat preview behavior. */
 
-import { ExternalLink, FileText, Loader2 } from "lucide-react"
+import { ExternalLink, Loader2 } from "lucide-react"
 import { memo, useEffect, useMemo, useState } from "react"
 
 import { proxifyGeneratedImagePreviewUrl } from "@/components/chat/image-generation/gpt-image-v11"
 import { extractPrimaryImageFromOpenClawHtml, type OpenClawPrimaryImage } from "@/lib/openclaw-html"
 import { cn } from "@/lib/utils"
+import { IconEssay } from "@/components/icons/v2"
 
 const PREVIEW_CACHE_TTL_MS = 5 * 60 * 1000
 const PREVIEW_CACHE_MAX_ENTRIES = 24
@@ -173,7 +174,7 @@ export const OpenClawHtmlPreview = memo(function OpenClawHtmlPreview({
     <div className={cn("my-3 overflow-hidden rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-[var(--paper-50)] shadow-sm", className)}>
       <div className="flex items-center gap-3 border-b border-[var(--paper-100)] bg-[var(--paper-50)] px-3 py-2">
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[var(--paper-50)] text-[var(--ink-500)]">
-          <FileText className="h-4 w-4" />
+          <IconEssay className="h-4 w-4" />
         </span>
         <span className="min-w-0 flex-1 truncate text-sm font-medium text-[var(--ink-700)]">{label}</span>
         <a

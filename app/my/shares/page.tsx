@@ -3,9 +3,10 @@
 import { ButtonV2 as Button } from "@/components/ui/v2"
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { Copy, Loader2, Trash2 } from "lucide-react"
+import { Loader2, Trash2 } from "lucide-react"
 import { ContentCard, type ContentCardShare } from "@/components/sharing/ContentCard"
 import { getVerifiedAuthHeaders } from "@/lib/client-auth"
+import { IconCopy } from "@/components/icons/v2"
 
 export default function MySharesPage() {
   const [shares, setShares] = useState<ContentCardShare[]>([])
@@ -83,7 +84,7 @@ export default function MySharesPage() {
               <ContentCard share={share} />
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={() => copyLink(share.share_code)} className="flex-1">
-                  <Copy className="mr-2 size-4" />
+                  <IconCopy className="mr-2 size-4" />
                   复制
                 </Button>
                 <Button variant="outline" size="sm" onClick={() => remove(share.share_code)} className="flex-1 text-rose-600 hover:text-rose-700">

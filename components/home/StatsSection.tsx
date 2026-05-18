@@ -9,8 +9,9 @@
 
 import { useEffect, useRef, useState } from "react"
 import { motion, useInView, useScroll, useTransform } from "framer-motion"
-import { Users, ThumbsUp, FileText, Clock } from "lucide-react"
+import { ThumbsUp } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { IconBanzhuren, IconEssay, IconHistory } from "@/components/icons/v2"
 
 // ============================================
 // 设计系统颜色常量
@@ -45,10 +46,10 @@ interface Stat {
 // ============================================
 
 const stats: Stat[] = [
-  { id: "source", value: "原图", suffix: "", label: "上传材料完整保留", icon: Users, isText: true },
+  { id: "source", value: "原图", suffix: "", label: "上传材料完整保留", icon: IconBanzhuren, isText: true },
   { id: "revision", value: "改稿", suffix: "", label: "批改与修改可对照", icon: ThumbsUp, isText: true },
-  { id: "practice", value: "建议", suffix: "", label: "错因和训练方向清楚", icon: FileText, isText: true },
-  { id: "review", value: "复盘", suffix: "", label: "家长老师继续跟进", icon: Clock, isText: true }
+  { id: "practice", value: "建议", suffix: "", label: "错因和训练方向清楚", icon: IconEssay, isText: true },
+  { id: "review", value: "复盘", suffix: "", label: "家长老师继续跟进", icon: IconHistory, isText: true }
 ]
 
 // ============================================

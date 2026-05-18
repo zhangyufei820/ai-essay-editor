@@ -7,8 +7,9 @@
 "use client"
 
 import { motion } from "framer-motion"
-import { Camera, CheckCircle2, Lightbulb, type LucideIcon } from "lucide-react"
+import type { ComponentType } from "react"
 import { brandColors, slateColors, creamColors } from "@/lib/design-tokens"
+import { IconDiagnosis, IconProblem, IconSealCheck } from "@/components/icons/v2"
 
 // ============================================
 // 流程步骤配置
@@ -16,7 +17,7 @@ import { brandColors, slateColors, creamColors } from "@/lib/design-tokens"
 
 interface Step {
   number: string
-  icon: LucideIcon
+  icon: ComponentType<any>
   title: string
   description: string
 }
@@ -24,19 +25,19 @@ interface Step {
 const steps: Step[] = [
   {
     number: "01",
-    icon: Camera,
+    icon: IconDiagnosis,
     title: "上传材料",
     description: "作文、试卷、题目或学习问题都可以作为入口，先把真实学习现场放进来。"
   },
   {
     number: "02",
-    icon: CheckCircle2,
+    icon: IconSealCheck,
     title: "生成反馈",
     description: "AI 把问题、原因、修改方向和训练建议整理成清晰清单，减少来回解释。"
   },
   {
     number: "03",
-    icon: Lightbulb,
+    icon: IconProblem,
     title: "复盘提升",
     description: "学生按建议修改和练习，家长、老师也能基于同一份反馈继续跟进。"
   }

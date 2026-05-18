@@ -10,8 +10,8 @@
  * - 编辑功能：重新填充输入框
  */
 
-import { Check, Pencil, X, FileText } from 'lucide-react'
-import { IconCopy } from "@/components/icons/v2"
+import { Check, Pencil, X } from "lucide-react"
+import { IconCopy, IconEssay } from "@/components/icons/v2"
 import { useState, useRef, useEffect } from 'react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -112,7 +112,7 @@ export function UserMessageBubble({ content, files, onEdit, onSend }: UserMessag
                   </div>
                 ) : (
                   <div className="flex min-w-[132px] items-center gap-2 px-3 py-2 text-[11px] sm:text-xs text-[var(--ink-600)]">
-                    <FileText className="h-4 w-4 text-[var(--ink-400)]" />
+                    <IconEssay className="h-4 w-4 text-[var(--ink-400)]" />
                     <span className="max-w-[84px] truncate">{file.name}</span>
                   </div>
                 )}

@@ -1,6 +1,6 @@
 import { ButtonV2 as Button } from "@/components/ui/v2"
-import { Award, BookOpen, Users } from "lucide-react"
 import Link from "next/link"
+import { IconBanzhuren, IconEnglish, IconSealStar } from "@/components/icons/v2"
 
 export function TeacherHero() {
   return (
@@ -8,7 +8,7 @@ export function TeacherHero() {
       <div className="container mx-auto px-4">
         <div className="mx-auto max-w-4xl text-center">
           <div className="mb-6 inline-flex items-center gap-2 rounded-full bg-[var(--ink-50)] px-4 py-2 text-sm font-medium text-[var(--ink-600)]">
-            <Award className="h-4 w-4" />
+            <IconSealStar className="h-4 w-4" />
             教师专业发展平台
           </div>
 
@@ -25,13 +25,13 @@ export function TeacherHero() {
           <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
             <Button size="lg" className="w-full sm:w-auto" asChild>
               <Link href="/teacher/resources">
-                <BookOpen className="mr-2 h-5 w-5" />
+                <IconEnglish className="mr-2 h-5 w-5" />
                 浏览资源库
               </Link>
             </Button>
             <Button size="lg" variant="outline" className="w-full sm:w-auto bg-transparent" asChild>
               <Link href="/teacher/community">
-                <Users className="mr-2 h-5 w-5" />
+                <IconBanzhuren className="mr-2 h-5 w-5" />
                 加入教研社区
               </Link>
             </Button>

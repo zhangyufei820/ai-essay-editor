@@ -1,8 +1,8 @@
 'use client'
 
 import Link from "next/link"
-import { ArrowLeft, Target, Cpu, Rocket, Calendar, Zap } from "lucide-react"
-import { IconBanzhuren, IconEnglish, IconProblem, IconSealCheck, IconSealStar } from "@/components/icons/v2"
+import { ArrowLeft, Cpu, Rocket, Calendar } from "lucide-react"
+import { IconAllInOne, IconBanzhuren, IconEnglish, IconProblem, IconProgress, IconSealCheck, IconSealStar } from "@/components/icons/v2"
 import { brandColors, slateColors, creamColors } from "@/lib/design-tokens"
 
 export default function AboutPage() {
@@ -90,7 +90,7 @@ export default function AboutPage() {
             {/* 使命 */}
             <div className="bg-[var(--paper-50)] rounded-[var(--radius-sharp)] p-6" style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
               <div className="w-12 h-12 rounded-[var(--radius-sharp)] flex items-center justify-center mb-4" style={{ backgroundColor: "var(--ink-50)" }}>
-                <Target className="w-6 h-6" style={{ color: "var(--ink-600)" }} />
+                <IconProgress className="w-6 h-6" style={{ color: "var(--ink-600)" }} />
               </div>
               <h3 className="text-xl font-semibold mb-2" style={{ color: "var(--ink-800)" }}>使命</h3>
               <p style={{ color: "var(--ink-600)" }}>让每个学生都能享受到 AI 带来的个性化教育，让学习更高效。</p>
@@ -134,7 +134,7 @@ export default function AboutPage() {
               </div>
               <div className="text-center p-4">
                 <div className="w-12 h-12 rounded-[var(--radius-sharp)] flex items-center justify-center mx-auto mb-3" style={{ backgroundColor: "var(--ink-50)" }}>
-                  <Zap className="w-6 h-6" style={{ color: "var(--ink-600)" }} />
+                  <IconAllInOne className="w-6 h-6" style={{ color: "var(--ink-600)" }} />
                 </div>
                 <h3 className="font-semibold mb-1" style={{ color: "var(--ink-800)" }}>多智能体引擎</h3>
                 <p className="text-sm" style={{ color: "var(--ink-500)" }}>

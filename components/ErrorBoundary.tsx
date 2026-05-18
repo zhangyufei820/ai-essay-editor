@@ -7,8 +7,9 @@
 "use client"
 
 import { Component, ReactNode } from "react"
-import { AlertCircle, RefreshCw, Home, MessageCircle } from "lucide-react"
+import { Home } from "lucide-react"
 import { brandColors } from "@/lib/design-tokens"
+import { IconFollowup, IconHistory, IconInkDot } from "@/components/icons/v2"
 
 // ============================================
 // 类型定义
@@ -86,7 +87,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
         <div className="flex flex-col items-center justify-center min-h-[400px] p-8 text-center">
           {/* 错误图标 */}
           <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center mb-6">
-            <AlertCircle className="w-8 h-8 text-[var(--seal-500)]" />
+            <IconInkDot className="w-8 h-8 text-[var(--seal-500)]" />
           </div>
 
           {/* 标题 */}
@@ -106,7 +107,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
               className="inline-flex items-center gap-2 px-4 py-2 text-white rounded-[var(--radius-sharp)] hover:opacity-90 transition-colors"
               style={{ backgroundColor: brandColors[900] }}
             >
-              <RefreshCw className="w-4 h-4" />
+              <IconHistory className="w-4 h-4" />
               刷新页面
             </button>
             <button
@@ -123,7 +124,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
             href="mailto:support@shenxiang.edu"
             className="inline-flex items-center gap-1.5 text-sm text-[var(--ink-400)] hover:text-[var(--ink-600)] transition-colors"
           >
-            <MessageCircle className="w-4 h-4" />
+            <IconFollowup className="w-4 h-4" />
             联系客服
           </a>
 

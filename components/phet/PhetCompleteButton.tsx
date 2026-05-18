@@ -2,9 +2,10 @@
 
 import { ButtonV2 as Button } from "@/components/ui/v2"
 import { useEffect, useMemo, useState } from "react"
-import { CheckCircle2, Loader2 } from "lucide-react"
+import { Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import { getVerifiedAuthHeaders } from "@/lib/client-auth"
+import { IconSealCheck } from "@/components/icons/v2"
 
 export function PhetCompleteButton({ simId }: { simId: string }) {
   const [startedAt] = useState(() => Date.now())
@@ -62,7 +63,7 @@ export function PhetCompleteButton({ simId }: { simId: string }) {
   return (
     <div className="space-y-2">
       <Button type="button" className="w-full" onClick={complete} disabled={isSubmitting}>
-        {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+        {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <IconSealCheck className="h-4 w-4" />}
         完成学习
       </Button>
       {message ? <p className="text-center text-xs text-[var(--ink-700)] dark:text-[var(--ink-300)]">{message}</p> : null}

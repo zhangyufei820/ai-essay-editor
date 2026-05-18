@@ -5,23 +5,8 @@
  * 与 lib/dify-credentials.ts 等业务侧的 model key 对齐。
  */
 
-import { Sparkles, Image as ImageIcon } from "lucide-react"
-import {
-  IconAllInOne,
-  IconBanzhuren,
-  IconDiagnosis,
-  IconEnglish,
-  IconEssay,
-  IconFollowup,
-  IconMath,
-  IconMic,
-  IconMusic,
-  IconOpenClaw,
-  IconProblem,
-  IconTeaching,
-  IconVocab,
-  IconWriting,
-} from "@/components/icons/v2"
+import { Image as ImageIcon } from "lucide-react"
+import { IconAllInOne, IconBanzhuren, IconDiagnosis, IconEnglish, IconEssay, IconFollowup, IconMath, IconMic, IconMusic, IconOpenClaw, IconProblem, IconTeaching, IconVocab, IconWriting } from "@/components/icons/v2"
 import type { AgentDefinition } from "./types"
 
 export const AGENT_REGISTRY: Record<string, AgentDefinition> = {
@@ -41,7 +26,7 @@ export const AGENT_REGISTRY: Record<string, AgentDefinition> = {
     group: "general",
     artifactType: "markdown",
     priceLabel: "按字数计费",
-    icon: Sparkles,
+    icon: IconAllInOne,
   },
   "teaching-pro": {
     model: "teaching-pro",

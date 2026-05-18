@@ -1,6 +1,7 @@
 import { CardV2 as Card } from "@/components/ui/v2"
-import { Baby, BookOpen, GraduationCap, School } from 'lucide-react'
+import { Baby, School } from "lucide-react"
 import Link from "next/link"
+import { IconEnglish, IconTeaching } from "@/components/icons/v2"
 
 const gradeLevels = [
   {
@@ -23,7 +24,7 @@ const gradeLevels = [
     id: "high",
     title: "高中教育",
     description: "高考备战，系统化知识梳理与提升",
-    icon: BookOpen,
+    icon: IconEnglish,
     subjects: ["语文", "数学", "英语", "物理", "化学", "生物", "历史", "地理", "政治"],
     href: "/subjects/high",
   },
@@ -31,7 +32,7 @@ const gradeLevels = [
     id: "university",
     title: "大学教育",
     description: "专业课程辅导，学术论文写作指导",
-    icon: GraduationCap,
+    icon: IconTeaching,
     subjects: ["专业课", "论文写作", "考研辅导", "英语四六级"],
     href: "/subjects/university",
   },

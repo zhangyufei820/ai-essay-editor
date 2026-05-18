@@ -11,8 +11,7 @@
 "use client"
 
 import * as React from "react"
-import { AlertTriangle } from "lucide-react"
-import { IconExportPdf, IconShare } from "@/components/icons/v2"
+import { IconExportPdf, IconInkDot, IconShare } from "@/components/icons/v2"
 import { ButtonV2 } from "@/components/ui/v2/button"
 import { SealStamp } from "@/components/ui/v2/seal"
 import { cn } from "@/lib/utils"
@@ -77,7 +76,7 @@ export function WorksheetPosterTemplate({
       {artifact.weakPoints && artifact.weakPoints.length > 0 ? (
         <section className="border-b border-[var(--paper-200)] px-6 py-6 sm:px-8">
           <h2 className="font-[var(--font-display)] text-[18px] font-bold text-[var(--ink-800)] flex items-center gap-2">
-            <AlertTriangle className="size-4 text-[var(--seal-500)]" aria-hidden="true" />
+            <IconInkDot className="size-4 text-[var(--seal-500)]" aria-hidden="true" />
             薄弱点 TOP {artifact.weakPoints.length}
           </h2>
           <ul className="mt-4 space-y-2">

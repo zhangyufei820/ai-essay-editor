@@ -1,22 +1,23 @@
 import { ButtonV2 as Button, CardV2 as Card, CardV2Content as CardContent } from "@/components/ui/v2"
-import { Bot, Brain, Lightbulb, Zap, Sparkles, MessageCircle } from "lucide-react"
+import { Zap } from "lucide-react"
 import Link from "next/link"
+import { IconAllInOne, IconFollowup, IconProblem } from "@/components/icons/v2"
 
 const aiFeatures = [
   {
-    icon: Bot,
+    icon: IconAllInOne,
     title: "AI学习助手",
     description: "24小时在线的智能学习伙伴，随时解答学习疑问",
     features: ["智能答疑", "个性化推荐", "学习规划"],
   },
   {
-    icon: Brain,
+    icon: IconAllInOne,
     title: "思维训练",
     description: "通过AI互动游戏，提升逻辑思维和创造力",
     features: ["逻辑推理", "创意激发", "问题解决"],
   },
   {
-    icon: Lightbulb,
+    icon: IconProblem,
     title: "知识探索",
     description: "AI引导下的探究式学习，激发求知欲和探索精神",
     features: ["主题探索", "深度学习", "跨学科整合"],
@@ -35,7 +36,7 @@ export function ParentAI() {
       <div className="container px-4">
         <div className="mx-auto max-w-2xl text-center mb-16">
           <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-[var(--ink-50)] px-4 py-2 text-sm font-medium text-[var(--ink-600)]">
-            <Sparkles className="h-4 w-4" />
+            <IconAllInOne className="h-4 w-4" />
             AI赋能教育
           </div>
           <h2 className="mb-4 text-3xl font-bold lg:text-4xl font-[var(--font-display)]">AI共同学习</h2>
@@ -72,13 +73,13 @@ export function ParentAI() {
 
         <div className="mx-auto max-w-3xl rounded-[var(--radius-sharp)] bg-gradient-to-r from-[var(--ink-50)] via-[var(--paper-50)] to-[var(--ink-50)] p-8 lg:p-12">
           <div className="text-center">
-            <MessageCircle className="mx-auto mb-4 h-12 w-12 text-[var(--ink-600)]" />
+            <IconFollowup className="mx-auto mb-4 h-12 w-12 text-[var(--ink-600)]" />
             <h3 className="mb-3 text-2xl font-bold">开启AI学习之旅</h3>
             <p className="mb-6 text-[var(--ink-500)]">与孩子一起体验AI技术带来的学习革新，共同成长，共享快乐</p>
             <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
               <Link href="/chat">
                 <Button size="lg" className="w-full sm:w-auto gap-2">
-                  <Sparkles className="h-5 w-5" />
+                  <IconAllInOne className="h-5 w-5" />
                   开始AI对话
                 </Button>
               </Link>

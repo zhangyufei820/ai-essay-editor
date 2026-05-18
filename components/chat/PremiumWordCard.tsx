@@ -1,8 +1,8 @@
 "use client"
 
 import { useEffect, useMemo, useState, type ReactNode } from "react"
-import { CheckCircle2, Headphones, Lightbulb, RotateCcw, Sparkles, SpellCheck, XCircle } from "lucide-react"
-import { IconEnglish, IconListen } from "@/components/icons/v2"
+import { Headphones, SpellCheck, XCircle } from "lucide-react"
+import { IconAllInOne, IconEnglish, IconHistory, IconListen, IconProblem, IconSealCheck } from "@/components/icons/v2"
 import { cn } from "@/lib/utils"
 import { getVerifiedAuthHeaders } from "@/lib/client-auth"
 import type { FrontendWordCard } from "@/lib/word-card-normalizer"
@@ -205,7 +205,7 @@ export function PremiumWordCard({ data }: PremiumWordCardProps) {
           </div>
         </Section>
 
-        <Section icon={<Sparkles className="h-4 w-4" />} title="记忆故事" tone="border-fuchsia-100 bg-fuchsia-50">
+        <Section icon={<IconAllInOne className="h-4 w-4" />} title="记忆故事" tone="border-fuchsia-100 bg-fuchsia-50">
           <div className="grid gap-3">
             <Field label="故事标题" value={memoryStory.story_title_cn} />
             <Field label="故事" value={memoryStory.story_cn} />
@@ -230,7 +230,7 @@ export function PremiumWordCard({ data }: PremiumWordCardProps) {
           </div>
         </Section>
 
-        <Section icon={<RotateCcw className="h-4 w-4" />} title="复习" tone="border-indigo-100 bg-indigo-50">
+        <Section icon={<IconHistory className="h-4 w-4" />} title="复习" tone="border-indigo-100 bg-indigo-50">
           <div className="grid gap-3">
             <Field label="正面问题" value={review.front_question_cn} />
             <Field label="背面答案" value={review.back_answer_cn} />
@@ -246,7 +246,7 @@ export function PremiumWordCard({ data }: PremiumWordCardProps) {
           </div>
         </Section>
 
-        <Section icon={<Lightbulb className="h-4 w-4" />} title="快速记忆" tone="border-rose-100 bg-rose-50">
+        <Section icon={<IconProblem className="h-4 w-4" />} title="快速记忆" tone="border-rose-100 bg-rose-50">
           <div className="grid gap-3">
             <Field label="一句话" value={quickMemory.one_sentence_cn} />
             <Field label="口诀" value={quickMemory.chant_cn} />
@@ -258,7 +258,7 @@ export function PremiumWordCard({ data }: PremiumWordCardProps) {
       <footer className="border-t border-[var(--paper-100)] bg-[var(--paper-50)] px-4 py-4 sm:px-6">
         <div className="flex flex-wrap items-center gap-2">
           <Pill className={qualityPassed ? "border-[var(--ink-200)] bg-[var(--ink-50)] text-[var(--ink-700)]" : "border-amber-200 bg-amber-50 text-amber-700"}>
-            {qualityPassed ? <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> : <XCircle className="mr-1 h-3.5 w-3.5" />}
+            {qualityPassed ? <IconSealCheck className="mr-1 h-3.5 w-3.5" /> : <XCircle className="mr-1 h-3.5 w-3.5" />}
             {qualityPassed ? "最终复检通过，可以展示" : "需要继续核验"}
           </Pill>
           {text(quality.score) && <Pill>评分 {text(quality.score)}</Pill>}

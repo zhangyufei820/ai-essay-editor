@@ -15,7 +15,8 @@ import {
 import { Suspense, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
-import { AlertCircle, CheckCircle, Clock, Loader2, RefreshCw } from "lucide-react"
+import { CheckCircle, Loader2 } from "lucide-react"
+import { IconHistory, IconInkDot } from "@/components/icons/v2"
 
 type OrderStatus = "loading" | "paid" | "pending" | "failed" | "not_found" | "unauthorized" | "error"
 
@@ -118,9 +119,9 @@ function PaymentSuccessContent() {
           {isSuccess ? (
             <CheckCircle className="h-16 w-16 text-[var(--ink-600)]" />
           ) : isPending ? (
-            <Clock className="h-16 w-16 text-amber-500" />
+            <IconHistory className="h-16 w-16 text-amber-500" />
           ) : (
-            <AlertCircle className="h-16 w-16 text-[var(--seal-500)]" />
+            <IconInkDot className="h-16 w-16 text-[var(--seal-500)]" />
           )}
         </div>
         <CardTitle className="text-2xl">
@@ -162,7 +163,7 @@ function PaymentSuccessContent() {
 
         {status === "unauthorized" && (
           <Alert variant="error">
-            <AlertCircle className="h-4 w-4" />
+            <IconInkDot className="h-4 w-4" />
             <AlertTitle>需要登录</AlertTitle>
             <AlertDescription>为了保护订单隐私，订单结果只允许本人查看。</AlertDescription>
           </Alert>
@@ -170,7 +171,7 @@ function PaymentSuccessContent() {
 
         {isFailure && status !== "unauthorized" && (
           <Alert variant="error">
-            <AlertCircle className="h-4 w-4" />
+            <IconInkDot className="h-4 w-4" />
             <AlertTitle>如果已经扣款，不要重复支付</AlertTitle>
             <AlertDescription>请保存订单号，联系 support@shenxiang.school，我们会帮你核对。</AlertDescription>
           </Alert>
@@ -205,7 +206,7 @@ function PaymentSuccessContent() {
 
         {orderNo && (
           <Button variant="ghost" className="w-full" onClick={() => window.location.reload()}>
-            {status === "loading" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+            {status === "loading" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <IconHistory className="mr-2 h-4 w-4" />}
             刷新支付结果
           </Button>
         )}

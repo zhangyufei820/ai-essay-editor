@@ -1,9 +1,10 @@
 "use client"
 
 import { ButtonV2 as Button } from "@/components/ui/v2"
-import { ArrowLeft, Languages, Maximize2, RotateCcw } from "lucide-react"
+import { ArrowLeft, Languages, Maximize2 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import type { PhetLocale } from "@/lib/phet/phet-utils"
+import { IconHistory } from "@/components/icons/v2"
 
 export function PhetSimControls({
   locale,
@@ -43,7 +44,7 @@ export function PhetSimControls({
           En
         </Button>
         <Button type="button" variant="outline" size="icon-sm" onClick={onRetry} aria-label="重新加载实验">
-          <RotateCcw className="h-4 w-4" />
+          <IconHistory className="h-4 w-4" />
         </Button>
         <Button type="button" variant="outline" size="icon-sm" onClick={onFullscreen} aria-label="全屏实验">
           <Maximize2 className="h-4 w-4" />

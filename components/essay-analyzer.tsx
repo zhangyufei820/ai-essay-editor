@@ -3,8 +3,9 @@
 import type React from "react"
 
 import { useState, useRef } from "react"
-import { Upload, FileText, Loader2, Clock, CheckCircle2, ArrowRight } from "lucide-react"
+import { Upload, Loader2, ArrowRight } from "lucide-react"
 import ReactMarkdown from "react-markdown"
+import { IconEssay, IconHistory, IconSealCheck } from "@/components/icons/v2"
 
 type Status = "idle" | "uploading" | "processing" | "completed"
 
@@ -186,7 +187,7 @@ export default function EssayAnalyzer() {
                       <div className="absolute inset-0 bg-blue-500/20 rounded-full animate-ping" />
                     </div>
                   ) : status === "completed" ? (
-                    <CheckCircle2 className="w-16 h-16 text-[var(--ink-600)]" />
+                    <IconSealCheck className="w-16 h-16 text-[var(--ink-600)]" />
                   ) : (
                     <Upload className="w-16 h-16 text-blue-600" />
                   )}
@@ -213,7 +214,7 @@ export default function EssayAnalyzer() {
             {/* Result Area - Using native div scrollable area */}
             <div className="bg-[var(--paper-50)] rounded-[var(--radius-sharp)] border-2 border-[var(--paper-200)] shadow-lg p-6">
               <div className="flex items-center gap-2 mb-4 pb-4 border-b border-[var(--paper-200)]">
-                <FileText className="w-5 h-5 text-blue-600" />
+                <IconEssay className="w-5 h-5 text-blue-600" />
                 <h2 className="text-lg font-semibold text-[var(--ink-800)]">批改结果</h2>
               </div>
 
@@ -225,7 +226,7 @@ export default function EssayAnalyzer() {
                 ) : (
                   <div className="flex items-center justify-center min-h-[400px] text-[var(--ink-400)]">
                     <div className="text-center">
-                      <FileText className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                      <IconEssay className="w-12 h-12 mx-auto mb-3 opacity-50" />
                       <p className="text-sm">
                         {status === "processing" ? (
                           <span className="flex items-center justify-center gap-2">
@@ -260,7 +261,7 @@ export default function EssayAnalyzer() {
           <div className="lg:col-span-4">
             <div className="bg-slate-900 rounded-[var(--radius-sharp)] border-2 border-slate-700 shadow-lg p-6 h-full">
               <div className="flex items-center gap-2 mb-4 pb-4 border-b border-slate-700">
-                <Clock className="w-5 h-5 text-[var(--ink-400)]" />
+                <IconHistory className="w-5 h-5 text-[var(--ink-400)]" />
                 <h2 className="text-lg font-semibold text-white">系统日志</h2>
               </div>
 
@@ -293,7 +294,7 @@ export default function EssayAnalyzer() {
 
                 {status === "completed" && (
                   <div className="mt-4 flex items-center gap-2 p-3 bg-[var(--ink-900)]/30 border border-[var(--ink-700)] rounded-[var(--radius-soft)]">
-                    <CheckCircle2 className="w-5 h-5 text-[var(--ink-400)] shrink-0" />
+                    <IconSealCheck className="w-5 h-5 text-[var(--ink-400)] shrink-0" />
                     <span className="text-sm font-medium text-[var(--ink-300)]">所有任务已完成</span>
                   </div>
                 )}

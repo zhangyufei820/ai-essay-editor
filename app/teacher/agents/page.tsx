@@ -12,8 +12,9 @@ import {
 } from "@/components/ui/v2"
 import { useEffect, useMemo, useState, type FormEvent } from "react"
 import Link from "next/link"
-import { Bot, Copy, Loader2, Plus, RefreshCw, Share2, Trash2, Users } from "lucide-react"
+import { Loader2, Plus, Trash2 } from "lucide-react"
 import { getVerifiedAuthHeaders } from "@/lib/client-auth"
+import { IconAllInOne, IconBanzhuren, IconCopy, IconHistory, IconShare } from "@/components/icons/v2"
 
 const TEMPLATES = [
   { value: "essay_review", label: "作文批改", description: "总评、打分、逐段批注和升格建议" },
@@ -244,7 +245,7 @@ export default function TeacherAgentsPage() {
             </p>
           </div>
           <Button variant="outline" onClick={loadData}>
-            <RefreshCw className="mr-2 size-4" />
+            <IconHistory className="mr-2 size-4" />
             刷新
           </Button>
         </header>
@@ -325,7 +326,7 @@ export default function TeacherAgentsPage() {
             <Card className="rounded-[var(--radius-sharp)]">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base">
-                  <Bot className="size-5 text-[var(--ink-600)]" />
+                  <IconAllInOne className="size-5 text-[var(--ink-600)]" />
                   我的智能体
                 </CardTitle>
               </CardHeader>
@@ -350,12 +351,12 @@ export default function TeacherAgentsPage() {
                           </div>
                           {agent.description ? <p className="text-sm text-[var(--ink-500)]">{agent.description}</p> : null}
                           <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--ink-500)]">
-                            <Share2 className="size-4" />
+                            <IconShare className="size-4" />
                             <span>share_code: {agent.share_code}</span>
                           </div>
                           <div className="flex flex-wrap gap-2">
                             <Button size="sm" variant="outline" onClick={() => copyShare(agent.share_code)}>
-                              <Copy className="mr-2 size-4" />
+                              <IconCopy className="mr-2 size-4" />
                               复制链接
                             </Button>
                             <Button size="sm" asChild>
@@ -375,7 +376,7 @@ export default function TeacherAgentsPage() {
             <Card className="rounded-[var(--radius-sharp)]">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base">
-                  <Users className="size-5 text-[var(--ink-600)]" />
+                  <IconBanzhuren className="size-5 text-[var(--ink-600)]" />
                   学生绑定与进度
                 </CardTitle>
               </CardHeader>
