@@ -24,6 +24,14 @@ import {
 } from "@/components/chat/v2/templates"
 import type { FlashcardArtifact, VocabCardArtifact, WorksheetDiagnosisArtifact } from "@/components/chat/v2/types"
 import { exportChatContentToPDF } from "@/lib/chat-pdf-export"
+import {
+  SheetV2,
+  SheetV2Content,
+  SheetV2Description,
+  SheetV2Header,
+  SheetV2Title,
+  SheetV2Trigger,
+} from "@/components/ui/v2/sheet"
 import { InkBrush } from "@/components/motion/InkMotion"
 import { parseEssayReview } from "@/lib/parse-essay-review"
 import { splitThinkingContent } from "@/lib/think-content"
@@ -423,6 +431,38 @@ function MessageActionToolbar({ actions }: { actions: MessageActions }) {
           {label}
         </button>
       ))}
+      <SheetV2>
+        <SheetV2Trigger asChild>
+          <button
+            type="button"
+            className="inline-flex min-h-9 items-center gap-1.5 rounded-[var(--radius-pill)] px-2.5 py-1.5 text-[12px] font-medium text-[var(--ink-600)] transition-colors hover:bg-[var(--ink-50)] hover:text-[var(--ink-800)] focus-visible:outline-none focus-visible:[box-shadow:var(--shadow-focus-ink)]"
+          >
+            <IconExportPdf className="size-3.5" aria-hidden="true" />
+            查看产物
+          </button>
+        </SheetV2Trigger>
+        <SheetV2Content side="right" className="w-[88vw] max-w-sm">
+          <SheetV2Header>
+            <SheetV2Title>已生成产物</SheetV2Title>
+            <SheetV2Description>当前回复可导出的学习材料。</SheetV2Description>
+          </SheetV2Header>
+          <div className="px-6 pb-6">
+            <ul className="space-y-2">
+              <li className="flex items-center gap-2 rounded-[var(--radius-soft)] border border-[var(--paper-200)] bg-white/70 px-3 py-2 text-[13px] text-[var(--ink-700)]">
+                <IconExportPdf className="size-4 text-[var(--seal-500)]" />
+                <span className="min-w-0 flex-1 truncate">AI 回复导出 PDF</span>
+                <button
+                  type="button"
+                  onClick={actions.onExportPDF}
+                  className="shrink-0 text-[var(--ink-500)] transition-colors hover:text-[var(--ink-800)] focus-visible:outline-none focus-visible:[box-shadow:var(--shadow-focus-ink)]"
+                >
+                  下载
+                </button>
+              </li>
+            </ul>
+          </div>
+        </SheetV2Content>
+      </SheetV2>
       <div className="ml-auto flex items-center gap-1">
         <button
           type="button"
