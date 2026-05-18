@@ -12,7 +12,8 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { BookOpen, Plus, RotateCcw } from "lucide-react"
+import { Plus } from "lucide-react"
+import { IconEnglish, IconHistory } from "@/components/icons/v2"
 import { cn } from "@/lib/utils"
 import { ButtonV2 } from "@/components/ui/v2/button"
 import { CardV2, CardV2Content } from "@/components/ui/v2/card"
@@ -72,7 +73,7 @@ export function FlashcardsPageV2({
           <StatCard
             label="今日待复习"
             value={dueCount}
-            icon={<RotateCcw className="size-4" />}
+            icon={<IconHistory className="size-4" />}
             tone="seal"
           />
         </InkStaggerItem>
@@ -80,7 +81,7 @@ export function FlashcardsPageV2({
           <StatCard
             label="已掌握"
             value={masteredCount}
-            icon={<BookOpen className="size-4" />}
+            icon={<IconEnglish className="size-4" />}
             tone="ink"
           />
         </InkStaggerItem>
@@ -123,7 +124,7 @@ export function FlashcardsPageV2({
           disabled={dueCount === 0}
           className="min-w-[180px]"
         >
-          <RotateCcw className="size-4" />
+          <IconHistory className="size-4" />
           {dueCount > 0 ? `开始复习 (${dueCount})` : "今日已完成"}
         </ButtonV2>
 

@@ -10,7 +10,13 @@ import {
 } from "@/components/ui/v2"
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { BarChart3, BookOpenCheck, Gem, Target, TrendingUp, Flame } from "lucide-react"
+import {
+  IconCredits,
+  IconDashboard,
+  IconProgress,
+  IconSealCheck,
+  IconStreak,
+} from "@/components/icons/v2"
 import { getVerifiedAuthHeaders } from "@/lib/client-auth"
 
 const SUBJECT_NAMES: Record<string, string> = {
@@ -188,25 +194,25 @@ export default function DashboardPage() {
           <>
             <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
               <StatCard
-                icon={<Flame className="size-5" />}
+                icon={<IconStreak className="size-5" />}
                 label="连续打卡"
                 value={`${data.progress.current_streak} 天`}
                 detail={`最长 ${data.progress.longest_streak} 天`}
               />
               <StatCard
-                icon={<TrendingUp className="size-5" />}
+                icon={<IconProgress className="size-5" />}
                 label="累计 XP"
                 value={`${totalXp} XP`}
                 detail={`本周 +${data.weekly_stats.total_xp}`}
               />
               <StatCard
-                icon={<BookOpenCheck className="size-5" />}
+                icon={<IconSealCheck className="size-5" />}
                 label="当前等级"
                 value={`Lv.${data.progress.level}`}
                 detail={`距下一级还需 ${nextLevelXp} XP`}
               />
               <StatCard
-                icon={<Gem className="size-5" />}
+                icon={<IconCredits className="size-5" />}
                 label="综合掌握度"
                 value={`${averageMastery}%`}
                 detail="来自各科掌握度均值"
@@ -216,7 +222,7 @@ export default function DashboardPage() {
             <Card className="rounded-[var(--radius-sharp)]">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-lg">
-                  <BarChart3 className="size-5 text-[var(--ink-700)] dark:text-[var(--ink-200)]" />
+                  <IconDashboard className="size-5 text-[var(--ink-700)] dark:text-[var(--ink-200)]" />
                   学习时长趋势
                 </CardTitle>
               </CardHeader>
@@ -269,7 +275,7 @@ export default function DashboardPage() {
               <Card className="rounded-[var(--radius-sharp)]">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-lg">
-                    <Target className="size-5 text-[var(--ink-700)] dark:text-[var(--ink-200)]" />
+                    <IconProgress className="size-5 text-[var(--ink-700)] dark:text-[var(--ink-200)]" />
                     今日待办
                   </CardTitle>
                 </CardHeader>

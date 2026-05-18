@@ -11,7 +11,8 @@ import {
 } from "@/components/ui/v2"
 import { useEffect, useMemo, useState, type FormEvent } from "react"
 import Link from "next/link"
-import { FileText, FolderOpen, Loader2, Plus, RefreshCw } from "lucide-react"
+import { Loader2, Plus, RefreshCw } from "lucide-react"
+import { IconEssay, IconFolder } from "@/components/icons/v2"
 import { getVerifiedAuthHeaders } from "@/lib/client-auth"
 
 const SUBJECTS = [
@@ -230,7 +231,7 @@ export default function FolderPage() {
           <section className="space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-sm text-[var(--ink-500)]">
-                <FolderOpen className="size-4" />
+                <IconFolder className="size-4" />
                 共 {totalCount} 条资料
               </div>
             </div>
@@ -251,7 +252,7 @@ export default function FolderPage() {
                         <Card key={file.id} className="rounded-[var(--radius-sharp)]">
                           <CardContent className="flex gap-3 py-4">
                             <div className="flex size-10 shrink-0 items-center justify-center rounded-[var(--radius-soft)] bg-[var(--ink-50)] text-[var(--ink-700)] dark:bg-[var(--ink-900)]/50 dark:text-[var(--ink-200)]">
-                              <FileText className="size-5" />
+                              <IconEssay className="size-5" />
                             </div>
                             <div className="min-w-0 flex-1">
                               <div className="truncate font-medium">{file.filename}</div>
@@ -270,7 +271,7 @@ export default function FolderPage() {
             ) : (
               <Card className="rounded-[var(--radius-sharp)]">
                 <CardContent className="flex flex-col items-center gap-3 py-14 text-center">
-                  <FolderOpen className="size-10 text-[var(--ink-600)]" />
+                  <IconFolder className="size-10 text-[var(--ink-600)]" />
                   <div>
                     <h2 className="font-semibold font-[var(--font-display)]">资料夹还是空的</h2>
                     <p className="mt-1 text-sm text-[var(--ink-500)]">先添加一条笔记或资料链接，后续就能用于生成闪卡。</p>

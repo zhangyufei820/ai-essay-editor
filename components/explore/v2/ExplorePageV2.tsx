@@ -3,7 +3,8 @@
 import * as React from "react"
 import Image from "next/image"
 import Link from "next/link"
-import { ArrowRight, Eye, Heart, MessageCircle, RefreshCw, Share2, Sparkles } from "lucide-react"
+import { ArrowRight, Eye, Heart, RefreshCw } from "lucide-react"
+import { IconAllInOne, IconFollowup, IconShare } from "@/components/icons/v2"
 import { cn } from "@/lib/utils"
 import { ButtonV2 } from "@/components/ui/v2/button"
 import { BadgeV2 } from "@/components/ui/v2/badge"
@@ -91,7 +92,7 @@ export function ExplorePageV2({ className }: { className?: string }) {
       <header className="mb-8 grid gap-6 rounded-[var(--radius-sharp)] border border-[var(--ink-200)] bg-[linear-gradient(180deg,var(--ink-50),var(--paper-50))] p-5 shadow-[0_22px_70px_rgba(16,55,35,0.10)] md:grid-cols-[1fr_auto] md:p-7">
         <div>
           <span className="inline-flex items-center gap-1.5 rounded-[var(--radius-pill)] border border-[var(--ink-200)] bg-[var(--paper-50)] px-3 py-1.5 text-[12px] font-semibold text-[var(--ink-700)]">
-            <Sparkles className="size-3.5" aria-hidden="true" />
+            <IconAllInOne className="size-3.5" aria-hidden="true" />
             创作广场
           </span>
           <h1 className="mt-4 font-[var(--font-display)] text-[clamp(30px,5vw,46px)] font-black leading-[1.08] text-[var(--ink-900)]">
@@ -207,7 +208,7 @@ function EmptyExploreState({
     <div className="grid min-h-[360px] place-items-center rounded-[var(--radius-sharp)] border border-dashed border-[var(--ink-200)] bg-[var(--ink-50)] p-6 text-center">
       <div className="max-w-md">
         <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-[var(--radius-soft)] border border-[var(--ink-200)] bg-[var(--paper-50)] text-[var(--ink-700)]">
-          <Share2 className="size-5" aria-hidden="true" />
+          <IconShare className="size-5" aria-hidden="true" />
         </div>
         <h2 className="font-[var(--font-display)] text-[22px] font-bold text-[var(--ink-800)]">{title}</h2>
         <p className="mt-2 text-[14px] leading-[1.7] text-[var(--ink-500)]">{description}</p>
@@ -260,7 +261,7 @@ function ExploreCard({ item, featured }: { item: ExploreItem; featured: boolean 
           <div className="mt-auto flex items-center gap-4 text-[12px] text-[var(--ink-500)]">
             <span className="flex items-center gap-1"><Eye className="size-3" aria-hidden="true" />{viewCount}</span>
             <span className="flex items-center gap-1"><Heart className="size-3" aria-hidden="true" />{likeCount}</span>
-            <span className="flex items-center gap-1"><MessageCircle className="size-3" aria-hidden="true" />{commentCount}</span>
+            <span className="flex items-center gap-1"><IconFollowup className="size-3" aria-hidden="true" />{commentCount}</span>
             <span className="ml-auto flex items-center gap-1 font-semibold text-[var(--ink-700)]">
               查看
               <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />

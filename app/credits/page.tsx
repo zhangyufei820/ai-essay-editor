@@ -13,7 +13,7 @@ import Link from "next/link"
 import { ShenxiangInterfaceIcon } from "@/components/icons/ShenxiangInterfaceIcons"
 import { getVerifiedAuthHeaders } from "@/lib/client-auth"
 import { createClient } from "@/lib/supabase/client"
-import { TrendingUp } from "lucide-react"
+import { IconProgress } from "@/components/icons/v2"
 
 type CreditTransaction = {
   id: string | number
@@ -139,7 +139,7 @@ export default function CreditsPage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">累计获得</CardTitle>
-              <TrendingUp className="h-4 w-4 text-[var(--ink-500)]" />
+              <IconProgress className="h-4 w-4 text-[var(--ink-500)]" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{totalEarned}</div>

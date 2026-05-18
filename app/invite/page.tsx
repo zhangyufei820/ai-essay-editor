@@ -3,7 +3,8 @@
 import * as React from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Check, Copy, Gift, Lock, Share2, Sparkles, Users } from "lucide-react"
+import { ArrowLeft, Check, Lock } from "lucide-react"
+import { IconAllInOne, IconBanzhuren, IconCopy, IconInvite, IconShare } from "@/components/icons/v2"
 import { toast } from "sonner"
 import { createClient } from "@supabase/supabase-js"
 import { BadgeV2 as Badge, ButtonV2 as Button, CardV2 as Card, LoadingStateV2, ProgressV2 } from "@/components/ui/v2"
@@ -187,7 +188,7 @@ export default function InvitePage() {
           <Card className="overflow-hidden border-[var(--ink-200)] bg-[linear-gradient(180deg,var(--ink-50),var(--paper-50))] shadow-[0_24px_80px_rgba(16,55,35,0.12)]">
             <div className="p-6 md:p-8">
               <span className="inline-flex items-center gap-1.5 rounded-[var(--radius-pill)] border border-[var(--ink-200)] bg-[var(--paper-50)] px-3 py-1.5 text-[12px] font-semibold text-[var(--ink-700)]">
-                <Gift className="size-3.5" aria-hidden="true" />
+                <IconInvite className="size-3.5" aria-hidden="true" />
                 邀请奖励
               </span>
               <h1 className="mt-5 max-w-2xl font-[var(--font-display)] text-[clamp(32px,5vw,52px)] font-black leading-[1.08] text-[var(--ink-900)]">
@@ -212,11 +213,11 @@ export default function InvitePage() {
                     <p className="truncate">{isPaidMember && referralCode ? inviteLink : "会员专属邀请链接"}</p>
                   </div>
                   <Button variant="outline" onClick={handleCopy} disabled={!isPaidMember || !referralCode}>
-                    {copied ? <Check className="size-4" aria-hidden="true" /> : <Copy className="size-4" aria-hidden="true" />}
+                    {copied ? <Check className="size-4" aria-hidden="true" /> : <IconCopy className="size-4" aria-hidden="true" />}
                     {copied ? "已复制" : "复制"}
                   </Button>
                   <Button onClick={handleShareClick} disabled={!referralCode}>
-                    <Share2 className="size-4" aria-hidden="true" />
+                    <IconShare className="size-4" aria-hidden="true" />
                     {isPaidMember ? "立即分享" : "开通后分享"}
                   </Button>
                 </div>
@@ -228,7 +229,7 @@ export default function InvitePage() {
             <Card className="p-5">
               <div className="flex items-center gap-3">
                 <div className="flex size-10 items-center justify-center rounded-[var(--radius-soft)] border border-[var(--ink-200)] bg-[var(--ink-50)] text-[var(--ink-700)]">
-                  <Users className="size-5" aria-hidden="true" />
+                  <IconBanzhuren className="size-5" aria-hidden="true" />
                 </div>
                 <div>
                   <p className="text-[12px] font-semibold text-[var(--ink-500)]">已邀请好友</p>
@@ -239,7 +240,7 @@ export default function InvitePage() {
             <Card className="p-5">
               <div className="flex items-center gap-3">
                 <div className="flex size-10 items-center justify-center rounded-[var(--radius-soft)] border border-[var(--ink-200)] bg-[var(--ink-50)] text-[var(--ink-700)]">
-                  <Sparkles className="size-5" aria-hidden="true" />
+                  <IconAllInOne className="size-5" aria-hidden="true" />
                 </div>
                 <div>
                   <p className="text-[12px] font-semibold text-[var(--ink-500)]">已获得积分</p>
