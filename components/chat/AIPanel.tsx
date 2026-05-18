@@ -161,7 +161,7 @@ export function AIPanel({ isOpen, onClose }: AIPanelProps) {
                 opacity: [0.5, 1, 0.5],
                 scaleX: [0.8, 1, 0.8],
               }}
-              transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+              transition={{ duration: 3, repeat: 0, ease: "easeInOut" }}
             />
 
             {/* 扫描光效 */}
@@ -209,7 +209,7 @@ export function AIPanel({ isOpen, onClose }: AIPanelProps) {
                       boxShadow: "0 0 20px rgba(134, 239, 172, 0.3)",
                     }}
                     animate={{ opacity: [0.3, 0.7, 0.3], scale: [1, 1.1, 1] }}
-                    transition={{ duration: 2.5, repeat: Infinity }}
+                    transition={{ duration: 2.5, repeat: 0 }}
                   />
                 </div>
 
@@ -284,7 +284,7 @@ export function AIPanel({ isOpen, onClose }: AIPanelProps) {
                     "0 0 20px rgba(134, 239, 172, 0.05)",
                   ],
                 }}
-                transition={{ duration: 4, repeat: Infinity }}
+                transition={{ duration: 4, repeat: 0 }}
               >
                 <p
                   className="text-xs tracking-[3px]"

@@ -140,7 +140,7 @@ export const AnimatedButton = forwardRef<HTMLButtonElement, AnimatedButtonProps>
             }}
             transition={{
               duration: 2,
-              repeat: Infinity,
+              repeat: 0,
               ease: "easeInOut"
             }}
           />

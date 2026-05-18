@@ -186,7 +186,7 @@ export function CreativePanel({ isOpen, onClose }: CreativePanelProps) {
                 opacity: [0.5, 1, 0.5],
                 scaleX: [0.8, 1, 0.8],
               }}
-              transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+              transition={{ duration: 3, repeat: 0, ease: "easeInOut" }}
             />
 
             {/* 扫描光效 */}
@@ -234,7 +234,7 @@ export function CreativePanel({ isOpen, onClose }: CreativePanelProps) {
                       boxShadow: "0 0 20px rgba(134, 239, 172, 0.3)",
                     }}
                     animate={{ opacity: [0.3, 0.7, 0.3], scale: [1, 1.1, 1] }}
-                    transition={{ duration: 2.5, repeat: Infinity }}
+                    transition={{ duration: 2.5, repeat: 0 }}
                   />
                 </div>
 
@@ -311,7 +311,7 @@ export function CreativePanel({ isOpen, onClose }: CreativePanelProps) {
                         "0 0 10px rgba(134, 239, 172, 0.1)",
                       ],
                     }}
-                    transition={{ duration: 3, repeat: Infinity }}
+                    transition={{ duration: 3, repeat: 0 }}
                   >
                     <IconAllInOne className="w-4 h-4" style={{ color: TOKENS.primary[700] }} />
                   </motion.div>
@@ -348,7 +348,7 @@ export function CreativePanel({ isOpen, onClose }: CreativePanelProps) {
                     "0 0 20px rgba(134, 239, 172, 0.05)",
                   ],
                 }}
-                transition={{ duration: 4, repeat: Infinity }}
+                transition={{ duration: 4, repeat: 0 }}
               >
                 <p
                   className="text-xs tracking-[3px]"
@@ -416,7 +416,7 @@ function CreativeIslandCard({
         animate={{
           opacity: [0.5, 0.8, 0.5],
         }}
-        transition={{ duration: 3, repeat: Infinity }}
+        transition={{ duration: 3, repeat: 0 }}
       />
 
       {/* 热门标签 */}
@@ -434,7 +434,7 @@ function CreativeIslandCard({
               "0 0 6px rgba(34, 197, 94, 0.4)",
             ],
           }}
-          transition={{ duration: 2, repeat: Infinity }}
+          transition={{ duration: 2, repeat: 0 }}
         >
           {option.badge}
         </motion.div>

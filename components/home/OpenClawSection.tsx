@@ -123,7 +123,7 @@ export function OpenClawSection() {
                 ],
                 opacity: [0.7, 1, 0.7],
               }}
-              transition={{ duration: 2, repeat: Infinity }}
+              transition={{ duration: 2, repeat: 0 }}
               style={{ backgroundColor: brandColors[600] }}
             />
             <span
@@ -186,7 +186,7 @@ export function OpenClawSection() {
                 scale: [1, 1.1, 1],
                 opacity: [0.5, 0.8, 0.5],
               }}
-              transition={{ duration: 4, repeat: Infinity }}
+              transition={{ duration: 4, repeat: 0 }}
             />
 
             <div className="relative z-10 flex flex-col md:flex-row items-center gap-8">
@@ -213,7 +213,7 @@ export function OpenClawSection() {
                       opacity: [0.3, 0.6, 0.3],
                       scale: [1, 1.05, 1],
                     }}
-                    transition={{ duration: 2, repeat: Infinity }}
+                    transition={{ duration: 2, repeat: 0 }}
                   />
                 </motion.div>
 

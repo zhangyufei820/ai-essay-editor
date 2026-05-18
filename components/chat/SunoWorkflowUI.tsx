@@ -137,19 +137,19 @@ const ComposingAnimation = () => (
       <motion.div
         className="absolute inset-0 rounded-full border-2 border-[var(--ink-200)]"
         animate={{ rotate: 360 }}
-        transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+        transition={{ duration: 3, repeat: 0, ease: "linear" }}
       />
       {/* 中圈反向旋转 */}
       <motion.div
         className="absolute inset-2 rounded-full border-2 border-dashed border-[var(--ink-300)]"
         animate={{ rotate: -360 }}
-        transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+        transition={{ duration: 4, repeat: 0, ease: "linear" }}
       />
       {/* 中心图标 */}
       <div className="absolute inset-4 flex items-center justify-center rounded-full bg-[var(--ink-600)] shadow-lg">
         <motion.div
           animate={{ scale: [1, 1.1, 1] }}
-          transition={{ duration: 1.5, repeat: Infinity }}
+          transition={{ duration: 1.5, repeat: 0 }}
         >
           <IconEssay className="h-6 w-6 text-white" />
         </motion.div>
@@ -163,7 +163,7 @@ const ComposingAnimation = () => (
     <motion.div
       className="mt-4 flex items-center justify-center gap-2 text-xs text-[var(--ink-600)]"
       animate={{ opacity: [0.5, 1, 0.5] }}
-      transition={{ duration: 2, repeat: Infinity }}
+      transition={{ duration: 2, repeat: 0 }}
     >
       <IconAllInOne className="h-3.5 w-3.5" />
       <span>灵感涌现中</span>
@@ -276,7 +276,7 @@ const SubmittingAnimation = () => (
       <motion.div
         className="absolute inset-0 rounded-full bg-[var(--ink-100)]"
         animate={{ scale: [1, 1.2, 1] }}
-        transition={{ duration: 1.5, repeat: Infinity }}
+        transition={{ duration: 1.5, repeat: 0 }}
       />
       <div className="absolute inset-0 flex items-center justify-center">
         <IconSend className="h-7 w-7 text-[var(--ink-600)]" />

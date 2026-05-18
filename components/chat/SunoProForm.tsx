@@ -689,7 +689,7 @@ export function SunoProForm({ onSubmit, isLoading = false, disabled = false }: S
                 <motion.div
                   className="flex items-center gap-3"
                   animate={{ opacity: [0.6, 1, 0.6] }}
-                  transition={{ duration: 1.5, repeat: Infinity }}
+                  transition={{ duration: 1.5, repeat: 0 }}
                 >
                   <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   <span>{willUseLLM ? "AI 正在优化创作..." : "正在生成..."}</span>
