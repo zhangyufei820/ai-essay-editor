@@ -34,10 +34,9 @@ import remarkMath from "remark-math"
 import rehypeKatex from "rehype-katex"
 
 // v2 墨砚 token colors
-const CLAUDE_TEXT_COLOR = "var(--ink-800)"
+const AI_TEXT_COLOR = "var(--ink-800)"
 const CLAUDE_SECONDARY_COLOR = "var(--ink-500)"
 const CLAUDE_ACCENT_COLOR = "var(--ink-700)"
-const CLAUDE_AVATAR_BG = "var(--ink-700)"
 const MAX_VISIBLE_HEIGHT = 600
 
 // Conclusion detection - hoisted to module scope to avoid recreation per render
@@ -237,7 +236,7 @@ function MarkdownContent({ content }: { content: string }) {
                   className="my-3 rounded-r-[var(--radius-soft)] border-l-[3px] border-[var(--ink-700)] bg-[var(--ink-50)]/70 px-4 py-3 text-[13px] sm:text-[14px]"
                   style={{
                     lineHeight: 1.6,
-                    color: CLAUDE_TEXT_COLOR,
+                    color: AI_TEXT_COLOR,
                 }}
               >
                 {children}
@@ -246,7 +245,7 @@ function MarkdownContent({ content }: { content: string }) {
           }
 
           return (
-            <p className="mb-1.5 last:mb-0 text-[13px] sm:text-[14px]" style={{ lineHeight: 1.6, color: CLAUDE_TEXT_COLOR }}>
+            <p className="mb-1.5 last:mb-0 text-[13px] sm:text-[14px]" style={{ lineHeight: 1.6, color: AI_TEXT_COLOR }}>
               {children}
             </p>
           )
@@ -262,7 +261,7 @@ function MarkdownContent({ content }: { content: string }) {
           </ol>
         ),
         li: ({ children }) => (
-          <li className="text-[13px] sm:text-[14px]" style={{ lineHeight: 1.6, color: CLAUDE_TEXT_COLOR }}>
+          <li className="text-[13px] sm:text-[14px]" style={{ lineHeight: 1.6, color: AI_TEXT_COLOR }}>
             {children}
           </li>
         ),
@@ -296,7 +295,7 @@ function MarkdownContent({ content }: { content: string }) {
           </pre>
         ),
         strong: ({ children }) => (
-          <strong className="font-semibold" style={{ color: CLAUDE_TEXT_COLOR }}>
+          <strong className="font-semibold" style={{ color: AI_TEXT_COLOR }}>
             {children}
           </strong>
         ),
@@ -495,7 +494,7 @@ function AssistantMarkdownCard({
       >
         <div
           className="text-[13px] sm:text-sm ai-content-container"
-          style={{ lineHeight: 1.6, color: CLAUDE_TEXT_COLOR }}
+          style={{ lineHeight: 1.6, color: AI_TEXT_COLOR }}
         >
           {parsedContent.hasThinking ? (
             <ThinkingDisclosure
@@ -667,7 +666,7 @@ const MessageBubble = memo(function MessageBubble({
               renderMarkdown={() => (
                 <div
                   className="text-[13px] sm:text-sm ai-content-container"
-                  style={{ lineHeight: 1.6, color: CLAUDE_TEXT_COLOR }}
+                  style={{ lineHeight: 1.6, color: AI_TEXT_COLOR }}
                 >
                   <MarkdownContent content={content} />
                 </div>
