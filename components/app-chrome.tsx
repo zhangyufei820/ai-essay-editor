@@ -1,5 +1,6 @@
 "use client"
 
+import { Box, Image, Music, Wrench } from "lucide-react"
 import { usePathname } from "next/navigation"
 import { useEffect, useMemo, useState, type ReactNode } from "react"
 
@@ -71,7 +72,7 @@ function hasStoredAuthToken() {
   )
 }
 
-function buildSidebarSections(): WorkspaceSidebarSection[] {
+export function buildSidebarSections(): WorkspaceSidebarSection[] {
   return [
     {
       title: "学习",
@@ -81,6 +82,15 @@ function buildSidebarSections(): WorkspaceSidebarSection[] {
         { label: "闪卡复习", href: "/flashcards" },
         { label: "互动实验室", href: "/lab" },
         { label: "教师平台", href: "/teacher/agents" },
+      ],
+    },
+    {
+      title: "多媒体专区",
+      items: [
+        { label: "GPT Image 2", href: "/chat/gpt-image-2", icon: Image, badge: "图像" },
+        { label: "Suno V5 音乐", href: "/chat/suno-v5", icon: Music, badge: "音乐" },
+        { label: "Tripo3D 模型生成", href: "/tools/tripo3d", icon: Box, badge: "3D" },
+        { label: "全部工具", href: "/tools", icon: Wrench },
       ],
     },
     {
