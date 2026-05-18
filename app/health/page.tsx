@@ -1,5 +1,6 @@
 import Link from "next/link"
-import { Activity, AlertCircle, ClipboardCheck, ExternalLink, Server } from "lucide-react"
+import { ExternalLink } from "lucide-react"
+import { IconDashboard, IconInkDot, IconProgress, IconSealCheck } from "@/components/icons/v2"
 
 const CHECK_ITEMS = [
   "确认最新版本是否已经完成构建并正常启动",
@@ -16,7 +17,7 @@ export default function HealthPage() {
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-[var(--ink-50)] px-3 py-1 text-sm font-medium text-[var(--ink-700)]">
-                <Activity className="h-4 w-4" />
+                <IconProgress className="h-4 w-4" />
                 运维状态页
               </div>
               <h1 className="text-3xl font-bold tracking-normal">健康检查</h1>
@@ -37,7 +38,7 @@ export default function HealthPage() {
         <section className="grid gap-4 md:grid-cols-2">
           <div className="rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-[var(--paper-50)] p-6 shadow-sm">
             <div className="mb-4 flex items-center gap-2">
-              <Server className="h-5 w-5 text-[var(--ink-700)]" />
+              <IconDashboard className="h-5 w-5 text-[var(--ink-700)]" />
               <h2 className="text-lg font-semibold">接口说明</h2>
             </div>
             <p className="text-sm leading-6 text-[var(--ink-600)]">
@@ -50,13 +51,13 @@ export default function HealthPage() {
 
           <div className="rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-[var(--paper-50)] p-6 shadow-sm">
             <div className="mb-4 flex items-center gap-2">
-              <AlertCircle className="h-5 w-5 text-amber-600" />
+              <IconInkDot className="h-5 w-5 text-amber-600" />
               <h2 className="text-lg font-semibold">异常时优先检查</h2>
             </div>
             <ul className="space-y-3 text-sm leading-6 text-[var(--ink-600)]">
               {CHECK_ITEMS.map((item) => (
                 <li key={item} className="flex gap-2">
-                  <ClipboardCheck className="mt-0.5 h-4 w-4 shrink-0 text-[var(--ink-700)]" />
+                  <IconSealCheck className="mt-0.5 h-4 w-4 shrink-0 text-[var(--ink-700)]" />
                   <span>{item}</span>
                 </li>
               ))}

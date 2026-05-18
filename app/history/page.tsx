@@ -2,7 +2,8 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { ArrowRight, Clock, FileText, History, MessageSquare, RefreshCw, Search } from "lucide-react"
+import { ArrowRight, Search } from "lucide-react"
+import { IconChat, IconEssay, IconHistory } from "@/components/icons/v2"
 import { BadgeV2 as Badge, ButtonV2 as Button, CardV2 as Card, LoadingStateV2 } from "@/components/ui/v2"
 import { ModelLogo, type ModelKey } from "@/components/ModelLogo"
 import { getVerifiedAuthHeaders } from "@/lib/client-auth"
@@ -203,7 +204,7 @@ export default function HistoryPage() {
         <header className="mb-6 grid gap-4 rounded-[var(--radius-sharp)] border border-[var(--ink-200)] bg-[linear-gradient(180deg,var(--ink-50),var(--paper-50))] p-5 shadow-[0_22px_70px_rgba(16,55,35,0.09)] md:grid-cols-[1fr_auto] md:p-7">
           <div>
             <span className="inline-flex items-center gap-1.5 rounded-[var(--radius-pill)] border border-[var(--ink-200)] bg-[var(--paper-50)] px-3 py-1.5 text-[12px] font-semibold text-[var(--ink-700)]">
-              <History className="size-3.5" aria-hidden="true" />
+              <IconHistory className="size-3.5" aria-hidden="true" />
               历史记录
             </span>
             <h1 className="mt-4 font-[var(--font-display)] text-[clamp(30px,5vw,44px)] font-black leading-[1.08] text-[var(--ink-900)]">
@@ -265,7 +266,7 @@ export default function HistoryPage() {
                   </button>
                 ))}
                 <Button variant="ghost" size="icon-sm" onClick={loadHistory} aria-label="刷新历史记录">
-                  <RefreshCw className="size-4" aria-hidden="true" />
+                  <IconHistory className="size-4" aria-hidden="true" />
                 </Button>
               </div>
             </div>
@@ -325,7 +326,7 @@ function HistoryRow({ item }: { item: HistoryItem }) {
           {isSession ? (
             <ModelLogo modelKey={model as ModelKey} size="md" />
           ) : (
-            <FileText className="size-5" aria-hidden="true" />
+            <IconEssay className="size-5" aria-hidden="true" />
           )}
         </div>
         <div className="min-w-0">
@@ -338,7 +339,7 @@ function HistoryRow({ item }: { item: HistoryItem }) {
           </div>
           <p className="mt-1 line-clamp-2 text-[13px] leading-[1.6] text-[var(--ink-500)]">{item.preview}</p>
           <div className="mt-2 flex items-center gap-2 text-[12px] text-[var(--ink-400)]">
-            <Clock className="size-3.5" aria-hidden="true" />
+            <IconHistory className="size-3.5" aria-hidden="true" />
             {formatTime(item.createdAt)}
             {!isSession && item.writerStyle ? <span>· {item.writerStyle}</span> : null}
           </div>
@@ -350,7 +351,7 @@ function HistoryRow({ item }: { item: HistoryItem }) {
               <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
             </span>
           ) : (
-            <MessageSquare className="size-4 text-[var(--ink-400)]" aria-hidden="true" />
+            <IconChat className="size-4 text-[var(--ink-400)]" aria-hidden="true" />
           )}
         </div>
       </div>

@@ -7,7 +7,8 @@
 'use client'
 
 import Link from 'next/link'
-import { Home, RefreshCw, Phone, MessageCircle, LifeBuoy } from 'lucide-react'
+import { Phone, LifeBuoy } from 'lucide-react'
+import { IconFollowup, IconHistory, IconLogoMark } from '@/components/icons/v2'
 
 export default function GlobalError({
   reset,
@@ -57,14 +58,14 @@ export default function GlobalError({
               onClick={reset}
               className="inline-flex items-center gap-2 px-5 py-2.5 bg-[var(--ink-900)] text-white rounded-[var(--radius-sharp)] hover:bg-[var(--ink-800)] transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-[var(--ink-500)] focus:ring-offset-2"
             >
-              <RefreshCw className="w-4 h-4" />
+              <IconHistory className="w-4 h-4" />
               重新加载
             </button>
             <Link
               href="/"
               className="inline-flex items-center gap-2 px-5 py-2.5 bg-[var(--paper-100)] text-[var(--ink-700)] rounded-[var(--radius-sharp)] hover:bg-[var(--paper-200)] transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"
             >
-              <Home className="w-4 h-4" />
+              <IconLogoMark className="w-4 h-4" />
               返回首页
             </Link>
             <Link
@@ -89,7 +90,7 @@ export default function GlobalError({
               </a>
               <span className="text-slate-300 hidden sm:inline">|</span>
               <div className="flex items-center gap-1.5 text-[var(--ink-600)]">
-                <MessageCircle className="w-4 h-4" aria-hidden="true" />
+                <IconFollowup className="w-4 h-4" aria-hidden="true" />
                 <span>联系客服咨询</span>
               </div>
             </div>

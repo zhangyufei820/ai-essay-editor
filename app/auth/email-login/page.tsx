@@ -17,7 +17,8 @@ import { useState, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { safeInternalRedirectPath } from "@/lib/security/redirect"
 import Link from "next/link"
-import { Mail, ArrowLeft, Info, KeyRound } from "lucide-react"
+import { ArrowLeft } from "lucide-react"
+import { IconInkDot, IconInvite, IconMember } from "@/components/icons/v2"
 
 export default function EmailLoginPage() {
   const router = useRouter()
@@ -113,7 +114,7 @@ export default function EmailLoginPage() {
         <Card className="w-full max-w-md">
           <CardHeader className="text-center space-y-4">
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[var(--ink-100)]">
-              <KeyRound className="h-10 w-10 text-[var(--ink-600)]" />
+              <IconMember className="h-10 w-10 text-[var(--ink-600)]" />
             </div>
             <CardTitle className="text-2xl">输入验证码</CardTitle>
             <CardDescription className="text-base">
@@ -123,7 +124,7 @@ export default function EmailLoginPage() {
           <CardContent className="space-y-4">
             {devCode && (
               <Alert className="bg-yellow-50 border-yellow-300">
-                <Info className="h-4 w-4 text-yellow-600" />
+                <IconInkDot className="h-4 w-4 text-yellow-600" />
                 <AlertDescription className="text-sm">
                   <div className="font-semibold text-yellow-800 mb-1">开发模式</div>
                   <div className="text-yellow-700">
@@ -152,7 +153,7 @@ export default function EmailLoginPage() {
               </div>
 
               <Alert className="bg-blue-50 border-blue-200">
-                <Info className="h-4 w-4 text-blue-600" />
+                <IconInkDot className="h-4 w-4 text-blue-600" />
                 <AlertDescription className="text-xs text-blue-800">
                   请检查您的邮箱收件箱和垃圾邮件箱。验证码5分钟内有效。
                 </AlertDescription>
@@ -209,7 +210,7 @@ export default function EmailLoginPage() {
         <Card>
           <CardHeader className="text-center space-y-2">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[var(--ink-100)]">
-              <Mail className="h-7 w-7 text-[var(--ink-600)]" />
+              <IconInvite className="h-7 w-7 text-[var(--ink-600)]" />
             </div>
             <CardTitle className="text-2xl">邮箱验证码登录</CardTitle>
             <CardDescription>输入邮箱获取验证码，无需密码</CardDescription>
@@ -231,7 +232,7 @@ export default function EmailLoginPage() {
               </div>
 
               <Alert className="bg-[var(--ink-50)] border-[var(--ink-200)]">
-                <Info className="h-4 w-4 text-[var(--ink-600)]" />
+                <IconInkDot className="h-4 w-4 text-[var(--ink-600)]" />
                 <AlertDescription className="text-xs text-[var(--ink-800)]">
                   我们会向您的邮箱发送6位数字验证码，输入验证码即可完成登录。
                 </AlertDescription>

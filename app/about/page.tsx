@@ -1,7 +1,8 @@
 'use client'
 
 import Link from "next/link"
-import { ArrowLeft, Users, Award, Target, Lightbulb, Shield, Cpu, Rocket, Calendar, BookOpen, Zap } from "lucide-react"
+import { ArrowLeft, Target, Cpu, Rocket, Calendar, Zap } from "lucide-react"
+import { IconBanzhuren, IconEnglish, IconProblem, IconSealCheck, IconSealStar } from "@/components/icons/v2"
 import { brandColors, slateColors, creamColors } from "@/lib/design-tokens"
 
 export default function AboutPage() {
@@ -26,7 +27,7 @@ export default function AboutPage() {
           
           {/* 标题 */}
           <div className="flex items-center gap-4 mb-4">
-            <Users className="w-10 h-10 text-white" />
+            <IconBanzhuren className="w-10 h-10 text-white" />
             <h1 className="text-3xl md:text-4xl font-bold text-white font-[var(--font-display)]">
               关于我们
             </h1>
@@ -80,7 +81,7 @@ export default function AboutPage() {
             {/* 创新 */}
             <div className="bg-[var(--paper-50)] rounded-[var(--radius-sharp)] p-6" style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
               <div className="w-12 h-12 rounded-[var(--radius-sharp)] flex items-center justify-center mb-4" style={{ backgroundColor: "var(--ink-50)" }}>
-                <Lightbulb className="w-6 h-6" style={{ color: "var(--ink-600)" }} />
+                <IconProblem className="w-6 h-6" style={{ color: "var(--ink-600)" }} />
               </div>
               <h3 className="text-xl font-semibold mb-2" style={{ color: "var(--ink-800)" }}>创新</h3>
               <p style={{ color: "var(--ink-600)" }}>持续探索 AI 技术在教育领域的应用，为用户带来前沿的学习体验。</p>
@@ -98,7 +99,7 @@ export default function AboutPage() {
             {/* 用户至上 */}
             <div className="bg-[var(--paper-50)] rounded-[var(--radius-sharp)] p-6" style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
               <div className="w-12 h-12 rounded-[var(--radius-sharp)] flex items-center justify-center mb-4" style={{ backgroundColor: "var(--ink-50)" }}>
-                <Users className="w-6 h-6" style={{ color: "var(--ink-600)" }} />
+                <IconBanzhuren className="w-6 h-6" style={{ color: "var(--ink-600)" }} />
               </div>
               <h3 className="text-xl font-semibold mb-2" style={{ color: "var(--ink-800)" }}>用户至上</h3>
               <p style={{ color: "var(--ink-600)" }}>始终以用户需求为导向，不断优化产品体验，提供优质服务。</p>
@@ -107,7 +108,7 @@ export default function AboutPage() {
             {/* 卓越 */}
             <div className="bg-[var(--paper-50)] rounded-[var(--radius-sharp)] p-6" style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
               <div className="w-12 h-12 rounded-[var(--radius-sharp)] flex items-center justify-center mb-4" style={{ backgroundColor: "var(--ink-50)" }}>
-                <Award className="w-6 h-6" style={{ color: "var(--ink-600)" }} />
+                <IconSealStar className="w-6 h-6" style={{ color: "var(--ink-600)" }} />
               </div>
               <h3 className="text-xl font-semibold mb-2" style={{ color: "var(--ink-800)" }}>卓越</h3>
               <p style={{ color: "var(--ink-600)" }}>追求卓越的产品质量和服务水平，致力于成为 AI 教育领域的领导者。</p>
@@ -142,7 +143,7 @@ export default function AboutPage() {
               </div>
               <div className="text-center p-4">
                 <div className="w-12 h-12 rounded-[var(--radius-sharp)] flex items-center justify-center mx-auto mb-3" style={{ backgroundColor: "var(--ink-50)" }}>
-                  <Shield className="w-6 h-6" style={{ color: "var(--ink-600)" }} />
+                  <IconSealCheck className="w-6 h-6" style={{ color: "var(--ink-600)" }} />
                 </div>
                 <h3 className="font-semibold mb-1" style={{ color: "var(--ink-800)" }}>数据安全保障</h3>
                 <p className="text-sm" style={{ color: "var(--ink-500)" }}>
@@ -184,7 +185,7 @@ export default function AboutPage() {
               </div>
               <div className="flex items-start gap-4">
                 <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: "var(--ink-50)" }}>
-                  <BookOpen className="w-5 h-5" style={{ color: "var(--ink-600)" }} />
+                  <IconEnglish className="w-5 h-5" style={{ color: "var(--ink-600)" }} />
                 </div>
                 <div>
                   <h3 className="font-semibold" style={{ color: "var(--ink-800)" }}>2026年 — 生态扩展</h3>
