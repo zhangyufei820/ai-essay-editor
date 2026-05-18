@@ -72,6 +72,40 @@ function convertInlineMarkdown(text: string) {
     .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2">$1</a>')
 }
 
+function parseTableRow(line: string) {
+  const trimmed = line.trim()
+  if (!trimmed.includes("|")) return null
+
+  let cells = trimmed.split("|")
+  if (cells[0]?.trim() === "") cells = cells.slice(1)
+  if (cells[cells.length - 1]?.trim() === "") cells = cells.slice(0, -1)
+
+  const normalized = cells.map((cell) => cell.trim())
+  return normalized.length >= 2 ? normalized : null
+}
+
+function isTableSeparatorRow(line: string) {
+  const cells = parseTableRow(line)
+  if (!cells) return false
+
+  return cells.every((cell) => /^:?-{3,}:?$/.test(cell.replace(/\s+/g, "")))
+}
+
+function renderTableBlock(rows: string[][]) {
+  const [header, ...body] = rows
+  const columnCount = Math.max(header.length, ...body.map((row) => row.length))
+  const normalizeRow = (row: string[]) => Array.from({ length: columnCount }, (_, index) => row[index] ?? "")
+
+  const headerHtml = normalizeRow(header)
+    .map((cell) => `<th>${convertInlineMarkdown(cell)}</th>`)
+    .join("")
+  const bodyHtml = body
+    .map((row) => `<tr>${normalizeRow(row).map((cell) => `<td>${convertInlineMarkdown(cell)}</td>`).join("")}</tr>`)
+    .join("")
+
+  return `<table><thead><tr>${headerHtml}</tr></thead><tbody>${bodyHtml}</tbody></table>`
+}
+
 export function prepareChatMarkdown(raw: string) {
   return cleanLLMText(stripThinking(raw)).trim()
 }
@@ -98,7 +132,8 @@ export function markdownToSafeHtml(raw: string) {
     inCode = false
   }
 
-  for (const line of lines) {
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index]
     const trimmed = line.trim()
 
     if (trimmed.startsWith("```")) {
@@ -121,6 +156,28 @@ export function markdownToSafeHtml(raw: string) {
     if (/^---+$/.test(trimmed)) {
       closeList()
       html.push("<hr>")
+      continue
+    }
+
+    const tableHeader = parseTableRow(trimmed)
+    const nextLine = lines[index + 1]?.trim() ?? ""
+    if (tableHeader && isTableSeparatorRow(nextLine)) {
+      closeList()
+      const tableRows: string[][] = [tableHeader]
+      index += 2
+
+      while (index < lines.length) {
+        const row = parseTableRow(lines[index])
+        if (!row) {
+          index -= 1
+          break
+        }
+
+        tableRows.push(row)
+        index += 1
+      }
+
+      html.push(renderTableBlock(tableRows))
       continue
     }
 
@@ -241,11 +298,14 @@ export const chatPdfStyles = `
     border-collapse: collapse;
     margin: 16px 0;
     font-size: 13px;
+    table-layout: fixed;
   }
   .content th, .content td {
     border: 1px solid #ddd5c7;
     padding: 8px 12px;
     text-align: left;
+    vertical-align: top;
+    word-break: break-word;
   }
   .content th {
     background: #f6f4ec;

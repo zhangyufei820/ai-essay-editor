@@ -28,6 +28,21 @@ describe("chat PDF export markdown rendering", () => {
     expect(html).not.toContain("- 建议")
   })
 
+  it("renders GitHub flavored markdown tables as real PDF tables", () => {
+    const html = markdownToSafeHtml(`| 项目 | 表现 | 建议 |
+| --- | --- | --- |
+| 结构 | 清晰 | 保持 |
+| 语言 | 有亮点 | 增加细节 |`)
+
+    expect(html).toContain("<table>")
+    expect(html).toContain("<thead>")
+    expect(html).toContain("<tbody>")
+    expect(html).toContain("<th>项目</th>")
+    expect(html).toContain("<td>结构</td>")
+    expect(html).not.toContain("| --- | --- | --- |")
+    expect(html).not.toContain("<p>| 项目 | 表现 | 建议 |</p>")
+  })
+
   it("essay review template renders the complete raw response through EnhancedMarkdown", () => {
     const src = fs.readFileSync(path.join(root, "components/chat/v2/templates/EssayReviewTemplate.tsx"), "utf8")
 
