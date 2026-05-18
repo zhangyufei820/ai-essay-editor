@@ -474,48 +474,12 @@ function ContactSection() {
 export function HelpPageClient() {
   return (
     <main className="min-h-screen bg-[var(--paper-50)] font-[var(--font-sans-v2)] text-[var(--ink-900)]">
-      {/* 顶部背景 - 渐变到透明的有机光影流 */}
+      {/* 顶部标题区 */}
       <div
-        className="relative py-16 md:py-20 overflow-hidden"
-        style={{
-          background: "linear-gradient(180deg, var(--ink-700) 0%, color-mix(in srgb, var(--ink-800) 60%, transparent) 50%, transparent 100%)"
-        }}
+        className="relative overflow-hidden border-b border-[var(--paper-200)] bg-[var(--paper-50)] py-12 md:py-16"
       >
-        {/* 动态背景装饰 - 有机光影流 */}
         <motion.div
-          className="absolute inset-0 overflow-hidden"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 1 }}
-        >
-          {[...Array(5)].map((_, i) => (
-            <motion.div
-              key={i}
-              className="absolute w-64 h-64 rounded-full"
-              style={{
-                background: `radial-gradient(circle, var(--ink-400)15 0%, transparent 70%)`,
-                left: `${20 + i * 20}%`,
-                top: `${10 + (i % 3) * 30}%`,
-              }}
-              animate={{
-                y: [0, -40, 0],
-                x: [0, 20, 0],
-                scale: [1, 1.15, 1],
-                opacity: [0.2, 0.5, 0.2],
-              }}
-              transition={{
-                duration: 8 + i * 2,
-                repeat: Infinity,
-                delay: i * 1,
-                ease: "linear",
-              }}
-            />
-          ))}
-        </motion.div>
-
-        {/* 浮动图标装饰 - 透明度调低50%成为皮肤肌理 */}
-        <motion.div
-          className="absolute top-20 right-10 opacity-[0.05]"
+          className="absolute top-16 right-10 hidden opacity-[0.04] md:block"
           animate={{
             y: [0, -15, 0],
             rotate: [0, 10, 0],
@@ -534,7 +498,7 @@ export function HelpPageClient() {
           >
             <Link 
               href="/"
-              className="inline-flex items-center gap-2 text-white/80 hover:text-white mb-8 transition-colors"
+              className="mb-8 inline-flex items-center gap-2 text-[var(--ink-500)] transition-colors hover:text-[var(--ink-800)]"
             >
               <motion.span
                 whileHover={{ x: -5 }}
@@ -556,9 +520,9 @@ export function HelpPageClient() {
               className="flex items-center gap-4 mb-4"
               animate={{ 
                 textShadow: [
-                  "0 0 20px rgba(255,255,255,0.3)",
-                  "0 0 40px rgba(255,255,255,0.5)",
-                  "0 0 20px rgba(255,255,255,0.3)"
+                  "0 0 0 rgba(0,0,0,0)",
+                  "0 0 0 rgba(0,0,0,0)",
+                  "0 0 0 rgba(0,0,0,0)"
                 ]
               }}
               transition={{ duration: 2, repeat: Infinity }}
@@ -572,12 +536,12 @@ export function HelpPageClient() {
               >
                 <ShenxiangInterfaceIcon name="help" size={46} />
               </motion.div>
-              <h1 className="text-3xl md:text-4xl font-bold text-white font-[var(--font-display)]">
+              <h1 className="font-[var(--font-display)] text-3xl font-bold text-[var(--ink-800)] md:text-4xl">
                 帮助中心
               </h1>
             </motion.div>
             <motion.p 
-              className="text-white/80 text-lg max-w-2xl"
+              className="max-w-2xl text-lg leading-8 text-[var(--ink-600)]"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.5, duration: 0.5 }}
@@ -588,30 +552,6 @@ export function HelpPageClient() {
             </motion.p>
           </motion.div>
         </div>
-        
-        {/* 波浪装饰 */}
-        <motion.div 
-          className="absolute bottom-0 left-0 right-0"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.8, duration: 0.5 }}
-        >
-          <svg 
-            viewBox="0 0 1440 60" 
-            fill="none" 
-            xmlns="http://www.w3.org/2000/svg"
-            className="w-full"
-            preserveAspectRatio="none"
-          >
-            <motion.path 
-              d="M0 60 C240 30 480 0 720 0 C960 0 1200 30 1440 60 L1440 60 L0 60Z" 
-              fill="var(--paper-50)"
-              initial={{ pathLength: 0 }}
-              animate={{ pathLength: 1 }}
-              transition={{ duration: 1.5, delay: 0.5 }}
-            />
-          </svg>
-        </motion.div>
       </div>
 
       {/* 主内容区 */}

@@ -20,7 +20,7 @@ import {
   type FormEvent,
 } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { X, Loader2, ChevronDown, FileText, Image as ImageIcon, MicOff } from "lucide-react"
+import { X, Loader2, ChevronDown, FileText, Image as ImageIcon, MicOff, Camera } from "lucide-react"
 import { IconMic, IconSend, IconUpload } from "@/components/icons/v2"
 import { cn } from "@/lib/utils"
 import { ModelSelector, type Model } from "./ModelSelector"
@@ -241,8 +241,12 @@ export function ChatInput({
 }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const cameraInputRef = useRef<HTMLInputElement>(null)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const cameraStreamRef = useRef<MediaStream | null>(null)
   const [isFocused, setIsFocused] = useState(false)
   const [isDraggingFile, setIsDraggingFile] = useState(false)
+  const [isCameraOpen, setIsCameraOpen] = useState(false)
   const [isListening, setIsListening] = useState(false)
   const recognitionRef = useRef<SpeechRecognition | null>(null)
   const dragDepthRef = useRef(0)
@@ -304,6 +308,15 @@ export function ChatInput({
     }
   }
 
+  const stopCamera = () => {
+    cameraStreamRef.current?.getTracks().forEach((track) => track.stop())
+    cameraStreamRef.current = null
+    if (videoRef.current) {
+      videoRef.current.srcObject = null
+    }
+    setIsCameraOpen(false)
+  }
+
   const uploadFiles = (files: File[]) => {
     if (!onFileUpload || disabled || isLoading || files.length === 0) return false
 
@@ -312,6 +325,54 @@ export function ChatInput({
 
     onFileUpload(fileList)
     return true
+  }
+
+  const handleOpenCamera = async () => {
+    if (disabled || isLoading) return
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      cameraInputRef.current?.click()
+      return
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: "environment" } },
+        audio: false,
+      })
+      cameraStreamRef.current = stream
+      setIsCameraOpen(true)
+      requestAnimationFrame(() => {
+        if (!videoRef.current) return
+        videoRef.current.srcObject = stream
+        videoRef.current.play().catch(() => {})
+      })
+    } catch {
+      cameraInputRef.current?.click()
+    }
+  }
+
+  const handleCapturePhoto = () => {
+    const video = videoRef.current
+    if (!video || video.videoWidth === 0 || video.videoHeight === 0) return
+
+    const canvas = document.createElement("canvas")
+    canvas.width = video.videoWidth
+    canvas.height = video.videoHeight
+    const context = canvas.getContext("2d")
+    if (!context) return
+
+    context.drawImage(video, 0, 0, canvas.width, canvas.height)
+    canvas.toBlob((blob) => {
+      if (!blob) return
+      uploadFiles([
+        new File([blob], `camera-${Date.now()}.jpg`, {
+          type: "image/jpeg",
+          lastModified: Date.now(),
+        }),
+      ])
+      stopCamera()
+    }, "image/jpeg", 0.92)
   }
 
   const handlePaste = (event: ReactClipboardEvent<HTMLDivElement>) => {
@@ -412,6 +473,7 @@ export function ChatInput({
       if (recognitionRef.current) {
         recognitionRef.current.abort()
       }
+      cameraStreamRef.current?.getTracks().forEach((track) => track.stop())
     }
   }, [])
 
@@ -427,10 +489,10 @@ export function ChatInput({
       onDrop={handleDrop}
       className={cn(
         className,
-        "relative mx-auto w-full max-w-3xl rounded-[var(--radius-card)] border border-[var(--paper-200)] bg-white shadow-[var(--shadow-paper)] touch-manipulation",
+        "relative mx-auto w-full max-w-3xl rounded-[var(--radius-card)] border border-[var(--ink-600)] bg-white shadow-[var(--shadow-paper)] touch-manipulation",
         "transition-[border-color,box-shadow] duration-200",
-        "focus-within:border-[var(--ink-500)] focus-within:[box-shadow:var(--shadow-focus-ink)]",
-        isFocused && "border-[var(--ink-500)]"
+        "focus-within:border-[var(--ink-700)] focus-within:[box-shadow:var(--shadow-focus-ink)]",
+        isFocused && "border-[var(--ink-700)]"
       )}
       style={{ 
         ['--ring-color' as string]: "var(--ink-500)"
@@ -447,6 +509,62 @@ export function ChatInput({
             松开即可上传文件
           </motion.div>
         )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isCameraOpen ? (
+          <motion.div
+            className="fixed inset-0 z-[80] flex items-center justify-center bg-[var(--ink-900)]/70 p-4 backdrop-blur-sm"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <motion.div
+              className="w-full max-w-lg overflow-hidden rounded-[var(--radius-card)] border border-[var(--ink-600)] bg-[var(--paper-50)] shadow-[var(--shadow-elevated)]"
+              initial={{ y: 18, scale: 0.98 }}
+              animate={{ y: 0, scale: 1 }}
+              exit={{ y: 18, scale: 0.98 }}
+            >
+              <div className="flex items-center justify-between border-b border-[var(--paper-200)] px-4 py-3">
+                <div className="flex items-center gap-2 text-sm font-semibold text-[var(--ink-800)]">
+                  <Camera className="h-4 w-4" />
+                  拍照上传
+                </div>
+                <button
+                  type="button"
+                  onClick={stopCamera}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[var(--ink-500)] transition-colors hover:bg-[var(--paper-100)] hover:text-[var(--ink-800)]"
+                  aria-label="关闭相机"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="bg-black">
+                <video
+                  ref={videoRef}
+                  playsInline
+                  muted
+                  autoPlay
+                  className="aspect-[4/3] w-full object-cover"
+                />
+              </div>
+              <div className="flex items-center justify-end gap-2 px-4 py-3">
+                <Button type="button" variant="ghost" size="sm" onClick={stopCamera}>
+                  取消
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={handleCapturePhoto}
+                  className="gap-2 bg-[var(--ink-700)] text-white hover:bg-[var(--ink-800)]"
+                >
+                  <Camera className="h-4 w-4" />
+                  使用照片
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        ) : null}
       </AnimatePresence>
 
       {/* 工具栏 */}
@@ -482,18 +600,30 @@ export function ChatInput({
             </button>
           )}
 
-          {/* 附件按钮 */}
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 rounded-full text-[var(--ink-600)] hover:bg-[var(--ink-50)] sm:rounded-[var(--radius-soft)]"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isLoading || disabled}
-            aria-label="上传附件"
-          >
-            <IconUpload className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 rounded-full text-[var(--ink-600)] hover:bg-[var(--ink-50)] sm:rounded-[var(--radius-soft)]"
+              onClick={handleOpenCamera}
+              disabled={isLoading || disabled}
+              aria-label="打开相机拍照"
+            >
+              <Camera className="h-4 w-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 rounded-full text-[var(--ink-600)] hover:bg-[var(--ink-50)] sm:rounded-[var(--radius-soft)]"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isLoading || disabled}
+              aria-label="上传附件"
+            >
+              <IconUpload className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       )}
 
@@ -535,24 +665,45 @@ export function ChatInput({
       >
         {/* 附件按钮（工具栏隐藏或移动端键盘态时显示） */}
         {!showModelSelector && (
-          <div className="flex flex-col items-center gap-0.5 sm:gap-1 shrink-0">
-            <span className="hidden text-[11px] text-[var(--ink-400)] font-[var(--font-mono-v2)] sm:block">
-              文件上传
-            </span>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className={cn(
-                "h-11 w-11 sm:h-10 sm:w-10 rounded-[var(--radius-sharp)] sm:rounded-[var(--radius-sharp)] touch-manipulation text-[var(--ink-600)] hover:bg-[var(--ink-50)]",
-                isFocused && "max-sm:h-9 max-sm:w-9 max-sm:rounded-full"
-              )}
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isLoading || disabled}
-              aria-label="上传附件"
-            >
-              <IconUpload className="h-4 w-4 sm:h-5 sm:w-5" />
-            </Button>
+          <div className="flex shrink-0 items-end gap-1">
+            <div className="flex flex-col items-center gap-0.5 sm:gap-1">
+              <span className="hidden text-[11px] text-[var(--ink-400)] font-[var(--font-mono-v2)] sm:block">
+                拍照
+              </span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className={cn(
+                  "h-11 w-11 sm:h-10 sm:w-10 rounded-[var(--radius-sharp)] touch-manipulation text-[var(--ink-600)] hover:bg-[var(--ink-50)]",
+                  isFocused && "max-sm:h-9 max-sm:w-9 max-sm:rounded-full"
+                )}
+                onClick={handleOpenCamera}
+                disabled={isLoading || disabled}
+                aria-label="打开相机拍照"
+              >
+                <Camera className="h-4 w-4 sm:h-5 sm:w-5" />
+              </Button>
+            </div>
+            <div className="flex flex-col items-center gap-0.5 sm:gap-1">
+              <span className="hidden text-[11px] text-[var(--ink-400)] font-[var(--font-mono-v2)] sm:block">
+                文件上传
+              </span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className={cn(
+                  "h-11 w-11 sm:h-10 sm:w-10 rounded-[var(--radius-sharp)] touch-manipulation text-[var(--ink-600)] hover:bg-[var(--ink-50)]",
+                  isFocused && "max-sm:h-9 max-sm:w-9 max-sm:rounded-full"
+                )}
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isLoading || disabled}
+                aria-label="上传附件"
+              >
+                <IconUpload className="h-4 w-4 sm:h-5 sm:w-5" />
+              </Button>
+            </div>
           </div>
         )}
 
@@ -642,6 +793,15 @@ export function ChatInput({
         accept="image/*,.pdf,.doc,.docx,.txt"
         onChange={handleFileChange}
         aria-label="文件上传"
+      />
+      <input
+        ref={cameraInputRef}
+        type="file"
+        className="hidden"
+        accept="image/*"
+        capture="environment"
+        onChange={handleFileChange}
+        aria-label="拍照上传"
       />
     </div>
   )

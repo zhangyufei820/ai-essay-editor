@@ -26,10 +26,10 @@ import remarkMath from "remark-math"
 import rehypeKatex from "rehype-katex"
 
 // v2 墨砚 token colors
-const CLAUDE_TEXT_COLOR = "var(--ink-700)"
+const CLAUDE_TEXT_COLOR = "var(--ink-800)"
 const CLAUDE_SECONDARY_COLOR = "var(--ink-500)"
-const CLAUDE_ACCENT_COLOR = "var(--seal-500)"
-const CLAUDE_AVATAR_BG = "var(--ink-600)"
+const CLAUDE_ACCENT_COLOR = "var(--ink-700)"
+const CLAUDE_AVATAR_BG = "var(--ink-700)"
 const MAX_VISIBLE_HEIGHT = 600
 
 // Conclusion detection - hoisted to module scope to avoid recreation per render
@@ -174,7 +174,7 @@ function MarkdownContent({ content }: { content: string }) {
           if (isConclusionPara) {
               return (
                 <p
-                  className="my-3 rounded-r-[var(--radius-soft)] border-l-[3px] border-[var(--seal-500)] bg-[var(--seal-50)]/60 px-4 py-3 text-[13px] sm:text-[14px]"
+                  className="my-3 rounded-r-[var(--radius-soft)] border-l-[3px] border-[var(--ink-700)] bg-[var(--ink-50)]/70 px-4 py-3 text-[13px] sm:text-[14px]"
                   style={{
                     lineHeight: 1.6,
                     color: CLAUDE_TEXT_COLOR,
@@ -508,9 +508,9 @@ const MessageBubble = memo(function MessageBubble({
 
   // User message style - transparent background, inherits page text color
   const userBubbleStyle = {
-    backgroundColor: "var(--ink-700)",
-    color: "white",
-    border: "1px solid var(--ink-700)",
+    backgroundColor: "transparent",
+    color: "var(--ink-800)",
+    border: "0",
     borderRadius: "var(--radius-soft)",
     maxWidth: "75%",
   }
@@ -530,7 +530,7 @@ const MessageBubble = memo(function MessageBubble({
       {isStreaming && !isUser && !content ? (
         <div className="flex items-center gap-3 px-4 py-4">
           {showAvatar ? (
-            <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[var(--ink-600)]">
+            <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[var(--ink-700)]">
               <Sparkles className="size-3.5 text-white" />
             </div>
           ) : null}
@@ -586,10 +586,7 @@ const MessageBubble = memo(function MessageBubble({
           {/* Message Content */}
           <div className={cn("flex flex-col", isUser ? "items-end" : "items-start")}>
             {isUser ? (
-              <div
-                className="px-3 py-2.5 sm:px-4 sm:py-3 shadow-[var(--shadow-paper)]"
-                style={userBubbleStyle}
-              >
+              <div className="px-1 py-1 sm:px-1.5 sm:py-1" style={userBubbleStyle}>
                 <p
                   className="whitespace-pre-wrap break-words text-[13px] sm:text-sm"
                   style={{ lineHeight: 1.6 }}

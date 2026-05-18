@@ -41,8 +41,8 @@ export function AssistantEyeAvatar({
       <defs>
         <linearGradient id={gradientId} x1="18" y1="16" x2="78" y2="78">
           <stop stopColor="#fffdf2" />
-          <stop offset=".48" stopColor="#e5fae9" />
-          <stop offset="1" stopColor="#b7efcf" />
+          <stop offset=".52" stopColor="#f4fbf4" />
+          <stop offset="1" stopColor="#e3f2e6" />
         </linearGradient>
         <style>
           {`
@@ -198,7 +198,7 @@ export function AssistantEyeAvatar({
             height="66"
             rx="28"
             fill={`url(#${gradientId})`}
-            stroke="#93dfb4"
+            stroke="#2f5138"
             strokeWidth="3"
           />
           <path
@@ -211,19 +211,19 @@ export function AssistantEyeAvatar({
             opacity=".82"
           />
           <g className="sx-eye-avatar-eyes">
-            <rect className="sx-eye-avatar-eye" x="27.5" y="39" width="18" height="18" rx="5.5" fill="#fffefa" stroke="#86dcb1" strokeWidth="1.8" />
-            <rect className="sx-eye-avatar-eye" x="51.5" y="39" width="18" height="18" rx="5.5" fill="#fffefa" stroke="#86dcb1" strokeWidth="1.8" />
+            <rect className="sx-eye-avatar-eye" x="27.5" y="39" width="18" height="18" rx="5.5" fill="#fffefa" stroke="#2f5138" strokeWidth="1.8" />
+            <rect className="sx-eye-avatar-eye" x="51.5" y="39" width="18" height="18" rx="5.5" fill="#fffefa" stroke="#2f5138" strokeWidth="1.8" />
           </g>
           <g className="sx-eye-avatar-closed" opacity="0">
-            <path d="M29.5 48h15" fill="none" stroke="#3f9374" strokeWidth="3.2" strokeLinecap="round" />
-            <path d="M53.5 48h15" fill="none" stroke="#3f9374" strokeWidth="3.2" strokeLinecap="round" />
+            <path d="M29.5 48h15" fill="none" stroke="#2f5138" strokeWidth="3.2" strokeLinecap="round" />
+            <path d="M53.5 48h15" fill="none" stroke="#2f5138" strokeWidth="3.2" strokeLinecap="round" />
           </g>
           <g className="sx-eye-avatar-pupils">
-            <circle className="sx-eye-avatar-pupil" cx="36.5" cy="48" r="3.1" fill="#3f9374" />
-            <circle className="sx-eye-avatar-pupil" cx="60.5" cy="48" r="3.1" fill="#3f9374" />
+            <circle className="sx-eye-avatar-pupil" cx="36.5" cy="48" r="3.1" fill="#2f5138" />
+            <circle className="sx-eye-avatar-pupil" cx="60.5" cy="48" r="3.1" fill="#2f5138" />
           </g>
           <g className="sx-eye-avatar-spark" opacity=".42">
-            <path d="M79 27l1.8 4 4.1 1.7-4.1 1.7L79 38.5l-1.8-4.1-4.1-1.7 4.1-1.7L79 27Z" fill="#10a37f" />
+            <path d="M79 27l1.8 4 4.1 1.7-4.1 1.7L79 38.5l-1.8-4.1-4.1-1.7 4.1-1.7L79 27Z" fill="#2f5138" />
           </g>
         </g>
       </g>

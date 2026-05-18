@@ -92,10 +92,10 @@ export function UserMessageBubble({ content, files, onEdit, onSend }: UserMessag
     <div className="group w-full">
       <div
         className={cn(
-          "rounded-[var(--radius-soft)] bg-[var(--ink-700)] px-4 py-3 text-white shadow-[var(--shadow-paper)] transition-all duration-200",
+          "rounded-[var(--radius-soft)] bg-transparent px-1 py-1 text-[var(--ink-800)] transition-all duration-200",
           isEditing
             ? "border border-[var(--seal-500)] ring-2 ring-[var(--seal-500)]/30"
-            : "border border-[var(--ink-700)]"
+            : "border border-transparent"
         )}
       >
         {/* 文件预览 */}
@@ -129,8 +129,7 @@ export function UserMessageBubble({ content, files, onEdit, onSend }: UserMessag
               value={editContent}
               onChange={(e) => setEditContent(e.target.value)}
               onKeyDown={handleKeyDown}
-              className="w-full min-h-[60px] max-h-[200px] p-2 text-[13px] sm:text-sm resize-none rounded-[var(--radius-soft)] border border-[var(--paper-200)] bg-[var(--paper-50)]/80 focus:outline-none focus:ring-2 focus:ring-[var(--ink-500)]/20"
-              style={{ color: "white" }}
+              className="w-full min-h-[60px] max-h-[200px] p-2 text-[13px] sm:text-sm resize-none rounded-[var(--radius-soft)] border border-[var(--paper-200)] bg-[var(--paper-50)]/80 text-[var(--ink-800)] focus:outline-none focus:ring-2 focus:ring-[var(--ink-500)]/20"
               placeholder="编辑消息..."
             />
             <div className="flex items-center justify-end gap-2">
