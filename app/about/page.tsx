@@ -1,5 +1,3 @@
-'use client'
-
 import Link from "next/link"
 import { ArrowLeft, Cpu, Rocket, Calendar } from "lucide-react"
 import { IconAllInOne, IconBanzhuren, IconEnglish, IconProblem, IconProgress, IconSealCheck, IconSealStar } from "@/components/icons/v2"

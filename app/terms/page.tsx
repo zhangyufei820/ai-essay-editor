@@ -1,5 +1,3 @@
-'use client'
-
 import Link from "next/link"
 import { ArrowLeft, CheckCircle, XCircle } from "lucide-react"
 import { brandColors, slateColors, creamColors } from "@/lib/design-tokens"

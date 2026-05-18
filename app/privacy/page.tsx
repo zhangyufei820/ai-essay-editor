@@ -1,5 +1,3 @@
-'use client'
-
 import Link from "next/link"
 import { ArrowLeft, Lock, Eye, UserCheck } from "lucide-react"
 import { IconSealCheck } from "@/components/icons/v2"
