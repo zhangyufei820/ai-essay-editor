@@ -10,10 +10,9 @@ import {
 } from "@/components/ui/v2"
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { ShenxiangInterfaceIcon } from "@/components/icons/ShenxiangInterfaceIcons"
 import { getVerifiedAuthHeaders } from "@/lib/client-auth"
 import { createClient } from "@/lib/supabase/client"
-import { IconProgress } from "@/components/icons/v2"
+import { IconCredits, IconHistory, IconProgress } from "@/components/icons/v2"
 
 type CreditTransaction = {
   id: string | number
@@ -128,7 +127,7 @@ export default function CreditsPage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">当前积分</CardTitle>
-              <ShenxiangInterfaceIcon name="credits" size={22} />
+              <IconCredits className="h-[22px] w-[22px]" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{credits}</div>
@@ -150,7 +149,7 @@ export default function CreditsPage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">累计消耗</CardTitle>
-              <ShenxiangInterfaceIcon name="history" size={22} />
+              <IconHistory className="h-[22px] w-[22px]" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{totalSpent}</div>

@@ -8,9 +8,20 @@
 "use client"
 
 import { motion, AnimatePresence } from "framer-motion"
+import type { ComponentType } from "react"
 import { X } from "lucide-react"
-import { IconTeaching } from "@/components/icons/v2"
-import { ArtisticThinkingIcon } from "@/components/icons/ArtisticThinkingIcons"
+import {
+  IconAllInOne,
+  IconBanzhuren,
+  IconBeike,
+  IconDiagnosis,
+  IconEnglish,
+  IconEssay,
+  IconMath,
+  IconTeaching,
+  IconVocab,
+  type InkIconProps,
+} from "@/components/icons/v2"
 
 // ============================================
 // 🎨 Design Tokens - "智慧之光" 配色系统
@@ -150,6 +161,18 @@ const EDUCATION_AGENTS: EducationAgent[] = [
     href: "/chat/banzhuren",
   },
 ]
+
+const EDUCATION_AGENT_ICONS: Record<string, ComponentType<InkIconProps>> = {
+  "all-in-one-agent": IconAllInOne,
+  "worksheet-diagnosis": IconDiagnosis,
+  standard: IconEssay,
+  "teaching-pro": IconTeaching,
+  "quanquan-math": IconMath,
+  "quanquan-english": IconEnglish,
+  "vocab-card": IconVocab,
+  "beike-pro": IconBeike,
+  banzhuren: IconBanzhuren,
+}
 
 // ============================================
 // 教育专区面板组件
@@ -360,6 +383,7 @@ function FloatingIslandCard({
   onClick: () => void
 }) {
   const isRecommended = agent.badge === "推荐"
+  const AgentIcon = EDUCATION_AGENT_ICONS[agent.key] ?? IconTeaching
 
   return (
     <motion.a
@@ -432,11 +456,7 @@ function FloatingIslandCard({
         }}
         transition={{ duration: 0.3 }}
       >
-        <ArtisticThinkingIcon
-          modelKey={agent.key as any}
-          size={24}
-          style={{ color: "var(--ink-600)" }}
-        />
+        <AgentIcon className="h-6 w-6 text-[var(--ink-600)]" />
 
         {/* 悬停时图标微光 */}
         <motion.div

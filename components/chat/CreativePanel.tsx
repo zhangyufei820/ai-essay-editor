@@ -10,7 +10,6 @@
 import { motion, AnimatePresence } from "framer-motion"
 import { X, Image, Box } from "lucide-react"
 import { IconAllInOne, IconMusic } from "@/components/icons/v2"
-import { ArtisticThinkingIcon } from "@/components/icons/ArtisticThinkingIcons"
 import { ModelLogo, type ModelKey } from "@/components/ModelLogo"
 import { TRIPO3D_EXTERNAL_URL } from "@/lib/tripo3d"
 
@@ -224,7 +223,7 @@ export function CreativePanel({ isOpen, onClose }: CreativePanelProps) {
                       boxShadow: "0 4px 20px rgba(14, 58, 31, 0.25), 0 0 40px rgba(134, 239, 172, 0.1)",
                     }}
                   >
-                    <ArtisticThinkingIcon modelKey="teaching-pro" size={20} />
+                    <IconAllInOne className="h-5 w-5" />
                   </div>
                   {/* 呼吸光环 */}
                   <motion.div

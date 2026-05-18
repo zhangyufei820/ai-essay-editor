@@ -9,7 +9,6 @@ import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { ShenxiangInterfaceIcon } from "@/components/icons/ShenxiangInterfaceIcons"
 import { extractUserId } from "@/lib/auth-user"
 import { ProfilePageV2 } from "@/components/settings/v2/ProfilePageV2"
 

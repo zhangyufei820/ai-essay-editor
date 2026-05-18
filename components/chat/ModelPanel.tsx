@@ -9,8 +9,8 @@
 
 import { motion, AnimatePresence } from "framer-motion"
 import { X } from "lucide-react"
-import { ArtisticThinkingIcon } from "@/components/icons/ArtisticThinkingIcons"
 import { ModelLogo } from "@/components/ModelLogo"
+import { IconAllInOne } from "@/components/icons/v2"
 
 // ============================================
 // 🎨 Design Tokens - "智慧之光" 配色系统
@@ -214,7 +214,7 @@ export function ModelPanel({ isOpen, onClose }: ModelPanelProps) {
                       boxShadow: "0 4px 20px rgba(14, 58, 31, 0.25), 0 0 40px rgba(134, 239, 172, 0.1)",
                     }}
                   >
-                    <ArtisticThinkingIcon modelKey="teaching-pro" size={20} />
+                    <IconAllInOne className="h-5 w-5" />
                   </div>
                   {/* 呼吸光环 */}
                   <motion.div

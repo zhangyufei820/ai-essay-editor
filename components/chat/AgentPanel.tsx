@@ -9,7 +9,7 @@
 import { motion, AnimatePresence } from "framer-motion"
 import { X } from "lucide-react"
 import { ModelLogo } from "@/components/ModelLogo"
-import { ArtisticThinkingIcon } from "@/components/icons/ArtisticThinkingIcons"
+import { IconAllInOne } from "@/components/icons/v2"
 
 // ============================================
 // 🎨 Design Tokens - "智慧之光" 配色系统
@@ -249,7 +249,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
                     }}
                     transition={{ duration: 3, repeat: 0 }}
                   >
-                    <ArtisticThinkingIcon modelKey="teaching-pro" size={20} />
+                    <IconAllInOne className="h-5 w-5" />
                   </motion.div>
                   <div>
                     <p className="text-xs font-medium" style={{ color: TOKENS.text.primary }}>

@@ -6,8 +6,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import Link from "next/link"
 import { CreditCard, ChevronDown, ChevronUp, ArrowLeft, ExternalLink, Phone } from "lucide-react"
 import { brandColors, slateColors, creamColors } from "@/lib/design-tokens"
-import { ShenxiangInterfaceIcon } from "@/components/icons/ShenxiangInterfaceIcons"
-import { IconEnglish, IconEssay, IconFollowup, IconUser } from "@/components/icons/v2"
+import { IconEnglish, IconEssay, IconFollowup, IconProblem, IconUser } from "@/components/icons/v2"
 
 // 客服联系方式配置
 const contactInfo = {
@@ -476,7 +475,7 @@ export function HelpPageClient() {
           }}
           transition={{ duration: 3, repeat: 0 }}
         >
-          <ShenxiangInterfaceIcon name="help" size={130} />
+          <IconProblem className="h-[130px] w-[130px]" />
         </motion.div>
 
         <div className="max-w-4xl mx-auto px-4 relative z-10">
@@ -524,7 +523,7 @@ export function HelpPageClient() {
                 }}
                 transition={{ duration: 1, repeat: 0, repeatDelay: 2 }}
               >
-                <ShenxiangInterfaceIcon name="help" size={46} />
+                <IconProblem className="h-[46px] w-[46px]" />
               </motion.div>
               <h1 className="font-[var(--font-display)] text-3xl font-bold text-[var(--ink-800)] md:text-4xl">
                 帮助中心
