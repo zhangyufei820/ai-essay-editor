@@ -9,8 +9,8 @@
 
 import { createElement, useEffect } from "react"
 import { motion, AnimatePresence, type Easing } from "framer-motion"
-import { X, FileText, File, Image, Loader2, Check, AlertCircle, Video } from "lucide-react"
-import { IconMusic } from "@/components/icons/v2"
+import { X, File, Image, Loader2, Check, Video } from "lucide-react"
+import { IconEssay, IconInkDot, IconMusic } from "@/components/icons/v2"
 import { cn } from "@/lib/utils"
 import { brandColors } from "@/lib/design-tokens"
 
@@ -41,7 +41,7 @@ function getFileIcon(type: string) {
   if (type.startsWith("image/")) return Image
   if (type.startsWith("video/")) return Video
   if (type.startsWith("audio/")) return IconMusic
-  if (type.includes("pdf")) return FileText
+  if (type.includes("pdf")) return IconEssay
   return File
 }
 
@@ -169,7 +169,7 @@ function ErrorOverlay() {
   return (
     <div className="absolute inset-0 bg-red-500/10 flex items-center justify-center border-2 border-red-400 rounded-[var(--radius-sharp)]">
       <div className="text-center">
-        <AlertCircle className="w-6 h-6 text-[var(--seal-500)] mx-auto" />
+        <IconInkDot className="w-6 h-6 text-[var(--seal-500)] mx-auto" />
         <span className="text-[10px] text-[var(--seal-500)] mt-1 block">上传失败</span>
       </div>
     </div>
@@ -289,7 +289,7 @@ function DocumentPreviewCard({
       {/* 错误状态 */}
       {file.status === "error" && (
         <div className="absolute top-2 right-2">
-          <AlertCircle className="w-4 h-4 text-[var(--seal-500)]" />
+          <IconInkDot className="w-4 h-4 text-[var(--seal-500)]" />
         </div>
       )}
 

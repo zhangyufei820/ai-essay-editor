@@ -7,7 +7,8 @@ import {
   TooltipV2Content as TooltipContent,
   TooltipV2Trigger as TooltipTrigger
 } from "@/components/ui/v2"
-import { Plus, MessageSquare, Trash2, MoreHorizontal } from "lucide-react"
+import { Plus, Trash2, MoreHorizontal } from "lucide-react"
+import { IconChat } from "@/components/icons/v2"
 import { cn } from "@/lib/utils"
 import { format } from "date-fns"
 
@@ -108,7 +109,7 @@ export function ChatSidebar({
           {sessions.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center opacity-60 px-4">
               <div className="mb-3 rounded-full bg-[var(--paper-100)] p-3">
-                <MessageSquare className="h-6 w-6 text-[var(--ink-400)]" />
+                <IconChat className="h-6 w-6 text-[var(--ink-400)]" />
               </div>
               <p className="text-sm font-medium text-[var(--ink-600)]">暂无历史记录</p>
               <p className="text-xs text-[var(--ink-400)] mt-1">点击上方按钮开始第一次批改吧！</p>
@@ -131,7 +132,7 @@ export function ChatSidebar({
                       {currentSessionId === session.id ? (
                         <span className="absolute left-1 top-1/2 size-1.5 -translate-y-1/2 rounded-full bg-[var(--seal-500)]" />
                       ) : null}
-                      <MessageSquare className={cn(
+                      <IconChat className={cn(
                         "h-4 w-4 shrink-0 transition-colors",
                         currentSessionId === session.id ? "text-[var(--ink-700)]" : "text-[var(--ink-400)] group-hover:text-[var(--ink-500)]"
                       )} />

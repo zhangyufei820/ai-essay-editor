@@ -18,8 +18,8 @@ import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
-import { Check, FileText } from 'lucide-react'
-import { IconCopy, IconExportPdf } from "@/components/icons/v2"
+import { Check } from 'lucide-react'
+import { IconCopy, IconEssay, IconExportPdf } from "@/components/icons/v2"
 import { Children, isValidElement, memo, useMemo, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -84,7 +84,7 @@ function MarkdownFileCard({ src, alt }: { src: string; alt?: string }) {
       className="my-3 flex max-w-full items-center gap-3 rounded-[var(--radius-soft)] border border-[var(--paper-200)] bg-[var(--paper-50)] px-3 py-2.5 text-[var(--ink-700)] no-underline transition-colors hover:bg-[var(--paper-100)]"
     >
       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[var(--paper-50)] text-[var(--ink-500)]">
-        <FileText className="h-4 w-4" />
+        <IconEssay className="h-4 w-4" />
       </span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-medium">{label}</span>

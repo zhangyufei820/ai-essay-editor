@@ -21,13 +21,11 @@ import DOMPurify from "isomorphic-dompurify"
 
 import { useIsMobile } from "@/hooks/use-mobile"
 import {
-  X, FileText, Loader2, AlertCircle,
-  ChevronDown, ChevronLeft, ArrowDown, Sparkles,
-  MicOff, History, ExternalLink,
-  FileSearch, ListChecks, ShieldCheck, ScanText,
-  type LucideIcon
+  X, Loader2,
+  ChevronDown, ChevronLeft, ArrowDown,
+  ExternalLink,
 } from "lucide-react"
-import { IconExportPdf, IconUser } from "@/components/icons/v2"
+import { IconDiagnosis, IconEssay, IconExportPdf, IconHistory, IconInkDot, IconSealCheck, IconUser } from "@/components/icons/v2"
 import { cn } from "@/lib/utils"
 import { extractUserId } from "@/lib/auth-user"
 import { buildChatSessionRoute, buildChatSessionRouteFromSession, isDedicatedChatSessionModel, resolveChatSessionRouteModel } from "@/lib/chat-session-routes"
@@ -623,7 +621,7 @@ type ProcessingStep = {
   label: string
   detail: string
   status: WorkflowNodeStatus
-  icon: LucideIcon
+  icon: React.ComponentType<{ className?: string }>
 }
 
 function buildDefaultProcessingSteps({
@@ -646,28 +644,28 @@ function buildDefaultProcessingSteps({
       label: hasFiles ? "接收学习资料" : "理解任务意图",
       detail: hasFiles ? `已接收 ${fileCount} 个附件，建立资料上下文` : "提取问题目标与约束",
       status: "completed",
-      icon: hasFiles ? FileSearch : ScanText,
+      icon: IconDiagnosis,
     },
     {
       id: "inspect",
       label: hasFiles ? "识别图文信息" : "拆解回答目标",
       detail: activeDetail,
       status: "running",
-      icon: ScanText,
+      icon: IconDiagnosis,
     },
     {
       id: "plan",
       label: "制定回答结构",
       detail: promptLength > 120 ? "材料较长，优先整理层次和关键点" : "规划开头、依据与结论顺序",
       status: "preparing",
-      icon: ListChecks,
+      icon: IconSealCheck,
     },
     {
       id: "verify",
       label: isOpenClaw ? "工具结果核验" : "一致性检查",
       detail: "检查是否贴合题目、避免空泛回答",
       status: "pending",
-      icon: ShieldCheck,
+      icon: IconSealCheck,
     },
   ]
 }
@@ -845,7 +843,7 @@ const MediaBlock = ({ items }: { items: MediaItem[] }) => {
               className="flex items-center gap-3 rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-[var(--paper-50)] p-4 transition-colors hover:bg-[var(--paper-100)]"
             >
               <div className="w-10 h-10 rounded-[var(--radius-soft)] bg-blue-100 flex items-center justify-center shrink-0">
-                <FileText className="h-5 w-5 text-blue-600" />
+                <IconEssay className="h-5 w-5 text-blue-600" />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-[var(--ink-700)] truncate">{item.name || "文件"}</p>
@@ -3272,7 +3270,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
             }}
             className="inline-flex items-center justify-center min-w-[40px] min-h-[40px] rounded-[var(--radius-pill)] text-[var(--ink-500)] transition-colors hover:bg-[var(--paper-50)] hover:text-[var(--ink-800)]"
           >
-            <History className="h-4 w-4" />
+            <IconHistory className="h-4 w-4" />
           </button>
           <button
             onClick={handleBack}
@@ -3676,7 +3674,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
             {fileProcessing.status !== "idle" && !isUploading && (
               <div className="mb-2 sm:mb-3 rounded-[var(--radius-soft)] sm:rounded-[var(--radius-sharp)] bg-[var(--paper-50)] p-2 sm:p-3 animate-in slide-in-from-bottom-2">
                 <div className="flex items-center gap-1.5 sm:gap-2">
-                  {fileProcessing.status === "error" ? <AlertCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-[var(--seal-500)]" /> : <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin" style={{ color: BRAND_GREEN }} />}
+                  {fileProcessing.status === "error" ? <IconInkDot className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-[var(--seal-500)]" /> : <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin" style={{ color: BRAND_GREEN }} />}
                   {dynamicStatusMessage ? (
                     <p className="text-xs sm:text-sm text-[var(--ink-600)] animate-pulse font-medium">
                       {dynamicStatusMessage}

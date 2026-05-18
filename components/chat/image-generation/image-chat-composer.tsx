@@ -4,8 +4,8 @@ import { ButtonV2 as Button, TextareaV2 as Textarea } from "@/components/ui/v2"
 /* eslint-disable @next/next/no-img-element -- Dynamic/user-generated/external image surfaces: keep native img to preserve sizing, blob/data/proxy URLs, payment QR codes, and chat preview behavior. */
 
 import type React from 'react'
-import { Loader2, X, FileText } from 'lucide-react'
-import { IconSend, IconUpload } from "@/components/icons/v2"
+import { Loader2, X } from 'lucide-react'
+import { IconEssay, IconSend, IconUpload } from "@/components/icons/v2"
 import { motion } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import type { ImageModeOption, ImageSizeOption } from './types'
@@ -99,7 +99,7 @@ export function ImageChatComposer(props: ImageChatComposerProps) {
                 </div>
               ) : (
                 <div className="flex items-center gap-2 rounded-[var(--radius-soft)] border border-[var(--paper-200)] bg-[var(--paper-50)] px-3 py-2 text-sm">
-                  <FileText className="h-4 w-4 text-[var(--ink-600)]" />
+                  <IconEssay className="h-4 w-4 text-[var(--ink-600)]" />
                   <span className="max-w-[100px] truncate text-[var(--ink-600)]">{file.name}</span>
                   <button type="button" onClick={() => props.onRemoveFile(index)} className="text-[var(--ink-400)] hover:text-[var(--seal-500)]">
                     <X className="h-3.5 w-3.5" />

@@ -6,8 +6,8 @@
 
 import { motion, AnimatePresence } from "framer-motion"
 import Link from "next/link"
-import { X, FileText, Pen, FlaskConical, Briefcase, Newspaper } from "lucide-react"
-import { IconEnglish, IconEssay, IconMic, IconTeaching } from "@/components/icons/v2"
+import { X } from "lucide-react"
+import { IconEnglish, IconEssay, IconLab, IconMic, IconTeaching, IconWriting } from "@/components/icons/v2"
 
 const TOKENS = {
   primary: {
@@ -346,14 +346,14 @@ function WritingIslandCard({
         }}
         transition={{ duration: 0.3 }}
       >
-        {agent.key === "ai-writing-paper" && <FileText className="w-6 h-6" style={{ color: "var(--ink-600)" }} />}
-        {agent.key === "zhongying-essay" && <Pen className="w-6 h-6" style={{ color: "var(--ink-600)" }} />}
+        {agent.key === "ai-writing-paper" && <IconEssay className="w-6 h-6" style={{ color: "var(--ink-600)" }} />}
+        {agent.key === "zhongying-essay" && <IconWriting className="w-6 h-6" style={{ color: "var(--ink-600)" }} />}
         {agent.key === "reading-report" && <IconEnglish className="w-6 h-6" style={{ color: "var(--ink-600)" }} />}
-        {agent.key === "experiment-report" && <FlaskConical className="w-6 h-6" style={{ color: "var(--ink-600)" }} />}
+        {agent.key === "experiment-report" && <IconLab className="w-6 h-6" style={{ color: "var(--ink-600)" }} />}
         {agent.key === "study-abroad" && <IconTeaching className="w-6 h-6" style={{ color: "var(--ink-600)" }} />}
-        {agent.key === "resume-optimize" && <Briefcase className="w-6 h-6" style={{ color: "var(--ink-600)" }} />}
+        {agent.key === "resume-optimize" && <IconWriting className="w-6 h-6" style={{ color: "var(--ink-600)" }} />}
         {agent.key === "speech-defense" && <IconMic className="w-6 h-6" style={{ color: "var(--ink-600)" }} />}
-        {agent.key === "school-wechat" && <Newspaper className="w-6 h-6" style={{ color: "var(--ink-600)" }} />}
+        {agent.key === "school-wechat" && <IconWriting className="w-6 h-6" style={{ color: "var(--ink-600)" }} />}
       </motion.div>
 
       {/* 中文名 */}

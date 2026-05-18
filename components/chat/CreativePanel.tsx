@@ -8,8 +8,8 @@
 "use client"
 
 import { motion, AnimatePresence } from "framer-motion"
-import { X, Image, Box, Sparkles } from "lucide-react"
-import { IconMusic } from "@/components/icons/v2"
+import { X, Image, Box } from "lucide-react"
+import { IconAllInOne, IconMusic } from "@/components/icons/v2"
 import { ArtisticThinkingIcon } from "@/components/icons/ArtisticThinkingIcons"
 import { ModelLogo, type ModelKey } from "@/components/ModelLogo"
 import { TRIPO3D_EXTERNAL_URL } from "@/lib/tripo3d"
@@ -313,7 +313,7 @@ export function CreativePanel({ isOpen, onClose }: CreativePanelProps) {
                     }}
                     transition={{ duration: 3, repeat: Infinity }}
                   >
-                    <Sparkles className="w-4 h-4" style={{ color: TOKENS.primary[700] }} />
+                    <IconAllInOne className="w-4 h-4" style={{ color: TOKENS.primary[700] }} />
                   </motion.div>
                   <div>
                     <p className="text-xs font-medium" style={{ color: TOKENS.text.primary }}>

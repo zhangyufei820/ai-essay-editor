@@ -1,7 +1,8 @@
 'use client'
 
 import type React from 'react'
-import { ChevronLeft, History } from 'lucide-react'
+import { ChevronLeft } from 'lucide-react'
+import { IconHistory } from "@/components/icons/v2"
 import { useRouter } from 'next/navigation'
 import { navigateHomeWithSidebar } from '@/lib/workspace-events'
 
@@ -53,7 +54,7 @@ export function ImageChatShell({
                   onClick={onShowHistory}
                   className="inline-flex h-9 min-w-9 items-center justify-center rounded-[var(--radius-pill)] bg-[var(--paper-100)] hover:bg-[var(--ink-50)] transition-colors"
                 >
-                  <History className="h-4 w-4 text-[var(--ink-600)]" />
+                  <IconHistory className="h-4 w-4 text-[var(--ink-600)]" />
                 </button>
               </div>
             ) : (
@@ -69,7 +70,7 @@ export function ImageChatShell({
                   onClick={onShowHistory}
                   className="inline-flex h-9 min-w-9 items-center justify-center rounded-[var(--radius-pill)] bg-[var(--paper-100)] hover:bg-[var(--ink-50)] transition-colors"
                 >
-                  <History className="h-4 w-4 text-[var(--ink-600)]" />
+                  <IconHistory className="h-4 w-4 text-[var(--ink-600)]" />
                 </button>
               </div>
             )}

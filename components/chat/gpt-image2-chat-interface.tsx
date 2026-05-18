@@ -7,23 +7,18 @@ import type React from "react"
 import { Suspense, useEffect, useMemo, useRef, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import {
-  AlertCircle,
-  CheckCircle2,
   ChevronDown,
   ChevronLeft,
   FileImage,
-  History,
   Image as ImageIcon,
   Loader2,
   RefreshCcw,
-  Sparkles,
   Trash2,
   UploadCloud,
   Wand2,
   X,
-  Zap,
 } from "lucide-react"
-import { IconCopy, IconExportPdf } from "@/components/icons/v2"
+import { IconAllInOne, IconCopy, IconExportPdf, IconHistory, IconInkDot, IconSealCheck } from "@/components/icons/v2"
 import { createClient } from "@supabase/supabase-js"
 import { toast } from "sonner"
 
@@ -1297,7 +1292,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
             </Button>
           )}
           <Button type="button" variant="outline" size="sm" onClick={() => setShowHistorySidebar(true)} className="h-9 min-w-9 rounded-[var(--radius-pill)] px-2 md:px-3">
-            <History className="h-4 w-4 md:mr-2" />
+            <IconHistory className="h-4 w-4 md:mr-2" />
             <span className="hidden md:inline">历史</span>
           </Button>
         </div>
@@ -1308,7 +1303,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
           <div className="hidden rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-[var(--paper-50)] p-5 md:block">
             <div className="flex gap-4">
               <div className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-[var(--radius-sharp)] bg-[var(--ink-50)] text-[var(--ink-700)] sm:flex">
-                <Sparkles className="h-5 w-5" />
+                <IconAllInOne className="h-5 w-5" />
               </div>
               <div className="space-y-2">
                 <h1 className="text-xl font-semibold text-[var(--ink-900)]">{copy.heroTitle}</h1>
@@ -1389,21 +1384,21 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
 
             {errorMessage ? (
               <div className="flex items-start gap-2 rounded-[var(--radius-sharp)] border border-[var(--seal-200)] bg-[var(--seal-50)] p-3 text-sm text-[var(--seal-500)]">
-                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                <IconInkDot className="mt-0.5 h-4 w-4 shrink-0" />
                 <span>{errorMessage}</span>
               </div>
             ) : null}
 
             {showLongRunningHint ? (
               <div className="flex items-start gap-2 rounded-[var(--radius-sharp)] border border-[var(--ink-200)] bg-[var(--ink-50)] p-3 text-sm text-[var(--ink-700)]">
-                <Zap className="mt-0.5 h-4 w-4 shrink-0" />
+                <IconAllInOne className="mt-0.5 h-4 w-4 shrink-0" />
                 <span>图片生成仍在处理中，复杂图像可能需要 3-5 分钟，请保持页面打开。</span>
               </div>
             ) : null}
 
             {shouldDowngradeHighRiskImage2 ? (
               <div className="flex items-start gap-2 rounded-[var(--radius-sharp)] border border-amber-500/25 bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-200">
-                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                <IconInkDot className="mt-0.5 h-4 w-4 shrink-0" />
                 <span>
                   4K 高质量{mode === "image_edit" ? "图片编辑" : "多图生成"}上游失败率较高，提交时会自动改为 medium{count > 1 ? " 且只生成 1 张" : ""}。
                 </span>
@@ -1420,7 +1415,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
                 className="h-11 rounded-[var(--radius-soft)] px-5 text-white"
                 style={{ backgroundColor: BRAND_GREEN }}
               >
-                {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+                {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <IconAllInOne className="mr-2 h-4 w-4" />}
                 {isSubmitting ? submitStage || "处理中" : mode === "image_edit" ? "开始编辑" : "开始生成"}
               </Button>
             </div>
@@ -1432,7 +1427,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
                 <h2 className="text-sm font-semibold text-[var(--ink-900)]">{copy.resultTitle}</h2>
                 <p className="mt-1 text-xs text-[var(--ink-500)]">生成成功后可下载或复制图片地址。</p>
               </div>
-              {result ? <CheckCircle2 className="h-5 w-5 text-[var(--ink-700)]" /> : null}
+              {result ? <IconSealCheck className="h-5 w-5 text-[var(--ink-700)]" /> : null}
             </div>
 
             {isSubmitting ? (
