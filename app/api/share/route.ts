@@ -33,6 +33,8 @@ export async function POST(request: NextRequest) {
     if (!payload.title.trim()) {
       return NextResponse.json({ error: "分享标题不能为空" }, { status: 400 })
     }
+    const aiResult = typeof payload.contentData.ai_result === "string" ? payload.contentData.ai_result : ""
+    const rewardAmount = aiResult.trim().length >= 800 ? 10 : 5
 
     const supabase = getSupabaseAdmin()
     const shareCode = await generateUniqueShareCode(supabase)
@@ -76,8 +78,8 @@ export async function POST(request: NextRequest) {
         userId,
         data.id,
         "create_share",
-        5,
-        "分享到创作广场获得积分奖励",
+        rewardAmount,
+        rewardAmount >= 10 ? "长文分享到创作广场获得积分奖励" : "分享到创作广场获得积分奖励",
       )
     } catch (rewardError) {
       console.error("[Share] reward failed:", rewardError)

@@ -62,6 +62,7 @@ interface MessageBubbleProps {
   timestamp?: Date
   avatar?: string
   onCopy?: () => void
+  onShare?: () => void
   className?: string
   model?: string
   showAvatar?: boolean
@@ -339,6 +340,32 @@ function MessageActionToolbar({ actions }: { actions: MessageActions }) {
   )
 }
 
+function ShareRewardCallout({ onShare }: { onShare: () => void }) {
+  return (
+    <div className="border-t border-[var(--paper-200)] bg-[linear-gradient(135deg,var(--ink-50),var(--paper-50))] px-4 py-4 sm:px-6">
+      <div className="flex flex-col gap-3 rounded-[var(--radius-sharp)] border border-[var(--ink-200)] bg-white/82 p-4 shadow-[0_10px_28px_rgba(63,90,66,0.12)] sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <div className="inline-flex items-center gap-2 rounded-[var(--radius-pill)] bg-[var(--seal-50)] px-3 py-1 text-[12px] font-semibold text-[var(--seal-600)]">
+            <IconShare className="size-3.5" aria-hidden="true" />
+            长文分享 +10 积分
+          </div>
+          <p className="mt-2 text-[13px] leading-6 text-[var(--ink-700)]">
+            把这份高质量回答分享到创作广场，让更多同学参考，也为你的账户赚取积分奖励。
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onShare}
+          className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-[var(--radius-pill)] bg-[var(--ink-700)] px-5 py-2.5 text-sm font-semibold text-white shadow-[0_8px_18px_rgba(63,90,66,0.22)] transition-colors hover:bg-[var(--ink-800)] focus-visible:outline-none focus-visible:[box-shadow:var(--shadow-focus-ink)]"
+        >
+          <IconShare className="size-4" aria-hidden="true" />
+          分享到广场
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function ThinkingDisclosure({
   content,
   isStreaming,
@@ -400,7 +427,7 @@ function AssistantMarkdownCard({
     <article
       data-slot="v2-message-bubble-markdown"
       data-template={templateType}
-      className="w-full max-w-3xl overflow-hidden rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-white text-[var(--ink-900)] shadow-[var(--shadow-paper)]"
+      className="w-full max-w-none overflow-hidden rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-white text-[var(--ink-900)] shadow-[var(--shadow-paper)]"
     >
       <div
         ref={contentRef}
@@ -448,6 +475,7 @@ function AssistantMarkdownCard({
         </div>
       ) : null}
 
+      {!isStreaming ? <ShareRewardCallout onShare={actions.onShare} /> : null}
       <MessageActionToolbar actions={actions} />
     </article>
   )
@@ -464,6 +492,7 @@ const MessageBubble = memo(function MessageBubble({
   timestamp,
   avatar,
   onCopy,
+  onShare,
   className,
   model,
   showAvatar = true,
@@ -506,6 +535,10 @@ const MessageBubble = memo(function MessageBubble({
       }
     },
     onShare: () => {
+      if (onShare) {
+        onShare()
+        return
+      }
       if (navigator.share) {
         navigator.share({ title: "沈翔智学 AI 回复", text: content.slice(0, 200) }).catch(() => {})
       }
@@ -516,7 +549,7 @@ const MessageBubble = memo(function MessageBubble({
     onPlayAudio: () => {
       window.dispatchEvent(new CustomEvent("play-chat-message-audio", { detail: { text: content } }))
     },
-  }), [content, essayReviewArtifact, onCopy])
+  }), [content, essayReviewArtifact, onCopy, onShare])
 
   // User message style - transparent background, inherits page text color
   const userBubbleStyle = {
@@ -596,7 +629,7 @@ const MessageBubble = memo(function MessageBubble({
           ) : null}
 
           {/* Message Content */}
-          <div className={cn("flex flex-col", isUser ? "items-end" : "items-start")}>
+          <div className={cn("flex flex-col", isUser ? "items-end" : "w-full items-start")}>
             {isUser ? (
               <div className="px-1 py-1 sm:px-1.5 sm:py-1" style={userBubbleStyle}>
                 <p
@@ -608,13 +641,16 @@ const MessageBubble = memo(function MessageBubble({
               </div>
             ) : (
               essayReviewArtifact ? (
-                <EssayReviewTemplate
-                  artifact={essayReviewArtifact}
-                  onCopy={actions.onCopy}
-                  onExportPDF={actions.onExportPDF}
-                  onShare={actions.onShare}
-                  onAskFollowup={actions.onAskFollowup}
-                />
+                <div className="w-full max-w-none overflow-hidden rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-white shadow-[var(--shadow-paper)]">
+                  <EssayReviewTemplate
+                    artifact={essayReviewArtifact}
+                    onCopy={actions.onCopy}
+                    onExportPDF={actions.onExportPDF}
+                    onShare={actions.onShare}
+                    onAskFollowup={actions.onAskFollowup}
+                  />
+                  {!isStreaming ? <ShareRewardCallout onShare={actions.onShare} /> : null}
+                </div>
               ) : (
                 <AssistantMarkdownCard
                   content={content}

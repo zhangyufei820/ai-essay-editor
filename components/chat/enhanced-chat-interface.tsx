@@ -3062,7 +3062,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
           ...(await getVerifiedAuthHeaders()),
         },
         body: JSON.stringify({
-          messages: messages.map(m => ({ role: m.role, content: m.content })),
+          messages: messages.map(m => ({ role: m.role, content: m.content, files: m.files })),
           userId,
           modelName: getModelUiConfig(selectedModel).name
         })
@@ -3079,12 +3079,13 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       const data = await res.json()
       console.log("🔗 [分享] API 返回数据:", data)
       const shareUrl = data.shareUrl
+      const rewardMessage = data.reward?.message || "分享成功"
 
       // 复制链接到剪贴板
       await navigator.clipboard.writeText(shareUrl)
 
-      toast.success("分享链接已复制", {
-        description: shareUrl,
+      toast.success(rewardMessage, {
+        description: `分享链接已复制：${shareUrl}`,
         duration: 5000
       })
 
@@ -3502,8 +3503,10 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                       )}
                       {/* Flat content container - No heavy backgrounds or borders */}
                       <div className={cn(
-                        "flex flex-col max-w-[94%] sm:max-w-[82%]",
-                        message.role === "user" ? "items-end" : "items-start"
+                        "flex flex-col",
+                        message.role === "user"
+                          ? "max-w-[94%] items-end sm:max-w-[82%]"
+                          : "w-full max-w-[calc(100%_-_3rem)] items-start sm:max-w-[min(1040px,calc(100%_-_4rem))]"
                       )}>
                         {/* User message - 复制和编辑功能 */}
                         {message.role === "user" ? (
@@ -3605,8 +3608,10 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                                       isStreaming={message.id === currentBotIdRef.current && showCursor && isLoading}
                                       model={selectedModel}
                                       onCopy={() => navigator.clipboard.writeText(cleanContent)}
+                                      onShare={handleShare}
                                       timestamp={message.timestamp ? new Date(message.timestamp) : undefined}
                                       showAvatar={false}
+                                      className="w-full"
                                     />
                                   )
                                 })()}
