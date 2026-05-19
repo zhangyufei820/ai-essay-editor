@@ -43,6 +43,7 @@ next-env.d.ts
 
 # Local worktrees
 .worktrees/
+vendor/
 
 # Logs
 logs

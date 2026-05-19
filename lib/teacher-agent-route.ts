@@ -14,6 +14,7 @@ const AGENT_TO_MODEL: Record<string, ModelType> = {
   "grok-4.2": "grok-4.2",
   "open-claw": "open-claw",
   "all-in-one-agent": "all-in-one-agent",
+  "super-all-in-one-agent": "super-all-in-one-agent",
   "quanquan-math": "quanquan-math",
   "quanquan-english": "quanquan-english",
   "vocab-card": "vocab-card",

@@ -38,6 +38,8 @@
   "exclude": [
     "node_modules",
     "services",
+    "vendor",
+    "omnivoice-dify-gateway",
     "**/*.backup.ts",
     "**/*.backup.tsx"
   ]

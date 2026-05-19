@@ -44,6 +44,7 @@ export type ModelType =
   | "beike-pro"
   | "banzhuren"
   | "all-in-one-agent"
+  | "super-all-in-one-agent"
   | "ai-writing-paper"
   | "zhongying-essay"
   | "reading-report"
@@ -136,7 +137,8 @@ export const MODEL_COSTS: Record<ModelType, ModelCostConfig> = {
   problem: { ...TEXT_MODEL_DEFAULTS, displayName: "题目解析智能体", estimatedInputTokens: 600, estimatedOutputTokens: 1000 },
   "beike-pro": { ...TEXT_MODEL_DEFAULTS, displayName: "全学段备课助手Pro", estimatedInputTokens: 1200, estimatedOutputTokens: 1800 },
   banzhuren: { ...TEXT_MODEL_DEFAULTS, displayName: "班主任超级助手", estimatedInputTokens: 1000, estimatedOutputTokens: 1500 },
-  "all-in-one-agent": { ...TEXT_MODEL_DEFAULTS, displayName: "全能超级智能体", estimatedInputTokens: 1200, estimatedOutputTokens: 1800 },
+  "all-in-one-agent": { ...TEXT_MODEL_DEFAULTS, displayName: "数学图片与动画生成器", estimatedInputTokens: 1200, estimatedOutputTokens: 1800 },
+  "super-all-in-one-agent": { ...TEXT_MODEL_DEFAULTS, displayName: "超级全能智能体", estimatedInputTokens: 1600, estimatedOutputTokens: 2400 },
   "ai-writing-paper": { ...TEXT_MODEL_DEFAULTS, displayName: "论文写作助手", estimatedInputTokens: 1200, estimatedOutputTokens: 1800 },
   "zhongying-essay": { ...TEXT_MODEL_DEFAULTS, displayName: "中英文作文助手" },
   "reading-report": { ...TEXT_MODEL_DEFAULTS, displayName: "读书报告助手", estimatedInputTokens: 1000, estimatedOutputTokens: 1500 },

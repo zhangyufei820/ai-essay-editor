@@ -57,6 +57,13 @@ export function getDifyCredentialForModel(
         env,
         defaultCredential,
       )
+    case "super-all-in-one-agent":
+      return selectRequiredProductionCredential(
+        env.DIFY_SUPER_ALL_IN_ONE_AGENT_API_KEY,
+        "DIFY_SUPER_ALL_IN_ONE_AGENT_API_KEY",
+        env,
+        defaultCredential,
+      )
     case "worksheet-diagnosis":
       return selectRequiredProductionCredential(
         env.DIFY_WORKSHEET_DIAGNOSIS_API_KEY,

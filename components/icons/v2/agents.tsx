@@ -102,11 +102,38 @@ export function IconTeaching(props: InkIconProps) {
   </>)
 }
 
-/** 全能超级智能体 — 六边形 + 闪电 */
+/** 网站助手 — 对话入口 + 指引星标 */
+export function IconWebsiteAssistant(props: InkIconProps) {
+  return wrap(props, <>
+    <path d="M5 6.5h10a4 4 0 0 1 0 8H9l-4 3.5v-3.5a4 4 0 0 1 0-8z" />
+    <path d="M9 10.5h4M9 12.8h2.5" opacity={0.65} />
+    <path d="M18.5 4.5v3M17 6h3" stroke="var(--seal-500,#B23A2C)" strokeWidth={1.3} />
+    <path d="M19 16.5l2 2-2 2" />
+    <path d="M14.5 18.5H21" />
+  </>)
+}
+
+/** 数学图片与动画生成器 — 函数曲线 + 图片框 + 播放 */
 export function IconAllInOne(props: InkIconProps) {
   return wrap(props, <>
-    <path d="M12 2l8.5 5v10L12 22l-8.5-5V7L12 2z" />
-    <path d="M13 7l-2 5h4l-2 5" strokeWidth={2} />
+    <rect x="3.5" y="4" width="17" height="13" rx="2" />
+    <path d="M6.5 14c1.5-4 3.5-4 5 0s3.5 4 5 0" />
+    <path d="M7 7.5h3.2M8.6 6v3" stroke="var(--seal-500,#B23A2C)" strokeWidth={1.2} />
+    <path d="M15.5 7.5v4l3-2-3-2z" fill="currentColor" stroke="none" opacity={0.9} />
+    <path d="M8 20h8M12 17v3" opacity={0.6} />
+  </>)
+}
+
+/** 超级全能智能体 — 中枢节点 + 多能力轨道 */
+export function IconSuperAgent(props: InkIconProps) {
+  return wrap(props, <>
+    <circle cx="12" cy="12" r="3.2" />
+    <path d="M12 3.5v5.3M12 15.2v5.3M3.5 12h5.3M15.2 12h5.3" />
+    <path d="M6.2 6.2l3.7 3.7M14.1 14.1l3.7 3.7M17.8 6.2l-3.7 3.7M9.9 14.1l-3.7 3.7" opacity={0.65} />
+    <circle cx="12" cy="3.5" r="1.4" fill="var(--seal-500,#B23A2C)" stroke="none" />
+    <rect x="18.8" y="10.8" width="2.8" height="2.8" rx=".6" fill="currentColor" stroke="none" />
+    <path d="M10.8 20.5h2.4l-1.2-2-1.2 2z" fill="currentColor" stroke="none" />
+    <path d="M3.5 10.8l1.4 2.4 1.4-2.4H3.5z" fill="currentColor" stroke="none" opacity={0.85} />
   </>)
 }
 

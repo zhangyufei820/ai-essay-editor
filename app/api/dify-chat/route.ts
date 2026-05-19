@@ -144,6 +144,7 @@ function buildGptImageV11Inputs(inputs: unknown): GptImageV11Inputs {
 const WORKFLOW_MODELS = new Set(["banana-2-pro", "gemini-image", "vocab-card"])
 const MEMBERSHIP_PRODUCT_IDS = ["basic", "pro", "premium", "enterprise", "campus"]
 const ALL_IN_ONE_AGENT_MODEL = "all-in-one-agent"
+const SUPER_ALL_IN_ONE_AGENT_MODEL = "super-all-in-one-agent"
 
 function appendOpenClawInlineOutputInstruction(query: string) {
   return [
@@ -1188,7 +1189,7 @@ export async function POST(request: NextRequest) {
     const requestedModelType = (model || "general-chat") as ModelType
     const configuredMaxOutputTokens = getMaxOutputTokensForModel(requestedModelType)
     const limitedQuery = appendTextOutputLimitInstruction(query || "你好", requestedModelType)
-    const isAllInOneAgent = model === ALL_IN_ONE_AGENT_MODEL
+    const isAllInOneAgent = model === ALL_IN_ONE_AGENT_MODEL || model === SUPER_ALL_IN_ONE_AGENT_MODEL
     const effectiveQuery = model === "open-claw" ? appendOpenClawInlineOutputInstruction(limitedQuery) : limitedQuery
     let effectiveConvId = normalizeDifyConversationId(conversation_id, modelPrefix)
     
@@ -1873,7 +1874,8 @@ export async function POST(request: NextRequest) {
           'gemini-image': 'Gemini 图像',
           'suno-v5': 'Suno 音乐',
           'open-claw': 'Open Claw 对话',
-          'all-in-one-agent': '全能超级智能体',
+          'all-in-one-agent': '数学图片与动画生成器',
+          'super-all-in-one-agent': '超级全能智能体',
         }
         const reason = reasonMap[model as string] || `使用 ${getModelDisplayName(model as ModelType)}`
         const description = workflowImageUrls.length > 0

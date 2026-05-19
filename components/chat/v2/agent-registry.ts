@@ -6,7 +6,7 @@
  */
 
 import { Image as ImageIcon } from "lucide-react"
-import { IconAllInOne, IconBanzhuren, IconDiagnosis, IconEnglish, IconEssay, IconFollowup, IconMath, IconMic, IconMusic, IconOpenClaw, IconProblem, IconTeaching, IconVocab, IconWriting } from "@/components/icons/v2"
+import { IconAllInOne, IconBanzhuren, IconDiagnosis, IconEnglish, IconEssay, IconFollowup, IconMath, IconMic, IconMusic, IconOpenClaw, IconProblem, IconSuperAgent, IconTeaching, IconVocab, IconWebsiteAssistant, IconWriting } from "@/components/icons/v2"
 import type { AgentDefinition } from "./types"
 
 export const AGENT_REGISTRY: Record<string, AgentDefinition> = {
@@ -26,7 +26,7 @@ export const AGENT_REGISTRY: Record<string, AgentDefinition> = {
     group: "general",
     artifactType: "markdown",
     priceLabel: "按字数计费",
-    icon: IconAllInOne,
+    icon: IconWebsiteAssistant,
   },
   "teaching-pro": {
     model: "teaching-pro",
@@ -212,12 +212,21 @@ export const AGENT_REGISTRY: Record<string, AgentDefinition> = {
   },
   "all-in-one-agent": {
     model: "all-in-one-agent",
-    name: "全能超级智能体",
+    name: "数学图片与动画生成器",
     description: "自动选择合适工具完成复杂任务",
     group: "general",
     artifactType: "markdown",
     priceLabel: "按 Token 计费",
     icon: IconAllInOne,
+  },
+  "super-all-in-one-agent": {
+    model: "super-all-in-one-agent",
+    name: "超级全能智能体",
+    description: "接入最新模型 GPT-5.5，可自由创建 skill，自由创建 PPT、图像生成、视频生成、超长论文写作、联网。",
+    group: "general",
+    artifactType: "markdown",
+    priceLabel: "按 Token 计费",
+    icon: IconSuperAgent,
   },
 }
 

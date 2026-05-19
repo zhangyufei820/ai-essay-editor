@@ -102,8 +102,15 @@ interface EducationPanelProps {
 
 const EDUCATION_AGENTS: EducationAgent[] = [
   {
+    key: "super-all-in-one-agent",
+    name: "超级全能智能体",
+    description: "GPT-5.5 / skill / PPT / 图像 / 视频 / 论文 / 联网",
+    badge: "新",
+    href: "/chat/super-all-in-one-agent",
+  },
+  {
     key: "all-in-one-agent",
-    name: "全能超级智能体",
+    name: "数学图片与动画生成器",
     description: "动画、图片、文件全能创作",
     badge: "推荐",
     href: "/chat/all-in-one-agent",
@@ -163,6 +170,7 @@ const EDUCATION_AGENTS: EducationAgent[] = [
 ]
 
 const EDUCATION_AGENT_ICONS: Record<string, ComponentType<InkIconProps>> = {
+  "super-all-in-one-agent": IconAllInOne,
   "all-in-one-agent": IconAllInOne,
   "worksheet-diagnosis": IconDiagnosis,
   standard: IconEssay,

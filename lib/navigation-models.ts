@@ -26,8 +26,18 @@ export const navigationModelGroups: NavigationModelGroup[] = [
     label: "教育专区",
     items: [
       {
+        key: "super-all-in-one-agent",
+        name: "超级全能智能体",
+        description: "GPT-5.5 / skill / PPT / 图像 / 视频 / 论文 / 联网",
+        href: "/chat/super-all-in-one-agent",
+        group: "教育专用",
+        color: BRAND_GREEN,
+        modelKey: "super-all-in-one-agent",
+        badge: "新",
+      },
+      {
         key: "all-in-one-agent",
-        name: "全能超级智能体",
+        name: "数学图片与动画生成器",
         description: "动画、图片、文件全能创作",
         href: "/chat/all-in-one-agent",
         group: "教育专用",

@@ -28,9 +28,23 @@ describe("all-in-one route model sync", () => {
 
     expect(text).toMatch(/const\s+WORKFLOW_MODELS\s*=\s*new Set\(\[[^\]]*"banana-2-pro"[^\]]*"gemini-image"[^\]]*"vocab-card"[^\]]*\]\)/)
     expect(text).toContain('const ALL_IN_ONE_AGENT_MODEL = "all-in-one-agent"')
+    expect(text).toContain('const SUPER_ALL_IN_ONE_AGENT_MODEL = "super-all-in-one-agent"')
     expect(text).not.toMatch(/const\s+WORKFLOW_MODELS\s*=\s*new Set\(\[[^\]]*["']all-in-one-agent["'][^\]]*\]\)/)
+    expect(text).not.toMatch(/const\s+WORKFLOW_MODELS\s*=\s*new Set\(\[[^\]]*["']super-all-in-one-agent["'][^\]]*\]\)/)
     expect(text).toContain("buildAllInOneAgentWorkflowInputs(effectiveQuery, inputs, fileUrls)")
     expect(text).not.toContain('"banana-2-pro", "vocab-card", "all-in-one-agent"')
+  })
+
+  it("registers super all-in-one without hardcoding its app key", () => {
+    const route = routeSource()
+    const ui = source()
+
+    expect(route).toContain("super-all-in-one-agent")
+    expect(ui).toContain("超级全能智能体")
+    expect(ui).toContain("const SUPER_ALL_IN_ONE_AGENT_PROMPTS")
+    expect(ui).toContain("我想制定一个学习计划")
+    expect(ui).toContain("selectedModel === \"super-all-in-one-agent\" ? SUPER_ALL_IN_ONE_AGENT_PROMPTS : ALL_IN_ONE_AGENT_PROMPTS")
+    expect(`${route}\n${ui}`).not.toContain("app-W04iqTx08kQQstH9fcpSBqbN")
   })
 
   it("streams readable all-in-one answers while filtering setup events", () => {

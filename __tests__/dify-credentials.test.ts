@@ -109,6 +109,32 @@ describe("Dify credential selection", () => {
     })
   })
 
+  it("uses the dedicated super all-in-one agent key when configured", () => {
+    const selection = getDifyCredentialForModel("super-all-in-one-agent", {
+      DIFY_SUPER_ALL_IN_ONE_AGENT_API_KEY: "super-all-in-one-key",
+      ESSAY_CORRECTION_API_KEY: "default-key",
+    })
+
+    expect(selection).toEqual({
+      credential: "super-all-in-one-key",
+      source: "DIFY_SUPER_ALL_IN_ONE_AGENT_API_KEY",
+    })
+  })
+
+  it("does not silently fall back for super all-in-one agent in production", () => {
+    const selection = getDifyCredentialForModel("super-all-in-one-agent", {
+      NODE_ENV: "production",
+      DIFY_API_KEY: "chat-key",
+      ESSAY_CORRECTION_API_KEY: "default-key",
+    })
+
+    expect(selection).toEqual({
+      credential: "",
+      source: "DIFY_SUPER_ALL_IN_ONE_AGENT_API_KEY",
+    })
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("DIFY_SUPER_ALL_IN_ONE_AGENT_API_KEY is required"))
+  })
+
   it("does not silently fall back to a chat key for worksheet diagnosis in production", () => {
     const selection = getDifyCredentialForModel("worksheet-diagnosis", {
       NODE_ENV: "production",

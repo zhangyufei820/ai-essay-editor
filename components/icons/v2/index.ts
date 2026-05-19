@@ -41,7 +41,9 @@ export {
   IconOpenClaw,
   IconMusic,
   IconTeaching,
+  IconWebsiteAssistant,
   IconAllInOne,
+  IconSuperAgent,
   IconBeike,
   IconBanzhuren,
 } from "./agents"

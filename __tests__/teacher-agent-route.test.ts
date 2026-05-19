@@ -10,6 +10,10 @@ describe("teacher agent chat routing", () => {
       model: "all-in-one-agent",
       teacherAgentShareCode: null,
     })
+    expect(resolveChatAgentParam("super-all-in-one-agent")).toEqual({
+      model: "super-all-in-one-agent",
+      teacherAgentShareCode: null,
+    })
   })
 
   it("routes teacher-created share codes to the teacher agent chat mode", () => {

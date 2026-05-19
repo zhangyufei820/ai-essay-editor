@@ -26,7 +26,8 @@ const SUPPORTED_MODELS = [
   'problem',         // 题目解析
   'beike-pro',       // 备课助手Pro
   'banzhuren',       // 班主任智能体
-  'all-in-one-agent', // 全能超级智能体
+  'all-in-one-agent', // 数学图片与动画生成器
+  'super-all-in-one-agent', // 超级全能智能体
   'ai-writing-paper', // 论文写作
   'zhongying-essay', // 中英文作文
   'reading-report',   // 读书报告

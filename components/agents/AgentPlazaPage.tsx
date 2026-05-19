@@ -193,6 +193,7 @@ function AgentCard({ agent, featured = false }: { agent: AgentDefinition; featur
     "suno-v5",
     "open-claw",
     "all-in-one-agent",
+    "super-all-in-one-agent",
   ].includes(agent.model)
 
   return (

@@ -90,6 +90,21 @@ describe('Sprint 5 payment / credits / membership guards', () => {
     expect(source).toContain('usageSource: "fixed"')
   })
 
+  it('keeps Image 2 prompt optimization authenticated and server-side', () => {
+    const route = read('app/api/image-prompt/optimize/route.ts')
+    const client = read('components/chat/gpt-image2-chat-interface.tsx')
+
+    expect(route).toContain('requireUser(request)')
+    expect(route).toContain('DIFY_IMAGE_PROMPT_OPTIMIZER_API_KEY')
+    expect(route).toContain('/chat-messages')
+    expect(route).toContain('/workflows/run')
+    expect(route).toContain('Gemini 图像生成')
+    expect(client).toContain('model: isGeminiWorkspace ? "gemini-image"')
+    expect(client).toContain('/api/image-prompt/optimize')
+    expect(client).toContain('自动优化')
+    expect(`${route}\n${client}`).not.toContain('app-VLBApoujAy64G9KdvcmZPpHq')
+  })
+
   it('does not trust browser-provided X-User-Id for protected chat APIs', () => {
     const difyChat = read('app/api/dify-chat/route.ts')
     const chatSession = read('app/api/chat-session/route.ts')

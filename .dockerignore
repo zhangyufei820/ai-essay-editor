@@ -6,6 +6,8 @@ node_modules
 .next
 out
 services
+vendor
+omnivoice-dify-gateway
 
 # 测试
 coverage

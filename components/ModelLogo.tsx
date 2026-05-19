@@ -3,13 +3,17 @@
 import React from "react"
 import Image from "next/image"
 import {
+  IconAllInOne,
+  IconSuperAgent,
+  IconWebsiteAssistant,
+} from "@/components/icons/v2"
+import {
   FileCheck2,
   Sparkles,
   Calculator,
   Languages,
   LayoutDashboard,
   UsersRound,
-  BrainCircuit,
   BookOpenText,
   ClipboardList,
   FilePenLine,
@@ -40,6 +44,7 @@ export type ModelKey =
   | "beike-pro"
   | "banzhuren"
   | "all-in-one-agent"
+  | "super-all-in-one-agent"
   | "banana-2-pro"
   | "gemini-image"
   | "suno-v5"
@@ -64,6 +69,8 @@ interface ModelLogoConfig {
   brandColor?: string
   /** Lucide 图标组件 */
   LucideIcon?: React.FC<LucideProps>
+  /** 站内自绘 SVG 图标组件 */
+  CustomIcon?: React.FC<{ size?: number; className?: string; style?: React.CSSProperties }>
   /** Lucide 图标尺寸 */
   lucideSize?: number
 }
@@ -97,7 +104,7 @@ const MODEL_LOGOS: Record<ModelKey, ModelLogoConfig> = {
 
   // 教育类智能体 - 使用 Lucide 线性图标，无背景
   "general-chat": {
-    LucideIcon: Sparkles,
+    CustomIcon: IconWebsiteAssistant,
     brandColor: "#10A37F",
   },
   "standard": {
@@ -133,7 +140,11 @@ const MODEL_LOGOS: Record<ModelKey, ModelLogoConfig> = {
     brandColor: "#10A37F",
   },
   "all-in-one-agent": {
-    LucideIcon: BrainCircuit,
+    CustomIcon: IconAllInOne,
+    brandColor: "#10A37F",
+  },
+  "super-all-in-one-agent": {
+    CustomIcon: IconSuperAgent,
     brandColor: "#10A37F",
   },
 
@@ -293,6 +304,21 @@ export function ModelLogo({
   }
 
   // 使用 Lucide 图标 - 纯图标，无背景
+  if (config?.CustomIcon) {
+    const IconComponent = config.CustomIcon
+    return (
+      <div
+        className={containerClassName}
+        style={containerStyle}
+      >
+        <IconComponent
+          size={sizeConfig.iconSize}
+          style={{ color: brandColor }}
+        />
+      </div>
+    )
+  }
+
   if (config?.LucideIcon) {
     const IconComponent = config.LucideIcon
     return (

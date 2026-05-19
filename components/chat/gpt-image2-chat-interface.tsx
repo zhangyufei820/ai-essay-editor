@@ -579,6 +579,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
   const [historyResults, setHistoryResults] = useState<ImageResult[]>([])
   const [errorMessage, setErrorMessage] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isOptimizingPrompt, setIsOptimizingPrompt] = useState(false)
   const [submitStage, setSubmitStage] = useState("")
   const [showLongRunningHint, setShowLongRunningHint] = useState(false)
   const [advancedOpen, setAdvancedOpen] = useState(false)
@@ -966,6 +967,50 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
     throw new Error("timeout")
   }
 
+  const optimizePrompt = async () => {
+    if (isSubmitting || isOptimizingPrompt) return
+    const cleanPrompt = prompt.trim()
+    if (!cleanPrompt) {
+      toast.error("请先输入要优化的提示词。")
+      return
+    }
+
+    setIsOptimizingPrompt(true)
+    setErrorMessage("")
+    try {
+      const response = await fetch(`${API_BASE}/api/image-prompt/optimize`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(await getVerifiedAuthHeaders()),
+        },
+        body: JSON.stringify({
+          prompt: cleanPrompt,
+          mode,
+          model: isGeminiWorkspace ? "gemini-image" : isBananaWorkspace ? "banana-2-pro" : model,
+          aspect_ratio: aspectRatio,
+          size,
+          quality,
+          image_count: count,
+        }),
+      })
+      const payload = await readResponseJson(response)
+      const optimizedPrompt = typeof payload?.optimized_prompt === "string" ? payload.optimized_prompt.trim() : ""
+
+      if (!response.ok || !optimizedPrompt) {
+        throw new Error(typeof payload?.error === "string" ? payload.error : "提示词优化失败")
+      }
+
+      setPrompt(optimizedPrompt)
+      toast.success("提示词已优化")
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "提示词优化失败，请稍后重试。"
+      toast.error(sanitizeServiceWording(message))
+    } finally {
+      setIsOptimizingPrompt(false)
+    }
+  }
+
   const submitImageTask = async (event?: React.FormEvent) => {
     event?.preventDefault()
     if (isSubmitting) return
@@ -1330,13 +1375,26 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
               </div>
 
               <div className="space-y-3">
-                <FieldLabel>提示词</FieldLabel>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <FieldLabel>提示词</FieldLabel>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={optimizePrompt}
+                    disabled={isSubmitting || isOptimizingPrompt || !prompt.trim()}
+                    className="h-8 rounded-[var(--radius-soft)] px-3 text-xs"
+                  >
+                    {isOptimizingPrompt ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Wand2 className="mr-1.5 h-3.5 w-3.5" />}
+                    {isOptimizingPrompt ? "优化中" : "自动优化"}
+                  </Button>
+                </div>
                 <Textarea
                   value={prompt}
                   onChange={(event) => setPrompt(event.target.value)}
                   placeholder="请输入图片生成或图片编辑提示词，例如：不要改变图片元素，放大至4K。"
                   className="min-h-[112px] md:min-h-[160px] resize-y rounded-[var(--radius-sharp)] border-[var(--paper-200)] bg-[var(--paper-50)] text-[15px] md:text-base leading-6 md:leading-7"
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || isOptimizingPrompt}
                 />
               </div>
             </div>

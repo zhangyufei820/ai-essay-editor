@@ -97,7 +97,8 @@ const MODEL_DISPLAY_NAMES: Record<string, string> = {
   "problem": "题目解析",
   "beike-pro": "备课助手",
   "banzhuren": "班主任助手",
-  "all-in-one-agent": "全能智能体",
+  "all-in-one-agent": "数学图片与动画生成器",
+  "super-all-in-one-agent": "超级全能智能体",
   "suno-v5": "音乐",
   "banana-2-pro": "Banana 2 Pro",
   "gpt-image-2": "GPT Image 2",
@@ -127,6 +128,13 @@ const ALL_IN_ONE_AGENT_PROMPTS = [
   "帮我把这张图片改成适合课堂展示的教学插图，风格清晰、干净、适合投影。",
   "根据我上传的文件，提炼重点并生成一份课堂讲解提纲和练习题。",
   "我想做一个数学概念可视化，请先帮我完善提示词，再生成可执行方案。",
+]
+
+const SUPER_ALL_IN_ONE_AGENT_PROMPTS = [
+  "我想制定一个学习计划，请根据我的考试时间、当前基础和每天可用时长，帮我拆成 7 天 / 30 天 / 学期计划。",
+  "帮我梳理这门课的知识框架，提炼重点、难点和易错点，并生成复习提纲、背诵清单和题型清单。",
+  "我需要每日 / 每周任务清单，请把我的目标拆成可执行任务，安排番茄钟节奏，并给出检查清单。",
+  "请根据我的情况定制学习方案：目标是【考试 / 课程 / 论文 / 作业】，截止时间是【日期】，基础是【简单描述】，每天能学【时长】。",
 ]
 
 // 获取模型徽章颜色 — 强制归一：所有模型统一为翡翠绿 var(--ink-600)
@@ -1769,12 +1777,20 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       group: "教育专用"
     },
     "all-in-one-agent": {
-      name: "全能超级智能体",
+      name: "数学图片与动画生成器",
       modelKey: "all-in-one-agent",
       color: BRAND_GREEN,
       description: "动画、图片、文件全能创作",
       badge: "新",
       group: "教育专用"
+    },
+    "super-all-in-one-agent": {
+      name: "超级全能智能体",
+      modelKey: "super-all-in-one-agent",
+      color: BRAND_GREEN,
+      description: "GPT-5.5 / skill / PPT / 图像 / 视频 / 论文 / 联网",
+      badge: "新",
+      group: "AI模型"
     },
     "gpt-5": {
       name: "ChatGPT 5.4",
@@ -3582,11 +3598,15 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                     <ModelLogo modelKey={selectedModel as any} size="xl" />
                   </div>
                   <h1 className="text-lg sm:text-xl font-semibold text-[var(--ink-800)] px-4">
-                    {selectedModel === "all-in-one-agent" ? "全能超级智能体" : "欢迎使用沈翔智学"}
+                    {selectedModel === "all-in-one-agent"
+                      ? "数学图片与动画生成器"
+                      : selectedModel === "super-all-in-one-agent"
+                        ? "超级全能智能体"
+                        : "欢迎使用沈翔智学"}
                   </h1>
-                  {selectedModel === "all-in-one-agent" && (
+                  {(selectedModel === "all-in-one-agent" || selectedModel === "super-all-in-one-agent") && (
                     <div className="mt-5 grid w-full max-w-2xl grid-cols-1 gap-2 px-4 text-left sm:grid-cols-2">
-                      {ALL_IN_ONE_AGENT_PROMPTS.map((prompt) => (
+                      {(selectedModel === "super-all-in-one-agent" ? SUPER_ALL_IN_ONE_AGENT_PROMPTS : ALL_IN_ONE_AGENT_PROMPTS).map((prompt) => (
                         <button
                           key={prompt}
                           type="button"
