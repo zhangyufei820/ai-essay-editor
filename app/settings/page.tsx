@@ -69,6 +69,10 @@ const CREDIT_TYPE_COLORS: Record<string, { bg: string; text: string }> = {
   "消耗积分": { bg: "var(--seal-50)", text: "var(--seal-500)" },
 }
 
+const MAX_AVATAR_FILE_SIZE = 8 * 1024 * 1024
+const MAX_AVATAR_DATA_URL_LENGTH = 250_000
+const AVATAR_CANVAS_SIZE = 256
+
 function readFirstString(...values: unknown[]) {
   for (const value of values) {
     if (typeof value === "string" && value.trim()) return value.trim()
@@ -125,6 +129,52 @@ function normalizeSettingsUser(rawUser: unknown) {
       nestedUser?.photo,
     ),
   }
+}
+
+function readFileAsDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result || ""))
+    reader.onerror = () => reject(new Error("头像读取失败"))
+    reader.readAsDataURL(file)
+  })
+}
+
+function loadImage(src: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image()
+    image.onload = () => resolve(image)
+    image.onerror = () => reject(new Error("头像图片解析失败"))
+    image.src = src
+  })
+}
+
+async function createAvatarDataUrl(file: File) {
+  if (!file.type.startsWith("image/")) {
+    throw new Error("请选择图片文件")
+  }
+  if (file.size > MAX_AVATAR_FILE_SIZE) {
+    throw new Error("头像图片不能超过 8MB")
+  }
+
+  const originalDataUrl = await readFileAsDataUrl(file)
+  const image = await loadImage(originalDataUrl)
+  const canvas = document.createElement("canvas")
+  canvas.width = AVATAR_CANVAS_SIZE
+  canvas.height = AVATAR_CANVAS_SIZE
+  const context = canvas.getContext("2d")
+  if (!context) throw new Error("当前浏览器不支持头像处理")
+
+  const side = Math.min(image.naturalWidth || image.width, image.naturalHeight || image.height)
+  const sourceX = ((image.naturalWidth || image.width) - side) / 2
+  const sourceY = ((image.naturalHeight || image.height) - side) / 2
+  context.drawImage(image, sourceX, sourceY, side, side, 0, 0, AVATAR_CANVAS_SIZE, AVATAR_CANVAS_SIZE)
+
+  const dataUrl = canvas.toDataURL("image/webp", 0.82)
+  if (dataUrl.length > MAX_AVATAR_DATA_URL_LENGTH) {
+    throw new Error("头像处理后仍过大，请换一张更小的图片")
+  }
+  return dataUrl
 }
 
 // 积分变化记录类型
@@ -239,34 +289,17 @@ export default function SettingsPage() {
       if (!event.target.files || event.target.files.length === 0) return
 
       const file = event.target.files[0]
-      const fileExt = file.name.split('.').pop()
-      const fileName = `avatar_${Date.now()}.${fileExt}`
-
-      const { data, error: uploadError } = await supabase.storage
-        .from('avatars')
-        .upload(fileName, file, {
-          cacheControl: '3600',
-          upsert: true
-        })
-
-      if (uploadError) {
-        throw new Error(`Upload Error: ${(uploadError as any).message}`)
-      }
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('avatars')
-        .getPublicUrl(fileName)
-
-      const finalUrl = `${publicUrl}?t=${Date.now()}`
+      const finalUrl = await createAvatarDataUrl(file)
       setAvatarUrl(finalUrl)
-      toast.success("上传成功！请点击【保存修改】")
+      toast.success("头像已更新预览，请点击【保存资料】")
 
     } catch (error: any) {
       console.error(error)
       setDebugError(error.message || "未知错误")
-      toast.error("上传失败")
+      toast.error(error.message || "头像处理失败")
     } finally {
       setUploading(false)
+      event.target.value = ""
     }
   }
 

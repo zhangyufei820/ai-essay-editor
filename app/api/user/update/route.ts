@@ -22,6 +22,18 @@ function isUUID(str: string) {
   return regex.test(str);
 }
 
+function normalizeAvatarUrl(value: unknown) {
+  if (typeof value !== 'string') return null
+  const avatarUrl = value.trim()
+  if (!avatarUrl) return null
+  if (avatarUrl.length > 250_000) {
+    throw new Error('头像图片过大，请换一张更小的图片')
+  }
+  if (/^https?:\/\//i.test(avatarUrl)) return avatarUrl
+  if (/^data:image\/(png|jpe?g|webp);base64,[a-z0-9+/=]+$/i.test(avatarUrl)) return avatarUrl
+  throw new Error('头像格式不支持')
+}
+
 // 暴力提取纯数字 (把 +86, -, 空格全部干掉)
 export async function POST(req: NextRequest) {
   console.log('[Admin Update] 收到更新请求')
@@ -39,6 +51,7 @@ export async function POST(req: NextRequest) {
     const supabaseAdmin = getSupabaseAdmin()
     let { userId: requestedUserId, name, avatarUrl } = await req.json()
     let userId = auth.user!.id
+    avatarUrl = normalizeAvatarUrl(avatarUrl)
 
     console.log('[Admin Update] 请求参数:', { userId: userId?.slice(0, 10), name, hasAvatar: !!avatarUrl })
 
