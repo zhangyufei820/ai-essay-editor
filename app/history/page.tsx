@@ -35,7 +35,7 @@ type HistoryItem =
 const MODEL_DISPLAY_NAMES: Record<string, string> = {
   standard: "作文批改",
   "general-chat": "网站助手",
-  "gpt-5": "ChatGPT 5.4",
+  "gpt-5": "ChatGPT 5.5",
   "claude-opus": "Claude Opus",
   "gemini-pro": "Gemini Pro",
   "gemini-image": "Gemini 图像",

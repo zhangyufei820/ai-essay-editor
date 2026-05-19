@@ -71,4 +71,14 @@ describe('app chrome routes', () => {
     expect(marketingHeader).toContain('<AvatarV2')
     expect(marketingHeader).toContain('<AvatarV2Image src={activeUser.avatar}')
   })
+
+  it('uses ChatGPT 5.5 display copy for the gpt-5 model', () => {
+    const navigationModels = readFileSync(path.join(process.cwd(), 'lib/navigation-models.ts'), 'utf8')
+    const modelPanel = readFileSync(path.join(process.cwd(), 'components/chat/ModelPanel.tsx'), 'utf8')
+    const enhancedChat = readFileSync(path.join(process.cwd(), 'components/chat/enhanced-chat-interface.tsx'), 'utf8')
+
+    expect(navigationModels).toContain('name: "ChatGPT 5.5"')
+    expect(modelPanel).toContain('name: "ChatGPT 5.5"')
+    expect(enhancedChat).toContain('name: "ChatGPT 5.5"')
+  })
 })

@@ -93,7 +93,7 @@ interface ModelPanelProps {
 const MODELS: Model[] = [
   {
     key: "gpt-5",
-    name: "ChatGPT 5.4",
+    name: "ChatGPT 5.5",
     nameEn: "GPT-5",
     description: "通用智能对话",
     badge: "新",

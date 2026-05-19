@@ -23,7 +23,7 @@ const MODEL_SHORTCUTS: Array<{
 }> = [
   {
     key: "gpt-5",
-    name: "ChatGPT 5.4",
+    name: "ChatGPT 5.5",
     description: "通用推理、写作和复杂问题拆解",
     href: "/chat/gpt-5",
     badge: "新",

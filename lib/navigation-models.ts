@@ -137,7 +137,7 @@ export const navigationModelGroups: NavigationModelGroup[] = [
       },
       {
         key: "gpt-5",
-        name: "ChatGPT 5.4",
+        name: "ChatGPT 5.5",
         description: "通用智能对话",
         href: "/chat/gpt-5",
         group: "AI模型",

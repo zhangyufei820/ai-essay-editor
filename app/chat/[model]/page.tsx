@@ -10,7 +10,7 @@ const SUPPORTED_MODELS = [
   'standard',        // 作文批改
   'general-chat',    // 通用轻量对话
   'teaching-pro',    // 教学评助手
-  'gpt-5',           // ChatGPT 5.4
+  'gpt-5',           // ChatGPT 5.5
   'claude-opus',     // Claude opus4.6thinking
   'gemini-pro',      // Gemini 3.1 pro
   'gemini-image',    // Gemini 图像

@@ -1890,7 +1890,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       group: "AI模型"
     },
     "gpt-5": {
-      name: "ChatGPT 5.4",
+      name: "ChatGPT 5.5",
       modelKey: "gpt-5",
       color: BRAND_GREEN,
       description: "通用智能对话",

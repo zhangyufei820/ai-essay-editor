@@ -127,7 +127,7 @@ export default function AboutPage() {
                 </div>
                 <h3 className="font-semibold mb-1" style={{ color: "var(--ink-800)" }}>多模型协同</h3>
                 <p className="text-sm" style={{ color: "var(--ink-500)" }}>
-                  整合 GPT-5.4、Claude Opus 4.6、Gemini 3.1、DeepSeek V3、Qwen 3.0 等全球顶尖 AI 模型，根据任务智能调度
+                  整合 GPT-5.5、Claude Opus 4.6、Gemini 3.1、DeepSeek V3、Qwen 3.0 等全球顶尖 AI 模型，根据任务智能调度
                 </p>
               </div>
               <div className="text-center p-4">
