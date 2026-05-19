@@ -32,6 +32,8 @@ import { buildChatSessionRoute, buildChatSessionRouteFromSession, isDedicatedCha
 import { toast } from "sonner"
 import { MessageBubble } from "./MessageBubble"
 import { ChatInput } from "./ChatInput"
+import { DailySurveyGate, type TrialSurveyStatus } from "@/components/trial/DailySurveyGate"
+import { trackCampaignEvent } from "@/lib/campaign-events-client"
 import { EmptyState } from "./EmptyState"
 import { AIStatusIndicator } from "@/components/ai/AIStatusIndicator"
 import { ModelSelector } from "./ModelSelector"
@@ -406,6 +408,25 @@ function formatSunoResponse(fullText: string): string {
   }
 
   return content
+}
+
+function extractWorkflowOutputText(outputs: unknown) {
+  if (!outputs || typeof outputs !== "object" || Array.isArray(outputs)) return ""
+  const record = outputs as Record<string, unknown>
+  const candidates = [
+    record.text,
+    record.result,
+    record.answer,
+    record.output,
+    record.markdown,
+    record.markdown_report,
+    record.report,
+    record.content,
+  ]
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.trim()) return candidate
+  }
+  return ""
 }
 
 function getChatErrorMessage(error: unknown, status?: number, model?: string): string {
@@ -1234,6 +1255,9 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   const [userId, setUserId] = useState<string>("")
   const [userAvatar, setUserAvatar] = useState<string>("")
   const [userCredits, setUserCredits] = useState<number>(0)
+  const [isPaidUser, setIsPaidUser] = useState(false)
+  const [trialStatus, setTrialStatus] = useState<TrialSurveyStatus | null>(null)
+  const [surveyGateOpen, setSurveyGateOpen] = useState(false)
   // 🔥 新增：用户显示名称（手机号/邮箱）
   const [userDisplayName, setUserDisplayName] = useState<string>("")
   const sessionIdRef = useRef<string | null>(null)
@@ -1404,7 +1428,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       if (userStr) {
         try {
           const user = JSON.parse(userStr)
-          const uid = user.id || user.sub || user.userId || user.user_id || ""
+          const uid = extractUserId(user)
           console.log("🔑 [用户初始化] 解析用户:", {
             hasId: Boolean(uid),
             hasPhone: Boolean(user.phone || user.phone_number),
@@ -1491,6 +1515,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         const data = await res.json()
         console.log("✅ [积分查询] API 成功:", data.credits)
         setUserCredits(data.credits || 0)
+        setIsPaidUser(Boolean(data.is_pro))
       } else {
         console.error("❌ [积分查询] API 失败:", res.status)
       }
@@ -1498,6 +1523,58 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       console.error("❌ [积分查询] 异常:", err)
     }
   }
+
+  const shouldRequireEssaySurvey = useCallback((status: TrialSurveyStatus | null) => {
+    return Boolean(
+      status?.active_grant_id &&
+      status.requires_daily_survey !== false &&
+      !status.today_survey_completed &&
+      !isPaidUser
+    )
+  }, [isPaidUser])
+
+  const refreshTrialSurveyState = useCallback(async () => {
+    if (!userId) {
+      return { status: null as TrialSurveyStatus | null, trialEligible: false, gateRequired: false }
+    }
+
+    try {
+      const headers = await getVerifiedAuthHeaders()
+      const [surveyResponse, creditsResponse] = await Promise.all([
+        fetch("/api/surveys/today", { cache: "no-store", headers }),
+        fetch("/api/user/credits", { cache: "no-store", headers }),
+      ])
+
+      const creditsData = await creditsResponse.json().catch(() => null)
+      const nextIsPaidUser = Boolean(creditsData?.is_pro || isPaidUser)
+      setIsPaidUser(nextIsPaidUser)
+      if (typeof creditsData?.credits === "number") {
+        setUserCredits(creditsData.credits)
+      }
+
+      const data = await surveyResponse.json().catch(() => null)
+      if (!surveyResponse.ok || !data?.ok) {
+        console.warn("[TrialSurveyGate] today survey precheck failed", surveyResponse.status, data?.error)
+        return { status: null as TrialSurveyStatus | null, trialEligible: false, gateRequired: false }
+      }
+
+      const status = (data.trialStatus || null) as TrialSurveyStatus | null
+      setTrialStatus(status)
+      return {
+        status,
+        trialEligible: Boolean(status?.active_grant_id),
+        gateRequired: Boolean(
+          status?.active_grant_id &&
+          status.requires_daily_survey !== false &&
+          !status.today_survey_completed &&
+          !nextIsPaidUser
+        ),
+      }
+    } catch (error) {
+      console.warn("[TrialSurveyGate] today survey precheck error", error)
+      return { status: null as TrialSurveyStatus | null, trialEligible: false, gateRequired: false }
+    }
+  }, [isPaidUser, userId])
 
   useEffect(() => {
     if (urlSessionId && urlSessionId !== currentSessionId) {
@@ -2270,8 +2347,19 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       sessionId: sessionIdRef.current
     })
 
+    let trialEligibleForSubmit = Boolean(trialStatus?.active_grant_id)
+    if (selectedModel === "standard" && !isPaidUser) {
+      const surveyState = await refreshTrialSurveyState()
+      trialEligibleForSubmit = surveyState.trialEligible
+      if (surveyState.gateRequired) {
+        setSurveyGateOpen(true)
+        toast.info("填写 90 秒问卷后解锁今日 2000 trial 积分")
+        return
+      }
+    }
+
     const cost = calculateCost()
-    if (userCredits < cost) {
+    if (userCredits < cost && !trialEligibleForSubmit) {
       toast.error("积分不足", {
         description: `需要 ${cost} 积分，当前 ${userCredits}`,
         duration: 2000
@@ -2572,7 +2660,35 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
           toast.error("请先登录")
           throw new Error(getChatErrorMessage("未授权", res.status, selectedModel))
         }
-        if (res.status === 402) throw new Error(getChatErrorMessage("积分不足", res.status, selectedModel))
+        if (res.status === 402 || res.status === 403) {
+          const contentType = res.headers.get("content-type") || ""
+          const errorPayload = contentType.includes("application/json")
+            ? await res.json().catch(() => null)
+            : null
+
+          if (errorPayload?.surveyRequired) {
+            void trackCampaignEvent("survey_required_block", {
+              featureName: "chat_essay_review",
+              status: res.status,
+              model: selectedModel,
+            })
+            setSurveyGateOpen(true)
+            if (typeof window !== "undefined") {
+              window.dispatchEvent(new CustomEvent("trial:open-daily-survey"))
+            }
+            setTrialStatus((previous) => ({
+              ...(previous || {}),
+              ...(errorPayload.trialStatus || {}),
+              requires_daily_survey: true,
+              today_survey_completed: false,
+            }))
+            toast.info("填写 90 秒问卷后解锁今日 2000 trial 积分")
+            throw new Error("请先完成今日共创反馈问卷，解锁免费体验额度")
+          }
+
+          if (res.status === 402) throw new Error(getChatErrorMessage("积分不足", res.status, selectedModel))
+          throw new Error(getChatErrorMessage(errorPayload?.error || "没有权限使用该功能", res.status, selectedModel))
+        }
         if (!res.ok) {
           const errorText = await res.text()
           console.error("❌ [API 错误] 状态码:", res.status)
@@ -2720,11 +2836,12 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                           applyVocabResult({ outputs })
                           continue
                         }
-                        if (outputs.text && !hasRec) {
-                            fullText = outputs.text
-                            setMessages(p => p.map(m => m.id === botId ? { ...m, content: fullText } : m))
-                        } else if (outputs.result && !hasRec) {
-                            fullText = outputs.result
+                        const outputText = extractWorkflowOutputText(outputs)
+                        if (outputText && !hasRec) {
+                            fullText = outputText
+                            hasRec = true
+                            setAnalysisStage(4)
+                            triggerHandover()
                             setMessages(p => p.map(m => m.id === botId ? { ...m, content: fullText } : m))
                         }
                     }
@@ -2742,6 +2859,12 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 	            hasRec = true
 	          }
 	        }
+          if (!isWordCardRequest && !hasRec) {
+            const friendlyError = "我没有收到可展示的作文批改结果，请重新提交一次。若仍然为空，请换一张更清晰的作文图片。"
+            setMessages(p => p.map(m => m.id === botId ? { ...m, content: friendlyError } : m))
+            fullText = friendlyError
+            hasRec = true
+          }
           console.debug("[ChatPerf]", {
             requestId,
             stage: "stream_end",
@@ -3176,6 +3299,10 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       console.log("🔗 [分享] 正在分享中，跳过")
       return
     }
+    if (!userId) {
+      toast.error("请先登录后再分享到广场")
+      return
+    }
     if (messages.length === 0) {
       console.log("🔗 [分享] 没有消息，显示错误")
       toast.error("没有可分享的内容")
@@ -3205,8 +3332,15 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 
       if (!res.ok) {
         const errText = await res.text()
+        let errorMessage = errText || "创建分享失败"
+        try {
+          const parsed = JSON.parse(errText)
+          errorMessage = parsed?.error || parsed?.message || errorMessage
+        } catch {
+          // Keep the raw server response for diagnostics.
+        }
         console.error("🔗 [分享] API 错误:", errText)
-        throw new Error('创建分享失败')
+        throw new Error(errorMessage)
       }
 
       const data = await res.json()
@@ -3237,7 +3371,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 
     } catch (err) {
       console.error("🔗 [分享] 失败:", err)
-      toast.error("分享失败，请稍后重试")
+      toast.error(err instanceof Error ? err.message : "分享失败，请稍后重试")
     } finally {
       setIsSharing(false)
     }
@@ -3841,6 +3975,16 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 	            {/* 🔥 输入框 - 使用 ChatInput 组件 - 移动端固定在底部 */}
             {(selectedModel !== "suno-v5" || messages.length > 0) && (
             <div className="relative z-20 mx-auto w-full max-w-3xl px-0">
+              <DailySurveyGate
+                featureName="作文批改"
+                enabled={selectedModel === "standard"}
+                open={surveyGateOpen}
+                onOpenChange={setSurveyGateOpen}
+                onCompleted={(nextTrialStatus) => {
+                  setTrialStatus((nextTrialStatus || null) as TrialSurveyStatus | null)
+                  toast.success("今日作文批改免费额度已解锁")
+                }}
+              />
               <ChatInput
                 showModelSelector={true}
                 selectedModel={selectedModel}

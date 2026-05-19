@@ -19,7 +19,7 @@ import {
   TabsV2Trigger as TabsTrigger
 } from "@/components/ui/v2"
 import { useState, useEffect, useCallback } from "react"
-import { Users, CreditCard, BarChart3, Lock, Eye, EyeOff, RefreshCw, Search, DollarSign, TrendingUp, UserCheck, Activity, AlertCircle } from "lucide-react"
+import { Users, CreditCard, BarChart3, Lock, Eye, EyeOff, RefreshCw, Search, DollarSign, TrendingUp, UserCheck, Activity, AlertCircle, MessageSquareText, Download } from "lucide-react"
 
 interface StatsData {
   totalUsers: number
@@ -76,6 +76,50 @@ interface UserDetails {
   }
 }
 
+interface TrialDashboardData {
+  metrics: {
+    cumulativeClaimed: number
+    activeTrialUsersToday: number
+    surveySubmittersToday: number
+    surveyCompletionRate: number
+    trialCreditsUsedToday: number
+    avgQualityScoreToday: number | null
+    announcementShownToday: number
+    claimClicksToday: number
+    claimSuccessToday: number
+    dailySurveyAutoPromptShownToday: number
+    dailySurveySubmitSuccessToday: number
+    dailySurveyLaterClickedToday: number
+    surveyRequiredBlocksToday: number
+    trialBillingSuccessToday: number
+  }
+  featureFlags?: {
+    campaignEnabled: boolean
+    batchGrantEnabled: boolean
+    consumptionEnabled: boolean
+  }
+  trends?: {
+    surveySubmitters7d: Array<{
+      date: string
+      submitters: number
+    }>
+  }
+  recentFeedback: Array<{
+    id: string
+    user_id: string
+    survey_date: string
+    answers_json: Record<string, unknown>
+    quality_score: number
+    streak_day: number
+    created_at: string
+    survey_templates?: {
+      template_key: string
+      title: string
+      cadence: string
+    } | null
+  }>
+}
+
 export default function AdminPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [password, setPassword] = useState("")
@@ -100,6 +144,7 @@ export default function AdminPage() {
   
   const [users, setUsers] = useState<UserData[]>([])
   const [orders, setOrders] = useState<OrderData[]>([])
+  const [trialDashboard, setTrialDashboard] = useState<TrialDashboardData | null>(null)
   const [selectedUser, setSelectedUser] = useState<string | null>(null)
   const [userDetails, setUserDetails] = useState<UserDetails | null>(null)
   const [userDetailsOpen, setUserDetailsOpen] = useState(false)
@@ -187,6 +232,58 @@ export default function AdminPage() {
     }
   }, [])
 
+  // 获取共创体验看板
+  const fetchTrialDashboard = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('admin_token')
+      if (!token) return
+
+      const response = await fetch('/api/admin/trial-dashboard', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+
+      if (!response.ok) {
+        throw new Error("trial dashboard request failed")
+      }
+
+      const data = await response.json()
+      if (!data.ok) {
+        throw new Error(data.error || "trial dashboard unavailable")
+      }
+
+      setTrialDashboard({
+        metrics: {
+          cumulativeClaimed: data.metrics?.cumulativeClaimed ?? 0,
+          activeTrialUsersToday: data.metrics?.activeTrialUsersToday ?? 0,
+          surveySubmittersToday: data.metrics?.surveySubmittersToday ?? 0,
+          surveyCompletionRate: data.metrics?.surveyCompletionRate ?? 0,
+          trialCreditsUsedToday: data.metrics?.trialCreditsUsedToday ?? 0,
+          avgQualityScoreToday: data.metrics?.avgQualityScoreToday ?? null,
+          announcementShownToday: data.metrics?.announcementShownToday ?? 0,
+          claimClicksToday: data.metrics?.claimClicksToday ?? 0,
+          claimSuccessToday: data.metrics?.claimSuccessToday ?? 0,
+          dailySurveyAutoPromptShownToday: data.metrics?.dailySurveyAutoPromptShownToday ?? 0,
+          dailySurveySubmitSuccessToday: data.metrics?.dailySurveySubmitSuccessToday ?? 0,
+          dailySurveyLaterClickedToday: data.metrics?.dailySurveyLaterClickedToday ?? 0,
+          surveyRequiredBlocksToday: data.metrics?.surveyRequiredBlocksToday ?? 0,
+          trialBillingSuccessToday: data.metrics?.trialBillingSuccessToday ?? 0,
+        },
+        featureFlags: data.featureFlags || {
+          campaignEnabled: true,
+          batchGrantEnabled: true,
+          consumptionEnabled: true,
+        },
+        trends: {
+          surveySubmitters7d: Array.isArray(data.trends?.surveySubmitters7d) ? data.trends.surveySubmitters7d : [],
+        },
+        recentFeedback: Array.isArray(data.recentFeedback) ? data.recentFeedback : [],
+      })
+    } catch (error) {
+      console.error('获取共创体验看板失败:', error)
+      setErrorMessage("共创体验看板加载失败，请检查 trial-dashboard 接口和体验计划数据表。")
+    }
+  }, [])
+
   // 获取所有数据
   const fetchAllData = useCallback(async () => {
     setLoading(true)
@@ -195,7 +292,8 @@ export default function AdminPage() {
       await Promise.all([
         fetchStats(),
         fetchUsers(),
-        fetchOrders()
+        fetchOrders(),
+        fetchTrialDashboard()
       ])
     } catch (error) {
       console.error('获取数据失败:', error)
@@ -203,7 +301,7 @@ export default function AdminPage() {
     } finally {
       setLoading(false)
     }
-  }, [fetchStats, fetchUsers, fetchOrders])
+  }, [fetchStats, fetchUsers, fetchOrders, fetchTrialDashboard])
 
   // 检查本地存储的 token 是否有效
   useEffect(() => {
@@ -310,6 +408,67 @@ export default function AdminPage() {
   const formatAmount = (amount: number) => {
     return `¥${amount.toLocaleString()}`
   }
+
+  const formatPercent = (value: number) => {
+    return `${(value * 100).toFixed(1)}%`
+  }
+
+  const maskUserId = (userId?: string) => {
+    if (!userId) return "匿名用户"
+    if (userId.length <= 10) return `${userId.slice(0, 3)}***`
+    return `${userId.slice(0, 6)}...${userId.slice(-4)}`
+  }
+
+  const extractFeedbackText = (answers: Record<string, unknown>) => {
+    const preferredKeys = ["best_part", "friction", "current_pain", "price_feedback", "top_request"]
+    const values = preferredKeys
+      .map((key) => answers[key])
+      .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+      .map((value) => value.trim())
+
+    if (values.length > 0) return values.join(" / ")
+
+    const fallback = Object.values(answers)
+      .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+      .map((value) => value.trim())
+      .slice(0, 2)
+      .join(" / ")
+
+    return fallback || "未填写开放反馈"
+  }
+
+  const downloadTrialExport = (type: string, range = "7d") => {
+    const token = localStorage.getItem('admin_token')
+    if (!token) return
+
+    const url = new URL('/api/admin/trial-dashboard/export', window.location.origin)
+    url.searchParams.set('type', type)
+    url.searchParams.set('range', range)
+
+    fetch(url.toString(), {
+      headers: { 'Authorization': `Bearer ${token}` },
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error(await response.text())
+        }
+        return response.blob()
+      })
+      .then((blob) => {
+        const href = URL.createObjectURL(blob)
+        const anchor = document.createElement('a')
+        anchor.href = href
+        anchor.download = `${type}_${range}.csv`
+        document.body.appendChild(anchor)
+        anchor.click()
+        anchor.remove()
+        URL.revokeObjectURL(href)
+      })
+      .catch((error) => {
+        console.error('导出 CSV 失败:', error)
+        setErrorMessage("CSV 导出失败，请检查管理员权限和导出接口。")
+      })
+  }
   
   // 如果未认证，显示登录界面
   if (!isAuthenticated) {
@@ -407,7 +566,7 @@ export default function AdminPage() {
             </div>
           )}
 
-          <TabsList className="grid w-full grid-cols-4 lg:w-[600px]">
+          <TabsList className="grid w-full grid-cols-2 gap-1 sm:grid-cols-5 lg:w-[760px]">
             <TabsTrigger value="overview" className="flex items-center gap-2">
               <BarChart3 className="w-4 h-4" />
               概览
@@ -423,6 +582,10 @@ export default function AdminPage() {
             <TabsTrigger value="stats" className="flex items-center gap-2">
               <TrendingUp className="w-4 h-4" />
               数据分析
+            </TabsTrigger>
+            <TabsTrigger value="trial" className="flex items-center gap-2">
+              <MessageSquareText className="w-4 h-4" />
+              共创体验
             </TabsTrigger>
           </TabsList>
 
@@ -571,6 +734,14 @@ export default function AdminPage() {
                     >
                       <BarChart3 className="w-4 h-4 mr-2" />
                       数据分析
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="w-full justify-start"
+                      onClick={() => setActiveTab("trial")}
+                    >
+                      <MessageSquareText className="w-4 h-4 mr-2" />
+                      共创体验
                     </Button>
                     <div className="rounded-[var(--radius-soft)] border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
                       运营排查建议：先复制订单号、用户 ID 和支付时间，再联系客服或检查支付回调日志。
@@ -804,6 +975,235 @@ export default function AdminPage() {
                       <p className="text-[var(--ink-600)]">用户平均价值</p>
                     </div>
                   </div>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
+          {/* 共创体验 Tab */}
+          <TabsContent value="trial">
+            <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>上线开关状态</CardTitle>
+                </CardHeader>
+                <CardContent className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                  {[
+                    ["活动弹窗", "NEXT_PUBLIC_FREE_TRIAL_CAMPAIGN_ENABLED", trialDashboard?.featureFlags?.campaignEnabled],
+                    ["批量发放", "FREE_TRIAL_BATCH_GRANT_ENABLED", trialDashboard?.featureFlags?.batchGrantEnabled],
+                    ["Trial 消耗", "FREE_TRIAL_CONSUMPTION_ENABLED", trialDashboard?.featureFlags?.consumptionEnabled],
+                  ].map(([label, envName, enabled]) => (
+                    <div
+                      key={String(envName)}
+                      className="rounded-[var(--radius-soft)] border border-[var(--paper-200)] bg-white p-4"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="font-semibold text-[var(--ink-900)]">{label}</p>
+                          <p className="mt-1 font-mono text-xs text-[var(--ink-500)]">{envName}</p>
+                        </div>
+                        <Badge variant={enabled === false ? "seal" : "paper"}>
+                          {enabled === false ? "关闭" : "开启"}
+                        </Badge>
+                      </div>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                <Card>
+                  <CardContent className="pt-6">
+                    <p className="text-sm text-[var(--ink-600)]">累计领取人数</p>
+                    <p className="mt-2 text-3xl font-bold text-[var(--ink-900)]">
+                      {(trialDashboard?.metrics.cumulativeClaimed || 0).toLocaleString()}
+                    </p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardContent className="pt-6">
+                    <p className="text-sm text-[var(--ink-600)]">今日活跃体验用户</p>
+                    <p className="mt-2 text-3xl font-bold text-[var(--ink-900)]">
+                      {(trialDashboard?.metrics.activeTrialUsersToday || 0).toLocaleString()}
+                    </p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardContent className="pt-6">
+                    <p className="text-sm text-[var(--ink-600)]">今日问卷提交人数</p>
+                    <p className="mt-2 text-3xl font-bold text-[var(--ink-900)]">
+                      {(trialDashboard?.metrics.surveySubmittersToday || 0).toLocaleString()}
+                    </p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardContent className="pt-6">
+                    <p className="text-sm text-[var(--ink-600)]">今日问卷完成率</p>
+                    <p className="mt-2 text-3xl font-bold text-[var(--ink-900)]">
+                      {formatPercent(trialDashboard?.metrics.surveyCompletionRate || 0)}
+                    </p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardContent className="pt-6">
+                    <p className="text-sm text-[var(--ink-600)]">今日 trial 消耗积分</p>
+                    <p className="mt-2 text-3xl font-bold text-[var(--ink-900)]">
+                      {(trialDashboard?.metrics.trialCreditsUsedToday || 0).toLocaleString()}
+                    </p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardContent className="pt-6">
+                    <p className="text-sm text-[var(--ink-600)]">今日平均问卷质量分</p>
+                    <p className="mt-2 text-3xl font-bold text-[var(--ink-900)]">
+                      {trialDashboard?.metrics.avgQualityScoreToday == null
+                        ? "暂无"
+                        : trialDashboard.metrics.avgQualityScoreToday.toFixed(1)}
+                    </p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+                {[
+                  ["今日弹窗曝光", trialDashboard?.metrics.announcementShownToday || 0],
+                  ["今日领取点击", trialDashboard?.metrics.claimClicksToday || 0],
+                  ["今日领取成功", trialDashboard?.metrics.claimSuccessToday || 0],
+                  ["今日自动问卷弹出", trialDashboard?.metrics.dailySurveyAutoPromptShownToday || 0],
+                  ["今日问卷提交成功", trialDashboard?.metrics.dailySurveySubmitSuccessToday || 0],
+                  ["今日稍后再说", trialDashboard?.metrics.dailySurveyLaterClickedToday || 0],
+                  ["今日问卷阻断", trialDashboard?.metrics.surveyRequiredBlocksToday || 0],
+                  ["今日 trial billing 成功", trialDashboard?.metrics.trialBillingSuccessToday || 0],
+                ].map(([label, value]) => (
+                  <Card key={label}>
+                    <CardContent className="pt-5">
+                      <p className="text-sm text-[var(--ink-600)]">{label}</p>
+                      <p className="mt-2 text-2xl font-bold text-[var(--ink-900)]">
+                        {Number(value).toLocaleString()}
+                      </p>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>近 7 天问卷提交趋势</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      {(trialDashboard?.trends?.surveySubmitters7d || []).map((item) => {
+                        const maxValue = Math.max(
+                          1,
+                          ...(trialDashboard?.trends?.surveySubmitters7d || []).map((trend) => trend.submitters),
+                        )
+                        return (
+                          <div key={item.date} className="grid grid-cols-[96px_1fr_48px] items-center gap-3 text-sm">
+                            <span className="font-mono text-[var(--ink-500)]">{item.date.slice(5)}</span>
+                            <div className="h-2 rounded-full bg-[var(--paper-200)]">
+                              <div
+                                className="h-2 rounded-full bg-[var(--ink-700)]"
+                                style={{ width: `${Math.max(4, (item.submitters / maxValue) * 100)}%` }}
+                              />
+                            </div>
+                            <span className="text-right font-semibold">{item.submitters}</span>
+                          </div>
+                        )
+                      })}
+                      {(trialDashboard?.trends?.surveySubmitters7d || []).length === 0 && (
+                        <p className="text-sm text-[var(--ink-500)]">暂无趋势数据。</p>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>CSV 导出</CardTitle>
+                  </CardHeader>
+                  <CardContent className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    {[
+                      ["survey_responses", "问卷回复"],
+                      ["trial_credit_usages", "Trial 消耗"],
+                      ["free_trial_grants", "体验授权"],
+                      ["campaign_events", "活动埋点"],
+                    ].map(([type, label]) => (
+                      <Button
+                        key={type}
+                        variant="outline"
+                        type="button"
+                        onClick={() => downloadTrialExport(type)}
+                        className="justify-start gap-2"
+                      >
+                        <Download className="h-4 w-4" />
+                        {label}
+                      </Button>
+                    ))}
+                  </CardContent>
+                </Card>
+              </div>
+
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between gap-3">
+                    <CardTitle>最近开放反馈</CardTitle>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={fetchTrialDashboard}
+                      disabled={loading}
+                      className="flex items-center gap-2"
+                    >
+                      <RefreshCw className="h-4 w-4" />
+                      刷新
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b">
+                          <th className="px-4 py-3 text-left">用户</th>
+                          <th className="px-4 py-3 text-left">问卷</th>
+                          <th className="px-4 py-3 text-left">质量分</th>
+                          <th className="px-4 py-3 text-left">连击</th>
+                          <th className="px-4 py-3 text-left">开放反馈</th>
+                          <th className="px-4 py-3 text-left">时间</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(trialDashboard?.recentFeedback || []).slice(0, 20).map((feedback) => (
+                          <tr key={feedback.id} className="border-b align-top hover:bg-[var(--paper-50)]">
+                            <td className="px-4 py-3 font-mono text-sm">{maskUserId(feedback.user_id)}</td>
+                            <td className="px-4 py-3">
+                              <Badge variant="paper">
+                                {feedback.survey_templates?.title || feedback.survey_templates?.template_key || "问卷反馈"}
+                              </Badge>
+                            </td>
+                            <td className="px-4 py-3 font-semibold">{feedback.quality_score}</td>
+                            <td className="px-4 py-3">{feedback.streak_day} 天</td>
+                            <td className="max-w-xl px-4 py-3 text-sm leading-6 text-[var(--ink-700)]">
+                              {extractFeedbackText(feedback.answers_json || {})}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-[var(--ink-600)]">{formatDate(feedback.created_at)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {(trialDashboard?.recentFeedback || []).length === 0 && (
+                    <div className="py-8 text-center text-sm text-[var(--ink-500)]">
+                      暂无开放反馈。用户提交问卷后，这里会展示脱敏后的最近反馈。
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>

@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { requireLearningUserId } from "@/lib/learning-user"
-import { spendCredits } from "@/lib/credits"
+import { getUserCredits, spendCredits } from "@/lib/credits"
+import { consumeWithTrialCredits } from "@/lib/trial-credits"
 import {
   createDeckName,
   normalizeCardCount,
@@ -15,6 +16,21 @@ export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 const GENERATION_COST = 1
+
+function createBillingPayload(result: {
+  trialUsed?: number
+  realCreditsUsed?: number
+  remainingToday?: number
+  blocked?: boolean
+  reason?: string | null
+} | null) {
+  return {
+    trialUsed: result?.trialUsed || 0,
+    realCreditsUsed: result?.realCreditsUsed || 0,
+    remainingToday: result?.remainingToday || 0,
+    surveyRequired: Boolean(result?.blocked && result.reason === "survey_required"),
+  }
+}
 
 function normalizeNotes(value: unknown) {
   return typeof value === "string" ? value.trim() : ""
@@ -72,28 +88,73 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Notes-to-Cards 工作流 API Key 未配置" }, { status: 503 })
     }
 
-    const charged = await spendCredits(
-      userId,
-      GENERATION_COST,
-      "consume",
-      "AI 生成闪卡",
-      `flashcards:${Date.now()}`,
-      {
-        feature: "flashcards",
+    const billingReferenceId = `flashcards:${Date.now()}`
+    const billingMetadata = {
+      feature: "flashcards",
+      actionType: "consume",
+      modelId: "notes-to-cards",
+      chargedCredits: GENERATION_COST,
+      description: "AI 生成闪卡",
+      rawProviderMetadata: {
+        subject,
+        cardCount,
+        difficultyLevel,
+      },
+    }
+
+    const currentCredits = await getUserCredits(userId)
+    const isPaidUser = Boolean(currentCredits?.is_pro)
+    let billing = createBillingPayload(null)
+    let charged = false
+
+    if (isPaidUser) {
+      charged = await spendCredits(
+        userId,
+        GENERATION_COST,
+        "consume",
+        "AI 生成闪卡",
+        billingReferenceId,
+        billingMetadata,
+      )
+      billing = {
+        trialUsed: 0,
+        realCreditsUsed: charged ? GENERATION_COST : 0,
+        remainingToday: 0,
+        surveyRequired: false,
+      }
+    } else {
+      const billingResult = await consumeWithTrialCredits({
+        userId,
+        amount: GENERATION_COST,
         actionType: "consume",
-        modelId: "notes-to-cards",
-        chargedCredits: GENERATION_COST,
         description: "AI 生成闪卡",
-        rawProviderMetadata: {
+        referenceId: billingReferenceId,
+        metadata: {
+          feature: "flashcards",
           subject,
           cardCount,
           difficultyLevel,
         },
-      },
-    )
+        billingMetadata,
+      })
+      billing = createBillingPayload(billingResult)
+
+      if (billingResult.blocked && billingResult.reason === "survey_required") {
+        return NextResponse.json({
+          error: "请先完成今日问卷，解锁免费体验额度",
+          surveyRequired: true,
+          billing,
+        }, { status: 402 })
+      }
+
+      charged = billingResult.success
+    }
 
     if (!charged) {
-      return NextResponse.json({ error: "积分不足，无法生成闪卡" }, { status: 402 })
+      return NextResponse.json({
+        error: "积分不足，无法生成闪卡",
+        billing,
+      }, { status: 402 })
     }
 
     const result = await runDifyWorkflow({
@@ -144,6 +205,7 @@ export async function POST(request: NextRequest) {
       deck_name: deckName,
       cards: insertedCards || [],
       count: insertedCards?.length || 0,
+      billing,
     })
   } catch (error) {
     console.error("[FlashcardsGenerate] failed:", error)

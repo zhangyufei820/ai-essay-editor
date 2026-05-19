@@ -1,8 +1,11 @@
 import nextVitals from "eslint-config-next/core-web-vitals"
 
+const nextReactPlugin = nextVitals.find((item) => item.plugins?.react)?.plugins?.react
+
 const config = [
   ...nextVitals,
   {
+    plugins: nextReactPlugin ? { react: nextReactPlugin } : {},
     rules: {
       "@next/next/no-html-link-for-pages": "warn",
       "import/no-anonymous-default-export": "off",

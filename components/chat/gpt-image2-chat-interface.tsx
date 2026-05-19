@@ -317,6 +317,10 @@ function UploadPanel({
   const [isDragging, setIsDragging] = useState(false)
 
   const pickFile = (file?: File) => {
+    if (disabled) {
+      toast.error("请先登录后再上传图片。")
+      return
+    }
     if (!file) return
     if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
       toast.error("仅支持 png / jpg / jpeg / webp")
@@ -411,6 +415,10 @@ function MultiImageUploadPanel({
   const [isDragging, setIsDragging] = useState(false)
 
   const pickFiles = (fileList?: FileList | File[] | null) => {
+    if (disabled) {
+      toast.error("请先登录后再上传图片。")
+      return
+    }
     if (!fileList) return
     const files = Array.from(fileList)
     if (files.length === 0) return
@@ -631,22 +639,42 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
     (mode === "image_edit" || count > 1)
 
   useEffect(() => {
-    const userStr = typeof window !== "undefined" ? localStorage.getItem("currentUser") : null
-    if (!userStr) {
-      setAuthChecked(true)
-      return
+    const initUser = async () => {
+      const { data: { user: verifiedUser } } = await supabase.auth.getUser()
+      if (verifiedUser?.id) {
+        setUserId(verifiedUser.id)
+        void fetchCredits(verifiedUser.id)
+        setAuthChecked(true)
+        return
+      }
+
+      const userStr = typeof window !== "undefined" ? localStorage.getItem("currentUser") : null
+      if (!userStr) {
+        setAuthChecked(true)
+        return
+      }
+
+      try {
+        const user = JSON.parse(userStr)
+        const uid = extractUserId(user)
+        const authingToken = localStorage.getItem("idToken") || localStorage.getItem("authingToken") || localStorage.getItem("accessToken")
+        if (authingToken && uid) {
+          setUserId(uid)
+          void fetchCredits(uid)
+        } else {
+          setErrorMessage("登录状态已过期，请重新登录后再上传或生成图片。")
+        }
+      } catch {
+        toast.error("用户信息解析失败，请重新登录")
+      } finally {
+        setAuthChecked(true)
+      }
     }
 
-    try {
-      const user = JSON.parse(userStr)
-      const uid = extractUserId(user)
-      setUserId(uid)
-      if (uid) void fetchCredits(uid)
-    } catch {
-      toast.error("用户信息解析失败，请重新登录")
-    } finally {
+    initUser().catch(() => {
+      setErrorMessage("登录状态校验失败，请重新登录后再试。")
       setAuthChecked(true)
-    }
+    })
   }, [])
 
   useEffect(() => {
@@ -1296,7 +1324,8 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
     toast.success(successText)
   }
 
-  const canSubmit = Boolean(userId) && Boolean(prompt.trim()) && !isSubmitting && (mode === "image_generate" || editImages.length > 0)
+  const isAuthenticated = Boolean(userId)
+  const canSubmit = isAuthenticated && Boolean(prompt.trim()) && !isSubmitting && (mode === "image_generate" || editImages.length > 0)
   const displayedResults = historyResults.length > 0 ? historyResults : result ? [result] : []
 
   return (
@@ -1412,7 +1441,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
                   title="编辑图片"
                   description={`点击上传或拖拽图片到这里，支持 png / jpg / jpeg / webp，最多 ${MAX_EDIT_IMAGE_UPLOADS} 张。`}
                   images={editImages}
-                  disabled={isSubmitting}
+                  disabled={!isAuthenticated || isSubmitting}
                   onPick={handleEditImagesPick}
                   onRemove={removeEditImage}
                   onClear={clearEditImages}
@@ -1423,7 +1452,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
                     title="蒙版图片"
                     description="用于局部编辑。普通换风格、放大、增强清晰度不需要上传蒙版。"
                     image={maskImage}
-                    disabled={isSubmitting}
+                    disabled={!isAuthenticated || isSubmitting}
                     onPick={(file) => handleImagePick("mask", file)}
                     onRemove={() => removeImage("mask")}
                   />
@@ -1456,7 +1485,11 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
 
             <div className="flex flex-col gap-3 rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-[var(--paper-50)] p-3 md:p-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="text-sm text-[var(--ink-500)]">
-                {mode === "image_edit" && editImages.length === 0 ? "图片编辑模式需要至少上传一张原图。" : "参数已准备好，提交后将开始生成。"}
+                {!isAuthenticated
+                  ? "请先登录后再上传图片或生成作品。"
+                  : mode === "image_edit" && editImages.length === 0
+                    ? "图片编辑模式需要至少上传一张原图。"
+                    : "参数已准备好，提交后将开始生成。"}
               </div>
               <Button
                 type="submit"

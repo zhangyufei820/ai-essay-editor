@@ -45,4 +45,21 @@ describe("chat think rendering and composer layout", () => {
     expect(workspaceV2).toContain("onCamera={onCamera ?? onAttach}")
     expect(imageWorkspace).toContain('capture="environment"')
   })
+
+  it("keeps chat auth extraction and empty workflow replies visible", () => {
+    const source = read("components/chat/enhanced-chat-interface.tsx")
+
+    expect(source).toContain("const uid = extractUserId(user)")
+    expect(source).toContain("extractWorkflowOutputText(outputs)")
+    expect(source).toContain("我没有收到可展示的作文批改结果")
+  })
+
+  it("blocks image uploads before login instead of failing after submission", () => {
+    const imageWorkspace = read("components/chat/gpt-image2-chat-interface.tsx")
+
+    expect(imageWorkspace).toContain("const isAuthenticated = Boolean(userId)")
+    expect(imageWorkspace).toContain("请先登录后再上传图片。")
+    expect(imageWorkspace).toContain("登录状态已过期，请重新登录后再上传或生成图片。")
+    expect(imageWorkspace).toContain("disabled={!isAuthenticated || isSubmitting}")
+  })
 })

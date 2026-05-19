@@ -13,6 +13,7 @@ import {
 } from '@/lib/pricing'
 import { assertSecureTlsConfiguration } from '@/lib/runtime-security'
 import { recordBillingIssue } from '@/lib/credits'
+import { canUseTrialCredits, consumeWithTrialCredits, type ConsumeWithTrialCreditsResult } from '@/lib/trial-credits'
 import {
   chargeCreditsSafely as spendCredits,
   createBillingLog as createBillingAuditMetadata,
@@ -38,7 +39,8 @@ async function deductCredit(
   usage: { totalTokens: number; promptTokens: number; completionTokens: number },
   description: string,
   parsedUsage?: ParsedDifyUsage | null,
-) {
+  useTrialCredits = false,
+): Promise<ConsumeWithTrialCreditsResult | null> {
   const currentCost = calculateActualCost(
     CHAT_MODEL,
     {
@@ -50,7 +52,7 @@ async function deductCredit(
   )
   if (currentCost <= 0) {
     console.warn("[Billing] Skip charging because prompt/completion tokens are missing")
-    return
+    return null
   }
 
   const billingMetadata = createBillingAuditMetadata({
@@ -101,15 +103,37 @@ async function deductCredit(
       maxOutputTokens: CHAT_MAX_OUTPUT_TOKENS,
     })
   }
-  const success = await spendCredits(
+  if (!useTrialCredits) {
+    const success = await spendCredits(
+      userId,
+      currentCost,
+      "consume",
+      chargeDescription,
+      undefined,
+      billingMetadata,
+    )
+    if (!success) {
+      console.error("[Billing] Deferred deduction failed or insufficient credits")
+      await recordBillingIssue(
+        userId,
+        currentCost,
+        "billing_failed",
+        `异常账单：${chargeDescription}`,
+        undefined,
+        billingMetadata,
+      )
+    }
+    return null
+  }
+
+  const billingResult = await consumeWithTrialCredits({
     userId,
-    currentCost,
-    "consume",
-    chargeDescription,
-    undefined,
+    amount: currentCost,
+    actionType: "consume",
+    description: chargeDescription,
     billingMetadata,
-  )
-  if (!success) {
+  })
+  if (!billingResult.success) {
     console.error("[Billing] Deferred deduction failed or insufficient credits")
     await recordBillingIssue(
       userId,
@@ -120,12 +144,15 @@ async function deductCredit(
       billingMetadata,
     )
   }
+
+  return billingResult
 }
 
 function createMeteredStreamResponse(
   upstreamResponse: Response,
   userId: string,
-  description: string
+  description: string,
+  options: { useTrialCredits?: boolean } = {},
 ) {
   const encoder = new TextEncoder()
   const decoder = new TextDecoder()
@@ -182,17 +209,41 @@ function createMeteredStreamResponse(
           }
         }
 
-        const finishChunk = `0:${JSON.stringify({ type: "finish", finishReason: "stop" })}\n`
-        controller.enqueue(encoder.encode(finishChunk))
-        controller.close()
+        let billingResult: ConsumeWithTrialCreditsResult | null = null
 
         if (hasReceivedContent && (promptTokens > 0 || completionTokens > 0)) {
-          void deductCredit(userId, { totalTokens, promptTokens, completionTokens }, description, latestParsedUsage).catch((error) => {
+          billingResult = await deductCredit(
+            userId,
+            { totalTokens, promptTokens, completionTokens },
+            description,
+            latestParsedUsage,
+            options.useTrialCredits === true,
+          ).catch((error) => {
             console.error("[Billing] Deferred deduction failed:", error)
+            return null
           })
         } else {
           console.warn(`[Billing] Skip charging, hasReceivedContent=${hasReceivedContent}, promptTokens=${promptTokens}, completionTokens=${completionTokens}`)
         }
+
+        if (billingResult) {
+          const billingChunk = `0:${JSON.stringify({
+            type: "data",
+            data: {
+              billing: {
+                trialUsed: billingResult.trialUsed,
+                realCreditsUsed: billingResult.realCreditsUsed,
+                remainingToday: billingResult.remainingToday,
+                surveyRequired: billingResult.blocked && billingResult.reason === "survey_required",
+              },
+            },
+          })}\n`
+          controller.enqueue(encoder.encode(billingChunk))
+        }
+
+        const finishChunk = `0:${JSON.stringify({ type: "finish", finishReason: "stop" })}\n`
+        controller.enqueue(encoder.encode(finishChunk))
+        controller.close()
       } catch (error) {
         controller.error(error)
       }
@@ -258,12 +309,36 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    if (creditData.credits < MIN_REQUIRED_CREDITS) {
+    const isEssayCorrectionRequest = Boolean(extractedText && extractedText.length > 100)
+    let trialPrecheck: Awaited<ReturnType<typeof canUseTrialCredits>> | null = null
+
+    if (isEssayCorrectionRequest) {
+      trialPrecheck = await canUseTrialCredits(userId, MIN_REQUIRED_CREDITS)
+      if (trialPrecheck.data?.blocked && trialPrecheck.data.reason === "survey_required") {
+        return new Response(JSON.stringify({
+          error: "请先完成今日共创反馈问卷，再使用免费体验额度",
+          surveyRequired: true,
+          billing: {
+            trialUsed: 0,
+            realCreditsUsed: 0,
+            remainingToday: trialPrecheck.data.remainingToday,
+            surveyRequired: true,
+          },
+        }), {
+          status: 402,
+          headers: { "Content-Type": "application/json" },
+        })
+      }
+    }
+
+    const availableTrialForMinimum = trialPrecheck?.data?.trialUsedAvailable || 0
+    if (creditData.credits + availableTrialForMinimum < MIN_REQUIRED_CREDITS) {
       return new Response(JSON.stringify({
         error: "当前积分不足",
-        message: `当前功能至少需要 ${MIN_REQUIRED_CREDITS} 积分，当前剩余 ${creditData.credits} 积分。请充值或升级会员后继续使用。`,
+        message: `当前功能至少需要 ${MIN_REQUIRED_CREDITS} 积分，当前剩余 ${creditData.credits} 积分。请充值、升级会员或完成体验额度解锁后继续使用。`,
         required: MIN_REQUIRED_CREDITS,
         current: creditData.credits,
+        trialRemaining: availableTrialForMinimum,
         action: "请充值或升级会员",
       }), {
         status: 402,
@@ -271,7 +346,7 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    if (extractedText && extractedText.length > 100) {
+    if (isEssayCorrectionRequest) {
       const essayGradeResponse = await fetch(`${req.url.replace("/api/chat", "/api/essay-grade")}`, {
         method: "POST",
         headers: {
@@ -295,7 +370,7 @@ export async function POST(req: NextRequest) {
         })
       }
 
-      return createMeteredStreamResponse(essayGradeResponse, userId, "使用 作文批改")
+      return createMeteredStreamResponse(essayGradeResponse, userId, "使用 作文批改", { useTrialCredits: true })
     }
 
     const customConfig = getAPIConfig(req.headers.get("X-AI-Provider") || "openai")

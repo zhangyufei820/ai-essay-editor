@@ -20,13 +20,15 @@ import {
 
 import type React from "react"
 
-import { useState, useRef } from "react"
+import { useCallback, useState, useRef } from "react"
 import { Loader2, Upload, X } from "lucide-react"
 import { UltimateRenderer } from "@/components/chat/UltimateRenderer"
 import { motion } from "framer-motion"
 import { toast } from "sonner"
 import { getVerifiedAuthHeaders } from "@/lib/client-auth"
 import { IconEssay } from "@/components/icons/v2"
+import { DailySurveyGate, type TrialSurveyStatus } from "@/components/trial/DailySurveyGate"
+import { trackCampaignEvent } from "@/lib/campaign-events-client"
 
 type UploadedFile = { 
   name: string
@@ -47,7 +49,52 @@ export function EssayGrader() {
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
   const [uploadProgress, setUploadProgress] = useState<number>(0)
   const [isUploading, setIsUploading] = useState(false)
+  const [trialStatus, setTrialStatus] = useState<TrialSurveyStatus | null>(null)
+  const [surveyGateOpen, setSurveyGateOpen] = useState(false)
+  const [isPaidUser, setIsPaidUser] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const shouldRequireEssaySurvey = useCallback((status: TrialSurveyStatus | null) => {
+    return Boolean(
+      status?.active_grant_id &&
+      status.requires_daily_survey !== false &&
+      !status.today_survey_completed &&
+      !isPaidUser
+    )
+  }, [isPaidUser])
+
+  const refreshTrialSurveyState = useCallback(async () => {
+    try {
+      const headers = await getVerifiedAuthHeaders()
+
+      const [surveyResponse, creditsResponse] = await Promise.all([
+        fetch("/api/surveys/today", { cache: "no-store", headers }),
+        fetch("/api/user/credits", { cache: "no-store", headers }),
+      ])
+
+      const creditsData = await creditsResponse.json().catch(() => null)
+      const nextIsPaidUser = Boolean(creditsData?.is_pro)
+      setIsPaidUser(nextIsPaidUser)
+
+      const surveyData = await surveyResponse.json().catch(() => null)
+      if (!surveyResponse.ok || !surveyData?.ok) {
+        console.warn("[EssayGrader] trial survey precheck failed", surveyResponse.status, surveyData?.error)
+        return false
+      }
+
+      const status = (surveyData.trialStatus || null) as TrialSurveyStatus | null
+      setTrialStatus(status)
+      return Boolean(
+        status?.active_grant_id &&
+        status.requires_daily_survey !== false &&
+        !status.today_survey_completed &&
+        !nextIsPaidUser
+      )
+    } catch (error) {
+      console.warn("[EssayGrader] trial survey precheck error", error)
+      return false
+    }
+  }, [])
 
   // 🔥 文件上传处理 - 参考 banana-chat-interface.tsx
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -134,6 +181,13 @@ export function EssayGrader() {
       return
     }
 
+    const gateRequired = await refreshTrialSurveyState()
+    if (gateRequired || shouldRequireEssaySurvey(trialStatus)) {
+      setSurveyGateOpen(true)
+      toast.info("填写 90 秒问卷后解锁今日 2000 trial 积分")
+      return
+    }
+
     setIsLoading(true)
     setResult("")
 
@@ -159,6 +213,31 @@ export function EssayGrader() {
       if (!response.ok) {
         const errorText = await response.text()
         console.error("[作文批改] 响应错误:", response.status, errorText)
+        try {
+          const parsedError = JSON.parse(errorText)
+          if (parsedError?.surveyRequired) {
+            void trackCampaignEvent("survey_required_block", {
+              featureName: "essay_grader",
+              status: response.status,
+            })
+            setSurveyGateOpen(true)
+            if (typeof window !== "undefined") {
+              window.dispatchEvent(new CustomEvent("trial:open-daily-survey"))
+            }
+            setTrialStatus((previous) => ({
+              ...(previous || {}),
+              ...(parsedError.trialStatus || {}),
+              requires_daily_survey: true,
+              today_survey_completed: false,
+            }))
+            toast.info("填写 90 秒问卷后解锁今日 2000 trial 积分")
+            throw new Error("请先完成今日共创反馈问卷，解锁免费体验额度")
+          }
+        } catch (parseError) {
+          if (parseError instanceof Error && parseError.message.includes("共创反馈问卷")) {
+            throw parseError
+          }
+        }
         throw new Error(`批改失败: ${response.status}`)
       }
 
@@ -236,6 +315,16 @@ export function EssayGrader() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-8">
+      <DailySurveyGate
+        featureName="作文批改"
+        enabled
+        open={surveyGateOpen}
+        onOpenChange={setSurveyGateOpen}
+        onCompleted={(nextTrialStatus) => {
+          setTrialStatus((nextTrialStatus || null) as TrialSurveyStatus | null)
+          toast.success("今日作文批改免费额度已解锁")
+        }}
+      />
       {/* Header */}
       <div className="text-center space-y-4">
         <h1 className="text-4xl font-bold text-balance">创意作文批改师</h1>

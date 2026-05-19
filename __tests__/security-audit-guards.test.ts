@@ -88,6 +88,15 @@ describe("P0/P1 security audit guardrails", () => {
     expect(src).not.toMatch(/printWindow\.document\.write\([^)]*htmlContent\)/)
   })
 
+  it("share creation sends verified auth and surfaces server errors in chat", () => {
+    const src = read("components/chat/enhanced-chat-interface.tsx")
+
+    expect(src).toContain("请先登录后再分享到广场")
+    expect(src).toContain("...(await getVerifiedAuthHeaders())")
+    expect(src).toContain("parsed?.error || parsed?.message")
+    expect(src).toContain('toast.error(err instanceof Error ? err.message : "分享失败，请稍后重试")')
+  })
+
   it("does not hardcode supabase url in dev compose", () => {
     const src = read("docker-compose.yml")
     expect(src).not.toMatch(/https:\/\/[a-z0-9]+\.supabase\.co/)
