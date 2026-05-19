@@ -606,7 +606,7 @@ export function ChatInput({
       {showModelSelector && (
         <div
           className={cn(
-            "flex items-center justify-between gap-3 border-b px-3 py-2 sm:px-4",
+            "flex items-center justify-between gap-2 border-b px-2 py-1.5 sm:px-3",
             isMobileInputMode && "max-sm:hidden"
           )}
           style={{ borderColor: "var(--paper-50)" }}
@@ -618,13 +618,14 @@ export function ChatInput({
               onModelChange={onModelChange}
               models={models}
               disabled={isLoading || disabled}
+              className="h-8 max-w-[230px] px-2 py-0 text-[12px] sm:max-w-[260px]"
             />
           ) : (
             /* Fallback: 简单按钮（当 props 不完整时） */
             <button
               type="button"
               onClick={onModelClick}
-              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-[var(--radius-pill)] border border-[var(--paper-300)] bg-[var(--paper-50)] text-[13px] font-medium text-[var(--ink-700)] font-[var(--font-sans-v2)] hover:bg-[var(--ink-50)] hover:border-[var(--ink-300)] transition-colors duration-200"
+              className="inline-flex h-8 max-w-[230px] items-center gap-1.5 rounded-[var(--radius-pill)] border border-[var(--paper-300)] bg-[var(--paper-50)] px-2 text-[12px] font-medium text-[var(--ink-700)] font-[var(--font-sans-v2)] hover:bg-[var(--ink-50)] hover:border-[var(--ink-300)] transition-colors duration-200 sm:max-w-[260px]"
               aria-label="选择 AI 模型"
             >
               <div className="h-2 w-2 rounded-full" style={{ backgroundColor: modelColor }} />
@@ -639,8 +640,8 @@ export function ChatInput({
             <Button
               type="button"
               variant="ghost"
-              size="icon"
-              className="h-8 w-8 rounded-full text-[var(--ink-600)] hover:bg-[var(--ink-50)] sm:rounded-[var(--radius-soft)]"
+              size="icon-sm"
+              className="rounded-full text-[var(--ink-600)] hover:bg-[var(--ink-50)] sm:rounded-[var(--radius-soft)]"
               onClick={() => fileInputRef.current?.click()}
               disabled={isLoading || disabled}
               aria-label="上传附件"
@@ -683,7 +684,7 @@ export function ChatInput({
       {/* 输入区域 */}
       <div
         className={cn(
-          "flex items-end gap-2 p-2 sm:gap-3 sm:p-3",
+          "flex items-end gap-1.5 p-2 sm:gap-2 sm:p-2.5",
           isMobileInputMode && "max-sm:p-1.5 max-sm:pb-2"
         )}
       >
@@ -732,79 +733,91 @@ export function ChatInput({
           </div>
         )}
 
-        {showModelSelector ? (
-          <div className="flex shrink-0 flex-col items-center gap-0.5 sm:gap-1">
-            <span className="hidden text-[11px] text-[var(--ink-400)] font-[var(--font-mono-v2)] sm:block">
-              拍照
+        <div
+          className={cn(
+            showModelSelector
+              ? "flex shrink-0 items-center gap-1 rounded-[var(--radius-pill)] border border-[var(--paper-200)] bg-[var(--paper-50)]/75 p-1"
+              : "contents"
+          )}
+        >
+          {showModelSelector ? (
+            <>
+              <span className="sr-only">拍照</span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                className="rounded-full text-[var(--ink-600)] hover:bg-white sm:rounded-[var(--radius-sharp)]"
+                onClick={openCamera}
+                disabled={isLoading || disabled || !onFileUpload}
+                aria-label="拍照上传"
+                title="拍照上传"
+              >
+                <Camera className="h-4 w-4" />
+              </Button>
+            </>
+          ) : null}
+
+          <div className={cn("flex shrink-0 flex-col items-center gap-0.5 sm:gap-1", showModelSelector && "contents")}>
+            <span className={cn("hidden text-[11px] text-[var(--ink-400)] font-[var(--font-mono-v2)] sm:block", showModelSelector && "sr-only")}>
+              {isPreparingSpeech ? "合成中" : isSpeaking ? "播放中" : "朗读"}
             </span>
-            <Button
+            <motion.button
               type="button"
-              variant="ghost"
-              size="icon"
-              className="h-10 w-10 rounded-full text-[var(--ink-600)] hover:bg-[var(--ink-50)] sm:rounded-[var(--radius-sharp)]"
-              onClick={openCamera}
-              disabled={isLoading || disabled || !onFileUpload}
-              aria-label="拍照上传"
-              title="拍照上传"
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={playInputText}
+              disabled={isLoading || disabled || isPreparingSpeech || !value.trim()}
+              className={cn(
+                showModelSelector ? "h-8 w-8" : "h-10 w-10",
+                "rounded-full sm:rounded-[var(--radius-sharp)] flex items-center justify-center transition-all duration-200 touch-manipulation",
+                isSpeaking
+                  ? "bg-[var(--ink-700)] text-white shadow-lg"
+                  : showModelSelector
+                    ? "text-[var(--ink-600)] hover:bg-white"
+                    : "text-[var(--ink-600)] hover:bg-[var(--ink-50)]",
+                (!value.trim() || isPreparingSpeech) && "opacity-50"
+              )}
+              aria-label={isSpeaking ? "停止朗读" : "朗读输入文字"}
+              title={isSpeaking ? "停止朗读" : "朗读输入文字"}
             >
-              <Camera className="h-4 w-4 sm:h-5 sm:w-5" />
-            </Button>
+              {isPreparingSpeech ? (
+                <Loader2 className={cn("h-4 w-4 animate-spin", !showModelSelector && "sm:h-5 sm:w-5")} />
+              ) : (
+                <Volume2 className={cn("h-4 w-4", !showModelSelector && "sm:h-5 sm:w-5")} />
+              )}
+            </motion.button>
           </div>
-        ) : null}
 
-        <div className="flex flex-col items-center gap-0.5 sm:gap-1 shrink-0">
-          <span className="hidden text-[11px] text-[var(--ink-400)] font-[var(--font-mono-v2)] sm:block">
-            {isPreparingSpeech ? "合成中" : isSpeaking ? "播放中" : "朗读"}
-          </span>
-          <motion.button
-            type="button"
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={playInputText}
-            disabled={isLoading || disabled || isPreparingSpeech || !value.trim()}
-            className={cn(
-              "h-10 w-10 rounded-full sm:rounded-[var(--radius-sharp)] flex items-center justify-center transition-all duration-200 touch-manipulation",
-              isSpeaking
-                ? "bg-[var(--ink-700)] text-white shadow-lg"
-                : "text-[var(--ink-600)] hover:bg-[var(--ink-50)]",
-              (!value.trim() || isPreparingSpeech) && "opacity-50"
-            )}
-            aria-label={isSpeaking ? "停止朗读" : "朗读输入文字"}
-            title={isSpeaking ? "停止朗读" : "朗读输入文字"}
-          >
-            {isPreparingSpeech ? (
-              <Loader2 className="h-4 w-4 animate-spin sm:h-5 sm:w-5" />
-            ) : (
-              <Volume2 className="h-4 w-4 sm:h-5 sm:w-5" />
-            )}
-          </motion.button>
-        </div>
-
-        {/* 语音输入按钮 */}
-        <div className={cn("flex flex-col items-center gap-0.5 sm:gap-1 shrink-0", isMobileInputMode && "max-sm:hidden")}>
-          <span className="hidden text-[11px] text-[var(--ink-400)] font-[var(--font-mono-v2)] sm:block">
-            {isListening ? "录音中" : "语音输入"}
-          </span>
-          <motion.button
-            type="button"
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={toggleVoiceInput}
-            disabled={isLoading || disabled}
-            className={cn(
-              "h-10 w-10 sm:h-10 sm:w-10 rounded-full sm:rounded-[var(--radius-sharp)] flex items-center justify-center transition-all duration-200 touch-manipulation",
-              isListening
-                ? "bg-[var(--seal-500)] text-white shadow-lg animate-pulse"
-                : "text-[var(--ink-600)] hover:bg-[var(--ink-50)]"
-            )}
-            aria-label={isListening ? "停止录音" : "开始语音输入"}
-          >
-            {isListening ? (
-              <IconMic className="h-4 w-4 opacity-50 sm:h-5 sm:w-5" />
-            ) : (
-              <IconMic className="h-4 w-4 sm:h-5 sm:w-5" />
-            )}
-          </motion.button>
+          {/* 语音输入按钮 */}
+          <div className={cn("flex flex-col items-center gap-0.5 sm:gap-1 shrink-0", showModelSelector && "contents", isMobileInputMode && "max-sm:hidden")}>
+            <span className={cn("hidden text-[11px] text-[var(--ink-400)] font-[var(--font-mono-v2)] sm:block", showModelSelector && "sr-only")}>
+              {isListening ? "录音中" : "语音输入"}
+            </span>
+            <motion.button
+              type="button"
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={toggleVoiceInput}
+              disabled={isLoading || disabled}
+              className={cn(
+                showModelSelector ? "h-8 w-8" : "h-10 w-10 sm:h-10 sm:w-10",
+                "rounded-full sm:rounded-[var(--radius-sharp)] flex items-center justify-center transition-all duration-200 touch-manipulation",
+                isListening
+                  ? "bg-[var(--seal-500)] text-white shadow-lg animate-pulse"
+                  : showModelSelector
+                    ? "text-[var(--ink-600)] hover:bg-white"
+                    : "text-[var(--ink-600)] hover:bg-[var(--ink-50)]"
+              )}
+              aria-label={isListening ? "停止录音" : "开始语音输入"}
+            >
+              {isListening ? (
+                <IconMic className={cn("h-4 w-4 opacity-50", !showModelSelector && "sm:h-5 sm:w-5")} />
+              ) : (
+                <IconMic className={cn("h-4 w-4", !showModelSelector && "sm:h-5 sm:w-5")} />
+              )}
+            </motion.button>
+          </div>
         </div>
 
         {/* 文本输入框 */}
@@ -818,10 +831,11 @@ export function ChatInput({
           placeholder={disabled ? "请先登录..." : placeholder}
           disabled={disabled || isLoading}
           className={cn(
-            "flex-1 resize-none border-0 bg-transparent shadow-none",
-            "min-h-[44px] max-h-[132px] rounded-[18px] px-3 py-2 text-[16px] leading-6 sm:min-h-[48px] sm:max-h-[160px] sm:p-2 sm:text-[15px]",
-            "focus-visible:border-transparent focus-visible:ring-0 focus-visible:[box-shadow:none]",
-            isMobileInputMode && "max-sm:min-h-[42px] max-sm:max-h-[112px] max-sm:bg-[var(--paper-50)]/80 max-sm:px-3 max-sm:py-2"
+            "min-w-0 flex-1 resize-none border bg-white shadow-none",
+            "min-h-[58px] max-h-[148px] rounded-[20px] border-[var(--ink-500)]/65 px-4 py-3 text-[16px] leading-6 sm:min-h-[60px] sm:max-h-[170px] sm:px-4 sm:py-3 sm:text-[16px]",
+            "placeholder:text-[var(--ink-500)]",
+            "focus-visible:border-[var(--ink-700)] focus-visible:ring-0 focus-visible:[box-shadow:0_0_0_2px_rgba(43,74,52,0.12)]",
+            isMobileInputMode && "max-sm:min-h-[54px] max-sm:max-h-[124px] max-sm:px-3.5 max-sm:py-2.5"
           )}
           style={{ color: "var(--ink-700)" }}
           rows={1}
