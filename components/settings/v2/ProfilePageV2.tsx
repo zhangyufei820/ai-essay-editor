@@ -36,6 +36,12 @@ export interface ProfilePageV2Props {
   }
   achievements?: Array<{ label: string; earned?: boolean }>
   onLogout?: () => void
+  onAvatarClick?: () => void
+  avatarUploading?: boolean
+  displayName?: string
+  onDisplayNameChange?: (value: string) => void
+  onSaveProfile?: () => void
+  savingProfile?: boolean
   className?: string
 }
 
@@ -44,6 +50,12 @@ export function ProfilePageV2({
   stats,
   achievements = [],
   onLogout,
+  onAvatarClick,
+  avatarUploading = false,
+  displayName,
+  onDisplayNameChange,
+  onSaveProfile,
+  savingProfile = false,
   className,
 }: ProfilePageV2Props) {
   return (
@@ -58,10 +70,28 @@ export function ProfilePageV2({
         {/* 左：身份卡 */}
         <CardV2 variant="paper" className="self-start">
           <CardV2Content className="flex flex-col items-center gap-4 py-8 text-center">
-            <AvatarV2 className="size-20">
-              {user?.avatar ? <AvatarV2Image src={user.avatar} alt={user.name ?? ""} /> : null}
-              <AvatarV2Fallback>{(user?.name ?? "U").slice(0, 1)}</AvatarV2Fallback>
-            </AvatarV2>
+            <button
+              type="button"
+              onClick={onAvatarClick}
+              disabled={!onAvatarClick || avatarUploading}
+              className={cn(
+                "group relative rounded-full outline-none transition",
+                onAvatarClick && "cursor-pointer focus-visible:[box-shadow:var(--shadow-focus-ink)]",
+                avatarUploading && "cursor-wait opacity-80"
+              )}
+              aria-label={avatarUploading ? "头像上传中" : "更换头像"}
+              title={avatarUploading ? "头像上传中" : "点击更换头像"}
+            >
+              <AvatarV2 className="size-20 transition group-hover:border-[var(--ink-300)] group-hover:bg-[var(--ink-50)]">
+                {user?.avatar ? <AvatarV2Image src={user.avatar} alt={user.name ?? ""} /> : null}
+                <AvatarV2Fallback>{(user?.name ?? "U").slice(0, 1)}</AvatarV2Fallback>
+              </AvatarV2>
+              {onAvatarClick ? (
+                <span className="absolute inset-x-1 bottom-1 rounded-[var(--radius-pill)] bg-[var(--ink-800)]/85 px-2 py-1 text-[10px] font-medium text-white opacity-0 transition group-hover:opacity-100">
+                  {avatarUploading ? "上传中" : "更换"}
+                </span>
+              ) : null}
+            </button>
 
             <div>
               <h2 className="font-[var(--font-display)] text-[20px] font-bold text-[var(--ink-800)]">
@@ -71,6 +101,34 @@ export function ProfilePageV2({
                 <p className="mt-1 text-[12px] text-[var(--ink-500)]">{user.email}</p>
               ) : null}
             </div>
+
+            {onDisplayNameChange || onSaveProfile ? (
+              <div className="w-full space-y-2">
+                {onDisplayNameChange ? (
+                  <label className="block text-left">
+                    <span className="mb-1 block text-[11px] font-medium text-[var(--ink-500)]">昵称</span>
+                    <input
+                      value={displayName ?? ""}
+                      onChange={(event) => onDisplayNameChange(event.target.value)}
+                      className="h-9 w-full rounded-[var(--radius-soft)] border border-[var(--paper-200)] bg-[var(--paper-50)] px-3 text-center text-[13px] text-[var(--ink-800)] outline-none transition focus:border-[var(--ink-500)] focus:ring-2 focus:ring-[var(--ink-100)]"
+                      placeholder="设置昵称"
+                    />
+                  </label>
+                ) : null}
+                {onSaveProfile ? (
+                  <ButtonV2
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={onSaveProfile}
+                    disabled={savingProfile}
+                    className="w-full"
+                  >
+                    {savingProfile ? "保存中..." : "保存资料"}
+                  </ButtonV2>
+                ) : null}
+              </div>
+            ) : null}
 
             {/* 会员状态 */}
             {user?.memberTier ? (

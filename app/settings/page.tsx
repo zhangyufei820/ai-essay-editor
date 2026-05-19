@@ -69,6 +69,64 @@ const CREDIT_TYPE_COLORS: Record<string, { bg: string; text: string }> = {
   "消耗积分": { bg: "var(--seal-50)", text: "var(--seal-500)" },
 }
 
+function readFirstString(...values: unknown[]) {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) return value.trim()
+  }
+  return ""
+}
+
+function getNestedRecord(value: unknown, key: string) {
+  if (!value || typeof value !== "object") return null
+  const child = (value as Record<string, unknown>)[key]
+  return child && typeof child === "object" ? child as Record<string, unknown> : null
+}
+
+function normalizeSettingsUser(rawUser: unknown) {
+  const user = rawUser && typeof rawUser === "object" ? rawUser as Record<string, unknown> : {}
+  const metadata = getNestedRecord(user, "user_metadata")
+  const nestedUser = getNestedRecord(user, "user")
+  const nestedMetadata = getNestedRecord(nestedUser, "user_metadata")
+
+  const preferredName = readFirstString(
+    metadata?.name,
+    metadata?.nickname,
+    user.name,
+    user.nickname,
+    user.display_name,
+    user.username,
+    nestedMetadata?.name,
+    nestedUser?.name,
+  )
+  const contactName = readFirstString(
+    nestedUser?.email,
+    user.email,
+    user.phone,
+    user.phone_number,
+  )
+  const looksLikeAnonymousNumericName = /^\d{6,10}$/.test(preferredName)
+  const name = looksLikeAnonymousNumericName && contactName ? contactName : preferredName || contactName
+
+  return {
+    raw: user,
+    id: extractUserId(user),
+    name: name || "学习用户",
+    email: readFirstString(user.email, nestedUser?.email),
+    phone: readFirstString(user.phone, user.phone_number, nestedUser?.phone, nestedUser?.phone_number),
+    avatar: readFirstString(
+      metadata?.avatar_url,
+      metadata?.picture,
+      user.avatar_url,
+      user.avatarUrl,
+      user.photo,
+      user.picture,
+      nestedMetadata?.avatar_url,
+      nestedUser?.avatar_url,
+      nestedUser?.photo,
+    ),
+  }
+}
+
 // 积分变化记录类型
 type CreditTransaction = {
   id: string
@@ -110,11 +168,12 @@ export default function SettingsPage() {
         if (localStr) {
           try {
             const localUser = JSON.parse(localStr)
+            const normalizedUser = normalizeSettingsUser(localUser)
             setUser(localUser)
-            setDisplayName(localUser.user_metadata?.name || localUser.nickname || "")
-            setAvatarUrl(localUser.user_metadata?.avatar_url || "")
+            setDisplayName(normalizedUser.name)
+            setAvatarUrl(normalizedUser.avatar)
             
-            const userId = localUser.id || localUser.sub || localUser.userId
+            const userId = normalizedUser.id
             if (userId) {
               const authHeaders = await getVerifiedAuthHeaders()
               // 获取积分
@@ -216,11 +275,15 @@ export default function SettingsPage() {
     setLoading(true)
 
     try {
-      const userId = user.id || user.sub || user.userId
+      const normalizedUser = normalizeSettingsUser(user)
+      const userId = normalizedUser.id
       
       const response = await fetch('/api/user/update', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(await getVerifiedAuthHeaders()),
+        },
         body: JSON.stringify({
           userId: userId,
           name: displayName,
@@ -236,6 +299,9 @@ export default function SettingsPage() {
       const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}')
       const updatedUser = {
         ...currentUser,
+        name: displayName,
+        nickname: displayName,
+        avatar_url: avatarUrl,
         user_metadata: {
           ...currentUser.user_metadata,
           name: displayName,
@@ -277,35 +343,50 @@ export default function SettingsPage() {
   }
 
   return (
-    <ProfilePageV2
-      user={{
-        name: user?.name || user?.nickname || user?.display_name,
-        email: user?.email,
-        avatar: avatarUrl || user?.photo || user?.avatar_url,
-        credits: credits,
-        memberTier: membershipType || undefined,
-        memberDaysLeft: undefined,
-      }}
-      stats={{
-        essaysReviewed: undefined,
-        flashcardsMastered: undefined,
-        mistakesArchived: undefined,
-        experimentsCompleted: undefined,
-        streakDays: undefined,
-      }}
-      achievements={[
-        { label: "首次批改", earned: true },
-        { label: "连续7天", earned: false },
-        { label: "1000积分", earned: credits >= 1000 },
-        { label: "邀请好友", earned: false },
-        { label: "闪卡100张", earned: false },
-        { label: "创作分享", earned: false },
-      ]}
-      onLogout={() => {
-        supabase?.auth.signOut()
-        localStorage.clear()
-        window.location.href = "/login"
-      }}
-    />
+    <>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleUploadAvatar}
+      />
+      <ProfilePageV2
+        user={{
+          name: displayName || normalizeSettingsUser(user).name,
+          email: normalizeSettingsUser(user).email || normalizeSettingsUser(user).phone,
+          avatar: avatarUrl || normalizeSettingsUser(user).avatar,
+          credits: credits,
+          memberTier: membershipType || undefined,
+          memberDaysLeft: undefined,
+        }}
+        stats={{
+          essaysReviewed: undefined,
+          flashcardsMastered: undefined,
+          mistakesArchived: undefined,
+          experimentsCompleted: undefined,
+          streakDays: undefined,
+        }}
+        achievements={[
+          { label: "首次批改", earned: true },
+          { label: "连续7天", earned: false },
+          { label: "1000积分", earned: credits >= 1000 },
+          { label: "邀请好友", earned: false },
+          { label: "闪卡100张", earned: false },
+          { label: "创作分享", earned: false },
+        ]}
+        displayName={displayName}
+        onDisplayNameChange={setDisplayName}
+        onSaveProfile={handleSave}
+        savingProfile={loading}
+        onAvatarClick={() => fileInputRef.current?.click()}
+        avatarUploading={uploading}
+        onLogout={() => {
+          supabase?.auth.signOut()
+          localStorage.clear()
+          window.location.href = "/login"
+        }}
+      />
+    </>
   )
 }

@@ -36,4 +36,17 @@ describe('app chrome routes', () => {
     expect(source).toContain('退出登录')
     expect(source).toContain('window.localStorage.removeItem("authingToken")')
   })
+
+  it('settings profile exposes avatar upload and save controls in v2 profile card', () => {
+    const settings = readFileSync(path.join(process.cwd(), 'app/settings/page.tsx'), 'utf8')
+    const profile = readFileSync(path.join(process.cwd(), 'components/settings/v2/ProfilePageV2.tsx'), 'utf8')
+
+    expect(settings).toContain('onChange={handleUploadAvatar}')
+    expect(settings).toContain('onAvatarClick={() => fileInputRef.current?.click()}')
+    expect(settings).toContain('onDisplayNameChange={setDisplayName}')
+    expect(settings).toContain('onSaveProfile={handleSave}')
+    expect(settings).toContain('looksLikeAnonymousNumericName')
+    expect(profile).toContain('aria-label={avatarUploading ? "头像上传中" : "更换头像"}')
+    expect(profile).toContain('保存资料')
+  })
 })
