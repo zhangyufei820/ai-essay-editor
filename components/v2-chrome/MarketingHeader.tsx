@@ -20,7 +20,9 @@ import { usePathname } from "next/navigation"
 import { Menu, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ButtonV2 } from "@/components/ui/v2/button"
+import { AvatarV2, AvatarV2Fallback, AvatarV2Image } from "@/components/ui/v2/avatar"
 import { SheetV2, SheetV2Content, SheetV2Trigger } from "@/components/ui/v2/sheet"
+import { readClientUserProfile, USER_PROFILE_UPDATED_EVENT } from "@/lib/client-user-profile"
 
 const NAV_ITEMS: ReadonlyArray<{ label: string; href: string }> = [
   { label: "智能体广场", href: "/agents" },
@@ -62,9 +64,10 @@ export function MarketingHeader({ user, className }: MarketingHeaderProps) {
         }
 
         const parsed = JSON.parse(raw)
+        const profile = readClientUserProfile()
         setLocalUser({
-          name: parsed.nickname || parsed.name || parsed.username || parsed.email || parsed.phone || "我的账户",
-          avatar: parsed.avatar || parsed.avatar_url || parsed.photo || parsed.picture || parsed.user_metadata?.avatar_url,
+          name: profile?.name || parsed.nickname || parsed.name || parsed.username || parsed.email || parsed.phone || "我的账户",
+          avatar: profile?.avatar,
         })
       } catch {
         setLocalUser(null)
@@ -73,9 +76,11 @@ export function MarketingHeader({ user, className }: MarketingHeaderProps) {
 
     readStoredUser()
     window.addEventListener("storage", readStoredUser)
+    window.addEventListener(USER_PROFILE_UPDATED_EVENT, readStoredUser)
     window.addEventListener("focus", readStoredUser)
     return () => {
       window.removeEventListener("storage", readStoredUser)
+      window.removeEventListener(USER_PROFILE_UPDATED_EVENT, readStoredUser)
       window.removeEventListener("focus", readStoredUser)
     }
   }, [user])
@@ -146,10 +151,14 @@ export function MarketingHeader({ user, className }: MarketingHeaderProps) {
         {/* 右侧 CTA */}
         <div className="ml-auto flex items-center gap-2">
           {activeUser ? (
-            <Link href="/settings" prefetch={false} className="hidden md:flex items-center gap-2">
+            <Link href="/settings" prefetch={false} className="hidden md:flex items-center gap-2 rounded-full outline-none focus-visible:[box-shadow:var(--shadow-focus-ink)]">
               <span className="font-[var(--font-sans-v2)] text-[14px] text-[var(--ink-700)]">
                 {activeUser.name ?? "我的账户"}
               </span>
+              <AvatarV2 className="size-8 transition hover:border-[var(--ink-300)] hover:bg-[var(--ink-50)]">
+                {activeUser.avatar ? <AvatarV2Image src={activeUser.avatar} alt={activeUser.name ?? "我的账户"} /> : null}
+                <AvatarV2Fallback>{(activeUser.name ?? "U").slice(0, 1).toUpperCase()}</AvatarV2Fallback>
+              </AvatarV2>
             </Link>
           ) : (
             <>

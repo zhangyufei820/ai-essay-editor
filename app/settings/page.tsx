@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { extractUserId } from "@/lib/auth-user"
+import { dispatchClientUserProfileUpdated } from "@/lib/client-user-profile"
 import { ProfilePageV2 } from "@/components/settings/v2/ProfilePageV2"
 
 const supabase = createClient(
@@ -332,16 +333,22 @@ export default function SettingsPage() {
       const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}')
       const updatedUser = {
         ...currentUser,
+        avatar: avatarUrl,
         name: displayName,
         nickname: displayName,
         avatar_url: avatarUrl,
+        avatarUrl: avatarUrl,
+        photo: avatarUrl,
+        picture: avatarUrl,
         user_metadata: {
           ...currentUser.user_metadata,
           name: displayName,
+          avatar: avatarUrl,
           avatar_url: avatarUrl
         }
       }
       localStorage.setItem('currentUser', JSON.stringify(updatedUser))
+      dispatchClientUserProfileUpdated()
 
       toast.success("保存成功！")
       

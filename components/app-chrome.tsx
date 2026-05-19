@@ -8,6 +8,7 @@ import { IconMusic, IconSettings } from "@/components/icons/v2"
 import { WorkspaceShell } from "@/components/v2-chrome"
 import type { WorkspaceSidebarSection } from "@/components/v2-chrome"
 import { getVerifiedAuthHeaders } from "@/lib/client-auth"
+import { readClientUserProfile, USER_PROFILE_UPDATED_EVENT } from "@/lib/client-user-profile"
 import { TRIPO3D_EXTERNAL_URL } from "@/lib/tripo3d"
 
 type WorkspaceUser = { name?: string; avatar?: string; credits?: number } | null
@@ -37,32 +38,9 @@ function resolvePageTitle(pathname: string | null) {
 }
 
 function parseStoredUser(): WorkspaceUser {
-  if (typeof window === "undefined") return null
-
-  try {
-    const raw = window.localStorage.getItem("currentUser")
-    if (!raw) return null
-    const user = JSON.parse(raw)
-
-    return {
-      name:
-        user?.name ||
-        user?.nickname ||
-        user?.display_name ||
-        user?.username ||
-        user?.email ||
-        user?.phone ||
-        user?.user_metadata?.name ||
-        "用户",
-      avatar:
-        user?.photo ||
-        user?.avatar_url ||
-        user?.avatarUrl ||
-        user?.user_metadata?.avatar_url,
-    }
-  } catch {
-    return null
-  }
+  const user = readClientUserProfile()
+  if (!user) return null
+  return { name: user.name || "用户", avatar: user.avatar }
 }
 
 function hasStoredAuthToken() {
@@ -149,11 +127,13 @@ export function AppChrome({ children }: { children: ReactNode }) {
 
     const refresh = () => loadUser()
     window.addEventListener("storage", refresh)
+    window.addEventListener(USER_PROFILE_UPDATED_EVENT, refresh)
     window.addEventListener("credits-refresh", refresh)
 
     return () => {
       cancelled = true
       window.removeEventListener("storage", refresh)
+      window.removeEventListener(USER_PROFILE_UPDATED_EVENT, refresh)
       window.removeEventListener("credits-refresh", refresh)
     }
   }, [])
