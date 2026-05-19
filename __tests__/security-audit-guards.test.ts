@@ -24,7 +24,7 @@ describe("P0/P1 security audit guardrails", () => {
     ]
 
     for (const route of routes) {
-      expect(read(route)).toContain("requireUser(")
+      expect(read(route)).toMatch(/require(User|LearningUserId)\(/)
     }
   })
 
@@ -90,11 +90,16 @@ describe("P0/P1 security audit guardrails", () => {
 
   it("share creation sends verified auth and surfaces server errors in chat", () => {
     const src = read("components/chat/enhanced-chat-interface.tsx")
+    const route = read("app/api/share/route.ts")
 
     expect(src).toContain("请先登录后再分享到广场")
     expect(src).toContain("...(await getVerifiedAuthHeaders())")
+    expect(src).toContain("messages.map(toShareSafeMessage)")
+    expect(src).not.toContain("files: m.files")
     expect(src).toContain("parsed?.error || parsed?.message")
     expect(src).toContain('toast.error(err instanceof Error ? err.message : "分享失败，请稍后重试")')
+    expect(route).toContain('import { requireLearningUserId } from "@/lib/learning-user"')
+    expect(route).toContain("const userId = auth.userId!")
   })
 
   it("does not hardcode supabase url in dev compose", () => {

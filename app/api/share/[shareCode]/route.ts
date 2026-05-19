@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { getSupabaseAdmin } from "@/lib/supabase-admin"
 import { getVerifiedUser } from "@/lib/auth/verified-user"
-import { requireLearningUserId } from "@/lib/learning-user"
+import { requireLearningUserId, resolveLearningUserId } from "@/lib/learning-user"
 import { publicShareSelect, type SharedContentRow, toPublicShare } from "@/lib/sharing"
 
 export const runtime = "nodejs"
@@ -33,11 +33,12 @@ export async function GET(request: NextRequest, context: Context) {
     const verifiedUser = await getVerifiedUser(request)
     let liked = false
     if (verifiedUser?.id) {
+      const userId = await resolveLearningUserId(verifiedUser)
       const { data: like } = await supabase
         .from("content_likes")
         .select("id")
         .eq("content_id", data.id)
-        .eq("user_id", verifiedUser.id)
+        .eq("user_id", userId)
         .maybeSingle()
       liked = Boolean(like)
     }

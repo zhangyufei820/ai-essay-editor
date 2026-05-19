@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireUser } from "@/lib/auth/verified-user"
 import { getSupabaseAdmin } from "@/lib/supabase-admin"
+import { requireLearningUserId } from "@/lib/learning-user"
 import { getClientIP, checkIpRateLimit, createRateLimitResponse } from "@/lib/rate-limit"
 import {
   awardShareCredits,
@@ -21,9 +21,9 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const auth = await requireUser(request)
+    const auth = await requireLearningUserId(request)
     if (auth.response) return auth.response
-    const userId = auth.user!.id
+    const userId = auth.userId!
     const body = await request.json().catch(() => ({}))
     if (!body || typeof body !== "object") {
       return NextResponse.json({ error: "分享内容不能为空" }, { status: 400 })

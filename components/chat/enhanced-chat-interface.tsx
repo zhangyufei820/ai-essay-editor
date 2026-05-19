@@ -256,6 +256,26 @@ type Message = {
   wordCard?: FrontendWordCard | null
 }
 
+function toShareSafeFile(file: UploadedFile) {
+  return {
+    name: file.name,
+    type: file.type,
+    size: file.size,
+    difyFileId: file.difyFileId,
+    gatewayUrl: file.gatewayUrl,
+    modelUrl: file.modelUrl,
+    url: file.modelUrl || file.gatewayUrl,
+  }
+}
+
+function toShareSafeMessage(message: Message) {
+  return {
+    role: message.role,
+    content: message.content,
+    files: message.files?.map(toShareSafeFile),
+  }
+}
+
 function textValue(value: unknown): string {
   if (value === undefined || value === null) return ""
   if (typeof value === "string" || typeof value === "number") return String(value)
@@ -3322,7 +3342,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
           ...(await getVerifiedAuthHeaders()),
         },
         body: JSON.stringify({
-          messages: messages.map(m => ({ role: m.role, content: m.content, files: m.files })),
+          messages: messages.map(toShareSafeMessage),
           userId,
           modelName: getModelUiConfig(selectedModel).name
         })
