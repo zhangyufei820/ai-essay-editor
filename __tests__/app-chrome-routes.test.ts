@@ -1,3 +1,5 @@
+import { readFileSync } from 'fs'
+import path from 'path'
 import { shouldSidebarOpenForRoute, usesAppChrome } from '@/lib/app-chrome-routes'
 
 describe('app chrome routes', () => {
@@ -22,5 +24,16 @@ describe('app chrome routes', () => {
     expect(shouldSidebarOpenForRoute('/chat/standard', true)).toBe(false)
     expect(shouldSidebarOpenForRoute('/chat/standard', false)).toBe(true)
     expect(shouldSidebarOpenForRoute('/credits', false)).toBe(true)
+  })
+
+  it('top bar avatar opens an account menu with profile, credits, and logout', () => {
+    const source = readFileSync(path.join(process.cwd(), 'components/v2-chrome/WorkspaceTopBar.tsx'), 'utf8')
+
+    expect(source).toContain('DropdownMenuV2Trigger')
+    expect(source).toContain('aria-label="打开账户菜单"')
+    expect(source).toContain('href="/settings"')
+    expect(source).toContain('href="/credits"')
+    expect(source).toContain('退出登录')
+    expect(source).toContain('window.localStorage.removeItem("authingToken")')
   })
 })
