@@ -1,0 +1,28 @@
+[project]
+name = "omnivoice-dify-gateway"
+version = "0.1.0"
+description = "Dify-friendly FastAPI gateway for OmniVoice Studio"
+requires-python = ">=3.11"
+dependencies = [
+  "aiofiles>=24.1.0",
+  "fastapi>=0.115.0",
+  "httpx>=0.27.0",
+  "orjson>=3.10.0",
+  "pydantic>=2.8.0",
+  "pydantic-settings>=2.4.0",
+  "python-multipart>=0.0.9",
+  "tenacity>=9.0.0",
+  "uvicorn[standard]>=0.30.0",
+]
+
+[project.optional-dependencies]
+test = [
+  "pytest>=8.3.0",
+  "pytest-asyncio>=0.24.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+asyncio_mode = "auto"
+

@@ -1,0 +1,82 @@
+services:
+  omnivoice:
+    image: ghcr.io/debpalash/omnivoice-studio:latest
+    container_name: omnivoice
+    restart: unless-stopped
+    volumes:
+      - omnivoice-data:/app/omnivoice_data
+    environment:
+      - HF_HOME=/app/omnivoice_data/huggingface
+      - HF_TOKEN=${HF_TOKEN:-}
+      - OMNIVOICE_DATA_DIR=/app/omnivoice_data
+      - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/app/backend
+    expose:
+      - "3900"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:3900/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 180s
+
+  gateway:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.gateway
+    container_name: omnivoice-gateway
+    restart: unless-stopped
+    env_file:
+      - ../.env
+    depends_on:
+      omnivoice:
+        condition: service_started
+    environment:
+      - OMNIVOICE_BASE_URL=http://omnivoice:3900
+      - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-https://voice-api.shenxiang.school}
+      - MEDIA_DIR=/data/media
+      - JOBS_DIR=/data/jobs
+      - MAX_TEXT_CHARS=${MAX_TEXT_CHARS:-5000}
+      - MAX_CONCURRENT_JOBS=${MAX_CONCURRENT_JOBS:-2}
+      - ENABLE_VOICE_CLONE=${ENABLE_VOICE_CLONE:-false}
+      - ALLOWED_VOICE_IDS=${ALLOWED_VOICE_IDS:-teacher_male_01,teacher_female_01,default}
+      - VOICE_ID_ALIASES=${VOICE_ID_ALIASES:-teacher_female_01:default,teacher_male_01:default}
+      - DEFAULT_VOICE_ID=${DEFAULT_VOICE_ID:-teacher_female_01}
+      - ENABLE_AUDIO_WATERMARK=${ENABLE_AUDIO_WATERMARK:-true}
+      - REQUEST_TIMEOUT_SECONDS=${REQUEST_TIMEOUT_SECONDS:-600}
+      - CORS_ALLOW_ORIGINS=${CORS_ALLOW_ORIGINS:-https://shenxiang.school,https://www.shenxiang.school}
+      - RATE_LIMIT_PER_MINUTE=${RATE_LIMIT_PER_MINUTE:-30}
+      - CLONE_RATE_LIMIT_PER_HOUR=${CLONE_RATE_LIMIT_PER_HOUR:-3}
+    volumes:
+      - gateway-media:/data/media
+      - gateway-jobs:/data/jobs
+    ports:
+      - "127.0.0.1:8010:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8000/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  caddy:
+    image: caddy:2.8-alpine
+    container_name: omnivoice-caddy
+    restart: unless-stopped
+    depends_on:
+      - gateway
+    profiles: ["caddy"]
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  omnivoice-data:
+  gateway-media:
+  gateway-jobs:
+  caddy-data:
+  caddy-config:
