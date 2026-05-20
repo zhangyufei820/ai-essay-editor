@@ -122,6 +122,9 @@ function toFriendlyErrorMessage(value: unknown) {
   const text = extractErrorMessage(value).trim()
   if (!text) return ""
   const normalized = text.toLowerCase()
+  if (text === "请求失败" || normalized.includes("provider_error")) {
+    return "音乐生成服务暂时繁忙，请稍后再试。"
+  }
   if (normalized.includes("503") || normalized.includes("service unavailable")) {
     return "音乐生成服务暂时繁忙，请稍后再试。"
   }
