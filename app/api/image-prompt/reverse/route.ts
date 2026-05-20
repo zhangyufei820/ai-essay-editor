@@ -17,6 +17,7 @@ const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "i
 const TARGET_MODELS = new Set(["gpt-image-2", "nano_banana"])
 const MAX_PROMPT_CHARS = 8000
 const REVERSE_PROMPT_MODEL_ID = "image-prompt-reverse"
+const ALLOWED_IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif"])
 
 function readString(value: unknown) {
   return typeof value === "string" ? value.trim() : ""
@@ -37,6 +38,12 @@ function isHtmlErrorContent(value: unknown) {
     text.includes("<title>shenxiang.school | 502: bad gateway</title>") ||
     (text.includes("cloudflare") && text.includes("bad gateway"))
   )
+}
+
+function isAllowedImageFile(file: File) {
+  if (ALLOWED_IMAGE_TYPES.has(file.type)) return true
+  const name = typeof file.name === "string" ? file.name.toLowerCase() : ""
+  return Array.from(ALLOWED_IMAGE_EXTENSIONS).some((extension) => name.endsWith(extension))
 }
 
 async function uploadFileToDify(file: File, userId: string, apiKey: string) {
@@ -160,7 +167,7 @@ export async function POST(request: NextRequest) {
   if (!(file instanceof File)) {
     return NextResponse.json({ error: "请先上传一张图片", code: "IMAGE_REQUIRED" }, { status: 400 })
   }
-  if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
+  if (!isAllowedImageFile(file)) {
     return NextResponse.json({ error: "仅支持 JPG、PNG、WebP 或 GIF 图片", code: "INVALID_IMAGE_TYPE" }, { status: 415 })
   }
   if (file.size > MAX_IMAGE_BYTES) {

@@ -34,6 +34,25 @@ type ReverseImageResult = {
   traceId?: string
 }
 
+function ProgressBar({ value, label }: { value: number; label: string }) {
+  const safeValue = Math.max(0, Math.min(100, Math.round(value)))
+
+  return (
+    <div className="rounded-[var(--radius-soft)] border border-[var(--paper-200)] bg-[var(--paper-100)]/70 p-3" role="status" aria-live="polite">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs font-semibold text-[var(--ink-700)]">{label}</p>
+        <span className="font-mono text-[11px] font-bold text-[var(--seal-600)]">{safeValue}%</span>
+      </div>
+      <div className="mt-2 h-2 overflow-hidden rounded-full bg-[var(--paper-200)]">
+        <div
+          className="h-full rounded-full bg-[linear-gradient(90deg,var(--ink-500),var(--seal-500))] transition-all duration-500"
+          style={{ width: `${safeValue}%` }}
+        />
+      </div>
+    </div>
+  )
+}
+
 const reverseModelOptions: Array<{ value: ReverseTargetModel; label: string }> = [
   { value: "gpt-image-2", label: "gpt-image-2" },
   { value: "nano_banana", label: "nano_banana" },
@@ -234,6 +253,7 @@ export default function ToolsPage() {
   const [reversePrompt, setReversePrompt] = useState("")
   const [reverseResult, setReverseResult] = useState<ReverseImageResult | null>(null)
   const [reverseStage, setReverseStage] = useState("")
+  const [reverseProgress, setReverseProgress] = useState(0)
   const documentFileRef = useRef<HTMLInputElement | null>(null)
   const ocrCameraRef = useRef<HTMLInputElement | null>(null)
   const ocrUploadRef = useRef<HTMLInputElement | null>(null)
@@ -268,6 +288,17 @@ export default function ToolsPage() {
     }
   }, [reverseImagePreview])
 
+  useEffect(() => {
+    if (busy !== "reverse" && busy !== "reverse-generate") return
+
+    const cap = busy === "reverse" ? 88 : 92
+    const timer = window.setInterval(() => {
+      setReverseProgress((current) => Math.min(cap, current + (current < 45 ? 7 : 3)))
+    }, 900)
+
+    return () => window.clearInterval(timer)
+  }, [busy])
+
   function readFileAsDataUrl(file: File) {
     return new Promise<string>((resolve, reject) => {
       const reader = new FileReader()
@@ -291,6 +322,7 @@ export default function ToolsPage() {
     setReversePrompt("")
     setReverseResult(null)
     setReverseStage("")
+    setReverseProgress(0)
     setResult({ title: "图像提示词反推", content: `已选择图片：${file.name}，请点击“开始反推提示词”。` })
   }
 
@@ -301,6 +333,7 @@ export default function ToolsPage() {
     while (Date.now() - startedAt < maxWaitMs) {
       await new Promise((resolve) => window.setTimeout(resolve, 5000))
       setReverseStage("图片仍在生成，正在检查结果")
+      setReverseProgress((current) => Math.min(94, Math.max(current + 2, 72)))
 
       const response = await fetch(`/api/dify-chat?imageTaskId=${encodeURIComponent(taskId)}&requestId=${encodeURIComponent(requestId)}`, {
         headers: {
@@ -328,16 +361,20 @@ export default function ToolsPage() {
 
     try {
       setBusy("reverse")
+      setReverseProgress(12)
       setReverseStage("正在上传图片并反推提示词")
+      setResult({ title: "图像提示词反推", content: "任务已开始，正在上传图片并等待工作流返回提示词..." })
       const formData = new FormData()
       formData.append("image", reverseImageFile)
       formData.append("target_model", reverseTargetModel)
 
+      setReverseProgress(28)
       const response = await fetch("/api/image-prompt/reverse", {
         method: "POST",
         headers: await getVerifiedAuthHeaders(),
         body: formData,
       })
+      setReverseProgress(86)
       const payload = await readResponseJson(response)
       const prompt = typeof payload?.prompt === "string" ? payload.prompt.trim() : ""
 
@@ -352,10 +389,12 @@ export default function ToolsPage() {
         generatedImages: [],
       })
       setResult({ title: "图像提示词反推", content: prompt })
+      setReverseProgress(100)
       setReverseStage("提示词已生成，可以继续生成图像")
     } catch (error) {
       const message = mapToolImageError(error)
       setResult({ title: "图像提示词反推", content: message })
+      setReverseProgress(0)
       setReverseStage("")
     } finally {
       setBusy(null)
@@ -371,7 +410,9 @@ export default function ToolsPage() {
 
     try {
       setBusy("reverse-generate")
+      setReverseProgress(10)
       setReverseStage("正在生成图片")
+      setResult({ title: "图像生成", content: "图像生成任务已提交，正在等待模型返回结果..." })
       const requestId = createClientRequestId(reverseTargetModel === "gpt-image-2" ? "tools-img" : "tools-banana")
       const generationModel = reverseTargetModel === "nano_banana" ? "banana-2-pro" : "gpt-image-2"
       const response = await fetch("/api/dify-chat", {
@@ -395,6 +436,7 @@ export default function ToolsPage() {
       })
 
       let payload = await readResponseJson(response)
+      setReverseProgress(62)
       const traceId = response.headers.get("X-Trace-Id") || undefined
       if (!response.ok) {
         throw new Error(typeof payload?.error === "string" ? payload.error : `upstream_error:${response.status}`)
@@ -402,6 +444,7 @@ export default function ToolsPage() {
 
       if (payload?.status === "running" && typeof payload?.imageTaskId === "string") {
         setReverseStage("图片任务已提交，等待生成结果")
+        setReverseProgress(68)
         payload = await pollImageTask(payload.imageTaskId, payload.requestId || requestId)
       }
 
@@ -430,10 +473,12 @@ export default function ToolsPage() {
       }
       setReverseResult(nextResult)
       setResult({ title: "图像生成结果", content: generatedImages.length ? generatedImages : sourceText || "图片已生成" })
+      setReverseProgress(100)
       setReverseStage("图片生成完成")
     } catch (error) {
       const message = mapToolImageError(error)
       setResult({ title: "图像生成", content: message })
+      setReverseProgress(0)
       setReverseStage("")
     } finally {
       setBusy(null)
@@ -713,7 +758,9 @@ export default function ToolsPage() {
                       生成图像
                     </Button>
                   </div>
-                  {reverseStage ? <p className="text-xs font-semibold text-[var(--ink-500)]">{reverseStage}</p> : null}
+                  {(busy === "reverse" || busy === "reverse-generate") ? (
+                    <ProgressBar value={reverseProgress} label={reverseStage || "任务处理中，请稍候"} />
+                  ) : reverseStage ? <p className="text-xs font-semibold text-[var(--ink-500)]">{reverseStage}</p> : null}
                 </div>
               </form>
             </ToolCard>
@@ -882,12 +929,28 @@ export default function ToolsPage() {
               </div>
             </CardHeader>
             <CardContent className="min-h-[420px] p-5">
-              {busy === "reverse-generate" ? (
+              {busy === "reverse" ? (
+                <div className="flex min-h-[340px] flex-col justify-center gap-4 rounded-[var(--radius-soft)] border border-[var(--paper-200)] bg-[var(--paper-100)]/60 p-5">
+                  <div className="flex items-center gap-3">
+                    <span className="flex size-10 items-center justify-center rounded-[var(--radius-soft)] border border-[var(--ink-100)] bg-[var(--ink-50)] text-[var(--ink-700)]">
+                      <Loader2 className="size-5 animate-spin" />
+                    </span>
+                    <div>
+                      <p className="font-[var(--font-display)] text-lg font-bold text-[var(--ink-900)]">正在反推提示词</p>
+                      <p className="mt-1 text-sm leading-6 text-[var(--ink-500)]">图片已提交到工作流，通常需要十几秒到一两分钟。</p>
+                    </div>
+                  </div>
+                  <ProgressBar value={reverseProgress} label={reverseStage || "正在等待反推结果"} />
+                </div>
+              ) : busy === "reverse-generate" ? (
                 <div className="flex min-h-[340px] flex-col items-center justify-center gap-4 rounded-[var(--radius-soft)] border border-[var(--paper-200)] bg-[var(--ink-900)] p-5 text-center">
                   <GridWaveLoader maxWidth={260} gridSize={12} dotSize={5} gap={5} label={reverseStage || "正在生成图片，请稍候。"} />
                   <div>
                     <p className="font-[var(--font-display)] text-lg font-bold text-[var(--paper-50)]">正在生成图像</p>
                     <p className="mt-2 text-sm leading-6 text-[var(--paper-200)]">{reverseStage || "Image 2 风格加载中，请稍候。"}</p>
+                  </div>
+                  <div className="w-full max-w-xs">
+                    <ProgressBar value={reverseProgress} label={reverseStage || "正在生成图像"} />
                   </div>
                 </div>
               ) : reverseResult?.generatedImages.length ? (
