@@ -36,6 +36,7 @@ import {
   type SunoWorkflowResult,
 } from "@/lib/suno-workflow-schema"
 import { SunoHelp } from "@/components/suno/SunoHelp"
+import { getVerifiedAuthHeaders } from "@/lib/client-auth"
 import { cn } from "@/lib/utils"
 
 type SongStatus = "idle" | "submitting" | "waiting" | "ready" | "failed"
@@ -168,7 +169,10 @@ function displayTitle(title: string, prompt: string) {
 async function runSuno(values: Record<string, unknown>) {
   const response = await fetch("/api/suno/run", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...(await getVerifiedAuthHeaders()),
+    },
     body: JSON.stringify(buildDifyInputs(values)),
   })
   const payload = await response.json().catch(() => ({ success: false, error: "服务器返回内容无法读取" }))

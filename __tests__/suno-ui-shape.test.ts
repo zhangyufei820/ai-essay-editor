@@ -39,4 +39,11 @@ describe("Suno UI shape", () => {
     expect(helpSource).toContain("第一次怎么用")
     expect(helpSource).toContain("生成后怎么看结果")
   })
+
+  it("sends verified auth headers when calling the server proxy", () => {
+    const source = read("components/suno/SunoPage.tsx")
+
+    expect(source).toContain('import { getVerifiedAuthHeaders } from "@/lib/client-auth"')
+    expect(source).toContain("...(await getVerifiedAuthHeaders())")
+  })
 })
