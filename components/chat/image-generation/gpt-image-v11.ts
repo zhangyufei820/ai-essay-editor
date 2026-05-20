@@ -252,29 +252,7 @@ export function resolveSizeForAspectRatio(
   aspectRatio: ImageAspectRatio,
   size: ImageSize
 ): { size: ImageSize; message?: string } {
-  if (isOriginalSize(size)) return { size }
-
-  if (aspectRatio === "9:16" && size === "3840x2160") {
-    return {
-      size: "2160x3840",
-      message: "你选择的是竖图比例，已自动切换为 4K 竖图 2160×3840。",
-    }
-  }
-
-  if (aspectRatio === "16:9" && size === "2160x3840") {
-    return {
-      size: "3840x2160",
-      message: "你选择的是横图比例，已自动切换为 4K 横图 3840×2160。",
-    }
-  }
-
-  if (aspectRatio === "1:1" && (size === "3840x2160" || size === "2160x3840")) {
-    return {
-      size: "2048x2048",
-      message: "你选择的是正方形比例，已自动切换为 2048×2048。",
-    }
-  }
-
+  void aspectRatio
   return { size }
 }
 

@@ -104,6 +104,12 @@ function pickEnum(value: unknown, allowed: readonly string[], fallback: string):
   return typeof value === "string" && allowed.includes(value) ? value : fallback
 }
 
+function pickImageSize(value: unknown): string {
+  if (typeof value !== "string") return GPT_IMAGE_V11_DEFAULT_INPUTS.size
+  const trimmed = value.trim()
+  return trimmed || GPT_IMAGE_V11_DEFAULT_INPUTS.size
+}
+
 function pickUrlString(value: unknown): string {
   if (typeof value !== "string") return ""
   return value.startsWith("http://") || value.startsWith("https://") ? value : ""
@@ -145,7 +151,7 @@ function buildGptImageV11Inputs(inputs: unknown): GptImageV11Inputs {
 
   return {
     aspect_ratio: pickEnum(record.aspect_ratio, GPT_IMAGE_V11_ALLOWED.aspect_ratio, GPT_IMAGE_V11_DEFAULT_INPUTS.aspect_ratio),
-    size: pickEnum(record.size, GPT_IMAGE_V11_ALLOWED.size, GPT_IMAGE_V11_DEFAULT_INPUTS.size),
+    size: pickImageSize(record.size),
     model: pickEnum(record.model, GPT_IMAGE_V11_ALLOWED.model, GPT_IMAGE_V11_DEFAULT_INPUTS.model),
     quality: pickEnum(record.quality, GPT_IMAGE_V11_ALLOWED.quality, GPT_IMAGE_V11_DEFAULT_INPUTS.quality),
     output_format: pickEnum(record.output_format, GPT_IMAGE_V11_ALLOWED.output_format, GPT_IMAGE_V11_DEFAULT_INPUTS.output_format),

@@ -74,10 +74,10 @@ describe("GPT Image V11 parameter mapping", () => {
     expect(getAspectRatioForSize("2160x3840")).toBe("9:16")
   })
 
-  it("resolves conflicting aspect ratio and 4K size selections", () => {
-    expect(resolveSizeForAspectRatio("9:16", "3840x2160").size).toBe("2160x3840")
-    expect(resolveSizeForAspectRatio("16:9", "2160x3840").size).toBe("3840x2160")
-    expect(resolveSizeForAspectRatio("1:1", "3840x2160").size).toBe("2048x2048")
+  it("keeps selected sizes unchanged when aspect ratio changes", () => {
+    expect(resolveSizeForAspectRatio("9:16", "3840x2160").size).toBe("3840x2160")
+    expect(resolveSizeForAspectRatio("16:9", "2160x3840").size).toBe("2160x3840")
+    expect(resolveSizeForAspectRatio("1:1", "3840x2160").size).toBe("3840x2160")
   })
 
   it("extracts image URLs from common Dify response shapes", () => {

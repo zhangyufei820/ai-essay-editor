@@ -51,19 +51,15 @@ import {
   extractImageUrlsFromDifyResult,
   getAspectRatioForSize,
   getPublicGeneratedImageDownloadUrl,
-  isLargeSize,
-  isOriginalSize,
   proxifyGeneratedImageDownloadUrl,
   proxifyGeneratedImageUrl,
   proxifyGeneratedImagePreviewUrl,
-  resolveSizeForAspectRatio,
 } from "@/components/chat/image-generation/gpt-image-v11"
 
 const API_BASE = ""
 const BRAND_GREEN = "var(--brand-900)"
 const ACCEPTED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp"]
 const MAX_EDIT_IMAGE_UPLOADS = 10
-const FOUR_K_IMAGE_SIZES = new Set<ImageSize>(["3840x2160", "2160x3840", "original_4k"])
 const GEMINI_FLASH_ONLY_ASPECT_RATIOS = new Set<ImageAspectRatio>(["4:1", "1:4", "8:1", "1:8"])
 
 const supabase = createClient(
@@ -660,13 +656,6 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
       ? "banana-2-pro"
       : (model as Extract<ModelType, "gpt-image-2" | "gpt-image-1.5" | "gpt-image-1" | "gpt-image-1-mini">)
   const estimatedImageCost = calculatePreviewCost(billingPreviewModel) * count
-  const shouldDowngradeHighRiskImage2 =
-    !isWorkflowImageWorkspace &&
-    model === "gpt-image-2" &&
-    FOUR_K_IMAGE_SIZES.has(size) &&
-    quality === "high" &&
-    (mode === "image_edit" || count > 1)
-
   useEffect(() => {
     const initUser = async () => {
       const { data: { user: verifiedUser } } = await supabase.auth.getUser()
@@ -829,11 +818,6 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
       return
     }
 
-    if (isOriginalSize(size)) {
-      setSize("1024x1024")
-      setAspectRatio("1:1")
-      toast.info("保持原图比例尺寸仅适用于图片编辑模式，已切换为 1024×1024。")
-    }
   }
 
   const applySize = (nextSize: ImageSize) => {
@@ -844,25 +828,10 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
       return
     }
 
-    if (mode === "image_generate" && isOriginalSize(nextSize)) {
-      setSize("1024x1024")
-      setAspectRatio("1:1")
-      toast.info("保持原图比例尺寸仅适用于图片编辑模式，已切换为 1024×1024。")
-      return
-    }
-
     setSize(nextSize)
     const derivedRatio = getAspectRatioForSize(nextSize)
     if (derivedRatio) setAspectRatio(derivedRatio)
 
-    if ((nextSize === "3840x2160" || nextSize === "2160x3840" || nextSize === "original_4k") && model !== "gpt-image-2") {
-      toast.warning("当前模型可能不支持 2K / 4K。建议切换到 GPT Image 2，或改用基础尺寸。", {
-        action: {
-          label: "使用 GPT Image 2",
-          onClick: () => setModel("gpt-image-2"),
-        },
-      })
-    }
   }
 
   const applyAspectRatio = (nextRatio: ImageAspectRatio) => {
@@ -876,12 +845,6 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
     }
 
     setAspectRatio(nextRatio)
-
-    const resolved = resolveSizeForAspectRatio(nextRatio, size)
-    if (resolved.size !== size) {
-      setSize(resolved.size)
-      if (resolved.message) toast.info(resolved.message)
-    }
   }
 
   const applyModel = (nextModel: GptImageModel) => {
@@ -897,9 +860,6 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
       toast.info("gpt-image-2 当前不推荐透明背景，请使用 auto 或 opaque。")
     }
 
-    if (nextModel !== "gpt-image-2" && isLargeSize(size)) {
-      toast.warning("当前模型可能不支持 2K / 4K。建议切换到 GPT Image 2，或改用基础尺寸。")
-    }
   }
 
   const handleEditImagesPick = (files: File[]) => {
@@ -1092,10 +1052,6 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
       return
     }
 
-    if (size === "original_4k" && model !== "gpt-image-2") {
-      toast.warning("非 GPT Image 2 会自动降级到基础尺寸。")
-    }
-
     if ((size === "3840x2160" || size === "2160x3840" || size === "original_4k") && quality === "high") {
       toast.info("4K 高质量生成可能耗时较长，请耐心等待。")
     }
@@ -1134,24 +1090,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
         setMaskGatewayUrl("")
       }
 
-      let submitInputsWithoutUrls = currentInputsWithoutUrls
-      if (shouldDowngradeHighRiskImage2) {
-        const nextCount = count > 1 ? 1 : count
-        submitInputsWithoutUrls = {
-          ...currentInputsWithoutUrls,
-          quality: "medium",
-          n: nextCount,
-        }
-        setQuality("medium")
-        if (nextCount !== count) setCount(nextCount)
-        toast.warning(
-          count > 1
-            ? "4K 高质量多图任务容易被上游限流，已自动改为 medium 且生成 1 张。"
-            : "4K 高质量图片编辑容易失败，已自动改为 medium 后提交。"
-        )
-      }
-
-      const submittedInputs = buildDifyInputs(submitInputsWithoutUrls, referenceUrls, maskUrl)
+      const submittedInputs = buildDifyInputs(currentInputsWithoutUrls, referenceUrls, maskUrl)
 
       setSubmitStage("正在生成图片")
 
@@ -1503,15 +1442,6 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
               </div>
             ) : null}
 
-            {shouldDowngradeHighRiskImage2 ? (
-              <div className="flex items-start gap-2 rounded-[var(--radius-sharp)] border border-amber-500/25 bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-200">
-                <IconInkDot className="mt-0.5 h-4 w-4 shrink-0" />
-                <span>
-                  4K 高质量{mode === "image_edit" ? "图片编辑" : "多图生成"}上游失败率较高，提交时会自动改为 medium{count > 1 ? " 且只生成 1 张" : ""}。
-                </span>
-              </div>
-            ) : null}
-
             <div className="flex flex-col gap-3 rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-[var(--paper-50)] p-3 md:p-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="text-sm text-[var(--ink-500)]">
                 {!isAuthenticated
@@ -1624,15 +1554,6 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
                 <div className="space-y-2">
                   <FieldLabel>图像模型</FieldLabel>
                   <NativeSelect value={model} onChange={applyModel} options={isGeminiWorkspace ? GEMINI_MODEL_OPTIONS : MODEL_OPTIONS} />
-                  {!isGeminiWorkspace && model !== "gpt-image-2" && isLargeSize(size) ? (
-                    <div className="rounded-[var(--radius-soft)] bg-amber-500/10 p-2 text-xs leading-relaxed text-amber-700 dark:text-amber-300">
-                      当前模型可能不支持 2K / 4K。建议切换到 GPT Image 2，或改用基础尺寸。
-                      {size === "original_4k" ? " 非 GPT Image 2 会自动降级到基础尺寸。" : null}
-                      <button type="button" onClick={() => setModel("gpt-image-2")} className="ml-2 font-semibold underline">
-                        使用 GPT Image 2
-                      </button>
-                    </div>
-                  ) : null}
                 </div>
               ) : null}
 
@@ -1648,7 +1569,6 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
                   onChange={applySize}
                   options={(isGeminiWorkspace ? GEMINI_IMAGE_SIZE_OPTIONS : SIZE_OPTIONS).filter((option) => !isBananaWorkspace || !option.editOnly).map((option) => ({
                     ...option,
-                    disabled: option.editOnly && mode === "image_generate",
                   }))}
                 />
               </div>
