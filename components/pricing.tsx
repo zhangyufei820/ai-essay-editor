@@ -287,7 +287,7 @@ export function Pricing({ currentSubscription }: { currentSubscription?: string 
           <div className="mt-6 rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-[var(--paper-50)] p-5 text-sm text-[var(--ink-700)] leading-relaxed">
             <p className="font-bold text-[var(--ink-900)] mb-3">图片和音乐如何扣费？</p>
             <ul className="space-y-2">
-              <li>• GPT Image 2：订阅用户可用，白名单用户可测试，按固定积分扣费。</li>
+              <li>• GPT Image 2：60 天共创体验期内登录用户可用，体验期后恢复订阅 / 白名单规则，按固定积分扣费。</li>
               <li>• GPT Image 1.5 / 1 / Mini：按对应固定积分扣费。</li>
               <li>• Suno：约 100 积分起，实际可能包含文本 token 补扣。</li>
             </ul>

@@ -3,7 +3,7 @@ import { readFileSync } from 'fs'
 import path from 'path'
 import { createBillingAuditMetadata, createUserReferralCode, getUserCredits, spendCredits, summarizeCreditTransactions } from '@/lib/credits'
 import { hasActiveMembership, resolveMembershipStatus } from '@/lib/products'
-import { canUseImage2, parseAllowlistEnv } from '@/lib/permissions'
+import { canUseImage2, isImage2CoCreationActive, parseAllowlistEnv } from '@/lib/permissions'
 
 jest.mock('@supabase/supabase-js', () => ({
   createClient: jest.fn(),
@@ -97,10 +97,12 @@ describe('credits helpers', () => {
     const oldEmails = process.env.IMAGE2_WHITELIST_EMAILS
     const oldLegacy = process.env.GPT_IMAGE_2_ALLOWLIST
     const oldOpenAccess = process.env.IMAGE2_TEST_OPEN_ACCESS
+    const oldCoCreationEndsAt = process.env.IMAGE2_CO_CREATION_ENDS_AT
     process.env.IMAGE2_WHITELIST_USER_IDS = 'admin-user, test-user '
     process.env.IMAGE2_WHITELIST_EMAILS = 'admin@example.com, TEST@example.com '
     process.env.GPT_IMAGE_2_ALLOWLIST = 'legacy-user'
     delete process.env.IMAGE2_TEST_OPEN_ACCESS
+    delete process.env.IMAGE2_CO_CREATION_ENDS_AT
 
     expect(parseAllowlistEnv(' admin@example.com, , test@example.com ')).toEqual(['admin@example.com', 'test@example.com'])
     expect(canUseImage2(null)).toBe(false)
@@ -120,15 +122,35 @@ describe('credits helpers', () => {
     else process.env.GPT_IMAGE_2_ALLOWLIST = oldLegacy
     if (oldOpenAccess === undefined) delete process.env.IMAGE2_TEST_OPEN_ACCESS
     else process.env.IMAGE2_TEST_OPEN_ACCESS = oldOpenAccess
+    if (oldCoCreationEndsAt === undefined) delete process.env.IMAGE2_CO_CREATION_ENDS_AT
+    else process.env.IMAGE2_CO_CREATION_ENDS_AT = oldCoCreationEndsAt
   })
 
-  it('can temporarily open GPT Image 2 for logged-in users during provider stability tests', () => {
-    const oldOpenAccess = process.env.IMAGE2_TEST_OPEN_ACCESS
-    process.env.IMAGE2_TEST_OPEN_ACCESS = 'true'
+  it('opens GPT Image 2 to logged-in users during the 60-day co-creation period', () => {
+    const oldCoCreationEndsAt = process.env.IMAGE2_CO_CREATION_ENDS_AT
+    process.env.IMAGE2_CO_CREATION_ENDS_AT = '2026-07-19T15:59:59.000Z'
 
+    expect(isImage2CoCreationActive(Date.parse('2026-05-20T00:00:00.000Z'))).toBe(true)
     expect(canUseImage2({ user_id: 'non-member-user' })).toBe(true)
     expect(canUseImage2(null)).toBe(false)
 
+    if (oldCoCreationEndsAt === undefined) delete process.env.IMAGE2_CO_CREATION_ENDS_AT
+    else process.env.IMAGE2_CO_CREATION_ENDS_AT = oldCoCreationEndsAt
+  })
+
+  it('restores GPT Image 2 subscriber or whitelist rules after co-creation ends', () => {
+    const oldCoCreationEndsAt = process.env.IMAGE2_CO_CREATION_ENDS_AT
+    const oldOpenAccess = process.env.IMAGE2_TEST_OPEN_ACCESS
+    process.env.IMAGE2_CO_CREATION_ENDS_AT = '2026-07-19T15:59:59.000Z'
+    delete process.env.IMAGE2_TEST_OPEN_ACCESS
+
+    expect(isImage2CoCreationActive(Date.parse('2026-07-20T00:00:00.000Z'))).toBe(false)
+    const afterCoCreation = Date.parse('2026-07-20T00:00:00.000Z')
+    expect(canUseImage2({ user_id: 'non-member-user' }, afterCoCreation)).toBe(false)
+    expect(canUseImage2({ user_id: 'member-user', membership_status: 'basic' }, afterCoCreation)).toBe(true)
+
+    if (oldCoCreationEndsAt === undefined) delete process.env.IMAGE2_CO_CREATION_ENDS_AT
+    else process.env.IMAGE2_CO_CREATION_ENDS_AT = oldCoCreationEndsAt
     if (oldOpenAccess === undefined) delete process.env.IMAGE2_TEST_OPEN_ACCESS
     else process.env.IMAGE2_TEST_OPEN_ACCESS = oldOpenAccess
   })
