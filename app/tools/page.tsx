@@ -10,8 +10,8 @@ import {
   LabelV2 as Label,
   TextareaV2 as Textarea
 } from "@/components/ui/v2"
-import { useState, type ComponentType, type FormEvent, type ReactNode } from "react"
-import { Loader2, Presentation, Search, Wand2 } from "lucide-react"
+import { useRef, useState, type ComponentType, type FormEvent, type ReactNode } from "react"
+import { Camera, Loader2, Presentation, Search, Upload, Wand2 } from "lucide-react"
 import { IconAllInOne, IconEssay } from "@/components/icons/v2"
 
 type ToolResult = {
@@ -78,10 +78,28 @@ export default function ToolsPage() {
   const [busy, setBusy] = useState<string | null>(null)
   const [result, setResult] = useState<ToolResult | null>(null)
   const [documentFile, setDocumentFile] = useState<File | null>(null)
+  const [ocrFile, setOcrFile] = useState<File | null>(null)
   const [ocrImages, setOcrImages] = useState("")
   const [presentationContent, setPresentationContent] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
   const [sparkQuery, setSparkQuery] = useState("")
+  const ocrCameraRef = useRef<HTMLInputElement | null>(null)
+  const ocrUploadRef = useRef<HTMLInputElement | null>(null)
+
+  function readFileAsDataUrl(file: File) {
+    return new Promise<string>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(String(reader.result || ""))
+      reader.onerror = () => reject(reader.error || new Error("读取图片失败"))
+      reader.readAsDataURL(file)
+    })
+  }
+
+  function handleOcrFile(file?: File | null) {
+    if (!file) return
+    setOcrFile(file)
+    setResult({ title: "图片 OCR", content: `已选择图片：${file.name}` })
+  }
 
   async function runDocumentProcess(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -105,17 +123,23 @@ export default function ToolsPage() {
   async function runOcr(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const images = ocrImages.split(/\n+/).map((value) => value.trim()).filter(Boolean)
-    if (!images.length) {
-      setResult({ title: "图片 OCR", content: "请粘贴至少一个图片 URL" })
+    if (!images.length && !ocrFile) {
+      setResult({ title: "图片 OCR", content: "请上传或拍摄一张图片，也可以粘贴测试文本" })
       return
     }
 
     try {
       setBusy("ocr")
+      const uploadedImage = ocrFile ? await readFileAsDataUrl(ocrFile) : null
       const response = await fetch("/api/ocr", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ images }),
+        body: JSON.stringify({
+          images: [
+            ...images,
+            ...(uploadedImage ? [{ file_name: ocrFile?.name, image_base64: uploadedImage.split(",")[1] }] : []),
+          ],
+        }),
       })
       const payload = await response.json().catch(() => ({}))
       setResult({ title: "OCR 识别结果", content: response.ok ? payload.text || payload : payload.error || "OCR 失败" })
@@ -229,10 +253,38 @@ export default function ToolsPage() {
               </form>
             </ToolCard>
 
-            <ToolCard index="02" title="图片 OCR" description="把图片链接中的文字识别出来，适合资料整理。" icon={Wand2}>
+            <ToolCard index="02" title="图片 OCR" description="上传或拍照识别图片文字，适合资料整理。" icon={Wand2}>
               <form className="space-y-3" onSubmit={runOcr}>
-                <Label htmlFor="ocr-images">图片 URL，每行一个</Label>
-                <Textarea id="ocr-images" rows={4} value={ocrImages} onChange={(event) => setOcrImages(event.target.value)} placeholder="https://..." />
+                <Label htmlFor="ocr-images">图片上传 / 拍照 / 测试文本</Label>
+                <input
+                  ref={ocrUploadRef}
+                  className="sr-only"
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) => handleOcrFile(event.target.files?.[0])}
+                />
+                <input
+                  ref={ocrCameraRef}
+                  className="sr-only"
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={(event) => handleOcrFile(event.target.files?.[0])}
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <Button type="button" variant="outline" onClick={() => ocrUploadRef.current?.click()}>
+                    <Upload className="mr-2 size-4" />
+                    上传图片
+                  </Button>
+                  <Button type="button" variant="outline" onClick={() => ocrCameraRef.current?.click()}>
+                    <Camera className="mr-2 size-4" />
+                    拍照识别
+                  </Button>
+                </div>
+                {ocrFile ? (
+                  <p className="truncate text-xs text-[var(--ink-500)]">已选：{ocrFile.name}</p>
+                ) : null}
+                <Textarea id="ocr-images" rows={3} value={ocrImages} onChange={(event) => setOcrImages(event.target.value)} placeholder="也可粘贴文字做网关连通性测试，每行一条" />
                 <Button type="submit" disabled={busy === "ocr"} className="w-full">
                   {busy === "ocr" ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
                   识别文字

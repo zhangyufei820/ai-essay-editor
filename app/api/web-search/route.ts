@@ -1,47 +1,119 @@
-import { NextResponse } from "next/server"
+import { NextResponse, type NextRequest } from "next/server"
+import { checkIpRateLimit, createRateLimitResponse, getClientIP } from "@/lib/rate-limit"
+import { callToolsDifyChat } from "@/lib/tools-dify-client"
+import { rejectUntrustedOrigin } from "@/lib/security/request"
 
-export const maxDuration = 30
+export const maxDuration = 60
 
-export async function POST(req: Request) {
+type SearchResult = {
+  title: string
+  url: string
+  snippet: string
+  source: string
+}
+
+function readString(value: unknown) {
+  return typeof value === "string" ? value.trim() : ""
+}
+
+async function searchWithTavily(query: string, maxResults: number): Promise<SearchResult[]> {
+  const apiKey = process.env.TAVILY_API_KEY
+  if (!apiKey) return []
+
+  const response = await fetch("https://api.tavily.com/search", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      query,
+      max_results: maxResults,
+      search_depth: "basic",
+      include_answer: false,
+      include_raw_content: false,
+    }),
+  })
+
+  if (!response.ok) {
+    throw new Error(`Tavily 搜索失败：${response.status}`)
+  }
+
+  const payload = await response.json() as { results?: Array<Record<string, unknown>> }
+  return (payload.results || []).map((item) => ({
+    title: readString(item.title) || "未命名结果",
+    url: readString(item.url),
+    snippet: readString(item.content),
+    source: "tavily",
+  })).filter((item) => item.url)
+}
+
+async function searchWithDify(query: string, maxResults: number): Promise<SearchResult[]> {
+  const apiKey = process.env.DIFY_WEB_SEARCH_API_KEY
+    || process.env.DIFY_ALL_IN_ONE_AGENT_API_KEY
+    || process.env.DIFY_SUPER_ALL_IN_ONE_AGENT_API_KEY
+  if (!apiKey) return []
+
+  const result = await callToolsDifyChat({
+    apiKey,
+    query: `请联网搜索并整理 ${maxResults} 条与“${query}”相关的可靠网页结果。返回 Markdown 列表，每条包含标题、链接和摘要。`,
+    inputs: { query, maxResults, tool: "web-search" },
+    user: "tools-web-search",
+  })
+
+  if (!result.ok) return []
+
+  return [{
+    title: `联网搜索整理：${query}`,
+    url: "dify://web-search",
+    snippet: result.content,
+    source: "dify",
+  }]
+}
+
+export async function POST(req: NextRequest) {
   try {
-    // IP 限流：30次/分钟
-    const { getClientIP, checkIpRateLimit, createRateLimitResponse } = await import('@/lib/rate-limit')
+    const originRejection = rejectUntrustedOrigin(req)
+    if (originRejection) return originRejection
+
     const ip = getClientIP(req)
     const limitResult = checkIpRateLimit(ip, 30)
     if (!limitResult.allowed) {
       return createRateLimitResponse(limitResult.retryAfter!)
     }
-    const { query, provider = "google", maxResults = 10 } = await req.json()
 
-    if (!query) {
+    const { query, maxResults = 5 } = await req.json()
+    const cleanQuery = typeof query === "string" ? query.trim() : ""
+    const limit = Math.min(Math.max(Number(maxResults) || 5, 1), 10)
+
+    if (!cleanQuery) {
       return NextResponse.json({ error: "查询内容不能为空" }, { status: 400 })
     }
 
-    // 这里集成实际的搜索API
-    // 示例：Google Custom Search API, Bing Web Search API等
-    const searchResults = await performWebSearch(query, provider, maxResults)
+    const results = await searchWithTavily(cleanQuery, limit)
+    const finalResults = results.length ? results : await searchWithDify(cleanQuery, limit)
+
+    if (!finalResults.length) {
+      return NextResponse.json(
+        {
+          error: "网页搜索服务未配置，请配置 TAVILY_API_KEY 或 DIFY_WEB_SEARCH_API_KEY",
+          code: "WEB_SEARCH_NOT_CONFIGURED",
+        },
+        { status: 501 },
+      )
+    }
 
     return NextResponse.json({
       success: true,
-      query,
-      provider,
-      results: searchResults,
+      query: cleanQuery,
+      provider: finalResults[0]?.source || "unknown",
+      results: finalResults,
     })
   } catch (error) {
-    console.error("[v0] Web search error:", error)
-    return NextResponse.json({ error: "搜索失败" }, { status: 500 })
+    console.error("[Tools Web Search] error:", error)
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "搜索失败" },
+      { status: 500 },
+    )
   }
-}
-
-async function performWebSearch(query: string, provider: string, maxResults: number) {
-  // 实际实现中，这里会调用真实的搜索API
-  // 目前返回模拟数据
-  return [
-    {
-      title: `搜索结果 - ${query}`,
-      url: "https://example.com",
-      snippet: "这是搜索结果的摘要内容...",
-      content: "完整的页面内容会在这里...",
-    },
-  ]
 }

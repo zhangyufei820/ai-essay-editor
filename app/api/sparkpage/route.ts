@@ -1,14 +1,11 @@
 import { generateText } from "ai"
-import { anthropic } from "@ai-sdk/anthropic"
-import { createGoogleGenerativeAI } from "@ai-sdk/google"
 import { createOpenAI, openai } from "@ai-sdk/openai"
-import { NextResponse } from "next/server"
+import { NextResponse, type NextRequest } from "next/server"
+import { checkIpRateLimit, createRateLimitResponse, getClientIP } from "@/lib/rate-limit"
+import { callToolsDifyChat } from "@/lib/tools-dify-client"
+import { rejectUntrustedOrigin } from "@/lib/security/request"
 
-export const maxDuration = 60
-
-const googleProvider = createGoogleGenerativeAI({
-  apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GEMINI_API_KEY || "",
-})
+export const maxDuration = 90
 
 const xaiProvider = createOpenAI({
   name: "xai",
@@ -16,105 +13,49 @@ const xaiProvider = createOpenAI({
   apiKey: process.env.XAI_API_KEY || process.env.OPENAI_API_KEY || "",
 })
 
-const fireworksProvider = createOpenAI({
-  name: "fireworks",
-  baseURL: process.env.FIREWORKS_BASE_URL || "https://api.fireworks.ai/inference/v1",
-  apiKey: process.env.FIREWORKS_API_KEY || process.env.OPENAI_API_KEY || "",
-})
-
 function resolveLanguageModel(provider: string, modelName: string) {
-  switch (provider) {
-    case "anthropic":
-      return anthropic(modelName)
-    case "google":
-      return googleProvider(modelName)
-    case "xai":
-      return xaiProvider(modelName)
-    case "fireworks":
-      return fireworksProvider(modelName)
-    case "openai":
-    default:
-      return openai(modelName)
-  }
-}
-
-export async function POST(req: Request) {
-  try {
-    // IP 限流：30次/分钟
-    const { getClientIP, checkIpRateLimit, createRateLimitResponse } = await import('@/lib/rate-limit')
-    const ip = getClientIP(req)
-    const limitResult = checkIpRateLimit(ip, 30)
-    if (!limitResult.allowed) {
-      return createRateLimitResponse(limitResult.retryAfter!)
-    }
-    const { query, searchResults, documents, provider = "openai", model = "gpt-5" } = await req.json()
-
-    if (!query) {
-      return NextResponse.json({ error: "查询内容不能为空" }, { status: 400 })
-    }
-
-    // 构建综合提示词
-    const prompt = buildSparkpagePrompt(query, searchResults, documents)
-
-    // 使用LLM生成结构化内容
-    const { text } = await generateText({
-      model: resolveLanguageModel(provider, model) as any,
-      prompt,
-      maxTokens: 8000,
-      temperature: 0.7,
-    })
-
-    // 解析生成的内容为结构化格式
-    const sparkpage = parseSparkpageContent(text)
-
-    return NextResponse.json({
-      success: true,
-      sparkpage,
-    })
-  } catch (error) {
-    console.error("[v0] Sparkpage generation error:", error)
-    return NextResponse.json({ error: "Sparkpage生成失败" }, { status: 500 })
-  }
+  if (provider === "xai") return xaiProvider(modelName)
+  return openai(modelName)
 }
 
 function buildSparkpagePrompt(query: string, searchResults?: unknown[], documents?: unknown[]): string {
-  let prompt = `作为一个专业的内容综合分析师，请根据以下信息创建一个结构化的Sparkpage：
+  let prompt = `作为一个专业的内容综合分析师，请根据以下信息创建一个结构化综合报告。
 
 用户查询: ${query}
-
 `
 
-  if (searchResults && searchResults.length > 0) {
+  if (Array.isArray(searchResults) && searchResults.length > 0) {
     prompt += `\n搜索结果:\n${JSON.stringify(searchResults, null, 2)}\n`
   }
 
-  if (documents && documents.length > 0) {
+  if (Array.isArray(documents) && documents.length > 0) {
     prompt += `\n文档内容:\n${JSON.stringify(documents, null, 2)}\n`
   }
 
   prompt += `
-请生成一个包含以下部分的综合分析：
-1. 执行摘要 (Executive Summary)
-2. 关键发现 (Key Findings)
-3. 详细分析 (Detailed Analysis)
-4. 数据可视化建议 (Data Visualization Suggestions)
-5. 结论与建议 (Conclusions & Recommendations)
-6. 相关资源 (Related Resources)
-
-请以JSON格式返回，包含title, sections数组，每个section有heading和content。
-`
+请生成 JSON，字段如下：
+{
+  "title": "报告标题",
+  "sections": [
+    { "heading": "执行摘要", "content": "..." },
+    { "heading": "关键发现", "content": "..." },
+    { "heading": "详细分析", "content": "..." },
+    { "heading": "行动建议", "content": "..." },
+    { "heading": "相关资源", "content": "..." }
+  ]
+}
+不要编造无法确认的链接。`
 
   return prompt
 }
 
 function parseSparkpageContent(text: string) {
+  const cleaned = text.trim().replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim()
   try {
-    // 尝试解析JSON
-    return JSON.parse(text)
+    return JSON.parse(cleaned)
   } catch {
-    // 如果不是JSON，返回基本结构
     return {
-      title: "分析报告",
+      title: "综合报告",
       sections: [
         {
           heading: "内容",
@@ -122,5 +63,89 @@ function parseSparkpageContent(text: string) {
         },
       ],
     }
+  }
+}
+
+async function generateSparkpage(input: {
+  query: string
+  searchResults?: unknown[]
+  documents?: unknown[]
+  provider?: string
+  model?: string
+}) {
+  const prompt = buildSparkpagePrompt(input.query, input.searchResults, input.documents)
+  const difyKey = process.env.DIFY_SPARKPAGE_API_KEY
+    || process.env.DIFY_SUPER_ALL_IN_ONE_AGENT_API_KEY
+    || process.env.DIFY_ALL_IN_ONE_AGENT_API_KEY
+
+  if (difyKey) {
+    const dify = await callToolsDifyChat({
+      apiKey: difyKey,
+      query: prompt,
+      inputs: {
+        query: input.query,
+        searchResults: input.searchResults || [],
+        documents: input.documents || [],
+        tool: "sparkpage",
+      },
+      user: "tools-sparkpage",
+    })
+
+    if (dify.ok) {
+      return { provider: "dify", sparkpage: parseSparkpageContent(dify.content) }
+    }
+  }
+
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error("综合报告工具未配置 Dify 或 OpenAI API Key")
+  }
+
+  const { text } = await generateText({
+    model: resolveLanguageModel(input.provider || "openai", input.model || "gpt-5-mini") as any,
+    prompt,
+    maxTokens: 6000,
+    temperature: 0.5,
+  })
+
+  return { provider: input.provider || "openai", sparkpage: parseSparkpageContent(text) }
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const originRejection = rejectUntrustedOrigin(req)
+    if (originRejection) return originRejection
+
+    const ip = getClientIP(req)
+    const limitResult = checkIpRateLimit(ip, 30)
+    if (!limitResult.allowed) {
+      return createRateLimitResponse(limitResult.retryAfter!)
+    }
+
+    const { query, searchResults, documents, provider, model } = await req.json()
+    const cleanQuery = typeof query === "string" ? query.trim() : ""
+
+    if (!cleanQuery) {
+      return NextResponse.json({ error: "查询内容不能为空" }, { status: 400 })
+    }
+
+    const result = await generateSparkpage({
+      query: cleanQuery,
+      searchResults: Array.isArray(searchResults) ? searchResults : undefined,
+      documents: Array.isArray(documents) ? documents : undefined,
+      provider: typeof provider === "string" ? provider : undefined,
+      model: typeof model === "string" ? model : undefined,
+    })
+
+    return NextResponse.json({
+      success: true,
+      provider: result.provider,
+      sparkpage: result.sparkpage,
+    })
+  } catch (error) {
+    console.error("[Tools Sparkpage] error:", error)
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Sparkpage 生成失败" },
+      { status: 500 },
+    )
   }
 }

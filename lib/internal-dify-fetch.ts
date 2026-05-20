@@ -5,6 +5,7 @@ const INTERNAL_HOSTS = new Set([
   "dify-image-gateway",
   "localhost",
   "127.0.0.1",
+  "host.docker.internal",
 ])
 
 const PRIVATE_HOST_PATTERN =
