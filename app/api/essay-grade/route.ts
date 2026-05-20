@@ -218,6 +218,8 @@ export async function POST(req: NextRequest) {
           "Content-Type": "text/event-stream",
           "Cache-Control": "no-cache",
           "Connection": "keep-alive",
+          "X-Accel-Buffering": "no",
+          "Content-Encoding": "none",
           "X-Trial-Used": String(billing.trialUsed),
           "X-Real-Credits-Used": String(billing.realCreditsUsed),
           "X-Trial-Remaining-Today": String(billing.remainingToday),

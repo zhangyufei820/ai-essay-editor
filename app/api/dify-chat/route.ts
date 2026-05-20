@@ -2462,6 +2462,8 @@ export async function POST(request: NextRequest) {
 	          "Content-Type": "text/event-stream",
 	          "Cache-Control": "no-cache",
 	          "Connection": "keep-alive",
+	          "X-Accel-Buffering": "no",
+	          "Content-Encoding": "none",
 	          "X-Request-Id": taskRun.requestId,
 	          "X-Trace-Id": taskRun.traceId,
 	        },
