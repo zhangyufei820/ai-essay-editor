@@ -32,7 +32,7 @@ const PAGE_TITLES: Array<[string, string]> = [
   ["/lab", "互动实验室"],
   ["/my/shares", "我的分享"],
   ["/settings", "个人中心"],
-  ["/suno", "智能音乐生成"],
+  ["/suno", "suno音乐创作"],
   ["/teacher/agents", "教师智能体"],
   ["/teacher", "教师专区"],
   ["/tools", "工具箱"],
@@ -75,7 +75,7 @@ export function buildSidebarSections(): WorkspaceSidebarSection[] {
       title: "多媒体专区",
       items: [
         { label: "图像生成", href: "/chat/gpt-image-2", icon: Image, badge: "图像" },
-        { label: "智能音乐生成", href: "/suno", icon: IconMusic, badge: "音乐" },
+        { label: "suno音乐创作", href: "/suno", icon: IconMusic, badge: "音乐" },
         { label: "三维细胞实验室", href: CELLFORGE_EXTERNAL_URL, icon: Box, badge: "三维" },
         { label: "全部工具", href: "/tools", icon: IconSettings },
       ],

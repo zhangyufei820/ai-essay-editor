@@ -54,9 +54,15 @@ type SongResult = SunoWorkflowResult & {
 }
 
 type SongForm = {
+  operation: string
   prompt: string
   title: string
   tags: string
+  negativeTags: string
+  mv: string
+  generationType: string
+  vocalGender: string
+  notifyHook: string
   instrumental: boolean
 }
 
@@ -66,11 +72,19 @@ const POLL_INTERVAL_MS = 8000
 const POLL_TIMEOUT_MS = 8 * 60 * 1000
 
 const DEFAULT_FORM: SongForm = {
+  operation: "music_custom",
   prompt: "",
   title: "",
   tags: "流行、抒情、钢琴",
+  negativeTags: "噪音、低质量、刺耳、跑调、嘈杂",
+  mv: "chirp-v5",
+  generationType: "TEXT",
+  vocalGender: "",
+  notifyHook: "",
   instrumental: false,
 }
+
+const SELECT_CLASS = "flex h-10 w-full rounded-[var(--radius-soft)] border border-[var(--paper-300)] bg-[var(--paper-50)] px-3 py-2 text-sm text-[var(--ink-800)] outline-none transition focus-visible:border-[var(--ink-500)] focus-visible:ring-2 focus-visible:ring-[var(--ink-200)] disabled:cursor-not-allowed disabled:opacity-60"
 
 const STATUS_TEXT: Record<SongStatus, string> = {
   idle: "等待创作",
@@ -523,15 +537,20 @@ export function SunoPage() {
     activeTaskIdRef.current = ""
 
     try {
+      const isInspiration = form.operation === "music_inspiration"
+      const isInstrumental = form.operation === "generate_instrumental" || form.instrumental
       const next = await runSuno({
-        operation: "music_custom",
-        prompt: form.prompt,
+        operation: form.operation,
+        prompt: isInspiration ? "" : form.prompt,
+        gpt_description_prompt: isInspiration ? form.prompt : "",
         title: form.title || title,
         tags: form.tags || "流行、抒情、钢琴",
-        negative_tags: "噪音、低质量、刺耳",
-        mv: "chirp-v5",
-        generation_type: "TEXT",
-        make_instrumental: form.instrumental ? "true" : "false",
+        negative_tags: form.negativeTags,
+        mv: form.mv,
+        generation_type: form.generationType,
+        vocal_gender: form.vocalGender,
+        notify_hook: form.notifyHook,
+        make_instrumental: isInstrumental ? "true" : "false",
       })
       setResult(next)
 
@@ -606,7 +625,7 @@ export function SunoPage() {
               <Sparkles className="h-4 w-4" />
               输入想法，自动生成歌曲
             </div>
-            <h1 className="font-[var(--font-display)] text-4xl font-bold leading-tight text-[var(--ink-900)] sm:text-5xl">智能音乐生成</h1>
+            <h1 className="font-[var(--font-display)] text-4xl font-bold leading-tight text-[var(--ink-900)] sm:text-5xl">suno音乐创作</h1>
             <p className="mt-3 max-w-2xl text-[15px] leading-7 text-[var(--ink-600)]">
               写下歌词或一句创作提示，系统会自动提交、等待并刷新结果。歌曲完成后，你可以直接试听和下载。
             </p>
@@ -627,15 +646,30 @@ export function SunoPage() {
                   <FileText className="h-5 w-5" />
                   创作内容
                 </CardTitle>
-                <CardDescription>只需要填写这几项，系统会自动匹配合适的创作参数。</CardDescription>
+                <CardDescription>所有必要参数都用中文展示，提交时会自动转换为 Dify 工作流需要的字段。</CardDescription>
               </CardHeader>
               <CardContent className="grid gap-5">
                 <div>
-                  <Label htmlFor="song_prompt">歌词或提示词</Label>
+                  <Label htmlFor="song_operation">创作方式</Label>
+                  <select
+                    id="song_operation"
+                    className={SELECT_CLASS}
+                    value={form.operation}
+                    onChange={(event) => setForm((previous) => ({ ...previous, operation: event.target.value }))}
+                    disabled={status === "submitting" || status === "waiting"}
+                  >
+                    <option value="music_custom">自定义歌曲：适合已有歌词或明确创作要求</option>
+                    <option value="generate_instrumental">纯音乐：适合背景音乐和配乐</option>
+                    <option value="music_inspiration">灵感生成：适合只写一句想法</option>
+                  </select>
+                </div>
+
+                <div>
+                  <Label htmlFor="song_prompt">歌词或创作提示</Label>
                   <Textarea
                     id="song_prompt"
                     rows={8}
-                    placeholder="例如：写一首关于毕业那天、操场晚风和朋友告别的中文流行歌。也可以直接粘贴完整歌词。"
+                    placeholder={"可以直接粘贴歌词，也可以写创作需求。\n\n示例：写一首关于毕业那天、操场晚风和朋友告别的中文流行歌。情绪温暖、有一点不舍，适合女生演唱，副歌要简单好记。"}
                     value={form.prompt}
                     onChange={(event) => setForm((previous) => ({ ...previous, prompt: event.target.value }))}
                     disabled={status === "submitting" || status === "waiting"}
@@ -648,7 +682,7 @@ export function SunoPage() {
                     <Label htmlFor="song_title">歌曲名</Label>
                     <Input
                       id="song_title"
-                      placeholder="不填则自动取名"
+                      placeholder="例如：晚风里的告别"
                       value={form.title}
                       onChange={(event) => setForm((previous) => ({ ...previous, title: event.target.value }))}
                       disabled={status === "submitting" || status === "waiting"}
@@ -658,12 +692,82 @@ export function SunoPage() {
                     <Label htmlFor="song_tags">歌曲风格</Label>
                     <Input
                       id="song_tags"
-                      placeholder="流行、抒情、钢琴"
+                      placeholder="例如：中文流行、抒情、钢琴、女声、温暖、电影感"
                       value={form.tags}
                       onChange={(event) => setForm((previous) => ({ ...previous, tags: event.target.value }))}
                       disabled={status === "submitting" || status === "waiting"}
                     />
                   </div>
+                </div>
+
+                <div>
+                  <Label htmlFor="song_negative_tags">不想要的风格</Label>
+                  <Input
+                    id="song_negative_tags"
+                    placeholder="例如：不要说唱、不要重金属、不要太吵、不要低质量"
+                    value={form.negativeTags}
+                    onChange={(event) => setForm((previous) => ({ ...previous, negativeTags: event.target.value }))}
+                    disabled={status === "submitting" || status === "waiting"}
+                  />
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <div>
+                    <Label htmlFor="song_mv">模型版本</Label>
+                    <select
+                      id="song_mv"
+                      className={SELECT_CLASS}
+                      value={form.mv}
+                      onChange={(event) => setForm((previous) => ({ ...previous, mv: event.target.value }))}
+                      disabled={status === "submitting" || status === "waiting"}
+                    >
+                      <option value="chirp-v5">稳定新版（推荐）</option>
+                      <option value="chirp-fenix">灵感新版</option>
+                      <option value="chirp-v4">稳定经典版</option>
+                      <option value="chirp-v3-5">经典快速版</option>
+                      <option value="chirp-v4-tau">风格一致性版</option>
+                      <option value="chirp-v3-5-tau">翻唱风格版</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="song_generation_type">生成类型</Label>
+                    <select
+                      id="song_generation_type"
+                      className={SELECT_CLASS}
+                      value={form.generationType}
+                      onChange={(event) => setForm((previous) => ({ ...previous, generationType: event.target.value }))}
+                      disabled={status === "submitting" || status === "waiting"}
+                    >
+                      <option value="TEXT">歌词文本创作</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="song_vocal_gender">人声倾向</Label>
+                    <select
+                      id="song_vocal_gender"
+                      className={SELECT_CLASS}
+                      value={form.vocalGender}
+                      onChange={(event) => setForm((previous) => ({ ...previous, vocalGender: event.target.value }))}
+                      disabled={status === "submitting" || status === "waiting"}
+                    >
+                      <option value="">不指定</option>
+                      <option value="f">女声</option>
+                      <option value="m">男声</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <Label htmlFor="song_notify_hook">完成通知地址</Label>
+                  <Input
+                    id="song_notify_hook"
+                    placeholder="可选。一般不用填写；如果有自己的回调地址，可以粘贴到这里。"
+                    value={form.notifyHook}
+                    onChange={(event) => setForm((previous) => ({ ...previous, notifyHook: event.target.value }))}
+                    disabled={status === "submitting" || status === "waiting"}
+                  />
                 </div>
 
                 <label className="flex cursor-pointer items-center justify-between gap-4 rounded-[var(--radius-soft)] border border-[var(--paper-200)] bg-[var(--paper-100)] px-4 py-3">

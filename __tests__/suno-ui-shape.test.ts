@@ -7,7 +7,7 @@ describe("Suno UI shape", () => {
   it("keeps the user-facing music flow simple and Chinese", () => {
     const source = read("components/suno/SunoPage.tsx")
 
-    for (const text of ["智能音乐生成", "歌词或提示词", "歌曲名", "歌曲风格", "只生成伴奏", "生成歌曲"]) {
+    for (const text of ["suno音乐创作", "歌词或创作提示", "歌曲名", "歌曲风格", "不想要的风格", "模型版本", "生成类型", "人声倾向", "完成通知地址", "只生成伴奏", "生成歌曲"]) {
       expect(source).toContain(text)
     }
 
@@ -34,7 +34,7 @@ describe("Suno UI shape", () => {
 
     expect(pageSource).toContain("<SunoHelp />")
     expect(helpSource).toContain("新手必看")
-    expect(helpSource).toContain("智能音乐生成使用帮助")
+    expect(helpSource).toContain("suno音乐创作使用帮助")
     expect(helpSource).toContain("展开完整使用帮助文档")
     expect(helpSource).toContain("第一次怎么用")
     expect(helpSource).toContain("生成后怎么看结果")
@@ -53,5 +53,18 @@ describe("Suno UI shape", () => {
     expect(source).toContain("function extractErrorMessage")
     expect(source).toContain("生成失败，请稍后再试或联系客服。")
     expect(source).not.toContain('setError(toText(next.error)')
+  })
+
+  it("passes the visible Chinese form fields to Dify workflow inputs", () => {
+    const source = read("components/suno/SunoPage.tsx")
+
+    expect(source).toContain("operation: form.operation")
+    expect(source).toContain("gpt_description_prompt: isInspiration ? form.prompt :")
+    expect(source).toContain("negative_tags: form.negativeTags")
+    expect(source).toContain("mv: form.mv")
+    expect(source).toContain("generation_type: form.generationType")
+    expect(source).toContain("vocal_gender: form.vocalGender")
+    expect(source).toContain("notify_hook: form.notifyHook")
+    expect(source).toContain('form.operation === "generate_instrumental"')
   })
 })

@@ -12,8 +12,8 @@ import {
 
 const quickExamples = [
   "写一首温柔治愈的中文流行歌，主题是夏天、回忆和重逢，适合女生演唱，编曲包含钢琴、弦乐和轻柔鼓点。",
-  "为东方草本护肤品牌创作一首中文品牌歌，主题是艾草、温养、自然、安心，旋律温柔上口，适合短视频传播。",
-  "生成一首适合护肤产品展示视频的背景音乐，不要人声，氛围干净、清透、自然，包含钢琴、古筝和轻柔弦乐。",
+  "为毕业纪念活动创作一首中文主题歌，主题是同学、操场、盛夏和远方，旋律温暖上口，适合短视频传播。",
+  "生成一首适合旅行视频的背景音乐，不要人声，氛围开阔、轻快、自由，包含钢琴、吉他和柔和弦乐。",
 ]
 
 const styleIdeas = [
@@ -42,7 +42,7 @@ export function SunoHelp() {
             <Badge variant="ink" className="mb-3">新手必看</Badge>
             <CardTitle className="flex items-center gap-2 text-2xl">
               <BookOpen className="h-6 w-6" />
-              智能音乐生成使用帮助
+              suno音乐创作使用帮助
             </CardTitle>
             <CardDescription className="mt-2 text-[15px] leading-7">
               第一次使用也没关系。你只要说清楚歌曲主题、风格、情绪和使用场景，系统会自动生成歌曲，完成后可以直接试听和下载。
@@ -100,7 +100,7 @@ export function SunoHelp() {
             </Section>
 
             <Section title="五、歌曲名和风格怎么填">
-              <p>歌曲名尽量简短、有记忆点，例如：旧日的海、晚风与你、一株艾草、回到夏天、不再回头。</p>
+              <p>歌曲名尽量简短、有记忆点，例如：旧日的海、晚风与你、回到夏天、星河来信、不再回头。</p>
               <div className="grid gap-2 sm:grid-cols-2">
                 {styleIdeas.map((item) => (
                   <div key={item} className="rounded-[var(--radius-soft)] bg-[var(--paper-100)] px-3 py-2">{item}</div>
@@ -108,9 +108,9 @@ export function SunoHelp() {
               </div>
             </Section>
 
-            <Section title="六、品牌歌怎么写">
-              <p>为品牌创作时，建议说明品牌名称、产品特点、目标用户、核心卖点和希望用户记住的一句话。</p>
-              <p className="rounded-[var(--radius-soft)] bg-[var(--paper-100)] p-3">例子：为一个东方草本护肤品牌创作一首广告歌，品牌关键词是艾草、温养、自然、安心，目标用户是年轻女性，歌曲风格清新温柔，歌词要突出“一株艾草，温养日常”。</p>
+            <Section title="六、主题歌怎么写">
+              <p>为活动、课程、社群或个人作品创作时，建议说明名称、核心主题、听众是谁、希望用户记住的一句话。</p>
+              <p className="rounded-[var(--radius-soft)] bg-[var(--paper-100)] p-3">例子：为毕业纪念活动创作一首中文主题歌，关键词是青春、操场、盛夏、远方和重逢，听众是即将毕业的学生，歌曲风格温暖明亮，副歌要突出“我们在风里奔跑，也在未来相逢”。</p>
             </Section>
 
             <Section title="七、歌词怎么写更容易好听">
