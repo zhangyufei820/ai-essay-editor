@@ -40,6 +40,17 @@ function isHtmlErrorContent(value: unknown) {
   )
 }
 
+function sanitizeReverseError(error: unknown) {
+  const raw = error instanceof Error ? error.message : String(error || "")
+  if (!raw || isHtmlErrorContent(raw)) return "图像提示词反推服务暂时不可用，请稍后重试"
+  return raw
+    .replace(/Dify\s*API/gi, "图像提示词服务")
+    .replace(/Dify/gi, "图像提示词服务")
+    .replace(/CHATFLOW_REVERSE_FAILED:\d+/g, "")
+    .replace(/WORKFLOW_APP_FAILED:\d+/g, "")
+    .trim() || "图像提示词反推服务暂时不可用，请稍后重试"
+}
+
 function sniffImageType(bytes: Uint8Array) {
   if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "image/jpeg"
   if (
@@ -100,6 +111,16 @@ async function uploadFileToDify(file: File, userId: string, apiKey: string) {
 }
 
 async function runReverseChatflow(apiKey: string, userId: string, inputs: Record<string, unknown>) {
+  const imageFile = asRecord(inputs.image)
+  const chatInputs = {
+    target_model: inputs.target_model,
+    model: inputs.model,
+    "gpt-image-2": inputs["gpt-image-2"],
+    nano_banana: inputs.nano_banana,
+    output_language: inputs.output_language,
+    instruction: inputs.instruction,
+  }
+
   const response = await internalDifyFetch(`${DIFY_BASE_URL}/chat-messages`, {
     method: "POST",
     headers: {
@@ -107,11 +128,11 @@ async function runReverseChatflow(apiKey: string, userId: string, inputs: Record
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      inputs,
+      inputs: chatInputs,
       query: "请根据我上传的图片反推出可用于图像生成的详细提示词。",
       response_mode: "blocking",
       user: userId,
-      files: [inputs.image],
+      files: [imageFile],
     }),
   })
 
@@ -241,7 +262,7 @@ export async function POST(request: NextRequest) {
       rawPayload = await runReverseChatflow(apiKey, auth.user!.id, inputs)
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      if (!/app mode matches|workflow|CHATFLOW_REVERSE_FAILED:404|CHATFLOW_REVERSE_FAILED:400/i.test(message)) {
+      if (!/app mode matches|workflow|CHATFLOW_REVERSE_FAILED:404/i.test(message)) {
         throw error
       }
       const workflow = await runDifyWorkflow({
@@ -353,6 +374,6 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error("[ImagePromptReverse] failed:", error instanceof Error ? error.message : error)
-    return NextResponse.json({ error: "图像提示词反推服务暂时不可用，请稍后重试", code: "REVERSE_FAILED" }, { status: 502 })
+    return NextResponse.json({ error: sanitizeReverseError(error), code: "REVERSE_FAILED" }, { status: 502 })
   }
 }
