@@ -167,6 +167,20 @@ function buildGptImageV11Inputs(inputs: unknown): GptImageV11Inputs {
   }
 }
 
+function buildGptImageV11DifyInputs(inputs: unknown) {
+  const imageInputs = buildGptImageV11Inputs(inputs)
+  const referenceImageUrlsText = imageInputs.reference_image_urls.join("\n")
+
+  return {
+    ...imageInputs,
+    reference_image_urls: referenceImageUrlsText,
+    image_urls: referenceImageUrlsText,
+    input_image_url: imageInputs.reference_image_url,
+    source_image_url: imageInputs.reference_image_url,
+    source_images: referenceImageUrlsText,
+  }
+}
+
 function calculateGptImageGatewayCredits(inputs: GptImageV11Inputs): number {
   const modelType = inputs.model as ModelType
   if (modelType === "gpt-image-2") {
@@ -233,8 +247,10 @@ function buildImageWorkflowInputs(query: string, inputs: unknown) {
       : []
   const imageUrlsText = safeReferenceImageUrls.join("\n")
 
+  const { model: _model, provider: _provider, ...safeRecord } = record
+
   return {
-    ...record,
+    ...safeRecord,
     image_prompt: query,
     prompt: typeof record.prompt === "string" && record.prompt.trim() ? record.prompt : query,
     query,
@@ -1343,7 +1359,7 @@ export async function POST(request: NextRequest) {
     logPerf(requestId, "api_enter", apiStartedAt, { model: model || "general-chat" })
     logPerf(requestId, "auth_done", apiStartedAt)
     const taskKind = isGptImageGatewayRequest ? "image" : model === "open-claw" ? "openclaw" : isAllInOneAgent ? "workflow" : "dify"
-    if (hasGptImageModelInput(inputs) && !isGptImageGatewayRequest) {
+    if (hasGptImageModelInput(inputs) && !isGptImageGatewayRequest && model !== "banana-2-pro") {
       console.warn(`🚫 [媒体权限] 图片模型请求顶层 model 不匹配，拒绝绕过媒体计费: model=${model || "empty"}`)
       return new Response(
         JSON.stringify({
@@ -1625,7 +1641,7 @@ export async function POST(request: NextRequest) {
             const isGptImage2 = isGptImageGatewayRequest
             difyRequest = {
                 inputs: isGptImage2
-                  ? buildGptImageV11Inputs(inputs)
+                  ? buildGptImageV11DifyInputs(inputs)
                   : isAllInOneAgent
                     ? buildAllInOneAgentWorkflowInputs(effectiveQuery, inputs, fileUrls)
                     : inputs || {},
