@@ -27,4 +27,16 @@ describe("Suno UI shape", () => {
     expect(source).toContain("下载歌曲")
     expect(source).toContain("你不用手动查询，系统会自动刷新结果。")
   })
+
+  it("shows beginner help in a prominent expandable guide", () => {
+    const pageSource = read("components/suno/SunoPage.tsx")
+    const helpSource = read("components/suno/SunoHelp.tsx")
+
+    expect(pageSource).toContain("<SunoHelp />")
+    expect(helpSource).toContain("新手必看")
+    expect(helpSource).toContain("智能音乐生成使用帮助")
+    expect(helpSource).toContain("展开完整使用帮助文档")
+    expect(helpSource).toContain("第一次怎么用")
+    expect(helpSource).toContain("生成后怎么看结果")
+  })
 })

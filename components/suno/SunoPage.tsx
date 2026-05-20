@@ -35,6 +35,7 @@ import {
   parseDifyResult,
   type SunoWorkflowResult,
 } from "@/lib/suno-workflow-schema"
+import { SunoHelp } from "@/components/suno/SunoHelp"
 import { cn } from "@/lib/utils"
 
 type SongStatus = "idle" | "submitting" | "waiting" | "ready" | "failed"
@@ -592,6 +593,8 @@ export function SunoPage() {
             <div>{elapsedText || "无需手动查询"}</div>
           </div>
         </header>
+
+        <SunoHelp />
 
         <div className="grid gap-6 lg:grid-cols-[minmax(360px,0.82fr)_minmax(0,1.18fr)]">
           <section className="grid gap-5">
