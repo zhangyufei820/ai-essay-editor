@@ -64,6 +64,7 @@ export function canUseImage2(user?: Image2PermissionUser): boolean {
   if (!user) return false
   const userId = user.id || user.user_id || null
   if (!userId) return false
+  if (process.env.IMAGE2_TEST_OPEN_ACCESS === "true") return true
   if (isSubscribedUser(user.membership_status || null)) return true
   if (isAllowlistedUserId(userId)) return true
   if (isAllowlistedEmail(user.email)) return true

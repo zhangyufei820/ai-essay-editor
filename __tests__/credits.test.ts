@@ -96,9 +96,11 @@ describe('credits helpers', () => {
     const oldUserIds = process.env.IMAGE2_WHITELIST_USER_IDS
     const oldEmails = process.env.IMAGE2_WHITELIST_EMAILS
     const oldLegacy = process.env.GPT_IMAGE_2_ALLOWLIST
+    const oldOpenAccess = process.env.IMAGE2_TEST_OPEN_ACCESS
     process.env.IMAGE2_WHITELIST_USER_IDS = 'admin-user, test-user '
     process.env.IMAGE2_WHITELIST_EMAILS = 'admin@example.com, TEST@example.com '
     process.env.GPT_IMAGE_2_ALLOWLIST = 'legacy-user'
+    delete process.env.IMAGE2_TEST_OPEN_ACCESS
 
     expect(parseAllowlistEnv(' admin@example.com, , test@example.com ')).toEqual(['admin@example.com', 'test@example.com'])
     expect(canUseImage2(null)).toBe(false)
@@ -116,6 +118,19 @@ describe('credits helpers', () => {
     else process.env.IMAGE2_WHITELIST_EMAILS = oldEmails
     if (oldLegacy === undefined) delete process.env.GPT_IMAGE_2_ALLOWLIST
     else process.env.GPT_IMAGE_2_ALLOWLIST = oldLegacy
+    if (oldOpenAccess === undefined) delete process.env.IMAGE2_TEST_OPEN_ACCESS
+    else process.env.IMAGE2_TEST_OPEN_ACCESS = oldOpenAccess
+  })
+
+  it('can temporarily open GPT Image 2 for logged-in users during provider stability tests', () => {
+    const oldOpenAccess = process.env.IMAGE2_TEST_OPEN_ACCESS
+    process.env.IMAGE2_TEST_OPEN_ACCESS = 'true'
+
+    expect(canUseImage2({ user_id: 'non-member-user' })).toBe(true)
+    expect(canUseImage2(null)).toBe(false)
+
+    if (oldOpenAccess === undefined) delete process.env.IMAGE2_TEST_OPEN_ACCESS
+    else process.env.IMAGE2_TEST_OPEN_ACCESS = oldOpenAccess
   })
 
   it('lets Image 2 server permissions fall back to persisted subscription flags', () => {
