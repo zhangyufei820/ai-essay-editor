@@ -25,7 +25,7 @@ function normalizeDifyBaseUrl(value: string | undefined) {
 
 function getDifyConfig() {
   const baseUrl = normalizeDifyBaseUrl(process.env.DIFY_INTERNAL_URL || process.env.DIFY_BASE_URL)
-  const apiKey = process.env.DIFY_API_KEY || ""
+  const apiKey = process.env.SUNO_DIFY_API_KEY || ""
   const workflowUser = process.env.DIFY_WORKFLOW_USER || "website-user"
   const gatewayBaseUrl = (process.env.SUNO_GATEWAY_BASE_URL || "").replace(/\/+$/, "")
   const gatewayApiKey = process.env.SUNO_GATEWAY_API_KEY || ""
@@ -46,7 +46,7 @@ async function readDifyJson(response: Response) {
 function assertConfigured() {
   const config = getDifyConfig()
   const missing = [
-    !config.apiKey && "DIFY_API_KEY",
+    !config.apiKey && "SUNO_DIFY_API_KEY",
     !config.gatewayBaseUrl && "SUNO_GATEWAY_BASE_URL",
     !config.gatewayApiKey && "SUNO_GATEWAY_API_KEY",
   ].filter(Boolean)

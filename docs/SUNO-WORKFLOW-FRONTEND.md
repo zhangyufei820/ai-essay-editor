@@ -18,11 +18,15 @@ POST /api/suno/run
 
 ```env
 DIFY_BASE_URL=https://api.dify.ai/v1
-DIFY_API_KEY=your_dify_workflow_app_key
+SUNO_DIFY_API_KEY=your_dify_workflow_app_key
 DIFY_WORKFLOW_USER=website-user
 SUNO_GATEWAY_BASE_URL=http://vivaapi-suno-gateway:8000
 SUNO_GATEWAY_API_KEY=your_suno_gateway_key
 ```
+
+`SUNO_DIFY_API_KEY` 必须填写 Dify Workflow「Suno 服务器网关调用器」应用的 App API Key。不要复用聊天助手、Agent 或文本生成应用的 Key，否则 Dify 会返回“应用模式和接口不匹配”。
+
+Suno 前端不会回退使用默认 `DIFY_API_KEY`。如果没有配置 `SUNO_DIFY_API_KEY`，页面会提示“音乐工作流未配置”，这是为了避免误把聊天应用 Key 发到 Workflow 接口。
 
 自托管 Dify 推荐在服务器内网使用：
 

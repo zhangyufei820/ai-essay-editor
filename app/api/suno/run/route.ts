@@ -144,6 +144,9 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     const message = sanitizeErrorMessage(error)
     const status = message.startsWith("SUNO_WORKFLOW_CONFIG_MISSING") ? 503 : 500
-    return NextResponse.json({ success: false, error: message }, { status })
+    const publicMessage = message.startsWith("SUNO_WORKFLOW_CONFIG_MISSING")
+      ? "音乐工作流未配置：请在服务器环境变量中设置 SUNO_DIFY_API_KEY，并确认它是 Dify Workflow「Suno 服务器网关调用器」的 App API Key。"
+      : message
+    return NextResponse.json({ success: false, error: publicMessage }, { status })
   }
 }

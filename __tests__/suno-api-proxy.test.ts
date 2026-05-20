@@ -38,6 +38,7 @@ describe("POST /api/suno/run", () => {
   beforeEach(() => {
     jest.clearAllMocks()
     process.env.DIFY_API_KEY = "dify-secret"
+    process.env.SUNO_DIFY_API_KEY = "suno-workflow-secret"
     process.env.SUNO_GATEWAY_BASE_URL = "http://vivaapi-suno-gateway:8000"
     process.env.SUNO_GATEWAY_API_KEY = "gateway-secret"
     runWorkflow.mockResolvedValue({
@@ -73,6 +74,7 @@ describe("POST /api/suno/run", () => {
       }),
     }))
     expect(JSON.stringify(json)).not.toContain("dify-secret")
+    expect(JSON.stringify(json)).not.toContain("suno-workflow-secret")
     expect(JSON.stringify(json)).not.toContain("gateway-secret")
     expect(ensureSunoCredits).toHaveBeenCalledWith("user-1")
     expect(chargeSunoBaseCredits).toHaveBeenCalledWith(expect.objectContaining({
