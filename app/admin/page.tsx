@@ -18,8 +18,9 @@ import {
   TabsV2List as TabsList,
   TabsV2Trigger as TabsTrigger
 } from "@/components/ui/v2"
+import { getVerifiedAuthHeaders } from "@/lib/client-auth"
 import { useState, useEffect, useCallback } from "react"
-import { Users, CreditCard, BarChart3, Lock, Eye, EyeOff, RefreshCw, Search, DollarSign, TrendingUp, UserCheck, Activity, AlertCircle, MessageSquareText, Download } from "lucide-react"
+import { Users, CreditCard, BarChart3, Lock, Eye, EyeOff, RefreshCw, Search, DollarSign, TrendingUp, UserCheck, Activity, AlertCircle, MessageSquareText, Download, ShieldAlert } from "lucide-react"
 
 interface StatsData {
   totalUsers: number
@@ -120,6 +121,45 @@ interface TrialDashboardData {
   }>
 }
 
+interface FreeTrialMonitorData {
+  runtimeFlags: {
+    campaignEnabled: boolean
+    consumptionEnabled: boolean
+    autoPromptEnabled: boolean
+    monitorEnabled: boolean
+  }
+  recentRuns: Array<{
+    id: string
+    started_at: string
+    finished_at: string | null
+    status: string
+    checks_json: Record<string, unknown>
+    actions_json: Record<string, unknown>
+    error_message: string | null
+  }>
+  recentIncidents: Array<{
+    id: string
+    incident_type: string
+    severity: "info" | "warning" | "p1" | "p0"
+    status: string
+    title: string
+    details: Record<string, unknown>
+    auto_action_taken: string | null
+    created_at: string
+  }>
+  openIncidents: Array<{
+    id: string
+    incident_type: string
+    severity: "p1" | "p0"
+    status: string
+    title: string
+    created_at: string
+  }>
+  hasOpenP0P1: boolean
+  lastRunAt: string | null
+  lastRunStatus: string | null
+}
+
 export default function AdminPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [password, setPassword] = useState("")
@@ -145,9 +185,16 @@ export default function AdminPage() {
   const [users, setUsers] = useState<UserData[]>([])
   const [orders, setOrders] = useState<OrderData[]>([])
   const [trialDashboard, setTrialDashboard] = useState<TrialDashboardData | null>(null)
+  const [trialMonitor, setTrialMonitor] = useState<FreeTrialMonitorData | null>(null)
   const [selectedUser, setSelectedUser] = useState<string | null>(null)
   const [userDetails, setUserDetails] = useState<UserDetails | null>(null)
   const [userDetailsOpen, setUserDetailsOpen] = useState(false)
+
+  const getAdminRequestHeaders = useCallback(async () => {
+    const token = localStorage.getItem('admin_token')
+    if (token) return { Authorization: `Bearer ${token}` }
+    return getVerifiedAuthHeaders()
+  }, [])
   
   // 获取统计数据
   const fetchStats = useCallback(async () => {
@@ -233,13 +280,13 @@ export default function AdminPage() {
   }, [])
 
   // 获取共创体验看板
-  const fetchTrialDashboard = useCallback(async () => {
+  const fetchTrialDashboard = useCallback(async (): Promise<boolean> => {
     try {
-      const token = localStorage.getItem('admin_token')
-      if (!token) return
+      const headers = await getAdminRequestHeaders()
+      if (!headers.Authorization) return false
 
       const response = await fetch('/api/admin/trial-dashboard', {
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers,
       })
 
       if (!response.ok) {
@@ -278,34 +325,82 @@ export default function AdminPage() {
         },
         recentFeedback: Array.isArray(data.recentFeedback) ? data.recentFeedback : [],
       })
+      return true
     } catch (error) {
       console.error('获取共创体验看板失败:', error)
       setErrorMessage("共创体验看板加载失败，请检查 trial-dashboard 接口和体验计划数据表。")
+      return false
     }
-  }, [])
+  }, [getAdminRequestHeaders])
+
+  const fetchTrialMonitor = useCallback(async (): Promise<boolean> => {
+    try {
+      const headers = await getAdminRequestHeaders()
+      if (!headers.Authorization) return false
+
+      const response = await fetch('/api/admin/free-trial-monitor', { headers })
+      if (!response.ok) {
+        throw new Error("trial monitor request failed")
+      }
+
+      const data = await response.json()
+      if (!data.ok) {
+        throw new Error(data.error || "trial monitor unavailable")
+      }
+
+      setTrialMonitor({
+        runtimeFlags: {
+          campaignEnabled: data.runtimeFlags?.campaignEnabled !== false,
+          consumptionEnabled: data.runtimeFlags?.consumptionEnabled !== false,
+          autoPromptEnabled: data.runtimeFlags?.autoPromptEnabled !== false,
+          monitorEnabled: data.runtimeFlags?.monitorEnabled !== false,
+        },
+        recentRuns: Array.isArray(data.recentRuns) ? data.recentRuns : [],
+        recentIncidents: Array.isArray(data.recentIncidents) ? data.recentIncidents : [],
+        openIncidents: Array.isArray(data.openIncidents) ? data.openIncidents : [],
+        hasOpenP0P1: Boolean(data.hasOpenP0P1),
+        lastRunAt: data.lastRunAt || null,
+        lastRunStatus: data.lastRunStatus || null,
+      })
+      return true
+    } catch (error) {
+      console.error('获取共创体验监控失败:', error)
+      setErrorMessage("共创体验监控状态加载失败，请检查 free-trial-monitor 接口和监控数据表。")
+      return false
+    }
+  }, [getAdminRequestHeaders])
 
   // 获取所有数据
   const fetchAllData = useCallback(async () => {
     setLoading(true)
     setErrorMessage("")
-    try {
-      await Promise.all([
-        fetchStats(),
-        fetchUsers(),
-        fetchOrders(),
-        fetchTrialDashboard()
-      ])
-    } catch (error) {
-      console.error('获取数据失败:', error)
+    const results = await Promise.allSettled([
+      fetchStats(),
+      fetchUsers(),
+      fetchOrders(),
+      fetchTrialDashboard(),
+      fetchTrialMonitor(),
+    ])
+
+    const failedCount = results.filter((result) => result.status === "rejected").length
+    if (failedCount === results.length) {
       setErrorMessage("后台数据加载失败，请稍后重试；如果持续失败，请检查服务日志、环境变量和 Supabase 连接状态。")
-    } finally {
-      setLoading(false)
     }
-  }, [fetchStats, fetchUsers, fetchOrders, fetchTrialDashboard])
+    setLoading(false)
+  }, [fetchStats, fetchUsers, fetchOrders, fetchTrialDashboard, fetchTrialMonitor])
 
   // 检查本地存储的 token 是否有效
   useEffect(() => {
     const token = localStorage.getItem('admin_token')
+    const tryVerifiedUserAdmin = async () => {
+      const ok = await fetchTrialDashboard()
+      if (ok) {
+        await fetchTrialMonitor()
+        setIsAuthenticated(true)
+        setActiveTab("trial")
+      }
+    }
+
     if (token) {
       // 验证 token
       fetch('/api/admin/verify', {
@@ -320,13 +415,17 @@ export default function AdminPage() {
         } else {
           // Token 无效，清除本地存储
           localStorage.removeItem('admin_token')
+          tryVerifiedUserAdmin()
         }
       })
       .catch(() => {
         localStorage.removeItem('admin_token')
+        tryVerifiedUserAdmin()
       })
+    } else {
+      tryVerifiedUserAdmin()
     }
-  }, [fetchAllData])
+  }, [fetchAllData, fetchTrialDashboard, fetchTrialMonitor])
   
   // 获取用户详情
   const fetchUserDetails = async (userId: string) => {
@@ -437,16 +536,16 @@ export default function AdminPage() {
     return fallback || "未填写开放反馈"
   }
 
-  const downloadTrialExport = (type: string, range = "7d") => {
-    const token = localStorage.getItem('admin_token')
-    if (!token) return
+  const downloadTrialExport = async (type: string, range = "7d") => {
+    const headers = await getAdminRequestHeaders()
+    if (!headers.Authorization) return
 
     const url = new URL('/api/admin/trial-dashboard/export', window.location.origin)
     url.searchParams.set('type', type)
     url.searchParams.set('range', range)
 
     fetch(url.toString(), {
-      headers: { 'Authorization': `Bearer ${token}` },
+      headers,
     })
       .then(async (response) => {
         if (!response.ok) {
@@ -468,6 +567,54 @@ export default function AdminPage() {
         console.error('导出 CSV 失败:', error)
         setErrorMessage("CSV 导出失败，请检查管理员权限和导出接口。")
       })
+  }
+
+  const updateRuntimeFlag = async (action: string, label: string) => {
+    const confirmed = window.confirm(`确认要${label}吗？这个操作会立即影响线上共创体验计划。`)
+    if (!confirmed) return
+
+    try {
+      const headers = await getAdminRequestHeaders()
+      if (!headers.Authorization) {
+        setErrorMessage("缺少管理员登录态，无法更新运行时开关。")
+        return
+      }
+
+      const response = await fetch('/api/admin/free-trial-monitor', {
+        method: 'POST',
+        headers: {
+          ...headers,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action,
+          reason: `admin_manual_${action}`,
+        }),
+      })
+      const data = await response.json().catch(() => null)
+      if (!response.ok || !data?.ok) {
+        throw new Error(data?.error || "runtime flag update failed")
+      }
+      setTrialMonitor({
+        runtimeFlags: {
+          campaignEnabled: data.runtimeFlags?.campaignEnabled !== false,
+          consumptionEnabled: data.runtimeFlags?.consumptionEnabled !== false,
+          autoPromptEnabled: data.runtimeFlags?.autoPromptEnabled !== false,
+          monitorEnabled: data.runtimeFlags?.monitorEnabled !== false,
+        },
+        recentRuns: Array.isArray(data.recentRuns) ? data.recentRuns : [],
+        recentIncidents: Array.isArray(data.recentIncidents) ? data.recentIncidents : [],
+        openIncidents: Array.isArray(data.openIncidents) ? data.openIncidents : [],
+        hasOpenP0P1: Boolean(data.hasOpenP0P1),
+        lastRunAt: data.lastRunAt || null,
+        lastRunStatus: data.lastRunStatus || null,
+      })
+      setErrorMessage("")
+      await fetchTrialDashboard()
+    } catch (error) {
+      console.error('更新运行时开关失败:', error)
+      setErrorMessage("运行时开关更新失败，请检查管理员权限和监控接口。")
+    }
   }
   
   // 如果未认证，显示登录界面
@@ -987,11 +1134,12 @@ export default function AdminPage() {
                 <CardHeader>
                   <CardTitle>上线开关状态</CardTitle>
                 </CardHeader>
-                <CardContent className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                <CardContent className="grid grid-cols-1 gap-3 md:grid-cols-4">
                   {[
-                    ["活动弹窗", "NEXT_PUBLIC_FREE_TRIAL_CAMPAIGN_ENABLED", trialDashboard?.featureFlags?.campaignEnabled],
+                    ["活动弹窗", "runtime + NEXT_PUBLIC_FREE_TRIAL_CAMPAIGN_ENABLED", trialMonitor?.runtimeFlags.campaignEnabled ?? trialDashboard?.featureFlags?.campaignEnabled],
                     ["批量发放", "FREE_TRIAL_BATCH_GRANT_ENABLED", trialDashboard?.featureFlags?.batchGrantEnabled],
-                    ["Trial 消耗", "FREE_TRIAL_CONSUMPTION_ENABLED", trialDashboard?.featureFlags?.consumptionEnabled],
+                    ["Trial 消耗", "runtime + FREE_TRIAL_CONSUMPTION_ENABLED", trialMonitor?.runtimeFlags.consumptionEnabled ?? trialDashboard?.featureFlags?.consumptionEnabled],
+                    ["自动问卷", "free_trial_auto_prompt_enabled", trialMonitor?.runtimeFlags.autoPromptEnabled],
                   ].map(([label, envName, enabled]) => (
                     <div
                       key={String(envName)}
@@ -1008,6 +1156,121 @@ export default function AdminPage() {
                       </div>
                     </div>
                   ))}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between gap-3">
+                    <CardTitle className="flex items-center gap-2">
+                      <ShieldAlert className="h-5 w-5" />
+                      监控
+                    </CardTitle>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={async () => {
+                        await fetchTrialMonitor()
+                      }}
+                      className="flex items-center gap-2"
+                    >
+                      <RefreshCw className="h-4 w-4" />
+                      刷新监控
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-5">
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+                    {[
+                      ["Campaign", trialMonitor?.runtimeFlags.campaignEnabled],
+                      ["Consumption", trialMonitor?.runtimeFlags.consumptionEnabled],
+                      ["Auto Prompt", trialMonitor?.runtimeFlags.autoPromptEnabled],
+                      ["Monitor", trialMonitor?.runtimeFlags.monitorEnabled],
+                    ].map(([label, enabled]) => (
+                      <div key={String(label)} className="rounded-[var(--radius-soft)] border border-[var(--paper-200)] bg-white p-4">
+                        <p className="text-sm text-[var(--ink-600)]">{label}</p>
+                        <Badge className="mt-2" variant={enabled === false ? "seal" : "paper"}>
+                          {enabled === false ? "关闭" : "开启"}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                    <div className="rounded-[var(--radius-soft)] border border-[var(--paper-200)] bg-[var(--paper-50)] p-4">
+                      <p className="text-sm text-[var(--ink-600)]">最近一次监控</p>
+                      <p className="mt-2 font-semibold text-[var(--ink-900)]">{formatDate(trialMonitor?.lastRunAt || undefined)}</p>
+                    </div>
+                    <div className="rounded-[var(--radius-soft)] border border-[var(--paper-200)] bg-[var(--paper-50)] p-4">
+                      <p className="text-sm text-[var(--ink-600)]">最近状态</p>
+                      <Badge className="mt-2" variant={trialMonitor?.lastRunStatus === "failed" ? "seal" : "paper"}>
+                        {trialMonitor?.lastRunStatus || "暂无"}
+                      </Badge>
+                    </div>
+                    <div className="rounded-[var(--radius-soft)] border border-[var(--paper-200)] bg-[var(--paper-50)] p-4">
+                      <p className="text-sm text-[var(--ink-600)]">Open P0/P1</p>
+                      <p className="mt-2 text-2xl font-bold text-[var(--ink-900)]">
+                        {(trialMonitor?.openIncidents.length || 0).toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-2 md:grid-cols-4">
+                    <Button variant="outline" onClick={() => updateRuntimeFlag("disable_consumption", "关闭 trial 免费消耗")}>
+                      关闭 trial 免费消耗
+                    </Button>
+                    <Button variant="outline" onClick={() => updateRuntimeFlag("disable_campaign", "关闭活动弹窗")}>
+                      关闭活动弹窗
+                    </Button>
+                    <Button variant="outline" onClick={() => updateRuntimeFlag("disable_auto_prompt", "关闭自动问卷弹出")}>
+                      关闭自动问卷
+                    </Button>
+                    <Button variant="outline" onClick={() => updateRuntimeFlag("disable_monitor", "关闭监控自动止损")}>
+                      关闭自动止损
+                    </Button>
+                    <Button variant="primary" onClick={() => updateRuntimeFlag("enable_consumption", "重新开启 trial 免费消耗")}>
+                      开启 trial 免费消耗
+                    </Button>
+                    <Button variant="primary" onClick={() => updateRuntimeFlag("enable_campaign", "重新开启活动弹窗")}>
+                      开启活动弹窗
+                    </Button>
+                    <Button variant="primary" onClick={() => updateRuntimeFlag("enable_auto_prompt", "重新开启自动问卷弹出")}>
+                      开启自动问卷
+                    </Button>
+                    <Button variant="primary" onClick={() => updateRuntimeFlag("enable_monitor", "重新开启监控自动止损")}>
+                      开启自动止损
+                    </Button>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b">
+                          <th className="px-4 py-3 text-left">级别</th>
+                          <th className="px-4 py-3 text-left">状态</th>
+                          <th className="px-4 py-3 text-left">标题</th>
+                          <th className="px-4 py-3 text-left">自动动作</th>
+                          <th className="px-4 py-3 text-left">时间</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(trialMonitor?.recentIncidents || []).slice(0, 20).map((incident) => (
+                          <tr key={incident.id} className="border-b align-top hover:bg-[var(--paper-50)]">
+                            <td className="px-4 py-3">
+                              <Badge variant={incident.severity === "p0" ? "seal" : "paper"}>{incident.severity.toUpperCase()}</Badge>
+                            </td>
+                            <td className="px-4 py-3 text-sm">{incident.status}</td>
+                            <td className="px-4 py-3 text-sm font-medium text-[var(--ink-900)]">{incident.title}</td>
+                            <td className="px-4 py-3 text-sm text-[var(--ink-600)]">{incident.auto_action_taken || "无"}</td>
+                            <td className="px-4 py-3 text-sm text-[var(--ink-600)]">{formatDate(incident.created_at)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {(trialMonitor?.recentIncidents || []).length === 0 && (
+                      <div className="py-6 text-center text-sm text-[var(--ink-500)]">暂无监控事件。</div>
+                    )}
+                  </div>
                 </CardContent>
               </Card>
 

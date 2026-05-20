@@ -4,11 +4,18 @@
  */
 import { createClient } from '@supabase/supabase-js'
 import { randomBytes, timingSafeEqual } from 'crypto'
+import type { NextRequest } from 'next/server'
+import { getVerifiedUser } from '@/lib/auth/verified-user'
 import { assertSecureTlsConfiguration } from '@/lib/runtime-security'
 
 // 内存 fallback（表不存在时使用）
 const memoryTokenStore = new Map<string, { expires: number }>()
 let useMemoryFallback = false
+
+export type AdminRequestAccess =
+  | { ok: true; authMode: 'token'; token: string; userId: null }
+  | { ok: true; authMode: 'user_id'; token: null; userId: string }
+  | { ok: false; authMode: null; token: null; userId: null }
 
 function getConfiguredAdminPassword(): string | null {
   const adminPassword = process.env.ADMIN_PASSWORD?.trim()
@@ -17,6 +24,20 @@ function getConfiguredAdminPassword(): string | null {
 
 export function isAdminPasswordConfigured(): boolean {
   return getConfiguredAdminPassword() !== null
+}
+
+export function getConfiguredAdminUserIds(): Set<string> {
+  return new Set(
+    (process.env.ADMIN_USER_IDS || '')
+      .split(/[\s,;]+/)
+      .map((id) => id.trim())
+      .filter(Boolean),
+  )
+}
+
+export function isConfiguredAdminUser(userId: string | null | undefined): boolean {
+  if (!userId) return false
+  return getConfiguredAdminUserIds().has(userId)
 }
 
 const getSupabaseAdmin = () => {
@@ -113,6 +134,27 @@ export async function verifyAdminToken(token: string): Promise<boolean> {
   } catch {
     return false
   }
+}
+
+/**
+ * 验证管理后台请求。
+ * 兼容两种方式：
+ * 1. 旧后台密码登录生成的 admin token。
+ * 2. 当前登录用户 ID 命中 ADMIN_USER_IDS。
+ */
+export async function verifyAdminRequest(request: NextRequest): Promise<AdminRequestAccess> {
+  const token = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '').trim() || null
+
+  if (token && await verifyAdminToken(token)) {
+    return { ok: true, authMode: 'token', token, userId: null }
+  }
+
+  const user = await getVerifiedUser(request)
+  if (isConfiguredAdminUser(user?.id)) {
+    return { ok: true, authMode: 'user_id', token: null, userId: user!.id }
+  }
+
+  return { ok: false, authMode: null, token: null, userId: null }
 }
 
 /**
