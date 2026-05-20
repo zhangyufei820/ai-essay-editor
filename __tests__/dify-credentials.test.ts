@@ -7,16 +7,16 @@ describe("Dify credential selection", () => {
     warnSpy.mockRestore()
   })
 
-  it("uses the image gateway token for GPT Image 2", () => {
+  it("uses the dedicated Dify GPT Image chatflow key for GPT Image 2", () => {
     const selection = getDifyCredentialForModel("gpt-image-2", {
-      DIFY_GPT_IMAGE_API_KEY: "invalid-dify-app-key",
+      DIFY_GPT_IMAGE_API_KEY: "dify-gpt-image-key",
       DIFY_IMAGE_GATEWAY_TOKEN: "gateway-token",
       ESSAY_CORRECTION_API_KEY: "default-key",
     })
 
     expect(selection).toEqual({
-      credential: "gateway-token",
-      source: "DIFY_IMAGE_GATEWAY_TOKEN",
+      credential: "dify-gpt-image-key",
+      source: "DIFY_GPT_IMAGE_API_KEY",
     })
   })
 

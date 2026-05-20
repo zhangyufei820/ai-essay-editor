@@ -1538,134 +1538,6 @@ export async function POST(request: NextRequest) {
     
     console.log(`💰 [预检查] 模型: ${modelType} | 当前积分: ${currentCredits}`)
 
-    if (isGptImageGatewayRequest) {
-      const imageBillingModel = (billingModelType || "gpt-image-2") as ModelType
-      const imageCount = imageInputsForBilling?.n || 1
-      const imageDescription = `图片生成 - ${getModelDisplayName(imageBillingModel)} x${imageCount}`
-      const imageBillingMetadata = createBillingAuditMetadata({
-        userId,
-        actionType: "image_generation",
-        feature: imageBillingModel === "gpt-image-2" ? "image2" : "image",
-        appId: keySource || "GPT_IMAGE_GATEWAY",
-        workflowId: null,
-        modelId: imageBillingModel,
-        requestedAppId: keySource || "GPT_IMAGE_GATEWAY",
-        requestedWorkflowId: null,
-        requestedModelId: imageBillingModel,
-        pricingVersion: PRICING_VERSION,
-        usageSource: "fixed",
-        estimated: false,
-        promptTokens: 0,
-        completionTokens: 0,
-        totalTokens: 0,
-        chargedCredits: estimatedMinCost,
-        requestId: taskRun.requestId,
-        conversationId: effectiveConvId || (typeof conversation_id === "string" ? conversation_id : null),
-        messageId: typeof messageId === "string" ? messageId : null,
-        rawProviderMetadata: {
-          imageCount,
-          fixedCreditsPerImage: imageInputsForBilling ? getGptImageGatewayCreditsPerImage(imageInputsForBilling) : calculateActualCost(imageBillingModel),
-          imageSize: imageInputsForBilling?.size,
-          imageQuality: imageInputsForBilling?.quality,
-          inputs: imageInputsForBilling,
-        },
-        description: imageDescription,
-      })
-      console.log("🎨 [GPT Image] 使用直连图片网关，绕过 Dify HTTP 节点超时")
-      if (async_image_task === true) {
-        const taskId = await startImageGatewayTask({
-          query,
-          inputs,
-          userId,
-          requestId: taskRun.id,
-          traceId: taskRun.traceId,
-        })
-        const pollToken = signImageTaskPollToken({
-          requestId: taskRun.requestId,
-          taskId,
-          userId,
-        })
-
-        const charged = await spendCredits(
-          userId,
-          estimatedMinCost,
-          "consume",
-          imageDescription,
-          taskRun.requestId,
-          imageBillingMetadata,
-        )
-
-        if (!charged) {
-          await updateTaskRun(taskRun.id, {
-            status: "failed",
-            stage: "图片任务已提交但积分扣除失败",
-            progress: 100,
-            errorMessage: "积分扣除失败，请联系客服处理该图片任务",
-            errorCode: "IMAGE_CREDIT_DEDUCT_FAILED",
-          })
-          return Response.json({ error: "积分扣除失败，请联系客服处理该图片任务" }, { status: 500 })
-        }
-
-        return Response.json(
-          {
-            status: "running",
-            imageTaskId: taskId,
-            requestId: taskRun.requestId,
-            traceId: taskRun.traceId,
-            pollToken,
-          },
-          {
-            headers: {
-              "X-Request-Id": taskRun.requestId,
-              "X-Trace-Id": taskRun.traceId,
-            },
-          },
-        )
-      }
-
-      const directResponse = await callImageGatewayDirect(query, inputs)
-      if (directResponse.ok) {
-        const payload = await directResponse.clone().json().catch(() => ({}))
-        const charged = await spendCredits(
-          userId,
-          estimatedMinCost,
-          "consume",
-          imageDescription,
-          taskRun.requestId,
-          imageBillingMetadata,
-        )
-        if (!charged) {
-          await updateTaskRun(taskRun.id, {
-            status: "failed",
-            stage: "图片生成完成但积分扣除失败",
-            progress: 100,
-            errorMessage: "积分扣除失败，本次结果未结算",
-            errorCode: "IMAGE_CREDIT_DEDUCT_FAILED",
-          })
-          return Response.json({ error: "积分扣除失败，本次结果未结算" }, { status: 500 })
-        }
-        await updateTaskRun(taskRun.id, {
-          status: "succeeded",
-          stage: "图片生成完成",
-          progress: 100,
-          artifacts: extractArtifactsFromUnknown(payload),
-        })
-      } else {
-        const payload = await directResponse.clone().json().catch(() => ({}))
-        await updateTaskRun(taskRun.id, {
-          status: "failed",
-          stage: "图片生成失败",
-          progress: 100,
-          errorMessage: typeof payload?.error === "string" ? payload.error : "图片服务请求失败",
-          errorCode: "IMAGE_GATEWAY_DIRECT_FAILED",
-          sanitizedError: sanitizeForTrace(payload) as Record<string, unknown>,
-        })
-      }
-      directResponse.headers.set("X-Request-Id", taskRun.requestId)
-      directResponse.headers.set("X-Trace-Id", taskRun.traceId)
-      return directResponse
-    }
-
     // --- 3. 构造 Dify 请求函数 ---
     // 🔥 共享流状态：首字节探测 + 超时定时器（供 callDify 和 transformStream 共同访问）
     const streamStatus: {
@@ -1937,6 +1809,57 @@ export async function POST(request: NextRequest) {
 	              workflowRunId,
 	              artifacts: extractArtifactsFromUnknown(workflowDetail),
 	            })
+              const imageInputs = imageInputsForBilling || buildGptImageV11Inputs(inputs)
+              const imageBillingModel = (billingModelType || "gpt-image-2") as ModelType
+              const imageCount = imageInputs.n || 1
+              const imageDescription = `图片生成 - ${getModelDisplayName(imageBillingModel)} x${imageCount}`
+              const imageBillingMetadata = createBillingAuditMetadata({
+                userId,
+                actionType: "image_generation",
+                feature: imageBillingModel === "gpt-image-2" ? "image2" : "image",
+                appId: keySource || "DIFY_GPT_IMAGE_API_KEY",
+                workflowId: "gpt-image-2",
+                modelId: imageBillingModel,
+                requestedAppId: keySource || "DIFY_GPT_IMAGE_API_KEY",
+                requestedWorkflowId: "gpt-image-2",
+                requestedModelId: imageBillingModel,
+                pricingVersion: PRICING_VERSION,
+                usageSource: "fixed",
+                estimated: false,
+                promptTokens: 0,
+                completionTokens: 0,
+                totalTokens: 0,
+                chargedCredits: estimatedMinCost,
+                requestId: taskRun.requestId,
+                conversationId: effectiveConvId || (typeof conversation_id === "string" ? conversation_id : null),
+                messageId: typeof messageId === "string" ? messageId : null,
+                rawProviderMetadata: {
+                  imageCount,
+                  fixedCreditsPerImage: getGptImageGatewayCreditsPerImage(imageInputs),
+                  imageSize: imageInputs.size,
+                  imageQuality: imageInputs.quality,
+                  inputs: imageInputs,
+                },
+                description: imageDescription,
+              })
+              const charged = await spendCredits(
+                userId,
+                estimatedMinCost,
+                "consume",
+                imageDescription,
+                taskRun.requestId,
+                imageBillingMetadata,
+              )
+              if (!charged) {
+                await updateTaskRun(taskRun.id, {
+                  status: "failed",
+                  stage: "图片生成完成但积分扣除失败",
+                  progress: 100,
+                  errorMessage: "积分扣除失败，本次结果未结算",
+                  errorCode: "IMAGE_CREDIT_DEDUCT_FAILED",
+                })
+                return Response.json({ error: "积分扣除失败，本次结果未结算" }, { status: 500 })
+              }
 	            return Response.json(
 	              {
 	                ...result,
@@ -1961,6 +1884,59 @@ export async function POST(request: NextRequest) {
 	          workflowRunId: typeof workflowRunId === "string" ? workflowRunId : null,
 	          artifacts: extractArtifactsFromUnknown(result),
 	        })
+        if (isWorkflowTerminalStatus(inlineStatus)) {
+          const imageInputs = imageInputsForBilling || buildGptImageV11Inputs(inputs)
+          const imageBillingModel = (billingModelType || "gpt-image-2") as ModelType
+          const imageCount = imageInputs.n || 1
+          const imageDescription = `图片生成 - ${getModelDisplayName(imageBillingModel)} x${imageCount}`
+          const imageBillingMetadata = createBillingAuditMetadata({
+            userId,
+            actionType: "image_generation",
+            feature: imageBillingModel === "gpt-image-2" ? "image2" : "image",
+            appId: keySource || "DIFY_GPT_IMAGE_API_KEY",
+            workflowId: "gpt-image-2",
+            modelId: imageBillingModel,
+            requestedAppId: keySource || "DIFY_GPT_IMAGE_API_KEY",
+            requestedWorkflowId: "gpt-image-2",
+            requestedModelId: imageBillingModel,
+            pricingVersion: PRICING_VERSION,
+            usageSource: "fixed",
+            estimated: false,
+            promptTokens: 0,
+            completionTokens: 0,
+            totalTokens: 0,
+            chargedCredits: estimatedMinCost,
+            requestId: taskRun.requestId,
+            conversationId: effectiveConvId || (typeof conversation_id === "string" ? conversation_id : null),
+            messageId: typeof messageId === "string" ? messageId : null,
+            rawProviderMetadata: {
+              imageCount,
+              fixedCreditsPerImage: getGptImageGatewayCreditsPerImage(imageInputs),
+              imageSize: imageInputs.size,
+              imageQuality: imageInputs.quality,
+              inputs: imageInputs,
+            },
+            description: imageDescription,
+          })
+          const charged = await spendCredits(
+            userId,
+            estimatedMinCost,
+            "consume",
+            imageDescription,
+            taskRun.requestId,
+            imageBillingMetadata,
+          )
+          if (!charged) {
+            await updateTaskRun(taskRun.id, {
+              status: "failed",
+              stage: "图片生成完成但积分扣除失败",
+              progress: 100,
+              errorMessage: "积分扣除失败，本次结果未结算",
+              errorCode: "IMAGE_CREDIT_DEDUCT_FAILED",
+            })
+            return Response.json({ error: "积分扣除失败，本次结果未结算" }, { status: 500 })
+          }
+        }
 	        return Response.json(
 	          { ...result, requestId: taskRun.requestId, traceId: taskRun.traceId },
 	          {

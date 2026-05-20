@@ -103,25 +103,28 @@ describe('Sprint 5 payment / credits / membership guards', () => {
     expect(image2).not.toContain('return "GPT Image 2 当前仅订阅用户可用，请升级会员后使用。"')
   })
 
-  it('creates async GPT Image 2 task ownership before the client starts polling', () => {
+  it('routes GPT Image 2 through the Dify chatflow instead of direct gateway task submission', () => {
     const source = read('app/api/dify-chat/route.ts')
-    const awaitedCreate = source.indexOf('? await createTaskRun(createTaskRunInput)')
-    const startTask = source.indexOf('const taskId = await startImageGatewayTask')
+    const gptImageBranch = source.slice(source.indexOf('if (isGptImageGatewayRequest) {'), source.indexOf('console.log(`✅ [Dify请求] 成功，开始流式传输...`)'))
 
-    expect(source).toContain('const createTaskRunInput = {')
-    expect(source).toContain('isGptImageGatewayRequest && async_image_task === true')
-    expect(awaitedCreate).toBeGreaterThan(-1)
-    expect(startTask).toBeGreaterThan(awaitedCreate)
+    expect(source).toContain('const isGptImage2 = isGptImageGatewayRequest')
+    expect(source).toContain('const apiEndpoint = isWorkflow ? "/workflows/run" : "/chat-messages";')
+    expect(source).toContain('Authorization: `Bearer ${selectedCredential}`')
+    expect(source).toContain('response_mode: isGptImage2 ? "blocking" : "streaming"')
+    expect(source).toContain('[GPT Image V11] Chatflow request prepared')
+    expect(source).toContain('workflowId: "gpt-image-2"')
+    expect(source).toContain('usageSource: "fixed"')
+    expect(source).not.toContain('console.log("🎨 [GPT Image] 使用直连图片网关，绕过 Dify HTTP 节点超时")')
+    expect(gptImageBranch).not.toContain('startImageGatewayTask')
+    expect(gptImageBranch).not.toContain('callImageGatewayDirect')
   })
 
-  it('uses a signed poll token for async Image 2 task polling and keeps forbidden errors diagnosable', () => {
+  it('keeps legacy direct gateway polling errors diagnosable for existing async tasks', () => {
     const route = read('app/api/dify-chat/route.ts')
     const image2 = read('components/chat/gpt-image2-chat-interface.tsx')
 
     expect(route).toContain('signImageTaskPollToken')
     expect(route).toContain('verifyImageTaskPollToken')
-    expect(route).toContain('const pollToken = signImageTaskPollToken')
-    expect(route).toContain('pollToken,')
     expect(route).toContain('request.headers.get("X-Image-Task-Poll-Token")')
     expect(route).toContain('code: "IMAGE_TASK_FORBIDDEN"')
     expect(route).toContain('code: "IMAGE2_ACCESS_DENIED"')
