@@ -51,6 +51,9 @@ describe("Suno UI shape", () => {
     const source = read("components/suno/SunoPage.tsx")
 
     expect(source).toContain("function extractErrorMessage")
+    expect(source).toContain("function toFriendlyErrorMessage")
+    expect(source).toContain("音乐生成服务暂时繁忙，请稍后再试。")
+    expect(source).toContain("没有找到这次歌曲任务，请重新提交生成。")
     expect(source).toContain("生成失败，请稍后再试或联系客服。")
     expect(source).not.toContain('setError(toText(next.error)')
   })

@@ -118,6 +118,25 @@ function extractErrorMessage(value: unknown): string {
   return ""
 }
 
+function toFriendlyErrorMessage(value: unknown) {
+  const text = extractErrorMessage(value).trim()
+  if (!text) return ""
+  const normalized = text.toLowerCase()
+  if (normalized.includes("503") || normalized.includes("service unavailable")) {
+    return "音乐生成服务暂时繁忙，请稍后再试。"
+  }
+  if (normalized.includes("task_not_exist")) {
+    return "没有找到这次歌曲任务，请重新提交生成。"
+  }
+  if (normalized.includes("unauthorized") || normalized.includes("401")) {
+    return "音乐服务授权异常，请联系客服处理。"
+  }
+  if (normalized.includes("timeout") || normalized.includes("timed out")) {
+    return "等待音乐生成超时，请稍后再试。"
+  }
+  return text
+}
+
 function readNested(value: unknown, path: Array<string | number>): unknown {
   let current = value as any
   for (const key of path) {
@@ -268,10 +287,12 @@ function SongPlayer({
   result,
   title,
   status,
+  error,
 }: {
   result: SongResult | null
   title: string
   status: SongStatus
+  error: string
 }) {
   const [current, setCurrent] = useState(0)
   const [playing, setPlaying] = useState(false)
@@ -280,6 +301,7 @@ function SongPlayer({
   const imageUrl = result?.image_urls?.[current] || result?.image_urls?.[0] || ""
   const audioUrl = audioUrls[current] || ""
   const ready = status === "ready" && audioUrl
+  const visibleError = error || toFriendlyErrorMessage(result?.error || result?.response_json)
 
   useEffect(() => {
     setCurrent(0)
@@ -361,10 +383,10 @@ function SongPlayer({
                 <div className="mt-8 rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-[var(--paper-100)] p-6 text-center">
                   {status === "failed" ? <AlertCircle className="mx-auto mb-3 size-9 text-[var(--seal-600)]" /> : <Loader2 className="mx-auto mb-3 size-9 animate-spin text-[var(--ink-600)]" />}
                   <p className="font-semibold text-[var(--ink-800)]">
-                    {status === "failed" ? "生成失败，请调整提示词后再试" : status === "idle" ? "输入歌词提示词后开始生成" : "歌曲生成通常需要几分钟"}
+                    {status === "failed" ? (visibleError || "生成失败，请稍后再试") : status === "idle" ? "输入歌词提示词后开始生成" : "歌曲生成通常需要几分钟"}
                   </p>
                   <p className="mt-2 text-sm leading-6 text-[var(--ink-500)]">
-                    {status === "failed" ? "如果已经扣费但没有结果，请保留任务记录联系客服核对。" : "你不用手动查询，系统会自动刷新结果。"}
+                    {status === "failed" ? "系统没有拿到可播放歌曲。请稍后重试；如果已经扣费，请保留任务记录联系客服核对。" : "你不用手动查询，系统会自动刷新结果。"}
                   </p>
                 </div>
               ) : (
@@ -514,7 +536,7 @@ export function SunoPage() {
       }
       if (isFailedStatus(next.status) || next.error) {
         setStatus("failed")
-        setError("歌曲生成失败，请换一个提示词再试。")
+        setError(toFriendlyErrorMessage(next.error || next.response_json) || "歌曲生成失败，请稍后再试。")
         return
       }
     } catch {
@@ -556,7 +578,7 @@ export function SunoPage() {
 
       if (!next.success) {
         setStatus("failed")
-        setError(extractErrorMessage(next.error || next.response_json) || "生成失败，请稍后再试或联系客服。")
+        setError(toFriendlyErrorMessage(next.error || next.response_json) || "生成失败，请稍后再试或联系客服。")
         return
       }
       if (next.audio_urls?.length) {
@@ -808,7 +830,7 @@ export function SunoPage() {
           </section>
 
           <section>
-            <SongPlayer result={result} title={title} status={status} />
+            <SongPlayer result={result} title={title} status={status} error={error} />
           </section>
         </div>
       </div>
