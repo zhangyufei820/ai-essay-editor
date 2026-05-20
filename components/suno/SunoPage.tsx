@@ -122,6 +122,9 @@ function toFriendlyErrorMessage(value: unknown) {
   const text = extractErrorMessage(value).trim()
   if (!text) return ""
   const normalized = text.toLowerCase()
+  if (text.includes("无可用渠道") || normalized.includes("distributor")) {
+    return "音乐供应商通道暂不可用，请稍后再试或联系客服处理。"
+  }
   if (text === "请求失败" || normalized.includes("provider_error")) {
     return "音乐生成服务暂时繁忙，请稍后再试。"
   }

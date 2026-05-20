@@ -469,6 +469,27 @@ function firstText(...values: unknown[]) {
   return ""
 }
 
+function findFirstTextByKeys(value: unknown, keys: Set<string>): string {
+  const parsed = parseJsonValue(value)
+  if (typeof parsed === "string") return keys.has("raw") ? parsed : ""
+  if (Array.isArray(parsed)) {
+    for (const item of parsed) {
+      const found = findFirstTextByKeys(item, keys)
+      if (found) return found
+    }
+    return ""
+  }
+  const record = readRecord(parsed)
+  for (const [key, item] of Object.entries(record)) {
+    if (keys.has(key) && typeof item === "string" && item.trim()) return item.trim()
+  }
+  for (const item of Object.values(record)) {
+    const found = findFirstTextByKeys(item, keys)
+    if (found) return found
+  }
+  return ""
+}
+
 function asStringArray(value: unknown): string[] {
   const parsed = parseJsonValue(value)
   if (Array.isArray(parsed)) {
@@ -489,6 +510,7 @@ export function parseDifyResult(payload: unknown): SunoWorkflowResult {
   const outputs = nestedOutputs || initialOutputs
   const responseJson = parseJsonValue(outputs.response_json || outputs.provider_response || outputs.data_json || initialResponseJson || payload)
   const provider = readRecord(responseJson)
+  const providerResponse = readRecord(provider.provider_response)
   const responseIsDifyEnvelope = isDifyWorkflowEnvelope(responseJson)
   const rootIsDifyEnvelope = isDifyWorkflowEnvelope(root)
   const outputSuccess = parseBooleanLike(outputs.success)
@@ -498,6 +520,7 @@ export function parseDifyResult(payload: unknown): SunoWorkflowResult {
   const providerTaskId = responseIsDifyEnvelope ? firstText(readDifyOutputs(responseJson)?.task_id) : extractTaskId(responseJson)
   const rootTaskId = rootIsDifyEnvelope ? "" : toStringValue(root.task_id)
   const providerClipId = responseIsDifyEnvelope ? firstText(readDifyOutputs(responseJson)?.clip_id) : extractClipId(responseJson)
+  const providerErrorText = findFirstTextByKeys(responseJson, new Set(["message", "error_message", "detail", "msg"]))
 
   return {
     success,
@@ -511,6 +534,6 @@ export function parseDifyResult(payload: unknown): SunoWorkflowResult {
     video_urls: asStringArray(outputs.video_urls).concat(asStringArray(provider.video_urls)),
     wav_url: firstText(outputs.wav_url, provider.wav_url),
     response_json: responseJson,
-    error: outputs.error || root.error || provider.error || (!success ? provider.message : null) || null,
+    error: firstText(providerErrorText, provider.message, providerResponse.error, provider.error, outputs.error, root.error) || null,
   }
 }

@@ -124,4 +124,30 @@ describe("parseDifyResult", () => {
     expect(result.success).toBe(true)
     expect(result.task_id).toBe("suno-task-id")
   })
+
+  it("extracts nested provider channel errors from response_json", () => {
+    const result = parseDifyResult({
+      data: {
+        status: "succeeded",
+        outputs: {
+          success: "false",
+          response_json: JSON.stringify({
+            success: false,
+            status_code: 503,
+            provider_code: "provider_error",
+            provider_response: {
+              error: {
+                message: "分组 default 下模型 suno_music 无可用渠道（distributor）",
+                type: "new_api_error",
+              },
+            },
+          }),
+          error: "请求失败",
+        },
+      },
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.error).toContain("suno_music 无可用渠道")
+  })
 })
