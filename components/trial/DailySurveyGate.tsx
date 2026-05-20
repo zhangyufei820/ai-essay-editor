@@ -200,15 +200,15 @@ export function DailySurveyGate({
     <>
       {children}
       <Dialog open={enabled && open} onOpenChange={handleOpenChange}>
-        <DialogContent className="max-w-xl">
-          <DialogHeader>
+        <DialogContent className="top-[max(0.75rem,env(safe-area-inset-top))] max-h-[calc(100dvh-1.5rem)] max-w-xl translate-y-0 grid-rows-[auto,minmax(0,1fr),auto] overflow-hidden p-4 sm:top-1/2 sm:max-h-[min(42rem,calc(100dvh-2rem))] sm:-translate-y-1/2 sm:p-6">
+          <DialogHeader className="shrink-0 pr-8">
             <DialogTitle>{title}</DialogTitle>
             <DialogDescription>
               {description || `填写后解锁今日 2000 trial 积分，用于${featureName}。稍后再说也可以，但不会解锁今日免费额度。`}
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4">
+          <div className="min-h-0 space-y-4 overflow-y-auto overscroll-contain pr-1 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] [-webkit-overflow-scrolling:touch]">
             {loading ? (
               <div className="rounded-[var(--radius-soft)] border border-[var(--paper-200)] bg-[var(--paper-100)] p-4 text-sm text-[var(--ink-600)]">
                 正在加载今日问卷...
@@ -283,7 +283,7 @@ export function DailySurveyGate({
             )}
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="shrink-0 border-t border-[var(--paper-200)] bg-[var(--paper-50)] pt-3">
             <Button
               type="button"
               variant="outline"
