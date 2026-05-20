@@ -108,6 +108,7 @@ describe('Sprint 5 payment / credits / membership guards', () => {
     const gptImageBranch = source.slice(source.indexOf('if (isGptImageGatewayRequest) {'), source.indexOf('console.log(`✅ [Dify请求] 成功，开始流式传输...`)'))
 
     expect(source).toContain('const isGptImage2 = isGptImageGatewayRequest')
+    expect(source).toContain('const isBananaChatflow = model === "banana-2-pro";')
     expect(source).toContain('const apiEndpoint = isWorkflow ? "/workflows/run" : "/chat-messages";')
     expect(source).toContain('Authorization: `Bearer ${selectedCredential}`')
     expect(source).toContain('response_mode: isGptImage2 ? "blocking" : "streaming"')

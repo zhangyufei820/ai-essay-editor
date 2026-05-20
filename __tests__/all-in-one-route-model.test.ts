@@ -26,12 +26,13 @@ describe("all-in-one route model sync", () => {
   it("uses Chatflow instead of Workflow for all-in-one-agent", () => {
     const text = routeSource()
 
-    expect(text).toMatch(/const\s+WORKFLOW_MODELS\s*=\s*new Set\(\[[^\]]*"banana-2-pro"[^\]]*"gemini-image"[^\]]*"vocab-card"[^\]]*\]\)/)
+    expect(text).toMatch(/const\s+WORKFLOW_MODELS\s*=\s*new Set\(\[[^\]]*"gemini-image"[^\]]*"vocab-card"[^\]]*\]\)/)
     expect(text).toContain('const ALL_IN_ONE_AGENT_MODEL = "all-in-one-agent"')
     expect(text).toContain('const SUPER_ALL_IN_ONE_AGENT_MODEL = "super-all-in-one-agent"')
     expect(text).not.toMatch(/const\s+WORKFLOW_MODELS\s*=\s*new Set\(\[[^\]]*["']all-in-one-agent["'][^\]]*\]\)/)
     expect(text).not.toMatch(/const\s+WORKFLOW_MODELS\s*=\s*new Set\(\[[^\]]*["']super-all-in-one-agent["'][^\]]*\]\)/)
     expect(text).toContain("buildAllInOneAgentWorkflowInputs(effectiveQuery, inputs, fileUrls)")
+    expect(text).not.toContain('"banana-2-pro", "gemini-image", "vocab-card"')
     expect(text).not.toContain('"banana-2-pro", "vocab-card", "all-in-one-agent"')
   })
 

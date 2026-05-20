@@ -197,7 +197,7 @@ function getGptImageGatewayCreditsPerImage(inputs: GptImageV11Inputs): number {
   return Math.ceil(calculateGptImageGatewayCredits({ ...inputs, n: 1 }))
 }
 
-const WORKFLOW_MODELS = new Set(["banana-2-pro", "gemini-image", "vocab-card"])
+const WORKFLOW_MODELS = new Set(["gemini-image", "vocab-card"])
 const MEMBERSHIP_PRODUCT_IDS = ["basic", "pro", "premium", "enterprise", "campus"]
 const ALL_IN_ONE_AGENT_MODEL = "all-in-one-agent"
 const SUPER_ALL_IN_ONE_AGENT_MODEL = "super-all-in-one-agent"
@@ -1590,10 +1590,11 @@ export async function POST(request: NextRequest) {
     const callDify = async (retryWithoutId = false) => {
         const currentConvId = retryWithoutId ? null : effectiveConvId;
 
-        // 🎨 Banana 与词境记忆卡使用 Workflow API；GPT Image V11 使用 Chatflow query + inputs。
+        // 🎨 Dify app mode matters: Banana is a chatflow, while Gemini image and vocab-card use Workflow API.
         const isWorkflow = WORKFLOW_MODELS.has(model || "");
         const isWorkflowImageModel = model === "banana-2-pro" || model === "gemini-image";
         const isVocabCardWorkflow = model === "vocab-card";
+        const isBananaChatflow = model === "banana-2-pro";
         const apiEndpoint = isWorkflow ? "/workflows/run" : "/chat-messages";
 
         let difyRequest: DifyWorkflowRequest | DifyChatRequest;
@@ -1639,12 +1640,24 @@ export async function POST(request: NextRequest) {
         } else {
             // 💬 Chat API 格式
             const isGptImage2 = isGptImageGatewayRequest
+            const chatInputs = isGptImage2
+              ? buildGptImageV11DifyInputs(inputs)
+              : isAllInOneAgent
+                ? buildAllInOneAgentWorkflowInputs(effectiveQuery, inputs, fileUrls)
+                : isBananaChatflow
+                  ? buildImageWorkflowInputs(effectiveQuery, inputs)
+                  : inputs || {}
+
+            if (isBananaChatflow && imageSize && chatInputs && typeof chatInputs === "object") {
+                const bananaInputs = chatInputs as Record<string, unknown>
+                bananaInputs.aspect_ratio = imageSize.ratio || "9:16"
+                bananaInputs.image_width = imageSize.width || 1080
+                bananaInputs.image_height = imageSize.height || 1920
+                console.log(`🎨 [Banana] 图片尺寸: ${imageSize.ratio} (${imageSize.width}x${imageSize.height})`)
+            }
+
             difyRequest = {
-                inputs: isGptImage2
-                  ? buildGptImageV11DifyInputs(inputs)
-                  : isAllInOneAgent
-                    ? buildAllInOneAgentWorkflowInputs(effectiveQuery, inputs, fileUrls)
-                    : inputs || {},
+                inputs: chatInputs,
                 query: isGptImage2 ? (query || "你好") : effectiveQuery,
                 response_mode: isGptImage2 ? "blocking" : "streaming",
                 user: userId || "default-user",
