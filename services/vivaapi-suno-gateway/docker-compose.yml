@@ -5,3 +5,12 @@ services:
     env_file: .env
     ports:
       - "${HOST_PORT:-8000}:8000"
+    networks:
+      default:
+      shenxiang-net:
+        aliases:
+          - vivaapi-suno-gateway
+
+networks:
+  shenxiang-net:
+    external: true
