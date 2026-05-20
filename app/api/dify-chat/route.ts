@@ -9,7 +9,6 @@ import {
 } from "@/lib/dify-types"
 import {
   calculateActualCost,
-  appendTextOutputLimitInstruction,
   getMaxOutputTokensForModel,
   getMinimumRequiredCredits,
   ModelType,
@@ -163,18 +162,6 @@ const WORKFLOW_MODELS = new Set(["banana-2-pro", "gemini-image", "vocab-card"])
 const MEMBERSHIP_PRODUCT_IDS = ["basic", "pro", "premium", "enterprise", "campus"]
 const ALL_IN_ONE_AGENT_MODEL = "all-in-one-agent"
 const SUPER_ALL_IN_ONE_AGENT_MODEL = "super-all-in-one-agent"
-
-function appendOpenClawInlineOutputInstruction(query: string) {
-  return [
-    query || "请分析",
-    "",
-    "【输出方式强制要求】",
-    "如果用户要求润色、改写、批改、论文修改、作文修改、总结或整理文档，请在最终回答中直接输出可复制的完整正文。",
-    "不要只生成或返回 doc/docx/pdf 文件、下载链接、附件卡片，或只回复“已保存到文件”。",
-    "不要生成“下载Word格式”“下载文档”“Word格式”等下载链接，也不要把结果保存为 Word 后让用户下载。",
-    "除非用户明确要求导出文件，否则最终回答只能包含对话框内可阅读、可复制的文本正文。",
-  ].join("\n")
-}
 
 function buildAllInOneAgentWorkflowInputs(query: string, inputs: unknown, fileUrls: string[]) {
   const record = inputs && typeof inputs === "object" ? inputs as Record<string, unknown> : {}
@@ -1210,9 +1197,8 @@ export async function POST(request: NextRequest) {
     const modelPrefix = model || "general-chat"
     const requestedModelType = (model || "general-chat") as ModelType
     const configuredMaxOutputTokens = getMaxOutputTokensForModel(requestedModelType)
-    const limitedQuery = appendTextOutputLimitInstruction(query || "你好", requestedModelType)
     const isAllInOneAgent = model === ALL_IN_ONE_AGENT_MODEL || model === SUPER_ALL_IN_ONE_AGENT_MODEL
-    const effectiveQuery = model === "open-claw" ? appendOpenClawInlineOutputInstruction(limitedQuery) : limitedQuery
+    const effectiveQuery = query || "你好"
     let effectiveConvId = normalizeDifyConversationId(conversation_id, modelPrefix)
     
     console.log(`🔍 [Dify-Chat] 接收请求: model=${model || "general-chat"} files=${difyFileIds.length} urls=${fileUrls.length}`)

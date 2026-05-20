@@ -238,8 +238,6 @@ export const MIN_TEXT_REQUIRED_CREDITS = TEXT_MIN_REQUIRED_CREDITS
 export const DAILY_FREE_LIMIT = 0
 export const LUXURY_THRESHOLD = Number.POSITIVE_INFINITY
 export const LUXURY_CREDITS = 12000
-export const TEXT_OUTPUT_LIMIT_MARKER = "[输出长度约束]"
-
 function normalizeInputTokens(usage?: TokenUsage): number {
   return Math.max(0, Number(usage?.promptTokens ?? usage?.inputTokens ?? 0) || 0)
 }
@@ -494,18 +492,8 @@ export function getMediaBillingConfig(model: ModelType): MediaBillingItem | unde
   return MEDIA_BILLING[model as keyof typeof MEDIA_BILLING]
 }
 
-export function buildTextOutputLimitInstruction(model: ModelType): string {
-  const maxOutputTokens = getMaxOutputTokensForModel(model)
-  if (!maxOutputTokens) return ""
-  return `${TEXT_OUTPUT_LIMIT_MARKER} 请在保证必要质量的前提下控制输出长度，生成内容最多约 ${maxOutputTokens.toLocaleString("en-US")} tokens。不要无边界展开；如果材料较长，请优先给出结构化、可执行的重点内容。`
-}
-
-export function appendTextOutputLimitInstruction(text: string, model: ModelType): string {
-  const instruction = buildTextOutputLimitInstruction(model)
-  if (!instruction) return text
-  const baseText = text || "你好"
-  if (baseText.includes(TEXT_OUTPUT_LIMIT_MARKER)) return baseText
-  return `${baseText}\n\n${instruction}`
+export function appendTextOutputLimitInstruction(text: string, _model: ModelType): string {
+  return text
 }
 
 export function shouldAuditHighConsumptionTextCall(

@@ -4,7 +4,6 @@ import { getAPIConfig } from "@/lib/ai-utils"
 import { requireUser } from "@/lib/auth/verified-user"
 import {
   PRICING_VERSION,
-  appendTextOutputLimitInstruction,
   calculateActualCost,
   getMaxOutputTokensForModel,
   getMinimumRequiredCredits,
@@ -420,7 +419,7 @@ export async function POST(req: NextRequest) {
         Authorization: `Bearer ${customConfig.apiKey}`,
       },
       body: JSON.stringify({
-        query: appendTextOutputLimitInstruction(queryText, CHAT_MODEL),
+        query: queryText,
         conversation_id: "",
         response_mode: "streaming",
         user: userId,

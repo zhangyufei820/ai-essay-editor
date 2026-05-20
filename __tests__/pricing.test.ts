@@ -293,11 +293,8 @@ describe('统一计费配置', () => {
     expect(getMaxOutputTokensForModel('gpt-image-2')).toBeNull()
   })
 
-  it('adds prompt-based output length constraints without duplicating them', () => {
-    const constrained = appendTextOutputLimitInstruction('请批改作文', 'standard')
-    expect(constrained).toContain('[输出长度约束]')
-    expect(constrained).toContain('25,000 tokens')
-    expect(appendTextOutputLimitInstruction(constrained, 'standard')).toBe(constrained)
+  it('does not append internal output constraints to user-visible prompts', () => {
+    expect(appendTextOutputLimitInstruction('请批改作文', 'standard')).toBe('请批改作文')
     expect(appendTextOutputLimitInstruction('画一张图', 'gpt-image-2')).toBe('画一张图')
   })
 

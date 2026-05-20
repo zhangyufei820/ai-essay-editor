@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { internalDifyFetch } from "@/lib/internal-dify-fetch"
 import { createBillingAuditMetadata } from "@/lib/credits"
-import { appendTextOutputLimitInstruction, getMaxOutputTokensForModel, getMinimumRequiredCredits, type ModelType } from "@/lib/pricing"
+import { getMaxOutputTokensForModel, getMinimumRequiredCredits, type ModelType } from "@/lib/pricing"
 import { requireUser } from "@/lib/auth/verified-user"
 import { consumeWithTrialCredits } from "@/lib/trial-credits"
 
@@ -136,7 +136,7 @@ export async function POST(req: NextRequest) {
         genre: genre || "记叙文",
         background: background || "课外习作"
       },
-      query: appendTextOutputLimitInstruction(essayText || "请批改上传的作文图片", ESSAY_MODEL),
+      query: essayText || "请批改上传的作文图片",
       response_mode: "streaming", // 🔥 改为流式响应，支持思考过程显示
       user: "essay-correction-user"
     }
