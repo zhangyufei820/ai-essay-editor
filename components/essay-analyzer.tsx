@@ -6,6 +6,7 @@ import { useState, useRef } from "react"
 import { Upload, Loader2, ArrowRight } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import { IconEssay, IconHistory, IconSealCheck } from "@/components/icons/v2"
+import { extractDifySseText } from "@/lib/dify-output-text"
 
 type Status = "idle" | "uploading" | "processing" | "completed"
 
@@ -102,14 +103,16 @@ export default function EssayAnalyzer() {
             try {
               const data = JSON.parse(line.slice(6))
 
-              if (data.event === "text_chunk") {
-                const newText = data.data?.text || ""
+              const eventText = extractDifySseText(data)
+              if (eventText) {
+                const newText = eventText
                 if (newText) {
                   accumulatedResult += newText
                   setResult(accumulatedResult)
                   addLog(`收到批改内容 (${accumulatedResult.length} 字符)`)
                 }
-              } else if (data.event === "workflow_finished") {
+              }
+              if (data.event === "workflow_finished") {
                 addLog("批改完成", "success")
                 setStatus("completed")
                 await saveToSupabase(accumulatedResult)

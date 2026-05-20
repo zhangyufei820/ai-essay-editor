@@ -71,6 +71,7 @@ import { logger } from "@/lib/logger"
 import { ModelLogo } from "@/components/ModelLogo"
 import { navigationModelConfig } from "@/lib/navigation-models"
 import { getOpenClawAttachmentKind, isLikelyHtmlDocumentUrl, toPublicOpenClawMediaSignUrl, toPublicOpenClawWorkspaceUrl } from "@/lib/openclaw-media"
+import { extractDifySseText, extractDifyTextOutput } from "@/lib/dify-output-text"
 import {
   calculatePreviewCost,
   ModelType,
@@ -431,22 +432,7 @@ function formatSunoResponse(fullText: string): string {
 }
 
 function extractWorkflowOutputText(outputs: unknown) {
-  if (!outputs || typeof outputs !== "object" || Array.isArray(outputs)) return ""
-  const record = outputs as Record<string, unknown>
-  const candidates = [
-    record.text,
-    record.result,
-    record.answer,
-    record.output,
-    record.markdown,
-    record.markdown_report,
-    record.report,
-    record.content,
-  ]
-  for (const candidate of candidates) {
-    if (typeof candidate === "string" && candidate.trim()) return candidate
-  }
-  return ""
+  return extractDifyTextOutput(outputs)
 }
 
 function getChatErrorMessage(error: unknown, status?: number, model?: string): string {
@@ -2797,10 +2783,12 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                       if (applyVocabResult(json)) continue
                     }
 
-                    // 🔥 处理 Chat API 的 answer 字段
-                    if (json.answer) {
+                    const eventText = extractDifySseText(json)
+
+                    // 🔥 处理 Chat / Workflow / Direct Answer 文本输出
+                    if (eventText) {
                         if (isWordCardRequest) {
-                          const cleanedAnswer = cleanVocabAnswer(json.answer)
+                          const cleanedAnswer = cleanVocabAnswer(eventText)
                           if (cleanedAnswer) {
                             fullText = cleanedAnswer
                             hasRec = true
@@ -2815,16 +2803,16 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                         if (!hasRec) {
                           setAnalysisStage(4)
                           triggerHandover() // 强制结束思考，激活光标
-                          console.log("✍️ [Answer] 收到第一个 answer，触发 handover")
+                          console.log("✍️ [DifyText] 收到第一个文本输出，触发 handover", { event: json.event })
                         }
                         hasRec = true
-                        fullText += json.answer
+                        fullText += eventText
                         setMessages(p => p.map(m => m.id === botId ? { ...m, content: fullText } : m))
                     }
 
                     // 🔥 处理 Workflow API 的 text_chunk/agent_message 事件
                     // 某些 Dify 工作流使用这些事件类型而不是 message+answer
-                    if ((json.event === 'text_chunk' || json.event === 'agent_message') && !json.answer) {
+                    if ((json.event === 'text_chunk' || json.event === 'agent_message') && !json.answer && !eventText) {
                         const text = json.data?.text || json.text || ''
                         if (text) {
                             if (isWordCardRequest) {
