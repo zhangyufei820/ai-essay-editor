@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server"
-import { logAdminAction, verifyAdminToken } from "@/lib/admin-auth"
+import { logAdminAction, verifyAdminRequest } from "@/lib/admin-auth"
 import { getFreeTrialFlags } from "@/lib/free-trial-flags"
 import { logger } from "@/lib/logger"
 import { getAdminRecentFeedback } from "@/lib/surveys"
@@ -68,13 +68,16 @@ async function getSurveySubmitTrend(days: number): Promise<Array<{ date: string;
 }
 
 export async function GET(request: NextRequest) {
-  const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim()
-  if (!token || !(await verifyAdminToken(token))) {
-    return NextResponse.json({ ok: false, error: "未授权" }, { status: 401 })
+  const adminAccess = await verifyAdminRequest(request)
+  if (!adminAccess.ok) {
+    return NextResponse.json({ ok: false, error: "无管理员权限" }, { status: 403 })
   }
 
   try {
-    await logAdminAction("view_trial_dashboard", token)
+    await logAdminAction("view_trial_dashboard", adminAccess.token, {
+      authMode: adminAccess.authMode,
+      adminUserId: adminAccess.userId,
+    })
 
     const today = todayIsoDate()
     const supabase = getSupabaseAdmin()

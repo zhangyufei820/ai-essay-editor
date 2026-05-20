@@ -1,12 +1,16 @@
 import { createClient } from '@supabase/supabase-js'
 import { readFileSync } from 'fs'
 import path from 'path'
-import { createBillingAuditMetadata, createUserReferralCode, getUserCredits, summarizeCreditTransactions } from '@/lib/credits'
+import { createBillingAuditMetadata, createUserReferralCode, getUserCredits, spendCredits, summarizeCreditTransactions } from '@/lib/credits'
 import { hasActiveMembership, resolveMembershipStatus } from '@/lib/products'
 import { canUseImage2, parseAllowlistEnv } from '@/lib/permissions'
 
 jest.mock('@supabase/supabase-js', () => ({
   createClient: jest.fn(),
+}))
+
+jest.mock('@/lib/trial-credits', () => ({
+  consumeWithTrialCredits: jest.fn(),
 }))
 
 function makeChain(response: any) {
@@ -238,6 +242,28 @@ describe('credits helpers', () => {
     expect(source).toContain('.select("credits")')
     expect(source).toContain('.maybeSingle()')
     expect(source).toContain('recordTransaction(')
+  })
+
+  it('routes public spendCredits through trial-first consumption', async () => {
+    const { consumeWithTrialCredits } = await import('@/lib/trial-credits')
+    ;(consumeWithTrialCredits as jest.Mock).mockResolvedValueOnce({
+      success: true,
+      blocked: false,
+      reason: null,
+    })
+
+    await expect(
+      spendCredits('user-1', 10, 'consume', '测试消费', 'ref-1', { feature: 'test' }),
+    ).resolves.toBe(true)
+
+    expect(consumeWithTrialCredits).toHaveBeenCalledWith(expect.objectContaining({
+      userId: 'user-1',
+      amount: 10,
+      actionType: 'consume',
+      description: '测试消费',
+      referenceId: 'ref-1',
+      billingMetadata: expect.objectContaining({ feature: 'test' }),
+    }))
   })
 
   it('reuses an existing referral code instead of rotating shared invite links', async () => {

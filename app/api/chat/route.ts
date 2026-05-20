@@ -15,7 +15,6 @@ import { assertSecureTlsConfiguration } from '@/lib/runtime-security'
 import { recordBillingIssue } from '@/lib/credits'
 import { canUseTrialCredits, consumeWithTrialCredits, type ConsumeWithTrialCreditsResult } from '@/lib/trial-credits'
 import {
-  chargeCreditsSafely as spendCredits,
   createBillingLog as createBillingAuditMetadata,
   parseDifyUsage,
   type ParsedDifyUsage,
@@ -39,7 +38,7 @@ async function deductCredit(
   usage: { totalTokens: number; promptTokens: number; completionTokens: number },
   description: string,
   parsedUsage?: ParsedDifyUsage | null,
-  useTrialCredits = false,
+  _useTrialCredits = true,
 ): Promise<ConsumeWithTrialCreditsResult | null> {
   const currentCost = calculateActualCost(
     CHAT_MODEL,
@@ -103,29 +102,6 @@ async function deductCredit(
       maxOutputTokens: CHAT_MAX_OUTPUT_TOKENS,
     })
   }
-  if (!useTrialCredits) {
-    const success = await spendCredits(
-      userId,
-      currentCost,
-      "consume",
-      chargeDescription,
-      undefined,
-      billingMetadata,
-    )
-    if (!success) {
-      console.error("[Billing] Deferred deduction failed or insufficient credits")
-      await recordBillingIssue(
-        userId,
-        currentCost,
-        "billing_failed",
-        `异常账单：${chargeDescription}`,
-        undefined,
-        billingMetadata,
-      )
-    }
-    return null
-  }
-
   const billingResult = await consumeWithTrialCredits({
     userId,
     amount: currentCost,
@@ -217,7 +193,7 @@ function createMeteredStreamResponse(
             { totalTokens, promptTokens, completionTokens },
             description,
             latestParsedUsage,
-            options.useTrialCredits === true,
+            true,
           ).catch((error) => {
             console.error("[Billing] Deferred deduction failed:", error)
             return null
@@ -312,23 +288,21 @@ export async function POST(req: NextRequest) {
     const isEssayCorrectionRequest = Boolean(extractedText && extractedText.length > 100)
     let trialPrecheck: Awaited<ReturnType<typeof canUseTrialCredits>> | null = null
 
-    if (isEssayCorrectionRequest) {
-      trialPrecheck = await canUseTrialCredits(userId, MIN_REQUIRED_CREDITS)
-      if (trialPrecheck.data?.blocked && trialPrecheck.data.reason === "survey_required") {
-        return new Response(JSON.stringify({
-          error: "请先完成今日共创反馈问卷，再使用免费体验额度",
+    trialPrecheck = await canUseTrialCredits(userId, MIN_REQUIRED_CREDITS)
+    if (trialPrecheck.data?.blocked && trialPrecheck.data.reason === "survey_required") {
+      return new Response(JSON.stringify({
+        error: "请先完成今日共创反馈问卷，再使用免费体验额度",
+        surveyRequired: true,
+        billing: {
+          trialUsed: 0,
+          realCreditsUsed: 0,
+          remainingToday: trialPrecheck.data.remainingToday,
           surveyRequired: true,
-          billing: {
-            trialUsed: 0,
-            realCreditsUsed: 0,
-            remainingToday: trialPrecheck.data.remainingToday,
-            surveyRequired: true,
-          },
-        }), {
-          status: 402,
-          headers: { "Content-Type": "application/json" },
-        })
-      }
+        },
+      }), {
+        status: 402,
+        headers: { "Content-Type": "application/json" },
+      })
     }
 
     const availableTrialForMinimum = trialPrecheck?.data?.trialUsedAvailable || 0

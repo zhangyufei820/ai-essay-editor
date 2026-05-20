@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireUser } from '@/lib/auth/verified-user'
+import { getUserTrialStatus } from '@/lib/free-trial'
 
 /**
  * 🎯 用户积分 API
@@ -31,6 +32,8 @@ export async function GET(request: NextRequest) {
 
     // 使用 Service Role Key 创建超级管理员客户端
     const supabaseAdmin = getSupabaseAdmin()
+    const trialStatusResult = await getUserTrialStatus(userId)
+    const trialStatus = trialStatusResult.data
 
     // 查询积分
     const { data: creditData, error } = await supabaseAdmin
@@ -64,7 +67,8 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ 
           credits: 1000, 
           is_pro: false,
-          isNew: true 
+          isNew: true,
+          trialStatus,
         })
       }
 
@@ -72,14 +76,16 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ 
         credits: newData?.credits || 1000, 
         is_pro: newData?.is_pro || false,
-        isNew: true 
+        isNew: true,
+        trialStatus,
       })
     }
 
     console.log(`✅ [积分API] 查询成功: credits=${creditData.credits}`)
     return NextResponse.json({ 
       credits: creditData.credits, 
-      is_pro: creditData.is_pro 
+      is_pro: creditData.is_pro,
+      trialStatus,
     })
 
   } catch (error) {

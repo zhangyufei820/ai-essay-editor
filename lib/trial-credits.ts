@@ -1,7 +1,7 @@
-import { spendCredits, type BillingAuditMetadata } from "@/lib/credits"
+import { spendRealCredits, type BillingAuditMetadata } from "@/lib/credits"
 import { recordCampaignEvent } from "@/lib/campaign-events"
 import { getActiveTrialGrant, getUserTrialStatus, type FreeTrialGrant } from "@/lib/free-trial"
-import { isFreeTrialConsumptionEnabled } from "@/lib/free-trial-flags"
+import { isRuntimeConsumptionEnabled } from "@/lib/free-trial-runtime-config"
 import { logger } from "@/lib/logger"
 import { hasSubmittedSurveyToday } from "@/lib/surveys"
 import { getSupabaseAdmin } from "@/lib/supabase-admin"
@@ -47,7 +47,7 @@ export interface ConsumeWithTrialCreditsInput {
 export interface CanUseTrialCreditsResult {
   allowed: boolean
   blocked: boolean
-  reason: "ok" | "invalid_amount" | "no_active_trial" | "survey_required" | "insufficient_trial_credits" | "system_error"
+  reason: "ok" | "invalid_amount" | "no_active_trial" | "trial_disabled" | "survey_required" | "insufficient_trial_credits" | "system_error"
   grantId: string | null
   remainingToday: number
   trialUsedAvailable: number
@@ -64,6 +64,7 @@ export interface ConsumeWithTrialCreditsResult {
   grantId: string | null
   realCreditsSpent: boolean
   error: string | null
+  trialDisabledReason?: string | null
 }
 
 function getErrorMessage(error: unknown): string {
@@ -80,8 +81,30 @@ function normalizeAmount(amount: number): number | null {
 }
 
 async function getGrantOrNull(userId: string): Promise<FreeTrialGrant | null> {
-  const grantResult = await getActiveTrialGrant(userId)
-  return grantResult.success ? grantResult.data : null
+  const now = new Date().toISOString()
+  try {
+    const { data, error } = await getSupabaseAdmin()
+      .from("free_trial_grants")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("status", "active")
+      .lte("start_at", now)
+      .gt("end_at", now)
+
+    if (error) throw error
+    const grants = ((data || []) as FreeTrialGrant[]).sort((left, right) => {
+      if (left.requires_daily_survey !== right.requires_daily_survey) {
+        return left.requires_daily_survey ? 1 : -1
+      }
+      if (left.daily_quota !== right.daily_quota) return right.daily_quota - left.daily_quota
+      return new Date(right.created_at).getTime() - new Date(left.created_at).getTime()
+    })
+    return grants[0] || null
+  } catch (error) {
+    logger.warn("[trial-credits] active grant list failed, falling back to free-trial helper", { userId, error })
+    const grantResult = await getActiveTrialGrant(userId)
+    return grantResult.success ? grantResult.data : null
+  }
 }
 
 export async function getTodayTrialUsage(userId: string): Promise<TrialCreditOperationResult<number>> {
@@ -152,6 +175,22 @@ export async function canUseTrialCredits(
           allowed: false,
           blocked: true,
           reason: "invalid_amount",
+          grantId: null,
+          remainingToday: 0,
+          trialUsedAvailable: 0,
+        },
+        error: null,
+      }
+    }
+
+    const runtimeConsumption = await isRuntimeConsumptionEnabled()
+    if (!runtimeConsumption.enabled) {
+      return {
+        success: true,
+        data: {
+          allowed: false,
+          blocked: false,
+          reason: "trial_disabled",
           grantId: null,
           remainingToday: 0,
           trialUsedAvailable: 0,
@@ -365,24 +404,33 @@ export async function consumeWithTrialCredits(
   }
 
   try {
-    if (!isFreeTrialConsumptionEnabled()) {
+    const runtimeConsumption = await isRuntimeConsumptionEnabled()
+    if (!runtimeConsumption.enabled) {
+      const disabledBillingMetadata = {
+        ...(input.billingMetadata || {}),
+        rawProviderMetadata: {
+          ...(input.billingMetadata?.rawProviderMetadata || {}),
+          trialDisabledReason: runtimeConsumption.reason,
+        },
+      }
+
       if (input.spendRealCredits === false) {
         return {
           ...baseResult,
           success: true,
           shouldUseRealCredits: true,
           realCreditsUsed: amount,
-          reason: "trial_consumption_disabled",
+          reason: runtimeConsumption.reason || "trial_consumption_disabled",
         }
       }
 
-      const spent = await spendCredits(
+      const spent = await spendRealCredits(
         input.userId,
         amount,
         input.actionType,
         input.description || `${input.actionType} 消费 ${amount} 积分`,
         input.referenceId,
-        input.billingMetadata,
+        { ...disabledBillingMetadata, skipTrialBilling: true },
       )
 
       return {
@@ -391,8 +439,9 @@ export async function consumeWithTrialCredits(
         shouldUseRealCredits: true,
         realCreditsUsed: amount,
         realCreditsSpent: spent,
-        reason: spent ? "trial_consumption_disabled" : "real_credit_spend_failed",
+        reason: spent ? runtimeConsumption.reason || "trial_consumption_disabled" : "real_credit_spend_failed",
         error: spent ? null : "real_credit_spend_failed",
+        trialDisabledReason: runtimeConsumption.reason || "trial_consumption_disabled",
       }
     }
 
@@ -408,13 +457,13 @@ export async function consumeWithTrialCredits(
         }
       }
 
-      const spent = await spendCredits(
+      const spent = await spendRealCredits(
         input.userId,
         amount,
         input.actionType,
         input.description || `${input.actionType} 消费 ${amount} 积分`,
         input.referenceId,
-        input.billingMetadata,
+        { ...(input.billingMetadata || {}), skipTrialBilling: true },
       )
 
       return {
@@ -491,7 +540,7 @@ export async function consumeWithTrialCredits(
         }
       }
 
-      realCreditsSpent = await spendCredits(
+      realCreditsSpent = await spendRealCredits(
         input.userId,
         realCreditsUsed,
         input.actionType,
@@ -505,6 +554,7 @@ export async function consumeWithTrialCredits(
             realCreditsUsed,
           },
           chargedCredits: realCreditsUsed,
+          skipTrialBilling: true,
         },
       )
 

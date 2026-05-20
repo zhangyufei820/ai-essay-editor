@@ -3,10 +3,11 @@ import { requireUser } from "@/lib/auth/verified-user"
 import { createRequestId } from "@/lib/ai-task-trace"
 import { createBillingLog, chargeCreditsSafely } from "@/lib/billing"
 import { calculateWorksheetDiagnosisCredits } from "@/lib/billing-config"
-import { addCredits, getUserCredits, type BillingAuditMetadata } from "@/lib/credits"
+import { addCredits, type BillingAuditMetadata } from "@/lib/credits"
 import { getDifyCredentialForModel } from "@/lib/dify-credentials"
 import { runDifyWorkflow } from "@/lib/dify-workflow-client"
 import { getClientIP, checkIpRateLimit, createRateLimitResponse } from "@/lib/rate-limit"
+import { canUseTrialCredits } from "@/lib/trial-credits"
 import {
   WorksheetDiagnosisRequestSchema,
   buildWorksheetDiagnosisInputs,
@@ -139,19 +140,6 @@ export async function POST(request: NextRequest) {
     }
 
     chargedCredits = calculateWorksheetDiagnosisCredits(parsed.data.images.length)
-    const credits = await getUserCredits(auth.user!.id)
-    if (!credits || credits.credits < chargedCredits) {
-      return NextResponse.json(
-        {
-          error: `当前积分不足，本次诊断需要 ${chargedCredits} 积分。`,
-          code: "INSUFFICIENT_CREDITS",
-          requiredCredits: chargedCredits,
-          currentCredits: credits?.credits ?? 0,
-        },
-        { status: 402, headers: { "X-Request-Id": requestId } },
-      )
-    }
-
     billingMetadata = createBillingLog({
       userId: auth.user!.id,
       actionType: "worksheet_diagnosis",
@@ -170,6 +158,24 @@ export async function POST(request: NextRequest) {
       },
     })
 
+    const trialPrecheck = await canUseTrialCredits(auth.user!.id, chargedCredits)
+    if (trialPrecheck.data?.blocked && trialPrecheck.data.reason === "survey_required") {
+      return NextResponse.json(
+        {
+          error: "请先完成今日问卷，解锁免费体验额度",
+          code: "SURVEY_REQUIRED",
+          surveyRequired: true,
+          billing: {
+            trialUsed: 0,
+            realCreditsUsed: 0,
+            remainingToday: trialPrecheck.data.remainingToday,
+            surveyRequired: true,
+          },
+        },
+        { status: 402, headers: { "X-Request-Id": requestId } },
+      )
+    }
+
     const wasCharged = await chargeCreditsSafely(
       auth.user!.id,
       chargedCredits,
@@ -185,7 +191,6 @@ export async function POST(request: NextRequest) {
           error: `当前积分不足，本次诊断需要 ${chargedCredits} 积分。`,
           code: "INSUFFICIENT_CREDITS",
           requiredCredits: chargedCredits,
-          currentCredits: credits.credits,
         },
         { status: 402, headers: { "X-Request-Id": requestId } },
       )

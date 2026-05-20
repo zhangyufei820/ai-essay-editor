@@ -62,6 +62,7 @@ export interface BillingAuditMetadata {
   requestId?: string | null
   createdAt?: string
   description?: string
+  skipTrialBilling?: boolean
 }
 
 export type BillingAuditInput = BillingAuditMetadata & {
@@ -345,8 +346,8 @@ async function recordTransaction(
   }
 }
 
-// 消费积分
-export async function spendCredits(
+// 仅扣真实积分。trial-credits 内部会调用它处理超额部分，避免 spendCredits 递归。
+export async function spendRealCredits(
   userId: string,
   amount: number,
   type: string,
@@ -415,6 +416,49 @@ export async function spendCredits(
   
   console.log(`[积分系统] 用户 ${userId} 消费 ${amount} 积分，余额: ${balanceAfter}`)
   return true
+}
+
+// 消费积分：默认先使用共创体验 trial 额度，额度不足时再扣真实积分。
+export async function spendCredits(
+  userId: string,
+  amount: number,
+  type: string,
+  description: string,
+  referenceId?: string,
+  billingMetadata?: BillingAuditMetadata,
+): Promise<boolean> {
+  if (billingMetadata?.skipTrialBilling) {
+    return spendRealCredits(userId, amount, type, description, referenceId, billingMetadata)
+  }
+
+  try {
+    const { consumeWithTrialCredits } = await import("@/lib/trial-credits")
+    const result = await consumeWithTrialCredits({
+      userId,
+      amount,
+      actionType: type,
+      description,
+      referenceId,
+      billingMetadata,
+    })
+
+    if (result.blocked && result.reason === "survey_required") {
+      console.warn(`[积分系统] trial 扣费被问卷门禁阻断 userId=${userId}, amount=${amount}, type=${type}`)
+      return false
+    }
+
+    return result.success
+  } catch (error) {
+    console.error("[积分系统] trial-first 扣费失败，回退真实积分扣费:", error)
+    return spendRealCredits(userId, amount, type, description, referenceId, {
+      ...(billingMetadata || {}),
+      rawProviderMetadata: {
+        ...(billingMetadata?.rawProviderMetadata || {}),
+        trialFirstFallback: true,
+      },
+      skipTrialBilling: true,
+    })
+  }
 }
 
 export async function recordBillingIssue(

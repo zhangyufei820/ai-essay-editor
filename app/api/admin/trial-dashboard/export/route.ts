@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server"
-import { logAdminAction, verifyAdminToken } from "@/lib/admin-auth"
+import { logAdminAction, verifyAdminRequest } from "@/lib/admin-auth"
 import { logger } from "@/lib/logger"
 import { getSupabaseAdmin } from "@/lib/supabase-admin"
 
@@ -61,9 +61,9 @@ function toCsv(columns: readonly string[], rows: Array<Record<string, unknown>>)
 }
 
 export async function GET(request: NextRequest) {
-  const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim()
-  if (!token || !(await verifyAdminToken(token))) {
-    return NextResponse.json({ ok: false, error: "未授权" }, { status: 401 })
+  const adminAccess = await verifyAdminRequest(request)
+  if (!adminAccess.ok) {
+    return NextResponse.json({ ok: false, error: "无管理员权限" }, { status: 403 })
   }
 
   const { searchParams } = new URL(request.url)
@@ -81,7 +81,9 @@ export async function GET(request: NextRequest) {
   const config = EXPORT_CONFIG[typeParam]
 
   try {
-    await logAdminAction("export_trial_dashboard_csv", token, {
+    await logAdminAction("export_trial_dashboard_csv", adminAccess.token, {
+      authMode: adminAccess.authMode,
+      adminUserId: adminAccess.userId,
       type: typeParam,
       range: rangeParam,
     })

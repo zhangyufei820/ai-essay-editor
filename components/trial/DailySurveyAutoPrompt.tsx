@@ -20,6 +20,12 @@ type SessionState = {
   trialStatus: TrialSurveyStatus | null
 }
 
+type RuntimeFlags = {
+  campaignEnabled: boolean
+  consumptionEnabled: boolean
+  autoPromptEnabled: boolean
+}
+
 function todayKey() {
   return new Date().toISOString().slice(0, 10)
 }
@@ -63,6 +69,11 @@ function shouldRequireSurvey(status: TrialSurveyStatus | null, paidUser: boolean
 export function DailySurveyAutoPrompt() {
   const [announcementOpen, setAnnouncementOpen] = useState(false)
   const [surveyOpen, setSurveyOpen] = useState(false)
+  const [runtimeFlags, setRuntimeFlags] = useState<RuntimeFlags>({
+    campaignEnabled: false,
+    consumptionEnabled: true,
+    autoPromptEnabled: true,
+  })
   const [session, setSession] = useState<SessionState>({
     loggedIn: false,
     userId: null,
@@ -72,6 +83,21 @@ export function DailySurveyAutoPrompt() {
   const autoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const localDate = useMemo(() => todayKey(), [])
+
+  const refreshRuntimeFlags = useCallback(async () => {
+    try {
+      const response = await fetch("/api/free-trial/runtime-flags", { cache: "no-store" })
+      const data = await response.json().catch(() => null)
+      setRuntimeFlags({
+        campaignEnabled: data?.campaignEnabled !== false,
+        consumptionEnabled: data?.consumptionEnabled !== false,
+        autoPromptEnabled: data?.autoPromptEnabled !== false,
+      })
+    } catch (error) {
+      console.warn("[DailySurveyAutoPrompt] runtime flags refresh failed", error)
+      setRuntimeFlags((previous) => ({ ...previous, campaignEnabled: false }))
+    }
+  }, [])
 
   const refreshSession = useCallback(async () => {
     if (typeof window === "undefined") return null
@@ -105,12 +131,17 @@ export function DailySurveyAutoPrompt() {
 
   useEffect(() => {
     if (typeof window === "undefined") return
+    void refreshRuntimeFlags()
+  }, [refreshRuntimeFlags])
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !runtimeFlags.campaignEnabled) return
     const shownKey = `${ANNOUNCEMENT_KEY_PREFIX}:${localDate}`
     if (!window.localStorage.getItem(shownKey)) {
       setAnnouncementOpen(true)
       window.localStorage.setItem(shownKey, "1")
     }
-  }, [localDate])
+  }, [localDate, runtimeFlags.campaignEnabled])
 
   useEffect(() => {
     void refreshSession().catch((error) => {
@@ -119,7 +150,7 @@ export function DailySurveyAutoPrompt() {
   }, [refreshSession])
 
   useEffect(() => {
-    if (typeof window === "undefined" || !session.loggedIn) return
+    if (typeof window === "undefined" || !session.loggedIn || !runtimeFlags.autoPromptEnabled) return
 
     const userKey = session.userId || "verified-user"
     const autoKey = `${AUTO_SURVEY_KEY_PREFIX}:${userKey}:${localDate}`
@@ -146,7 +177,7 @@ export function DailySurveyAutoPrompt() {
         autoTimerRef.current = null
       }
     }
-  }, [localDate, session])
+  }, [localDate, runtimeFlags.autoPromptEnabled, session])
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -163,7 +194,7 @@ export function DailySurveyAutoPrompt() {
   return (
     <>
       <FreeTrialAnnouncementModal
-        open={announcementOpen}
+        open={runtimeFlags.campaignEnabled && announcementOpen}
         loggedIn={session.loggedIn}
         hasTrial={hasTrial}
         paidUser={session.paidUser}

@@ -1,7 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { internalDifyFetch } from "@/lib/internal-dify-fetch"
-import { appendTextOutputLimitInstruction, getMaxOutputTokensForModel, type ModelType } from "@/lib/pricing"
+import { createBillingAuditMetadata } from "@/lib/credits"
+import { appendTextOutputLimitInstruction, getMaxOutputTokensForModel, getMinimumRequiredCredits, type ModelType } from "@/lib/pricing"
 import { requireUser } from "@/lib/auth/verified-user"
+import { consumeWithTrialCredits } from "@/lib/trial-credits"
 
 export const maxDuration = 60
 
@@ -10,6 +12,22 @@ const ESSAY_CORRECTION_API_KEY = process.env.ESSAY_CORRECTION_API_KEY
 const ESSAY_CORRECTION_BASE_URL = process.env.ESSAY_CORRECTION_BASE_URL
 const ESSAY_MODEL: ModelType = "standard"
 const ESSAY_MAX_OUTPUT_TOKENS = getMaxOutputTokensForModel(ESSAY_MODEL)
+const ESSAY_GRADING_COST = getMinimumRequiredCredits(ESSAY_MODEL)
+
+function createBillingPayload(result: {
+  trialUsed?: number
+  realCreditsUsed?: number
+  remainingToday?: number
+  blocked?: boolean
+  reason?: string | null
+} | null) {
+  return {
+    trialUsed: result?.trialUsed || 0,
+    realCreditsUsed: result?.realCreditsUsed || 0,
+    remainingToday: result?.remainingToday || 0,
+    surveyRequired: Boolean(result?.blocked && result.reason === "survey_required"),
+  }
+}
 
 export async function POST(req: NextRequest) {
   console.log("[作文批改] ===== API 调用开始 =====")
@@ -17,6 +35,7 @@ export async function POST(req: NextRequest) {
   try {
     const auth = await requireUser(req)
     if (auth.response) return auth.response
+    const userId = auth.user!.id
     // ==========================================
     // 限流检查
     // ==========================================
@@ -55,6 +74,57 @@ export async function POST(req: NextRequest) {
     }
 
     console.log("[作文批改] 使用服务:", ESSAY_CORRECTION_BASE_URL)
+
+    const billingReferenceId = `essay-grade:${Date.now()}`
+    const billingMetadata = createBillingAuditMetadata({
+      userId,
+      actionType: "consume",
+      feature: "essay_grade",
+      modelId: ESSAY_MODEL,
+      requestedModelId: ESSAY_MODEL,
+      chargedCredits: ESSAY_GRADING_COST,
+      description: "AI 作文批改",
+      rawProviderMetadata: {
+        gradeLevel: gradeLevel || "初中",
+        topic: topic || "作文",
+        wordLimit: wordLimit || "800字",
+        fileCount: fileIds?.length || 0,
+        estimatedInputLength: essayText?.length || 0,
+      },
+    })
+
+    let billing = createBillingPayload(null)
+    const billingResult = await consumeWithTrialCredits({
+      userId,
+      amount: ESSAY_GRADING_COST,
+      actionType: "consume",
+      description: "AI 作文批改",
+      referenceId: billingReferenceId,
+      metadata: {
+        feature: "essay_grade",
+        gradeLevel: gradeLevel || "初中",
+        topic: topic || "作文",
+        wordLimit: wordLimit || "800字",
+      },
+      billingMetadata,
+    })
+    billing = createBillingPayload(billingResult)
+    const charged = billingResult.success
+
+    if (billingResult?.blocked && billingResult.reason === "survey_required") {
+      return NextResponse.json({
+        error: "请先完成今日问卷，解锁免费体验额度",
+        surveyRequired: true,
+        billing,
+      }, { status: 402 })
+    }
+
+    if (!charged) {
+      return NextResponse.json({
+        error: "积分不足，无法批改作文",
+        billing,
+      }, { status: 402 })
+    }
 
     // 🔥 构建请求体 - 支持文件上传
     const difyRequest: any = {
@@ -103,8 +173,14 @@ export async function POST(req: NextRequest) {
       console.log("[作文批改] 开始流式传输...")
 
       // 🔥 创建 TransformStream 处理思考过程
+      const encoder = new TextEncoder()
+      let billingSent = false
       const transformStream = new TransformStream({
         async transform(chunk, controller) {
+          if (!billingSent) {
+            billingSent = true
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ event: "billing", billing })}\n\n`))
+          }
           // 直接传递数据给前端
           controller.enqueue(chunk)
           
@@ -141,7 +217,10 @@ export async function POST(req: NextRequest) {
         headers: { 
           "Content-Type": "text/event-stream",
           "Cache-Control": "no-cache",
-          "Connection": "keep-alive"
+          "Connection": "keep-alive",
+          "X-Trial-Used": String(billing.trialUsed),
+          "X-Real-Credits-Used": String(billing.realCreditsUsed),
+          "X-Trial-Remaining-Today": String(billing.remainingToday),
         }
       })
     } catch (apiError) {

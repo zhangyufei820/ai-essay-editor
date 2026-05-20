@@ -32,7 +32,7 @@ export interface WorkspaceShellProps {
   /** 顶栏中央显示的页面标题 */
   pageTitle?: React.ReactNode
   /** 顶栏右侧 user 数据 */
-  user?: { name?: string; avatar?: string; credits?: number } | null
+  user?: { name?: string; avatar?: string; credits?: number; trialRemaining?: number; trialUnlocked?: boolean } | null
   /** 右侧固定抽屉（用于 chat 的产物面板） */
   rightDrawer?: React.ReactNode
   /** 移动端汉堡菜单是否显示侧栏 */

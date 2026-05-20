@@ -1,6 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { requireLearningUserId } from "@/lib/learning-user"
-import { getUserCredits, spendCredits } from "@/lib/credits"
 import { consumeWithTrialCredits } from "@/lib/trial-credits"
 import {
   createDeckName,
@@ -102,53 +101,32 @@ export async function POST(request: NextRequest) {
       },
     }
 
-    const currentCredits = await getUserCredits(userId)
-    const isPaidUser = Boolean(currentCredits?.is_pro)
     let billing = createBillingPayload(null)
-    let charged = false
+    const billingResult = await consumeWithTrialCredits({
+      userId,
+      amount: GENERATION_COST,
+      actionType: "consume",
+      description: "AI 生成闪卡",
+      referenceId: billingReferenceId,
+      metadata: {
+        feature: "flashcards",
+        subject,
+        cardCount,
+        difficultyLevel,
+      },
+      billingMetadata,
+    })
+    billing = createBillingPayload(billingResult)
 
-    if (isPaidUser) {
-      charged = await spendCredits(
-        userId,
-        GENERATION_COST,
-        "consume",
-        "AI 生成闪卡",
-        billingReferenceId,
-        billingMetadata,
-      )
-      billing = {
-        trialUsed: 0,
-        realCreditsUsed: charged ? GENERATION_COST : 0,
-        remainingToday: 0,
-        surveyRequired: false,
-      }
-    } else {
-      const billingResult = await consumeWithTrialCredits({
-        userId,
-        amount: GENERATION_COST,
-        actionType: "consume",
-        description: "AI 生成闪卡",
-        referenceId: billingReferenceId,
-        metadata: {
-          feature: "flashcards",
-          subject,
-          cardCount,
-          difficultyLevel,
-        },
-        billingMetadata,
-      })
-      billing = createBillingPayload(billingResult)
-
-      if (billingResult.blocked && billingResult.reason === "survey_required") {
-        return NextResponse.json({
-          error: "请先完成今日问卷，解锁免费体验额度",
-          surveyRequired: true,
-          billing,
-        }, { status: 402 })
-      }
-
-      charged = billingResult.success
+    if (billingResult.blocked && billingResult.reason === "survey_required") {
+      return NextResponse.json({
+        error: "请先完成今日问卷，解锁免费体验额度",
+        surveyRequired: true,
+        billing,
+      }, { status: 402 })
     }
+
+    const charged = billingResult.success
 
     if (!charged) {
       return NextResponse.json({

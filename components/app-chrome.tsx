@@ -11,7 +11,13 @@ import { getVerifiedAuthHeaders } from "@/lib/client-auth"
 import { readClientUserProfile, USER_PROFILE_UPDATED_EVENT } from "@/lib/client-user-profile"
 import { CELLFORGE_EXTERNAL_URL } from "@/lib/tripo3d"
 
-type WorkspaceUser = { name?: string; avatar?: string; credits?: number } | null
+type WorkspaceUser = {
+  name?: string
+  avatar?: string
+  credits?: number
+  trialRemaining?: number
+  trialUnlocked?: boolean
+} | null
 
 const PAGE_TITLES: Array<[string, string]> = [
   ["/admin", "管理后台"],
@@ -117,6 +123,10 @@ export function AppChrome({ children }: { children: ReactNode }) {
         setUser((current) => ({
           ...(current ?? storedUser ?? { name: "用户" }),
           credits: typeof data.credits === "number" ? data.credits : current?.credits,
+          trialRemaining: typeof data.trialStatus?.today_trial_remaining === "number"
+            ? data.trialStatus.today_trial_remaining
+            : current?.trialRemaining,
+          trialUnlocked: Boolean(data.trialStatus?.trial_active && data.trialStatus?.today_survey_completed),
         }))
       } catch {
         // Keep the local user fallback if the credits endpoint is temporarily unavailable.

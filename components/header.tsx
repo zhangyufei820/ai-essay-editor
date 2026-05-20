@@ -45,6 +45,8 @@ export function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [user, setUser] = useState<HeaderUser | null>(null)
   const [credits, setCredits] = useState<number | null>(null)
+  const [trialRemaining, setTrialRemaining] = useState<number | null>(null)
+  const [trialUnlocked, setTrialUnlocked] = useState(false)
   const pathname = usePathname()
 
   useEffect(() => {
@@ -58,6 +60,8 @@ export function Header() {
         if (!response.ok) return
         const data = await response.json()
         setCredits(data.credits || 0)
+        setTrialRemaining(typeof data.trialStatus?.today_trial_remaining === "number" ? data.trialStatus.today_trial_remaining : null)
+        setTrialUnlocked(Boolean(data.trialStatus?.trial_active && data.trialStatus?.today_survey_completed))
       } catch (error) {
         console.error("[Header] 获取积分失败:", error)
       }
@@ -95,6 +99,8 @@ export function Header() {
         }
         setUser(null)
         setCredits(null)
+        setTrialRemaining(null)
+        setTrialUnlocked(false)
       }
     })
 
@@ -130,6 +136,13 @@ export function Header() {
         <div className="hidden items-center gap-3 md:flex">
           {user ? (
             <>
+              {trialUnlocked && typeof trialRemaining === "number" && trialRemaining > 0 ? (
+                <Button asChild variant="outline" size="sm" className="gap-2 rounded-full bg-[var(--seal-50)] text-[var(--seal-700)]">
+                  <Link href="/campaign/free-trial">
+                    体验 {trialRemaining.toLocaleString()}
+                  </Link>
+                </Button>
+              ) : null}
               <Button asChild variant="ghost" size="sm" className="gap-2 rounded-full">
                 <Link href="/credits">
                   <IconCredits className="h-4 w-4" />
@@ -195,6 +208,13 @@ export function Header() {
             <div className="mt-4 flex flex-col gap-2 border-t pt-4">
               {user ? (
                 <>
+                  {trialUnlocked && typeof trialRemaining === "number" && trialRemaining > 0 ? (
+                    <Button asChild variant="outline" size="sm" className="w-full justify-start gap-2 bg-[var(--seal-50)] text-[var(--seal-700)]">
+                      <Link href="/campaign/free-trial" onClick={() => setMobileMenuOpen(false)}>
+                        体验 {trialRemaining.toLocaleString()}
+                      </Link>
+                    </Button>
+                  ) : null}
                   <Button asChild variant="ghost" size="sm" className="w-full justify-start gap-2">
                     <Link href="/credits" onClick={() => setMobileMenuOpen(false)}>
                       <IconCredits className="h-4 w-4" />

@@ -82,8 +82,13 @@ export function FreeTrialAnnouncementModal({
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>沈翔智学 60 天共创体验计划</DialogTitle>
-          <DialogDescription>
-            每天填写 90 秒反馈，即可解锁当天 2000 trial 积分，免费体验 AI 作文批改、闪卡复习等功能。
+          <DialogDescription className="space-y-3 leading-7">
+            <span className="block">沈翔智学 60 天共创体验计划已开启。</span>
+            <span className="block">
+              所有注册用户已获得 60 天共创体验资格。每天填写约 90 秒反馈，即可解锁当天 2000 trial
+              积分，用于体验 AI 作文批改、闪卡复习等功能。
+            </span>
+            <span className="block">已付费会员的权益不会受到影响，会员到期时间已顺延 60 天。</span>
           </DialogDescription>
         </DialogHeader>
 

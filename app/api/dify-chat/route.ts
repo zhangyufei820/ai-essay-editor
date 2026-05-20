@@ -20,6 +20,7 @@ import {
 import { canUseImage2, isSubscribedUser, resolveMembershipStatus } from "@/lib/permissions"
 import { recordBillingIssue } from "@/lib/credits"
 import { refundImageTaskCredits } from "@/lib/image-task-refunds"
+import { canUseTrialCredits } from "@/lib/trial-credits"
 import {
   chargeCreditsSafely as spendCredits,
   createBillingLog as createBillingAuditMetadata,
@@ -1399,17 +1400,37 @@ export async function POST(request: NextRequest) {
       : getMinimumRequiredCredits(modelType)
     logPerf(requestId, "credit_check_done", apiStartedAt, { requiredCredits: estimatedMinCost })
     
-    if (currentCredits < estimatedMinCost) {
+    const trialPrecheck = await canUseTrialCredits(userId, estimatedMinCost)
+    if (trialPrecheck.data?.blocked && trialPrecheck.data.reason === "survey_required") {
+      console.warn(`🚫 [计费] 共创体验问卷未完成: user=${userId.slice(0, 8)}, required=${estimatedMinCost}`)
+      return new Response(
+        JSON.stringify({
+          error: "请先完成今日问卷，解锁免费体验额度",
+          surveyRequired: true,
+          billing: {
+            trialUsed: 0,
+            realCreditsUsed: 0,
+            remainingToday: trialPrecheck.data.remainingToday,
+            surveyRequired: true,
+          },
+        }),
+        { status: 402, headers: { "Content-Type": "application/json" } },
+      )
+    }
+
+    const availableTrialForMinimum = trialPrecheck.data?.trialUsedAvailable || 0
+    if (currentCredits + availableTrialForMinimum < estimatedMinCost) {
       console.warn(`🚫 [计费] 用户积分不足: 当前 ${currentCredits}`)
       return new Response(
         JSON.stringify({
           error: "当前积分不足",
-          message: `当前功能至少需要 ${estimatedMinCost} 积分，当前剩余 ${currentCredits} 积分。请充值或升级会员后继续使用。`,
+          message: `当前功能至少需要 ${estimatedMinCost} 积分，当前剩余 ${currentCredits} 积分。请充值、升级会员或完成体验额度解锁后继续使用。`,
           required: estimatedMinCost,
           current: currentCredits,
+          trialRemaining: availableTrialForMinimum,
           action: "请充值或升级会员",
         }),
-        { status: 402 }
+        { status: 402, headers: { "Content-Type": "application/json" } }
       )
     }
     

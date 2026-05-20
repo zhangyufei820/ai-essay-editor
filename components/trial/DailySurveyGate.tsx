@@ -183,6 +183,9 @@ export function DailySurveyGate({
         streakDay: data.streakDay,
         source: `daily_survey_gate:${featureName}`,
       })
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("credits-refresh"))
+      }
       onCompleted?.(data.trialStatus)
       onOpenChange?.(false)
     } catch (error) {

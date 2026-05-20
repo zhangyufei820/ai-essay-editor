@@ -1,8 +1,13 @@
 import { claimFreeTrial } from "@/lib/free-trial"
+import {
+  disableFreeTrialConsumption,
+  getBooleanRuntimeFlag,
+  RUNTIME_CONFIG_KEYS,
+} from "@/lib/free-trial-runtime-config"
 import { calculateSurveyQualityScore, submitSurveyResponse } from "@/lib/surveys"
 import { consumeWithTrialCredits } from "@/lib/trial-credits"
 import { getSupabaseAdmin } from "@/lib/supabase-admin"
-import { spendCredits } from "@/lib/credits"
+import { spendRealCredits } from "@/lib/credits"
 
 jest.mock("@/lib/logger", () => ({
   logger: {
@@ -18,7 +23,7 @@ jest.mock("@/lib/supabase-admin", () => ({
 }))
 
 jest.mock("@/lib/credits", () => ({
-  spendCredits: jest.fn(),
+  spendRealCredits: jest.fn(),
 }))
 
 type Row = Record<string, any>
@@ -71,6 +76,9 @@ function createSupabaseMock(seed: Partial<Tables> = {}) {
     survey_templates: [],
     survey_responses: [],
     trial_credit_usages: [],
+    free_trial_runtime_config: [],
+    monitor_incidents: [],
+    monitor_runs: [],
     user_trial_status: [],
     user_credits: [],
     credit_transactions: [],
@@ -91,6 +99,14 @@ function createSupabaseMock(seed: Partial<Tables> = {}) {
 
       const resolveRows = () => {
         let rows = [...(tables[table] || [])].filter((row) => matchesFilters(row, state.filters))
+        if (table === "free_trial_grants") {
+          rows = rows.filter((row) => {
+            const now = Date.now()
+            const startsOk = !row.start_at || new Date(row.start_at).getTime() <= now
+            const endsOk = !row.end_at || new Date(row.end_at).getTime() > now
+            return startsOk && endsOk
+          })
+        }
         for (const order of [...state.orderBy].reverse()) {
           rows.sort((a, b) => {
             const left = String(a[order.column] || "")
@@ -132,6 +148,16 @@ function createSupabaseMock(seed: Partial<Tables> = {}) {
         }),
         insert: jest.fn((payload: Row | Row[]) => {
           state.insertPayload = payload
+          return chain
+        }),
+        upsert: jest.fn((payload: Row | Row[]) => {
+          state.insertPayload = payload
+          const payloads = Array.isArray(payload) ? payload : [payload]
+          for (const item of payloads) {
+            const key = item.config_key
+            const existing = key ? tables[table].find((row) => row.config_key === key) : null
+            if (existing) Object.assign(existing, item)
+          }
           return chain
         }),
         update: jest.fn((payload: Row) => {
@@ -238,7 +264,7 @@ describe("trial credit libraries", () => {
   beforeEach(() => {
     jest.clearAllMocks()
     delete process.env.FREE_TRIAL_CONSUMPTION_ENABLED
-    ;(spendCredits as jest.Mock).mockResolvedValue(true)
+    ;(spendRealCredits as jest.Mock).mockResolvedValue(true)
   })
 
   it("consumeWithTrialCredits blocks active trial usage when today's survey is missing", async () => {
@@ -261,7 +287,7 @@ describe("trial credit libraries", () => {
       realCreditsUsed: 0,
       grantId: "grant-1",
     })
-    expect(spendCredits).not.toHaveBeenCalled()
+    expect(spendRealCredits).not.toHaveBeenCalled()
   })
 
   it("consumeWithTrialCredits uses trial credits only when quota is enough", async () => {
@@ -294,7 +320,7 @@ describe("trial credit libraries", () => {
       realCreditsSpent: false,
     })
     expect(supabase.tables.trial_credit_usages).toHaveLength(1)
-    expect(spendCredits).not.toHaveBeenCalled()
+    expect(spendRealCredits).not.toHaveBeenCalled()
   })
 
   it("consumeWithTrialCredits charges real credits for overage when trial quota is insufficient", async () => {
@@ -325,13 +351,53 @@ describe("trial credit libraries", () => {
       shouldUseRealCredits: true,
       realCreditsSpent: true,
     })
-    expect(spendCredits).toHaveBeenCalledWith(
+    expect(spendRealCredits).toHaveBeenCalledWith(
       "user-1",
       80,
       "essay_review",
       expect.stringContaining("超出体验额度"),
       "msg-2",
-      expect.objectContaining({ chargedCredits: 80 }),
+      expect.objectContaining({ chargedCredits: 80, skipTrialBilling: true }),
+    )
+  })
+
+  it("consumeWithTrialCredits prefers paid extension grants that do not require surveys", async () => {
+    const supabase = createSupabaseMock({
+      free_trial_grants: [
+        createGrant({ id: "campaign-grant", grant_type: "campaign", requires_daily_survey: true, daily_quota: 2000 }),
+        createGrant({ id: "paid-extension", grant_type: "paid_extension", requires_daily_survey: false, daily_quota: 0 }),
+      ],
+      user_trial_status: [{
+        user_id: "user-1",
+        active_grant_id: "paid-extension",
+        today_trial_remaining: 0,
+      }],
+      user_credits: [{ user_id: "user-1", credits: 500 }],
+    })
+    ;(getSupabaseAdmin as jest.Mock).mockReturnValue(supabase)
+
+    const result = await consumeWithTrialCredits({
+      userId: "user-1",
+      amount: 100,
+      actionType: "paid_user_agent",
+      referenceId: "paid-1",
+    })
+
+    expect(result).toMatchObject({
+      success: true,
+      blocked: false,
+      grantId: "paid-extension",
+      trialUsed: 0,
+      realCreditsUsed: 100,
+      realCreditsSpent: true,
+    })
+    expect(spendRealCredits).toHaveBeenCalledWith(
+      "user-1",
+      100,
+      "paid_user_agent",
+      expect.stringContaining("超出体验额度"),
+      "paid-1",
+      expect.objectContaining({ chargedCredits: 100, skipTrialBilling: true }),
     )
   })
 
@@ -354,13 +420,13 @@ describe("trial credit libraries", () => {
       realCreditsUsed: 50,
       realCreditsSpent: true,
     })
-    expect(spendCredits).toHaveBeenCalledWith(
+    expect(spendRealCredits).toHaveBeenCalledWith(
       "user-2",
       50,
       "essay_review",
       expect.stringContaining("消费 50 积分"),
       "msg-3",
-      undefined,
+      expect.objectContaining({ skipTrialBilling: true }),
     )
   })
 
@@ -386,20 +452,106 @@ describe("trial credit libraries", () => {
 
     expect(result).toMatchObject({
       success: true,
-      reason: "trial_consumption_disabled",
+      reason: "env_free_trial_consumption_disabled",
       shouldUseRealCredits: true,
       trialUsed: 0,
       realCreditsUsed: 100,
       realCreditsSpent: true,
     })
     expect(supabase.tables.trial_credit_usages).toHaveLength(0)
-    expect(spendCredits).toHaveBeenCalledWith(
+    expect(spendRealCredits).toHaveBeenCalledWith(
       "user-1",
       100,
       "essay_review",
       expect.stringContaining("消费 100 积分"),
       "flag-off-1",
-      undefined,
+      expect.objectContaining({
+        skipTrialBilling: true,
+        rawProviderMetadata: expect.objectContaining({
+          trialDisabledReason: "env_free_trial_consumption_disabled",
+        }),
+      }),
     )
+  })
+
+  it("consumeWithTrialCredits ignores active trial quota when runtime consumption flag is disabled", async () => {
+    process.env.FREE_TRIAL_CONSUMPTION_ENABLED = "true"
+    const supabase = createSupabaseMock({
+      free_trial_grants: [createGrant()],
+      survey_responses: [{ id: "survey-1", user_id: "user-1", survey_date: today }],
+      user_trial_status: [{
+        user_id: "user-1",
+        active_grant_id: "grant-1",
+        today_trial_remaining: 2000,
+      }],
+      free_trial_runtime_config: [{
+        id: "runtime-1",
+        config_key: RUNTIME_CONFIG_KEYS.consumption,
+        config_value: { enabled: false },
+      }],
+    })
+    ;(getSupabaseAdmin as jest.Mock).mockReturnValue(supabase)
+
+    const result = await consumeWithTrialCredits({
+      userId: "user-1",
+      amount: 100,
+      actionType: "essay_review",
+      referenceId: "runtime-off-1",
+    })
+
+    expect(result).toMatchObject({
+      success: true,
+      reason: "runtime_free_trial_consumption_disabled",
+      shouldUseRealCredits: true,
+      trialUsed: 0,
+      realCreditsUsed: 100,
+    })
+    expect(supabase.tables.trial_credit_usages).toHaveLength(0)
+    expect(spendRealCredits).toHaveBeenCalled()
+  })
+})
+
+describe("runtime config libraries", () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+  })
+
+  it("getBooleanRuntimeFlag falls back when DB row is missing", async () => {
+    const supabase = createSupabaseMock()
+    ;(getSupabaseAdmin as jest.Mock).mockReturnValue(supabase)
+
+    await expect(getBooleanRuntimeFlag(RUNTIME_CONFIG_KEYS.consumption, true)).resolves.toBe(true)
+  })
+
+  it("getBooleanRuntimeFlag lets DB false override fallback true", async () => {
+    const supabase = createSupabaseMock({
+      free_trial_runtime_config: [{
+        id: "runtime-1",
+        config_key: RUNTIME_CONFIG_KEYS.consumption,
+        config_value: { enabled: false },
+      }],
+    })
+    ;(getSupabaseAdmin as jest.Mock).mockReturnValue(supabase)
+
+    await expect(getBooleanRuntimeFlag(RUNTIME_CONFIG_KEYS.consumption, true)).resolves.toBe(false)
+  })
+
+  it("disableFreeTrialConsumption writes config and incident", async () => {
+    const supabase = createSupabaseMock()
+    ;(getSupabaseAdmin as jest.Mock).mockReturnValue(supabase)
+
+    const result = await disableFreeTrialConsumption("P0 smoke", { source: "test" })
+
+    expect(result.success).toBe(true)
+    expect(supabase.tables.free_trial_runtime_config[0]).toMatchObject({
+      config_key: RUNTIME_CONFIG_KEYS.consumption,
+      config_value: expect.objectContaining({ enabled: false, reason: "P0 smoke" }),
+      updated_by: "monitor",
+    })
+    expect(supabase.tables.monitor_incidents[0]).toMatchObject({
+      incident_type: "disable_free_trial_consumption",
+      severity: "p0",
+      auto_action_taken: "free_trial_consumption_enabled=false",
+    })
   })
 })

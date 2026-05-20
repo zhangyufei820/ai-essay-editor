@@ -2,6 +2,8 @@ export type FreeTrialFlagKey =
   | "campaignEnabled"
   | "batchGrantEnabled"
   | "consumptionEnabled"
+  | "autoPromptEnabled"
+  | "monitorEnabled"
 
 export type FreeTrialFlags = Record<FreeTrialFlagKey, boolean>
 
@@ -15,6 +17,8 @@ export function getFreeTrialFlags(): FreeTrialFlags {
     campaignEnabled: readBooleanFlag(process.env.NEXT_PUBLIC_FREE_TRIAL_CAMPAIGN_ENABLED, true),
     batchGrantEnabled: readBooleanFlag(process.env.FREE_TRIAL_BATCH_GRANT_ENABLED, true),
     consumptionEnabled: readBooleanFlag(process.env.FREE_TRIAL_CONSUMPTION_ENABLED, true),
+    autoPromptEnabled: true,
+    monitorEnabled: true,
   }
 }
 

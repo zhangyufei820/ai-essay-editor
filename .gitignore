@@ -67,3 +67,7 @@ logs
 
 # Local standalone service workspace, not part of the website billing release
 /services/word-card-api/
+
+# Local exports and Supabase CLI state
+/exports/
+/supabase/.temp/
