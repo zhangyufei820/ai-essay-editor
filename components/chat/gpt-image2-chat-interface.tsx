@@ -139,9 +139,9 @@ const WORKSPACE_COPY: Record<ImageWorkspaceModel, {
   },
   "banana-2-pro": {
     title: "Banana2 Pro 4K",
-    subtitle: "图像生成工作台",
+    subtitle: "图像生成与编辑工作台",
     heroTitle: "AI 图像工作台",
-    heroDescription: "使用 Banana2 Pro 4K 生成高质量图片。填写提示词并选择画幅与尺寸后，结果会在同一工作台中完整展示。",
+    heroDescription: "使用 Banana2 Pro 4K 生成或编辑高质量图片。可上传原图进行重绘、放大和风格调整，结果会在同一工作台中完整展示。",
     resultTitle: "结果展示",
     loadingLabel: "Banana2 Pro 正在生成图像，请稍候。",
     saveTitle: "图片生成",
@@ -594,7 +594,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
     const wantsEdit = initialMode === "image_edit" || initialMode === "image-edit"
     const base = isGeminiWorkspace
       ? wantsEdit ? GEMINI_IMAGE_EDIT_DEFAULTS : GEMINI_IMAGE_DEFAULT_INPUTS
-      : !isBananaWorkspace && wantsEdit
+      : wantsEdit
         ? EDIT_MODE_DEFAULTS
         : DEFAULT_IMAGE_INPUTS
     return {
@@ -812,7 +812,6 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
   }
 
   const applyMode = (nextMode: ImageTaskMode) => {
-    if (isBananaWorkspace && nextMode === "image_edit") return
     setMode(nextMode)
     setReferenceGatewayUrls([])
     setMaskGatewayUrl("")
@@ -820,7 +819,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
     if (nextMode === "image_edit") {
       setModel(isGeminiWorkspace ? "gemini-3.1-flash-image-preview" : "gpt-image-2")
       setAspectRatio(isGeminiWorkspace ? "1:1" : "auto")
-      setSize(isGeminiWorkspace ? "1K" : "original_4k")
+      setSize(isGeminiWorkspace ? "1K" : isBananaWorkspace ? "1024x1024" : "original_4k")
       setQuality("medium")
       setOutputFormat("png")
       setOutputCompression(100)
@@ -954,6 +953,33 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
     }
 
     return imageUrl as string
+  }
+
+  async function uploadImageToDify(file: File) {
+    if (!userId) throw new Error("请先登录后再上传图片。")
+
+    const formData = new FormData()
+    formData.append("file", file)
+    formData.append("user", userId)
+    formData.append("model", workspaceModel)
+
+    const res = await fetch(`${API_BASE}/api/dify-upload`, {
+      method: "POST",
+      headers: {
+        ...(await getVerifiedAuthHeaders()),
+        "X-Model": workspaceModel,
+      },
+      body: formData,
+    })
+
+    const json = await res.json().catch(() => ({}))
+    const fileId = json.id || json.data?.id
+
+    if (!res.ok || !json.success || !fileId) {
+      throw new Error(json.message || json.error || "图片上传失败")
+    }
+
+    return fileId as string
   }
 
   function buildImageTaskError(payload: unknown, status: number, fallbackRequestId: string, fallbackTaskId?: string) {
@@ -1104,12 +1130,19 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
 	      let referenceUrls: string[] = []
       let maskUrl = ""
 
-      if (!isBananaWorkspace && mode === "image_edit") {
-        setSubmitStage("正在上传图片")
-        referenceUrls = await Promise.all(editImages.map((image) => uploadImageToGateway(image.file)))
-        setReferenceGatewayUrls(referenceUrls)
+      let bananaFileIds: string[] = []
 
-        if (!isGeminiWorkspace && maskImage) {
+      if (mode === "image_edit") {
+        setSubmitStage("正在上传图片")
+        if (isBananaWorkspace) {
+          bananaFileIds = await Promise.all(editImages.map((image) => uploadImageToDify(image.file)))
+          setReferenceGatewayUrls([])
+        } else {
+          referenceUrls = await Promise.all(editImages.map((image) => uploadImageToGateway(image.file)))
+          setReferenceGatewayUrls(referenceUrls)
+        }
+
+        if (!isGeminiWorkspace && !isBananaWorkspace && maskImage) {
           maskUrl = await uploadImageToGateway(maskImage.file)
           setMaskGatewayUrl(maskUrl)
         }
@@ -1132,6 +1165,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
         body: JSON.stringify({
           query: cleanPrompt,
           inputs: submittedInputs,
+          fileIds: bananaFileIds,
           model: workspaceModel,
           mode: "image",
           imageSize: isBananaWorkspace ? resolveBananaImageSize(size, aspectRatio) : undefined,
@@ -1380,7 +1414,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
             <div className="rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-[var(--paper-50)] p-3 md:p-4">
               <div className="mb-3 md:mb-4 flex flex-wrap items-center gap-2">
                 <div className="flex rounded-[var(--radius-soft)] bg-[var(--paper-100)] p-1">
-                  {(isBananaWorkspace ? MODE_OPTIONS.filter((option) => option.value === "image_generate") : MODE_OPTIONS).map((option) => (
+                  {MODE_OPTIONS.map((option) => (
                     <button
                       key={option.value}
                       type="button"
@@ -1422,12 +1456,12 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
               </div>
             </div>
 
-            {!isBananaWorkspace && mode === "image_edit" ? (
+            {mode === "image_edit" ? (
               <div className="space-y-3 md:space-y-4 rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-[var(--paper-50)] p-3 md:p-4">
                 <div>
                   <h2 className="text-sm font-semibold text-[var(--ink-900)]">图片编辑素材</h2>
                   <p className="mt-1 text-xs leading-relaxed text-[var(--ink-500)]">
-                    上传需要编辑的原图，最多 {MAX_EDIT_IMAGE_UPLOADS} 张{isGeminiWorkspace ? "。" : "；蒙版只会作用在第一张图。"}
+                    上传需要编辑的原图，最多 {MAX_EDIT_IMAGE_UPLOADS} 张{isGeminiWorkspace || isBananaWorkspace ? "。" : "；蒙版只会作用在第一张图。"}
                   </p>
                 </div>
 
@@ -1441,7 +1475,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
                   onClear={clearEditImages}
                 />
 
-                {!isGeminiWorkspace ? <CollapsibleSection title="蒙版图片，可选" open={maskOpen} onToggle={() => setMaskOpen((value) => !value)}>
+                {!isGeminiWorkspace && !isBananaWorkspace ? <CollapsibleSection title="蒙版图片，可选" open={maskOpen} onToggle={() => setMaskOpen((value) => !value)}>
                   <UploadPanel
                     title="蒙版图片"
                     description="用于局部编辑。普通换风格、放大、增强清晰度不需要上传蒙版。"
@@ -1593,7 +1627,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
                 <NativeSelect
                   value={size}
                   onChange={applySize}
-                  options={(isGeminiWorkspace ? GEMINI_IMAGE_SIZE_OPTIONS : SIZE_OPTIONS).filter((option) => !isBananaWorkspace || !option.editOnly).map((option) => ({
+                  options={(isGeminiWorkspace ? GEMINI_IMAGE_SIZE_OPTIONS : SIZE_OPTIONS).map((option) => ({
                     ...option,
                   }))}
                 />

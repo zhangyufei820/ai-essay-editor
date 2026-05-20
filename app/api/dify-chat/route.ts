@@ -222,6 +222,31 @@ function buildAllInOneAgentWorkflowInputs(query: string, inputs: unknown, fileUr
   }
 }
 
+function buildImageWorkflowInputs(query: string, inputs: unknown) {
+  const record = inputs && typeof inputs === "object" ? inputs as Record<string, unknown> : {}
+  const referenceImageUrls = pickUrlStrings(record.reference_image_urls)
+  const referenceImageUrl = pickUrlString(record.reference_image_url)
+  const safeReferenceImageUrls = referenceImageUrls.length > 0
+    ? referenceImageUrls
+    : referenceImageUrl
+      ? [referenceImageUrl]
+      : []
+  const imageUrlsText = safeReferenceImageUrls.join("\n")
+
+  return {
+    ...record,
+    image_prompt: query,
+    prompt: typeof record.prompt === "string" && record.prompt.trim() ? record.prompt : query,
+    query,
+    reference_image_url: safeReferenceImageUrls[0] || "",
+    reference_image_urls: imageUrlsText,
+    image_urls: imageUrlsText,
+    input_image_url: safeReferenceImageUrls[0] || "",
+    source_image_url: safeReferenceImageUrls[0] || "",
+    source_images: imageUrlsText,
+  }
+}
+
 type MembershipIdentity = {
   email?: string | null
   phone?: string | null
@@ -1566,10 +1591,12 @@ export async function POST(request: NextRequest) {
                   user: userId || "default-user",
                 }
               : {
-                  inputs: {
-                      image_prompt: effectiveQuery,
-                      ...(inputs || {})
-                  },
+                  inputs: isWorkflowImageModel
+                    ? buildImageWorkflowInputs(effectiveQuery, inputs)
+                    : {
+                        image_prompt: effectiveQuery,
+                        ...(inputs || {})
+                    },
                   response_mode: "streaming",
                   user: userId || "default-user",
               }
