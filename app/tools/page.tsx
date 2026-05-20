@@ -83,6 +83,7 @@ export default function ToolsPage() {
   const [presentationContent, setPresentationContent] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
   const [sparkQuery, setSparkQuery] = useState("")
+  const documentFileRef = useRef<HTMLInputElement | null>(null)
   const ocrCameraRef = useRef<HTMLInputElement | null>(null)
   const ocrUploadRef = useRef<HTMLInputElement | null>(null)
 
@@ -245,7 +246,20 @@ export default function ToolsPage() {
             <ToolCard index="01" title="文档处理" description="上传学习资料，提取可继续加工的文本。" icon={IconEssay}>
               <form className="space-y-3" onSubmit={runDocumentProcess}>
                 <Label htmlFor="document-file">上传 PDF / Word / 图片 / 文本</Label>
-                <Input id="document-file" type="file" onChange={(event) => setDocumentFile(event.target.files?.[0] || null)} />
+                <Input
+                  ref={documentFileRef}
+                  id="document-file"
+                  type="file"
+                  className="sr-only"
+                  onChange={(event) => setDocumentFile(event.target.files?.[0] || null)}
+                />
+                <button
+                  type="button"
+                  onClick={() => documentFileRef.current?.click()}
+                  className="flex h-12 w-full items-center justify-center rounded-[var(--radius-soft)] border border-[var(--paper-300)] bg-[var(--paper-100)] px-4 text-sm font-semibold text-[var(--ink-700)] transition hover:border-[var(--ink-400)] hover:bg-[var(--ink-50)]"
+                >
+                  {documentFile ? documentFile.name : "➕点击上传文档"}
+                </button>
                 <Button type="submit" disabled={busy === "document"} className="w-full">
                   {busy === "document" ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
                   提取文本
