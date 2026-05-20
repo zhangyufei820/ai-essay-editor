@@ -10,13 +10,29 @@ import {
   LabelV2 as Label,
   TextareaV2 as Textarea
 } from "@/components/ui/v2"
-import { useRef, useState, type ComponentType, type FormEvent, type ReactNode } from "react"
-import { Camera, Loader2, Presentation, Search, Upload, Wand2 } from "lucide-react"
+import { useEffect, useRef, useState, type ComponentType, type FormEvent, type ReactNode } from "react"
+import { Camera, Loader2, Megaphone, Presentation, Search, Upload, Wand2 } from "lucide-react"
 import { IconAllInOne, IconEssay } from "@/components/icons/v2"
 
 type ToolResult = {
   title: string
   content: unknown
+}
+
+type VoiceOption = {
+  voice_id: string
+  name: string
+  language?: string
+  description?: string
+}
+
+type VoiceJob = {
+  job_id: string
+  status: "queued" | "running" | "succeeded" | "failed"
+  progress?: number
+  audio_url?: string | null
+  error?: string | null
+  voice_id?: string | null
 }
 
 function JsonBlock({ value }: { value: unknown }) {
@@ -83,9 +99,31 @@ export default function ToolsPage() {
   const [presentationContent, setPresentationContent] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
   const [sparkQuery, setSparkQuery] = useState("")
+  const [ttsText, setTtsText] = useState("")
+  const [ttsVoices, setTtsVoices] = useState<VoiceOption[]>([])
+  const [ttsVoiceId, setTtsVoiceId] = useState("")
+  const [ttsJob, setTtsJob] = useState<VoiceJob | null>(null)
   const documentFileRef = useRef<HTMLInputElement | null>(null)
   const ocrCameraRef = useRef<HTMLInputElement | null>(null)
   const ocrUploadRef = useRef<HTMLInputElement | null>(null)
+
+  useEffect(() => {
+    let mounted = true
+    fetch("/api/omnivoice/voices")
+      .then((response) => response.json())
+      .then((payload) => {
+        if (!mounted || !Array.isArray(payload.voices)) return
+        setTtsVoices(payload.voices)
+        setTtsVoiceId((current) => current || payload.voices[0]?.voice_id || "")
+      })
+      .catch(() => {
+        if (mounted) setTtsVoices([])
+      })
+
+    return () => {
+      mounted = false
+    }
+  }, [])
 
   function readFileAsDataUrl(file: File) {
     return new Promise<string>((resolve, reject) => {
@@ -212,6 +250,58 @@ export default function ToolsPage() {
     }
   }
 
+  async function runTts(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!ttsText.trim()) {
+      setResult({ title: "文字转语音", content: "请输入要朗读的文字" })
+      return
+    }
+
+    try {
+      setBusy("tts")
+      setTtsJob(null)
+      const response = await fetch("/api/omnivoice/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: ttsText,
+          voice_id: ttsVoiceId || undefined,
+          language: "zh-CN",
+          emotion: "friendly",
+        }),
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok || !payload.job?.job_id) {
+        setResult({ title: "文字转语音", content: payload.error || "语音任务创建失败" })
+        return
+      }
+
+      setTtsJob(payload.job)
+      setResult({ title: "文字转语音", content: "语音任务已创建，正在生成音频..." })
+
+      for (let attempt = 0; attempt < 30; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, attempt < 3 ? 1500 : 3000))
+        const jobResponse = await fetch(`/api/omnivoice/jobs/${encodeURIComponent(payload.job.job_id)}`)
+        const jobPayload = await jobResponse.json().catch(() => ({}))
+        if (!jobResponse.ok || !jobPayload.job) continue
+
+        setTtsJob(jobPayload.job)
+        if (jobPayload.job.status === "succeeded" && jobPayload.job.audio_url) {
+          setResult({ title: "文字转语音", content: "语音已生成，可在左侧播放器试听。" })
+          return
+        }
+        if (jobPayload.job.status === "failed") {
+          setResult({ title: "文字转语音", content: jobPayload.job.error || "语音生成失败" })
+          return
+        }
+      }
+
+      setResult({ title: "文字转语音", content: "语音仍在生成中，请稍后再试。" })
+    } finally {
+      setBusy(null)
+    }
+  }
+
   return (
     <main className="min-h-screen w-full max-w-full overflow-x-hidden bg-[linear-gradient(180deg,var(--paper-50)_0%,var(--paper-100)_100%)] px-4 py-5 dark:bg-[var(--paper-50)] sm:px-6 lg:px-8">
       <div className="mx-auto w-full max-w-7xl space-y-5">
@@ -225,7 +315,7 @@ export default function ToolsPage() {
             </div>
             <div className="hidden w-full min-w-0 grid-cols-3 gap-2 text-center sm:grid md:w-auto">
               {[
-                ["5", "可用工具"],
+                ["6", "可用工具"],
                 ["API", "实时处理"],
                 ["1", "结果面板"],
               ].map(([value, label]) => (
@@ -335,6 +425,56 @@ export default function ToolsPage() {
                   {busy === "spark" ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
                   生成报告
                 </Button>
+              </form>
+            </ToolCard>
+
+            <ToolCard index="06" title="文字转语音" description="把文本转换成可播放音频，调用服务器 OmniVoice 网关。" icon={Megaphone} featured>
+              <form className="space-y-3" onSubmit={runTts}>
+                <Label htmlFor="tts-text">朗读文本</Label>
+                <Textarea
+                  id="tts-text"
+                  rows={4}
+                  value={ttsText}
+                  maxLength={1200}
+                  onChange={(event) => setTtsText(event.target.value)}
+                  placeholder="输入要转换成语音的文字..."
+                />
+                <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+                  <div className="space-y-2">
+                    <Label htmlFor="tts-voice">音色</Label>
+                    <select
+                      id="tts-voice"
+                      value={ttsVoiceId}
+                      onChange={(event) => setTtsVoiceId(event.target.value)}
+                      className="h-10 w-full rounded-[var(--radius-soft)] border border-[var(--paper-300)] bg-[var(--paper-50)] px-3 text-sm text-[var(--ink-800)] outline-none focus:border-[var(--ink-500)]"
+                    >
+                      {ttsVoices.length ? ttsVoices.map((voice) => (
+                        <option key={voice.voice_id} value={voice.voice_id}>
+                          {voice.name}{voice.description ? ` - ${voice.description}` : ""}
+                        </option>
+                      )) : (
+                        <option value="">正在加载音色...</option>
+                      )}
+                    </select>
+                  </div>
+                  <Button type="submit" disabled={busy === "tts" || !ttsText.trim()}>
+                    {busy === "tts" ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+                    生成语音
+                  </Button>
+                </div>
+                {ttsJob ? (
+                  <div className="rounded-[var(--radius-soft)] border border-[var(--paper-200)] bg-[var(--paper-100)]/60 p-3">
+                    <p className="text-xs font-semibold text-[var(--ink-600)]">
+                      状态：{ttsJob.status === "succeeded" ? "已完成" : ttsJob.status === "failed" ? "失败" : "生成中"} · 进度 {Math.round((ttsJob.progress || 0) * 100)}%
+                    </p>
+                    {ttsJob.audio_url ? (
+                      <audio className="mt-3 w-full" controls src={ttsJob.audio_url}>
+                        <a href={ttsJob.audio_url}>播放音频</a>
+                      </audio>
+                    ) : null}
+                    {ttsJob.error ? <p className="mt-2 text-xs text-[var(--seal-600)]">{ttsJob.error}</p> : null}
+                  </div>
+                ) : null}
               </form>
             </ToolCard>
           </div>
