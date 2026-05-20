@@ -15,6 +15,17 @@ npm run perf:baseline -- --base-url=https://shenxiang.school --iterations=3
 
 如果任一命令失败，先修复失败原因，再考虑上线。
 
+## 自动部署与工作区清洁
+
+本项目约定：测试通过后自动部署。除非站长明确要求暂停，上线修复或功能变更在完成必要验证后，应继续部署到生产环境，并完成线上 smoke check。
+
+部署完成后必须保持两端工作区干净：
+
+- 本地 `/Users/aixingren/ai-essay-editor`：提交或明确归类本次变更，不长期保留未说明的未提交改动。
+- 服务器 `/data/ai-essay-editor`：不得长期留下散落的热修复文件、错误同步产物、`.DS_Store` / `._*` 文件、临时备份目录或未归类源码改动。
+- 若临时热修复绕过了 `git pull`，必须尽快补齐正式提交和可追溯部署，并用 `git status --short --branch` 核对服务器工作区。
+- 验证不要只看容器启动成功；还要检查 `/api/health`，并在必要时确认容器内编译产物包含本次改动。
+
 ## 上线前检查清单
 
 - 确认 `.env.production` 已在服务器上存在，但不要覆盖已有生产文件。
