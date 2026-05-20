@@ -9,7 +9,7 @@ import { WorkspaceShell } from "@/components/v2-chrome"
 import type { WorkspaceSidebarSection } from "@/components/v2-chrome"
 import { getVerifiedAuthHeaders } from "@/lib/client-auth"
 import { readClientUserProfile, USER_PROFILE_UPDATED_EVENT } from "@/lib/client-user-profile"
-import { TRIPO3D_EXTERNAL_URL } from "@/lib/tripo3d"
+import { CELLFORGE_EXTERNAL_URL } from "@/lib/tripo3d"
 
 type WorkspaceUser = { name?: string; avatar?: string; credits?: number } | null
 
@@ -69,7 +69,7 @@ export function buildSidebarSections(): WorkspaceSidebarSection[] {
       items: [
         { label: "GPT Image 2", href: "/chat/gpt-image-2", icon: Image, badge: "图像" },
         { label: "Suno V5 音乐", href: "/chat/suno-v5", icon: IconMusic, badge: "音乐" },
-        { label: "Tripo3D 模型生成", href: TRIPO3D_EXTERNAL_URL, icon: Box, badge: "3D" },
+        { label: "3D 细胞工作台", href: CELLFORGE_EXTERNAL_URL, icon: Box, badge: "3D" },
         { label: "全部工具", href: "/tools", icon: IconSettings },
       ],
     },

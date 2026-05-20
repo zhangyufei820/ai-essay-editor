@@ -1,11 +1,11 @@
 import { redirect } from "next/navigation"
-import { TRIPO3D_EXTERNAL_URL } from "@/lib/tripo3d"
+import { CELLFORGE_EXTERNAL_URL } from "@/lib/tripo3d"
 
 export const metadata = {
-  title: "Tripo3D｜沈翔智学",
-  description: "打开 Tripo3D 模型生成工作台。",
+  title: "3D 细胞工作台｜沈翔智学",
+  description: "打开沈翔智学自建 3D 细胞模型工作台。",
 }
 
 export default function Tripo3DPage() {
-  redirect(TRIPO3D_EXTERNAL_URL)
+  redirect(CELLFORGE_EXTERNAL_URL)
 }

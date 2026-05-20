@@ -11,7 +11,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import { X, Image, Box } from "lucide-react"
 import { IconAllInOne, IconMusic } from "@/components/icons/v2"
 import { ModelLogo, type ModelKey } from "@/components/ModelLogo"
-import { TRIPO3D_EXTERNAL_URL } from "@/lib/tripo3d"
+import { CELLFORGE_EXTERNAL_URL } from "@/lib/tripo3d"
 
 // ============================================
 // 🎨 Design Tokens - "智慧之光" 配色系统
@@ -124,13 +124,13 @@ const CREATIVE_OPTIONS: CreativeOption[] = [
   },
   {
     key: "tripo3d",
-    name: "Tripo3D",
+    name: "3D 细胞工作台",
     nameEn: "3D",
     icon: Box,
-    description: "文字 / 图片生成 3D 模型",
+    description: "细胞 3D 场景与模型生成",
     badge: "3D",
     gradient: "linear-gradient(135deg, rgba(63, 90, 66, 0.12) 0%, rgba(178, 58, 44, 0.08) 100%)",
-    href: TRIPO3D_EXTERNAL_URL,
+    href: CELLFORGE_EXTERNAL_URL,
   },
 ]
 
