@@ -81,29 +81,69 @@ function normalizeAmount(amount: number): number | null {
 }
 
 async function getGrantOrNull(userId: string): Promise<FreeTrialGrant | null> {
-  const now = new Date().toISOString()
-  try {
-    const { data, error } = await getSupabaseAdmin()
-      .from("free_trial_grants")
-      .select("*")
-      .eq("user_id", userId)
-      .eq("status", "active")
-      .lte("start_at", now)
-      .gt("end_at", now)
+  return getBestActiveGrantForConsumption(userId)
+}
 
-    if (error) throw error
-    const grants = ((data || []) as FreeTrialGrant[]).sort((left, right) => {
-      if (left.requires_daily_survey !== right.requires_daily_survey) {
-        return left.requires_daily_survey ? 1 : -1
-      }
-      if (left.daily_quota !== right.daily_quota) return right.daily_quota - left.daily_quota
-      return new Date(right.created_at).getTime() - new Date(left.created_at).getTime()
-    })
-    return grants[0] || null
+function sortGrantsForTrialConsumption(left: FreeTrialGrant, right: FreeTrialGrant): number {
+  const leftHasQuota = left.daily_quota > 0
+  const rightHasQuota = right.daily_quota > 0
+  if (leftHasQuota !== rightHasQuota) return leftHasQuota ? -1 : 1
+  if (left.daily_quota !== right.daily_quota) return right.daily_quota - left.daily_quota
+  if (left.requires_daily_survey !== right.requires_daily_survey) {
+    return left.requires_daily_survey ? 1 : -1
+  }
+  return new Date(right.created_at).getTime() - new Date(left.created_at).getTime()
+}
+
+function hasActiveNoSurveyGrant(grants: FreeTrialGrant[]): boolean {
+  return grants.some((grant) => !grant.requires_daily_survey)
+}
+
+async function getActiveGrants(userId: string): Promise<FreeTrialGrant[]> {
+  const now = new Date().toISOString()
+  const { data, error } = await getSupabaseAdmin()
+    .from("free_trial_grants")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("status", "active")
+    .lte("start_at", now)
+    .gt("end_at", now)
+
+  if (error) throw error
+  return (data || []) as FreeTrialGrant[]
+}
+
+async function getBestActiveGrantForConsumption(userId: string): Promise<FreeTrialGrant | null> {
+  try {
+    const grants = await getActiveGrants(userId)
+    return grants.sort(sortGrantsForTrialConsumption)[0] || null
   } catch (error) {
     logger.warn("[trial-credits] active grant list failed, falling back to free-trial helper", { userId, error })
     const grantResult = await getActiveTrialGrant(userId)
     return grantResult.success ? grantResult.data : null
+  }
+}
+
+async function shouldRequireSurveyForGrant(userId: string, grant: FreeTrialGrant): Promise<TrialCreditOperationResult<boolean>> {
+  try {
+    if (!grant.requires_daily_survey) {
+      return { success: true, data: false, error: null }
+    }
+
+    const grants = await getActiveGrants(userId)
+    if (hasActiveNoSurveyGrant(grants)) {
+      return { success: true, data: false, error: null }
+    }
+
+    const submitted = await hasSubmittedSurveyToday(userId)
+    if (!submitted.success) {
+      return { success: false, data: true, error: submitted.error }
+    }
+
+    return { success: true, data: !submitted.data, error: null }
+  } catch (error) {
+    logger.error("[trial-credits] shouldRequireSurveyForGrant failed", { userId, grantId: grant.id, error })
+    return { success: false, data: true, error: getErrorMessage(error) }
   }
 }
 
@@ -126,11 +166,6 @@ export async function getTodayTrialUsage(userId: string): Promise<TrialCreditOpe
 
 export async function getTodayTrialRemaining(userId: string): Promise<TrialCreditOperationResult<number>> {
   try {
-    const status = await getUserTrialStatus(userId)
-    if (status.success && status.data) {
-      return { success: true, data: status.data.today_trial_remaining, error: null }
-    }
-
     const grant = await getGrantOrNull(userId)
     if (!grant) return { success: true, data: 0, error: null }
 
@@ -146,16 +181,10 @@ export async function getTodayTrialRemaining(userId: string): Promise<TrialCredi
 export async function shouldRequireSurveyBeforeTrialUse(userId: string): Promise<TrialCreditOperationResult<boolean>> {
   try {
     const grant = await getGrantOrNull(userId)
-    if (!grant || !grant.requires_daily_survey) {
+    if (!grant) {
       return { success: true, data: false, error: null }
     }
-
-    const submitted = await hasSubmittedSurveyToday(userId)
-    if (!submitted.success) {
-      return { success: false, data: true, error: submitted.error }
-    }
-
-    return { success: true, data: !submitted.data, error: null }
+    return shouldRequireSurveyForGrant(userId, grant)
   } catch (error) {
     logger.error("[trial-credits] shouldRequireSurveyBeforeTrialUse failed", { userId, error })
     return { success: false, data: true, error: getErrorMessage(error) }
@@ -477,16 +506,14 @@ export async function consumeWithTrialCredits(
       }
     }
 
-    if (grant.requires_daily_survey) {
-      const submitted = await hasSubmittedSurveyToday(input.userId)
-      if (!submitted.data) {
-        return {
-          ...baseResult,
-          success: true,
-          blocked: true,
-          reason: "survey_required",
-          grantId: grant.id,
-        }
+    const surveyRequired = await shouldRequireSurveyForGrant(input.userId, grant)
+    if (surveyRequired.data) {
+      return {
+        ...baseResult,
+        success: true,
+        blocked: true,
+        reason: "survey_required",
+        grantId: grant.id,
       }
     }
 

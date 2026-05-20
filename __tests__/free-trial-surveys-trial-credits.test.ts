@@ -327,10 +327,16 @@ describe("trial credit libraries", () => {
     const supabase = createSupabaseMock({
       free_trial_grants: [createGrant()],
       survey_responses: [{ id: "survey-1", user_id: "user-1", survey_date: today }],
-      user_trial_status: [{
+      trial_credit_usages: [{
+        id: "usage-existing",
         user_id: "user-1",
-        active_grant_id: "grant-1",
-        today_trial_remaining: 120,
+        grant_id: "grant-1",
+        usage_date: today,
+        action_type: "essay_review",
+        amount: 1880,
+        reference_id: "existing",
+        metadata: {},
+        created_at: new Date().toISOString(),
       }],
       user_credits: [{ user_id: "user-1", credits: 500 }],
     })
@@ -361,7 +367,7 @@ describe("trial credit libraries", () => {
     )
   })
 
-  it("consumeWithTrialCredits prefers paid extension grants that do not require surveys", async () => {
+  it("consumeWithTrialCredits uses campaign quota while paid extension removes the survey gate", async () => {
     const supabase = createSupabaseMock({
       free_trial_grants: [
         createGrant({ id: "campaign-grant", grant_type: "campaign", requires_daily_survey: true, daily_quota: 2000 }),
@@ -369,8 +375,8 @@ describe("trial credit libraries", () => {
       ],
       user_trial_status: [{
         user_id: "user-1",
-        active_grant_id: "paid-extension",
-        today_trial_remaining: 0,
+        active_grant_id: "campaign-grant",
+        today_trial_remaining: 2000,
       }],
       user_credits: [{ user_id: "user-1", credits: 500 }],
     })
@@ -386,19 +392,22 @@ describe("trial credit libraries", () => {
     expect(result).toMatchObject({
       success: true,
       blocked: false,
-      grantId: "paid-extension",
-      trialUsed: 0,
-      realCreditsUsed: 100,
-      realCreditsSpent: true,
+      grantId: "campaign-grant",
+      trialUsed: 100,
+      realCreditsUsed: 0,
+      remainingToday: 1900,
+      realCreditsSpent: false,
     })
-    expect(spendRealCredits).toHaveBeenCalledWith(
-      "user-1",
-      100,
-      "paid_user_agent",
-      expect.stringContaining("超出体验额度"),
-      "paid-1",
-      expect.objectContaining({ chargedCredits: 100, skipTrialBilling: true }),
-    )
+    expect(spendRealCredits).not.toHaveBeenCalled()
+    expect(supabase.tables.trial_credit_usages).toEqual([
+      expect.objectContaining({
+        user_id: "user-1",
+        grant_id: "campaign-grant",
+        amount: 100,
+        action_type: "paid_user_agent",
+        reference_id: "paid-1",
+      }),
+    ])
   })
 
   it("consumeWithTrialCredits falls back to real credits for non-trial users", async () => {
