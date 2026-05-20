@@ -103,6 +103,29 @@ describe('Sprint 5 payment / credits / membership guards', () => {
     expect(image2).not.toContain('return "GPT Image 2 当前仅订阅用户可用，请升级会员后使用。"')
   })
 
+  it('creates async GPT Image 2 task ownership before the client starts polling', () => {
+    const source = read('app/api/dify-chat/route.ts')
+    const awaitedCreate = source.indexOf('? await createTaskRun(createTaskRunInput)')
+    const startTask = source.indexOf('const taskId = await startImageGatewayTask')
+
+    expect(source).toContain('const createTaskRunInput = {')
+    expect(source).toContain('isGptImageGatewayRequest && async_image_task === true')
+    expect(awaitedCreate).toBeGreaterThan(-1)
+    expect(startTask).toBeGreaterThan(awaitedCreate)
+  })
+
+  it('keeps the standalone image workspace generation request independent from stale chat session ownership', () => {
+    const image2 = read('components/chat/gpt-image2-chat-interface.tsx')
+    const fetchStart = image2.indexOf('fetch(`${API_BASE}/api/dify-chat`')
+    const bodyStart = image2.indexOf('body: JSON.stringify({', fetchStart)
+    const bodyEnd = image2.indexOf('}),', bodyStart)
+    const requestBody = image2.slice(bodyStart, bodyEnd)
+
+    expect(requestBody).toContain('requestId')
+    expect(requestBody).not.toContain('sessionId:')
+    expect(requestBody).not.toContain('conversation_id:')
+  })
+
   it('keeps Image 2 prompt optimization authenticated and server-side', () => {
     const route = read('app/api/image-prompt/optimize/route.ts')
     const client = read('components/chat/gpt-image2-chat-interface.tsx')

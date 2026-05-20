@@ -1247,13 +1247,7 @@ export async function POST(request: NextRequest) {
 
     const imageInputsForBilling = isGptImageGatewayRequest ? buildGptImageV11Inputs(inputs) : null
     const billingModelType = imageInputsForBilling?.model as ModelType | undefined
-    const taskRun = {
-      id: requestId,
-      requestId,
-      traceId: createTraceId(requestId),
-      persisted: false,
-    }
-    fireAndForget("AI Task Trace create", createTaskRun({
+    const createTaskRunInput = {
       userId,
       sessionId: typeof sessionId === "string" ? sessionId : null,
       messageId: typeof messageId === "string" ? messageId : null,
@@ -1268,7 +1262,18 @@ export async function POST(request: NextRequest) {
         max_output_tokens: configuredMaxOutputTokens,
         async_image_task: async_image_task === true,
       },
-    }))
+    }
+    const taskRun = isGptImageGatewayRequest && async_image_task === true
+      ? await createTaskRun(createTaskRunInput)
+      : {
+          id: requestId,
+          requestId,
+          traceId: createTraceId(requestId),
+          persisted: false,
+        }
+    if (!(isGptImageGatewayRequest && async_image_task === true)) {
+      fireAndForget("AI Task Trace create", createTaskRun(createTaskRunInput))
+    }
 
     if (typeof sessionId === "string" && sessionId.trim()) {
       const { data: sessionOwner, error: sessionOwnerError } = await getSupabaseAdmin()

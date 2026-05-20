@@ -1110,15 +1110,13 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
         body: JSON.stringify({
           query: cleanPrompt,
           inputs: submittedInputs,
-          conversation_id: currentSessionIdRef.current || undefined,
-	          model: workspaceModel,
-	          mode: "image",
-	          imageSize: isBananaWorkspace ? resolveBananaImageSize(size, aspectRatio) : undefined,
-	          async_image_task: workspaceModel === "gpt-image-2",
-	          requestId,
-	          sessionId: currentSessionIdRef.current || undefined,
-	        }),
-	      })
+          model: workspaceModel,
+          mode: "image",
+          imageSize: isBananaWorkspace ? resolveBananaImageSize(size, aspectRatio) : undefined,
+          async_image_task: workspaceModel === "gpt-image-2",
+          requestId,
+        }),
+      })
 	      const traceId = response.headers.get("X-Trace-Id") || undefined
 
       let imageUrls: string[] = []
