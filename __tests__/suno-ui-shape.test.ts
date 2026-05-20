@@ -46,4 +46,12 @@ describe("Suno UI shape", () => {
     expect(source).toContain('import { getVerifiedAuthHeaders } from "@/lib/client-auth"')
     expect(source).toContain("...(await getVerifiedAuthHeaders())")
   })
+
+  it("does not show raw object errors to users", () => {
+    const source = read("components/suno/SunoPage.tsx")
+
+    expect(source).toContain("function extractErrorMessage")
+    expect(source).toContain("生成失败，请稍后再试或联系客服。")
+    expect(source).not.toContain('setError(toText(next.error)')
+  })
 })

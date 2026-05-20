@@ -85,6 +85,25 @@ function toText(value: unknown) {
   return String(value)
 }
 
+function extractErrorMessage(value: unknown): string {
+  if (!value) return ""
+  if (typeof value === "string") return value
+  if (value instanceof Error) return value.message
+  if (Array.isArray(value)) {
+    return value.map(extractErrorMessage).filter(Boolean).join("；")
+  }
+  if (typeof value === "object") {
+    const record = value as Record<string, unknown>
+    for (const key of ["error", "message", "detail", "msg", "reason", "code"]) {
+      const text = extractErrorMessage(record[key])
+      if (text) return text
+    }
+    const detailText = extractErrorMessage(record.details)
+    if (detailText) return detailText
+  }
+  return ""
+}
+
 function readNested(value: unknown, path: Array<string | number>): unknown {
   let current = value as any
   for (const key of path) {
@@ -518,7 +537,7 @@ export function SunoPage() {
 
       if (!next.success) {
         setStatus("failed")
-        setError(toText(next.error) || "提交失败，请稍后重试。")
+        setError(extractErrorMessage(next.error || next.response_json) || "生成失败，请稍后再试或联系客服。")
         return
       }
       if (next.audio_urls?.length) {
