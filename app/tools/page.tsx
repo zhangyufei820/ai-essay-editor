@@ -124,6 +124,51 @@ async function readResponseJson(response: Response) {
   }
 }
 
+async function readReversePromptStream(
+  response: Response,
+  onProgress: (event: { progress?: unknown; stage?: unknown }) => void,
+) {
+  const reader = response.body?.getReader()
+  if (!reader) return readResponseJson(response)
+
+  const decoder = new TextDecoder()
+  let buffer = ""
+  let finalPayload: any = null
+
+  const handleLine = (line: string) => {
+    if (!line.trim()) return
+    let event: any
+    try {
+      event = JSON.parse(line)
+    } catch {
+      finalPayload = { type: "error", error: "反推连接中断，请稍后重试。" }
+      return
+    }
+    if (event.type === "progress") {
+      onProgress(event)
+      return
+    }
+    if (event.type === "done" || event.type === "error") {
+      finalPayload = event
+    }
+  }
+
+  while (true) {
+    const { value, done } = await reader.read()
+    if (value) {
+      buffer += decoder.decode(value, { stream: !done })
+      const lines = buffer.split("\n")
+      buffer = lines.pop() || ""
+      for (const line of lines) handleLine(line)
+    }
+    if (done) break
+  }
+
+  buffer += decoder.decode()
+  if (buffer.trim()) handleLine(buffer)
+  return finalPayload || {}
+}
+
 function extractMarkdownImageUrls(content: string) {
   return Array.from(content.matchAll(/!\[[^\]]*]\(([^)]+)\)/g), (match) => match[1])
     .filter((url): url is string => Boolean(url))
@@ -369,16 +414,20 @@ export default function ToolsPage() {
       formData.append("target_model", reverseTargetModel)
 
       setReverseProgress(28)
-      const response = await fetch("/api/image-prompt/reverse", {
+      const response = await fetch("/api/image-prompt/reverse?stream=1", {
         method: "POST",
         headers: await getVerifiedAuthHeaders(),
         body: formData,
       })
       setReverseProgress(86)
-      const payload = await readResponseJson(response)
+      const payload = await readReversePromptStream(response, (event) => {
+        const progress = Number(event.progress)
+        if (Number.isFinite(progress)) setReverseProgress(Math.max(0, Math.min(99, progress)))
+        if (typeof event.stage === "string" && event.stage.trim()) setReverseStage(event.stage.trim())
+      })
       const prompt = typeof payload?.prompt === "string" ? payload.prompt.trim() : ""
 
-      if (!response.ok || !prompt || isHtmlErrorContent(prompt)) {
+      if (!response.ok || payload?.type === "error" || !prompt || isHtmlErrorContent(prompt)) {
         throw new Error(typeof payload?.error === "string" ? payload.error : "反推提示词失败")
       }
 

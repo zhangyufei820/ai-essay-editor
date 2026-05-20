@@ -18,6 +18,17 @@ const TARGET_MODELS = new Set(["gpt-image-2", "nano_banana"])
 const MAX_PROMPT_CHARS = 8000
 const REVERSE_PROMPT_MODEL_ID = "image-prompt-reverse"
 const ALLOWED_IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif"])
+const STREAM_HEARTBEAT_MS = 8_000
+
+type ReverseSuccessPayload = {
+  ok: true
+  prompt: string
+  target_model: string
+  workflowRunId?: string
+  taskId?: string
+  messageId?: string
+  billing: ReturnType<typeof createBillingPayload>
+}
 
 function readString(value: unknown) {
   return typeof value === "string" ? value.trim() : ""
@@ -212,6 +223,140 @@ function buildReverseInputs(uploadFileId: string, targetModel: string) {
   }
 }
 
+function createJsonLineEncoder(controller: ReadableStreamDefaultController<Uint8Array>) {
+  const encoder = new TextEncoder()
+  return (event: Record<string, unknown>) => {
+    controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`))
+  }
+}
+
+async function processReverseRequest(file: File, targetModel: string, userId: string, apiKey: string, emit?: (event: Record<string, unknown>) => void): Promise<ReverseSuccessPayload | NextResponse> {
+  emit?.({ type: "progress", progress: 32, stage: "正在上传图片" })
+  const uploadFileId = await uploadFileToDify(file, userId, apiKey)
+  const inputs = buildReverseInputs(uploadFileId, targetModel)
+  let workflowRunId: string | undefined
+  let taskId: string | undefined
+  let rawPayload: Record<string, unknown>
+
+  emit?.({ type: "progress", progress: 48, stage: "图片已上传，正在等待反推结果" })
+  try {
+    rawPayload = await runReverseChatflow(apiKey, userId, inputs)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    if (!/app mode matches|workflow|CHATFLOW_REVERSE_FAILED:404/i.test(message)) {
+      throw error
+    }
+    emit?.({ type: "progress", progress: 56, stage: "正在切换兼容调用方式" })
+    const workflow = await runDifyWorkflow({
+      apiKey,
+      inputs,
+      user: userId,
+      responseMode: "blocking",
+      timeoutMs: 150_000,
+    })
+    workflowRunId = workflow.workflowRunId
+    taskId = workflow.taskId
+    rawPayload = {
+      ...workflow.raw,
+      outputs: workflow.outputs,
+      data: {
+        ...asRecord(workflow.raw.data),
+        outputs: workflow.outputs,
+      },
+    }
+  }
+
+  emit?.({ type: "progress", progress: 88, stage: "已收到反推结果，正在整理并扣费" })
+  const prompt = extractPromptFromPayload(rawPayload)
+
+  if (!prompt || isHtmlErrorContent(prompt)) {
+    return NextResponse.json({ error: "反推结果为空，请换一张图片重试", code: "EMPTY_REVERSE_PROMPT" }, { status: 502 })
+  }
+
+  const parsedUsage = parseDifyUsage({
+    ...rawPayload,
+    text: prompt,
+  })
+  const tokenCredits = calculateTextCredits({
+    ...parsedUsage,
+    outputText: prompt,
+    hasOutput: true,
+  })
+  const billingReferenceId = `image-prompt-reverse:${workflowRunId || taskId || readString(rawPayload.message_id) || Date.now()}`
+  const billingMetadata = createBillingAuditMetadata({
+    userId,
+    actionType: "consume",
+    feature: "image_prompt_reverse",
+    appId: "DIFY_IMAGE_PROMPT_REVERSE_API_KEY",
+    workflowId: workflowRunId || null,
+    modelId: REVERSE_PROMPT_MODEL_ID,
+    requestedAppId: "DIFY_IMAGE_PROMPT_REVERSE_API_KEY",
+    requestedWorkflowId: workflowRunId || null,
+    requestedModelId: targetModel,
+    pricingVersion: PRICING_VERSION,
+    usageSource: parsedUsage.usageSource,
+    estimated: parsedUsage.estimated,
+    promptTokens: parsedUsage.promptTokens,
+    completionTokens: parsedUsage.completionTokens,
+    totalTokens: parsedUsage.totalTokens,
+    chargedCredits: tokenCredits,
+    rawUsageJson: parsedUsage.rawUsage || null,
+    finishReason: parsedUsage.finishReason || null,
+    latency: parsedUsage.latency ?? null,
+    timeToFirstToken: parsedUsage.timeToFirstToken ?? null,
+    rawProviderMetadata: {
+      targetModel,
+      taskId: taskId || null,
+      workflowRunId: workflowRunId || null,
+      messageId: readString(rawPayload.message_id) || null,
+    },
+    description: "图像提示词反推",
+  })
+  const billingResult = await consumeWithTrialCredits({
+    userId,
+    amount: tokenCredits,
+    actionType: "consume",
+    description: "图像提示词反推",
+    referenceId: billingReferenceId,
+    metadata: {
+      feature: "image_prompt_reverse",
+      targetModel,
+    },
+    billingMetadata,
+  })
+  const billing = createBillingPayload(billingResult)
+
+  if (billingResult.blocked && billingResult.reason === "survey_required") {
+    return NextResponse.json({
+      error: "请先完成今日问卷，解锁免费体验额度",
+      surveyRequired: true,
+      billing,
+    }, { status: 402 })
+  }
+
+  if (!billingResult.success) {
+    await recordBillingIssue(
+      userId,
+      tokenCredits,
+      "consume",
+      "异常账单：图像提示词反推",
+      billingReferenceId,
+      billingMetadata,
+    )
+    return NextResponse.json({ error: "积分不足，无法反推提示词", billing }, { status: 402 })
+  }
+
+  return {
+    ok: true,
+    prompt,
+    target_model: targetModel,
+    workflowRunId,
+    taskId,
+    messageId: readString(rawPayload.message_id),
+    billing,
+  }
+}
+
 export async function POST(request: NextRequest) {
   const rateLimitResponse = applyRateLimit(request, {
     keyPrefix: "image-prompt-reverse",
@@ -251,127 +396,49 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "参数错误：target_model 仅支持 gpt-image-2 或 nano_banana", code: "INVALID_TARGET_MODEL" }, { status: 400 })
   }
 
+  const wantsStream = request.nextUrl.searchParams.get("stream") === "1"
+  if (wantsStream) {
+    const stream = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        const emit = createJsonLineEncoder(controller)
+        let heartbeat: ReturnType<typeof setInterval> | null = null
+
+        try {
+          emit({ type: "progress", progress: 24, stage: "任务已开始" })
+          heartbeat = setInterval(() => {
+            emit({ type: "progress", progress: 76, stage: "反推仍在进行，请稍候" })
+          }, STREAM_HEARTBEAT_MS)
+          const result = await processReverseRequest(file, targetModel, auth.user!.id, apiKey, emit)
+          if (heartbeat) clearInterval(heartbeat)
+          if (result instanceof NextResponse) {
+            const payload = await result.json().catch(() => ({ error: "处理失败，请稍后重试。" }))
+            emit({ type: "error", ...payload, status: result.status })
+          } else {
+            emit({ type: "done", progress: 100, ...result })
+          }
+        } catch (error) {
+          if (heartbeat) clearInterval(heartbeat)
+          console.error("[ImagePromptReverse] failed:", error instanceof Error ? error.message : error)
+          emit({ type: "error", error: sanitizeReverseError(error), code: "REVERSE_FAILED", status: 502 })
+        } finally {
+          controller.close()
+        }
+      },
+    })
+
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "application/x-ndjson; charset=utf-8",
+        "Cache-Control": "no-cache, no-transform",
+        "X-Accel-Buffering": "no",
+      },
+    })
+  }
+
   try {
-    const uploadFileId = await uploadFileToDify(file, auth.user!.id, apiKey)
-    const inputs = buildReverseInputs(uploadFileId, targetModel)
-    let workflowRunId: string | undefined
-    let taskId: string | undefined
-    let rawPayload: Record<string, unknown>
-
-    try {
-      rawPayload = await runReverseChatflow(apiKey, auth.user!.id, inputs)
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      if (!/app mode matches|workflow|CHATFLOW_REVERSE_FAILED:404/i.test(message)) {
-        throw error
-      }
-      const workflow = await runDifyWorkflow({
-        apiKey,
-        inputs,
-        user: auth.user!.id,
-        responseMode: "blocking",
-        timeoutMs: 150_000,
-      })
-      workflowRunId = workflow.workflowRunId
-      taskId = workflow.taskId
-      rawPayload = {
-        ...workflow.raw,
-        outputs: workflow.outputs,
-        data: {
-          ...asRecord(workflow.raw.data),
-          outputs: workflow.outputs,
-        },
-      }
-    }
-
-    const prompt = extractPromptFromPayload(rawPayload)
-
-    if (!prompt || isHtmlErrorContent(prompt)) {
-      return NextResponse.json({ error: "反推结果为空，请换一张图片重试", code: "EMPTY_REVERSE_PROMPT" }, { status: 502 })
-    }
-
-    const parsedUsage = parseDifyUsage({
-      ...rawPayload,
-      text: prompt,
-    })
-    const tokenCredits = calculateTextCredits({
-      ...parsedUsage,
-      outputText: prompt,
-      hasOutput: true,
-    })
-    const billingReferenceId = `image-prompt-reverse:${workflowRunId || taskId || readString(rawPayload.message_id) || Date.now()}`
-    const billingMetadata = createBillingAuditMetadata({
-      userId: auth.user!.id,
-      actionType: "consume",
-      feature: "image_prompt_reverse",
-      appId: "DIFY_IMAGE_PROMPT_REVERSE_API_KEY",
-      workflowId: workflowRunId || null,
-      modelId: REVERSE_PROMPT_MODEL_ID,
-      requestedAppId: "DIFY_IMAGE_PROMPT_REVERSE_API_KEY",
-      requestedWorkflowId: workflowRunId || null,
-      requestedModelId: targetModel,
-      pricingVersion: PRICING_VERSION,
-      usageSource: parsedUsage.usageSource,
-      estimated: parsedUsage.estimated,
-      promptTokens: parsedUsage.promptTokens,
-      completionTokens: parsedUsage.completionTokens,
-      totalTokens: parsedUsage.totalTokens,
-      chargedCredits: tokenCredits,
-      rawUsageJson: parsedUsage.rawUsage || null,
-      finishReason: parsedUsage.finishReason || null,
-      latency: parsedUsage.latency ?? null,
-      timeToFirstToken: parsedUsage.timeToFirstToken ?? null,
-      rawProviderMetadata: {
-        targetModel,
-        taskId: taskId || null,
-        workflowRunId: workflowRunId || null,
-        messageId: readString(rawPayload.message_id) || null,
-      },
-      description: "图像提示词反推",
-    })
-    const billingResult = await consumeWithTrialCredits({
-      userId: auth.user!.id,
-      amount: tokenCredits,
-      actionType: "consume",
-      description: "图像提示词反推",
-      referenceId: billingReferenceId,
-      metadata: {
-        feature: "image_prompt_reverse",
-        targetModel,
-      },
-      billingMetadata,
-    })
-    const billing = createBillingPayload(billingResult)
-
-    if (billingResult.blocked && billingResult.reason === "survey_required") {
-      return NextResponse.json({
-        error: "请先完成今日问卷，解锁免费体验额度",
-        surveyRequired: true,
-        billing,
-      }, { status: 402 })
-    }
-
-    if (!billingResult.success) {
-      await recordBillingIssue(
-        auth.user!.id,
-        tokenCredits,
-        "consume",
-        "异常账单：图像提示词反推",
-        billingReferenceId,
-        billingMetadata,
-      )
-      return NextResponse.json({ error: "积分不足，无法反推提示词", billing }, { status: 402 })
-    }
-
-    return NextResponse.json({
-      ok: true,
-      prompt,
-      target_model: targetModel,
-      workflowRunId,
-      taskId,
-      messageId: readString(rawPayload.message_id),
-      billing,
-    })
+    const result = await processReverseRequest(file, targetModel, auth.user!.id, apiKey)
+    if (result instanceof NextResponse) return result
+    return NextResponse.json(result)
   } catch (error) {
     console.error("[ImagePromptReverse] failed:", error instanceof Error ? error.message : error)
     return NextResponse.json({ error: sanitizeReverseError(error), code: "REVERSE_FAILED" }, { status: 502 })
