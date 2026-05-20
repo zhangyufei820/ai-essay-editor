@@ -69,6 +69,10 @@ curl -X POST https://voice-api.shenxiang.school/v1/tts \
   -d '{"text":"你好，这是一段沈翔智学 AI 老师语音讲评测试。","voice_id":"teacher_female_01","sync":true}'
 ```
 
+The gateway defaults to `PREFER_GENERATE_ENDPOINT=true`, so TTS requests call
+OmniVoice Studio's `/generate` endpoint first. Set it to `false` only when the
+upstream exposes an OpenAI-compatible `/v1/audio/speech` endpoint.
+
 ## Dify
 
 See `docs/dify_import.md`.

@@ -53,6 +53,8 @@ describe("tools workbench route mappings", () => {
     expect(page).toContain('fetch("/api/omnivoice/voices"')
     expect(page).toContain('fetch("/api/omnivoice/tts"')
     expect(page).toContain("/api/omnivoice/jobs/")
+    expect(page).toContain("TTS_POLL_MAX_ATTEMPTS = 150")
+    expect(page).toContain("语音模型首次加载可能需要几分钟")
     expect(page).toContain("图像提示词反推")
     expect(page).toContain("gpt-image-2")
     expect(page).toContain("nano_banana")

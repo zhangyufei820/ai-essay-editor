@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     rate_limit_per_minute: int = Field(default=30, alias="RATE_LIMIT_PER_MINUTE")
     clone_rate_limit_per_hour: int = Field(default=3, alias="CLONE_RATE_LIMIT_PER_HOUR")
     mock_tts_when_omnivoice_unavailable: bool = Field(default=False, alias="MOCK_TTS_WHEN_OMNIVOICE_UNAVAILABLE")
+    prefer_generate_endpoint: bool = Field(default=True, alias="PREFER_GENERATE_ENDPOINT")
     version: str = "0.1.0"
 
     @property

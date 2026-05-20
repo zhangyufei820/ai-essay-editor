@@ -45,7 +45,17 @@ class OmniVoiceClient:
         filename = f"{uuid.uuid4().hex}.{fmt}"
         mime_type = MIME_BY_FORMAT.get(fmt, "application/octet-stream")
         try:
-            content, mime_type, filename = await self._synthesize_openai_compat(request, voice_id, filename, mime_type)
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                if self.settings.prefer_generate_endpoint:
+                    content, mime_type, filename = await self._synthesize_generate(client, request, voice_id, filename)
+                else:
+                    content, mime_type, filename = await self._synthesize_openai_compat(
+                        client,
+                        request,
+                        voice_id,
+                        filename,
+                        mime_type,
+                    )
             path = await save_audio_bytes(self.settings.media_dir, filename, content)
         except Exception as exc:
             if self.settings.mock_tts_when_omnivoice_unavailable:
@@ -64,6 +74,7 @@ class OmniVoiceClient:
 
     async def _synthesize_openai_compat(
         self,
+        client: httpx.AsyncClient,
         request: TTSRequest,
         voice_id: str,
         filename: str,
@@ -78,22 +89,21 @@ class OmniVoiceClient:
             "language": self._map_language(request.language),
             "instruct": self._map_instruct(voice_id, request.emotion),
         }
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            response = await client.post(
-                f"{self.settings.omnivoice_base_url.rstrip('/')}/v1/audio/speech",
-                json=payload,
-            )
-            if response.status_code in {404, 405}:
-                return await self._synthesize_generate(client, request, voice_id, filename)
-            response.raise_for_status()
-            content = response.content
-            mime_type = response.headers.get("content-type", mime_type).split(";")[0]
-            disposition = response.headers.get("content-disposition", "")
-            if "filename=" in disposition and "." in disposition:
-                upstream_ext = disposition.rsplit(".", 1)[-1].strip("\"'")
-                if upstream_ext and upstream_ext != request.format:
-                    filename = f"{Path(filename).stem}.{upstream_ext}"
-            return content, mime_type, filename
+        response = await client.post(
+            f"{self.settings.omnivoice_base_url.rstrip('/')}/v1/audio/speech",
+            json=payload,
+        )
+        if response.status_code in {404, 405}:
+            return await self._synthesize_generate(client, request, voice_id, filename)
+        response.raise_for_status()
+        content = response.content
+        mime_type = response.headers.get("content-type", mime_type).split(";")[0]
+        disposition = response.headers.get("content-disposition", "")
+        if "filename=" in disposition and "." in disposition:
+            upstream_ext = disposition.rsplit(".", 1)[-1].strip("\"'")
+            if upstream_ext and upstream_ext != request.format:
+                filename = f"{Path(filename).stem}.{upstream_ext}"
+        return content, mime_type, filename
 
     async def _synthesize_generate(
         self,

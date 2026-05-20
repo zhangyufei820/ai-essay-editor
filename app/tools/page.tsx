@@ -55,6 +55,9 @@ type VoiceJob = {
   voice_id?: string | null
 }
 
+const TTS_POLL_MAX_ATTEMPTS = 150
+const TTS_POLL_SLOW_HINT_AFTER_ATTEMPTS = 12
+
 function JsonBlock({ value }: { value: unknown }) {
   if (typeof value === "string") {
     return <div className="whitespace-pre-wrap rounded-[var(--radius-soft)] bg-[var(--paper-100)]/50 p-3 text-sm leading-6">{value}</div>
@@ -553,13 +556,16 @@ export default function ToolsPage() {
       setTtsJob(payload.job)
       setResult({ title: "文字转语音", content: "语音任务已创建，正在生成音频..." })
 
-      for (let attempt = 0; attempt < 30; attempt += 1) {
-        await new Promise((resolve) => setTimeout(resolve, attempt < 3 ? 1500 : 3000))
+      for (let attempt = 0; attempt < TTS_POLL_MAX_ATTEMPTS; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, attempt < 3 ? 1500 : 5000))
         const jobResponse = await fetch(`/api/omnivoice/jobs/${encodeURIComponent(payload.job.job_id)}`)
         const jobPayload = await jobResponse.json().catch(() => ({}))
         if (!jobResponse.ok || !jobPayload.job) continue
 
         setTtsJob(jobPayload.job)
+        if (jobPayload.job.status === "running" && attempt === TTS_POLL_SLOW_HINT_AFTER_ATTEMPTS) {
+          setResult({ title: "文字转语音", content: "语音模型首次加载可能需要几分钟，系统仍在生成，请不要关闭页面。" })
+        }
         if (jobPayload.job.status === "succeeded" && jobPayload.job.audio_url) {
           setResult({ title: "文字转语音", content: "语音已生成，可在左侧播放器试听。" })
           return
@@ -570,7 +576,7 @@ export default function ToolsPage() {
         }
       }
 
-      setResult({ title: "文字转语音", content: "语音仍在生成中，请稍后再试。" })
+      setResult({ title: "文字转语音", content: "语音仍在生成中。任务已提交到服务器，请稍后点击生成语音重试或联系管理员查询任务 ID。" })
     } finally {
       setBusy(null)
     }
@@ -824,6 +830,11 @@ export default function ToolsPage() {
                     <p className="text-xs font-semibold text-[var(--ink-600)]">
                       状态：{ttsJob.status === "succeeded" ? "已完成" : ttsJob.status === "failed" ? "失败" : "生成中"} · 进度 {Math.round((ttsJob.progress || 0) * 100)}%
                     </p>
+                    {busy === "tts" && !ttsJob.audio_url && ttsJob.status !== "failed" ? (
+                      <p className="mt-2 text-xs leading-5 text-[var(--ink-500)]">
+                        正在轮询服务器任务。首次加载 OmniVoice 模型时可能会停在 20% 数分钟，生成完成后播放器会自动出现。
+                      </p>
+                    ) : null}
                     {ttsJob.audio_url ? (
                       <audio className="mt-3 w-full" controls src={ttsJob.audio_url}>
                         <a href={ttsJob.audio_url}>播放音频</a>
