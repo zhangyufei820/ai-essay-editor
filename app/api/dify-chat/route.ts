@@ -114,6 +114,23 @@ function pickUrlStrings(value: unknown): string[] {
     .filter((item) => item.startsWith("http://") || item.startsWith("https://"))
 }
 
+function isHtmlErrorContent(value: unknown) {
+  if (typeof value !== "string") return false
+  const text = value.trim().toLowerCase()
+  return (
+    text.startsWith("<!doctype html") ||
+    text.startsWith("<html") ||
+    text.includes("<title>shenxiang.school | 502: bad gateway</title>") ||
+    (text.includes("cloudflare") && text.includes("bad gateway"))
+  )
+}
+
+function sanitizeUpstreamErrorText(value: unknown, fallback = "图片服务暂时不可用，请稍后重试。") {
+  if (typeof value !== "string") return fallback
+  if (!value.trim() || isHtmlErrorContent(value)) return fallback
+  return value.replace(/Dify\s*API/gi, "图片服务").replace(/Dify/gi, "服务").replace(/网关/g, "服务")
+}
+
 function buildGptImageV11Inputs(inputs: unknown): GptImageV11Inputs {
   const record = inputs && typeof inputs === "object" ? inputs as Record<string, unknown> : {}
   const referenceImageUrls = pickUrlStrings(record.reference_image_urls)
@@ -773,7 +790,9 @@ function createImageGatewayResponse(payload: unknown) {
   const detail = record.detail && typeof record.detail === "object" ? record.detail as Record<string, unknown> : {}
   const requestPayload = detail.request_payload && typeof detail.request_payload === "object" ? detail.request_payload as Record<string, unknown> : {}
   const referenceImageUrls = Array.isArray(requestPayload.reference_image_urls) ? requestPayload.reference_image_urls : []
-  const message = typeof record.message === "string" ? record.message : success ? "图片生成成功" : "图片生成失败"
+  const message = typeof record.message === "string"
+    ? sanitizeUpstreamErrorText(record.message, success ? "图片生成成功" : "图片服务暂时不可用，请稍后重试。")
+    : success ? "图片生成成功" : "图片服务暂时不可用，请稍后重试。"
   const answer = [message, ...imageUrls.map((url) => `![Generated Image](${url})`)].join("\n\n")
 
   console.log("[GPT Image Gateway] response", {
@@ -786,7 +805,7 @@ function createImageGatewayResponse(payload: unknown) {
   })
 
   if (!success) {
-    return Response.json({ error: message, data: record }, { status: statusCode >= 400 ? statusCode : 502 })
+    return Response.json({ error: message, code: "IMAGE_GATEWAY_FAILED" }, { status: statusCode >= 400 ? statusCode : 502 })
   }
 
   return Response.json({
@@ -828,11 +847,13 @@ async function callImageGatewayDirect(query: string, inputs: unknown) {
     try {
       payload = JSON.parse(text)
     } catch {
-      payload = { success: false, message: text.slice(0, 500), status_code: response.status }
+      payload = { success: false, message: sanitizeUpstreamErrorText(text), status_code: response.status }
     }
 
     if (!response.ok) {
-      return Response.json({ error: "图片服务请求失败", data: payload }, { status: response.status })
+      const record = payload && typeof payload === "object" ? payload as Record<string, unknown> : {}
+      const message = sanitizeUpstreamErrorText(record.message, "图片服务请求失败，请稍后重试。")
+      return Response.json({ error: message, code: "IMAGE_GATEWAY_HTTP_ERROR" }, { status: response.status })
     }
 
     return createImageGatewayResponse(payload)
@@ -1746,7 +1767,10 @@ export async function POST(request: NextRequest) {
           })
         }
         
-        return new Response(JSON.stringify({ error: `Dify Error: ${errorText}` }), { status: response.status })
+        return new Response(
+          JSON.stringify({ error: sanitizeUpstreamErrorText(errorText, "服务暂时不可用，请稍后重试。") }),
+          { status: response.status },
+        )
     }
 
     // 🎨 GPT Image V11 使用 Chatflow blocking 响应；兼容少数返回 workflow_run_id 的场景。

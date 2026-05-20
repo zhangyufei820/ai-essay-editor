@@ -176,8 +176,20 @@ function formatBytes(bytes: number) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`
 }
 
+function isHtmlErrorContent(value: unknown) {
+  if (typeof value !== "string") return false
+  const text = value.trim().toLowerCase()
+  return (
+    text.startsWith("<!doctype html") ||
+    text.startsWith("<html") ||
+    text.includes("<title>shenxiang.school | 502: bad gateway</title>") ||
+    (text.includes("cloudflare") && text.includes("bad gateway"))
+  )
+}
+
 function mapImageError(error: unknown): string {
   const raw = error instanceof Error ? error.message : String(error || "")
+  if (isHtmlErrorContent(raw)) return "图片服务暂时不可用，请稍后重试。"
   const lower = raw.toLowerCase()
 
   if (raw === "empty_prompt") return "提示词不能为空。"
@@ -194,6 +206,9 @@ function mapImageError(error: unknown): string {
   if (lower.includes("timeout") || raw.includes("超时") || lower.includes("504")) {
     return "图片生成等待超时。复杂图像可能仍在上游处理中，请稍后重试，或先降低尺寸 / 质量。"
   }
+  if (lower.includes("bad gateway") || lower.includes("502")) {
+    return "图片服务暂时不可用，请稍后重试。"
+  }
   if (lower.includes("upstream_error") || lower.includes("dify error") || lower.includes("500")) {
     return "图片服务请求失败，可能是余额不足、模型不可用、尺寸不支持或参数不兼容。"
   }
@@ -202,6 +217,7 @@ function mapImageError(error: unknown): string {
 }
 
 function sanitizeServiceWording(text: string) {
+  if (isHtmlErrorContent(text)) return "图片服务暂时不可用，请稍后重试。"
   return text
     .replace(/Dify\s*API/gi, "图片服务")
     .replace(/Dify/gi, "服务")

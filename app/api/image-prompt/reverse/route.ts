@@ -24,6 +24,17 @@ function asRecord(value: unknown): Record<string, unknown> {
     : {}
 }
 
+function isHtmlErrorContent(value: unknown) {
+  if (typeof value !== "string") return false
+  const text = value.trim().toLowerCase()
+  return (
+    text.startsWith("<!doctype html") ||
+    text.startsWith("<html") ||
+    text.includes("<title>shenxiang.school | 502: bad gateway</title>") ||
+    (text.includes("cloudflare") && text.includes("bad gateway"))
+  )
+}
+
 async function uploadFileToDify(file: File, userId: string, apiKey: string) {
   const formData = new FormData()
   formData.append("file", file)
@@ -154,7 +165,7 @@ export async function POST(request: NextRequest) {
     const prompt = extractPromptFromPayload({ outputs: workflow.outputs, data: { outputs: workflow.outputs } })
       || extractPromptFromPayload(workflow.raw)
 
-    if (!prompt) {
+    if (!prompt || isHtmlErrorContent(prompt)) {
       return NextResponse.json({ error: "反推结果为空，请换一张图片重试", code: "EMPTY_REVERSE_PROMPT" }, { status: 502 })
     }
 

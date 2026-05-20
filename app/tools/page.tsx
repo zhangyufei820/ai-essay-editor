@@ -34,9 +34,9 @@ type ReverseImageResult = {
   traceId?: string
 }
 
-const reverseModelOptions: Array<{ value: ReverseTargetModel; label: string; description: string }> = [
-  { value: "gpt-image-2", label: "gpt-image-2", description: "映射 Image 2 网关，适合高质量重绘" },
-  { value: "nano_banana", label: "nano_banana", description: "映射 Banana/Gemini 图像工作流，适合快速创意图" },
+const reverseModelOptions: Array<{ value: ReverseTargetModel; label: string }> = [
+  { value: "gpt-image-2", label: "gpt-image-2" },
+  { value: "nano_banana", label: "nano_banana" },
 ]
 
 type VoiceOption = {
@@ -70,6 +70,23 @@ function JsonBlock({ value }: { value: unknown }) {
   )
 }
 
+function isHtmlErrorContent(value: unknown) {
+  if (typeof value !== "string") return false
+  const text = value.trim().toLowerCase()
+  return (
+    text.startsWith("<!doctype html") ||
+    text.startsWith("<html") ||
+    text.includes("<title>shenxiang.school | 502: bad gateway</title>") ||
+    (text.includes("cloudflare") && text.includes("bad gateway"))
+  )
+}
+
+function getSafeServiceError(error: unknown, fallback = "服务暂时不可用，请稍后重试。") {
+  const raw = error instanceof Error ? error.message : String(error || "")
+  if (!raw || isHtmlErrorContent(raw)) return fallback
+  return raw
+}
+
 function createClientRequestId(prefix = "tools-img") {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
     return `${prefix}_${crypto.randomUUID()}`
@@ -95,7 +112,7 @@ function extractMarkdownImageUrls(content: string) {
 }
 
 function mapToolImageError(error: unknown) {
-  const raw = error instanceof Error ? error.message : String(error || "")
+  const raw = getSafeServiceError(error, "图片服务暂时不可用，请稍后重试。")
   const lower = raw.toLowerCase()
   if (raw.includes("请先登录") || raw.includes("未授权") || lower.includes("unauthorized") || lower.includes("401")) {
     return "请先登录后再使用图像提示词反推。"
@@ -105,6 +122,12 @@ function mapToolImageError(error: unknown) {
   }
   if (lower.includes("403") || lower.includes("forbidden")) {
     return "当前账号暂时不能使用该图像生成模型，请切换模型或升级后再试。"
+  }
+  if (lower.includes("bad gateway") || lower.includes("502")) {
+    return "图片服务暂时不可用，请稍后重试。"
+  }
+  if (lower.includes("upstream_error") || lower.includes("dify error") || lower.includes("500")) {
+    return "图片服务请求失败，可能是余额不足、模型不可用、尺寸不支持或参数不兼容。"
   }
   return raw.replace(/Dify/gi, "服务").replace(/网关/g, "服务") || "处理失败，请稍后重试。"
 }
@@ -318,7 +341,7 @@ export default function ToolsPage() {
       const payload = await readResponseJson(response)
       const prompt = typeof payload?.prompt === "string" ? payload.prompt.trim() : ""
 
-      if (!response.ok || !prompt) {
+      if (!response.ok || !prompt || isHtmlErrorContent(prompt)) {
         throw new Error(typeof payload?.error === "string" ? payload.error : "反推提示词失败")
       }
 
@@ -664,7 +687,6 @@ export default function ToolsPage() {
                           ].join(" ")}
                         >
                           <span className="block font-mono text-xs font-bold">{option.label}</span>
-                          <span className="mt-1 block text-xs leading-5 text-[var(--ink-500)]">{option.description}</span>
                         </button>
                       ))}
                     </div>
