@@ -76,6 +76,17 @@ export function WorkspaceSidebar({
   className,
 }: WorkspaceSidebarProps) {
   const pathname = usePathname()
+  const [appLauncherOpen, setAppLauncherOpen] = React.useState(false)
+
+  React.useEffect(() => {
+    if (collapsed) setAppLauncherOpen(false)
+  }, [collapsed])
+
+  const handleLauncherItemClick = () => {
+    setAppLauncherOpen(false)
+    onItemClick?.()
+  }
+
   const renderItemContent = (item: WorkspaceSidebarItem, active: boolean) => {
     const Icon = item.icon
 
@@ -119,16 +130,91 @@ export function WorkspaceSidebar({
       {/* 顶部 "新对话" 主 CTA */}
       <div className="px-3 pt-4 pb-2">
         <ButtonV2
-          asChild
           variant="primary"
           size="default"
           className="w-full justify-start gap-2"
+          onClick={() => setAppLauncherOpen((value) => !value)}
+          aria-expanded={appLauncherOpen}
+          aria-controls="workspace-app-launcher"
         >
-          <Link href="/chat" prefetch={false} onClick={onItemClick}>
-            <span aria-hidden="true">＋</span>
-            {!collapsed ? "新对话" : null}
-          </Link>
+          <span aria-hidden="true">＋</span>
+          {!collapsed ? "新对话" : null}
         </ButtonV2>
+
+        {appLauncherOpen && !collapsed ? (
+          <div
+            id="workspace-app-launcher"
+            className="mt-3 max-h-[58vh] overflow-auto rounded-[var(--radius-soft)] border border-[var(--paper-200)] bg-[var(--paper-50)] p-2 shadow-[0_16px_36px_rgba(14,27,17,0.14)]"
+          >
+            <div className="px-2 pb-2 text-[12px] font-semibold text-[var(--ink-700)]">
+              选择应用开始
+            </div>
+            {sections.map((section, idx) => (
+              <div key={section.title ?? idx} className="mb-2 last:mb-0">
+                {section.title ? (
+                  <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--ink-400)]">
+                    {section.title}
+                  </div>
+                ) : null}
+                <ul className="space-y-0.5">
+                  {section.items.map((item) => {
+                    const Icon = item.icon
+                    const external = /^https?:\/\//.test(item.href)
+                    const itemClassName = cn(
+                      "flex items-center gap-2 rounded-[var(--radius-soft)] px-2 py-2 text-[13px]",
+                      "text-[var(--ink-600)] hover:bg-[var(--ink-50)] hover:text-[var(--ink-800)]"
+                    )
+
+                    const content = (
+                      <>
+                        {Icon ? (
+                          <Icon className="size-4 shrink-0" aria-hidden="true" />
+                        ) : (
+                          <span className="size-4 shrink-0" aria-hidden="true" />
+                        )}
+                        <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                        {item.badge ? (
+                          <span className="rounded-[var(--radius-pill)] bg-[var(--seal-50)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--seal-600)]">
+                            {item.badge}
+                          </span>
+                        ) : null}
+                      </>
+                    )
+
+                    if (external) {
+                      return (
+                        <li key={`launcher-${item.href}`}>
+                          <a
+                            href={item.href}
+                            target="_blank"
+                            rel="noreferrer"
+                            onClick={handleLauncherItemClick}
+                            className={itemClassName}
+                          >
+                            {content}
+                          </a>
+                        </li>
+                      )
+                    }
+
+                    return (
+                      <li key={`launcher-${item.href}`}>
+                        <Link
+                          href={item.href}
+                          prefetch={false}
+                          onClick={handleLauncherItemClick}
+                          className={itemClassName}
+                        >
+                          {content}
+                        </Link>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </div>
+            ))}
+          </div>
+        ) : null}
       </div>
 
       {/* 滚动分组列表 */}

@@ -1,5 +1,7 @@
 import { buildSidebarSections } from "@/components/app-chrome"
 import { CELLFORGE_EXTERNAL_URL } from "@/lib/tripo3d"
+import { readFileSync } from "fs"
+import path from "path"
 
 describe("app chrome sidebar", () => {
   it("surfaces the CellForge 3D workspace inside the AI chat workspace sidebar", () => {
@@ -14,5 +16,14 @@ describe("app chrome sidebar", () => {
         }),
       ])
     )
+  })
+
+  it("opens an app launcher from the new chat CTA", () => {
+    const sidebar = readFileSync(path.join(process.cwd(), "components/v2-chrome/WorkspaceSidebar.tsx"), "utf8")
+
+    expect(sidebar).toContain("appLauncherOpen")
+    expect(sidebar).toContain("aria-expanded={appLauncherOpen}")
+    expect(sidebar).toContain("选择应用开始")
+    expect(sidebar).toContain("workspace-app-launcher")
   })
 })
