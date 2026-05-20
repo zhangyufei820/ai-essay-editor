@@ -22,7 +22,7 @@ type WorkspaceUser = {
 const PAGE_TITLES: Array<[string, string]> = [
   ["/admin", "管理后台"],
   ["/agents", "智能体广场"],
-  ["/chat", "AI 对话"],
+  ["/chat", "智能对话"],
   ["/credits", "积分中心"],
   ["/dashboard", "学习看板"],
   ["/flashcards", "闪卡复习"],
@@ -32,7 +32,7 @@ const PAGE_TITLES: Array<[string, string]> = [
   ["/lab", "互动实验室"],
   ["/my/shares", "我的分享"],
   ["/settings", "个人中心"],
-  ["/suno", "Suno 音乐生成"],
+  ["/suno", "智能音乐生成"],
   ["/teacher/agents", "教师智能体"],
   ["/teacher", "教师专区"],
   ["/tools", "工具箱"],
@@ -74,9 +74,9 @@ export function buildSidebarSections(): WorkspaceSidebarSection[] {
     {
       title: "多媒体专区",
       items: [
-        { label: "GPT Image 2", href: "/chat/gpt-image-2", icon: Image, badge: "图像" },
-        { label: "Suno 音乐生成", href: "/suno", icon: IconMusic, badge: "音乐" },
-        { label: "3D 细胞工作台", href: CELLFORGE_EXTERNAL_URL, icon: Box, badge: "3D" },
+        { label: "图像生成", href: "/chat/gpt-image-2", icon: Image, badge: "图像" },
+        { label: "智能音乐生成", href: "/suno", icon: IconMusic, badge: "音乐" },
+        { label: "三维细胞实验室", href: CELLFORGE_EXTERNAL_URL, icon: Box, badge: "三维" },
         { label: "全部工具", href: "/tools", icon: IconSettings },
       ],
     },

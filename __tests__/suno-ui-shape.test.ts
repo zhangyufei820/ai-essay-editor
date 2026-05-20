@@ -4,22 +4,27 @@ import path from "path"
 const read = (file: string) => readFileSync(path.join(process.cwd(), file), "utf8")
 
 describe("Suno UI shape", () => {
-  it("contains the required operation tabs and key fields", () => {
+  it("keeps the user-facing music flow simple and Chinese", () => {
     const source = read("components/suno/SunoPage.tsx")
 
-    for (const text of ["创作歌曲", "续写 / Cover", "上传音频二创", "歌词 / 拼接", "查询结果", "高级调试"]) {
+    for (const text of ["智能音乐生成", "歌词或提示词", "歌曲名", "歌曲风格", "只生成伴奏", "生成歌曲"]) {
       expect(source).toContain(text)
     }
-    for (const field of ["gpt_description_prompt", "continue_clip_id", "audio_file", "raw_body_json", "s3_fields_json"]) {
-      expect(source).toContain(field)
+
+    for (const hiddenWorkbenchText of ["高级调试", "Raw", "Timing", "Feed", "复制 task_id", "一键查询"]) {
+      expect(source).not.toContain(hiddenWorkbenchText)
     }
   })
 
-  it("shows task_id and one-click query behavior", () => {
+  it("auto-polls and renders playback, download, and waiting animation", () => {
     const source = read("components/suno/SunoPage.tsx")
 
-    expect(source).toContain("复制 task_id")
-    expect(source).toContain("一键查询")
-    expect(source).toContain('setOperation(form, "fetch_task")')
+    expect(source).toContain('operation: "fetch_task"')
+    expect(source).toContain("setTimeout(() => pollTask")
+    expect(source).toContain("WaveAnimation")
+    expect(source).toContain("<audio")
+    expect(source).toContain("试听")
+    expect(source).toContain("下载歌曲")
+    expect(source).toContain("你不用手动查询，系统会自动刷新结果。")
   })
 })
