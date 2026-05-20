@@ -70,7 +70,7 @@ const GPT_IMAGE_V11_DEFAULT_INPUTS: GptImageV11Inputs = {
   aspect_ratio: "1:1",
   size: "1024x1024",
   model: "gpt-image-1",
-  quality: "medium",
+  quality: "low",
   output_format: "png",
   output_compression: 100,
   background: "auto",
