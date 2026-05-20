@@ -99,6 +99,32 @@ async function uploadFileToDify(file: File, userId: string, apiKey: string) {
   return id
 }
 
+async function runReverseChatflow(apiKey: string, userId: string, inputs: Record<string, unknown>) {
+  const response = await internalDifyFetch(`${DIFY_BASE_URL}/chat-messages`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      inputs,
+      query: "请根据我上传的图片反推出可用于图像生成的详细提示词。",
+      response_mode: "blocking",
+      user: userId,
+      files: [inputs.image],
+    }),
+  })
+
+  const payload = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    const message = readString(asRecord(payload).message)
+      || readString(asRecord(payload).error)
+      || `CHATFLOW_REVERSE_FAILED:${response.status}`
+    throw new Error(message)
+  }
+  return payload as Record<string, unknown>
+}
+
 function extractPromptFromPayload(payload: unknown) {
   const root = asRecord(payload)
   const data = asRecord(root.data)
@@ -207,28 +233,44 @@ export async function POST(request: NextRequest) {
   try {
     const uploadFileId = await uploadFileToDify(file, auth.user!.id, apiKey)
     const inputs = buildReverseInputs(uploadFileId, targetModel)
-    const workflow = await runDifyWorkflow({
-      apiKey,
-      inputs,
-      user: auth.user!.id,
-      responseMode: "blocking",
-      timeoutMs: 150_000,
-    })
+    let workflowRunId: string | undefined
+    let taskId: string | undefined
+    let rawPayload: Record<string, unknown>
 
-    const prompt = extractPromptFromPayload({ outputs: workflow.outputs, data: { outputs: workflow.outputs } })
-      || extractPromptFromPayload(workflow.raw)
+    try {
+      rawPayload = await runReverseChatflow(apiKey, auth.user!.id, inputs)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      if (!/app mode matches|workflow|CHATFLOW_REVERSE_FAILED:404|CHATFLOW_REVERSE_FAILED:400/i.test(message)) {
+        throw error
+      }
+      const workflow = await runDifyWorkflow({
+        apiKey,
+        inputs,
+        user: auth.user!.id,
+        responseMode: "blocking",
+        timeoutMs: 150_000,
+      })
+      workflowRunId = workflow.workflowRunId
+      taskId = workflow.taskId
+      rawPayload = {
+        ...workflow.raw,
+        outputs: workflow.outputs,
+        data: {
+          ...asRecord(workflow.raw.data),
+          outputs: workflow.outputs,
+        },
+      }
+    }
+
+    const prompt = extractPromptFromPayload(rawPayload)
 
     if (!prompt || isHtmlErrorContent(prompt)) {
       return NextResponse.json({ error: "反推结果为空，请换一张图片重试", code: "EMPTY_REVERSE_PROMPT" }, { status: 502 })
     }
 
     const parsedUsage = parseDifyUsage({
-      ...workflow.raw,
-      outputs: workflow.outputs,
-      data: {
-        ...asRecord(workflow.raw.data),
-        outputs: workflow.outputs,
-      },
+      ...rawPayload,
       text: prompt,
     })
     const tokenCredits = calculateTextCredits({
@@ -236,16 +278,16 @@ export async function POST(request: NextRequest) {
       outputText: prompt,
       hasOutput: true,
     })
-    const billingReferenceId = `image-prompt-reverse:${workflow.workflowRunId || workflow.taskId || Date.now()}`
+    const billingReferenceId = `image-prompt-reverse:${workflowRunId || taskId || readString(rawPayload.message_id) || Date.now()}`
     const billingMetadata = createBillingAuditMetadata({
       userId: auth.user!.id,
       actionType: "consume",
       feature: "image_prompt_reverse",
       appId: "DIFY_IMAGE_PROMPT_REVERSE_API_KEY",
-      workflowId: workflow.workflowRunId || null,
+      workflowId: workflowRunId || null,
       modelId: REVERSE_PROMPT_MODEL_ID,
       requestedAppId: "DIFY_IMAGE_PROMPT_REVERSE_API_KEY",
-      requestedWorkflowId: workflow.workflowRunId || null,
+      requestedWorkflowId: workflowRunId || null,
       requestedModelId: targetModel,
       pricingVersion: PRICING_VERSION,
       usageSource: parsedUsage.usageSource,
@@ -260,8 +302,9 @@ export async function POST(request: NextRequest) {
       timeToFirstToken: parsedUsage.timeToFirstToken ?? null,
       rawProviderMetadata: {
         targetModel,
-        taskId: workflow.taskId || null,
-        workflowRunId: workflow.workflowRunId || null,
+        taskId: taskId || null,
+        workflowRunId: workflowRunId || null,
+        messageId: readString(rawPayload.message_id) || null,
       },
       description: "图像提示词反推",
     })
@@ -303,8 +346,9 @@ export async function POST(request: NextRequest) {
       ok: true,
       prompt,
       target_model: targetModel,
-      workflowRunId: workflow.workflowRunId,
-      taskId: workflow.taskId,
+      workflowRunId,
+      taskId,
+      messageId: readString(rawPayload.message_id),
       billing,
     })
   } catch (error) {
