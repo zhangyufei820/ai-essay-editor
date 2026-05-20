@@ -10,6 +10,7 @@ import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { resolveMembershipStatus } from '@/lib/products'
 import { requireUser } from '@/lib/auth/verified-user'
+import { getUserEntitlementSummary } from '@/lib/user-entitlements'
 
 export const dynamic = 'force-dynamic'
 
@@ -99,6 +100,27 @@ async function resolveRelatedUserIds(supabaseAdmin: any, userId: string, identif
 
 export async function checkMembership(userId: string, identifiers: string[] = []) {
   const supabaseAdmin = getSupabaseAdmin()
+  const [email, phone, metadataPhone, metadataMobile] = identifiers
+  const entitlement = await getUserEntitlementSummary(userId, {
+    email: email || null,
+    phone: phone || metadataPhone || metadataMobile || null,
+    metadata: {
+      phone: metadataPhone,
+      mobile: metadataMobile,
+    },
+  })
+
+  if (entitlement?.membershipStatus || entitlement?.latestMembershipOrder) {
+    return NextResponse.json({
+      isPaidMember: true,
+      orderCount: entitlement.latestMembershipOrder ? 1 : 0,
+      latestOrder: entitlement.latestMembershipOrder,
+      userId: entitlement.entitlementUserId,
+      relatedUserIds: entitlement.relatedUserIds,
+      type: entitlement.membershipStatus || entitlement.latestMembershipOrder?.product_id || "pro",
+    })
+  }
+
   const relatedUserIds = await resolveRelatedUserIds(supabaseAdmin, userId, identifiers)
 
   // 策略1: 直接用原始 userId 查询订单

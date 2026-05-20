@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireUser } from '@/lib/auth/verified-user'
 import { getUserTrialStatus } from '@/lib/free-trial'
+import { getUserEntitlementSummary } from '@/lib/user-entitlements'
 
 /**
  * 🎯 用户积分 API
@@ -34,6 +35,23 @@ export async function GET(request: NextRequest) {
     const supabaseAdmin = getSupabaseAdmin()
     const trialStatusResult = await getUserTrialStatus(userId)
     const trialStatus = trialStatusResult.data
+
+    const entitlement = await getUserEntitlementSummary(userId, {
+      email: auth.user!.email || null,
+      phone: auth.user!.phone || null,
+      metadata: auth.user!.metadata || null,
+    })
+
+    if (entitlement) {
+      return NextResponse.json({
+        credits: entitlement.credits,
+        is_pro: entitlement.isPro,
+        membership_status: entitlement.membershipStatus,
+        entitlementUserId: entitlement.entitlementUserId,
+        relatedUserIds: entitlement.relatedUserIds,
+        trialStatus,
+      })
+    }
 
     // 查询积分
     const { data: creditData, error } = await supabaseAdmin

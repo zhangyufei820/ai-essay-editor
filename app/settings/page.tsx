@@ -11,32 +11,13 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { extractUserId } from "@/lib/auth-user"
 import { dispatchClientUserProfileUpdated } from "@/lib/client-user-profile"
+import { getVerifiedAuthHeaders } from "@/lib/client-auth"
 import { ProfilePageV2 } from "@/components/settings/v2/ProfilePageV2"
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
-
-async function getVerifiedAuthHeaders(): Promise<Record<string, string>> {
-  if (typeof window !== "undefined") {
-    const authingToken = localStorage.getItem("idToken") || localStorage.getItem("authingToken") || localStorage.getItem("accessToken")
-    try {
-      const currentUserId = extractUserId(JSON.parse(localStorage.getItem("currentUser") || "null"))
-      if (authingToken && /^[a-f0-9]{24}$/i.test(currentUserId)) {
-        return { Authorization: `Bearer ${authingToken}` }
-      }
-    } catch {
-      // Fall through to the verified Supabase session check.
-    }
-  }
-
-  const { data } = await supabase.auth.getSession()
-  if (data.session?.access_token) return { Authorization: `Bearer ${data.session.access_token}` }
-  if (typeof window === "undefined") return {}
-  const authingToken = localStorage.getItem("idToken") || localStorage.getItem("authingToken") || localStorage.getItem("accessToken")
-  return authingToken ? { Authorization: `Bearer ${authingToken}` } : {}
-}
 
 // 设计系统颜色
 const COLORS = {
@@ -68,6 +49,18 @@ const CREDIT_TYPE_COLORS: Record<string, { bg: string; text: string }> = {
   "其他积分": { bg: "var(--paper-100)", text: "var(--ink-700)" },
   "购买积分": { bg: "var(--ink-50)", text: "var(--ink-700)" },
   "消耗积分": { bg: "var(--seal-50)", text: "var(--seal-500)" },
+}
+
+function normalizeMembershipLabel(type?: string | null) {
+  if (!type || type === "免费") return ""
+  const labels: Record<string, string> = {
+    basic: "基础版",
+    pro: "专业版",
+    premium: "豪华版",
+    enterprise: "企业版",
+    campus: "校园版",
+  }
+  return labels[type] || type
 }
 
 const MAX_AVATAR_FILE_SIZE = 8 * 1024 * 1024
@@ -238,7 +231,7 @@ export default function SettingsPage() {
               const memberRes = await fetch(`/api/user/membership`, { headers: authHeaders })
               if (memberRes.ok) {
                 const data = await memberRes.json()
-                setMembershipType(data.type || "免费")
+                setMembershipType(normalizeMembershipLabel(data.type))
               }
               
               // 获取邀请统计
@@ -397,7 +390,7 @@ export default function SettingsPage() {
           email: normalizeSettingsUser(user).email || normalizeSettingsUser(user).phone,
           avatar: avatarUrl || normalizeSettingsUser(user).avatar,
           credits: credits,
-          memberTier: membershipType || undefined,
+          memberTier: normalizeMembershipLabel(membershipType) || undefined,
           memberDaysLeft: undefined,
         }}
         stats={{
