@@ -83,6 +83,8 @@ describe('Sprint 5 payment / credits / membership guards', () => {
     expect(source).toContain('hasGptImageModelInput(inputs) && !isGptImageGatewayRequest')
     expect(source).toContain('function isGptImageGatewayModel(model: unknown)')
     expect(source).toContain('const userId = auth.user!.id')
+    expect(source).toContain('const hasActiveTrialForRequest = Boolean(trialPrecheck.data?.grantId)')
+    expect(source).toContain('!hasActiveTrialForRequest && !canUseImage2')
     expect(source).toContain('.eq("user_id", userId)')
     expect(source).toContain('calculateGptImageGatewayCredits(imageInputsForBilling)')
     expect(source).toContain('createBillingAuditMetadata')

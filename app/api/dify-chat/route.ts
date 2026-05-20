@@ -31,6 +31,7 @@ import { assertSecureTlsConfiguration } from "@/lib/runtime-security"
 import { requireUser } from "@/lib/auth/verified-user"
 import { internalDifyFetch } from "@/lib/internal-dify-fetch"
 import { getDifyCredentialForModel } from "@/lib/dify-credentials"
+import { extractDifyTextOutput } from "@/lib/dify-output-text"
 import { rewriteOpenClawMediaReferences } from "@/lib/openclaw-media"
 import { rewriteOpenClawMediaReferencesWithSignedUrls } from "@/lib/openclaw-media-server"
 import {
@@ -1240,36 +1241,6 @@ export async function POST(request: NextRequest) {
 
     const imageInputsForBilling = isGptImageGatewayRequest ? buildGptImageV11Inputs(inputs) : null
     const billingModelType = imageInputsForBilling?.model as ModelType | undefined
-    if (imageInputsForBilling && (billingModelType || "gpt-image-2") === "gpt-image-2") {
-      const { data: userProfile } = await getSupabaseAdmin()
-        .from("user_profiles")
-        .select("email")
-        .eq("user_id", userId)
-        .maybeSingle()
-      const membershipStatus = await resolveActiveMembershipStatus(getSupabaseAdmin(), userId, {
-        email: auth.user!.email,
-        phone: auth.user!.phone,
-      })
-
-      if (!canUseImage2({
-        user_id: userId,
-        email: typeof userProfile?.email === "string" ? userProfile.email : auth.user!.email,
-        membership_status: membershipStatus,
-      })) {
-        console.warn(`🚫 [媒体权限] 用户无权限使用 ${billingModelType || "gpt-image-2"}`)
-        return new Response(
-          JSON.stringify({
-            error: "GPT Image 2 当前仅订阅用户可用，请升级会员后使用。",
-            message: "GPT Image 2 当前仅订阅用户可用，请升级会员后使用。",
-            requiredMembership: "basic",
-            allowlist: ["IMAGE2_WHITELIST_USER_IDS", "IMAGE2_WHITELIST_EMAILS"],
-            action: "请充值或升级会员",
-          }),
-          { status: 403, headers: { "Content-Type": "application/json" } },
-        )
-      }
-    }
-
     const taskRun = {
       id: requestId,
       requestId,
@@ -1419,6 +1390,37 @@ export async function POST(request: NextRequest) {
         }),
         { status: 402, headers: { "Content-Type": "application/json" } },
       )
+    }
+
+    const hasActiveTrialForRequest = Boolean(trialPrecheck.data?.grantId)
+    if (imageInputsForBilling && (billingModelType || "gpt-image-2") === "gpt-image-2") {
+      const { data: userProfile } = await getSupabaseAdmin()
+        .from("user_profiles")
+        .select("email")
+        .eq("user_id", userId)
+        .maybeSingle()
+      const membershipStatus = await resolveActiveMembershipStatus(getSupabaseAdmin(), userId, {
+        email: auth.user!.email,
+        phone: auth.user!.phone,
+      })
+
+      if (!hasActiveTrialForRequest && !canUseImage2({
+        user_id: userId,
+        email: typeof userProfile?.email === "string" ? userProfile.email : auth.user!.email,
+        membership_status: membershipStatus,
+      })) {
+        console.warn(`🚫 [媒体权限] 用户无共创体验或订阅权限，不能使用 ${billingModelType || "gpt-image-2"}`)
+        return new Response(
+          JSON.stringify({
+            error: "GPT Image 2 当前仅订阅用户可用，请升级会员后使用。",
+            message: "GPT Image 2 当前仅订阅用户可用，请升级会员后使用。",
+            requiredMembership: "basic",
+            allowlist: ["IMAGE2_WHITELIST_USER_IDS", "IMAGE2_WHITELIST_EMAILS"],
+            action: "请充值或升级会员",
+          }),
+          { status: 403, headers: { "Content-Type": "application/json" } },
+        )
+      }
     }
 
     const availableTrialForMinimum = trialPrecheck.data?.trialUsedAvailable || 0
@@ -2217,19 +2219,15 @@ export async function POST(request: NextRequest) {
                       answer: safeOutputs.answer,
                       conversation_id: conversationId || undefined,
                     })}\n\n`))
-	                  } else if (outputs.text) {
-	                    fullResponseText += outputs.text
+	                  } else {
+                      const outputText = extractDifyTextOutput(outputs)
+                      if (outputText) {
+	                    fullResponseText += outputText
 	                    hasReceivedContent = true
-	                    console.log(`🎨 [Workflow完成] 收集到输出文本:`, { length: String(outputs.text).length })
+	                    console.log(`🎨 [Workflow完成] 收集到输出文本:`, { length: outputText.length })
                       if (shouldBufferForDisplay && !allInOneStreamedAnswer) {
-                        enqueueAllInOneDisplayOnce(String(outputs.text))
+                        enqueueAllInOneDisplayOnce(outputText)
                       }
-	                  } else if (outputs.result) {
-	                    fullResponseText += outputs.result
-	                    hasReceivedContent = true
-		                    console.log(`🎨 [Workflow完成] 收集到结果文本:`, { length: String(outputs.result).length })
-                      if (shouldBufferForDisplay && !allInOneStreamedAnswer) {
-                        enqueueAllInOneDisplayOnce(String(outputs.result))
                       }
 		                  }
 	                }
