@@ -11,6 +11,7 @@ const APP_ROUTE_PREFIXES = [
   "/lab",
   "/my",
   "/settings",
+  "/suno",
   "/teacher",
   "/tools",
   "/worksheet-diagnosis",

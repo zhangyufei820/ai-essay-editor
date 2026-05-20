@@ -12,6 +12,7 @@ describe('app chrome routes', () => {
     expect(usesAppChrome('/my/shares')).toBe(true)
     expect(usesAppChrome('/teacher/agents')).toBe(true)
     expect(usesAppChrome('/tools')).toBe(true)
+    expect(usesAppChrome('/suno')).toBe(true)
     expect(usesAppChrome('/about')).toBe(false)
   })
 
