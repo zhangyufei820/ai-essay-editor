@@ -944,6 +944,60 @@ function createImageGatewayResponse(payload: unknown) {
   })
 }
 
+async function chargeImageGatewayCredits(params: {
+  userId: string
+  amount: number
+  inputs: GptImageV11Inputs
+  billingModel: ModelType
+  keySource: string | null
+  requestId: string
+  conversationId?: string | null
+  messageId?: string | null
+}) {
+  const imageCount = params.inputs.n || 1
+  const description = `图片生成 - ${getModelDisplayName(params.billingModel)} x${imageCount}`
+  const billingMetadata = createBillingAuditMetadata({
+    userId: params.userId,
+    actionType: "image_generation",
+    feature: params.billingModel === "gpt-image-2" ? "image2" : "image",
+    appId: params.keySource || "DIFY_IMAGE_GATEWAY",
+    workflowId: "dify-image-gateway",
+    modelId: params.billingModel,
+    requestedAppId: params.keySource || "DIFY_IMAGE_GATEWAY",
+    requestedWorkflowId: "dify-image-gateway",
+    requestedModelId: params.billingModel,
+    pricingVersion: PRICING_VERSION,
+    usageSource: "fixed",
+    estimated: false,
+    promptTokens: 0,
+    completionTokens: 0,
+    totalTokens: 0,
+    chargedCredits: params.amount,
+    requestId: params.requestId,
+    conversationId: params.conversationId || null,
+    messageId: params.messageId || null,
+    rawProviderMetadata: {
+      imageCount,
+      fixedCreditsPerImage: getGptImageGatewayCreditsPerImage(params.inputs),
+      imageSize: params.inputs.size,
+      imageQuality: params.inputs.quality,
+      inputs: params.inputs,
+    },
+    description,
+  })
+
+  const charged = await spendCredits(
+    params.userId,
+    params.amount,
+    "consume",
+    description,
+    params.requestId,
+    billingMetadata,
+  )
+
+  return { charged, description, billingMetadata }
+}
+
 async function callImageGatewayDirect(query: string, inputs: unknown) {
   const gatewayToken = process.env.DIFY_IMAGE_GATEWAY_TOKEN || ""
   const timeout = createTimeoutSignal(GPT_IMAGE_GATEWAY_TIMEOUT_MS)
@@ -1435,7 +1489,7 @@ export async function POST(request: NextRequest) {
     const { credential: selectedCredential, source: keySource } = getDifyCredentialForModel(model, process.env, DEFAULT_DIFY_KEY)
 
     // 安全检查：防止忘配 Key
-    if (!selectedCredential) {
+    if (!selectedCredential && !isGptImageGatewayRequest) {
         console.error(`❌ 严重错误: 模型 ${model} 的凭据未配置！环境变量 ${keySource} 为空`);
         return new Response(JSON.stringify({ 
           error: `配置错误：${model} 模型凭据未设置`,
@@ -1578,6 +1632,75 @@ export async function POST(request: NextRequest) {
     }
     
     console.log(`💰 [预检查] 模型: ${modelType} | 当前积分: ${currentCredits}`)
+
+    if (isGptImageGatewayRequest) {
+      console.log("🎨 [GPT Image] 使用直连图片网关，绕过 Dify chatflow")
+      await updateTaskRun(taskRun.id, {
+        status: "running",
+        stage: "图片网关生成中",
+        progress: 35,
+      })
+
+      const gatewayResponse = await callImageGatewayDirect(effectiveQuery, inputs)
+      const gatewayPayload = await gatewayResponse.clone().json().catch(() => ({}))
+
+      if (!gatewayResponse.ok) {
+        await updateTaskRun(taskRun.id, {
+          status: "failed",
+          stage: "图片网关返回错误",
+          progress: 100,
+          errorMessage: typeof gatewayPayload?.error === "string" ? gatewayPayload.error : "图片服务请求失败",
+          errorCode: typeof gatewayPayload?.code === "string" ? gatewayPayload.code : `IMAGE_GATEWAY_${gatewayResponse.status}`,
+          sanitizedError: sanitizeForTrace(gatewayPayload) as Record<string, unknown>,
+        })
+
+        return gatewayResponse
+      }
+
+      const imageInputs = imageInputsForBilling || buildGptImageV11Inputs(inputs)
+      const imageBillingModel = (billingModelType || "gpt-image-2") as ModelType
+      const { charged } = await chargeImageGatewayCredits({
+        userId,
+        amount: estimatedMinCost,
+        inputs: imageInputs,
+        billingModel: imageBillingModel,
+        keySource,
+        requestId: taskRun.requestId,
+        conversationId: effectiveConvId || (typeof conversation_id === "string" ? conversation_id : null),
+        messageId: typeof messageId === "string" ? messageId : null,
+      })
+
+      if (!charged) {
+        await updateTaskRun(taskRun.id, {
+          status: "failed",
+          stage: "图片生成完成但积分扣除失败",
+          progress: 100,
+          errorMessage: "积分扣除失败，本次结果未结算",
+          errorCode: "IMAGE_CREDIT_DEDUCT_FAILED",
+          sanitizedError: sanitizeForTrace(gatewayPayload) as Record<string, unknown>,
+        })
+        return Response.json({ error: "积分扣除失败，本次结果未结算" }, { status: 500 })
+      }
+
+      await updateTaskRun(taskRun.id, {
+        status: "succeeded",
+        stage: "图片生成完成",
+        progress: 100,
+        artifacts: extractArtifactsFromUnknown(gatewayPayload),
+        metadata: {
+          gateway_status: gatewayResponse.status,
+          charged_credits: estimatedMinCost,
+          source: "direct_image_gateway",
+        },
+      })
+
+      return Response.json(gatewayPayload, {
+        headers: {
+          "X-Request-Id": taskRun.requestId,
+          "X-Trace-Id": taskRun.traceId,
+        },
+      })
+    }
 
     // --- 3. 构造 Dify 请求函数 ---
     // 🔥 共享流状态：首字节探测 + 超时定时器（供 callDify 和 transformStream 共同访问）

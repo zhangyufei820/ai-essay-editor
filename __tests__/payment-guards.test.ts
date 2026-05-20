@@ -103,21 +103,19 @@ describe('Sprint 5 payment / credits / membership guards', () => {
     expect(image2).not.toContain('return "GPT Image 2 当前仅订阅用户可用，请升级会员后使用。"')
   })
 
-  it('routes GPT Image 2 through the Dify chatflow instead of direct gateway task submission', () => {
+  it('routes GPT Image 2 through the direct image gateway after server-side billing guards', () => {
     const source = read('app/api/dify-chat/route.ts')
-    const gptImageBranch = source.slice(source.indexOf('if (isGptImageGatewayRequest) {'), source.indexOf('console.log(`✅ [Dify请求] 成功，开始流式传输...`)'))
+    const billingCheckIndex = source.indexOf('const estimatedMinCost = imageInputsForBilling')
+    const directGatewayIndex = source.indexOf('console.log("🎨 [GPT Image] 使用直连图片网关，绕过 Dify chatflow")')
+    const difyCallIndex = source.indexOf('const callDify = async')
 
-    expect(source).toContain('const isGptImage2 = isGptImageGatewayRequest')
-    expect(source).toContain('const isBananaChatflow = model === "banana-2-pro";')
-    expect(source).toContain('const apiEndpoint = isWorkflow ? "/workflows/run" : "/chat-messages";')
-    expect(source).toContain('Authorization: `Bearer ${selectedCredential}`')
-    expect(source).toContain('response_mode: isGptImage2 ? "blocking" : "streaming"')
-    expect(source).toContain('[GPT Image V11] Chatflow request prepared')
-    expect(source).toContain('workflowId: "gpt-image-2"')
+    expect(source).toContain('callImageGatewayDirect(effectiveQuery, inputs)')
+    expect(source).toContain('chargeImageGatewayCredits({')
+    expect(source).toContain('workflowId: "dify-image-gateway"')
     expect(source).toContain('usageSource: "fixed"')
-    expect(source).not.toContain('console.log("🎨 [GPT Image] 使用直连图片网关，绕过 Dify HTTP 节点超时")')
-    expect(gptImageBranch).not.toContain('startImageGatewayTask')
-    expect(gptImageBranch).not.toContain('callImageGatewayDirect')
+    expect(source).toContain('if (!selectedCredential && !isGptImageGatewayRequest)')
+    expect(directGatewayIndex).toBeGreaterThan(billingCheckIndex)
+    expect(difyCallIndex).toBeGreaterThan(directGatewayIndex)
   })
 
   it('keeps legacy direct gateway polling errors diagnosable for existing async tasks', () => {
