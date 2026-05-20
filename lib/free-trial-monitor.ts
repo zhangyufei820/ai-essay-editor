@@ -67,6 +67,24 @@ function isChinaDaytime(now = new Date()): boolean {
   return hour >= 8 && hour <= 23
 }
 
+function countEventsSince(
+  events: Array<{ created_at: string }>,
+  sinceMs: number,
+): number {
+  return events.filter((event) => new Date(event.created_at).getTime() >= sinceMs).length
+}
+
+function countEventsBetween(
+  events: Array<{ created_at: string }>,
+  startMs: number,
+  endMs: number,
+): number {
+  return events.filter((event) => {
+    const createdAt = new Date(event.created_at).getTime()
+    return createdAt >= startMs && createdAt < endMs
+  }).length
+}
+
 async function countRows(table: string, filters?: (query: any) => any): Promise<number> {
   let query = getSupabaseAdmin().from(table).select("*", { count: "exact", head: true })
   if (filters) query = filters(query)
@@ -346,13 +364,31 @@ async function checkFunnel(checks: Record<string, unknown>, incidents: MonitorIn
   )
 
   const counts = Object.fromEntries(WATCH_EVENT_NAMES.map((eventName) => [eventName, 0])) as Record<string, number>
+  const nowMs = Date.now()
   const recentAnnouncement = events.some((event) =>
     event.event_name === "free_trial_announcement_shown" &&
-    new Date(event.created_at).getTime() >= Date.now() - 30 * 60 * 1000
+    new Date(event.created_at).getTime() >= nowMs - 30 * 60 * 1000
   )
   for (const event of events) counts[event.event_name] = (counts[event.event_name] || 0) + 1
 
-  checks.funnel = { counts, recentAnnouncement }
+  const fallbackEvents = events.filter((event) => event.event_name === "trial_billing_real_credit_fallback")
+  const fallbackRecent5m = countEventsSince(fallbackEvents, nowMs - 5 * 60 * 1000)
+  const fallbackRecent30m = countEventsSince(fallbackEvents, nowMs - 30 * 60 * 1000)
+  const fallbackPrevious30m = countEventsBetween(
+    fallbackEvents,
+    nowMs - 60 * 60 * 1000,
+    nowMs - 30 * 60 * 1000,
+  )
+
+  checks.funnel = {
+    counts,
+    recentAnnouncement,
+    fallbackWindows: {
+      recent5m: fallbackRecent5m,
+      recent30m: fallbackRecent30m,
+      previous30m: fallbackPrevious30m,
+    },
+  }
 
   if (isChinaDaytime() && !recentAnnouncement) {
     addIncident(incidents, {
@@ -383,12 +419,21 @@ async function checkFunnel(checks: Record<string, unknown>, incidents: MonitorIn
     })
   }
 
-  if ((counts.trial_billing_real_credit_fallback || 0) > 50) {
+  const fallbackIsGrowing = fallbackPrevious30m > 0 && fallbackRecent30m >= fallbackPrevious30m * 2
+  if (fallbackRecent5m >= 5 || fallbackRecent30m >= 20 || (fallbackRecent30m >= 10 && fallbackIsGrowing)) {
     addIncident(incidents, {
       incidentType: "real_credit_fallback_high",
       severity: "p1",
       title: "trial 超额扣真实积分 fallback 次数偏高",
-      details: { fallbackCount: counts.trial_billing_real_credit_fallback, todo: "无法自动判断用户投诉或误扣，需要人工复核。" },
+      details: {
+        fallbackTotalToday: counts.trial_billing_real_credit_fallback,
+        recent5m: fallbackRecent5m,
+        recent30m: fallbackRecent30m,
+        previous30m: fallbackPrevious30m,
+        fallbackIsGrowing,
+        thresholds: { recent5m: 5, recent30m: 20, growingRecent30m: 10 },
+        todo: "无法自动判断用户投诉或误扣，需要人工复核。",
+      },
     })
   }
 }
