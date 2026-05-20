@@ -1,6 +1,7 @@
 import {
   buildDifyInputs,
   normalizeBooleanString,
+  parseDifyResult,
   validateOperationInput,
 } from "@/lib/suno-workflow-schema"
 
@@ -68,5 +69,59 @@ describe("validateOperationInput", () => {
   it("allows timing with clip_id and no timing_id", () => {
     const result = validateOperationInput({ operation: "timing", clip_id: "clip-1" })
     expect(result.ok).toBe(true)
+  })
+})
+
+describe("parseDifyResult", () => {
+  it("treats Dify string false as failed and does not use workflow task_id as Suno task_id", () => {
+    const result = parseDifyResult({
+      task_id: "workflow-task-id",
+      workflow_run_id: "workflow-run-id",
+      data: {
+        status: "succeeded",
+        outputs: {
+          success: "false",
+          http_status: 200,
+          provider_code: "task_not_exist",
+          message: "task_not_exist",
+          task_id: "",
+          response_json: JSON.stringify({
+            success: false,
+            status_code: 400,
+            provider_code: "task_not_exist",
+            message: "task_not_exist",
+            task_id: "",
+            audio_urls: [],
+          }),
+          error: "task_not_exist",
+        },
+      },
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.task_id).toBe("")
+    expect(result.error).toBe("task_not_exist")
+  })
+
+  it("extracts the provider task_id from successful workflow outputs", () => {
+    const result = parseDifyResult({
+      task_id: "workflow-task-id",
+      data: {
+        status: "succeeded",
+        outputs: {
+          success: "true",
+          http_status: 200,
+          task_id: "suno-task-id",
+          audio_urls: "",
+          response_json: JSON.stringify({
+            success: true,
+            task_id: "suno-task-id",
+          }),
+        },
+      },
+    })
+
+    expect(result.success).toBe(true)
+    expect(result.task_id).toBe("suno-task-id")
   })
 })

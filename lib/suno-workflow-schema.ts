@@ -419,28 +419,98 @@ export function extractClipId(value: unknown): string {
   return toStringValue(record.clip_id || record.clipId)
 }
 
+function parseJsonValue(value: unknown): unknown {
+  if (typeof value !== "string") return value
+  const text = value.trim()
+  if (!text) return ""
+  if (!text.startsWith("{") && !text.startsWith("[")) return value
+  try {
+    return JSON.parse(text)
+  } catch {
+    return value
+  }
+}
+
+function readRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {}
+}
+
+function readDifyOutputs(value: unknown): Record<string, unknown> | null {
+  const record = readRecord(value)
+  const data = readRecord(record.data)
+  const dataOutputs = readRecord(data.outputs)
+  if (Object.keys(dataOutputs).length > 0) return dataOutputs
+  const outputs = readRecord(record.outputs)
+  return Object.keys(outputs).length > 0 ? outputs : null
+}
+
+function isDifyWorkflowEnvelope(value: unknown) {
+  const record = readRecord(value)
+  const data = readRecord(record.data)
+  return Boolean(record.workflow_run_id || data.workflow_id || data.outputs)
+}
+
+function parseBooleanLike(value: unknown, fallback?: boolean): boolean | undefined {
+  if (typeof value === "boolean") return value
+  if (typeof value === "number") return value !== 0
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase()
+    if (["true", "1", "yes", "success", "succeeded", "ok"].includes(normalized)) return true
+    if (["false", "0", "no", "fail", "failed", "error"].includes(normalized)) return false
+  }
+  return fallback
+}
+
+function firstText(...values: unknown[]) {
+  for (const value of values) {
+    const text = toStringValue(value).trim()
+    if (text) return text
+  }
+  return ""
+}
+
 function asStringArray(value: unknown): string[] {
-  if (!Array.isArray(value)) return []
-  return value.filter((item): item is string => typeof item === "string" && item.length > 0)
+  const parsed = parseJsonValue(value)
+  if (Array.isArray(parsed)) {
+    return parsed
+      .map((item) => toStringValue(item).trim())
+      .filter(Boolean)
+  }
+  const text = toStringValue(parsed).trim()
+  return text ? [text] : []
 }
 
 export function parseDifyResult(payload: unknown): SunoWorkflowResult {
-  const root = (payload || {}) as Record<string, unknown>
-  const outputs = ((root.data as Record<string, unknown> | undefined)?.outputs || root.outputs || root) as Record<string, unknown>
-  const responseJson = outputs.response_json || outputs.provider_response || payload
+  const root = readRecord(payload)
+  const rootOutputs = readDifyOutputs(root)
+  const initialOutputs = rootOutputs || root
+  const initialResponseJson = parseJsonValue(initialOutputs.response_json || initialOutputs.provider_response || initialOutputs.data_json)
+  const nestedOutputs = readDifyOutputs(initialResponseJson)
+  const outputs = nestedOutputs || initialOutputs
+  const responseJson = parseJsonValue(outputs.response_json || outputs.provider_response || outputs.data_json || initialResponseJson || payload)
+  const provider = readRecord(responseJson)
+  const responseIsDifyEnvelope = isDifyWorkflowEnvelope(responseJson)
+  const rootIsDifyEnvelope = isDifyWorkflowEnvelope(root)
+  const outputSuccess = parseBooleanLike(outputs.success)
+  const providerSuccess = parseBooleanLike(provider.success)
+  const workflowSuccess = parseBooleanLike(readRecord(root.data).status === "succeeded")
+  const success = outputSuccess ?? providerSuccess ?? parseBooleanLike(root.success) ?? workflowSuccess ?? false
+  const providerTaskId = responseIsDifyEnvelope ? firstText(readDifyOutputs(responseJson)?.task_id) : extractTaskId(responseJson)
+  const rootTaskId = rootIsDifyEnvelope ? "" : toStringValue(root.task_id)
+  const providerClipId = responseIsDifyEnvelope ? firstText(readDifyOutputs(responseJson)?.clip_id) : extractClipId(responseJson)
 
   return {
-    success: Boolean(outputs.success ?? root.success ?? ((root.data as Record<string, unknown> | undefined)?.status === "succeeded")),
-    http_status: Number(outputs.http_status || outputs.status_code || root.status_code || 200),
-    task_id: toStringValue(outputs.task_id || extractTaskId(responseJson)),
-    clip_id: toStringValue(outputs.clip_id || extractClipId(responseJson)),
-    upload_id: toStringValue(outputs.upload_id),
-    status: toStringValue(outputs.status),
-    audio_urls: asStringArray(outputs.audio_urls),
-    image_urls: asStringArray(outputs.image_urls),
-    video_urls: asStringArray(outputs.video_urls),
-    wav_url: toStringValue(outputs.wav_url),
+    success,
+    http_status: Number(outputs.http_status || outputs.status_code || provider.status_code || root.status_code || 200),
+    task_id: firstText(outputs.task_id, providerTaskId, rootTaskId),
+    clip_id: firstText(outputs.clip_id, providerClipId),
+    upload_id: firstText(outputs.upload_id, provider.upload_id),
+    status: firstText(outputs.status, provider.status),
+    audio_urls: asStringArray(outputs.audio_urls).concat(asStringArray(provider.audio_urls)),
+    image_urls: asStringArray(outputs.image_urls).concat(asStringArray(provider.image_urls)),
+    video_urls: asStringArray(outputs.video_urls).concat(asStringArray(provider.video_urls)),
+    wav_url: firstText(outputs.wav_url, provider.wav_url),
     response_json: responseJson,
-    error: outputs.error || root.error || null,
+    error: outputs.error || root.error || provider.error || (!success ? provider.message : null) || null,
   }
 }
