@@ -31,6 +31,7 @@ import { assertSecureTlsConfiguration } from "@/lib/runtime-security"
 import { requireUser } from "@/lib/auth/verified-user"
 import { internalDifyFetch } from "@/lib/internal-dify-fetch"
 import { getDifyCredentialForModel } from "@/lib/dify-credentials"
+import { extractDifyTextOutput } from "@/lib/dify-output-text"
 import { rewriteOpenClawMediaReferences } from "@/lib/openclaw-media"
 import { rewriteOpenClawMediaReferencesWithSignedUrls } from "@/lib/openclaw-media-server"
 import {
@@ -2218,19 +2219,15 @@ export async function POST(request: NextRequest) {
                       answer: safeOutputs.answer,
                       conversation_id: conversationId || undefined,
                     })}\n\n`))
-	                  } else if (outputs.text) {
-	                    fullResponseText += outputs.text
+	                  } else {
+                      const outputText = extractDifyTextOutput(outputs)
+                      if (outputText) {
+	                    fullResponseText += outputText
 	                    hasReceivedContent = true
-	                    console.log(`🎨 [Workflow完成] 收集到输出文本:`, { length: String(outputs.text).length })
+	                    console.log(`🎨 [Workflow完成] 收集到输出文本:`, { length: outputText.length })
                       if (shouldBufferForDisplay && !allInOneStreamedAnswer) {
-                        enqueueAllInOneDisplayOnce(String(outputs.text))
+                        enqueueAllInOneDisplayOnce(outputText)
                       }
-	                  } else if (outputs.result) {
-	                    fullResponseText += outputs.result
-	                    hasReceivedContent = true
-		                    console.log(`🎨 [Workflow完成] 收集到结果文本:`, { length: String(outputs.result).length })
-                      if (shouldBufferForDisplay && !allInOneStreamedAnswer) {
-                        enqueueAllInOneDisplayOnce(String(outputs.result))
                       }
 		                  }
 	                }

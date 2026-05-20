@@ -58,6 +58,7 @@ import { brandColors, slateColors } from "@/lib/design-tokens"
 import { LATEX_MACROS, renderLatex } from "@/lib/latex-constants"
 import { cleanLLMText } from "@/lib/text-sanitizer"
 import { parseEssayReview } from "@/lib/parse-essay-review"
+import { extractDifyTextOutput } from "@/lib/dify-output-text"
 import { containsRawDifyWordCardPayload, normalizeDifyWordCardResponse, type FrontendWordCard } from "@/lib/word-card-normalizer"
 import { buildVocabCardWorkflowInputs, cleanVocabAnswer, resolveVocabCardResult } from "@/lib/vocab-card-workflow"
 import { resolveChatAgentParam } from "@/lib/teacher-agent-route"
@@ -431,22 +432,7 @@ function formatSunoResponse(fullText: string): string {
 }
 
 function extractWorkflowOutputText(outputs: unknown) {
-  if (!outputs || typeof outputs !== "object" || Array.isArray(outputs)) return ""
-  const record = outputs as Record<string, unknown>
-  const candidates = [
-    record.text,
-    record.result,
-    record.answer,
-    record.output,
-    record.markdown,
-    record.markdown_report,
-    record.report,
-    record.content,
-  ]
-  for (const candidate of candidates) {
-    if (typeof candidate === "string" && candidate.trim()) return candidate
-  }
-  return ""
+  return extractDifyTextOutput(outputs)
 }
 
 function getChatErrorMessage(error: unknown, status?: number, model?: string): string {

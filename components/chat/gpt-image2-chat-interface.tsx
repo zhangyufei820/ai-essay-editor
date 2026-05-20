@@ -19,6 +19,7 @@ import { buildChatSessionRouteFromSession } from "@/lib/chat-session-routes"
 import type { ModelType } from "@/lib/pricing"
 import { calculatePreviewCost } from "@/lib/pricing"
 import { cn } from "@/lib/utils"
+import { extractDifyTextOutput } from "@/lib/dify-output-text"
 import {
   ASPECT_RATIO_OPTIONS,
   BACKGROUND_OPTIONS,
@@ -1207,8 +1208,8 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
 
               if (json.event === "workflow_finished") {
                 const outputs = json.data?.outputs || json.outputs
-                if (outputs?.text) fullText = outputs.text
-                if (outputs?.result) fullText = outputs.result
+                const outputText = extractDifyTextOutput(outputs)
+                if (outputText) fullText = outputText
                 const files = outputs?.files || outputs?.images || []
                 for (const file of files) {
                   if (file?.type === "image" && file.url) {
