@@ -97,6 +97,19 @@ describe("Dify credential selection", () => {
     })
   })
 
+  it("uses the dedicated experiment report workflow key when configured", () => {
+    const selection = getDifyCredentialForModel("experiment-report", {
+      DIFY_EXPERIMENT_REPORT_API_KEY: "experiment-report-key",
+      DIFY_AI_WRITING_PAPER_API_KEY: "writing-paper-key",
+      ESSAY_CORRECTION_API_KEY: "default-key",
+    })
+
+    expect(selection).toEqual({
+      credential: "experiment-report-key",
+      source: "DIFY_EXPERIMENT_REPORT_API_KEY",
+    })
+  })
+
   it("uses the dedicated all-in-one agent workflow key when configured", () => {
     const selection = getDifyCredentialForModel("all-in-one-agent", {
       DIFY_ALL_IN_ONE_AGENT_API_KEY: "all-in-one-key",

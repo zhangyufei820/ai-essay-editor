@@ -74,12 +74,13 @@ export function getDifyCredentialForModel(
     case "ai-writing-paper":
     case "zhongying-essay":
     case "reading-report":
-    case "experiment-report":
     case "study-abroad":
     case "resume-optimize":
     case "speech-defense":
     case "school-wechat":
       return selectCredential(env.DIFY_AI_WRITING_PAPER_API_KEY, "DIFY_AI_WRITING_PAPER_API_KEY", defaultCredential)
+    case "experiment-report":
+      return selectCredential(env.DIFY_EXPERIMENT_REPORT_API_KEY, "DIFY_EXPERIMENT_REPORT_API_KEY", defaultCredential)
     default:
       return { credential: defaultCredential, source: "DEFAULT_DIFY_KEY" }
   }
