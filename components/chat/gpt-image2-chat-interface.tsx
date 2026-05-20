@@ -188,9 +188,14 @@ function mapImageError(error: unknown): string {
   const raw = error instanceof Error ? error.message : String(error || "")
   if (isHtmlErrorContent(raw)) return "图片服务暂时不可用，请稍后重试。"
   const lower = raw.toLowerCase()
+  const requestId = raw.match(/requestId=([A-Za-z0-9_-]+)/)?.[1]
+  const requestSuffix = requestId ? `（requestId=${requestId}）` : ""
 
   if (raw === "empty_prompt") return "提示词不能为空。"
   if (raw === "missing_edit_image") return "图片编辑模式需要上传原图。"
+  if (raw.includes("IMAGE_TASK_FORBIDDEN")) return `图片任务权限校验失败，请重新提交。${requestSuffix}`
+  if (raw.includes("IMAGE2_ACCESS_DENIED")) return "GPT Image 2 当前共创体验期内登录用户可用，请先登录后生成图片。"
+  if (raw.includes("CHAT_SESSION_FORBIDDEN")) return `当前对话校验失败，请新建对话后重试。${requestSuffix}`
   if (
     raw.includes("上游额度不足") ||
     raw.includes("余额不足") ||
@@ -214,7 +219,8 @@ function mapImageError(error: unknown): string {
     return "GPT Image 2 当前共创体验期已开放给登录用户，请刷新页面后重试；若仍失败，请重新登录。"
   }
   if (lower.includes("forbidden") || lower.includes("403")) {
-    return "当前账号暂时无法提交图片生成，请刷新页面后重试；若仍失败，请重新登录。"
+    const detail = sanitizeServiceWording(raw).replace(/\s+/g, " ").trim()
+    return `图片提交被拒绝：${detail.slice(0, 180)}${detail.length > 180 ? "..." : ""}`
   }
   if (lower.includes("download_file_error")) return "无法读取上传图片，请重新上传。"
   if (lower.includes("network") || lower.includes("failed to fetch")) return "网络请求失败，请稍后重试。"
@@ -950,7 +956,26 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
     return imageUrl as string
   }
 
-  async function pollImageTask(taskId: string, requestId: string) {
+  function buildImageTaskError(payload: unknown, status: number, fallbackRequestId: string, fallbackTaskId?: string) {
+    const record = payload && typeof payload === "object" ? payload as Record<string, unknown> : {}
+    const data = record.data && typeof record.data === "object" ? record.data as Record<string, unknown> : {}
+    const detailMessage =
+      typeof record.error === "string"
+        ? record.error
+        : typeof data.message === "string"
+          ? data.message
+          : typeof data.code === "string"
+            ? data.code
+            : ""
+    const code = typeof record.code === "string" ? record.code : `upstream_error:${status}`
+    const payloadRequestId = typeof record.requestId === "string" ? record.requestId : fallbackRequestId
+    const payloadTaskId = typeof record.taskId === "string" ? record.taskId : fallbackTaskId
+    const parts = [detailMessage || code, `[${code}]`, `requestId=${payloadRequestId}`]
+    if (payloadTaskId) parts.push(`taskId=${payloadTaskId}`)
+    return parts.join(" ")
+  }
+
+  async function pollImageTask(taskId: string, requestId: string, pollToken?: string) {
     const startedAt = Date.now()
     const maxWaitMs = 10 * 60 * 1000
 
@@ -958,10 +983,15 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
       await wait(5_000)
       setSubmitStage("图片仍在生成，正在检查结果")
 
-      const response = await fetch(`${API_BASE}/api/dify-chat?imageTaskId=${encodeURIComponent(taskId)}&requestId=${encodeURIComponent(requestId)}`, {
+      const params = new URLSearchParams({
+        imageTaskId: taskId,
+        requestId,
+      })
+      const response = await fetch(`${API_BASE}/api/dify-chat?${params.toString()}`, {
         headers: {
           ...(await getVerifiedAuthHeaders()),
           "X-Request-Id": requestId,
+          ...(pollToken ? { "X-Image-Task-Poll-Token": pollToken } : {}),
         },
       })
       const payload = await readResponseJson(response)
@@ -972,19 +1002,11 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
 
       if (payload?.status === "running") continue
 
-      const detailMessage =
-        typeof payload?.error === "string"
-          ? payload.error
-          : typeof payload?.data?.message === "string"
-            ? payload.data.message
-            : typeof payload?.data?.code === "string"
-              ? payload.data.code
-              : ""
       const elapsedSuffix =
         typeof payload?.elapsedMs === "number"
           ? ` (${Math.max(1, Math.round(payload.elapsedMs / 1000))}s)`
           : ""
-      throw new Error((detailMessage || `upstream_error:${response.status}`) + elapsedSuffix)
+      throw new Error(buildImageTaskError(payload, response.status, requestId, taskId) + elapsedSuffix)
     }
 
     throw new Error("timeout")
@@ -1201,7 +1223,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
 
 	        if (payload?.status === "running" && typeof payload?.imageTaskId === "string") {
 	          setSubmitStage("图片任务已提交，等待生成结果")
-	          payload = await pollImageTask(payload.imageTaskId, payload.requestId || requestId)
+	          payload = await pollImageTask(payload.imageTaskId, payload.requestId || requestId, payload.pollToken)
 	        }
 
         imageUrls = parseDifyResult(payload)

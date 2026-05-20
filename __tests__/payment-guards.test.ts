@@ -114,6 +114,26 @@ describe('Sprint 5 payment / credits / membership guards', () => {
     expect(startTask).toBeGreaterThan(awaitedCreate)
   })
 
+  it('uses a signed poll token for async Image 2 task polling and keeps forbidden errors diagnosable', () => {
+    const route = read('app/api/dify-chat/route.ts')
+    const image2 = read('components/chat/gpt-image2-chat-interface.tsx')
+
+    expect(route).toContain('signImageTaskPollToken')
+    expect(route).toContain('verifyImageTaskPollToken')
+    expect(route).toContain('const pollToken = signImageTaskPollToken')
+    expect(route).toContain('pollToken,')
+    expect(route).toContain('request.headers.get("X-Image-Task-Poll-Token")')
+    expect(route).toContain('code: "IMAGE_TASK_FORBIDDEN"')
+    expect(route).toContain('code: "IMAGE2_ACCESS_DENIED"')
+    expect(route).toContain('code: "CHAT_SESSION_FORBIDDEN"')
+
+    expect(image2).toContain('pollImageTask(payload.imageTaskId, payload.requestId || requestId, payload.pollToken)')
+    expect(image2).toContain('"X-Image-Task-Poll-Token": pollToken')
+    expect(image2).toContain('IMAGE_TASK_FORBIDDEN')
+    expect(image2).toContain('requestId=')
+    expect(image2).not.toContain('return "当前账号暂时无法提交图片生成，请刷新页面后重试；若仍失败，请重新登录。"')
+  })
+
   it('keeps the standalone image workspace generation request independent from stale chat session ownership', () => {
     const image2 = read('components/chat/gpt-image2-chat-interface.tsx')
     const fetchStart = image2.indexOf('fetch(`${API_BASE}/api/dify-chat`')

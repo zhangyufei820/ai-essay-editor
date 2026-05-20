@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { createHmac, timingSafeEqual } from "crypto"
 import { createClient } from "@supabase/supabase-js"
 import {
   DifyChatRequest,
@@ -391,6 +392,7 @@ const OPENCLAW_FIRST_BYTE_TIMEOUT_MS = 900_000
 const GPT_IMAGE_BLOCKING_TIMEOUT_MS = 300_000
 const GPT_IMAGE_GATEWAY_TIMEOUT_MS = 540_000
 const GPT_IMAGE_ASYNC_TASK_MAX_AGE_MS = 15 * 60 * 1000
+const GPT_IMAGE_POLL_TOKEN_TTL_MS = GPT_IMAGE_ASYNC_TASK_MAX_AGE_MS + 5 * 60 * 1000
 const IMAGE_GATEWAY_URL = (process.env.DIFY_IMAGE_GATEWAY_URL || "http://dify-image-gateway:8001").replace(/\/+$/, "")
 // 🔥 作文批改（standard）使用专用的 ESSAY_CORRECTION_API_KEY
 const DEFAULT_DIFY_KEY = process.env.ESSAY_CORRECTION_API_KEY || process.env.DIFY_API_KEY 
@@ -406,6 +408,73 @@ function logPerf(requestId: string, stage: string, startedAt: number, extra: Rec
     elapsedMs: nowMs() - startedAt,
     ...extra,
   })
+}
+
+function getImageTaskPollSecret() {
+  return process.env.NEXT_SERVER_ACTIONS_ENCRYPTION_KEY
+    || process.env.DIFY_IMAGE_GATEWAY_TOKEN
+    || process.env.SUPABASE_SERVICE_ROLE_KEY
+    || ""
+}
+
+function encodePollTokenPayload(payload: Record<string, unknown>) {
+  return Buffer.from(JSON.stringify(payload), "utf8").toString("base64url")
+}
+
+function decodePollTokenPayload(encoded: string) {
+  try {
+    const json = Buffer.from(encoded, "base64url").toString("utf8")
+    const payload = JSON.parse(json)
+    return payload && typeof payload === "object" ? payload as Record<string, unknown> : null
+  } catch {
+    return null
+  }
+}
+
+function createPollTokenUserHash(secret: string, userId: string) {
+  return createHmac("sha256", secret).update(userId).digest("hex").slice(0, 32)
+}
+
+function safeTimingEqual(left: string, right: string) {
+  const leftBuffer = Buffer.from(left)
+  const rightBuffer = Buffer.from(right)
+  return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer)
+}
+
+function signImageTaskPollToken(params: { requestId: string; taskId: string; userId: string }) {
+  const secret = getImageTaskPollSecret()
+  if (!secret) return ""
+
+  const encoded = encodePollTokenPayload({
+    v: 1,
+    requestId: params.requestId,
+    taskId: params.taskId,
+    userHash: createPollTokenUserHash(secret, params.userId),
+    expiresAt: Date.now() + GPT_IMAGE_POLL_TOKEN_TTL_MS,
+  })
+  const signature = createHmac("sha256", secret).update(encoded).digest("base64url")
+  return `${encoded}.${signature}`
+}
+
+function verifyImageTaskPollToken(token: string | null, params: { requestId: string; taskId: string; userId: string }) {
+  const secret = getImageTaskPollSecret()
+  if (!secret || !token) return false
+
+  const [encoded, signature, extra] = token.split(".")
+  if (!encoded || !signature || extra !== undefined) return false
+
+  const expectedSignature = createHmac("sha256", secret).update(encoded).digest("base64url")
+  if (!safeTimingEqual(signature, expectedSignature)) return false
+
+  const payload = decodePollTokenPayload(encoded)
+  const expiresAt = typeof payload?.expiresAt === "number" ? payload.expiresAt : 0
+  return (
+    payload?.v === 1
+    && payload.requestId === params.requestId
+    && payload.taskId === params.taskId
+    && payload.userHash === createPollTokenUserHash(secret, params.userId)
+    && expiresAt > Date.now()
+  )
 }
 
 function fireAndForget(label: string, work: Promise<unknown>) {
@@ -949,7 +1018,7 @@ async function startImageGatewayTask(params: {
 export async function GET(request: NextRequest) {
   const taskId = request.nextUrl.searchParams.get("imageTaskId")
   if (!taskId) {
-    return Response.json({ error: "缺少图片任务 ID" }, { status: 400 })
+    return Response.json({ error: "缺少图片任务 ID", code: "IMAGE_TASK_ID_MISSING" }, { status: 400 })
   }
 
   const auth = await requireUser(request)
@@ -957,8 +1026,9 @@ export async function GET(request: NextRequest) {
   const userId = auth.user!.id
   const requestId = request.nextUrl.searchParams.get("requestId") || request.headers.get("X-Request-Id")
   if (!requestId) {
-    return Response.json({ error: "未授权访问，请先登录" }, { status: 401 })
+    return Response.json({ error: "未授权访问，请先登录", code: "UNAUTHORIZED", taskId }, { status: 401 })
   }
+  const pollToken = request.nextUrl.searchParams.get("pollToken") || request.headers.get("X-Image-Task-Poll-Token")
 
   const { data: taskOwner, error: taskOwnerError } = await getSupabaseAdmin()
     .from("ai_task_runs")
@@ -969,17 +1039,30 @@ export async function GET(request: NextRequest) {
 
   if (taskOwnerError) {
     console.error("[GPT Image Task] 权限校验失败:", taskOwnerError)
-    return Response.json({ error: "图片任务权限校验失败" }, { status: 500 })
+    return Response.json({ error: "图片任务权限校验失败", code: "IMAGE_TASK_OWNER_LOOKUP_FAILED", requestId, taskId }, { status: 500 })
   }
 
   if (!taskOwner || (taskOwner.upstream_task_id && taskOwner.upstream_task_id !== taskId)) {
-    console.warn(`🚫 [GPT Image Task] 用户无权查询图片任务: requestId=${requestId}, taskId=${taskId}`)
-    return Response.json({ error: "无权访问该图片任务" }, { status: 403 })
+    const tokenAuthorized = verifyImageTaskPollToken(pollToken, { requestId, taskId, userId })
+    if (!tokenAuthorized) {
+      console.warn("[GPT Image Task] 用户无权查询图片任务", {
+        requestId,
+        taskId,
+        hasOwner: Boolean(taskOwner),
+        hasPollToken: Boolean(pollToken),
+      })
+      return Response.json({ error: "无权访问该图片任务", code: "IMAGE_TASK_FORBIDDEN", requestId, taskId }, { status: 403 })
+    }
+    console.warn("[GPT Image Task] owner 记录暂未匹配，已使用签名轮询凭证继续查询", {
+      requestId,
+      taskId,
+      hasOwner: Boolean(taskOwner),
+    })
   }
 
-  const createdAtMs = taskOwner.created_at ? new Date(taskOwner.created_at).getTime() : NaN
+  const createdAtMs = taskOwner?.created_at ? new Date(taskOwner.created_at).getTime() : NaN
   const taskAgeMs = Number.isFinite(createdAtMs) ? Date.now() - createdAtMs : 0
-  if ((taskOwner.status === "queued" || taskOwner.status === "running") && taskAgeMs > GPT_IMAGE_ASYNC_TASK_MAX_AGE_MS) {
+  if ((taskOwner?.status === "queued" || taskOwner?.status === "running") && taskAgeMs > GPT_IMAGE_ASYNC_TASK_MAX_AGE_MS) {
     const refund = await refundImageTaskCredits({
       userId,
       requestId,
@@ -1008,6 +1091,7 @@ export async function GET(request: NextRequest) {
         requestId,
         elapsedMs: taskAgeMs,
         error: "图片任务超时，已自动退回积分",
+        code: "IMAGE_TASK_POLL_TIMEOUT",
         refund,
       },
       { status: 504 },
@@ -1051,7 +1135,7 @@ export async function GET(request: NextRequest) {
         },
       })
     }
-    return Response.json({ error: "图片任务不存在或已过期", refund }, { status: response.status || 404 })
+    return Response.json({ error: "图片任务不存在或已过期", code: "IMAGE_TASK_NOT_FOUND", requestId, taskId, refund }, { status: response.status || 404 })
   }
 
   const elapsedMs = typeof task?.elapsed_ms === "number" ? task.elapsed_ms : 0
@@ -1284,12 +1368,12 @@ export async function POST(request: NextRequest) {
 
       if (sessionOwnerError) {
         console.error("[Dify-Chat] 会话 owner 校验失败:", sessionOwnerError.message)
-        return Response.json({ error: "会话权限校验失败" }, { status: 500 })
+        return Response.json({ error: "会话权限校验失败", code: "CHAT_SESSION_OWNER_LOOKUP_FAILED", requestId }, { status: 500 })
       }
 
       if (sessionOwner && sessionOwner.user_id !== userId) {
         console.warn(`🚫 [Dify-Chat] 会话越权访问被拦截: requestId=${requestId}`)
-        return Response.json({ error: "无权访问该会话" }, { status: 403 })
+        return Response.json({ error: "无权访问该会话", code: "CHAT_SESSION_FORBIDDEN", requestId }, { status: 403 })
       }
     }
 
@@ -1425,6 +1509,8 @@ export async function POST(request: NextRequest) {
           JSON.stringify({
             error: "GPT Image 2 当前共创体验期内登录用户可用，请先登录后使用。",
             message: "GPT Image 2 当前共创体验期内登录用户可用，请先登录后使用。",
+            code: "IMAGE2_ACCESS_DENIED",
+            requestId,
             requiredMembership: "basic",
             allowlist: ["IMAGE2_WHITELIST_USER_IDS", "IMAGE2_WHITELIST_EMAILS"],
             action: "请先登录，或在体验期结束后升级会员",
@@ -1494,6 +1580,11 @@ export async function POST(request: NextRequest) {
           requestId: taskRun.id,
           traceId: taskRun.traceId,
         })
+        const pollToken = signImageTaskPollToken({
+          requestId: taskRun.requestId,
+          taskId,
+          userId,
+        })
 
         const charged = await spendCredits(
           userId,
@@ -1521,6 +1612,7 @@ export async function POST(request: NextRequest) {
             imageTaskId: taskId,
             requestId: taskRun.requestId,
             traceId: taskRun.traceId,
+            pollToken,
           },
           {
             headers: {
