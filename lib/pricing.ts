@@ -59,6 +59,10 @@ export type GenMode = "text" | "image" | "music" | "video"
 export type ModelCategory = "text" | "media"
 export type TextWorkflowKind = "default_text" | "short_agent" | "ordinary_writing" | "essay_correction" | "long_writing"
 
+const MODEL_MAX_OUTPUT_TOKEN_OVERRIDES: Partial<Record<ModelType, number>> = {
+  "experiment-report": 4000,
+}
+
 export type TokenUsage = {
   totalTokens?: number
   inputTokens?: number
@@ -481,6 +485,8 @@ export function getTextWorkflowKind(model: ModelType): TextWorkflowKind {
 export function getMaxOutputTokensForModel(model: ModelType): number | null {
   const config = MODEL_COSTS[model]
   if (config?.category === "media") return null
+  const override = MODEL_MAX_OUTPUT_TOKEN_OVERRIDES[model]
+  if (override) return override
   return TEXT_WORKFLOW_MAX_OUTPUT_TOKENS[getTextWorkflowKind(model)]
 }
 

@@ -289,6 +289,7 @@ describe('统一计费配置', () => {
     expect(getMaxOutputTokensForModel('resume-optimize')).toBe(8000)
     expect(getMaxOutputTokensForModel('standard')).toBe(25000)
     expect(getMaxOutputTokensForModel('ai-writing-paper')).toBe(20000)
+    expect(getMaxOutputTokensForModel('experiment-report')).toBe(4000)
     expect(getMaxOutputTokensForModel('gpt-image-2')).toBeNull()
   })
 

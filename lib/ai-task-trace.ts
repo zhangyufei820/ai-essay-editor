@@ -254,6 +254,7 @@ export async function replaceTaskNodeEvents(id: string, events: Array<Omit<TaskN
       updated_at: new Date().toISOString(),
     })
     .eq("id", id)
+    .is("completed_at", null)
 
   if (error) {
     if (error.code === "42P01") taskTableAvailable = false
