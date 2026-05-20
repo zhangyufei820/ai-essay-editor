@@ -1,5 +1,6 @@
 import {
   calculateActualCost,
+  calculateImage2Credits,
   calculateTextCredits,
   getMinimumRequiredCredits,
   parseDifyUsage,
@@ -35,8 +36,11 @@ export function estimateTokensFromText(text: string): number {
   return Math.max(1, Math.ceil(cjkChars / 1.5 + wordCount * 1.3 + Math.max(symbolCount, 0) / 4))
 }
 
-export function calculateImageCredits(model: ModelType, count = 1): number {
+export function calculateImageCredits(model: ModelType, count = 1, options: { size?: unknown; quality?: unknown } = {}): number {
   const safeCount = Math.max(1, Math.floor(count || 1))
+  if (model === "gpt-image-2") {
+    return calculateImage2Credits({ size: options.size, quality: options.quality, count: safeCount })
+  }
   return calculateActualCost(model) * safeCount
 }
 

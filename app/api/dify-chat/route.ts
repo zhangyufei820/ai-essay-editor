@@ -9,6 +9,7 @@ import {
 } from "@/lib/dify-types"
 import {
   calculateActualCost,
+  calculateImage2Credits,
   getMaxOutputTokensForModel,
   getMinimumRequiredCredits,
   ModelType,
@@ -156,6 +157,22 @@ function buildGptImageV11Inputs(inputs: unknown): GptImageV11Inputs {
     reference_image_urls: safeReferenceImageUrls.slice(0, 10),
     mask_image_url: pickUrlString(record.mask_image_url),
   }
+}
+
+function calculateGptImageGatewayCredits(inputs: GptImageV11Inputs): number {
+  const modelType = inputs.model as ModelType
+  if (modelType === "gpt-image-2") {
+    return calculateImage2Credits({
+      size: inputs.size,
+      quality: inputs.quality,
+      count: inputs.n,
+    })
+  }
+  return calculateActualCost(modelType) * inputs.n
+}
+
+function getGptImageGatewayCreditsPerImage(inputs: GptImageV11Inputs): number {
+  return Math.ceil(calculateGptImageGatewayCredits({ ...inputs, n: 1 }))
 }
 
 const WORKFLOW_MODELS = new Set(["banana-2-pro", "gemini-image", "vocab-card"])
@@ -1382,7 +1399,7 @@ export async function POST(request: NextRequest) {
     const currentCredits = userCredits?.credits || 0
     
     const estimatedMinCost = imageInputsForBilling
-      ? calculateActualCost(billingModelType || "gpt-image-2") * imageInputsForBilling.n
+      ? calculateGptImageGatewayCredits(imageInputsForBilling)
       : getMinimumRequiredCredits(modelType)
     logPerf(requestId, "credit_check_done", apiStartedAt, { requiredCredits: estimatedMinCost })
     
@@ -1448,7 +1465,9 @@ export async function POST(request: NextRequest) {
         messageId: typeof messageId === "string" ? messageId : null,
         rawProviderMetadata: {
           imageCount,
-          fixedCreditsPerImage: calculateActualCost(imageBillingModel),
+          fixedCreditsPerImage: imageInputsForBilling ? getGptImageGatewayCreditsPerImage(imageInputsForBilling) : calculateActualCost(imageBillingModel),
+          imageSize: imageInputsForBilling?.size,
+          imageQuality: imageInputsForBilling?.quality,
           inputs: imageInputsForBilling,
         },
         description: imageDescription,

@@ -188,7 +188,7 @@ export const AGENT_REGISTRY: Record<string, AgentDefinition> = {
     description: "高质量 4K 图像生成与修图",
     group: "creative",
     artifactType: "markdown",
-    priceLabel: "260 积分/张",
+    priceLabel: "10-55 积分/张",
     memberOnly: true,
     icon: ImageIcon,
   },

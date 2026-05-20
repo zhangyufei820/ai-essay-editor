@@ -91,6 +91,6 @@ describe("worksheet diagnosis Dify contract", () => {
     expect(calculateWorksheetDiagnosisCredits(2)).toBe(110)
     expect(calculateWorksheetDiagnosisCredits(6)).toBe(230)
     expect(calculateWorksheetDiagnosisCredits(20)).toBe(230)
-    expect(WORKSHEET_REPORT_IMAGE_CREDITS).toBe(260)
+    expect(WORKSHEET_REPORT_IMAGE_CREDITS).toBe(20)
   })
 })

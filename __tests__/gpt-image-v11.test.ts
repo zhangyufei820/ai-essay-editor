@@ -19,7 +19,7 @@ describe("GPT Image V11 parameter mapping", () => {
       model: "gpt-image-1",
       aspect_ratio: "1:1",
       size: "1024x1024",
-      quality: "medium",
+      quality: "low",
       output_format: "png",
       output_compression: 100,
       background: "auto",

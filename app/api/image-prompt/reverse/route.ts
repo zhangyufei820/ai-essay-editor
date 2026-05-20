@@ -3,6 +3,9 @@ import { requireUser } from "@/lib/auth/verified-user"
 import { internalDifyFetch } from "@/lib/internal-dify-fetch"
 import { applyRateLimit } from "@/lib/rate-limit"
 import { extractDifyWorkflowOutputs, runDifyWorkflow } from "@/lib/dify-workflow-client"
+import { createBillingAuditMetadata, recordBillingIssue } from "@/lib/credits"
+import { calculateTextCredits, parseDifyUsage, PRICING_VERSION } from "@/lib/pricing"
+import { consumeWithTrialCredits } from "@/lib/trial-credits"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -13,6 +16,7 @@ const MAX_IMAGE_BYTES = 12 * 1024 * 1024
 const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"])
 const TARGET_MODELS = new Set(["gpt-image-2", "nano_banana"])
 const MAX_PROMPT_CHARS = 8000
+const REVERSE_PROMPT_MODEL_ID = "image-prompt-reverse"
 
 function readString(value: unknown) {
   return typeof value === "string" ? value.trim() : ""
@@ -92,6 +96,21 @@ function extractPromptFromPayload(payload: unknown) {
     .slice(0, MAX_PROMPT_CHARS)
 }
 
+function createBillingPayload(result: {
+  trialUsed?: number
+  realCreditsUsed?: number
+  remainingToday?: number
+  blocked?: boolean
+  reason?: string | null
+} | null) {
+  return {
+    trialUsed: result?.trialUsed || 0,
+    realCreditsUsed: result?.realCreditsUsed || 0,
+    remainingToday: result?.remainingToday || 0,
+    surveyRequired: Boolean(result?.blocked && result.reason === "survey_required"),
+  }
+}
+
 function buildReverseInputs(uploadFileId: string, targetModel: string) {
   const imageFile = {
     type: "image",
@@ -169,12 +188,90 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "反推结果为空，请换一张图片重试", code: "EMPTY_REVERSE_PROMPT" }, { status: 502 })
     }
 
+    const parsedUsage = parseDifyUsage({
+      ...workflow.raw,
+      outputs: workflow.outputs,
+      data: {
+        ...asRecord(workflow.raw.data),
+        outputs: workflow.outputs,
+      },
+      text: prompt,
+    })
+    const tokenCredits = calculateTextCredits({
+      ...parsedUsage,
+      outputText: prompt,
+      hasOutput: true,
+    })
+    const billingReferenceId = `image-prompt-reverse:${workflow.workflowRunId || workflow.taskId || Date.now()}`
+    const billingMetadata = createBillingAuditMetadata({
+      userId: auth.user!.id,
+      actionType: "consume",
+      feature: "image_prompt_reverse",
+      appId: "DIFY_IMAGE_PROMPT_REVERSE_API_KEY",
+      workflowId: workflow.workflowRunId || null,
+      modelId: REVERSE_PROMPT_MODEL_ID,
+      requestedAppId: "DIFY_IMAGE_PROMPT_REVERSE_API_KEY",
+      requestedWorkflowId: workflow.workflowRunId || null,
+      requestedModelId: targetModel,
+      pricingVersion: PRICING_VERSION,
+      usageSource: parsedUsage.usageSource,
+      estimated: parsedUsage.estimated,
+      promptTokens: parsedUsage.promptTokens,
+      completionTokens: parsedUsage.completionTokens,
+      totalTokens: parsedUsage.totalTokens,
+      chargedCredits: tokenCredits,
+      rawUsageJson: parsedUsage.rawUsage || null,
+      finishReason: parsedUsage.finishReason || null,
+      latency: parsedUsage.latency ?? null,
+      timeToFirstToken: parsedUsage.timeToFirstToken ?? null,
+      rawProviderMetadata: {
+        targetModel,
+        taskId: workflow.taskId || null,
+        workflowRunId: workflow.workflowRunId || null,
+      },
+      description: "图像提示词反推",
+    })
+    const billingResult = await consumeWithTrialCredits({
+      userId: auth.user!.id,
+      amount: tokenCredits,
+      actionType: "consume",
+      description: "图像提示词反推",
+      referenceId: billingReferenceId,
+      metadata: {
+        feature: "image_prompt_reverse",
+        targetModel,
+      },
+      billingMetadata,
+    })
+    const billing = createBillingPayload(billingResult)
+
+    if (billingResult.blocked && billingResult.reason === "survey_required") {
+      return NextResponse.json({
+        error: "请先完成今日问卷，解锁免费体验额度",
+        surveyRequired: true,
+        billing,
+      }, { status: 402 })
+    }
+
+    if (!billingResult.success) {
+      await recordBillingIssue(
+        auth.user!.id,
+        tokenCredits,
+        "consume",
+        "异常账单：图像提示词反推",
+        billingReferenceId,
+        billingMetadata,
+      )
+      return NextResponse.json({ error: "积分不足，无法反推提示词", billing }, { status: 402 })
+    }
+
     return NextResponse.json({
       ok: true,
       prompt,
       target_model: targetModel,
       workflowRunId: workflow.workflowRunId,
       taskId: workflow.taskId,
+      billing,
     })
   } catch (error) {
     console.error("[ImagePromptReverse] failed:", error instanceof Error ? error.message : error)

@@ -8,6 +8,12 @@ import {
   HIGH_CONSUMPTION_TEXT_CREDITS,
   HIGH_CONSUMPTION_TEXT_OUTPUT_TOKENS,
   IMAGE2_CREDITS,
+  IMAGE2_1K_CREDITS,
+  IMAGE2_2K_CREDITS,
+  IMAGE2_4K_CREDITS,
+  IMAGE2_512_CREDITS,
+  IMAGE2_HIGH_QUALITY_EXTRA_CREDITS,
+  IMAGE2_MEDIUM_QUALITY_EXTRA_CREDITS,
   MEDIA_BILLING,
   PRICING_VERSION,
   SUNO_BASE_CREDITS,
@@ -58,6 +64,8 @@ export type ModelType =
 export type GenMode = "text" | "image" | "music" | "video"
 export type ModelCategory = "text" | "media"
 export type TextWorkflowKind = "default_text" | "short_agent" | "ordinary_writing" | "essay_correction" | "long_writing"
+export type Image2SizeTier = "512" | "1K" | "2K" | "4K"
+export type Image2QualityTier = "auto" | "low" | "medium" | "high"
 
 const MODEL_MAX_OUTPUT_TOKEN_OVERRIDES: Partial<Record<ModelType, number>> = {
   "experiment-report": 4000,
@@ -215,6 +223,12 @@ export {
   GPT_IMAGE_1_MINI_CREDITS,
   GEMINI_IMAGE_CREDITS,
   IMAGE2_CREDITS,
+  IMAGE2_1K_CREDITS,
+  IMAGE2_2K_CREDITS,
+  IMAGE2_4K_CREDITS,
+  IMAGE2_512_CREDITS,
+  IMAGE2_HIGH_QUALITY_EXTRA_CREDITS,
+  IMAGE2_MEDIUM_QUALITY_EXTRA_CREDITS,
   PRICING_VERSION,
   SUNO_BASE_CREDITS,
   TEXT_WORKFLOW_MAX_OUTPUT_TOKENS,
@@ -417,6 +431,41 @@ export function calculatePreviewCost(
   }, { hasOutputContent: true })
 }
 
+export function normalizeImage2SizeTier(size?: unknown): Image2SizeTier {
+  const value = typeof size === "string" ? size.trim() : ""
+  if (value === "512") return "512"
+  if (value === "2K" || value === "original_2k" || value.startsWith("2048x") || value.endsWith("x2048")) return "2K"
+  if (value === "4K" || value === "original_4k" || value === "3840x2160" || value === "2160x3840") return "4K"
+  return "1K"
+}
+
+export function calculateImage2Credits(options: {
+  size?: unknown
+  quality?: unknown
+  count?: unknown
+  tokenUsage?: TokenUsage
+  hasOutputContent?: boolean
+} = {}): number {
+  const sizeTier = normalizeImage2SizeTier(options.size)
+  const baseCreditsBySize: Record<Image2SizeTier, number> = {
+    "512": IMAGE2_512_CREDITS,
+    "1K": IMAGE2_1K_CREDITS,
+    "2K": IMAGE2_2K_CREDITS,
+    "4K": IMAGE2_4K_CREDITS,
+  }
+  const quality = typeof options.quality === "string" ? options.quality : "low"
+  const qualityExtra =
+    quality === "medium"
+      ? IMAGE2_MEDIUM_QUALITY_EXTRA_CREDITS
+      : quality === "high"
+        ? IMAGE2_HIGH_QUALITY_EXTRA_CREDITS
+        : 0
+  const imageCount = Math.max(1, Math.floor(Number(options.count ?? 1) || 1))
+  const imageCredits = (baseCreditsBySize[sizeTier] + qualityExtra) * imageCount
+  const tokenCredits = calculateTextUsageCost(options.tokenUsage, { hasOutputContent: options.hasOutputContent })
+  return imageCredits + tokenCredits
+}
+
 export function calculateActualCost(
   model: ModelType,
   tokenUsage?: TokenUsage,
@@ -434,6 +483,9 @@ export function calculateActualCost(
   }
 
   if (config.category === "media" && config.fixedCost) {
+    if (model === "gpt-image-2") {
+      return calculateImage2Credits({ tokenUsage, hasOutputContent: options?.hasOutputContent })
+    }
     const textCost = model === "suno-v5" ? calculateTextUsageCost(tokenUsage, { hasOutputContent: options?.hasOutputContent }) : 0
     return config.fixedCost + textCost
   }
