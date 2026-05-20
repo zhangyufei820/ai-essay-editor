@@ -25,13 +25,11 @@ const AGENTS = [
   "banana-2-pro",
   "gpt-image-2",
   "gpt-image-1",
-  "suno-v5",
   "all-in-one-agent",
 ]
 
 function routeFor(model) {
   if (model === "standard") return "/api/chat"
-  if (model === "suno-v5") return "/api/suno"
   return "/api/dify-chat"
 }
 
@@ -39,15 +37,6 @@ function bodyFor(model) {
   if (model === "standard") {
     return {
       messages: [{ role: "user", content: "ping" }],
-    }
-  }
-
-  if (model === "suno-v5") {
-    return {
-      action: "generate",
-      query: "ping",
-      streaming: false,
-      taskMode: "inspiration",
     }
   }
 

@@ -628,7 +628,6 @@ const MessageBubble = memo(function MessageBubble({
     if (essayReviewArtifact) return "essay-review"
     if (model === "vocab-card") return "vocab-card"
     if (model === "flashcard") return "flashcard"
-    if (model === "suno-v5") return "music-card"
     if (model?.includes("gpt-image") || model === "banana-2-pro" || model === "gemini-image") return "image-gallery"
     if (model === "worksheet-diagnosis") return "worksheet-poster"
     return "markdown"
@@ -801,7 +800,6 @@ const MessageBubble = memo(function MessageBubble({
                     ) : (
                       <AssistantMarkdownCard content={content} actions={actions} templateType={templateType} isStreaming={isStreaming} />
                     )
-                  case "music-card":
                   case "image-gallery":
                   default:
                     return <AssistantMarkdownCard content={content} actions={actions} templateType={templateType} isStreaming={isStreaming} />

@@ -17,7 +17,6 @@ const SUPPORTED_MODELS = [
   'banana-2-pro',    // Banana 2 Pro
   'gpt-image-2',     // GPT Image 2
   'gpt-image-1',     // GPT Image 1
-  'suno-v5',         // Suno V5 (音乐)
   'grok-4.2',        // Grok-4.2
   'open-claw',       // Open Claw
   'quanquan-math',   // 全圈数学智能体

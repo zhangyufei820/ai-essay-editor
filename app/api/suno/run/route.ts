@@ -2,11 +2,20 @@ import { NextRequest, NextResponse } from "next/server"
 import { requireUser } from "@/lib/auth/verified-user"
 import { createSunoDifyClient } from "@/lib/suno-dify-client"
 import {
+  chargeSunoBaseCredits,
+  chargeSunoTokenUsageIfPresent,
+  createSunoChargeDescription,
+  ensureSunoCredits,
+  recordSunoBillingFailure,
+} from "@/lib/suno-billing"
+import {
   SUNO_MAX_UPLOAD_BYTES,
+  SUNO_COST_OPERATIONS,
   buildDifyInputs,
   parseDifyResult,
   sunoRunRequestSchema,
   validateOperationInput,
+  type SunoOperation,
   type SunoFormValues,
 } from "@/lib/suno-workflow-schema"
 
@@ -79,6 +88,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: "表单校验失败", details: validation.errors }, { status: 422 })
     }
 
+    const billableOperation = SUNO_COST_OPERATIONS.has(operation as SunoOperation)
+    if (billableOperation) {
+      const creditGuard = await ensureSunoCredits(auth.user!.id)
+      if (creditGuard) return creditGuard
+    }
+
     const client = createSunoDifyClient()
     const user = process.env.DIFY_WORKFLOW_USER || auth.user?.id || "website-user"
     const inputs = buildDifyInputs({ ...values, audio_file: file || values.audio_file })
@@ -90,7 +105,34 @@ export async function POST(request: NextRequest) {
     }
 
     const result = await client.runWorkflow({ inputs, user })
-    const normalized = parseDifyResult(result)
+    const normalized = parseDifyResult(result.response_json || result)
+    const successfulProviderResult = Boolean(result.success && normalized.success)
+
+    if (billableOperation && successfulProviderResult) {
+      const referenceId = normalized.task_id || normalized.clip_id || normalized.upload_id || null
+      const description = createSunoChargeDescription(operation)
+      const charged = await chargeSunoBaseCredits({
+        userId: auth.user!.id,
+        operation,
+        description,
+        referenceId,
+      })
+      if (!charged) {
+        await recordSunoBillingFailure({
+          userId: auth.user!.id,
+          operation,
+          description,
+          referenceId,
+        })
+        return NextResponse.json({ success: false, error: "积分扣除失败，请重试", code: "CREDITS_DEDUCT_FAILED" }, { status: 500 })
+      }
+      await chargeSunoTokenUsageIfPresent({
+        userId: auth.user!.id,
+        operation,
+        providerPayload: result.response_json || result,
+        referenceId,
+      })
+    }
 
     return NextResponse.json({
       ...normalized,

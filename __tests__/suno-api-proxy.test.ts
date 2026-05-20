@@ -6,12 +6,24 @@ jest.mock("@/lib/auth/verified-user", () => ({
 
 const uploadFile = jest.fn()
 const runWorkflow = jest.fn()
+const ensureSunoCredits = jest.fn(async () => null)
+const chargeSunoBaseCredits = jest.fn(async () => true)
+const chargeSunoTokenUsageIfPresent = jest.fn(async () => ({ charged: false, credits: 0, reason: "no_explicit_usage" }))
+const recordSunoBillingFailure = jest.fn()
 
 jest.mock("@/lib/suno-dify-client", () => ({
   createSunoDifyClient: () => ({
     uploadFile,
     runWorkflow,
   }),
+}))
+
+jest.mock("@/lib/suno-billing", () => ({
+  ensureSunoCredits,
+  chargeSunoBaseCredits,
+  chargeSunoTokenUsageIfPresent,
+  recordSunoBillingFailure,
+  createSunoChargeDescription: (operation: string) => `Suno ${operation}`,
 }))
 
 function makeJsonRequest(body: Record<string, unknown>) {
@@ -62,6 +74,43 @@ describe("POST /api/suno/run", () => {
     }))
     expect(JSON.stringify(json)).not.toContain("dify-secret")
     expect(JSON.stringify(json)).not.toContain("gateway-secret")
+    expect(ensureSunoCredits).toHaveBeenCalledWith("user-1")
+    expect(chargeSunoBaseCredits).toHaveBeenCalledWith(expect.objectContaining({
+      userId: "user-1",
+      operation: "music_custom",
+      referenceId: "task-1",
+    }))
+  })
+
+  it("does not bill query operations", async () => {
+    const { POST } = await import("@/app/api/suno/run/route")
+    const response = await POST(makeJsonRequest({
+      operation: "fetch_task",
+      task_id: "task-1",
+    }))
+
+    expect(response.status).toBe(200)
+    expect(ensureSunoCredits).not.toHaveBeenCalled()
+    expect(chargeSunoBaseCredits).not.toHaveBeenCalled()
+  })
+
+  it("returns billing error if post-success credit deduction fails", async () => {
+    chargeSunoBaseCredits.mockResolvedValueOnce(false)
+    const { POST } = await import("@/app/api/suno/run/route")
+    const response = await POST(makeJsonRequest({
+      operation: "music_custom",
+      prompt: "歌词",
+      title: "标题",
+      tags: "pop",
+    }))
+    const json = await response.json()
+
+    expect(response.status).toBe(500)
+    expect(json.code).toBe("CREDITS_DEDUCT_FAILED")
+    expect(recordSunoBillingFailure).toHaveBeenCalledWith(expect.objectContaining({
+      userId: "user-1",
+      operation: "music_custom",
+    }))
   })
 
   it("accepts multipart file and uploads through the adapter", async () => {

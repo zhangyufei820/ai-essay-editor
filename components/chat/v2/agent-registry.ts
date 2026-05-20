@@ -6,7 +6,7 @@
  */
 
 import { Image as ImageIcon } from "lucide-react"
-import { IconAllInOne, IconBanzhuren, IconDiagnosis, IconEnglish, IconEssay, IconFollowup, IconMath, IconMic, IconMusic, IconOpenClaw, IconProblem, IconSuperAgent, IconTeaching, IconVocab, IconWebsiteAssistant, IconWriting } from "@/components/icons/v2"
+import { IconAllInOne, IconBanzhuren, IconDiagnosis, IconEnglish, IconEssay, IconFollowup, IconMath, IconMic, IconOpenClaw, IconProblem, IconSuperAgent, IconTeaching, IconVocab, IconWebsiteAssistant, IconWriting } from "@/components/icons/v2"
 import type { AgentDefinition } from "./types"
 
 export const AGENT_REGISTRY: Record<string, AgentDefinition> = {
@@ -200,15 +200,6 @@ export const AGENT_REGISTRY: Record<string, AgentDefinition> = {
     artifactType: "markdown",
     priceLabel: "150 积分/张",
     icon: ImageIcon,
-  },
-  "suno-v5": {
-    model: "suno-v5",
-    name: "Suno V5 音乐",
-    description: "AI 作词 + 作曲 + 生成完整歌曲",
-    group: "creative",
-    artifactType: "markdown",
-    priceLabel: "100 积分起",
-    icon: IconMusic,
   },
   "all-in-one-agent": {
     model: "all-in-one-agent",

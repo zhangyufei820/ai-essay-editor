@@ -57,3 +57,12 @@ gateway_api_key = process.env.SUNO_GATEWAY_API_KEY
 - 高级调试：raw、callbacks recent、health
 
 高级 raw 默认隐藏，普通用户不需要手写 `params_json`。
+
+## 计费
+
+`/api/suno/run` 已复用旧版 Suno 的站内积分逻辑：
+
+- 生成类操作会先检查 trial 额度、问卷门禁和真实积分余额。
+- Dify 工作流成功返回后扣除 `suno-v5` 的基础音乐生成积分。
+- 如果 blocking 响应中带有 Dify usage，会继续记录 `suno_llm_token` 补扣审计。
+- 查询、WAV、Timing、Feed、Raw、回调查看等调试/查询类操作不扣费。

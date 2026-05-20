@@ -39,11 +39,6 @@ import { AIStatusIndicator } from "@/components/ai/AIStatusIndicator"
 import { ModelSelector } from "./ModelSelector"
 import { MathInline, MathBlock } from "./UltimateRenderer"
 import { useWorkflowVisualizer } from "@/hooks/useWorkflowVisualizer"
-// 🎵 Suno 音乐生成相关导入
-import { MusicCard } from "./MusicCard"
-import { useSunoMusic, extractTaskId, removeTaskIdFromText, type SunoProFormData } from "@/hooks/useSunoMusic"
-import { TASK_ID_REGEX } from "@/lib/suno-config"
-import { SunoProForm, type SunoFormData } from "./SunoProForm"
 import type { ChatSession } from "./chat-sidebar"
 import { motion, AnimatePresence } from "framer-motion"
 import { EnhancedMarkdown } from "./EnhancedMarkdown"
@@ -102,7 +97,6 @@ const MODEL_DISPLAY_NAMES: Record<string, string> = {
   "banzhuren": "班主任助手",
   "all-in-one-agent": "数学图片与动画生成器",
   "super-all-in-one-agent": "超级全能智能体",
-  "suno-v5": "音乐",
   "banana-2-pro": "Banana 2 Pro",
   "gpt-image-2": "GPT Image 2",
   "gpt-image-1": "GPT Image 1",
@@ -378,57 +372,6 @@ function getRandomStatusMessage(status: FileProcessingState['status'], progress?
   if (!messages) return ""
   const message = messages[Math.floor(Math.random() * messages.length)]
   return message.replace('{progress}', String(progress || 0))
-}
-
-// 🎵 格式化 Suno 响应：只保留歌词和 prompt，移除思考过程和冗余内容
-function formatSunoResponse(fullText: string): string {
-  // 1. 移除思考过程 <think>...</think>
-  let content = fullText.replace(/<think>[\s\S]*?<\/think>/gi, '').trim()
-
-  // 2. 尝试提取 JSON 中的歌词
-  const jsonMatch = content.match(/```json\s*([\s\S]*?)```/i)
-  if (jsonMatch) {
-    try {
-      const jsonData = JSON.parse(jsonMatch[1])
-      const title = jsonData.title || ''
-      const lyrics = jsonData.lyrics_plain_text || jsonData.lyrics || ''
-      const stylePrompt = jsonData.style_prompt || ''
-
-      // 3. 格式化输出（Claude 风格：简洁、清晰）
-      let formatted = ''
-
-      if (title) {
-        formatted += `## 🎵 ${title}\n\n`
-      }
-
-      if (stylePrompt) {
-        formatted += `**风格提示词：**\n\`\`\`\n${stylePrompt}\n\`\`\`\n\n`
-      }
-
-      if (lyrics) {
-        formatted += `**完整歌词：**\n\n${lyrics}\n`
-      }
-
-      // 添加任务 ID 提示（如果有）
-      const taskIdMatch = fullText.match(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/i)
-      if (taskIdMatch) {
-        formatted += `\n---\n📝 任务ID: \`${taskIdMatch[1]}\`\n请回复 **"确认生成"** 开始生成音乐！`
-      }
-
-      return formatted || content
-    } catch (e) {
-      // JSON 解析失败，返回原始内容
-    }
-  }
-
-  // 4. 如果没有 JSON，尝试提取歌词部分
-  // 移除 Phase 分析等冗余内容
-  const lyricsMatch = content.match(/\*\*(?:完整歌词|歌词)[：:]\*\*[\s\S]*?(?=\n\n(?:##|\*\*生成|$))/i)
-  if (lyricsMatch) {
-    return lyricsMatch[0]
-  }
-
-  return content
 }
 
 function extractWorkflowOutputText(outputs: unknown) {
@@ -1299,17 +1242,6 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     sessionModelRef.current = null
   }
 
-  const getConversationIdForRequest = (model: ModelType) => {
-    const conversationId = sessionIdRef.current
-    if (!conversationId) return null
-    if (sessionModelRef.current && sessionModelRef.current !== model) return null
-    return `${model}:${conversationId}`
-  }
-
-  // 🎵 Suno V5 音乐生成模式（必选项）
-  type SunoMode = "inspiration" | "custom" | "extend"
-  const [sunoMode, setSunoMode] = useState<SunoMode>("inspiration")
-
   const isLuxury = userCredits > 1000
 
   // 🎯 升级引导横幅状态（非豪华会员显示，发送消息后消失）
@@ -1403,17 +1335,6 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     resetWorkflow,
     triggerHandover
   } = useWorkflowVisualizer()
-
-  // 🎵 Suno 音乐生成 Hook（完全隔离，仅在 suno-v5 模型时使用）
-  const {
-    musicTasks,
-    getTaskByMessageId,
-    conversationId: sunoConversationId,  // 🔥 获取 Suno 会话 ID
-    startMusicGeneration,
-    startMusicGenerationPro,  // 🔥 专业模式函数
-    retryTask,
-    hasActiveTasks: hasSunoActiveTasks
-  } = useSunoMusic()
 
 	  useEffect(() => {
 	    if (typeof window !== 'undefined') {
@@ -1934,13 +1855,6 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       description: "轻量图像生成",
       group: "创意生成",
     },
-    "suno-v5": {
-      name: "Suno V5",
-      modelKey: "suno-v5",
-      color: BRAND_GREEN,
-      description: "AI 音乐创作，约 100 积分起",
-      group: "创意生成"
-    },
     "grok-4.2": {
       name: "Grok-4.2",
       modelKey: "grok-4.2",
@@ -2062,8 +1976,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       return
     }
 
-    if (nextModel === "suno-v5") setGenMode("music")
-    else setGenMode("text")
+    setGenMode("text")
 
     // 🔥 记录用户上次使用的模型
     lastUsedModelRef.current = nextModel
@@ -2423,7 +2336,6 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       "general-chat": "你好",
       "standard": "批改作文",
       "teaching-pro": "分析教学材料",
-      "suno-v5": "创作一首歌曲",
     }
     const defaultPrompt = defaultPrompts[selectedModel] || "请分析"
     // 🔥 将上传的文件附加到用户消息中
@@ -2439,80 +2351,6 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     }
     // 🔥 发送后自动滚动到消息底部，确保 AI 回复时能自动跟进
     setTimeout(() => scrollToBottom(), 50)
-
-    // ============================================
-    // 🎵 Suno V5 特殊处理逻辑（完全隔离）
-    // ============================================
-    if (selectedModel === "suno-v5") {
-      console.log("🎵 [Suno V5] 进入音乐生成模式")
-
-      // 🔥 创建会话和保存用户消息（与普通对话一致）
-      const preview = userMsg.content.slice(0, 30)
-      const { data: existing } = await supabase.from('chat_sessions').select('id').eq('id', sid).maybeSingle()
-      if (!existing) {
-        await supabase.from('chat_sessions').insert({ id: sid, user_id: userId, title: "音乐创作", preview, ai_model: selectedModel })
-      } else {
-        await supabase.from('chat_sessions').update({ preview, ai_model: selectedModel }).eq('id', sid)
-      }
-      await supabase.from('chat_messages').insert({ session_id: sid, role: "user", content: userMsg.content })
-
-      // 🔥 刷新侧边栏会话列表
-      refreshSessionList()
-
-      const botId = (Date.now() + 1).toString()
-      currentBotIdRef.current = botId
-      setMessages(p => [...p, { id: botId, role: "assistant", content: "" }])
-
-      try {
-        // 使用 Suno 服务生成音乐
-        await startMusicGeneration(
-          userMsg.content,
-          userId,
-          botId,
-          sunoMode,  // 🔥 传递用户选择的模式
-          // onTextChunk: 实时更新文字（chunk 已经是累积的完整文本）
-          (chunk) => {
-            // 🔥 chunk 是累积的完整文本，直接替换而不是拼接
-            setMessages(p => p.map(m =>
-              m.id === botId ? { ...m, content: chunk } : m
-            ))
-          },
-          // onComplete: 生成完成
-          async (fullText) => {
-            // 🔥 提取并格式化歌词和 prompt
-            const formattedContent = formatSunoResponse(fullText)
-            setMessages(p => p.map(m =>
-              m.id === botId ? { ...m, content: formattedContent } : m
-            ))
-
-            // 保存到数据库
-            await supabase.from('chat_messages').insert({
-              session_id: sid,
-              role: "assistant",
-              content: fullText
-            })
-
-            await refreshCredits()
-
-            console.log("✅ [Suno V5] 音乐生成任务已提交")
-          }
-        )
-      } catch (err: any) {
-        console.error("❌ [Suno V5] 生成失败:", err)
-        const errorMsg = getChatErrorMessage(err, undefined, selectedModel)
-        toast.error(errorMsg || "音乐生成失败")
-        setMessages(p => p.map(m => m.id === botId ? { ...m, content: buildChatErrorContent(errorMsg || "音乐生成失败") } : m))
-      } finally {
-        setIsLoading(false)
-        setProcessingContext(null)
-        refreshCredits()
-      }
-
-      return // 🔥 关键：Suno V5 处理完毕后直接返回，不执行后续逻辑
-    }
-    // ============================================
-    // 🎵 Suno V5 特殊处理结束
-    // ============================================
 
     const botId = (Date.now()+1).toString();
     // 🔥 记录当前正在处理的消息 ID
@@ -2632,8 +2470,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 	              query: isWordCardRequest ? vocabUserMessage : userMsg.content,
               fileIds,
               fileUrls,
-              // 🔥 Suno V5 使用 useSunoMusic 的 conversationId 保持会话连续性
-              conversation_id: getConversationIdForRequest(selectedModel),
+              conversation_id: sessionIdRef.current,
 	              model: selectedModel,
 	              mode: genMode,
 	              inputs: isWordCardRequest ? vocabWorkflowInputs : undefined,
@@ -3601,118 +3438,6 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                 // 🔥 骨架屏：会话切换时显示对话块轮廓
                 isLoading && !currentBotIdRef.current ? (
                   <ChatSkeleton />
-                ) : selectedModel === "suno-v5" ? (
-                  // 🎵 Suno V5 专业模式表单 - 放在主滚动区域
-                  <div className="py-4 sm:py-6 animate-in fade-in duration-500">
-                    <SunoProForm
-                      onSubmit={async (formData) => {
-                        if (!userId) {
-                          toast.error("请登录")
-                          return
-                        }
-
-                        const cost = calculateCost()
-                        if (userCredits < cost) {
-                          toast.error("积分不足", {
-                            description: `需要 ${cost} 积分，当前 ${userCredits}`,
-                            duration: 2000
-                          })
-                          return
-                        }
-
-                        setIsLoading(true)
-                        collapseSidebar()
-
-                        let sid = currentSessionId
-                        // 🔥 修复：当模型切换时，即使 urlSessionId 存在也忽略
-                        const isModelSwitch = sessionIdRef.current === null && currentSessionId;
-                        if (!sid && !urlSessionId) {
-                          sid = createLocalSessionId()
-                          setCurrentSessionId(sid)
-                          clearDifyConversationState()
-                        } else if (urlSessionId && !isModelSwitch) {
-                          sid = urlSessionId
-                          setCurrentSessionId(urlSessionId)
-                          clearDifyConversationState()
-                        } else {
-                          sid = createLocalSessionId()
-                          setCurrentSessionId(sid)
-                          clearDifyConversationState()
-                        }
-
-                        // 🔥 用户消息：显示歌词和音乐提示词（如果有）
-                        let userContent = `🎵 专业模式创作\n\n**标题**: ${formData.title || '未命名'}\n**模式**: ${formData.task_mode}`
-                        if (formData.lyrics) {
-                          userContent += `\n\n**歌词**:\n${formData.lyrics}`
-                        }
-                        if (formData.prompt) {
-                          userContent += `\n\n**音乐提示词**: ${formData.prompt}`
-                        }
-                        if (formData.style_tags) {
-                          userContent += `\n**风格标签**: ${formData.style_tags}`
-                        }
-                        const userMsg: Message = {
-                          id: Date.now().toString(),
-                          role: "user",
-                          content: userContent
-                        }
-                        setMessages(p => [...p, userMsg])
-
-                        const preview = formData.title || formData.prompt.slice(0, 30)
-                        const { data: existing } = await supabase.from('chat_sessions').select('id').eq('id', sid).maybeSingle()
-                        if (!existing) {
-                          await supabase.from('chat_sessions').insert({ id: sid, user_id: userId, title: "音乐创作", preview, ai_model: selectedModel })
-                        }
-                        await supabase.from('chat_messages').insert({ session_id: sid, role: "user", content: userContent })
-
-                        // 🔥 刷新侧边栏会话列表
-                        refreshSessionList()
-
-                        const botId = (Date.now() + 1).toString()
-                        currentBotIdRef.current = botId
-                        setMessages(p => [...p, { id: botId, role: "assistant", content: "" }])
-
-                        try {
-                          // 🔥 使用专业模式函数，传递完整 formData 对象
-                          await startMusicGenerationPro(
-                            formData,
-                            userId,
-                            botId,
-                            (chunk) => {
-                              setMessages(p => p.map(m =>
-                                m.id === botId ? { ...m, content: chunk } : m
-                              ))
-                            },
-                            async (fullText) => {
-                              const formattedContent = formatSunoResponse(fullText)
-                              setMessages(p => p.map(m =>
-                                m.id === botId ? { ...m, content: formattedContent } : m
-                              ))
-
-                              await supabase.from('chat_messages').insert({
-                                session_id: sid,
-                                role: "assistant",
-                                content: fullText
-                              })
-
-                              // 🔥 后端 handleGenerateStreamingPro 已包含完整计费逻辑（基础费+Token费）
-                              // 前端不再单独扣费，避免三重计费
-                              // 余额会在 finally 的 refreshCredits() 时同步
-                            }
-                          )
-                        } catch (err: any) {
-                          console.error("❌ [Suno Pro] 生成失败:", err)
-                          toast.error(err.message || "音乐生成失败")
-                          setMessages(p => p.filter(m => m.id !== botId))
-                        } finally {
-                          setIsLoading(false)
-                          refreshCredits()
-                        }
-                      }}
-                      isLoading={isLoading}
-                      disabled={!userId || hasSunoActiveTasks}
-                    />
-                  </div>
                 ) : selectedModel === "vocab-card" ? (
                   <div className="mx-auto flex min-h-full w-full max-w-4xl flex-col justify-start py-3 sm:py-5 md:py-6">
                     <div className="mb-4 flex flex-col items-center text-center sm:mb-6">
@@ -3826,38 +3551,6 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                               <div>
                                 {/* Content renderer */}
                                 {(() => {
-                                  const musicTask = getTaskByMessageId(message.id)
-                                  const hasTaskId = TASK_ID_REGEX.test(message.content)
-                                  const savedMusic = message.metadata?.type === "music" ? message.metadata : null
-
-                                  if (musicTask || hasTaskId || savedMusic) {
-                                    const taskId = musicTask?.taskId || savedMusic?.taskId || extractTaskId(message.content) || ""
-                                    const cleanContent = removeTaskIdFromText(message.content)
-                                    const songs = (musicTask?.songs || savedMusic?.songs || []) as [any, any]
-                                    const globalStatus = musicTask?.globalStatus || (savedMusic ? "SUCCESS" : "PENDING")
-
-                                    return (
-                                      <>
-                                        {cleanContent && (
-                                          <UltimateRenderer
-                                            content={cleanLLMText(cleanContent)}
-                                            isStreaming={message.id === currentBotIdRef.current && showCursor && isLoading}
-                                          />
-                                        )}
-                                        {(taskId && songs.length > 0) && (
-                                          <MusicCard
-                                            taskId={taskId}
-                                            songs={songs}
-                                            globalStatus={globalStatus}
-                                            errorMessage={musicTask?.errorMessage}
-                                            onRetry={() => retryTask(taskId, userId)}
-                                            className="mt-4"
-                                          />
-                                        )}
-                                      </>
-                                    )
-                                  }
-
                                   const wordCard = message.wordCard || message.metadata?.wordCard || normalizeDifyWordCardResponse(message.content)
                                   if (wordCard) {
                                     return <VocabCardTemplate artifact={toVocabCardArtifact(wordCard)} />
@@ -3979,7 +3672,6 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
               </div>
             )}
 	            {/* 🔥 输入框 - 使用 ChatInput 组件 - 移动端固定在底部 */}
-            {(selectedModel !== "suno-v5" || messages.length > 0) && (
             <div className="relative z-20 mx-auto w-full max-w-3xl px-0">
               <DailySurveyGate
                 featureName="作文批改"
@@ -4019,9 +3711,8 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                 }}
               />
             </div>
-            )}
 
-            {!userId && selectedModel !== "suno-v5" && (
+            {!userId && (
               <div className="mt-2 hidden items-center justify-center gap-1 text-[10px] sm:mt-3 sm:flex sm:text-xs">
                 <span className="text-[var(--ink-400)]">未登录，</span>
                 <Link

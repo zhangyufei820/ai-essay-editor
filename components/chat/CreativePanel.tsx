@@ -121,6 +121,7 @@ const CREATIVE_OPTIONS: CreativeOption[] = [
     icon: IconMusic,
     description: "AI 作曲与音效创作",
     gradient: "linear-gradient(135deg, rgba(245, 158, 11, 0.12) 0%, rgba(134, 239, 172, 0.08) 100%)",
+    href: "/suno",
   },
   {
     key: "tripo3d",

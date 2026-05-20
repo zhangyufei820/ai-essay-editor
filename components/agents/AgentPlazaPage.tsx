@@ -190,7 +190,6 @@ function AgentCard({ agent, featured = false }: { agent: AgentDefinition; featur
     "general-chat",
     "banana-2-pro",
     "gpt-image-2",
-    "suno-v5",
     "open-claw",
     "all-in-one-agent",
     "super-all-in-one-agent",

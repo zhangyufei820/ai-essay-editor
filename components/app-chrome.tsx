@@ -75,8 +75,7 @@ export function buildSidebarSections(): WorkspaceSidebarSection[] {
       title: "多媒体专区",
       items: [
         { label: "GPT Image 2", href: "/chat/gpt-image-2", icon: Image, badge: "图像" },
-        { label: "Suno V5 音乐", href: "/chat/suno-v5", icon: IconMusic, badge: "音乐" },
-        { label: "Suno 网关工作台", href: "/suno", icon: IconMusic, badge: "网关" },
+        { label: "Suno 音乐生成", href: "/suno", icon: IconMusic, badge: "音乐" },
         { label: "3D 细胞工作台", href: CELLFORGE_EXTERNAL_URL, icon: Box, badge: "3D" },
         { label: "全部工具", href: "/tools", icon: IconSettings },
       ],

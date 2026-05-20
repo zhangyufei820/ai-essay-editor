@@ -8,7 +8,7 @@ describe("P0/P1 security audit guardrails", () => {
   it("requires verified users for formerly client-userId sensitive APIs", () => {
     const routes = [
       "app/api/chat/route.ts",
-      "app/api/suno/route.ts",
+      "app/api/suno/run/route.ts",
       "app/api/share/route.ts",
       "app/api/share/claim-reward/route.ts",
       "app/api/referral/get-code/route.ts",

@@ -147,7 +147,7 @@ describe('Sprint 5 payment / credits / membership guards', () => {
     const source = read('components/chat/enhanced-chat-interface.tsx')
     const difyChat = read('app/api/dify-chat/route.ts')
     const login = read('app/login/page.tsx')
-    const suno = read('app/api/suno/route.ts')
+    const suno = read('app/api/suno/run/route.ts')
 
     expect(source).toContain('stage: "request_headers"')
     expect(source).toContain('hasAuthorization')
@@ -186,10 +186,10 @@ describe('Sprint 5 payment / credits / membership guards', () => {
   })
 
   it('keeps Suno base and token deductions in unified billing audit metadata', () => {
-    const source = read('app/api/suno/route.ts')
+    const source = `${read('app/api/suno/run/route.ts')}\n${read('lib/suno-billing.ts')}`
     expect(source).toContain('createBillingAuditMetadata')
-    expect(source).toContain("feature: 'suno'")
-    expect(source).toContain("usageSource: 'fixed'")
-    expect(source).toContain("actionType: 'suno_llm_token'")
+    expect(source).toContain('feature: "suno"')
+    expect(source).toContain('usageSource: "fixed"')
+    expect(source).toContain('actionType: "suno_llm_token"')
   })
 })

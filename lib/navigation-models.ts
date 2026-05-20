@@ -296,15 +296,6 @@ export const navigationModelGroups: NavigationModelGroup[] = [
         color: BRAND_GREEN,
         modelKey: "gpt-image-1",
       },
-      {
-        key: "suno-v5",
-        name: "Suno V5",
-        description: "AI 音乐创作，约 100 积分起",
-        href: "/chat/suno-v5",
-        group: "创意生成",
-        color: BRAND_GREEN,
-        modelKey: "suno-v5",
-      },
     ],
   },
 ]
