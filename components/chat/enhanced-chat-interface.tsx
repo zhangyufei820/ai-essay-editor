@@ -388,8 +388,11 @@ function getChatErrorMessage(error: unknown, status?: number, model?: string): s
   if (status === 402 || /402|积分不足|余额不足|credit|balance/.test(raw)) {
     return "积分不足，当前任务没有扣费。请充值或升级会员后继续使用。"
   }
+  if (raw.includes("GPT Image 2 当前共创体验期内登录用户可用")) {
+    return "GPT Image 2 当前共创体验期内登录用户可用，请先登录后使用。"
+  }
   if (raw.includes("GPT Image 2 当前仅订阅用户可用") || raw.includes("仅订阅用户可用")) {
-    return "GPT Image 2 当前仅订阅用户可用，请升级会员后使用。"
+    return "GPT Image 2 当前共创体验期已开放给登录用户，请刷新页面后重试；若仍失败，请重新登录。"
   }
   if (/无权访问图片生成接口|permission|forbidden|403/.test(raw)) {
     return "当前账号暂无图片生成权限，请切换模型，或联系客服开通后再试。"

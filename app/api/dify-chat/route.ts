@@ -1415,14 +1415,14 @@ export async function POST(request: NextRequest) {
         email: typeof userProfile?.email === "string" ? userProfile.email : auth.user!.email,
         membership_status: membershipStatus,
       })) {
-        console.warn(`🚫 [媒体权限] 用户无共创体验或订阅权限，不能使用 ${billingModelType || "gpt-image-2"}`)
+        console.warn(`🚫 [媒体权限] 用户无共创体验或订阅/白名单权限，不能使用 ${billingModelType || "gpt-image-2"}`)
         return new Response(
           JSON.stringify({
-            error: "GPT Image 2 当前仅订阅用户可用，请升级会员后使用。",
-            message: "GPT Image 2 当前仅订阅用户可用，请升级会员后使用。",
+            error: "GPT Image 2 当前共创体验期内登录用户可用，请先登录后使用。",
+            message: "GPT Image 2 当前共创体验期内登录用户可用，请先登录后使用。",
             requiredMembership: "basic",
             allowlist: ["IMAGE2_WHITELIST_USER_IDS", "IMAGE2_WHITELIST_EMAILS"],
-            action: "请充值或升级会员",
+            action: "请先登录，或在体验期结束后升级会员",
           }),
           { status: 403, headers: { "Content-Type": "application/json" } },
         )

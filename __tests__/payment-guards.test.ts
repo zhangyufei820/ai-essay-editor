@@ -92,6 +92,17 @@ describe('Sprint 5 payment / credits / membership guards', () => {
     expect(source).toContain('usageSource: "fixed"')
   })
 
+  it('does not show the old subscriber-only copy for GPT Image 2 during co-creation access', () => {
+    const route = read('app/api/dify-chat/route.ts')
+    const chat = read('components/chat/enhanced-chat-interface.tsx')
+    const image2 = read('components/chat/gpt-image2-chat-interface.tsx')
+
+    expect(route).toContain('GPT Image 2 当前共创体验期内登录用户可用')
+    expect(route).not.toContain('GPT Image 2 当前仅订阅用户可用，请升级会员后使用。')
+    expect(chat).not.toContain('return "GPT Image 2 当前仅订阅用户可用，请升级会员后使用。"')
+    expect(image2).not.toContain('return "GPT Image 2 当前仅订阅用户可用，请升级会员后使用。"')
+  })
+
   it('keeps Image 2 prompt optimization authenticated and server-side', () => {
     const route = read('app/api/image-prompt/optimize/route.ts')
     const client = read('components/chat/gpt-image2-chat-interface.tsx')

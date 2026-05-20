@@ -207,8 +207,14 @@ function mapImageError(error: unknown): string {
   if (raw.includes("未登录") || raw.includes("请先登录") || raw.includes("未授权") || lower.includes("unauthorized") || lower.includes("401")) {
     return "请先登录后再生成图片。"
   }
-  if (raw.includes("仅订阅用户可用") || raw.includes("白名单") || lower.includes("forbidden") || lower.includes("403")) {
-    return "GPT Image 2 当前仅订阅用户可用，请升级会员后使用。"
+  if (raw.includes("GPT Image 2 当前共创体验期内登录用户可用")) {
+    return "GPT Image 2 当前共创体验期内登录用户可用，请先登录后生成图片。"
+  }
+  if (raw.includes("仅订阅用户可用") || raw.includes("白名单")) {
+    return "GPT Image 2 当前共创体验期已开放给登录用户，请刷新页面后重试；若仍失败，请重新登录。"
+  }
+  if (lower.includes("forbidden") || lower.includes("403")) {
+    return "当前账号暂时无法提交图片生成，请刷新页面后重试；若仍失败，请重新登录。"
   }
   if (lower.includes("download_file_error")) return "无法读取上传图片，请重新上传。"
   if (lower.includes("network") || lower.includes("failed to fetch")) return "网络请求失败，请稍后重试。"
