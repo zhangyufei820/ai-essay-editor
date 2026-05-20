@@ -20,7 +20,7 @@ export type OmniVoiceJob = {
   voice_id?: string | null
 }
 
-const DEFAULT_OMNIVOICE_GATEWAY_URL = "http://172.23.0.1:8010"
+const DEFAULT_OMNIVOICE_GATEWAY_URL = "http://omnivoice-gateway:8000"
 
 function getGatewayUrl() {
   return (process.env.OMNIVOICE_GATEWAY_URL || DEFAULT_OMNIVOICE_GATEWAY_URL).replace(/\/+$/, "")

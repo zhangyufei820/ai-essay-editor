@@ -82,7 +82,7 @@ services:
       - DIFY_BASE_URL=http://docker-api-1:5001/v1
       - DIFY_IMAGE_GATEWAY_URL=http://dify-image-gateway:8001
       - DIFY_IMAGE_GATEWAY_PUBLIC_URL=http://43.154.111.156:8001
-      - OMNIVOICE_GATEWAY_URL=${OMNIVOICE_GATEWAY_URL:-http://172.23.0.1:8010}
+      - OMNIVOICE_GATEWAY_URL=${OMNIVOICE_GATEWAY_URL:-http://omnivoice-gateway:8000}
       - NEXT_PUBLIC_APP_URL=https://www.shenxiang.school
       - NEXT_PUBLIC_FREE_TRIAL_CAMPAIGN_ENABLED=${NEXT_PUBLIC_FREE_TRIAL_CAMPAIGN_ENABLED:-true}
       - FREE_TRIAL_BATCH_GRANT_ENABLED=${FREE_TRIAL_BATCH_GRANT_ENABLED:-true}
@@ -101,6 +101,7 @@ services:
     networks:
       - shenxiang-net
       - docker_default
+      - deploy_default
     logging:
       driver: 'json-file'
       options:
@@ -154,6 +155,8 @@ networks:
   shenxiang-net:
     external: true
   docker_default:
+    external: true
+  deploy_default:
     external: true
 
 secrets:
