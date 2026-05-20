@@ -195,6 +195,18 @@ function mapImageError(error: unknown): string {
 
   if (raw === "empty_prompt") return "提示词不能为空。"
   if (raw === "missing_edit_image") return "图片编辑模式需要上传原图。"
+  if (
+    raw.includes("上游额度不足") ||
+    raw.includes("余额不足") ||
+    raw.includes("充值") ||
+    lower.includes("upstream_balance_exhausted") ||
+    lower.includes("balance has run out") ||
+    lower.includes("recharge") ||
+    lower.includes("insufficient balance") ||
+    lower.includes("quota")
+  ) {
+    return "图像上游额度不足，本次积分已自动退回，请联系管理员补充上游额度后重试。"
+  }
   if (lower.includes("rate") || lower.includes("429")) return "图片服务请求较多，请稍后再试，或降低质量 / 切换模型。"
   if (raw.includes("未登录") || raw.includes("请先登录") || raw.includes("未授权") || lower.includes("unauthorized") || lower.includes("401")) {
     return "请先登录后再生成图片。"

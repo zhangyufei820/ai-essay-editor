@@ -178,6 +178,18 @@ function extractMarkdownImageUrls(content: string) {
 function mapToolImageError(error: unknown) {
   const raw = getSafeServiceError(error, "图片服务暂时不可用，请稍后重试。")
   const lower = raw.toLowerCase()
+  if (
+    raw.includes("上游额度不足") ||
+    raw.includes("余额不足") ||
+    raw.includes("充值") ||
+    lower.includes("upstream_balance_exhausted") ||
+    lower.includes("balance has run out") ||
+    lower.includes("recharge") ||
+    lower.includes("insufficient balance") ||
+    lower.includes("quota")
+  ) {
+    return "图像上游额度不足，本次积分已自动退回，请联系管理员补充上游额度后重试。"
+  }
   if (raw.includes("请先登录") || raw.includes("未授权") || lower.includes("unauthorized") || lower.includes("401")) {
     return "请先登录后再使用图像提示词反推。"
   }
