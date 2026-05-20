@@ -33,7 +33,6 @@ import { internalDifyFetch } from "@/lib/internal-dify-fetch"
 import { getDifyCredentialForModel } from "@/lib/dify-credentials"
 import { rewriteOpenClawMediaReferences } from "@/lib/openclaw-media"
 import { rewriteOpenClawMediaReferencesWithSignedUrls } from "@/lib/openclaw-media-server"
-import { extractDifySseText } from "@/lib/dify-output-text"
 import {
   createRequestId,
   createTraceId,
@@ -2143,16 +2142,13 @@ export async function POST(request: NextRequest) {
 	                }).catch((error) => console.warn("[AI Task Trace] conversation update failed:", error))
 	              }
 
-              const eventText = extractDifySseText(json)
-              const eventTextHandledBelow = json.event === "message" || json.event === "text_chunk" || json.event === "agent_message"
-
               // 🔥 收集响应文本内容（Chat API）
-	              if (json.event === "message" && eventText) {
-	                fullResponseText += eventText
+	              if (json.event === "message" && json.answer) {
+	                fullResponseText += json.answer
 	                hasReceivedContent = true
                   if (shouldBufferForDisplay && shouldStreamAllInOneAnswer(json)) {
                     allInOneStreamedAnswer = true
-                    enqueueSseAnswer(controller, eventText)
+                    enqueueSseAnswer(controller, json.answer)
                   }
 	                const artifacts = model === "open-claw" ? extractArtifactsFromText(fullResponseText) : []
 	                if (artifacts.length > 0) {
@@ -2168,7 +2164,7 @@ export async function POST(request: NextRequest) {
                 if (isWorkflowImageModel) {
                   // 匹配 Markdown 图片格式：![alt](url)
                   const imageRegex = /!\[.*?\]\((https?:\/\/[^\)]+)\)/g
-                  const matches = eventText.matchAll(imageRegex)
+                  const matches = json.answer.matchAll(imageRegex)
                   for (const match of matches) {
                     const imageUrl = match[1]
 	                    if (!workflowImageUrls.includes(imageUrl)) {
@@ -2181,7 +2177,7 @@ export async function POST(request: NextRequest) {
 
               // 🔥 收集 Workflow API 的文本响应（Banana 2 Pro）
               if (json.event === "text_chunk" || json.event === "agent_message") {
-                const text = eventText
+                const text = json.data?.text || json.text || ''
 	                if (text) {
 		                  fullResponseText += text
 		                  hasReceivedContent = true
@@ -2197,15 +2193,6 @@ export async function POST(request: NextRequest) {
 	                  }
 	                }
 	              }
-
-              if (!eventTextHandledBelow && eventText) {
-                fullResponseText += eventText
-                hasReceivedContent = true
-                console.log(`📝 [Dify直接输出] 收集到文本:`, { event: json.event, length: eventText.length })
-                if (model !== "vocab-card") {
-                  enqueueSseAnswer(controller, eventText)
-                }
-              }
 
 	              // 🔥 收集 Workflow 完成事件的输出文本
 	              if (json.event === "workflow_finished") {
@@ -2230,17 +2217,21 @@ export async function POST(request: NextRequest) {
                       answer: safeOutputs.answer,
                       conversation_id: conversationId || undefined,
                     })}\n\n`))
-                  } else if (!eventText) {
-                    const outputText = extractDifySseText({ event: "workflow_finished", data: { outputs } })
-                    if (outputText) {
-                      fullResponseText += outputText
-                      hasReceivedContent = true
-                      console.log(`🎨 [Workflow完成] 收集到输出文本:`, { length: outputText.length })
+	                  } else if (outputs.text) {
+	                    fullResponseText += outputs.text
+	                    hasReceivedContent = true
+	                    console.log(`🎨 [Workflow完成] 收集到输出文本:`, { length: String(outputs.text).length })
                       if (shouldBufferForDisplay && !allInOneStreamedAnswer) {
-                        enqueueAllInOneDisplayOnce(outputText)
+                        enqueueAllInOneDisplayOnce(String(outputs.text))
                       }
-                    }
-                  }
+	                  } else if (outputs.result) {
+	                    fullResponseText += outputs.result
+	                    hasReceivedContent = true
+		                    console.log(`🎨 [Workflow完成] 收集到结果文本:`, { length: String(outputs.result).length })
+                      if (shouldBufferForDisplay && !allInOneStreamedAnswer) {
+                        enqueueAllInOneDisplayOnce(String(outputs.result))
+                      }
+		                  }
 	                }
 	                const parsedUsage = parseDifyUsage(json)
 	                latestParsedUsage = parsedUsage
@@ -2343,10 +2334,8 @@ export async function POST(request: NextRequest) {
             try {
               const json = JSON.parse(data)
               // 处理最后一条消息的文本收集
-              const eventText = extractDifySseText(json)
-              if (eventText) {
-                fullResponseText += eventText
-                hasReceivedContent = true
+              if (json.event === "message" && json.answer) {
+                fullResponseText += json.answer
               }
               if (json.conversation_id) {
                 conversationId = json.conversation_id

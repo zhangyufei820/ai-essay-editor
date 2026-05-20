@@ -29,7 +29,6 @@ import { getVerifiedAuthHeaders } from "@/lib/client-auth"
 import { IconEssay } from "@/components/icons/v2"
 import { DailySurveyGate, type TrialSurveyStatus } from "@/components/trial/DailySurveyGate"
 import { trackCampaignEvent } from "@/lib/campaign-events-client"
-import { extractDifySseText } from "@/lib/dify-output-text"
 
 type UploadedFile = { 
   name: string
@@ -276,9 +275,15 @@ export function EssayGrader() {
                 console.log("[作文批改] 思考:", json.thought)
               }
               
-              const eventText = extractDifySseText(json)
-              if (eventText) {
-                fullText += eventText
+              // 🔥 处理文本输出（answer字段）
+              if (json.answer) {
+                fullText += json.answer
+                setResult(fullText)
+              }
+              
+              // 🔥 处理 message 事件
+              if (json.event === "message" && json.answer) {
+                fullText += json.answer
                 setResult(fullText)
               }
             } catch (e) {

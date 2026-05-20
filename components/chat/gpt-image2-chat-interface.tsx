@@ -16,7 +16,6 @@ import { GridWaveLoader } from "@/components/chat/GridWaveLoader"
 import { collapseSidebar, navigateHomeWithSidebar, refreshCredits, refreshSessionList } from "@/lib/workspace-events"
 import { extractUserId } from "@/lib/auth-user"
 import { buildChatSessionRouteFromSession } from "@/lib/chat-session-routes"
-import { extractDifySseText, extractDifyTextOutput } from "@/lib/dify-output-text"
 import type { ModelType } from "@/lib/pricing"
 import { calculatePreviewCost } from "@/lib/pricing"
 import { cn } from "@/lib/utils"
@@ -1200,17 +1199,16 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
                 currentSessionIdRef.current = json.conversation_id
               }
 
-              const eventText = extractDifySseText(json)
-              if (eventText) fullText += eventText
+              if (json.answer) fullText += json.answer
 
-              if ((json.event === "text_chunk" || json.event === "agent_message") && !eventText) {
+              if (json.event === "text_chunk" || json.event === "agent_message") {
                 fullText += json.data?.text || json.text || ""
               }
 
               if (json.event === "workflow_finished") {
                 const outputs = json.data?.outputs || json.outputs
-                const outputText = extractDifyTextOutput(outputs)
-                if (outputText) fullText = outputText
+                if (outputs?.text) fullText = outputs.text
+                if (outputs?.result) fullText = outputs.result
                 const files = outputs?.files || outputs?.images || []
                 for (const file of files) {
                   if (file?.type === "image" && file.url) {
