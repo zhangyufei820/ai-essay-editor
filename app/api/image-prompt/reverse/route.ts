@@ -40,10 +40,37 @@ function isHtmlErrorContent(value: unknown) {
   )
 }
 
-function isAllowedImageFile(file: File) {
+function sniffImageType(bytes: Uint8Array) {
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "image/jpeg"
+  if (
+    bytes.length >= 8 &&
+    bytes[0] === 0x89 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x4e &&
+    bytes[3] === 0x47 &&
+    bytes[4] === 0x0d &&
+    bytes[5] === 0x0a &&
+    bytes[6] === 0x1a &&
+    bytes[7] === 0x0a
+  ) return "image/png"
+  if (bytes.length >= 12) {
+    const header = String.fromCharCode(...bytes.slice(0, 12))
+    if (header.startsWith("RIFF") && header.slice(8, 12) === "WEBP") return "image/webp"
+  }
+  if (bytes.length >= 6) {
+    const header = String.fromCharCode(...bytes.slice(0, 6))
+    if (header === "GIF87a" || header === "GIF89a") return "image/gif"
+  }
+  return ""
+}
+
+async function isAllowedImageFile(file: File) {
   if (ALLOWED_IMAGE_TYPES.has(file.type)) return true
   const name = typeof file.name === "string" ? file.name.toLowerCase() : ""
-  return Array.from(ALLOWED_IMAGE_EXTENSIONS).some((extension) => name.endsWith(extension))
+  if (Array.from(ALLOWED_IMAGE_EXTENSIONS).some((extension) => name.endsWith(extension))) return true
+
+  const header = new Uint8Array(await file.slice(0, 16).arrayBuffer())
+  return ALLOWED_IMAGE_TYPES.has(sniffImageType(header))
 }
 
 async function uploadFileToDify(file: File, userId: string, apiKey: string) {
@@ -167,7 +194,7 @@ export async function POST(request: NextRequest) {
   if (!(file instanceof File)) {
     return NextResponse.json({ error: "请先上传一张图片", code: "IMAGE_REQUIRED" }, { status: 400 })
   }
-  if (!isAllowedImageFile(file)) {
+  if (!(await isAllowedImageFile(file))) {
     return NextResponse.json({ error: "仅支持 JPG、PNG、WebP 或 GIF 图片", code: "INVALID_IMAGE_TYPE" }, { status: 415 })
   }
   if (file.size > MAX_IMAGE_BYTES) {

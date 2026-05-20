@@ -102,6 +102,8 @@ describe("tools workbench route mappings", () => {
     expect(route).toContain("parseDifyUsage")
     expect(route).toContain("calculateTextCredits")
     expect(route).toContain("isHtmlErrorContent")
+    expect(route).toContain("sniffImageType")
+    expect(route).toContain("file.slice(0, 16).arrayBuffer()")
     expect(route).toContain('"gpt-image-2"')
     expect(route).toContain("nano_banana")
     expect(route).toContain("target_model")
