@@ -16,6 +16,7 @@ import { GridWaveLoader } from "@/components/chat/GridWaveLoader"
 import { collapseSidebar, navigateHomeWithSidebar, refreshCredits, refreshSessionList } from "@/lib/workspace-events"
 import { extractUserId } from "@/lib/auth-user"
 import { buildChatSessionRouteFromSession } from "@/lib/chat-session-routes"
+import { isSurveyRequiredPayload, openTrialSurveyGate } from "@/lib/trial-survey-client"
 import type { ModelType } from "@/lib/pricing"
 import { calculatePreviewCost } from "@/lib/pricing"
 import { cn } from "@/lib/utils"
@@ -234,6 +235,19 @@ function mapImageError(error: unknown): string {
   }
 
   return sanitizeServiceWording(raw) || "图片生成失败，请稍后重试。"
+}
+
+function buildSurveyRequiredError() {
+  const error = new Error("SURVEY_REQUIRED")
+  error.name = "SurveyRequiredError"
+  return error
+}
+
+function handleSurveyRequired(featureName: string) {
+  openTrialSurveyGate({
+    featureName,
+    message: `请先完成今日问卷，解锁体验额度后继续使用${featureName}。`,
+  })
 }
 
 function sanitizeServiceWording(text: string) {
@@ -1180,6 +1194,18 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
 
       if (isWorkflowImageWorkspace) {
         if (!response.ok) {
+          const contentType = response.headers.get("content-type") || ""
+          if (contentType.includes("application/json")) {
+            const payload = await response.json().catch(() => null)
+            if (isSurveyRequiredPayload(payload)) throw buildSurveyRequiredError()
+            const detail =
+              typeof payload?.error === "string"
+                ? payload.error
+                : typeof payload?.message === "string"
+                  ? payload.message
+                  : JSON.stringify(payload || {})
+            throw new Error(`upstream_error:${response.status}:${detail.slice(0, 120)}`)
+          }
           const errorText = await response.text()
           throw new Error(`upstream_error:${response.status}:${errorText.slice(0, 120)}`)
         }
@@ -1244,6 +1270,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
         let payload = await readResponseJson(response)
 
         if (!response.ok) {
+          if (isSurveyRequiredPayload(payload)) throw buildSurveyRequiredError()
           const detailMessage =
             typeof payload?.data?.message === "string"
               ? payload.data.message
@@ -1291,6 +1318,12 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
       if (userId) void fetchCredits(userId)
       refreshCredits()
     } catch (error) {
+      if (error instanceof Error && error.name === "SurveyRequiredError") {
+        handleSurveyRequired(workspaceModel === "gpt-image-2" ? "GPT Image 2" : "图像生成")
+        setShowLongRunningHint(false)
+        setErrorMessage("请先完成今日问卷，完成后可继续生成图片。")
+        return
+      }
       const message = mapImageError(error)
       setShowLongRunningHint(false)
       setErrorMessage(message)

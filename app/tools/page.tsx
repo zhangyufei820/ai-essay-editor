@@ -14,6 +14,7 @@ import {
 import { GridWaveLoader } from "@/components/chat/GridWaveLoader"
 import { extractImageUrlsFromDifyResult, proxifyGeneratedImageUrl } from "@/components/chat/image-generation/gpt-image-v11"
 import { getVerifiedAuthHeaders } from "@/lib/client-auth"
+import { isSurveyRequiredPayload, openTrialSurveyGate } from "@/lib/trial-survey-client"
 import Link from "next/link"
 import { useEffect, useMemo, useRef, useState, type ComponentType, type FormEvent, type ReactNode } from "react"
 import { Camera, FileImage, Image as ImageIcon, Loader2, Megaphone, Presentation, Search, Sparkles, Upload, Wand2 } from "lucide-react"
@@ -151,6 +152,10 @@ async function readReversePromptStream(
     }
     if (event.type === "done" || event.type === "error") {
       finalPayload = event
+      return
+    }
+    if (event.surveyRequired || event.error) {
+      finalPayload = event
     }
   }
 
@@ -207,6 +212,19 @@ function mapToolImageError(error: unknown) {
     return "图片服务请求失败，可能是余额不足、模型不可用、尺寸不支持或参数不兼容。"
   }
   return raw.replace(/Dify/gi, "服务").replace(/网关/g, "服务") || "处理失败，请稍后重试。"
+}
+
+function buildSurveyRequiredError() {
+  const error = new Error("SURVEY_REQUIRED")
+  error.name = "SurveyRequiredError"
+  return error
+}
+
+function handleSurveyRequired(featureName: string) {
+  openTrialSurveyGate({
+    featureName,
+    message: `请先完成今日问卷，解锁体验额度后继续使用${featureName}。`,
+  })
 }
 
 function buildImageGenerationInputs(targetModel: ReverseTargetModel) {
@@ -444,6 +462,7 @@ export default function ToolsPage() {
       const prompt = typeof payload?.prompt === "string" ? payload.prompt.trim() : ""
 
       if (!response.ok || payload?.type === "error" || !prompt || isHtmlErrorContent(prompt)) {
+        if (isSurveyRequiredPayload(payload)) throw buildSurveyRequiredError()
         throw new Error(typeof payload?.error === "string" ? payload.error : "反推提示词失败")
       }
 
@@ -457,6 +476,13 @@ export default function ToolsPage() {
       setReverseProgress(100)
       setReverseStage("提示词已生成，可以继续生成图像")
     } catch (error) {
+      if (error instanceof Error && error.name === "SurveyRequiredError") {
+        handleSurveyRequired("图像提示词反推")
+        setResult({ title: "图像提示词反推", content: "请先完成今日问卷，完成后可继续反推提示词。" })
+        setReverseProgress(0)
+        setReverseStage("")
+        return
+      }
       const message = mapToolImageError(error)
       setResult({ title: "图像提示词反推", content: message })
       setReverseProgress(0)
@@ -504,6 +530,7 @@ export default function ToolsPage() {
       setReverseProgress(62)
       const traceId = response.headers.get("X-Trace-Id") || undefined
       if (!response.ok) {
+        if (isSurveyRequiredPayload(payload)) throw buildSurveyRequiredError()
         throw new Error(typeof payload?.error === "string" ? payload.error : `upstream_error:${response.status}`)
       }
 
@@ -541,6 +568,13 @@ export default function ToolsPage() {
       setReverseProgress(100)
       setReverseStage("图片生成完成")
     } catch (error) {
+      if (error instanceof Error && error.name === "SurveyRequiredError") {
+        handleSurveyRequired("图像生成")
+        setResult({ title: "图像生成", content: "请先完成今日问卷，完成后可继续生成图片。" })
+        setReverseProgress(0)
+        setReverseStage("")
+        return
+      }
       const message = mapToolImageError(error)
       setResult({ title: "图像生成", content: message })
       setReverseProgress(0)

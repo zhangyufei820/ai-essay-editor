@@ -34,6 +34,7 @@ import { MessageBubble } from "./MessageBubble"
 import { ChatInput } from "./ChatInput"
 import { DailySurveyGate, type TrialSurveyStatus } from "@/components/trial/DailySurveyGate"
 import { trackCampaignEvent } from "@/lib/campaign-events-client"
+import { openTrialSurveyGate } from "@/lib/trial-survey-client"
 import { EmptyState } from "./EmptyState"
 import { AIStatusIndicator } from "@/components/ai/AIStatusIndicator"
 import { ModelSelector } from "./ModelSelector"
@@ -2385,12 +2386,15 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     })
 
     let trialEligibleForSubmit = Boolean(trialStatus?.active_grant_id)
-    if (selectedModel === "standard" && !isPaidUser) {
+    if (!isPaidUser) {
       const surveyState = await refreshTrialSurveyState()
       trialEligibleForSubmit = surveyState.trialEligible
       if (surveyState.gateRequired) {
         setSurveyGateOpen(true)
-        toast.info("填写 90 秒问卷后解锁今日 2000 trial 积分")
+        openTrialSurveyGate({
+          featureName: getModelUiConfig(selectedModel).name || "当前功能",
+          message: "请先完成今日问卷，解锁体验额度后继续使用当前功能。",
+        })
         return
       }
     }
@@ -2644,17 +2648,16 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
               status: res.status,
               model: selectedModel,
             })
-            setSurveyGateOpen(true)
-            if (typeof window !== "undefined") {
-              window.dispatchEvent(new CustomEvent("trial:open-daily-survey"))
-            }
+            openTrialSurveyGate({
+              featureName: getModelUiConfig(selectedModel).name || "当前功能",
+              message: "请先完成今日问卷，解锁体验额度后继续使用当前功能。",
+            })
             setTrialStatus((previous) => ({
               ...(previous || {}),
               ...(errorPayload.trialStatus || {}),
               requires_daily_survey: true,
               today_survey_completed: false,
             }))
-            toast.info("填写 90 秒问卷后解锁今日 2000 trial 积分")
             throw new Error("请先完成今日共创反馈问卷，解锁免费体验额度")
           }
 
@@ -3803,13 +3806,13 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 	            {/* 🔥 输入框 - 使用 ChatInput 组件 - 移动端固定在底部 */}
             <div className="relative z-20 mx-auto w-full max-w-3xl px-0">
               <DailySurveyGate
-                featureName="作文批改"
-                enabled={selectedModel === "standard"}
+                featureName={getModelUiConfig(selectedModel).name || "当前功能"}
+                enabled
                 open={surveyGateOpen}
                 onOpenChange={setSurveyGateOpen}
                 onCompleted={(nextTrialStatus) => {
                   setTrialStatus((nextTrialStatus || null) as TrialSurveyStatus | null)
-                  toast.success("今日作文批改免费额度已解锁")
+                  toast.success("今日体验额度已解锁")
                 }}
               />
               <ChatInput

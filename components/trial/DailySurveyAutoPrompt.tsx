@@ -6,13 +6,12 @@ import { trackCampaignEvent } from "@/lib/campaign-events-client"
 import { getVerifiedAuthHeaders } from "@/lib/client-auth"
 import { DailySurveyGate, type TrialSurveyStatus } from "@/components/trial/DailySurveyGate"
 import { FreeTrialAnnouncementModal } from "@/components/trial/FreeTrialAnnouncementModal"
+import { OPEN_DAILY_SURVEY_EVENT } from "@/lib/trial-survey-client"
 
 const ANNOUNCEMENT_KEY_PREFIX = "free-trial-announcement-shown"
 const AUTO_SURVEY_KEY_PREFIX = "daily-survey-auto-shown"
 const SURVEY_SNOOZE_KEY_PREFIX = "daily-survey-auto-snoozed-until"
 const SURVEY_SNOOZE_MS = 2 * 60 * 60 * 1000
-const OPEN_SURVEY_EVENT = "trial:open-daily-survey"
-
 type SessionState = {
   loggedIn: boolean
   userId: string | null
@@ -182,12 +181,21 @@ export function DailySurveyAutoPrompt() {
   useEffect(() => {
     if (typeof window === "undefined") return
     const handleOpenSurvey = () => {
-      if (!session.loggedIn || session.paidUser) return
-      setSurveyOpen(true)
+      void refreshSession()
+        .then((nextSession) => {
+          const activeSession = nextSession || session
+          if (!activeSession.loggedIn || activeSession.paidUser) return
+          setSurveyOpen(true)
+        })
+        .catch((error) => {
+          console.warn("[DailySurveyAutoPrompt] forced survey refresh failed", error)
+          if (!session.loggedIn || session.paidUser) return
+          setSurveyOpen(true)
+        })
     }
-    window.addEventListener(OPEN_SURVEY_EVENT, handleOpenSurvey)
-    return () => window.removeEventListener(OPEN_SURVEY_EVENT, handleOpenSurvey)
-  }, [session.loggedIn, session.paidUser])
+    window.addEventListener(OPEN_DAILY_SURVEY_EVENT, handleOpenSurvey)
+    return () => window.removeEventListener(OPEN_DAILY_SURVEY_EVENT, handleOpenSurvey)
+  }, [refreshSession, session])
 
   const hasTrial = Boolean(session.trialStatus?.active_grant_id)
 

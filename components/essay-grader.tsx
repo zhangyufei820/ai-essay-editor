@@ -29,6 +29,7 @@ import { getVerifiedAuthHeaders } from "@/lib/client-auth"
 import { IconEssay } from "@/components/icons/v2"
 import { DailySurveyGate, type TrialSurveyStatus } from "@/components/trial/DailySurveyGate"
 import { trackCampaignEvent } from "@/lib/campaign-events-client"
+import { openTrialSurveyGate } from "@/lib/trial-survey-client"
 
 type UploadedFile = { 
   name: string
@@ -184,7 +185,10 @@ export function EssayGrader() {
     const gateRequired = await refreshTrialSurveyState()
     if (gateRequired || shouldRequireEssaySurvey(trialStatus)) {
       setSurveyGateOpen(true)
-      toast.info("填写 90 秒问卷后解锁今日 2000 trial 积分")
+      openTrialSurveyGate({
+        featureName: "作文批改",
+        message: "请先完成今日问卷，解锁体验额度后继续批改作文。",
+      })
       return
     }
 
@@ -220,17 +224,16 @@ export function EssayGrader() {
               featureName: "essay_grader",
               status: response.status,
             })
-            setSurveyGateOpen(true)
-            if (typeof window !== "undefined") {
-              window.dispatchEvent(new CustomEvent("trial:open-daily-survey"))
-            }
+            openTrialSurveyGate({
+              featureName: "作文批改",
+              message: "请先完成今日问卷，解锁体验额度后继续批改作文。",
+            })
             setTrialStatus((previous) => ({
               ...(previous || {}),
               ...(parsedError.trialStatus || {}),
               requires_daily_survey: true,
               today_survey_completed: false,
             }))
-            toast.info("填写 90 秒问卷后解锁今日 2000 trial 积分")
             throw new Error("请先完成今日共创反馈问卷，解锁免费体验额度")
           }
         } catch (parseError) {
@@ -322,7 +325,7 @@ export function EssayGrader() {
         onOpenChange={setSurveyGateOpen}
         onCompleted={(nextTrialStatus) => {
           setTrialStatus((nextTrialStatus || null) as TrialSurveyStatus | null)
-          toast.success("今日作文批改免费额度已解锁")
+          toast.success("今日体验额度已解锁")
         }}
       />
       {/* Header */}
