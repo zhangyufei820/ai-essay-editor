@@ -46,6 +46,23 @@ describe("chat think rendering and composer layout", () => {
     expect(imageWorkspace).toContain('capture="environment"')
   })
 
+  it("lets OpenClaw load a skill and sends the English skill id through inputs", () => {
+    const chatInput = read("components/chat/ChatInput.tsx")
+    const picker = read("components/chat/OpenClawSkillPicker.tsx")
+    const skills = read("lib/openclaw-skills.ts")
+    const chatInterface = read("components/chat/enhanced-chat-interface.tsx")
+
+    expect(chatInput).toContain("showOpenClawSkillButton")
+    expect(chatInput).toContain("加载技能")
+    expect(picker).toContain("选择一个技能后，会把对应英文技能标识传递给 OpenClaw")
+    expect(skills).toContain('id: "khazix-writer"')
+    expect(skills).toContain('id: "AI Video Generation"')
+    expect(chatInterface).toContain('showOpenClawSkillButton={selectedModel === "open-claw"}')
+    expect(chatInterface).toContain("openclaw_skill_id: selectedOpenClawSkill.id")
+    expect(chatInterface).toContain("selected_skill: selectedOpenClawSkill.id")
+    expect(chatInterface).toContain("skill_name: selectedOpenClawSkill.id")
+  })
+
   it("keeps chat auth extraction and empty workflow replies visible", () => {
     const source = read("components/chat/enhanced-chat-interface.tsx")
 

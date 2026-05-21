@@ -32,6 +32,7 @@ import { buildChatSessionRoute, buildChatSessionRouteFromSession, isDedicatedCha
 import { toast } from "sonner"
 import { MessageBubble } from "./MessageBubble"
 import { ChatInput } from "./ChatInput"
+import { OpenClawSkillPicker } from "./OpenClawSkillPicker"
 import { DailySurveyGate, type TrialSurveyStatus } from "@/components/trial/DailySurveyGate"
 import { trackCampaignEvent } from "@/lib/campaign-events-client"
 import { openTrialSurveyGate } from "@/lib/trial-survey-client"
@@ -69,6 +70,7 @@ import { logger } from "@/lib/logger"
 import { ModelLogo } from "@/components/ModelLogo"
 import { navigationModelConfig } from "@/lib/navigation-models"
 import { getOpenClawAttachmentKind, isLikelyHtmlDocumentUrl, toPublicOpenClawMediaSignUrl, toPublicOpenClawWorkspaceUrl } from "@/lib/openclaw-media"
+import type { OpenClawSkill } from "@/lib/openclaw-skills"
 import {
   calculatePreviewCost,
   ModelType,
@@ -1729,6 +1731,8 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     style: "colorful",
     language: "zh-CN",
   })
+  const [openClawSkillPickerOpen, setOpenClawSkillPickerOpen] = useState(false)
+  const [selectedOpenClawSkill, setSelectedOpenClawSkill] = useState<OpenClawSkill | null>(null)
   const [currentWord, setCurrentWord] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   // 🔥 深度思考提示状态（15秒后显示）
@@ -2081,6 +2085,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     if (nextModel !== selectedModel) {
       clearConversationState()
       setMessages([])
+      setSelectedOpenClawSkill(null)
       console.log(`🔄 [模型切换] ${selectedModel} → ${nextModel}，已清除会话命名空间`)
     }
 
@@ -2494,7 +2499,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
             role: "user",
             content: userMsg.content,
             files: activeFiles,
-            metadata: { requestId, clientMessageId: userMsg.id, workflowSkillId },
+            metadata: { requestId, clientMessageId: userMsg.id, workflowSkillId, openClawSkillId: selectedOpenClawSkill?.id },
           })
         })
       } catch (error) {
@@ -2506,6 +2511,15 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     let fullText = ""; let hasRec = false
     let wordCard: FrontendWordCard | null = null
     const isWordCardRequest = selectedModel === "vocab-card"
+    const openClawSkillInputs = selectedModel === "open-claw" && selectedOpenClawSkill
+      ? {
+          openclaw_skill_id: selectedOpenClawSkill.id,
+          skill_id: selectedOpenClawSkill.id,
+          skill: selectedOpenClawSkill.id,
+          selected_skill: selectedOpenClawSkill.id,
+          skill_name: selectedOpenClawSkill.id,
+        }
+      : undefined
     const applyWordCard = (card: FrontendWordCard) => {
       wordCard = card
       hasRec = true
@@ -2597,6 +2611,8 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 	              mode: genMode,
 	              inputs: isWordCardRequest
                   ? vocabWorkflowInputs
+                  : openClawSkillInputs
+                    ? openClawSkillInputs
                   : workflowSkillId
                     ? {
                         workflow_skill_id: workflowSkillId,
@@ -3829,6 +3845,9 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                 onRemoveFile={(i) => setUploadedFiles((p) => p.filter((_, idx) => idx !== i))}
                 isLoading={isLoading}
                 disabled={isLoading}
+                showOpenClawSkillButton={selectedModel === "open-claw"}
+                selectedOpenClawSkillName={selectedOpenClawSkill?.name}
+                onOpenClawSkillClick={() => setOpenClawSkillPickerOpen(true)}
                 placeholder={userId
                   ? selectedModel === "vocab-card"
                     ? "例如：你好啊 / 我要学习 apple / 考我一下"
@@ -3841,6 +3860,15 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                   const target = { target: { files } } as unknown as React.ChangeEvent<HTMLInputElement>
                   handleFileUpload(target)
                 }}
+              />
+              <OpenClawSkillPicker
+                open={openClawSkillPickerOpen}
+                selectedSkillId={selectedOpenClawSkill?.id}
+                onSelect={(skill) => {
+                  setSelectedOpenClawSkill(skill)
+                  toast.success(`已加载技能：${skill.name}`)
+                }}
+                onClose={() => setOpenClawSkillPickerOpen(false)}
               />
             </div>
 

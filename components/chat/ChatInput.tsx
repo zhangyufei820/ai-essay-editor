@@ -20,7 +20,7 @@ import {
   type FormEvent,
 } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Camera, Volume2, X, Loader2, ChevronDown, CornerDownLeft } from "lucide-react"
+import { Camera, Volume2, X, Loader2, ChevronDown, CornerDownLeft, Sparkles } from "lucide-react"
 import { IconEssay, IconMic, IconUpload } from "@/components/icons/v2"
 import { cn } from "@/lib/utils"
 import { ModelSelector, type Model } from "./ModelSelector"
@@ -111,6 +111,12 @@ interface ChatInputProps {
   onModelChange?: (model: string) => void
   /** 模型颜色 */
   modelColor?: string
+  /** 是否显示 OpenClaw 技能加载按钮 */
+  showOpenClawSkillButton?: boolean
+  /** 当前选择的 OpenClaw 技能名 */
+  selectedOpenClawSkillName?: string
+  /** 点击 OpenClaw 技能加载按钮 */
+  onOpenClawSkillClick?: () => void
   /** 自定义类名 */
   className?: string
 }
@@ -239,6 +245,9 @@ export function ChatInput({
   modelColor = "var(--ink-900)",
   models = [],
   onModelChange,
+  showOpenClawSkillButton = false,
+  selectedOpenClawSkillName,
+  onOpenClawSkillClick,
   className
 }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -637,6 +646,25 @@ export function ChatInput({
           )}
 
           <div className="flex items-center gap-1">
+            {showOpenClawSkillButton && (
+              <button
+                type="button"
+                onClick={onOpenClawSkillClick}
+                disabled={isLoading || disabled || !onOpenClawSkillClick}
+                className={cn(
+                  "inline-flex h-8 max-w-[142px] items-center gap-1.5 rounded-[var(--radius-pill)] border px-2.5 text-[12px] font-semibold transition-colors",
+                  selectedOpenClawSkillName
+                    ? "border-[var(--ink-300)] bg-[var(--ink-50)] text-[var(--ink-800)]"
+                    : "border-[var(--paper-200)] bg-[var(--paper-50)] text-[var(--ink-600)] hover:border-[var(--ink-300)] hover:bg-[var(--ink-50)]",
+                  "disabled:cursor-not-allowed disabled:opacity-50"
+                )}
+                aria-label="加载 OpenClaw 技能"
+                title={selectedOpenClawSkillName ? `已选择：${selectedOpenClawSkillName}` : "加载技能"}
+              >
+                <Sparkles className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">{selectedOpenClawSkillName || "加载技能"}</span>
+              </button>
+            )}
             <Button
               type="button"
               variant="ghost"
