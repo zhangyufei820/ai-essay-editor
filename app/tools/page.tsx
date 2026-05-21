@@ -14,9 +14,10 @@ import {
 import { GridWaveLoader } from "@/components/chat/GridWaveLoader"
 import { extractImageUrlsFromDifyResult, proxifyGeneratedImageUrl } from "@/components/chat/image-generation/gpt-image-v11"
 import { getVerifiedAuthHeaders } from "@/lib/client-auth"
+import Link from "next/link"
 import { useEffect, useMemo, useRef, useState, type ComponentType, type FormEvent, type ReactNode } from "react"
 import { Camera, FileImage, Image as ImageIcon, Loader2, Megaphone, Presentation, Search, Sparkles, Upload, Wand2 } from "lucide-react"
-import { IconAllInOne, IconEssay } from "@/components/icons/v2"
+import { IconAllInOne, IconDiagnosis, IconEssay } from "@/components/icons/v2"
 
 type ToolResult = {
   title: string
@@ -724,7 +725,7 @@ export default function ToolsPage() {
             </div>
             <div className="hidden w-full min-w-0 grid-cols-3 gap-2 text-center sm:grid md:w-auto">
               {[
-                ["7", "可用工具"],
+                ["8", "可用工具"],
                 ["API", "实时处理"],
                 ["1", "结果面板"],
               ].map(([value, label]) => (
@@ -826,7 +827,21 @@ export default function ToolsPage() {
               </form>
             </ToolCard>
 
-            <ToolCard index="02" title="文档处理" description="上传学习资料，提取可继续加工的文本。" icon={IconEssay}>
+            <ToolCard index="02" title="拍卷诊断海报" description="上传试卷或作业图片，先由模型批改归因，再调用 Image 2 生成诊断海报。" icon={IconDiagnosis} featured>
+              <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+                <div className="space-y-2">
+                  <p className="text-sm font-semibold text-[var(--ink-800)]">上传试卷 / 作业 / 错题图片</p>
+                  <p className="text-sm leading-6 text-[var(--ink-500)]">
+                    进入完整诊断页后，可上传 1-6 张图片，生成结构化诊断，再继续生成家校沟通海报。
+                  </p>
+                </div>
+                <Button asChild variant="seal" className="h-11 rounded-[var(--radius-soft)]">
+                  <Link href="/worksheet-diagnosis">打开拍卷诊断</Link>
+                </Button>
+              </div>
+            </ToolCard>
+
+            <ToolCard index="03" title="文档处理" description="上传学习资料，提取可继续加工的文本。" icon={IconEssay}>
               <form className="space-y-3" onSubmit={runDocumentProcess}>
                 <Label htmlFor="document-file">上传 PDF / Word / 图片 / 文本</Label>
                 <Input
@@ -850,7 +865,7 @@ export default function ToolsPage() {
               </form>
             </ToolCard>
 
-            <ToolCard index="03" title="图片 OCR" description="上传或拍照识别图片文字，适合资料整理。" icon={Wand2}>
+            <ToolCard index="04" title="图片 OCR" description="上传或拍照识别图片文字，适合资料整理。" icon={Wand2}>
               <form className="space-y-3" onSubmit={runOcr}>
                 <Label htmlFor="ocr-images">图片上传 / 拍照 / 测试文本</Label>
                 <input
@@ -889,7 +904,7 @@ export default function ToolsPage() {
               </form>
             </ToolCard>
 
-            <ToolCard index="04" title="演示文稿" description="把课件、汇报素材快速整理成演示结构。" icon={Presentation}>
+            <ToolCard index="05" title="演示文稿" description="把课件、汇报素材快速整理成演示结构。" icon={Presentation}>
               <form className="space-y-3" onSubmit={runPresentation}>
                 <Label htmlFor="presentation-content">课件或汇报内容</Label>
                 <Textarea id="presentation-content" rows={5} value={presentationContent} onChange={(event) => setPresentationContent(event.target.value)} placeholder="粘贴要生成演示文稿的内容..." />
@@ -900,7 +915,7 @@ export default function ToolsPage() {
               </form>
             </ToolCard>
 
-            <ToolCard index="05" title="网页搜索" description="围绕一个问题抓取网页结果，辅助备课和调研。" icon={Search}>
+            <ToolCard index="06" title="网页搜索" description="围绕一个问题抓取网页结果，辅助备课和调研。" icon={Search}>
               <form className="space-y-3" onSubmit={runSearch}>
                 <Label htmlFor="search-query">搜索问题</Label>
                 <Input id="search-query" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="例如：牛顿第二定律生活例子" />
@@ -911,7 +926,7 @@ export default function ToolsPage() {
               </form>
             </ToolCard>
 
-            <ToolCard index="06" title="Sparkpage 综合报告" description="输入主题，生成更完整的资料整理和综合分析结果。" icon={IconAllInOne} featured>
+            <ToolCard index="07" title="Sparkpage 综合报告" description="输入主题，生成更完整的资料整理和综合分析结果。" icon={IconAllInOne} featured>
               <form className="grid gap-3 md:grid-cols-[1fr_auto]" onSubmit={runSparkpage}>
                 <Input value={sparkQuery} onChange={(event) => setSparkQuery(event.target.value)} placeholder="输入要综合分析的主题" />
                 <Button type="submit" disabled={busy === "spark"}>
@@ -921,7 +936,7 @@ export default function ToolsPage() {
               </form>
             </ToolCard>
 
-            <ToolCard index="07" title="文字转语音" description="把文本转换成可播放音频，调用服务器 OmniVoice 网关。" icon={Megaphone} featured>
+            <ToolCard index="08" title="文字转语音" description="把文本转换成可播放音频，调用服务器 OmniVoice 网关。" icon={Megaphone} featured>
               <form className="space-y-3" onSubmit={runTts}>
                 <Label htmlFor="tts-text">朗读文本</Label>
                 <Textarea

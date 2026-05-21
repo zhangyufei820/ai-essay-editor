@@ -56,6 +56,9 @@ describe("tools workbench route mappings", () => {
     expect(page).toContain("/api/omnivoice/jobs/")
     expect(page).toContain("TTS_POLL_MAX_ATTEMPTS = 150")
     expect(page).toContain("语音模型首次加载可能需要几分钟")
+    expect(page).toContain("拍卷诊断海报")
+    expect(page).toContain('href="/worksheet-diagnosis"')
+    expect(page).toContain("再调用 Image 2 生成诊断海报")
     expect(page).toContain("图像提示词反推")
     expect(page).toContain("gpt-image-2")
     expect(page).toContain("nano_banana")
@@ -130,5 +133,13 @@ describe("tools workbench route mappings", () => {
     expect(toolPage).toContain("图像上游额度不足，本次积分已自动退回")
     expect(imageWorkspace).toContain("图像上游额度不足，本次积分已自动退回")
     expect(chatRoute).not.toContain("Dify Error: ${errorText}")
+  })
+
+  it("renders the worksheet diagnosis page with the full upload and poster generation app", () => {
+    const page = read("app/worksheet-diagnosis/page.tsx")
+
+    expect(page).toContain("WorksheetDiagnosisApp")
+    expect(page).not.toContain("DiagnosisPageV2")
+    expect(page).toContain("错题诊断海报")
   })
 })

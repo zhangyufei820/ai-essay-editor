@@ -18,6 +18,20 @@ describe("app chrome sidebar", () => {
     )
   })
 
+  it("keeps the worksheet diagnosis flagship entry in the workspace sidebar", () => {
+    const items = buildSidebarSections().flatMap((section) => section.items)
+
+    expect(items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "拍卷诊断",
+          href: "/worksheet-diagnosis",
+          badge: "主打",
+        }),
+      ])
+    )
+  })
+
   it("opens an app launcher from the new chat CTA", () => {
     const sidebar = readFileSync(path.join(process.cwd(), "components/v2-chrome/WorkspaceSidebar.tsx"), "utf8")
 

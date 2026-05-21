@@ -1,11 +1,23 @@
 import type { Metadata } from "next"
-import { DiagnosisPageV2 } from "@/components/worksheet-diagnosis/v2/DiagnosisPageV2"
+import { WorksheetDiagnosisApp } from "@/components/worksheet-diagnosis-app"
 
 export const metadata: Metadata = {
-  title: "拍卷诊断错题 | 沈翔智学",
-  description: "上传试卷图片，AI 归因错题并生成训练建议海报。",
+  title: "错题诊断海报 | 沈翔智学",
+  description: "上传试卷或作业图片，AI 自动识别错题、归因学习问题，并生成适合家长沟通的训练建议。",
+  openGraph: {
+    title: "沈翔智学 - 错题诊断海报",
+    description: "拍卷子生成家长看得懂的学习反馈。",
+    url: "https://shenxiang.school/worksheet-diagnosis",
+  },
+  alternates: {
+    canonical: "https://shenxiang.school/worksheet-diagnosis",
+  },
 }
 
 export default function WorksheetDiagnosisPage() {
-  return <DiagnosisPageV2 />
+  return (
+    <main className="min-h-screen bg-[linear-gradient(180deg,var(--paper-50)_0%,var(--paper-100)_100%)] px-4 py-6 md:py-10">
+      <WorksheetDiagnosisApp />
+    </main>
+  )
 }

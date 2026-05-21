@@ -4,7 +4,7 @@ import { Box, Image } from "lucide-react"
 import { usePathname } from "next/navigation"
 import { useEffect, useMemo, useState, type ReactNode } from "react"
 
-import { IconMusic, IconSettings } from "@/components/icons/v2"
+import { IconDiagnosis, IconMusic, IconSettings } from "@/components/icons/v2"
 import { WorkspaceShell } from "@/components/v2-chrome"
 import type { WorkspaceSidebarSection } from "@/components/v2-chrome"
 import { getVerifiedAuthHeaders } from "@/lib/client-auth"
@@ -65,6 +65,7 @@ export function buildSidebarSections(): WorkspaceSidebarSection[] {
       title: "学习",
       items: [
         { label: "对话", href: "/chat" },
+        { label: "拍卷诊断", href: "/worksheet-diagnosis", icon: IconDiagnosis, badge: "主打" },
         { label: "智能体广场", href: "/agents" },
         { label: "闪卡复习", href: "/flashcards" },
         { label: "互动实验室", href: "/lab" },
