@@ -54,6 +54,15 @@ describe("chat think rendering and composer layout", () => {
     expect(source).toContain("我没有收到可展示的作文批改结果")
   })
 
+  it("keeps OpenClaw final node output visible when message chunks are empty", () => {
+    const route = read("app/api/dify-chat/route.ts")
+
+    expect(route).toContain("function extractOpenClawFinalNodeText")
+    expect(route).toContain('nodeTitle.includes("直接回复")')
+    expect(route).toContain('model === "open-claw" && json.event === "message_end"')
+    expect(route).toContain("enqueueSseAnswer(controller, openClawFinalOutputText)")
+  })
+
   it("blocks image uploads before login instead of failing after submission", () => {
     const imageWorkspace = read("components/chat/gpt-image2-chat-interface.tsx")
 

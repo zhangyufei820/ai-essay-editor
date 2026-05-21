@@ -833,6 +833,42 @@ function shouldStreamAllInOneAnswer(event: Record<string, unknown>) {
   return !selector.includes("quick_reply_answer_node") && !selector.includes("frontend_input_node")
 }
 
+function readRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null
+}
+
+function extractOpenClawFinalNodeText(event: Record<string, unknown>) {
+  if (event.event !== "node_finished") return ""
+
+  const data = readRecord(event.data)
+  const outputs = readRecord(data?.outputs)
+  if (!data || !outputs) return ""
+
+  const nodeTitle = String(data.title || event.title || "").trim().toLowerCase()
+  const nodeType = String(data.node_type || data.type || event.node_type || "").trim().toLowerCase()
+  const isFinalTextNode =
+    nodeType === "llm" ||
+    nodeType === "answer" ||
+    nodeType === "direct-answer" ||
+    nodeTitle === "llm" ||
+    nodeTitle.includes("直接回复") ||
+    nodeTitle.includes("direct reply") ||
+    nodeTitle.includes("final answer") ||
+    nodeTitle.includes("answer")
+
+  if (!isFinalTextNode) return ""
+
+  return extractDifyTextOutput({
+    answer: outputs.answer,
+    text: outputs.text,
+    result: outputs.result,
+    markdown: outputs.markdown,
+    content: outputs.content,
+  })
+}
+
 function extractDisplayTextFromUnknown(value: unknown): string[] {
   if (!value) return []
   if (typeof value === "string") {
@@ -2293,6 +2329,7 @@ export async function POST(request: NextRequest) {
     let workflowNodeFailure: { message: string; code: string } | null = null
     let allInOneDisplaySent = false
     let allInOneStreamedAnswer = false
+    let openClawFinalOutputText = ""
     const bufferedNodeEvents: Array<{
       event: string
       title?: string
@@ -2529,8 +2566,19 @@ export async function POST(request: NextRequest) {
                       errorMessage,
                       errorCode: workflowNodeFailure.code,
                       sanitizedError: sanitizeForTrace({ node: title, status: nodeStatus, error: errorMessage }) as Record<string, unknown>,
-                    }).catch((error) => console.warn("[AI Task Trace] node failure update failed:", error))
-                  }
+	                    }).catch((error) => console.warn("[AI Task Trace] node failure update failed:", error))
+	                  }
+                    if (model === "open-claw" && !hasReceivedContent) {
+                      const finalNodeText = extractOpenClawFinalNodeText(json)
+                      if (finalNodeText.trim()) {
+                        openClawFinalOutputText = finalNodeText
+                        updateTaskRun(taskRun.id, {
+                          status: "running",
+                          stage: "已收到 OpenClaw 最终回复",
+                          progress: 90,
+                        }).catch((error) => console.warn("[AI Task Trace] OpenClaw final node update failed:", error))
+                      }
+                    }
 	              }
 
 	              // 提取 conversation_id
@@ -2670,6 +2718,11 @@ export async function POST(request: NextRequest) {
               if (shouldBufferForDisplay && json.event === "message_end" && fullResponseText.trim() && !allInOneStreamedAnswer) {
                 enqueueAllInOneDisplayOnce(fullResponseText)
               }
+              if (model === "open-claw" && json.event === "message_end" && !hasReceivedContent && openClawFinalOutputText.trim()) {
+                enqueueSseAnswer(controller, openClawFinalOutputText)
+                fullResponseText = openClawFinalOutputText
+                hasReceivedContent = true
+              }
 
               // 🎨 处理 workflow_finished 事件（可能包含图片）
               if (json.event === "workflow_finished" && isWorkflowImageModel) {
@@ -2758,11 +2811,16 @@ export async function POST(request: NextRequest) {
         }
 
         // 🔥 流结束，触发扣费（仅当有实际内容时才扣费）
-        if (isAllInOneAgent && fullResponseText.trim() && !allInOneDisplaySent && !allInOneStreamedAnswer) {
-          allInOneDisplaySent = true
-          enqueueSseAnswer(controller, normalizeAllInOneAgentDisplay(fullResponseText))
+	        if (isAllInOneAgent && fullResponseText.trim() && !allInOneDisplaySent && !allInOneStreamedAnswer) {
+	          allInOneDisplaySent = true
+	          enqueueSseAnswer(controller, normalizeAllInOneAgentDisplay(fullResponseText))
+	        }
+        if (model === "open-claw" && !hasReceivedContent && openClawFinalOutputText.trim()) {
+          enqueueSseAnswer(controller, openClawFinalOutputText)
+          fullResponseText = openClawFinalOutputText
+          hasReceivedContent = true
         }
-        console.log(`💰 [Billing] 流结束，输入 ${promptTokens} tokens，输出 ${completionTokens} tokens，总 ${totalTokens} tokens，内容长度: ${fullResponseText.length}，hasReceivedContent: ${hasReceivedContent}`)
+	        console.log(`💰 [Billing] 流结束，输入 ${promptTokens} tokens，输出 ${completionTokens} tokens，总 ${totalTokens} tokens，内容长度: ${fullResponseText.length}，hasReceivedContent: ${hasReceivedContent}`)
 	        if (!workflowNodeFailure && hasReceivedContent && (promptTokens > 0 || completionTokens > 0 || workflowImageUrls.length > 0)) {
 	          deductCredit().catch(e => console.error("[Billing] 扣费异步异常:", e))
 	        } else {
