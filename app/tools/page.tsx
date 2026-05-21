@@ -250,6 +250,7 @@ function buildImageGenerationInputs(targetModel: ReverseTargetModel) {
 }
 
 function ToolCard({
+  id,
   index,
   title,
   description,
@@ -257,6 +258,7 @@ function ToolCard({
   children,
   featured = false,
 }: {
+  id?: string
   index: string
   title: string
   description: string
@@ -266,6 +268,7 @@ function ToolCard({
 }) {
   return (
     <Card
+      id={id}
       className={[
         "group w-full min-w-0 max-w-[calc(100vw-2rem)] overflow-hidden rounded-[var(--radius-sharp)] border-[var(--paper-200)] bg-[var(--paper-50)] sm:max-w-none",
         "shadow-[0_1px_0_rgba(16,55,35,0.04),0_18px_48px_rgba(16,55,35,0.06)] transition duration-300",
@@ -743,7 +746,7 @@ export default function ToolsPage() {
 
         <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_430px]">
           <div className="grid min-w-0 gap-4 lg:grid-cols-2">
-            <ToolCard index="01" title="图像提示词反推" description="上传参考图，反推出可直接用于 Image 2 或 Banana/Gemini 的生成提示词。" icon={FileImage} featured>
+            <ToolCard id="image-prompt-reverse" index="01" title="图像提示词反推" description="上传参考图，反推出可直接用于 Image 2 或 Banana/Gemini 的生成提示词。" icon={FileImage} featured>
               <form className="grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]" onSubmit={runReversePrompt}>
                 <div className="space-y-3">
                   <Label htmlFor="reverse-image-file">上传图片</Label>
@@ -827,7 +830,7 @@ export default function ToolsPage() {
               </form>
             </ToolCard>
 
-            <ToolCard index="02" title="拍卷诊断海报" description="上传试卷或作业图片，先由模型批改归因，再调用 Image 2 生成诊断海报。" icon={IconDiagnosis} featured>
+            <ToolCard id="worksheet-diagnosis-tool" index="02" title="拍卷诊断海报" description="上传试卷或作业图片，先由模型批改归因，再调用 Image 2 生成诊断海报。" icon={IconDiagnosis} featured>
               <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
                 <div className="space-y-2">
                   <p className="text-sm font-semibold text-[var(--ink-800)]">上传试卷 / 作业 / 错题图片</p>
@@ -841,7 +844,7 @@ export default function ToolsPage() {
               </div>
             </ToolCard>
 
-            <ToolCard index="03" title="文档处理" description="上传学习资料，提取可继续加工的文本。" icon={IconEssay}>
+            <ToolCard id="document-process" index="03" title="文档处理" description="上传学习资料，提取可继续加工的文本。" icon={IconEssay}>
               <form className="space-y-3" onSubmit={runDocumentProcess}>
                 <Label htmlFor="document-file">上传 PDF / Word / 图片 / 文本</Label>
                 <Input
@@ -865,7 +868,7 @@ export default function ToolsPage() {
               </form>
             </ToolCard>
 
-            <ToolCard index="04" title="图片 OCR" description="上传或拍照识别图片文字，适合资料整理。" icon={Wand2}>
+            <ToolCard id="ocr" index="04" title="图片 OCR" description="上传或拍照识别图片文字，适合资料整理。" icon={Wand2}>
               <form className="space-y-3" onSubmit={runOcr}>
                 <Label htmlFor="ocr-images">图片上传 / 拍照 / 测试文本</Label>
                 <input
@@ -904,7 +907,7 @@ export default function ToolsPage() {
               </form>
             </ToolCard>
 
-            <ToolCard index="05" title="演示文稿" description="把课件、汇报素材快速整理成演示结构。" icon={Presentation}>
+            <ToolCard id="presentation" index="05" title="演示文稿" description="把课件、汇报素材快速整理成演示结构。" icon={Presentation}>
               <form className="space-y-3" onSubmit={runPresentation}>
                 <Label htmlFor="presentation-content">课件或汇报内容</Label>
                 <Textarea id="presentation-content" rows={5} value={presentationContent} onChange={(event) => setPresentationContent(event.target.value)} placeholder="粘贴要生成演示文稿的内容..." />
@@ -915,7 +918,7 @@ export default function ToolsPage() {
               </form>
             </ToolCard>
 
-            <ToolCard index="06" title="网页搜索" description="围绕一个问题抓取网页结果，辅助备课和调研。" icon={Search}>
+            <ToolCard id="web-search" index="06" title="网页搜索" description="围绕一个问题抓取网页结果，辅助备课和调研。" icon={Search}>
               <form className="space-y-3" onSubmit={runSearch}>
                 <Label htmlFor="search-query">搜索问题</Label>
                 <Input id="search-query" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="例如：牛顿第二定律生活例子" />
@@ -926,7 +929,7 @@ export default function ToolsPage() {
               </form>
             </ToolCard>
 
-            <ToolCard index="07" title="Sparkpage 综合报告" description="输入主题，生成更完整的资料整理和综合分析结果。" icon={IconAllInOne} featured>
+            <ToolCard id="sparkpage" index="07" title="Sparkpage 综合报告" description="输入主题，生成更完整的资料整理和综合分析结果。" icon={IconAllInOne} featured>
               <form className="grid gap-3 md:grid-cols-[1fr_auto]" onSubmit={runSparkpage}>
                 <Input value={sparkQuery} onChange={(event) => setSparkQuery(event.target.value)} placeholder="输入要综合分析的主题" />
                 <Button type="submit" disabled={busy === "spark"}>
@@ -936,7 +939,7 @@ export default function ToolsPage() {
               </form>
             </ToolCard>
 
-            <ToolCard index="08" title="文字转语音" description="把文本转换成可播放音频，调用服务器 OmniVoice 网关。" icon={Megaphone} featured>
+            <ToolCard id="tts" index="08" title="文字转语音" description="把文本转换成可播放音频，调用服务器 OmniVoice 网关。" icon={Megaphone} featured>
               <form className="space-y-3" onSubmit={runTts}>
                 <Label htmlFor="tts-text">朗读文本</Label>
                 <Textarea

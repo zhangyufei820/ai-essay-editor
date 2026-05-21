@@ -134,6 +134,32 @@ describe("Dify credential selection", () => {
     })
   })
 
+  it("uses the shared workflow skill key when configured", () => {
+    const selection = getDifyCredentialForModel("workflow-skill", {
+      DIFY_WORKFLOW_SKILL_API_KEY: "workflow-skill-key",
+      ESSAY_CORRECTION_API_KEY: "default-key",
+    })
+
+    expect(selection).toEqual({
+      credential: "workflow-skill-key",
+      source: "DIFY_WORKFLOW_SKILL_API_KEY",
+    })
+  })
+
+  it("does not silently fall back for shared workflow skills in production", () => {
+    const selection = getDifyCredentialForModel("workflow-skill", {
+      NODE_ENV: "production",
+      DIFY_API_KEY: "chat-key",
+      ESSAY_CORRECTION_API_KEY: "default-key",
+    })
+
+    expect(selection).toEqual({
+      credential: "",
+      source: "DIFY_WORKFLOW_SKILL_API_KEY",
+    })
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("DIFY_WORKFLOW_SKILL_API_KEY is required"))
+  })
+
   it("does not silently fall back for super all-in-one agent in production", () => {
     const selection = getDifyCredentialForModel("super-all-in-one-agent", {
       NODE_ENV: "production",

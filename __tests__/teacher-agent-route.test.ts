@@ -5,14 +5,25 @@ describe("teacher agent chat routing", () => {
     expect(resolveChatAgentParam("standard")).toEqual({
       model: "standard",
       teacherAgentShareCode: null,
+      workflowSkillId: null,
     })
     expect(resolveChatAgentParam("all-in-one-agent")).toEqual({
       model: "all-in-one-agent",
       teacherAgentShareCode: null,
+      workflowSkillId: null,
     })
     expect(resolveChatAgentParam("super-all-in-one-agent")).toEqual({
       model: "super-all-in-one-agent",
       teacherAgentShareCode: null,
+      workflowSkillId: null,
+    })
+  })
+
+  it("routes plaza workflow skill cards through the shared chat app", () => {
+    expect(resolveChatAgentParam("khazix-writer")).toEqual({
+      model: "general-chat",
+      teacherAgentShareCode: null,
+      workflowSkillId: "khazix-writer",
     })
   })
 
@@ -20,6 +31,7 @@ describe("teacher agent chat routing", () => {
     expect(resolveChatAgentParam("a1b2c3d4")).toEqual({
       model: TEACHER_AGENT_MODEL,
       teacherAgentShareCode: "a1b2c3d4",
+      workflowSkillId: null,
     })
   })
 
@@ -27,10 +39,12 @@ describe("teacher agent chat routing", () => {
     expect(resolveChatAgentParam("../../secret")).toEqual({
       model: null,
       teacherAgentShareCode: null,
+      workflowSkillId: null,
     })
     expect(resolveChatAgentParam("teacher-agent")).toEqual({
       model: null,
       teacherAgentShareCode: null,
+      workflowSkillId: null,
     })
   })
 })

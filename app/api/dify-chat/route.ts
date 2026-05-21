@@ -32,6 +32,7 @@ import { assertSecureTlsConfiguration } from "@/lib/runtime-security"
 import { requireUser } from "@/lib/auth/verified-user"
 import { internalDifyFetch } from "@/lib/internal-dify-fetch"
 import { getDifyCredentialForModel } from "@/lib/dify-credentials"
+import { isWorkflowSkillAgent } from "@/lib/workflow-skill-agents"
 import { extractDifyTextOutput } from "@/lib/dify-output-text"
 import { rewriteOpenClawMediaReferences } from "@/lib/openclaw-media"
 import { rewriteOpenClawMediaReferencesWithSignedUrls } from "@/lib/openclaw-media-server"
@@ -1442,19 +1443,20 @@ export async function POST(request: NextRequest) {
     
     const body = await request.json()
     const { query, conversation_id, fileIds, inputs, model, imageSize, async_image_task, sessionId, messageId } = body
+    const workflowSkillId = isWorkflowSkillAgent(body.workflowSkillId) ? body.workflowSkillId : null
     const difyFileIds = Array.isArray(fileIds)
       ? fileIds.filter((id): id is string => typeof id === "string" && id.trim().length > 0)
       : []
     const fileUrls = pickUrlStrings(body.fileUrls)
 
-    const modelPrefix = model || "general-chat"
+    const modelPrefix = workflowSkillId || model || "general-chat"
     const requestedModelType = (model || "general-chat") as ModelType
     const configuredMaxOutputTokens = getMaxOutputTokensForModel(requestedModelType)
     const isAllInOneAgent = model === ALL_IN_ONE_AGENT_MODEL || model === SUPER_ALL_IN_ONE_AGENT_MODEL
     const effectiveQuery = query || "你好"
     let effectiveConvId = normalizeDifyConversationId(conversation_id, modelPrefix)
     
-    console.log(`🔍 [Dify-Chat] 接收请求: model=${model || "general-chat"} files=${difyFileIds.length} urls=${fileUrls.length}`)
+    console.log(`🔍 [Dify-Chat] 接收请求: model=${model || "general-chat"} workflowSkill=${workflowSkillId || "none"} files=${difyFileIds.length} urls=${fileUrls.length}`)
     
     const userId = auth.user!.id
 
@@ -1536,13 +1538,13 @@ export async function POST(request: NextRequest) {
     console.log(`🔄 [切换模型] 目标模型: ${model || "默认标准版"} | conversation=${effectiveConvId ? "reuse" : "new"}`)
 
     // --- 1. 钥匙分发中心 (彻底分离通道) ---
-    const { credential: selectedCredential, source: keySource } = getDifyCredentialForModel(model, process.env, DEFAULT_DIFY_KEY)
+    const { credential: selectedCredential, source: keySource } = getDifyCredentialForModel(workflowSkillId ? "workflow-skill" : model, process.env, DEFAULT_DIFY_KEY)
 
     // 安全检查：防止忘配 Key
     if (!selectedCredential && !isGptImageGatewayRequest) {
-        console.error(`❌ 严重错误: 模型 ${model} 的凭据未配置！环境变量 ${keySource} 为空`);
+        console.error(`❌ 严重错误: 模型 ${workflowSkillId || model} 的凭据未配置！环境变量 ${keySource} 为空`);
         return new Response(JSON.stringify({ 
-          error: `配置错误：${model} 模型凭据未设置`,
+          error: `配置错误：${workflowSkillId || model} 模型凭据未设置`,
           details: `请在 Vercel 环境变量中配置 ${keySource}`
         }), { 
           status: 500,
@@ -1904,6 +1906,15 @@ export async function POST(request: NextRequest) {
                 ? buildAllInOneAgentWorkflowInputs(effectiveQuery, inputs, fileUrls)
                 : isBananaChatflow
                   ? buildImageWorkflowInputs(effectiveQuery, inputs)
+                : workflowSkillId
+                  ? {
+                      ...(inputs || {}),
+                      workflow_skill_id: workflowSkillId,
+                      skill_id: workflowSkillId,
+                      skill: workflowSkillId,
+                      agent: workflowSkillId,
+                      route: workflowSkillId,
+                    }
                   : inputs || {}
 
             if (isBananaChatflow && imageSize && chatInputs && typeof chatInputs === "object") {

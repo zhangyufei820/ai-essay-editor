@@ -13,6 +13,13 @@ export function getDifyCredentialForModel(
   switch (model) {
     case "general-chat":
       return selectGeneralChatCredential(env, defaultCredential)
+    case "workflow-skill":
+      return selectRequiredProductionCredential(
+        env.DIFY_WORKFLOW_SKILL_API_KEY,
+        "DIFY_WORKFLOW_SKILL_API_KEY",
+        env,
+        defaultCredential,
+      )
     case "teaching-pro":
       return selectCredential(env.DIFY_TEACHING_PRO_API_KEY, "DIFY_TEACHING_PRO_API_KEY", defaultCredential)
     case "gpt-5":

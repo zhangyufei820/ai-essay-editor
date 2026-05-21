@@ -1,4 +1,5 @@
 import type { ModelType } from "@/lib/pricing"
+import { isWorkflowSkillAgent, type WorkflowSkillId } from "@/lib/workflow-skill-agents"
 
 export const TEACHER_AGENT_MODEL: ModelType = "teacher-agent"
 
@@ -39,16 +40,21 @@ const TEACHER_SHARE_CODE_PATTERN = /^[a-zA-Z0-9]{6,32}$/
 export function resolveChatAgentParam(agent?: string | null): {
   model: ModelType | null
   teacherAgentShareCode: string | null
+  workflowSkillId: WorkflowSkillId | null
 } {
   const value = agent?.trim()
-  if (!value) return { model: null, teacherAgentShareCode: null }
+  if (!value) return { model: null, teacherAgentShareCode: null, workflowSkillId: null }
 
   const builtInModel = AGENT_TO_MODEL[value]
-  if (builtInModel) return { model: builtInModel, teacherAgentShareCode: null }
+  if (builtInModel) return { model: builtInModel, teacherAgentShareCode: null, workflowSkillId: null }
 
-  if (TEACHER_SHARE_CODE_PATTERN.test(value)) {
-    return { model: TEACHER_AGENT_MODEL, teacherAgentShareCode: value }
+  if (isWorkflowSkillAgent(value)) {
+    return { model: "general-chat", teacherAgentShareCode: null, workflowSkillId: value }
   }
 
-  return { model: null, teacherAgentShareCode: null }
+  if (TEACHER_SHARE_CODE_PATTERN.test(value)) {
+    return { model: TEACHER_AGENT_MODEL, teacherAgentShareCode: value, workflowSkillId: null }
+  }
+
+  return { model: null, teacherAgentShareCode: null, workflowSkillId: null }
 }

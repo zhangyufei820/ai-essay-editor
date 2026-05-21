@@ -57,6 +57,7 @@ import { extractDifyTextOutput } from "@/lib/dify-output-text"
 import { containsRawDifyWordCardPayload, normalizeDifyWordCardResponse, type FrontendWordCard } from "@/lib/word-card-normalizer"
 import { buildVocabCardWorkflowInputs, cleanVocabAnswer, resolveVocabCardResult } from "@/lib/vocab-card-workflow"
 import { resolveChatAgentParam } from "@/lib/teacher-agent-route"
+import { isWorkflowSkillAgent, type WorkflowSkillId } from "@/lib/workflow-skill-agents"
 import { createClient } from "@supabase/supabase-js"
 import { collapseSidebar, navigateHomeWithSidebar, refreshCredits, refreshSessionList, SESSION_LIST_REFRESH_EVENT } from "@/lib/workspace-events"
 import { useSelectedModelStore } from "@/hooks/useSelectedModelStore"
@@ -109,6 +110,118 @@ const MODEL_DISPLAY_NAMES: Record<string, string> = {
   "speech-defense": "演讲答辩",
   "school-wechat": "公众号",
   "teacher-agent": "教师智能体",
+}
+
+const WORKFLOW_SKILL_DISPLAY: Record<WorkflowSkillId, { name: string; description: string; tags: string[] }> = {
+  "khazix-writer": {
+    name: "公众号长文写作助手",
+    description: "按素材写公众号长文、扩写成稿、续写可发布内容。",
+    tags: ["公众号", "长文", "素材成稿"],
+  },
+  Chinese: {
+    name: "中文自然润色助手",
+    description: "把机械感强的中文改得更顺、更自然。",
+    tags: ["中文润色", "自然表达", "校对"],
+  },
+  Grammar: {
+    name: "通用语法纠错助手",
+    description: "修正语法、病句、拼写、标点和通用文本问题。",
+    tags: ["语法", "病句", "标点"],
+  },
+  "thesis-helper": {
+    name: "论文结构与大纲助手",
+    description: "辅助论文大纲、综述框架、摘要和引用格式。",
+    tags: ["论文", "大纲", "综述"],
+  },
+  "mba-thesis-advisor": {
+    name: "MBA 论文提升助手",
+    description: "面向 MBA 论文优化结构、论证、案例和质量标准。",
+    tags: ["MBA", "论文提升", "案例"],
+  },
+  "academic-thesis-review": {
+    name: "管理类硕士论文评审助手",
+    description: "审阅 MBA、MEM、MPA 等管理类硕士论文。",
+    tags: ["硕士论文", "评审", "修改建议"],
+  },
+  "shenxiang-lunwen-shenping": {
+    name: "论文审稿诊断助手",
+    description: "提供审稿式论文诊断、学术自查和修改方向。",
+    tags: ["审稿", "诊断", "学术自查"],
+  },
+  "shenxiang-paper-review-v5": {
+    name: "投稿前终检助手",
+    description: "投稿前排雷、降重整改、AIGC 风险检查和终稿把关。",
+    tags: ["投稿前", "终检", "AIGC"],
+  },
+  "shenxiang-chuzhong-xiuxi-piyue": {
+    name: "初中作文批阅助手",
+    description: "初中作文批改、润色、点评和升格建议。",
+    tags: ["初中作文", "批阅", "升格"],
+  },
+  "shenxiang-yi-lunwen-piyue": {
+    name: "议论文批改助手",
+    description: "强化议论文论证、结构和观点表达。",
+    tags: ["议论文", "论证", "结构"],
+  },
+  "shenxiang-lunshuowen": {
+    name: "高中论述文生成助手",
+    description: "根据题目生成高中论述文或议论文。",
+    tags: ["高中", "论述文", "成文"],
+  },
+  "shenxiang-gaozhong-lunshuowen": {
+    name: "高中论述文升格助手",
+    description: "提升高中论述文逻辑、论证深度和表达质量。",
+    tags: ["高中", "升格", "逻辑"],
+  },
+  "shenxiang-zuowen-shengge": {
+    name: "散文哲思风升格助手",
+    description: "适合散文升格、哲思风润色和表达优化。",
+    tags: ["散文", "哲思", "润色"],
+  },
+  "shenxiang-zuowen-zhangxiaofeng": {
+    name: "张晓风风格润色助手",
+    description: "面向张晓风风格仿写和散文语言润色。",
+    tags: ["张晓风", "仿写", "散文"],
+  },
+  "shenxiang-xiaoxuezuowen": {
+    name: "小学生作文全程升级助手",
+    description: "面向 1-6 年级小学生作文的多阶段升级。",
+    tags: ["小学作文", "升级", "展示"],
+  },
+  "shenxiang-xueweipigai-revise": {
+    name: "小学作文精批细改助手",
+    description: "逐句精批小学作文，适合家长辅导场景。",
+    tags: ["小学作文", "精批", "家长辅导"],
+  },
+  "shenxiang-xiaoxue-zuowen-piyue": {
+    name: "小学低段记叙文助手",
+    description: "适合 1-3 年级低段记叙文点评和表达提升。",
+    tags: ["低段", "记叙文", "点评"],
+  },
+  "shenxiang-xiaoxue-xiangxiang-zuowen": {
+    name: "小学想象作文助手",
+    description: "童话、幻想、拟人等想象作文批改与创意提升。",
+    tags: ["想象作文", "童话", "创意"],
+  },
+  "shenxiang-xiaoxue-5grade-zhengwen": {
+    name: "五年级征文润色助手",
+    description: "提升五年级征文的文学性、结构和感染力。",
+    tags: ["五年级", "征文", "润色"],
+  },
+  "shenxiang-gaozhong-yingyu-zuowen": {
+    name: "高中英语作文批改助手",
+    description: "高中英语作文批改、120 词优化和错误纠正。",
+    tags: ["高中英语", "作文批改", "语法"],
+  },
+  "xueersi-english-grammar-check": {
+    name: "英语语法讲解助手",
+    description: "英语语法纠错和中文讲解，帮助理解错误原因。",
+    tags: ["英语语法", "中文讲解", "纠错"],
+  },
+}
+
+function getWorkflowSkillDisplay(skillId?: string | null) {
+  return isWorkflowSkillAgent(skillId) ? WORKFLOW_SKILL_DISPLAY[skillId] : null
 }
 
 type ModelUiConfig = {
@@ -1198,6 +1311,8 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   const urlAgent = searchParams.get("agent")
   const resolvedUrlAgent = resolveChatAgentParam(urlAgent)
   const teacherAgentShareCode = resolvedUrlAgent.teacherAgentShareCode
+  const workflowSkillId = !urlSessionId ? resolvedUrlAgent.workflowSkillId : null
+  const workflowSkillDisplay = getWorkflowSkillDisplay(workflowSkillId)
   // 🔥 优先使用 initialModel prop（来自动态路由），其次使用 URL 参数
   const effectiveAgent = initialModel || resolvedUrlAgent.model || urlAgent
 
@@ -1519,7 +1634,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   useEffect(() => {
     const targetModel = urlAgent ? (resolvedUrlAgent.model || "general-chat") : (initialModel || "general-chat")
 
-    console.log(`🔗 [URL Sync] urlAgent=${urlAgent}, prevUrlAgent=${prevUrlAgentRef.current}, targetModel=${targetModel}, teacherAgent=${teacherAgentShareCode || ""}`)
+    console.log(`🔗 [URL Sync] urlAgent=${urlAgent}, prevUrlAgent=${prevUrlAgentRef.current}, targetModel=${targetModel}, teacherAgent=${teacherAgentShareCode || ""}, workflowSkill=${workflowSkillId || ""}`)
 
     if (urlAgent !== prevUrlAgentRef.current) {
       prevUrlAgentRef.current = urlAgent
@@ -1534,7 +1649,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         clearConversationState()
       }
     }
-  }, [initialModel, resolvedUrlAgent.model, setSelectedModel, teacherAgentShareCode, urlAgent, urlSessionId])
+  }, [initialModel, resolvedUrlAgent.model, setSelectedModel, teacherAgentShareCode, urlAgent, urlSessionId, workflowSkillId])
 
   // 🔥 当路由参数 initialModel 变化时，同步更新 selectedModel
   // 但如果是加载历史会话（urlSessionId 存在），则跳过，由 loadHistorySession 处理模型同步
@@ -2375,7 +2490,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
             role: "user",
             content: userMsg.content,
             files: activeFiles,
-            metadata: { requestId, clientMessageId: userMsg.id },
+            metadata: { requestId, clientMessageId: userMsg.id, workflowSkillId },
           })
         })
       } catch (error) {
@@ -2476,7 +2591,18 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
               conversation_id: sessionIdRef.current,
 	              model: selectedModel,
 	              mode: genMode,
-	              inputs: isWordCardRequest ? vocabWorkflowInputs : undefined,
+	              inputs: isWordCardRequest
+                  ? vocabWorkflowInputs
+                  : workflowSkillId
+                    ? {
+                        workflow_skill_id: workflowSkillId,
+                        skill_id: workflowSkillId,
+                        skill: workflowSkillId,
+                        agent: workflowSkillId,
+                        route: workflowSkillId,
+                      }
+                    : undefined,
+                workflowSkillId,
 	              requestId,
 	              sessionId: sid,
 	              messageId: botId,
