@@ -32,6 +32,7 @@ import { buildChatSessionRoute, buildChatSessionRouteFromSession, isDedicatedCha
 import { toast } from "sonner"
 import { MessageBubble } from "./MessageBubble"
 import { ChatInput } from "./ChatInput"
+import { CodexSkillPicker } from "./CodexSkillPicker"
 import { OpenClawSkillPicker } from "./OpenClawSkillPicker"
 import { DailySurveyGate, type TrialSurveyStatus } from "@/components/trial/DailySurveyGate"
 import { trackCampaignEvent } from "@/lib/campaign-events-client"
@@ -70,6 +71,7 @@ import { logger } from "@/lib/logger"
 import { ModelLogo } from "@/components/ModelLogo"
 import { navigationModelConfig } from "@/lib/navigation-models"
 import { getOpenClawAttachmentKind, isLikelyHtmlDocumentUrl, toPublicOpenClawMediaSignUrl, toPublicOpenClawWorkspaceUrl } from "@/lib/openclaw-media"
+import type { CodexSkill } from "@/lib/codex-skills"
 import type { OpenClawSkill } from "@/lib/openclaw-skills"
 import {
   calculatePreviewCost,
@@ -1731,6 +1733,8 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     style: "colorful",
     language: "zh-CN",
   })
+  const [codexSkillPickerOpen, setCodexSkillPickerOpen] = useState(false)
+  const [selectedCodexSkill, setSelectedCodexSkill] = useState<CodexSkill | null>(null)
   const [openClawSkillPickerOpen, setOpenClawSkillPickerOpen] = useState(false)
   const [selectedOpenClawSkill, setSelectedOpenClawSkill] = useState<OpenClawSkill | null>(null)
   const [currentWord, setCurrentWord] = useState("")
@@ -2085,6 +2089,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     if (nextModel !== selectedModel) {
       clearConversationState()
       setMessages([])
+      setSelectedCodexSkill(null)
       setSelectedOpenClawSkill(null)
       console.log(`🔄 [模型切换] ${selectedModel} → ${nextModel}，已清除会话命名空间`)
     }
@@ -2499,7 +2504,13 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
             role: "user",
             content: userMsg.content,
             files: activeFiles,
-            metadata: { requestId, clientMessageId: userMsg.id, workflowSkillId, openClawSkillId: selectedOpenClawSkill?.id },
+            metadata: {
+              requestId,
+              clientMessageId: userMsg.id,
+              workflowSkillId,
+              codexSkillId: selectedCodexSkill?.id,
+              openClawSkillId: selectedOpenClawSkill?.id,
+            },
           })
         })
       } catch (error) {
@@ -2511,6 +2522,15 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     let fullText = ""; let hasRec = false
     let wordCard: FrontendWordCard | null = null
     const isWordCardRequest = selectedModel === "vocab-card"
+    const codexSkillInputs = selectedModel === "super-all-in-one-agent" && selectedCodexSkill
+      ? {
+          codex_skill_id: selectedCodexSkill.id,
+          skill_id: selectedCodexSkill.id,
+          skill: selectedCodexSkill.id,
+          selected_skill: selectedCodexSkill.id,
+          skill_name: selectedCodexSkill.id,
+        }
+      : undefined
     const openClawSkillInputs = selectedModel === "open-claw" && selectedOpenClawSkill
       ? {
           openclaw_skill_id: selectedOpenClawSkill.id,
@@ -2611,6 +2631,8 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 	              mode: genMode,
 	              inputs: isWordCardRequest
                   ? vocabWorkflowInputs
+                  : codexSkillInputs
+                    ? codexSkillInputs
                   : openClawSkillInputs
                     ? openClawSkillInputs
                   : workflowSkillId
@@ -3848,6 +3870,9 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                 showOpenClawSkillButton={selectedModel === "open-claw"}
                 selectedOpenClawSkillName={selectedOpenClawSkill?.name}
                 onOpenClawSkillClick={() => setOpenClawSkillPickerOpen(true)}
+                showCodexSkillButton={selectedModel === "super-all-in-one-agent"}
+                selectedCodexSkillName={selectedCodexSkill?.name}
+                onCodexSkillClick={() => setCodexSkillPickerOpen(true)}
                 placeholder={userId
                   ? selectedModel === "vocab-card"
                     ? "例如：你好啊 / 我要学习 apple / 考我一下"
@@ -3860,6 +3885,15 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                   const target = { target: { files } } as unknown as React.ChangeEvent<HTMLInputElement>
                   handleFileUpload(target)
                 }}
+              />
+              <CodexSkillPicker
+                open={codexSkillPickerOpen}
+                selectedSkillId={selectedCodexSkill?.id}
+                onSelect={(skill) => {
+                  setSelectedCodexSkill(skill)
+                  toast.success(`已加载技能：${skill.name}`)
+                }}
+                onClose={() => setCodexSkillPickerOpen(false)}
               />
               <OpenClawSkillPicker
                 open={openClawSkillPickerOpen}

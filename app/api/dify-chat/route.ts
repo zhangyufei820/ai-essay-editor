@@ -36,6 +36,7 @@ import { isWorkflowSkillAgent } from "@/lib/workflow-skill-agents"
 import { extractDifyTextOutput } from "@/lib/dify-output-text"
 import { rewriteOpenClawMediaReferences } from "@/lib/openclaw-media"
 import { rewriteOpenClawMediaReferencesWithSignedUrls } from "@/lib/openclaw-media-server"
+import { getCodexSkillById } from "@/lib/codex-skills"
 import { getOpenClawSkillById } from "@/lib/openclaw-skills"
 import {
   createRequestId,
@@ -285,6 +286,77 @@ function buildAllInOneAgentWorkflowInputs(query: string, inputs: unknown, fileUr
     source_image_url: fileUrls[0] || "",
     source_images: imageUrlsText,
   }
+}
+
+const CODEX_SKILL_INPUT_KEYS = [
+  "codex_skill_id",
+  "selected_skill",
+  "skill_id",
+  "skill",
+  "skill_name",
+] as const
+
+function readCodexSkillId(inputs: unknown) {
+  const record = readRecord(inputs)
+  if (!record) return null
+
+  for (const key of CODEX_SKILL_INPUT_KEYS) {
+    const value = record[key]
+    if (typeof value === "string" && value.trim()) return value.trim()
+  }
+
+  return null
+}
+
+function buildCodexSkillInputs(inputs: unknown) {
+  const baseInputs = readRecord(inputs) ? { ...(inputs as Record<string, unknown>) } : {}
+  const skillId = readCodexSkillId(baseInputs)
+  if (!skillId) return { inputs: baseInputs, skillId: null }
+
+  const skill = getCodexSkillById(skillId)
+  const skillDisplayName = skill?.name || skillId
+
+  return {
+    inputs: {
+      ...baseInputs,
+      codex_skill_id: skillId,
+      selected_skill: skillId,
+      skill_id: skillId,
+      skill: skillId,
+      skill_name: skillId,
+      skill_selected: skillId,
+      codex_skill_name: skillDisplayName,
+      codex_skill_description: skill?.description || "",
+      codex_skill_category: skill?.category || "",
+      codex_skill_tags: skill?.tags || [],
+      force_skill_selected: "true",
+    },
+    skillId,
+  }
+}
+
+function buildCodexSkillQuery(query: string, chatInputs: Record<string, unknown>) {
+  const skillId = readCodexSkillId(chatInputs)
+  if (!skillId) return query
+
+  const skill = getCodexSkillById(skillId)
+  const skillDisplayName = skill?.name || skillId
+  const skillDescription = skill?.description || "用户已在前端明确选择该技能。"
+  const skillTags = Array.isArray(skill?.tags) ? skill.tags.join("、") : ""
+
+  return [
+    "[Codex 已加载技能]",
+    `skill_selected: ${skillId}`,
+    `skill_id: ${skillId}`,
+    `skill_name: ${skillId}`,
+    `skill_display_name: ${skillDisplayName}`,
+    `skill_description: ${skillDescription}`,
+    skillTags ? `skill_tags: ${skillTags}` : "",
+    "system_note: 用户已在前端明确选择以上技能。请必须按该技能处理下面的用户请求，不要重新判定为 general 或其他技能，也不要把本段路由提示原样展示给用户。",
+    "",
+    "用户请求：",
+    query,
+  ].filter(Boolean).join("\n")
 }
 
 function buildImageWorkflowInputs(query: string, inputs: unknown) {
@@ -2009,11 +2081,19 @@ export async function POST(request: NextRequest) {
         } else {
             // 💬 Chat API 格式
             const isGptImage2 = isGptImageGatewayRequest
+            const normalizedCodexSkill = model === SUPER_ALL_IN_ONE_AGENT_MODEL ? buildCodexSkillInputs(inputs) : null
             const normalizedOpenClawSkill = model === "open-claw" ? buildOpenClawSkillInputs(inputs) : null
+            const allInOneQuery = normalizedCodexSkill?.skillId
+              ? buildCodexSkillQuery(effectiveQuery, normalizedCodexSkill.inputs)
+              : effectiveQuery
             const chatInputs = isGptImage2
               ? buildGptImageV11DifyInputs(inputs)
               : isAllInOneAgent
-                ? buildAllInOneAgentWorkflowInputs(effectiveQuery, inputs, fileUrls)
+                ? buildAllInOneAgentWorkflowInputs(
+                    allInOneQuery,
+                    normalizedCodexSkill ? normalizedCodexSkill.inputs : inputs,
+                    fileUrls,
+                  )
                 : isBananaChatflow
                   ? buildImageWorkflowInputs(effectiveQuery, inputs)
                 : normalizedOpenClawSkill
@@ -2032,6 +2112,8 @@ export async function POST(request: NextRequest) {
               ? buildOpenClawSkillQuery(effectiveQuery, chatInputs)
               : isGptImage2
                 ? (query || "你好")
+                : normalizedCodexSkill?.skillId
+                  ? allInOneQuery
                 : effectiveQuery
 
             if (isBananaChatflow && imageSize && chatInputs && typeof chatInputs === "object") {
@@ -2052,6 +2134,10 @@ export async function POST(request: NextRequest) {
 
             if (model === "open-claw") {
                 console.log(`[OpenClaw Skill] selected=${normalizedOpenClawSkill?.skillId || "none"} queryInjected=${Boolean(normalizedOpenClawSkill?.skillId)}`)
+            }
+
+            if (model === SUPER_ALL_IN_ONE_AGENT_MODEL) {
+                console.log(`[Codex Skill] selected=${normalizedCodexSkill?.skillId || "none"} queryInjected=${Boolean(normalizedCodexSkill?.skillId)}`)
             }
 
             if (!isGptImage2 && difyFileIds.length > 0) {

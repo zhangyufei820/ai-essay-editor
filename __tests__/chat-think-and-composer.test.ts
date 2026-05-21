@@ -68,6 +68,27 @@ describe("chat think rendering and composer layout", () => {
     expect(route).toContain("queryInjected")
   })
 
+  it("lets Codex load a skill in super all-in-one and sends the English skill id through inputs", () => {
+    const chatInput = read("components/chat/ChatInput.tsx")
+    const picker = read("components/chat/CodexSkillPicker.tsx")
+    const skills = read("lib/codex-skills.ts")
+    const chatInterface = read("components/chat/enhanced-chat-interface.tsx")
+    const route = read("app/api/dify-chat/route.ts")
+
+    expect(chatInput).toContain("showCodexSkillButton")
+    expect(picker).toContain("选择一个技能后，会把对应英文技能标识传递给超级全能智能体")
+    expect(skills).toContain('id: "paper_outline"')
+    expect(skills).toContain('id: "shenxiang_image_gen"')
+    expect(chatInterface).toContain('showCodexSkillButton={selectedModel === "super-all-in-one-agent"}')
+    expect(chatInterface).toContain("codex_skill_id: selectedCodexSkill.id")
+    expect(chatInterface).toContain("selected_skill: selectedCodexSkill.id")
+    expect(chatInterface).toContain("skill_name: selectedCodexSkill.id")
+    expect(route).toContain("getCodexSkillById")
+    expect(route).toContain("codex_skill_description")
+    expect(route).toContain("[Codex 已加载技能]")
+    expect(route).toContain("buildCodexSkillQuery(effectiveQuery, normalizedCodexSkill.inputs)")
+  })
+
   it("keeps chat auth extraction and empty workflow replies visible", () => {
     const source = read("components/chat/enhanced-chat-interface.tsx")
 
