@@ -10,9 +10,9 @@ describe("app chrome sidebar", () => {
     expect(items).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          label: "3D 细胞工作台",
+          label: "三维细胞实验室",
           href: CELLFORGE_EXTERNAL_URL,
-          badge: "3D",
+          badge: "三维",
         }),
       ])
     )
@@ -25,5 +25,14 @@ describe("app chrome sidebar", () => {
     expect(sidebar).toContain("aria-expanded={appLauncherOpen}")
     expect(sidebar).toContain("选择应用开始")
     expect(sidebar).toContain("workspace-app-launcher")
+  })
+
+  it("uses explicit router navigation for internal sidebar links", () => {
+    const sidebar = readFileSync(path.join(process.cwd(), "components/v2-chrome/WorkspaceSidebar.tsx"), "utf8")
+
+    expect(sidebar).toContain("const router = useRouter()")
+    expect(sidebar).toContain("handleInternalNavigation")
+    expect(sidebar).toContain("event?.preventDefault()")
+    expect(sidebar).toContain("router.push(href)")
   })
 })

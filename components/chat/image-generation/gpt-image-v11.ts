@@ -170,9 +170,9 @@ export const MODERATION_OPTIONS: Option<ImageModeration>[] = [
 export const DEFAULT_IMAGE_INPUTS: GptImageInputs = {
   provider: "openai",
   mode: "image_generate",
-  model: "gpt-image-1",
+  model: "gpt-image-2",
   aspect_ratio: "1:1",
-  size: "1024x1024",
+  size: "2K",
   quality: "low",
   output_format: "png",
   output_compression: 100,

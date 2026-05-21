@@ -41,7 +41,6 @@ import {
   type ImageTaskMode,
   MODERATION_OPTIONS,
   MODE_OPTIONS,
-  MODEL_OPTIONS,
   OUTPUT_FORMAT_OPTIONS,
   QUALITY_OPTIONS,
   SIZE_OPTIONS,
@@ -584,6 +583,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
   const isBananaWorkspace = workspaceModel === "banana-2-pro"
   const isGeminiWorkspace = workspaceModel === "gemini-image"
   const isWorkflowImageWorkspace = isBananaWorkspace || isGeminiWorkspace
+  const showModelSelector = isGeminiWorkspace
   const copy = WORKSPACE_COPY[workspaceModel]
   const urlSessionId = searchParams.get("sessionId") || searchParams.get("id")
   const initialPrompt = searchParams.get("prompt") ?? ""
@@ -645,7 +645,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
       aspect_ratio: aspectRatio,
       size,
       image_size: isGeminiWorkspace ? size as "auto" | "512" | "1K" | "2K" | "4K" : undefined,
-      model,
+      model: isGeminiWorkspace ? model : "gpt-image-2",
       quality,
       output_format: outputFormat,
       output_compression: outputCompression,
@@ -666,7 +666,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
     ? "gemini-image"
     : isBananaWorkspace
       ? "banana-2-pro"
-      : (model as Extract<ModelType, "gpt-image-2" | "gpt-image-1.5" | "gpt-image-1" | "gpt-image-1-mini">)
+      : "gpt-image-2"
   const estimatedImageCost = calculatePreviewCost(billingPreviewModel) * count
   useEffect(() => {
     const initUser = async () => {
@@ -1610,10 +1610,10 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
           <section className="rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-[var(--paper-50)] p-4">
             <h2 className="mb-4 text-sm font-semibold text-[var(--ink-900)]">基础参数</h2>
             <div className="space-y-4">
-              {!isBananaWorkspace ? (
+              {showModelSelector ? (
                 <div className="space-y-2">
                   <FieldLabel>图像模型</FieldLabel>
-                  <NativeSelect value={model} onChange={applyModel} options={isGeminiWorkspace ? GEMINI_MODEL_OPTIONS : MODEL_OPTIONS} />
+                  <NativeSelect value={model} onChange={applyModel} options={GEMINI_MODEL_OPTIONS} />
                 </div>
               ) : null}
 

@@ -11,8 +11,7 @@
 "use client"
 
 import * as React from "react"
-import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { ChevronLeft, type LucideIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ButtonV2 } from "@/components/ui/v2/button"
@@ -76,6 +75,7 @@ export function WorkspaceSidebar({
   className,
 }: WorkspaceSidebarProps) {
   const pathname = usePathname()
+  const router = useRouter()
   const [appLauncherOpen, setAppLauncherOpen] = React.useState(false)
 
   React.useEffect(() => {
@@ -85,6 +85,15 @@ export function WorkspaceSidebar({
   const handleLauncherItemClick = () => {
     setAppLauncherOpen(false)
     onItemClick?.()
+  }
+
+  const handleInternalNavigation = (href: string, event?: React.MouseEvent<HTMLElement>) => {
+    event?.preventDefault()
+    setAppLauncherOpen(false)
+    onItemClick?.()
+    if (href !== pathname) {
+      router.push(href)
+    }
   }
 
   const renderItemContent = (item: WorkspaceSidebarItem, active: boolean) => {
@@ -199,14 +208,13 @@ export function WorkspaceSidebar({
 
                     return (
                       <li key={`launcher-${item.href}`}>
-                        <Link
+                        <a
                           href={item.href}
-                          prefetch={false}
-                          onClick={handleLauncherItemClick}
+                          onClick={(event) => handleInternalNavigation(item.href, event)}
                           className={itemClassName}
                         >
                           {content}
-                        </Link>
+                        </a>
                       </li>
                     )
                   })}
@@ -260,14 +268,13 @@ export function WorkspaceSidebar({
 
                 return (
                   <li key={item.href}>
-                    <Link
+                    <a
                       href={item.href}
-                      prefetch={false}
-                      onClick={onItemClick}
+                      onClick={(event) => handleInternalNavigation(item.href, event)}
                       className={itemClassName}
                     >
                       {renderItemContent(item, active)}
-                    </Link>
+                    </a>
                   </li>
                 )
               })}

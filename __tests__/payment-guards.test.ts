@@ -118,6 +118,15 @@ describe('Sprint 5 payment / credits / membership guards', () => {
     expect(difyCallIndex).toBeGreaterThan(directGatewayIndex)
   })
 
+  it('keeps the Image 2 workspace locked to the default GPT Image 2 model', () => {
+    const image2 = read('components/chat/gpt-image2-chat-interface.tsx')
+
+    expect(image2).toContain('const showModelSelector = isGeminiWorkspace')
+    expect(image2).toContain('model: isGeminiWorkspace ? model : "gpt-image-2"')
+    expect(image2).toContain(': "gpt-image-2"')
+    expect(image2).not.toContain('options={isGeminiWorkspace ? GEMINI_MODEL_OPTIONS : MODEL_OPTIONS}')
+  })
+
   it('keeps legacy direct gateway polling errors diagnosable for existing async tasks', () => {
     const route = read('app/api/dify-chat/route.ts')
     const image2 = read('components/chat/gpt-image2-chat-interface.tsx')

@@ -16,9 +16,9 @@ describe("GPT Image V11 parameter mapping", () => {
   it("builds complete default text-to-image inputs", () => {
     expect(buildDifyInputs(DEFAULT_IMAGE_INPUTS)).toEqual({
       mode: "image_generate",
-      model: "gpt-image-1",
+      model: "gpt-image-2",
       aspect_ratio: "1:1",
-      size: "1024x1024",
+      size: "2K",
       quality: "low",
       output_format: "png",
       output_compression: 100,
