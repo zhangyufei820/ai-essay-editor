@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import { createPortal } from "react-dom"
 import { AnimatePresence, motion } from "framer-motion"
 import { Check, Search, Sparkles, X } from "lucide-react"
 import { ButtonV2 as Button, InputV2 as Input } from "@/components/ui/v2"
@@ -32,6 +33,11 @@ export function OpenClawSkillPicker({
   const [query, setQuery] = useState("")
   const [activeCategory, setActiveCategory] = useState<OpenClawSkillCategory | "全部">("全部")
   const [isMelting, setIsMelting] = useState(false)
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   useEffect(() => {
     if (!open) {
@@ -87,11 +93,13 @@ export function OpenClawSkillPicker({
     window.setTimeout(onClose, 420)
   }
 
-  return (
+  if (!mounted) return null
+
+  return createPortal(
     <AnimatePresence>
       {open ? (
         <motion.div
-          className="fixed inset-0 z-[80] bg-[var(--paper-50)] text-[var(--ink-800)]"
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-[rgba(14,27,17,0.32)] p-3 text-[var(--ink-800)] backdrop-blur-sm sm:p-6"
           role="dialog"
           aria-modal="true"
           aria-label="加载 OpenClaw 技能"
@@ -112,8 +120,8 @@ export function OpenClawSkillPicker({
           }}
           transition={{ duration: 0.34, ease: [0.22, 1, 0.36, 1] }}
         >
-          <div className="flex h-full flex-col">
-            <header className="shrink-0 border-b border-[var(--paper-200)] bg-[var(--paper-50)]/95 px-4 py-3 backdrop-blur sm:px-6">
+          <div className="flex h-[calc(100vh-24px)] w-full max-w-[1180px] flex-col overflow-hidden rounded-[var(--radius-card)] border border-[var(--paper-200)] bg-[var(--paper-50)] shadow-[0_28px_80px_rgba(14,27,17,0.24)] sm:h-[calc(100vh-48px)]">
+            <header className="shrink-0 border-b border-[var(--paper-200)] bg-[var(--paper-50)]/95 px-4 py-3 backdrop-blur sm:px-6 sm:py-4">
               <div className="mx-auto flex max-w-6xl items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="inline-flex items-center gap-2 rounded-[var(--radius-pill)] border border-[var(--ink-200)] bg-[var(--ink-50)] px-2.5 py-1 text-[11px] font-semibold text-[var(--ink-600)]">
@@ -263,5 +271,6 @@ export function OpenClawSkillPicker({
         </motion.div>
       ) : null}
     </AnimatePresence>
+    , document.body
   )
 }
