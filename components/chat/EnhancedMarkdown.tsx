@@ -23,6 +23,7 @@ import { proxifyGeneratedImagePreviewUrl } from '@/components/chat/image-generat
 import { OpenClawHtmlPreview } from '@/components/chat/OpenClawHtmlPreview'
 import { getOpenClawAttachmentKind, isLikelyHtmlDocumentUrl, rewriteOpenClawMediaReferences } from '@/lib/openclaw-media'
 import { MarkdownCodeBlock, extractLanguageFromClassName } from '@/components/chat/MarkdownCodeBlock'
+import { cleanLLMText } from '@/lib/text-sanitizer'
 
 // 静奢风配色
 const TEXT_COLOR = "#333333"
@@ -104,7 +105,7 @@ function containsOpenClawHtmlPreview(children: React.ReactNode) {
 
 export const EnhancedMarkdown = memo(function EnhancedMarkdown({ content, className }: EnhancedMarkdownProps) {
   const normalizedContent = useMemo(
-    () => stripOpenClawDownloadLinks(normalizeMathDelimiters(rewriteOpenClawMediaReferences(content))),
+    () => stripOpenClawDownloadLinks(cleanLLMText(normalizeMathDelimiters(rewriteOpenClawMediaReferences(content)))),
     [content],
   )
 

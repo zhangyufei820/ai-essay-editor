@@ -41,6 +41,7 @@ import remarkGfm from "remark-gfm"
 import remarkMath from "remark-math"
 import rehypeKatex from "rehype-katex"
 import { MarkdownCodeBlock, extractLanguageFromClassName } from "@/components/chat/MarkdownCodeBlock"
+import { cleanLLMText } from "@/lib/text-sanitizer"
 
 // v2 墨砚 token colors
 const AI_TEXT_COLOR = "var(--ink-800)"
@@ -222,13 +223,14 @@ const HAS_LATEX_REGEX = /\$[^$]+\$|\$\$[\s\S]+?\$\$/;
 
 // 仅当内容包含公式时才加载 math 插件，节省解析开销
 function MarkdownContent({ content }: { content: string }) {
+  const normalizedContent = useMemo(() => cleanLLMText(content), [content])
   const mathPlugins = useMemo(() => {
-    return HAS_LATEX_REGEX.test(content) ? [remarkMath] : []
-  }, [content])
+    return HAS_LATEX_REGEX.test(normalizedContent) ? [remarkMath] : []
+  }, [normalizedContent])
 
   const rehypePlugins = useMemo(() => {
-    return HAS_LATEX_REGEX.test(content) ? [rehypeKatex] : []
-  }, [content])
+    return HAS_LATEX_REGEX.test(normalizedContent) ? [rehypeKatex] : []
+  }, [normalizedContent])
 
   return (
     <ReactMarkdown
@@ -367,7 +369,7 @@ function MarkdownContent({ content }: { content: string }) {
         ),
       }}
     >
-      {content}
+      {normalizedContent}
     </ReactMarkdown>
   )
 }

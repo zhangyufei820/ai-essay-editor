@@ -8,6 +8,36 @@
  * 4. 其他常见转义序列
  */
 
+function normalizeMarkdownOutsideFences(text: string, normalize: (chunk: string) => string) {
+  const lines = text.split("\n")
+  let inFence = false
+
+  return lines
+    .map((line) => {
+      const isFence = /^\s*(```|~~~)/.test(line)
+      if (isFence) {
+        inFence = !inFence
+        return line
+      }
+      return inFence ? line : normalize(line)
+    })
+    .join("\n")
+}
+
+function normalizeCompactMarkdownBlocks(text: string) {
+  return normalizeMarkdownOutsideFences(text, (chunk) => (
+    chunk
+      // 模型常把标题贴在上一句后面，如 "工具推荐### 文献检索"。
+      .replace(/([^\n])([ \t]*)(#{2,6})([ \t]+)(?=\S)/g, "$1\n\n$3$4")
+      .replace(/([^\n])([ \t]*)(#{2,6})(?=[\u4e00-\u9fa5A-Za-z0-9])/g, "$1\n\n$3 ")
+      // 行首 "###标题" 也补成标准 Markdown 标题。
+      .replace(/(^|\n)(#{2,6})(?=[\u4e00-\u9fa5A-Za-z0-9])/g, "$1$2 ")
+      // 冒号后紧跟列表时补换行，避免 "- " / "1. " 作为正文显示。
+      .replace(/([：:；;。！？])\s+([-*])\s+(?=\S)/g, "$1\n$2 ")
+      .replace(/([：:；;。！？])\s+(\d{1,2}[.、])\s+(?=\S)/g, "$1\n$2 ")
+  ))
+}
+
 /**
  * 清洗 LLM 原始输出文本，修复过度转义问题
  *
@@ -141,5 +171,5 @@ export function cleanLLMText(rawText: string): string {
   // 修复类似 "1.  \\n  2." 这种被过度转义搞坏的列表
   text = text.replace(/(\d+)\.\s*\\n\s+/g, "$1. ")
 
-  return text
+  return normalizeCompactMarkdownBlocks(text)
 }

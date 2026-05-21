@@ -14,6 +14,7 @@ import React, { useMemo, memo, type ReactNode } from "react"
 import { cn } from "@/lib/utils"
 import { slateColors } from "@/lib/design-tokens"
 import { LATEX_MACROS, renderLatex } from "@/lib/latex-constants"
+import { cleanLLMText } from "@/lib/text-sanitizer"
 import katex from "katex"
 
 // Claude style colors
@@ -217,7 +218,8 @@ const UltimateRenderer = memo(function UltimateRenderer({
       return <StreamingCursor />
     }
 
-    const lines = content.split("\n")
+    const normalizedContent = cleanLLMText(content)
+    const lines = normalizedContent.split("\n")
     const renderedElements: React.ReactElement[] = []
     let tableBuffer: string[] = []
 

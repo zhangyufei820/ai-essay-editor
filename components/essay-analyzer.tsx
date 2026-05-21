@@ -6,6 +6,7 @@ import { useState, useRef } from "react"
 import { Upload, Loader2, ArrowRight } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import { IconEssay, IconHistory, IconSealCheck } from "@/components/icons/v2"
+import { cleanLLMText } from "@/lib/text-sanitizer"
 
 type Status = "idle" | "uploading" | "processing" | "completed"
 
@@ -221,7 +222,7 @@ export default function EssayAnalyzer() {
               <div className="max-h-[600px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100">
                 {result ? (
                   <div className="prose prose-slate max-w-none">
-                    <ReactMarkdown>{result}</ReactMarkdown>
+                    <ReactMarkdown>{cleanLLMText(result)}</ReactMarkdown>
                   </div>
                 ) : (
                   <div className="flex items-center justify-center min-h-[400px] text-[var(--ink-400)]">

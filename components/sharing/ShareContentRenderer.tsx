@@ -4,6 +4,7 @@ import Image from "next/image"
 import type { ReactNode } from "react"
 import { ImageIcon, MessageSquareText, Presentation, Video } from "lucide-react"
 import { IconAllInOne, IconEnglish, IconEssay, IconSealStar } from "@/components/icons/v2"
+import { cleanLLMText } from "@/lib/text-sanitizer"
 
 type ShareContentData = Record<string, unknown>
 
@@ -109,7 +110,7 @@ function getOriginalText(data: ShareContentData, aiResult: string) {
 }
 
 function cleanDisplayResult(text: string) {
-  return stripThinking(text)
+  return cleanLLMText(stripThinking(text))
     .replace(/^正在取图片信息[\s\S]*?(?=#{1,4}\s)/, "")
     .replace(/^以下为.*?完整文字信息[：:][\s\S]*?(?=#{1,4}\s)/, "")
     .trim()
