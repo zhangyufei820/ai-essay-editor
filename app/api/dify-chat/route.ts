@@ -1208,41 +1208,6 @@ export async function GET(request: NextRequest) {
 
   const createdAtMs = taskOwner?.created_at ? new Date(taskOwner.created_at).getTime() : NaN
   const taskAgeMs = Number.isFinite(createdAtMs) ? Date.now() - createdAtMs : 0
-  if ((taskOwner?.status === "queued" || taskOwner?.status === "running") && taskAgeMs > GPT_IMAGE_ASYNC_TASK_MAX_AGE_MS) {
-    const refund = await refundImageTaskCredits({
-      userId,
-      requestId,
-      reason: "图片异步任务轮询超时",
-      errorCode: "IMAGE_TASK_POLL_TIMEOUT",
-    })
-    await updateTaskRun(requestId, {
-      status: "timeout",
-      stage: "图片任务超时，已自动退回积分",
-      progress: 100,
-      upstreamTaskId: taskId,
-      errorMessage: "图片任务长时间未完成，系统已自动结束并尝试退回积分",
-      errorCode: "IMAGE_TASK_POLL_TIMEOUT",
-      metadata: {
-        elapsed_ms: taskAgeMs,
-        gateway_status: "timeout",
-        refund_status: refund.status,
-        refund_amount: refund.amount || 0,
-        refund_reference_id: refund.refundReferenceId || null,
-      },
-    })
-    return Response.json(
-      {
-        status: "failed",
-        taskId,
-        requestId,
-        elapsedMs: taskAgeMs,
-        error: "图片任务超时，已自动退回积分",
-        code: "IMAGE_TASK_POLL_TIMEOUT",
-        refund,
-      },
-      { status: 504 },
-    )
-  }
 
   const gatewayToken = process.env.DIFY_IMAGE_GATEWAY_TOKEN || ""
   const response = await internalDifyFetch(`${IMAGE_GATEWAY_URL}/api/image/tasks/${encodeURIComponent(taskId)}`, {
@@ -1351,6 +1316,42 @@ export async function GET(request: NextRequest) {
         refund,
       },
       { status: statusCode },
+    )
+  }
+
+  if ((taskOwner?.status === "queued" || taskOwner?.status === "running") && taskAgeMs > GPT_IMAGE_ASYNC_TASK_MAX_AGE_MS) {
+    const refund = await refundImageTaskCredits({
+      userId,
+      requestId,
+      reason: "图片异步任务轮询超时",
+      errorCode: "IMAGE_TASK_POLL_TIMEOUT",
+    })
+    await updateTaskRun(requestId, {
+      status: "timeout",
+      stage: "图片任务超时，已自动退回积分",
+      progress: 100,
+      upstreamTaskId: taskId,
+      errorMessage: "图片任务长时间未完成，系统已自动结束并尝试退回积分",
+      errorCode: "IMAGE_TASK_POLL_TIMEOUT",
+      metadata: {
+        elapsed_ms: taskAgeMs,
+        gateway_status: task?.status || "timeout",
+        refund_status: refund.status,
+        refund_amount: refund.amount || 0,
+        refund_reference_id: refund.refundReferenceId || null,
+      },
+    })
+    return Response.json(
+      {
+        status: "failed",
+        taskId,
+        requestId,
+        elapsedMs: taskAgeMs,
+        error: "图片任务超时，已自动退回积分",
+        code: "IMAGE_TASK_POLL_TIMEOUT",
+        refund,
+      },
+      { status: 504 },
     )
   }
 

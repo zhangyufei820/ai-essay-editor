@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js"
-import { sanitizeForTrace } from "@/lib/ai-task-trace"
+import { extractArtifactsFromUnknown, sanitizeForTrace } from "@/lib/ai-task-trace"
 
 type RefundStatus = "refunded" | "already_refunded" | "no_charge_found" | "conflict" | "error"
 
@@ -18,11 +18,18 @@ export type ImageTaskRefundResult = {
 export type SettleStaleImageTasksResult = {
   scanned: number
   settled: number
+  recovered: number
   refunded: number
   failedScanned: number
   failedSettled: number
   results: ImageTaskRefundResult[]
   errors: string[]
+}
+
+type GatewayTaskState = {
+  ok: boolean
+  task?: Record<string, unknown>
+  error?: string
 }
 
 function getSupabaseAdmin() {
@@ -36,6 +43,58 @@ function getSupabaseAdmin() {
 
 function refundReferenceIdFor(requestId: string) {
   return `refund:${requestId}`
+}
+
+function getGatewayStatus(task: Record<string, unknown>) {
+  return typeof task.status === "string" ? task.status : ""
+}
+
+function getGatewayElapsedMs(task: Record<string, unknown>) {
+  return typeof task.elapsed_ms === "number" ? task.elapsed_ms : 0
+}
+
+function getGatewayStatusCode(task: Record<string, unknown>) {
+  return typeof task.status_code === "number" ? task.status_code : undefined
+}
+
+function getGatewayErrorMessage(task: Record<string, unknown>) {
+  if (typeof task.error === "string" && task.error.trim()) return task.error
+  const payload = task.error_payload && typeof task.error_payload === "object"
+    ? task.error_payload as Record<string, unknown>
+    : {}
+  return typeof payload.message === "string" && payload.message.trim()
+    ? payload.message
+    : "图片任务失败"
+}
+
+function getGatewayResultPayload(task: Record<string, unknown>) {
+  return task.result && typeof task.result === "object" ? task.result as Record<string, unknown> : {}
+}
+
+async function readGatewayTask(upstreamTaskId: string): Promise<GatewayTaskState> {
+  const gatewayUrl = (process.env.DIFY_IMAGE_GATEWAY_URL || "http://dify-image-gateway:8001").replace(/\/+$/, "")
+  const gatewayToken = process.env.DIFY_IMAGE_GATEWAY_TOKEN || ""
+
+  try {
+    const response = await fetch(`${gatewayUrl}/api/image/tasks/${encodeURIComponent(upstreamTaskId)}`, {
+      headers: gatewayToken
+        ? {
+            "x-gateway-token": gatewayToken,
+            Authorization: `Bearer ${gatewayToken}`,
+          }
+        : {},
+    })
+    const task = await response.json().catch(() => ({}))
+    if (!response.ok) {
+      const message = task && typeof task === "object" && typeof (task as Record<string, unknown>).error === "string"
+        ? String((task as Record<string, unknown>).error)
+        : `图片网关任务查询失败 HTTP ${response.status}`
+      return { ok: false, error: message }
+    }
+    return { ok: true, task: task && typeof task === "object" ? task as Record<string, unknown> : {} }
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) }
+  }
 }
 
 async function insertRefundTransaction(params: {
@@ -290,6 +349,7 @@ export async function settleStaleImageTasks(options: {
   const result: SettleStaleImageTasksResult = {
     scanned: 0,
     settled: 0,
+    recovered: 0,
     refunded: 0,
     failedScanned: 0,
     failedSettled: 0,
@@ -299,7 +359,7 @@ export async function settleStaleImageTasks(options: {
 
   const { data: staleTasks, error } = await supabase
     .from("ai_task_runs")
-    .select("id,user_id,status,stage,metadata,created_at,updated_at")
+    .select("id,user_id,status,stage,metadata,created_at,updated_at,upstream_task_id")
     .eq("model", "gpt-image-2")
     .in("status", ["queued", "running"])
     .lt("created_at", cutoff)
@@ -317,6 +377,113 @@ export async function settleStaleImageTasks(options: {
     const requestId = String(task.id || "")
     const userId = String(task.user_id || "")
     if (!requestId || !userId) continue
+    const metadata = task.metadata && typeof task.metadata === "object" ? task.metadata : {}
+    const upstreamTaskId = typeof task.upstream_task_id === "string" ? task.upstream_task_id : ""
+
+    if (upstreamTaskId) {
+      const gatewayState = await readGatewayTask(upstreamTaskId)
+      if (!gatewayState.ok) {
+        result.errors.push(`${requestId}: ${gatewayState.error || "图片网关任务查询失败"}`)
+        continue
+      }
+
+      const gatewayTask = gatewayState.task || {}
+      const gatewayStatus = getGatewayStatus(gatewayTask)
+      const elapsedMs = getGatewayElapsedMs(gatewayTask)
+
+      if (gatewayStatus === "succeeded") {
+        const gatewayResult = getGatewayResultPayload(gatewayTask)
+        if (!options.dryRun) {
+          const { error: updateError } = await supabase
+            .from("ai_task_runs")
+            .update({
+              status: "succeeded",
+              stage: "图片生成完成",
+              progress: 100,
+              error_message: null,
+              error_code: null,
+              artifacts: sanitizeForTrace(extractArtifactsFromUnknown(gatewayResult)),
+              metadata: {
+                ...metadata,
+                elapsed_ms: elapsedMs,
+                gateway_status: gatewayStatus,
+                recovered_from_stale: true,
+                recovered_at: new Date().toISOString(),
+              },
+              completed_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", requestId)
+            .in("status", ["queued", "running"])
+
+          if (updateError) {
+            result.errors.push(`${requestId}: ${updateError.message}`)
+            continue
+          }
+        }
+
+        result.settled += 1
+        result.recovered += 1
+        continue
+      }
+
+      if (gatewayStatus === "failed") {
+        const errorMessage = getGatewayErrorMessage(gatewayTask)
+        const statusCode = getGatewayStatusCode(gatewayTask)
+        const refund = options.dryRun
+          ? {
+              status: "no_charge_found" as const,
+              requestId,
+              userId,
+              message: "dry run",
+            }
+          : await refundImageTaskCredits({
+              userId,
+              requestId,
+              reason: errorMessage,
+              errorCode: "IMAGE_TASK_FAILED",
+              statusCode,
+            })
+
+        if (!options.dryRun) {
+          const { error: updateError } = await supabase
+            .from("ai_task_runs")
+            .update({
+              status: "failed",
+              stage: "图片生成失败",
+              progress: 100,
+              error_message: errorMessage,
+              error_code: "IMAGE_TASK_FAILED",
+              sanitized_error: sanitizeForTrace(gatewayTask),
+              metadata: {
+                ...metadata,
+                elapsed_ms: elapsedMs,
+                status_code: statusCode || null,
+                gateway_status: gatewayStatus,
+                refund_status: refund.status,
+                refund_amount: refund.amount || 0,
+                refund_reference_id: refund.refundReferenceId || null,
+              },
+              completed_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", requestId)
+            .in("status", ["queued", "running"])
+
+          if (updateError) {
+            result.errors.push(`${requestId}: ${updateError.message}`)
+            continue
+          }
+        }
+
+        result.settled += 1
+        if (refund.status === "refunded" || refund.status === "already_refunded") {
+          result.refunded += 1
+        }
+        result.results.push(refund)
+        continue
+      }
+    }
 
     if (!options.dryRun) {
       const { error: updateError } = await supabase
@@ -328,9 +495,10 @@ export async function settleStaleImageTasks(options: {
           error_message: "图片任务长时间未完成，系统已自动结束并尝试退回积分",
           error_code: "IMAGE_TASK_STALE_TIMEOUT",
           metadata: {
-            ...(task.metadata && typeof task.metadata === "object" ? task.metadata : {}),
+            ...metadata,
             stale_timeout_at: new Date().toISOString(),
             stale_cutoff: cutoff,
+            gateway_status: upstreamTaskId ? "stale_running" : "missing_upstream_task_id",
           },
           completed_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
