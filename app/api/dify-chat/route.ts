@@ -36,6 +36,7 @@ import { isWorkflowSkillAgent } from "@/lib/workflow-skill-agents"
 import { extractDifyTextOutput } from "@/lib/dify-output-text"
 import { rewriteOpenClawMediaReferences } from "@/lib/openclaw-media"
 import { rewriteOpenClawMediaReferencesWithSignedUrls } from "@/lib/openclaw-media-server"
+import { getOpenClawSkillById } from "@/lib/openclaw-skills"
 import {
   createRequestId,
   createTraceId,
@@ -837,6 +838,77 @@ function readRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown>
     : null
+}
+
+const OPENCLAW_SKILL_INPUT_KEYS = [
+  "openclaw_skill_id",
+  "selected_skill",
+  "skill_id",
+  "skill",
+  "skill_name",
+] as const
+
+function readOpenClawSkillId(inputs: unknown) {
+  const record = readRecord(inputs)
+  if (!record) return null
+
+  for (const key of OPENCLAW_SKILL_INPUT_KEYS) {
+    const value = record[key]
+    if (typeof value === "string" && value.trim()) return value.trim()
+  }
+
+  return null
+}
+
+function buildOpenClawSkillInputs(inputs: unknown) {
+  const baseInputs = readRecord(inputs) ? { ...(inputs as Record<string, unknown>) } : {}
+  const skillId = readOpenClawSkillId(baseInputs)
+  if (!skillId) return { inputs: baseInputs, skillId: null }
+
+  const skill = getOpenClawSkillById(skillId)
+  const skillDisplayName = skill?.name || skillId
+
+  return {
+    inputs: {
+      ...baseInputs,
+      openclaw_skill_id: skillId,
+      selected_skill: skillId,
+      skill_id: skillId,
+      skill: skillId,
+      skill_name: skillId,
+      skill_selected: skillId,
+      openclaw_skill_name: skillDisplayName,
+      openclaw_skill_description: skill?.description || "",
+      openclaw_skill_category: skill?.category || "",
+      openclaw_skill_tags: skill?.tags || [],
+      force_skill_selected: "true",
+    },
+    skillId,
+  }
+}
+
+function buildOpenClawSkillQuery(query: string, chatInputs: Record<string, unknown>) {
+  const skillId = readOpenClawSkillId(chatInputs)
+  if (!skillId) return query
+
+  const skill = getOpenClawSkillById(skillId)
+  const skillDisplayName = skill?.name || skillId
+  const skillDescription = skill?.description || "用户已在前端明确选择该技能。"
+  const skillTags = Array.isArray(skill?.tags) ? skill.tags.join("、") : ""
+
+  return [
+    "[OpenClaw 已加载技能]",
+    `skill_selected: ${skillId}`,
+    `skill_id: ${skillId}`,
+    `skill_name: ${skillId}`,
+    `skill_display_name: ${skillDisplayName}`,
+    `skill_description: ${skillDescription}`,
+    skillTags ? `skill_tags: ${skillTags}` : "",
+    "system_note: 用户已在前端明确选择以上技能。请必须按该技能处理下面的用户请求，不要重新判定为 none，也不要把本段路由提示原样展示给用户。",
+    "",
+    "用户请求：",
+    query,
+  ].filter(Boolean).join("\n")
 }
 
 function extractOpenClawFinalNodeText(event: Record<string, unknown>) {
@@ -1937,12 +2009,15 @@ export async function POST(request: NextRequest) {
         } else {
             // 💬 Chat API 格式
             const isGptImage2 = isGptImageGatewayRequest
+            const normalizedOpenClawSkill = model === "open-claw" ? buildOpenClawSkillInputs(inputs) : null
             const chatInputs = isGptImage2
               ? buildGptImageV11DifyInputs(inputs)
               : isAllInOneAgent
                 ? buildAllInOneAgentWorkflowInputs(effectiveQuery, inputs, fileUrls)
                 : isBananaChatflow
                   ? buildImageWorkflowInputs(effectiveQuery, inputs)
+                : normalizedOpenClawSkill
+                  ? normalizedOpenClawSkill.inputs
                 : workflowSkillId
                   ? {
                       ...(inputs || {}),
@@ -1953,6 +2028,11 @@ export async function POST(request: NextRequest) {
                       route: workflowSkillId,
                     }
                   : inputs || {}
+            const difyQuery = model === "open-claw"
+              ? buildOpenClawSkillQuery(effectiveQuery, chatInputs)
+              : isGptImage2
+                ? (query || "你好")
+                : effectiveQuery
 
             if (isBananaChatflow && imageSize && chatInputs && typeof chatInputs === "object") {
                 const bananaInputs = chatInputs as Record<string, unknown>
@@ -1964,10 +2044,14 @@ export async function POST(request: NextRequest) {
 
             difyRequest = {
                 inputs: chatInputs,
-                query: isGptImage2 ? (query || "你好") : effectiveQuery,
+                query: difyQuery,
                 response_mode: isGptImage2 ? "blocking" : "streaming",
                 user: userId || "default-user",
                 conversation_id: currentConvId,
+            }
+
+            if (model === "open-claw") {
+                console.log(`[OpenClaw Skill] selected=${normalizedOpenClawSkill?.skillId || "none"} queryInjected=${Boolean(normalizedOpenClawSkill?.skillId)}`)
             }
 
             if (!isGptImage2 && difyFileIds.length > 0) {

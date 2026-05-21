@@ -51,6 +51,7 @@ describe("chat think rendering and composer layout", () => {
     const picker = read("components/chat/OpenClawSkillPicker.tsx")
     const skills = read("lib/openclaw-skills.ts")
     const chatInterface = read("components/chat/enhanced-chat-interface.tsx")
+    const route = read("app/api/dify-chat/route.ts")
 
     expect(chatInput).toContain("showOpenClawSkillButton")
     expect(chatInput).toContain("加载技能")
@@ -61,6 +62,10 @@ describe("chat think rendering and composer layout", () => {
     expect(chatInterface).toContain("openclaw_skill_id: selectedOpenClawSkill.id")
     expect(chatInterface).toContain("selected_skill: selectedOpenClawSkill.id")
     expect(chatInterface).toContain("skill_name: selectedOpenClawSkill.id")
+    expect(route).toContain("getOpenClawSkillById")
+    expect(route).toContain("openclaw_skill_description")
+    expect(route).toContain("[OpenClaw 已加载技能]")
+    expect(route).toContain("queryInjected")
   })
 
   it("keeps chat auth extraction and empty workflow replies visible", () => {
