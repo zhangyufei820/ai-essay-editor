@@ -126,7 +126,7 @@ const EDUCATION_AGENTS: EducationAgent[] = [
     key: "standard",
     name: "作文批改",
     description: "专业作文分析与点评",
-    badge: "主打",
+    badge: "推荐",
     href: "/chat/standard",
   },
   {

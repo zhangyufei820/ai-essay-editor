@@ -631,23 +631,26 @@ export function WorksheetDiagnosisApp() {
               type="button"
               onClick={() => fileInputRef.current?.click()}
               disabled={isUploading || worksheets.length >= 6}
-              className="flex min-h-[138px] w-full flex-col items-center justify-center gap-3 rounded-[var(--radius-sharp)] border border-dashed border-[var(--ink-300)] bg-[var(--ink-50)] px-4 text-center transition hover:bg-[var(--ink-50)] disabled:cursor-not-allowed disabled:opacity-60"
+              className="flex min-h-[148px] w-full flex-col items-center justify-center gap-3 rounded-[var(--radius-sharp)] border-2 border-dashed border-[var(--ink-400)] bg-[var(--ink-50)] px-4 text-center shadow-sm transition hover:border-[var(--ink-700)] hover:bg-[var(--paper-100)] disabled:cursor-not-allowed disabled:opacity-60"
             >
-              <span className="flex items-center gap-3 text-[var(--ink-700)]">
-                {isUploading ? <Loader2 className="size-7 animate-spin" /> : <Plus className="size-8" />}
-                <FileImage className="size-7" />
+              <span className="flex size-14 items-center justify-center rounded-[var(--radius-soft)] border border-[var(--ink-200)] bg-[var(--paper-50)] text-[var(--ink-700)]">
+                {isUploading ? <Loader2 className="size-7 animate-spin" /> : <Plus className="size-9" />}
               </span>
-              <span className="text-sm font-semibold text-[var(--ink-900)]">
+              <span className="flex items-center gap-2 text-base font-bold text-[var(--ink-900)]">
+                <FileImage className="size-5 text-[var(--ink-700)]" />
                 {isUploading ? "正在上传图片" : "点击上传试卷图片"}
               </span>
+              <span className="text-xs leading-5 text-[var(--ink-500)]">可一次选择多张试卷 / 作业 / 错题图片。</span>
             </button>
             <button
               type="button"
               onClick={openCamera}
               disabled={isUploading || worksheets.length >= 6}
-              className="flex min-h-[132px] w-full flex-col items-center justify-center gap-3 rounded-[var(--radius-sharp)] border border-dashed border-[var(--ink-200)] bg-[var(--paper-50)] px-4 text-center transition hover:border-[var(--ink-400)] hover:bg-[var(--ink-50)] disabled:cursor-not-allowed disabled:opacity-60"
+              className="flex min-h-[132px] w-full flex-col items-center justify-center gap-3 rounded-[var(--radius-sharp)] border-2 border-dashed border-[var(--ink-300)] bg-[var(--paper-50)] px-4 text-center transition hover:border-[var(--ink-700)] hover:bg-[var(--ink-50)] disabled:cursor-not-allowed disabled:opacity-60"
             >
-              <Camera className="size-8 text-[var(--ink-700)]" />
+              <span className="flex size-14 items-center justify-center rounded-full border border-[var(--ink-200)] bg-[var(--ink-50)] text-[var(--ink-700)]">
+                <Camera className="size-8" />
+              </span>
               <span className="text-sm font-semibold text-[var(--ink-900)]">打开相机拍试卷</span>
               <span className="text-xs leading-5 text-[var(--ink-500)]">手机端呼出相机，Web 端打开摄像头预览。</span>
             </button>

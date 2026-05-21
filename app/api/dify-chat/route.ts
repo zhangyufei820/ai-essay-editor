@@ -1635,11 +1635,98 @@ export async function POST(request: NextRequest) {
 
     if (isGptImageGatewayRequest) {
       console.log("🎨 [GPT Image] 使用直连图片网关，绕过 Dify chatflow")
+      const imageInputs = imageInputsForBilling || buildGptImageV11Inputs(inputs)
+      const imageBillingModel = (billingModelType || "gpt-image-2") as ModelType
+
       await updateTaskRun(taskRun.id, {
         status: "running",
         stage: "图片网关生成中",
         progress: 35,
       })
+
+      if (async_image_task === true) {
+        const { charged } = await chargeImageGatewayCredits({
+          userId,
+          amount: estimatedMinCost,
+          inputs: imageInputs,
+          billingModel: imageBillingModel,
+          keySource,
+          requestId: taskRun.requestId,
+          conversationId: effectiveConvId || (typeof conversation_id === "string" ? conversation_id : null),
+          messageId: typeof messageId === "string" ? messageId : null,
+        })
+
+        if (!charged) {
+          await updateTaskRun(taskRun.id, {
+            status: "failed",
+            stage: "图片任务提交前积分扣除失败",
+            progress: 100,
+            errorMessage: "积分扣除失败，本次图片任务未提交",
+            errorCode: "IMAGE_CREDIT_DEDUCT_FAILED",
+          })
+          return Response.json({ error: "积分扣除失败，本次图片任务未提交" }, { status: 500 })
+        }
+
+        try {
+          const taskId = await startImageGatewayTask({
+            query: effectiveQuery,
+            inputs,
+            userId,
+            requestId: taskRun.requestId,
+            traceId: taskRun.traceId,
+          })
+          const pollToken = signImageTaskPollToken({ requestId: taskRun.requestId, taskId, userId })
+
+          return Response.json(
+            {
+              status: "running",
+              imageTaskId: taskId,
+              requestId: taskRun.requestId,
+              pollToken,
+              message: "图片任务已提交，正在生成。",
+            },
+            {
+              headers: {
+                "X-Request-Id": taskRun.requestId,
+                "X-Trace-Id": taskRun.traceId,
+              },
+            },
+          )
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "图片任务提交失败"
+          const refund = await refundImageTaskCredits({
+            userId,
+            requestId: taskRun.requestId,
+            reason: message,
+            errorCode: "IMAGE_TASK_SUBMIT_FAILED",
+            statusCode: 502,
+          })
+
+          await updateTaskRun(taskRun.id, {
+            status: "failed",
+            stage: "图片任务提交失败",
+            progress: 100,
+            errorMessage: message,
+            errorCode: "IMAGE_TASK_SUBMIT_FAILED",
+            metadata: {
+              refund_status: refund.status,
+              refund_amount: refund.amount || 0,
+              refund_reference_id: refund.refundReferenceId || null,
+            },
+          })
+
+          return Response.json(
+            { error: message, code: "IMAGE_TASK_SUBMIT_FAILED", requestId: taskRun.requestId, refund },
+            {
+              status: 502,
+              headers: {
+                "X-Request-Id": taskRun.requestId,
+                "X-Trace-Id": taskRun.traceId,
+              },
+            },
+          )
+        }
+      }
 
       const gatewayResponse = await callImageGatewayDirect(effectiveQuery, inputs)
       const gatewayPayload = await gatewayResponse.clone().json().catch(() => ({}))
@@ -1657,8 +1744,6 @@ export async function POST(request: NextRequest) {
         return gatewayResponse
       }
 
-      const imageInputs = imageInputsForBilling || buildGptImageV11Inputs(inputs)
-      const imageBillingModel = (billingModelType || "gpt-image-2") as ModelType
       const { charged } = await chargeImageGatewayCredits({
         userId,
         amount: estimatedMinCost,
