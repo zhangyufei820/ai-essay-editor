@@ -16,11 +16,19 @@ import {
   SelectV2Value as SelectValue,
   TextareaV2 as Textarea
 } from "@/components/ui/v2"
+import {
+  DialogV2,
+  DialogV2Content,
+  DialogV2Description,
+  DialogV2Footer,
+  DialogV2Header,
+  DialogV2Title,
+} from "@/components/ui/v2/dialog"
 /* eslint-disable @next/next/no-img-element -- User uploaded worksheet previews need native object URLs. */
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { createClient } from "@supabase/supabase-js"
-import { FileImage, ImageIcon, Loader2, MessageSquareText, Upload, X } from "lucide-react"
+import { Camera, FileImage, ImageIcon, Loader2, MessageSquareText, Plus, Upload, X } from "lucide-react"
 import { toast } from "sonner"
 import { extractUserId } from "@/lib/auth-user"
 import {
@@ -143,13 +151,28 @@ function formatElapsed(seconds: number) {
   return rest ? `${minutes}m ${rest}s` : `${minutes}m`
 }
 
+function shouldUseSystemCameraPicker() {
+  if (typeof navigator === "undefined" || typeof window === "undefined") return false
+  return (
+    window.matchMedia?.("(pointer: coarse)").matches ||
+    /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)
+  )
+}
+
 export function WorksheetDiagnosisApp() {
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const cameraInputRef = useRef<HTMLInputElement>(null)
+  const cameraVideoRef = useRef<HTMLVideoElement>(null)
+  const cameraCanvasRef = useRef<HTMLCanvasElement>(null)
+  const cameraStreamRef = useRef<MediaStream | null>(null)
   const [subject, setSubject] = useState("数学")
   const [grade, setGrade] = useState("")
   const [reportStyle, setReportStyle] = useState<"parent" | "teacher" | "student">("parent")
   const [extraContext, setExtraContext] = useState("")
   const [worksheets, setWorksheets] = useState<UploadedWorksheet[]>([])
+  const [isCameraOpen, setIsCameraOpen] = useState(false)
+  const [isCameraReady, setIsCameraReady] = useState(false)
+  const [cameraError, setCameraError] = useState("")
   const [isUploading, setIsUploading] = useState(false)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [analyzeProgress, setAnalyzeProgress] = useState("")
@@ -189,10 +212,17 @@ export function WorksheetDiagnosisApp() {
     return () => window.clearInterval(timer)
   }, [isGeneratingPoster, posterStartedAt])
 
-  const uploadFiles = async (files: FileList | null) => {
-    if (!files?.length) return
+  useEffect(() => {
+    return () => {
+      cameraStreamRef.current?.getTracks().forEach((track) => track.stop())
+      cameraStreamRef.current = null
+    }
+  }, [])
 
-    const incoming = Array.from(files).filter((file) => file.type.startsWith("image/"))
+  const uploadWorksheetFiles = async (files: File[]) => {
+    if (!files.length) return
+
+    const incoming = files.filter((file) => file.type.startsWith("image/"))
     if (incoming.length === 0) {
       toast.error("请上传 jpg、png、webp 等图片文件")
       return
@@ -243,7 +273,92 @@ export function WorksheetDiagnosisApp() {
     } finally {
       setIsUploading(false)
       if (fileInputRef.current) fileInputRef.current.value = ""
+      if (cameraInputRef.current) cameraInputRef.current.value = ""
     }
+  }
+
+  const uploadFiles = async (files: FileList | null) => {
+    if (!files?.length) return
+    await uploadWorksheetFiles(Array.from(files))
+  }
+
+  const stopCamera = () => {
+    cameraStreamRef.current?.getTracks().forEach((track) => track.stop())
+    cameraStreamRef.current = null
+    if (cameraVideoRef.current) {
+      cameraVideoRef.current.srcObject = null
+    }
+    setIsCameraReady(false)
+  }
+
+  const closeCamera = () => {
+    stopCamera()
+    setIsCameraOpen(false)
+    setCameraError("")
+  }
+
+  const openCamera = async () => {
+    if (isUploading || worksheets.length >= 6) return
+
+    if (shouldUseSystemCameraPicker()) {
+      cameraInputRef.current?.click()
+      return
+    }
+
+    setIsCameraOpen(true)
+    setCameraError("")
+    setIsCameraReady(false)
+
+    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+      cameraInputRef.current?.click()
+      return
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: { ideal: "environment" },
+          width: { ideal: 1600 },
+          height: { ideal: 1200 },
+        },
+        audio: false,
+      })
+      cameraStreamRef.current = stream
+      if (cameraVideoRef.current) {
+        cameraVideoRef.current.srcObject = stream
+        await cameraVideoRef.current.play()
+        setIsCameraReady(true)
+      }
+    } catch {
+      setCameraError("无法打开摄像头，请检查浏览器权限，或改用系统拍照/相册。")
+    }
+  }
+
+  const captureCameraPhoto = async () => {
+    const video = cameraVideoRef.current
+    const canvas = cameraCanvasRef.current
+    if (!video || !canvas || !isCameraReady) return
+
+    const width = video.videoWidth || 1280
+    const height = video.videoHeight || 960
+    canvas.width = width
+    canvas.height = height
+    const context = canvas.getContext("2d")
+    if (!context) {
+      toast.error("相机画面处理失败")
+      return
+    }
+
+    context.drawImage(video, 0, 0, width, height)
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.92))
+    if (!blob) {
+      toast.error("拍照失败，请重试")
+      return
+    }
+
+    const file = new File([blob], `worksheet-camera-${Date.now()}.jpg`, { type: "image/jpeg" })
+    closeCamera()
+    await uploadWorksheetFiles([file])
   }
 
   const removeWorksheet = (index: number) => {
@@ -350,7 +465,7 @@ export function WorksheetDiagnosisApp() {
     toast.success("已保留诊断结果，可继续查看或重新上传试卷。")
   }
 
-  const pollPosterTask = async (taskId: string, requestId: string) => {
+  const pollPosterTask = async (taskId: string, requestId: string, pollToken?: string) => {
     const startedAt = Date.now()
     const maxWaitMs = 10 * 60 * 1000
 
@@ -362,6 +477,7 @@ export function WorksheetDiagnosisApp() {
         headers: {
           ...(await getVerifiedAuthHeaders()),
           "X-Request-Id": requestId,
+          ...(pollToken ? { "X-Image-Task-Poll-Token": pollToken } : {}),
         },
       })
       const payload = await readResponseJson(response)
@@ -434,7 +550,7 @@ export function WorksheetDiagnosisApp() {
 
       if (payload?.status === "running" && typeof payload?.imageTaskId === "string") {
         setPosterStage("海报任务已提交，等待生成结果")
-        payload = await pollPosterTask(payload.imageTaskId, payload.requestId || requestId)
+        payload = await pollPosterTask(payload.imageTaskId, payload.requestId || requestId, payload.pollToken)
       }
 
       const rawImageUrls = extractImageUrlsFromDifyResult(payload)
@@ -502,16 +618,38 @@ export function WorksheetDiagnosisApp() {
               className="hidden"
               onChange={(event) => uploadFiles(event.target.files)}
             />
+            <input
+              ref={cameraInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              aria-label="拍照上传试卷"
+              onChange={(event) => uploadFiles(event.target.files)}
+            />
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
               disabled={isUploading || worksheets.length >= 6}
               className="flex min-h-[138px] w-full flex-col items-center justify-center gap-3 rounded-[var(--radius-sharp)] border border-dashed border-[var(--ink-300)] bg-[var(--ink-50)] px-4 text-center transition hover:bg-[var(--ink-50)] disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {isUploading ? <Loader2 className="size-7 animate-spin text-[var(--ink-700)]" /> : <FileImage className="size-7 text-[var(--ink-700)]" />}
+              <span className="flex items-center gap-3 text-[var(--ink-700)]">
+                {isUploading ? <Loader2 className="size-7 animate-spin" /> : <Plus className="size-8" />}
+                <FileImage className="size-7" />
+              </span>
               <span className="text-sm font-semibold text-[var(--ink-900)]">
                 {isUploading ? "正在上传图片" : "点击上传试卷图片"}
               </span>
+            </button>
+            <button
+              type="button"
+              onClick={openCamera}
+              disabled={isUploading || worksheets.length >= 6}
+              className="flex min-h-[132px] w-full flex-col items-center justify-center gap-3 rounded-[var(--radius-sharp)] border border-dashed border-[var(--ink-200)] bg-[var(--paper-50)] px-4 text-center transition hover:border-[var(--ink-400)] hover:bg-[var(--ink-50)] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <Camera className="size-8 text-[var(--ink-700)]" />
+              <span className="text-sm font-semibold text-[var(--ink-900)]">打开相机拍试卷</span>
+              <span className="text-xs leading-5 text-[var(--ink-500)]">手机端呼出相机，Web 端打开摄像头预览。</span>
             </button>
 
             {worksheets.length > 0 && (
@@ -750,6 +888,39 @@ export function WorksheetDiagnosisApp() {
           </CardContent>
         </Card>
       </section>
+
+      <DialogV2 open={isCameraOpen} onOpenChange={(open) => (open ? openCamera() : closeCamera())}>
+        <DialogV2Content className="max-w-3xl">
+          <DialogV2Header>
+            <DialogV2Title>拍照上传试卷</DialogV2Title>
+            <DialogV2Description>把试卷放入画面，尽量保持光线均匀、页面完整。</DialogV2Description>
+          </DialogV2Header>
+
+          {cameraError ? (
+            <div className="rounded-[var(--radius-sharp)] border border-[var(--seal-200)] bg-[var(--seal-50)] p-4 text-sm leading-6 text-[var(--seal-700)]">
+              {cameraError}
+            </div>
+          ) : (
+            <video
+              ref={cameraVideoRef}
+              className="max-h-[62vh] w-full rounded-[var(--radius-sharp)] bg-[var(--ink-900)] object-contain"
+              muted
+              playsInline
+            />
+          )}
+          <canvas ref={cameraCanvasRef} className="hidden" />
+
+          <DialogV2Footer>
+            <Button type="button" variant="outline" onClick={() => cameraInputRef.current?.click()}>
+              打开系统拍照/相册
+            </Button>
+            <Button type="button" onClick={captureCameraPhoto} disabled={!isCameraReady || Boolean(cameraError)}>
+              <Camera className="mr-2 size-4" />
+              拍照使用
+            </Button>
+          </DialogV2Footer>
+        </DialogV2Content>
+      </DialogV2>
     </div>
   )
 }

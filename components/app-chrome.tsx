@@ -65,7 +65,7 @@ export function buildSidebarSections(): WorkspaceSidebarSection[] {
       title: "学习",
       items: [
         { label: "对话", href: "/chat" },
-        { label: "拍卷诊断", href: "/worksheet-diagnosis", icon: IconDiagnosis, badge: "主打" },
+        { label: "拍卷诊断", href: "/worksheet-diagnosis", icon: IconDiagnosis, badge: "推荐" },
         { label: "智能体广场", href: "/agents" },
         { label: "闪卡复习", href: "/flashcards" },
         { label: "互动实验室", href: "/lab" },

@@ -18,7 +18,7 @@ describe("app chrome sidebar", () => {
     )
   })
 
-  it("keeps the worksheet diagnosis flagship entry in the workspace sidebar", () => {
+  it("keeps the worksheet diagnosis recommended entry in the workspace sidebar", () => {
     const items = buildSidebarSections().flatMap((section) => section.items)
 
     expect(items).toEqual(
@@ -26,7 +26,7 @@ describe("app chrome sidebar", () => {
         expect.objectContaining({
           label: "拍卷诊断",
           href: "/worksheet-diagnosis",
-          badge: "主打",
+          badge: "推荐",
         }),
       ])
     )

@@ -137,9 +137,18 @@ describe("tools workbench route mappings", () => {
 
   it("renders the worksheet diagnosis page with the full upload and poster generation app", () => {
     const page = read("app/worksheet-diagnosis/page.tsx")
+    const app = read("components/worksheet-diagnosis-app.tsx")
 
     expect(page).toContain("WorksheetDiagnosisApp")
     expect(page).not.toContain("DiagnosisPageV2")
     expect(page).toContain("错题诊断海报")
+    expect(app).toContain('capture="environment"')
+    expect(app).toContain("shouldUseSystemCameraPicker")
+    expect(app).toContain("navigator.mediaDevices.getUserMedia")
+    expect(app).toContain("打开相机拍试卷")
+    expect(app).toContain("<Plus")
+    expect(app).toContain("<Camera")
+    expect(app).toContain('"X-Image-Task-Poll-Token": pollToken')
+    expect(app).toContain("pollPosterTask(payload.imageTaskId, payload.requestId || requestId, payload.pollToken)")
   })
 })
