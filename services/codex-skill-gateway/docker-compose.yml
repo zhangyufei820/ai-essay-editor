@@ -43,7 +43,11 @@ services:
       retries: 3
     restart: unless-stopped
     networks:
-      - codex-skill-gateway-net
+      codex-skill-gateway-net: {}
+      docker_default:
+        aliases:
+          - codex-gateway
+          - codex-skill-gateway
 
   codex-worker-fast:
     build:
@@ -96,3 +100,5 @@ services:
 networks:
   codex-skill-gateway-net:
     name: codex-skill-gateway-net
+  docker_default:
+    external: true
