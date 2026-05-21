@@ -6,9 +6,11 @@ declare module "react-syntax-highlighter" {
     language?: string
     PreTag?: string | ComponentType<any>
     customStyle?: Record<string, unknown>
+    codeTagProps?: Record<string, unknown>
     style?: unknown
     showLineNumbers?: boolean
     wrapLines?: boolean
+    wrapLongLines?: boolean
   }>
 }
 

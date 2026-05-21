@@ -40,6 +40,7 @@ import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import remarkMath from "remark-math"
 import rehypeKatex from "rehype-katex"
+import { MarkdownCodeBlock, extractLanguageFromClassName } from "@/components/chat/MarkdownCodeBlock"
 
 // v2 墨砚 token colors
 const AI_TEXT_COLOR = "var(--ink-800)"
@@ -274,7 +275,9 @@ function MarkdownContent({ content }: { content: string }) {
           </li>
         ),
         code: ({ children, className }) => {
-          const isInline = !className
+          const rawCode = String(children)
+          const codeString = rawCode.replace(/\n$/, "")
+          const isInline = !className && !rawCode.includes("\n")
           if (isInline) {
             return (
               <code
@@ -289,16 +292,15 @@ function MarkdownContent({ content }: { content: string }) {
             )
           }
           return (
-            <code className={cn("block p-2.5 sm:p-4 rounded-[var(--radius-soft)] text-[12px] sm:text-sm overflow-x-auto mb-2.5", className)}>
-              {children}
-            </code>
+            <MarkdownCodeBlock
+              code={codeString}
+              language={extractLanguageFromClassName(className)}
+              className="mb-3"
+            />
           )
         },
         pre: ({ children }) => (
-          <pre
-            className="rounded-[var(--radius-soft)] overflow-hidden mb-2"
-            style={{ backgroundColor: "var(--ink-900)" }}
-          >
+          <pre className="contents">
             {children}
           </pre>
         ),

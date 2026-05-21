@@ -16,22 +16,17 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
-import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
-import { Check } from 'lucide-react'
-import { IconCopy, IconEssay, IconExportPdf } from "@/components/icons/v2"
-import { Children, isValidElement, memo, useMemo, useState } from 'react'
+import { IconEssay, IconExportPdf } from "@/components/icons/v2"
+import { Children, isValidElement, memo, useMemo } from 'react'
 import { cn } from '@/lib/utils'
-import { motion, AnimatePresence } from 'framer-motion'
 import { proxifyGeneratedImagePreviewUrl } from '@/components/chat/image-generation/gpt-image-v11'
 import { OpenClawHtmlPreview } from '@/components/chat/OpenClawHtmlPreview'
 import { getOpenClawAttachmentKind, isLikelyHtmlDocumentUrl, rewriteOpenClawMediaReferences } from '@/lib/openclaw-media'
+import { MarkdownCodeBlock, extractLanguageFromClassName } from '@/components/chat/MarkdownCodeBlock'
 
 // 静奢风配色
 const TEXT_COLOR = "#333333"
 const SECONDARY_COLOR = "#666666"
-const CODE_BG = "#f5f5f5"
-const CODE_TEXT = "var(--paper-100)"
 const INLINE_CODE_BG = "#f0f0f0"
 const BORDER_COLOR = "#e5e5e5"
 
@@ -105,57 +100,6 @@ function containsOpenClawHtmlPreview(children: React.ReactNode) {
   return Children.toArray(children).some((child) => (
     isValidElement(child) && child.type === OpenClawHtmlPreview
   ))
-}
-
-// 复制按钮组件
-function CopyButton({ text }: { text: string }) {
-  const [copied, setCopied] = useState(false)
-
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(text)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch (err) {
-      console.error('复制失败:', err)
-    }
-  }
-
-  return (
-    <button
-      onClick={handleCopy}
-      className={cn(
-        "absolute top-2 right-2 p-2 rounded-[var(--radius-soft)] transition-all duration-200",
-        "hover:bg-[var(--paper-50)]/20 backdrop-blur-sm",
-        copied ? "bg-[var(--seal-500)]/20 text-[var(--ink-400)]" : "bg-[var(--paper-50)]/10 text-[var(--ink-400)] hover:text-white"
-      )}
-      title={copied ? "已复制!" : "复制代码"}
-    >
-      <AnimatePresence mode="wait">
-        {copied ? (
-          <motion.div
-            key="checked"
-            initial={{ scale: 0.8, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0.8, opacity: 0 }}
-            transition={{ duration: 0.15 }}
-          >
-            <Check className="w-4 h-4" />
-          </motion.div>
-        ) : (
-          <motion.div
-            key="copy"
-            initial={{ scale: 0.8, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0.8, opacity: 0 }}
-            transition={{ duration: 0.15 }}
-          >
-            <IconCopy className="w-4 h-4" />
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </button>
-  )
 }
 
 export const EnhancedMarkdown = memo(function EnhancedMarkdown({ content, className }: EnhancedMarkdownProps) {
@@ -291,7 +235,9 @@ export const EnhancedMarkdown = memo(function EnhancedMarkdown({ content, classN
 
           // 行内代码
           code: ({ className, children, ...props }) => {
-            const isInline = !className
+            const rawCode = String(children)
+            const codeString = rawCode.replace(/\n$/, '')
+            const isInline = !className && !rawCode.includes("\n")
             if (isInline) {
                 return (
                   <code
@@ -308,44 +254,14 @@ export const EnhancedMarkdown = memo(function EnhancedMarkdown({ content, classN
               )
             }
             // 代码块
-            const match = /language-(\w+)/.exec(className || '')
-            const language = match ? match[1] : ''
-            const codeString = String(children).replace(/\n$/, '')
+            const language = extractLanguageFromClassName(className)
 
-            return (
-              <div className="relative my-2.5 sm:my-4 rounded-[var(--radius-sharp)] overflow-hidden shadow-lg">
-                {/* 语言标签 */}
-                {language && (
-                  <div className="absolute top-0 left-3 px-2 py-1 text-[10px] sm:text-xs rounded-b-lg bg-[var(--paper-50)]/10 text-[var(--ink-400)]">
-                    {language}
-                  </div>
-                )}
-                <CopyButton text={codeString} />
-                  <SyntaxHighlighter
-                  style={oneDark}
-                  language={language || 'text'}
-                  PreTag="div"
-                  customStyle={{
-                    margin: 0,
-                    padding: '0.875rem',
-                    backgroundColor: 'var(--ink-900)',
-                    color: CODE_TEXT,
-                    fontSize: '0.78rem',
-                    lineHeight: 1.6,
-                    borderRadius: '0.75rem',
-                  }}
-                  showLineNumbers={false}
-                  wrapLines={true}
-                >
-                  {codeString}
-                </SyntaxHighlighter>
-              </div>
-            )
+            return <MarkdownCodeBlock code={codeString} language={language} />
           },
 
           // 预格式化代码块
           pre: ({ children }) => (
-            <pre className="my-2 sm:my-3">
+            <pre className="contents">
               {children}
             </pre>
           ),
