@@ -18,7 +18,7 @@ describe("GPT Image V11 parameter mapping", () => {
       mode: "image_generate",
       model: "gpt-image-2",
       aspect_ratio: "1:1",
-      size: "2K",
+      size: "2048x2048",
       quality: "low",
       output_format: "png",
       output_compression: 100,
@@ -119,5 +119,14 @@ describe("GPT Image V11 parameter mapping", () => {
     expect(buildImageProxyUrl("https://shenxiang.school/api/image-proxy/raw/image.png?url=http%3A%2F%2F43.154.111.156%3A8002%2Fimages%2Fresult.png")).toBe(
       "/api/image-proxy/preview/image.webp?url=http%3A%2F%2F43.154.111.156%3A8002%2Fimages%2Fresult.png&format=webp"
     )
+  })
+
+  it("keeps Image 2 direct gateway sizes normalized before submission", () => {
+    const routeSource = require("fs").readFileSync(require("path").join(process.cwd(), "app/api/dify-chat/route.ts"), "utf8")
+
+    expect(routeSource).toContain("function normalizeImageGatewaySize")
+    expect(routeSource).toContain('if (size === "2K" || size === "original_2k") return getImageGatewaySizeByTier("2K", inputs.aspect_ratio)')
+    expect(routeSource).toContain("size: gatewaySize")
+    expect(routeSource).not.toContain("size: imageInputs.size,")
   })
 })

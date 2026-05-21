@@ -172,7 +172,7 @@ export const DEFAULT_IMAGE_INPUTS: GptImageInputs = {
   mode: "image_generate",
   model: "gpt-image-2",
   aspect_ratio: "1:1",
-  size: "2K",
+  size: "2048x2048",
   quality: "low",
   output_format: "png",
   output_compression: 100,

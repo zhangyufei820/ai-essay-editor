@@ -86,7 +86,7 @@ const GPT_IMAGE_V11_DEFAULT_INPUTS: GptImageV11Inputs = {
 
 const GPT_IMAGE_V11_ALLOWED = {
   aspect_ratio: ["auto", "1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "21:9", "9:21", "2:1", "1:2", "3:1", "1:3"],
-  size: ["auto", "original_1k", "original_2k", "original_4k", "1024x1024", "1536x1024", "1024x1536", "2048x2048", "2048x1152", "1152x2048", "3840x2160", "2160x3840"],
+  size: ["auto", "1K", "2K", "4K", "original_1k", "original_2k", "original_4k", "1024x1024", "1536x1024", "1024x1536", "2048x2048", "2048x1152", "1152x2048", "3840x2160", "2160x3840"],
   model: ["gpt-image-2", "gpt-image-1.5", "gpt-image-1", "gpt-image-1-mini"],
   quality: ["auto", "low", "medium", "high"],
   output_format: ["png", "jpeg", "webp"],
@@ -179,6 +179,55 @@ function buildGptImageV11DifyInputs(inputs: unknown) {
     source_image_url: imageInputs.reference_image_url,
     source_images: referenceImageUrlsText,
   }
+}
+
+function getImageGatewayOrientation(aspectRatio: string): "square" | "landscape" | "portrait" {
+  const [width, height] = aspectRatio.split(":").map((part) => Number(part))
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return "square"
+  if (width > height) return "landscape"
+  if (height > width) return "portrait"
+  return "square"
+}
+
+function getImageGatewaySizeByTier(tier: "1K" | "2K" | "4K", aspectRatio: string): string {
+  const orientation = getImageGatewayOrientation(aspectRatio)
+  const sizeMap: Record<"1K" | "2K" | "4K", Record<"square" | "landscape" | "portrait", string>> = {
+    "1K": {
+      square: "1024x1024",
+      landscape: "1536x1024",
+      portrait: "1024x1536",
+    },
+    "2K": {
+      square: "2048x2048",
+      landscape: "2048x1152",
+      portrait: "1152x2048",
+    },
+    "4K": {
+      square: "2048x2048",
+      landscape: "3840x2160",
+      portrait: "2160x3840",
+    },
+  }
+  return sizeMap[tier][orientation]
+}
+
+function normalizeImageGatewaySize(inputs: GptImageV11Inputs): string {
+  const size = inputs.size.trim()
+
+  if (/^\d+x\d+$/i.test(size)) return size
+
+  if (
+    inputs.mode === "image_edit" &&
+    size.startsWith("original_") &&
+    (inputs.reference_image_urls.length > 0 || inputs.reference_image_url)
+  ) {
+    return size
+  }
+
+  if (size === "4K" || size === "original_4k") return getImageGatewaySizeByTier("4K", inputs.aspect_ratio)
+  if (size === "2K" || size === "original_2k") return getImageGatewaySizeByTier("2K", inputs.aspect_ratio)
+
+  return getImageGatewaySizeByTier("1K", inputs.aspect_ratio)
 }
 
 function calculateGptImageGatewayCredits(inputs: GptImageV11Inputs): number {
@@ -882,12 +931,13 @@ function createTimeoutSignal(timeoutMs: number) {
 
 function buildImageGatewayPayload(query: string, inputs: unknown) {
   const imageInputs = buildGptImageV11Inputs(inputs)
+  const gatewaySize = normalizeImageGatewaySize(imageInputs)
 
   return {
     prompt: query || "生成图片",
     mode: imageInputs.mode,
     model: imageInputs.model,
-    size: imageInputs.size,
+    size: gatewaySize,
     quality: imageInputs.quality,
     n: imageInputs.n,
     output_format: imageInputs.output_format,
