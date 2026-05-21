@@ -1,0 +1,6 @@
+.env
+codex-home/
+runs/
+__pycache__/
+*.pyc
+.DS_Store

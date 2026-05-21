@@ -58,6 +58,7 @@ logs
 # Local agent / temp artifacts
 .codex-temp/
 .codex-tmp/
+/codex-skill-gateway/
 .claude/worktrees/
 .superpowers/
 .claude/deployment-memory.md

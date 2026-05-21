@@ -1,0 +1,98 @@
+services:
+  codex-redis:
+    image: redis:7-alpine
+    container_name: codex-skill-redis
+    command: ["redis-server", "--appendonly", "no", "--save", ""]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - codex-skill-gateway-net
+
+  codex-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BASE_IMAGE: codex-skill-gateway-codex-gateway:latest
+        CODEX_CLI_VERSION: "0.132.0"
+    image: codex-skill-gateway-codex-gateway:latest
+    container_name: codex-skill-gateway
+    env_file:
+      - .env
+    ports:
+      - "127.0.0.1:18081:8000"
+    volumes:
+      - ./runs:/workspace/runs
+      - ./skills:/opt/codex-skills:ro
+      - ./skill_registry.json:/app/skill_registry.json:ro
+      - ./codex-home:/codex-home
+    depends_on:
+      - codex-redis
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)\"",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - codex-skill-gateway-net
+
+  codex-worker-fast:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BASE_IMAGE: codex-skill-gateway-codex-worker-fast:latest
+        CODEX_CLI_VERSION: "0.132.0"
+    image: codex-skill-gateway-codex-worker-fast:latest
+    command: ["python", "worker.py"]
+    env_file:
+      - .env
+    environment:
+      WORKER_QUEUES: fast,image
+    volumes:
+      - ./runs:/workspace/runs
+      - ./skills:/opt/codex-skills:ro
+      - ./skill_registry.json:/app/skill_registry.json:ro
+      - ./codex-home:/codex-home
+    depends_on:
+      - codex-redis
+    restart: unless-stopped
+    networks:
+      - codex-skill-gateway-net
+
+  codex-worker-heavy:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BASE_IMAGE: codex-skill-gateway-codex-worker-heavy:latest
+        CODEX_CLI_VERSION: "0.132.0"
+    image: codex-skill-gateway-codex-worker-heavy:latest
+    command: ["python", "worker.py"]
+    env_file:
+      - .env
+    environment:
+      WORKER_QUEUES: heavy
+    volumes:
+      - ./runs:/workspace/runs
+      - ./skills:/opt/codex-skills:ro
+      - ./skill_registry.json:/app/skill_registry.json:ro
+      - ./codex-home:/codex-home
+    depends_on:
+      - codex-redis
+    restart: unless-stopped
+    networks:
+      - codex-skill-gateway-net
+
+networks:
+  codex-skill-gateway-net:
+    name: codex-skill-gateway-net
