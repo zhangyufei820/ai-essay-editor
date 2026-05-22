@@ -184,13 +184,13 @@ function toFriendlyError(error: unknown) {
     return "请先登录后再生成视频。"
   }
   if (text.includes("RELAYDANCE_GATEWAY_CONFIG_MISSING") || text.includes("视频网关未配置")) {
-    return "视频网关还没有完成服务器配置，请联系管理员检查 RelayDance 网关。"
+    return "视频生成服务还没有准备好，请稍后再试或联系管理员。"
   }
   if (text.includes("model not found")) {
     return "模型规格不匹配，请选择页面里的 Seedance 模型和清晰度组合。"
   }
   if (text.includes("InputImageSensitiveContentDetected") || text.includes("PrivacyInformation")) {
-    return "参考图触发了上游图片审核，请更换图片后再试。"
+    return "参考图可能包含不适合生成的内容，请更换图片后再试。"
   }
   if (text.includes("prompt is too long") || text.includes("prompt is too short")) {
     return "提示词长度不合适，建议控制在 30 到 500 字。"
@@ -452,7 +452,7 @@ export function VideoGenerationPage() {
       }
       const remoteUrl = payload?.data?.model_url || payload?.data?.url || payload?.modelUrl || payload?.gatewayUrl
       if (!remoteUrl || typeof remoteUrl !== "string") {
-        throw new Error("上传成功但没有返回可用于模型读取的图片 URL。")
+        throw new Error("图片已经上传，但暂时无法用于视频生成，请重新上传。")
       }
       setAsset({ file, previewUrl, remoteUrl })
       if (slot === "first") updateForm("firstFrameUrl", remoteUrl)
@@ -541,7 +541,7 @@ export function VideoGenerationPage() {
       form: snapshot,
       status: "submitting",
       progress: 3,
-      message: "正在提交到视频网关",
+      message: "正在提交生成请求",
     }
     setTasks((current) => [pendingTask, ...current].slice(0, 8))
     setActiveTaskId(localTaskId)
@@ -609,17 +609,17 @@ export function VideoGenerationPage() {
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="ink">
                 <Film className="size-3" />
-                Seedance 视频工作台
+                AI 视频创作
               </Badge>
-              <Badge variant="paper">异步生成</Badge>
-              <Badge variant="seal">临时视频链接约 30 分钟有效</Badge>
+              <Badge variant="paper">自动生成</Badge>
+              <Badge variant="seal">完成后可在线播放和下载</Badge>
             </div>
             <div className="mt-5 max-w-3xl">
               <h1 className="font-[var(--font-display)] text-[28px] font-black leading-tight text-[var(--ink-900)] sm:text-[36px]">
                 把分镜、首帧和提示词整理成一条可下载的视频
               </h1>
               <p className="mt-3 text-[15px] leading-7 text-[var(--ink-600)]">
-                适合课程短片、知识卡片、作品展示和广场分享。页面会提交任务到视频网关，并通过统一媒体任务中心自动刷新结果。
+                适合课程短片、知识卡片、作品展示和广场分享。提交后可以留在页面等待，完成后会自动出现视频结果。
               </p>
             </div>
             <div className="mt-5 grid gap-3 sm:grid-cols-3">
@@ -660,9 +660,9 @@ export function VideoGenerationPage() {
                 )}
               </div>
               <div className="grid grid-cols-3 gap-2 text-center text-xs text-white/75">
-                <span>Prompt</span>
-                <span>Gateway</span>
-                <span>MP4</span>
+                <span>写分镜</span>
+                <span>生成画面</span>
+                <span>完成视频</span>
               </div>
             </div>
           </div>
@@ -675,7 +675,7 @@ export function VideoGenerationPage() {
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <CardTitle>素材与分镜</CardTitle>
-                    <CardDescription>文生视频可以只写提示词；图生视频建议上传首帧图，尾帧会保留但当前上游文档不保证生效。</CardDescription>
+                    <CardDescription>可以直接写文字生成视频；也可以上传开头画面，让视频从指定画面开始。</CardDescription>
                   </div>
                   <div className="inline-flex rounded-full border border-[var(--paper-300)] bg-[var(--paper-100)] p-1">
                     {[
@@ -701,7 +701,7 @@ export function VideoGenerationPage() {
                 <div className="grid gap-4 lg:grid-cols-2">
                   <FrameDropzone
                     label="上传首帧"
-                    hint="控制视频开头画面，RelayDance 文档明确支持。"
+                    hint="让视频从这张画面开始，适合保持人物、场景或构图一致。"
                     asset={firstFrame}
                     onPick={(file) => uploadFrame("first", file)}
                     onClear={() => clearFrame("first")}
@@ -709,7 +709,7 @@ export function VideoGenerationPage() {
                   />
                   <FrameDropzone
                     label="上传尾帧"
-                    hint="用于未来尾帧工作流兼容；当前网关默认不转发。"
+                    hint="可先放入想要的结尾画面，当前会作为创作参考保留。"
                     asset={lastFrame}
                     onPick={(file) => uploadFrame("last", file)}
                     onClear={() => clearFrame("last")}
@@ -718,7 +718,7 @@ export function VideoGenerationPage() {
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="space-y-2">
-                    <Label htmlFor="firstFrameUrl">首帧 URL</Label>
+                    <Label htmlFor="firstFrameUrl">首帧图片链接</Label>
                     <Input
                       id="firstFrameUrl"
                       value={form.firstFrameUrl}
@@ -730,7 +730,7 @@ export function VideoGenerationPage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="lastFrameUrl">尾帧 URL</Label>
+                    <Label htmlFor="lastFrameUrl">尾帧图片链接</Label>
                     <Input
                       id="lastFrameUrl"
                       value={form.lastFrameUrl}
@@ -791,7 +791,7 @@ export function VideoGenerationPage() {
             <Card className="xl:sticky xl:top-5">
               <CardHeader>
                 <CardTitle>生成参数</CardTitle>
-                <CardDescription>参数来自 RelayDance 文档，提交后会进入统一任务中心自动轮询。</CardDescription>
+                <CardDescription>选择视频长度、画面比例和清晰度，提交后页面会自动等待结果。</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <SelectField label="模型" value={form.model} onValueChange={(value) => updateForm("model", value)}>
@@ -804,7 +804,7 @@ export function VideoGenerationPage() {
 
                 <div className="rounded-[var(--radius-soft)] border border-[var(--paper-200)] bg-[var(--paper-100)] p-3 text-xs leading-5 text-[var(--ink-600)]">
                   <span className="font-semibold text-[var(--ink-800)]">{currentModel.description}</span>
-                  {form.model === "doubao-seedance-2-0-fast-260128" ? "；Fast 模型按文档不支持 1080p，也不建议生成音轨。" : "；Pro 模型适合正式作品。"}
+                  {form.model === "doubao-seedance-2-0-fast-260128" ? "；适合先看效果，速度更快。" : "；适合正式作品，画面更稳。"}
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
@@ -831,7 +831,7 @@ export function VideoGenerationPage() {
                   <label className="flex items-center justify-between gap-3">
                     <span>
                       <span className="block text-sm font-semibold text-[var(--ink-800)]">生成音轨</span>
-                      <span className="block text-xs leading-5 text-[var(--ink-500)]">文档说明仅 Pro 模型支持音轨。</span>
+                      <span className="block text-xs leading-5 text-[var(--ink-500)]">为视频加入环境声或简单音效。</span>
                     </span>
                     <Switch
                       checked={form.generateAudio}
@@ -841,8 +841,8 @@ export function VideoGenerationPage() {
                   </label>
                   <label className="flex items-center justify-between gap-3">
                     <span>
-                      <span className="block text-sm font-semibold text-[var(--ink-800)]">上游水印</span>
-                      <span className="block text-xs leading-5 text-[var(--ink-500)]">默认关闭，适合正式站内作品。</span>
+                      <span className="block text-sm font-semibold text-[var(--ink-800)]">添加水印</span>
+                      <span className="block text-xs leading-5 text-[var(--ink-500)]">默认关闭，正式作品更干净。</span>
                     </span>
                     <Switch checked={form.watermark} onCheckedChange={(checked) => updateForm("watermark", checked)} />
                   </label>
@@ -877,7 +877,7 @@ export function VideoGenerationPage() {
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <CardTitle>结果预览</CardTitle>
-                  <CardDescription>完成后会返回 MP4 临时链接，可直接播放和下载；分享到广场前再持久化到 COS。</CardDescription>
+                  <CardDescription>生成完成后可以直接播放和下载；需要公开分享时，系统会再保存一份稳定版本。</CardDescription>
                 </div>
                 {activeTask?.downloadUrl ? (
                   <Button variant="seal" asChild>
@@ -985,9 +985,9 @@ export function VideoGenerationPage() {
 
         <section className="grid gap-3 lg:grid-cols-3">
           {[
-            ["主流产品模式", "参考 Runway、Luma、Pika、Kling 的工作台习惯：素材、提示词、参数和结果并排呈现。"],
-            ["服务端安全", "sk token 只在视频网关环境变量中保存，浏览器只拿任务 ID 和临时视频 URL。"],
-            ["广场策略", "用户自己预览和下载走临时链接；点击分享到广场后，再把视频持久化到 COS。"],
+            ["清晰创作流程", "先准备画面素材，再写分镜提示词，最后选择时长、比例和清晰度。"],
+            ["账号安全保护", "生成过程由服务器代为处理，页面不会暴露任何敏感凭据。"],
+            ["分享更稳定", "自己预览和下载很快；发布到广场时，系统会保存成更适合长期展示的版本。"],
           ].map(([title, body]) => (
             <div key={title} className="rounded-[var(--radius-soft)] border border-[var(--paper-200)] bg-[var(--paper-50)] p-4">
               <div className="mb-2 flex items-center gap-2 text-sm font-bold text-[var(--ink-800)]">

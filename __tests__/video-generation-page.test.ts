@@ -24,9 +24,10 @@ describe("video generation page", () => {
     expect(source).toContain("doubao-seedance-2-0-1080p")
     expect(source).toContain("16:9")
     expect(source).toContain("9:16")
-    expect(source).toContain("临时视频链接约 30 分钟有效")
-    expect(source).toContain("尾帧会保留但当前上游文档不保证生效")
-    expect(source).toContain("分享到广场后，再把视频持久化到 COS")
+    expect(source).toContain("完成后可在线播放和下载")
+    expect(source).toContain("让视频从这张画面开始")
+    expect(source).toContain("生成完成后可以直接播放和下载")
+    expect(source).toContain("发布到广场时，系统会保存成更适合长期展示的版本")
   })
 
   it("auto-polls status and renders video playback plus download", () => {
