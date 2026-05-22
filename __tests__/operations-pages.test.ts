@@ -32,8 +32,15 @@ describe("operations-facing pages", () => {
   })
 
   it("serves local icon routes to avoid repeated browser icon 404s", () => {
-    expect(read("app/favicon.ico/route.ts")).toContain('"/icon.svg"')
-    expect(read("app/apple-icon.png/route.ts")).toContain('"/icon.svg"')
+    const faviconRoute = read("app/favicon.ico/route.ts")
+    const appleIconRoute = read("app/apple-icon.png/route.ts")
+
+    expect(faviconRoute).toContain('"public", "icon.svg"')
+    expect(faviconRoute).toContain('"Content-Type": "image/svg+xml; charset=utf-8"')
+    expect(faviconRoute).not.toContain("NextResponse.redirect")
+    expect(appleIconRoute).toContain('"public", "icon.svg"')
+    expect(appleIconRoute).toContain('"Content-Type": "image/png"')
+    expect(appleIconRoute).not.toContain("NextResponse.redirect")
     expect(read("app/layout.tsx")).toContain('icon: "/favicon.ico"')
     expect(read("app/layout.tsx")).toContain('apple: "/apple-icon.png"')
   })
