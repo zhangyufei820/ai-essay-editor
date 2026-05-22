@@ -228,6 +228,27 @@ function statusLabel(status: StudioTask["status"]) {
   return "已取消"
 }
 
+const GENERATION_PHASES = [
+  { label: "提交中", detail: "正在整理提示词与参考帧。" },
+  { label: "排队中", detail: "生成任务已进入队列，请保持页面打开。" },
+  { label: "镜头生成中", detail: "正在按分镜生成动态画面。" },
+  { label: "合成 MP4", detail: "正在合成视频文件和预览地址。" },
+  { label: "可下载", detail: "视频已准备好，可以播放和下载。" },
+] as const
+
+function generationPhaseIndex(task: StudioTask) {
+  if (task.videoUrl || task.status === "completed") return 4
+  if (task.status === "submitting") return 0
+  if (task.status === "queued") return 1
+  if (task.progress >= 72) return 3
+  if (task.progress >= 18) return 2
+  return 1
+}
+
+function generationPhase(task: StudioTask) {
+  return GENERATION_PHASES[generationPhaseIndex(task)]
+}
+
 function formatBytes(size?: number) {
   if (!size) return ""
   if (size < 1024 * 1024) return `${Math.max(1, Math.round(size / 1024))}KB`
@@ -352,6 +373,88 @@ function SelectField({
         </SelectTrigger>
         <SelectContent>{children}</SelectContent>
       </Select>
+    </div>
+  )
+}
+
+function FilmGenerationLoader({ task }: { task: StudioTask }) {
+  const activeIndex = generationPhaseIndex(task)
+  const activePhase = generationPhase(task)
+  const frames = ["分镜", "首帧", "镜头", "合成"]
+
+  return (
+    <div className="relative flex min-h-[320px] w-full flex-col items-center justify-center overflow-hidden p-5 text-center text-white">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,0.12),transparent_26%),linear-gradient(135deg,rgba(184,201,187,0.12),transparent_42%)]" />
+      <div className="pointer-events-none absolute inset-0 opacity-50 [background-image:linear-gradient(rgba(255,255,255,0.05)_1px,transparent_1px)] [background-size:100%_9px]" />
+      <div className="relative w-full max-w-[560px]">
+        <div className="mb-4 flex items-center justify-between gap-3 text-xs text-white/65">
+          <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 font-semibold">
+            <Film className="size-3.5" />
+            正在生成视频
+          </span>
+          <span className="font-mono">{Math.round(task.progress)}%</span>
+        </div>
+
+        <div className="relative overflow-hidden rounded-[var(--radius-soft)] border border-white/15 bg-black/35 p-4 shadow-2xl">
+          <div className="absolute inset-x-0 top-0 h-3 bg-[repeating-linear-gradient(90deg,rgba(255,255,255,0.22)_0_10px,transparent_10px_22px)] opacity-50" />
+          <div className="absolute inset-x-0 bottom-0 h-3 bg-[repeating-linear-gradient(90deg,rgba(255,255,255,0.22)_0_10px,transparent_10px_22px)] opacity-50" />
+          <div className="pointer-events-none absolute inset-y-0 w-24 bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.18),transparent)] animate-[sx-video-film-scan_2.4s_ease-in-out_infinite]" />
+          <div className="grid grid-cols-4 gap-2 pt-3 pb-2">
+            {frames.map((frame, index) => {
+              const lit = index <= Math.min(activeIndex, 3)
+              return (
+                <div
+                  key={frame}
+                  className={cn(
+                    "relative flex aspect-[4/3] items-end overflow-hidden rounded-[6px] border p-2 text-left transition",
+                    lit ? "border-[var(--seal-300)] bg-[linear-gradient(135deg,rgba(255,255,255,0.2),rgba(184,201,187,0.22))] shadow-[0_0_22px_rgba(184,201,187,0.2)]" : "border-white/10 bg-white/[0.04]"
+                  )}
+                >
+                  <div className={cn("absolute inset-0", lit ? "animate-[sx-video-frame-glow_1.8s_ease-in-out_infinite]" : "")} />
+                  <span className="relative text-[11px] font-bold text-white/85">{frame}</span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        <div className="mt-5">
+          <p className="text-base font-bold">{activePhase.label}</p>
+          <p className="mt-1 text-sm leading-6 text-white/65">{activePhase.detail}</p>
+        </div>
+
+        <div className="mt-5 grid grid-cols-5 gap-2 text-[11px] font-semibold text-white/55">
+          {GENERATION_PHASES.map((phase, index) => (
+            <div key={phase.label} className="min-w-0">
+              <div
+                className={cn(
+                  "mx-auto mb-2 size-2.5 rounded-full border transition",
+                  index < activeIndex ? "border-[var(--seal-300)] bg-[var(--seal-300)]" : index === activeIndex ? "border-white bg-white animate-[sx-video-dot-pulse_1.2s_ease-in-out_infinite]" : "border-white/25 bg-white/5"
+                )}
+              />
+              <span className={cn("block truncate", index <= activeIndex ? "text-white/85" : "text-white/45")}>{phase.label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      <style jsx global>{`
+        @keyframes sx-video-film-scan {
+          0% { left: -28%; opacity: 0; }
+          18% { opacity: 1; }
+          82% { opacity: 1; }
+          100% { left: 112%; opacity: 0; }
+        }
+
+        @keyframes sx-video-frame-glow {
+          0%, 100% { opacity: 0.18; transform: translateY(0); }
+          50% { opacity: 0.45; transform: translateY(-2px); }
+        }
+
+        @keyframes sx-video-dot-pulse {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.28); }
+          50% { box-shadow: 0 0 0 7px rgba(255, 255, 255, 0); }
+        }
+      `}</style>
     </div>
   )
 }
@@ -895,21 +998,15 @@ export function VideoGenerationPage() {
                   {activeTask?.videoUrl ? (
                     <video src={activeTask.videoUrl} controls className="h-full w-full object-contain" />
                   ) : (
-                    <div className="flex min-h-[320px] flex-col items-center justify-center p-8 text-center text-white">
-                      {activeTask && activeTask.status !== "failed" ? (
-                        <>
-                          <Loader2 className="mb-4 size-10 animate-spin text-white/75" />
-                          <p className="font-semibold">{activeTask.message}</p>
-                          <p className="mt-2 text-sm text-white/60">你不用手动查询，系统会自动刷新结果。</p>
-                        </>
-                      ) : (
-                        <>
-                          <FileImage className="mb-4 size-11 text-white/70" />
-                          <p className="font-semibold">还没有视频结果</p>
-                          <p className="mt-2 text-sm text-white/60">提交任务后，结果会显示在这里。</p>
-                        </>
-                      )}
-                    </div>
+                    activeTask && activeTask.status !== "failed" && activeTask.status !== "expired" && activeTask.status !== "cancelled" ? (
+                      <FilmGenerationLoader task={activeTask} />
+                    ) : (
+                      <div className="flex min-h-[320px] flex-col items-center justify-center p-8 text-center text-white">
+                        <FileImage className="mb-4 size-11 text-white/70" />
+                        <p className="font-semibold">还没有视频结果</p>
+                        <p className="mt-2 text-sm text-white/60">提交任务后，结果会显示在这里。</p>
+                      </div>
+                    )
                   )}
                 </div>
               </div>
