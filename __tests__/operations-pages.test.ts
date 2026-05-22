@@ -42,7 +42,8 @@ describe("operations-facing pages", () => {
     expect(appleIconRoute).toContain('"Content-Type": "image/png"')
     expect(appleIconRoute).not.toContain("NextResponse.redirect")
     expect(read("app/layout.tsx")).toContain('icon: "/favicon.ico"')
-    expect(read("app/layout.tsx")).toContain('apple: "/apple-icon.png"')
+    expect(read("app/layout.tsx")).toContain('const APPLE_ICON_HREF = "/apple-icon.png?v=')
+    expect(read("app/layout.tsx")).toContain("apple: APPLE_ICON_HREF")
   })
 
   it("keeps static marketing pages fully static for read-only production containers", () => {

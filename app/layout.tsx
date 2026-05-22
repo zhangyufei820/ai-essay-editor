@@ -13,6 +13,7 @@ import { Toaster } from "sonner"
 const SITE_TITLE = "沈翔智学｜AI作文批改 · 写作提分工具"
 const SITE_DESCRIPTION = "上传作文，AI逐段批改、指出问题、给出提分建议，帮助小学、初中、高中学生提升写作能力。"
 const SITE_KEYWORDS = "AI作文批改,作文批改,写作提分,作文润色,语文学习,智能教育,沈翔智学"
+const APPLE_ICON_HREF = "/apple-icon.png?v=bf77832"
 
 const WEBSITE_SCHEMA = {
   "@context": "https://schema.org",
@@ -91,7 +92,7 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: "/favicon.ico",
-    apple: "/apple-icon.png",
+    apple: APPLE_ICON_HREF,
   },
   robots: {
     index: true,
@@ -140,10 +141,10 @@ export default function RootLayout({
         {/* Authing CSS 由登录页自行动态加载（guard-react 组件内部加载），无需全局同步引入 */}
         {/* PWA / 浏览器图标 */}
         <link rel="icon" href="/favicon.ico" sizes="any" />
-        <link rel="apple-touch-icon" href="/apple-icon.png" />
-        <link rel="apple-touch-icon" sizes="152x152" href="/apple-icon.png" />
-        <link rel="apple-touch-icon" sizes="180x180" href="/apple-icon.png" />
-        <link rel="apple-touch-icon" sizes="167x167" href="/apple-icon.png" />
+        <link rel="apple-touch-icon" href={APPLE_ICON_HREF} />
+        <link rel="apple-touch-icon" sizes="152x152" href={APPLE_ICON_HREF} />
+        <link rel="apple-touch-icon" sizes="180x180" href={APPLE_ICON_HREF} />
+        <link rel="apple-touch-icon" sizes="167x167" href={APPLE_ICON_HREF} />
 
         {/* Schema.org 结构化数据 - 网站信息 */}
         <script
