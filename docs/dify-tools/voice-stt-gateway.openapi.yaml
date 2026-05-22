@@ -1,0 +1,57 @@
+openapi: 3.0.3
+info:
+  title: Voice STT Gateway Tools
+  version: 0.1.0
+  description: Dify tools for the internal speech-to-text gateway used by shenxiang.school.
+servers:
+  - url: http://voice-gateway:8080
+components:
+  schemas:
+    SttResponse:
+      type: object
+      properties:
+        text:
+          type: string
+          description: Recognized transcript.
+        model:
+          type: string
+          nullable: true
+        error:
+          type: string
+          nullable: true
+        details:
+          type: object
+          nullable: true
+          additionalProperties: true
+paths:
+  /voice/stt:
+    post:
+      operationId: transcribeAudio
+      summary: Transcribe an uploaded audio file.
+      description: Use this for speech-to-text. The gateway should be reachable only from the internal Docker network.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Audio file. Supported examples include webm, mp3, wav, ogg, mp4.
+                language:
+                  type: string
+                  default: en
+                  description: Recognition language hint.
+                target:
+                  type: string
+                  description: Optional expected word or sentence, useful for pronunciation checking.
+      responses:
+        "200":
+          description: Transcription result.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SttResponse"
