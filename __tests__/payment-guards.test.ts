@@ -145,6 +145,29 @@ describe('Sprint 5 payment / credits / membership guards', () => {
     expect(image2).not.toContain('return "当前账号暂时无法提交图片生成，请刷新页面后重试；若仍失败，请重新登录。"')
   })
 
+  it('returns handled async Image 2 task failures as task results instead of API 5xx noise', () => {
+    const route = read('app/api/dify-chat/route.ts')
+    const timeoutIndex = route.indexOf('code: "IMAGE_TASK_POLL_TIMEOUT"')
+    const timeoutBlock = route.slice(Math.max(0, timeoutIndex - 600), timeoutIndex + 800)
+
+    expect(route).toContain('const GPT_IMAGE_ASYNC_TASK_MAX_AGE_MS = 30 * 60 * 1000')
+    expect(route).toContain('upstreamStatusCode: statusCode')
+    expect(route).toContain('code: "IMAGE_TASK_POLL_TIMEOUT"')
+    expect(route).not.toContain('{ status: statusCode },')
+    expect(timeoutBlock).not.toContain('{ status: 504 },')
+  })
+
+  it('reports missing image workflow credentials as service configuration errors', () => {
+    const chatRoute = read('app/api/dify-chat/route.ts')
+    const uploadRoute = read('app/api/dify-upload/route.ts')
+
+    expect(chatRoute).toContain('const MISSING_DIFY_CREDENTIAL_STATUS = 503')
+    expect(chatRoute).toContain('code: "DIFY_CREDENTIAL_MISSING"')
+    expect(chatRoute).toContain('请在生产环境变量中配置')
+    expect(uploadRoute).toContain('code: "DIFY_UPLOAD_CREDENTIAL_MISSING"')
+    expect(uploadRoute).toContain('status: 503')
+  })
+
   it('keeps the standalone image workspace generation request independent from stale chat session ownership', () => {
     const image2 = read('components/chat/gpt-image2-chat-interface.tsx')
     const fetchStart = image2.indexOf('fetch(`${API_BASE}/api/dify-chat`')

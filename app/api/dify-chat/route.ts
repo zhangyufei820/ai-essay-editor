@@ -555,11 +555,12 @@ const DEFAULT_DIFY_FIRST_BYTE_TIMEOUT_MS = 120_000
 const OPENCLAW_FIRST_BYTE_TIMEOUT_MS = 900_000
 const GPT_IMAGE_BLOCKING_TIMEOUT_MS = 300_000
 const GPT_IMAGE_GATEWAY_TIMEOUT_MS = 540_000
-const GPT_IMAGE_ASYNC_TASK_MAX_AGE_MS = 15 * 60 * 1000
+const GPT_IMAGE_ASYNC_TASK_MAX_AGE_MS = 30 * 60 * 1000
 const GPT_IMAGE_POLL_TOKEN_TTL_MS = GPT_IMAGE_ASYNC_TASK_MAX_AGE_MS + 5 * 60 * 1000
 const IMAGE_GATEWAY_URL = (process.env.DIFY_IMAGE_GATEWAY_URL || "http://dify-image-gateway:8001").replace(/\/+$/, "")
 // 🔥 作文批改（standard）使用专用的 ESSAY_CORRECTION_API_KEY
 const DEFAULT_DIFY_KEY = process.env.ESSAY_CORRECTION_API_KEY || process.env.DIFY_API_KEY 
+const MISSING_DIFY_CREDENTIAL_STATUS = 503
 
 function nowMs() {
   return Date.now()
@@ -1426,7 +1427,14 @@ export async function GET(request: NextRequest) {
         },
       })
     }
-    return Response.json({ error: "图片任务不存在或已过期", code: "IMAGE_TASK_NOT_FOUND", requestId, taskId, refund }, { status: response.status || 404 })
+    return Response.json({
+      status: "failed",
+      error: "图片任务不存在或已过期",
+      code: "IMAGE_TASK_NOT_FOUND",
+      requestId,
+      taskId,
+      refund,
+    })
   }
 
   const elapsedMs = typeof task?.elapsed_ms === "number" ? task.elapsed_ms : 0
@@ -1485,18 +1493,17 @@ export async function GET(request: NextRequest) {
         },
       })
     }
-    return Response.json(
-      {
-        status: "failed",
-        taskId,
-        requestId,
-        elapsedMs,
-        error: errorMessage,
-        data: task?.error_payload || {},
-        refund,
-      },
-      { status: statusCode },
-    )
+    return Response.json({
+      status: "failed",
+      taskId,
+      requestId,
+      elapsedMs,
+      error: errorMessage,
+      code: "IMAGE_TASK_FAILED",
+      upstreamStatusCode: statusCode,
+      data: task?.error_payload || {},
+      refund,
+    })
   }
 
   if ((taskOwner?.status === "queued" || taskOwner?.status === "running") && taskAgeMs > GPT_IMAGE_ASYNC_TASK_MAX_AGE_MS) {
@@ -1521,18 +1528,15 @@ export async function GET(request: NextRequest) {
         refund_reference_id: refund.refundReferenceId || null,
       },
     })
-    return Response.json(
-      {
-        status: "failed",
-        taskId,
-        requestId,
-        elapsedMs: taskAgeMs,
-        error: "图片任务超时，已自动退回积分",
-        code: "IMAGE_TASK_POLL_TIMEOUT",
-        refund,
-      },
-      { status: 504 },
-    )
+    return Response.json({
+      status: "failed",
+      taskId,
+      requestId,
+      elapsedMs: taskAgeMs,
+      error: "图片任务超时，已自动退回积分",
+      code: "IMAGE_TASK_POLL_TIMEOUT",
+      refund,
+    })
   }
 
   if (requestId) {
@@ -1726,9 +1730,10 @@ export async function POST(request: NextRequest) {
         console.error(`❌ 严重错误: 模型 ${workflowSkillId || model} 的凭据未配置！环境变量 ${keySource} 为空`);
         return new Response(JSON.stringify({ 
           error: `配置错误：${workflowSkillId || model} 模型凭据未设置`,
-          details: `请在 Vercel 环境变量中配置 ${keySource}`
+          code: "DIFY_CREDENTIAL_MISSING",
+          details: `请在生产环境变量中配置 ${keySource}`
         }), { 
-          status: 500,
+          status: MISSING_DIFY_CREDENTIAL_STATUS,
           headers: { "Content-Type": "application/json" }
         });
     }

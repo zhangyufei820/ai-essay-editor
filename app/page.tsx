@@ -2,7 +2,7 @@ import type { Metadata } from "next"
 import { HomePageV2 } from "@/components/home/v2"
 
 export const dynamic = "force-static"
-export const revalidate = 300
+export const revalidate = false
 
 export const metadata: Metadata = {
   title: "沈翔智学｜AI作文批改 · 写作提分工具",

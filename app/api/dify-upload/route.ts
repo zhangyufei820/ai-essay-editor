@@ -300,8 +300,12 @@ export async function POST(request: NextRequest) {
     const targetModel = model || modelFromForm
     const targetApiKey = getApiKeyForModel(targetModel)
     if (!targetApiKey) {
-      return new Response(JSON.stringify({ error: "目标模型上传凭据未配置" }), {
-        status: 500,
+      return new Response(JSON.stringify({
+        error: "目标模型上传凭据未配置",
+        code: "DIFY_UPLOAD_CREDENTIAL_MISSING",
+        details: targetModel ? `请在生产环境变量中配置 ${targetModel} 对应的 Dify API Key` : "缺少目标模型凭据",
+      }), {
+        status: 503,
         headers: { "Content-Type": "application/json", "X-Request-Id": requestId },
       })
     }

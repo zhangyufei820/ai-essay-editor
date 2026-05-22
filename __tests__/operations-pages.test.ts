@@ -30,4 +30,17 @@ describe("operations-facing pages", () => {
     expect(source).toContain("Supabase")
     expect(source).toContain("不要把真实值")
   })
+
+  it("serves local icon routes to avoid repeated browser icon 404s", () => {
+    expect(read("app/favicon.ico/route.ts")).toContain('"/icon.svg"')
+    expect(read("app/apple-icon.png/route.ts")).toContain('"/icon.svg"')
+    expect(read("app/layout.tsx")).toContain('icon: "/favicon.ico"')
+    expect(read("app/layout.tsx")).toContain('apple: "/apple-icon.png"')
+  })
+
+  it("keeps static marketing pages fully static for read-only production containers", () => {
+    expect(read("app/page.tsx")).toContain("export const revalidate = false")
+    expect(read("app/pricing/layout.tsx")).toContain("export const revalidate = false")
+    expect(read("app/help/page.tsx")).toContain("export const revalidate = false")
+  })
 })

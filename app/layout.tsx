@@ -89,6 +89,10 @@ export const metadata: Metadata = {
     description: SITE_DESCRIPTION,
     images: ["https://cdn.shenxiang.school/og-image.png"],
   },
+  icons: {
+    icon: "/favicon.ico",
+    apple: "/apple-icon.png",
+  },
   robots: {
     index: true,
     follow: true,
@@ -134,11 +138,12 @@ export default function RootLayout({
         />
 
         {/* Authing CSS 由登录页自行动态加载（guard-react 组件内部加载），无需全局同步引入 */}
-        {/* PWA Apple 图标 - 使用 CDN */}
-        <link rel="apple-touch-icon" href="https://cdn.shenxiang.school/icons/icon-192x192.png" />
-        <link rel="apple-touch-icon" sizes="152x152" href="https://cdn.shenxiang.school/icons/icon-152x152.png" />
-        <link rel="apple-touch-icon" sizes="180x180" href="https://cdn.shenxiang.school/icons/icon-192x192.png" />
-        <link rel="apple-touch-icon" sizes="167x167" href="https://cdn.shenxiang.school/icons/icon-192x192.png" />
+        {/* PWA / 浏览器图标 */}
+        <link rel="icon" href="/favicon.ico" sizes="any" />
+        <link rel="apple-touch-icon" href="/apple-icon.png" />
+        <link rel="apple-touch-icon" sizes="152x152" href="/apple-icon.png" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/apple-icon.png" />
+        <link rel="apple-touch-icon" sizes="167x167" href="/apple-icon.png" />
 
         {/* Schema.org 结构化数据 - 网站信息 */}
         <script
