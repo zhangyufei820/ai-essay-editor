@@ -22,6 +22,29 @@ const WATCH_EVENT_NAMES = [
 
 const RUNTIME_FLAG_KEYS = ["campaignEnabled", "consumptionEnabled", "autoPromptEnabled"]
 
+const CREDIT_CONSUMPTION_REFERENCE_PREFIXES = [
+  "chat_",
+  "img_",
+  "poster_",
+  "tools-img_",
+  "openclaw_",
+  "image-prompt-reverse:",
+  "worksheet_",
+  "essay-grade:",
+  "flashcards:",
+]
+
+const CREDIT_CONSUMPTION_DESCRIPTION_KEYWORDS = [
+  "作文批改",
+  "闪卡",
+  "图片",
+  "图像",
+  "对话",
+  "OpenClaw",
+  "错题",
+  "worksheet",
+]
+
 const REQUIRED_MONITOR_FILES = [
   "app/api/free-trial/runtime-flags/route.ts",
   "app/api/cron/free-trial-monitor/route.ts",
@@ -82,6 +105,18 @@ function countEventsBetween(events, startMs, endMs) {
     const createdAt = new Date(event.created_at).getTime()
     return createdAt >= startMs && createdAt < endMs
   }).length
+}
+
+function minutesAgoIso(minutes) {
+  return new Date(Date.now() - minutes * 60 * 1000).toISOString()
+}
+
+function isAiCreditConsumption(row) {
+  const referenceId = String(row.reference_id || "")
+  const description = String(row.description || "")
+
+  return CREDIT_CONSUMPTION_REFERENCE_PREFIXES.some((prefix) => referenceId.startsWith(prefix)) ||
+    CREDIT_CONSUMPTION_DESCRIPTION_KEYWORDS.some((keyword) => description.includes(keyword))
 }
 
 async function countRows(table, filters) {
@@ -368,6 +403,90 @@ async function runMonitor() {
         })
       } else if (avgPerUser > 3000) {
         incidents.push({ incidentType: "trial_avg_per_user_warning", severity: "warning", title: "人均 trial 消耗偏高", details: checks.trialUsage })
+      }
+
+      const { data: consumptionFlag } = await supabase
+        .from("free_trial_runtime_config")
+        .select("config_value")
+        .eq("config_key", "free_trial_consumption_enabled")
+        .maybeSingle()
+      if (consumptionFlag?.config_value?.enabled === false) {
+        checks.unexpectedRealCreditDebits = {
+          skipped: true,
+          reason: "free_trial_consumption_enabled=false; real credit consumption is expected while trial consumption is disabled",
+        }
+      } else {
+        const since30m = minutesAgoIso(30)
+        const since60m = minutesAgoIso(60)
+        const recentDebits = await fetchRows(
+          "credit_transactions",
+          "id,user_id,amount,type,description,reference_id,created_at",
+          (query) => query
+            .lt("amount", 0)
+            .gte("created_at", since30m)
+            .order("created_at", { ascending: false })
+            .limit(200),
+        )
+        const aiDebits = recentDebits.filter(isAiCreditConsumption)
+        const referenceIds = Array.from(new Set(aiDebits.map((row) => row.reference_id).filter(Boolean)))
+        let trialUsageReferenceIds = new Set()
+        if (referenceIds.length > 0) {
+          const usageRows = await fetchRows(
+            "trial_credit_usages",
+            "reference_id",
+            (query) => query
+              .in("reference_id", referenceIds)
+              .gte("created_at", since60m),
+          )
+          trialUsageReferenceIds = new Set(usageRows.map((row) => row.reference_id).filter(Boolean))
+        }
+        const unexpected = aiDebits.filter((row) => !row.reference_id || !trialUsageReferenceIds.has(row.reference_id))
+        const nowMs = Date.now()
+        const unexpectedRecent5m = unexpected.filter((row) => new Date(row.created_at).getTime() >= nowMs - 5 * 60 * 1000)
+        const unexpectedAmount30m = unexpected.reduce((sum, row) => sum + Math.abs(Number(row.amount || 0)), 0)
+        const unexpectedAmount5m = unexpectedRecent5m.reduce((sum, row) => sum + Math.abs(Number(row.amount || 0)), 0)
+        checks.unexpectedRealCreditDebits = {
+          scannedDebits30m: recentDebits.length,
+          aiDebits30m: aiDebits.length,
+          unexpectedCount30m: unexpected.length,
+          unexpectedAmount30m,
+          unexpectedUsers30m: new Set(unexpected.map((row) => row.user_id)).size,
+          unexpectedCount5m: unexpectedRecent5m.length,
+          unexpectedAmount5m,
+          unexpectedUsers5m: new Set(unexpectedRecent5m.map((row) => row.user_id)).size,
+          matchedTrialUsageReferences: trialUsageReferenceIds.size,
+          samples: unexpected.slice(0, 20).map((row) => ({
+            id: row.id,
+            userId: row.user_id,
+            amount: row.amount,
+            type: row.type,
+            description: row.description,
+            referenceId: row.reference_id,
+            createdAt: row.created_at,
+          })),
+          thresholds: {
+            p1Count30m: 3,
+            p1Amount30m: 200,
+            p0Count5m: 10,
+            p0Amount5m: 500,
+          },
+        }
+        if (unexpectedRecent5m.length >= 10 || unexpectedAmount5m >= 500) {
+          incidents.push({
+            incidentType: "unexpected_real_credit_debits",
+            severity: "p0",
+            title: "近期 AI 功能真实积分扣费未匹配 trial usage",
+            details: checks.unexpectedRealCreditDebits,
+            autoActions: ["disable_consumption"],
+          })
+        } else if (unexpected.length >= 3 || unexpectedAmount30m >= 200) {
+          incidents.push({
+            incidentType: "unexpected_real_credit_debits",
+            severity: "p1",
+            title: "近期 AI 功能真实积分扣费未匹配 trial usage",
+            details: checks.unexpectedRealCreditDebits,
+          })
+        }
       }
 
       const surveyRows = await fetchRows("survey_responses", "quality_score", (query) => query.eq("survey_date", today))

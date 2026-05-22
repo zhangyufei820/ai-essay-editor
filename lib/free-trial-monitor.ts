@@ -46,6 +46,29 @@ const WATCH_EVENT_NAMES = [
 
 const RUNTIME_FLAG_KEYS = ["campaignEnabled", "consumptionEnabled", "autoPromptEnabled"] as const
 
+const CREDIT_CONSUMPTION_REFERENCE_PREFIXES = [
+  "chat_",
+  "img_",
+  "poster_",
+  "tools-img_",
+  "openclaw_",
+  "image-prompt-reverse:",
+  "worksheet_",
+  "essay-grade:",
+  "flashcards:",
+]
+
+const CREDIT_CONSUMPTION_DESCRIPTION_KEYWORDS = [
+  "作文批改",
+  "闪卡",
+  "图片",
+  "图像",
+  "对话",
+  "OpenClaw",
+  "错题",
+  "worksheet",
+]
+
 function todayIsoDate(): string {
   return new Date().toISOString().slice(0, 10)
 }
@@ -83,6 +106,14 @@ function countEventsBetween(
     const createdAt = new Date(event.created_at).getTime()
     return createdAt >= startMs && createdAt < endMs
   }).length
+}
+
+function isAiCreditConsumption(row: { reference_id?: string | null; description?: string | null }): boolean {
+  const referenceId = String(row.reference_id || "")
+  const description = String(row.description || "")
+
+  return CREDIT_CONSUMPTION_REFERENCE_PREFIXES.some((prefix) => referenceId.startsWith(prefix)) ||
+    CREDIT_CONSUMPTION_DESCRIPTION_KEYWORDS.some((keyword) => description.includes(keyword))
 }
 
 async function countRows(table: string, filters?: (query: any) => any): Promise<number> {
@@ -509,6 +540,125 @@ async function checkTrialUsage(checks: Record<string, unknown>, incidents: Monit
   }
 }
 
+async function checkUnexpectedRealCreditDebits(
+  checks: Record<string, unknown>,
+  incidents: MonitorIncidentDraft[],
+) {
+  const runtimeFlags = checks.runtimeFlags as { consumptionEnabled?: boolean } | undefined
+  if (runtimeFlags?.consumptionEnabled === false) {
+    checks.unexpectedRealCreditDebits = {
+      skipped: true,
+      reason: "free_trial_consumption_enabled=false; real credit consumption is expected while trial consumption is disabled",
+    }
+    return
+  }
+
+  const since30m = minutesAgoIso(30)
+  const since60m = minutesAgoIso(60)
+  const nowMs = Date.now()
+  const recentDebits = await fetchRows<{
+    id: number
+    user_id: string
+    amount: number
+    type: string | null
+    description: string | null
+    reference_id: string | null
+    created_at: string
+  }>(
+    "credit_transactions",
+    "id,user_id,amount,type,description,reference_id,created_at",
+    (query) => query
+      .lt("amount", 0)
+      .gte("created_at", since30m)
+      .order("created_at", { ascending: false })
+      .limit(200),
+  )
+
+  const aiDebits = recentDebits.filter(isAiCreditConsumption)
+  const referenceIds = Array.from(new Set(
+    aiDebits
+      .map((row) => row.reference_id)
+      .filter((referenceId): referenceId is string => Boolean(referenceId)),
+  ))
+
+  let trialUsageReferenceIds = new Set<string>()
+  if (referenceIds.length > 0) {
+    const usageRows = await fetchRows<{ reference_id: string | null }>(
+      "trial_credit_usages",
+      "reference_id",
+      (query) => query
+        .in("reference_id", referenceIds)
+        .gte("created_at", since60m),
+    )
+    trialUsageReferenceIds = new Set(
+      usageRows
+        .map((row) => row.reference_id)
+        .filter((referenceId): referenceId is string => Boolean(referenceId)),
+    )
+  }
+
+  const unexpected = aiDebits.filter((row) => {
+    if (!row.reference_id) return true
+    return !trialUsageReferenceIds.has(row.reference_id)
+  })
+  const unexpectedRecent5m = unexpected.filter((row) =>
+    new Date(row.created_at).getTime() >= nowMs - 5 * 60 * 1000
+  )
+
+  const amount30m = unexpected.reduce((sum, row) => sum + Math.abs(Number(row.amount || 0)), 0)
+  const amount5m = unexpectedRecent5m.reduce((sum, row) => sum + Math.abs(Number(row.amount || 0)), 0)
+  const users30m = new Set(unexpected.map((row) => row.user_id)).size
+  const users5m = new Set(unexpectedRecent5m.map((row) => row.user_id)).size
+  const samples = unexpected.slice(0, 20).map((row) => ({
+    id: row.id,
+    userId: row.user_id,
+    amount: row.amount,
+    type: row.type,
+    description: row.description,
+    referenceId: row.reference_id,
+    createdAt: row.created_at,
+  }))
+
+  checks.unexpectedRealCreditDebits = {
+    scannedDebits30m: recentDebits.length,
+    aiDebits30m: aiDebits.length,
+    unexpectedCount30m: unexpected.length,
+    unexpectedAmount30m: amount30m,
+    unexpectedUsers30m: users30m,
+    unexpectedCount5m: unexpectedRecent5m.length,
+    unexpectedAmount5m: amount5m,
+    unexpectedUsers5m: users5m,
+    matchedTrialUsageReferences: trialUsageReferenceIds.size,
+    samples,
+    thresholds: {
+      p1Count30m: 3,
+      p1Amount30m: 200,
+      p0Count5m: 10,
+      p0Amount5m: 500,
+    },
+  }
+
+  if (unexpectedRecent5m.length >= 10 || amount5m >= 500) {
+    addIncident(incidents, {
+      incidentType: "unexpected_real_credit_debits",
+      severity: "p0",
+      title: "近期 AI 功能真实积分扣费未匹配 trial usage",
+      details: checks.unexpectedRealCreditDebits as Record<string, unknown>,
+      autoActions: ["disable_consumption"],
+    })
+    return
+  }
+
+  if (unexpected.length >= 3 || amount30m >= 200) {
+    addIncident(incidents, {
+      incidentType: "unexpected_real_credit_debits",
+      severity: "p1",
+      title: "近期 AI 功能真实积分扣费未匹配 trial usage",
+      details: checks.unexpectedRealCreditDebits as Record<string, unknown>,
+    })
+  }
+}
+
 async function checkSurveyQuality(checks: Record<string, unknown>, incidents: MonitorIncidentDraft[]) {
   const today = todayIsoDate()
   const rows = await fetchRows<{ quality_score: number }>(
@@ -622,6 +772,7 @@ export async function runFreeTrialMonitor(): Promise<FreeTrialMonitorResult> {
       await checkDuplicateGrants(checks, incidents)
       await checkFunnel(checks, incidents)
       await checkTrialUsage(checks, incidents)
+      await checkUnexpectedRealCreditDebits(checks, incidents)
       await checkSurveyQuality(checks, incidents)
       await checkAdminDashboard(checks)
       checks.paidUserBlockDetection = {
