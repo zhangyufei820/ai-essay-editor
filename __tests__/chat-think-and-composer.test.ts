@@ -68,6 +68,16 @@ describe("chat think rendering and composer layout", () => {
     expect(route).toContain("queryInjected")
   })
 
+  it("guards OpenClaw server operations while allowing configured admins", () => {
+    const route = read("app/api/dify-chat/route.ts")
+    const guard = read("lib/openclaw-runtime-guard.ts")
+
+    expect(route).toContain("evaluateOpenClawRuntimeRequest")
+    expect(route).toContain('model === "open-claw" && !isConfiguredAdminUser(userId)')
+    expect(route).toContain("code: guard.code")
+    expect(guard).toContain("OPENCLAW_FORBIDDEN_RUNTIME_ACTION")
+  })
+
   it("lets Codex load a skill in super all-in-one and sends the English skill id through inputs", () => {
     const chatInput = read("components/chat/ChatInput.tsx")
     const picker = read("components/chat/CodexSkillPicker.tsx")

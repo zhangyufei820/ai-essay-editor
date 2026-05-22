@@ -30,12 +30,14 @@ import {
 } from "@/lib/billing"
 import { assertSecureTlsConfiguration } from "@/lib/runtime-security"
 import { requireUser } from "@/lib/auth/verified-user"
+import { isConfiguredAdminUser } from "@/lib/admin-auth"
 import { internalDifyFetch } from "@/lib/internal-dify-fetch"
 import { getDifyCredentialForModel } from "@/lib/dify-credentials"
 import { isWorkflowSkillAgent } from "@/lib/workflow-skill-agents"
 import { extractDifyTextOutput } from "@/lib/dify-output-text"
 import { rewriteOpenClawMediaReferences } from "@/lib/openclaw-media"
 import { rewriteOpenClawMediaReferencesWithSignedUrls } from "@/lib/openclaw-media-server"
+import { evaluateOpenClawRuntimeRequest } from "@/lib/openclaw-runtime-guard"
 import { getCodexSkillById } from "@/lib/codex-skills"
 import { getOpenClawSkillById } from "@/lib/openclaw-skills"
 import {
@@ -1644,6 +1646,19 @@ export async function POST(request: NextRequest) {
     console.log(`🔍 [Dify-Chat] 接收请求: model=${model || "general-chat"} workflowSkill=${workflowSkillId || "none"} files=${difyFileIds.length} urls=${fileUrls.length}`)
     
     const userId = auth.user!.id
+    if (model === "open-claw" && !isConfiguredAdminUser(userId)) {
+      const guard = evaluateOpenClawRuntimeRequest({ query: effectiveQuery, inputs })
+      if (!guard.allowed) {
+        console.warn(`[OpenClaw Guard] blocked user=${userId} code=${guard.code} matched=${guard.matched}`)
+        return new Response(
+          JSON.stringify({
+            error: guard.message,
+            code: guard.code,
+          }),
+          { status: 403, headers: { "Content-Type": "application/json" } },
+        )
+      }
+    }
 
     const isGptImageGatewayRequest = isGptImageGatewayModel(model)
     const requestId = request.headers.get("X-Request-Id") || body.requestId || createRequestId(isGptImageGatewayRequest ? "img" : "chat")
