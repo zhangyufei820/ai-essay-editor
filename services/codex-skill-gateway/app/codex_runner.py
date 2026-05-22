@@ -16,7 +16,7 @@ from app.config import (
     secret_values_for_redaction,
     write_codex_config,
 )
-from app.security import normalize_sandbox, redact
+from app.security import contains_forbidden_runtime_action, normalize_sandbox, redact
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +41,13 @@ class CodexRunner:
                 "Requested skill files are not available.",
             )
         prompt = self._build_prompt(task)
+        if contains_forbidden_runtime_action(prompt):
+            return self._failed(
+                task,
+                started,
+                "FORBIDDEN_RUNTIME_ACTION",
+                "This request asks for forbidden file, server, or destructive operations.",
+            )
         (workspace / "prompt.txt").write_text(prompt, encoding="utf-8")
 
         if not has_codex_auth(self.settings):
@@ -116,15 +123,12 @@ class CodexRunner:
     def _build_command(self, task: dict[str, Any], workspace: Path, prompt: str) -> list[str]:
         help_text = self._help_text()
         command = ["codex", "exec"]
-        bypass_sandbox = "--dangerously-bypass-approvals-and-sandbox" in help_text
-        if bypass_sandbox:
-            command.append("--dangerously-bypass-approvals-and-sandbox")
         if "--ephemeral" in help_text:
             command.append("--ephemeral")
         if "--color" in help_text:
             command.extend(["--color", "never"])
         sandbox = normalize_sandbox(task["skill"].get("sandbox", "read-only"), self.settings)
-        if not bypass_sandbox and "--sandbox" in help_text:
+        if "--sandbox" in help_text:
             command.extend(["--sandbox", sandbox])
         if "--skip-git-repo-check" in help_text:
             command.append("--skip-git-repo-check")
@@ -193,6 +197,9 @@ class CodexRunner:
 4. 如果信息不足，先给出可用版本，再列出需要补充的信息。
 5. 输出内容必须适合直接返回给 shenxiang.school 用户。
 6. 不要暴露服务器路径、环境变量、API Key、内部错误堆栈。
+7. 只能在当前临时工作区内写入产物；禁止删除文件。
+8. 禁止读取或修改 .env、Docker、Nginx/OpenResty、1Panel、SSH、服务器目录或任何生产配置。
+9. 禁止执行 ssh、scp、rsync、docker、sudo、rm、git reset、git clean、chmod、chown 等命令。
 """
 
     def _failed(self, task: dict[str, Any], started: float, code: str, message: str) -> dict[str, Any]:

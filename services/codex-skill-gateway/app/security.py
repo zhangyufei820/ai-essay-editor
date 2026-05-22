@@ -3,6 +3,7 @@ from __future__ import annotations
 import hmac
 import json
 import re
+from pathlib import Path
 from typing import Any, Iterable
 
 from fastapi import Depends, HTTPException, status
@@ -61,6 +62,22 @@ def require_bearer(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
 
 
+def require_admin_bearer(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+) -> None:
+    settings = get_settings()
+    expected = settings.admin_api_key
+    if not expected:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Admin API key is not configured.",
+        )
+    if credentials is None or credentials.scheme.lower() != "bearer":
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
+    if not hmac.compare_digest(credentials.credentials, expected):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
+
+
 def redact(text: str | bytes | None, secret_values: Iterable[str]) -> str:
     if text is None:
         safe = ""
@@ -92,6 +109,73 @@ def normalize_sandbox(sandbox: str, settings: Settings) -> str:
     allowed = {"read-only", "workspace-write"}
     normalized = sandbox if sandbox in allowed else "read-only"
     return normalized
+
+
+FORBIDDEN_COMMAND_PATTERNS = (
+    r"\brm\s+-",
+    r"\brmdir\b",
+    r"\bfind\b.{0,80}\b-delete\b",
+    r"\bgit\s+(clean|reset|checkout|push)\b",
+    r"\bdocker\b",
+    r"\bssh\b",
+    r"\bscp\b",
+    r"\brsync\b",
+    r"\bsudo\b",
+    r"\bchmod\b",
+    r"\bchown\b",
+    r"\bkubectl\b",
+    r"\bhelm\b",
+)
+
+FORBIDDEN_PATH_PATTERNS = (
+    r"(^|/)\.env($|[.\s/])",
+    r"(^|/)\.ssh($|/)",
+    r"docker-compose[^/\s]*\.ya?ml",
+    r"(^|/)Dockerfile($|[\s\"'}\]])",
+    r"(^|/)nginx($|/)",
+    r"(^|/)openresty($|/)",
+    r"(^|/)1panel($|/)",
+    r"/opt/1panel($|/)",
+    r"/etc($|/)",
+    r"/root($|/)",
+    r"/data/ai-essay-editor($|/)",
+    r"/var/lib/docker($|/)",
+)
+
+
+def contains_forbidden_runtime_action(value: Any) -> bool:
+    text = _value_to_text(value)
+    for pattern in FORBIDDEN_COMMAND_PATTERNS:
+        if re.search(pattern, text, re.IGNORECASE | re.DOTALL):
+            return True
+    for pattern in FORBIDDEN_PATH_PATTERNS:
+        if re.search(pattern, text, re.IGNORECASE | re.DOTALL):
+            return True
+    return False
+
+
+def assert_safe_skill_file_path(relative_path: str) -> Path:
+    if "\x00" in relative_path:
+        raise ValueError("file path contains null byte")
+    path = Path(relative_path)
+    if path.is_absolute():
+        raise ValueError("file path must be relative")
+    if any(part in {"", ".", ".."} for part in path.parts):
+        raise ValueError("file path must not contain traversal segments")
+    path_text = path.as_posix()
+    allowed = (
+        path_text == "SKILL.md"
+        or path_text == "agents/openai.yaml"
+        or path_text.startswith("scripts/")
+        or path_text.startswith("references/")
+        or path_text.startswith("assets/")
+    )
+    if not allowed:
+        raise ValueError("file path is outside allowed skill folders")
+    for pattern in FORBIDDEN_PATH_PATTERNS:
+        if re.search(pattern, path_text, re.IGNORECASE | re.DOTALL):
+            raise ValueError("file path is forbidden")
+    return path
 
 
 def contains_admin_intent(value: Any) -> bool:

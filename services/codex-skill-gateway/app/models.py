@@ -25,6 +25,24 @@ class RunRequest(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+class SkillFile(BaseModel):
+    path: str = Field(..., min_length=1, max_length=240)
+    content: str = Field(..., max_length=50000)
+
+
+class CreateSkillRequest(BaseModel):
+    name: str = Field(..., min_length=2, max_length=80, pattern=r"^[a-zA-Z0-9_-]+$")
+    display_name: str = Field(default="", max_length=120)
+    description: str = Field(default="", max_length=500)
+    files: list[SkillFile] = Field(default_factory=list, max_length=20)
+    submit_for_review: bool = True
+
+
+class AdminRunRequest(RunRequest):
+    admin_reason: str = Field(..., min_length=8, max_length=500)
+    allow_admin_intent: bool = True
+
+
 class SkillPublic(BaseModel):
     name: str
     display_name: str

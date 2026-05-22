@@ -1,12 +1,61 @@
 import { createHash, randomUUID } from "crypto"
 import { createClient, type SupabaseClient } from "@supabase/supabase-js"
 
-type TaskStatus = "queued" | "running" | "succeeded" | "failed" | "timeout" | "cancelled"
+export type TaskStatus = "queued" | "running" | "succeeded" | "failed" | "timeout" | "cancelled"
+type UnifiedTaskStatus = "queued" | "running" | "completed" | "failed" | "expired" | "cancelled"
 
-type TaskArtifact = {
-  type: "image" | "html" | "ppt" | "pdf" | "file"
+export type TaskArtifact = {
+  type: "image" | "video" | "audio" | "html" | "ppt" | "pdf" | "file"
   url: string
   name?: string
+  download_url?: string
+  expires_at?: string
+}
+
+export type TaskRunRecord = {
+  id: string
+  user_id: string
+  session_id?: string | null
+  message_id?: string | null
+  model?: string | null
+  kind?: string | null
+  status?: string | null
+  stage?: string | null
+  progress?: number | null
+  request_id?: string | null
+  trace_id?: string | null
+  conversation_id?: string | null
+  workflow_run_id?: string | null
+  upstream_task_id?: string | null
+  current_tool?: string | null
+  current_file?: string | null
+  node_events?: unknown
+  artifacts?: unknown
+  error_message?: string | null
+  error_code?: string | null
+  metadata?: Record<string, unknown> | null
+  created_at?: string | null
+  updated_at?: string | null
+  completed_at?: string | null
+}
+
+export type UnifiedMediaTask = {
+  id: string
+  type: string
+  status: UnifiedTaskStatus
+  provider_status?: string | null
+  progress: number
+  stage?: string | null
+  message: string
+  outputs: TaskArtifact[]
+  error: { message: string; code?: string | null } | null
+  upstream_task_id?: string | null
+  request_id?: string | null
+  trace_id?: string | null
+  metadata: Record<string, unknown>
+  created_at?: string | null
+  updated_at?: string | null
+  completed_at?: string | null
 }
 
 type TaskNodeEvent = {
@@ -111,6 +160,8 @@ export function extractArtifactsFromText(text: string): TaskArtifact[] {
     const lower = rawUrl.toLowerCase()
     const name = decodeURIComponent(rawUrl.split("/").pop()?.split(/[?#]/, 1)[0] || "file")
     const type: TaskArtifact["type"] =
+      /\.(mp4|webm|mov|m4v)(?:[?#]|$)/i.test(lower) ? "video" :
+      /\.(mp3|wav|m4a|ogg|flac)(?:[?#]|$)/i.test(lower) ? "audio" :
       /\.(png|jpe?g|webp|gif|avif)(?:[?#]|$)/i.test(lower) ? "image" :
       /\.html?(?:[?#]|$)/i.test(lower) ? "html" :
       /\.pptx?(?:[?#]|$)/i.test(lower) ? "ppt" :
@@ -124,6 +175,111 @@ export function extractArtifactsFromText(text: string): TaskArtifact[] {
 export function extractArtifactsFromUnknown(value: unknown): TaskArtifact[] {
   const text = typeof value === "string" ? value : JSON.stringify(sanitizeForTrace(value) || "")
   return extractArtifactsFromText(text)
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {}
+}
+
+function asString(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined
+}
+
+function asNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined
+}
+
+function normalizeTaskStatus(status: string | null | undefined, metadata: Record<string, unknown>): UnifiedTaskStatus {
+  const normalized = String(status || "").toLowerCase()
+  const providerStatus = String(metadata.gateway_status || metadata.provider_status || "").toLowerCase()
+  const combined = `${normalized} ${providerStatus}`
+
+  if (combined.match(/\b(succeeded|success|completed|complete|done)\b/)) return "completed"
+  if (combined.match(/\b(timeout|expired|stale_running)\b/)) return "expired"
+  if (combined.match(/\b(cancelled|canceled)\b/)) return "cancelled"
+  if (combined.match(/\b(failed|failure|error|not_found)\b/)) return "failed"
+  if (combined.match(/\b(running|processing|in_progress|submitted)\b/)) return "running"
+  return "queued"
+}
+
+function normalizeTaskOutputs(task: TaskRunRecord, metadata: Record<string, unknown>): TaskArtifact[] {
+  const artifacts = Array.isArray(task.artifacts) ? task.artifacts : []
+  const normalized: TaskArtifact[] = []
+
+  for (const item of artifacts) {
+    const record = asRecord(item)
+    const url = asString(record.url)
+    if (!url) continue
+    normalized.push({
+      type: (asString(record.type) as TaskArtifact["type"] | undefined) || "file",
+      url,
+      name: asString(record.name),
+      download_url: asString(record.download_url) || url,
+      expires_at: asString(record.expires_at),
+    })
+  }
+
+  const candidates = [
+    ["video", metadata.video_url, metadata.temporary_video_url, metadata.download_url],
+    ["audio", metadata.audio_url, metadata.wav_url],
+    ["image", metadata.image_url, metadata.result_image_url],
+    ["file", metadata.file_url, metadata.output_url],
+  ] as const
+
+  for (const [type, ...values] of candidates) {
+    for (const value of values) {
+      const url = asString(value)
+      if (!url || normalized.some((artifact) => artifact.url === url)) continue
+      normalized.push({
+        type,
+        url,
+        download_url: asString(metadata.download_url) || url,
+        expires_at: asString(metadata.expires_at),
+      })
+    }
+  }
+
+  return normalized.slice(0, 50)
+}
+
+function normalizeTaskProgress(task: TaskRunRecord, status: UnifiedTaskStatus) {
+  if (status === "completed" || status === "failed" || status === "expired" || status === "cancelled") return 100
+  const progress = asNumber(task.progress)
+  if (progress === undefined) return status === "queued" ? 0 : 50
+  return Math.min(99, Math.max(0, Math.round(progress)))
+}
+
+export function normalizeMediaTask(task: TaskRunRecord): UnifiedMediaTask {
+  const metadata = asRecord(task.metadata)
+  const status = normalizeTaskStatus(task.status, metadata)
+  const providerStatus = asString(metadata.gateway_status) || asString(metadata.provider_status) || task.status || null
+  const message = task.error_message || task.stage || (
+    status === "completed" ? "任务已完成" :
+    status === "failed" ? "任务失败" :
+    status === "expired" ? "任务已过期" :
+    status === "cancelled" ? "任务已取消" :
+    status === "running" ? "任务进行中" :
+    "任务排队中"
+  )
+
+  return {
+    id: task.id,
+    type: task.kind || "task",
+    status,
+    provider_status: providerStatus,
+    progress: normalizeTaskProgress(task, status),
+    stage: task.stage || null,
+    message,
+    outputs: normalizeTaskOutputs(task, metadata),
+    error: task.error_message ? { message: task.error_message, code: task.error_code || null } : null,
+    upstream_task_id: task.upstream_task_id || null,
+    request_id: task.request_id || null,
+    trace_id: task.trace_id || null,
+    metadata: sanitizeForTrace(metadata) as Record<string, unknown>,
+    created_at: task.created_at || null,
+    updated_at: task.updated_at || null,
+    completed_at: task.completed_at || null,
+  }
 }
 
 export async function createTaskRun(input: CreateTaskRunInput) {
@@ -289,4 +445,47 @@ export async function getTaskRunsForUser(params: {
   }
   taskTableAvailable = true
   return data || []
+}
+
+export async function getTaskRunForUser(params: {
+  userId: string
+  taskId: string
+}) {
+  const supabase = getSupabaseAdmin()
+  if (!supabase || taskTableAvailable === false) return null
+
+  const selectFields = "id,user_id,session_id,message_id,model,kind,status,stage,progress,request_id,trace_id,conversation_id,workflow_run_id,upstream_task_id,current_tool,current_file,node_events,artifacts,error_message,error_code,metadata,created_at,updated_at,completed_at"
+
+  const byId = await supabase
+    .from("ai_task_runs")
+    .select(selectFields)
+    .eq("user_id", params.userId)
+    .eq("id", params.taskId)
+    .maybeSingle()
+
+  if (byId.error) {
+    if (byId.error.code === "42P01") taskTableAvailable = false
+    console.warn("[AI Task Trace] single id query skipped:", byId.error.message)
+    return null
+  }
+  if (byId.data) {
+    taskTableAvailable = true
+    return byId.data
+  }
+
+  const byRequestId = await supabase
+    .from("ai_task_runs")
+    .select(selectFields)
+    .eq("user_id", params.userId)
+    .eq("request_id", params.taskId)
+    .maybeSingle()
+
+  if (byRequestId.error) {
+    if (byRequestId.error.code === "42P01") taskTableAvailable = false
+    console.warn("[AI Task Trace] single request query skipped:", byRequestId.error.message)
+    return null
+  }
+
+  taskTableAvailable = true
+  return byRequestId.data || null
 }

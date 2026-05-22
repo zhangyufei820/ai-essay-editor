@@ -1,0 +1,102 @@
+openapi: 3.0.3
+info:
+  title: Image Gateway Tools
+  version: 0.1.0
+  description: Dify tools for the existing GPT Image gateway used by shenxiang.school.
+servers:
+  - url: http://dify-image-gateway:8001
+security:
+  - ImageGatewayToken: []
+components:
+  securitySchemes:
+    ImageGatewayToken:
+      type: apiKey
+      in: header
+      name: x-gateway-token
+  schemas:
+    GenericResponse:
+      type: object
+      additionalProperties: true
+paths:
+  /api/image/unified:
+    post:
+      operationId: generateImage
+      summary: Generate images synchronously through the image gateway.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+              properties:
+                prompt: { type: string }
+                query: { type: string }
+                model: { type: string }
+                n:
+                  type: integer
+                  minimum: 1
+                  maximum: 4
+                size: { type: string }
+                quality: { type: string }
+      responses:
+        "200":
+          description: Image generation result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GenericResponse" }
+  /api/image/tasks:
+    post:
+      operationId: submitImageTask
+      summary: Submit an async image generation task.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: Async image task.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GenericResponse" }
+  /api/image/tasks/{task_id}:
+    get:
+      operationId: getImageTask
+      summary: Get async image task status.
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Image task status.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GenericResponse" }
+  /api/files/upload:
+    post:
+      operationId: uploadImageFile
+      summary: Upload a file to the image gateway.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                user:
+                  type: string
+      responses:
+        "200":
+          description: Uploaded file result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GenericResponse" }

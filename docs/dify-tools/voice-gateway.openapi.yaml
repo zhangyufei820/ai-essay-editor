@@ -1,0 +1,87 @@
+openapi: 3.0.3
+info:
+  title: Voice Gateway Tools
+  version: 0.1.0
+  description: Dify tools for the formal OmniVoice gateway.
+servers:
+  - url: https://voice-api.shenxiang.school
+security:
+  - ApiKeyAuth: []
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+  schemas:
+    GenericResponse:
+      type: object
+      additionalProperties: true
+paths:
+  /v1/voices:
+    get:
+      operationId: listVoices
+      summary: List enabled voices.
+      responses:
+        "200":
+          description: Voice list.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GenericResponse" }
+  /v1/tts:
+    post:
+      operationId: createTTS
+      summary: Generate speech from text.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text: { type: string }
+                voice_id:
+                  type: string
+                  default: teacher_female_01
+                language:
+                  type: string
+                  default: zh-CN
+                speed:
+                  type: number
+                  default: 1
+                emotion:
+                  type: string
+                  default: friendly
+                format:
+                  type: string
+                  enum: [mp3, wav, flac, opus]
+                  default: mp3
+                return_mode:
+                  type: string
+                  enum: [url]
+                  default: url
+                sync:
+                  type: boolean
+                  default: false
+      responses:
+        "200":
+          description: TTS job or completed result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GenericResponse" }
+  /v1/jobs/{job_id}:
+    get:
+      operationId: getVoiceJob
+      summary: Get voice job status.
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Voice job status.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GenericResponse" }

@@ -1,0 +1,165 @@
+openapi: 3.0.3
+info:
+  title: RelayDance Video Gateway Tools
+  version: 0.1.0
+  description: Dify tools for RelayDance video generation through the private gateway.
+servers:
+  - url: http://relaydance-video-gateway:8000
+security:
+  - GatewayKeyAuth: []
+components:
+  securitySchemes:
+    GatewayKeyAuth:
+      type: apiKey
+      in: header
+      name: X-Gateway-Key
+  schemas:
+    GatewayResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        status_code: { type: integer }
+        provider_code: { type: string }
+        message: { type: string }
+        task_id: { type: string }
+        status: { type: string }
+        progress: { type: integer, nullable: true }
+        video_url: { type: string }
+        video_urls:
+          type: array
+          items: { type: string }
+        upload_url: { type: string }
+        source_url: { type: string }
+        asset_id: { type: string }
+        warnings:
+          type: array
+          items: { type: string }
+        data:
+          type: object
+          nullable: true
+          additionalProperties: true
+        provider_response: { type: object, additionalProperties: true }
+        error:
+          type: object
+          nullable: true
+          additionalProperties: true
+paths:
+  /api/v1/video/create:
+    post:
+      operationId: createVideo
+      summary: Create a video generation task from prompt and optional frame URLs.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [prompt]
+              properties:
+                prompt:
+                  type: string
+                  description: Video prompt written by Codex or Dify Agent.
+                model:
+                  type: string
+                  default: doubao-seedance-2-0-720p
+                seconds:
+                  type: string
+                  enum: ["3", "5", "10"]
+                  default: "5"
+                ratio:
+                  type: string
+                  enum: ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9"]
+                  default: "16:9"
+                resolution:
+                  type: string
+                  enum: [720p, 1080p]
+                  default: 720p
+                generate_audio:
+                  type: boolean
+                  default: false
+                watermark:
+                  type: boolean
+                  nullable: true
+                first_frame_url:
+                  type: string
+                  description: Public URL for the first frame image.
+                last_frame_url:
+                  type: string
+                  description: Optional last frame URL. Forwarded only when gateway enables last-frame support.
+      responses:
+        "200":
+          description: Video task result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GatewayResponse" }
+  /api/v1/videos/{task_id}:
+    get:
+      operationId: getVideoTask
+      summary: Get RelayDance video task status.
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Video task status.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GatewayResponse" }
+  /api/v1/upload-url:
+    get:
+      operationId: getUploadUrl
+      summary: Get provider upload URL for an image asset.
+      parameters:
+        - name: ext
+          in: query
+          required: true
+          schema: { type: string, enum: [jpg, jpeg, png, webp] }
+        - name: md5
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Upload URL.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GatewayResponse" }
+  /api/v1/assets/virtual/create:
+    post:
+      operationId: createVirtualAsset
+      summary: Create a RelayDance virtual asset from a public source URL.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [source_url]
+              properties:
+                source_url: { type: string }
+                asset_type:
+                  type: string
+                  default: Image
+      responses:
+        "200":
+          description: Asset creation result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GatewayResponse" }
+  /api/v1/assets/{asset_id}/status:
+    get:
+      operationId: getVirtualAssetStatus
+      summary: Get RelayDance virtual asset status.
+      parameters:
+        - name: asset_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Asset status.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GatewayResponse" }

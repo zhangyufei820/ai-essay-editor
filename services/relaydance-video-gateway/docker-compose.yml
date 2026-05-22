@@ -1,0 +1,19 @@
+services:
+  app:
+    build: .
+    image: relaydance-video-gateway:latest
+    container_name: relaydance-video-gateway
+    restart: unless-stopped
+    env_file: .env
+    mem_limit: 512m
+    ports:
+      - "127.0.0.1:${HOST_PORT:-8013}:8000"
+    networks:
+      default:
+      shenxiang-net:
+        aliases:
+          - relaydance-video-gateway
+
+networks:
+  shenxiang-net:
+    external: true

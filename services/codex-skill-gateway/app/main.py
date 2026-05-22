@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import time
+from pathlib import Path
 from typing import AsyncIterator, Any
 from uuid import uuid4
 
@@ -14,10 +15,18 @@ from redis import Redis
 
 from app import __version__
 from app.config import ensure_codex_config, ensure_directories, get_settings
-from app.models import ChatCompletionsRequest, ImageGenerationRequest, RunRequest
+from app.models import AdminRunRequest, ChatCompletionsRequest, CreateSkillRequest, ImageGenerationRequest, RunRequest
 from app.queue import RedisTaskQueue
 from app.registry import get_skill, list_public_skills, load_registry, validate_public_skill
-from app.security import contains_admin_intent, redact, require_bearer, safe_error
+from app.security import (
+    assert_safe_skill_file_path,
+    contains_admin_intent,
+    contains_forbidden_runtime_action,
+    redact,
+    require_admin_bearer,
+    require_bearer,
+    safe_error,
+)
 from app.task_store import TaskStore, now_iso
 
 settings = get_settings()
@@ -58,6 +67,26 @@ def skills() -> dict[str, object]:
 @app.post("/run", dependencies=[Depends(require_bearer)])
 async def run_skill(request: RunRequest) -> dict[str, object]:
     return await submit_task(request)
+
+
+@app.post("/admin/run", dependencies=[Depends(require_admin_bearer)])
+async def admin_run_skill(request: AdminRunRequest) -> dict[str, object]:
+    logger.warning(
+        "admin run requested skill=%s reason_len=%s",
+        request.skill_name,
+        len(request.admin_reason),
+    )
+    return await submit_task(request, allow_admin_intent=True)
+
+
+@app.post("/skills/custom", dependencies=[Depends(require_bearer)])
+def create_custom_skill(request: CreateSkillRequest) -> dict[str, object]:
+    return create_skill_submission(request, actor="user", approved=False)
+
+
+@app.post("/admin/skills/custom", dependencies=[Depends(require_admin_bearer)])
+def admin_create_custom_skill(request: CreateSkillRequest) -> dict[str, object]:
+    return create_skill_submission(request, actor="admin", approved=True)
 
 
 @app.get("/tasks/{task_id}", dependencies=[Depends(require_bearer)])
@@ -490,7 +519,7 @@ def chunk_text(text: str, size: int) -> list[str]:
     return [text[index : index + size] for index in range(0, len(text), size)]
 
 
-async def submit_task(request: RunRequest) -> dict[str, object]:
+async def submit_task(request: RunRequest, allow_admin_intent: bool = False) -> dict[str, object]:
     task_id = f"task_{uuid4().hex[:16]}"
     skill = get_skill(settings, request.skill_name)
     if skill is None:
@@ -510,7 +539,20 @@ async def submit_task(request: RunRequest) -> dict[str, object]:
             "This request was classified as unsafe and was not executed.",
             request.skill_name,
         )
-    if contains_admin_intent(
+    if contains_forbidden_runtime_action(
+        {
+            "user_query": request.user_query,
+            "params": request.params,
+            "metadata": request.metadata,
+        }
+    ):
+        return failed_response(
+            task_id,
+            "FORBIDDEN_RUNTIME_ACTION",
+            "This request asks for forbidden file, server, or destructive operations.",
+            request.skill_name,
+        )
+    if not allow_admin_intent and contains_admin_intent(
         {
             "user_query": request.user_query,
             "params": request.params,
@@ -549,6 +591,77 @@ async def submit_task(request: RunRequest) -> dict[str, object]:
         return queued_response(task_id, request.skill_name, "async", "queued", "任务已进入队列")
     response = public_task_response(waited, preferred_mode="sync")
     return response
+
+
+def create_skill_submission(request: CreateSkillRequest, actor: str, approved: bool) -> dict[str, object]:
+    skill_root = settings.user_skills_dir / ("approved" if approved else "pending") / request.name
+    skill_root_resolved = skill_root.resolve()
+    user_skills_root = settings.user_skills_dir.resolve()
+    if not str(skill_root_resolved).startswith(str(user_skills_root) + "/"):
+        raise HTTPException(status_code=400, detail="Invalid skill path")
+    if skill_root.exists():
+        raise HTTPException(status_code=409, detail="Skill submission already exists")
+
+    files = request.files or [
+        {
+            "path": "SKILL.md",
+            "content": default_skill_content(request),
+        }
+    ]
+    has_skill_md = False
+    for file in files:
+        path_text = file.path if hasattr(file, "path") else str(file["path"])
+        content = file.content if hasattr(file, "content") else str(file["content"])
+        if path_text == "SKILL.md":
+            has_skill_md = True
+        if contains_forbidden_runtime_action({"path": path_text, "content": content}):
+            raise HTTPException(status_code=422, detail="Skill file contains forbidden server or destructive operations")
+        try:
+            safe_path = assert_safe_skill_file_path(path_text)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        target = (skill_root / safe_path).resolve()
+        if not str(target).startswith(str(skill_root_resolved) + "/"):
+            raise HTTPException(status_code=400, detail="Invalid skill file path")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(content, encoding="utf-8")
+    if not has_skill_md:
+        raise HTTPException(status_code=422, detail="SKILL.md is required")
+
+    manifest = {
+        "name": request.name,
+        "display_name": request.display_name or request.name,
+        "description": request.description,
+        "status": "approved" if approved else "pending_review",
+        "actor": actor,
+        "created_at": now_iso(),
+        "delete_allowed": False,
+    }
+    (skill_root / "submission.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+    logger.info("skill submission created name=%s actor=%s approved=%s", request.name, actor, approved)
+    return {
+        "success": True,
+        "name": request.name,
+        "status": manifest["status"],
+        "path": str(skill_root),
+        "message": "Skill submitted for review." if not approved else "Admin skill submission created.",
+    }
+
+
+def default_skill_content(request: CreateSkillRequest) -> str:
+    description = request.description or "User-created skill pending review."
+    display_name = request.display_name or request.name
+    return f"""---
+name: {request.name}
+description: {description}
+---
+
+# {display_name}
+
+{description}
+
+This skill is pending administrator review before production use.
+"""
 
 
 def should_return_async(request: RunRequest, queue_name: str) -> bool:

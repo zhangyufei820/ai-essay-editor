@@ -27,6 +27,7 @@ services:
       - "127.0.0.1:18081:8000"
     volumes:
       - ./runs:/workspace/runs
+      - ./user-skills:/workspace/user-skills
       - ./skills:/opt/codex-skills:ro
       - ./skill_registry.json:/app/skill_registry.json:ro
       - ./codex-home:/codex-home
@@ -43,15 +44,7 @@ services:
       retries: 3
     restart: unless-stopped
     networks:
-      codex-skill-gateway-net: {}
-      docker_default:
-        aliases:
-          - codex-gateway
-          - codex-skill-gateway
-      docker_ssrf_proxy_network:
-        aliases:
-          - codex-gateway
-          - codex-skill-gateway
+      - codex-skill-gateway-net
 
   codex-worker-fast:
     build:
@@ -68,6 +61,7 @@ services:
       WORKER_QUEUES: fast,image
     volumes:
       - ./runs:/workspace/runs
+      - ./user-skills:/workspace/user-skills
       - ./skills:/opt/codex-skills:ro
       - ./skill_registry.json:/app/skill_registry.json:ro
       - ./codex-home:/codex-home
@@ -92,6 +86,7 @@ services:
       WORKER_QUEUES: heavy
     volumes:
       - ./runs:/workspace/runs
+      - ./user-skills:/workspace/user-skills
       - ./skills:/opt/codex-skills:ro
       - ./skill_registry.json:/app/skill_registry.json:ro
       - ./codex-home:/codex-home
@@ -104,7 +99,3 @@ services:
 networks:
   codex-skill-gateway-net:
     name: codex-skill-gateway-net
-  docker_default:
-    external: true
-  docker_ssrf_proxy_network:
-    external: true

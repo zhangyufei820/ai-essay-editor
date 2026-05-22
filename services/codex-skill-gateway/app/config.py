@@ -10,8 +10,10 @@ class Settings:
     service_name: str = "codex-skill-gateway"
     version: str = "0.1.0"
     gateway_api_key: str = ""
+    admin_api_key: str = ""
     redis_url: str = "redis://codex-redis:6379/0"
     runs_dir: Path = Path("/workspace/runs")
+    user_skills_dir: Path = Path("/workspace/user-skills")
     skills_dir: Path = Path("/opt/codex-skills")
     registry_path: Path = Path("/app/skill_registry.json")
     codex_home: Path = Path("/codex-home")
@@ -41,8 +43,10 @@ def _env_int(name: str, default: int) -> int:
 def get_settings() -> Settings:
     return Settings(
         gateway_api_key=os.getenv("GATEWAY_API_KEY", ""),
+        admin_api_key=os.getenv("ADMIN_API_KEY", ""),
         redis_url=os.getenv("REDIS_URL", "redis://codex-redis:6379/0"),
         runs_dir=Path(os.getenv("RUNS_DIR", "/workspace/runs")),
+        user_skills_dir=Path(os.getenv("USER_SKILLS_DIR", "/workspace/user-skills")),
         skills_dir=Path(os.getenv("SKILLS_DIR", "/opt/codex-skills")),
         registry_path=Path(os.getenv("REGISTRY_PATH", "/app/skill_registry.json")),
         codex_home=Path(os.getenv("CODEX_HOME", "/codex-home")),
@@ -62,6 +66,7 @@ def get_settings() -> Settings:
 
 def ensure_directories(settings: Settings) -> None:
     settings.runs_dir.mkdir(parents=True, exist_ok=True)
+    settings.user_skills_dir.mkdir(parents=True, exist_ok=True)
     settings.codex_home.mkdir(parents=True, exist_ok=True)
 
 
@@ -115,6 +120,7 @@ def has_codex_auth(settings: Settings) -> bool:
 def secret_values_for_redaction(settings: Settings) -> list[str]:
     values = [
         settings.gateway_api_key,
+        settings.admin_api_key,
         settings.codex_api_key,
         os.getenv("OPENAI_API_KEY", ""),
     ]

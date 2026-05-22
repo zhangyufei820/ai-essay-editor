@@ -199,13 +199,17 @@ describe('Sprint 5 payment / credits / membership guards', () => {
     const difyChat = read('app/api/dify-chat/route.ts')
     const chatSession = read('app/api/chat-session/route.ts')
     const taskStatus = read('app/api/task-status/route.ts')
+    const mediaTaskStatus = read('app/api/media/tasks/[taskId]/route.ts')
+    const relaydanceVideo = read('app/api/media/video/relaydance/route.ts')
     const saveMessage = read('app/api/save-message/route.ts')
 
     expect(difyChat).toContain('requireUser(request)')
     expect(chatSession).toContain('requireUser(request)')
     expect(taskStatus).toContain('requireUser(request)')
+    expect(mediaTaskStatus).toContain('requireUser(request)')
+    expect(relaydanceVideo).toContain('requireUser(request)')
     expect(saveMessage).toContain('requireUser(request)')
-    expect(`${difyChat}\n${chatSession}\n${taskStatus}\n${saveMessage}`).not.toContain('request.headers.get("X-User-Id")')
+    expect(`${difyChat}\n${chatSession}\n${taskStatus}\n${mediaTaskStatus}\n${relaydanceVideo}\n${saveMessage}`).not.toContain('request.headers.get("X-User-Id")')
   })
 
   it('requires a verified user before syncing Authing profile data', () => {

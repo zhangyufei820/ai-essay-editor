@@ -1,0 +1,143 @@
+import json
+
+import respx
+from httpx import Response
+
+
+def test_missing_gateway_key_returns_401(client):
+    response = client.post("/api/v1/video/create", json={"prompt": "test"})
+
+    assert response.status_code == 401
+    body = response.json()
+    assert body["success"] is False
+    assert body["error"]["message"] == "gateway unauthorized"
+
+
+@respx.mock
+def test_authorization_bearer_auto_prefix(client, auth_headers, provider_base):
+    route = respx.post(f"{provider_base}/v1/video/generations").mock(
+        return_value=Response(200, json={"task_id": "task-1"}),
+    )
+
+    response = client.post(
+        "/api/v1/video/generations",
+        headers=auth_headers,
+        json={
+            "model": "doubao-seedance-2-0-720p",
+            "prompt": "A cinematic test video",
+            "seconds": "5",
+            "metadata": {"ratio": "16:9", "resolution": "720p"},
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["task_id"] == "task-1"
+    assert route.calls.last.request.headers["Authorization"] == "Bearer test-token"
+
+
+@respx.mock
+def test_dify_create_builds_first_frame_payload_and_warns_on_last_frame(client, auth_headers, provider_base):
+    route = respx.post(f"{provider_base}/v1/video/generations").mock(
+        return_value=Response(200, json={"task_id": "task-2"}),
+    )
+
+    response = client.post(
+        "/api/v1/video/create",
+        headers=auth_headers,
+        json={
+            "prompt": "Slow cinematic dolly-in.",
+            "model": "doubao-seedance-2-0-720p",
+            "seconds": 5,
+            "ratio": "16:9",
+            "resolution": "720p",
+            "first_frame_url": "https://cdn.test/first.jpg",
+            "last_frame_url": "https://cdn.test/last.jpg",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["task_id"] == "task-2"
+    assert body["warnings"]
+    sent = json.loads(route.calls.last.request.content)
+    assert sent["seconds"] == "5"
+    assert sent["metadata"]["content"] == [
+        {
+            "type": "image_url",
+            "image_url": {"url": "https://cdn.test/first.jpg"},
+            "role": "first_frame",
+        }
+    ]
+
+
+@respx.mock
+def test_get_video_status_returns_video_url(client, auth_headers, provider_base):
+    respx.get(f"{provider_base}/v1/videos/task-1").mock(
+        return_value=Response(
+            200,
+            json={
+                "id": "task-1",
+                "status": "completed",
+                "progress": 100,
+                "metadata": {"url": "https://cdn.relaydance.com/result.mp4"},
+            },
+        ),
+    )
+
+    response = client.get("/api/v1/videos/task-1", headers=auth_headers)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["task_id"] == "task-1"
+    assert body["status"] == "completed"
+    assert body["video_url"] == "https://cdn.relaydance.com/result.mp4"
+
+
+@respx.mock
+def test_upload_url_uses_pay_domain(client, auth_headers):
+    route = respx.get("https://pay.relaydance.com/api/upload-url").mock(
+        return_value=Response(
+            200,
+            json={
+                "exists": False,
+                "upload_url": "https://r2.test/upload",
+                "source_url": "https://cdn.relaydance.com/source.jpg",
+            },
+        ),
+    )
+
+    response = client.get(
+        "/api/v1/upload-url?ext=jpg&md5=0123456789abcdef0123456789abcdef",
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["upload_url"] == "https://r2.test/upload"
+    assert route.calls.last.request.url.host == "pay.relaydance.com"
+
+
+def test_raw_rejects_full_url(client, auth_headers):
+    response = client.post(
+        "/api/v1/raw",
+        headers=auth_headers,
+        json={"method": "POST", "path": "https://evil.test/v1/video/generations", "body": {}},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["success"] is False
+
+
+@respx.mock
+def test_raw_allows_video_path(client, auth_headers, provider_base):
+    route = respx.post(f"{provider_base}/v1/video/generations").mock(
+        return_value=Response(200, json={"task_id": "task-raw"}),
+    )
+
+    response = client.post(
+        "/api/v1/raw",
+        headers=auth_headers,
+        json={"method": "POST", "path": "/v1/video/generations", "body": {"model": "x"}},
+    )
+
+    assert response.status_code == 200
+    assert route.called

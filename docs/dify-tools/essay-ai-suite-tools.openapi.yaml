@@ -1,0 +1,72 @@
+openapi: 3.0.3
+info:
+  title: Essay AI Suite OCR Tools
+  version: 0.1.0
+  description: Dify tools for OCR and document extraction through essay-ai-suite.
+servers:
+  - url: http://essay-ai-suite:3100
+security:
+  - ApiTokenAuth: []
+components:
+  securitySchemes:
+    ApiTokenAuth:
+      type: apiKey
+      in: header
+      name: x-api-token
+  schemas:
+    GenericResponse:
+      type: object
+      additionalProperties: true
+paths:
+  /api/ocr/image:
+    post:
+      operationId: recognizeImage
+      summary: Recognize text from one image.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: OCR request accepted by essay-ai-suite. Usually pass image_url or base64 image fields used by the OCR provider.
+              additionalProperties: true
+      responses:
+        "200":
+          description: OCR result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GenericResponse" }
+  /api/ocr/batch:
+    post:
+      operationId: recognizeImages
+      summary: Recognize text from multiple images.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: Batch OCR result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GenericResponse" }
+  /api/doc/extract:
+    post:
+      operationId: extractDocument
+      summary: Extract text from a document.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: Document extraction result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GenericResponse" }

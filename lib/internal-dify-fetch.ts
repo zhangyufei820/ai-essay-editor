@@ -3,6 +3,7 @@ import { Agent } from "undici"
 const INTERNAL_HOSTS = new Set([
   "docker-api-1",
   "dify-image-gateway",
+  "relaydance-video-gateway",
   "localhost",
   "127.0.0.1",
   "host.docker.internal",

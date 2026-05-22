@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireUser } from "@/lib/auth/verified-user"
-import { getTaskRunsForUser } from "@/lib/ai-task-trace"
+import { getTaskRunsForUser, normalizeMediaTask } from "@/lib/ai-task-trace"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -21,5 +21,8 @@ export async function GET(request: NextRequest) {
     limit: Number.isFinite(limit) ? Math.min(50, Math.max(1, Math.round(limit))) : 10,
   })
 
-  return NextResponse.json({ tasks })
+  return NextResponse.json({
+    tasks,
+    mediaTasks: tasks.map(normalizeMediaTask),
+  })
 }

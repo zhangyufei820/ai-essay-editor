@@ -1,0 +1,149 @@
+openapi: 3.0.3
+info:
+  title: Suno Music Gateway Tools
+  version: 0.1.0
+  description: Dify tools for Suno music generation through the ViVaAPI gateway.
+servers:
+  - url: http://vivaapi-suno-gateway:8000
+security:
+  - GatewayKeyAuth: []
+components:
+  securitySchemes:
+    GatewayKeyAuth:
+      type: apiKey
+      in: header
+      name: X-Gateway-Key
+  schemas:
+    GatewayResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        status_code: { type: integer }
+        provider_code: { type: string }
+        message: { type: string }
+        task_id: { type: string }
+        clip_id: { type: string }
+        status: { type: string }
+        audio_urls:
+          type: array
+          items: { type: string }
+        image_urls:
+          type: array
+          items: { type: string }
+        video_urls:
+          type: array
+          items: { type: string }
+        wav_url: { type: string }
+        data:
+          type: object
+          nullable: true
+          additionalProperties: true
+        provider_response: { type: object, additionalProperties: true }
+        error:
+          type: object
+          nullable: true
+          additionalProperties: true
+paths:
+  /api/v1/suno/music/custom:
+    post:
+      operationId: createCustomMusic
+      summary: Create a custom song task.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [prompt, title]
+              properties:
+                prompt: { type: string }
+                title: { type: string }
+                tags:
+                  type: string
+                  default: ""
+                negative_tags:
+                  type: string
+                  default: ""
+                mv:
+                  type: string
+                  default: chirp-v5
+                generation_type:
+                  type: string
+                  default: TEXT
+                notify_hook:
+                  type: string
+                  nullable: true
+      responses:
+        "200":
+          description: Music task.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GatewayResponse" }
+  /api/v1/suno/music/inspiration:
+    post:
+      operationId: createInspiredMusic
+      summary: Create music from a description prompt.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [gpt_description_prompt]
+              properties:
+                gpt_description_prompt: { type: string }
+                make_instrumental:
+                  type: boolean
+                  default: false
+                mv:
+                  type: string
+                  default: chirp-v5
+                prompt:
+                  type: string
+                  nullable: true
+                notify_hook:
+                  type: string
+                  nullable: true
+      responses:
+        "200":
+          description: Music task.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GatewayResponse" }
+  /api/v1/suno/lyrics:
+    post:
+      operationId: createLyrics
+      summary: Create a lyrics generation task.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [prompt]
+              properties:
+                prompt: { type: string }
+                notify_hook:
+                  type: string
+                  nullable: true
+      responses:
+        "200":
+          description: Lyrics task.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GatewayResponse" }
+  /api/v1/suno/tasks/{task_id}:
+    get:
+      operationId: getMusicTask
+      summary: Get Suno task status.
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Task status.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GatewayResponse" }

@@ -1,0 +1,119 @@
+openapi: 3.0.3
+info:
+  title: Shenxiang Search Gateway Tools
+  version: 0.1.0
+  description: Dify tools for secure web search through the Shenxiang Search Gateway.
+servers:
+  - url: http://search-gateway:8000
+security:
+  - GatewayKeyAuth: []
+components:
+  securitySchemes:
+    GatewayKeyAuth:
+      type: apiKey
+      in: header
+      name: X-Gateway-Key
+  schemas:
+    SearchResult:
+      type: object
+      properties:
+        title: { type: string }
+        url: { type: string }
+        snippet: { type: string }
+        source: { type: string }
+        published_at: { type: string, nullable: true }
+        score: { type: number, nullable: true }
+        raw_content: { type: string, nullable: true }
+    GatewayResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        status_code: { type: integer }
+        provider_code: { type: string }
+        message: { type: string }
+        provider: { type: string }
+        query: { type: string }
+        answer: { type: string }
+        results:
+          type: array
+          items: { $ref: "#/components/schemas/SearchResult" }
+        data: { type: object, additionalProperties: true }
+        provider_response: { type: object, additionalProperties: true }
+        warnings:
+          type: array
+          items: { type: string }
+        error:
+          type: object
+          nullable: true
+          additionalProperties: true
+paths:
+  /api/v1/search:
+    post:
+      operationId: webSearch
+      summary: Search the web.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [query]
+              properties:
+                query:
+                  type: string
+                  description: Search query, max 500 characters.
+                provider:
+                  type: string
+                  enum: [auto, tavily, brave]
+                  default: auto
+                max_results:
+                  type: integer
+                  minimum: 1
+                  maximum: 10
+                  default: 5
+                search_depth:
+                  type: string
+                  enum: [basic, advanced]
+                  default: basic
+                include_answer:
+                  type: boolean
+                  default: false
+                include_raw_content:
+                  type: boolean
+                  default: false
+      responses:
+        "200":
+          description: Normalized search result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GatewayResponse" }
+  /api/v1/extract:
+    post:
+      operationId: webExtract
+      summary: Extract readable content from public web pages.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [urls]
+              properties:
+                urls:
+                  type: array
+                  minItems: 1
+                  maxItems: 5
+                  items: { type: string }
+                include_images:
+                  type: boolean
+                  default: false
+                extract_depth:
+                  type: string
+                  enum: [basic, advanced]
+                  default: basic
+      responses:
+        "200":
+          description: Extracted page content.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GatewayResponse" }

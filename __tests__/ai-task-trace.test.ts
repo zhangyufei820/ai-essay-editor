@@ -1,8 +1,21 @@
 import {
   createRequestId,
   extractArtifactsFromText,
+  normalizeMediaTask,
   sanitizeForTrace,
 } from "@/lib/ai-task-trace"
+
+jest.mock("@/lib/relaydance-gateway-client", () => ({
+  getRelayDanceVideoTask: jest.fn(),
+}))
+
+jest.mock("@/lib/ai-task-trace", () => {
+  const actual = jest.requireActual("@/lib/ai-task-trace")
+  return {
+    ...actual,
+    updateTaskRun: jest.fn(async () => undefined),
+  }
+})
 
 describe("ai task trace helpers", () => {
   it("creates prefixed request ids", () => {
@@ -25,13 +38,113 @@ describe("ai task trace helpers", () => {
     const artifacts = extractArtifactsFromText([
       "完成: https://www.shenxiang.school/slides/script-to-video-flow-v2.html",
       "图片: /api/openclaw-media-sign/tool-image-generation/result.png",
+      "视频: https://cdn.example.com/output.mp4",
+      "音频: https://cdn.example.com/output.wav",
       "PDF: https://www.shenxiang.school/slides/report.pdf",
     ].join("\n"))
 
     expect(artifacts).toEqual(expect.arrayContaining([
       expect.objectContaining({ type: "html" }),
       expect.objectContaining({ type: "image" }),
+      expect.objectContaining({ type: "video" }),
+      expect.objectContaining({ type: "audio" }),
       expect.objectContaining({ type: "pdf" }),
     ]))
+  })
+
+  it("normalizes task records for the unified media task center", () => {
+    const task = normalizeMediaTask({
+      id: "video_req_1",
+      user_id: "user_1",
+      kind: "video_generation",
+      status: "succeeded",
+      progress: 72,
+      request_id: "video_req_1",
+      trace_id: "trace_1",
+      upstream_task_id: "provider_task_1",
+      artifacts: [],
+      metadata: {
+        gateway_status: "completed",
+        temporary_video_url: "https://cdn.relaydance.com/result.mp4",
+        expires_at: "2026-05-22T08:00:00.000Z",
+        token: "secret-value",
+      },
+      created_at: "2026-05-22T07:00:00.000Z",
+      updated_at: "2026-05-22T07:01:00.000Z",
+      completed_at: "2026-05-22T07:01:00.000Z",
+    })
+
+    expect(task).toEqual(expect.objectContaining({
+      id: "video_req_1",
+      type: "video_generation",
+      status: "completed",
+      progress: 100,
+      upstream_task_id: "provider_task_1",
+    }))
+    expect(task.outputs).toEqual([
+      expect.objectContaining({
+        type: "video",
+        url: "https://cdn.relaydance.com/result.mp4",
+        download_url: "https://cdn.relaydance.com/result.mp4",
+        expires_at: "2026-05-22T08:00:00.000Z",
+      }),
+    ])
+    expect(task.metadata.token).toBe("[redacted]")
+  })
+
+  it("refreshes RelayDance tasks into completed unified media tasks", async () => {
+    const { refreshMediaTask, normalizeRefreshedMediaTask } = await import("@/lib/media-task-refresh")
+    const { getRelayDanceVideoTask } = await import("@/lib/relaydance-gateway-client")
+    const { updateTaskRun } = await import("@/lib/ai-task-trace")
+
+    ;(getRelayDanceVideoTask as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      payload: {
+        success: true,
+        status: "completed",
+        progress: 100,
+        video_url: "https://cdn.relaydance.com/final.mp4",
+        provider_response: {
+          id: "provider_task_1",
+          status: "completed",
+          metadata: { url: "https://cdn.relaydance.com/final.mp4" },
+        },
+      },
+      error: null,
+    })
+
+    const refreshed = await refreshMediaTask({
+      id: "video_req_1",
+      user_id: "user_1",
+      kind: "video_generation",
+      status: "running",
+      progress: 30,
+      request_id: "video_req_1",
+      upstream_task_id: "provider_task_1",
+      artifacts: [],
+      metadata: {
+        provider: "relaydance",
+        expires_at: "2026-05-22T08:00:00.000Z",
+      },
+    })
+    const normalized = normalizeRefreshedMediaTask(refreshed)
+
+    expect(getRelayDanceVideoTask).toHaveBeenCalledWith("provider_task_1")
+    expect(updateTaskRun).toHaveBeenCalledWith("video_req_1", expect.objectContaining({
+      status: "succeeded",
+      stage: "视频生成完成",
+      artifacts: [
+        expect.objectContaining({
+          type: "video",
+          url: "https://cdn.relaydance.com/final.mp4",
+        }),
+      ],
+    }))
+    expect(normalized.status).toBe("completed")
+    expect(normalized.outputs[0]).toEqual(expect.objectContaining({
+      type: "video",
+      url: "https://cdn.relaydance.com/final.mp4",
+    }))
   })
 })
