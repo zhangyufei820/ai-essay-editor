@@ -140,6 +140,39 @@ export async function claimFreeTrial(
   })
 }
 
+export async function hasPaidMembership(userId: string): Promise<boolean> {
+  try {
+    const supabase = getSupabaseAdmin()
+
+    const { data: creditUser, error: creditError } = await supabase
+      .from("user_credits")
+      .select("user_id, is_pro")
+      .eq("user_id", userId)
+      .maybeSingle()
+
+    if (creditError) {
+      logger.warn("[free-trial] failed to check paid user from user_credits", { userId, error: creditError })
+    }
+    if (creditUser?.is_pro) return true
+
+    const { data: orders, error: orderError } = await supabase
+      .from("orders")
+      .select("product_id")
+      .eq("user_id", userId)
+      .eq("status", "paid")
+
+    if (orderError) {
+      logger.warn("[free-trial] failed to check paid user from orders", { userId, error: orderError })
+      return false
+    }
+
+    return (orders || []).some((order) => isMembershipProduct(String(order.product_id)))
+  } catch (error) {
+    logger.warn("[free-trial] hasPaidMembership failed", { userId, error })
+    return false
+  }
+}
+
 export async function grantFreeTrial(
   userId: string,
   options: GrantFreeTrialOptions = {},

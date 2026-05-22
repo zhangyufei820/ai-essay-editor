@@ -81,6 +81,7 @@ function createSupabaseMock(seed: Partial<Tables> = {}) {
     monitor_runs: [],
     user_trial_status: [],
     user_credits: [],
+    orders: [],
     credit_transactions: [],
     ...seed,
   }
@@ -410,8 +411,87 @@ describe("trial credit libraries", () => {
     ])
   })
 
-  it("consumeWithTrialCredits falls back to real credits for non-trial users", async () => {
+  it("consumeWithTrialCredits auto-grants campaign trial for users without an active grant while campaign is open", async () => {
     const supabase = createSupabaseMock()
+    ;(getSupabaseAdmin as jest.Mock).mockReturnValue(supabase)
+
+    const result = await consumeWithTrialCredits({
+      userId: "user-2",
+      amount: 50,
+      actionType: "essay_review",
+      referenceId: "msg-3",
+    })
+
+    expect(result).toMatchObject({
+      success: true,
+      blocked: true,
+      reason: "survey_required",
+      shouldUseRealCredits: false,
+      trialUsed: 0,
+      realCreditsUsed: 0,
+      realCreditsSpent: false,
+    })
+    expect(supabase.tables.free_trial_grants).toEqual([
+      expect.objectContaining({
+        user_id: "user-2",
+        grant_type: "campaign",
+        daily_quota: 2000,
+        requires_daily_survey: true,
+        status: "active",
+        metadata: expect.objectContaining({ source: "auto_trial_consumption_campaign" }),
+      }),
+    ])
+    expect(spendRealCredits).not.toHaveBeenCalled()
+  })
+
+  it("consumeWithTrialCredits auto-grants no-survey paid extension for paid users without an active grant", async () => {
+    const supabase = createSupabaseMock({
+      user_credits: [{ user_id: "paid-user", credits: 500, is_pro: true }],
+    })
+    ;(getSupabaseAdmin as jest.Mock).mockReturnValue(supabase)
+
+    const result = await consumeWithTrialCredits({
+      userId: "paid-user",
+      amount: 50,
+      actionType: "essay_review",
+      referenceId: "paid-msg-1",
+    })
+
+    expect(result).toMatchObject({
+      success: true,
+      blocked: false,
+      shouldUseRealCredits: false,
+      trialUsed: 50,
+      realCreditsUsed: 0,
+      remainingToday: 1950,
+      realCreditsSpent: false,
+    })
+    expect(supabase.tables.free_trial_grants).toEqual([
+      expect.objectContaining({
+        user_id: "paid-user",
+        grant_type: "paid_extension",
+        requires_daily_survey: false,
+        metadata: expect.objectContaining({ source: "auto_trial_consumption_paid_extension" }),
+      }),
+    ])
+    expect(supabase.tables.trial_credit_usages).toEqual([
+      expect.objectContaining({
+        user_id: "paid-user",
+        amount: 50,
+        reference_id: "paid-msg-1",
+      }),
+    ])
+    expect(spendRealCredits).not.toHaveBeenCalled()
+  })
+
+  it("consumeWithTrialCredits falls back to real credits when campaign runtime flag is disabled for non-trial users", async () => {
+    const supabase = createSupabaseMock({
+      free_trial_runtime_config: [{
+        id: "runtime-campaign-off",
+        config_key: RUNTIME_CONFIG_KEYS.campaign,
+        config_value: { enabled: false },
+      }],
+    })
     ;(getSupabaseAdmin as jest.Mock).mockReturnValue(supabase)
 
     const result = await consumeWithTrialCredits({

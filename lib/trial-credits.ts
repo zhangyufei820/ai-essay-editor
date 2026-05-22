@@ -1,7 +1,7 @@
 import { spendRealCredits, type BillingAuditMetadata } from "@/lib/credits"
 import { recordCampaignEvent } from "@/lib/campaign-events"
-import { getActiveTrialGrant, getUserTrialStatus, type FreeTrialGrant } from "@/lib/free-trial"
-import { isRuntimeConsumptionEnabled } from "@/lib/free-trial-runtime-config"
+import { getActiveTrialGrant, getUserTrialStatus, grantFreeTrial, hasPaidMembership, type FreeTrialGrant } from "@/lib/free-trial"
+import { getAllRuntimeFlags, isRuntimeConsumptionEnabled } from "@/lib/free-trial-runtime-config"
 import { logger } from "@/lib/logger"
 import { hasSubmittedSurveyToday } from "@/lib/surveys"
 import { getSupabaseAdmin } from "@/lib/supabase-admin"
@@ -82,6 +82,33 @@ function normalizeAmount(amount: number): number | null {
 
 async function getGrantOrNull(userId: string): Promise<FreeTrialGrant | null> {
   return getBestActiveGrantForConsumption(userId)
+}
+
+async function ensureGrantForOpenCampaign(userId: string): Promise<FreeTrialGrant | null> {
+  const existingGrant = await getGrantOrNull(userId)
+  if (existingGrant) return existingGrant
+
+  const flags = await getAllRuntimeFlags()
+  if (!flags.campaignEnabled) return null
+
+  const paidUser = await hasPaidMembership(userId)
+  const grantResult = await grantFreeTrial(userId, {
+    grantType: paidUser ? "paid_extension" : "campaign",
+    days: 60,
+    dailyQuota: 2000,
+    requiresDailySurvey: !paidUser,
+    metadata: {
+      source: paidUser ? "auto_trial_consumption_paid_extension" : "auto_trial_consumption_campaign",
+      reason: "auto_grant_before_trial_consumption",
+    },
+  })
+
+  if (!grantResult.success || !grantResult.data) {
+    logger.warn("[trial-credits] auto grant before consumption failed", { userId, error: grantResult.error })
+    return null
+  }
+
+  return grantResult.data
 }
 
 function sortGrantsForTrialConsumption(left: FreeTrialGrant, right: FreeTrialGrant): number {
@@ -166,7 +193,7 @@ export async function getTodayTrialUsage(userId: string): Promise<TrialCreditOpe
 
 export async function getTodayTrialRemaining(userId: string): Promise<TrialCreditOperationResult<number>> {
   try {
-    const grant = await getGrantOrNull(userId)
+    const grant = await ensureGrantForOpenCampaign(userId)
     if (!grant) return { success: true, data: 0, error: null }
 
     const usage = await getTodayTrialUsage(userId)
@@ -180,7 +207,7 @@ export async function getTodayTrialRemaining(userId: string): Promise<TrialCredi
 
 export async function shouldRequireSurveyBeforeTrialUse(userId: string): Promise<TrialCreditOperationResult<boolean>> {
   try {
-    const grant = await getGrantOrNull(userId)
+    const grant = await ensureGrantForOpenCampaign(userId)
     if (!grant) {
       return { success: true, data: false, error: null }
     }
@@ -474,7 +501,7 @@ export async function consumeWithTrialCredits(
       }
     }
 
-    const grant = await getGrantOrNull(input.userId)
+    const grant = await ensureGrantForOpenCampaign(input.userId)
     if (!grant) {
       if (input.spendRealCredits === false) {
         return {
