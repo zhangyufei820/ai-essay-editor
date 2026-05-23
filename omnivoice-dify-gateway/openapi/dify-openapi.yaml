@@ -4,7 +4,7 @@ info:
   version: 0.1.0
   description: JSON-first speech generation gateway for Dify and shenxiang.school.
 servers:
-  - url: https://voice-api.shenxiang.school
+  - url: http://omnivoice-gateway:8000
 security:
   - ApiKeyAuth: []
 components:
@@ -269,4 +269,3 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ErrorEnvelope" }
-

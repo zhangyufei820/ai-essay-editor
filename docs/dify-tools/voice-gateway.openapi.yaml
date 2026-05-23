@@ -4,7 +4,7 @@ info:
   version: 0.1.0
   description: Dify tools for the formal OmniVoice gateway.
 servers:
-  - url: https://voice-api.shenxiang.school
+  - url: http://omnivoice-gateway:8000
 security:
   - ApiKeyAuth: []
 components:

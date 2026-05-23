@@ -52,6 +52,11 @@ services:
       - gateway-jobs:/data/jobs
     ports:
       - "127.0.0.1:8010:8000"
+    networks:
+      default:
+      shenxiang-net:
+        aliases:
+          - omnivoice-gateway
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:8000/healthz"]
       interval: 30s
@@ -80,3 +85,7 @@ volumes:
   gateway-jobs:
   caddy-data:
   caddy-config:
+
+networks:
+  shenxiang-net:
+    external: true
