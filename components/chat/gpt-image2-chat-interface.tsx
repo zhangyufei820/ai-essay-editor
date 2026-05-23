@@ -193,6 +193,12 @@ function mapImageError(error: unknown): string {
 
   if (raw === "empty_prompt") return "提示词不能为空。"
   if (raw === "missing_edit_image") return "图片编辑模式需要上传原图。"
+  if (raw.includes("DIFY_CREDENTIAL_INVALID") || raw.includes("Access token is invalid") || raw.includes("工作流凭据失效")) {
+    return "图像工作流凭据失效，请管理员更新 Dify 应用 API Key 后重试。"
+  }
+  if (raw.includes("DIFY_CREDENTIAL_MISSING")) {
+    return "图像工作流凭据未配置，请管理员补齐 Dify 应用 API Key。"
+  }
   if (raw.includes("IMAGE_TASK_FORBIDDEN")) return `图片任务权限校验失败，请重新提交。${requestSuffix}`
   if (raw.includes("IMAGE2_ACCESS_DENIED")) return "GPT Image 2 当前共创体验期内登录用户可用，请先登录后生成图片。"
   if (raw.includes("CHAT_SESSION_FORBIDDEN")) return `当前对话校验失败，请新建对话后重试。${requestSuffix}`

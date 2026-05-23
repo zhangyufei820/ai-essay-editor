@@ -612,6 +612,27 @@ const IMAGE_GATEWAY_URL = (process.env.DIFY_IMAGE_GATEWAY_URL || "http://dify-im
 const DEFAULT_DIFY_KEY = process.env.ESSAY_CORRECTION_API_KEY || process.env.DIFY_API_KEY 
 const MISSING_DIFY_CREDENTIAL_STATUS = 503
 
+function isDifyCredentialInvalidResponse(status: number, body: string) {
+  const normalized = body.toLowerCase()
+  return (
+    status === 401 &&
+    (
+      normalized.includes("access token is invalid") ||
+      normalized.includes('"code":"unauthorized"') ||
+      normalized.includes('"code": "unauthorized"')
+    )
+  )
+}
+
+function getDifyCredentialInvalidMessage(model: string | null | undefined, keySource: string) {
+  const label = model === "gemini-image"
+    ? "Gemini 图像工作流"
+    : model === "banana-2-pro"
+      ? "Banana 图像工作流"
+      : "Dify 工作流"
+  return `${label}凭据失效，请管理员在服务器环境变量 ${keySource || "DIFY_API_KEY"} 中配置有效的 Dify 应用 API Key。`
+}
+
 function nowMs() {
   return Date.now()
 }
@@ -2346,17 +2367,23 @@ export async function POST(request: NextRequest) {
 
     if (!response.ok) {
         const errorText = await response.text()
+        const isDifyCredentialInvalid = isDifyCredentialInvalidResponse(response.status, errorText)
+        const handledErrorCode = isDifyCredentialInvalid ? "DIFY_CREDENTIAL_INVALID" : `DIFY_${response.status}`
+        const handledErrorMessage = isDifyCredentialInvalid
+          ? getDifyCredentialInvalidMessage(model, keySource)
+          : sanitizeUpstreamErrorText(errorText, "服务暂时不可用，请稍后重试。")
         console.error(`❌ Dify API 最终报错 (${model}):`, {
           status: response.status,
           bodyLength: errorText.length,
           sanitizedBody: sanitizeForTrace(errorText),
+          errorCode: handledErrorCode,
         })
         await updateTaskRun(taskRun.id, {
           status: "failed",
           stage: "Dify 返回错误",
           progress: 100,
-          errorMessage: errorText.slice(0, 1000),
-          errorCode: `DIFY_${response.status}`,
+          errorMessage: handledErrorMessage,
+          errorCode: handledErrorCode,
           sanitizedError: { status: response.status, body: sanitizeForTrace(errorText) },
         })
         
@@ -2371,7 +2398,11 @@ export async function POST(request: NextRequest) {
         }
         
         return new Response(
-          JSON.stringify({ error: sanitizeUpstreamErrorText(errorText, "服务暂时不可用，请稍后重试。") }),
+          JSON.stringify({
+            error: handledErrorMessage,
+            message: handledErrorMessage,
+            code: handledErrorCode,
+          }),
           { status: response.status },
         )
     }

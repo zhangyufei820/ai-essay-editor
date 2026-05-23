@@ -163,9 +163,19 @@ describe('Sprint 5 payment / credits / membership guards', () => {
 
     expect(chatRoute).toContain('const MISSING_DIFY_CREDENTIAL_STATUS = 503')
     expect(chatRoute).toContain('code: "DIFY_CREDENTIAL_MISSING"')
+    expect(chatRoute).toContain('function isDifyCredentialInvalidResponse')
+    expect(chatRoute).toContain('code: handledErrorCode')
+    expect(chatRoute).toContain('DIFY_CREDENTIAL_INVALID')
     expect(chatRoute).toContain('请在生产环境变量中配置')
     expect(uploadRoute).toContain('code: "DIFY_UPLOAD_CREDENTIAL_MISSING"')
     expect(uploadRoute).toContain('status: 503')
+  })
+
+  it('does not mislabel Dify credential failures as user login failures in image workspaces', () => {
+    const image2 = read('components/chat/gpt-image2-chat-interface.tsx')
+
+    expect(image2).toContain('DIFY_CREDENTIAL_INVALID')
+    expect(image2).toContain('图像工作流凭据失效，请管理员更新 Dify 应用 API Key 后重试。')
   })
 
   it('keeps the standalone image workspace generation request independent from stale chat session ownership', () => {
