@@ -828,6 +828,7 @@ def select_skill(text: str) -> str:
             return skill.name
 
     rules = [
+        ("storyboard-creator", ["故事板", "分镜", "分镜表", "脚本转视频", "视频脚本", "视频提示词", "镜头列表", "shot list", "storyboard"]),
         ("shenxiang_image_gen", ["数学动画", "manim", "函数动画", "可视化动画", "生成图片", "生图", "画图", "gpt-image"]),
         ("literature_review", ["文献综述", "研究现状", "检索关键词", "doi", "literature"]),
         ("paper_polish", ["润色", "降口语化", "摘要润色", "polish"]),
@@ -851,4 +852,5 @@ def task_type_for_skill(skill_name: str) -> str:
         "teacher_lesson_plan": "teacher_resource",
         "study_plan": "study_planning",
         "shenxiang_image_gen": "image_generation",
+        "storyboard-creator": "video_storyboard",
     }.get(skill_name, "general_chat")

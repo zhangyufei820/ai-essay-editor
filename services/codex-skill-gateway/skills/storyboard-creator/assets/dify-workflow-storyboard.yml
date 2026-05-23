@@ -1,0 +1,28 @@
+app:
+  name: storyboard-creator-simple
+  description: Minimal Dify flow idea for calling Codex storyboard-creator.
+inputs:
+  prompt:
+    type: paragraph
+    required: true
+  orientation:
+    type: select
+    required: false
+    default: "16:9"
+    options: ["16:9", "9:16", "1:1"]
+  duration_seconds:
+    type: number
+    required: false
+    default: 30
+flow:
+  - node: codex_storyboard
+    type: llm_or_http
+    instruction: >
+      Call Codex Skill Gateway with skill_name=storyboard-creator.
+      Ask for JSON plus Markdown storyboard. Pass prompt, orientation,
+      duration_seconds, image_model, and video_model as params.
+  - node: output
+    type: answer
+    fields:
+      storyboard_json: "{{ codex_storyboard.json }}"
+      storyboard_markdown: "{{ codex_storyboard.markdown }}"

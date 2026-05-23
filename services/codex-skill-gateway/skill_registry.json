@@ -82,5 +82,17 @@
     "sandbox": "workspace-write",
     "enabled": true,
     "public": true
+  },
+  "storyboard-creator": {
+    "name": "storyboard-creator",
+    "display_name": "AI 故事板",
+    "category": "video_storyboard",
+    "description": "用于剧本解析、分镜表、角色一致性卡、场景卡、图像提示词和视频生成提示词。",
+    "queue": "heavy",
+    "timeout": 300,
+    "cost_points": 8,
+    "sandbox": "read-only",
+    "enabled": true,
+    "public": true
   }
 }
