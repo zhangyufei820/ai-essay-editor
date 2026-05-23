@@ -828,7 +828,7 @@ def select_skill(text: str) -> str:
             return skill.name
 
     rules = [
-        ("storyboard-creator", ["故事板", "分镜", "分镜表", "脚本转视频", "视频脚本", "视频提示词", "镜头列表", "shot list", "storyboard"]),
+        ("storyboard-creator", ["故事板", "分镜", "分镜表", "脚本转视频", "视频脚本", "视频提示词", "镜头列表", "剧组通告", "拍摄工作单", "首尾帧", "图片转视频", "图生视频", "shot list", "shot list sheet", "storyboard"]),
         ("shenxiang_image_gen", ["数学动画", "manim", "函数动画", "可视化动画", "生成图片", "生图", "画图", "gpt-image"]),
         ("literature_review", ["文献综述", "研究现状", "检索关键词", "doi", "literature"]),
         ("paper_polish", ["润色", "降口语化", "摘要润色", "polish"]),

@@ -7,8 +7,24 @@
     "schema_version": { "type": "string" },
     "title": { "type": "string" },
     "logline": { "type": "string" },
-    "orientation": { "type": "string", "enum": ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9"] },
+    "orientation": { "type": "string", "enum": ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9", "2.39:1"] },
     "target_duration_seconds": { "type": "integer", "minimum": 3, "maximum": 600 },
+    "platform_profile": {
+      "type": "object",
+      "properties": {
+        "target_platform": { "type": "string" },
+        "scene_property": { "type": "string" },
+        "story_beat": { "type": "string" },
+        "reference_image_types": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["character", "scene", "prop", "start_frame", "end_frame"]
+          }
+        }
+      },
+      "additionalProperties": true
+    },
     "style": {
       "type": "object",
       "required": ["genre", "visual_style", "color_palette", "mood"],
@@ -60,17 +76,35 @@
         "required": ["id", "scene_id", "duration_seconds", "shot_type", "camera_movement", "visual_description", "image_prompt", "video_prompt", "model_hints"],
         "properties": {
           "id": { "type": "string" },
+          "shot_number": { "type": "string" },
           "scene_id": { "type": "string" },
           "duration_seconds": { "type": "integer", "minimum": 1, "maximum": 60 },
+          "timecode": {
+            "type": "object",
+            "properties": {
+              "start": { "type": "string" },
+              "end": { "type": "string" },
+              "label": { "type": "string" }
+            },
+            "additionalProperties": true
+          },
+          "shot_size": { "type": "string" },
           "shot_type": { "type": "string" },
+          "camera_angle": { "type": "string" },
           "camera_movement": { "type": "string" },
+          "cut": { "type": "string" },
+          "camera_settings": { "type": "string" },
           "visual_description": { "type": "string" },
           "action": { "type": "string" },
           "emotion": { "type": "string" },
           "dialogue_or_subtitle": { "type": "string" },
+          "dialogue_sfx": { "type": "string" },
+          "frame_prompt": { "type": "string" },
           "image_prompt": { "type": "string" },
           "video_prompt": { "type": "string" },
           "negative_prompt": { "type": "string" },
+          "key_shot": { "type": "boolean" },
+          "key_shot_reason": { "type": "string" },
           "model_hints": {
             "type": "object",
             "required": ["image_model", "video_model", "ratio", "seconds"],
@@ -85,6 +119,44 @@
         },
         "additionalProperties": true
       }
+    },
+    "production_sheet": {
+      "type": "object",
+      "properties": {
+        "header": {
+          "type": "object",
+          "properties": {
+            "project_title": { "type": "string" },
+            "scene_number": { "type": "string" },
+            "scene_property": { "type": "string" },
+            "time_of_day": { "type": "string" },
+            "director": { "type": "string" },
+            "dp": { "type": "string" },
+            "shot_count": { "type": "integer", "minimum": 1 },
+            "target_platform": { "type": "string" },
+            "aspect_ratio": { "type": "string" }
+          },
+          "additionalProperties": true
+        },
+        "columns": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "footer": {
+          "type": "object",
+          "properties": {
+            "page": { "type": "string" },
+            "total_runtime": { "type": "string" },
+            "revision": { "type": "string" },
+            "effective_date": { "type": "string" },
+            "dp_signature": { "type": "string" },
+            "director_signature": { "type": "string" }
+          },
+          "additionalProperties": true
+        },
+        "shot_list_sheet_image_prompt": { "type": "string" }
+      },
+      "additionalProperties": true
     },
     "production_notes": {
       "type": "array",

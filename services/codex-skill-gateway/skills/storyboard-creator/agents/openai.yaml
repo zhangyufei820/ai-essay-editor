@@ -1,7 +1,7 @@
 interface:
   display_name: "AI 故事板"
-  short_description: "剧本解析、分镜表、角色一致性与视频提示词"
+  short_description: "工业 Shot List Sheet、分镜表、角色一致性与视频提示词"
   brand_color: "#2F7D5C"
-  default_prompt: "Use $storyboard-creator to turn this idea into a JSON storyboard and readable shot list."
+  default_prompt: "Use $storyboard-creator to turn this idea into an industrial Shot List Sheet with JSON, image prompts, and video prompts."
 policy:
   allow_implicit_invocation: true
