@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: RelayDance Video Gateway Tools
   version: 0.1.0
-  description: Dify tools for RelayDance video generation through the private gateway.
+  description: Dify tools for RelayDance video generation only. Use createVideo only when the user explicitly asks for video, MP4, image-to-video, text-to-video, short film, or first/last-frame video. For image-only requests such as "生成图片", "画图", posters, covers, illustrations, logos, or icons, use the Image Gateway generateImage/submitImageTask tools instead.
 servers:
   - url: http://relaydance-video-gateway:8000
 security:
@@ -47,7 +47,7 @@ paths:
   /api/v1/video/create:
     post:
       operationId: createVideo
-      summary: Create a video generation task from prompt and optional frame URLs.
+      summary: Create an asynchronous video generation task. Do not use for image-only generation; use Image Gateway generateImage or submitImageTask instead.
       requestBody:
         required: true
         content:
@@ -58,7 +58,7 @@ paths:
               properties:
                 prompt:
                   type: string
-                  description: Video prompt written by Codex or Dify Agent.
+                  description: Video prompt written by Codex or Dify Agent. It must describe a video/MP4/short-film/image-to-video request, not an image-only request.
                 model:
                   type: string
                   default: doubao-seedance-2-0-720p

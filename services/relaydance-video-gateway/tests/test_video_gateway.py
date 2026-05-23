@@ -13,6 +13,20 @@ def test_missing_gateway_key_returns_401(client):
     assert body["error"]["message"] == "gateway unauthorized"
 
 
+def test_create_video_rejects_image_generation_intent(client, auth_headers):
+    response = client.post(
+        "/api/v1/video/create",
+        headers=auth_headers,
+        json={"prompt": "生成图片：一张温暖的数学教学海报"},
+    )
+
+    assert response.status_code == 422
+    body = response.json()
+    assert body["success"] is False
+    assert body["provider_code"] == "validation_error"
+    assert "image-generation request" in body["message"]
+
+
 @respx.mock
 def test_authorization_bearer_auto_prefix(client, auth_headers, provider_base):
     route = respx.post(f"{provider_base}/v1/video/generations").mock(

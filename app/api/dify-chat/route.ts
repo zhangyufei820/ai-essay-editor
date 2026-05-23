@@ -256,6 +256,42 @@ const MEMBERSHIP_PRODUCT_IDS = ["basic", "pro", "premium", "enterprise", "campus
 const ALL_IN_ONE_AGENT_MODEL = "all-in-one-agent"
 const SUPER_ALL_IN_ONE_AGENT_MODEL = "super-all-in-one-agent"
 
+const IMAGE_MEDIA_PATTERNS = [
+  /生成(?:图片|图像|图)(?!.*(?:视频|短片|影片|mp4))/i,
+  /(?:^|[\s，。,.；;、])(?:画|绘制)(?:一张|一幅|一个|张|个|幅|图|图片|图像|海报|插图|头像|logo|图标)/i,
+  /(?:海报|封面图|配图|插图|头像|logo|图标|壁纸|表情包)/i,
+  /\b(?:generate|create|make)\s+(?:an?\s+)?(?:image|picture|poster|illustration|cover|logo|icon)\b/i,
+]
+
+const VIDEO_MEDIA_PATTERNS = [
+  /(?:生成|制作|合成|创建).*(?:视频|短片|影片|mp4)/i,
+  /(?:图片|图像|首帧|尾帧).*(?:转视频|生成视频|视频)/i,
+  /(?:图生视频|文生视频|首尾帧|视频生成|短视频|运镜|镜头生成)/i,
+  /\b(?:video|mp4|image-to-video|text-to-video|short film|clip)\b/i,
+]
+
+function matchesAnyPattern(value: string, patterns: RegExp[]) {
+  return patterns.some((pattern) => pattern.test(value))
+}
+
+function detectMediaRequest(query: string, inputs: unknown): "image" | "video" | "unknown" {
+  const record = inputs && typeof inputs === "object" && !Array.isArray(inputs)
+    ? inputs as Record<string, unknown>
+    : null
+  const parts = [
+    query,
+    typeof record?.prompt === "string" ? record.prompt : "",
+    typeof record?.image_prompt === "string" ? record.image_prompt : "",
+    typeof record?.task_type === "string" ? record.task_type : "",
+    typeof record?.user_intent === "string" ? record.user_intent : "",
+    typeof record?.skill_name === "string" ? record.skill_name : "",
+  ].filter(Boolean).join("\n")
+
+  if (matchesAnyPattern(parts, VIDEO_MEDIA_PATTERNS)) return "video"
+  if (matchesAnyPattern(parts, IMAGE_MEDIA_PATTERNS)) return "image"
+  return "unknown"
+}
+
 function buildAllInOneAgentWorkflowInputs(query: string, inputs: unknown, fileUrls: string[]) {
   const record = inputs && typeof inputs === "object" ? inputs as Record<string, unknown> : {}
   const rawQuality = typeof record.quality === "string" ? record.quality : "low"
@@ -265,6 +301,7 @@ function buildAllInOneAgentWorkflowInputs(query: string, inputs: unknown, fileUr
     : Number(record.duration_seconds)
   const imageUrlsText = fileUrls.join("\n")
   const prompt = query || "请根据用户需求生成内容"
+  const mediaRequest = detectMediaRequest(prompt, record)
 
   return {
     ...record,
@@ -276,6 +313,8 @@ function buildAllInOneAgentWorkflowInputs(query: string, inputs: unknown, fileUr
     style: typeof record.style === "string" && record.style.trim() ? record.style : "auto",
     duration_seconds: Number.isFinite(rawDuration) && rawDuration > 0 ? String(Math.min(120, Math.max(1, rawDuration))) : "auto",
     quality,
+    requested_media_type: mediaRequest,
+    requested_tool_family: mediaRequest === "image" ? "image_gateway" : mediaRequest === "video" ? "video_gateway" : "auto",
     has_uploaded_images: fileUrls.length > 0 ? "true" : "false",
     uploaded_image_count: String(fileUrls.length),
     file_urls: imageUrlsText,
@@ -345,6 +384,14 @@ function buildCodexSkillQuery(query: string, chatInputs: Record<string, unknown>
   const skillDisplayName = skill?.name || skillId
   const skillDescription = skill?.description || "用户已在前端明确选择该技能。"
   const skillTags = Array.isArray(skill?.tags) ? skill.tags.join("、") : ""
+  const mediaRequest = detectMediaRequest(query, chatInputs)
+  const mediaRoutingNote = [
+    "[媒体工具路由硬规则]",
+    "- 用户说“生成图片 / 生成图像 / 画图 / 海报 / 封面 / 配图 / illustration / poster”时，必须调用图片网关工具 generateImage 或 submitImageTask，禁止调用 createVideo。",
+    "- 只有用户明确说“生成视频 / 图生视频 / 文生视频 / MP4 / 短片 / 首帧尾帧视频”时，才允许调用视频网关 createVideo。",
+    "- 如果当前技能是 image_prompt，且用户说“生成图片”，请使用上一轮或当前上下文里的图片提示词作为 prompt 调用 generateImage。",
+    `- 当前检测到的媒体意图: ${mediaRequest}`,
+  ].join("\n")
 
   return [
     "[Codex 已加载技能]",
@@ -354,6 +401,7 @@ function buildCodexSkillQuery(query: string, chatInputs: Record<string, unknown>
     `skill_display_name: ${skillDisplayName}`,
     `skill_description: ${skillDescription}`,
     skillTags ? `skill_tags: ${skillTags}` : "",
+    mediaRoutingNote,
     "system_note: 用户已在前端明确选择以上技能。请必须按该技能处理下面的用户请求，不要重新判定为 general 或其他技能，也不要把本段路由提示原样展示给用户。",
     "",
     "用户请求：",

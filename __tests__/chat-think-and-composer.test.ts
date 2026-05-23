@@ -97,6 +97,9 @@ describe("chat think rendering and composer layout", () => {
     expect(route).toContain("codex_skill_description")
     expect(route).toContain("[Codex 已加载技能]")
     expect(route).toContain("buildCodexSkillQuery(effectiveQuery, normalizedCodexSkill.inputs)")
+    expect(route).toContain("[媒体工具路由硬规则]")
+    expect(route).toContain("requested_tool_family")
+    expect(route).toContain("generateImage 或 submitImageTask")
   })
 
   it("keeps chat auth extraction and empty workflow replies visible", () => {

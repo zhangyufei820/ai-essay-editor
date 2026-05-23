@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: Image Gateway Tools
   version: 0.1.0
-  description: Dify tools for the existing GPT Image gateway used by shenxiang.school.
+  description: Dify tools for image generation and image editing. Use these tools when the user asks to generate images, pictures, posters, covers, illustrations, logos, icons, or edit an uploaded image. Do not use video tools for image-only requests.
 servers:
   - url: http://dify-image-gateway:8001
 security:
@@ -21,7 +21,7 @@ paths:
   /api/image/unified:
     post:
       operationId: generateImage
-      summary: Generate images synchronously through the image gateway.
+      summary: Generate or edit images synchronously. Use for "生成图片", "生成图像", posters, covers, illustrations, logos, and image-only tasks. Do not call createVideo for these requests.
       requestBody:
         required: true
         content:
@@ -48,7 +48,7 @@ paths:
   /api/image/tasks:
     post:
       operationId: submitImageTask
-      summary: Submit an async image generation task.
+      summary: Submit an async image generation or image editing task. Use this for longer image-only tasks, never for video generation.
       requestBody:
         required: true
         content:

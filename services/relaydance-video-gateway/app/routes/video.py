@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends
 from fastapi.responses import Response
+import re
 
 from app.config import Settings, get_settings
 from app.relaydance_client import RelayDanceClient, public_body, validate_model
@@ -17,6 +18,26 @@ from app.schemas import (
 
 router = APIRouter(prefix="/api/v1", tags=["video"])
 
+IMAGE_INTENT_PATTERNS = (
+    re.compile(r"生成(?:图片|图像|图)(?!.*(?:视频|短片|影片|mp4))", re.IGNORECASE),
+    re.compile(r"(?:^|[\s，。,.；;、])(?:画|绘制)(?:一张|一幅|一个|张|个|幅|图|图片|图像|海报|插图|头像|logo|图标)", re.IGNORECASE),
+    re.compile(r"(?:海报|封面图|配图|插图|头像|logo|图标|壁纸|表情包)", re.IGNORECASE),
+    re.compile(r"\b(?:generate|create|make)\s+(?:an?\s+)?(?:image|picture|poster|illustration|cover|logo|icon)\b", re.IGNORECASE),
+)
+
+VIDEO_INTENT_PATTERNS = (
+    re.compile(r"(?:生成|制作|合成|创建).*(?:视频|短片|影片|mp4)", re.IGNORECASE),
+    re.compile(r"(?:图片|图像|首帧|尾帧).*(?:转视频|生成视频|视频)", re.IGNORECASE),
+    re.compile(r"(?:图生视频|文生视频|首尾帧|视频生成|短视频|运镜|镜头生成)", re.IGNORECASE),
+    re.compile(r"\b(?:video|mp4|image-to-video|text-to-video|short film|clip)\b", re.IGNORECASE),
+)
+
+
+def looks_like_image_request(prompt: str) -> bool:
+    if any(pattern.search(prompt) for pattern in VIDEO_INTENT_PATTERNS):
+        return False
+    return any(pattern.search(prompt) for pattern in IMAGE_INTENT_PATTERNS)
+
 
 def client_dep(settings: Settings = Depends(get_settings)) -> RelayDanceClient:
     return RelayDanceClient(settings)
@@ -24,6 +45,8 @@ def client_dep(settings: Settings = Depends(get_settings)) -> RelayDanceClient:
 
 def build_generation_from_dify(body: DifyVideoCreateRequest, settings: Settings) -> tuple[VideoGenerationRequest, list[str]]:
     warnings: list[str] = []
+    if looks_like_image_request(body.prompt):
+        raise ValueError("This looks like an image-generation request. Use the image gateway generateImage/submitImageTask tool instead of createVideo.")
     content: list[VideoContentItem] = []
     if body.first_frame_url:
         content.append(VideoContentItem(image_url=ImageUrl(url=body.first_frame_url), role="first_frame"))
