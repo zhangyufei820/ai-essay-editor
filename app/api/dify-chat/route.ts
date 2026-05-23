@@ -73,6 +73,16 @@ type GptImageV11Inputs = {
   mask_image_url: string
 }
 
+type GeminiImageGatewayInputs = {
+  aspect_ratio: string
+  image_size: string
+  model: string
+  n: number
+  mode: string
+  reference_image_url: string
+  reference_image_urls: string[]
+}
+
 const GPT_IMAGE_V11_DEFAULT_INPUTS: GptImageV11Inputs = {
   aspect_ratio: "1:1",
   size: "1024x1024",
@@ -97,6 +107,23 @@ const GPT_IMAGE_V11_ALLOWED = {
   output_format: ["png", "jpeg", "webp"],
   background: ["auto", "opaque", "transparent"],
   moderation: ["auto", "low"],
+  mode: ["image_generate", "image_edit"],
+} as const
+
+const GEMINI_IMAGE_GATEWAY_DEFAULT_INPUTS: GeminiImageGatewayInputs = {
+  aspect_ratio: "1:1",
+  image_size: "1K",
+  model: "gemini-3.1-flash-image-preview",
+  n: 1,
+  mode: "image_generate",
+  reference_image_url: "",
+  reference_image_urls: [],
+}
+
+const GEMINI_IMAGE_GATEWAY_ALLOWED = {
+  aspect_ratio: ["auto", "1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9", "4:1", "1:4", "8:1", "1:8"],
+  image_size: ["auto", "512", "1K", "2K", "4K"],
+  model: ["gemini-3.1-flash-image-preview", "gemini-3-pro-image-preview"],
   mode: ["image_generate", "image_edit"],
 } as const
 
@@ -169,6 +196,32 @@ function buildGptImageV11Inputs(inputs: unknown): GptImageV11Inputs {
     reference_image_url: safeReferenceImageUrls[0] || "",
     reference_image_urls: safeReferenceImageUrls.slice(0, 10),
     mask_image_url: pickUrlString(record.mask_image_url),
+  }
+}
+
+function buildGeminiImageGatewayInputs(inputs: unknown): GeminiImageGatewayInputs {
+  const record = inputs && typeof inputs === "object" ? inputs as Record<string, unknown> : {}
+  const referenceImageUrls = pickUrlStrings(record.reference_image_urls)
+  const referenceImageUrl = pickUrlString(record.reference_image_url)
+  const safeReferenceImageUrls = referenceImageUrls.length > 0
+    ? referenceImageUrls
+    : referenceImageUrl
+      ? [referenceImageUrl]
+      : []
+  const rawImageSize = typeof record.image_size === "string" && record.image_size.trim()
+    ? record.image_size
+    : typeof record.size === "string"
+      ? record.size
+      : GEMINI_IMAGE_GATEWAY_DEFAULT_INPUTS.image_size
+
+  return {
+    aspect_ratio: pickEnum(record.aspect_ratio, GEMINI_IMAGE_GATEWAY_ALLOWED.aspect_ratio, GEMINI_IMAGE_GATEWAY_DEFAULT_INPUTS.aspect_ratio),
+    image_size: pickEnum(rawImageSize, GEMINI_IMAGE_GATEWAY_ALLOWED.image_size, GEMINI_IMAGE_GATEWAY_DEFAULT_INPUTS.image_size),
+    model: pickEnum(record.model, GEMINI_IMAGE_GATEWAY_ALLOWED.model, GEMINI_IMAGE_GATEWAY_DEFAULT_INPUTS.model),
+    n: clampNumber(record.n, 1, 4, GEMINI_IMAGE_GATEWAY_DEFAULT_INPUTS.n),
+    mode: pickEnum(record.mode, GEMINI_IMAGE_GATEWAY_ALLOWED.mode, GEMINI_IMAGE_GATEWAY_DEFAULT_INPUTS.mode),
+    reference_image_url: safeReferenceImageUrls[0] || "",
+    reference_image_urls: safeReferenceImageUrls.slice(0, 10),
   }
 }
 
@@ -251,7 +304,7 @@ function getGptImageGatewayCreditsPerImage(inputs: GptImageV11Inputs): number {
   return Math.ceil(calculateGptImageGatewayCredits({ ...inputs, n: 1 }))
 }
 
-const WORKFLOW_MODELS = new Set(["gemini-image", "vocab-card"])
+const WORKFLOW_MODELS = new Set(["vocab-card"])
 const MEMBERSHIP_PRODUCT_IDS = ["basic", "pro", "premium", "enterprise", "campus"]
 const ALL_IN_ONE_AGENT_MODEL = "all-in-one-agent"
 const SUPER_ALL_IN_ONE_AGENT_MODEL = "super-all-in-one-agent"
@@ -608,6 +661,7 @@ const GPT_IMAGE_GATEWAY_TIMEOUT_MS = 540_000
 const GPT_IMAGE_ASYNC_TASK_MAX_AGE_MS = 30 * 60 * 1000
 const GPT_IMAGE_POLL_TOKEN_TTL_MS = GPT_IMAGE_ASYNC_TASK_MAX_AGE_MS + 5 * 60 * 1000
 const IMAGE_GATEWAY_URL = (process.env.DIFY_IMAGE_GATEWAY_URL || "http://dify-image-gateway:8001").replace(/\/+$/, "")
+const GEMINI_IMAGE_GATEWAY_URL = (process.env.GEMINI_IMAGE_GATEWAY_URL || "http://gemini-image-gateway:8002").replace(/\/+$/, "")
 // 🔥 作文批改（standard）使用专用的 ESSAY_CORRECTION_API_KEY
 const DEFAULT_DIFY_KEY = process.env.ESSAY_CORRECTION_API_KEY || process.env.DIFY_API_KEY 
 const MISSING_DIFY_CREDENTIAL_STATUS = 503
@@ -1206,6 +1260,22 @@ function buildImageGatewayPayload(query: string, inputs: unknown) {
   }
 }
 
+function buildGeminiImageGatewayPayload(query: string, inputs: unknown) {
+  const imageInputs = buildGeminiImageGatewayInputs(inputs)
+
+  return {
+    prompt: query || "生成图片",
+    mode: imageInputs.mode,
+    model: imageInputs.model,
+    aspect_ratio: imageInputs.aspect_ratio,
+    image_size: imageInputs.image_size,
+    response_modalities: ["TEXT", "IMAGE"],
+    n: imageInputs.n,
+    reference_image_url: imageInputs.reference_image_url,
+    reference_image_urls: imageInputs.reference_image_urls,
+  }
+}
+
 function createImageGatewayResponse(payload: unknown) {
   const record = payload && typeof payload === "object" ? payload as Record<string, unknown> : {}
   const success = record.success !== false
@@ -1247,28 +1317,31 @@ function createImageGatewayResponse(payload: unknown) {
   })
 }
 
-async function chargeImageGatewayCredits(params: {
+async function chargeFixedImageCredits(params: {
   userId: string
   amount: number
-  inputs: GptImageV11Inputs
-  billingModel: ModelType
+  imageCount: number
+  imageSize: string
+  modelId: ModelType
   keySource: string | null
+  gatewayName: string
+  feature?: string
+  rawProviderMetadata?: Record<string, unknown>
   requestId: string
   conversationId?: string | null
   messageId?: string | null
 }) {
-  const imageCount = params.inputs.n || 1
-  const description = `图片生成 - ${getModelDisplayName(params.billingModel)} x${imageCount}`
+  const description = `图片生成 - ${getModelDisplayName(params.modelId)} x${params.imageCount}`
   const billingMetadata = createBillingAuditMetadata({
     userId: params.userId,
     actionType: "image_generation",
-    feature: params.billingModel === "gpt-image-2" ? "image2" : "image",
-    appId: params.keySource || "DIFY_IMAGE_GATEWAY",
-    workflowId: "dify-image-gateway",
-    modelId: params.billingModel,
-    requestedAppId: params.keySource || "DIFY_IMAGE_GATEWAY",
-    requestedWorkflowId: "dify-image-gateway",
-    requestedModelId: params.billingModel,
+    feature: params.feature || "image",
+    appId: params.keySource || params.gatewayName,
+    workflowId: params.gatewayName,
+    modelId: params.modelId,
+    requestedAppId: params.keySource || params.gatewayName,
+    requestedWorkflowId: params.gatewayName,
+    requestedModelId: params.modelId,
     pricingVersion: PRICING_VERSION,
     usageSource: "fixed",
     estimated: false,
@@ -1280,11 +1353,10 @@ async function chargeImageGatewayCredits(params: {
     conversationId: params.conversationId || null,
     messageId: params.messageId || null,
     rawProviderMetadata: {
-      imageCount,
-      fixedCreditsPerImage: getGptImageGatewayCreditsPerImage(params.inputs),
-      imageSize: params.inputs.size,
-      imageQuality: params.inputs.quality,
-      inputs: params.inputs,
+      imageCount: params.imageCount,
+      fixedCreditsPerImage: Math.ceil(params.amount / Math.max(1, params.imageCount)),
+      imageSize: params.imageSize,
+      ...(params.rawProviderMetadata || {}),
     },
     description,
   })
@@ -1299,6 +1371,35 @@ async function chargeImageGatewayCredits(params: {
   )
 
   return { charged, description, billingMetadata }
+}
+
+async function chargeImageGatewayCredits(params: {
+  userId: string
+  amount: number
+  inputs: GptImageV11Inputs
+  billingModel: ModelType
+  keySource: string | null
+  requestId: string
+  conversationId?: string | null
+  messageId?: string | null
+}) {
+  return chargeFixedImageCredits({
+    userId: params.userId,
+    amount: params.amount,
+    imageCount: params.inputs.n || 1,
+    imageSize: params.inputs.size,
+    modelId: params.billingModel,
+    keySource: params.keySource,
+    gatewayName: "dify-image-gateway",
+    feature: params.billingModel === "gpt-image-2" ? "image2" : "image",
+    requestId: params.requestId,
+    conversationId: params.conversationId || null,
+    messageId: params.messageId || null,
+    rawProviderMetadata: {
+      imageQuality: params.inputs.quality,
+      inputs: params.inputs,
+    },
+  })
 }
 
 async function callImageGatewayDirect(query: string, inputs: unknown) {
@@ -1348,6 +1449,60 @@ async function callImageGatewayDirect(query: string, inputs: unknown) {
     console.error("❌ [GPT Image] 直连图片服务失败:", error)
     return Response.json(
       { error: "图片服务暂时不可用，请稍后重试" },
+      { status: 502 },
+    )
+  } finally {
+    timeout.clear()
+  }
+}
+
+async function callGeminiImageGatewayDirect(query: string, inputs: unknown) {
+  const gatewayToken = process.env.GEMINI_IMAGE_GATEWAY_TOKEN || ""
+  const timeout = createTimeoutSignal(GPT_IMAGE_GATEWAY_TIMEOUT_MS)
+
+  try {
+    const response = await internalDifyFetch(`${GEMINI_IMAGE_GATEWAY_URL}/api/gemini-image/unified`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(gatewayToken
+          ? {
+              "x-gateway-token": gatewayToken,
+              Authorization: `Bearer ${gatewayToken}`,
+            }
+          : {}),
+      },
+      body: JSON.stringify(buildGeminiImageGatewayPayload(query, inputs)),
+      signal: timeout.signal,
+    })
+
+    const text = await response.text()
+    let payload: unknown = {}
+    try {
+      payload = JSON.parse(text)
+    } catch {
+      payload = { success: false, message: sanitizeUpstreamErrorText(text), status_code: response.status }
+    }
+
+    if (!response.ok) {
+      const record = payload && typeof payload === "object" ? payload as Record<string, unknown> : {}
+      const message = sanitizeUpstreamErrorText(record.message, "Gemini 图像服务请求失败，请稍后重试。")
+      return Response.json({ error: message, code: "GEMINI_IMAGE_GATEWAY_HTTP_ERROR" }, { status: response.status })
+    }
+
+    return createImageGatewayResponse(payload)
+  } catch (error) {
+    const err = error instanceof Error ? error : null
+    if (err?.name === "AbortError") {
+      return Response.json(
+        { error: "Gemini 图像生成等待超时，请降低尺寸或质量后重试", code: "GEMINI_IMAGE_GATEWAY_TIMEOUT" },
+        { status: 504 },
+      )
+    }
+
+    console.error("❌ [Gemini Image] 直连图片服务失败:", error)
+    return Response.json(
+      { error: "Gemini 图像服务暂时不可用，请稍后重试", code: "GEMINI_IMAGE_GATEWAY_UNAVAILABLE" },
       { status: 502 },
     )
   } finally {
@@ -1730,11 +1885,13 @@ export async function POST(request: NextRequest) {
     }
 
     const isGptImageGatewayRequest = isGptImageGatewayModel(model)
-    const requestId = request.headers.get("X-Request-Id") || body.requestId || createRequestId(isGptImageGatewayRequest ? "img" : "chat")
+    const isGeminiImageGatewayRequest = model === "gemini-image"
+    const isDirectImageGatewayRequest = isGptImageGatewayRequest || isGeminiImageGatewayRequest
+    const requestId = request.headers.get("X-Request-Id") || body.requestId || createRequestId(isDirectImageGatewayRequest ? "img" : "chat")
     logPerf(requestId, "api_enter", apiStartedAt, { model: model || "general-chat" })
     logPerf(requestId, "auth_done", apiStartedAt)
-    const taskKind = isGptImageGatewayRequest ? "image" : model === "open-claw" ? "openclaw" : isAllInOneAgent ? "workflow" : "dify"
-    if (hasGptImageModelInput(inputs) && !isGptImageGatewayRequest && model !== "banana-2-pro") {
+    const taskKind = isDirectImageGatewayRequest ? "image" : model === "open-claw" ? "openclaw" : isAllInOneAgent ? "workflow" : "dify"
+    if (hasGptImageModelInput(inputs) && !isDirectImageGatewayRequest && model !== "banana-2-pro") {
       console.warn(`🚫 [媒体权限] 图片模型请求顶层 model 不匹配，拒绝绕过媒体计费: model=${model || "empty"}`)
       return new Response(
         JSON.stringify({
@@ -1793,7 +1950,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    if (!isGptImageGatewayRequest && !isAllInOneAgent && fileUrls.length > 0 && difyFileIds.length === 0) {
+    if (!isDirectImageGatewayRequest && !isAllInOneAgent && fileUrls.length > 0 && difyFileIds.length === 0) {
       console.warn(`🚫 [Dify-Chat] 非图片生成模型拒绝 remote_url 附件: model=${model || "general-chat"} urls=${fileUrls.length}`)
       return new Response(
         JSON.stringify({ error: "文件上传缺少 Dify 文件 ID，请重新上传文件后再试" }),
@@ -1810,7 +1967,7 @@ export async function POST(request: NextRequest) {
     const { credential: selectedCredential, source: keySource } = getDifyCredentialForModel(workflowSkillId ? "workflow-skill" : model, process.env, DEFAULT_DIFY_KEY)
 
     // 安全检查：防止忘配 Key
-    if (!selectedCredential && !isGptImageGatewayRequest) {
+    if (!selectedCredential && !isDirectImageGatewayRequest) {
         console.error(`❌ 严重错误: 模型 ${workflowSkillId || model} 的凭据未配置！环境变量 ${keySource} 为空`);
         return new Response(JSON.stringify({ 
           error: `配置错误：${workflowSkillId || model} 模型凭据未设置`,
@@ -1954,6 +2111,81 @@ export async function POST(request: NextRequest) {
     }
     
     console.log(`💰 [预检查] 模型: ${modelType} | 当前积分: ${currentCredits}`)
+
+    if (model === "gemini-image") {
+      console.log("🎨 [Gemini Image] 使用直连 Gemini 图片网关，绕过 Dify workflow")
+      const geminiImageInputs = buildGeminiImageGatewayInputs(inputs)
+
+      await updateTaskRun(taskRun.id, {
+        status: "running",
+        stage: "Gemini 图片网关生成中",
+        progress: 35,
+      })
+
+      const gatewayResponse = await callGeminiImageGatewayDirect(effectiveQuery, inputs)
+      const gatewayPayload = await gatewayResponse.clone().json().catch(() => ({}))
+
+      if (!gatewayResponse.ok) {
+        await updateTaskRun(taskRun.id, {
+          status: "failed",
+          stage: "Gemini 图片网关返回错误",
+          progress: 100,
+          errorMessage: typeof gatewayPayload?.error === "string" ? gatewayPayload.error : "Gemini 图像服务请求失败",
+          errorCode: typeof gatewayPayload?.code === "string" ? gatewayPayload.code : `GEMINI_IMAGE_GATEWAY_${gatewayResponse.status}`,
+          sanitizedError: sanitizeForTrace(gatewayPayload) as Record<string, unknown>,
+        })
+
+        return gatewayResponse
+      }
+
+      const { charged } = await chargeFixedImageCredits({
+        userId,
+        amount: estimatedMinCost,
+        imageCount: geminiImageInputs.n,
+        imageSize: geminiImageInputs.image_size,
+        modelId: "gemini-image",
+        keySource: "GEMINI_IMAGE_GATEWAY",
+        gatewayName: "gemini-image-gateway",
+        requestId: taskRun.requestId,
+        conversationId: effectiveConvId || (typeof conversation_id === "string" ? conversation_id : null),
+        messageId: typeof messageId === "string" ? messageId : null,
+        rawProviderMetadata: {
+          inputs: geminiImageInputs,
+          provider: "google-gemini",
+        },
+      })
+
+      if (!charged) {
+        await updateTaskRun(taskRun.id, {
+          status: "failed",
+          stage: "图片生成完成但积分扣除失败",
+          progress: 100,
+          errorMessage: "积分扣除失败，本次结果未结算",
+          errorCode: "IMAGE_CREDIT_DEDUCT_FAILED",
+          sanitizedError: sanitizeForTrace(gatewayPayload) as Record<string, unknown>,
+        })
+        return Response.json({ error: "积分扣除失败，本次结果未结算" }, { status: 500 })
+      }
+
+      await updateTaskRun(taskRun.id, {
+        status: "succeeded",
+        stage: "图片生成完成",
+        progress: 100,
+        artifacts: extractArtifactsFromUnknown(gatewayPayload),
+        metadata: {
+          gateway_status: gatewayResponse.status,
+          charged_credits: estimatedMinCost,
+          source: "gemini_image_gateway",
+        },
+      })
+
+      return Response.json(gatewayPayload, {
+        headers: {
+          "X-Request-Id": taskRun.requestId,
+          "X-Trace-Id": taskRun.traceId,
+        },
+      })
+    }
 
     if (isGptImageGatewayRequest) {
       console.log("🎨 [GPT Image] 使用直连图片网关，绕过 Dify chatflow")

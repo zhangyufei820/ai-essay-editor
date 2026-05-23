@@ -23,19 +23,30 @@ describe("all-in-one route model sync", () => {
     expect(text).toContain("setSelectedModel(lastUsedModelRef.current)")
   })
 
-  it("uses Chatflow instead of Workflow for all-in-one-agent", () => {
+  it("uses Workflow only for true Dify workflow apps", () => {
     const text = routeSource()
 
-    expect(text).toMatch(/const\s+WORKFLOW_MODELS\s*=\s*new Set\(\[[^\]]*"gemini-image"[^\]]*"vocab-card"[^\]]*\]\)/)
+    expect(text).toMatch(/const\s+WORKFLOW_MODELS\s*=\s*new Set\(\[[^\]]*"vocab-card"[^\]]*\]\)/)
     expect(text).toContain('const ALL_IN_ONE_AGENT_MODEL = "all-in-one-agent"')
     expect(text).toContain('const SUPER_ALL_IN_ONE_AGENT_MODEL = "super-all-in-one-agent"')
     expect(text).not.toMatch(/const\s+WORKFLOW_MODELS\s*=\s*new Set\(\[[^\]]*["']all-in-one-agent["'][^\]]*\]\)/)
     expect(text).not.toMatch(/const\s+WORKFLOW_MODELS\s*=\s*new Set\(\[[^\]]*["']super-all-in-one-agent["'][^\]]*\]\)/)
+    expect(text).not.toMatch(/const\s+WORKFLOW_MODELS\s*=\s*new Set\(\[[^\]]*["']gemini-image["'][^\]]*\]\)/)
     expect(text).toContain("buildAllInOneAgentWorkflowInputs(")
     expect(text).toContain("allInOneQuery")
     expect(text).toContain("normalizedCodexSkill ? normalizedCodexSkill.inputs : inputs")
     expect(text).not.toContain('"banana-2-pro", "gemini-image", "vocab-card"')
     expect(text).not.toContain('"banana-2-pro", "vocab-card", "all-in-one-agent"')
+  })
+
+  it("routes Gemini image through its gateway instead of Dify workflow", () => {
+    const text = routeSource()
+
+    expect(text).toContain('model === "gemini-image"')
+    expect(text).toContain("callGeminiImageGatewayDirect(effectiveQuery, inputs)")
+    expect(text).toContain("GEMINI_IMAGE_GATEWAY_URL")
+    expect(text).toContain("gemini-image-gateway")
+    expect(text).not.toContain('WORKFLOW_MODELS = new Set(["gemini-image"')
   })
 
   it("registers super all-in-one without hardcoding its app key", () => {

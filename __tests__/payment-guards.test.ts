@@ -80,7 +80,7 @@ describe('Sprint 5 payment / credits / membership guards', () => {
     expect(source).toContain('IMAGE2_WHITELIST_USER_IDS')
     expect(source).toContain('IMAGE2_WHITELIST_EMAILS')
     expect(source).toContain('resolveActiveMembershipStatus')
-    expect(source).toContain('hasGptImageModelInput(inputs) && !isGptImageGatewayRequest')
+    expect(source).toContain('hasGptImageModelInput(inputs) && !isDirectImageGatewayRequest')
     expect(source).toContain('function isGptImageGatewayModel(model: unknown)')
     expect(source).toContain('const userId = auth.user!.id')
     expect(source).toContain('const hasActiveTrialForRequest = Boolean(trialPrecheck.data?.grantId)')
@@ -111,11 +111,31 @@ describe('Sprint 5 payment / credits / membership guards', () => {
 
     expect(source).toContain('callImageGatewayDirect(effectiveQuery, inputs)')
     expect(source).toContain('chargeImageGatewayCredits({')
-    expect(source).toContain('workflowId: "dify-image-gateway"')
+    expect(source).toContain('gatewayName: "dify-image-gateway"')
     expect(source).toContain('usageSource: "fixed"')
-    expect(source).toContain('if (!selectedCredential && !isGptImageGatewayRequest)')
+    expect(source).toContain('if (!selectedCredential && !isDirectImageGatewayRequest)')
     expect(directGatewayIndex).toBeGreaterThan(billingCheckIndex)
     expect(difyCallIndex).toBeGreaterThan(directGatewayIndex)
+  })
+
+  it('routes Gemini image through the dedicated gateway after server-side billing guards', () => {
+    const source = read('app/api/dify-chat/route.ts')
+    const billingCheckIndex = source.indexOf('const estimatedMinCost = imageInputsForBilling')
+    const geminiGatewayIndex = source.indexOf('console.log("🎨 [Gemini Image] 使用直连 Gemini 图片网关，绕过 Dify workflow")')
+    const difyCallIndex = source.indexOf('const callDify = async')
+
+    expect(source).toContain('const GEMINI_IMAGE_GATEWAY_URL')
+    expect(source).toContain('callGeminiImageGatewayDirect(effectiveQuery, inputs)')
+    expect(source).toContain('gatewayName: "gemini-image-gateway"')
+    expect(geminiGatewayIndex).toBeGreaterThan(billingCheckIndex)
+    expect(difyCallIndex).toBeGreaterThan(geminiGatewayIndex)
+  })
+
+  it('keeps Gemini image out of Dify workflow app routing', () => {
+    const source = read('app/api/dify-chat/route.ts')
+
+    expect(source).toContain('const WORKFLOW_MODELS = new Set(["vocab-card"])')
+    expect(source).not.toContain('const WORKFLOW_MODELS = new Set(["gemini-image"')
   })
 
   it('keeps the Image 2 workspace locked to the default GPT Image 2 model', () => {
