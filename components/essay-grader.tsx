@@ -277,6 +277,10 @@ export function EssayGrader() {
               if (json.event === "agent_thought") {
                 console.log("[作文批改] 思考:", json.thought)
               }
+
+              if (json.event === "error") {
+                throw new Error(json.message || json.error || "作文批改服务返回错误")
+              }
               
               // 🔥 处理文本输出（answer字段）
               if (json.answer) {

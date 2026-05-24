@@ -5,7 +5,7 @@ import { getMaxOutputTokensForModel, getMinimumRequiredCredits, type ModelType }
 import { requireUser } from "@/lib/auth/verified-user"
 import { consumeWithTrialCredits } from "@/lib/trial-credits"
 
-export const maxDuration = 60
+export const maxDuration = 300
 
 // 使用专门的作文批改环境变量
 const ESSAY_CORRECTION_API_KEY = process.env.ESSAY_CORRECTION_API_KEY
@@ -174,19 +174,37 @@ export async function POST(req: NextRequest) {
 
       // 🔥 创建 TransformStream 处理思考过程
       const encoder = new TextEncoder()
+      const decoder = new TextDecoder()
       let billingSent = false
+      let heartbeatId: ReturnType<typeof setInterval> | null = null
+      const stopHeartbeat = () => {
+        if (heartbeatId) {
+          clearInterval(heartbeatId)
+          heartbeatId = null
+        }
+      }
       const transformStream = new TransformStream({
-        async transform(chunk, controller) {
+        start(controller) {
           if (!billingSent) {
             billingSent = true
             controller.enqueue(encoder.encode(`data: ${JSON.stringify({ event: "billing", billing })}\n\n`))
           }
+
+          heartbeatId = setInterval(() => {
+            try {
+              controller.enqueue(encoder.encode(`: essay-grade-keepalive ${Date.now()}\n\n`))
+            } catch {
+              stopHeartbeat()
+            }
+          }, 15_000)
+        },
+        async transform(chunk, controller) {
           // 直接传递数据给前端
           controller.enqueue(chunk)
           
           // 解析并记录思考过程
           try {
-            const text = new TextDecoder().decode(chunk)
+            const text = decoder.decode(chunk)
             const lines = text.split("\n")
             
             for (const line of lines) {
@@ -209,6 +227,9 @@ export async function POST(req: NextRequest) {
               } catch {}
             }
           } catch {}
+        },
+        flush() {
+          stopHeartbeat()
         }
       })
 
