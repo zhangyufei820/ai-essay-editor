@@ -401,19 +401,11 @@ export function EssayGrader() {
             )}
             
             <div className="flex gap-2">
-              <div className="relative inline-flex">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  type="button"
-                  disabled={isUploading}
-                  tabIndex={-1}
-                  aria-hidden="true"
-                  className="pointer-events-none"
-                >
-                  <Upload className="w-4 h-4 mr-2" />
-                  上传作文图片
-                </Button>
+              <label
+                htmlFor="essay-image-upload"
+                aria-disabled={isUploading}
+                className="inline-flex h-9 shrink-0 cursor-pointer select-none items-center justify-center gap-1.5 whitespace-nowrap rounded-[var(--radius-pill)] border border-[var(--ink-300)]/60 bg-[var(--paper-50)] px-3 text-[13px] font-[var(--font-sans-v2)] font-semibold leading-none tracking-normal text-[var(--ink-700)] transition-[background-color,border-color,color,box-shadow,transform] duration-200 hover:border-[var(--ink-500)] hover:bg-[var(--paper-100)] active:translate-y-[1px] aria-disabled:pointer-events-none aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
+              >
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -423,9 +415,13 @@ export function EssayGrader() {
                   id="essay-image-upload"
                   aria-label="上传作文图片"
                   disabled={isUploading}
-                  className="absolute inset-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
+                  className="sr-only"
                 />
-              </div>
+                <span className="inline-flex items-center justify-center gap-1.5">
+                  <Upload className="w-4 h-4 mr-2" />
+                  上传作文图片
+                </span>
+              </label>
               <Button variant="outline" size="sm" disabled>
                 <IconEssay className="w-4 h-4 mr-2" />
                 上传文档 (即将推出)
