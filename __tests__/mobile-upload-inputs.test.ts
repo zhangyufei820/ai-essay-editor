@@ -20,6 +20,7 @@ describe("mobile upload entry points", () => {
       const source = read(file)
       expect(`${file}\n${source}`).toContain("sx-file-input")
       expect(`${file}\n${source}`).not.toMatch(/type="file"[\s\S]{0,180}className="hidden"/)
+      expect(`${file}\n${source}`).not.toMatch(/InputRef\.current\?\.click\(\)/)
     }
   })
 

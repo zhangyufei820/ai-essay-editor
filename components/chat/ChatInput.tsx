@@ -357,22 +357,6 @@ export function ChatInput({
     setCameraError("")
   }
 
-  const openCamera = () => {
-    if (disabled || isLoading || !onFileUpload) return
-
-    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
-      cameraInputRef.current?.click()
-      return
-    }
-
-    setIsCameraOpen(true)
-  }
-
-  const openSystemCameraOrAlbum = () => {
-    if (disabled || isLoading || !onFileUpload) return
-    cameraInputRef.current?.click()
-  }
-
   const uploadFiles = (files: File[]) => {
     if (!onFileUpload || disabled || isLoading || files.length === 0) return false
 
@@ -868,21 +852,19 @@ export function ChatInput({
               <span className="hidden text-[11px] text-[var(--ink-400)] font-[var(--font-mono-v2)] sm:block">
                 拍照
               </span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
+              <label
+                htmlFor={cameraInputId}
                 className={cn(
-                  "h-11 w-11 sm:h-10 sm:w-10 rounded-[var(--radius-sharp)] touch-manipulation text-[var(--ink-600)] hover:bg-[var(--ink-50)]",
-                  isFocused && "max-sm:h-9 max-sm:w-9 max-sm:rounded-full"
+                  "inline-flex h-11 w-11 cursor-pointer select-none items-center justify-center rounded-[var(--radius-sharp)] text-[var(--ink-600)] transition-colors hover:bg-[var(--ink-50)] sm:h-10 sm:w-10",
+                  "touch-manipulation",
+                  isFocused && "max-sm:h-9 max-sm:w-9 max-sm:rounded-full",
+                  (isLoading || disabled || !onFileUpload) && "pointer-events-none opacity-50"
                 )}
-                onClick={openCamera}
-                disabled={isLoading || disabled || !onFileUpload}
                 aria-label="拍照上传"
                 title="拍照上传"
               >
                 <Camera className="h-4 w-4 sm:h-5 sm:w-5" />
-              </Button>
+              </label>
             </div>
           </div>
         )}

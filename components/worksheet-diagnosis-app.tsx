@@ -152,14 +152,6 @@ function formatElapsed(seconds: number) {
   return rest ? `${minutes}m ${rest}s` : `${minutes}m`
 }
 
-function shouldUseSystemCameraPicker() {
-  if (typeof navigator === "undefined" || typeof window === "undefined") return false
-  return (
-    window.matchMedia?.("(pointer: coarse)").matches ||
-    /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)
-  )
-}
-
 export function WorksheetDiagnosisApp() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const cameraInputRef = useRef<HTMLInputElement>(null)
@@ -301,17 +293,12 @@ export function WorksheetDiagnosisApp() {
   const openCamera = async () => {
     if (isUploading || worksheets.length >= 6) return
 
-    if (shouldUseSystemCameraPicker()) {
-      cameraInputRef.current?.click()
-      return
-    }
-
     setIsCameraOpen(true)
     setCameraError("")
     setIsCameraReady(false)
 
     if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
-      cameraInputRef.current?.click()
+      setCameraError("当前浏览器不支持摄像头预览，请使用系统拍照/相册。")
       return
     }
 
