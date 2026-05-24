@@ -319,7 +319,7 @@ describe('Sprint 5 payment / credits / membership guards', () => {
     expect(source).toContain('id="essay-image-upload"')
     expect(source).toContain('htmlFor="essay-image-upload"')
     expect(source).toContain('aria-label="上传作文图片"')
-    expect(source).toContain('className="sr-only"')
+    expect(source).toContain('className="sr-only sx-file-input"')
     expect(source).not.toContain('htmlFor="file-upload"')
     expect(source).not.toContain('fileInputRef.current?.click()')
   })
@@ -354,6 +354,11 @@ describe('Sprint 5 payment / credits / membership guards', () => {
   it('keeps daily survey gate actions reachable on mobile viewports', () => {
     const source = read('components/trial/DailySurveyGate.tsx')
 
+    expect(source).toContain('SURVEY_FETCH_TIMEOUT_MS')
+    expect(source).toContain('const [loadError, setLoadError]')
+    expect(source).toContain('signal: controller.signal')
+    expect(source).toContain('重新加载')
+    expect(source).toContain('今日问卷加载失败，请稍后重试；你也可以先点“稍后再说”退出。')
     expect(source).toContain('h-[calc(100svh-1rem)]')
     expect(source).toContain('flex-1 touch-pan-y')
     expect(source).toContain('overflow-y-auto')

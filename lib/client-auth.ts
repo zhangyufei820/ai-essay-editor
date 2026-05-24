@@ -16,6 +16,7 @@ const AUTH_TOKEN_STORAGE_KEYS = [
   AUTHING_SDK_TOKEN_KEY,
 ] as const
 const SUPABASE_AUTH_TOKEN_SUFFIX = "-auth-token"
+const SUPABASE_SESSION_TIMEOUT_MS = 1200
 export const AUTH_REQUIRED_MESSAGE = "登录状态已过期，请重新登录后再上传文件。"
 
 function isUsableToken(value: unknown): value is string {
@@ -156,6 +157,26 @@ function getStoredSupabaseAccessToken() {
   return null
 }
 
+async function getSupabaseSessionAccessTokenWithTimeout() {
+  const supabase = createClient()
+  if (!supabase) return null
+
+  let timeoutId: ReturnType<typeof setTimeout> | null = null
+  try {
+    const timeout = new Promise<null>((resolve) => {
+      timeoutId = setTimeout(() => resolve(null), SUPABASE_SESSION_TIMEOUT_MS)
+    })
+    const session = supabase.auth
+      .getSession()
+      .then(({ data }) => data.session?.access_token || null)
+      .catch(() => null)
+
+    return await Promise.race([session, timeout])
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId)
+  }
+}
+
 function pickJwtFromStoredUser() {
   const storedCurrentUser = getStoredCurrentUser()
   const storedAuthingUser = getStoredAuthingSdkUser()
@@ -212,12 +233,9 @@ export async function getVerifiedAuthHeaders(currentUser?: unknown): Promise<Rec
     return { Authorization: `Bearer ${authingToken}` }
   }
 
-  const supabase = createClient()
-  if (supabase) {
-    const { data } = await supabase.auth.getSession()
-    if (data.session?.access_token) {
-      return { Authorization: `Bearer ${data.session.access_token}` }
-    }
+  const liveSupabaseAccessToken = await getSupabaseSessionAccessTokenWithTimeout()
+  if (liveSupabaseAccessToken) {
+    return { Authorization: `Bearer ${liveSupabaseAccessToken}` }
   }
 
   const supabaseStoredAccessToken = getStoredSupabaseAccessToken()

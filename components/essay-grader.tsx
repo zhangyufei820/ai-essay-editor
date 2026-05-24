@@ -452,7 +452,7 @@ export function EssayGrader() {
                   id="essay-image-upload"
                   aria-label="上传作文图片"
                   disabled={isUploading}
-                  className="sx-file-input"
+                  className="sr-only sx-file-input"
                 />
                 <span className="inline-flex items-center justify-center gap-1.5">
                   <Upload className="w-4 h-4 mr-2" />

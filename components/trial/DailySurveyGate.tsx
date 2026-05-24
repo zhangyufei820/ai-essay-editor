@@ -17,6 +17,8 @@ import { toast } from "sonner"
 import { trackCampaignEvent } from "@/lib/campaign-events-client"
 import { getVerifiedAuthHeaders } from "@/lib/client-auth"
 
+const SURVEY_FETCH_TIMEOUT_MS = 8000
+
 type SurveyQuestion = {
   id: string
   type?: string
@@ -86,6 +88,7 @@ export function DailySurveyGate({
   const [template, setTemplate] = useState<TodaySurveyTemplate | null>(null)
   const [answers, setAnswers] = useState<Record<string, unknown>>({})
   const [loading, setLoading] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [startedAt, setStartedAt] = useState<number | null>(null)
 
@@ -94,11 +97,15 @@ export function DailySurveyGate({
   const loadTemplate = useCallback(async () => {
     if (!enabled || template || loading) return
     setLoading(true)
+    setLoadError(null)
     setStartedAt(Date.now())
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), SURVEY_FETCH_TIMEOUT_MS)
     try {
       const response = await fetch("/api/surveys/today", {
         cache: "no-store",
         headers: await getVerifiedAuthHeaders(),
+        signal: controller.signal,
       })
       const data = await response.json().catch(() => null)
       if (!response.ok || !data?.ok) {
@@ -111,8 +118,10 @@ export function DailySurveyGate({
       }
     } catch (error) {
       console.error("[DailySurveyGate] load failed", error)
+      setLoadError("今日问卷加载失败，请稍后重试；你也可以先点“稍后再说”退出。")
       toast.error("今日问卷加载失败，请稍后重试")
     } finally {
+      clearTimeout(timeoutId)
       setLoading(false)
     }
   }, [enabled, loading, onCompleted, onOpenChange, template])
@@ -212,6 +221,13 @@ export function DailySurveyGate({
             {loading ? (
               <div className="rounded-[var(--radius-soft)] border border-[var(--paper-200)] bg-[var(--paper-100)] p-4 text-sm text-[var(--ink-600)]">
                 正在加载今日问卷...
+              </div>
+            ) : loadError ? (
+              <div className="space-y-3 rounded-[var(--radius-soft)] border border-[var(--paper-200)] bg-[var(--paper-100)] p-4 text-sm text-[var(--ink-600)]">
+                <p>{loadError}</p>
+                <Button type="button" size="sm" variant="outline" onClick={() => void loadTemplate()}>
+                  重新加载
+                </Button>
               </div>
             ) : questions.length === 0 ? (
               <div className="rounded-[var(--radius-soft)] border border-[var(--paper-200)] bg-[var(--paper-100)] p-4 text-sm text-[var(--ink-600)]">

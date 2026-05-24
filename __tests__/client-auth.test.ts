@@ -22,6 +22,8 @@ describe("client auth headers", () => {
 
   afterEach(() => {
     jest.resetModules()
+    jest.dontMock("@/lib/supabase/client")
+    jest.useRealTimers()
     process.env.NEXT_PUBLIC_SUPABASE_URL = originalSupabaseUrl
     Object.defineProperty(global, "window", { value: originalWindow, configurable: true })
     Reflect.deleteProperty(global, "localStorage")
@@ -113,6 +115,61 @@ describe("client auth headers", () => {
     const { getVerifiedAuthHeaders, hasStoredVerifiedAuthToken } = await import("@/lib/client-auth")
     expect(hasStoredVerifiedAuthToken()).toBe(true)
     await expect(getVerifiedAuthHeaders()).resolves.toEqual({ Authorization: "Bearer supabase.access.signature" })
+  })
+
+  it("falls back to stored Supabase auth when the live session helper stalls", async () => {
+    jest.useFakeTimers()
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://rnujdnmxufmzgjvmddla.supabase.co"
+    installStorage({
+      idToken: null,
+      authingToken: null,
+      accessToken: null,
+      _authing_token: null,
+      _authing_user: null,
+      currentUser: null,
+      "sb-rnujdnmxufmzgjvmddla-auth-token": JSON.stringify({
+        access_token: "stored.supabase.signature",
+        refresh_token: "refresh-token",
+      }),
+    })
+
+    jest.doMock("@/lib/supabase/client", () => ({
+      createClient: () => ({
+        auth: {
+          getSession: jest.fn(() => new Promise(() => undefined)),
+        },
+      }),
+    }))
+
+    const { getVerifiedAuthHeaders } = await import("@/lib/client-auth")
+    const promise = getVerifiedAuthHeaders()
+    jest.advanceTimersByTime(1200)
+
+    await expect(promise).resolves.toEqual({ Authorization: "Bearer stored.supabase.signature" })
+  })
+
+  it("uses the live Supabase session when it resolves before the timeout", async () => {
+    installStorage({
+      idToken: null,
+      authingToken: null,
+      accessToken: null,
+      _authing_token: null,
+      _authing_user: null,
+      currentUser: null,
+    })
+
+    jest.doMock("@/lib/supabase/client", () => ({
+      createClient: () => ({
+        auth: {
+          getSession: jest.fn(async () => ({
+            data: { session: { access_token: "live.supabase.signature" } },
+          })),
+        },
+      }),
+    }))
+
+    const { getVerifiedAuthHeaders } = await import("@/lib/client-auth")
+    await expect(getVerifiedAuthHeaders()).resolves.toEqual({ Authorization: "Bearer live.supabase.signature" })
   })
 
   it("requires an authorization header for upload requests", async () => {
