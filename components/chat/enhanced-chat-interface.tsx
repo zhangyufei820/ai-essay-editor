@@ -64,7 +64,7 @@ import { isWorkflowSkillAgent, type WorkflowSkillId } from "@/lib/workflow-skill
 import { createClient } from "@supabase/supabase-js"
 import { collapseSidebar, navigateHomeWithSidebar, refreshCredits, refreshSessionList, SESSION_LIST_REFRESH_EVENT } from "@/lib/workspace-events"
 import { useSelectedModelStore } from "@/hooks/useSelectedModelStore"
-import { getVerifiedAuthHeaders, hasStoredVerifiedAuthToken } from "@/lib/client-auth"
+import { getRequiredAuthHeaders, getVerifiedAuthHeaders, hasStoredVerifiedAuthToken } from "@/lib/client-auth"
 import { validateFileForUpload, MAX_FILE_SIZE } from "@/lib/upload-service"
 import { VoiceRecorder, getDifyTTS, transcribeAudio } from "@/lib/voice-service"
 import { getApiUrl } from "@/lib/api-config"
@@ -2157,7 +2157,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
             const res = await fetch("/api/dify-upload", {
               method: "POST",
               headers: {
-                ...(await getVerifiedAuthHeaders()),
+                ...(await getRequiredAuthHeaders()),
                 "X-Model": selectedModel || ""
               },
               body: formData

@@ -41,7 +41,7 @@ import {
   SwitchV2 as Switch,
   TextareaV2 as Textarea,
 } from "@/components/ui/v2"
-import { getVerifiedAuthHeaders } from "@/lib/client-auth"
+import { getRequiredAuthHeaders, getVerifiedAuthHeaders } from "@/lib/client-auth"
 import { cn } from "@/lib/utils"
 
 type VideoForm = {
@@ -545,7 +545,7 @@ export function VideoGenerationPage() {
         method: "POST",
         headers: {
           "X-Model": "gpt-image-2",
-          ...(await getVerifiedAuthHeaders()),
+          ...(await getRequiredAuthHeaders()),
         },
         body,
       })

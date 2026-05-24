@@ -7,14 +7,18 @@ import { LoginPageV2 } from "@/components/auth/v2/LoginPageV2"
 import { safeInternalRedirectPath } from '@/lib/security/redirect'
 import { hasStoredVerifiedAuthToken } from "@/lib/client-auth"
 
-function collectJwtValues(value: unknown, candidates: Array<{ key: string; value: string; priority: number }> = [], key = "") {
+function isUsableToken(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0 && value !== "null" && value !== "undefined"
+}
+
+function collectTokenValues(value: unknown, candidates: Array<{ key: string; value: string; priority: number }> = [], key = "") {
   if (!value || typeof value !== "object") return candidates
 
   for (const [childKey, childValue] of Object.entries(value as Record<string, unknown>)) {
     const path = key ? `${key}.${childKey}` : childKey
     const normalizedKey = childKey.toLowerCase().replace(/[_-]/g, "")
 
-    if (typeof childValue === "string" && childValue.split(".").length === 3) {
+    if (isUsableToken(childValue)) {
       const priority = normalizedKey === "idtoken"
         ? 0
         : normalizedKey === "token"
@@ -25,10 +29,13 @@ function collectJwtValues(value: unknown, candidates: Array<{ key: string; value
               ? 3
               : normalizedKey === "accesstoken"
                 ? 4
-                : 5
-      candidates.push({ key: path, value: childValue, priority })
+                : normalizedKey.endsWith("token")
+                  ? 5
+                  : 6
+
+      if (priority < 6) candidates.push({ key: path, value: childValue, priority })
     } else if (childValue && typeof childValue === "object") {
-      collectJwtValues(childValue, candidates, path)
+      collectTokenValues(childValue, candidates, path)
     }
   }
 
@@ -36,15 +43,15 @@ function collectJwtValues(value: unknown, candidates: Array<{ key: string; value
 }
 
 function pickAuthingToken(user: Record<string, any>) {
-  const jwtValues = collectJwtValues(user)
-  const [best] = jwtValues.sort((a, b) => a.priority - b.priority)
+  const tokenValues = collectTokenValues(user)
+  const [best] = tokenValues.sort((a, b) => a.priority - b.priority)
   return best?.value || ''
 }
 
 function persistAuthingTokens(user: Record<string, any>) {
-  const jwtValues = collectJwtValues(user)
-  const idToken = jwtValues.find((item) => item.key.toLowerCase().replace(/[_-]/g, "").endsWith("idtoken"))?.value
-  const accessToken = jwtValues.find((item) => item.key.toLowerCase().replace(/[_-]/g, "").endsWith("accesstoken"))?.value
+  const tokenValues = collectTokenValues(user)
+  const idToken = tokenValues.find((item) => item.key.toLowerCase().replace(/[_-]/g, "").endsWith("idtoken"))?.value
+  const accessToken = tokenValues.find((item) => item.key.toLowerCase().replace(/[_-]/g, "").endsWith("accesstoken"))?.value
   const bestToken = pickAuthingToken(user)
 
   if (idToken) localStorage.setItem("idToken", idToken)

@@ -19,6 +19,7 @@ describe("video generation page", () => {
     expect(source).toContain("/api/media/tasks/")
     expect(source).toContain('fetch("/api/dify-upload"')
     expect(source).toContain("getVerifiedAuthHeaders")
+    expect(source).toContain("getRequiredAuthHeaders")
     expect(source).toContain("doubao-seedance-2-0-fast-260128")
     expect(source).toContain("doubao-seedance-2-0-720p")
     expect(source).toContain("doubao-seedance-2-0-1080p")

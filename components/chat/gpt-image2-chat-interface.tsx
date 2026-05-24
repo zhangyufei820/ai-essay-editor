@@ -15,7 +15,7 @@ import { ModelLogo } from "@/components/ModelLogo"
 import { GridWaveLoader } from "@/components/chat/GridWaveLoader"
 import { collapseSidebar, navigateHomeWithSidebar, refreshCredits, refreshSessionList } from "@/lib/workspace-events"
 import { extractUserId } from "@/lib/auth-user"
-import { getVerifiedAuthHeaders, hasStoredVerifiedAuthToken } from "@/lib/client-auth"
+import { getRequiredAuthHeaders, getVerifiedAuthHeaders, hasStoredVerifiedAuthToken } from "@/lib/client-auth"
 import { buildChatSessionRouteFromSession } from "@/lib/chat-session-routes"
 import { isSurveyRequiredPayload, openTrialSurveyGate } from "@/lib/trial-survey-client"
 import type { ModelType } from "@/lib/pricing"
@@ -938,7 +938,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
     const res = await fetch(`${API_BASE}/api/dify-upload`, {
       method: "POST",
       headers: {
-        ...(await getVerifiedAuthHeaders()),
+        ...(await getRequiredAuthHeaders()),
         "X-Model": workspaceModel,
       },
       body: formData,
@@ -966,7 +966,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
     const res = await fetch(`${API_BASE}/api/dify-upload`, {
       method: "POST",
       headers: {
-        ...(await getVerifiedAuthHeaders()),
+        ...(await getRequiredAuthHeaders()),
         "X-Model": workspaceModel,
       },
       body: formData,

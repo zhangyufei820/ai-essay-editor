@@ -15,6 +15,8 @@ const AUTH_TOKEN_STORAGE_KEYS = [
   "accessToken",
   AUTHING_SDK_TOKEN_KEY,
 ] as const
+const SUPABASE_AUTH_TOKEN_SUFFIX = "-auth-token"
+export const AUTH_REQUIRED_MESSAGE = "登录状态已过期，请重新登录后再上传文件。"
 
 function isUsableToken(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0 && value !== "null" && value !== "undefined"
@@ -101,6 +103,59 @@ function readStoredToken(key: string) {
   return isUsableToken(value) ? value : null
 }
 
+function getSupabaseProjectRef() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  if (!supabaseUrl) return null
+
+  try {
+    return new URL(supabaseUrl).hostname.split(".")[0] || null
+  } catch {
+    return null
+  }
+}
+
+function getSupabaseAuthStorageKeys() {
+  if (typeof window === "undefined") return []
+
+  const keys = new Set<string>()
+  const projectRef = getSupabaseProjectRef()
+  if (projectRef) keys.add(`sb-${projectRef}${SUPABASE_AUTH_TOKEN_SUFFIX}`)
+
+  for (let index = 0; index < window.localStorage.length; index += 1) {
+    const key = window.localStorage.key(index)
+    if (key?.startsWith("sb-") && key.endsWith(SUPABASE_AUTH_TOKEN_SUFFIX)) {
+      keys.add(key)
+    }
+  }
+
+  return Array.from(keys)
+}
+
+function pickSupabaseAccessToken(value: unknown) {
+  if (!value || typeof value !== "object") return null
+
+  const candidates = collectTokenCandidates(value)
+    .filter((candidate) => {
+      const normalizedKey = candidate.key.toLowerCase().replace(/[_-]/g, "")
+      return normalizedKey.endsWith("accesstoken") || normalizedKey.endsWith("token")
+    })
+    .sort((a, b) => a.priority - b.priority)
+
+  return candidates.find((candidate) => looksLikeJwt(candidate.value))?.value || null
+}
+
+function getStoredSupabaseAccessToken() {
+  if (typeof window === "undefined") return null
+
+  for (const key of getSupabaseAuthStorageKeys()) {
+    const parsed = parseStoredJson(key)
+    const token = pickSupabaseAccessToken(parsed)
+    if (token) return token
+  }
+
+  return null
+}
+
 function pickJwtFromStoredUser() {
   const storedCurrentUser = getStoredCurrentUser()
   const storedAuthingUser = getStoredAuthingSdkUser()
@@ -165,17 +220,38 @@ export async function getVerifiedAuthHeaders(currentUser?: unknown): Promise<Rec
     }
   }
 
+  const supabaseStoredAccessToken = getStoredSupabaseAccessToken()
+  if (supabaseStoredAccessToken) {
+    return { Authorization: `Bearer ${supabaseStoredAccessToken}` }
+  }
+
   return authingToken ? { Authorization: `Bearer ${authingToken}` } : {}
+}
+
+export async function getRequiredAuthHeaders(currentUser?: unknown): Promise<Record<string, string>> {
+  const headers = await getVerifiedAuthHeaders(currentUser)
+  if (headers.Authorization) return headers
+
+  const error = new Error(AUTH_REQUIRED_MESSAGE)
+  error.name = "AuthRequiredError"
+  throw error
 }
 
 export function hasStoredVerifiedAuthToken() {
   if (typeof window === "undefined") return false
-  return Boolean(getStoredAuthingToken() || AUTH_TOKEN_STORAGE_KEYS.some((key) => readStoredToken(key)))
+  return Boolean(
+    getStoredAuthingToken() ||
+    getStoredSupabaseAccessToken() ||
+    AUTH_TOKEN_STORAGE_KEYS.some((key) => readStoredToken(key)),
+  )
 }
 
 export function clearStoredAuthTokens() {
   if (typeof window === "undefined") return
   for (const key of AUTH_TOKEN_STORAGE_KEYS) {
+    window.localStorage.removeItem(key)
+  }
+  for (const key of getSupabaseAuthStorageKeys()) {
     window.localStorage.removeItem(key)
   }
   window.localStorage.removeItem(AUTHING_SDK_USER_KEY)

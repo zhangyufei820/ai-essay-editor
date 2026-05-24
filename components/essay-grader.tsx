@@ -25,7 +25,7 @@ import { Loader2, Upload, X } from "lucide-react"
 import { UltimateRenderer } from "@/components/chat/UltimateRenderer"
 import { motion } from "framer-motion"
 import { toast } from "sonner"
-import { getVerifiedAuthHeaders } from "@/lib/client-auth"
+import { getRequiredAuthHeaders, getVerifiedAuthHeaders } from "@/lib/client-auth"
 import { IconEssay } from "@/components/icons/v2"
 import { DailySurveyGate, type TrialSurveyStatus } from "@/components/trial/DailySurveyGate"
 import { trackCampaignEvent } from "@/lib/campaign-events-client"
@@ -115,7 +115,7 @@ export function EssayGrader() {
         const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || ''}/api/dify-upload`, {
           method: "POST",
           headers: {
-            ...(await getVerifiedAuthHeaders()),
+            ...(await getRequiredAuthHeaders()),
             "X-Model": "essay-correction"
           },
           body: formData
@@ -161,7 +161,7 @@ export function EssayGrader() {
       toast.success("文件上传成功")
     } catch (e: any) {
       console.error("上传错误:", e)
-      toast.error("上传失败")
+      toast.error(e.message || "上传失败")
     } finally {
       setIsUploading(false)
       setUploadProgress(0)

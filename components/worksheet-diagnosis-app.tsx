@@ -31,7 +31,7 @@ import { createClient } from "@supabase/supabase-js"
 import { Camera, FileImage, ImageIcon, Loader2, MessageSquareText, Plus, Upload, X } from "lucide-react"
 import { toast } from "sonner"
 import { extractUserId } from "@/lib/auth-user"
-import { getVerifiedAuthHeaders } from "@/lib/client-auth"
+import { getRequiredAuthHeaders, getVerifiedAuthHeaders } from "@/lib/client-auth"
 import {
   WORKSHEET_REPORT_IMAGE_CREDITS,
   calculateWorksheetDiagnosisCredits,
@@ -230,7 +230,7 @@ export function WorksheetDiagnosisApp() {
     setIsUploading(true)
     setErrorMessage("")
     try {
-      const headers = await getVerifiedAuthHeaders()
+      const headers = await getRequiredAuthHeaders()
       const uploaded: UploadedWorksheet[] = []
 
       for (const file of incoming) {

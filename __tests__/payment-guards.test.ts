@@ -303,8 +303,8 @@ describe('Sprint 5 payment / credits / membership guards', () => {
     const uploadStart = source.indexOf('/api/dify-upload')
     const uploadBlock = source.slice(Math.max(0, uploadStart - 250), uploadStart + 350)
 
-    expect(source).toContain('import { getVerifiedAuthHeaders } from "@/lib/client-auth"')
-    expect(uploadBlock).toContain('...(await getVerifiedAuthHeaders())')
+    expect(source).toContain('getRequiredAuthHeaders')
+    expect(uploadBlock).toContain('...(await getRequiredAuthHeaders())')
     expect(uploadBlock).toContain('"X-Model": "essay-correction"')
     expect(source).toContain('id="essay-image-upload"')
     expect(source).toContain('htmlFor="essay-image-upload"')
@@ -320,11 +320,16 @@ describe('Sprint 5 payment / credits / membership guards', () => {
     const worksheet = read('components/worksheet-diagnosis-app.tsx')
     const checkout = read('app/checkout/[productId]/page.tsx')
 
-    for (const source of [chat, imageWorkspace, worksheet, checkout]) {
+    for (const source of [chat, imageWorkspace, worksheet]) {
       expect(source).toContain('getVerifiedAuthHeaders')
+      expect(source).toContain('getRequiredAuthHeaders')
       expect(source).toContain('from "@/lib/client-auth"')
       expect(source).not.toContain('async function getVerifiedAuthHeaders(): Promise<Record<string, string>>')
     }
+
+    expect(checkout).toContain('getVerifiedAuthHeaders')
+    expect(checkout).toContain('from "@/lib/client-auth"')
+    expect(checkout).not.toContain('async function getVerifiedAuthHeaders(): Promise<Record<string, string>>')
   })
 
   it('routes the legacy analyze page through the live essay grader path', () => {
