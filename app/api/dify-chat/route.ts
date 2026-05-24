@@ -1214,20 +1214,28 @@ function normalizeAllInOneAgentDisplay(rawText: string) {
   return displayText || "任务已提交，但上游还没有返回可直接展示的内容。请稍后重试，或换一个更明确的生成要求。"
 }
 
-function enqueueSseAnswer(controller: TransformStreamDefaultController<Uint8Array>, answer: string) {
-  controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ event: "message", answer })}\n\n`))
+type SseByteController = {
+  enqueue(chunk: Uint8Array): void
 }
 
-function enqueueSseStatus(controller: TransformStreamDefaultController<Uint8Array>, payload: {
+function enqueueSseEvent(controller: SseByteController, payload: Record<string, unknown>) {
+  controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(payload)}\n\n`))
+}
+
+function enqueueSseAnswer(controller: SseByteController, answer: string) {
+  enqueueSseEvent(controller, { event: "message", answer })
+}
+
+function enqueueSseStatus(controller: SseByteController, payload: {
   stage: string
   progress?: number
   heartbeat?: number
 }) {
-  controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({
+  enqueueSseEvent(controller, {
     event: "status",
     ...payload,
     ts: Date.now(),
-  })}\n\n`))
+  })
 }
 
 function getTraceModelDisplayName(model?: string | null) {
@@ -2397,6 +2405,10 @@ export async function POST(request: NextRequest) {
       timeoutId: ReturnType<typeof setTimeout> | null
       controller: AbortController | null
     } = { firstByteReceived: false, timeoutId: null, controller: null }
+    const useBlockingDifyChat =
+      !WORKFLOW_MODELS.has(model || "") &&
+      !isGptImageGatewayRequest &&
+      model !== "banana-2-pro"
 
     const callDify = async (retryWithoutId = false) => {
         const currentConvId = retryWithoutId ? null : effectiveConvId;
@@ -2497,7 +2509,7 @@ export async function POST(request: NextRequest) {
             difyRequest = {
                 inputs: chatInputs,
                 query: difyQuery,
-                response_mode: isGptImage2 ? "blocking" : "streaming",
+                response_mode: useBlockingDifyChat ? "blocking" : isGptImage2 ? "blocking" : "streaming",
                 user: userId || "default-user",
                 conversation_id: currentConvId,
             }
@@ -2561,7 +2573,7 @@ export async function POST(request: NextRequest) {
             })
             console.warn(`✅ [Dify请求] 响应到达 status=${response.status} body=${response.body === null ? 'null' : 'ReadableStream'}`)
 
-            if (isGptImageGatewayRequest && !streamStatus.firstByteReceived) {
+            if ((isGptImageGatewayRequest || useBlockingDifyChat) && !streamStatus.firstByteReceived) {
                 streamStatus.firstByteReceived = true
                 if (streamStatus.timeoutId) {
                     clearTimeout(streamStatus.timeoutId)
@@ -3011,6 +3023,175 @@ export async function POST(request: NextRequest) {
       } catch (e) {
         console.error("[Billing] 扣费失败:", e)
       }
+    }
+
+    const applyBlockingDifyPayload = async (payload: unknown, controller: SseByteController) => {
+      const record = payload && typeof payload === "object" ? payload as Record<string, unknown> : {}
+      const parsedUsage = parseDifyUsage(payload)
+      latestParsedUsage = parsedUsage
+      totalTokens = parsedUsage.totalTokens
+      promptTokens = parsedUsage.promptTokens
+      completionTokens = parsedUsage.completionTokens
+
+      const rawConversationId = typeof record.conversation_id === "string"
+        ? record.conversation_id
+        : typeof (record.data as Record<string, unknown> | undefined)?.conversation_id === "string"
+          ? String((record.data as Record<string, unknown>).conversation_id)
+          : ""
+      if (rawConversationId) conversationId = rawConversationId
+
+      const rawAnswer = extractDifyTextOutput(payload)
+      const answer = model === "open-claw"
+        ? rewriteOpenClawMediaReferencesWithSignedUrls(rawAnswer, undefined, userId)
+        : isAllInOneAgent
+          ? normalizeAllInOneAgentDisplay(rawAnswer)
+          : rawAnswer
+
+      if (conversationId) {
+        enqueueSseEvent(controller, {
+          event: "conversation",
+          conversation_id: conversationId,
+        })
+      }
+
+      if (answer.trim()) {
+        enqueueSseAnswer(controller, answer)
+        fullResponseText = answer
+        hasReceivedContent = true
+      }
+
+      enqueueSseEvent(controller, {
+        event: "message_end",
+        conversation_id: conversationId || undefined,
+        metadata: {
+          usage: parsedUsage.rawUsage || null,
+          usage_source: parsedUsage.usageSource,
+          estimated: parsedUsage.estimated,
+          prompt_tokens: promptTokens,
+          completion_tokens: completionTokens,
+          total_tokens: totalTokens,
+        },
+      })
+
+      if (conversationId) {
+        await updateTaskRun(taskRun.id, {
+          status: "running",
+          stage: "消息生成完成，正在结算",
+          conversationId,
+          progress: 95,
+          metadata: {
+            dify_response_mode: "blocking",
+            total_tokens: totalTokens,
+            prompt_tokens: promptTokens,
+            completion_tokens: completionTokens,
+          },
+        })
+      }
+    }
+
+    const finalizeDifyChatResponse = async (stagePrefix = "任务完成") => {
+      const shouldCharge = !workflowNodeFailure && hasReceivedContent && (promptTokens > 0 || completionTokens > 0 || workflowImageUrls.length > 0)
+      console.log(`💰 [Billing] ${stagePrefix}，输入 ${promptTokens} tokens，输出 ${completionTokens} tokens，总 ${totalTokens} tokens，内容长度: ${fullResponseText.length}，hasReceivedContent: ${hasReceivedContent}`)
+      if (shouldCharge) {
+        await deductCredit()
+      } else {
+        console.warn(`⚠️ [Billing] ${stagePrefix}但无可结算 token，不扣费`)
+      }
+
+      const finalFailed = Boolean(workflowNodeFailure) || !hasReceivedContent
+      taskCompleted = true
+      await updateTaskRun(taskRun.id, {
+        status: finalFailed ? "failed" : "succeeded",
+        stage: workflowNodeFailure ? "OpenClaw 上游节点执行失败" : hasReceivedContent ? "任务完成" : "流结束但没有返回内容",
+        progress: 100,
+        conversationId: conversationId || undefined,
+        artifacts: extractArtifactsFromText(fullResponseText),
+        errorMessage: workflowNodeFailure?.message || (hasReceivedContent ? null : "流结束但没有返回内容"),
+        errorCode: workflowNodeFailure?.code || (hasReceivedContent ? null : "EMPTY_STREAM"),
+        metadata: {
+          total_tokens: totalTokens,
+          prompt_tokens: promptTokens,
+          completion_tokens: completionTokens,
+          response_length: fullResponseText.length,
+          has_received_content: hasReceivedContent,
+          node_failure: workflowNodeFailure,
+          dify_response_mode: useBlockingDifyChat ? "blocking" : "streaming",
+        },
+      })
+      if (bufferedNodeEvents.length > 0) {
+        fireAndForget("AI Task Trace node batch", replaceTaskNodeEvents(taskRun.id, bufferedNodeEvents))
+      }
+      logPerf(taskRun.requestId, "stream_end", apiStartedAt, {
+        responseLength: fullResponseText.length,
+        nodeEvents: bufferedNodeEvents.length,
+        responseMode: useBlockingDifyChat ? "blocking" : "streaming",
+      })
+    }
+
+    if (useBlockingDifyChat) {
+      console.log(`✅ [Dify请求] 成功，使用 blocking 响应包装为 SSE...`)
+      const blockingPayload = await response.clone().json().catch(async () => {
+        const text = await response.text().catch(() => "")
+        return { answer: text }
+      })
+      const responseBody = new ReadableStream<Uint8Array>({
+        async start(controller) {
+          try {
+            enqueueSseStatus(controller, { stage: "已收到上游回复，正在整理结果", progress: 90 })
+            await applyBlockingDifyPayload(blockingPayload, controller)
+            await finalizeDifyChatResponse("blocking 响应结束")
+            controller.close()
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error)
+            await updateTaskRun(taskRun.id, {
+              status: "failed",
+              stage: "blocking 响应处理失败",
+              progress: 100,
+              errorMessage: message,
+              errorCode: "DIFY_BLOCKING_RESPONSE_FAILED",
+              sanitizedError: sanitizeForTrace({ message }) as Record<string, unknown>,
+            }).catch((traceError) => console.warn("[AI Task Trace] blocking failure update failed:", traceError))
+            enqueueSseEvent(controller, {
+              event: "error",
+              message: "服务响应处理失败，请稍后重试",
+              code: "DIFY_BLOCKING_RESPONSE_FAILED",
+            })
+            controller.close()
+          }
+        },
+      })
+
+      request.signal.addEventListener("abort", () => {
+        if (taskCompleted) return
+        clientAborted = true
+        updateTaskRun(taskRun.id, {
+          status: "cancelled",
+          stage: "客户端连接中断",
+          progress: hasReceivedContent ? 80 : 100,
+          conversationId: conversationId || undefined,
+          errorMessage: `浏览器或网络连接在 ${getTraceModelDisplayName(model)} 响应完成前中断`,
+          errorCode: "CLIENT_STREAM_ABORTED",
+          metadata: {
+            response_length: fullResponseText.length,
+            has_received_content: hasReceivedContent,
+            model,
+            dify_response_mode: "blocking",
+          },
+        }).catch((error) => console.warn("[AI Task Trace] client abort update failed:", error))
+      }, { once: true })
+
+      return new Response(responseBody, {
+        headers: {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache",
+          "Connection": "keep-alive",
+          "X-Accel-Buffering": "no",
+          "Content-Encoding": "none",
+          "X-Request-Id": taskRun.requestId,
+          "X-Trace-Id": taskRun.traceId,
+          "X-Dify-Response-Mode": "blocking",
+        },
+      })
     }
 
     const transformStream = new TransformStream({

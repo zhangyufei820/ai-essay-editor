@@ -71,4 +71,16 @@ describe("all-in-one route model sync", () => {
     expect(text).toContain("enqueueSseAnswer(controller, json.answer)")
     expect(text).toContain("!allInOneStreamedAnswer")
   })
+
+  it("uses Dify blocking mode for chat apps and wraps the answer as SSE", () => {
+    const text = routeSource()
+
+    expect(text).toContain("const useBlockingDifyChat")
+    expect(text).toContain('model !== "banana-2-pro"')
+    expect(text).toContain('response_mode: useBlockingDifyChat ? "blocking"')
+    expect(text).toContain("applyBlockingDifyPayload")
+    expect(text).toContain("使用 blocking 响应包装为 SSE")
+    expect(text).toContain('"X-Dify-Response-Mode": "blocking"')
+    expect(text).toContain("enqueueSseAnswer(controller, answer)")
+  })
 })
