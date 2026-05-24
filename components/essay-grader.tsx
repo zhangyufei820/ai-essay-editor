@@ -172,11 +172,6 @@ export function EssayGrader() {
 
   const removeFile = (i: number) => setUploadedFiles(p => p.filter((_, idx) => idx !== i))
 
-  const openFilePicker = () => {
-    if (isUploading) return
-    fileInputRef.current?.click()
-  }
-
   const handleSubmit = async () => {
     if (!essayText.trim() && uploadedFiles.length === 0) {
       toast.error("请输入作文内容或上传作文图片")
@@ -406,27 +401,30 @@ export function EssayGrader() {
             )}
             
             <div className="flex gap-2">
-              <div className="relative">
-                <Input
+              <div className="relative inline-flex">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  type="button"
+                  disabled={isUploading}
+                  tabIndex={-1}
+                  aria-hidden="true"
+                  className="pointer-events-none"
+                >
+                  <Upload className="w-4 h-4 mr-2" />
+                  上传作文图片
+                </Button>
+                <input
                   ref={fileInputRef}
                   type="file"
                   accept="image/*"
                   multiple
                   onChange={handleFileUpload}
-                  className="sr-only"
                   id="essay-image-upload"
-                  tabIndex={-1}
-                />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  type="button"
-                  onClick={openFilePicker}
+                  aria-label="上传作文图片"
                   disabled={isUploading}
-                >
-                  <Upload className="w-4 h-4 mr-2" />
-                  上传作文图片
-                </Button>
+                  className="absolute inset-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
+                />
               </div>
               <Button variant="outline" size="sm" disabled>
                 <IconEssay className="w-4 h-4 mr-2" />
