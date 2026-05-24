@@ -308,6 +308,15 @@ describe('Sprint 5 payment / credits / membership guards', () => {
     expect(uploadBlock).toContain('"X-Model": "essay-correction"')
   })
 
+  it('routes the legacy analyze page through the live essay grader path', () => {
+    const source = read('app/analyze/page.tsx')
+
+    expect(source).toContain('import { EssayGrader } from "@/components/essay-grader"')
+    expect(source).toContain('<EssayGrader />')
+    expect(source).not.toContain('EssayAnalyzer')
+    expect(source).not.toContain('/api/analyze')
+  })
+
   it('keeps daily survey gate actions reachable on mobile viewports', () => {
     const source = read('components/trial/DailySurveyGate.tsx')
 
