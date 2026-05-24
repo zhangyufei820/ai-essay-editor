@@ -138,7 +138,7 @@ export async function POST(req: NextRequest) {
       },
       query: essayText || "请批改上传的作文图片",
       response_mode: "streaming", // 🔥 改为流式响应，支持思考过程显示
-      user: "essay-correction-user"
+      user: userId
     }
 
     console.log("[作文批改] 输出上限约束:", { maxOutputTokens: ESSAY_MAX_OUTPUT_TOKENS })
