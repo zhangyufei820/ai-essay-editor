@@ -306,6 +306,11 @@ describe('Sprint 5 payment / credits / membership guards', () => {
     expect(source).toContain('import { getVerifiedAuthHeaders } from "@/lib/client-auth"')
     expect(uploadBlock).toContain('...(await getVerifiedAuthHeaders())')
     expect(uploadBlock).toContain('"X-Model": "essay-correction"')
+    expect(source).toContain('const openFilePicker = () =>')
+    expect(source).toContain('fileInputRef.current?.click()')
+    expect(source).toContain('onClick={openFilePicker}')
+    expect(source).toContain('id="essay-image-upload"')
+    expect(source).not.toContain('htmlFor="file-upload"')
   })
 
   it('routes the legacy analyze page through the live essay grader path', () => {

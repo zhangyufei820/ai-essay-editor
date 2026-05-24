@@ -172,6 +172,11 @@ export function EssayGrader() {
 
   const removeFile = (i: number) => setUploadedFiles(p => p.filter((_, idx) => idx !== i))
 
+  const openFilePicker = () => {
+    if (isUploading) return
+    fileInputRef.current?.click()
+  }
+
   const handleSubmit = async () => {
     if (!essayText.trim() && uploadedFiles.length === 0) {
       toast.error("请输入作文内容或上传作文图片")
@@ -408,17 +413,20 @@ export function EssayGrader() {
                   accept="image/*"
                   multiple
                   onChange={handleFileUpload}
-                  className="hidden"
-                  id="file-upload"
+                  className="sr-only"
+                  id="essay-image-upload"
+                  tabIndex={-1}
                 />
-                <Label htmlFor="file-upload">
-                  <Button variant="outline" size="sm" asChild type="button">
-                    <span>
-                      <Upload className="w-4 h-4 mr-2" />
-                      上传作文图片
-                    </span>
-                  </Button>
-                </Label>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  type="button"
+                  onClick={openFilePicker}
+                  disabled={isUploading}
+                >
+                  <Upload className="w-4 h-4 mr-2" />
+                  上传作文图片
+                </Button>
               </div>
               <Button variant="outline" size="sm" disabled>
                 <IconEssay className="w-4 h-4 mr-2" />
