@@ -1,9 +1,60 @@
 import { extractUserId } from "@/lib/auth-user"
 import { createClient } from "@/lib/supabase/client"
 
+type TokenCandidate = {
+  key: string
+  value: string
+  priority: number
+}
+
+function looksLikeJwt(value: unknown): value is string {
+  return typeof value === "string" && value.split(".").length === 3
+}
+
+function collectJwtCandidates(value: unknown, candidates: TokenCandidate[] = [], key = "") {
+  if (!value || typeof value !== "object") return candidates
+
+  const record = value as Record<string, unknown>
+  for (const [childKey, childValue] of Object.entries(record)) {
+    const path = key ? `${key}.${childKey}` : childKey
+    const normalizedKey = childKey.toLowerCase().replace(/[_-]/g, "")
+
+    if (looksLikeJwt(childValue)) {
+      const priority = normalizedKey === "idtoken"
+        ? 0
+        : normalizedKey === "token"
+          ? 1
+          : normalizedKey === "authtoken"
+            ? 2
+            : normalizedKey === "authingtoken"
+              ? 3
+              : normalizedKey === "accesstoken"
+                ? 4
+                : 5
+      candidates.push({ key: path, value: childValue, priority })
+    } else if (childValue && typeof childValue === "object") {
+      collectJwtCandidates(childValue, candidates, path)
+    }
+  }
+
+  return candidates
+}
+
+function pickJwtFromStoredUser() {
+  const storedCurrentUser = getStoredCurrentUser()
+  const [candidate] = collectJwtCandidates(storedCurrentUser)
+    .sort((a, b) => a.priority - b.priority)
+  return looksLikeJwt(candidate?.value) ? candidate.value : null
+}
+
 function getStoredAuthingToken() {
   if (typeof window === "undefined") return null
-  return localStorage.getItem("idToken") || localStorage.getItem("authingToken") || localStorage.getItem("accessToken")
+  return (
+    localStorage.getItem("idToken") ||
+    pickJwtFromStoredUser() ||
+    localStorage.getItem("authingToken") ||
+    localStorage.getItem("accessToken")
+  )
 }
 
 function isAuthingUserId(user: unknown) {
@@ -20,7 +71,9 @@ function getStoredCurrentUser() {
 }
 
 export async function getVerifiedAuthHeaders(currentUser?: unknown): Promise<Record<string, string>> {
-  const authingToken = getStoredAuthingToken()
+  const authingToken =
+    collectJwtCandidates(currentUser).sort((a, b) => a.priority - b.priority)[0]?.value ||
+    getStoredAuthingToken()
   const storedCurrentUser = getStoredCurrentUser()
   if (authingToken && (isAuthingUserId(currentUser) || isAuthingUserId(storedCurrentUser))) {
     return { Authorization: `Bearer ${authingToken}` }

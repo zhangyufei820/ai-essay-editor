@@ -11,33 +11,10 @@ import { PRODUCTS, requiresMembership, hasActiveMembership, getProductPriceInCen
 import { ArrowLeft, Loader2, LogIn, ExternalLink } from "lucide-react"
 import Link from "next/link"
 import { BETA_CONFIG } from "@/lib/beta-config"
-import { extractUserId } from "@/lib/auth-user"
 import { use, useEffect, useState, Suspense } from "react"
 import { createClient } from "@/lib/supabase/client"
+import { getVerifiedAuthHeaders } from "@/lib/client-auth"
 import { IconInkDot, IconMember, IconSealCheck } from "@/components/icons/v2"
-
-async function getVerifiedAuthHeaders(): Promise<Record<string, string>> {
-  if (typeof window !== "undefined") {
-    const authingToken = localStorage.getItem("idToken") || localStorage.getItem("authingToken") || localStorage.getItem("accessToken")
-    try {
-      const currentUserId = extractUserId(JSON.parse(localStorage.getItem("currentUser") || "null"))
-      if (authingToken && /^[a-f0-9]{24}$/i.test(currentUserId)) {
-        return { Authorization: `Bearer ${authingToken}` }
-      }
-    } catch {
-      // Fall through to the verified Supabase session check.
-    }
-  }
-
-  const supabase = createClient()
-  if (supabase) {
-    const { data } = await supabase.auth.getSession()
-    if (data.session?.access_token) return { Authorization: `Bearer ${data.session.access_token}` }
-  }
-  if (typeof window === "undefined") return {}
-  const authingToken = localStorage.getItem("idToken") || localStorage.getItem("authingToken") || localStorage.getItem("accessToken")
-  return authingToken ? { Authorization: `Bearer ${authingToken}` } : {}
-}
 
 function CheckoutFlow({ productId }: { productId: string }) {
   const router = useRouter()

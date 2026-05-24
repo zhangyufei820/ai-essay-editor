@@ -64,6 +64,7 @@ import { isWorkflowSkillAgent, type WorkflowSkillId } from "@/lib/workflow-skill
 import { createClient } from "@supabase/supabase-js"
 import { collapseSidebar, navigateHomeWithSidebar, refreshCredits, refreshSessionList, SESSION_LIST_REFRESH_EVENT } from "@/lib/workspace-events"
 import { useSelectedModelStore } from "@/hooks/useSelectedModelStore"
+import { getVerifiedAuthHeaders } from "@/lib/client-auth"
 import { validateFileForUpload, MAX_FILE_SIZE } from "@/lib/upload-service"
 import { VoiceRecorder, getDifyTTS, transcribeAudio } from "@/lib/voice-service"
 import { getApiUrl } from "@/lib/api-config"
@@ -312,26 +313,6 @@ function ChatSkeleton() {
       ))}
     </div>
   )
-}
-
-async function getVerifiedAuthHeaders(): Promise<Record<string, string>> {
-  if (typeof window !== "undefined") {
-    const authingToken = localStorage.getItem("idToken") || localStorage.getItem("authingToken") || localStorage.getItem("accessToken")
-    try {
-      const currentUserId = extractUserId(JSON.parse(localStorage.getItem("currentUser") || "null"))
-      if (authingToken && /^[a-f0-9]{24}$/i.test(currentUserId)) {
-        return { Authorization: `Bearer ${authingToken}` }
-      }
-    } catch {
-      // Fall through to the verified Supabase session check.
-    }
-  }
-
-  const { data } = await supabase.auth.getSession()
-  if (data.session?.access_token) return { Authorization: `Bearer ${data.session.access_token}` }
-  if (typeof window === "undefined") return {}
-  const authingToken = localStorage.getItem("idToken") || localStorage.getItem("authingToken") || localStorage.getItem("accessToken")
-  return authingToken ? { Authorization: `Bearer ${authingToken}` } : {}
 }
 
 // --- 类型定义 ---

@@ -6,19 +6,51 @@ import { Loader2 } from 'lucide-react'
 import { LoginPageV2 } from "@/components/auth/v2/LoginPageV2"
 import { safeInternalRedirectPath } from '@/lib/security/redirect'
 
+function collectJwtValues(value: unknown, candidates: Array<{ key: string; value: string; priority: number }> = [], key = "") {
+  if (!value || typeof value !== "object") return candidates
+
+  for (const [childKey, childValue] of Object.entries(value as Record<string, unknown>)) {
+    const path = key ? `${key}.${childKey}` : childKey
+    const normalizedKey = childKey.toLowerCase().replace(/[_-]/g, "")
+
+    if (typeof childValue === "string" && childValue.split(".").length === 3) {
+      const priority = normalizedKey === "idtoken"
+        ? 0
+        : normalizedKey === "token"
+          ? 1
+          : normalizedKey === "authtoken"
+            ? 2
+            : normalizedKey === "authingtoken"
+              ? 3
+              : normalizedKey === "accesstoken"
+                ? 4
+                : 5
+      candidates.push({ key: path, value: childValue, priority })
+    } else if (childValue && typeof childValue === "object") {
+      collectJwtValues(childValue, candidates, path)
+    }
+  }
+
+  return candidates
+}
+
 function pickAuthingToken(user: Record<string, any>) {
-  const candidates = [
-    user.idToken,
-    user.id_token,
-    user.accessToken,
-    user.access_token,
-    user.token,
-    user.jwt,
-    user.authingToken,
-    typeof window !== 'undefined' ? localStorage.getItem('idToken') : null,
-    typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null,
-  ]
-  return candidates.find((value): value is string => typeof value === 'string' && value.split('.').length === 3) || ''
+  const jwtValues = collectJwtValues(user)
+  const [best] = jwtValues.sort((a, b) => a.priority - b.priority)
+  return best?.value || ''
+}
+
+function persistAuthingTokens(user: Record<string, any>) {
+  const jwtValues = collectJwtValues(user)
+  const idToken = jwtValues.find((item) => item.key.toLowerCase().replace(/[_-]/g, "").endsWith("idtoken"))?.value
+  const accessToken = jwtValues.find((item) => item.key.toLowerCase().replace(/[_-]/g, "").endsWith("accesstoken"))?.value
+  const bestToken = pickAuthingToken(user)
+
+  if (idToken) localStorage.setItem("idToken", idToken)
+  if (accessToken) localStorage.setItem("accessToken", accessToken)
+  if (bestToken) localStorage.setItem("authingToken", bestToken)
+
+  return bestToken
 }
 
 function AuthingLoginComponent() {
@@ -93,10 +125,7 @@ function AuthingLoginComponent() {
         // [关键] 保存用户信息到浏览器，以便支付页面能看到
         const finalUser = userInfo.data || userInfo
         localStorage.setItem('currentUser', JSON.stringify(finalUser))
-        const authingToken = pickAuthingToken(finalUser)
-        if (authingToken) {
-          localStorage.setItem('authingToken', authingToken)
-        }
+        const authingToken = persistAuthingTokens(userInfo)
 
         // 可选：同步到你的后端数据库 (保留了你之前的逻辑)
         try {

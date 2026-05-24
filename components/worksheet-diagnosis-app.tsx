@@ -31,6 +31,7 @@ import { createClient } from "@supabase/supabase-js"
 import { Camera, FileImage, ImageIcon, Loader2, MessageSquareText, Plus, Upload, X } from "lucide-react"
 import { toast } from "sonner"
 import { extractUserId } from "@/lib/auth-user"
+import { getVerifiedAuthHeaders } from "@/lib/client-auth"
 import {
   WORKSHEET_REPORT_IMAGE_CREDITS,
   calculateWorksheetDiagnosisCredits,
@@ -98,27 +99,6 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
 )
-
-async function getVerifiedAuthHeaders(): Promise<Record<string, string>> {
-  if (typeof window !== "undefined") {
-    const authingToken = localStorage.getItem("idToken") || localStorage.getItem("authingToken") || localStorage.getItem("accessToken")
-    try {
-      const currentUserId = extractUserId(JSON.parse(localStorage.getItem("currentUser") || "null"))
-      if (authingToken && /^[a-f0-9]{24}$/i.test(currentUserId)) {
-        return { Authorization: `Bearer ${authingToken}` }
-      }
-    } catch {
-      // Fall through to Supabase session.
-    }
-  }
-
-  const { data } = await supabase.auth.getSession()
-  if (data.session?.access_token) return { Authorization: `Bearer ${data.session.access_token}` }
-
-  if (typeof window === "undefined") return {}
-  const authingToken = localStorage.getItem("idToken") || localStorage.getItem("authingToken") || localStorage.getItem("accessToken")
-  return authingToken ? { Authorization: `Bearer ${authingToken}` } : {}
-}
 
 function formatBytes(bytes: number) {
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`

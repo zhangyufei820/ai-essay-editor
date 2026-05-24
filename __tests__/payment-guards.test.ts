@@ -314,6 +314,18 @@ describe('Sprint 5 payment / credits / membership guards', () => {
     expect(source).not.toContain('fileInputRef.current?.click()')
   })
 
+  it('keeps chat agent uploads on the shared verified auth helper', () => {
+    const chat = read('components/chat/enhanced-chat-interface.tsx')
+    const imageWorkspace = read('components/chat/gpt-image2-chat-interface.tsx')
+    const worksheet = read('components/worksheet-diagnosis-app.tsx')
+    const checkout = read('app/checkout/[productId]/page.tsx')
+
+    for (const source of [chat, imageWorkspace, worksheet, checkout]) {
+      expect(source).toContain('import { getVerifiedAuthHeaders } from "@/lib/client-auth"')
+      expect(source).not.toContain('async function getVerifiedAuthHeaders(): Promise<Record<string, string>>')
+    }
+  })
+
   it('routes the legacy analyze page through the live essay grader path', () => {
     const source = read('app/analyze/page.tsx')
 
