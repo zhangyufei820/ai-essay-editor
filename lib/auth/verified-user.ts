@@ -1,6 +1,6 @@
 import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
-import { verifyAuthingJwt } from "@/lib/auth/authing-jwt"
+import { verifyAuthingJwt, verifyAuthingUserInfoToken } from "@/lib/auth/authing-jwt"
 
 export type VerifiedUser = {
   id: string
@@ -57,7 +57,9 @@ export async function getVerifiedUser(request: NextRequest): Promise<VerifiedUse
 
   if (!bearerToken) return null
 
-  const authingPayload = await verifyAuthingJwt(bearerToken)
+  const authingPayload =
+    (await verifyAuthingJwt(bearerToken)) ||
+    (await verifyAuthingUserInfoToken(bearerToken))
   if (!authingPayload?.sub) return null
 
   return {

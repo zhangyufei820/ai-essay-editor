@@ -1,6 +1,10 @@
 import { createSign, generateKeyPairSync } from "crypto"
 import fs from "fs"
-import { clearAuthingJwksCacheForTests, verifyAuthingJwt } from "@/lib/auth/authing-jwt"
+import {
+  clearAuthingJwksCacheForTests,
+  verifyAuthingJwt,
+  verifyAuthingUserInfoToken,
+} from "@/lib/auth/authing-jwt"
 import { getVerifiedUser, requireUser } from "@/lib/auth/verified-user"
 
 function base64Url(input: string | Buffer) {
@@ -114,6 +118,52 @@ describe("Authing JWT verification", () => {
     }
   })
 
+  it("falls back to Authing userinfo for opaque access tokens", async () => {
+    process.env.AUTHING_ISSUER = env.AUTHING_ISSUER
+    process.env.AUTHING_AUDIENCE = env.AUTHING_AUDIENCE
+    process.env.AUTHING_JWKS_URL = env.AUTHING_JWKS_URL
+    const accessToken = "opaque-access-token"
+    const fetchUserInfo = jest.fn(async (url: string, init?: any) => {
+      if (url.endsWith("/.well-known/openid-configuration")) {
+        return {
+          ok: true,
+          json: async () => ({ userinfo_endpoint: "https://auth.example.com/oidc/me" }),
+        }
+      }
+
+      expect(init?.headers?.Authorization).toBe(`Bearer ${accessToken}`)
+      return {
+        ok: true,
+        json: async () => ({
+          sub: "507f1f77bcf86cd799439011",
+          phone_number: "13900000000",
+        }),
+      }
+    })
+
+    const originalFetch = global.fetch
+    global.fetch = fetchUserInfo as any
+
+    try {
+      await expect(verifyAuthingUserInfoToken(accessToken, process.env, fetchUserInfo as any, nowMs))
+        .resolves
+        .toMatchObject({ sub: "507f1f77bcf86cd799439011", phone_number: "13900000000" })
+
+      const auth = await requireUser(createMockRequest({ Authorization: `Bearer ${accessToken}` }))
+      expect(auth.response).toBeNull()
+      expect(auth.user).toMatchObject({
+        id: "507f1f77bcf86cd799439011",
+        phone: "13900000000",
+        provider: "authing",
+      })
+    } finally {
+      global.fetch = originalFetch
+      delete process.env.AUTHING_ISSUER
+      delete process.env.AUTHING_AUDIENCE
+      delete process.env.AUTHING_JWKS_URL
+    }
+  })
+
   it("returns 401 when no verified token is present", async () => {
     const auth = await requireUser(createMockRequest())
     expect(auth.user).toBeNull()
@@ -136,5 +186,6 @@ describe("Authing JWT verification", () => {
     expect(source).toContain("supabase.auth.getUser(bearerToken)")
     expect(source).toContain("supabase.auth.getUser()")
     expect(source).toContain("verifyAuthingJwt(bearerToken)")
+    expect(source).toContain("verifyAuthingUserInfoToken(bearerToken)")
   })
 })

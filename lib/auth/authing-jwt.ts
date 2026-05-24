@@ -25,8 +25,17 @@ type Jwks = {
 }
 
 type FetchLike = (url: string) => Promise<Pick<Response, "ok" | "json">>
+type UserInfoFetchLike = (
+  url: string,
+  init?: { headers?: Record<string, string> },
+) => Promise<Pick<Response, "ok" | "json">>
+
+type OidcDiscovery = {
+  userinfo_endpoint?: string
+}
 
 const JWKS_CACHE = new Map<string, { expiresAt: number; jwks: Jwks }>()
+const USERINFO_ENDPOINT_CACHE = new Map<string, { expiresAt: number; endpoint: string }>()
 const JWKS_CACHE_TTL_MS = 10 * 60 * 1000
 
 function decodeBase64Url(value: string) {
@@ -67,6 +76,57 @@ async function fetchJwks(jwksUrl: string, fetchImpl: FetchLike, nowMs: number) {
   const jwks = (await response.json()) as Jwks
   JWKS_CACHE.set(jwksUrl, { jwks, expiresAt: nowMs + JWKS_CACHE_TTL_MS })
   return jwks
+}
+
+async function resolveUserInfoEndpoint(
+  issuer: string,
+  fetchImpl: UserInfoFetchLike,
+  nowMs: number,
+  env: Env,
+) {
+  const configured = env.AUTHING_USERINFO_URL?.trim()
+  if (configured) return configured
+
+  const cached = USERINFO_ENDPOINT_CACHE.get(issuer)
+  if (cached && cached.expiresAt > nowMs) return cached.endpoint
+
+  const discoveryUrl = `${issuer.replace(/\/+$/, "")}/.well-known/openid-configuration`
+  const response = await fetchImpl(discoveryUrl)
+  if (!response.ok) return null
+
+  const discovery = (await response.json()) as OidcDiscovery
+  if (!discovery.userinfo_endpoint) return null
+
+  USERINFO_ENDPOINT_CACHE.set(issuer, {
+    endpoint: discovery.userinfo_endpoint,
+    expiresAt: nowMs + JWKS_CACHE_TTL_MS,
+  })
+  return discovery.userinfo_endpoint
+}
+
+export async function verifyAuthingUserInfoToken(
+  token: string,
+  env: Env = process.env,
+  fetchImpl: UserInfoFetchLike = fetch,
+  nowMs = Date.now(),
+): Promise<AuthingJwtPayload | null> {
+  const issuer = env.AUTHING_ISSUER?.trim()
+  if (!issuer) return null
+
+  const userInfoEndpoint = await resolveUserInfoEndpoint(issuer, fetchImpl, nowMs, env)
+  if (!userInfoEndpoint) return null
+
+  const response = await fetchImpl(userInfoEndpoint, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!response.ok) return null
+
+  const payload = (await response.json()) as AuthingJwtPayload
+  if (!payload?.sub) return null
+  return {
+    ...payload,
+    iss: payload.iss || issuer,
+  }
 }
 
 export async function verifyAuthingJwt(
@@ -113,4 +173,5 @@ export async function verifyAuthingJwt(
 
 export function clearAuthingJwksCacheForTests() {
   JWKS_CACHE.clear()
+  USERINFO_ENDPOINT_CACHE.clear()
 }
