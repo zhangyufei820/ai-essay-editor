@@ -1139,6 +1139,38 @@ function extractOpenClawFinalNodeText(event: Record<string, unknown>) {
   })
 }
 
+function extractFinalNodeOutputText(event: Record<string, unknown>) {
+  if (event.event !== "node_finished") return ""
+
+  const data = readRecord(event.data)
+  const outputs = readRecord(data?.outputs)
+  if (!data || !outputs) return ""
+
+  const nodeTitle = String(data.title || event.title || "").trim().toLowerCase()
+  const nodeType = String(data.node_type || data.type || event.node_type || "").trim().toLowerCase()
+  const isDisplayNode =
+    nodeType === "llm" ||
+    nodeType === "answer" ||
+    nodeType === "direct-answer" ||
+    nodeTitle === "llm" ||
+    nodeTitle.includes("直接回复") ||
+    nodeTitle.includes("direct reply") ||
+    nodeTitle.includes("final answer") ||
+    nodeTitle.includes("answer") ||
+    nodeTitle.includes("总编辑") ||
+    nodeTitle.includes("报告")
+
+  if (!isDisplayNode) return ""
+
+  return extractDifyTextOutput({
+    answer: outputs.answer,
+    text: outputs.text,
+    result: outputs.result,
+    markdown: outputs.markdown,
+    content: outputs.content,
+  })
+}
+
 function extractDisplayTextFromUnknown(value: unknown): string[] {
   if (!value) return []
   if (typeof value === "string") {
@@ -2830,6 +2862,7 @@ export async function POST(request: NextRequest) {
     let workflowNodeFailure: { message: string; code: string } | null = null
     let allInOneDisplaySent = false
     let allInOneStreamedAnswer = false
+    let finalNodeOutputText = ""
     let openClawFinalOutputText = ""
     const bufferedNodeEvents: Array<{
       event: string
@@ -3069,15 +3102,21 @@ export async function POST(request: NextRequest) {
                       sanitizedError: sanitizeForTrace({ node: title, status: nodeStatus, error: errorMessage }) as Record<string, unknown>,
 	                    }).catch((error) => console.warn("[AI Task Trace] node failure update failed:", error))
 	                  }
-                    if (model === "open-claw" && !hasReceivedContent) {
-                      const finalNodeText = extractOpenClawFinalNodeText(json)
+                    if (!hasReceivedContent) {
+                      const finalNodeText = extractFinalNodeOutputText(json)
                       if (finalNodeText.trim()) {
-                        openClawFinalOutputText = finalNodeText
+                        finalNodeOutputText = finalNodeText
                         updateTaskRun(taskRun.id, {
                           status: "running",
-                          stage: "已收到 OpenClaw 最终回复",
+                          stage: model === "open-claw" ? "已收到 OpenClaw 最终回复" : "已收到最终节点回复",
                           progress: 90,
-                        }).catch((error) => console.warn("[AI Task Trace] OpenClaw final node update failed:", error))
+                        }).catch((error) => console.warn("[AI Task Trace] final node update failed:", error))
+                      }
+                      if (model === "open-claw") {
+                        const openClawFinalNodeText = extractOpenClawFinalNodeText(json)
+                        if (openClawFinalNodeText.trim()) {
+                          openClawFinalOutputText = openClawFinalNodeText
+                        }
                       }
                     }
 	              }
@@ -3223,6 +3262,11 @@ export async function POST(request: NextRequest) {
                 enqueueSseAnswer(controller, openClawFinalOutputText)
                 fullResponseText = openClawFinalOutputText
                 hasReceivedContent = true
+              } else if (json.event === "message_end" && !hasReceivedContent && finalNodeOutputText.trim()) {
+                const displayText = isAllInOneAgent ? normalizeAllInOneAgentDisplay(finalNodeOutputText) : finalNodeOutputText
+                enqueueSseAnswer(controller, displayText)
+                fullResponseText = displayText
+                hasReceivedContent = true
               }
 
               // 🎨 处理 workflow_finished 事件（可能包含图片）
@@ -3319,6 +3363,11 @@ export async function POST(request: NextRequest) {
         if (model === "open-claw" && !hasReceivedContent && openClawFinalOutputText.trim()) {
           enqueueSseAnswer(controller, openClawFinalOutputText)
           fullResponseText = openClawFinalOutputText
+          hasReceivedContent = true
+        } else if (!hasReceivedContent && finalNodeOutputText.trim()) {
+          const displayText = isAllInOneAgent ? normalizeAllInOneAgentDisplay(finalNodeOutputText) : finalNodeOutputText
+          enqueueSseAnswer(controller, displayText)
+          fullResponseText = displayText
           hasReceivedContent = true
         }
 	        console.log(`💰 [Billing] 流结束，输入 ${promptTokens} tokens，输出 ${completionTokens} tokens，总 ${totalTokens} tokens，内容长度: ${fullResponseText.length}，hasReceivedContent: ${hasReceivedContent}`)
