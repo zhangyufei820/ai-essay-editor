@@ -23,6 +23,7 @@ type RuntimeFlags = {
   campaignEnabled: boolean
   consumptionEnabled: boolean
   autoPromptEnabled: boolean
+  loaded: boolean
 }
 
 function todayKey() {
@@ -65,8 +66,9 @@ export function DailySurveyAutoPrompt() {
   const [surveyOpen, setSurveyOpen] = useState(false)
   const [runtimeFlags, setRuntimeFlags] = useState<RuntimeFlags>({
     campaignEnabled: false,
-    consumptionEnabled: true,
-    autoPromptEnabled: true,
+    consumptionEnabled: false,
+    autoPromptEnabled: false,
+    loaded: false,
   })
   const [session, setSession] = useState<SessionState>({
     loggedIn: false,
@@ -86,10 +88,16 @@ export function DailySurveyAutoPrompt() {
         campaignEnabled: data?.campaignEnabled !== false,
         consumptionEnabled: data?.consumptionEnabled !== false,
         autoPromptEnabled: data?.autoPromptEnabled !== false,
+        loaded: true,
       })
     } catch (error) {
       console.warn("[DailySurveyAutoPrompt] runtime flags refresh failed", error)
-      setRuntimeFlags((previous) => ({ ...previous, campaignEnabled: false }))
+      setRuntimeFlags({
+        campaignEnabled: false,
+        consumptionEnabled: false,
+        autoPromptEnabled: false,
+        loaded: true,
+      })
     }
   }, [])
 
@@ -144,7 +152,7 @@ export function DailySurveyAutoPrompt() {
   }, [refreshSession])
 
   useEffect(() => {
-    if (typeof window === "undefined" || !session.loggedIn || !runtimeFlags.autoPromptEnabled) return
+    if (typeof window === "undefined" || !session.loggedIn || !runtimeFlags.consumptionEnabled || !runtimeFlags.autoPromptEnabled) return
 
     const userKey = session.userId || "verified-user"
     const autoKey = `${AUTO_SURVEY_KEY_PREFIX}:${userKey}:${localDate}`
@@ -171,11 +179,15 @@ export function DailySurveyAutoPrompt() {
         autoTimerRef.current = null
       }
     }
-  }, [localDate, runtimeFlags.autoPromptEnabled, session])
+  }, [localDate, runtimeFlags.autoPromptEnabled, runtimeFlags.consumptionEnabled, session])
 
   useEffect(() => {
     if (typeof window === "undefined") return
     const handleOpenSurvey = () => {
+      if (!runtimeFlags.loaded || !runtimeFlags.consumptionEnabled || !runtimeFlags.autoPromptEnabled) {
+        setSurveyOpen(false)
+        return
+      }
       void refreshSession()
         .then((nextSession) => {
           const activeSession = nextSession || session
@@ -190,9 +202,14 @@ export function DailySurveyAutoPrompt() {
     }
     window.addEventListener(OPEN_DAILY_SURVEY_EVENT, handleOpenSurvey)
     return () => window.removeEventListener(OPEN_DAILY_SURVEY_EVENT, handleOpenSurvey)
-  }, [refreshSession, session])
+  }, [refreshSession, runtimeFlags.autoPromptEnabled, runtimeFlags.consumptionEnabled, runtimeFlags.loaded, session])
 
   const hasTrial = Boolean(session.trialStatus?.active_grant_id)
+  const surveyGateEnabled = runtimeFlags.loaded
+    && runtimeFlags.consumptionEnabled
+    && runtimeFlags.autoPromptEnabled
+    && session.loggedIn
+    && shouldRequireSurvey(session.trialStatus, session.paidUser)
 
   return (
     <>
@@ -207,7 +224,7 @@ export function DailySurveyAutoPrompt() {
 
       <DailySurveyGate
         featureName="今日 AI 学习体验"
-        enabled={session.loggedIn && shouldRequireSurvey(session.trialStatus, session.paidUser)}
+        enabled={surveyGateEnabled}
         open={surveyOpen}
         onOpenChange={setSurveyOpen}
         title="完成今日反馈，解锁今日体验额度"

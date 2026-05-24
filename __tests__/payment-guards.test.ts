@@ -372,6 +372,18 @@ describe('Sprint 5 payment / credits / membership guards', () => {
     expect(essay).toContain('setSurveyGateOpen(openedSurveyGate)')
   })
 
+  it('keeps the global daily survey prompt behind runtime stop-loss flags', () => {
+    const source = read('components/trial/DailySurveyAutoPrompt.tsx')
+
+    expect(source).toContain('loaded: false')
+    expect(source).toContain('consumptionEnabled: false')
+    expect(source).toContain('autoPromptEnabled: false')
+    expect(source).toContain('const surveyGateEnabled = runtimeFlags.loaded')
+    expect(source).toContain('&& runtimeFlags.consumptionEnabled')
+    expect(source).toContain('&& runtimeFlags.autoPromptEnabled')
+    expect(source).toContain('enabled={surveyGateEnabled}')
+  })
+
   it('lets Bearer requests reach route-level verified auth instead of Supabase-only middleware', () => {
     const middleware = read('lib/supabase/middleware.ts')
 
