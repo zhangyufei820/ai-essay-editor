@@ -353,6 +353,8 @@ describe('Sprint 5 payment / credits / membership guards', () => {
 
   it('keeps daily survey gate actions reachable on mobile viewports', () => {
     const source = read('components/trial/DailySurveyGate.tsx')
+    const chat = read('components/chat/enhanced-chat-interface.tsx')
+    const essay = read('components/essay-grader.tsx')
 
     expect(source).toContain('SURVEY_FETCH_TIMEOUT_MS')
     expect(source).toContain('const [loadError, setLoadError]')
@@ -364,6 +366,10 @@ describe('Sprint 5 payment / credits / membership guards', () => {
     expect(source).toContain('overflow-y-auto')
     expect(source).toContain('pb-[max(0.75rem,env(safe-area-inset-bottom))]')
     expect(source).toContain('grid shrink-0 grid-cols-2')
+    expect(chat).toContain('const openedSurveyGate = await openTrialSurveyGate')
+    expect(chat).toContain('setSurveyGateOpen(openedSurveyGate)')
+    expect(essay).toContain('const openedSurveyGate = await openTrialSurveyGate')
+    expect(essay).toContain('setSurveyGateOpen(openedSurveyGate)')
   })
 
   it('lets Bearer requests reach route-level verified auth instead of Supabase-only middleware', () => {

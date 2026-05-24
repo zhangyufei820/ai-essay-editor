@@ -199,12 +199,12 @@ export function EssayGrader() {
 
     const gateRequired = await refreshTrialSurveyState()
     if (gateRequired || shouldRequireEssaySurvey(trialStatus)) {
-      setSurveyGateOpen(true)
-      openTrialSurveyGate({
+      const openedSurveyGate = await openTrialSurveyGate({
         featureName: "作文批改",
         message: "请先完成今日问卷，解锁体验额度后继续批改作文。",
       })
-      return
+      setSurveyGateOpen(openedSurveyGate)
+      if (openedSurveyGate) return
     }
 
     setIsLoading(true)
@@ -239,7 +239,7 @@ export function EssayGrader() {
               featureName: "essay_grader",
               status: response.status,
             })
-            openTrialSurveyGate({
+            void openTrialSurveyGate({
               featureName: "作文批改",
               message: "请先完成今日问卷，解锁体验额度后继续批改作文。",
             })

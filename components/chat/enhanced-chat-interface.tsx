@@ -2475,12 +2475,16 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       const surveyState = await refreshTrialSurveyState()
       trialEligibleForSubmit = surveyState.trialEligible
       if (surveyState.gateRequired) {
-        setSurveyGateOpen(true)
-        openTrialSurveyGate({
+        const openedSurveyGate = await openTrialSurveyGate({
           featureName: getModelUiConfig(selectedModel).name || "当前功能",
           message: "请先完成今日问卷，解锁体验额度后继续使用当前功能。",
         })
-        return
+        setSurveyGateOpen(openedSurveyGate)
+        if (!openedSurveyGate) {
+          trialEligibleForSubmit = false
+        } else {
+          return
+        }
       }
     }
 
@@ -2763,7 +2767,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
               status: res.status,
               model: selectedModel,
             })
-            openTrialSurveyGate({
+            void openTrialSurveyGate({
               featureName: getModelUiConfig(selectedModel).name || "当前功能",
               message: "请先完成今日问卷，解锁体验额度后继续使用当前功能。",
             })
