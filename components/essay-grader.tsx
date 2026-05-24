@@ -110,7 +110,6 @@ export function EssayGrader() {
       const uploadPromises = Array.from(files).map(async (file, index) => {
         const formData = new FormData()
         formData.append("file", file)
-        formData.append("user", "essay-correction-user")
         
         const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || ''}/api/dify-upload`, {
           method: "POST",

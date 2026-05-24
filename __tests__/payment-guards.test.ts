@@ -310,6 +310,7 @@ describe('Sprint 5 payment / credits / membership guards', () => {
     expect(route).toContain('const userId = auth.user!.id')
     expect(route).toContain('user: userId')
     expect(route).not.toContain('user: "essay-correction-user"')
+    expect(source).not.toContain('essay-correction-user')
     expect(source).toContain('id="essay-image-upload"')
     expect(source).toContain('htmlFor="essay-image-upload"')
     expect(source).toContain('aria-label="上传作文图片"')
