@@ -19,6 +19,9 @@ describe("Dify final node output fallback", () => {
     const route = read("app/api/dify-chat/route.ts")
 
     expect(route).toContain('dify-keepalive')
+    expect(route).toContain("function enqueueSseStatus")
+    expect(route).toContain('event: "status"')
+    expect(route).toContain("连接正常，任务仍在处理中")
     expect(route).not.toContain('if (model !== "open-claw" && !isAllInOneAgent) return body')
   })
 })

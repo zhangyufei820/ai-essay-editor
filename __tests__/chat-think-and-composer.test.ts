@@ -107,7 +107,12 @@ describe("chat think rendering and composer layout", () => {
 
     expect(source).toContain("const uid = extractUserId(user)")
     expect(source).toContain("extractWorkflowOutputText(outputs)")
-    expect(source).toContain("我没有收到可展示的作文批改结果")
+    expect(source).toContain("getModelEmptyResponseMessage(selectedModel)")
+    expect(source).toContain('disabledReason={!userId ? "auth" : isLoading ? "loading" : undefined}')
+    expect(source).toContain("hydrateVerifiedUserFromApi")
+    expect(source).toContain('json.event === "status"')
+    expect(source).toContain('json.event === "error"')
+    expect(source).toContain("连接正常，任务仍在处理中")
   })
 
   it("keeps OpenClaw final node output visible when message chunks are empty", () => {

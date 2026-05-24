@@ -33,10 +33,30 @@ export const ALLOWED_FILE_TYPES = [
   "image/png", 
   "image/gif", 
   "image/webp",
+  "image/heic",
+  "image/heif",
   "application/pdf", 
   "text/plain",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 ]
+
+const ALLOWED_FILE_EXTENSIONS = [
+  ".jpg",
+  ".jpeg",
+  ".png",
+  ".gif",
+  ".webp",
+  ".heic",
+  ".heif",
+  ".pdf",
+  ".txt",
+  ".docx",
+]
+
+function getFileExtension(fileName: string) {
+  const index = fileName.lastIndexOf(".")
+  return index >= 0 ? fileName.slice(index).toLowerCase() : ""
+}
 
 export const MAX_FILE_SIZE = 100 * 1024 * 1024 // 100MB
 
@@ -48,6 +68,11 @@ export const MAX_FILE_SIZE = 100 * 1024 * 1024 // 100MB
  * ✅ 安全校验：验证文件类型
  */
 export function validateFileType(file: File): { valid: boolean; error?: string } {
+  const ext = getFileExtension(file.name)
+  if (!file.type && ALLOWED_FILE_EXTENSIONS.includes(ext)) {
+    return { valid: true }
+  }
+
   if (!ALLOWED_FILE_TYPES.includes(file.type)) {
     return { 
       valid: false, 

@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server"
 import { NextResponse } from "next/server"
 import { randomUUID } from "crypto"
 import path from "path"
+import sharp from "sharp"
 import { getClientIP, checkIpRateLimit, createRateLimitResponse } from "@/lib/rate-limit"
 import { internalDifyFetch } from "@/lib/internal-dify-fetch"
 import { getDifyCredentialForModel } from "@/lib/dify-credentials"
@@ -24,6 +25,8 @@ const ALLOWED_MIME_TYPES = [
   "image/png",
   "image/gif",
   "image/webp",
+  "image/heic",
+  "image/heif",
   "application/pdf",
   "text/plain",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document", // .docx
@@ -36,7 +39,7 @@ const ALLOWED_MIME_TYPES = [
 ]
 
 // ✅ 安全校验：允许的文件扩展名
-const ALLOWED_EXTENSIONS = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".pdf", ".txt", ".docx", ".webm", ".mp3", ".ogg", ".wav"]
+const ALLOWED_EXTENSIONS = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".heic", ".heif", ".pdf", ".txt", ".docx", ".webm", ".mp3", ".ogg", ".wav"]
 
 // ✅ 安全校验：docker-nginx-1 100M 上限
 const MAX_FILE_SIZE_VERCEL = 100 * 1024 * 1024
@@ -75,6 +78,11 @@ function getApiKeyForModel(model: string | null): string {
  * ✅ 安全校验：验证文件类型 (MIME)
  */
 function validateFileType(file: File): { valid: boolean; error?: string } {
+  const ext = path.extname(file.name).toLowerCase()
+  if (!file.type && ALLOWED_EXTENSIONS.includes(ext)) {
+    return { valid: true }
+  }
+
   if (!ALLOWED_MIME_TYPES.includes(file.type)) {
     return { 
       valid: false, 
@@ -147,6 +155,68 @@ function buildModelAccessibleImageUrl(request: NextRequest, gatewayUrl: string):
 
 function shouldUseImageGateway(model: string | null) {
   return model === "gpt-image-2" || model === "gpt-image-1" || model === "gemini-image"
+}
+
+function isHeicLikeFile(file: File, ext?: string) {
+  const normalizedExt = (ext || path.extname(file.name)).toLowerCase()
+  return file.type === "image/heic" || file.type === "image/heif" || normalizedExt === ".heic" || normalizedExt === ".heif"
+}
+
+function inferMimeTypeFromExtension(ext: string) {
+  switch (ext.toLowerCase()) {
+    case ".jpg":
+    case ".jpeg":
+      return "image/jpeg"
+    case ".png":
+      return "image/png"
+    case ".gif":
+      return "image/gif"
+    case ".webp":
+      return "image/webp"
+    case ".pdf":
+      return "application/pdf"
+    case ".txt":
+      return "text/plain"
+    case ".docx":
+      return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    case ".webm":
+      return "audio/webm"
+    case ".mp3":
+      return "audio/mpeg"
+    case ".ogg":
+      return "audio/ogg"
+    case ".wav":
+      return "audio/wav"
+    default:
+      return ""
+  }
+}
+
+async function normalizeUploadFile(file: File, safeExt: string) {
+  if (!isHeicLikeFile(file, safeExt)) {
+    const inferredType = file.type || inferMimeTypeFromExtension(safeExt)
+    return {
+      file: inferredType && inferredType !== file.type
+        ? new File([await file.arrayBuffer()], file.name, { type: inferredType })
+        : file,
+      safeExt,
+      convertedFrom: null as string | null,
+    }
+  }
+
+  const inputBuffer = Buffer.from(await file.arrayBuffer())
+  const outputBuffer = await sharp(inputBuffer)
+    .rotate()
+    .jpeg({ quality: 92, mozjpeg: true })
+    .toBuffer()
+  const outputArrayBuffer = new ArrayBuffer(outputBuffer.byteLength)
+  new Uint8Array(outputArrayBuffer).set(outputBuffer)
+
+  return {
+    file: new File([outputArrayBuffer], file.name.replace(/\.(heic|heif)$/i, ".jpg"), { type: "image/jpeg" }),
+    safeExt: ".jpg",
+    convertedFrom: safeExt,
+  }
 }
 
 async function uploadFileToDify(file: File, userId: string, apiKey: string) {
@@ -293,8 +363,13 @@ export async function POST(request: NextRequest) {
     // ============================================
     // 5. 安全校验：生成安全的随机文件名
     // ============================================
-    const safeFileName = generateSafeFileName(extCheck.safeExt!)
-	    console.log(`[Upload] 安全校验通过: ${file.name} -> ${safeFileName} | 用户: ${userId} | 大小: ${(file.size / 1024 / 1024).toFixed(2)}MB | requestId=${requestId}`)
+    const normalizedUpload = await normalizeUploadFile(file, extCheck.safeExt!)
+    const uploadFile = normalizedUpload.file
+    const safeFileName = generateSafeFileName(normalizedUpload.safeExt)
+    console.log(`[Upload] 安全校验通过: ${file.name} -> ${safeFileName} | 用户: ${userId} | 大小: ${(file.size / 1024 / 1024).toFixed(2)}MB | requestId=${requestId}`, {
+      convertedFrom: normalizedUpload.convertedFrom,
+      uploadType: uploadFile.type,
+    })
 
     // 🔥 根据模型选择正确的 API Key
     const targetModel = model || modelFromForm
@@ -310,7 +385,7 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    const safeFile = new File([file], safeFileName, { type: file.type })
+    const safeFile = new File([uploadFile], safeFileName, { type: uploadFile.type })
 
     // 非 GPT Image 工作台必须走 Dify 原生 upload_file_id。
     // OpenClaw、作文批改、教学模型等 Dify 应用不可靠支持 remote_url。
@@ -336,8 +411,11 @@ export async function POST(request: NextRequest) {
           data: {
             id: difyFileId,
             filename: safeFileName,
-            content_type: file.type,
-            size: file.size,
+            content_type: uploadFile.type,
+            size: uploadFile.size,
+            original_content_type: file.type,
+            original_size: file.size,
+            converted_from: normalizedUpload.convertedFrom,
           },
         }), {
           status: 200,
@@ -471,8 +549,11 @@ export async function POST(request: NextRequest) {
         gateway_url: gatewayUrl,
         model_url: modelUrl,
         filename: safeFileName,
-        content_type: file.type,
-        size: file.size,
+        content_type: uploadFile.type,
+        size: uploadFile.size,
+        original_content_type: file.type,
+        original_size: file.size,
+        converted_from: normalizedUpload.convertedFrom,
       },
       gatewayUrl,
       modelUrl,

@@ -32,6 +32,12 @@ type ChatRequestBody = {
   userId?: string
 }
 
+function isImageFileRecord(file: { name?: unknown; type?: unknown }) {
+  const type = typeof file.type === "string" ? file.type : ""
+  const name = typeof file.name === "string" ? file.name : ""
+  return type.startsWith("image/") || /\.(png|jpe?g|webp|gif|heic|heif)(\?|#|$)?$/i.test(name)
+}
+
 async function deductCredit(
   userId: string,
   usage: { totalTokens: number; promptTokens: number; completionTokens: number },
@@ -376,7 +382,7 @@ export async function POST(req: NextRequest) {
       }
 
       if (index === messages.length - 1 && msg.role === "user" && files && files.length > 0) {
-        const hasImages = files.some((file) => file.type.startsWith("image/"))
+        const hasImages = files.some(isImageFileRecord)
         if (hasImages) {
           const content: any[] = []
           if (textContent.trim()) {
@@ -384,7 +390,7 @@ export async function POST(req: NextRequest) {
           }
 
           for (const file of files) {
-            if (file.type.startsWith("image/")) {
+            if (isImageFileRecord(file)) {
               content.push({ type: "image_url", image_url: { url: file.data } })
             }
           }

@@ -135,6 +135,24 @@ describe("tools workbench route mappings", () => {
     expect(chatRoute).not.toContain("Dify Error: ${errorText}")
   })
 
+  it("accepts mobile HEIC uploads through the shared image paths", () => {
+    const uploadRoute = read("app/api/dify-upload/route.ts")
+    const uploadService = read("lib/upload-service.ts")
+    const imageWorkspace = read("components/chat/gpt-image2-chat-interface.tsx")
+    const videoPage = read("components/video/VideoGenerationPage.tsx")
+    const worksheetApp = read("components/worksheet-diagnosis-app.tsx")
+    const essayGrader = read("components/essay-grader.tsx")
+
+    expect(uploadRoute).toContain('"image/heic"')
+    expect(uploadRoute).toContain("normalizeUploadFile")
+    expect(uploadRoute).toContain("sharp(inputBuffer)")
+    expect(uploadService).toContain('"image/heic"')
+    expect(imageWorkspace).toContain("IMAGE_UPLOAD_ACCEPT")
+    expect(videoPage).toContain("isAcceptedFrameImage")
+    expect(worksheetApp).toContain("isWorksheetImageFile")
+    expect(essayGrader).toContain("isEssayImageFile")
+  })
+
   it("renders the worksheet diagnosis page with the full upload and poster generation app", () => {
     const page = read("app/worksheet-diagnosis/page.tsx")
     const app = read("components/worksheet-diagnosis-app.tsx")

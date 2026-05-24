@@ -307,6 +307,8 @@ describe('Sprint 5 payment / credits / membership guards', () => {
     expect(source).toContain('getRequiredAuthHeaders')
     expect(uploadBlock).toContain('...(await getRequiredAuthHeaders())')
     expect(uploadBlock).toContain('"X-Model": "essay-correction"')
+    expect(source).toContain("readUploadError")
+    expect(source).toContain('json.event === "status"')
     expect(route).toContain('const userId = auth.user!.id')
     expect(route).toContain('user: userId')
     expect(route).toContain('export const maxDuration = 300')

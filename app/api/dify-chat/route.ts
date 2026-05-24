@@ -1218,6 +1218,18 @@ function enqueueSseAnswer(controller: TransformStreamDefaultController<Uint8Arra
   controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ event: "message", answer })}\n\n`))
 }
 
+function enqueueSseStatus(controller: TransformStreamDefaultController<Uint8Array>, payload: {
+  stage: string
+  progress?: number
+  heartbeat?: number
+}) {
+  controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({
+    event: "status",
+    ...payload,
+    ts: Date.now(),
+  })}\n\n`))
+}
+
 const DIFY_CONVERSATION_ID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
@@ -3067,20 +3079,27 @@ export async function POST(request: NextRequest) {
 	                console.log(`🧠 [工作流节点] ${json.event}: ${json.data?.title || json.title || '未知节点'}`)
 	                const nodeData = json.data || {}
                   const nodeStatus = String(nodeData.status || json.status || "").toLowerCase()
+                  const nodeTitle = String(nodeData.title || json.title || "正在处理")
+                  if (json.event === "node_started") {
+                    enqueueSseStatus(controller, {
+                      stage: nodeTitle,
+                      progress: hasReceivedContent ? 60 : 30,
+                    })
+                  }
                   if (model === "vocab-card") {
                     controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(json)}\n\n`))
                   }
 	                if (bufferedNodeEvents.length < 80) {
 	                  bufferedNodeEvents.push({
 	                    event: json.event,
-	                    title: nodeData.title || json.title || "未知节点",
+	                    title: nodeTitle,
 	                    node_id: nodeData.node_id || json.node_id,
 	                    status: nodeData.status || json.status,
 	                    workflow_run_id: nodeData.workflow_run_id || json.workflow_run_id,
 	                  })
 	                }
                   if (json.event === "node_finished" && ["failed", "error"].includes(nodeStatus)) {
-                    const title = nodeData.title || json.title || "OpenClaw 节点"
+                    const title = nodeTitle || "OpenClaw 节点"
                     const errorMessage = String(
                       nodeData.error ||
                       nodeData.error_message ||
@@ -3092,6 +3111,12 @@ export async function POST(request: NextRequest) {
                       message: errorMessage,
                       code: model === "open-claw" ? "OPENCLAW_NODE_FAILED" : "DIFY_NODE_FAILED",
                     }
+                    controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({
+                      event: "error",
+                      error: errorMessage,
+                      message: errorMessage,
+                      code: workflowNodeFailure.code,
+                    })}\n\n`))
                     updateTaskRun(taskRun.id, {
                       status: "failed",
                       stage: `${title} 执行失败`,
@@ -3432,6 +3457,11 @@ export async function POST(request: NextRequest) {
             if (closed) return
             try {
               controller.enqueue(encoder.encode(`: ${heartbeatLabel} ${Date.now()}\n\n`))
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+                event: "status",
+                stage: "连接正常，任务仍在处理中",
+                heartbeat: Date.now(),
+              })}\n\n`))
             } catch {
               stopHeartbeat()
             }

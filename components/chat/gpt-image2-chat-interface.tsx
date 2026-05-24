@@ -59,9 +59,15 @@ import {
 
 const API_BASE = ""
 const BRAND_GREEN = "var(--brand-900)"
-const ACCEPTED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp"]
+const ACCEPTED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp", "image/heic", "image/heif"]
 const MAX_EDIT_IMAGE_UPLOADS = 10
 const GEMINI_FLASH_ONLY_ASPECT_RATIOS = new Set<ImageAspectRatio>(["4:1", "1:4", "8:1", "1:8"])
+const IMAGE_UPLOAD_ACCEPT = ".png,.jpg,.jpeg,.webp,.heic,.heif,image/png,image/jpeg,image/webp,image/heic,image/heif"
+
+function isAcceptedImageFile(file: File) {
+  const extension = file.name.slice(file.name.lastIndexOf(".")).toLowerCase()
+  return ACCEPTED_IMAGE_TYPES.includes(file.type) || [".png", ".jpg", ".jpeg", ".webp", ".heic", ".heif"].includes(extension)
+}
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -359,8 +365,8 @@ function UploadPanel({
       return
     }
     if (!file) return
-    if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
-      toast.error("仅支持 png / jpg / jpeg / webp")
+    if (!isAcceptedImageFile(file)) {
+      toast.error("仅支持 png / jpg / jpeg / webp / heic")
       return
     }
     onPick(file)
@@ -387,7 +393,7 @@ function UploadPanel({
       <input
         ref={inputRef}
         type="file"
-        accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"
+        accept={IMAGE_UPLOAD_ACCEPT}
         capture="environment"
         className="hidden"
         onChange={(event) => pickFile(event.target.files?.[0])}
@@ -460,9 +466,9 @@ function MultiImageUploadPanel({
     const files = Array.from(fileList)
     if (files.length === 0) return
 
-    const invalidFile = files.find((file) => !ACCEPTED_IMAGE_TYPES.includes(file.type))
+    const invalidFile = files.find((file) => !isAcceptedImageFile(file))
     if (invalidFile) {
-      toast.error("仅支持 png / jpg / jpeg / webp")
+      toast.error("仅支持 png / jpg / jpeg / webp / heic")
       return
     }
 
@@ -491,7 +497,7 @@ function MultiImageUploadPanel({
         ref={inputRef}
         type="file"
         multiple
-        accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"
+        accept={IMAGE_UPLOAD_ACCEPT}
         capture="environment"
         className="hidden"
         onChange={(event) => {
@@ -677,6 +683,22 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
         void fetchCredits(verifiedUser.id)
         setAuthChecked(true)
         return
+      }
+
+      try {
+        const headers = await getVerifiedAuthHeaders()
+        if (headers.Authorization) {
+          const res = await fetch(`${API_BASE}/api/user/credits`, { cache: "no-store", headers })
+          const data = res.ok ? await res.json().catch(() => null) : null
+          if (typeof data?.userId === "string" && data.userId) {
+            setUserId(data.userId)
+            setUserCredits(typeof data.credits === "number" ? data.credits : 0)
+            setAuthChecked(true)
+            return
+          }
+        }
+      } catch {
+        // Fall back to local user parsing below.
       }
 
       const userStr = typeof window !== "undefined" ? localStorage.getItem("currentUser") : null
@@ -949,7 +971,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
     const imageUrl = json.modelUrl || json.data?.model_url || json.data?.url || json.gatewayUrl
 
     if (!res.ok || !json.success || !imageUrl) {
-      throw new Error(json.message || json.error || "图片上传失败")
+      throw new Error(json.details || json.message || json.error || "图片上传失败")
     }
 
     return imageUrl as string
@@ -976,7 +998,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
     const fileId = json.id || json.data?.id
 
     if (!res.ok || !json.success || !fileId) {
-      throw new Error(json.message || json.error || "图片上传失败")
+      throw new Error(json.details || json.message || json.error || "图片上传失败")
     }
 
     return fileId as string
@@ -1223,6 +1245,15 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
                 currentSessionIdRef.current = json.conversation_id
               }
 
+              if (json.event === "status") {
+                setSubmitStage(String(json.stage || json.message || "仍在处理，请保持页面打开"))
+                continue
+              }
+
+              if (json.event === "error") {
+                throw new Error(String(json.message || json.error || "图片服务返回错误"))
+              }
+
               if (json.answer) fullText += json.answer
 
               if (json.event === "text_chunk" || json.event === "agent_message") {
@@ -1244,7 +1275,10 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
               if (json.event === "message_file" && json.type === "image" && json.url) {
                 fullText += `\n\n![Generated Image](${json.url})`
               }
-            } catch {
+            } catch (streamEventError) {
+              if (streamEventError instanceof Error && !(streamEventError instanceof SyntaxError)) {
+                throw streamEventError
+              }
               // Wait for the next complete SSE line.
             }
           }

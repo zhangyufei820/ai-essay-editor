@@ -78,6 +78,8 @@ type VoiceJob = {
 
 const TTS_POLL_MAX_ATTEMPTS = 150
 const TTS_POLL_SLOW_HINT_AFTER_ATTEMPTS = 12
+const IMAGE_UPLOAD_ACCEPT = ".jpg,.jpeg,.png,.webp,.gif,.heic,.heif,image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif"
+const DOCUMENT_UPLOAD_ACCEPT = ".jpg,.jpeg,.png,.webp,.gif,.heic,.heif,.pdf,.doc,.docx,.txt,image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
 function JsonBlock({ value }: { value: unknown }) {
   if (typeof value === "string") {
@@ -789,7 +791,7 @@ export default function ToolsPage() {
                     id="reverse-image-file"
                     className="sr-only"
                     type="file"
-                    accept="image/*"
+                    accept={IMAGE_UPLOAD_ACCEPT}
                     onChange={(event) => handleReverseImageFile(event.target.files?.[0])}
                   />
                   <button
@@ -886,6 +888,7 @@ export default function ToolsPage() {
                   id="document-file"
                   type="file"
                   className="sr-only"
+                  accept={DOCUMENT_UPLOAD_ACCEPT}
                   onChange={(event) => setDocumentFile(event.target.files?.[0] || null)}
                 />
                 <button
@@ -909,14 +912,14 @@ export default function ToolsPage() {
                   ref={ocrUploadRef}
                   className="sr-only"
                   type="file"
-                  accept="image/*"
+                  accept={IMAGE_UPLOAD_ACCEPT}
                   onChange={(event) => handleOcrFile(event.target.files?.[0])}
                 />
                 <input
                   ref={ocrCameraRef}
                   className="sr-only"
                   type="file"
-                  accept="image/*"
+                  accept={IMAGE_UPLOAD_ACCEPT}
                   capture="environment"
                   onChange={(event) => handleOcrFile(event.target.files?.[0])}
                 />

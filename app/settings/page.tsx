@@ -1,7 +1,6 @@
 "use client"
 
 import { ButtonV2 as Button, InputV2 as Input, LabelV2 as Label } from "@/components/ui/v2"
-/* eslint-disable @next/next/no-img-element -- Dynamic/user-generated/external image surfaces: keep native img to preserve sizing, blob/data/proxy URLs, payment QR codes, and chat preview behavior. */
 
 import { useState, useEffect, useRef } from "react"
 import { createClient } from "@supabase/supabase-js"
@@ -66,6 +65,7 @@ function normalizeMembershipLabel(type?: string | null) {
 const MAX_AVATAR_FILE_SIZE = 8 * 1024 * 1024
 const MAX_AVATAR_DATA_URL_LENGTH = 250_000
 const AVATAR_CANVAS_SIZE = 256
+const AVATAR_IMAGE_ACCEPT = ".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
 
 function readFirstString(...values: unknown[]) {
   for (const value of values) {
@@ -381,7 +381,7 @@ export default function SettingsPage() {
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/*"
+        accept={AVATAR_IMAGE_ACCEPT}
         className="hidden"
         onChange={handleUploadAvatar}
       />

@@ -40,6 +40,22 @@ type UploadedFile = {
   difyFileId?: string
 }
 
+function readUploadError(payload: unknown, fallback: string) {
+  if (!payload || typeof payload !== "object") return fallback
+  const record = payload as Record<string, unknown>
+  const details = typeof record.details === "string" ? record.details : ""
+  const error = typeof record.error === "string" ? record.error : ""
+  const message = typeof record.message === "string" ? record.message : ""
+  return details || error || message || fallback
+}
+
+function isEssayImageFile(file: File) {
+  const extension = file.name.slice(file.name.lastIndexOf(".")).toLowerCase()
+  return file.type.startsWith("image/") || [".jpg", ".jpeg", ".png", ".webp", ".gif", ".heic", ".heif"].includes(extension)
+}
+
+const ESSAY_IMAGE_ACCEPT = ".jpg,.jpeg,.png,.webp,.gif,.heic,.heif,image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif"
+
 export function EssayGrader() {
   const [essayText, setEssayText] = useState("")
   const [gradeLevel, setGradeLevel] = useState("")
@@ -120,18 +136,17 @@ export function EssayGrader() {
           body: formData
         })
         
-        if (!res.ok) {
-          const errText = await res.text()
-          throw new Error(`上传失败: ${res.status} ${errText}`)
-        }
+        const data = await res.json().catch(() => ({}))
         
-        const data = await res.json()
+        if (!res.ok || data?.success === false || !data?.id) {
+          throw new Error(readUploadError(data, `上传失败: ${res.status}`))
+        }
         
         // 更新进度
         setUploadProgress(Math.round(((index + 1) / totalFiles) * 100))
         
         return new Promise<UploadedFile>((resolve) => {
-          if (file.type.startsWith("image/")) {
+          if (isEssayImageFile(file)) {
             resolve({
               name: file.name,
               type: file.type,
@@ -255,6 +270,11 @@ export function EssayGrader() {
       const decoder = new TextDecoder()
       let buffer = ""
       let fullText = ""
+      const applyAnswer = (text: string) => {
+        if (!text) return
+        fullText += text
+        setResult(fullText)
+      }
 
       try {
         while (true) {
@@ -266,12 +286,24 @@ export function EssayGrader() {
           buffer = lines.pop() || ""
 
           for (const line of lines) {
+            if (line.startsWith(":")) {
+              if (!fullText) {
+                setResult("作文图片正在识别和批改，请保持页面打开...")
+              }
+              continue
+            }
             if (!line.startsWith("data: ")) continue
             const data = line.slice(6).trim()
-            if (data === "[DONE]") continue
+            if (!data || data === "[DONE]") continue
             
             try {
               const json = JSON.parse(data)
+              if (json.event === "billing") continue
+
+              if (json.event === "status") {
+                if (!fullText) setResult(String(json.stage || json.message || "作文图片正在识别和批改，请保持页面打开..."))
+                continue
+              }
               
               // 🔥 处理思考过程（agent_thought）
               if (json.event === "agent_thought") {
@@ -284,19 +316,21 @@ export function EssayGrader() {
               
               // 🔥 处理文本输出（answer字段）
               if (json.answer) {
-                fullText += json.answer
-                setResult(fullText)
+                applyAnswer(json.answer)
               }
               
               // 🔥 处理 message 事件
               if (json.event === "message" && json.answer) {
-                fullText += json.answer
-                setResult(fullText)
+                applyAnswer(json.answer)
               }
             } catch (e) {
+              if (e instanceof Error && !(e instanceof SyntaxError)) throw e
               console.error("解析失败:", e, data)
             }
           }
+        }
+        if (!fullText) {
+          throw new Error("批改服务没有返回可展示结果，请重新提交一次。")
         }
       } catch (streamError) {
         console.error("[作文批改] 流读取错误:", streamError)
@@ -412,7 +446,7 @@ export function EssayGrader() {
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/*"
+                  accept={ESSAY_IMAGE_ACCEPT}
                   multiple
                   onChange={handleFileUpload}
                   id="essay-image-upload"

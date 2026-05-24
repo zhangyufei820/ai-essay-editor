@@ -37,6 +37,7 @@ export interface DiagnosisPageV2Props {
 
 const SUBJECTS = ["数学", "语文", "英语", "物理", "化学", "生物", "历史", "地理", "政治"]
 const GRADES = ["小学", "初一", "初二", "初三", "高一", "高二", "高三"]
+const DIAGNOSIS_UPLOAD_ACCEPT = ".jpg,.jpeg,.png,.webp,.gif,.heic,.heif,.pdf,image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,application/pdf"
 
 export function DiagnosisPageV2({
   onUpload,
@@ -156,7 +157,7 @@ export function DiagnosisPageV2({
           <input
             ref={inputRef}
             type="file"
-            accept="image/*,.pdf"
+            accept={DIAGNOSIS_UPLOAD_ACCEPT}
             multiple
             className="hidden"
             onChange={(e) => {

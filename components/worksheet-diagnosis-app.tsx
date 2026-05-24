@@ -105,6 +105,13 @@ function formatBytes(bytes: number) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`
 }
 
+function isWorksheetImageFile(file: File) {
+  const extension = file.name.slice(file.name.lastIndexOf(".")).toLowerCase()
+  return file.type.startsWith("image/") || [".jpg", ".jpeg", ".png", ".webp", ".gif", ".heic", ".heif"].includes(extension)
+}
+
+const WORKSHEET_IMAGE_ACCEPT = ".jpg,.jpeg,.png,.webp,.gif,.heic,.heif,image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif"
+
 function createClientRequestId(prefix = "worksheet") {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
     return `${prefix}_${crypto.randomUUID()}`
@@ -216,7 +223,7 @@ export function WorksheetDiagnosisApp() {
   const uploadWorksheetFiles = async (files: File[]) => {
     if (!files.length) return
 
-    const incoming = files.filter((file) => file.type.startsWith("image/"))
+    const incoming = files.filter(isWorksheetImageFile)
     if (incoming.length === 0) {
       toast.error("请上传 jpg、png、webp 等图片文件")
       return
@@ -249,7 +256,7 @@ export function WorksheetDiagnosisApp() {
 
         const payload = await response.json().catch(() => ({}))
         if (!response.ok || !payload.id) {
-          throw new Error(payload.error || "图片上传失败，请稍后重试。")
+          throw new Error(payload.details || payload.error || payload.message || "图片上传失败，请稍后重试。")
         }
 
         uploaded.push({
@@ -620,7 +627,7 @@ export function WorksheetDiagnosisApp() {
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/*"
+              accept={WORKSHEET_IMAGE_ACCEPT}
               multiple
               className="hidden"
               onChange={(event) => uploadFiles(event.target.files)}
@@ -628,7 +635,7 @@ export function WorksheetDiagnosisApp() {
             <input
               ref={cameraInputRef}
               type="file"
-              accept="image/*"
+              accept={WORKSHEET_IMAGE_ACCEPT}
               capture="environment"
               className="hidden"
               aria-label="拍照上传试卷"

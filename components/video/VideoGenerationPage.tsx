@@ -92,6 +92,8 @@ type MediaTask = {
   completed_at?: string | null
 }
 
+const FRAME_IMAGE_ACCEPT = ".jpg,.jpeg,.png,.webp,.heic,.heif,image/jpeg,image/png,image/webp,image/heic,image/heif"
+
 type StudioTask = {
   id: string
   requestId: string
@@ -261,6 +263,12 @@ function readPayloadText(payload: unknown) {
   return String(record.error || record.message || record.details || "")
 }
 
+function isAcceptedFrameImage(file: File) {
+  const extension = file.name.slice(file.name.lastIndexOf(".")).toLowerCase()
+  return ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"].includes(file.type) ||
+    [".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif"].includes(extension)
+}
+
 async function readJson(response: Response) {
   const text = await response.text()
   if (!text) return {}
@@ -299,7 +307,7 @@ function FrameDropzone({
       <input
         ref={inputRef}
         type="file"
-        accept="image/png,image/jpeg,image/webp"
+        accept={FRAME_IMAGE_ACCEPT}
         className="hidden"
         onChange={handleChange}
         disabled={disabled}
@@ -531,8 +539,8 @@ export function VideoGenerationPage() {
     updateForm("mode", "image")
 
     try {
-      if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
-        throw new Error("只支持 JPG、PNG 或 WebP 图片。")
+      if (!isAcceptedFrameImage(file)) {
+        throw new Error("只支持 JPG、PNG、WebP 或 HEIC 图片。")
       }
       if (file.size > 20 * 1024 * 1024) {
         throw new Error("参考图不能超过 20MB。")
@@ -552,6 +560,10 @@ export function VideoGenerationPage() {
       const payload = await readJson(response)
       if (!response.ok || payload?.success === false) {
         throw new Error(readPayloadText(payload) || `图片上传失败：${response.status}`)
+      }
+      const convertedFrom = payload?.data?.converted_from
+      if (typeof convertedFrom === "string" && convertedFrom) {
+        setError("手机照片已自动转为 JPG，可继续生成视频。")
       }
       const remoteUrl = payload?.data?.model_url || payload?.data?.url || payload?.modelUrl || payload?.gatewayUrl
       if (!remoteUrl || typeof remoteUrl !== "string") {

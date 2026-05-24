@@ -95,6 +95,8 @@ interface ChatInputProps {
   isLoading?: boolean
   /** 是否禁用 */
   disabled?: boolean
+  /** 禁用原因，用于区分未登录和生成中 */
+  disabledReason?: "auth" | "loading" | "manual"
   /** 占位符文本 */
   placeholder?: string
   /** 当前模型名称 */
@@ -126,6 +128,9 @@ interface ChatInputProps {
   /** 自定义类名 */
   className?: string
 }
+
+const CHAT_FILE_ACCEPT = ".jpg,.jpeg,.png,.webp,.gif,.heic,.heif,.pdf,.doc,.docx,.txt,image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+const CHAT_CAMERA_ACCEPT = ".jpg,.jpeg,.png,.webp,.heic,.heif,image/jpeg,image/png,image/webp,image/heic,image/heif"
 
 function createFileList(files: File[]): FileList | null {
   if (files.length === 0 || typeof DataTransfer === "undefined") return null
@@ -243,6 +248,7 @@ export function ChatInput({
   onRemoveFile,
   isLoading = false,
   disabled = false,
+  disabledReason,
   placeholder = "输入内容开始对话...",
   modelName,
   selectedModel,
@@ -593,6 +599,12 @@ export function ChatInput({
   }
 
   // 是否可以提交
+  const effectiveDisabledReason = disabledReason || (isLoading ? "loading" : disabled ? "auth" : undefined)
+  const inputPlaceholder = effectiveDisabledReason === "auth"
+    ? "请先登录..."
+    : isLoading
+      ? "正在处理，请稍候..."
+      : placeholder
   const canSubmit = !isLoading && !disabled && (value.trim() || uploadedFiles.length > 0)
 
   const closeMobileTools = () => setMobileToolsOpen(false)
@@ -970,7 +982,7 @@ export function ChatInput({
           onKeyDown={handleKeyDown}
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
-          placeholder={disabled ? "请先登录..." : placeholder}
+          placeholder={inputPlaceholder}
           disabled={disabled || isLoading}
           className={cn(
             "min-w-0 flex-1 resize-none border bg-white shadow-none",
@@ -1019,7 +1031,7 @@ export function ChatInput({
         type="file"
         className="hidden"
         multiple
-        accept="image/*,.pdf,.doc,.docx,.txt"
+        accept={CHAT_FILE_ACCEPT}
         onChange={handleFileChange}
         aria-label="文件上传"
       />
@@ -1027,7 +1039,8 @@ export function ChatInput({
         ref={cameraInputRef}
         type="file"
         className="hidden"
-        accept="image/*"
+        accept={CHAT_CAMERA_ACCEPT}
+        capture="environment"
         onChange={handleFileChange}
         aria-label="拍照上传"
       />

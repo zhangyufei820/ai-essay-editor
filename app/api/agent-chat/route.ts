@@ -16,6 +16,59 @@ function fireAndForget(label: string, promise: Promise<unknown>) {
   promise.catch((error) => console.error(`[AgentChat] ${label} failed:`, error))
 }
 
+function addStreamHeartbeat(body: ReadableStream<Uint8Array>) {
+  const encoder = new TextEncoder()
+  let reader: ReadableStreamDefaultReader<Uint8Array> | null = null
+  let heartbeatId: ReturnType<typeof setInterval> | null = null
+  let closed = false
+
+  const stop = () => {
+    closed = true
+    if (heartbeatId) {
+      clearInterval(heartbeatId)
+      heartbeatId = null
+    }
+  }
+
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      reader = body.getReader()
+      heartbeatId = setInterval(() => {
+        if (closed) return
+        try {
+          controller.enqueue(encoder.encode(`: agent-chat-keepalive ${Date.now()}\n\n`))
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+            event: "status",
+            stage: "连接正常，教师智能体仍在处理中",
+            heartbeat: Date.now(),
+          })}\n\n`))
+        } catch {
+          stop()
+        }
+      }, 15_000)
+
+      ;(async () => {
+        try {
+          while (true) {
+            const { done, value } = await reader!.read()
+            if (done) break
+            if (value) controller.enqueue(value)
+          }
+          stop()
+          controller.close()
+        } catch (error) {
+          stop()
+          controller.error(error)
+        }
+      })()
+    },
+    async cancel(reason) {
+      stop()
+      await reader?.cancel(reason).catch(() => undefined)
+    },
+  })
+}
+
 async function updateAgentMetrics(params: {
   agentId: string
   totalConversations: number | null
@@ -99,7 +152,7 @@ export async function POST(request: NextRequest) {
       }),
     )
 
-    return new Response(response.body, {
+    return new Response(addStreamHeartbeat(response.body), {
       status: response.status,
       headers: {
         "Content-Type": "text/event-stream; charset=utf-8",

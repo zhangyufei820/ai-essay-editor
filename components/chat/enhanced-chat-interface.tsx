@@ -438,6 +438,8 @@ type ProcessingContext = {
   fileCount: number
   promptLength: number
   startedAt: number
+  lastActivityAt?: number
+  heartbeatCount?: number
   requestId?: string
   traceId?: string
   stage?: string
@@ -473,8 +475,29 @@ function getRandomStatusMessage(status: FileProcessingState['status'], progress?
   return message.replace('{progress}', String(progress || 0))
 }
 
+function isUploadedImageFile(file: Pick<UploadedFile, "name" | "type">) {
+  const extension = file.name.slice(file.name.lastIndexOf(".")).toLowerCase()
+  return file.type?.startsWith("image/") || [".jpg", ".jpeg", ".png", ".webp", ".gif", ".heic", ".heif"].includes(extension)
+}
+
 function extractWorkflowOutputText(outputs: unknown) {
   return extractDifyTextOutput(outputs)
+}
+
+function getModelEmptyResponseMessage(model: string) {
+  if (model === "standard") {
+    return "我没有收到可展示的作文批改结果，请重新提交一次。若仍然为空，请换一张更清晰的作文图片。"
+  }
+  if (model === "open-claw") {
+    return "OpenClaw 任务已结束，但没有返回可展示内容。请换一个更明确的要求，或稍后重新提交。"
+  }
+  if (model === "all-in-one-agent" || model === "super-all-in-one-agent") {
+    return "任务已结束，但没有返回可展示内容。请把要生成的图片、动画或文档要求再描述得更具体一些。"
+  }
+  if (model === "gemini-image" || model === "banana-2-pro" || model === "gpt-image-2") {
+    return "图片任务已结束，但没有返回图片或可展示说明。请降低尺寸 / 质量后重试。"
+  }
+  return "我没有收到可展示的回复，请再试一次。"
 }
 
 function getChatErrorMessage(error: unknown, status?: number, model?: string): string {
@@ -670,6 +693,8 @@ function ProcessingStatusCard({
   const promptLength = context?.promptLength || 0
   const startedAt = context?.startedAt || Date.now()
   const elapsedSeconds = Math.max(1, Math.round((Date.now() - startedAt) / 1000))
+  const lastActivityAt = context?.lastActivityAt || startedAt
+  const quietSeconds = Math.max(0, Math.round((Date.now() - lastActivityAt) / 1000))
   const realNodes = workflowState.nodes.map((node) => ({
     id: node.id,
     label: node.config.label,
@@ -701,7 +726,10 @@ function ProcessingStatusCard({
     : hasFiles
       ? "正在读取资料并规划回答"
       : "正在组织高质量回复"
-  const stageText = context?.stage || currentRunningText || (showLongWaitHint ? "处理时间稍长，请保持页面打开" : "正在建立回答结构")
+  const heartbeatHint = context?.heartbeatCount
+    ? `连接正常，已等待 ${elapsedSeconds}s`
+    : ""
+  const stageText = context?.stage || currentRunningText || heartbeatHint || (showLongWaitHint ? "处理时间稍长，请保持页面打开" : "正在建立回答结构")
   const runningStep = steps.find((step) => step.status === "running" || step.status === "preparing") || steps[0]
   const completedStep = [...steps].reverse().find((step) => step.status === "completed")
   const nextStep = steps.find((step) => step.status === "pending")
@@ -722,7 +750,7 @@ function ProcessingStatusCard({
           <span className="relative inline-flex h-2 w-2 rounded-[var(--radius-pill)] bg-[var(--ink-600)]" />
         </span>
         <span className="shrink-0 font-semibold text-[var(--ink-700)]">ai.plan</span>
-        <span className="min-w-0 truncate text-[var(--ink-500)]">{statusText}</span>
+        <span className="min-w-0 truncate text-[var(--ink-500)]">{stageText || statusText}</span>
         <span className="ml-auto shrink-0 text-[var(--ink-400)]">{elapsedSeconds}s</span>
       </div>
       <div className="mt-1.5 space-y-0.5">
@@ -754,7 +782,7 @@ function ProcessingStatusCard({
         />
       </div>
       <p className="mt-1 truncate text-[10px] leading-4 text-[var(--ink-400)]">
-        {modelName} · {hasFiles ? `${context?.fileCount || 0} files` : "text"} · keep_intent=true
+        {modelName} · {hasFiles ? `${context?.fileCount || 0} files` : "text"} · {quietSeconds > 20 ? `last_event=${quietSeconds}s` : "stream=alive"}
       </p>
     </section>
   )
@@ -1479,12 +1507,15 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
             recoverPendingTasks(uid)
           } else {
             console.warn("⚠️ [用户初始化] 检测到本地 Authing 用户，但缺少后端可验证 token，已禁用受保护对话请求")
+            await hydrateVerifiedUserFromApi()
           }
         } catch (e) {
           console.error("❌ [用户初始化] 解析失败:", e)
+          await hydrateVerifiedUserFromApi()
         }
       } else {
         console.warn("⚠️ [用户初始化] localStorage 中无 currentUser")
+        await hydrateVerifiedUserFromApi()
       }
       }
       initUser().catch((error) => console.warn("⚠️ [用户初始化] verified session 查询失败:", error))
@@ -1544,6 +1575,13 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       if (res.ok) {
         const data = await res.json()
         console.log("✅ [积分查询] API 成功:", data.credits)
+        if (typeof data.userId === "string" && data.userId && data.userId !== userId) {
+          setUserId(data.userId)
+          if (!uid) {
+            fetchChatSessions(data.userId)
+            recoverPendingTasks(data.userId)
+          }
+        }
         setUserCredits(data.credits || 0)
         setIsPaidUser(Boolean(data.is_pro))
       } else {
@@ -1551,6 +1589,27 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       }
     } catch (err) {
       console.error("❌ [积分查询] 异常:", err)
+    }
+  }
+
+  const hydrateVerifiedUserFromApi = async () => {
+    try {
+      const headers = await getVerifiedAuthHeaders()
+      if (!headers.Authorization) return false
+      const res = await fetch("/api/user/credits", { cache: "no-store", headers })
+      if (!res.ok) return false
+      const data = await res.json().catch(() => null)
+      const verifiedUserId = typeof data?.userId === "string" ? data.userId : ""
+      if (!verifiedUserId) return false
+      setUserId(verifiedUserId)
+      setUserCredits(typeof data.credits === "number" ? data.credits : 0)
+      setIsPaidUser(Boolean(data.is_pro))
+      fetchChatSessions(verifiedUserId)
+      recoverPendingTasks(verifiedUserId)
+      return true
+    } catch (error) {
+      console.warn("⚠️ [用户初始化] 后端身份校验失败:", error)
+      return false
     }
   }
 
@@ -1776,19 +1835,27 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 
   // 🔥 深度思考提示：isLoading 启动后 15 秒显示提示，收到首字节后清除
   useEffect(() => {
-    if (isLoading) {
-      // 15 秒后显示提示
-      deepThinkingTimerRef.current = setTimeout(() => {
-        setShowDeepThinkingHint(true)
-      }, 15_000)
-    } else {
-      // 加载结束，清理所有状态
+    if (!isLoading) {
       setShowDeepThinkingHint(false)
       if (deepThinkingTimerRef.current) {
         clearTimeout(deepThinkingTimerRef.current)
         deepThinkingTimerRef.current = null
       }
+      return
     }
+
+    deepThinkingTimerRef.current = setTimeout(() => {
+      setShowDeepThinkingHint(true)
+      setProcessingContext((context) => context
+        ? {
+            ...context,
+            lastActivityAt: Date.now(),
+            stage: context.fileCount > 0
+              ? "文件任务处理较久，连接仍在等待返回"
+              : "任务处理较久，连接仍在等待返回",
+          }
+        : context)
+    }, 15_000)
 
     return () => {
       if (deepThinkingTimerRef.current) {
@@ -2179,7 +2246,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
             setUploadProgress(Math.round(((index + 1) / totalFiles) * 100))
 
             return new Promise<UploadedFile>((resolve) => {
-                if (fileToUpload.type.startsWith("image/")) {
+                if (isUploadedImageFile({ name: fileToUpload.name, type: fileToUpload.type })) {
                     resolve({
                         name: fileToUpload.name,
                         type: fileToUpload.type,
@@ -2405,11 +2472,13 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 	    setDynamicStatusMessage("")
 	    setIsLoading(true); setAnalysisStage(0);
 	    setIsComplexMode(activeFiles.length > 0 || txt.length > 150)
-	    setProcessingContext({
+	      setProcessingContext({
 	      model: selectedModel,
 	      fileCount: activeFiles.length,
 	      promptLength: txt.length,
 	      startedAt: Date.now(),
+	      lastActivityAt: Date.now(),
+	      heartbeatCount: 0,
 	      requestId,
 	      stage: "请求已提交"
 	    })
@@ -2563,7 +2632,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     try {
         const fileIds = activeFiles.map(f => f.difyFileId).filter(Boolean)
         const fileUrls = activeFiles
-          .filter((file) => file.type?.startsWith("image/"))
+          .filter(isUploadedImageFile)
           .map((file) => file.modelUrl || (/^https?:\/\//.test(file.data) ? file.data : "") || file.gatewayUrl || "")
           .filter(Boolean)
 
@@ -2727,10 +2796,40 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
             buffer = lines.pop() || "";
 
             for (const line of lines) {
+                if (line.startsWith(":")) {
+                  const label = line.slice(1).trim()
+                  const isKeepalive = /keepalive|heartbeat/i.test(label)
+                  if (isKeepalive) {
+                    setProcessingContext((context) => context?.requestId === requestId
+                      ? {
+                          ...context,
+                          lastActivityAt: Date.now(),
+                          heartbeatCount: (context.heartbeatCount || 0) + 1,
+                          stage: context.stage || "连接正常，任务仍在处理中",
+                        }
+                      : context)
+                  }
+                  continue
+                }
                 if (!line.startsWith("data: ")) continue
-                const data = line.slice(6).trim(); if (data === "[DONE]") continue
+                const data = line.slice(6).trim(); if (!data || data === "[DONE]") continue
                 try {
                     const json = JSON.parse(data)
+                    if (json.event === "status") {
+                      setProcessingContext((context) => context?.requestId === requestId
+                        ? {
+                            ...context,
+                            lastActivityAt: Date.now(),
+                            heartbeatCount: (context.heartbeatCount || 0) + 1,
+                            stage: String(json.stage || json.message || context.stage || "任务仍在处理中"),
+                            traceId: traceId || context.traceId,
+                          }
+                        : context)
+                      continue
+                    }
+                    if (json.event === "error") {
+                      throw new Error(String(json.message || json.error || "服务返回错误"))
+                    }
 
                     // 🎯 工作流事件处理 - 传递给可视化 Hook
                     // 🔥 Dify SSE 格式：node_started 事件的数据在 json.data 中
@@ -2743,9 +2842,9 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 	                        console.log(`🔔 [SSE Event] ${json.event}: "${nodeTitle}"`, nodeData)
 	                      }
 	                      if (nodeTitle) {
-	                        setProcessingContext((context) => context?.requestId === requestId
-	                          ? { ...context, stage: String(nodeTitle), traceId: traceId || context.traceId }
-	                          : context)
+                        setProcessingContext((context) => context?.requestId === requestId
+                          ? { ...context, stage: String(nodeTitle), lastActivityAt: Date.now(), traceId: traceId || context.traceId }
+                          : context)
 	                      }
 
                       handleSSEEvent({
@@ -2839,6 +2938,9 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                         }
                     }
                 } catch (e) {
+                    if (e instanceof Error && !(e instanceof SyntaxError)) {
+                      throw e
+                    }
                     console.error("❌ [流式解析] 解析事件失败:", e, "原始数据:", data)
                 }
             }
@@ -2853,7 +2955,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 	          }
 	        }
           if (!isWordCardRequest && !hasRec) {
-            const friendlyError = "我没有收到可展示的作文批改结果，请重新提交一次。若仍然为空，请换一张更清晰的作文图片。"
+            const friendlyError = getModelEmptyResponseMessage(selectedModel)
             setMessages(p => p.map(m => m.id === botId ? { ...m, content: friendlyError } : m))
             fullText = friendlyError
             hasRec = true
@@ -3846,7 +3948,8 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                 uploadedFiles={uploadedFiles}
                 onRemoveFile={(i) => setUploadedFiles((p) => p.filter((_, idx) => idx !== i))}
                 isLoading={isLoading}
-                disabled={isLoading}
+                disabled={isLoading || !userId}
+                disabledReason={!userId ? "auth" : isLoading ? "loading" : undefined}
                 showOpenClawSkillButton={selectedModel === "open-claw"}
                 selectedOpenClawSkillName={selectedOpenClawSkill?.name}
                 onOpenClawSkillClick={() => setOpenClawSkillPickerOpen(true)}
