@@ -626,26 +626,30 @@ export function WorksheetDiagnosisApp() {
           <CardContent className="space-y-4">
             <input
               ref={fileInputRef}
+              id="worksheet-image-upload"
               type="file"
               accept={WORKSHEET_IMAGE_ACCEPT}
               multiple
-              className="hidden"
+              className="sx-file-input"
               onChange={(event) => uploadFiles(event.target.files)}
             />
             <input
               ref={cameraInputRef}
+              id="worksheet-camera-upload"
               type="file"
               accept={WORKSHEET_IMAGE_ACCEPT}
               capture="environment"
-              className="hidden"
+              className="sx-file-input"
               aria-label="拍照上传试卷"
               onChange={(event) => uploadFiles(event.target.files)}
             />
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isUploading || worksheets.length >= 6}
-              className="flex min-h-[148px] w-full flex-col items-center justify-center gap-3 rounded-[var(--radius-sharp)] border-2 border-dashed border-[var(--ink-400)] bg-[var(--ink-50)] px-4 text-center shadow-sm transition hover:border-[var(--ink-700)] hover:bg-[var(--paper-100)] disabled:cursor-not-allowed disabled:opacity-60"
+            <label
+              htmlFor="worksheet-image-upload"
+              aria-disabled={isUploading || worksheets.length >= 6}
+              className={[
+                "flex min-h-[148px] w-full cursor-pointer flex-col items-center justify-center gap-3 rounded-[var(--radius-sharp)] border-2 border-dashed border-[var(--ink-400)] bg-[var(--ink-50)] px-4 text-center shadow-sm transition hover:border-[var(--ink-700)] hover:bg-[var(--paper-100)]",
+                (isUploading || worksheets.length >= 6) ? "pointer-events-none opacity-60" : "",
+              ].join(" ")}
             >
               <span className="flex size-14 items-center justify-center rounded-[var(--radius-soft)] border border-[var(--ink-200)] bg-[var(--paper-50)] text-[var(--ink-700)]">
                 {isUploading ? <Loader2 className="size-7 animate-spin" /> : <Plus className="size-9" />}
@@ -655,19 +659,21 @@ export function WorksheetDiagnosisApp() {
                 {isUploading ? "正在上传图片" : "点击上传试卷图片"}
               </span>
               <span className="text-xs leading-5 text-[var(--ink-500)]">可一次选择多张试卷 / 作业 / 错题图片。</span>
-            </button>
-            <button
-              type="button"
-              onClick={openCamera}
-              disabled={isUploading || worksheets.length >= 6}
-              className="flex min-h-[132px] w-full flex-col items-center justify-center gap-3 rounded-[var(--radius-sharp)] border-2 border-dashed border-[var(--ink-300)] bg-[var(--paper-50)] px-4 text-center transition hover:border-[var(--ink-700)] hover:bg-[var(--ink-50)] disabled:cursor-not-allowed disabled:opacity-60"
+            </label>
+            <label
+              htmlFor="worksheet-camera-upload"
+              aria-disabled={isUploading || worksheets.length >= 6}
+              className={[
+                "flex min-h-[132px] w-full cursor-pointer flex-col items-center justify-center gap-3 rounded-[var(--radius-sharp)] border-2 border-dashed border-[var(--ink-300)] bg-[var(--paper-50)] px-4 text-center transition hover:border-[var(--ink-700)] hover:bg-[var(--ink-50)]",
+                (isUploading || worksheets.length >= 6) ? "pointer-events-none opacity-60" : "",
+              ].join(" ")}
             >
               <span className="flex size-14 items-center justify-center rounded-full border border-[var(--ink-200)] bg-[var(--ink-50)] text-[var(--ink-700)]">
                 <Camera className="size-8" />
               </span>
               <span className="text-sm font-semibold text-[var(--ink-900)]">打开相机拍试卷</span>
               <span className="text-xs leading-5 text-[var(--ink-500)]">手机端呼出相机，Web 端打开摄像头预览。</span>
-            </button>
+            </label>
 
             {worksheets.length > 0 && (
               <div className="grid grid-cols-2 gap-3">
@@ -928,8 +934,10 @@ export function WorksheetDiagnosisApp() {
           <canvas ref={cameraCanvasRef} className="hidden" />
 
           <DialogV2Footer>
-            <Button type="button" variant="outline" onClick={() => cameraInputRef.current?.click()}>
-              打开系统拍照/相册
+            <Button type="button" variant="outline" asChild>
+              <label htmlFor="worksheet-camera-upload" className="cursor-pointer">
+                打开系统拍照/相册
+              </label>
             </Button>
             <Button type="button" onClick={captureCameraPhoto} disabled={!isCameraReady || Boolean(cameraError)}>
               <Camera className="mr-2 size-4" />

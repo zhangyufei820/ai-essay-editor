@@ -49,7 +49,7 @@ describe('app chrome routes', () => {
     expect(settings).toContain('onChange={handleUploadAvatar}')
     expect(settings).toContain('createAvatarDataUrl')
     expect(settings).not.toContain(".from('avatars')")
-    expect(settings).toContain('onAvatarClick={() => fileInputRef.current?.click()}')
+    expect(settings).toContain('avatarInputId="settings-avatar-upload"')
     expect(settings).toContain('onDisplayNameChange={setDisplayName}')
     expect(settings).toContain('onSaveProfile={handleSave}')
     expect(settings).toContain('looksLikeAnonymousNumericName')

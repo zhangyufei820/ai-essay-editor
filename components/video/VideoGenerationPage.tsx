@@ -295,6 +295,7 @@ function FrameDropzone({
   disabled?: boolean
 }) {
   const inputRef = useRef<HTMLInputElement | null>(null)
+  const inputId = `video-frame-${label.replace(/\s+/g, "-")}`
 
   const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -306,17 +307,20 @@ function FrameDropzone({
     <div className="min-w-0 rounded-[var(--radius-soft)] border border-dashed border-[var(--paper-300)] bg-[var(--paper-100)]/60 p-3">
       <input
         ref={inputRef}
+        id={inputId}
         type="file"
         accept={FRAME_IMAGE_ACCEPT}
-        className="hidden"
+        className="sx-file-input"
         onChange={handleChange}
         disabled={disabled}
       />
-      <button
-        type="button"
-        onClick={() => inputRef.current?.click()}
-        disabled={disabled}
-        className="group flex min-h-[172px] w-full flex-col items-center justify-center overflow-hidden rounded-[var(--radius-soft)] border border-[var(--paper-200)] bg-[var(--paper-50)] text-center outline-none transition hover:border-[var(--ink-300)] focus-visible:[box-shadow:var(--shadow-focus-ink)] disabled:cursor-not-allowed disabled:opacity-60"
+      <label
+        htmlFor={inputId}
+        aria-disabled={disabled}
+        className={cn(
+          "group flex min-h-[172px] w-full cursor-pointer flex-col items-center justify-center overflow-hidden rounded-[var(--radius-soft)] border border-[var(--paper-200)] bg-[var(--paper-50)] text-center outline-none transition hover:border-[var(--ink-300)] focus-visible:[box-shadow:var(--shadow-focus-ink)]",
+          disabled && "pointer-events-none opacity-60"
+        )}
       >
         {asset.previewUrl ? (
           <img src={asset.previewUrl} alt={label} className="h-full max-h-[184px] w-full object-cover" />
@@ -329,7 +333,7 @@ function FrameDropzone({
             <span className="mt-1 max-w-[16rem] text-xs leading-5 text-[var(--ink-500)]">{hint}</span>
           </span>
         )}
-      </button>
+      </label>
       <div className="mt-3 flex min-h-8 items-center justify-between gap-3">
         <div className="min-w-0 text-xs leading-5 text-[var(--ink-500)]">
           {asset.file ? (

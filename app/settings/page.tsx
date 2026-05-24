@@ -380,9 +380,10 @@ export default function SettingsPage() {
     <>
       <input
         ref={fileInputRef}
+        id="settings-avatar-upload"
         type="file"
         accept={AVATAR_IMAGE_ACCEPT}
-        className="hidden"
+        className="sx-file-input"
         onChange={handleUploadAvatar}
       />
       <ProfilePageV2
@@ -413,7 +414,7 @@ export default function SettingsPage() {
         onDisplayNameChange={setDisplayName}
         onSaveProfile={handleSave}
         savingProfile={loading}
-        onAvatarClick={() => fileInputRef.current?.click()}
+        avatarInputId="settings-avatar-upload"
         avatarUploading={uploading}
         onLogout={() => {
           supabase?.auth.signOut()

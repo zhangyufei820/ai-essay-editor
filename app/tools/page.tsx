@@ -789,15 +789,14 @@ export default function ToolsPage() {
                   <input
                     ref={reverseImageRef}
                     id="reverse-image-file"
-                    className="sr-only"
+                    className="sx-file-input"
                     type="file"
                     accept={IMAGE_UPLOAD_ACCEPT}
                     onChange={(event) => handleReverseImageFile(event.target.files?.[0])}
                   />
-                  <button
-                    type="button"
-                    onClick={() => reverseImageRef.current?.click()}
-                    className="flex min-h-44 w-full flex-col items-center justify-center gap-3 rounded-[var(--radius-soft)] border border-dashed border-[var(--ink-300)] bg-[var(--ink-50)] px-4 text-center text-sm font-semibold text-[var(--ink-700)] transition hover:border-[var(--ink-600)] hover:bg-[var(--paper-100)]"
+                  <label
+                    htmlFor="reverse-image-file"
+                    className="flex min-h-44 w-full cursor-pointer flex-col items-center justify-center gap-3 rounded-[var(--radius-soft)] border border-dashed border-[var(--ink-300)] bg-[var(--ink-50)] px-4 text-center text-sm font-semibold text-[var(--ink-700)] transition hover:border-[var(--ink-600)] hover:bg-[var(--paper-100)]"
                   >
                     {reverseImagePreview ? (
                       <img src={reverseImagePreview} alt="已上传图片预览" className="max-h-40 rounded-[var(--radius-soft)] object-contain" />
@@ -810,7 +809,7 @@ export default function ToolsPage() {
                         <span className="text-xs font-normal text-[var(--ink-500)]">支持 JPG / PNG / WebP，上传后再反推提示词</span>
                       </>
                     )}
-                  </button>
+                  </label>
                   {reverseImageFile ? (
                     <p className="truncate text-xs text-[var(--ink-500)]">已选：{reverseImageFile.name}</p>
                   ) : null}
@@ -887,17 +886,16 @@ export default function ToolsPage() {
                   ref={documentFileRef}
                   id="document-file"
                   type="file"
-                  className="sr-only"
+                  className="sx-file-input"
                   accept={DOCUMENT_UPLOAD_ACCEPT}
                   onChange={(event) => setDocumentFile(event.target.files?.[0] || null)}
                 />
-                <button
-                  type="button"
-                  onClick={() => documentFileRef.current?.click()}
-                  className="flex h-12 w-full items-center justify-center rounded-[var(--radius-soft)] border border-[var(--paper-300)] bg-[var(--paper-100)] px-4 text-sm font-semibold text-[var(--ink-700)] transition hover:border-[var(--ink-400)] hover:bg-[var(--ink-50)]"
+                <label
+                  htmlFor="document-file"
+                  className="flex h-12 w-full cursor-pointer items-center justify-center rounded-[var(--radius-soft)] border border-[var(--paper-300)] bg-[var(--paper-100)] px-4 text-sm font-semibold text-[var(--ink-700)] transition hover:border-[var(--ink-400)] hover:bg-[var(--ink-50)]"
                 >
                   {documentFile ? documentFile.name : "➕点击上传文档"}
-                </button>
+                </label>
                 <Button type="submit" disabled={busy === "document"} className="w-full">
                   {busy === "document" ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
                   提取文本
@@ -910,27 +908,33 @@ export default function ToolsPage() {
                 <Label htmlFor="ocr-images">图片上传 / 拍照 / 测试文本</Label>
                 <input
                   ref={ocrUploadRef}
-                  className="sr-only"
+                  id="ocr-image-upload"
+                  className="sx-file-input"
                   type="file"
                   accept={IMAGE_UPLOAD_ACCEPT}
                   onChange={(event) => handleOcrFile(event.target.files?.[0])}
                 />
                 <input
                   ref={ocrCameraRef}
-                  className="sr-only"
+                  id="ocr-camera-upload"
+                  className="sx-file-input"
                   type="file"
                   accept={IMAGE_UPLOAD_ACCEPT}
                   capture="environment"
                   onChange={(event) => handleOcrFile(event.target.files?.[0])}
                 />
                 <div className="grid grid-cols-2 gap-2">
-                  <Button type="button" variant="outline" onClick={() => ocrUploadRef.current?.click()}>
-                    <Upload className="mr-2 size-4" />
-                    上传图片
+                  <Button type="button" variant="outline" asChild>
+                    <label htmlFor="ocr-image-upload" className="cursor-pointer">
+                      <Upload className="mr-2 size-4" />
+                      上传图片
+                    </label>
                   </Button>
-                  <Button type="button" variant="outline" onClick={() => ocrCameraRef.current?.click()}>
-                    <Camera className="mr-2 size-4" />
-                    拍照识别
+                  <Button type="button" variant="outline" asChild>
+                    <label htmlFor="ocr-camera-upload" className="cursor-pointer">
+                      <Camera className="mr-2 size-4" />
+                      拍照识别
+                    </label>
                   </Button>
                 </div>
                 {ocrFile ? (

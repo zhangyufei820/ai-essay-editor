@@ -13,6 +13,7 @@ import {
   useRef,
   useEffect,
   useState,
+  useId,
   type KeyboardEvent,
   type ChangeEvent,
   type ClipboardEvent as ReactClipboardEvent,
@@ -271,6 +272,8 @@ export function ChatInput({
   const cameraVideoRef = useRef<HTMLVideoElement>(null)
   const cameraCanvasRef = useRef<HTMLCanvasElement>(null)
   const cameraStreamRef = useRef<MediaStream | null>(null)
+  const uploadInputId = useId()
+  const cameraInputId = useId()
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const [isFocused, setIsFocused] = useState(false)
   const [isDraggingFile, setIsDraggingFile] = useState(false)
@@ -339,6 +342,7 @@ export function ChatInput({
       // 清空 input 以便重复选择同一文件
       e.target.value = ""
     }
+    closeMobileTools()
   }
 
   const stopCamera = () => {
@@ -711,17 +715,17 @@ export function ChatInput({
                 <span className="truncate">{selectedCodexSkillName || "加载技能"}</span>
               </button>
             )}
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              className="hidden rounded-full text-[var(--ink-600)] hover:bg-[var(--ink-50)] sm:inline-flex sm:rounded-[var(--radius-soft)]"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isLoading || disabled}
+            <label
+              htmlFor={uploadInputId}
+              aria-disabled={isLoading || disabled}
+              className={cn(
+                "hidden h-8 w-8 cursor-pointer select-none items-center justify-center rounded-full text-[var(--ink-600)] transition-colors hover:bg-[var(--ink-50)] sm:inline-flex sm:rounded-[var(--radius-soft)]",
+                (isLoading || disabled) && "pointer-events-none opacity-50"
+              )}
               aria-label="上传附件"
             >
               <IconUpload className="h-4 w-4" />
-            </Button>
+            </label>
           </div>
         </div>
       )}
@@ -788,30 +792,28 @@ export function ChatInput({
                   transition={{ duration: 0.16 }}
                   className="absolute bottom-12 left-0 z-40 min-w-[164px] overflow-hidden rounded-[var(--radius-soft)] border border-[var(--paper-200)] bg-[var(--paper-50)] p-1 shadow-[0_12px_34px_rgba(14,27,17,0.16)]"
                 >
-                  <button
-                    type="button"
-                    className="flex min-h-11 w-full items-center gap-2 rounded-[var(--radius-soft)] px-3 text-left text-[14px] font-medium text-[var(--ink-800)] hover:bg-[var(--ink-50)]"
-                    onClick={() => {
-                      closeMobileTools()
-                      fileInputRef.current?.click()
-                    }}
-                    disabled={isLoading || disabled}
+                  <label
+                    htmlFor={uploadInputId}
+                    className={cn(
+                      "flex min-h-11 w-full cursor-pointer items-center gap-2 rounded-[var(--radius-soft)] px-3 text-left text-[14px] font-medium text-[var(--ink-800)] hover:bg-[var(--ink-50)]",
+                      (isLoading || disabled) && "pointer-events-none opacity-50"
+                    )}
+                    aria-disabled={isLoading || disabled}
                   >
                     <IconUpload className="h-4 w-4 text-[var(--ink-700)]" />
                     上传文件
-                  </button>
-                  <button
-                    type="button"
-                    className="flex min-h-11 w-full items-center gap-2 rounded-[var(--radius-soft)] px-3 text-left text-[14px] font-medium text-[var(--ink-800)] hover:bg-[var(--ink-50)]"
-                    onClick={() => {
-                      closeMobileTools()
-                      openSystemCameraOrAlbum()
-                    }}
-                    disabled={isLoading || disabled || !onFileUpload}
+                  </label>
+                  <label
+                    htmlFor={cameraInputId}
+                    className={cn(
+                      "flex min-h-11 w-full cursor-pointer items-center gap-2 rounded-[var(--radius-soft)] px-3 text-left text-[14px] font-medium text-[var(--ink-800)] hover:bg-[var(--ink-50)]",
+                      (isLoading || disabled || !onFileUpload) && "pointer-events-none opacity-50"
+                    )}
+                    aria-disabled={isLoading || disabled || !onFileUpload}
                   >
                     <Camera className="h-4 w-4 text-[var(--ink-700)]" />
                     拍照/相册
-                  </button>
+                  </label>
                   <button
                     type="button"
                     className="flex min-h-11 w-full items-center gap-2 rounded-[var(--radius-soft)] px-3 text-left text-[14px] font-medium text-[var(--ink-800)] hover:bg-[var(--ink-50)]"
@@ -849,20 +851,18 @@ export function ChatInput({
               <span className="hidden text-[11px] text-[var(--ink-400)] font-[var(--font-mono-v2)] sm:block">
                 文件上传
               </span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
+              <label
+                htmlFor={uploadInputId}
                 className={cn(
-                  "h-11 w-11 sm:h-10 sm:w-10 rounded-[var(--radius-sharp)] touch-manipulation text-[var(--ink-600)] hover:bg-[var(--ink-50)]",
-                  isFocused && "max-sm:h-9 max-sm:w-9 max-sm:rounded-full"
+                  "inline-flex h-11 w-11 cursor-pointer select-none items-center justify-center rounded-[var(--radius-sharp)] text-[var(--ink-600)] transition-colors hover:bg-[var(--ink-50)] sm:h-10 sm:w-10",
+                  "touch-manipulation",
+                  isFocused && "max-sm:h-9 max-sm:w-9 max-sm:rounded-full",
+                  (isLoading || disabled) && "pointer-events-none opacity-50"
                 )}
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isLoading || disabled}
                 aria-label="上传附件"
               >
                 <IconUpload className="h-4 w-4 sm:h-5 sm:w-5" />
-              </Button>
+              </label>
             </div>
             <div className="flex flex-col items-center gap-0.5 sm:gap-1">
               <span className="hidden text-[11px] text-[var(--ink-400)] font-[var(--font-mono-v2)] sm:block">
@@ -897,18 +897,17 @@ export function ChatInput({
           {showModelSelector ? (
             <>
               <span className="sr-only">拍照</span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                className="rounded-full text-[var(--ink-600)] hover:bg-white sm:rounded-[var(--radius-sharp)]"
-                onClick={openCamera}
-                disabled={isLoading || disabled || !onFileUpload}
+              <label
+                htmlFor={cameraInputId}
+                className={cn(
+                  "inline-flex h-8 w-8 cursor-pointer select-none items-center justify-center rounded-full text-[var(--ink-600)] transition-colors hover:bg-white sm:rounded-[var(--radius-sharp)]",
+                  (isLoading || disabled || !onFileUpload) && "pointer-events-none opacity-50"
+                )}
                 aria-label="拍照上传"
                 title="拍照上传"
               >
                 <Camera className="h-4 w-4" />
-              </Button>
+              </label>
             </>
           ) : null}
 
@@ -1028,8 +1027,9 @@ export function ChatInput({
       {/* 隐藏的文件输入 */}
       <input
         ref={fileInputRef}
+        id={uploadInputId}
         type="file"
-        className="hidden"
+        className="sx-file-input"
         multiple
         accept={CHAT_FILE_ACCEPT}
         onChange={handleFileChange}
@@ -1037,8 +1037,9 @@ export function ChatInput({
       />
       <input
         ref={cameraInputRef}
+        id={cameraInputId}
         type="file"
-        className="hidden"
+        className="sx-file-input"
         accept={CHAT_CAMERA_ACCEPT}
         capture="environment"
         onChange={handleFileChange}
@@ -1080,8 +1081,10 @@ export function ChatInput({
                   <div className="flex min-h-[280px] flex-col items-center justify-center gap-3 px-6 text-center text-white">
                     <Camera className="h-8 w-8 opacity-80" />
                     <p className="text-sm leading-6">{cameraError}</p>
-                    <Button type="button" variant="outline" size="sm" onClick={() => cameraInputRef.current?.click()}>
-                      打开系统拍照/相册
+                    <Button type="button" variant="outline" size="sm" asChild>
+                      <label htmlFor={cameraInputId} className="cursor-pointer">
+                        打开系统拍照/相册
+                      </label>
                     </Button>
                   </div>
                 ) : (
@@ -1095,8 +1098,10 @@ export function ChatInput({
                 <canvas ref={cameraCanvasRef} className="hidden" />
               </div>
               <div className="flex items-center justify-between gap-3 px-4 py-3">
-                <Button type="button" variant="ghost" onClick={() => cameraInputRef.current?.click()}>
-                  从相册选择
+                <Button type="button" variant="ghost" asChild>
+                  <label htmlFor={cameraInputId} className="cursor-pointer">
+                    从相册选择
+                  </label>
                 </Button>
                 <Button type="button" onClick={captureCameraPhoto} disabled={!isCameraReady || Boolean(cameraError)}>
                   <Camera className="mr-2 h-4 w-4" />

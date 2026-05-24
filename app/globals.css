@@ -767,6 +767,18 @@
   top: env(safe-area-inset-top, 0px);
 }
 
+.sx-file-input {
+  position: fixed;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 /* ============================================
  * 🎯 GenSpark 风格流式光标 (Streaming Cursor)
  * ============================================ */

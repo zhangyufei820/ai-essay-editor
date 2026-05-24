@@ -124,10 +124,10 @@ export function DiagnosisPageV2({
 
       {/* 上传区 */}
       <InkReveal as="div" delay={0.12}>
-        <div
+        <label
+          htmlFor="diagnosis-v2-upload"
           onDragOver={(e) => e.preventDefault()}
           onDrop={handleDrop}
-          onClick={() => inputRef.current?.click()}
           className={cn(
             "flex cursor-pointer flex-col items-center justify-center gap-4",
             "min-h-[240px] rounded-[var(--radius-card)]",
@@ -156,17 +156,18 @@ export function DiagnosisPageV2({
           </div>
           <input
             ref={inputRef}
+            id="diagnosis-v2-upload"
             type="file"
             accept={DIAGNOSIS_UPLOAD_ACCEPT}
             multiple
-            className="hidden"
+            className="sx-file-input"
             onChange={(e) => {
               if (e.target.files && e.target.files.length > 0) {
                 onUpload?.(e.target.files)
               }
             }}
           />
-        </div>
+        </label>
 
         {/* 已上传预览 */}
         {files.length > 0 ? (

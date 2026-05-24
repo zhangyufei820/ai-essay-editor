@@ -37,6 +37,7 @@ export interface ProfilePageV2Props {
   achievements?: Array<{ label: string; earned?: boolean }>
   onLogout?: () => void
   onAvatarClick?: () => void
+  avatarInputId?: string
   avatarUploading?: boolean
   displayName?: string
   onDisplayNameChange?: (value: string) => void
@@ -50,7 +51,7 @@ export function ProfilePageV2({
   stats,
   achievements = [],
   onLogout,
-  onAvatarClick,
+  avatarInputId,
   avatarUploading = false,
   displayName,
   onDisplayNameChange,
@@ -70,28 +71,28 @@ export function ProfilePageV2({
         {/* 左：身份卡 */}
         <CardV2 variant="paper" className="self-start">
           <CardV2Content className="flex flex-col items-center gap-4 py-8 text-center">
-            <button
-              type="button"
-              onClick={onAvatarClick}
-              disabled={!onAvatarClick || avatarUploading}
+            <label
+              htmlFor={avatarInputId}
               className={cn(
                 "group relative rounded-full outline-none transition",
-                onAvatarClick && "cursor-pointer focus-visible:[box-shadow:var(--shadow-focus-ink)]",
-                avatarUploading && "cursor-wait opacity-80"
+                avatarInputId && "cursor-pointer focus-visible:[box-shadow:var(--shadow-focus-ink)]",
+                avatarUploading && "cursor-wait opacity-80",
+                (avatarUploading || !avatarInputId) && "pointer-events-none opacity-80"
               )}
               aria-label={avatarUploading ? "头像上传中" : "更换头像"}
               title={avatarUploading ? "头像上传中" : "点击更换头像"}
+              aria-disabled={avatarUploading || !avatarInputId}
             >
               <AvatarV2 className="size-20 transition group-hover:border-[var(--ink-300)] group-hover:bg-[var(--ink-50)]">
                 {user?.avatar ? <AvatarV2Image src={user.avatar} alt={user.name ?? ""} /> : null}
                 <AvatarV2Fallback>{(user?.name ?? "U").slice(0, 1)}</AvatarV2Fallback>
               </AvatarV2>
-              {onAvatarClick ? (
+              {avatarInputId ? (
                 <span className="absolute inset-x-1 bottom-1 rounded-[var(--radius-pill)] bg-[var(--ink-800)]/85 px-2 py-1 text-[10px] font-medium text-white opacity-0 transition group-hover:opacity-100">
                   {avatarUploading ? "上传中" : "更换"}
                 </span>
               ) : null}
-            </button>
+            </label>
 
             <div>
               <h2 className="font-[var(--font-display)] text-[20px] font-bold text-[var(--ink-800)]">
