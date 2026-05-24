@@ -162,7 +162,8 @@ function isHtmlErrorContent(value: unknown) {
     text.startsWith("<!doctype html") ||
     text.startsWith("<html") ||
     text.includes("<title>shenxiang.school | 502: bad gateway</title>") ||
-    (text.includes("cloudflare") && text.includes("bad gateway"))
+    text.includes("524: a timeout occurred") ||
+    (text.includes("cloudflare") && (text.includes("bad gateway") || text.includes("a timeout occurred")))
   )
 }
 
@@ -2407,6 +2408,7 @@ export async function POST(request: NextRequest) {
       controller: AbortController | null
     } = { firstByteReceived: false, timeoutId: null, controller: null }
     const useBlockingDifyChat =
+      process.env.DIFY_CHAT_FORCE_BLOCKING_MODE === "true" &&
       !WORKFLOW_MODELS.has(model || "") &&
       !isGptImageGatewayRequest &&
       model !== "banana-2-pro"
@@ -2903,6 +2905,7 @@ export async function POST(request: NextRequest) {
     let allInOneStreamedAnswer = false
     let finalNodeOutputText = ""
     let openClawFinalOutputText = ""
+    let actualDifyResponseMode: "streaming" | "blocking" | "json_fallback" = useBlockingDifyChat ? "blocking" : "streaming"
     const bufferedNodeEvents: Array<{
       event: string
       title?: string
@@ -3125,7 +3128,7 @@ export async function POST(request: NextRequest) {
           response_length: fullResponseText.length,
           has_received_content: hasReceivedContent,
           node_failure: workflowNodeFailure,
-          dify_response_mode: useBlockingDifyChat ? "blocking" : "streaming",
+          dify_response_mode: actualDifyResponseMode,
         },
       })
       if (bufferedNodeEvents.length > 0) {
@@ -3134,12 +3137,21 @@ export async function POST(request: NextRequest) {
       logPerf(taskRun.requestId, "stream_end", apiStartedAt, {
         responseLength: fullResponseText.length,
         nodeEvents: bufferedNodeEvents.length,
-        responseMode: useBlockingDifyChat ? "blocking" : "streaming",
+        responseMode: actualDifyResponseMode,
       })
     }
 
-    if (useBlockingDifyChat) {
-      console.log(`✅ [Dify请求] 成功，使用 blocking 响应包装为 SSE...`)
+    const responseContentType = response.headers.get("content-type") || ""
+    const shouldWrapDifyResponseAsSse =
+      useBlockingDifyChat ||
+      (
+        !responseContentType.toLowerCase().includes("text/event-stream") &&
+        responseContentType.toLowerCase().includes("application/json")
+      )
+
+    if (shouldWrapDifyResponseAsSse) {
+      actualDifyResponseMode = useBlockingDifyChat ? "blocking" : "json_fallback"
+      console.log(`✅ [Dify请求] 成功，使用 ${actualDifyResponseMode} 响应包装为 SSE...`)
       const blockingPayload = await response.clone().json().catch(async () => {
         const text = await response.text().catch(() => "")
         return { answer: text }
@@ -3185,7 +3197,7 @@ export async function POST(request: NextRequest) {
             response_length: fullResponseText.length,
             has_received_content: hasReceivedContent,
             model,
-            dify_response_mode: "blocking",
+            dify_response_mode: actualDifyResponseMode,
           },
         }).catch((error) => console.warn("[AI Task Trace] client abort update failed:", error))
       }, { once: true })
@@ -3199,7 +3211,7 @@ export async function POST(request: NextRequest) {
           "Content-Encoding": "none",
           "X-Request-Id": taskRun.requestId,
           "X-Trace-Id": taskRun.traceId,
-          "X-Dify-Response-Mode": "blocking",
+          "X-Dify-Response-Mode": actualDifyResponseMode,
         },
       })
     }

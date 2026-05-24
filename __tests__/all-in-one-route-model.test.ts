@@ -72,15 +72,17 @@ describe("all-in-one route model sync", () => {
     expect(text).toContain("!allInOneStreamedAnswer")
   })
 
-  it("uses Dify blocking mode for chat apps and wraps the answer as SSE", () => {
+  it("keeps chat apps streaming by default and only wraps JSON/blocking fallbacks as SSE", () => {
     const text = routeSource()
 
     expect(text).toContain("const useBlockingDifyChat")
+    expect(text).toContain('process.env.DIFY_CHAT_FORCE_BLOCKING_MODE === "true"')
     expect(text).toContain('model !== "banana-2-pro"')
-    expect(text).toContain('response_mode: useBlockingDifyChat ? "blocking"')
+    expect(text).toContain('response_mode: useBlockingDifyChat ? "blocking" : isGptImage2 ? "blocking" : "streaming"')
     expect(text).toContain("applyBlockingDifyPayload")
-    expect(text).toContain("使用 blocking 响应包装为 SSE")
-    expect(text).toContain('"X-Dify-Response-Mode": "blocking"')
+    expect(text).toContain("shouldWrapDifyResponseAsSse")
+    expect(text).toContain('"json_fallback"')
+    expect(text).toContain('"X-Dify-Response-Mode": actualDifyResponseMode')
     expect(text).toContain("enqueueSseAnswer(controller, answer)")
   })
 })
