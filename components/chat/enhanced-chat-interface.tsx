@@ -70,7 +70,7 @@ import { VoiceRecorder, getDifyTTS, transcribeAudio } from "@/lib/voice-service"
 import { getApiUrl } from "@/lib/api-config"
 import { logger } from "@/lib/logger"
 import { ModelLogo } from "@/components/ModelLogo"
-import { navigationModelConfig } from "@/lib/navigation-models"
+import { navigationModelConfig, getNavigationModelItem } from "@/lib/navigation-models"
 import { getOpenClawAttachmentKind, isLikelyHtmlDocumentUrl, toPublicOpenClawMediaSignUrl, toPublicOpenClawWorkspaceUrl } from "@/lib/openclaw-media"
 import type { CodexSkill } from "@/lib/codex-skills"
 import type { OpenClawSkill } from "@/lib/openclaw-skills"
@@ -500,6 +500,20 @@ function getModelEmptyResponseMessage(model: string) {
   return "我没有收到可展示的回复，请再试一次。"
 }
 
+function getChatModelDisplayLabel(model?: string) {
+  if (!model) return "当前任务"
+  const navigationName = getNavigationModelItem(model as ModelType)?.name
+  return navigationName || MODEL_DISPLAY_NAMES[model] || model
+}
+
+function isNetworkStreamError(raw: string, lower: string) {
+  return (
+    /network error|failed to fetch|fetch failed|load failed|networkerror|err_incomplete_chunked_encoding|err_network_changed|err_connection|socket|connection/i.test(raw) ||
+    /网络|连接.*中断|连接.*失败/.test(raw) ||
+    lower.includes("network")
+  )
+}
+
 function getChatErrorMessage(error: unknown, status?: number, model?: string): string {
   const raw = error instanceof Error ? error.message : String(error || "")
   const text = raw.toLowerCase()
@@ -523,10 +537,13 @@ function getChatErrorMessage(error: unknown, status?: number, model?: string): s
     if (model === "open-claw") {
       return "OpenClaw 上游模型响应超时或任务被中断。复杂图片/大文件任务可能排队较久，请稍后重试。"
     }
-    return "服务响应超时，已保留已生成内容。复杂文件或 OpenClaw 任务可能需要更久，请稍后重试。"
+    return `${getChatModelDisplayLabel(model)} 响应超时或连接被中断。页面会保留已生成内容；若没有看到结果，请刷新历史记录后再决定是否重新提交。`
   }
-  if (model === "open-claw" && /network error|failed to fetch|load failed|networkerror|网络/.test(text)) {
-    return "OpenClaw 长任务连接中断，可能是上游模型超时或浏览器网络断开。当前任务没有正常完成，请稍后重试。"
+  if (isNetworkStreamError(raw, text)) {
+    if (model === "open-claw") {
+      return "OpenClaw 长任务连接中断，可能是上游模型超时或浏览器网络断开。当前页面没有收到完整结果，请稍后刷新历史记录或重新提交。"
+    }
+    return `${getChatModelDisplayLabel(model)} 连接中断：后端已接收请求，但浏览器在读取流式结果时断开。请先刷新当前会话或历史记录查看是否已有结果；若仍没有结果，再重新提交一次。`
   }
   if (/file|upload|附件|上传/.test(text) || /文件|上传|附件/.test(raw)) {
     return "文件未上传成功或附件无法被模型读取，请删除附件后重新上传再提交。"
@@ -540,16 +557,16 @@ function getChatErrorMessage(error: unknown, status?: number, model?: string): s
 
 function buildChatErrorContent(message: string): string {
   return [
-    "### 请求没有完成",
+    "### 响应没有完整送达",
     "",
     message,
     "",
-    "建议：检查登录状态、积分余额和附件上传状态；如果是 OpenClaw 或大文件任务，请稍后重试。"
+    "建议：先刷新当前会话或历史记录查看是否已有结果；如果仍无结果，再重新提交。若连续出现，请保留截图和发生时间。"
   ].join("\n")
 }
 
-async function getTaskFailureMessage(requestId: string, model: string): Promise<string | null> {
-  if (!requestId || model !== "open-claw") return null
+async function getTaskFailureMessage(requestId: string, model: string): Promise<{ message: string; status?: string } | null> {
+  if (!requestId) return null
   try {
     const res = await fetch(`/api/task-status?requestId=${encodeURIComponent(requestId)}&limit=1`, {
       headers: await getVerifiedAuthHeaders(),
@@ -561,13 +578,24 @@ async function getTaskFailureMessage(requestId: string, model: string): Promise<
 
     const stage = typeof task.stage === "string" ? task.stage : ""
     const detail = typeof task.error_message === "string" ? task.error_message : ""
+    const status = typeof task.status === "string" ? task.status : undefined
+    const modelLabel = getChatModelDisplayLabel(model)
     if (["failed", "timeout", "cancelled"].includes(task.status)) {
-      if (detail) return detail
-      if (stage) return `OpenClaw 任务未完成：${stage}`
-      return "OpenClaw 任务没有正常完成。"
+      if (detail) return { message: detail, status }
+      if (stage) return { message: `${modelLabel} 任务未完成：${stage}`, status }
+      return { message: `${modelLabel} 任务没有正常完成。`, status }
     }
     if (["queued", "running"].includes(task.status)) {
-      return stage ? `OpenClaw 任务仍在处理中：${stage}` : "OpenClaw 任务仍在处理中，请稍后刷新会话查看结果。"
+      return {
+        message: stage ? `${modelLabel} 任务仍在处理中：${stage}` : `${modelLabel} 任务仍在处理中，请稍后刷新会话查看结果。`,
+        status,
+      }
+    }
+    if (task.status === "succeeded") {
+      return {
+        message: `${modelLabel} 任务已完成，但当前浏览器没有收到完整响应。请刷新当前会话或历史记录查看；若仍无内容，再重新提交。`,
+        status,
+      }
     }
   } catch (error) {
     console.warn("⚠️ [任务状态] 查询失败:", error)
@@ -2992,8 +3020,10 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         console.error("❌ [对话异常] 错误堆栈:", e.stack)
         console.error("❌ [对话异常] 模型:", selectedModel, "模式:", genMode)
 
-        const taskFailureMessage = await getTaskFailureMessage(requestId, selectedModel)
-        const errorMsg = taskFailureMessage || getChatErrorMessage(e, undefined, selectedModel)
+        const taskFailure = await getTaskFailureMessage(requestId, selectedModel)
+        const errorMsg = taskFailure?.message || getChatErrorMessage(e, undefined, selectedModel)
+        const rawError = e instanceof Error ? e.message : String(e || "")
+        const mayRecoverFromHistory = !taskFailure && isNetworkStreamError(rawError, rawError.toLowerCase())
         toast.error(errorMsg, {
           description: selectedModel === "gemini-image" ? "图片生成失败，请检查提示词" : undefined,
           duration: 5000
@@ -3004,12 +3034,14 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
           // 保留消息并在末尾添加中断提示
           setMessages(p => p.map(m => m.id === botId ? { ...m, content: `${fullText}\n\n---\n*内容生成已中断：${errorMsg}*` } : m))
           toast.error("内容生成中断，已保留已生成的部分", { duration: 4000 })
-	        } else {
-	          // 没有任何内容时也保留错误消息，避免用户看到消息突然消失。
-	          setMessages(p => p.map(m => m.id === botId ? { ...m, content: buildChatErrorContent(errorMsg) } : m))
-	        }
-	        forgetPendingTask(requestId)
-	    } finally {
+		        } else {
+		          // 没有任何内容时也保留错误消息，避免用户看到消息突然消失。
+		          setMessages(p => p.map(m => m.id === botId ? { ...m, content: buildChatErrorContent(errorMsg) } : m))
+		        }
+		        if (!mayRecoverFromHistory && !["queued", "running"].includes(taskFailure?.status || "")) {
+		          forgetPendingTask(requestId)
+		        }
+		    } finally {
 	      setIsLoading(false)
 	      setProcessingContext(null)
 	      // 🔥 重置工作流状态（而非 markWorkflowComplete，否则会显示误导性的"已完成"节点）

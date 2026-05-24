@@ -115,6 +115,21 @@ describe("chat think rendering and composer layout", () => {
     expect(source).toContain("连接正常，任务仍在处理中")
   })
 
+  it("turns mobile stream network failures into recoverable chat guidance for every model", () => {
+    const source = read("components/chat/enhanced-chat-interface.tsx")
+    const route = read("app/api/dify-chat/route.ts")
+
+    expect(source).toContain("function isNetworkStreamError")
+    expect(source).toContain("getNavigationModelItem(model as ModelType)?.name")
+    expect(source).toContain("连接中断：后端已接收请求")
+    expect(source).toContain("请先刷新当前会话或历史记录查看是否已有结果")
+    expect(source).toContain("OpenClaw 长任务连接中断")
+    expect(source).not.toContain('model !== "open-claw") return null')
+    expect(source).not.toContain("建议：检查登录状态、积分余额和附件上传状态")
+    expect(route).toContain("getTraceModelDisplayName(model)")
+    expect(route).not.toContain("浏览器或网络连接在 OpenClaw 长任务完成前中断")
+  })
+
   it("keeps OpenClaw final node output visible when message chunks are empty", () => {
     const route = read("app/api/dify-chat/route.ts")
 

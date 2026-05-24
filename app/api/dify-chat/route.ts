@@ -1230,6 +1230,11 @@ function enqueueSseStatus(controller: TransformStreamDefaultController<Uint8Arra
   })}\n\n`))
 }
 
+function getTraceModelDisplayName(model?: string | null) {
+  if (!model) return "当前任务"
+  return getModelDisplayName(model as ModelType) || model
+}
+
 const DIFY_CONVERSATION_ID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
@@ -3499,6 +3504,7 @@ export async function POST(request: NextRequest) {
     request.signal.addEventListener("abort", () => {
       if (taskCompleted) return
       clientAborted = true
+      const modelLabel = getTraceModelDisplayName(model)
       if (streamStatus.timeoutId) {
         clearTimeout(streamStatus.timeoutId)
         streamStatus.timeoutId = null
@@ -3509,7 +3515,7 @@ export async function POST(request: NextRequest) {
         stage: "客户端连接中断",
         progress: hasReceivedContent ? 80 : 100,
         conversationId: conversationId || undefined,
-        errorMessage: "浏览器或网络连接在 OpenClaw 长任务完成前中断",
+        errorMessage: `浏览器或网络连接在 ${modelLabel} 响应完成前中断`,
         errorCode: "CLIENT_STREAM_ABORTED",
         metadata: {
           response_length: fullResponseText.length,
