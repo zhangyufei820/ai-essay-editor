@@ -20,7 +20,7 @@ import {
   type FormEvent,
 } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Camera, Volume2, X, Loader2, ChevronDown, CornerDownLeft, Sparkles } from "lucide-react"
+import { Camera, Volume2, X, Loader2, ChevronDown, CornerDownLeft, Sparkles, Plus } from "lucide-react"
 import { IconEssay, IconMic, IconUpload } from "@/components/icons/v2"
 import { cn } from "@/lib/utils"
 import { ModelSelector, type Model } from "./ModelSelector"
@@ -274,6 +274,7 @@ export function ChatInput({
   const [isCameraOpen, setIsCameraOpen] = useState(false)
   const [isCameraReady, setIsCameraReady] = useState(false)
   const [cameraError, setCameraError] = useState("")
+  const [mobileToolsOpen, setMobileToolsOpen] = useState(false)
   const recognitionRef = useRef<SpeechRecognition | null>(null)
   const dragDepthRef = useRef(0)
   const isMobileInputMode = isFocused || value.trim().length > 0
@@ -355,6 +356,11 @@ export function ChatInput({
     }
 
     setIsCameraOpen(true)
+  }
+
+  const openSystemCameraOrAlbum = () => {
+    if (disabled || isLoading || !onFileUpload) return
+    cameraInputRef.current?.click()
   }
 
   const uploadFiles = (files: File[]) => {
@@ -589,6 +595,8 @@ export function ChatInput({
   // 是否可以提交
   const canSubmit = !isLoading && !disabled && (value.trim() || uploadedFiles.length > 0)
 
+  const closeMobileTools = () => setMobileToolsOpen(false)
+
   return (
     <div
       onPaste={handlePaste}
@@ -599,6 +607,7 @@ export function ChatInput({
       className={cn(
         className,
         "relative mx-auto w-full max-w-3xl rounded-[var(--radius-card)] border border-[var(--paper-200)] bg-white shadow-[0_18px_46px_rgba(14,27,17,0.14),0_4px_12px_rgba(14,27,17,0.08)] touch-manipulation",
+        "max-sm:rounded-[var(--radius-soft)] max-sm:shadow-[0_-4px_20px_rgba(14,27,17,0.10)]",
         "transition-[border-color,box-shadow] duration-200",
         "focus-within:border-[var(--ink-300)] focus-within:shadow-[0_22px_60px_rgba(14,27,17,0.16),0_6px_16px_rgba(14,27,17,0.10)]",
         isFocused && "border-[var(--ink-300)]"
@@ -623,10 +632,7 @@ export function ChatInput({
       {/* 工具栏 */}
       {showModelSelector && (
         <div
-          className={cn(
-            "flex items-center justify-between gap-2 border-b px-2 py-1.5 sm:px-3",
-            isMobileInputMode && "max-sm:hidden"
-          )}
+          className="flex items-center justify-between gap-2 border-b px-2 py-1.5 sm:px-3"
           style={{ borderColor: "var(--paper-50)" }}
         >
           {/* 模型选择器 - 使用 ModelSelector 组件 */}
@@ -697,7 +703,7 @@ export function ChatInput({
               type="button"
               variant="ghost"
               size="icon-sm"
-              className="rounded-full text-[var(--ink-600)] hover:bg-[var(--ink-50)] sm:rounded-[var(--radius-soft)]"
+              className="hidden rounded-full text-[var(--ink-600)] hover:bg-[var(--ink-50)] sm:inline-flex sm:rounded-[var(--radius-soft)]"
               onClick={() => fileInputRef.current?.click()}
               disabled={isLoading || disabled}
               aria-label="上传附件"
@@ -741,9 +747,89 @@ export function ChatInput({
       <div
         className={cn(
           "flex items-end gap-1.5 p-2 sm:gap-2 sm:p-2.5",
-          isMobileInputMode && "max-sm:p-1.5 max-sm:pb-2"
+          "max-sm:gap-1 max-sm:p-1.5 max-sm:pb-2"
         )}
       >
+        {showModelSelector ? (
+          <div className="relative shrink-0 sm:hidden">
+            <button
+              type="button"
+              onClick={() => setMobileToolsOpen((open) => !open)}
+              disabled={isLoading || disabled}
+              className={cn(
+                "flex h-10 w-10 items-center justify-center rounded-full border border-[var(--paper-200)] bg-[var(--paper-50)] text-[var(--ink-700)] shadow-sm transition-colors",
+                "hover:bg-[var(--ink-50)] active:bg-[var(--ink-100)] disabled:cursor-not-allowed disabled:opacity-50",
+                mobileToolsOpen && "bg-[var(--ink-50)] text-[var(--ink-900)]"
+              )}
+              aria-label={mobileToolsOpen ? "收起输入工具" : "展开输入工具"}
+              aria-expanded={mobileToolsOpen}
+            >
+              <Plus className={cn("h-5 w-5 transition-transform", mobileToolsOpen && "rotate-45")} />
+            </button>
+
+            <AnimatePresence>
+              {mobileToolsOpen ? (
+                <motion.div
+                  initial={{ opacity: 0, y: 8, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 8, scale: 0.98 }}
+                  transition={{ duration: 0.16 }}
+                  className="absolute bottom-12 left-0 z-40 min-w-[164px] overflow-hidden rounded-[var(--radius-soft)] border border-[var(--paper-200)] bg-[var(--paper-50)] p-1 shadow-[0_12px_34px_rgba(14,27,17,0.16)]"
+                >
+                  <button
+                    type="button"
+                    className="flex min-h-11 w-full items-center gap-2 rounded-[var(--radius-soft)] px-3 text-left text-[14px] font-medium text-[var(--ink-800)] hover:bg-[var(--ink-50)]"
+                    onClick={() => {
+                      closeMobileTools()
+                      fileInputRef.current?.click()
+                    }}
+                    disabled={isLoading || disabled}
+                  >
+                    <IconUpload className="h-4 w-4 text-[var(--ink-700)]" />
+                    上传文件
+                  </button>
+                  <button
+                    type="button"
+                    className="flex min-h-11 w-full items-center gap-2 rounded-[var(--radius-soft)] px-3 text-left text-[14px] font-medium text-[var(--ink-800)] hover:bg-[var(--ink-50)]"
+                    onClick={() => {
+                      closeMobileTools()
+                      openSystemCameraOrAlbum()
+                    }}
+                    disabled={isLoading || disabled || !onFileUpload}
+                  >
+                    <Camera className="h-4 w-4 text-[var(--ink-700)]" />
+                    拍照/相册
+                  </button>
+                  <button
+                    type="button"
+                    className="flex min-h-11 w-full items-center gap-2 rounded-[var(--radius-soft)] px-3 text-left text-[14px] font-medium text-[var(--ink-800)] hover:bg-[var(--ink-50)]"
+                    onClick={() => {
+                      closeMobileTools()
+                      toggleVoiceInput()
+                    }}
+                    disabled={isLoading || disabled}
+                  >
+                    <IconMic className="h-4 w-4 text-[var(--ink-700)]" />
+                    {isListening ? "停止语音" : "语音输入"}
+                  </button>
+                  <button
+                    type="button"
+                    className="flex min-h-11 w-full items-center gap-2 rounded-[var(--radius-soft)] px-3 text-left text-[14px] font-medium text-[var(--ink-800)] hover:bg-[var(--ink-50)] disabled:opacity-50"
+                    onClick={() => {
+                      closeMobileTools()
+                      playInputText()
+                    }}
+                    disabled={isLoading || disabled || isPreparingSpeech || !value.trim()}
+                  >
+                    <Volume2 className="h-4 w-4 text-[var(--ink-700)]" />
+                    {isSpeaking ? "停止朗读" : "朗读文字"}
+                  </button>
+                </motion.div>
+              ) : null}
+            </AnimatePresence>
+          </div>
+        ) : null}
+
         {/* 附件按钮（工具栏隐藏或移动端键盘态时显示） */}
         {!showModelSelector && (
           <div className="flex shrink-0 items-end gap-1">
@@ -792,7 +878,7 @@ export function ChatInput({
         <div
           className={cn(
             showModelSelector
-              ? "flex shrink-0 items-center gap-1 rounded-[var(--radius-pill)] border border-[var(--paper-200)] bg-[var(--paper-50)]/75 p-1"
+              ? "hidden shrink-0 items-center gap-1 rounded-[var(--radius-pill)] border border-[var(--paper-200)] bg-[var(--paper-50)]/75 p-1 sm:flex"
               : "contents"
           )}
         >
@@ -891,7 +977,7 @@ export function ChatInput({
             "min-h-[58px] max-h-[148px] rounded-[20px] border-[var(--ink-500)]/65 px-4 py-3 text-[16px] leading-6 sm:min-h-[60px] sm:max-h-[170px] sm:px-4 sm:py-3 sm:text-[16px]",
             "placeholder:text-[var(--ink-500)]",
             "focus-visible:border-[var(--ink-700)] focus-visible:ring-0 focus-visible:[box-shadow:0_0_0_2px_rgba(43,74,52,0.12)]",
-            isMobileInputMode && "max-sm:min-h-[54px] max-sm:max-h-[124px] max-sm:px-3.5 max-sm:py-2.5"
+            "max-sm:min-h-[46px] max-sm:max-h-[120px] max-sm:rounded-[var(--radius-soft)] max-sm:px-3 max-sm:py-2.5"
           )}
           style={{ color: "var(--ink-700)" }}
           rows={1}
@@ -913,7 +999,7 @@ export function ChatInput({
               "bg-[var(--seal-500)] text-white transition-all duration-200 hover:bg-[var(--seal-600)]",
               "active:translate-y-[1px] active:shadow-[inset_0_1px_2px_rgba(142,45,34,0.45)]",
               "disabled:opacity-50 disabled:bg-[var(--paper-300)]",
-              isMobileInputMode && "max-sm:h-10 max-sm:w-10",
+              "max-sm:h-10 max-sm:w-10",
               !canSubmit && "cursor-not-allowed"
             )}
             aria-label="发送消息"
@@ -942,7 +1028,6 @@ export function ChatInput({
         type="file"
         className="hidden"
         accept="image/*"
-        capture="environment"
         onChange={handleFileChange}
         aria-label="拍照上传"
       />

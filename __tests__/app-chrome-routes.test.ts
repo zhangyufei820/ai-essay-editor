@@ -35,7 +35,11 @@ describe('app chrome routes', () => {
     expect(source).toContain('href="/settings"')
     expect(source).toContain('href="/credits"')
     expect(source).toContain('退出登录')
-    expect(source).toContain('window.localStorage.removeItem("authingToken")')
+    expect(source).toContain('clearStoredAuthTokens()')
+
+    const authSource = readFileSync(path.join(process.cwd(), 'lib/client-auth.ts'), 'utf8')
+    expect(authSource).toContain('"authingToken"')
+    expect(authSource).toContain('window.localStorage.removeItem(key)')
   })
 
   it('settings profile exposes avatar upload and save controls in v2 profile card', () => {

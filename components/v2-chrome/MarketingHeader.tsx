@@ -21,7 +21,7 @@ import { Menu, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ButtonV2 } from "@/components/ui/v2/button"
 import { AvatarV2, AvatarV2Fallback, AvatarV2Image } from "@/components/ui/v2/avatar"
-import { SheetV2, SheetV2Content, SheetV2Trigger } from "@/components/ui/v2/sheet"
+import { SheetV2, SheetV2Content, SheetV2Title, SheetV2Trigger } from "@/components/ui/v2/sheet"
 import { readClientUserProfile, USER_PROFILE_UPDATED_EVENT } from "@/lib/client-user-profile"
 import { hasStoredVerifiedAuthToken } from "@/lib/client-auth"
 
@@ -179,8 +179,13 @@ export function MarketingHeader({ user, className }: MarketingHeaderProps) {
                 <Menu className="size-5" />
               </ButtonV2>
             </SheetV2Trigger>
-            <SheetV2Content side="right" className="w-[88vw] max-w-sm">
+            <SheetV2Content
+              side="right"
+              showCloseButton={false}
+              className="w-[88vw] max-w-sm bg-[var(--paper-50)] text-[var(--ink-900)]"
+            >
               <div className="flex h-full flex-col">
+                <SheetV2Title className="sr-only">移动端导航菜单</SheetV2Title>
                 <div className="flex items-center justify-between px-6 pt-6 pb-3">
                   <Image
                     src="/images/design-mode/home-logo-transparent.png"
@@ -200,21 +205,32 @@ export function MarketingHeader({ user, className }: MarketingHeaderProps) {
                 </div>
 
                 <nav className="flex flex-col gap-1 px-3 py-4">
-                  {NAV_ITEMS.map((item) => (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      prefetch={false}
-                      onClick={() => setOpen(false)}
-                      className="px-4 py-3 rounded-[var(--radius-soft)] font-[var(--font-sans-v2)] text-[15px] text-[var(--ink-700)] hover:bg-[var(--ink-50)]"
-                    >
-                      {item.label}
-                    </Link>
-                  ))}
+                  {NAV_ITEMS.map((item) => {
+                    const active =
+                      item.href === "/"
+                        ? pathname === "/"
+                        : pathname?.startsWith(item.href) ?? false
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        prefetch={false}
+                        onClick={() => setOpen(false)}
+                        className={cn(
+                          "rounded-[var(--radius-soft)] px-4 py-3 font-[var(--font-sans-v2)] text-[15px] font-medium transition-colors",
+                          active
+                            ? "bg-[var(--ink-50)] text-[var(--ink-800)]"
+                            : "text-[var(--ink-700)] hover:bg-[var(--ink-50)] hover:text-[var(--ink-900)]"
+                        )}
+                      >
+                        {item.label}
+                      </Link>
+                    )
+                  })}
                 </nav>
 
                 <div className="mt-auto px-6 pb-6 flex flex-col gap-3">
-                  <ButtonV2 asChild variant="primary" size="lg" className="w-full">
+                  <ButtonV2 asChild variant="primary" size="lg" className="w-full text-white">
                     <Link href={activeUser ? "/chat/standard" : "/login"} prefetch={false} onClick={() => setOpen(false)}>
                       开始使用
                     </Link>

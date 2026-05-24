@@ -74,17 +74,21 @@ export function WorkspaceShell({
         {/* 移动端侧栏 */}
         {sidebarOpen ? (
           <div
-            className="fixed inset-0 z-30 bg-[rgba(14,27,17,0.4)] backdrop-blur-[2px] md:hidden"
+            className="fixed inset-0 z-[60] bg-[rgba(14,27,17,0.42)] backdrop-blur-[2px] md:hidden"
             onClick={() => setSidebarOpen(false)}
-            aria-hidden="true"
+            role="dialog"
+            aria-modal="true"
+            aria-label="工作台导航菜单"
           >
             <div
-              className="absolute inset-y-0 left-0 w-[80vw] max-w-xs animate-in slide-in-from-left duration-300 ease-[var(--ease-paper-fold)]"
+              className="absolute inset-y-0 left-0 w-[82vw] max-w-[320px] animate-in slide-in-from-left duration-300 ease-[var(--ease-paper-fold)]"
               onClick={(e) => e.stopPropagation()}
             >
               <WorkspaceSidebar
                 sections={sidebarSections}
                 onItemClick={() => setSidebarOpen(false)}
+                onMobileClose={() => setSidebarOpen(false)}
+                mobileMode
                 className="flex h-full"
               />
             </div>

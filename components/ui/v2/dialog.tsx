@@ -72,7 +72,7 @@ export function DialogV2Content({
         {showCloseButton ? (
           <DialogPrimitive.Close
             className={cn(
-              "absolute right-4 top-4 inline-flex h-8 w-8 items-center justify-center",
+              "absolute right-3 top-3 inline-flex h-10 w-10 items-center justify-center sm:right-4 sm:top-4",
               "rounded-full text-[var(--ink-500)]",
               "transition-colors duration-200",
               "hover:bg-[var(--paper-200)] hover:text-[var(--ink-800)]",

@@ -12,7 +12,7 @@
 import * as React from "react"
 import Link from "next/link"
 import Image from "next/image"
-import { LogOut, Menu, UserRound, WalletCards } from "lucide-react"
+import { LogOut, Menu, UserRound, WalletCards, X } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { IconCredits } from "@/components/icons/v2"
 import { cn } from "@/lib/utils"
@@ -41,6 +41,7 @@ export function WorkspaceTopBar({
   pageTitle,
   user,
   onMenuClick,
+  sidebarOpen,
   className,
 }: WorkspaceTopBarProps) {
   const router = useRouter()
@@ -59,7 +60,8 @@ export function WorkspaceTopBar({
     <header
       data-slot="v2-workspace-topbar"
       className={cn(
-        "sticky top-0 z-30 flex h-14 w-full items-center gap-3 border-b border-[var(--paper-200)] bg-[var(--paper-50)]/85 px-3 backdrop-blur-md md:px-4",
+        "sticky top-0 z-30 flex h-14 w-full items-center gap-3 border-b border-[var(--paper-200)] bg-[var(--paper-50)]/92 px-3 backdrop-blur-md md:px-4",
+        "supports-[height:100dvh]:pt-0",
         className
       )}
     >
@@ -67,11 +69,12 @@ export function WorkspaceTopBar({
       <ButtonV2
         variant="ghost"
         size="icon-sm"
-        className="md:hidden"
+        className="md:hidden text-[var(--ink-700)]"
         onClick={onMenuClick}
-        aria-label="打开侧栏菜单"
+        aria-label={sidebarOpen ? "关闭侧栏菜单" : "打开侧栏菜单"}
+        aria-expanded={sidebarOpen}
       >
-        <Menu className="size-5" />
+        {sidebarOpen ? <X className="size-5" /> : <Menu className="size-5" />}
       </ButtonV2>
 
       {/* 品牌 + 页面标题 */}
@@ -182,7 +185,7 @@ export function WorkspaceTopBar({
             </DropdownMenuV2Content>
           </DropdownMenuV2>
         ) : (
-          <ButtonV2 asChild variant="primary" size="sm">
+          <ButtonV2 asChild variant="primary" size="sm" className="text-white">
             <Link href="/login" prefetch={false}>
               登录
             </Link>

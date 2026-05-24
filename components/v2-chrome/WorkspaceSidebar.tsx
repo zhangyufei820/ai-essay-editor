@@ -12,7 +12,7 @@
 
 import * as React from "react"
 import { usePathname, useRouter } from "next/navigation"
-import { ChevronLeft, type LucideIcon } from "lucide-react"
+import { ChevronLeft, Plus, X, type LucideIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ButtonV2 } from "@/components/ui/v2/button"
 
@@ -35,6 +35,10 @@ export interface WorkspaceSidebarProps {
   onToggleCollapse?: () => void
   /** 移动端用：点击 item 后通知父组件关闭侧栏 */
   onItemClick?: () => void
+  /** 移动端抽屉用：显式关闭入口 */
+  onMobileClose?: () => void
+  /** 移动端抽屉态：使用更宽触控区域和品牌统一色 */
+  mobileMode?: boolean
   className?: string
 }
 
@@ -72,6 +76,8 @@ export function WorkspaceSidebar({
   collapsed = false,
   onToggleCollapse,
   onItemClick,
+  onMobileClose,
+  mobileMode = false,
   className,
 }: WorkspaceSidebarProps) {
   const pathname = usePathname()
@@ -108,7 +114,7 @@ export function WorkspaceSidebar({
           />
         ) : null}
         {Icon ? (
-          <Icon className="size-4 shrink-0" aria-hidden="true" />
+          <Icon className="size-4 shrink-0 text-current" aria-hidden="true" />
         ) : (
           <span className="size-4" aria-hidden="true" />
         )}
@@ -116,7 +122,7 @@ export function WorkspaceSidebar({
           <>
             <span className="flex-1 truncate">{item.label}</span>
             {item.badge ? (
-              <span className="text-[11px] px-1.5 py-0.5 rounded-[var(--radius-pill)] bg-[var(--seal-50)] text-[var(--seal-600)] font-mono">
+              <span className="rounded-[var(--radius-pill)] border border-[var(--ink-200)] bg-[var(--ink-50)] px-1.5 py-0.5 font-[var(--font-sans-v2)] text-[11px] font-semibold text-[var(--ink-700)]">
                 {item.badge}
               </span>
             ) : null}
@@ -130,23 +136,43 @@ export function WorkspaceSidebar({
     <aside
       data-slot="v2-workspace-sidebar"
       className={cn(
-        "flex w-60 shrink-0 flex-col bg-[var(--paper-50)] border-r border-[var(--paper-200)]",
+        "flex w-60 shrink-0 flex-col border-r border-[var(--paper-200)] bg-[var(--paper-50)] text-[var(--ink-900)]",
         "font-[var(--font-sans-v2)]",
+        mobileMode && "w-full max-w-none shadow-[8px_0_28px_rgba(14,27,17,0.16)]",
         collapsed && "w-16",
         className
       )}
     >
       {/* 顶部 "新对话" 主 CTA */}
-      <div className="px-3 pt-4 pb-2">
+      <div className={cn("px-3 pt-4 pb-2", mobileMode && "px-4 pt-[max(env(safe-area-inset-top),16px)] pb-3")}>
+        {mobileMode ? (
+          <div className="mb-3 flex items-center justify-between">
+            <span className="font-[var(--font-display)] text-[18px] font-bold text-[var(--ink-900)]">
+              工作台
+            </span>
+            <button
+              type="button"
+              onClick={onMobileClose}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full text-[var(--ink-700)] transition-colors hover:bg-[var(--ink-50)] active:bg-[var(--ink-100)]"
+              aria-label="关闭工作台导航"
+            >
+              <X className="size-5" aria-hidden="true" />
+            </button>
+          </div>
+        ) : null}
         <ButtonV2
           variant="primary"
           size="default"
-          className="w-full justify-start gap-2"
+          className={cn(
+            "w-full justify-start gap-2",
+            "text-white [&_svg]:text-white",
+            mobileMode && "h-12 rounded-[var(--radius-soft)] px-4 text-[15px]"
+          )}
           onClick={() => setAppLauncherOpen((value) => !value)}
           aria-expanded={appLauncherOpen}
           aria-controls="workspace-app-launcher"
         >
-          <span aria-hidden="true">＋</span>
+          <Plus className="size-4 text-white" aria-hidden="true" />
           {!collapsed ? "新对话" : null}
         </ButtonV2>
 
@@ -171,7 +197,7 @@ export function WorkspaceSidebar({
                     const external = /^https?:\/\//.test(item.href)
                     const itemClassName = cn(
                       "flex items-center gap-2 rounded-[var(--radius-soft)] px-2 py-2 text-[13px]",
-                      "text-[var(--ink-600)] hover:bg-[var(--ink-50)] hover:text-[var(--ink-800)]"
+                      "text-[var(--ink-700)] hover:bg-[var(--ink-50)] hover:text-[var(--ink-900)]"
                     )
 
                     const content = (
@@ -183,7 +209,7 @@ export function WorkspaceSidebar({
                         )}
                         <span className="min-w-0 flex-1 truncate">{item.label}</span>
                         {item.badge ? (
-                          <span className="rounded-[var(--radius-pill)] bg-[var(--seal-50)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--seal-600)]">
+                          <span className="rounded-[var(--radius-pill)] border border-[var(--ink-200)] bg-[var(--ink-50)] px-1.5 py-0.5 font-[var(--font-sans-v2)] text-[10px] font-semibold text-[var(--ink-700)]">
                             {item.badge}
                           </span>
                         ) : null}
@@ -226,11 +252,11 @@ export function WorkspaceSidebar({
       </div>
 
       {/* 滚动分组列表 */}
-      <nav className="flex-1 overflow-auto px-2 py-2">
+      <nav className={cn("flex-1 overflow-auto px-2 py-2", mobileMode && "px-4 pb-[max(env(safe-area-inset-bottom),16px)]")}>
         {sections.map((section, idx) => (
-          <div key={section.title ?? idx} className="mb-4">
+          <div key={section.title ?? idx} className={cn("mb-4", mobileMode && "mb-5")}>
             {section.title && !collapsed ? (
-              <div className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-[var(--ink-400)]">
+              <div className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-normal text-[var(--ink-500)]">
                 {section.title}
               </div>
             ) : null}
@@ -243,11 +269,12 @@ export function WorkspaceSidebar({
                   ? pathname === item.href
                   : pathname === item.href || pathname?.startsWith(`${item.href}/`)
                 const itemClassName = cn(
-                  "group relative flex items-center gap-3 px-3 py-2 rounded-[var(--radius-soft)] text-[14px]",
+                  "group relative flex min-h-11 items-center gap-3 rounded-[var(--radius-soft)] px-3 py-2 text-[14px]",
                   "transition-colors duration-200",
+                  mobileMode && "min-h-12 text-[15px]",
                   active
                     ? "bg-[var(--ink-50)] text-[var(--ink-800)] font-semibold"
-                    : "text-[var(--ink-600)] hover:bg-[var(--ink-50)]/60 hover:text-[var(--ink-700)]"
+                    : "text-[var(--ink-700)] hover:bg-[var(--ink-50)]/70 hover:text-[var(--ink-900)]"
                 )
 
                 if (external) {
