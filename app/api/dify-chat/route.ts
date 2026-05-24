@@ -3407,13 +3407,15 @@ export async function POST(request: NextRequest) {
     })
 
     const addLongTaskHeartbeat = (body: ReadableStream<Uint8Array>) => {
-      if (model !== "open-claw" && !isAllInOneAgent) return body
-
       const encoder = new TextEncoder()
       let reader: ReadableStreamDefaultReader<Uint8Array> | null = null
       let heartbeatId: ReturnType<typeof setInterval> | null = null
       let closed = false
-      const heartbeatLabel = isAllInOneAgent ? "all-in-one-keepalive" : "openclaw-keepalive"
+      const heartbeatLabel = isAllInOneAgent
+        ? "all-in-one-keepalive"
+        : model === "open-claw"
+          ? "openclaw-keepalive"
+          : "dify-keepalive"
 
       const stopHeartbeat = () => {
         closed = true

@@ -14,4 +14,11 @@ describe("Dify final node output fallback", () => {
     expect(route).toContain("!hasReceivedContent && finalNodeOutputText.trim()")
     expect(route).toContain("已收到最终节点回复")
   })
+
+  it("keeps regular Dify streams alive while waiting for long chatflow nodes", () => {
+    const route = read("app/api/dify-chat/route.ts")
+
+    expect(route).toContain('dify-keepalive')
+    expect(route).not.toContain('if (model !== "open-claw" && !isAllInOneAgent) return body')
+  })
 })
