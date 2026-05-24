@@ -137,13 +137,13 @@ export function DailySurveyAutoPrompt() {
   }, [refreshRuntimeFlags])
 
   useEffect(() => {
-    if (typeof window === "undefined" || !runtimeFlags.campaignEnabled) return
+    if (typeof window === "undefined" || !runtimeFlags.loaded || !runtimeFlags.campaignEnabled || !runtimeFlags.consumptionEnabled) return
     const shownKey = `${ANNOUNCEMENT_KEY_PREFIX}:${localDate}`
     if (!window.localStorage.getItem(shownKey)) {
       setAnnouncementOpen(true)
       window.localStorage.setItem(shownKey, "1")
     }
-  }, [localDate, runtimeFlags.campaignEnabled])
+  }, [localDate, runtimeFlags.campaignEnabled, runtimeFlags.consumptionEnabled, runtimeFlags.loaded])
 
   useEffect(() => {
     void refreshSession().catch((error) => {
@@ -214,7 +214,7 @@ export function DailySurveyAutoPrompt() {
   return (
     <>
       <FreeTrialAnnouncementModal
-        open={runtimeFlags.campaignEnabled && announcementOpen}
+        open={runtimeFlags.loaded && runtimeFlags.campaignEnabled && runtimeFlags.consumptionEnabled && announcementOpen}
         loggedIn={session.loggedIn}
         hasTrial={hasTrial}
         paidUser={session.paidUser}

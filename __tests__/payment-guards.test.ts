@@ -382,6 +382,7 @@ describe('Sprint 5 payment / credits / membership guards', () => {
     expect(source).toContain('&& runtimeFlags.consumptionEnabled')
     expect(source).toContain('&& runtimeFlags.autoPromptEnabled')
     expect(source).toContain('enabled={surveyGateEnabled}')
+    expect(source).toContain('runtimeFlags.loaded && runtimeFlags.campaignEnabled && runtimeFlags.consumptionEnabled && announcementOpen')
   })
 
   it('lets Bearer requests reach route-level verified auth instead of Supabase-only middleware', () => {
