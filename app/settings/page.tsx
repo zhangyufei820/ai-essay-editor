@@ -11,7 +11,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { extractUserId } from "@/lib/auth-user"
 import { dispatchClientUserProfileUpdated } from "@/lib/client-user-profile"
-import { getVerifiedAuthHeaders } from "@/lib/client-auth"
+import { clearStoredAuthTokens, getVerifiedAuthHeaders } from "@/lib/client-auth"
 import { ProfilePageV2 } from "@/components/settings/v2/ProfilePageV2"
 
 const supabase = createClient(
@@ -361,6 +361,7 @@ export default function SettingsPage() {
   const handleLogout = async () => {
     await supabase.auth.signOut()
     localStorage.removeItem('currentUser')
+    clearStoredAuthTokens()
     router.push("/login")
   }
 

@@ -15,7 +15,7 @@ import { ModelLogo } from "@/components/ModelLogo"
 import { GridWaveLoader } from "@/components/chat/GridWaveLoader"
 import { collapseSidebar, navigateHomeWithSidebar, refreshCredits, refreshSessionList } from "@/lib/workspace-events"
 import { extractUserId } from "@/lib/auth-user"
-import { getVerifiedAuthHeaders } from "@/lib/client-auth"
+import { getVerifiedAuthHeaders, hasStoredVerifiedAuthToken } from "@/lib/client-auth"
 import { buildChatSessionRouteFromSession } from "@/lib/chat-session-routes"
 import { isSurveyRequiredPayload, openTrialSurveyGate } from "@/lib/trial-survey-client"
 import type { ModelType } from "@/lib/pricing"
@@ -688,8 +688,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
       try {
         const user = JSON.parse(userStr)
         const uid = extractUserId(user)
-        const authingToken = localStorage.getItem("idToken") || localStorage.getItem("authingToken") || localStorage.getItem("accessToken")
-        if (authingToken && uid) {
+        if (hasStoredVerifiedAuthToken() && uid) {
           setUserId(uid)
           void fetchCredits(uid)
         } else {

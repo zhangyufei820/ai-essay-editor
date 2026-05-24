@@ -7,7 +7,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react"
 import { IconDiagnosis, IconMusic, IconSettings } from "@/components/icons/v2"
 import { WorkspaceShell } from "@/components/v2-chrome"
 import type { WorkspaceSidebarSection } from "@/components/v2-chrome"
-import { getVerifiedAuthHeaders } from "@/lib/client-auth"
+import { getVerifiedAuthHeaders, hasStoredVerifiedAuthToken } from "@/lib/client-auth"
 import { readClientUserProfile, USER_PROFILE_UPDATED_EVENT } from "@/lib/client-user-profile"
 import { CELLFORGE_EXTERNAL_URL } from "@/lib/tripo3d"
 
@@ -52,12 +52,7 @@ function parseStoredUser(): WorkspaceUser {
 }
 
 function hasStoredAuthToken() {
-  if (typeof window === "undefined") return false
-  return Boolean(
-    window.localStorage.getItem("idToken") ||
-      window.localStorage.getItem("authingToken") ||
-      window.localStorage.getItem("accessToken")
-  )
+  return hasStoredVerifiedAuthToken()
 }
 
 export function buildSidebarSections(): WorkspaceSidebarSection[] {

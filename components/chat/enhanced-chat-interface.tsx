@@ -64,7 +64,7 @@ import { isWorkflowSkillAgent, type WorkflowSkillId } from "@/lib/workflow-skill
 import { createClient } from "@supabase/supabase-js"
 import { collapseSidebar, navigateHomeWithSidebar, refreshCredits, refreshSessionList, SESSION_LIST_REFRESH_EVENT } from "@/lib/workspace-events"
 import { useSelectedModelStore } from "@/hooks/useSelectedModelStore"
-import { getVerifiedAuthHeaders } from "@/lib/client-auth"
+import { getVerifiedAuthHeaders, hasStoredVerifiedAuthToken } from "@/lib/client-auth"
 import { validateFileForUpload, MAX_FILE_SIZE } from "@/lib/upload-service"
 import { VoiceRecorder, getDifyTTS, transcribeAudio } from "@/lib/voice-service"
 import { getApiUrl } from "@/lib/api-config"
@@ -1472,8 +1472,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
           setUserDisplayName(displayName)
           console.log("👤 [用户初始化] 显示名称:", displayName)
 
-          const authingToken = localStorage.getItem("idToken") || localStorage.getItem("authingToken") || localStorage.getItem("accessToken")
-          if (authingToken && uid) {
+          if (hasStoredVerifiedAuthToken() && uid) {
             setUserId(uid)
             fetchCredits(uid)
             fetchChatSessions(uid)

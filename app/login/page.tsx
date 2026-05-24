@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 import { LoginPageV2 } from "@/components/auth/v2/LoginPageV2"
 import { safeInternalRedirectPath } from '@/lib/security/redirect'
+import { hasStoredVerifiedAuthToken } from "@/lib/client-auth"
 
 function collectJwtValues(value: unknown, candidates: Array<{ key: string; value: string; priority: number }> = [], key = "") {
   if (!value || typeof value !== "object") return candidates
@@ -49,6 +50,7 @@ function persistAuthingTokens(user: Record<string, any>) {
   if (idToken) localStorage.setItem("idToken", idToken)
   if (accessToken) localStorage.setItem("accessToken", accessToken)
   if (bestToken) localStorage.setItem("authingToken", bestToken)
+  if (bestToken) localStorage.setItem("_authing_token", bestToken)
 
   return bestToken
 }
@@ -74,8 +76,7 @@ function AuthingLoginComponent() {
     // 1. 检查是否已经登录
     // 如果已经有用户信息，直接跳转，不再显示登录框
     const user = localStorage.getItem('currentUser')
-    const token = localStorage.getItem('idToken') || localStorage.getItem('authingToken') || localStorage.getItem('accessToken')
-    if (user && token) {
+    if (user && hasStoredVerifiedAuthToken()) {
       const redirectPath = safeInternalRedirectPath(searchParams.get('redirect'))
       router.replace(redirectPath || '/')
       return
@@ -125,6 +126,7 @@ function AuthingLoginComponent() {
         // [关键] 保存用户信息到浏览器，以便支付页面能看到
         const finalUser = userInfo.data || userInfo
         localStorage.setItem('currentUser', JSON.stringify(finalUser))
+        localStorage.setItem('_authing_user', JSON.stringify(finalUser))
         const authingToken = persistAuthingTokens(userInfo)
 
         // 可选：同步到你的后端数据库 (保留了你之前的逻辑)

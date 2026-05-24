@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 import { trackCampaignEvent } from "@/lib/campaign-events-client"
-import { getVerifiedAuthHeaders } from "@/lib/client-auth"
+import { getVerifiedAuthHeaders, hasStoredVerifiedAuthToken } from "@/lib/client-auth"
 import { DailySurveyGate, type TrialSurveyStatus } from "@/components/trial/DailySurveyGate"
 import { FreeTrialAnnouncementModal } from "@/components/trial/FreeTrialAnnouncementModal"
 import { OPEN_DAILY_SURVEY_EVENT } from "@/lib/trial-survey-client"
@@ -48,12 +48,7 @@ function extractStoredUserId() {
 }
 
 function hasStoredAuthToken() {
-  if (typeof window === "undefined") return false
-  return Boolean(
-    window.localStorage.getItem("idToken") ||
-    window.localStorage.getItem("authingToken") ||
-    window.localStorage.getItem("accessToken")
-  )
+  return hasStoredVerifiedAuthToken()
 }
 
 function shouldRequireSurvey(status: TrialSurveyStatus | null, paidUser: boolean) {

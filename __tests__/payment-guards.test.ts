@@ -321,7 +321,8 @@ describe('Sprint 5 payment / credits / membership guards', () => {
     const checkout = read('app/checkout/[productId]/page.tsx')
 
     for (const source of [chat, imageWorkspace, worksheet, checkout]) {
-      expect(source).toContain('import { getVerifiedAuthHeaders } from "@/lib/client-auth"')
+      expect(source).toContain('getVerifiedAuthHeaders')
+      expect(source).toContain('from "@/lib/client-auth"')
       expect(source).not.toContain('async function getVerifiedAuthHeaders(): Promise<Record<string, string>>')
     }
   })

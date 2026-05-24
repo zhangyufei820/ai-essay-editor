@@ -41,7 +41,7 @@ import { AIPanel } from "./chat/AIPanel"
 import { createClient } from "@supabase/supabase-js"
 import { shouldSidebarOpenForRoute } from "@/lib/app-chrome-routes"
 import { extractUserId } from "@/lib/auth-user"
-import { getVerifiedAuthHeaders } from "@/lib/client-auth"
+import { clearStoredAuthTokens, getVerifiedAuthHeaders, hasStoredVerifiedAuthToken } from "@/lib/client-auth"
 
 // --- 设计系统颜色常量 ---
 const COLORS = {
@@ -278,7 +278,6 @@ function AppSidebarInner() {
         if (!userId && userStr) {
           try {
             const parsedUser = JSON.parse(userStr)
-            const authingToken = localStorage.getItem("idToken") || localStorage.getItem("authingToken") || localStorage.getItem("accessToken")
             const authingUserId = parsedUser.id || parsedUser.sub || parsedUser.userId || parsedUser.user_id
             console.log("🔍 [侧边栏] 解析用户数据:", {
               hasId: Boolean(parsedUser.id || parsedUser.sub || parsedUser.userId || parsedUser.user_id),
@@ -286,7 +285,7 @@ function AppSidebarInner() {
               hasPhone: Boolean(parsedUser.phone),
             })
             setUser(parsedUser)
-            if (authingToken && authingUserId) {
+            if (hasStoredVerifiedAuthToken() && authingUserId) {
               userId = authingUserId
               setCurrentUserId(userId)
             } else {
@@ -347,6 +346,7 @@ function AppSidebarInner() {
   const handleLogout = async () => {
     await supabase.auth.signOut()
     localStorage.removeItem('currentUser')
+    clearStoredAuthTokens()
     window.location.href = "/login"
   }
   

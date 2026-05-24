@@ -23,6 +23,7 @@ import { ButtonV2 } from "@/components/ui/v2/button"
 import { AvatarV2, AvatarV2Fallback, AvatarV2Image } from "@/components/ui/v2/avatar"
 import { SheetV2, SheetV2Content, SheetV2Trigger } from "@/components/ui/v2/sheet"
 import { readClientUserProfile, USER_PROFILE_UPDATED_EVENT } from "@/lib/client-user-profile"
+import { hasStoredVerifiedAuthToken } from "@/lib/client-auth"
 
 const NAV_ITEMS: ReadonlyArray<{ label: string; href: string }> = [
   { label: "智能体广场", href: "/agents" },
@@ -54,11 +55,7 @@ export function MarketingHeader({ user, className }: MarketingHeaderProps) {
     function readStoredUser() {
       try {
         const raw = window.localStorage.getItem("currentUser")
-        const token =
-          window.localStorage.getItem("idToken") ||
-          window.localStorage.getItem("authingToken") ||
-          window.localStorage.getItem("accessToken")
-        if (!raw || !token) {
+        if (!raw || !hasStoredVerifiedAuthToken()) {
           setLocalUser(null)
           return
         }

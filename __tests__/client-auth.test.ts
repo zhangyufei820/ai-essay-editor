@@ -45,6 +45,8 @@ describe("client auth headers", () => {
       idToken: null,
       authingToken: null,
       accessToken: null,
+      _authing_token: null,
+      _authing_user: null,
       currentUser: JSON.stringify({ id: "507f1f77bcf86cd799439011" }),
     })
 
@@ -53,5 +55,48 @@ describe("client auth headers", () => {
       id: "507f1f77bcf86cd799439011",
       tokenSet: { idToken: "argument.id.signature" },
     })).resolves.toEqual({ Authorization: "Bearer argument.id.signature" })
+  })
+
+  it("uses the Authing SDK token cache for existing mobile sessions", async () => {
+    installStorage({
+      idToken: null,
+      authingToken: null,
+      accessToken: null,
+      _authing_token: "sdk.token.value",
+      _authing_user: JSON.stringify({ id: "507f1f77bcf86cd799439011", token: "sdk.token.value" }),
+      currentUser: JSON.stringify({ id: "507f1f77bcf86cd799439011" }),
+    })
+
+    const { getVerifiedAuthHeaders, hasStoredVerifiedAuthToken } = await import("@/lib/client-auth")
+    expect(hasStoredVerifiedAuthToken()).toBe(true)
+    await expect(getVerifiedAuthHeaders()).resolves.toEqual({ Authorization: "Bearer sdk.token.value" })
+  })
+
+  it("uses the Authing SDK user cache when currentUser is missing", async () => {
+    installStorage({
+      idToken: null,
+      authingToken: null,
+      accessToken: null,
+      _authing_token: "sdk.only.token",
+      _authing_user: JSON.stringify({ id: "507f1f77bcf86cd799439011", token: "sdk.only.token" }),
+      currentUser: null,
+    })
+
+    const { getVerifiedAuthHeaders } = await import("@/lib/client-auth")
+    await expect(getVerifiedAuthHeaders()).resolves.toEqual({ Authorization: "Bearer sdk.only.token" })
+  })
+
+  it("clears both first-party and Authing SDK token cache on logout", async () => {
+    const removeItem = jest.fn()
+    Object.defineProperty(global, "window", { value: { localStorage: { removeItem } }, configurable: true })
+
+    const { clearStoredAuthTokens } = await import("@/lib/client-auth")
+    clearStoredAuthTokens()
+
+    expect(removeItem).toHaveBeenCalledWith("idToken")
+    expect(removeItem).toHaveBeenCalledWith("authingToken")
+    expect(removeItem).toHaveBeenCalledWith("accessToken")
+    expect(removeItem).toHaveBeenCalledWith("_authing_token")
+    expect(removeItem).toHaveBeenCalledWith("_authing_user")
   })
 })
