@@ -655,6 +655,7 @@ const DIFY_BASE_URL = process.env.DIFY_INTERNAL_URL
   || process.env.DIFY_BASE_URL
   || "https://api.dify.ai/v1"
 const DEFAULT_DIFY_FIRST_BYTE_TIMEOUT_MS = 120_000
+const DEFAULT_DIFY_BLOCKING_RESPONSE_TIMEOUT_MS = Number(process.env.DIFY_BLOCKING_RESPONSE_TIMEOUT_MS || 600_000)
 const OPENCLAW_FIRST_BYTE_TIMEOUT_MS = 900_000
 const GPT_IMAGE_BLOCKING_TIMEOUT_MS = 300_000
 const GPT_IMAGE_GATEWAY_TIMEOUT_MS = 540_000
@@ -2538,17 +2539,26 @@ export async function POST(request: NextRequest) {
 
         console.log(`🔗 [API端点] ${apiEndpoint} | 模式: ${isWorkflow ? 'Workflow' : 'Chat'}`)
 
-        const firstByteTimeoutMs = isGptImageGatewayRequest
+        const firstByteTimeoutMs = useBlockingDifyChat
+          ? model === "open-claw" || isAllInOneAgent
+            ? OPENCLAW_FIRST_BYTE_TIMEOUT_MS
+            : DEFAULT_DIFY_BLOCKING_RESPONSE_TIMEOUT_MS
+          : isGptImageGatewayRequest
           ? GPT_IMAGE_BLOCKING_TIMEOUT_MS
           : model === "open-claw" || isAllInOneAgent
             ? OPENCLAW_FIRST_BYTE_TIMEOUT_MS
             : DEFAULT_DIFY_FIRST_BYTE_TIMEOUT_MS
+        const timeoutStage = useBlockingDifyChat ? "Dify blocking 响应超时" : "Dify 首字节超时"
+        const timeoutCode = useBlockingDifyChat ? "DIFY_BLOCKING_TIMEOUT" : "DIFY_FIRST_BYTE_TIMEOUT"
+        const timeoutMessage = useBlockingDifyChat
+          ? `请求超时：Dify 服务在 ${Math.round(firstByteTimeoutMs / 1000)} 秒内未完成响应`
+          : `请求超时：Dify 服务在 ${Math.round(firstByteTimeoutMs / 1000)} 秒内未响应`
 
         // GPT Image 与 OpenClaw 大型 PPT 任务经常超过 120 秒才返回首字节。
         streamStatus.controller = new AbortController()
         streamStatus.timeoutId = setTimeout(() => {
             if (!streamStatus.firstByteReceived) {
-                console.warn(`⏰ [Dify超时] ${Math.round(firstByteTimeoutMs / 1000)}秒内未收到首字节，中断请求 model=${model}`)
+                console.warn(`⏰ [Dify超时] ${Math.round(firstByteTimeoutMs / 1000)}秒内未完成${useBlockingDifyChat ? "blocking响应" : "首字节"}，中断请求 model=${model}`)
                 streamStatus.controller?.abort()
             }
         }, firstByteTimeoutMs)
@@ -2595,12 +2605,12 @@ export async function POST(request: NextRequest) {
 	                console.error(`❌ [Dify请求] 请求被中断（超时）:`, err.message)
 	                await updateTaskRun(taskRun.id, {
 	                  status: "timeout",
-	                  stage: "Dify 首字节超时",
+	                  stage: timeoutStage,
 	                  progress: 100,
 	                  errorMessage: err.message,
-	                  errorCode: "DIFY_FIRST_BYTE_TIMEOUT",
+	                  errorCode: timeoutCode,
 	                })
-	                throw new Error(`请求超时：Dify 服务在 ${Math.round(firstByteTimeoutMs / 1000)} 秒内未响应`)
+	                throw new Error(timeoutMessage)
 	            }
 
             throw error
