@@ -200,15 +200,15 @@ export function DailySurveyGate({
     <>
       {children}
       <Dialog open={enabled && open} onOpenChange={handleOpenChange}>
-        <DialogContent className="top-[max(0.75rem,env(safe-area-inset-top))] max-h-[calc(100dvh-1.5rem)] max-w-xl translate-y-0 grid-rows-[auto,minmax(0,1fr),auto] overflow-hidden p-4 sm:top-1/2 sm:max-h-[min(42rem,calc(100dvh-2rem))] sm:-translate-y-1/2 sm:p-6">
-          <DialogHeader className="shrink-0 pr-8">
+        <DialogContent className="top-[max(0.5rem,env(safe-area-inset-top))] flex h-[calc(100svh-1rem)] max-h-[calc(100svh-1rem)] w-[calc(100vw-1rem)] max-w-xl translate-y-0 flex-col gap-0 overflow-hidden p-0 sm:top-1/2 sm:h-auto sm:max-h-[min(42rem,calc(100dvh-2rem))] sm:w-[calc(100%-2rem)] sm:-translate-y-1/2">
+          <DialogHeader className="shrink-0 px-4 pt-4 pr-12 sm:px-6 sm:pt-6">
             <DialogTitle>{title}</DialogTitle>
             <DialogDescription>
               {description || `填写后解锁今日 2000 trial 积分，用于${featureName}。稍后再说也可以，但不会解锁今日免费额度。`}
             </DialogDescription>
           </DialogHeader>
 
-          <div className="min-h-0 space-y-4 overflow-y-auto overscroll-contain pr-1 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] [-webkit-overflow-scrolling:touch]">
+          <div className="min-h-0 flex-1 touch-pan-y space-y-4 overflow-y-auto overscroll-contain px-4 py-4 [-webkit-overflow-scrolling:touch] sm:px-6">
             {loading ? (
               <div className="rounded-[var(--radius-soft)] border border-[var(--paper-200)] bg-[var(--paper-100)] p-4 text-sm text-[var(--ink-600)]">
                 正在加载今日问卷...
@@ -283,7 +283,7 @@ export function DailySurveyGate({
             )}
           </div>
 
-          <DialogFooter className="shrink-0 border-t border-[var(--paper-200)] bg-[var(--paper-50)] pt-3">
+          <DialogFooter className="mt-0 grid shrink-0 grid-cols-2 gap-2 border-t border-[var(--paper-200)] bg-[var(--paper-50)] px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 sm:flex sm:px-6 sm:pb-6">
             <Button
               type="button"
               variant="outline"

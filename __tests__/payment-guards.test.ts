@@ -298,6 +298,26 @@ describe('Sprint 5 payment / credits / membership guards', () => {
     expect(clients).not.toContain("'X-User-Id'")
   })
 
+  it('keeps standalone essay image upload authenticated', () => {
+    const source = read('components/essay-grader.tsx')
+    const uploadStart = source.indexOf('/api/dify-upload')
+    const uploadBlock = source.slice(Math.max(0, uploadStart - 250), uploadStart + 350)
+
+    expect(source).toContain('import { getVerifiedAuthHeaders } from "@/lib/client-auth"')
+    expect(uploadBlock).toContain('...(await getVerifiedAuthHeaders())')
+    expect(uploadBlock).toContain('"X-Model": "essay-correction"')
+  })
+
+  it('keeps daily survey gate actions reachable on mobile viewports', () => {
+    const source = read('components/trial/DailySurveyGate.tsx')
+
+    expect(source).toContain('h-[calc(100svh-1rem)]')
+    expect(source).toContain('flex-1 touch-pan-y')
+    expect(source).toContain('overflow-y-auto')
+    expect(source).toContain('pb-[max(0.75rem,env(safe-area-inset-bottom))]')
+    expect(source).toContain('grid shrink-0 grid-cols-2')
+  })
+
   it('lets Bearer requests reach route-level verified auth instead of Supabase-only middleware', () => {
     const middleware = read('lib/supabase/middleware.ts')
 

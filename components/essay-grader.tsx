@@ -115,6 +115,7 @@ export function EssayGrader() {
         const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || ''}/api/dify-upload`, {
           method: "POST",
           headers: {
+            ...(await getVerifiedAuthHeaders()),
             "X-Model": "essay-correction"
           },
           body: formData
