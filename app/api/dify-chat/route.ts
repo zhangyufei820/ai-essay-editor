@@ -2408,7 +2408,8 @@ export async function POST(request: NextRequest) {
       controller: AbortController | null
     } = { firstByteReceived: false, timeoutId: null, controller: null }
     const useBlockingDifyChat =
-      (process.env.DIFY_CHAT_FORCE_BLOCKING_MODE === "true" || model === "open-claw") &&
+      (process.env.DIFY_CHAT_FORCE_BLOCKING_MODE === "true" ||
+        (model === "open-claw" && process.env.DIFY_OPENCLAW_FORCE_BLOCKING_MODE === "true")) &&
       !WORKFLOW_MODELS.has(model || "") &&
       !isGptImageGatewayRequest &&
       model !== "banana-2-pro"

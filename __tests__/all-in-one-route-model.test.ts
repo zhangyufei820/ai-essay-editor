@@ -72,12 +72,12 @@ describe("all-in-one route model sync", () => {
     expect(text).toContain("!allInOneStreamedAnswer")
   })
 
-  it("keeps chat apps streaming by default while wrapping OpenClaw and JSON fallbacks as SSE", () => {
+  it("keeps chat apps streaming by default while allowing explicit blocking fallbacks", () => {
     const text = routeSource()
 
     expect(text).toContain("const useBlockingDifyChat")
     expect(text).toContain('process.env.DIFY_CHAT_FORCE_BLOCKING_MODE === "true"')
-    expect(text).toContain('model === "open-claw"')
+    expect(text).toContain('process.env.DIFY_OPENCLAW_FORCE_BLOCKING_MODE === "true"')
     expect(text).toContain('model !== "banana-2-pro"')
     expect(text).toContain('response_mode: useBlockingDifyChat ? "blocking" : isGptImage2 ? "blocking" : "streaming"')
     expect(text).toContain("applyBlockingDifyPayload")
