@@ -1,4 +1,4 @@
-import { claimFreeTrial } from "@/lib/free-trial"
+import { claimFreeTrial, getUserTrialStatus } from "@/lib/free-trial"
 import {
   disableFreeTrialConsumption,
   getBooleanRuntimeFlag,
@@ -222,6 +222,51 @@ describe("free trial libraries", () => {
     expect(result.success).toBe(true)
     expect(result.data?.id).toBe("existing-grant")
     expect(supabase.tables.free_trial_grants).toHaveLength(1)
+  })
+
+  it("getUserTrialStatus displays campaign quota when a zero-quota paid extension is the selected view row", async () => {
+    const supabase = createSupabaseMock({
+      free_trial_grants: [
+        createGrant({ id: "campaign-grant", grant_type: "campaign", requires_daily_survey: true, daily_quota: 2000 }),
+        createGrant({
+          id: "paid-extension",
+          grant_type: "paid_extension",
+          requires_daily_survey: false,
+          daily_quota: 0,
+          created_at: new Date(Date.now() + 1000).toISOString(),
+        }),
+      ],
+      user_trial_status: [{
+        user_id: "user-1",
+        active_grant_id: "paid-extension",
+        trial_start_at: new Date(Date.now() - 60_000).toISOString(),
+        trial_end_at: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString(),
+        daily_quota: 0,
+        requires_daily_survey: false,
+        today_survey_completed: false,
+        today_trial_used: 0,
+        today_trial_remaining: 0,
+        trial_active: true,
+        current_streak_days: 0,
+      }],
+      trial_credit_usages: [{ id: "usage-1", user_id: "user-1", grant_id: "campaign-grant", usage_date: today, amount: 150 }],
+    })
+    ;(getSupabaseAdmin as jest.Mock).mockReturnValue(supabase)
+
+    const result = await getUserTrialStatus("user-1")
+
+    expect(result).toMatchObject({
+      success: true,
+      data: {
+        active_grant_id: "campaign-grant",
+        daily_quota: 2000,
+        requires_daily_survey: false,
+        today_survey_completed: true,
+        today_trial_used: 150,
+        today_trial_remaining: 1850,
+        trial_active: true,
+      },
+    })
   })
 })
 

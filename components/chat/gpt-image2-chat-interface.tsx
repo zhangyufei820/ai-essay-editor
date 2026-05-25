@@ -1254,10 +1254,6 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
             try {
               const json = JSON.parse(data)
 
-              if (json.conversation_id) {
-                currentSessionIdRef.current = json.conversation_id
-              }
-
               if (json.event === "status") {
                 setSubmitStage(String(json.stage || json.message || "仍在处理，请保持页面打开"))
                 continue

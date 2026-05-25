@@ -42,7 +42,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "无权访问该会话" }, { status: 403 })
     }
 
-    // 生产 chat_messages 表目前没有 metadata 列，历史幂等信息先由前端去重保护。
     const { data: message, error: messageError } = await supabase
       .from("chat_messages")
       .insert({

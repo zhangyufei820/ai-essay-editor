@@ -125,7 +125,10 @@ export function AppChrome({ children }: { children: ReactNode }) {
           trialRemaining: typeof data.trialStatus?.today_trial_remaining === "number"
             ? data.trialStatus.today_trial_remaining
             : current?.trialRemaining,
-          trialUnlocked: Boolean(data.trialStatus?.trial_active && data.trialStatus?.today_survey_completed),
+          trialUnlocked: Boolean(
+            data.trialStatus?.trial_active &&
+            (data.trialStatus.requires_daily_survey === false || data.trialStatus.today_survey_completed)
+          ),
         }))
       } catch {
         // Keep the local user fallback if the credits endpoint is temporarily unavailable.

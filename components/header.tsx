@@ -61,7 +61,10 @@ export function Header() {
         const data = await response.json()
         setCredits(data.credits || 0)
         setTrialRemaining(typeof data.trialStatus?.today_trial_remaining === "number" ? data.trialStatus.today_trial_remaining : null)
-        setTrialUnlocked(Boolean(data.trialStatus?.trial_active && data.trialStatus?.today_survey_completed))
+        setTrialUnlocked(Boolean(
+          data.trialStatus?.trial_active &&
+          (data.trialStatus.requires_daily_survey === false || data.trialStatus.today_survey_completed)
+        ))
       } catch (error) {
         console.error("[Header] 获取积分失败:", error)
       }

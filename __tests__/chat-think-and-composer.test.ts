@@ -24,10 +24,17 @@ describe("chat think rendering and composer layout", () => {
 
   it("anchors the chat composer to the bottom on desktop and mobile", () => {
     const source = read("components/chat/enhanced-chat-interface.tsx")
+    const chatInput = read("components/chat/ChatInput.tsx")
 
-    expect(source).toContain("className=\"h-full overflow-y-auto custom-scrollbar pb-40 md:pb-44\"")
-    expect(source).toContain("absolute inset-x-0 bottom-0 z-30")
+    expect(source).toContain("className=\"h-full overflow-y-auto custom-scrollbar pb-[180px] sm:pb-[196px] md:pb-[224px]\"")
+    expect(source).toContain("fixed inset-x-0 bottom-0 z-40")
+    expect(source).toContain("md:left-72")
     expect(source).not.toContain("md:relative md:p-6")
+    expect(source).not.toContain("每天仅需4元")
+    expect(source).not.toContain("升级豪华会员")
+    expect(chatInput).toContain("disabled={disabled}")
+    expect(chatInput).not.toContain('正在处理，请稍候...')
+    expect(chatInput).not.toContain("disabled={disabled || isLoading}")
   })
 
   it("exposes camera capture and text-to-speech controls in chat composers", () => {
@@ -113,6 +120,25 @@ describe("chat think rendering and composer layout", () => {
     expect(source).toContain('json.event === "status"')
     expect(source).toContain('json.event === "error"')
     expect(source).toContain("连接正常，任务仍在处理中")
+  })
+
+  it("keeps local history sessions separate from Dify memory conversations", () => {
+    const source = read("components/chat/enhanced-chat-interface.tsx")
+    const saveMessageRoute = read("app/api/save-message/route.ts")
+    const chatSessionRoute = read("app/api/chat-session/route.ts")
+
+    expect(source).toContain("const difyConversationIdRef = useRef<string | null>(null)")
+    expect(source).toContain("difyConversationIdRef.current = conversationId")
+    expect(source).toContain("conversation_id: difyConversationIdRef.current")
+    expect(source).toContain("dify_conversation_id: params.difyConversationId || undefined")
+    expect(source).toContain("sessionData?.dify_conversation_id")
+    expect(source).toContain("difyConversationId: difyConversationIdRef.current")
+    expect(source).not.toContain("sessionIdRef.current = conversationId")
+    expect(saveMessageRoute).not.toContain("metadata: metadata && typeof metadata")
+    expect(chatSessionRoute).toContain("dify_conversation_id")
+    expect(chatSessionRoute).toContain("SESSION_DETAIL_FIELDS_LEGACY")
+    expect(chatSessionRoute).toContain("isMissingDifyConversationColumn")
+    expect(chatSessionRoute).toContain(".select(\"id,role,content,created_at\")")
   })
 
   it("turns mobile stream network failures into recoverable chat guidance for every model", () => {

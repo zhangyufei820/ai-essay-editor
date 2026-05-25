@@ -3,6 +3,20 @@ import { createClient as createSupabaseClient } from "@supabase/supabase-js"
 import { requireUser } from "@/lib/auth/verified-user"
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+const DIFY_CONVERSATION_COLUMN = "dify_conversation_id"
+const SESSION_LIST_FIELDS = `id,title,preview,ai_model,${DIFY_CONVERSATION_COLUMN},created_at`
+const SESSION_DETAIL_FIELDS = `id,title,preview,ai_model,${DIFY_CONVERSATION_COLUMN},user_id,created_at`
+const SESSION_LIST_FIELDS_LEGACY = "id,title,preview,ai_model,created_at"
+const SESSION_DETAIL_FIELDS_LEGACY = "id,title,preview,ai_model,user_id,created_at"
+
+function isMissingDifyConversationColumn(error: unknown) {
+  return Boolean(
+    error &&
+    typeof error === "object" &&
+    "code" in error &&
+    (error as { code?: string }).code === "42703",
+  )
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,7 +36,10 @@ export async function POST(request: NextRequest) {
     const user = auth.user!
 
     const body = await request.json()
-    const { id, title, preview, ai_model } = body
+    const { id, title, preview, ai_model, dify_conversation_id } = body
+    const difyConversationId = typeof dify_conversation_id === "string" && dify_conversation_id.trim()
+      ? dify_conversation_id.trim()
+      : null
     const requestedId = typeof id === "string" && id.trim() ? id.trim() : null
     if (requestedId && !UUID_RE.test(requestedId)) {
       return NextResponse.json({ error: "会话 ID 格式无效" }, { status: 400 })
@@ -41,34 +58,70 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "无权访问该会话" }, { status: 403 })
       }
       if (existing) {
-        const { data: session, error } = await supabase
+        const updatePayload = {
+          title: title || "新对话",
+          preview: preview || null,
+          ai_model,
+          ...(difyConversationId ? { [DIFY_CONVERSATION_COLUMN]: difyConversationId } : {}),
+        }
+        let { data: session, error } = await supabase
           .from("chat_sessions")
-          .update({
-            title: title || "新对话",
-            preview: preview || null,
-            ai_model,
-          })
+          .update(updatePayload)
           .eq("id", requestedId)
           .eq("user_id", user.id)
           .select()
           .single()
+
+        if (error && difyConversationId && isMissingDifyConversationColumn(error)) {
+          const fallback = await supabase
+            .from("chat_sessions")
+            .update({
+              title: updatePayload.title,
+              preview: updatePayload.preview,
+              ai_model: updatePayload.ai_model,
+            })
+            .eq("id", requestedId)
+            .eq("user_id", user.id)
+            .select()
+            .single()
+          session = fallback.data
+          error = fallback.error
+        }
 
         if (error) throw error
         return NextResponse.json({ session })
       }
     }
 
-    const { data: session, error } = await supabase
+    const insertPayload = {
+      ...(requestedId ? { id: requestedId } : {}),
+      user_id: user.id,
+      title: title || "新对话",
+      preview: preview || null,
+      ai_model,
+      ...(difyConversationId ? { [DIFY_CONVERSATION_COLUMN]: difyConversationId } : {}),
+    }
+    let { data: session, error } = await supabase
       .from("chat_sessions")
-      .insert({
-        ...(requestedId ? { id: requestedId } : {}),
-        user_id: user.id,
-        title: title || "新对话",
-        preview: preview || null,
-        ai_model,
-      })
+      .insert(insertPayload)
       .select()
       .single()
+
+    if (error && difyConversationId && isMissingDifyConversationColumn(error)) {
+      const fallback = await supabase
+        .from("chat_sessions")
+        .insert({
+          ...(requestedId ? { id: requestedId } : {}),
+          user_id: user.id,
+          title: title || "新对话",
+          preview: preview || null,
+          ai_model,
+        })
+        .select()
+        .single()
+      session = fallback.data
+      error = fallback.error
+    }
 
     if (error) throw error
 
@@ -102,11 +155,21 @@ export async function GET(request: NextRequest) {
 
     const supabase = createServiceRoleClient()
     if (sessionId) {
-      const { data: session, error: sessionError } = await supabase
+      let { data: session, error: sessionError }: { data: Record<string, unknown> | null; error: unknown } = await supabase
         .from("chat_sessions")
-        .select("id,title,preview,ai_model,user_id,created_at")
+        .select(SESSION_DETAIL_FIELDS)
         .eq("id", sessionId)
         .maybeSingle()
+
+      if (sessionError && isMissingDifyConversationColumn(sessionError)) {
+        const fallback = await supabase
+          .from("chat_sessions")
+          .select(SESSION_DETAIL_FIELDS_LEGACY)
+          .eq("id", sessionId)
+          .maybeSingle()
+        session = fallback.data
+        sessionError = fallback.error
+      }
 
       if (sessionError) throw sessionError
       if (!session) return NextResponse.json({ error: "会话不存在" }, { status: 404 })
@@ -125,12 +188,23 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ session: safeSession, messages: messages || [] })
     }
 
-    const { data: sessions, error } = await supabase
+    let { data: sessions, error }: { data: Array<Record<string, unknown>> | null; error: unknown } = await supabase
       .from("chat_sessions")
-      .select("id,title,preview,ai_model,created_at")
+      .select(SESSION_LIST_FIELDS)
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
       .limit(limit)
+
+    if (error && isMissingDifyConversationColumn(error)) {
+      const fallback = await supabase
+        .from("chat_sessions")
+        .select(SESSION_LIST_FIELDS_LEGACY)
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(limit)
+      sessions = fallback.data
+      error = fallback.error
+    }
 
     if (error) throw error
 

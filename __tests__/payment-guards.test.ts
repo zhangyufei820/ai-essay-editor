@@ -208,6 +208,7 @@ describe('Sprint 5 payment / credits / membership guards', () => {
     expect(requestBody).toContain('requestId')
     expect(requestBody).not.toContain('sessionId:')
     expect(requestBody).not.toContain('conversation_id:')
+    expect(image2).not.toContain('currentSessionIdRef.current = json.conversation_id')
   })
 
   it('keeps Image 2 prompt optimization authenticated and server-side', () => {

@@ -98,6 +98,21 @@ function normalizeQuota(dailyQuota?: number): number {
   return Math.floor(dailyQuota)
 }
 
+function todayIsoDate(): string {
+  return new Date().toISOString().slice(0, 10)
+}
+
+function sortGrantsForDisplay(left: FreeTrialGrant, right: FreeTrialGrant): number {
+  const leftHasQuota = left.daily_quota > 0
+  const rightHasQuota = right.daily_quota > 0
+  if (leftHasQuota !== rightHasQuota) return leftHasQuota ? -1 : 1
+  if (left.daily_quota !== right.daily_quota) return right.daily_quota - left.daily_quota
+  if (left.requires_daily_survey !== right.requires_daily_survey) {
+    return left.requires_daily_survey ? 1 : -1
+  }
+  return new Date(right.created_at).getTime() - new Date(left.created_at).getTime()
+}
+
 async function getActiveTrialGrantWithClient(
   supabase: SupabaseClient,
   userId: string,
@@ -117,6 +132,23 @@ async function getActiveTrialGrantWithClient(
 
   if (error) throw error
   return (data as FreeTrialGrant | null) || null
+}
+
+async function getActiveTrialGrantsWithClient(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<FreeTrialGrant[]> {
+  const now = new Date().toISOString()
+  const { data, error } = await supabase
+    .from("free_trial_grants")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("status", "active")
+    .lte("start_at", now)
+    .gt("end_at", now)
+
+  if (error) throw error
+  return (data || []) as FreeTrialGrant[]
 }
 
 export async function getActiveTrialGrant(userId: string): Promise<TrialOperationResult<FreeTrialGrant>> {
@@ -307,7 +339,8 @@ export async function revokeTrial(userId: string, reason?: string): Promise<Tria
 
 export async function getUserTrialStatus(userId: string): Promise<TrialOperationResult<UserTrialStatus>> {
   try {
-    const { data, error } = await getSupabaseAdmin()
+    const supabase = getSupabaseAdmin()
+    const { data, error } = await supabase
       .from("user_trial_status")
       .select("*")
       .eq("user_id", userId)
@@ -329,7 +362,54 @@ export async function getUserTrialStatus(userId: string): Promise<TrialOperation
       current_streak_days: 0,
     }
 
-    return { success: true, data: (data as UserTrialStatus | null) || fallback, error: null }
+    const viewStatus = (data as UserTrialStatus | null) || fallback
+    if (viewStatus.daily_quota > 0 || viewStatus.today_trial_remaining > 0) {
+      return { success: true, data: viewStatus, error: null }
+    }
+
+    const activeGrants = await getActiveTrialGrantsWithClient(supabase, userId)
+    const displayGrant = activeGrants.sort(sortGrantsForDisplay)[0]
+    if (!displayGrant || displayGrant.daily_quota <= 0) {
+      return { success: true, data: viewStatus, error: null }
+    }
+
+    const [usageResult, surveyResult] = await Promise.all([
+      supabase
+        .from("trial_credit_usages")
+        .select("amount")
+        .eq("user_id", userId)
+        .eq("usage_date", todayIsoDate()),
+      supabase
+        .from("survey_responses")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("survey_date", todayIsoDate())
+        .maybeSingle(),
+    ])
+
+    if (usageResult.error) throw usageResult.error
+    if (surveyResult.error) throw surveyResult.error
+
+    const todayTrialUsed = (usageResult.data || []).reduce((sum, row) => sum + Number(row.amount || 0), 0)
+    const hasNoSurveyGrant = activeGrants.some((grant) => !grant.requires_daily_survey)
+    const todaySurveyCompleted = Boolean(surveyResult.data) || hasNoSurveyGrant
+
+    return {
+      success: true,
+      data: {
+        ...viewStatus,
+        active_grant_id: displayGrant.id,
+        trial_start_at: displayGrant.start_at,
+        trial_end_at: displayGrant.end_at,
+        daily_quota: displayGrant.daily_quota,
+        requires_daily_survey: hasNoSurveyGrant ? false : displayGrant.requires_daily_survey,
+        today_survey_completed: todaySurveyCompleted,
+        today_trial_used: todayTrialUsed,
+        today_trial_remaining: Math.max(displayGrant.daily_quota - todayTrialUsed, 0),
+        trial_active: !displayGrant.requires_daily_survey || todaySurveyCompleted,
+      },
+      error: null,
+    }
   } catch (error) {
     logger.error("[free-trial] getUserTrialStatus failed", { userId, error })
     return { success: false, data: null, error: getErrorMessage(error) }

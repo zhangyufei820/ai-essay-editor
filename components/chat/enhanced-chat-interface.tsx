@@ -636,6 +636,7 @@ async function ensureChatSessionViaApi(params: {
   title: string
   preview: string
   model: string
+  difyConversationId?: string | null
 }) {
   const res = await fetch("/api/chat-session", {
     method: "POST",
@@ -648,6 +649,7 @@ async function ensureChatSessionViaApi(params: {
       title: params.title,
       preview: params.preview,
       ai_model: params.model,
+      dify_conversation_id: params.difyConversationId || undefined,
     }),
   })
   if (!res.ok) throw new Error(`chat_session_save_failed_${res.status}`)
@@ -1370,6 +1372,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   // 🔥 新增：用户显示名称（手机号/邮箱）
   const [userDisplayName, setUserDisplayName] = useState<string>("")
   const sessionIdRef = useRef<string | null>(null)
+  const difyConversationIdRef = useRef<string | null>(null)
   const sessionModelRef = useRef<ModelType | null>(null)
   const [currentSessionId, setCurrentSessionId] = useState<string>("")
 
@@ -1386,6 +1389,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 
   const clearConversationState = () => {
     sessionIdRef.current = null
+    difyConversationIdRef.current = null
     sessionModelRef.current = null
     setCurrentSessionId("")
     setCurrentWord("")
@@ -1393,19 +1397,16 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 
   const adoptConversationState = (conversationId: string | null, model: ModelType) => {
     if (!conversationId) return
-    sessionIdRef.current = conversationId
+    difyConversationIdRef.current = conversationId
     sessionModelRef.current = model
   }
 
   const clearDifyConversationState = () => {
-    sessionIdRef.current = null
+    difyConversationIdRef.current = null
     sessionModelRef.current = null
   }
 
   const isLuxury = userCredits > 1000
-
-  // 🎯 升级引导横幅状态（非豪华会员显示，发送消息后消失）
-  const [showUpgradeBanner, setShowUpgradeBanner] = useState(true)
 
   // 🔥 历史会话侧边栏状态
   const [showHistorySidebar, setShowHistorySidebar] = useState(false)
@@ -1766,7 +1767,6 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       setSelectedModel(targetModel as ModelType)
       console.log(`✅ [历史会话模型同步] setSelectedModel 已调用: ${targetModel}`)
       setCurrentSessionId(sid)
-      clearDifyConversationState()
 
       if (data && data.length > 0) {
         // 🔥 加载消息时包含 metadata（用于恢复音乐数据）
@@ -1778,8 +1778,15 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
            wordCard: m.metadata?.wordCard || normalizeDifyWordCardResponse(m.content)
         }))
         setMessages(historyMessages)
+        if (typeof sessionData?.dify_conversation_id === "string" && sessionData.dify_conversation_id) {
+          adoptConversationState(sessionData.dify_conversation_id, targetModel as ModelType)
+        } else {
+          clearDifyConversationState()
+        }
         const restoredCurrentWord = [...historyMessages].reverse().find((message) => message.wordCard?.word)?.wordCard?.word
         setCurrentWord(restoredCurrentWord || "")
+      } else {
+        clearDifyConversationState()
       }
     } catch (e) {
       console.error("加载历史会话失败:", e)
@@ -2467,7 +2474,8 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       mode: genMode,
       promptLength: txt.length,
       urlAgent,
-      sessionId: sessionIdRef.current
+      sessionId: currentSessionId,
+      hasDifyConversation: Boolean(difyConversationIdRef.current)
     })
 
     let trialEligibleForSubmit = Boolean(trialStatus?.active_grant_id)
@@ -2523,9 +2531,9 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 
     let sid = currentSessionId;
     const hadUrlSessionId = Boolean(urlSessionId)
-    // 🔥 修复：当模型切换时（sessionIdRef.current === null），即使 urlSessionId 存在也忽略
+    // 🔥 修复：当模型切换时（currentSessionId 为空），即使 urlSessionId 存在也忽略
     // 否则会导致用旧模型的 session 去请求新模型
-    const isModelSwitch = sessionIdRef.current === null && currentSessionId;
+    const isModelSwitch = !currentSessionId && Boolean(urlSessionId);
     if (!sid && !urlSessionId) {
         sid = createLocalSessionId();
         setCurrentSessionId(sid);
@@ -2674,7 +2682,8 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
           model: selectedModel,
           teacherAgent: isTeacherAgentSubmit,
           mode: genMode,
-          sessionId: sessionIdRef.current,
+          sessionId: sid,
+          hasDifyConversation: Boolean(difyConversationIdRef.current),
           fileCount: fileIds.length,
           fileUrlCount: fileUrls.length
         })
@@ -2699,7 +2708,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 	            body: JSON.stringify(isTeacherAgentSubmit ? {
                 message: userMsg.content,
                 agent_share_code: teacherAgentShareCode,
-                conversation_id: sessionIdRef.current,
+                conversation_id: difyConversationIdRef.current,
                 requestId,
                 sessionId: sid,
                 messageId: botId,
@@ -2707,7 +2716,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 	              query: isWordCardRequest ? vocabUserMessage : userMsg.content,
               fileIds,
               fileUrls,
-              conversation_id: sessionIdRef.current,
+              conversation_id: difyConversationIdRef.current,
 	              model: selectedModel,
 	              mode: genMode,
 	              inputs: isWordCardRequest
@@ -2890,7 +2899,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                       })
                     }
 
-                    if (json.conversation_id && sessionIdRef.current !== json.conversation_id) {
+                    if (json.conversation_id && difyConversationIdRef.current !== json.conversation_id) {
                         const normalizedConversationId = json.conversation_id.startsWith(`${selectedModel}:`)
                           ? json.conversation_id.slice((selectedModel + ":").length)
                           : json.conversation_id
@@ -3008,6 +3017,15 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                   content: cardToSave ? JSON.stringify({ frontend_card_json: cardToSave }) : fullText,
                   metadata: { requestId, clientMessageId: botId }
                 })
+                if (difyConversationIdRef.current) {
+                  await ensureChatSessionViaApi({
+                    sessionId: sid,
+                    title: userMsg.content.slice(0, 10) || "对话",
+                    preview: userMsg.content.slice(0, 30),
+                    model: selectedModel,
+                    difyConversationId: difyConversationIdRef.current,
+                  })
+                }
               })
             } catch (error) {
               console.warn("⚠️ [消息保存] 助手消息后台保存失败:", error)
@@ -3621,45 +3639,6 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 
       <div className="flex flex-1 flex-col h-full relative min-w-0">
 
-        {/* 🎯 升级引导横幅 - 非豪华会员常驻显示，用户手动关闭 */}
-        <AnimatePresence>
-          {showUpgradeBanner && !isLuxury && !isMobile && (
-            <motion.div
-              initial={{ opacity: 0, y: -20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20, height: 0 }}
-              className="bg-[var(--ink-50)] border-b border-[var(--ink-100)] px-4 py-3 shrink-0"
-            >
-              <div className="mx-auto max-w-3xl flex items-center justify-between gap-4">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-[var(--ink-800)]">
-                    每天仅需4元，获得每月 12,000 积分
-                  </p>
-                  <p className="text-xs text-[var(--ink-600)] mt-0.5 truncate">
-                    可用于作文批改、备课、论文写作等文本工作流
-                  </p>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <Button
-                    size="sm"
-                    className="h-8 px-4 text-white text-xs font-medium rounded-[var(--radius-pill)] shadow-sm hover:opacity-90 transition-all"
-                    style={{ backgroundColor: BRAND_GREEN }}
-                    onClick={() => router.push("/pricing")}
-                  >
-                    升级豪华会员
-                  </Button>
-                  <button
-                    onClick={() => setShowUpgradeBanner(false)}
-                    className="p-1 text-[var(--ink-400)] hover:text-[var(--ink-600)] transition-colors"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
         {/* 🔥 顶部导航栏 - 移动端极简收紧 */}
         <div className="flex items-center h-11 md:h-14 px-2 md:px-4 border-b border-[var(--paper-100)]/70 bg-[var(--paper-50)]/90 backdrop-blur-sm shrink-0 pt-safe">
           <button
@@ -3719,7 +3698,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
           <div
             ref={scrollAreaRef}
             onScroll={handleScroll}
-            className="h-full overflow-y-auto custom-scrollbar pb-40 md:pb-44"
+            className="h-full overflow-y-auto custom-scrollbar pb-[180px] sm:pb-[196px] md:pb-[224px]"
           >
               <div className="mx-auto max-w-6xl px-2.5 sm:px-4 md:px-6 lg:px-10 py-2.5 sm:py-6 md:py-8">
               {messages.length === 0 ? (
@@ -3774,7 +3753,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                 </div>
                 )
                 ) : (
-                <div className="space-y-3 sm:space-y-5 pt-1 sm:pt-3 pb-32 md:pb-6">
+                <div className="space-y-3 sm:space-y-5 pt-1 sm:pt-3 pb-8">
                     {messages.map((message, index) => (
                       <div key={message.id}>
                       {isDifferentDay(message.timestamp, messages[index - 1]?.timestamp) ? (
@@ -3924,8 +3903,8 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
           </AnimatePresence>
         </div>
 
-            {/* 🔥 输入框区域 - 移动端优化；desktop anchor baseline: absolute inset-x-0 bottom-0 z-30 */}
-        <div className="fixed inset-x-0 bottom-0 z-30 shrink-0 border-t border-[var(--paper-100)]/80 bg-[var(--paper-50)]/96 p-1.5 pb-[max(env(safe-area-inset-bottom),4px)] shadow-[0_-8px_24px_rgba(15,23,42,0.05)] backdrop-blur-md md:absolute md:p-6">
+            {/* 🔥 输入框区域 - 固定在视口底部，避免对话滚动时遮挡输入 */}
+        <div className="fixed inset-x-0 bottom-0 z-40 shrink-0 border-t border-[var(--paper-100)]/80 bg-[var(--paper-50)]/96 p-1.5 pb-[max(env(safe-area-inset-bottom),4px)] shadow-[0_-8px_24px_rgba(15,23,42,0.05)] backdrop-blur-md md:left-72 md:p-6">
           <div className="mx-auto max-w-5xl">
             {/* 🔥 上传进度条 - 移动端优化 */}
             {isUploading && (

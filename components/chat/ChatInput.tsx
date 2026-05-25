@@ -590,9 +590,7 @@ export function ChatInput({
   const effectiveDisabledReason = disabledReason || (isLoading ? "loading" : disabled ? "auth" : undefined)
   const inputPlaceholder = effectiveDisabledReason === "auth"
     ? "请先登录..."
-    : isLoading
-      ? "正在处理，请稍候..."
-      : placeholder
+    : placeholder
   const canSubmit = !isLoading && !disabled && (value.trim() || uploadedFiles.length > 0)
 
   const closeMobileTools = () => setMobileToolsOpen(false)
@@ -964,7 +962,7 @@ export function ChatInput({
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
           placeholder={inputPlaceholder}
-          disabled={disabled || isLoading}
+          disabled={disabled}
           className={cn(
             "min-w-0 flex-1 resize-none border bg-white shadow-none",
             "min-h-[58px] max-h-[148px] rounded-[20px] border-[var(--ink-500)]/65 px-4 py-3 text-[16px] leading-6 sm:min-h-[60px] sm:max-h-[170px] sm:px-4 sm:py-3 sm:text-[16px]",
