@@ -49,6 +49,7 @@ export interface DifyChatRequest {
   response_mode: "streaming" | "blocking"
   user: string
   conversation_id?: string | null
+  auto_generate_name?: boolean
   files?: DifyFileObject[]
 }
 

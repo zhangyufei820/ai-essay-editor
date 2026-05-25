@@ -62,6 +62,7 @@ export async function callToolsDifyChat(input: {
         query: input.query,
         response_mode: "blocking",
         user: input.user || "tools-workbench",
+        auto_generate_name: false,
       }),
       signal: controller.signal,
     })

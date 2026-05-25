@@ -2516,6 +2516,7 @@ export async function POST(request: NextRequest) {
                 response_mode: useBlockingDifyChat ? "blocking" : isGptImage2 ? "blocking" : "streaming",
                 user: userId || "default-user",
                 conversation_id: currentConvId,
+                auto_generate_name: false,
             }
 
             if (model === "open-claw") {
