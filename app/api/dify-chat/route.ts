@@ -243,8 +243,9 @@ function buildGptImageV11DifyInputs(inputs: unknown) {
 
 function normalizeImageGatewaySize(inputs: GptImageV11Inputs): string {
   const size = inputs.size.trim()
-  if (size === "2K" || size === "4K") return size
-  return "1K"
+  if (size === "2K") return "2048x2048"
+  if (size === "4K") return "3840x3840"
+  return "1024x1024"
 }
 
 function calculateGptImageGatewayCredits(inputs: GptImageV11Inputs): number {
@@ -618,7 +619,7 @@ const GPT_IMAGE_ASYNC_TASK_MAX_AGE_MS = 30 * 60 * 1000
 const GPT_IMAGE_POLL_TOKEN_TTL_MS = GPT_IMAGE_ASYNC_TASK_MAX_AGE_MS + 5 * 60 * 1000
 const IMAGE_GATEWAY_URL = (process.env.DIFY_IMAGE_GATEWAY_URL || "http://dify-image-gateway:8001").replace(/\/+$/, "")
 const VIVAAPI_IMAGE_BASE_URL = (process.env.VIVAAPI_IMAGE_BASE_URL || "https://www.vivaapi.top").replace(/\/+$/, "")
-const VIVAAPI_IMAGE_MODEL = process.env.VIVAAPI_IMAGE_MODEL || "gpt-image-2-pro"
+const VIVAAPI_IMAGE_MODEL = process.env.VIVAAPI_IMAGE_MODEL || "gpt-image-2"
 const GEMINI_IMAGE_GATEWAY_URL = (process.env.GEMINI_IMAGE_GATEWAY_URL || "http://gemini-image-gateway:8002").replace(/\/+$/, "")
 // 🔥 作文批改（standard）使用专用的 ESSAY_CORRECTION_API_KEY
 const DEFAULT_DIFY_KEY = process.env.ESSAY_CORRECTION_API_KEY || process.env.DIFY_API_KEY 

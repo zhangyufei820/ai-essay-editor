@@ -125,7 +125,10 @@ describe("GPT Image V11 parameter mapping", () => {
     const routeSource = require("fs").readFileSync(require("path").join(process.cwd(), "app/api/dify-chat/route.ts"), "utf8")
 
     expect(routeSource).toContain("function normalizeImageGatewaySize")
-    expect(routeSource).toContain('if (size === "2K" || size === "4K") return size')
+    expect(routeSource).toContain('if (size === "2K") return "2048x2048"')
+    expect(routeSource).toContain('if (size === "4K") return "3840x3840"')
+    expect(routeSource).toContain('return "1024x1024"')
+    expect(routeSource).toContain('const VIVAAPI_IMAGE_MODEL = process.env.VIVAAPI_IMAGE_MODEL || "gpt-image-2"')
     expect(routeSource).toContain("VIVAAPI_IMAGE_BASE_URL")
     expect(routeSource).toContain("/v1/images/generations")
     expect(routeSource).toContain("buildVivaApiImagePayload")
