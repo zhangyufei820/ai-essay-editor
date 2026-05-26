@@ -31,14 +31,40 @@ class OmniVoiceClient:
             return False
 
     async def list_voices(self) -> dict:
+        upstream_voices: dict[str, dict] = {}
         try:
             async with httpx.AsyncClient(timeout=20) as client:
                 response = await client.get(f"{self.settings.omnivoice_base_url.rstrip('/')}/v1/audio/voices")
-                response.raise_for_status()
-                return response.json()
+                if response.status_code < 400:
+                    payload = response.json()
+                    upstream_voices = {
+                        item.get("voice_id"): item
+                        for item in payload.get("voices", [])
+                        if isinstance(item, dict) and item.get("voice_id")
+                    }
+                else:
+                    logger.warning(
+                        "Upstream voice list unavailable: status=%s url=%s",
+                        response.status_code,
+                        response.request.url if response.request else self.settings.omnivoice_base_url,
+                    )
         except Exception as exc:
             logger.warning("Could not list upstream voices: %s", exc)
-            return {"voices": [], "engines": []}
+
+        voices = []
+        for voice_id in self.settings.allowed_voice_ids:
+            upstream_voice = upstream_voices.get(voice_id, {})
+            voices.append(
+                {
+                    "voice_id": voice_id,
+                    "name": upstream_voice.get("name") or voice_id,
+                    "language": upstream_voice.get("language") or "zh-CN",
+                    "description": upstream_voice.get("description") or "",
+                    "enabled": True,
+                }
+            )
+
+        return {"voices": voices, "engines": []}
 
     async def synthesize(self, request: TTSRequest, voice_id: str) -> dict:
         fmt = request.format
