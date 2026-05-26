@@ -2,6 +2,8 @@ import http from "node:http"
 
 const PORT = Number(process.env.PORT || 8080)
 const OPENAI_BASE_URL = (process.env.OPENAI_BASE_URL || "https://api.openai.com/v1").replace(/\/+$/, "")
+const OPENAI_TTS_URL = (process.env.VOICE_TTS_URL || `${OPENAI_BASE_URL}/audio/speech`).replace(/\/+$/, "")
+const OPENAI_STT_URL = (process.env.VOICE_STT_URL || `${OPENAI_BASE_URL}/audio/transcriptions`).replace(/\/+$/, "")
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || ""
 const TTS_PROVIDER = (process.env.VOICE_TTS_PROVIDER || "openai").toLowerCase()
 const STT_PROVIDER = (process.env.VOICE_STT_PROVIDER || "openai").toLowerCase()
@@ -105,7 +107,7 @@ function assertConfigured(kind) {
 }
 
 async function openaiTts({ input, responseFormat, voice, instructions }) {
-  const upstream = await fetch(`${OPENAI_BASE_URL}/audio/speech`, {
+  const upstream = await fetch(OPENAI_TTS_URL, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${OPENAI_API_KEY}`,
@@ -266,7 +268,7 @@ async function handleTts(req, res) {
   res.end(result.audio)
 }
 
-async function transcribeWithOpenAICompatible({ baseUrl, apiKey, model, file, language, prompt }) {
+async function transcribeWithOpenAICompatible({ url, baseUrl, apiKey, model, file, language, prompt }) {
   const providerForm = new FormData()
   providerForm.append("model", model)
   providerForm.append("file", file, file.name || "recording.webm")
@@ -276,7 +278,8 @@ async function transcribeWithOpenAICompatible({ baseUrl, apiKey, model, file, la
     providerForm.append("prompt", prompt.trim().slice(0, 400))
   }
 
-  const upstream = await fetch(`${baseUrl}/audio/transcriptions`, {
+  const endpoint = url || `${baseUrl.replace(/\/+$/, "")}/audio/transcriptions`
+  const upstream = await fetch(endpoint, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
@@ -330,6 +333,7 @@ async function handleStt(req, res) {
         prompt,
       })
     : await transcribeWithOpenAICompatible({
+        url: OPENAI_STT_URL,
         baseUrl: OPENAI_BASE_URL,
         apiKey: OPENAI_API_KEY,
         model: STT_MODEL,
