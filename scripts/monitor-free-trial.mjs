@@ -119,6 +119,13 @@ function isAiCreditConsumption(row) {
     CREDIT_CONSUMPTION_DESCRIPTION_KEYWORDS.some((keyword) => description.includes(keyword))
 }
 
+function isExpectedTrialRealCreditFallbackEvent(event) {
+  const metadata = event.metadata || {}
+  const realCreditsUsed = Number(metadata.realCreditsUsed || 0)
+  const trialUsed = Number(metadata.trialUsed || 0)
+  return realCreditsUsed > 0 && trialUsed === 0
+}
+
 async function countRows(table, filters) {
   let query = supabase.from(table).select("*", { count: "exact", head: true })
   if (filters) query = filters(query)
@@ -430,17 +437,36 @@ async function runMonitor() {
         const aiDebits = recentDebits.filter(isAiCreditConsumption)
         const referenceIds = Array.from(new Set(aiDebits.map((row) => row.reference_id).filter(Boolean)))
         let trialUsageReferenceIds = new Set()
+        let expectedFallbackReferenceIds = new Set()
         if (referenceIds.length > 0) {
-          const usageRows = await fetchRows(
-            "trial_credit_usages",
-            "reference_id",
-            (query) => query
-              .in("reference_id", referenceIds)
-              .gte("created_at", since60m),
-          )
+          const [usageRows, fallbackEvents] = await Promise.all([
+            fetchRows(
+              "trial_credit_usages",
+              "reference_id",
+              (query) => query
+                .in("reference_id", referenceIds)
+                .gte("created_at", since60m),
+            ),
+            fetchRows(
+              "campaign_events",
+              "metadata",
+              (query) => query
+                .eq("event_name", "trial_billing_real_credit_fallback")
+                .gte("created_at", since60m),
+            ),
+          ])
           trialUsageReferenceIds = new Set(usageRows.map((row) => row.reference_id).filter(Boolean))
+          expectedFallbackReferenceIds = new Set(
+            fallbackEvents
+              .filter(isExpectedTrialRealCreditFallbackEvent)
+              .map((event) => event.metadata?.referenceId)
+              .filter((referenceId) => typeof referenceId === "string" && referenceIds.includes(referenceId)),
+          )
         }
-        const unexpected = aiDebits.filter((row) => !row.reference_id || !trialUsageReferenceIds.has(row.reference_id))
+        const unexpected = aiDebits.filter((row) => (
+          !row.reference_id ||
+          (!trialUsageReferenceIds.has(row.reference_id) && !expectedFallbackReferenceIds.has(row.reference_id))
+        ))
         const nowMs = Date.now()
         const unexpectedRecent5m = unexpected.filter((row) => new Date(row.created_at).getTime() >= nowMs - 5 * 60 * 1000)
         const unexpectedAmount30m = unexpected.reduce((sum, row) => sum + Math.abs(Number(row.amount || 0)), 0)
@@ -455,6 +481,7 @@ async function runMonitor() {
           unexpectedAmount5m,
           unexpectedUsers5m: new Set(unexpectedRecent5m.map((row) => row.user_id)).size,
           matchedTrialUsageReferences: trialUsageReferenceIds.size,
+          matchedExpectedFallbackReferences: expectedFallbackReferenceIds.size,
           samples: unexpected.slice(0, 20).map((row) => ({
             id: row.id,
             userId: row.user_id,

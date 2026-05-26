@@ -377,8 +377,12 @@ describe('Sprint 5 payment / credits / membership guards', () => {
     const source = read('components/trial/DailySurveyAutoPrompt.tsx')
 
     expect(source).toContain('loaded: false')
+    expect(source).toContain('SESSION_REFRESH_TIMEOUT_MS')
+    expect(source).toContain('fetchWithTimeout')
     expect(source).toContain('consumptionEnabled: false')
     expect(source).toContain('autoPromptEnabled: false')
+    expect(source).toContain('today_survey_refresh_failed')
+    expect(source).toContain('setSurveyOpen(false)')
     expect(source).toContain('const surveyGateEnabled = runtimeFlags.loaded')
     expect(source).toContain('&& runtimeFlags.consumptionEnabled')
     expect(source).toContain('&& runtimeFlags.autoPromptEnabled')

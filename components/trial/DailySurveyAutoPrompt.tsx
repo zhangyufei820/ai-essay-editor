@@ -12,6 +12,7 @@ const ANNOUNCEMENT_KEY_PREFIX = "free-trial-announcement-shown"
 const AUTO_SURVEY_KEY_PREFIX = "daily-survey-auto-shown"
 const SURVEY_SNOOZE_KEY_PREFIX = "daily-survey-auto-snoozed-until"
 const SURVEY_SNOOZE_MS = 2 * 60 * 60 * 1000
+const SESSION_REFRESH_TIMEOUT_MS = 8000
 type SessionState = {
   loggedIn: boolean
   userId: string | null
@@ -59,6 +60,16 @@ function shouldRequireSurvey(status: TrialSurveyStatus | null, paidUser: boolean
     !status.today_survey_completed &&
     !paidUser
   )
+}
+
+async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit = {}, timeoutMs = SESSION_REFRESH_TIMEOUT_MS) {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    return await fetch(input, { ...init, signal: controller.signal })
+  } finally {
+    clearTimeout(timeoutId)
+  }
 }
 
 export function DailySurveyAutoPrompt() {
@@ -114,12 +125,15 @@ export function DailySurveyAutoPrompt() {
     }
 
     const [surveyResponse, creditsResponse] = await Promise.all([
-      fetch("/api/surveys/today", { cache: "no-store", headers }),
-      fetch("/api/user/credits", { cache: "no-store", headers }),
+      fetchWithTimeout("/api/surveys/today", { cache: "no-store", headers }),
+      fetchWithTimeout("/api/user/credits", { cache: "no-store", headers }),
     ])
 
     const surveyData = await surveyResponse.json().catch(() => null)
     const creditsData = await creditsResponse.json().catch(() => null)
+    if (!surveyResponse.ok || !surveyData?.ok) {
+      throw new Error(surveyData?.error || "today_survey_refresh_failed")
+    }
     const trialStatus = (surveyData?.trialStatus || null) as TrialSurveyStatus | null
     const nextSession = {
       loggedIn: true,
@@ -196,8 +210,8 @@ export function DailySurveyAutoPrompt() {
         })
         .catch((error) => {
           console.warn("[DailySurveyAutoPrompt] forced survey refresh failed", error)
-          if (!session.loggedIn || session.paidUser) return
-          setSurveyOpen(true)
+          setSurveyOpen(false)
+          toast.error("今日问卷加载失败，请稍后重试")
         })
     }
     window.addEventListener(OPEN_DAILY_SURVEY_EVENT, handleOpenSurvey)

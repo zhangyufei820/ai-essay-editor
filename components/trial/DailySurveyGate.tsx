@@ -112,7 +112,7 @@ export function DailySurveyGate({
         throw new Error(data?.error || "今日问卷加载失败")
       }
       setTemplate(data.template)
-      if (data.alreadySubmitted) {
+      if (data.alreadySubmitted || !data.template) {
         onCompleted?.(data.trialStatus)
         onOpenChange?.(false)
       }
@@ -120,11 +120,15 @@ export function DailySurveyGate({
       console.error("[DailySurveyGate] load failed", error)
       setLoadError("今日问卷加载失败，请稍后重试；你也可以先点“稍后再说”退出。")
       toast.error("今日问卷加载失败，请稍后重试")
+      if (trackingSource === "auto") {
+        onDismiss?.()
+        onOpenChange?.(false)
+      }
     } finally {
       clearTimeout(timeoutId)
       setLoading(false)
     }
-  }, [enabled, loading, onCompleted, onOpenChange, template])
+  }, [enabled, loading, onCompleted, onDismiss, onOpenChange, template, trackingSource])
 
   useEffect(() => {
     if (enabled && open) {

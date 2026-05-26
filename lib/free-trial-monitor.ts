@@ -116,6 +116,15 @@ function isAiCreditConsumption(row: { reference_id?: string | null; description?
     CREDIT_CONSUMPTION_DESCRIPTION_KEYWORDS.some((keyword) => description.includes(keyword))
 }
 
+function isExpectedTrialRealCreditFallbackEvent(event: {
+  metadata?: Record<string, unknown> | null
+}): boolean {
+  const metadata = event.metadata || {}
+  const realCreditsUsed = Number(metadata.realCreditsUsed || 0)
+  const trialUsed = Number(metadata.trialUsed || 0)
+  return realCreditsUsed > 0 && trialUsed === 0
+}
+
 async function countRows(table: string, filters?: (query: any) => any): Promise<number> {
   let query = getSupabaseAdmin().from(table).select("*", { count: "exact", head: true })
   if (filters) query = filters(query)
@@ -582,24 +591,40 @@ async function checkUnexpectedRealCreditDebits(
   ))
 
   let trialUsageReferenceIds = new Set<string>()
+  let expectedFallbackReferenceIds = new Set<string>()
   if (referenceIds.length > 0) {
-    const usageRows = await fetchRows<{ reference_id: string | null }>(
-      "trial_credit_usages",
-      "reference_id",
-      (query) => query
-        .in("reference_id", referenceIds)
-        .gte("created_at", since60m),
-    )
+    const [usageRows, fallbackEvents] = await Promise.all([
+      fetchRows<{ reference_id: string | null }>(
+        "trial_credit_usages",
+        "reference_id",
+        (query) => query
+          .in("reference_id", referenceIds)
+          .gte("created_at", since60m),
+      ),
+      fetchRows<{ metadata: Record<string, unknown> | null }>(
+        "campaign_events",
+        "metadata",
+        (query) => query
+          .eq("event_name", "trial_billing_real_credit_fallback")
+          .gte("created_at", since60m),
+      ),
+    ])
     trialUsageReferenceIds = new Set(
       usageRows
         .map((row) => row.reference_id)
         .filter((referenceId): referenceId is string => Boolean(referenceId)),
     )
+    expectedFallbackReferenceIds = new Set(
+      fallbackEvents
+        .filter(isExpectedTrialRealCreditFallbackEvent)
+        .map((event) => event.metadata?.referenceId)
+        .filter((referenceId): referenceId is string => typeof referenceId === "string" && referenceIds.includes(referenceId)),
+    )
   }
 
   const unexpected = aiDebits.filter((row) => {
     if (!row.reference_id) return true
-    return !trialUsageReferenceIds.has(row.reference_id)
+    return !trialUsageReferenceIds.has(row.reference_id) && !expectedFallbackReferenceIds.has(row.reference_id)
   })
   const unexpectedRecent5m = unexpected.filter((row) =>
     new Date(row.created_at).getTime() >= nowMs - 5 * 60 * 1000
@@ -629,6 +654,7 @@ async function checkUnexpectedRealCreditDebits(
     unexpectedAmount5m: amount5m,
     unexpectedUsers5m: users5m,
     matchedTrialUsageReferences: trialUsageReferenceIds.size,
+    matchedExpectedFallbackReferences: expectedFallbackReferenceIds.size,
     samples,
     thresholds: {
       p1Count30m: 3,
