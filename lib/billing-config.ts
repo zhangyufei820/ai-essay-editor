@@ -71,9 +71,6 @@ export const IMAGE2_4K_CREDITS = 50
 export const IMAGE2_MEDIUM_QUALITY_EXTRA_CREDITS = 5
 export const IMAGE2_HIGH_QUALITY_EXTRA_CREDITS = 5
 export const IMAGE2_CREDITS = IMAGE2_1K_CREDITS
-export const GPT_IMAGE_15_CREDITS = 200
-export const GPT_IMAGE_1_CREDITS = 150
-export const GPT_IMAGE_1_MINI_CREDITS = 80
 export const BANANA2_PRO_IMAGE_BASE_CREDITS = 150
 export const BANANA2_PRO_IMAGE_RISK_MULTIPLIER = 1.1
 export const BANANA2_PRO_IMAGE_CREDITS = Math.ceil(BANANA2_PRO_IMAGE_BASE_CREDITS * BANANA2_PRO_IMAGE_RISK_MULTIPLIER)
@@ -214,9 +211,6 @@ export const BILLING_CONFIG = {
       allowlistUserIdsEnv: "IMAGE2_WHITELIST_USER_IDS",
       allowlistEmailsEnv: "IMAGE2_WHITELIST_EMAILS",
     },
-    "gpt-image-1.5": { fixedCredits: GPT_IMAGE_15_CREDITS },
-    "gpt-image-1": { fixedCredits: GPT_IMAGE_1_CREDITS },
-    "gpt-image-1-mini": { fixedCredits: GPT_IMAGE_1_MINI_CREDITS },
     "suno-v5": { fixedCredits: SUNO_BASE_CREDITS },
   } satisfies Record<string, MediaBillingItem>,
 } as const

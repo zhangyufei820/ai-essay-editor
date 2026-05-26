@@ -16,7 +16,6 @@ const SUPPORTED_MODELS = [
   'gemini-image',    // Gemini 图像
   'banana-2-pro',    // Banana 2 Pro
   'gpt-image-2',     // GPT Image 2
-  'gpt-image-1',     // GPT Image 1
   'grok-4.2',        // Grok-4.2
   'open-claw',       // Open Claw
   'quanquan-math',   // 全圈数学智能体
@@ -109,7 +108,7 @@ export default function ModelChatPage() {
     )
   }
 
-  if (model === 'gpt-image-2' || model === 'gpt-image-1' || model === 'banana-2-pro') {
+  if (model === 'gpt-image-2' || model === 'banana-2-pro') {
     console.log('✅ [ModelChatPage] 使用图像工作台')
     return (
       <main className="flex min-h-screen flex-col">

@@ -1,9 +1,6 @@
 import {
   ASSUMED_PROVIDER_INPUT_VCOINS_PER_1M,
   ASSUMED_PROVIDER_OUTPUT_VCOINS_PER_1M,
-  GPT_IMAGE_15_CREDITS,
-  GPT_IMAGE_1_CREDITS,
-  GPT_IMAGE_1_MINI_CREDITS,
   GEMINI_IMAGE_CREDITS,
   HIGH_CONSUMPTION_TEXT_CREDITS,
   HIGH_CONSUMPTION_TEXT_OUTPUT_TOKENS,
@@ -37,9 +34,6 @@ export type ModelType =
   | "gemini-image"
   | "banana-2-pro"
   | "gpt-image-2"
-  | "gpt-image-1.5"
-  | "gpt-image-1"
-  | "gpt-image-1-mini"
   | "suno-v5"
   | "grok-4.2"
   | "open-claw"
@@ -187,24 +181,6 @@ export const MODEL_COSTS: Record<ModelType, ModelCostConfig> = {
     displayName: "GPT Image 2",
     mode: "image",
   },
-  "gpt-image-1.5": {
-    category: "media",
-    fixedCost: MEDIA_BILLING["gpt-image-1.5"].fixedCredits,
-    displayName: "GPT Image 1.5",
-    mode: "image",
-  },
-  "gpt-image-1": {
-    category: "media",
-    fixedCost: MEDIA_BILLING["gpt-image-1"].fixedCredits,
-    displayName: "GPT Image 1",
-    mode: "image",
-  },
-  "gpt-image-1-mini": {
-    category: "media",
-    fixedCost: MEDIA_BILLING["gpt-image-1-mini"].fixedCredits,
-    displayName: "GPT Image 1 Mini",
-    mode: "image",
-  },
   "suno-v5": {
     category: "media",
     fixedCost: MEDIA_BILLING["suno-v5"].fixedCredits,
@@ -218,9 +194,6 @@ export const MODEL_COSTS: Record<ModelType, ModelCostConfig> = {
 export {
   ASSUMED_PROVIDER_INPUT_VCOINS_PER_1M,
   ASSUMED_PROVIDER_OUTPUT_VCOINS_PER_1M,
-  GPT_IMAGE_15_CREDITS,
-  GPT_IMAGE_1_CREDITS,
-  GPT_IMAGE_1_MINI_CREDITS,
   GEMINI_IMAGE_CREDITS,
   IMAGE2_CREDITS,
   IMAGE2_1K_CREDITS,
@@ -239,9 +212,6 @@ export {
   TEXT_WORKFLOW_MIN_REQUIRED_CREDITS,
 }
 
-export const IMAGE_1_5_CREDITS = GPT_IMAGE_15_CREDITS
-export const IMAGE_1_CREDITS = GPT_IMAGE_1_CREDITS
-export const IMAGE_1_MINI_CREDITS = GPT_IMAGE_1_MINI_CREDITS
 export const pricingVersion = PRICING_VERSION
 
 export const INPUT_TOKEN_RATE = TEXT_INPUT_CREDITS_PER_1K

@@ -33,7 +33,6 @@ const MODEL_DISPLAY_NAMES: Record<string, string> = {
   "suno-v5": "音乐",
   "banana-2-pro": "Banana 2 Pro",
   "gpt-image-2": "GPT Image 2",
-  "gpt-image-1": "GPT Image 1",
   "ai-writing-paper": "论文写作",
   "zhongying-essay": "中英文作文",
   "reading-report": "读书报告",

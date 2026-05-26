@@ -106,12 +106,14 @@ describe('Sprint 5 payment / credits / membership guards', () => {
   it('routes GPT Image 2 through the direct image gateway after server-side billing guards', () => {
     const source = read('app/api/dify-chat/route.ts')
     const billingCheckIndex = source.indexOf('const estimatedMinCost = imageInputsForBilling')
-    const directGatewayIndex = source.indexOf('console.log("🎨 [GPT Image] 使用直连图片网关，绕过 Dify chatflow")')
+    const directGatewayIndex = source.indexOf('console.log("🎨 [GPT Image] 使用 VivaAPI 图片通道，绕过 Dify chatflow")')
     const difyCallIndex = source.indexOf('const callDify = async')
 
     expect(source).toContain('callImageGatewayDirect(effectiveQuery, inputs)')
     expect(source).toContain('chargeImageGatewayCredits({')
-    expect(source).toContain('gatewayName: "dify-image-gateway"')
+    expect(source).toContain('gatewayName: process.env.VIVAAPI_IMAGE_API_KEY ? "vivaapi-image" : "dify-image-gateway"')
+    expect(source).toContain('VIVAAPI_IMAGE_BASE_URL')
+    expect(source).toContain('/v1/images/generations')
     expect(source).toContain('usageSource: "fixed"')
     expect(source).toContain('if (!selectedCredential && !isDirectImageGatewayRequest)')
     expect(directGatewayIndex).toBeGreaterThan(billingCheckIndex)

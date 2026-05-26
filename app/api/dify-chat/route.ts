@@ -85,8 +85,8 @@ type GeminiImageGatewayInputs = {
 
 const GPT_IMAGE_V11_DEFAULT_INPUTS: GptImageV11Inputs = {
   aspect_ratio: "1:1",
-  size: "1024x1024",
-  model: "gpt-image-1",
+  size: "1K",
+  model: "gpt-image-2",
   quality: "low",
   output_format: "png",
   output_compression: 100,
@@ -101,8 +101,8 @@ const GPT_IMAGE_V11_DEFAULT_INPUTS: GptImageV11Inputs = {
 
 const GPT_IMAGE_V11_ALLOWED = {
   aspect_ratio: ["auto", "1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "21:9", "9:21", "2:1", "1:2", "3:1", "1:3"],
-  size: ["auto", "1K", "2K", "4K", "original_1k", "original_2k", "original_4k", "1024x1024", "1536x1024", "1024x1536", "2048x2048", "2048x1152", "1152x2048", "3840x2160", "2160x3840"],
-  model: ["gpt-image-2", "gpt-image-1.5", "gpt-image-1", "gpt-image-1-mini"],
+  size: ["1K", "2K", "4K"],
+  model: ["gpt-image-2"],
   quality: ["auto", "low", "medium", "high"],
   output_format: ["png", "jpeg", "webp"],
   background: ["auto", "opaque", "transparent"],
@@ -140,7 +140,8 @@ function pickEnum(value: unknown, allowed: readonly string[], fallback: string):
 function pickImageSize(value: unknown): string {
   if (typeof value !== "string") return GPT_IMAGE_V11_DEFAULT_INPUTS.size
   const trimmed = value.trim()
-  return trimmed || GPT_IMAGE_V11_DEFAULT_INPUTS.size
+  if (trimmed === "2K" || trimmed === "4K") return trimmed
+  return "1K"
 }
 
 function pickUrlString(value: unknown): string {
@@ -240,65 +241,18 @@ function buildGptImageV11DifyInputs(inputs: unknown) {
   }
 }
 
-function getImageGatewayOrientation(aspectRatio: string): "square" | "landscape" | "portrait" {
-  const [width, height] = aspectRatio.split(":").map((part) => Number(part))
-  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return "square"
-  if (width > height) return "landscape"
-  if (height > width) return "portrait"
-  return "square"
-}
-
-function getImageGatewaySizeByTier(tier: "1K" | "2K" | "4K", aspectRatio: string): string {
-  const orientation = getImageGatewayOrientation(aspectRatio)
-  const sizeMap: Record<"1K" | "2K" | "4K", Record<"square" | "landscape" | "portrait", string>> = {
-    "1K": {
-      square: "1024x1024",
-      landscape: "1536x1024",
-      portrait: "1024x1536",
-    },
-    "2K": {
-      square: "2048x2048",
-      landscape: "2048x1152",
-      portrait: "1152x2048",
-    },
-    "4K": {
-      square: "2048x2048",
-      landscape: "3840x2160",
-      portrait: "2160x3840",
-    },
-  }
-  return sizeMap[tier][orientation]
-}
-
 function normalizeImageGatewaySize(inputs: GptImageV11Inputs): string {
   const size = inputs.size.trim()
-
-  if (/^\d+x\d+$/i.test(size)) return size
-
-  if (
-    inputs.mode === "image_edit" &&
-    size.startsWith("original_") &&
-    (inputs.reference_image_urls.length > 0 || inputs.reference_image_url)
-  ) {
-    return size
-  }
-
-  if (size === "4K" || size === "original_4k") return getImageGatewaySizeByTier("4K", inputs.aspect_ratio)
-  if (size === "2K" || size === "original_2k") return getImageGatewaySizeByTier("2K", inputs.aspect_ratio)
-
-  return getImageGatewaySizeByTier("1K", inputs.aspect_ratio)
+  if (size === "2K" || size === "4K") return size
+  return "1K"
 }
 
 function calculateGptImageGatewayCredits(inputs: GptImageV11Inputs): number {
-  const modelType = inputs.model as ModelType
-  if (modelType === "gpt-image-2") {
-    return calculateImage2Credits({
-      size: inputs.size,
-      quality: inputs.quality,
-      count: inputs.n,
-    })
-  }
-  return calculateActualCost(modelType) * inputs.n
+  return calculateImage2Credits({
+    size: inputs.size,
+    quality: inputs.quality,
+    count: inputs.n,
+  })
 }
 
 function getGptImageGatewayCreditsPerImage(inputs: GptImageV11Inputs): number {
@@ -501,8 +455,8 @@ function hasGptImageModelInput(inputs: unknown): boolean {
   return typeof rawModel === "string" && GPT_IMAGE_V11_ALLOWED.model.some((model) => model === rawModel)
 }
 
-function isGptImageGatewayModel(model: unknown): model is "gpt-image-2" | "gpt-image-1" {
-  return model === "gpt-image-2" || model === "gpt-image-1"
+function isGptImageGatewayModel(model: unknown): model is "gpt-image-2" {
+  return model === "gpt-image-2"
 }
 
 async function resolveActiveMembershipStatus(
@@ -663,6 +617,8 @@ const GPT_IMAGE_GATEWAY_TIMEOUT_MS = 540_000
 const GPT_IMAGE_ASYNC_TASK_MAX_AGE_MS = 30 * 60 * 1000
 const GPT_IMAGE_POLL_TOKEN_TTL_MS = GPT_IMAGE_ASYNC_TASK_MAX_AGE_MS + 5 * 60 * 1000
 const IMAGE_GATEWAY_URL = (process.env.DIFY_IMAGE_GATEWAY_URL || "http://dify-image-gateway:8001").replace(/\/+$/, "")
+const VIVAAPI_IMAGE_BASE_URL = (process.env.VIVAAPI_IMAGE_BASE_URL || "https://www.vivaapi.top").replace(/\/+$/, "")
+const VIVAAPI_IMAGE_MODEL = process.env.VIVAAPI_IMAGE_MODEL || "gpt-image-2-pro"
 const GEMINI_IMAGE_GATEWAY_URL = (process.env.GEMINI_IMAGE_GATEWAY_URL || "http://gemini-image-gateway:8002").replace(/\/+$/, "")
 // 🔥 作文批改（standard）使用专用的 ESSAY_CORRECTION_API_KEY
 const DEFAULT_DIFY_KEY = process.env.ESSAY_CORRECTION_API_KEY || process.env.DIFY_API_KEY 
@@ -1319,6 +1275,26 @@ function buildImageGatewayPayload(query: string, inputs: unknown) {
   }
 }
 
+function buildVivaApiImagePayload(query: string, inputs: unknown) {
+  const imageInputs = buildGptImageV11Inputs(inputs)
+  const referenceImages = imageInputs.reference_image_urls.length > 0
+    ? imageInputs.reference_image_urls
+    : imageInputs.reference_image_url
+      ? [imageInputs.reference_image_url]
+      : []
+
+  return {
+    model: VIVAAPI_IMAGE_MODEL,
+    prompt: query || "生成图片",
+    size: normalizeImageGatewaySize(imageInputs),
+    n: imageInputs.n,
+    ...(imageInputs.quality ? { quality: imageInputs.quality } : {}),
+    ...(imageInputs.output_format ? { response_format: "url" } : {}),
+    ...(referenceImages.length > 0 ? { reference_image_urls: referenceImages } : {}),
+    ...(imageInputs.mask_image_url ? { mask_image_url: imageInputs.mask_image_url } : {}),
+  }
+}
+
 function buildGeminiImageGatewayPayload(query: string, inputs: unknown) {
   const imageInputs = buildGeminiImageGatewayInputs(inputs)
 
@@ -1371,6 +1347,33 @@ function createImageGatewayResponse(payload: unknown) {
         text: answer,
         image_urls: imageUrls,
         images: imageUrls.map((url) => ({ type: "image", url })),
+      },
+    },
+  })
+}
+
+function createVivaApiImageResponse(payload: unknown) {
+  const imageUrls = extractWorkflowImageUrls(payload)
+  const answer = ["图片生成成功", ...imageUrls.map((url) => `![Generated Image](${url})`)].join("\n\n")
+
+  console.log("[VivaAPI Image] response", {
+    imageCount: imageUrls.length,
+  })
+
+  if (imageUrls.length === 0) {
+    return Response.json({ error: "图片服务未返回图片链接", code: "VIVAAPI_IMAGE_EMPTY_RESULT" }, { status: 502 })
+  }
+
+  return Response.json({
+    answer,
+    data: {
+      status: "succeeded",
+      outputs: {
+        provider: "vivaapi",
+        text: answer,
+        image_urls: imageUrls,
+        images: imageUrls.map((url) => ({ type: "image", url })),
+        raw: payload,
       },
     },
   })
@@ -1449,7 +1452,7 @@ async function chargeImageGatewayCredits(params: {
     imageSize: params.inputs.size,
     modelId: params.billingModel,
     keySource: params.keySource,
-    gatewayName: "dify-image-gateway",
+    gatewayName: process.env.VIVAAPI_IMAGE_API_KEY ? "vivaapi-image" : "dify-image-gateway",
     feature: params.billingModel === "gpt-image-2" ? "image2" : "image",
     requestId: params.requestId,
     conversationId: params.conversationId || null,
@@ -1457,16 +1460,19 @@ async function chargeImageGatewayCredits(params: {
     rawProviderMetadata: {
       imageQuality: params.inputs.quality,
       inputs: params.inputs,
+      provider: process.env.VIVAAPI_IMAGE_API_KEY ? "vivaapi" : "dify-image-gateway",
     },
   })
 }
 
 async function callImageGatewayDirect(query: string, inputs: unknown) {
-  const gatewayToken = process.env.DIFY_IMAGE_GATEWAY_TOKEN || ""
+  const gatewayToken = process.env.VIVAAPI_IMAGE_API_KEY || process.env.DIFY_IMAGE_GATEWAY_TOKEN || ""
+  const gatewayBaseUrl = process.env.VIVAAPI_IMAGE_API_KEY ? VIVAAPI_IMAGE_BASE_URL : IMAGE_GATEWAY_URL
+  const gatewayPath = process.env.VIVAAPI_IMAGE_API_KEY ? "/v1/images/generations" : "/api/image/unified"
   const timeout = createTimeoutSignal(GPT_IMAGE_GATEWAY_TIMEOUT_MS)
 
   try {
-    const response = await internalDifyFetch(`${IMAGE_GATEWAY_URL}/api/image/unified`, {
+    const response = await internalDifyFetch(`${gatewayBaseUrl}${gatewayPath}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -1477,7 +1483,10 @@ async function callImageGatewayDirect(query: string, inputs: unknown) {
             }
           : {}),
       },
-      body: JSON.stringify(buildImageGatewayPayload(query, inputs)),
+      body: JSON.stringify(process.env.VIVAAPI_IMAGE_API_KEY
+        ? buildVivaApiImagePayload(query, inputs)
+        : buildImageGatewayPayload(query, inputs)
+      ),
       signal: timeout.signal,
     })
 
@@ -1495,7 +1504,9 @@ async function callImageGatewayDirect(query: string, inputs: unknown) {
       return Response.json({ error: message, code: "IMAGE_GATEWAY_HTTP_ERROR" }, { status: response.status })
     }
 
-    return createImageGatewayResponse(payload)
+    return process.env.VIVAAPI_IMAGE_API_KEY
+      ? createVivaApiImageResponse(payload)
+      : createImageGatewayResponse(payload)
   } catch (error) {
     const err = error instanceof Error ? error : null
     if (err?.name === "AbortError") {
@@ -2247,7 +2258,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (isGptImageGatewayRequest) {
-      console.log("🎨 [GPT Image] 使用直连图片网关，绕过 Dify chatflow")
+      console.log("🎨 [GPT Image] 使用 VivaAPI 图片通道，绕过 Dify chatflow")
       const imageInputs = imageInputsForBilling || buildGptImageV11Inputs(inputs)
       const imageBillingModel = (billingModelType || "gpt-image-2") as ModelType
 
@@ -2257,7 +2268,7 @@ export async function POST(request: NextRequest) {
         progress: 35,
       })
 
-      if (async_image_task === true) {
+      if (async_image_task === true && !process.env.VIVAAPI_IMAGE_API_KEY) {
         const { charged } = await chargeImageGatewayCredits({
           userId,
           amount: estimatedMinCost,

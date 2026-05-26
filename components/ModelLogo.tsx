@@ -50,7 +50,6 @@ export type ModelKey =
   | "suno-v5"
   | "banana"
   | "gpt-image-2"
-  | "gpt-image-1"
   | "ai-writing-paper"
   | "zhongying-essay"
   | "reading-report"
@@ -211,11 +210,6 @@ const MODEL_LOGOS: Record<ModelKey, ModelLogoConfig> = {
     brandColor: "#10A37F",
   },
   "gpt-image-2": {
-    svgPath: "/logos/chatgpt-icon.svg",
-    useLocal: true,
-    brandColor: "#10A37F",
-  },
-  "gpt-image-1": {
     svgPath: "/logos/chatgpt-icon.svg",
     useLocal: true,
     brandColor: "#10A37F",

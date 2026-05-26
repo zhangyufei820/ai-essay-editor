@@ -18,7 +18,7 @@ describe("GPT Image V11 parameter mapping", () => {
       mode: "image_generate",
       model: "gpt-image-2",
       aspect_ratio: "1:1",
-      size: "2048x2048",
+      size: "1K",
       quality: "low",
       output_format: "png",
       output_compression: 100,
@@ -47,7 +47,7 @@ describe("GPT Image V11 parameter mapping", () => {
       mode: "image_edit",
       model: "gpt-image-2",
       aspect_ratio: "auto",
-      size: "original_4k",
+      size: "1K",
       reference_image_url: "http://gateway/ref.png",
       reference_image_urls: ["http://gateway/ref.png"],
       mask_image_url: "http://gateway/mask.png",
@@ -125,8 +125,11 @@ describe("GPT Image V11 parameter mapping", () => {
     const routeSource = require("fs").readFileSync(require("path").join(process.cwd(), "app/api/dify-chat/route.ts"), "utf8")
 
     expect(routeSource).toContain("function normalizeImageGatewaySize")
-    expect(routeSource).toContain('if (size === "2K" || size === "original_2k") return getImageGatewaySizeByTier("2K", inputs.aspect_ratio)')
-    expect(routeSource).toContain("size: gatewaySize")
+    expect(routeSource).toContain('if (size === "2K" || size === "4K") return size')
+    expect(routeSource).toContain("VIVAAPI_IMAGE_BASE_URL")
+    expect(routeSource).toContain("/v1/images/generations")
+    expect(routeSource).toContain("buildVivaApiImagePayload")
+    expect(routeSource).not.toContain("getImageGatewaySizeByTier")
     expect(routeSource).not.toContain("size: imageInputs.size,")
   })
 })

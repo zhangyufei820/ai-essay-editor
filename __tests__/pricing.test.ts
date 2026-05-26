@@ -14,9 +14,6 @@ import {
   getMaxOutputTokensForModel,
   getMediaBillingConfig,
   getMinimumRequiredCredits,
-  IMAGE_1_5_CREDITS,
-  IMAGE_1_CREDITS,
-  IMAGE_1_MINI_CREDITS,
   IMAGE2_CREDITS,
   GEMINI_IMAGE_CREDITS,
   SUNO_BASE_CREDITS,
@@ -229,15 +226,9 @@ describe('统一计费配置', () => {
 
   it('keeps multimedia fixed charges in the same backend config path', () => {
     expect(IMAGE2_CREDITS).toBe(20)
-    expect(IMAGE_1_5_CREDITS).toBe(200)
-    expect(IMAGE_1_CREDITS).toBe(150)
-    expect(IMAGE_1_MINI_CREDITS).toBe(80)
     expect(GEMINI_IMAGE_CREDITS).toBe(165)
     expect(SUNO_BASE_CREDITS).toBe(100)
     expect(calculateActualCost('gpt-image-2')).toBe(20)
-    expect(calculateActualCost('gpt-image-1.5')).toBe(200)
-    expect(calculateActualCost('gpt-image-1')).toBe(150)
-    expect(calculateActualCost('gpt-image-1-mini')).toBe(80)
     expect(calculateActualCost('gemini-image')).toBe(0)
     expect(calculateActualCost('suno-v5')).toBe(100)
     expect(calculateActualCost('suno-v5', { inputTokens: 1000, outputTokens: 1000 }, { hasOutputContent: true })).toBe(125)

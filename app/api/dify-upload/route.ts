@@ -154,7 +154,7 @@ function buildModelAccessibleImageUrl(request: NextRequest, gatewayUrl: string):
 }
 
 function shouldUseImageGateway(model: string | null) {
-  return model === "gpt-image-2" || model === "gpt-image-1" || model === "gemini-image"
+  return model === "gpt-image-2" || model === "gemini-image"
 }
 
 function isHeicLikeFile(file: File, ext?: string) {

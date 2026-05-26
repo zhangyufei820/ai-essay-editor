@@ -185,20 +185,11 @@ export const AGENT_REGISTRY: Record<string, AgentDefinition> = {
   "gpt-image-2": {
     model: "gpt-image-2",
     name: "GPT Image 2",
-    description: "高质量 4K 图像生成与修图",
+    description: "1K / 2K / 4K 图像生成与修图",
     group: "creative",
     artifactType: "markdown",
-    priceLabel: "10-55 积分/张",
+    priceLabel: "20-55 积分/张",
     memberOnly: true,
-    icon: ImageIcon,
-  },
-  "gpt-image-1": {
-    model: "gpt-image-1",
-    name: "GPT Image 1",
-    description: "标准图像生成",
-    group: "creative",
-    artifactType: "markdown",
-    priceLabel: "150 积分/张",
     icon: ImageIcon,
   },
   "all-in-one-agent": {

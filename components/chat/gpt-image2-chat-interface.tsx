@@ -50,7 +50,6 @@ import {
   clampCompression,
   clampImageCount,
   extractImageUrlsFromDifyResult,
-  getAspectRatioForSize,
   getPublicGeneratedImageDownloadUrl,
   proxifyGeneratedImageDownloadUrl,
   proxifyGeneratedImageUrl,
@@ -117,9 +116,9 @@ const WORKSPACE_COPY: Record<ImageWorkspaceModel, {
 }> = {
   "gpt-image-2": {
     title: "图像生成 / 图像编辑",
-    subtitle: "V11 Reference URL 工作流",
+    subtitle: "VivaAPI GPT Image 2",
     heroTitle: "AI 图像工作台",
-    heroDescription: "支持文生图与上传图片编辑。日常推荐 gpt-image-1 + 1024×1024 + medium；需要 4K 或高质量作品时，选择 gpt-image-2，并使用 3840×2160 或 2160×3840。图片编辑时，上传原图后系统会自动完成安全处理。",
+    heroDescription: "使用 GPT Image 2 生成或编辑图片，支持 1K、2K、4K 三档尺寸。图片编辑时，上传原图后系统会自动完成安全处理。",
     resultTitle: "结果展示",
     loadingLabel: "正在生成更细致的图像，请稍候。",
     saveTitle: "图像生成",
@@ -854,7 +853,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
     if (nextMode === "image_edit") {
       setModel(isGeminiWorkspace ? "gemini-3.1-flash-image-preview" : "gpt-image-2")
       setAspectRatio(isGeminiWorkspace ? "1:1" : "auto")
-      setSize(isGeminiWorkspace ? "1K" : isBananaWorkspace ? "1024x1024" : "original_4k")
+      setSize(isGeminiWorkspace ? "1K" : isBananaWorkspace ? "1024x1024" : "1K")
       setQuality("medium")
       setOutputFormat("png")
       setOutputCompression(100)
@@ -875,9 +874,6 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
     }
 
     setSize(nextSize)
-    const derivedRatio = getAspectRatioForSize(nextSize)
-    if (derivedRatio) setAspectRatio(derivedRatio)
-
   }
 
   const applyAspectRatio = (nextRatio: ImageAspectRatio) => {
@@ -1141,8 +1137,8 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
       return
     }
 
-    if ((size === "3840x2160" || size === "2160x3840" || size === "original_4k") && quality === "high") {
-      toast.info("4K 高质量生成可能耗时较长，请耐心等待。")
+    if (size === "4K" && quality === "high") {
+      toast.info("4K 生成可能耗时较长，请耐心等待。")
     }
 
 	    setIsSubmitting(true)
@@ -1204,7 +1200,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
           model: workspaceModel,
           mode: "image",
           imageSize: isBananaWorkspace ? resolveBananaImageSize(size, aspectRatio) : undefined,
-          async_image_task: workspaceModel === "gpt-image-2",
+          async_image_task: false,
           requestId,
         }),
       })

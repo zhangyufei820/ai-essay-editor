@@ -32,7 +32,6 @@ const AGENT_TO_MODEL: Record<string, ModelType> = {
   "school-wechat": "school-wechat",
   "banana-2-pro": "banana-2-pro",
   "gpt-image-2": "gpt-image-2",
-  "gpt-image-1": "gpt-image-1",
 }
 
 const TEACHER_SHARE_CODE_PATTERN = /^[a-zA-Z0-9]{6,32}$/

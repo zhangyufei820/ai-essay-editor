@@ -1,6 +1,6 @@
 export type ImageTaskMode = "image_generate" | "image_edit"
 export type GeminiImageModel = "gemini-3.1-flash-image-preview" | "gemini-3-pro-image-preview"
-export type GptImageModel = "gpt-image-2" | "gpt-image-1.5" | "gpt-image-1" | "gpt-image-1-mini" | GeminiImageModel
+export type GptImageModel = "gpt-image-2" | GeminiImageModel
 export type ImageAspectRatio =
   | "auto"
   | "1:1"
@@ -76,10 +76,7 @@ export const MODE_OPTIONS: Option<ImageTaskMode>[] = [
 ]
 
 export const MODEL_OPTIONS: Option<GptImageModel>[] = [
-  { label: "GPT Image 2｜最高质量，支持 2K / 4K", value: "gpt-image-2" },
-  { label: "GPT Image 1.5｜质量与速度折中", value: "gpt-image-1.5" },
-  { label: "GPT Image 1｜默认推荐，稳定经济", value: "gpt-image-1" },
-  { label: "GPT Image 1 Mini｜快速测试，低成本", value: "gpt-image-1-mini" },
+  { label: "GPT Image 2｜支持 1K / 2K / 4K", value: "gpt-image-2" },
 ]
 
 export const GEMINI_MODEL_OPTIONS: Option<GeminiImageModel>[] = [
@@ -121,18 +118,9 @@ export const GEMINI_ASPECT_RATIO_OPTIONS: Option<ImageAspectRatio>[] = [
 ]
 
 export const SIZE_OPTIONS: Option<ImageSize>[] = [
-  { label: "自动选择", value: "auto" },
-  { label: "保持原图比例，标准清晰度｜图片编辑专用", value: "original_1k", editOnly: true },
-  { label: "保持原图比例，2K｜图片编辑专用", value: "original_2k", editOnly: true },
-  { label: "保持原图比例，4K｜仅推荐 GPT Image 2，图片编辑专用", value: "original_4k", editOnly: true },
-  { label: "标准正方形 1024×1024", value: "1024x1024" },
-  { label: "标准横图 1536×1024", value: "1536x1024" },
-  { label: "标准竖图 1024×1536", value: "1024x1536" },
-  { label: "2K 正方形 2048×2048", value: "2048x2048" },
-  { label: "2K 横图 2048×1152", value: "2048x1152" },
-  { label: "2K 竖图 1152×2048", value: "1152x2048" },
-  { label: "4K 横图 3840×2160", value: "3840x2160" },
-  { label: "4K 竖图 2160×3840", value: "2160x3840" },
+  { label: "1K", value: "1K", description: "标准生成" },
+  { label: "2K", value: "2K", description: "高清生成" },
+  { label: "4K", value: "4K", description: "高质量大图" },
 ]
 
 export const GEMINI_IMAGE_SIZE_OPTIONS: Option<ImageSize>[] = [
@@ -172,7 +160,7 @@ export const DEFAULT_IMAGE_INPUTS: GptImageInputs = {
   mode: "image_generate",
   model: "gpt-image-2",
   aspect_ratio: "1:1",
-  size: "2048x2048",
+  size: "1K",
   quality: "low",
   output_format: "png",
   output_compression: 100,
@@ -189,7 +177,7 @@ export const EDIT_MODE_DEFAULTS: GptImageInputs = {
   mode: "image_edit",
   model: "gpt-image-2",
   aspect_ratio: "auto",
-  size: "original_4k",
+  size: "1K",
   quality: "low",
   output_format: "png",
   output_compression: 100,
@@ -226,6 +214,9 @@ export const GEMINI_IMAGE_EDIT_DEFAULTS: GptImageInputs = {
 }
 
 const SIZE_TO_RATIO: Partial<Record<ImageSize, ImageAspectRatio>> = {
+  "1K": "1:1",
+  "2K": "1:1",
+  "4K": "1:1",
   "1024x1024": "1:1",
   "2048x2048": "1:1",
   "1536x1024": "16:9",

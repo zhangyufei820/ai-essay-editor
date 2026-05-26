@@ -39,7 +39,6 @@ export function getDifyCredentialForModel(
     case "banana-2-pro":
       return selectCredential(env.DIFY_BANANA_API_KEY, "DIFY_BANANA_API_KEY", defaultCredential)
     case "gpt-image-2":
-    case "gpt-image-1":
       return selectCredential(env.DIFY_GPT_IMAGE_API_KEY, "DIFY_GPT_IMAGE_API_KEY", defaultCredential)
     case "grok-4.2":
       return selectCredential(env.DIFY_API_KEY_GROK42, "DIFY_API_KEY_GROK42", defaultCredential)

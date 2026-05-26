@@ -12,11 +12,12 @@ describe('image generation config', () => {
     expect(config.chatRoute).toBe(GPT_IMAGE_2_CHAT_ROUTE)
     expect(config.modes.map((mode) => mode.key)).toEqual(['text-to-image', 'image-edit'])
     expect(config.defaultSizeValue).toBe('1-1-standard')
-    expect(config.sizeOptions).toHaveLength(28)
-    expect(config.sizeOptions.find((size) => size.value === '16-9-4k-experimental')).toMatchObject({
-      ratio: '16:9',
+    expect(config.sizeOptions).toHaveLength(3)
+    expect(config.sizeOptions.map((size) => size.apiValue)).toEqual(['1K', '2K', '4K'])
+    expect(config.sizeOptions.find((size) => size.value === '1-1-4k-experimental')).toMatchObject({
+      ratio: '1:1',
       tier: '4k-experimental',
-      apiValue: '3840x2160',
+      apiValue: '4K',
     })
     expect(config.modes.some((mode) => mode.key === config.defaultModeKey)).toBe(true)
     expect(config.sizeOptions.some((size) => size.value === config.defaultSizeValue)).toBe(true)

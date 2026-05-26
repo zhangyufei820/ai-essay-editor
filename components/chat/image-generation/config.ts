@@ -19,7 +19,8 @@ function createSizeOption(
   ratio: string,
   tier: ImageResolutionTier,
   width: number,
-  height: number
+  height: number,
+  apiValue = `${width}x${height}`
 ): ImageSizeOption {
   return {
     label: ratio,
@@ -29,39 +30,14 @@ function createSizeOption(
     tierLabel: SIZE_TIER_LABELS[tier],
     width,
     height,
-    apiValue: `${width}x${height}`,
+    apiValue,
   }
 }
 
 const GPT_IMAGE_2_SIZE_OPTIONS = [
-  createSizeOption('1:1', 'standard', 1024, 1024),
-  createSizeOption('1:1', 'hd', 1536, 1536),
-  createSizeOption('1:1', '2k', 2048, 2048),
-  createSizeOption('1:1', '4k-experimental', 3072, 3072),
-  createSizeOption('4:3', 'standard', 1024, 768),
-  createSizeOption('4:3', 'hd', 1440, 1080),
-  createSizeOption('4:3', '2k', 2048, 1536),
-  createSizeOption('4:3', '4k-experimental', 2880, 2160),
-  createSizeOption('3:2', 'standard', 1152, 768),
-  createSizeOption('3:2', 'hd', 1620, 1080),
-  createSizeOption('3:2', '2k', 2304, 1536),
-  createSizeOption('3:2', '4k-experimental', 3240, 2160),
-  createSizeOption('16:9', 'standard', 1024, 576),
-  createSizeOption('16:9', 'hd', 1920, 1080),
-  createSizeOption('16:9', '2k', 2560, 1440),
-  createSizeOption('16:9', '4k-experimental', 3840, 2160),
-  createSizeOption('9:16', 'standard', 576, 1024),
-  createSizeOption('9:16', 'hd', 1080, 1920),
-  createSizeOption('9:16', '2k', 1440, 2560),
-  createSizeOption('9:16', '4k-experimental', 2160, 3840),
-  createSizeOption('2:3', 'standard', 768, 1152),
-  createSizeOption('2:3', 'hd', 1080, 1620),
-  createSizeOption('2:3', '2k', 1536, 2304),
-  createSizeOption('2:3', '4k-experimental', 2160, 3240),
-  createSizeOption('3:4', 'standard', 768, 1024),
-  createSizeOption('3:4', 'hd', 1080, 1440),
-  createSizeOption('3:4', '2k', 1536, 2048),
-  createSizeOption('3:4', '4k-experimental', 2160, 2880),
+  createSizeOption('1:1', 'standard', 1024, 1024, '1K'),
+  createSizeOption('1:1', '2k', 2048, 2048, '2K'),
+  createSizeOption('1:1', '4k-experimental', 3840, 3840, '4K'),
 ]
 
 const GEMINI_SIZE_OPTIONS = [
