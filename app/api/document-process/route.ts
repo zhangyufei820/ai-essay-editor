@@ -28,6 +28,14 @@ export async function POST(req: NextRequest) {
   const originRejection = rejectUntrustedOrigin(req)
   if (originRejection) return originRejection
 
+  const contentType = req.headers.get("content-type") || ""
+  if (!contentType.toLowerCase().includes("multipart/form-data")) {
+    return NextResponse.json(
+      { error: "请使用 multipart/form-data 上传文件", code: "DOCUMENT_FILE_REQUIRED" },
+      { status: 400 },
+    )
+  }
+
   const ip = getClientIP(req)
   const limitResult = checkIpRateLimit(ip, 30)
   if (!limitResult.allowed) {
@@ -35,11 +43,23 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const formData = await req.formData()
+    let formData: FormData
+    try {
+      formData = await req.formData()
+    } catch {
+      return NextResponse.json(
+        { error: "上传表单格式无效，请重新选择文件后提交", code: "INVALID_MULTIPART_FORM" },
+        { status: 400 },
+      )
+    }
+
     const file = formData.get("file")
 
     if (!(file instanceof File)) {
-      return NextResponse.json({ error: "未上传文件" }, { status: 400 })
+      return NextResponse.json(
+        { error: "未上传文件", code: "DOCUMENT_FILE_REQUIRED" },
+        { status: 400 },
+      )
     }
 
     const body = isTextLike(file)
