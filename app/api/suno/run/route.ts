@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireUser } from "@/lib/auth/verified-user"
+import { getUserEntitlementSummary } from "@/lib/user-entitlements"
 import { createSunoDifyClient } from "@/lib/suno-dify-client"
 import {
   chargeSunoBaseCredits,
@@ -62,6 +63,12 @@ export async function POST(request: NextRequest) {
   try {
     const auth = await requireUser(request)
     if (auth.response) return auth.response
+    const entitlement = await getUserEntitlementSummary(auth.user!.id, {
+      email: auth.user!.email || null,
+      phone: auth.user!.phone || null,
+      metadata: auth.user!.metadata || null,
+    })
+    const realCreditUserId = entitlement?.entitlementUserId || auth.user!.id
 
     const { values, file } = await parseRequest(request)
     const operation = String(values.operation || "")
@@ -90,7 +97,7 @@ export async function POST(request: NextRequest) {
 
     const billableOperation = SUNO_COST_OPERATIONS.has(operation as SunoOperation)
     if (billableOperation) {
-      const creditGuard = await ensureSunoCredits(auth.user!.id)
+      const creditGuard = await ensureSunoCredits(auth.user!.id, { realCreditUserId })
       if (creditGuard) return creditGuard
     }
 
@@ -113,6 +120,7 @@ export async function POST(request: NextRequest) {
       const description = createSunoChargeDescription(operation)
       const charged = await chargeSunoBaseCredits({
         userId: auth.user!.id,
+        realCreditUserId,
         operation,
         description,
         referenceId,
@@ -128,6 +136,7 @@ export async function POST(request: NextRequest) {
       }
       await chargeSunoTokenUsageIfPresent({
         userId: auth.user!.id,
+        realCreditUserId,
         operation,
         providerPayload: result.response_json || result,
         referenceId,

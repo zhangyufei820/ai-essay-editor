@@ -28,10 +28,22 @@ describe("suno billing", () => {
     chargeCreditsSafely.mockResolvedValue(true)
   })
 
-  it("returns survey-required credit guard response", async () => {
+  it("lets real credits pass the survey-gated trial guard", async () => {
     canUseTrialCredits.mockResolvedValueOnce({
       data: { blocked: true, reason: "survey_required", remainingToday: 2000 },
     })
+    const { ensureSunoCredits } = await import("@/lib/suno-billing")
+
+    const response = await ensureSunoCredits("user-1")
+
+    expect(response).toBeNull()
+  })
+
+  it("returns survey-required credit guard response when real credits are insufficient", async () => {
+    canUseTrialCredits.mockResolvedValueOnce({
+      data: { blocked: true, reason: "survey_required", remainingToday: 2000 },
+    })
+    getUserCredits.mockResolvedValueOnce({ credits: 0 })
     const { ensureSunoCredits } = await import("@/lib/suno-billing")
 
     const response = await ensureSunoCredits("user-1")
@@ -64,6 +76,7 @@ describe("suno billing", () => {
         modelId: "suno-v5",
         chargedCredits: 100,
       }),
+      {},
     )
   })
 
@@ -102,6 +115,7 @@ describe("suno billing", () => {
         completionTokens: 1000,
         totalTokens: 2000,
       }),
+      {},
     )
   })
 })

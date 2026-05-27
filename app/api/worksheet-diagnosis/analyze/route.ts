@@ -8,6 +8,7 @@ import { getDifyCredentialForModel } from "@/lib/dify-credentials"
 import { runDifyWorkflow } from "@/lib/dify-workflow-client"
 import { getClientIP, checkIpRateLimit, createRateLimitResponse } from "@/lib/rate-limit"
 import { canUseTrialCredits } from "@/lib/trial-credits"
+import { getUserEntitlementSummary } from "@/lib/user-entitlements"
 import {
   WorksheetDiagnosisRequestSchema,
   buildWorksheetDiagnosisInputs,
@@ -112,6 +113,12 @@ export async function POST(request: NextRequest) {
   const auth = await requireUser(request)
   if (auth.response) return auth.response
   userIdForRefund = auth.user!.id
+  const entitlement = await getUserEntitlementSummary(auth.user!.id, {
+    email: auth.user!.email || null,
+    phone: auth.user!.phone || null,
+    metadata: auth.user!.metadata || null,
+  })
+  const realCreditUserId = entitlement?.entitlementUserId || auth.user!.id
 
   try {
     const json = await request.json()
@@ -159,23 +166,6 @@ export async function POST(request: NextRequest) {
     })
 
     const trialPrecheck = await canUseTrialCredits(auth.user!.id, chargedCredits)
-    if (trialPrecheck.data?.blocked && trialPrecheck.data.reason === "survey_required") {
-      return NextResponse.json(
-        {
-          error: "请先完成今日问卷，解锁免费体验额度",
-          code: "SURVEY_REQUIRED",
-          surveyRequired: true,
-          billing: {
-            trialUsed: 0,
-            realCreditsUsed: 0,
-            remainingToday: trialPrecheck.data.remainingToday,
-            surveyRequired: true,
-          },
-        },
-        { status: 402, headers: { "X-Request-Id": requestId } },
-      )
-    }
-
     const wasCharged = await chargeCreditsSafely(
       auth.user!.id,
       chargedCredits,
@@ -183,9 +173,27 @@ export async function POST(request: NextRequest) {
       `错题诊断：${parsed.data.images.length} 张试卷图片`,
       requestId,
       billingMetadata,
+      { realCreditUserId },
     )
 
     if (!wasCharged) {
+      if (trialPrecheck.data?.blocked && trialPrecheck.data.reason === "survey_required") {
+        return NextResponse.json(
+          {
+            error: "请先完成今日问卷，解锁免费体验额度",
+            code: "SURVEY_REQUIRED",
+            surveyRequired: true,
+            billing: {
+              trialUsed: 0,
+              realCreditsUsed: 0,
+              remainingToday: trialPrecheck.data.remainingToday,
+              surveyRequired: true,
+            },
+          },
+          { status: 402, headers: { "X-Request-Id": requestId } },
+        )
+      }
+
       return NextResponse.json(
         {
           error: `当前积分不足，本次诊断需要 ${chargedCredits} 积分。`,

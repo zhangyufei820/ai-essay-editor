@@ -12,9 +12,17 @@ import { canUseTrialCredits } from "@/lib/trial-credits"
 const SUNO_MODEL = "suno-v5" as const
 const SUNO_APP_ID = "SUNO_SERVER_GATEWAY_WORKFLOW"
 
-export async function ensureSunoCredits(userId: string) {
+export async function ensureSunoCredits(userId: string, options: { realCreditUserId?: string } = {}) {
+  const realCreditUserId = options.realCreditUserId || userId
   const trialPrecheck = await canUseTrialCredits(userId, SUNO_BASE_CREDITS)
-  if (trialPrecheck.data?.blocked && trialPrecheck.data.reason === "survey_required") {
+  const userCredits = await getUserCredits(realCreditUserId)
+  const availableTrialForMinimum = trialPrecheck.data?.trialUsedAvailable || 0
+
+  if (
+    trialPrecheck.data?.blocked &&
+    trialPrecheck.data.reason === "survey_required" &&
+    (!userCredits || userCredits.credits < SUNO_BASE_CREDITS)
+  ) {
     return NextResponse.json({
       error: "请先完成今日问卷，解锁免费体验额度",
       message: "填写 90 秒问卷后，即可解锁今日 2000 trial 积分。",
@@ -29,8 +37,6 @@ export async function ensureSunoCredits(userId: string) {
     }, { status: 402 })
   }
 
-  const userCredits = await getUserCredits(userId)
-  const availableTrialForMinimum = trialPrecheck.data?.trialUsedAvailable || 0
   if (!userCredits || userCredits.credits + availableTrialForMinimum < SUNO_BASE_CREDITS) {
     return NextResponse.json({
       error: "当前积分不足",
@@ -51,6 +57,7 @@ export function createSunoChargeDescription(operation: string) {
 
 export async function chargeSunoBaseCredits(params: {
   userId: string
+  realCreditUserId?: string
   operation: string
   description?: string
   referenceId?: string | null
@@ -91,6 +98,7 @@ export async function chargeSunoBaseCredits(params: {
       },
       description,
     }),
+    { realCreditUserId: params.realCreditUserId },
   )
 }
 
@@ -147,6 +155,7 @@ function hasExplicitDifyUsage(usage: ParsedDifyUsage) {
 
 export async function chargeSunoTokenUsageIfPresent(params: {
   userId: string
+  realCreditUserId?: string
   operation: string
   providerPayload: unknown
   referenceId?: string | null
@@ -212,6 +221,7 @@ export async function chargeSunoTokenUsageIfPresent(params: {
     description,
     params.referenceId || params.requestId || undefined,
     billingMetadata,
+    { realCreditUserId: params.realCreditUserId },
   )
 
   if (!success) {
