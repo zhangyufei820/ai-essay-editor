@@ -121,7 +121,7 @@ const GEMINI_IMAGE_GATEWAY_DEFAULT_INPUTS: GeminiImageGatewayInputs = {
 const GEMINI_IMAGE_GATEWAY_ALLOWED = {
   aspect_ratio: ["auto", "1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9", "4:1", "1:4", "8:1", "1:8"],
   image_size: ["auto", "512", "1K", "2K", "4K"],
-  model: ["gemini-3.1-flash-image-preview", "gemini-3-pro-image-preview"],
+  model: ["gemini-3.1-flash-image-preview"],
   mode: ["image_generate", "image_edit"],
 } as const
 
@@ -601,6 +601,11 @@ function isDifyCredentialInvalidResponse(status: number, body: string) {
 function getDifyCredentialInvalidMessage(model: string | null | undefined, keySource: string) {
   const label = "Dify 工作流"
   return `${label}凭据失效，请管理员在服务器环境变量 ${keySource || "DIFY_API_KEY"} 中配置有效的 Dify 应用 API Key。`
+}
+
+function getDifyAppModeMismatchMessage(model: string | null | undefined, keySource: string, expectedMode: string, actualMode: string | null) {
+  const label = model === "vocab-card" ? "词境记忆卡" : getModelDisplayName(model as ModelType) || model || "Dify 应用"
+  return `${label}服务配置错误：${keySource} 当前绑定的 Dify app mode 是 ${actualMode || "unknown"}，但此功能需要 ${expectedMode}。请在生产环境变量中绑定正确的 Dify 应用 Key。`
 }
 
 function nowMs() {
@@ -1199,6 +1204,32 @@ async function shouldRetryDifyWithNewConversation(response: Response, conversati
   return isConversationError
 }
 
+const DIFY_APP_INFO_CACHE = new Map<string, { mode: string | null; name: string | null; checkedAt: number }>()
+const DIFY_APP_INFO_CACHE_TTL_MS = 5 * 60 * 1000
+
+async function getDifyAppInfo(baseUrl: string, credential: string, cacheKey: string) {
+  const cached = DIFY_APP_INFO_CACHE.get(cacheKey)
+  if (cached && Date.now() - cached.checkedAt < DIFY_APP_INFO_CACHE_TTL_MS) return cached
+
+  const response = await internalDifyFetch(`${baseUrl}/info`, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${credential}` },
+    cache: "no-store",
+  })
+  if (!response.ok) {
+    return { mode: null, name: null, checkedAt: Date.now() }
+  }
+
+  const payload = await response.json().catch(() => ({}))
+  const info = {
+    mode: typeof payload?.mode === "string" ? payload.mode : null,
+    name: typeof payload?.name === "string" ? payload.name : null,
+    checkedAt: Date.now(),
+  }
+  DIFY_APP_INFO_CACHE.set(cacheKey, info)
+  return info
+}
+
 function createTimeoutSignal(timeoutMs: number) {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), timeoutMs)
@@ -1308,6 +1339,27 @@ function createImageGatewayResponse(payload: unknown) {
       },
     },
   })
+}
+
+function createProviderTaskResponseFromStoredResult(payload: unknown) {
+  const record = payload && typeof payload === "object" ? payload as Record<string, unknown> : {}
+  if (record.ok === false) {
+    const statusCode = typeof record.status === "number" && record.status >= 400 ? record.status : 502
+    const errorPayload = record.payload && typeof record.payload === "object" ? record.payload as Record<string, unknown> : {}
+    const message = sanitizeUpstreamErrorText(
+      typeof errorPayload.message === "string"
+        ? errorPayload.message
+        : typeof errorPayload.error === "string"
+          ? errorPayload.error
+          : typeof record.text === "string"
+            ? record.text
+            : "",
+      "图片服务请求失败，请稍后重试。",
+    )
+    return Response.json({ error: message, code: "IMAGE_GATEWAY_HTTP_ERROR" }, { status: statusCode })
+  }
+
+  return createVivaApiImageResponse(record.payload || payload)
 }
 
 function createVivaApiImageResponse(payload: unknown) {
@@ -1600,6 +1652,116 @@ async function startImageGatewayTask(params: {
   return taskId
 }
 
+async function startVivaApiImageTask(params: {
+  query: string
+  inputs: unknown
+  requestId: string
+  traceId: string
+}) {
+  await updateTaskRun(params.requestId, {
+    status: "running",
+    stage: "VivaAPI 图片任务已提交，等待生成结果",
+    progress: 15,
+    upstreamTaskId: params.requestId,
+    metadata: {
+      provider: "vivaapi",
+      gateway_status: "submitted",
+    },
+  })
+
+  fireAndForget("VivaAPI Image Task", (async () => {
+    const startedAt = Date.now()
+    const gatewayToken = process.env.VIVAAPI_IMAGE_API_KEY || ""
+    const timeout = createTimeoutSignal(GPT_IMAGE_GATEWAY_TIMEOUT_MS)
+
+    try {
+      const response = await internalDifyFetch(`${VIVAAPI_IMAGE_BASE_URL}/v1/images/generations`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(gatewayToken
+            ? {
+                "x-gateway-token": gatewayToken,
+                Authorization: `Bearer ${gatewayToken}`,
+              }
+            : {}),
+        },
+        body: JSON.stringify(buildVivaApiImagePayload(params.query, params.inputs)),
+        signal: timeout.signal,
+      })
+
+      const text = await response.text()
+      const payload = safeJsonParse(text) || { message: sanitizeUpstreamErrorText(text), raw: text }
+      const storedResult = response.ok
+        ? { ok: true, payload }
+        : { ok: false, status: response.status, payload, text: sanitizeUpstreamErrorText(text) }
+      const wrappedResponse = createProviderTaskResponseFromStoredResult(storedResult)
+      const wrappedPayload = await wrappedResponse.json().catch(() => ({}))
+
+      if (!response.ok || !wrappedResponse.ok) {
+        await updateTaskRun(params.requestId, {
+          status: "failed",
+          stage: "图片生成失败",
+          progress: 100,
+          upstreamTaskId: params.requestId,
+          errorMessage: typeof wrappedPayload?.error === "string" ? wrappedPayload.error : "图片服务请求失败",
+          errorCode: typeof wrappedPayload?.code === "string" ? wrappedPayload.code : `VIVAAPI_IMAGE_${response.status || wrappedResponse.status}`,
+          sanitizedError: sanitizeForTrace(storedResult) as Record<string, unknown>,
+          metadata: {
+            provider: "vivaapi",
+            elapsed_ms: Date.now() - startedAt,
+            gateway_status: "failed",
+            provider_status: response.status,
+            result: sanitizeForTrace(storedResult),
+          },
+        })
+        return
+      }
+
+      await updateTaskRun(params.requestId, {
+        status: "succeeded",
+        stage: "图片生成完成",
+        progress: 100,
+        upstreamTaskId: params.requestId,
+        artifacts: extractArtifactsFromUnknown(wrappedPayload),
+        metadata: {
+          provider: "vivaapi",
+          elapsed_ms: Date.now() - startedAt,
+          gateway_status: "succeeded",
+          result: sanitizeForTrace(storedResult),
+        },
+      })
+    } catch (error) {
+      const err = error instanceof Error ? error : null
+      await updateTaskRun(params.requestId, {
+        status: err?.name === "AbortError" ? "timeout" : "failed",
+        stage: err?.name === "AbortError" ? "图片生成超时" : "图片生成失败",
+        progress: 100,
+        upstreamTaskId: params.requestId,
+        errorMessage: err?.name === "AbortError" ? "图片生成等待超时，请降低尺寸或质量后重试" : "图片服务暂时不可用，请稍后重试",
+        errorCode: err?.name === "AbortError" ? "IMAGE_GATEWAY_TIMEOUT" : "IMAGE_GATEWAY_UNAVAILABLE",
+        sanitizedError: sanitizeForTrace({ message: err?.message || String(error) }) as Record<string, unknown>,
+        metadata: {
+          provider: "vivaapi",
+          elapsed_ms: Date.now() - startedAt,
+          gateway_status: err?.name === "AbortError" ? "timeout" : "failed",
+        },
+      })
+    } finally {
+      timeout.clear()
+    }
+  })())
+
+  console.log("[VivaAPI Image Task] persisted", {
+    taskId: params.requestId,
+    promptLength: params.query.length,
+    requestId: params.requestId,
+    traceId: params.traceId,
+  })
+
+  return params.requestId
+}
+
 export async function GET(request: NextRequest) {
   const taskId = request.nextUrl.searchParams.get("imageTaskId")
   if (!taskId) {
@@ -1647,6 +1809,114 @@ export async function GET(request: NextRequest) {
 
   const createdAtMs = taskOwner?.created_at ? new Date(taskOwner.created_at).getTime() : NaN
   const taskAgeMs = Number.isFinite(createdAtMs) ? Date.now() - createdAtMs : 0
+
+  if (taskId === requestId) {
+    const { data: storedTask, error: storedTaskError } = await getSupabaseAdmin()
+      .from("ai_task_runs")
+      .select("id,status,stage,progress,metadata,error_message,error_code,created_at,updated_at,upstream_task_id")
+      .eq("id", requestId)
+      .eq("user_id", userId)
+      .maybeSingle()
+
+    if (storedTaskError) {
+      console.error("[GPT Image Task] 查询异步图片任务失败:", storedTaskError.message)
+      return Response.json({ error: "图片任务查询失败", code: "IMAGE_TASK_LOOKUP_FAILED", requestId, taskId }, { status: 500 })
+    }
+
+    const metadata = storedTask?.metadata && typeof storedTask.metadata === "object"
+      ? storedTask.metadata as Record<string, unknown>
+      : {}
+    const result = metadata.result
+
+    if (storedTask?.status === "succeeded" && result) {
+      const wrappedResponse = createProviderTaskResponseFromStoredResult(result)
+      const wrappedPayload = await wrappedResponse.json().catch(() => ({}))
+      return Response.json({
+        status: "succeeded",
+        taskId,
+        requestId,
+        elapsedMs: typeof metadata.elapsed_ms === "number" ? metadata.elapsed_ms : taskAgeMs,
+        result: wrappedPayload,
+      })
+    }
+
+    if (storedTask?.status === "failed" || storedTask?.status === "timeout") {
+      const shouldRefund = metadata.refund_status === undefined
+      const refund = shouldRefund
+        ? await refundImageTaskCredits({
+            userId,
+            requestId,
+            reason: storedTask.error_message || "图片生成失败",
+            errorCode: storedTask.error_code || "IMAGE_TASK_FAILED",
+          })
+        : null
+
+      if (refund) {
+        await updateTaskRun(requestId, {
+          status: "failed",
+          metadata: {
+            ...metadata,
+            refund_status: refund.status,
+            refund_amount: refund.amount || 0,
+            refund_reference_id: refund.refundReferenceId || null,
+          },
+        })
+      }
+
+      return Response.json({
+        status: "failed",
+        taskId,
+        requestId,
+        elapsedMs: typeof metadata.elapsed_ms === "number" ? metadata.elapsed_ms : taskAgeMs,
+        error: storedTask.error_message || "图片生成失败",
+        code: storedTask.error_code || "IMAGE_TASK_FAILED",
+        refund,
+      })
+    }
+
+    if (taskAgeMs > GPT_IMAGE_ASYNC_TASK_MAX_AGE_MS) {
+      const refund = await refundImageTaskCredits({
+        userId,
+        requestId,
+        reason: "图片异步任务轮询超时",
+        errorCode: "IMAGE_TASK_POLL_TIMEOUT",
+      })
+      await updateTaskRun(requestId, {
+        status: "timeout",
+        stage: "图片任务超时，已自动退回积分",
+        progress: 100,
+        upstreamTaskId: taskId,
+        errorMessage: "图片任务长时间未完成，系统已自动结束并尝试退回积分",
+        errorCode: "IMAGE_TASK_POLL_TIMEOUT",
+        metadata: {
+          ...metadata,
+          elapsed_ms: taskAgeMs,
+          gateway_status: "timeout",
+          refund_status: refund.status,
+          refund_amount: refund.amount || 0,
+          refund_reference_id: refund.refundReferenceId || null,
+        },
+      })
+      return Response.json({
+        status: "failed",
+        taskId,
+        requestId,
+        elapsedMs: taskAgeMs,
+        error: "图片任务超时，已自动退回积分",
+        code: "IMAGE_TASK_POLL_TIMEOUT",
+        refund,
+      })
+    }
+
+    return Response.json({
+      status: "running",
+      taskId,
+      requestId,
+      elapsedMs: taskAgeMs,
+      stage: storedTask?.stage || "图片正在生成",
+      progress: typeof storedTask?.progress === "number" ? storedTask.progress : 55,
+    })
+  }
 
   const gatewayToken = process.env.DIFY_IMAGE_GATEWAY_TOKEN || ""
   const response = await internalDifyFetch(`${IMAGE_GATEWAY_URL}/api/image/tasks/${encodeURIComponent(taskId)}`, {
@@ -2238,7 +2508,7 @@ export async function POST(request: NextRequest) {
         progress: 35,
       })
 
-      if (async_image_task === true && !process.env.VIVAAPI_IMAGE_API_KEY) {
+      if (async_image_task === true) {
         const { charged } = await chargeImageGatewayCredits({
           userId,
           realCreditUserId,
@@ -2263,13 +2533,20 @@ export async function POST(request: NextRequest) {
         }
 
         try {
-          const taskId = await startImageGatewayTask({
-            query: effectiveQuery,
-            inputs,
-            userId,
-            requestId: taskRun.requestId,
-            traceId: taskRun.traceId,
-          })
+          const taskId = process.env.VIVAAPI_IMAGE_API_KEY
+            ? await startVivaApiImageTask({
+                query: effectiveQuery,
+                inputs,
+                requestId: taskRun.requestId,
+                traceId: taskRun.traceId,
+              })
+            : await startImageGatewayTask({
+                query: effectiveQuery,
+                inputs,
+                userId,
+                requestId: taskRun.requestId,
+                traceId: taskRun.traceId,
+              })
           const pollToken = signImageTaskPollToken({ requestId: taskRun.requestId, taskId, userId })
 
           return Response.json(
@@ -2406,6 +2683,28 @@ export async function POST(request: NextRequest) {
         let difyRequest: DifyWorkflowRequest | DifyChatRequest;
 
         if (isWorkflow) {
+            const appInfo = await getDifyAppInfo(DIFY_BASE_URL, selectedCredential, keySource)
+            if (appInfo.mode && appInfo.mode !== "workflow") {
+              const message = getDifyAppModeMismatchMessage(model, keySource, "workflow", appInfo.mode)
+              console.error("❌ [Dify App Mode] 工作流模型绑定了非 workflow 应用", {
+                model,
+                keySource,
+                expectedMode: "workflow",
+                actualMode: appInfo.mode,
+                appName: appInfo.name,
+              })
+              return new Response(JSON.stringify({
+                error: message,
+                code: "DIFY_APP_MODE_MISMATCH",
+                expectedMode: "workflow",
+                actualMode: appInfo.mode,
+                keySource,
+              }), {
+                status: MISSING_DIFY_CREDENTIAL_STATUS,
+                headers: { "Content-Type": "application/json" },
+              })
+            }
+
             // Dify 图像工作流参数格式（image_prompt）
             difyRequest = isVocabCardWorkflow
               ? {

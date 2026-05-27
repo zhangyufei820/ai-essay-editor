@@ -1145,7 +1145,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
           inputs: submittedInputs,
           model: workspaceModel,
           mode: "image",
-          async_image_task: false,
+          async_image_task: workspaceModel === "gpt-image-2",
           requestId,
         }),
       })
