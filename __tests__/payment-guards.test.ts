@@ -182,6 +182,7 @@ describe('Sprint 5 payment / credits / membership guards', () => {
   it('reports missing image workflow credentials as service configuration errors', () => {
     const chatRoute = read('app/api/dify-chat/route.ts')
     const uploadRoute = read('app/api/dify-upload/route.ts')
+    const credentials = read('lib/dify-credentials.ts')
 
     expect(chatRoute).toContain('const MISSING_DIFY_CREDENTIAL_STATUS = 503')
     expect(chatRoute).toContain('code: "DIFY_CREDENTIAL_MISSING"')
@@ -191,6 +192,10 @@ describe('Sprint 5 payment / credits / membership guards', () => {
     expect(chatRoute).toContain('请在生产环境变量中配置')
     expect(uploadRoute).toContain('code: "DIFY_UPLOAD_CREDENTIAL_MISSING"')
     expect(uploadRoute).toContain('status: 503')
+    expect(uploadRoute).toContain('model === "banana-2-pro"')
+    expect(credentials).toContain('selectRequiredDistinctProductionCredential')
+    expect(credentials).toContain('DIFY_BANANA_API_KEY')
+    expect(credentials).toContain('must not reuse the default or essay-correction credential in production')
   })
 
   it('does not mislabel Dify credential failures as user login failures in image workspaces', () => {

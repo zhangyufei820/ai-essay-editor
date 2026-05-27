@@ -37,9 +37,19 @@ export function getDifyCredentialForModel(
       )
     case "banana":
     case "banana-2-pro":
-      return selectCredential(env.DIFY_BANANA_API_KEY, "DIFY_BANANA_API_KEY", defaultCredential)
+      return selectRequiredDistinctProductionCredential(
+        env.DIFY_BANANA_API_KEY,
+        "DIFY_BANANA_API_KEY",
+        env,
+        defaultCredential,
+      )
     case "gpt-image-2":
-      return selectCredential(env.DIFY_GPT_IMAGE_API_KEY, "DIFY_GPT_IMAGE_API_KEY", defaultCredential)
+      return selectRequiredDistinctProductionCredential(
+        env.DIFY_GPT_IMAGE_API_KEY,
+        "DIFY_GPT_IMAGE_API_KEY",
+        env,
+        defaultCredential,
+      )
     case "grok-4.2":
       return selectCredential(env.DIFY_API_KEY_GROK42, "DIFY_API_KEY_GROK42", defaultCredential)
     case "open-claw":
@@ -133,5 +143,33 @@ function selectRequiredProductionCredential(
     console.warn(`[Dify Credentials] ${source} is required in production`)
     return { credential: "", source }
   }
+  return selectCredential(credential, source, defaultCredential)
+}
+
+function selectRequiredDistinctProductionCredential(
+  credential: string | undefined,
+  source: string,
+  env: Env,
+  defaultCredential: string,
+): DifyCredentialSelection {
+  if (credential) {
+    const forbiddenFallbacks = new Set(
+      [defaultCredential, env.ESSAY_CORRECTION_API_KEY, env.DIFY_API_KEY]
+        .filter((value): value is string => Boolean(value)),
+    )
+
+    if (env.NODE_ENV === "production" && forbiddenFallbacks.has(credential)) {
+      console.warn(`[Dify Credentials] ${source} must not reuse the default or essay-correction credential in production`)
+      return { credential: "", source }
+    }
+
+    return { credential, source }
+  }
+
+  if (env.NODE_ENV === "production") {
+    console.warn(`[Dify Credentials] ${source} is required in production`)
+    return { credential: "", source }
+  }
+
   return selectCredential(credential, source, defaultCredential)
 }

@@ -20,6 +20,50 @@ describe("Dify credential selection", () => {
     })
   })
 
+  it("uses the dedicated Banana key when configured", () => {
+    const selection = getDifyCredentialForModel("banana-2-pro", {
+      NODE_ENV: "production",
+      DIFY_BANANA_API_KEY: "banana-key",
+      ESSAY_CORRECTION_API_KEY: "essay-key",
+      DIFY_API_KEY: "general-key",
+    })
+
+    expect(selection).toEqual({
+      credential: "banana-key",
+      source: "DIFY_BANANA_API_KEY",
+    })
+  })
+
+  it("does not let Banana reuse the essay-correction credential in production", () => {
+    const selection = getDifyCredentialForModel("banana-2-pro", {
+      NODE_ENV: "production",
+      DIFY_BANANA_API_KEY: "essay-key",
+      ESSAY_CORRECTION_API_KEY: "essay-key",
+      DIFY_API_KEY: "general-key",
+    })
+
+    expect(selection).toEqual({
+      credential: "",
+      source: "DIFY_BANANA_API_KEY",
+    })
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("DIFY_BANANA_API_KEY must not reuse"))
+  })
+
+  it("does not let GPT Image 2 reuse the default Dify credential in production", () => {
+    const selection = getDifyCredentialForModel("gpt-image-2", {
+      NODE_ENV: "production",
+      DIFY_GPT_IMAGE_API_KEY: "general-key",
+      ESSAY_CORRECTION_API_KEY: "essay-key",
+      DIFY_API_KEY: "general-key",
+    })
+
+    expect(selection).toEqual({
+      credential: "",
+      source: "DIFY_GPT_IMAGE_API_KEY",
+    })
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("DIFY_GPT_IMAGE_API_KEY must not reuse"))
+  })
+
   it("uses the dedicated Gemini image workflow key when configured", () => {
     const selection = getDifyCredentialForModel("gemini-image", {
       DIFY_GEMINI_IMAGE_API_KEY: "gemini-image-key",
