@@ -77,8 +77,9 @@ export async function chargeCreditsSafely(
   description: string,
   referenceId?: string,
   billingMetadata?: BillingAuditMetadata,
+  options: { realCreditUserId?: string } = {},
 ): Promise<boolean> {
-  return spendCredits(userId, amount, actionType, description, referenceId, billingMetadata)
+  return spendCredits(userId, amount, actionType, description, referenceId, billingMetadata, options)
 }
 
 export function createBillingLog(input: BillingAuditInput): BillingAuditMetadata {

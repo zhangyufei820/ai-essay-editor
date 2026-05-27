@@ -6,6 +6,7 @@ import { extractDifyWorkflowOutputs, runDifyWorkflow } from "@/lib/dify-workflow
 import { createBillingAuditMetadata, recordBillingIssue } from "@/lib/credits"
 import { calculateTextCredits, parseDifyUsage, PRICING_VERSION } from "@/lib/pricing"
 import { consumeWithTrialCredits } from "@/lib/trial-credits"
+import { getUserEntitlementSummary } from "@/lib/user-entitlements"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -230,7 +231,14 @@ function createJsonLineEncoder(controller: ReadableStreamDefaultController<Uint8
   }
 }
 
-async function processReverseRequest(file: File, targetModel: string, userId: string, apiKey: string, emit?: (event: Record<string, unknown>) => void): Promise<ReverseSuccessPayload | NextResponse> {
+async function processReverseRequest(
+  file: File,
+  targetModel: string,
+  userId: string,
+  realCreditUserId: string,
+  apiKey: string,
+  emit?: (event: Record<string, unknown>) => void,
+): Promise<ReverseSuccessPayload | NextResponse> {
   emit?.({ type: "progress", progress: 32, stage: "正在上传图片" })
   const uploadFileId = await uploadFileToDify(file, userId, apiKey)
   const inputs = buildReverseInputs(uploadFileId, targetModel)
@@ -314,6 +322,7 @@ async function processReverseRequest(file: File, targetModel: string, userId: st
   })
   const billingResult = await consumeWithTrialCredits({
     userId,
+    realCreditUserId,
     amount: tokenCredits,
     actionType: "consume",
     description: "图像提示词反推",
@@ -367,6 +376,12 @@ export async function POST(request: NextRequest) {
 
   const auth = await requireUser(request)
   if (auth.response) return auth.response
+  const entitlement = await getUserEntitlementSummary(auth.user!.id, {
+    email: auth.user!.email || null,
+    phone: auth.user!.phone || null,
+    metadata: auth.user!.metadata || null,
+  })
+  const realCreditUserId = entitlement?.entitlementUserId || auth.user!.id
 
   const apiKey = process.env.DIFY_IMAGE_PROMPT_REVERSE_API_KEY || ""
   if (!apiKey) {
@@ -408,7 +423,7 @@ export async function POST(request: NextRequest) {
           heartbeat = setInterval(() => {
             emit({ type: "progress", progress: 76, stage: "反推仍在进行，请稍候" })
           }, STREAM_HEARTBEAT_MS)
-          const result = await processReverseRequest(file, targetModel, auth.user!.id, apiKey, emit)
+          const result = await processReverseRequest(file, targetModel, auth.user!.id, realCreditUserId, apiKey, emit)
           if (heartbeat) clearInterval(heartbeat)
           if (result instanceof NextResponse) {
             const payload = await result.json().catch(() => ({ error: "处理失败，请稍后重试。" }))
@@ -436,7 +451,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const result = await processReverseRequest(file, targetModel, auth.user!.id, apiKey)
+    const result = await processReverseRequest(file, targetModel, auth.user!.id, realCreditUserId, apiKey)
     if (result instanceof NextResponse) return result
     return NextResponse.json(result)
   } catch (error) {

@@ -13,6 +13,7 @@ import {
 import { assertSecureTlsConfiguration } from '@/lib/runtime-security'
 import { recordBillingIssue } from '@/lib/credits'
 import { canUseTrialCredits, consumeWithTrialCredits, type ConsumeWithTrialCreditsResult } from '@/lib/trial-credits'
+import { getUserEntitlementSummary } from '@/lib/user-entitlements'
 import {
   createBillingLog as createBillingAuditMetadata,
   parseDifyUsage,
@@ -40,6 +41,7 @@ function isImageFileRecord(file: { name?: unknown; type?: unknown }) {
 
 async function deductCredit(
   userId: string,
+  realCreditUserId: string,
   usage: { totalTokens: number; promptTokens: number; completionTokens: number },
   description: string,
   parsedUsage?: ParsedDifyUsage | null,
@@ -109,6 +111,7 @@ async function deductCredit(
   }
   const billingResult = await consumeWithTrialCredits({
     userId,
+    realCreditUserId,
     amount: currentCost,
     actionType: "consume",
     description: chargeDescription,
@@ -132,6 +135,7 @@ async function deductCredit(
 function createMeteredStreamResponse(
   upstreamResponse: Response,
   userId: string,
+  realCreditUserId: string,
   description: string,
   options: { useTrialCredits?: boolean } = {},
 ) {
@@ -195,6 +199,7 @@ function createMeteredStreamResponse(
         if (hasReceivedContent && (promptTokens > 0 || completionTokens > 0)) {
           billingResult = await deductCredit(
             userId,
+            realCreditUserId,
             { totalTokens, promptTokens, completionTokens },
             description,
             latestParsedUsage,
@@ -258,6 +263,12 @@ export async function POST(req: NextRequest) {
     const body = await req.json() as ChatRequestBody
     const { messages, files, extractedText } = body
     const userId = auth.user!.id
+    const entitlement = await getUserEntitlementSummary(userId, {
+      email: auth.user!.email || null,
+      phone: auth.user!.phone || null,
+      metadata: auth.user!.metadata || null,
+    })
+    const realCreditUserId = entitlement?.entitlementUserId || userId
 
     const userLimitResult = checkUserRateLimit(userId)
     if (!userLimitResult.allowed) {
@@ -272,7 +283,7 @@ export async function POST(req: NextRequest) {
     const { data: creditData, error: creditError } = await supabaseAdmin
       .from('user_credits')
       .select('credits')
-      .eq('user_id', userId)
+      .eq('user_id', realCreditUserId)
       .single()
 
     if (creditError) {
@@ -294,7 +305,11 @@ export async function POST(req: NextRequest) {
     let trialPrecheck: Awaited<ReturnType<typeof canUseTrialCredits>> | null = null
 
     trialPrecheck = await canUseTrialCredits(userId, MIN_REQUIRED_CREDITS)
-    if (trialPrecheck.data?.blocked && trialPrecheck.data.reason === "survey_required") {
+    if (
+      trialPrecheck.data?.blocked &&
+      trialPrecheck.data.reason === "survey_required" &&
+      creditData.credits < MIN_REQUIRED_CREDITS
+    ) {
       return new Response(JSON.stringify({
         error: "请先完成今日共创反馈问卷，再使用免费体验额度",
         surveyRequired: true,
@@ -349,7 +364,7 @@ export async function POST(req: NextRequest) {
         })
       }
 
-      return createMeteredStreamResponse(essayGradeResponse, userId, "使用 作文批改", { useTrialCredits: true })
+      return createMeteredStreamResponse(essayGradeResponse, userId, realCreditUserId, "使用 作文批改", { useTrialCredits: true })
     }
 
     const customConfig = getAPIConfig(req.headers.get("X-AI-Provider") || "openai")
@@ -442,7 +457,7 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    return createMeteredStreamResponse(response, userId, "使用 AI 对话")
+    return createMeteredStreamResponse(response, userId, realCreditUserId, "使用 AI 对话")
   } catch (error) {
     console.error("[v0] Chat API error:", error)
     return new Response(JSON.stringify({ error: "Internal server error" }), {

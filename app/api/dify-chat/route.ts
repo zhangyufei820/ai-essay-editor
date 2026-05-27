@@ -27,6 +27,7 @@ import {
 } from "@/lib/billing"
 import { assertSecureTlsConfiguration } from "@/lib/runtime-security"
 import { requireUser } from "@/lib/auth/verified-user"
+import { getUserEntitlementSummary } from "@/lib/user-entitlements"
 import { isConfiguredAdminUser } from "@/lib/admin-auth"
 import { internalDifyFetch } from "@/lib/internal-dify-fetch"
 import { getDifyCredentialForModel } from "@/lib/dify-credentials"
@@ -1338,6 +1339,7 @@ function createVivaApiImageResponse(payload: unknown) {
 
 async function chargeFixedImageCredits(params: {
   userId: string
+  realCreditUserId?: string
   amount: number
   imageCount: number
   imageSize: string
@@ -1387,6 +1389,7 @@ async function chargeFixedImageCredits(params: {
     description,
     params.requestId,
     billingMetadata,
+    { realCreditUserId: params.realCreditUserId },
   )
 
   return { charged, description, billingMetadata }
@@ -1394,6 +1397,7 @@ async function chargeFixedImageCredits(params: {
 
 async function chargeImageGatewayCredits(params: {
   userId: string
+  realCreditUserId?: string
   amount: number
   inputs: GptImageV11Inputs
   billingModel: ModelType
@@ -1404,6 +1408,7 @@ async function chargeImageGatewayCredits(params: {
 }) {
   return chargeFixedImageCredits({
     userId: params.userId,
+    realCreditUserId: params.realCreditUserId,
     amount: params.amount,
     imageCount: params.inputs.n || 1,
     imageSize: params.inputs.size,
@@ -1897,6 +1902,12 @@ export async function POST(request: NextRequest) {
     console.log(`🔍 [Dify-Chat] 接收请求: model=${model || "general-chat"} workflowSkill=${workflowSkillId || "none"} files=${difyFileIds.length} urls=${fileUrls.length}`)
     
     const userId = auth.user!.id
+    const entitlement = await getUserEntitlementSummary(userId, {
+      email: auth.user!.email || null,
+      phone: auth.user!.phone || null,
+      metadata: auth.user!.metadata || null,
+    })
+    const realCreditUserId = entitlement?.entitlementUserId || userId
     if (model === "open-claw" && !isConfiguredAdminUser(userId)) {
       const guard = evaluateOpenClawRuntimeRequest({ query: effectiveQuery, inputs })
       if (!guard.allowed) {
@@ -2018,7 +2029,7 @@ export async function POST(request: NextRequest) {
     let { data: userCredits, error: creditsError } = await getSupabaseAdmin()
       .from("user_credits")
       .select("credits, user_id, is_pro")
-      .eq("user_id", userId)
+      .eq("user_id", realCreditUserId)
       .single()
     
     // 🔥 关键修复：如果用户不存在，先创建积分记录（赠送 1000 积分，与注册逻辑一致）
@@ -2028,7 +2039,7 @@ export async function POST(request: NextRequest) {
       
       const { data: newCredits, error: insertError } = await getSupabaseAdmin()
         .from("user_credits")
-        .insert({ user_id: userId, credits: 1000, is_pro: false })
+        .insert({ user_id: realCreditUserId, credits: 1000, is_pro: false })
         .select()
         .single()
       
@@ -2037,7 +2048,7 @@ export async function POST(request: NextRequest) {
         // 尝试 upsert
         const { data: upsertData, error: upsertError } = await getSupabaseAdmin()
           .from("user_credits")
-          .upsert({ user_id: userId, credits: 1000, is_pro: false })
+          .upsert({ user_id: realCreditUserId, credits: 1000, is_pro: false })
           .select()
           .single()
         
@@ -2068,7 +2079,11 @@ export async function POST(request: NextRequest) {
     logPerf(requestId, "credit_check_done", apiStartedAt, { requiredCredits: estimatedMinCost })
     
     const trialPrecheck = await canUseTrialCredits(userId, estimatedMinCost)
-    if (trialPrecheck.data?.blocked && trialPrecheck.data.reason === "survey_required") {
+    if (
+      trialPrecheck.data?.blocked &&
+      trialPrecheck.data.reason === "survey_required" &&
+      currentCredits < estimatedMinCost
+    ) {
       console.warn(`🚫 [计费] 共创体验问卷未完成: user=${userId.slice(0, 8)}, required=${estimatedMinCost}`)
       return new Response(
         JSON.stringify({
@@ -2164,6 +2179,7 @@ export async function POST(request: NextRequest) {
 
       const { charged } = await chargeFixedImageCredits({
         userId,
+        realCreditUserId,
         amount: estimatedMinCost,
         imageCount: geminiImageInputs.n,
         imageSize: geminiImageInputs.image_size,
@@ -2225,6 +2241,7 @@ export async function POST(request: NextRequest) {
       if (async_image_task === true && !process.env.VIVAAPI_IMAGE_API_KEY) {
         const { charged } = await chargeImageGatewayCredits({
           userId,
+          realCreditUserId,
           amount: estimatedMinCost,
           inputs: imageInputs,
           billingModel: imageBillingModel,
@@ -2324,6 +2341,7 @@ export async function POST(request: NextRequest) {
 
       const { charged } = await chargeImageGatewayCredits({
         userId,
+        realCreditUserId,
         amount: estimatedMinCost,
         inputs: imageInputs,
         billingModel: imageBillingModel,
@@ -2716,6 +2734,7 @@ export async function POST(request: NextRequest) {
                 imageDescription,
                 taskRun.requestId,
                 imageBillingMetadata,
+                { realCreditUserId },
               )
               if (!charged) {
                 await updateTaskRun(taskRun.id, {
@@ -2792,6 +2811,7 @@ export async function POST(request: NextRequest) {
             imageDescription,
             taskRun.requestId,
             imageBillingMetadata,
+            { realCreditUserId },
           )
           if (!charged) {
             await updateTaskRun(taskRun.id, {
@@ -2951,6 +2971,7 @@ export async function POST(request: NextRequest) {
           description,
           taskRun.requestId,
           billingMetadata,
+          { realCreditUserId },
         )
         if (!success) {
           console.error("[Billing] 扣费失败或积分不足")

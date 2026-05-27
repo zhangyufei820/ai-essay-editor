@@ -426,15 +426,17 @@ export async function spendCredits(
   description: string,
   referenceId?: string,
   billingMetadata?: BillingAuditMetadata,
+  options: { realCreditUserId?: string } = {},
 ): Promise<boolean> {
   if (billingMetadata?.skipTrialBilling) {
-    return spendRealCredits(userId, amount, type, description, referenceId, billingMetadata)
+    return spendRealCredits(options.realCreditUserId || userId, amount, type, description, referenceId, billingMetadata)
   }
 
   try {
     const { consumeWithTrialCredits } = await import("@/lib/trial-credits")
     const result = await consumeWithTrialCredits({
       userId,
+      realCreditUserId: options.realCreditUserId,
       amount,
       actionType: type,
       description,
@@ -450,7 +452,7 @@ export async function spendCredits(
     return result.success
   } catch (error) {
     console.error("[积分系统] trial-first 扣费失败，回退真实积分扣费:", error)
-    return spendRealCredits(userId, amount, type, description, referenceId, {
+    return spendRealCredits(options.realCreditUserId || userId, amount, type, description, referenceId, {
       ...(billingMetadata || {}),
       rawProviderMetadata: {
         ...(billingMetadata?.rawProviderMetadata || {}),

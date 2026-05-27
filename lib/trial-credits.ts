@@ -35,6 +35,7 @@ export interface RecordTrialCreditUsageInput {
 
 export interface ConsumeWithTrialCreditsInput {
   userId: string
+  realCreditUserId?: string
   amount: number
   actionType: string
   referenceId?: string
@@ -442,6 +443,7 @@ export async function consumeWithTrialCredits(
   input: ConsumeWithTrialCreditsInput,
 ): Promise<ConsumeWithTrialCreditsResult> {
   const amount = normalizeAmount(input.amount)
+  const realCreditUserId = input.realCreditUserId || input.userId
   const baseResult: ConsumeWithTrialCreditsResult = {
     success: false,
     blocked: false,
@@ -481,7 +483,7 @@ export async function consumeWithTrialCredits(
       }
 
       const spent = await spendRealCredits(
-        input.userId,
+        realCreditUserId,
         amount,
         input.actionType,
         input.description || `${input.actionType} 消费 ${amount} 积分`,
@@ -514,7 +516,7 @@ export async function consumeWithTrialCredits(
       }
 
       const spent = await spendRealCredits(
-        input.userId,
+        realCreditUserId,
         amount,
         input.actionType,
         input.description || `${input.actionType} 消费 ${amount} 积分`,
@@ -535,6 +537,41 @@ export async function consumeWithTrialCredits(
 
     const surveyRequired = await shouldRequireSurveyForGrant(input.userId, grant)
     if (surveyRequired.data) {
+      if (input.spendRealCredits !== false) {
+        const spent = await spendRealCredits(
+          realCreditUserId,
+          amount,
+          input.actionType,
+          input.description || `${input.actionType} 消费 ${amount} 积分`,
+          input.referenceId,
+          {
+            ...(input.billingMetadata || {}),
+            rawProviderMetadata: {
+              ...(input.billingMetadata?.rawProviderMetadata || {}),
+              trialGateBypassedWithRealCredits: true,
+              trialGrantId: grant.id,
+              trialUserId: input.userId,
+              realCreditUserId,
+            },
+            chargedCredits: amount,
+            skipTrialBilling: true,
+          },
+        )
+
+        return {
+          ...baseResult,
+          success: spent,
+          blocked: !spent,
+          shouldUseRealCredits: true,
+          trialUsed: 0,
+          realCreditsUsed: amount,
+          grantId: grant.id,
+          realCreditsSpent: spent,
+          reason: spent ? "survey_required_real_credit_fallback" : "survey_required",
+          error: spent ? null : "real_credit_spend_failed",
+        }
+      }
+
       return {
         ...baseResult,
         success: true,
@@ -595,7 +632,7 @@ export async function consumeWithTrialCredits(
       }
 
       realCreditsSpent = await spendRealCredits(
-        input.userId,
+        realCreditUserId,
         realCreditsUsed,
         input.actionType,
         input.description || `${input.actionType} 超出体验额度，扣除真实积分 ${realCreditsUsed}`,

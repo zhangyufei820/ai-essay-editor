@@ -10,6 +10,7 @@ import {
 } from "@/lib/flashcards"
 import { runDifyWorkflow } from "@/lib/dify-workflow-client"
 import { getSupabaseAdmin } from "@/lib/supabase-admin"
+import { getUserEntitlementSummary } from "@/lib/user-entitlements"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -59,6 +60,13 @@ export async function POST(request: NextRequest) {
     const auth = await requireLearningUserId(request)
     if (auth.response) return auth.response
     const userId = auth.userId!
+    const verifiedUser = auth.auth.user
+    const entitlement = await getUserEntitlementSummary(userId, {
+      email: verifiedUser?.email || null,
+      phone: verifiedUser?.phone || null,
+      metadata: verifiedUser?.metadata || null,
+    })
+    const realCreditUserId = entitlement?.entitlementUserId || userId
 
     let body: Record<string, unknown>
     try {
@@ -104,6 +112,7 @@ export async function POST(request: NextRequest) {
     let billing = createBillingPayload(null)
     const billingResult = await consumeWithTrialCredits({
       userId,
+      realCreditUserId,
       amount: GENERATION_COST,
       actionType: "consume",
       description: "AI 生成闪卡",
