@@ -429,7 +429,7 @@ function buildImageWorkflowInputs(query: string, inputs: unknown) {
       : []
   const imageUrlsText = safeReferenceImageUrls.join("\n")
 
-  const { model: _model, provider: _provider, ...safeRecord } = record
+  const { provider: _provider, ...safeRecord } = record
 
   return {
     ...safeRecord,

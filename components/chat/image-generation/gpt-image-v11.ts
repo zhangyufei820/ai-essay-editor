@@ -80,8 +80,8 @@ export const MODEL_OPTIONS: Option<GptImageModel>[] = [
 ]
 
 export const GEMINI_MODEL_OPTIONS: Option<GeminiImageModel>[] = [
-  { label: "Gemini 3.1 Flash Image｜速度快，支持超宽比例", value: "gemini-3.1-flash-image-preview" },
   { label: "Gemini 3 Pro Image｜更强理解与画面质量", value: "gemini-3-pro-image-preview" },
+  { label: "Gemini 3.1 Flash Image｜速度快，支持超宽比例", value: "gemini-3.1-flash-image-preview" },
 ]
 
 export const ASPECT_RATIO_OPTIONS: Option<ImageAspectRatio>[] = [
@@ -192,7 +192,7 @@ export const EDIT_MODE_DEFAULTS: GptImageInputs = {
 export const GEMINI_IMAGE_DEFAULT_INPUTS: GptImageInputs = {
   provider: "google",
   mode: "image_generate",
-  model: "gemini-3.1-flash-image-preview",
+  model: "gemini-3-pro-image-preview",
   aspect_ratio: "1:1",
   size: "1K",
   image_size: "1K",

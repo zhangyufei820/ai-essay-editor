@@ -851,7 +851,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
     setMaskGatewayUrl("")
 
     if (nextMode === "image_edit") {
-      setModel(isGeminiWorkspace ? "gemini-3.1-flash-image-preview" : "gpt-image-2")
+      setModel(isGeminiWorkspace ? "gemini-3-pro-image-preview" : "gpt-image-2")
       setAspectRatio(isGeminiWorkspace ? "1:1" : "auto")
       setSize(isGeminiWorkspace ? "1K" : isBananaWorkspace ? "1024x1024" : "1K")
       setQuality("medium")
