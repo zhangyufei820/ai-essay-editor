@@ -301,25 +301,31 @@ async function checkRuntimeFlagsEndpoint(checks: Record<string, unknown>, incide
 async function checkTables(checks: Record<string, unknown>, incidents: MonitorIncidentDraft[]) {
   const results: Record<string, boolean> = {}
   const missing: string[] = []
+  const errors: Record<string, string> = {}
 
   for (const table of CORE_TABLES) {
     try {
       await countRows(table)
       results[table] = true
-    } catch {
+    } catch (error) {
       results[table] = false
       missing.push(table)
+      errors[table] = getErrorMessage(error)
     }
   }
 
-  checks.tables = { ok: missing.length === 0, results, missing }
+  checks.tables = { ok: missing.length === 0, results, missing, errors }
   if (missing.length > 0) {
     addIncident(incidents, {
       incidentType: "core_tables_missing",
-      severity: "p0",
-      title: "共创体验核心数据表缺失",
-      details: { missing },
-      autoActions: ["disable_campaign", "disable_consumption"],
+      severity: "p1",
+      title: "共创体验核心表探测失败，需要人工确认",
+      details: {
+        missing,
+        errors,
+        autoStopLoss: false,
+        reason: "Supabase 或网络瞬时失败不能单次关闭用户可见权益。",
+      },
     })
   }
 }

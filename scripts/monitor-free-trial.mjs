@@ -308,21 +308,27 @@ async function runMonitor() {
     checkLocalMonitorFiles(checks, incidents)
 
     const missing = []
+    const tableErrors = {}
     for (const table of CORE_TABLES) {
       try {
         await countRows(table)
-      } catch {
+      } catch (error) {
         missing.push(table)
+        tableErrors[table] = error instanceof Error ? error.message : String(error)
       }
     }
-    checks.tables = { ok: missing.length === 0, missing }
+    checks.tables = { ok: missing.length === 0, missing, errors: tableErrors }
     if (missing.length > 0) {
       incidents.push({
         incidentType: "core_tables_missing",
-        severity: "p0",
-        title: "共创体验核心数据表缺失",
-        details: { missing },
-        autoActions: ["disable_campaign", "disable_consumption"],
+        severity: "p1",
+        title: "共创体验核心表探测失败，需要人工确认",
+        details: {
+          missing,
+          errors: tableErrors,
+          autoStopLoss: false,
+          reason: "Supabase 或网络瞬时失败不能单次关闭用户可见权益。",
+        },
       })
     }
 
