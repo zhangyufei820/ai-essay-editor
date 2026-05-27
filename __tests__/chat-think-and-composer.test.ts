@@ -122,6 +122,16 @@ describe("chat think rendering and composer layout", () => {
     expect(source).toContain("连接正常，任务仍在处理中")
   })
 
+  it("counts available trial credits before showing the client-side insufficient-credit toast", () => {
+    const source = read("components/chat/enhanced-chat-interface.tsx")
+
+    expect(source).toContain("getAvailableTrialCreditsForSubmit")
+    expect(source).toContain("availableTrialCreditsForSubmit = getAvailableTrialCreditsForSubmit(surveyState.status)")
+    expect(source).toContain("const availableCreditsForSubmit = userCredits + (trialEligibleForSubmit ? availableTrialCreditsForSubmit : 0)")
+    expect(source).toContain("if (availableCreditsForSubmit < cost)")
+    expect(source).not.toContain("if (userCredits < cost && !trialEligibleForSubmit)")
+  })
+
   it("keeps local history sessions separate from Dify memory conversations", () => {
     const source = read("components/chat/enhanced-chat-interface.tsx")
     const saveMessageRoute = read("app/api/save-message/route.ts")

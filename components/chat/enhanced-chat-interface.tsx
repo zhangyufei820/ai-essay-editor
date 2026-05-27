@@ -1367,6 +1367,12 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   const [userCredits, setUserCredits] = useState<number>(0)
   const [isPaidUser, setIsPaidUser] = useState(false)
   const [trialStatus, setTrialStatus] = useState<TrialSurveyStatus | null>(null)
+
+  const getAvailableTrialCreditsForSubmit = useCallback((status: TrialSurveyStatus | null) => {
+    if (!status?.active_grant_id) return 0
+    const remaining = Number(status.today_trial_remaining || 0)
+    return Number.isFinite(remaining) && remaining > 0 ? Math.floor(remaining) : 0
+  }, [])
   const [surveyGateOpen, setSurveyGateOpen] = useState(false)
   // 🔥 新增：用户显示名称（手机号/邮箱）
   const [userDisplayName, setUserDisplayName] = useState<string>("")
@@ -2457,10 +2463,13 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     })
 
     let trialEligibleForSubmit = Boolean(trialStatus?.active_grant_id)
+    let availableTrialCreditsForSubmit = getAvailableTrialCreditsForSubmit(trialStatus)
     if (!isPaidUser) {
       const surveyState = await refreshTrialSurveyState()
       trialEligibleForSubmit = surveyState.trialEligible
-      if (surveyState.gateRequired) {
+      availableTrialCreditsForSubmit = getAvailableTrialCreditsForSubmit(surveyState.status)
+      const cost = calculateCost()
+      if (surveyState.gateRequired && userCredits < cost) {
         const openedSurveyGate = await openTrialSurveyGate({
           featureName: getModelUiConfig(selectedModel).name || "当前功能",
           message: "请先完成今日问卷，解锁体验额度后继续使用当前功能。",
@@ -2475,9 +2484,12 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     }
 
     const cost = calculateCost()
-    if (userCredits < cost && !trialEligibleForSubmit) {
+    const availableCreditsForSubmit = userCredits + (trialEligibleForSubmit ? availableTrialCreditsForSubmit : 0)
+    if (availableCreditsForSubmit < cost) {
       toast.error("积分不足", {
-        description: `需要 ${cost} 积分，当前 ${userCredits}`,
+        description: availableTrialCreditsForSubmit > 0
+          ? `需要 ${cost} 积分，当前真实积分 ${userCredits}，体验额度 ${availableTrialCreditsForSubmit}`
+          : `需要 ${cost} 积分，当前 ${userCredits}`,
         duration: 2000
       })
       return
