@@ -132,6 +132,14 @@ describe("chat think rendering and composer layout", () => {
     expect(source).not.toContain("if (userCredits < cost && !trialEligibleForSubmit)")
   })
 
+  it("keeps free-trial prompts off login and auth pages", () => {
+    const source = read("components/trial/DailySurveyAutoPrompt.tsx")
+
+    expect(source).toContain('pathname === "/login" || pathname.startsWith("/auth/")')
+    expect(source).toContain("!suppressPrompts && runtimeFlags.loaded")
+    expect(source).toContain("enabled={!suppressPrompts && surveyGateEnabled}")
+  })
+
   it("keeps local history sessions separate from Dify memory conversations", () => {
     const source = read("components/chat/enhanced-chat-interface.tsx")
     const saveMessageRoute = read("app/api/save-message/route.ts")

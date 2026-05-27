@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { usePathname } from "next/navigation"
 import { toast } from "sonner"
 import { trackCampaignEvent } from "@/lib/campaign-events-client"
 import { getVerifiedAuthHeaders, hasStoredVerifiedAuthToken } from "@/lib/client-auth"
@@ -73,6 +74,7 @@ async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit = {}
 }
 
 export function DailySurveyAutoPrompt() {
+  const pathname = usePathname()
   const [announcementOpen, setAnnouncementOpen] = useState(false)
   const [surveyOpen, setSurveyOpen] = useState(false)
   const [runtimeFlags, setRuntimeFlags] = useState<RuntimeFlags>({
@@ -90,6 +92,7 @@ export function DailySurveyAutoPrompt() {
   const autoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const localDate = useMemo(() => todayKey(), [])
+  const suppressPrompts = pathname === "/login" || pathname.startsWith("/auth/")
 
   const refreshRuntimeFlags = useCallback(async () => {
     try {
@@ -151,13 +154,13 @@ export function DailySurveyAutoPrompt() {
   }, [refreshRuntimeFlags])
 
   useEffect(() => {
-    if (typeof window === "undefined" || !runtimeFlags.loaded || !runtimeFlags.campaignEnabled || !runtimeFlags.consumptionEnabled) return
+    if (typeof window === "undefined" || suppressPrompts || !runtimeFlags.loaded || !runtimeFlags.campaignEnabled || !runtimeFlags.consumptionEnabled) return
     const shownKey = `${ANNOUNCEMENT_KEY_PREFIX}:${localDate}`
     if (!window.localStorage.getItem(shownKey)) {
       setAnnouncementOpen(true)
       window.localStorage.setItem(shownKey, "1")
     }
-  }, [localDate, runtimeFlags.campaignEnabled, runtimeFlags.consumptionEnabled, runtimeFlags.loaded])
+  }, [localDate, runtimeFlags.campaignEnabled, runtimeFlags.consumptionEnabled, runtimeFlags.loaded, suppressPrompts])
 
   useEffect(() => {
     void refreshSession().catch((error) => {
@@ -166,7 +169,7 @@ export function DailySurveyAutoPrompt() {
   }, [refreshSession])
 
   useEffect(() => {
-    if (typeof window === "undefined" || !session.loggedIn || !runtimeFlags.consumptionEnabled || !runtimeFlags.autoPromptEnabled) return
+    if (typeof window === "undefined" || suppressPrompts || !session.loggedIn || !runtimeFlags.consumptionEnabled || !runtimeFlags.autoPromptEnabled) return
 
     const userKey = session.userId || "verified-user"
     const autoKey = `${AUTO_SURVEY_KEY_PREFIX}:${userKey}:${localDate}`
@@ -193,7 +196,7 @@ export function DailySurveyAutoPrompt() {
         autoTimerRef.current = null
       }
     }
-  }, [localDate, runtimeFlags.autoPromptEnabled, runtimeFlags.consumptionEnabled, session])
+  }, [localDate, runtimeFlags.autoPromptEnabled, runtimeFlags.consumptionEnabled, session, suppressPrompts])
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -228,7 +231,7 @@ export function DailySurveyAutoPrompt() {
   return (
     <>
       <FreeTrialAnnouncementModal
-        open={runtimeFlags.loaded && runtimeFlags.campaignEnabled && runtimeFlags.consumptionEnabled && announcementOpen}
+        open={!suppressPrompts && runtimeFlags.loaded && runtimeFlags.campaignEnabled && runtimeFlags.consumptionEnabled && announcementOpen}
         loggedIn={session.loggedIn}
         hasTrial={hasTrial}
         paidUser={session.paidUser}
@@ -238,7 +241,7 @@ export function DailySurveyAutoPrompt() {
 
       <DailySurveyGate
         featureName="今日 AI 学习体验"
-        enabled={surveyGateEnabled}
+        enabled={!suppressPrompts && surveyGateEnabled}
         open={surveyOpen}
         onOpenChange={setSurveyOpen}
         title="完成今日反馈，解锁今日体验额度"

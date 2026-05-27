@@ -8,6 +8,7 @@
     "dev": "next dev",
     "lint": "eslint .",
     "perf:baseline": "node scripts/perf-baseline.mjs",
+    "test:e2e": "playwright test",
     "start": "next start",
     "test": "jest",
     "test:watch": "jest --watch",
@@ -98,6 +99,7 @@
     "zustand": "^5.0.12"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "@tailwindcss/postcss": "^4.1.9",
     "@types/jest": "^30.0.0",
     "@types/node": "^22",
