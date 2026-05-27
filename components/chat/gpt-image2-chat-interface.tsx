@@ -832,7 +832,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
     setMaskGatewayUrl("")
 
     if (nextMode === "image_edit") {
-      setModel(isGeminiGatewayWorkspace ? "gemini-3-pro-image-preview" : "gpt-image-2")
+      setModel(isGeminiGatewayWorkspace ? "gemini-3.1-flash-image-preview" : "gpt-image-2")
       setAspectRatio(isGeminiGatewayWorkspace ? "1:1" : "auto")
       setSize(isGeminiGatewayWorkspace ? "1K" : "1K")
       setQuality("medium")
@@ -872,12 +872,6 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
 
   const applyModel = (nextModel: GptImageModel) => {
     setModel(nextModel)
-    if (isGeminiGatewayWorkspace && nextModel === "gemini-3-pro-image-preview" && GEMINI_FLASH_ONLY_ASPECT_RATIOS.has(aspectRatio)) {
-      setAspectRatio("1:1")
-      toast.info("Gemini 3 Pro 暂不使用超宽/超高比例，已切换为 1:1。")
-      return
-    }
-
     if (nextModel === "gpt-image-2" && background === "transparent") {
       setBackground("auto")
       toast.info("gpt-image-2 当前不推荐透明背景，请使用 auto 或 opaque。")
