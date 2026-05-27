@@ -31,8 +31,14 @@ test.describe("production authenticated chat", () => {
 
     await page.waitForURL(/\/chat(?:$|\?)/, { timeout: 45_000 })
     await expect(page.getByPlaceholder("输入内容开始对话...")).toBeVisible({ timeout: 30_000 })
+    const chatTrialDialog = page.getByRole("dialog", { name: "沈翔智学 60 天共创体验计划" })
+    if (await chatTrialDialog.isVisible({ timeout: 8_000 }).catch(() => false)) {
+      await chatTrialDialog.getByRole("button", { name: "稍后再说" }).click()
+      await expect(chatTrialDialog).toBeHidden()
+    }
 
     await page.getByPlaceholder("输入内容开始对话...").fill("请用一句话回复：共创体验验证")
+    await expect(page.getByRole("button", { name: "发送消息" })).toBeEnabled()
     await page.getByRole("button", { name: "发送消息" }).click()
 
     await expect(page.getByText("积分不足")).not.toBeVisible({ timeout: 5_000 })
