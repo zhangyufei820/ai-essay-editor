@@ -20,7 +20,7 @@ describe("Dify credential selection", () => {
     })
   })
 
-  it("uses the dedicated Banana key when configured", () => {
+  it("does not select a Dify credential for Banana image generation", () => {
     const selection = getDifyCredentialForModel("banana-2-pro", {
       NODE_ENV: "production",
       DIFY_BANANA_API_KEY: "banana-key",
@@ -29,12 +29,12 @@ describe("Dify credential selection", () => {
     })
 
     expect(selection).toEqual({
-      credential: "banana-key",
-      source: "DIFY_BANANA_API_KEY",
+      credential: "",
+      source: "GEMINI_IMAGE_GATEWAY",
     })
   })
 
-  it("does not let Banana reuse the essay-correction credential in production", () => {
+  it("does not let Banana fall back to essay-correction Dify credentials", () => {
     const selection = getDifyCredentialForModel("banana-2-pro", {
       NODE_ENV: "production",
       DIFY_BANANA_API_KEY: "essay-key",
@@ -44,9 +44,9 @@ describe("Dify credential selection", () => {
 
     expect(selection).toEqual({
       credential: "",
-      source: "DIFY_BANANA_API_KEY",
+      source: "GEMINI_IMAGE_GATEWAY",
     })
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("DIFY_BANANA_API_KEY must not reuse"))
+    expect(warnSpy).not.toHaveBeenCalledWith(expect.stringContaining("DIFY_BANANA_API_KEY"))
   })
 
   it("does not let GPT Image 2 reuse the default Dify credential in production", () => {
@@ -64,19 +64,19 @@ describe("Dify credential selection", () => {
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("DIFY_GPT_IMAGE_API_KEY must not reuse"))
   })
 
-  it("uses the dedicated Gemini image workflow key when configured", () => {
+  it("does not select a Dify credential for Gemini image generation", () => {
     const selection = getDifyCredentialForModel("gemini-image", {
       DIFY_GEMINI_IMAGE_API_KEY: "gemini-image-key",
       ESSAY_CORRECTION_API_KEY: "default-key",
     })
 
     expect(selection).toEqual({
-      credential: "gemini-image-key",
-      source: "DIFY_GEMINI_IMAGE_API_KEY",
+      credential: "",
+      source: "GEMINI_IMAGE_GATEWAY",
     })
   })
 
-  it("does not silently fall back for Gemini image in production", () => {
+  it("does not let Gemini image fall back to Dify chat credentials", () => {
     const selection = getDifyCredentialForModel("gemini-image", {
       NODE_ENV: "production",
       DIFY_API_KEY: "chat-key",
@@ -85,9 +85,9 @@ describe("Dify credential selection", () => {
 
     expect(selection).toEqual({
       credential: "",
-      source: "DIFY_GEMINI_IMAGE_API_KEY",
+      source: "GEMINI_IMAGE_GATEWAY",
     })
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("DIFY_GEMINI_IMAGE_API_KEY is required"))
+    expect(warnSpy).not.toHaveBeenCalledWith(expect.stringContaining("DIFY_GEMINI_IMAGE_API_KEY"))
   })
 
   it("falls back to the default credential when a model-specific key is missing", () => {

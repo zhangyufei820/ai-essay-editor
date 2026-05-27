@@ -21,7 +21,6 @@ import { isSurveyRequiredPayload, openTrialSurveyGate } from "@/lib/trial-survey
 import type { ModelType } from "@/lib/pricing"
 import { calculatePreviewCost } from "@/lib/pricing"
 import { cn } from "@/lib/utils"
-import { extractDifyTextOutput } from "@/lib/dify-output-text"
 import {
   ASPECT_RATIO_OPTIONS,
   BACKGROUND_OPTIONS,
@@ -272,25 +271,6 @@ function extractMarkdownImageUrls(content: string) {
   return Array.from(content.matchAll(/!\[[^\]]*\]\(([^)]+)\)/g), (match) => match[1])
     .filter((url): url is string => Boolean(url))
     .map(proxifyGeneratedImageUrl)
-}
-
-function resolveBananaImageSize(size: ImageSize, aspectRatio: ImageAspectRatio) {
-  const dimensions: Partial<Record<ImageSize, { width: number; height: number; ratio: string }>> = {
-    "1024x1024": { width: 1024, height: 1024, ratio: "1:1" },
-    "1536x1024": { width: 1536, height: 1024, ratio: "3:2" },
-    "1024x1536": { width: 1024, height: 1536, ratio: "2:3" },
-    "2048x2048": { width: 2048, height: 2048, ratio: "1:1" },
-    "2048x1152": { width: 2048, height: 1152, ratio: "16:9" },
-    "1152x2048": { width: 1152, height: 2048, ratio: "9:16" },
-    "3840x2160": { width: 3840, height: 2160, ratio: "16:9" },
-    "2160x3840": { width: 2160, height: 3840, ratio: "9:16" },
-  }
-
-  return dimensions[size] || {
-    width: aspectRatio === "16:9" ? 1920 : aspectRatio === "1:1" ? 1536 : 1080,
-    height: aspectRatio === "16:9" ? 1080 : aspectRatio === "1:1" ? 1536 : 1920,
-    ratio: aspectRatio === "auto" ? "9:16" : aspectRatio,
-  }
 }
 
 function FieldLabel({ children, hint }: { children: React.ReactNode; hint?: string }) {
@@ -601,8 +581,9 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
   const searchParams = useSearchParams()
   const isBananaWorkspace = workspaceModel === "banana-2-pro"
   const isGeminiWorkspace = workspaceModel === "gemini-image"
-  const isWorkflowImageWorkspace = isBananaWorkspace || isGeminiWorkspace
-  const showModelSelector = isGeminiWorkspace
+  const isGeminiGatewayWorkspace = isBananaWorkspace || isGeminiWorkspace
+  const isWorkflowImageWorkspace = isGeminiGatewayWorkspace
+  const showModelSelector = isGeminiGatewayWorkspace
   const copy = WORKSPACE_COPY[workspaceModel]
   const urlSessionId = searchParams.get("sessionId") || searchParams.get("id")
   const initialPrompt = searchParams.get("prompt") ?? ""
@@ -611,7 +592,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
 
   const initialInputs = useMemo(() => {
     const wantsEdit = initialMode === "image_edit" || initialMode === "image-edit"
-    const base = isGeminiWorkspace
+    const base = isGeminiGatewayWorkspace
       ? wantsEdit ? GEMINI_IMAGE_EDIT_DEFAULTS : GEMINI_IMAGE_DEFAULT_INPUTS
       : wantsEdit
         ? EDIT_MODE_DEFAULTS
@@ -620,7 +601,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
       ...base,
       size: [...SIZE_OPTIONS, ...GEMINI_IMAGE_SIZE_OPTIONS].some((option) => option.value === initialSize) ? (initialSize as ImageSize) : base.size,
     }
-  }, [initialMode, initialSize, isBananaWorkspace, isGeminiWorkspace])
+  }, [initialMode, initialSize, isGeminiGatewayWorkspace])
 
   const [userId, setUserId] = useState("")
   const [userCredits, setUserCredits] = useState(0)
@@ -660,11 +641,11 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
 
   const currentInputsWithoutUrls = useMemo(
     () => ({
-      provider: isGeminiWorkspace ? "google" as const : "openai" as const,
+      provider: isGeminiGatewayWorkspace ? "google" as const : "openai" as const,
       aspect_ratio: aspectRatio,
       size,
-      image_size: isGeminiWorkspace ? size as "auto" | "512" | "1K" | "2K" | "4K" : undefined,
-      model: isGeminiWorkspace ? model : "gpt-image-2",
+      image_size: isGeminiGatewayWorkspace ? size as "auto" | "512" | "1K" | "2K" | "4K" : undefined,
+      model: isGeminiGatewayWorkspace ? model : "gpt-image-2",
       quality,
       output_format: outputFormat,
       output_compression: outputCompression,
@@ -672,9 +653,9 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
       moderation,
       n: count,
       mode,
-      response_modalities: isGeminiWorkspace ? ["TEXT", "IMAGE"] : undefined,
+      response_modalities: isGeminiGatewayWorkspace ? ["TEXT", "IMAGE"] : undefined,
     }),
-    [aspectRatio, background, count, isGeminiWorkspace, mode, model, moderation, outputCompression, outputFormat, quality, size]
+    [aspectRatio, background, count, isGeminiGatewayWorkspace, mode, model, moderation, outputCompression, outputFormat, quality, size]
   )
 
   const previewInputs = useMemo(
@@ -851,9 +832,9 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
     setMaskGatewayUrl("")
 
     if (nextMode === "image_edit") {
-      setModel(isGeminiWorkspace ? "gemini-3-pro-image-preview" : "gpt-image-2")
-      setAspectRatio(isGeminiWorkspace ? "1:1" : "auto")
-      setSize(isGeminiWorkspace ? "1K" : isBananaWorkspace ? "1024x1024" : "1K")
+      setModel(isGeminiGatewayWorkspace ? "gemini-3-pro-image-preview" : "gpt-image-2")
+      setAspectRatio(isGeminiGatewayWorkspace ? "1:1" : "auto")
+      setSize(isGeminiGatewayWorkspace ? "1K" : "1K")
       setQuality("medium")
       setOutputFormat("png")
       setOutputCompression(100)
@@ -866,7 +847,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
   }
 
   const applySize = (nextSize: ImageSize) => {
-    if (isGeminiWorkspace) {
+    if (isGeminiGatewayWorkspace) {
       setSize(nextSize)
       if (nextSize === "512") toast.info("512 适合快速预览，正式出图建议使用 1K 或 2K。")
       if (nextSize === "4K") toast.info("4K 生成可能耗时较长，请保持页面打开。")
@@ -877,7 +858,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
   }
 
   const applyAspectRatio = (nextRatio: ImageAspectRatio) => {
-    if (isGeminiWorkspace) {
+    if (isGeminiGatewayWorkspace) {
       setAspectRatio(nextRatio)
       if (GEMINI_FLASH_ONLY_ASPECT_RATIOS.has(nextRatio) && model !== "gemini-3.1-flash-image-preview") {
         setModel("gemini-3.1-flash-image-preview")
@@ -891,7 +872,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
 
   const applyModel = (nextModel: GptImageModel) => {
     setModel(nextModel)
-    if (isGeminiWorkspace && nextModel === "gemini-3-pro-image-preview" && GEMINI_FLASH_ONLY_ASPECT_RATIOS.has(aspectRatio)) {
+    if (isGeminiGatewayWorkspace && nextModel === "gemini-3-pro-image-preview" && GEMINI_FLASH_ONLY_ASPECT_RATIOS.has(aspectRatio)) {
       setAspectRatio("1:1")
       toast.info("Gemini 3 Pro 暂不使用超宽/超高比例，已切换为 1:1。")
       return
@@ -986,33 +967,6 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
     return imageUrl as string
   }
 
-  async function uploadImageToDify(file: File) {
-    if (!userId) throw new Error("请先登录后再上传图片。")
-
-    const formData = new FormData()
-    formData.append("file", file)
-    formData.append("user", userId)
-    formData.append("model", workspaceModel)
-
-    const res = await fetch(`${API_BASE}/api/dify-upload`, {
-      method: "POST",
-      headers: {
-        ...(await getRequiredAuthHeaders()),
-        "X-Model": workspaceModel,
-      },
-      body: formData,
-    })
-
-    const json = await res.json().catch(() => ({}))
-    const fileId = json.id || json.data?.id
-
-    if (!res.ok || !json.success || !fileId) {
-      throw new Error(json.details || json.message || json.error || "图片上传失败")
-    }
-
-    return fileId as string
-  }
-
   function buildImageTaskError(payload: unknown, status: number, fallbackRequestId: string, fallbackTaskId?: string) {
     const record = payload && typeof payload === "object" ? payload as Record<string, unknown> : {}
     const data = record.data && typeof record.data === "object" ? record.data as Record<string, unknown> : {}
@@ -1089,7 +1043,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
         body: JSON.stringify({
           prompt: cleanPrompt,
           mode,
-          model: isGeminiWorkspace ? "gemini-image" : isBananaWorkspace ? "banana-2-pro" : model,
+          model: isGeminiGatewayWorkspace ? workspaceModel : model,
           aspect_ratio: aspectRatio,
           size,
           quality,
@@ -1161,19 +1115,12 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
 	      let referenceUrls: string[] = []
       let maskUrl = ""
 
-      let bananaFileIds: string[] = []
-
       if (mode === "image_edit") {
         setSubmitStage("正在上传图片")
-        if (isBananaWorkspace) {
-          bananaFileIds = await Promise.all(editImages.map((image) => uploadImageToDify(image.file)))
-          setReferenceGatewayUrls([])
-        } else {
-          referenceUrls = await Promise.all(editImages.map((image) => uploadImageToGateway(image.file)))
-          setReferenceGatewayUrls(referenceUrls)
-        }
+        referenceUrls = await Promise.all(editImages.map((image) => uploadImageToGateway(image.file)))
+        setReferenceGatewayUrls(referenceUrls)
 
-        if (!isGeminiWorkspace && !isBananaWorkspace && maskImage) {
+        if (!isGeminiGatewayWorkspace && maskImage) {
           maskUrl = await uploadImageToGateway(maskImage.file)
           setMaskGatewayUrl(maskUrl)
         }
@@ -1196,10 +1143,8 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
         body: JSON.stringify({
           query: cleanPrompt,
           inputs: submittedInputs,
-          fileIds: bananaFileIds,
           model: workspaceModel,
           mode: "image",
-          imageSize: isBananaWorkspace ? resolveBananaImageSize(size, aspectRatio) : undefined,
           async_image_task: false,
           requestId,
         }),
@@ -1210,87 +1155,25 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
       let sourceText = ""
 
       if (isWorkflowImageWorkspace) {
+        const payload = await readResponseJson(response)
         if (!response.ok) {
-          const contentType = response.headers.get("content-type") || ""
-          if (contentType.includes("application/json")) {
-            const payload = await response.json().catch(() => null)
-            if (isSurveyRequiredPayload(payload)) throw buildSurveyRequiredError()
-            const detail =
-              typeof payload?.error === "string"
-                ? payload.error
-                : typeof payload?.message === "string"
-                  ? payload.message
-                  : JSON.stringify(payload || {})
-            throw new Error(`upstream_error:${response.status}:${detail.slice(0, 120)}`)
-          }
-          const errorText = await response.text()
-          throw new Error(`upstream_error:${response.status}:${errorText.slice(0, 120)}`)
+          if (isSurveyRequiredPayload(payload)) throw buildSurveyRequiredError()
+          const detail =
+            typeof payload?.error === "string"
+              ? payload.error
+              : typeof payload?.message === "string"
+                ? payload.message
+                : JSON.stringify(payload || {})
+          throw new Error(`upstream_error:${response.status}:${detail.slice(0, 120)}`)
         }
 
-        const reader = response.body?.getReader()
-        if (!reader) throw new Error("upstream_error: empty image result")
-
-        const decoder = new TextDecoder()
-        let buffer = ""
-        let fullText = ""
-
-        while (true) {
-          const { done, value } = await reader.read()
-          if (done) break
-
-          buffer += decoder.decode(value, { stream: true })
-          const lines = buffer.split("\n")
-          buffer = lines.pop() || ""
-
-          for (const line of lines) {
-            if (!line.startsWith("data: ")) continue
-            const data = line.slice(6).trim()
-            if (!data || data === "[DONE]") continue
-
-            try {
-              const json = JSON.parse(data)
-
-              if (json.event === "status") {
-                setSubmitStage(String(json.stage || json.message || "仍在处理，请保持页面打开"))
-                continue
-              }
-
-              if (json.event === "error") {
-                throw new Error(String(json.message || json.error || "图片服务返回错误"))
-              }
-
-              if (json.answer) fullText += json.answer
-
-              if (json.event === "text_chunk" || json.event === "agent_message") {
-                fullText += json.data?.text || json.text || ""
-              }
-
-              if (json.event === "workflow_finished") {
-                const outputs = json.data?.outputs || json.outputs
-                const outputText = extractDifyTextOutput(outputs)
-                if (outputText) fullText = outputText
-                const files = outputs?.files || outputs?.images || []
-                for (const file of files) {
-                  if (file?.type === "image" && file.url) {
-                    fullText += `\n\n![Generated Image](${file.url})`
-                  }
-                }
-              }
-
-              if (json.event === "message_file" && json.type === "image" && json.url) {
-                fullText += `\n\n![Generated Image](${json.url})`
-              }
-            } catch (streamEventError) {
-              if (streamEventError instanceof Error && !(streamEventError instanceof SyntaxError)) {
-                throw streamEventError
-              }
-              // Wait for the next complete SSE line.
-            }
-          }
-        }
-
-        imageUrls = extractMarkdownImageUrls(fullText)
-        sourceText = sanitizeServiceWording(fullText)
+        imageUrls = parseDifyResult(payload)
+        sourceText =
+          typeof payload?.answer === "string"
+            ? sanitizeServiceWording(payload.answer)
+            : typeof payload?.data?.outputs?.text === "string"
+              ? sanitizeServiceWording(payload.data.outputs.text)
+              : ""
       } else {
         let payload = await readResponseJson(response)
 
@@ -1677,7 +1560,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
 
               <div className="space-y-2">
                 <FieldLabel hint="画幅比例是辅助参数，真正输出尺寸由 size 决定。">画幅比例</FieldLabel>
-                <NativeSelect value={aspectRatio} onChange={applyAspectRatio} options={isGeminiWorkspace ? GEMINI_ASPECT_RATIO_OPTIONS : ASPECT_RATIO_OPTIONS} />
+                <NativeSelect value={aspectRatio} onChange={applyAspectRatio} options={isGeminiGatewayWorkspace ? GEMINI_ASPECT_RATIO_OPTIONS : ASPECT_RATIO_OPTIONS} />
               </div>
 
               <div className="space-y-2">
@@ -1685,7 +1568,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
                 <NativeSelect
                   value={size}
                   onChange={applySize}
-                  options={(isGeminiWorkspace ? GEMINI_IMAGE_SIZE_OPTIONS : SIZE_OPTIONS).map((option) => ({
+                  options={(isGeminiGatewayWorkspace ? GEMINI_IMAGE_SIZE_OPTIONS : SIZE_OPTIONS).map((option) => ({
                     ...option,
                   }))}
                 />
@@ -1777,7 +1660,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
                 ["mode", previewInputs.mode],
                 ["model", isGeminiWorkspace ? "gemini-image" : isBananaWorkspace ? "banana-2-pro" : previewInputs.model],
                 ["aspect_ratio", previewInputs.aspect_ratio],
-                ["size", isGeminiWorkspace ? previewInputs.image_size || previewInputs.size : previewInputs.size],
+                ["size", isGeminiGatewayWorkspace ? previewInputs.image_size || previewInputs.size : previewInputs.size],
                 ["quality", previewInputs.quality],
                 ["output_format", previewInputs.output_format],
                 ["output_compression", previewInputs.output_compression],

@@ -43,10 +43,13 @@ describe("all-in-one route model sync", () => {
     const text = routeSource()
 
     expect(text).toContain('model === "gemini-image"')
+    expect(text).toContain('model === "gemini-image" || model === "banana-2-pro"')
     expect(text).toContain("callGeminiImageGatewayDirect(effectiveQuery, inputs)")
     expect(text).toContain("GEMINI_IMAGE_GATEWAY_URL")
     expect(text).toContain("gemini-image-gateway")
     expect(text).not.toContain('WORKFLOW_MODELS = new Set(["gemini-image"')
+    expect(text).not.toContain("DIFY_BANANA_API_KEY")
+    expect(text).not.toContain("isBananaChatflow")
   })
 
   it("registers super all-in-one without hardcoding its app key", () => {
@@ -78,7 +81,7 @@ describe("all-in-one route model sync", () => {
     expect(text).toContain("const useBlockingDifyChat")
     expect(text).toContain('process.env.DIFY_CHAT_FORCE_BLOCKING_MODE === "true"')
     expect(text).toContain('process.env.DIFY_OPENCLAW_FORCE_BLOCKING_MODE === "true"')
-    expect(text).toContain('model !== "banana-2-pro"')
+    expect(text).toContain("!isDirectImageGatewayRequest")
     expect(text).toContain('response_mode: useBlockingDifyChat ? "blocking" : isGptImage2 ? "blocking" : "streaming"')
     expect(text).toContain("applyBlockingDifyPayload")
     expect(text).toContain("shouldWrapDifyResponseAsSse")

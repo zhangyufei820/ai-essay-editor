@@ -4,9 +4,6 @@ import { createClient } from "@supabase/supabase-js"
 import {
   DifyChatRequest,
   DifyWorkflowRequest,
-  DifyImageObject,
-  DifyFileObject,
-  DifyImageSize,
 } from "@/lib/dify-types"
 import {
   calculateActualCost,
@@ -418,33 +415,6 @@ function buildCodexSkillQuery(query: string, chatInputs: Record<string, unknown>
   ].filter(Boolean).join("\n")
 }
 
-function buildImageWorkflowInputs(query: string, inputs: unknown) {
-  const record = inputs && typeof inputs === "object" ? inputs as Record<string, unknown> : {}
-  const referenceImageUrls = pickUrlStrings(record.reference_image_urls)
-  const referenceImageUrl = pickUrlString(record.reference_image_url)
-  const safeReferenceImageUrls = referenceImageUrls.length > 0
-    ? referenceImageUrls
-    : referenceImageUrl
-      ? [referenceImageUrl]
-      : []
-  const imageUrlsText = safeReferenceImageUrls.join("\n")
-
-  const { provider: _provider, ...safeRecord } = record
-
-  return {
-    ...safeRecord,
-    image_prompt: query,
-    prompt: typeof record.prompt === "string" && record.prompt.trim() ? record.prompt : query,
-    query,
-    reference_image_url: safeReferenceImageUrls[0] || "",
-    reference_image_urls: imageUrlsText,
-    image_urls: imageUrlsText,
-    input_image_url: safeReferenceImageUrls[0] || "",
-    source_image_url: safeReferenceImageUrls[0] || "",
-    source_images: imageUrlsText,
-  }
-}
-
 type MembershipIdentity = {
   email?: string | null
   phone?: string | null
@@ -458,6 +428,10 @@ function hasGptImageModelInput(inputs: unknown): boolean {
 
 function isGptImageGatewayModel(model: unknown): model is "gpt-image-2" {
   return model === "gpt-image-2"
+}
+
+function isGeminiImageGatewayModel(model: unknown): model is "gemini-image" | "banana-2-pro" {
+  return model === "gemini-image" || model === "banana-2-pro"
 }
 
 async function resolveActiveMembershipStatus(
@@ -592,20 +566,6 @@ function sanitizeVocabCardOutputs(outputs: unknown): Record<string, unknown> {
   }
 }
 
-function summarizeDifyEventForLog(json: Record<string, any>) {
-  const data = json.data && typeof json.data === "object" ? json.data as Record<string, any> : {}
-  const outputs = data.outputs && typeof data.outputs === "object" ? data.outputs as Record<string, any> : {}
-  return {
-    event: typeof json.event === "string" ? json.event : "unknown",
-    hasConversationId: typeof json.conversation_id === "string",
-    nodeTitle: typeof data.title === "string" ? data.title : typeof json.title === "string" ? json.title : undefined,
-    workflowRunId: typeof data.workflow_run_id === "string" || typeof json.workflow_run_id === "string" ? "present" : "missing",
-    hasAnswer: typeof json.answer === "string" && json.answer.length > 0,
-    outputKeys: Object.keys(outputs).slice(0, 10),
-    fileCount: Array.isArray(outputs.files) ? outputs.files.length : undefined,
-  }
-}
-
 // 默认的基础配置
 const DIFY_BASE_URL = process.env.DIFY_INTERNAL_URL
   || process.env.DIFY_BASE_URL
@@ -638,11 +598,7 @@ function isDifyCredentialInvalidResponse(status: number, body: string) {
 }
 
 function getDifyCredentialInvalidMessage(model: string | null | undefined, keySource: string) {
-  const label = model === "gemini-image"
-    ? "Gemini 图像工作流"
-    : model === "banana-2-pro"
-      ? "Banana 图像工作流"
-      : "Dify 工作流"
+  const label = "Dify 工作流"
   return `${label}凭据失效，请管理员在服务器环境变量 ${keySource || "DIFY_API_KEY"} 中配置有效的 Dify 应用 API Key。`
 }
 
@@ -1956,13 +1912,13 @@ export async function POST(request: NextRequest) {
     }
 
     const isGptImageGatewayRequest = isGptImageGatewayModel(model)
-    const isGeminiImageGatewayRequest = model === "gemini-image"
+    const isGeminiImageGatewayRequest = isGeminiImageGatewayModel(model)
     const isDirectImageGatewayRequest = isGptImageGatewayRequest || isGeminiImageGatewayRequest
     const requestId = request.headers.get("X-Request-Id") || body.requestId || createRequestId(isDirectImageGatewayRequest ? "img" : "chat")
     logPerf(requestId, "api_enter", apiStartedAt, { model: model || "general-chat" })
     logPerf(requestId, "auth_done", apiStartedAt)
     const taskKind = isDirectImageGatewayRequest ? "image" : model === "open-claw" ? "openclaw" : isAllInOneAgent ? "workflow" : "dify"
-    if (hasGptImageModelInput(inputs) && !isDirectImageGatewayRequest && model !== "banana-2-pro") {
+    if (hasGptImageModelInput(inputs) && !isDirectImageGatewayRequest) {
       console.warn(`🚫 [媒体权限] 图片模型请求顶层 model 不匹配，拒绝绕过媒体计费: model=${model || "empty"}`)
       return new Response(
         JSON.stringify({
@@ -1973,6 +1929,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const geminiImageInputsForBilling = isGeminiImageGatewayRequest ? buildGeminiImageGatewayInputs(inputs) : null
     const imageInputsForBilling = isGptImageGatewayRequest ? buildGptImageV11Inputs(inputs) : null
     const billingModelType = imageInputsForBilling?.model as ModelType | undefined
     const createTaskRunInput = {
@@ -2035,7 +1992,9 @@ export async function POST(request: NextRequest) {
     console.log(`🔄 [切换模型] 目标模型: ${model || "默认标准版"} | conversation=${effectiveConvId ? "reuse" : "new"}`)
 
     // --- 1. 钥匙分发中心 (彻底分离通道) ---
-    const { credential: selectedCredential, source: keySource } = getDifyCredentialForModel(workflowSkillId ? "workflow-skill" : model, process.env, DEFAULT_DIFY_KEY)
+    const { credential: selectedCredential, source: keySource } = isDirectImageGatewayRequest
+      ? { credential: "", source: isGptImageGatewayRequest ? "IMAGE_GATEWAY" : "GEMINI_IMAGE_GATEWAY" }
+      : getDifyCredentialForModel(workflowSkillId ? "workflow-skill" : model, process.env, DEFAULT_DIFY_KEY)
 
     // 安全检查：防止忘配 Key
     if (!selectedCredential && !isDirectImageGatewayRequest) {
@@ -2049,12 +2008,6 @@ export async function POST(request: NextRequest) {
           headers: { "Content-Type": "application/json" }
         });
     }
-    
-    // 🔥 Banana 专用调试日志
-    if (model === "banana-2-pro") {
-      console.log(`🎨 [Banana Debug] files=${difyFileIds.length} conversation=${conversation_id ? "reuse" : "new"}`)
-    }
-
     // --- 2. 获取用户积分（用于预检查） ---
     const modelType = requestedModelType
     
@@ -2183,13 +2136,13 @@ export async function POST(request: NextRequest) {
     
     console.log(`💰 [预检查] 模型: ${modelType} | 当前积分: ${currentCredits}`)
 
-    if (model === "gemini-image") {
-      console.log("🎨 [Gemini Image] 使用直连 Gemini 图片网关，绕过 Dify workflow")
-      const geminiImageInputs = buildGeminiImageGatewayInputs(inputs)
+    if (isGeminiImageGatewayRequest) {
+      console.log(`🎨 [Gemini Image Gateway] ${model} 使用直连 Gemini 图片网关，绕过 Dify workflow`)
+      const geminiImageInputs = geminiImageInputsForBilling || buildGeminiImageGatewayInputs(inputs)
 
       await updateTaskRun(taskRun.id, {
         status: "running",
-        stage: "Gemini 图片网关生成中",
+          stage: `${model === "banana-2-pro" ? "Banana" : "Gemini"} 图片网关生成中`,
         progress: 35,
       })
 
@@ -2199,9 +2152,9 @@ export async function POST(request: NextRequest) {
       if (!gatewayResponse.ok) {
         await updateTaskRun(taskRun.id, {
           status: "failed",
-          stage: "Gemini 图片网关返回错误",
+          stage: `${model === "banana-2-pro" ? "Banana" : "Gemini"} 图片网关返回错误`,
           progress: 100,
-          errorMessage: typeof gatewayPayload?.error === "string" ? gatewayPayload.error : "Gemini 图像服务请求失败",
+          errorMessage: typeof gatewayPayload?.error === "string" ? gatewayPayload.error : "图像服务请求失败",
           errorCode: typeof gatewayPayload?.code === "string" ? gatewayPayload.code : `GEMINI_IMAGE_GATEWAY_${gatewayResponse.status}`,
           sanitizedError: sanitizeForTrace(gatewayPayload) as Record<string, unknown>,
         })
@@ -2214,7 +2167,7 @@ export async function POST(request: NextRequest) {
         amount: estimatedMinCost,
         imageCount: geminiImageInputs.n,
         imageSize: geminiImageInputs.image_size,
-        modelId: "gemini-image",
+        modelId: model,
         keySource: "GEMINI_IMAGE_GATEWAY",
         gatewayName: "gemini-image-gateway",
         requestId: taskRun.requestId,
@@ -2423,17 +2376,13 @@ export async function POST(request: NextRequest) {
       (process.env.DIFY_CHAT_FORCE_BLOCKING_MODE === "true" ||
         (model === "open-claw" && process.env.DIFY_OPENCLAW_FORCE_BLOCKING_MODE === "true")) &&
       !WORKFLOW_MODELS.has(model || "") &&
-      !isGptImageGatewayRequest &&
-      model !== "banana-2-pro"
+      !isDirectImageGatewayRequest
 
     const callDify = async (retryWithoutId = false) => {
         const currentConvId = retryWithoutId ? null : effectiveConvId;
 
-        // 🎨 Dify app mode matters: Banana is a chatflow, while Gemini image and vocab-card use Workflow API.
         const isWorkflow = WORKFLOW_MODELS.has(model || "");
-        const isWorkflowImageModel = model === "banana-2-pro" || model === "gemini-image";
         const isVocabCardWorkflow = model === "vocab-card";
-        const isBananaChatflow = model === "banana-2-pro";
         const apiEndpoint = isWorkflow ? "/workflows/run" : "/chat-messages";
 
         let difyRequest: DifyWorkflowRequest | DifyChatRequest;
@@ -2447,12 +2396,10 @@ export async function POST(request: NextRequest) {
                   user: userId || "default-user",
                 }
               : {
-                  inputs: isWorkflowImageModel
-                    ? buildImageWorkflowInputs(effectiveQuery, inputs)
-                    : {
-                        image_prompt: effectiveQuery,
-                        ...(inputs || {})
-                    },
+                  inputs: {
+                    image_prompt: effectiveQuery,
+                    ...(inputs || {})
+                  },
                   response_mode: "streaming",
                   user: userId || "default-user",
               }
@@ -2464,7 +2411,6 @@ export async function POST(request: NextRequest) {
                   transfer_method: 'local_file',
                   upload_file_id: difyFileIds[0]
                 }]
-                console.log(`🎨 [Banana] 使用文件对象:`, difyRequest.inputs.init_image)
             }
 
             // 🎨 传递尺寸参数（如果有）
@@ -2472,7 +2418,6 @@ export async function POST(request: NextRequest) {
                 difyRequest.inputs.aspect_ratio = imageSize.ratio || "9:16"
                 difyRequest.inputs.image_width = imageSize.width || 1080
                 difyRequest.inputs.image_height = imageSize.height || 1920
-                console.log(`🎨 [Banana] 图片尺寸: ${imageSize.ratio} (${imageSize.width}x${imageSize.height})`)
             }
 
             console.log(`🎨 [Workflow] request prepared: model=${model} files=${difyFileIds.length} hasImageSize=${Boolean(imageSize)}`)
@@ -2492,8 +2437,6 @@ export async function POST(request: NextRequest) {
                     normalizedCodexSkill ? normalizedCodexSkill.inputs : inputs,
                     fileUrls,
                   )
-                : isBananaChatflow
-                  ? buildImageWorkflowInputs(effectiveQuery, inputs)
                 : normalizedOpenClawSkill
                   ? normalizedOpenClawSkill.inputs
                 : workflowSkillId
@@ -2513,14 +2456,6 @@ export async function POST(request: NextRequest) {
                 : normalizedCodexSkill?.skillId
                   ? allInOneQuery
                 : effectiveQuery
-
-            if (isBananaChatflow && imageSize && chatInputs && typeof chatInputs === "object") {
-                const bananaInputs = chatInputs as Record<string, unknown>
-                bananaInputs.aspect_ratio = imageSize.ratio || "9:16"
-                bananaInputs.image_width = imageSize.width || 1080
-                bananaInputs.image_height = imageSize.height || 1920
-                console.log(`🎨 [Banana] 图片尺寸: ${imageSize.ratio} (${imageSize.width}x${imageSize.height})`)
-            }
 
             difyRequest = {
                 inputs: chatInputs,
@@ -2650,14 +2585,6 @@ export async function POST(request: NextRequest) {
         console.warn(`📡 [Dify响应] 状态码: ${response.status}`)
         console.warn(`📡 [Dify响应] body类型: ${typeof response.body} | body是否为null: ${response.body === null}`)
 
-        if (model === "banana-2-pro") {
-            console.log(`🎨 [Banana] Dify响应头摘要:`, {
-              contentType: response.headers.get("content-type") || undefined,
-              hasRequestId: Boolean(response.headers.get("x-request-id")),
-              hasTraceId: Boolean(response.headers.get("x-trace-id")),
-            })
-        }
-
         const shouldRetryWithNewConversation =
           retryCount === 0 && await shouldRetryDifyWithNewConversation(response, effectiveConvId)
 
@@ -2705,16 +2632,6 @@ export async function POST(request: NextRequest) {
           errorCode: handledErrorCode,
           sanitizedError: { status: response.status, body: sanitizeForTrace(errorText) },
         })
-        
-        // 🔥 Banana 特殊错误处理
-        if (model === "banana-2-pro") {
-          console.error(`🎨 [Banana错误] 响应摘要:`, {
-            status: response.status,
-            statusText: response.statusText,
-            bodyLength: errorText.length,
-            baseUrl: DIFY_BASE_URL
-          })
-        }
         
         return new Response(
           JSON.stringify({
@@ -2900,15 +2817,14 @@ export async function POST(request: NextRequest) {
 
     console.log(`✅ [Dify请求] 成功，开始流式传输...`)
 
-    // --- 5. 流式响应 + 智能扣费 + Banana 图片转存 ---
+    // --- 5. 流式响应 + 智能扣费 ---
     // 创建一个 TransformStream 来处理流式数据并在结束时扣费
     let totalTokens = 0
     let promptTokens = 0
     let completionTokens = 0
     let conversationId = ""
     let fullResponseText = ""  // 🔥 收集完整响应内容用于验证
-    let workflowImageUrls: string[] = []  // 🎨 收集工作流图像模型生成的图片 URL
-    const isWorkflowImageModel = model === "banana-2-pro" || model === "gemini-image"
+    let workflowImageUrls: string[] = []  // 🎨 收集 Dify 工作流生成的图片 URL
     let jsonBuffer = ""  // 🔥 JSON 行缓冲：跨 chunk 拼接不完整的 SSE 数据行
     let hasReceivedContent = false  // 🔥 标记是否收到了实际内容（用于判断是否扣费）
     let latestParsedUsage: ParsedDifyUsage | null = null
@@ -3259,11 +3175,6 @@ export async function POST(request: NextRequest) {
             controller.enqueue(new TextEncoder().encode(outputText))
           }
 
-          // 🎨 Banana 调试：记录原始数据
-          if (isWorkflowImageModel && text.trim()) {
-            console.log(`🎨 [WorkflowImage流式] 收到数据块:`, { model, bytes: chunk.byteLength })
-          }
-
           // 🔥 追加到缓冲区，然后只处理完整的行
           // 完整的 SSE 数据行格式：data: {...}\n
           // 可能被 TCP 包分割成多块传输，需要跨 chunk 缓冲
@@ -3290,11 +3201,6 @@ export async function POST(request: NextRequest) {
 
             try {
               const json = JSON.parse(data)
-
-              // 🎨 Banana 调试：记录所有事件
-              if (isWorkflowImageModel) {
-                console.log(`🎨 [WorkflowImage事件] 摘要:`, summarizeDifyEventForLog(json))
-              }
 
 	              // 🧠 记录工作流节点事件（用于前端思考过程显示）
 	              if (json.event === 'node_started' || json.event === 'node_finished') {
@@ -3402,22 +3308,9 @@ export async function POST(request: NextRequest) {
 	                  }).catch((error) => console.warn("[AI Task Trace] artifact update failed:", error))
 	                }
 
-                // 🎨 工作流图片检测：提取图片 URL
-                if (isWorkflowImageModel) {
-                  // 匹配 Markdown 图片格式：![alt](url)
-                  const imageRegex = /!\[.*?\]\((https?:\/\/[^\)]+)\)/g
-                  const matches = json.answer.matchAll(imageRegex)
-                  for (const match of matches) {
-                    const imageUrl = match[1]
-	                    if (!workflowImageUrls.includes(imageUrl)) {
-	                      workflowImageUrls.push(imageUrl)
-	                      console.log(`🎨 [WorkflowImage] 检测到图片 URL (message):`, { model, imageCount: workflowImageUrls.length })
-	                    }
-                  }
-                }
               }
 
-              // 🔥 收集 Workflow API 的文本响应（Banana 2 Pro）
+              // 🔥 收集 Workflow API 的文本响应
               if (json.event === "text_chunk" || json.event === "agent_message") {
                 const text = json.data?.text || json.text || ''
 	                if (text) {
@@ -3485,23 +3378,6 @@ export async function POST(request: NextRequest) {
 	                }).catch((error) => console.warn("[AI Task Trace] workflow finish update failed:", error))
 	              }
 
-              // 🎨 处理 message_file 事件（图片文件）
-              if (json.event === "message_file" && isWorkflowImageModel) {
-                console.log(`🎨 [WorkflowImage] 收到 message_file 事件:`, summarizeDifyEventForLog(json))
-
-                // Dify 返回的图片文件格式：{ type: "image", url: "..." }
-                if (json.type === "image" && json.url) {
-                  const imageUrl = json.url
-	                  if (!workflowImageUrls.includes(imageUrl)) {
-	                    workflowImageUrls.push(imageUrl)
-	                    console.log(`🎨 [WorkflowImage] 检测到图片 URL (message_file):`, { model, imageCount: workflowImageUrls.length })
-
-                    // 🔥 立即将图片 URL 以 Markdown 格式添加到响应中
-                    fullResponseText += `\n\n![Generated Image](${imageUrl})`
-                  }
-                }
-              }
-
               if (shouldBufferForDisplay && json.event === "message_end" && fullResponseText.trim() && !allInOneStreamedAnswer) {
                 enqueueAllInOneDisplayOnce(fullResponseText)
               }
@@ -3514,28 +3390,6 @@ export async function POST(request: NextRequest) {
                 enqueueSseAnswer(controller, displayText)
                 fullResponseText = displayText
                 hasReceivedContent = true
-              }
-
-              // 🎨 处理 workflow_finished 事件（可能包含图片）
-              if (json.event === "workflow_finished" && isWorkflowImageModel) {
-                console.log(`🎨 [WorkflowImage] 收到 workflow_finished 事件:`, summarizeDifyEventForLog(json))
-
-                // 检查是否有输出文件
-                const workflowFiles = json.outputs?.files || json.data?.outputs?.files || []
-                if (Array.isArray(workflowFiles)) {
-                  for (const file of workflowFiles) {
-                    if (file.type === "image" && file.url) {
-                      const imageUrl = file.url
-	                      if (!workflowImageUrls.includes(imageUrl)) {
-	                        workflowImageUrls.push(imageUrl)
-	                        console.log(`🎨 [WorkflowImage] 检测到图片 URL (workflow_finished):`, { model, imageCount: workflowImageUrls.length })
-
-                        // 🔥 立即将图片 URL 以 Markdown 格式添加到响应中
-                        fullResponseText += `\n\n![Generated Image](${imageUrl})`
-                      }
-                    }
-                  }
-                }
               }
 
 	              // 提取 token 使用量（Dify 在 message_end 事件中返回）

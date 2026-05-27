@@ -123,10 +123,12 @@ describe('Sprint 5 payment / credits / membership guards', () => {
   it('routes Gemini image through the dedicated gateway after server-side billing guards', () => {
     const source = read('app/api/dify-chat/route.ts')
     const billingCheckIndex = source.indexOf('const estimatedMinCost = imageInputsForBilling')
-    const geminiGatewayIndex = source.indexOf('console.log("🎨 [Gemini Image] 使用直连 Gemini 图片网关，绕过 Dify workflow")')
+    const geminiGatewayIndex = source.indexOf('[Gemini Image Gateway]')
     const difyCallIndex = source.indexOf('const callDify = async')
 
     expect(source).toContain('const GEMINI_IMAGE_GATEWAY_URL')
+    expect(source).toContain('function isGeminiImageGatewayModel(model: unknown)')
+    expect(source).toContain('model === "gemini-image" || model === "banana-2-pro"')
     expect(source).toContain('callGeminiImageGatewayDirect(effectiveQuery, inputs)')
     expect(source).toContain('gatewayName: "gemini-image-gateway"')
     expect(geminiGatewayIndex).toBeGreaterThan(billingCheckIndex)
@@ -143,8 +145,8 @@ describe('Sprint 5 payment / credits / membership guards', () => {
   it('keeps the Image 2 workspace locked to the default GPT Image 2 model', () => {
     const image2 = read('components/chat/gpt-image2-chat-interface.tsx')
 
-    expect(image2).toContain('const showModelSelector = isGeminiWorkspace')
-    expect(image2).toContain('model: isGeminiWorkspace ? model : "gpt-image-2"')
+    expect(image2).toContain('const showModelSelector = isGeminiGatewayWorkspace')
+    expect(image2).toContain('model: isGeminiGatewayWorkspace ? model : "gpt-image-2"')
     expect(image2).toContain(': "gpt-image-2"')
     expect(image2).not.toContain('options={isGeminiWorkspace ? GEMINI_MODEL_OPTIONS : MODEL_OPTIONS}')
   })
@@ -193,8 +195,11 @@ describe('Sprint 5 payment / credits / membership guards', () => {
     expect(uploadRoute).toContain('code: "DIFY_UPLOAD_CREDENTIAL_MISSING"')
     expect(uploadRoute).toContain('status: 503')
     expect(uploadRoute).toContain('model === "banana-2-pro"')
+    expect(uploadRoute).toContain('const useImageGateway = shouldUseImageGateway(targetModel)')
+    expect(uploadRoute).toContain('if (!useImageGateway && !targetApiKey)')
     expect(credentials).toContain('selectRequiredDistinctProductionCredential')
-    expect(credentials).toContain('DIFY_BANANA_API_KEY')
+    expect(credentials).not.toContain('DIFY_BANANA_API_KEY')
+    expect(credentials).toContain('source: "GEMINI_IMAGE_GATEWAY"')
     expect(credentials).toContain('must not reuse the default or essay-correction credential in production')
   })
 
@@ -227,7 +232,7 @@ describe('Sprint 5 payment / credits / membership guards', () => {
     expect(route).toContain('/chat-messages')
     expect(route).toContain('/workflows/run')
     expect(route).toContain('Gemini 图像生成')
-    expect(client).toContain('model: isGeminiWorkspace ? "gemini-image"')
+    expect(client).toContain('model: isGeminiGatewayWorkspace ? workspaceModel : model')
     expect(client).toContain('/api/image-prompt/optimize')
     expect(client).toContain('自动优化')
     expect(`${route}\n${client}`).not.toContain('app-VLBApoujAy64G9KdvcmZPpHq')

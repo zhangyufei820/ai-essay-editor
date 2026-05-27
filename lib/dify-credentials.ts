@@ -28,21 +28,11 @@ export function getDifyCredentialForModel(
       return selectCredential(env.DIFY_API_KEY_CLAUDE, "DIFY_API_KEY_CLAUDE", defaultCredential)
     case "gemini-pro":
       return selectCredential(env.DIFY_API_KEY_GEMINI, "DIFY_API_KEY_GEMINI", defaultCredential)
-    case "gemini-image":
-      return selectRequiredProductionCredential(
-        env.DIFY_GEMINI_IMAGE_API_KEY,
-        "DIFY_GEMINI_IMAGE_API_KEY",
-        env,
-        defaultCredential,
-      )
     case "banana":
     case "banana-2-pro":
-      return selectRequiredDistinctProductionCredential(
-        env.DIFY_BANANA_API_KEY,
-        "DIFY_BANANA_API_KEY",
-        env,
-        defaultCredential,
-      )
+      return { credential: "", source: "GEMINI_IMAGE_GATEWAY" }
+    case "gemini-image":
+      return { credential: "", source: "GEMINI_IMAGE_GATEWAY" }
     case "gpt-image-2":
       return selectRequiredDistinctProductionCredential(
         env.DIFY_GPT_IMAGE_API_KEY,

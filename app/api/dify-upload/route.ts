@@ -257,14 +257,6 @@ export async function POST(request: NextRequest) {
     return createRateLimitResponse(limitResult.retryAfter!)
   }
 
-  // ✅ 检查 API Key 配置
-  if (!DEFAULT_DIFY_KEY) {
-    return new Response(JSON.stringify({ error: "Dify API key not configured" }), {
-      status: 500,
-      headers: { "Content-Type": "application/json", "X-Request-Id": requestId },
-    })
-  }
-
   try {
     // ============================================
     // 0. 大文件预检：Vercel/Node API 限制 4.5MB，超出引导使用直连
@@ -371,10 +363,10 @@ export async function POST(request: NextRequest) {
       uploadType: uploadFile.type,
     })
 
-    // 🔥 根据模型选择正确的 API Key
     const targetModel = model || modelFromForm
-    const targetApiKey = getApiKeyForModel(targetModel)
-    if (!targetApiKey) {
+    const useImageGateway = shouldUseImageGateway(targetModel)
+    const targetApiKey = useImageGateway ? "" : getApiKeyForModel(targetModel)
+    if (!useImageGateway && !targetApiKey) {
       return new Response(JSON.stringify({
         error: "目标模型上传凭据未配置",
         code: "DIFY_UPLOAD_CREDENTIAL_MISSING",
@@ -389,7 +381,7 @@ export async function POST(request: NextRequest) {
 
     // 非 GPT Image 工作台必须走 Dify 原生 upload_file_id。
     // OpenClaw、作文批改、教学模型等 Dify 应用不可靠支持 remote_url。
-    if (!shouldUseImageGateway(targetModel)) {
+    if (!useImageGateway) {
       try {
         const difyFileId = await uploadFileToDify(safeFile, userId, targetApiKey)
         if (!difyFileId) {
