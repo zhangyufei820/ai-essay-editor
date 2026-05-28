@@ -218,7 +218,7 @@ export function EssayGrader() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...(await getVerifiedAuthHeaders()),
+          ...(await getRequiredAuthHeaders()),
         },
         body: JSON.stringify({
           essayText,
@@ -232,6 +232,9 @@ export function EssayGrader() {
       if (!response.ok) {
         const errorText = await response.text()
         console.error("[作文批改] 响应错误:", response.status, errorText)
+        if (response.status === 401) {
+          throw new Error("登录状态已过期，请重新登录后再提交。")
+        }
         try {
           const parsedError = JSON.parse(errorText)
           if (parsedError?.surveyRequired) {
