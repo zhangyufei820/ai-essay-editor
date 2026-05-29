@@ -233,14 +233,14 @@ export async function getVerifiedAuthHeaders(currentUser?: unknown): Promise<Rec
     return { Authorization: `Bearer ${authingToken}` }
   }
 
-  const liveSupabaseAccessToken = await getSupabaseSessionAccessTokenWithTimeout()
-  if (liveSupabaseAccessToken) {
-    return { Authorization: `Bearer ${liveSupabaseAccessToken}` }
-  }
-
   const supabaseStoredAccessToken = getStoredSupabaseAccessToken()
   if (supabaseStoredAccessToken) {
     return { Authorization: `Bearer ${supabaseStoredAccessToken}` }
+  }
+
+  const liveSupabaseAccessToken = await getSupabaseSessionAccessTokenWithTimeout()
+  if (liveSupabaseAccessToken) {
+    return { Authorization: `Bearer ${liveSupabaseAccessToken}` }
   }
 
   return authingToken ? { Authorization: `Bearer ${authingToken}` } : {}

@@ -681,12 +681,22 @@ async function saveChatMessageViaApi(params: {
 function scheduleChatPerfRenderMark(requestId: string, stage: string, startedAt: number) {
   if (typeof window === "undefined") return
   window.requestAnimationFrame(() => {
-    console.debug("[ChatPerf]", {
-      requestId,
-      stage,
-      elapsedMs: Date.now() - startedAt,
-    })
+    recordChatPerf(requestId, stage, Date.now() - startedAt)
   })
+}
+
+function recordChatPerf(requestId: string, stage: string, elapsedMs: number, extra: Record<string, unknown> = {}) {
+  const payload = {
+    requestId,
+    stage,
+    elapsedMs,
+    ...extra,
+  }
+  if (typeof window !== "undefined") {
+    const perfWindow = window as Window & { __SHENXIANG_CHAT_PERF__?: Array<Record<string, unknown>> }
+    perfWindow.__SHENXIANG_CHAT_PERF__ = [...(perfWindow.__SHENXIANG_CHAT_PERF__ || []), payload].slice(-80)
+  }
+  console.debug("[ChatPerf]", payload)
 }
 
 function rememberPendingTask(task: { requestId: string; sessionId?: string; model: string; createdAt: number }) {
@@ -2699,12 +2709,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
           const authHeaders = await authHeadersPromise
           const requestStartedAt = Date.now()
           const hasAuthorization = Boolean(authHeaders.Authorization)
-          console.debug("[ChatPerf]", {
-            requestId,
-            stage: "click_to_request_start",
-            elapsedMs: requestStartedAt - clickStartedAt,
-            model: selectedModel,
-          })
+          recordChatPerf(requestId, "click_to_request_start", requestStartedAt - clickStartedAt, { model: selectedModel })
 
 	        const res = await fetch(getApiUrl(isTeacherAgentSubmit ? "/api/agent-chat" : "/api/dify-chat"), {
 	            method: "POST",
@@ -2748,10 +2753,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 	              messageId: botId,
 	            })
 	        })
-          console.debug("[ChatPerf]", {
-            requestId,
-            stage: "request_headers",
-            elapsedMs: Date.now() - requestStartedAt,
+          recordChatPerf(requestId, "request_headers", Date.now() - requestStartedAt, {
             hasAuthorization,
             hasCookie: false,
             model: selectedModel,
@@ -2832,11 +2834,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         const markFirstAnswer = (stage: "first_answer" | "first_word_card" | "first_text_chunk" | "first_workflow_output") => {
           if (firstAnswerAt) return
           firstAnswerAt = Date.now()
-          console.debug("[ChatPerf]", {
-            requestId,
-            stage,
-            elapsedMs: firstAnswerAt - requestStartedAt,
-          })
+          recordChatPerf(requestId, stage, firstAnswerAt - requestStartedAt)
         }
         const updateAssistantMessageContent = (content: string, stage = "first_render") => {
           if (!firstAnswerAt) markFirstAnswer("first_answer")
@@ -2856,11 +2854,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
             if (done) break;
             if (!firstChunkAt) {
               firstChunkAt = Date.now()
-              console.debug("[ChatPerf]", {
-                requestId,
-                stage: "first_chunk",
-                elapsedMs: firstChunkAt - requestStartedAt,
-              })
+              recordChatPerf(requestId, "first_chunk", firstChunkAt - requestStartedAt)
             }
 
             buffer += decoder.decode(value, { stream: true });
@@ -3039,11 +3033,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
             fullText = friendlyError
             hasRec = true
           }
-          console.debug("[ChatPerf]", {
-            requestId,
-            stage: "stream_end",
-            elapsedMs: Date.now() - requestStartedAt,
-          })
+          recordChatPerf(requestId, "stream_end", Date.now() - requestStartedAt)
           if (hasRec) {
             await persistUserMessagePromise
             const cardToSave = wordCard as FrontendWordCard | null
@@ -3110,7 +3100,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       if (userId) {
         fetchCredits(userId)
       }
-      console.debug("[ChatPerf]", { requestId, stage: "post_stream_refresh", count: 1 })
+      recordChatPerf(requestId, "post_stream_refresh", 0, { count: 1 })
 
       // 🔥 移除自动切换回 standard 的逻辑，保持当前模型
       // if (genMode !== "text") {

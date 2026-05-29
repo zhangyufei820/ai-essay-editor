@@ -97,7 +97,8 @@ describe("client auth headers", () => {
     await expect(getVerifiedAuthHeaders()).resolves.toEqual({ Authorization: "Bearer sdk.only.token" })
   })
 
-  it("uses the Supabase auth storage access token when the live session helper is unavailable", async () => {
+  it("uses the Supabase auth storage access token without waiting for the live session helper", async () => {
+    jest.useFakeTimers()
     process.env.NEXT_PUBLIC_SUPABASE_URL = "https://rnujdnmxufmzgjvmddla.supabase.co"
     installStorage({
       idToken: null,
@@ -112,9 +113,17 @@ describe("client auth headers", () => {
       }),
     })
 
+    const getSession = jest.fn(() => new Promise(() => undefined))
+    jest.doMock("@/lib/supabase/client", () => ({
+      createClient: () => ({
+        auth: { getSession },
+      }),
+    }))
+
     const { getVerifiedAuthHeaders, hasStoredVerifiedAuthToken } = await import("@/lib/client-auth")
     expect(hasStoredVerifiedAuthToken()).toBe(true)
     await expect(getVerifiedAuthHeaders()).resolves.toEqual({ Authorization: "Bearer supabase.access.signature" })
+    expect(getSession).not.toHaveBeenCalled()
   })
 
   it("falls back to stored Supabase auth when the live session helper stalls", async () => {

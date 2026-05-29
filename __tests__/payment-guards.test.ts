@@ -287,7 +287,7 @@ describe('Sprint 5 payment / credits / membership guards', () => {
     const login = read('app/login/page.tsx')
     const suno = read('app/api/suno/run/route.ts')
 
-    expect(source).toContain('stage: "request_headers"')
+    expect(source).toContain('recordChatPerf(requestId, "request_headers"')
     expect(source).toContain('hasAuthorization')
     expect(source).toContain('hasCookie')
     expect(`${source}\n${difyChat}`).not.toContain('Object.fromEntries(res.headers.entries())')
