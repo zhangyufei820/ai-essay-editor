@@ -42,6 +42,7 @@ import remarkMath from "remark-math"
 import rehypeKatex from "rehype-katex"
 import { MarkdownCodeBlock, extractLanguageFromClassName } from "@/components/chat/MarkdownCodeBlock"
 import { cleanLLMText } from "@/lib/text-sanitizer"
+import { isAssistantFailureContent } from "@/lib/chat-message-guards"
 
 // v2 墨砚 token colors
 const AI_TEXT_COLOR = "var(--ink-800)"
@@ -538,6 +539,7 @@ function AssistantMarkdownCard({
   const [isLong, setIsLong] = useState(false)
   const parsedContent = useMemo(() => splitThinkingContent(content), [content])
   const answerContent = parsedContent.answer || (parsedContent.hasOpenThinking ? "" : content)
+  const isFailureContent = isAssistantFailureContent(answerContent || content)
 
   useEffect(() => {
     setCollapsed(true)
@@ -599,8 +601,8 @@ function AssistantMarkdownCard({
         </div>
       ) : null}
 
-      {!isStreaming ? <ShareRewardCallout onShare={actions.onShare} /> : null}
-      <MessageActionToolbar actions={actions} />
+      {!isStreaming && !isFailureContent ? <ShareRewardCallout onShare={actions.onShare} /> : null}
+      {!isFailureContent ? <MessageActionToolbar actions={actions} /> : null}
     </article>
   )
 }
@@ -627,15 +629,17 @@ const MessageBubble = memo(function MessageBubble({
     if (isUser || !isEssayModel) return null
     return parseEssayReview(content)
   }, [content, isUser, model])
+  const isFailureContent = !isUser && isAssistantFailureContent(content)
   const templateType = useMemo(() => {
     if (isUser) return "user"
+    if (isFailureContent) return "markdown"
     if (essayReviewArtifact) return "essay-review"
     if (model === "vocab-card") return "vocab-card"
     if (model === "flashcard") return "flashcard"
     if (model?.includes("gpt-image") || model === "banana-2-pro" || model === "gemini-image") return "image-gallery"
     if (model === "worksheet-diagnosis") return "worksheet-poster"
     return "markdown"
-  }, [essayReviewArtifact, isUser, model])
+  }, [essayReviewArtifact, isFailureContent, isUser, model])
   const vocabCardArtifact = useMemo(
     () => templateType === "vocab-card" ? parseVocabCard(content) : null,
     [content, templateType]
@@ -778,7 +782,7 @@ const MessageBubble = memo(function MessageBubble({
                           onShare={actions.onShare}
                           onAskFollowup={actions.onAskFollowup}
                         />
-                        {!isStreaming ? <ShareRewardCallout onShare={actions.onShare} /> : null}
+                        {!isStreaming && !isFailureContent ? <ShareRewardCallout onShare={actions.onShare} /> : null}
                       </div>
                     )
                   case "vocab-card":

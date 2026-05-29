@@ -310,6 +310,9 @@ Dify / Agent 类任务补充调用链：
 - 服务间通信是否误用 `127.0.0.1:port`；容器内应使用容器名或正确监听 `0.0.0.0`。
 - 新环境变量是否同步到 `.env.example`、部署文档和运行环境说明，但不得写入真实值。
 - 流式输出是否真正使用 streaming，而不是等全部生成后一次性返回。
+- Dify 应用 Key 必须一应用一 Key 独立绑定，禁止复用其它应用 Key，禁止使用 `DIFY_API_KEY` 作为默认值或 fallback。
+- 修改或新增 Dify Key 后，必须运行 `node scripts/check-env.js .env.production`，并用 Dify `/v1/info` 核对环境变量实际绑定的 app 名称。
+- Gemini/Banana 图片生成只走 `gemini-image-gateway` 直联网关，不得重新接回 Dify chatflow。
 
 ### 支付、积分、会员、订单
 
@@ -622,6 +625,7 @@ npm test -- __tests__/credits.test.ts __tests__/payment-guards.test.ts __tests__
 
 - 容器网络：修改网络配置后，必须验证所有相关容器能互通。
 - 环境变量：新增变量后，必须同步 `.env.example`、部署文档、Docker/服务器运行说明；不得提交真实值。
+- Dify Key 串线：优先查 `lib/dify-credentials.ts`、相关 API route 和生产 `.env.production`；`DIFY_API_KEY` 必须为空或示例占位，不能作为任何应用 fallback。
 - URL 拼接：检查 Base URL 是否已包含 `/v1` 等路径，避免重复拼接。
 - 端口绑定：服务间通信不要在容器内误用 `127.0.0.1:port`；服务监听通常应为 `0.0.0.0`，容器互调用容器名。
 - 流式输出：后端确认 `stream: true` 或等价配置，前端确认 `ReadableStream` 读取循环和 Markdown 增量渲染。

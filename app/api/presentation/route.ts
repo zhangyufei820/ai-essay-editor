@@ -23,9 +23,7 @@ ${content}`
 }
 
 async function generatePresentationOutline(content: string, template?: string) {
-  const apiKey = process.env.DIFY_PRESENTATION_API_KEY
-    || process.env.DIFY_BEIKE_PRO_API_KEY
-    || process.env.DIFY_ALL_IN_ONE_AGENT_API_KEY
+  const apiKey = process.env.DIFY_PRESENTATION_API_KEY || ""
 
   if (apiKey) {
     const dify = await callToolsDifyChat({
@@ -38,7 +36,7 @@ async function generatePresentationOutline(content: string, template?: string) {
   }
 
   if (!process.env.OPENAI_API_KEY) {
-    throw new Error("演示文稿工具未配置 Dify 或 OpenAI API Key")
+    throw new Error("演示文稿工具未配置 DIFY_PRESENTATION_API_KEY 或 OpenAI API Key")
   }
 
   const { text } = await generateText({

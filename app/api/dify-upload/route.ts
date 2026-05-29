@@ -62,12 +62,9 @@ const PUBLIC_APP_URL = (
   "https://shenxiang.school"
 ).replace(/\/+$/, "")
 
-// 🔥 作文批改（standard）使用专用的 ESSAY_CORRECTION_API_KEY
-const DEFAULT_DIFY_KEY = process.env.ESSAY_CORRECTION_API_KEY || process.env.DIFY_API_KEY
-
 // 🔥 根据模型获取对应的 API Key（与 dify-chat 保持一致）
 function getApiKeyForModel(model: string | null): string {
-  return getDifyCredentialForModel(model, process.env, DEFAULT_DIFY_KEY).credential
+  return getDifyCredentialForModel(model, process.env).credential
 }
 
 // ============================================

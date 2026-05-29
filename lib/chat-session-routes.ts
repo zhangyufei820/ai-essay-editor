@@ -19,10 +19,6 @@ export function buildChatSessionRoute(sessionId: string, model?: string | null, 
     return `/chat/gemini-image?sessionId=${safeSessionId}`
   }
 
-  if (safeModel === "banana-2-pro") {
-    return `/chat/banana-2-pro?sessionId=${safeSessionId}`
-  }
-
   return `/chat?sessionId=${safeSessionId}&agent=${encodeURIComponent(safeModel)}`
 }
 
@@ -60,7 +56,7 @@ export function normalizeChatSessionModel(model?: string | null) {
     lower === "creative-image-banana" ||
     lower === "banana"
   ) {
-    return "banana-2-pro"
+    return "gpt-image-2"
   }
 
   return lower || "general-chat"
@@ -68,7 +64,7 @@ export function normalizeChatSessionModel(model?: string | null) {
 
 export function resolveChatSessionRouteModel(session: ChatSessionRouteSource) {
   const normalized = normalizeChatSessionModel(session.ai_model)
-  if (normalized === "gpt-image-2" || normalized === "gemini-image" || normalized === "banana-2-pro") return normalized
+  if (normalized === "gpt-image-2" || normalized === "gemini-image") return normalized
 
   const fields = [
     session.ai_model,
@@ -109,7 +105,7 @@ export function resolveChatSessionRouteModel(session: ChatSessionRouteSource) {
     fields.includes("banana 2") ||
     fields.includes("图片生成")
   ) {
-    return "banana-2-pro"
+    return "gpt-image-2"
   }
 
   if (session.ai_model?.trim()) return normalized
@@ -128,5 +124,5 @@ export function buildChatSessionRouteFromSession(session: ChatSessionRouteSource
 
 export function isDedicatedChatSessionModel(model?: string | null) {
   const normalized = normalizeChatSessionModel(model)
-  return normalized === "gpt-image-2" || normalized === "gemini-image" || normalized === "banana-2-pro"
+  return normalized === "gpt-image-2" || normalized === "gemini-image"
 }

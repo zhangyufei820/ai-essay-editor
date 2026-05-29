@@ -14,6 +14,8 @@ describe("Dify final output text extraction", () => {
   })
 
   it("extracts common final output keys", () => {
+    expect(extractDifyTextOutput({ final_content: "最终汇总" })).toBe("最终汇总")
+    expect(extractDifyTextOutput({ output: "最终输出" })).toBe("最终输出")
     expect(extractDifyTextOutput({ result: "最终结果" })).toBe("最终结果")
     expect(extractDifyTextOutput({ text: "最终文本" })).toBe("最终文本")
     expect(extractDifyTextOutput({ answer: "最终回答" })).toBe("最终回答")

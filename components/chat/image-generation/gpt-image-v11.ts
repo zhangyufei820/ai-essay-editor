@@ -39,6 +39,7 @@ export type ImageSize =
   | "1152x2048"
   | "3840x2160"
   | "2160x3840"
+  | `${number}x${number}`
 export type ImageQuality = "auto" | "low" | "medium" | "high"
 export type ImageOutputFormat = "png" | "jpeg" | "webp"
 export type ImageBackground = "auto" | "opaque" | "transparent"
@@ -58,6 +59,8 @@ export interface GptImageInputs {
   n: number
   mode: ImageTaskMode
   response_modalities?: string[]
+  source_image_width?: number
+  source_image_height?: number
   reference_image_url: string
   reference_image_urls: string[]
   mask_image_url: string
@@ -159,7 +162,7 @@ export const DEFAULT_IMAGE_INPUTS: GptImageInputs = {
   mode: "image_generate",
   model: "gpt-image-2",
   aspect_ratio: "1:1",
-  size: "1K",
+  size: "2K",
   quality: "low",
   output_format: "png",
   output_compression: 100,
@@ -176,7 +179,7 @@ export const EDIT_MODE_DEFAULTS: GptImageInputs = {
   mode: "image_edit",
   model: "gpt-image-2",
   aspect_ratio: "auto",
-  size: "1K",
+  size: "2K",
   quality: "low",
   output_format: "png",
   output_compression: 100,
@@ -215,7 +218,7 @@ export const GEMINI_IMAGE_EDIT_DEFAULTS: GptImageInputs = {
 const SIZE_TO_RATIO: Partial<Record<ImageSize, ImageAspectRatio>> = {
   "1K": "1:1",
   "2K": "1:1",
-  "4K": "1:1",
+  "4K": "16:9",
   "1024x1024": "1:1",
   "2048x2048": "1:1",
   "1536x1024": "16:9",
@@ -283,6 +286,9 @@ export function buildDifyInputs(
       n: clampImageCount(values.n),
       mode: values.mode,
       response_modalities: ["TEXT", "IMAGE"],
+      ...(values.source_image_width && values.source_image_height
+        ? { source_image_width: values.source_image_width, source_image_height: values.source_image_height }
+        : {}),
       reference_image_url: referenceImageUrls[0] || "",
       reference_image_urls: referenceImageUrls,
       mask_image_url: "",
@@ -301,6 +307,9 @@ export function buildDifyInputs(
     moderation: values.moderation,
     n: clampImageCount(values.n),
     mode: values.mode,
+    ...(values.source_image_width && values.source_image_height
+      ? { source_image_width: values.source_image_width, source_image_height: values.source_image_height }
+      : {}),
     reference_image_url: referenceImageUrls[0] || "",
     reference_image_urls: referenceImageUrls,
     mask_image_url: maskImageUrl,

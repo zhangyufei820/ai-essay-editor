@@ -8,75 +8,52 @@ export type DifyCredentialSelection = {
 export function getDifyCredentialForModel(
   model: string | null | undefined,
   env: Env = process.env,
-  defaultCredential = env.ESSAY_CORRECTION_API_KEY || env.DIFY_API_KEY || "",
+  _defaultCredential = "",
 ): DifyCredentialSelection {
-  switch (model) {
+  switch (model || "general-chat") {
     case "general-chat":
-      return selectGeneralChatCredential(env, defaultCredential)
+      return selectRequiredCredential(env.DIFY_GENERAL_CHAT_API_KEY, "DIFY_GENERAL_CHAT_API_KEY", env)
+    case "standard":
+      return selectRequiredCredential(env.ESSAY_CORRECTION_API_KEY, "ESSAY_CORRECTION_API_KEY", env)
     case "workflow-skill":
-      return selectRequiredProductionCredential(
-        env.DIFY_WORKFLOW_SKILL_API_KEY,
-        "DIFY_WORKFLOW_SKILL_API_KEY",
-        env,
-        defaultCredential,
-      )
+      return selectRequiredCredential(env.DIFY_WORKFLOW_SKILL_API_KEY, "DIFY_WORKFLOW_SKILL_API_KEY", env)
     case "teaching-pro":
-      return selectCredential(env.DIFY_TEACHING_PRO_API_KEY, "DIFY_TEACHING_PRO_API_KEY", defaultCredential)
+      return selectRequiredCredential(env.DIFY_TEACHING_PRO_API_KEY, "DIFY_TEACHING_PRO_API_KEY", env)
     case "gpt-5":
-      return selectCredential(env.DIFY_API_KEY_GPT5, "DIFY_API_KEY_GPT5", defaultCredential)
+      return selectRequiredCredential(env.DIFY_API_KEY_GPT5, "DIFY_API_KEY_GPT5", env)
     case "claude-opus":
-      return selectCredential(env.DIFY_API_KEY_CLAUDE, "DIFY_API_KEY_CLAUDE", defaultCredential)
+      return selectRequiredCredential(env.DIFY_API_KEY_CLAUDE, "DIFY_API_KEY_CLAUDE", env)
     case "gemini-pro":
-      return selectCredential(env.DIFY_API_KEY_GEMINI, "DIFY_API_KEY_GEMINI", defaultCredential)
+      return selectRequiredCredential(env.DIFY_API_KEY_GEMINI, "DIFY_API_KEY_GEMINI", env)
     case "banana":
     case "banana-2-pro":
       return { credential: "", source: "GEMINI_IMAGE_GATEWAY" }
     case "gemini-image":
       return { credential: "", source: "GEMINI_IMAGE_GATEWAY" }
     case "gpt-image-2":
-      return selectRequiredDistinctProductionCredential(
-        env.DIFY_GPT_IMAGE_API_KEY,
-        "DIFY_GPT_IMAGE_API_KEY",
-        env,
-        defaultCredential,
-      )
+      return selectRequiredCredential(env.DIFY_GPT_IMAGE_API_KEY, "DIFY_GPT_IMAGE_API_KEY", env)
     case "grok-4.2":
-      return selectCredential(env.DIFY_API_KEY_GROK42, "DIFY_API_KEY_GROK42", defaultCredential)
+      return selectRequiredCredential(env.DIFY_API_KEY_GROK42, "DIFY_API_KEY_GROK42", env)
     case "open-claw":
-      return selectCredential(env.DIFY_API_KEY_OPENCLAW, "DIFY_API_KEY_OPENCLAW", defaultCredential)
+      return selectRequiredCredential(env.DIFY_API_KEY_OPENCLAW, "DIFY_API_KEY_OPENCLAW", env)
     case "quanquan-math":
-      return selectCredential(env.DIFY_QUANQUANMATH_API_KEY, "DIFY_QUANQUANMATH_API_KEY", defaultCredential)
+      return selectRequiredCredential(env.DIFY_QUANQUANMATH_API_KEY, "DIFY_QUANQUANMATH_API_KEY", env)
     case "quanquan-english":
-      return selectCredential(env.DIFY_QUANQUANENGLISH_API_KEY, "DIFY_QUANQUANENGLISH_API_KEY", defaultCredential)
+      return selectRequiredCredential(env.DIFY_QUANQUANENGLISH_API_KEY, "DIFY_QUANQUANENGLISH_API_KEY", env)
     case "vocab-card":
-      return selectCredential(env.DIFY_VOCAB_CARD_API_KEY, "DIFY_VOCAB_CARD_API_KEY", defaultCredential)
+      return selectRequiredCredential(env.DIFY_VOCAB_CARD_API_KEY, "DIFY_VOCAB_CARD_API_KEY", env)
     case "problem":
-      return selectCredential(env.DIFY_PROBLEM_API_KEY, "DIFY_PROBLEM_API_KEY", defaultCredential)
+      return selectRequiredCredential(env.DIFY_PROBLEM_API_KEY, "DIFY_PROBLEM_API_KEY", env)
     case "beike-pro":
-      return selectCredential(env.DIFY_BEIKE_PRO_API_KEY, "DIFY_BEIKE_PRO_API_KEY", defaultCredential)
+      return selectRequiredCredential(env.DIFY_BEIKE_PRO_API_KEY, "DIFY_BEIKE_PRO_API_KEY", env)
     case "banzhuren":
-      return selectCredential(env.DIFY_BANZHUREN_API_KEY, "DIFY_BANZHUREN_API_KEY", defaultCredential)
+      return selectRequiredCredential(env.DIFY_BANZHUREN_API_KEY, "DIFY_BANZHUREN_API_KEY", env)
     case "all-in-one-agent":
-      return selectRequiredProductionCredential(
-        env.DIFY_ALL_IN_ONE_AGENT_API_KEY,
-        "DIFY_ALL_IN_ONE_AGENT_API_KEY",
-        env,
-        defaultCredential,
-      )
+      return selectRequiredCredential(env.DIFY_ALL_IN_ONE_AGENT_API_KEY, "DIFY_ALL_IN_ONE_AGENT_API_KEY", env)
     case "super-all-in-one-agent":
-      return selectRequiredProductionCredential(
-        env.DIFY_SUPER_ALL_IN_ONE_AGENT_API_KEY,
-        "DIFY_SUPER_ALL_IN_ONE_AGENT_API_KEY",
-        env,
-        defaultCredential,
-      )
+      return selectRequiredCredential(env.DIFY_SUPER_ALL_IN_ONE_AGENT_API_KEY, "DIFY_SUPER_ALL_IN_ONE_AGENT_API_KEY", env)
     case "worksheet-diagnosis":
-      return selectRequiredProductionCredential(
-        env.DIFY_WORKSHEET_DIAGNOSIS_API_KEY,
-        "DIFY_WORKSHEET_DIAGNOSIS_API_KEY",
-        env,
-        defaultCredential,
-      )
+      return selectRequiredCredential(env.DIFY_WORKSHEET_DIAGNOSIS_API_KEY, "DIFY_WORKSHEET_DIAGNOSIS_API_KEY", env)
     case "ai-writing-paper":
     case "zhongying-essay":
     case "reading-report":
@@ -84,82 +61,21 @@ export function getDifyCredentialForModel(
     case "resume-optimize":
     case "speech-defense":
     case "school-wechat":
-      return selectCredential(env.DIFY_AI_WRITING_PAPER_API_KEY, "DIFY_AI_WRITING_PAPER_API_KEY", defaultCredential)
+      return selectRequiredCredential(env.DIFY_AI_WRITING_PAPER_API_KEY, "DIFY_AI_WRITING_PAPER_API_KEY", env)
     case "experiment-report":
-      return selectCredential(env.DIFY_EXPERIMENT_REPORT_API_KEY, "DIFY_EXPERIMENT_REPORT_API_KEY", defaultCredential)
+      return selectRequiredCredential(env.DIFY_EXPERIMENT_REPORT_API_KEY, "DIFY_EXPERIMENT_REPORT_API_KEY", env)
     default:
-      return { credential: defaultCredential, source: "DEFAULT_DIFY_KEY" }
+      console.warn(`[Dify Credentials] Unsupported Dify model: ${model || "general-chat"}`)
+      return { credential: "", source: "UNSUPPORTED_DIFY_MODEL" }
   }
 }
 
-function selectGeneralChatCredential(env: Env, defaultCredential: string): DifyCredentialSelection {
-  if (env.DIFY_GENERAL_CHAT_API_KEY) {
-    return { credential: env.DIFY_GENERAL_CHAT_API_KEY, source: "DIFY_GENERAL_CHAT_API_KEY" }
-  }
-
-  if (env.DIFY_API_KEY) {
-    return { credential: env.DIFY_API_KEY, source: "DIFY_API_KEY" }
-  }
-
-  if (env.NODE_ENV === "production") {
-    console.warn("[Dify Credentials] DIFY_GENERAL_CHAT_API_KEY or DIFY_API_KEY is required for general-chat in production")
-    return { credential: "", source: "DIFY_GENERAL_CHAT_API_KEY or DIFY_API_KEY" }
-  }
-
-  const devFallback = env.DIFY_API_KEY_GPT5 || defaultCredential
-  if (devFallback) {
-    console.warn("[Dify Credentials] DIFY_GENERAL_CHAT_API_KEY missing; using local development fallback")
-  }
-  return selectCredential(devFallback, "DIFY_GENERAL_CHAT_API_KEY", defaultCredential)
-}
-
-function selectCredential(
-  credential: string | undefined,
-  source: string,
-  defaultCredential: string,
-): DifyCredentialSelection {
-  if (credential) return { credential, source }
-  return { credential: defaultCredential, source: "DEFAULT_DIFY_KEY" }
-}
-
-function selectRequiredProductionCredential(
+function selectRequiredCredential(
   credential: string | undefined,
   source: string,
   env: Env,
-  defaultCredential: string,
 ): DifyCredentialSelection {
   if (credential) return { credential, source }
-  if (env.NODE_ENV === "production") {
-    console.warn(`[Dify Credentials] ${source} is required in production`)
-    return { credential: "", source }
-  }
-  return selectCredential(credential, source, defaultCredential)
-}
-
-function selectRequiredDistinctProductionCredential(
-  credential: string | undefined,
-  source: string,
-  env: Env,
-  defaultCredential: string,
-): DifyCredentialSelection {
-  if (credential) {
-    const forbiddenFallbacks = new Set(
-      [defaultCredential, env.ESSAY_CORRECTION_API_KEY, env.DIFY_API_KEY]
-        .filter((value): value is string => Boolean(value)),
-    )
-
-    if (env.NODE_ENV === "production" && forbiddenFallbacks.has(credential)) {
-      console.warn(`[Dify Credentials] ${source} must not reuse the default or essay-correction credential in production`)
-      return { credential: "", source }
-    }
-
-    return { credential, source }
-  }
-
-  if (env.NODE_ENV === "production") {
-    console.warn(`[Dify Credentials] ${source} is required in production`)
-    return { credential: "", source }
-  }
-
-  return selectCredential(credential, source, defaultCredential)
+  console.warn(`[Dify Credentials] ${source} is required for this Dify app`)
+  return { credential: "", source }
 }

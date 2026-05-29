@@ -49,9 +49,7 @@ async function searchWithTavily(query: string, maxResults: number): Promise<Sear
 }
 
 async function searchWithDify(query: string, maxResults: number): Promise<SearchResult[]> {
-  const apiKey = process.env.DIFY_WEB_SEARCH_API_KEY
-    || process.env.DIFY_ALL_IN_ONE_AGENT_API_KEY
-    || process.env.DIFY_SUPER_ALL_IN_ONE_AGENT_API_KEY
+  const apiKey = process.env.DIFY_WEB_SEARCH_API_KEY || ""
   if (!apiKey) return []
 
   const result = await callToolsDifyChat({

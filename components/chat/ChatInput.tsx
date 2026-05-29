@@ -111,7 +111,7 @@ interface ChatInputProps {
   /** 模型列表（showModelSelector=true 时必需） */
   models?: Model[]
   /** 模型切换回调（showModelSelector=true 时必需） */
-  onModelChange?: (model: string) => void
+  onModelChange?: (model: string, item?: Model) => void
   /** 模型颜色 */
   modelColor?: string
   /** 是否显示 OpenClaw 技能加载按钮 */

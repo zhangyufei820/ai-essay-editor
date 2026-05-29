@@ -3,10 +3,12 @@
 import dynamic from 'next/dynamic'
 import { useParams, notFound } from 'next/navigation'
 import { LoadingStateV2 } from '@/components/ui/v2'
+import { PLAZA_AGENTS } from '@/components/agents/agent-plaza-data'
+import type { ModelType } from '@/lib/pricing'
 
 // 🎯 支持的模型/智能体列表
 // 新增智能体时，只需在此处添加即可
-const SUPPORTED_MODELS = [
+const BUILTIN_CHAT_MODELS = [
   'standard',        // 作文批改
   'general-chat',    // 通用轻量对话
   'teaching-pro',    // 教学评助手
@@ -14,7 +16,6 @@ const SUPPORTED_MODELS = [
   'claude-opus',     // Claude opus4.6thinking
   'gemini-pro',      // Gemini 3.1 pro
   'gemini-image',    // Gemini 图像
-  'banana-2-pro',    // Banana 2 Pro
   'gpt-image-2',     // GPT Image 2
   'grok-4.2',        // Grok-4.2
   'open-claw',       // Open Claw
@@ -28,12 +29,12 @@ const SUPPORTED_MODELS = [
   'super-all-in-one-agent', // 超级全能智能体
   'ai-writing-paper', // 论文写作
   'zhongying-essay', // 中英文作文
-  'reading-report',   // 读书报告
   'experiment-report',// 实验报告
-  'study-abroad',    // 留学升学文书
-  'resume-optimize', // 实习简历优化
-  'speech-defense',  // 演讲与答辩稿
-  'school-wechat',   // 学校公众号写作
+] as const
+
+const SUPPORTED_MODELS = [
+  ...BUILTIN_CHAT_MODELS,
+  ...PLAZA_AGENTS.filter((agent) => agent.href.startsWith("/chat/") && !agent.workflowSkill).map((agent) => agent.id),
 ] as const
 
 export type SupportedModel = typeof SUPPORTED_MODELS[number]
@@ -96,8 +97,10 @@ export default function ModelChatPage() {
     notFound()
   }
 
+  const supportedModel = model as ModelType
+
   // 🔥 根据模型选择不同的界面组件
-  if (model === 'gemini-image') {
+  if (supportedModel === 'gemini-image') {
     console.log('✅ [ModelChatPage] 使用 Gemini 图像工作台')
     return (
       <main className="flex min-h-screen flex-col">
@@ -108,23 +111,23 @@ export default function ModelChatPage() {
     )
   }
 
-  if (model === 'gpt-image-2' || model === 'banana-2-pro') {
+  if (supportedModel === 'gpt-image-2') {
     console.log('✅ [ModelChatPage] 使用图像工作台')
     return (
       <main className="flex min-h-screen flex-col">
         <div className="flex-1">
-          <ImageWorkspace workspaceModel={model === 'banana-2-pro' ? 'banana-2-pro' : 'gpt-image-2'} />
+          <ImageWorkspace workspaceModel="gpt-image-2" />
         </div>
       </main>
     )
   }
 
   // 其他模型使用通用界面
-  console.log('⚠️ [ModelChatPage] 使用 EnhancedChatInterface，模型:', model)
+  console.log('⚠️ [ModelChatPage] 使用 EnhancedChatInterface，模型:', supportedModel)
   return (
     <main className="flex min-h-screen flex-col">
       <div className="flex-1">
-        <EnhancedChatInterface initialModel={model as SupportedModel} />
+        <EnhancedChatInterface initialModel={supportedModel} />
       </div>
     </main>
   )

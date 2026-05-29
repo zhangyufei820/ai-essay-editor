@@ -20,10 +20,10 @@ describe('chat session routes', () => {
     expect(normalizeChatSessionModel('google-gemini-image')).toBe('gemini-image')
   })
 
-  it('routes Banana aliases to the Banana image workspace', () => {
-    expect(normalizeChatSessionModel('creative-image-banana')).toBe('banana-2-pro')
-    expect(normalizeChatSessionModel('banana')).toBe('banana-2-pro')
-    expect(buildChatSessionRoute('abc', 'banana')).toBe('/chat/banana-2-pro?sessionId=abc')
+  it('routes retired Banana aliases to the current GPT Image workspace', () => {
+    expect(normalizeChatSessionModel('creative-image-banana')).toBe('gpt-image-2')
+    expect(normalizeChatSessionModel('banana')).toBe('gpt-image-2')
+    expect(buildChatSessionRoute('abc', 'banana')).toBe('/chat/gpt-image-2?sessionId=abc')
   })
 
   it('infers old GPT Image records from non-model metadata', () => {

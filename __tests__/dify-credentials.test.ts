@@ -49,21 +49,6 @@ describe("Dify credential selection", () => {
     expect(warnSpy).not.toHaveBeenCalledWith(expect.stringContaining("DIFY_BANANA_API_KEY"))
   })
 
-  it("does not let GPT Image 2 reuse the default Dify credential in production", () => {
-    const selection = getDifyCredentialForModel("gpt-image-2", {
-      NODE_ENV: "production",
-      DIFY_GPT_IMAGE_API_KEY: "general-key",
-      ESSAY_CORRECTION_API_KEY: "essay-key",
-      DIFY_API_KEY: "general-key",
-    })
-
-    expect(selection).toEqual({
-      credential: "",
-      source: "DIFY_GPT_IMAGE_API_KEY",
-    })
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("DIFY_GPT_IMAGE_API_KEY must not reuse"))
-  })
-
   it("does not select a Dify credential for Gemini image generation", () => {
     const selection = getDifyCredentialForModel("gemini-image", {
       DIFY_GEMINI_IMAGE_API_KEY: "gemini-image-key",
@@ -90,15 +75,16 @@ describe("Dify credential selection", () => {
     expect(warnSpy).not.toHaveBeenCalledWith(expect.stringContaining("DIFY_GEMINI_IMAGE_API_KEY"))
   })
 
-  it("falls back to the default credential when a model-specific key is missing", () => {
+  it("does not fall back when a model-specific key is missing", () => {
     const selection = getDifyCredentialForModel("gpt-5", {
       ESSAY_CORRECTION_API_KEY: "default-key",
     })
 
     expect(selection).toEqual({
-      credential: "default-key",
-      source: "DEFAULT_DIFY_KEY",
+      credential: "",
+      source: "DIFY_API_KEY_GPT5",
     })
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("DIFY_API_KEY_GPT5 is required"))
   })
 
   it("uses the dedicated general-chat key when configured", () => {
@@ -115,7 +101,7 @@ describe("Dify credential selection", () => {
     })
   })
 
-  it("supports the legacy DIFY_API_KEY for general-chat in production", () => {
+  it("does not use the legacy DIFY_API_KEY for general-chat", () => {
     const selection = getDifyCredentialForModel("general-chat", {
       NODE_ENV: "production",
       DIFY_API_KEY: "legacy-general-chat-key",
@@ -124,9 +110,10 @@ describe("Dify credential selection", () => {
     })
 
     expect(selection).toEqual({
-      credential: "legacy-general-chat-key",
-      source: "DIFY_API_KEY",
+      credential: "",
+      source: "DIFY_GENERAL_CHAT_API_KEY",
     })
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("DIFY_GENERAL_CHAT_API_KEY is required"))
   })
 
   it("uses the dedicated worksheet diagnosis workflow key when configured", () => {
@@ -218,6 +205,34 @@ describe("Dify credential selection", () => {
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("DIFY_SUPER_ALL_IN_ONE_AGENT_API_KEY is required"))
   })
 
+  it("uses the dedicated OpenClaw key when configured", () => {
+    const selection = getDifyCredentialForModel("open-claw", {
+      NODE_ENV: "production",
+      DIFY_API_KEY_OPENCLAW: "openclaw-key",
+      DIFY_API_KEY: "chat-key",
+      ESSAY_CORRECTION_API_KEY: "essay-key",
+    })
+
+    expect(selection).toEqual({
+      credential: "openclaw-key",
+      source: "DIFY_API_KEY_OPENCLAW",
+    })
+  })
+
+  it("does not silently fall back for OpenClaw in production", () => {
+    const selection = getDifyCredentialForModel("open-claw", {
+      NODE_ENV: "production",
+      DIFY_API_KEY: "chat-key",
+      ESSAY_CORRECTION_API_KEY: "essay-key",
+    })
+
+    expect(selection).toEqual({
+      credential: "",
+      source: "DIFY_API_KEY_OPENCLAW",
+    })
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("DIFY_API_KEY_OPENCLAW is required"))
+  })
+
   it("does not silently fall back to a chat key for worksheet diagnosis in production", () => {
     const selection = getDifyCredentialForModel("worksheet-diagnosis", {
       NODE_ENV: "production",
@@ -241,8 +256,35 @@ describe("Dify credential selection", () => {
 
     expect(selection).toEqual({
       credential: "",
-      source: "DIFY_GENERAL_CHAT_API_KEY or DIFY_API_KEY",
+      source: "DIFY_GENERAL_CHAT_API_KEY",
     })
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("DIFY_GENERAL_CHAT_API_KEY or DIFY_API_KEY is required"))
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("DIFY_GENERAL_CHAT_API_KEY is required"))
+  })
+
+  it("uses the dedicated essay correction key for the standard model", () => {
+    const selection = getDifyCredentialForModel("standard", {
+      NODE_ENV: "production",
+      ESSAY_CORRECTION_API_KEY: "essay-key",
+      DIFY_GENERAL_CHAT_API_KEY: "general-key",
+    })
+
+    expect(selection).toEqual({
+      credential: "essay-key",
+      source: "ESSAY_CORRECTION_API_KEY",
+    })
+  })
+
+  it("rejects unsupported models instead of using any default key", () => {
+    const selection = getDifyCredentialForModel("unknown-model", {
+      NODE_ENV: "production",
+      ESSAY_CORRECTION_API_KEY: "essay-key",
+      DIFY_GENERAL_CHAT_API_KEY: "general-key",
+    })
+
+    expect(selection).toEqual({
+      credential: "",
+      source: "UNSUPPORTED_DIFY_MODEL",
+    })
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("Unsupported Dify model"))
   })
 })

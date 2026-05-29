@@ -37,6 +37,9 @@
   ],
   "exclude": [
     "node_modules",
+    "playwright.config.ts",
+    "__tests__",
+    "tests",
     "services",
     "vendor",
     "omnivoice-dify-gateway",

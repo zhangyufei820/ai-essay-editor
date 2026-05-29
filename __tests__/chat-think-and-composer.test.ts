@@ -181,6 +181,8 @@ describe("chat think rendering and composer layout", () => {
     expect(route).toContain('nodeTitle.includes("直接回复")')
     expect(route).toContain('model === "open-claw" && json.event === "message_end"')
     expect(route).toContain("enqueueSseAnswer(controller, openClawFinalOutputText)")
+    expect(route).toContain("OPENCLAW_EMPTY_UPSTREAM_RESPONSE")
+    expect(route).toContain("OpenClaw 上游模型本次返回为空，请重新提交。当前任务未扣费。")
   })
 
   it("blocks image uploads before login instead of failing after submission", () => {

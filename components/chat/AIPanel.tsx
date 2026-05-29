@@ -7,7 +7,7 @@
 import { motion, AnimatePresence } from "framer-motion"
 import Link from "next/link"
 import { X } from "lucide-react"
-import { IconEnglish, IconEssay, IconLab, IconMic, IconTeaching, IconWriting } from "@/components/icons/v2"
+import { IconEssay, IconLab, IconWriting } from "@/components/icons/v2"
 
 const TOKENS = {
   primary: {
@@ -77,40 +77,10 @@ const AI_WRITING_AGENTS: WritingAgent[] = [
     href: "/chat/zhongying-essay",
   },
   {
-    key: "reading-report",
-    name: "读书报告 / 观后感",
-    description: "提炼书籍核心观点，深化阅读思考",
-    href: "/chat/reading-report",
-  },
-  {
     key: "experiment-report",
     name: "实验报告助理",
     description: "规范理工科实验报告格式与结论分析",
     href: "/chat/experiment-report",
-  },
-  {
-    key: "study-abroad",
-    name: "留学与升学文书",
-    description: "挖掘个人闪光点，打磨专属申请故事",
-    href: "/chat/study-abroad",
-  },
-  {
-    key: "resume-optimize",
-    name: "实习简历优化",
-    description: "提炼校园经历，生成专业职场简历",
-    href: "/chat/resume",
-  },
-  {
-    key: "speech-defense",
-    name: "演讲与答辩稿",
-    description: "竞选、比赛与论文答辩的逐字稿定制",
-    href: "/chat/speech-defense",
-  },
-  {
-    key: "school-wechat",
-    name: "学校公众号写作",
-    description: "校园宣传与活动稿件撰写",
-    href: "/chat/school-wechat",
   },
 ]
 
@@ -348,12 +318,7 @@ function WritingIslandCard({
       >
         {agent.key === "ai-writing-paper" && <IconEssay className="w-6 h-6" style={{ color: "var(--ink-600)" }} />}
         {agent.key === "zhongying-essay" && <IconWriting className="w-6 h-6" style={{ color: "var(--ink-600)" }} />}
-        {agent.key === "reading-report" && <IconEnglish className="w-6 h-6" style={{ color: "var(--ink-600)" }} />}
         {agent.key === "experiment-report" && <IconLab className="w-6 h-6" style={{ color: "var(--ink-600)" }} />}
-        {agent.key === "study-abroad" && <IconTeaching className="w-6 h-6" style={{ color: "var(--ink-600)" }} />}
-        {agent.key === "resume-optimize" && <IconWriting className="w-6 h-6" style={{ color: "var(--ink-600)" }} />}
-        {agent.key === "speech-defense" && <IconMic className="w-6 h-6" style={{ color: "var(--ink-600)" }} />}
-        {agent.key === "school-wechat" && <IconWriting className="w-6 h-6" style={{ color: "var(--ink-600)" }} />}
       </motion.div>
 
       {/* 中文名 */}

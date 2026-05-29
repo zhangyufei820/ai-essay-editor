@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createHmac, timingSafeEqual } from "crypto"
 import { createClient } from "@supabase/supabase-js"
+import sharp from "sharp"
 import {
   DifyChatRequest,
   DifyWorkflowRequest,
@@ -66,6 +67,8 @@ type GptImageV11Inputs = {
   moderation: string
   n: number
   mode: string
+  source_image_width?: number
+  source_image_height?: number
   reference_image_url: string
   reference_image_urls: string[]
   mask_image_url: string
@@ -83,7 +86,7 @@ type GeminiImageGatewayInputs = {
 
 const GPT_IMAGE_V11_DEFAULT_INPUTS: GptImageV11Inputs = {
   aspect_ratio: "1:1",
-  size: "1K",
+  size: "2K",
   model: "gpt-image-2",
   quality: "low",
   output_format: "png",
@@ -107,6 +110,10 @@ const GPT_IMAGE_V11_ALLOWED = {
   moderation: ["auto", "low"],
   mode: ["image_generate", "image_edit"],
 } as const
+
+const GPT_IMAGE_GATEWAY_FIXED_SIZES = new Set(["1024x1024", "2048x2048", "3840x2160", "2160x3840"])
+const GPT_IMAGE_GATEWAY_MAX_SIDE = 3840
+const GPT_IMAGE_GATEWAY_MAX_PIXELS = 3840 * 2160
 
 const GEMINI_IMAGE_GATEWAY_DEFAULT_INPUTS: GeminiImageGatewayInputs = {
   aspect_ratio: "1:1",
@@ -138,8 +145,15 @@ function pickEnum(value: unknown, allowed: readonly string[], fallback: string):
 function pickImageSize(value: unknown): string {
   if (typeof value !== "string") return GPT_IMAGE_V11_DEFAULT_INPUTS.size
   const trimmed = value.trim()
-  if (trimmed === "2K" || trimmed === "4K") return trimmed
-  return "1K"
+  if (trimmed === "1K" || trimmed === "2K" || trimmed === "4K") return trimmed
+  if (/^\d{3,4}x\d{3,4}$/.test(trimmed)) return trimmed
+  return GPT_IMAGE_V11_DEFAULT_INPUTS.size
+}
+
+function pickPositiveDimension(value: unknown): number | undefined {
+  const numeric = typeof value === "number" ? value : Number(value)
+  if (!Number.isFinite(numeric) || numeric <= 0) return undefined
+  return Math.round(numeric)
 }
 
 function pickUrlString(value: unknown): string {
@@ -193,6 +207,8 @@ function buildGptImageV11Inputs(inputs: unknown): GptImageV11Inputs {
     moderation: pickEnum(record.moderation, GPT_IMAGE_V11_ALLOWED.moderation, GPT_IMAGE_V11_DEFAULT_INPUTS.moderation),
     n: clampNumber(record.n, 1, 4, GPT_IMAGE_V11_DEFAULT_INPUTS.n),
     mode: pickEnum(record.mode, GPT_IMAGE_V11_ALLOWED.mode, GPT_IMAGE_V11_DEFAULT_INPUTS.mode),
+    source_image_width: pickPositiveDimension(record.source_image_width),
+    source_image_height: pickPositiveDimension(record.source_image_height),
     reference_image_url: safeReferenceImageUrls[0] || "",
     reference_image_urls: safeReferenceImageUrls.slice(0, 10),
     mask_image_url: pickUrlString(record.mask_image_url),
@@ -241,9 +257,49 @@ function buildGptImageV11DifyInputs(inputs: unknown) {
 
 function normalizeImageGatewaySize(inputs: GptImageV11Inputs): string {
   const size = inputs.size.trim()
+  if (GPT_IMAGE_GATEWAY_FIXED_SIZES.has(size)) return size
+  if (/^\d{3,4}x\d{3,4}$/.test(size)) return size
+
+  if (
+    inputs.mode === "image_edit" &&
+    size === "4K" &&
+    inputs.source_image_width &&
+    inputs.source_image_height
+  ) {
+    return getImageSizeForSourceAspectRatio(inputs.source_image_width, inputs.source_image_height)
+  }
+
+  const aspectRatio = inputs.aspect_ratio.trim()
+  const isPortrait =
+    aspectRatio === "9:16" ||
+    aspectRatio === "3:4" ||
+    aspectRatio === "2:3" ||
+    aspectRatio === "9:21" ||
+    aspectRatio === "1:2" ||
+    aspectRatio === "1:3"
+
+  if (size === "1K") return "1024x1024"
   if (size === "2K") return "2048x2048"
-  if (size === "4K") return "3840x3840"
-  return "1024x1024"
+  if (size === "4K") return isPortrait ? "2160x3840" : "3840x2160"
+  return "2048x2048"
+}
+
+function getImageSizeForSourceAspectRatio(sourceWidth: number, sourceHeight: number) {
+  if (sourceWidth <= 0 || sourceHeight <= 0) return "2160x3840"
+  const aspectRatio = sourceWidth / sourceHeight
+  const maxHeightByPixels = Math.sqrt(GPT_IMAGE_GATEWAY_MAX_PIXELS / aspectRatio)
+  const height = sourceHeight >= sourceWidth
+    ? Math.min(GPT_IMAGE_GATEWAY_MAX_SIDE, maxHeightByPixels)
+    : Math.min(GPT_IMAGE_GATEWAY_MAX_SIDE / aspectRatio, Math.sqrt(GPT_IMAGE_GATEWAY_MAX_PIXELS / aspectRatio))
+  const rawWidth = height * aspectRatio
+  const width = clampImageGatewayDimension(rawWidth)
+  const normalizedHeight = clampImageGatewayDimension(height)
+  return `${width}x${normalizedHeight}`
+}
+
+function clampImageGatewayDimension(value: number) {
+  const rounded = Math.round(value / 16) * 16
+  return Math.min(GPT_IMAGE_GATEWAY_MAX_SIDE, Math.max(1024, rounded))
 }
 
 function calculateGptImageGatewayCredits(inputs: GptImageV11Inputs): number {
@@ -579,11 +635,15 @@ const GPT_IMAGE_GATEWAY_TIMEOUT_MS = 540_000
 const GPT_IMAGE_ASYNC_TASK_MAX_AGE_MS = 30 * 60 * 1000
 const GPT_IMAGE_POLL_TOKEN_TTL_MS = GPT_IMAGE_ASYNC_TASK_MAX_AGE_MS + 5 * 60 * 1000
 const IMAGE_GATEWAY_URL = (process.env.DIFY_IMAGE_GATEWAY_URL || "http://dify-image-gateway:8001").replace(/\/+$/, "")
-const VIVAAPI_IMAGE_BASE_URL = (process.env.VIVAAPI_IMAGE_BASE_URL || "https://www.vivaapi.top").replace(/\/+$/, "")
-const VIVAAPI_IMAGE_MODEL = process.env.VIVAAPI_IMAGE_MODEL || "gpt-image-2"
+const VIVAAPI_IMAGE_BASE_URL = (process.env.VIVAAPI_IMAGE_BASE_URL || "https://moonapix.com").replace(/\/+$/, "")
+const VIVAAPI_IMAGE_MODEL = process.env.VIVAAPI_IMAGE_MODEL || "gpt-image-2-vip"
 const GEMINI_IMAGE_GATEWAY_URL = (process.env.GEMINI_IMAGE_GATEWAY_URL || "http://gemini-image-gateway:8002").replace(/\/+$/, "")
+const VIVAAPI_EDIT_MAX_SOURCE_DIMENSION = 2048
+const VIVAAPI_EDIT_RETRY_SOURCE_DIMENSION = 1536
+const VIVAAPI_EDIT_MAX_SOURCE_BYTES = 4 * 1024 * 1024
+const VIVAAPI_EDIT_JPEG_QUALITY = 90
+const VIVAAPI_RETRYABLE_HTTP_STATUSES = new Set([408, 500, 502, 503, 504, 524])
 // 🔥 作文批改（standard）使用专用的 ESSAY_CORRECTION_API_KEY
-const DEFAULT_DIFY_KEY = process.env.ESSAY_CORRECTION_API_KEY || process.env.DIFY_API_KEY 
 const MISSING_DIFY_CREDENTIAL_STATUS = 503
 
 function isDifyCredentialInvalidResponse(status: number, body: string) {
@@ -600,7 +660,7 @@ function isDifyCredentialInvalidResponse(status: number, body: string) {
 
 function getDifyCredentialInvalidMessage(model: string | null | undefined, keySource: string) {
   const label = "Dify 工作流"
-  return `${label}凭据失效，请管理员在服务器环境变量 ${keySource || "DIFY_API_KEY"} 中配置有效的 Dify 应用 API Key。`
+  return `${label}凭据失效，请管理员在服务器环境变量 ${keySource || "对应应用专用 Key"} 中配置有效的 Dify 应用 API Key。`
 }
 
 function getDifyAppModeMismatchMessage(model: string | null | undefined, keySource: string, expectedMode: string, actualMode: string | null) {
@@ -1284,6 +1344,207 @@ function buildVivaApiImagePayload(query: string, inputs: unknown) {
   }
 }
 
+type VivaApiEditSourceMetadata = {
+  field: string
+  source_url_host: string
+  original_bytes: number
+  original_content_type: string
+  submitted_bytes: number
+  submitted_content_type: string
+  width?: number
+  height?: number
+  resized: boolean
+  max_dimension: number
+}
+
+type VivaApiImageEditFormDataResult = {
+  formData: FormData
+  sourceMetadata: VivaApiEditSourceMetadata[]
+  gatewaySize: string
+}
+
+async function appendRemoteImageToFormData(
+  formData: FormData,
+  fieldName: string,
+  imageUrl: string,
+  filename: string,
+  sourceMetadata: VivaApiEditSourceMetadata[],
+  maxDimension = VIVAAPI_EDIT_MAX_SOURCE_DIMENSION,
+) {
+  const response = await internalDifyFetch(imageUrl, {
+    headers: {
+      Accept: "image/png,image/jpeg,image/webp,image/*,*/*",
+    },
+  })
+  if (!response.ok) {
+    throw new Error(`IMAGE_EDIT_SOURCE_FETCH_${response.status}`)
+  }
+
+  const contentType = response.headers.get("content-type") || "image/png"
+  const inputBuffer = Buffer.from(await response.arrayBuffer())
+  const normalized = await normalizeVivaApiEditSourceImage(inputBuffer, contentType, maxDimension)
+  const submittedBytes = new Uint8Array(normalized.buffer)
+  formData.append(fieldName, new Blob([submittedBytes], { type: normalized.contentType }), `${filename}.${normalized.extension}`)
+
+  let sourceUrlHost = ""
+  try {
+    sourceUrlHost = new URL(imageUrl).host
+  } catch {
+    sourceUrlHost = "invalid-url"
+  }
+
+  sourceMetadata.push({
+    field: fieldName,
+    source_url_host: sourceUrlHost,
+    original_bytes: inputBuffer.byteLength,
+    original_content_type: contentType,
+    submitted_bytes: normalized.buffer.byteLength,
+    submitted_content_type: normalized.contentType,
+    width: normalized.width,
+    height: normalized.height,
+    resized: normalized.resized,
+    max_dimension: maxDimension,
+  })
+}
+
+async function normalizeVivaApiEditSourceImage(inputBuffer: Buffer, contentType: string, maxDimension = VIVAAPI_EDIT_MAX_SOURCE_DIMENSION) {
+  const metadata = await sharp(inputBuffer).metadata().catch(() => null)
+  const shouldNormalize =
+    inputBuffer.byteLength > VIVAAPI_EDIT_MAX_SOURCE_BYTES ||
+    !contentType.toLowerCase().includes("jpeg") ||
+    (metadata?.width || 0) > maxDimension ||
+    (metadata?.height || 0) > maxDimension
+
+  if (!shouldNormalize) {
+    return {
+      buffer: inputBuffer,
+      contentType,
+      extension: contentType.toLowerCase().includes("png") ? "png" : "jpg",
+      width: metadata?.width,
+      height: metadata?.height,
+      resized: false,
+    }
+  }
+
+  const pipeline = sharp(inputBuffer).rotate().resize({
+    width: maxDimension,
+    height: maxDimension,
+    fit: "inside",
+    withoutEnlargement: true,
+  })
+  const outputBuffer = await pipeline.jpeg({ quality: VIVAAPI_EDIT_JPEG_QUALITY, mozjpeg: true }).toBuffer()
+  const outputMetadata = await sharp(outputBuffer).metadata().catch(() => null)
+
+  return {
+    buffer: outputBuffer,
+    contentType: "image/jpeg",
+    extension: "jpg",
+    width: outputMetadata?.width || metadata?.width,
+    height: outputMetadata?.height || metadata?.height,
+    resized: true,
+  }
+}
+
+async function buildVivaApiImageEditFormData(
+  query: string,
+  inputs: unknown,
+  maxDimension = VIVAAPI_EDIT_MAX_SOURCE_DIMENSION,
+): Promise<VivaApiImageEditFormDataResult> {
+  const imageInputs = buildGptImageV11Inputs(inputs)
+  const referenceImages = imageInputs.reference_image_urls.length > 0
+    ? imageInputs.reference_image_urls
+    : imageInputs.reference_image_url
+      ? [imageInputs.reference_image_url]
+      : []
+
+  if (referenceImages.length === 0) {
+    throw new Error("IMAGE_EDIT_SOURCE_REQUIRED")
+  }
+
+  const formData = new FormData()
+  const sourceMetadata: VivaApiEditSourceMetadata[] = []
+  const gatewaySize = normalizeImageGatewaySize(imageInputs)
+  formData.append("model", VIVAAPI_IMAGE_MODEL)
+  formData.append("prompt", query || "编辑图片")
+  formData.append("size", gatewaySize)
+  formData.append("n", String(imageInputs.n))
+  if (imageInputs.quality) formData.append("quality", imageInputs.quality)
+  if (imageInputs.output_format) formData.append("response_format", "url")
+
+  await appendRemoteImageToFormData(formData, "image", referenceImages[0], "source-image", sourceMetadata, maxDimension)
+  if (imageInputs.mask_image_url) {
+    await appendRemoteImageToFormData(formData, "mask", imageInputs.mask_image_url, "mask-image", sourceMetadata, maxDimension)
+  }
+
+  return { formData, sourceMetadata, gatewaySize }
+}
+
+function shouldRetryVivaApiImageResponse(response: Response, storedResult: unknown, attempt: number) {
+  if (attempt > 1) return false
+  if (VIVAAPI_RETRYABLE_HTTP_STATUSES.has(response.status)) return true
+  const resultText = JSON.stringify(sanitizeForTrace(storedResult)).toLowerCase()
+  return resultText.includes("524: a timeout occurred") || resultText.includes("a timeout occurred")
+}
+
+async function submitVivaApiImageRequest(params: {
+  query: string
+  inputs: unknown
+  isEditMode: boolean
+  gatewayPath: string
+  gatewayToken: string
+  signal: AbortSignal
+  attempt: number
+}) {
+  let editSourceMetadata: VivaApiEditSourceMetadata[] = []
+  let body: BodyInit
+  const imageInputs = buildGptImageV11Inputs(params.inputs)
+  let gatewaySize = normalizeImageGatewaySize(imageInputs)
+  if (params.isEditMode) {
+    const editFormData = await buildVivaApiImageEditFormData(
+      params.query,
+      params.inputs,
+      params.attempt > 1 ? VIVAAPI_EDIT_RETRY_SOURCE_DIMENSION : VIVAAPI_EDIT_MAX_SOURCE_DIMENSION,
+    )
+    body = editFormData.formData
+    editSourceMetadata = editFormData.sourceMetadata
+    gatewaySize = editFormData.gatewaySize
+  } else {
+    body = JSON.stringify(buildVivaApiImagePayload(params.query, params.inputs))
+  }
+
+  const response = await internalDifyFetch(`${VIVAAPI_IMAGE_BASE_URL}${params.gatewayPath}`, {
+    method: "POST",
+    headers: {
+      ...(!params.isEditMode ? { "Content-Type": "application/json" } : {}),
+      ...(params.gatewayToken
+        ? {
+            "x-gateway-token": params.gatewayToken,
+            Authorization: `Bearer ${params.gatewayToken}`,
+          }
+        : {}),
+    },
+    body,
+    signal: params.signal,
+  })
+
+  const text = await response.text()
+  const payload = safeJsonParse(text) || { message: sanitizeUpstreamErrorText(text), raw: text }
+  const storedResult = response.ok
+    ? { ok: true, payload }
+    : { ok: false, status: response.status, payload, text: sanitizeUpstreamErrorText(text) }
+  const wrappedResponse = createProviderTaskResponseFromStoredResult(storedResult)
+  const wrappedPayload = await wrappedResponse.json().catch(() => ({}))
+
+  return {
+    response,
+    storedResult,
+    wrappedResponse,
+    wrappedPayload,
+    editSourceMetadata,
+    gatewaySize,
+  }
+}
+
 function buildGeminiImageGatewayPayload(query: string, inputs: unknown) {
   const imageInputs = buildGeminiImageGatewayInputs(inputs)
 
@@ -1658,6 +1919,13 @@ async function startVivaApiImageTask(params: {
   requestId: string
   traceId: string
 }) {
+  const imageInputs = buildGptImageV11Inputs(params.inputs)
+  const isEditMode = imageInputs.mode === "image_edit"
+  const gatewayPath = isEditMode ? "/v1/images/edits" : "/v1/images/generations"
+  let gatewaySize = normalizeImageGatewaySize(imageInputs)
+  let editSourceMetadata: VivaApiEditSourceMetadata[] = []
+  let vivaApiAttempt = 1
+
   await updateTaskRun(params.requestId, {
     status: "running",
     stage: "VivaAPI 图片任务已提交，等待生成结果",
@@ -1666,6 +1934,11 @@ async function startVivaApiImageTask(params: {
     metadata: {
       provider: "vivaapi",
       gateway_status: "submitted",
+      gateway_path: gatewayPath,
+      gateway_size: gatewaySize,
+      mode: imageInputs.mode,
+      source_image_width: imageInputs.source_image_width,
+      source_image_height: imageInputs.source_image_height,
     },
   })
 
@@ -1675,28 +1948,53 @@ async function startVivaApiImageTask(params: {
     const timeout = createTimeoutSignal(GPT_IMAGE_GATEWAY_TIMEOUT_MS)
 
     try {
-      const response = await internalDifyFetch(`${VIVAAPI_IMAGE_BASE_URL}/v1/images/generations`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(gatewayToken
-            ? {
-                "x-gateway-token": gatewayToken,
-                Authorization: `Bearer ${gatewayToken}`,
-              }
-            : {}),
-        },
-        body: JSON.stringify(buildVivaApiImagePayload(params.query, params.inputs)),
+      let submission = await submitVivaApiImageRequest({
+        query: params.query,
+        inputs: params.inputs,
+        isEditMode,
+        gatewayPath,
+        gatewayToken,
         signal: timeout.signal,
+        attempt: vivaApiAttempt,
       })
+      editSourceMetadata = submission.editSourceMetadata
+      gatewaySize = submission.gatewaySize
 
-      const text = await response.text()
-      const payload = safeJsonParse(text) || { message: sanitizeUpstreamErrorText(text), raw: text }
-      const storedResult = response.ok
-        ? { ok: true, payload }
-        : { ok: false, status: response.status, payload, text: sanitizeUpstreamErrorText(text) }
-      const wrappedResponse = createProviderTaskResponseFromStoredResult(storedResult)
-      const wrappedPayload = await wrappedResponse.json().catch(() => ({}))
+      if (isEditMode && shouldRetryVivaApiImageResponse(submission.response, submission.storedResult, vivaApiAttempt)) {
+        vivaApiAttempt += 1
+        await updateTaskRun(params.requestId, {
+          status: "running",
+          stage: "图片编辑服务响应超时，正在自动重试",
+          progress: 45,
+          upstreamTaskId: params.requestId,
+          metadata: {
+            provider: "vivaapi",
+            elapsed_ms: Date.now() - startedAt,
+            gateway_status: "retrying",
+            gateway_path: gatewayPath,
+            gateway_size: gatewaySize,
+            mode: imageInputs.mode,
+            source_image_width: imageInputs.source_image_width,
+            source_image_height: imageInputs.source_image_height,
+            attempt: vivaApiAttempt,
+            previous_status: submission.response.status,
+            edit_sources: editSourceMetadata,
+          },
+        })
+        submission = await submitVivaApiImageRequest({
+          query: params.query,
+          inputs: params.inputs,
+          isEditMode,
+          gatewayPath,
+          gatewayToken,
+          signal: timeout.signal,
+          attempt: vivaApiAttempt,
+        })
+        editSourceMetadata = submission.editSourceMetadata
+        gatewaySize = submission.gatewaySize
+      }
+
+      const { response, storedResult, wrappedResponse, wrappedPayload } = submission
 
       if (!response.ok || !wrappedResponse.ok) {
         await updateTaskRun(params.requestId, {
@@ -1711,6 +2009,13 @@ async function startVivaApiImageTask(params: {
             provider: "vivaapi",
             elapsed_ms: Date.now() - startedAt,
             gateway_status: "failed",
+            gateway_path: gatewayPath,
+            gateway_size: gatewaySize,
+            mode: imageInputs.mode,
+            source_image_width: imageInputs.source_image_width,
+            source_image_height: imageInputs.source_image_height,
+            edit_sources: editSourceMetadata,
+            attempt: vivaApiAttempt,
             provider_status: response.status,
             result: sanitizeForTrace(storedResult),
           },
@@ -1728,6 +2033,13 @@ async function startVivaApiImageTask(params: {
           provider: "vivaapi",
           elapsed_ms: Date.now() - startedAt,
           gateway_status: "succeeded",
+          gateway_path: gatewayPath,
+          gateway_size: gatewaySize,
+          mode: imageInputs.mode,
+          source_image_width: imageInputs.source_image_width,
+          source_image_height: imageInputs.source_image_height,
+          edit_sources: editSourceMetadata,
+          attempt: vivaApiAttempt,
           result: sanitizeForTrace(storedResult),
         },
       })
@@ -1745,6 +2057,13 @@ async function startVivaApiImageTask(params: {
           provider: "vivaapi",
           elapsed_ms: Date.now() - startedAt,
           gateway_status: err?.name === "AbortError" ? "timeout" : "failed",
+          gateway_path: gatewayPath,
+          gateway_size: gatewaySize,
+          mode: imageInputs.mode,
+          source_image_width: imageInputs.source_image_width,
+          source_image_height: imageInputs.source_image_height,
+          edit_sources: editSourceMetadata,
+          attempt: vivaApiAttempt,
         },
       })
     } finally {
@@ -2275,7 +2594,7 @@ export async function POST(request: NextRequest) {
     // --- 1. 钥匙分发中心 (彻底分离通道) ---
     const { credential: selectedCredential, source: keySource } = isDirectImageGatewayRequest
       ? { credential: "", source: isGptImageGatewayRequest ? "IMAGE_GATEWAY" : "GEMINI_IMAGE_GATEWAY" }
-      : getDifyCredentialForModel(workflowSkillId ? "workflow-skill" : model, process.env, DEFAULT_DIFY_KEY)
+      : getDifyCredentialForModel(workflowSkillId ? "workflow-skill" : model, process.env)
 
     // 安全检查：防止忘配 Key
     if (!selectedCredential && !isDirectImageGatewayRequest) {
@@ -2838,7 +3157,7 @@ export async function POST(request: NextRequest) {
               progress: 8,
               conversationId: currentConvId,
             }))
-            console.warn(`🚀 [Dify请求] 开始请求 Dify... model=${model} endpoint=${DIFY_BASE_URL}${apiEndpoint} requestId=${taskRun.requestId}`)
+            console.warn(`🚀 [Dify请求] 开始请求 Dify... model=${model} keySource=${keySource} endpoint=${DIFY_BASE_URL}${apiEndpoint} requestId=${taskRun.requestId}`)
             logPerf(taskRun.requestId, "dify_request_start", apiStartedAt, { endpoint: apiEndpoint })
             const response = await internalDifyFetch(`${DIFY_BASE_URL}${apiEndpoint}`, {
                 method: "POST",
@@ -3711,6 +4030,34 @@ export async function POST(request: NextRequest) {
                 fullResponseText = displayText
                 hasReceivedContent = true
               }
+              if (model === "open-claw" && json.event === "message_end" && !hasReceivedContent && !workflowNodeFailure) {
+                const message = "OpenClaw 上游模型本次返回为空，请重新提交。当前任务未扣费。"
+                workflowNodeFailure = {
+                  message,
+                  code: "OPENCLAW_EMPTY_UPSTREAM_RESPONSE",
+                }
+                controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({
+                  event: "error",
+                  error: message,
+                  message,
+                  code: workflowNodeFailure.code,
+                })}\n\n`))
+                updateTaskRun(taskRun.id, {
+                  status: "failed",
+                  stage: "OpenClaw 上游返回空内容",
+                  progress: 100,
+                  conversationId: conversationId || undefined,
+                  errorMessage: message,
+                  errorCode: workflowNodeFailure.code,
+                  metadata: {
+                    has_received_content: false,
+                    total_tokens: totalTokens,
+                    prompt_tokens: promptTokens,
+                    completion_tokens: completionTokens,
+                    dify_response_mode: actualDifyResponseMode,
+                  },
+                }).catch((error) => console.warn("[AI Task Trace] openclaw empty response update failed:", error))
+              }
 
 	              // 提取 token 使用量（Dify 在 message_end 事件中返回）
 		              if (json.event === "message_end" && json.metadata?.usage) {
@@ -3790,6 +4137,34 @@ export async function POST(request: NextRequest) {
           enqueueSseAnswer(controller, displayText)
           fullResponseText = displayText
           hasReceivedContent = true
+        }
+        if (model === "open-claw" && !hasReceivedContent && !workflowNodeFailure) {
+          const message = "OpenClaw 上游模型本次返回为空，请重新提交。当前任务未扣费。"
+          workflowNodeFailure = {
+            message,
+            code: "OPENCLAW_EMPTY_UPSTREAM_RESPONSE",
+          }
+          enqueueSseEvent(controller, {
+            event: "error",
+            error: message,
+            message,
+            code: workflowNodeFailure.code,
+          })
+          updateTaskRun(taskRun.id, {
+            status: "failed",
+            stage: "OpenClaw 上游返回空内容",
+            progress: 100,
+            conversationId: conversationId || undefined,
+            errorMessage: message,
+            errorCode: workflowNodeFailure.code,
+            metadata: {
+              has_received_content: false,
+              total_tokens: totalTokens,
+              prompt_tokens: promptTokens,
+              completion_tokens: completionTokens,
+              dify_response_mode: actualDifyResponseMode,
+            },
+          }).catch((error) => console.warn("[AI Task Trace] openclaw empty flush update failed:", error))
         }
 	        console.log(`💰 [Billing] 流结束，输入 ${promptTokens} tokens，输出 ${completionTokens} tokens，总 ${totalTokens} tokens，内容长度: ${fullResponseText.length}，hasReceivedContent: ${hasReceivedContent}`)
 	        if (!workflowNodeFailure && hasReceivedContent && (promptTokens > 0 || completionTokens > 0 || workflowImageUrls.length > 0)) {

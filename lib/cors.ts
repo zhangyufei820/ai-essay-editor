@@ -3,6 +3,7 @@ import type { NextRequest } from "next/server"
 const ALLOWED_CORS_ORIGINS = new Set([
   "https://shenxiang.school",
   "https://www.shenxiang.school",
+  "https://school.shenxiang.school",
   "https://api.shenxiang.school",
   "http://localhost:3000",
   "http://127.0.0.1:3000",

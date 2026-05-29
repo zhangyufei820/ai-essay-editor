@@ -1,5 +1,7 @@
 const TEXT_OUTPUT_KEYS = [
   "markdown_report",
+  "final_content",
+  "output",
   "result",
   "text",
   "answer",

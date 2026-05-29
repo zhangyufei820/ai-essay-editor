@@ -43,11 +43,17 @@ export interface Model {
   badge?: string
   group?: string
   modelKey?: ModelKey
+  href?: string
+  routeId?: string
+  workflowSkill?: boolean
+  external?: boolean
+  priceLabel?: string
+  memberOnly?: boolean
 }
 
 interface ModelSelectorProps {
   selectedModel: string
-  onModelChange: (model: string) => void
+  onModelChange: (model: string, item?: Model) => void
   models: Model[]
   disabled?: boolean
   className?: string
@@ -74,7 +80,7 @@ export function ModelSelector({
   const [open, setOpen] = useState(false)
 
   const current = useMemo(() => {
-    return AGENT_REGISTRY[selectedModel] ?? models.find((item) => item.key === selectedModel) ?? null
+    return models.find((item) => item.key === selectedModel) ?? AGENT_REGISTRY[selectedModel] ?? null
   }, [models, selectedModel])
 
   const modelGroups = useMemo(() => {
@@ -155,9 +161,9 @@ export function ModelSelector({
                 <div className="grid gap-2 sm:grid-cols-2">
                   {items.map((model) => {
                     const registryAgent = AGENT_REGISTRY[model.key]
-                    const locked = Boolean(registryAgent?.memberOnly && !isMember)
+                    const locked = Boolean((model.memberOnly || registryAgent?.memberOnly) && !isMember)
                     const active = model.key === selectedModel
-                    const Icon = registryAgent?.icon
+                    const Icon = typeof model.icon === "string" ? registryAgent?.icon : model.icon ?? registryAgent?.icon
                     const FallbackIcon = typeof model.icon === "string" ? null : model.icon
                     const stringIcon = typeof model.icon === "string" ? model.icon : null
 
@@ -167,7 +173,7 @@ export function ModelSelector({
                         type="button"
                         onClick={() => {
                           if (locked) return
-                          onModelChange(model.key)
+                          onModelChange(model.key, model)
                           setOpen(false)
                         }}
                         disabled={locked}
@@ -201,9 +207,9 @@ export function ModelSelector({
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1.5">
                             <span className="font-[var(--font-display)] text-[14px] font-bold text-[var(--ink-800)]">
-                              {registryAgent?.name ?? model.name}
+                              {model.name ?? registryAgent?.name}
                             </span>
-                            {registryAgent?.memberOnly ? (
+                            {model.memberOnly || registryAgent?.memberOnly ? (
                               <BadgeV2 variant="seal">
                                 <Lock className="size-2.5 mr-0.5" />
                                 会员
@@ -216,11 +222,11 @@ export function ModelSelector({
                             ) : null}
                           </div>
                           <p className="mt-0.5 text-[12px] leading-[1.5] text-[var(--ink-500)] line-clamp-2">
-                            {registryAgent?.description ?? model.description ?? "AI 助手"}
+                            {model.description ?? registryAgent?.description ?? "AI 助手"}
                           </p>
-                          {registryAgent?.priceLabel ? (
+                          {model.priceLabel || registryAgent?.priceLabel ? (
                             <p className="mt-1 text-[11px] text-[var(--ink-400)] font-[var(--font-mono-v2)]">
-                              {registryAgent.priceLabel}
+                              {model.priceLabel || registryAgent?.priceLabel}
                             </p>
                           ) : null}
                         </div>

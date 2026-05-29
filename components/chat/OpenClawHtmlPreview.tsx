@@ -53,6 +53,7 @@ function sameSiteUrl(value: string) {
     const trustedAppHosts = new Set([
       "shenxiang.school",
       "www.shenxiang.school",
+      "school.shenxiang.school",
       "api.shenxiang.school",
       "cloudflare.shenxiang.school",
       "localhost",

@@ -77,6 +77,8 @@ type UploadKind = "edit" | "mask"
 type SelectedImage = {
   file: File
   previewUrl: string
+  width?: number
+  height?: number
 }
 
 type ImageResult = {
@@ -151,6 +153,24 @@ function createClientRequestId(prefix = "img") {
 
 function createObjectUrl(file: File) {
   return URL.createObjectURL(file)
+}
+
+function readImageDimensions(file: File): Promise<{ width: number; height: number } | null> {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file)
+    const image = new Image()
+    image.onload = () => {
+      const width = image.naturalWidth
+      const height = image.naturalHeight
+      URL.revokeObjectURL(url)
+      resolve(width > 0 && height > 0 ? { width, height } : null)
+    }
+    image.onerror = () => {
+      URL.revokeObjectURL(url)
+      resolve(null)
+    }
+    image.src = url
+  })
 }
 
 function formatBytes(bytes: number) {
@@ -653,9 +673,11 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
       moderation,
       n: count,
       mode,
+      source_image_width: mode === "image_edit" ? editImages[0]?.width : undefined,
+      source_image_height: mode === "image_edit" ? editImages[0]?.height : undefined,
       response_modalities: isGeminiGatewayWorkspace ? ["TEXT", "IMAGE"] : undefined,
     }),
-    [aspectRatio, background, count, isGeminiGatewayWorkspace, mode, model, moderation, outputCompression, outputFormat, quality, size]
+    [aspectRatio, background, count, editImages, isGeminiGatewayWorkspace, mode, model, moderation, outputCompression, outputFormat, quality, size]
   )
 
   const previewInputs = useMemo(
@@ -834,7 +856,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
     if (nextMode === "image_edit") {
       setModel(isGeminiGatewayWorkspace ? "gemini-3.1-flash-image-preview" : "gpt-image-2")
       setAspectRatio(isGeminiGatewayWorkspace ? "1:1" : "auto")
-      setSize(isGeminiGatewayWorkspace ? "1K" : "1K")
+      setSize(isGeminiGatewayWorkspace ? "1K" : "2K")
       setQuality("medium")
       setOutputFormat("png")
       setOutputCompression(100)
@@ -855,6 +877,9 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
     }
 
     setSize(nextSize)
+    if (mode !== "image_edit" && nextSize === "4K" && (aspectRatio === "1:1" || aspectRatio === "auto")) {
+      setAspectRatio("16:9")
+    }
   }
 
   const applyAspectRatio = (nextRatio: ImageAspectRatio) => {
@@ -879,25 +904,29 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
 
   }
 
-  const handleEditImagesPick = (files: File[]) => {
+  const handleEditImagesPick = async (files: File[]) => {
     if (files.length === 0) return
     setReferenceGatewayUrls([])
+    const nextImages = await Promise.all(files.map(async (file) => ({
+      file,
+      previewUrl: createObjectUrl(file),
+      ...(await readImageDimensions(file) || {}),
+    })))
     setEditImages((current) => {
       const remainingSlots = MAX_EDIT_IMAGE_UPLOADS - current.length
       if (remainingSlots <= 0) {
         toast.error(`最多上传 ${MAX_EDIT_IMAGE_UPLOADS} 张参考图。`)
+        nextImages.forEach((image) => URL.revokeObjectURL(image.previewUrl))
         return current
       }
 
-      const acceptedFiles = files.slice(0, remainingSlots)
-      if (files.length > remainingSlots) {
+      const acceptedImages = nextImages.slice(0, remainingSlots)
+      nextImages.slice(remainingSlots).forEach((image) => URL.revokeObjectURL(image.previewUrl))
+      if (nextImages.length > remainingSlots) {
         toast.warning(`最多上传 ${MAX_EDIT_IMAGE_UPLOADS} 张参考图，已保留前 ${remainingSlots} 张。`)
       }
 
-      return [
-        ...current,
-        ...acceptedFiles.map((file) => ({ file, previewUrl: createObjectUrl(file) })),
-      ]
+      return [...current, ...acceptedImages]
     })
 
     if (mode !== "image_edit") {

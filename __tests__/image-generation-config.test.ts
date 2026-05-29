@@ -11,13 +11,15 @@ describe('image generation config', () => {
     expect(config.entryRoute).toBe('/chat/creative-image-gpt2')
     expect(config.chatRoute).toBe(GPT_IMAGE_2_CHAT_ROUTE)
     expect(config.modes.map((mode) => mode.key)).toEqual(['text-to-image', 'image-edit'])
-    expect(config.defaultSizeValue).toBe('1-1-standard')
+    expect(config.defaultSizeValue).toBe('1-1-2k')
     expect(config.sizeOptions).toHaveLength(3)
     expect(config.sizeOptions.map((size) => size.apiValue)).toEqual(['1K', '2K', '4K'])
-    expect(config.sizeOptions.find((size) => size.value === '1-1-4k-experimental')).toMatchObject({
-      ratio: '1:1',
+    expect(config.sizeOptions.find((size) => size.value === '16-9-4k-experimental')).toMatchObject({
+      ratio: '16:9',
       tier: '4k-experimental',
       apiValue: '4K',
+      width: 3840,
+      height: 2160,
     })
     expect(config.modes.some((mode) => mode.key === config.defaultModeKey)).toBe(true)
     expect(config.sizeOptions.some((size) => size.value === config.defaultSizeValue)).toBe(true)

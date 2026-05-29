@@ -114,6 +114,7 @@ describe('Sprint 5 payment / credits / membership guards', () => {
     expect(source).toContain('gatewayName: process.env.VIVAAPI_IMAGE_API_KEY ? "vivaapi-image" : "dify-image-gateway"')
     expect(source).toContain('VIVAAPI_IMAGE_BASE_URL')
     expect(source).toContain('/v1/images/generations')
+    expect(source).toContain('/v1/images/edits')
     expect(source).toContain('usageSource: "fixed"')
     expect(source).toContain('if (!selectedCredential && !isDirectImageGatewayRequest)')
     expect(directGatewayIndex).toBeGreaterThan(billingCheckIndex)
@@ -197,10 +198,12 @@ describe('Sprint 5 payment / credits / membership guards', () => {
     expect(uploadRoute).toContain('model === "banana-2-pro"')
     expect(uploadRoute).toContain('const useImageGateway = shouldUseImageGateway(targetModel)')
     expect(uploadRoute).toContain('if (!useImageGateway && !targetApiKey)')
-    expect(credentials).toContain('selectRequiredDistinctProductionCredential')
+    expect(credentials).toContain('function selectRequiredCredential')
+    expect(credentials).toContain('case "gpt-image-2":')
+    expect(credentials).toContain('DIFY_GPT_IMAGE_API_KEY')
     expect(credentials).not.toContain('DIFY_BANANA_API_KEY')
     expect(credentials).toContain('source: "GEMINI_IMAGE_GATEWAY"')
-    expect(credentials).toContain('must not reuse the default or essay-correction credential in production')
+    expect(credentials).toContain('UNSUPPORTED_DIFY_MODEL')
   })
 
   it('does not mislabel Dify credential failures as user login failures in image workspaces', () => {
@@ -402,7 +405,7 @@ describe('Sprint 5 payment / credits / membership guards', () => {
     expect(source).toContain('const surveyGateEnabled = runtimeFlags.loaded')
     expect(source).toContain('&& runtimeFlags.consumptionEnabled')
     expect(source).toContain('&& runtimeFlags.autoPromptEnabled')
-    expect(source).toContain('enabled={surveyGateEnabled}')
+    expect(source).toContain('enabled={!suppressPrompts && surveyGateEnabled}')
     expect(source).toContain('runtimeFlags.loaded && runtimeFlags.campaignEnabled && runtimeFlags.consumptionEnabled && announcementOpen')
   })
 

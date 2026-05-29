@@ -18,7 +18,7 @@ describe("GPT Image V11 parameter mapping", () => {
       mode: "image_generate",
       model: "gpt-image-2",
       aspect_ratio: "1:1",
-      size: "1K",
+      size: "2K",
       quality: "low",
       output_format: "png",
       output_compression: 100,
@@ -47,7 +47,7 @@ describe("GPT Image V11 parameter mapping", () => {
       mode: "image_edit",
       model: "gpt-image-2",
       aspect_ratio: "auto",
-      size: "1K",
+      size: "2K",
       reference_image_url: "http://gateway/ref.png",
       reference_image_urls: ["http://gateway/ref.png"],
       mask_image_url: "http://gateway/mask.png",
@@ -65,6 +65,23 @@ describe("GPT Image V11 parameter mapping", () => {
       reference_image_url: "http://gateway/ref-1.png",
       reference_image_urls: ["http://gateway/ref-1.png", "http://gateway/ref-2.png"],
       mask_image_url: "http://gateway/mask.png",
+    })
+  })
+
+  it("passes source image dimensions for aspect-preserving edit requests", () => {
+    expect(
+      buildDifyInputs({
+        ...EDIT_MODE_DEFAULTS,
+        size: "4K",
+        source_image_width: 2500,
+        source_image_height: 3500,
+      }, "http://gateway/ref.png")
+    ).toMatchObject({
+      mode: "image_edit",
+      size: "4K",
+      source_image_width: 2500,
+      source_image_height: 3500,
+      reference_image_url: "http://gateway/ref.png",
     })
   })
 
@@ -125,12 +142,32 @@ describe("GPT Image V11 parameter mapping", () => {
     const routeSource = require("fs").readFileSync(require("path").join(process.cwd(), "app/api/dify-chat/route.ts"), "utf8")
 
     expect(routeSource).toContain("function normalizeImageGatewaySize")
+    expect(routeSource).toContain('if (size === "1K") return "1024x1024"')
     expect(routeSource).toContain('if (size === "2K") return "2048x2048"')
-    expect(routeSource).toContain('if (size === "4K") return "3840x3840"')
-    expect(routeSource).toContain('return "1024x1024"')
-    expect(routeSource).toContain('const VIVAAPI_IMAGE_MODEL = process.env.VIVAAPI_IMAGE_MODEL || "gpt-image-2"')
+    expect(routeSource).toContain("getImageSizeForSourceAspectRatio")
+    expect(routeSource).toContain("source_image_width")
+    expect(routeSource).toContain("source_image_height")
+    expect(routeSource).toContain('inputs.mode === "image_edit"')
+    expect(routeSource).toContain('if (size === "4K") return isPortrait ? "2160x3840" : "3840x2160"')
+    expect(routeSource).toContain('return "2048x2048"')
+    expect(routeSource).toContain('const VIVAAPI_IMAGE_MODEL = process.env.VIVAAPI_IMAGE_MODEL || "gpt-image-2-vip"')
+    expect(routeSource).not.toContain("3840x3840")
+    expect(routeSource).not.toContain("4096x4096")
     expect(routeSource).toContain("VIVAAPI_IMAGE_BASE_URL")
     expect(routeSource).toContain("/v1/images/generations")
+    expect(routeSource).toContain("/v1/images/edits")
+    expect(routeSource).toContain('const isEditMode = imageInputs.mode === "image_edit"')
+    expect(routeSource).toContain("buildVivaApiImageEditFormData")
+    expect(routeSource).toContain('appendRemoteImageToFormData(formData, "image"')
+    expect(routeSource).toContain("normalizeVivaApiEditSourceImage")
+    expect(routeSource).toContain("VIVAAPI_EDIT_MAX_SOURCE_BYTES")
+    expect(routeSource).toContain("VIVAAPI_EDIT_MAX_SOURCE_DIMENSION = 2048")
+    expect(routeSource).toContain("VIVAAPI_EDIT_RETRY_SOURCE_DIMENSION = 1536")
+    expect(routeSource).toContain("shouldRetryVivaApiImageResponse")
+    expect(routeSource).toContain("submitVivaApiImageRequest")
+    expect(routeSource).toContain("gateway_status: \"retrying\"")
+    expect(routeSource).toContain("edit_sources: editSourceMetadata")
+    expect(routeSource).toContain('gateway_path: gatewayPath')
     expect(routeSource).toContain("buildVivaApiImagePayload")
     expect(routeSource).not.toContain("getImageGatewaySizeByTier")
     expect(routeSource).not.toContain("size: imageInputs.size,")

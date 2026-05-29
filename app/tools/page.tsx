@@ -254,7 +254,7 @@ function buildImageGenerationInputs(targetModel: ReverseTargetModel) {
   return {
     provider: "openai",
     aspect_ratio: "1:1",
-    size: "1024x1024",
+    size: "2K",
     model: "gpt-image-2",
     quality: "low",
     output_format: "png",
@@ -782,7 +782,7 @@ export default function ToolsPage() {
 
         <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_430px]">
           <div className="grid min-w-0 gap-4 lg:grid-cols-2">
-            <ToolCard id="image-prompt-reverse" index="01" title="图像提示词反推" description="上传参考图，反推出可直接用于 Image 2 或 Banana/Gemini 的生成提示词。" icon={FileImage} featured>
+            <ToolCard id="image-prompt-reverse" index="01" title="图像提示词反推" description="上传参考图，反推出可直接用于 Image 2 或 Gemini 的生成提示词。" icon={FileImage} featured>
               <form className="grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]" onSubmit={runReversePrompt}>
                 <div className="space-y-3">
                   <Label htmlFor="reverse-image-file">上传图片</Label>

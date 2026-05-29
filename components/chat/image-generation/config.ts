@@ -37,7 +37,7 @@ function createSizeOption(
 const GPT_IMAGE_2_SIZE_OPTIONS = [
   createSizeOption('1:1', 'standard', 1024, 1024, '1K'),
   createSizeOption('1:1', '2k', 2048, 2048, '2K'),
-  createSizeOption('1:1', '4k-experimental', 3840, 3840, '4K'),
+  createSizeOption('16:9', '4k-experimental', 3840, 2160, '4K'),
 ]
 
 const GEMINI_SIZE_OPTIONS = [
@@ -85,7 +85,7 @@ const MODEL_CONFIGS: Record<ImageGenerationModel, ImageModelConfig> = {
       { key: 'image-edit', label: '图像编辑' },
     ],
     sizeOptions: GPT_IMAGE_2_SIZE_OPTIONS,
-    defaultSizeValue: '1-1-standard',
+    defaultSizeValue: '1-1-2k',
     defaultModeKey: 'text-to-image',
   },
   'gemini-image': {

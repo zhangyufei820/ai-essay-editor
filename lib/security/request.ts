@@ -13,6 +13,7 @@ function getAllowedHosts() {
   }
   hosts.add("www.shenxiang.school")
   hosts.add("shenxiang.school")
+  hosts.add("school.shenxiang.school")
   return hosts
 }
 

@@ -148,7 +148,7 @@ const nextConfig = {
           "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdn.authing.co https://fonts.googleapis.cn",
           "img-src 'self' data: blob: https:",
           "font-src 'self' data: https://cdn.jsdelivr.net https://cdn.authing.co https://fonts.gstatic.cn",
-          "connect-src 'self' https://shenxiang.school https://www.shenxiang.school https://api.shenxiang.school https://cdn.shenxiang.school https://*.supabase.co wss://*.supabase.co https://core.authing.cn https://*.authing.cn https://files.authing.co https://api.xunhupay.com https://*.stripe.com https://api.dify.ai https://www.vivaapi.cn wss:",
+          "connect-src 'self' https://shenxiang.school https://www.shenxiang.school https://school.shenxiang.school https://api.shenxiang.school https://cdn.shenxiang.school https://*.supabase.co wss://*.supabase.co https://core.authing.cn https://*.authing.cn https://files.authing.co https://api.xunhupay.com https://*.stripe.com https://api.dify.ai https://www.vivaapi.cn wss:",
           "media-src 'self' data: blob: https:",
           "frame-src 'self' https://js.stripe.com https://hooks.stripe.com https://phet.colorado.edu",
           "object-src 'none'",

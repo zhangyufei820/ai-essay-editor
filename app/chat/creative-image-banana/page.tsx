@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation"
 
 export default function CreativeImageBananaPage() {
-  redirect("/chat/banana-2-pro")
+  redirect("/chat/gpt-image-2")
 }

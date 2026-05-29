@@ -24,7 +24,7 @@ const COLLAPSE_THRESHOLD = 6
 const CATEGORY_DESCRIPTIONS: Partial<Record<AgentCategory, string>> = {
   推荐: "优先展示站内核心能力和高频入口。",
   通用助手: "适合不确定从哪里开始、需要综合处理或教师自定义的场景。",
-  公众号与内容写作: "覆盖公众号长文、读书报告、文书、简历、演讲和校园内容。",
+  公众号与内容写作: "覆盖公众号长文、素材成稿、内容扩写和可发布文章续写。",
   中文润色与纠错: "把文本改得更顺、更自然，并处理语法、标点和校对问题。",
   论文与学术: "围绕论文选题、大纲、评审、投稿前终检和实验报告展开。",
   中小学作文: "面向作文批改、议论文、初中作文和散文升格。",
@@ -41,12 +41,7 @@ const MAIN_TOOL_IDS = [
   "standard",
   "ai-writing-paper",
   "zhongying-essay",
-  "reading-report",
   "experiment-report",
-  "study-abroad",
-  "resume-optimize",
-  "speech-defense",
-  "school-wechat",
   "teaching-pro",
   "beike-pro",
   "banzhuren",
@@ -56,7 +51,6 @@ const MAIN_TOOL_IDS = [
   "problem",
   "worksheet-diagnosis",
   "gpt-image-2",
-  "banana-2-pro",
 ] as const
 
 const categoryOptions = [{ key: "all", label: "全部" }, ...AGENT_CATEGORIES] as const

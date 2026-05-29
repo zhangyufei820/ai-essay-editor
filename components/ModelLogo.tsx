@@ -17,10 +17,6 @@ import {
   BookOpenText,
   ClipboardList,
   FilePenLine,
-  GraduationCap,
-  IdCard,
-  MessageSquareQuote,
-  Newspaper,
   type LucideProps,
 } from "lucide-react"
 
@@ -52,12 +48,7 @@ export type ModelKey =
   | "gpt-image-2"
   | "ai-writing-paper"
   | "zhongying-essay"
-  | "reading-report"
   | "experiment-report"
-  | "study-abroad"
-  | "resume-optimize"
-  | "speech-defense"
-  | "school-wechat"
 
 interface ModelLogoConfig {
   /** SVG 文件路径（本地 /public 路径） */
@@ -156,28 +147,8 @@ const MODEL_LOGOS: Record<ModelKey, ModelLogoConfig> = {
     LucideIcon: BookOpenText,
     brandColor: "#10A37F",
   },
-  "reading-report": {
-    LucideIcon: BookOpenText,
-    brandColor: "#10A37F",
-  },
   "experiment-report": {
     LucideIcon: ClipboardList,
-    brandColor: "#10A37F",
-  },
-  "study-abroad": {
-    LucideIcon: GraduationCap,
-    brandColor: "#10A37F",
-  },
-  "resume-optimize": {
-    LucideIcon: IdCard,
-    brandColor: "#10A37F",
-  },
-  "speech-defense": {
-    LucideIcon: MessageSquareQuote,
-    brandColor: "#10A37F",
-  },
-  "school-wechat": {
-    LucideIcon: Newspaper,
     brandColor: "#10A37F",
   },
 

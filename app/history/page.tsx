@@ -50,16 +50,11 @@ const MODEL_DISPLAY_NAMES: Record<string, string> = {
   "all-in-one-agent": "数学图片与动画生成器",
   "super-all-in-one-agent": "超级全能智能体",
   "suno-v5": "Suno V5",
-  "banana-2-pro": "Banana 2 Pro",
+  "banana-2-pro": "GPT Image 2",
   "gpt-image-2": "GPT Image 2",
   "ai-writing-paper": "论文写作",
   "zhongying-essay": "中英作文",
-  "reading-report": "读书报告",
   "experiment-report": "实验报告",
-  "study-abroad": "留学文书",
-  "resume-optimize": "简历优化",
-  "speech-defense": "演讲答辩",
-  "school-wechat": "校园文案",
 }
 
 function hasLocalUser() {

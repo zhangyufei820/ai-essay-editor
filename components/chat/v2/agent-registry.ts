@@ -6,7 +6,7 @@
  */
 
 import { Image as ImageIcon } from "lucide-react"
-import { IconAllInOne, IconBanzhuren, IconDiagnosis, IconEnglish, IconEssay, IconFollowup, IconMath, IconMic, IconOpenClaw, IconProblem, IconSuperAgent, IconTeaching, IconVocab, IconWebsiteAssistant, IconWriting } from "@/components/icons/v2"
+import { IconAllInOne, IconBanzhuren, IconDiagnosis, IconEnglish, IconEssay, IconMath, IconOpenClaw, IconProblem, IconSuperAgent, IconTeaching, IconVocab, IconWebsiteAssistant, IconWriting } from "@/components/icons/v2"
 import type { AgentDefinition } from "./types"
 
 export const AGENT_REGISTRY: Record<string, AgentDefinition> = {
@@ -56,15 +56,6 @@ export const AGENT_REGISTRY: Record<string, AgentDefinition> = {
     priceLabel: "100 积分起",
     icon: IconEnglish,
   },
-  "reading-report": {
-    model: "reading-report",
-    name: "读书报告",
-    description: "读后感与读书笔记",
-    group: "writing",
-    artifactType: "markdown",
-    priceLabel: "100 积分起",
-    icon: IconEssay,
-  },
   "experiment-report": {
     model: "experiment-report",
     name: "实验报告",
@@ -73,42 +64,6 @@ export const AGENT_REGISTRY: Record<string, AgentDefinition> = {
     artifactType: "markdown",
     priceLabel: "100 积分起",
     icon: IconDiagnosis,
-  },
-  "study-abroad": {
-    model: "study-abroad",
-    name: "留学文书",
-    description: "PS / SOP / Essay 多轮打磨",
-    group: "writing",
-    artifactType: "markdown",
-    priceLabel: "100 积分起",
-    icon: IconWriting,
-  },
-  "resume-optimize": {
-    model: "resume-optimize",
-    name: "简历优化",
-    description: "升级你的求职简历",
-    group: "writing",
-    artifactType: "markdown",
-    priceLabel: "20 积分起",
-    icon: IconWriting,
-  },
-  "speech-defense": {
-    model: "speech-defense",
-    name: "演讲答辩",
-    description: "答辩 / 演讲稿 / 即兴演讲",
-    group: "writing",
-    artifactType: "markdown",
-    priceLabel: "20 积分起",
-    icon: IconMic,
-  },
-  "school-wechat": {
-    model: "school-wechat",
-    name: "校园文案",
-    description: "校园活动 / 公众号 / 海报文案",
-    group: "writing",
-    artifactType: "markdown",
-    priceLabel: "20 积分起",
-    icon: IconFollowup,
   },
   "beike-pro": {
     model: "beike-pro",
@@ -173,15 +128,6 @@ export const AGENT_REGISTRY: Record<string, AgentDefinition> = {
     priceLabel: "高级模型",
     icon: IconOpenClaw,
   },
-  "banana-2-pro": {
-    model: "banana-2-pro",
-    name: "Banana 2 Pro 4K",
-    description: "高质量图像生成（4K 大图）",
-    group: "creative",
-    artifactType: "markdown",
-    priceLabel: "165 积分/张",
-    icon: ImageIcon,
-  },
   "gpt-image-2": {
     model: "gpt-image-2",
     name: "GPT Image 2",
@@ -189,7 +135,6 @@ export const AGENT_REGISTRY: Record<string, AgentDefinition> = {
     group: "creative",
     artifactType: "markdown",
     priceLabel: "20-55 积分/张",
-    memberOnly: true,
     icon: ImageIcon,
   },
   "all-in-one-agent": {

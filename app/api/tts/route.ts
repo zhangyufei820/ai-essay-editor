@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { internalDifyFetch } from "@/lib/internal-dify-fetch"
 import { requireUser } from "@/lib/auth/verified-user"
+import { getDifyCredentialForModel } from "@/lib/dify-credentials"
 
 export const runtime = "nodejs"
 export const maxDuration = 60
@@ -22,25 +23,8 @@ const DIFY_BASE_URL = process.env.DIFY_INTERNAL_URL
   || "https://api.dify.ai"
 
 // 获取模型对应的 API Key
-function getDifyApiKey(model?: string): string {
-  const DEFAULT_DIFY_KEY = process.env.ESSAY_CORRECTION_API_KEY || process.env.DIFY_API_KEY || ""
-
-  switch (model) {
-    case "teaching-pro":
-      return process.env.DIFY_TEACHING_PRO_API_KEY || DEFAULT_DIFY_KEY
-    case "gpt-5":
-      return process.env.DIFY_API_KEY_GPT5 || DEFAULT_DIFY_KEY
-    case "claude-opus":
-      return process.env.DIFY_API_KEY_CLAUDE || DEFAULT_DIFY_KEY
-    case "gemini-pro":
-      return process.env.DIFY_API_KEY_GEMINI || DEFAULT_DIFY_KEY
-    case "grok-4.2":
-      return process.env.DIFY_API_KEY_GROK42 || DEFAULT_DIFY_KEY
-    case "open-claw":
-      return process.env.DIFY_API_KEY_OPENCLAW || DEFAULT_DIFY_KEY
-    default:
-      return DEFAULT_DIFY_KEY
-  }
+function getDifyApiKey(model?: string): { credential: string; source: string } {
+  return getDifyCredentialForModel(model || "general-chat", process.env)
 }
 
 export async function POST(request: NextRequest) {
@@ -63,11 +47,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const apiKey = getDifyApiKey(model)
+    const { credential: apiKey, source: keySource } = getDifyApiKey(model)
 
     if (!apiKey) {
       return NextResponse.json(
-        { error: "API Key 未配置" },
+        { error: `API Key 未配置：${keySource}` },
         { status: 500 }
       )
     }

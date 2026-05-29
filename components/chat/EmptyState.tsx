@@ -14,9 +14,9 @@ const QUICK_AGENTS = [
 ] as const
 
 const MORE_AGENTS = [
-  { group: "写作", items: ["论文", "中英作文", "留学文书", "简历", "演讲", "校园文案"] },
+  { group: "写作", items: ["论文", "中英作文", "实验报告"] },
   { group: "学科", items: ["英语", "词境记忆卡", "题目解析"] },
-  { group: "创作", items: ["GPT Image", "Banana 4K", "Suno 音乐", "OpenClaw"] },
+  { group: "创作", items: ["GPT Image", "Gemini 图像", "Suno 音乐", "OpenClaw"] },
   { group: "教学", items: ["备课 Pro", "班主任", "教学评"] },
 ] as const
 

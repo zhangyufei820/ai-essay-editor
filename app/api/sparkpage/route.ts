@@ -74,9 +74,7 @@ async function generateSparkpage(input: {
   model?: string
 }) {
   const prompt = buildSparkpagePrompt(input.query, input.searchResults, input.documents)
-  const difyKey = process.env.DIFY_SPARKPAGE_API_KEY
-    || process.env.DIFY_SUPER_ALL_IN_ONE_AGENT_API_KEY
-    || process.env.DIFY_ALL_IN_ONE_AGENT_API_KEY
+  const difyKey = process.env.DIFY_SPARKPAGE_API_KEY || ""
 
   if (difyKey) {
     const dify = await callToolsDifyChat({
@@ -97,7 +95,7 @@ async function generateSparkpage(input: {
   }
 
   if (!process.env.OPENAI_API_KEY) {
-    throw new Error("综合报告工具未配置 Dify 或 OpenAI API Key")
+    throw new Error("综合报告工具未配置 DIFY_SPARKPAGE_API_KEY 或 OpenAI API Key")
   }
 
   const { text } = await generateText({

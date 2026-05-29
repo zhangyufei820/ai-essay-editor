@@ -39,7 +39,7 @@ import { trackCampaignEvent } from "@/lib/campaign-events-client"
 import { openTrialSurveyGate } from "@/lib/trial-survey-client"
 import { EmptyState } from "./EmptyState"
 import { AIStatusIndicator } from "@/components/ai/AIStatusIndicator"
-import { ModelSelector } from "./ModelSelector"
+import { ModelSelector, type Model } from "./ModelSelector"
 import { MathInline, MathBlock } from "./UltimateRenderer"
 import { useWorkflowVisualizer } from "@/hooks/useWorkflowVisualizer"
 import type { ChatSession } from "./chat-sidebar"
@@ -57,6 +57,7 @@ import { LATEX_MACROS, renderLatex } from "@/lib/latex-constants"
 import { cleanLLMText } from "@/lib/text-sanitizer"
 import { parseEssayReview } from "@/lib/parse-essay-review"
 import { extractDifyTextOutput } from "@/lib/dify-output-text"
+import { isAssistantFailureContent } from "@/lib/chat-message-guards"
 import { containsRawDifyWordCardPayload, normalizeDifyWordCardResponse, type FrontendWordCard } from "@/lib/word-card-normalizer"
 import { buildVocabCardWorkflowInputs, cleanVocabAnswer, resolveVocabCardResult } from "@/lib/vocab-card-workflow"
 import { resolveChatAgentParam } from "@/lib/teacher-agent-route"
@@ -71,6 +72,7 @@ import { getApiUrl } from "@/lib/api-config"
 import { logger } from "@/lib/logger"
 import { ModelLogo } from "@/components/ModelLogo"
 import { navigationModelConfig, getNavigationModelItem } from "@/lib/navigation-models"
+import { PLAZA_AGENTS } from "@/components/agents/agent-plaza-data"
 import { getOpenClawAttachmentKind, isLikelyHtmlDocumentUrl, toPublicOpenClawMediaSignUrl, toPublicOpenClawWorkspaceUrl } from "@/lib/openclaw-media"
 import type { CodexSkill } from "@/lib/codex-skills"
 import type { OpenClawSkill } from "@/lib/openclaw-skills"
@@ -104,16 +106,11 @@ const MODEL_DISPLAY_NAMES: Record<string, string> = {
   "banzhuren": "班主任助手",
   "all-in-one-agent": "数学图片与动画生成器",
   "super-all-in-one-agent": "超级全能智能体",
-  "banana-2-pro": "Banana 2 Pro",
+  "banana-2-pro": "GPT Image 2",
   "gpt-image-2": "GPT Image 2",
   "ai-writing-paper": "论文写作",
   "zhongying-essay": "中英文作文",
-  "reading-report": "读书报告",
   "experiment-report": "实验报告",
-  "study-abroad": "留学文书",
-  "resume-optimize": "简历优化",
-  "speech-defense": "演讲答辩",
-  "school-wechat": "公众号",
   "teacher-agent": "教师智能体",
 }
 
@@ -2078,46 +2075,11 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       description: "K12与四六级作文思路启发与语法润色",
       group: "AI写作"
     },
-    "reading-report": {
-      name: "读书报告 / 观后感",
-      modelKey: "reading-report",
-      color: BRAND_GREEN,
-      description: "提炼书籍核心观点，深化阅读思考",
-      group: "AI写作"
-    },
     "experiment-report": {
       name: "实验报告助理",
       modelKey: "experiment-report",
       color: BRAND_GREEN,
       description: "规范理工科实验报告格式与结论分析",
-      group: "AI写作"
-    },
-    "study-abroad": {
-      name: "留学与升学文书",
-      modelKey: "study-abroad",
-      color: BRAND_GREEN,
-      description: "挖掘个人闪光点，打磨专属申请故事",
-      group: "AI写作"
-    },
-    "resume-optimize": {
-      name: "实习简历优化",
-      modelKey: "resume-optimize",
-      color: BRAND_GREEN,
-      description: "提炼校园经历，生成专业职场简历",
-      group: "AI写作"
-    },
-    "speech-defense": {
-      name: "演讲与答辩稿",
-      modelKey: "speech-defense",
-      color: BRAND_GREEN,
-      description: "竞选、比赛与论文答辩的逐字稿定制",
-      group: "AI写作"
-    },
-    "school-wechat": {
-      name: "学校公众号写作",
-      modelKey: "school-wechat",
-      color: BRAND_GREEN,
-      description: "校园宣传与活动稿件撰写",
       group: "AI写作"
     },
   }
@@ -2137,18 +2099,60 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     }
   }
 
-  // 🔥 转换为 ModelSelector 需要的格式
-  const modelList = Object.entries(modelConfig).map(([key, config]) => ({
-    key,
-    name: config!.name,
-    modelKey: config!.modelKey as any,
-    color: config!.color,
-    description: config!.description,
-    badge: config!.badge,
-    group: config!.group
-  }))
+  const plazaChatAgents = PLAZA_AGENTS.map((agent) => {
+    const builtinConfig = modelConfig[agent.id as ModelType]
+    return {
+      key: agent.id,
+      name: agent.name,
+      icon: agent.icon,
+      modelKey: (agent.modelKey ?? builtinConfig?.modelKey) as any,
+      color: builtinConfig?.color || BRAND_GREEN,
+      description: agent.description,
+      badge: agent.badge,
+      group: agent.category,
+      href: agent.href,
+      routeId: agent.routeId,
+      workflowSkill: agent.workflowSkill,
+      external: agent.external,
+      priceLabel: agent.priceLabel,
+      memberOnly: agent.memberOnly,
+    }
+  })
 
-  const handleModelChange = (model: string) => {
+  // 🔥 转换为 ModelSelector 需要的格式，并以智能体广场为完整来源
+  const modelList = plazaChatAgents
+
+  const selectedAgentKey = workflowSkillId || selectedModel
+  const selectedAgentName = workflowSkillDisplay?.name || getModelUiConfig(selectedModel).name
+
+  const handleModelChange = (model: string, item?: Model) => {
+    if (item?.external) {
+      window.open(item.href || item.routeId || "/agents", "_blank", "noopener,noreferrer")
+      return
+    }
+
+    if (item?.href && !item.href.startsWith("/chat")) {
+      router.push(item.href)
+      return
+    }
+
+    if (item?.workflowSkill) {
+      const nextRoute = item.href || `/chat?agent=${encodeURIComponent(model)}`
+      const targetModel = "general-chat" as ModelType
+      if (selectedModel !== targetModel) {
+        clearConversationState()
+        setMessages([])
+        setSelectedCodexSkill(null)
+        setSelectedOpenClawSkill(null)
+      }
+      setGenMode("text")
+      lastUsedModelRef.current = targetModel
+      setSelectedModel(targetModel)
+      router.push(nextRoute)
+      toast.success(`已切换至 ${item.name}`)
+      return
+    }
+
     if (!(model in MODEL_COSTS)) return
     const nextModel = model as ModelType
 
@@ -2165,7 +2169,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     }
 
     // 🚀 图像模型使用独立工作台，避免落回通用 AI 对话画面
-    if (nextModel === "gemini-image" || nextModel === "gpt-image-2" || nextModel === "banana-2-pro") {
+    if (nextModel === "gemini-image" || nextModel === "gpt-image-2") {
       console.log('✅ [模型切换] 检测到图像模型，跳转到专用页面')
       router.push(`/chat/${nextModel}`)
       return
@@ -2176,6 +2180,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
     // 🔥 记录用户上次使用的模型
     lastUsedModelRef.current = nextModel
     setSelectedModel(nextModel)
+    router.push(`/chat/${nextModel}`)
 
     console.log(`🔄 [模型切换] 已切换至 ${model}`)
 
@@ -3447,6 +3452,10 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       toast.error("没有可分享的内容")
       return
     }
+    if (messages.some((message) => message.role === "assistant" && isAssistantFailureContent(message.content))) {
+      toast.error("当前对话包含未完成或失败的回复，不能分享到创作广场")
+      return
+    }
 
     setIsSharing(true)
     toast.info("正在生成分享链接...")
@@ -3648,7 +3657,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
           </button>
           <div className="flex-1 min-w-0 px-1 text-center md:text-left md:ml-2">
             <ModelSelector
-              selectedModel={selectedModel}
+              selectedModel={selectedAgentKey}
               models={modelList}
               onModelChange={handleModelChange}
               disabled={isLoading}
@@ -3658,7 +3667,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
               className="hidden h-8 align-middle md:inline-flex"
             />
             <span className="ml-2 hidden max-w-[180px] truncate align-middle text-[12px] text-[var(--ink-400)] md:inline-block">
-              当前：{getModelUiConfig(selectedModel).name}
+              当前：{selectedAgentName}
             </span>
           </div>
           {/* 🔥 移动端用户信息显示 - 仅在移动端显示 */}
@@ -3942,11 +3951,11 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
               />
               <ChatInput
                 showModelSelector={true}
-                selectedModel={selectedModel}
+                selectedModel={selectedAgentKey}
                 models={modelList}
                 onModelChange={handleModelChange}
                 modelColor={getModelUiConfig(selectedModel).color}
-                modelName={getModelUiConfig(selectedModel).name}
+                modelName={selectedAgentName}
                 value={input}
                 onChange={setInput}
                 onSubmit={onSubmit}
