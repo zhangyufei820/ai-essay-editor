@@ -15,6 +15,7 @@ import { LoadingStateV2, SkeletonV2 as Skeleton } from "@/components/ui/v2"
 
 import type React from "react"
 import { useState, useRef, useEffect, Suspense, useCallback } from "react"
+import { flushSync } from "react-dom"
 import Link from "next/link"
 import { useSearchParams, useRouter } from "next/navigation"
 import DOMPurify from "isomorphic-dompurify"
@@ -675,6 +676,17 @@ async function saveChatMessageViaApi(params: {
   })
   if (!res.ok) throw new Error(`chat_message_save_failed_${res.status}`)
   return res.json()
+}
+
+function scheduleChatPerfRenderMark(requestId: string, stage: string, startedAt: number) {
+  if (typeof window === "undefined") return
+  window.requestAnimationFrame(() => {
+    console.debug("[ChatPerf]", {
+      requestId,
+      stage,
+      elapsedMs: Date.now() - startedAt,
+    })
+  })
 }
 
 function rememberPendingTask(task: { requestId: string; sessionId?: string; model: string; createdAt: number }) {
@@ -2430,6 +2442,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   ) => {
     const clickStartedAt = Date.now()
     e.preventDefault(); if (!userId) { toast.error("请登录"); return }
+    const authHeadersPromise = getVerifiedAuthHeaders()
     const activeFiles = overrides?.files ?? uploadedFiles
     const txt = ((overrides?.content ?? input) || "").trim()
     const isWordCardSubmit = selectedModel === "vocab-card"
@@ -2683,7 +2696,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
           fileUrlCount: fileUrls.length
         })
 
-          const authHeaders = await getVerifiedAuthHeaders()
+          const authHeaders = await authHeadersPromise
           const requestStartedAt = Date.now()
           const hasAuthorization = Boolean(authHeaders.Authorization)
           console.debug("[ChatPerf]", {
@@ -2814,6 +2827,29 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         const decoder = new TextDecoder();
         let buffer = "";
         let firstChunkAt: number | null = null
+        let firstAnswerAt: number | null = null
+        let firstRenderMarked = false
+        const markFirstAnswer = (stage: "first_answer" | "first_word_card" | "first_text_chunk" | "first_workflow_output") => {
+          if (firstAnswerAt) return
+          firstAnswerAt = Date.now()
+          console.debug("[ChatPerf]", {
+            requestId,
+            stage,
+            elapsedMs: firstAnswerAt - requestStartedAt,
+          })
+        }
+        const updateAssistantMessageContent = (content: string, stage = "first_render") => {
+          if (!firstAnswerAt) markFirstAnswer("first_answer")
+          if (!firstRenderMarked) {
+            firstRenderMarked = true
+            flushSync(() => {
+              setMessages(p => p.map(m => m.id === botId ? { ...m, content } : m))
+            })
+            scheduleChatPerfRenderMark(requestId, stage, requestStartedAt)
+            return
+          }
+          setMessages(p => p.map(m => m.id === botId ? { ...m, content } : m))
+        }
 
         while (true) {
             const { done, value } = await reader!.read();
@@ -2902,7 +2938,11 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                     }
 
                     if (isWordCardRequest && hasVocabRenderablePayload(json)) {
-                      if (applyVocabResult(json)) continue
+                      if (applyVocabResult(json)) {
+                        markFirstAnswer("first_word_card")
+                        scheduleChatPerfRenderMark(requestId, "first_render", requestStartedAt)
+                        continue
+                      }
                     }
 
                     // 🔥 处理 Chat API 的 answer 字段
@@ -2925,9 +2965,10 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                           triggerHandover() // 强制结束思考，激活光标
                           console.log("✍️ [Answer] 收到第一个 answer，触发 handover")
                         }
+                        markFirstAnswer("first_answer")
                         hasRec = true
                         fullText += json.answer
-                        setMessages(p => p.map(m => m.id === botId ? { ...m, content: fullText } : m))
+                        updateAssistantMessageContent(fullText)
                     }
 
                     // 🔥 处理 Workflow API 的 text_chunk/agent_message 事件
@@ -2951,9 +2992,10 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                               triggerHandover()
                               console.log("✍️ [TextChunk] 收到第一个文本块，触发 handover")
                             }
+                            markFirstAnswer("first_text_chunk")
                             hasRec = true
                             fullText += text
-                            setMessages(p => p.map(m => m.id === botId ? { ...m, content: fullText } : m))
+                            updateAssistantMessageContent(fullText)
                         }
                     }
 
@@ -2966,11 +3008,12 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                         }
                         const outputText = extractWorkflowOutputText(outputs)
                         if (outputText && !hasRec) {
+                            markFirstAnswer("first_workflow_output")
                             fullText = outputText
                             hasRec = true
                             setAnalysisStage(4)
                             triggerHandover()
-                            setMessages(p => p.map(m => m.id === botId ? { ...m, content: fullText } : m))
+                            updateAssistantMessageContent(fullText)
                         }
                     }
                 } catch (e) {
