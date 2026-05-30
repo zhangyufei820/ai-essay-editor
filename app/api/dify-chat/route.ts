@@ -148,6 +148,7 @@ const GEMINI_IMAGE_GATEWAY_ALLOWED = {
 const GEMINI_IMAGE_BLANK_SAMPLE_SIZE = 32
 const GEMINI_IMAGE_BLANK_BRIGHTNESS_THRESHOLD = 248
 const GEMINI_IMAGE_BLANK_MAX_DARK_PIXEL_RATIO = 0.01
+const GEMINI_IMAGE_BLANK_RETRY_LIMIT = 1
 const SERVER_STARTED_AT_MS = Date.now()
 
 function clampNumber(value: unknown, min: number, max: number, fallback: number): number {
@@ -2187,8 +2188,9 @@ async function runGeminiImageGatewayTask(params: {
   const recoverableTask = buildRecoverableGeminiImageTask(params)
   const startedAt = Date.now()
 
-  const gatewayResponse = await callGeminiImageGatewayDirect(params.query, params.inputs)
-  const gatewayPayload = await gatewayResponse.clone().json().catch(() => ({}))
+  let gatewayAttempt = 1
+  let gatewayResponse = await callGeminiImageGatewayDirect(params.query, params.inputs)
+  let gatewayPayload = await gatewayResponse.clone().json().catch(() => ({}))
 
   if (!gatewayResponse.ok) {
     await updateTaskRun(params.requestId, {
@@ -2209,7 +2211,55 @@ async function runGeminiImageGatewayTask(params: {
     return { response: gatewayResponse, payload: gatewayPayload, trace, imageInputs }
   }
 
-  const imageInspection = await inspectGeneratedImagesForBlankOutput(gatewayPayload)
+  let imageInspection = await inspectGeneratedImagesForBlankOutput(gatewayPayload)
+  while (gatewayResponse.ok && !imageInspection.ok && imageInspection.code === "GEMINI_IMAGE_BLANK_RESULT" && gatewayAttempt <= GEMINI_IMAGE_BLANK_RETRY_LIMIT) {
+    await updateTaskRun(params.requestId, {
+      status: "running",
+      stage: "Gemini 图片网关返回空白图片，正在自动重试",
+      progress: 55,
+      upstreamTaskId: params.requestId,
+      artifacts: extractArtifactsFromUnknown(gatewayPayload),
+      metadata: {
+        ...trace,
+        recoverable_task: recoverableTask,
+        elapsed_ms: Date.now() - startedAt,
+        gateway_status: "retrying",
+        result_quality: "blank_or_invalid",
+        attempt: gatewayAttempt,
+        next_attempt: gatewayAttempt + 1,
+        image_inspections: imageInspection.inspections,
+        result: sanitizeForTrace(gatewayPayload),
+      },
+    })
+
+    gatewayAttempt += 1
+    gatewayResponse = await callGeminiImageGatewayDirect(params.query, params.inputs)
+    gatewayPayload = await gatewayResponse.clone().json().catch(() => ({}))
+
+    if (!gatewayResponse.ok) break
+    imageInspection = await inspectGeneratedImagesForBlankOutput(gatewayPayload)
+  }
+
+  if (!gatewayResponse.ok) {
+    await updateTaskRun(params.requestId, {
+      status: "failed",
+      stage: "Gemini 图片网关返回错误",
+      progress: 100,
+      errorMessage: typeof gatewayPayload?.error === "string" ? gatewayPayload.error : "图像服务请求失败",
+      errorCode: typeof gatewayPayload?.code === "string" ? gatewayPayload.code : `GEMINI_IMAGE_GATEWAY_${gatewayResponse.status}`,
+      sanitizedError: sanitizeForTrace(gatewayPayload) as Record<string, unknown>,
+      metadata: {
+        ...trace,
+        recoverable_task: recoverableTask,
+        elapsed_ms: Date.now() - startedAt,
+        gateway_status: gatewayResponse.status,
+        attempt: gatewayAttempt,
+        result: sanitizeForTrace(gatewayPayload),
+      },
+    })
+    return { response: gatewayResponse, payload: gatewayPayload, trace, imageInputs }
+  }
+
   if (!imageInspection.ok) {
     await updateTaskRun(params.requestId, {
       status: "failed",
@@ -2225,6 +2275,7 @@ async function runGeminiImageGatewayTask(params: {
         elapsed_ms: Date.now() - startedAt,
         gateway_status: gatewayResponse.status,
         result_quality: "blank_or_invalid",
+        attempt: gatewayAttempt,
         image_inspections: imageInspection.inspections,
         result: sanitizeForTrace(gatewayPayload),
       },
@@ -2275,6 +2326,7 @@ async function runGeminiImageGatewayTask(params: {
         recoverable_task: recoverableTask,
         elapsed_ms: Date.now() - startedAt,
         gateway_status: gatewayResponse.status,
+        attempt: gatewayAttempt,
         image_inspections: imageInspection.inspections,
         result: sanitizeForTrace(gatewayPayload),
       },
@@ -2300,6 +2352,7 @@ async function runGeminiImageGatewayTask(params: {
       gateway_status: gatewayResponse.status,
       charged_credits: params.amount,
       result_quality: "ok",
+      attempt: gatewayAttempt,
       image_inspections: imageInspection.inspections,
       result: sanitizeForTrace(gatewayPayload),
     },
