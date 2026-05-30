@@ -1739,11 +1739,14 @@ function createProviderTaskResponseFromStoredResult(payload: unknown) {
   if (record.ok === false) {
     const statusCode = typeof record.status === "number" && record.status >= 400 ? record.status : 502
     const errorPayload = record.payload && typeof record.payload === "object" ? record.payload as Record<string, unknown> : {}
+    const nestedError = errorPayload.error && typeof errorPayload.error === "object" ? errorPayload.error as Record<string, unknown> : {}
     const message = sanitizeUpstreamErrorText(
       typeof errorPayload.message === "string"
         ? errorPayload.message
         : typeof errorPayload.error === "string"
           ? errorPayload.error
+          : typeof nestedError.message === "string"
+            ? nestedError.message
           : typeof record.text === "string"
             ? record.text
             : "",

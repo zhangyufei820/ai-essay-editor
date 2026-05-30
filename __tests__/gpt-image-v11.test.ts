@@ -191,6 +191,7 @@ describe("GPT Image V11 parameter mapping", () => {
     expect(routeSource).toContain("size: normalizeVivaApiImageSize(imageInputs)")
     expect(routeSource).toContain("const gatewaySize = normalizeVivaApiImageSize(imageInputs)")
     expect(routeSource).toContain("let gatewaySize = normalizeVivaApiImageSize(imageInputs)")
+    expect(routeSource).toContain("nestedError.message")
     expect(routeSource).not.toContain("getImageGatewaySizeByTier")
     expect(routeSource).not.toContain("size: imageInputs.size,")
     expect(routeSource).not.toContain('formData.append("size", normalizeImageGatewaySize')

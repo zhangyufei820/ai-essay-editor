@@ -234,6 +234,12 @@ function mapImageError(error: unknown): string {
     return `图片提交被拒绝：${detail.slice(0, 180)}${detail.length > 180 ? "..." : ""}`
   }
   if (lower.includes("download_file_error")) return "无法读取上传图片，请重新上传。"
+  if (lower.includes("violated our relevant policies") || lower.includes("policy")) {
+    return "图片服务安全策略拦截了这次编辑。请换一张素材或调整提示词后重试。"
+  }
+  if (lower.includes("invalid size") || raw.includes("尺寸不支持")) {
+    return "当前图片服务不支持这组尺寸参数，系统已更新尺寸映射，请刷新页面后重试。"
+  }
   if (lower.includes("network") || lower.includes("failed to fetch")) return "网络请求失败，请稍后重试。"
   if (lower.includes("timeout") || raw.includes("超时") || lower.includes("504")) {
     return "图片生成等待超时。复杂图像可能仍在上游处理中，请稍后重试，或先降低尺寸 / 质量。"
