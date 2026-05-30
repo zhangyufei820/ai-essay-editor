@@ -12,7 +12,7 @@
 
 import { memo, useEffect, useMemo, useRef, useState } from "react"
 import { motion, type Easing } from "framer-motion"
-import { ChevronDown, ChevronUp, ThumbsDown, ThumbsUp } from "lucide-react"
+import { BookmarkPlus, ChevronDown, ChevronUp, ListRestart, ThumbsDown, ThumbsUp } from "lucide-react"
 import { IconAllInOne, IconCopy, IconExportPdf, IconFollowup, IconHistory, IconListen, IconShare, IconUser } from "@/components/icons/v2"
 import { cn } from "@/lib/utils"
 import { AssistantMessageV2 } from "@/components/chat/v2"
@@ -132,6 +132,10 @@ interface MessageBubbleProps {
   avatar?: string
   onCopy?: () => void
   onShare?: () => void
+  onSaveMistake?: () => void
+  onGenerateSimilar?: () => void
+  showMistakeActions?: boolean
+  isSavingMistake?: boolean
   className?: string
   model?: string
   showAvatar?: boolean
@@ -382,9 +386,19 @@ interface MessageActions {
   onAskFollowup: () => void
   onPlayAudio: () => void
   onRegenerate: () => void
+  onSaveMistake?: () => void
+  onGenerateSimilar?: () => void
 }
 
-function MessageActionToolbar({ actions }: { actions: MessageActions }) {
+function MessageActionToolbar({
+  actions,
+  showMistakeActions,
+  isSavingMistake,
+}: {
+  actions: MessageActions
+  showMistakeActions?: boolean
+  isSavingMistake?: boolean
+}) {
   function handleFeedback(type: "up" | "down") {
     toast.success(type === "up" ? "感谢反馈！" : "我们会改进")
   }
@@ -400,6 +414,27 @@ function MessageActionToolbar({ actions }: { actions: MessageActions }) {
 
   return (
     <div className="flex flex-wrap items-center gap-2 border-t border-[var(--paper-200)] bg-[var(--paper-50)] px-4 py-3 sm:px-6">
+      {showMistakeActions ? (
+        <>
+          <button
+            type="button"
+            onClick={actions.onSaveMistake}
+            disabled={isSavingMistake}
+            className="inline-flex min-h-9 items-center gap-1.5 rounded-[var(--radius-pill)] px-2.5 py-1.5 text-[12px] font-medium text-[var(--ink-600)] transition-colors hover:bg-[var(--ink-50)] hover:text-[var(--ink-800)] disabled:opacity-55 focus-visible:outline-none focus-visible:[box-shadow:var(--shadow-focus-ink)]"
+          >
+            <BookmarkPlus className="size-3.5" aria-hidden="true" />
+            {isSavingMistake ? "保存中" : "加入错题本"}
+          </button>
+          <button
+            type="button"
+            onClick={actions.onGenerateSimilar}
+            className="inline-flex min-h-9 items-center gap-1.5 rounded-[var(--radius-pill)] px-2.5 py-1.5 text-[12px] font-medium text-[var(--ink-600)] transition-colors hover:bg-[var(--ink-50)] hover:text-[var(--ink-800)] focus-visible:outline-none focus-visible:[box-shadow:var(--shadow-focus-ink)]"
+          >
+            <ListRestart className="size-3.5" aria-hidden="true" />
+            举一反三
+          </button>
+        </>
+      ) : null}
       {buttons.map(({ label, icon: Icon, onClick }) => (
         <button
           key={label}
@@ -528,11 +563,15 @@ function AssistantMarkdownCard({
   actions,
   templateType,
   isStreaming,
+  showMistakeActions,
+  isSavingMistake,
 }: {
   content: string
   actions: MessageActions
   templateType: string
   isStreaming?: boolean
+  showMistakeActions?: boolean
+  isSavingMistake?: boolean
 }) {
   const contentRef = useRef<HTMLDivElement>(null)
   const [collapsed, setCollapsed] = useState(true)
@@ -602,7 +641,13 @@ function AssistantMarkdownCard({
       ) : null}
 
       {!isStreaming && !isFailureContent ? <ShareRewardCallout onShare={actions.onShare} /> : null}
-      {!isFailureContent ? <MessageActionToolbar actions={actions} /> : null}
+      {!isFailureContent ? (
+        <MessageActionToolbar
+          actions={actions}
+          showMistakeActions={showMistakeActions}
+          isSavingMistake={isSavingMistake}
+        />
+      ) : null}
     </article>
   )
 }
@@ -619,6 +664,10 @@ const MessageBubble = memo(function MessageBubble({
   avatar,
   onCopy,
   onShare,
+  onSaveMistake,
+  onGenerateSimilar,
+  showMistakeActions,
+  isSavingMistake,
   className,
   model,
   showAvatar = true,
@@ -688,7 +737,9 @@ const MessageBubble = memo(function MessageBubble({
     onRegenerate: () => {
       window.dispatchEvent(new CustomEvent("regenerate-last-message"))
     },
-  }), [content, essayReviewArtifact, onCopy, onShare, templateType])
+    onSaveMistake,
+    onGenerateSimilar,
+  }), [content, essayReviewArtifact, onCopy, onGenerateSimilar, onSaveMistake, onShare, templateType])
 
   return (
     <motion.div
@@ -792,7 +843,14 @@ const MessageBubble = memo(function MessageBubble({
                         onPlayAudio={actions.onPlayAudio}
                       />
                     ) : (
-                      <AssistantMarkdownCard content={content} actions={actions} templateType={templateType} isStreaming={isStreaming} />
+                      <AssistantMarkdownCard
+                        content={content}
+                        actions={actions}
+                        templateType={templateType}
+                        isStreaming={isStreaming}
+                        showMistakeActions={showMistakeActions}
+                        isSavingMistake={isSavingMistake}
+                      />
                     )
                   case "worksheet-poster":
                     return (
@@ -806,11 +864,27 @@ const MessageBubble = memo(function MessageBubble({
                     return flashcardArtifact ? (
                       <FlashcardTemplate artifact={flashcardArtifact} />
                     ) : (
-                      <AssistantMarkdownCard content={content} actions={actions} templateType={templateType} isStreaming={isStreaming} />
+                      <AssistantMarkdownCard
+                        content={content}
+                        actions={actions}
+                        templateType={templateType}
+                        isStreaming={isStreaming}
+                        showMistakeActions={showMistakeActions}
+                        isSavingMistake={isSavingMistake}
+                      />
                     )
                   case "image-gallery":
                   default:
-                    return <AssistantMarkdownCard content={content} actions={actions} templateType={templateType} isStreaming={isStreaming} />
+                    return (
+                      <AssistantMarkdownCard
+                        content={content}
+                        actions={actions}
+                        templateType={templateType}
+                        isStreaming={isStreaming}
+                        showMistakeActions={showMistakeActions}
+                        isSavingMistake={isSavingMistake}
+                      />
+                    )
                 }
               })()
             )}

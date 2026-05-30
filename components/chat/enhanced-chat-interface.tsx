@@ -56,6 +56,7 @@ import katex from "katex"
 import { brandColors, slateColors } from "@/lib/design-tokens"
 import { LATEX_MACROS, renderLatex } from "@/lib/latex-constants"
 import { cleanLLMText } from "@/lib/text-sanitizer"
+import { sanitizeDifyAnswerForModel } from "@/lib/dify-answer-cleanup"
 import { parseEssayReview } from "@/lib/parse-essay-review"
 import { extractDifyTextOutput } from "@/lib/dify-output-text"
 import { isAssistantFailureContent } from "@/lib/chat-message-guards"
@@ -345,6 +346,21 @@ type Message = {
     wordCard?: FrontendWordCard
   } | null
   wordCard?: FrontendWordCard | null
+}
+
+function getPreviousUserMessage(messages: Message[], assistantIndex: number) {
+  for (let index = assistantIndex - 1; index >= 0; index -= 1) {
+    if (messages[index]?.role === "user") return messages[index]
+  }
+  return null
+}
+
+function inferMistakeSubject(model: ModelType, question: string, answer: string) {
+  const source = `${question}\n${answer}`
+  if (/数学|方程|函数|几何|计算|证明|x\s*[+=\-*/]|÷|×/.test(source)) return "math"
+  if (/英语|单词|语法|阅读理解|translate|grammar/i.test(source)) return "english"
+  if (/语文|阅读|文言文|诗歌|作文|修辞/.test(source)) return "chinese"
+  return model === "problem" ? "problem" : "other"
 }
 
 function toShareSafeFile(file: UploadedFile) {
@@ -1087,13 +1103,13 @@ const MediaBlock = ({ items }: { items: MediaItem[] }) => {
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1.5 rounded-[var(--radius-soft)] bg-blue-500 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-600"
-                >
-                  <IconExportPdf className="h-3.5 w-3.5" />
-                  下载
-                </a>
-              </div>
-            </div>
-          )
+	                >
+	                  <IconExportPdf className="h-3.5 w-3.5" />
+	                  下载
+	                </a>
+	              </div>
+	            </div>
+	          )
         } else if (effectiveType === "ppt") {
           // PPT 预览（使用 Google Docs Viewer 或内联 iframe）
           const pptUrl = publicUrl
@@ -1399,6 +1415,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   const difyConversationIdRef = useRef<string | null>(null)
   const sessionModelRef = useRef<ModelType | null>(null)
   const [currentSessionId, setCurrentSessionId] = useState<string>("")
+  const [savingMistakeMessageId, setSavingMistakeMessageId] = useState<string | null>(null)
 
   // 🔥 修复：跟踪主动会话切换（侧边栏点击 vs URL 导航）
   // 🔥 now in Zustand store: useSelectedModelStore
@@ -3038,11 +3055,14 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
             await persistUserMessagePromise
             const cardToSave = wordCard as FrontendWordCard | null
             try {
+              const assistantContent = cardToSave
+                ? JSON.stringify({ frontend_card_json: cardToSave })
+                : sanitizeDifyAnswerForModel(fullText, selectedModel)
               await saveMessageOnce(`${requestId}:assistant`, async () => {
                 await saveChatMessageViaApi({
                   sessionId: sid,
                   role: "assistant",
-                  content: cardToSave ? JSON.stringify({ frontend_card_json: cardToSave }) : fullText,
+                  content: assistantContent,
                   metadata: { requestId, clientMessageId: botId }
                 })
                 if (difyConversationIdRef.current) {
@@ -3108,6 +3128,59 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       //   setSelectedModel("standard")
       // }
     }
+  }
+
+  const saveProblemAsMistake = async (question: string, answer: string, assistantMessageId: string) => {
+    const cleanQuestion = question.trim()
+    const cleanAnswer = answer.trim()
+    if (!cleanQuestion || !cleanAnswer) {
+      toast.error("没有可保存的题目解析")
+      return
+    }
+
+    setSavingMistakeMessageId(assistantMessageId)
+    try {
+      const res = await fetch("/api/mistakes", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(await getVerifiedAuthHeaders()),
+        },
+        body: JSON.stringify({
+          subject: inferMistakeSubject(selectedModel, cleanQuestion, cleanAnswer),
+          question: cleanQuestion,
+          correct_answer: cleanAnswer.slice(0, 6000),
+          explanation: cleanAnswer.slice(0, 6000),
+          source: "problem-chat",
+          topic: "题目解析",
+        }),
+      })
+      const payload = await res.json().catch(() => null)
+      if (!res.ok) {
+        throw new Error(payload?.error || `mistake_save_failed_${res.status}`)
+      }
+      toast.success(payload?.existing ? "这道题已在错题本中" : "已加入错题本")
+    } catch (error) {
+      console.warn("[MistakeBook] save failed:", error)
+      toast.error("保存错题失败，请稍后重试")
+    } finally {
+      setSavingMistakeMessageId(null)
+    }
+  }
+
+  const generateSimilarProblems = (question: string, answer: string) => {
+    const prompt = [
+      "请基于下面这道题生成 5 道举一反三练习。",
+      "要求：难度从基础到提高递进；每题先给题目，再给提示，最后集中给答案与解析。",
+      "",
+      "原题：",
+      question.trim(),
+      "",
+      "原解析：",
+      answer.trim().slice(0, 1800),
+    ].join("\n")
+    setInput(prompt)
+    window.dispatchEvent(new Event("focus-chat-input"))
   }
 
   useEffect(() => {
@@ -3785,132 +3858,152 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                 </div>
                 )
                 ) : (
-                <div className="space-y-3 sm:space-y-5 pt-1 sm:pt-3 pb-8">
-                    {messages.map((message, index) => (
-                      <div key={message.id}>
-                      {isDifferentDay(message.timestamp, messages[index - 1]?.timestamp) ? (
-                        <div className="flex items-center gap-3 py-4">
-                          <div className="h-px flex-1 bg-[var(--paper-200)]" />
-                          <span className="font-[var(--font-mono-v2)] text-[11px] text-[var(--ink-400)]">
-                            {formatDateLabel(message.timestamp)}
-                          </span>
-                          <div className="h-px flex-1 bg-[var(--paper-200)]" />
-                        </div>
-                      ) : null}
-                      <div className={cn("flex gap-1 sm:gap-2 group/message", message.role === "user" ? "justify-end" : "justify-start")}>
-                      {message.role === "assistant" && (
-                        // Smaller AI avatar - expressive assistant SVG.
-                        <div
-                          className={cn(
-                            "mt-0.5 flex shrink-0 items-center justify-center",
-                            selectedModel === "open-claw" ? "h-16 w-16 sm:h-[72px] sm:w-[72px]" : "h-11 w-11 sm:h-12 sm:w-12",
-                          )}
-                        >
-                          <AssistantEyeAvatar
-                            size={selectedModel === "open-claw" ? "xl" : "md"}
-                            isActive={message.id === currentBotIdRef.current && isLoading}
-                          />
-                        </div>
-                      )}
-                      {/* Flat content container - No heavy backgrounds or borders */}
-                      <div className={cn(
-                        "flex flex-col",
-                        message.role === "user"
-                          ? "max-w-[94%] items-end sm:max-w-[82%]"
-                          : "w-full max-w-[calc(100%_-_3rem)] items-start sm:max-w-[min(1040px,calc(100%_-_4rem))]"
-                      )}>
-                        {/* User message - 复制和编辑功能 */}
-                        {message.role === "user" ? (
-                          <UserMessageBubble
-                            content={message.content}
-                            files={message.files}
-                            onEdit={(content, files) => {
-                              setInput(content)
-                              setUploadedFiles((files as UploadedFile[]) ?? [])
-                            }}
-                            onSend={(content, files) => {
-                              setInput(content)
-                              // 自动提交
-                              const fakeEvent = { preventDefault: () => {} } as unknown as React.FormEvent
-                              onSubmit(fakeEvent, { content, files: (files as UploadedFile[]) ?? [] })
-                            }}
-                          />
-                        ) : (
-                          // AI message - Flat, minimal container
-                          <div className="w-full space-y-3">
-                            {message.id === currentBotIdRef.current && isLoading && !isFastTrack && !message.content && (
-                              <ProcessingStatusCard
-                                context={processingContext}
-                                showLongWaitHint={showDeepThinkingHint}
-                                workflowState={workflowState}
-                                currentRunningText={currentRunningText}
-                              />
-                            )}
-                            {(message.content || !(message.id === currentBotIdRef.current && isLoading && !isFastTrack)) && (
-                              <div>
-                                {/* Content renderer */}
-                                {(() => {
-                                  const wordCard = message.wordCard || message.metadata?.wordCard || normalizeDifyWordCardResponse(message.content)
-                                  if (wordCard) {
-                                    return <VocabCardTemplate artifact={toVocabCardArtifact(wordCard)} />
-                                  }
-                                  const vocabFallback = selectedModel === "vocab-card"
-                                    ? resolveVocabCardResult(message.content, currentWord)
-                                    : null
-                                  if (vocabFallback?.frontendCard) {
-                                    return <VocabCardTemplate artifact={toVocabCardArtifact(vocabFallback.frontendCard)} />
-                                  }
-                                  if (vocabFallback?.answer) {
-                                    return (
-                                      <EnhancedMarkdown
-                                        content={cleanLLMText(vocabFallback.answer)}
-                                      />
-                                    )
-                                  }
-                                  if (
-                                    selectedModel === "vocab-card" &&
-                                    containsRawDifyWordCardPayload(message.content) &&
-                                    !(message.id === currentBotIdRef.current && isLoading)
-                                  ) {
-                                    return (
-                                      <div className="rounded-[var(--radius-sharp)] border border-amber-100 bg-amber-50 p-4 text-sm leading-6 text-amber-800">
-                                        我没有收到可展示的回复，请再试一次。
-                                      </div>
-                                    )
-                                  }
+                <div className="space-y-3 pb-8 pt-1 sm:space-y-5 sm:pt-3">
+                  {messages.map((message, index) => {
+                    const previousUserMessage = message.role === "assistant"
+                      ? getPreviousUserMessage(messages, index)
+                      : null
+                    const cleanAssistantContent = message.role === "assistant"
+                      ? sanitizeDifyAnswerForModel(message.content, selectedModel)
+                      : message.content
+                    const showProblemActions = message.role === "assistant" &&
+                      selectedModel === "problem" &&
+                      Boolean(previousUserMessage?.content) &&
+                      Boolean(cleanAssistantContent.trim()) &&
+                      !isAssistantFailureContent(cleanAssistantContent)
 
-                                  const cleanContent = cleanLLMText(message.content)
-                                  return (
-                                    <MessageBubble
-                                      role="assistant"
-                                      content={cleanContent}
-                                      isStreaming={message.id === currentBotIdRef.current && showCursor && isLoading}
-                                      model={selectedModel}
-                                      onCopy={() => navigator.clipboard.writeText(cleanContent)}
-                                      onShare={handleShare}
-                                      timestamp={message.timestamp ? new Date(message.timestamp) : undefined}
-                                      showAvatar={false}
-                                      className="w-full"
-                                    />
-                                  )
-                                })()}
+                    return (
+                      <div key={message.id}>
+                        {isDifferentDay(message.timestamp, messages[index - 1]?.timestamp) ? (
+                          <div className="flex items-center gap-3 py-4">
+                            <div className="h-px flex-1 bg-[var(--paper-200)]" />
+                            <span className="font-[var(--font-mono-v2)] text-[11px] text-[var(--ink-400)]">
+                              {formatDateLabel(message.timestamp)}
+                            </span>
+                            <div className="h-px flex-1 bg-[var(--paper-200)]" />
+                          </div>
+                        ) : null}
+
+                        <div className={cn("flex gap-1 sm:gap-2 group/message", message.role === "user" ? "justify-end" : "justify-start")}>
+                          {message.role === "assistant" ? (
+                            <div
+                              className={cn(
+                                "mt-0.5 flex shrink-0 items-center justify-center",
+                                selectedModel === "open-claw" ? "h-16 w-16 sm:h-[72px] sm:w-[72px]" : "h-11 w-11 sm:h-12 sm:w-12",
+                              )}
+                            >
+                              <AssistantEyeAvatar
+                                size={selectedModel === "open-claw" ? "xl" : "md"}
+                                isActive={message.id === currentBotIdRef.current && isLoading}
+                              />
+                            </div>
+                          ) : null}
+
+                          <div className={cn(
+                            "flex flex-col",
+                            message.role === "user"
+                              ? "max-w-[94%] items-end sm:max-w-[82%]"
+                              : "w-full max-w-[calc(100%_-_3rem)] items-start sm:max-w-[min(1040px,calc(100%_-_4rem))]",
+                          )}>
+                            {message.role === "user" ? (
+                              <UserMessageBubble
+                                content={message.content}
+                                files={message.files}
+                                onEdit={(content, files) => {
+                                  setInput(content)
+                                  setUploadedFiles((files as UploadedFile[]) ?? [])
+                                }}
+                                onSend={(content, files) => {
+                                  setInput(content)
+                                  const fakeEvent = { preventDefault: () => {} } as unknown as React.FormEvent
+                                  onSubmit(fakeEvent, { content, files: (files as UploadedFile[]) ?? [] })
+                                }}
+                              />
+                            ) : (
+                              <div className="w-full space-y-3">
+                                {message.id === currentBotIdRef.current && isLoading && !isFastTrack && !message.content ? (
+                                  <ProcessingStatusCard
+                                    context={processingContext}
+                                    showLongWaitHint={showDeepThinkingHint}
+                                    workflowState={workflowState}
+                                    currentRunningText={currentRunningText}
+                                  />
+                                ) : null}
+                                {(message.content || !(message.id === currentBotIdRef.current && isLoading && !isFastTrack)) ? (
+                                  <div>
+                                    {(() => {
+                                      const wordCard = message.wordCard || message.metadata?.wordCard || normalizeDifyWordCardResponse(cleanAssistantContent)
+                                      if (wordCard) {
+                                        return <VocabCardTemplate artifact={toVocabCardArtifact(wordCard)} />
+                                      }
+
+                                      const vocabFallback = selectedModel === "vocab-card"
+                                        ? resolveVocabCardResult(cleanAssistantContent, currentWord)
+                                        : null
+                                      if (vocabFallback?.frontendCard) {
+                                        return <VocabCardTemplate artifact={toVocabCardArtifact(vocabFallback.frontendCard)} />
+                                      }
+                                      if (vocabFallback?.answer) {
+                                        return <EnhancedMarkdown content={cleanLLMText(vocabFallback.answer)} />
+                                      }
+                                      if (
+                                        selectedModel === "vocab-card" &&
+                                        containsRawDifyWordCardPayload(cleanAssistantContent) &&
+                                        !(message.id === currentBotIdRef.current && isLoading)
+                                      ) {
+                                        return (
+                                          <div className="rounded-[var(--radius-sharp)] border border-amber-100 bg-amber-50 p-4 text-sm leading-6 text-amber-800">
+                                            我没有收到可展示的回复，请再试一次。
+                                          </div>
+                                        )
+                                      }
+
+                                      const cleanContent = cleanLLMText(cleanAssistantContent)
+                                      return (
+                                        <MessageBubble
+                                          role="assistant"
+                                          content={cleanContent}
+                                          isStreaming={message.id === currentBotIdRef.current && showCursor && isLoading}
+                                          model={selectedModel}
+                                          onCopy={() => navigator.clipboard.writeText(cleanContent)}
+                                          onShare={handleShare}
+                                          showMistakeActions={showProblemActions}
+                                          isSavingMistake={savingMistakeMessageId === message.id}
+                                          onSaveMistake={() => {
+                                            if (previousUserMessage) {
+                                              void saveProblemAsMistake(previousUserMessage.content, cleanContent, message.id)
+                                            }
+                                          }}
+                                          onGenerateSimilar={() => {
+                                            if (previousUserMessage) {
+                                              generateSimilarProblems(previousUserMessage.content, cleanContent)
+                                            }
+                                          }}
+                                          timestamp={message.timestamp ? new Date(message.timestamp) : undefined}
+                                          showAvatar={false}
+                                          className="w-full"
+                                        />
+                                      )
+                                    })()}
+                                  </div>
+                                ) : null}
                               </div>
                             )}
                           </div>
-                        )}
-                      </div>
-                      {message.role === "user" && (
-                        <div className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-[var(--radius-pill)] bg-[var(--paper-200)] mt-0.5 sm:h-7 sm:w-7">
-                          {userAvatar ? (
-                            <img src={userAvatar} alt="Me" className="h-full w-full object-cover" />
-                          ) : (
-                            <IconUser className="h-3.5 w-3.5 text-[var(--ink-500)]" />
-                          )}
+
+                          {message.role === "user" ? (
+                            <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-[var(--radius-pill)] bg-[var(--paper-200)] sm:h-7 sm:w-7">
+                              {userAvatar ? (
+                                <img src={userAvatar} alt="Me" className="h-full w-full object-cover" />
+                              ) : (
+                                <IconUser className="h-3.5 w-3.5 text-[var(--ink-500)]" />
+                              )}
+                            </div>
+                          ) : null}
                         </div>
-                      )}
-                    </div>
-                    </div>
-                  ))}
+                      </div>
+                    )
+                  })}
                   <div ref={messagesEndRef} />
                 </div>
               )}

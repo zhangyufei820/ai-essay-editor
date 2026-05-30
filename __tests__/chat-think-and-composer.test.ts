@@ -185,6 +185,25 @@ describe("chat think rendering and composer layout", () => {
     expect(route).toContain("OpenClaw 上游模型本次返回为空，请重新提交。当前任务未扣费。")
   })
 
+  it("exposes problem answers as mistake-book study actions", () => {
+    const source = read("components/chat/enhanced-chat-interface.tsx")
+    const bubble = read("components/chat/MessageBubble.tsx")
+    const route = read("app/api/mistakes/route.ts")
+
+    expect(source).toContain('selectedModel === "problem"')
+    expect(source).toContain("saveProblemAsMistake")
+    expect(source).toContain("generateSimilarProblems")
+    expect(source).toContain('fetch("/api/mistakes"')
+    expect(source).toContain("showMistakeActions={showProblemActions}")
+    expect(bubble).toContain("加入错题本")
+    expect(bubble).toContain("举一反三")
+    expect(route).toContain('from("mistake_book")')
+    expect(route).toContain("requireLearningUserId")
+    expect(route).toContain("const userId = auth.userId!")
+    expect(route).not.toContain("requireUser")
+    expect(route).not.toContain("user_id: user.id")
+  })
+
   it("blocks image uploads before login instead of failing after submission", () => {
     const imageWorkspace = read("components/chat/gpt-image2-chat-interface.tsx")
 

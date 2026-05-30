@@ -32,6 +32,7 @@ import { getUserEntitlementSummary } from "@/lib/user-entitlements"
 import { isConfiguredAdminUser } from "@/lib/admin-auth"
 import { internalDifyFetch } from "@/lib/internal-dify-fetch"
 import { getDifyCredentialForModel } from "@/lib/dify-credentials"
+import { sanitizeDifyAnswerForModel } from "@/lib/dify-answer-cleanup"
 import { isWorkflowSkillAgent } from "@/lib/workflow-skill-agents"
 import { extractDifyTextOutput } from "@/lib/dify-output-text"
 import { rewriteOpenClawMediaReferences } from "@/lib/openclaw-media"
@@ -319,6 +320,7 @@ const WORKFLOW_MODELS = new Set(["vocab-card"])
 const MEMBERSHIP_PRODUCT_IDS = ["basic", "pro", "premium", "enterprise", "campus"]
 const ALL_IN_ONE_AGENT_MODEL = "all-in-one-agent"
 const SUPER_ALL_IN_ONE_AGENT_MODEL = "super-all-in-one-agent"
+const BEIKE_PRO_MODEL = "beike-pro"
 
 function buildAllInOneAgentWorkflowInputs(query: string, inputs: unknown, fileUrls: string[]) {
   const record = inputs && typeof inputs === "object" ? inputs as Record<string, unknown> : {}
@@ -1798,9 +1800,9 @@ async function callGeminiImageGatewayDirect(query: string, inputs: unknown) {
         ...(gatewayToken
           ? {
               "x-gateway-token": gatewayToken,
-              Authorization: `Bearer ${gatewayToken}`,
-            }
-          : {}),
+            Authorization: `Bearer ${gatewayToken}`,
+          }
+        : {}),
       },
       body: JSON.stringify(isMoonapixGateway
         ? buildGeminiImageGatewayPayload(query, inputs)
@@ -2976,7 +2978,8 @@ export async function POST(request: NextRequest) {
     } = { firstByteReceived: false, timeoutId: null, controller: null }
     const useBlockingDifyChat =
       (process.env.DIFY_CHAT_FORCE_BLOCKING_MODE === "true" ||
-        (model === "open-claw" && process.env.DIFY_OPENCLAW_FORCE_BLOCKING_MODE === "true")) &&
+        (model === "open-claw" && process.env.DIFY_OPENCLAW_FORCE_BLOCKING_MODE === "true") ||
+        model === BEIKE_PRO_MODEL) &&
       !WORKFLOW_MODELS.has(model || "") &&
       !isDirectImageGatewayRequest
 
@@ -3120,7 +3123,7 @@ export async function POST(request: NextRequest) {
             : DEFAULT_DIFY_BLOCKING_RESPONSE_TIMEOUT_MS
           : isGptImageGatewayRequest
           ? GPT_IMAGE_BLOCKING_TIMEOUT_MS
-          : model === "open-claw" || isAllInOneAgent
+          : model === "open-claw" || isAllInOneAgent || model === BEIKE_PRO_MODEL
             ? OPENCLAW_FIRST_BYTE_TIMEOUT_MS
             : DEFAULT_DIFY_FIRST_BYTE_TIMEOUT_MS
         const timeoutStage = useBlockingDifyChat ? "Dify blocking 响应超时" : "Dify 首字节超时"
@@ -3610,7 +3613,7 @@ export async function POST(request: NextRequest) {
           : ""
       if (rawConversationId) conversationId = rawConversationId
 
-      const rawAnswer = extractDifyTextOutput(payload)
+      const rawAnswer = sanitizeDifyAnswerForModel(extractDifyTextOutput(payload), model)
       const answer = model === "open-claw"
         ? rewriteOpenClawMediaReferencesWithSignedUrls(rawAnswer, undefined, userId)
         : isAllInOneAgent
@@ -3921,7 +3924,12 @@ export async function POST(request: NextRequest) {
 	              if (json.event === "message" && json.answer) {
 	                fullResponseText += json.answer
 	                hasReceivedContent = true
-                  if (shouldBufferForDisplay && shouldStreamAllInOneAnswer(json)) {
+                  if (model === BEIKE_PRO_MODEL) {
+                    const cleanAnswer = sanitizeDifyAnswerForModel(json.answer, model)
+                    if (cleanAnswer) {
+                      enqueueSseAnswer(controller, cleanAnswer)
+                    }
+                  } else if (shouldBufferForDisplay && shouldStreamAllInOneAnswer(json)) {
                     allInOneStreamedAnswer = true
                     enqueueSseAnswer(controller, json.answer)
                   }
@@ -3939,7 +3947,7 @@ export async function POST(request: NextRequest) {
 
               // 🔥 收集 Workflow API 的文本响应
               if (json.event === "text_chunk" || json.event === "agent_message") {
-                const text = json.data?.text || json.text || ''
+	                const text = sanitizeDifyAnswerForModel(json.data?.text || json.text || '', model)
 	                if (text) {
 		                  fullResponseText += text
 		                  hasReceivedContent = true
@@ -3980,7 +3988,7 @@ export async function POST(request: NextRequest) {
                       conversation_id: conversationId || undefined,
                     })}\n\n`))
 	                  } else {
-                      const outputText = extractDifyTextOutput(outputs)
+                      const outputText = sanitizeDifyAnswerForModel(extractDifyTextOutput(outputs), model)
                       if (outputText) {
 	                    fullResponseText += outputText
 	                    hasReceivedContent = true
