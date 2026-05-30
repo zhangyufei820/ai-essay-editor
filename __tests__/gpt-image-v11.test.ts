@@ -165,6 +165,9 @@ describe("GPT Image V11 parameter mapping", () => {
     expect(routeSource).toContain("GEMINI_IMAGE_BLANK_RESULT")
     expect(routeSource).toContain("inspectGeneratedImagesForBlankOutput")
     expect(routeSource).toContain("result_quality: \"blank_or_invalid\"")
+    expect(routeSource).toContain("startGeminiImageGatewayTask")
+    expect(routeSource).toContain("runGeminiImageGatewayTask")
+    expect(routeSource).toContain("Gemini 图片任务已提交")
     expect(routeSource).toContain("/v1/images/generations")
     expect(routeSource).toContain("/v1/images/edits")
     expect(routeSource).toContain('const isEditMode = imageInputs.mode === "image_edit"')
@@ -182,5 +185,12 @@ describe("GPT Image V11 parameter mapping", () => {
     expect(routeSource).toContain("buildVivaApiImagePayload")
     expect(routeSource).not.toContain("getImageGatewaySizeByTier")
     expect(routeSource).not.toContain("size: imageInputs.size,")
+  })
+
+  it("submits Gemini image requests as async tasks to avoid edge timeouts", () => {
+    const source = require("fs").readFileSync(require("path").join(process.cwd(), "components/chat/gpt-image2-chat-interface.tsx"), "utf8")
+
+    expect(source).toContain('async_image_task: workspaceModel === "gpt-image-2" || workspaceModel === "gemini-image"')
+    expect(source).toContain("pollImageTask(payload.imageTaskId")
   })
 })

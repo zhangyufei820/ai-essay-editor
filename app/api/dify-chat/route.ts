@@ -1971,6 +1971,192 @@ async function callGeminiImageGatewayDirect(query: string, inputs: unknown) {
   }
 }
 
+function buildGeminiGatewayTrace(imageInputs: GeminiImageGatewayInputs) {
+  return {
+    source: "gemini_image_gateway",
+    provider: "moonapix",
+    gateway_path: GEMINI_IMAGE_GATEWAY_URL === "https://moonapix.com" || process.env.GEMINI_IMAGE_GATEWAY_OPENAI_COMPAT === "true"
+      ? "/v1/images/generations"
+      : "/api/gemini-image/unified",
+    mode: imageInputs.mode,
+    image_size: imageInputs.image_size,
+    requested_aspect_ratio: imageInputs.aspect_ratio,
+    resolved_aspect_ratio: resolveGeminiGatewayAspectRatio(imageInputs),
+    source_image_width: imageInputs.source_image_width,
+    source_image_height: imageInputs.source_image_height,
+    reference_count: imageInputs.reference_image_urls.length,
+  }
+}
+
+async function runGeminiImageGatewayTask(params: {
+  query: string
+  inputs: unknown
+  userId: string
+  realCreditUserId?: string
+  amount: number
+  modelId: ModelType
+  requestId: string
+  conversationId?: string | null
+  messageId?: string | null
+}) {
+  const imageInputs = buildGeminiImageGatewayInputs(params.inputs)
+  const trace = buildGeminiGatewayTrace(imageInputs)
+  const startedAt = Date.now()
+
+  const gatewayResponse = await callGeminiImageGatewayDirect(params.query, params.inputs)
+  const gatewayPayload = await gatewayResponse.clone().json().catch(() => ({}))
+
+  if (!gatewayResponse.ok) {
+    await updateTaskRun(params.requestId, {
+      status: "failed",
+      stage: "Gemini 图片网关返回错误",
+      progress: 100,
+      errorMessage: typeof gatewayPayload?.error === "string" ? gatewayPayload.error : "图像服务请求失败",
+      errorCode: typeof gatewayPayload?.code === "string" ? gatewayPayload.code : `GEMINI_IMAGE_GATEWAY_${gatewayResponse.status}`,
+      sanitizedError: sanitizeForTrace(gatewayPayload) as Record<string, unknown>,
+      metadata: {
+        ...trace,
+        elapsed_ms: Date.now() - startedAt,
+        gateway_status: gatewayResponse.status,
+        result: sanitizeForTrace(gatewayPayload),
+      },
+    })
+    return { response: gatewayResponse, payload: gatewayPayload, trace, imageInputs }
+  }
+
+  const imageInspection = await inspectGeneratedImagesForBlankOutput(gatewayPayload)
+  if (!imageInspection.ok) {
+    await updateTaskRun(params.requestId, {
+      status: "failed",
+      stage: "Gemini 图片网关返回空白图片",
+      progress: 100,
+      artifacts: extractArtifactsFromUnknown(gatewayPayload),
+      errorMessage: imageInspection.error || "图片服务返回了空白图片",
+      errorCode: imageInspection.code || "GEMINI_IMAGE_BLANK_RESULT",
+      sanitizedError: sanitizeForTrace(gatewayPayload) as Record<string, unknown>,
+      metadata: {
+        ...trace,
+        elapsed_ms: Date.now() - startedAt,
+        gateway_status: gatewayResponse.status,
+        result_quality: "blank_or_invalid",
+        image_inspections: imageInspection.inspections,
+        result: sanitizeForTrace(gatewayPayload),
+      },
+    })
+    return {
+      response: Response.json(
+        {
+          error: imageInspection.error || "图片服务返回了空白图片，请调整提示词、比例或尺寸后重试。",
+          code: imageInspection.code || "GEMINI_IMAGE_BLANK_RESULT",
+          requestId: params.requestId,
+        },
+        { status: 502 },
+      ),
+      payload: gatewayPayload,
+      trace,
+      imageInputs,
+    }
+  }
+
+  const { charged } = await chargeFixedImageCredits({
+    userId: params.userId,
+    realCreditUserId: params.realCreditUserId,
+    amount: params.amount,
+    imageCount: imageInputs.n,
+    imageSize: imageInputs.image_size,
+    modelId: params.modelId,
+    keySource: "GEMINI_IMAGE_GATEWAY",
+    gatewayName: "gemini-image-gateway",
+    requestId: params.requestId,
+    conversationId: params.conversationId || null,
+    messageId: params.messageId || null,
+    rawProviderMetadata: {
+      inputs: imageInputs,
+      provider: "google-gemini",
+    },
+  })
+
+  if (!charged) {
+    await updateTaskRun(params.requestId, {
+      status: "failed",
+      stage: "图片生成完成但积分扣除失败",
+      progress: 100,
+      errorMessage: "积分扣除失败，本次结果未结算",
+      errorCode: "IMAGE_CREDIT_DEDUCT_FAILED",
+      sanitizedError: sanitizeForTrace(gatewayPayload) as Record<string, unknown>,
+      metadata: {
+        ...trace,
+        elapsed_ms: Date.now() - startedAt,
+        gateway_status: gatewayResponse.status,
+        image_inspections: imageInspection.inspections,
+        result: sanitizeForTrace(gatewayPayload),
+      },
+    })
+    return {
+      response: Response.json({ error: "积分扣除失败，本次结果未结算" }, { status: 500 }),
+      payload: gatewayPayload,
+      trace,
+      imageInputs,
+    }
+  }
+
+  await updateTaskRun(params.requestId, {
+    status: "succeeded",
+    stage: "图片生成完成",
+    progress: 100,
+    upstreamTaskId: params.requestId,
+    artifacts: extractArtifactsFromUnknown(gatewayPayload),
+    metadata: {
+      ...trace,
+      elapsed_ms: Date.now() - startedAt,
+      gateway_status: gatewayResponse.status,
+      charged_credits: params.amount,
+      result_quality: "ok",
+      image_inspections: imageInspection.inspections,
+      result: sanitizeForTrace(gatewayPayload),
+    },
+  })
+
+  return { response: gatewayResponse, payload: gatewayPayload, trace, imageInputs }
+}
+
+async function startGeminiImageGatewayTask(params: {
+  query: string
+  inputs: unknown
+  userId: string
+  realCreditUserId?: string
+  amount: number
+  modelId: ModelType
+  requestId: string
+  traceId: string
+  conversationId?: string | null
+  messageId?: string | null
+}) {
+  const imageInputs = buildGeminiImageGatewayInputs(params.inputs)
+
+  await updateTaskRun(params.requestId, {
+    status: "running",
+    stage: "Gemini 图片任务已提交，等待生成结果",
+    progress: 15,
+    upstreamTaskId: params.requestId,
+    metadata: {
+      ...buildGeminiGatewayTrace(imageInputs),
+      gateway_status: "submitted",
+    },
+  })
+
+  fireAndForget("Gemini Image Task", runGeminiImageGatewayTask(params))
+
+  console.log("[Gemini Image Task] persisted", {
+    taskId: params.requestId,
+    promptLength: params.query.length,
+    requestId: params.requestId,
+    traceId: params.traceId,
+  })
+
+  return params.requestId
+}
+
 async function startImageGatewayTask(params: {
   query: string
   inputs: unknown
@@ -2859,125 +3045,68 @@ export async function POST(request: NextRequest) {
     if (isGeminiImageGatewayRequest) {
       console.log(`🎨 [Gemini Image Gateway] ${model} 使用直连 Gemini 图片网关，绕过 Dify workflow`)
       const geminiImageInputs = geminiImageInputsForBilling || buildGeminiImageGatewayInputs(inputs)
-      const resolvedGeminiAspectRatio = resolveGeminiGatewayAspectRatio(geminiImageInputs)
-      const geminiGatewayTrace = {
-        source: "gemini_image_gateway",
-        provider: "moonapix",
-        gateway_path: GEMINI_IMAGE_GATEWAY_URL === "https://moonapix.com" || process.env.GEMINI_IMAGE_GATEWAY_OPENAI_COMPAT === "true"
-          ? "/v1/images/generations"
-          : "/api/gemini-image/unified",
-        mode: geminiImageInputs.mode,
-        image_size: geminiImageInputs.image_size,
-        requested_aspect_ratio: geminiImageInputs.aspect_ratio,
-        resolved_aspect_ratio: resolvedGeminiAspectRatio,
-        source_image_width: geminiImageInputs.source_image_width,
-        source_image_height: geminiImageInputs.source_image_height,
-        reference_count: geminiImageInputs.reference_image_urls.length,
-      }
 
       await updateTaskRun(taskRun.id, {
         status: "running",
-          stage: `${model === "banana-2-pro" ? "Banana" : "Gemini"} 图片网关生成中`,
+        stage: `${model === "banana-2-pro" ? "Banana" : "Gemini"} 图片网关生成中`,
         progress: 35,
-        metadata: geminiGatewayTrace,
+        metadata: buildGeminiGatewayTrace(geminiImageInputs),
       })
 
-      const gatewayResponse = await callGeminiImageGatewayDirect(effectiveQuery, inputs)
-      const gatewayPayload = await gatewayResponse.clone().json().catch(() => ({}))
-
-      if (!gatewayResponse.ok) {
-        await updateTaskRun(taskRun.id, {
-          status: "failed",
-          stage: `${model === "banana-2-pro" ? "Banana" : "Gemini"} 图片网关返回错误`,
-          progress: 100,
-          errorMessage: typeof gatewayPayload?.error === "string" ? gatewayPayload.error : "图像服务请求失败",
-          errorCode: typeof gatewayPayload?.code === "string" ? gatewayPayload.code : `GEMINI_IMAGE_GATEWAY_${gatewayResponse.status}`,
-          sanitizedError: sanitizeForTrace(gatewayPayload) as Record<string, unknown>,
-          metadata: {
-            ...geminiGatewayTrace,
-            gateway_status: gatewayResponse.status,
-          },
+      if (async_image_task === true) {
+        const taskId = await startGeminiImageGatewayTask({
+          query: effectiveQuery,
+          inputs,
+          userId,
+          realCreditUserId,
+          amount: estimatedMinCost,
+          modelId: model,
+          requestId: taskRun.requestId,
+          traceId: taskRun.traceId,
+          conversationId: effectiveConvId || (typeof conversation_id === "string" ? conversation_id : null),
+          messageId: typeof messageId === "string" ? messageId : null,
         })
-
-        return gatewayResponse
-      }
-
-      const imageInspection = await inspectGeneratedImagesForBlankOutput(gatewayPayload)
-      if (!imageInspection.ok) {
-        await updateTaskRun(taskRun.id, {
-          status: "failed",
-          stage: "Gemini 图片网关返回空白图片",
-          progress: 100,
-          artifacts: extractArtifactsFromUnknown(gatewayPayload),
-          errorMessage: imageInspection.error || "图片服务返回了空白图片",
-          errorCode: imageInspection.code || "GEMINI_IMAGE_BLANK_RESULT",
-          sanitizedError: sanitizeForTrace(gatewayPayload) as Record<string, unknown>,
-          metadata: {
-            ...geminiGatewayTrace,
-            gateway_status: gatewayResponse.status,
-            result_quality: "blank_or_invalid",
-            image_inspections: imageInspection.inspections,
-          },
-        })
+        const pollToken = signImageTaskPollToken({ requestId: taskRun.requestId, taskId, userId })
 
         return Response.json(
           {
-            error: imageInspection.error || "图片服务返回了空白图片，请调整提示词、比例或尺寸后重试。",
-            code: imageInspection.code || "GEMINI_IMAGE_BLANK_RESULT",
+            status: "running",
+            imageTaskId: taskId,
             requestId: taskRun.requestId,
+            traceId: taskRun.traceId,
+            pollToken,
+            message: "Gemini 图片任务已提交，正在生成",
           },
-          { status: 502, headers: { "X-Request-Id": taskRun.requestId, "X-Trace-Id": taskRun.traceId } },
+          {
+            headers: {
+              "X-Request-Id": taskRun.requestId,
+              "X-Trace-Id": taskRun.traceId,
+            },
+          },
         )
       }
 
-      const { charged } = await chargeFixedImageCredits({
+      const { response: gatewayResponse, payload: gatewayPayload } = await runGeminiImageGatewayTask({
+        query: effectiveQuery,
+        inputs,
         userId,
         realCreditUserId,
         amount: estimatedMinCost,
-        imageCount: geminiImageInputs.n,
-        imageSize: geminiImageInputs.image_size,
         modelId: model,
-        keySource: "GEMINI_IMAGE_GATEWAY",
-        gatewayName: "gemini-image-gateway",
         requestId: taskRun.requestId,
         conversationId: effectiveConvId || (typeof conversation_id === "string" ? conversation_id : null),
         messageId: typeof messageId === "string" ? messageId : null,
-        rawProviderMetadata: {
-          inputs: geminiImageInputs,
-          provider: "google-gemini",
-        },
       })
 
-      if (!charged) {
-        await updateTaskRun(taskRun.id, {
-          status: "failed",
-          stage: "图片生成完成但积分扣除失败",
-          progress: 100,
-          errorMessage: "积分扣除失败，本次结果未结算",
-          errorCode: "IMAGE_CREDIT_DEDUCT_FAILED",
-          sanitizedError: sanitizeForTrace(gatewayPayload) as Record<string, unknown>,
-          metadata: {
-            ...geminiGatewayTrace,
-            gateway_status: gatewayResponse.status,
-            image_inspections: imageInspection.inspections,
+      if (!gatewayResponse.ok) {
+        return Response.json(gatewayPayload, {
+          status: gatewayResponse.status,
+          headers: {
+            "X-Request-Id": taskRun.requestId,
+            "X-Trace-Id": taskRun.traceId,
           },
         })
-        return Response.json({ error: "积分扣除失败，本次结果未结算" }, { status: 500 })
       }
-
-      await updateTaskRun(taskRun.id, {
-        status: "succeeded",
-        stage: "图片生成完成",
-        progress: 100,
-        artifacts: extractArtifactsFromUnknown(gatewayPayload),
-        metadata: {
-          ...geminiGatewayTrace,
-          gateway_status: gatewayResponse.status,
-          charged_credits: estimatedMinCost,
-          result_quality: "ok",
-          image_inspections: imageInspection.inspections,
-        },
-      })
 
       return Response.json(gatewayPayload, {
         headers: {
