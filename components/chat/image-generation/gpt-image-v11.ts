@@ -1,5 +1,5 @@
 export type ImageTaskMode = "image_generate" | "image_edit"
-export type GeminiImageModel = "gemini-3.1-flash-image-preview" | "gemini-3-pro-image-preview"
+export type GeminiImageModel = "gemini-3-pro-image-preview"
 export type GptImageModel = "gpt-image-2" | GeminiImageModel
 export type ImageAspectRatio =
   | "auto"
@@ -83,7 +83,7 @@ export const MODEL_OPTIONS: Option<GptImageModel>[] = [
 ]
 
 export const GEMINI_MODEL_OPTIONS: Option<GeminiImageModel>[] = [
-  { label: "Gemini 3.1 Flash Image｜速度快，支持超宽比例", value: "gemini-3.1-flash-image-preview" },
+  { label: "Gemini 3 Pro Image｜Moonapix 网关", value: "gemini-3-pro-image-preview" },
 ]
 
 export const ASPECT_RATIO_OPTIONS: Option<ImageAspectRatio>[] = [
@@ -104,6 +104,7 @@ export const ASPECT_RATIO_OPTIONS: Option<ImageAspectRatio>[] = [
 ]
 
 export const GEMINI_ASPECT_RATIO_OPTIONS: Option<ImageAspectRatio>[] = [
+  { label: "自动", value: "auto" },
   { label: "正方形 1:1", value: "1:1" },
   { label: "横图 16:9", value: "16:9" },
   { label: "竖图 9:16", value: "9:16" },
@@ -194,8 +195,8 @@ export const EDIT_MODE_DEFAULTS: GptImageInputs = {
 export const GEMINI_IMAGE_DEFAULT_INPUTS: GptImageInputs = {
   provider: "google",
   mode: "image_generate",
-  model: "gemini-3.1-flash-image-preview",
-  aspect_ratio: "1:1",
+  model: "gemini-3-pro-image-preview",
+  aspect_ratio: "auto",
   size: "1K",
   image_size: "1K",
   quality: "low",
@@ -213,6 +214,7 @@ export const GEMINI_IMAGE_DEFAULT_INPUTS: GptImageInputs = {
 export const GEMINI_IMAGE_EDIT_DEFAULTS: GptImageInputs = {
   ...GEMINI_IMAGE_DEFAULT_INPUTS,
   mode: "image_edit",
+  aspect_ratio: "auto",
 }
 
 const SIZE_TO_RATIO: Partial<Record<ImageSize, ImageAspectRatio>> = {

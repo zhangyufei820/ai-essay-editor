@@ -128,9 +128,11 @@ describe('Sprint 5 payment / credits / membership guards', () => {
     const difyCallIndex = source.indexOf('const callDify = async')
 
     expect(source).toContain('const GEMINI_IMAGE_GATEWAY_URL')
+    expect(source).toContain('"https://moonapix.com"')
     expect(source).toContain('function isGeminiImageGatewayModel(model: unknown)')
     expect(source).toContain('model === "gemini-image" || model === "banana-2-pro"')
     expect(source).toContain('callGeminiImageGatewayDirect(effectiveQuery, inputs)')
+    expect(source).toContain('/v1/images/generations')
     expect(source).toContain('gatewayName: "gemini-image-gateway"')
     expect(geminiGatewayIndex).toBeGreaterThan(billingCheckIndex)
     expect(difyCallIndex).toBeGreaterThan(geminiGatewayIndex)

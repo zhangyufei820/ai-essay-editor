@@ -35,7 +35,8 @@ describe("GPT Image V11 parameter mapping", () => {
   it("keeps Gemini image count in the Dify inputs", () => {
     expect(buildDifyInputs({ ...GEMINI_IMAGE_DEFAULT_INPUTS, n: 3 })).toMatchObject({
       provider: "google",
-      model: "gemini-3.1-flash-image-preview",
+      model: "gemini-3-pro-image-preview",
+      aspect_ratio: "auto",
       image_size: "1K",
       response_modalities: ["TEXT", "IMAGE"],
       n: 3,
@@ -154,6 +155,11 @@ describe("GPT Image V11 parameter mapping", () => {
     expect(routeSource).not.toContain("3840x3840")
     expect(routeSource).not.toContain("4096x4096")
     expect(routeSource).toContain("VIVAAPI_IMAGE_BASE_URL")
+    expect(routeSource).toContain('const GEMINI_IMAGE_GATEWAY_URL = (process.env.GEMINI_IMAGE_GATEWAY_URL || "https://moonapix.com")')
+    expect(routeSource).toContain("/v1/images/generations")
+    expect(routeSource).toContain("buildLegacyGeminiImageGatewayPayload")
+    expect(routeSource).toContain('model: "gemini-3-pro-image-preview"')
+    expect(routeSource).toContain('aspect_ratio: "auto"')
     expect(routeSource).toContain("/v1/images/generations")
     expect(routeSource).toContain("/v1/images/edits")
     expect(routeSource).toContain('const isEditMode = imageInputs.mode === "image_edit"')

@@ -117,9 +117,9 @@ const GPT_IMAGE_GATEWAY_MAX_SIDE = 3840
 const GPT_IMAGE_GATEWAY_MAX_PIXELS = 3840 * 2160
 
 const GEMINI_IMAGE_GATEWAY_DEFAULT_INPUTS: GeminiImageGatewayInputs = {
-  aspect_ratio: "1:1",
+  aspect_ratio: "auto",
   image_size: "1K",
-  model: "gemini-3.1-flash-image-preview",
+  model: "gemini-3-pro-image-preview",
   n: 1,
   mode: "image_generate",
   reference_image_url: "",
@@ -129,7 +129,7 @@ const GEMINI_IMAGE_GATEWAY_DEFAULT_INPUTS: GeminiImageGatewayInputs = {
 const GEMINI_IMAGE_GATEWAY_ALLOWED = {
   aspect_ratio: ["auto", "1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9", "4:1", "1:4", "8:1", "1:8"],
   image_size: ["auto", "512", "1K", "2K", "4K"],
-  model: ["gemini-3.1-flash-image-preview"],
+  model: ["gemini-3-pro-image-preview"],
   mode: ["image_generate", "image_edit"],
 } as const
 
@@ -602,7 +602,7 @@ const GPT_IMAGE_POLL_TOKEN_TTL_MS = GPT_IMAGE_ASYNC_TASK_MAX_AGE_MS + 5 * 60 * 1
 const IMAGE_GATEWAY_URL = (process.env.DIFY_IMAGE_GATEWAY_URL || "http://dify-image-gateway:8001").replace(/\/+$/, "")
 const VIVAAPI_IMAGE_BASE_URL = (process.env.VIVAAPI_IMAGE_BASE_URL || "https://moonapix.com").replace(/\/+$/, "")
 const VIVAAPI_IMAGE_MODEL = process.env.VIVAAPI_IMAGE_MODEL || "gpt-image-2-vip"
-const GEMINI_IMAGE_GATEWAY_URL = (process.env.GEMINI_IMAGE_GATEWAY_URL || "http://gemini-image-gateway:8002").replace(/\/+$/, "")
+const GEMINI_IMAGE_GATEWAY_URL = (process.env.GEMINI_IMAGE_GATEWAY_URL || "https://moonapix.com").replace(/\/+$/, "")
 const VIVAAPI_EDIT_MAX_SOURCE_DIMENSION = 2048
 const VIVAAPI_EDIT_RETRY_SOURCE_DIMENSION = 1536
 const VIVAAPI_EDIT_MAX_SOURCE_BYTES = 4 * 1024 * 1024
@@ -1515,6 +1515,24 @@ function buildGeminiImageGatewayPayload(query: string, inputs: unknown) {
 
   return {
     prompt: query || "生成图片",
+    model: imageInputs.model,
+    size: imageInputs.image_size,
+    n: imageInputs.n,
+    response_format: "url",
+    ...(imageInputs.aspect_ratio ? { aspect_ratio: imageInputs.aspect_ratio } : {}),
+    ...(imageInputs.reference_image_urls.length > 0
+      ? { reference_image_urls: imageInputs.reference_image_urls }
+      : imageInputs.reference_image_url
+        ? { reference_image_urls: [imageInputs.reference_image_url] }
+        : {}),
+  }
+}
+
+function buildLegacyGeminiImageGatewayPayload(query: string, inputs: unknown) {
+  const imageInputs = buildGeminiImageGatewayInputs(inputs)
+
+  return {
+    prompt: query || "生成图片",
     mode: imageInputs.mode,
     model: imageInputs.model,
     aspect_ratio: imageInputs.aspect_ratio,
@@ -1768,10 +1786,12 @@ async function callImageGatewayDirect(query: string, inputs: unknown) {
 
 async function callGeminiImageGatewayDirect(query: string, inputs: unknown) {
   const gatewayToken = process.env.GEMINI_IMAGE_GATEWAY_TOKEN || ""
+  const isMoonapixGateway = GEMINI_IMAGE_GATEWAY_URL === "https://moonapix.com" || process.env.GEMINI_IMAGE_GATEWAY_OPENAI_COMPAT === "true"
+  const gatewayPath = isMoonapixGateway ? "/v1/images/generations" : "/api/gemini-image/unified"
   const timeout = createTimeoutSignal(GPT_IMAGE_GATEWAY_TIMEOUT_MS)
 
   try {
-    const response = await internalDifyFetch(`${GEMINI_IMAGE_GATEWAY_URL}/api/gemini-image/unified`, {
+    const response = await internalDifyFetch(`${GEMINI_IMAGE_GATEWAY_URL}${gatewayPath}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -1782,7 +1802,10 @@ async function callGeminiImageGatewayDirect(query: string, inputs: unknown) {
             }
           : {}),
       },
-      body: JSON.stringify(buildGeminiImageGatewayPayload(query, inputs)),
+      body: JSON.stringify(isMoonapixGateway
+        ? buildGeminiImageGatewayPayload(query, inputs)
+        : buildLegacyGeminiImageGatewayPayload(query, inputs)
+      ),
       signal: timeout.signal,
     })
 
@@ -1800,7 +1823,7 @@ async function callGeminiImageGatewayDirect(query: string, inputs: unknown) {
       return Response.json({ error: message, code: "GEMINI_IMAGE_GATEWAY_HTTP_ERROR" }, { status: response.status })
     }
 
-    return createImageGatewayResponse(payload)
+    return isMoonapixGateway ? createVivaApiImageResponse(payload) : createImageGatewayResponse(payload)
   } catch (error) {
     const err = error instanceof Error ? error : null
     if (err?.name === "AbortError") {

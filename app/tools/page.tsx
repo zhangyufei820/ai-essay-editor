@@ -233,10 +233,10 @@ function buildImageGenerationInputs(targetModel: ReverseTargetModel) {
   if (targetModel === "nano_banana") {
     return {
       provider: "google",
-      aspect_ratio: "1:1",
+      aspect_ratio: "auto",
       size: "1K",
       image_size: "1K",
-      model: "gemini-3.1-flash-image-preview",
+      model: "gemini-3-pro-image-preview",
       quality: "low",
       output_format: "png",
       output_compression: 100,
