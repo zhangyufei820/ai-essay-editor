@@ -82,6 +82,8 @@ type GeminiImageGatewayInputs = {
   model: string
   n: number
   mode: string
+  source_image_width?: number
+  source_image_height?: number
   reference_image_url: string
   reference_image_urls: string[]
 }
@@ -133,6 +135,9 @@ const GEMINI_IMAGE_GATEWAY_ALLOWED = {
   model: ["gemini-3-pro-image-preview"],
   mode: ["image_generate", "image_edit"],
 } as const
+const GEMINI_IMAGE_BLANK_SAMPLE_SIZE = 32
+const GEMINI_IMAGE_BLANK_BRIGHTNESS_THRESHOLD = 248
+const GEMINI_IMAGE_BLANK_MAX_DARK_PIXEL_RATIO = 0.01
 
 function clampNumber(value: unknown, min: number, max: number, fallback: number): number {
   const numeric = typeof value === "number" ? value : Number(value)
@@ -168,6 +173,40 @@ function pickUrlStrings(value: unknown): string[] {
   return value
     .filter((item): item is string => typeof item === "string")
     .filter((item) => item.startsWith("http://") || item.startsWith("https://"))
+}
+
+function getNearestGeminiAspectRatioForSource(width?: number, height?: number): string | null {
+  if (!width || !height) return null
+  const sourceRatio = width / height
+  const candidates = GEMINI_IMAGE_GATEWAY_ALLOWED.aspect_ratio.filter((ratio) => ratio !== "auto")
+  let bestRatio = ""
+  let bestDistance = Number.POSITIVE_INFINITY
+
+  for (const candidate of candidates) {
+    const [candidateWidth, candidateHeight] = candidate.split(":").map(Number)
+    if (!candidateWidth || !candidateHeight) continue
+    const distance = Math.abs(Math.log(sourceRatio / (candidateWidth / candidateHeight)))
+    if (distance < bestDistance) {
+      bestDistance = distance
+      bestRatio = candidate
+    }
+  }
+
+  return bestRatio || null
+}
+
+function resolveGeminiGatewayAspectRatio(inputs: GeminiImageGatewayInputs) {
+  if (
+    inputs.aspect_ratio === "auto" &&
+    inputs.mode === "image_edit" &&
+    inputs.reference_image_urls.length > 0 &&
+    inputs.source_image_width &&
+    inputs.source_image_height
+  ) {
+    return getNearestGeminiAspectRatioForSource(inputs.source_image_width, inputs.source_image_height) || inputs.aspect_ratio
+  }
+
+  return inputs.aspect_ratio
 }
 
 function isHtmlErrorContent(value: unknown) {
@@ -238,6 +277,8 @@ function buildGeminiImageGatewayInputs(inputs: unknown): GeminiImageGatewayInput
     model: pickEnum(record.model, GEMINI_IMAGE_GATEWAY_ALLOWED.model, GEMINI_IMAGE_GATEWAY_DEFAULT_INPUTS.model),
     n: clampNumber(record.n, 1, 4, GEMINI_IMAGE_GATEWAY_DEFAULT_INPUTS.n),
     mode: pickEnum(record.mode, GEMINI_IMAGE_GATEWAY_ALLOWED.mode, GEMINI_IMAGE_GATEWAY_DEFAULT_INPUTS.mode),
+    source_image_width: pickPositiveDimension(record.source_image_width),
+    source_image_height: pickPositiveDimension(record.source_image_height),
     reference_image_url: safeReferenceImageUrls[0] || "",
     reference_image_urls: safeReferenceImageUrls.slice(0, 10),
   }
@@ -1514,6 +1555,7 @@ async function submitVivaApiImageRequest(params: {
 
 function buildGeminiImageGatewayPayload(query: string, inputs: unknown) {
   const imageInputs = buildGeminiImageGatewayInputs(inputs)
+  const aspectRatio = resolveGeminiGatewayAspectRatio(imageInputs)
 
   return {
     prompt: query || "生成图片",
@@ -1521,7 +1563,7 @@ function buildGeminiImageGatewayPayload(query: string, inputs: unknown) {
     size: imageInputs.image_size,
     n: imageInputs.n,
     response_format: "url",
-    ...(imageInputs.aspect_ratio ? { aspect_ratio: imageInputs.aspect_ratio } : {}),
+    ...(aspectRatio ? { aspect_ratio: aspectRatio } : {}),
     ...(imageInputs.reference_image_urls.length > 0
       ? { reference_image_urls: imageInputs.reference_image_urls }
       : imageInputs.reference_image_url
@@ -1633,6 +1675,90 @@ function createVivaApiImageResponse(payload: unknown) {
       },
     },
   })
+}
+
+type GeminiImageInspection = {
+  url: string
+  ok: boolean
+  status?: number
+  width?: number
+  height?: number
+  avgBrightness?: number
+  darkPixelRatio?: number
+  error?: string
+}
+
+function getImageUrlsFromGatewayResponsePayload(payload: unknown) {
+  return extractWorkflowImageUrls(payload).slice(0, 4)
+}
+
+async function inspectGeneratedImageUrl(url: string): Promise<GeminiImageInspection> {
+  try {
+    const response = await internalDifyFetch(url, { signal: AbortSignal.timeout(30_000) })
+    if (!response.ok) {
+      return { url, ok: false, status: response.status, error: `image_fetch_${response.status}` }
+    }
+
+    const buffer = Buffer.from(await response.arrayBuffer())
+    const image = sharp(buffer, { animated: false })
+    const metadata = await image.metadata()
+    const raw = await image
+      .resize(GEMINI_IMAGE_BLANK_SAMPLE_SIZE, GEMINI_IMAGE_BLANK_SAMPLE_SIZE, { fit: "fill" })
+      .removeAlpha()
+      .raw()
+      .toBuffer()
+    const pixelCount = Math.max(1, Math.floor(raw.length / 3))
+    let brightnessTotal = 0
+    let darkPixels = 0
+
+    for (let index = 0; index < raw.length; index += 3) {
+      const brightness = (raw[index] + raw[index + 1] + raw[index + 2]) / 3
+      brightnessTotal += brightness
+      if (brightness < GEMINI_IMAGE_BLANK_BRIGHTNESS_THRESHOLD) darkPixels += 1
+    }
+
+    const avgBrightness = brightnessTotal / pixelCount
+    const darkPixelRatio = darkPixels / pixelCount
+    return {
+      url,
+      ok: !(avgBrightness >= GEMINI_IMAGE_BLANK_BRIGHTNESS_THRESHOLD && darkPixelRatio <= GEMINI_IMAGE_BLANK_MAX_DARK_PIXEL_RATIO),
+      status: response.status,
+      width: metadata.width,
+      height: metadata.height,
+      avgBrightness: Number(avgBrightness.toFixed(2)),
+      darkPixelRatio: Number(darkPixelRatio.toFixed(4)),
+    }
+  } catch (error) {
+    const err = error instanceof Error ? error : null
+    return { url, ok: false, error: err?.message || String(error) }
+  }
+}
+
+async function inspectGeneratedImagesForBlankOutput(payload: unknown) {
+  const imageUrls = getImageUrlsFromGatewayResponsePayload(payload)
+  if (imageUrls.length === 0) {
+    return {
+      ok: false,
+      imageUrls,
+      inspections: [] as GeminiImageInspection[],
+      error: "图片服务未返回图片链接",
+      code: "GEMINI_IMAGE_EMPTY_RESULT",
+    }
+  }
+
+  const inspections = await Promise.all(imageUrls.map(inspectGeneratedImageUrl))
+  const blankInspections = inspections.filter((inspection) => !inspection.ok)
+  if (blankInspections.length > 0) {
+    return {
+      ok: false,
+      imageUrls,
+      inspections,
+      error: "图片服务返回了空白图片，请调整提示词、比例或尺寸后重试。",
+      code: "GEMINI_IMAGE_BLANK_RESULT",
+    }
+  }
+
+  return { ok: true, imageUrls, inspections }
 }
 
 async function chargeFixedImageCredits(params: {
@@ -2733,11 +2859,27 @@ export async function POST(request: NextRequest) {
     if (isGeminiImageGatewayRequest) {
       console.log(`🎨 [Gemini Image Gateway] ${model} 使用直连 Gemini 图片网关，绕过 Dify workflow`)
       const geminiImageInputs = geminiImageInputsForBilling || buildGeminiImageGatewayInputs(inputs)
+      const resolvedGeminiAspectRatio = resolveGeminiGatewayAspectRatio(geminiImageInputs)
+      const geminiGatewayTrace = {
+        source: "gemini_image_gateway",
+        provider: "moonapix",
+        gateway_path: GEMINI_IMAGE_GATEWAY_URL === "https://moonapix.com" || process.env.GEMINI_IMAGE_GATEWAY_OPENAI_COMPAT === "true"
+          ? "/v1/images/generations"
+          : "/api/gemini-image/unified",
+        mode: geminiImageInputs.mode,
+        image_size: geminiImageInputs.image_size,
+        requested_aspect_ratio: geminiImageInputs.aspect_ratio,
+        resolved_aspect_ratio: resolvedGeminiAspectRatio,
+        source_image_width: geminiImageInputs.source_image_width,
+        source_image_height: geminiImageInputs.source_image_height,
+        reference_count: geminiImageInputs.reference_image_urls.length,
+      }
 
       await updateTaskRun(taskRun.id, {
         status: "running",
           stage: `${model === "banana-2-pro" ? "Banana" : "Gemini"} 图片网关生成中`,
         progress: 35,
+        metadata: geminiGatewayTrace,
       })
 
       const gatewayResponse = await callGeminiImageGatewayDirect(effectiveQuery, inputs)
@@ -2751,9 +2893,41 @@ export async function POST(request: NextRequest) {
           errorMessage: typeof gatewayPayload?.error === "string" ? gatewayPayload.error : "图像服务请求失败",
           errorCode: typeof gatewayPayload?.code === "string" ? gatewayPayload.code : `GEMINI_IMAGE_GATEWAY_${gatewayResponse.status}`,
           sanitizedError: sanitizeForTrace(gatewayPayload) as Record<string, unknown>,
+          metadata: {
+            ...geminiGatewayTrace,
+            gateway_status: gatewayResponse.status,
+          },
         })
 
         return gatewayResponse
+      }
+
+      const imageInspection = await inspectGeneratedImagesForBlankOutput(gatewayPayload)
+      if (!imageInspection.ok) {
+        await updateTaskRun(taskRun.id, {
+          status: "failed",
+          stage: "Gemini 图片网关返回空白图片",
+          progress: 100,
+          artifacts: extractArtifactsFromUnknown(gatewayPayload),
+          errorMessage: imageInspection.error || "图片服务返回了空白图片",
+          errorCode: imageInspection.code || "GEMINI_IMAGE_BLANK_RESULT",
+          sanitizedError: sanitizeForTrace(gatewayPayload) as Record<string, unknown>,
+          metadata: {
+            ...geminiGatewayTrace,
+            gateway_status: gatewayResponse.status,
+            result_quality: "blank_or_invalid",
+            image_inspections: imageInspection.inspections,
+          },
+        })
+
+        return Response.json(
+          {
+            error: imageInspection.error || "图片服务返回了空白图片，请调整提示词、比例或尺寸后重试。",
+            code: imageInspection.code || "GEMINI_IMAGE_BLANK_RESULT",
+            requestId: taskRun.requestId,
+          },
+          { status: 502, headers: { "X-Request-Id": taskRun.requestId, "X-Trace-Id": taskRun.traceId } },
+        )
       }
 
       const { charged } = await chargeFixedImageCredits({
@@ -2782,6 +2956,11 @@ export async function POST(request: NextRequest) {
           errorMessage: "积分扣除失败，本次结果未结算",
           errorCode: "IMAGE_CREDIT_DEDUCT_FAILED",
           sanitizedError: sanitizeForTrace(gatewayPayload) as Record<string, unknown>,
+          metadata: {
+            ...geminiGatewayTrace,
+            gateway_status: gatewayResponse.status,
+            image_inspections: imageInspection.inspections,
+          },
         })
         return Response.json({ error: "积分扣除失败，本次结果未结算" }, { status: 500 })
       }
@@ -2792,9 +2971,11 @@ export async function POST(request: NextRequest) {
         progress: 100,
         artifacts: extractArtifactsFromUnknown(gatewayPayload),
         metadata: {
+          ...geminiGatewayTrace,
           gateway_status: gatewayResponse.status,
           charged_credits: estimatedMinCost,
-          source: "gemini_image_gateway",
+          result_quality: "ok",
+          image_inspections: imageInspection.inspections,
         },
       })
 
