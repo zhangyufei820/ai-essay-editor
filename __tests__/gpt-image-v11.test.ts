@@ -143,6 +143,7 @@ describe("GPT Image V11 parameter mapping", () => {
     const routeSource = require("fs").readFileSync(require("path").join(process.cwd(), "app/api/dify-chat/route.ts"), "utf8")
 
     expect(routeSource).toContain("function normalizeImageGatewaySize")
+    expect(routeSource).toContain("function normalizeVivaApiImageSize")
     expect(routeSource).toContain('if (size === "1K") return "1024x1024"')
     expect(routeSource).toContain('if (size === "2K") return "2048x2048"')
     expect(routeSource).toContain("getImageSizeForSourceAspectRatio")
@@ -187,8 +188,12 @@ describe("GPT Image V11 parameter mapping", () => {
     expect(routeSource).toContain("edit_sources: editSourceMetadata")
     expect(routeSource).toContain('gateway_path: gatewayPath')
     expect(routeSource).toContain("buildVivaApiImagePayload")
+    expect(routeSource).toContain("size: normalizeVivaApiImageSize(imageInputs)")
+    expect(routeSource).toContain("const gatewaySize = normalizeVivaApiImageSize(imageInputs)")
+    expect(routeSource).toContain("let gatewaySize = normalizeVivaApiImageSize(imageInputs)")
     expect(routeSource).not.toContain("getImageGatewaySizeByTier")
     expect(routeSource).not.toContain("size: imageInputs.size,")
+    expect(routeSource).not.toContain('formData.append("size", normalizeImageGatewaySize')
   })
 
   it("submits Gemini image requests as async tasks to avoid edge timeouts", () => {

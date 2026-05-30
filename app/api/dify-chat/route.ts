@@ -338,6 +338,15 @@ function normalizeImageGatewaySize(inputs: GptImageV11Inputs): string {
   return "2048x2048"
 }
 
+function normalizeVivaApiImageSize(inputs: GptImageV11Inputs): string {
+  const size = inputs.size.trim()
+  if (size === "1K" || size === "2K" || size === "4K") return size
+  if (size === "1024x1024" || size === "1536x1024" || size === "1024x1536") return "1K"
+  if (size === "2048x2048") return "2K"
+  if (size === "3840x2160" || size === "2160x3840") return "4K"
+  return "2K"
+}
+
 function getImageSizeForSourceAspectRatio(sourceWidth: number, sourceHeight: number) {
   if (sourceWidth <= 0 || sourceHeight <= 0) return "2160x3840"
   const aspectRatio = sourceWidth / sourceHeight
@@ -1354,7 +1363,7 @@ function buildVivaApiImagePayload(query: string, inputs: unknown) {
   return {
     model: VIVAAPI_IMAGE_MODEL,
     prompt: query || "生成图片",
-    size: normalizeImageGatewaySize(imageInputs),
+    size: normalizeVivaApiImageSize(imageInputs),
     n: imageInputs.n,
     ...(imageInputs.quality ? { quality: imageInputs.quality } : {}),
     ...(imageInputs.output_format ? { response_format: "url" } : {}),
@@ -1482,7 +1491,7 @@ async function buildVivaApiImageEditFormData(
 
   const formData = new FormData()
   const sourceMetadata: VivaApiEditSourceMetadata[] = []
-  const gatewaySize = normalizeImageGatewaySize(imageInputs)
+  const gatewaySize = normalizeVivaApiImageSize(imageInputs)
   formData.append("model", VIVAAPI_IMAGE_MODEL)
   formData.append("prompt", query || "编辑图片")
   formData.append("size", gatewaySize)
@@ -1517,7 +1526,7 @@ async function submitVivaApiImageRequest(params: {
   let editSourceMetadata: VivaApiEditSourceMetadata[] = []
   let body: BodyInit
   const imageInputs = buildGptImageV11Inputs(params.inputs)
-  let gatewaySize = normalizeImageGatewaySize(imageInputs)
+  let gatewaySize = normalizeVivaApiImageSize(imageInputs)
   if (params.isEditMode) {
     const editFormData = await buildVivaApiImageEditFormData(
       params.query,
