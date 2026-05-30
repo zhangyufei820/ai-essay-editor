@@ -41,7 +41,7 @@ class CodexRunner:
                 "Requested skill files are not available.",
             )
         prompt = self._build_prompt(task)
-        if contains_forbidden_runtime_action(prompt):
+        if contains_forbidden_runtime_action(self._forbidden_runtime_scan_payload(task)):
             return self._failed(
                 task,
                 started,
@@ -201,6 +201,16 @@ class CodexRunner:
 8. 禁止读取或修改 .env、Docker、Nginx/OpenResty、1Panel、SSH、服务器目录或任何生产配置。
 9. 禁止执行 ssh、scp、rsync、docker、sudo、rm、git reset、git clean、chmod、chown 等命令。
 """
+
+    def _forbidden_runtime_scan_payload(self, task: dict[str, Any]) -> dict[str, Any]:
+        request = task.get("request", {})
+        if not isinstance(request, dict):
+            request = {}
+        return {
+            "user_query": request.get("user_query", ""),
+            "params": request.get("params", {}),
+            "metadata": request.get("metadata", {}),
+        }
 
     def _failed(self, task: dict[str, Any], started: float, code: str, message: str) -> dict[str, Any]:
         workspace = Path(task["workspace"])

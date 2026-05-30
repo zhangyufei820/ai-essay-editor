@@ -21,6 +21,8 @@ describe("codex skill gateway intent routing", () => {
 
     expect(runner).not.toContain("--dangerously-bypass-approvals-and-sandbox")
     expect(runner).toContain("FORBIDDEN_RUNTIME_ACTION")
+    expect(runner).toContain("_forbidden_runtime_scan_payload")
+    expect(runner).toContain('request.get("user_query", "")')
     expect(security).toContain("require_admin_bearer")
     expect(security).toContain("contains_forbidden_runtime_action")
     expect(security).toContain("assert_safe_skill_file_path")
