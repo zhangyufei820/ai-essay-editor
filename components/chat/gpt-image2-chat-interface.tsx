@@ -1178,7 +1178,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
       let sourceText = ""
 
       if (isWorkflowImageWorkspace) {
-        const payload = await readResponseJson(response)
+        let payload = await readResponseJson(response)
         if (!response.ok) {
           if (isSurveyRequiredPayload(payload)) throw buildSurveyRequiredError()
           const detail =
@@ -1188,6 +1188,11 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
                 ? payload.message
                 : JSON.stringify(payload || {})
           throw new Error(`upstream_error:${response.status}:${detail.slice(0, 120)}`)
+        }
+
+        if (payload?.status === "running" && typeof payload?.imageTaskId === "string") {
+          setSubmitStage("图片任务已提交，等待生成结果")
+          payload = await pollImageTask(payload.imageTaskId, payload.requestId || requestId, payload.pollToken)
         }
 
         imageUrls = parseDifyResult(payload)

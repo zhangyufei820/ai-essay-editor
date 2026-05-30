@@ -192,5 +192,8 @@ describe("GPT Image V11 parameter mapping", () => {
 
     expect(source).toContain('async_image_task: workspaceModel === "gpt-image-2" || workspaceModel === "gemini-image"')
     expect(source).toContain("pollImageTask(payload.imageTaskId")
+    expect(source).toContain('if (isWorkflowImageWorkspace)')
+    expect(source).toContain('let payload = await readResponseJson(response)')
+    expect(source).toContain('payload?.status === "running" && typeof payload?.imageTaskId === "string"')
   })
 })
