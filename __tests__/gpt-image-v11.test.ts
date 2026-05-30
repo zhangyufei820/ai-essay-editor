@@ -168,6 +168,10 @@ describe("GPT Image V11 parameter mapping", () => {
     expect(routeSource).toContain("startGeminiImageGatewayTask")
     expect(routeSource).toContain("runGeminiImageGatewayTask")
     expect(routeSource).toContain("Gemini 图片任务已提交")
+    expect(routeSource).toContain("RecoverableGeminiImageTask")
+    expect(routeSource).toContain("buildRecoverableGeminiImageTask")
+    expect(routeSource).toContain("recoverGeminiImageGatewayTask")
+    expect(routeSource).toContain("SERVER_STARTED_AT_MS")
     expect(routeSource).toContain("/v1/images/generations")
     expect(routeSource).toContain("/v1/images/edits")
     expect(routeSource).toContain('const isEditMode = imageInputs.mode === "image_edit"')
@@ -189,11 +193,16 @@ describe("GPT Image V11 parameter mapping", () => {
 
   it("submits Gemini image requests as async tasks to avoid edge timeouts", () => {
     const source = require("fs").readFileSync(require("path").join(process.cwd(), "components/chat/gpt-image2-chat-interface.tsx"), "utf8")
+    const routeSource = require("fs").readFileSync(require("path").join(process.cwd(), "app/api/dify-chat/route.ts"), "utf8")
 
     expect(source).toContain('async_image_task: workspaceModel === "gpt-image-2" || workspaceModel === "gemini-image"')
     expect(source).toContain("pollImageTask(payload.imageTaskId")
     expect(source).toContain('if (isWorkflowImageWorkspace)')
     expect(source).toContain('let payload = await readResponseJson(response)')
     expect(source).toContain('payload?.status === "running" && typeof payload?.imageTaskId === "string"')
+    expect(routeSource).toContain("const taskRun = isDirectImageGatewayRequest && async_image_task === true")
+    expect(routeSource).toContain('code: "IMAGE_TASK_TRACE_UNAVAILABLE"')
+    expect(routeSource).toContain("taskCreatedBeforeThisProcess")
+    expect(routeSource).toContain('gateway_status: "recovered"')
   })
 })

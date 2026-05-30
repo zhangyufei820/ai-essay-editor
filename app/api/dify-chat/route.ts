@@ -88,6 +88,16 @@ type GeminiImageGatewayInputs = {
   reference_image_urls: string[]
 }
 
+type RecoverableGeminiImageTask = {
+  query: string
+  inputs: GeminiImageGatewayInputs
+  realCreditUserId?: string | null
+  amount: number
+  modelId: ModelType
+  conversationId?: string | null
+  messageId?: string | null
+}
+
 const GPT_IMAGE_V11_DEFAULT_INPUTS: GptImageV11Inputs = {
   aspect_ratio: "1:1",
   size: "2K",
@@ -138,6 +148,7 @@ const GEMINI_IMAGE_GATEWAY_ALLOWED = {
 const GEMINI_IMAGE_BLANK_SAMPLE_SIZE = 32
 const GEMINI_IMAGE_BLANK_BRIGHTNESS_THRESHOLD = 248
 const GEMINI_IMAGE_BLANK_MAX_DARK_PIXEL_RATIO = 0.01
+const SERVER_STARTED_AT_MS = Date.now()
 
 function clampNumber(value: unknown, min: number, max: number, fallback: number): number {
   const numeric = typeof value === "number" ? value : Number(value)
@@ -1572,6 +1583,91 @@ function buildGeminiImageGatewayPayload(query: string, inputs: unknown) {
   }
 }
 
+function buildRecoverableGeminiImageTask(params: {
+  query: string
+  inputs: unknown
+  realCreditUserId?: string
+  amount: number
+  modelId: ModelType
+  conversationId?: string | null
+  messageId?: string | null
+}): RecoverableGeminiImageTask {
+  return {
+    query: params.query,
+    inputs: buildGeminiImageGatewayInputs(params.inputs),
+    realCreditUserId: params.realCreditUserId || null,
+    amount: params.amount,
+    modelId: params.modelId,
+    conversationId: params.conversationId || null,
+    messageId: params.messageId || null,
+  }
+}
+
+function readRecoverableGeminiImageTask(metadata: Record<string, unknown>): RecoverableGeminiImageTask | null {
+  const task = metadata.recoverable_task
+  if (!task || typeof task !== "object") return null
+  const record = task as Record<string, unknown>
+  const query = typeof record.query === "string" ? record.query : ""
+  const amount = typeof record.amount === "number" && Number.isFinite(record.amount) ? record.amount : 0
+  const modelId = typeof record.modelId === "string" ? record.modelId as ModelType : "gemini-image"
+  if (!query.trim() || amount <= 0 || modelId !== "gemini-image") return null
+
+  return {
+    query,
+    inputs: buildGeminiImageGatewayInputs(record.inputs),
+    realCreditUserId: typeof record.realCreditUserId === "string" ? record.realCreditUserId : null,
+    amount,
+    modelId,
+    conversationId: typeof record.conversationId === "string" ? record.conversationId : null,
+    messageId: typeof record.messageId === "string" ? record.messageId : null,
+  }
+}
+
+function recoverGeminiImageGatewayTask(params: {
+  requestId: string
+  userId: string
+  traceId?: string | null
+  metadata: Record<string, unknown>
+}) {
+  const task = readRecoverableGeminiImageTask(params.metadata)
+  if (!task) return false
+  const recoveryAttempts = typeof params.metadata.recovery_attempts === "number" ? params.metadata.recovery_attempts : 0
+  if (recoveryAttempts >= 1) return false
+
+  fireAndForget("Gemini Image Task recovery", (async () => {
+    await updateTaskRun(params.requestId, {
+      status: "running",
+      stage: "Gemini 图片任务恢复中，正在重新检查生成结果",
+      progress: 35,
+      upstreamTaskId: params.requestId,
+      metadata: {
+        ...params.metadata,
+        gateway_status: "recovered",
+        recovery_attempts: recoveryAttempts + 1,
+        recovery_started_at: new Date().toISOString(),
+      },
+    })
+
+    await runGeminiImageGatewayTask({
+      query: task.query,
+      inputs: task.inputs,
+      userId: params.userId,
+      realCreditUserId: task.realCreditUserId || undefined,
+      amount: task.amount,
+      modelId: task.modelId,
+      requestId: params.requestId,
+      conversationId: task.conversationId || null,
+      messageId: task.messageId || null,
+    })
+  })())
+
+  console.warn("[Gemini Image Task] recovered stale running task", {
+    requestId: params.requestId,
+    traceId: params.traceId || "",
+  })
+  return true
+}
+
 function buildLegacyGeminiImageGatewayPayload(query: string, inputs: unknown) {
   const imageInputs = buildGeminiImageGatewayInputs(inputs)
 
@@ -2001,6 +2097,7 @@ async function runGeminiImageGatewayTask(params: {
 }) {
   const imageInputs = buildGeminiImageGatewayInputs(params.inputs)
   const trace = buildGeminiGatewayTrace(imageInputs)
+  const recoverableTask = buildRecoverableGeminiImageTask(params)
   const startedAt = Date.now()
 
   const gatewayResponse = await callGeminiImageGatewayDirect(params.query, params.inputs)
@@ -2016,6 +2113,7 @@ async function runGeminiImageGatewayTask(params: {
       sanitizedError: sanitizeForTrace(gatewayPayload) as Record<string, unknown>,
       metadata: {
         ...trace,
+        recoverable_task: recoverableTask,
         elapsed_ms: Date.now() - startedAt,
         gateway_status: gatewayResponse.status,
         result: sanitizeForTrace(gatewayPayload),
@@ -2036,6 +2134,7 @@ async function runGeminiImageGatewayTask(params: {
       sanitizedError: sanitizeForTrace(gatewayPayload) as Record<string, unknown>,
       metadata: {
         ...trace,
+        recoverable_task: recoverableTask,
         elapsed_ms: Date.now() - startedAt,
         gateway_status: gatewayResponse.status,
         result_quality: "blank_or_invalid",
@@ -2086,6 +2185,7 @@ async function runGeminiImageGatewayTask(params: {
       sanitizedError: sanitizeForTrace(gatewayPayload) as Record<string, unknown>,
       metadata: {
         ...trace,
+        recoverable_task: recoverableTask,
         elapsed_ms: Date.now() - startedAt,
         gateway_status: gatewayResponse.status,
         image_inspections: imageInspection.inspections,
@@ -2108,6 +2208,7 @@ async function runGeminiImageGatewayTask(params: {
     artifacts: extractArtifactsFromUnknown(gatewayPayload),
     metadata: {
       ...trace,
+      recoverable_task: recoverableTask,
       elapsed_ms: Date.now() - startedAt,
       gateway_status: gatewayResponse.status,
       charged_credits: params.amount,
@@ -2133,6 +2234,7 @@ async function startGeminiImageGatewayTask(params: {
   messageId?: string | null
 }) {
   const imageInputs = buildGeminiImageGatewayInputs(params.inputs)
+  const recoverableTask = buildRecoverableGeminiImageTask(params)
 
   await updateTaskRun(params.requestId, {
     status: "running",
@@ -2141,6 +2243,7 @@ async function startGeminiImageGatewayTask(params: {
     upstreamTaskId: params.requestId,
     metadata: {
       ...buildGeminiGatewayTrace(imageInputs),
+      recoverable_task: recoverableTask,
       gateway_status: "submitted",
     },
   })
@@ -2529,6 +2632,30 @@ export async function GET(request: NextRequest) {
       })
     }
 
+    const provider = typeof metadata.provider === "string" ? metadata.provider : ""
+    const gatewayStatus = typeof metadata.gateway_status === "string" ? metadata.gateway_status : ""
+    const taskCreatedBeforeThisProcess = Number.isFinite(createdAtMs) && createdAtMs < SERVER_STARTED_AT_MS
+    if (
+      provider === "moonapix" &&
+      gatewayStatus === "submitted" &&
+      taskCreatedBeforeThisProcess &&
+      recoverGeminiImageGatewayTask({
+        requestId,
+        userId,
+        traceId: typeof metadata.trace_id === "string" ? metadata.trace_id : null,
+        metadata,
+      })
+    ) {
+      return Response.json({
+        status: "running",
+        taskId,
+        requestId,
+        elapsedMs: taskAgeMs,
+        stage: "Gemini 图片任务恢复中，正在重新检查生成结果",
+        progress: Math.max(typeof storedTask?.progress === "number" ? storedTask.progress : 35, 35),
+      })
+    }
+
     return Response.json({
       status: "running",
       taskId,
@@ -2850,7 +2977,7 @@ export async function POST(request: NextRequest) {
         async_image_task: async_image_task === true,
       },
     }
-    const taskRun = isGptImageGatewayRequest && async_image_task === true
+    const taskRun = isDirectImageGatewayRequest && async_image_task === true
       ? await createTaskRun(createTaskRunInput)
       : {
           id: requestId,
@@ -2858,7 +2985,7 @@ export async function POST(request: NextRequest) {
           traceId: createTraceId(requestId),
           persisted: false,
         }
-    if (!(isGptImageGatewayRequest && async_image_task === true)) {
+    if (!(isDirectImageGatewayRequest && async_image_task === true)) {
       fireAndForget("AI Task Trace create", createTaskRun(createTaskRunInput))
     }
 
@@ -3054,6 +3181,17 @@ export async function POST(request: NextRequest) {
       })
 
       if (async_image_task === true) {
+        if (!taskRun.persisted) {
+          return Response.json(
+            {
+              error: "图片任务记录创建失败，请稍后重试",
+              code: "IMAGE_TASK_TRACE_UNAVAILABLE",
+              requestId: taskRun.requestId,
+            },
+            { status: 503 },
+          )
+        }
+
         const taskId = await startGeminiImageGatewayTask({
           query: effectiveQuery,
           inputs,
