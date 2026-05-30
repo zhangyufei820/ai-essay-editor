@@ -106,7 +106,7 @@ describe('Sprint 5 payment / credits / membership guards', () => {
   it('routes GPT Image 2 through the direct image gateway after server-side billing guards', () => {
     const source = read('app/api/dify-chat/route.ts')
     const billingCheckIndex = source.indexOf('const estimatedMinCost = imageInputsForBilling')
-    const directGatewayIndex = source.indexOf('console.log("🎨 [GPT Image] 使用 VivaAPI 图片通道，绕过 Dify chatflow")')
+    const directGatewayIndex = source.indexOf('console.log("🎨 [GPT Image] 使用 Moonapix 图片通道，绕过 Dify chatflow")')
     const difyCallIndex = source.indexOf('const callDify = async')
 
     expect(source).toContain('callImageGatewayDirect(effectiveQuery, inputs)')
@@ -131,7 +131,8 @@ describe('Sprint 5 payment / credits / membership guards', () => {
     expect(source).toContain('"https://moonapix.com"')
     expect(source).toContain('function isGeminiImageGatewayModel(model: unknown)')
     expect(source).toContain('model === "gemini-image" || model === "banana-2-pro"')
-    expect(source).toContain('callGeminiImageGatewayDirect(effectiveQuery, inputs)')
+    expect(source).toContain('runGeminiImageGatewayTask({')
+    expect(source).toContain('query: effectiveQuery')
     expect(source).toContain('/v1/images/generations')
     expect(source).toContain('gatewayName: "gemini-image-gateway"')
     expect(geminiGatewayIndex).toBeGreaterThan(billingCheckIndex)

@@ -2339,17 +2339,17 @@ async function startVivaApiImageTask(params: {
   const imageInputs = buildGptImageV11Inputs(params.inputs)
   const isEditMode = imageInputs.mode === "image_edit"
   const gatewayPath = isEditMode ? "/v1/images/edits" : "/v1/images/generations"
-  let gatewaySize = normalizeImageGatewaySize(imageInputs)
+  let gatewaySize = normalizeVivaApiImageSize(imageInputs)
   let editSourceMetadata: VivaApiEditSourceMetadata[] = []
   let vivaApiAttempt = 1
 
   await updateTaskRun(params.requestId, {
     status: "running",
-    stage: "VivaAPI 图片任务已提交，等待生成结果",
+    stage: "Moonapix 图片任务已提交，等待生成结果",
     progress: 15,
     upstreamTaskId: params.requestId,
     metadata: {
-      provider: "vivaapi",
+      provider: "moonapix",
       gateway_status: "submitted",
       gateway_path: gatewayPath,
       gateway_size: gatewaySize,
@@ -2359,7 +2359,7 @@ async function startVivaApiImageTask(params: {
     },
   })
 
-  fireAndForget("VivaAPI Image Task", (async () => {
+  fireAndForget("Moonapix Image Task", (async () => {
     const startedAt = Date.now()
     const gatewayToken = process.env.VIVAAPI_IMAGE_API_KEY || ""
     const timeout = createTimeoutSignal(GPT_IMAGE_GATEWAY_TIMEOUT_MS)
@@ -2385,7 +2385,7 @@ async function startVivaApiImageTask(params: {
           progress: 45,
           upstreamTaskId: params.requestId,
           metadata: {
-            provider: "vivaapi",
+            provider: "moonapix",
             elapsed_ms: Date.now() - startedAt,
             gateway_status: "retrying",
             gateway_path: gatewayPath,
@@ -2423,7 +2423,7 @@ async function startVivaApiImageTask(params: {
           errorCode: typeof wrappedPayload?.code === "string" ? wrappedPayload.code : `VIVAAPI_IMAGE_${response.status || wrappedResponse.status}`,
           sanitizedError: sanitizeForTrace(storedResult) as Record<string, unknown>,
           metadata: {
-            provider: "vivaapi",
+            provider: "moonapix",
             elapsed_ms: Date.now() - startedAt,
             gateway_status: "failed",
             gateway_path: gatewayPath,
@@ -2447,7 +2447,7 @@ async function startVivaApiImageTask(params: {
         upstreamTaskId: params.requestId,
         artifacts: extractArtifactsFromUnknown(wrappedPayload),
         metadata: {
-          provider: "vivaapi",
+          provider: "moonapix",
           elapsed_ms: Date.now() - startedAt,
           gateway_status: "succeeded",
           gateway_path: gatewayPath,
@@ -2471,7 +2471,7 @@ async function startVivaApiImageTask(params: {
         errorCode: err?.name === "AbortError" ? "IMAGE_GATEWAY_TIMEOUT" : "IMAGE_GATEWAY_UNAVAILABLE",
         sanitizedError: sanitizeForTrace({ message: err?.message || String(error) }) as Record<string, unknown>,
         metadata: {
-          provider: "vivaapi",
+          provider: "moonapix",
           elapsed_ms: Date.now() - startedAt,
           gateway_status: err?.name === "AbortError" ? "timeout" : "failed",
           gateway_path: gatewayPath,
@@ -2488,7 +2488,7 @@ async function startVivaApiImageTask(params: {
     }
   })())
 
-  console.log("[VivaAPI Image Task] persisted", {
+  console.log("[Moonapix Image Task] persisted", {
     taskId: params.requestId,
     promptLength: params.query.length,
     requestId: params.requestId,
@@ -3267,7 +3267,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (isGptImageGatewayRequest) {
-      console.log("🎨 [GPT Image] 使用 VivaAPI 图片通道，绕过 Dify chatflow")
+      console.log("🎨 [GPT Image] 使用 Moonapix 图片通道，绕过 Dify chatflow")
       const imageInputs = imageInputsForBilling || buildGptImageV11Inputs(inputs)
       const imageBillingModel = (billingModelType || "gpt-image-2") as ModelType
 

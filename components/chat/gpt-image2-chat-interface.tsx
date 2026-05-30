@@ -117,7 +117,7 @@ const WORKSPACE_COPY: Record<ImageWorkspaceModel, {
 }> = {
   "gpt-image-2": {
     title: "图像生成 / 图像编辑",
-    subtitle: "VivaAPI GPT Image 2",
+    subtitle: "Moonapix GPT Image 2",
     heroTitle: "AI 图像工作台",
     heroDescription: "使用 GPT Image 2 生成或编辑图片，支持 1K、2K、4K 三档尺寸。图片编辑时，上传原图后系统会自动完成安全处理。",
     resultTitle: "结果展示",
