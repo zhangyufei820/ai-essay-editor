@@ -338,13 +338,88 @@ function normalizeImageGatewaySize(inputs: GptImageV11Inputs): string {
   return "2048x2048"
 }
 
+const VIVAAPI_IMAGE_SIZE_TABLE = {
+  "1K": {
+    "1:1": "1280x1280",
+    "2:3": "848x1280",
+    "3:2": "1280x848",
+    "3:4": "960x1280",
+    "4:3": "1280x960",
+    "4:5": "1024x1280",
+    "5:4": "1280x1024",
+    "9:16": "720x1280",
+    "16:9": "1280x720",
+    "21:9": "1280x544",
+  },
+  "2K": {
+    "1:1": "2048x2048",
+    "2:3": "1360x2048",
+    "3:2": "2048x1360",
+    "3:4": "1536x2048",
+    "4:3": "2048x1536",
+    "4:5": "1632x2048",
+    "5:4": "2048x1632",
+    "9:16": "1152x2048",
+    "16:9": "2048x1152",
+    "21:9": "2048x864",
+  },
+  "4K": {
+    "1:1": "2880x2880",
+    "2:3": "2336x3520",
+    "3:2": "3520x2336",
+    "3:4": "2480x3312",
+    "4:3": "3312x2480",
+    "4:5": "2560x3216",
+    "5:4": "3216x2560",
+    "9:16": "2160x3840",
+    "16:9": "3840x2160",
+    "21:9": "3840x1632",
+  },
+} as const
+
+type VivaApiImageTier = keyof typeof VIVAAPI_IMAGE_SIZE_TABLE
+type VivaApiImageAspectRatio = keyof typeof VIVAAPI_IMAGE_SIZE_TABLE["4K"]
+
+function getNearestVivaApiAspectRatio(width?: number, height?: number): VivaApiImageAspectRatio {
+  if (!width || !height || width <= 0 || height <= 0) return "1:1"
+  const sourceRatio = width / height
+  const candidates = Object.keys(VIVAAPI_IMAGE_SIZE_TABLE["4K"]) as VivaApiImageAspectRatio[]
+  let bestRatio: VivaApiImageAspectRatio = "1:1"
+  let bestDistance = Number.POSITIVE_INFINITY
+
+  for (const candidate of candidates) {
+    const [candidateWidth, candidateHeight] = candidate.split(":").map(Number)
+    if (!candidateWidth || !candidateHeight) continue
+    const distance = Math.abs(Math.log(sourceRatio / (candidateWidth / candidateHeight)))
+    if (distance < bestDistance) {
+      bestDistance = distance
+      bestRatio = candidate
+    }
+  }
+
+  return bestRatio
+}
+
 function normalizeVivaApiImageSize(inputs: GptImageV11Inputs): string {
   const size = inputs.size.trim()
-  if (size === "1K" || size === "2K" || size === "4K") return size
-  if (size === "1024x1024" || size === "1536x1024" || size === "1024x1536") return "1K"
-  if (size === "2048x2048") return "2K"
-  if (size === "3840x2160" || size === "2160x3840") return "4K"
-  return "2K"
+  for (const tier of Object.keys(VIVAAPI_IMAGE_SIZE_TABLE) as VivaApiImageTier[]) {
+    const exactMatch = Object.values(VIVAAPI_IMAGE_SIZE_TABLE[tier]).includes(size as never)
+    if (exactMatch) return size
+  }
+
+  const tier: VivaApiImageTier = size === "1K" || size === "2K" || size === "4K" ? size : "2K"
+  const requestedAspectRatio = inputs.aspect_ratio.trim()
+  const aspectRatio = requestedAspectRatio === "auto"
+    ? getNearestVivaApiAspectRatio(inputs.source_image_width, inputs.source_image_height)
+    : requestedAspectRatio in VIVAAPI_IMAGE_SIZE_TABLE[tier]
+      ? requestedAspectRatio as VivaApiImageAspectRatio
+      : getNearestVivaApiAspectRatio(inputs.source_image_width, inputs.source_image_height)
+
+  return VIVAAPI_IMAGE_SIZE_TABLE[tier][aspectRatio]
+}
+
+function isGptImage2VipModel() {
+  return VIVAAPI_IMAGE_MODEL === "gpt-image-2-vip"
 }
 
 function getImageSizeForSourceAspectRatio(sourceWidth: number, sourceHeight: number) {
@@ -1496,7 +1571,7 @@ async function buildVivaApiImageEditFormData(
   formData.append("prompt", query || "编辑图片")
   formData.append("size", gatewaySize)
   formData.append("n", String(imageInputs.n))
-  if (imageInputs.quality) formData.append("quality", imageInputs.quality)
+  if (!isGptImage2VipModel() && imageInputs.quality) formData.append("quality", imageInputs.quality)
   if (imageInputs.output_format) formData.append("response_format", "url")
 
   await appendRemoteImageToFormData(formData, "image", referenceImages[0], "source-image", sourceMetadata, maxDimension)

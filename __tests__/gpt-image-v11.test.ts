@@ -144,6 +144,10 @@ describe("GPT Image V11 parameter mapping", () => {
 
     expect(routeSource).toContain("function normalizeImageGatewaySize")
     expect(routeSource).toContain("function normalizeVivaApiImageSize")
+    expect(routeSource).toContain("VIVAAPI_IMAGE_SIZE_TABLE")
+    expect(routeSource).toContain('"3:2": "3520x2336"')
+    expect(routeSource).toContain("getNearestVivaApiAspectRatio")
+    expect(routeSource).toContain('requestedAspectRatio === "auto"')
     expect(routeSource).toContain('if (size === "1K") return "1024x1024"')
     expect(routeSource).toContain('if (size === "2K") return "2048x2048"')
     expect(routeSource).toContain("getImageSizeForSourceAspectRatio")
@@ -178,6 +182,7 @@ describe("GPT Image V11 parameter mapping", () => {
     expect(routeSource).toContain('const isEditMode = imageInputs.mode === "image_edit"')
     expect(routeSource).toContain("buildVivaApiImageEditFormData")
     expect(routeSource).toContain('appendRemoteImageToFormData(formData, "image"')
+    expect(routeSource).toContain('if (!isGptImage2VipModel() && imageInputs.quality) formData.append("quality", imageInputs.quality)')
     expect(routeSource).toContain("normalizeVivaApiEditSourceImage")
     expect(routeSource).toContain("VIVAAPI_EDIT_MAX_SOURCE_BYTES")
     expect(routeSource).toContain("VIVAAPI_EDIT_MAX_SOURCE_DIMENSION = 2048")
