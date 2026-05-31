@@ -226,6 +226,7 @@ describe("GPT Image V11 parameter mapping", () => {
     const routeSource = require("fs").readFileSync(require("path").join(process.cwd(), "app/api/dify-chat/route.ts"), "utf8")
 
     expect(source).toContain('async_image_task: workspaceModel === "gpt-image-2" || workspaceModel === "gemini-image" || workspaceModel === "banana-2-pro"')
+    expect(source).toContain('if (mode !== "image_edit" && nextSize === "4K" && (aspectRatio === "1:1" || aspectRatio === "auto"))')
     expect(source).toContain("pollImageTask(payload.imageTaskId")
     expect(source).toContain('if (isWorkflowImageWorkspace)')
     expect(source).toContain('let payload = await readResponseJson(response)')
