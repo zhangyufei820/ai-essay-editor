@@ -145,9 +145,13 @@ const GEMINI_IMAGE_GATEWAY_ALLOWED = {
   model: ["gemini-3-pro-image-preview"],
   mode: ["image_generate", "image_edit"],
 } as const
-const GEMINI_IMAGE_BLANK_SAMPLE_SIZE = 32
+const GEMINI_IMAGE_BLANK_SAMPLE_SIZE = 64
 const GEMINI_IMAGE_BLANK_BRIGHTNESS_THRESHOLD = 248
 const GEMINI_IMAGE_BLANK_MAX_DARK_PIXEL_RATIO = 0.01
+const GEMINI_IMAGE_LOW_DETAIL_MAX_LUMINANCE_STDDEV = 2
+const GEMINI_IMAGE_LOW_DETAIL_MAX_EDGE_DELTA = 0.5
+const GEMINI_IMAGE_LOW_DETAIL_MAX_STRONG_EDGE_RATIO = 0.001
+const GEMINI_IMAGE_LOW_DETAIL_MIN_AVG_BRIGHTNESS = 180
 const GEMINI_IMAGE_BLANK_RETRY_LIMIT = 1
 const SERVER_STARTED_AT_MS = Date.now()
 
@@ -1874,6 +1878,11 @@ type GeminiImageInspection = {
   height?: number
   avgBrightness?: number
   darkPixelRatio?: number
+  luminanceStdDev?: number
+  rgbStdDev?: number
+  avgEdgeDelta?: number
+  strongEdgeRatio?: number
+  reason?: "blank" | "low_detail"
   error?: string
 }
 
@@ -1899,23 +1908,85 @@ async function inspectGeneratedImageUrl(url: string): Promise<GeminiImageInspect
     const pixelCount = Math.max(1, Math.floor(raw.length / 3))
     let brightnessTotal = 0
     let darkPixels = 0
+    let redTotal = 0
+    let greenTotal = 0
+    let blueTotal = 0
+    const luminanceValues: number[] = []
 
     for (let index = 0; index < raw.length; index += 3) {
-      const brightness = (raw[index] + raw[index + 1] + raw[index + 2]) / 3
+      const red = raw[index]
+      const green = raw[index + 1]
+      const blue = raw[index + 2]
+      const brightness = (red + green + blue) / 3
       brightnessTotal += brightness
+      redTotal += red
+      greenTotal += green
+      blueTotal += blue
+      luminanceValues.push(brightness)
       if (brightness < GEMINI_IMAGE_BLANK_BRIGHTNESS_THRESHOLD) darkPixels += 1
     }
 
     const avgBrightness = brightnessTotal / pixelCount
     const darkPixelRatio = darkPixels / pixelCount
+    const avgRed = redTotal / pixelCount
+    const avgGreen = greenTotal / pixelCount
+    const avgBlue = blueTotal / pixelCount
+    let luminanceVarianceTotal = 0
+    let rgbVarianceTotal = 0
+    let edgeDeltaTotal = 0
+    let strongEdges = 0
+    const sampleWidth = GEMINI_IMAGE_BLANK_SAMPLE_SIZE
+    const sampleHeight = Math.max(1, Math.floor(pixelCount / sampleWidth))
+    const luminanceAt = (x: number, y: number) => luminanceValues[(y * sampleWidth) + x] || 0
+
+    for (let y = 0; y < sampleHeight; y += 1) {
+      for (let x = 0; x < sampleWidth; x += 1) {
+        const pixelIndex = (y * sampleWidth + x) * 3
+        const red = raw[pixelIndex]
+        const green = raw[pixelIndex + 1]
+        const blue = raw[pixelIndex + 2]
+        const luminance = luminanceAt(x, y)
+        luminanceVarianceTotal += (luminance - avgBrightness) ** 2
+        rgbVarianceTotal += (red - avgRed) ** 2 + (green - avgGreen) ** 2 + (blue - avgBlue) ** 2
+
+        if (x + 1 < sampleWidth) {
+          const delta = Math.abs(luminance - luminanceAt(x + 1, y))
+          edgeDeltaTotal += delta
+          if (delta >= 12) strongEdges += 1
+        }
+        if (y + 1 < sampleHeight) {
+          const delta = Math.abs(luminance - luminanceAt(x, y + 1))
+          edgeDeltaTotal += delta
+          if (delta >= 12) strongEdges += 1
+        }
+      }
+    }
+
+    const edgePairCount = Math.max(1, sampleHeight * Math.max(0, sampleWidth - 1) + Math.max(0, sampleHeight - 1) * sampleWidth)
+    const luminanceStdDev = Math.sqrt(luminanceVarianceTotal / pixelCount)
+    const rgbStdDev = Math.sqrt(rgbVarianceTotal / (pixelCount * 3))
+    const avgEdgeDelta = edgeDeltaTotal / edgePairCount
+    const strongEdgeRatio = strongEdges / edgePairCount
+    const isBlank = avgBrightness >= GEMINI_IMAGE_BLANK_BRIGHTNESS_THRESHOLD && darkPixelRatio <= GEMINI_IMAGE_BLANK_MAX_DARK_PIXEL_RATIO
+    const isLowDetail =
+      avgBrightness >= GEMINI_IMAGE_LOW_DETAIL_MIN_AVG_BRIGHTNESS &&
+      luminanceStdDev <= GEMINI_IMAGE_LOW_DETAIL_MAX_LUMINANCE_STDDEV &&
+      avgEdgeDelta <= GEMINI_IMAGE_LOW_DETAIL_MAX_EDGE_DELTA &&
+      strongEdgeRatio <= GEMINI_IMAGE_LOW_DETAIL_MAX_STRONG_EDGE_RATIO
+
     return {
       url,
-      ok: !(avgBrightness >= GEMINI_IMAGE_BLANK_BRIGHTNESS_THRESHOLD && darkPixelRatio <= GEMINI_IMAGE_BLANK_MAX_DARK_PIXEL_RATIO),
+      ok: !(isBlank || isLowDetail),
       status: response.status,
       width: metadata.width,
       height: metadata.height,
       avgBrightness: Number(avgBrightness.toFixed(2)),
       darkPixelRatio: Number(darkPixelRatio.toFixed(4)),
+      luminanceStdDev: Number(luminanceStdDev.toFixed(2)),
+      rgbStdDev: Number(rgbStdDev.toFixed(2)),
+      avgEdgeDelta: Number(avgEdgeDelta.toFixed(2)),
+      strongEdgeRatio: Number(strongEdgeRatio.toFixed(4)),
+      reason: isBlank ? "blank" : isLowDetail ? "low_detail" : undefined,
     }
   } catch (error) {
     const err = error instanceof Error ? error : null
