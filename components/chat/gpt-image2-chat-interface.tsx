@@ -877,9 +877,6 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
   const applySize = (nextSize: ImageSize) => {
     if (isGeminiGatewayWorkspace) {
       setSize(nextSize)
-      if (mode !== "image_edit" && nextSize === "4K" && (aspectRatio === "1:1" || aspectRatio === "auto")) {
-        setAspectRatio("16:9")
-      }
       if (nextSize === "512") toast.info("512 适合快速预览，正式出图建议使用 1K 或 2K。")
       if (nextSize === "4K") toast.info("4K 生成可能耗时较长，请保持页面打开。")
       return
