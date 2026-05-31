@@ -1174,7 +1174,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
           inputs: submittedInputs,
           model: workspaceModel,
           mode: "image",
-          async_image_task: workspaceModel === "gpt-image-2" || workspaceModel === "gemini-image",
+          async_image_task: workspaceModel === "gpt-image-2" || workspaceModel === "gemini-image" || workspaceModel === "banana-2-pro",
           requestId,
         }),
       })

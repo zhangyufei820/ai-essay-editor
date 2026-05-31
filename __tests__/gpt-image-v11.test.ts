@@ -214,11 +214,11 @@ describe("GPT Image V11 parameter mapping", () => {
     expect(routeSource).not.toContain('formData.append("size", normalizeImageGatewaySize')
   })
 
-  it("submits Gemini image requests as async tasks to avoid edge timeouts", () => {
+  it("submits Gemini and Banana image requests as async tasks to avoid edge timeouts", () => {
     const source = require("fs").readFileSync(require("path").join(process.cwd(), "components/chat/gpt-image2-chat-interface.tsx"), "utf8")
     const routeSource = require("fs").readFileSync(require("path").join(process.cwd(), "app/api/dify-chat/route.ts"), "utf8")
 
-    expect(source).toContain('async_image_task: workspaceModel === "gpt-image-2" || workspaceModel === "gemini-image"')
+    expect(source).toContain('async_image_task: workspaceModel === "gpt-image-2" || workspaceModel === "gemini-image" || workspaceModel === "banana-2-pro"')
     expect(source).toContain("pollImageTask(payload.imageTaskId")
     expect(source).toContain('if (isWorkflowImageWorkspace)')
     expect(source).toContain('let payload = await readResponseJson(response)')
