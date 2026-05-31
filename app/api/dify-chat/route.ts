@@ -1587,7 +1587,12 @@ function shouldRetryVivaApiImageResponse(response: Response, storedResult: unkno
   if (attempt > 1) return false
   if (VIVAAPI_RETRYABLE_HTTP_STATUSES.has(response.status)) return true
   const resultText = JSON.stringify(sanitizeForTrace(storedResult)).toLowerCase()
-  return resultText.includes("524: a timeout occurred") || resultText.includes("a timeout occurred")
+  return (
+    resultText.includes("524: a timeout occurred") ||
+    resultText.includes("a timeout occurred") ||
+    resultText.includes("upstream_error") ||
+    resultText.includes("system error")
+  )
 }
 
 async function submitVivaApiImageRequest(params: {
@@ -2509,7 +2514,7 @@ async function startVivaApiImageTask(params: {
         vivaApiAttempt += 1
         await updateTaskRun(params.requestId, {
           status: "running",
-          stage: "图片编辑服务响应超时，正在自动重试",
+          stage: "图片编辑服务返回临时错误，正在自动重试",
           progress: 45,
           upstreamTaskId: params.requestId,
           metadata: {
