@@ -1677,6 +1677,22 @@ function buildGeminiImageGatewayPayload(query: string, inputs: unknown) {
   }
 }
 
+function shouldRetryBananaEdit1KWithAcceptedGatewaySize(params: {
+  modelId: ModelType
+  imageInputs: GeminiImageGatewayInputs
+  response: Response
+  payload: unknown
+}) {
+  if (params.modelId !== "banana-2-pro") return false
+  if (params.imageInputs.mode !== "image_edit") return false
+  if (params.imageInputs.image_size !== "1K") return false
+  if (params.response.status !== 400) return false
+
+  const record = params.payload && typeof params.payload === "object" ? params.payload as Record<string, unknown> : {}
+  const code = typeof record.code === "string" ? record.code : ""
+  return code === "GEMINI_IMAGE_GATEWAY_HTTP_ERROR"
+}
+
 function buildRecoverableGeminiImageTask(params: {
   query: string
   inputs: unknown
@@ -2267,24 +2283,77 @@ async function runGeminiImageGatewayTask(params: {
   let gatewayAttempt = 1
   let gatewayResponse = await callGeminiImageGatewayDirect(params.query, params.inputs)
   let gatewayPayload = await gatewayResponse.clone().json().catch(() => ({}))
+  let effectiveImageInputs = imageInputs
+  let effectiveTrace = trace
+  let gatewayCompatibilityMetadata: Record<string, unknown> = {}
 
   if (!gatewayResponse.ok) {
-    await updateTaskRun(params.requestId, {
-      status: "failed",
-      stage: "Gemini 图片网关返回错误",
-      progress: 100,
-      errorMessage: typeof gatewayPayload?.error === "string" ? gatewayPayload.error : "图像服务请求失败",
-      errorCode: typeof gatewayPayload?.code === "string" ? gatewayPayload.code : `GEMINI_IMAGE_GATEWAY_${gatewayResponse.status}`,
-      sanitizedError: sanitizeForTrace(gatewayPayload) as Record<string, unknown>,
-      metadata: {
-        ...trace,
-        recoverable_task: recoverableTask,
-        elapsed_ms: Date.now() - startedAt,
-        gateway_status: gatewayResponse.status,
-        result: sanitizeForTrace(gatewayPayload),
-      },
-    })
-    return { response: gatewayResponse, payload: gatewayPayload, trace, imageInputs }
+    if (shouldRetryBananaEdit1KWithAcceptedGatewaySize({
+      modelId: params.modelId,
+      imageInputs,
+      response: gatewayResponse,
+      payload: gatewayPayload,
+    })) {
+      const retryInputs: GeminiImageGatewayInputs = { ...imageInputs, image_size: "2K" }
+      const retryTrace = buildGeminiGatewayTrace(retryInputs)
+      const firstFailure = sanitizeForTrace(gatewayPayload)
+
+      await updateTaskRun(params.requestId, {
+        status: "running",
+        stage: "Banana 图片编辑 1K 正在使用兼容尺寸重试",
+        progress: 45,
+        upstreamTaskId: params.requestId,
+        sanitizedError: firstFailure as Record<string, unknown>,
+        metadata: {
+          ...trace,
+          recoverable_task: recoverableTask,
+          elapsed_ms: Date.now() - startedAt,
+          gateway_status: "retrying",
+          attempt: gatewayAttempt,
+          next_attempt: gatewayAttempt + 1,
+          result: firstFailure,
+          compatibility_retry: {
+            reason: "banana_edit_1k_gateway_400",
+            requested_image_size: "1K",
+            retry_image_size: "2K",
+          },
+        },
+      })
+
+      gatewayAttempt += 1
+      gatewayResponse = await callGeminiImageGatewayDirect(params.query, retryInputs)
+      gatewayPayload = await gatewayResponse.clone().json().catch(() => ({}))
+      effectiveImageInputs = retryInputs
+      effectiveTrace = retryTrace
+      gatewayCompatibilityMetadata = {
+        requested_image_size: imageInputs.image_size,
+        effective_image_size: retryInputs.image_size,
+        compatibility_retry_reason: "banana_edit_1k_gateway_400",
+        first_gateway_status: 400,
+        first_gateway_result: firstFailure,
+      }
+    }
+
+    if (!gatewayResponse.ok) {
+      await updateTaskRun(params.requestId, {
+        status: "failed",
+        stage: "Gemini 图片网关返回错误",
+        progress: 100,
+        errorMessage: typeof gatewayPayload?.error === "string" ? gatewayPayload.error : "图像服务请求失败",
+        errorCode: typeof gatewayPayload?.code === "string" ? gatewayPayload.code : `GEMINI_IMAGE_GATEWAY_${gatewayResponse.status}`,
+        sanitizedError: sanitizeForTrace(gatewayPayload) as Record<string, unknown>,
+        metadata: {
+          ...trace,
+          recoverable_task: recoverableTask,
+          elapsed_ms: Date.now() - startedAt,
+          gateway_status: gatewayResponse.status,
+          attempt: gatewayAttempt,
+          ...gatewayCompatibilityMetadata,
+          result: sanitizeForTrace(gatewayPayload),
+        },
+      })
+      return { response: gatewayResponse, payload: gatewayPayload, trace, imageInputs }
+    }
   }
 
   let imageInspection = await inspectGeneratedImagesForBlankOutput(gatewayPayload)
@@ -2296,20 +2365,21 @@ async function runGeminiImageGatewayTask(params: {
       upstreamTaskId: params.requestId,
       artifacts: extractArtifactsFromUnknown(gatewayPayload),
       metadata: {
-        ...trace,
+        ...effectiveTrace,
         recoverable_task: recoverableTask,
         elapsed_ms: Date.now() - startedAt,
         gateway_status: "retrying",
         result_quality: "blank_or_invalid",
         attempt: gatewayAttempt,
         next_attempt: gatewayAttempt + 1,
+        ...gatewayCompatibilityMetadata,
         image_inspections: imageInspection.inspections,
         result: sanitizeForTrace(gatewayPayload),
       },
     })
 
     gatewayAttempt += 1
-    gatewayResponse = await callGeminiImageGatewayDirect(params.query, params.inputs)
+    gatewayResponse = await callGeminiImageGatewayDirect(params.query, effectiveImageInputs)
     gatewayPayload = await gatewayResponse.clone().json().catch(() => ({}))
 
     if (!gatewayResponse.ok) break
@@ -2325,11 +2395,12 @@ async function runGeminiImageGatewayTask(params: {
       errorCode: typeof gatewayPayload?.code === "string" ? gatewayPayload.code : `GEMINI_IMAGE_GATEWAY_${gatewayResponse.status}`,
       sanitizedError: sanitizeForTrace(gatewayPayload) as Record<string, unknown>,
       metadata: {
-        ...trace,
+        ...effectiveTrace,
         recoverable_task: recoverableTask,
         elapsed_ms: Date.now() - startedAt,
         gateway_status: gatewayResponse.status,
         attempt: gatewayAttempt,
+        ...gatewayCompatibilityMetadata,
         result: sanitizeForTrace(gatewayPayload),
       },
     })
@@ -2346,12 +2417,13 @@ async function runGeminiImageGatewayTask(params: {
       errorCode: imageInspection.code || "GEMINI_IMAGE_BLANK_RESULT",
       sanitizedError: sanitizeForTrace(gatewayPayload) as Record<string, unknown>,
       metadata: {
-        ...trace,
+        ...effectiveTrace,
         recoverable_task: recoverableTask,
         elapsed_ms: Date.now() - startedAt,
         gateway_status: gatewayResponse.status,
         result_quality: "blank_or_invalid",
         attempt: gatewayAttempt,
+        ...gatewayCompatibilityMetadata,
         image_inspections: imageInspection.inspections,
         result: sanitizeForTrace(gatewayPayload),
       },
@@ -2385,7 +2457,9 @@ async function runGeminiImageGatewayTask(params: {
     messageId: params.messageId || null,
     rawProviderMetadata: {
       inputs: imageInputs,
+      effective_inputs: effectiveImageInputs,
       provider: "google-gemini",
+      ...gatewayCompatibilityMetadata,
     },
   })
 
@@ -2398,11 +2472,12 @@ async function runGeminiImageGatewayTask(params: {
       errorCode: "IMAGE_CREDIT_DEDUCT_FAILED",
       sanitizedError: sanitizeForTrace(gatewayPayload) as Record<string, unknown>,
       metadata: {
-        ...trace,
+        ...effectiveTrace,
         recoverable_task: recoverableTask,
         elapsed_ms: Date.now() - startedAt,
         gateway_status: gatewayResponse.status,
         attempt: gatewayAttempt,
+        ...gatewayCompatibilityMetadata,
         image_inspections: imageInspection.inspections,
         result: sanitizeForTrace(gatewayPayload),
       },
@@ -2422,13 +2497,14 @@ async function runGeminiImageGatewayTask(params: {
     upstreamTaskId: params.requestId,
     artifacts: extractArtifactsFromUnknown(gatewayPayload),
     metadata: {
-      ...trace,
+      ...effectiveTrace,
       recoverable_task: recoverableTask,
       elapsed_ms: Date.now() - startedAt,
       gateway_status: gatewayResponse.status,
       charged_credits: params.amount,
       result_quality: "ok",
       attempt: gatewayAttempt,
+      ...gatewayCompatibilityMetadata,
       image_inspections: imageInspection.inspections,
       result: sanitizeForTrace(gatewayPayload),
     },
