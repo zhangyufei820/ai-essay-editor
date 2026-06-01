@@ -1,6 +1,10 @@
 model_list:
   # Business aliases. Keep clients on these names so provider/model changes can
   # happen inside the gateway without touching Dify or frontend config.
+  #
+  # Primary providers and fallback order are based on production smoke probes on
+  # 2026-06-01. Public model names keep one fastest primary deployment; slower
+  # same-model deployments are exposed as sx-* fallback aliases.
   - model_name: sx-fast-chat
     litellm_params:
       model: openai/gpt-5.5
@@ -10,15 +14,13 @@ model_list:
         User-Agent: Codex
       timeout: 20
 
-  # Chinese/language arts: primary Claude route.
   - model_name: sx-chinese-text
     litellm_params:
       model: openai/claude-opus-4-7
-      api_base: os.environ/VIVAAPI_LLM_BASE_URL
-      api_key: os.environ/VIVAAPI_LLM_API_KEY
+      api_base: os.environ/MOONAPIX_LLM_BASE_URL
+      api_key: os.environ/MOONAPIX_LLM_API_KEY
       timeout: 40
 
-  # Math and general reasoning: primary OpenAI GPT 5.5 route.
   - model_name: sx-math-text
     litellm_params:
       model: openai/gpt-5.5
@@ -37,12 +39,82 @@ model_list:
         User-Agent: Codex
       timeout: 20
 
-  # Internal fallback aliases used by router_settings.fallbacks.
+  # Internal same-model fallback aliases used by router_settings.fallbacks.
+  - model_name: sx-gpt-5.2-vivaapi
+    litellm_params:
+      model: openai/gpt-5.2
+      api_base: os.environ/VIVAAPI_LLM_BASE_URL
+      api_key: os.environ/VIVAAPI_LLM_API_KEY
+      timeout: 20
+
+  - model_name: sx-gpt-5.4-vivaapi
+    litellm_params:
+      model: openai/gpt-5.4
+      api_base: os.environ/VIVAAPI_LLM_BASE_URL
+      api_key: os.environ/VIVAAPI_LLM_API_KEY
+      timeout: 20
+
+  - model_name: sx-gpt-5.4-moonapix
+    litellm_params:
+      model: openai/gpt-5.4
+      api_base: os.environ/MOONAPIX_LLM_BASE_URL
+      api_key: os.environ/MOONAPIX_LLM_API_KEY
+      timeout: 30
+
+  - model_name: sx-gpt-5.4-mini-vivaapi
+    litellm_params:
+      model: openai/gpt-5.4-mini
+      api_base: os.environ/VIVAAPI_LLM_BASE_URL
+      api_key: os.environ/VIVAAPI_LLM_API_KEY
+      timeout: 20
+
+  - model_name: sx-gpt-5.4-mini-moonapix
+    litellm_params:
+      model: openai/gpt-5.4-mini
+      api_base: os.environ/MOONAPIX_LLM_BASE_URL
+      api_key: os.environ/MOONAPIX_LLM_API_KEY
+      timeout: 30
+
+  - model_name: sx-gpt-5.4-pro-vivaapi
+    litellm_params:
+      model: openai/gpt-5.4-pro
+      api_base: os.environ/VIVAAPI_LLM_BASE_URL
+      api_key: os.environ/VIVAAPI_LLM_API_KEY
+      timeout: 30
+
+  - model_name: sx-gpt-5.5-vivaapi
+    litellm_params:
+      model: openai/gpt-5.5
+      api_base: os.environ/VIVAAPI_LLM_BASE_URL
+      api_key: os.environ/VIVAAPI_LLM_API_KEY
+      timeout: 30
+
+  - model_name: sx-gpt-5.5-moonapix
+    litellm_params:
+      model: openai/gpt-5.5
+      api_base: os.environ/MOONAPIX_LLM_BASE_URL
+      api_key: os.environ/MOONAPIX_LLM_API_KEY
+      timeout: 30
+
+  - model_name: sx-claude-opus-4-7-vivaapi
+    litellm_params:
+      model: openai/claude-opus-4-7
+      api_base: os.environ/VIVAAPI_LLM_BASE_URL
+      api_key: os.environ/VIVAAPI_LLM_API_KEY
+      timeout: 40
+
   - model_name: sx-claude-sonnet-4-6
     litellm_params:
       model: openai/claude-sonnet-4-6
       api_base: os.environ/VIVAAPI_LLM_BASE_URL
       api_key: os.environ/VIVAAPI_LLM_API_KEY
+      timeout: 30
+
+  - model_name: sx-claude-sonnet-4-6-moonapix
+    litellm_params:
+      model: openai/claude-sonnet-4-6
+      api_base: os.environ/MOONAPIX_LLM_BASE_URL
+      api_key: os.environ/MOONAPIX_LLM_API_KEY
       timeout: 30
 
   - model_name: sx-claude-opus-4-6-thinking
@@ -52,13 +124,6 @@ model_list:
       api_key: os.environ/VIVAAPI_LLM_API_KEY
       timeout: 40
 
-  - model_name: sx-gpt-5.5-vivaapi
-    litellm_params:
-      model: openai/gpt-5.5
-      api_base: os.environ/VIVAAPI_LLM_BASE_URL
-      api_key: os.environ/VIVAAPI_LLM_API_KEY
-      timeout: 30
-
   - model_name: sx-gemini-3.1-pro
     litellm_params:
       model: openai/gemini-3.1-pro-preview
@@ -66,8 +131,8 @@ model_list:
       api_key: os.environ/VIVAAPI_LLM_API_KEY
       timeout: 30
 
-  # OpenAI-compatible model groups. Identical model ids are merged under the
-  # same public model_name so LiteLLM can route/fail over between deployments.
+  # Public OpenAI/GPT model names. Each public name is the fastest successful
+  # provider; slower same-model providers are explicit fallbacks below.
   - model_name: gpt-4o-mini
     litellm_params:
       model: openai/gpt-4o-mini
@@ -82,13 +147,6 @@ model_list:
       api_key: os.environ/TOKENFLUX_LLM_API_KEY
       extra_headers:
         User-Agent: Codex
-      timeout: 20
-
-  - model_name: gpt-5.2
-    litellm_params:
-      model: openai/gpt-5.2
-      api_base: os.environ/VIVAAPI_LLM_BASE_URL
-      api_key: os.environ/VIVAAPI_LLM_API_KEY
       timeout: 20
 
   - model_name: gpt-5.3
@@ -118,13 +176,6 @@ model_list:
         User-Agent: Codex
       timeout: 20
 
-  - model_name: gpt-5.4
-    litellm_params:
-      model: openai/gpt-5.4
-      api_base: os.environ/VIVAAPI_LLM_BASE_URL
-      api_key: os.environ/VIVAAPI_LLM_API_KEY
-      timeout: 20
-
   - model_name: gpt-5.4-mini
     litellm_params:
       model: openai/gpt-5.4-mini
@@ -132,13 +183,6 @@ model_list:
       api_key: os.environ/TOKENFLUX_LLM_API_KEY
       extra_headers:
         User-Agent: Codex
-      timeout: 20
-
-  - model_name: gpt-5.4-mini
-    litellm_params:
-      model: openai/gpt-5.4-mini
-      api_base: os.environ/VIVAAPI_LLM_BASE_URL
-      api_key: os.environ/VIVAAPI_LLM_API_KEY
       timeout: 20
 
   - model_name: gpt-5.4-pro
@@ -150,13 +194,6 @@ model_list:
         User-Agent: Codex
       timeout: 30
 
-  - model_name: gpt-5.4-pro
-    litellm_params:
-      model: openai/gpt-5.4-pro
-      api_base: os.environ/VIVAAPI_LLM_BASE_URL
-      api_key: os.environ/VIVAAPI_LLM_API_KEY
-      timeout: 30
-
   - model_name: gpt-5.5
     litellm_params:
       model: openai/gpt-5.5
@@ -166,19 +203,13 @@ model_list:
         User-Agent: Codex
       timeout: 20
 
-  - model_name: gpt-5.5
-    litellm_params:
-      model: openai/gpt-5.5
-      api_base: os.environ/VIVAAPI_LLM_BASE_URL
-      api_key: os.environ/VIVAAPI_LLM_API_KEY
-      timeout: 30
-
-  # Claude text models verified by live chat probes.
+  # Public Claude text model names. MoonApix thinking variants were excluded
+  # from exact thinking fallbacks because smoke tests returned base model ids.
   - model_name: claude-opus-4-7
     litellm_params:
       model: openai/claude-opus-4-7
-      api_base: os.environ/VIVAAPI_LLM_BASE_URL
-      api_key: os.environ/VIVAAPI_LLM_API_KEY
+      api_base: os.environ/MOONAPIX_LLM_BASE_URL
+      api_key: os.environ/MOONAPIX_LLM_API_KEY
       timeout: 40
 
   - model_name: claude-sonnet-4-6
@@ -202,7 +233,7 @@ model_list:
       api_key: os.environ/VIVAAPI_LLM_API_KEY
       timeout: 40
 
-  # Gemini text models verified by live chat probes.
+  # Public Gemini text model names.
   - model_name: gemini-3.1-pro-preview
     litellm_params:
       model: openai/gemini-3.1-pro-preview
@@ -217,14 +248,27 @@ model_list:
       api_key: os.environ/VIVAAPI_LLM_API_KEY
       timeout: 30
 
+  - model_name: gemini-2.5-pro
+    litellm_params:
+      model: openai/gemini-2.5-pro
+      api_base: os.environ/VIVAAPI_LLM_BASE_URL
+      api_key: os.environ/VIVAAPI_LLM_API_KEY
+      timeout: 30
+
 router_settings:
   fallbacks:
-    - sx-fast-chat: ["sx-gpt-5.5-vivaapi", "sx-gemini-3.1-pro"]
-    - sx-chinese-text: ["sx-claude-sonnet-4-6", "sx-claude-opus-4-6-thinking", "sx-general-text"]
-    - sx-math-text: ["sx-gpt-5.5-vivaapi", "sx-gemini-3.1-pro"]
-    - sx-general-text: ["sx-gpt-5.5-vivaapi", "sx-gemini-3.1-pro"]
-    - gpt-5.5: ["sx-gpt-5.5-vivaapi", "sx-gemini-3.1-pro"]
-  routing_strategy: latency-based-routing
+    - sx-fast-chat: ["sx-gpt-5.5-vivaapi", "sx-gpt-5.5-moonapix", "sx-gemini-3.1-pro"]
+    - sx-chinese-text: ["sx-claude-opus-4-7-vivaapi", "sx-claude-sonnet-4-6", "sx-claude-sonnet-4-6-moonapix", "sx-general-text"]
+    - sx-math-text: ["sx-gpt-5.5-vivaapi", "sx-gpt-5.5-moonapix", "sx-gemini-3.1-pro"]
+    - sx-general-text: ["sx-gpt-5.5-vivaapi", "sx-gpt-5.5-moonapix", "sx-gemini-3.1-pro"]
+    - gpt-5.2: ["sx-gpt-5.2-vivaapi"]
+    - gpt-5.4: ["sx-gpt-5.4-vivaapi", "sx-gpt-5.4-moonapix"]
+    - gpt-5.4-mini: ["sx-gpt-5.4-mini-vivaapi", "sx-gpt-5.4-mini-moonapix"]
+    - gpt-5.4-pro: ["sx-gpt-5.4-pro-vivaapi", "gpt-5.4"]
+    - gpt-5.5: ["sx-gpt-5.5-vivaapi", "sx-gpt-5.5-moonapix", "sx-gemini-3.1-pro"]
+    - claude-opus-4-7: ["sx-claude-opus-4-7-vivaapi", "sx-claude-sonnet-4-6"]
+    - claude-sonnet-4-6: ["sx-claude-sonnet-4-6-moonapix"]
+  routing_strategy: simple-shuffle
   allowed_fails: 2
   cooldown_time: 60
   num_retries: 1
