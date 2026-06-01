@@ -30,7 +30,7 @@ function renderMath(markdown: string) {
       strict: "ignore",
       macros: LATEX_MACROS,
     })
-    const token = `@@MATH_BLOCK_${mathBlocks.length}@@`
+    const token = `@@SXCHATPDFMATHBLOCK${mathBlocks.length}@@`
     mathBlocks.push(html)
     return token
   })
@@ -43,7 +43,7 @@ function renderMath(markdown: string) {
       strict: "ignore",
       macros: LATEX_MACROS,
     })
-    const token = `@@MATH_INLINE_${inlineMath.length}@@`
+    const token = `@@SXCHATPDFMATHINLINE${inlineMath.length}@@`
     inlineMath.push(html)
     return token
   })
@@ -54,10 +54,10 @@ function renderMath(markdown: string) {
 function restoreMath(html: string, mathBlocks: string[], inlineMath: string[]) {
   let restored = html
   mathBlocks.forEach((math, index) => {
-    restored = restored.replaceAll(`@@MATH_BLOCK_${index}@@`, math)
+    restored = restored.replaceAll(`@@SXCHATPDFMATHBLOCK${index}@@`, math)
   })
   inlineMath.forEach((math, index) => {
-    restored = restored.replaceAll(`@@MATH_INLINE_${index}@@`, math)
+    restored = restored.replaceAll(`@@SXCHATPDFMATHINLINE${index}@@`, math)
   })
   return restored
 }

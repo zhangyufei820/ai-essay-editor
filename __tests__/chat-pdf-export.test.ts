@@ -43,6 +43,27 @@ describe("chat PDF export markdown rendering", () => {
     expect(html).not.toContain("<p>| 项目 | 表现 | 建议 |</p>")
   })
 
+  it("renders inline math without leaking export placeholders", () => {
+    const html = markdownToSafeHtml("若 $AB \\parallel CD$，则同位角相等。")
+
+    expect(html).toContain("katex")
+    expect(html).toContain("同位角相等")
+    expect(html).not.toContain("@@MATH")
+    expect(html).not.toContain("$AB")
+  })
+
+  it("renders display math without leaking export placeholders", () => {
+    const html = markdownToSafeHtml(`面积公式：
+
+$$
+S = \\frac{1}{2}ah
+$$`)
+
+    expect(html).toContain("katex-display")
+    expect(html).not.toContain("@@MATH")
+    expect(html).not.toContain("$$")
+  })
+
   it("essay review template renders the complete raw response through EnhancedMarkdown", () => {
     const src = fs.readFileSync(path.join(root, "components/chat/v2/templates/EssayReviewTemplate.tsx"), "utf8")
 
