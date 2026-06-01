@@ -39,6 +39,17 @@ model_list:
         User-Agent: Codex
       timeout: 20
 
+  # Image recognition / visual understanding. This is multimodal chat with
+  # image_url inputs, not image generation.
+  - model_name: sx-image-vision
+    litellm_params:
+      model: openai/gpt-5.4-mini
+      api_base: os.environ/TOKENFLUX_LLM_BASE_URL
+      api_key: os.environ/TOKENFLUX_LLM_API_KEY
+      extra_headers:
+        User-Agent: Codex
+      timeout: 20
+
   # Internal same-model fallback aliases used by router_settings.fallbacks.
   - model_name: sx-gpt-5.2-vivaapi
     litellm_params:
@@ -67,6 +78,20 @@ model_list:
       api_base: os.environ/VIVAAPI_LLM_BASE_URL
       api_key: os.environ/VIVAAPI_LLM_API_KEY
       timeout: 20
+
+  - model_name: sx-image-vision-vivaapi
+    litellm_params:
+      model: openai/gpt-5.4-mini
+      api_base: os.environ/VIVAAPI_LLM_BASE_URL
+      api_key: os.environ/VIVAAPI_LLM_API_KEY
+      timeout: 20
+
+  - model_name: sx-image-vision-moonapix
+    litellm_params:
+      model: openai/claude-sonnet-4-6
+      api_base: os.environ/MOONAPIX_LLM_BASE_URL
+      api_key: os.environ/MOONAPIX_LLM_API_KEY
+      timeout: 30
 
   - model_name: sx-gpt-5.4-mini-moonapix
     litellm_params:
@@ -261,6 +286,7 @@ router_settings:
     - sx-chinese-text: ["sx-claude-opus-4-7-vivaapi", "sx-claude-sonnet-4-6", "sx-claude-sonnet-4-6-moonapix", "sx-general-text"]
     - sx-math-text: ["sx-gpt-5.5-vivaapi", "sx-gpt-5.5-moonapix", "sx-gemini-3.1-pro"]
     - sx-general-text: ["sx-gpt-5.5-vivaapi", "sx-gpt-5.5-moonapix", "sx-gemini-3.1-pro"]
+    - sx-image-vision: ["sx-image-vision-vivaapi", "sx-image-vision-moonapix", "sx-gpt-5.4-mini-vivaapi"]
     - gpt-5.2: ["sx-gpt-5.2-vivaapi"]
     - gpt-5.4: ["sx-gpt-5.4-vivaapi", "sx-gpt-5.4-moonapix"]
     - gpt-5.4-mini: ["sx-gpt-5.4-mini-vivaapi", "sx-gpt-5.4-mini-moonapix"]
