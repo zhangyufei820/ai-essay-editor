@@ -223,6 +223,7 @@ router_settings:
     - sx-chinese-text: ["sx-claude-sonnet-4-6", "sx-claude-opus-4-6-thinking", "sx-general-text"]
     - sx-math-text: ["sx-gpt-5.5-vivaapi", "sx-gemini-3.1-pro"]
     - sx-general-text: ["sx-gpt-5.5-vivaapi", "sx-gemini-3.1-pro"]
+    - gpt-5.5: ["sx-gpt-5.5-vivaapi", "sx-gemini-3.1-pro"]
   routing_strategy: latency-based-routing
   allowed_fails: 2
   cooldown_time: 60
