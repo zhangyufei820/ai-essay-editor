@@ -1,8 +1,20 @@
 # LLM Gateway
 
-Self-hosted OpenAI-compatible routing layer for realtime text calls. It keeps provider keys server-side and exposes one internal model alias:
+Self-hosted OpenAI-compatible routing layer for realtime text calls. It keeps provider keys server-side and exposes one fast internal alias plus provider-backed model aliases.
 
 - `sx-fast-chat`
+- `gpt-4o-mini`
+- `gpt-5.2`
+- `gpt-5.4`
+- `gpt-5.4-mini`
+- `gpt-5.4-pro`
+- `gpt-5.5`
+- `claude-sonnet-4-5-20250929`
+- `claude-opus-4-5-20251101`
+- `gemini-2.5-flash`
+- `gemini-2.5-pro`
+
+Identical model ids are merged under the same public `model_name` in `config.yaml`. LiteLLM can then route across deployments and cool down a failed deployment without changing the client-side model name.
 
 Production should point Dify / Next.js OpenAI-compatible providers at:
 
@@ -33,12 +45,14 @@ Configure real values only in `.env.production` on the server:
 
 ```env
 LITELLM_MASTER_KEY=replace-with-internal-gateway-key
-LLM_PROVIDER_A_BASE_URL=https://provider-a.example.com/v1
-LLM_PROVIDER_A_API_KEY=replace-with-provider-a-key
-LLM_PROVIDER_B_BASE_URL=https://provider-b.example.com/v1
-LLM_PROVIDER_B_API_KEY=replace-with-provider-b-key
-LLM_PROVIDER_C_BASE_URL=https://provider-c.example.com/v1
-LLM_PROVIDER_C_API_KEY=replace-with-provider-c-key
+VIVAAPI_LLM_BASE_URL=https://www.vivaapi.cn/v1
+VIVAAPI_LLM_API_KEY=replace-with-vivaapi-key
+TOKENFLUX_LLM_BASE_URL=https://tokenflux.dev/v1
+TOKENFLUX_LLM_API_KEY=replace-with-tokenflux-key
+MOONAPIX_LLM_BASE_URL=https://moonapix.com/v1
+MOONAPIX_LLM_API_KEY=replace-with-moonapix-key
 ```
+
+`config.yaml` only includes deployments that have been verified for realtime text chat. A provider can be present in server env before it is added to a model route.
 
 Keep media generation on the media task stack. This gateway is for low-latency realtime text routing.

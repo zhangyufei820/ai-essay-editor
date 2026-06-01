@@ -11,7 +11,7 @@ http://llm-gateway:4000/v1
 model: sx-fast-chat
 ```
 
-The gateway is configured in `services/llm-gateway/config.yaml` and wired in `docker-compose.prod.yml`. Provider keys must live only in `.env.production` on the server.
+The gateway is configured in `services/llm-gateway/config.yaml` and wired in `docker-compose.prod.yml`. Provider keys must live only in `.env.production` on the server. The default low-latency alias is `sx-fast-chat`; verified direct aliases include OpenAI-compatible GPT, Claude, and Gemini text model ids.
 
 Use this path for:
 

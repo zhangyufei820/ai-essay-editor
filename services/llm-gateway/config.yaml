@@ -1,24 +1,85 @@
 model_list:
+  # Fast, stable default for realtime text chat.
   - model_name: sx-fast-chat
     litellm_params:
       model: openai/gpt-4o-mini
-      api_base: os.environ/LLM_PROVIDER_A_BASE_URL
-      api_key: os.environ/LLM_PROVIDER_A_API_KEY
+      api_base: os.environ/VIVAAPI_LLM_BASE_URL
+      api_key: os.environ/VIVAAPI_LLM_API_KEY
       timeout: 20
 
-  - model_name: sx-fast-chat
+  # OpenAI-compatible model groups. Identical model ids are merged under the
+  # same public model_name so LiteLLM can route/fail over by deployment order.
+  - model_name: gpt-4o-mini
     litellm_params:
       model: openai/gpt-4o-mini
-      api_base: os.environ/LLM_PROVIDER_B_BASE_URL
-      api_key: os.environ/LLM_PROVIDER_B_API_KEY
+      api_base: os.environ/VIVAAPI_LLM_BASE_URL
+      api_key: os.environ/VIVAAPI_LLM_API_KEY
       timeout: 20
 
-  - model_name: sx-fast-chat
+  - model_name: gpt-5.2
     litellm_params:
-      model: openai/gpt-4o-mini
-      api_base: os.environ/LLM_PROVIDER_C_BASE_URL
-      api_key: os.environ/LLM_PROVIDER_C_API_KEY
+      model: openai/gpt-5.2
+      api_base: os.environ/VIVAAPI_LLM_BASE_URL
+      api_key: os.environ/VIVAAPI_LLM_API_KEY
       timeout: 20
+
+  - model_name: gpt-5.4
+    litellm_params:
+      model: openai/gpt-5.4
+      api_base: os.environ/VIVAAPI_LLM_BASE_URL
+      api_key: os.environ/VIVAAPI_LLM_API_KEY
+      timeout: 20
+
+  - model_name: gpt-5.4-mini
+    litellm_params:
+      model: openai/gpt-5.4-mini
+      api_base: os.environ/VIVAAPI_LLM_BASE_URL
+      api_key: os.environ/VIVAAPI_LLM_API_KEY
+      timeout: 20
+
+  - model_name: gpt-5.4-pro
+    litellm_params:
+      model: openai/gpt-5.4-pro
+      api_base: os.environ/VIVAAPI_LLM_BASE_URL
+      api_key: os.environ/VIVAAPI_LLM_API_KEY
+      timeout: 30
+
+  - model_name: gpt-5.5
+    litellm_params:
+      model: openai/gpt-5.5
+      api_base: os.environ/VIVAAPI_LLM_BASE_URL
+      api_key: os.environ/VIVAAPI_LLM_API_KEY
+      timeout: 30
+
+  # Claude text models currently verified through VivaAPI.
+  - model_name: claude-sonnet-4-5-20250929
+    litellm_params:
+      model: openai/claude-sonnet-4-5-20250929
+      api_base: os.environ/VIVAAPI_LLM_BASE_URL
+      api_key: os.environ/VIVAAPI_LLM_API_KEY
+      timeout: 30
+
+  - model_name: claude-opus-4-5-20251101
+    litellm_params:
+      model: openai/claude-opus-4-5-20251101
+      api_base: os.environ/VIVAAPI_LLM_BASE_URL
+      api_key: os.environ/VIVAAPI_LLM_API_KEY
+      timeout: 30
+
+  # Gemini text models currently verified through VivaAPI.
+  - model_name: gemini-2.5-flash
+    litellm_params:
+      model: openai/gemini-2.5-flash
+      api_base: os.environ/VIVAAPI_LLM_BASE_URL
+      api_key: os.environ/VIVAAPI_LLM_API_KEY
+      timeout: 30
+
+  - model_name: gemini-2.5-pro
+    litellm_params:
+      model: openai/gemini-2.5-pro
+      api_base: os.environ/VIVAAPI_LLM_BASE_URL
+      api_key: os.environ/VIVAAPI_LLM_API_KEY
+      timeout: 30
 
 router_settings:
   routing_strategy: latency-based-routing
