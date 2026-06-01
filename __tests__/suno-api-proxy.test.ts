@@ -4,6 +4,18 @@ jest.mock("@/lib/auth/verified-user", () => ({
   requireUser: jest.fn(async () => ({ user: { id: "user-1" } })),
 }))
 
+jest.mock("@/lib/user-entitlements", () => ({
+  getUserEntitlementSummary: jest.fn(async () => ({
+    userId: "user-1",
+    entitlementUserId: "user-1",
+    relatedUserIds: ["user-1"],
+    credits: 1000,
+    isPro: false,
+    membershipStatus: null,
+    latestMembershipOrder: null,
+  })),
+}))
+
 const uploadFile = jest.fn()
 const runWorkflow = jest.fn()
 const ensureSunoCredits = jest.fn(async () => null)
@@ -76,7 +88,7 @@ describe("POST /api/suno/run", () => {
     expect(JSON.stringify(json)).not.toContain("dify-secret")
     expect(JSON.stringify(json)).not.toContain("suno-workflow-secret")
     expect(JSON.stringify(json)).not.toContain("gateway-secret")
-    expect(ensureSunoCredits).toHaveBeenCalledWith("user-1")
+    expect(ensureSunoCredits).toHaveBeenCalledWith("user-1", { realCreditUserId: "user-1" })
     expect(chargeSunoBaseCredits).toHaveBeenCalledWith(expect.objectContaining({
       userId: "user-1",
       operation: "music_custom",

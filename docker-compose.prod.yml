@@ -49,6 +49,42 @@ services:
       retries: 3
 
   # ----------------------------------------------------------
+  # LLM Gateway - OpenAI-compatible realtime text routing
+  # ----------------------------------------------------------
+  llm-gateway:
+    image: ghcr.io/berriai/litellm:main-latest
+    container_name: shenxiang-llm-gateway
+    profiles:
+      - ai-reliability
+    restart: unless-stopped
+    read_only: true
+    mem_limit: 768m
+    cpus: 0.75
+    pids_limit: 128
+    env_file:
+      - .env.production
+    command: ["--config", "/app/config.yaml", "--port", "4000", "--host", "0.0.0.0"]
+    volumes:
+      - ./services/llm-gateway/config.yaml:/app/config.yaml:ro
+    tmpfs:
+      - /tmp
+    expose:
+      - "4000"
+    networks:
+      - shenxiang-net
+    logging:
+      driver: 'json-file'
+      options:
+        max-size: '10m'
+        max-file: '3'
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:4000/health/liveliness"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  # ----------------------------------------------------------
   # Next.js 应用
   # ----------------------------------------------------------
   nextjs:
@@ -88,6 +124,7 @@ services:
       - FREE_TRIAL_BATCH_GRANT_ENABLED=${FREE_TRIAL_BATCH_GRANT_ENABLED:-true}
       - FREE_TRIAL_CONSUMPTION_ENABLED=${FREE_TRIAL_CONSUMPTION_ENABLED:-true}
       - VOICE_GATEWAY_URL=http://voice-gateway:8080
+      - LLM_GATEWAY_BASE_URL=http://llm-gateway:4000/v1
     deploy:
       resources:
         reservations:

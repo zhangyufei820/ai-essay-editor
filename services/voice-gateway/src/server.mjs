@@ -12,6 +12,8 @@ const STT_MODEL = process.env.VOICE_STT_MODEL || "gpt-4o-mini-transcribe"
 const DEFAULT_VOICE = process.env.VOICE_TTS_VOICE || "coral"
 const MAX_TTS_CHARS = Number(process.env.VOICE_MAX_TTS_CHARS || 600)
 const MAX_AUDIO_BYTES = Number(process.env.VOICE_MAX_AUDIO_BYTES || 25 * 1024 * 1024)
+const TTS_TIMEOUT_MS = Number(process.env.VOICE_TTS_TIMEOUT_MS || 5000)
+const STT_TIMEOUT_MS = Number(process.env.VOICE_STT_TIMEOUT_MS || 20000)
 const MINIMAX_BASE_URL = (process.env.MINIMAX_BASE_URL || "https://api.minimax.io/v1").replace(/\/+$/, "")
 const MINIMAX_API_KEY = process.env.MINIMAX_API_KEY || ""
 const MINIMAX_TTS_MODEL = process.env.MINIMAX_TTS_MODEL || "speech-2.8-turbo"
@@ -27,6 +29,12 @@ const SILICONFLOW_TTS_VOICE = process.env.SILICONFLOW_TTS_VOICE
     ? SILICONFLOW_TTS_MODEL_CONFIG
     : `${SILICONFLOW_TTS_MODEL}:diana`)
 const SILICONFLOW_STT_MODEL = process.env.SILICONFLOW_STT_MODEL || "FunAudioLLM/SenseVoiceSmall"
+const PROVIDERS = new Set(["openai", "minimax", "siliconflow"])
+const TTS_PROVIDER_CHAIN = parseProviderChain(process.env.VOICE_TTS_PROVIDER_CHAIN, TTS_PROVIDER, ["openai", "siliconflow", "minimax"])
+const STT_PROVIDER_CHAIN = parseProviderChain(process.env.VOICE_STT_PROVIDER_CHAIN, STT_PROVIDER, ["openai", "siliconflow"])
+const TTS_CACHE_MAX_ENTRIES = Number(process.env.VOICE_TTS_CACHE_MAX_ENTRIES || 256)
+const TTS_CACHE_TTL_MS = Number(process.env.VOICE_TTS_CACHE_TTL_SECONDS || 86400) * 1000
+const ttsCache = new Map()
 
 const ALLOWED_AUDIO_TYPES = new Set([
   "audio/webm",
@@ -90,24 +98,89 @@ function normalizeLanguage(language) {
   return value || "en"
 }
 
-function providerConfigured(kind) {
-  if (kind === "tts" && TTS_PROVIDER === "minimax") return Boolean(MINIMAX_API_KEY)
-  if (kind === "tts" && TTS_PROVIDER === "siliconflow") return Boolean(SILICONFLOW_API_KEY)
-  if (kind === "stt" && STT_PROVIDER === "siliconflow") return Boolean(SILICONFLOW_API_KEY)
+function parseProviderChain(value, primary, fallback) {
+  const source = typeof value === "string" && value.trim()
+    ? value
+    : primary || fallback.join(",")
+  const providers = source
+    .split(",")
+    .map((item) => item.trim().toLowerCase())
+    .filter((item) => PROVIDERS.has(item))
+  const unique = Array.from(new Set(providers))
+  return unique.length ? unique : fallback
+}
+
+function providerConfiguredFor(kind, provider) {
+  if (kind === "tts" && provider === "minimax") return Boolean(MINIMAX_API_KEY)
+  if (kind === "tts" && provider === "siliconflow") return Boolean(SILICONFLOW_API_KEY)
+  if (kind === "stt" && provider === "minimax") return false
+  if (kind === "stt" && provider === "siliconflow") return Boolean(SILICONFLOW_API_KEY)
+  if (provider === "openai") return Boolean(OPENAI_API_KEY)
   return Boolean(OPENAI_API_KEY)
+}
+
+function providerConfigured(kind) {
+  const chain = kind === "tts" ? TTS_PROVIDER_CHAIN : STT_PROVIDER_CHAIN
+  return chain.some((provider) => providerConfiguredFor(kind, provider))
 }
 
 function assertConfigured(kind) {
   if (!providerConfigured(kind)) {
-    const provider = kind === "tts" ? TTS_PROVIDER : STT_PROVIDER
-    const error = new Error(`${provider.toUpperCase()} ${kind.toUpperCase()} provider is not configured`)
+    const chain = kind === "tts" ? TTS_PROVIDER_CHAIN : STT_PROVIDER_CHAIN
+    const error = new Error(`${chain.join(",").toUpperCase()} ${kind.toUpperCase()} provider chain is not configured`)
     error.status = 503
     throw error
   }
 }
 
+async function fetchWithTimeout(url, options, timeoutMs) {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    return await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    })
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      const timeoutError = new Error(`provider request timed out after ${timeoutMs}ms`)
+      timeoutError.status = 504
+      throw timeoutError
+    }
+    throw error
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+function getTtsCacheKey({ input, responseFormat, voice, instructions }) {
+  return JSON.stringify([input, responseFormat, voice, instructions])
+}
+
+function getCachedTts(key) {
+  const cached = ttsCache.get(key)
+  if (!cached) return null
+  if (Date.now() - cached.createdAt > TTS_CACHE_TTL_MS) {
+    ttsCache.delete(key)
+    return null
+  }
+  return cached
+}
+
+function setCachedTts(key, result) {
+  if (TTS_CACHE_MAX_ENTRIES <= 0) return
+  if (ttsCache.size >= TTS_CACHE_MAX_ENTRIES) {
+    const firstKey = ttsCache.keys().next().value
+    if (firstKey) ttsCache.delete(firstKey)
+  }
+  ttsCache.set(key, {
+    ...result,
+    createdAt: Date.now(),
+  })
+}
+
 async function openaiTts({ input, responseFormat, voice, instructions }) {
-  const upstream = await fetch(OPENAI_TTS_URL, {
+  const upstream = await fetchWithTimeout(OPENAI_TTS_URL, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${OPENAI_API_KEY}`,
@@ -120,7 +193,7 @@ async function openaiTts({ input, responseFormat, voice, instructions }) {
       instructions,
       response_format: responseFormat,
     }),
-  })
+  }, TTS_TIMEOUT_MS)
 
   if (!upstream.ok) {
     const errorText = await upstream.text()
@@ -132,12 +205,12 @@ async function openaiTts({ input, responseFormat, voice, instructions }) {
 
   const audio = Buffer.from(await upstream.arrayBuffer())
   const contentType = upstream.headers.get("content-type") || (responseFormat === "wav" ? "audio/wav" : "audio/mpeg")
-  return { audio, contentType }
+  return { audio, contentType, provider: "openai" }
 }
 
 async function minimaxTts({ input, responseFormat, voice }) {
   const audioFormat = responseFormat === "wav" ? "wav" : responseFormat === "flac" ? "flac" : "mp3"
-  const upstream = await fetch(`${MINIMAX_BASE_URL}/t2a_v2`, {
+  const upstream = await fetchWithTimeout(`${MINIMAX_BASE_URL}/t2a_v2`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${MINIMAX_API_KEY}`,
@@ -162,7 +235,7 @@ async function minimaxTts({ input, responseFormat, voice }) {
         channel: 1,
       },
     }),
-  })
+  }, TTS_TIMEOUT_MS)
 
   const payload = await upstream.json().catch(async () => ({ raw: await upstream.text().catch(() => "") }))
   if (!upstream.ok || payload?.base_resp?.status_code) {
@@ -183,12 +256,13 @@ async function minimaxTts({ input, responseFormat, voice }) {
   return {
     audio: Buffer.from(hexAudio, "hex"),
     contentType: audioFormat === "wav" ? "audio/wav" : audioFormat === "flac" ? "audio/flac" : "audio/mpeg",
+    provider: "minimax",
   }
 }
 
 async function siliconflowTts({ input, responseFormat, voice }) {
   const siliconflowVoice = voice && voice !== "coral" ? voice : SILICONFLOW_TTS_VOICE
-  const upstream = await fetch(`${SILICONFLOW_BASE_URL}/audio/speech`, {
+  const upstream = await fetchWithTimeout(`${SILICONFLOW_BASE_URL}/audio/speech`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${SILICONFLOW_API_KEY}`,
@@ -200,7 +274,7 @@ async function siliconflowTts({ input, responseFormat, voice }) {
       input,
       response_format: responseFormat,
     }),
-  })
+  }, TTS_TIMEOUT_MS)
 
   const contentType = upstream.headers.get("content-type") || ""
   if (!upstream.ok) {
@@ -218,6 +292,7 @@ async function siliconflowTts({ input, responseFormat, voice }) {
     return {
       audio,
       contentType: contentType || (responseFormat === "wav" ? "audio/wav" : "audio/mpeg"),
+      provider: "siliconflow",
     }
   }
 
@@ -231,12 +306,43 @@ async function siliconflowTts({ input, responseFormat, voice }) {
     return {
       audio: Buffer.from(audioBase64, "base64"),
       contentType: responseFormat === "wav" ? "audio/wav" : "audio/mpeg",
+      provider: "siliconflow",
     }
   }
 
   const error = new Error("SiliconFlow TTS response did not include audio")
   error.status = 502
   error.details = payload
+  throw error
+}
+
+async function callTtsProvider(provider, params) {
+  if (provider === "minimax") return await minimaxTts(params)
+  if (provider === "siliconflow") return await siliconflowTts(params)
+  return await openaiTts(params)
+}
+
+async function ttsWithFallback(params) {
+  const errors = []
+  for (const provider of TTS_PROVIDER_CHAIN) {
+    if (!providerConfiguredFor("tts", provider)) {
+      errors.push({ provider, status: 503, message: "provider not configured" })
+      continue
+    }
+    try {
+      return await callTtsProvider(provider, params)
+    } catch (error) {
+      errors.push({
+        provider,
+        status: Number(error?.status || 500),
+        message: error?.message || "provider request failed",
+      })
+    }
+  }
+
+  const error = new Error("all TTS providers failed")
+  error.status = errors.some((item) => item.status === 429) ? 429 : errors.some((item) => item.status === 504) ? 504 : 502
+  error.details = errors
   throw error
 }
 
@@ -254,16 +360,17 @@ async function handleTts(req, res) {
     ? body.instructions.trim().slice(0, 600)
     : "Speak slowly and clearly in standard English pronunciation for a language learner."
 
-  const result = TTS_PROVIDER === "minimax"
-    ? await minimaxTts({ input, responseFormat, voice, instructions })
-    : TTS_PROVIDER === "siliconflow"
-      ? await siliconflowTts({ input, responseFormat, voice, instructions })
-      : await openaiTts({ input, responseFormat, voice, instructions })
+  const cacheKey = getTtsCacheKey({ input, responseFormat, voice, instructions })
+  const cached = getCachedTts(cacheKey)
+  const result = cached || await ttsWithFallback({ input, responseFormat, voice, instructions })
+  if (!cached) setCachedTts(cacheKey, result)
 
   res.writeHead(200, {
     "Content-Type": result.contentType,
     "Content-Length": result.audio.byteLength,
     "Cache-Control": "public, max-age=86400",
+    "X-Voice-Provider": result.provider || "cache",
+    "X-Voice-Cache": cached ? "hit" : "miss",
   })
   res.end(result.audio)
 }
@@ -279,13 +386,13 @@ async function transcribeWithOpenAICompatible({ url, baseUrl, apiKey, model, fil
   }
 
   const endpoint = url || `${baseUrl.replace(/\/+$/, "")}/audio/transcriptions`
-  const upstream = await fetch(endpoint, {
+  const upstream = await fetchWithTimeout(endpoint, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
     },
     body: providerForm,
-  })
+  }, STT_TIMEOUT_MS)
 
   const payload = await upstream.json().catch(async () => ({ raw: await upstream.text().catch(() => "") }))
   if (!upstream.ok) {
@@ -299,6 +406,50 @@ async function transcribeWithOpenAICompatible({ url, baseUrl, apiKey, model, fil
     text: typeof payload.text === "string" ? payload.text : "",
     model,
   }
+}
+
+async function callSttProvider(provider, params) {
+  if (provider === "siliconflow") {
+    return await transcribeWithOpenAICompatible({
+      baseUrl: SILICONFLOW_BASE_URL,
+      apiKey: SILICONFLOW_API_KEY,
+      model: SILICONFLOW_STT_MODEL,
+      ...params,
+    })
+  }
+
+  return await transcribeWithOpenAICompatible({
+    url: OPENAI_STT_URL,
+    baseUrl: OPENAI_BASE_URL,
+    apiKey: OPENAI_API_KEY,
+    model: STT_MODEL,
+    ...params,
+  })
+}
+
+async function sttWithFallback(params) {
+  const errors = []
+  for (const provider of STT_PROVIDER_CHAIN) {
+    if (!providerConfiguredFor("stt", provider)) {
+      errors.push({ provider, status: 503, message: "provider not configured" })
+      continue
+    }
+    try {
+      const result = await callSttProvider(provider, params)
+      return { ...result, provider }
+    } catch (error) {
+      errors.push({
+        provider,
+        status: Number(error?.status || 500),
+        message: error?.message || "provider request failed",
+      })
+    }
+  }
+
+  const error = new Error("all STT providers failed")
+  error.status = errors.some((item) => item.status === 429) ? 429 : errors.some((item) => item.status === 504) ? 504 : 502
+  error.details = errors
+  throw error
 }
 
 async function handleStt(req, res) {
@@ -323,24 +474,7 @@ async function handleStt(req, res) {
 
   const language = normalizeLanguage(formData.get("language"))
   const prompt = formData.get("prompt")
-  const result = STT_PROVIDER === "siliconflow"
-    ? await transcribeWithOpenAICompatible({
-        baseUrl: SILICONFLOW_BASE_URL,
-        apiKey: SILICONFLOW_API_KEY,
-        model: SILICONFLOW_STT_MODEL,
-        file,
-        language,
-        prompt,
-      })
-    : await transcribeWithOpenAICompatible({
-        url: OPENAI_STT_URL,
-        baseUrl: OPENAI_BASE_URL,
-        apiKey: OPENAI_API_KEY,
-        model: STT_MODEL,
-        file,
-        language,
-        prompt,
-      })
+  const result = await sttWithFallback({ file, language, prompt })
 
   return json(res, 200, result)
 }
@@ -352,11 +486,16 @@ async function route(req, res) {
         status: "ok",
         ttsProvider: TTS_PROVIDER,
         sttProvider: STT_PROVIDER,
+        ttsProviderChain: TTS_PROVIDER_CHAIN,
+        sttProviderChain: STT_PROVIDER_CHAIN,
         ttsModel: TTS_PROVIDER === "minimax" ? MINIMAX_TTS_MODEL : TTS_PROVIDER === "siliconflow" ? SILICONFLOW_TTS_MODEL : TTS_MODEL,
         ttsVoice: TTS_PROVIDER === "siliconflow" ? SILICONFLOW_TTS_VOICE : TTS_PROVIDER === "minimax" ? MINIMAX_VOICE_ID : DEFAULT_VOICE,
         sttModel: STT_PROVIDER === "siliconflow" ? SILICONFLOW_STT_MODEL : STT_MODEL,
         ttsProviderConfigured: providerConfigured("tts"),
         sttProviderConfigured: providerConfigured("stt"),
+        ttsTimeoutMs: TTS_TIMEOUT_MS,
+        sttTimeoutMs: STT_TIMEOUT_MS,
+        ttsCacheSize: ttsCache.size,
       })
     }
 
