@@ -17,6 +17,17 @@
 
 复制 `.env.example` 为 `.env`，填入真实 token。真实 `.env` 不入库。
 
+生产环境的 `CODEX_MODEL_PROVIDER=proxy` 应指向内网 LLM Gateway，而不是某一家上游供应商：
+
+```env
+CODEX_MODEL=sx-fast-chat
+CODEX_PROXY_BASE_URL=http://llm-gateway:4000/v1
+CODEX_PROXY_ENV_KEY=PROXY_API_KEY
+PROXY_API_KEY=<server LITELLM_MASTER_KEY>
+```
+
+`sx-fast-chat` 是网关里的热文本别名，背后按健康探测和熔断状态在多家供应商间切换。这样 Codex Skill Gateway 的同步技能请求和 OpenAI-compatible `/v1/chat/completions` 都不再绑定单一供应商。
+
 技能文件位于 `skills/<skill_name>/SKILL.md`，注册表位于 `skill_registry.json`。两者都要保持同步。
 
 普通用户只能提交自定义 skill 到 `user-skills/pending/<skill_name>`。这些 skill 不会自动进入生产注册表。

@@ -19,6 +19,9 @@ Use this path for:
 - short assistant calls
 - image recognition / visual understanding through multimodal chat payloads
 - Dify OpenAI-compatible provider routing
+- OpenClaw realtime text routing
+- Codex Skill Gateway realtime text routing
+- essay-ai-suite OCR / image-recognition calls
 
 Do not use this path for long image, music, or video generation.
 

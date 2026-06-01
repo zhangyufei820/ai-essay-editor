@@ -55,9 +55,9 @@ Authorization: Bearer ${LLM_API_KEY}
 Set:
 
 ```env
-LLM_API_BASE_URL=https://your-provider.example.com/v1
+LLM_API_BASE_URL=http://llm-gateway:4000/v1
 LLM_API_KEY=your-key
-LLM_MODEL=your-model
+LLM_MODEL=sx-chinese-text
 ```
 
 Essay grading uses the versioned prompt template `essay-grading-v1` from `src/prompts/essay-grading-v1.ts`. API results include `provider`, `model`, and `prompt_version` so batch results can be audited later.
@@ -90,9 +90,11 @@ Current implementation:
 - Document extraction can call an external parser endpoint when `DOC_EXTRACT_API_URL` and `DOC_EXTRACT_API_KEY` are set.
 
 ```env
-OCR_API_BASE_URL=https://your-vision-provider.example.com/v1
+OCR_API_BASE_URL=http://llm-gateway:4000/v1
 OCR_API_KEY=your-ocr-key
-OCR_MODEL=your-vision-model
+OCR_MODEL=sx-image-vision
 DOC_EXTRACT_API_URL=https://your-doc-parser.example.com/extract
 DOC_EXTRACT_API_KEY=your-doc-key
 ```
+
+In production, use the internal LiteLLM master key for `LLM_API_KEY` and `OCR_API_KEY`. `sx-image-vision` is a multimodal chat alias for image recognition / OCR-style visual understanding; keep long-running image generation on the media task gateways instead.
