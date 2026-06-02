@@ -141,4 +141,18 @@ describe("llm gateway reliability config", () => {
       }
     }
   })
+
+  it("keeps legacy Dify GPT aliases behind working gateway fallbacks", () => {
+    const config = loadConfig()
+    const fallbackTargets = new Map<string, string[]>()
+
+    for (const fallback of config.router_settings.fallbacks || []) {
+      for (const [source, targets] of Object.entries(fallback)) {
+        fallbackTargets.set(source, targets)
+      }
+    }
+
+    expect(fallbackTargets.get("gpt-5.3")).toEqual(["gpt-5.5", "sx-fast-chat"])
+    expect(fallbackTargets.get("gpt-5.3-spark")).toEqual(["gpt-5.5", "sx-fast-chat"])
+  })
 })

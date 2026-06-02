@@ -744,6 +744,8 @@ router_settings:
     - sx-general-text: ["gpt-5.5", "gemini-3.1-pro-preview"]
     - sx-image-vision: ["gpt-5.4-mini", "sx-image-vision-vivaapi", "sx-image-vision-moonapix"]
     - gpt-5.2: ["sx-gpt-5.2-vivaapi"]
+    - gpt-5.3: ["gpt-5.5", "sx-fast-chat"]
+    - gpt-5.3-spark: ["gpt-5.5", "sx-fast-chat"]
     - gpt-5.4: ["sx-gpt-5.4-vivaapi", "sx-gpt-5.4-moonapix"]
     - gpt-5.4-mini: ["sx-gpt-5.4-mini-vivaapi", "sx-gpt-5.4-mini-moonapix"]
     - gpt-5.4-pro: ["sx-gpt-5.4-pro-vivaapi", "gpt-5.4"]
