@@ -6,7 +6,6 @@ type GatewayModel = {
   model_name: string
   litellm_params?: {
     model?: string
-    api_base?: string
     order?: number
     timeout?: number
   }
@@ -45,15 +44,6 @@ function loadConfig() {
 
 function modelsByName(config: GatewayConfig, name: string) {
   return config.model_list.filter((item) => item.model_name === name)
-}
-
-function deploymentSignature(item: GatewayModel) {
-  return [
-    item.litellm_params?.model,
-    item.litellm_params?.api_base,
-    item.litellm_params?.order,
-    item.model_info?.id,
-  ].join("|")
 }
 
 describe("llm gateway reliability config", () => {
@@ -122,26 +112,20 @@ describe("llm gateway reliability config", () => {
     }
   })
 
-  it("exposes Chinese Dify labels without adding background probe load", () => {
+  it("keeps gateway model names ASCII-safe for response headers", () => {
     const config = loadConfig()
-    const aliases = [
-      ["sx-fast-chat", "沈翔快速对话"],
-      ["sx-chinese-text", "沈翔语文优先"],
-      ["sx-math-text", "沈翔数学推理"],
-      ["sx-general-text", "沈翔通用文本"],
-      ["sx-image-vision", "沈翔图像识别"],
-    ] as const
 
-    for (const [canonicalName, chineseName] of aliases) {
-      const canonical = modelsByName(config, canonicalName)
-      const chinese = modelsByName(config, chineseName)
+    for (const model of config.model_list) {
+      expect(model.model_name).toMatch(/^[\x20-\x7E]+$/)
+    }
 
-      expect(chinese.length).toBe(canonical.length)
-      expect(chinese.map(deploymentSignature).sort()).toEqual(
-        canonical.map(deploymentSignature).sort(),
-      )
-      expect(chinese.every((item) => item.model_info?.mode === "chat")).toBe(true)
-      expect(chinese.every((item) => item.model_info?.disable_background_health_check)).toBe(true)
+    for (const fallback of config.router_settings.fallbacks || []) {
+      for (const [source, targets] of Object.entries(fallback)) {
+        expect(source).toMatch(/^[\x20-\x7E]+$/)
+        for (const target of targets) {
+          expect(target).toMatch(/^[\x20-\x7E]+$/)
+        }
+      }
     }
   })
 

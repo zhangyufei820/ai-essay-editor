@@ -7,11 +7,6 @@ Self-hosted OpenAI-compatible routing layer for realtime text and image-recognit
 - `sx-math-text`
 - `sx-general-text`
 - `sx-image-vision`
-- `沈翔快速对话`
-- `沈翔语文优先`
-- `沈翔数学推理`
-- `沈翔通用文本`
-- `沈翔图像识别`
 - `gpt-4o-mini`
 - `gpt-5.2`
 - `gpt-5.4`
@@ -41,7 +36,7 @@ Use `LITELLM_MASTER_KEY` as the internal gateway key. Do not expose provider key
 
 For Dify model-provider display, use the Chinese aliases directly as model names:
 
-| Dify display model | Canonical route |
+| Dify display model | Gateway `endpoint_model_name` |
 |---|---|
 | `沈翔快速对话` | `sx-fast-chat` |
 | `沈翔语文优先` | `sx-chinese-text` |
@@ -49,7 +44,7 @@ For Dify model-provider display, use the Chinese aliases directly as model names
 | `沈翔通用文本` | `sx-general-text` |
 | `沈翔图像识别` | `sx-image-vision` |
 
-The Chinese aliases are real gateway model names, not only labels. They share the same upstream deployment ids as the canonical routes and disable duplicate background probes so Dify display labels do not add health-check load.
+Keep LiteLLM gateway model names ASCII-only. Dify can show Chinese names through `display_name` / Dify's provider model name, while the credential's `endpoint_model_name` points at the stable `sx-*` route. This avoids non-ASCII model names being written into OpenAI-compatible response headers.
 
 ## Health
 

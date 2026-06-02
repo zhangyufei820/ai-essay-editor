@@ -13,17 +13,17 @@ model: sx-fast-chat
 
 The gateway is configured in `services/llm-gateway/config.yaml` and wired in `docker-compose.prod.yml`. Provider keys must live only in `.env.production` on the server. The default low-latency alias is `sx-fast-chat`; business aliases also include `sx-chinese-text`, `sx-math-text`, `sx-general-text`, and `sx-image-vision`.
 
-Dify can use Chinese display aliases as the actual model names:
+Dify can use Chinese display aliases while sending ASCII gateway model names:
 
-| Dify model name | Route intent |
-|---|---|
-| `沈翔快速对话` | fastest stable text chat |
-| `沈翔语文优先` | Chinese-language writing and humanities tasks, Claude-first |
-| `沈翔数学推理` | math and reasoning tasks, OpenAI/Gemini-first |
-| `沈翔通用文本` | general text tasks |
-| `沈翔图像识别` | multimodal image recognition / visual understanding |
+| Dify display model | Gateway `endpoint_model_name` | Route intent |
+|---|---|---|
+| `沈翔快速对话` | `sx-fast-chat` | fastest stable text chat |
+| `沈翔语文优先` | `sx-chinese-text` | Chinese-language writing and humanities tasks, Claude-first |
+| `沈翔数学推理` | `sx-math-text` | math and reasoning tasks, OpenAI/Gemini-first |
+| `沈翔通用文本` | `sx-general-text` | general text tasks |
+| `沈翔图像识别` | `sx-image-vision` | multimodal image recognition / visual understanding |
 
-These aliases route through the same upstream pools as their canonical `sx-*` aliases. They are configured as real LiteLLM model names so Dify's visible label and request model stay aligned.
+Keep LiteLLM gateway model names ASCII-only. Dify's Chinese label belongs in Dify's model display/provider configuration, while `endpoint_model_name` points at the `sx-*` route. This avoids non-ASCII model names being reflected into OpenAI-compatible response headers.
 
 Use this path for:
 
