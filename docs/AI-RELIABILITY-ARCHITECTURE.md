@@ -13,6 +13,18 @@ model: sx-fast-chat
 
 The gateway is configured in `services/llm-gateway/config.yaml` and wired in `docker-compose.prod.yml`. Provider keys must live only in `.env.production` on the server. The default low-latency alias is `sx-fast-chat`; business aliases also include `sx-chinese-text`, `sx-math-text`, `sx-general-text`, and `sx-image-vision`.
 
+Dify can use Chinese display aliases as the actual model names:
+
+| Dify model name | Route intent |
+|---|---|
+| `沈翔快速对话` | fastest stable text chat |
+| `沈翔语文优先` | Chinese-language writing and humanities tasks, Claude-first |
+| `沈翔数学推理` | math and reasoning tasks, OpenAI/Gemini-first |
+| `沈翔通用文本` | general text tasks |
+| `沈翔图像识别` | multimodal image recognition / visual understanding |
+
+These aliases route through the same upstream pools as their canonical `sx-*` aliases. They are configured as real LiteLLM model names so Dify's visible label and request model stay aligned.
+
 Use this path for:
 
 - text chat

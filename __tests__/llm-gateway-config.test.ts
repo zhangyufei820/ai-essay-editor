@@ -6,6 +6,7 @@ type GatewayModel = {
   model_name: string
   litellm_params?: {
     model?: string
+    api_base?: string
     order?: number
     timeout?: number
   }
@@ -44,6 +45,15 @@ function loadConfig() {
 
 function modelsByName(config: GatewayConfig, name: string) {
   return config.model_list.filter((item) => item.model_name === name)
+}
+
+function deploymentSignature(item: GatewayModel) {
+  return [
+    item.litellm_params?.model,
+    item.litellm_params?.api_base,
+    item.litellm_params?.order,
+    item.model_info?.id,
+  ].join("|")
 }
 
 describe("llm gateway reliability config", () => {
@@ -109,6 +119,29 @@ describe("llm gateway reliability config", () => {
       expect(fastIds.has(id)).toBe(true)
       expect(mathIds.has(id)).toBe(true)
       expect(generalIds.has(id)).toBe(true)
+    }
+  })
+
+  it("exposes Chinese Dify labels without adding background probe load", () => {
+    const config = loadConfig()
+    const aliases = [
+      ["sx-fast-chat", "沈翔快速对话"],
+      ["sx-chinese-text", "沈翔语文优先"],
+      ["sx-math-text", "沈翔数学推理"],
+      ["sx-general-text", "沈翔通用文本"],
+      ["sx-image-vision", "沈翔图像识别"],
+    ] as const
+
+    for (const [canonicalName, chineseName] of aliases) {
+      const canonical = modelsByName(config, canonicalName)
+      const chinese = modelsByName(config, chineseName)
+
+      expect(chinese.length).toBe(canonical.length)
+      expect(chinese.map(deploymentSignature).sort()).toEqual(
+        canonical.map(deploymentSignature).sort(),
+      )
+      expect(chinese.every((item) => item.model_info?.mode === "chat")).toBe(true)
+      expect(chinese.every((item) => item.model_info?.disable_background_health_check)).toBe(true)
     }
   })
 
