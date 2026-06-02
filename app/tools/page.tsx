@@ -13,9 +13,10 @@ import {
 } from "@/components/ui/v2"
 import { GridWaveLoader } from "@/components/chat/GridWaveLoader"
 import { extractImageUrlsFromDifyResult, proxifyGeneratedImageUrl } from "@/components/chat/image-generation/gpt-image-v11"
-import { getVerifiedAuthHeaders } from "@/lib/client-auth"
+import { clearStoredAuthState, getVerifiedAuthHeaders } from "@/lib/client-auth"
 import { isSurveyRequiredPayload, openTrialSurveyGate } from "@/lib/trial-survey-client"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { useEffect, useMemo, useRef, useState, type ComponentType, type FormEvent, type ReactNode } from "react"
 import { Camera, FileImage, Image as ImageIcon, Loader2, Megaphone, Presentation, Search, Sparkles, Upload, Wand2 } from "lucide-react"
 import { IconAllInOne, IconDiagnosis, IconEssay } from "@/components/icons/v2"
@@ -229,6 +230,10 @@ function handleSurveyRequired(featureName: string) {
   })
 }
 
+function buildToolsLoginRedirect() {
+  return `/login?redirect=${encodeURIComponent("/tools#image-prompt-reverse")}`
+}
+
 function buildImageGenerationInputs(targetModel: ReverseTargetModel) {
   if (targetModel === "nano_banana") {
     return {
@@ -316,6 +321,7 @@ function ToolCard({
 }
 
 export default function ToolsPage() {
+  const router = useRouter()
   const [busy, setBusy] = useState<string | null>(null)
   const [result, setResult] = useState<ToolResult | null>(null)
   const [documentFile, setDocumentFile] = useState<File | null>(null)
@@ -407,6 +413,26 @@ export default function ToolsPage() {
     setResult({ title: "图像提示词反推", content: `已选择图片：${file.name}，请点击“开始反推提示词”。` })
   }
 
+  async function getRequiredToolAuthHeaders(featureName: string) {
+    const headers = await getVerifiedAuthHeaders()
+    if (headers.Authorization) return headers
+
+    clearStoredAuthState()
+    setResult({ title: featureName, content: "登录状态已过期，请重新登录后再使用图像工具。" })
+    setReverseProgress(0)
+    setReverseStage("")
+    router.push(buildToolsLoginRedirect())
+    throw new Error("AUTH_REQUIRED")
+  }
+
+  function handleStaleToolAuth(featureName: string) {
+    clearStoredAuthState()
+    setResult({ title: featureName, content: "登录状态已过期，请重新登录后再使用图像工具。" })
+    setReverseProgress(0)
+    setReverseStage("")
+    router.push(buildToolsLoginRedirect())
+  }
+
   async function pollImageTask(taskId: string, requestId: string) {
     const startedAt = Date.now()
     const maxWaitMs = 10 * 60 * 1000
@@ -450,9 +476,10 @@ export default function ToolsPage() {
       formData.append("target_model", reverseTargetModel)
 
       setReverseProgress(28)
+      const authHeaders = await getRequiredToolAuthHeaders("图像提示词反推")
       const response = await fetch("/api/image-prompt/reverse?stream=1", {
         method: "POST",
-        headers: await getVerifiedAuthHeaders(),
+        headers: authHeaders,
         body: formData,
       })
       setReverseProgress(86)
@@ -461,6 +488,10 @@ export default function ToolsPage() {
         if (Number.isFinite(progress)) setReverseProgress(Math.max(0, Math.min(99, progress)))
         if (typeof event.stage === "string" && event.stage.trim()) setReverseStage(event.stage.trim())
       })
+      if (response.status === 401) {
+        handleStaleToolAuth("图像提示词反推")
+        return
+      }
       const prompt = typeof payload?.prompt === "string" ? payload.prompt.trim() : ""
 
       if (!response.ok || payload?.type === "error" || !prompt || isHtmlErrorContent(prompt)) {
@@ -485,6 +516,7 @@ export default function ToolsPage() {
         setReverseStage("")
         return
       }
+      if (error instanceof Error && error.message === "AUTH_REQUIRED") return
       const message = mapToolImageError(error)
       setResult({ title: "图像提示词反推", content: message })
       setReverseProgress(0)
@@ -508,11 +540,12 @@ export default function ToolsPage() {
       setResult({ title: "图像生成", content: "图像生成任务已提交，正在等待模型返回结果..." })
       const requestId = createClientRequestId(reverseTargetModel === "gpt-image-2" ? "tools-img" : "tools-banana")
       const generationModel = reverseTargetModel === "nano_banana" ? "banana-2-pro" : "gpt-image-2"
+      const authHeaders = await getRequiredToolAuthHeaders("图像生成")
       const response = await fetch("/api/dify-chat", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...(await getVerifiedAuthHeaders()),
+          ...authHeaders,
           "X-Request-Id": requestId,
         },
         body: JSON.stringify({
@@ -531,6 +564,10 @@ export default function ToolsPage() {
       let payload = await readResponseJson(response)
       setReverseProgress(62)
       const traceId = response.headers.get("X-Trace-Id") || undefined
+      if (response.status === 401) {
+        handleStaleToolAuth("图像生成")
+        return
+      }
       if (!response.ok) {
         if (isSurveyRequiredPayload(payload)) throw buildSurveyRequiredError()
         throw new Error(typeof payload?.error === "string" ? payload.error : `upstream_error:${response.status}`)
@@ -577,6 +614,7 @@ export default function ToolsPage() {
         setReverseStage("")
         return
       }
+      if (error instanceof Error && error.message === "AUTH_REQUIRED") return
       const message = mapToolImageError(error)
       setResult({ title: "图像生成", content: message })
       setReverseProgress(0)

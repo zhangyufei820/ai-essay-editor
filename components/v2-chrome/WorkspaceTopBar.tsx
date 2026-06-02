@@ -27,7 +27,7 @@ import {
   DropdownMenuV2Trigger,
 } from "@/components/ui/v2/dropdown-menu"
 import { createClient } from "@/lib/supabase/client"
-import { clearStoredAuthTokens } from "@/lib/client-auth"
+import { clearStoredAuthState } from "@/lib/client-auth"
 
 export interface WorkspaceTopBarProps {
   pageTitle?: React.ReactNode
@@ -49,8 +49,7 @@ export function WorkspaceTopBar({
   const handleLogout = React.useCallback(async () => {
     await createClient()?.auth.signOut().catch(() => null)
     if (typeof window !== "undefined") {
-      window.localStorage.removeItem("currentUser")
-      clearStoredAuthTokens()
+      clearStoredAuthState()
       window.dispatchEvent(new Event("credits-refresh"))
     }
     router.push("/login")

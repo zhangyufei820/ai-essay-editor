@@ -7,7 +7,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react"
 import { IconDiagnosis, IconMusic, IconSettings } from "@/components/icons/v2"
 import { WorkspaceShell } from "@/components/v2-chrome"
 import type { WorkspaceSidebarSection } from "@/components/v2-chrome"
-import { getVerifiedAuthHeaders, hasStoredVerifiedAuthToken } from "@/lib/client-auth"
+import { clearStoredAuthState, getVerifiedAuthHeaders, hasStoredVerifiedAuthToken } from "@/lib/client-auth"
 import { readClientUserProfile, USER_PROFILE_UPDATED_EVENT } from "@/lib/client-user-profile"
 import { CELLFORGE_EXTERNAL_URL } from "@/lib/tripo3d"
 
@@ -116,6 +116,11 @@ export function AppChrome({ children }: { children: ReactNode }) {
       try {
         const headers = await getVerifiedAuthHeaders()
         const response = await fetch("/api/user/credits", { headers })
+        if (response.status === 401 && (headers.Authorization || storedUser || hasStoredAuthToken())) {
+          clearStoredAuthState()
+          setUser(null)
+          return
+        }
         if (!response.ok) return
         const data = await response.json()
         if (cancelled) return

@@ -274,3 +274,9 @@ export function clearStoredAuthTokens() {
   }
   window.localStorage.removeItem(AUTHING_SDK_USER_KEY)
 }
+
+export function clearStoredAuthState() {
+  if (typeof window === "undefined") return
+  clearStoredAuthTokens()
+  window.localStorage.removeItem("currentUser")
+}

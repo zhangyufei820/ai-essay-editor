@@ -35,11 +35,20 @@ describe('app chrome routes', () => {
     expect(source).toContain('href="/settings"')
     expect(source).toContain('href="/credits"')
     expect(source).toContain('退出登录')
-    expect(source).toContain('clearStoredAuthTokens()')
+    expect(source).toContain('clearStoredAuthState()')
 
     const authSource = readFileSync(path.join(process.cwd(), 'lib/client-auth.ts'), 'utf8')
     expect(authSource).toContain('"authingToken"')
+    expect(authSource).toContain('window.localStorage.removeItem("currentUser")')
     expect(authSource).toContain('window.localStorage.removeItem(key)')
+  })
+
+  it('clears stale local auth state when the workspace chrome receives a verified auth 401', () => {
+    const source = readFileSync(path.join(process.cwd(), 'components/app-chrome.tsx'), 'utf8')
+
+    expect(source).toContain('clearStoredAuthState()')
+    expect(source).toContain('response.status === 401')
+    expect(source).toContain('setUser(null)')
   })
 
   it('settings profile exposes avatar upload and save controls in v2 profile card', () => {

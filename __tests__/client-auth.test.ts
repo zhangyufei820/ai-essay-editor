@@ -210,7 +210,7 @@ describe("client auth headers", () => {
       configurable: true,
     })
 
-    const { clearStoredAuthTokens } = await import("@/lib/client-auth")
+    const { clearStoredAuthState, clearStoredAuthTokens } = await import("@/lib/client-auth")
     clearStoredAuthTokens()
 
     expect(removeItem).toHaveBeenCalledWith("idToken")
@@ -219,5 +219,8 @@ describe("client auth headers", () => {
     expect(removeItem).toHaveBeenCalledWith("_authing_token")
     expect(removeItem).toHaveBeenCalledWith("_authing_user")
     expect(removeItem).toHaveBeenCalledWith("sb-rnujdnmxufmzgjvmddla-auth-token")
+
+    clearStoredAuthState()
+    expect(removeItem).toHaveBeenCalledWith("currentUser")
   })
 })
