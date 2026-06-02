@@ -171,4 +171,23 @@ describe("llm gateway reliability config", () => {
       expect(deployments.every((item) => item.model_info?.mode === "chat")).toBe(true)
     }
   })
+
+  it("does not put TokenFlux-only GPT deployments first for Dify-facing routes", () => {
+    const config = loadConfig()
+    const difyFacingRoutes = [
+      "sx-fast-chat",
+      "sx-math-text",
+      "sx-general-text",
+      "gpt-5.2",
+      "gpt-5.4",
+      "gpt-5.4-mini",
+      "gpt-5.5",
+    ]
+
+    for (const route of difyFacingRoutes) {
+      const primary = modelsByName(config, route).find((item) => item.litellm_params?.order === 1)
+      expect(primary).toBeTruthy()
+      expect(primary?.model_info?.id || "").not.toContain("tokenflux")
+    }
+  })
 })
