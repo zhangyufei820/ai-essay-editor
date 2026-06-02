@@ -62,12 +62,12 @@ model_list:
   - model_name: sx-chinese-text
     litellm_params:
       model: openai/claude-opus-4-7
-      api_base: os.environ/MOONAPIX_LLM_BASE_URL
-      api_key: os.environ/MOONAPIX_LLM_API_KEY
+      api_base: os.environ/VIVAAPI_LLM_BASE_URL
+      api_key: os.environ/VIVAAPI_LLM_API_KEY
       timeout: 35
       order: 1
     model_info:
-      id: deploy-moonapix-claude-opus-4-7
+      id: deploy-vivaapi-claude-opus-4-7
       mode: chat
       health_check_timeout: 8
       health_check_max_tokens: 3
@@ -75,27 +75,14 @@ model_list:
   - model_name: sx-chinese-text
     litellm_params:
       model: openai/claude-opus-4-7
-      api_base: os.environ/VIVAAPI_LLM_BASE_URL
-      api_key: os.environ/VIVAAPI_LLM_API_KEY
+      api_base: os.environ/MOONAPIX_LLM_BASE_URL
+      api_key: os.environ/MOONAPIX_LLM_API_KEY
       timeout: 35
       order: 2
     model_info:
-      id: deploy-vivaapi-claude-opus-4-7
+      id: deploy-moonapix-claude-opus-4-7
       mode: chat
       health_check_timeout: 10
-      health_check_max_tokens: 3
-
-  - model_name: sx-chinese-text
-    litellm_params:
-      model: openai/claude-sonnet-4-6
-      api_base: os.environ/VIVAAPI_LLM_BASE_URL
-      api_key: os.environ/VIVAAPI_LLM_API_KEY
-      timeout: 30
-      order: 3
-    model_info:
-      id: deploy-vivaapi-claude-sonnet-4-6
-      mode: chat
-      health_check_timeout: 8
       health_check_max_tokens: 3
 
   - model_name: sx-chinese-text
@@ -107,6 +94,19 @@ model_list:
       order: 3
     model_info:
       id: deploy-moonapix-claude-sonnet-4-6
+      mode: chat
+      health_check_timeout: 8
+      health_check_max_tokens: 3
+
+  - model_name: sx-chinese-text
+    litellm_params:
+      model: openai/claude-sonnet-4-6
+      api_base: os.environ/VIVAAPI_LLM_BASE_URL
+      api_key: os.environ/VIVAAPI_LLM_API_KEY
+      timeout: 30
+      order: 4
+    model_info:
+      id: deploy-vivaapi-claude-sonnet-4-6
       mode: chat
       health_check_timeout: 8
       health_check_max_tokens: 3
@@ -632,12 +632,12 @@ model_list:
   - model_name: claude-opus-4-7
     litellm_params:
       model: openai/claude-opus-4-7
-      api_base: os.environ/MOONAPIX_LLM_BASE_URL
-      api_key: os.environ/MOONAPIX_LLM_API_KEY
+      api_base: os.environ/VIVAAPI_LLM_BASE_URL
+      api_key: os.environ/VIVAAPI_LLM_API_KEY
       timeout: 35
       order: 1
     model_info:
-      id: deploy-moonapix-claude-opus-4-7
+      id: deploy-vivaapi-claude-opus-4-7
       mode: chat
       health_check_timeout: 8
       health_check_max_tokens: 3
@@ -645,12 +645,12 @@ model_list:
   - model_name: claude-opus-4-7
     litellm_params:
       model: openai/claude-opus-4-7
-      api_base: os.environ/VIVAAPI_LLM_BASE_URL
-      api_key: os.environ/VIVAAPI_LLM_API_KEY
+      api_base: os.environ/MOONAPIX_LLM_BASE_URL
+      api_key: os.environ/MOONAPIX_LLM_API_KEY
       timeout: 35
       order: 2
     model_info:
-      id: deploy-vivaapi-claude-opus-4-7
+      id: deploy-moonapix-claude-opus-4-7
       mode: chat
       health_check_timeout: 10
       health_check_max_tokens: 3
@@ -658,24 +658,50 @@ model_list:
   - model_name: claude-sonnet-4-6
     litellm_params:
       model: openai/claude-sonnet-4-6
-      api_base: os.environ/VIVAAPI_LLM_BASE_URL
-      api_key: os.environ/VIVAAPI_LLM_API_KEY
+      api_base: os.environ/MOONAPIX_LLM_BASE_URL
+      api_key: os.environ/MOONAPIX_LLM_API_KEY
       timeout: 30
       order: 1
     model_info:
-      id: deploy-vivaapi-claude-sonnet-4-6
+      id: deploy-moonapix-claude-sonnet-4-6
       mode: chat
       disable_background_health_check: true
 
   - model_name: claude-sonnet-4-6
     litellm_params:
       model: openai/claude-sonnet-4-6
-      api_base: os.environ/MOONAPIX_LLM_BASE_URL
-      api_key: os.environ/MOONAPIX_LLM_API_KEY
+      api_base: os.environ/VIVAAPI_LLM_BASE_URL
+      api_key: os.environ/VIVAAPI_LLM_API_KEY
       timeout: 30
       order: 2
     model_info:
+      id: deploy-vivaapi-claude-sonnet-4-6
+      mode: chat
+      disable_background_health_check: true
+
+  # Compatibility aliases for older Dify workflow model names whose exact
+  # upstream channels are no longer reliably available.
+  - model_name: claude-3-7-sonnet-20250219
+    litellm_params:
+      model: openai/claude-sonnet-4-6
+      api_base: os.environ/MOONAPIX_LLM_BASE_URL
+      api_key: os.environ/MOONAPIX_LLM_API_KEY
+      timeout: 30
+      order: 1
+    model_info:
       id: deploy-moonapix-claude-sonnet-4-6
+      mode: chat
+      disable_background_health_check: true
+
+  - model_name: claude-3-7-sonnet-20250219
+    litellm_params:
+      model: openai/claude-sonnet-4-6
+      api_base: os.environ/VIVAAPI_LLM_BASE_URL
+      api_key: os.environ/VIVAAPI_LLM_API_KEY
+      timeout: 30
+      order: 2
+    model_info:
+      id: deploy-vivaapi-claude-sonnet-4-6
       mode: chat
       disable_background_health_check: true
 
@@ -702,6 +728,57 @@ model_list:
       disable_background_health_check: true
 
   # Public Gemini text model names.
+  - model_name: gemini-3.1-flash-lite-preview
+    litellm_params:
+      model: openai/gemini-2.5-flash
+      api_base: os.environ/VIVAAPI_LLM_BASE_URL
+      api_key: os.environ/VIVAAPI_LLM_API_KEY
+      timeout: 25
+      order: 1
+    model_info:
+      id: gemini-2-5-flash-vivaapi
+      mode: chat
+      health_check_timeout: 8
+      health_check_max_tokens: 3
+
+  - model_name: gemini-3.1-flash-lite-preview
+    litellm_params:
+      model: openai/gemini-3.1-pro-preview
+      api_base: os.environ/VIVAAPI_LLM_BASE_URL
+      api_key: os.environ/VIVAAPI_LLM_API_KEY
+      timeout: 30
+      order: 2
+    model_info:
+      id: deploy-vivaapi-gemini-3-1-pro-preview
+      mode: chat
+      health_check_timeout: 8
+      health_check_max_tokens: 3
+
+  - model_name: gemini-3-pro-image-preview
+    litellm_params:
+      model: openai/gemini-3-pro-image-preview
+      api_base: os.environ/VIVAAPI_LLM_BASE_URL
+      api_key: os.environ/VIVAAPI_LLM_API_KEY
+      timeout: 30
+      order: 1
+    model_info:
+      id: gemini-3-pro-image-preview-vivaapi
+      mode: chat
+      disable_background_health_check: true
+
+  - model_name: gemini-3-pro-image-preview
+    litellm_params:
+      model: openai/gemini-3.1-pro-preview
+      api_base: os.environ/VIVAAPI_LLM_BASE_URL
+      api_key: os.environ/VIVAAPI_LLM_API_KEY
+      timeout: 30
+      order: 2
+    model_info:
+      id: deploy-vivaapi-gemini-3-1-pro-preview
+      mode: chat
+      health_check_timeout: 8
+      health_check_max_tokens: 3
+
   - model_name: gemini-3.1-pro-preview
     litellm_params:
       model: openai/gemini-3.1-pro-preview
@@ -723,7 +800,8 @@ model_list:
     model_info:
       id: gemini-2-5-flash-vivaapi
       mode: chat
-      disable_background_health_check: true
+      health_check_timeout: 8
+      health_check_max_tokens: 3
 
   - model_name: gemini-2.5-pro
     litellm_params:

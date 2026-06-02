@@ -155,4 +155,20 @@ describe("llm gateway reliability config", () => {
     expect(fallbackTargets.get("gpt-5.3")).toEqual(["gpt-5.5", "sx-fast-chat"])
     expect(fallbackTargets.get("gpt-5.3-spark")).toEqual(["gpt-5.5", "sx-fast-chat"])
   })
+
+  it("keeps high-volume legacy Dify text model names routed through gateway aliases", () => {
+    const config = loadConfig()
+    const expectedModelNames = [
+      "claude-3-7-sonnet-20250219",
+      "gemini-3.1-flash-lite-preview",
+      "gemini-3-pro-image-preview",
+    ]
+
+    for (const name of expectedModelNames) {
+      const deployments = modelsByName(config, name)
+      expect(deployments.length).toBeGreaterThanOrEqual(2)
+      expect(deployments.some((item) => item.litellm_params?.order === 1)).toBe(true)
+      expect(deployments.every((item) => item.model_info?.mode === "chat")).toBe(true)
+    }
+  })
 })
