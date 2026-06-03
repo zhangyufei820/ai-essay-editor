@@ -57,6 +57,7 @@ import { brandColors, slateColors } from "@/lib/design-tokens"
 import { LATEX_MACROS, renderLatex } from "@/lib/latex-constants"
 import { cleanLLMText } from "@/lib/text-sanitizer"
 import { sanitizeDifyAnswerForModel } from "@/lib/dify-answer-cleanup"
+import { getSafeUpstreamErrorMessage, hasTechnicalUpstreamErrorText } from "@/lib/chat-error-sanitizer"
 import { parseEssayReview } from "@/lib/parse-essay-review"
 import { extractDifyTextOutput } from "@/lib/dify-output-text"
 import { isAssistantFailureContent } from "@/lib/chat-message-guards"
@@ -552,6 +553,10 @@ function getChatErrorMessage(error: unknown, status?: number, model?: string): s
     }
     return `${getChatModelDisplayLabel(model)} 响应超时或连接被中断。页面会保留已生成内容；若没有看到结果，请刷新历史记录后再决定是否重新提交。`
   }
+  const safeUpstreamMessage = getSafeUpstreamErrorMessage(raw)
+  if (safeUpstreamMessage) {
+    return safeUpstreamMessage
+  }
   if (isNetworkStreamError(raw, text)) {
     if (model === "open-claw") {
       return "OpenClaw 长任务连接中断，可能是上游模型超时或浏览器网络断开。当前页面没有收到完整结果，请稍后刷新历史记录或重新提交。"
@@ -576,6 +581,17 @@ function buildChatErrorContent(message: string): string {
     "",
     "建议：先刷新当前会话或历史记录查看是否已有结果；如果仍无结果，再重新提交。若连续出现，请保留截图和发生时间。"
   ].join("\n")
+}
+
+function getSafeAssistantErrorContent(message: string) {
+  if (!hasTechnicalUpstreamErrorText(message)) return message
+  const safeMessage = getSafeUpstreamErrorMessage(message)
+  return safeMessage || "服务暂时不可用，请稍后重试。"
+}
+
+function normalizeChatTaskFailureMessage(message: string, model?: string) {
+  if (!hasTechnicalUpstreamErrorText(message)) return message
+  return getSafeUpstreamErrorMessage(message, `${getChatModelDisplayLabel(model)}暂时不可用，请稍后重试。`) || message
 }
 
 async function getTaskFailureMessage(requestId: string, model: string): Promise<{ message: string; status?: string } | null> {
@@ -3091,7 +3107,10 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         console.error("❌ [对话异常] 模型:", selectedModel, "模式:", genMode)
 
         const taskFailure = await getTaskFailureMessage(requestId, selectedModel)
-        const errorMsg = taskFailure?.message || getChatErrorMessage(e, undefined, selectedModel)
+        const errorMsg = normalizeChatTaskFailureMessage(
+          taskFailure?.message || getChatErrorMessage(e, undefined, selectedModel),
+          selectedModel,
+        )
         const rawError = e instanceof Error ? e.message : String(e || "")
         const mayRecoverFromHistory = !taskFailure && isNetworkStreamError(rawError, rawError.toLowerCase())
         toast.error(errorMsg, {
@@ -3102,11 +3121,11 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         // 🔥 保留已生成的内容（如果 fullText 有内容，说明 AI 已经输出了部分内容）
         if (fullText.trim()) {
           // 保留消息并在末尾添加中断提示
-          setMessages(p => p.map(m => m.id === botId ? { ...m, content: `${fullText}\n\n---\n*内容生成已中断：${errorMsg}*` } : m))
+          setMessages(p => p.map(m => m.id === botId ? { ...m, content: `${fullText}\n\n---\n*内容生成已中断：${getSafeAssistantErrorContent(errorMsg)}*` } : m))
           toast.error("内容生成中断，已保留已生成的部分", { duration: 4000 })
 		        } else {
 		          // 没有任何内容时也保留错误消息，避免用户看到消息突然消失。
-		          setMessages(p => p.map(m => m.id === botId ? { ...m, content: buildChatErrorContent(errorMsg) } : m))
+		          setMessages(p => p.map(m => m.id === botId ? { ...m, content: buildChatErrorContent(getSafeAssistantErrorContent(errorMsg)) } : m))
 		        }
 		        if (!mayRecoverFromHistory && !["queued", "running"].includes(taskFailure?.status || "")) {
 		          forgetPendingTask(requestId)

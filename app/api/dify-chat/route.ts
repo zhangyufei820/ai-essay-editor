@@ -33,6 +33,7 @@ import { isConfiguredAdminUser } from "@/lib/admin-auth"
 import { internalDifyFetch } from "@/lib/internal-dify-fetch"
 import { getDifyCredentialForModel } from "@/lib/dify-credentials"
 import { sanitizeDifyAnswerForModel } from "@/lib/dify-answer-cleanup"
+import { getSafeUpstreamErrorMessage, stripUpstreamBranding } from "@/lib/chat-error-sanitizer"
 import { isWorkflowSkillAgent } from "@/lib/workflow-skill-agents"
 import { extractDifyTextOutput } from "@/lib/dify-output-text"
 import { rewriteOpenClawMediaReferences } from "@/lib/openclaw-media"
@@ -240,7 +241,7 @@ function isHtmlErrorContent(value: unknown) {
 function sanitizeUpstreamErrorText(value: unknown, fallback = "图片服务暂时不可用，请稍后重试。") {
   if (typeof value !== "string") return fallback
   if (!value.trim() || isHtmlErrorContent(value)) return fallback
-  return value.replace(/Dify\s*API/gi, "图片服务").replace(/Dify/gi, "服务").replace(/网关/g, "服务")
+  return getSafeUpstreamErrorMessage(value, fallback) || stripUpstreamBranding(value)
 }
 
 function buildGptImageV11Inputs(inputs: unknown): GptImageV11Inputs {

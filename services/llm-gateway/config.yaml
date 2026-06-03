@@ -828,6 +828,7 @@ router_settings:
     - gpt-5.4-mini: ["sx-gpt-5.4-mini-vivaapi", "sx-gpt-5.4-mini-moonapix"]
     - gpt-5.4-pro: ["sx-gpt-5.4-pro-vivaapi", "gpt-5.4"]
     - gpt-5.5: ["sx-gpt-5.5-vivaapi", "sx-gpt-5.5-moonapix", "sx-gemini-3.1-pro"]
+    - gemini-3.1-pro-preview: ["sx-gpt-5.5-vivaapi", "sx-gpt-5.5-moonapix"]
     - claude-opus-4-7: ["sx-claude-opus-4-7-vivaapi", "sx-claude-sonnet-4-6"]
     - claude-sonnet-4-6: ["sx-claude-sonnet-4-6-moonapix"]
   routing_strategy: simple-shuffle
