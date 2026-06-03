@@ -747,12 +747,21 @@ function normalizeVivaApiImageModel(model: string | undefined) {
   return trimmed
 }
 const VIVAAPI_IMAGE_MODEL = normalizeVivaApiImageModel(process.env.VIVAAPI_IMAGE_MODEL)
+const MOONAPIX_LLM_IMAGE_BASE_URL = (process.env.MOONAPIX_LLM_BASE_URL || "https://moonapix.com/v1").replace(/\/v1\/?$/, "").replace(/\/+$/, "")
+const VIVAAPI_LLM_IMAGE_BASE_URL = (process.env.VIVAAPI_LLM_BASE_URL || "https://www.vivaapi.cn/v1").replace(/\/v1\/?$/, "").replace(/\/+$/, "")
 const GEMINI_IMAGE_GATEWAY_URL = (process.env.GEMINI_IMAGE_GATEWAY_URL || "https://moonapix.com").replace(/\/+$/, "")
 const VIVAAPI_EDIT_MAX_SOURCE_DIMENSION = 2048
 const VIVAAPI_EDIT_RETRY_SOURCE_DIMENSION = 1536
 const VIVAAPI_EDIT_MAX_SOURCE_BYTES = 4 * 1024 * 1024
 const VIVAAPI_EDIT_JPEG_QUALITY = 90
 const VIVAAPI_RETRYABLE_HTTP_STATUSES = new Set([408, 500, 502, 503, 504, 524])
+const VIVAAPI_FAILOVER_ERROR_PATTERNS = [
+  /No available channel/i,
+  /无可用渠道/i,
+  /no access to model/i,
+  /Invalid token/i,
+  /high load/i,
+] as const
 // 🔥 作文批改（standard）使用专用的 ESSAY_CORRECTION_API_KEY
 const MISSING_DIFY_CREDENTIAL_STATUS = 503
 
@@ -1434,7 +1443,7 @@ function buildImageGatewayPayload(query: string, inputs: unknown) {
   }
 }
 
-function buildVivaApiImagePayload(query: string, inputs: unknown) {
+function buildVivaApiImagePayload(query: string, inputs: unknown, model = VIVAAPI_IMAGE_MODEL) {
   const imageInputs = buildGptImageV11Inputs(inputs)
   const referenceImages = imageInputs.reference_image_urls.length > 0
     ? imageInputs.reference_image_urls
@@ -1443,7 +1452,7 @@ function buildVivaApiImagePayload(query: string, inputs: unknown) {
       : []
 
   return {
-    model: VIVAAPI_IMAGE_MODEL,
+    model,
     prompt: query || "生成图片",
     size: normalizeVivaApiImageSize(imageInputs),
     n: imageInputs.n,
@@ -1471,6 +1480,53 @@ type VivaApiImageEditFormDataResult = {
   formData: FormData
   sourceMetadata: VivaApiEditSourceMetadata[]
   gatewaySize: string
+}
+
+type VivaApiImageGatewayCandidate = {
+  name: string
+  baseUrl: string
+  token: string
+  model: string
+}
+
+function getVivaApiImageGatewayCandidates(): VivaApiImageGatewayCandidate[] {
+  return [
+    {
+      name: "vivaapi-image",
+      baseUrl: VIVAAPI_IMAGE_BASE_URL,
+      token: process.env.VIVAAPI_IMAGE_API_KEY || "",
+      model: VIVAAPI_IMAGE_MODEL,
+    },
+    {
+      name: "moonapix-llm-image-fallback",
+      baseUrl: MOONAPIX_LLM_IMAGE_BASE_URL,
+      token: process.env.MOONAPIX_LLM_API_KEY || "",
+      model: "gpt-image-2",
+    },
+    {
+      name: "vivaapi-llm-image-fallback",
+      baseUrl: VIVAAPI_LLM_IMAGE_BASE_URL,
+      token: process.env.VIVAAPI_LLM_API_KEY || "",
+      model: "gpt-image-2",
+    },
+  ].filter((candidate) => candidate.token)
+}
+
+function shouldFailoverVivaApiImageResponse(response: Response, storedResult: unknown) {
+  if (VIVAAPI_RETRYABLE_HTTP_STATUSES.has(response.status)) return true
+  if (response.status === 400 || response.status === 401 || response.status === 403) {
+    const resultText = JSON.stringify(sanitizeForTrace(storedResult))
+    return VIVAAPI_FAILOVER_ERROR_PATTERNS.some((pattern) => pattern.test(resultText))
+  }
+  return false
+}
+
+function safeJsonFromText(text: string, statusCode: number): unknown {
+  try {
+    return JSON.parse(text)
+  } catch {
+    return { success: false, message: sanitizeUpstreamErrorText(text), status_code: statusCode }
+  }
 }
 
 async function appendRemoteImageToFormData(
@@ -1558,6 +1614,7 @@ async function normalizeVivaApiEditSourceImage(inputBuffer: Buffer, contentType:
 async function buildVivaApiImageEditFormData(
   query: string,
   inputs: unknown,
+  model = VIVAAPI_IMAGE_MODEL,
   maxDimension = VIVAAPI_EDIT_MAX_SOURCE_DIMENSION,
 ): Promise<VivaApiImageEditFormDataResult> {
   const imageInputs = buildGptImageV11Inputs(inputs)
@@ -1574,7 +1631,7 @@ async function buildVivaApiImageEditFormData(
   const formData = new FormData()
   const sourceMetadata: VivaApiEditSourceMetadata[] = []
   const gatewaySize = normalizeVivaApiImageSize(imageInputs)
-  formData.append("model", VIVAAPI_IMAGE_MODEL)
+  formData.append("model", model)
   formData.append("prompt", query || "编辑图片")
   formData.append("size", gatewaySize)
   formData.append("n", String(imageInputs.n))
@@ -1605,8 +1662,8 @@ async function submitVivaApiImageRequest(params: {
   query: string
   inputs: unknown
   isEditMode: boolean
+  gateway: VivaApiImageGatewayCandidate
   gatewayPath: string
-  gatewayToken: string
   signal: AbortSignal
   attempt: number
 }) {
@@ -1618,23 +1675,24 @@ async function submitVivaApiImageRequest(params: {
     const editFormData = await buildVivaApiImageEditFormData(
       params.query,
       params.inputs,
+      params.gateway.model,
       params.attempt > 1 ? VIVAAPI_EDIT_RETRY_SOURCE_DIMENSION : VIVAAPI_EDIT_MAX_SOURCE_DIMENSION,
     )
     body = editFormData.formData
     editSourceMetadata = editFormData.sourceMetadata
     gatewaySize = editFormData.gatewaySize
   } else {
-    body = JSON.stringify(buildVivaApiImagePayload(params.query, params.inputs))
+    body = JSON.stringify(buildVivaApiImagePayload(params.query, params.inputs, params.gateway.model))
   }
 
-  const response = await internalDifyFetch(`${VIVAAPI_IMAGE_BASE_URL}${params.gatewayPath}`, {
+  const response = await internalDifyFetch(`${params.gateway.baseUrl}${params.gatewayPath}`, {
     method: "POST",
     headers: {
       ...(!params.isEditMode ? { "Content-Type": "application/json" } : {}),
-      ...(params.gatewayToken
+      ...(params.gateway.token
         ? {
-            "x-gateway-token": params.gatewayToken,
-            Authorization: `Bearer ${params.gatewayToken}`,
+            "x-gateway-token": params.gateway.token,
+            Authorization: `Bearer ${params.gateway.token}`,
           }
         : {}),
     },
@@ -2151,25 +2209,62 @@ async function callImageGatewayDirect(query: string, inputs: unknown) {
   const timeout = createTimeoutSignal(GPT_IMAGE_GATEWAY_TIMEOUT_MS)
 
   try {
-    const response = await internalDifyFetch(`${gatewayBaseUrl}${gatewayPath}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(gatewayToken
-          ? {
-              "x-gateway-token": gatewayToken,
-              Authorization: `Bearer ${gatewayToken}`,
-            }
-          : {}),
-      },
-      body: JSON.stringify(process.env.VIVAAPI_IMAGE_API_KEY
-        ? buildVivaApiImagePayload(query, inputs)
-        : buildImageGatewayPayload(query, inputs)
-      ),
-      signal: timeout.signal,
-    })
+    let response: Response
+    let text = ""
 
-    const text = await response.text()
+    if (process.env.VIVAAPI_IMAGE_API_KEY) {
+      const gatewayCandidates = getVivaApiImageGatewayCandidates()
+      if (gatewayCandidates.length === 0) {
+        return Response.json({ error: "图片服务未配置可用通道", code: "IMAGE_GATEWAY_MISSING" }, { status: 503 })
+      }
+
+      let payload: unknown = {}
+      let selectedResponse: Response | null = null
+      let selectedText = ""
+      for (const [candidateIndex, gateway] of gatewayCandidates.entries()) {
+        const candidateResponse = await internalDifyFetch(`${gateway.baseUrl}${gatewayPath}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-gateway-token": gateway.token,
+            Authorization: `Bearer ${gateway.token}`,
+          },
+          body: JSON.stringify(buildVivaApiImagePayload(query, inputs, gateway.model)),
+          signal: timeout.signal,
+        })
+        const candidateText = await candidateResponse.text()
+        payload = safeJsonFromText(candidateText, candidateResponse.status)
+        selectedResponse = candidateResponse
+        selectedText = candidateText
+        if (
+          candidateIndex < gatewayCandidates.length - 1 &&
+          shouldFailoverVivaApiImageResponse(candidateResponse, payload)
+        ) {
+          continue
+        }
+        break
+      }
+
+      response = selectedResponse as Response
+      text = selectedText
+    } else {
+      response = await internalDifyFetch(`${gatewayBaseUrl}${gatewayPath}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(gatewayToken
+            ? {
+                "x-gateway-token": gatewayToken,
+                Authorization: `Bearer ${gatewayToken}`,
+              }
+            : {}),
+        },
+        body: JSON.stringify(buildImageGatewayPayload(query, inputs)),
+        signal: timeout.signal,
+      })
+      text = await response.text()
+    }
+
     let payload: unknown = {}
     try {
       payload = JSON.parse(text)
@@ -2682,6 +2777,7 @@ async function startVivaApiImageTask(params: {
   let gatewaySize = normalizeVivaApiImageSize(imageInputs)
   let editSourceMetadata: VivaApiEditSourceMetadata[] = []
   let vivaApiAttempt = 1
+  let activeGateway: VivaApiImageGatewayCandidate | null = null
 
   await updateTaskRun(params.requestId, {
     status: "running",
@@ -2693,6 +2789,7 @@ async function startVivaApiImageTask(params: {
       gateway_status: "submitted",
       gateway_path: gatewayPath,
       gateway_size: gatewaySize,
+      gateway_name: null,
       mode: imageInputs.mode,
       source_image_width: imageInputs.source_image_width,
       source_image_height: imageInputs.source_image_height,
@@ -2701,19 +2798,56 @@ async function startVivaApiImageTask(params: {
 
   fireAndForget("Moonapix Image Task", (async () => {
     const startedAt = Date.now()
-    const gatewayToken = process.env.VIVAAPI_IMAGE_API_KEY || ""
+    const gatewayCandidates = getVivaApiImageGatewayCandidates()
     const timeout = createTimeoutSignal(GPT_IMAGE_GATEWAY_TIMEOUT_MS)
 
     try {
-      let submission = await submitVivaApiImageRequest({
-        query: params.query,
-        inputs: params.inputs,
-        isEditMode,
-        gatewayPath,
-        gatewayToken,
-        signal: timeout.signal,
-        attempt: vivaApiAttempt,
-      })
+      if (gatewayCandidates.length === 0) throw new Error("VIVAAPI_IMAGE_GATEWAY_MISSING")
+
+      let submission: Awaited<ReturnType<typeof submitVivaApiImageRequest>> | null = null
+      for (const [candidateIndex, gateway] of gatewayCandidates.entries()) {
+        activeGateway = gateway
+        const nextSubmission = await submitVivaApiImageRequest({
+          query: params.query,
+          inputs: params.inputs,
+          isEditMode,
+          gateway,
+          gatewayPath,
+          signal: timeout.signal,
+          attempt: vivaApiAttempt,
+        })
+        submission = nextSubmission
+        if (
+          candidateIndex < gatewayCandidates.length - 1 &&
+          shouldFailoverVivaApiImageResponse(nextSubmission.response, nextSubmission.storedResult)
+        ) {
+          await updateTaskRun(params.requestId, {
+            status: "running",
+            stage: "图片服务主通道不可用，正在切换备用通道",
+            progress: 35,
+            upstreamTaskId: params.requestId,
+            metadata: {
+              provider: "moonapix",
+              elapsed_ms: Date.now() - startedAt,
+              gateway_status: "failover",
+              gateway_path: gatewayPath,
+              gateway_size: nextSubmission.gatewaySize,
+              gateway_name: gateway.name,
+              gateway_model: gateway.model,
+              provider_status: nextSubmission.response.status,
+              mode: imageInputs.mode,
+              source_image_width: imageInputs.source_image_width,
+              source_image_height: imageInputs.source_image_height,
+              edit_sources: nextSubmission.editSourceMetadata,
+              attempt: vivaApiAttempt,
+            },
+          })
+          continue
+        }
+        break
+      }
+
+      if (!submission || !activeGateway) throw new Error("VIVAAPI_IMAGE_GATEWAY_UNAVAILABLE")
       editSourceMetadata = submission.editSourceMetadata
       gatewaySize = submission.gatewaySize
 
@@ -2730,6 +2864,8 @@ async function startVivaApiImageTask(params: {
             gateway_status: "retrying",
             gateway_path: gatewayPath,
             gateway_size: gatewaySize,
+            gateway_name: activeGateway.name,
+            gateway_model: activeGateway.model,
             mode: imageInputs.mode,
             source_image_width: imageInputs.source_image_width,
             source_image_height: imageInputs.source_image_height,
@@ -2742,8 +2878,8 @@ async function startVivaApiImageTask(params: {
           query: params.query,
           inputs: params.inputs,
           isEditMode,
+          gateway: activeGateway,
           gatewayPath,
-          gatewayToken,
           signal: timeout.signal,
           attempt: vivaApiAttempt,
         })
@@ -2768,6 +2904,8 @@ async function startVivaApiImageTask(params: {
             gateway_status: "failed",
             gateway_path: gatewayPath,
             gateway_size: gatewaySize,
+            gateway_name: activeGateway.name,
+            gateway_model: activeGateway.model,
             mode: imageInputs.mode,
             source_image_width: imageInputs.source_image_width,
             source_image_height: imageInputs.source_image_height,
@@ -2792,6 +2930,8 @@ async function startVivaApiImageTask(params: {
           gateway_status: "succeeded",
           gateway_path: gatewayPath,
           gateway_size: gatewaySize,
+          gateway_name: activeGateway.name,
+          gateway_model: activeGateway.model,
           mode: imageInputs.mode,
           source_image_width: imageInputs.source_image_width,
           source_image_height: imageInputs.source_image_height,
