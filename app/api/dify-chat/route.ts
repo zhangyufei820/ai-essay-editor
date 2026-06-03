@@ -424,10 +424,6 @@ function normalizeVivaApiImageSize(inputs: GptImageV11Inputs): string {
   return VIVAAPI_IMAGE_SIZE_TABLE[tier][aspectRatio]
 }
 
-function isGptImage2VipModel() {
-  return VIVAAPI_IMAGE_MODEL === "gpt-image-2-vip"
-}
-
 function getImageSizeForSourceAspectRatio(sourceWidth: number, sourceHeight: number) {
   if (sourceWidth <= 0 || sourceHeight <= 0) return "2160x3840"
   const aspectRatio = sourceWidth / sourceHeight
@@ -745,7 +741,12 @@ const GPT_IMAGE_ASYNC_TASK_MAX_AGE_MS = 30 * 60 * 1000
 const GPT_IMAGE_POLL_TOKEN_TTL_MS = GPT_IMAGE_ASYNC_TASK_MAX_AGE_MS + 5 * 60 * 1000
 const IMAGE_GATEWAY_URL = (process.env.DIFY_IMAGE_GATEWAY_URL || "http://dify-image-gateway:8001").replace(/\/+$/, "")
 const VIVAAPI_IMAGE_BASE_URL = (process.env.VIVAAPI_IMAGE_BASE_URL || "https://moonapix.com").replace(/\/+$/, "")
-const VIVAAPI_IMAGE_MODEL = process.env.VIVAAPI_IMAGE_MODEL || "gpt-image-2-vip"
+function normalizeVivaApiImageModel(model: string | undefined) {
+  const trimmed = model?.trim()
+  if (!trimmed || trimmed === "gpt-image-2-vip") return "gpt-image-2"
+  return trimmed
+}
+const VIVAAPI_IMAGE_MODEL = normalizeVivaApiImageModel(process.env.VIVAAPI_IMAGE_MODEL)
 const GEMINI_IMAGE_GATEWAY_URL = (process.env.GEMINI_IMAGE_GATEWAY_URL || "https://moonapix.com").replace(/\/+$/, "")
 const VIVAAPI_EDIT_MAX_SOURCE_DIMENSION = 2048
 const VIVAAPI_EDIT_RETRY_SOURCE_DIMENSION = 1536
@@ -1577,7 +1578,7 @@ async function buildVivaApiImageEditFormData(
   formData.append("prompt", query || "编辑图片")
   formData.append("size", gatewaySize)
   formData.append("n", String(imageInputs.n))
-  if (!isGptImage2VipModel() && imageInputs.quality) formData.append("quality", imageInputs.quality)
+  if (imageInputs.quality) formData.append("quality", imageInputs.quality)
   if (imageInputs.output_format) formData.append("response_format", "url")
 
   await appendRemoteImageToFormData(formData, "image", referenceImages[0], "source-image", sourceMetadata, maxDimension)
