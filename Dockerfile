@@ -61,6 +61,7 @@ ENV HOSTNAME=0.0.0.0
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/package.json ./
+COPY --from=builder /app/scripts ./scripts
 
 # 健康检查：等待 Next.js 启动
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
