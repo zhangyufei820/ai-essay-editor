@@ -14,8 +14,7 @@ import { toast } from "sonner"
 import { ModelLogo } from "@/components/ModelLogo"
 import { GridWaveLoader } from "@/components/chat/GridWaveLoader"
 import { collapseSidebar, navigateHomeWithSidebar, refreshCredits, refreshSessionList } from "@/lib/workspace-events"
-import { extractUserId } from "@/lib/auth-user"
-import { getRequiredAuthHeaders, getVerifiedAuthHeaders, hasStoredVerifiedAuthToken } from "@/lib/client-auth"
+import { getRequiredAuthHeaders, getStoredClientIdentity, getVerifiedAuthHeaders } from "@/lib/client-auth"
 import { buildChatSessionRouteFromSession } from "@/lib/chat-session-routes"
 import { isSurveyRequiredPayload, openTrialSurveyGate } from "@/lib/trial-survey-client"
 import type { ModelType } from "@/lib/pricing"
@@ -706,6 +705,8 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
         return
       }
 
+      const { userId: storedUserId, hasVerifiedToken } = getStoredClientIdentity()
+
       try {
         const headers = await getVerifiedAuthHeaders()
         if (headers.Authorization) {
@@ -722,26 +723,12 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
         // Fall back to local user parsing below.
       }
 
-      const userStr = typeof window !== "undefined" ? localStorage.getItem("currentUser") : null
-      if (!userStr) {
-        setAuthChecked(true)
-        return
+      if (hasVerifiedToken && storedUserId) {
+        setUserId(storedUserId)
+        void fetchCredits(storedUserId)
       }
 
-      try {
-        const user = JSON.parse(userStr)
-        const uid = extractUserId(user)
-        if (hasStoredVerifiedAuthToken() && uid) {
-          setUserId(uid)
-          void fetchCredits(uid)
-        } else {
-          setErrorMessage("登录状态已过期，请重新登录后再上传或生成图片。")
-        }
-      } catch {
-        toast.error("用户信息解析失败，请重新登录")
-      } finally {
-        setAuthChecked(true)
-      }
+      setAuthChecked(true)
     }
 
     initUser().catch(() => {

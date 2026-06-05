@@ -28,7 +28,6 @@ import {
 } from "lucide-react"
 import { IconDiagnosis, IconEssay, IconExportPdf, IconHistory, IconInkDot, IconSealCheck, IconUser } from "@/components/icons/v2"
 import { cn } from "@/lib/utils"
-import { extractUserId } from "@/lib/auth-user"
 import { buildChatSessionRoute, buildChatSessionRouteFromSession, isDedicatedChatSessionModel, resolveChatSessionRouteModel } from "@/lib/chat-session-routes"
 import { toast } from "sonner"
 import { MessageBubble } from "./MessageBubble"
@@ -68,7 +67,7 @@ import { isWorkflowSkillAgent, type WorkflowSkillId } from "@/lib/workflow-skill
 import { createClient } from "@supabase/supabase-js"
 import { collapseSidebar, navigateHomeWithSidebar, refreshCredits, refreshSessionList, SESSION_LIST_REFRESH_EVENT } from "@/lib/workspace-events"
 import { useSelectedModelStore } from "@/hooks/useSelectedModelStore"
-import { getRequiredAuthHeaders, getVerifiedAuthHeaders, hasStoredVerifiedAuthToken } from "@/lib/client-auth"
+import { getRequiredAuthHeaders, getStoredClientIdentity, getVerifiedAuthHeaders, hasStoredVerifiedAuthToken } from "@/lib/client-auth"
 import { validateFileForUpload, MAX_FILE_SIZE } from "@/lib/upload-service"
 import { VoiceRecorder, getDifyTTS, transcribeAudio } from "@/lib/voice-service"
 import { getApiUrl } from "@/lib/api-config"
@@ -1414,6 +1413,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   const isMobile = useIsMobile()
 
   const [userId, setUserId] = useState<string>("")
+  const [authResolved, setAuthResolved] = useState(false)
   const [userAvatar, setUserAvatar] = useState<string>("")
   const [userCredits, setUserCredits] = useState<number>(0)
   const [isPaidUser, setIsPaidUser] = useState(false)
@@ -1560,6 +1560,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         const { data: { user: verifiedUser } } = await supabase.auth.getUser()
         if (verifiedUser?.id) {
           setUserId(verifiedUser.id)
+          setAuthResolved(true)
           if (verifiedUser.user_metadata?.avatar_url) setUserAvatar(verifiedUser.user_metadata.avatar_url)
           const displayName = verifiedUser.phone || verifiedUser.email || verifiedUser.user_metadata?.name || "用户"
           setUserDisplayName(displayName)
@@ -1569,42 +1570,54 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
           return
         }
 
-      const userStr = localStorage.getItem('currentUser')
-      if (userStr) {
-        try {
-          const user = JSON.parse(userStr)
-          const uid = extractUserId(user)
+        const { user, userId: storedUserId, hasVerifiedToken } = getStoredClientIdentity()
+        if (user && typeof user === "object") {
+          const record = user as Record<string, any>
           console.log("🔑 [用户初始化] 解析用户:", {
-            hasId: Boolean(uid),
-            hasPhone: Boolean(user.phone || user.phone_number),
-            hasEmail: Boolean(user.email),
+            hasId: Boolean(storedUserId),
+            hasPhone: Boolean(record.phone || record.phone_number),
+            hasEmail: Boolean(record.email),
           })
-          if (user.user_metadata?.avatar_url) setUserAvatar(user.user_metadata.avatar_url)
+          if (record.user_metadata?.avatar_url) setUserAvatar(record.user_metadata.avatar_url)
 
-          // 🔥 设置用户显示名称：优先手机号 > 邮箱 > 用户名
-          const displayName = user.phone || user.phone_number || user.email || user.nickname || user.username || user.user_metadata?.name || "用户"
+          const displayName =
+            record.phone ||
+            record.phone_number ||
+            record.email ||
+            record.nickname ||
+            record.username ||
+            record.user_metadata?.name ||
+            "用户"
           setUserDisplayName(displayName)
           console.log("👤 [用户初始化] 显示名称:", displayName)
-
-          if (hasStoredVerifiedAuthToken() && uid) {
-            setUserId(uid)
-            fetchCredits(uid)
-            fetchChatSessions(uid)
-            recoverPendingTasks(uid)
-          } else {
-            console.warn("⚠️ [用户初始化] 检测到本地 Authing 用户，但缺少后端可验证 token，已禁用受保护对话请求")
-            await hydrateVerifiedUserFromApi()
-          }
-        } catch (e) {
-          console.error("❌ [用户初始化] 解析失败:", e)
-          await hydrateVerifiedUserFromApi()
+        } else {
+          console.warn("⚠️ [用户初始化] localStorage 中无 currentUser")
         }
-      } else {
-        console.warn("⚠️ [用户初始化] localStorage 中无 currentUser")
-        await hydrateVerifiedUserFromApi()
+
+        const hydrated = await hydrateVerifiedUserFromApi()
+        if (hydrated) {
+          setAuthResolved(true)
+          return
+        }
+
+        if (hasVerifiedToken && storedUserId) {
+          setUserId(storedUserId)
+          setAuthResolved(true)
+          fetchCredits(storedUserId)
+          fetchChatSessions(storedUserId)
+          recoverPendingTasks(storedUserId)
+          return
+        }
+
+        if (user) {
+          console.warn("⚠️ [用户初始化] 检测到本地用户，但后端暂未确认身份，保留展示信息并等待后续重试")
+        }
+        setAuthResolved(true)
       }
-      }
-      initUser().catch((error) => console.warn("⚠️ [用户初始化] verified session 查询失败:", error))
+      initUser().catch((error) => {
+        console.warn("⚠️ [用户初始化] verified session 查询失败:", error)
+        setAuthResolved(true)
+      })
     }
 	  }, [])
 
@@ -1750,6 +1763,9 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       return { status: null as TrialSurveyStatus | null, trialEligible: false, gateRequired: false }
     }
   }, [isPaidUser, userId])
+
+  const isAuthenticated = Boolean(userId)
+  const isAuthPending = !authResolved
 
   useEffect(() => {
     if (urlSessionId && urlSessionId !== currentSessionId) {
@@ -4107,21 +4123,23 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                 uploadedFiles={uploadedFiles}
                 onRemoveFile={(i) => setUploadedFiles((p) => p.filter((_, idx) => idx !== i))}
                 isLoading={isLoading}
-                disabled={isLoading || !userId}
-                disabledReason={!userId ? "auth" : isLoading ? "loading" : undefined}
+                disabled={isLoading || (!isAuthenticated && !isAuthPending)}
+                disabledReason={!isAuthenticated && !isAuthPending ? "auth" : isLoading ? "loading" : undefined}
                 showOpenClawSkillButton={selectedModel === "open-claw"}
                 selectedOpenClawSkillName={selectedOpenClawSkill?.name}
                 onOpenClawSkillClick={() => setOpenClawSkillPickerOpen(true)}
                 showCodexSkillButton={selectedModel === "super-all-in-one-agent"}
                 selectedCodexSkillName={selectedCodexSkill?.name}
                 onCodexSkillClick={() => setCodexSkillPickerOpen(true)}
-                placeholder={userId
+                placeholder={isAuthenticated
                   ? selectedModel === "vocab-card"
                     ? "例如：你好啊 / 我要学习 apple / 考我一下"
                     : selectedModel === "all-in-one-agent"
                       ? "描述你想生成的动画、图片或要处理的文件..."
                     : "输入内容开始对话..."
-                  : "请先登录..."}
+                  : isAuthPending
+                    ? "正在恢复登录状态..."
+                    : "请先登录..."}
                 className="overflow-visible border-[var(--paper-200)]/70 bg-[var(--paper-50)]/95 shadow-[0_-4px_18px_rgba(0,0,0,0.06)] backdrop-blur-md sm:shadow-[0_8px_24px_rgba(0,0,0,0.10)]"
                 onFileUpload={(files) => {
                   const target = { target: { files } } as unknown as React.ChangeEvent<HTMLInputElement>
@@ -4148,7 +4166,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
               />
             </div>
 
-            {!userId && (
+            {!isAuthenticated && !isAuthPending && (
               <div className="mt-2 hidden items-center justify-center gap-1 text-[10px] sm:mt-3 sm:flex sm:text-xs">
                 <span className="text-[var(--ink-400)]">未登录，</span>
                 <Link

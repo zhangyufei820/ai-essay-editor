@@ -223,6 +223,21 @@ function getStoredAuthingSdkUser() {
   return parseStoredJson(AUTHING_SDK_USER_KEY)
 }
 
+export function getStoredClientIdentity() {
+  const currentUser = getStoredCurrentUser()
+  const authingSdkUser = getStoredAuthingSdkUser()
+  const user = currentUser || authingSdkUser
+  const userId = extractUserId(currentUser) || extractUserId(authingSdkUser)
+
+  return {
+    currentUser,
+    authingSdkUser,
+    user,
+    userId,
+    hasVerifiedToken: hasStoredVerifiedAuthToken(),
+  }
+}
+
 export async function getVerifiedAuthHeaders(currentUser?: unknown): Promise<Record<string, string>> {
   const authingToken =
     collectTokenCandidates(currentUser).sort((a, b) => a.priority - b.priority)[0]?.value ||
