@@ -230,6 +230,23 @@ describe("llm gateway reliability config", () => {
     expect(vision[0]?.model_info?.id).toBe("deploy-tokenflux-gpt-5-4-mini")
   })
 
+  it("keeps legacy gpt-5.4-mini pinned to the tokenflux primary for long JSON generators", () => {
+    const config = loadConfig()
+    const legacy = modelsByName(config, "gpt-5.4-mini")
+
+    expect(legacy).toHaveLength(3)
+    const byOrder = [...legacy].sort(
+      (left, right) => (left.litellm_params?.order || 0) - (right.litellm_params?.order || 0),
+    )
+
+    expect(byOrder.map((item) => item.model_info?.id)).toEqual([
+      "deploy-tokenflux-gpt-5-4-mini",
+      "deploy-moonapix-gpt-5-4-mini",
+      "deploy-vivaapi-gpt-5-4-mini",
+    ])
+    expect(byOrder[0]?.litellm_params?.api_base).toBe("os.environ/TOKENFLUX_LLM_BASE_URL")
+  })
+
   it("exposes the Grok direct model route for independent-model pages", () => {
     const config = loadConfig()
     const grok = modelsByName(config, "grok-4.2")
