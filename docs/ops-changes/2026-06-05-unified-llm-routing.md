@@ -5,10 +5,11 @@
 ## 这次落地了什么
 
 1. `services/llm-gateway/config.yaml`
-   - `sx-fast-chat` 继续以 `gpt-5.5` 为主池，`vivaapi -> moonapix -> tokenflux -> gemini`
-   - `sx-chinese-text` 调整为 `claude-sonnet-4-6` 优先，`claude-opus-4-7` 作为更慢但更强的后备
-   - `sx-image-vision` 调整为 `gpt-5.4-mini` 优先，视觉识别先走更快路径
+   - `sx-fast-chat` 以 `gpt-5.5` 为主池，生产同环境复测后切为 `tokenflux -> moonapix -> vivaapi -> gemini`
+   - `sx-chinese-text` 生产同环境复测后切为 `Moonapix claude-sonnet-4-6` 主路，`Viva/Moonapix opus` 与 `sx-general-text` 做后备
+   - `sx-image-vision` 生产同环境复测后切为 `TokenFlux gpt-5.4-mini` 主路，后备顺序为 `Viva gpt-5.4-mini -> Moonapix gpt-5.4-mini -> Moonapix claude-sonnet-4-6`
    - 暴露独立 `grok-4.2` 路由，方便独立模型页保持模型身份
+   - TokenFlux 通道补齐了生产验证通过的 `User-Agent`，修复其 `403 TLS router` 拦截
 2. `scripts/dify-remap-unified-routing.mjs`
    - 只扫描真实前端使用的 Dify app
    - 排除 `Open Claw`、`codex` 和四个独立模型页
@@ -33,6 +34,9 @@
 - Dify workflow graph 备份标签：`codex-unified-routing-20260605060301`
 - 统一 remap 之后 dry-run 为 `total_changes = 0`
 - `shenxiang-llm-gateway` 已通过 liveliness / readiness
+- 2026-06-05 二次同环境复测结论：
+  - `sx-chinese-text` 现网主路若走 Viva 会慢于 Moonapix，已改成 Moonapix 主路
+  - `sx-image-vision` 在真实 URL 识图和 base64 OCR 两种输入下，TokenFlux `gpt-5.4-mini` 都是最快且成功率稳定的主路
 
 ## 常用命令
 

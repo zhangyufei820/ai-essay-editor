@@ -18,11 +18,11 @@ Self-hosted OpenAI-compatible routing layer for realtime text and image-recognit
 - `gemini-2.5-flash`
 - `gemini-2.5-pro`
 
-Hot business aliases are multi-deployment pools in `config.yaml`. LiteLLM filters unhealthy deployments from background health state, then honors deployment `order`:
+Hot business aliases are single-primary routes in `config.yaml`. LiteLLM keeps the primary healthy with background checks, and failover happens through explicit `router_settings.fallbacks` chains:
 
-- `order: 1`: fastest measured primary
-- `order: 2+`: fallback providers
-- `fallbacks`: last-resort cross-alias fallback after the deployment pool is exhausted
+- primary alias: fastest measured deployment
+- fallback alias chain: deterministic provider order after a primary failure
+- cross-alias fallback: last-resort escape hatch when the primary family is unhealthy
 
 Deployment `model_info.id` values are shared across equivalent text aliases where the same provider/model pair is reused. This makes cooldown and circuit state follow the real upstream deployment instead of one alias only.
 

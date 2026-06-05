@@ -23,6 +23,8 @@ type GatewayConfig = {
   router_settings: {
     cooldown_time?: number
     allowed_fails?: number
+    routing_strategy?: string
+    routing_strategy_args?: Record<string, number>
     allowed_fails_policy?: Record<string, number>
     fallbacks?: Array<Record<string, string[]>>
   }
@@ -63,7 +65,7 @@ describe("llm gateway reliability config", () => {
     expect(config.router_settings.allowed_fails_policy?.BadRequestErrorAllowedFails).toBe(0)
   })
 
-  it("keeps hot text and vision aliases as ordered multi-provider pools", () => {
+  it("keeps hot text and vision aliases pinned to a single primary deployment", () => {
     const config = loadConfig()
     const expectedAliases = [
       "sx-fast-chat",
@@ -75,8 +77,7 @@ describe("llm gateway reliability config", () => {
 
     for (const alias of expectedAliases) {
       const deployments = modelsByName(config, alias)
-      expect(deployments.length).toBeGreaterThanOrEqual(3)
-      expect(deployments.some((item) => item.litellm_params?.order === 1)).toBe(true)
+      expect(deployments).toHaveLength(1)
       expect(deployments.every((item) => item.model_info?.id)).toBe(true)
       expect(deployments.every((item) => item.model_info?.mode === "chat")).toBe(true)
       expect(deployments.every((item) => typeof item.litellm_params?.timeout === "number")).toBe(true)
@@ -99,13 +100,13 @@ describe("llm gateway reliability config", () => {
     expect(probes.every((item) => (item.model_info?.health_check_max_tokens || 0) <= 3)).toBe(true)
   })
 
-  it("shares deployment ids across text aliases for shared circuit state", () => {
+  it("keeps hot GPT aliases on the tokenflux primaries while fallback chains reuse shared deployments", () => {
     const config = loadConfig()
     const fastIds = new Set(modelsByName(config, "sx-fast-chat").map((item) => item.model_info?.id))
     const mathIds = new Set(modelsByName(config, "sx-math-text").map((item) => item.model_info?.id))
     const generalIds = new Set(modelsByName(config, "sx-general-text").map((item) => item.model_info?.id))
 
-    for (const id of ["deploy-tokenflux-gpt-5-5", "deploy-vivaapi-gpt-5-5", "deploy-moonapix-gpt-5-5"]) {
+    for (const id of ["deploy-tokenflux-gpt-5-5"]) {
       expect(fastIds.has(id)).toBe(true)
       expect(mathIds.has(id)).toBe(true)
       expect(generalIds.has(id)).toBe(true)
@@ -157,7 +158,7 @@ describe("llm gateway reliability config", () => {
     expect(fallbackTargets.get("gemini-3.1-pro-preview")).toEqual(["sx-gpt-5.5-vivaapi", "sx-gpt-5.5-moonapix"])
   })
 
-  it("keeps high-volume legacy Dify text model names routed through gateway aliases", () => {
+  it("keeps high-volume legacy Dify text model names routed through gateway-compatible deployments", () => {
     const config = loadConfig()
     const expectedModelNames = [
       "claude-3-7-sonnet-20250219",
@@ -168,53 +169,65 @@ describe("llm gateway reliability config", () => {
     for (const name of expectedModelNames) {
       const deployments = modelsByName(config, name)
       expect(deployments.length).toBeGreaterThanOrEqual(2)
-      expect(deployments.some((item) => item.litellm_params?.order === 1)).toBe(true)
       expect(deployments.every((item) => item.model_info?.mode === "chat")).toBe(true)
     }
   })
 
-  it("does not put TokenFlux-only GPT deployments first for Dify-facing routes", () => {
+  it("keeps explicit fallback chains aligned to fastest stable provider order", () => {
     const config = loadConfig()
-    const difyFacingRoutes = [
-      "sx-fast-chat",
-      "sx-math-text",
-      "sx-general-text",
-      "gpt-5.2",
-      "gpt-5.4",
-      "gpt-5.4-mini",
-      "gpt-5.5",
-    ]
+    const fallbackTargets = new Map<string, string[]>()
 
-    for (const route of difyFacingRoutes) {
-      const primary = modelsByName(config, route).find((item) => item.litellm_params?.order === 1)
-      expect(primary).toBeTruthy()
-      expect(primary?.model_info?.id || "").not.toContain("tokenflux")
+    for (const fallback of config.router_settings.fallbacks || []) {
+      for (const [source, targets] of Object.entries(fallback)) {
+        fallbackTargets.set(source, targets)
+      }
+    }
+
+    expect(fallbackTargets.get("sx-fast-chat")).toEqual(["sx-gpt-5.5-moonapix", "sx-gpt-5.5-vivaapi", "sx-gemini-3.1-pro"])
+    expect(fallbackTargets.get("sx-math-text")).toEqual(["sx-gpt-5.5-moonapix", "sx-gpt-5.5-vivaapi", "sx-gemini-3.1-pro"])
+    expect(fallbackTargets.get("sx-general-text")).toEqual(["sx-gpt-5.5-moonapix", "sx-gpt-5.5-vivaapi", "sx-gemini-3.1-pro"])
+    expect(fallbackTargets.get("sx-chinese-text")).toEqual([
+      "sx-claude-sonnet-4-6",
+      "sx-claude-opus-4-7-vivaapi",
+      "sx-claude-opus-4-7-moonapix",
+      "sx-general-text",
+    ])
+    expect(fallbackTargets.get("sx-image-vision")).toEqual([
+      "sx-gpt-5.4-mini-vivaapi",
+      "sx-gpt-5.4-mini-moonapix",
+      "sx-image-vision-moonapix",
+      "gpt-5.4-mini",
+    ])
+  })
+
+  it("keeps Chinese-first routing pinned to the fast Claude Sonnet primary", () => {
+    const config = loadConfig()
+    const chinese = modelsByName(config, "sx-chinese-text")
+
+    expect(chinese).toHaveLength(1)
+    expect(chinese[0]?.litellm_params?.model).toBe("openai/claude-sonnet-4-6")
+    expect(chinese[0]?.litellm_params?.api_base).toBe("os.environ/MOONAPIX_LLM_BASE_URL")
+    expect(chinese[0]?.model_info?.id).toBe("deploy-moonapix-claude-sonnet-4-6")
+  })
+
+  it("keeps the fast GPT business aliases pinned to the TokenFlux deployment", () => {
+    const config = loadConfig()
+
+    for (const alias of ["sx-fast-chat", "sx-math-text", "sx-general-text"]) {
+      const deployments = modelsByName(config, alias)
+      expect(deployments).toHaveLength(1)
+      expect(deployments[0]?.litellm_params?.api_base).toBe("os.environ/TOKENFLUX_LLM_BASE_URL")
+      expect(deployments[0]?.model_info?.id).toBe("deploy-tokenflux-gpt-5-5")
     }
   })
 
-  it("keeps Chinese-first routing on fast Claude Sonnet before Opus", () => {
-    const config = loadConfig()
-    const chinese = modelsByName(config, "sx-chinese-text")
-      .sort((a, b) => (a.litellm_params?.order || 0) - (b.litellm_params?.order || 0))
-
-    expect(chinese.map((item) => item.litellm_params?.model)).toEqual([
-      "openai/claude-sonnet-4-6",
-      "openai/claude-sonnet-4-6",
-      "openai/claude-opus-4-7",
-      "openai/claude-opus-4-7",
-    ])
-    expect(chinese[0]?.model_info?.id).toBe("deploy-vivaapi-claude-sonnet-4-6")
-    expect(chinese[1]?.model_info?.id).toBe("deploy-moonapix-claude-sonnet-4-6")
-  })
-
-  it("keeps vision routing on GPT-5.4-mini before slower multimodal fallbacks", () => {
+  it("keeps vision routing pinned to GPT-5.4-mini before multimodal fallbacks", () => {
     const config = loadConfig()
     const vision = modelsByName(config, "sx-image-vision")
-      .sort((a, b) => (a.litellm_params?.order || 0) - (b.litellm_params?.order || 0))
 
-    expect(vision[0]?.model_info?.id).toBe("deploy-vision-vivaapi-gpt-5-4-mini")
-    expect(vision[1]?.model_info?.id).toBe("deploy-vision-tokenflux-gpt-5-4-mini")
-    expect(vision[2]?.model_info?.id).toBe("deploy-vision-moonapix-claude-sonnet-4-6")
+    expect(vision).toHaveLength(1)
+    expect(vision[0]?.litellm_params?.api_base).toBe("os.environ/TOKENFLUX_LLM_BASE_URL")
+    expect(vision[0]?.model_info?.id).toBe("deploy-tokenflux-gpt-5-4-mini")
   })
 
   it("exposes the Grok direct model route for independent-model pages", () => {
@@ -224,5 +237,13 @@ describe("llm gateway reliability config", () => {
     expect(grok).toHaveLength(1)
     expect(grok[0]?.litellm_params?.model).toBe("openai/grok-4.2")
     expect(grok[0]?.model_info?.id).toBe("grok-4-2-vivaapi")
+  })
+
+  it("uses latency-based routing with explicit fallback chains instead of random shuffle", () => {
+    const config = loadConfig()
+
+    expect(config.router_settings.routing_strategy).toBe("latency-based-routing")
+    expect(config.router_settings.routing_strategy_args?.ttl).toBe(30)
+    expect(config.router_settings.routing_strategy_args?.lowest_latency_buffer).toBe(0)
   })
 })

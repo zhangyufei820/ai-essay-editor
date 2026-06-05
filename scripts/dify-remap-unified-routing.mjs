@@ -5,7 +5,7 @@ import os from "os"
 import path from "path"
 import { spawnSync } from "child_process"
 
-const EXCLUDED_APP_NAMES = new Set([
+const PRESERVED_APP_NAMES = new Set([
   "Open Claw",
   "codex",
   "ChatGPT 5.4",
@@ -35,7 +35,37 @@ const PROVIDER_NAME = "langgenius/openai_api_compatible/openai_api_compatible"
 const DEFAULT_MODEL_NAME = "沈翔通用文本"
 
 const APP_RULES = {
+  "3d提示词优化": {
+    defaultModelName: "沈翔通用文本",
+  },
+  "Image Prompt Studio Chatflow v2.2 Fixed": {
+    defaultModelName: "沈翔通用文本",
+  },
+  "K12中英文作文企业级Chatflow-显性提示词版": {
+    defaultModelName: "沈翔语文优先",
+  },
+  "Minimal Video Gateway Fixed": {
+    defaultModelName: "沈翔通用文本",
+  },
+  "Notes to Flashcards": {
+    defaultModelName: "沈翔通用文本",
+  },
+  "Teacher Custom Agent Workflow Fallback": {
+    defaultModelName: "沈翔语文优先",
+  },
+  "OpenClaw_Expert_Bridge": {
+    defaultModelName: "沈翔快速对话",
+  },
+  "gemini 图像提示词": {
+    defaultModelName: "沈翔通用文本",
+  },
+  "gpt2图像提示词优化": {
+    defaultModelName: "沈翔通用文本",
+  },
   "网站助手": {
+    defaultModelName: "沈翔快速对话",
+  },
+  "网页搜索专用助手": {
     defaultModelName: "沈翔快速对话",
   },
   "全学段作文批改超级智能体": {
@@ -118,32 +148,42 @@ const APP_RULES = {
 }
 
 const FALLBACK_RULES = [
-  [/视觉|OCR|图片|图像/i, "沈翔图像识别"],
+  [/视觉提取|OCR|图片.*识别|图像.*识别|识别图片|图片内容识别/i, "沈翔图像识别"],
   [/快速|极速|意图|路由|回复|理解/i, "沈翔快速对话"],
   [/数学|推理/i, "沈翔数学推理"],
-  [/作文|写作|润色|语文|实验报告|备课|班主任/i, "沈翔语文优先"],
+  [/作文|写作|润色|语文|实验报告|备课|班主任|教案|教师|论文|学生表现|一致性/i, "沈翔语文优先"],
 ]
 
 function parseArgs(argv) {
   const args = {
     apply: false,
+    allApps: false,
     host: process.env.DIFY_DB_SSH_HOST || "root@43.154.111.156",
+    includePreserved: false,
     appNames: [],
+    nodeTypes: ["llm", "question-classifier"],
   }
 
   for (let i = 2; i < argv.length; i += 1) {
     const arg = argv[i]
     if (arg === "--apply") {
       args.apply = true
+    } else if (arg === "--all-apps") {
+      args.allApps = true
     } else if (arg === "--host") {
       args.host = argv[++i]
     } else if (arg === "--app") {
       args.appNames.push(argv[++i])
+    } else if (arg === "--include-preserved") {
+      args.includePreserved = true
+    } else if (arg === "--node-type") {
+      args.nodeTypes.push(argv[++i])
     } else {
       throw new Error(`Unknown argument: ${arg}`)
     }
   }
 
+  args.nodeTypes = [...new Set(args.nodeTypes.filter(Boolean))]
   return args
 }
 
@@ -161,7 +201,9 @@ function runRemote(host, script) {
   return result.stdout
 }
 
-function pickGatewayModel(nodeTitle, appName) {
+function pickGatewayModel(nodeTitle, appName, nodeType) {
+  if (nodeType === "question-classifier") return "沈翔快速对话"
+
   const appRule = APP_RULES[appName]
   if (appRule?.nodeRules) {
     for (const [pattern, modelName] of appRule.nodeRules) {
@@ -178,42 +220,49 @@ function pickGatewayModel(nodeTitle, appName) {
   return DEFAULT_MODEL_NAME
 }
 
-function buildRemoteAuditScript(appNames) {
+function buildRemoteAuditScript({ appNames, allApps, includePreserved, nodeTypes }) {
   const appFilter = JSON.stringify(appNames)
+  const nodeTypeFilter = JSON.stringify(nodeTypes)
+  const allAppsLiteral = allApps ? "True" : "False"
+  const includePreservedLiteral = includePreserved ? "True" : "False"
   return `
 import json
 import subprocess
 from pathlib import Path
 
-EXCLUDED = ${JSON.stringify([...EXCLUDED_APP_NAMES])}
+PRESERVED = ${JSON.stringify([...PRESERVED_APP_NAMES])}
 APP_FILTER = set(${appFilter})
+ALL_APPS = ${allAppsLiteral}
+INCLUDE_PRESERVED = ${includePreservedLiteral}
+NODE_TYPES = set(${nodeTypeFilter})
 TARGET_ENV_KEYS = ${JSON.stringify(TARGET_ENV_KEYS)}
 
-env = {}
-for raw in Path("/data/ai-essay-editor/.env.production").read_text().splitlines():
-  line = raw.strip()
-  if not line or line.startswith("#") or "=" not in line:
-    continue
-  k, v = line.split("=", 1)
-  if k in TARGET_ENV_KEYS:
-    env[k] = v.strip().strip('"').strip("'")
-
 target_app_ids = set()
-for key in TARGET_ENV_KEYS:
-  token = env.get(key, "")
-  if not token:
-    continue
-  safe = token.replace("'", "''")
-  sql = f"select coalesce(app_id::text, '') from api_tokens where token = '{safe}' limit 1;"
-  token_res = subprocess.run(
-    ["docker", "exec", "docker-db_postgres-1", "psql", "-U", "shenxiang", "-d", "shenxiang", "-At", "-c", sql],
-    capture_output=True,
-    text=True,
-    check=True,
-  )
-  app_id = (token_res.stdout or "").strip()
-  if app_id:
-    target_app_ids.add(app_id)
+if not ALL_APPS:
+  env = {}
+  for raw in Path("/data/ai-essay-editor/.env.production").read_text().splitlines():
+    line = raw.strip()
+    if not line or line.startswith("#") or "=" not in line:
+      continue
+    k, v = line.split("=", 1)
+    if k in TARGET_ENV_KEYS:
+      env[k] = v.strip().strip('"').strip("'")
+
+  for key in TARGET_ENV_KEYS:
+    token = env.get(key, "")
+    if not token:
+      continue
+    safe = token.replace("'", "''")
+    sql = f"select coalesce(app_id::text, '') from api_tokens where token = '{safe}' limit 1;"
+    token_res = subprocess.run(
+      ["docker", "exec", "docker-db_postgres-1", "psql", "-U", "shenxiang", "-d", "shenxiang", "-At", "-c", sql],
+      capture_output=True,
+      text=True,
+      check=True,
+    )
+    app_id = (token_res.stdout or "").strip()
+    if app_id:
+      target_app_ids.add(app_id)
 
 sql = """
 with workflow_nodes as (
@@ -244,7 +293,7 @@ from (
     coalesce(node->'data'->'model'->>'name', '') as model_name,
     coalesce(node->'data'->'model'->>'provider', '') as provider_name
   from workflow_nodes
-  where node->'data'->>'type' = 'llm'
+  where node->'data'->>'type' in ('llm', 'question-classifier')
 ) t;
 """
 
@@ -257,9 +306,11 @@ res = subprocess.run(
 rows = json.loads(res.stdout or "null") or []
 filtered = []
 for row in rows:
-  if row["app_name"] in EXCLUDED:
+  if row["node_type"] not in NODE_TYPES:
     continue
-  if target_app_ids and row["app_id"] not in target_app_ids:
+  if not INCLUDE_PRESERVED and row["app_name"] in PRESERVED:
+    continue
+  if not ALL_APPS and target_app_ids and row["app_id"] not in target_app_ids:
     continue
   if APP_FILTER and row["app_name"] not in APP_FILTER:
     continue
@@ -337,12 +388,12 @@ print(json.dumps({"backup_label": label, "updated": len(CHANGES)}, ensure_ascii=
 
 function main() {
   const args = parseArgs(process.argv)
-  const auditRaw = runRemote(args.host, buildRemoteAuditScript(args.appNames))
+  const auditRaw = runRemote(args.host, buildRemoteAuditScript(args))
   const rows = JSON.parse(auditRaw)
 
   const changes = []
   for (const row of rows) {
-    const targetModelName = pickGatewayModel(row.node_title || "", row.app_name || "")
+    const targetModelName = pickGatewayModel(row.node_title || "", row.app_name || "", row.node_type || "")
     if (row.model_name === targetModelName && row.provider_name === PROVIDER_NAME) continue
     changes.push({
       ...row,
@@ -354,6 +405,7 @@ function main() {
     const key = change.app_name
     if (!acc[key]) acc[key] = []
     acc[key].push({
+      node_type: change.node_type,
       node_title: change.node_title,
       from_model: change.model_name,
       to_model: change.target_model_name,
@@ -363,7 +415,10 @@ function main() {
 
   const output = {
     apply: args.apply,
+    all_apps: args.allApps,
     host: args.host,
+    include_preserved: args.includePreserved,
+    node_types: args.nodeTypes,
     total_changes: changes.length,
     apps: summary,
   }

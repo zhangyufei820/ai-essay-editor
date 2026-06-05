@@ -41,14 +41,21 @@ Do not use this path for long image, music, or video generation.
 
 The LLM gateway uses LiteLLM's background health checks and health-check-driven routing:
 
-- hot aliases are multi-deployment pools with explicit `order`
-- `order: 1` is the fastest measured primary provider
-- higher orders are used when earlier deployments are unhealthy or cooling down
+- hot aliases are single-primary routes
+- the primary is the fastest measured deployment for that business alias
 - provider failures enter cooldown through `allowed_fails` / `allowed_fails_policy`
+- explicit `router_settings.fallbacks` define the deterministic backup order
 - health checks are low-frequency and serial: 180 second interval, concurrency 1, max 3 output tokens, 6-10 second per-deployment timeout
 - health probe 429/408 responses are treated as routing signals, so overloaded providers can be avoided before a user request lands there
 
-This is true dynamic failover on the request path, not only static fallback. It is intentionally not high-throughput load balancing across every provider by default, because the product objective is fastest stable responses: use the fastest healthy primary, then switch away quickly when it is unhealthy.
+This is true dynamic failover on the request path, not random load spreading. The product objective is fastest stable responses: hold the fastest healthy primary, then switch away quickly when it is unhealthy.
+
+As of 2026-06-05 production verification, the hot GPT text aliases (`sx-fast-chat`, `sx-math-text`, `sx-general-text`) use TokenFlux as the primary because same-model smoke tests from the production environment measured it fastest after adding the required Codex-style `User-Agent` header for TokenFlux's TLS router checks.
+
+The business-specialized primaries were also tightened from the same environment:
+
+- `sx-chinese-text`: `Moonapix claude-sonnet-4-6` primary, because it was materially faster than the Viva Claude route while staying stable.
+- `sx-image-vision`: `TokenFlux gpt-5.4-mini` primary, with `Viva gpt-5.4-mini` then Moonapix as fallbacks, because it was the fastest stable path for both URL-based vision requests and the base64 OCR shape used by `essay-ai-suite`.
 
 ## Voice
 
