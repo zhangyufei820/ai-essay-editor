@@ -191,4 +191,38 @@ describe("llm gateway reliability config", () => {
       expect(primary?.model_info?.id || "").not.toContain("tokenflux")
     }
   })
+
+  it("keeps Chinese-first routing on fast Claude Sonnet before Opus", () => {
+    const config = loadConfig()
+    const chinese = modelsByName(config, "sx-chinese-text")
+      .sort((a, b) => (a.litellm_params?.order || 0) - (b.litellm_params?.order || 0))
+
+    expect(chinese.map((item) => item.litellm_params?.model)).toEqual([
+      "openai/claude-sonnet-4-6",
+      "openai/claude-sonnet-4-6",
+      "openai/claude-opus-4-7",
+      "openai/claude-opus-4-7",
+    ])
+    expect(chinese[0]?.model_info?.id).toBe("deploy-vivaapi-claude-sonnet-4-6")
+    expect(chinese[1]?.model_info?.id).toBe("deploy-moonapix-claude-sonnet-4-6")
+  })
+
+  it("keeps vision routing on GPT-5.4-mini before slower multimodal fallbacks", () => {
+    const config = loadConfig()
+    const vision = modelsByName(config, "sx-image-vision")
+      .sort((a, b) => (a.litellm_params?.order || 0) - (b.litellm_params?.order || 0))
+
+    expect(vision[0]?.model_info?.id).toBe("deploy-vision-vivaapi-gpt-5-4-mini")
+    expect(vision[1]?.model_info?.id).toBe("deploy-vision-tokenflux-gpt-5-4-mini")
+    expect(vision[2]?.model_info?.id).toBe("deploy-vision-moonapix-claude-sonnet-4-6")
+  })
+
+  it("exposes the Grok direct model route for independent-model pages", () => {
+    const config = loadConfig()
+    const grok = modelsByName(config, "grok-4.2")
+
+    expect(grok).toHaveLength(1)
+    expect(grok[0]?.litellm_params?.model).toBe("openai/grok-4.2")
+    expect(grok[0]?.model_info?.id).toBe("grok-4-2-vivaapi")
+  })
 })

@@ -8,6 +8,8 @@
     "dev": "next dev",
     "lint": "eslint .",
     "perf:baseline": "node scripts/perf-baseline.mjs",
+    "perf:chat:prod": "node scripts/production-chat-latency.mjs",
+    "perf:dify:audit": "node scripts/dify-workflow-latency-audit.mjs",
     "test:e2e": "playwright test",
     "start": "next start",
     "test": "jest",
