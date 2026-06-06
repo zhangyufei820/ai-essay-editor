@@ -17,6 +17,8 @@ const PROBLEM_APP = {
   appName: "题目解析专用智能体",
   workflowId: "3be80f07-bf2e-4845-b246-2e61bff9dd69",
   routeNodeId: "17751975014370",
+  solveNodeId: "1775196356822",
+  finalEditorNodeId: "17643486820500",
 }
 
 const WEIGHTED_RETRIEVAL_CONFIG = {
@@ -213,12 +215,45 @@ def tune_problem_route(current_graph):
             "text": (user_prompt or {}).get("text", "{{#sys.query#}}"),
         },
     ]
+    model["name"] = "gemini-3.1-pro-preview"
+    model["provider"] = "langgenius/openai_api_compatible/openai_api_compatible"
+    model["mode"] = "chat"
     return {
         "target_graph": target_graph,
         "before_completion_params": deepcopy(model.get("completion_params", {})),
         "after_completion_params": deepcopy(completion),
         "before_prompt_chars": len(prompt_template[0].get("text", "")) if prompt_template else 0,
         "after_prompt_chars": len(PROBLEM_ROUTE_SYSTEM_PROMPT),
+        "route_model_name": model.get("name"),
+    }
+
+def tune_problem_solver(current_graph):
+    target_graph = deepcopy(current_graph)
+    solve_node_ids = [PROBLEM["solveNodeId"], PROBLEM["finalEditorNodeId"]]
+    tuned_nodes = []
+
+    for node_id in solve_node_ids:
+        solve_node = find_node(target_graph, node_id)
+        if solve_node is None:
+            raise RuntimeError(f"problem solve node not found: {node_id}")
+        data = solve_node.setdefault("data", {})
+        model = data.setdefault("model", {})
+        completion = model.setdefault("completion_params", {})
+        if "temperature" not in completion:
+            completion["temperature"] = 0.7
+        model["name"] = "gpt-5.5"
+        model["provider"] = "langgenius/openai_api_compatible/openai_api_compatible"
+        model["mode"] = "chat"
+        tuned_nodes.append({
+            "node_id": str(node_id),
+            "title": data.get("title", ""),
+            "model_name": model.get("name"),
+            "completion_params": deepcopy(completion),
+        })
+
+    return {
+        "target_graph": target_graph,
+        "solve_nodes": tuned_nodes,
     }
 
 site_workflow = load_workflow(SITE["workflowId"])
@@ -226,6 +261,7 @@ problem_workflow = load_workflow(PROBLEM["workflowId"])
 
 site_tuned = tune_site_assistant(site_workflow["graph"])
 problem_tuned = tune_problem_route(problem_workflow["graph"])
+problem_solver_tuned = tune_problem_solver(problem_tuned["target_graph"])
 
 changes = []
 
@@ -239,14 +275,14 @@ if site_tuned["target_graph"] != site_workflow["graph"]:
         "reason": "restore_or_lighten_site_assistant_retrieval",
     })
 
-if problem_tuned["target_graph"] != problem_workflow["graph"]:
+if problem_solver_tuned["target_graph"] != problem_workflow["graph"]:
     changes.append({
         "app_id": problem_workflow["app_id"],
         "app_name": problem_workflow["app_name"],
         "workflow_id": problem_workflow["workflow_id"],
         "before_graph_raw": problem_workflow["graph_raw"],
-        "after_graph": problem_tuned["target_graph"],
-        "reason": "tighten_problem_route_node",
+        "after_graph": problem_solver_tuned["target_graph"],
+        "reason": "tighten_problem_route_and_solver_models",
     })
 
 summary = {
@@ -267,6 +303,8 @@ summary = {
         "after_completion_params": problem_tuned["after_completion_params"],
         "before_prompt_chars": problem_tuned["before_prompt_chars"],
         "after_prompt_chars": problem_tuned["after_prompt_chars"],
+        "route_model_name": problem_tuned["route_model_name"],
+        "solve_nodes": problem_solver_tuned["solve_nodes"],
     },
 }
 

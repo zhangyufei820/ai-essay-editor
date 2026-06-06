@@ -77,6 +77,29 @@ describe("production dify hardening guards", () => {
       temperature: 0,
     })
     expect(payload.problem.after_prompt_chars).toBe(632)
+    expect(payload.problem.route_model_name).toBe("gemini-3.1-pro-preview")
+    expect(payload.problem.solve_nodes).toEqual([
+      {
+        node_id: "1775196356822",
+        title: "LLM 3",
+        model_name: "gpt-5.5",
+        completion_params: { temperature: 0.7 },
+      },
+      {
+        node_id: "17643486820500",
+        title: "总编辑 ",
+        model_name: "gpt-5.5",
+        completion_params: { temperature: 0.7 },
+      },
+    ])
+  })
+
+  it("keeps problem workflow remap aligned to the dedicated latency-tightened models", () => {
+    const payload = parseFirstJsonObject(runNodeScript(remapScriptPath, ["--app", "题目解析专用智能体"]))
+
+    expect(payload.apply).toBe(false)
+    expect(payload.total_changes).toBe(0)
+    expect(payload.apps || {}).toEqual({})
   })
 
   it("keeps vocab-card tuning idempotent for both published and draft workflows", () => {
