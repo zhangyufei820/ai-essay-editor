@@ -1,7 +1,12 @@
 import fs from "fs"
 import path from "path"
 
-import { markdownToSafeHtml, prepareChatMarkdown } from "@/lib/chat-pdf-export"
+import {
+  chatPdfStyles,
+  chooseChatPdfSliceHeight,
+  markdownToSafeHtml,
+  prepareChatMarkdown,
+} from "@/lib/chat-pdf-export"
 
 const root = path.resolve(__dirname, "..")
 
@@ -48,6 +53,7 @@ describe("chat PDF export markdown rendering", () => {
 
     expect(html).toContain("katex")
     expect(html).toContain("同位角相等")
+    expect(html).not.toContain("katex-mathml")
     expect(html).not.toContain("@@MATH")
     expect(html).not.toContain("$AB")
   })
@@ -60,8 +66,44 @@ S = \\frac{1}{2}ah
 $$`)
 
     expect(html).toContain("katex-display")
+    expect(html).not.toContain("katex-mathml")
     expect(html).not.toContain("@@MATH")
     expect(html).not.toContain("$$")
+  })
+
+  it("ships KaTeX hiding rules with the offscreen PDF document", () => {
+    expect(chatPdfStyles).toContain(".katex .katex-mathml")
+    expect(chatPdfStyles).toContain("clip: rect(1px, 1px, 1px, 1px)")
+    expect(chatPdfStyles).toContain(".katex-display")
+  })
+
+  it("moves page slices to safe breakpoints before cutting text", () => {
+    expect(
+      chooseChatPdfSliceHeight({
+        sourceY: 0,
+        maxSliceHeight: 1000,
+        canvasHeight: 2400,
+        safeBreaks: [120, 540, 928, 1040],
+      })
+    ).toBe(928)
+
+    expect(
+      chooseChatPdfSliceHeight({
+        sourceY: 928,
+        maxSliceHeight: 1000,
+        canvasHeight: 2400,
+        safeBreaks: [120, 540, 928, 1880, 2050],
+      })
+    ).toBe(952)
+
+    expect(
+      chooseChatPdfSliceHeight({
+        sourceY: 1880,
+        maxSliceHeight: 1000,
+        canvasHeight: 2400,
+        safeBreaks: [2050],
+      })
+    ).toBe(520)
   })
 
   it("essay review template renders the complete raw response through EnhancedMarkdown", () => {
@@ -70,5 +112,14 @@ $$`)
     expect(src).toContain("完整批改内容")
     expect(src).toContain("<EnhancedMarkdown")
     expect(src).not.toContain("<pre className")
+  })
+
+  it("keeps chat PDF export centralized in the shared helper", () => {
+    const src = fs.readFileSync(path.join(root, "components/chat/enhanced-chat-interface.tsx"), "utf8")
+
+    expect(src).not.toContain("const handleExportPDF = async")
+    expect(src).not.toContain('import("html2canvas")')
+    expect(src).not.toContain('import("jspdf")')
+    expect(src).not.toContain("printWindow.document.write")
   })
 })

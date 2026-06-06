@@ -25,6 +25,7 @@ function renderMath(markdown: string) {
   const withBlocks = markdown.replace(/\$\$([\s\S]+?)\$\$/g, (_, math) => {
     const html = katex.renderToString(math.trim(), {
       displayMode: true,
+      output: "html",
       throwOnError: false,
       trust: false,
       strict: "ignore",
@@ -38,6 +39,7 @@ function renderMath(markdown: string) {
   const withInline = withBlocks.replace(/\$([^$\n]+?)\$/g, (_, math) => {
     const html = katex.renderToString(math.trim(), {
       displayMode: false,
+      output: "html",
       throwOnError: false,
       trust: false,
       strict: "ignore",
@@ -312,6 +314,27 @@ export const chatPdfStyles = `
     font-weight: 700;
     color: #14532d;
   }
+  .katex { font-size: 1em; white-space: nowrap; }
+  .katex .katex-mathml {
+    clip: rect(1px, 1px, 1px, 1px);
+    border: 0;
+    height: 1px;
+    overflow: hidden;
+    padding: 0;
+    position: absolute;
+    width: 1px;
+  }
+  .katex-display {
+    display: block;
+    margin: 1em 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    text-align: center;
+  }
+  .katex-display > .katex {
+    display: block;
+    text-align: center;
+  }
   .footer {
     margin-top: 40px;
     padding-top: 20px;
@@ -322,6 +345,58 @@ export const chatPdfStyles = `
   }
   .katex-error { color: #B71C1C; font-size: 0.9em; }
 `
+
+type ChatPdfSliceOptions = {
+  sourceY: number
+  maxSliceHeight: number
+  canvasHeight: number
+  safeBreaks: number[]
+}
+
+const MIN_SAFE_SLICE_RATIO = 0.58
+const SAFE_BREAK_PADDING = 10
+
+export function chooseChatPdfSliceHeight({
+  sourceY,
+  maxSliceHeight,
+  canvasHeight,
+  safeBreaks,
+}: ChatPdfSliceOptions) {
+  const remainingHeight = canvasHeight - sourceY
+  if (remainingHeight <= maxSliceHeight) return remainingHeight
+
+  const targetEnd = sourceY + maxSliceHeight
+  const minEnd = sourceY + Math.floor(maxSliceHeight * MIN_SAFE_SLICE_RATIO)
+  const safeEnd = [...safeBreaks]
+    .filter((breakY) => breakY >= minEnd && breakY <= targetEnd - SAFE_BREAK_PADDING)
+    .sort((a, b) => b - a)[0]
+
+  return Math.max(1, Math.floor((safeEnd ?? targetEnd) - sourceY))
+}
+
+function collectChatPdfSafeBreaks(reportRoot: HTMLDivElement, canvasScale: number) {
+  const rootRect = reportRoot.getBoundingClientRect()
+  const selector = [
+    ".header",
+    ".footer",
+    ".content > h1",
+    ".content > h2",
+    ".content > h3",
+    ".content > h4",
+    ".content > p",
+    ".content > ul",
+    ".content > ol",
+    ".content > blockquote",
+    ".content > table",
+    ".content > pre",
+    ".content > hr",
+  ].join(", ")
+
+  return Array.from(reportRoot.querySelectorAll<HTMLElement>(selector))
+    .map((node) => Math.round((node.getBoundingClientRect().bottom - rootRect.top) * canvasScale))
+    .filter((breakY) => Number.isFinite(breakY) && breakY > 0)
+    .sort((a, b) => a - b)
+}
 
 export async function exportChatContentToPDF(raw: string, options?: { title?: string; filenamePrefix?: string }) {
   let reportRoot: HTMLDivElement | null = null
@@ -359,6 +434,8 @@ export async function exportChatContentToPDF(raw: string, options?: { title?: st
       windowHeight: reportRoot.scrollHeight,
     })
 
+    const canvasScale = canvas.width / reportRoot.scrollWidth
+    const safeBreaks = collectChatPdfSafeBreaks(reportRoot, canvasScale)
     const pdf = new jsPDF({ orientation: "p", unit: "pt", format: "a4", compress: true })
     const pageWidth = pdf.internal.pageSize.getWidth()
     const pageHeight = pdf.internal.pageSize.getHeight()
@@ -374,7 +451,12 @@ export async function exportChatContentToPDF(raw: string, options?: { title?: st
     let sourceY = 0
     let pageIndex = 0
     while (sourceY < canvas.height) {
-      const sliceHeightPx = Math.min(pageHeightPx, canvas.height - sourceY)
+      const sliceHeightPx = chooseChatPdfSliceHeight({
+        sourceY,
+        maxSliceHeight: pageHeightPx,
+        canvasHeight: canvas.height,
+        safeBreaks,
+      })
       pageCanvas.height = sliceHeightPx
       pageContext.clearRect(0, 0, pageCanvas.width, pageCanvas.height)
       pageContext.drawImage(canvas, 0, sourceY, canvas.width, sliceHeightPx, 0, 0, pageCanvas.width, sliceHeightPx)
