@@ -675,6 +675,21 @@ model_list:
       mode: chat
       disable_background_health_check: true
 
+guardrails:
+  - guardrail_name: sx-global-sensitive-content
+    litellm_params:
+      guardrail: litellm_content_filter
+      mode: ["pre_call", "post_call"]
+      default_on: true
+      blocked_words_file: /app/guardrails/blocked-words.yaml
+      categories:
+        - category: harmful_violence
+          action: BLOCK
+          severity_threshold: medium
+        - category: harmful_illegal_weapons
+          action: BLOCK
+          severity_threshold: medium
+
 router_settings:
   fallbacks:
     - sx-fast-chat: ["sx-gpt-5.5-moonapix", "sx-gpt-5.5-vivaapi", "sx-gemini-3.1-pro"]

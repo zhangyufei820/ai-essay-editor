@@ -20,6 +20,20 @@ type GatewayModel = {
 
 type GatewayConfig = {
   model_list: GatewayModel[]
+  guardrails?: Array<{
+    guardrail_name?: string
+    litellm_params?: {
+      guardrail?: string
+      mode?: string[]
+      default_on?: boolean
+      blocked_words_file?: string
+      categories?: Array<{
+        category?: string
+        action?: string
+        severity_threshold?: string
+      }>
+    }
+  }>
   router_settings: {
     cooldown_time?: number
     allowed_fails?: number
@@ -262,5 +276,53 @@ describe("llm gateway reliability config", () => {
     expect(config.router_settings.routing_strategy).toBe("latency-based-routing")
     expect(config.router_settings.routing_strategy_args?.ttl).toBe(30)
     expect(config.router_settings.routing_strategy_args?.lowest_latency_buffer).toBe(0)
+  })
+
+  it("enables a default-on global sensitive-content guardrail for all gateway models", () => {
+    const config = loadConfig()
+    const guardrail = config.guardrails?.find((item) => item.guardrail_name === "sx-global-sensitive-content")
+
+    expect(guardrail).toBeDefined()
+    expect(guardrail?.litellm_params?.guardrail).toBe("litellm_content_filter")
+    expect(guardrail?.litellm_params?.default_on).toBe(true)
+    expect(guardrail?.litellm_params?.mode).toEqual(["pre_call", "post_call"])
+    expect(guardrail?.litellm_params?.blocked_words_file).toBe("/app/guardrails/blocked-words.yaml")
+    expect(guardrail?.litellm_params?.categories).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ category: "harmful_violence", action: "BLOCK" }),
+        expect.objectContaining({ category: "harmful_illegal_weapons", action: "BLOCK" }),
+      ]),
+    )
+  })
+
+  it("keeps the mounted blocked-words policy file present with the requested coverage", () => {
+    const policyPath = path.join(process.cwd(), "services/llm-gateway/guardrails/blocked-words.yaml")
+    expect(fs.existsSync(policyPath)).toBe(true)
+
+    const policy = yaml.load(fs.readFileSync(policyPath, "utf8")) as {
+      blocked_words?: Array<{ keyword?: string; action?: string; description?: string }>
+    }
+
+    expect(Array.isArray(policy.blocked_words)).toBe(true)
+    expect(policy.blocked_words?.length).toBeGreaterThanOrEqual(20)
+
+    const keywords = new Set((policy.blocked_words || []).map((item) => item.keyword))
+    const descriptions = new Set((policy.blocked_words || []).map((item) => item.description))
+
+    expect(keywords.has("色情")).toBe(true)
+    expect(keywords.has("暴力")).toBe(true)
+    expect(keywords.has("血腥")).toBe(true)
+    expect(keywords.has("毒品")).toBe(true)
+    expect(keywords.has("枪支")).toBe(true)
+    expect(keywords.has("国家领导人")).toBe(true)
+    expect(descriptions.has("政治敏感内容")).toBe(true)
+    expect((policy.blocked_words || []).every((item) => item.action === "BLOCK")).toBe(true)
+  })
+
+  it("mounts the guardrail policy directory into the llm-gateway container", () => {
+    const composePath = path.join(process.cwd(), "docker-compose.prod.yml")
+    const compose = fs.readFileSync(composePath, "utf8")
+
+    expect(compose).toContain("./services/llm-gateway/guardrails:/app/guardrails:ro")
   })
 })

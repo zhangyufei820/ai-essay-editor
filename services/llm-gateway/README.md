@@ -26,6 +26,35 @@ Hot business aliases are single-primary routes in `config.yaml`. LiteLLM keeps t
 
 Deployment `model_info.id` values are shared across equivalent text aliases where the same provider/model pair is reused. This makes cooldown and circuit state follow the real upstream deployment instead of one alias only.
 
+## Sensitive Content Filter
+
+The gateway now applies a default-on LiteLLM content filter before requests leave the gateway and again on model output.
+
+- all gateway text aliases inherit the same filter
+- request path and response path are both covered
+- built-in categories block violent and illegal-weapons content
+- `/app/guardrails/blocked-words.yaml` adds the China-facing exact-match policy for:
+  - 色情
+  - 暴力 / 血腥
+  - 毒品
+  - 枪支
+  - 国家领导人 / 政治敏感词
+
+Repository source of truth:
+
+```text
+services/llm-gateway/config.yaml
+services/llm-gateway/guardrails/blocked-words.yaml
+```
+
+Container mount:
+
+```text
+./services/llm-gateway/guardrails:/app/guardrails:ro
+```
+
+When policy changes are needed, update the mounted rules file instead of editing frontend or Dify nodes one by one.
+
 Production should point Dify / Next.js OpenAI-compatible providers at:
 
 ```text

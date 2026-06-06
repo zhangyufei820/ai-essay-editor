@@ -13,6 +13,13 @@ model: sx-fast-chat
 
 The gateway is configured in `services/llm-gateway/config.yaml` and wired in `docker-compose.prod.yml`. Provider keys must live only in `.env.production` on the server. The default low-latency alias is `sx-fast-chat`; business aliases also include `sx-chinese-text`, `sx-math-text`, `sx-general-text`, and `sx-image-vision`.
 
+The same gateway also owns the default-on sensitive-content filter for all routed models. Requests are checked before provider dispatch, and model output is checked again before it returns to Dify / Next.js / OpenClaw / Codex callers. Current policy combines:
+
+- LiteLLM built-in violent / illegal-weapons categories
+- repository-managed exact-match words in `services/llm-gateway/guardrails/blocked-words.yaml`
+
+The mounted policy file is the single source of truth for 色情、暴力、血腥、毒品、枪支、国家领导人和政治敏感词 filtering at the realtime gateway layer.
+
 Dify can use Chinese display aliases while sending ASCII gateway model names:
 
 | Dify display model | Gateway `endpoint_model_name` | Route intent |

@@ -60,6 +60,7 @@ npm run perf:baseline -- --base-url=https://shenxiang.school --iterations=3
 ## AI 网关与媒体任务巡检
 
 - 实时文字：检查 `llm-gateway` 的 `/health/liveliness` 和 `/health/readiness`，并确认 Dify / Next.js 只使用内网 `LLM_GATEWAY_BASE_URL` 与内部网关 key。
+- 实时文字安全：确认 `services/llm-gateway/config.yaml` 仍启用 default-on `guardrails`，且 `services/llm-gateway/guardrails/blocked-words.yaml` 已被挂载到容器 `/app/guardrails`。
 - 语音：检查 `voice-gateway` 的 `/voice/health`，确认 `ttsProviderChain` / `sttProviderChain` 至少有一个已配置 provider。
 - 媒体：长任务必须能在 `ai_task_runs` 中看到状态，并可通过 `/api/media/tasks/:taskId` 或 `/api/task-status` 返回统一任务状态。
 - 安全：不得把上游 OpenAI-compatible provider key 写进 Dify workflow 变量、前端环境变量、日志或仓库文档。
