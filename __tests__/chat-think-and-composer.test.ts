@@ -111,15 +111,20 @@ describe("chat think rendering and composer layout", () => {
 
   it("keeps chat auth extraction and empty workflow replies visible", () => {
     const source = read("components/chat/enhanced-chat-interface.tsx")
+    const chatInput = read("components/chat/ChatInput.tsx")
 
-    expect(source).toContain("const uid = extractUserId(user)")
+    expect(source).toContain("const [userId, setUserId] = useState<string>(\"\")")
+    expect(source).toContain("getStoredClientIdentity()")
     expect(source).toContain("extractWorkflowOutputText(outputs)")
     expect(source).toContain("getModelEmptyResponseMessage(selectedModel)")
-    expect(source).toContain('disabledReason={!userId ? "auth" : isLoading ? "loading" : undefined}')
+    expect(source).toContain("disabled={isLoading || isAuthPending || !isAuthenticated}")
+    expect(source).toContain('? "auth-pending"')
     expect(source).toContain("hydrateVerifiedUserFromApi")
     expect(source).toContain('json.event === "status"')
     expect(source).toContain('json.event === "error"')
     expect(source).toContain("连接正常，任务仍在处理中")
+    expect(chatInput).toContain('disabledReason?: "auth" | "auth-pending" | "loading" | "manual"')
+    expect(chatInput).toContain('? "正在恢复登录状态..."')
   })
 
   it("counts available trial credits before showing the client-side insufficient-credit toast", () => {
@@ -135,9 +140,10 @@ describe("chat think rendering and composer layout", () => {
   it("keeps free-trial prompts off login and auth pages", () => {
     const source = read("components/trial/DailySurveyAutoPrompt.tsx")
 
-    expect(source).toContain('pathname === "/login" || pathname.startsWith("/auth/")')
-    expect(source).toContain("!suppressPrompts && runtimeFlags.loaded")
-    expect(source).toContain("enabled={!suppressPrompts && surveyGateEnabled}")
+    expect(source).toContain('pathname === "/login"')
+    expect(source).toContain('pathname.startsWith("/auth/")')
+    expect(source).toContain("!suppressPassivePrompts && runtimeFlags.loaded")
+    expect(source).toContain("enabled={surveyGateEnabled}")
   })
 
   it("keeps local history sessions separate from Dify memory conversations", () => {
@@ -209,7 +215,7 @@ describe("chat think rendering and composer layout", () => {
 
     expect(imageWorkspace).toContain("const isAuthenticated = Boolean(userId)")
     expect(imageWorkspace).toContain("请先登录后再上传图片。")
-    expect(imageWorkspace).toContain("登录状态已过期，请重新登录后再上传或生成图片。")
+    expect(imageWorkspace).toContain("请先登录后再生成图片。")
     expect(imageWorkspace).toContain("disabled={!isAuthenticated || isSubmitting}")
   })
 })

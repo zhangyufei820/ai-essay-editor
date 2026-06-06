@@ -96,8 +96,8 @@ interface ChatInputProps {
   isLoading?: boolean
   /** 是否禁用 */
   disabled?: boolean
-  /** 禁用原因，用于区分未登录和生成中 */
-  disabledReason?: "auth" | "loading" | "manual"
+  /** 禁用原因，用于区分未登录、登录恢复中和生成中 */
+  disabledReason?: "auth" | "auth-pending" | "loading" | "manual"
   /** 占位符文本 */
   placeholder?: string
   /** 当前模型名称 */
@@ -587,10 +587,14 @@ export function ChatInput({
   }
 
   // 是否可以提交
-  const effectiveDisabledReason = disabledReason || (isLoading ? "loading" : disabled ? "auth" : undefined)
-  const inputPlaceholder = effectiveDisabledReason === "auth"
-    ? "请先登录..."
-    : placeholder
+  const effectiveDisabledReason =
+    disabledReason || (isLoading ? "loading" : disabled ? "auth" : undefined)
+  const inputPlaceholder =
+    effectiveDisabledReason === "auth"
+      ? "请先登录..."
+      : effectiveDisabledReason === "auth-pending"
+        ? "正在恢复登录状态..."
+        : placeholder
   const canSubmit = !isLoading && !disabled && (value.trim() || uploadedFiles.length > 0)
 
   const closeMobileTools = () => setMobileToolsOpen(false)

@@ -4123,23 +4123,27 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                 uploadedFiles={uploadedFiles}
                 onRemoveFile={(i) => setUploadedFiles((p) => p.filter((_, idx) => idx !== i))}
                 isLoading={isLoading}
-                disabled={isLoading || (!isAuthenticated && !isAuthPending)}
-                disabledReason={!isAuthenticated && !isAuthPending ? "auth" : isLoading ? "loading" : undefined}
+                disabled={isLoading || isAuthPending || !isAuthenticated}
+                disabledReason={
+                  isLoading
+                    ? "loading"
+                    : isAuthPending
+                      ? "auth-pending"
+                      : !isAuthenticated
+                        ? "auth"
+                        : undefined
+                }
                 showOpenClawSkillButton={selectedModel === "open-claw"}
                 selectedOpenClawSkillName={selectedOpenClawSkill?.name}
                 onOpenClawSkillClick={() => setOpenClawSkillPickerOpen(true)}
                 showCodexSkillButton={selectedModel === "super-all-in-one-agent"}
                 selectedCodexSkillName={selectedCodexSkill?.name}
                 onCodexSkillClick={() => setCodexSkillPickerOpen(true)}
-                placeholder={isAuthenticated
-                  ? selectedModel === "vocab-card"
-                    ? "例如：你好啊 / 我要学习 apple / 考我一下"
-                    : selectedModel === "all-in-one-agent"
-                      ? "描述你想生成的动画、图片或要处理的文件..."
-                    : "输入内容开始对话..."
-                  : isAuthPending
-                    ? "正在恢复登录状态..."
-                    : "请先登录..."}
+                placeholder={selectedModel === "vocab-card"
+                  ? "例如：你好啊 / 我要学习 apple / 考我一下"
+                  : selectedModel === "all-in-one-agent"
+                    ? "描述你想生成的动画、图片或要处理的文件..."
+                    : "输入内容开始对话..."}
                 className="overflow-visible border-[var(--paper-200)]/70 bg-[var(--paper-50)]/95 shadow-[0_-4px_18px_rgba(0,0,0,0.06)] backdrop-blur-md sm:shadow-[0_8px_24px_rgba(0,0,0,0.10)]"
                 onFileUpload={(files) => {
                   const target = { target: { files } } as unknown as React.ChangeEvent<HTMLInputElement>
