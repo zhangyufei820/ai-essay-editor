@@ -170,6 +170,12 @@ describe("llm gateway reliability config", () => {
     expect(fallbackTargets.get("gpt-5.3")).toEqual(["gpt-5.5", "sx-fast-chat"])
     expect(fallbackTargets.get("gpt-5.3-spark")).toEqual(["gpt-5.5", "sx-fast-chat"])
     expect(fallbackTargets.get("gemini-3.1-pro-preview")).toEqual(["sx-gpt-5.5-vivaapi", "sx-gpt-5.5-moonapix"])
+    expect(fallbackTargets.get("gemini-3-pro-image-preview")).toEqual([
+      "sx-image-vision",
+      "sx-gpt-5.4-mini-vivaapi",
+      "sx-gpt-5.4-mini-moonapix",
+      "gpt-5.4-mini",
+    ])
   })
 
   it("keeps high-volume legacy Dify text model names routed through gateway-compatible deployments", () => {
