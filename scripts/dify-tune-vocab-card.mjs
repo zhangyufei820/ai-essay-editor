@@ -17,28 +17,28 @@ const TARGET_PROVIDER = "langgenius/openai_api_compatible/openai_api_compatible"
 
 const NODE_TUNING = {
   "1101": {
-    modelName: "沈翔语文优先",
+    modelName: "沈翔快速对话",
     completionParams: {
       max_tokens: 512,
       temperature: 0,
     },
   },
   "1004": {
-    modelName: "gpt-5.4-mini",
+    modelName: "沈翔通用文本",
     completionParams: {
       max_tokens: 1800,
       temperature: 0,
     },
   },
   "1007": {
-    modelName: "gpt-5.4-mini",
+    modelName: "沈翔通用文本",
     completionParams: {
       max_tokens: 384,
       temperature: 0,
     },
   },
   "1010": {
-    modelName: "gpt-5.4-mini",
+    modelName: "沈翔通用文本",
     completionParams: {
       max_tokens: 1024,
       temperature: 0,

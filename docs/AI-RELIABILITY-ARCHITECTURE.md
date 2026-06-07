@@ -42,6 +42,18 @@ Use this path for:
 - Codex Skill Gateway realtime text routing
 - essay-ai-suite OCR / image-recognition calls
 
+Realtime Dify workflow nodes are governed by the five `沈翔*` display aliases
+above. The only explicit exceptions are:
+
+- knowledge retrieval models (`embeddings` and `rerank` model types)
+- `Open Claw`
+- `codex`
+
+Model-identity pages such as ChatGPT, Claude, Gemini, and Grok still use Dify
+app names for product display, but their realtime workflow nodes must route
+through the `沈翔*` gateway aliases so provider failover and guardrails stay in
+force.
+
 Do not use this path for long image, music, or video generation.
 
 ### Active Health And Circuit Breaking

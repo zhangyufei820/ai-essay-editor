@@ -1,8 +1,16 @@
 import { execFileSync } from "child_process"
+import fs from "fs"
 
 const scriptPath = "scripts/dify-tune-site-problem-workflows.mjs"
 const remapScriptPath = "scripts/dify-remap-unified-routing.mjs"
 const vocabCardScriptPath = "scripts/dify-tune-vocab-card.mjs"
+const approvedGatewayModels = [
+  "沈翔快速对话",
+  "沈翔语文优先",
+  "沈翔数学推理",
+  "沈翔通用文本",
+  "沈翔图像识别",
+]
 
 function runNodeScript(script: string, args: string[] = []) {
   return execFileSync("node", [script, ...args], {
@@ -22,38 +30,45 @@ function parseFirstJsonObject(stdout: string) {
 }
 
 describe("production dify hardening guards", () => {
-  it("keeps unified routing drift limited to the approved vocab-card latency exceptions", () => {
+  it("keeps every non-exempt realtime Dify app on the approved gateway aliases", () => {
     const payload = parseFirstJsonObject(runNodeScript(remapScriptPath))
 
     expect(payload.apply).toBe(false)
-    expect(payload.total_changes).toBe(4)
-    expect(Object.keys(payload.apps || {})).toEqual(["词镜记忆卡"])
-    expect(payload.apps?.["词镜记忆卡"]).toEqual([
-      {
-        node_type: "llm",
-        node_title: "04_AI_生成单词卡片",
-        from_model: "gpt-5.4-mini",
-        to_model: "沈翔通用文本",
-      },
-      {
-        node_type: "llm",
-        node_title: "07_AI_质检卡片",
-        from_model: "gpt-5.4-mini",
-        to_model: "沈翔通用文本",
-      },
-      {
-        node_type: "llm",
-        node_title: "10_AI_重写问题字段",
-        from_model: "gpt-5.4-mini",
-        to_model: "沈翔通用文本",
-      },
-      {
-        node_type: "llm",
-        node_title: "01_AI_对话理解与学习意图判断",
-        from_model: "沈翔语文优先",
-        to_model: "沈翔快速对话",
-      },
+    expect(payload.total_changes).toBe(0)
+    expect(payload.apps || {}).toEqual({})
+    expect(payload.preserved_apps).toEqual(["Open Claw", "codex"])
+    expect(payload.approved_gateway_model_names).toEqual([
+      "沈翔快速对话",
+      "沈翔语文优先",
+      "沈翔数学推理",
+      "沈翔通用文本",
+      "沈翔图像识别",
     ])
+    expect(payload.exempt_model_types).toEqual(["embeddings", "rerank"])
+  })
+
+  it("keeps the all-app Dify audit clean except for Open Claw and codex", () => {
+    const payload = parseFirstJsonObject(runNodeScript(remapScriptPath, ["--all-apps"]))
+
+    expect(payload.apply).toBe(false)
+    expect(payload.all_apps).toBe(true)
+    expect(payload.include_preserved).toBe(false)
+    expect(payload.preserved_apps).toEqual(["Open Claw", "codex"])
+    expect(payload.total_changes).toBe(0)
+    expect(payload.apps || {}).toEqual({})
+  })
+
+  it("prevents remediation scripts from reintroducing direct realtime model targets", () => {
+    const sources = [
+      fs.readFileSync(remapScriptPath, "utf8"),
+      fs.readFileSync(scriptPath, "utf8"),
+      fs.readFileSync(vocabCardScriptPath, "utf8"),
+    ].join("\n")
+    const directTargetPattern = /(?:defaultModelName|modelName|model\["name"\])\s*[:=]\s*"([^"]+)"/g
+
+    for (const match of sources.matchAll(directTargetPattern)) {
+      expect(approvedGatewayModels).toContain(match[1])
+    }
   })
 
   it("keeps site assistant and problem workflow tuning idempotent", () => {
@@ -77,18 +92,18 @@ describe("production dify hardening guards", () => {
       temperature: 0,
     })
     expect(payload.problem.after_prompt_chars).toBe(632)
-    expect(payload.problem.route_model_name).toBe("gemini-3.1-pro-preview")
+    expect(payload.problem.route_model_name).toBe("沈翔快速对话")
     expect(payload.problem.solve_nodes).toEqual([
       {
         node_id: "1775196356822",
         title: "LLM 3",
-        model_name: "gpt-5.5",
+        model_name: "沈翔数学推理",
         completion_params: { temperature: 0.7 },
       },
       {
         node_id: "17643486820500",
         title: "总编辑 ",
-        model_name: "gpt-5.5",
+        model_name: "沈翔数学推理",
         completion_params: { temperature: 0.7 },
       },
     ])

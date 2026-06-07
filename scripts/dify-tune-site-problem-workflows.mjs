@@ -215,7 +215,7 @@ def tune_problem_route(current_graph):
             "text": (user_prompt or {}).get("text", "{{#sys.query#}}"),
         },
     ]
-    model["name"] = "gemini-3.1-pro-preview"
+    model["name"] = "沈翔快速对话"
     model["provider"] = "langgenius/openai_api_compatible/openai_api_compatible"
     model["mode"] = "chat"
     return {
@@ -241,7 +241,7 @@ def tune_problem_solver(current_graph):
         completion = model.setdefault("completion_params", {})
         if "temperature" not in completion:
             completion["temperature"] = 0.7
-        model["name"] = "gpt-5.5"
+        model["name"] = "沈翔数学推理"
         model["provider"] = "langgenius/openai_api_compatible/openai_api_compatible"
         model["mode"] = "chat"
         tuned_nodes.append({

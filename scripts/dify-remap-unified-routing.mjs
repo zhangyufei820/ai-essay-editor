@@ -8,14 +8,14 @@ import { spawnSync } from "child_process"
 const PRESERVED_APP_NAMES = new Set([
   "Open Claw",
   "codex",
-  "ChatGPT 5.4",
-  "Claude 4.6 think",
-  "Gemini 3.1 pro",
-  "grok-4.2",
 ])
 
 const TARGET_ENV_KEYS = [
   "DIFY_GENERAL_CHAT_API_KEY",
+  "DIFY_API_KEY_GPT5",
+  "DIFY_API_KEY_CLAUDE",
+  "DIFY_API_KEY_GEMINI",
+  "DIFY_API_KEY_GROK42",
   "ESSAY_CORRECTION_API_KEY",
   "DIFY_WORKFLOW_SKILL_API_KEY",
   "DIFY_TEACHING_PRO_API_KEY",
@@ -26,13 +26,25 @@ const TARGET_ENV_KEYS = [
   "DIFY_BEIKE_PRO_API_KEY",
   "DIFY_BANZHUREN_API_KEY",
   "DIFY_ALL_IN_ONE_AGENT_API_KEY",
+  "DIFY_SUPER_ALL_IN_ONE_AGENT_API_KEY",
   "DIFY_WORKSHEET_DIAGNOSIS_API_KEY",
   "DIFY_AI_WRITING_PAPER_API_KEY",
   "DIFY_EXPERIMENT_REPORT_API_KEY",
+  "DIFY_IMAGE_PROMPT_REVERSE_API_KEY",
+  "DIFY_IMAGE_PROMPT_OPTIMIZER_API_KEY",
+  "DIFY_PRESENTATION_API_KEY",
+  "DIFY_SPARKPAGE_API_KEY",
 ]
 
 const PROVIDER_NAME = "langgenius/openai_api_compatible/openai_api_compatible"
 const DEFAULT_MODEL_NAME = "沈翔通用文本"
+const APPROVED_DIFY_GATEWAY_MODEL_NAMES = new Set([
+  "沈翔快速对话",
+  "沈翔语文优先",
+  "沈翔数学推理",
+  "沈翔通用文本",
+  "沈翔图像识别",
+])
 
 const APP_RULES = {
   "3d提示词优化": {
@@ -67,6 +79,18 @@ const APP_RULES = {
   },
   "网页搜索专用助手": {
     defaultModelName: "沈翔快速对话",
+  },
+  "ChatGPT 5.4": {
+    defaultModelName: "沈翔通用文本",
+  },
+  "Claude 4.6 think": {
+    defaultModelName: "沈翔语文优先",
+  },
+  "Gemini 3.1 pro": {
+    defaultModelName: "沈翔数学推理",
+  },
+  "grok-4.2": {
+    defaultModelName: "沈翔通用文本",
   },
   "全学段作文批改超级智能体": {
     nodeRules: [
@@ -108,9 +132,8 @@ const APP_RULES = {
   "题目解析专用智能体": {
     nodeRules: [
       [/视觉提取/i, "沈翔图像识别"],
-      [/问题通道|LLM 4/i, "gemini-3.1-pro-preview"],
-      [/LLM 3|总编辑/i, "gpt-5.5"],
-      [/.*/i, "gpt-5.5"],
+      [/问题通道/i, "沈翔快速对话"],
+      [/.*/i, "沈翔数学推理"],
     ],
   },
   "全学段备课助手pro": {
@@ -219,6 +242,14 @@ function pickGatewayModel(nodeTitle, appName, nodeType) {
   }
 
   return DEFAULT_MODEL_NAME
+}
+
+function assertApprovedGatewayModelName(modelName, appName, nodeTitle) {
+  if (APPROVED_DIFY_GATEWAY_MODEL_NAMES.has(modelName)) return
+  throw new Error(
+    `unapproved Dify gateway target model "${modelName}" for app "${appName}" node "${nodeTitle}". ` +
+      "Realtime Dify nodes must use the 沈翔* gateway aliases; keep retrieval, Open Claw, and codex as the only exemptions.",
+  )
 }
 
 function buildRemoteAuditScript({ appNames, allApps, includePreserved, nodeTypes }) {
@@ -395,6 +426,7 @@ function main() {
   const changes = []
   for (const row of rows) {
     const targetModelName = pickGatewayModel(row.node_title || "", row.app_name || "", row.node_type || "")
+    assertApprovedGatewayModelName(targetModelName, row.app_name || "", row.node_title || "")
     if (row.model_name === targetModelName && row.provider_name === PROVIDER_NAME) continue
     changes.push({
       ...row,
@@ -420,6 +452,9 @@ function main() {
     host: args.host,
     include_preserved: args.includePreserved,
     node_types: args.nodeTypes,
+    preserved_apps: [...PRESERVED_APP_NAMES],
+    approved_gateway_model_names: [...APPROVED_DIFY_GATEWAY_MODEL_NAMES],
+    exempt_model_types: ["embeddings", "rerank"],
     total_changes: changes.length,
     apps: summary,
   }
