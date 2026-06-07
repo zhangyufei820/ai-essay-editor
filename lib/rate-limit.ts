@@ -1,6 +1,8 @@
+import { isIP } from 'node:net';
+
 /**
  * 基于内存的滑动窗口限流器
- * 
+ *
  * 特性：
  * - 每个 IP 每分钟最多 30 次 API 请求
  * - 每个用户每分钟最多 60 次 AI 对话请求
@@ -21,6 +23,7 @@ class MemoryRateLimiter {
     this.cleanupInterval = setInterval(() => {
       this.cleanup();
     }, 60 * 1000);
+    this.cleanupInterval.unref?.();
   }
 
   /**
@@ -143,25 +146,43 @@ export function checkUserRateLimit(userId: string): {
  * 获取客户端 IP 地址
  */
 export function getClientIP(request: Request): string {
-  // 优先从 x-forwarded-for 获取（代理环境）
-  const forwardedFor = request.headers.get('x-forwarded-for');
-  if (forwardedFor) {
-    // 取第一个 IP（客户端真实 IP）
-    const ips = forwardedFor.split(',').map(ip => ip.trim());
-    if (ips.length > 0 && ips[0]) {
-      return ips[0];
-    }
+  const realIp = request.headers.get('x-real-ip');
+  const normalizedRealIp = normalizeIp(realIp);
+  if (normalizedRealIp) {
+    return normalizedRealIp;
   }
 
-  // 从 x-real-ip 获取
-  const realIp = request.headers.get('x-real-ip');
-  if (realIp) {
-    return realIp;
+  const cfConnectingIp = request.headers.get('cf-connecting-ip');
+  const normalizedCfIp = normalizeIp(cfConnectingIp);
+  if (normalizedCfIp) {
+    return normalizedCfIp;
+  }
+
+  const forwardedFor = request.headers.get('x-forwarded-for');
+  if (forwardedFor) {
+    const ips = forwardedFor
+      .split(',')
+      .map(ip => normalizeIp(ip))
+      .filter((ip): ip is string => Boolean(ip));
+
+    if (ips.length > 0) {
+      return ips[ips.length - 1];
+    }
   }
 
   // 如果没有代理头，使用默认值
   // 注意：在 Next.js API 路由中，request.ip 可能不可用
   return 'unknown';
+}
+
+function normalizeIp(value: string | null): string | null {
+  if (!value) return null;
+
+  const ip = value.trim().replace(/^\[|\]$/g, '');
+  if (!ip) return null;
+
+  const normalized = ip.startsWith('::ffff:') ? ip.slice(7) : ip;
+  return isIP(normalized) ? normalized : null;
 }
 
 /**

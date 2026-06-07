@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js"
 import { verifyXunhupaySign } from "@/lib/xunhupay"
 import { getProductCredits, getProductPriceInCents, isCreditsProduct, isMembershipProduct, isPurchasableProduct } from "@/lib/products"
 import { logger } from "@/lib/logger"
+import { grantPaymentCreditsWithOptimisticRetry } from "@/lib/payment-credit-grant"
 
 // 🔥 使用 Service Role Key 创建管理员客户端（绕过所有 RLS）
 function getSupabaseAdmin() {
@@ -11,8 +12,6 @@ function getSupabaseAdmin() {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   )
 }
-
-const MAX_CREDITS = 10_000_000  // 单用户积分上限 1000 万
 
 function parseAmountInCents(value: unknown): number | null {
   const amount = Number.parseFloat(String(value || ""))
@@ -172,89 +171,21 @@ export async function POST(request: NextRequest) {
       return new NextResponse("fail", { status: 200 })
     }
 
-    // 🔥 查询用户当前积分记录
-    const { data: currentCredits, error: creditsError } = await supabase
-      .from("user_credits")
-      .select("*")
-      .eq("user_id", order.user_id)
-      .maybeSingle()
+    const creditGrant = await grantPaymentCreditsWithOptimisticRetry(supabase, {
+      orderNo,
+      userId: order.user_id,
+      credits,
+      isPro,
+    })
 
-    let balanceBefore = currentCredits?.credits || 0
-    let balanceAfter = balanceBefore + credits
-
-    if (currentCredits) {
-      // 更新现有记录
-      const newCredits = balanceAfter
-      
-      // 🛡️ 积分上限校验
-      if (newCredits > MAX_CREDITS) {
-        logger.error("[xunhupay] credits limit exceeded", { orderNo, userId: order.user_id, newCredits, maxCredits: MAX_CREDITS })
-        await restoreClaimedOrderToPending(supabase, orderNo, "credits_limit_exceeded")
-        return new NextResponse("fail", { status: 200 })
-      }
-      
-      const newIsPro = isPro || currentCredits.is_pro // 一旦成为会员就保持
-      
-      logger.info("[xunhupay] updating user credits", { orderNo, userId: order.user_id, before: currentCredits.credits, after: newCredits, wasPro: currentCredits.is_pro, isPro: newIsPro })
-      
-      const { data: updatedCredits, error: updateError } = await supabase
-        .from("user_credits")
-        .update({
-          credits: newCredits,
-          is_pro: newIsPro,
-          updated_at: new Date().toISOString()
-        })
-        .eq("user_id", order.user_id)
-        .eq("credits", currentCredits.credits)
-        .select("credits")
-        .maybeSingle()
-
-      if (updateError || !updatedCredits || updatedCredits.credits !== newCredits) {
-        logger.error("[xunhupay] credits update failed", { orderNo, updateError })
-        await restoreClaimedOrderToPending(supabase, orderNo, "credits_update_failed")
-        return new NextResponse("fail", { status: 200 })
-      }
-      logger.info("[xunhupay] user credits updated", { orderNo, userId: order.user_id })
-    } else {
-      // 创建新记录
-      logger.info("[xunhupay] creating user credits", { orderNo, userId: order.user_id, credits, isPro })
-      
-      const { error: insertError } = await supabase
-        .from("user_credits")
-        .insert({
-          user_id: order.user_id,
-          credits: credits,
-          is_pro: isPro
-        })
-
-      if (insertError) {
-        logger.error("[xunhupay] credits insert failed", { orderNo, insertError })
-        
-        // 🔥 如果是外键约束错误，尝试 upsert
-        if (insertError.code === '23503') {
-          logger.info("[xunhupay] trying credits upsert", { orderNo, userId: order.user_id })
-          const { error: upsertError } = await supabase
-            .from("user_credits")
-            .upsert({
-              user_id: order.user_id,
-              credits: credits,
-              is_pro: isPro
-            }, { onConflict: 'user_id' })
-          
-          if (upsertError) {
-            logger.error("[xunhupay] credits upsert failed", { orderNo, upsertError })
-            await restoreClaimedOrderToPending(supabase, orderNo, "credits_upsert_failed")
-            return new NextResponse("fail", { status: 200 })
-          }
-          logger.info("[xunhupay] credits upserted", { orderNo, userId: order.user_id })
-        } else {
-          await restoreClaimedOrderToPending(supabase, orderNo, "credits_insert_failed")
-          return new NextResponse("fail", { status: 200 })
-        }
-      } else {
-        logger.info("[xunhupay] user credits created", { orderNo, userId: order.user_id })
-      }
+    if (!creditGrant.ok) {
+      logger.error("[xunhupay] credits grant failed", { orderNo, userId: order.user_id, reason: creditGrant.errorReason, error: creditGrant.error })
+      await restoreClaimedOrderToPending(supabase, orderNo, creditGrant.errorReason || "credits_grant_failed")
+      return new NextResponse("fail", { status: 200 })
     }
+
+    const balanceBefore = creditGrant.balanceBefore ?? 0
+    const balanceAfter = creditGrant.balanceAfter ?? balanceBefore + credits
 
     // 🔥 记录交易流水（可选，失败不影响主流程）
     try {

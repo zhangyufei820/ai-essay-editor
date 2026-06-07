@@ -40,7 +40,10 @@ describe("P0/P1 security audit guardrails", () => {
   })
 
   it("keeps high-risk debug and media routes behind explicit auth controls", () => {
-    expect(read("app/api/debug/init-tables/route.ts")).toContain("ENABLE_DEBUG_ROUTES")
+    expect(read("app/api/debug/init-tables/route.ts")).toContain("areDebugRoutesEnabled")
+    expect(read("app/api/debug/orders/route.ts")).toContain("areDebugRoutesEnabled")
+    expect(read("lib/debug-routes.ts")).toContain('process.env.NODE_ENV !== "production"')
+    expect(read("lib/debug-routes.ts")).toContain("ENABLE_DEBUG_ROUTES")
     expect(read("app/api/debug/init-tables/route.ts")).toContain("verifyAdminToken")
     expect(read("app/api/openclaw-media-sign/[...path]/route.ts")).toContain("requireUser(request)")
     expect(read("app/api/openclaw-media/[...path]/route.ts")).toContain("verifySignedOpenClawMediaPath(mediaPath, exp, sig, auth.user.id)")
