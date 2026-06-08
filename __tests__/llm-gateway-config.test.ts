@@ -169,11 +169,12 @@ describe("llm gateway reliability config", () => {
 
     expect(fallbackTargets.get("gpt-5.3")).toEqual(["gpt-5.5", "sx-fast-chat"])
     expect(fallbackTargets.get("gpt-5.3-spark")).toEqual(["gpt-5.5", "sx-fast-chat"])
-    expect(fallbackTargets.get("gemini-3.1-pro-preview")).toEqual(["sx-gpt-5.5-vivaapi", "sx-gpt-5.5-moonapix"])
+    expect(fallbackTargets.get("gemini-3.1-pro-preview")).toEqual(["sx-gpt-5.5-tokenflux", "sx-gpt-5.5-moonapix"])
     expect(fallbackTargets.get("gemini-3-pro-image-preview")).toEqual([
       "sx-image-vision",
-      "sx-gpt-5.4-mini-vivaapi",
       "sx-gpt-5.4-mini-moonapix",
+      "sx-image-vision-moonapix",
+      "sx-gpt-5.4-mini-vivaapi",
       "gpt-5.4-mini",
     ])
   })
@@ -203,35 +204,35 @@ describe("llm gateway reliability config", () => {
       }
     }
 
-    expect(fallbackTargets.get("sx-fast-chat")).toEqual(["sx-gpt-5.5-moonapix", "sx-gpt-5.5-vivaapi", "sx-gemini-3.1-pro"])
-    expect(fallbackTargets.get("sx-gpt-5.5-tokenflux")).toEqual(["sx-gpt-5.5-moonapix", "sx-gpt-5.5-vivaapi", "sx-gemini-3.1-pro"])
-    expect(fallbackTargets.get("sx-gpt-5.5-moonapix")).toEqual(["sx-gpt-5.5-vivaapi", "sx-gpt-5.5-tokenflux", "sx-gemini-3.1-pro"])
-    expect(fallbackTargets.get("sx-gpt-5.5-vivaapi")).toEqual(["sx-gpt-5.5-tokenflux", "sx-gpt-5.5-moonapix", "sx-gemini-3.1-pro"])
-    expect(fallbackTargets.get("sx-math-text")).toEqual(["sx-gpt-5.5-moonapix", "sx-gpt-5.5-vivaapi", "sx-gemini-3.1-pro"])
-    expect(fallbackTargets.get("sx-general-text")).toEqual(["sx-gpt-5.5-moonapix", "sx-gpt-5.5-vivaapi", "sx-gemini-3.1-pro"])
-    expect(fallbackTargets.get("sx-gemini-3.1-pro")).toEqual(["sx-gpt-5.5-tokenflux", "sx-gpt-5.5-moonapix", "sx-gpt-5.5-vivaapi"])
+    expect(fallbackTargets.get("sx-fast-chat")).toEqual(["sx-gpt-5.5-moonapix", "sx-gpt-5.5-vivaapi"])
+    expect(fallbackTargets.get("sx-gpt-5.5-tokenflux")).toEqual(["sx-gpt-5.5-moonapix", "sx-gpt-5.5-vivaapi"])
+    expect(fallbackTargets.get("sx-gpt-5.5-moonapix")).toEqual(["sx-gpt-5.5-tokenflux", "sx-gpt-5.5-vivaapi"])
+    expect(fallbackTargets.get("sx-gpt-5.5-vivaapi")).toEqual(["sx-gpt-5.5-tokenflux", "sx-gpt-5.5-moonapix"])
+    expect(fallbackTargets.get("sx-math-text")).toEqual(["sx-gpt-5.5-moonapix", "sx-gpt-5.5-vivaapi"])
+    expect(fallbackTargets.get("sx-general-text")).toEqual(["sx-gpt-5.5-moonapix", "sx-gpt-5.5-vivaapi"])
+    expect(fallbackTargets.get("sx-gemini-3.1-pro")).toEqual(["sx-gpt-5.5-tokenflux", "sx-gpt-5.5-moonapix"])
     expect(fallbackTargets.get("sx-chinese-text")).toEqual([
-      "sx-claude-sonnet-4-6",
-      "sx-claude-opus-4-7-vivaapi",
-      "sx-claude-opus-4-7-moonapix",
       "sx-general-text",
+      "sx-claude-sonnet-4-6-vivaapi",
+      "sx-claude-opus-4-7-moonapix",
+      "sx-claude-opus-4-7-vivaapi",
     ])
     expect(fallbackTargets.get("sx-claude-sonnet-4-6")).toEqual([
-      "sx-claude-sonnet-4-6-moonapix",
-      "sx-claude-opus-4-7-vivaapi",
-      "sx-claude-opus-4-7-moonapix",
       "sx-general-text",
+      "sx-claude-sonnet-4-6-vivaapi",
+      "sx-claude-opus-4-7-moonapix",
+      "sx-claude-opus-4-7-vivaapi",
     ])
     expect(fallbackTargets.get("sx-claude-sonnet-4-6-moonapix")).toEqual([
-      "sx-claude-sonnet-4-6",
-      "sx-claude-opus-4-7-vivaapi",
-      "sx-claude-opus-4-7-moonapix",
       "sx-general-text",
+      "sx-claude-sonnet-4-6-vivaapi",
+      "sx-claude-opus-4-7-moonapix",
+      "sx-claude-opus-4-7-vivaapi",
     ])
     expect(fallbackTargets.get("sx-image-vision")).toEqual([
-      "sx-gpt-5.4-mini-vivaapi",
       "sx-gpt-5.4-mini-moonapix",
       "sx-image-vision-moonapix",
+      "sx-gpt-5.4-mini-vivaapi",
       "gpt-5.4-mini",
     ])
   })
@@ -252,6 +253,7 @@ describe("llm gateway reliability config", () => {
       "sx-gemini-3.1-pro",
       "sx-claude-sonnet-4-6",
       "sx-claude-sonnet-4-6-moonapix",
+      "sx-claude-sonnet-4-6-vivaapi",
       "sx-claude-opus-4-7-vivaapi",
       "sx-claude-opus-4-7-moonapix",
       "sx-gpt-5.4-mini-vivaapi",
@@ -274,6 +276,62 @@ describe("llm gateway reliability config", () => {
     expect(chinese[0]?.litellm_params?.model).toBe("openai/claude-sonnet-4-6")
     expect(chinese[0]?.litellm_params?.api_base).toBe("os.environ/MOONAPIX_LLM_BASE_URL")
     expect(chinese[0]?.model_info?.id).toBe("deploy-moonapix-claude-sonnet-4-6")
+  })
+
+  it("keeps slow or unstable providers out of first fallback position for hot aliases", () => {
+    const config = loadConfig()
+    const fallbackTargets = new Map<string, string[]>()
+
+    for (const fallback of config.router_settings.fallbacks || []) {
+      for (const [source, targets] of Object.entries(fallback)) {
+        fallbackTargets.set(source, targets)
+      }
+    }
+
+    for (const alias of ["sx-fast-chat", "sx-math-text", "sx-general-text"]) {
+      expect(fallbackTargets.get(alias)?.[0]).toBe("sx-gpt-5.5-moonapix")
+      expect(fallbackTargets.get(alias)).not.toContain("sx-gemini-3.1-pro")
+    }
+
+    expect(fallbackTargets.get("sx-image-vision")?.slice(0, 2)).toEqual([
+      "sx-gpt-5.4-mini-moonapix",
+      "sx-image-vision-moonapix",
+    ])
+    expect(fallbackTargets.get("sx-image-vision")?.[0]).not.toBe("sx-gpt-5.4-mini-vivaapi")
+
+    expect(fallbackTargets.get("sx-chinese-text")?.[0]).toBe("sx-general-text")
+    expect(fallbackTargets.get("gemini-3.1-pro-preview")?.[0]).toBe("sx-gpt-5.5-tokenflux")
+    expect(fallbackTargets.get("gemini-3-pro-image-preview")?.[0]).toBe("sx-image-vision")
+    expect(fallbackTargets.get("claude-sonnet-4-6")).toEqual(["sx-general-text", "sx-claude-sonnet-4-6-vivaapi"])
+  })
+
+  it("keeps slow provider-specific internal aliases on short failover timeouts", () => {
+    const config = loadConfig()
+
+    const shortTimeoutAliases = [
+      "sx-gpt-5.5-vivaapi",
+      "sx-gpt-5.4-mini-vivaapi",
+      "sx-image-vision-vivaapi",
+      "sx-gemini-3.1-pro",
+      "sx-claude-sonnet-4-6-vivaapi",
+    ]
+
+    for (const alias of shortTimeoutAliases) {
+      const deployments = modelsByName(config, alias)
+      expect(deployments.length).toBeGreaterThanOrEqual(1)
+      expect(deployments.every((item) => (item.litellm_params?.timeout || 0) <= 10)).toBe(true)
+    }
+  })
+
+  it("keeps compatibility vision aliases on a fast TokenFlux primary", () => {
+    const config = loadConfig()
+    const legacy = modelsByName(config, "gemini-3-pro-image-preview")
+    const byOrder = [...legacy].sort(
+      (left, right) => (left.litellm_params?.order || 0) - (right.litellm_params?.order || 0),
+    )
+
+    expect(byOrder[0]?.model_info?.id).toBe("gemini-3-pro-image-preview-tokenflux-compat")
+    expect(byOrder[0]?.litellm_params?.api_base).toBe("os.environ/TOKENFLUX_LLM_BASE_URL")
   })
 
   it("keeps the fast GPT business aliases pinned to the TokenFlux deployment", () => {
