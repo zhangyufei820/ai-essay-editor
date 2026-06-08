@@ -320,6 +320,7 @@ type UploadedFile = {
   difyFileId?: string
   gatewayUrl?: string
   modelUrl?: string
+  storageUrl?: string
 }
 // 🔥 消息类型 - 支持 metadata 存储音乐等附加数据，支持 files 显示上传的文件
 type Message = {
@@ -368,6 +369,7 @@ function toShareSafeFile(file: UploadedFile) {
     difyFileId: file.difyFileId,
     gatewayUrl: file.gatewayUrl,
     modelUrl: file.modelUrl,
+    storageUrl: file.storageUrl,
     url: file.modelUrl || file.gatewayUrl,
   }
 }
@@ -2347,21 +2349,21 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                         difyFileId: data.id,
                         gatewayUrl,
                         modelUrl,
+                        storageUrl: modelUrl || gatewayUrl || (data.id ? `dify-file://${data.id}` : ""),
                         preview: URL.createObjectURL(fileToUpload)
                     });
                 } else {
-                    const reader = new FileReader();
-                    reader.onload = e => resolve({
+                    resolve({
                         name: fileToUpload.name,
                         type: fileToUpload.type,
                         size: fileToUpload.size,
-                        data: e.target?.result as string,
+                        data: data.id ? `dify-file://${data.id}` : "",
                         difyFileId: data.id,
                         gatewayUrl,
                         modelUrl,
+                        storageUrl: data.id ? `dify-file://${data.id}` : "",
                         preview: undefined
-                    });
-                    reader.readAsDataURL(fileToUpload)
+                    })
                 }
             })
         });

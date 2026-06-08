@@ -1,7 +1,30 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient as createSupabaseClient } from "@supabase/supabase-js"
+import { createHash } from "crypto"
 import { requireUser } from "@/lib/auth/verified-user"
+import { isCosConfigured } from "@/lib/cos"
 import { uploadBase64File } from "@/lib/storage"
+
+function resolveUploadedFileStorageUrl(file: Record<string, unknown>, fileData: string): string | null {
+  const explicitUrl = file.storageUrl || file.storage_url || file.modelUrl || file.model_url || file.gatewayUrl || file.gateway_url
+  if (typeof explicitUrl === "string" && explicitUrl.trim()) return explicitUrl.trim()
+
+  const difyFileId = file.difyFileId || file.dify_file_id || file.id
+  if (typeof difyFileId === "string" && difyFileId.trim()) return `dify-file://${difyFileId.trim()}`
+
+  if (/^https?:\/\//i.test(fileData) || fileData.startsWith("/")) return fileData
+  return null
+}
+
+function createInlineFileReference(file: Record<string, unknown>, fileData: string): string {
+  const hash = createHash("sha256").update([
+    String(file.name || "upload.bin"),
+    String(file.type || "application/octet-stream"),
+    String(file.size || 0),
+    fileData.slice(0, 1024),
+  ].join(":")).digest("hex").slice(0, 24)
+  return `inline-file://${hash}`
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -58,21 +81,25 @@ export async function POST(request: NextRequest) {
     if (files && files.length > 0) {
       for (const file of files) {
         try {
+          if (!file || typeof file !== "object") continue
           const fileData = typeof file.data === "string" ? file.data : ""
-          if (!fileData) continue
 
-          // 已经通过 /api/dify-upload 得到的公网/代理 URL 直接保存，不再按 base64 解码。
-          const storageUrl = /^https?:\/\//i.test(fileData) || fileData.startsWith("/")
-            ? fileData
-            : await uploadBase64File(fileData, file.name, file.type, user.id)
+          const storageUrl = resolveUploadedFileStorageUrl(file, fileData)
+            || (fileData
+              ? isCosConfigured()
+                ? await uploadBase64File(fileData, String(file.name || "upload.bin"), String(file.type || "application/octet-stream"), user.id)
+                : createInlineFileReference(file, fileData)
+              : null)
+
+          if (!storageUrl) continue
 
           // 保存文件元数据
           await supabase.from("uploaded_files").insert({
             user_id: user.id,
             session_id,
             message_id: message.id,
-            file_name: file.name,
-            file_type: file.type,
+            file_name: String(file.name || "upload.bin"),
+            file_type: String(file.type || "application/octet-stream"),
             file_size: file.size || 0,
             storage_url: storageUrl,
           })

@@ -204,9 +204,25 @@ describe("llm gateway reliability config", () => {
     }
 
     expect(fallbackTargets.get("sx-fast-chat")).toEqual(["sx-gpt-5.5-moonapix", "sx-gpt-5.5-vivaapi", "sx-gemini-3.1-pro"])
+    expect(fallbackTargets.get("sx-gpt-5.5-tokenflux")).toEqual(["sx-gpt-5.5-moonapix", "sx-gpt-5.5-vivaapi", "sx-gemini-3.1-pro"])
+    expect(fallbackTargets.get("sx-gpt-5.5-moonapix")).toEqual(["sx-gpt-5.5-vivaapi", "sx-gpt-5.5-tokenflux", "sx-gemini-3.1-pro"])
+    expect(fallbackTargets.get("sx-gpt-5.5-vivaapi")).toEqual(["sx-gpt-5.5-tokenflux", "sx-gpt-5.5-moonapix", "sx-gemini-3.1-pro"])
     expect(fallbackTargets.get("sx-math-text")).toEqual(["sx-gpt-5.5-moonapix", "sx-gpt-5.5-vivaapi", "sx-gemini-3.1-pro"])
     expect(fallbackTargets.get("sx-general-text")).toEqual(["sx-gpt-5.5-moonapix", "sx-gpt-5.5-vivaapi", "sx-gemini-3.1-pro"])
+    expect(fallbackTargets.get("sx-gemini-3.1-pro")).toEqual(["sx-gpt-5.5-tokenflux", "sx-gpt-5.5-moonapix", "sx-gpt-5.5-vivaapi"])
     expect(fallbackTargets.get("sx-chinese-text")).toEqual([
+      "sx-claude-sonnet-4-6",
+      "sx-claude-opus-4-7-vivaapi",
+      "sx-claude-opus-4-7-moonapix",
+      "sx-general-text",
+    ])
+    expect(fallbackTargets.get("sx-claude-sonnet-4-6")).toEqual([
+      "sx-claude-sonnet-4-6-moonapix",
+      "sx-claude-opus-4-7-vivaapi",
+      "sx-claude-opus-4-7-moonapix",
+      "sx-general-text",
+    ])
+    expect(fallbackTargets.get("sx-claude-sonnet-4-6-moonapix")).toEqual([
       "sx-claude-sonnet-4-6",
       "sx-claude-opus-4-7-vivaapi",
       "sx-claude-opus-4-7-moonapix",
@@ -218,6 +234,36 @@ describe("llm gateway reliability config", () => {
       "sx-image-vision-moonapix",
       "gpt-5.4-mini",
     ])
+  })
+
+  it("keeps internal fallback aliases from becoming terminal no-fallback routes", () => {
+    const config = loadConfig()
+    const fallbackTargets = new Map<string, string[]>()
+    for (const fallback of config.router_settings.fallbacks || []) {
+      for (const [source, targets] of Object.entries(fallback)) {
+        fallbackTargets.set(source, targets)
+      }
+    }
+
+    const internalAliases = [
+      "sx-gpt-5.5-tokenflux",
+      "sx-gpt-5.5-moonapix",
+      "sx-gpt-5.5-vivaapi",
+      "sx-gemini-3.1-pro",
+      "sx-claude-sonnet-4-6",
+      "sx-claude-sonnet-4-6-moonapix",
+      "sx-claude-opus-4-7-vivaapi",
+      "sx-claude-opus-4-7-moonapix",
+      "sx-gpt-5.4-mini-vivaapi",
+      "sx-gpt-5.4-mini-moonapix",
+      "sx-image-vision-tokenflux",
+      "sx-image-vision-vivaapi",
+      "sx-image-vision-moonapix",
+    ]
+
+    for (const alias of internalAliases) {
+      expect(fallbackTargets.get(alias)?.length).toBeGreaterThan(0)
+    }
   })
 
   it("keeps Chinese-first routing pinned to the fast Claude Sonnet primary", () => {

@@ -4,6 +4,7 @@ import fs from "fs"
 const scriptPath = "scripts/dify-tune-site-problem-workflows.mjs"
 const remapScriptPath = "scripts/dify-remap-unified-routing.mjs"
 const vocabCardScriptPath = "scripts/dify-tune-vocab-card.mjs"
+const aiWritingPaperScriptPath = "scripts/dify-tune-ai-writing-paper.mjs"
 const approvedGatewayModels = [
   "沈翔快速对话",
   "沈翔语文优先",
@@ -63,6 +64,7 @@ describe("production dify hardening guards", () => {
       fs.readFileSync(remapScriptPath, "utf8"),
       fs.readFileSync(scriptPath, "utf8"),
       fs.readFileSync(vocabCardScriptPath, "utf8"),
+      fs.readFileSync(aiWritingPaperScriptPath, "utf8"),
     ].join("\n")
     const directTargetPattern = /(?:defaultModelName|modelName|model\["name"\])\s*[:=]\s*"([^"]+)"/g
 
@@ -137,5 +139,23 @@ describe("production dify hardening guards", () => {
         node_changes: [],
       },
     ])
+  })
+
+  it("keeps ai-writing-paper agent tuning idempotent and pinned to gateway aliases", () => {
+    const payload = parseFirstJsonObject(runNodeScript(aiWritingPaperScriptPath))
+
+    expect(payload.apply).toBe(false)
+    expect(payload.app_name).toBe("论文写作")
+    expect(payload.app_id).toBe("4575cc05-91ca-4058-a861-faa39738b6f0")
+    expect(payload.planned_changes).toBe(0)
+    expect(payload.tuning).toMatchObject({
+      agentModelName: "沈翔语文优先",
+      routeModelName: "沈翔快速对话",
+      visionModelName: "沈翔图像识别",
+      agentMaxTokens: 20000,
+      agentMaximumIterations: 6,
+      skillAgentMaxSteps: 6,
+    })
+    expect(payload.node_changes).toEqual([])
   })
 })
