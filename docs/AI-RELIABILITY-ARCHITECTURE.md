@@ -15,10 +15,10 @@ The gateway is configured in `services/llm-gateway/config.yaml` and wired in `do
 
 The same gateway also owns the default-on sensitive-content filter for all routed models. Requests are checked before provider dispatch, and model output is checked again before it returns to Dify / Next.js / OpenClaw / Codex callers. Current policy combines:
 
-- LiteLLM built-in violent / illegal-weapons categories
+- LiteLLM built-in illegal-weapons category
 - repository-managed exact-match words in `services/llm-gateway/guardrails/blocked-words.yaml`
 
-The mounted policy file is the single source of truth for 色情、暴力、血腥、毒品、枪支、国家领导人和政治敏感词 filtering at the realtime gateway layer.
+The mounted policy file is the single source of truth for 色情和枪支 exact-match filtering at the realtime gateway layer. Violence, blood, drug, national-leader, and political keywords are intentionally not blocked at the gateway layer because they caused false positives in normal education prompts.
 
 Dify can use Chinese display aliases while sending ASCII gateway model names:
 

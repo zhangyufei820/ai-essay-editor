@@ -32,13 +32,15 @@ The gateway now applies a default-on LiteLLM content filter before requests leav
 
 - all gateway text aliases inherit the same filter
 - request path and response path are both covered
-- built-in categories block violent and illegal-weapons content
-- `/app/guardrails/blocked-words.yaml` adds the China-facing exact-match policy for:
+- built-in categories block illegal-weapons content
+- `/app/guardrails/blocked-words.yaml` adds the exact-match policy for:
   - 色情
-  - 暴力 / 血腥
-  - 毒品
   - 枪支
-  - 国家领导人 / 政治敏感词
+
+Violence, blood, drug, national-leader, and political keywords are intentionally
+not blocked by the gateway keyword file. They caused false positives in normal
+education prompts and should be handled by downstream product review rules only
+when a specific app requires it.
 
 Repository source of truth:
 

@@ -709,9 +709,6 @@ guardrails:
       default_on: true
       blocked_words_file: /app/guardrails/blocked-words.yaml
       categories:
-        - category: harmful_violence
-          action: BLOCK
-          severity_threshold: medium
         - category: harmful_illegal_weapons
           action: BLOCK
           severity_threshold: medium

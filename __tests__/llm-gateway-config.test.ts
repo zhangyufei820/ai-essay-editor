@@ -397,15 +397,12 @@ describe("llm gateway reliability config", () => {
     expect(guardrail?.litellm_params?.default_on).toBe(true)
     expect(guardrail?.litellm_params?.mode).toEqual(["pre_call", "post_call"])
     expect(guardrail?.litellm_params?.blocked_words_file).toBe("/app/guardrails/blocked-words.yaml")
-    expect(guardrail?.litellm_params?.categories).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ category: "harmful_violence", action: "BLOCK" }),
-        expect.objectContaining({ category: "harmful_illegal_weapons", action: "BLOCK" }),
-      ]),
-    )
+    expect(guardrail?.litellm_params?.categories).toEqual([
+      expect.objectContaining({ category: "harmful_illegal_weapons", action: "BLOCK" }),
+    ])
   })
 
-  it("keeps the mounted blocked-words policy file present with the requested coverage", () => {
+  it("keeps the mounted blocked-words policy limited to pornographic and firearm terms", () => {
     const policyPath = path.join(process.cwd(), "services/llm-gateway/guardrails/blocked-words.yaml")
     expect(fs.existsSync(policyPath)).toBe(true)
 
@@ -414,18 +411,18 @@ describe("llm gateway reliability config", () => {
     }
 
     expect(Array.isArray(policy.blocked_words)).toBe(true)
-    expect(policy.blocked_words?.length).toBeGreaterThanOrEqual(20)
+    expect(policy.blocked_words?.length).toBeGreaterThanOrEqual(10)
 
     const keywords = new Set((policy.blocked_words || []).map((item) => item.keyword))
     const descriptions = new Set((policy.blocked_words || []).map((item) => item.description))
 
     expect(keywords.has("色情")).toBe(true)
-    expect(keywords.has("暴力")).toBe(true)
-    expect(keywords.has("血腥")).toBe(true)
-    expect(keywords.has("毒品")).toBe(true)
     expect(keywords.has("枪支")).toBe(true)
-    expect(keywords.has("国家领导人")).toBe(true)
-    expect(descriptions.has("政治敏感内容")).toBe(true)
+    expect(keywords.has("暴力")).toBe(false)
+    expect(keywords.has("血腥")).toBe(false)
+    expect(keywords.has("毒品")).toBe(false)
+    expect(keywords.has("国家领导人")).toBe(false)
+    expect(descriptions).toEqual(new Set(["色情内容", "枪支内容"]))
     expect((policy.blocked_words || []).every((item) => item.action === "BLOCK")).toBe(true)
   })
 
