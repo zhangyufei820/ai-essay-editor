@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server"
 import { requireUser } from "@/lib/auth/verified-user"
 import { internalDifyFetch } from "@/lib/internal-dify-fetch"
 import { applyRateLimit } from "@/lib/rate-limit"
+import { getPublicAiLabel } from "@/lib/public-ai-labels"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -63,7 +64,7 @@ function extractOptimizedPrompt(payload: unknown): string {
 function buildInputs(body: OptimizeRequestBody) {
   const prompt = readString(body.prompt)
   const model = readString(body.model) || "gpt-image-2"
-  const targetModelName = model === "gemini-image" ? "Gemini 图像生成" : model === "banana-2-pro" ? "Banana2 Pro 4K" : "GPT Image 2"
+  const targetModelName = getPublicAiLabel(model, "图像创作")
   return {
     prompt,
     original_prompt: prompt,

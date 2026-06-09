@@ -74,7 +74,7 @@ const GEMINI_SIZE_OPTIONS = [
 const MODEL_CONFIGS: Record<ImageGenerationModel, ImageModelConfig> = {
   'gpt-image-2': {
     model: 'gpt-image-2',
-    title: 'GPT Image 2',
+    title: '高质量图像',
     modelKey: 'gpt-image-2',
     entryRoute: '/chat/creative-image-gpt2',
     chatRoute: GPT_IMAGE_2_CHAT_ROUTE,
@@ -90,7 +90,7 @@ const MODEL_CONFIGS: Record<ImageGenerationModel, ImageModelConfig> = {
   },
   'gemini-image': {
     model: 'gemini-image',
-    title: 'Gemini 图像',
+    title: '图文创作',
     modelKey: 'gemini-image',
     entryRoute: '/chat/creative-image-gemini',
     chatRoute: GEMINI_IMAGE_CHAT_ROUTE,

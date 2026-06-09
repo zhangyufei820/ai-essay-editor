@@ -12,7 +12,7 @@ describe("Dify final node output fallback", () => {
     expect(route).toContain('nodeTitle.includes("报告")')
     expect(route).toContain("let finalNodeOutputText = \"\"")
     expect(route).toContain("!hasReceivedContent && finalNodeOutputText.trim()")
-    expect(route).toContain("已收到最终节点回复")
+    expect(route).toContain("已收到结果，正在整理")
   })
 
   it("keeps regular Dify streams alive while waiting for long chatflow nodes", () => {

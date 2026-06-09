@@ -649,7 +649,7 @@ export function SunoPage() {
               <Sparkles className="h-4 w-4" />
               输入想法，自动生成歌曲
             </div>
-            <h1 className="font-[var(--font-display)] text-4xl font-bold leading-tight text-[var(--ink-900)] sm:text-5xl">suno音乐创作</h1>
+            <h1 className="font-[var(--font-display)] text-4xl font-bold leading-tight text-[var(--ink-900)] sm:text-5xl">音乐创作</h1>
             <p className="mt-3 max-w-2xl text-[15px] leading-7 text-[var(--ink-600)]">
               写下歌词或一句创作提示，系统会自动提交、等待并刷新结果。歌曲完成后，你可以直接试听和下载。
             </p>
@@ -737,7 +737,7 @@ export function SunoPage() {
 
                 <div className="grid gap-4 sm:grid-cols-3">
                   <div>
-                    <Label htmlFor="song_mv">模型版本</Label>
+                    <Label htmlFor="song_mv">生成版本</Label>
                     <select
                       id="song_mv"
                       className={SELECT_CLASS}

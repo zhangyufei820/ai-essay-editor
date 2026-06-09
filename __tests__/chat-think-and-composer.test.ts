@@ -61,8 +61,8 @@ describe("chat think rendering and composer layout", () => {
     const route = read("app/api/dify-chat/route.ts")
 
     expect(chatInput).toContain("showOpenClawSkillButton")
-    expect(chatInput).toContain("加载技能")
-    expect(picker).toContain("选择一个技能后，当前对话会按对应能力处理你的任务。")
+    expect(chatInput).toContain("加载能力")
+    expect(picker).toContain("选择一个能力后，当前对话会按对应方式处理你的任务。")
     expect(picker).not.toMatch(/英文技能标识|传递给 OpenClaw|OpenClaw Skills/)
     expect(skills).toContain('id: "khazix-writer"')
     expect(skills).toContain('id: "AI Video Generation"')
@@ -72,7 +72,7 @@ describe("chat think rendering and composer layout", () => {
     expect(chatInterface).toContain("skill_name: selectedOpenClawSkill.id")
     expect(route).toContain("getOpenClawSkillById")
     expect(route).toContain("openclaw_skill_description")
-    expect(route).toContain("[OpenClaw 已加载技能]")
+    expect(route).toContain("[高级创作已加载能力]")
     expect(route).toContain("queryInjected")
   })
 
@@ -94,7 +94,7 @@ describe("chat think rendering and composer layout", () => {
     const route = read("app/api/dify-chat/route.ts")
 
     expect(chatInput).toContain("showCodexSkillButton")
-    expect(picker).toContain("选择一个技能后，当前对话会按对应能力处理你的任务。")
+    expect(picker).toContain("选择一个能力后，当前对话会按对应方式处理你的任务。")
     expect(picker).not.toMatch(/英文技能标识|传递给超级全能智能体|Codex Skills/)
     expect(skills).toContain('id: "paper_outline"')
     expect(skills).toContain('id: "shenxiang_image_gen"')
@@ -104,7 +104,7 @@ describe("chat think rendering and composer layout", () => {
     expect(chatInterface).toContain("skill_name: selectedCodexSkill.id")
     expect(route).toContain("getCodexSkillById")
     expect(route).toContain("codex_skill_description")
-    expect(route).toContain("[Codex 已加载技能]")
+    expect(route).toContain("[超级全能智能体已加载能力]")
     expect(route).toContain("buildCodexSkillQuery(effectiveQuery, normalizedCodexSkill.inputs)")
     expect(route).toContain("[媒体工具路由硬规则]")
     expect(route).toContain("requested_tool_family")
@@ -190,7 +190,8 @@ describe("chat think rendering and composer layout", () => {
     expect(route).toContain('model === "open-claw" && json.event === "message_end"')
     expect(route).toContain("enqueueSseAnswer(controller, openClawFinalOutputText)")
     expect(route).toContain("OPENCLAW_EMPTY_UPSTREAM_RESPONSE")
-    expect(route).toContain("OpenClaw 上游模型本次返回为空，请重新提交。当前任务未扣费。")
+    expect(route).toContain("高级创作本次没有返回可展示内容，请重新提交。当前任务未扣费。")
+    expect(route).not.toContain("OpenClaw 上游模型本次返回为空，请重新提交。当前任务未扣费。")
   })
 
   it("exposes problem answers as mistake-book study actions", () => {

@@ -225,8 +225,11 @@ describe('Sprint 5 payment / credits / membership guards', () => {
   it('does not mislabel Dify credential failures as user login failures in image workspaces', () => {
     const image2 = read('components/chat/gpt-image2-chat-interface.tsx')
 
-    expect(image2).toContain('DIFY_CREDENTIAL_INVALID')
+    expect(image2).toContain('SERVICE_CREDENTIAL_INVALID')
+    expect(image2).toContain('SERVICE_CREDENTIAL_MISSING')
     expect(image2).toContain('图像服务配置暂时不可用，请联系管理员处理。')
+    expect(image2).not.toContain('DIFY_CREDENTIAL_INVALID')
+    expect(image2).not.toContain('DIFY_CREDENTIAL_MISSING')
     expect(image2).not.toContain('图像工作流凭据失效，请管理员更新 Dify 应用 API Key 后重试。')
   })
 
@@ -251,7 +254,7 @@ describe('Sprint 5 payment / credits / membership guards', () => {
     expect(route).toContain('DIFY_IMAGE_PROMPT_OPTIMIZER_API_KEY')
     expect(route).toContain('/chat-messages')
     expect(route).toContain('/workflows/run')
-    expect(route).toContain('Gemini 图像生成')
+    expect(route).toContain('getPublicAiLabel(model, "图像创作")')
     expect(client).toContain('model: isGeminiGatewayWorkspace ? workspaceModel : model')
     expect(client).toContain('/api/image-prompt/optimize')
     expect(client).toContain('自动优化')

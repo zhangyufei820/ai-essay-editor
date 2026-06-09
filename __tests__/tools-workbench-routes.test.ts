@@ -65,7 +65,7 @@ describe("tools workbench route mappings", () => {
     expect(page).toContain("语音服务首次准备可能需要几分钟")
     expect(page).toContain("拍卷诊断海报")
     expect(page).toContain('href="/worksheet-diagnosis"')
-    expect(page).toContain("再调用 Image 2 生成诊断海报")
+    expect(page).toContain("再生成诊断海报")
     expect(page).toContain("图像提示词反推")
     expect(page).toContain("gpt-image-2")
     expect(page).toContain("nano_banana")

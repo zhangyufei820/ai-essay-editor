@@ -8,6 +8,7 @@ import { BadgeV2 as Badge, ButtonV2 as Button, CardV2 as Card, LoadingStateV2 } 
 import { ModelLogo, type ModelKey } from "@/components/ModelLogo"
 import { getVerifiedAuthHeaders } from "@/lib/client-auth"
 import { buildChatSessionRouteFromSession, resolveChatSessionRouteModel } from "@/lib/chat-session-routes"
+import { getPublicAiLabel, sanitizePublicAiLabel } from "@/lib/public-ai-labels"
 import { cn } from "@/lib/utils"
 
 type ChatSession = {
@@ -35,12 +36,12 @@ type HistoryItem =
 const MODEL_DISPLAY_NAMES: Record<string, string> = {
   standard: "作文批改",
   "general-chat": "网站助手",
-  "gpt-5": "ChatGPT 5.5",
-  "claude-opus": "Claude Opus",
-  "gemini-pro": "Gemini Pro",
-  "gemini-image": "Gemini 图像",
-  "grok-4.2": "Grok 4.2",
-  "open-claw": "OpenClaw",
+  "gpt-5": getPublicAiLabel("gpt-5"),
+  "claude-opus": getPublicAiLabel("claude-opus"),
+  "gemini-pro": getPublicAiLabel("gemini-pro"),
+  "gemini-image": getPublicAiLabel("gemini-image"),
+  "grok-4.2": getPublicAiLabel("grok-4.2"),
+  "open-claw": getPublicAiLabel("open-claw"),
   "quanquan-math": "全学段数学",
   "quanquan-english": "全学段英语",
   "vocab-card": "词境记忆卡",
@@ -49,9 +50,9 @@ const MODEL_DISPLAY_NAMES: Record<string, string> = {
   banzhuren: "班主任助手",
   "all-in-one-agent": "数学图片与动画生成器",
   "super-all-in-one-agent": "超级全能智能体",
-  "suno-v5": "Suno V5",
-  "banana-2-pro": "GPT Image 2",
-  "gpt-image-2": "GPT Image 2",
+  "suno-v5": getPublicAiLabel("suno-v5"),
+  "banana-2-pro": getPublicAiLabel("banana-2-pro"),
+  "gpt-image-2": getPublicAiLabel("gpt-image-2"),
   "ai-writing-paper": "论文写作",
   "zhongying-essay": "中英作文",
   "experiment-report": "实验报告",
@@ -91,7 +92,7 @@ function normalizeSession(session: ChatSession): HistoryItem {
   return {
     type: "session",
     id: session.id,
-    title: cleanText(session.title, MODEL_DISPLAY_NAMES[model] || "AI 对话"),
+    title: cleanText(session.title, sanitizePublicAiLabel(MODEL_DISPLAY_NAMES[model] || model, "AI 对话")),
     preview: cleanText(session.preview, "继续打开这次对话，查看完整上下文和生成结果。"),
     model,
     createdAt: session.created_at,
@@ -181,7 +182,7 @@ export default function HistoryPage() {
     if (filter !== "all" && item.type !== filter) return false
     const keyword = query.trim().toLowerCase()
     if (!keyword) return true
-    const haystack = `${item.title} ${item.preview} ${item.type === "session" ? MODEL_DISPLAY_NAMES[item.model] || item.model : item.writerStyle || ""}`.toLowerCase()
+    const haystack = `${item.title} ${item.preview} ${item.type === "session" ? sanitizePublicAiLabel(MODEL_DISPLAY_NAMES[item.model] || item.model, "智能任务") : item.writerStyle || ""}`.toLowerCase()
     return haystack.includes(keyword)
   })
 
@@ -236,7 +237,7 @@ export default function HistoryPage() {
                 <input
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
-                  placeholder="搜索标题、摘要或模型"
+                  placeholder="搜索标题、摘要或功能"
                   className="h-10 w-full rounded-[var(--radius-pill)] border border-[var(--paper-300)] bg-[var(--paper-50)] pl-9 pr-4 text-[14px] text-[var(--ink-800)] outline-none transition focus:border-[var(--ink-400)]"
                 />
               </div>

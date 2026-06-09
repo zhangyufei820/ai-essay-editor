@@ -213,7 +213,7 @@ function mapToolImageError(error: unknown) {
   if (lower.includes("upstream_error") || lower.includes("dify error") || lower.includes("500")) {
     return "图片服务请求失败，可能是余额不足、尺寸不支持或参数不兼容。"
   }
-  return raw.replace(/Dify/gi, "服务").replace(/网关/g, "服务") || "处理失败，请稍后重试。"
+  return raw.replace(/\b[A-Za-z][A-Za-z0-9_.-]*(?:\s+[A-Za-z0-9_.-]+){0,3}\b/g, "服务").replace(/(?:服务通道|连接层)/g, "服务") || "处理失败，请稍后重试。"
 }
 
 function buildSurveyRequiredError() {
@@ -817,7 +817,7 @@ export default function ToolsPage() {
 
         <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_430px]">
           <div className="grid min-w-0 gap-4 lg:grid-cols-2">
-            <ToolCard id="image-prompt-reverse" index="01" title="图像提示词反推" description="上传参考图，反推出可直接用于 Image 2 或 Gemini 的生成提示词。" icon={FileImage} featured>
+            <ToolCard id="image-prompt-reverse" index="01" title="图像提示词反推" description="上传参考图，反推出可直接用于图像创作的生成提示词。" icon={FileImage} featured>
               <form className="grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]" onSubmit={runReversePrompt}>
                 <div className="space-y-3">
                   <Label htmlFor="reverse-image-file">上传图片</Label>
@@ -900,7 +900,7 @@ export default function ToolsPage() {
               </form>
             </ToolCard>
 
-            <ToolCard id="worksheet-diagnosis-tool" index="02" title="拍卷诊断海报" description="上传试卷或作业图片，先由模型批改归因，再调用 Image 2 生成诊断海报。" icon={IconDiagnosis} featured>
+            <ToolCard id="worksheet-diagnosis-tool" index="02" title="拍卷诊断海报" description="上传试卷或作业图片，先完成批改归因，再生成诊断海报。" icon={IconDiagnosis} featured>
               <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
                 <div className="space-y-2">
                   <p className="text-sm font-semibold text-[var(--ink-800)]">上传试卷 / 作业 / 错题图片</p>
@@ -1102,7 +1102,7 @@ export default function ToolsPage() {
                   <GridWaveLoader maxWidth={260} gridSize={12} dotSize={5} gap={5} label={reverseStage || "正在生成图片，请稍候。"} />
                   <div>
                     <p className="font-[var(--font-display)] text-lg font-bold text-[var(--paper-50)]">正在生成图像</p>
-                    <p className="mt-2 text-sm leading-6 text-[var(--paper-200)]">{reverseStage || "Image 2 风格加载中，请稍候。"}</p>
+                    <p className="mt-2 text-sm leading-6 text-[var(--paper-200)]">{reverseStage || "图像风格加载中，请稍候。"}</p>
                   </div>
                   <div className="w-full max-w-xs">
                     <ProgressBar value={reverseProgress} label={reverseStage || "正在生成图像"} />

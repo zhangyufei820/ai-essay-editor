@@ -4,7 +4,7 @@ export type AIProvider = {
   id: string
   name: string
   description: string
-  models: {
+  capabilities: {
     id: string
     name: string
     description: string
@@ -18,117 +18,96 @@ export type AIProvider = {
   status: "available" | "requires_key"
 }
 
-const AI_PROVIDERS: AIProvider[] = [
+const AI_CAPABILITY_GROUPS: AIProvider[] = [
   {
-    id: "openai",
-    name: "OpenAI",
-    description: "业界领先的AI模型，擅长理解和生成自然语言",
-    models: [
+    id: "deep-chat",
+    name: "深度对话",
+    description: "适合通用推理、写作和复杂问题拆解",
+    capabilities: [
       {
         id: "gpt-5",
-        name: "GPT-5.5",
-        description: "最新旗舰模型，卓越的推理和创作能力",
+        name: "深度对话",
+        description: "通用推理、写作和复杂问题拆解",
         contextWindow: 128000,
       },
       {
-        id: "gpt-5-mini",
-        name: "GPT-5.5 Mini",
-        description: "快速高效的轻量级模型",
+        id: "general-chat",
+        name: "网站助手",
+        description: "快速问答、功能入口和套餐权益说明",
         contextWindow: 128000,
       },
     ],
-    features: ["文本生成", "代码理解", "多语言支持", "长文本处理"],
+    features: ["文本生成", "多语言支持", "复杂问题拆解", "快速响应"],
     status: "available",
   },
   {
-    id: "anthropic",
-    name: "Anthropic Claude",
-    description: "注重安全性和准确性的AI助手",
-    models: [
+    id: "long-form-analysis",
+    name: "长文分析",
+    description: "适合长文理解、结构分析和严谨润色",
+    capabilities: [
       {
-        id: "claude-sonnet-4.5",
-        name: "Claude Opus 4.6",
-        description: "平衡性能和速度的最佳选择",
+        id: "claude-opus",
+        name: "长文分析",
+        description: "长文理解、结构分析和严谨润色",
         contextWindow: 200000,
       },
       {
-        id: "claude-opus-4",
-        name: "Claude Opus 4",
-        description: "最强大的推理和分析能力",
-        contextWindow: 200000,
+        id: "ai-writing-paper",
+        name: "论文写作",
+        description: "结构化论文初稿与引用整理",
+        contextWindow: 128000,
       },
     ],
-    features: ["深度分析", "长文档处理", "精确引用", "安全可靠"],
+    features: ["深度分析", "长文档处理", "结构化写作", "严谨润色"],
     status: "available",
   },
   {
-    id: "xai",
-    name: "xAI (Grok)",
-    description: "实时信息和幽默风格的AI模型",
-    models: [
+    id: "vision-and-creative",
+    name: "图文创作",
+    description: "适合图文理解、资料整理、图像生成和图像编辑",
+    capabilities: [
       {
-        id: "grok-4",
-        name: "Grok 4",
-        description: "最新的Grok模型，实时信息访问",
-        contextWindow: 131072,
-      },
-      {
-        id: "grok-4-fast",
-        name: "Grok 4 Fast",
-        description: "快速响应版本",
-        contextWindow: 131072,
-      },
-    ],
-    features: ["实时信息", "幽默风格", "快速响应", "多模态理解"],
-    status: "available",
-  },
-  {
-    id: "google",
-    name: "Google Gemini",
-    description: "Google的多模态AI模型",
-    models: [
-      {
-        id: "gemini-2.5-flash",
-        name: "Gemini 2.5 Flash",
-        description: "快速多模态处理",
+        id: "gemini-pro",
+        name: "图文理解",
+        description: "图文资料理解与整理",
         contextWindow: 1000000,
       },
       {
-        id: "gemini-2.5-pro",
-        name: "Gemini 2.5 Pro",
-        description: "专业级多模态能力",
-        contextWindow: 2000000,
+        id: "gpt-image-2",
+        name: "高质量图像",
+        description: "高质量图像生成与编辑",
+        contextWindow: 128000,
       },
     ],
-    features: ["超长上下文", "多模态", "代码生成", "数据分析"],
+    features: ["图文理解", "图像生成", "图像编辑", "资料整理"],
     status: "available",
   },
   {
-    id: "fireworks",
-    name: "Fireworks AI",
-    description: "高性能开源模型托管平台",
-    models: [
+    id: "creative-agent",
+    name: "高级创作",
+    description: "适合复杂创作、演示和多步骤内容生成",
+    capabilities: [
       {
-        id: "llama-v4-70b",
-        name: "Llama 4 70B",
-        description: "Meta最新开源模型",
+        id: "open-claw",
+        name: "高级创作",
+        description: "复杂创作、演示和多步骤内容生成",
         contextWindow: 128000,
       },
       {
-        id: "mixtral-8x22b",
-        name: "Mixtral 8x22B",
-        description: "高性能混合专家模型",
-        contextWindow: 65536,
+        id: "super-all-in-one-agent",
+        name: "超级全能智能体",
+        description: "PPT、图像、视频、论文、联网和多步骤任务",
+        contextWindow: 128000,
       },
     ],
-    features: ["开源模型", "高性价比", "快速推理", "灵活部署"],
+    features: ["PPT", "网页", "多步骤任务", "综合创作"],
     status: "available",
   },
 ]
 
 export async function GET() {
   return NextResponse.json({
-    providers: AI_PROVIDERS,
-    total: AI_PROVIDERS.length,
+    providers: AI_CAPABILITY_GROUPS,
+    total: AI_CAPABILITY_GROUPS.length,
   })
 }

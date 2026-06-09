@@ -7,6 +7,7 @@
 
 import { Image as ImageIcon } from "lucide-react"
 import { IconAllInOne, IconBanzhuren, IconDiagnosis, IconEnglish, IconEssay, IconMath, IconOpenClaw, IconProblem, IconSuperAgent, IconTeaching, IconVocab, IconWebsiteAssistant, IconWriting } from "@/components/icons/v2"
+import { getPublicAiLabel } from "@/lib/public-ai-labels"
 import type { AgentDefinition } from "./types"
 
 export const AGENT_REGISTRY: Record<string, AgentDefinition> = {
@@ -121,16 +122,16 @@ export const AGENT_REGISTRY: Record<string, AgentDefinition> = {
   },
   "open-claw": {
     model: "open-claw",
-    name: "OpenClaw 演示页",
+    name: getPublicAiLabel("open-claw"),
     description: "生成完整 PPT / 网页",
     group: "creative",
     artifactType: "markdown",
-    priceLabel: "高级模型",
+    priceLabel: "高级能力",
     icon: IconOpenClaw,
   },
   "gpt-image-2": {
     model: "gpt-image-2",
-    name: "GPT Image 2",
+    name: getPublicAiLabel("gpt-image-2"),
     description: "1K / 2K / 4K 图像生成与修图",
     group: "creative",
     artifactType: "markdown",
@@ -149,7 +150,7 @@ export const AGENT_REGISTRY: Record<string, AgentDefinition> = {
   "super-all-in-one-agent": {
     model: "super-all-in-one-agent",
     name: "超级全能智能体",
-    description: "接入最新模型 GPT-5.5，可自由创建 skill，自由创建 PPT、图像生成、视频生成、超长论文写作、联网。",
+    description: "接入综合能力，可完成 PPT、图像生成、视频生成、超长论文写作、联网和多步骤任务。",
     group: "general",
     artifactType: "markdown",
     priceLabel: "按 Token 计费",

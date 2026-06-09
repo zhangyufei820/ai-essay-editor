@@ -38,7 +38,7 @@ export const OPENCLAW_SKILLS: OpenClawSkill[] = [
     id: "clawhub",
     name: "ClawHub 技能中心",
     category: "核心工具",
-    description: "用于查看、管理和调用智能体技能入口，适合需要先找能力再执行任务的场景。",
+    description: "用于查看、管理和调用智能能力入口，适合需要先找能力再执行任务的场景。",
     tags: ["技能中心", "能力管理", "智能体"],
   },
   {

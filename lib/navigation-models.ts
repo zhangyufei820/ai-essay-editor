@@ -1,5 +1,6 @@
 import type { ModelKey } from "@/components/ModelLogo"
 import type { ModelType } from "@/lib/pricing"
+import { getPublicAiLabel } from "@/lib/public-ai-labels"
 
 export type NavigationModelGroup = {
   key: string
@@ -28,7 +29,7 @@ export const navigationModelGroups: NavigationModelGroup[] = [
       {
         key: "super-all-in-one-agent",
         name: "超级全能智能体",
-        description: "GPT-5.5 / skill / PPT / 图像 / 视频 / 论文 / 联网",
+        description: "复杂问题拆解、PPT、图像、视频、论文与联网资料整理",
         href: "/chat/super-all-in-one-agent",
         group: "教育专用",
         color: BRAND_GREEN,
@@ -123,61 +124,61 @@ export const navigationModelGroups: NavigationModelGroup[] = [
   },
   {
     key: "models",
-    label: "顶级模型专区",
+    label: "智能能力专区",
     items: [
       {
         key: "general-chat",
-        name: "通用对话",
+        name: getPublicAiLabel("general-chat"),
         description: "轻量快速问答",
         href: "/chat/general-chat",
-        group: "AI模型",
+        group: "智能能力",
         color: BRAND_GREEN,
         modelKey: "general-chat",
         badge: "默认",
       },
       {
         key: "gpt-5",
-        name: "ChatGPT 5.5",
-        description: "通用智能对话",
+        name: getPublicAiLabel("gpt-5"),
+        description: "通用推理、写作和复杂问题拆解",
         href: "/chat/gpt-5",
-        group: "AI模型",
+        group: "智能能力",
         color: BRAND_GREEN,
         modelKey: "gpt-5",
         badge: "新",
       },
       {
         key: "claude-opus",
-        name: "Claude opus4.6thinking",
+        name: getPublicAiLabel("claude-opus"),
         description: "深度推理与分析",
         href: "/chat/claude-opus",
-        group: "AI模型",
+        group: "智能能力",
         color: BRAND_GREEN,
         modelKey: "claude-opus",
       },
       {
         key: "gemini-pro",
-        name: "Gemini 3.1 pro",
+        name: getPublicAiLabel("gemini-pro"),
         description: "多模态理解",
         href: "/chat/gemini-pro",
-        group: "AI模型",
+        group: "智能能力",
         color: BRAND_GREEN,
         modelKey: "gemini-pro",
       },
       {
         key: "grok-4.2",
-        name: "Grok-4.2",
-        description: "xAI 智能助手",
+        name: getPublicAiLabel("grok-4.2"),
+        description: "开放式探索与灵感发散",
         href: "/chat/grok-4.2",
-        group: "AI模型",
+        group: "智能能力",
         color: BRAND_GREEN,
         modelKey: "grok-4.2",
       },
       {
         key: "open-claw",
-        name: "Open Claw",
-        description: "OpenClaw 智能助手",
+        name: getPublicAiLabel("open-claw"),
+        description: "复杂创作、演示和多步骤内容生成",
         href: "/chat/open-claw",
-        group: "AI模型",
+        group: "智能能力",
         color: BRAND_GREEN,
         modelKey: "open-claw",
         badge: "推荐",
@@ -224,8 +225,8 @@ export const navigationModelGroups: NavigationModelGroup[] = [
     items: [
       {
         key: "gemini-image",
-        name: "Gemini 图像",
-        description: "Google Gemini 文生图与图像编辑",
+        name: getPublicAiLabel("gemini-image"),
+        description: "文生图与图像编辑",
         href: "/chat/gemini-image",
         group: "创意生成",
         color: BRAND_GREEN,
@@ -234,7 +235,7 @@ export const navigationModelGroups: NavigationModelGroup[] = [
       },
       {
         key: "gpt-image-2",
-        name: "GPT Image 2",
+        name: getPublicAiLabel("gpt-image-2"),
         description: "1K / 2K / 4K 图像生成与编辑",
         href: "/chat/gpt-image-2",
         group: "创意生成",

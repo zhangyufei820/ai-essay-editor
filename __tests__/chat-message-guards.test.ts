@@ -7,6 +7,7 @@ import {
   sanitizePublicAiStatus,
   sanitizeAssistantMessageForPublicDisplay,
 } from "@/lib/chat-error-sanitizer"
+import { sanitizePublicAiLabel } from "@/lib/public-ai-labels"
 import { readFileSync } from "fs"
 import path from "path"
 
@@ -49,6 +50,25 @@ describe("chat message guards", () => {
     expect(sanitizePublicAiStatus("Dify 会话已提交")).toBe("任务已提交")
   })
 
+  it("blocks backend model and provider labels from public labels", () => {
+    const samples = [
+      "GPT Image 2",
+      "Image 2",
+      "Banana2 Pro 4K",
+      "Google Gemini 图像",
+      "Claude Opus",
+      "ChatGPT 5.5",
+      "OpenClaw",
+      "TokenFlux provider",
+      "workflow node model group",
+    ]
+
+    for (const sample of samples) {
+      expect(sanitizePublicAiLabel(sample, "智能任务")).toBe("智能任务")
+      expect(hasInternalAiDetailText(sample)).toBe(true)
+    }
+  })
+
   it("sanitizes old assistant failure messages before rendering history, copy, audio, export, or sharing", () => {
     const oldContent = [
       "### 响应没有完整送达",
@@ -61,9 +81,16 @@ describe("chat message guards", () => {
     const messageBubble = read("components/chat/MessageBubble.tsx")
     const enhancedChat = read("components/chat/enhanced-chat-interface.tsx")
     const chatSession = read("app/api/chat-session/route.ts")
+    const saveMessage = read("app/api/save-message/route.ts")
 
     expect(sanitized).toContain("### 当前回复未完整送达")
     expect(sanitized).toContain("任务已提交")
+    expect(sanitized).toBe([
+      "### 当前回复未完整送达",
+      "任务已提交，仍在处理中",
+      "",
+      "建议：先刷新当前会话或历史记录查看是否已有结果。",
+    ].join("\n"))
     expect(sanitized).not.toMatch(/Dify|工作流|节点|模型|供应商|网关|上游|备用线路/)
     expect(messageBubble).toContain("const publicContent = useMemo")
     expect(messageBubble).toContain("navigator.clipboard.writeText(publicContent)")
@@ -72,6 +99,8 @@ describe("chat message guards", () => {
     expect(enhancedChat).toContain("sanitizeAssistantMessageForPublicDisplay(sanitizeDifyAnswerForModel")
     expect(chatSession).toContain("toPublicChatMessage")
     expect(chatSession).toContain("sanitizeAssistantMessageForPublicDisplay(message.content)")
+    expect(saveMessage).toContain("sanitizeAssistantMessageForPublicDisplay(content)")
+    expect(saveMessage).toContain("content: safeContent")
   })
 
   it("uses the guard before showing share rewards or creating share links", () => {
@@ -134,6 +163,98 @@ describe("chat message guards", () => {
     expect(enhancedChat).not.toContain("### 响应没有完整送达")
     expect(toolsPage).not.toMatch(/等待工作流返回|提交到工作流|网关连通性测试|OmniVoice 网关|图像上游|生成任务已提交，正在等待模型返回结果/)
     expect(`${openClawPicker}\n${codexPicker}`).not.toMatch(/OpenClaw Skills|Codex Skills|英文技能标识|传递给 OpenClaw|传递给超级全能智能体/)
+    expect(`${openClawPicker}\n${codexPicker}`).not.toContain("英文 id")
+    expect(`${openClawPicker}\n${codexPicker}`).not.toContain("<p className=\"mt-1 truncate font-[var(--font-mono-v2)] text-[11px] text-[var(--ink-400)]\">\n                                      {skill.id}")
     expect(openClawSkills).not.toMatch(/description:\s*"[^"]*(OpenClaw|节点|工作流)|tags:\s*\[[^\]]*"(OpenClaw|节点|工作流)"|name:\s*"[^"]*(节点|工作流)/)
+  })
+
+  it("uses public capability labels across user-facing app entry points", () => {
+    const navigationModels = read("lib/navigation-models.ts")
+    const agentPlaza = read("components/agents/agent-plaza-data.ts")
+    const agentRegistry = read("components/chat/v2/agent-registry.ts")
+    const modelPanel = read("components/chat/ModelPanel.tsx")
+    const chatInput = read("components/chat/ChatInput.tsx")
+    const notFound = read("app/not-found.tsx")
+    const enhancedChat = read("components/chat/enhanced-chat-interface.tsx")
+    const appSidebar = read("components/app-sidebar.tsx")
+    const chatSidebar = read("components/chat/chat-sidebar.tsx")
+    const emptyState = read("components/chat/EmptyState.tsx")
+    const agentPanel = read("components/chat/AgentPanel.tsx")
+    const openClawSection = read("components/home/OpenClawSection.tsx")
+    const agentPlazaPage = read("components/agents/AgentPlazaPage.tsx")
+    const historyPage = read("app/history/page.tsx")
+    const toolsPage = read("app/tools/page.tsx")
+    const chatLayout = read("app/chat/layout.tsx")
+    const gptImagePage = read("app/chat/gpt-image-2/page.tsx")
+    const imageWorkspace = read("components/chat/gpt-image2-chat-interface.tsx")
+    const imageConfig = read("components/chat/image-generation/config.ts")
+    const imageInputsConfig = read("components/chat/image-generation/gpt-image-v11.ts")
+    const educationPanel = read("components/chat/EducationPanel.tsx")
+    const pricingPage = read("components/pricing/v2/PricingPageV2.tsx")
+    const pricing = read("components/pricing.tsx")
+    const aboutPage = read("app/about/page.tsx")
+    const htmlPreview = read("components/chat/OpenClawHtmlPreview.tsx")
+    const runtimeGuard = read("lib/openclaw-runtime-guard.ts")
+    const helpPage = read("components/help/HelpPageClient.tsx")
+    const helpLayout = read("app/help/layout.tsx")
+    const termsPage = read("app/terms/page.tsx")
+    const providersRoute = read("app/api/providers/route.ts")
+    const imagePromptOptimizer = read("app/api/image-prompt/optimize/route.ts")
+    const sunoPage = read("components/suno/SunoPage.tsx")
+
+    const publicSurface = [
+      navigationModels,
+      agentPlaza,
+      agentRegistry,
+      modelPanel,
+      chatInput,
+      notFound,
+      appSidebar,
+      chatSidebar,
+      emptyState,
+      agentPanel,
+      openClawSection,
+      agentPlazaPage,
+      historyPage,
+      toolsPage,
+      chatLayout,
+      gptImagePage,
+      imageWorkspace,
+      imageConfig,
+      imageInputsConfig,
+      educationPanel,
+      pricingPage,
+      pricing,
+      aboutPage,
+      htmlPreview,
+      runtimeGuard,
+      helpPage,
+      helpLayout,
+      termsPage,
+      providersRoute,
+      imagePromptOptimizer,
+      sunoPage,
+      enhancedChat.replace(/import[\s\S]*?const BRAND_GREEN/, "const BRAND_GREEN"),
+    ].join("\n")
+
+    const withoutCodeOnlyIdentifiers = publicSurface
+      .replace(/import[\s\S]*?from\s+["'][^"']+["']/g, "")
+      .replace(/type\s+\w*[A-Za-z]*(?:OpenClaw|Codex|Dify|Workflow|Gemini|Gpt|Suno)\w*[\s\S]*?(?=\n(?:type|interface|const|function|export|class)\b|$)/g, "")
+      .replace(/\b(?:const|let|var|function)\s+\w*[A-Za-z]*(?:OpenClaw|Codex|Dify|Workflow|Gemini|Gpt|Suno|Banana)\w*[\s\S]*?(?=\n(?:const|let|var|function|export|class|type|interface)\b|$)/g, "")
+      .replace(/\/(?:\\\/|[^/\n])+\/[a-z]*/gi, "")
+      .replace(/\/\/.*$/gm, "")
+
+    expect(withoutCodeOnlyIdentifiers).not.toMatch(/ChatGPT|Claude opus|Claude Opus|Gemini Pro|Gemini 图像|Google Gemini|Grok 4\.2|Grok-4\.2|Open Claw|OpenClaw 演示页|OpenClaw 智能助手|GPT Image 2|Image 2|Banana2 Pro|Banana 2 Pro|suno音乐创作|DeepSeek|Qwen|OpenAI|Anthropic|xAI|Fireworks|Llama|Mixtral|独立模型|顶级模型|高级模型|模型专区|模型版本|供应商|网关|工作流凭据失效|英文 id/)
+    expect(publicSurface).toContain("getPublicAiLabel(\"gpt-5\")")
+    expect(publicSurface).toContain("getPublicAiLabel(\"claude-opus\")")
+    expect(publicSurface).toContain("getPublicAiLabel(\"gemini-pro\")")
+    expect(publicSurface).toContain("getPublicAiLabel(\"open-claw\")")
+    expect(publicSurface).toContain("getPublicAiLabel(\"gpt-image-2\")")
+    expect(chatInput).not.toContain("加载 Codex 技能")
+    expect(chatInput).not.toContain("选择 AI 模型")
+    expect(notFound).not.toMatch(/GPT|Claude|Gemini/)
+    expect(providersRoute).not.toMatch(/OpenAI|Anthropic|Claude|Gemini|Grok|Fireworks|Llama|Mixtral/)
+    expect(imagePromptOptimizer).toContain('getPublicAiLabel(model, "图像创作")')
+    expect(sunoPage).not.toContain("模型版本")
   })
 })

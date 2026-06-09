@@ -219,7 +219,7 @@ export const OpenClawHtmlPreview = memo(function OpenClawHtmlPreview({
         {status === "ready" && primaryImage && (
           <img
             src={proxifyGeneratedImagePreviewUrl(primaryImage.src, 1200)}
-            alt={primaryImage.alt || label || "OpenClaw 生成图片"}
+            alt={primaryImage.alt || label || "生成图片"}
             className="max-h-[640px] w-full object-contain bg-[var(--paper-50)]"
             loading="lazy"
           />

@@ -1,5 +1,5 @@
 /**
- * 🤖 OpenClaw 智能助手面板
+ * 🤖 高级创作智能助手面板
  *
  * 通用 AI 助手，专注无限探索
  */
@@ -77,7 +77,7 @@ interface AgentPanelProps {
 }
 
 // ============================================
-// OpenClaw 面板组件
+// 高级创作面板组件
 // ============================================
 
 export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
@@ -184,13 +184,13 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
                     className="text-base font-semibold tracking-[0.5px]"
                     style={{ color: TOKENS.primary[800], letterSpacing: "1.5px" }}
                   >
-                    Open Claw
+                    高级创作
                   </h2>
                   <p
                     className="text-[10px] mt-0.5"
                     style={{ color: TOKENS.text.tertiary, letterSpacing: "2px", textTransform: "uppercase" }}
                   >
-                    AI ASSISTANT
+                    智能助手
                   </p>
                 </div>
               </motion.div>
@@ -209,7 +209,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
               </motion.button>
             </motion.div>
 
-            {/* OpenClaw 主卡片 */}
+            {/* 高级创作主卡片 */}
             <div className="flex-1 overflow-y-auto px-5 pb-6">
               <motion.div
                 initial={{ opacity: 0, y: 30, scale: 0.92 }}
@@ -256,7 +256,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
                       通用智能助手
                     </p>
                     <p className="text-[10px] mt-1 leading-relaxed" style={{ color: TOKENS.text.tertiary }}>
-                      OpenClaw 是您的通用 AI 助手，可以帮助您完成各种任务，包括但不限于：
+                      这是您的通用智能助手，可以帮助您完成各种任务，包括但不限于：
                     </p>
                     <ul className="mt-2 space-y-1">
                       {[
@@ -321,7 +321,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
 }
 
 // ============================================
-// OpenClaw 主卡片
+// 高级创作主卡片
 // ============================================
 
 function OpenClawCard({ onClick }: { onClick: () => void }) {
@@ -410,7 +410,7 @@ function OpenClawCard({ onClick }: { onClick: () => void }) {
           className="text-[8px] mb-1 tracking-widest uppercase"
           style={{ color: TOKENS.text.tertiary, letterSpacing: "0.15em" }}
         >
-          AI Assistant
+          智能助手
         </p>
 
         {/* 中文名 */}
@@ -418,7 +418,7 @@ function OpenClawCard({ onClick }: { onClick: () => void }) {
           className="text-base font-medium"
           style={{ color: TOKENS.text.primary, letterSpacing: "0.3px" }}
         >
-          Open Claw
+          高级创作
         </p>
 
         {/* 描述 */}

@@ -1,5 +1,5 @@
 /**
- * 🎯 AI模型专区面板 - "灵感圣殿" 艺廊版
+ * 🎯 智能能力专区面板 - "灵感圣殿" 艺廊版
  *
  * 设计哲学：消融界面与用户之间的"屏幕感"
  * 关键词：浮动岛屿、智慧之光、极光呼吸
@@ -11,6 +11,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import { X } from "lucide-react"
 import { ModelLogo } from "@/components/ModelLogo"
 import { IconAllInOne } from "@/components/icons/v2"
+import { getPublicAiLabel } from "@/lib/public-ai-labels"
 
 // ============================================
 // 🎨 Design Tokens - "智慧之光" 配色系统
@@ -87,40 +88,35 @@ interface ModelPanelProps {
 }
 
 // ============================================
-// AI模型数据 - 艺廊目录
+// 智能能力数据 - 艺廊目录
 // ============================================
 
 const MODELS: Model[] = [
   {
     key: "gpt-5",
-    name: "ChatGPT 5.5",
-    nameEn: "GPT-5",
-    description: "通用智能对话",
+    name: getPublicAiLabel("gpt-5"),
+    description: "通用推理、写作和复杂问题拆解",
     badge: "新",
   },
   {
     key: "claude-opus",
-    name: "Claude opus4.6thinking",
-    nameEn: "Claude",
+    name: getPublicAiLabel("claude-opus"),
     description: "深度推理与分析",
   },
   {
     key: "gemini-pro",
-    name: "Gemini 3.1 pro",
-    nameEn: "Gemini",
-    description: "多模态理解",
+    name: getPublicAiLabel("gemini-pro"),
+    description: "图文资料理解与整理",
   },
   {
     key: "grok-4.2",
-    name: "Grok-4.2",
-    nameEn: "Grok",
-    description: "xAI 智能助手",
+    name: getPublicAiLabel("grok-4.2"),
+    description: "开放式探索与灵感发散",
   },
   {
     key: "open-claw",
-    name: "Open Claw",
-    nameEn: "OpenClaw",
-    description: "OpenClaw 智能助手",
+    name: getPublicAiLabel("open-claw"),
+    description: "复杂创作、演示和多步骤内容生成",
     badge: "推荐",
   },
 ]
@@ -233,13 +229,13 @@ export function ModelPanel({ isOpen, onClose }: ModelPanelProps) {
                     className="text-base font-semibold tracking-[0.5px]"
                     style={{ color: TOKENS.primary[800], letterSpacing: "1.5px" }}
                   >
-                    AI 模型专区
+                    智能能力专区
                   </h2>
                   <p
                     className="text-[10px] mt-0.5"
                     style={{ color: TOKENS.text.tertiary, letterSpacing: "2px", textTransform: "uppercase" }}
                   >
-                    MODELS GALLERY
+                    CAPABILITY GALLERY
                   </p>
                 </div>
               </motion.div>

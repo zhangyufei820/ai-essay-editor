@@ -6,19 +6,19 @@ import { LoadingStateV2 } from '@/components/ui/v2'
 import { PLAZA_AGENTS } from '@/components/agents/agent-plaza-data'
 import type { ModelType } from '@/lib/pricing'
 
-// 🎯 支持的模型/智能体列表
+// 🎯 支持的智能体列表
 // 新增智能体时，只需在此处添加即可
 const BUILTIN_CHAT_MODELS = [
   'standard',        // 作文批改
   'general-chat',    // 通用轻量对话
   'teaching-pro',    // 教学评助手
-  'gpt-5',           // ChatGPT 5.5
-  'claude-opus',     // Claude opus4.6thinking
-  'gemini-pro',      // Gemini 3.1 pro
-  'gemini-image',    // Gemini 图像
-  'gpt-image-2',     // GPT Image 2
-  'grok-4.2',        // Grok-4.2
-  'open-claw',       // Open Claw
+  'gpt-5',           // 深度对话
+  'claude-opus',     // 长文分析
+  'gemini-pro',      // 图文理解
+  'gemini-image',    // 图文创作
+  'gpt-image-2',     // 高质量图像
+  'grok-4.2',        // 灵感探索
+  'open-claw',       // 高级创作
   'quanquan-math',   // 全圈数学智能体
   'quanquan-english', // 全圈英语智能体
   'vocab-card',      // 词境记忆卡
@@ -52,7 +52,7 @@ const EnhancedChatInterface = dynamic(
   }
 )
 
-// Gemini 图像使用与 GPT Image 2 一致的图像工作台界面
+// 图文创作使用图像工作台界面
 const GeminiImageWorkspace = dynamic(
   () => import("@/components/chat/gpt-image2-chat-interface").then(mod => {
     const ImageWorkspace = mod.GptImage2ChatInterface
@@ -90,7 +90,7 @@ export default function ModelChatPage() {
 
   // 🔍 调试日志
   console.log('🔍 [ModelChatPage] 当前模型:', model)
-  console.log('🔍 [ModelChatPage] 是否为 gemini-image:', model === 'gemini-image')
+  console.log('🔍 [ModelChatPage] 是否为图文创作:', model === 'gemini-image')
 
   // 验证模型是否支持
   if (!SUPPORTED_MODELS.includes(model as SupportedModel)) {
@@ -101,7 +101,7 @@ export default function ModelChatPage() {
 
   // 🔥 根据模型选择不同的界面组件
   if (supportedModel === 'gemini-image') {
-    console.log('✅ [ModelChatPage] 使用 Gemini 图像工作台')
+    console.log('✅ [ModelChatPage] 使用图文创作工作台')
     return (
       <main className="flex min-h-screen flex-col">
         <div className="flex-1">

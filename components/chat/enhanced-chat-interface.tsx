@@ -71,6 +71,7 @@ import { getApiUrl } from "@/lib/api-config"
 import { logger } from "@/lib/logger"
 import { ModelLogo } from "@/components/ModelLogo"
 import { navigationModelConfig, getNavigationModelItem } from "@/lib/navigation-models"
+import { getPublicAiLabel, sanitizePublicAiLabel } from "@/lib/public-ai-labels"
 import { PLAZA_AGENTS } from "@/components/agents/agent-plaza-data"
 import { getOpenClawAttachmentKind, isLikelyHtmlDocumentUrl, toPublicOpenClawMediaSignUrl, toPublicOpenClawWorkspaceUrl } from "@/lib/openclaw-media"
 import type { CodexSkill } from "@/lib/codex-skills"
@@ -87,26 +88,26 @@ import type { WorkflowState, WorkflowNodeStatus } from "@/lib/workflow-visual-co
 // 🔥 品牌深绿色（参考主页标题）
 const BRAND_GREEN = "var(--ink-700)"
 
-// 模型 key 到显示名称的映射
 const MODEL_DISPLAY_NAMES: Record<string, string> = {
-  "standard": "标准",
-  "teaching-pro": "教学 Pro",
-  "gpt-5": "GPT-5",
-  "claude-opus": "Claude",
-  "gemini-pro": "Gemini",
-  "gemini-image": "Gemini 图像",
-  "grok-4.2": "Grok",
-  "open-claw": "OpenClaw",
-  "quanquan-math": "全科数学",
-  "quanquan-english": "全科英语",
+  "general-chat": getPublicAiLabel("general-chat"),
+  "standard": getPublicAiLabel("standard"),
+  "teaching-pro": getPublicAiLabel("teaching-pro"),
+  "gpt-5": getPublicAiLabel("gpt-5"),
+  "claude-opus": getPublicAiLabel("claude-opus"),
+  "gemini-pro": getPublicAiLabel("gemini-pro"),
+  "gemini-image": getPublicAiLabel("gemini-image"),
+  "grok-4.2": getPublicAiLabel("grok-4.2"),
+  "open-claw": getPublicAiLabel("open-claw"),
+  "quanquan-math": getPublicAiLabel("quanquan-math"),
+  "quanquan-english": getPublicAiLabel("quanquan-english"),
   "vocab-card": "词境记忆卡",
   "problem": "题目解析",
   "beike-pro": "备课助手",
   "banzhuren": "班主任助手",
   "all-in-one-agent": "数学图片与动画生成器",
   "super-all-in-one-agent": "超级全能智能体",
-  "banana-2-pro": "GPT Image 2",
-  "gpt-image-2": "GPT Image 2",
+  "banana-2-pro": getPublicAiLabel("banana-2-pro"),
+  "gpt-image-2": getPublicAiLabel("gpt-image-2"),
   "ai-writing-paper": "论文写作",
   "zhongying-essay": "中英文作文",
   "experiment-report": "实验报告",
@@ -500,7 +501,7 @@ function getModelEmptyResponseMessage(model: string) {
     return "我没有收到可展示的作文批改结果，请重新提交一次。若仍然为空，请换一张更清晰的作文图片。"
   }
   if (model === "open-claw") {
-    return "OpenClaw 任务已结束，但没有返回可展示内容。请换一个更明确的要求，或稍后重新提交。"
+    return "任务已结束，但没有返回可展示内容。请换一个更明确的要求，或稍后重新提交。"
   }
   if (model === "all-in-one-agent" || model === "super-all-in-one-agent") {
     return "任务已结束，但没有返回可展示内容。请把要生成的图片、动画或文档要求再描述得更具体一些。"
@@ -514,7 +515,7 @@ function getModelEmptyResponseMessage(model: string) {
 function getChatModelDisplayLabel(model?: string) {
   if (!model) return "当前任务"
   const navigationName = getNavigationModelItem(model as ModelType)?.name
-  return navigationName || MODEL_DISPLAY_NAMES[model] || model
+  return sanitizePublicAiLabel(navigationName || MODEL_DISPLAY_NAMES[model] || model, "当前任务")
 }
 
 function isNetworkStreamError(raw: string, lower: string) {
@@ -535,10 +536,10 @@ function getChatErrorMessage(error: unknown, status?: number, model?: string): s
   if (status === 402 || /402|积分不足|余额不足|credit|balance/.test(raw)) {
     return "积分不足，当前任务没有扣费。请充值或升级会员后继续使用。"
   }
-  if (raw.includes("GPT Image 2 当前共创体验期内登录用户可用")) {
+  if (raw.includes("当前共创体验期内登录用户可用")) {
     return "当前图像能力需要登录后使用，请先登录后再提交。"
   }
-  if (raw.includes("GPT Image 2 当前仅订阅用户可用") || raw.includes("仅订阅用户可用")) {
+  if (raw.includes("当前仅订阅用户可用") || raw.includes("仅订阅用户可用")) {
     return "当前账号暂时无法使用该图像能力，请刷新页面或重新登录后再试。"
   }
   if (/无权访问图片生成接口|permission|forbidden|403/.test(raw)) {
@@ -771,7 +772,7 @@ function ProcessingStatusCard({
   workflowState: WorkflowState
   currentRunningText: string
 }) {
-  const modelName = context?.model ? (MODEL_DISPLAY_NAMES[context.model] || context.model) : "AI"
+  const modelName = sanitizePublicAiLabel(context?.model ? (MODEL_DISPLAY_NAMES[context.model] || context.model) : "", "当前任务")
   const isOpenClaw = context?.model === "open-claw"
   const hasFiles = Boolean(context?.fileCount)
   const promptLength = context?.promptLength || 0
@@ -813,14 +814,17 @@ function ProcessingStatusCard({
   const heartbeatHint = context?.heartbeatCount
     ? `连接正常，已等待 ${elapsedSeconds}s`
     : ""
-  const stageText = context?.stage || currentRunningText || heartbeatHint || (showLongWaitHint ? "处理时间稍长，请保持页面打开" : "正在建立回答结构")
+  const stageText = sanitizePublicAiStatus(
+    context?.stage || currentRunningText || heartbeatHint || (showLongWaitHint ? "处理时间稍长，请保持页面打开" : "正在建立回答结构"),
+    showLongWaitHint ? "处理时间稍长，请保持页面打开" : "正在建立回答结构",
+  )
   const runningStep = steps.find((step) => step.status === "running" || step.status === "preparing") || steps[0]
   const completedStep = [...steps].reverse().find((step) => step.status === "completed")
   const nextStep = steps.find((step) => step.status === "pending")
   const traceLines = [
     completedStep ? { marker: "ok", text: completedStep.label, detail: completedStep.detail } : null,
-    runningStep ? { marker: "run", text: runningStep.label, detail: runningStep.detail || stageText } : null,
-    nextStep ? { marker: "wait", text: nextStep.label, detail: nextStep.detail } : null,
+    runningStep ? { marker: "run", text: sanitizePublicAiStatus(runningStep.label, "正在处理"), detail: sanitizePublicAiStatus(runningStep.detail || stageText, stageText) } : null,
+    nextStep ? { marker: "wait", text: sanitizePublicAiStatus(nextStep.label, "等待处理"), detail: sanitizePublicAiStatus(nextStep.detail, "等待处理") } : null,
   ].filter(Boolean).slice(0, 3) as Array<{ marker: "ok" | "run" | "wait"; text: string; detail: string }>
 
   return (
@@ -1048,7 +1052,7 @@ const MediaBlock = ({ items }: { items: MediaItem[] }) => {
         const effectiveType = item.type === "image" ? getOpenClawAttachmentKind(publicUrl) : item.type
 
         if (effectiveType === "image") {
-          // 🔥 使用 GPT Image 样式渲染图片
+          // 🔥 使用图像卡片样式渲染图片
           const imageUrl = publicUrl
           return (
             <motion.div
@@ -2009,12 +2013,12 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
   // --- 模型配置（增强版：添加描述和标签） ---
   const fallbackModelConfig: Partial<Record<ModelType, ModelUiConfig>> = {
     "general-chat": {
-      name: "通用对话",
+      name: getPublicAiLabel("general-chat"),
       modelKey: "general-chat",
       color: BRAND_GREEN,
       description: "轻量快速问答",
       badge: "默认",
-      group: "AI模型"
+      group: "智能能力"
     },
     "standard": {
       name: "作文批改",
@@ -2079,42 +2083,42 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       name: "超级全能智能体",
       modelKey: "super-all-in-one-agent",
       color: BRAND_GREEN,
-      description: "GPT-5.5 / skill / PPT / 图像 / 视频 / 论文 / 联网",
+      description: "复杂问题拆解、PPT、图像、视频、论文与联网资料整理",
       badge: "新",
-      group: "AI模型"
+      group: "智能能力"
     },
     "gpt-5": {
-      name: "ChatGPT 5.5",
+      name: getPublicAiLabel("gpt-5"),
       modelKey: "gpt-5",
       color: BRAND_GREEN,
-      description: "通用智能对话",
+      description: "通用推理、写作和复杂问题拆解",
       badge: "新",
-      group: "AI模型"
+      group: "智能能力"
     },
     "claude-opus": {
-      name: "Claude opus4.6thinking",
+      name: getPublicAiLabel("claude-opus"),
       modelKey: "claude-opus",
       color: BRAND_GREEN,
       description: "深度推理与分析",
-      group: "AI模型"
+      group: "智能能力"
     },
     "gemini-pro": {
-      name: "Gemini 3.1 pro",
+      name: getPublicAiLabel("gemini-pro"),
       modelKey: "gemini-pro",
       color: BRAND_GREEN,
-      description: "多模态理解",
-      group: "AI模型"
+      description: "图文资料理解与整理",
+      group: "智能能力"
     },
     "gemini-image": {
-      name: "Gemini 图像",
+      name: getPublicAiLabel("gemini-image"),
       modelKey: "gemini-image",
       color: BRAND_GREEN,
-      description: "Google Gemini 文生图与图像编辑",
+      description: "文生图与图像编辑",
       badge: "新",
       group: "创意生成"
     },
     "gpt-image-2": {
-      name: "GPT Image 2",
+      name: getPublicAiLabel("gpt-image-2"),
       modelKey: "gpt-image-2",
       color: BRAND_GREEN,
       description: "高质量图像生成与编辑",
@@ -2122,19 +2126,19 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
       group: "创意生成",
     },
     "grok-4.2": {
-      name: "Grok-4.2",
+      name: getPublicAiLabel("grok-4.2"),
       modelKey: "grok-4.2",
       color: BRAND_GREEN,
-      description: "xAI 智能助手",
-      group: "AI模型"
+      description: "开放式探索与灵感发散",
+      group: "智能能力"
     },
     "open-claw": {
-      name: "Open Claw",
+      name: getPublicAiLabel("open-claw"),
       modelKey: "open-claw",
       color: BRAND_GREEN,
-      description: "OpenClaw 智能助手",
+      description: "复杂创作、演示和多步骤内容生成",
       badge: "推荐",
-      group: "AI模型"
+      group: "智能能力"
     },
     "ai-writing-paper": {
       name: "论文写作",
@@ -2167,11 +2171,11 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 
   const getModelUiConfig = (model: ModelType): ModelUiConfig => {
     return modelConfig[model] || {
-      name: MODEL_DISPLAY_NAMES[model] || getModelDisplayName(model),
+      name: sanitizePublicAiLabel(MODEL_DISPLAY_NAMES[model] || getModelDisplayName(model), "当前功能"),
       modelKey: model,
       color: BRAND_GREEN,
       description: "AI 助手",
-      group: "AI模型",
+      group: "智能能力",
     }
   }
 
@@ -3809,7 +3813,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                 selectedSkillId={selectedCodexSkill?.id}
                 onSelect={(skill) => {
                   setSelectedCodexSkill(skill)
-                  toast.success(`已加载技能：${skill.name}`)
+                  toast.success(`已加载能力：${skill.name}`)
                 }}
                 onClose={() => setCodexSkillPickerOpen(false)}
               />
@@ -3818,7 +3822,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                 selectedSkillId={selectedOpenClawSkill?.id}
                 onSelect={(skill) => {
                   setSelectedOpenClawSkill(skill)
-                  toast.success(`已加载技能：${skill.name}`)
+                  toast.success(`已加载能力：${skill.name}`)
                 }}
                 onClose={() => setOpenClawSkillPickerOpen(false)}
               />

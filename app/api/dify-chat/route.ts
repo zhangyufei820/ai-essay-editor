@@ -34,6 +34,7 @@ import { internalDifyFetch } from "@/lib/internal-dify-fetch"
 import { getDifyCredentialForModel } from "@/lib/dify-credentials"
 import { sanitizeDifyAnswerForModel } from "@/lib/dify-answer-cleanup"
 import { getSafeUpstreamErrorMessage, sanitizePublicAiError, sanitizePublicAiErrorCode, sanitizePublicAiStatus, stripUpstreamBranding } from "@/lib/chat-error-sanitizer"
+import { getPublicAiLabel, sanitizePublicAiLabel } from "@/lib/public-ai-labels"
 import { isWorkflowSkillAgent } from "@/lib/workflow-skill-agents"
 import { extractDifyTextOutput } from "@/lib/dify-output-text"
 import { rewriteOpenClawMediaReferences } from "@/lib/openclaw-media"
@@ -553,7 +554,7 @@ function buildCodexSkillQuery(query: string, chatInputs: Record<string, unknown>
 
   const skill = getCodexSkillById(skillId)
   const skillDisplayName = skill?.name || skillId
-  const skillDescription = skill?.description || "用户已在前端明确选择该技能。"
+  const skillDescription = skill?.description || "用户已在前端明确选择该能力。"
   const skillTags = Array.isArray(skill?.tags) ? skill.tags.join("、") : ""
   const mediaRequest = detectAllInOneMediaRequest(query, chatInputs)
   const mediaRoutingNote = [
@@ -565,7 +566,7 @@ function buildCodexSkillQuery(query: string, chatInputs: Record<string, unknown>
   ].join("\n")
 
   return [
-    "[Codex 已加载技能]",
+    "[超级全能智能体已加载能力]",
     `skill_selected: ${skillId}`,
     `skill_id: ${skillId}`,
     `skill_name: ${skillId}`,
@@ -785,7 +786,7 @@ function getDifyCredentialInvalidMessage(model: string | null | undefined, keySo
 }
 
 function getDifyAppModeMismatchMessage(model: string | null | undefined, keySource: string, expectedMode: string, actualMode: string | null) {
-  const label = model === "vocab-card" ? "词境记忆卡" : getModelDisplayName(model as ModelType) || "当前功能"
+  const label = getPublicAiLabel(model, "当前功能")
   return `${label}服务配置暂不可用，请联系管理员处理。`
 }
 
@@ -1193,11 +1194,11 @@ function buildOpenClawSkillQuery(query: string, chatInputs: Record<string, unkno
 
   const skill = getOpenClawSkillById(skillId)
   const skillDisplayName = skill?.name || skillId
-  const skillDescription = skill?.description || "用户已在前端明确选择该技能。"
+  const skillDescription = skill?.description || "用户已在前端明确选择该能力。"
   const skillTags = Array.isArray(skill?.tags) ? skill.tags.join("、") : ""
 
   return [
-    "[OpenClaw 已加载技能]",
+    "[高级创作已加载能力]",
     `skill_selected: ${skillId}`,
     `skill_id: ${skillId}`,
     `skill_name: ${skillId}`,
@@ -1366,7 +1367,7 @@ function buildPublicVocabWorkflowEvent(outputs: Record<string, unknown>, convers
 
 function getTraceModelDisplayName(model?: string | null) {
   if (!model) return "当前任务"
-  return getModelDisplayName(model as ModelType) || model
+  return getPublicAiLabel(model, "当前任务")
 }
 
 const DIFY_CONVERSATION_ID_PATTERN =
@@ -1848,7 +1849,7 @@ function recoverGeminiImageGatewayTask(params: {
   fireAndForget("Gemini Image Task recovery", (async () => {
     await updateTaskRun(params.requestId, {
       status: "running",
-      stage: "Gemini 图片任务恢复中，正在重新检查生成结果",
+      stage: "图像任务恢复中，正在重新检查生成结果",
       progress: 35,
       upstreamTaskId: params.requestId,
       metadata: {
@@ -2150,7 +2151,7 @@ async function chargeFixedImageCredits(params: {
   conversationId?: string | null
   messageId?: string | null
 }) {
-  const description = `图片生成 - ${getModelDisplayName(params.modelId)} x${params.imageCount}`
+  const description = `图片生成 - ${getPublicAiLabel(params.modelId, "图像创作")} x${params.imageCount}`
   const billingMetadata = createBillingAuditMetadata({
     userId: params.userId,
     actionType: "image_generation",
@@ -2358,7 +2359,7 @@ async function callGeminiImageGatewayDirect(query: string, inputs: unknown) {
 
     if (!response.ok) {
       const record = payload && typeof payload === "object" ? payload as Record<string, unknown> : {}
-      const message = sanitizeUpstreamErrorText(record.message, "Gemini 图像服务请求失败，请稍后重试。")
+      const message = sanitizeUpstreamErrorText(record.message, "图像服务请求失败，请稍后重试。")
       return Response.json({ error: message, code: sanitizePublicAiErrorCode("GEMINI_IMAGE_GATEWAY_HTTP_ERROR") }, { status: response.status })
     }
 
@@ -2367,14 +2368,14 @@ async function callGeminiImageGatewayDirect(query: string, inputs: unknown) {
     const err = error instanceof Error ? error : null
     if (err?.name === "AbortError") {
       return Response.json(
-        { error: "Gemini 图像生成等待超时，请降低尺寸或质量后重试", code: sanitizePublicAiErrorCode("GEMINI_IMAGE_GATEWAY_TIMEOUT") },
+        { error: "图像生成等待超时，请降低尺寸或质量后重试", code: sanitizePublicAiErrorCode("GEMINI_IMAGE_GATEWAY_TIMEOUT") },
         { status: 504 },
       )
     }
 
     console.error("❌ [Gemini Image] 直连图片服务失败:", error)
     return Response.json(
-      { error: "Gemini 图像服务暂时不可用，请稍后重试", code: sanitizePublicAiErrorCode("GEMINI_IMAGE_GATEWAY_UNAVAILABLE") },
+      { error: "图像服务暂时不可用，请稍后重试", code: sanitizePublicAiErrorCode("GEMINI_IMAGE_GATEWAY_UNAVAILABLE") },
       { status: 502 },
     )
   } finally {
@@ -2435,7 +2436,7 @@ async function runGeminiImageGatewayTask(params: {
 
       await updateTaskRun(params.requestId, {
         status: "running",
-        stage: "Banana 图片编辑 1K 正在使用兼容尺寸重试",
+        stage: "图像编辑正在使用兼容尺寸重试",
         progress: 45,
         upstreamTaskId: params.requestId,
         sanitizedError: firstFailure as Record<string, unknown>,
@@ -2480,7 +2481,7 @@ async function runGeminiImageGatewayTask(params: {
 
     await updateTaskRun(params.requestId, {
       status: "running",
-      stage: "Banana 图片网关超时，正在自动重试",
+      stage: "图像服务响应超时，正在自动重试",
       progress: 50,
       upstreamTaskId: params.requestId,
       sanitizedError: firstFailure as Record<string, unknown>,
@@ -2516,7 +2517,7 @@ async function runGeminiImageGatewayTask(params: {
   if (!gatewayResponse.ok) {
     await updateTaskRun(params.requestId, {
       status: "failed",
-      stage: "Gemini 图片网关返回错误",
+      stage: "图像服务返回错误",
       progress: 100,
       errorMessage: typeof gatewayPayload?.error === "string" ? gatewayPayload.error : "图像服务请求失败",
       errorCode: typeof gatewayPayload?.code === "string" ? gatewayPayload.code : `GEMINI_IMAGE_GATEWAY_${gatewayResponse.status}`,
@@ -2538,7 +2539,7 @@ async function runGeminiImageGatewayTask(params: {
   while (gatewayResponse.ok && !imageInspection.ok && imageInspection.code === "GEMINI_IMAGE_BLANK_RESULT" && gatewayAttempt <= GEMINI_IMAGE_BLANK_RETRY_LIMIT) {
     await updateTaskRun(params.requestId, {
       status: "running",
-      stage: "Gemini 图片网关返回空白图片，正在自动重试",
+      stage: "图像服务返回空白图片，正在自动重试",
       progress: 55,
       upstreamTaskId: params.requestId,
       artifacts: extractArtifactsFromUnknown(gatewayPayload),
@@ -2567,7 +2568,7 @@ async function runGeminiImageGatewayTask(params: {
   if (!gatewayResponse.ok) {
     await updateTaskRun(params.requestId, {
       status: "failed",
-      stage: "Gemini 图片网关返回错误",
+      stage: "图像服务返回错误",
       progress: 100,
       errorMessage: typeof gatewayPayload?.error === "string" ? gatewayPayload.error : "图像服务请求失败",
       errorCode: typeof gatewayPayload?.code === "string" ? gatewayPayload.code : `GEMINI_IMAGE_GATEWAY_${gatewayResponse.status}`,
@@ -2588,7 +2589,7 @@ async function runGeminiImageGatewayTask(params: {
   if (!imageInspection.ok) {
     await updateTaskRun(params.requestId, {
       status: "failed",
-      stage: "Gemini 图片网关返回空白图片",
+      stage: "图像服务返回空白图片",
       progress: 100,
       artifacts: extractArtifactsFromUnknown(gatewayPayload),
       errorMessage: imageInspection.error || "图片服务返回了空白图片",
@@ -2708,7 +2709,7 @@ async function startGeminiImageGatewayTask(params: {
 
   await updateTaskRun(params.requestId, {
     status: "running",
-    stage: "Gemini 图片任务已提交，等待生成结果",
+    stage: "图像任务已提交，等待生成结果",
     progress: 15,
     upstreamTaskId: params.requestId,
     metadata: {
@@ -2804,7 +2805,7 @@ async function startVivaApiImageTask(params: {
 
   await updateTaskRun(params.requestId, {
     status: "running",
-    stage: "Moonapix 图片任务已提交，等待生成结果",
+    stage: "图像任务已提交，等待生成结果",
     progress: 15,
     upstreamTaskId: params.requestId,
     metadata: {
@@ -3166,7 +3167,7 @@ export async function GET(request: NextRequest) {
         taskId,
         requestId,
         elapsedMs: taskAgeMs,
-        stage: "Gemini 图片任务恢复中，正在重新检查生成结果",
+        stage: "图像任务恢复中，正在重新检查生成结果",
         progress: Math.max(typeof storedTask?.progress === "number" ? storedTask.progress : 35, 35),
       })
     }
@@ -3685,7 +3686,7 @@ export async function POST(request: NextRequest) {
 
       await updateTaskRun(taskRun.id, {
         status: "running",
-        stage: `${model === "banana-2-pro" ? "Banana" : "Gemini"} 图片网关生成中`,
+        stage: "图像服务生成中",
         progress: 35,
         metadata: buildGeminiGatewayTrace(geminiImageInputs),
       })
@@ -3722,7 +3723,7 @@ export async function POST(request: NextRequest) {
             imageTaskId: taskId,
             requestId: taskRun.requestId,
             pollToken,
-            message: "Gemini 图片任务已提交，正在生成",
+            message: "图像任务已提交，正在生成",
           },
           {
             headers: {
@@ -3774,7 +3775,7 @@ export async function POST(request: NextRequest) {
 
       await updateTaskRun(taskRun.id, {
         status: "running",
-        stage: "图片网关生成中",
+        stage: "图像服务生成中",
         progress: 35,
       })
 
@@ -3874,7 +3875,7 @@ export async function POST(request: NextRequest) {
       if (!gatewayResponse.ok) {
         await updateTaskRun(taskRun.id, {
           status: "failed",
-          stage: "图片网关返回错误",
+          stage: "图像服务返回错误",
           progress: 100,
           errorMessage: typeof gatewayPayload?.error === "string" ? gatewayPayload.error : "图片服务请求失败",
           errorCode: typeof gatewayPayload?.code === "string" ? gatewayPayload.code : `IMAGE_GATEWAY_${gatewayResponse.status}`,
@@ -4275,7 +4276,7 @@ export async function POST(request: NextRequest) {
               const imageInputs = imageInputsForBilling || buildGptImageV11Inputs(inputs)
               const imageBillingModel = (billingModelType || "gpt-image-2") as ModelType
               const imageCount = imageInputs.n || 1
-              const imageDescription = `图片生成 - ${getModelDisplayName(imageBillingModel)} x${imageCount}`
+              const imageDescription = `图片生成 - ${getPublicAiLabel(imageBillingModel, "图像创作")} x${imageCount}`
               const imageBillingMetadata = createBillingAuditMetadata({
                 userId,
                 actionType: "image_generation",
@@ -4350,7 +4351,7 @@ export async function POST(request: NextRequest) {
           const imageInputs = imageInputsForBilling || buildGptImageV11Inputs(inputs)
           const imageBillingModel = (billingModelType || "gpt-image-2") as ModelType
           const imageCount = imageInputs.n || 1
-          const imageDescription = `图片生成 - ${getModelDisplayName(imageBillingModel)} x${imageCount}`
+          const imageDescription = `图片生成 - ${getPublicAiLabel(imageBillingModel, "图像创作")} x${imageCount}`
           const imageBillingMetadata = createBillingAuditMetadata({
             userId,
             actionType: "image_generation",
@@ -4462,17 +4463,17 @@ export async function POST(request: NextRequest) {
         const reasonMap: Record<string, string> = {
           'standard': '作文批改',
           'teaching-pro': '教学评助手',
-          'claude-opus': 'Claude 对话',
-          'gpt-5': 'GPT-5.5 对话',
-          'gemini-pro': 'Gemini 对话',
-          'banana-2-pro': 'Banana 绘图',
-          'gemini-image': 'Gemini 图像',
-          'suno-v5': 'Suno 音乐',
-          'open-claw': 'Open Claw 对话',
+          'claude-opus': getPublicAiLabel("claude-opus"),
+          'gpt-5': getPublicAiLabel("gpt-5"),
+          'gemini-pro': getPublicAiLabel("gemini-pro"),
+          'banana-2-pro': getPublicAiLabel("banana-2-pro"),
+          'gemini-image': getPublicAiLabel("gemini-image"),
+          'suno-v5': getPublicAiLabel("suno-v5"),
+          'open-claw': getPublicAiLabel("open-claw"),
           'all-in-one-agent': '数学图片与动画生成器',
           'super-all-in-one-agent': '超级全能智能体',
         }
-        const reason = reasonMap[model as string] || `使用 ${getModelDisplayName(model as ModelType)}`
+        const reason = reasonMap[model as string] || `使用 ${getPublicAiLabel(model, "智能任务")}`
         const description = workflowImageUrls.length > 0
           ? `${reason} (生成 ${workflowImageUrls.length} 张图片)`
           : `${reason} (输入 ${promptTokens} tokens / 输出 ${completionTokens} tokens)`
@@ -4641,7 +4642,7 @@ export async function POST(request: NextRequest) {
       taskCompleted = true
       await updateTaskRun(taskRun.id, {
         status: finalFailed ? "failed" : "succeeded",
-        stage: workflowNodeFailure ? "OpenClaw 上游节点执行失败" : hasReceivedContent ? "任务完成" : "流结束但没有返回内容",
+        stage: workflowNodeFailure ? "任务处理失败" : hasReceivedContent ? "任务完成" : "流结束但没有返回内容",
         progress: 100,
         conversationId: conversationId || undefined,
         artifacts: extractArtifactsFromText(fullResponseText),
@@ -4811,28 +4812,28 @@ export async function POST(request: NextRequest) {
 	                  })
 	                }
                   if (json.event === "node_finished" && ["failed", "error"].includes(nodeStatus)) {
-                    const title = nodeTitle || "OpenClaw 节点"
+                    const title = sanitizePublicAiLabel(nodeTitle || "", "任务处理")
                     const errorMessage = String(
                       nodeData.error ||
                       nodeData.error_message ||
                       json.error ||
                       json.message ||
-                      `${title} 执行失败`
+                      `${title}处理失败`
                     )
                     workflowNodeFailure = {
                       message: errorMessage,
                       code: model === "open-claw" ? "OPENCLAW_NODE_FAILED" : "DIFY_NODE_FAILED",
                     }
-	                    enqueueSseError(controller, errorMessage, workflowNodeFailure.code)
+                    enqueueSseError(controller, sanitizePublicAiError(errorMessage, "任务处理失败，请稍后重试。"), workflowNodeFailure.code)
                     updateTaskRun(taskRun.id, {
                       status: "failed",
-                      stage: `${title} 执行失败`,
+                      stage: `${title}处理失败`,
                       progress: 100,
                       workflowRunId: nodeData.workflow_run_id || json.workflow_run_id || null,
-                      errorMessage,
+                      errorMessage: sanitizePublicAiError(errorMessage, "任务处理失败，请稍后重试。"),
                       errorCode: workflowNodeFailure.code,
                       sanitizedError: sanitizeForTrace({ node: title, status: nodeStatus, error: errorMessage }) as Record<string, unknown>,
-	                    }).catch((error) => console.warn("[AI Task Trace] node failure update failed:", error))
+		                    }).catch((error) => console.warn("[AI Task Trace] node failure update failed:", error))
 	                  }
                     if (!hasReceivedContent) {
                       const finalNodeText = extractFinalNodeOutputText(json)
@@ -4840,7 +4841,7 @@ export async function POST(request: NextRequest) {
                         finalNodeOutputText = finalNodeText
                         updateTaskRun(taskRun.id, {
                           status: "running",
-                          stage: model === "open-claw" ? "已收到 OpenClaw 最终回复" : "已收到最终节点回复",
+                          stage: "已收到结果，正在整理",
                           progress: 90,
                         }).catch((error) => console.warn("[AI Task Trace] final node update failed:", error))
                       }
@@ -4968,7 +4969,7 @@ export async function POST(request: NextRequest) {
 	                if (parsedUsage.completionTokens > 0) completionTokens = parsedUsage.completionTokens
 	                updateTaskRun(taskRun.id, {
 	                  status: "succeeded",
-	                  stage: "工作流已完成",
+	                  stage: "任务已完成",
 	                  progress: 100,
 	                  workflowRunId,
 	                  artifacts: extractArtifactsFromUnknown(json.data?.outputs || json.outputs || fullResponseText),
@@ -4989,7 +4990,7 @@ export async function POST(request: NextRequest) {
                 hasReceivedContent = true
               }
               if (model === "open-claw" && json.event === "message_end" && !hasReceivedContent && !workflowNodeFailure) {
-                const message = "OpenClaw 上游模型本次返回为空，请重新提交。当前任务未扣费。"
+                const message = "高级创作本次没有返回可展示内容，请重新提交。当前任务未扣费。"
                 workflowNodeFailure = {
                   message,
                   code: "OPENCLAW_EMPTY_UPSTREAM_RESPONSE",
@@ -4997,7 +4998,7 @@ export async function POST(request: NextRequest) {
 	                enqueueSseError(controller, message, workflowNodeFailure.code)
                 updateTaskRun(taskRun.id, {
                   status: "failed",
-                  stage: "OpenClaw 上游返回空内容",
+                  stage: "任务没有返回可展示内容",
                   progress: 100,
                   conversationId: conversationId || undefined,
                   errorMessage: message,
@@ -5092,7 +5093,7 @@ export async function POST(request: NextRequest) {
           hasReceivedContent = true
         }
         if (model === "open-claw" && !hasReceivedContent && !workflowNodeFailure) {
-          const message = "OpenClaw 上游模型本次返回为空，请重新提交。当前任务未扣费。"
+          const message = "高级创作本次没有返回可展示内容，请重新提交。当前任务未扣费。"
           workflowNodeFailure = {
             message,
             code: "OPENCLAW_EMPTY_UPSTREAM_RESPONSE",
@@ -5100,7 +5101,7 @@ export async function POST(request: NextRequest) {
           enqueueSseError(controller, message, workflowNodeFailure.code)
           updateTaskRun(taskRun.id, {
             status: "failed",
-            stage: "OpenClaw 上游返回空内容",
+            stage: "任务没有返回可展示内容",
             progress: 100,
             conversationId: conversationId || undefined,
             errorMessage: message,
@@ -5124,7 +5125,7 @@ export async function POST(request: NextRequest) {
           taskCompleted = true
 	        updateTaskRun(taskRun.id, {
 	          status: finalFailed ? "failed" : "succeeded",
-	          stage: workflowNodeFailure ? "OpenClaw 上游节点执行失败" : hasReceivedContent ? "任务完成" : "流结束但没有返回内容",
+	          stage: workflowNodeFailure ? "任务处理失败" : hasReceivedContent ? "任务完成" : "流结束但没有返回内容",
 	          progress: 100,
 	          conversationId: conversationId || undefined,
 	          artifacts: extractArtifactsFromText(fullResponseText),

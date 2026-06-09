@@ -10,18 +10,19 @@ import {
 import { Plus, Trash2, MoreHorizontal } from "lucide-react"
 import { IconChat } from "@/components/icons/v2"
 import { cn } from "@/lib/utils"
+import { getPublicAiLabel, sanitizePublicAiLabel } from "@/lib/public-ai-labels"
 import { format } from "date-fns"
 
 // 模型 key 到显示名称的映射
 const MODEL_DISPLAY_NAMES: Record<string, string> = {
   "standard": "标准",
   "teaching-pro": "教学 Pro",
-  "gpt-5": "GPT-5",
-  "claude-opus": "Claude",
-  "gemini-pro": "Gemini",
-  "gemini-image": "Gemini 图像",
-  "grok-4.2": "Grok",
-  "open-claw": "OpenClaw",
+  "gpt-5": getPublicAiLabel("gpt-5"),
+  "claude-opus": getPublicAiLabel("claude-opus"),
+  "gemini-pro": getPublicAiLabel("gemini-pro"),
+  "gemini-image": getPublicAiLabel("gemini-image"),
+  "grok-4.2": getPublicAiLabel("grok-4.2"),
+  "open-claw": getPublicAiLabel("open-claw"),
   "quanquan-math": "全科数学",
   "quanquan-english": "全科英语",
   "vocab-card": "词境记忆卡",
@@ -30,9 +31,9 @@ const MODEL_DISPLAY_NAMES: Record<string, string> = {
   "banzhuren": "班主任助手",
   "all-in-one-agent": "数学图片与动画生成器",
   "super-all-in-one-agent": "超级全能智能体",
-  "suno-v5": "音乐",
-  "banana-2-pro": "GPT Image 2",
-  "gpt-image-2": "GPT Image 2",
+  "suno-v5": getPublicAiLabel("suno-v5"),
+  "banana-2-pro": getPublicAiLabel("banana-2-pro"),
+  "gpt-image-2": getPublicAiLabel("gpt-image-2"),
   "ai-writing-paper": "论文写作",
   "zhongying-essay": "中英文作文",
   "experiment-report": "实验报告",
@@ -142,7 +143,7 @@ export function ChatSidebar({
                               <span
                                 className="text-[9px] px-1.5 py-0.5 rounded-full font-medium shrink-0 bg-[var(--ink-500)]/10 text-[var(--ink-600)]"
                               >
-                                {MODEL_DISPLAY_NAMES[session.ai_model] || session.ai_model}
+                                {sanitizePublicAiLabel(MODEL_DISPLAY_NAMES[session.ai_model] || session.ai_model, "智能任务")}
                               </span>
                             )}
                           </div>

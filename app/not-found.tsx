@@ -13,7 +13,7 @@ import { IconChat } from "@/components/icons/v2"
 
 // 热门链接配置
 const POPULAR_LINKS = [
-  { href: '/chat', label: 'AI 对话', icon: IconChat, desc: 'GPT·Claude·Gemini' },
+  { href: '/chat', label: 'AI 对话', icon: IconChat, desc: '深度对话与学习助手' },
   { href: '/essay', label: '作文批改', icon: Search, desc: 'AI 专业点评' },
   { href: '/pricing', label: '价格方案', icon: Search, desc: '了解会员权益' },
 ]

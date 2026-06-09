@@ -2,8 +2,8 @@ import type { Metadata } from 'next'
 import { GptImage2ChatInterface } from '@/components/chat/gpt-image2-chat-interface'
 
 export const metadata: Metadata = {
-  title: 'GPT Image 2 | 沈翔智学',
-  description: 'AI 图像生成 - GPT Image 2 全屏对话',
+  title: '高质量图像 | 沈翔智学',
+  description: 'AI 图像生成与编辑工作台',
 }
 
 export default function GptImage2Page() {

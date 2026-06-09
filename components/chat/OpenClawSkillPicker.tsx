@@ -21,7 +21,7 @@ type OpenClawSkillPickerProps = {
 }
 
 function categoryLabel(category: OpenClawSkillCategory, count: number) {
-  return `${category} · ${count} 个技能`
+  return `${category} · ${count} 个能力`
 }
 
 export function OpenClawSkillPicker({
@@ -102,7 +102,7 @@ export function OpenClawSkillPicker({
           className="fixed inset-0 z-[9999] flex items-center justify-center bg-[rgba(14,27,17,0.32)] p-3 text-[var(--ink-800)] backdrop-blur-sm sm:p-6"
           role="dialog"
           aria-modal="true"
-          aria-label="加载智能体技能"
+          aria-label="加载智能能力"
           initial={{ opacity: 0 }}
           animate={{
             opacity: isMelting ? 0 : 1,
@@ -126,13 +126,13 @@ export function OpenClawSkillPicker({
                 <div className="min-w-0">
                   <div className="inline-flex items-center gap-2 rounded-[var(--radius-pill)] border border-[var(--ink-200)] bg-[var(--ink-50)] px-2.5 py-1 text-[11px] font-semibold text-[var(--ink-600)]">
                     <Sparkles className="size-3.5" />
-                    智能体技能
+                    智能能力
                   </div>
                   <h2 className="mt-2 font-[var(--font-display)] text-[22px] font-bold tracking-normal text-[var(--ink-900)] sm:text-[28px]">
-                    加载技能
+                    加载能力
                   </h2>
                   <p className="mt-1 max-w-2xl text-[13px] leading-6 text-[var(--ink-500)] sm:text-sm">
-                    选择一个技能后，当前对话会按对应能力处理你的任务。
+                    选择一个能力后，当前对话会按对应方式处理你的任务。
                   </p>
                 </div>
                 <Button
@@ -141,7 +141,7 @@ export function OpenClawSkillPicker({
                   size="icon"
                   className="mt-1 rounded-full"
                   onClick={onClose}
-                  aria-label="关闭技能选择"
+                  aria-label="关闭能力选择"
                 >
                   <X className="size-5" />
                 </Button>
@@ -157,7 +157,7 @@ export function OpenClawSkillPicker({
                       <Input
                         value={query}
                         onChange={(event) => setQuery(event.target.value)}
-                        placeholder="搜索技能名称、用途、标签或英文 id"
+                        placeholder="搜索能力名称、用途或标签"
                         className="h-11 rounded-[var(--radius-pill)] bg-white pl-9"
                       />
                     </label>
@@ -229,8 +229,8 @@ export function OpenClawSkillPicker({
                                     <p className="font-[var(--font-display)] text-[15px] font-bold leading-6 text-[var(--ink-900)]">
                                       {skill.name}
                                     </p>
-                                    <p className="mt-1 truncate font-[var(--font-mono-v2)] text-[11px] text-[var(--ink-400)]">
-                                      {skill.id}
+                                    <p className="mt-1 truncate text-[11px] text-[var(--ink-400)]">
+                                      {skill.category}
                                     </p>
                                   </div>
                                   <span

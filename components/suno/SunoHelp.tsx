@@ -42,7 +42,7 @@ export function SunoHelp() {
             <Badge variant="ink" className="mb-3">新手必看</Badge>
             <CardTitle className="flex items-center gap-2 text-2xl">
               <BookOpen className="h-6 w-6" />
-              suno音乐创作使用帮助
+              音乐创作使用帮助
             </CardTitle>
             <CardDescription className="mt-2 text-[15px] leading-7">
               第一次使用也没关系。你只要说清楚歌曲主题、风格、情绪和使用场景，系统会自动生成歌曲，完成后可以直接试听和下载。

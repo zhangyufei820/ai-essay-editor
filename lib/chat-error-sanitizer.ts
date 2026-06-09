@@ -21,27 +21,40 @@ const INTERNAL_AI_DETAIL_PATTERNS = [
   /LiteLLM/i,
   /Plugin/i,
   /PluginInvokeError/i,
+  /OpenClaw/i,
+  /Codex/i,
   /node[_\s-]?(?:id|started|finished|execution)?/i,
   /model[_\s-]?(?:id|provider|group)?/i,
   /provider/i,
   /gateway/i,
   /OpenAI/i,
   /Anthropic/i,
+  /ChatGPT/i,
+  /\bgpt[-_\w.]*\b/i,
   /Gemini/i,
   /Claude/i,
+  /Grok/i,
+  /Suno/i,
+  /Banana\s*2?\s*Pro/i,
+  /Image\s*2/i,
+  /DeepSeek/i,
+  /Qwen/i,
   /Moonapix/i,
   /VivaAPI/i,
   /TokenFlux/i,
-  /工具|插件|节点|工作流|模型|供应商|网关|上游|备用线路|会话已提交/,
+  /skill_(?:id|name|selected)|tool_calls?|function_call/i,
+  /插件|节点|工作流|供应商|网关|上游|备用线路|会话已提交|底层模型|模型供应商|模型路由|模型组|后台工具|内部工具/,
 ] as const
 
 const INTERNAL_STATUS_REPLACEMENTS: Array<[RegExp, string]> = [
+  [/[\p{Script=Han}A-Za-z0-9\s-]{0,24}\s*任务仍在处理中\s*[：:]\s*Dify\s*会话已提交/giu, "任务已提交，仍在处理中"],
   [/Dify\s*blocking\s*响应超时/gi, "服务响应超时"],
   [/Dify\s*首字节超时/gi, "服务响应超时"],
   [/Dify\s*返回错误/gi, "服务返回错误"],
   [/无法获取\s*Dify\s*响应/gi, "服务暂时没有响应"],
   [/轮询\s*Dify\s*工作流详情/gi, "正在检查任务结果"],
   [/Dify\s*会话已提交/gi, "任务已提交"],
+  [/OpenClaw\s*任务已结束，但没有返回可展示内容/gi, "任务已结束，但没有返回可展示内容"],
   [/工作流已提交/g, "任务已提交"],
   [/工作流已完成/g, "任务已完成"],
   [/已收到最终节点回复/g, "已收到结果，正在整理"],
@@ -101,6 +114,10 @@ export function stripUpstreamBranding(value: string) {
     .replace(/Dify/gi, "服务")
     .replace(/LiteLLM/gi, "智能服务")
     .replace(/PluginInvokeError/gi, "服务调用错误")
+    .replace(/OpenClaw/gi, "智能服务")
+    .replace(/Codex/gi, "智能服务")
+    .replace(/ChatGPT|OpenAI|Anthropic|Claude|Gemini|Grok|Suno|Banana\s*2?\s*Pro|Image\s*2|DeepSeek|Qwen/gi, "智能服务")
+    .replace(/\b(?:sx|gpt|gemini|claude|openai|anthropic|grok|suno|deepseek|qwen|banana)[\w.-]*/gi, "智能服务")
     .replace(/上游/g, "服务")
     .replace(/网关/g, "服务")
     .replace(/备用线路/g, "连接")
@@ -124,7 +141,7 @@ export function sanitizePublicAiStatus(value: unknown, fallback = "任务仍在�
   output = stripUpstreamBranding(output)
     .replace(/\b(?:node|model|provider|workflow|plugin|gateway)[-_a-z0-9:. ]*/gi, "服务")
     .replace(/\b(?:req_id|request_id|workflow_run_id|conversation_id|task_id)\s*[:=]\s*[\w-]+/gi, "")
-    .replace(/\b(?:sx|gpt|gemini|claude|openai|anthropic)[\w.-]*/gi, "智能服务")
+    .replace(/\b(?:sx|gpt|gemini|claude|openai|anthropic|grok|suno|deepseek|qwen|banana)[\w.-]*/gi, "智能服务")
     .replace(/[ \t]{2,}/g, " ")
     .replace(/\s*([，。；：,.!?])\s*/g, "$1")
     .trim()

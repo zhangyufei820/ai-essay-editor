@@ -4,6 +4,7 @@ import { createHash } from "crypto"
 import { requireUser } from "@/lib/auth/verified-user"
 import { isCosConfigured } from "@/lib/cos"
 import { uploadBase64File } from "@/lib/storage"
+import { sanitizeAssistantMessageForPublicDisplay } from "@/lib/chat-error-sanitizer"
 
 function resolveUploadedFileStorageUrl(file: Record<string, unknown>, fileData: string): string | null {
   const explicitUrl = file.storageUrl || file.storage_url || file.modelUrl || file.model_url || file.gatewayUrl || file.gateway_url
@@ -65,12 +66,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "无权访问该会话" }, { status: 403 })
     }
 
+    const safeContent = role === "assistant"
+      ? sanitizeAssistantMessageForPublicDisplay(content)
+      : content
+
     const { data: message, error: messageError } = await supabase
       .from("chat_messages")
       .insert({
         session_id,
         role,
-        content,
+        content: safeContent,
       })
       .select()
       .single()

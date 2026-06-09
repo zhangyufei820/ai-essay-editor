@@ -652,11 +652,11 @@ export function ChatInput({
               type="button"
               onClick={onModelClick}
               className="inline-flex h-8 max-w-[230px] items-center gap-1.5 rounded-[var(--radius-pill)] border border-[var(--paper-300)] bg-[var(--paper-50)] px-2 text-[12px] font-medium text-[var(--ink-700)] font-[var(--font-sans-v2)] hover:bg-[var(--ink-50)] hover:border-[var(--ink-300)] transition-colors duration-200 sm:max-w-[260px]"
-              aria-label="选择 AI 模型"
+              aria-label="选择智能体"
             >
               <div className="h-2 w-2 rounded-full" style={{ backgroundColor: modelColor }} />
               <span>
-                {modelName || "选择模型"}
+                {modelName || "选择智能体"}
               </span>
               <ChevronDown className="h-3 w-3 text-[var(--ink-400)]" />
             </button>
@@ -675,11 +675,11 @@ export function ChatInput({
                     : "border-[var(--paper-200)] bg-[var(--paper-50)] text-[var(--ink-600)] hover:border-[var(--ink-300)] hover:bg-[var(--ink-50)]",
                   "disabled:cursor-not-allowed disabled:opacity-50"
                 )}
-                aria-label="加载智能体技能"
-                title={selectedOpenClawSkillName ? `已选择：${selectedOpenClawSkillName}` : "加载技能"}
+                aria-label="加载智能能力"
+                title={selectedOpenClawSkillName ? `已选择：${selectedOpenClawSkillName}` : "加载能力"}
               >
                 <Sparkles className="h-3.5 w-3.5 shrink-0" />
-                <span className="truncate">{selectedOpenClawSkillName || "加载技能"}</span>
+                <span className="truncate">{selectedOpenClawSkillName || "加载能力"}</span>
               </button>
             )}
             {showCodexSkillButton && (
@@ -694,11 +694,11 @@ export function ChatInput({
                     : "border-[var(--paper-200)] bg-[var(--paper-50)] text-[var(--ink-600)] hover:border-[var(--ink-300)] hover:bg-[var(--ink-50)]",
                   "disabled:cursor-not-allowed disabled:opacity-50"
                 )}
-                aria-label="加载 Codex 技能"
-                title={selectedCodexSkillName ? `已选择：${selectedCodexSkillName}` : "加载技能"}
+                aria-label="加载创作能力"
+                title={selectedCodexSkillName ? `已选择：${selectedCodexSkillName}` : "加载能力"}
               >
                 <Sparkles className="h-3.5 w-3.5 shrink-0" />
-                <span className="truncate">{selectedCodexSkillName || "加载技能"}</span>
+                <span className="truncate">{selectedCodexSkillName || "加载能力"}</span>
               </button>
             )}
             <label

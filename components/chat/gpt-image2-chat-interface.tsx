@@ -118,28 +118,28 @@ const WORKSPACE_COPY: Record<ImageWorkspaceModel, {
     title: "图像生成 / 图像编辑",
     subtitle: "高质量图像生成与编辑",
     heroTitle: "AI 图像工作台",
-    heroDescription: "使用 GPT Image 2 生成或编辑图片，支持 1K、2K、4K 三档尺寸。图片编辑时，上传原图后系统会自动完成安全处理。",
+    heroDescription: "生成或编辑高质量图片，支持 1K、2K、4K 三档尺寸。图片编辑时，上传原图后系统会自动完成安全处理。",
     resultTitle: "结果展示",
     loadingLabel: "正在生成更细致的图像，请稍候。",
     saveTitle: "图像生成",
   },
   "banana-2-pro": {
-    title: "Banana2 Pro 4K",
+    title: "创意图像 4K",
     subtitle: "图像生成与编辑工作台",
     heroTitle: "AI 图像工作台",
-    heroDescription: "使用 Banana2 Pro 4K 生成或编辑高质量图片。可上传原图进行重绘、放大和风格调整，结果会在同一工作台中完整展示。",
+    heroDescription: "生成或编辑高质量图片。可上传原图进行重绘、放大和风格调整，结果会在同一工作台中完整展示。",
     resultTitle: "结果展示",
-    loadingLabel: "Banana2 Pro 正在生成图像，请稍候。",
+    loadingLabel: "正在生成图像，请稍候。",
     saveTitle: "图片生成",
   },
   "gemini-image": {
-    title: "Gemini 图像",
-    subtitle: "Google Gemini 图像生成与编辑",
-    heroTitle: "Gemini 图像工作台",
-    heroDescription: "恢复新版 Gemini 图像生成入口，支持文生图、参考图编辑、画幅比例、尺寸和生成张数控制。适合快速创意草图、课程配图和图片重绘。",
-    resultTitle: "Gemini 结果展示",
-    loadingLabel: "Gemini 正在生成图像，请稍候。",
-    saveTitle: "Gemini 图像生成",
+    title: "图文创作",
+    subtitle: "图像生成与编辑",
+    heroTitle: "图文创作工作台",
+    heroDescription: "支持文生图、参考图编辑、画幅比例、尺寸和生成张数控制。适合快速创意草图、课程配图和图片重绘。",
+    resultTitle: "结果展示",
+    loadingLabel: "正在生成图像，请稍候。",
+    saveTitle: "图文创作",
   },
 }
 
@@ -195,10 +195,13 @@ function mapImageError(error: unknown): string {
 
   if (raw === "empty_prompt") return "提示词不能为空。"
   if (raw === "missing_edit_image") return "图片编辑模式需要上传原图。"
-  if (raw.includes("SERVICE_CONFIG_UNAVAILABLE") || raw.includes("DIFY_CREDENTIAL_INVALID") || raw.includes("Access token is invalid") || raw.includes("工作流凭据失效")) {
-    return "图像服务配置暂时不可用，请联系管理员处理。"
-  }
-  if (raw.includes("DIFY_CREDENTIAL_MISSING")) {
+  if (
+    raw.includes("SERVICE_CONFIG_UNAVAILABLE") ||
+    raw.includes("SERVICE_CREDENTIAL_INVALID") ||
+    raw.includes("SERVICE_CREDENTIAL_MISSING") ||
+    lower.includes("credential") ||
+    lower.includes("access token is invalid")
+  ) {
     return "图像服务配置暂时不可用，请联系管理员处理。"
   }
   if (raw.includes("SERVICE_ACCESS_DENIED") || raw.includes("IMAGE_TASK_FORBIDDEN") || raw.includes("CHAT_SESSION_FORBIDDEN")) {
@@ -221,7 +224,7 @@ function mapImageError(error: unknown): string {
   if (raw.includes("未登录") || raw.includes("请先登录") || raw.includes("未授权") || lower.includes("unauthorized") || lower.includes("401")) {
     return "请先登录后再生成图片。"
   }
-  if (raw.includes("GPT Image 2 当前共创体验期内登录用户可用")) {
+  if (raw.includes("当前共创体验期内登录用户可用")) {
     return "当前图像能力需要登录后使用，请先登录后再生成图片。"
   }
   if (raw.includes("仅订阅用户可用") || raw.includes("白名单")) {
@@ -268,11 +271,8 @@ function handleSurveyRequired(featureName: string) {
 function sanitizeServiceWording(text: string) {
   if (isHtmlErrorContent(text)) return "图片服务暂时不可用，请稍后重试。"
   return text
-    .replace(/Dify\s*API/gi, "图片服务")
-    .replace(/Dify/gi, "服务")
-    .replace(/OpenAI|GPT Image 2|Gemini|Banana2 Pro|Banana 2 Pro|Moonapix|VivaAPI|TokenFlux/gi, "图像服务")
-    .replace(/图片网关/g, "图片服务")
-    .replace(/网关/g, "服务")
+    .replace(/\b[A-Za-z][A-Za-z0-9_.-]*(?:\s+[A-Za-z0-9_.-]+){0,3}\b/g, "图像服务")
+    .replace(/图片(?:路由|连接|服务通道)/g, "图片服务")
     .replace(/\brequestId=[A-Za-z0-9_-]+\b/g, "")
 }
 
@@ -1266,7 +1266,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
       refreshCredits()
     } catch (error) {
       if (error instanceof Error && error.name === "SurveyRequiredError") {
-        handleSurveyRequired(workspaceModel === "gpt-image-2" ? "GPT Image 2" : "图像生成")
+        handleSurveyRequired(workspaceModel === "gpt-image-2" ? "高质量图像" : "图像生成")
         setShowLongRunningHint(false)
         setErrorMessage("请先完成今日问卷，完成后可继续生成图片。")
         return

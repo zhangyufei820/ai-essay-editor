@@ -7,7 +7,7 @@ describe("Suno UI shape", () => {
   it("keeps the user-facing music flow simple and Chinese", () => {
     const source = read("components/suno/SunoPage.tsx")
 
-    for (const text of ["suno音乐创作", "歌词或创作提示", "歌曲名", "歌曲风格", "不想要的风格", "模型版本", "生成类型", "人声倾向", "完成通知地址", "只生成伴奏", "生成歌曲"]) {
+    for (const text of ["音乐创作", "歌词或创作提示", "歌曲名", "歌曲风格", "不想要的风格", "生成版本", "生成类型", "人声倾向", "完成通知地址", "只生成伴奏", "生成歌曲"]) {
       expect(source).toContain(text)
     }
 
@@ -34,7 +34,8 @@ describe("Suno UI shape", () => {
 
     expect(pageSource).toContain("<SunoHelp />")
     expect(helpSource).toContain("新手必看")
-    expect(helpSource).toContain("suno音乐创作使用帮助")
+    expect(helpSource).toContain("音乐创作使用帮助")
+    expect(helpSource).not.toContain("suno音乐创作使用帮助")
     expect(helpSource).toContain("展开完整使用帮助文档")
     expect(helpSource).toContain("第一次怎么用")
     expect(helpSource).toContain("生成后怎么看结果")

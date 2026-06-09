@@ -68,7 +68,7 @@ export function evaluateOpenClawRuntimeRequest(input: OpenClawRuntimeGuardInput)
         allowed: false,
         code: "OPENCLAW_FORBIDDEN_RUNTIME_ACTION",
         matched: pattern.source,
-        message: "OpenClaw 普通用户不能执行 SSH、Docker、删除、重启、权限变更等服务器操作。",
+        message: "高级创作普通用户不能执行 SSH、Docker、删除、重启、权限变更等服务器操作。",
       }
     }
   }
@@ -79,7 +79,7 @@ export function evaluateOpenClawRuntimeRequest(input: OpenClawRuntimeGuardInput)
         allowed: false,
         code: "OPENCLAW_FORBIDDEN_RUNTIME_ACTION",
         matched: pattern.source,
-        message: "OpenClaw 普通用户不能读取或修改服务器配置、1Panel、OpenResty、.env、生产目录等敏感路径。",
+        message: "高级创作普通用户不能读取或修改服务器配置、1Panel、OpenResty、.env、生产目录等敏感路径。",
       }
     }
   }
@@ -90,7 +90,7 @@ export function evaluateOpenClawRuntimeRequest(input: OpenClawRuntimeGuardInput)
         allowed: false,
         code: "OPENCLAW_FORBIDDEN_RUNTIME_ACTION",
         matched: pattern.source,
-        message: "OpenClaw 普通用户不能请求删除文件、修改配置、控制容器或获取服务器权限。",
+        message: "高级创作普通用户不能请求删除文件、修改配置、控制容器或获取服务器权限。",
       }
     }
   }

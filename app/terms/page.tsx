@@ -81,7 +81,7 @@ export default function TermsPage() {
             </p>
             <ul className="space-y-3" style={{ color: "var(--ink-600)" }}>
               <li>• 作文批改：AI 自动批改作文并提供修改建议</li>
-              <li>• 智能对话：与全球顶尖 AI 大模型进行对话交流</li>
+              <li>• 智能对话：按学习场景进行对话、分析、写作和资料整理</li>
               <li>• 学习规划：制定个性化的学习计划</li>
               <li>• 图片生成：输入描述生成精美图片</li>
               <li>• 音乐创作：利用 AI 创作原创音乐</li>
@@ -89,7 +89,7 @@ export default function TermsPage() {
             </ul>
             <div className="mt-6 space-y-3" style={{ color: "var(--ink-600)" }}>
               <p>
-                付费服务的价格、积分数量、会员权益、模型消耗规则等，以
+                付费服务的价格、积分数量、会员权益、功能消耗规则等，以
                 <Link href="/pricing" className="underline mx-1" style={{ color: "var(--ink-700)" }}>
                   价格方案
                 </Link>

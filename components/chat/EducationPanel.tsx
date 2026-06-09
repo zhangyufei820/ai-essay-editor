@@ -104,7 +104,7 @@ const EDUCATION_AGENTS: EducationAgent[] = [
   {
     key: "super-all-in-one-agent",
     name: "超级全能智能体",
-    description: "GPT-5.5 / skill / PPT / 图像 / 视频 / 论文 / 联网",
+    description: "PPT / 图像 / 视频 / 论文 / 联网 / 多步骤任务",
     badge: "新",
     href: "/chat/super-all-in-one-agent",
   },

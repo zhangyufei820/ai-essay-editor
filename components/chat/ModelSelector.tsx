@@ -21,7 +21,7 @@ import { ModelLogo } from "@/components/ModelLogo"
 
 const GROUP_LABELS: Record<string, string> = {
   "教育专用": "教育专区",
-  "AI模型": "顶级模型专区",
+  "AI模型": "智能能力专区",
   "AI写作": "AI写作专区",
   "创意生成": "多媒体专区",
   general: "通用",

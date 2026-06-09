@@ -1,7 +1,7 @@
 /**
- * 🤖 OpenClaw 专区组件
+ * 🤖 高级创作专区组件
  *
- * 展示 OpenClaw 通用 AI 助手，作为独立版块位于创意生成下方
+ * 展示通用 AI 助手，作为独立版块位于创意生成下方
  */
 
 "use client"
@@ -13,7 +13,7 @@ import { brandColors, slateColors } from "@/lib/design-tokens"
 import { IconAllInOne } from "@/components/icons/v2"
 
 // ============================================
-// OpenClaw 区域配置
+// 高级创作区域配置
 // ============================================
 
 const FEATURES = [
@@ -69,7 +69,7 @@ const itemVariants = {
 export function OpenClawSection() {
   return (
     <section
-      id="openclaw"
+      id="advanced-creation"
       className="py-24 md:py-32 relative overflow-hidden"
       style={{ backgroundColor: "#FAFAFA" }}
     >
@@ -130,7 +130,7 @@ export function OpenClawSection() {
               className="text-xs font-medium uppercase tracking-wider"
               style={{ color: brandColors[600], letterSpacing: "2px" }}
             >
-              OpenClaw
+              高级创作
             </span>
           </motion.div>
 
@@ -154,11 +154,11 @@ export function OpenClawSection() {
             viewport={{ once: true }}
             transition={{ delay: 0.3 }}
           >
-            OpenClaw 是您的专属 AI 助手，可以帮助您完成各种任务
+            一站式处理问答、写作、翻译、代码和多步骤创作任务
           </motion.p>
         </motion.div>
 
-        {/* OpenClaw 卡片 */}
+        {/* 高级创作卡片 */}
         <motion.div
           initial={{ opacity: 0, y: 40 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -192,7 +192,7 @@ export function OpenClawSection() {
             <div className="relative z-10 flex flex-col md:flex-row items-center gap-8">
               {/* 左侧：图标和标题 */}
               <div className="flex flex-col items-center md:items-start gap-4 flex-1">
-                {/* OpenClaw 图标 */}
+                {/* 高级创作图标 */}
                 <motion.div
                   className="relative w-20 h-20 rounded-[var(--radius-sharp)] flex items-center justify-center"
                   style={{
@@ -219,10 +219,10 @@ export function OpenClawSection() {
 
                 <div className="text-center md:text-left">
                   <h3 className="text-2xl font-bold mb-2" style={{ color: brandColors[800] }}>
-                    Open Claw
+                    高级创作
                   </h3>
                   <p className="text-sm" style={{ color: slateColors[500] }}>
-                    AI Assistant · 通用智能助手
+                    通用智能助手
                   </p>
                 </div>
 

@@ -17,6 +17,8 @@ import {
   BookOpenText,
   ClipboardList,
   FilePenLine,
+  Image as ImageIcon,
+  Music,
   type LucideProps,
 } from "lucide-react"
 
@@ -70,25 +72,20 @@ interface ModelLogoConfig {
 // ============================================
 
 const MODEL_LOGOS: Record<ModelKey, ModelLogoConfig> = {
-  // 官方模型 Logo - 使用本地 SVG（无背景，纯 logo）
   "gpt-5": {
-    svgPath: "/logos/chatgpt-icon.svg",
-    useLocal: true,
+    LucideIcon: Sparkles,
     brandColor: "#10A37F",
   },
   "claude-opus": {
-    svgPath: "/logos/claude-ai-icon.svg",
-    useLocal: true,
+    LucideIcon: BookOpenText,
     brandColor: "#10A37F",
   },
   "gemini-pro": {
-    svgPath: "/logos/google-gemini-icon.svg",
-    useLocal: true,
+    LucideIcon: Languages,
     brandColor: "#10A37F",
   },
   "grok-4.2": {
-    svgPath: "/logos/grok-icon.svg",
-    useLocal: true,
+    LucideIcon: Sparkles,
     brandColor: "#10A37F",
   },
 
@@ -154,17 +151,15 @@ const MODEL_LOGOS: Record<ModelKey, ModelLogoConfig> = {
 
   // 创意生成类
   "banana-2-pro": {
-    svgPath: "/logos/google-gemini-icon.svg",
-    useLocal: true,
+    LucideIcon: ImageIcon,
     brandColor: "#10A37F",
   },
   "gemini-image": {
-    svgPath: "/logos/google-gemini-icon.svg",
-    useLocal: true,
+    LucideIcon: ImageIcon,
     brandColor: "#10A37F",
   },
   "suno-v5": {
-    LucideIcon: Sparkles,
+    LucideIcon: Music,
     brandColor: "#10A37F",
   },
 
@@ -176,13 +171,11 @@ const MODEL_LOGOS: Record<ModelKey, ModelLogoConfig> = {
 
   // 图像生成类
   "banana": {
-    svgPath: "/logos/google-gemini-icon.svg",
-    useLocal: true,
+    LucideIcon: ImageIcon,
     brandColor: "#10A37F",
   },
   "gpt-image-2": {
-    svgPath: "/logos/chatgpt-icon.svg",
-    useLocal: true,
+    LucideIcon: ImageIcon,
     brandColor: "#10A37F",
   },
 }

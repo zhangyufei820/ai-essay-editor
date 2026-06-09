@@ -9,14 +9,14 @@ import { InkReveal, InkStagger, InkStaggerItem } from "@/components/motion/InkMo
 const QUICK_AGENTS = [
   { href: "/chat/standard", icon: IconEssay, name: "作文批改", desc: "逐段点评 + 升格", price: "100积分/次" },
   { href: "/agents", icon: IconAllInOne, name: "智能体广场", desc: "全部学习入口", price: "按需选择" },
-  { href: "/chat/super-all-in-one-agent", icon: IconAllInOne, name: "超级全能智能体", desc: "GPT-5.5 多能力", price: "按token" },
+  { href: "/chat/super-all-in-one-agent", icon: IconAllInOne, name: "超级全能智能体", desc: "多能力协作", price: "按token" },
   { href: "/chat/quanquan-math", icon: IconMath, name: "数学解题", desc: "分步讲解", price: "20积分起" },
 ] as const
 
 const MORE_AGENTS = [
   { group: "写作", items: ["论文", "中英作文", "实验报告"] },
   { group: "学科", items: ["英语", "词境记忆卡", "题目解析"] },
-  { group: "创作", items: ["GPT Image", "Gemini 图像", "Suno 音乐", "OpenClaw"] },
+  { group: "创作", items: ["高质量图像", "图文创作", "音乐创作", "高级创作"] },
   { group: "教学", items: ["备课 Pro", "班主任", "教学评"] },
 ] as const
 

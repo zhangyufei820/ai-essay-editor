@@ -45,7 +45,7 @@ const PLANS: Plan[] = [
     price: "¥68",
     period: "/ 月",
     credits: "5,000 积分/月",
-    features: ["包含基础版所有功能", "GPT Image 2 (4K)", "闪卡无限生成", "优先响应"],
+    features: ["包含基础版所有功能", "高质量图像 4K", "闪卡无限生成", "优先响应"],
     recommended: true,
     cta: "升级专业版",
   },

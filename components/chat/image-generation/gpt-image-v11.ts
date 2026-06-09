@@ -79,11 +79,11 @@ export const MODE_OPTIONS: Option<ImageTaskMode>[] = [
 ]
 
 export const MODEL_OPTIONS: Option<GptImageModel>[] = [
-  { label: "GPT Image 2｜支持 1K / 2K / 4K", value: "gpt-image-2" },
+  { label: "高质量图像｜支持 1K / 2K / 4K", value: "gpt-image-2" },
 ]
 
 export const GEMINI_MODEL_OPTIONS: Option<GeminiImageModel>[] = [
-  { label: "Gemini 3 Pro Image｜高质量图像模式", value: "gemini-3-pro-image-preview" },
+  { label: "图文创作｜高质量图像模式", value: "gemini-3-pro-image-preview" },
 ]
 
 export const ASPECT_RATIO_OPTIONS: Option<ImageAspectRatio>[] = [

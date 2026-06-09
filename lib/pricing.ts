@@ -23,6 +23,7 @@ import {
   TEXT_WORKFLOW_MIN_REQUIRED_CREDITS,
   type MediaBillingItem,
 } from "@/lib/billing-config"
+import { getPublicAiLabel } from "@/lib/public-ai-labels"
 
 export type ModelType =
   | "general-chat"
@@ -154,15 +155,15 @@ export const MODEL_COSTS: Record<ModelType, ModelCostConfig> = {
   "speech-defense": { ...TEXT_MODEL_DEFAULTS, displayName: "演讲与答辩稿助手", estimatedInputTokens: 1000, estimatedOutputTokens: 1500 },
   "school-wechat": { ...TEXT_MODEL_DEFAULTS, displayName: "学校公众号写作助手" },
   "teacher-agent": { ...TEXT_MODEL_DEFAULTS, displayName: "教师自定义智能体", estimatedInputTokens: 700, estimatedOutputTokens: 1000 },
-  "gpt-5": { ...TEXT_MODEL_DEFAULTS, displayName: "ChatGPT 5.5", estimatedInputTokens: 700, estimatedOutputTokens: 1000 },
-  "claude-opus": { ...TEXT_MODEL_DEFAULTS, displayName: "Claude opus4.6thinking" },
-  "gemini-pro": { ...TEXT_MODEL_DEFAULTS, displayName: "Gemini 3.1 pro", estimatedInputTokens: 700, estimatedOutputTokens: 1000 },
-  "grok-4.2": { ...TEXT_MODEL_DEFAULTS, displayName: "Grok-4.2", estimatedInputTokens: 700, estimatedOutputTokens: 1000 },
-  "open-claw": { ...TEXT_MODEL_DEFAULTS, displayName: "Open Claw", estimatedInputTokens: 700, estimatedOutputTokens: 1000 },
+  "gpt-5": { ...TEXT_MODEL_DEFAULTS, displayName: getPublicAiLabel("gpt-5"), estimatedInputTokens: 700, estimatedOutputTokens: 1000 },
+  "claude-opus": { ...TEXT_MODEL_DEFAULTS, displayName: getPublicAiLabel("claude-opus") },
+  "gemini-pro": { ...TEXT_MODEL_DEFAULTS, displayName: getPublicAiLabel("gemini-pro"), estimatedInputTokens: 700, estimatedOutputTokens: 1000 },
+  "grok-4.2": { ...TEXT_MODEL_DEFAULTS, displayName: getPublicAiLabel("grok-4.2"), estimatedInputTokens: 700, estimatedOutputTokens: 1000 },
+  "open-claw": { ...TEXT_MODEL_DEFAULTS, displayName: getPublicAiLabel("open-claw"), estimatedInputTokens: 700, estimatedOutputTokens: 1000 },
   "banana-2-pro": {
     category: "media",
     fixedCost: MEDIA_BILLING["banana-2-pro"].fixedCredits,
-    displayName: "Banana2 Pro 4K",
+    displayName: getPublicAiLabel("banana-2-pro"),
     mode: "image",
     estimatedInputTokens: 300,
     estimatedOutputTokens: 300,
@@ -170,7 +171,7 @@ export const MODEL_COSTS: Record<ModelType, ModelCostConfig> = {
   "gemini-image": {
     category: "media",
     fixedCost: MEDIA_BILLING["gemini-image"].fixedCredits,
-    displayName: "Gemini 图像",
+    displayName: getPublicAiLabel("gemini-image"),
     mode: "image",
     estimatedInputTokens: 300,
     estimatedOutputTokens: 300,
@@ -178,13 +179,13 @@ export const MODEL_COSTS: Record<ModelType, ModelCostConfig> = {
   "gpt-image-2": {
     category: "media",
     fixedCost: MEDIA_BILLING["gpt-image-2"].fixedCredits,
-    displayName: "GPT Image 2",
+    displayName: getPublicAiLabel("gpt-image-2"),
     mode: "image",
   },
   "suno-v5": {
     category: "media",
     fixedCost: MEDIA_BILLING["suno-v5"].fixedCredits,
-    displayName: "Suno V5",
+    displayName: getPublicAiLabel("suno-v5"),
     mode: "music",
     estimatedInputTokens: 300,
     estimatedOutputTokens: 300,

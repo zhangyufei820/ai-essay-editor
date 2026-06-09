@@ -65,7 +65,7 @@ export default function AboutPage() {
               沈翔智学是一家专注于 AI 教育领域的创新型科技公司。我们致力于将最先进的人工智能技术应用于教育场景，为学生和教师提供智能化、个性化的学习与教学体验。
             </p>
             <p className="text-lg leading-relaxed mt-4" style={{ color: "var(--ink-600)" }}>
-              平台整合全球顶尖的 AI 大模型，为用户提供作文批改、智能对话、学习规划、图片生成、音乐创作等多种 AI 功能，让学习变得更加高效、有趣。
+              平台整合多路高性能智能能力，为用户提供作文批改、智能对话、学习规划、图片生成、音乐创作等多种 AI 功能，让学习变得更加高效、有趣。
             </p>
           </div>
         </section>
@@ -125,9 +125,9 @@ export default function AboutPage() {
                 <div className="w-12 h-12 rounded-[var(--radius-sharp)] flex items-center justify-center mx-auto mb-3" style={{ backgroundColor: "var(--ink-50)" }}>
                   <Cpu className="w-6 h-6" style={{ color: "var(--ink-600)" }} />
                 </div>
-                <h3 className="font-semibold mb-1" style={{ color: "var(--ink-800)" }}>多模型协同</h3>
+                <h3 className="font-semibold mb-1" style={{ color: "var(--ink-800)" }}>多能力协同</h3>
                 <p className="text-sm" style={{ color: "var(--ink-500)" }}>
-                  整合 GPT-5.5、Claude Opus 4.6、Gemini 3.1、DeepSeek V3、Qwen 3.0 等全球顶尖 AI 模型，根据任务智能调度
+                  整合多路高性能 AI 能力，根据写作、推理、图像和教学任务智能调度
                 </p>
               </div>
               <div className="text-center p-4">
@@ -166,7 +166,7 @@ export default function AboutPage() {
                 <div>
                   <h3 className="font-semibold" style={{ color: "var(--ink-800)" }}>2024年 — 产品启动</h3>
                   <p className="text-sm mt-1" style={{ color: "var(--ink-500)" }}>
-                    沈翔智学正式立项，基于 LLM 技术打造 AI 作文批改引擎，完成核心算法研发与原型验证
+                    沈翔智学正式立项，打造 AI 作文批改引擎，完成核心算法研发与原型验证
                   </p>
                 </div>
               </div>
@@ -177,7 +177,7 @@ export default function AboutPage() {
                 <div>
                   <h3 className="font-semibold" style={{ color: "var(--ink-800)" }}>2025年 — 正式上线</h3>
                   <p className="text-sm mt-1" style={{ color: "var(--ink-500)" }}>
-                    平台正式上线运营，接入多模态大模型矩阵，推出全学段数学、英语、作文批改等核心功能
+                    平台正式上线运营，接入多模态智能能力矩阵，推出全学段数学、英语、作文批改等核心功能
                   </p>
                 </div>
               </div>
@@ -188,7 +188,7 @@ export default function AboutPage() {
                 <div>
                   <h3 className="font-semibold" style={{ color: "var(--ink-800)" }}>2026年 — 生态扩展</h3>
                   <p className="text-sm mt-1" style={{ color: "var(--ink-500)" }}>
-                    推出 OpenClaw 通用助手、备课助手 Pro、班主任助手等垂直智能体，服务超过 10,000+ 学生用户
+                    推出高级创作助手、备课助手 Pro、班主任助手等垂直智能体，服务超过 10,000+ 学生用户
                   </p>
                 </div>
               </div>

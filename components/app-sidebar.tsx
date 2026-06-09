@@ -128,7 +128,7 @@ function AppSidebarInner() {
   // 🔥 智能体专区面板状态
   const [isAgentPanelOpen, setIsAgentPanelOpen] = useState(false)
 
-  // 🔥 AI模型专区面板状态
+  // 🔥 智能能力专区面板状态
   const [isModelPanelOpen, setIsModelPanelOpen] = useState(false)
 
   // 🔥 创意生成专区面板状态
@@ -792,7 +792,7 @@ function AppSidebarInner() {
             </Link>
           </div>
 
-          {/* 智能体专区入口 - OpenClaw 专区 */}
+          {/* 智能体专区入口 - 高级创作专区 */}
           <div className="mt-4 mb-2">
             <motion.button
               onClick={() => setIsAgentPanelOpen(true)}
@@ -813,7 +813,7 @@ function AppSidebarInner() {
             >
               <IconAllInOne className="w-[18px] h-[18px]" style={{ color: COLORS.primary.main }} />
               <span className="text-[12px] font-medium leading-none whitespace-nowrap" style={{ color: COLORS.primary.dark }}>
-                OpenClaw
+                高级创作
               </span>
             </motion.button>
           </div>
@@ -844,7 +844,7 @@ function AppSidebarInner() {
             </motion.button>
           </div>
 
-          {/* D. AI模型专区入口 */}
+          {/* D. 智能能力专区入口 */}
           <div className="mb-2">
             <motion.button
               onClick={() => setIsModelPanelOpen(true)}
@@ -865,7 +865,7 @@ function AppSidebarInner() {
             >
               <IconChat className="w-[18px] h-[18px]" style={{ color: COLORS.primary.dark }} />
               <span className="text-[12px] font-medium leading-none whitespace-nowrap" style={{ color: COLORS.primary.dark }}>
-                顶级模型专区
+                智能能力专区
               </span>
             </motion.button>
           </div>
@@ -1091,7 +1091,7 @@ function AppSidebarInner() {
         onClose={() => setIsAgentPanelOpen(false)}
       />
 
-      {/* 🔥 AI模型专区面板 */}
+      {/* 🔥 智能能力专区面板 */}
       <ModelPanel
         isOpen={isModelPanelOpen}
         onClose={() => setIsModelPanelOpen(false)}

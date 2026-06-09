@@ -33,7 +33,7 @@ const CATEGORY_DESCRIPTIONS: Partial<Record<AgentCategory, string>> = {
   英语写作与语法: "覆盖中英作文、英语语法讲解、词汇记忆和高中英语作文。",
   教学与学科: "服务教师备课、班主任管理、学科答疑、错题诊断和互动实验。",
   图像与创作: "图像生成、图像编辑、提示词反推、音乐和 3D 创作入口。",
-  独立模型: "直接进入 ChatGPT、Claude、Gemini、Grok 等模型原生对话。",
+  智能能力: "直接进入深度对话、长文分析、图文理解和灵感探索等能力。",
   其他工具: "OCR、文档提取、演示文稿、网页搜索、综合报告和 TTS 等工具。",
 }
 
@@ -69,7 +69,7 @@ function agentSearchText(agent: PlazaAgent) {
       agent.skill,
       agent.agent,
       agent.routeId,
-      agent.workflowSkill ? "workflow-skill" : "",
+      agent.workflowSkill ? "任务能力" : "",
       ...agent.tags,
     ]
       .filter(Boolean)
@@ -242,7 +242,7 @@ export function AgentPlazaPage() {
                 <InputV2
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
-                  placeholder="搜索名称、简介、标签或 skill"
+                  placeholder="搜索名称、简介或标签"
                   className="pl-9 pr-9"
                   aria-label="搜索智能体"
                 />
@@ -438,7 +438,7 @@ function AgentCard({ agent, featured = false, compact = false }: { agent: PlazaA
             </div>
             <div className="flex items-center justify-between gap-3">
               <span className="truncate text-[11px] text-[var(--ink-400)] font-[var(--font-mono-v2)]">
-                {agent.skill || agent.agent || agent.id}
+                {agent.category}
               </span>
               <span className="inline-flex shrink-0 items-center gap-1.5 text-[13px] font-semibold text-[var(--ink-700)] font-[var(--font-sans-v2)]">
                 进入
