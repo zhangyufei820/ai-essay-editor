@@ -114,17 +114,15 @@ describe("llm gateway reliability config", () => {
     expect(probes.every((item) => (item.model_info?.health_check_max_tokens || 0) <= 3)).toBe(true)
   })
 
-  it("keeps hot GPT aliases on the tokenflux primaries while fallback chains reuse shared deployments", () => {
+  it("keeps hot GPT aliases on TokenFlux while general text uses the stable mini primary", () => {
     const config = loadConfig()
     const fastIds = new Set(modelsByName(config, "sx-fast-chat").map((item) => item.model_info?.id))
     const mathIds = new Set(modelsByName(config, "sx-math-text").map((item) => item.model_info?.id))
     const generalIds = new Set(modelsByName(config, "sx-general-text").map((item) => item.model_info?.id))
 
-    for (const id of ["deploy-tokenflux-gpt-5-5"]) {
-      expect(fastIds.has(id)).toBe(true)
-      expect(mathIds.has(id)).toBe(true)
-      expect(generalIds.has(id)).toBe(true)
-    }
+    expect(fastIds.has("deploy-tokenflux-gpt-5-5")).toBe(true)
+    expect(mathIds.has("deploy-tokenflux-gpt-5-5")).toBe(true)
+    expect(generalIds.has("deploy-tokenflux-gpt-5-4-mini")).toBe(true)
   })
 
   it("keeps gateway model names ASCII-safe for response headers", () => {
@@ -215,7 +213,11 @@ describe("llm gateway reliability config", () => {
       "sx-image-vision",
       "sx-gpt-5.5-vivaapi",
     ])
-    expect(fallbackTargets.get("sx-general-text")).toEqual(["sx-gpt-5.5-moonapix", "sx-gpt-5.5-vivaapi"])
+    expect(fallbackTargets.get("sx-general-text")).toEqual([
+      "gpt-5.4-mini",
+      "sx-gpt-5.4-mini-moonapix",
+      "sx-gpt-5.4-mini-vivaapi",
+    ])
     expect(fallbackTargets.get("sx-gemini-3.1-pro")).toEqual(["sx-gpt-5.5-tokenflux", "sx-gpt-5.5-moonapix"])
     expect(fallbackTargets.get("sx-chinese-text")).toEqual([
       "sx-general-text",
@@ -294,10 +296,13 @@ describe("llm gateway reliability config", () => {
       }
     }
 
-    for (const alias of ["sx-fast-chat", "sx-general-text"]) {
+    for (const alias of ["sx-fast-chat"]) {
       expect(fallbackTargets.get(alias)?.[0]).toBe("sx-gpt-5.5-moonapix")
       expect(fallbackTargets.get(alias)).not.toContain("sx-gemini-3.1-pro")
     }
+
+    expect(fallbackTargets.get("sx-general-text")?.[0]).toBe("gpt-5.4-mini")
+    expect(fallbackTargets.get("sx-general-text")).not.toContain("sx-gemini-3.1-pro")
 
     expect(fallbackTargets.get("sx-math-text")?.[0]).toBe("sx-gpt-5.5-moonapix")
     expect(fallbackTargets.get("sx-math-text")).toContain("sx-gemini-3.1-pro")
@@ -348,12 +353,18 @@ describe("llm gateway reliability config", () => {
   it("keeps the fast GPT business aliases pinned to the TokenFlux deployment", () => {
     const config = loadConfig()
 
-    for (const alias of ["sx-fast-chat", "sx-math-text", "sx-general-text"]) {
+    for (const alias of ["sx-fast-chat", "sx-math-text"]) {
       const deployments = modelsByName(config, alias)
       expect(deployments).toHaveLength(1)
       expect(deployments[0]?.litellm_params?.api_base).toBe("os.environ/TOKENFLUX_LLM_BASE_URL")
       expect(deployments[0]?.model_info?.id).toBe("deploy-tokenflux-gpt-5-5")
     }
+
+    const general = modelsByName(config, "sx-general-text")
+    expect(general).toHaveLength(1)
+    expect(general[0]?.litellm_params?.api_base).toBe("os.environ/TOKENFLUX_LLM_BASE_URL")
+    expect(general[0]?.litellm_params?.model).toBe("openai/gpt-5.4-mini")
+    expect(general[0]?.model_info?.id).toBe("deploy-tokenflux-gpt-5-4-mini")
   })
 
   it("keeps vision routing pinned to GPT-5.4-mini before multimodal fallbacks", () => {

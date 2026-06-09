@@ -21,6 +21,13 @@ const PROBLEM_APP = {
   finalEditorNodeId: "17643486820500",
 }
 
+const QUANQUAN_MATH_APP = {
+  appName: "全学段数学智能体",
+  workflowId: "81a66ab5-6410-41c0-8079-f3454d0843c7",
+  routeNodeId: "1775197140264",
+  finalEditorNodeId: "17643486820500",
+}
+
 const WEIGHTED_RETRIEVAL_CONFIG = {
   top_k: 3,
   score_threshold: null,
@@ -72,6 +79,14 @@ const PROBLEM_ROUTE_SYSTEM_PROMPT = [
   "- JSON 前后不要有任何额外字符。",
 ].join("\n")
 
+const QUANQUAN_MATH_EDITOR_SYSTEM_PROMPT = [
+  "你是全学段数学解题老师。",
+  "请基于路由结果、OCR 内容和检索上下文回答。",
+  "如果图片题干不完整，先明确缺失部分，再尽量给出可判断部分的解法。",
+  "回答保持清晰但不要冗长，优先输出题目信息、关键思路、步骤和结论。",
+  "不要解释系统、网关、Dify 或错误提示；不要复述追踪码。",
+].join("\n")
+
 function parseArgs(argv) {
   const args = {
     apply: false,
@@ -120,8 +135,10 @@ from pathlib import Path
 APPLY = ${apply ? "True" : "False"}
 SITE = ${JSON.stringify(SITE_ASSISTANT)}
 PROBLEM = ${JSON.stringify(PROBLEM_APP)}
+QUANQUAN_MATH = ${JSON.stringify(QUANQUAN_MATH_APP)}
 WEIGHTED_RETRIEVAL_CONFIG = json.loads(${JSON.stringify(JSON.stringify(WEIGHTED_RETRIEVAL_CONFIG))})
 PROBLEM_ROUTE_SYSTEM_PROMPT = ${JSON.stringify(PROBLEM_ROUTE_SYSTEM_PROMPT)}
+QUANQUAN_MATH_EDITOR_SYSTEM_PROMPT = ${JSON.stringify(QUANQUAN_MATH_EDITOR_SYSTEM_PROMPT)}
 
 def run_sql(sql):
     result = subprocess.run(
@@ -256,12 +273,72 @@ def tune_problem_solver(current_graph):
         "solve_nodes": tuned_nodes,
     }
 
+def tune_quanquan_math(current_graph):
+    target_graph = deepcopy(current_graph)
+    route_node = find_node(target_graph, QUANQUAN_MATH["routeNodeId"])
+    if route_node is None:
+        raise RuntimeError("quanquan math route node not found")
+    route_data = route_node.setdefault("data", {})
+    route_model = route_data.setdefault("model", {})
+    route_completion = route_model.setdefault("completion_params", {})
+    route_completion["temperature"] = 0
+    route_completion["max_tokens"] = 128
+    route_model["name"] = "沈翔快速对话"
+    route_model["provider"] = "langgenius/openai_api_compatible/openai_api_compatible"
+    route_model["mode"] = "chat"
+
+    editor_node = find_node(target_graph, QUANQUAN_MATH["finalEditorNodeId"])
+    if editor_node is None:
+        raise RuntimeError("quanquan math final editor node not found")
+    editor_data = editor_node.setdefault("data", {})
+    editor_model = editor_data.setdefault("model", {})
+    editor_completion = editor_model.setdefault("completion_params", {})
+    editor_completion["temperature"] = 0.2
+    editor_completion["max_tokens"] = 900
+    editor_model["name"] = "沈翔通用文本"
+    editor_model["provider"] = "langgenius/openai_api_compatible/openai_api_compatible"
+    editor_model["mode"] = "chat"
+
+    prompt_template = editor_data.get("prompt_template") or []
+    user_prompt = next((item for item in prompt_template if item.get("role") == "user"), None)
+    editor_data["prompt_template"] = [
+        {
+            "id": (prompt_template[0] or {}).get("id", "codex-quanquan-math-editor-system") if prompt_template else "codex-quanquan-math-editor-system",
+            "role": "system",
+            "text": QUANQUAN_MATH_EDITOR_SYSTEM_PROMPT,
+        },
+        {
+            "id": (user_prompt or {}).get("id", "codex-quanquan-math-editor-user"),
+            "role": "user",
+            "text": (user_prompt or {}).get("text", "对以下内容深度解答：\\n{{#1775197140264.text#}}{{#context#}}"),
+        },
+    ]
+
+    return {
+        "target_graph": target_graph,
+        "route_node": {
+            "node_id": QUANQUAN_MATH["routeNodeId"],
+            "title": route_data.get("title", ""),
+            "model_name": route_model.get("name"),
+            "completion_params": deepcopy(route_completion),
+        },
+        "final_editor_node": {
+            "node_id": QUANQUAN_MATH["finalEditorNodeId"],
+            "title": editor_data.get("title", ""),
+            "model_name": editor_model.get("name"),
+            "completion_params": deepcopy(editor_completion),
+            "system_prompt_chars": len(QUANQUAN_MATH_EDITOR_SYSTEM_PROMPT),
+        },
+    }
+
 site_workflow = load_workflow(SITE["workflowId"])
 problem_workflow = load_workflow(PROBLEM["workflowId"])
+quanquan_math_workflow = load_workflow(QUANQUAN_MATH["workflowId"])
 
 site_tuned = tune_site_assistant(site_workflow["graph"])
 problem_tuned = tune_problem_route(problem_workflow["graph"])
 problem_solver_tuned = tune_problem_solver(problem_tuned["target_graph"])
+quanquan_math_tuned = tune_quanquan_math(quanquan_math_workflow["graph"])
 
 changes = []
 
@@ -285,6 +362,16 @@ if problem_solver_tuned["target_graph"] != problem_workflow["graph"]:
         "reason": "tighten_problem_route_and_solver_models",
     })
 
+if quanquan_math_tuned["target_graph"] != quanquan_math_workflow["graph"]:
+    changes.append({
+        "app_id": quanquan_math_workflow["app_id"],
+        "app_name": quanquan_math_workflow["app_name"],
+        "workflow_id": quanquan_math_workflow["workflow_id"],
+        "before_graph_raw": quanquan_math_workflow["graph_raw"],
+        "after_graph": quanquan_math_tuned["target_graph"],
+        "reason": "tighten_quanquan_math_route_and_final_editor",
+    })
+
 summary = {
     "apply": APPLY,
     "planned_changes": len(changes),
@@ -305,6 +392,12 @@ summary = {
         "after_prompt_chars": problem_tuned["after_prompt_chars"],
         "route_model_name": problem_tuned["route_model_name"],
         "solve_nodes": problem_solver_tuned["solve_nodes"],
+    },
+    "quanquan_math": {
+        "workflow_id": quanquan_math_workflow["workflow_id"],
+        "app_name": quanquan_math_workflow["app_name"],
+        "route_node": quanquan_math_tuned["route_node"],
+        "final_editor_node": quanquan_math_tuned["final_editor_node"],
     },
 }
 

@@ -109,6 +109,21 @@ describe("production dify hardening guards", () => {
         completion_params: { temperature: 0.7 },
       },
     ])
+
+    expect(payload.quanquan_math.app_name).toBe("全学段数学智能体")
+    expect(payload.quanquan_math.route_node).toEqual({
+      node_id: "1775197140264",
+      title: "LLM 4",
+      model_name: "沈翔快速对话",
+      completion_params: { max_tokens: 128, temperature: 0 },
+    })
+    expect(payload.quanquan_math.final_editor_node).toMatchObject({
+      node_id: "17643486820500",
+      title: "总编辑 ",
+      model_name: "沈翔通用文本",
+      completion_params: { max_tokens: 900, temperature: 0.2 },
+    })
+    expect(payload.quanquan_math.final_editor_node.system_prompt_chars).toBeGreaterThan(80)
   })
 
   it("keeps problem workflow remap aligned to the dedicated latency-tightened models", () => {

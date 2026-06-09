@@ -47,14 +47,14 @@ model_list:
 
   - model_name: sx-general-text
     litellm_params:
-      model: openai/gpt-5.5
+      model: openai/gpt-5.4-mini
       api_base: os.environ/TOKENFLUX_LLM_BASE_URL
       api_key: os.environ/TOKENFLUX_LLM_API_KEY
       extra_headers:
         User-Agent: Codex Desktop/0.133.0 (Mac OS 13.5.0; x86_64) Apple_Terminal/447 (codex_exec; 0.133.0)
-      timeout: 25
+      timeout: 20
     model_info:
-      id: deploy-tokenflux-gpt-5-5
+      id: deploy-tokenflux-gpt-5-4-mini
       mode: chat
       health_check_timeout: 8
       health_check_max_tokens: 3
@@ -726,7 +726,7 @@ router_settings:
     - sx-claude-opus-4-7-vivaapi: ["sx-claude-opus-4-7-moonapix", "sx-general-text", "sx-claude-sonnet-4-6"]
     - sx-claude-opus-4-7-moonapix: ["sx-claude-sonnet-4-6", "sx-general-text", "sx-claude-opus-4-7-vivaapi"]
     - sx-math-text: ["sx-gpt-5.5-moonapix", "sx-gemini-3.1-pro", "gpt-5.4-mini", "sx-image-vision", "sx-gpt-5.5-vivaapi"]
-    - sx-general-text: ["sx-gpt-5.5-moonapix", "sx-gpt-5.5-vivaapi"]
+    - sx-general-text: ["gpt-5.4-mini", "sx-gpt-5.4-mini-moonapix", "sx-gpt-5.4-mini-vivaapi"]
     - sx-gemini-3.1-pro: ["sx-gpt-5.5-tokenflux", "sx-gpt-5.5-moonapix"]
     - sx-image-vision: ["sx-gpt-5.4-mini-moonapix", "sx-image-vision-moonapix", "sx-gpt-5.4-mini-vivaapi", "gpt-5.4-mini"]
     - sx-gpt-5.4-mini-vivaapi: ["sx-image-vision-tokenflux", "sx-gpt-5.4-mini-moonapix", "gpt-5.4-mini"]
