@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient as createSupabaseClient } from "@supabase/supabase-js"
 import { requireUser } from "@/lib/auth/verified-user"
+import { sanitizeAssistantMessageForPublicDisplay } from "@/lib/chat-error-sanitizer"
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const DIFY_CONVERSATION_COLUMN = "dify_conversation_id"
@@ -16,6 +17,14 @@ function isMissingDifyConversationColumn(error: unknown) {
     "code" in error &&
     (error as { code?: string }).code === "42703",
   )
+}
+
+function toPublicChatMessage(message: Record<string, unknown>) {
+  if (message.role !== "assistant") return message
+  return {
+    ...message,
+    content: sanitizeAssistantMessageForPublicDisplay(message.content),
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -185,7 +194,7 @@ export async function GET(request: NextRequest) {
 
       if (messagesError) throw messagesError
       const { user_id: _userId, ...safeSession } = session
-      return NextResponse.json({ session: safeSession, messages: messages || [] })
+      return NextResponse.json({ session: safeSession, messages: (messages || []).map(toPublicChatMessage) })
     }
 
     let { data: sessions, error }: { data: Array<Record<string, unknown>> | null; error: unknown } = await supabase

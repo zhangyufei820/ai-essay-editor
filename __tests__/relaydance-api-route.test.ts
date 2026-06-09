@@ -87,9 +87,9 @@ describe("POST /api/media/video/relaydance", () => {
     expect(json).toEqual(expect.objectContaining({
       success: true,
       task_id: "video_req_1",
-      provider_task_id: "provider_task_1",
       poll_url: "/api/media/tasks/video_req_1",
     }))
     expect(JSON.stringify(json)).not.toContain("gateway-secret")
+    expect(JSON.stringify(json)).not.toMatch(/provider_task_id|trace_id|next_adapter|upstream_task_id|metadata|provider_status/)
   })
 })

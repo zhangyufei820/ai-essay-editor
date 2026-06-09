@@ -555,7 +555,7 @@ export const PLAZA_AGENTS: PlazaAgent[] = [
     id: "omnivoice-tts",
     name: "文字转语音",
     category: "其他工具",
-    description: "把文本转换成可播放音频，支持服务器 OmniVoice 网关和音色选择。",
+    description: "把文本转换成可播放音频，支持服务器语音服务和音色选择。",
     icon: FileAudio,
     href: "/tools#tts",
     routeId: "/tools#tts",

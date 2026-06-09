@@ -32,7 +32,7 @@ const INTERNAL_AI_DETAIL_PATTERNS = [
   /Moonapix/i,
   /VivaAPI/i,
   /TokenFlux/i,
-  /工具|插件|节点|工作流|模型|供应商|网关|上游|会话已提交/,
+  /工具|插件|节点|工作流|模型|供应商|网关|上游|备用线路|会话已提交/,
 ] as const
 
 const INTERNAL_STATUS_REPLACEMENTS: Array<[RegExp, string]> = [
@@ -90,9 +90,9 @@ export function getSafeUpstreamErrorMessage(
 
   const noun = serviceNounFromFallback(fallback)
   if (hasTimeoutUpstreamErrorText(value)) {
-    return `${noun}响应超时或备用线路不可用。请先刷新当前会话或历史记录查看是否已有结果；若仍无结果，再重新提交。`
+    return `${noun}响应超时或连接中断。请先刷新当前会话或历史记录查看是否已有结果；若仍无结果，再重新提交。`
   }
-  return `${noun}暂时不可用，系统没有把本次内部错误展示给学生。请稍后重试或切换其他功能。`
+  return `${noun}暂时不可用。请稍后重试或切换其他功能。`
 }
 
 export function stripUpstreamBranding(value: string) {
@@ -101,7 +101,9 @@ export function stripUpstreamBranding(value: string) {
     .replace(/Dify/gi, "服务")
     .replace(/LiteLLM/gi, "智能服务")
     .replace(/PluginInvokeError/gi, "服务调用错误")
+    .replace(/上游/g, "服务")
     .replace(/网关/g, "服务")
+    .replace(/备用线路/g, "连接")
 }
 
 export function hasInternalAiDetailText(value: unknown): boolean {
@@ -139,4 +141,47 @@ export function sanitizePublicAiError(value: unknown, fallback = "服务暂时�
   const output = sanitizePublicAiStatus(value, fallback)
   if (!output || hasInternalAiDetailText(output)) return fallback
   return output
+}
+
+export function sanitizeAssistantMessageForPublicDisplay(value: unknown): string {
+  if (typeof value !== "string" || !value.trim()) return ""
+  if (!hasTechnicalUpstreamErrorText(value) && !hasInternalAiDetailText(value)) return value
+
+  const withoutOldTitle = value
+    .replace(/^#{1,6}\s*响应没有完整送达\s*$/gim, "### 当前回复未完整送达")
+    .replace(/响应没有完整送达/g, "当前回复未完整送达")
+
+  const lines = withoutOldTitle.split(/\r?\n/)
+  const sanitizedLines = lines.map((line) => {
+    if (!line.trim()) return line
+    if (/^#{1,6}\s*当前回复未完整送达\s*$/.test(line.trim())) return line
+    return sanitizePublicAiError(line, "服务暂时不可用，请稍后重试。")
+  })
+
+  const output = sanitizedLines.join("\n").replace(/\n{3,}/g, "\n\n").trim()
+  return output || "服务暂时不可用，请稍后重试。"
+}
+
+export function sanitizePublicAiErrorCode(value: unknown): string | null {
+  if (typeof value !== "string" || !value.trim()) return null
+  const code = value.trim()
+  if (/CREDENTIAL|CONFIG|KEY|SECRET|TOKEN|APP_MODE|NOT_CONFIGURED|MISSING/i.test(code)) {
+    return "SERVICE_CONFIG_UNAVAILABLE"
+  }
+  if (/TIMEOUT|TIMED_OUT|408|504|524/i.test(code)) {
+    return "SERVICE_RESPONSE_TIMEOUT"
+  }
+  if (/FORBIDDEN|UNAUTHORIZED|ACCESS_DENIED|OWNER|SESSION/i.test(code)) {
+    return "SERVICE_ACCESS_DENIED"
+  }
+  if (/EMPTY|NO_RESPONSE|BLANK|NO_CONTENT/i.test(code)) {
+    return "SERVICE_EMPTY_RESPONSE"
+  }
+  if (/CREDIT|BALANCE|QUOTA|BILLING/i.test(code)) {
+    return "SERVICE_USAGE_LIMIT"
+  }
+  if (/DIFY|WORKFLOW|PLUGIN|LITELLM|OPENCLAW|GATEWAY|PROVIDER|MODEL|NODE|VIVA|MOONAPIX|TOKENFLUX|GEMINI|OPENAI|ANTHROPIC/i.test(code)) {
+    return "SERVICE_TEMPORARILY_UNAVAILABLE"
+  }
+  return code.replace(/[^A-Z0-9_]/gi, "_").toUpperCase().slice(0, 80)
 }

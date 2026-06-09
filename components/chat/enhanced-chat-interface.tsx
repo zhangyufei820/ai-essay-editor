@@ -53,7 +53,7 @@ import { VocabCardDifyForm, type VocabCardDifyInputs } from "./VocabCardDifyForm
 import { brandColors, slateColors } from "@/lib/design-tokens"
 import { cleanLLMText } from "@/lib/text-sanitizer"
 import { sanitizeDifyAnswerForModel } from "@/lib/dify-answer-cleanup"
-import { getSafeUpstreamErrorMessage, hasTechnicalUpstreamErrorText, sanitizePublicAiError, sanitizePublicAiStatus } from "@/lib/chat-error-sanitizer"
+import { getSafeUpstreamErrorMessage, hasInternalAiDetailText, hasTechnicalUpstreamErrorText, sanitizeAssistantMessageForPublicDisplay, sanitizePublicAiError, sanitizePublicAiStatus } from "@/lib/chat-error-sanitizer"
 import { parseEssayReview } from "@/lib/parse-essay-review"
 import { extractDifyTextOutput } from "@/lib/dify-output-text"
 import { isAssistantFailureContent } from "@/lib/chat-message-guards"
@@ -453,7 +453,6 @@ type ProcessingContext = {
   lastActivityAt?: number
   heartbeatCount?: number
   requestId?: string
-  traceId?: string
   stage?: string
 }
 
@@ -537,17 +536,17 @@ function getChatErrorMessage(error: unknown, status?: number, model?: string): s
     return "积分不足，当前任务没有扣费。请充值或升级会员后继续使用。"
   }
   if (raw.includes("GPT Image 2 当前共创体验期内登录用户可用")) {
-    return "GPT Image 2 当前共创体验期内登录用户可用，请先登录后使用。"
+    return "当前图像能力需要登录后使用，请先登录后再提交。"
   }
   if (raw.includes("GPT Image 2 当前仅订阅用户可用") || raw.includes("仅订阅用户可用")) {
-    return "GPT Image 2 当前共创体验期已开放给登录用户，请刷新页面后重试；若仍失败，请重新登录。"
+    return "当前账号暂时无法使用该图像能力，请刷新页面或重新登录后再试。"
   }
   if (/无权访问图片生成接口|permission|forbidden|403/.test(raw)) {
     return "当前账号暂无图片生成权限，请切换模型，或联系客服开通后再试。"
   }
   if (/timeout|timed out|abort|aborted|超时/.test(text) || /超时|中断/.test(raw)) {
     if (model === "open-claw") {
-      return "OpenClaw 上游模型响应超时或任务被中断。复杂图片/大文件任务可能排队较久，请稍后重试。"
+      return "当前任务响应超时或被中断。复杂图片/大文件任务可能排队较久，请稍后刷新历史记录或重新提交。"
     }
     return `${getChatModelDisplayLabel(model)} 响应超时或连接被中断。页面会保留已生成内容；若没有看到结果，请刷新历史记录后再决定是否重新提交。`
   }
@@ -557,7 +556,7 @@ function getChatErrorMessage(error: unknown, status?: number, model?: string): s
   }
   if (isNetworkStreamError(raw, text)) {
     if (model === "open-claw") {
-      return "OpenClaw 长任务连接中断，可能是上游模型超时或浏览器网络断开。当前页面没有收到完整结果，请稍后刷新历史记录或重新提交。"
+      return "当前长任务连接中断，可能是服务响应超时或浏览器网络断开。当前页面没有收到完整结果，请稍后刷新历史记录或重新提交。"
     }
     return `${getChatModelDisplayLabel(model)} 连接中断：后端已接收请求，但浏览器在读取流式结果时断开。请先刷新当前会话或历史记录查看是否已有结果；若仍没有结果，再重新提交一次。`
   }
@@ -565,31 +564,38 @@ function getChatErrorMessage(error: unknown, status?: number, model?: string): s
     return "文件未上传成功或附件无法被模型读取，请删除附件后重新上传再提交。"
   }
   if (model === "gemini-image") {
-    return "图片生成服务暂时不可用，可能是余额、模型、尺寸或参数不兼容导致。请稍后重试或调整提示词。"
+    return "图片生成服务暂时不可用，可能是余额、尺寸或参数不兼容导致。请稍后重试或调整提示词。"
   }
 
   return sanitizePublicAiError(raw, "对话出错，请稍后重试。")
 }
 
 function buildChatErrorContent(message: string): string {
+  const safeMessage = getSafeAssistantErrorContent(message)
   return [
-    "### 响应没有完整送达",
+    "### 当前回复未完整送达",
     "",
-    message,
+    safeMessage,
     "",
     "建议：先刷新当前会话或历史记录查看是否已有结果；如果仍无结果，再重新提交。若连续出现，请保留截图和发生时间。"
   ].join("\n")
 }
 
 function getSafeAssistantErrorContent(message: string) {
-  if (!hasTechnicalUpstreamErrorText(message)) return message
+  const fallback = "服务暂时不可用，请稍后重试。"
+  if (!hasTechnicalUpstreamErrorText(message) && !hasInternalAiDetailText(message)) {
+    return sanitizePublicAiError(message, fallback)
+  }
   const safeMessage = getSafeUpstreamErrorMessage(message)
-  return safeMessage || "服务暂时不可用，请稍后重试。"
+  return sanitizePublicAiError(safeMessage || message, fallback)
 }
 
 function normalizeChatTaskFailureMessage(message: string, model?: string) {
-  if (!hasTechnicalUpstreamErrorText(message)) return sanitizePublicAiError(message, `${getChatModelDisplayLabel(model)}暂时不可用，请稍后重试。`)
-  return getSafeUpstreamErrorMessage(message, `${getChatModelDisplayLabel(model)}暂时不可用，请稍后重试。`) || message
+  const fallback = `${getChatModelDisplayLabel(model)}暂时不可用，请稍后重试。`
+  if (!hasTechnicalUpstreamErrorText(message) && !hasInternalAiDetailText(message)) {
+    return sanitizePublicAiError(message, fallback)
+  }
+  return sanitizePublicAiError(getSafeUpstreamErrorMessage(message, fallback) || message, fallback)
 }
 
 async function getTaskFailureMessage(requestId: string, model: string): Promise<{ message: string; status?: string } | null> {
@@ -827,7 +833,7 @@ function ProcessingStatusCard({
           <span className="absolute inline-flex h-full w-full animate-ping rounded-[var(--radius-pill)] bg-[var(--seal-500)] opacity-40" />
           <span className="relative inline-flex h-2 w-2 rounded-[var(--radius-pill)] bg-[var(--ink-600)]" />
         </span>
-        <span className="shrink-0 font-semibold text-[var(--ink-700)]">ai.plan</span>
+        <span className="shrink-0 font-semibold text-[var(--ink-700)]">思考进度</span>
         <span className="min-w-0 truncate text-[var(--ink-500)]">{stageText || statusText}</span>
         <span className="ml-auto shrink-0 text-[var(--ink-400)]">{elapsedSeconds}s</span>
       </div>
@@ -860,7 +866,7 @@ function ProcessingStatusCard({
         />
       </div>
       <p className="mt-1 truncate text-[10px] leading-4 text-[var(--ink-400)]">
-        {modelName} · {hasFiles ? `${context?.fileCount || 0} files` : "text"} · {quietSeconds > 20 ? `last_event=${quietSeconds}s` : "stream=alive"}
+        {modelName} · {hasFiles ? `已接收 ${context?.fileCount || 0} 个附件` : "正在处理文字内容"} · {quietSeconds > 20 ? `已等待 ${quietSeconds}s` : "连接正常"}
       </p>
     </section>
   )
@@ -1654,7 +1660,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 	      if (activeTasks.length > 0) {
 	        const task = activeTasks[0]
 	        toast.info("检测到未完成的长任务，已恢复状态", {
-	          description: task.stage || task.current_tool || "任务仍在处理中",
+	          description: sanitizePublicAiStatus(task.stage, "任务仍在处理中"),
 	          duration: 5000,
 	        })
 	      }
@@ -1845,7 +1851,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
         const historyMessages = data.map((m: any) => ({
            id: m.id,
            role: m.role,
-           content: m.content,
+           content: m.role === "assistant" ? sanitizeAssistantMessageForPublicDisplay(m.content) : m.content,
            metadata: m.metadata || null,  // 🔥 包含音乐等附加数据
            wordCard: m.metadata?.wordCard || normalizeDifyWordCardResponse(m.content)
         }))
@@ -2806,15 +2812,9 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
             hasCookie: false,
             model: selectedModel,
           })
-	        const traceId = res.headers.get("X-Trace-Id") || undefined
-	        if (traceId) {
-	          setProcessingContext((context) => context?.requestId === requestId ? { ...context, traceId } : context)
-	        }
-
         console.log("📥 [API 响应] 状态码:", res.status)
         console.log("📥 [API 响应] Header 摘要:", {
           contentType: res.headers.get("content-type") || undefined,
-          hasTraceId: Boolean(traceId),
           hasRequestId: Boolean(res.headers.get("X-Request-Id")),
         })
 
@@ -2930,46 +2930,23 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                 try {
                     const json = JSON.parse(data)
                     if (json.event === "status") {
-                      setProcessingContext((context) => context?.requestId === requestId
-                        ? {
-                            ...context,
-                            lastActivityAt: Date.now(),
-                            heartbeatCount: (context.heartbeatCount || 0) + 1,
-                            stage: sanitizePublicAiStatus(String(json.stage || json.message || context.stage || "任务仍在处理中"), "任务仍在处理中"),
-                            traceId: traceId || context.traceId,
-                          }
-                        : context)
+	                      setProcessingContext((context) => context?.requestId === requestId
+	                        ? {
+	                            ...context,
+	                            lastActivityAt: Date.now(),
+	                            heartbeatCount: (context.heartbeatCount || 0) + 1,
+	                            stage: sanitizePublicAiStatus(String(json.stage || json.message || context.stage || "任务仍在处理中"), "任务仍在处理中"),
+	                          }
+	                        : context)
                       continue
                     }
                     if (json.event === "error") {
                       throw new Error(String(json.message || json.error || "服务返回错误"))
                     }
 
-                    // 🎯 工作流事件处理 - 传递给可视化 Hook
-                    // 🔥 Dify SSE 格式：node_started 事件的数据在 json.data 中
-	                    if (json.event) {
-                      const nodeData = json.data || {}
-                      const nodeTitle = nodeData.title || json.title
-
-                      // 🔍 调试日志
-	                      if (json.event === 'node_started' || json.event === 'node_finished') {
-	                        console.log(`🔔 [SSE Event] ${json.event}: "${nodeTitle}"`, nodeData)
-	                      }
-	                      if (nodeTitle) {
-                        setProcessingContext((context) => context?.requestId === requestId
-                          ? { ...context, stage: sanitizePublicAiStatus(String(nodeTitle), "正在分析内容"), lastActivityAt: Date.now(), traceId: traceId || context.traceId }
-                          : context)
-	                      }
-
-                      handleSSEEvent({
-                        event: json.event,
-                        data: {
-                          node_id: nodeData.node_id || json.node_id,
-                          title: nodeTitle,
-                          status: nodeData.status || json.status,
-                          workflow_run_id: nodeData.workflow_run_id || json.workflow_run_id
-                        }
-                      })
+                    // 🎯 只处理后端明确允许的公共流程事件，避免原始节点或工作流标识进入用户端。
+                    if (json.event === "workflow_started" || json.event === "workflow_finished") {
+                      handleSSEEvent({ event: json.event })
                     }
 
                     if (json.conversation_id && difyConversationIdRef.current !== json.conversation_id) {
@@ -3576,7 +3553,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                       ? getPreviousUserMessage(messages, index)
                       : null
                     const cleanAssistantContent = message.role === "assistant"
-                      ? sanitizeDifyAnswerForModel(message.content, selectedModel)
+                      ? sanitizeAssistantMessageForPublicDisplay(sanitizeDifyAnswerForModel(message.content, selectedModel))
                       : message.content
                     const showProblemActions = message.role === "assistant" &&
                       selectedModel === "problem" &&

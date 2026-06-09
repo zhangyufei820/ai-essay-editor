@@ -29,7 +29,6 @@ import {
   GEMINI_IMAGE_DEFAULT_INPUTS,
   GEMINI_IMAGE_EDIT_DEFAULTS,
   GEMINI_IMAGE_SIZE_OPTIONS,
-  GEMINI_MODEL_OPTIONS,
   type GptImageInputs,
   type GptImageModel,
   type ImageAspectRatio,
@@ -86,7 +85,6 @@ type ImageResult = {
   submittedInputs: GptImageInputs
   prompt: string
   requestId?: string
-  traceId?: string
 }
 
 type ChatSession = {
@@ -105,6 +103,8 @@ type GptImage2ChatInterfaceProps = {
   workspaceModel?: ImageWorkspaceModel
 }
 
+type PublicPreviewRow = [string, React.ReactNode]
+
 const WORKSPACE_COPY: Record<ImageWorkspaceModel, {
   title: string
   subtitle: string
@@ -116,7 +116,7 @@ const WORKSPACE_COPY: Record<ImageWorkspaceModel, {
 }> = {
   "gpt-image-2": {
     title: "图像生成 / 图像编辑",
-    subtitle: "Moonapix GPT Image 2",
+    subtitle: "高质量图像生成与编辑",
     heroTitle: "AI 图像工作台",
     heroDescription: "使用 GPT Image 2 生成或编辑图片，支持 1K、2K、4K 三档尺寸。图片编辑时，上传原图后系统会自动完成安全处理。",
     resultTitle: "结果展示",
@@ -192,20 +192,19 @@ function mapImageError(error: unknown): string {
   const raw = error instanceof Error ? error.message : String(error || "")
   if (isHtmlErrorContent(raw)) return "图片服务暂时不可用，请稍后重试。"
   const lower = raw.toLowerCase()
-  const requestId = raw.match(/requestId=([A-Za-z0-9_-]+)/)?.[1]
-  const requestSuffix = requestId ? `（requestId=${requestId}）` : ""
 
   if (raw === "empty_prompt") return "提示词不能为空。"
   if (raw === "missing_edit_image") return "图片编辑模式需要上传原图。"
-  if (raw.includes("DIFY_CREDENTIAL_INVALID") || raw.includes("Access token is invalid") || raw.includes("工作流凭据失效")) {
-    return "图像工作流凭据失效，请管理员更新 Dify 应用 API Key 后重试。"
+  if (raw.includes("SERVICE_CONFIG_UNAVAILABLE") || raw.includes("DIFY_CREDENTIAL_INVALID") || raw.includes("Access token is invalid") || raw.includes("工作流凭据失效")) {
+    return "图像服务配置暂时不可用，请联系管理员处理。"
   }
   if (raw.includes("DIFY_CREDENTIAL_MISSING")) {
-    return "图像工作流凭据未配置，请管理员补齐 Dify 应用 API Key。"
+    return "图像服务配置暂时不可用，请联系管理员处理。"
   }
-  if (raw.includes("IMAGE_TASK_FORBIDDEN")) return `图片任务权限校验失败，请重新提交。${requestSuffix}`
-  if (raw.includes("IMAGE2_ACCESS_DENIED")) return "GPT Image 2 当前共创体验期内登录用户可用，请先登录后生成图片。"
-  if (raw.includes("CHAT_SESSION_FORBIDDEN")) return `当前对话校验失败，请新建对话后重试。${requestSuffix}`
+  if (raw.includes("SERVICE_ACCESS_DENIED") || raw.includes("IMAGE_TASK_FORBIDDEN") || raw.includes("CHAT_SESSION_FORBIDDEN")) {
+    return "当前账号或会话校验失败，请重新登录后再提交。"
+  }
+  if (raw.includes("IMAGE2_ACCESS_DENIED")) return "当前账号暂时无法使用该图像能力，请重新登录后再试。"
   if (
     raw.includes("上游额度不足") ||
     raw.includes("余额不足") ||
@@ -216,17 +215,17 @@ function mapImageError(error: unknown): string {
     lower.includes("insufficient balance") ||
     lower.includes("quota")
   ) {
-    return "图像上游额度不足，本次积分已自动退回，请联系管理员补充上游额度后重试。"
+    return "图像服务额度不足，本次积分已自动退回，请联系管理员处理后重试。"
   }
-  if (lower.includes("rate") || lower.includes("429")) return "图片服务请求较多，请稍后再试，或降低质量 / 切换模型。"
+  if (lower.includes("rate") || lower.includes("429")) return "图片服务请求较多，请稍后再试，或降低质量后重试。"
   if (raw.includes("未登录") || raw.includes("请先登录") || raw.includes("未授权") || lower.includes("unauthorized") || lower.includes("401")) {
     return "请先登录后再生成图片。"
   }
   if (raw.includes("GPT Image 2 当前共创体验期内登录用户可用")) {
-    return "GPT Image 2 当前共创体验期内登录用户可用，请先登录后生成图片。"
+    return "当前图像能力需要登录后使用，请先登录后再生成图片。"
   }
   if (raw.includes("仅订阅用户可用") || raw.includes("白名单")) {
-    return "GPT Image 2 当前共创体验期已开放给登录用户，请刷新页面后重试；若仍失败，请重新登录。"
+    return "当前账号暂时无法使用该图像能力，请刷新页面或重新登录后再试。"
   }
   if (lower.includes("forbidden") || lower.includes("403")) {
     const detail = sanitizeServiceWording(raw).replace(/\s+/g, " ").trim()
@@ -241,13 +240,13 @@ function mapImageError(error: unknown): string {
   }
   if (lower.includes("network") || lower.includes("failed to fetch")) return "网络请求失败，请稍后重试。"
   if (lower.includes("timeout") || raw.includes("超时") || lower.includes("504")) {
-    return "图片生成等待超时。复杂图像可能仍在上游处理中，请稍后重试，或先降低尺寸 / 质量。"
+    return "图片生成等待超时。复杂图像可能仍在处理中，请稍后重试，或先降低尺寸 / 质量。"
   }
   if (lower.includes("bad gateway") || lower.includes("502")) {
     return "图片服务暂时不可用，请稍后重试。"
   }
   if (lower.includes("upstream_error") || lower.includes("dify error") || lower.includes("500")) {
-    return "图片服务请求失败，可能是余额不足、模型不可用、尺寸不支持或参数不兼容。"
+    return "图片服务请求失败，可能是余额不足、尺寸不支持或参数不兼容。"
   }
 
   return sanitizeServiceWording(raw) || "图片生成失败，请稍后重试。"
@@ -271,8 +270,18 @@ function sanitizeServiceWording(text: string) {
   return text
     .replace(/Dify\s*API/gi, "图片服务")
     .replace(/Dify/gi, "服务")
+    .replace(/OpenAI|GPT Image 2|Gemini|Banana2 Pro|Banana 2 Pro|Moonapix|VivaAPI|TokenFlux/gi, "图像服务")
     .replace(/图片网关/g, "图片服务")
     .replace(/网关/g, "服务")
+    .replace(/\brequestId=[A-Za-z0-9_-]+\b/g, "")
+}
+
+function optionLabel<T extends string>(options: Array<{ value: T; label: string }>, value: T | undefined, fallback = "自动") {
+  return options.find((option) => option.value === value)?.label || fallback
+}
+
+function imageCapabilityLabel(mode: ImageTaskMode) {
+  return mode === "image_edit" ? "图片编辑" : "文生图"
 }
 
 function parseDifyResult(payload: unknown) {
@@ -608,7 +617,6 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
   const isGeminiWorkspace = workspaceModel === "gemini-image"
   const isGeminiGatewayWorkspace = isBananaWorkspace || isGeminiWorkspace
   const isWorkflowImageWorkspace = isGeminiGatewayWorkspace
-  const showModelSelector = isGeminiGatewayWorkspace
   const copy = WORKSPACE_COPY[workspaceModel]
   const urlSessionId = searchParams.get("sessionId") || searchParams.get("id")
   const initialPrompt = searchParams.get("prompt") ?? ""
@@ -685,9 +693,32 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
     [aspectRatio, background, count, editImages, isGeminiGatewayWorkspace, mode, model, moderation, outputCompression, outputFormat, quality, size]
   )
 
-  const previewInputs = useMemo(
-    () => buildDifyInputs(currentInputsWithoutUrls, referenceGatewayUrls, maskGatewayUrl),
-    [currentInputsWithoutUrls, maskGatewayUrl, referenceGatewayUrls]
+  const sizeOptionsForWorkspace = isGeminiGatewayWorkspace ? GEMINI_IMAGE_SIZE_OPTIONS : SIZE_OPTIONS
+  const aspectRatioOptionsForWorkspace = isGeminiGatewayWorkspace ? GEMINI_ASPECT_RATIO_OPTIONS : ASPECT_RATIO_OPTIONS
+  const publicPreviewRows = useMemo<PublicPreviewRow[]>(
+    () => [
+      ["生成方式", imageCapabilityLabel(mode)],
+      ["画幅比例", optionLabel(aspectRatioOptionsForWorkspace, aspectRatio)],
+      ["图片尺寸", optionLabel(sizeOptionsForWorkspace, size)],
+      ["生成质量", isWorkflowImageWorkspace ? "自动" : optionLabel(QUALITY_OPTIONS, quality)],
+      ["图片格式", isWorkflowImageWorkspace ? "自动" : optionLabel(OUTPUT_FORMAT_OPTIONS, outputFormat)],
+      ["生成张数", count],
+      ["参考图", referenceGatewayUrls.length > 0 ? `已上传 ${referenceGatewayUrls.length} 张` : "未上传"],
+      ["蒙版图", maskGatewayUrl ? "已上传" : "未上传"],
+    ],
+    [
+      aspectRatio,
+      aspectRatioOptionsForWorkspace,
+      count,
+      isWorkflowImageWorkspace,
+      maskGatewayUrl,
+      mode,
+      outputFormat,
+      quality,
+      referenceGatewayUrls.length,
+      size,
+      sizeOptionsForWorkspace,
+    ]
   )
   const billingPreviewModel: ModelType = isGeminiWorkspace
     ? "gemini-image"
@@ -880,21 +911,12 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
       setAspectRatio(nextRatio)
       if (GEMINI_FLASH_ONLY_ASPECT_RATIOS.has(nextRatio) && model !== "gemini-3-pro-image-preview") {
         setModel("gemini-3-pro-image-preview")
-        toast.info("超宽/超高比例已切换到 Gemini 3 Pro Image。")
+        toast.info("超宽/超高比例已自动切换到更适合的图像生成模式。")
       }
       return
     }
 
     setAspectRatio(nextRatio)
-  }
-
-  const applyModel = (nextModel: GptImageModel) => {
-    setModel(nextModel)
-    if (nextModel === "gpt-image-2" && background === "transparent") {
-      setBackground("auto")
-      toast.info("gpt-image-2 当前不推荐透明背景，请使用 auto 或 opaque。")
-    }
-
   }
 
   const handleEditImagesPick = async (files: File[]) => {
@@ -995,9 +1017,8 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
             ? data.code
             : ""
     const code = typeof record.code === "string" ? record.code : `upstream_error:${status}`
-    const payloadRequestId = typeof record.requestId === "string" ? record.requestId : fallbackRequestId
     const payloadTaskId = typeof record.taskId === "string" ? record.taskId : fallbackTaskId
-    const parts = [detailMessage || code, `[${code}]`, `requestId=${payloadRequestId}`]
+    const parts = [detailMessage || code, `[${code}]`]
     if (payloadTaskId) parts.push(`taskId=${payloadTaskId}`)
     return parts.join(" ")
   }
@@ -1165,8 +1186,6 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
           requestId,
         }),
       })
-	      const traceId = response.headers.get("X-Trace-Id") || undefined
-
       let imageUrls: string[] = []
       let sourceText = ""
 
@@ -1235,7 +1254,6 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
 	        submittedInputs,
 	        prompt: cleanPrompt,
 	        requestId,
-	        traceId,
 	      }
       setResult(nextResult)
       setHistoryResults((items) => [...items, nextResult])
@@ -1549,11 +1567,11 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
                     )}
 
                     <div className="grid gap-2 rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-[var(--paper-100)] p-3 text-xs text-[var(--ink-500)] sm:grid-cols-5">
-                      <span>模式：{item.submittedInputs.mode === "image_edit" ? "图片编辑" : "文生图"}</span>
-                      <span>模型：{isGeminiWorkspace ? "gemini-image" : isBananaWorkspace ? "banana-2-pro" : item.submittedInputs.model}</span>
-                      <span>尺寸：{item.submittedInputs.size}</span>
-                      <span>质量：{item.submittedInputs.quality}</span>
-                      <span>格式：{item.submittedInputs.output_format}</span>
+                      <span>能力：{imageCapabilityLabel(item.submittedInputs.mode)}</span>
+                      <span>画幅：{optionLabel(aspectRatioOptionsForWorkspace, item.submittedInputs.aspect_ratio)}</span>
+                      <span>尺寸：{optionLabel(sizeOptionsForWorkspace, item.submittedInputs.size)}</span>
+                      <span>质量：{isWorkflowImageWorkspace ? "自动" : optionLabel(QUALITY_OPTIONS, item.submittedInputs.quality)}</span>
+                      <span>格式：{isWorkflowImageWorkspace ? "自动" : optionLabel(OUTPUT_FORMAT_OPTIONS, item.submittedInputs.output_format)}</span>
                     </div>
                   </article>
                 ))}
@@ -1572,13 +1590,6 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
           <section className="rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-[var(--paper-50)] p-4">
             <h2 className="mb-4 text-sm font-semibold text-[var(--ink-900)]">基础参数</h2>
             <div className="space-y-4">
-              {showModelSelector ? (
-                <div className="space-y-2">
-                  <FieldLabel>图像模型</FieldLabel>
-                  <NativeSelect value={model} onChange={applyModel} options={GEMINI_MODEL_OPTIONS} />
-                </div>
-              ) : null}
-
               <div className="space-y-2">
                 <FieldLabel hint="画幅比例是辅助参数，真正输出尺寸由 size 决定。">画幅比例</FieldLabel>
                 <NativeSelect value={aspectRatio} onChange={applyAspectRatio} options={isGeminiGatewayWorkspace ? GEMINI_ASPECT_RATIO_OPTIONS : ASPECT_RATIO_OPTIONS} />
@@ -1663,7 +1674,7 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
                     }))}
                   />
                   {model === "gpt-image-2" ? (
-                    <p className="text-xs text-[var(--ink-500)]">gpt-image-2 当前不推荐透明背景，请使用 auto 或 opaque。</p>
+                    <p className="text-xs text-[var(--ink-500)]">当前设置暂不推荐透明背景，请使用自动或不透明背景。</p>
                   ) : null}
                 </div>
 
@@ -1675,25 +1686,12 @@ function GptImage2ChatInterfaceInner({ workspaceModel = "gpt-image-2" }: GptImag
             </CollapsibleSection>
           ) : null}
 
-          <CollapsibleSection title="参数预览" open={previewOpen} onToggle={() => setPreviewOpen((value) => !value)}>
+          <CollapsibleSection title="提交预览" open={previewOpen} onToggle={() => setPreviewOpen((value) => !value)}>
             <div className="space-y-2 text-xs">
-              {[
-                ["mode", previewInputs.mode],
-                ["model", isGeminiWorkspace ? "gemini-image" : isBananaWorkspace ? "banana-2-pro" : previewInputs.model],
-                ["aspect_ratio", previewInputs.aspect_ratio],
-                ["size", isGeminiGatewayWorkspace ? previewInputs.image_size || previewInputs.size : previewInputs.size],
-                ["quality", previewInputs.quality],
-                ["output_format", previewInputs.output_format],
-                ["output_compression", previewInputs.output_compression],
-                ["background", previewInputs.background],
-                ["moderation", previewInputs.moderation],
-                ["n", previewInputs.n],
-                ["reference_image_url 是否已生成", Boolean(previewInputs.reference_image_url)],
-                ["mask_image_url 是否已生成", Boolean(previewInputs.mask_image_url)],
-              ].map(([key, value]) => (
+              {publicPreviewRows.map(([key, value]) => (
                 <div key={String(key)} className="flex items-center justify-between gap-3 rounded-[var(--radius-soft)] bg-[var(--paper-100)] px-3 py-2">
                   <span className="text-[var(--ink-500)]">{key}</span>
-                  <span className="font-mono text-[var(--ink-900)]">{String(value)}</span>
+                  <span className="text-[var(--ink-900)]">{value}</span>
                 </div>
               ))}
             </div>

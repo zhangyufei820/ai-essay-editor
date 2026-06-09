@@ -44,7 +44,7 @@ async function searchWithTavily(query: string, maxResults: number): Promise<Sear
     title: readString(item.title) || "未命名结果",
     url: readString(item.url),
     snippet: readString(item.content),
-    source: "tavily",
+    source: "search",
   })).filter((item) => item.url)
 }
 
@@ -63,9 +63,9 @@ async function searchWithDify(query: string, maxResults: number): Promise<Search
 
   return [{
     title: `联网搜索整理：${query}`,
-    url: "dify://web-search",
+    url: "",
     snippet: result.content,
-    source: "dify",
+    source: "search",
   }]
 }
 
@@ -94,7 +94,7 @@ export async function POST(req: NextRequest) {
     if (!finalResults.length) {
       return NextResponse.json(
         {
-          error: "网页搜索服务未配置，请配置 TAVILY_API_KEY 或 DIFY_WEB_SEARCH_API_KEY",
+          error: "网页搜索服务暂时不可用，请稍后重试。",
           code: "WEB_SEARCH_NOT_CONFIGURED",
         },
         { status: 501 },
@@ -104,13 +104,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       query: cleanQuery,
-      provider: finalResults[0]?.source || "unknown",
+      engine: "server",
       results: finalResults,
     })
   } catch (error) {
     console.error("[Tools Web Search] error:", error)
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "搜索失败" },
+      { error: "网页搜索失败，请稍后重试。" },
       { status: 500 },
     )
   }

@@ -102,7 +102,7 @@ export function OpenClawSkillPicker({
           className="fixed inset-0 z-[9999] flex items-center justify-center bg-[rgba(14,27,17,0.32)] p-3 text-[var(--ink-800)] backdrop-blur-sm sm:p-6"
           role="dialog"
           aria-modal="true"
-          aria-label="加载 OpenClaw 技能"
+          aria-label="加载智能体技能"
           initial={{ opacity: 0 }}
           animate={{
             opacity: isMelting ? 0 : 1,
@@ -126,13 +126,13 @@ export function OpenClawSkillPicker({
                 <div className="min-w-0">
                   <div className="inline-flex items-center gap-2 rounded-[var(--radius-pill)] border border-[var(--ink-200)] bg-[var(--ink-50)] px-2.5 py-1 text-[11px] font-semibold text-[var(--ink-600)]">
                     <Sparkles className="size-3.5" />
-                    OpenClaw Skills
+                    智能体技能
                   </div>
                   <h2 className="mt-2 font-[var(--font-display)] text-[22px] font-bold tracking-normal text-[var(--ink-900)] sm:text-[28px]">
                     加载技能
                   </h2>
                   <p className="mt-1 max-w-2xl text-[13px] leading-6 text-[var(--ink-500)] sm:text-sm">
-                    选择一个技能后，会把对应英文技能标识传递给 OpenClaw，让当前对话按该技能执行。
+                    选择一个技能后，当前对话会按对应能力处理你的任务。
                   </p>
                 </div>
                 <Button

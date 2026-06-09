@@ -19,6 +19,7 @@ import {
   type SunoOperation,
   type SunoFormValues,
 } from "@/lib/suno-workflow-schema"
+import { sanitizePublicAiError } from "@/lib/chat-error-sanitizer"
 
 export const dynamic = "force-dynamic"
 
@@ -26,11 +27,30 @@ const FILE_OPERATIONS = new Set(["upload_s3", "upload_full", "upload_full_and_cr
 
 function sanitizeErrorMessage(error: unknown) {
   const raw = error instanceof Error ? error.message : String(error || "服务暂时不可用")
+  if (/config|missing|api[_-]?key|token|secret|authorization|env|environment|未配置|凭据|workflow/i.test(raw)) {
+    return "音乐服务暂时不可用，请稍后重试。"
+  }
   return raw
     .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [REDACTED]")
     .replace(/sk-[A-Za-z0-9_-]+/g, "[REDACTED_SECRET]")
     .replace(/gateway_api_key["':\s]+[^"',\s}]+/gi, "gateway_api_key:[REDACTED]")
     .slice(0, 500)
+}
+
+function toPublicSunoResult(result: ReturnType<typeof parseDifyResult>, success: boolean, httpStatus?: number) {
+  return {
+    success,
+    http_status: httpStatus,
+    task_id: result.task_id || "",
+    clip_id: result.clip_id || "",
+    upload_id: result.upload_id || "",
+    status: result.status || "",
+    audio_urls: result.audio_urls || [],
+    image_urls: result.image_urls || [],
+    video_urls: result.video_urls || [],
+    wav_url: result.wav_url || "",
+    error: result.error ? sanitizePublicAiError(sanitizeErrorMessage(result.error), "音乐服务暂时不可用，请稍后重试。") : null,
+  }
 }
 
 function formDataToValues(form: FormData): SunoFormValues {
@@ -143,19 +163,12 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    return NextResponse.json({
-      ...normalized,
-      success: result.success,
-      http_status: result.http_status,
-      response_json: result.response_json,
-      error: result.error || normalized.error,
-    }, { status: result.http_status && result.http_status >= 400 ? result.http_status : 200 })
+    const publicResult = toPublicSunoResult(normalized, result.success, result.http_status)
+    return NextResponse.json(publicResult, { status: result.http_status && result.http_status >= 400 ? result.http_status : 200 })
   } catch (error) {
-    const message = sanitizeErrorMessage(error)
-    const status = message.startsWith("SUNO_WORKFLOW_CONFIG_MISSING") ? 503 : 500
-    const publicMessage = message.startsWith("SUNO_WORKFLOW_CONFIG_MISSING")
-      ? "音乐工作流未配置：请在服务器环境变量中设置 SUNO_DIFY_API_KEY，并确认它是 Dify Workflow「Suno 服务器网关调用器」的 App API Key。"
-      : message
+    const rawMessage = error instanceof Error ? error.message : String(error || "")
+    const status = rawMessage.startsWith("SUNO_WORKFLOW_CONFIG_MISSING") ? 503 : 500
+    const publicMessage = sanitizePublicAiError(sanitizeErrorMessage(error), "音乐服务暂时不可用，请稍后重试。")
     return NextResponse.json({ success: false, error: publicMessage }, { status })
   }
 }

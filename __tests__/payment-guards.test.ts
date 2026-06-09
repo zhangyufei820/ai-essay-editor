@@ -80,8 +80,8 @@ describe('Sprint 5 payment / credits / membership guards', () => {
   it('keeps GPT Image 2 access and billing checks on the server', () => {
     const source = read('app/api/dify-chat/route.ts')
     expect(source).toContain('canUseImage2')
-    expect(source).toContain('IMAGE2_WHITELIST_USER_IDS')
-    expect(source).toContain('IMAGE2_WHITELIST_EMAILS')
+    expect(read('lib/permissions.ts')).toContain('process.env.IMAGE2_WHITELIST_USER_IDS')
+    expect(read('lib/permissions.ts')).toContain('process.env.IMAGE2_WHITELIST_EMAILS')
     expect(source).toContain('resolveActiveMembershipStatus')
     expect(source).toContain('hasGptImageModelInput(inputs) && !isDirectImageGatewayRequest')
     expect(source).toContain('function isGptImageGatewayModel(model: unknown)')
@@ -95,15 +95,18 @@ describe('Sprint 5 payment / credits / membership guards', () => {
     expect(source).toContain('usageSource: "fixed"')
   })
 
-  it('does not show the old subscriber-only copy for GPT Image 2 during co-creation access', () => {
+  it('keeps image access failure copy generic on user-facing surfaces', () => {
     const route = read('app/api/dify-chat/route.ts')
     const chat = read('components/chat/enhanced-chat-interface.tsx')
     const image2 = read('components/chat/gpt-image2-chat-interface.tsx')
 
-    expect(route).toContain('GPT Image 2 当前共创体验期内登录用户可用')
+    expect(route).toContain('当前账号暂时无法使用该图像能力，请重新登录后再试。')
+    expect(route).not.toContain('GPT Image 2 当前共创体验期内登录用户可用')
     expect(route).not.toContain('GPT Image 2 当前仅订阅用户可用，请升级会员后使用。')
     expect(chat).not.toContain('return "GPT Image 2 当前仅订阅用户可用，请升级会员后使用。"')
     expect(image2).not.toContain('return "GPT Image 2 当前仅订阅用户可用，请升级会员后使用。"')
+    expect(chat).not.toContain('return "GPT Image 2 当前共创体验期内登录用户可用，请先登录后使用。"')
+    expect(image2).not.toContain('return "GPT Image 2 当前共创体验期内登录用户可用，请先登录后生成图片。"')
   })
 
   it('routes GPT Image 2 through the direct image gateway after server-side billing guards', () => {
@@ -152,27 +155,32 @@ describe('Sprint 5 payment / credits / membership guards', () => {
   it('keeps the Image 2 workspace locked to the default GPT Image 2 model', () => {
     const image2 = read('components/chat/gpt-image2-chat-interface.tsx')
 
-    expect(image2).toContain('const showModelSelector = isGeminiGatewayWorkspace')
     expect(image2).toContain('model: isGeminiGatewayWorkspace ? model : "gpt-image-2"')
     expect(image2).toContain(': "gpt-image-2"')
+    expect(image2).not.toContain('FieldLabel>图像模型')
+    expect(image2).not.toContain('options={GEMINI_MODEL_OPTIONS}')
     expect(image2).not.toContain('options={isGeminiWorkspace ? GEMINI_MODEL_OPTIONS : MODEL_OPTIONS}')
   })
 
-  it('keeps legacy direct gateway polling errors diagnosable for existing async tasks', () => {
+  it('keeps async image polling guarded while public errors stay sanitized', () => {
     const route = read('app/api/dify-chat/route.ts')
     const image2 = read('components/chat/gpt-image2-chat-interface.tsx')
 
     expect(route).toContain('signImageTaskPollToken')
     expect(route).toContain('verifyImageTaskPollToken')
     expect(route).toContain('request.headers.get("X-Image-Task-Poll-Token")')
-    expect(route).toContain('code: "IMAGE_TASK_FORBIDDEN"')
-    expect(route).toContain('code: "IMAGE2_ACCESS_DENIED"')
-    expect(route).toContain('code: "CHAT_SESSION_FORBIDDEN"')
+    expect(route).toContain('code: sanitizePublicAiErrorCode("IMAGE_TASK_FORBIDDEN")')
+    expect(route).toContain('code: sanitizePublicAiErrorCode("IMAGE2_ACCESS_DENIED")')
+    expect(route).toContain('code: sanitizePublicAiErrorCode("CHAT_SESSION_FORBIDDEN")')
+    expect(route).not.toContain('code: "IMAGE_TASK_FORBIDDEN"')
+    expect(route).not.toContain('code: "IMAGE2_ACCESS_DENIED"')
+    expect(route).not.toContain('code: "CHAT_SESSION_FORBIDDEN"')
+    expect(route).not.toContain('allowlist: ["IMAGE2_WHITELIST_USER_IDS", "IMAGE2_WHITELIST_EMAILS"]')
 
     expect(image2).toContain('pollImageTask(payload.imageTaskId, payload.requestId || requestId, payload.pollToken)')
     expect(image2).toContain('"X-Image-Task-Poll-Token": pollToken')
-    expect(image2).toContain('IMAGE_TASK_FORBIDDEN')
-    expect(image2).toContain('requestId=')
+    expect(image2).toContain('SERVICE_ACCESS_DENIED')
+    expect(image2).not.toContain('`requestId=${payloadRequestId}`')
     expect(image2).not.toContain('return "当前账号暂时无法提交图片生成，请刷新页面后重试；若仍失败，请重新登录。"')
   })
 
@@ -182,8 +190,9 @@ describe('Sprint 5 payment / credits / membership guards', () => {
     const timeoutBlock = route.slice(Math.max(0, timeoutIndex - 600), timeoutIndex + 800)
 
     expect(route).toContain('const GPT_IMAGE_ASYNC_TASK_MAX_AGE_MS = 30 * 60 * 1000')
-    expect(route).toContain('upstreamStatusCode: statusCode')
-    expect(route).toContain('code: "IMAGE_TASK_POLL_TIMEOUT"')
+    expect(route).not.toContain('upstreamStatusCode: statusCode')
+    expect(route).toContain('code: sanitizePublicAiErrorCode("IMAGE_TASK_POLL_TIMEOUT")')
+    expect(route).not.toContain('code: "IMAGE_TASK_POLL_TIMEOUT"')
     expect(route).not.toContain('{ status: statusCode },')
     expect(timeoutBlock).not.toContain('{ status: 504 },')
   })
@@ -194,12 +203,13 @@ describe('Sprint 5 payment / credits / membership guards', () => {
     const credentials = read('lib/dify-credentials.ts')
 
     expect(chatRoute).toContain('const MISSING_DIFY_CREDENTIAL_STATUS = 503')
-    expect(chatRoute).toContain('code: "DIFY_CREDENTIAL_MISSING"')
+    expect(chatRoute).toContain('code: sanitizePublicAiErrorCode("DIFY_CREDENTIAL_MISSING")')
     expect(chatRoute).toContain('function isDifyCredentialInvalidResponse')
-    expect(chatRoute).toContain('code: handledErrorCode')
+    expect(chatRoute).toContain('code: sanitizePublicAiErrorCode(handledErrorCode)')
     expect(chatRoute).toContain('DIFY_CREDENTIAL_INVALID')
-    expect(chatRoute).toContain('请在生产环境变量中配置')
-    expect(uploadRoute).toContain('code: "DIFY_UPLOAD_CREDENTIAL_MISSING"')
+    expect(chatRoute).toContain('当前智能服务配置暂不可用，请联系管理员处理。')
+    expect(chatRoute).not.toContain('请在生产环境变量中配置')
+    expect(uploadRoute).toContain('code: sanitizePublicAiErrorCode("DIFY_UPLOAD_CREDENTIAL_MISSING")')
     expect(uploadRoute).toContain('status: 503')
     expect(uploadRoute).toContain('model === "banana-2-pro"')
     expect(uploadRoute).toContain('const useImageGateway = shouldUseImageGateway(targetModel)')
@@ -216,7 +226,8 @@ describe('Sprint 5 payment / credits / membership guards', () => {
     const image2 = read('components/chat/gpt-image2-chat-interface.tsx')
 
     expect(image2).toContain('DIFY_CREDENTIAL_INVALID')
-    expect(image2).toContain('图像工作流凭据失效，请管理员更新 Dify 应用 API Key 后重试。')
+    expect(image2).toContain('图像服务配置暂时不可用，请联系管理员处理。')
+    expect(image2).not.toContain('图像工作流凭据失效，请管理员更新 Dify 应用 API Key 后重试。')
   })
 
   it('keeps the standalone image workspace generation request independent from stale chat session ownership', () => {

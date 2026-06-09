@@ -139,7 +139,7 @@ export function parseWorksheetDiagnosis(outputs: Record<string, unknown>): Works
   if (typeof parsed === "string") {
     return WorksheetDiagnosisSchema.parse({
       overall_summary: parsed.slice(0, 1200),
-      cautions: ["Dify 未返回结构化 JSON，已保留原始诊断文本。"],
+      cautions: ["系统未返回结构化诊断，已保留原始诊断文本。"],
     })
   }
 
@@ -147,7 +147,7 @@ export function parseWorksheetDiagnosis(outputs: Record<string, unknown>): Works
   if (result.success) return result.data
 
   return WorksheetDiagnosisSchema.parse({
-    overall_summary: "诊断结果格式不完整，请检查 Dify 工作流输出字段。",
+    overall_summary: "诊断结果格式不完整，请稍后重新提交或联系管理员检查服务配置。",
     cautions: result.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`).slice(0, 5),
   })
 }

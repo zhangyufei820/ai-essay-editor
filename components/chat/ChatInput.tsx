@@ -675,7 +675,7 @@ export function ChatInput({
                     : "border-[var(--paper-200)] bg-[var(--paper-50)] text-[var(--ink-600)] hover:border-[var(--ink-300)] hover:bg-[var(--ink-50)]",
                   "disabled:cursor-not-allowed disabled:opacity-50"
                 )}
-                aria-label="加载 OpenClaw 技能"
+                aria-label="加载智能体技能"
                 title={selectedOpenClawSkillName ? `已选择：${selectedOpenClawSkillName}` : "加载技能"}
               >
                 <Sparkles className="h-3.5 w-3.5 shrink-0" />

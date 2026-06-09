@@ -78,8 +78,7 @@ export async function POST(req: NextRequest) {
     if (!result.ok || !result.result) {
       return NextResponse.json(
         {
-          error: result.error || "文档提取网关暂不可用",
-          gateway: "essay-ai-suite",
+          error: result.error || "文档提取服务暂不可用",
         },
         { status: 502 },
       )
@@ -89,7 +88,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           error: result.result.error || "文档未能提取文本",
-          gateway: "essay-ai-suite",
           result: result.result,
         },
         { status: 422 },
@@ -98,12 +96,10 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      gateway: "essay-ai-suite",
       fileName: result.result.file_name || file.name,
       fileType: result.result.mime_type || file.type,
       extractedText: result.result.text,
       wordCount: result.result.char_count,
-      provider: result.result.provider,
     })
   } catch (error) {
     console.error("[Tools Document] error:", error)

@@ -1,4 +1,5 @@
 import { internalDifyFetch } from "@/lib/internal-dify-fetch"
+import { sanitizePublicAiError } from "@/lib/chat-error-sanitizer"
 
 export type DifyWorkflowRunOptions = {
   apiKey: string
@@ -74,7 +75,7 @@ export async function runDifyWorkflow({
   timeoutMs = 120_000,
 }: DifyWorkflowRunOptions): Promise<DifyWorkflowRunResult> {
   if (!apiKey) {
-    throw new Error("DIFY_WORKFLOW_API_KEY_MISSING")
+    throw new Error("智能服务暂时不可用，请稍后重试。")
   }
 
   const timeout = createTimeoutSignal(timeoutMs)
@@ -106,7 +107,7 @@ export async function runDifyWorkflow({
         || readString(payload.error)
         || readString(asRecord(payload.data).error)
         || `Dify workflow failed: ${response.status}`
-      throw new Error(message)
+      throw new Error(sanitizePublicAiError(message, "智能服务暂时不可用，请稍后重试。"))
     }
 
     return {
@@ -118,9 +119,12 @@ export async function runDifyWorkflow({
     }
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
-      throw new Error("DIFY_WORKFLOW_TIMEOUT")
+      throw new Error("智能服务响应超时，请稍后重试。")
     }
-    throw error
+    if (error instanceof Error) {
+      throw new Error(sanitizePublicAiError(error.message, "智能服务暂时不可用，请稍后重试。"))
+    }
+    throw new Error("智能服务暂时不可用，请稍后重试。")
   } finally {
     timeout.clear()
   }

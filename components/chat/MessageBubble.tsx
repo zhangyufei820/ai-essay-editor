@@ -43,6 +43,7 @@ import rehypeKatex from "rehype-katex"
 import { MarkdownCodeBlock, extractLanguageFromClassName } from "@/components/chat/MarkdownCodeBlock"
 import { cleanLLMText } from "@/lib/text-sanitizer"
 import { isAssistantFailureContent } from "@/lib/chat-message-guards"
+import { sanitizeAssistantMessageForPublicDisplay } from "@/lib/chat-error-sanitizer"
 
 // v2 墨砚 token colors
 const AI_TEXT_COLOR = "var(--ink-800)"
@@ -673,12 +674,16 @@ const MessageBubble = memo(function MessageBubble({
   showAvatar = true,
 }: MessageBubbleProps) {
   const isUser = role === "user"
+  const publicContent = useMemo(
+    () => isUser ? content : sanitizeAssistantMessageForPublicDisplay(content),
+    [content, isUser],
+  )
   const essayReviewArtifact = useMemo(() => {
     const isEssayModel = model === "standard" || model === "essay-correction"
     if (isUser || !isEssayModel) return null
-    return parseEssayReview(content)
-  }, [content, isUser, model])
-  const isFailureContent = !isUser && isAssistantFailureContent(content)
+    return parseEssayReview(publicContent)
+  }, [isUser, model, publicContent])
+  const isFailureContent = !isUser && isAssistantFailureContent(publicContent)
   const templateType = useMemo(() => {
     if (isUser) return "user"
     if (isFailureContent) return "markdown"
@@ -690,17 +695,17 @@ const MessageBubble = memo(function MessageBubble({
     return "markdown"
   }, [essayReviewArtifact, isFailureContent, isUser, model])
   const vocabCardArtifact = useMemo(
-    () => templateType === "vocab-card" ? parseVocabCard(content) : null,
-    [content, templateType]
+    () => templateType === "vocab-card" ? parseVocabCard(publicContent) : null,
+    [publicContent, templateType]
   )
   const flashcardArtifact = useMemo(
-    () => templateType === "flashcard" ? parseFlashcards(content) : null,
-    [content, templateType]
+    () => templateType === "flashcard" ? parseFlashcards(publicContent) : null,
+    [publicContent, templateType]
   )
   const actions = useMemo<MessageActions>(() => ({
     onCopy: async () => {
       try {
-        await navigator.clipboard.writeText(content)
+        await navigator.clipboard.writeText(publicContent)
         onCopy?.()
       } catch (err) {
         console.error("Copy failed:", err)
@@ -709,7 +714,7 @@ const MessageBubble = memo(function MessageBubble({
     onExportPDF: async () => {
       try {
         toast.info("正在生成完整 PDF...")
-        await exportChatContentToPDF(content, {
+        await exportChatContentToPDF(publicContent, {
           title: essayReviewArtifact ? "沈翔智学 - 作文批改报告" : "沈翔智学 - AI 分析报告",
           filenamePrefix: essayReviewArtifact ? "沈翔智学-作文批改报告" : "沈翔智学-AI分析报告",
         })
@@ -725,21 +730,21 @@ const MessageBubble = memo(function MessageBubble({
         return
       }
       if (navigator.share) {
-        navigator.share({ title: "沈翔智学 AI 回复", text: content.slice(0, 200) }).catch(() => {})
+        navigator.share({ title: "沈翔智学 AI 回复", text: publicContent.slice(0, 200) }).catch(() => {})
       }
     },
     onAskFollowup: () => {
       window.dispatchEvent(new Event("focus-chat-input"))
     },
     onPlayAudio: () => {
-      window.dispatchEvent(new CustomEvent("play-chat-message-audio", { detail: { text: content } }))
+      window.dispatchEvent(new CustomEvent("play-chat-message-audio", { detail: { text: publicContent } }))
     },
     onRegenerate: () => {
       window.dispatchEvent(new CustomEvent("regenerate-last-message"))
     },
     onSaveMistake,
     onGenerateSimilar,
-  }), [content, essayReviewArtifact, onCopy, onGenerateSimilar, onSaveMistake, onShare, templateType])
+  }), [essayReviewArtifact, onCopy, onGenerateSimilar, onSaveMistake, onShare, publicContent, templateType])
 
   return (
     <motion.div
@@ -753,7 +758,7 @@ const MessageBubble = memo(function MessageBubble({
       )}
     >
       {/* AI 流式输出中：空内容显示毛笔思考，有内容则正常渲染并追加笔触指示 */}
-      {isStreaming && !isUser && !content ? (
+      {isStreaming && !isUser && !publicContent ? (
         <div className="flex items-center gap-3 px-4 py-4">
           {showAvatar ? (
             <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[var(--ink-700)]">
@@ -767,7 +772,7 @@ const MessageBubble = memo(function MessageBubble({
             </span>
           </div>
         </div>
-      ) : isStreaming && !isUser && content ? (
+      ) : isStreaming && !isUser && publicContent ? (
         <>
           {showAvatar ? (
             <div className="flex-shrink-0 mt-1">
@@ -779,7 +784,7 @@ const MessageBubble = memo(function MessageBubble({
               message={{
                 id: "streaming",
                 role: "assistant",
-                content,
+                content: publicContent,
                 streaming: true,
                 model,
               }}
@@ -788,7 +793,7 @@ const MessageBubble = memo(function MessageBubble({
                   className="text-[13px] sm:text-sm ai-content-container"
                   style={{ lineHeight: 1.6, color: AI_TEXT_COLOR }}
                 >
-                  <MarkdownContent content={content} />
+                  <MarkdownContent content={publicContent} />
                 </div>
               )}
             />
@@ -817,7 +822,7 @@ const MessageBubble = memo(function MessageBubble({
                   className="whitespace-pre-wrap break-words text-[13px] sm:text-sm"
                   style={{ lineHeight: 1.6 }}
                 >
-                  {content}
+                  {publicContent}
                 </p>
               </div>
             ) : (
@@ -844,7 +849,7 @@ const MessageBubble = memo(function MessageBubble({
                       />
                     ) : (
                       <AssistantMarkdownCard
-                        content={content}
+                        content={publicContent}
                         actions={actions}
                         templateType={templateType}
                         isStreaming={isStreaming}
@@ -855,7 +860,7 @@ const MessageBubble = memo(function MessageBubble({
                   case "worksheet-poster":
                     return (
                       <WorksheetPosterTemplate
-                        artifact={parseWorksheetPoster(content)}
+                        artifact={parseWorksheetPoster(publicContent)}
                         onDownload={actions.onExportPDF}
                         onShare={actions.onShare}
                       />
@@ -865,7 +870,7 @@ const MessageBubble = memo(function MessageBubble({
                       <FlashcardTemplate artifact={flashcardArtifact} />
                     ) : (
                       <AssistantMarkdownCard
-                        content={content}
+                        content={publicContent}
                         actions={actions}
                         templateType={templateType}
                         isStreaming={isStreaming}
@@ -877,7 +882,7 @@ const MessageBubble = memo(function MessageBubble({
                   default:
                     return (
                       <AssistantMarkdownCard
-                        content={content}
+                        content={publicContent}
                         actions={actions}
                         templateType={templateType}
                         isStreaming={isStreaming}

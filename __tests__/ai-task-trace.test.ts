@@ -77,10 +77,9 @@ describe("ai task trace helpers", () => {
 
     expect(task).toEqual(expect.objectContaining({
       id: "video_req_1",
-      type: "video_generation",
+      type: "video",
       status: "completed",
       progress: 100,
-      upstream_task_id: "provider_task_1",
     }))
     expect(task.outputs).toEqual([
       expect.objectContaining({
@@ -90,7 +89,7 @@ describe("ai task trace helpers", () => {
         expires_at: "2026-05-22T08:00:00.000Z",
       }),
     ])
-    expect(task.metadata.token).toBe("[redacted]")
+    expect(JSON.stringify(task)).not.toMatch(/trace_1|provider_task_1|metadata|provider_status|upstream_task_id|trace_id/)
   })
 
   it("keeps internal workflow details out of public task records and media task messages", () => {
@@ -104,16 +103,20 @@ describe("ai task trace helpers", () => {
       stage: "Dify 会话已提交",
       current_tool: "总编辑",
       error_message: "PluginInvokeError from LiteLLM provider TokenFlux",
+      error_code: "DIFY_NODE_FAILED",
       metadata: { provider: "tokenflux" },
     }
     const publicTask = toPublicTaskRun(rawTask)
     const mediaTask = normalizeMediaTask(rawTask)
+    const publicJson = JSON.stringify({ publicTask, mediaTask })
 
     expect(publicTask.stage).toBe("任务已提交")
-    expect(publicTask.current_tool).toBe("智能处理")
     expect(publicTask.error_message).not.toMatch(/Dify|Plugin|LiteLLM|TokenFlux|provider|总编辑/)
+    expect(publicTask.error_code).toBe("SERVICE_TEMPORARILY_UNAVAILABLE")
     expect(mediaTask.stage).toBe("任务已提交")
     expect(mediaTask.message).not.toMatch(/Dify|Plugin|LiteLLM|TokenFlux|provider|总编辑/)
+    expect(mediaTask.error?.code).toBe("SERVICE_TEMPORARILY_UNAVAILABLE")
+    expect(publicJson).not.toMatch(/user_1|current_tool|metadata|provider|workflow_run_id|node_events|conversation_id|upstream_task_id|trace_id|model|kind|总编辑|tokenflux/i)
   })
 
   it("refreshes RelayDance tasks into completed unified media tasks", async () => {

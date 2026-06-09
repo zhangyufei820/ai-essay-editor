@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "crypto"
 import { createClient, type SupabaseClient } from "@supabase/supabase-js"
-import { sanitizePublicAiError, sanitizePublicAiStatus } from "@/lib/chat-error-sanitizer"
+import { sanitizePublicAiError, sanitizePublicAiErrorCode, sanitizePublicAiStatus } from "@/lib/chat-error-sanitizer"
 
 export type TaskStatus = "queued" | "running" | "succeeded" | "failed" | "timeout" | "cancelled"
 type UnifiedTaskStatus = "queued" | "running" | "completed" | "failed" | "expired" | "cancelled"
@@ -31,7 +31,7 @@ export type TaskRunRecord = {
   current_tool?: string | null
   current_file?: string | null
   node_events?: unknown
-  artifacts?: unknown
+  artifacts?: TaskArtifact[]
   error_message?: string | null
   error_code?: string | null
   metadata?: Record<string, unknown> | null
@@ -44,25 +44,29 @@ export type UnifiedMediaTask = {
   id: string
   type: string
   status: UnifiedTaskStatus
-  provider_status?: string | null
   progress: number
   stage?: string | null
   message: string
   outputs: TaskArtifact[]
   error: { message: string; code?: string | null } | null
-  upstream_task_id?: string | null
   request_id?: string | null
-  trace_id?: string | null
-  metadata: Record<string, unknown>
   created_at?: string | null
   updated_at?: string | null
   completed_at?: string | null
 }
 
-export type PublicTaskRunRecord = Omit<TaskRunRecord, "stage" | "current_tool" | "error_message"> & {
+export type PublicTaskRunRecord = {
+  id: string
+  status?: string | null
   stage?: string | null
-  current_tool?: string | null
+  progress?: number | null
+  request_id?: string | null
+  artifacts?: unknown
   error_message?: string | null
+  error_code?: string | null
+  created_at?: string | null
+  updated_at?: string | null
+  completed_at?: string | null
 }
 
 type TaskNodeEvent = {
@@ -259,7 +263,6 @@ function normalizeTaskProgress(task: TaskRunRecord, status: UnifiedTaskStatus) {
 export function normalizeMediaTask(task: TaskRunRecord): UnifiedMediaTask {
   const metadata = asRecord(task.metadata)
   const status = normalizeTaskStatus(task.status, metadata)
-  const providerStatus = asString(metadata.gateway_status) || asString(metadata.provider_status) || task.status || null
   const safeStage = sanitizePublicAiStatus(task.stage, "任务仍在处理中")
   const safeErrorMessage = task.error_message
     ? sanitizePublicAiError(task.error_message, "任务处理失败，请稍后重试。")
@@ -275,18 +278,14 @@ export function normalizeMediaTask(task: TaskRunRecord): UnifiedMediaTask {
 
   return {
     id: task.id,
-    type: task.kind || "task",
+    type: publicTaskType(task.kind),
     status,
-    provider_status: providerStatus,
     progress: normalizeTaskProgress(task, status),
     stage: safeStage || null,
     message,
     outputs: normalizeTaskOutputs(task, metadata),
-    error: safeErrorMessage ? { message: safeErrorMessage, code: task.error_code || null } : null,
-    upstream_task_id: task.upstream_task_id || null,
+    error: safeErrorMessage ? { message: safeErrorMessage, code: sanitizePublicAiErrorCode(task.error_code) } : null,
     request_id: task.request_id || null,
-    trace_id: task.trace_id || null,
-    metadata: sanitizeForTrace(metadata) as Record<string, unknown>,
     created_at: task.created_at || null,
     updated_at: task.updated_at || null,
     completed_at: task.completed_at || null,
@@ -295,13 +294,28 @@ export function normalizeMediaTask(task: TaskRunRecord): UnifiedMediaTask {
 
 export function toPublicTaskRun(task: TaskRunRecord): PublicTaskRunRecord {
   return {
-    ...task,
+    id: task.id,
+    status: task.status || null,
     stage: sanitizePublicAiStatus(task.stage, "任务仍在处理中"),
-    current_tool: task.current_tool ? "智能处理" : null,
+    progress: typeof task.progress === "number" ? task.progress : null,
+    request_id: task.request_id || null,
+    artifacts: normalizeTaskOutputs(task, asRecord(task.metadata)),
     error_message: task.error_message
       ? sanitizePublicAiError(task.error_message, "任务处理失败，请稍后重试。")
       : null,
+    error_code: sanitizePublicAiErrorCode(task.error_code),
+    created_at: task.created_at || null,
+    updated_at: task.updated_at || null,
+    completed_at: task.completed_at || null,
   }
+}
+
+function publicTaskType(kind?: string | null) {
+  const normalized = String(kind || "task").toLowerCase()
+  if (normalized.includes("image")) return "image"
+  if (normalized.includes("video")) return "video"
+  if (normalized.includes("music") || normalized.includes("audio")) return "audio"
+  return "task"
 }
 
 export async function createTaskRun(input: CreateTaskRunInput) {

@@ -105,7 +105,7 @@ export async function POST(request: NextRequest) {
 
     const apiKey = process.env.DIFY_API_KEY_TEACHER_AGENT || ""
     if (!apiKey) {
-      return NextResponse.json({ error: "教师智能体 Dify API Key 未配置" }, { status: 503 })
+      return NextResponse.json({ error: "教师智能体服务暂时不可用，请稍后重试。" }, { status: 503 })
     }
 
     const supabase = getSupabaseAdmin()

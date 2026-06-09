@@ -62,7 +62,7 @@ function extractMediaFilename(audioUrl: string) {
 
 export async function listOmniVoices() {
   if (!getGatewayApiKey()) {
-    return { ok: false, voices: [] as OmniVoiceInfo[], error: "OMNIVOICE_GATEWAY_API_KEY 未配置" }
+    return { ok: false, voices: [] as OmniVoiceInfo[], error: "语音服务暂时不可用，请稍后重试。" }
   }
 
   const response = await internalDifyFetch(`${getGatewayUrl()}/v1/voices`, {
@@ -84,7 +84,7 @@ export async function createOmniTtsJob(input: {
   format?: "mp3" | "wav" | "flac" | "opus"
 }) {
   if (!getGatewayApiKey()) {
-    return { ok: false, job: null, error: "OMNIVOICE_GATEWAY_API_KEY 未配置" }
+    return { ok: false, job: null, error: "语音服务暂时不可用，请稍后重试。" }
   }
 
   const response = await internalDifyFetch(`${getGatewayUrl()}/v1/tts`, {
@@ -112,7 +112,7 @@ export async function createOmniTtsJob(input: {
 
 export async function getOmniTtsJob(jobId: string) {
   if (!getGatewayApiKey()) {
-    return { ok: false, job: null, error: "OMNIVOICE_GATEWAY_API_KEY 未配置" }
+    return { ok: false, job: null, error: "语音服务暂时不可用，请稍后重试。" }
   }
 
   const response = await internalDifyFetch(`${getGatewayUrl()}/v1/jobs/${encodeURIComponent(jobId)}`, {
@@ -131,7 +131,7 @@ export async function fetchOmniMedia(
   options: { range?: string; method?: "GET" | "HEAD" } = {},
 ) {
   if (!getGatewayApiKey()) {
-    return { ok: false, status: 503, headers: new Headers(), body: null, error: "OMNIVOICE_GATEWAY_API_KEY 未配置" }
+    return { ok: false, status: 503, headers: new Headers(), body: null, error: "语音服务暂时不可用，请稍后重试。" }
   }
 
   const headers: Record<string, string> = {

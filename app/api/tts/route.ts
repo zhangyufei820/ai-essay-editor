@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
 
     if (!apiKey) {
       return NextResponse.json(
-        { error: `API Key 未配置：${keySource}` },
+        { error: "语音服务暂时不可用，请稍后重试。" },
         { status: 500 }
       )
     }
@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
 
       console.error("❌ [TTS] Dify API 错误:", difyResponse.status, errorText)
       return NextResponse.json(
-        { error: "TTS 请求失败" },
+        { error: "语音服务暂时不可用，请稍后重试。" },
         { status: difyResponse.status }
       )
     }
@@ -105,7 +105,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("❌ [TTS] 错误:", error)
     return NextResponse.json(
-      { error: "服务器内部错误" },
+      { error: "语音服务暂时不可用，请稍后重试。" },
       { status: 500 }
     )
   }

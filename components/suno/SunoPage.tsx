@@ -50,7 +50,6 @@ type RecentSong = {
   createdAt: string
 }
 type SongResult = SunoWorkflowResult & {
-  response_json?: unknown
 }
 
 type SongForm = {
@@ -123,7 +122,7 @@ function toFriendlyErrorMessage(value: unknown) {
   if (!text) return ""
   const normalized = text.toLowerCase()
   if (text.includes("无可用渠道") || normalized.includes("distributor")) {
-    return "音乐供应商通道暂不可用，请稍后再试或联系客服处理。"
+    return "音乐服务暂时不可用，请稍后再试或联系客服处理。"
   }
   if (text === "请求失败" || normalized.includes("provider_error")) {
     return "音乐生成服务暂时繁忙，请稍后再试。"
@@ -206,7 +205,6 @@ function normalizeSongResult(payload: unknown): SongResult {
     audio_urls: Array.from(audioUrls),
     image_urls: Array.from(imageUrls),
     video_urls: Array.from(videoUrls),
-    response_json: responseJson,
   }
 }
 
@@ -240,7 +238,6 @@ async function runSuno(values: Record<string, unknown>) {
     success: Boolean(payload.success ?? parsed.success),
     http_status: payload.http_status ?? response.status,
     error: payload.error ?? parsed.error,
-    response_json: payload.response_json ?? payload,
   }
 }
 
@@ -307,7 +304,7 @@ function SongPlayer({
   const imageUrl = result?.image_urls?.[current] || result?.image_urls?.[0] || ""
   const audioUrl = audioUrls[current] || ""
   const ready = status === "ready" && audioUrl
-  const visibleError = error || toFriendlyErrorMessage(result?.error || result?.response_json)
+  const visibleError = error || toFriendlyErrorMessage(result?.error)
 
   useEffect(() => {
     setCurrent(0)
@@ -542,7 +539,7 @@ export function SunoPage() {
       }
       if (isFailedStatus(next.status) || next.error) {
         setStatus("failed")
-        setError(toFriendlyErrorMessage(next.error || next.response_json) || "歌曲生成失败，请稍后再试。")
+        setError(toFriendlyErrorMessage(next.error) || "歌曲生成失败，请稍后再试。")
         return
       }
     } catch {
@@ -584,7 +581,7 @@ export function SunoPage() {
 
       if (!next.success) {
         setStatus("failed")
-        setError(toFriendlyErrorMessage(next.error || next.response_json) || "生成失败，请稍后再试或联系客服。")
+        setError(toFriendlyErrorMessage(next.error) || "生成失败，请稍后再试或联系客服。")
         return
       }
       if (next.audio_urls?.length) {
@@ -628,7 +625,6 @@ export function SunoPage() {
       clip_id: item.clipId,
       audio_urls: item.audioUrls,
       image_urls: item.imageUrls,
-      response_json: item,
     })
     setStatus("ready")
     setError("")
@@ -674,7 +670,7 @@ export function SunoPage() {
                   <FileText className="h-5 w-5" />
                   创作内容
                 </CardTitle>
-                <CardDescription>所有必要参数都用中文展示，提交时会自动转换为 Dify 工作流需要的字段。</CardDescription>
+                <CardDescription>所有必要参数都用中文展示，提交后系统会自动完成创作任务。</CardDescription>
               </CardHeader>
               <CardContent className="grid gap-5">
                 <div>

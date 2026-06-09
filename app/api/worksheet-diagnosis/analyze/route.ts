@@ -6,6 +6,7 @@ import { calculateWorksheetDiagnosisCredits } from "@/lib/billing-config"
 import { addCredits, type BillingAuditMetadata } from "@/lib/credits"
 import { getDifyCredentialForModel } from "@/lib/dify-credentials"
 import { runDifyWorkflow } from "@/lib/dify-workflow-client"
+import { sanitizePublicAiErrorCode } from "@/lib/chat-error-sanitizer"
 import { getClientIP, checkIpRateLimit, createRateLimitResponse } from "@/lib/rate-limit"
 import { canUseTrialCredits } from "@/lib/trial-credits"
 import { getUserEntitlementSummary } from "@/lib/user-entitlements"
@@ -27,7 +28,7 @@ function mapAnalyzeError(error: unknown) {
       status: 504,
       body: {
         error: "诊断等待超时，请先减少图片数量或压缩图片后重试。",
-        code: "DIFY_WORKFLOW_TIMEOUT",
+        code: sanitizePublicAiErrorCode("DIFY_WORKFLOW_TIMEOUT"),
       },
     }
   }
@@ -37,7 +38,7 @@ function mapAnalyzeError(error: unknown) {
       status: 500,
       body: {
         error: "错题诊断服务暂未启用，请联系管理员处理。",
-        code: "DIFY_WORKSHEET_DIAGNOSIS_KEY_MISSING",
+        code: sanitizePublicAiErrorCode("DIFY_WORKSHEET_DIAGNOSIS_KEY_MISSING"),
       },
     }
   }
@@ -56,7 +57,7 @@ function mapAnalyzeError(error: unknown) {
     status: 502,
     body: {
       error: "错题诊断服务暂时不可用，请稍后重试。",
-      code: "DIFY_WORKFLOW_FAILED",
+      code: sanitizePublicAiErrorCode("DIFY_WORKFLOW_FAILED"),
     },
   }
 }
@@ -259,9 +260,7 @@ export async function POST(request: NextRequest) {
                 type: "error",
                 requestId,
                 error: "错题诊断服务暂时不可用，请稍后重试。",
-                code: "DIFY_WORKFLOW_NOT_SUCCEEDED",
-                status: workflow.status,
-                workflowRunId: workflow.workflowRunId,
+                code: sanitizePublicAiErrorCode("DIFY_WORKFLOW_NOT_SUCCEEDED"),
                 billing: {
                   chargedCredits,
                   refunded,
@@ -282,11 +281,8 @@ export async function POST(request: NextRequest) {
               type: "result",
               ok: true,
               requestId,
-              workflowRunId: workflow.workflowRunId,
-              taskId: workflow.taskId,
               diagnosis,
               renderPrompt,
-              rawOutputs: workflow.outputs,
               billing: {
                 chargedCredits,
                 refunded: false,

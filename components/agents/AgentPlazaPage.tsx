@@ -150,7 +150,7 @@ export function AgentPlazaPage() {
               让学习和创作直接进入状态。
             </h1>
             <p className="mt-5 max-w-2xl text-[15px] leading-[1.85] text-[var(--ink-600)] font-[var(--font-sans-v2)] sm:text-[17px]">
-              写作、论文、学科讲解、教学准备、图像音乐创作和顶级模型都在同一个入口。每个工作流技能都整理成智能体卡片，直接进入对应任务。
+              写作、论文、学科讲解、教学准备、图像音乐创作和专业能力都在同一个入口。每个任务能力都整理成智能体卡片，直接进入对应任务。
             </p>
           </div>
 
@@ -168,7 +168,7 @@ export function AgentPlazaPage() {
             </div>
             <div className="mt-4 grid grid-cols-2 gap-2 text-[12px] text-[var(--ink-600)] font-[var(--font-sans-v2)] sm:grid-cols-3">
               {[
-                [String(workflowCount), "工作流技能"],
+                [String(workflowCount), "任务能力"],
                 [String(mainToolAgents.length), "主力工具"],
                 [String(AGENT_CATEGORIES.length), "分类"],
               ].map(([value, label]) => (
@@ -186,7 +186,7 @@ export function AgentPlazaPage() {
               ))}
             </div>
             <p className="mt-3 text-[12px] leading-5 text-[var(--ink-500)] font-[var(--font-sans-v2)]">
-              已接入 {workflowCount} 个写作 / 学习 / 论文 / 作文 / 英语类工作流技能。
+              已接入 {workflowCount} 个写作 / 学习 / 论文 / 作文 / 英语类任务能力。
             </p>
           </div>
         </div>

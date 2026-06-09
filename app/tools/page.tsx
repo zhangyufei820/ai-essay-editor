@@ -34,7 +34,6 @@ type ReverseImageResult = {
   generatedImages: string[]
   sourceText?: string
   requestId?: string
-  traceId?: string
 }
 
 function ProgressBar({ value, label }: { value: number; label: string }) {
@@ -197,7 +196,7 @@ function mapToolImageError(error: unknown) {
     lower.includes("insufficient balance") ||
     lower.includes("quota")
   ) {
-    return "图像上游额度不足，本次积分已自动退回，请联系管理员补充上游额度后重试。"
+    return "图像服务额度不足，本次积分已自动退回，请联系管理员处理后重试。"
   }
   if (raw.includes("请先登录") || raw.includes("未授权") || lower.includes("unauthorized") || lower.includes("401")) {
     return "请先登录后再使用图像提示词反推。"
@@ -206,13 +205,13 @@ function mapToolImageError(error: unknown) {
     return "图片生成等待超时，请稍后重试，或先降低生成质量。"
   }
   if (lower.includes("403") || lower.includes("forbidden")) {
-    return "当前账号暂时不能使用该图像生成模型，请切换模型或升级后再试。"
+    return "当前账号暂时不能使用该图像能力，请联系客服确认权限后再试。"
   }
   if (lower.includes("bad gateway") || lower.includes("502")) {
     return "图片服务暂时不可用，请稍后重试。"
   }
   if (lower.includes("upstream_error") || lower.includes("dify error") || lower.includes("500")) {
-    return "图片服务请求失败，可能是余额不足、模型不可用、尺寸不支持或参数不兼容。"
+    return "图片服务请求失败，可能是余额不足、尺寸不支持或参数不兼容。"
   }
   return raw.replace(/Dify/gi, "服务").replace(/网关/g, "服务") || "处理失败，请稍后重试。"
 }
@@ -470,7 +469,7 @@ export default function ToolsPage() {
       setBusy("reverse")
       setReverseProgress(12)
       setReverseStage("正在上传图片并反推提示词")
-      setResult({ title: "图像提示词反推", content: "任务已开始，正在上传图片并等待工作流返回提示词..." })
+      setResult({ title: "图像提示词反推", content: "任务已开始，正在上传图片并等待反推结果..." })
       const formData = new FormData()
       formData.append("image", reverseImageFile)
       formData.append("target_model", reverseTargetModel)
@@ -537,7 +536,7 @@ export default function ToolsPage() {
       setBusy("reverse-generate")
       setReverseProgress(10)
       setReverseStage("正在生成图片")
-      setResult({ title: "图像生成", content: "图像生成任务已提交，正在等待模型返回结果..." })
+      setResult({ title: "图像生成", content: "图像生成任务已提交，正在等待生成结果..." })
       const requestId = createClientRequestId(reverseTargetModel === "gpt-image-2" ? "tools-img" : "tools-banana")
       const generationModel = reverseTargetModel === "nano_banana" ? "banana-2-pro" : "gpt-image-2"
       const authHeaders = await getRequiredToolAuthHeaders("图像生成")
@@ -563,7 +562,6 @@ export default function ToolsPage() {
 
       let payload = await readResponseJson(response)
       setReverseProgress(62)
-      const traceId = response.headers.get("X-Trace-Id") || undefined
       if (response.status === 401) {
         handleStaleToolAuth("图像生成")
         return
@@ -600,7 +598,6 @@ export default function ToolsPage() {
         generatedImages,
         sourceText,
         requestId,
-        traceId,
       }
       setReverseResult(nextResult)
       setResult({ title: "图像生成结果", content: generatedImages.length ? generatedImages : sourceText || "图片已生成" })
@@ -771,7 +768,7 @@ export default function ToolsPage() {
 
         setTtsJob(jobPayload.job)
         if (jobPayload.job.status === "running" && attempt === TTS_POLL_SLOW_HINT_AFTER_ATTEMPTS) {
-          setResult({ title: "文字转语音", content: "语音模型首次加载可能需要几分钟，系统仍在生成，请不要关闭页面。" })
+          setResult({ title: "文字转语音", content: "语音服务首次准备可能需要几分钟，系统仍在生成，请不要关闭页面。" })
         }
         if (jobPayload.job.status === "succeeded" && jobPayload.job.audio_url) {
           setResult({ title: "文字转语音", content: "语音已生成，可在左侧播放器试听。" })
@@ -978,7 +975,7 @@ export default function ToolsPage() {
                 {ocrFile ? (
                   <p className="truncate text-xs text-[var(--ink-500)]">已选：{ocrFile.name}</p>
                 ) : null}
-                <Textarea id="ocr-images" rows={3} value={ocrImages} onChange={(event) => setOcrImages(event.target.value)} placeholder="也可粘贴文字做网关连通性测试，每行一条" />
+                <Textarea id="ocr-images" rows={3} value={ocrImages} onChange={(event) => setOcrImages(event.target.value)} placeholder="也可粘贴文字做连接测试，每行一条" />
                 <Button type="submit" disabled={busy === "ocr"} className="w-full">
                   {busy === "ocr" ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
                   识别文字
@@ -1018,7 +1015,7 @@ export default function ToolsPage() {
               </form>
             </ToolCard>
 
-            <ToolCard id="tts" index="08" title="文字转语音" description="把文本转换成可播放音频，调用服务器 OmniVoice 网关。" icon={Megaphone} featured>
+            <ToolCard id="tts" index="08" title="文字转语音" description="把文本转换成可播放音频，调用服务器语音服务。" icon={Megaphone} featured>
               <form className="space-y-3" onSubmit={runTts}>
                 <Label htmlFor="tts-text">朗读文本</Label>
                 <Textarea
@@ -1059,7 +1056,7 @@ export default function ToolsPage() {
                     </p>
                     {busy === "tts" && !ttsJob.audio_url && ttsJob.status !== "failed" ? (
                       <p className="mt-2 text-xs leading-5 text-[var(--ink-500)]">
-                        正在轮询服务器任务。首次加载 OmniVoice 模型时可能会停在 20% 数分钟，生成完成后播放器会自动出现。
+                        正在检查语音生成进度。首次准备语音服务时可能会停在 20% 数分钟，生成完成后播放器会自动出现。
                       </p>
                     ) : null}
                     {ttsJob.audio_url ? (
@@ -1095,7 +1092,7 @@ export default function ToolsPage() {
                     </span>
                     <div>
                       <p className="font-[var(--font-display)] text-lg font-bold text-[var(--ink-900)]">正在反推提示词</p>
-                      <p className="mt-1 text-sm leading-6 text-[var(--ink-500)]">图片已提交到工作流，通常需要十几秒到一两分钟。</p>
+                      <p className="mt-1 text-sm leading-6 text-[var(--ink-500)]">图片已提交到服务，通常需要十几秒到一两分钟。</p>
                     </div>
                   </div>
                   <ProgressBar value={reverseProgress} label={reverseStage || "正在等待反推结果"} />

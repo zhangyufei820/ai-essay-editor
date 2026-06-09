@@ -24,10 +24,6 @@ const STREAM_HEARTBEAT_MS = 8_000
 type ReverseSuccessPayload = {
   ok: true
   prompt: string
-  target_model: string
-  workflowRunId?: string
-  taskId?: string
-  messageId?: string
   billing: ReturnType<typeof createBillingPayload>
 }
 
@@ -358,10 +354,6 @@ async function processReverseRequest(
   return {
     ok: true,
     prompt,
-    target_model: targetModel,
-    workflowRunId,
-    taskId,
-    messageId: readString(rawPayload.message_id),
     billing,
   }
 }

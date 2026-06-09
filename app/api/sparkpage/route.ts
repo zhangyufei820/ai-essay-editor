@@ -90,12 +90,12 @@ async function generateSparkpage(input: {
     })
 
     if (dify.ok) {
-      return { provider: "dify", sparkpage: parseSparkpageContent(dify.content) }
+      return { engine: "server", sparkpage: parseSparkpageContent(dify.content) }
     }
   }
 
   if (!process.env.OPENAI_API_KEY) {
-    throw new Error("综合报告工具未配置 DIFY_SPARKPAGE_API_KEY 或 OpenAI API Key")
+    throw new Error("综合报告服务暂时不可用，请稍后重试。")
   }
 
   const { text } = await generateText({
@@ -105,7 +105,7 @@ async function generateSparkpage(input: {
     temperature: 0.5,
   })
 
-  return { provider: input.provider || "openai", sparkpage: parseSparkpageContent(text) }
+  return { engine: "server", sparkpage: parseSparkpageContent(text) }
 }
 
 export async function POST(req: NextRequest) {
@@ -136,13 +136,13 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      provider: result.provider,
+      engine: result.engine,
       sparkpage: result.sparkpage,
     })
   } catch (error) {
     console.error("[Tools Sparkpage] error:", error)
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Sparkpage 生成失败" },
+      { error: "综合报告生成失败，请稍后重试。" },
       { status: 500 },
     )
   }

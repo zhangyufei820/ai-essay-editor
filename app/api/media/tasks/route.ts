@@ -45,6 +45,9 @@ type MusicSubmitResult =
 
 function publicErrorMessage(error: unknown) {
   const raw = error instanceof Error ? error.message : String(error || "媒体任务提交失败")
+  if (/config|missing|api[_-]?key|token|secret|authorization|env|environment|未配置|凭据/i.test(raw)) {
+    return "媒体服务暂时不可用，请稍后重试。"
+  }
   return raw
     .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [REDACTED]")
     .replace(/sk-[A-Za-z0-9_-]+/g, "[REDACTED_SECRET]")
@@ -164,7 +167,6 @@ export async function POST(request: NextRequest) {
       success: true,
       task_id: taskRun.requestId,
       request_id: taskRun.requestId,
-      trace_id: taskRun.traceId,
       status: "queued",
       poll_url: `/api/media/tasks/${encodeURIComponent(taskRun.requestId)}`,
       task: normalizeMediaTask({
@@ -174,7 +176,6 @@ export async function POST(request: NextRequest) {
         status: "running",
         progress: 5,
         request_id: taskRun.requestId,
-        trace_id: taskRun.traceId,
         metadata,
       }),
     }, { status: 202 })
@@ -191,10 +192,8 @@ export async function POST(request: NextRequest) {
       success: true,
       task_id: taskRun.requestId,
       request_id: taskRun.requestId,
-      trace_id: taskRun.traceId,
       status: "queued",
       poll_url: `/api/media/tasks/${encodeURIComponent(taskRun.requestId)}`,
-      next_adapter: "/api/media/video/relaydance",
     }, { status: 202 })
   }
 
@@ -252,8 +251,6 @@ export async function POST(request: NextRequest) {
       success: true,
       task_id: taskRun.requestId,
       request_id: taskRun.requestId,
-      trace_id: taskRun.traceId,
-      provider_task_id: result.providerTaskId,
       status: "running",
       poll_url: `/api/media/tasks/${encodeURIComponent(taskRun.requestId)}`,
     })

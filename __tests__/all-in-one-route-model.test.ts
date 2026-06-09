@@ -73,7 +73,7 @@ describe("all-in-one route model sync", () => {
     expect(text).toContain('!selector.includes("quick_reply_answer_node")')
     expect(text).toContain('!selector.includes("frontend_input_node")')
     expect(text).toContain("allInOneStreamedAnswer = true")
-    expect(text).toContain("enqueueSseAnswer(controller, json.answer)")
+    expect(text).toContain("enqueueSseAnswer(controller, answerText)")
     expect(text).toContain("!allInOneStreamedAnswer")
   })
 
@@ -93,7 +93,8 @@ describe("all-in-one route model sync", () => {
     expect(text).toContain("applyBlockingDifyPayload")
     expect(text).toContain("shouldWrapDifyResponseAsSse")
     expect(text).toContain('"json_fallback"')
-    expect(text).toContain('"X-Dify-Response-Mode": actualDifyResponseMode')
+    expect(text).toContain("dify_response_mode: actualDifyResponseMode")
+    expect(text).not.toContain('"X-Dify-Response-Mode": actualDifyResponseMode')
     expect(text).toContain("enqueueSseAnswer(controller, answer)")
     expect(text).toContain("sanitizeDifyAnswerForModel(extractDifyTextOutput(payload), model)")
   })

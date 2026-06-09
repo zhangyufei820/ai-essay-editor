@@ -1,4 +1,5 @@
 import { internalDifyFetch } from "@/lib/internal-dify-fetch"
+import { sanitizePublicAiError } from "@/lib/chat-error-sanitizer"
 
 const DIFY_BASE_URL = (process.env.DIFY_INTERNAL_URL
   || process.env.DIFY_BASE_URL
@@ -44,7 +45,7 @@ export async function callToolsDifyChat(input: {
   timeoutMs?: number
 }): Promise<ToolsDifyResult> {
   if (!input.apiKey) {
-    return { ok: false, content: "", error: "工具工作流 API Key 未配置" }
+    return { ok: false, content: "", error: "工具服务暂时不可用，请稍后重试。" }
   }
 
   const controller = new AbortController()
@@ -76,11 +77,12 @@ export async function callToolsDifyChat(input: {
     }
 
     if (!response.ok) {
+      const rawError = readString(payload.message) || readString(payload.error) || `Dify request failed: ${response.status}`
       return {
         ok: false,
         content: "",
         raw: payload,
-        error: readString(payload.message) || readString(payload.error) || `Dify request failed: ${response.status}`,
+        error: sanitizePublicAiError(rawError, "工具服务暂时不可用，请稍后重试。"),
       }
     }
 
@@ -89,17 +91,16 @@ export async function callToolsDifyChat(input: {
       ok: Boolean(content),
       content,
       raw: payload,
-      error: content ? undefined : "Dify 没有返回可展示内容",
+      error: content ? undefined : "工具服务没有返回可展示内容，请稍后重试。",
     }
   } catch (error) {
+    const rawError = error instanceof Error ? error.message : String(error)
     return {
       ok: false,
       content: "",
       error: error instanceof Error && error.name === "AbortError"
-        ? "Dify 工具请求超时"
-        : error instanceof Error
-          ? error.message
-          : String(error),
+        ? "工具服务响应超时，请稍后重试。"
+        : sanitizePublicAiError(rawError, "工具服务暂时不可用，请稍后重试。"),
     }
   } finally {
     clearTimeout(timeout)

@@ -185,7 +185,7 @@ function toFriendlyError(error: unknown) {
   if (text.includes("请先登录") || text.includes("未授权") || lower.includes("unauthorized") || lower.includes("401")) {
     return "请先登录后再生成视频。"
   }
-  if (text.includes("RELAYDANCE_GATEWAY_CONFIG_MISSING") || text.includes("视频网关未配置")) {
+  if (text.includes("RELAYDANCE_GATEWAY_CONFIG_MISSING") || text.includes("视频服务暂时不可用")) {
     return "视频生成服务还没有准备好，请稍后再试或联系管理员。"
   }
   if (text.includes("model not found")) {

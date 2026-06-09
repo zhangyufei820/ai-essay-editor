@@ -32,11 +32,11 @@ async function generatePresentationOutline(content: string, template?: string) {
       inputs: { content, template: template || "classroom", tool: "presentation" },
       user: "tools-presentation",
     })
-    if (dify.ok) return { provider: "dify", content: dify.content, raw: dify.raw }
+    if (dify.ok) return { engine: "server", content: dify.content, raw: dify.raw }
   }
 
   if (!process.env.OPENAI_API_KEY) {
-    throw new Error("演示文稿工具未配置 DIFY_PRESENTATION_API_KEY 或 OpenAI API Key")
+    throw new Error("演示文稿服务暂时不可用，请稍后重试。")
   }
 
   const { text } = await generateText({
@@ -46,7 +46,7 @@ async function generatePresentationOutline(content: string, template?: string) {
     temperature: 0.4,
   })
 
-  return { provider: "openai", content: text }
+  return { engine: "server", content: text }
 }
 
 export async function POST(req: NextRequest) {
@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
       success: true,
       presentation: {
         title: "演示文稿大纲",
-        provider: outline.provider,
+        engine: outline.engine,
         format: "markdown-outline",
         content: outline.content,
       },
@@ -78,7 +78,7 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     console.error("[Tools Presentation] error:", error)
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "演示文稿生成失败" },
+      { error: "演示文稿生成失败，请稍后重试。" },
       { status: 500 },
     )
   }

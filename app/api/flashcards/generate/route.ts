@@ -92,7 +92,7 @@ export async function POST(request: NextRequest) {
     const difficultyLevel = normalizeDifficultyLevel(body.difficulty_level)
     const apiKey = process.env.DIFY_API_KEY_NOTES_TO_CARDS || ""
     if (!apiKey) {
-      return NextResponse.json({ error: "Notes-to-Cards 工作流 API Key 未配置" }, { status: 503 })
+      return NextResponse.json({ error: "闪卡生成服务暂时不可用，请稍后重试。" }, { status: 503 })
     }
 
     const billingReferenceId = `flashcards:${Date.now()}`

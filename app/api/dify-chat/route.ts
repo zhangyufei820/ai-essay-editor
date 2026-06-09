@@ -33,7 +33,7 @@ import { isConfiguredAdminUser } from "@/lib/admin-auth"
 import { internalDifyFetch } from "@/lib/internal-dify-fetch"
 import { getDifyCredentialForModel } from "@/lib/dify-credentials"
 import { sanitizeDifyAnswerForModel } from "@/lib/dify-answer-cleanup"
-import { getSafeUpstreamErrorMessage, sanitizePublicAiStatus, stripUpstreamBranding } from "@/lib/chat-error-sanitizer"
+import { getSafeUpstreamErrorMessage, sanitizePublicAiError, sanitizePublicAiErrorCode, sanitizePublicAiStatus, stripUpstreamBranding } from "@/lib/chat-error-sanitizer"
 import { isWorkflowSkillAgent } from "@/lib/workflow-skill-agents"
 import { extractDifyTextOutput } from "@/lib/dify-output-text"
 import { rewriteOpenClawMediaReferences } from "@/lib/openclaw-media"
@@ -241,7 +241,7 @@ function isHtmlErrorContent(value: unknown) {
 function sanitizeUpstreamErrorText(value: unknown, fallback = "图片服务暂时不可用，请稍后重试。") {
   if (typeof value !== "string") return fallback
   if (!value.trim() || isHtmlErrorContent(value)) return fallback
-  return getSafeUpstreamErrorMessage(value, fallback) || stripUpstreamBranding(value)
+  return sanitizePublicAiError(getSafeUpstreamErrorMessage(value, fallback) || stripUpstreamBranding(value), fallback)
 }
 
 function buildGptImageV11Inputs(inputs: unknown): GptImageV11Inputs {
@@ -781,13 +781,12 @@ function isDifyCredentialInvalidResponse(status: number, body: string) {
 }
 
 function getDifyCredentialInvalidMessage(model: string | null | undefined, keySource: string) {
-  const label = "Dify 工作流"
-  return `${label}凭据失效，请管理员在服务器环境变量 ${keySource || "对应应用专用 Key"} 中配置有效的 Dify 应用 API Key。`
+  return "当前智能服务配置暂不可用，请联系管理员处理。"
 }
 
 function getDifyAppModeMismatchMessage(model: string | null | undefined, keySource: string, expectedMode: string, actualMode: string | null) {
-  const label = model === "vocab-card" ? "词境记忆卡" : getModelDisplayName(model as ModelType) || model || "Dify 应用"
-  return `${label}服务配置错误：${keySource} 当前绑定的 Dify app mode 是 ${actualMode || "unknown"}，但此功能需要 ${expectedMode}。请在生产环境变量中绑定正确的 Dify 应用 Key。`
+  const label = model === "vocab-card" ? "词境记忆卡" : getModelDisplayName(model as ModelType) || "当前功能"
+  return `${label}服务配置暂不可用，请联系管理员处理。`
 }
 
 function nowMs() {
@@ -1314,7 +1313,7 @@ function normalizeAllInOneAgentDisplay(rawText: string) {
     .sort((a, b) => b.length - a.length)[0] || (parsedValues.length > 0 || looksLikeAllInOneControlPayload(rawText) ? "" : rawText)
 
   const displayText = stripInternalFileReferences(rawDisplayText)
-  return displayText || "任务已提交，但上游还没有返回可直接展示的内容。请稍后重试，或换一个更明确的生成要求。"
+  return displayText || "任务已提交，但暂时没有返回可直接展示的内容。请稍后重试，或换一个更明确的生成要求。"
 }
 
 type SseByteController = {
@@ -1340,6 +1339,29 @@ function enqueueSseStatus(controller: SseByteController, payload: {
     stage: sanitizePublicAiStatus(payload.stage, "任务仍在处理中"),
     ts: Date.now(),
   })
+}
+
+function enqueueSseError(controller: SseByteController, message: unknown, code?: string) {
+  const safeMessage = sanitizePublicAiError(message, "服务暂时不可用，请稍后重试。")
+  enqueueSseEvent(controller, {
+    event: "error",
+    message: safeMessage,
+    error: safeMessage,
+    code: sanitizePublicAiErrorCode(code),
+  })
+}
+
+function buildPublicVocabWorkflowEvent(outputs: Record<string, unknown>, conversationId?: string) {
+  return {
+    event: "workflow_finished",
+    data: { outputs },
+    outputs,
+    frontend_card_json: outputs.frontend_card_json,
+    current_word: outputs.current_word,
+    word: outputs.word,
+    answer: outputs.answer,
+    conversation_id: conversationId || undefined,
+  }
 }
 
 function getTraceModelDisplayName(model?: string | null) {
@@ -1897,7 +1919,7 @@ function createImageGatewayResponse(payload: unknown) {
   })
 
   if (!success) {
-    return Response.json({ error: message, code: "IMAGE_GATEWAY_FAILED" }, { status: statusCode >= 400 ? statusCode : 502 })
+    return Response.json({ error: message, code: sanitizePublicAiErrorCode("IMAGE_GATEWAY_FAILED") }, { status: statusCode >= 400 ? statusCode : 502 })
   }
 
   return Response.json({
@@ -1905,7 +1927,6 @@ function createImageGatewayResponse(payload: unknown) {
     data: {
       status: "succeeded",
       outputs: {
-        ...record,
         text: answer,
         image_urls: imageUrls,
         images: imageUrls.map((url) => ({ type: "image", url })),
@@ -1932,7 +1953,7 @@ function createProviderTaskResponseFromStoredResult(payload: unknown) {
             : "",
       "图片服务请求失败，请稍后重试。",
     )
-    return Response.json({ error: message, code: "IMAGE_GATEWAY_HTTP_ERROR" }, { status: statusCode })
+    return Response.json({ error: message, code: sanitizePublicAiErrorCode("IMAGE_GATEWAY_HTTP_ERROR") }, { status: statusCode })
   }
 
   return createVivaApiImageResponse(record.payload || payload)
@@ -1947,7 +1968,7 @@ function createVivaApiImageResponse(payload: unknown) {
   })
 
   if (imageUrls.length === 0) {
-    return Response.json({ error: "图片服务未返回图片链接", code: "VIVAAPI_IMAGE_EMPTY_RESULT" }, { status: 502 })
+    return Response.json({ error: "图片服务未返回图片链接", code: sanitizePublicAiErrorCode("VIVAAPI_IMAGE_EMPTY_RESULT") }, { status: 502 })
   }
 
   return Response.json({
@@ -1955,11 +1976,9 @@ function createVivaApiImageResponse(payload: unknown) {
     data: {
       status: "succeeded",
       outputs: {
-        provider: "vivaapi",
         text: answer,
         image_urls: imageUrls,
         images: imageUrls.map((url) => ({ type: "image", url })),
-        raw: payload,
       },
     },
   })
@@ -2219,7 +2238,7 @@ async function callImageGatewayDirect(query: string, inputs: unknown) {
     if (process.env.VIVAAPI_IMAGE_API_KEY) {
       const gatewayCandidates = getVivaApiImageGatewayCandidates()
       if (gatewayCandidates.length === 0) {
-        return Response.json({ error: "图片服务未配置可用通道", code: "IMAGE_GATEWAY_MISSING" }, { status: 503 })
+        return Response.json({ error: "图片服务未配置可用通道", code: sanitizePublicAiErrorCode("IMAGE_GATEWAY_MISSING") }, { status: 503 })
       }
 
       let payload: unknown = {}
@@ -2279,7 +2298,7 @@ async function callImageGatewayDirect(query: string, inputs: unknown) {
     if (!response.ok) {
       const record = payload && typeof payload === "object" ? payload as Record<string, unknown> : {}
       const message = sanitizeUpstreamErrorText(record.message, "图片服务请求失败，请稍后重试。")
-      return Response.json({ error: message, code: "IMAGE_GATEWAY_HTTP_ERROR" }, { status: response.status })
+      return Response.json({ error: message, code: sanitizePublicAiErrorCode("IMAGE_GATEWAY_HTTP_ERROR") }, { status: response.status })
     }
 
     return process.env.VIVAAPI_IMAGE_API_KEY
@@ -2289,7 +2308,7 @@ async function callImageGatewayDirect(query: string, inputs: unknown) {
     const err = error instanceof Error ? error : null
     if (err?.name === "AbortError") {
       return Response.json(
-        { error: "图片生成等待超时，请降低尺寸或质量后重试", code: "IMAGE_GATEWAY_TIMEOUT" },
+        { error: "图片生成等待超时，请降低尺寸或质量后重试", code: sanitizePublicAiErrorCode("IMAGE_GATEWAY_TIMEOUT") },
         { status: 504 },
       )
     }
@@ -2340,7 +2359,7 @@ async function callGeminiImageGatewayDirect(query: string, inputs: unknown) {
     if (!response.ok) {
       const record = payload && typeof payload === "object" ? payload as Record<string, unknown> : {}
       const message = sanitizeUpstreamErrorText(record.message, "Gemini 图像服务请求失败，请稍后重试。")
-      return Response.json({ error: message, code: "GEMINI_IMAGE_GATEWAY_HTTP_ERROR" }, { status: response.status })
+      return Response.json({ error: message, code: sanitizePublicAiErrorCode("GEMINI_IMAGE_GATEWAY_HTTP_ERROR") }, { status: response.status })
     }
 
     return isMoonapixGateway ? createVivaApiImageResponse(payload) : createImageGatewayResponse(payload)
@@ -2348,14 +2367,14 @@ async function callGeminiImageGatewayDirect(query: string, inputs: unknown) {
     const err = error instanceof Error ? error : null
     if (err?.name === "AbortError") {
       return Response.json(
-        { error: "Gemini 图像生成等待超时，请降低尺寸或质量后重试", code: "GEMINI_IMAGE_GATEWAY_TIMEOUT" },
+        { error: "Gemini 图像生成等待超时，请降低尺寸或质量后重试", code: sanitizePublicAiErrorCode("GEMINI_IMAGE_GATEWAY_TIMEOUT") },
         { status: 504 },
       )
     }
 
     console.error("❌ [Gemini Image] 直连图片服务失败:", error)
     return Response.json(
-      { error: "Gemini 图像服务暂时不可用，请稍后重试", code: "GEMINI_IMAGE_GATEWAY_UNAVAILABLE" },
+      { error: "Gemini 图像服务暂时不可用，请稍后重试", code: sanitizePublicAiErrorCode("GEMINI_IMAGE_GATEWAY_UNAVAILABLE") },
       { status: 502 },
     )
   } finally {
@@ -2985,7 +3004,7 @@ async function startVivaApiImageTask(params: {
 export async function GET(request: NextRequest) {
   const taskId = request.nextUrl.searchParams.get("imageTaskId")
   if (!taskId) {
-    return Response.json({ error: "缺少图片任务 ID", code: "IMAGE_TASK_ID_MISSING" }, { status: 400 })
+    return Response.json({ error: "缺少图片任务 ID", code: sanitizePublicAiErrorCode("IMAGE_TASK_ID_MISSING") }, { status: 400 })
   }
 
   const auth = await requireUser(request)
@@ -2993,7 +3012,7 @@ export async function GET(request: NextRequest) {
   const userId = auth.user!.id
   const requestId = request.nextUrl.searchParams.get("requestId") || request.headers.get("X-Request-Id")
   if (!requestId) {
-    return Response.json({ error: "未授权访问，请先登录", code: "UNAUTHORIZED", taskId }, { status: 401 })
+    return Response.json({ error: "未授权访问，请先登录", code: sanitizePublicAiErrorCode("UNAUTHORIZED") }, { status: 401 })
   }
   const pollToken = request.nextUrl.searchParams.get("pollToken") || request.headers.get("X-Image-Task-Poll-Token")
 
@@ -3006,7 +3025,7 @@ export async function GET(request: NextRequest) {
 
   if (taskOwnerError) {
     console.error("[GPT Image Task] 权限校验失败:", taskOwnerError)
-    return Response.json({ error: "图片任务权限校验失败", code: "IMAGE_TASK_OWNER_LOOKUP_FAILED", requestId, taskId }, { status: 500 })
+    return Response.json({ error: "图片任务权限校验失败", code: sanitizePublicAiErrorCode("IMAGE_TASK_OWNER_LOOKUP_FAILED") }, { status: 500 })
   }
 
   if (!taskOwner || (taskOwner.upstream_task_id && taskOwner.upstream_task_id !== taskId)) {
@@ -3018,7 +3037,7 @@ export async function GET(request: NextRequest) {
         hasOwner: Boolean(taskOwner),
         hasPollToken: Boolean(pollToken),
       })
-      return Response.json({ error: "无权访问该图片任务", code: "IMAGE_TASK_FORBIDDEN", requestId, taskId }, { status: 403 })
+      return Response.json({ error: "无权访问该图片任务", code: sanitizePublicAiErrorCode("IMAGE_TASK_FORBIDDEN") }, { status: 403 })
     }
     console.warn("[GPT Image Task] owner 记录暂未匹配，已使用签名轮询凭证继续查询", {
       requestId,
@@ -3040,7 +3059,7 @@ export async function GET(request: NextRequest) {
 
     if (storedTaskError) {
       console.error("[GPT Image Task] 查询异步图片任务失败:", storedTaskError.message)
-      return Response.json({ error: "图片任务查询失败", code: "IMAGE_TASK_LOOKUP_FAILED", requestId, taskId }, { status: 500 })
+      return Response.json({ error: "图片任务查询失败", code: sanitizePublicAiErrorCode("IMAGE_TASK_LOOKUP_FAILED") }, { status: 500 })
     }
 
     const metadata = storedTask?.metadata && typeof storedTask.metadata === "object"
@@ -3089,7 +3108,7 @@ export async function GET(request: NextRequest) {
         requestId,
         elapsedMs: typeof metadata.elapsed_ms === "number" ? metadata.elapsed_ms : taskAgeMs,
         error: storedTask.error_message || "图片生成失败",
-        code: storedTask.error_code || "IMAGE_TASK_FAILED",
+        code: sanitizePublicAiErrorCode(storedTask.error_code || "IMAGE_TASK_FAILED"),
         refund,
       })
     }
@@ -3123,7 +3142,7 @@ export async function GET(request: NextRequest) {
         requestId,
         elapsedMs: taskAgeMs,
         error: "图片任务超时，已自动退回积分",
-        code: "IMAGE_TASK_POLL_TIMEOUT",
+        code: sanitizePublicAiErrorCode("IMAGE_TASK_POLL_TIMEOUT"),
         refund,
       })
     }
@@ -3202,9 +3221,8 @@ export async function GET(request: NextRequest) {
     return Response.json({
       status: "failed",
       error: "图片任务不存在或已过期",
-      code: "IMAGE_TASK_NOT_FOUND",
+      code: sanitizePublicAiErrorCode("IMAGE_TASK_NOT_FOUND"),
       requestId,
-      taskId,
       refund,
     })
   }
@@ -3271,9 +3289,7 @@ export async function GET(request: NextRequest) {
       requestId,
       elapsedMs,
       error: errorMessage,
-      code: "IMAGE_TASK_FAILED",
-      upstreamStatusCode: statusCode,
-      data: task?.error_payload || {},
+      code: sanitizePublicAiErrorCode("IMAGE_TASK_FAILED"),
       refund,
     })
   }
@@ -3306,7 +3322,7 @@ export async function GET(request: NextRequest) {
       requestId,
       elapsedMs: taskAgeMs,
       error: "图片任务超时，已自动退回积分",
-      code: "IMAGE_TASK_POLL_TIMEOUT",
+      code: sanitizePublicAiErrorCode("IMAGE_TASK_POLL_TIMEOUT"),
       refund,
     })
   }
@@ -3429,7 +3445,7 @@ export async function POST(request: NextRequest) {
         return new Response(
           JSON.stringify({
             error: guard.message,
-            code: guard.code,
+            code: sanitizePublicAiErrorCode(guard.code),
           }),
           { status: 403, headers: { "Content-Type": "application/json" } },
         )
@@ -3494,12 +3510,12 @@ export async function POST(request: NextRequest) {
 
       if (sessionOwnerError) {
         console.error("[Dify-Chat] 会话 owner 校验失败:", sessionOwnerError.message)
-        return Response.json({ error: "会话权限校验失败", code: "CHAT_SESSION_OWNER_LOOKUP_FAILED", requestId }, { status: 500 })
+        return Response.json({ error: "会话权限校验失败", code: sanitizePublicAiErrorCode("CHAT_SESSION_OWNER_LOOKUP_FAILED") }, { status: 500 })
       }
 
       if (sessionOwner && sessionOwner.user_id !== userId) {
         console.warn(`🚫 [Dify-Chat] 会话越权访问被拦截: requestId=${requestId}`)
-        return Response.json({ error: "无权访问该会话", code: "CHAT_SESSION_FORBIDDEN", requestId }, { status: 403 })
+        return Response.json({ error: "无权访问该会话", code: sanitizePublicAiErrorCode("CHAT_SESSION_FORBIDDEN") }, { status: 403 })
       }
     }
 
@@ -3524,10 +3540,10 @@ export async function POST(request: NextRequest) {
     // 安全检查：防止忘配 Key
     if (!selectedCredential && !isDirectImageGatewayRequest) {
         console.error(`❌ 严重错误: 模型 ${workflowSkillId || model} 的凭据未配置！环境变量 ${keySource} 为空`);
+        const message = "当前智能服务配置暂不可用，请联系管理员处理。"
         return new Response(JSON.stringify({ 
-          error: `配置错误：${workflowSkillId || model} 模型凭据未设置`,
-          code: "DIFY_CREDENTIAL_MISSING",
-          details: `请在生产环境变量中配置 ${keySource}`
+          error: message,
+          code: sanitizePublicAiErrorCode("DIFY_CREDENTIAL_MISSING"),
         }), { 
           status: MISSING_DIFY_CREDENTIAL_STATUS,
           headers: { "Content-Type": "application/json" }
@@ -3634,13 +3650,11 @@ export async function POST(request: NextRequest) {
         console.warn(`🚫 [媒体权限] 用户无共创体验或订阅/白名单权限，不能使用 ${billingModelType || "gpt-image-2"}`)
         return new Response(
           JSON.stringify({
-            error: "GPT Image 2 当前共创体验期内登录用户可用，请先登录后使用。",
-            message: "GPT Image 2 当前共创体验期内登录用户可用，请先登录后使用。",
-            code: "IMAGE2_ACCESS_DENIED",
-            requestId,
+            error: "当前账号暂时无法使用该图像能力，请重新登录后再试。",
+            message: "当前账号暂时无法使用该图像能力，请重新登录后再试。",
+            code: sanitizePublicAiErrorCode("IMAGE2_ACCESS_DENIED"),
             requiredMembership: "basic",
-            allowlist: ["IMAGE2_WHITELIST_USER_IDS", "IMAGE2_WHITELIST_EMAILS"],
-            action: "请先登录，或在体验期结束后升级会员",
+            action: "请先重新登录，或联系管理员确认账号权限。",
           }),
           { status: 403, headers: { "Content-Type": "application/json" } },
         )
@@ -3707,14 +3721,12 @@ export async function POST(request: NextRequest) {
             status: "running",
             imageTaskId: taskId,
             requestId: taskRun.requestId,
-            traceId: taskRun.traceId,
             pollToken,
             message: "Gemini 图片任务已提交，正在生成",
           },
           {
             headers: {
               "X-Request-Id": taskRun.requestId,
-              "X-Trace-Id": taskRun.traceId,
             },
           },
         )
@@ -3733,11 +3745,17 @@ export async function POST(request: NextRequest) {
       })
 
       if (!gatewayResponse.ok) {
-        return Response.json(gatewayPayload, {
+        return Response.json({
+          error: sanitizePublicAiError(
+            typeof gatewayPayload?.error === "string" ? gatewayPayload.error : typeof gatewayPayload?.message === "string" ? gatewayPayload.message : "图片服务请求失败",
+            "图片服务暂时不可用，请稍后重试。",
+          ),
+          code: sanitizePublicAiErrorCode(typeof gatewayPayload?.code === "string" ? gatewayPayload.code : `IMAGE_SERVICE_${gatewayResponse.status}`),
+          requestId: taskRun.requestId,
+        }, {
           status: gatewayResponse.status,
           headers: {
             "X-Request-Id": taskRun.requestId,
-            "X-Trace-Id": taskRun.traceId,
           },
         })
       }
@@ -3745,7 +3763,6 @@ export async function POST(request: NextRequest) {
       return Response.json(gatewayPayload, {
         headers: {
           "X-Request-Id": taskRun.requestId,
-          "X-Trace-Id": taskRun.traceId,
         },
       })
     }
@@ -3813,7 +3830,6 @@ export async function POST(request: NextRequest) {
             {
               headers: {
                 "X-Request-Id": taskRun.requestId,
-                "X-Trace-Id": taskRun.traceId,
               },
             },
           )
@@ -3846,7 +3862,6 @@ export async function POST(request: NextRequest) {
               status: 502,
               headers: {
                 "X-Request-Id": taskRun.requestId,
-                "X-Trace-Id": taskRun.traceId,
               },
             },
           )
@@ -3866,7 +3881,19 @@ export async function POST(request: NextRequest) {
           sanitizedError: sanitizeForTrace(gatewayPayload) as Record<string, unknown>,
         })
 
-        return gatewayResponse
+        return Response.json({
+          error: sanitizePublicAiError(
+            typeof gatewayPayload?.error === "string" ? gatewayPayload.error : typeof gatewayPayload?.message === "string" ? gatewayPayload.message : "图片服务请求失败",
+            "图片服务暂时不可用，请稍后重试。",
+          ),
+          code: sanitizePublicAiErrorCode(typeof gatewayPayload?.code === "string" ? gatewayPayload.code : `IMAGE_SERVICE_${gatewayResponse.status}`),
+          requestId: taskRun.requestId,
+        }, {
+          status: gatewayResponse.status,
+          headers: {
+            "X-Request-Id": taskRun.requestId,
+          },
+        })
       }
 
       const { charged } = await chargeImageGatewayCredits({
@@ -3908,7 +3935,6 @@ export async function POST(request: NextRequest) {
       return Response.json(gatewayPayload, {
         headers: {
           "X-Request-Id": taskRun.requestId,
-          "X-Trace-Id": taskRun.traceId,
         },
       })
     }
@@ -3950,10 +3976,7 @@ export async function POST(request: NextRequest) {
               })
               return new Response(JSON.stringify({
                 error: message,
-                code: "DIFY_APP_MODE_MISMATCH",
-                expectedMode: "workflow",
-                actualMode: appInfo.mode,
-                keySource,
+                code: sanitizePublicAiErrorCode("DIFY_APP_MODE_MISMATCH"),
               }), {
                 status: MISSING_DIFY_CREDENTIAL_STATUS,
                 headers: { "Content-Type": "application/json" },
@@ -4173,14 +4196,15 @@ export async function POST(request: NextRequest) {
 
     // 防御：确保 response 已赋值
     if (!response) {
+        const message = "服务暂时没有响应，请稍后重试。"
         await updateTaskRun(taskRun.id, {
           status: "failed",
           stage: "服务暂时没有响应",
           progress: 100,
-          errorMessage: "请求失败：无法获取响应",
+          errorMessage: message,
           errorCode: "DIFY_NO_RESPONSE",
         })
-        return new Response(JSON.stringify({ error: "请求失败：无法获取响应" }), { status: 500 })
+        return new Response(JSON.stringify({ error: message }), { status: 500 })
     }
 
     if (!response.ok) {
@@ -4209,7 +4233,7 @@ export async function POST(request: NextRequest) {
           JSON.stringify({
             error: handledErrorMessage,
             message: handledErrorMessage,
-            code: handledErrorCode,
+            code: sanitizePublicAiErrorCode(handledErrorCode),
           }),
           { status: response.status },
         )
@@ -4301,19 +4325,17 @@ export async function POST(request: NextRequest) {
                 return Response.json({ error: "积分扣除失败，本次结果未结算" }, { status: 500 })
               }
 	            return Response.json(
-	              {
-	                ...result,
-	                data: workflowDetail,
-	                requestId: taskRun.requestId,
-	                traceId: taskRun.traceId,
-	              },
-	              {
-	                headers: {
-	                  "X-Request-Id": taskRun.requestId,
-	                  "X-Trace-Id": taskRun.traceId,
-	                },
-	              },
-	            )
+		              {
+		                ...result,
+		                data: workflowDetail,
+		                requestId: taskRun.requestId,
+		              },
+		              {
+		                headers: {
+		                  "X-Request-Id": taskRun.requestId,
+		                },
+		              },
+		            )
 	          }
 	        }
 
@@ -4378,15 +4400,14 @@ export async function POST(request: NextRequest) {
             return Response.json({ error: "积分扣除失败，本次结果未结算" }, { status: 500 })
           }
         }
-	        return Response.json(
-	          { ...result, requestId: taskRun.requestId, traceId: taskRun.traceId },
-	          {
-	            headers: {
-	              "X-Request-Id": taskRun.requestId,
-	              "X-Trace-Id": taskRun.traceId,
-	            },
-	          },
-	        )
+		        return Response.json(
+		          { ...result, requestId: taskRun.requestId },
+		          {
+		            headers: {
+		              "X-Request-Id": taskRun.requestId,
+		            },
+		          },
+		        )
 	    }
 
     console.log(`✅ [Dify请求] 成功，开始流式传输...`)
@@ -4678,11 +4699,7 @@ export async function POST(request: NextRequest) {
               errorCode: "DIFY_BLOCKING_RESPONSE_FAILED",
               sanitizedError: sanitizeForTrace({ message }) as Record<string, unknown>,
             }).catch((traceError) => console.warn("[AI Task Trace] blocking failure update failed:", traceError))
-            enqueueSseEvent(controller, {
-              event: "error",
-              message: "服务响应处理失败，请稍后重试",
-              code: "DIFY_BLOCKING_RESPONSE_FAILED",
-            })
+            enqueueSseError(controller, "服务响应处理失败，请稍后重试", "DIFY_BLOCKING_RESPONSE_FAILED")
             controller.close()
           }
         },
@@ -4707,18 +4724,16 @@ export async function POST(request: NextRequest) {
         }).catch((error) => console.warn("[AI Task Trace] client abort update failed:", error))
       }, { once: true })
 
-      return new Response(responseBody, {
-        headers: {
-          "Content-Type": "text/event-stream",
-          "Cache-Control": "no-cache",
-          "Connection": "keep-alive",
-          "X-Accel-Buffering": "no",
-          "Content-Encoding": "none",
-          "X-Request-Id": taskRun.requestId,
-          "X-Trace-Id": taskRun.traceId,
-          "X-Dify-Response-Mode": actualDifyResponseMode,
-        },
-      })
+	      return new Response(responseBody, {
+	        headers: {
+	          "Content-Type": "text/event-stream",
+	          "Cache-Control": "no-cache",
+	          "Connection": "keep-alive",
+	          "X-Accel-Buffering": "no",
+	          "Content-Encoding": "none",
+	          "X-Request-Id": taskRun.requestId,
+	        },
+	      })
     }
 
     const transformStream = new TransformStream({
@@ -4745,10 +4760,7 @@ export async function POST(request: NextRequest) {
             enqueueSseAnswer(controller, normalizeAllInOneAgentDisplay(rawValue))
           }
 
-          // 传递数据给前端。词境记忆卡会在解析后只转发结构化卡片事件，避免 raw JSON 出现在页面。
-          if (model !== "vocab-card" && !shouldBufferForDisplay) {
-            controller.enqueue(new TextEncoder().encode(outputText))
-          }
+	          // 后端解析 Dify 原始 SSE 后只重发用户端需要的安全事件，避免节点、模型、工作流 ID 穿透到浏览器。
 
           // 🔥 追加到缓冲区，然后只处理完整的行
           // 完整的 SSE 数据行格式：data: {...}\n
@@ -4789,10 +4801,7 @@ export async function POST(request: NextRequest) {
                       progress: hasReceivedContent ? 60 : 30,
                     })
                   }
-                  if (model === "vocab-card") {
-                    controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(json)}\n\n`))
-                  }
-	                if (bufferedNodeEvents.length < 80) {
+		                if (bufferedNodeEvents.length < 80) {
 	                  bufferedNodeEvents.push({
 	                    event: json.event,
 	                    title: nodeTitle,
@@ -4814,12 +4823,7 @@ export async function POST(request: NextRequest) {
                       message: errorMessage,
                       code: model === "open-claw" ? "OPENCLAW_NODE_FAILED" : "DIFY_NODE_FAILED",
                     }
-                    controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({
-                      event: "error",
-                      error: errorMessage,
-                      message: errorMessage,
-                      code: workflowNodeFailure.code,
-                    })}\n\n`))
+	                    enqueueSseError(controller, errorMessage, workflowNodeFailure.code)
                     updateTaskRun(taskRun.id, {
                       status: "failed",
                       stage: `${title} 执行失败`,
@@ -4852,12 +4856,10 @@ export async function POST(request: NextRequest) {
 	              // 提取 conversation_id
 	              if (json.conversation_id) {
 	                conversationId = json.conversation_id
-                  if (model === "vocab-card" && json.event !== "node_started" && json.event !== "node_finished") {
-                    controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({
-                      event: json.event || "conversation",
-                      conversation_id: conversationId,
-                    })}\n\n`))
-                  }
+                  enqueueSseEvent(controller, {
+                    event: "conversation",
+                    conversation_id: conversationId,
+                  })
 	                updateTaskRun(taskRun.id, {
 	                  status: "running",
 	                  conversationId,
@@ -4867,16 +4869,26 @@ export async function POST(request: NextRequest) {
 
               // 🔥 收集响应文本内容（Chat API）
 	              if (json.event === "message" && json.answer) {
-	                fullResponseText += json.answer
+                  const answerText = model === "open-claw"
+                    ? rewriteOpenClawMediaReferencesWithSignedUrls(String(json.answer), undefined, userId)
+                    : String(json.answer)
+	                fullResponseText += answerText
 	                hasReceivedContent = true
-                  if (model === BEIKE_PRO_MODEL) {
-                    const cleanAnswer = sanitizeDifyAnswerForModel(json.answer, model)
+                  if (model === "vocab-card") {
+                    const cleanAnswer = cleanVocabAnswer(answerText)
+                    if (cleanAnswer) {
+                      enqueueSseAnswer(controller, cleanAnswer)
+                    }
+                  } else if (model === BEIKE_PRO_MODEL) {
+                    const cleanAnswer = sanitizeDifyAnswerForModel(answerText, model)
                     if (cleanAnswer) {
                       enqueueSseAnswer(controller, cleanAnswer)
                     }
                   } else if (shouldBufferForDisplay && shouldStreamAllInOneAnswer(json)) {
                     allInOneStreamedAnswer = true
-                    enqueueSseAnswer(controller, json.answer)
+                    enqueueSseAnswer(controller, answerText)
+                  } else if (!shouldBufferForDisplay) {
+                    enqueueSseAnswer(controller, answerText)
                   }
 	                const artifacts = model === "open-claw" ? extractArtifactsFromText(fullResponseText) : []
 	                if (artifacts.length > 0) {
@@ -4892,11 +4904,23 @@ export async function POST(request: NextRequest) {
 
               // 🔥 收集 Workflow API 的文本响应
               if (json.event === "text_chunk" || json.event === "agent_message") {
-	                const text = sanitizeDifyAnswerForModel(json.data?.text || json.text || '', model)
+		                const text = model === "open-claw"
+                      ? rewriteOpenClawMediaReferencesWithSignedUrls(sanitizeDifyAnswerForModel(json.data?.text || json.text || '', model), undefined, userId)
+                      : sanitizeDifyAnswerForModel(json.data?.text || json.text || '', model)
 	                if (text) {
 		                  fullResponseText += text
 		                  hasReceivedContent = true
 		                  console.log(`🎨 [Workflow文本] 收集到文本:`, { length: text.length })
+                      if (model === "vocab-card") {
+                        const cleanedAnswer = cleanVocabAnswer(text)
+                        if (cleanedAnswer) enqueueSseAnswer(controller, cleanedAnswer)
+                      } else if (!shouldBufferForDisplay) {
+                        enqueueSseEvent(controller, {
+                          event: json.event,
+                          text,
+                          data: { text },
+                        })
+                      }
 	                  const artifacts = model === "open-claw" ? extractArtifactsFromText(fullResponseText) : []
 	                  if (artifacts.length > 0) {
 	                    updateTaskRun(taskRun.id, {
@@ -4919,19 +4943,7 @@ export async function POST(request: NextRequest) {
                     fullResponseText += JSON.stringify({ outputs: safeOutputs })
                     hasReceivedContent = true
                     console.log(`📚 [VocabCard] 收集到结构化 outputs`)
-                    controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({
-                      event: "workflow_finished",
-                      data: {
-                        ...json.data,
-                        outputs: safeOutputs,
-                      },
-                      outputs: safeOutputs,
-                      frontend_card_json: safeOutputs.frontend_card_json,
-                      current_word: safeOutputs.current_word,
-                      word: safeOutputs.word,
-                      answer: safeOutputs.answer,
-                      conversation_id: conversationId || undefined,
-                    })}\n\n`))
+	                    enqueueSseEvent(controller, buildPublicVocabWorkflowEvent(safeOutputs, conversationId))
 	                  } else {
                       const outputText = sanitizeDifyAnswerForModel(extractDifyTextOutput(outputs), model)
                       if (outputText) {
@@ -4940,6 +4952,11 @@ export async function POST(request: NextRequest) {
 	                    console.log(`🎨 [Workflow完成] 收集到输出文本:`, { length: outputText.length })
                       if (shouldBufferForDisplay && !allInOneStreamedAnswer) {
                         enqueueAllInOneDisplayOnce(outputText)
+                      } else if (!shouldBufferForDisplay) {
+                        enqueueSseEvent(controller, {
+                          event: "workflow_finished",
+                          data: { outputs: { text: outputText } },
+                        })
                       }
                       }
 		                  }
@@ -4977,12 +4994,7 @@ export async function POST(request: NextRequest) {
                   message,
                   code: "OPENCLAW_EMPTY_UPSTREAM_RESPONSE",
                 }
-                controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({
-                  event: "error",
-                  error: message,
-                  message,
-                  code: workflowNodeFailure.code,
-                })}\n\n`))
+	                enqueueSseError(controller, message, workflowNodeFailure.code)
                 updateTaskRun(taskRun.id, {
                   status: "failed",
                   stage: "OpenClaw 上游返回空内容",
@@ -5027,7 +5039,7 @@ export async function POST(request: NextRequest) {
           }
         } catch (e) {
           console.error(`❌ [Transform] transform阶段异常:`, e)
-          controller.enqueue(chunk)
+	          enqueueSseError(controller, "服务响应处理失败，请稍后重试", "DIFY_STREAM_TRANSFORM_FAILED")
         }
       },
 
@@ -5085,12 +5097,7 @@ export async function POST(request: NextRequest) {
             message,
             code: "OPENCLAW_EMPTY_UPSTREAM_RESPONSE",
           }
-          enqueueSseEvent(controller, {
-            event: "error",
-            error: message,
-            message,
-            code: workflowNodeFailure.code,
-          })
+          enqueueSseError(controller, message, workflowNodeFailure.code)
           updateTaskRun(taskRun.id, {
             status: "failed",
             stage: "OpenClaw 上游返回空内容",
@@ -5205,7 +5212,7 @@ export async function POST(request: NextRequest) {
     const transformedBody = response.body?.pipeThrough(transformStream)
     if (!transformedBody) {
       console.error(`❌ [Stream错误] pipeThrough返回undefined! response.body=${response.body === null ? 'null' : 'not-null'}`)
-      return new Response(JSON.stringify({ error: "Dify响应体为空，服务端流处理失败" }), { status: 502 })
+      return new Response(JSON.stringify({ error: "服务暂时没有返回可展示内容，请稍后重试。" }), { status: 502 })
     }
     const responseBody = addLongTaskHeartbeat(transformedBody)
     request.signal.addEventListener("abort", () => {
@@ -5240,24 +5247,24 @@ export async function POST(request: NextRequest) {
 	          "X-Accel-Buffering": "no",
 	          "Content-Encoding": "none",
 	          "X-Request-Id": taskRun.requestId,
-	          "X-Trace-Id": taskRun.traceId,
 	        },
 	    })
 
 	  } catch (error: unknown) {
 	    const err = error instanceof Error ? error : new Error(String(error))
 	    console.error("❌ 后端致命错误:", err.message);
+        const publicMessage = sanitizePublicAiError(err.message, "服务暂时不可用，请稍后重试。")
 	    const fallbackRequestId = request.headers.get("X-Request-Id")
 	    if (fallbackRequestId) {
 	      await updateTaskRun(fallbackRequestId, {
 	        status: "failed",
 	        stage: "服务端致命错误",
 	        progress: 100,
-	        errorMessage: err.message,
+	        errorMessage: publicMessage,
 	        errorCode: "DIFY_FATAL",
 	        sanitizedError: sanitizeForTrace({ message: err.message, stack: err.stack }) as Record<string, unknown>,
 	      })
 	    }
-	    return new Response(JSON.stringify({ error: err.message }), { status: 500 })
+	    return new Response(JSON.stringify({ error: publicMessage }), { status: 500 })
 	  }
 }

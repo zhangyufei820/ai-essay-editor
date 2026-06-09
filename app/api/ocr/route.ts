@@ -76,8 +76,7 @@ export async function POST(req: NextRequest) {
     if (!result.ok) {
       return NextResponse.json(
         {
-          error: result.error || "OCR 网关暂不可用",
-          gateway: "essay-ai-suite",
+          error: result.error || "OCR 服务暂不可用",
         },
         { status: 502 },
       )
@@ -89,7 +88,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           error: failed[0]?.error || "OCR 识别失败",
-          gateway: "essay-ai-suite",
           results,
         },
         { status: 422 },
@@ -98,7 +96,6 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      gateway: "essay-ai-suite",
       text: results.map((item) => item.text).filter(Boolean).join("\n\n"),
       results,
     })

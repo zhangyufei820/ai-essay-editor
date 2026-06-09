@@ -53,7 +53,7 @@ describe("chat think rendering and composer layout", () => {
     expect(imageWorkspace).toContain('capture="environment"')
   })
 
-  it("lets OpenClaw load a skill and sends the English skill id through inputs", () => {
+  it("lets OpenClaw load a skill while hiding internal skill ids from visible copy", () => {
     const chatInput = read("components/chat/ChatInput.tsx")
     const picker = read("components/chat/OpenClawSkillPicker.tsx")
     const skills = read("lib/openclaw-skills.ts")
@@ -62,7 +62,8 @@ describe("chat think rendering and composer layout", () => {
 
     expect(chatInput).toContain("showOpenClawSkillButton")
     expect(chatInput).toContain("加载技能")
-    expect(picker).toContain("选择一个技能后，会把对应英文技能标识传递给 OpenClaw")
+    expect(picker).toContain("选择一个技能后，当前对话会按对应能力处理你的任务。")
+    expect(picker).not.toMatch(/英文技能标识|传递给 OpenClaw|OpenClaw Skills/)
     expect(skills).toContain('id: "khazix-writer"')
     expect(skills).toContain('id: "AI Video Generation"')
     expect(chatInterface).toContain('showOpenClawSkillButton={selectedModel === "open-claw"}')
@@ -81,11 +82,11 @@ describe("chat think rendering and composer layout", () => {
 
     expect(route).toContain("evaluateOpenClawRuntimeRequest")
     expect(route).toContain('model === "open-claw" && !isConfiguredAdminUser(userId)')
-    expect(route).toContain("code: guard.code")
+    expect(route).toContain("code: sanitizePublicAiErrorCode(guard.code)")
     expect(guard).toContain("OPENCLAW_FORBIDDEN_RUNTIME_ACTION")
   })
 
-  it("lets Codex load a skill in super all-in-one and sends the English skill id through inputs", () => {
+  it("lets Codex load a skill in super all-in-one while hiding internal skill ids from visible copy", () => {
     const chatInput = read("components/chat/ChatInput.tsx")
     const picker = read("components/chat/CodexSkillPicker.tsx")
     const skills = read("lib/codex-skills.ts")
@@ -93,7 +94,8 @@ describe("chat think rendering and composer layout", () => {
     const route = read("app/api/dify-chat/route.ts")
 
     expect(chatInput).toContain("showCodexSkillButton")
-    expect(picker).toContain("选择一个技能后，会把对应英文技能标识传递给超级全能智能体")
+    expect(picker).toContain("选择一个技能后，当前对话会按对应能力处理你的任务。")
+    expect(picker).not.toMatch(/英文技能标识|传递给超级全能智能体|Codex Skills/)
     expect(skills).toContain('id: "paper_outline"')
     expect(skills).toContain('id: "shenxiang_image_gen"')
     expect(chatInterface).toContain('showCodexSkillButton={selectedModel === "super-all-in-one-agent"}')
@@ -173,7 +175,7 @@ describe("chat think rendering and composer layout", () => {
     expect(source).toContain("getNavigationModelItem(model as ModelType)?.name")
     expect(source).toContain("连接中断：后端已接收请求")
     expect(source).toContain("请先刷新当前会话或历史记录查看是否已有结果")
-    expect(source).toContain("OpenClaw 长任务连接中断")
+    expect(source).toContain("当前长任务连接中断")
     expect(source).not.toContain('model !== "open-claw") return null')
     expect(source).not.toContain("建议：检查登录状态、积分余额和附件上传状态")
     expect(route).toContain("getTraceModelDisplayName(model)")

@@ -8,6 +8,7 @@ import { internalDifyFetch } from "@/lib/internal-dify-fetch"
 import { getDifyCredentialForModel } from "@/lib/dify-credentials"
 import { createRequestId, sanitizeForTrace } from "@/lib/ai-task-trace"
 import { requireUser } from "@/lib/auth/verified-user"
+import { sanitizePublicAiErrorCode } from "@/lib/chat-error-sanitizer"
 
 // ✅ 修改 1: 切换回 Node.js 运行时，以支持更大的文件和更稳定的上传
 export const runtime = "nodejs" 
@@ -365,9 +366,8 @@ export async function POST(request: NextRequest) {
     const targetApiKey = useImageGateway ? "" : getApiKeyForModel(targetModel)
     if (!useImageGateway && !targetApiKey) {
       return new Response(JSON.stringify({
-        error: "目标模型上传凭据未配置",
-        code: "DIFY_UPLOAD_CREDENTIAL_MISSING",
-        details: targetModel ? `请在生产环境变量中配置 ${targetModel} 对应的 Dify API Key` : "缺少目标模型凭据",
+        error: "文件上传服务暂时不可用，请稍后重试。",
+        code: sanitizePublicAiErrorCode("DIFY_UPLOAD_CREDENTIAL_MISSING"),
       }), {
         status: 503,
         headers: { "Content-Type": "application/json", "X-Request-Id": requestId },
@@ -419,8 +419,7 @@ export async function POST(request: NextRequest) {
         })
 
         return new Response(JSON.stringify({
-          error: "File upload to Dify failed",
-          details: sanitizeForTrace(error instanceof Error ? error.message : String(error)),
+          error: "文件上传失败，请稍后重试。",
           status: 502,
         }), {
           status: 502,
@@ -440,7 +439,7 @@ export async function POST(request: NextRequest) {
     // 🔥 使用图片网关认证令牌
     const gatewayToken = process.env.DIFY_IMAGE_GATEWAY_TOKEN
     if (!gatewayToken) {
-      return NextResponse.json({ error: "图片网关未配置" }, { status: 503 })
+      return NextResponse.json({ error: "图片上传服务暂时不可用，请稍后重试。" }, { status: 503 })
     }
     const uploadUrl = `${IMAGE_GATEWAY_URL}/api/files/upload`
 

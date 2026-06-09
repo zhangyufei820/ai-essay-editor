@@ -65,7 +65,6 @@ type Diagnosis = {
 
 type AnalyzeResponse = {
   requestId: string
-  workflowRunId?: string
   diagnosis: Diagnosis
   renderPrompt: string
   billing?: {

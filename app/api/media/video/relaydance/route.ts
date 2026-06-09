@@ -25,7 +25,10 @@ const createVideoSchema = z.object({
 function publicErrorMessage(error: unknown) {
   const message = error instanceof Error ? error.message : String(error || "视频生成服务请求失败")
   if (message.startsWith("RELAYDANCE_GATEWAY_CONFIG_MISSING")) {
-    return "视频网关未配置：请在服务器环境变量中设置 RELAYDANCE_GATEWAY_API_KEY。"
+    return "视频服务暂时不可用，请稍后重试。"
+  }
+  if (/config|missing|api[_-]?key|token|secret|authorization|env|environment|未配置|凭据/i.test(message)) {
+    return "视频服务暂时不可用，请稍后重试。"
   }
   return message
     .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [REDACTED]")
@@ -116,26 +119,25 @@ export async function POST(request: NextRequest) {
       success: true,
       task_id: taskRun.requestId,
       request_id: taskRun.requestId,
-      trace_id: taskRun.traceId,
-      provider_task_id: providerTaskId,
       status: "running",
       poll_url: `/api/media/tasks/${encodeURIComponent(taskRun.requestId)}`,
       warnings: payload.warnings || [],
     })
   } catch (error) {
+    const rawMessage = error instanceof Error ? error.message : String(error || "")
     const message = publicErrorMessage(error)
     await updateTaskRun(taskRun.id, {
       status: "failed",
       stage: "视频任务提交失败",
       progress: 100,
       errorMessage: message,
-      errorCode: message.startsWith("视频网关未配置") ? "RELAYDANCE_GATEWAY_CONFIG_MISSING" : "RELAYDANCE_GATEWAY_ERROR",
+      errorCode: rawMessage.startsWith("RELAYDANCE_GATEWAY_CONFIG_MISSING") ? "RELAYDANCE_GATEWAY_CONFIG_MISSING" : "RELAYDANCE_GATEWAY_ERROR",
       sanitizedError: { message },
       metadata: {
         ...baseMetadata,
         gateway_status: "submit_error",
       },
     })
-    return NextResponse.json({ success: false, error: message, request_id: taskRun.requestId }, { status: message.startsWith("视频网关未配置") ? 503 : 500 })
+    return NextResponse.json({ success: false, error: message, request_id: taskRun.requestId }, { status: rawMessage.startsWith("RELAYDANCE_GATEWAY_CONFIG_MISSING") ? 503 : 500 })
   }
 }
