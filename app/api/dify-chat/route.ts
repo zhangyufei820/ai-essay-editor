@@ -33,7 +33,7 @@ import { isConfiguredAdminUser } from "@/lib/admin-auth"
 import { internalDifyFetch } from "@/lib/internal-dify-fetch"
 import { getDifyCredentialForModel } from "@/lib/dify-credentials"
 import { sanitizeDifyAnswerForModel } from "@/lib/dify-answer-cleanup"
-import { getSafeUpstreamErrorMessage, stripUpstreamBranding } from "@/lib/chat-error-sanitizer"
+import { getSafeUpstreamErrorMessage, sanitizePublicAiStatus, stripUpstreamBranding } from "@/lib/chat-error-sanitizer"
 import { isWorkflowSkillAgent } from "@/lib/workflow-skill-agents"
 import { extractDifyTextOutput } from "@/lib/dify-output-text"
 import { rewriteOpenClawMediaReferences } from "@/lib/openclaw-media"
@@ -1337,6 +1337,7 @@ function enqueueSseStatus(controller: SseByteController, payload: {
   enqueueSseEvent(controller, {
     event: "status",
     ...payload,
+    stage: sanitizePublicAiStatus(payload.stage, "任务仍在处理中"),
     ts: Date.now(),
   })
 }
@@ -4070,7 +4071,7 @@ export async function POST(request: NextRequest) {
           : model === "open-claw" || isAllInOneAgent || model === BEIKE_PRO_MODEL
             ? OPENCLAW_FIRST_BYTE_TIMEOUT_MS
             : DEFAULT_DIFY_FIRST_BYTE_TIMEOUT_MS
-        const timeoutStage = useBlockingDifyChat ? "Dify blocking 响应超时" : "Dify 首字节超时"
+        const timeoutStage = "服务响应超时"
         const timeoutCode = useBlockingDifyChat ? "DIFY_BLOCKING_TIMEOUT" : "DIFY_FIRST_BYTE_TIMEOUT"
         const timeoutMessage = useBlockingDifyChat
           ? `请求超时：Dify 服务在 ${Math.round(firstByteTimeoutMs / 1000)} 秒内未完成响应`
@@ -4088,7 +4089,7 @@ export async function POST(request: NextRequest) {
         try {
             fireAndForget("AI Task Trace running", updateTaskRun(taskRun.id, {
               status: "running",
-              stage: isWorkflow ? "工作流已提交" : "Dify 会话已提交",
+              stage: "任务已提交",
               progress: 8,
               conversationId: currentConvId,
             }))
@@ -4174,7 +4175,7 @@ export async function POST(request: NextRequest) {
     if (!response) {
         await updateTaskRun(taskRun.id, {
           status: "failed",
-          stage: "无法获取 Dify 响应",
+          stage: "服务暂时没有响应",
           progress: 100,
           errorMessage: "请求失败：无法获取响应",
           errorCode: "DIFY_NO_RESPONSE",
@@ -4197,7 +4198,7 @@ export async function POST(request: NextRequest) {
         })
         await updateTaskRun(taskRun.id, {
           status: "failed",
-          stage: "Dify 返回错误",
+          stage: "服务返回错误",
           progress: 100,
           errorMessage: handledErrorMessage,
           errorCode: handledErrorCode,
@@ -4229,7 +4230,7 @@ export async function POST(request: NextRequest) {
 	          console.log(`🎨 [GPT Image 2] 首次响应未返回最终图片，开始轮询 workflow_run_id=${workflowRunId}`)
 	          await updateTaskRun(taskRun.id, {
 	            status: "running",
-	            stage: "轮询 Dify 工作流详情",
+	            stage: "正在检查任务结果",
 	            progress: 55,
 	            workflowRunId,
 	          })
@@ -4784,7 +4785,7 @@ export async function POST(request: NextRequest) {
                   const nodeTitle = String(nodeData.title || json.title || "正在处理")
                   if (json.event === "node_started") {
                     enqueueSseStatus(controller, {
-                      stage: nodeTitle,
+                      stage: "正在分析内容",
                       progress: hasReceivedContent ? 60 : 30,
                     })
                   }

@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "crypto"
 import { createClient, type SupabaseClient } from "@supabase/supabase-js"
+import { sanitizePublicAiError, sanitizePublicAiStatus } from "@/lib/chat-error-sanitizer"
 
 export type TaskStatus = "queued" | "running" | "succeeded" | "failed" | "timeout" | "cancelled"
 type UnifiedTaskStatus = "queued" | "running" | "completed" | "failed" | "expired" | "cancelled"
@@ -56,6 +57,12 @@ export type UnifiedMediaTask = {
   created_at?: string | null
   updated_at?: string | null
   completed_at?: string | null
+}
+
+export type PublicTaskRunRecord = Omit<TaskRunRecord, "stage" | "current_tool" | "error_message"> & {
+  stage?: string | null
+  current_tool?: string | null
+  error_message?: string | null
 }
 
 type TaskNodeEvent = {
@@ -253,7 +260,11 @@ export function normalizeMediaTask(task: TaskRunRecord): UnifiedMediaTask {
   const metadata = asRecord(task.metadata)
   const status = normalizeTaskStatus(task.status, metadata)
   const providerStatus = asString(metadata.gateway_status) || asString(metadata.provider_status) || task.status || null
-  const message = task.error_message || task.stage || (
+  const safeStage = sanitizePublicAiStatus(task.stage, "任务仍在处理中")
+  const safeErrorMessage = task.error_message
+    ? sanitizePublicAiError(task.error_message, "任务处理失败，请稍后重试。")
+    : null
+  const message = safeErrorMessage || safeStage || (
     status === "completed" ? "任务已完成" :
     status === "failed" ? "任务失败" :
     status === "expired" ? "任务已过期" :
@@ -268,10 +279,10 @@ export function normalizeMediaTask(task: TaskRunRecord): UnifiedMediaTask {
     status,
     provider_status: providerStatus,
     progress: normalizeTaskProgress(task, status),
-    stage: task.stage || null,
+    stage: safeStage || null,
     message,
     outputs: normalizeTaskOutputs(task, metadata),
-    error: task.error_message ? { message: task.error_message, code: task.error_code || null } : null,
+    error: safeErrorMessage ? { message: safeErrorMessage, code: task.error_code || null } : null,
     upstream_task_id: task.upstream_task_id || null,
     request_id: task.request_id || null,
     trace_id: task.trace_id || null,
@@ -279,6 +290,17 @@ export function normalizeMediaTask(task: TaskRunRecord): UnifiedMediaTask {
     created_at: task.created_at || null,
     updated_at: task.updated_at || null,
     completed_at: task.completed_at || null,
+  }
+}
+
+export function toPublicTaskRun(task: TaskRunRecord): PublicTaskRunRecord {
+  return {
+    ...task,
+    stage: sanitizePublicAiStatus(task.stage, "任务仍在处理中"),
+    current_tool: task.current_tool ? "智能处理" : null,
+    error_message: task.error_message
+      ? sanitizePublicAiError(task.error_message, "任务处理失败，请稍后重试。")
+      : null,
   }
 }
 

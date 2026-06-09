@@ -1,5 +1,11 @@
 import { isAssistantFailureContent } from "@/lib/chat-message-guards"
-import { getSafeUpstreamErrorMessage, hasTechnicalUpstreamErrorText } from "@/lib/chat-error-sanitizer"
+import {
+  getSafeUpstreamErrorMessage,
+  hasInternalAiDetailText,
+  hasTechnicalUpstreamErrorText,
+  sanitizePublicAiError,
+  sanitizePublicAiStatus,
+} from "@/lib/chat-error-sanitizer"
 import { readFileSync } from "fs"
 import path from "path"
 
@@ -18,8 +24,28 @@ describe("chat message guards", () => {
     const technicalMessage = "req_id: 073a50cd02 PluginInvokeError: {'args':{'description':'[models] Error: API request failed with status code 408: {\"error\":{\"message\":\"LiteLLM.Timeout: APITimeoutError - Request timed out. Error_str: Request timed out... No fallback model group found for original_model_group=gemini-3.1-pro-preview\"}}'}}"
 
     expect(hasTechnicalUpstreamErrorText(technicalMessage)).toBe(true)
-    expect(getSafeUpstreamErrorMessage(technicalMessage, "模型服务暂时不可用，请稍后重试。")).toBe("模型服务响应超时或备用线路不可用。请先刷新当前会话或历史记录查看是否已有结果；若仍无结果，再重新提交。")
-    expect(getSafeUpstreamErrorMessage("正常业务文案", "模型服务暂时不可用，请稍后重试。")).toBeNull()
+    expect(getSafeUpstreamErrorMessage(technicalMessage, "智能服务暂时不可用，请稍后重试。")).toBe("智能服务响应超时或备用线路不可用。请先刷新当前会话或历史记录查看是否已有结果；若仍无结果，再重新提交。")
+    expect(getSafeUpstreamErrorMessage("正常业务文案", "智能服务暂时不可用，请稍后重试。")).toBeNull()
+  })
+
+  it("removes backend provider and workflow details from public task status text", () => {
+    const samples = [
+      "Dify 会话已提交",
+      "轮询 Dify 工作流详情",
+      "总编辑 执行失败",
+      "PluginInvokeError: [models] Error from LiteLLM provider TokenFlux",
+      "node_finished model_provider=openai workflow_run_id=abc",
+    ]
+
+    for (const sample of samples) {
+      const publicStatus = sanitizePublicAiStatus(sample, "任务仍在处理中")
+      const publicError = sanitizePublicAiError(sample, "服务暂时不可用，请稍后重试。")
+      expect(hasInternalAiDetailText(publicStatus)).toBe(false)
+      expect(hasInternalAiDetailText(publicError)).toBe(false)
+      expect(`${publicStatus}\n${publicError}`).not.toMatch(/Dify|Workflow|Plugin|LiteLLM|TokenFlux|node|model|provider|工作流|节点|模型|工具|插件/)
+    }
+
+    expect(sanitizePublicAiStatus("Dify 会话已提交")).toBe("任务已提交")
   })
 
   it("uses the guard before showing share rewards or creating share links", () => {

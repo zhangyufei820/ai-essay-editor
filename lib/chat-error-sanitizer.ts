@@ -14,6 +14,46 @@ const TECHNICAL_UPSTREAM_ERROR_PATTERNS = [
   /\bError code:\s*408\b/i,
 ] as const
 
+const INTERNAL_AI_DETAIL_PATTERNS = [
+  /Dify/i,
+  /Workflow/i,
+  /workflow/i,
+  /LiteLLM/i,
+  /Plugin/i,
+  /PluginInvokeError/i,
+  /node[_\s-]?(?:id|started|finished|execution)?/i,
+  /model[_\s-]?(?:id|provider|group)?/i,
+  /provider/i,
+  /gateway/i,
+  /OpenAI/i,
+  /Anthropic/i,
+  /Gemini/i,
+  /Claude/i,
+  /Moonapix/i,
+  /VivaAPI/i,
+  /TokenFlux/i,
+  /工具|插件|节点|工作流|模型|供应商|网关|上游|会话已提交/,
+] as const
+
+const INTERNAL_STATUS_REPLACEMENTS: Array<[RegExp, string]> = [
+  [/Dify\s*blocking\s*响应超时/gi, "服务响应超时"],
+  [/Dify\s*首字节超时/gi, "服务响应超时"],
+  [/Dify\s*返回错误/gi, "服务返回错误"],
+  [/无法获取\s*Dify\s*响应/gi, "服务暂时没有响应"],
+  [/轮询\s*Dify\s*工作流详情/gi, "正在检查任务结果"],
+  [/Dify\s*会话已提交/gi, "任务已提交"],
+  [/工作流已提交/g, "任务已提交"],
+  [/工作流已完成/g, "任务已完成"],
+  [/已收到最终节点回复/g, "已收到结果，正在整理"],
+  [/OpenClaw\s*上游节点执行失败/gi, "任务处理失败"],
+  [/OpenClaw\s*上游返回空内容/gi, "任务没有返回可展示内容"],
+  [/已收到\s*OpenClaw\s*最终回复/gi, "已收到结果，正在整理"],
+  [/blocking\s*响应处理失败/gi, "响应处理失败"],
+  [/客户端连接中断/g, "连接中断"],
+  [/服务端致命错误/g, "服务暂时不可用"],
+  [/([^\n\r，。；;:：]{1,40})\s*执行失败/g, "任务处理失败"],
+]
+
 const TIMEOUT_ERROR_PATTERNS = [
   /APITimeoutError/i,
   /LiteLLM\.Timeout/i,
@@ -28,7 +68,7 @@ const TIMEOUT_ERROR_PATTERNS = [
 function serviceNounFromFallback(fallback: string) {
   if (/图片|图像/.test(fallback)) return "图片服务"
   if (/语音|音频/.test(fallback)) return "语音服务"
-  return "模型服务"
+  return "智能服务"
 }
 
 export function hasTechnicalUpstreamErrorText(value: unknown): boolean {
@@ -52,14 +92,51 @@ export function getSafeUpstreamErrorMessage(
   if (hasTimeoutUpstreamErrorText(value)) {
     return `${noun}响应超时或备用线路不可用。请先刷新当前会话或历史记录查看是否已有结果；若仍无结果，再重新提交。`
   }
-  return `${noun}暂时不可用，系统没有把本次内部错误展示给学生。请稍后重试或切换其他模型。`
+  return `${noun}暂时不可用，系统没有把本次内部错误展示给学生。请稍后重试或切换其他功能。`
 }
 
 export function stripUpstreamBranding(value: string) {
   return value
     .replace(/Dify\s*API/gi, "服务")
     .replace(/Dify/gi, "服务")
-    .replace(/LiteLLM/gi, "模型服务")
+    .replace(/LiteLLM/gi, "智能服务")
     .replace(/PluginInvokeError/gi, "服务调用错误")
     .replace(/网关/g, "服务")
+}
+
+export function hasInternalAiDetailText(value: unknown): boolean {
+  if (typeof value !== "string") return false
+  return INTERNAL_AI_DETAIL_PATTERNS.some((pattern) => pattern.test(value))
+}
+
+export function sanitizePublicAiStatus(value: unknown, fallback = "任务仍在处理中"): string {
+  if (typeof value !== "string" || !value.trim()) return fallback
+
+  const safeUpstreamMessage = getSafeUpstreamErrorMessage(value)
+  if (safeUpstreamMessage) return safeUpstreamMessage
+
+  let output = value.trim()
+  for (const [pattern, replacement] of INTERNAL_STATUS_REPLACEMENTS) {
+    output = output.replace(pattern, replacement)
+  }
+  output = stripUpstreamBranding(output)
+    .replace(/\b(?:node|model|provider|workflow|plugin|gateway)[-_a-z0-9:. ]*/gi, "服务")
+    .replace(/\b(?:req_id|request_id|workflow_run_id|conversation_id|task_id)\s*[:=]\s*[\w-]+/gi, "")
+    .replace(/\b(?:sx|gpt|gemini|claude|openai|anthropic)[\w.-]*/gi, "智能服务")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/\s*([，。；：,.!?])\s*/g, "$1")
+    .trim()
+
+  if (!output || hasInternalAiDetailText(output)) return fallback
+  return output
+}
+
+export function sanitizePublicAiError(value: unknown, fallback = "服务暂时不可用，请稍后重试。"): string {
+  if (typeof value !== "string" || !value.trim()) return fallback
+  const safeUpstreamMessage = getSafeUpstreamErrorMessage(value, fallback)
+  if (safeUpstreamMessage) return safeUpstreamMessage
+
+  const output = sanitizePublicAiStatus(value, fallback)
+  if (!output || hasInternalAiDetailText(output)) return fallback
+  return output
 }

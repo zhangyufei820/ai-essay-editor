@@ -3,6 +3,7 @@ import {
   extractArtifactsFromText,
   normalizeMediaTask,
   sanitizeForTrace,
+  toPublicTaskRun,
 } from "@/lib/ai-task-trace"
 
 jest.mock("@/lib/relaydance-gateway-client", () => ({
@@ -90,6 +91,29 @@ describe("ai task trace helpers", () => {
       }),
     ])
     expect(task.metadata.token).toBe("[redacted]")
+  })
+
+  it("keeps internal workflow details out of public task records and media task messages", () => {
+    const rawTask = {
+      id: "chat_req_1",
+      user_id: "user_1",
+      kind: "chat",
+      status: "running",
+      progress: 8,
+      request_id: "chat_req_1",
+      stage: "Dify 会话已提交",
+      current_tool: "总编辑",
+      error_message: "PluginInvokeError from LiteLLM provider TokenFlux",
+      metadata: { provider: "tokenflux" },
+    }
+    const publicTask = toPublicTaskRun(rawTask)
+    const mediaTask = normalizeMediaTask(rawTask)
+
+    expect(publicTask.stage).toBe("任务已提交")
+    expect(publicTask.current_tool).toBe("智能处理")
+    expect(publicTask.error_message).not.toMatch(/Dify|Plugin|LiteLLM|TokenFlux|provider|总编辑/)
+    expect(mediaTask.stage).toBe("任务已提交")
+    expect(mediaTask.message).not.toMatch(/Dify|Plugin|LiteLLM|TokenFlux|provider|总编辑/)
   })
 
   it("refreshes RelayDance tasks into completed unified media tasks", async () => {

@@ -53,7 +53,7 @@ import { VocabCardDifyForm, type VocabCardDifyInputs } from "./VocabCardDifyForm
 import { brandColors, slateColors } from "@/lib/design-tokens"
 import { cleanLLMText } from "@/lib/text-sanitizer"
 import { sanitizeDifyAnswerForModel } from "@/lib/dify-answer-cleanup"
-import { getSafeUpstreamErrorMessage, hasTechnicalUpstreamErrorText } from "@/lib/chat-error-sanitizer"
+import { getSafeUpstreamErrorMessage, hasTechnicalUpstreamErrorText, sanitizePublicAiError, sanitizePublicAiStatus } from "@/lib/chat-error-sanitizer"
 import { parseEssayReview } from "@/lib/parse-essay-review"
 import { extractDifyTextOutput } from "@/lib/dify-output-text"
 import { isAssistantFailureContent } from "@/lib/chat-message-guards"
@@ -568,7 +568,7 @@ function getChatErrorMessage(error: unknown, status?: number, model?: string): s
     return "图片生成服务暂时不可用，可能是余额、模型、尺寸或参数不兼容导致。请稍后重试或调整提示词。"
   }
 
-  return raw || "对话出错，请稍后重试。"
+  return sanitizePublicAiError(raw, "对话出错，请稍后重试。")
 }
 
 function buildChatErrorContent(message: string): string {
@@ -588,7 +588,7 @@ function getSafeAssistantErrorContent(message: string) {
 }
 
 function normalizeChatTaskFailureMessage(message: string, model?: string) {
-  if (!hasTechnicalUpstreamErrorText(message)) return message
+  if (!hasTechnicalUpstreamErrorText(message)) return sanitizePublicAiError(message, `${getChatModelDisplayLabel(model)}暂时不可用，请稍后重试。`)
   return getSafeUpstreamErrorMessage(message, `${getChatModelDisplayLabel(model)}暂时不可用，请稍后重试。`) || message
 }
 
@@ -603,8 +603,8 @@ async function getTaskFailureMessage(requestId: string, model: string): Promise<
     const task = Array.isArray(payload.tasks) ? payload.tasks[0] : null
     if (!task) return null
 
-    const stage = typeof task.stage === "string" ? task.stage : ""
-    const detail = typeof task.error_message === "string" ? task.error_message : ""
+    const stage = typeof task.stage === "string" ? sanitizePublicAiStatus(task.stage, "任务仍在处理中") : ""
+    const detail = typeof task.error_message === "string" ? sanitizePublicAiError(task.error_message, "") : ""
     const status = typeof task.status === "string" ? task.status : undefined
     const modelLabel = getChatModelDisplayLabel(model)
     if (["failed", "timeout", "cancelled"].includes(task.status)) {
@@ -2935,7 +2935,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
                             ...context,
                             lastActivityAt: Date.now(),
                             heartbeatCount: (context.heartbeatCount || 0) + 1,
-                            stage: String(json.stage || json.message || context.stage || "任务仍在处理中"),
+                            stage: sanitizePublicAiStatus(String(json.stage || json.message || context.stage || "任务仍在处理中"), "任务仍在处理中"),
                             traceId: traceId || context.traceId,
                           }
                         : context)
@@ -2957,7 +2957,7 @@ function ChatInterfaceInner({ initialModel }: ChatInterfaceInnerProps) {
 	                      }
 	                      if (nodeTitle) {
                         setProcessingContext((context) => context?.requestId === requestId
-                          ? { ...context, stage: String(nodeTitle), lastActivityAt: Date.now(), traceId: traceId || context.traceId }
+                          ? { ...context, stage: sanitizePublicAiStatus(String(nodeTitle), "正在分析内容"), lastActivityAt: Date.now(), traceId: traceId || context.traceId }
                           : context)
 	                      }
 
