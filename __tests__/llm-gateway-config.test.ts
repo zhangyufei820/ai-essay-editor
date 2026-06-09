@@ -208,7 +208,13 @@ describe("llm gateway reliability config", () => {
     expect(fallbackTargets.get("sx-gpt-5.5-tokenflux")).toEqual(["sx-gpt-5.5-moonapix", "sx-gpt-5.5-vivaapi"])
     expect(fallbackTargets.get("sx-gpt-5.5-moonapix")).toEqual(["sx-gpt-5.5-tokenflux", "sx-gpt-5.5-vivaapi"])
     expect(fallbackTargets.get("sx-gpt-5.5-vivaapi")).toEqual(["sx-gpt-5.5-tokenflux", "sx-gpt-5.5-moonapix"])
-    expect(fallbackTargets.get("sx-math-text")).toEqual(["sx-gpt-5.5-moonapix", "sx-gpt-5.5-vivaapi"])
+    expect(fallbackTargets.get("sx-math-text")).toEqual([
+      "sx-gpt-5.5-moonapix",
+      "sx-gemini-3.1-pro",
+      "gpt-5.4-mini",
+      "sx-image-vision",
+      "sx-gpt-5.5-vivaapi",
+    ])
     expect(fallbackTargets.get("sx-general-text")).toEqual(["sx-gpt-5.5-moonapix", "sx-gpt-5.5-vivaapi"])
     expect(fallbackTargets.get("sx-gemini-3.1-pro")).toEqual(["sx-gpt-5.5-tokenflux", "sx-gpt-5.5-moonapix"])
     expect(fallbackTargets.get("sx-chinese-text")).toEqual([
@@ -288,10 +294,15 @@ describe("llm gateway reliability config", () => {
       }
     }
 
-    for (const alias of ["sx-fast-chat", "sx-math-text", "sx-general-text"]) {
+    for (const alias of ["sx-fast-chat", "sx-general-text"]) {
       expect(fallbackTargets.get(alias)?.[0]).toBe("sx-gpt-5.5-moonapix")
       expect(fallbackTargets.get(alias)).not.toContain("sx-gemini-3.1-pro")
     }
+
+    expect(fallbackTargets.get("sx-math-text")?.[0]).toBe("sx-gpt-5.5-moonapix")
+    expect(fallbackTargets.get("sx-math-text")).toContain("sx-gemini-3.1-pro")
+    expect(fallbackTargets.get("sx-math-text")).toContain("gpt-5.4-mini")
+    expect(fallbackTargets.get("sx-math-text")).toContain("sx-image-vision")
 
     expect(fallbackTargets.get("sx-image-vision")?.slice(0, 2)).toEqual([
       "sx-gpt-5.4-mini-moonapix",
@@ -422,6 +433,9 @@ describe("llm gateway reliability config", () => {
     expect(keywords.has("血腥")).toBe(false)
     expect(keywords.has("毒品")).toBe(false)
     expect(keywords.has("国家领导人")).toBe(false)
+    expect(keywords.has("子弹")).toBe(false)
+    expect(keywords.has("火药")).toBe(false)
+    expect(keywords.has("炸弹")).toBe(false)
     expect(descriptions).toEqual(new Set(["色情内容", "枪支内容"]))
     expect((policy.blocked_words || []).every((item) => item.action === "BLOCK")).toBe(true)
   })

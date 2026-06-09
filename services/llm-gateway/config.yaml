@@ -725,7 +725,7 @@ router_settings:
     - sx-claude-sonnet-4-6-vivaapi: ["sx-claude-sonnet-4-6-moonapix", "sx-general-text"]
     - sx-claude-opus-4-7-vivaapi: ["sx-claude-opus-4-7-moonapix", "sx-general-text", "sx-claude-sonnet-4-6"]
     - sx-claude-opus-4-7-moonapix: ["sx-claude-sonnet-4-6", "sx-general-text", "sx-claude-opus-4-7-vivaapi"]
-    - sx-math-text: ["sx-gpt-5.5-moonapix", "sx-gpt-5.5-vivaapi"]
+    - sx-math-text: ["sx-gpt-5.5-moonapix", "sx-gemini-3.1-pro", "gpt-5.4-mini", "sx-image-vision", "sx-gpt-5.5-vivaapi"]
     - sx-general-text: ["sx-gpt-5.5-moonapix", "sx-gpt-5.5-vivaapi"]
     - sx-gemini-3.1-pro: ["sx-gpt-5.5-tokenflux", "sx-gpt-5.5-moonapix"]
     - sx-image-vision: ["sx-gpt-5.4-mini-moonapix", "sx-image-vision-moonapix", "sx-gpt-5.4-mini-vivaapi", "gpt-5.4-mini"]
