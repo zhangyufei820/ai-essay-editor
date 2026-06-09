@@ -243,8 +243,17 @@ describe("chat message guards", () => {
       .replace(/\b(?:const|let|var|function)\s+\w*[A-Za-z]*(?:OpenClaw|Codex|Dify|Workflow|Gemini|Gpt|Suno|Banana)\w*[\s\S]*?(?=\n(?:const|let|var|function|export|class|type|interface)\b|$)/g, "")
       .replace(/\/(?:\\\/|[^/\n])+\/[a-z]*/gi, "")
       .replace(/\/\/.*$/gm, "")
+    const publicCopySurface = [
+      agentPlaza,
+      agentRegistry,
+      toolsPage,
+      helpPage,
+      helpLayout,
+      pricing,
+    ].join("\n")
 
     expect(withoutCodeOnlyIdentifiers).not.toMatch(/ChatGPT|Claude opus|Claude Opus|Gemini Pro|Gemini 图像|Google Gemini|Grok 4\.2|Grok-4\.2|Open Claw|OpenClaw 演示页|OpenClaw 智能助手|GPT Image 2|Image 2|Banana2 Pro|Banana 2 Pro|suno音乐创作|DeepSeek|Qwen|OpenAI|Anthropic|xAI|Fireworks|Llama|Mixtral|独立模型|顶级模型|高级模型|模型专区|模型版本|供应商|网关|工作流凭据失效|英文 id/)
+    expect(publicCopySurface).not.toMatch(/按 Token 计费|1K tokens|token 用量|target_model 仅支持|参数映射|Tools Desk|Sparkpage 综合报告/)
     expect(publicSurface).toContain("getPublicAiLabel(\"gpt-5\")")
     expect(publicSurface).toContain("getPublicAiLabel(\"claude-opus\")")
     expect(publicSurface).toContain("getPublicAiLabel(\"gemini-pro\")")

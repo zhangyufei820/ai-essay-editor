@@ -137,7 +137,7 @@ export const PLAZA_AGENTS: PlazaAgent[] = [
     modelKey: "super-all-in-one-agent",
     tags: ["综合能力", "PPT", "图像", "视频", "论文", "联网"],
     badge: "核心",
-    priceLabel: "按 Token 计费",
+    priceLabel: "按内容计费",
     featured: true,
   },
   {
@@ -182,7 +182,7 @@ export const PLAZA_AGENTS: PlazaAgent[] = [
     agent: "all-in-one-agent",
     modelKey: "all-in-one-agent",
     tags: ["数学图片", "动画", "文件", "综合任务"],
-    priceLabel: "按 Token 计费",
+    priceLabel: "按内容计费",
     featured: true,
   },
   {
@@ -543,7 +543,7 @@ export const PLAZA_AGENTS: PlazaAgent[] = [
   },
   {
     id: "sparkpage",
-    name: "Sparkpage 综合报告",
+    name: "综合报告",
     category: "其他工具",
     description: "输入主题，生成更完整的资料整理和综合分析结果。",
     icon: PanelTop,

@@ -400,7 +400,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "图片不能超过 12MB，请压缩后再上传", code: "IMAGE_TOO_LARGE" }, { status: 413 })
   }
   if (!TARGET_MODELS.has(targetModel)) {
-    return NextResponse.json({ error: "参数错误：target_model 仅支持 gpt-image-2 或 nano_banana", code: "INVALID_TARGET_MODEL" }, { status: 400 })
+    return NextResponse.json({ error: "生成方式参数错误，请刷新页面后重试", code: "INVALID_TARGET_MODEL" }, { status: 400 })
   }
 
   const wantsStream = request.nextUrl.searchParams.get("stream") === "1"

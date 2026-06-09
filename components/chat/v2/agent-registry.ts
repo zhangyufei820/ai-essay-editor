@@ -144,7 +144,7 @@ export const AGENT_REGISTRY: Record<string, AgentDefinition> = {
     description: "自动选择合适工具完成复杂任务",
     group: "general",
     artifactType: "markdown",
-    priceLabel: "按 Token 计费",
+    priceLabel: "按内容计费",
     icon: IconAllInOne,
   },
   "super-all-in-one-agent": {
@@ -153,7 +153,7 @@ export const AGENT_REGISTRY: Record<string, AgentDefinition> = {
     description: "接入综合能力，可完成 PPT、图像生成、视频生成、超长论文写作、联网和多步骤任务。",
     group: "general",
     artifactType: "markdown",
-    priceLabel: "按 Token 计费",
+    priceLabel: "按内容计费",
     icon: IconSuperAgent,
   },
 }

@@ -56,8 +56,8 @@ function ProgressBar({ value, label }: { value: number; label: string }) {
 }
 
 const reverseModelOptions: Array<{ value: ReverseTargetModel; label: string }> = [
-  { value: "gpt-image-2", label: "gpt-image-2" },
-  { value: "nano_banana", label: "nano_banana" },
+  { value: "gpt-image-2", label: "高清写实" },
+  { value: "nano_banana", label: "创意插画" },
 ]
 
 type VoiceOption = {
@@ -792,7 +792,7 @@ export default function ToolsPage() {
         <header className="w-full min-w-0 max-w-[calc(100vw-2rem)] rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-[rgba(255,255,255,0.58)] px-5 py-4 shadow-[0_18px_60px_rgba(16,55,35,0.08)] backdrop-blur sm:max-w-none">
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div>
-              <p className="text-xs font-bold uppercase tracking-[0.16em] text-[var(--seal-600)]">Tools Desk</p>
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-[var(--seal-600)]">工具工作台</p>
               <h1 className="mt-2 font-[var(--font-display)] text-2xl font-black leading-tight text-[var(--ink-900)] sm:text-3xl">
                 工具工作台
               </h1>
@@ -800,7 +800,7 @@ export default function ToolsPage() {
             <div className="hidden w-full min-w-0 grid-cols-3 gap-2 text-center sm:grid md:w-auto">
               {[
                 ["8", "可用工具"],
-                ["API", "实时处理"],
+                ["实时", "在线处理"],
                 ["1", "结果面板"],
               ].map(([value, label]) => (
                 <div
@@ -852,7 +852,7 @@ export default function ToolsPage() {
 
                 <div className="space-y-3">
                   <div className="space-y-2">
-                    <Label>参数映射</Label>
+                    <Label>生成方式</Label>
                     <div className="grid gap-2 sm:grid-cols-2">
                       {reverseModelOptions.map((option) => (
                         <button
@@ -879,7 +879,7 @@ export default function ToolsPage() {
                       rows={7}
                       value={reversePrompt}
                       onChange={(event) => setReversePrompt(event.target.value)}
-                      placeholder={`上传图片后，系统会按 ${selectedReverseModel.label} 参数反推提示词...`}
+                      placeholder={`上传图片后，系统会按${selectedReverseModel.label}方向反推提示词...`}
                     />
                   </div>
 
@@ -1005,7 +1005,7 @@ export default function ToolsPage() {
               </form>
             </ToolCard>
 
-            <ToolCard id="sparkpage" index="07" title="Sparkpage 综合报告" description="输入主题，生成更完整的资料整理和综合分析结果。" icon={IconAllInOne} featured>
+            <ToolCard id="sparkpage" index="07" title="综合报告" description="输入主题，生成更完整的资料整理和综合分析结果。" icon={IconAllInOne} featured>
               <form className="grid gap-3 md:grid-cols-[1fr_auto]" onSubmit={runSparkpage}>
                 <Input value={sparkQuery} onChange={(event) => setSparkQuery(event.target.value)} placeholder="输入要综合分析的主题" />
                 <Button type="submit" disabled={busy === "spark"}>

@@ -252,21 +252,21 @@ export function Pricing({ currentSubscription }: { currentSubscription?: string 
           <p className="text-[var(--ink-700)] leading-relaxed mb-6">
             <span className="font-bold text-[var(--ink-900)]">问：积分是如何消耗的？</span>
             <br />
-            答：文本生成按实际输入和输出内容计费。输入和输出都会消耗积分，输出越长，消耗越多。系统会在模型返回完成后，根据实际 token 用量扣除积分。
+            答：文本生成按实际输入和输出内容计费。输入和输出都会消耗积分，输出越长，消耗越多。系统会在回复完成后，根据实际内容长度扣除积分。
           </p>
           <ul className="space-y-3 text-[var(--ink-700)]">
             <li className="flex items-start">
               <Check className="w-5 h-5 text-[var(--ink-700)] mr-3 flex-shrink-0 mt-0.5" />
               <span>
                 <span className="font-bold text-[var(--ink-900)]">输入内容:</span>{" "}
-                <span className="font-bold text-[var(--ink-700)]">5 积分 / 1K tokens</span>
+                <span className="font-bold text-[var(--ink-700)]">约 5 积分 / 千字</span>
               </span>
             </li>
             <li className="flex items-start">
               <Check className="w-5 h-5 text-[var(--ink-700)] mr-3 flex-shrink-0 mt-0.5" />
               <span>
                 <span className="font-bold text-[var(--ink-900)]">输出内容:</span>{" "}
-                <span className="font-bold text-[var(--ink-700)]">20 积分 / 1K tokens</span>
+                <span className="font-bold text-[var(--ink-700)]">约 20 积分 / 千字</span>
               </span>
             </li>
             <li className="flex items-start">
@@ -288,7 +288,7 @@ export function Pricing({ currentSubscription }: { currentSubscription?: string 
             <p className="font-bold text-[var(--ink-900)] mb-3">图片和音乐如何扣费？</p>
             <ul className="space-y-2">
               <li>• 高质量图像：60 天共创体验期内登录用户可用，体验期后恢复订阅 / 白名单规则，支持 1K / 2K / 4K，按生成规格扣费。</li>
-              <li>• 音乐创作：约 100 积分起，实际可能包含文本 token 补扣。</li>
+              <li>• 音乐创作：约 100 积分起，实际可能按生成内容补充扣费。</li>
             </ul>
           </div>
           <div className="mt-6 rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-[var(--paper-50)] p-5 text-sm text-[var(--ink-700)] leading-relaxed">
@@ -312,7 +312,7 @@ export function Pricing({ currentSubscription }: { currentSubscription?: string 
             </div>
             <p className="mt-4">以上为预计积分区间，不是固定价格。实际消耗会随作文长度、批改详细程度和生成内容多少变化。</p>
           </div>
-          <p className="text-[var(--ink-700)] font-semibold text-sm mt-4">提示：文本价格不按模型名称分档，用户侧只按输入和输出 token 用量结算积分。</p>
+          <p className="text-[var(--ink-700)] font-semibold text-sm mt-4">提示：文本价格不按能力名称分档，用户侧只按输入和输出内容长度结算积分。</p>
           
           {/* 支持链接 */}
           <div className="mt-8 pt-6 border-t border-[var(--paper-200)]">
