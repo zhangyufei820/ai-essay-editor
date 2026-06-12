@@ -150,7 +150,7 @@ def models() -> dict[str, object]:
 @app.post("/v1/images/generations", dependencies=[Depends(require_bearer)])
 async def image_generations(request: ImageGenerationRequest) -> dict[str, object]:
     if not image_provider_ready():
-        raise HTTPException(status_code=503, detail="Image provider is not configured.")
+        raise HTTPException(status_code=503, detail="图像服务暂时不可用，请稍后重试。")
 
     payload = request.model_dump(exclude_none=True)
     payload["model"] = request.model or settings.image_model
@@ -166,10 +166,10 @@ async def image_generations(request: ImageGenerationRequest) -> dict[str, object
             retry_payload.pop("response_format", None)
             response = await client.post(image_generation_url(), headers=headers, json=retry_payload)
     if response.status_code >= 400:
-        safe_body = redact(response.text[:500], secret_values_for_error_redaction())
+        logger.warning("image generation request failed status=%s", response.status_code)
         raise HTTPException(
             status_code=502,
-            detail=f"Image provider request failed with status {response.status_code}: {safe_body}",
+            detail="图像服务暂时不可用，请稍后重试。",
         )
     return response.json()
 
@@ -240,8 +240,7 @@ async def chat_completions(request: ChatCompletionsRequest) -> object:
     result = await submit_task(run_request)
     content = result.get("result") or result.get("message") or ""
     if not result.get("success"):
-        error = result.get("error", {})
-        content = f"任务执行失败：{error.get('message', '未知错误')}"
+        content = "任务执行失败：智能服务暂时不可用，请稍后重试。"
 
     if request.stream:
         return StreamingResponse(
@@ -309,10 +308,10 @@ async def proxy_chat_completion(request: ChatCompletionsRequest, skill_name: str
     async with httpx.AsyncClient(timeout=timeout) as client:
         response = await client.post(url, headers=headers, json=payload)
     if response.status_code >= 400:
-        safe_body = redact(response.text[:500], secret_values_for_error_redaction())
+        logger.warning("skill gateway chat request failed status=%s", response.status_code)
         raise HTTPException(
             status_code=502,
-            detail=f"Provider chat request failed with status {response.status_code}: {safe_body}",
+            detail="智能服务暂时不可用，请稍后重试。",
         )
     return response.json()
 
@@ -385,12 +384,11 @@ async def stream_provider_chat(
         async with httpx.AsyncClient(timeout=timeout) as client:
             async with client.stream("POST", url, headers=headers, json=payload) as response:
                 if response.status_code >= 400:
-                    body = await response.aread()
-                    text = body.decode("utf-8", errors="replace")
-                    safe_body = redact(text[:500], secret_values_for_error_redaction())
+                    await response.aread()
+                    logger.warning("skill gateway streaming request failed status=%s", response.status_code)
                     async for event in stream_error_message(
                         requested_model,
-                        f"任务执行失败：模型供应商返回 {response.status_code}。{safe_body}",
+                        "任务执行失败：智能服务暂时不可用，请稍后重试。",
                     ):
                         yield event
                     return
@@ -402,10 +400,10 @@ async def stream_provider_chat(
                     else:
                         yield f"data: {line}\n\n"
     except Exception as exc:
-        safe_message = redact(str(exc), secret_values_for_error_redaction())
+        logger.warning("skill gateway streaming request failed error_type=%s", type(exc).__name__)
         async for event in stream_error_message(
             requested_model,
-            f"任务执行失败：模型流式连接异常。{safe_message}",
+            "任务执行失败：智能服务暂时不可用，请稍后重试。",
         ):
             yield event
 

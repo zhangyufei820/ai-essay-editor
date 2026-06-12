@@ -35,7 +35,7 @@ async function proxyMedia(request: NextRequest, context: Context, headOnly = fal
   const range = request.headers.get("range") || undefined
   const upstream = await fetchOmniMedia(decodedFilename, { range, method: headOnly ? "HEAD" : "GET" })
   if (!upstream.ok) {
-    return NextResponse.json({ error: upstream.error || "音频文件读取失败" }, { status: upstream.status })
+    return NextResponse.json({ error: "音频文件读取失败" }, { status: upstream.status })
   }
 
   return new Response(headOnly ? null : upstream.body, {

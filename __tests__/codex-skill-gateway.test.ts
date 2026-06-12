@@ -42,4 +42,13 @@ describe("codex skill gateway intent routing", () => {
     expect(source).toContain("allow_admin_intent=True")
     expect(envExample).toContain("ADMIN_API_KEY=replace-with-separate-admin-token")
   })
+
+  it("does not stream provider or raw backend errors to users", () => {
+    const source = read("services/codex-skill-gateway/app/main.py")
+    const security = read("services/codex-skill-gateway/app/security.py")
+
+    expect(source).toContain("任务执行失败：智能服务暂时不可用，请稍后重试。")
+    expect(source).toContain("图像服务暂时不可用，请稍后重试。")
+    expect(`${source}\n${security}`).not.toMatch(/模型供应商返回|Provider chat request failed|Image provider request failed|Image provider is not configured|Gateway API key is not configured|safe_body/)
+  })
 })

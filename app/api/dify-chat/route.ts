@@ -4707,7 +4707,7 @@ export async function POST(request: NextRequest) {
       const responseBody = new ReadableStream<Uint8Array>({
         async start(controller) {
           try {
-            enqueueSseStatus(controller, { stage: "已收到上游回复，正在整理结果", progress: 90 })
+            enqueueSseStatus(controller, { stage: "已收到服务结果，正在整理内容", progress: 90 })
             await applyBlockingDifyPayload(blockingPayload, controller)
             await finalizeDifyChatResponse("blocking 响应结束")
             controller.close()

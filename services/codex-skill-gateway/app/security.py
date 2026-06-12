@@ -54,7 +54,7 @@ def require_bearer(
     if not expected:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Gateway API key is not configured.",
+            detail="服务暂时不可用，请稍后重试。",
         )
     if credentials is None or credentials.scheme.lower() != "bearer":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
@@ -70,7 +70,7 @@ def require_admin_bearer(
     if not expected:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Admin API key is not configured.",
+            detail="管理服务暂时不可用，请稍后重试。",
         )
     if credentials is None or credentials.scheme.lower() != "bearer":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")

@@ -53,8 +53,8 @@ describe("Suno UI shape", () => {
 
     expect(source).toContain("function extractErrorMessage")
     expect(source).toContain("function toFriendlyErrorMessage")
-    expect(source).toContain("无可用渠道")
-    expect(source).toContain("音乐服务暂时不可用，请稍后再试或联系客服处理。")
+    expect(source).not.toContain("无可用渠道")
+    expect(source).toContain("音乐生成服务暂时繁忙，请稍后再试。")
     expect(source).not.toContain("音乐供应商通道暂不可用")
     expect(source).not.toContain("Dify 工作流")
     expect(source).toContain('text === "请求失败"')
