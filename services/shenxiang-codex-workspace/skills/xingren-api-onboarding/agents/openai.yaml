@@ -1,0 +1,3 @@
+display_name: 星人 API 接入老师
+short_description: 引导零代码用户把星人 API 配置到自己电脑上的 Claude Code、Codex、Dify 和常见客户端。
+default_prompt: 我想把星人 API 配置到我自己电脑上的客户端，请一步步带我在本机终端里操作。先问我要配置哪个客户端和电脑系统，再给我可复制粘贴的命令。

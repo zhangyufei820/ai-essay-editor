@@ -20,7 +20,6 @@ import Link from "next/link"
 import { ArrowRight, Blocks } from "lucide-react"
 import { ButtonV2 } from "@/components/ui/v2/button"
 import { ScoreSeal } from "@/components/ui/v2/seal"
-import { InkReveal } from "@/components/motion/InkMotion"
 import { cn } from "@/lib/utils"
 import { IconAllInOne, IconEssay, IconSealCheck } from "@/components/icons/v2"
 
@@ -53,7 +52,7 @@ export function HeroV2() {
 
       <div className="mx-auto box-border grid w-full max-w-7xl items-center gap-10 px-4 py-10 md:px-6 md:py-16 lg:grid-cols-[minmax(0,1fr)_minmax(360px,520px)] lg:gap-16 lg:py-24">
         {/* 左侧：文字 + CTA */}
-        <InkReveal as="div" className="max-w-2xl">
+        <div className="max-w-2xl">
           {/* 信誉徽章 */}
           <span className="inline-flex items-center gap-1.5 rounded-[var(--radius-pill)] border border-[var(--ink-200)] bg-[var(--paper-100)] px-3 py-1.5 text-[12px] font-semibold text-[var(--ink-700)] font-[var(--font-sans-v2)]">
             <IconSealCheck className="size-3.5" aria-hidden="true" />
@@ -114,16 +113,12 @@ export function HeroV2() {
               </li>
             ))}
           </ul>
-        </InkReveal>
+        </div>
 
         {/* 右侧：报告卡片预览 */}
-        <InkReveal
-          as="div"
-          delay={0.15}
-          className="hidden lg:block"
-        >
+        <div className="hidden lg:block">
           <ReportPreview />
-        </InkReveal>
+        </div>
       </div>
     </section>
   )

@@ -1,0 +1,4 @@
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+*/5 * * * * root /opt/shenxiang-new-api/scripts/codex_entry_guard.sh >> /opt/shenxiang-new-api/logs/codex-entry-guard.cron.log 2>&1

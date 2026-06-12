@@ -1,0 +1,147 @@
+site:
+  name: 星人 API
+  console_url: "https://api.aiphui.top"
+  docs_url: "https://api.aiphui.top/docs/"
+  codex_url: "https://api.aiphui.top/codex/"
+  third_party_page: "https://api.aiphui.top/docs/third-party-api-keys.html"
+  api_examples_page: "https://api.aiphui.top/docs/api-usage-examples.html"
+  claude_code_page: "https://api.aiphui.top/docs/claude-code-user-guide.html"
+  terminal_clients_page: "https://api.aiphui.top/docs/terminal-clients-quickstart.html"
+
+base_urls:
+  openai_compatible: "https://api.aiphui.top/v1"
+  claude_code: "https://api.aiphui.top/claude"
+  console: "https://api.aiphui.top"
+
+key_types:
+  text:
+    display_name: "星人 Codex 文本令牌"
+    base_url: "https://api.aiphui.top/v1"
+    allowed_models:
+      - gpt-5.4-mini
+      - gpt-5.4
+      - gpt-5.5
+    use_for:
+      - OpenAI-compatible chat clients
+      - Dify OpenAI-compatible provider
+      - Codex-style text/code tasks
+  claude:
+    display_name: "星人 Claude 高阶令牌"
+    base_url: "https://api.aiphui.top/claude"
+    allowed_models:
+      - cc-native-haiku
+      - cc-native-sonnet-fast
+      - cc-native-sonnet-full
+      - cc-native-opus-fast
+      - cc-native-opus-full
+      - cc-gpt-haiku
+      - cc-gpt-sonnet
+      - cc-gpt-opus
+    use_for:
+      - Claude Code
+      - Claude-native agent clients
+  image:
+    display_name: "星人图像生成令牌"
+    base_url: "https://api.aiphui.top/v1"
+    generation_endpoint: "/v1/images/generations"
+    edit_endpoint: "/v1/images/edits"
+    allowed_models:
+      - gpt-image-2-4K
+      - grok-imagine-image
+    model_usage:
+      gpt-image-2-4K: "普通文生图、局部编辑、mask；如果遇到服务超时，可换用 grok-imagine-image"
+      grok-imagine-image: "局部编辑、mask、参考图修改；常作为 Image 2 超时兜底"
+    mask_rules:
+      endpoint: "/v1/images/edits"
+      recommended_model: "gpt-image-2-4K"
+      fallback_model: "grok-imagine-image"
+      format: "PNG"
+      max_size: "4MB"
+      size_rule: "mask 宽高必须和第一张原图完全一致"
+      transparent_area: "alpha=0 的透明区域会被重画"
+      opaque_area: "alpha=255 的不透明区域会尽量保留"
+    use_for:
+      - Image generation
+      - Image editing where supported
+  video:
+    display_name: "星人视频生成令牌"
+    base_url: "https://api.aiphui.top/v1"
+    allowed_models:
+      - seedance-2.0
+      - grok-video-super-720p
+    use_for:
+      - Video generation
+      - Image-to-video where supported
+
+client_map:
+  claude_code:
+    protocol: anthropic
+    base_url: "https://api.aiphui.top/claude"
+    key_type: claude
+    recommended_model: cc-native-sonnet-fast
+    small_fast_model: cc-native-haiku
+  codex:
+    protocol: openai-compatible
+    base_url: "https://api.aiphui.top/v1"
+    key_type: text
+    recommended_model: gpt-5.5
+    fallback_model: gpt-5.4-mini
+  hermes:
+    protocol: openai-compatible
+    base_url: "https://api.aiphui.top/v1"
+    key_type: text
+    recommended_model: gpt-5.5
+  openclaw:
+    protocol: openai-compatible
+    base_url: "https://api.aiphui.top/v1"
+    key_type: text
+    recommended_model: gpt-5.5
+  opencode:
+    protocol: openai-compatible
+    base_url: "https://api.aiphui.top/v1"
+    key_type: text
+    recommended_model: gpt-5.5
+  dify:
+    protocol: openai-compatible
+    base_url: "https://api.aiphui.top/v1"
+    key_type: text
+    provider: OpenAI-API-compatible
+  cherry_studio:
+    protocol: openai-compatible
+    base_url: "https://api.aiphui.top/v1"
+    key_type: text
+  image_generation:
+    protocol: openai-images
+    base_url: "https://api.aiphui.top/v1"
+    key_type: image
+    endpoint: "/v1/images/generations"
+  video_generation:
+    protocol: vendor-compatible-video
+    base_url: "https://api.aiphui.top/v1"
+    key_type: video
+
+common_errors:
+  invalid_token:
+    patterns:
+      - "401"
+      - "invalid token"
+    answer: "重新复制对应类型的 Key，确认以 sk- 开头，没有空格。"
+  no_model_access:
+    patterns:
+      - "This token has no access to model"
+      - "model not allowed"
+    answer: "Key 类型不对。文本 Key 不能调图像/视频模型；图像 Key 不能调 Claude；Claude Code 要用 Claude 高阶令牌。"
+  insufficient_quota:
+    patterns:
+      - "insufficient quota"
+      - "额度不足"
+    answer: "余额或令牌额度不足，回到控制台检查余额或兑换充值码。"
+  no_available_channel:
+    patterns:
+      - "模型暂不可用"
+    answer: "模型当前暂不可用，先换推荐小模型测试，再联系管理员检查模型权限和服务可用性。"
+  timeout:
+    patterns:
+      - "timeout"
+      - "timed out"
+    answer: "延长客户端超时时间，优先开启流式输出；图像/视频任务可能需要更长等待。"

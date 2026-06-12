@@ -1,0 +1,96 @@
+recipes:
+  claude_code_macos:
+    title: "macOS/Linux 一键配置 Claude Code"
+    when: "User wants Claude Code on macOS or Linux."
+    command: |
+      printf "请粘贴“第三方接入”里的星人 Claude 高阶令牌，然后按回车："
+      read -r XINGREN_CLAUDE_KEY
+      mkdir -p ~/.xingren-api
+      cat > ~/.xingren-api/claude-code.env <<EOF
+      export ANTHROPIC_BASE_URL="https://api.aiphui.top/claude"
+      export ANTHROPIC_AUTH_TOKEN="$XINGREN_CLAUDE_KEY"
+      export ANTHROPIC_MODEL="cc-native-sonnet-fast"
+      export ANTHROPIC_SMALL_FAST_MODEL="cc-native-haiku"
+      export CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=1
+      EOF
+      source ~/.xingren-api/claude-code.env
+      echo "Claude Code 环境变量已加载。现在运行: claude"
+  claude_code_windows:
+    title: "Windows PowerShell 一键配置 Claude Code"
+    when: "User wants Claude Code on Windows."
+    command: |
+      $XingrenClaudeKey = Read-Host "请粘贴“第三方接入”里的星人 Claude 高阶令牌，然后按回车"
+      New-Item -ItemType Directory -Force "$env:USERPROFILE\\.xingren-api" | Out-Null
+      @(
+        '$env:ANTHROPIC_BASE_URL="https://api.aiphui.top/claude"',
+        '$env:ANTHROPIC_AUTH_TOKEN="' + $XingrenClaudeKey + '"',
+        '$env:ANTHROPIC_MODEL="cc-native-sonnet-fast"',
+        '$env:ANTHROPIC_SMALL_FAST_MODEL="cc-native-haiku"',
+        '$env:CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY="1"'
+      ) | Set-Content -Encoding UTF8 "$env:USERPROFILE\\.xingren-api\\claude-code.ps1"
+      . "$env:USERPROFILE\\.xingren-api\\claude-code.ps1"
+      Write-Host "Claude Code 环境变量已加载。现在运行: claude"
+  openai_models_check:
+    title: "OpenAI-compatible 模型列表检查"
+    when: "User wants to check whether an OpenAI-compatible key works."
+    command: |
+      printf "请粘贴“第三方接入”里的星人 Codex 文本令牌，然后按回车："
+      read -r XINGREN_TEXT_KEY
+      curl -sS https://api.aiphui.top/v1/models \
+        -H "Authorization: Bearer $XINGREN_TEXT_KEY"
+  image_models_check:
+    title: "图像令牌权限检查"
+    when: "User wants image generation or gpt-image-2-4K access."
+    command: |
+      printf "请粘贴“第三方接入”里的星人图像生成令牌，然后按回车："
+      read -r XINGREN_IMAGE_KEY
+      curl -sS https://api.aiphui.top/v1/models \
+        -H "Authorization: Bearer $XINGREN_IMAGE_KEY"
+  image_generation_example:
+    title: "图像生成示例，运行会消耗余额"
+    when: "User confirms they want to generate an image."
+    command: |
+      printf "请粘贴“第三方接入”里的星人图像生成令牌，然后按回车："
+      read -r XINGREN_IMAGE_KEY
+      curl https://api.aiphui.top/v1/images/generations \
+        -H "Authorization: Bearer $XINGREN_IMAGE_KEY" \
+        -H "Content-Type: application/json" \
+        -d '{
+          "model": "gpt-image-2-4K",
+          "prompt": "一只透明玻璃质感的未来感小猫，干净背景",
+          "size": "960x960",
+          "n": 1
+        }'
+  image_mask_edit_example:
+    title: "图像局部编辑 / mask 示例，运行会消耗余额"
+    when: "User wants to edit only part of an image with a mask."
+    notes:
+      - "局部编辑可以用 gpt-image-2-4K；如果遇到服务超时，再换 grok-imagine-image。"
+      - "mask 必须是 PNG、小于 4MB，宽高和原图完全一致。"
+      - "透明区域 alpha=0 会被重画，不透明区域会尽量保留。"
+    command: |
+      printf "请粘贴“第三方接入”里的星人图像生成令牌，然后按回车："
+      read -r XINGREN_IMAGE_KEY
+      curl https://api.aiphui.top/v1/images/edits \
+        -H "Authorization: Bearer $XINGREN_IMAGE_KEY" \
+        -F "model=gpt-image-2-4K" \
+        -F "image=@input.png" \
+        -F "mask=@mask.png" \
+        -F "prompt=只修改透明区域，把它改成红玫瑰，其余区域保持不变" \
+        -F "size=1024x1024"
+  dify_openai_compatible:
+    title: "Dify 手动填写项"
+    when: "User wants Dify setup."
+    fields:
+      provider: "OpenAI-API-compatible"
+      api_base_url: "https://api.aiphui.top/v1"
+      api_key: "星人 Codex 文本令牌"
+      model_name: "gpt-5.4-mini"
+  generic_openai_client:
+    title: "通用 OpenAI-compatible 客户端填写项"
+    when: "User wants Cherry Studio, OpenCat, Chatbox, Hermes, OpenClaw, OpenCode, or unknown OpenAI-compatible clients."
+    fields:
+      base_url: "https://api.aiphui.top/v1"
+      api_key: "星人 Codex 文本令牌"
+      model: "gpt-5.4-mini"
+      stronger_model: "gpt-5.5"

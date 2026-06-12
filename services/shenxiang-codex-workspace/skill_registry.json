@@ -1,0 +1,110 @@
+{
+  "codex_workspace": {
+    "name": "codex_workspace",
+    "display_name": "Codex 云工作台",
+    "category": "codex_workspace",
+    "description": "面向普通用户的云端 Codex 工作台：支持任务拆解、写作、代码、文件分析、模型角色配置和个人 Skill。",
+    "queue": "fast",
+    "timeout": 240,
+    "cost_points": 5,
+    "sandbox": "workspace-write",
+    "enabled": true,
+    "public": true
+  },
+  "paper_outline": {
+    "name": "paper_outline",
+    "display_name": "论文大纲",
+    "category": "academic_writing",
+    "description": "用于论文选题、开题框架、论文结构、章节大纲生成。",
+    "queue": "fast",
+    "timeout": 180,
+    "cost_points": 5,
+    "sandbox": "read-only",
+    "enabled": true,
+    "public": true
+  },
+  "paper_polish": {
+    "name": "paper_polish",
+    "display_name": "论文润色",
+    "category": "academic_writing",
+    "description": "用于论文段落润色、降口语化、提升学术表达。",
+    "queue": "fast",
+    "timeout": 180,
+    "cost_points": 3,
+    "sandbox": "read-only",
+    "enabled": true,
+    "public": true
+  },
+  "literature_review": {
+    "name": "literature_review",
+    "display_name": "文献综述",
+    "category": "academic_writing",
+    "description": "用于生成文献综述框架、研究现状整理、检索关键词建议。禁止编造真实文献。",
+    "queue": "heavy",
+    "timeout": 300,
+    "cost_points": 8,
+    "sandbox": "read-only",
+    "enabled": true,
+    "public": true
+  },
+  "image_prompt": {
+    "name": "image_prompt",
+    "display_name": "图片提示词",
+    "category": "image_prompt",
+    "description": "用于生成论文插图、公众号配图、封面图、Midjourney 提示词。",
+    "queue": "fast",
+    "timeout": 120,
+    "cost_points": 2,
+    "sandbox": "read-only",
+    "enabled": true,
+    "public": true
+  },
+  "teacher_lesson_plan": {
+    "name": "teacher_lesson_plan",
+    "display_name": "教案生成",
+    "category": "teacher_resource",
+    "description": "用于教师教案、教学设计、课堂活动设计。",
+    "queue": "fast",
+    "timeout": 180,
+    "cost_points": 5,
+    "sandbox": "read-only",
+    "enabled": true,
+    "public": true
+  },
+  "study_plan": {
+    "name": "study_plan",
+    "display_name": "学习规划",
+    "category": "study_planning",
+    "description": "用于学生学习计划、错题提升计划、阶段学习路径规划。",
+    "queue": "fast",
+    "timeout": 180,
+    "cost_points": 4,
+    "sandbox": "read-only",
+    "enabled": true,
+    "public": true
+  },
+  "storyboard-creator": {
+    "name": "storyboard-creator",
+    "display_name": "AI 故事板",
+    "category": "video_storyboard",
+    "description": "用于剧本解析、工业级 Shot List Sheet、剧组通告式分镜表、角色一致性卡、场景卡、图像提示词和视频生成提示词。",
+    "queue": "heavy",
+    "timeout": 300,
+    "cost_points": 8,
+    "sandbox": "read-only",
+    "enabled": true,
+    "public": true
+  },
+  "xingren-api-onboarding": {
+    "name": "xingren-api-onboarding",
+    "display_name": "API 接入老师",
+    "category": "api_onboarding",
+    "description": "用于零代码用户把星人 API 配置到自己电脑上的 Claude Code、Codex、Hermes、OpenClaw、OpenCode、Dify 和常见 OpenAI-compatible 客户端，输出可直接复制进本机终端的操作命令。",
+    "queue": "fast",
+    "timeout": 240,
+    "cost_points": 3,
+    "sandbox": "read-only",
+    "enabled": true,
+    "public": true
+  }
+}

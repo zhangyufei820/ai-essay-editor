@@ -1,0 +1,28 @@
+services:
+  shenxiang-claude-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: shenxiang-claude-gateway:latest
+    container_name: shenxiang-claude-gateway
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "127.0.0.1:3130:3130"
+    networks:
+      - shenxiang-claude-gateway-net
+      - shenxiang-new-api-net
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3130/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+networks:
+  shenxiang-claude-gateway-net:
+    name: shenxiang-claude-gateway-net
+  shenxiang-new-api-net:
+    external: true
+    name: shenxiang-new-api-net

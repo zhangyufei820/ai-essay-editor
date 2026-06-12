@@ -1,0 +1,78 @@
+name: shenxiang-new-api
+
+services:
+  shenxiang-new-api:
+    image: shenxiang-new-api-upstream-cost:20260612-1400-codex-entry
+    container_name: shenxiang-new-api
+    restart: unless-stopped
+    depends_on:
+      shenxiang-new-api-mysql:
+        condition: service_healthy
+      shenxiang-new-api-redis:
+        condition: service_healthy
+    ports:
+      - "${HOST_BIND_IP:-127.0.0.1}:${HOST_BIND_PORT:-3120}:${NEW_API_CONTAINER_PORT:-3000}"
+    environment:
+      TZ: ${TZ}
+      SQL_DSN: ${MYSQL_USER}:${MYSQL_PASSWORD}@tcp(shenxiang-new-api-mysql:3306)/${MYSQL_DATABASE}
+      REDIS_CONN_STRING: redis://:${REDIS_PASSWORD}@shenxiang-new-api-redis:6379
+      SESSION_SECRET: ${SESSION_SECRET}
+      CRYPTO_SECRET: ${CRYPTO_SECRET}
+      PLAYGROUND_MEDIA_CACHE_DIR: /data/media-cache
+      PLAYGROUND_MEDIA_URL_PREFIX: /pg/media/files
+      PLAYGROUND_MEDIA_MAX_MB: 256
+      TASK_PRICE_PATCH: grok-video-super-720p
+    volumes:
+      - ./data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:${NEW_API_CONTAINER_PORT:-3000}/api/status | grep -o '\"success\":\\s*true' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - shenxiang-new-api-net
+
+  shenxiang-new-api-mysql:
+    image: mysql:8.2
+    container_name: shenxiang-new-api-mysql
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - ./mysql:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$${MYSQL_ROOT_PASSWORD}\" --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    networks:
+      - shenxiang-new-api-net
+
+  shenxiang-new-api-redis:
+    image: redis:7
+    container_name: shenxiang-new-api-redis
+    restart: unless-stopped
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD}"]
+    volumes:
+      - ./redis:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$${REDIS_PASSWORD}\" ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    networks:
+      - shenxiang-new-api-net
+
+networks:
+  shenxiang-new-api-net:
+    name: shenxiang-new-api-net

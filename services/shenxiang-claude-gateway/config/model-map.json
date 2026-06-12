@@ -1,0 +1,179 @@
+{
+  "models": [
+    {
+      "id": "cc-gpt-haiku",
+      "display_name": "Claude Code Haiku",
+      "route_type": "openai-mapped",
+      "target_model": "gpt-5.4-mini",
+      "description": "适合轻量任务的 Claude Code 兼容模型。"
+    },
+    {
+      "id": "cc-gpt-sonnet",
+      "display_name": "Claude Code Sonnet",
+      "route_type": "openai-mapped",
+      "target_model": "gpt-5.5",
+      "description": "适合日常代码任务的 Claude Code 兼容模型。"
+    },
+    {
+      "id": "cc-gpt-opus",
+      "display_name": "Claude Code Opus",
+      "route_type": "openai-mapped",
+      "target_model": "codex-auto-review",
+      "description": "适合高质量代码任务的 Claude Code 兼容模型。"
+    },
+    {
+      "id": "claude-3-5-haiku-20241022",
+      "display_name": "Claude Haiku 兼容",
+      "route_type": "openai-mapped",
+      "target_model": "gpt-5.4-mini",
+      "description": "兼容常见 Claude Haiku 模型名。"
+    },
+    {
+      "id": "claude-3-5-sonnet-20241022",
+      "display_name": "Claude Sonnet 兼容",
+      "route_type": "openai-mapped",
+      "target_model": "gpt-5.5",
+      "description": "兼容常见 Claude Sonnet 模型名。"
+    },
+    {
+      "id": "claude-3-7-sonnet-20250219",
+      "display_name": "Claude Sonnet 3.7 兼容",
+      "route_type": "openai-mapped",
+      "target_model": "gpt-5.5",
+      "description": "兼容 Claude Code 旧模型名。"
+    },
+    {
+      "id": "claude-sonnet-4-5-20250929",
+      "display_name": "Claude Sonnet 4.5 兼容",
+      "route_type": "openai-mapped",
+      "target_model": "gpt-5.5",
+      "description": "兼容 Claude Code 默认 Sonnet 名称。"
+    },
+    {
+      "id": "claude-opus-4-5-20251101",
+      "display_name": "Claude Opus 4.5 兼容",
+      "route_type": "openai-mapped",
+      "target_model": "codex-auto-review",
+      "description": "兼容 Claude Opus 名称。"
+    },
+    {
+      "id": "cc-native-haiku",
+      "display_name": "Claude Haiku",
+      "route_type": "native-claude",
+      "target_model": "claude-haiku-4-5-20251001-full",
+      "description": "适合轻量任务的 Claude 风格模型。"
+    },
+    {
+      "id": "cc-native-sonnet-fast",
+      "display_name": "Claude Sonnet Fast",
+      "route_type": "native-claude",
+      "target_model": "claude-sonnet-4-6-fast",
+      "description": "适合快速代码任务的 Claude 风格模型。"
+    },
+    {
+      "id": "cc-native-sonnet-full",
+      "display_name": "Claude Sonnet Full",
+      "route_type": "native-claude",
+      "target_model": "claude-sonnet-4-6-full",
+      "description": "适合复杂代码任务的 Claude 风格模型。"
+    },
+    {
+      "id": "cc-native-opus-fast",
+      "display_name": "Claude Opus Fast",
+      "route_type": "native-claude",
+      "target_model": "claude-opus-4-8-fast",
+      "description": "适合高质量代码任务的 Claude 风格模型。"
+    },
+    {
+      "id": "cc-native-opus-full",
+      "display_name": "Claude Opus Full",
+      "route_type": "native-claude",
+      "target_model": "claude-opus-4-8-full",
+      "description": "适合深度代码任务的 Claude 风格模型。"
+    },
+    {
+      "id": "claude-haiku-4-5-20251001-full",
+      "display_name": "Claude Haiku 4.5 Full",
+      "route_type": "native-claude",
+      "target_model": "claude-haiku-4-5-20251001-full",
+      "description": "Claude 风格模型服务。"
+    },
+    {
+      "id": "claude-sonnet-4-5-20250929-fast",
+      "display_name": "Claude Sonnet 4.5 Fast",
+      "route_type": "native-claude",
+      "target_model": "claude-sonnet-4-5-20250929-fast",
+      "description": "Claude 风格模型服务。"
+    },
+    {
+      "id": "claude-sonnet-4-5-20250929-full",
+      "display_name": "Claude Sonnet 4.5 Full",
+      "route_type": "native-claude",
+      "target_model": "claude-sonnet-4-5-20250929-full",
+      "description": "Claude 风格模型服务。"
+    },
+    {
+      "id": "claude-sonnet-4-6-fast",
+      "display_name": "Claude Sonnet 4.6 Fast",
+      "route_type": "native-claude",
+      "target_model": "claude-sonnet-4-6-fast",
+      "description": "Claude 风格模型服务。"
+    },
+    {
+      "id": "claude-sonnet-4-6-full",
+      "display_name": "Claude Sonnet 4.6 Full",
+      "route_type": "native-claude",
+      "target_model": "claude-sonnet-4-6-full",
+      "description": "Claude 风格模型服务。"
+    },
+    {
+      "id": "claude-opus-4-5-20251101-full",
+      "display_name": "Claude Opus 4.5 Full",
+      "route_type": "native-claude",
+      "target_model": "claude-opus-4-5-20251101-full",
+      "description": "Claude 风格模型服务。"
+    },
+    {
+      "id": "claude-opus-4-6-fast",
+      "display_name": "Claude Opus 4.6 Fast",
+      "route_type": "native-claude",
+      "target_model": "claude-opus-4-6-fast",
+      "description": "Claude 风格模型服务。"
+    },
+    {
+      "id": "claude-opus-4-6-full",
+      "display_name": "Claude Opus 4.6 Full",
+      "route_type": "native-claude",
+      "target_model": "claude-opus-4-6-full",
+      "description": "Claude 风格模型服务。"
+    },
+    {
+      "id": "claude-opus-4-7-fast",
+      "display_name": "Claude Opus 4.7 Fast",
+      "route_type": "native-claude",
+      "target_model": "claude-opus-4-7-fast",
+      "description": "Claude 风格模型服务。"
+    },
+    {
+      "id": "claude-opus-4-7-full",
+      "display_name": "Claude Opus 4.7 Full",
+      "route_type": "native-claude",
+      "target_model": "claude-opus-4-7-full",
+      "description": "Claude 风格模型服务。"
+    },
+    {
+      "id": "claude-opus-4-8-fast",
+      "display_name": "Claude Opus 4.8 Fast",
+      "route_type": "native-claude",
+      "target_model": "claude-opus-4-8-fast",
+      "description": "Claude 风格模型服务。"
+    },
+    {
+      "id": "claude-opus-4-8-full",
+      "display_name": "Claude Opus 4.8 Full",
+      "route_type": "native-claude",
+      "target_model": "claude-opus-4-8-full",
+      "description": "Claude 风格模型服务。"
+    }
+  ]
+}

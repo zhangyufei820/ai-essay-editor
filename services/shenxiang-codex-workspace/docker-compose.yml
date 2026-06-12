@@ -1,0 +1,93 @@
+services:
+  shenxiang-codex-workspace-redis:
+    image: redis:7-alpine
+    container_name: shenxiang-codex-workspace-redis
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "100"]
+    volumes:
+      - ./redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - shenxiang-codex-workspace-net
+
+  shenxiang-codex-workspace:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BASE_IMAGE: python:3.11-slim
+        CODEX_CLI_VERSION: "0.132.0"
+    image: shenxiang-codex-workspace:latest
+    container_name: shenxiang-codex-workspace
+    env_file:
+      - .env
+    ports:
+      - "${HOST_BIND_IP:-127.0.0.1}:${HOST_BIND_PORT:-3140}:8000"
+    volumes:
+      - ./runs:/workspace/runs
+      - ./user-skills:/workspace/user-skills
+      - ./codex-home:/codex-home
+    depends_on:
+      - shenxiang-codex-workspace-redis
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)\"",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - shenxiang-codex-workspace-net
+
+  shenxiang-codex-worker-fast:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BASE_IMAGE: python:3.11-slim
+        CODEX_CLI_VERSION: "0.132.0"
+    image: shenxiang-codex-workspace:latest
+    container_name: shenxiang-codex-worker-fast
+    command: ["python", "worker.py"]
+    env_file:
+      - .env
+    environment:
+      WORKER_QUEUES: fast,image
+    volumes:
+      - ./runs:/workspace/runs
+      - ./user-skills:/workspace/user-skills
+      - ./codex-home:/codex-home
+    depends_on:
+      - shenxiang-codex-workspace-redis
+    restart: unless-stopped
+    networks:
+      - shenxiang-codex-workspace-net
+
+  shenxiang-codex-worker-heavy:
+    image: shenxiang-codex-workspace:latest
+    container_name: shenxiang-codex-worker-heavy
+    command: ["python", "worker.py"]
+    env_file:
+      - .env
+    environment:
+      WORKER_QUEUES: heavy
+    volumes:
+      - ./runs:/workspace/runs
+      - ./user-skills:/workspace/user-skills
+      - ./codex-home:/codex-home
+    depends_on:
+      - shenxiang-codex-workspace-redis
+    restart: unless-stopped
+    networks:
+      - shenxiang-codex-workspace-net
+
+networks:
+  shenxiang-codex-workspace-net:
+    name: shenxiang-codex-workspace-net
