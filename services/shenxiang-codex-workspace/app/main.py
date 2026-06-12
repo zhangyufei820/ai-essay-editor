@@ -162,15 +162,6 @@ FAST_CHAT_EXECUTION_HINTS = (
 )
 
 MEDIA_MODEL_HINTS = ("image", "imagine", "video", "seedance", "sora", "veo")
-FAST_SKILL_NAMES = {
-    "image_prompt",
-    "literature_review",
-    "paper_outline",
-    "paper_polish",
-    "study_plan",
-    "teacher_lesson_plan",
-    "xingren-api-onboarding",
-}
 FAST_SKILL_BLOCKING_HINTS = (
     "终端",
     "命令",
@@ -1183,6 +1174,11 @@ def should_use_fast_skill(request: WorkspaceRunRequest, task: dict[str, Any]) ->
     if request.files:
         return False
     if request.skill_name == "codex_workspace":
+        return False
+    if task.get("queue") != "fast":
+        return False
+    skill = task.get("skill") if isinstance(task.get("skill"), dict) else {}
+    if skill.get("sandbox") != "read-only":
         return False
     if request.risk_level != "normal":
         return False

@@ -68,7 +68,7 @@ def test_fast_skill_route_allows_pure_text_skill():
         model_config={"chat_main": "gpt-5.4-mini"},
     )
 
-    assert should_use_fast_skill(request, {"queue": "fast"})
+    assert should_use_fast_skill(request, {"queue": "fast", "skill": {"sandbox": "read-only"}})
 
 
 def test_fast_skill_route_blocks_workspace_work():
@@ -79,15 +79,38 @@ def test_fast_skill_route_blocks_workspace_work():
         model_config={"chat_main": "gpt-5.4-mini"},
     )
 
-    assert not should_use_fast_skill(request, {"queue": "fast"})
+    assert not should_use_fast_skill(request, {"queue": "fast", "skill": {"sandbox": "read-only"}})
     assert not should_use_fast_skill(
         request.model_copy(update={"files": [WorkspaceFile(path="notes.md", content="hello")]}),
-        {"queue": "fast"},
+        {"queue": "fast", "skill": {"sandbox": "read-only"}},
     )
     assert not should_use_fast_skill(
         request.model_copy(update={"skill_name": "codex_workspace", "user_query": "普通问答"}),
-        {"queue": "fast"},
+        {"queue": "fast", "skill": {"sandbox": "workspace-write"}},
     )
+
+
+def test_fast_skill_route_respects_registry_queue_and_sandbox():
+    request = WorkspaceRunRequest(
+        user_query="请生成一份故事板大纲",
+        skill_name="storyboard-creator",
+        model_role="chat_main",
+        model_config={"chat_main": "gpt-5.4-mini"},
+    )
+
+    assert not should_use_fast_skill(request, {"queue": "heavy", "skill": {"sandbox": "read-only"}})
+    assert not should_use_fast_skill(request, {"queue": "fast", "skill": {"sandbox": "workspace-write"}})
+
+
+def test_fast_skill_route_allows_onboarding_copy_paste_commands():
+    request = WorkspaceRunRequest(
+        user_query="给我本机配置 Codex 的命令和环境变量",
+        skill_name="xingren-api-onboarding",
+        model_role="chat_main",
+        model_config={"chat_main": "gpt-5.4-mini"},
+    )
+
+    assert should_use_fast_skill(request, {"queue": "fast", "skill": {"sandbox": "read-only"}})
 
 
 def test_fast_skill_messages_include_loaded_skill_markdown():
