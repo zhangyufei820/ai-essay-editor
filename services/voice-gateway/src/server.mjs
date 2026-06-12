@@ -124,6 +124,15 @@ function providerConfigured(kind) {
   return chain.some((provider) => providerConfiguredFor(kind, provider))
 }
 
+function publicVoiceGatewayError(error, status) {
+  if (status === 400) return error?.message || "请求参数错误"
+  if (status === 413) return "音频文件过大"
+  if (status === 415) return "不支持的音频格式"
+  if (status === 429) return "当前请求较多，请稍后重试。"
+  if ([408, 504, 524].includes(Number(status))) return "语音服务响应超时，请稍后重试。"
+  return "语音服务暂时不可用，请稍后重试。"
+}
+
 function assertConfigured(kind) {
   if (!providerConfigured(kind)) {
     const chain = kind === "tts" ? TTS_PROVIDER_CHAIN : STT_PROVIDER_CHAIN
@@ -484,13 +493,6 @@ async function route(req, res) {
     if (req.method === "GET" && req.url === "/voice/health") {
       return json(res, 200, {
         status: "ok",
-        ttsProvider: TTS_PROVIDER,
-        sttProvider: STT_PROVIDER,
-        ttsProviderChain: TTS_PROVIDER_CHAIN,
-        sttProviderChain: STT_PROVIDER_CHAIN,
-        ttsModel: TTS_PROVIDER === "minimax" ? MINIMAX_TTS_MODEL : TTS_PROVIDER === "siliconflow" ? SILICONFLOW_TTS_MODEL : TTS_MODEL,
-        ttsVoice: TTS_PROVIDER === "siliconflow" ? SILICONFLOW_TTS_VOICE : TTS_PROVIDER === "minimax" ? MINIMAX_VOICE_ID : DEFAULT_VOICE,
-        sttModel: STT_PROVIDER === "siliconflow" ? SILICONFLOW_STT_MODEL : STT_MODEL,
         ttsProviderConfigured: providerConfigured("tts"),
         sttProviderConfigured: providerConfigured("stt"),
         ttsTimeoutMs: TTS_TIMEOUT_MS,
@@ -507,8 +509,7 @@ async function route(req, res) {
     const status = Number(error?.status || 500)
     console.error("[voice-gateway]", error)
     return json(res, status, {
-      error: status === 500 ? "voice gateway internal error" : error.message,
-      details: error?.details,
+      error: publicVoiceGatewayError(error, status),
     })
   }
 }

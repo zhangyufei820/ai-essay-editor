@@ -33,8 +33,7 @@ def public_body(model: Any) -> dict[str, Any]:
 def validate_model(model: str, settings: Settings | None = None) -> None:
     settings = settings or get_settings()
     if settings.strict_model_validation and model not in ALLOWED_MODELS:
-        allowed = ", ".join(sorted(ALLOWED_MODELS))
-        raise ValueError(f"model must be one of: {allowed}")
+        raise ValueError("requested model is not available")
 
 
 def provider_code_from_payload(payload: Any, status_code: int) -> str:
@@ -48,7 +47,18 @@ def provider_code_from_payload(payload: Any, status_code: int) -> str:
             value = payload.get(key)
             if value is not None:
                 return str(value)
-    return "success" if 200 <= status_code < 300 else "provider_error"
+    return "success" if 200 <= status_code < 300 else "service_error"
+
+
+def public_provider_code(code: str, status_code: int) -> str:
+    text = str(code or "").lower()
+    if 200 <= status_code < 300:
+        return "success"
+    if "validation" in text:
+        return "validation_error"
+    if status_code in {408, 504, 524} or "timeout" in text:
+        return "service_timeout"
+    return "service_error"
 
 
 def message_from_payload(payload: Any) -> str:
@@ -103,7 +113,7 @@ def normalize_provider_response(
     warnings: list[str] | None = None,
 ) -> GatewayResponse:
     provider_response = payload if isinstance(payload, dict) else {"raw": payload}
-    provider_code = provider_code_from_payload(payload, status_code)
+    raw_provider_code = provider_code_from_payload(payload, status_code)
     status = str(find_first(payload, {"status", "state"}) or "")
     task_id = str(find_first(payload, {"task_id", "taskId", "id"}) or "")
     video_url = str(find_first(payload, {"url", "video_url", "videoUrl"}) or "")
@@ -113,14 +123,14 @@ def normalize_provider_response(
     asset_id = str(find_first(payload, {"asset_id", "assetId", "id"}) or "")
     progress_value = find_first(payload, {"progress"})
     progress = progress_value if isinstance(progress_value, int) else None
-    provider_code_lower = provider_code.lower()
-    success = 200 <= status_code < 300 and provider_code_lower not in {"provider_error", "error", "failed", "failure"}
+    provider_code_lower = raw_provider_code.lower()
+    success = 200 <= status_code < 300 and provider_code_lower not in {"service_error", "provider_error", "error", "failed", "failure"}
 
     return GatewayResponse(
         success=success,
         status_code=status_code,
-        provider_code=provider_code,
-        message=message_from_payload(payload),
+        provider_code=public_provider_code(raw_provider_code, status_code),
+        message="" if success else "服务暂时不可用，请稍后重试。",
         task_id=task_id,
         status=status,
         progress=progress,
@@ -186,15 +196,15 @@ class RelayDanceClient:
                     await asyncio.sleep(0.5 * (2**attempt))
                     continue
                 return normalize_provider_response(
-                    {"provider_error_text": str(exc)},
+                    {"service_error": "request_failed"},
                     502,
-                    error={"code": "provider_request_failed", "message": "Provider request failed"},
+                    error={"code": "service_request_failed", "message": "服务暂时不可用，请稍后重试。"},
                     warnings=warnings,
                 )
         return normalize_provider_response(
-            {"provider_error_text": "unknown provider error"},
+            {"service_error": "request_failed"},
             502,
-            error={"code": "provider_request_failed", "message": "Provider request failed"},
+            error={"code": "service_request_failed", "message": "服务暂时不可用，请稍后重试。"},
             warnings=warnings,
         )
 
@@ -206,7 +216,7 @@ class RelayDanceClient:
         try:
             return json.loads(text)
         except json.JSONDecodeError:
-            return {"provider_error_text" if response.is_error else "text": text}
+            return {"service_error" if response.is_error else "text": text}
 
     async def content(self, task_id: str) -> tuple[int, str, bytes, dict[str, str]]:
         url = f"{self.settings.relaydance_base_url}/v1/videos/{task_id}/content"

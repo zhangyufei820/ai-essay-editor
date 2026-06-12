@@ -1,4 +1,5 @@
 import { internalDifyFetch } from "@/lib/internal-dify-fetch"
+import { sanitizePublicAiError } from "@/lib/chat-error-sanitizer"
 
 const DEFAULT_ESSAY_AI_SUITE_URL = "http://172.23.0.1:3100"
 
@@ -66,7 +67,7 @@ export async function callEssayAiSuite<T>(
     if (!response.ok) {
       return {
         ok: false,
-        error: payload.error || `essay-ai-suite request failed: ${response.status}`,
+        error: sanitizePublicAiError(payload.error, "文档识别服务暂不可用，请稍后重试。"),
       }
     }
 
@@ -75,10 +76,10 @@ export async function callEssayAiSuite<T>(
     return {
       ok: false,
       error: error instanceof Error && error.name === "AbortError"
-        ? "essay-ai-suite 请求超时"
+        ? "文档识别服务响应超时，请稍后重试。"
         : error instanceof Error
-          ? error.message
-          : String(error),
+          ? sanitizePublicAiError(error.message, "文档识别服务暂不可用，请稍后重试。")
+          : sanitizePublicAiError(String(error), "文档识别服务暂不可用，请稍后重试。"),
     }
   } finally {
     clearTimeout(timeout)

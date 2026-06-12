@@ -12,7 +12,7 @@ def test_missing_gateway_key_returns_401(client):
     assert response.status_code == 401
     body = response.json()
     assert body["success"] is False
-    assert body["error"]["message"] == "gateway unauthorized"
+    assert body["error"]["message"] == "未授权"
 
 
 @respx.mock
@@ -43,7 +43,8 @@ def test_tavily_search_normalizes_results(client, auth_headers, tavily_base):
     assert response.status_code == 200
     body = response.json()
     assert body["success"] is True
-    assert body["provider"] == "tavily"
+    assert body["provider"] == "search"
+    assert "provider_response" not in body
     assert body["answer"] == "short answer"
     assert body["results"][0]["url"] == "https://example.com/a"
     assert route.calls.last.request.headers["Authorization"] == "Bearer tavily-token"
@@ -81,10 +82,10 @@ def test_auto_falls_back_to_brave_when_tavily_fails(client, auth_headers, tavily
     assert response.status_code == 200
     body = response.json()
     assert body["success"] is True
-    assert body["provider"] == "brave"
-    assert body["results"][0]["source"] == "brave"
+    assert body["provider"] == "search"
+    assert body["results"][0]["source"] == "web"
     assert "X-Subscription-Token" in brave_route.calls.last.request.headers
-    assert "tavily failed" in body["warnings"][0]
+    assert body["warnings"][0] == "搜索服务自动切换线路"
 
 
 @respx.mock
@@ -114,7 +115,7 @@ def test_brave_search_can_be_requested_directly(client, auth_headers, brave_base
 
     assert response.status_code == 200
     body = response.json()
-    assert body["provider"] == "brave"
+    assert body["provider"] == "search"
     assert body["results"][0]["snippet"] == "snippet one snippet two"
     assert route.calls.last.request.url.params["q"] == "direct"
 
@@ -130,7 +131,7 @@ def test_returns_503_when_no_provider_is_configured(client, auth_headers, monkey
     body = response.json()
     assert body["success"] is False
     assert body["status_code"] == 503
-    assert body["provider_code"] == "search_provider_not_configured"
+    assert body["provider_code"] == "search_service_unavailable"
 
 
 @respx.mock
@@ -155,6 +156,9 @@ def test_extract_uses_tavily_and_blocks_private_urls(client, auth_headers, tavil
 
     assert ok.status_code == 200
     assert ok.json()["success"] is True
+    assert ok.json()["provider"] == "search"
+    assert "provider_response" not in ok.json()
+    assert ok.json()["data"]["results"][0]["raw_content"] == "content"
     assert route.called
     assert blocked.status_code == 200
     assert blocked.json()["success"] is False

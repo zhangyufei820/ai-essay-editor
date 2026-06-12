@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireUser } from "@/lib/auth/verified-user"
 import { getClientIP, checkIpRateLimit, createRateLimitResponse } from "@/lib/rate-limit"
+import { sanitizePublicAiError } from "@/lib/chat-error-sanitizer"
 
 export const runtime = "nodejs"
 export const maxDuration = 120
@@ -64,14 +65,13 @@ export async function POST(request: NextRequest) {
     const payload = await response.json().catch(() => ({}))
     if (!response.ok) {
       return NextResponse.json(
-        { error: payload.error || "语音识别失败", details: payload.details },
+        { error: sanitizePublicAiError(payload.error, "语音识别失败，请稍后重试。") },
         { status: response.status },
       )
     }
 
     return NextResponse.json({
       text: typeof payload.text === "string" ? payload.text : "",
-      model: payload.model,
     })
   } catch (error) {
     console.error("❌ [Voice STT] 错误:", error)

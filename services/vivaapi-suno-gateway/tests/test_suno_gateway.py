@@ -11,7 +11,7 @@ def test_missing_gateway_key_returns_401(client):
     assert response.status_code == 401
     body = response.json()
     assert body["success"] is False
-    assert body["error"]["message"] == "gateway unauthorized"
+    assert body["error"]["message"] == "未授权"
 
 
 @respx.mock
@@ -94,7 +94,7 @@ def test_upload_authorize(client, auth_headers, provider_base):
     response = client.post("/api/v1/suno/upload/authorize", headers=auth_headers, json={"extension": "mp3"})
 
     assert response.json()["upload_id"] == "upload-1"
-    assert response.json()["provider_response"]["data"]["fields"]["key"] == "k"
+    assert "provider_response" not in response.json()
 
 
 @respx.mock
@@ -127,7 +127,8 @@ def test_upload_full_flow_mock(client, auth_headers, provider_base, tmp_path):
     assert body["success"] is True
     assert body["upload_id"] == "upload-1"
     assert body["clip_id"] == "clip-1"
-    assert "authorize" in body["provider_response"]
+    assert "provider_response" not in body
+    assert "data" not in body
 
 
 @respx.mock
@@ -158,7 +159,8 @@ def test_timing(client, auth_headers, provider_base):
     response = client.get("/api/v1/suno/timing/timing-1", headers=auth_headers)
 
     assert response.status_code == 200
-    assert response.json()["provider_response"]["timing"] == []
+    assert "provider_response" not in response.json()
+    assert response.json()["timing"] == []
 
 
 def test_raw_rejects_full_url(client, auth_headers):

@@ -63,6 +63,10 @@ function normalizeBody(body: unknown): Required<TrialBatchGrantBody> {
   }
 }
 
+function publicBatchError(scope: string): { scope: string; error: string } {
+  return { scope, error: "批量发放步骤失败，请查看服务端日志" }
+}
+
 async function loadExistingUserIds(): Promise<string[]> {
   const { data, error } = await getSupabaseAdmin()
     .from("user_credits")
@@ -126,7 +130,8 @@ async function runDryRun(options: Required<TrialBatchGrantBody>): Promise<DryRun
     result.usersScanned = existingUsers.length
     result.trialsGranted = existingUsers.filter((userId) => !activeTrialUsers.has(userId)).length
   } catch (error) {
-    result.errors.push({ scope: "existing_users", error: error instanceof Error ? error.message : String(error) })
+    logger.warn("[trial-batch-grant] dry-run existing users failed", error)
+    result.errors.push(publicBatchError("existing_users"))
   }
 
   if (options.extendPaidMemberships) {
@@ -136,7 +141,8 @@ async function runDryRun(options: Required<TrialBatchGrantBody>): Promise<DryRun
       result.paidMembershipsExtended = paidUsers.filter((userId) => !activeTrialUsers.has(userId)).length
       result.usersScanned = Math.max(result.usersScanned, paidUsers.length)
     } catch (error) {
-      result.errors.push({ scope: "paid_memberships", error: error instanceof Error ? error.message : String(error) })
+      logger.warn("[trial-batch-grant] dry-run paid memberships failed", error)
+      result.errors.push(publicBatchError("paid_memberships"))
     }
   }
 
@@ -166,7 +172,8 @@ async function runWrite(options: Required<TrialBatchGrantBody>): Promise<{
         metadata: { source: "trial_batch_grant" },
       })
     } catch (error) {
-      errors.push({ scope: "campaign_grants", error: error instanceof Error ? error.message : String(error) })
+      logger.warn("[trial-batch-grant] campaign grants failed", error)
+      errors.push(publicBatchError("campaign_grants"))
     }
   }
 
@@ -239,8 +246,8 @@ export async function POST(request: NextRequest) {
 
     const errors = [
       ...result.errors,
-      ...(result.campaign?.errors || []).map((error) => ({ scope: `campaign:${error.userId}`, error: error.error })),
-      ...(result.paid?.errors || []).map((error) => ({ scope: `paid:${error.userId}`, error: error.error })),
+      ...(result.campaign?.errors || []).map((entry) => publicBatchError(`campaign:${entry.userId}`)),
+      ...(result.paid?.errors || []).map((entry) => publicBatchError(`paid:${entry.userId}`)),
     ]
 
     return NextResponse.json({

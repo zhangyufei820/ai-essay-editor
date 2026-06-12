@@ -120,11 +120,11 @@ export async function POST(request: NextRequest) {
       key,
       enabled,
       success: result.success,
-      error: result.error,
+      error: result.success ? null : "update_failed",
     })
 
     if (!result.success) {
-      return NextResponse.json({ ok: false, error: result.error || "update_failed" }, { status: 500 })
+      return NextResponse.json({ ok: false, error: "更新监控开关失败" }, { status: 500 })
     }
 
     const state = await loadMonitorState()

@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/auth/verified-user"
 import { checkIpRateLimit, createRateLimitResponse, getClientIP } from "@/lib/rate-limit"
 import { callEssayAiSuite, type OcrResult } from "@/lib/essay-ai-suite-client"
 import { rejectUntrustedOrigin } from "@/lib/security/request"
+import { sanitizePublicAiError } from "@/lib/chat-error-sanitizer"
 
 export const runtime = "nodejs"
 export const maxDuration = 120
@@ -46,6 +47,14 @@ function normalizeImageInput(value: unknown, index: number): OcrImagePayload | n
   }
 }
 
+function toPublicOcrResult(result: OcrResult) {
+  const { provider: _provider, error, ...publicResult } = result
+  return {
+    ...publicResult,
+    error: error ? sanitizePublicAiError(error, "OCR 识别失败，请稍后重试。") : null,
+  }
+}
+
 export async function POST(req: NextRequest) {
   const originRejection = rejectUntrustedOrigin(req)
   if (originRejection) return originRejection
@@ -76,7 +85,7 @@ export async function POST(req: NextRequest) {
     if (!result.ok) {
       return NextResponse.json(
         {
-          error: result.error || "OCR 服务暂不可用",
+          error: sanitizePublicAiError(result.error, "OCR 服务暂不可用，请稍后重试。"),
         },
         { status: 502 },
       )
@@ -84,11 +93,12 @@ export async function POST(req: NextRequest) {
 
     const results = result.results || (result.result ? [result.result] : [])
     const failed = results.filter((item) => item.status !== "success")
+    const publicResults = results.map(toPublicOcrResult)
     if (failed.length) {
       return NextResponse.json(
         {
-          error: failed[0]?.error || "OCR 识别失败",
-          results,
+          error: sanitizePublicAiError(failed[0]?.error, "OCR 识别失败，请稍后重试。"),
+          results: publicResults,
         },
         { status: 422 },
       )
@@ -97,7 +107,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       text: results.map((item) => item.text).filter(Boolean).join("\n\n"),
-      results,
+      results: publicResults,
     })
   } catch (error) {
     console.error("[Tools OCR] error:", error)

@@ -164,7 +164,7 @@ export async function GET(request: NextRequest) {
     console.error('❌ [积分记录] 查询失败:', error)
     const isConfigError = error?.message === '缺少 Supabase 配置'
     return NextResponse.json({ 
-      error: isConfigError ? '积分记录服务未配置' : (error.message || '查询失败'),
+      error: isConfigError ? '积分记录服务未配置' : '积分记录查询失败，请稍后重试',
       transactions: []
     }, { status: isConfigError ? 503 : 500 })
   }

@@ -2,6 +2,7 @@ import "server-only"
 
 import { internalDifyFetch } from "@/lib/internal-dify-fetch"
 import { sanitizeForTrace } from "@/lib/ai-task-trace"
+import { sanitizePublicAiError } from "@/lib/chat-error-sanitizer"
 
 export const RELAYDANCE_DEFAULT_MODEL = "doubao-seedance-2-0-720p"
 
@@ -76,7 +77,7 @@ function messageFromGateway(payload: RelayDanceGatewayResponse) {
     if (typeof error.message === "string" && error.message.trim()) return error.message.trim()
     if (typeof error.code === "string" && error.code.trim()) return error.code.trim()
   }
-  return "RelayDance 网关请求失败"
+  return "视频服务请求失败"
 }
 
 function normalizeGatewayResult(response: Response, payload: RelayDanceGatewayResponse): RelayDanceClientResult {
@@ -86,7 +87,7 @@ function normalizeGatewayResult(response: Response, payload: RelayDanceGatewayRe
     ok,
     status: response.status,
     payload: sanitizeForTrace(payload) as RelayDanceGatewayResponse,
-    error: ok ? null : messageFromGateway(payload),
+    error: ok ? null : sanitizePublicAiError(messageFromGateway(payload), "视频服务暂时不可用，请稍后重试。"),
   }
 }
 

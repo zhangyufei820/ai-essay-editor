@@ -30,7 +30,7 @@ class GatewayResponse(BaseModel):
     answer: str = ""
     results: list[SearchResult] = Field(default_factory=list)
     data: Any = None
-    provider_response: dict[str, Any] = Field(default_factory=dict)
+    provider_response: dict[str, Any] = Field(default_factory=dict, exclude=True)
     warnings: list[str] = Field(default_factory=list)
     error: Any = None
 

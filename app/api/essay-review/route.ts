@@ -117,27 +117,31 @@ ${essay}
 请按照专业标准进行详细批改。${grade?.includes("高中") || requirements?.includes("议论文") || requirements?.includes("论述文") ? "注意：这是一篇论述文/议论文，请特别参考徐贲式学者型写作风格进行指导。" : ""}
 `
 
-  const { text, usage } = await generateText({
-    model: model as any,
-    system: ESSAY_REVIEW_PROMPT,
-    prompt: userPrompt,
-    maxTokens: ESSAY_REVIEW_MAX_OUTPUT_TOKENS,
-    temperature: 0.7,
-  })
-
-  const completionTokens = Number((usage as any)?.completionTokens ?? (usage as any)?.outputTokens ?? 0) || 0
-  if (shouldAuditHighConsumptionTextCall("standard", completionTokens, 0)) {
-    console.warn("[Billing Audit] 高消耗作文批改调用:", {
-      provider,
-      modelName,
-      completionTokens,
-      maxOutputTokens: ESSAY_REVIEW_MAX_OUTPUT_TOKENS,
+  try {
+    const { text, usage } = await generateText({
+      model: model as any,
+      system: ESSAY_REVIEW_PROMPT,
+      prompt: userPrompt,
+      maxTokens: ESSAY_REVIEW_MAX_OUTPUT_TOKENS,
+      temperature: 0.7,
     })
-  }
 
-  return Response.json({
-    review: text,
-    usage,
-    model,
-  })
+    const completionTokens = Number((usage as any)?.completionTokens ?? (usage as any)?.outputTokens ?? 0) || 0
+    if (shouldAuditHighConsumptionTextCall("standard", completionTokens, 0)) {
+      console.warn("[Billing Audit] 高消耗作文批改调用:", {
+        provider,
+        modelName,
+        completionTokens,
+        maxOutputTokens: ESSAY_REVIEW_MAX_OUTPUT_TOKENS,
+      })
+    }
+
+    return Response.json({
+      review: text,
+      usage,
+    })
+  } catch (error) {
+    console.error("[EssayReview] generation failed:", error)
+    return Response.json({ error: "作文批改服务暂时不可用，请稍后重试。" }, { status: 502 })
+  }
 }

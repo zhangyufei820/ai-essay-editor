@@ -15,6 +15,7 @@ import { GridWaveLoader } from "@/components/chat/GridWaveLoader"
 import { extractImageUrlsFromDifyResult, proxifyGeneratedImageUrl } from "@/components/chat/image-generation/gpt-image-v11"
 import { clearStoredAuthState, getVerifiedAuthHeaders } from "@/lib/client-auth"
 import { isSurveyRequiredPayload, openTrialSurveyGate } from "@/lib/trial-survey-client"
+import { sanitizePublicAiError } from "@/lib/chat-error-sanitizer"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useEffect, useMemo, useRef, useState, type ComponentType, type FormEvent, type ReactNode } from "react"
@@ -107,7 +108,7 @@ function isHtmlErrorContent(value: unknown) {
 function getSafeServiceError(error: unknown, fallback = "服务暂时不可用，请稍后重试。") {
   const raw = error instanceof Error ? error.message : String(error || "")
   if (!raw || isHtmlErrorContent(raw)) return fallback
-  return raw
+  return sanitizePublicAiError(raw, fallback)
 }
 
 function createClientRequestId(prefix = "tools-img") {
@@ -190,7 +191,7 @@ function mapToolImageError(error: unknown) {
     raw.includes("上游额度不足") ||
     raw.includes("余额不足") ||
     raw.includes("充值") ||
-    lower.includes("upstream_balance_exhausted") ||
+    lower.includes("service_balance_exhausted") ||
     lower.includes("balance has run out") ||
     lower.includes("recharge") ||
     lower.includes("insufficient balance") ||
@@ -210,7 +211,7 @@ function mapToolImageError(error: unknown) {
   if (lower.includes("bad gateway") || lower.includes("502")) {
     return "图片服务暂时不可用，请稍后重试。"
   }
-  if (lower.includes("upstream_error") || lower.includes("dify error") || lower.includes("500")) {
+  if (lower.includes("service_error") || lower.includes("500")) {
     return "图片服务请求失败，可能是余额不足、尺寸不支持或参数不兼容。"
   }
   return raw.replace(/\b[A-Za-z][A-Za-z0-9_.-]*(?:\s+[A-Za-z0-9_.-]+){0,3}\b/g, "服务").replace(/(?:服务通道|连接层)/g, "服务") || "处理失败，请稍后重试。"
@@ -452,7 +453,7 @@ export default function ToolsPage() {
       if (response.ok && payload?.status === "succeeded") return payload.result
       if (payload?.status === "running") continue
 
-      throw new Error(typeof payload?.error === "string" ? payload.error : `upstream_error:${response.status}`)
+      throw new Error(typeof payload?.error === "string" ? payload.error : `service_error:${response.status}`)
     }
 
     throw new Error("timeout")
@@ -568,7 +569,7 @@ export default function ToolsPage() {
       }
       if (!response.ok) {
         if (isSurveyRequiredPayload(payload)) throw buildSurveyRequiredError()
-        throw new Error(typeof payload?.error === "string" ? payload.error : `upstream_error:${response.status}`)
+        throw new Error(typeof payload?.error === "string" ? payload.error : `service_error:${response.status}`)
       }
 
       if (payload?.status === "running" && typeof payload?.imageTaskId === "string") {
@@ -589,7 +590,7 @@ export default function ToolsPage() {
       ].filter((url, index, items) => items.indexOf(url) === index)
 
       if (!generatedImages.length && !sourceText) {
-        throw new Error("upstream_error: empty image result")
+        throw new Error("service_error: empty image result")
       }
 
       const nextResult = {

@@ -93,7 +93,7 @@ export async function POST(req: NextRequest) {
 
       if (authUpdate.error) {
         console.error("Supabase 更新失败:", authUpdate.error)
-        return NextResponse.json({ error: authUpdate.error.message }, { status: 500 })
+        return NextResponse.json({ error: "用户资料更新失败，请稍后重试" }, { status: 500 })
       }
       data = authUpdate.data
     }
@@ -103,6 +103,6 @@ export async function POST(req: NextRequest) {
 
   } catch (error: any) {
     console.error("API 内部错误:", error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: "用户资料更新失败，请稍后重试" }, { status: 500 })
   }
 }

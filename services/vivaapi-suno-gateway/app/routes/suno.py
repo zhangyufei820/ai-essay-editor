@@ -226,7 +226,7 @@ def extract_s3_target(authorize_response: GatewayResponse) -> tuple[str, dict[st
     url = data.get("url") or data.get("upload_url") or data.get("uploadUrl") if isinstance(data, dict) else None
     fields = data.get("fields") if isinstance(data, dict) and isinstance(data.get("fields"), dict) else None
     if not url:
-        raise HTTPException(status_code=502, detail="provider authorize response did not include url/upload_url")
+        raise HTTPException(status_code=502, detail="音乐服务暂时不可用，请稍后重试。")
     return str(url), fields
 
 

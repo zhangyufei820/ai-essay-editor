@@ -369,7 +369,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         error: "批改失败，请稍后重试",
-        details: errorMessage,
       },
       { status: 500 },
     )

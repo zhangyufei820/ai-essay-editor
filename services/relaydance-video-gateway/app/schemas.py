@@ -34,8 +34,8 @@ class GatewayResponse(BaseModel):
     source_url: str = ""
     asset_id: str = ""
     warnings: list[str] = Field(default_factory=list)
-    data: Any = None
-    provider_response: dict[str, Any] = Field(default_factory=dict)
+    data: Any = Field(default=None, exclude=True)
+    provider_response: dict[str, Any] = Field(default_factory=dict, exclude=True)
     error: Any = None
 
 

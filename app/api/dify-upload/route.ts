@@ -462,8 +462,8 @@ export async function POST(request: NextRequest) {
 
       return new Response(
         JSON.stringify({
-          error: "File upload to gateway failed",
-          details: sanitizeForTrace(errorText),
+          error: "文件上传服务暂时不可用，请稍后重试。",
+          code: sanitizePublicAiErrorCode("IMAGE_UPLOAD_SERVICE_FAILED"),
           status: gatewayResponse.status,
         }),
         {
@@ -483,8 +483,8 @@ export async function POST(request: NextRequest) {
 
       return new Response(
         JSON.stringify({
-          error: "File upload to gateway failed",
-          details: gatewayData.message || "Gateway upload returned failure",
+          error: "文件上传服务暂时不可用，请稍后重试。",
+          code: sanitizePublicAiErrorCode("IMAGE_UPLOAD_SERVICE_FAILED"),
           status: 502,
         }),
         {
@@ -509,7 +509,8 @@ export async function POST(request: NextRequest) {
 
       return new Response(
         JSON.stringify({
-          error: "Gateway upload did not return a public image URL",
+          error: "文件上传服务暂时不可用，请稍后重试。",
+          code: sanitizePublicAiErrorCode("IMAGE_UPLOAD_SERVICE_FAILED"),
           status: 502,
         }),
         {
@@ -527,14 +528,13 @@ export async function POST(request: NextRequest) {
 
     const modelUrl = buildModelAccessibleImageUrl(request, gatewayUrl)
 
-    // 返回图片结果：gatewayUrl 用于内部追踪，modelUrl 是给外部模型拉取的 HTTPS 地址。
+    // 公开响应只返回模型可访问的文件地址，内部网关地址不透出给用户端。
     return new Response(JSON.stringify({
       success: true,
       code: "ok",
       message: "文件上传成功",
       data: {
         url: modelUrl,
-        gateway_url: gatewayUrl,
         model_url: modelUrl,
         filename: safeFileName,
         content_type: uploadFile.type,
@@ -543,7 +543,6 @@ export async function POST(request: NextRequest) {
         original_size: file.size,
         converted_from: normalizedUpload.convertedFrom,
       },
-      gatewayUrl,
       modelUrl,
     }), {
       status: 200,
@@ -553,8 +552,8 @@ export async function POST(request: NextRequest) {
     console.error("[Backend] Upload error:", error)
     return new Response(
       JSON.stringify({
-        error: "Internal server error",
-        details: sanitizeForTrace(error instanceof Error ? error.message : String(error)),
+        error: "文件上传服务暂时不可用，请稍后重试。",
+        code: sanitizePublicAiErrorCode("IMAGE_UPLOAD_SERVICE_FAILED"),
       }),
       {
         status: 500,

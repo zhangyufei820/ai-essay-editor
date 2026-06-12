@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server"
 import { z } from "zod"
 import { requireUser } from "@/lib/auth/verified-user"
 import { createRequestId, createTaskRun, normalizeMediaTask, updateTaskRun } from "@/lib/ai-task-trace"
+import { sanitizePublicAiError } from "@/lib/chat-error-sanitizer"
 import { chooseProvider, type ProviderModality } from "@/lib/ai-provider-health"
 import {
   buildDifyInputs,
@@ -48,11 +49,12 @@ function publicErrorMessage(error: unknown) {
   if (/config|missing|api[_-]?key|token|secret|authorization|env|environment|未配置|凭据/i.test(raw)) {
     return "媒体服务暂时不可用，请稍后重试。"
   }
-  return raw
+  const redacted = raw
     .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [REDACTED]")
     .replace(/sk-[A-Za-z0-9_-]+/g, "[REDACTED_SECRET]")
     .replace(/(?:api[_-]?key|token|secret|authorization)["':=\s]+[A-Za-z0-9._~+/=-]{8,}/gi, "$1:[REDACTED]")
     .slice(0, 500)
+  return sanitizePublicAiError(redacted, "媒体服务暂时不可用，请稍后重试。")
 }
 
 async function submitMusicTask(input: {

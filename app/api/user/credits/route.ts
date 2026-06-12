@@ -45,7 +45,6 @@ export async function GET(request: NextRequest) {
     if (entitlement) {
       return NextResponse.json({
         userId,
-        provider: auth.user!.provider || null,
         credits: entitlement.credits,
         is_pro: entitlement.isPro,
         membership_status: entitlement.membershipStatus,
@@ -64,7 +63,7 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       console.error(`❌ [积分API] 查询失败:`, error)
-      return NextResponse.json({ error: error.message }, { status: 500 })
+      return NextResponse.json({ error: "积分查询失败，请稍后重试" }, { status: 500 })
     }
 
     // 如果没有记录，自动创建
@@ -86,7 +85,6 @@ export async function GET(request: NextRequest) {
         // 即使创建失败，也返回默认值
         return NextResponse.json({
           userId,
-          provider: auth.user!.provider || null,
           credits: 1000,
           is_pro: false,
           isNew: true,
@@ -97,7 +95,6 @@ export async function GET(request: NextRequest) {
       console.log(`✅ [积分API] 新用户积分初始化成功:`, newData)
       return NextResponse.json({
         userId,
-        provider: auth.user!.provider || null,
         credits: newData?.credits || 1000,
         is_pro: newData?.is_pro || false,
         isNew: true,
@@ -108,7 +105,6 @@ export async function GET(request: NextRequest) {
     console.log(`✅ [积分API] 查询成功: credits=${creditData.credits}`)
     return NextResponse.json({
       userId,
-      provider: auth.user!.provider || null,
       credits: creditData.credits,
       is_pro: creditData.is_pro,
       trialStatus,

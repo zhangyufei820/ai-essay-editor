@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server"
 import { callEssayAiSuite, type DocumentExtractResult } from "@/lib/essay-ai-suite-client"
 import { checkIpRateLimit, createRateLimitResponse, getClientIP } from "@/lib/rate-limit"
 import { rejectUntrustedOrigin } from "@/lib/security/request"
+import { sanitizePublicAiError } from "@/lib/chat-error-sanitizer"
 
 export const runtime = "nodejs"
 export const maxDuration = 120
@@ -22,6 +23,14 @@ function isTextLike(file: File) {
     name.endsWith(".csv") ||
     name.endsWith(".json")
   )
+}
+
+function toPublicDocumentResult(result: DocumentExtractResult) {
+  const { provider: _provider, error, ...publicResult } = result
+  return {
+    ...publicResult,
+    error: error ? sanitizePublicAiError(error, "文档未能提取文本，请稍后重试。") : null,
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -78,7 +87,7 @@ export async function POST(req: NextRequest) {
     if (!result.ok || !result.result) {
       return NextResponse.json(
         {
-          error: result.error || "文档提取服务暂不可用",
+          error: sanitizePublicAiError(result.error, "文档提取服务暂不可用，请稍后重试。"),
         },
         { status: 502 },
       )
@@ -87,8 +96,8 @@ export async function POST(req: NextRequest) {
     if (result.result.status !== "success") {
       return NextResponse.json(
         {
-          error: result.result.error || "文档未能提取文本",
-          result: result.result,
+          error: sanitizePublicAiError(result.result.error, "文档未能提取文本，请稍后重试。"),
+          result: toPublicDocumentResult(result.result),
         },
         { status: 422 },
       )

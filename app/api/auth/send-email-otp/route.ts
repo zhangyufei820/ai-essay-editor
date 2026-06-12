@@ -103,7 +103,7 @@ export async function POST(request: NextRequest) {
     })
   } catch (error: any) {
     console.error("发送验证码失败:", error)
-    return NextResponse.json({ error: error.message || "发送失败" }, { status: 500 })
+    return NextResponse.json({ error: "发送失败，请稍后重试" }, { status: 500 })
   }
 }
 

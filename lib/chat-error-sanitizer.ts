@@ -2,6 +2,12 @@ const TECHNICAL_UPSTREAM_ERROR_PATTERNS = [
   /PluginInvokeError/i,
   /APITimeoutError/i,
   /LiteLLM[^,\n]*Error/i,
+  /provider[_\s-]?error/i,
+  /upstream[_\s-]?(?:error|request|response|provider)/i,
+  /gateway[_\s-]?(?:error|timeout|failed|request)/i,
+  /No available channel/i,
+  /channel[_\s-]?(?:id|name|error|unavailable)/i,
+  /distributor/i,
   /request_timeout/i,
   /Request timed out/i,
   /API request failed with status code/i,
@@ -10,11 +16,16 @@ const TECHNICAL_UPSTREAM_ERROR_PATTERNS = [
   /Deployment Info/i,
   /Fallbacks\s*=/i,
   /\bmodels\]\s*Error/i,
+  /\brequest[_\s-]?id\b/i,
+  /\bx-request-id\b/i,
+  /\bcf-ray\b/i,
   /\bstatus code:\s*408\b/i,
   /\bError code:\s*408\b/i,
 ] as const
 
 const INTERNAL_AI_DETAIL_PATTERNS = [
+  /https?:\/\/[^\s)"'<>`]+/i,
+  /\b[A-Za-z0-9.-]+\.(?:ai|top|dev|com|cn|io|net|org|cloud|app|xyz)\b/i,
   /Dify/i,
   /Workflow/i,
   /workflow/i,
@@ -39,11 +50,19 @@ const INTERNAL_AI_DETAIL_PATTERNS = [
   /Image\s*2/i,
   /DeepSeek/i,
   /Qwen/i,
+  /New\s*API/i,
+  /RelayDance/i,
+  /OmniVoice/i,
   /Moonapix/i,
   /VivaAPI/i,
   /TokenFlux/i,
+  /Yunwu/i,
+  /云雾/i,
+  /Fable/i,
+  /GJX/i,
+  /硅基|火山|豆包|智谱|月之暗面|Kimi/i,
   /skill_(?:id|name|selected)|tool_calls?|function_call/i,
-  /插件|节点|工作流|供应商|网关|上游|备用线路|会话已提交|底层模型|模型供应商|模型路由|模型组|后台工具|内部工具/,
+  /插件|节点|工作流|供应商|渠道|通道|网关|上游|备用线路|会话已提交|底层模型|模型供应商|模型路由|模型组|后台工具|内部工具/,
 ] as const
 
 const INTERNAL_STATUS_REPLACEMENTS: Array<[RegExp, string]> = [
@@ -110,6 +129,8 @@ export function getSafeUpstreamErrorMessage(
 
 export function stripUpstreamBranding(value: string) {
   return value
+    .replace(/https?:\/\/[^\s)"'<>`]+/gi, "服务地址")
+    .replace(/\b[A-Za-z0-9.-]+\.(?:ai|top|dev|com|cn|io|net|org|cloud|app|xyz)(?:\/[^\s)"'<>`]*)?/gi, "服务地址")
     .replace(/Dify\s*API/gi, "服务")
     .replace(/Dify/gi, "服务")
     .replace(/LiteLLM/gi, "智能服务")
@@ -117,9 +138,16 @@ export function stripUpstreamBranding(value: string) {
     .replace(/OpenClaw/gi, "智能服务")
     .replace(/Codex/gi, "智能服务")
     .replace(/ChatGPT|OpenAI|Anthropic|Claude|Gemini|Grok|Suno|Banana\s*2?\s*Pro|Image\s*2|DeepSeek|Qwen/gi, "智能服务")
-    .replace(/\b(?:sx|gpt|gemini|claude|openai|anthropic|grok|suno|deepseek|qwen|banana)[\w.-]*/gi, "智能服务")
+    .replace(/New\s*API|RelayDance|OmniVoice|Moonapix|VivaAPI|TokenFlux|Yunwu|Fable|GJX|云雾|硅基|火山|豆包|智谱|月之暗面|Kimi/gi, "智能服务")
+    .replace(/\b(?:sx|gpt|gemini|claude|openai|anthropic|grok|suno|deepseek|qwen|banana|tokenflux|moonapix|vivaapi|yunwu|fable|gjx|relaydance|omnivoice)[\w.-]*/gi, "智能服务")
+    .replace(/\b(?:req_id|request_id|x-request-id|cf-ray|trace_id|channel_id|channel|provider|gateway|workflow_run_id|conversation_id|task_id)\s*[:=]\s*[\w.-]+/gi, "")
+    .replace(/No available channel(?: for model)?[^，。；;\n]*/gi, "服务暂时不可用")
+    .replace(/insufficient[_\s-]?user[_\s-]?quota/gi, "当前额度不足")
+    .replace(/provider[_\s-]?error/gi, "服务错误")
     .replace(/上游/g, "服务")
     .replace(/网关/g, "服务")
+    .replace(/供应商/g, "服务")
+    .replace(/渠道|通道/g, "连接")
     .replace(/备用线路/g, "连接")
 }
 
@@ -140,8 +168,8 @@ export function sanitizePublicAiStatus(value: unknown, fallback = "任务仍在�
   }
   output = stripUpstreamBranding(output)
     .replace(/\b(?:node|model|provider|workflow|plugin|gateway)[-_a-z0-9:. ]*/gi, "服务")
-    .replace(/\b(?:req_id|request_id|workflow_run_id|conversation_id|task_id)\s*[:=]\s*[\w-]+/gi, "")
-    .replace(/\b(?:sx|gpt|gemini|claude|openai|anthropic|grok|suno|deepseek|qwen|banana)[\w.-]*/gi, "智能服务")
+    .replace(/\b(?:req_id|request_id|x-request-id|cf-ray|workflow_run_id|conversation_id|task_id|trace_id|channel_id)\s*[:=]\s*[\w.-]+/gi, "")
+    .replace(/\b(?:sx|gpt|gemini|claude|openai|anthropic|grok|suno|deepseek|qwen|banana|tokenflux|moonapix|vivaapi|yunwu|fable|gjx|relaydance|omnivoice)[\w.-]*/gi, "智能服务")
     .replace(/[ \t]{2,}/g, " ")
     .replace(/\s*([，。；：,.!?])\s*/g, "$1")
     .trim()
@@ -197,7 +225,7 @@ export function sanitizePublicAiErrorCode(value: unknown): string | null {
   if (/CREDIT|BALANCE|QUOTA|BILLING/i.test(code)) {
     return "SERVICE_USAGE_LIMIT"
   }
-  if (/DIFY|WORKFLOW|PLUGIN|LITELLM|OPENCLAW|GATEWAY|PROVIDER|MODEL|NODE|VIVA|MOONAPIX|TOKENFLUX|GEMINI|OPENAI|ANTHROPIC/i.test(code)) {
+  if (/DIFY|WORKFLOW|PLUGIN|LITELLM|OPENCLAW|GATEWAY|PROVIDER|MODEL|NODE|VIVA|MOONAPIX|TOKENFLUX|YUNWU|FABLE|GJX|GEMINI|OPENAI|ANTHROPIC|CHANNEL|UPSTREAM|RELAYDANCE|OMNIVOICE/i.test(code)) {
     return "SERVICE_TEMPORARILY_UNAVAILABLE"
   }
   return code.replace(/[^A-Z0-9_]/gi, "_").toUpperCase().slice(0, 80)

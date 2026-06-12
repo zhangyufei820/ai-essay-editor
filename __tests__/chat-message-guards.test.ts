@@ -50,6 +50,26 @@ describe("chat message guards", () => {
     expect(sanitizePublicAiStatus("Dify 会话已提交")).toBe("任务已提交")
   })
 
+  it("removes supplier names, domains, request ids, and channel details from public errors", () => {
+    const samples = [
+      "Yunwu provider_error: No available channel for model gpt-5.5 channel_id=14 x-request-id=req_123",
+      "云雾余额不足 cf-ray=abc123 https://yunwu.ai/v1/chat/completions",
+      "Moonapix gateway failed request_id=moon_1 https://moonapix.com/v1/images/generations",
+      "VivaAPI upstream response channel=3 api.gjx88.com returned provider_error",
+      "Fable distributor error trace_id=trace_1",
+      "RelayDance API failed with GJX fallback",
+      "OmniVoice request failed at tokenflux.dev",
+    ]
+
+    for (const sample of samples) {
+      const publicError = sanitizePublicAiError(sample, "服务暂时不可用，请稍后重试。")
+      const publicStatus = sanitizePublicAiStatus(sample, "任务仍在处理中")
+      expect(hasInternalAiDetailText(publicError)).toBe(false)
+      expect(hasInternalAiDetailText(publicStatus)).toBe(false)
+      expect(`${publicError}\n${publicStatus}`).not.toMatch(/Yunwu|云雾|Moonapix|VivaAPI|TokenFlux|Fable|GJX|RelayDance|OmniVoice|api\.gjx88|yunwu\.ai|moonapix\.com|tokenflux\.dev|No available channel|x-request-id|cf-ray|channel_id|trace_id|provider|gateway|upstream/i)
+    }
+  })
+
   it("blocks backend model and provider labels from public labels", () => {
     const samples = [
       "GPT Image 2",

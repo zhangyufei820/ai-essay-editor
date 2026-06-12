@@ -69,6 +69,17 @@ def provider_code_from_payload(payload: Any, status_code: int) -> str:
     return "success" if 200 <= status_code < 300 else "provider_error"
 
 
+def public_provider_code(code: str, status_code: int) -> str:
+    text = str(code or "").lower()
+    if 200 <= status_code < 300:
+        return "success"
+    if "validation" in text:
+        return "validation_error"
+    if status_code in {408, 504, 524} or "timeout" in text:
+        return "search_service_timeout"
+    return "search_service_unavailable"
+
+
 def normalize_error_response(
     *,
     provider: str,
@@ -77,17 +88,17 @@ def normalize_error_response(
     error_code: str = "provider_error",
     warnings: list[str] | None = None,
 ) -> GatewayResponse:
-    provider_response = payload if isinstance(payload, dict) else {"raw": payload}
+    code = public_provider_code(provider_code_from_payload(payload, status_code) or error_code, status_code)
     return GatewayResponse(
         success=False,
         status_code=status_code,
-        provider_code=provider_code_from_payload(payload, status_code) or error_code,
-        message=message_from_payload(payload) or "Search provider request failed",
-        provider=provider,
-        data=payload,
-        provider_response=provider_response,
+        provider_code=code,
+        message="搜索服务暂时不可用，请稍后重试。",
+        provider="search",
+        data=None,
+        provider_response={},
         warnings=warnings or [],
-        error={"code": error_code, "message": message_from_payload(payload) or "Search provider request failed"},
+        error={"code": code, "message": "搜索服务暂时不可用，请稍后重试。"},
     )
 
 
@@ -108,7 +119,7 @@ def tavily_results(payload: dict[str, Any]) -> list[SearchResult]:
                 title=str(item.get("title") or "").strip() or "Untitled result",
                 url=url,
                 snippet=str(item.get("content") or item.get("snippet") or "").strip(),
-                source="tavily",
+                source="web",
                 published_at=str(item.get("published_date") or "").strip() or None,
                 score=float(score) if isinstance(score, numbers.Real) else None,
                 raw_content=str(item.get("raw_content") or "").strip() or None,
@@ -138,8 +149,32 @@ def brave_results(payload: dict[str, Any]) -> list[SearchResult]:
                 title=str(item.get("title") or "").strip() or "Untitled result",
                 url=url,
                 snippet=description,
-                source="brave",
+                source="web",
                 published_at=str(item.get("age") or "").strip() or None,
+            )
+        )
+    return normalized
+
+
+def extract_results(payload: dict[str, Any]) -> list[SearchResult]:
+    results = payload.get("results")
+    if not isinstance(results, list):
+        return []
+    normalized: list[SearchResult] = []
+    for item in results:
+        if not isinstance(item, dict):
+            continue
+        url = str(item.get("url") or "").strip()
+        if not url:
+            continue
+        raw_content = str(item.get("raw_content") or item.get("content") or "").strip()
+        normalized.append(
+            SearchResult(
+                title=str(item.get("title") or "").strip() or "Extracted page",
+                url=url,
+                snippet=raw_content[:500],
+                source="web",
+                raw_content=raw_content or None,
             )
         )
     return normalized
@@ -166,14 +201,14 @@ def normalize_search_response(
     return GatewayResponse(
         success=True,
         status_code=status_code,
-        provider_code=provider_code_from_payload(payload, status_code),
-        message=message_from_payload(payload),
-        provider=provider,
+        provider_code=public_provider_code(provider_code_from_payload(payload, status_code), status_code),
+        message="",
+        provider="search",
         query=request.query,
         answer=answer,
         results=results,
         data={"answer": answer, "results": [result.model_dump(exclude_none=True) for result in results]},
-        provider_response=provider_response,
+        provider_response={},
         warnings=warnings or [],
         error=None,
     )
@@ -220,12 +255,13 @@ class SearchClient:
             return GatewayResponse(
                 success=False,
                 status_code=503,
-                provider_code="search_provider_not_configured",
-                message="No search provider is configured",
-                provider=request.provider,
+                provider_code="search_service_unavailable",
+                message="搜索服务暂时不可用，请稍后重试。",
+                provider="search",
                 query=request.query,
-                warnings=[f"{provider} is missing API key" for provider in candidates],
-                error={"code": "search_provider_not_configured", "message": "No search provider is configured"},
+                warnings=["搜索服务暂时不可用"],
+                provider_response={},
+                error={"code": "search_service_unavailable", "message": "搜索服务暂时不可用，请稍后重试。"},
             )
 
         last_error: GatewayResponse | None = None
@@ -236,7 +272,7 @@ class SearchClient:
             last_error = result
             if request.provider != "auto" or self.settings.search_provider != "auto":
                 break
-            warnings.append(f"{provider} failed with HTTP {result.status_code}; trying next provider")
+            warnings.append("搜索服务自动切换线路")
 
         if last_error is not None:
             last_error.warnings = warnings or last_error.warnings
@@ -245,11 +281,12 @@ class SearchClient:
         return GatewayResponse(
             success=False,
             status_code=503,
-            provider_code="search_provider_not_configured",
-            message="No search provider is configured",
-            provider=request.provider,
+            provider_code="search_service_unavailable",
+            message="搜索服务暂时不可用，请稍后重试。",
+            provider="search",
             query=request.query,
-            error={"code": "search_provider_not_configured", "message": "No search provider is configured"},
+            provider_response={},
+            error={"code": "search_service_unavailable", "message": "搜索服务暂时不可用，请稍后重试。"},
         )
 
     async def extract(self, request: ExtractRequest) -> GatewayResponse:
@@ -259,18 +296,20 @@ class SearchClient:
                 success=False,
                 status_code=422,
                 provider_code="validation_error",
-                message="Only public http(s) URLs are allowed",
-                provider="tavily",
-                error={"code": "validation_error", "message": "Only public http(s) URLs are allowed"},
+                message="只允许提取公开网页链接",
+                provider="search",
+                provider_response={},
+                error={"code": "validation_error", "message": "只允许提取公开网页链接"},
             )
         if not self.settings.tavily_api_key.strip():
             return GatewayResponse(
                 success=False,
                 status_code=503,
-                provider_code="search_provider_not_configured",
-                message="Tavily API key is required for extraction",
-                provider="tavily",
-                error={"code": "search_provider_not_configured", "message": "Tavily API key is required for extraction"},
+                provider_code="search_service_unavailable",
+                message="搜索服务暂时不可用，请稍后重试。",
+                provider="search",
+                provider_response={},
+                error={"code": "search_service_unavailable", "message": "搜索服务暂时不可用，请稍后重试。"},
             )
         try:
             payload = await self._post_json(
@@ -290,15 +329,17 @@ class SearchClient:
 
         provider_response = payload["body"] if isinstance(payload["body"], dict) else {"raw": payload["body"]}
         success = 200 <= payload["status_code"] < 300
+        results = extract_results(provider_response)
         return GatewayResponse(
             success=success,
             status_code=payload["status_code"],
-            provider_code=provider_code_from_payload(provider_response, payload["status_code"]),
-            message=message_from_payload(provider_response),
-            provider="tavily",
-            data=provider_response,
-            provider_response=provider_response,
-            error=None if success else {"code": "provider_error", "message": message_from_payload(provider_response)},
+            provider_code=public_provider_code(provider_code_from_payload(provider_response, payload["status_code"]), payload["status_code"]),
+            message="",
+            provider="search",
+            results=results,
+            data={"results": [result.model_dump(exclude_none=True) for result in results]},
+            provider_response={},
+            error=None if success else {"code": "search_service_unavailable", "message": "搜索服务暂时不可用，请稍后重试。"},
         )
 
     async def _search_once(

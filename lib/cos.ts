@@ -219,7 +219,7 @@ export async function uploadBufferToCos(
     return {
       success: false,
       cdnUrl: '',
-      error: error.message || '上传失败',
+      error: '上传失败',
     }
   }
 }
@@ -254,8 +254,8 @@ export async function uploadToCos(
     console.log('⚠️ [COS] 未配置密钥，返回原始 URL')
     return {
       success: false,
-      cdnUrl: sourceUrl,
-      error: 'COS 未配置',
+      cdnUrl: '',
+      error: '上传失败',
     }
   }
   
@@ -318,11 +318,11 @@ export async function uploadToCos(
   } catch (error: any) {
     console.error('❌ [COS] 上传失败:', error.message || error)
     
-    // 🔥 错误处理：fallback 回原始链接
+    // 不回传原始远程链接，避免把临时资源地址暴露给用户端。
     return {
       success: false,
-      cdnUrl: sourceUrl, // 返回原始 URL，确保业务不中断
-      error: error.message || '上传失败',
+      cdnUrl: '',
+      error: '上传失败',
     }
   }
 }

@@ -1,4 +1,5 @@
 import { internalDifyFetch } from "@/lib/internal-dify-fetch"
+import { sanitizePublicAiError } from "@/lib/chat-error-sanitizer"
 
 export type OmniVoiceInfo = {
   voice_id: string
@@ -43,8 +44,11 @@ function absolutizeAudioUrl(audioUrl: string | null | undefined) {
   if (!audioUrl) return null
   const filename = extractMediaFilename(audioUrl)
   if (filename) return `${MEDIA_ROUTE}/${encodeURIComponent(filename)}`
-  if (/^https?:\/\//i.test(audioUrl)) return audioUrl
-  return `${getGatewayUrl()}${audioUrl.startsWith("/") ? "" : "/"}${audioUrl}`
+  return null
+}
+
+function publicVoiceError(value: unknown, fallback = "语音服务暂时不可用，请稍后重试。") {
+  return sanitizePublicAiError(typeof value === "string" ? value : "", fallback)
 }
 
 function extractMediaFilename(audioUrl: string) {
@@ -70,7 +74,7 @@ export async function listOmniVoices() {
   })
   const payload = await response.json().catch(() => ({})) as { voices?: OmniVoiceInfo[]; error?: { message?: string } }
   if (!response.ok) {
-    return { ok: false, voices: [] as OmniVoiceInfo[], error: payload.error?.message || "获取音色列表失败" }
+    return { ok: false, voices: [] as OmniVoiceInfo[], error: publicVoiceError(payload.error?.message, "音色列表暂时不可用，请稍后重试。") }
   }
   return { ok: true, voices: (payload.voices || []).filter((voice) => voice.enabled !== false), error: null }
 }
@@ -104,7 +108,7 @@ export async function createOmniTtsJob(input: {
 
   const payload = await response.json().catch(() => ({})) as Partial<OmniVoiceJob> & { error?: { message?: string } }
   if (!response.ok || !payload.job_id) {
-    return { ok: false, job: null, error: payload.error?.message || "创建语音任务失败" }
+    return { ok: false, job: null, error: publicVoiceError(payload.error?.message, "创建语音任务失败，请稍后重试。") }
   }
 
   return { ok: true, job: normalizeOmniJob(payload as OmniVoiceJob), error: null }
@@ -120,7 +124,7 @@ export async function getOmniTtsJob(jobId: string) {
   })
   const payload = await response.json().catch(() => ({})) as OmniVoiceJob & { error?: { message?: string } }
   if (!response.ok || !payload.job_id) {
-    return { ok: false, job: null, error: payload.error?.message || "查询语音任务失败" }
+    return { ok: false, job: null, error: publicVoiceError(payload.error?.message, "查询语音任务失败，请稍后重试。") }
   }
 
   return { ok: true, job: normalizeOmniJob(payload), error: null }
@@ -168,6 +172,7 @@ function normalizeOmniJob(job: OmniVoiceJob): OmniVoiceJob {
   return {
     ...job,
     audio_url: absolutizeAudioUrl(job.audio_url),
+    error: job.error ? publicVoiceError(job.error, "语音任务失败，请稍后重试。") : null,
   }
 }
 

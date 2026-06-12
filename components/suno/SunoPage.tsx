@@ -37,6 +37,7 @@ import {
 } from "@/lib/suno-workflow-schema"
 import { SunoHelp } from "@/components/suno/SunoHelp"
 import { getVerifiedAuthHeaders } from "@/lib/client-auth"
+import { sanitizePublicAiError } from "@/lib/chat-error-sanitizer"
 import { cn } from "@/lib/utils"
 
 type SongStatus = "idle" | "submitting" | "waiting" | "ready" | "failed"
@@ -118,13 +119,10 @@ function extractErrorMessage(value: unknown): string {
 }
 
 function toFriendlyErrorMessage(value: unknown) {
-  const text = extractErrorMessage(value).trim()
+  const text = sanitizePublicAiError(extractErrorMessage(value), "").trim()
   if (!text) return ""
   const normalized = text.toLowerCase()
-  if (text.includes("无可用渠道") || normalized.includes("distributor")) {
-    return "音乐服务暂时不可用，请稍后再试或联系客服处理。"
-  }
-  if (text === "请求失败" || normalized.includes("provider_error")) {
+  if (text === "请求失败" || normalized.includes("service_error")) {
     return "音乐生成服务暂时繁忙，请稍后再试。"
   }
   if (normalized.includes("503") || normalized.includes("service unavailable")) {

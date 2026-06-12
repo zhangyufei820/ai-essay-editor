@@ -33,7 +33,8 @@ const PUBLIC_AI_LABELS: Record<string, string> = {
 const INTERNAL_PUBLIC_LABEL_PATTERNS = [
   /\b(?:openai|anthropic|claude|chatgpt|gpt|gemini|grok|xai|suno|deepseek|qwen)\b/i,
   /banana\s*2?\s*pro|banana2\s*pro/i,
-  /\b(?:dify|litellm|moonapix|tokenflux|vivaapi|newapi|codex|openclaw)\b/i,
+  /\b(?:dify|litellm|moonapix|tokenflux|vivaapi|yunwu|fable|gjx|newapi|codex|openclaw|relaydance|omnivoice)\b/i,
+  /云雾|硅基|火山|豆包|智谱|月之暗面|Kimi/i,
   /\bimage\s*2\b/i,
   /\b(?:provider|gateway|workflow|plugin|node|model)[-_a-z0-9:. ]*/i,
   /(?:供应商|网关|工作流|插件|节点|底层模型|模型路由|模型组|后台工具|内部工具|后台模型)/,

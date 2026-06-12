@@ -5,6 +5,7 @@ import {
   sanitizeForTrace,
   updateTaskRun,
 } from "@/lib/ai-task-trace"
+import { sanitizePublicAiError, sanitizePublicAiErrorCode } from "@/lib/chat-error-sanitizer"
 import { getRelayDanceVideoTask, type RelayDanceGatewayResponse } from "@/lib/relaydance-gateway-client"
 
 const RELAYDANCE_COMPLETED_STATUSES = new Set(["completed", "succeeded", "success", "done"])
@@ -94,13 +95,17 @@ export async function refreshMediaTask(task: TaskRunRecord): Promise<TaskRunReco
   }
 
   if (!result.ok || RELAYDANCE_FAILED_STATUSES.has(providerStatus)) {
-    const errorMessage = result.error || errorMessageFromPayload(payload) || "视频生成失败"
+    const errorMessage = sanitizePublicAiError(
+      result.error || errorMessageFromPayload(payload) || "视频生成失败",
+      "视频服务暂时不可用，请稍后重试。",
+    )
+    const errorCode = sanitizePublicAiErrorCode(payload.provider_code || `VIDEO_${result.status}`) || "SERVICE_TEMPORARILY_UNAVAILABLE"
     await updateTaskRun(task.id, {
       status: "failed",
       stage: "视频生成失败",
       progress: 100,
       errorMessage,
-      errorCode: payload.provider_code || `RELAYDANCE_${result.status}`,
+      errorCode,
       sanitizedError: providerResponse,
       metadata: baseMetadata,
     })
@@ -109,7 +114,7 @@ export async function refreshMediaTask(task: TaskRunRecord): Promise<TaskRunReco
       stage: "视频生成失败",
       progress: 100,
       error_message: errorMessage,
-      error_code: payload.provider_code || `RELAYDANCE_${result.status}`,
+      error_code: errorCode,
       metadata: baseMetadata,
       completed_at: new Date().toISOString(),
     })

@@ -34,9 +34,11 @@ def create_app() -> FastAPI:
             payload = GatewayResponse(
                 success=False,
                 status_code=500,
-                provider_code="gateway_error",
-                message="Internal gateway error",
-                error={"code": "gateway_error", "message": "Internal gateway error"},
+                provider_code="search_service_unavailable",
+                message="搜索服务暂时不可用，请稍后重试。",
+                provider="search",
+                provider_response={},
+                error={"code": "search_service_unavailable", "message": "搜索服务暂时不可用，请稍后重试。"},
             )
             return JSONResponse(status_code=500, content=jsonable_encoder(payload))
 
@@ -45,9 +47,9 @@ def create_app() -> FastAPI:
         settings: Settings = Depends(get_settings),
     ) -> None:
         if not settings.gateway_api_key:
-            raise HTTPException(status_code=503, detail="GATEWAY_API_KEY is not configured")
+            raise HTTPException(status_code=503, detail="搜索服务暂时不可用，请稍后重试。")
         if x_gateway_key != settings.gateway_api_key:
-            raise HTTPException(status_code=401, detail="gateway unauthorized")
+            raise HTTPException(status_code=401, detail="未授权")
 
     app.include_router(search_router, dependencies=[Depends(require_gateway_key)])
 
@@ -57,10 +59,7 @@ def create_app() -> FastAPI:
             "success": True,
             "service": "search-gateway",
             "version": settings.service_version,
-            "provider": settings.search_provider,
-            "provider_order": settings.provider_order,
-            "tavily_configured": bool(settings.tavily_api_key),
-            "brave_configured": bool(settings.brave_api_key),
+            "search_configured": bool(settings.tavily_api_key or settings.brave_api_key),
         }
 
     @app.exception_handler(HTTPException)
@@ -68,9 +67,11 @@ def create_app() -> FastAPI:
         payload = GatewayResponse(
             success=False,
             status_code=exc.status_code,
-            provider_code="gateway_error",
+            provider_code="search_service_unavailable" if exc.status_code >= 500 else "request_error",
             message=str(exc.detail),
-            error={"code": "gateway_error", "message": str(exc.detail)},
+            provider="search",
+            provider_response={},
+            error={"code": "search_service_unavailable" if exc.status_code >= 500 else "request_error", "message": str(exc.detail)},
         )
         return JSONResponse(status_code=exc.status_code, content=jsonable_encoder(payload))
 

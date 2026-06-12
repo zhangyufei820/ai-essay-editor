@@ -358,7 +358,11 @@ export async function POST(req: NextRequest) {
 
       if (!essayGradeResponse.ok) {
         const errorText = await essayGradeResponse.text()
-        return new Response(JSON.stringify({ error: errorText || "Essay grading failed" }), {
+        console.error("[Chat] Essay grading request failed:", {
+          status: essayGradeResponse.status,
+          bodyLength: errorText.length,
+        })
+        return new Response(JSON.stringify({ error: "作文批改服务暂时不可用，请稍后重试。" }), {
           status: essayGradeResponse.status,
           headers: { "Content-Type": "application/json" },
         })
@@ -369,7 +373,7 @@ export async function POST(req: NextRequest) {
 
     const customConfig = getAPIConfig(req.headers.get("X-AI-Provider") || "openai")
     if (!customConfig) {
-      return new Response(JSON.stringify({ error: "API configuration not found" }), {
+      return new Response(JSON.stringify({ error: "智能服务暂时不可用，请稍后重试。" }), {
         status: 500,
         headers: { "Content-Type": "application/json" },
       })

@@ -46,7 +46,7 @@ def client_dep(settings: Settings = Depends(get_settings)) -> RelayDanceClient:
 def build_generation_from_dify(body: DifyVideoCreateRequest, settings: Settings) -> tuple[VideoGenerationRequest, list[str]]:
     warnings: list[str] = []
     if looks_like_image_request(body.prompt):
-        raise ValueError("This looks like an image-generation request. Use the image gateway generateImage/submitImageTask tool instead of createVideo.")
+        raise ValueError("这看起来是图片生成请求，请改用图片生成功能。")
     content: list[VideoContentItem] = []
     if body.first_frame_url:
         content.append(VideoContentItem(image_url=ImageUrl(url=body.first_frame_url), role="first_frame"))
@@ -54,7 +54,7 @@ def build_generation_from_dify(body: DifyVideoCreateRequest, settings: Settings)
         if settings.enable_last_frame:
             content.append(VideoContentItem(image_url=ImageUrl(url=body.last_frame_url), role="last_frame"))
         else:
-            warnings.append("last_frame_url was provided but RelayDance PDF does not document last_frame support; it was not forwarded")
+            warnings.append("当前视频服务暂不支持尾帧参数，已自动忽略。")
 
     metadata = GenerationMetadata(
         ratio=body.ratio,

@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server"
 import { z } from "zod"
 import { requireUser } from "@/lib/auth/verified-user"
 import { createRequestId, createTaskRun, sanitizeForTrace, updateTaskRun } from "@/lib/ai-task-trace"
+import { sanitizePublicAiError, sanitizePublicAiErrorCode } from "@/lib/chat-error-sanitizer"
 import { createRelayDanceVideo, RELAYDANCE_DEFAULT_MODEL } from "@/lib/relaydance-gateway-client"
 
 export const runtime = "nodejs"
@@ -30,10 +31,11 @@ function publicErrorMessage(error: unknown) {
   if (/config|missing|api[_-]?key|token|secret|authorization|env|environment|未配置|凭据/i.test(message)) {
     return "视频服务暂时不可用，请稍后重试。"
   }
-  return message
+  const redacted = message
     .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [REDACTED]")
     .replace(/sk-[A-Za-z0-9_-]+/g, "[REDACTED_SECRET]")
     .slice(0, 500)
+  return sanitizePublicAiError(redacted, "视频服务暂时不可用，请稍后重试。")
 }
 
 export async function POST(request: NextRequest) {
@@ -84,7 +86,7 @@ export async function POST(request: NextRequest) {
     const providerTaskId = typeof payload.task_id === "string" ? payload.task_id : ""
 
     if (!result.ok || !providerTaskId) {
-      const errorMessage = result.error || "RelayDance 没有返回任务 ID"
+      const errorMessage = publicErrorMessage(result.error || "视频服务没有返回任务编号")
       await updateTaskRun(taskRun.id, {
         status: "failed",
         stage: "视频任务提交失败",
@@ -98,7 +100,12 @@ export async function POST(request: NextRequest) {
           provider_response: sanitizeForTrace(payload.provider_response || payload) as Record<string, unknown>,
         },
       })
-      return NextResponse.json({ success: false, error: errorMessage, request_id: taskRun.requestId }, { status: result.status >= 400 ? result.status : 502 })
+      return NextResponse.json({
+        success: false,
+        error: errorMessage,
+        code: sanitizePublicAiErrorCode(payload.provider_code || `VIDEO_${result.status}`),
+        request_id: taskRun.requestId,
+      }, { status: result.status >= 400 ? result.status : 502 })
     }
 
     await updateTaskRun(taskRun.id, {
@@ -121,7 +128,6 @@ export async function POST(request: NextRequest) {
       request_id: taskRun.requestId,
       status: "running",
       poll_url: `/api/media/tasks/${encodeURIComponent(taskRun.requestId)}`,
-      warnings: payload.warnings || [],
     })
   } catch (error) {
     const rawMessage = error instanceof Error ? error.message : String(error || "")
@@ -138,6 +144,11 @@ export async function POST(request: NextRequest) {
         gateway_status: "submit_error",
       },
     })
-    return NextResponse.json({ success: false, error: message, request_id: taskRun.requestId }, { status: rawMessage.startsWith("RELAYDANCE_GATEWAY_CONFIG_MISSING") ? 503 : 500 })
+    return NextResponse.json({
+      success: false,
+      error: message,
+      code: sanitizePublicAiErrorCode(rawMessage.startsWith("RELAYDANCE_GATEWAY_CONFIG_MISSING") ? "VIDEO_GATEWAY_CONFIG_MISSING" : "VIDEO_GATEWAY_ERROR"),
+      request_id: taskRun.requestId,
+    }, { status: rawMessage.startsWith("RELAYDANCE_GATEWAY_CONFIG_MISSING") ? 503 : 500 })
   }
 }

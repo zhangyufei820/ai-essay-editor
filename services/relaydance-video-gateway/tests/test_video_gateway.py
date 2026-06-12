@@ -10,7 +10,7 @@ def test_missing_gateway_key_returns_401(client):
     assert response.status_code == 401
     body = response.json()
     assert body["success"] is False
-    assert body["error"]["message"] == "gateway unauthorized"
+    assert body["error"]["message"] == "未授权"
 
 
 def test_create_video_rejects_image_generation_intent(client, auth_headers):
@@ -24,7 +24,7 @@ def test_create_video_rejects_image_generation_intent(client, auth_headers):
     body = response.json()
     assert body["success"] is False
     assert body["provider_code"] == "validation_error"
-    assert "image-generation request" in body["message"]
+    assert body["message"] == "参数格式错误，请检查后重试。"
 
 
 @respx.mock

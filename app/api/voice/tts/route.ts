@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { requireUser } from "@/lib/auth/verified-user"
 import { getClientIP, checkIpRateLimit, createRateLimitResponse } from "@/lib/rate-limit"
 import { resolveVoiceTtsPayload } from "@/lib/voice-tts-request"
+import { sanitizePublicAiError } from "@/lib/chat-error-sanitizer"
 
 export const runtime = "nodejs"
 export const maxDuration = 90
@@ -51,7 +52,7 @@ export async function POST(request: NextRequest) {
     if (!response.ok) {
       const payload = await response.json().catch(() => ({}))
       return NextResponse.json(
-        { error: payload.error || "语音生成失败", details: payload.details },
+        { error: sanitizePublicAiError(payload.error, "语音生成失败，请稍后重试。") },
         { status: response.status },
       )
     }

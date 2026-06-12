@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
 
       if (createError) {
         console.error("[v0] 创建用户失败:", createError)
-        return NextResponse.json({ error: "创建用户失败: " + createError.message }, { status: 500 })
+        return NextResponse.json({ error: "创建用户失败，请稍后重试" }, { status: 500 })
       }
 
       userId = newUser.user?.id
@@ -162,7 +162,7 @@ export async function POST(request: NextRequest) {
     })
   } catch (error: any) {
     console.error("[v0] 验证异常:", error)
-    return NextResponse.json({ error: error.message || "验证失败" }, { status: 500 })
+    return NextResponse.json({ error: "验证失败，请稍后重试" }, { status: 500 })
   }
 }
 

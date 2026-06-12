@@ -40,8 +40,7 @@ def validate_mv(body: dict[str, Any], settings: Settings | None = None) -> None:
     if not isinstance(mv, str) or not mv.strip():
         raise ValueError("mv must be a non-empty string")
     if settings.strict_model_validation and mv not in ALLOWED_MODELS:
-        allowed = ", ".join(sorted(ALLOWED_MODELS))
-        raise ValueError(f"mv must be one of: {allowed}")
+        raise ValueError("requested music model is not available")
 
 
 def provider_code_from_payload(payload: Any, status_code: int) -> str:
@@ -50,7 +49,18 @@ def provider_code_from_payload(payload: Any, status_code: int) -> str:
             value = payload.get(key)
             if value is not None:
                 return str(value)
-    return "success" if 200 <= status_code < 300 else "provider_error"
+    return "success" if 200 <= status_code < 300 else "service_error"
+
+
+def public_provider_code(code: str, status_code: int) -> str:
+    text = str(code or "").lower()
+    if 200 <= status_code < 300:
+        return "success"
+    if "validation" in text:
+        return "validation_error"
+    if status_code in {408, 504, 524} or "timeout" in text:
+        return "service_timeout"
+    return "service_error"
 
 
 def message_from_payload(payload: Any) -> str:
@@ -101,8 +111,8 @@ def normalize_provider_response(
     error: Any = None,
 ) -> GatewayResponse:
     provider_response = payload if isinstance(payload, dict) else {"raw": payload}
-    provider_code = provider_code_from_payload(payload, status_code)
-    success = 200 <= status_code < 300 and provider_code.lower() in {
+    raw_provider_code = provider_code_from_payload(payload, status_code)
+    success = 200 <= status_code < 300 and raw_provider_code.lower() in {
         "success",
         "ok",
         "200",
@@ -112,7 +122,8 @@ def normalize_provider_response(
         "submitted",
         "created",
     }
-    if 200 <= status_code < 300 and provider_code.lower() not in {
+    if 200 <= status_code < 300 and raw_provider_code.lower() not in {
+        "service_error",
         "provider_error",
         "error",
         "failed",
@@ -123,8 +134,8 @@ def normalize_provider_response(
     return GatewayResponse(
         success=success,
         status_code=status_code,
-        provider_code=provider_code,
-        message=message_from_payload(payload),
+        provider_code=public_provider_code(raw_provider_code, status_code),
+        message="" if success else "服务暂时不可用，请稍后重试。",
         task_id=str(find_first(payload, {"task_id", "taskId", "id"}) or ""),
         clip_id=str(find_first(payload, {"clip_id", "clipId", "clipIdStr"}) or ""),
         upload_id=str(find_first(payload, {"upload_id", "uploadId", "id"}) or ""),
@@ -188,14 +199,14 @@ class VivaAPIClient:
                     await asyncio.sleep(0.5 * (2**attempt))
                     continue
                 return normalize_provider_response(
-                    {"provider_error_text": str(exc)},
+                    {"service_error": "request_failed"},
                     502,
-                    error={"code": "provider_request_failed", "message": "Provider request failed"},
+                    error={"code": "service_request_failed", "message": "服务暂时不可用，请稍后重试。"},
                 )
         return normalize_provider_response(
-            {"provider_error_text": str(last_error) if last_error else "unknown error"},
+            {"service_error": "request_failed"},
             502,
-            error={"code": "provider_request_failed", "message": "Provider request failed"},
+            error={"code": "service_request_failed", "message": "服务暂时不可用，请稍后重试。"},
         )
 
     async def _response_payload(self, response: httpx.Response) -> Any:
@@ -206,7 +217,7 @@ class VivaAPIClient:
         try:
             return json.loads(text)
         except json.JSONDecodeError:
-            return {"provider_error_text" if response.is_error else "text": text}
+            return {"service_error" if response.is_error else "text": text}
 
     async def s3_upload(
         self,

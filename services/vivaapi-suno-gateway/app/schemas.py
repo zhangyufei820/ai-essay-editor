@@ -35,8 +35,8 @@ class GatewayResponse(BaseModel):
     video_urls: list[str] = Field(default_factory=list)
     wav_url: str = ""
     timing: Any = None
-    data: Any = None
-    provider_response: dict[str, Any] = Field(default_factory=dict)
+    data: Any = Field(default=None, exclude=True)
+    provider_response: dict[str, Any] = Field(default_factory=dict, exclude=True)
     error: Any = None
 
 

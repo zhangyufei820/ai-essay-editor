@@ -17,9 +17,9 @@ logger = logging.getLogger("relaydance_video_gateway")
 
 def create_app() -> FastAPI:
     app = FastAPI(
-        title="RelayDance Video Gateway",
+        title="Shenxiang Video Gateway",
         version=get_settings().service_version,
-        description="Secure HTTP gateway for Dify and Next.js to call RelayDance video APIs without exposing provider tokens.",
+        description="Secure HTTP gateway for video generation.",
     )
 
     @app.middleware("http")
@@ -34,9 +34,9 @@ def create_app() -> FastAPI:
             payload = GatewayResponse(
                 success=False,
                 status_code=500,
-                provider_code="gateway_error",
-                message="Internal gateway error",
-                error={"code": "gateway_error", "message": "Internal gateway error"},
+                provider_code="service_error",
+                message="服务暂时不可用，请稍后重试。",
+                error={"code": "service_error", "message": "服务暂时不可用，请稍后重试。"},
             )
             return JSONResponse(status_code=500, content=jsonable_encoder(payload))
 
@@ -45,30 +45,29 @@ def create_app() -> FastAPI:
         settings: Settings = Depends(get_settings),
     ) -> None:
         if not settings.gateway_api_key:
-            raise HTTPException(status_code=503, detail="GATEWAY_API_KEY is not configured")
+            raise HTTPException(status_code=503, detail="服务暂时不可用，请稍后重试。")
         if x_gateway_key != settings.gateway_api_key:
-            raise HTTPException(status_code=401, detail="gateway unauthorized")
+            raise HTTPException(status_code=401, detail="未授权")
 
     app.include_router(video_router, dependencies=[Depends(require_gateway_key)])
 
     @app.get("/health", tags=["health"])
     async def health(settings: Settings = Depends(get_settings)) -> dict[str, object]:
-        return {
-            "success": True,
-            "service": "relaydance-video-gateway",
-            "version": settings.service_version,
-            "relaydance_base_url": settings.relaydance_base_url,
-            "enable_last_frame": settings.enable_last_frame,
-        }
+            return {
+                "success": True,
+                "service": "video-gateway",
+                "version": settings.service_version,
+                "video_configured": bool(settings.relaydance_authorization),
+            }
 
     @app.exception_handler(HTTPException)
     async def http_exception_handler(_request: Request, exc: HTTPException) -> JSONResponse:
         payload = GatewayResponse(
             success=False,
             status_code=exc.status_code,
-            provider_code="gateway_error",
+            provider_code="service_error" if exc.status_code >= 500 else "request_error",
             message=str(exc.detail),
-            error={"code": "gateway_error", "message": str(exc.detail)},
+            error={"code": "service_error" if exc.status_code >= 500 else "request_error", "message": str(exc.detail)},
         )
         return JSONResponse(status_code=exc.status_code, content=jsonable_encoder(payload))
 
@@ -78,20 +77,21 @@ def create_app() -> FastAPI:
             success=False,
             status_code=422,
             provider_code="validation_error",
-            message="Request validation failed",
-            error={"code": "validation_error", "details": exc.errors()},
+            message="参数格式错误，请检查后重试。",
+            error={"code": "validation_error", "message": "参数格式错误，请检查后重试。"},
         )
         return JSONResponse(status_code=422, content=jsonable_encoder(payload))
 
     @app.exception_handler(ValueError)
     async def value_error_handler(_request: Request, exc: ValueError) -> JSONResponse:
         payload = normalize_provider_response(
-            {"message": str(exc)},
+            {"message": "参数格式错误，请检查后重试。"},
             422,
-            error={"code": "validation_error", "message": str(exc)},
+            error={"code": "validation_error", "message": "参数格式错误，请检查后重试。"},
         )
         payload.success = False
         payload.provider_code = "validation_error"
+        payload.message = "参数格式错误，请检查后重试。"
         return JSONResponse(status_code=422, content=jsonable_encoder(payload))
 
     return app

@@ -2005,6 +2005,27 @@ function getImageUrlsFromGatewayResponsePayload(payload: unknown) {
   return extractWorkflowImageUrls(payload).slice(0, 4)
 }
 
+function buildPublicImageGatewayPayload(payload: unknown, requestId: string) {
+  const imageUrls = getImageUrlsFromGatewayResponsePayload(payload)
+  const images = imageUrls.map((url) => ({ type: "image", url }))
+  const answer = imageUrls.map((url) => `![生成图片](${url})`).join("\n\n")
+  return {
+    success: true,
+    status: "succeeded",
+    answer: answer || "图片已生成",
+    image_urls: imageUrls,
+    images,
+    requestId,
+    data: {
+      outputs: {
+        text: answer || "图片已生成",
+        image_urls: imageUrls,
+        images,
+      },
+    },
+  }
+}
+
 async function inspectGeneratedImageUrl(url: string): Promise<GeminiImageInspection> {
   try {
     const response = await internalDifyFetch(url, { signal: AbortSignal.timeout(30_000) })
@@ -3761,7 +3782,7 @@ export async function POST(request: NextRequest) {
         })
       }
 
-      return Response.json(gatewayPayload, {
+      return Response.json(buildPublicImageGatewayPayload(gatewayPayload, taskRun.requestId), {
         headers: {
           "X-Request-Id": taskRun.requestId,
         },
@@ -3933,7 +3954,7 @@ export async function POST(request: NextRequest) {
         },
       })
 
-      return Response.json(gatewayPayload, {
+      return Response.json(buildPublicImageGatewayPayload(gatewayPayload, taskRun.requestId), {
         headers: {
           "X-Request-Id": taskRun.requestId,
         },
