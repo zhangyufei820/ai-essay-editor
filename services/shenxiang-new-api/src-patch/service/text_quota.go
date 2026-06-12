@@ -330,6 +330,8 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 
 	adminRejectReason := common.GetContextKeyString(ctx, constant.ContextKeyAdminRejectReason)
 	summary := calculateTextQuotaSummary(ctx, relayInfo, usage)
+	responseStreamOutputSent := ctx.GetBool("response_stream_output_sent")
+	responseCompletedSeen := ctx.GetBool("response_completed_seen")
 
 	var tieredResult *billingexpr.TieredResult
 	tieredBillingApplied := false
@@ -368,7 +370,11 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 	}
 
 	if summary.TotalTokens == 0 && (upstreamCostBilling == nil || !upstreamCostBilling.Applied) {
-		extraContent = append(extraContent, "上游没有返回计费信息，无法扣费（可能是上游超时）")
+		if responseStreamOutputSent {
+			extraContent = append(extraContent, "已向用户输出内容但上游没有返回计费信息，本次按 0 扣费并记录审计")
+		} else {
+			extraContent = append(extraContent, "未向用户输出有效内容，上游没有返回计费信息，本次按 0 扣费并返还预扣")
+		}
 		logger.LogError(ctx, fmt.Sprintf("total tokens is 0, cannot consume quota, userId %d, channelId %d, tokenId %d, model %s， pre-consumed quota %d", relayInfo.UserId, relayInfo.ChannelId, relayInfo.TokenId, summary.ModelName, relayInfo.FinalPreConsumedQuota))
 	} else {
 		model.UpdateUserUsedQuotaAndRequestCount(relayInfo.UserId, summary.Quota)
@@ -405,6 +411,19 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 	}
 	if adminRejectReason != "" {
 		other["reject_reason"] = adminRejectReason
+	}
+	if responseStreamOutputSent {
+		other["response_stream_output_sent"] = true
+	}
+	if responseCompletedSeen {
+		other["response_completed_seen"] = true
+	}
+	if summary.TotalTokens == 0 && (upstreamCostBilling == nil || !upstreamCostBilling.Applied) {
+		other["billing_settlement"] = "preconsume_refund_no_usage"
+		if responseStreamOutputSent {
+			other["billing_settlement"] = "zero_usage_after_output_review"
+		}
+		other["pre_consumed_quota"] = relayInfo.FinalPreConsumedQuota
 	}
 	if summary.ImageTokens != 0 {
 		other["image"] = true

@@ -251,6 +251,7 @@ func responsesChatStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, res
 				sr.Error(err)
 				return
 			}
+			c.Set("response_stream_output_sent", true)
 		}
 	})
 
@@ -290,6 +291,7 @@ func responsesChatStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, res
 	_ = writeResponsesCompatEvent(c, "response.completed", map[string]any{
 		"response": responseEnvelope(responseID, createdAt, model, "completed", []any{outputItem}, usage),
 	})
+	c.Set("response_completed_seen", true)
 
 	return usage, nil
 }

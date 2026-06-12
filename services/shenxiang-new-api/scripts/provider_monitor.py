@@ -37,6 +37,16 @@ CONSECUTIVE_FAILURES_TO_OPEN = int(os.environ.get("PROVIDER_MONITOR_CONSECUTIVE_
 RECOVER_SUCCESS_STREAK = int(os.environ.get("PROVIDER_MONITOR_RECOVER_SUCCESS_STREAK", "2"))
 RECOVER_COOLDOWN_SECONDS = int(os.environ.get("PROVIDER_MONITOR_RECOVER_COOLDOWN_SECONDS", "300"))
 RECOVERING_RUNS = int(os.environ.get("PROVIDER_MONITOR_RECOVERING_RUNS", "2"))
+REAL_REQUEST_LOOKBACK_SECONDS = int(os.environ.get("PROVIDER_MONITOR_REAL_REQUEST_LOOKBACK_SECONDS", "1800"))
+REAL_REQUEST_LIMIT = int(os.environ.get("PROVIDER_MONITOR_REAL_REQUEST_LIMIT", "300"))
+REAL_REQUEST_USE_TIME_DEGRADE_MS = int(os.environ.get("PROVIDER_MONITOR_REAL_REQUEST_USE_TIME_DEGRADE_MS", "60000"))
+
+REDACTED = "***redacted***"
+SENSITIVE_TEXT_PATTERNS = (
+    re.compile(r"sk-[A-Za-z0-9][A-Za-z0-9_\-]{8,}"),
+    re.compile(r"(?i)(authorization:\s*bearer\s+)[^\s\"']+"),
+    re.compile(r"https?://[^\s\"'<>]+"),
+)
 
 
 @dataclass(frozen=True)
@@ -73,7 +83,7 @@ TEXT_FAMILIES = (
 
 
 IMAGE2_PRIMARY = {
-    "name": "image2_moonapi_primary",
+    "name": "image2_primary",
     "channel_id": 4,
     "fallback_channel_id": 8,
     "model": "gpt-image-2-4K",
@@ -152,10 +162,43 @@ def shell_quote(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
 
 
+def redact_text(value: str) -> str:
+    text = str(value or "")
+    for pattern in SENSITIVE_TEXT_PATTERNS:
+        text = pattern.sub(lambda m: (m.group(1) + REDACTED) if m.lastindex else REDACTED, text)
+    return text
+
+
+def sanitize_for_event(value: Any) -> Any:
+    if isinstance(value, dict):
+        safe: dict[str, Any] = {}
+        for key, item in value.items():
+            key_text = str(key)
+            if key_text in {"key", "base_url", "preview", "url"}:
+                safe[key_text] = REDACTED
+            elif key_text == "provider":
+                safe[key_text] = REDACTED
+            elif key_text == "providers" and isinstance(item, dict):
+                safe[key_text] = {
+                    f"provider_{index + 1}": sanitize_for_event(provider_state)
+                    for index, provider_state in enumerate(item.values())
+                }
+            elif key_text in {"error", "reason", "msg"} and isinstance(item, str):
+                safe[key_text] = redact_text(item)[:300]
+            else:
+                safe[key_text] = sanitize_for_event(item)
+        return safe
+    if isinstance(value, list):
+        return [sanitize_for_event(item) for item in value]
+    if isinstance(value, str):
+        return redact_text(value)
+    return value
+
+
 def write_event(event: dict[str, Any]) -> None:
     LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
     with LOG_PATH.open("a") as fp:
-        fp.write(json.dumps(event, ensure_ascii=False, separators=(",", ":")) + "\n")
+        fp.write(json.dumps(sanitize_for_event(event), ensure_ascii=False, separators=(",", ":")) + "\n")
 
 
 def load_state() -> dict[str, Any]:
@@ -206,9 +249,11 @@ WHERE id IN ({ids})
 def redact_channel(channel: dict[str, Any]) -> dict[str, Any]:
     safe = dict(channel)
     if "key" in safe:
-        safe["key"] = "***redacted***"
+        safe["key"] = REDACTED
     if "base_url" in safe:
-        safe["base_url"] = "***redacted***"
+        safe["base_url"] = REDACTED
+    if "name" in safe:
+        safe["name"] = REDACTED
     return safe
 
 
@@ -231,6 +276,33 @@ def first_key(raw_key: str) -> str:
         except Exception:
             pass
     return key.splitlines()[0].strip()
+
+
+def classify_http_error(status: int) -> str:
+    if status in {401, 403}:
+        return "auth_error"
+    if status == 402:
+        return "quota_error"
+    if status == 408:
+        return "timeout"
+    if status == 429:
+        return "rate_limited"
+    if status in {499, 524}:
+        return "stream_timeout"
+    if 500 <= status <= 599:
+        return "upstream_5xx"
+    return "http_error"
+
+
+def classify_exception(exc: Exception) -> str:
+    name = exc.__class__.__name__.lower()
+    if "timeout" in name:
+        return "timeout"
+    if "ssl" in name:
+        return "tls_error"
+    if "connection" in name or "url" in name:
+        return "network_error"
+    return "probe_error"
 
 
 def request_chat(base_url: str, api_key: str, model: str) -> dict[str, Any]:
@@ -282,24 +354,21 @@ def request_chat(base_url: str, api_key: str, model: str) -> dict[str, Any]:
                 "status": status,
                 "first_token_ms": first_ms,
                 "reason": "ok" if ok else "bad_stream",
-                "preview": preview[:120],
             }
     except urllib.error.HTTPError as exc:
-        text = exc.read(512).decode("utf-8", "replace")
+        _ = exc.read(512)
         return {
             "ok": False,
             "status": exc.code,
             "first_token_ms": int((time.monotonic() - start) * 1000),
-            "reason": "http_error",
-            "preview": text[:120],
+            "reason": classify_http_error(exc.code),
         }
     except Exception as exc:
         return {
             "ok": False,
             "status": 0,
             "first_token_ms": int((time.monotonic() - start) * 1000),
-            "reason": exc.__class__.__name__,
-            "preview": str(exc)[:120],
+            "reason": classify_exception(exc),
         }
 
 
@@ -339,15 +408,19 @@ def append_sample(state: dict[str, Any], family: str, model: str, channel_id: in
     key = f"{family}:{model}:{channel_id}"
     route = state.setdefault("routes", {}).setdefault(key, {"samples": []})
     samples = route.setdefault("samples", [])
-    samples.append(
-        {
-            "ts": now_ts(),
-            "ok": bool(result.get("ok")),
-            "status": int(result.get("status") or 0),
-            "first_token_ms": int(result.get("first_token_ms") or 0),
-            "reason": str(result.get("reason") or "unknown")[:80],
-        }
-    )
+    sample = {
+        "ts": int(result.get("ts") or now_ts()),
+        "ok": bool(result.get("ok")),
+        "status": int(result.get("status") or 0),
+        "first_token_ms": int(result.get("first_token_ms") or 0),
+        "reason": str(result.get("reason") or "unknown")[:80],
+        "source": str(result.get("source") or "canary")[:40],
+    }
+    if result.get("use_time_ms") is not None:
+        sample["use_time_ms"] = int(result.get("use_time_ms") or 0)
+    if result.get("log_id") is not None:
+        sample["log_id"] = int(result.get("log_id") or 0)
+    samples.append(sample)
     cutoff = now_ts() - WINDOW_MAX_AGE_SECONDS
     route["samples"] = [sample for sample in samples if int(sample.get("ts") or 0) >= cutoff][-WINDOW_SIZE:]
     return route
@@ -358,28 +431,33 @@ def summarize_route(route: dict[str, Any]) -> dict[str, Any]:
     total = len(samples)
     ok_samples = [sample for sample in samples if sample.get("ok")]
     ok_latencies = [int(sample.get("first_token_ms") or 0) for sample in ok_samples]
+    use_times = [int(sample.get("use_time_ms") or 0) for sample in ok_samples if int(sample.get("use_time_ms") or 0) > 0]
     failures = total - len(ok_samples)
     error_rate = failures / total if total else 1.0
     p50 = percentile(ok_latencies, 0.50)
     p95 = percentile(ok_latencies, 0.95)
+    use_time_p95 = percentile(use_times, 0.95)
     last = samples[-1] if samples else {}
     fail_streak = consecutive_failures(samples)
     success_streak = consecutive_successes(samples)
     hard_error = int(last.get("status") or 0) in {401, 402, 403}
+    slow_real_request = use_time_p95 is not None and use_time_p95 >= REAL_REQUEST_USE_TIME_DEGRADE_MS
     state_name = "healthy"
     if total >= 2 and (hard_error or fail_streak >= CONSECUTIVE_FAILURES_TO_OPEN):
         state_name = "open"
     elif total >= 3 and (error_rate >= FAIL_ERROR_RATE or (p95 is not None and p95 >= P95_OPEN_MS)):
         state_name = "open"
-    elif total >= 2 and (error_rate >= DEGRADE_ERROR_RATE or (p95 is not None and p95 >= P95_DEGRADE_MS)):
+    elif total >= 2 and (error_rate >= DEGRADE_ERROR_RATE or (p95 is not None and p95 >= P95_DEGRADE_MS) or slow_real_request):
         state_name = "degraded"
     return {
         "samples": total,
+        "real_samples": sum(1 for sample in samples if sample.get("source") == "real_request"),
         "successes": len(ok_samples),
         "failures": failures,
         "error_rate": round(error_rate, 4),
         "p50_ms": p50,
         "p95_ms": p95,
+        "p95_use_ms": use_time_p95,
         "last": {k: last.get(k) for k in ("ok", "status", "first_token_ms", "reason", "ts")},
         "consecutive_failures": fail_streak,
         "consecutive_successes": success_streak,
@@ -487,12 +565,133 @@ def score_channel(model_summaries: list[dict[str, Any]], baseline_rank: int) -> 
         return 10_000_000.0
     p50_values = [summary["p50_ms"] for summary in model_summaries if summary.get("p50_ms") is not None]
     p95_values = [summary["p95_ms"] for summary in model_summaries if summary.get("p95_ms") is not None]
+    use_time_p95_values = [summary["p95_use_ms"] for summary in model_summaries if summary.get("p95_use_ms") is not None]
     error_rate = statistics.mean([float(summary.get("error_rate") or 1.0) for summary in model_summaries])
     open_count = sum(1 for summary in model_summaries if summary.get("state") == "open")
     degraded_count = sum(1 for summary in model_summaries if summary.get("state") == "degraded")
     p50 = statistics.median(p50_values) if p50_values else P95_OPEN_MS
     p95 = max(p95_values) if p95_values else P95_OPEN_MS
-    return float(p50) + float(p95) * 0.35 + error_rate * 20_000 + open_count * 80_000 + degraded_count * 8_000 + baseline_rank * 25
+    use_time_penalty = max(use_time_p95_values) * 0.08 if use_time_p95_values else 0
+    return float(p50) + float(p95) * 0.35 + use_time_penalty + error_rate * 20_000 + open_count * 80_000 + degraded_count * 8_000 + baseline_rank * 25
+
+
+def stream_status_from_other(other: dict[str, Any]) -> tuple[bool, str]:
+    stream_status = other.get("stream_status")
+    if not isinstance(stream_status, dict):
+        return True, "real_ok"
+    status = str(stream_status.get("status") or "ok")
+    end_reason = str(stream_status.get("end_reason") or "")
+    if status == "ok" and end_reason in {"", "done", "eof", "handler_stop"}:
+        return True, "real_ok"
+    if end_reason == "client_gone":
+        return False, "real_client_gone"
+    if end_reason == "timeout":
+        return False, "real_timeout"
+    if end_reason == "panic":
+        return False, "real_panic"
+    return False, "real_stream_error"
+
+
+def load_real_request_rows(env: dict[str, str], state: dict[str, Any], families: tuple[TextFamily, ...]) -> list[dict[str, Any]]:
+    channel_ids = sorted({channel_id for family in families for channel_id in family.channel_ids})
+    models = sorted({model for family in families for model in family.models})
+    if not channel_ids or not models or REAL_REQUEST_LIMIT <= 0:
+        return []
+    last_id = int(state.get("real_request_last_log_id") or 0)
+    cutoff = now_ts() - REAL_REQUEST_LOOKBACK_SECONDS
+    ids = ",".join(str(channel_id) for channel_id in channel_ids)
+    model_filter = ",".join(shell_quote(model) for model in models)
+    select = f"""
+SELECT JSON_OBJECT(
+  'id', id,
+  'created_at', created_at,
+  'model_name', model_name,
+  'channel_id', channel_id,
+  'use_time', use_time,
+  'is_stream', is_stream,
+  'prompt_tokens', prompt_tokens,
+  'completion_tokens', completion_tokens,
+  'other', COALESCE(other, '')
+)
+FROM logs
+WHERE id > {last_id}
+  AND created_at >= {cutoff}
+  AND channel_id IN ({ids})
+  AND model_name IN ({model_filter})
+ORDER BY id ASC
+LIMIT {int(REAL_REQUEST_LIMIT)}
+"""
+    return mysql_json(select, env)
+
+
+def ingest_real_request_samples(
+    families: tuple[TextFamily, ...],
+    state: dict[str, Any],
+    env: dict[str, str],
+) -> dict[str, Any]:
+    rows = load_real_request_rows(env, state, families)
+    family_by_route: dict[tuple[int, str], str] = {}
+    for family in families:
+        for channel_id in family.channel_ids:
+            for model in family.models:
+                family_by_route[(channel_id, model)] = family.name
+
+    ingested = 0
+    skipped = 0
+    max_id = int(state.get("real_request_last_log_id") or 0)
+    for row in rows:
+        log_id = int(row.get("id") or 0)
+        max_id = max(max_id, log_id)
+        channel_id = int(row.get("channel_id") or 0)
+        model_name = str(row.get("model_name") or "")
+        family_name = family_by_route.get((channel_id, model_name))
+        if not family_name:
+            skipped += 1
+            continue
+        try:
+            other = json.loads(str(row.get("other") or "{}"))
+            if not isinstance(other, dict):
+                other = {}
+        except Exception:
+            other = {}
+        request_path = str(other.get("request_path") or "")
+        if request_path and request_path not in {"/v1/responses", "/v1/chat/completions"}:
+            skipped += 1
+            continue
+        frt = int(float(other.get("frt") or 0))
+        if frt <= 0:
+            skipped += 1
+            continue
+        ok, reason = stream_status_from_other(other)
+        append_sample(
+            state,
+            family_name,
+            model_name,
+            channel_id,
+            {
+                "ts": int(row.get("created_at") or now_ts()),
+                "ok": ok,
+                "status": 200 if ok else 499,
+                "first_token_ms": frt,
+                "use_time_ms": int(row.get("use_time") or 0) * 1000,
+                "reason": reason,
+                "source": "real_request",
+                "log_id": log_id,
+            },
+        )
+        ingested += 1
+    if max_id:
+        state["real_request_last_log_id"] = max_id
+    event = {
+        "ts": now_iso(),
+        "event": "real_request_latency_ingest",
+        "rows": len(rows),
+        "ingested": ingested,
+        "skipped": skipped,
+        "last_log_id": state.get("real_request_last_log_id", 0),
+    }
+    write_event(event)
+    return event
 
 
 def evaluate_text_family(
@@ -573,7 +772,6 @@ def evaluate_text_family(
         current_status = int(summary["current_status"])
         if (
             family.allow_disable
-            and not family.standalone
             and current_status == 1
             and summary["hard_unhealthy"]
             and enabled_count > 1
@@ -613,6 +811,10 @@ def evaluate_text_family(
             target_priority = min(target_priority, lowest_priority)
             target_weight = 25
             ch_state["recovering_runs_left"] = max(0, int(ch_state.get("recovering_runs_left") or 0) - 1)
+        elif summary.get("hard_unhealthy") and enabled_count <= 1:
+            target_weight = 25
+            if summary["action"] == "none":
+                summary["action"] = "soft_circuit_no_fallback"
         elif summary.get("degraded"):
             target_weight = 50
         if int(summary.get("current_priority") or 0) != target_priority:
@@ -781,11 +983,11 @@ def main() -> int:
         if args.no_probe:
             print(
                 json.dumps(
-                    {
+                    sanitize_for_event({
                         "text_families": [family.__dict__ for family in TEXT_FAMILIES],
                         "channels": {channel_id: redact_channel(channel) for channel_id, channel in channels.items()},
                         "state": state,
-                    },
+                    }),
                     ensure_ascii=False,
                     default=str,
                 )
@@ -793,6 +995,7 @@ def main() -> int:
             return 0
 
         results: dict[str, Any] = {}
+        results["real_request_latency_ingest"] = ingest_real_request_samples(TEXT_FAMILIES, state, env)
         results[IMAGE2_PRIMARY["name"]] = evaluate_image2_primary(
             load_channels_by_id(env, [IMAGE2_PRIMARY["channel_id"], IMAGE2_PRIMARY["fallback_channel_id"]]),
             state,
@@ -813,6 +1016,7 @@ if __name__ == "__main__":
         print(json.dumps({"ok": False, "error": "provider monitor already running"}, ensure_ascii=False), file=os.sys.stderr)
         raise SystemExit(75)
     except Exception as exc:
-        write_event({"ts": now_iso(), "event": "provider_monitor_error", "error": str(exc)[:500]})
-        print(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False), file=os.sys.stderr)
+        safe_error = redact_text(str(exc))[:500]
+        write_event({"ts": now_iso(), "event": "provider_monitor_error", "error": safe_error})
+        print(json.dumps({"ok": False, "error": safe_error}, ensure_ascii=False), file=os.sys.stderr)
         raise SystemExit(1)

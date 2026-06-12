@@ -17,6 +17,20 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+func markResponsesStreamOutputSent(c *gin.Context, streamResponse dto.ResponsesStreamResponse) {
+	if c == nil {
+		return
+	}
+	switch streamResponse.Type {
+	case "response.output_text.delta", "response.reasoning_summary_text.delta", "response.function_call_arguments.delta":
+		if streamResponse.Delta != "" {
+			c.Set("response_stream_output_sent", true)
+		}
+	case "response.completed":
+		c.Set("response_completed_seen", true)
+	}
+}
+
 func OaiResponsesHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Response) (*dto.Usage, *types.NewAPIError) {
 	defer service.CloseResponseBodyGracefully(resp)
 
@@ -90,8 +104,10 @@ func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 			return
 		}
 		sendResponsesStreamData(c, streamResponse, data)
+		markResponsesStreamOutputSent(c, streamResponse)
 		switch streamResponse.Type {
 		case "response.completed":
+			c.Set("response_completed_seen", true)
 			if streamResponse.Response != nil {
 				if streamResponse.Response.Usage != nil {
 					if streamResponse.Response.Usage.InputTokens != 0 {

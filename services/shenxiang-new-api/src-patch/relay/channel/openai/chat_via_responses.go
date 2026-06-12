@@ -230,6 +230,7 @@ func OaiResponsesToChatStreamHandler(c *gin.Context, info *relaycommon.RelayInfo
 		if !sendChatChunk(chunk) {
 			return false
 		}
+		c.Set("response_stream_output_sent", true)
 		hasSentReasoningSummary = true
 		return true
 	}
@@ -287,6 +288,9 @@ func OaiResponsesToChatStreamHandler(c *gin.Context, info *relaycommon.RelayInfo
 		}
 		if !sendChatChunk(chunk) {
 			return false
+		}
+		if name != "" || argsDelta != "" {
+			c.Set("response_stream_output_sent", true)
 		}
 		sawToolCall = true
 
@@ -389,6 +393,7 @@ func OaiResponsesToChatStreamHandler(c *gin.Context, info *relaycommon.RelayInfo
 					sr.Stop(streamErr)
 					return
 				}
+				c.Set("response_stream_output_sent", true)
 			}
 
 		case "response.output_item.added", "response.output_item.done":
@@ -447,6 +452,7 @@ func OaiResponsesToChatStreamHandler(c *gin.Context, info *relaycommon.RelayInfo
 		case "response.function_call_arguments.done":
 
 		case "response.completed":
+			c.Set("response_completed_seen", true)
 			if streamResp.Response != nil {
 				if streamResp.Response.Model != "" {
 					model = streamResp.Response.Model
