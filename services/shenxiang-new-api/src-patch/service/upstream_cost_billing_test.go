@@ -1,6 +1,7 @@
 package service
 
 import (
+	"net/http"
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
@@ -74,16 +75,38 @@ func TestCopyResponsesCostFieldsPreservesTopLevelCost(t *testing.T) {
 	require.Equal(t, 0.25, cost)
 }
 
+func TestCopyResponseHeaderCostFieldsUsesUSDHeader(t *testing.T) {
+	usage := &dto.Usage{}
+	headers := http.Header{}
+	headers.Set("X-Upstream-Cost-Usd", "0.25")
+
+	CopyResponseHeaderCostFields(usage, headers)
+	cost, currency, source, ok, reason := ExtractUpstreamCostFromUsage(usage)
+
+	require.True(t, ok, reason)
+	require.Equal(t, "usage.cost_usd", source)
+	require.Equal(t, "USD", currency)
+	require.InDelta(t, 0.25, cost, 0.000001)
+}
+
 func TestMergeRealtimeUpstreamCostSkipsCurrencyMismatch(t *testing.T) {
-	total := &dto.Usage{
+	total := &dto.RealtimeUsage{
 		CostUSD: 0.25,
 	}
 
-	MergeRealtimeUpstreamCost(total, &dto.Usage{
+	MergeRealtimeUpstreamCost(total, &dto.RealtimeUsage{
 		CostCNY: 1.00,
 	})
 
-	cost, currency, source, ok, reason := ExtractUpstreamCostFromUsage(total)
+	normalUsage := &dto.Usage{
+		CostUSD:      total.CostUSD,
+		CostCNY:      total.CostCNY,
+		CostCurrency: total.CostCurrency,
+		Currency:     total.Currency,
+		CostDetails:  total.CostDetails,
+		Billing:      total.Billing,
+	}
+	cost, currency, source, ok, reason := ExtractUpstreamCostFromUsage(normalUsage)
 	require.True(t, ok, reason)
 	require.Equal(t, "usage.cost_usd", source)
 	require.Equal(t, "USD", currency)
@@ -91,15 +114,22 @@ func TestMergeRealtimeUpstreamCostSkipsCurrencyMismatch(t *testing.T) {
 }
 
 func TestMergeRealtimeUpstreamCostAddsMatchingCurrency(t *testing.T) {
-	total := &dto.Usage{
+	total := &dto.RealtimeUsage{
 		CostUSD: 0.25,
 	}
 
-	MergeRealtimeUpstreamCost(total, &dto.Usage{
+	MergeRealtimeUpstreamCost(total, &dto.RealtimeUsage{
 		CostUSD: 0.10,
 	})
 
-	cost, currency, _, ok, reason := ExtractUpstreamCostFromUsage(total)
+	normalUsage := &dto.Usage{
+		CostUSD:      total.CostUSD,
+		CostCurrency: total.CostCurrency,
+		Currency:     total.Currency,
+		CostDetails:  total.CostDetails,
+		Billing:      total.Billing,
+	}
+	cost, currency, _, ok, reason := ExtractUpstreamCostFromUsage(normalUsage)
 	require.True(t, ok, reason)
 	require.Equal(t, "USD", currency)
 	require.InDelta(t, 0.35, cost, 0.000001)

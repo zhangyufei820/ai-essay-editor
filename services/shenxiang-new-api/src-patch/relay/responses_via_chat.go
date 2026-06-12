@@ -134,9 +134,11 @@ func responsesChatHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *htt
 	if err != nil {
 		return nil, types.NewOpenAIError(err, types.ErrorCodeBadResponseBody, http.StatusInternalServerError)
 	}
+	service.CopyResponseHeaderCostFields(usage, resp.Header)
 	if !service.ValidUsage(usage) {
 		text := service.ExtractOutputTextFromResponses(responsesResp)
 		usage = service.ResponseText2Usage(c, text, info.UpstreamModelName, info.GetEstimatePromptTokens())
+		service.CopyResponseHeaderCostFields(usage, resp.Header)
 		responsesResp.Usage = usage
 	}
 
@@ -259,6 +261,7 @@ func responsesChatStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, res
 	if !service.ValidUsage(usage) {
 		usage = service.ResponseText2Usage(c, text, info.UpstreamModelName, info.GetEstimatePromptTokens())
 	}
+	service.CopyResponseHeaderCostFields(usage, resp.Header)
 
 	content := map[string]any{
 		"type":        "output_text",

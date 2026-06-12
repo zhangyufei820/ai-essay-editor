@@ -72,6 +72,7 @@ func OaiResponsesToChatHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 	}
 	if usage != nil {
 		service.CopyResponsesCostFields(usage, &responsesResp)
+		service.CopyResponseHeaderCostFields(usage, resp.Header)
 		chatResp.Usage = *usage
 	}
 
@@ -483,6 +484,7 @@ func OaiResponsesToChatStreamHandler(c *gin.Context, info *relaycommon.RelayInfo
 						usage.CompletionTokenDetails.ReasoningTokens = streamResp.Response.Usage.CompletionTokenDetails.ReasoningTokens
 					}
 					service.CopyResponsesCostFields(usage, streamResp.Response)
+					service.CopyResponseHeaderCostFields(usage, resp.Header)
 				}
 			}
 

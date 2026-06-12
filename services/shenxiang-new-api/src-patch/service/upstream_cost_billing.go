@@ -3,6 +3,7 @@ package service
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"strconv"
 	"strings"
 
@@ -32,6 +33,40 @@ type upstreamCostCandidate struct {
 	source   string
 	currency string
 	value    any
+}
+
+var responseHeaderCostFields = []string{
+	"X-Upstream-Cost",
+	"X-Usage-Cost",
+	"X-Provider-Cost",
+	"X-Billing-Cost",
+	"X-Total-Cost",
+	"X-Cost",
+}
+
+var responseHeaderCostUSDFields = []string{
+	"X-Upstream-Cost-Usd",
+	"X-Usage-Cost-Usd",
+	"X-Provider-Cost-Usd",
+	"X-Billing-Cost-Usd",
+	"X-Total-Cost-Usd",
+	"X-Cost-Usd",
+}
+
+var responseHeaderCostCNYFields = []string{
+	"X-Upstream-Cost-Cny",
+	"X-Usage-Cost-Cny",
+	"X-Provider-Cost-Cny",
+	"X-Billing-Cost-Cny",
+	"X-Total-Cost-Cny",
+	"X-Cost-Cny",
+}
+
+var responseHeaderCurrencyFields = []string{
+	"X-Upstream-Cost-Currency",
+	"X-Billing-Currency",
+	"X-Cost-Currency",
+	"X-Currency",
 }
 
 func ApplyUpstreamCostBilling(relayInfo *relaycommon.RelayInfo, usage *dto.Usage, currentQuota int) (int, *UpstreamCostBillingResult) {
@@ -219,6 +254,36 @@ func CopyResponsesCostFields(dst *dto.Usage, src *dto.OpenAIResponsesResponse) {
 	}
 }
 
+func CopyResponseHeaderCostFields(dst *dto.Usage, headers http.Header) {
+	if dst == nil || headers == nil {
+		return
+	}
+	if dst.CostUSD == nil {
+		if value := firstResponseHeader(headers, responseHeaderCostUSDFields...); value != "" {
+			dst.CostUSD = value
+			if dst.CostCurrency == "" {
+				dst.CostCurrency = "USD"
+			}
+		}
+	}
+	if dst.CostCNY == nil {
+		if value := firstResponseHeader(headers, responseHeaderCostCNYFields...); value != "" {
+			dst.CostCNY = value
+			if dst.CostCurrency == "" {
+				dst.CostCurrency = "CNY"
+			}
+		}
+	}
+	if dst.Cost == nil {
+		if value := firstResponseHeader(headers, responseHeaderCostFields...); value != "" {
+			dst.Cost = value
+		}
+	}
+	if dst.CostCurrency == "" {
+		dst.CostCurrency = normalizeCostCurrency(firstResponseHeader(headers, responseHeaderCurrencyFields...))
+	}
+}
+
 func MergeRealtimeUpstreamCost(totalUsage *dto.RealtimeUsage, usage *dto.RealtimeUsage) {
 	if totalUsage == nil || usage == nil {
 		return
@@ -321,6 +386,15 @@ func parsePositiveCost(value any) (float64, bool) {
 		return 0, false
 	}
 	return cost, true
+}
+
+func firstResponseHeader(headers http.Header, names ...string) string {
+	for _, name := range names {
+		if value := strings.TrimSpace(headers.Get(name)); value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func parseCost(value any) (float64, bool) {

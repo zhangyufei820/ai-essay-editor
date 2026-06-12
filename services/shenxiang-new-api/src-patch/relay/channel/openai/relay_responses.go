@@ -68,6 +68,7 @@ func OaiResponsesHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http
 		}
 	}
 	service.CopyResponsesCostFields(&usage, &responsesResponse)
+	service.CopyResponseHeaderCostFields(&usage, resp.Header)
 	if info == nil || info.ResponsesUsageInfo == nil || info.ResponsesUsageInfo.BuiltInTools == nil {
 		return &usage, nil
 	}
@@ -123,6 +124,7 @@ func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 						usage.PromptTokensDetails.CachedTokens = streamResponse.Response.Usage.InputTokensDetails.CachedTokens
 					}
 					service.CopyResponsesCostFields(usage, streamResponse.Response)
+					service.CopyResponseHeaderCostFields(usage, resp.Header)
 				}
 				if streamResponse.Response.HasImageGenerationCall() {
 					c.Set("image_generation_call", true)
