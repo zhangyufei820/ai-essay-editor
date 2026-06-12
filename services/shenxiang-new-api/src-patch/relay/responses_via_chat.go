@@ -36,7 +36,7 @@ func shouldResponsesUseChatCompletionsCompat(info *relaycommon.RelayInfo) bool {
 func responsesViaChatCompletions(c *gin.Context, info *relaycommon.RelayInfo, adaptor channel.Adaptor, request *dto.OpenAIResponsesRequest) (*dto.Usage, *types.NewAPIError) {
 	if responsesRequestHasTools(request) {
 		return nil, types.NewErrorWithStatusCode(
-			fmt.Errorf("tools are not supported by this /v1/responses compatibility route"),
+			fmt.Errorf("tools are not supported for this model on this endpoint"),
 			types.ErrorCodeInvalidRequest,
 			http.StatusBadRequest,
 			types.ErrOptionWithSkipRetry(),

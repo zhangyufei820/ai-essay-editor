@@ -243,7 +243,7 @@ func PostWssConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, mod
 	}
 	other := GenerateWssOtherInfo(ctx, relayInfo, usage, modelRatio, groupRatio,
 		completionRatio.InexactFloat64(), audioRatio.InexactFloat64(), audioCompletionRatio.InexactFloat64(), modelPrice, relayInfo.PriceData.GroupRatioInfo.GroupSpecialRatio)
-	if tieredResult != nil {
+	if tieredResult != nil && (upstreamCostBilling == nil || !upstreamCostBilling.Applied) {
 		InjectTieredBillingInfo(other, relayInfo, tieredResult)
 	}
 	InjectUpstreamCostBillingInfo(other, upstreamCostBilling)
@@ -372,7 +372,7 @@ func PostAudioConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, u
 	}
 	other := GenerateAudioOtherInfo(ctx, relayInfo, usage, modelRatio, groupRatio,
 		completionRatio.InexactFloat64(), audioRatio.InexactFloat64(), audioCompletionRatio.InexactFloat64(), modelPrice, relayInfo.PriceData.GroupRatioInfo.GroupSpecialRatio)
-	if tieredResult != nil {
+	if tieredResult != nil && (upstreamCostBilling == nil || !upstreamCostBilling.Applied) {
 		InjectTieredBillingInfo(other, relayInfo, tieredResult)
 	}
 	InjectUpstreamCostBillingInfo(other, upstreamCostBilling)

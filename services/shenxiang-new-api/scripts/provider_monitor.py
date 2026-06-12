@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import concurrent.futures
 import fcntl
+import hashlib
 import json
 import math
 import os
@@ -654,7 +655,19 @@ def find_recent_image2_primary_524s() -> list[str]:
         r"\|\s*([A-Za-z0-9]+)\s*\|\s*channel error "
         rf"\(channel #{IMAGE2_PRIMARY['channel_id']}, status code: {IMAGE2_PRIMARY['status_code']}\)"
     )
-    return sorted(set(pattern.findall(logs)))
+    matches = sorted(set(pattern.findall(logs)))
+    if not matches:
+        error_marker = re.compile(
+            rf"channel error \(channel #{IMAGE2_PRIMARY['channel_id']}, status code: {IMAGE2_PRIMARY['status_code']}\)"
+        )
+        unparsed = [line for line in logs.splitlines() if error_marker.search(line)]
+        if unparsed:
+            write_event({"type": "warn", "msg": "image2_primary errors found but request ids were not parseable; synthetic ids used"})
+            matches = sorted({
+                "unparsed-" + hashlib.sha1(line.encode("utf-8", "ignore")).hexdigest()[:16]
+                for line in unparsed
+            })
+    return matches
 
 
 def load_channels_by_id(env: dict[str, str], channel_ids: list[int]) -> dict[int, dict[str, Any]]:

@@ -268,10 +268,10 @@ func InjectUpstreamCostBillingInfo(other map[string]interface{}, result *Upstrea
 	if other == nil || result == nil {
 		return
 	}
-	other["upstream_cost_billing"] = "fallback"
 	other["upstream_cost_markup_rate"] = result.MarkupRate
 	other["quota_before_upstream_cost"] = result.PreviousQuota
 	if !result.Applied {
+		other["upstream_cost_billing"] = "fallback"
 		if result.FallbackReason != "" {
 			other["upstream_cost_fallback_reason"] = result.FallbackReason
 		}

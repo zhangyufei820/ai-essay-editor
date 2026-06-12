@@ -460,7 +460,7 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 		// prompt/cache fields here, otherwise old upstream payloads may be double-counted.
 		other["input_tokens_total"] = usage.InputTokens
 	}
-	if tieredBillingApplied {
+	if tieredBillingApplied && (upstreamCostBilling == nil || !upstreamCostBilling.Applied) {
 		InjectTieredBillingInfo(other, relayInfo, tieredResult)
 	}
 	InjectUpstreamCostBillingInfo(other, upstreamCostBilling)

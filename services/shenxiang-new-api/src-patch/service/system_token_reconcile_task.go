@@ -46,7 +46,8 @@ func runSystemTokenReconcileOnce() {
 	}
 	defer systemTokenReconcileRunning.Store(false)
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Minute)
+	defer cancel()
 	var scanned int
 	var created int
 	var failed int
