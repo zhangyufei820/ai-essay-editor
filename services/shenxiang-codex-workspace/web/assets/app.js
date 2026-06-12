@@ -43,7 +43,7 @@ const fallbackModelModes = {
   codex: {
     label: "对话 / 代码",
     description: "普通对话、代码审查、文件分析和 Skill 工作区。",
-    models: ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini"],
+    models: ["gpt-5.4-mini", "gpt-5.4", "gpt-5.5"],
     billing: "按文本 Token 计费，适合日常任务和代码任务。",
   },
   claude: {
@@ -162,12 +162,12 @@ async function bootstrap() {
 
 function seedFallbackDefaults() {
   state.defaults = {
-    chat_main: state.defaults.chat_main || "gpt-5.5",
+    chat_main: state.defaults.chat_main || "gpt-5.4-mini",
     small_fast: state.defaults.small_fast || "gpt-5.4-mini",
     web_search: state.defaults.web_search || "gpt-5.4",
     image_generation: state.defaults.image_generation || "gpt-image-2-4K",
     video_generation: state.defaults.video_generation || "seedance-2.0",
-    code_review: state.defaults.code_review || "gpt-5.5",
+    code_review: state.defaults.code_review || "gpt-5.4-mini",
   };
   state.modelModes = state.modelModes && Object.keys(state.modelModes).length ? state.modelModes : fallbackModelModes;
 }
@@ -362,7 +362,7 @@ function isCodexTextModel(model) {
 
 function isCodexAllowedTextModel(model) {
   if (!isCodexTextModel(model)) return false;
-  if (!state.allowedModels?.length) return ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini"].includes(model);
+  if (!state.allowedModels?.length) return ["gpt-5.4-mini", "gpt-5.4", "gpt-5.5"].includes(model);
   return state.allowedModels.includes(model);
 }
 

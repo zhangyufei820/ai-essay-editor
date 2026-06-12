@@ -1,4 +1,14 @@
-from app.main import fast_skill_messages, runtime_guard_payload, should_use_fast_skill
+from app.main import (
+    FAST_CHAT_HISTORY_CHARS,
+    FAST_CHAT_HISTORY_LIMIT,
+    fast_chat_messages,
+    fast_skill_messages,
+    fast_skill_responses_payload,
+    response_error_message,
+    responses_delta_text,
+    runtime_guard_payload,
+    should_use_fast_skill,
+)
 from app.models import WorkspaceFile, WorkspaceRunRequest
 from app.security import contains_forbidden_runtime_action
 from app.codex_runner import CodexRunner
@@ -95,3 +105,47 @@ def test_fast_skill_messages_include_loaded_skill_markdown():
     assert messages[0]["role"] == "system"
     assert "Paper Outline Skill" in messages[0]["content"]
     assert "生成论文大纲" in messages[-1]["content"]
+
+
+def test_fast_chat_messages_trim_history_for_low_latency():
+    history = [
+        {"role": "user", "content": f"old-{index}-" + "x" * (FAST_CHAT_HISTORY_CHARS + 50)}
+        for index in range(FAST_CHAT_HISTORY_LIMIT + 3)
+    ]
+    request = WorkspaceRunRequest(
+        user_query="只回复 pong",
+        metadata={"history": history},
+        model_config={"chat_main": "gpt-5.4-mini"},
+    )
+
+    messages = fast_chat_messages(request)
+
+    assert len(messages) == FAST_CHAT_HISTORY_LIMIT + 2
+    assert "old-0" not in "\n".join(message["content"] for message in messages)
+    assert all(len(message["content"]) <= FAST_CHAT_HISTORY_CHARS for message in messages[1:-1])
+
+
+def test_onboarding_fast_skill_uses_compact_prompt():
+    request = WorkspaceRunRequest(
+        user_query="我想把星人 API 配置到我自己电脑上的 Codex",
+        skill_name="xingren-api-onboarding",
+        model_role="chat_main",
+        model_config={"chat_main": "gpt-5.4-mini"},
+    )
+    oversized_skill = "# Skill\n" + "完整长文档不应进入 fast prompt\n" * 5000
+
+    messages = fast_skill_messages(request, oversized_skill)
+    payload = fast_skill_responses_payload(request, oversized_skill, "gpt-5.4-mini")
+
+    assert "用户自己的本机客户端" in messages[0]["content"]
+    assert "完整长文档不应进入 fast prompt" not in messages[0]["content"]
+    assert len(messages[0]["content"]) < 2500
+    assert payload["model"] == "gpt-5.4-mini"
+    assert payload["stream"] is True
+    assert "用户自己的本机客户端" in payload["instructions"]
+
+
+def test_responses_sse_delta_and_error_parsers():
+    assert responses_delta_text({"type": "response.output_text.delta", "delta": "pong"}) == "pong"
+    assert responses_delta_text({"type": "response.completed", "delta": "ignored"}) == ""
+    assert response_error_message({"error": {"message": "bad request"}}) == "bad request"

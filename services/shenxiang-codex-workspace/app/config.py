@@ -18,12 +18,12 @@ class Settings:
     codex_home: Path = Path("/codex-home")
     new_api_base_url: str = "https://api.aiphui.top/v1"
     public_base_url: str = "https://api.aiphui.top/codex"
-    default_chat_model: str = "gpt-5.5"
+    default_chat_model: str = "gpt-5.4-mini"
     default_small_fast_model: str = "gpt-5.4-mini"
     default_web_search_model: str = "gpt-5.4"
     default_image_model: str = "gpt-image-2-4K"
     default_video_model: str = "seedance-2.0"
-    default_code_model: str = "gpt-5.5"
+    default_code_model: str = "gpt-5.4-mini"
     codex_chat_fallback_model: str = "gpt-5.4-mini"
     auto_token_name: str = "星人 Codex 文本令牌"
     claude_token_name: str = "星人 Claude 高阶令牌"
@@ -34,9 +34,9 @@ class Settings:
     models_cache_seconds: int = 300
     skill_cache_seconds: int = 300
     codex_allowed_models: tuple[str, ...] = (
-        "gpt-5.5",
-        "gpt-5.4",
         "gpt-5.4-mini",
+        "gpt-5.4",
+        "gpt-5.5",
     )
     claude_allowed_models: tuple[str, ...] = (
         "claude-fable-5",
@@ -52,6 +52,8 @@ class Settings:
     max_file_bytes: int = 120000
     max_image_bytes: int = 6_000_000
     max_user_skills: int = 30
+    fast_path_first_delta_timeout_seconds: int = 6
+    fast_path_max_output_tokens: int = 1200
     codex_exec_sandbox: str = "danger-full-access"
     log_level: str = "INFO"
 
@@ -77,12 +79,12 @@ def get_settings() -> Settings:
         codex_home=Path(os.getenv("CODEX_HOME", "/codex-home")),
         new_api_base_url=os.getenv("NEW_API_BASE_URL", "https://api.aiphui.top/v1").rstrip("/"),
         public_base_url=os.getenv("PUBLIC_BASE_URL", "https://api.aiphui.top/codex").rstrip("/"),
-        default_chat_model=os.getenv("DEFAULT_CHAT_MODEL", "gpt-5.5"),
+        default_chat_model=os.getenv("DEFAULT_CHAT_MODEL", "gpt-5.4-mini"),
         default_small_fast_model=os.getenv("DEFAULT_SMALL_FAST_MODEL", "gpt-5.4-mini"),
         default_web_search_model=os.getenv("DEFAULT_WEB_SEARCH_MODEL", "gpt-5.4"),
         default_image_model=os.getenv("DEFAULT_IMAGE_MODEL", "gpt-image-2-4K"),
         default_video_model=os.getenv("DEFAULT_VIDEO_MODEL", "seedance-2.0"),
-        default_code_model=os.getenv("DEFAULT_CODE_MODEL", "gpt-5.5"),
+        default_code_model=os.getenv("DEFAULT_CODE_MODEL", "gpt-5.4-mini"),
         codex_chat_fallback_model=os.getenv("CODEX_CHAT_FALLBACK_MODEL", "gpt-5.4-mini"),
         auto_token_name=os.getenv("AUTO_TOKEN_NAME", "星人 Codex 文本令牌"),
         claude_token_name=os.getenv("CLAUDE_TOKEN_NAME", "星人 Claude 高阶令牌"),
@@ -94,7 +96,7 @@ def get_settings() -> Settings:
         skill_cache_seconds=_env_int("SKILL_CACHE_SECONDS", 300),
         codex_allowed_models=_env_list(
             "CODEX_ALLOWED_MODELS",
-            "gpt-5.5,gpt-5.4,gpt-5.4-mini",
+            "gpt-5.4-mini,gpt-5.4,gpt-5.5",
         ),
         claude_allowed_models=_env_list(
             "CLAUDE_ALLOWED_MODELS",
@@ -108,6 +110,8 @@ def get_settings() -> Settings:
         max_file_bytes=_env_int("MAX_FILE_BYTES", 120000),
         max_image_bytes=_env_int("MAX_IMAGE_BYTES", 6_000_000),
         max_user_skills=_env_int("MAX_USER_SKILLS", 30),
+        fast_path_first_delta_timeout_seconds=_env_int("FAST_PATH_FIRST_DELTA_TIMEOUT_SECONDS", 6),
+        fast_path_max_output_tokens=_env_int("FAST_PATH_MAX_OUTPUT_TOKENS", 1200),
         codex_exec_sandbox=os.getenv("CODEX_EXEC_SANDBOX", "danger-full-access"),
         log_level=os.getenv("LOG_LEVEL", "INFO").upper(),
     )

@@ -77,11 +77,30 @@ _model_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 _skill_markdown_cache: dict[str, tuple[int, int, str]] = {}
 _redis_pool: ConnectionPool | None = None
 
+FAST_CHAT_HISTORY_LIMIT = 4
+FAST_CHAT_HISTORY_CHARS = 1200
+FAST_SKILL_HISTORY_LIMIT = 4
+FAST_SKILL_HISTORY_CHARS = 1200
+FAST_SKILL_MARKDOWN_CHAR_LIMIT = 12000
+
+
+class FastPathFallback(Exception):
+    def __init__(self, reason: str):
+        super().__init__(reason)
+        self.reason = reason
+
+
+class FastPathUpstreamError(Exception):
+    def __init__(self, code: str, message: str):
+        super().__init__(message)
+        self.code = code
+        self.message = message
+
 FAST_CHAT_SYSTEM_PROMPT = """你是星人 Codex 云端助手。
 你运行在星人的 New API 网关之上，面向普通用户提供清晰、自然、专业的帮助。
 如果用户只是日常问答、解释概念、写作或轻量建议，请直接回答，保持简洁但有质感。
 不要声称你已经读取、修改、运行了服务器文件或命令。
-如果用户请求代码执行、文件处理、项目修改、部署、终端命令或需要 Skill 的任务，请提醒将切换到 Codex 工作区处理。"""
+如果用户请求代码执行、文件处理、项目修改、部署或终端命令，请提醒将切换到 Codex 工作区处理。"""
 
 FAST_CHAT_EXECUTION_HINTS = (
     "运行",
@@ -122,7 +141,6 @@ FAST_CHAT_EXECUTION_HINTS = (
     "编译",
     "测试",
     "单元测试",
-    "skill",
     "数据库",
     "sql",
     "api key",
@@ -151,6 +169,7 @@ FAST_SKILL_NAMES = {
     "paper_polish",
     "study_plan",
     "teacher_lesson_plan",
+    "xingren-api-onboarding",
 }
 FAST_SKILL_BLOCKING_HINTS = (
     "终端",
@@ -194,7 +213,7 @@ FAST_SKILL_BLOCKING_HINTS = (
     "环境变量",
     "run ",
     "terminal",
-    "command",
+    "execute command",
     "fix the code",
     "modify file",
     "edit file",
@@ -205,6 +224,22 @@ FAST_SKILL_BLOCKING_HINTS = (
     "build",
     "stack trace",
 )
+XINGREN_API_ONBOARDING_FAST_PROMPT = """你是星人 API 接入老师，只负责帮用户把星人 API 配到用户自己的本机客户端。
+不要把当前云端 Codex 工作区当成目标环境；云端有系统配置不代表用户电脑已经配置好。
+严禁回答“云端 Codex 已配置好所以不用配置”“当前环境变量可用就完成了”。
+
+回答规则：
+1. 先说明目标是配置用户自己的电脑或第三方客户端。
+2. 一次只给一个可复制步骤，优先给终端/PowerShell 命令，不让小白手工改 JSON/TOML/YAML。
+3. 引导用户到 https://api.aiphui.top/codex/ 的“第三方接入”复制对应专用 key。
+4. OpenAI 兼容客户端使用 Base URL: https://api.aiphui.top/v1。
+5. Claude Code 使用 Base URL: https://api.aiphui.top/claude。
+6. 图像生成使用 /v1/images/generations；不要让用户用 /v1/chat/completions 生成图片。
+7. 如果用户没说系统，先给 macOS/Linux 和 Windows 的识别命令，让用户回传结果。
+8. 如果用户贴出完整 key，只在当前步骤使用；总结时必须脱敏。
+9. 最后要求用户把终端最后几行结果发回来，再继续下一步。
+
+语气：耐心、具体、一步一步，不要声称已经替用户在本机执行。"""
 SKILL_FRONT_MATTER_RE = re.compile(r"^---\s*\n(?P<body>[\s\S]{0,4000}?)\n---\s*", re.MULTILINE)
 SAFE_SKILL_NAME_RE = re.compile(r"^[a-zA-Z0-9_-]{2,80}$")
 
@@ -616,7 +651,7 @@ def model_suggestions() -> dict[str, Any]:
     return {
         "chat_main": {
             "label": "对话主模型",
-            "description": "日常问答、长任务规划、综合写作，建议选择质量最高且额度允许的文本模型。",
+            "description": "日常问答、长任务规划、综合写作，默认走低延迟文本模型。",
             "recommended": settings.default_chat_model,
         },
         "small_fast": {
@@ -641,7 +676,7 @@ def model_suggestions() -> dict[str, Any]:
         },
         "code_review": {
             "label": "代码审查",
-            "description": "代码解释、审查、自动修改建议，建议使用 gpt-5.5 或 gpt-5.4。",
+            "description": "代码解释、审查、自动修改建议，默认先走快速文本模型。",
             "recommended": settings.default_code_model,
         },
     }
@@ -652,7 +687,7 @@ def model_modes() -> dict[str, Any]:
         "codex": {
             "label": "对话 / 代码",
             "description": "普通对话、代码审查、文件分析和 Skill 工作区。",
-            "models": list(settings.codex_allowed_models),
+            "models": ordered_codex_models(),
             "token_name": settings.auto_token_name,
             "billing": "按文本 Token 计费，适合日常任务和代码任务。",
         },
@@ -1046,17 +1081,21 @@ async def stream_fast_chat(
     started = time.monotonic()
     mode = request_mode(request)
     mode_user = user_for_mode(user, mode)
-    model = selected_text_model(request)
+    model = selected_fast_text_model(request)
     headers = {
         "Authorization": f"Bearer {mode_user.api_key}",
         "Content-Type": "application/json",
     }
-    payload = {
+    responses_payload = fast_chat_responses_payload(request, model)
+    chat_payload = {
         "model": model,
         "messages": fast_chat_messages(request),
         "stream": True,
+        "max_tokens": settings.fast_path_max_output_tokens,
     }
     final_text = ""
+    first_delta_ms: int | None = None
+    protocol = "responses"
     yield {
         "type": "status",
         "message": "快速会话已接入",
@@ -1072,50 +1111,43 @@ async def stream_fast_chat(
     try:
         timeout = httpx.Timeout(120.0, connect=8.0, read=120.0, write=20.0)
         async with httpx.AsyncClient(timeout=timeout) as client:
-            async with client.stream(
-                "POST",
-                f"{settings.new_api_base_url}/chat/completions",
-                headers=headers,
-                json=payload,
-            ) as response:
-                if response.status_code >= 400:
-                    body = (await response.aread()).decode("utf-8", errors="replace")
-                    yield {
-                        "type": "error",
-                        "code": public_error_code("FAST_CHAT_UPSTREAM_FAILED"),
-                        "message": safe_upstream_error(body, mode_user.api_key, response.status_code),
-                    }
-                    return
-                async for line in response.aiter_lines():
-                    line = line.strip()
-                    if not line or line.startswith(":"):
-                        continue
-                    if not line.startswith("data:"):
-                        continue
-                    data = line[5:].strip()
-                    if data == "[DONE]":
-                        break
-                    try:
-                        event = json.loads(data)
-                    except ValueError:
-                        continue
-                    error = event.get("error") if isinstance(event, dict) else None
-                    if isinstance(error, dict):
-                        message = str(error.get("message") or "模型服务返回错误。")
-                        yield {
-                            "type": "error",
-                            "code": public_error_code(str(error.get("code") or "FAST_CHAT_UPSTREAM_ERROR")),
-                            "message": public_error_message(
-                                redact(message, secret_values_for_redaction(settings, mode_user.api_key)),
-                                "智能服务暂时不可用，请稍后重试。",
-                            ),
-                        }
-                        return
-                    delta = chat_completion_delta_text(event)
-                    if delta:
-                        final_text += delta
-                        yield {"type": "delta", "text": delta, "event": "fast_chat.delta", "mode": "fast_chat"}
+            try:
+                async for delta in stream_responses_deltas(client, headers, responses_payload):
+                    if first_delta_ms is None:
+                        first_delta_ms = int((time.monotonic() - started) * 1000)
+                    final_text += delta
+                    yield {"type": "delta", "text": delta, "event": "fast_chat.delta", "mode": "fast_chat"}
+            except FastPathFallback as fallback:
+                protocol = "chat_completions"
+                logger.warning(
+                    "fast_chat responses fallback task_id=%s user=%s model=%s reason=%s",
+                    task_id,
+                    mode_user.key_hint,
+                    model,
+                    fallback.reason,
+                )
+                yield {
+                    "type": "status",
+                    "message": "正在切换备用流式通道",
+                    "mode": "fast_chat",
+                    "task_id": task_id,
+                }
+                async for delta in stream_chat_completion_deltas(client, headers, chat_payload, mode_user.api_key):
+                    if first_delta_ms is None:
+                        first_delta_ms = int((time.monotonic() - started) * 1000)
+                    final_text += delta
+                    yield {"type": "delta", "text": delta, "event": "fast_chat.delta", "mode": "fast_chat"}
     except Exception as exc:
+        if isinstance(exc, FastPathUpstreamError):
+            yield {
+                "type": "error",
+                "code": public_error_code(exc.code),
+                "message": public_error_message(
+                    redact(exc.message, secret_values_for_redaction(settings, mode_user.api_key)),
+                    "智能服务暂时不可用，请稍后重试。",
+                ),
+            }
+            return
         yield {
             "type": "error",
             "code": public_error_code("FAST_CHAT_REQUEST_FAILED"),
@@ -1127,10 +1159,12 @@ async def stream_fast_chat(
         return
 
     logger.info(
-        "fast_chat completed task_id=%s user=%s model=%s duration_ms=%s chars=%s",
+        "fast_chat completed task_id=%s user=%s model=%s protocol=%s first_delta_ms=%s duration_ms=%s chars=%s",
         task_id,
         mode_user.key_hint,
         model,
+        protocol,
+        first_delta_ms,
         int((time.monotonic() - started) * 1000),
         len(final_text),
     )
@@ -1148,7 +1182,7 @@ async def stream_fast_chat(
 def should_use_fast_skill(request: WorkspaceRunRequest, task: dict[str, Any]) -> bool:
     if request.files:
         return False
-    if request.skill_name not in FAST_SKILL_NAMES:
+    if request.skill_name == "codex_workspace":
         return False
     if request.risk_level != "normal":
         return False
@@ -1156,17 +1190,17 @@ def should_use_fast_skill(request: WorkspaceRunRequest, task: dict[str, Any]) ->
         return False
     if request_mode(request) != "codex":
         return False
-    if task.get("queue") != "fast":
-        return False
     if bool(request.params.get("force_workspace") or request.metadata.get("force_workspace")):
         return False
     query = normalize_for_intent_match(request.user_query)
     if not query:
         return False
-    return not has_fast_skill_blocking_intent(query)
+    return not has_fast_skill_blocking_intent(query, request.skill_name)
 
 
-def has_fast_skill_blocking_intent(query: str) -> bool:
+def has_fast_skill_blocking_intent(query: str, skill_name: str = "") -> bool:
+    if skill_name == "xingren-api-onboarding":
+        return False
     return any(hint in query for hint in FAST_SKILL_BLOCKING_HINTS)
 
 
@@ -1178,7 +1212,7 @@ async def stream_fast_skill(
     task_id = str(task.get("task_id") or f"skill_{uuid4().hex[:16]}")
     started = time.monotonic()
     mode_user = user_for_mode(user, "codex")
-    model = selected_text_model(request)
+    model = selected_fast_text_model(request)
     try:
         skill_markdown = load_fast_skill_markdown(user, request.skill_name)
     except (OSError, ValueError) as exc:
@@ -1193,12 +1227,16 @@ async def stream_fast_skill(
         "Authorization": f"Bearer {mode_user.api_key}",
         "Content-Type": "application/json",
     }
-    payload = {
+    responses_payload = fast_skill_responses_payload(request, skill_markdown, model)
+    chat_payload = {
         "model": model,
         "messages": fast_skill_messages(request, skill_markdown),
         "stream": True,
+        "max_tokens": settings.fast_path_max_output_tokens,
     }
     final_text = ""
+    first_delta_ms: int | None = None
+    protocol = "responses"
     display_name = str(task.get("skill", {}).get("display_name") or request.skill_name)
     yield {
         "type": "status",
@@ -1215,58 +1253,57 @@ async def stream_fast_skill(
     try:
         timeout = httpx.Timeout(120.0, connect=8.0, read=120.0, write=20.0)
         async with httpx.AsyncClient(timeout=timeout) as client:
-            async with client.stream(
-                "POST",
-                f"{settings.new_api_base_url}/chat/completions",
-                headers=headers,
-                json=payload,
-            ) as response:
-                if response.status_code >= 400:
-                    body = (await response.aread()).decode("utf-8", errors="replace")
+            try:
+                async for delta in stream_responses_deltas(client, headers, responses_payload):
+                    if first_delta_ms is None:
+                        first_delta_ms = int((time.monotonic() - started) * 1000)
+                    final_text += delta
                     yield {
-                        "type": "error",
-                        "code": public_error_code("FAST_SKILL_UPSTREAM_FAILED"),
-                        "message": safe_upstream_error(body, mode_user.api_key, response.status_code),
+                        "type": "delta",
+                        "text": delta,
+                        "event": "fast_skill.delta",
+                        "mode": "fast_skill",
                         "task_id": task_id,
                     }
-                    return
-                async for line in response.aiter_lines():
-                    line = line.strip()
-                    if not line or line.startswith(":"):
-                        continue
-                    if not line.startswith("data:"):
-                        continue
-                    data = line[5:].strip()
-                    if data == "[DONE]":
-                        break
-                    try:
-                        event = json.loads(data)
-                    except ValueError:
-                        continue
-                    error = event.get("error") if isinstance(event, dict) else None
-                    if isinstance(error, dict):
-                        message = str(error.get("message") or "模型服务返回错误。")
-                        yield {
-                            "type": "error",
-                            "code": public_error_code(str(error.get("code") or "FAST_SKILL_UPSTREAM_ERROR")),
-                            "message": public_error_message(
-                                redact(message, secret_values_for_redaction(settings, mode_user.api_key)),
-                                "智能服务暂时不可用，请稍后重试。",
-                            ),
-                            "task_id": task_id,
-                        }
-                        return
-                    delta = chat_completion_delta_text(event)
-                    if delta:
-                        final_text += delta
-                        yield {
-                            "type": "delta",
-                            "text": delta,
-                            "event": "fast_skill.delta",
-                            "mode": "fast_skill",
-                            "task_id": task_id,
-                        }
+            except FastPathFallback as fallback:
+                protocol = "chat_completions"
+                logger.warning(
+                    "fast_skill responses fallback task_id=%s user=%s skill=%s model=%s reason=%s",
+                    task_id,
+                    mode_user.key_hint,
+                    request.skill_name,
+                    model,
+                    fallback.reason,
+                )
+                yield {
+                    "type": "status",
+                    "message": "正在切换备用流式通道",
+                    "mode": "fast_skill",
+                    "task_id": task_id,
+                }
+                async for delta in stream_chat_completion_deltas(client, headers, chat_payload, mode_user.api_key):
+                    if first_delta_ms is None:
+                        first_delta_ms = int((time.monotonic() - started) * 1000)
+                    final_text += delta
+                    yield {
+                        "type": "delta",
+                        "text": delta,
+                        "event": "fast_skill.delta",
+                        "mode": "fast_skill",
+                        "task_id": task_id,
+                    }
     except Exception as exc:
+        if isinstance(exc, FastPathUpstreamError):
+            yield {
+                "type": "error",
+                "code": public_error_code(exc.code),
+                "message": public_error_message(
+                    redact(exc.message, secret_values_for_redaction(settings, mode_user.api_key)),
+                    "智能服务暂时不可用，请稍后重试。",
+                ),
+                "task_id": task_id,
+            }
+            return
         yield {
             "type": "error",
             "code": public_error_code("FAST_SKILL_REQUEST_FAILED"),
@@ -1279,11 +1316,13 @@ async def stream_fast_skill(
         return
 
     logger.info(
-        "fast_skill completed task_id=%s user=%s skill=%s model=%s duration_ms=%s chars=%s",
+        "fast_skill completed task_id=%s user=%s skill=%s model=%s protocol=%s first_delta_ms=%s duration_ms=%s chars=%s",
         task_id,
         mode_user.key_hint,
         request.skill_name,
         model,
+        protocol,
+        first_delta_ms,
         int((time.monotonic() - started) * 1000),
         len(final_text),
     )
@@ -1298,21 +1337,164 @@ async def stream_fast_skill(
     }
 
 
-def fast_skill_messages(request: WorkspaceRunRequest, skill_markdown: str) -> list[dict[str, str]]:
-    system_prompt = (
-        "你是星人 Codex 的快速 Skill 执行器。"
-        "当前请求已经加载了下面的 SKILL.md，你必须严格按该 Skill 的角色、规则和输出结构回答。"
-        "这是纯文本快速路径：不要声称已经读取、修改、创建或运行了本地文件/命令。"
-        "如果用户明确要求处理上传文件、执行命令、修改代码、部署、读取服务器或创建文件，"
-        "请简短说明需要切换到 Codex 工作区执行。\n\n"
-        "===== 已加载的 SKILL.md =====\n"
-        f"{skill_markdown[:60000]}\n"
-        "===== SKILL.md 结束 ====="
+async def stream_responses_deltas(
+    client: httpx.AsyncClient,
+    headers: dict[str, str],
+    payload: dict[str, Any],
+) -> AsyncIterator[str]:
+    first_delta_seen = False
+    deadline = time.monotonic() + max(1, settings.fast_path_first_delta_timeout_seconds)
+    try:
+        async with client.stream(
+            "POST",
+            f"{settings.new_api_base_url}/responses",
+            headers=headers,
+            json=payload,
+        ) as response:
+            if response.status_code >= 400:
+                raise FastPathFallback(f"responses_status_{response.status_code}")
+            iterator = response.aiter_lines()
+            while True:
+                timeout_seconds = 90.0
+                if not first_delta_seen:
+                    timeout_seconds = max(0.1, deadline - time.monotonic())
+                try:
+                    line = await asyncio.wait_for(iterator.__anext__(), timeout=timeout_seconds)
+                except StopAsyncIteration:
+                    break
+                except asyncio.TimeoutError as exc:
+                    if not first_delta_seen:
+                        raise FastPathFallback("responses_first_delta_timeout") from exc
+                    raise FastPathUpstreamError("FAST_RESPONSES_STREAM_TIMEOUT", "模型响应超时。") from exc
+                line = line.strip()
+                if not line or line.startswith(":") or not line.startswith("data:"):
+                    continue
+                data = line[5:].strip()
+                if data == "[DONE]":
+                    break
+                try:
+                    event = json.loads(data)
+                except ValueError:
+                    continue
+                error = response_error_message(event)
+                if error:
+                    if not first_delta_seen:
+                        raise FastPathFallback("responses_error_event")
+                    raise FastPathUpstreamError("FAST_RESPONSES_UPSTREAM_ERROR", error)
+                delta = responses_delta_text(event)
+                if delta:
+                    first_delta_seen = True
+                    yield delta
+    except (httpx.TimeoutException, httpx.HTTPError) as exc:
+        if not first_delta_seen:
+            raise FastPathFallback(type(exc).__name__) from exc
+        raise FastPathUpstreamError("FAST_RESPONSES_REQUEST_FAILED", str(exc)) from exc
+    if not first_delta_seen:
+        raise FastPathFallback("responses_empty")
+
+
+async def stream_chat_completion_deltas(
+    client: httpx.AsyncClient,
+    headers: dict[str, str],
+    payload: dict[str, Any],
+    api_key: str,
+) -> AsyncIterator[str]:
+    async with client.stream(
+        "POST",
+        f"{settings.new_api_base_url}/chat/completions",
+        headers=headers,
+        json=payload,
+    ) as response:
+        if response.status_code >= 400:
+            body = (await response.aread()).decode("utf-8", errors="replace")
+            raise FastPathUpstreamError("FAST_CHAT_UPSTREAM_FAILED", safe_upstream_error(body, api_key, response.status_code))
+        async for line in response.aiter_lines():
+            line = line.strip()
+            if not line or line.startswith(":"):
+                continue
+            if not line.startswith("data:"):
+                continue
+            data = line[5:].strip()
+            if data == "[DONE]":
+                break
+            try:
+                event = json.loads(data)
+            except ValueError:
+                continue
+            error = response_error_message(event)
+            if error:
+                raise FastPathUpstreamError("FAST_CHAT_UPSTREAM_ERROR", error)
+            delta = chat_completion_delta_text(event) or responses_delta_text(event)
+            if delta:
+                yield delta
+
+
+def fast_chat_responses_payload(request: WorkspaceRunRequest, model: str) -> dict[str, Any]:
+    return {
+        "model": model,
+        "instructions": FAST_CHAT_SYSTEM_PROMPT,
+        "input": fast_chat_input(request),
+        "stream": True,
+        "max_output_tokens": settings.fast_path_max_output_tokens,
+    }
+
+
+def fast_skill_responses_payload(
+    request: WorkspaceRunRequest,
+    skill_markdown: str,
+    model: str,
+) -> dict[str, Any]:
+    return {
+        "model": model,
+        "instructions": fast_skill_system_prompt(request, skill_markdown),
+        "input": fast_skill_user_input(request),
+        "stream": True,
+        "max_output_tokens": settings.fast_path_max_output_tokens,
+    }
+
+
+def fast_chat_input(request: WorkspaceRunRequest) -> str:
+    parts = compact_history_parts(request, FAST_CHAT_HISTORY_LIMIT, FAST_CHAT_HISTORY_CHARS)
+    parts.append(f"用户当前请求：\n{request.user_query[:8000]}")
+    return "\n\n".join(parts)
+
+
+def fast_skill_user_input(request: WorkspaceRunRequest) -> str:
+    parts = compact_history_parts(request, FAST_SKILL_HISTORY_LIMIT, FAST_SKILL_HISTORY_CHARS)
+    parts.append(
+        "当前任务：\n"
+        f"用户意图：{request.user_intent or request.task_type}\n"
+        f"输出格式：{request.output_format}\n"
+        f"用户请求：\n{request.user_query[:8000]}"
     )
+    return "\n\n".join(parts)
+
+
+def compact_history_parts(request: WorkspaceRunRequest, limit: int, chars: int) -> list[str]:
+    history = request.metadata.get("history") if isinstance(request.metadata, dict) else None
+    parts: list[str] = []
+    if not isinstance(history, list):
+        return parts
+    for item in history[-limit:]:
+        if not isinstance(item, dict):
+            continue
+        role = str(item.get("role") or "")
+        if role not in {"user", "assistant"}:
+            continue
+        content = str(item.get("content") or "").strip()
+        if not content:
+            continue
+        label = "用户" if role == "user" else "助手"
+        parts.append(f"{label}历史：\n{content[:chars]}")
+    return parts
+
+
+def fast_skill_messages(request: WorkspaceRunRequest, skill_markdown: str) -> list[dict[str, str]]:
+    system_prompt = fast_skill_system_prompt(request, skill_markdown)
     messages: list[dict[str, str]] = [{"role": "system", "content": system_prompt}]
     history = request.metadata.get("history") if isinstance(request.metadata, dict) else None
     if isinstance(history, list):
-        for item in history[-8:]:
+        for item in history[-FAST_SKILL_HISTORY_LIMIT:]:
             if not isinstance(item, dict):
                 continue
             role = str(item.get("role") or "")
@@ -1320,7 +1502,7 @@ def fast_skill_messages(request: WorkspaceRunRequest, skill_markdown: str) -> li
                 continue
             content = str(item.get("content") or "").strip()
             if content:
-                messages.append({"role": role, "content": content[:3000]})
+                messages.append({"role": role, "content": content[:FAST_SKILL_HISTORY_CHARS]})
     user_prompt = (
         f"用户意图：{request.user_intent or request.task_type}\n"
         f"输出格式：{request.output_format}\n"
@@ -1328,6 +1510,23 @@ def fast_skill_messages(request: WorkspaceRunRequest, skill_markdown: str) -> li
     )
     messages.append({"role": "user", "content": user_prompt})
     return messages
+
+
+def fast_skill_system_prompt(request: WorkspaceRunRequest, skill_markdown: str) -> str:
+    if request.skill_name == "xingren-api-onboarding":
+        return XINGREN_API_ONBOARDING_FAST_PROMPT
+    compact_markdown = skill_markdown[:FAST_SKILL_MARKDOWN_CHAR_LIMIT]
+    return (
+        "你是星人 Codex 的快速 Skill 执行器。"
+        "当前请求已经加载了下面的 SKILL.md，你必须严格按该 Skill 的角色、规则和输出结构回答。"
+        "这是纯文本快速路径：不要声称已经读取、修改、创建或运行了本地文件/命令。"
+        "如果 Skill 要求给用户本机提供可复制命令，你可以输出命令，但必须明确这是让用户在自己电脑上执行。"
+        "如果用户明确要求处理上传文件、执行命令、修改代码、部署、读取服务器或创建文件，"
+        "请简短说明需要切换到 Codex 工作区执行。\n\n"
+        "===== 已加载的 SKILL.md =====\n"
+        f"{compact_markdown}\n"
+        "===== SKILL.md 结束 ====="
+    )
 
 
 def load_fast_skill_markdown(user: UserContext, skill_name: str) -> str:
@@ -1376,11 +1575,33 @@ def selected_text_model(request: WorkspaceRunRequest) -> str:
     return settings.codex_allowed_models[0] if settings.codex_allowed_models else settings.default_small_fast_model
 
 
+def selected_fast_text_model(request: WorkspaceRunRequest) -> str:
+    if request_mode(request) == "codex":
+        fast = settings.default_small_fast_model
+        if is_allowed_model_for_request(fast, request):
+            return fast
+    return selected_text_model(request)
+
+
+def ordered_codex_models() -> list[str]:
+    preferred = [
+        settings.default_small_fast_model,
+        settings.default_chat_model,
+        settings.default_web_search_model,
+        settings.default_code_model,
+    ]
+    result: list[str] = []
+    for model in [*preferred, *settings.codex_allowed_models]:
+        if model and model in settings.codex_allowed_models and model not in result:
+            result.append(model)
+    return result
+
+
 def fast_chat_messages(request: WorkspaceRunRequest) -> list[dict[str, str]]:
     messages: list[dict[str, str]] = [{"role": "system", "content": FAST_CHAT_SYSTEM_PROMPT}]
     history = request.metadata.get("history") if isinstance(request.metadata, dict) else None
     if isinstance(history, list):
-        for item in history[-10:]:
+        for item in history[-FAST_CHAT_HISTORY_LIMIT:]:
             if not isinstance(item, dict):
                 continue
             role = str(item.get("role") or "")
@@ -1389,7 +1610,7 @@ def fast_chat_messages(request: WorkspaceRunRequest) -> list[dict[str, str]]:
             content = str(item.get("content") or "").strip()
             if not content:
                 continue
-            messages.append({"role": role, "content": content[:4000]})
+            messages.append({"role": role, "content": content[:FAST_CHAT_HISTORY_CHARS]})
     messages.append({"role": "user", "content": request.user_query})
     return messages
 
@@ -1472,6 +1693,35 @@ def chat_completion_delta_text(payload: Any) -> str:
             return text
     text = choice.get("text")
     return str(text) if isinstance(text, str) else ""
+
+
+def responses_delta_text(payload: Any) -> str:
+    if not isinstance(payload, dict):
+        return ""
+    event_type = str(payload.get("type") or "")
+    delta = payload.get("delta")
+    if isinstance(delta, str) and ("output_text" in event_type or event_type.endswith(".delta")):
+        return delta
+    text = payload.get("text")
+    if isinstance(text, str) and event_type in {"response.output_text.delta", "output_text.delta"}:
+        return text
+    content = content_to_text(payload.get("content"))
+    if content and ("output_text" in event_type or event_type.endswith(".delta")):
+        return content
+    return ""
+
+
+def response_error_message(payload: Any) -> str:
+    if not isinstance(payload, dict):
+        return ""
+    error = payload.get("error")
+    if isinstance(error, dict):
+        return str(error.get("message") or error.get("code") or "模型服务返回错误。")
+    if isinstance(error, str):
+        return error
+    if str(payload.get("type") or "") in {"error", "response.error"}:
+        return str(payload.get("message") or "模型服务返回错误。")
+    return ""
 
 
 def content_to_text(content: Any) -> str:
