@@ -100,7 +100,7 @@ const IMAGE_MODELS = [
     hint: '适合高阶视觉方案、复杂场景草图和高分辨率创意图。',
   },
   {
-    value: 'grok-image-pro',
+    value: 'grok-imagine-image',
     label: 'Grok Image Pro',
     badge: 'Pro',
     vendor: '星人图像',

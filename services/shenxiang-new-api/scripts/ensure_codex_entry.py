@@ -337,11 +337,22 @@ def fetch_bundle_text(base_url: str) -> str:
     return bundle
 
 
+def fetch_text(url: str) -> str:
+    headers = {"User-Agent": "shenxiang-new-api-codex-entry-guard/1.0"}
+    with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=10) as resp:
+        return resp.read().decode("utf-8", errors="replace")
+
+
 def check_url(base_url: str) -> dict[str, bool]:
     text = fetch_bundle_text(base_url)
+    try:
+        codex_text = fetch_text(base_url.rstrip("/") + "/codex/")
+    except Exception:
+        codex_text = ""
     return {
         "has_codex_label": "云端 Codex" in text or "云端Codex" in text,
         "has_codex_route": "/codex/" in text,
+        "codex_route_serves_workspace": "星人 Codex" in codex_text and "页面未找到" not in codex_text,
         "has_media_label": "媒体工坊" in text,
     }
 

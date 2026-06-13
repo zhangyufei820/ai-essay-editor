@@ -22,7 +22,7 @@ export const IMAGE_MODEL_IDS = [
   'gpt-image-2-4K',
   'banana-2',
   'gemini-3-pro-image-preview',
-  'grok-image-pro',
+  'grok-imagine-image',
 ] as const
 
 export const VIDEO_MODEL_IDS = [
@@ -97,7 +97,7 @@ export const MEDIA_MODEL_CONFIGS: ModelCapability[] = [
     ],
   },
   {
-    id: 'grok-image-pro',
+    id: 'grok-imagine-image',
     label: 'Grok Image Pro',
     kind: 'image',
     vendorLabel: '星人图像',
