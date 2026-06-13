@@ -2,7 +2,7 @@ name: shenxiang-new-api
 
 services:
   shenxiang-new-api:
-    image: shenxiang-new-api-upstream-cost:20260612-1400-codex-entry
+    image: shenxiang-new-api-priority-cost:20260613-1323-security-hotfix
     container_name: shenxiang-new-api
     restart: unless-stopped
     depends_on:
@@ -22,6 +22,7 @@ services:
       PLAYGROUND_MEDIA_URL_PREFIX: /pg/media/files
       PLAYGROUND_MEDIA_MAX_MB: 256
       TASK_PRICE_PATCH: grok-video-super-720p
+      UPSTREAM_COST_MARKUP_RATE: ${UPSTREAM_COST_MARKUP_RATE:-0.08}
     volumes:
       - ./data:/data
     healthcheck:

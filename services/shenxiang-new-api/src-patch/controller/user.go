@@ -8,7 +8,6 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/dto"
@@ -28,20 +27,6 @@ import (
 type LoginRequest struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
-}
-
-func ensureSystemTokensForUser(c *gin.Context, userID int) {
-	if userID <= 0 {
-		return
-	}
-	result, err := service.EnsureSystemTokensForUserID(c.Request.Context(), userID)
-	if err != nil {
-		common.SysError(fmt.Sprintf("ensure system tokens for user %d failed: %v", userID, err))
-		return
-	}
-	if result.Created > 0 {
-		common.SysLog(fmt.Sprintf("ensured system tokens for user %d: created=%d skipped=%d", userID, result.Created, result.Skipped))
-	}
 }
 
 func Login(c *gin.Context) {
@@ -239,7 +224,6 @@ func Register(c *gin.Context) {
 			return
 		}
 	}
-	ensureSystemTokensForUser(c, insertedUser.Id)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -497,6 +481,7 @@ func generateDefaultSidebarConfig(userRole int) string {
 	defaultConfig["chat"] = map[string]interface{}{
 		"enabled":    true,
 		"playground": true,
+		"media":      true,
 		"chat":       true,
 	}
 
@@ -871,7 +856,6 @@ func CreateUser(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	ensureSystemTokensForUser(c, cleanUser.Id)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -1078,46 +1062,7 @@ type topUpRequest struct {
 	Key string `json:"key"`
 }
 
-var topUpLocks sync.Map
-var topUpCreateLock sync.Mutex
-
-type topUpTryLock struct {
-	ch chan struct{}
-}
-
-func newTopUpTryLock() *topUpTryLock {
-	return &topUpTryLock{ch: make(chan struct{}, 1)}
-}
-
-func (l *topUpTryLock) TryLock() bool {
-	select {
-	case l.ch <- struct{}{}:
-		return true
-	default:
-		return false
-	}
-}
-
-func (l *topUpTryLock) Unlock() {
-	select {
-	case <-l.ch:
-	default:
-	}
-}
-
-func getTopUpLock(userID int) *topUpTryLock {
-	if v, ok := topUpLocks.Load(userID); ok {
-		return v.(*topUpTryLock)
-	}
-	topUpCreateLock.Lock()
-	defer topUpCreateLock.Unlock()
-	if v, ok := topUpLocks.Load(userID); ok {
-		return v.(*topUpTryLock)
-	}
-	l := newTopUpTryLock()
-	topUpLocks.Store(userID, l)
-	return l
-}
+var topUpLocks = common.NewKeyedTryLocks[int]()
 
 func TopUp(c *gin.Context) {
 	if !operation_setting.IsPaymentComplianceConfirmed() {
@@ -1126,12 +1071,12 @@ func TopUp(c *gin.Context) {
 	}
 
 	id := c.GetInt("id")
-	lock := getTopUpLock(id)
-	if !lock.TryLock() {
+	unlock, ok := topUpLocks.TryLock(id)
+	if !ok {
 		common.ApiErrorI18n(c, i18n.MsgUserTopUpProcessing)
 		return
 	}
-	defer lock.Unlock()
+	defer unlock()
 	req := topUpRequest{}
 	err := c.ShouldBindJSON(&req)
 	if err != nil {
@@ -1194,8 +1139,7 @@ func UpdateUserSetting(c *gin.Context) {
 			common.ApiErrorI18n(c, i18n.MsgSettingWebhookEmpty)
 			return
 		}
-		// 验证URL格式
-		if _, err := url.ParseRequestURI(req.WebhookUrl); err != nil {
+		if err := common.ValidatePublicHTTPURL(req.WebhookUrl); err != nil {
 			common.ApiErrorI18n(c, i18n.MsgSettingWebhookInvalid)
 			return
 		}

@@ -15,7 +15,7 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-const UpstreamCostMarkupRate = 0.08
+const DefaultUpstreamCostMarkupRate = 0.08
 
 type UpstreamCostBillingResult struct {
 	Applied              bool
@@ -33,6 +33,19 @@ type upstreamCostCandidate struct {
 	source   string
 	currency string
 	value    any
+}
+
+func upstreamCostMarkupRate() float64 {
+	value := common.GetEnvOrDefaultString("UPSTREAM_COST_MARKUP_RATE", "")
+	if value == "" {
+		return DefaultUpstreamCostMarkupRate
+	}
+	parsed, err := strconv.ParseFloat(value, 64)
+	if err != nil || parsed < 0 {
+		common.SysError(fmt.Sprintf("invalid UPSTREAM_COST_MARKUP_RATE %q; using default %.4f", value, DefaultUpstreamCostMarkupRate))
+		return DefaultUpstreamCostMarkupRate
+	}
+	return parsed
 }
 
 var responseHeaderCostFields = []string{
@@ -70,8 +83,9 @@ var responseHeaderCurrencyFields = []string{
 }
 
 func ApplyUpstreamCostBilling(relayInfo *relaycommon.RelayInfo, usage *dto.Usage, currentQuota int) (int, *UpstreamCostBillingResult) {
+	markupRate := upstreamCostMarkupRate()
 	result := &UpstreamCostBillingResult{
-		MarkupRate:    UpstreamCostMarkupRate,
+		MarkupRate:    markupRate,
 		PreviousQuota: currentQuota,
 		FinalQuota:    currentQuota,
 	}
@@ -81,7 +95,7 @@ func ApplyUpstreamCostBilling(relayInfo *relaycommon.RelayInfo, usage *dto.Usage
 		return currentQuota, result
 	}
 
-	quota, billedCostUSD, ok := quotaFromUpstreamCost(cost, currency)
+	quota, billedCostUSD, ok := quotaFromUpstreamCost(cost, currency, markupRate)
 	if !ok {
 		result.FallbackReason = "unsupported_currency"
 		return currentQuota, result
@@ -351,7 +365,7 @@ func InjectUpstreamCostBillingInfo(other map[string]interface{}, result *Upstrea
 	other["quota_after_upstream_cost"] = result.FinalQuota
 }
 
-func quotaFromUpstreamCost(cost float64, currency string) (quota int, billedCostUSD float64, ok bool) {
+func quotaFromUpstreamCost(cost float64, currency string, markupRate float64) (quota int, billedCostUSD float64, ok bool) {
 	currency = normalizeCostCurrency(currency)
 	if currency == "" {
 		currency = "USD"
@@ -359,15 +373,16 @@ func quotaFromUpstreamCost(cost float64, currency string) (quota int, billedCost
 	costDecimal := decimal.NewFromFloat(cost)
 	switch currency {
 	case "USD":
-		billedCostUSD = costDecimal.Mul(decimal.NewFromFloat(1 + UpstreamCostMarkupRate)).InexactFloat64()
+		billedCostUSD = costDecimal.Mul(decimal.NewFromFloat(1 + markupRate)).InexactFloat64()
 	case "CNY":
 		exchangeRate := operation_setting.USDExchangeRate
 		if exchangeRate <= 0 {
+			common.SysError("USDExchangeRate is not configured; upstream CNY cost billing is using fallback exchange rate 7.3")
 			exchangeRate = 7.3
 		}
 		billedCostUSD = costDecimal.
 			Div(decimal.NewFromFloat(exchangeRate)).
-			Mul(decimal.NewFromFloat(1 + UpstreamCostMarkupRate)).
+			Mul(decimal.NewFromFloat(1 + markupRate)).
 			InexactFloat64()
 	default:
 		return 0, 0, false

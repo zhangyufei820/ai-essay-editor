@@ -56,7 +56,8 @@ func HandleOAuth(c *gin.Context) {
 
 	// 1. Validate state (CSRF protection)
 	state := c.Query("state")
-	if state == "" || session.Get("oauth_state") == nil || state != session.Get("oauth_state").(string) {
+	oauthState, ok := session.Get("oauth_state").(string)
+	if state == "" || !ok || state != oauthState {
 		c.JSON(http.StatusForbidden, gin.H{
 			"success": false,
 			"message": i18n.T(c, i18n.MsgOAuthStateInvalid),
@@ -80,10 +81,9 @@ func HandleOAuth(c *gin.Context) {
 	// 4. Handle error from provider
 	errorCode := c.Query("error")
 	if errorCode != "" {
-		errorDescription := c.Query("error_description")
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
-			"message": errorDescription,
+			"message": i18n.T(c, i18n.MsgOAuthConnectFailed, providerParams(provider.GetName())),
 		})
 		return
 	}
@@ -326,7 +326,6 @@ func findOrCreateOAuthUser(c *gin.Context, provider oauth.Provider, oauthUser *o
 		// Perform post-transaction tasks
 		user.FinalizeOAuthUserCreation(inviterId)
 	}
-	ensureSystemTokensForUser(c, user.Id)
 
 	return user, nil
 }

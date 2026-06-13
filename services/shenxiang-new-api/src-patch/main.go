@@ -150,7 +150,7 @@ func main() {
 
 	if os.Getenv("ENABLE_PPROF") == "true" {
 		gopool.Go(func() {
-			log.Println(http.ListenAndServe("0.0.0.0:8005", nil))
+			log.Println(http.ListenAndServe(common.GetEnvOrDefaultString("PPROF_LISTEN_ADDR", "127.0.0.1:8005"), nil))
 		})
 		go common.Monitor()
 		common.SysLog("pprof enabled")
@@ -180,11 +180,12 @@ func main() {
 	middleware.SetUpLogger(server)
 	// Initialize session store
 	store := cookie.NewStore([]byte(common.SessionSecret))
+	secureCookie := common.GetEnvOrDefaultBool("SESSION_COOKIE_SECURE", true)
 	store.Options(sessions.Options{
 		Path:     "/",
 		MaxAge:   2592000, // 30 days
 		HttpOnly: true,
-		Secure:   false,
+		Secure:   secureCookie,
 		SameSite: http.SameSiteStrictMode,
 	})
 	server.Use(sessions.Sessions("session", store))
