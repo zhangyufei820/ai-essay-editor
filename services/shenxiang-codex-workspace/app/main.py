@@ -691,10 +691,10 @@ def model_modes() -> dict[str, Any]:
         },
         "image": {
             "label": "图像生成",
-            "description": "Image 2 支持普通生图和局部编辑；Grok 可作为更快的编辑备选。",
+            "description": "Image 2 和 Grok 图像是独立模型，请按任务明确选择。",
             "models": list(settings.image_allowed_models),
             "token_name": settings.image_token_name,
-            "billing": "按张计费。Image 2 编辑若遇到服务超时，系统会自动尝试稳定链路。",
+            "billing": "按张计费。系统不会在 Image 2 与 Grok 图像之间自动切换。",
         },
         "video": {
             "label": "视频生成",

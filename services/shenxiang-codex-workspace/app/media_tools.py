@@ -67,8 +67,6 @@ VIDEO_URL_RE = re.compile(r"https?://[^\s\"'<>]+?\.(?:mp4|webm|mov|m4v)(?:\?[^\s
 IMAGE_URL_RE = re.compile(r"https?://[^\s\"'<>]+?\.(?:png|jpe?g|webp|gif)(?:\?[^\s\"'<>]+)?", re.IGNORECASE)
 MAX_REMOTE_IMAGE_BYTES = 20 * 1024 * 1024
 MAX_REMOTE_VIDEO_BYTES = 120 * 1024 * 1024
-MASK_EDIT_MODEL = "grok-imagine-image"
-RETRYABLE_IMAGE_EDIT_STATUS = {502, 503, 524}
 
 
 @dataclass
@@ -180,10 +178,6 @@ async def generate_image(
     async with httpx.AsyncClient(timeout=timeout) as client:
         if image_inputs:
             response = await post_image_edit(client, endpoint, user.api_key, payload, image_inputs, mask_input)
-            if should_retry_image_edit(response) and model != MASK_EDIT_MODEL:
-                fallback_payload = {**payload, "model": MASK_EDIT_MODEL}
-                response = await post_image_edit(client, endpoint, user.api_key, fallback_payload, image_inputs, mask_input)
-                model = MASK_EDIT_MODEL
         else:
             response = await client.post(endpoint, headers=auth_headers(user.api_key), json=payload)
     if response.status_code >= 400:
@@ -310,14 +304,6 @@ async def post_image_edit(
     if not files:
         return await client.post(endpoint, headers=auth_headers(api_key), json=payload)
     return await client.post(endpoint, headers=auth_headers(api_key, None), data=data, files=files)
-
-
-def should_retry_image_edit(response: httpx.Response) -> bool:
-    if response.status_code in RETRYABLE_IMAGE_EDIT_STATUS:
-        return True
-    if response.status_code >= 500 and "524" in response.text[:500]:
-        return True
-    return False
 
 
 def split_image_inputs_from_files(request: WorkspaceRunRequest) -> tuple[list[str], str]:

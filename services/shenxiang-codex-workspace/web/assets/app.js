@@ -54,9 +54,9 @@ const fallbackModelModes = {
   },
   image: {
     label: "图像生成",
-    description: "Image 2 支持普通生图和局部编辑；Grok 可作为更快的编辑备选。",
+    description: "Image 2 和 Grok 图像是独立模型，请按任务明确选择。",
     models: ["gpt-image-2-4K", "grok-imagine-image"],
-    billing: "按张计费。Image 2 编辑若遇到服务超时，系统会自动尝试稳定链路。",
+    billing: "按张计费。系统不会在 Image 2 与 Grok 图像之间自动切换。",
   },
   video: {
     label: "视频生成",
@@ -415,7 +415,7 @@ function hasImageEditInputs() {
 
 function syncImageEditModelHint() {
   if (currentMode() !== "image" || !hasImageEditInputs()) return;
-  setNotice("已检测到参考图或蒙版。Image 2 支持局部编辑；如果服务超时，系统会自动尝试稳定链路。", "ok");
+  setNotice("已检测到参考图或蒙版。请确认当前选择的图像模型支持该编辑方式。", "ok");
 }
 
 function renderModeConsole() {
@@ -692,7 +692,7 @@ async function runTask() {
   clearEvents();
   addEvent("同步账户", "active");
   if (mode === "image" && hasImageEditInputs()) {
-    addEvent("图像编辑已启用，超时自动尝试备用模型", "tool");
+    addEvent("图像编辑已启用，将使用当前选择的模型", "tool");
   }
 
   const payload = {

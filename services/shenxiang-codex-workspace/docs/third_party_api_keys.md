@@ -133,7 +133,7 @@ POST https://api.aiphui.top/v1/images/generations
 POST https://api.aiphui.top/v1/images/edits
 ```
 
-`gpt-image-2-4K` 本身支持 `/v1/images/edits` 和 mask。`mask` 必须是 PNG、小于 4MB，并且宽高和原图完全一致；透明区域会被重画，不透明区域会尽量保持不变。如果 `gpt-image-2-4K` 遇到服务超时，可以临时换用 `grok-imagine-image`，或直接在云 Codex 图像模式里使用，云 Codex 会自动尝试稳定链路。
+`gpt-image-2-4K` 本身支持 `/v1/images/edits` 和 mask。`mask` 必须是 PNG、小于 4MB，并且宽高和原图完全一致；透明区域会被重画，不透明区域会尽量保持不变。`gpt-image-2-4K` 与 `grok-imagine-image` 是独立模型，云 Codex 不会在两者之间自动切换；如果要使用 Grok 图像，请在模型选择中明确选择。
 
 生成图片后请及时下载，平台缓存文件只保留一段时间。
 

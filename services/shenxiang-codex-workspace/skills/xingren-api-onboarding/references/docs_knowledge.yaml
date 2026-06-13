@@ -49,12 +49,12 @@ key_types:
       - gpt-image-2-4K
       - grok-imagine-image
     model_usage:
-      gpt-image-2-4K: "普通文生图、局部编辑、mask；如果遇到服务超时，可换用 grok-imagine-image"
-      grok-imagine-image: "局部编辑、mask、参考图修改；常作为 Image 2 超时兜底"
+      gpt-image-2-4K: "普通文生图、局部编辑、mask"
+      grok-imagine-image: "Grok 图像生成、局部编辑、mask、参考图修改"
     mask_rules:
       endpoint: "/v1/images/edits"
       recommended_model: "gpt-image-2-4K"
-      fallback_model: "grok-imagine-image"
+      model_selection: "gpt-image-2-4K 与 grok-imagine-image 是独立模型，不自动互相 fallback"
       format: "PNG"
       max_size: "4MB"
       size_rule: "mask 宽高必须和第一张原图完全一致"
