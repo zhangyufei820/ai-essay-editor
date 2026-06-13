@@ -18,7 +18,12 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import type { ModelCapability } from './types'
 
-export const IMAGE_MODEL_IDS = ['gpt-image-2-4K', 'banana-2', 'grok-image-pro'] as const
+export const IMAGE_MODEL_IDS = [
+  'gpt-image-2-4K',
+  'banana-2',
+  'gemini-3-pro-image-preview',
+  'grok-image-pro',
+] as const
 
 export const VIDEO_MODEL_IDS = [
   'grok-video-super-720p',
@@ -70,6 +75,24 @@ export const MEDIA_MODEL_CONFIGS: ModelCapability[] = [
     defaultQuality: 'auto',
     notes: [
       '独立模型，不参与 GPT Image 2 fallback；后台渠道映射到 Moonapix 的 gemini-3.1-flash-image-preview。',
+      '4K 规格已用 4096x2048 做上游冒烟测试。',
+    ],
+  },
+  {
+    id: 'gemini-3-pro-image-preview',
+    label: 'Gemini 3 Pro Image · 4K',
+    kind: 'image',
+    vendorLabel: 'Moonapix',
+    endpoint: '/v1/images/generations',
+    description: '适合高阶视觉方案、复杂场景草图和高分辨率创意图。',
+    supportsEdit: false,
+    sizes: ['1024x1024', '2048x2048', '2048x4096', '4096x2048'],
+    qualities: ['auto'],
+    outputFormats: ['url'],
+    defaultSize: '4096x2048',
+    defaultQuality: 'auto',
+    notes: [
+      '独立模型，不参与 GPT Image 2 或 Banana 2 fallback；后台渠道直连 Moonapix 的 gemini-3-pro-image-preview。',
       '4K 规格已用 4096x2048 做上游冒烟测试。',
     ],
   },

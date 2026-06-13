@@ -87,6 +87,19 @@ const IMAGE_MODELS = [
     hint: '适合快速高分辨率创意图、场景草图和视觉方案探索。',
   },
   {
+    value: 'gemini-3-pro-image-preview',
+    label: 'Gemini 3 Pro Image',
+    badge: '4K',
+    vendor: 'Moonapix',
+    sizes: ['1024x1024', '2048x2048', '2048x4096', '4096x2048'],
+    qualities: ['auto'],
+    formats: ['url'],
+    defaultSize: '4096x2048',
+    defaultQuality: 'auto',
+    edit: false,
+    hint: '适合高阶视觉方案、复杂场景草图和高分辨率创意图。',
+  },
+  {
     value: 'grok-image-pro',
     label: 'Grok Image Pro',
     badge: 'Pro',
@@ -730,7 +743,7 @@ const MediaPlayground = () => {
           </div>
           <div className='mp-hero-stats'>
             <StatPill label='保留' value='1 小时' />
-            <StatPill label='图像' value='3 模型' />
+            <StatPill label='图像' value='4 模型' />
             <StatPill label='视频' value='2 模型' />
           </div>
         </section>

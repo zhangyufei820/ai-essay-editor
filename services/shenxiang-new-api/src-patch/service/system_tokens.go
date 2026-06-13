@@ -38,7 +38,7 @@ func SystemTokenProfiles() []SystemTokenProfile {
 		{
 			Mode:   "image",
 			Name:   "星人图像生成令牌",
-			Models: []string{"gpt-image-2-4K", "grok-imagine-image", "banana-2"},
+			Models: []string{"gpt-image-2-4K", "grok-imagine-image", "banana-2", "gemini-3-pro-image-preview"},
 		},
 		{
 			Mode:   "video",
