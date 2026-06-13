@@ -23,6 +23,7 @@ Hot business aliases are single-primary routes in `config.yaml`. LiteLLM keeps t
 - primary alias: fastest measured deployment
 - fallback alias chain: deterministic provider order after a primary failure
 - cross-alias fallback: last-resort escape hatch when the primary family is unhealthy
+- provider retry count is `0`: a failed primary immediately moves to the fallback chain instead of spending another request on the same unhealthy route
 
 Deployment `model_info.id` values are shared across equivalent text aliases where the same provider/model pair is reused. This makes cooldown and circuit state follow the real upstream deployment instead of one alias only.
 
@@ -95,6 +96,7 @@ Active health checks are intentionally bounded for production safety:
 - `health_check_timeout: 6-10` seconds per deployment
 - `health_check_skip_disabled_background_models: true`
 - `health_check_ignore_transient_errors: false`, so 429/408 probes can move traffic away before users hit provider pressure
+- `allowed_fails: 0` with timeout, rate-limit, bad-request, and internal-server policies set to `0`, so user-facing failures trip cooldown on the first observed failure
 
 Most long-tail/direct aliases set `disable_background_health_check: true`. The active probe set stays small so health checks do not compete with user traffic.
 

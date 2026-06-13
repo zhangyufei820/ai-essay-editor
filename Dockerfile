@@ -63,9 +63,9 @@ COPY --from=builder /app/public ./public
 COPY --from=builder /app/package.json ./
 COPY --from=builder /app/scripts ./scripts
 
-# 健康检查：等待 Next.js 启动
+# 健康检查：等待 Next.js 启动。用 Node 自身避免 curl 子进程在 PID 1 未回收时堆积。
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-  CMD curl -sf http://localhost:3000/ || exit 1
+  CMD node -e "fetch('http://127.0.0.1:3000').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 EXPOSE 3000
 

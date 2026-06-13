@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireUser } from '@/lib/auth/verified-user'
 import { getUserTrialStatus } from '@/lib/free-trial'
+import { isOperationTimeoutError, withTimeout } from '@/lib/server-timeout'
 import { getUserEntitlementSummary } from '@/lib/user-entitlements'
 
 /**
@@ -23,9 +24,13 @@ const getSupabaseAdmin = () => {
   return createClient(url, key)
 }
 
+const AUTH_TIMEOUT_MS = 5_000
+const BASE_CREDITS_TIMEOUT_MS = 4_000
+const OPTIONAL_STATUS_TIMEOUT_MS = 2_500
+
 export async function GET(request: NextRequest) {
   try {
-    const auth = await requireUser(request)
+    const auth = await withTimeout(requireUser(request), AUTH_TIMEOUT_MS, "user-credits.auth")
     if (auth.response) return auth.response
     const userId = auth.user!.id
 
@@ -33,14 +38,49 @@ export async function GET(request: NextRequest) {
 
     // 使用 Service Role Key 创建超级管理员客户端
     const supabaseAdmin = getSupabaseAdmin()
-    const trialStatusResult = await getUserTrialStatus(userId)
-    const trialStatus = trialStatusResult.data
+    const trialStatusPromise = withTimeout(
+      getUserTrialStatus(userId),
+      OPTIONAL_STATUS_TIMEOUT_MS,
+      "user-credits.trial-status",
+    )
+      .then((result) => result.data)
+      .catch((error) => {
+        console.warn("[积分API] 试用状态降级:", error)
+        return null
+      })
 
-    const entitlement = await getUserEntitlementSummary(userId, {
-      email: auth.user!.email || null,
-      phone: auth.user!.phone || null,
-      metadata: auth.user!.metadata || null,
+    const entitlementPromise = withTimeout(
+      getUserEntitlementSummary(userId, {
+        email: auth.user!.email || null,
+        phone: auth.user!.phone || null,
+        metadata: auth.user!.metadata || null,
+      }),
+      OPTIONAL_STATUS_TIMEOUT_MS,
+      "user-credits.entitlement",
+    ).catch((error) => {
+      console.warn("[积分API] 权益合并降级:", error)
+      return null
     })
+
+    const baseCreditsPromise = withTimeout(
+      Promise.resolve(
+        supabaseAdmin
+          .from('user_credits')
+          .select('credits, is_pro')
+          .eq('user_id', userId)
+          .maybeSingle(),
+      ),
+      BASE_CREDITS_TIMEOUT_MS,
+      "user-credits.base-credits",
+    )
+      .then((result) => ({ ok: true as const, result }))
+      .catch((error) => ({ ok: false as const, error }))
+
+    const [trialStatus, entitlement, baseCredits] = await Promise.all([
+      trialStatusPromise,
+      entitlementPromise,
+      baseCreditsPromise,
+    ])
 
     if (entitlement) {
       return NextResponse.json({
@@ -54,12 +94,19 @@ export async function GET(request: NextRequest) {
       })
     }
 
+    if (!baseCredits.ok) {
+      console.error("[积分API] 基础积分查询超时或失败:", baseCredits.error)
+      return NextResponse.json(
+        {
+          error: "积分服务暂时繁忙，请稍后重试",
+          code: isOperationTimeoutError(baseCredits.error) ? "CREDITS_TIMEOUT" : "CREDITS_QUERY_FAILED",
+        },
+        { status: isOperationTimeoutError(baseCredits.error) ? 503 : 500 },
+      )
+    }
+
     // 查询积分
-    const { data: creditData, error } = await supabaseAdmin
-      .from('user_credits')
-      .select('credits, is_pro')
-      .eq('user_id', userId)
-      .maybeSingle()
+    const { data: creditData, error } = baseCredits.result
 
     if (error) {
       console.error(`❌ [积分API] 查询失败:`, error)
@@ -70,15 +117,21 @@ export async function GET(request: NextRequest) {
     if (!creditData) {
       console.log("🆕 [积分API] 用户无积分记录，自动创建...")
       
-      const { data: newData, error: insertError } = await supabaseAdmin
-        .from('user_credits')
-        .upsert({
-          user_id: userId,
-          credits: 1000,
-          is_pro: false
-        })
-        .select('credits, is_pro')
-        .single()
+      const { data: newData, error: insertError } = await withTimeout(
+        Promise.resolve(
+          supabaseAdmin
+            .from('user_credits')
+            .upsert({
+              user_id: userId,
+              credits: 1000,
+              is_pro: false
+            })
+            .select('credits, is_pro')
+            .single(),
+        ),
+        BASE_CREDITS_TIMEOUT_MS,
+        "user-credits.create-default",
+      )
 
       if (insertError) {
         console.error(`❌ [积分API] 创建积分记录失败:`, insertError)
@@ -112,6 +165,12 @@ export async function GET(request: NextRequest) {
 
   } catch (error) {
     console.error('[积分API] 异常:', error)
+    if (isOperationTimeoutError(error)) {
+      return NextResponse.json(
+        { error: '认证或积分服务暂时繁忙，请稍后重试', code: error.code },
+        { status: 503 },
+      )
+    }
     const message = error instanceof Error && error.message === '缺少 Supabase 配置'
       ? '积分服务未配置'
       : 'Internal Server Error'

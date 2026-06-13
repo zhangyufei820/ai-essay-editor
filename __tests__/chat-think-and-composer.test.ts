@@ -164,6 +164,7 @@ describe("chat think rendering and composer layout", () => {
     expect(chatSessionRoute).toContain("dify_conversation_id")
     expect(chatSessionRoute).toContain("SESSION_DETAIL_FIELDS_LEGACY")
     expect(chatSessionRoute).toContain("isMissingDifyConversationColumn")
+    expect(chatSessionRoute).toContain("id: requestedId || randomUUID()")
     expect(chatSessionRoute).toContain(".select(\"id,role,content,created_at\")")
   })
 

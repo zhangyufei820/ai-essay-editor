@@ -12,7 +12,7 @@ model_list:
       api_key: os.environ/TOKENFLUX_LLM_API_KEY
       extra_headers:
         User-Agent: Codex Desktop/0.133.0 (Mac OS 13.5.0; x86_64) Apple_Terminal/447 (codex_exec; 0.133.0)
-      timeout: 25
+      timeout: 18
     model_info:
       id: deploy-tokenflux-gpt-5-5
       mode: chat
@@ -38,7 +38,7 @@ model_list:
       api_key: os.environ/TOKENFLUX_LLM_API_KEY
       extra_headers:
         User-Agent: Codex Desktop/0.133.0 (Mac OS 13.5.0; x86_64) Apple_Terminal/447 (codex_exec; 0.133.0)
-      timeout: 25
+      timeout: 18
     model_info:
       id: deploy-tokenflux-gpt-5-5
       mode: chat
@@ -749,21 +749,21 @@ router_settings:
   routing_strategy_args:
     ttl: 30
     lowest_latency_buffer: 0
-  allowed_fails: 1
+  allowed_fails: 0
   cooldown_time: 240
-  num_retries: 1
+  num_retries: 0
   retry_after: 0
-  timeout: 25
+  timeout: 22
   allowed_fails_policy:
     AuthenticationErrorAllowedFails: 0
-    TimeoutErrorAllowedFails: 1
+    TimeoutErrorAllowedFails: 0
     RateLimitErrorAllowedFails: 0
     BadRequestErrorAllowedFails: 0
-    InternalServerErrorAllowedFails: 1
+    InternalServerErrorAllowedFails: 0
 
 litellm_settings:
-  request_timeout: 25
-  num_retries: 1
+  request_timeout: 22
+  num_retries: 0
   drop_params: true
   success_callback: []
   failure_callback: []

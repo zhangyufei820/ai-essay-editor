@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient as createSupabaseClient } from "@supabase/supabase-js"
+import { randomUUID } from "crypto"
 import { requireUser } from "@/lib/auth/verified-user"
 import { sanitizeAssistantMessageForPublicDisplay } from "@/lib/chat-error-sanitizer"
 
@@ -103,7 +104,7 @@ export async function POST(request: NextRequest) {
     }
 
     const insertPayload = {
-      ...(requestedId ? { id: requestedId } : {}),
+      id: requestedId || randomUUID(),
       user_id: user.id,
       title: title || "新对话",
       preview: preview || null,
@@ -120,7 +121,7 @@ export async function POST(request: NextRequest) {
       const fallback = await supabase
         .from("chat_sessions")
         .insert({
-          ...(requestedId ? { id: requestedId } : {}),
+          id: insertPayload.id,
           user_id: user.id,
           title: title || "新对话",
           preview: preview || null,

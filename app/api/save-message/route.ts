@@ -5,6 +5,12 @@ import { requireUser } from "@/lib/auth/verified-user"
 import { isCosConfigured } from "@/lib/cos"
 import { uploadBase64File } from "@/lib/storage"
 import { sanitizeAssistantMessageForPublicDisplay } from "@/lib/chat-error-sanitizer"
+import { isOperationTimeoutError, withTimeout } from "@/lib/server-timeout"
+
+const AUTH_TIMEOUT_MS = 5_000
+const SESSION_LOOKUP_TIMEOUT_MS = 4_000
+const MESSAGE_INSERT_TIMEOUT_MS = 5_000
+const FILE_METADATA_TIMEOUT_MS = 2_500
 
 function resolveUploadedFileStorageUrl(file: Record<string, unknown>, fileData: string): string | null {
   const explicitUrl = file.storageUrl || file.storage_url || file.modelUrl || file.model_url || file.gatewayUrl || file.gateway_url
@@ -41,7 +47,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "数据库未配置" }, { status: 503 })
     }
 
-    const auth = await requireUser(request)
+    const auth = await withTimeout(requireUser(request), AUTH_TIMEOUT_MS, "save-message.auth")
     if (auth.response) return auth.response
     const user = auth.user!
 
@@ -52,11 +58,17 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = createServiceRoleClient()
-    const { data: session, error: sessionError } = await supabase
-      .from("chat_sessions")
-      .select("id,user_id")
-      .eq("id", session_id)
-      .maybeSingle()
+    const { data: session, error: sessionError } = await withTimeout(
+      Promise.resolve(
+        supabase
+          .from("chat_sessions")
+          .select("id,user_id")
+          .eq("id", session_id)
+          .maybeSingle(),
+      ),
+      SESSION_LOOKUP_TIMEOUT_MS,
+      "save-message.session-lookup",
+    )
 
     if (sessionError) throw sessionError
     if (!session) {
@@ -70,54 +82,46 @@ export async function POST(request: NextRequest) {
       ? sanitizeAssistantMessageForPublicDisplay(content)
       : content
 
-    const { data: message, error: messageError } = await supabase
-      .from("chat_messages")
-      .insert({
-        session_id,
-        role,
-        content: safeContent,
-      })
-      .select()
-      .single()
+    const { data: message, error: messageError } = await withTimeout(
+      Promise.resolve(
+        supabase
+          .from("chat_messages")
+          .insert({
+            session_id,
+            role,
+            content: safeContent,
+          })
+          .select()
+          .single(),
+      ),
+      MESSAGE_INSERT_TIMEOUT_MS,
+      "save-message.message-insert",
+    )
 
     if (messageError) throw messageError
 
     // 保存文件
-    if (files && files.length > 0) {
-      for (const file of files) {
-        try {
-          if (!file || typeof file !== "object") continue
-          const fileData = typeof file.data === "string" ? file.data : ""
-
-          const storageUrl = resolveUploadedFileStorageUrl(file, fileData)
-            || (fileData
-              ? isCosConfigured()
-                ? await uploadBase64File(fileData, String(file.name || "upload.bin"), String(file.type || "application/octet-stream"), user.id)
-                : createInlineFileReference(file, fileData)
-              : null)
-
-          if (!storageUrl) continue
-
-          // 保存文件元数据
-          await supabase.from("uploaded_files").insert({
-            user_id: user.id,
-            session_id,
-            message_id: message.id,
-            file_name: String(file.name || "upload.bin"),
-            file_type: String(file.type || "application/octet-stream"),
-            file_size: file.size || 0,
-            storage_url: storageUrl,
-          })
-        } catch (fileError) {
-          console.error("[v0] File save error:", fileError)
-          // 继续处理其他文件
-        }
-      }
+    if (Array.isArray(files) && files.length > 0) {
+      void persistUploadedFileMetadata({
+        files,
+        supabase,
+        userId: user.id,
+        sessionId: session_id,
+        messageId: message.id,
+      }).catch((fileError) => {
+        console.error("[v0] File metadata save background error:", fileError)
+      })
     }
 
     return NextResponse.json({ message })
   } catch (error) {
     console.error("[v0] Save message error:", error)
+    if (isOperationTimeoutError(error)) {
+      return NextResponse.json(
+        { error: "保存服务暂时繁忙，请稍后重试", code: error.code },
+        { status: 503 },
+      )
+    }
     return NextResponse.json({ error: "保存消息失败" }, { status: 500 })
   }
 }
@@ -127,4 +131,51 @@ function createServiceRoleClient() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
   )
+}
+
+async function persistUploadedFileMetadata({
+  files,
+  supabase,
+  userId,
+  sessionId,
+  messageId,
+}: {
+  files: unknown[]
+  supabase: ReturnType<typeof createServiceRoleClient>
+  userId: string
+  sessionId: string
+  messageId: string
+}) {
+  for (const file of files) {
+    try {
+      if (!file || typeof file !== "object") continue
+      const record = file as Record<string, unknown>
+      const fileData = typeof record.data === "string" ? record.data : ""
+
+      const saveOne = async () => {
+        const storageUrl = resolveUploadedFileStorageUrl(record, fileData)
+          || (fileData
+            ? isCosConfigured()
+              ? await uploadBase64File(fileData, String(record.name || "upload.bin"), String(record.type || "application/octet-stream"), userId)
+              : createInlineFileReference(record, fileData)
+            : null)
+
+        if (!storageUrl) return
+
+        await supabase.from("uploaded_files").insert({
+          user_id: userId,
+          session_id: sessionId,
+          message_id: messageId,
+          file_name: String(record.name || "upload.bin"),
+          file_type: String(record.type || "application/octet-stream"),
+          file_size: record.size || 0,
+          storage_url: storageUrl,
+        })
+      }
+
+      await withTimeout(saveOne(), FILE_METADATA_TIMEOUT_MS, "save-message.file-metadata")
+    } catch (fileError) {
+      console.error("[v0] File save error:", fileError)
+    }
+  }
 }

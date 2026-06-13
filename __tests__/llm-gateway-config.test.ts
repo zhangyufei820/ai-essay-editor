@@ -37,10 +37,16 @@ type GatewayConfig = {
   router_settings: {
     cooldown_time?: number
     allowed_fails?: number
+    num_retries?: number
+    timeout?: number
     routing_strategy?: string
     routing_strategy_args?: Record<string, number>
     allowed_fails_policy?: Record<string, number>
     fallbacks?: Array<Record<string, string[]>>
+  }
+  litellm_settings?: {
+    request_timeout?: number
+    num_retries?: number
   }
   general_settings: {
     background_health_checks?: boolean
@@ -73,10 +79,16 @@ describe("llm gateway reliability config", () => {
     expect(config.general_settings.health_check_staleness_threshold).toBeGreaterThanOrEqual(360)
     expect(config.general_settings.health_check_skip_disabled_background_models).toBe(true)
     expect(config.router_settings.cooldown_time).toBeGreaterThanOrEqual(240)
-    expect(config.router_settings.allowed_fails).toBeLessThanOrEqual(1)
+    expect(config.router_settings.allowed_fails).toBe(0)
+    expect(config.router_settings.num_retries).toBe(0)
+    expect(config.litellm_settings?.num_retries).toBe(0)
+    expect(config.router_settings.timeout).toBeLessThanOrEqual(22)
+    expect(config.litellm_settings?.request_timeout).toBeLessThanOrEqual(22)
     expect(config.router_settings.allowed_fails_policy?.AuthenticationErrorAllowedFails).toBe(0)
+    expect(config.router_settings.allowed_fails_policy?.TimeoutErrorAllowedFails).toBe(0)
     expect(config.router_settings.allowed_fails_policy?.RateLimitErrorAllowedFails).toBe(0)
     expect(config.router_settings.allowed_fails_policy?.BadRequestErrorAllowedFails).toBe(0)
+    expect(config.router_settings.allowed_fails_policy?.InternalServerErrorAllowedFails).toBe(0)
   })
 
   it("keeps hot text and vision aliases pinned to a single primary deployment", () => {
@@ -456,5 +468,19 @@ describe("llm gateway reliability config", () => {
     const compose = fs.readFileSync(composePath, "utf8")
 
     expect(compose).toContain("./services/llm-gateway/guardrails:/app/guardrails:ro")
+  })
+
+  it("keeps production runtime probes from accumulating curl zombies", () => {
+    const composePath = path.join(process.cwd(), "docker-compose.prod.yml")
+    const dockerfilePath = path.join(process.cwd(), "Dockerfile")
+    const compose = fs.readFileSync(composePath, "utf8")
+    const dockerfile = fs.readFileSync(dockerfilePath, "utf8")
+
+    expect(compose).toContain("mem_limit: 1536m")
+    expect(compose).toMatch(/llm-gateway:\n[\s\S]*?init: true/)
+    expect(compose).toMatch(/nextjs:\n[\s\S]*?init: true/)
+    expect(compose).not.toMatch(/curl\s+-f\s+http:\/\/localhost:3000/)
+    expect(dockerfile).not.toMatch(/curl\s+-sf\s+http:\/\/localhost:3000/)
+    expect(dockerfile).toContain("fetch('http://127.0.0.1:3000')")
   })
 })

@@ -64,6 +64,7 @@ The LLM gateway uses LiteLLM's background health checks and health-check-driven 
 - the primary is the fastest measured deployment for that business alias
 - provider failures enter cooldown through `allowed_fails` / `allowed_fails_policy`
 - explicit `router_settings.fallbacks` define the deterministic backup order
+- failed primaries do not get an extra same-provider retry before fallback; this keeps first failure latency bounded
 - health checks are low-frequency and serial: 180 second interval, concurrency 1, max 3 output tokens, 6-10 second per-deployment timeout
 - health probe 429/408 responses are treated as routing signals, so overloaded providers can be avoided before a user request lands there
 
