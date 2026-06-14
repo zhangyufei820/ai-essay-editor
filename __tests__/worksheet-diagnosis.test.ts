@@ -93,4 +93,21 @@ describe("worksheet diagnosis Dify contract", () => {
     expect(calculateWorksheetDiagnosisCredits(20)).toBe(230)
     expect(WORKSHEET_REPORT_IMAGE_CREDITS).toBe(20)
   })
+
+  it("hands a signed poster token from diagnosis to Image 2 without changing the public image workspace gate", () => {
+    const analyzeRoute = require("fs").readFileSync(require("path").join(process.cwd(), "app/api/worksheet-diagnosis/analyze/route.ts"), "utf8")
+    const app = require("fs").readFileSync(require("path").join(process.cwd(), "components/worksheet-diagnosis-app.tsx"), "utf8")
+    const chatRoute = require("fs").readFileSync(require("path").join(process.cwd(), "app/api/dify-chat/route.ts"), "utf8")
+
+    expect(analyzeRoute).toContain("signWorksheetPosterToken")
+    expect(analyzeRoute).toContain("posterToken")
+    expect(app).toContain("posterToken?: string")
+    expect(app).toContain("worksheetPosterToken: result.posterToken")
+    expect(app).toContain("worksheetDiagnosisRequestId: result.requestId")
+    expect(app).toContain('size: "1K"')
+    expect(app).toContain('quality: "low"')
+    expect(chatRoute).toContain("verifyWorksheetPosterToken")
+    expect(chatRoute).toContain("hasVerifiedWorksheetPosterToken")
+    expect(chatRoute).toContain("!hasActiveTrialForRequest && !hasVerifiedWorksheetPosterToken && !canUseImage2")
+  })
 })

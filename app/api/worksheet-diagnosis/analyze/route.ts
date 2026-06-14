@@ -10,6 +10,7 @@ import { sanitizePublicAiErrorCode } from "@/lib/chat-error-sanitizer"
 import { getClientIP, checkIpRateLimit, createRateLimitResponse } from "@/lib/rate-limit"
 import { canUseTrialCredits } from "@/lib/trial-credits"
 import { getUserEntitlementSummary } from "@/lib/user-entitlements"
+import { signWorksheetPosterToken } from "@/lib/worksheet-poster-token"
 import {
   WorksheetDiagnosisRequestSchema,
   buildWorksheetDiagnosisInputs,
@@ -271,6 +272,11 @@ export async function POST(request: NextRequest) {
 
             const diagnosis = parseWorksheetDiagnosis(workflow.outputs)
             const renderPrompt = buildWorksheetReportRenderPrompt(diagnosis, parsed.data.reportStyle)
+            const posterToken = signWorksheetPosterToken({
+              userId: auth.user!.id,
+              diagnosisRequestId: requestId,
+              renderPrompt,
+            })
             console.log("[WorksheetDiagnosis] analyze completed", {
               requestId,
               workflowRunId: workflow.workflowRunId,
@@ -283,6 +289,7 @@ export async function POST(request: NextRequest) {
               requestId,
               diagnosis,
               renderPrompt,
+              posterToken,
               billing: {
                 chargedCredits,
                 refunded: false,

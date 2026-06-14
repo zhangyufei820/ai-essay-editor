@@ -43,6 +43,7 @@ import { evaluateOpenClawRuntimeRequest } from "@/lib/openclaw-runtime-guard"
 import { getCodexSkillById } from "@/lib/codex-skills"
 import { getOpenClawSkillById } from "@/lib/openclaw-skills"
 import { detectAllInOneMediaRequest } from "@/lib/all-in-one-media-intent"
+import { verifyWorksheetPosterToken } from "@/lib/worksheet-poster-token"
 import {
   createRequestId,
   createTraceId,
@@ -3651,6 +3652,17 @@ export async function POST(request: NextRequest) {
     }
 
     const hasActiveTrialForRequest = Boolean(trialPrecheck.data?.grantId)
+    const worksheetPosterToken = typeof body.worksheetPosterToken === "string" ? body.worksheetPosterToken : null
+    const worksheetDiagnosisRequestId = typeof body.worksheetDiagnosisRequestId === "string" ? body.worksheetDiagnosisRequestId : null
+    const hasVerifiedWorksheetPosterToken =
+      imageInputsForBilling &&
+      (billingModelType || "gpt-image-2") === "gpt-image-2" &&
+      worksheetDiagnosisRequestId &&
+      verifyWorksheetPosterToken(worksheetPosterToken, {
+        userId,
+        diagnosisRequestId: worksheetDiagnosisRequestId,
+        renderPrompt: effectiveQuery,
+      })
     if (imageInputsForBilling && (billingModelType || "gpt-image-2") === "gpt-image-2") {
       const { data: userProfile } = await getSupabaseAdmin()
         .from("user_profiles")
@@ -3662,7 +3674,7 @@ export async function POST(request: NextRequest) {
         phone: auth.user!.phone,
       })
 
-      if (!hasActiveTrialForRequest && !canUseImage2({
+      if (!hasActiveTrialForRequest && !hasVerifiedWorksheetPosterToken && !canUseImage2({
         user_id: userId,
         email: typeof userProfile?.email === "string" ? userProfile.email : auth.user!.email,
         membership_status: membershipStatus,

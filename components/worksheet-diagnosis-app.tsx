@@ -67,6 +67,7 @@ type AnalyzeResponse = {
   requestId: string
   diagnosis: Diagnosis
   renderPrompt: string
+  posterToken?: string
   billing?: {
     chargedCredits: number
     refunded?: boolean
@@ -520,9 +521,9 @@ export function WorksheetDiagnosisApp() {
           query: result.renderPrompt,
           inputs: {
             aspect_ratio: "3:4",
-            size: "1024x1536",
+            size: "1K",
             model: "gpt-image-2",
-            quality: "medium",
+            quality: "low",
             output_format: "png",
             output_compression: 100,
             background: "opaque",
@@ -532,6 +533,8 @@ export function WorksheetDiagnosisApp() {
           },
           model: "gpt-image-2",
           mode: "image",
+          worksheetPosterToken: result.posterToken,
+          worksheetDiagnosisRequestId: result.requestId,
           async_image_task: true,
           requestId,
         }),
