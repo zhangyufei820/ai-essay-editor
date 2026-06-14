@@ -2,6 +2,7 @@ import {
   getOpenClawAttachmentKind,
   isLikelyHtmlDocumentUrl,
   isLikelyRenderableImageUrl,
+  resolveOpenClawPresentationPreviewUrl,
   rewriteOpenClawMediaReferences,
   toPublicOpenClawWorkspaceUrl,
 } from "@/lib/openclaw-media"
@@ -64,5 +65,14 @@ describe("openclaw media rewriting", () => {
   it("classifies real image assets as renderable images", () => {
     expect(isLikelyRenderableImageUrl("https://www.shenxiang.school/slides/bg1.png")).toBe(true)
     expect(getOpenClawAttachmentKind("https://www.shenxiang.school/api/openclaw-media-sign/output.webp")).toBe("image")
+  })
+
+  it("prefers same-name HTML previews for OpenClaw presentation files", () => {
+    expect(resolveOpenClawPresentationPreviewUrl("https://www.shenxiang.school/slides/lesson.pptx")).toBe(
+      "https://www.shenxiang.school/slides/lesson.html",
+    )
+    expect(resolveOpenClawPresentationPreviewUrl("/home/node/.openclaw/workspace/slides/geometry-proof.pptx")).toBe(
+      "https://www.shenxiang.school/slides/geometry-proof.html",
+    )
   })
 })

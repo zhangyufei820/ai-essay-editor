@@ -2,7 +2,7 @@ import "server-only"
 
 import { createHmac, timingSafeEqual } from "crypto"
 
-import { toPublicOpenClawMediaUrl } from "@/lib/openclaw-media"
+import { resolveOpenClawPresentationPreviewUrl, toPublicOpenClawMediaUrl, toPublicOpenClawWorkspaceUrl } from "@/lib/openclaw-media"
 
 const DEFAULT_OPENCLAW_MEDIA_TTL_SECONDS = 60 * 60
 
@@ -49,6 +49,18 @@ export function rewriteOpenClawMediaReferencesWithSignedUrls(
     )
     .replace(/\/home\/node\/\.openclaw\/media\/([^\s)"'<>`]+)/g, (_match, mediaPath: string) =>
       createSignedOpenClawMediaUrl(mediaPath, expiresInSeconds, userId),
+    )
+    .replace(/https?:\/\/(?:43\.154\.111\.156|shenxiang\.school|www\.shenxiang\.school|school\.shenxiang\.school|api\.shenxiang\.school|cloudflare\.shenxiang\.school|localhost|127\.0\.0\.1)(?::18789)?\/__openclaw__\/workspace\/([^\s)"'<>`]+)/g, (_match, workspacePath: string) =>
+      resolveOpenClawPresentationPreviewUrl(toPublicOpenClawWorkspaceUrl(workspacePath)),
+    )
+    .replace(/\/home\/node\/\.openclaw\/workspace\/([^\s)"'<>`]+)/g, (_match, workspacePath: string) =>
+      resolveOpenClawPresentationPreviewUrl(toPublicOpenClawWorkspaceUrl(workspacePath)),
+    )
+    .replace(/https?:\/\/(?:shenxiang\.school|www\.shenxiang\.school|school\.shenxiang\.school|api\.shenxiang\.school|cloudflare\.shenxiang\.school|localhost|127\.0\.0\.1)(?::\d+)?\/slides\/[^\s)"'<>`]+\.pptx?(?:[?#][^\s)"'<>`]*)?/gi, (url: string) =>
+      resolveOpenClawPresentationPreviewUrl(url),
+    )
+    .replace(/\/slides\/[^\s)"'<>`]+\.pptx?(?:[?#][^\s)"'<>`]*)?/gi, (url: string) =>
+      resolveOpenClawPresentationPreviewUrl(url),
     )
 }
 

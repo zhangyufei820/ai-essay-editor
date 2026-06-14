@@ -73,7 +73,7 @@ import { ModelLogo } from "@/components/ModelLogo"
 import { navigationModelConfig, getNavigationModelItem } from "@/lib/navigation-models"
 import { getPublicAiLabel, sanitizePublicAiLabel } from "@/lib/public-ai-labels"
 import { PLAZA_AGENTS } from "@/components/agents/agent-plaza-data"
-import { getOpenClawAttachmentKind, isLikelyHtmlDocumentUrl, toPublicOpenClawMediaSignUrl, toPublicOpenClawWorkspaceUrl } from "@/lib/openclaw-media"
+import { getOpenClawAttachmentKind, isLikelyHtmlDocumentUrl, resolveOpenClawPresentationPreviewUrl, toPublicOpenClawMediaSignUrl, toPublicOpenClawWorkspaceUrl } from "@/lib/openclaw-media"
 import type { CodexSkill } from "@/lib/codex-skills"
 import type { OpenClawSkill } from "@/lib/openclaw-skills"
 import {
@@ -1135,21 +1135,12 @@ const MediaBlock = ({ items }: { items: MediaItem[] }) => {
 	            </div>
 	          )
         } else if (effectiveType === "ppt") {
-          // PPT 预览（使用 Google Docs Viewer 或内联 iframe）
-          const pptUrl = publicUrl
-          const googleViewerUrl = `https://docs.google.com/gview?url=${encodeURIComponent(pptUrl)}&embedded=true`
           return (
-            <div key={index} className="rounded-[var(--radius-sharp)] overflow-hidden border border-[var(--ink-100)] shadow-xl">
-              <div className="bg-[var(--ink-50)] px-4 py-2 border-b border-[var(--ink-100)]">
-                <span className="text-sm font-medium text-[var(--ink-700)]">📊 {item.name || "PPT 文档"}</span>
-              </div>
-              <iframe
-                src={googleViewerUrl}
-                className="w-full h-[400px] bg-[var(--paper-50)]"
-                frameBorder="0"
-                title="PPT Preview"
-              />
-            </div>
+            <OpenClawHtmlPreview
+              key={index}
+              src={resolveOpenClawPresentationPreviewUrl(publicUrl)}
+              title={item.name || "演示文稿"}
+            />
           )
         }
         return null

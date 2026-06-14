@@ -29,4 +29,37 @@ describe("Dify answer cleanup", () => {
     const raw = "{\"skill\":\"teacher-kit-v4\",\"message\":\"debug\"}"
     expect(sanitizeDifyAnswerForModel(raw, "problem")).toBe(raw)
   })
+
+  it("removes transient unavailable and skill debug lines from successful OpenClaw skill answers", () => {
+    const raw = [
+      "服务暂时不可用，请稍后重试。 skill_trigger_reason: 服务暂时不可用，请稍后重试。",
+      "skill_trigger_reason: 前端已明确选择“PPT 全流程助手”，并提供了完整几何题解析内容用于生成课件",
+      "",
+      "已生成这道几何题的解析 PPT，可直接查看：",
+      "",
+      "[点击查看演示文稿](https://www.shenxiang.school/slides/geometry-proof.html)",
+      "",
+      "这版是 12 页课堂讲解版。",
+    ].join("\n")
+
+    const cleaned = sanitizeDifyAnswerForModel(raw, "open-claw")
+
+    expect(cleaned).toContain("已生成这道几何题的解析 PPT")
+    expect(cleaned).toContain("[点击查看演示文稿](https://www.shenxiang.school/slides/geometry-proof.html)")
+    expect(cleaned).not.toContain("服务暂时不可用")
+    expect(cleaned).not.toContain("skill_trigger_reason")
+  })
+
+  it("removes a split OpenClaw unavailable prefix once skill debug text arrives", () => {
+    const raw = [
+      "服务暂时不可用，请稍后重试。",
+      "skill_trigger_reason: 前端已明确选择“PPT 全流程助手”",
+    ].join(" ")
+
+    expect(sanitizeDifyAnswerForModel(raw, "open-claw")).toBe("")
+  })
+
+  it("keeps a real OpenClaw unavailable message when there is no useful result", () => {
+    expect(sanitizeDifyAnswerForModel("服务暂时不可用，请稍后重试。", "open-claw")).toBe("服务暂时不可用，请稍后重试。")
+  })
 })

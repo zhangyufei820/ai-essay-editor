@@ -32,7 +32,7 @@ import { getUserEntitlementSummary } from "@/lib/user-entitlements"
 import { isConfiguredAdminUser } from "@/lib/admin-auth"
 import { internalDifyFetch } from "@/lib/internal-dify-fetch"
 import { getDifyCredentialForModel } from "@/lib/dify-credentials"
-import { sanitizeDifyAnswerForModel } from "@/lib/dify-answer-cleanup"
+import { hasUsefulOpenClawResult, sanitizeDifyAnswerForModel } from "@/lib/dify-answer-cleanup"
 import { getSafeUpstreamErrorMessage, sanitizePublicAiError, sanitizePublicAiErrorCode, sanitizePublicAiStatus, stripUpstreamBranding } from "@/lib/chat-error-sanitizer"
 import { getPublicAiLabel, sanitizePublicAiLabel } from "@/lib/public-ai-labels"
 import { isWorkflowSkillAgent } from "@/lib/workflow-skill-agents"
@@ -4462,6 +4462,7 @@ export async function POST(request: NextRequest) {
     let allInOneStreamedAnswer = false
     let finalNodeOutputText = ""
     let openClawFinalOutputText = ""
+    let pendingOpenClawAnswerRawText = ""
     let actualDifyResponseMode: "streaming" | "blocking" | "json_fallback" = useBlockingDifyChat ? "blocking" : "streaming"
     const bufferedNodeEvents: Array<{
       event: string
@@ -4470,6 +4471,64 @@ export async function POST(request: NextRequest) {
       status?: string
       workflow_run_id?: string
     }> = []
+
+    const cleanOpenClawAnswerForDisplay = (rawValue: string) =>
+      rewriteOpenClawMediaReferencesWithSignedUrls(sanitizeDifyAnswerForModel(rawValue, model), undefined, userId)
+
+    const appendOpenClawAnswerChunk = (rawValue: string) => {
+      pendingOpenClawAnswerRawText += rawValue
+    }
+
+    const flushPendingOpenClawAnswer = (controller: SseByteController) => {
+      if (model !== "open-claw" || !pendingOpenClawAnswerRawText || hasReceivedContent) {
+        pendingOpenClawAnswerRawText = ""
+        return ""
+      }
+
+      const pendingRawValue = pendingOpenClawAnswerRawText
+      pendingOpenClawAnswerRawText = ""
+      const cleanedText = cleanOpenClawAnswerForDisplay(pendingRawValue)
+      if (!cleanedText) return ""
+
+      fullResponseText += cleanedText
+      hasReceivedContent = true
+      enqueueSseAnswer(controller, cleanedText)
+      return cleanedText
+    }
+
+    const emitOpenClawFallbackDisplay = (controller: SseByteController) => {
+      if (model !== "open-claw" || hasReceivedContent) return ""
+
+      const candidateTexts = [
+        openClawFinalOutputText,
+        pendingOpenClawAnswerRawText,
+        finalNodeOutputText,
+      ]
+      const preferredText = candidateTexts
+        .map((text) => cleanOpenClawAnswerForDisplay(text))
+        .find((text) => text.trim() && hasUsefulOpenClawResult(text)) || ""
+
+      if (preferredText.trim()) {
+        pendingOpenClawAnswerRawText = ""
+        fullResponseText = preferredText
+        hasReceivedContent = true
+        enqueueSseAnswer(controller, preferredText)
+        return preferredText
+      }
+
+      const secondaryText = candidateTexts
+        .map((text) => cleanOpenClawAnswerForDisplay(text))
+        .find((text) => text.trim()) || ""
+      if (secondaryText.trim()) {
+        pendingOpenClawAnswerRawText = ""
+        fullResponseText = secondaryText
+        hasReceivedContent = true
+        enqueueSseAnswer(controller, secondaryText)
+        return secondaryText
+      }
+
+      return flushPendingOpenClawAnswer(controller)
+    }
 
     // 🔥 扣费函数：流结束后根据实际 token 用量扣费
     const deductCredit = async () => {
@@ -4901,9 +4960,12 @@ export async function POST(request: NextRequest) {
 
               // 🔥 收集响应文本内容（Chat API）
 	              if (json.event === "message" && json.answer) {
-                  const answerText = model === "open-claw"
-                    ? rewriteOpenClawMediaReferencesWithSignedUrls(String(json.answer), undefined, userId)
-                    : String(json.answer)
+                  if (model === "open-claw") {
+                    appendOpenClawAnswerChunk(String(json.answer))
+                    continue
+                  }
+
+                  const answerText = String(json.answer)
 	                fullResponseText += answerText
 	                hasReceivedContent = true
                   if (model === "vocab-card") {
@@ -4922,16 +4984,6 @@ export async function POST(request: NextRequest) {
                   } else if (!shouldBufferForDisplay) {
                     enqueueSseAnswer(controller, answerText)
                   }
-	                const artifacts = model === "open-claw" ? extractArtifactsFromText(fullResponseText) : []
-	                if (artifacts.length > 0) {
-	                  updateTaskRun(taskRun.id, {
-	                    status: "running",
-	                    stage: "已检测到生成文件",
-	                    progress: 80,
-	                    artifacts,
-	                  }).catch((error) => console.warn("[AI Task Trace] artifact update failed:", error))
-	                }
-
               }
 
               // 🔥 收集 Workflow API 的文本响应
@@ -4977,7 +5029,10 @@ export async function POST(request: NextRequest) {
                     console.log(`📚 [VocabCard] 收集到结构化 outputs`)
 	                    enqueueSseEvent(controller, buildPublicVocabWorkflowEvent(safeOutputs, conversationId))
 	                  } else {
-                      const outputText = sanitizeDifyAnswerForModel(extractDifyTextOutput(outputs), model)
+                      const rawOutputText = sanitizeDifyAnswerForModel(extractDifyTextOutput(outputs), model)
+                      const outputText = model === "open-claw"
+                        ? rewriteOpenClawMediaReferencesWithSignedUrls(rawOutputText, undefined, userId)
+                        : rawOutputText
                       if (outputText) {
 	                    fullResponseText += outputText
 	                    hasReceivedContent = true
@@ -5010,10 +5065,11 @@ export async function POST(request: NextRequest) {
               if (shouldBufferForDisplay && json.event === "message_end" && fullResponseText.trim() && !allInOneStreamedAnswer) {
                 enqueueAllInOneDisplayOnce(fullResponseText)
               }
-              if (model === "open-claw" && json.event === "message_end" && !hasReceivedContent && openClawFinalOutputText.trim()) {
-                enqueueSseAnswer(controller, openClawFinalOutputText)
-                fullResponseText = openClawFinalOutputText
-                hasReceivedContent = true
+              if (model === "open-claw" && json.event === "message_end") {
+                const openClawDisplayText = emitOpenClawFallbackDisplay(controller)
+                if (openClawDisplayText) {
+                  console.log(`🎨 [OpenClaw] 消息结束后展示内容:`, { length: openClawDisplayText.length })
+                }
               } else if (json.event === "message_end" && !hasReceivedContent && finalNodeOutputText.trim()) {
                 const displayText = isAllInOneAgent ? normalizeAllInOneAgentDisplay(finalNodeOutputText) : finalNodeOutputText
                 enqueueSseAnswer(controller, displayText)
@@ -5045,20 +5101,20 @@ export async function POST(request: NextRequest) {
               }
 
 	              // 提取 token 使用量（Dify 在 message_end 事件中返回）
-		              if (json.event === "message_end" && json.metadata?.usage) {
-		                const parsedUsage = parseDifyUsage(json)
-		                latestParsedUsage = parsedUsage
-		                totalTokens = parsedUsage.totalTokens
-		                promptTokens = parsedUsage.promptTokens
-		                completionTokens = parsedUsage.completionTokens
-		                console.log(`📊 [Token统计] 输入: ${promptTokens}, 输出: ${completionTokens}, 总Token: ${totalTokens}`)
-	                updateTaskRun(taskRun.id, {
-	                  status: "running",
-	                  stage: "消息生成完成，正在结算",
-	                  progress: 95,
-	                  metadata: { total_tokens: totalTokens, prompt_tokens: promptTokens, completion_tokens: completionTokens },
-	                }).catch((error) => console.warn("[AI Task Trace] message_end update failed:", error))
-	              }
+              if (json.event === "message_end" && json.metadata?.usage) {
+                const parsedUsage = parseDifyUsage(json)
+                latestParsedUsage = parsedUsage
+                totalTokens = parsedUsage.totalTokens
+                promptTokens = parsedUsage.promptTokens
+                completionTokens = parsedUsage.completionTokens
+                console.log(`📊 [Token统计] 输入: ${promptTokens}, 输出: ${completionTokens}, 总Token: ${totalTokens}`)
+                updateTaskRun(taskRun.id, {
+                  status: "running",
+                  stage: "消息生成完成，正在结算",
+                  progress: 95,
+                  metadata: { total_tokens: totalTokens, prompt_tokens: promptTokens, completion_tokens: completionTokens },
+                }).catch((error) => console.warn("[AI Task Trace] message_end update failed:", error))
+              }
             } catch (e) {
               // 🔥 只有真正 JSON 格式错误才记录（而不是被截断的数据）
               if (e instanceof SyntaxError) {
@@ -5089,7 +5145,11 @@ export async function POST(request: NextRequest) {
               const json = JSON.parse(data)
               // 处理最后一条消息的文本收集
               if (json.event === "message" && json.answer) {
-                fullResponseText += json.answer
+                if (model === "open-claw") {
+                  appendOpenClawAnswerChunk(String(json.answer))
+                } else {
+                  fullResponseText += String(json.answer)
+                }
               }
               if (json.conversation_id) {
                 conversationId = json.conversation_id
@@ -5109,14 +5169,15 @@ export async function POST(request: NextRequest) {
         }
 
         // 🔥 流结束，触发扣费（仅当有实际内容时才扣费）
-	        if (isAllInOneAgent && fullResponseText.trim() && !allInOneDisplaySent && !allInOneStreamedAnswer) {
-	          allInOneDisplaySent = true
-	          enqueueSseAnswer(controller, normalizeAllInOneAgentDisplay(fullResponseText))
-	        }
-        if (model === "open-claw" && !hasReceivedContent && openClawFinalOutputText.trim()) {
-          enqueueSseAnswer(controller, openClawFinalOutputText)
-          fullResponseText = openClawFinalOutputText
-          hasReceivedContent = true
+        if (isAllInOneAgent && fullResponseText.trim() && !allInOneDisplaySent && !allInOneStreamedAnswer) {
+          allInOneDisplaySent = true
+          enqueueSseAnswer(controller, normalizeAllInOneAgentDisplay(fullResponseText))
+        }
+        if (model === "open-claw") {
+          const openClawDisplayText = emitOpenClawFallbackDisplay(controller)
+          if (openClawDisplayText) {
+            console.log(`🎨 [OpenClaw] 流结束后展示内容:`, { length: openClawDisplayText.length })
+          }
         } else if (!hasReceivedContent && finalNodeOutputText.trim()) {
           const displayText = isAllInOneAgent ? normalizeAllInOneAgentDisplay(finalNodeOutputText) : finalNodeOutputText
           enqueueSseAnswer(controller, displayText)

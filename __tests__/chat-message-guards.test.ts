@@ -188,6 +188,31 @@ describe("chat message guards", () => {
     expect(openClawSkills).not.toMatch(/description:\s*"[^"]*(OpenClaw|节点|工作流)|tags:\s*\[[^\]]*"(OpenClaw|节点|工作流)"|name:\s*"[^"]*(节点|工作流)/)
   })
 
+  it("shows OpenClaw presentations through HTML preview instead of a download-first PPT viewer", () => {
+    const enhancedChat = read("components/chat/enhanced-chat-interface.tsx")
+    const media = read("lib/openclaw-media.ts")
+
+    expect(media).toContain("resolveOpenClawPresentationPreviewUrl")
+    expect(enhancedChat).toContain("resolveOpenClawPresentationPreviewUrl")
+    expect(enhancedChat).not.toContain("docs.google.com/gview")
+    expect(enhancedChat).not.toContain("PPT Preview")
+  })
+
+  it("buffers and sanitizes OpenClaw streaming message text before exposing it to users", () => {
+    const route = read("app/api/dify-chat/route.ts")
+
+    expect(route).toContain("let pendingOpenClawAnswerRawText = \"\"")
+    expect(route).toContain("const appendOpenClawAnswerChunk")
+    expect(route).toContain("const emitOpenClawFallbackDisplay")
+    expect(route).toContain("if (model === \"open-claw\") {\n                    appendOpenClawAnswerChunk(String(json.answer))\n                    continue\n                  }")
+    expect(route).toContain("if (model === \"open-claw\" && json.event === \"message_end\")")
+    expect(route).toContain("openClawFinalOutputText,\n        pendingOpenClawAnswerRawText,\n        finalNodeOutputText")
+    expect(route).toContain(".map((text) => cleanOpenClawAnswerForDisplay(text))")
+    expect(route).toContain("hasUsefulOpenClawResult(text)")
+    expect(route).toContain("rewriteOpenClawMediaReferencesWithSignedUrls(rawOutputText, undefined, userId)")
+    expect(route).not.toContain("rewriteOpenClawMediaReferencesWithSignedUrls(String(json.answer), undefined, userId)")
+  })
+
   it("uses public capability labels across user-facing app entry points", () => {
     const navigationModels = read("lib/navigation-models.ts")
     const agentPlaza = read("components/agents/agent-plaza-data.ts")

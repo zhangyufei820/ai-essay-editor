@@ -105,6 +105,25 @@ export function getOpenClawAttachmentKind(value: string): "image" | "ppt" | "fil
   return "file"
 }
 
+function replacePathExtension(value: string, extension: string) {
+  const hashIndex = value.indexOf("#")
+  const hash = hashIndex >= 0 ? value.slice(hashIndex) : ""
+  const withoutHash = hashIndex >= 0 ? value.slice(0, hashIndex) : value
+  const queryIndex = withoutHash.indexOf("?")
+  const query = queryIndex >= 0 ? withoutHash.slice(queryIndex) : ""
+  const base = queryIndex >= 0 ? withoutHash.slice(0, queryIndex) : withoutHash
+
+  return `${base.replace(/\.[^/.?#]+$/, extension)}${query}${hash}`
+}
+
+export function resolveOpenClawPresentationPreviewUrl(value: string) {
+  const rewritten = rewriteOpenClawMediaReferences(value)
+  if (isLikelyHtmlDocumentUrl(rewritten)) return rewritten
+  if (getOpenClawAttachmentKind(rewritten) !== "ppt") return rewritten
+
+  return replacePathExtension(rewritten, ".html")
+}
+
 export function rewriteOpenClawMediaReferences(text: string) {
   return text
     .replace(OPENCLAW_MEDIA_URL_PATTERN, (_match, mediaPath: string) => toPublicOpenClawMediaSignUrl(mediaPath))

@@ -71,6 +71,32 @@ function stripTeacherKitMetadataLines(text: string) {
     .replace(/^\s*skill_(?:id|name|display_name|description|category|tags)\s*:\s*.*$/gim, "")
 }
 
+function stripSkillMetadataLines(text: string) {
+  return text
+    .replace(/^\s*skill_trigger_reason\s*:\s*.*$/gim, "")
+    .replace(/^\s*skill_(?:selected|id|name|display_name|description|category|tags)\s*:\s*.*$/gim, "")
+}
+
+export function hasUsefulOpenClawResult(text: string) {
+  return (
+    /\[[^\]]*(?:演示文稿|PPT|课件|查看|打开)[^\]]*\]\([^)]+\)/i.test(text) ||
+    /(?:已生成|生成完成|可直接查看|点击查看|查看演示文稿|演示文稿|PPT|课件)/i.test(text) ||
+    /(?:\/slides\/|__openclaw__\/workspace\/|\/home\/node\/\.openclaw\/workspace\/)[^\s)"'<>`]+/i.test(text)
+  )
+}
+
+function stripTransientOpenClawUnavailable(text: string) {
+  const withoutSkillDebugPrefix = text
+    .replace(/服务暂时不可用，请稍后重试。?\s*(?=skill_trigger_reason\s*:)/gi, "")
+    .replace(/智能服务暂时不可用，请稍后重试。?\s*(?=skill_trigger_reason\s*:)/gi, "")
+
+  if (!hasUsefulOpenClawResult(withoutSkillDebugPrefix)) return withoutSkillDebugPrefix
+
+  return withoutSkillDebugPrefix
+    .replace(/^\s*服务暂时不可用，请稍后重试。?\s*$/gim, "")
+    .replace(/^\s*智能服务暂时不可用，请稍后重试。?\s*$/gim, "")
+}
+
 function stripTeacherKitFencedJson(text: string) {
   return text.replace(/```(?:json)?\s*([\s\S]*?)```/gi, (match, inner) => {
     const parsed = safeJsonParse(String(inner).trim())
@@ -96,7 +122,17 @@ export function cleanBeikeProAnswer(answer: string) {
   )
 }
 
+export function cleanOpenClawAnswer(answer: string) {
+  if (!answer || typeof answer !== "string") return ""
+  return normalizeBlankLines(
+    stripSkillMetadataLines(
+      stripTransientOpenClawUnavailable(answer),
+    ),
+  )
+}
+
 export function sanitizeDifyAnswerForModel(answer: string, model?: string | null) {
   if (model === "beike-pro") return cleanBeikeProAnswer(answer)
+  if (model === "open-claw") return cleanOpenClawAnswer(answer)
   return answer
 }
