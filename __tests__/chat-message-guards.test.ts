@@ -190,10 +190,13 @@ describe("chat message guards", () => {
 
   it("shows OpenClaw presentations through HTML preview instead of a download-first PPT viewer", () => {
     const enhancedChat = read("components/chat/enhanced-chat-interface.tsx")
+    const messageBubble = read("components/chat/MessageBubble.tsx")
     const media = read("lib/openclaw-media.ts")
 
     expect(media).toContain("resolveOpenClawPresentationPreviewUrl")
     expect(enhancedChat).toContain("resolveOpenClawPresentationPreviewUrl")
+    expect(messageBubble).toContain("shouldPreviewPresentationLink")
+    expect(messageBubble).toContain("<OpenClawHtmlPreview src={rawHref} title={label || \"演示文稿\"} />")
     expect(enhancedChat).not.toContain("docs.google.com/gview")
     expect(enhancedChat).not.toContain("PPT Preview")
   })

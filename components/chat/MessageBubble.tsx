@@ -44,6 +44,8 @@ import { MarkdownCodeBlock, extractLanguageFromClassName } from "@/components/ch
 import { cleanLLMText } from "@/lib/text-sanitizer"
 import { isAssistantFailureContent } from "@/lib/chat-message-guards"
 import { sanitizeAssistantMessageForPublicDisplay } from "@/lib/chat-error-sanitizer"
+import { OpenClawHtmlPreview } from "@/components/chat/OpenClawHtmlPreview"
+import { isLikelyHtmlDocumentUrl, rewriteOpenClawMediaReferences } from "@/lib/openclaw-media"
 
 // v2 墨砚 token colors
 const AI_TEXT_COLOR = "var(--ink-800)"
@@ -119,6 +121,18 @@ function getTextContent(children: React.ReactNode): string {
     return getTextContent((children as { props: { children: React.ReactNode } }).props.children)
   }
   return ''
+}
+
+function shouldPreviewPresentationLink(href: string, label: string) {
+  if (!href) return false
+  const normalizedHref = rewriteOpenClawMediaReferences(href)
+  const lowerHref = normalizedHref.toLowerCase()
+  const isPresentationLabel = /(?:演示文稿|ppt|课件|幻灯片|查看)/i.test(label)
+  const isPresentationHref =
+    /\/slides\//i.test(lowerHref) &&
+    (isLikelyHtmlDocumentUrl(normalizedHref) || /\.pptx?(?:[?#]|$)/i.test(lowerHref))
+
+  return isPresentationLabel && isPresentationHref
 }
 
 // ============================================
@@ -318,17 +332,25 @@ function MarkdownContent({ content }: { content: string }) {
           </strong>
         ),
         em: ({ children }) => <em className="italic">{children}</em>,
-        a: ({ href, children }) => (
-          <a
-            href={href}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="underline underline-offset-2"
-            style={{ color: CLAUDE_ACCENT_COLOR }}
-          >
-            {children}
-          </a>
-        ),
+        a: ({ href, children }) => {
+          const rawHref = href ? String(href) : ""
+          const label = getTextContent(children)
+          if (shouldPreviewPresentationLink(rawHref, label)) {
+            return <OpenClawHtmlPreview src={rawHref} title={label || "演示文稿"} />
+          }
+
+          return (
+            <a
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline underline-offset-2"
+              style={{ color: CLAUDE_ACCENT_COLOR }}
+            >
+              {children}
+            </a>
+          )
+        },
         h1: ({ children }) => (
           <h1
             className="font-bold text-[14px] sm:text-base mt-2 mb-1"
