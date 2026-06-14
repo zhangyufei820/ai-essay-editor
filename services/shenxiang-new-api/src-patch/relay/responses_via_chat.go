@@ -183,10 +183,71 @@ func responsesChatStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, res
 
 	responseID := helper.GetResponseID(c)
 	messageID := "msg_" + responseID
+	reasoningID := "rs_" + responseID
 	createdAt := int(time.Now().Unix())
 	model := info.UpstreamModelName
 	var responseText strings.Builder
+	var reasoningText strings.Builder
 	usage := &dto.Usage{}
+
+	// 推理与可见正文是两个独立的 output item，按出现顺序动态分配 output_index：
+	// reasoning(type=reasoning) 走 summary_index 维度，message(type=message) 走 content_index 维度。
+	// 不能把推理混入可见输出，否则会污染最终回答与计费文本。
+	reasoningStarted := false
+	messageStarted := false
+	reasoningOutputIndex := -1
+	messageOutputIndex := -1
+	nextOutputIndex := 0
+
+	startReasoningItem := func() {
+		reasoningStarted = true
+		reasoningOutputIndex = nextOutputIndex
+		nextOutputIndex++
+		_ = writeResponsesCompatEvent(c, "response.output_item.added", map[string]any{
+			"output_index": reasoningOutputIndex,
+			"item": map[string]any{
+				"id":      reasoningID,
+				"type":    "reasoning",
+				"status":  "in_progress",
+				"summary": []any{},
+			},
+		})
+		_ = writeResponsesCompatEvent(c, "response.reasoning_summary_part.added", map[string]any{
+			"item_id":       reasoningID,
+			"output_index":  reasoningOutputIndex,
+			"summary_index": 0,
+			"part": map[string]any{
+				"type": "summary_text",
+				"text": "",
+			},
+		})
+	}
+
+	startMessageItem := func() {
+		messageStarted = true
+		messageOutputIndex = nextOutputIndex
+		nextOutputIndex++
+		_ = writeResponsesCompatEvent(c, "response.output_item.added", map[string]any{
+			"output_index": messageOutputIndex,
+			"item": map[string]any{
+				"id":      messageID,
+				"type":    "message",
+				"status":  "in_progress",
+				"role":    "assistant",
+				"content": []any{},
+			},
+		})
+		_ = writeResponsesCompatEvent(c, "response.content_part.added", map[string]any{
+			"item_id":       messageID,
+			"output_index":  messageOutputIndex,
+			"content_index": 0,
+			"part": map[string]any{
+				"type":        "output_text",
+				"text":        "",
+				"annotations": []any{},
+			},
+		})
+	}
 
 	helper.SetEventStreamHeaders(c)
 	if err := writeResponsesCompatEvent(c, "response.created", map[string]any{
@@ -194,26 +255,6 @@ func responsesChatStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, res
 	}); err != nil {
 		return nil, types.NewOpenAIError(err, types.ErrorCodeBadResponse, http.StatusInternalServerError)
 	}
-	_ = writeResponsesCompatEvent(c, "response.output_item.added", map[string]any{
-		"output_index": 0,
-		"item": map[string]any{
-			"id":      messageID,
-			"type":    "message",
-			"status":  "in_progress",
-			"role":    "assistant",
-			"content": []any{},
-		},
-	})
-	_ = writeResponsesCompatEvent(c, "response.content_part.added", map[string]any{
-		"item_id":       messageID,
-		"output_index":  0,
-		"content_index": 0,
-		"part": map[string]any{
-			"type":        "output_text",
-			"text":        "",
-			"annotations": []any{},
-		},
-	})
 
 	helper.StreamScannerHandler(c, resp, info, func(data string, sr *helper.StreamResult) {
 		if strings.TrimSpace(data) == "[DONE]" {
@@ -236,39 +277,93 @@ func responsesChatStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, res
 			usage = chunk.Usage
 		}
 		for _, choice := range chunk.Choices {
-			delta := choice.Delta.GetContentString()
-			if delta == "" {
-				delta = choice.Delta.GetReasoningContent()
+			if content := choice.Delta.GetContentString(); content != "" {
+				if !messageStarted {
+					startMessageItem()
+				}
+				responseText.WriteString(content)
+				if err := writeResponsesCompatEvent(c, "response.output_text.delta", map[string]any{
+					"item_id":       messageID,
+					"output_index":  messageOutputIndex,
+					"content_index": 0,
+					"delta":         content,
+				}); err != nil {
+					sr.Error(err)
+					return
+				}
+				c.Set("response_stream_output_sent", true)
 			}
-			if delta == "" {
-				continue
+			if reasoningDelta := choice.Delta.GetReasoningContent(); reasoningDelta != "" {
+				if !reasoningStarted {
+					startReasoningItem()
+				}
+				reasoningText.WriteString(reasoningDelta)
+				if err := writeResponsesCompatEvent(c, "response.reasoning_summary_text.delta", map[string]any{
+					"item_id":       reasoningID,
+					"output_index":  reasoningOutputIndex,
+					"summary_index": 0,
+					"delta":         reasoningDelta,
+				}); err != nil {
+					sr.Error(err)
+					return
+				}
 			}
-			responseText.WriteString(delta)
-			if err := writeResponsesCompatEvent(c, "response.output_text.delta", map[string]any{
-				"item_id":       messageID,
-				"output_index":  0,
-				"content_index": 0,
-				"delta":         delta,
-			}); err != nil {
-				sr.Error(err)
-				return
-			}
-			c.Set("response_stream_output_sent", true)
 		}
 	})
 
 	text := responseText.String()
+	reasoning := reasoningText.String()
 	if !service.ValidUsage(usage) {
-		usage = service.ResponseText2Usage(c, text, info.UpstreamModelName, info.GetEstimatePromptTokens())
+		// 计费回退需把推理内容计入补全 token：推理流即使无可见正文也消耗了输出，
+		// 仅按可见 text 估算会漏计 reasoning，造成欠计费。
+		usage = service.ResponseText2Usage(c, text+reasoning, info.UpstreamModelName, info.GetEstimatePromptTokens())
 	}
 	service.CopyResponseHeaderCostFields(usage, resp.Header)
+
+	// 即使上游没有可见正文，也补一个 message item，维持下游"至少一条 message 输出"的契约。
+	if !messageStarted {
+		startMessageItem()
+	}
+
+	// 最终 output 数组必须按 output_index 顺序排列，槽位与事件中的 index 一致。
+	ordered := make([]any, nextOutputIndex)
+
+	if reasoningStarted {
+		_ = writeResponsesCompatEvent(c, "response.reasoning_summary_text.done", map[string]any{
+			"item_id":       reasoningID,
+			"output_index":  reasoningOutputIndex,
+			"summary_index": 0,
+			"text":          reasoning,
+		})
+		summaryPart := map[string]any{
+			"type": "summary_text",
+			"text": reasoning,
+		}
+		_ = writeResponsesCompatEvent(c, "response.reasoning_summary_part.done", map[string]any{
+			"item_id":       reasoningID,
+			"output_index":  reasoningOutputIndex,
+			"summary_index": 0,
+			"part":          summaryPart,
+		})
+		reasoningItem := map[string]any{
+			"id":      reasoningID,
+			"type":    "reasoning",
+			"status":  "completed",
+			"summary": []any{summaryPart},
+		}
+		_ = writeResponsesCompatEvent(c, "response.output_item.done", map[string]any{
+			"output_index": reasoningOutputIndex,
+			"item":         reasoningItem,
+		})
+		ordered[reasoningOutputIndex] = reasoningItem
+	}
 
 	content := map[string]any{
 		"type":        "output_text",
 		"text":        text,
 		"annotations": []any{},
 	}
-	outputItem := map[string]any{
+	messageItem := map[string]any{
 		"id":      messageID,
 		"type":    "message",
 		"status":  "completed",
@@ -277,22 +372,24 @@ func responsesChatStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, res
 	}
 	_ = writeResponsesCompatEvent(c, "response.output_text.done", map[string]any{
 		"item_id":       messageID,
-		"output_index":  0,
+		"output_index":  messageOutputIndex,
 		"content_index": 0,
 		"text":          text,
 	})
 	_ = writeResponsesCompatEvent(c, "response.content_part.done", map[string]any{
 		"item_id":       messageID,
-		"output_index":  0,
+		"output_index":  messageOutputIndex,
 		"content_index": 0,
 		"part":          content,
 	})
 	_ = writeResponsesCompatEvent(c, "response.output_item.done", map[string]any{
-		"output_index": 0,
-		"item":         outputItem,
+		"output_index": messageOutputIndex,
+		"item":         messageItem,
 	})
+	ordered[messageOutputIndex] = messageItem
+
 	_ = writeResponsesCompatEvent(c, "response.completed", map[string]any{
-		"response": responseEnvelope(responseID, createdAt, model, "completed", []any{outputItem}, usage),
+		"response": responseEnvelope(responseID, createdAt, model, "completed", ordered, usage),
 	})
 	c.Set("response_completed_seen", true)
 

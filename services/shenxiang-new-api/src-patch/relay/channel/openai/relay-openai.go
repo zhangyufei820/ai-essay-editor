@@ -338,6 +338,13 @@ func OpenaiRealtimeHandler(c *gin.Context, info *relaycommon.RelayInfo) (*types.
 	clientConn := info.ClientWs
 	targetConn := info.TargetWs
 
+	// 关闭两个连接以唤醒仍阻塞在 ReadMessage() 的残留 goroutine。
+	// gorilla 允许 Close 与 ReadMessage 并发调用；重复 Close 仅返回被忽略的错误。
+	defer func() {
+		_ = clientConn.Close()
+		_ = targetConn.Close()
+	}()
+
 	clientClosed := make(chan struct{})
 	targetClosed := make(chan struct{})
 	sendChan := make(chan []byte, 100)

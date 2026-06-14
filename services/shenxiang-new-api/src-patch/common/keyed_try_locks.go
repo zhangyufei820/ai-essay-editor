@@ -19,12 +19,17 @@ func (m *KeyedTryLocks[K]) TryLock(key K) (func(), bool) {
 	lock := actual.(*keyedTryLock)
 	select {
 	case lock.ch <- struct{}{}:
+		// Unlock only releases the slot. We deliberately do NOT delete the
+		// key from the map here: draining the channel and deleting the entry
+		// cannot be done atomically, so another goroutine could acquire the
+		// lock between the drain and the delete, and the delete would then
+		// evict a *held* lock — breaking mutual exclusion. Entries are keyed
+		// by a bounded set (e.g. user id), so retaining them is acceptable.
 		return func() {
 			select {
 			case <-lock.ch:
 			default:
 			}
-			m.locks.CompareAndDelete(key, lock)
 		}, true
 	default:
 		return nil, false

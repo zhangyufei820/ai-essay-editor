@@ -194,7 +194,8 @@ func ResponsesResponseToChatCompletionsResponse(resp *dto.OpenAIResponsesRespons
 	created := resp.CreatedAt
 
 	var toolCalls []dto.ToolCallResponse
-	if text == "" && len(resp.Output) > 0 {
+	// 正文与 tool_calls 可同时存在，不能因为有正文就丢弃 tool_calls
+	if len(resp.Output) > 0 {
 		for _, out := range resp.Output {
 			if out.Type != "function_call" {
 				continue
@@ -228,8 +229,8 @@ func ResponsesResponseToChatCompletionsResponse(resp *dto.OpenAIResponsesRespons
 		Content: text,
 	}
 	if len(toolCalls) > 0 {
+		// 保留正文：正文与 tool_calls 可同时存在，清空会丢失模型的可见回答
 		msg.SetToolCalls(toolCalls)
-		msg.Content = ""
 	}
 
 	out := &dto.OpenAITextResponse{

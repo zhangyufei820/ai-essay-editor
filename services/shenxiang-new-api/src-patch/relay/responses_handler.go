@@ -142,7 +142,11 @@ func ResponsesHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *
 		return newAPIError
 	}
 
-	usageDto := usage.(*dto.Usage)
+	usageDto, ok := usage.(*dto.Usage)
+	if !ok || usageDto == nil {
+		common.SysError(fmt.Sprintf("ResponsesHelper: unexpected usage type %T for model %s, skip billing", usage, info.OriginModelName))
+		return nil
+	}
 	if info.RelayMode == relayconstant.RelayModeResponsesCompact {
 		originModelName := info.OriginModelName
 		originPriceData := info.PriceData

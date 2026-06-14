@@ -149,8 +149,9 @@ func updateVideoSingleTask(ctx context.Context, adaptor channel.TaskAdaptor, cha
 			task.FailReason = taskResult.Url
 		}
 
-		// 如果返回了 total_tokens 并且配置了模型倍率(非固定价格),则重新计费
-		if taskResult.TotalTokens > 0 {
+		// 如果返回了 total_tokens 并且配置了模型倍率(非固定价格)，则重新计费。
+		// 仅在首次进入 success 状态时结算，防止重复轮询导致重复补扣/退还。
+		if taskResult.TotalTokens > 0 && preStatus != model.TaskStatusSuccess {
 			// 获取模型名称
 			var taskData map[string]interface{}
 			if err := json.Unmarshal(task.Data, &taskData); err == nil {

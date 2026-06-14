@@ -54,7 +54,11 @@ func calculateAudioQuota(info QuotaInfo) int {
 		groupRatio := decimal.NewFromFloat(info.GroupRatio)
 
 		quota := modelPrice.Mul(quotaPerUnit).Mul(groupRatio)
-		return int(quota.IntPart())
+		// 定价与分组倍率均非零但向下取整为 0 时按 1 计费，避免漏计（与 token 计费分支一致）
+		if !modelPrice.IsZero() && !groupRatio.IsZero() && quota.LessThanOrEqual(decimal.Zero) {
+			quota = decimal.NewFromInt(1)
+		}
+		return int(quota.Round(0).IntPart())
 	}
 
 	completionRatio := decimal.NewFromFloat(ratio_setting.GetCompletionRatio(info.ModelName))
@@ -416,6 +420,8 @@ func PreConsumeTokenQuota(relayInfo *relaycommon.RelayInfo, quota int) error {
 func PostConsumeQuota(relayInfo *relaycommon.RelayInfo, quota int, preConsumedQuota int, sendEmail bool) (err error) {
 
 	// 1) Consume from wallet quota OR subscription item
+	billedSubscription := false
+	var subDelta int64
 	if relayInfo != nil && relayInfo.BillingSource == BillingSourceSubscription {
 		if relayInfo.SubscriptionId == 0 {
 			return errors.New("subscription id is missing")
@@ -426,6 +432,8 @@ func PostConsumeQuota(relayInfo *relaycommon.RelayInfo, quota int, preConsumedQu
 				return err
 			}
 			relayInfo.SubscriptionPostDelta += delta
+			billedSubscription = true
+			subDelta = delta
 		}
 	} else {
 		// Wallet
@@ -446,6 +454,24 @@ func PostConsumeQuota(relayInfo *relaycommon.RelayInfo, quota int, preConsumedQu
 			err = model.IncreaseTokenQuota(relayInfo.TokenId, relayInfo.TokenKey, -quota)
 		}
 		if err != nil {
+			// 补偿：钱包/订阅额度已扣减但 token 额度扣减失败，回滚以避免账目漂移
+			if billedSubscription {
+				if rbErr := model.PostConsumeUserSubscriptionDelta(relayInfo.SubscriptionId, -subDelta); rbErr != nil {
+					common.SysError(fmt.Sprintf("PostConsumeQuota: failed to roll back subscription delta for sub %d (user %d): %v", relayInfo.SubscriptionId, relayInfo.UserId, rbErr))
+				} else {
+					relayInfo.SubscriptionPostDelta -= subDelta
+				}
+			} else {
+				var rbErr error
+				if quota > 0 {
+					rbErr = model.IncreaseUserQuota(relayInfo.UserId, quota, false)
+				} else {
+					rbErr = model.DecreaseUserQuota(relayInfo.UserId, -quota, false)
+				}
+				if rbErr != nil {
+					common.SysError(fmt.Sprintf("PostConsumeQuota: failed to roll back wallet quota for user %d (quota %d): %v", relayInfo.UserId, quota, rbErr))
+				}
+			}
 			return err
 		}
 	}

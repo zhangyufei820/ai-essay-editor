@@ -211,13 +211,18 @@ func TextHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *types
 		return newApiErr
 	}
 
-	var containAudioTokens = usage.(*dto.Usage).CompletionTokenDetails.AudioTokens > 0 || usage.(*dto.Usage).PromptTokensDetails.AudioTokens > 0
+	usageDto, ok := usage.(*dto.Usage)
+	if !ok || usageDto == nil {
+		common.SysError(fmt.Sprintf("TextHelper: unexpected usage type %T for model %s, skip billing", usage, info.OriginModelName))
+		return nil
+	}
+	var containAudioTokens = usageDto.CompletionTokenDetails.AudioTokens > 0 || usageDto.PromptTokensDetails.AudioTokens > 0
 	var containsAudioRatios = ratio_setting.ContainsAudioRatio(info.OriginModelName) || ratio_setting.ContainsAudioCompletionRatio(info.OriginModelName)
 
 	if containAudioTokens && containsAudioRatios {
-		service.PostAudioConsumeQuota(c, info, usage.(*dto.Usage), "")
+		service.PostAudioConsumeQuota(c, info, usageDto, "")
 	} else {
-		service.PostTextConsumeQuota(c, info, usage.(*dto.Usage), nil)
+		service.PostTextConsumeQuota(c, info, usageDto, nil)
 	}
 	return nil
 }

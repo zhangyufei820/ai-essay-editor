@@ -377,8 +377,8 @@ func quotaFromUpstreamCost(cost float64, currency string, markupRate float64) (q
 	case "CNY":
 		exchangeRate := operation_setting.USDExchangeRate
 		if exchangeRate <= 0 {
-			common.SysError("USDExchangeRate is not configured; upstream CNY cost billing is using fallback exchange rate 7.3")
-			exchangeRate = 7.3
+			common.SysError("USDExchangeRate is not configured; upstream CNY cost billing is disabled to avoid profit distortion")
+			return 0, 0, false
 		}
 		billedCostUSD = costDecimal.
 			Div(decimal.NewFromFloat(exchangeRate)).
@@ -388,6 +388,13 @@ func quotaFromUpstreamCost(cost float64, currency string, markupRate float64) (q
 		return 0, 0, false
 	}
 	quotaDecimal := decimal.NewFromFloat(billedCostUSD).Mul(decimal.NewFromFloat(common.QuotaPerUnit))
+	// 防御异常上游成本（如恶意/错误的 cost header）导致 IntPart 溢出回绕成负数或垃圾值：
+	// 超出安全范围或为负时不信任该成本，跳过上游成本计费，回退到标准计费。
+	maxSafeQuota := decimal.New(1, 18) // 1e18，远超任何合理单请求成本，且安全位于 int64 范围内
+	if quotaDecimal.IsNegative() || quotaDecimal.GreaterThan(maxSafeQuota) {
+		common.SysError(fmt.Sprintf("upstream cost billing produced out-of-range quota (cost=%v %s, billedUSD=%v); skipping upstream cost billing", cost, currency, billedCostUSD))
+		return 0, 0, false
+	}
 	quota = int(quotaDecimal.Round(0).IntPart())
 	if quota == 0 && cost > 0 {
 		quota = 1

@@ -221,6 +221,11 @@ func ClaudeHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *typ
 		return newAPIError
 	}
 
-	service.PostTextConsumeQuota(c, info, usage.(*dto.Usage), nil)
+	usageDto, ok := usage.(*dto.Usage)
+	if !ok || usageDto == nil {
+		common.SysError(fmt.Sprintf("ClaudeHelper: unexpected usage type %T for model %s, skip billing", usage, info.OriginModelName))
+		return nil
+	}
+	service.PostTextConsumeQuota(c, info, usageDto, nil)
 	return nil
 }

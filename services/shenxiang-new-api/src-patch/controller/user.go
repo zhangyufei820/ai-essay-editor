@@ -64,14 +64,22 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	// 检查是否启用2FA
+	completeLogin(&user, c)
+}
+
+// completeLogin enforces 2FA (when enabled) before establishing a session.
+// Every login entry point — password and all OAuth providers — must go
+// through here so the 2FA gate cannot be bypassed by an OAuth path. When
+// 2FA is enabled it stores a pending session (same keys the password flow
+// has always used, so the upstream verify endpoint stays compatible) and
+// asks the client to verify; otherwise it finalises the login.
+func completeLogin(user *model.User, c *gin.Context) {
 	if model.IsTwoFAEnabled(user.Id) {
 		// 设置pending session，等待2FA验证
 		session := sessions.Default(c)
 		session.Set("pending_username", user.Username)
 		session.Set("pending_user_id", user.Id)
-		err := session.Save()
-		if err != nil {
+		if err := session.Save(); err != nil {
 			common.ApiErrorI18n(c, i18n.MsgUserSessionSaveFailed)
 			return
 		}
@@ -86,7 +94,7 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	setupLogin(&user, c)
+	setupLogin(user, c)
 }
 
 // setup session & cookies and then return user info
@@ -537,10 +545,8 @@ func generateDefaultSidebarConfig(userRole int) string {
 }
 
 func GetUserModels(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		id = c.GetInt("id")
-	}
+	// 始终使用会话用户自身的 id，忽略路径中的 :id，防止越权枚举他人可用模型(IDOR)。
+	id := c.GetInt("id")
 	user, err := model.GetUserCache(id)
 	if err != nil {
 		common.ApiError(c, err)
@@ -1170,6 +1176,11 @@ func UpdateUserSetting(c *gin.Context) {
 			common.ApiErrorI18n(c, i18n.MsgSettingUrlMustHttp)
 			return
 		}
+		// 防止 SSRF：拒绝内网/回环/非公网地址
+		if err := common.ValidatePublicHTTPURL(req.BarkUrl); err != nil {
+			common.ApiErrorI18n(c, i18n.MsgSettingBarkUrlInvalid)
+			return
+		}
 	}
 
 	// 如果是Gotify类型，验证Gotify URL和Token
@@ -1190,6 +1201,11 @@ func UpdateUserSetting(c *gin.Context) {
 		// 检查是否是HTTP或HTTPS
 		if !strings.HasPrefix(req.GotifyUrl, "https://") && !strings.HasPrefix(req.GotifyUrl, "http://") {
 			common.ApiErrorI18n(c, i18n.MsgSettingUrlMustHttp)
+			return
+		}
+		// 防止 SSRF：拒绝内网/回环/非公网地址
+		if err := common.ValidatePublicHTTPURL(req.GotifyUrl); err != nil {
+			common.ApiErrorI18n(c, i18n.MsgSettingGotifyUrlInvalid)
 			return
 		}
 	}

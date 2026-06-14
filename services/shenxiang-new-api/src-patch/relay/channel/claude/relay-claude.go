@@ -490,9 +490,7 @@ func StreamResponseClaude2OpenAI(claudeResponse *dto.ClaudeResponse) *dto.ChatCo
 					},
 				})
 			case "signature_delta":
-				// 加密的不处理
-				signatureContent := "\n"
-				choice.Delta.ReasoningContent = &signatureContent
+				// 加密签名内容，不是推理文本，跳过——否则会向推理流注入多余换行
 			case "thinking_delta":
 				choice.Delta.ReasoningContent = claudeResponse.Delta.Thinking
 			}
@@ -835,7 +833,8 @@ func HandleStreamResponseData(c *gin.Context, info *relaycommon.RelayInfo, claud
 
 func HandleStreamFinalResponse(c *gin.Context, info *relaycommon.RelayInfo, claudeInfo *ClaudeResponseInfo) {
 	if claudeInfo.Usage.PromptTokens == 0 {
-		//上游出错
+		// 上游可能出错：未返回 prompt token 用量。记录以便排查，下方会用估算值兜底计费。
+		logger.LogError(c, fmt.Sprintf("claude upstream returned zero prompt tokens for model %s, falling back to estimated usage", info.UpstreamModelName))
 	}
 	if claudeInfo.Usage.CompletionTokens == 0 || !claudeInfo.Done {
 		if common.DebugEnabled {
