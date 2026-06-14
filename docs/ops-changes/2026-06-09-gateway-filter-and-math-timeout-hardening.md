@@ -12,12 +12,12 @@
   - 关键词只保留色情和枪支。
   - 明确移除暴力、血腥、毒品、国家领导人和政治关键词。
 - `app/api/dify-chat/route.ts`
-  - `quanquan-math` 强制使用 Dify blocking 调用，并在 Next.js 侧包装成 SSE 返回给前端。
-  - 目的：避开长输出链路中 Dify 到前端的流式中途断读，把失败面收窄到一次完整上游响应。
+  - `quanquan-math` 默认保持 Dify streaming 调用，避免 blocking 模式下浏览器长期等不到 `/api/dify-chat` 响应头而表现为前端无响应。
+  - blocking 仅保留为全局显式兜底开关或特定长任务路径，不能默认套到数学智能体。
 - `__tests__/llm-gateway-config.test.ts`
   - 固定网关只拦截色情和枪支。
 - `__tests__/all-in-one-route-model.test.ts`
-  - 固定数学智能体进入显式 blocking 兜底集合。
+  - 固定数学智能体不进入默认 blocking 集合。
 
 ## 策略边界
 
@@ -43,4 +43,4 @@ npm run build
 - `shenxiang-llm-gateway` 容器 liveliness / readiness 正常。
 - 包含“暴力”的普通教育提示词不再被关键词误拦。
 - 包含“色情”和“枪支”的提示词仍被网关拦截。
-- `/chat/quanquan-math` 通过 Next.js API 返回 `X-Dify-Response-Mode: blocking`。
+- `/chat/quanquan-math` 应尽快返回 `text/event-stream` 响应头，并通过 SSE status / message 事件持续更新前端。
