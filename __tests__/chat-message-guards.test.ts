@@ -6,6 +6,7 @@ import {
   sanitizePublicAiError,
   sanitizePublicAiStatus,
   sanitizeAssistantMessageForPublicDisplay,
+  stripUpstreamBranding,
 } from "@/lib/chat-error-sanitizer"
 import { sanitizePublicAiLabel } from "@/lib/public-ai-labels"
 import { readFileSync } from "fs"
@@ -68,6 +69,21 @@ describe("chat message guards", () => {
       expect(hasInternalAiDetailText(publicStatus)).toBe(false)
       expect(`${publicError}\n${publicStatus}`).not.toMatch(/Yunwu|云雾|Moonapix|VivaAPI|TokenFlux|Fable|GJX|RelayDance|OmniVoice|api\.gjx88|yunwu\.ai|moonapix\.com|tokenflux\.dev|No available channel|x-request-id|cf-ray|channel_id|trace_id|provider|gateway|upstream/i)
     }
+  })
+
+  it("keeps public OpenClaw artifact links while hiding upstream service URLs", () => {
+    const answer = [
+      "已生成，不需要重复生成同一个文件。直接打开这里：",
+      "[点击查看演示文稿](https://www.shenxiang.school/slides/geometry-proof.html)",
+      "备用文件：/api/openclaw-media-sign/output/preview.png",
+    ].join("\n")
+    const upstreamError = "Moonapix gateway failed https://moonapix.com/v1/images/generations request_id=req_1"
+
+    expect(hasInternalAiDetailText(answer)).toBe(false)
+    expect(sanitizeAssistantMessageForPublicDisplay(answer)).toBe(answer)
+    expect(stripUpstreamBranding(answer)).toContain("https://www.shenxiang.school/slides/geometry-proof.html")
+    expect(stripUpstreamBranding(answer)).toContain("/api/openclaw-media-sign/output/preview.png")
+    expect(sanitizePublicAiError(upstreamError, "服务暂时不可用，请稍后重试。")).not.toMatch(/moonapix\.com|request_id|gateway/i)
   })
 
   it("blocks backend model and provider labels from public labels", () => {

@@ -97,6 +97,28 @@ const TIMEOUT_ERROR_PATTERNS = [
   /超时/,
 ] as const
 
+const PUBLIC_OPENCLAW_ARTIFACT_URL_PATTERN =
+  /(?:https?:\/\/(?:www\.)?(?:shenxiang\.school|school\.shenxiang\.school|api\.shenxiang\.school|cloudflare\.shenxiang\.school))?\/(?:slides\/|api\/openclaw-media(?:-sign)?\/)[^\s)"'<>`]+/gi
+
+function protectPublicOpenClawArtifactUrls(value: string) {
+  const urls: string[] = []
+  const text = value.replace(PUBLIC_OPENCLAW_ARTIFACT_URL_PATTERN, (match) => {
+    const token = `__PUBLIC_ARTIFACT_URL_${urls.length}__`
+    urls.push(match)
+    return token
+  })
+
+  return {
+    text,
+    restore(output: string) {
+      return urls.reduce(
+        (restored, url, index) => restored.split(`__PUBLIC_ARTIFACT_URL_${index}__`).join(url),
+        output,
+      )
+    },
+  }
+}
+
 function serviceNounFromFallback(fallback: string) {
   if (/图片|图像/.test(fallback)) return "图片服务"
   if (/语音|音频/.test(fallback)) return "语音服务"
@@ -128,7 +150,9 @@ export function getSafeUpstreamErrorMessage(
 }
 
 export function stripUpstreamBranding(value: string) {
-  return value
+  const protectedValue = protectPublicOpenClawArtifactUrls(value)
+
+  return protectedValue.restore(protectedValue.text
     .replace(/https?:\/\/[^\s)"'<>`]+/gi, "服务地址")
     .replace(/\b[A-Za-z0-9.-]+\.(?:ai|top|dev|com|cn|io|net|org|cloud|app|xyz)(?:\/[^\s)"'<>`]*)?/gi, "服务地址")
     .replace(/Dify\s*API/gi, "服务")
@@ -148,12 +172,13 @@ export function stripUpstreamBranding(value: string) {
     .replace(/网关/g, "服务")
     .replace(/供应商/g, "服务")
     .replace(/渠道|通道/g, "连接")
-    .replace(/备用线路/g, "连接")
+    .replace(/备用线路/g, "连接"))
 }
 
 export function hasInternalAiDetailText(value: unknown): boolean {
   if (typeof value !== "string") return false
-  return INTERNAL_AI_DETAIL_PATTERNS.some((pattern) => pattern.test(value))
+  const protectedValue = protectPublicOpenClawArtifactUrls(value)
+  return INTERNAL_AI_DETAIL_PATTERNS.some((pattern) => pattern.test(protectedValue.text))
 }
 
 export function sanitizePublicAiStatus(value: unknown, fallback = "任务仍在处理中"): string {
