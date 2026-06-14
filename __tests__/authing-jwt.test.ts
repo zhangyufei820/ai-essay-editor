@@ -118,6 +118,51 @@ describe("Authing JWT verification", () => {
     }
   })
 
+  it("does not call Supabase before verifying a valid Authing bearer token", async () => {
+    jest.resetModules()
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://rnujdnmxufmzgjvmddla.supabase.co"
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "anon-key"
+    process.env.AUTHING_ISSUER = env.AUTHING_ISSUER
+    process.env.AUTHING_AUDIENCE = env.AUTHING_AUDIENCE
+    process.env.AUTHING_JWKS_URL = env.AUTHING_JWKS_URL
+
+    const getUser = jest.fn(async () => {
+      throw new Error("Supabase should not be called for Authing bearer tokens")
+    })
+    jest.doMock("@supabase/ssr", () => ({
+      createServerClient: jest.fn(() => ({
+        auth: { getUser },
+      })),
+    }))
+
+    const originalFetch = global.fetch
+    global.fetch = fetchJwks as any
+    const token = createJwt({
+      sub: "507f1f77bcf86cd799439011",
+      email: "authing-user@example.com",
+      iss: "https://auth.example.com/oidc",
+      aud: "authing-app-id",
+      exp: Math.floor(Date.now() / 1000) + 60,
+    }, privatePem)
+
+    try {
+      const { requireUser: requireUserWithSupabaseEnv } = await import("@/lib/auth/verified-user")
+      const auth = await requireUserWithSupabaseEnv(createMockRequest({ Authorization: `Bearer ${token}` }))
+      expect(auth.response).toBeNull()
+      expect(auth.user).toMatchObject({ id: "507f1f77bcf86cd799439011", provider: "authing" })
+      expect(getUser).not.toHaveBeenCalled()
+    } finally {
+      global.fetch = originalFetch
+      jest.dontMock("@supabase/ssr")
+      jest.resetModules()
+      delete process.env.NEXT_PUBLIC_SUPABASE_URL
+      delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      delete process.env.AUTHING_ISSUER
+      delete process.env.AUTHING_AUDIENCE
+      delete process.env.AUTHING_JWKS_URL
+    }
+  })
+
   it("falls back to Authing userinfo for opaque access tokens", async () => {
     process.env.AUTHING_ISSUER = env.AUTHING_ISSUER
     process.env.AUTHING_AUDIENCE = env.AUTHING_AUDIENCE
@@ -181,8 +226,11 @@ describe("Authing JWT verification", () => {
     expect(user).toBeNull()
   })
 
-  it("keeps the Supabase verification path before Authing fallback", () => {
+  it("tries Authing bearer tokens before Supabase fallback", () => {
     const source = fs.readFileSync("lib/auth/verified-user.ts", "utf8")
+    expect(source).toContain("shouldVerifyAuthingBeforeSupabase(bearerToken)")
+    expect(source.indexOf("getAuthingVerifiedUserFromBearer(bearerToken)"))
+      .toBeLessThan(source.indexOf("supabase.auth.getUser(bearerToken)"))
     expect(source).toContain("supabase.auth.getUser(bearerToken)")
     expect(source).toContain("supabase.auth.getUser()")
     expect(source).toContain("verifyAuthingJwt(bearerToken)")

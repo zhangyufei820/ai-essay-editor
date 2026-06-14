@@ -34,9 +34,55 @@ function readBearerToken(request: NextRequest) {
   return match?.[1]?.trim() || null
 }
 
+function decodeJwtPayload(token: string): Record<string, unknown> | null {
+  const [, encodedPayload] = token.split(".")
+  if (!encodedPayload) return null
+
+  try {
+    const normalized = encodedPayload.replace(/-/g, "+").replace(/_/g, "/")
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=")
+    return JSON.parse(Buffer.from(padded, "base64").toString("utf8")) as Record<string, unknown>
+  } catch {
+    return null
+  }
+}
+
+function shouldVerifyAuthingBeforeSupabase(token: string) {
+  const issuer = process.env.AUTHING_ISSUER?.trim()
+  if (!issuer) return false
+
+  const parts = token.split(".")
+  if (parts.length !== 3) {
+    return true
+  }
+
+  const payload = decodeJwtPayload(token)
+  return payload?.iss === issuer
+}
+
+async function getAuthingVerifiedUserFromBearer(bearerToken: string): Promise<VerifiedUser | null> {
+  const authingPayload =
+    (await verifyAuthingJwt(bearerToken)) ||
+    (await verifyAuthingUserInfoToken(bearerToken))
+  if (!authingPayload?.sub) return null
+
+  return {
+    id: authingPayload.sub,
+    email: authingPayload.email,
+    phone: authingPayload.phone_number || authingPayload.phone,
+    provider: "authing",
+  }
+}
+
 export async function getVerifiedUser(request: NextRequest): Promise<VerifiedUser | null> {
   const supabase = createRequestSupabaseClient(request)
   const bearerToken = readBearerToken(request)
+
+  const authingFirst = bearerToken ? shouldVerifyAuthingBeforeSupabase(bearerToken) : false
+  if (bearerToken && authingFirst) {
+    const authingUser = await getAuthingVerifiedUserFromBearer(bearerToken)
+    if (authingUser) return authingUser
+  }
 
   if (supabase) {
     const result = bearerToken
@@ -55,19 +101,9 @@ export async function getVerifiedUser(request: NextRequest): Promise<VerifiedUse
     }
   }
 
-  if (!bearerToken) return null
+  if (!bearerToken || authingFirst) return null
 
-  const authingPayload =
-    (await verifyAuthingJwt(bearerToken)) ||
-    (await verifyAuthingUserInfoToken(bearerToken))
-  if (!authingPayload?.sub) return null
-
-  return {
-    id: authingPayload.sub,
-    email: authingPayload.email,
-    phone: authingPayload.phone_number || authingPayload.phone,
-    provider: "authing",
-  }
+  return getAuthingVerifiedUserFromBearer(bearerToken)
 }
 
 export async function requireUser(request: NextRequest) {

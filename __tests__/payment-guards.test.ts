@@ -435,9 +435,9 @@ describe('Sprint 5 payment / credits / membership guards', () => {
   it('lets Bearer requests reach route-level verified auth instead of Supabase-only middleware', () => {
     const middleware = read('lib/supabase/middleware.ts')
 
-    expect(middleware).toContain('if (!user && bearerToken)')
+    expect(middleware).toContain('if (bearerToken)')
     expect(middleware).toContain('return supabaseResponse')
-    expect(middleware).toContain('Authing Bearer tokens are verified inside route handlers by requireUser()')
+    expect(middleware).toContain('Avoid an extra Supabase network call here')
     expect(middleware).not.toContain('request.headers.get("X-User-Id")')
   })
 

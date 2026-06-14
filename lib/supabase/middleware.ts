@@ -69,16 +69,14 @@ export async function updateSession(request: NextRequest) {
   
   if (isProtectedApiRoute) {
     const bearerToken = request.headers.get("Authorization")?.match(/^Bearer\s+(.+)$/i)?.[1]?.trim()
-    const { data: { user } } = bearerToken
-      ? await supabase.auth.getUser(bearerToken)
-      : await supabase.auth.getUser()
-
-    // Authing Bearer tokens are verified inside route handlers by requireUser().
-    // Middleware must not trust them as identity, but should let them reach the
-    // route-level Supabase/Authing verifier instead of blocking as Supabase-only.
-    if (!user && bearerToken) {
+    if (bearerToken) {
+      // Bearer tokens are verified inside route handlers by requireUser().
+      // Avoid an extra Supabase network call here; Authing uploads should not
+      // wait on Supabase before reaching route-level Supabase/Authing auth.
       return supabaseResponse
     }
+
+    const { data: { user } } = await supabase.auth.getUser()
 
     // 浏览器可以伪造 X-User-Id；受保护接口只能信任已验证的 Supabase session。
     if (!user) {
