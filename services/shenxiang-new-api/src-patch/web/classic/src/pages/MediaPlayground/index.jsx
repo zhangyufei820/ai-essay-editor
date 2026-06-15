@@ -32,7 +32,6 @@ import {
   Toast,
   Tooltip,
   Typography,
-  Upload,
 } from '@douyinfe/semi-ui';
 import {
   IconChevronDown,
@@ -48,6 +47,7 @@ import {
   IconUpload,
 } from '@douyinfe/semi-icons';
 import { API, copy } from '../../helpers';
+import './MediaPlayground.css';
 
 const { Text, Title, Paragraph } = Typography;
 
@@ -77,26 +77,26 @@ const IMAGE_MODELS = [
     value: 'banana-2',
     label: 'Banana 2',
     badge: '4K',
-    vendor: 'Moonapix',
+    vendor: '星人图像',
     sizes: ['1024x1024', '2048x2048', '2048x4096', '4096x2048'],
     qualities: ['auto'],
     formats: ['url'],
     defaultSize: '4096x2048',
     defaultQuality: 'auto',
-    edit: false,
+    edit: true,
     hint: '适合快速高分辨率创意图、场景草图和视觉方案探索。',
   },
   {
     value: 'gemini-3-pro-image-preview',
     label: 'Gemini 3 Pro Image',
     badge: '4K',
-    vendor: 'Moonapix',
+    vendor: '星人图像',
     sizes: ['1024x1024', '2048x2048', '2048x4096', '4096x2048'],
     qualities: ['auto'],
     formats: ['url'],
     defaultSize: '4096x2048',
     defaultQuality: 'auto',
-    edit: false,
+    edit: true,
     hint: '适合高阶视觉方案、复杂场景草图和高分辨率创意图。',
   },
   {
@@ -104,15 +104,52 @@ const IMAGE_MODELS = [
     label: 'Grok Image Pro',
     badge: 'Pro',
     vendor: '星人图像',
-    sizes: ['1024x1024', '1792x1024', '1024x1792'],
-    qualities: ['standard', 'hd'],
+    sizes: ['960x960', '720x1280', '1280x720', '1168x784', '784x1168'],
+    aspectRatios: [
+      'auto',
+      '1:1',
+      '3:4',
+      '4:3',
+      '9:16',
+      '16:9',
+      '2:3',
+      '3:2',
+      '9:19.5',
+      '19.5:9',
+      '9:20',
+      '20:9',
+      '1:2',
+      '2:1',
+    ],
+    resolutions: ['1k', '2k'],
+    qualities: ['low', 'medium', 'high'],
     formats: ['url'],
-    defaultSize: '1024x1024',
-    defaultQuality: 'standard',
-    edit: false,
-    hint: '适合真实感、社媒封面和快速创意探索。',
+    defaultSize: '960x960',
+    defaultAspectRatio: '1:1',
+    defaultResolution: '2k',
+    defaultQuality: 'high',
+    edit: true,
+    hint: '适合真实感、社媒封面和快速创意探索。支持尺寸、宽高比、质量和 1k/2k 分辨率。',
   },
 ];
+
+const SIZE_TO_ASPECT_RATIO = {
+  '960x960': '1:1',
+  '720x1280': '9:16',
+  '1280x720': '16:9',
+  '1168x784': '3:2',
+  '784x1168': '2:3',
+  '1024x1024': '1:1',
+  '1024x1536': '2:3',
+  '1536x1024': '3:2',
+  '2048x2048': '1:1',
+  '2048x4096': '1:2',
+  '4096x2048': '2:1',
+};
+
+function isGrokImageModel(model) {
+  return model === 'grok-imagine-image';
+}
 
 const VIDEO_MODELS = [
   {
@@ -197,6 +234,33 @@ function normalizeURL(url) {
   if (!url) return '';
   if (url.startsWith('/')) return url;
   return url;
+}
+
+function isBrowserPreviewableURL(url) {
+  if (!url) return false;
+  return (
+    url.startsWith('data:') ||
+    url.startsWith('blob:') ||
+    url.startsWith('/') ||
+    /^https?:\/\//i.test(url)
+  );
+}
+
+function pickPreviewURL(result) {
+  const urls = getPreviewURLs(result);
+  return urls[0] || '';
+}
+
+function getPreviewURLs(result) {
+  const urls = [
+    result.cachedUrl,
+    result.displayUrl,
+    result.url,
+  ]
+    .map(normalizeURL)
+    .filter(Boolean)
+    .filter(isBrowserPreviewableURL);
+  return Array.from(new Set(urls));
 }
 
 function extractImageResults(response) {
@@ -288,60 +352,120 @@ function NativeSelect({ label, value, options, onChange }) {
 }
 
 function FileDrop({ label, file, onFile, compact = false }) {
+  const [previewUrl, setPreviewUrl] = useState('');
+  const [isDragging, setIsDragging] = useState(false);
+
+  useEffect(() => {
+    if (!file) {
+      setPreviewUrl('');
+      return undefined;
+    }
+    const nextUrl = URL.createObjectURL(file);
+    setPreviewUrl(nextUrl);
+    return () => URL.revokeObjectURL(nextUrl);
+  }, [file]);
+
+  const handleDrop = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDragging(false);
+    const nextFile = event.dataTransfer.files?.[0];
+    if (nextFile) onFile(nextFile);
+  };
+
   return (
     <div className={compact ? 'mp-upload mp-upload-compact' : 'mp-upload'}>
-      <Upload
-        limit={1}
-        accept='image/png,image/jpeg,image/webp'
-        beforeUpload={({ file: uploadFile }) => {
-          onFile(uploadFile.fileInstance);
-          return false;
+      <label
+        className={isDragging ? 'mp-upload-card is-dragging' : 'mp-upload-card'}
+        onDragEnter={(event) => {
+          event.preventDefault();
+          setIsDragging(true);
         }}
-        onRemove={() => onFile(null)}
-        dragMainText={label}
-        dragSubText='支持 PNG / JPG / WebP'
-      />
-      {file ? <Tag color='green'>{file.name}</Tag> : null}
+        onDragOver={(event) => event.preventDefault()}
+        onDragLeave={() => setIsDragging(false)}
+        onDrop={handleDrop}
+      >
+        {previewUrl ? (
+          <div className='mp-upload-preview'>
+            <img src={previewUrl} alt={`${label}预览`} />
+          </div>
+        ) : (
+          <div className='mp-upload-placeholder'>
+            <IconUpload size='extra-large' />
+          </div>
+        )}
+        <span className='mp-upload-title'>{label}</span>
+        <span className='mp-upload-hint'>
+          {file ? file.name : '拖入图片，或点击上传 PNG / JPG / WebP'}
+        </span>
+        <input
+          type='file'
+          accept='image/png,image/jpeg,image/webp'
+          className='mp-upload-input'
+          onChange={(event) => onFile(event.target.files?.[0] || null)}
+        />
+      </label>
     </div>
   );
 }
 
 function ResultCard({ result, onRemove }) {
-  const [mediaError, setMediaError] = useState(false);
-  const displayUrl = normalizeURL(
-    result.cachedUrl || result.displayUrl || result.url,
-  );
+  const previewUrls = getPreviewURLs(result);
+  const [activeUrlIndex, setActiveUrlIndex] = useState(0);
+  const [previewFailed, setPreviewFailed] = useState(false);
+  const displayUrl = previewUrls[activeUrlIndex] || '';
   const originalUrl = normalizeURL(result.url);
   const cacheFailed = result.cacheStatus === 'failed';
+  const previewUnavailable = previewFailed || !displayUrl;
+  const usedFallbackPreview = activeUrlIndex > 0;
+  const statusText = cacheFailed
+    ? '临时缓存不可用，作品已生成，请用原始链接保存。'
+    : '浏览器暂时无法直接预览，请打开原始链接保存。';
+
+  useEffect(() => {
+    setActiveUrlIndex(0);
+    setPreviewFailed(false);
+  }, [result.id, result.cachedUrl, result.displayUrl, result.url]);
+
+  const handlePreviewError = () => {
+    if (activeUrlIndex + 1 < previewUrls.length) {
+      setActiveUrlIndex(activeUrlIndex + 1);
+      return;
+    }
+    setPreviewFailed(true);
+  };
 
   return (
     <div className='mp-result-card'>
       <div className='mp-result-frame'>
-        {result.kind === 'image' ? (
+        {displayUrl && result.kind === 'image' ? (
           <img
+            key={displayUrl}
             src={displayUrl}
             alt='生成结果'
-            onLoad={() => setMediaError(false)}
-            onError={() => setMediaError(true)}
+            onLoad={() => setPreviewFailed(false)}
+            onError={handlePreviewError}
           />
-        ) : (
+        ) : displayUrl ? (
           <video
+            key={displayUrl}
             src={displayUrl}
             controls
             playsInline
-            onLoadedData={() => setMediaError(false)}
-            onError={() => setMediaError(true)}
+            onLoadedData={() => setPreviewFailed(false)}
+            onError={handlePreviewError}
           />
-        )}
-        {(mediaError || cacheFailed) && (
+        ) : null}
+        {(cacheFailed || usedFallbackPreview) && !previewUnavailable ? (
+          <div className='mp-media-notice'>
+            已使用原始链接预览，请尽快下载保存。
+          </div>
+        ) : null}
+        {previewUnavailable ? (
           <div className='mp-media-error'>
             <IconEyeOpened />
-            <strong>预览加载失败</strong>
-            <span>
-              {cacheFailed
-                ? result.cacheMessage
-                : '临时链接可能限制浏览器直连。'}
-            </span>
+            <strong>作品已生成，预览暂不可用</strong>
+            <span>{statusText}</span>
             <Space spacing={8}>
               {originalUrl ? (
                 <Button
@@ -364,7 +488,7 @@ function ResultCard({ result, onRemove }) {
               </Button>
             </Space>
           </div>
-        )}
+        ) : null}
       </div>
       <div className='mp-result-meta'>
         <div>
@@ -423,6 +547,12 @@ const MediaPlayground = () => {
   const [size, setSize] = useState(IMAGE_MODELS[0].defaultSize);
   const [quality, setQuality] = useState(IMAGE_MODELS[0].defaultQuality);
   const [format, setFormat] = useState('png');
+  const [aspectRatio, setAspectRatio] = useState(
+    IMAGE_MODELS[0].defaultAspectRatio || 'auto',
+  );
+  const [resolution, setResolution] = useState(
+    IMAGE_MODELS[0].defaultResolution || 'auto',
+  );
   const [background, setBackground] = useState('auto');
   const [inputFidelity, setInputFidelity] = useState('auto');
   const [compression, setCompression] = useState(100);
@@ -482,6 +612,17 @@ const MediaPlayground = () => {
           'auto',
       );
       setFormat(activeImageModel.formats?.[0] || 'png');
+      setAspectRatio(
+        activeImageModel.defaultAspectRatio ||
+          activeImageModel.aspectRatios?.[0] ||
+          SIZE_TO_ASPECT_RATIO[activeModel.defaultSize] ||
+          'auto',
+      );
+      setResolution(
+        activeImageModel.defaultResolution ||
+          activeImageModel.resolutions?.[0] ||
+          'auto',
+      );
     } else {
       setDuration(
         activeVideoModel.defaultDuration ||
@@ -494,6 +635,10 @@ const MediaPlayground = () => {
 
   const requestPayload = useMemo(() => {
     if (mode === 'image') {
+      const effectiveAspectRatio =
+        aspectRatio && aspectRatio !== 'auto'
+          ? aspectRatio
+          : SIZE_TO_ASPECT_RATIO[size] || '';
       const payload = {
         model: imageModel,
         group,
@@ -502,6 +647,10 @@ const MediaPlayground = () => {
         size,
       };
       if (quality) payload.quality = quality;
+      if (isGrokImageModel(imageModel)) {
+        if (effectiveAspectRatio) payload.aspect_ratio = effectiveAspectRatio;
+        if (resolution && resolution !== 'auto') payload.resolution = resolution;
+      }
       if (format && format !== 'url') payload.output_format = format;
       if (format !== 'png' && format !== 'url')
         payload.output_compression = compression;
@@ -566,6 +715,8 @@ const MediaPlayground = () => {
     negativePrompt,
     prompt,
     quality,
+    aspectRatio,
+    resolution,
     seed,
     size,
     videoModel,
@@ -839,6 +990,15 @@ const MediaPlayground = () => {
               </div>
             )}
 
+            {mode === 'image' && imageWorkflow === 'edit' ? (
+              <NativeSelect
+                label='参考图保真度'
+                value={inputFidelity}
+                options={toSelectOptions(['auto', 'low', 'high'])}
+                onChange={setInputFidelity}
+              />
+            ) : null}
+
             <div className='mp-field-grid'>
               <NativeSelect
                 label='分组'
@@ -892,6 +1052,22 @@ const MediaPlayground = () => {
 
             {mode === 'image' ? (
               <>
+                {activeImageModel.aspectRatios?.length ? (
+                  <NativeSelect
+                    label='宽高比'
+                    value={aspectRatio}
+                    options={toSelectOptions(activeImageModel.aspectRatios)}
+                    onChange={setAspectRatio}
+                  />
+                ) : null}
+                {activeImageModel.resolutions?.length ? (
+                  <NativeSelect
+                    label='分辨率'
+                    value={resolution}
+                    options={toSelectOptions(activeImageModel.resolutions)}
+                    onChange={setResolution}
+                  />
+                ) : null}
                 <NativeSelect
                   label='背景'
                   value={background}
@@ -924,27 +1100,6 @@ const MediaPlayground = () => {
                       onChange={setCompression}
                     />
                   </div>
-                ) : null}
-                {imageWorkflow === 'edit' ? (
-                  <>
-                    <NativeSelect
-                      label='参考图保真度'
-                      value={inputFidelity}
-                      options={toSelectOptions(['auto', 'low', 'high'])}
-                      onChange={setInputFidelity}
-                    />
-                    <FileDrop
-                      label='上传参考图'
-                      file={referenceFile}
-                      onFile={setReferenceFile}
-                    />
-                    <FileDrop
-                      label='上传遮罩图，可选'
-                      file={maskFile}
-                      onFile={setMaskFile}
-                      compact
-                    />
-                  </>
                 ) : null}
               </>
             ) : (
@@ -1021,6 +1176,21 @@ const MediaPlayground = () => {
                 placeholder='不想出现的内容：低清晰度、畸形手指、文字错误、过曝等'
                 className='mp-negative-input'
               />
+              {mode === 'image' && imageWorkflow === 'edit' ? (
+                <div className='mp-field-grid'>
+                  <FileDrop
+                    label='上传参考图'
+                    file={referenceFile}
+                    onFile={setReferenceFile}
+                  />
+                  <FileDrop
+                    label='上传遮罩图，可选'
+                    file={maskFile}
+                    onFile={setMaskFile}
+                    compact
+                  />
+                </div>
+              ) : null}
               <div className='mp-action-row'>
                 <Banner
                   type='warning'

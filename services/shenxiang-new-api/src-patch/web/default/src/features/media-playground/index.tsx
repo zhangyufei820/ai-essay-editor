@@ -72,6 +72,25 @@ import type {
   VideoWorkflow,
 } from './types'
 
+
+const SIZE_TO_ASPECT_RATIO: Record<string, string> = {
+  '960x960': '1:1',
+  '720x1280': '9:16',
+  '1280x720': '16:9',
+  '1168x784': '3:2',
+  '784x1168': '2:3',
+  '1024x1024': '1:1',
+  '1024x1536': '2:3',
+  '1536x1024': '3:2',
+  '2048x2048': '1:1',
+  '2048x4096': '1:2',
+  '4096x2048': '2:1',
+}
+
+function isGrokImageModel(model: string) {
+  return model === 'grok-imagine-image'
+}
+
 const DEFAULT_PROMPT =
   '一张高级科技感海报，主体是一位年轻创业者站在城市夜景前，干净、真实、有商业质感。'
 
@@ -88,6 +107,12 @@ export function MediaPlayground() {
   const [quality, setQuality] = useState(IMAGE_MODELS[0].defaultQuality ?? '')
   const [outputFormat, setOutputFormat] = useState('png')
   const [outputCompression, setOutputCompression] = useState(100)
+  const [aspectRatio, setAspectRatio] = useState(
+    IMAGE_MODELS[0].defaultAspectRatio ?? 'auto'
+  )
+  const [resolution, setResolution] = useState(
+    IMAGE_MODELS[0].defaultResolution ?? 'auto'
+  )
   const [inputFidelity, setInputFidelity] = useState('auto')
   const [background, setBackground] = useState('auto')
   const [count, setCount] = useState(1)
@@ -141,6 +166,13 @@ export function MediaPlayground() {
     setQuality(model.defaultQuality ?? '')
     if (model.kind === 'image') {
       setOutputFormat(model.outputFormats?.[0] ?? 'url')
+      setAspectRatio(
+        model.defaultAspectRatio ??
+          model.aspectRatios?.[0] ??
+          SIZE_TO_ASPECT_RATIO[model.defaultSize] ??
+          'auto'
+      )
+      setResolution(model.defaultResolution ?? model.resolutions?.[0] ?? 'auto')
     }
     if (model.defaultDuration) setDuration(model.defaultDuration)
     if (model.defaultFps) setFps(model.defaultFps)
@@ -148,6 +180,10 @@ export function MediaPlayground() {
 
   const requestPayload = useMemo(() => {
     if (mode === 'image') {
+      const effectiveAspectRatio =
+        aspectRatio && aspectRatio !== 'auto'
+          ? aspectRatio
+          : (SIZE_TO_ASPECT_RATIO[size] ?? '')
       const payload: Record<string, unknown> = {
         model: imageModel,
         group,
@@ -156,6 +192,10 @@ export function MediaPlayground() {
         size,
       }
       if (quality) payload.quality = quality
+      if (isGrokImageModel(imageModel)) {
+        if (effectiveAspectRatio) payload.aspect_ratio = effectiveAspectRatio
+        if (resolution && resolution !== 'auto') payload.resolution = resolution
+      }
       if (outputFormat && outputFormat !== 'url') {
         payload.output_format = outputFormat
       }
@@ -239,6 +279,8 @@ export function MediaPlayground() {
     outputFormat,
     prompt,
     quality,
+    aspectRatio,
+    resolution,
     seed,
     size,
     videoModel,
@@ -467,6 +509,20 @@ export function MediaPlayground() {
                 />
               </Field>
 
+              {(imageWorkflow === 'edit' ||
+                (mode === 'video' && videoWorkflow !== 'text')) && (
+                <UploadPanel
+                  videoWorkflow={videoWorkflow}
+                  referenceFile={referenceFile}
+                  lastFrameFile={lastFrameFile}
+                  maskFile={maskFile}
+                  showMask={mode === 'image' && imageWorkflow === 'edit'}
+                  onReferenceFileChange={setReferenceFile}
+                  onLastFrameFileChange={setLastFrameFile}
+                  onMaskFileChange={setMaskFile}
+                />
+              )}
+
               <MediaParameters
                 activeModel={activeModel}
                 mode={mode}
@@ -491,25 +547,15 @@ export function MediaPlayground() {
                 onQualityChange={setQuality}
                 onOutputFormatChange={setOutputFormat}
                 onOutputCompressionChange={setOutputCompression}
+                aspectRatio={aspectRatio}
+                resolution={resolution}
+                onAspectRatioChange={setAspectRatio}
+                onResolutionChange={setResolution}
                 onBackgroundChange={setBackground}
                 onSeedChange={setSeed}
                 onSizeChange={setSize}
                 onWatermarkChange={setWatermark}
               />
-
-              {(imageWorkflow === 'edit' ||
-                (mode === 'video' && videoWorkflow !== 'text')) && (
-                <UploadPanel
-                  videoWorkflow={videoWorkflow}
-                  referenceFile={referenceFile}
-                  lastFrameFile={lastFrameFile}
-                  maskFile={maskFile}
-                  showMask={mode === 'image' && imageWorkflow === 'edit'}
-                  onReferenceFileChange={setReferenceFile}
-                  onLastFrameFileChange={setLastFrameFile}
-                  onMaskFileChange={setMaskFile}
-                />
-              )}
 
               <div className='bg-muted/50 rounded-lg border p-3 text-sm'>
                 <div className='flex gap-2'>
@@ -744,6 +790,8 @@ function MediaParameters(props: {
   quality: string
   outputFormat: string
   outputCompression: number
+  aspectRatio: string
+  resolution: string
   background: string
   watermark: boolean
   seed: string
@@ -756,6 +804,8 @@ function MediaParameters(props: {
   onQualityChange: (value: string) => void
   onOutputFormatChange: (value: string) => void
   onOutputCompressionChange: (value: number) => void
+  onAspectRatioChange: (value: string) => void
+  onResolutionChange: (value: string) => void
   onBackgroundChange: (value: string) => void
   onSeedChange: (value: string) => void
   onSizeChange: (value: string) => void
@@ -823,6 +873,40 @@ function MediaParameters(props: {
               ))}
             </NativeSelect>
           </Field>
+          {props.activeModel.aspectRatios?.length ? (
+            <Field label='宽高比'>
+              <NativeSelect
+                className='w-full'
+                value={props.aspectRatio}
+                onChange={(event) =>
+                  props.onAspectRatioChange(event.target.value)
+                }
+              >
+                {props.activeModel.aspectRatios.map((ratio) => (
+                  <NativeSelectOption key={ratio} value={ratio}>
+                    {ratio}
+                  </NativeSelectOption>
+                ))}
+              </NativeSelect>
+            </Field>
+          ) : null}
+          {props.activeModel.resolutions?.length ? (
+            <Field label='分辨率'>
+              <NativeSelect
+                className='w-full'
+                value={props.resolution}
+                onChange={(event) =>
+                  props.onResolutionChange(event.target.value)
+                }
+              >
+                {props.activeModel.resolutions.map((resolution) => (
+                  <NativeSelectOption key={resolution} value={resolution}>
+                    {resolution}
+                  </NativeSelectOption>
+                ))}
+              </NativeSelect>
+            </Field>
+          ) : null}
           {props.activeModel.supportsOutputCompression &&
             props.outputFormat !== 'png' &&
             props.outputFormat !== 'url' && (
