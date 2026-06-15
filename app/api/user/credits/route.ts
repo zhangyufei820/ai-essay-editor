@@ -28,6 +28,26 @@ const AUTH_TIMEOUT_MS = 5_000
 const BASE_CREDITS_TIMEOUT_MS = 4_000
 const OPTIONAL_STATUS_TIMEOUT_MS = 2_500
 
+function createSafeCreditsDegradedResponse({
+  userId,
+  trialStatus = null,
+  code,
+}: {
+  userId: string | null
+  trialStatus?: unknown
+  code: string
+}) {
+  return NextResponse.json({
+    userId,
+    credits: 0,
+    is_pro: false,
+    trialStatus,
+    degraded: true,
+    creditStatus: "unavailable",
+    code,
+  })
+}
+
 export async function GET(request: NextRequest) {
   try {
     const auth = await withTimeout(requireUser(request), AUTH_TIMEOUT_MS, "user-credits.auth")
@@ -96,13 +116,11 @@ export async function GET(request: NextRequest) {
 
     if (!baseCredits.ok) {
       console.error("[积分API] 基础积分查询超时或失败:", baseCredits.error)
-      return NextResponse.json(
-        {
-          error: "积分服务暂时繁忙，请稍后重试",
-          code: isOperationTimeoutError(baseCredits.error) ? "CREDITS_TIMEOUT" : "CREDITS_QUERY_FAILED",
-        },
-        { status: isOperationTimeoutError(baseCredits.error) ? 503 : 500 },
-      )
+      return createSafeCreditsDegradedResponse({
+        userId,
+        trialStatus,
+        code: isOperationTimeoutError(baseCredits.error) ? "CREDITS_TIMEOUT" : "CREDITS_QUERY_FAILED",
+      })
     }
 
     // 查询积分
@@ -110,7 +128,11 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       console.error(`❌ [积分API] 查询失败:`, error)
-      return NextResponse.json({ error: "积分查询失败，请稍后重试" }, { status: 500 })
+      return createSafeCreditsDegradedResponse({
+        userId,
+        trialStatus,
+        code: "CREDITS_QUERY_FAILED",
+      })
     }
 
     // 如果没有记录，自动创建
@@ -166,10 +188,10 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('[积分API] 异常:', error)
     if (isOperationTimeoutError(error)) {
-      return NextResponse.json(
-        { error: '认证或积分服务暂时繁忙，请稍后重试', code: error.code },
-        { status: 503 },
-      )
+      return createSafeCreditsDegradedResponse({
+        userId: null,
+        code: error.code,
+      })
     }
     const message = error instanceof Error && error.message === '缺少 Supabase 配置'
       ? '积分服务未配置'

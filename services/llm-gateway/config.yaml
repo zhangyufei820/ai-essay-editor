@@ -749,17 +749,21 @@ router_settings:
   routing_strategy_args:
     ttl: 30
     lowest_latency_buffer: 0
-  allowed_fails: 0
-  cooldown_time: 240
+  # Enterprise fallback policy:
+  # - keep per-deployment timeouts short so the router can move to the next lane
+  # - tolerate one transient transport failure before cooling a deployment
+  # - keep cooldown short so a fast primary can recover without minutes of outage
+  allowed_fails: 1
+  cooldown_time: 45
   num_retries: 0
   retry_after: 0
   timeout: 22
   allowed_fails_policy:
     AuthenticationErrorAllowedFails: 0
-    TimeoutErrorAllowedFails: 0
-    RateLimitErrorAllowedFails: 0
+    TimeoutErrorAllowedFails: 1
+    RateLimitErrorAllowedFails: 1
     BadRequestErrorAllowedFails: 0
-    InternalServerErrorAllowedFails: 0
+    InternalServerErrorAllowedFails: 1
 
 litellm_settings:
   request_timeout: 22

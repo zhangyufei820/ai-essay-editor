@@ -12,6 +12,17 @@ const AUTH_TIMEOUT_MS = 5_000
 const SURVEY_READ_TIMEOUT_MS = 2_500
 const TRIAL_STATUS_TIMEOUT_MS = 2_000
 
+function createSafeSurveyDegradedResponse(code: string) {
+  return NextResponse.json({
+    ok: true,
+    template: null,
+    alreadySubmitted: false,
+    trialStatus: null,
+    degraded: true,
+    code,
+  })
+}
+
 export async function GET(request: NextRequest) {
   try {
     const auth = await withTimeout(requireUser(request), AUTH_TIMEOUT_MS, "surveys-today.auth")
@@ -66,14 +77,8 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     logger.error("[surveys/today] unexpected error", error)
     if (isOperationTimeoutError(error)) {
-      return NextResponse.json(
-        { ok: false, template: null, alreadySubmitted: false, trialStatus: null, code: error.code },
-        { status: 503 },
-      )
+      return createSafeSurveyDegradedResponse(error.code)
     }
-    return NextResponse.json(
-      { ok: false, template: null, alreadySubmitted: false, trialStatus: null },
-      { status: 500 },
-    )
+    return createSafeSurveyDegradedResponse("SURVEY_STATE_UNAVAILABLE")
   }
 }

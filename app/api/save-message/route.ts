@@ -12,6 +12,23 @@ const SESSION_LOOKUP_TIMEOUT_MS = 4_000
 const MESSAGE_INSERT_TIMEOUT_MS = 5_000
 const FILE_METADATA_TIMEOUT_MS = 2_500
 
+function createPersistenceDegradedResponse(code: string) {
+  return NextResponse.json(
+    {
+      saved: false,
+      degraded: true,
+      code,
+    },
+    { status: 202 },
+  )
+}
+
+function isTransientPersistenceError(error: unknown) {
+  if (isOperationTimeoutError(error)) return true
+  const message = error instanceof Error ? error.message : JSON.stringify(error)
+  return /timeout|timed out|522|502|503|504|fetch failed|socket|statement timeout|upstream request timeout/i.test(message || "")
+}
+
 function resolveUploadedFileStorageUrl(file: Record<string, unknown>, fileData: string): string | null {
   const explicitUrl = file.storageUrl || file.storage_url || file.modelUrl || file.model_url || file.gatewayUrl || file.gateway_url
   if (typeof explicitUrl === "string" && explicitUrl.trim()) return explicitUrl.trim()
@@ -116,10 +133,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ message })
   } catch (error) {
     console.error("[v0] Save message error:", error)
-    if (isOperationTimeoutError(error)) {
-      return NextResponse.json(
-        { error: "保存服务暂时繁忙，请稍后重试", code: error.code },
-        { status: 503 },
+    if (isTransientPersistenceError(error)) {
+      return createPersistenceDegradedResponse(
+        isOperationTimeoutError(error) ? error.code : "SAVE_MESSAGE_PERSISTENCE_DEGRADED",
       )
     }
     return NextResponse.json({ error: "保存消息失败" }, { status: 500 })
