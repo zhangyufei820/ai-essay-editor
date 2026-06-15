@@ -46,6 +46,36 @@ npm cache clean --force
 journalctl --vacuum-time=7d
 ```
 
+## 48 小时自动清理策略
+
+生产机使用 `shenxiang-container-runtime-cleanup.timer` 做保守自动治理：
+
+- 频率：每 48 小时运行一次，开机 30 分钟后补跑，带 30 分钟随机延迟。
+- 触发条件：默认根盘使用率达到 `70%` 才执行清理；低于阈值只写审计日志。
+- 清理范围：`docker buildx prune -af --filter until=48h`、`docker image prune -f`、根盘仍高于阈值时再执行 `docker image prune -af --filter until=168h`、`journalctl --vacuum-time=7d`。
+- 安全边界：不执行 `docker system prune`，不执行 `docker volume prune`，不删除容器、网络、卷，不直接删除 `/var/lib/containerd` 文件。
+- 回滚窗口：默认保留近 7 天镜像标签；`docker image prune -a` 只删除未被任何容器引用的镜像。
+- 健康保护：清理前后都请求本机和公网 `/api/health`；清理前健康失败时直接失败退出。
+- 日志：`/var/log/shenxiang-cleanup/container-runtime-cleanup-YYYY-MM-DD.log`。
+
+安装/更新：
+
+```bash
+install -m 0755 scripts/server-container-runtime-cleanup.sh /usr/local/sbin/shenxiang-container-runtime-cleanup.sh
+install -m 0644 deploy/systemd/shenxiang-container-runtime-cleanup.service /etc/systemd/system/shenxiang-container-runtime-cleanup.service
+install -m 0644 deploy/systemd/shenxiang-container-runtime-cleanup.timer /etc/systemd/system/shenxiang-container-runtime-cleanup.timer
+systemctl daemon-reload
+systemctl enable --now shenxiang-container-runtime-cleanup.timer
+```
+
+手动演练：
+
+```bash
+DRY_RUN=1 /usr/local/sbin/shenxiang-container-runtime-cleanup.sh
+systemctl start shenxiang-container-runtime-cleanup.service
+systemctl status shenxiang-container-runtime-cleanup.timer --no-pager
+```
+
 建议频率：
 
 - 磁盘使用率低于 70%：每周或每次大构建后检查，不必强清。

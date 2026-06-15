@@ -1,0 +1,17 @@
+[Unit]
+Description=Shenxiang safe container runtime cleanup
+Documentation=/data/ai-essay-editor/docs/SERVER-CLEANUP-SOP.md
+Wants=network-online.target docker.service
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+Environment=MIN_USAGE_PERCENT=70
+Environment=BUILD_CACHE_UNTIL=48h
+Environment=UNUSED_IMAGE_UNTIL=168h
+Environment=JOURNAL_VACUUM_TIME=7d
+ExecStart=/usr/local/sbin/shenxiang-container-runtime-cleanup.sh
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+TimeoutStartSec=20min

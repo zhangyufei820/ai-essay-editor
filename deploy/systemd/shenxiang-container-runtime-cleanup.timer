@@ -1,0 +1,12 @@
+[Unit]
+Description=Run Shenxiang safe container runtime cleanup every 48 hours
+
+[Timer]
+OnBootSec=30min
+OnUnitActiveSec=48h
+RandomizedDelaySec=30min
+Persistent=true
+Unit=shenxiang-container-runtime-cleanup.service
+
+[Install]
+WantedBy=timers.target
