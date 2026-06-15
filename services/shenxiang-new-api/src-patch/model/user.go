@@ -685,6 +685,22 @@ func IsEmailAlreadyTaken(email string) bool {
 	return DB.Unscoped().Where("email = ?", email).Find(&User{}).RowsAffected == 1
 }
 
+// IsEmailTakenByOtherUser reports whether an email is already bound to a user
+// other than excludeUserId. Used to prevent two accounts from sharing one
+// email, which would make password-reset-by-email ambiguous. Returns an error
+// on DB failure so callers fail closed rather than treating a failed lookup as
+// "not taken".
+func IsEmailTakenByOtherUser(email string, excludeUserId int) (bool, error) {
+	if email == "" {
+		return false, nil
+	}
+	var count int64
+	if err := DB.Unscoped().Model(&User{}).Where("email = ? AND id <> ?", email, excludeUserId).Count(&count).Error; err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
 func IsWeChatIdAlreadyTaken(wechatId string) bool {
 	return DB.Unscoped().Where("wechat_id = ?", wechatId).Find(&User{}).RowsAffected == 1
 }
@@ -712,6 +728,16 @@ func ResetUserPasswordByEmail(email string, password string) error {
 	hashedPassword, err := common.Password2Hash(password)
 	if err != nil {
 		return err
+	}
+	// Guard against mass password reset: if more than one account shares this
+	// email (legacy duplicates), refuse rather than overwrite every matching
+	// row's password.
+	var count int64
+	if err = DB.Model(&User{}).Where("email = ?", email).Count(&count).Error; err != nil {
+		return err
+	}
+	if count > 1 {
+		return errors.New("存在多个使用该邮箱的账户，无法安全重置密码，请联系管理员")
 	}
 	err = DB.Model(&User{}).Where("email = ?", email).Update("password", hashedPassword).Error
 	return err
@@ -1085,7 +1111,13 @@ func (user *User) FillUserByLinuxDOId() error {
 	if user.LinuxDOId == "" {
 		return errors.New("linux do id is empty")
 	}
+	// 仅匹配未注销(scoped)用户：与 IsLinuxDOIdAlreadyTaken 的 Unscoped 检查配合，
+	// 已注销账户会命中 taken 检查但在此处查不到，user.Id 保持为 0，由调用方
+	// 据此返回"用户已注销"。区分 ErrRecordNotFound 与真实 DB 错误，避免吞掉后者。
 	err := DB.Where("linux_do_id = ?", user.LinuxDOId).First(user).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil
+	}
 	return err
 }
 

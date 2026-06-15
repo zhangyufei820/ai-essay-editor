@@ -3,7 +3,6 @@ package claude
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 
@@ -54,8 +53,8 @@ func RequestOpenAI2ClaudeMessage(c *gin.Context, textRequest dto.GeneralOpenAIRe
 				Description: tool.Function.Description,
 			}
 			claudeTool.InputSchema = make(map[string]interface{})
-			if params["type"] != nil {
-				claudeTool.InputSchema["type"] = params["type"].(string)
+			if typeVal, ok := params["type"].(string); ok {
+				claudeTool.InputSchema["type"] = typeVal
 			}
 			claudeTool.InputSchema["properties"] = params["properties"]
 			claudeTool.InputSchema["required"] = params["required"]
@@ -245,13 +244,15 @@ func RequestOpenAI2ClaudeMessage(c *gin.Context, textRequest dto.GeneralOpenAIRe
 
 	if textRequest.Stop != nil {
 		// stop maybe string/array string, convert to array string
-		switch textRequest.Stop.(type) {
+		switch stop := textRequest.Stop.(type) {
 		case string:
-			claudeRequest.StopSequences = []string{textRequest.Stop.(string)}
+			claudeRequest.StopSequences = []string{stop}
 		case []interface{}:
 			stopSequences := make([]string, 0)
-			for _, stop := range textRequest.Stop.([]interface{}) {
-				stopSequences = append(stopSequences, stop.(string))
+			for _, s := range stop {
+				if str, ok := s.(string); ok {
+					stopSequences = append(stopSequences, str)
+				}
 			}
 			claudeRequest.StopSequences = stopSequences
 		}
@@ -948,7 +949,7 @@ func ClaudeHandler(c *gin.Context, resp *http.Response, info *relaycommon.RelayI
 		ResponseText: strings.Builder{},
 		Usage:        &dto.Usage{},
 	}
-	responseBody, err := io.ReadAll(resp.Body)
+	responseBody, err := common.ReadAllCapped(resp.Body)
 	if err != nil {
 		return nil, types.NewError(err, types.ErrorCodeBadResponseBody)
 	}

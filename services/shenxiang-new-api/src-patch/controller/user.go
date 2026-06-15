@@ -1051,7 +1051,17 @@ func EmailBind(c *gin.Context) {
 		return
 	}
 	user.Email = email
-	// no need to check if this email already taken, because we have used verification code to check it
+	// Reject binding an email already in use by a different account. The
+	// verification code only proves inbox ownership; it does NOT prevent two
+	// accounts from sharing one email, which would make password-reset-by-email
+	// ambiguous and dangerous.
+	if taken, err := model.IsEmailTakenByOtherUser(email, user.Id); err != nil {
+		common.ApiError(c, err)
+		return
+	} else if taken {
+		common.ApiError(c, errors.New("该邮箱已被其他账户绑定"))
+		return
+	}
 	err = user.Update(false)
 	if err != nil {
 		common.ApiError(c, err)

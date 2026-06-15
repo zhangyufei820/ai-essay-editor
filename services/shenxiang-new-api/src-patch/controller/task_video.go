@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
+	"math"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -17,6 +17,14 @@ import (
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 )
+
+// maxVideoTotalTokens caps the upstream-reported token count used for video
+// rebilling. An attacker-controlled or compromised upstream could otherwise
+// return an astronomically large total_tokens; once multiplied by the model and
+// group ratios the float→int conversion can overflow to a NEGATIVE quota, which
+// routes into the refund branch and CREDITS the user's balance. Reject anything
+// beyond a generous sane bound rather than trust it.
+const maxVideoTotalTokens = 1_000_000_000
 
 func UpdateVideoTaskAll(ctx context.Context, platform constant.TaskPlatform, taskChannelM map[int][]string, taskM map[string]*model.Task) error {
 	for channelId, taskIds := range taskChannelM {
@@ -91,7 +99,7 @@ func updateVideoSingleTask(ctx context.Context, adaptor channel.TaskAdaptor, cha
 	//return fmt.Errorf("get Video Task status code: %d", resp.StatusCode)
 	//}
 	defer resp.Body.Close()
-	responseBody, err := io.ReadAll(resp.Body)
+	responseBody, err := common.ReadAllCapped(resp.Body)
 	if err != nil {
 		return fmt.Errorf("readAll failed for task %s: %w", taskId, err)
 	}
@@ -151,7 +159,10 @@ func updateVideoSingleTask(ctx context.Context, adaptor channel.TaskAdaptor, cha
 
 		// 如果返回了 total_tokens 并且配置了模型倍率(非固定价格)，则重新计费。
 		// 仅在首次进入 success 状态时结算，防止重复轮询导致重复补扣/退还。
-		if taskResult.TotalTokens > 0 && preStatus != model.TaskStatusSuccess {
+		if taskResult.TotalTokens > maxVideoTotalTokens {
+			logger.LogError(ctx, fmt.Sprintf("视频任务 %s 上游返回异常 token 数 %d，超过上限 %d，跳过重新计费",
+				task.TaskID, taskResult.TotalTokens, maxVideoTotalTokens))
+		} else if taskResult.TotalTokens > 0 && preStatus != model.TaskStatusSuccess {
 			// 获取模型名称
 			var taskData map[string]interface{}
 			if err := json.Unmarshal(task.Data, &taskData); err == nil {
@@ -180,7 +191,17 @@ func updateVideoSingleTask(ctx context.Context, adaptor channel.TaskAdaptor, cha
 							}
 
 							// 计算实际应扣费额度: totalTokens * modelRatio * groupRatio
-							actualQuota := int(float64(taskResult.TotalTokens) * modelRatio * finalGroupRatio)
+							// totalTokens 已在上方限制 <= maxVideoTotalTokens；这里再次
+							// 防御非有限/负值结果，并钳制 actualQuota >= 0，杜绝因溢出走入
+							// 退款分支给用户凭空充值。
+							rawQuota := float64(taskResult.TotalTokens) * modelRatio * finalGroupRatio
+							if math.IsNaN(rawQuota) || math.IsInf(rawQuota, 0) || rawQuota < 0 {
+								rawQuota = 0
+							}
+							actualQuota := int(rawQuota)
+							if actualQuota < 0 {
+								actualQuota = 0
+							}
 
 							// 计算差额
 							preConsumedQuota := task.Quota

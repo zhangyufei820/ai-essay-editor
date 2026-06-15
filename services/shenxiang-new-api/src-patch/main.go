@@ -5,8 +5,11 @@ import (
 	"embed"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -46,6 +49,25 @@ var classicBuildFS embed.FS
 
 //go:embed web/classic/dist/index.html
 var classicIndexPage []byte
+
+func localPprofListenAddr(configured string) string {
+	configured = strings.TrimSpace(configured)
+	if configured == "" {
+		return "127.0.0.1:8005"
+	}
+	_, port, err := net.SplitHostPort(configured)
+	if err == nil && port != "" {
+		return net.JoinHostPort("127.0.0.1", port)
+	}
+	if strings.HasPrefix(configured, ":") && len(configured) > 1 {
+		return "127.0.0.1" + configured
+	}
+	if _, err := strconv.Atoi(configured); err == nil {
+		return "127.0.0.1:" + configured
+	}
+	common.SysError("invalid PPROF_LISTEN_ADDR " + configured + "; forcing 127.0.0.1:8005")
+	return "127.0.0.1:8005"
+}
 
 func main() {
 	startTime := time.Now()
@@ -149,11 +171,12 @@ func main() {
 	}
 
 	if os.Getenv("ENABLE_PPROF") == "true" {
+		pprofListenAddr := localPprofListenAddr(common.GetEnvOrDefaultString("PPROF_LISTEN_ADDR", "127.0.0.1:8005"))
 		gopool.Go(func() {
-			log.Println(http.ListenAndServe(common.GetEnvOrDefaultString("PPROF_LISTEN_ADDR", "127.0.0.1:8005"), nil))
+			log.Println(http.ListenAndServe(pprofListenAddr, nil))
 		})
 		go common.Monitor()
-		common.SysLog("pprof enabled")
+		common.SysLog("pprof enabled on " + pprofListenAddr)
 	}
 
 	err = common.StartPyroScope()
@@ -214,19 +237,52 @@ func main() {
 	}
 }
 
+// analyticsIDPattern restricts analytics identifiers to characters that cannot
+// break out of an HTML attribute or JS string literal. Umami website IDs are
+// UUIDs and Google measurement IDs look like "G-XXXX"/"UA-XXXX-Y"; both fit.
+var analyticsIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
+
+// validAnalyticsID reports whether an admin-supplied analytics ID is safe to
+// inline into the index page. Although these come from deployment env vars (not
+// end users), validating them prevents a stray quote or "</script>" in a
+// misconfigured value from breaking the page or injecting markup.
+func validAnalyticsID(id string) bool {
+	return len(id) <= 64 && analyticsIDPattern.MatchString(id)
+}
+
+// validAnalyticsScriptURL reports whether the Umami script URL is a well-formed
+// absolute http(s) URL safe to place in a src attribute.
+func validAnalyticsScriptURL(raw string) bool {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return false
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return false
+	}
+	return u.Host != ""
+}
+
 func InjectUmamiAnalytics() {
 	analyticsInjectBuilder := &strings.Builder{}
-	if os.Getenv("UMAMI_WEBSITE_ID") != "" {
-		umamiSiteID := os.Getenv("UMAMI_WEBSITE_ID")
-		umamiScriptURL := os.Getenv("UMAMI_SCRIPT_URL")
-		if umamiScriptURL == "" {
-			umamiScriptURL = "https://analytics.umami.is/script.js"
+	if umamiSiteID := os.Getenv("UMAMI_WEBSITE_ID"); umamiSiteID != "" {
+		if !validAnalyticsID(umamiSiteID) {
+			common.SysError("UMAMI_WEBSITE_ID 含非法字符，跳过注入")
+		} else {
+			umamiScriptURL := os.Getenv("UMAMI_SCRIPT_URL")
+			if umamiScriptURL == "" {
+				umamiScriptURL = "https://analytics.umami.is/script.js"
+			}
+			if !validAnalyticsScriptURL(umamiScriptURL) {
+				common.SysError("UMAMI_SCRIPT_URL 不是合法的 http(s) 地址，跳过注入")
+			} else {
+				analyticsInjectBuilder.WriteString("<script defer src=\"")
+				analyticsInjectBuilder.WriteString(umamiScriptURL)
+				analyticsInjectBuilder.WriteString("\" data-website-id=\"")
+				analyticsInjectBuilder.WriteString(umamiSiteID)
+				analyticsInjectBuilder.WriteString("\"></script>")
+			}
 		}
-		analyticsInjectBuilder.WriteString("<script defer src=\"")
-		analyticsInjectBuilder.WriteString(umamiScriptURL)
-		analyticsInjectBuilder.WriteString("\" data-website-id=\"")
-		analyticsInjectBuilder.WriteString(umamiSiteID)
-		analyticsInjectBuilder.WriteString("\"></script>")
 	}
 	analyticsInjectBuilder.WriteString("<!--Umami QuantumNous-->\n")
 	analyticsInject := []byte(analyticsInjectBuilder.String())
@@ -237,20 +293,23 @@ func InjectUmamiAnalytics() {
 
 func InjectGoogleAnalytics() {
 	analyticsInjectBuilder := &strings.Builder{}
-	if os.Getenv("GOOGLE_ANALYTICS_ID") != "" {
-		gaID := os.Getenv("GOOGLE_ANALYTICS_ID")
-		// Google Analytics 4 (gtag.js)
-		analyticsInjectBuilder.WriteString("<script async src=\"https://www.googletagmanager.com/gtag/js?id=")
-		analyticsInjectBuilder.WriteString(gaID)
-		analyticsInjectBuilder.WriteString("\"></script>")
-		analyticsInjectBuilder.WriteString("<script>")
-		analyticsInjectBuilder.WriteString("window.dataLayer = window.dataLayer || [];")
-		analyticsInjectBuilder.WriteString("function gtag(){dataLayer.push(arguments);}")
-		analyticsInjectBuilder.WriteString("gtag('js', new Date());")
-		analyticsInjectBuilder.WriteString("gtag('config', '")
-		analyticsInjectBuilder.WriteString(gaID)
-		analyticsInjectBuilder.WriteString("');")
-		analyticsInjectBuilder.WriteString("</script>")
+	if gaID := os.Getenv("GOOGLE_ANALYTICS_ID"); gaID != "" {
+		if !validAnalyticsID(gaID) {
+			common.SysError("GOOGLE_ANALYTICS_ID 含非法字符，跳过注入")
+		} else {
+			// Google Analytics 4 (gtag.js)
+			analyticsInjectBuilder.WriteString("<script async src=\"https://www.googletagmanager.com/gtag/js?id=")
+			analyticsInjectBuilder.WriteString(gaID)
+			analyticsInjectBuilder.WriteString("\"></script>")
+			analyticsInjectBuilder.WriteString("<script>")
+			analyticsInjectBuilder.WriteString("window.dataLayer = window.dataLayer || [];")
+			analyticsInjectBuilder.WriteString("function gtag(){dataLayer.push(arguments);}")
+			analyticsInjectBuilder.WriteString("gtag('js', new Date());")
+			analyticsInjectBuilder.WriteString("gtag('config', '")
+			analyticsInjectBuilder.WriteString(gaID)
+			analyticsInjectBuilder.WriteString("');")
+			analyticsInjectBuilder.WriteString("</script>")
+		}
 	}
 	analyticsInjectBuilder.WriteString("<!--Google Analytics QuantumNous-->\n")
 	analyticsInject := []byte(analyticsInjectBuilder.String())

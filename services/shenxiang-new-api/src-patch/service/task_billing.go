@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"math"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
@@ -13,6 +14,14 @@ import (
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/gin-gonic/gin"
 )
+
+// maxTaskTotalTokens caps the upstream-reported token count used for async task
+// rebilling. An attacker-controlled or compromised upstream could otherwise
+// return an astronomically large total_tokens; once multiplied by the model and
+// group ratios the float→int conversion result is implementation-defined and can
+// wrap to a negative or garbage quota. Reject anything beyond a generous sane
+// bound rather than trust it.
+const maxTaskTotalTokens = 1_000_000_000
 
 // LogTaskConsumption 记录任务消费日志和统计信息（仅记录，不涉及实际扣费）。
 // 实际扣费已由 BillingSession（PreConsumeBilling + SettleBilling）完成。
@@ -249,6 +258,11 @@ func RecalculateTaskQuotaByTokens(ctx context.Context, task *model.Task, totalTo
 	if totalTokens <= 0 {
 		return
 	}
+	if totalTokens > maxTaskTotalTokens {
+		logger.LogError(ctx, fmt.Sprintf("任务 %s 上游返回异常 token 数 %d，超过上限 %d，跳过重新计费",
+			task.TaskID, totalTokens, maxTaskTotalTokens))
+		return
+	}
 
 	modelName := taskModelName(task)
 
@@ -292,7 +306,16 @@ func RecalculateTaskQuotaByTokens(ctx context.Context, task *model.Task, totalTo
 	}
 
 	// 计算实际应扣费额度: totalTokens * modelRatio * groupRatio * otherMultiplier
-	actualQuota := int(float64(totalTokens) * modelRatio * finalGroupRatio * otherMultiplier)
+	// totalTokens 已在上方限制 <= maxTaskTotalTokens；这里再次防御非有限/负值结果，
+	// 并钳制 actualQuota >= 0，杜绝因 float→int 溢出走入退款分支给用户凭空充值。
+	rawQuota := float64(totalTokens) * modelRatio * finalGroupRatio * otherMultiplier
+	if math.IsNaN(rawQuota) || math.IsInf(rawQuota, 0) || rawQuota < 0 {
+		rawQuota = 0
+	}
+	actualQuota := int(rawQuota)
+	if actualQuota < 0 {
+		actualQuota = 0
+	}
 
 	reason := fmt.Sprintf("token重算：tokens=%d, modelRatio=%.2f, groupRatio=%.2f, otherMultiplier=%.4f", totalTokens, modelRatio, finalGroupRatio, otherMultiplier)
 	RecalculateTaskQuota(ctx, task, actualQuota, reason)
