@@ -1,6 +1,6 @@
 [Unit]
 Description=Shenxiang safe container runtime cleanup
-Documentation=/data/ai-essay-editor/docs/SERVER-CLEANUP-SOP.md
+Documentation=file:/data/ai-essay-editor/docs/SERVER-CLEANUP-SOP.md
 Wants=network-online.target docker.service
 After=network-online.target docker.service
 

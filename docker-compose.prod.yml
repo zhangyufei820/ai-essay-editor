@@ -59,8 +59,8 @@ services:
     restart: unless-stopped
     init: true
     read_only: true
-    mem_limit: 1536m
-    cpus: 0.75
+    mem_limit: 2304m
+    cpus: 1.0
     pids_limit: 128
     env_file:
       - .env.production

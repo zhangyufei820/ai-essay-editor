@@ -5,6 +5,24 @@ import { requireUser } from '@/lib/auth/verified-user'
 import { handleReferralSignup } from '@/lib/credits'
 import { rejectUntrustedOrigin } from '@/lib/security/request'
 
+function isTransientSyncError(error: unknown) {
+  const message = error instanceof Error ? error.message : JSON.stringify(error)
+  return /timeout|timed out|522|502|503|504|fetch failed|socket|connection|ECONNRESET|ETIMEDOUT/i.test(message || "")
+}
+
+function createSyncDegradedResponse(reason: string) {
+  return NextResponse.json(
+    {
+      success: true,
+      synced: false,
+      degraded: true,
+      code: "AUTH_SYNC_DEGRADED",
+      reason,
+    },
+    { status: 202 },
+  )
+}
+
 export async function POST(request: NextRequest) {
   // IP 限流：30次/分钟
   const ip = getClientIP(request)
@@ -136,6 +154,9 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('[Sync API Error]', error)
+    if (isTransientSyncError(error)) {
+      return createSyncDegradedResponse("用户资料同步暂时降级，登录态已保留")
+    }
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }

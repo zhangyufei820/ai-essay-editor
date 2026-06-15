@@ -196,8 +196,13 @@ export async function GET(request: NextRequest) {
     const message = error instanceof Error && error.message === '缺少 Supabase 配置'
       ? '积分服务未配置'
       : 'Internal Server Error'
-    const status = message === '积分服务未配置' ? 503 : 500
-    return NextResponse.json({ error: message }, { status })
+    if (message === '积分服务未配置') {
+      return createSafeCreditsDegradedResponse({
+        userId: null,
+        code: "CREDITS_SERVICE_UNCONFIGURED",
+      })
+    }
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }
 
