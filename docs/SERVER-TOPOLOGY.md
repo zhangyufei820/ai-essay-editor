@@ -86,3 +86,35 @@ curl -fsS https://shenxiang.school/api/health
 3. 对未知端口先观察 3-7 天访问日志，不直接关闭。
 4. 数据库、Redis、Plugin Daemon 等高风险端口优先改为本机绑定或防火墙限制。
 5. 每次只改一个端口组，改后验证主站、Dify、图片网关、OpenClaw 和后台。
+
+## Docker 发布端口防漂移
+
+生产机使用 `shenxiang-docker-user-firewall.timer` 定期校验 Docker
+`DOCKER-USER` 链，防止 Docker 发布端口绕过 UFW 或容器重建后规则漂移。
+
+当前策略只阻断从公网网卡进入 Docker bridge 的高风险直连路径：
+
+- Dify 直连 Web/API 和 Plugin Daemon：`docker_default` 的 `80,8443,5003`
+- Word Card 数据库与 Redis：`word-card-api_default` 的 `5432,6379`
+- essay-ai-suite 直连接口：`1panel-network` 的 `3100`
+
+该策略不拦截容器内网互调、本机 `127.0.0.1` 调用、主站 `80/443`、SSH、
+1Panel 管理口或 OpenClaw 业务入口。安装/更新命令：
+
+```bash
+install -m 0755 scripts/server-docker-user-firewall.sh /usr/local/sbin/shenxiang-docker-user-firewall.sh
+install -m 0644 deploy/systemd/shenxiang-docker-user-firewall.service /etc/systemd/system/shenxiang-docker-user-firewall.service
+install -m 0644 deploy/systemd/shenxiang-docker-user-firewall.timer /etc/systemd/system/shenxiang-docker-user-firewall.timer
+systemctl daemon-reload
+systemctl enable --now shenxiang-docker-user-firewall.timer
+systemctl start shenxiang-docker-user-firewall.service
+```
+
+验证：
+
+```bash
+DRY_RUN=1 /usr/local/sbin/shenxiang-docker-user-firewall.sh
+iptables -S DOCKER-USER
+curl -fsS http://127.0.0.1:3000/api/health
+curl -fsS https://shenxiang.school/api/health
+```

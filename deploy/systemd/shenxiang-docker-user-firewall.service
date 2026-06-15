@@ -1,0 +1,13 @@
+[Unit]
+Description=Reconcile Shenxiang Docker DOCKER-USER firewall rules
+Documentation=file:/data/ai-essay-editor/docs/SERVER-TOPOLOGY.md
+Wants=docker.service
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/shenxiang-docker-user-firewall.sh
+Nice=5
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+TimeoutStartSec=2min

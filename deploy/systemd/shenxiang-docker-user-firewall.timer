@@ -1,0 +1,12 @@
+[Unit]
+Description=Reconcile Shenxiang Docker firewall rules after Docker/network drift
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=10min
+RandomizedDelaySec=2min
+Persistent=true
+Unit=shenxiang-docker-user-firewall.service
+
+[Install]
+WantedBy=timers.target
