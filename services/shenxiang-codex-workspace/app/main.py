@@ -988,7 +988,21 @@ async def stream_media_generation(
         "task_id": task_id,
     }
     try:
-        result = await generate_media(settings, request, user_for_mode(user, media_kind), task, media_kind)
+        generation_task = asyncio.create_task(generate_media(settings, request, user_for_mode(user, media_kind), task, media_kind))
+        heartbeat = 0
+        while not generation_task.done():
+            await asyncio.sleep(10)
+            if generation_task.done():
+                break
+            heartbeat += 1
+            elapsed = heartbeat * 10
+            yield {
+                "type": "status",
+                "message": f"{label}生成中，已等待 {elapsed}s，请保持页面打开",
+                "mode": "media_generation",
+                "task_id": task_id,
+            }
+        result = await generation_task
     except MediaGenerationError as exc:
         store.update(
             task_id,
@@ -1395,34 +1409,59 @@ async def stream_chat_completion_deltas(
     payload: dict[str, Any],
     api_key: str,
 ) -> AsyncIterator[str]:
-    async with client.stream(
-        "POST",
-        f"{settings.new_api_base_url}/chat/completions",
-        headers=headers,
-        json=payload,
-    ) as response:
-        if response.status_code >= 400:
-            body = (await response.aread()).decode("utf-8", errors="replace")
-            raise FastPathUpstreamError("FAST_CHAT_UPSTREAM_FAILED", safe_upstream_error(body, api_key, response.status_code))
-        async for line in response.aiter_lines():
-            line = line.strip()
-            if not line or line.startswith(":"):
-                continue
-            if not line.startswith("data:"):
-                continue
-            data = line[5:].strip()
-            if data == "[DONE]":
-                break
-            try:
-                event = json.loads(data)
-            except ValueError:
-                continue
-            error = response_error_message(event)
-            if error:
-                raise FastPathUpstreamError("FAST_CHAT_UPSTREAM_ERROR", error)
-            delta = chat_completion_delta_text(event) or responses_delta_text(event)
-            if delta:
-                yield delta
+    first_delta_seen = False
+    deadline = time.monotonic() + max(1, settings.fast_path_chat_first_delta_timeout_seconds)
+    try:
+        async with client.stream(
+            "POST",
+            f"{settings.new_api_base_url}/chat/completions",
+            headers=headers,
+            json=payload,
+        ) as response:
+            if response.status_code >= 400:
+                body = (await response.aread()).decode("utf-8", errors="replace")
+                raise FastPathUpstreamError(
+                    "FAST_CHAT_UPSTREAM_FAILED",
+                    safe_upstream_error(body, api_key, response.status_code),
+                )
+            iterator = response.aiter_lines()
+            while True:
+                timeout_seconds = 90.0
+                if not first_delta_seen:
+                    timeout_seconds = max(0.1, deadline - time.monotonic())
+                try:
+                    line = await asyncio.wait_for(iterator.__anext__(), timeout=timeout_seconds)
+                except StopAsyncIteration:
+                    break
+                except asyncio.TimeoutError as exc:
+                    if not first_delta_seen:
+                        raise FastPathUpstreamError("FAST_CHAT_FIRST_DELTA_TIMEOUT", "备用流式通道首包超时。") from exc
+                    raise FastPathUpstreamError("FAST_CHAT_STREAM_TIMEOUT", "备用流式通道响应超时。") from exc
+                line = line.strip()
+                if not line or line.startswith(":"):
+                    continue
+                if not line.startswith("data:"):
+                    continue
+                data = line[5:].strip()
+                if data == "[DONE]":
+                    break
+                try:
+                    event = json.loads(data)
+                except ValueError:
+                    continue
+                error = response_error_message(event)
+                if error:
+                    raise FastPathUpstreamError("FAST_CHAT_UPSTREAM_ERROR", error)
+                delta = chat_completion_delta_text(event) or responses_delta_text(event)
+                if delta:
+                    first_delta_seen = True
+                    yield delta
+    except (httpx.TimeoutException, httpx.HTTPError) as exc:
+        if not first_delta_seen:
+            raise FastPathUpstreamError("FAST_CHAT_REQUEST_FAILED", "备用流式通道连接失败。") from exc
+        raise FastPathUpstreamError("FAST_CHAT_REQUEST_FAILED", str(exc)) from exc
+    if not first_delta_seen:
+        raise FastPathUpstreamError("FAST_CHAT_EMPTY_STREAM", "备用流式通道没有返回内容。")
 
 
 def fast_chat_responses_payload(request: WorkspaceRunRequest, model: str) -> dict[str, Any]:

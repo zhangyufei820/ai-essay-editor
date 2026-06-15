@@ -1,6 +1,9 @@
+import pytest
+
 from app.main import (
     FAST_CHAT_HISTORY_CHARS,
     FAST_CHAT_HISTORY_LIMIT,
+    FastPathUpstreamError,
     fast_chat_messages,
     fast_skill_messages,
     fast_skill_responses_payload,
@@ -8,6 +11,7 @@ from app.main import (
     responses_delta_text,
     runtime_guard_payload,
     should_use_fast_skill,
+    stream_chat_completion_deltas,
 )
 from app.models import WorkspaceFile, WorkspaceRunRequest
 from app.security import contains_forbidden_runtime_action
@@ -172,3 +176,38 @@ def test_responses_sse_delta_and_error_parsers():
     assert responses_delta_text({"type": "response.output_text.delta", "delta": "pong"}) == "pong"
     assert responses_delta_text({"type": "response.completed", "delta": "ignored"}) == ""
     assert response_error_message({"error": {"message": "bad request"}}) == "bad request"
+
+
+@pytest.mark.asyncio
+async def test_chat_completion_fallback_rejects_empty_stream(monkeypatch):
+    class FakeResponse:
+        status_code = 200
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def _lines(self):
+            yield ""
+            yield "data: [DONE]"
+
+        def aiter_lines(self):
+            return self._lines()
+
+    class FakeClient:
+        def stream(self, *_args, **_kwargs):
+            return FakeResponse()
+
+    class FakeSettings:
+        new_api_base_url = "http://new-api/v1"
+        fast_path_chat_first_delta_timeout_seconds = 1
+
+    monkeypatch.setattr("app.main.settings", FakeSettings())
+
+    with pytest.raises(FastPathUpstreamError) as exc:
+        async for _delta in stream_chat_completion_deltas(FakeClient(), {}, {"stream": True}, "sk-test"):
+            pass
+
+    assert exc.value.code == "FAST_CHAT_EMPTY_STREAM"
