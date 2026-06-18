@@ -1,6 +1,7 @@
 export type CodexSkillCategory =
   | "论文与学术"
   | "教学与学习"
+  | "PPT 与演示"
   | "图像与动画"
 
 export type CodexSkill = {
@@ -14,6 +15,7 @@ export type CodexSkill = {
 export const CODEX_SKILL_CATEGORIES: CodexSkillCategory[] = [
   "论文与学术",
   "教学与学习",
+  "PPT 与演示",
   "图像与动画",
 ]
 
@@ -52,6 +54,20 @@ export const CODEX_SKILLS: CodexSkill[] = [
     category: "教学与学习",
     description: "用于学生学习计划、错题提升计划和阶段学习路径规划，适合制定可执行的每日/每周安排。",
     tags: ["学习计划", "错题提升", "阶段规划"],
+  },
+  {
+    id: "ppt-master-cn",
+    name: "PPT 生成大师",
+    category: "PPT 与演示",
+    description: "用于把 PDF、DOCX、URL、Markdown 或主题资料生成真正可编辑的 PowerPoint PPTX，支持模板、原生形状和视觉质检。",
+    tags: ["生成 PPT", "可编辑 PPTX", "模板演示"],
+  },
+  {
+    id: "image-to-editable-ppt-cn",
+    name: "图片转可编辑 PPT",
+    category: "PPT 与演示",
+    description: "用于把截图、扫描 PDF、图片版 PPT/PPTX 重建为对象级可编辑 PowerPoint，避免整页图片糊进幻灯片。",
+    tags: ["截图转 PPT", "扫描 PDF", "分层可编辑"],
   },
   {
     id: "image_prompt",

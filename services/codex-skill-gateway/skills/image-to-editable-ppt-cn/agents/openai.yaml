@@ -1,0 +1,4 @@
+interface:
+  display_name: "图片转可编辑 PPT"
+  short_description: "把图片、扫描 PDF、图片版 PPT/PPTX 重建为对象级可编辑 PPTX"
+  default_prompt: "使用 $image-to-editable-ppt-cn 将输入重建为对象级可编辑 PowerPoint PPTX。"

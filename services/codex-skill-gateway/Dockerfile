@@ -15,6 +15,9 @@ COPY worker.py /app/worker.py
 COPY skill_registry.json /app/skill_registry.json
 COPY skills /opt/codex-skills
 
+RUN pip install --no-cache-dir -r /opt/codex-skills/ppt-master-cn/requirements.txt \
+    && pip install --no-cache-dir -e /opt/codex-skills/image-to-editable-ppt-cn/cli
+
 RUN mkdir -p /workspace/runs /codex-home
 
 EXPOSE 8000

@@ -94,5 +94,29 @@
     "sandbox": "read-only",
     "enabled": true,
     "public": true
+  },
+  "ppt-master-cn": {
+    "name": "ppt-master-cn",
+    "display_name": "PPT 生成大师",
+    "category": "presentation",
+    "description": "用于把 PDF、DOCX、XLSX、URL、Markdown 或主题资料生成高质量可编辑 PowerPoint PPTX，支持模板、SVG 页面、原生形状导出和视觉质检。",
+    "queue": "heavy",
+    "timeout": 900,
+    "cost_points": 20,
+    "sandbox": "workspace-write",
+    "enabled": true,
+    "public": true
+  },
+  "image-to-editable-ppt-cn": {
+    "name": "image-to-editable-ppt-cn",
+    "display_name": "图片转可编辑 PPT",
+    "category": "presentation",
+    "description": "用于把幻灯片截图、图片、扫描 PDF、图片版 PPT/PPTX 重建为对象级可编辑 PowerPoint PPTX，不用于从零生成新演示。",
+    "queue": "heavy",
+    "timeout": 1200,
+    "cost_points": 25,
+    "sandbox": "workspace-write",
+    "enabled": true,
+    "public": true
   }
 }

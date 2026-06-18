@@ -1,0 +1,4 @@
+interface:
+  display_name: "PPT 生成大师"
+  short_description: "把资料生成高质量可编辑 PowerPoint PPTX"
+  default_prompt: "使用 $ppt-master-cn 生成一份高质量、可编辑、带视觉质检的 PowerPoint PPTX。"

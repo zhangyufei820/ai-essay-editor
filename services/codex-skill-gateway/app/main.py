@@ -819,14 +819,22 @@ def build_skill_list_markdown() -> str:
 
 def select_skill(text: str) -> str:
     lowered = text.lower()
+    compact = "".join(lowered.split())
     for skill in load_registry(settings).values():
+        skill_name = skill.name.lower()
+        display_name = skill.display_name.lower()
         if skill.enabled and skill.public and (
-            skill.name.lower() in lowered or skill.display_name.lower() in lowered
+            skill_name in lowered
+            or skill_name in compact
+            or display_name in lowered
+            or "".join(display_name.split()) in compact
         ):
             return skill.name
 
     rules = [
         ("storyboard-creator", ["故事板", "分镜", "分镜表", "脚本转视频", "视频脚本", "视频提示词", "镜头列表", "剧组通告", "拍摄工作单", "首尾帧", "图片转视频", "图生视频", "shot list", "shot list sheet", "storyboard"]),
+        ("image-to-editable-ppt-cn", ["转成可编辑ppt", "可编辑ppt", "分层ppt", "重建ppt", "图片版ppt", "扫描版ppt", "扫描pdf", "截图转ppt", "图片转ppt", "ppt editable", "editable ppt"]),
+        ("ppt-master-cn", ["生成ppt", "做ppt", "制作ppt", "演示文稿", "presentation", "powerpoint", "pptx", "slide deck", "slides"]),
         ("shenxiang_image_gen", ["数学动画", "manim", "函数动画", "可视化动画", "生成图片", "生图", "画图", "gpt-image"]),
         ("literature_review", ["文献综述", "研究现状", "检索关键词", "doi", "literature"]),
         ("paper_polish", ["润色", "降口语化", "摘要润色", "polish"]),
@@ -836,7 +844,7 @@ def select_skill(text: str) -> str:
         ("paper_outline", ["论文大纲", "开题", "论文结构", "选题", "outline"]),
     ]
     for skill, keywords in rules:
-        if any(keyword in lowered for keyword in keywords):
+        if any(keyword in lowered or keyword.replace(" ", "") in compact for keyword in keywords):
             return skill
     return "study_plan"
 
@@ -851,4 +859,6 @@ def task_type_for_skill(skill_name: str) -> str:
         "study_plan": "study_planning",
         "shenxiang_image_gen": "image_generation",
         "storyboard-creator": "video_storyboard",
+        "ppt-master-cn": "presentation",
+        "image-to-editable-ppt-cn": "presentation",
     }.get(skill_name, "general_chat")
