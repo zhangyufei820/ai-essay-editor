@@ -21,6 +21,7 @@ const state = {
   scrollFrame: 0,
   renderFrame: 0,
   pendingAssistantText: "",
+  activeArtifacts: [],
   activeContent: "",
   activeUserQuery: "",
   chatHistory: [],
@@ -55,14 +56,14 @@ const fallbackModelModes = {
   image: {
     label: "图像生成",
     description: "Image 2、Grok、Banana 2、Gemini 图像是独立模型，请按任务明确选择。",
-    models: ["gpt-image-2-4K", "grok-imagine-image", "banana-2", "gemini-3-pro-image-preview"],
-    billing: "按张计费。四个图像模型各自独立，不会自动互相切换。",
+    models: ["gpt-image-2-4K", "grok-imagine-image", "banana-2", "gemini-3-pro-image-preview", "ecommerce-banana-2"],
+    billing: "按张计费。电商特价banana-2 固定 1K / 1 张，其余图像模型按各自配置执行。",
   },
   video: {
     label: "视频生成",
     description: "Seedance / Grok 文生视频、图生视频。",
     models: ["seedance-2.0", "grok-video-super-720p"],
-    billing: "按秒或按次计费。Seedance 2.0 当前展示价 ¥6/15秒，生成后请立即下载。",
+    billing: "按秒或按次计费。生成结果会直接在页面内预览。",
   },
 };
 const imageUrlPattern = /^https?:\/\/\S+\.(png|jpe?g|webp|gif)(\?\S*)?$/i;
@@ -408,6 +409,7 @@ function modelLabel(model) {
   if (model === "grok-imagine-image") return "Grok 图像 · 快速编辑 / mask";
   if (model === "banana-2") return "Banana 2 · 图像生成 / 图像编辑";
   if (model === "gemini-3-pro-image-preview") return "Gemini 3 Pro Image · 高质量图像";
+  if (model === "ecommerce-banana-2") return "电商特价banana-2 · 1K / 可编辑";
   return model;
 }
 
@@ -438,7 +440,7 @@ function renderModeConsole() {
 function placeholderForMode(mode) {
   if (mode === "claude") return "描述你的高阶创作或复杂推理任务，Claude 模型会按高阶价格计费";
   if (mode === "image") return "描述要生成或修改的图片。局部编辑请上传原图和蒙版 PNG，透明区域会被重画";
-  if (mode === "video") return "描述视频内容，可上传首帧/参考图；按秒或按次计费，生成后请立即下载";
+  if (mode === "video") return "描述视频内容，可上传首帧/参考图；按秒或按次计费，生成后会在页面内预览";
   return "给 Codex 发消息，Enter 发送，Shift + Enter 换行";
 }
 
@@ -691,6 +693,7 @@ async function runTask() {
   state.activeTrace = state.activeAssistantBubble?.querySelector(".activity-steps") || null;
   state.activeStatus = state.activeAssistantBubble?.querySelector(".activity-status") || null;
   state.activeTraceLines = 0;
+  state.activeArtifacts = [];
   clearEvents();
   addEvent("同步账户", "active");
   if (mode === "image" && hasImageEditInputs()) {
@@ -722,7 +725,7 @@ async function runTask() {
   } catch (error) {
     addEvent("请求失败", "bad");
     updateAssistant(`请求失败：${friendlyErrorMessage(error)}`);
-    finishAssistant();
+    finishAssistant("failed");
   } finally {
     state.isRunning = false;
   }
@@ -731,16 +734,24 @@ async function runTask() {
 function friendlyErrorMessage(error) {
   const raw = String(error?.message || error || "").trim();
   const lower = raw.toLowerCase();
+  const hasPlaceholderToken =
+    raw.includes("[REDACTED]替换成") ||
+    raw.includes("替换成你的") ||
+    (raw.includes("[REDACTED]") && /token|key|令牌|密钥/i.test(raw));
   if (
     lower.includes("invalid token") ||
+    lower.includes("invalid api key") ||
+    lower.includes("unauthorized") ||
     lower.includes("401") ||
-    raw.includes("[REDACTED]替换成") ||
-    raw.includes("替换成你的")
+    hasPlaceholderToken
   ) {
     return "令牌无效。常见原因是复制了示例里的占位文本，而不是真实的星人令牌。云 Codex 页面内会自动注入 Key，不需要手动设置 OPENAI_API_KEY；如果要接入自己电脑上的第三方客户端，请到左侧“第三方接入”页面复制真实专用 Key。";
   }
   if (lower === "network error" || lower.includes("failed to fetch") || lower.includes("networkerror")) {
-    return "网络请求中断。请先刷新页面并点击左侧“自动配置”重新同步四类系统 Key；如果刚才运行过包含 [REDACTED] 或“替换成你的”字样的命令，请不要再复制那段占位命令。";
+    return "连接中断，可能是网络波动、页面刷新或浏览器暂时断开。请直接重试；如果连续出现，请联系管理员查看这次请求的服务日志。";
+  }
+  if (lower.includes("stream closed without result")) {
+    return "连接在模型返回结果前中断。请直接重试；如果连续出现，请联系管理员查看这次请求的服务日志。";
   }
   return raw || "未知错误";
 }
@@ -812,51 +823,79 @@ async function streamRequest(payload) {
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const chunks = buffer.split("\n\n");
-    buffer = chunks.pop() || "";
-    for (const chunk of chunks) {
-      const line = chunk.split("\n").find((item) => item.startsWith("data:"));
-      if (!line) continue;
-      const event = JSON.parse(line.slice(5).trim());
-      handleStreamEvent(event);
+  let sawEvent = false;
+  let sawTerminalEvent = false;
+  const dispatchChunk = (chunk) => {
+    const line = chunk.split("\n").find((item) => item.startsWith("data:"));
+    if (!line) return;
+    const event = JSON.parse(line.slice(5).trim());
+    sawEvent = true;
+    sawTerminalEvent = handleStreamEvent(event) || sawTerminalEvent;
+  };
+  const finishInterruptedStream = () => {
+    if (!state.activeContent.trim()) return false;
+    const partialText = `${state.activeContent.trim()}\n\n连接中断，已保留上方已生成内容。你可以直接重试，或补一句“继续刚才的内容”。`;
+    addEvent("连接中断，已保留已生成内容", "bad");
+    updateAssistant(partialText);
+    commitHistory(state.activeUserQuery, partialText);
+    finishAssistant("interrupted");
+    return true;
+  };
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const chunks = buffer.split("\n\n");
+      buffer = chunks.pop() || "";
+      for (const chunk of chunks) dispatchChunk(chunk);
     }
+  } catch (error) {
+    if (finishInterruptedStream()) return;
+    throw error;
   }
+  buffer += decoder.decode();
+  if (buffer.trim()) dispatchChunk(buffer);
+  if (sawTerminalEvent) return;
+  if (finishInterruptedStream()) return;
+  if (sawEvent) {
+    throw new Error("stream closed without result");
+  }
+  throw new Error("network error");
 }
 
 function handleStreamEvent(event) {
   if (event.type === "status") {
     addEvent(event.message || "处理中", "active");
-    return;
+    return false;
   }
   if (event.type === "codex_event" || event.type === "tool") {
     addEvent(event.message || event.event || "Codex event", event.type === "tool" ? "tool" : "");
-    return;
+    return false;
   }
   if (event.type === "delta") {
     state.activeContent += event.text || "";
     scheduleAssistantUpdate(state.activeContent);
-    return;
+    return false;
   }
   if (event.type === "complete") {
     addEvent(`完成 · ${Math.round((event.duration_ms || 0) / 1000)}s`, "done");
     const finalText = event.result || state.activeContent || "已完成。";
-    updateAssistant(finalText);
+    updateAssistant(finalText, event.artifacts || []);
     commitHistory(state.activeUserQuery, finalText);
     finishAssistant();
-    return;
+    return true;
   }
   if (event.type === "error" || event.status === "failed") {
     addEvent(event.code || "失败", "bad");
     updateAssistant(userFriendlyError(event));
-    finishAssistant();
+    finishAssistant("failed");
+    return true;
   }
+  return false;
 }
 
-function appendMessage(role, text, streaming = false) {
+function appendMessage(role, text, streaming = false, artifacts = []) {
   const article = document.createElement("article");
   article.className = `message ${role}${streaming ? " streaming" : ""}`;
   const avatar = document.createElement("div");
@@ -883,7 +922,7 @@ function appendMessage(role, text, streaming = false) {
   }
   const content = document.createElement("div");
   content.className = "message-content";
-  content.innerHTML = renderRichText(text || (streaming ? "" : "正在思考..."));
+  content.innerHTML = renderResponseHtml(text || (streaming ? "" : "正在思考..."), artifacts);
   bubble.appendChild(content);
   if (role === "assistant") {
     const actions = document.createElement("div");
@@ -898,14 +937,17 @@ function appendMessage(role, text, streaming = false) {
   return content;
 }
 
-function updateAssistant(text) {
+function updateAssistant(text, artifacts = []) {
   if (!state.activeAssistant) return;
   state.pendingAssistantText = String(text || "");
+  if (Array.isArray(artifacts) && artifacts.length) {
+    state.activeArtifacts = artifacts;
+  }
   if (state.renderFrame) {
     cancelAnimationFrame(state.renderFrame);
     state.renderFrame = 0;
   }
-  state.activeAssistant.innerHTML = renderRichText(text || "");
+  state.activeAssistant.innerHTML = renderResponseHtml(text || "", state.activeArtifacts);
   enhanceCodeBlocks(state.activeAssistant);
   scrollToBottom();
 }
@@ -916,19 +958,19 @@ function scheduleAssistantUpdate(text) {
   state.renderFrame = requestAnimationFrame(() => {
     state.renderFrame = 0;
     if (!state.activeAssistant) return;
-    state.activeAssistant.innerHTML = renderRichText(state.pendingAssistantText || "");
+    state.activeAssistant.innerHTML = renderResponseHtml(state.pendingAssistantText || "", state.activeArtifacts);
     enhanceCodeBlocks(state.activeAssistant);
     scrollToBottom();
   });
 }
 
-function finishAssistant() {
+function finishAssistant(finalState = "done") {
   if (state.renderFrame) {
     cancelAnimationFrame(state.renderFrame);
     state.renderFrame = 0;
   }
   if (state.activeAssistant && state.pendingAssistantText) {
-    state.activeAssistant.innerHTML = renderRichText(state.pendingAssistantText);
+    state.activeAssistant.innerHTML = renderResponseHtml(state.pendingAssistantText, state.activeArtifacts);
     enhanceCodeBlocks(state.activeAssistant);
   }
   const article = state.activeAssistant?.closest(".message");
@@ -939,11 +981,17 @@ function finishAssistant() {
     activity.querySelector(".activity-head")?.setAttribute("aria-expanded", "false");
   }
   const meta = article?.querySelector(".activity-mode");
-  if (meta) meta.textContent = "done";
-  if (state.activeStatus) state.activeStatus.textContent = "完成";
+  if (meta) {
+    meta.textContent = finalState === "interrupted" ? "paused" : finalState === "failed" ? "failed" : "done";
+  }
+  if (state.activeStatus) {
+    state.activeStatus.textContent =
+      finalState === "interrupted" ? "连接中断" : finalState === "failed" ? "失败" : "完成";
+  }
   state.activeAssistantBubble = null;
   state.activeTrace = null;
   state.activeStatus = null;
+  state.activeArtifacts = [];
   state.activeUserQuery = "";
 }
 
@@ -956,6 +1004,10 @@ function scrollToBottom() {
     messages.scrollTop = messages.scrollHeight;
     state.scrollFrame = 0;
   });
+}
+
+function renderResponseHtml(text, artifacts = []) {
+  return `${renderRichText(text)}${renderArtifacts(artifacts)}`;
 }
 
 function renderRichText(text) {
@@ -1039,11 +1091,76 @@ function renderGeneratedMedia(type, url, label = "") {
     <figure class="generated-media ${type}">
       <div class="media-frame">${preview}</div>
       <figcaption>
-        <span>${safeLabel} · 生成后请立即下载，文件只保留一小时。</span>
-        <a href="${safeUrl}" download target="_blank" rel="noopener noreferrer">下载</a>
+        <span>${safeLabel} · 已在页面内生成预览。</span>
       </figcaption>
     </figure>
   `;
+}
+
+function renderArtifacts(artifacts = []) {
+  const items = Array.isArray(artifacts) ? artifacts.filter(Boolean) : [];
+  if (!items.length) return "";
+  const cards = items.map((item) => renderArtifactCard(item)).filter(Boolean).join("");
+  if (!cards) return "";
+  return `<section class="artifact-gallery" aria-label="生成文件预览">${cards}</section>`;
+}
+
+function renderArtifactCard(artifact) {
+  const kind = artifact.kind || "";
+  const name = artifact.name || artifact.path || "生成文件";
+  const title = escapeHtml(name);
+  const badge = escapeHtml(artifactKindLabel(kind));
+  const previews = Array.isArray(artifact.previews) ? artifact.previews : [];
+  if (["image", "video", "pdf", "text"].includes(kind) && artifact.url) {
+    return `
+      <article class="artifact-card ${escapeHtml(kind)}">
+        <div class="artifact-head"><strong>${title}</strong><span>${badge}</span></div>
+        ${renderArtifactPreview({ ...artifact, name })}
+      </article>
+    `;
+  }
+  const previewHtml = previews.map((preview) => renderArtifactPreview(preview)).filter(Boolean).join("");
+  return `
+    <article class="artifact-card ${escapeHtml(kind || "file")}">
+      <div class="artifact-head"><strong>${title}</strong><span>${badge}</span></div>
+      ${
+        previewHtml ||
+        `<div class="artifact-empty">文件已生成；当前没有可直接展示的预览页。</div>`
+      }
+    </article>
+  `;
+}
+
+function renderArtifactPreview(item) {
+  const url = item.url ? escapeHtml(item.url) : "";
+  const label = escapeHtml(item.name || item.path || "预览");
+  if (!url) return "";
+  if (item.kind === "image") {
+    return `<figure class="artifact-preview image"><img src="${url}" alt="${label}" loading="lazy" /></figure>`;
+  }
+  if (item.kind === "video") {
+    return `<figure class="artifact-preview video"><video src="${url}" controls playsinline preload="metadata"></video></figure>`;
+  }
+  if (item.kind === "pdf") {
+    return `<figure class="artifact-preview pdf"><iframe src="${url}" title="${label}" loading="lazy"></iframe></figure>`;
+  }
+  if (item.kind === "text") {
+    return `<figure class="artifact-preview text"><iframe src="${url}" title="${label}" loading="lazy"></iframe></figure>`;
+  }
+  return "";
+}
+
+function artifactKindLabel(kind) {
+  const labels = {
+    image: "图片预览",
+    video: "视频预览",
+    pdf: "PDF 预览",
+    text: "文本预览",
+    presentation: "PPTX",
+    document: "文档",
+    spreadsheet: "表格",
+  };
+  return labels[kind] || "文件";
 }
 
 function inlineFormat(text) {

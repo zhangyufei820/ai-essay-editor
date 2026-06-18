@@ -63,6 +63,53 @@ VIDEO_INTENT_KEYWORDS = (
 
 NEGATION_HINTS = ("不要生成图片", "不用生成图片", "不要出图", "不需要图片", "不要生成视频", "不需要视频")
 
+IMAGE_CONFIRMATION_KEYWORDS = (
+    "确认生成图片",
+    "确认生成图像",
+    "现在生成图片",
+    "现在生成图像",
+    "开始生成图片",
+    "开始生成图像",
+    "请生成图片",
+    "请生成图像",
+    "帮我生成图片",
+    "帮我生成图像",
+    "按这些提示词生成图片",
+    "按这个提示词生成图片",
+    "generate the image",
+    "generate images",
+    "create the image",
+)
+
+VIDEO_CONFIRMATION_KEYWORDS = (
+    "确认生成视频",
+    "现在生成视频",
+    "开始生成视频",
+    "请生成视频",
+    "帮我生成视频",
+    "按这些提示词生成视频",
+    "按这个提示词生成视频",
+    "generate the video",
+    "generate videos",
+    "create the video",
+)
+
+PROMPT_ONLY_HINTS = (
+    "只需要提示词",
+    "只输出提示词",
+    "输出提示词",
+    "生成提示词",
+    "图像提示词",
+    "图片提示词",
+    "视频提示词",
+    "分镜脚本",
+    "分镜表",
+    "故事板",
+    "storyboard",
+    "shot list",
+    "prompt only",
+)
+
 VIDEO_URL_RE = re.compile(r"https?://[^\s\"'<>]+?\.(?:mp4|webm|mov|m4v)(?:\?[^\s\"'<>]+)?", re.IGNORECASE)
 IMAGE_URL_RE = re.compile(r"https?://[^\s\"'<>]+?\.(?:png|jpe?g|webp|gif)(?:\?[^\s\"'<>]+)?", re.IGNORECASE)
 MAX_REMOTE_IMAGE_BYTES = 20 * 1024 * 1024
@@ -84,7 +131,7 @@ class MediaResult:
         lines = [
             f"### {self.model} 生成完成",
             "",
-            "生成后请立即下载，媒体文件只保留一小时。",
+            "生成结果已在页面内预览。",
             "",
         ]
         if self.media_type == "image":
@@ -109,15 +156,25 @@ def detect_media_kind(request: WorkspaceRunRequest) -> str | None:
         return None
     if any(hint in text for hint in NEGATION_HINTS):
         return None
-    if any(keyword in text for keyword in VIDEO_INTENT_KEYWORDS):
+    if is_confirmed_video_generation(text):
         return "video"
-    if any(keyword in text for keyword in IMAGE_INTENT_KEYWORDS):
+    if is_confirmed_image_generation(text):
         return "image"
+    if any(hint in text for hint in PROMPT_ONLY_HINTS):
+        return None
     return None
 
 
 def normalize_intent_text(text: str) -> str:
     return re.sub(r"\s+", " ", str(text or "").strip().lower())
+
+
+def is_confirmed_image_generation(text: str) -> bool:
+    return any(keyword in text for keyword in IMAGE_CONFIRMATION_KEYWORDS)
+
+
+def is_confirmed_video_generation(text: str) -> bool:
+    return any(keyword in text for keyword in VIDEO_CONFIRMATION_KEYWORDS)
 
 
 def selected_media_model(settings: Settings, request: WorkspaceRunRequest, media_type: str) -> str:
@@ -158,15 +215,18 @@ async def generate_image(
     user: UserContext,
     model: str,
 ) -> MediaResult:
+    is_ecommerce_banana = model == "ecommerce-banana-2"
     payload: dict[str, Any] = {
         "model": model,
         "prompt": request.user_query,
-        "n": int(request.params.get("n") or 1),
-        "size": str(request.params.get("size") or request.params.get("resolution") or "1024x1024"),
+        "n": 1 if is_ecommerce_banana else int(request.params.get("n") or 1),
+        "size": "1024x1024"
+        if is_ecommerce_banana
+        else str(request.params.get("size") or request.params.get("resolution") or "1024x1024"),
     }
     for key in ("quality", "style", "response_format", "background", "moderation"):
         value = request.params.get(key)
-        if value is not None and str(value):
+        if not is_ecommerce_banana and value is not None and str(value):
             payload[key] = value
     image_inputs, mask_input = split_image_inputs_from_files(request)
     endpoint = f"{settings.new_api_base_url}/images/generations"

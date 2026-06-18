@@ -19,6 +19,7 @@ from fastapi.staticfiles import StaticFiles
 from redis import ConnectionPool, Redis
 
 from app import __version__
+from app.artifacts import collect_task_artifacts, media_type_for_path
 from app.config import ensure_codex_config, ensure_directories, get_settings, secret_values_for_redaction
 from app.codex_runner import CodexRunner
 from app.models import (
@@ -505,8 +506,30 @@ async def chat_stream(
     runner = CodexRunner(settings)
 
     async def event_stream():
+        store = task_store()
+        store.create({key: value for key, value in task_or_error.items() if not str(key).startswith("_")})
         yield sse_event({"type": "status", "message": "已同步账户", "task_id": task_or_error["task_id"]})
         async for event in runner.stream(task_or_error):
+            if event.get("type") == "complete" and event.get("status") == "completed":
+                artifacts = collect_task_artifacts(task_or_error, settings.public_base_url, generate_previews=True)
+                event["artifacts"] = artifacts
+                store.update(
+                    str(task_or_error["task_id"]),
+                    status="completed",
+                    result=str(event.get("result") or ""),
+                    result_type=str(event.get("result_type") or "markdown"),
+                    duration_ms=event.get("duration_ms", 0),
+                    artifacts=artifacts,
+                    finished_at=now_iso(),
+                )
+            elif event.get("type") == "error" or event.get("status") == "failed":
+                store.update(
+                    str(task_or_error["task_id"]),
+                    status="failed",
+                    result_type=str(event.get("result_type") or "markdown"),
+                    error=safe_error(str(event.get("code") or "TASK_FAILED"), str(event.get("message") or "Task failed.")),
+                    finished_at=now_iso(),
+                )
             yield sse_event(event)
 
     return StreamingResponse(
@@ -544,7 +567,12 @@ def get_task_file(
         raise HTTPException(status_code=400, detail="Invalid file path")
     if not requested.is_file():
         raise HTTPException(status_code=404, detail="File not found")
-    return FileResponse(str(requested), filename=requested.name)
+    return FileResponse(
+        str(requested),
+        media_type=media_type_for_path(requested),
+        filename=requested.name,
+        content_disposition_type="inline",
+    )
 
 
 @app.post("/admin/run", dependencies=[Depends(require_admin_bearer)])
@@ -701,7 +729,7 @@ def model_modes() -> dict[str, Any]:
             "description": "Seedance / Grok 文生视频、图生视频。",
             "models": list(settings.video_allowed_models),
             "token_name": settings.video_token_name,
-            "billing": "按秒或按次计费。Seedance 2.0 当前展示价 ¥6/15秒，生成后请立即下载。",
+            "billing": "按秒或按次计费。生成结果会直接在页面内预览。",
         },
     }
 
@@ -1044,12 +1072,21 @@ async def stream_media_generation(
         "task_id": task_id,
     }
     markdown = result.markdown()
+    completed_task = {
+        **task,
+        "task_id": task_id,
+        "status": "completed",
+        "result": markdown,
+        "result_type": result.media_type,
+    }
+    artifacts = collect_task_artifacts(completed_task, settings.public_base_url)
     store.update(
         task_id,
         status="completed",
         result_type=result.media_type,
         result=markdown,
         duration_ms=result.duration_ms,
+        artifacts=artifacts,
         finished_at=now_iso(),
     )
     logger.info(
@@ -1069,6 +1106,7 @@ async def stream_media_generation(
         "duration_ms": result.duration_ms,
         "mode": "media_generation",
         "task_id": task_id,
+        "artifacts": artifacts,
         "media": {
             "type": result.media_type,
             "model": result.model,
@@ -2036,12 +2074,16 @@ def public_task_response(task: dict[str, Any], preferred_mode: str | None = None
         "updated_at": task.get("updated_at"),
     }
     if status == "completed":
+        artifacts = task.get("artifacts")
+        if not isinstance(artifacts, list):
+            artifacts = collect_task_artifacts(task, settings.public_base_url)
         return {
             "success": True,
             "mode": mode,
             **base,
             "result_type": task.get("result_type") or "markdown",
             "result": task.get("result", ""),
+            "artifacts": artifacts,
             "usage": {
                 "duration_ms": task.get("duration_ms", 0),
                 "cost_points": task.get("cost_points", 0),

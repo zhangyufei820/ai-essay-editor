@@ -7,6 +7,7 @@ from typing import Any
 
 from redis import Redis
 
+from app.artifacts import collect_task_artifacts
 from app.codex_runner import CodexRunner
 from app.config import ensure_codex_config, ensure_directories, get_settings
 from app.queue import RedisTaskQueue
@@ -70,10 +71,21 @@ def main() -> None:
             "finished_at": now_iso(),
         }
         if result["status"] == "completed":
+            completed_task = {
+                **task,
+                "status": "completed",
+                "result": result.get("result", ""),
+                "result_type": result.get("result_type", "markdown"),
+            }
             fields.update(
                 {
                     "result": result.get("result", ""),
                     "result_type": result.get("result_type", "markdown"),
+                    "artifacts": collect_task_artifacts(
+                        completed_task,
+                        settings.public_base_url,
+                        generate_previews=True,
+                    ),
                 }
             )
         else:
