@@ -36,19 +36,6 @@ const MIME_TYPES: Record<string, string> = {
   ".zip": "application/zip",
 }
 
-const DOWNLOAD_EXTENSIONS = new Set([
-  ".csv",
-  ".doc",
-  ".docx",
-  ".md",
-  ".ppt",
-  ".pptx",
-  ".txt",
-  ".xls",
-  ".xlsx",
-  ".zip",
-])
-
 function contentDisposition(filePath: string, disposition: "inline" | "attachment") {
   const filename = path.basename(filePath).replace(/[\u0000-\u001f"\\]/g, "_")
   return `${disposition}; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`
@@ -113,9 +100,7 @@ export async function GET(
       return new Response("Unsupported Media Type", { status: 415 })
     }
     const extension = path.extname(filePath).toLowerCase()
-    const disposition = request.nextUrl.searchParams.get("download") === "1" || DOWNLOAD_EXTENSIONS.has(extension)
-      ? "attachment"
-      : "inline"
+    const disposition = request.nextUrl.searchParams.get("download") === "1" ? "attachment" : "inline"
 
     return new Response(bytes, {
       headers: {

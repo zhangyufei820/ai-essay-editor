@@ -207,14 +207,35 @@ describe("chat message guards", () => {
   it("shows OpenClaw presentations through HTML preview instead of a download-first PPT viewer", () => {
     const enhancedChat = read("components/chat/enhanced-chat-interface.tsx")
     const messageBubble = read("components/chat/MessageBubble.tsx")
+    const enhancedMarkdown = read("components/chat/EnhancedMarkdown.tsx")
     const media = read("lib/openclaw-media.ts")
 
     expect(media).toContain("resolveOpenClawPresentationPreviewUrl")
-    expect(enhancedChat).toContain("resolveOpenClawPresentationPreviewUrl")
+    expect(enhancedChat).toContain("GeneratedFilePreview")
+    expect(enhancedMarkdown).toContain("GeneratedFilePreview")
     expect(messageBubble).toContain("shouldPreviewPresentationLink")
-    expect(messageBubble).toContain("<OpenClawHtmlPreview src={rawHref} title={label || \"演示文稿\"} />")
+    expect(messageBubble).toContain("<GeneratedFilePreview src={rawHref} title={label || \"演示文稿\"} />")
     expect(enhancedChat).not.toContain("docs.google.com/gview")
     expect(enhancedChat).not.toContain("PPT Preview")
+    expect(enhancedMarkdown).not.toContain("download={label}")
+    expect(enhancedMarkdown).not.toContain("withDownloadParam")
+  })
+
+  it("renders generated files as preview components instead of download-first links", () => {
+    const preview = read("lib/generated-file-preview.ts")
+    const component = read("components/chat/GeneratedFilePreview.tsx")
+    const route = read("app/api/codex-skill-files/[taskId]/[...path]/route.ts")
+    const enhancedMarkdown = read("components/chat/EnhancedMarkdown.tsx")
+    const messageBubble = read("components/chat/MessageBubble.tsx")
+
+    expect(preview).toContain("rewriteGeneratedFileReferences")
+    expect(preview).toContain("/api/codex-skill-files/")
+    expect(component).toContain("打开预览")
+    expect(component).not.toContain("下载")
+    expect(enhancedMarkdown).toContain("shouldPreviewGeneratedFileLink")
+    expect(messageBubble).toContain("shouldPreviewGeneratedFileLink")
+    expect(route).toContain('request.nextUrl.searchParams.get("download") === "1" ? "attachment" : "inline"')
+    expect(route).toContain("Content-Disposition")
   })
 
   it("buffers and sanitizes OpenClaw streaming message text before exposing it to users", () => {

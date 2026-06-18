@@ -3,13 +3,15 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import mimetypes
 import time
 from pathlib import Path
 from typing import AsyncIterator, Any
+from urllib.parse import quote
 from uuid import uuid4
 
 import httpx
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, StreamingResponse
 from redis import Redis
 
@@ -98,8 +100,13 @@ def get_task(task_id: str) -> dict[str, object]:
     return public_task_response(task)
 
 
+def content_disposition(filename: str, disposition: str) -> str:
+    safe_filename = "".join("_" if ord(ch) < 32 or ch in {'"', "\\"} else ch for ch in filename)
+    return f"{disposition}; filename=\"{safe_filename}\"; filename*=UTF-8''{quote(safe_filename)}"
+
+
 @app.get("/tasks/{task_id}/files/{file_path:path}", dependencies=[Depends(require_bearer)])
-def get_task_file(task_id: str, file_path: str) -> FileResponse:
+def get_task_file(request: Request, task_id: str, file_path: str) -> FileResponse:
     store = task_store()
     task = store.get(task_id)
     if task is None:
@@ -112,7 +119,16 @@ def get_task_file(task_id: str, file_path: str) -> FileResponse:
         raise HTTPException(status_code=400, detail="Invalid file path")
     if not requested.is_file():
         raise HTTPException(status_code=404, detail="File not found")
-    return FileResponse(str(requested), filename=requested.name)
+    media_type = mimetypes.guess_type(requested.name)[0] or "application/octet-stream"
+    disposition = "attachment" if request.query_params.get("download") == "1" else "inline"
+    return FileResponse(
+        str(requested),
+        media_type=media_type,
+        headers={
+            "Content-Disposition": content_disposition(requested.name, disposition),
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
 
 
 @app.get("/v1/models", dependencies=[Depends(require_bearer)])

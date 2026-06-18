@@ -10,7 +10,7 @@
 
 "use client"
 
-import { memo, useEffect, useMemo, useRef, useState } from "react"
+import { Children, isValidElement, memo, useEffect, useMemo, useRef, useState } from "react"
 import { motion, type Easing } from "framer-motion"
 import { BookmarkPlus, ChevronDown, ChevronUp, ListRestart, ThumbsDown, ThumbsUp } from "lucide-react"
 import { IconAllInOne, IconCopy, IconExportPdf, IconFollowup, IconHistory, IconListen, IconShare, IconUser } from "@/components/icons/v2"
@@ -44,8 +44,8 @@ import { MarkdownCodeBlock, extractLanguageFromClassName } from "@/components/ch
 import { cleanLLMText } from "@/lib/text-sanitizer"
 import { isAssistantFailureContent } from "@/lib/chat-message-guards"
 import { sanitizeAssistantMessageForPublicDisplay } from "@/lib/chat-error-sanitizer"
-import { OpenClawHtmlPreview } from "@/components/chat/OpenClawHtmlPreview"
-import { isLikelyHtmlDocumentUrl, rewriteOpenClawMediaReferences } from "@/lib/openclaw-media"
+import { GeneratedFilePreview } from "@/components/chat/GeneratedFilePreview"
+import { rewriteGeneratedFileReferences, shouldPreviewGeneratedFileLink } from "@/lib/generated-file-preview"
 
 // v2 墨砚 token colors
 const AI_TEXT_COLOR = "var(--ink-800)"
@@ -123,16 +123,14 @@ function getTextContent(children: React.ReactNode): string {
   return ''
 }
 
-function shouldPreviewPresentationLink(href: string, label: string) {
-  if (!href) return false
-  const normalizedHref = rewriteOpenClawMediaReferences(href)
-  const lowerHref = normalizedHref.toLowerCase()
-  const isPresentationLabel = /(?:演示文稿|ppt|课件|幻灯片|查看)/i.test(label)
-  const isPresentationHref =
-    /\/slides\//i.test(lowerHref) &&
-    (isLikelyHtmlDocumentUrl(normalizedHref) || /\.pptx?(?:[?#]|$)/i.test(lowerHref))
+function containsGeneratedFilePreview(children: React.ReactNode) {
+  return Children.toArray(children).some((child) => (
+    isValidElement(child) && child.type === GeneratedFilePreview
+  ))
+}
 
-  return isPresentationLabel && isPresentationHref
+function shouldPreviewPresentationLink(href: string, label: string) {
+  return shouldPreviewGeneratedFileLink(href, label)
 }
 
 // ============================================
@@ -243,7 +241,7 @@ const HAS_LATEX_REGEX = /\$[^$]+\$|\$\$[\s\S]+?\$\$/;
 
 // 仅当内容包含公式时才加载 math 插件，节省解析开销
 function MarkdownContent({ content }: { content: string }) {
-  const normalizedContent = useMemo(() => cleanLLMText(content), [content])
+  const normalizedContent = useMemo(() => cleanLLMText(rewriteGeneratedFileReferences(content)), [content])
   const mathPlugins = useMemo(() => {
     return HAS_LATEX_REGEX.test(normalizedContent) ? [remarkMath] : []
   }, [normalizedContent])
@@ -258,6 +256,10 @@ function MarkdownContent({ content }: { content: string }) {
       rehypePlugins={rehypePlugins}
       components={{
         p: ({ children }) => {
+          if (containsGeneratedFilePreview(children)) {
+            return <>{children}</>
+          }
+
           const textContent = getTextContent(children)
           const isConclusionPara = isConclusionParagraph(textContent)
 
@@ -336,7 +338,7 @@ function MarkdownContent({ content }: { content: string }) {
           const rawHref = href ? String(href) : ""
           const label = getTextContent(children)
           if (shouldPreviewPresentationLink(rawHref, label)) {
-            return <OpenClawHtmlPreview src={rawHref} title={label || "演示文稿"} />
+            return <GeneratedFilePreview src={rawHref} title={label || "演示文稿"} />
           }
 
           return (
@@ -482,7 +484,7 @@ function MessageActionToolbar({
         <SheetV2Content side="right" className="w-[88vw] max-w-sm">
           <SheetV2Header>
             <SheetV2Title>已生成产物</SheetV2Title>
-            <SheetV2Description>当前回复可导出的学习材料。</SheetV2Description>
+            <SheetV2Description>当前回复可查看的学习材料。</SheetV2Description>
           </SheetV2Header>
           <div className="px-6 pb-6">
             <ul className="space-y-2">
@@ -494,7 +496,7 @@ function MessageActionToolbar({
                   onClick={actions.onExportPDF}
                   className="shrink-0 text-[var(--ink-500)] transition-colors hover:text-[var(--ink-800)] focus-visible:outline-none focus-visible:[box-shadow:var(--shadow-focus-ink)]"
                 >
-                  下载
+                  查看
                 </button>
               </li>
             </ul>

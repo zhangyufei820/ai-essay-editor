@@ -16,12 +16,13 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
-import { IconEssay, IconExportPdf } from "@/components/icons/v2"
 import { Children, isValidElement, memo, useMemo } from 'react'
 import { cn } from '@/lib/utils'
 import { proxifyGeneratedImagePreviewUrl } from '@/components/chat/image-generation/gpt-image-v11'
+import { GeneratedFilePreview } from '@/components/chat/GeneratedFilePreview'
 import { OpenClawHtmlPreview } from '@/components/chat/OpenClawHtmlPreview'
-import { getOpenClawAttachmentKind, isLikelyHtmlDocumentUrl, rewriteOpenClawMediaReferences } from '@/lib/openclaw-media'
+import { getOpenClawAttachmentKind } from '@/lib/openclaw-media'
+import { rewriteGeneratedFileReferences, shouldPreviewGeneratedFileLink } from '@/lib/generated-file-preview'
 import { MarkdownCodeBlock, extractLanguageFromClassName } from '@/components/chat/MarkdownCodeBlock'
 import { cleanLLMText } from '@/lib/text-sanitizer'
 
@@ -44,68 +45,21 @@ function normalizeMathDelimiters(text: string) {
     .replace(/\\\)/g, "$")
 }
 
-function stripOpenClawDownloadLinks(text: string) {
-  return text
-    .replace(/^\s*(?:[📄📎⬇️🔗]\s*)?\[([^\]]*(?:下载\s*Word|Word\s*格式|下载文档|下载文件)[^\]]*)\]\(([^)]*(?:\/api\/openclaw-media|\/api\/openclaw-media-sign|__openclaw__)[^)]*)\)\s*$/gim, "")
-    .replace(/^\s*(?:[📄📎⬇️🔗]\s*)?\[([^\]]+)\]\(([^)]*(?:\/api\/openclaw-media|\/api\/openclaw-media-sign|__openclaw__)[^)]*\.(?:docx?|pdf)(?:[?#][^)]*)?)\)\s*$/gim, "")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim()
-}
-
-function safeDecodeURIComponent(value: string) {
-  try {
-    return decodeURIComponent(value)
-  } catch {
-    return value
-  }
-}
-
-function withDownloadParam(url: string): string {
-  const hashIndex = url.indexOf("#")
-  const base = hashIndex >= 0 ? url.slice(0, hashIndex) : url
-  const hash = hashIndex >= 0 ? url.slice(hashIndex) : ""
-  const separator = base.includes("?") ? "&" : "?"
-  return `${base}${separator}download=1${hash}`
-}
-
-function MarkdownFileCard({ src, alt }: { src: string; alt?: string }) {
-  const label = alt?.trim() || safeDecodeURIComponent(src.split("/").pop()?.split(/[?#]/, 1)[0] || "打开文件")
-
-  return (
-    <a
-      href={withDownloadParam(src)}
-      download={label}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="my-3 flex max-w-full items-center gap-3 rounded-[var(--radius-soft)] border border-[var(--paper-200)] bg-[var(--paper-50)] px-3 py-2.5 text-[var(--ink-700)] no-underline transition-colors hover:bg-[var(--paper-100)]"
-    >
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[var(--paper-50)] text-[var(--ink-500)]">
-        <IconEssay className="h-4 w-4" />
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-medium">{label}</span>
-        <span className="block truncate text-xs text-[var(--ink-500)]">{src}</span>
-      </span>
-      <IconExportPdf className="h-4 w-4 shrink-0 text-[var(--ink-400)]" />
-    </a>
-  )
-}
-
 function childrenToText(children: React.ReactNode): string {
   if (typeof children === "string" || typeof children === "number") return String(children)
   if (Array.isArray(children)) return children.map(childrenToText).join("")
   return ""
 }
 
-function containsOpenClawHtmlPreview(children: React.ReactNode) {
+function containsGeneratedFilePreview(children: React.ReactNode) {
   return Children.toArray(children).some((child) => (
-    isValidElement(child) && child.type === OpenClawHtmlPreview
+    isValidElement(child) && (child.type === OpenClawHtmlPreview || child.type === GeneratedFilePreview)
   ))
 }
 
 export const EnhancedMarkdown = memo(function EnhancedMarkdown({ content, className }: EnhancedMarkdownProps) {
   const normalizedContent = useMemo(
-    () => stripOpenClawDownloadLinks(cleanLLMText(normalizeMathDelimiters(rewriteOpenClawMediaReferences(content)))),
+    () => cleanLLMText(normalizeMathDelimiters(rewriteGeneratedFileReferences(content))),
     [content],
   )
 
@@ -149,7 +103,7 @@ export const EnhancedMarkdown = memo(function EnhancedMarkdown({ content, classN
 
           // 段落和文本
           p: ({ children }) => {
-            if (containsOpenClawHtmlPreview(children)) {
+            if (containsGeneratedFilePreview(children)) {
               return <>{children}</>
             }
 
@@ -165,8 +119,8 @@ export const EnhancedMarkdown = memo(function EnhancedMarkdown({ content, classN
             const rawHref = href ? String(href) : ""
             const label = childrenToText(children)
 
-            if (rawHref && isLikelyHtmlDocumentUrl(rawHref)) {
-              return <OpenClawHtmlPreview src={rawHref} title={label || undefined} />
+            if (shouldPreviewGeneratedFileLink(rawHref, label)) {
+              return <GeneratedFilePreview src={rawHref} title={label || undefined} />
             }
 
             if (rawHref && getOpenClawAttachmentKind(rawHref) === "image") {
@@ -277,12 +231,8 @@ export const EnhancedMarkdown = memo(function EnhancedMarkdown({ content, classN
             const rawSrc = src ? String(src) : ""
             if (!rawSrc) return null
 
-            if (isLikelyHtmlDocumentUrl(rawSrc)) {
-              return <OpenClawHtmlPreview src={rawSrc} title={alt || undefined} />
-            }
-
             if (getOpenClawAttachmentKind(rawSrc) !== "image") {
-              return <MarkdownFileCard src={rawSrc} alt={alt || undefined} />
+              return <GeneratedFilePreview src={rawSrc} title={alt || undefined} />
             }
 
             return (

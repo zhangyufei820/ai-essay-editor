@@ -1,6 +1,8 @@
 import { Agent } from "undici"
 
 const INTERNAL_HOSTS = new Set([
+  "codex-gateway",
+  "codex-skill-gateway",
   "docker-api-1",
   "dify-image-gateway",
   "relaydance-video-gateway",

@@ -7,6 +7,7 @@ import subprocess
 import time
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 from app.config import (
     Settings,
@@ -19,6 +20,35 @@ from app.config import (
 from app.security import contains_forbidden_runtime_action, normalize_sandbox, redact
 
 logger = logging.getLogger(__name__)
+
+ARTIFACT_EXTENSIONS = {
+    ".csv",
+    ".doc",
+    ".docx",
+    ".gif",
+    ".htm",
+    ".html",
+    ".jpeg",
+    ".jpg",
+    ".json",
+    ".md",
+    ".pdf",
+    ".png",
+    ".ppt",
+    ".pptx",
+    ".svg",
+    ".txt",
+    ".webp",
+    ".xls",
+    ".xlsx",
+    ".zip",
+}
+
+PRIMARY_PREVIEW_EXTENSIONS = {".html", ".htm", ".pdf", ".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"}
+OFFICE_EXTENSIONS = {".ppt", ".pptx", ".doc", ".docx", ".xls", ".xlsx"}
+INTERNAL_OUTPUT_FILES = {"prompt.txt", "result.md", "status.json", "stdout.txt", "stderr.txt"}
+INTERNAL_DIRS = {".agents", ".git", "__pycache__"}
+MAX_ARTIFACT_LINKS = 12
 
 
 class CodexRunner:
@@ -111,6 +141,7 @@ class CodexRunner:
             return self._failed(task, started, "CODEX_EXEC_FAILED", message)
 
         result = redact(stdout.strip(), secret_values_for_redaction(self.settings))
+        result = self._append_artifact_preview_links(result, workspace, task_id)
         (workspace / "result.md").write_text(result, encoding="utf-8")
         return {
             "status": "completed",
@@ -200,7 +231,80 @@ class CodexRunner:
 7. 只能在当前临时工作区内写入产物；禁止删除文件。
 8. 禁止读取或修改 .env、Docker、Nginx/OpenResty、1Panel、SSH、服务器目录或任何生产配置。
 9. 禁止执行 ssh、scp、rsync、docker、sudo、rm、git reset、git clean、chmod、chown 等命令。
+10. 生成 PPT、PDF、HTML、图片或文档时，请在回复里优先给前端可预览/可打开的结果，避免把本地文件路径作为第一入口。
 """
+
+    def _append_artifact_preview_links(self, result: str, workspace: Path, task_id: str) -> str:
+        artifacts = self._discover_artifacts(workspace)
+        if not artifacts:
+            return result
+
+        existing = result
+        lines = ["", "### 生成文件预览", ""]
+        for path in artifacts:
+            rel = path.relative_to(workspace).as_posix()
+            if self._artifact_already_linked(existing, task_id, rel):
+                continue
+            label = "打开预览" if path.suffix.lower() in PRIMARY_PREVIEW_EXTENSIONS else "打开文件"
+            lines.append(f"- [{label}：{path.name}](/tasks/{task_id}/files/{self._quote_path(rel)})")
+
+        if len(lines) <= 3:
+            return result
+        return f"{result.rstrip()}\n{chr(10).join(lines)}\n"
+
+    def _discover_artifacts(self, workspace: Path) -> list[Path]:
+        candidates: list[Path] = []
+        html_stems: set[str] = set()
+        for path in workspace.rglob("*"):
+            if not path.is_file():
+                continue
+            rel = path.relative_to(workspace)
+            if self._is_internal_artifact(rel):
+                continue
+            extension = path.suffix.lower()
+            if extension not in ARTIFACT_EXTENSIONS:
+                continue
+            candidates.append(path)
+            if extension in {".html", ".htm"}:
+                html_stems.add(str(path.with_suffix("")))
+
+        visible: list[Path] = []
+        for path in candidates:
+            if path.suffix.lower() in OFFICE_EXTENSIONS and str(path.with_suffix("")) in html_stems:
+                continue
+            visible.append(path)
+
+        return sorted(visible, key=self._artifact_sort_key)[:MAX_ARTIFACT_LINKS]
+
+    def _is_internal_artifact(self, rel_path: Path) -> bool:
+        if rel_path.name in INTERNAL_OUTPUT_FILES:
+            return True
+        return any(part in INTERNAL_DIRS or part.startswith(".") for part in rel_path.parts)
+
+    def _artifact_sort_key(self, path: Path) -> tuple[int, int, str]:
+        extension = path.suffix.lower()
+        if extension in {".html", ".htm"}:
+            group = 0
+        elif extension in {".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"}:
+            group = 1
+        elif extension == ".pdf":
+            group = 2
+        elif extension in OFFICE_EXTENSIONS:
+            group = 3
+        else:
+            group = 4
+        return (group, len(path.parts), path.as_posix())
+
+    def _artifact_already_linked(self, result: str, task_id: str, rel_path: str) -> bool:
+        encoded = self._quote_path(rel_path)
+        return (
+            rel_path in result
+            or f"/tasks/{task_id}/files/{encoded}" in result
+            or f"/api/codex-skill-files/{task_id}/{encoded}" in result
+        )
+
+    def _quote_path(self, rel_path: str) -> str:
+        return "/".join(quote(part) for part in rel_path.split("/"))
 
     def _forbidden_runtime_scan_payload(self, task: dict[str, Any]) -> dict[str, Any]:
         request = task.get("request", {})

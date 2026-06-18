@@ -23,9 +23,8 @@ import { useIsMobile } from "@/hooks/use-mobile"
 import {
   X, Loader2,
   ChevronDown, ChevronLeft, ArrowDown,
-  ExternalLink,
 } from "lucide-react"
-import { IconDiagnosis, IconEssay, IconExportPdf, IconHistory, IconInkDot, IconSealCheck, IconUser } from "@/components/icons/v2"
+import { IconDiagnosis, IconHistory, IconInkDot, IconSealCheck, IconUser } from "@/components/icons/v2"
 import { cn } from "@/lib/utils"
 import { buildChatSessionRoute, buildChatSessionRouteFromSession, isDedicatedChatSessionModel, resolveChatSessionRouteModel } from "@/lib/chat-session-routes"
 import { toast } from "sonner"
@@ -45,7 +44,7 @@ import type { ChatSession } from "./chat-sidebar"
 import { motion, AnimatePresence } from "framer-motion"
 import { EnhancedMarkdown } from "./EnhancedMarkdown"
 import { AssistantEyeAvatar } from "./AssistantEyeAvatar"
-import { OpenClawHtmlPreview } from "./OpenClawHtmlPreview"
+import { GeneratedFilePreview } from "./GeneratedFilePreview"
 import { UserMessageBubble } from "./UserMessageBubble"
 import { VocabCardTemplate } from "@/components/chat/v2/templates"
 import type { VocabCardArtifact } from "@/components/chat/v2/types"
@@ -73,7 +72,8 @@ import { ModelLogo } from "@/components/ModelLogo"
 import { navigationModelConfig, getNavigationModelItem } from "@/lib/navigation-models"
 import { getPublicAiLabel, sanitizePublicAiLabel } from "@/lib/public-ai-labels"
 import { PLAZA_AGENTS } from "@/components/agents/agent-plaza-data"
-import { getOpenClawAttachmentKind, isLikelyHtmlDocumentUrl, resolveOpenClawPresentationPreviewUrl, toPublicOpenClawMediaSignUrl, toPublicOpenClawWorkspaceUrl } from "@/lib/openclaw-media"
+import { getOpenClawAttachmentKind, toPublicOpenClawMediaSignUrl, toPublicOpenClawWorkspaceUrl } from "@/lib/openclaw-media"
+import { getGeneratedFilePreviewKind, rewriteGeneratedFileReferences, shouldPreviewGeneratedFileLink } from "@/lib/generated-file-preview"
 import type { CodexSkill } from "@/lib/codex-skills"
 import type { OpenClawSkill } from "@/lib/openclaw-skills"
 import {
@@ -1034,14 +1034,6 @@ function convertOpenClawUrl(url: string): string {
   return url
 }
 
-function withDownloadParam(url: string): string {
-  const hashIndex = url.indexOf("#")
-  const base = hashIndex >= 0 ? url.slice(0, hashIndex) : url
-  const hash = hashIndex >= 0 ? url.slice(hashIndex) : ""
-  const separator = base.includes("?") ? "&" : "?"
-  return `${base}${separator}download=1${hash}`
-}
-
 const MediaBlock = ({ items }: { items: MediaItem[] }) => {
   if (!items || items.length === 0) return null
 
@@ -1052,8 +1044,6 @@ const MediaBlock = ({ items }: { items: MediaItem[] }) => {
         const effectiveType = item.type === "image" ? getOpenClawAttachmentKind(publicUrl) : item.type
 
         if (effectiveType === "image") {
-          // 🔥 使用图像卡片样式渲染图片
-          const imageUrl = publicUrl
           return (
             <motion.div
               key={index}
@@ -1063,82 +1053,26 @@ const MediaBlock = ({ items }: { items: MediaItem[] }) => {
               className="relative rounded-[var(--radius-sharp)] overflow-hidden shadow-xl border border-[var(--ink-100)]"
             >
               <img
-                src={imageUrl}
+                src={publicUrl}
                 alt={item.name || "Generated Image"}
                 className="w-full h-auto max-h-[500px] object-contain bg-[var(--paper-50)]"
                 loading="lazy"
               />
-              {/* 下载按钮 */}
-              <a
-                href={imageUrl}
-                download={item.name}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="absolute top-3 right-3 p-2 bg-[var(--paper-50)]/90 backdrop-blur-sm rounded-[var(--radius-soft)] shadow-lg hover:bg-[var(--paper-50)] transition-all"
-              >
-                <IconExportPdf className="w-4 h-4 text-[var(--ink-600)]" />
-              </a>
             </motion.div>
           )
         } else if (effectiveType === "file") {
-          // 文件下载链接
-          const isPDF = publicUrl.toLowerCase().includes('.pdf')
-          const isHtml = publicUrl.toLowerCase().includes('.html')
-          const fileUrl = publicUrl
-          const downloadUrl = withDownloadParam(fileUrl)
-
-          if (isHtml || isLikelyHtmlDocumentUrl(fileUrl)) {
-            return (
-              <OpenClawHtmlPreview
-                key={index}
-                src={fileUrl}
-                title={item.name || "HTML 页面"}
-              />
-            )
-          }
-
           return (
-            <div
+            <GeneratedFilePreview
               key={index}
-              className="flex items-center gap-3 rounded-[var(--radius-sharp)] border border-[var(--paper-200)] bg-[var(--paper-50)] p-4 transition-colors hover:bg-[var(--paper-100)]"
-            >
-              <div className="w-10 h-10 rounded-[var(--radius-soft)] bg-blue-100 flex items-center justify-center shrink-0">
-                <IconEssay className="h-5 w-5 text-blue-600" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-[var(--ink-700)] truncate">{item.name || "文件"}</p>
-                <p className="truncate text-xs text-[var(--ink-400)]">{isHtml ? "HTML 页面" : isPDF ? "PDF 文档" : "文件"}</p>
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                {isPDF && (
-                  <a
-                    href={fileUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 rounded-[var(--radius-soft)] bg-[var(--paper-50)] px-3 py-1.5 text-xs font-medium text-[var(--ink-600)] shadow-sm transition-colors hover:bg-[var(--paper-100)]"
-                  >
-                    <ExternalLink className="h-3.5 w-3.5" />
-                    打开
-                  </a>
-                )}
-                <a
-                  href={downloadUrl}
-                  download={item.name}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 rounded-[var(--radius-soft)] bg-blue-500 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-600"
-	                >
-	                  <IconExportPdf className="h-3.5 w-3.5" />
-	                  下载
-	                </a>
-	              </div>
-	            </div>
+              src={publicUrl}
+              title={item.name || "生成文件"}
+            />
 	          )
         } else if (effectiveType === "ppt") {
           return (
-            <OpenClawHtmlPreview
+            <GeneratedFilePreview
               key={index}
-              src={resolveOpenClawPresentationPreviewUrl(publicUrl)}
+              src={publicUrl}
               title={item.name || "演示文稿"}
             />
           )
@@ -1193,14 +1127,15 @@ const ThinkingBlock = ({ content, isStreaming }: { content: string; isStreaming?
 
 function UltimateRenderer({ content, isStreaming = false }: { content: string; isStreaming?: boolean }) {
   if (!content) return <span className="text-[var(--ink-500)] animate-cursor-blink">▍</span>;
+  const rewrittenContent = rewriteGeneratedFileReferences(content)
 
   // 🧠 处理 <think> 标签：提取思考内容并折叠显示
-  const thinkMatch = content.match(/<think>([\s\S]*?)<\/think>/i)
+  const thinkMatch = rewrittenContent.match(/<think>([\s\S]*?)<\/think>/i)
   const thinkContent = thinkMatch ? thinkMatch[1].trim() : null
 
   // 如果只有 <think> 标签还没闭合（流式输出中）
-  const hasOpenThink = content.includes('<think>') && !content.includes('</think>')
-  const openThinkContent = hasOpenThink ? content.split('<think>')[1] : null
+  const hasOpenThink = rewrittenContent.includes('<think>') && !rewrittenContent.includes('</think>')
+  const openThinkContent = hasOpenThink ? rewrittenContent.split('<think>')[1] : null
 
   // 🔥 提取媒体内容（图片、文件、PPT）
   const mediaItems: MediaItem[] = []
@@ -1208,7 +1143,7 @@ function UltimateRenderer({ content, isStreaming = false }: { content: string; i
   // 匹配 ![alt](url) 图片格式
   const imageRegex = /!\[([^\]]*)\]\(([^)]+)\)/g
   let match
-  while ((match = imageRegex.exec(content)) !== null) {
+  while ((match = imageRegex.exec(rewrittenContent)) !== null) {
     mediaItems.push({
       type: "image",
       url: match[2],
@@ -1218,7 +1153,7 @@ function UltimateRenderer({ content, isStreaming = false }: { content: string; i
 
   // 匹配 [file](url) 文件格式
   const fileRegex = /\[file\]\(([^)]+)\)/g
-  while ((match = fileRegex.exec(content)) !== null) {
+  while ((match = fileRegex.exec(rewrittenContent)) !== null) {
     const url = match[1]
     const name = url.split('/').pop() || "文件"
     mediaItems.push({
@@ -1230,7 +1165,7 @@ function UltimateRenderer({ content, isStreaming = false }: { content: string; i
 
   // 匹配 [ppt](url) PPT格式
   const pptRegex = /\[ppt\]\(([^)]+)\)/g
-  while ((match = pptRegex.exec(content)) !== null) {
+  while ((match = pptRegex.exec(rewrittenContent)) !== null) {
     const url = match[1]
     const name = url.split('/').pop() || "PPT文档"
     mediaItems.push({
@@ -1242,19 +1177,33 @@ function UltimateRenderer({ content, isStreaming = false }: { content: string; i
 
   // 匹配 MEDIA: 前缀格式 (MEDIA:image:url, MEDIA:file:url, MEDIA:ppt:url)
   const mediaPrefixRegex = /^MEDIA:(image|file|ppt):(.+)$/gm
-  while ((match = mediaPrefixRegex.exec(content)) !== null) {
+  while ((match = mediaPrefixRegex.exec(rewrittenContent)) !== null) {
     const type = match[1] as "image" | "file" | "ppt"
     const url = match[2]
     const name = url.split('/').pop() || type
     mediaItems.push({ type, url, name })
   }
 
+  const generatedLinkRegex = /\[([^\]]+)\]\(([^)]+)\)/g
+  while ((match = generatedLinkRegex.exec(rewrittenContent)) !== null) {
+    const label = match[1]
+    const url = match[2]
+    if (!shouldPreviewGeneratedFileLink(url, label)) continue
+    const previewKind = getGeneratedFilePreviewKind(url)
+    const type: MediaItem["type"] =
+      previewKind === "image" ? "image" :
+      previewKind === "presentation" ? "ppt" :
+      "file"
+    mediaItems.push({ type, url, name: label || url.split('/').pop() || type })
+  }
+
   // 从主内容中移除媒体标记
-  let cleanContent = content
+  let cleanContent = rewrittenContent
     .replace(/!\[([^\]]*)\]\([^)]+\)/g, '')
     .replace(/\[file\]\([^)]+\)/g, '')
     .replace(/\[ppt\]\([^)]+\)/g, '')
     .replace(/^MEDIA:(image|file|ppt):.+$/gm, '')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (full, label, url) => shouldPreviewGeneratedFileLink(String(url), String(label)) ? "" : full)
     .trim()
 
   // 如果内容为空或只有思考内容
