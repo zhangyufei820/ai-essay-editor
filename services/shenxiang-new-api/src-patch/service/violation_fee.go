@@ -23,6 +23,13 @@ const (
 	ContentViolatesUsageMarker = "Content violates usage guidelines"
 )
 
+var promptBlockedMarkers = []string{
+	"content_policy_violation",
+	"prompt_blocked",
+	"rejected by the safety system",
+	"safety_violations=",
+}
+
 func IsViolationFeeCode(code types.ErrorCode) bool {
 	return strings.HasPrefix(string(code), ViolationFeeCodePrefix)
 }
@@ -38,6 +45,36 @@ func HasCSAMViolationMarker(err *types.NewAPIError) bool {
 	return strings.Contains(msg, CSAMViolationMarker) || strings.Contains(err.Error(), ContentViolatesUsageMarker)
 }
 
+func IsPromptBlockedError(err *types.NewAPIError) bool {
+	if err == nil {
+		return false
+	}
+	if err.GetErrorCode() == types.ErrorCodePromptBlocked {
+		return true
+	}
+	oai := err.ToOpenAIError()
+	text := strings.ToLower(fmt.Sprintf("%s %s %v", err.Error(), oai.Message, oai.Code))
+	for _, marker := range promptBlockedMarkers {
+		if strings.Contains(text, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+func WrapAsPromptBlocked(err *types.NewAPIError) *types.NewAPIError {
+	if err == nil {
+		return nil
+	}
+	oai := err.ToOpenAIError()
+	if oai.Message == "" {
+		oai.Message = err.Error()
+	}
+	oai.Type = string(types.ErrorCodePromptBlocked)
+	oai.Code = string(types.ErrorCodePromptBlocked)
+	return types.WithOpenAIError(oai, err.StatusCode, types.ErrOptionWithSkipRetry())
+}
+
 func WrapAsViolationFeeGrokCSAM(err *types.NewAPIError) *types.NewAPIError {
 	if err == nil {
 		return nil
@@ -50,6 +87,7 @@ func WrapAsViolationFeeGrokCSAM(err *types.NewAPIError) *types.NewAPIError {
 
 // NormalizeViolationFeeError ensures:
 // - if the CSAM marker is present, error.code is set to a stable violation-fee code and skip-retry is enabled.
+// - if the provider reports a generic prompt safety block, retry is skipped without charging a violation fee.
 // - if error.code already has the violation-fee prefix, skip-retry is enabled.
 //
 // It must be called before retry decision logic.
@@ -65,6 +103,10 @@ func NormalizeViolationFeeError(err *types.NewAPIError) *types.NewAPIError {
 	if IsViolationFeeCode(err.GetErrorCode()) {
 		oai := err.ToOpenAIError()
 		return types.WithOpenAIError(oai, err.StatusCode, types.ErrOptionWithSkipRetry())
+	}
+
+	if IsPromptBlockedError(err) {
+		return WrapAsPromptBlocked(err)
 	}
 
 	return err

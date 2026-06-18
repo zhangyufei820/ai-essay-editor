@@ -27,6 +27,8 @@ type ImageRequest struct {
 	Moderation        json.RawMessage `json:"moderation,omitempty"`
 	OutputFormat      json.RawMessage `json:"output_format,omitempty"`
 	OutputCompression json.RawMessage `json:"output_compression,omitempty"`
+	ResponseFormatObj json.RawMessage `json:"responseFormat,omitempty"`
+	GenerationConfig  json.RawMessage `json:"generationConfig,omitempty"`
 	PartialImages     json.RawMessage `json:"partial_images,omitempty"`
 	// Stream            bool            `json:"stream,omitempty"`
 	Images        json.RawMessage `json:"images,omitempty"`

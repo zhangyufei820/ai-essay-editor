@@ -89,6 +89,10 @@ func ApplyUpstreamCostBilling(relayInfo *relaycommon.RelayInfo, usage *dto.Usage
 		PreviousQuota: currentQuota,
 		FinalQuota:    currentQuota,
 	}
+	if relayInfo != nil && ShouldSkipUpstreamCostBillingForModel(relayInfo.OriginModelName) {
+		result.FallbackReason = "fixed_model_price"
+		return currentQuota, result
+	}
 	cost, currency, source, ok, reason := ExtractUpstreamCostFromUsage(usage)
 	if !ok {
 		result.FallbackReason = reason

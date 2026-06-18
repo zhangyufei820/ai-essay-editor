@@ -6,6 +6,7 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/dto"
+	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/stretchr/testify/require"
 )
@@ -57,6 +58,19 @@ func TestApplyUpstreamCostBillingFallsBackWhenCostMissing(t *testing.T) {
 	require.Equal(t, "missing_upstream_cost", result.FallbackReason)
 	require.Equal(t, 321, quota)
 	require.Equal(t, 321, result.FinalQuota)
+}
+
+func TestApplyUpstreamCostBillingSkipsFixedPriceImageModel(t *testing.T) {
+	quota, result := ApplyUpstreamCostBilling(&relaycommon.RelayInfo{
+		OriginModelName: EcommerceBanana2Model,
+	}, &dto.Usage{
+		Cost: 9.99,
+	}, 42500)
+
+	require.False(t, result.Applied)
+	require.Equal(t, "fixed_model_price", result.FallbackReason)
+	require.Equal(t, 42500, quota)
+	require.Equal(t, 42500, result.FinalQuota)
 }
 
 func TestCopyResponsesCostFieldsPreservesTopLevelCost(t *testing.T) {

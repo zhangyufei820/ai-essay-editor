@@ -1,0 +1,5 @@
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+# Keep generated playground media downloadable for 24 hours, then clean once daily.
+17 4 * * * root PLAYGROUND_MEDIA_KEEP_MINUTES=1440 /opt/shenxiang-new-api/scripts/cleanup_playground_media.sh >> /opt/shenxiang-new-api/logs/media-cache-cleanup.log 2>&1

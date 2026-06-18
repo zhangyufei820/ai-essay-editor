@@ -19,7 +19,6 @@ For commercial licensing, please contact support@quantumnous.com
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
-  AlertCircle,
   CheckCircle2,
   Copy,
   Download,
@@ -83,12 +82,160 @@ const SIZE_TO_ASPECT_RATIO: Record<string, string> = {
   '1024x1536': '2:3',
   '1536x1024': '3:2',
   '2048x2048': '1:1',
-  '2048x4096': '1:2',
-  '4096x2048': '2:1',
+  '2048x1152': '16:9',
+  '3840x2160': '16:9',
+  '2160x3840': '9:16',
 }
+
+const GPT_IMAGE_2_SIZE_BY_RESOLUTION: Record<string, Record<string, string>> = {
+  '1K': {
+    '1:1': '1024x1024',
+    '2:3': '1024x1536',
+    '3:2': '1536x1024',
+    '16:9': '1536x864',
+    '9:16': '864x1536',
+  },
+  '2K': {
+    '1:1': '2048x2048',
+    '2:3': '1152x1728',
+    '3:2': '1728x1152',
+    '16:9': '2048x1152',
+    '9:16': '1152x2048',
+  },
+  '4K': {
+    '1:1': '2048x2048',
+    '2:3': '2160x3240',
+    '3:2': '3240x2160',
+    '16:9': '3840x2160',
+    '9:16': '2160x3840',
+  },
+}
+
+const IMAGE_GENERATION_GROUP = {
+  value: 'default',
+  label: '图像生成分组',
+}
+
+const IMAGE_EDIT_REFERENCE_LIMIT = 10
+const VIDEO_REFERENCE_LIMIT = 5
+const MEDIA_RESULT_STORAGE_KEY = 'shenxiang-media-playground-results:v1'
+const MEDIA_RESULT_TTL_MS = 24 * 60 * 60 * 1000
 
 function isGrokImageModel(model: string) {
   return model === 'grok-imagine-image'
+}
+
+function isGeminiImageModel(model: string) {
+  return (
+    model === 'banana-2' ||
+    model === 'gemini-3-pro-image-preview' ||
+    model === 'ecommerce-banana-2'
+  )
+}
+
+function isGptImage2Model(model: string) {
+  return model === 'gpt-image-2-4K'
+}
+
+function clampCount(value: number, model: ModelCapability) {
+  const max = Math.max(1, model.maxCount ?? 1)
+  return Math.min(Math.max(1, Number(value) || 1), max)
+}
+
+function imageAspectRatioFor(size: string, aspectRatio: string) {
+  return aspectRatio && aspectRatio !== 'auto'
+    ? aspectRatio
+    : (SIZE_TO_ASPECT_RATIO[size] ?? size)
+}
+
+function imageResponseFormat(aspectRatio: string, imageSize: string) {
+  return {
+    image: {
+      aspectRatio,
+      ...(imageSize && imageSize !== 'auto' ? { imageSize } : {}),
+    },
+  }
+}
+
+function gptImage2SizeFor(aspectRatio: string, imageSize: string) {
+  const normalizedResolution = imageSize && imageSize !== 'auto' ? imageSize : '1K'
+  return (
+    GPT_IMAGE_2_SIZE_BY_RESOLUTION[normalizedResolution]?.[aspectRatio] ??
+    GPT_IMAGE_2_SIZE_BY_RESOLUTION[normalizedResolution]?.['1:1'] ??
+    '1024x1024'
+  )
+}
+
+function sizeOptionLabel(size: string, model: ModelCapability) {
+  if (
+    model.kind === 'image' &&
+    (model.sizeParam === 'size' || model.sizeParam === 'aspect_ratio')
+  ) {
+    return SIZE_TO_ASPECT_RATIO[size] ?? size
+  }
+  return size
+}
+
+function userFacingGenerationError(error: unknown) {
+  const message =
+    error instanceof Error && error.message ? error.message : '生成失败'
+  const lower = message.toLowerCase()
+  if (
+    lower.includes('prompt_blocked') ||
+    lower.includes('content_policy_violation') ||
+    lower.includes('rejected by the safety system') ||
+    lower.includes('safety_violations=')
+  ) {
+    return '提示词或参考图被安全策略拒绝，请调整内容后重试。'
+  }
+  return message
+}
+
+function isPersistentMediaUrl(url?: string) {
+  if (!url) return false
+  return url.startsWith('/') || /^https?:\/\//i.test(url)
+}
+
+function restoreStoredResults(): MediaResult[] {
+  if (typeof window === 'undefined') return []
+  try {
+    const raw = window.localStorage.getItem(MEDIA_RESULT_STORAGE_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    const now = Date.now()
+    return parsed.filter((item): item is MediaResult => {
+      const url = item?.cachedUrl || item?.url
+      return (
+        typeof item?.id === 'string' &&
+        (item?.kind === 'image' || item?.kind === 'video') &&
+        typeof item?.createdAt === 'number' &&
+        now - item.createdAt < MEDIA_RESULT_TTL_MS &&
+        isPersistentMediaUrl(url)
+      )
+    })
+  } catch {
+    return []
+  }
+}
+
+function persistResults(results: MediaResult[]) {
+  if (typeof window === 'undefined') return
+  const now = Date.now()
+  const storable = results
+    .filter((item) => now - item.createdAt < MEDIA_RESULT_TTL_MS)
+    .map((item) => {
+      const durableUrl = item.cachedUrl || item.url
+      if (!isPersistentMediaUrl(durableUrl)) return null
+      return {
+        ...item,
+        url: isPersistentMediaUrl(item.url) ? item.url : durableUrl,
+        cachedUrl: item.cachedUrl,
+      }
+    })
+    .filter(Boolean)
+    .slice(0, 60)
+  window.localStorage.setItem(MEDIA_RESULT_STORAGE_KEY, JSON.stringify(storable))
 }
 
 const DEFAULT_PROMPT =
@@ -121,16 +268,19 @@ export function MediaPlayground() {
   const [seed, setSeed] = useState('')
   const [enhancePrompt, setEnhancePrompt] = useState(true)
   const [watermark, setWatermark] = useState(false)
-  const [referenceFile, setReferenceFile] = useState<File | null>(null)
+  const [referenceFiles, setReferenceFiles] = useState<File[]>([])
   const [lastFrameFile, setLastFrameFile] = useState<File | null>(null)
   const [maskFile, setMaskFile] = useState<File | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [taskMessage, setTaskMessage] = useState('')
   const [results, setResults] = useState<MediaResult[]>([])
+  const [resultsLoaded, setResultsLoaded] = useState(false)
   const [showRequest, setShowRequest] = useState(false)
 
   const activeModelId = mode === 'image' ? imageModel : videoModel
   const activeModel = getMediaModelConfig(activeModelId) ?? IMAGE_MODELS[0]
+  const referenceFileLimit =
+    mode === 'image' ? IMAGE_EDIT_REFERENCE_LIMIT : VIDEO_REFERENCE_LIMIT
 
   const { data: userModels = [] } = useQuery({
     queryKey: ['media-playground-models'],
@@ -159,11 +309,28 @@ export function MediaPlayground() {
     }
   }, [group, userGroups])
 
+  const effectiveGroup = mode === 'image' ? IMAGE_GENERATION_GROUP.value : group
+  const visibleGroupOptions =
+    mode === 'image'
+      ? [IMAGE_GENERATION_GROUP]
+      : userGroups
+
+  useEffect(() => {
+    setResults(restoreStoredResults())
+    setResultsLoaded(true)
+  }, [])
+
+  useEffect(() => {
+    if (!resultsLoaded) return
+    persistResults(results)
+  }, [results, resultsLoaded])
+
   useEffect(() => {
     const model = getMediaModelConfig(activeModelId)
     if (!model) return
     setSize(model.defaultSize)
     setQuality(model.defaultQuality ?? '')
+    setCount((value) => clampCount(value, model))
     if (model.kind === 'image') {
       setOutputFormat(model.outputFormats?.[0] ?? 'url')
       setAspectRatio(
@@ -178,24 +345,47 @@ export function MediaPlayground() {
     if (model.defaultFps) setFps(model.defaultFps)
   }, [activeModelId])
 
+  useEffect(() => {
+    setReferenceFiles((files) =>
+      files.length > referenceFileLimit
+        ? files.slice(0, referenceFileLimit)
+        : files
+    )
+  }, [referenceFileLimit])
+
   const requestPayload = useMemo(() => {
     if (mode === 'image') {
-      const effectiveAspectRatio =
-        aspectRatio && aspectRatio !== 'auto'
-          ? aspectRatio
-          : (SIZE_TO_ASPECT_RATIO[size] ?? '')
+      const effectiveCount = clampCount(count, activeModel)
+      const effectiveAspectRatio = imageAspectRatioFor(size, aspectRatio)
       const payload: Record<string, unknown> = {
         model: imageModel,
-        group,
+        group: effectiveGroup,
         prompt,
-        n: count,
-        size,
       }
-      if (quality) payload.quality = quality
       if (isGrokImageModel(imageModel)) {
+        payload.n = effectiveCount
         if (effectiveAspectRatio) payload.aspect_ratio = effectiveAspectRatio
         if (resolution && resolution !== 'auto') payload.resolution = resolution
+        if (outputFormat && outputFormat !== 'url') payload.response_format = outputFormat
+        return payload
       }
+      if (isGeminiImageModel(imageModel)) {
+        const responseFormat = imageResponseFormat(effectiveAspectRatio, resolution)
+        payload.responseFormat = responseFormat
+        payload.generationConfig = {
+          responseModalities: ['TEXT', 'IMAGE'],
+          responseFormat,
+        }
+        if (negativePrompt.trim()) {
+          payload.extra_fields = { negative_prompt: negativePrompt.trim() }
+        }
+        return payload
+      }
+      payload.n = effectiveCount
+      payload.size = isGptImage2Model(imageModel)
+        ? gptImage2SizeFor(effectiveAspectRatio, resolution)
+        : size
+      if (quality) payload.quality = quality
       if (outputFormat && outputFormat !== 'url') {
         payload.output_format = outputFormat
       }
@@ -209,7 +399,9 @@ export function MediaPlayground() {
       if (imageWorkflow === 'edit' && activeModel.supportsInputFidelity) {
         payload.input_fidelity = inputFidelity
       }
-      if (background !== 'auto') payload.background = background
+      if (activeModel.backgroundOptions?.includes(background) && background !== 'auto') {
+        payload.background = background
+      }
       if (negativePrompt.trim()) {
         payload.extra_fields = { negative_prompt: negativePrompt.trim() }
       }
@@ -219,7 +411,7 @@ export function MediaPlayground() {
     const { width, height } = splitSize(size)
     const payload: Record<string, unknown> = {
       model: videoModel,
-      group,
+      group: effectiveGroup,
       prompt,
       seconds: String(duration),
       duration,
@@ -240,26 +432,27 @@ export function MediaPlayground() {
       payload.metadata = { negative_prompt: negativePrompt.trim() }
     }
     if (videoWorkflow === 'image') {
-      payload.image = '上传的首帧图片会在提交时自动填入'
-      payload.images = ['上传的首帧图片会在提交时自动填入']
+      payload.image = '上传的第一张参考图会在提交时自动填入'
+      payload.images = ['最多 5 张参考图会在提交时自动填入']
     }
     if (videoWorkflow === 'first-last') {
-      payload.image = '上传的首帧图片会在提交时自动填入'
+      payload.image = '上传的第一张首帧 / 参考图会在提交时自动填入'
       payload.images = [
-        '上传的首帧图片会在提交时自动填入',
+        '最多 5 张首帧 / 参考图会在提交时自动填入',
         '上传的尾帧图片会在提交时自动填入',
       ]
       payload.metadata = {
         ...(payload.metadata as Record<string, unknown> | undefined),
         last_frame_image: '上传的尾帧图片会在提交时自动填入',
         frames: [
-          { role: 'first_frame', image: '上传的首帧图片会在提交时自动填入' },
+          { role: 'first_frame', image: '上传的第一张首帧图片会在提交时自动填入' },
           { role: 'last_frame', image: '上传的尾帧图片会在提交时自动填入' },
         ],
       }
     }
     return payload
   }, [
+    activeModel,
     activeModel.supportsInputFidelity,
     activeModel.supportsOutputCompression,
     activeModel.supportsPromptEnhancement,
@@ -267,9 +460,9 @@ export function MediaPlayground() {
     background,
     count,
     duration,
+    effectiveGroup,
     enhancePrompt,
     fps,
-    group,
     imageModel,
     imageWorkflow,
     inputFidelity,
@@ -290,8 +483,28 @@ export function MediaPlayground() {
 
   const selectedModelAllowed = modelAccess[activeModelId] !== false
 
+  function addReferenceFiles(files: FileList | File[] | null | undefined) {
+    const incoming = Array.from(files ?? [])
+    if (incoming.length === 0) return
+    const available = referenceFileLimit - referenceFiles.length
+    if (available <= 0) {
+      toast.warning(`最多支持上传 ${referenceFileLimit} 张参考图。`)
+      return
+    }
+    const accepted = incoming.slice(0, available)
+    setReferenceFiles((current) =>
+      [...current, ...accepted].slice(0, referenceFileLimit)
+    )
+    if (incoming.length > accepted.length) {
+      toast.warning(`最多支持上传 ${referenceFileLimit} 张参考图，已保留前 ${referenceFileLimit} 张。`)
+    }
+  }
+
+  function removeReferenceFile(index: number) {
+    setReferenceFiles((files) => files.filter((_, itemIndex) => itemIndex !== index))
+  }
+
   async function cacheResult(result: MediaResult) {
-    if (result.url.startsWith('data:')) return result
     try {
       const cached = await cacheGeneratedMedia(result.url, result.kind)
       return { ...result, cachedUrl: cached.url }
@@ -314,12 +527,12 @@ export function MediaPlayground() {
       toast.error('请先写一句你想生成什么。')
       return
     }
-    if (mode === 'image' && imageWorkflow === 'edit' && !referenceFile) {
-      toast.error('图像修改需要先上传一张参考图。')
+    if (mode === 'image' && imageWorkflow === 'edit' && referenceFiles.length === 0) {
+      toast.error('图像修改需要先上传参考图。')
       return
     }
-    if (mode === 'video' && videoWorkflow !== 'text' && !referenceFile) {
-      toast.error('图生视频需要先上传首帧图片。')
+    if (mode === 'video' && videoWorkflow !== 'text' && referenceFiles.length === 0) {
+      toast.error('图生视频需要先上传首帧或参考图。')
       return
     }
     if (mode === 'video' && videoWorkflow === 'first-last' && !lastFrameFile) {
@@ -334,27 +547,11 @@ export function MediaPlayground() {
         let response
         if (imageWorkflow === 'edit') {
           const form = new FormData()
-          form.set('model', imageModel)
-          form.set('group', group)
-          form.set('prompt', prompt)
-          form.set('n', String(count))
-          form.set('size', size)
-          if (quality) form.set('quality', quality)
-          if (outputFormat && outputFormat !== 'url') {
-            form.set('output_format', outputFormat)
-          }
-          if (
-            activeModel.supportsOutputCompression &&
-            outputFormat !== 'png' &&
-            outputFormat !== 'url'
-          ) {
-            form.set('output_compression', String(outputCompression))
-          }
-          if (activeModel.supportsInputFidelity) {
-            form.set('input_fidelity', inputFidelity)
-          }
-          if (background !== 'auto') form.set('background', background)
-          if (referenceFile) form.set('image', referenceFile)
+          Object.entries(requestPayload).forEach(([key, value]) => {
+            if (value === undefined || value === null) return
+            form.set(key, typeof value === 'object' ? JSON.stringify(value) : String(value))
+          })
+          referenceFiles.forEach((file) => form.append('image', file))
           if (maskFile) form.set('mask', maskFile)
           response = await editImage(form)
         } else {
@@ -373,18 +570,26 @@ export function MediaPlayground() {
 
       const payload = { ...requestPayload }
       if (videoWorkflow === 'image' || videoWorkflow === 'first-last') {
-        const firstFrame = await fileToDataUrl(referenceFile!)
-        payload.image = firstFrame
-        payload.images = [firstFrame]
+        const referenceFrames = await Promise.all(
+          referenceFiles.map((file) => fileToDataUrl(file))
+        )
+        payload.image = referenceFrames[0]
+        payload.images = referenceFrames
       }
       if (videoWorkflow === 'first-last') {
         const lastFrame = await fileToDataUrl(lastFrameFile!)
-        payload.images = [payload.image, lastFrame]
+        const referenceFrames = Array.isArray(payload.images)
+          ? (payload.images as string[])
+          : [payload.image as string]
+        payload.images = [...referenceFrames, lastFrame]
         payload.metadata = {
           ...(payload.metadata as Record<string, unknown> | undefined),
           last_frame_image: lastFrame,
           frames: [
-            { role: 'first_frame', image: payload.image },
+            ...referenceFrames.map((image, index) => ({
+              role: index === 0 ? 'first_frame' : 'reference_frame',
+              image,
+            })),
             { role: 'last_frame', image: lastFrame },
           ],
         }
@@ -401,7 +606,7 @@ export function MediaPlayground() {
       setResults((prev) => [cached, ...prev])
       toast.success('视频已生成，请立即下载保存。')
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : '生成失败')
+      toast.error(userFacingGenerationError(error))
     } finally {
       setIsSubmitting(false)
       setTaskMessage('')
@@ -481,10 +686,11 @@ export function MediaPlayground() {
               <Field label='用户分组'>
                 <NativeSelect
                   className='w-full'
-                  value={group}
+                  value={effectiveGroup}
                   onChange={(event) => setGroup(event.target.value)}
+                  disabled={mode === 'image'}
                 >
-                  {userGroups.map((item) => (
+                  {visibleGroupOptions.map((item) => (
                     <NativeSelectOption key={item.value} value={item.value}>
                       {item.label}
                     </NativeSelectOption>
@@ -513,11 +719,13 @@ export function MediaPlayground() {
                 (mode === 'video' && videoWorkflow !== 'text')) && (
                 <UploadPanel
                   videoWorkflow={videoWorkflow}
-                  referenceFile={referenceFile}
+                  referenceFiles={referenceFiles}
+                  referenceFileLimit={referenceFileLimit}
                   lastFrameFile={lastFrameFile}
                   maskFile={maskFile}
                   showMask={mode === 'image' && imageWorkflow === 'edit'}
-                  onReferenceFileChange={setReferenceFile}
+                  onReferenceFilesAdd={addReferenceFiles}
+                  onReferenceFileRemove={removeReferenceFile}
                   onLastFrameFileChange={setLastFrameFile}
                   onMaskFileChange={setMaskFile}
                 />
@@ -556,16 +764,6 @@ export function MediaPlayground() {
                 onSizeChange={setSize}
                 onWatermarkChange={setWatermark}
               />
-
-              <div className='bg-muted/50 rounded-lg border p-3 text-sm'>
-                <div className='flex gap-2'>
-                  <AlertCircle className='mt-0.5 size-4 shrink-0' />
-                  <p>
-                    图像和视频生成后请立即下载。操练场只保留临时文件 1 小时，
-                    到期会自动清理。
-                  </p>
-                </div>
-              </div>
 
               <Button
                 className='h-10 w-full'
@@ -622,6 +820,7 @@ export function MediaPlayground() {
             )}
 
             <ResultGrid results={results} />
+            <RetentionNotice />
           </section>
         </div>
       </div>
@@ -821,7 +1020,7 @@ function MediaParameters(props: {
         >
           {props.activeModel.sizes.map((size) => (
             <NativeSelectOption key={size} value={size}>
-              {size}
+              {sizeOptionLabel(size, props.activeModel)}
             </NativeSelectOption>
           ))}
         </NativeSelect>
@@ -846,16 +1045,21 @@ function MediaParameters(props: {
             <div className='flex items-center gap-3'>
               <Slider
                 min={1}
-                max={4}
+                max={props.activeModel.maxCount ?? 1}
                 step={1}
-                value={[props.count]}
+                value={[clampCount(props.count, props.activeModel)]}
                 onValueChange={(value) =>
                   props.onCountChange(
-                    Array.isArray(value) ? (value[0] ?? 1) : value
+                    clampCount(
+                      Array.isArray(value) ? (value[0] ?? 1) : value,
+                      props.activeModel
+                    )
                   )
                 }
               />
-              <span className='w-8 text-right text-sm'>{props.count}</span>
+              <span className='w-8 text-right text-sm'>
+                {clampCount(props.count, props.activeModel)}
+              </span>
             </div>
           </Field>
           <Field label='输出格式'>
@@ -929,19 +1133,21 @@ function MediaParameters(props: {
                 </div>
               </Field>
             )}
-          <Field label='背景'>
-            <NativeSelect
-              className='w-full'
-              value={props.background}
-              onChange={(event) => props.onBackgroundChange(event.target.value)}
-            >
-              <NativeSelectOption value='auto'>auto</NativeSelectOption>
-              <NativeSelectOption value='transparent'>
-                transparent
-              </NativeSelectOption>
-              <NativeSelectOption value='opaque'>opaque</NativeSelectOption>
-            </NativeSelect>
-          </Field>
+          {props.activeModel.backgroundOptions?.length ? (
+            <Field label='背景'>
+              <NativeSelect
+                className='w-full'
+                value={props.background}
+                onChange={(event) => props.onBackgroundChange(event.target.value)}
+              >
+                {props.activeModel.backgroundOptions.map((option) => (
+                  <NativeSelectOption key={option} value={option}>
+                    {option}
+                  </NativeSelectOption>
+                ))}
+              </NativeSelect>
+            </Field>
+          ) : null}
           {props.imageWorkflow === 'edit' &&
             props.activeModel.supportsInputFidelity && (
               <Field label='参考图保真度'>
@@ -1025,20 +1231,31 @@ function MediaParameters(props: {
 
 function UploadPanel(props: {
   videoWorkflow: VideoWorkflow
-  referenceFile: File | null
+  referenceFiles: File[]
+  referenceFileLimit: number
   lastFrameFile: File | null
   maskFile: File | null
   showMask: boolean
-  onReferenceFileChange: (file: File | null) => void
+  onReferenceFilesAdd: (files: FileList | File[] | null | undefined) => void
+  onReferenceFileRemove: (index: number) => void
   onLastFrameFileChange: (file: File | null) => void
   onMaskFileChange: (file: File | null) => void
 }) {
+  const referenceLabel =
+    props.videoWorkflow === 'first-last'
+      ? '首帧 / 参考图'
+      : props.videoWorkflow === 'image'
+        ? '参考图 / 首帧'
+        : '参考图'
+
   return (
     <div className='grid gap-3'>
-      <FileInput
-        label='参考图 / 首帧'
-        file={props.referenceFile}
-        onChange={props.onReferenceFileChange}
+      <MultiFileInput
+        label={referenceLabel}
+        files={props.referenceFiles}
+        maxFiles={props.referenceFileLimit}
+        onAdd={props.onReferenceFilesAdd}
+        onRemove={props.onReferenceFileRemove}
       />
       {props.videoWorkflow === 'first-last' && (
         <FileInput
@@ -1053,6 +1270,65 @@ function UploadPanel(props: {
           file={props.maskFile}
           onChange={props.onMaskFileChange}
         />
+      )}
+    </div>
+  )
+}
+
+function MultiFileInput({
+  label,
+  files,
+  maxFiles,
+  onAdd,
+  onRemove,
+}: {
+  label: string
+  files: File[]
+  maxFiles: number
+  onAdd: (files: FileList | File[] | null | undefined) => void
+  onRemove: (index: number) => void
+}) {
+  return (
+    <div className='grid gap-2'>
+      <label className='bg-muted/20 hover:bg-muted/40 flex min-h-24 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed p-4 text-center transition-colors'>
+        <Upload className='text-muted-foreground size-5' />
+        <span className='mt-2 text-sm font-medium'>{label}</span>
+        <span className='text-muted-foreground mt-1 max-w-full truncate text-xs'>
+          已选 {files.length} / {maxFiles} 张，点击可继续上传 PNG / JPG / WEBP
+        </span>
+        <input
+          type='file'
+          multiple
+          accept='image/png,image/jpeg,image/webp'
+          className='sr-only'
+          onChange={(event) => {
+            onAdd(event.target.files)
+            event.target.value = ''
+          }}
+        />
+      </label>
+      {files.length > 0 && (
+        <div className='grid gap-2'>
+          {files.map((file, index) => (
+            <div
+              key={`${file.name}-${file.lastModified}-${index}`}
+              className='bg-muted/20 flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-xs'
+            >
+              <span className='min-w-0 truncate'>
+                {index + 1}. {file.name}
+              </span>
+              <Button
+                type='button'
+                variant='ghost'
+                size='sm'
+                className='h-7 shrink-0 px-2'
+                onClick={() => onRemove(index)}
+              >
+                移除
+              </Button>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   )
@@ -1081,6 +1357,14 @@ function FileInput({
         onChange={(event) => onChange(event.target.files?.[0] ?? null)}
       />
     </label>
+  )
+}
+
+function RetentionNotice() {
+  return (
+    <div className='text-muted-foreground mt-auto border-t px-4 py-3 text-xs leading-relaxed'>
+      生成后的临时预览文件保留 24 小时，到期自动清理；请在有效期内下载保存。
+    </div>
   )
 }
 
@@ -1118,7 +1402,7 @@ function ResultGrid({ results }: { results: MediaResult[] }) {
           </div>
           <h3 className='mt-4 text-base font-semibold'>等待你的第一个作品</h3>
           <p className='text-muted-foreground mt-2 text-sm'>
-            生成完成后，图像和视频会出现在这里。临时文件只保留 1 小时。
+            生成完成后，图像和视频会出现在这里。临时文件保留 24 小时。
           </p>
         </div>
       </div>
@@ -1156,7 +1440,7 @@ function ResultGrid({ results }: { results: MediaResult[] }) {
                   {result.kind === 'image' ? '图像' : '视频'}
                 </Badge>
                 <span className='text-muted-foreground text-xs'>
-                  1小时内有效
+                  24小时内有效
                 </span>
               </div>
               {result.revisedPrompt && (

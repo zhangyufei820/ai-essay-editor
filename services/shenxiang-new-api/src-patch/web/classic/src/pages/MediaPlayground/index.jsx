@@ -51,25 +51,40 @@ import './MediaPlayground.css';
 
 const { Text, Title, Paragraph } = Typography;
 
+const GOOGLE_NANO_BANANA_2_ASPECT_RATIOS = [
+  '1:1',
+  '1:4',
+  '1:8',
+  '2:3',
+  '3:2',
+  '3:4',
+  '4:1',
+  '4:3',
+  '4:5',
+  '5:4',
+  '8:1',
+  '9:16',
+  '16:9',
+  '21:9',
+];
+
 const IMAGE_MODELS = [
   {
     value: 'gpt-image-2-4K',
     label: 'GPT Image 2',
     badge: '4K',
     vendor: '星人图像',
-    sizes: [
-      'auto',
-      '1024x1024',
-      '1024x1536',
-      '1536x1024',
-      '2048x2048',
-      '2048x4096',
-      '4096x2048',
-    ],
+    sizes: ['1:1', '2:3', '3:2', '16:9', '9:16'],
+    resolutions: ['1K', '2K', '4K'],
     qualities: ['auto', 'low', 'medium', 'high'],
     formats: ['png', 'jpeg', 'webp'],
-    defaultSize: '1024x1024',
+    defaultSize: '1:1',
+    defaultResolution: '1K',
     defaultQuality: 'high',
+    maxCount: 4,
+    countParam: 'n',
+    sizeParam: 'size',
+    backgroundOptions: ['auto', 'opaque'],
     edit: true,
     hint: '适合高质量海报、产品图和需要透明背景的素材。',
   },
@@ -78,11 +93,18 @@ const IMAGE_MODELS = [
     label: 'Banana 2',
     badge: '4K',
     vendor: '星人图像',
-    sizes: ['1024x1024', '2048x2048', '2048x4096', '4096x2048'],
+    sizes: GOOGLE_NANO_BANANA_2_ASPECT_RATIOS,
+    aspectRatios: GOOGLE_NANO_BANANA_2_ASPECT_RATIOS,
+    resolutions: ['1K', '2K'],
     qualities: ['auto'],
     formats: ['url'],
-    defaultSize: '4096x2048',
+    defaultSize: '16:9',
+    defaultAspectRatio: '16:9',
+    defaultResolution: '2K',
     defaultQuality: 'auto',
+    maxCount: 1,
+    countParam: 'none',
+    sizeParam: 'responseFormat',
     edit: true,
     hint: '适合快速高分辨率创意图、场景草图和视觉方案探索。',
   },
@@ -91,13 +113,70 @@ const IMAGE_MODELS = [
     label: 'Gemini 3 Pro Image',
     badge: '4K',
     vendor: '星人图像',
-    sizes: ['1024x1024', '2048x2048', '2048x4096', '4096x2048'],
+    sizes: [
+      '1:1',
+      '1:4',
+      '1:8',
+      '2:3',
+      '3:2',
+      '3:4',
+      '4:1',
+      '4:3',
+      '4:5',
+      '5:4',
+      '8:1',
+      '9:16',
+      '16:9',
+      '21:9',
+    ],
+    aspectRatios: [
+      '1:1',
+      '1:4',
+      '1:8',
+      '2:3',
+      '3:2',
+      '3:4',
+      '4:1',
+      '4:3',
+      '4:5',
+      '5:4',
+      '8:1',
+      '9:16',
+      '16:9',
+      '21:9',
+    ],
+    resolutions: ['512', '1K', '2K', '4K'],
     qualities: ['auto'],
     formats: ['url'],
-    defaultSize: '4096x2048',
+    defaultSize: '16:9',
+    defaultAspectRatio: '16:9',
+    defaultResolution: '4K',
     defaultQuality: 'auto',
+    maxCount: 1,
+    countParam: 'none',
+    sizeParam: 'responseFormat',
     edit: true,
     hint: '适合高阶视觉方案、复杂场景草图和高分辨率创意图。',
+  },
+  {
+    value: 'ecommerce-banana-2',
+    label: '电商特价banana-2',
+    badge: '1K',
+    vendor: 'Gemini',
+    sizes: GOOGLE_NANO_BANANA_2_ASPECT_RATIOS,
+    aspectRatios: GOOGLE_NANO_BANANA_2_ASPECT_RATIOS,
+    resolutions: ['1K'],
+    qualities: ['auto'],
+    formats: ['url'],
+    defaultSize: '1:1',
+    defaultAspectRatio: '1:1',
+    defaultResolution: '1K',
+    defaultQuality: 'auto',
+    maxCount: 1,
+    countParam: 'none',
+    sizeParam: 'responseFormat',
+    edit: true,
+    hint: '电商特价 Banana 2，仅支持 1K 输出，可编辑图像，按 0.085/张计费。',
   },
   {
     value: 'grok-imagine-image',
@@ -123,11 +202,14 @@ const IMAGE_MODELS = [
     ],
     resolutions: ['1k', '2k'],
     qualities: ['low', 'medium', 'high'],
-    formats: ['url'],
+    formats: ['url', 'b64_json'],
     defaultSize: '960x960',
     defaultAspectRatio: '1:1',
     defaultResolution: '2k',
     defaultQuality: 'high',
+    maxCount: 10,
+    countParam: 'n',
+    sizeParam: 'aspect_ratio',
     edit: true,
     hint: '适合真实感、社媒封面和快速创意探索。支持尺寸、宽高比、质量和 1k/2k 分辨率。',
   },
@@ -143,12 +225,88 @@ const SIZE_TO_ASPECT_RATIO = {
   '1024x1536': '2:3',
   '1536x1024': '3:2',
   '2048x2048': '1:1',
-  '2048x4096': '1:2',
-  '4096x2048': '2:1',
+  '2048x1152': '16:9',
+  '3840x2160': '16:9',
+  '2160x3840': '9:16',
 };
+
+const GPT_IMAGE_2_SIZE_BY_RESOLUTION = {
+  '1K': {
+    '1:1': '1024x1024',
+    '2:3': '1024x1536',
+    '3:2': '1536x1024',
+    '16:9': '1536x864',
+    '9:16': '864x1536',
+  },
+  '2K': {
+    '1:1': '2048x2048',
+    '2:3': '1152x1728',
+    '3:2': '1728x1152',
+    '16:9': '2048x1152',
+    '9:16': '1152x2048',
+  },
+  '4K': {
+    '1:1': '2048x2048',
+    '2:3': '2160x3240',
+    '3:2': '3240x2160',
+    '16:9': '3840x2160',
+    '9:16': '2160x3840',
+  },
+};
+
+const IMAGE_GENERATION_GROUP = {
+  value: 'default',
+  label: '图像生成分组',
+};
+
+const IMAGE_EDIT_REFERENCE_LIMIT = 10;
+const VIDEO_REFERENCE_LIMIT = 5;
+const MEDIA_RESULT_STORAGE_KEY = 'shenxiang-media-playground-results:v1';
+const MEDIA_RESULT_TTL_MS = 24 * 60 * 60 * 1000;
 
 function isGrokImageModel(model) {
   return model === 'grok-imagine-image';
+}
+
+function isGeminiImageModel(model) {
+  return (
+    model === 'banana-2' ||
+    model === 'gemini-3-pro-image-preview' ||
+    model === 'ecommerce-banana-2'
+  );
+}
+
+function isGptImage2Model(model) {
+  return model === 'gpt-image-2-4K';
+}
+
+function clampCount(value, model) {
+  const max = Math.max(1, model.maxCount || 1);
+  return Math.min(Math.max(1, Number(value) || 1), max);
+}
+
+function imageAspectRatioFor(size, aspectRatio) {
+  return aspectRatio && aspectRatio !== 'auto'
+    ? aspectRatio
+    : SIZE_TO_ASPECT_RATIO[size] || size;
+}
+
+function imageResponseFormat(aspectRatio, imageSize) {
+  return {
+    image: {
+      aspectRatio,
+      ...(imageSize && imageSize !== 'auto' ? { imageSize } : {}),
+    },
+  };
+}
+
+function gptImage2SizeFor(aspectRatio, imageSize) {
+  const normalizedResolution = imageSize && imageSize !== 'auto' ? imageSize : '1K';
+  return (
+    GPT_IMAGE_2_SIZE_BY_RESOLUTION[normalizedResolution]?.[aspectRatio] ||
+    GPT_IMAGE_2_SIZE_BY_RESOLUTION[normalizedResolution]?.['1:1'] ||
+    '1024x1024'
+  );
 }
 
 const VIDEO_MODELS = [
@@ -206,6 +364,86 @@ const EMPTY_MODELS = [];
 
 function toSelectOptions(values) {
   return values.map((value) => ({ value, label: String(value) }));
+}
+
+function sizeOptionLabel(value, model) {
+  if (model.sizeParam === 'size' || model.sizeParam === 'aspect_ratio') {
+    return SIZE_TO_ASPECT_RATIO[value] || String(value);
+  }
+  return String(value);
+}
+
+function toSizeSelectOptions(values, model) {
+  return values.map((value) => ({
+    value,
+    label: sizeOptionLabel(value, model),
+  }));
+}
+
+function userFacingGenerationError(error) {
+  const message = error?.message || '生成失败';
+  const lower = String(message).toLowerCase();
+  if (
+    lower.includes('prompt_blocked') ||
+    lower.includes('content_policy_violation') ||
+    lower.includes('rejected by the safety system') ||
+    lower.includes('safety_violations=')
+  ) {
+    return '提示词或参考图被安全策略拒绝，请调整内容后重试。';
+  }
+  return message;
+}
+
+function isPersistentMediaURL(url) {
+  if (!url) return false;
+  return url.startsWith('/') || /^https?:\/\//i.test(url);
+}
+
+function restoreStoredResults() {
+  try {
+    const raw = window.localStorage.getItem(MEDIA_RESULT_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    const now = Date.now();
+    return parsed.filter((item) => {
+      const url = item?.cachedUrl || item?.url;
+      return (
+        item?.id &&
+        ['image', 'video'].includes(item.kind) &&
+        typeof item.createdAt === 'number' &&
+        now - item.createdAt < MEDIA_RESULT_TTL_MS &&
+        isPersistentMediaURL(url)
+      );
+    });
+  } catch (error) {
+    return [];
+  }
+}
+
+function persistResults(results) {
+  try {
+    const now = Date.now();
+    const storable = results
+      .filter((item) => now - (item.createdAt || now) < MEDIA_RESULT_TTL_MS)
+      .map((item) => {
+        const durableUrl = item.cachedUrl || item.url;
+        if (!isPersistentMediaURL(durableUrl)) return null;
+        return {
+          ...item,
+          url: isPersistentMediaURL(item.url) ? item.url : durableUrl,
+          displayUrl: isPersistentMediaURL(item.displayUrl)
+            ? item.displayUrl
+            : durableUrl,
+          cachedUrl: item.cachedUrl,
+        };
+      })
+      .filter(Boolean)
+      .slice(0, 60);
+    window.localStorage.setItem(MEDIA_RESULT_STORAGE_KEY, JSON.stringify(storable));
+  } catch (error) {
+    // Local persistence is a convenience; generation should not fail if it is unavailable.
+  }
 }
 
 function fileToDataURL(file) {
@@ -278,6 +516,7 @@ function extractImageResults(response) {
         displayUrl: url.startsWith('data:') ? dataURLToBlobURL(url) : url,
         revisedPrompt: item.revised_prompt,
         status: 'ready',
+        createdAt: Date.now(),
       };
     })
     .filter(Boolean);
@@ -336,7 +575,7 @@ function SectionTitle({ children, meta }) {
   );
 }
 
-function NativeSelect({ label, value, options, onChange }) {
+function NativeSelect({ label, value, options, onChange, disabled = false }) {
   return (
     <label className='mp-field'>
       <span>{label}</span>
@@ -344,6 +583,7 @@ function NativeSelect({ label, value, options, onChange }) {
         value={value}
         optionList={options}
         onChange={onChange}
+        disabled={disabled}
         suffix={<IconChevronDown />}
         style={{ width: '100%' }}
       />
@@ -405,6 +645,93 @@ function FileDrop({ label, file, onFile, compact = false }) {
           onChange={(event) => onFile(event.target.files?.[0] || null)}
         />
       </label>
+    </div>
+  );
+}
+
+function MultiFileDrop({ label, files, maxFiles, onFiles, onRemove }) {
+  const [isDragging, setIsDragging] = useState(false);
+  const previewFile = files[0] || null;
+  const [previewUrl, setPreviewUrl] = useState('');
+
+  useEffect(() => {
+    if (!previewFile) {
+      setPreviewUrl('');
+      return undefined;
+    }
+    const nextUrl = URL.createObjectURL(previewFile);
+    setPreviewUrl(nextUrl);
+    return () => URL.revokeObjectURL(nextUrl);
+  }, [previewFile]);
+
+  const handleFiles = (fileList) => {
+    onFiles(fileList);
+  };
+
+  const handleDrop = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDragging(false);
+    handleFiles(event.dataTransfer.files);
+  };
+
+  return (
+    <div className='mp-upload'>
+      <label
+        className={isDragging ? 'mp-upload-card is-dragging' : 'mp-upload-card'}
+        onDragEnter={(event) => {
+          event.preventDefault();
+          setIsDragging(true);
+        }}
+        onDragOver={(event) => event.preventDefault()}
+        onDragLeave={() => setIsDragging(false)}
+        onDrop={handleDrop}
+      >
+        {previewUrl ? (
+          <div className='mp-upload-preview'>
+            <img src={previewUrl} alt={`${label}预览`} />
+          </div>
+        ) : (
+          <div className='mp-upload-placeholder'>
+            <IconUpload size='extra-large' />
+          </div>
+        )}
+        <span className='mp-upload-title'>{label}</span>
+        <span className='mp-upload-hint'>
+          已选 {files.length} / {maxFiles} 张，拖入或点击上传 PNG / JPG / WebP
+        </span>
+        <input
+          type='file'
+          multiple
+          accept='image/png,image/jpeg,image/webp'
+          className='mp-upload-input'
+          onChange={(event) => {
+            handleFiles(event.target.files);
+            event.target.value = '';
+          }}
+        />
+      </label>
+      {files.length > 0 ? (
+        <div className='mp-upload-file-list'>
+          {files.map((file, index) => (
+            <div
+              key={`${file.name}-${file.lastModified}-${index}`}
+              className='mp-upload-file-item'
+            >
+              <span>
+                {index + 1}. {file.name}
+              </span>
+              <Button
+                size='small'
+                theme='borderless'
+                onClick={() => onRemove(index)}
+              >
+                移除
+              </Button>
+            </div>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -495,7 +822,7 @@ function ResultCard({ result, onRemove }) {
           <Tag color={result.kind === 'image' ? 'blue' : 'purple'}>
             {result.kind === 'image' ? '图像' : '视频'}
           </Tag>
-          <Tag color='orange'>1 小时内有效</Tag>
+          <Tag color='orange'>24 小时内有效</Tag>
         </div>
         <Space spacing={8}>
           <Tooltip content='复制可访问链接'>
@@ -562,10 +889,11 @@ const MediaPlayground = () => {
   const [seed, setSeed] = useState('');
   const [enhancePrompt, setEnhancePrompt] = useState(true);
   const [watermark, setWatermark] = useState(false);
-  const [referenceFile, setReferenceFile] = useState(null);
+  const [referenceFiles, setReferenceFiles] = useState([]);
   const [lastFrameFile, setLastFrameFile] = useState(null);
   const [maskFile, setMaskFile] = useState(null);
   const [results, setResults] = useState([]);
+  const [resultsLoaded, setResultsLoaded] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [taskMessage, setTaskMessage] = useState('');
   const [showPayload, setShowPayload] = useState(true);
@@ -584,6 +912,12 @@ const MediaPlayground = () => {
   const currentModelId = mode === 'image' ? imageModel : videoModel;
   const modelAllowed =
     models.length === 0 || models.some((item) => item === currentModelId);
+  const effectiveGroup =
+    mode === 'image' ? IMAGE_GENERATION_GROUP.value : group;
+  const visibleGroupOptions =
+    mode === 'image' ? [IMAGE_GENERATION_GROUP] : groups;
+  const referenceFileLimit =
+    mode === 'image' ? IMAGE_EDIT_REFERENCE_LIMIT : VIDEO_REFERENCE_LIMIT;
 
   useEffect(() => {
     API.get('/api/user/self/groups')
@@ -633,29 +967,91 @@ const MediaPlayground = () => {
     }
   }, [activeModel, activeImageModel, activeVideoModel, mode]);
 
+  useEffect(() => {
+    setReferenceFiles((files) =>
+      files.length > referenceFileLimit
+        ? files.slice(0, referenceFileLimit)
+        : files,
+    );
+  }, [referenceFileLimit]);
+
+  useEffect(() => {
+    setResults(restoreStoredResults());
+    setResultsLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    if (!resultsLoaded) return;
+    persistResults(results);
+  }, [results, resultsLoaded]);
+
+  function addReferenceFiles(fileList) {
+    const incoming = Array.from(fileList || []);
+    if (incoming.length === 0) return;
+    const available = referenceFileLimit - referenceFiles.length;
+    if (available <= 0) {
+      Toast.warning(`最多支持上传 ${referenceFileLimit} 张参考图。`);
+      return;
+    }
+    const accepted = incoming.slice(0, available);
+    setReferenceFiles((current) =>
+      [...current, ...accepted].slice(0, referenceFileLimit),
+    );
+    if (incoming.length > accepted.length) {
+      Toast.warning(
+        `最多支持上传 ${referenceFileLimit} 张参考图，已保留前 ${referenceFileLimit} 张。`,
+      );
+    }
+  }
+
+  function removeReferenceFile(index) {
+    setReferenceFiles((files) =>
+      files.filter((_, itemIndex) => itemIndex !== index),
+    );
+  }
+
   const requestPayload = useMemo(() => {
     if (mode === 'image') {
-      const effectiveAspectRatio =
-        aspectRatio && aspectRatio !== 'auto'
-          ? aspectRatio
-          : SIZE_TO_ASPECT_RATIO[size] || '';
+      const effectiveCount = clampCount(count, activeImageModel);
+      const effectiveAspectRatio = imageAspectRatioFor(size, aspectRatio);
       const payload = {
         model: imageModel,
-        group,
+        group: effectiveGroup,
         prompt,
-        n: count,
-        size,
       };
-      if (quality) payload.quality = quality;
       if (isGrokImageModel(imageModel)) {
+        payload.n = effectiveCount;
         if (effectiveAspectRatio) payload.aspect_ratio = effectiveAspectRatio;
         if (resolution && resolution !== 'auto') payload.resolution = resolution;
+        if (format && format !== 'url') payload.response_format = format;
+        return payload;
       }
+      if (isGeminiImageModel(imageModel)) {
+        const responseFormat = imageResponseFormat(effectiveAspectRatio, resolution);
+        payload.responseFormat = responseFormat;
+        payload.generationConfig = {
+          responseModalities: ['TEXT', 'IMAGE'],
+          responseFormat,
+        };
+        if (negativePrompt.trim())
+          payload.extra_fields = { negative_prompt: negativePrompt.trim() };
+        return payload;
+      }
+      payload.n = effectiveCount;
+      payload.size = isGptImage2Model(imageModel)
+        ? gptImage2SizeFor(effectiveAspectRatio, resolution)
+        : size;
+      if (quality) payload.quality = quality;
       if (format && format !== 'url') payload.output_format = format;
-      if (format !== 'png' && format !== 'url')
+      if (activeImageModel.sizeParam === 'size' && format !== 'png' && format !== 'url')
         payload.output_compression = compression;
-      if (background !== 'auto') payload.background = background;
-      if (imageWorkflow === 'edit') payload.input_fidelity = inputFidelity;
+      if (
+        activeImageModel.backgroundOptions?.includes(background) &&
+        background !== 'auto'
+      )
+        payload.background = background;
+      if (imageWorkflow === 'edit' && activeImageModel.supportsInputFidelity)
+        payload.input_fidelity = inputFidelity;
       if (negativePrompt.trim())
         payload.extra_fields = { negative_prompt: negativePrompt.trim() };
       return payload;
@@ -664,7 +1060,7 @@ const MediaPlayground = () => {
     const [width, height] = size.split('x').map((value) => Number(value));
     const payload = {
       model: videoModel,
-      group,
+      group: effectiveGroup,
       prompt,
       duration,
       seconds: String(duration),
@@ -680,20 +1076,20 @@ const MediaPlayground = () => {
     if (negativePrompt.trim())
       payload.metadata = { negative_prompt: negativePrompt.trim() };
     if (videoWorkflow === 'image') {
-      payload.image = '上传的首帧图片会在提交时自动填入';
-      payload.images = ['上传的首帧图片会在提交时自动填入'];
+      payload.image = '上传的第一张参考图会在提交时自动填入';
+      payload.images = ['最多 5 张参考图会在提交时自动填入'];
     }
     if (videoWorkflow === 'first-last') {
-      payload.image = '上传的首帧图片会在提交时自动填入';
+      payload.image = '上传的第一张首帧 / 参考图会在提交时自动填入';
       payload.images = [
-        '上传的首帧图片会在提交时自动填入',
+        '最多 5 张首帧 / 参考图会在提交时自动填入',
         '上传的尾帧图片会在提交时自动填入',
       ];
       payload.metadata = {
         ...(payload.metadata || {}),
         last_frame_image: '上传的尾帧图片会在提交时自动填入',
         frames: [
-          { role: 'first_frame', image: '上传的首帧图片会在提交时自动填入' },
+          { role: 'first_frame', image: '上传的第一张首帧图片会在提交时自动填入' },
           { role: 'last_frame', image: '上传的尾帧图片会在提交时自动填入' },
         ],
       };
@@ -704,10 +1100,10 @@ const MediaPlayground = () => {
     compression,
     count,
     duration,
+    effectiveGroup,
     enhancePrompt,
     format,
     fps,
-    group,
     imageModel,
     imageWorkflow,
     inputFidelity,
@@ -722,10 +1118,11 @@ const MediaPlayground = () => {
     videoModel,
     videoWorkflow,
     watermark,
+    activeImageModel,
   ]);
 
   async function cacheMedia(result) {
-    if (!result.url || result.url.startsWith('data:')) return result;
+    if (!result.url) return result;
     try {
       const res = await API.post(
         '/pg/media/cache',
@@ -762,10 +1159,13 @@ const MediaPlayground = () => {
     if (imageWorkflow === 'edit') {
       const form = new FormData();
       Object.entries(requestPayload).forEach(([key, value]) => {
-        if (value !== undefined && typeof value !== 'object')
-          form.set(key, String(value));
+        if (value === undefined || value === null) return;
+        form.set(
+          key,
+          typeof value === 'object' ? JSON.stringify(value) : String(value),
+        );
       });
-      if (referenceFile) form.set('image', referenceFile);
+      referenceFiles.forEach((file) => form.append('image', file));
       if (maskFile) form.set('mask', maskFile);
       response = await API.post('/pg/images/edits', form, {
         skipErrorHandler: true,
@@ -811,6 +1211,7 @@ const MediaPlayground = () => {
           displayUrl: url,
           taskId,
           status,
+          createdAt: Date.now(),
         };
       }
       if (status === 'failed')
@@ -823,18 +1224,26 @@ const MediaPlayground = () => {
   async function submitVideo() {
     const payload = { ...requestPayload };
     if (videoWorkflow === 'image' || videoWorkflow === 'first-last') {
-      const firstFrame = await fileToDataURL(referenceFile);
-      payload.image = firstFrame;
-      payload.images = [firstFrame];
+      const referenceFrames = await Promise.all(
+        referenceFiles.map((file) => fileToDataURL(file)),
+      );
+      payload.image = referenceFrames[0];
+      payload.images = referenceFrames;
     }
     if (videoWorkflow === 'first-last') {
       const lastFrame = await fileToDataURL(lastFrameFile);
-      payload.images = [payload.image, lastFrame];
+      const referenceFrames = Array.isArray(payload.images)
+        ? payload.images
+        : [payload.image];
+      payload.images = [...referenceFrames, lastFrame];
       payload.metadata = {
         ...(payload.metadata || {}),
         last_frame_image: lastFrame,
         frames: [
-          { role: 'first_frame', image: payload.image },
+          ...referenceFrames.map((image, index) => ({
+            role: index === 0 ? 'first_frame' : 'reference_frame',
+            image,
+          })),
           { role: 'last_frame', image: lastFrame },
         ],
       };
@@ -855,10 +1264,10 @@ const MediaPlayground = () => {
   async function handleSubmit() {
     if (!modelAllowed) return Toast.error('当前用户分组暂未开放这个模型。');
     if (!prompt.trim()) return Toast.error('请先写一句你想生成什么。');
-    if (mode === 'image' && imageWorkflow === 'edit' && !referenceFile)
+    if (mode === 'image' && imageWorkflow === 'edit' && referenceFiles.length === 0)
       return Toast.error('图像修改需要先上传参考图。');
-    if (mode === 'video' && videoWorkflow !== 'text' && !referenceFile)
-      return Toast.error('图生视频需要先上传首帧图片。');
+    if (mode === 'video' && videoWorkflow !== 'text' && referenceFiles.length === 0)
+      return Toast.error('图生视频需要先上传首帧或参考图。');
     if (mode === 'video' && videoWorkflow === 'first-last' && !lastFrameFile)
       return Toast.error('首尾帧视频需要同时上传首帧和尾帧。');
 
@@ -870,7 +1279,7 @@ const MediaPlayground = () => {
       if (mode === 'image') await submitImage();
       else await submitVideo();
     } catch (error) {
-      Toast.error(error.message || '生成失败');
+      Toast.error(userFacingGenerationError(error));
     } finally {
       setSubmitting(false);
       setTaskMessage('');
@@ -893,8 +1302,8 @@ const MediaPlayground = () => {
             <Paragraph>从提示词到成片下载，统一在一个工作台完成。</Paragraph>
           </div>
           <div className='mp-hero-stats'>
-            <StatPill label='保留' value='1 小时' />
-            <StatPill label='图像' value='4 模型' />
+            <StatPill label='保留' value='24 小时' />
+            <StatPill label='图像' value='5 模型' />
             <StatPill label='视频' value='2 模型' />
           </div>
         </section>
@@ -990,7 +1399,9 @@ const MediaPlayground = () => {
               </div>
             )}
 
-            {mode === 'image' && imageWorkflow === 'edit' ? (
+            {mode === 'image' &&
+            imageWorkflow === 'edit' &&
+            activeImageModel.supportsInputFidelity ? (
               <NativeSelect
                 label='参考图保真度'
                 value={inputFidelity}
@@ -1002,14 +1413,15 @@ const MediaPlayground = () => {
             <div className='mp-field-grid'>
               <NativeSelect
                 label='分组'
-                value={group}
-                options={groups}
+                value={effectiveGroup}
+                options={visibleGroupOptions}
                 onChange={setGroup}
+                disabled={mode === 'image'}
               />
               <NativeSelect
                 label={mode === 'image' ? '画面尺寸' : '视频尺寸'}
                 value={size}
-                options={toSelectOptions(activeModel.sizes)}
+                options={toSizeSelectOptions(activeModel.sizes, activeModel)}
                 onChange={setSize}
               />
               {mode === 'image' ? (
@@ -1068,23 +1480,25 @@ const MediaPlayground = () => {
                     onChange={setResolution}
                   />
                 ) : null}
-                <NativeSelect
-                  label='背景'
-                  value={background}
-                  options={toSelectOptions(['auto', 'transparent', 'opaque'])}
-                  onChange={setBackground}
-                />
+                {activeImageModel.backgroundOptions?.length ? (
+                  <NativeSelect
+                    label='背景'
+                    value={background}
+                    options={toSelectOptions(activeImageModel.backgroundOptions)}
+                    onChange={setBackground}
+                  />
+                ) : null}
                 <div className='mp-slider-field'>
                   <div>
                     <span>生成数量</span>
-                    <b>{count} 张</b>
+                    <b>{clampCount(count, activeImageModel)} 张</b>
                   </div>
                   <Slider
                     min={1}
-                    max={4}
+                    max={activeImageModel.maxCount || 1}
                     step={1}
-                    value={count}
-                    onChange={setCount}
+                    value={clampCount(count, activeImageModel)}
+                    onChange={(value) => setCount(clampCount(value, activeImageModel))}
                   />
                 </div>
                 {format !== 'png' && format !== 'url' ? (
@@ -1127,10 +1541,16 @@ const MediaPlayground = () => {
                   <Switch checked={watermark} onChange={setWatermark} />
                 </div>
                 {videoWorkflow !== 'text' ? (
-                  <FileDrop
-                    label='上传首帧图片'
-                    file={referenceFile}
-                    onFile={setReferenceFile}
+                  <MultiFileDrop
+                    label={
+                      videoWorkflow === 'first-last'
+                        ? '上传首帧 / 参考图'
+                        : '上传参考图 / 首帧'
+                    }
+                    files={referenceFiles}
+                    maxFiles={referenceFileLimit}
+                    onFiles={addReferenceFiles}
+                    onRemove={removeReferenceFile}
                   />
                 ) : null}
                 {videoWorkflow === 'first-last' ? (
@@ -1178,10 +1598,12 @@ const MediaPlayground = () => {
               />
               {mode === 'image' && imageWorkflow === 'edit' ? (
                 <div className='mp-field-grid'>
-                  <FileDrop
+                  <MultiFileDrop
                     label='上传参考图'
-                    file={referenceFile}
-                    onFile={setReferenceFile}
+                    files={referenceFiles}
+                    maxFiles={referenceFileLimit}
+                    onFiles={addReferenceFiles}
+                    onRemove={removeReferenceFile}
                   />
                   <FileDrop
                     label='上传遮罩图，可选'
@@ -1192,11 +1614,6 @@ const MediaPlayground = () => {
                 </div>
               ) : null}
               <div className='mp-action-row'>
-                <Banner
-                  type='warning'
-                  closeIcon={null}
-                  description='生成后请立即下载。临时预览文件只保留 1 小时，到期会自动清理。'
-                />
                 <Button
                   theme='solid'
                   type='primary'
@@ -1271,6 +1688,9 @@ const MediaPlayground = () => {
                 ))}
               </div>
             )}
+            <div className='mp-retention-note'>
+              生成后的临时预览文件保留 24 小时，到期自动清理；请在有效期内下载保存。
+            </div>
           </main>
 
           <aside className='mp-panel mp-inspector'>
@@ -1293,11 +1713,15 @@ const MediaPlayground = () => {
               </div>
               <div>
                 <span>尺寸</span>
-                <strong>{size}</strong>
+                <strong>{sizeOptionLabel(size, activeModel)}</strong>
               </div>
               <div>
                 <span>分组</span>
-                <strong>{group || '默认'}</strong>
+                <strong>
+                  {mode === 'image'
+                    ? IMAGE_GENERATION_GROUP.label
+                    : group || '默认'}
+                </strong>
               </div>
             </div>
           </aside>

@@ -38,6 +38,13 @@ func Distribute() func(c *gin.Context) {
 			abortWithOpenAiMessage(c, http.StatusBadRequest, i18n.T(c, i18n.MsgDistributorInvalidRequest, map[string]any{"Error": err.Error()}))
 			return
 		}
+		if shouldSelectChannel && isImageGenerationRequest(c) {
+			if err := service.CaptureImageRequestForRouting(c, modelRequest.Model); err != nil {
+				abortWithOpenAiMessage(c, http.StatusBadRequest, i18n.T(c, i18n.MsgDistributorInvalidRequest, map[string]any{"Error": err.Error()}))
+				return
+			}
+		}
+		allowedHighResolutionChannels := service.HighResolutionImageChannelSet(c, modelRequest.Model)
 		if ok {
 			id, err := strconv.Atoi(channelId.(string))
 			if err != nil {
@@ -52,6 +59,12 @@ func Distribute() func(c *gin.Context) {
 			if channel.Status != common.ChannelStatusEnabled {
 				abortWithOpenAiMessage(c, http.StatusForbidden, i18n.T(c, i18n.MsgDistributorChannelDisabled))
 				return
+			}
+			if len(allowedHighResolutionChannels) > 0 {
+				if _, allowed := allowedHighResolutionChannels[channel.Id]; !allowed {
+					abortWithOpenAiMessage(c, http.StatusServiceUnavailable, i18n.T(c, i18n.MsgDistributorNoAvailableChannel, map[string]any{"Group": common.GetContextKeyString(c, constant.ContextKeyUsingGroup), "Model": modelRequest.Model}), types.ErrorCodeModelNotFound)
+					return
+				}
 			}
 		} else {
 			// Select a channel for the user
@@ -104,7 +117,8 @@ func Distribute() func(c *gin.Context) {
 				if preferredChannelID, found := service.GetPreferredChannelByAffinity(c, modelRequest.Model, usingGroup); found {
 					affinityUsable := false
 					preferred, err := model.CacheGetChannel(preferredChannelID)
-					if err == nil && preferred != nil && preferred.Status == common.ChannelStatusEnabled {
+					_, highResolutionPreferredAllowed := allowedHighResolutionChannels[preferredChannelID]
+					if (len(allowedHighResolutionChannels) == 0 || highResolutionPreferredAllowed) && err == nil && preferred != nil && preferred.Status == common.ChannelStatusEnabled {
 						if usingGroup == "auto" {
 							userGroup := common.GetContextKeyString(c, constant.ContextKeyUserGroup)
 							autoGroups := service.GetUserAutoGroup(userGroup)
@@ -397,6 +411,11 @@ func getModelRequest(c *gin.Context) (*ModelRequest, bool, error) {
 		modelRequest.Model = ratio_setting.WithCompactModelSuffix(modelRequest.Model)
 	}
 	return &modelRequest, shouldSelectChannel, nil
+}
+
+func isImageGenerationRequest(c *gin.Context) bool {
+	return strings.HasPrefix(c.Request.URL.Path, "/v1/images/generations") ||
+		strings.HasPrefix(c.Request.URL.Path, "/pg/images/generations")
 }
 
 // 修复 #4834: GET /v1/video/generations/:task_id && /v1/video/:task_id 此前不解析 model，
