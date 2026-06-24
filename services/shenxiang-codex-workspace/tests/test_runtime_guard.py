@@ -7,6 +7,7 @@ from app.main import (
     fast_chat_messages,
     fast_skill_messages,
     fast_skill_responses_payload,
+    render_simple_markdown,
     response_error_message,
     responses_delta_text,
     runtime_guard_payload,
@@ -170,6 +171,26 @@ def test_onboarding_fast_skill_uses_compact_prompt():
     assert payload["model"] == "gpt-5.4-mini"
     assert payload["stream"] is True
     assert "用户自己的本机客户端" in payload["instructions"]
+
+
+def test_markdown_doc_renderer_supports_tables_and_ordered_lists():
+    html = render_simple_markdown(
+        """# 教程
+
+| 系统 | 下载文件 |
+|---|---|
+| Windows | `setup.exe` |
+
+1. 打开 `Codex++ 管理工具`。
+2. 填写 Base URL。
+"""
+    )
+
+    assert "<table>" in html
+    assert "<th>系统</th>" in html
+    assert "<td><code>setup.exe</code></td>" in html
+    assert "<ol>" in html
+    assert "<li>打开 <code>Codex++ 管理工具</code>。</li>" in html
 
 
 def test_responses_sse_delta_and_error_parsers():

@@ -612,14 +612,105 @@ function showIntegrations(activate = true) {
       <div class="integration-actions">
         <button type="button" id="refreshProvisionKeys">刷新四类 Key</button>
         <a href="/codex/docs/third-party-api-keys" target="_blank" rel="noopener noreferrer">打开详细教程</a>
+        <a href="https://github.com/BigPizzaV3/CodexPlusPlus/releases/latest" target="_blank" rel="noopener noreferrer">下载 Codex++</a>
       </div>
       <div class="integration-grid">${cards}</div>
+      ${codexPlusPlusGuideHtml()}
       <div class="integration-help">
         <strong>常见错误</strong>
         <p>401 通常是 Key 错；403 通常是余额不足或模型无权限；模型暂不可用时请切换已开放模型；请求超时可换低延迟模型或稍后重试。</p>
       </div>
     </div>
   `);
+}
+
+function codexPlusPlusGuideHtml() {
+  return `
+    <section class="integration-doc">
+      <div class="integration-doc-head">
+        <span>Codex++</span>
+        <h3>把 Codex 桌面版接入星人 API</h3>
+        <p>Codex++ 是第三方增强工具，提供静默启动器和管理面板。星人 API 提供可填写进去的 Base URL、Key 和模型，帮助普通用户把 Codex App 或 Codex CLI 接到第三方 API。</p>
+      </div>
+
+      <div class="codexpp-split">
+        <article>
+          <span>日常启动</span>
+          <h4>Codex++</h4>
+          <p>静默启动 Codex App，并通过外部 CDP 注入增强功能。不显示管理界面，不修改 Codex App 原始安装文件。</p>
+        </article>
+        <article>
+          <span>配置诊断</span>
+          <h4>Codex++ 管理工具</h4>
+          <p>用于配置中转注入、检查状态、修复、更新、查看日志、管理增强功能和用户脚本。</p>
+        </article>
+      </div>
+
+      <div class="download-grid" aria-label="Codex++ 下载链接">
+        <a href="https://github.com/BigPizzaV3/CodexPlusPlus/releases/latest" target="_blank" rel="noopener noreferrer">
+          <span>统一入口</span>
+          <strong>GitHub Releases</strong>
+          <em>永远下载最新版本</em>
+        </a>
+        <a href="https://github.com/BigPizzaV3/CodexPlusPlus/releases/download/v1.2.18/CodexPlusPlus-1.2.18-windows-x64-setup.exe" target="_blank" rel="noopener noreferrer">
+          <span>Windows</span>
+          <strong>x64 安装包</strong>
+          <em>.exe setup</em>
+        </a>
+        <a href="https://github.com/BigPizzaV3/CodexPlusPlus/releases/download/v1.2.18/CodexPlusPlus-1.2.18-macos-arm64.dmg" target="_blank" rel="noopener noreferrer">
+          <span>macOS</span>
+          <strong>Apple Silicon</strong>
+          <em>M1/M2/M3/M4</em>
+        </a>
+        <a href="https://github.com/BigPizzaV3/CodexPlusPlus/releases/download/v1.2.18/CodexPlusPlus-1.2.18-macos-x64.dmg" target="_blank" rel="noopener noreferrer">
+          <span>macOS</span>
+          <strong>Intel x64</strong>
+          <em>Intel Mac</em>
+        </a>
+      </div>
+
+      <div class="setup-steps">
+        <section>
+          <h4>安装后先做这 5 步</h4>
+          <ol>
+            <li>打开原版 Codex App，确认能正常进入界面，然后关闭。</li>
+            <li>打开 <strong>Codex++ 管理工具</strong>。</li>
+            <li>进入中转注入或 API 配置页面，新增 <strong>星人 API</strong> 配置。</li>
+            <li>填写下方 Base URL、API Key 和模型。</li>
+            <li>应用配置后，日常从 <strong>Codex++</strong> 启动。</li>
+          </ol>
+        </section>
+        <section>
+          <h4>星人 API 推荐填写</h4>
+          <dl>
+            <dt>Base URL</dt>
+            <dd><code>https://api.aiphui.top/v1</code><button type="button" data-copy="https://api.aiphui.top/v1" data-copy-label="复制">复制</button></dd>
+            <dt>API Key</dt>
+            <dd><code>复制“星人 Codex 文本令牌”</code></dd>
+            <dt>Model</dt>
+            <dd><code>gpt-5.5</code><button type="button" data-copy="gpt-5.5" data-copy-label="复制">复制</button></dd>
+          </dl>
+        </section>
+      </div>
+
+      <div class="feature-list">
+        <strong>完整功能说明</strong>
+        <ul>
+          <li>中转注入：配置多个 API 供应商，可切回官方 ChatGPT 登录态。</li>
+          <li>增强功能：插件入口解锁、特殊插件强制安装、会话删除、Markdown 导出、项目移动和 Timeline。</li>
+          <li>粘贴修复：富文本粘贴只保留纯文本，减少被误识别为附件。</li>
+          <li>Provider 同步：切换供应商后旧会话仍可见，并保留同步备份。</li>
+          <li>开发辅助：Zed 打开入口、upstream worktree 创建、用户脚本管理。</li>
+          <li>自动更新：管理工具和静默启动器都会检查 GitHub Release。</li>
+        </ul>
+      </div>
+
+      <div class="terminal-note">
+        <strong>只用终端 Codex CLI？</strong>
+        <p>不需要安装 Codex++。在 Codex CLI 里直接填 <code>https://api.aiphui.top/v1</code>、星人 Codex 文本令牌和 <code>gpt-5.5</code> 即可。完整命令见详细教程。</p>
+      </div>
+    </section>
+  `;
 }
 
 function provisionCardsHtml() {

@@ -2115,6 +2115,10 @@ def markdown_document_html(title: str, markdown: str) -> str:
     code {{ padding: 2px 6px; border-radius: 6px; background: rgba(255,255,255,.07); color: #d9fff3; }}
     pre {{ overflow: auto; padding: 14px; border: 1px solid rgba(181,204,196,.12); border-radius: 12px; background: rgba(0,0,0,.26); }}
     pre code {{ padding: 0; background: transparent; }}
+    table {{ width: 100%; margin: 18px 0; border-collapse: collapse; border: 1px solid rgba(181,204,196,.14); border-radius: 12px; overflow: hidden; }}
+    th, td {{ padding: 10px 12px; border-bottom: 1px solid rgba(181,204,196,.1); text-align: left; vertical-align: top; }}
+    th {{ color: #edf7f2; background: rgba(255,255,255,.06); }}
+    td {{ color: #bfd1cb; }}
   </style>
 </head>
 <body><main>{html}</main></body>
@@ -2124,18 +2128,43 @@ def markdown_document_html(title: str, markdown: str) -> str:
 def render_simple_markdown(markdown: str) -> str:
     html: list[str] = []
     in_code = False
-    list_open = False
+    list_open: str | None = None
+    table_open = False
 
     def close_list() -> None:
         nonlocal list_open
         if list_open:
-            html.append("</ul>")
-            list_open = False
+            html.append(f"</{list_open}>")
+            list_open = None
 
-    for raw in markdown.splitlines():
+    def close_table() -> None:
+        nonlocal table_open
+        if table_open:
+            html.append("</tbody></table>")
+            table_open = False
+
+    def close_blocks() -> None:
+        close_list()
+        close_table()
+
+    def inline_markdown(value: str) -> str:
+        text = html_escape(value.strip())
+        return re.sub(r"`([^`]+)`", r"<code>\1</code>", text)
+
+    def table_cells(line: str) -> list[str]:
+        return [cell.strip() for cell in line.strip().strip("|").split("|")]
+
+    def is_table_separator(line: str) -> bool:
+        cells = table_cells(line)
+        return bool(cells) and all(re.fullmatch(r":?-{3,}:?", cell) for cell in cells)
+
+    lines = markdown.splitlines()
+    index = 0
+    while index < len(lines):
+        raw = lines[index]
         line = raw.rstrip()
         if line.startswith("```"):
-            close_list()
+            close_blocks()
             if in_code:
                 html.append("</code></pre>")
                 in_code = False
@@ -2143,33 +2172,65 @@ def render_simple_markdown(markdown: str) -> str:
                 lang = html_escape(line.strip("`").strip() or "text")
                 html.append(f'<pre><code data-lang="{lang}">')
                 in_code = True
+            index += 1
             continue
         if in_code:
             html.append(html_escape(line) + "\n")
+            index += 1
             continue
         if not line.strip():
-            close_list()
+            close_blocks()
+            index += 1
+            continue
+        if (
+            line.strip().startswith("|")
+            and index + 1 < len(lines)
+            and is_table_separator(lines[index + 1].strip())
+        ):
+            close_blocks()
+            headers = table_cells(line)
+            html.append("<table><thead><tr>")
+            html.extend(f"<th>{inline_markdown(cell)}</th>" for cell in headers)
+            html.append("</tr></thead><tbody>")
+            table_open = True
+            index += 2
+            while index < len(lines) and lines[index].strip().startswith("|"):
+                row = table_cells(lines[index])
+                html.append("<tr>")
+                html.extend(f"<td>{inline_markdown(cell)}</td>" for cell in row)
+                html.append("</tr>")
+                index += 1
+            close_table()
             continue
         if line.startswith("# "):
-            close_list()
+            close_blocks()
             html.append(f"<h1>{html_escape(line[2:].strip())}</h1>")
         elif line.startswith("## "):
-            close_list()
+            close_blocks()
             html.append(f"<h2>{html_escape(line[3:].strip())}</h2>")
         elif line.startswith("### "):
-            close_list()
+            close_blocks()
             html.append(f"<h3>{html_escape(line[4:].strip())}</h3>")
         elif line.startswith("- "):
-            if not list_open:
+            close_table()
+            if list_open != "ul":
+                close_list()
                 html.append("<ul>")
-                list_open = True
-            html.append(f"<li>{html_escape(line[2:].strip())}</li>")
+                list_open = "ul"
+            html.append(f"<li>{inline_markdown(line[2:])}</li>")
+        elif match := re.match(r"^\d+\.\s+(.*)$", line):
+            close_table()
+            if list_open != "ol":
+                close_list()
+                html.append("<ol>")
+                list_open = "ol"
+            html.append(f"<li>{inline_markdown(match.group(1))}</li>")
         else:
-            close_list()
-            text = html_escape(line.strip())
-            text = re.sub(r"`([^`]+)`", r"<code>\1</code>", text)
-            html.append(f"<p>{text}</p>")
+            close_blocks()
+            html.append(f"<p>{inline_markdown(line)}</p>")
+        index += 1
     close_list()
+    close_table()
     if in_code:
         html.append("</code></pre>")
     return "\n".join(html)
