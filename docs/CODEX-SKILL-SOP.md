@@ -14,6 +14,8 @@
 4. 给出本次 skill 调用链，例如：`codebase-recon -> architect -> backend -> qa -> webapp-testing`。
 5. 按“八步作业流”推进：问题分析、计划、方案、预验证、实施、验证、审查、交付。
 
+如果任务跨越多个 Codex 相关系统、第三方 Provider、New API、Cowart、本地内容项目或用户要求“提高效率/形成 SOP”，先读取 `docs/CODEX-EFFICIENCY-SOP.md`，用“目标栈路由卡”确认边界后再进入本 SOP 的具体任务流程。
+
 本 SOP 已整合来自 Claude 项目记忆的三份历史规范：
 
 - `/Users/aixingren/.claude/projects/-Users-aixingren-ai-essay-editor/memory/2026-04-04-skill-usage-guide.md`
