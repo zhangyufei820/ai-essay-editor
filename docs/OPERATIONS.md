@@ -63,9 +63,15 @@ npm run perf:baseline -- --base-url=https://shenxiang.school --iterations=3
 - 实时文字安全：确认 `services/llm-gateway/config.yaml` 仍启用 default-on `guardrails`，且 `services/llm-gateway/guardrails/blocked-words.yaml` 已被挂载到容器 `/app/guardrails`。当前关键词策略只拦截色情和枪支；不要把暴力、血腥、毒品、国家领导人或政治词重新加入网关级关键词，避免教育场景误判。
 - 语音：检查 `voice-gateway` 的 `/voice/health`，确认 `ttsProviderChain` / `sttProviderChain` 至少有一个已配置 provider。
 - 媒体：长任务必须能在 `ai_task_runs` 中看到状态，并可通过 `/api/media/tasks/:taskId` 或 `/api/task-status` 返回统一任务状态。
+- 任务状态收敛：先运行 `npm run ops:ai-tasks:reconcile -- --older-than-minutes=60 --limit=100` 做 dry-run；确认只会处理明显过期的 `queued` / `running` 后，再运行 `npm run ops:ai-tasks:reconcile:apply -- --older-than-minutes=60 --limit=100`。该任务只收敛终态，不补扣、不退款、不删除记录。
 - 安全：不得把上游 OpenAI-compatible provider key 写进 Dify workflow 变量、前端环境变量、日志或仓库文档。
 
 `/admin` 应确认登录、概览、用户列表、订单记录可以正常加载；不要降低后台鉴权要求。
+
+## 监控与磁盘守卫
+
+- Sentry 配置检查：`npm run ops:sentry:check -- --allow-missing` 可用于上线前确认变量是否存在；生产启用后去掉 `--allow-missing`，必须同时看到 `SENTRY_DSN` 与 `NEXT_PUBLIC_SENTRY_DSN` 可用。不要把真实 DSN 写进仓库或聊天。
+- 磁盘 85% 前保守巡检：`npm run ops:disk:guard` 只读检查根盘使用率；默认 80% 开始运行 `scripts/server-audit.sh`，85% 及以上返回告警码。任何清理动作仍必须回到 `docs/SERVER-CLEANUP-SOP.md`，不要直接执行高风险 prune。
 
 ## 支付问题排查
 

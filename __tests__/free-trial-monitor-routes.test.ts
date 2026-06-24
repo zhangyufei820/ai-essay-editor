@@ -12,6 +12,15 @@ describe("free trial monitor source contracts", () => {
     expect(source).toContain("runFreeTrialMonitor")
   })
 
+  it("ai task reconcile cron is authenticated and only applies from POST", () => {
+    const source = read("app/api/cron/reconcile-ai-task-runs/route.ts")
+    expect(source).toContain("CRON_SECRET")
+    expect(source).toContain("AI_TASK_RECONCILE_CRON_SECRET")
+    expect(source).toContain("reconcileStaleAiTaskRuns")
+    expect(source).toContain("allowApply: false")
+    expect(source).toContain("allowApply: true")
+  })
+
   it("admin monitor route requires admin verification", () => {
     const source = read("app/api/admin/free-trial-monitor/route.ts")
     expect(source).toContain("verifyAdminRequest")
