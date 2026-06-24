@@ -20,6 +20,9 @@ describe("operations and monitoring docs", () => {
     expect(docs).toContain("/api/health")
     expect(docs).toContain("/health")
     expect(docs).toContain("Sentry")
+    expect(docs).toContain("ops:sentry:check")
+    expect(docs).toContain("ops:ai-tasks:reconcile")
+    expect(docs).toContain("ops:disk:guard")
     expect(docs).toContain("不要把真实密钥写进文档或代码")
   })
 

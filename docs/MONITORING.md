@@ -30,6 +30,34 @@ NEXT_PUBLIC_SENTRY_DSN="https://<public-key>@<org>.ingest.sentry.io/<project-id>
 - 不要提交真实 DSN 到 Git。
 - 生产环境建议 `tracesSampleRate` 保持较低采样率，避免噪音和成本过高。
 
+验证命令：
+
+```bash
+# 本地或未配置环境允许缺失，用于确认脚本和占位保护正常
+npm run ops:sentry:check -- --allow-missing
+
+# 生产启用后必须通过；若失败，先检查 .env.production 或 secret manager
+npm run ops:sentry:check
+```
+
+如果暂时不用 Sentry，必须保留外部 `/api/health` 可用性监控和日志巡检作为等价最低保障。
+
+## AI 任务状态监控
+
+`ai_task_runs` 是长任务和 Dify / OpenClaw / 图片任务的统一状态表。若巡检发现大量历史 `queued` / `running`，先 dry-run：
+
+```bash
+npm run ops:ai-tasks:reconcile -- --older-than-minutes=60 --limit=100
+```
+
+确认输出只包含明显过期记录后再 apply：
+
+```bash
+npm run ops:ai-tasks:reconcile:apply -- --older-than-minutes=60 --limit=100
+```
+
+收敛规则：明确完成阶段进入 `succeeded`，客户端断连进入 `cancelled`，异常信号进入 `failed`，其余过期任务进入 `timeout`。该任务不删除数据，也不修改积分流水。
+
 ## 外部可用性监控
 
 可以使用 UptimeRobot、Better Stack、Pingdom 或同类工具：
@@ -55,4 +83,4 @@ NEXT_PUBLIC_SENTRY_DSN="https://<public-key>@<org>.ingest.sentry.io/<project-id>
 - `/`、`/pricing`、`/admin` 是否可访问。
 - 应用日志是否有连续错误。
 - Supabase、支付回调和环境变量是否异常。
-- 服务器磁盘和 Docker 缓存是否异常增长：`bash scripts/server-audit.sh`。
+- 服务器磁盘和 Docker 缓存是否异常增长：先运行 `npm run ops:disk:guard` 或 `bash scripts/server-audit.sh`，再按 `docs/SERVER-CLEANUP-SOP.md` 处理。

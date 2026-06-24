@@ -18,6 +18,7 @@
 
 ```bash
 cd /data/ai-essay-editor
+npm run ops:disk:guard || true
 bash scripts/server-audit.sh | tee "/data/server-audit-before-$(date +%F-%H%M).log"
 df -h / /data
 docker system df
@@ -79,6 +80,7 @@ systemctl status shenxiang-container-runtime-cleanup.timer --no-pager
 建议频率：
 
 - 磁盘使用率低于 70%：每周或每次大构建后检查，不必强清。
+- 80%-85%：运行 `npm run ops:disk:guard`，保留审计日志，评估 BuildKit / journald / npm cache 是否异常增长。
 - 70%-85%：清理 `until=72h` 或 `until=24h` 的 BuildKit 缓存。
 - 高于 85%：先审计，再只清 BuildKit/日志/npm 缓存；不要碰卷和运行中服务。
 
