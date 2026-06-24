@@ -14,6 +14,15 @@ describe("Dify answer cleanup", () => {
     expect(cleaned).not.toContain('"message"')
   })
 
+  it("removes compact teacher-kit control JSON appended after beike-pro content", () => {
+    const raw = [
+      "下面给你《背影》10分钟课堂导入的三种设计：",
+      "{\"skill\":\"teacher-kit-v4\",\"message\":\"用teacher-kit-v4技能备课，请为《背影》设计一个10分钟课堂导入，输出三条。\"}",
+    ].join("")
+
+    expect(cleanBeikeProAnswer(raw)).toBe("下面给你《背影》10分钟课堂导入的三种设计：")
+  })
+
   it("removes teacher-kit metadata lines from long beike-pro answers", () => {
     const raw = [
       "skill_selected: teacher-kit-v4",
