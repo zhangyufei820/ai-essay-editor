@@ -55,7 +55,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     // 调用外部错误回调
     this.props.onError?.(error, errorInfo)
     
-    // TODO: 上报错误到监控服务（如 Sentry）
+    // TODO: 接入站内错误日志或现有运维巡检链路
     // reportError(error, errorInfo)
   }
 

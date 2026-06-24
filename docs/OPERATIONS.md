@@ -70,7 +70,7 @@ npm run perf:baseline -- --base-url=https://shenxiang.school --iterations=3
 
 ## 监控与磁盘守卫
 
-- Sentry 配置检查：`npm run ops:sentry:check -- --allow-missing` 可用于上线前确认变量是否存在；生产启用后去掉 `--allow-missing`，必须同时看到 `SENTRY_DSN` 与 `NEXT_PUBLIC_SENTRY_DSN` 可用。不要把真实 DSN 写进仓库或聊天。
+- 错误巡检：当前不接入第三方错误上报 SDK，使用 `docker logs shenxiang-nextjs`、OpenResty 访问日志、`/api/health` 和业务表状态做日常巡检。
 - 磁盘 85% 前保守巡检：`npm run ops:disk:guard` 只读检查根盘使用率；默认 80% 开始运行 `scripts/server-audit.sh`，85% 及以上返回告警码。任何清理动作仍必须回到 `docs/SERVER-CLEANUP-SOP.md`，不要直接执行高风险 prune。
 
 ## 支付问题排查

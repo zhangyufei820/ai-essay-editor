@@ -2,7 +2,7 @@
 
 适用项目：`ai-essay-editor` / 沈翔智学。
 
-本项目是 Next.js 16 + TypeScript 应用，包含 Supabase、Dify API、支付、Authing、Sentry、Docker 自托管、1Panel/服务包、Jest 测试和运维文档。每次让 Codex 处理任务时，先按本 SOP 明确该调用哪些 skill，避免只靠通用对话推进。
+本项目是 Next.js 16 + TypeScript 应用，包含 Supabase、Dify API、支付、Authing、Docker 自托管、1Panel/服务包、Jest 测试和运维文档。每次让 Codex 处理任务时，先按本 SOP 明确该调用哪些 skill，避免只靠通用对话推进。
 
 ## 0. 每次任务的固定开场
 
@@ -424,22 +424,20 @@ npm test -- __tests__/credits.test.ts __tests__/payment-guards.test.ts __tests__
 
 后续部署时，禁止再用“工作区有大量未提交改动”作为最终报告结论；必须给出具体归类和处置结果。若未获授权处理，应至少报告阻塞原因和建议隔离命令。
 
-### Sentry / 线上错误 / 监控
+### 线上错误 / 监控
 
 调用链：
 
-1. `sentry-triage`
-2. `vibe-systematic-debugging`
-3. `backend` / `frontend`
-4. `qa`
+1. `vibe-systematic-debugging`
+2. `backend` / `frontend`
+3. `qa`
 
 必须读取：
 
 - `docs/RUNBOOK.md`
 - `docs/MONITORING.md`
-- `sentry.client.config.ts`
-- `sentry.server.config.ts`
-- `sentry.edge.config.ts`
+
+当前生产不接入第三方错误上报 SDK；优先检查 `shenxiang-nextjs`、OpenResty 日志、`/api/health` 和业务表状态。
 
 ### 性能问题
 
@@ -501,7 +499,7 @@ npm test -- __tests__/credits.test.ts __tests__/payment-guards.test.ts __tests__
 | CI、PR、GitHub Actions | `gh-fix-ci`、`ci-fixer` |
 | 代码审查 | `reviewer`、`brooks-review`、`brooks-test` |
 | 性能慢 | `vibe-performance-testing`、`vibe-detecting-performance-regressions` |
-| Sentry、线上错误 | `sentry-triage`、`vibe-systematic-debugging` |
+| 线上错误、监控异常 | `vibe-systematic-debugging`、`qa` |
 | 写文档、Runbook、发布说明 | `docs`、`vibe-writing-docs` |
 | 批量生图、客户选图、跑图图库 | `batch-image-studio`、`imagegen` |
 

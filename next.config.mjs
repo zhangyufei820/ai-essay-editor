@@ -2,8 +2,6 @@
  * 🚀 沈翔学校 - Next.js 配置（Next.js 16 兼容版）
  */
 
-import { withSentryConfig } from '@sentry/nextjs';
-
 const deploymentVersion = process.env.DEPLOYMENT_VERSION || process.env.NEXT_BUILD_ID;
 
 /** @type {import('next').NextConfig} */
@@ -206,23 +204,4 @@ const nextConfig = {
   },
 }
 
-export default withSentryConfig(nextConfig, {
-  // Sentry Webpack Plugin 配置
-  // https://docs.sentry.io/platforms/javascript/guides/nextjs/manual-setup/
-  silent: true,
-  // 在生产环境上传 sourcemap
-  widenClientFileUpload: true,
-  // 在生产环境自动删除 console
-  transpileClientSDK: true,
-  // Next.js 16 + Turbopack 当前构建不会生成 Pages Router manifest。
-  // 禁用生产编译后 sourcemap/release 钩子，避免 Sentry 读取 pages-manifest.json 失败。
-  useRunAfterProductionCompileHook: false,
-  sourcemaps: {
-    disable: true,
-  },
-}, {
-  // 报告所有 metadata 项以获得更好的调试
-  tunnelRoute: '/monitoring',
-  // 禁用 Sentry CLI 在构建时上传 sourcemap（可选，根据需要启用）
-  // dryRun: process.env.NODE_ENV === 'development',
-});
+export default nextConfig

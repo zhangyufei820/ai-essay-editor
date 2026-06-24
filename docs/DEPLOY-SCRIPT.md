@@ -229,7 +229,6 @@ docker system prune -f
 ## 🔗 相关文档
 
 - [Uptime 监控设置](./UPTIME-SETUP.md)
-- [Sentry 错误监控](../SENTRY-SETUP.md)
 - [Docker 部署指南](../DEPLOYMENT_GUIDE.md)
 
 ---

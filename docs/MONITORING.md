@@ -11,36 +11,17 @@
 
 建议外部监控每 1-5 分钟请求一次 `https://shenxiang.school/api/health`。连续 2-3 次失败后再告警，避免偶发网络抖动造成误报。
 
-## Sentry 错误监控
+## 错误日志巡检
 
-代码已做安全保护：当 DSN 未配置或仍是占位符时，会跳过 Sentry 初始化。
+当前阶段不接入第三方错误上报 SDK。生产故障排查以外部 `/api/health` 可用性监控、`shenxiang-nextjs` 日志、OpenResty 访问日志和业务表巡检为准。
 
-推荐变量名：
-
-```bash
-SENTRY_DSN="https://<public-key>@<org>.ingest.sentry.io/<project-id>"
-NEXT_PUBLIC_SENTRY_DSN="https://<public-key>@<org>.ingest.sentry.io/<project-id>"
-```
-
-配置原则：
-
-- 客户端只能使用 `NEXT_PUBLIC_SENTRY_DSN`。
-- 服务端和 Edge 使用 `SENTRY_DSN`。
-- 不要在客户端暴露服务端密钥。
-- 不要提交真实 DSN 到 Git。
-- 生产环境建议 `tracesSampleRate` 保持较低采样率，避免噪音和成本过高。
-
-验证命令：
+建议每日查看：
 
 ```bash
-# 本地或未配置环境允许缺失，用于确认脚本和占位保护正常
-npm run ops:sentry:check -- --allow-missing
-
-# 生产启用后必须通过；若失败，先检查 .env.production 或 secret manager
-npm run ops:sentry:check
+docker logs shenxiang-nextjs --since 24h 2>&1 | grep -Ei 'error|fail|timeout|refused|oom|exception|unhandled' || true
 ```
 
-如果暂时不用 Sentry，必须保留外部 `/api/health` 可用性监控和日志巡检作为等价最低保障。
+如需更细的用户路径定位，优先结合 `shenxiang-openresty` 访问日志、`ai_task_runs` 状态和相关业务表，而不是引入额外监控依赖。
 
 ## AI 任务状态监控
 

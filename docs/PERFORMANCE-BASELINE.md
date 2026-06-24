@@ -70,4 +70,4 @@ npm run perf:baseline -- --base-url=http://127.0.0.1:3000 --routes=/,/chat,/lab,
 - 告警条件: HTTP 非 200、返回体不包含 `"ok"`、连续 2-3 次失败
 - 告警对象: 站长、技术负责人、值班群
 
-当前阶段先按 SOP 落地，不在服务器新增监控容器。后续如要接 Uptime Kuma、Sentry 或 Better Stack，先出端口和数据留存评估。
+当前阶段先按 SOP 落地，不在服务器新增监控容器。后续如要接第三方监控平台，先出端口和数据留存评估。
