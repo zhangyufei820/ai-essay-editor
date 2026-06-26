@@ -10,6 +10,7 @@ from pathlib import Path
 ROOT = Path(os.environ.get("SHENXIANG_NEW_API_ROOT", "/opt/shenxiang-new-api"))
 DEFAULT_BASE_URL = "https://dragtokens.com/v1"
 DEFAULT_MODEL = "gpt-5.5"
+DEFAULT_MODELS = DEFAULT_MODEL
 CHANNEL_TAG = "dragtokens-gpt55-responses"
 PLAN_TITLE = "¥500 月卡"
 QUOTA_PER_USD = 500_000
@@ -127,8 +128,23 @@ def upsert_schema() -> None:
         mysql("\n".join(statements))
 
 
-def upsert_channel(api_key: str, base_url: str, model: str) -> int:
+def normalize_models(raw: str) -> list[str]:
+    models: list[str] = []
+    seen: set[str] = set()
+    for item in raw.replace("\n", ",").split(","):
+        model = item.strip()
+        if not model or model in seen:
+            continue
+        seen.add(model)
+        models.append(model)
+    if not models:
+        models.append(DEFAULT_MODEL)
+    return models
+
+
+def upsert_channel(api_key: str, base_url: str, models: list[str]) -> int:
     groups = "default,standard,pro,code,internal"
+    models_value = ",".join(models)
     channel_id = scalar(f"SELECT id FROM channels WHERE tag = {sql_quote(CHANNEL_TAG)} ORDER BY id DESC LIMIT 1;")
     if channel_id:
         mysql(
@@ -140,7 +156,7 @@ SET type = 1,
     status = 1,
     name = '星人文本 Dragtokens 月卡链路',
     base_url = {sql_quote(base_url)},
-    models = {sql_quote(model)},
+    models = {sql_quote(models_value)},
     `group` = {sql_quote(groups)},
     priority = {PRIMARY_PRIORITY},
     weight = 100,
@@ -155,7 +171,7 @@ SET NAMES utf8mb4;
 INSERT INTO channels
   (type, `key`, status, name, base_url, models, `group`, priority, weight, tag, created_time)
 VALUES
-  (1, {sql_quote(api_key)}, 1, '星人文本 Dragtokens 月卡链路', {sql_quote(base_url)}, {sql_quote(model)}, {sql_quote(groups)}, {PRIMARY_PRIORITY}, 100, {sql_quote(CHANNEL_TAG)}, UNIX_TIMESTAMP());
+  (1, {sql_quote(api_key)}, 1, '星人文本 Dragtokens 月卡链路', {sql_quote(base_url)}, {sql_quote(models_value)}, {sql_quote(groups)}, {PRIMARY_PRIORITY}, 100, {sql_quote(CHANNEL_TAG)}, UNIX_TIMESTAMP());
 """
     )
     channel_id = scalar(f"SELECT id FROM channels WHERE tag = {sql_quote(CHANNEL_TAG)} ORDER BY id DESC LIMIT 1;")
@@ -291,13 +307,17 @@ def main() -> None:
     load_dotenv(ROOT / ".env")
     api_key = require_env("DRAGTOKENS_API_KEY")
     base_url = os.environ.get("DRAGTOKENS_BASE_URL", DEFAULT_BASE_URL).strip() or DEFAULT_BASE_URL
-    model = os.environ.get("DRAGTOKENS_MODEL", DEFAULT_MODEL).strip() or DEFAULT_MODEL
+    models_raw = os.environ.get("DRAGTOKENS_MODELS", "").strip()
+    if not models_raw:
+        models_raw = os.environ.get("DRAGTOKENS_MODEL", DEFAULT_MODELS)
+    models = normalize_models(models_raw)
     upsert_schema()
-    channel_id = upsert_channel(api_key, base_url, model)
-    upsert_model_and_abilities(channel_id, model)
-    upsert_responses_policy(channel_id, model)
+    channel_id = upsert_channel(api_key, base_url, models)
+    for model in models:
+        upsert_model_and_abilities(channel_id, model)
+        upsert_responses_policy(channel_id, model)
     upsert_plan()
-    print(json.dumps({"ok": True, "channel_id": channel_id, "model": model, "plan": PLAN_TITLE}, ensure_ascii=False))
+    print(json.dumps({"ok": True, "channel_id": channel_id, "models": models, "plan": PLAN_TITLE}, ensure_ascii=False))
 
 
 if __name__ == "__main__":

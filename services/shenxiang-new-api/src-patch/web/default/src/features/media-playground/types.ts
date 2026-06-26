@@ -40,12 +40,15 @@ export type ModelCapability = {
   supportsPromptEnhancement?: boolean
   supportsWatermark?: boolean
   sizes: string[]
+  sizeParam?: 'size' | 'aspect_ratio' | 'responseFormat'
   qualities?: string[]
   aspectRatios?: string[]
   resolutions?: string[]
   durations?: number[]
   fps?: number[]
   outputFormats?: string[]
+  backgroundOptions?: string[]
+  maxCount?: number
   defaultSize: string
   defaultQuality?: string
   defaultAspectRatio?: string
