@@ -2,7 +2,7 @@ name: shenxiang-new-api
 
 services:
   shenxiang-new-api:
-    image: shenxiang-new-api-codex-media-fix:20260613-2153
+    image: shenxiang-new-api-dragtokens-monthly-routing:20260625-1725
     container_name: shenxiang-new-api
     restart: unless-stopped
     depends_on:
@@ -21,9 +21,18 @@ services:
       PLAYGROUND_MEDIA_CACHE_DIR: /data/media-cache
       PLAYGROUND_MEDIA_URL_PREFIX: /pg/media/files
       PLAYGROUND_MEDIA_MAX_MB: 256
+      PLAYGROUND_MEDIA_KEEP_MINUTES: ${PLAYGROUND_MEDIA_KEEP_MINUTES:-4320}
+      PLAYGROUND_IMAGE_RETRY_TIMES: 3
+      PLAYGROUND_IMAGE_RELAY_TIMEOUT_SECONDS: ${PLAYGROUND_IMAGE_RELAY_TIMEOUT_SECONDS:-240}
       CODEX_WORKSPACE_UPSTREAM: ${CODEX_WORKSPACE_UPSTREAM:-http://shenxiang-codex-workspace:8000}
       TASK_PRICE_PATCH: grok-video-super-720p
       UPSTREAM_COST_MARKUP_RATE: ${UPSTREAM_COST_MARKUP_RATE:-0.08}
+      UPSTREAM_OFFICIAL_USD_COST_CNY: ${UPSTREAM_OFFICIAL_USD_COST_CNY:-0.09}
+      GPT_IMAGE_2_4K_2K_CHANNEL_IDS: ${GPT_IMAGE_2_4K_2K_CHANNEL_IDS:-16}
+      GPT_IMAGE_2_4K_4K_CHANNEL_IDS: ${GPT_IMAGE_2_4K_4K_CHANNEL_IDS:-16}
+      DRAGTOKENS_API_KEY: ${DRAGTOKENS_API_KEY:-}
+      DRAGTOKENS_BASE_URL: ${DRAGTOKENS_BASE_URL:-https://dragtokens.com/v1}
+      DRAGTOKENS_MODEL: ${DRAGTOKENS_MODEL:-gpt-5.5}
     volumes:
       - ./data:/data
     healthcheck:

@@ -40,6 +40,10 @@ RECOVERING_RUNS = int(os.environ.get("PROVIDER_MONITOR_RECOVERING_RUNS", "2"))
 REAL_REQUEST_LOOKBACK_SECONDS = int(os.environ.get("PROVIDER_MONITOR_REAL_REQUEST_LOOKBACK_SECONDS", "1800"))
 REAL_REQUEST_LIMIT = int(os.environ.get("PROVIDER_MONITOR_REAL_REQUEST_LIMIT", "300"))
 REAL_REQUEST_USE_TIME_DEGRADE_MS = int(os.environ.get("PROVIDER_MONITOR_REAL_REQUEST_USE_TIME_DEGRADE_MS", "60000"))
+TEXT_FAMILY_PROBE_EVERY = {
+    "openai_text": 1,
+    "claude_text": int(os.environ.get("PROVIDER_MONITOR_CLAUDE_TEXT_PROBE_EVERY", "2")),
+}
 
 REDACTED = "***redacted***"
 SENSITIVE_TEXT_PATTERNS = (
@@ -63,21 +67,14 @@ TEXT_FAMILIES = (
     TextFamily(
         name="openai_text",
         models=("gpt-5.5", "gpt-5.4", "gpt-5.4-mini"),
-        channel_ids=(1, 14, 2, 3),
-        baseline_priorities={1: 40, 14: 30, 2: 20, 3: 10},
+        channel_ids=(21, 3, 14, 1, 2),
+        baseline_priorities={21: 90, 3: 40, 14: 30, 1: 20, 2: 10},
     ),
     TextFamily(
         name="claude_text",
         models=("claude-opus-4-8", "claude-opus-4-7", "claude-opus-4-6", "claude-sonnet-4-6"),
         channel_ids=(13, 9, 10),
         baseline_priorities={13: 30, 9: 20, 10: 10},
-    ),
-    TextFamily(
-        name="claude_fable_text",
-        models=("claude-fable-5",),
-        channel_ids=(11,),
-        baseline_priorities={11: 15},
-        standalone=True,
     ),
 )
 
@@ -142,6 +139,8 @@ def docker_mysql(args: list[str], env: dict[str, str], *, input_text: str | None
         kwargs["stderr"] = subprocess.PIPE
     if input_text is not None:
         kwargs["input"] = input_text
+    kwargs["encoding"] = "utf-8"
+    kwargs["errors"] = "replace"
     result = subprocess.run(cmd, **kwargs)
     if result.returncode != 0:
         stderr = (result.stderr or "").strip()
@@ -222,6 +221,32 @@ def save_state(state: dict[str, Any]) -> None:
     tmp.write_text(json.dumps(state, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
     os.chmod(tmp, 0o600)
     tmp.replace(STATE_PATH)
+
+
+def should_probe_text_family(family: TextFamily, state: dict[str, Any]) -> tuple[bool, dict[str, Any]]:
+    probe_every = max(1, int(TEXT_FAMILY_PROBE_EVERY.get(family.name, 1) or 1))
+    counters = state.setdefault("text_family_probe_counters", {})
+    counter = int(counters.get(family.name) or 0) + 1
+    counters[family.name] = counter
+    should_probe = (counter - 1) % probe_every == 0
+    return should_probe, {"counter": counter, "probe_every": probe_every}
+
+
+def skip_text_family_event(family: TextFamily, dry_run: bool, probe_meta: dict[str, Any]) -> dict[str, Any]:
+    probe_every = int(probe_meta.get("probe_every") or 1)
+    counter = int(probe_meta.get("counter") or 0)
+    event = {
+        "ts": now_iso(),
+        "event": "text_latency_family_skipped",
+        "family": family.name,
+        "dry_run": dry_run,
+        "reason": "probe_downsampled",
+        "counter": counter,
+        "probe_every": probe_every,
+        "next_probe_after_runs": max(1, probe_every - ((counter - 1) % probe_every)),
+    }
+    write_event(event)
+    return event
 
 
 def load_channels(env: dict[str, str], channel_ids: list[int]) -> dict[int, dict[str, Any]]:
@@ -305,8 +330,16 @@ def classify_exception(exc: Exception) -> str:
     return "probe_error"
 
 
+def openai_request_url(base_url: str, request_path: str) -> str:
+    base = (base_url or "").strip().rstrip("/")
+    path = request_path if request_path.startswith("/") else f"/{request_path}"
+    if base.endswith("/v1") and path.startswith("/v1/"):
+        path = path[3:]
+    return base + path
+
+
 def request_chat(base_url: str, api_key: str, model: str) -> dict[str, Any]:
-    url = base_url.rstrip("/") + "/v1/chat/completions"
+    url = openai_request_url(base_url, "/v1/chat/completions")
     body = json.dumps(
         {
             "model": model,
@@ -801,7 +834,18 @@ def evaluate_text_family(
         for summary in channel_summaries.values()
         if not summary.get("missing") and int(summary.get("current_status") or 0) == 1
     ]
-    rankable.sort(key=lambda item: (item.get("hard_unhealthy", False), float(item.get("score") or 10_000_000)))
+    primary_channel_id = family.channel_ids[0] if family.channel_ids else 0
+    rankable.sort(
+        key=lambda item: (
+            not (
+                int(item.get("channel_id") or 0) == primary_channel_id
+                and not item.get("hard_unhealthy", False)
+                and not item.get("degraded", False)
+            ),
+            item.get("hard_unhealthy", False),
+            float(item.get("score") or 10_000_000),
+        )
+    )
     for rank, summary in enumerate(rankable):
         channel_id = int(summary["channel_id"])
         ch_state = channel_state(state, channel_id, int(summary["baseline_priority"]))
@@ -845,6 +889,8 @@ def docker_logs_since(seconds: int) -> str:
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
+        encoding="utf-8",
+        errors="replace",
     )
     if result.returncode != 0:
         raise RuntimeError(f"docker logs failed: {(result.stdout or '').strip()[:300]}")
@@ -1003,6 +1049,10 @@ def main() -> int:
             args.dry_run,
         )
         for family in TEXT_FAMILIES:
+            should_probe, probe_meta = should_probe_text_family(family, state)
+            if not should_probe:
+                results[family.name] = skip_text_family_event(family, args.dry_run, probe_meta)
+                continue
             results[family.name] = evaluate_text_family(family, channels, state, env, args.dry_run)
         save_state(state)
         print(json.dumps({"ok": True, "dry_run": args.dry_run, "results": results}, ensure_ascii=False))

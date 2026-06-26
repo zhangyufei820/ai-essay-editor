@@ -1,0 +1,4 @@
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+*/15 8-23 * * * root /opt/shenxiang-new-api/scripts/provider_monitor.sh >> /opt/shenxiang-new-api/logs/provider-monitor.cron.log 2>&1
