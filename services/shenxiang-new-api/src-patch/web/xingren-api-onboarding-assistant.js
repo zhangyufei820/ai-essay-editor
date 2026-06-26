@@ -22,6 +22,8 @@
     loginPath: "/login",
   };
 
+  var ASSISTANT_AVATAR_URL = "/assets/xingren-api-assistant-avatar.jpg";
+
   var SITE_ROUTES = {
     home: {
       title: "首页",
@@ -84,10 +86,10 @@
       aliases: ["日志", "记录", "用量", "报错记录", "request id", "日志记录"],
     },
     codexCloud: {
-      title: "云端 Codex",
+      title: "云 Codex",
       path: CONFIG.codexCloudPath,
       hint: "在浏览器里使用云端 Codex 工作区，处理代码任务、查看运行状态和排查环境问题。",
-      aliases: ["云端codex", "云端 codex", "cloud codex", "codex 工作区", "codex workspace"],
+      aliases: ["云codex", "云 codex", "云端codex", "云端 codex", "cloud codex", "codex 工作区", "codex workspace"],
     },
   };
 
@@ -952,6 +954,16 @@
     return escapeHTML(normalizeAgentText(content)).replace(/\n{2,}/g, "</p><p>").replace(/\n/g, "<br>");
   }
 
+  function renderAvatar(className) {
+    return (
+      '<span class="' +
+      className +
+      ' xr-api-assistant-avatar-frame"><img src="' +
+      ASSISTANT_AVATAR_URL +
+      '" alt="" decoding="async" /></span>'
+    );
+  }
+
   function renderMessages() {
     var list = document.querySelector(".xr-api-assistant-messages");
     if (!list) return;
@@ -1027,11 +1039,14 @@
     }
     root.innerHTML =
       '<button type="button" class="xr-api-assistant-launcher" aria-label="打开星人 API 接入老师">' +
-      '<span class="xr-api-assistant-launcher-icon">AI</span><span class="xr-api-assistant-launcher-copy"><strong>全站接入老师</strong><small>找入口 / 创建 Key</small></span>' +
+      renderAvatar("xr-api-assistant-launcher-icon") +
+      '<span class="xr-api-assistant-launcher-copy"><strong>全站接入老师</strong><small>找入口 / 创建 Key</small></span>' +
       "</button>" +
       (state.open
         ? '<aside class="xr-api-assistant-panel" role="dialog" aria-label="星人 API 接入老师">' +
-          '<header><div class="xr-api-assistant-title"><span class="xr-api-assistant-avatar">AI</span><div><strong>星人 API 全站接入老师</strong><span>读当前页、答疑、授权后自动创建 Key</span></div></div><button type="button" class="xr-api-assistant-close" aria-label="结束会话并清空历史">×</button></header>' +
+          '<header><div class="xr-api-assistant-title">' +
+          renderAvatar("xr-api-assistant-avatar") +
+          '<div><strong>星人 API 全站接入老师</strong><span>读当前页、答疑、授权后自动创建 Key</span></div></div><button type="button" class="xr-api-assistant-close" aria-label="结束会话并清空历史">×</button></header>' +
           '<div class="xr-api-assistant-statusbar"><span>全站可见</span><span>读当前页</span><span>授权后操作</span><span>结束即清空</span></div>' +
           '<div class="xr-api-assistant-messages" aria-live="polite"></div>' +
           '<form class="xr-api-assistant-form"><input aria-label="输入接入需求" placeholder="问当前页面、入口、价格、报错，或说：我要将 API 接入 Codex" autocomplete="off" maxlength="900" /><button type="submit">发送</button></form>' +
@@ -1059,9 +1074,12 @@
     style.id = "xr-api-assistant-style";
     style.textContent =
       "#xr-api-assistant-root{position:fixed;right:14px;top:50%;transform:translateY(-50%);z-index:2147483000;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;color:#162033;letter-spacing:0}" +
-      ".xr-api-assistant-launcher{display:grid;place-items:center;border:1px solid rgba(20,184,166,.22);border-radius:12px;background:linear-gradient(135deg,#ffffff,#eefdf8);color:#10212f;padding:7px;box-shadow:0 12px 36px rgba(15,23,42,.18);cursor:pointer;width:52px;height:52px;text-align:center;transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease}" +
-      ".xr-api-assistant-launcher:hover{transform:translateX(-2px);border-color:rgba(15,118,110,.4);box-shadow:0 16px 48px rgba(15,23,42,.24)}" +
-      ".xr-api-assistant-launcher-icon,.xr-api-assistant-avatar{display:grid;place-items:center;width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#0f766e,#155e75);color:white;font-weight:850;font-size:12px;letter-spacing:0}" +
+      ".xr-api-assistant-launcher{position:relative;display:grid;place-items:center;border:1px solid rgba(20,184,166,.32);border-radius:14px;background:linear-gradient(135deg,#ffffff,#eefdf8);color:#10212f;padding:6px;box-shadow:0 12px 36px rgba(15,23,42,.2),0 0 0 1px rgba(255,255,255,.72) inset;cursor:pointer;width:52px;height:52px;text-align:center;transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease}" +
+      ".xr-api-assistant-launcher::before{content:'';position:absolute;inset:-7px;border:1px solid rgba(45,212,191,.48);border-radius:18px;pointer-events:none;animation:xrApiLauncherPing 2.8s ease-out infinite}" +
+      ".xr-api-assistant-launcher::after{content:'';position:absolute;right:4px;top:4px;width:9px;height:9px;border-radius:999px;background:#22c55e;box-shadow:0 0 0 3px rgba(34,197,94,.2);animation:xrApiOnlineDot 1.9s ease-in-out infinite;pointer-events:none}" +
+      ".xr-api-assistant-launcher:hover{transform:translateX(-2px);border-color:rgba(15,118,110,.48);box-shadow:0 16px 48px rgba(15,23,42,.25),0 0 0 1px rgba(255,255,255,.88) inset}" +
+      ".xr-api-assistant-launcher-icon,.xr-api-assistant-avatar{display:grid;place-items:center;width:38px;height:38px;border-radius:11px;background:#0f766e;color:white;font-weight:850;font-size:12px;letter-spacing:0;overflow:hidden;box-shadow:0 6px 18px rgba(15,118,110,.25)}" +
+      ".xr-api-assistant-avatar-frame img{display:block;width:100%;height:100%;object-fit:cover}" +
       ".xr-api-assistant-launcher-copy{display:none}" +
       ".xr-api-assistant-open .xr-api-assistant-launcher{display:none}" +
       ".xr-api-assistant-panel{position:fixed;right:76px;top:50%;transform:translateY(-50%);width:min(500px,calc(100vw - 104px));height:min(730px,calc(100vh - 48px));background:#ffffff;border:1px solid rgba(15,23,42,.14);border-radius:16px;box-shadow:0 30px 92px rgba(15,23,42,.3);display:flex;flex-direction:column;overflow:hidden}" +
@@ -1075,7 +1093,8 @@
       ".xr-api-assistant-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:11px}.xr-api-assistant-actions button,.xr-api-assistant-form button{border:0;border-radius:10px;background:#0f766e;color:white;padding:8px 10px;font-size:12px;font-weight:750;cursor:pointer;white-space:normal;text-align:center;line-height:1.25}.xr-api-assistant-actions button:nth-child(2n){background:#334155}.xr-api-assistant-actions button:nth-child(3n){background:#155e75}.xr-api-assistant-actions button:nth-child(4n){background:#7c2d12}.xr-api-assistant-actions button:hover,.xr-api-assistant-form button:hover{filter:brightness(.96)}" +
       ".xr-api-assistant-code{position:relative;margin:11px 0 2px;background:#101828;border-radius:12px;color:#e2e8f0;overflow:hidden;border:1px solid rgba(255,255,255,.08)}.xr-api-assistant-code button{position:absolute;right:8px;top:8px;border:0;border-radius:8px;background:#22c55e;color:#062814;padding:6px 9px;font-size:12px;font-weight:800;cursor:pointer}.xr-api-assistant-code pre{margin:0;padding:44px 12px 12px;white-space:pre-wrap;word-break:break-word;font-size:12px;line-height:1.54}" +
       ".xr-api-assistant-form{display:grid;grid-template-columns:1fr auto;gap:9px;padding:12px;border-top:1px solid #e5e7eb;background:white}.xr-api-assistant-form input{min-width:0;border:1px solid #cbd5e1;border-radius:11px;padding:11px 12px;font-size:13px;outline:none}.xr-api-assistant-form input:focus{border-color:#0f766e;box-shadow:0 0 0 3px rgba(15,118,110,.14)}.xr-api-assistant-form button{padding:0 14px}" +
-      ".xr-api-assistant-typing{display:flex;gap:6px;align-items:center;width:auto}.xr-api-assistant-typing strong{font-size:12px;color:#475569;margin-right:2px}.xr-api-assistant-typing span{width:6px;height:6px;border-radius:50%;background:#64748b;animation:xrApiTyping 1s infinite ease-in-out}.xr-api-assistant-typing span:nth-child(2){animation-delay:.15s}.xr-api-assistant-typing span:nth-child(3){animation-delay:.3s}@keyframes xrApiTyping{0%,80%,100%{opacity:.35;transform:translateY(0)}40%{opacity:1;transform:translateY(-3px)}}" +
+      ".xr-api-assistant-typing{display:flex;gap:6px;align-items:center;width:auto}.xr-api-assistant-typing strong{font-size:12px;color:#475569;margin-right:2px}.xr-api-assistant-typing span{width:6px;height:6px;border-radius:50%;background:#64748b;animation:xrApiTyping 1s infinite ease-in-out}.xr-api-assistant-typing span:nth-child(2){animation-delay:.15s}.xr-api-assistant-typing span:nth-child(3){animation-delay:.3s}@keyframes xrApiTyping{0%,80%,100%{opacity:.35;transform:translateY(0)}40%{opacity:1;transform:translateY(-3px)}}@keyframes xrApiLauncherPing{0%{opacity:.72;transform:scale(.82)}70%,100%{opacity:0;transform:scale(1.28)}}@keyframes xrApiOnlineDot{0%,100%{transform:scale(1);opacity:.82}50%{transform:scale(1.24);opacity:1}}" +
+      "@media (prefers-reduced-motion:reduce){.xr-api-assistant-launcher,.xr-api-assistant-launcher::before,.xr-api-assistant-launcher::after,.xr-api-assistant-typing span{animation:none;transition:none}}" +
       "@media (max-width:640px){#xr-api-assistant-root{right:10px;top:auto;bottom:76px;transform:none}.xr-api-assistant-launcher{width:48px;height:48px;padding:6px}.xr-api-assistant-launcher-icon{width:36px;height:36px}.xr-api-assistant-panel{left:0;right:0;top:auto;bottom:0;transform:none;width:100%;height:min(75vh,660px);border-radius:16px 16px 0 0}.xr-api-assistant-title span:last-child{max-width:200px}.xr-api-assistant-actions button{flex:1 1 calc(50% - 8px)}}";
     document.head.appendChild(style);
   }

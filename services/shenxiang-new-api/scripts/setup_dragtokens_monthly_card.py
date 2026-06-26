@@ -10,7 +10,7 @@ from pathlib import Path
 ROOT = Path(os.environ.get("SHENXIANG_NEW_API_ROOT", "/opt/shenxiang-new-api"))
 DEFAULT_BASE_URL = "https://dragtokens.com/v1"
 DEFAULT_MODEL = "gpt-5.5"
-DEFAULT_MODELS = DEFAULT_MODEL
+DEFAULT_MODELS = "gpt-5.5,gpt-5.4,gpt-5.4-mini"
 CHANNEL_TAG = "dragtokens-gpt55-responses"
 PLAN_TITLE = "¥500 月卡"
 QUOTA_PER_USD = 500_000

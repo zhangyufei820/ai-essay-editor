@@ -53,6 +53,9 @@ var classicIndexPage []byte
 //go:embed web/xingren-api-onboarding-assistant.js
 var xingrenAPIOnboardingAssistantJS []byte
 
+//go:embed web/xingren-api-assistant-avatar.jpg
+var xingrenAPIAssistantAvatarJPG []byte
+
 func localPprofListenAddr(configured string) string {
 	configured = strings.TrimSpace(configured)
 	if configured == "" {
@@ -220,6 +223,7 @@ func main() {
 	InjectUmamiAnalytics()
 	InjectGoogleAnalytics()
 	InjectXingrenAPIOnboardingAssistant()
+	RegisterXingrenAPIStaticAssets(server)
 	RegisterXingrenOnboardingAssistant(server)
 
 	// 设置路由
@@ -262,6 +266,13 @@ func configureTrustedProxies(server *gin.Engine) {
 		common.SysError("failed to configure trusted proxies: " + err.Error())
 		_ = server.SetTrustedProxies([]string{"127.0.0.1", "::1"})
 	}
+}
+
+func RegisterXingrenAPIStaticAssets(server *gin.Engine) {
+	server.GET("/assets/xingren-api-assistant-avatar.jpg", func(c *gin.Context) {
+		c.Header("Cache-Control", "public, max-age=31536000, immutable")
+		c.Data(http.StatusOK, "image/jpeg", xingrenAPIAssistantAvatarJPG)
+	})
 }
 
 // analyticsIDPattern restricts analytics identifiers to characters that cannot

@@ -44,6 +44,35 @@ def patch_file(path: Path, replacements: list[tuple[str, str, str]]) -> bool:
     return changed_any
 
 
+def latest_source_root(app_root: Path) -> Path:
+    candidates = sorted((app_root / "build").glob("src-*"), key=lambda path: path.stat().st_mtime, reverse=True)
+    for candidate in candidates:
+        if (candidate / "Dockerfile").exists() and (candidate / "web/package.json").exists():
+            return candidate
+    return DEFAULT_SOURCE_ROOT
+
+
+def normalize_codex_labels(source_root: Path) -> dict[str, bool]:
+    paths = [
+        source_root / "web/classic/src/hooks/common/useNavigation.js",
+        source_root / "web/classic/src/pages/Setting/Operation/SettingsHeaderNavModules.jsx",
+        source_root / "web/default/src/hooks/use-top-nav-links.ts",
+        source_root / "web/default/src/features/system-settings/maintenance/header-navigation-section.tsx",
+    ]
+    results: dict[str, bool] = {}
+    for path in paths:
+        if not path.exists():
+            results[path.name] = False
+            continue
+        text = read_text(path)
+        normalized = text.replace("云端 Codex", "云 Codex").replace("云端Codex", "云 Codex")
+        changed = normalized != text
+        if changed:
+            write_text(path, normalized)
+        results[path.name] = changed
+    return results
+
+
 def patch_classic_navigation(source_root: Path) -> bool:
     path = source_root / "web/classic/src/hooks/common/useNavigation.js"
     return patch_file(
@@ -56,7 +85,7 @@ def patch_classic_navigation(source_root: Path) -> bool:
             ),
             (
                 "      {\n        text: t('媒体工坊'),\n        itemKey: 'media',\n        to: '/console/media-playground',\n      },\n      {\n        text: t('模型广场'),",
-                "      {\n        text: t('媒体工坊'),\n        itemKey: 'media',\n        to: '/console/media-playground',\n      },\n      {\n        text: t('云端 Codex'),\n        itemKey: 'codex',\n        to: '/codex/',\n      },\n      {\n        text: t('模型广场'),",
+                "      {\n        text: t('媒体工坊'),\n        itemKey: 'media',\n        to: '/console/media-playground',\n      },\n      {\n        text: t('云 Codex'),\n        itemKey: 'codex',\n        to: '/codex/',\n      },\n      {\n        text: t('模型广场'),",
                 "classic nav codex link",
             ),
             (
@@ -89,7 +118,7 @@ def patch_classic_settings(source_root: Path) -> bool:
         ),
         (
             "    {\n      key: 'media',\n      title: t('媒体工坊'),\n      description: t('图像和视频生成入口'),\n    },\n    {\n      key: 'pricing',",
-            "    {\n      key: 'media',\n      title: t('媒体工坊'),\n      description: t('图像和视频生成入口'),\n    },\n    {\n      key: 'codex',\n      title: t('云端 Codex'),\n      description: t('在线 Codex 工作台入口'),\n    },\n    {\n      key: 'pricing',",
+            "    {\n      key: 'media',\n      title: t('媒体工坊'),\n      description: t('图像和视频生成入口'),\n    },\n    {\n      key: 'codex',\n      title: t('云 Codex'),\n      description: t('在线 Codex 工作台入口'),\n    },\n    {\n      key: 'pricing',",
             "classic settings codex card",
         ),
     ]
@@ -133,7 +162,7 @@ def patch_default_top_links(source_root: Path) -> bool:
             ),
             (
                 "  // Pricing\n  const pricing = modules?.pricing",
-                "  // Cloud Codex\n  if (modules?.codex !== false) {\n    links.push({ title: t('云端 Codex'), href: '/codex/' })\n  }\n\n  // Pricing\n  const pricing = modules?.pricing",
+                "  // Cloud Codex\n  if (modules?.codex !== false) {\n    links.push({ title: t('云 Codex'), href: '/codex/' })\n  }\n\n  // Pricing\n  const pricing = modules?.pricing",
                 "default top links codex",
             ),
         ],
@@ -178,7 +207,7 @@ def patch_default_settings(source_root: Path) -> bool:
             ),
             (
                 "    {\n      key: 'docs',\n      title: t('Docs'),",
-                "    {\n      key: 'codex',\n      title: t('云端 Codex'),\n      description: t('Online Codex workspace.'),\n    },\n    {\n      key: 'docs',\n      title: t('Docs'),",
+                "    {\n      key: 'codex',\n      title: t('云 Codex'),\n      description: t('Online Codex workspace.'),\n    },\n    {\n      key: 'docs',\n      title: t('Docs'),",
                 "default header simple module codex",
             ),
         ],
@@ -188,6 +217,7 @@ def patch_default_settings(source_root: Path) -> bool:
 
 def patch_source(source_root: Path) -> dict[str, bool]:
     results = {
+        "codex_label_normalized": any(normalize_codex_labels(source_root).values()),
         "classic_navigation": patch_classic_navigation(source_root),
         "classic_settings": patch_classic_settings(source_root),
         "default_nav_modules": patch_default_nav_modules(source_root),
@@ -350,7 +380,7 @@ def check_url(base_url: str) -> dict[str, bool]:
     except Exception:
         codex_text = ""
     return {
-        "has_codex_label": "云端 Codex" in text or "云端Codex" in text,
+        "has_codex_label": "云 Codex" in text or "云端 Codex" in text or "云端Codex" in text,
         "has_codex_route": "/codex/" in text,
         "codex_route_serves_workspace": "星人 Codex" in codex_text and "页面未找到" not in codex_text,
         "has_media_label": "媒体工坊" in text,
@@ -360,7 +390,7 @@ def check_url(base_url: str) -> dict[str, bool]:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--app-root", default=str(DEFAULT_APP_ROOT))
-    parser.add_argument("--source-root", default=str(DEFAULT_SOURCE_ROOT))
+    parser.add_argument("--source-root", default="")
     parser.add_argument("--patch-source", action="store_true")
     parser.add_argument("--sync-db", action="store_true")
     parser.add_argument("--check-url", default="")
@@ -368,8 +398,10 @@ def main() -> int:
     args = parser.parse_args()
 
     results: dict[str, Any] = {}
+    source_root = Path(args.source_root) if args.source_root else latest_source_root(Path(args.app_root))
     if args.patch_source:
-        results["source"] = patch_source(Path(args.source_root))
+        results["source_root"] = str(source_root)
+        results["source"] = patch_source(source_root)
     if args.sync_db:
         results["db"] = sync_db_options(Path(args.app_root))
     if args.check_url:

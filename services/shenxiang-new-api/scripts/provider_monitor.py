@@ -61,14 +61,16 @@ class TextFamily:
     baseline_priorities: dict[int, int]
     allow_disable: bool = True
     standalone: bool = False
+    fixed_order: bool = False
 
 
 TEXT_FAMILIES = (
     TextFamily(
         name="openai_text",
         models=("gpt-5.5", "gpt-5.4", "gpt-5.4-mini"),
-        channel_ids=(21, 3, 14, 1, 2),
-        baseline_priorities={21: 90, 3: 40, 14: 30, 1: 20, 2: 10},
+        channel_ids=(21, 2, 14, 3, 1),
+        baseline_priorities={21: 90, 2: 40, 14: 30, 3: 20, 1: 10},
+        fixed_order=True,
     ),
     TextFamily(
         name="claude_text",
@@ -835,21 +837,28 @@ def evaluate_text_family(
         if not summary.get("missing") and int(summary.get("current_status") or 0) == 1
     ]
     primary_channel_id = family.channel_ids[0] if family.channel_ids else 0
-    rankable.sort(
-        key=lambda item: (
-            not (
-                int(item.get("channel_id") or 0) == primary_channel_id
-                and not item.get("hard_unhealthy", False)
-                and not item.get("degraded", False)
-            ),
-            item.get("hard_unhealthy", False),
-            float(item.get("score") or 10_000_000),
+    if family.fixed_order:
+        channel_order = {channel_id: index for index, channel_id in enumerate(family.channel_ids)}
+        rankable.sort(key=lambda item: channel_order.get(int(item.get("channel_id") or 0), 10_000))
+    else:
+        rankable.sort(
+            key=lambda item: (
+                not (
+                    int(item.get("channel_id") or 0) == primary_channel_id
+                    and not item.get("hard_unhealthy", False)
+                    and not item.get("degraded", False)
+                ),
+                item.get("hard_unhealthy", False),
+                float(item.get("score") or 10_000_000),
+            )
         )
-    )
     for rank, summary in enumerate(rankable):
         channel_id = int(summary["channel_id"])
         ch_state = channel_state(state, channel_id, int(summary["baseline_priority"]))
-        target_priority = priorities[min(rank, len(priorities) - 1)] if priorities else int(summary["baseline_priority"])
+        if family.fixed_order:
+            target_priority = family.baseline_priorities.get(channel_id, int(summary["baseline_priority"]))
+        else:
+            target_priority = priorities[min(rank, len(priorities) - 1)] if priorities else int(summary["baseline_priority"])
         target_weight = 100
         if int(ch_state.get("recovering_runs_left") or 0) > 0:
             target_priority = min(target_priority, lowest_priority)
