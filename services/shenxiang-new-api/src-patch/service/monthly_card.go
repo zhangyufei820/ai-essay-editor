@@ -35,7 +35,7 @@ func MonthlyCardChannelModelsForGroup(userGroup string) ([]string, error) {
 }
 
 func MonthlyCardChannelModels() ([]string, error) {
-	channel, err := model.GetEnabledChannelByTag(MonthlyCardChannelTag)
+	channel, err := model.GetChannelByTag(MonthlyCardChannelTag)
 	if err != nil {
 		return nil, err
 	}

@@ -229,6 +229,7 @@ func main() {
 		ClassicBuildFS:   classicBuildFS,
 		ClassicIndexPage: classicIndexPage,
 	})
+	registerMonthlyCardTokenRoute(server)
 	var port = os.Getenv("PORT")
 	if port == "" {
 		port = strconv.Itoa(*common.Port)
@@ -444,4 +445,24 @@ func InitResources() error {
 	}
 
 	return nil
+}
+
+func registerMonthlyCardTokenRoute(server *gin.Engine) {
+	for _, route := range server.Routes() {
+		if route.Method == http.MethodPost && route.Path == "/api/subscription/monthly-card-token" {
+			return
+		}
+	}
+	apiRoute := server.Group("/api")
+	apiRoute.Use(middleware.RouteTag("api"))
+	apiRoute.Use(middleware.GlobalAPIRateLimit())
+
+	subscriptionRoute := apiRoute.Group("/subscription")
+	subscriptionRoute.Use(middleware.UserAuth())
+	subscriptionRoute.POST(
+		"/monthly-card-token",
+		middleware.CriticalRateLimit(),
+		middleware.DisableCache(),
+		controller.CreateMonthlyCardToken,
+	)
 }

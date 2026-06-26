@@ -29,10 +29,21 @@ type BillingSession struct {
 	tokenConsumed    int  // 令牌额度实际扣减量
 	extraReserved    int  // 发送前补充预扣的额度（订阅退款时需要单独回滚）
 	trusted          bool // 是否命中信任额度旁路
+	skipTokenQuota   bool // 月卡专供通道按订阅额度扣减，不叠加普通 token 日/月限额
 	fundingSettled   bool // funding.Settle 已成功，资金来源已提交
 	settled          bool // Settle 全部完成（资金 + 令牌）
 	refunded         bool // Refund 已调用
 	mu               sync.Mutex
+}
+
+func (s *BillingSession) shouldChargeTokenQuota() bool {
+	if s == nil || s.relayInfo == nil || s.relayInfo.IsPlayground {
+		return false
+	}
+	if s.skipTokenQuota {
+		return false
+	}
+	return true
 }
 
 // Settle 根据实际消耗额度进行结算。
@@ -60,7 +71,7 @@ func (s *BillingSession) Settle(actualQuota int) error {
 	}
 	// 2) 调整令牌额度
 	var tokenErr error
-	if !s.relayInfo.IsPlayground {
+	if s.shouldChargeTokenQuota() {
 		if delta > 0 {
 			tokenErr = model.DecreaseTokenQuota(s.relayInfo.TokenId, s.relayInfo.TokenKey, delta)
 		} else {
@@ -210,7 +221,7 @@ func (s *BillingSession) preConsume(c *gin.Context, quota int) *types.NewAPIErro
 	}
 
 	// ---- 1) 预扣令牌额度 ----
-	if effectiveQuota > 0 {
+	if effectiveQuota > 0 && s.shouldChargeTokenQuota() {
 		if err := PreConsumeTokenQuota(s.relayInfo, effectiveQuota); err != nil {
 			return types.NewErrorWithStatusCode(err, types.ErrorCodePreConsumeTokenQuotaFailed, http.StatusForbidden, types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
 		}
@@ -289,7 +300,7 @@ func (s *BillingSession) rollbackFundingReserve(delta int) {
 }
 
 func (s *BillingSession) reserveToken(delta int) error {
-	if delta <= 0 || s.relayInfo.IsPlayground {
+	if delta <= 0 || !s.shouldChargeTokenQuota() {
 		return nil
 	}
 	if err := PreConsumeTokenQuota(s.relayInfo, delta); err != nil {
@@ -302,9 +313,6 @@ func (s *BillingSession) reserveToken(delta int) error {
 func (s *BillingSession) shouldTrust(c *gin.Context) bool {
 	// 异步任务（ForcePreConsume=true）必须预扣全额，不允许信任旁路
 	if s.relayInfo.ForcePreConsume {
-		return false
-	}
-	if s.relayInfo.TokenDailyQuota > 0 || s.relayInfo.TokenMonthlyQuota > 0 {
 		return false
 	}
 
@@ -421,8 +429,15 @@ func NewBillingSession(c *gin.Context, relayInfo *relaycommon.RelayInfo, preCons
 		if subConsume <= 0 {
 			subConsume = 1
 		}
+		skipTokenQuota := false
+		if c != nil && (c.GetBool("monthly_card_token") || IsMonthlyCardTokenName(c.GetString("token_name"))) {
+			skipTokenQuota = true
+		} else if ok, err := UserHasMonthlyCard(relayInfo.UserId); err == nil && ok && MonthlyCardChannelSupportsModel(relayInfo.OriginModelName) {
+			skipTokenQuota = true
+		}
 		session := &BillingSession{
-			relayInfo: relayInfo,
+			relayInfo:      relayInfo,
+			skipTokenQuota: skipTokenQuota,
 			funding: &SubscriptionFunding{
 				requestId: relayInfo.RequestId,
 				userId:    relayInfo.UserId,

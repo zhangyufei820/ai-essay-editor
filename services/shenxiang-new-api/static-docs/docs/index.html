@@ -754,7 +754,7 @@
       <div class="shell">
         <div class="section-head">
           <h2>¥500 月卡这样使用</h2>
-          <p>月卡开通后，不是在令牌创建页选择扣费方式。先到充值中心把扣费方式设为仅用订阅，再用 <code>gpt-5.5</code> 调用。</p>
+          <p>月卡开通后，不要创建普通 Key。到充值中心点击“创建月卡专用 API Key”，这个 Key 会固定走月卡订阅额度，并只显示月卡专供通道里的模型。</p>
         </div>
 
         <div class="steps">
@@ -765,34 +765,34 @@
           </article>
           <article class="step">
             <span class="num">2</span>
-            <h3>选择仅用订阅</h3>
-            <p>在我的订阅右侧找到扣费方式下拉框，选择仅用订阅。这样调用会明确使用月卡额度，不会转扣钱包余额。</p>
+            <h3>创建专用 Key</h3>
+            <p>在“我的订阅”右侧点击“创建月卡专用 API Key”。系统会自动生成或更新一个名为 <code>¥500 月卡专用</code> 的 Key。</p>
           </article>
           <article class="step">
             <span class="num">3</span>
-            <h3>模型填写 gpt-5.5</h3>
-            <p>创建 API Key 后，客户端模型名只填 <code>gpt-5.5</code>。不要添加渠道后缀，也不要写成 <code>gpt-5.5-数字后缀</code>。</p>
+            <h3>按模型列表选择</h3>
+            <p>用月卡专用 Key 请求 <code>/v1/models</code>，返回的就是月卡专供通道当前开放的全部模型。客户端只填列表里显示的模型名。</p>
           </article>
         </div>
 
         <div class="install-panel">
           <article class="install-card">
             <h3>入口在哪里</h3>
-            <p>如果你在创建令牌页面看到过期时间、令牌分组、额度设置，说明还没有到月卡扣费方式的位置。这里可以正常创建 Key，但不能选择月卡扣费。</p>
+            <p>不要在普通令牌页面手动创建月卡 Key。普通 Key 会按普通钱包/模型计费逻辑走；月卡专用 Key 要从充值中心的一键按钮创建。</p>
             <div class="mini-steps">
               <div class="mini-step"><span>1</span><div><strong>打开充值中心</strong><br>进入 <code>https://api.aiphui.top/console/topup</code>。</div></div>
-              <div class="mini-step"><span>2</span><div><strong>看我的订阅</strong><br>先看页面顶部或订阅套餐区域里的我的订阅，不是在新建令牌弹窗里找。</div></div>
-              <div class="mini-step"><span>3</span><div><strong>改扣费方式</strong><br>把我的订阅右侧下拉框从默认选项改成仅用订阅。没有生效订阅时，这个选项会显示不可用。</div></div>
+              <div class="mini-step"><span>2</span><div><strong>看我的订阅</strong><br>确认 ¥500 月卡处于生效中，并能看到日额度、月额度和到期时间。</div></div>
+              <div class="mini-step"><span>3</span><div><strong>点击创建</strong><br>点击“创建月卡专用 API Key”。创建成功后 Key 会自动复制到剪贴板。</div></div>
             </div>
             <div class="hero-actions">
               <a class="btn primary" href="https://api.aiphui.top/console/topup">打开充值中心</a>
-              <a class="btn" href="https://api.aiphui.top/console/token">去创建 API Key</a>
+              <a class="btn" href="https://api.aiphui.top/docs/#api-examples">查看调用示例</a>
             </div>
           </article>
 
           <article class="install-card">
             <h3>月卡专用调用示例</h3>
-            <p>推荐优先使用 Responses API。系统会自动识别有效的 ¥500 月卡和 <code>gpt-5.5</code>，并路由到月卡专用模型。</p>
+            <p>推荐优先使用 Responses API。月卡专用 Key 会强制走订阅计费，模型列表会读取月卡专供通道里的全部可用模型。</p>
             <div class="copy-list" style="margin-top:14px">
               <div class="copy-row">
                 <span>Base URL</span>
@@ -801,8 +801,8 @@
               </div>
               <div class="copy-row">
                 <span>模型</span>
-                <div class="copy-value">gpt-5.5</div>
-                <button class="copy" data-copy="gpt-5.5">复制</button>
+                <div class="copy-value">先用 /v1/models 读取</div>
+                <button class="copy" data-copy="curl https://api.aiphui.top/v1/models -H 'Authorization: Bearer sk-你的月卡专用Key'">复制</button>
               </div>
               <div class="copy-row">
                 <span>接口</span>
@@ -813,13 +813,13 @@
             <div class="example" style="margin-top:14px">
               <div class="example-title">
                 <span>复制测试请求</span>
-                <button class="copy" data-copy="curl https://api.aiphui.top/v1/responses -H 'Authorization: Bearer sk-你的Key' -H 'Content-Type: application/json' -d '{&quot;model&quot;:&quot;gpt-5.5&quot;,&quot;input&quot;:&quot;你好&quot;}'">复制</button>
+                <button class="copy" data-copy="curl https://api.aiphui.top/v1/responses -H 'Authorization: Bearer sk-你的月卡专用Key' -H 'Content-Type: application/json' -d '{&quot;model&quot;:&quot;从模型列表复制一个模型名&quot;,&quot;input&quot;:&quot;你好&quot;}'">复制</button>
               </div>
               <pre><code>curl https://api.aiphui.top/v1/responses \
-  -H 'Authorization: Bearer sk-你的Key' \
+  -H 'Authorization: Bearer sk-你的月卡专用Key' \
   -H 'Content-Type: application/json' \
   -d '{
-    "model": "gpt-5.5",
+    "model": "从模型列表复制一个模型名",
     "input": "你好"
   }'</code></pre>
             </div>
@@ -850,12 +850,12 @@
             <h3>调用前自查</h3>
             <div class="callout">
               <strong>最关键的一句话</strong>
-              创建 API Key 页面只负责生成 Key；月卡扣费方式在充值中心选择；客户端模型只填 <code>gpt-5.5</code>。
+              月卡用户直接创建“月卡专用 API Key”；不要使用普通 Key。模型名以这个 Key 请求 <code>/v1/models</code> 的返回结果为准。
             </div>
             <div class="mini-steps">
-              <div class="mini-step"><span>1</span><div><strong>Base URL</strong><br>普通客户端填写 <code>https://api.aiphui.top/v1</code>。</div></div>
+              <div class="mini-step"><span>1</span><div><strong>Base URL</strong><br>月卡专用 Key 也填写 <code>https://api.aiphui.top/v1</code>。</div></div>
               <div class="mini-step"><span>2</span><div><strong>接口优先级</strong><br>优先使用 <code>/v1/responses</code>；旧客户端可以继续用 <code>/v1/chat/completions</code>。</div></div>
-              <div class="mini-step"><span>3</span><div><strong>出错时</strong><br>403 先检查是否已开通月卡、是否选择仅用订阅、模型是否写成 <code>gpt-5.5</code>。</div></div>
+              <div class="mini-step"><span>3</span><div><strong>出错时</strong><br>403 先检查是否已开通月卡、是否用了月卡专用 Key、模型是否来自 <code>/v1/models</code>。</div></div>
             </div>
           </article>
         </div>
@@ -880,7 +880,7 @@
             <div class="config-table">
               <div class="config-line"><strong>类型</strong><span>通用 API</span></div>
               <div class="config-line"><strong>Base URL</strong><span><code>https://api.aiphui.top/v1</code></span></div>
-              <div class="config-line"><strong>模型</strong><span><code>gpt-5.5</code> 或 <code>gpt-5.4-mini</code></span></div>
+              <div class="config-line"><strong>模型</strong><span>月卡专用 Key 按 <code>/v1/models</code> 返回选择</span></div>
             </div>
           </article>
 
@@ -895,7 +895,7 @@
             <div class="config-table">
               <div class="config-line"><strong>类型</strong><span>通用 API</span></div>
               <div class="config-line"><strong>Base URL</strong><span><code>https://api.aiphui.top/v1</code></span></div>
-              <div class="config-line"><strong>模型</strong><span><code>gpt-5.5</code></span></div>
+              <div class="config-line"><strong>模型</strong><span>月卡专用 Key 按 <code>/v1/models</code> 返回选择</span></div>
             </div>
           </article>
 

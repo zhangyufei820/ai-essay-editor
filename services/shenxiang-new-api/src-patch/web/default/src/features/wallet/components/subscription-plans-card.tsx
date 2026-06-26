@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { Crown, RefreshCw, Sparkles, Check } from 'lucide-react'
+import { Crown, RefreshCw, Sparkles, Check, KeyRound } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { formatQuota } from '@/lib/format'
@@ -50,6 +50,7 @@ import {
   getPublicPlans,
   getSelfSubscriptionFull,
   updateBillingPreference,
+  createMonthlyCardToken,
 } from '@/features/subscriptions/api'
 import { SubscriptionPurchaseDialog } from '@/features/subscriptions/components/dialogs/subscription-purchase-dialog'
 import { formatDuration, formatResetPeriod } from '@/features/subscriptions/lib'
@@ -130,6 +131,7 @@ export function SubscriptionPlansCard({
     useState('subscription_first')
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [creatingMonthlyCardKey, setCreatingMonthlyCardKey] = useState(false)
 
   const [purchaseOpen, setPurchaseOpen] = useState(false)
   const [selectedPlan, setSelectedPlan] = useState<PlanRecord | null>(null)
@@ -240,6 +242,15 @@ export function SubscriptionPlansCard({
     return map
   }, [plans])
 
+  const hasActiveMonthlyCard = activeSubscriptions.some((sub) => {
+    const subscription = sub?.subscription
+    const planTitle = planTitleMap.get(subscription?.plan_id || 0) || ''
+    return (
+      Number(subscription?.monthly_amount_total || 0) > 0 ||
+      planTitle.includes('500 月卡')
+    )
+  })
+
   const getRemainingDays = (sub: UserSubscriptionRecord) => {
     const endTime = sub?.subscription?.end_time || 0
     if (!endTime) return 0
@@ -251,6 +262,45 @@ export function SubscriptionPlansCard({
     const total = Number(sub?.subscription?.amount_total || 0)
     const used = Number(sub?.subscription?.amount_used || 0)
     return clampPercent(used, total)
+  }
+
+  const copyText = async (text: string) => {
+    if (!text) return
+    if (navigator?.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text)
+      return
+    }
+    const textarea = document.createElement('textarea')
+    textarea.value = text
+    textarea.style.position = 'fixed'
+    textarea.style.opacity = '0'
+    document.body.appendChild(textarea)
+    textarea.select()
+    document.execCommand('copy')
+    document.body.removeChild(textarea)
+  }
+
+  const handleCreateMonthlyCardToken = async () => {
+    setCreatingMonthlyCardKey(true)
+    try {
+      const res = await createMonthlyCardToken()
+      if (!res.success || !res.data?.key) {
+        toast.error(res.message || t('Request failed'))
+        return
+      }
+      await copyText(res.data.key)
+      const models = (res.data.models || []).join(', ')
+      toast.success(
+        `${t('Copied to clipboard')} · ${res.data.base_url}${
+          models ? ` · ${models}` : ''
+        }`
+      )
+      await fetchSelfSubscription()
+    } catch {
+      toast.error(t('Request failed'))
+    } finally {
+      setCreatingMonthlyCardKey(false)
+    }
   }
 
   if (loading) {
@@ -318,7 +368,19 @@ export function SubscriptionPlansCard({
                 )}
               </span>
             </div>
-            <div className='flex w-full items-center gap-2 sm:w-auto'>
+            <div className='flex w-full flex-wrap items-center gap-2 sm:w-auto'>
+              <Button
+                variant='outline'
+                size='sm'
+                className='h-8 flex-1 gap-1.5 text-xs sm:flex-none'
+                onClick={handleCreateMonthlyCardToken}
+                disabled={!hasActiveMonthlyCard || creatingMonthlyCardKey}
+              >
+                <KeyRound className='h-3.5 w-3.5' />
+                {creatingMonthlyCardKey
+                  ? t('Creating...')
+                  : t('创建月卡专用 API Key')}
+              </Button>
               <Select
                 items={[
                   {
@@ -408,6 +470,14 @@ export function SubscriptionPlansCard({
               )}
             </p>
           )}
+
+          {hasActiveMonthlyCard ? (
+            <p className='text-muted-foreground mt-2 text-xs'>
+              {t(
+                'Monthly card users should use the dedicated API Key. It only returns monthly-card channel models and always uses subscription quota.'
+              )}
+            </p>
+          ) : null}
 
           {hasAny && (
             <>

@@ -101,7 +101,15 @@ func Distribute() func(c *gin.Context) {
 					}
 				}
 
-				if monthlyCardChannel, monthlyCardGroup, found := getDragtokensMonthlyCardChannel(c, modelRequest.Model, usingGroup); found {
+				if monthlyCardChannel, monthlyCardGroup, found, monthlyCardErr := getDragtokensMonthlyCardChannel(c, modelRequest.Model, usingGroup); found {
+					if monthlyCardErr != nil || monthlyCardChannel == nil {
+						message := "月卡专用通道当前不可用，请稍后重试"
+						if monthlyCardErr != nil {
+							common.SysError(fmt.Sprintf("monthly card channel unavailable: %s", monthlyCardErr.Error()))
+						}
+						abortWithOpenAiMessage(c, http.StatusServiceUnavailable, message, types.ErrorCodeModelNotFound)
+						return
+					}
 					channel = monthlyCardChannel
 					selectGroup = monthlyCardGroup
 				}
@@ -174,31 +182,28 @@ func Distribute() func(c *gin.Context) {
 	}
 }
 
-func getDragtokensMonthlyCardChannel(c *gin.Context, modelName string, usingGroup string) (*model.Channel, string, bool) {
-	if c == nil || !c.GetBool("monthly_card_token") {
-		return nil, "", false
+func getDragtokensMonthlyCardChannel(c *gin.Context, modelName string, usingGroup string) (*model.Channel, string, bool, error) {
+	if c == nil || (!c.GetBool("monthly_card_token") && !service.IsMonthlyCardTokenName(c.GetString("token_name"))) {
+		return nil, "", false, nil
 	}
 	if !service.MonthlyCardChannelSupportsModel(modelName) {
-		return nil, "", false
+		return nil, "", false, nil
 	}
 	channel, err := model.GetEnabledChannelByTag(service.MonthlyCardChannelTag)
 	if err != nil || channel == nil {
-		if err != nil {
-			common.SysError(fmt.Sprintf("monthly card channel unavailable: %s", err.Error()))
-		}
-		return nil, "", false
+		return nil, "", true, err
 	}
 	if usingGroup == "auto" {
 		userGroup := common.GetContextKeyString(c, constant.ContextKeyUserGroup)
 		for _, group := range service.GetUserAutoGroup(userGroup) {
 			if group != "" {
 				common.SetContextKey(c, constant.ContextKeyAutoGroup, group)
-				return channel, group, true
+				return channel, group, true, nil
 			}
 		}
-		return channel, usingGroup, true
+		return channel, usingGroup, true, nil
 	}
-	return channel, usingGroup, true
+	return channel, usingGroup, true, nil
 }
 
 // getModelFromRequest 从请求中读取模型信息

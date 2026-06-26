@@ -32,7 +32,7 @@ import {
 } from '@douyinfe/semi-ui';
 import { API, showError, showSuccess, renderQuota } from '../../helpers';
 import { getCurrencyConfig } from '../../helpers/render';
-import { RefreshCw, Sparkles } from 'lucide-react';
+import { KeyRound, RefreshCw, Sparkles } from 'lucide-react';
 import SubscriptionPurchaseModal from './modals/SubscriptionPurchaseModal';
 import {
   formatSubscriptionDuration,
@@ -109,6 +109,7 @@ const SubscriptionPlansCard = ({
   const [paying, setPaying] = useState(false);
   const [selectedEpayMethod, setSelectedEpayMethod] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [creatingMonthlyCardKey, setCreatingMonthlyCardKey] = useState(false);
 
   const epayMethods = useMemo(() => getEpayMethods(payMethods), [payMethods]);
 
@@ -130,6 +131,44 @@ const SubscriptionPlansCard = ({
       await reloadSubscriptionSelf?.();
     } finally {
       setRefreshing(false);
+    }
+  };
+
+  const copyText = async (text) => {
+    if (!text) return;
+    if (navigator?.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return;
+    }
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand('copy');
+    document.body.removeChild(textarea);
+  };
+
+  const createMonthlyCardToken = async () => {
+    setCreatingMonthlyCardKey(true);
+    try {
+      const res = await API.post('/api/subscription/monthly-card-token', {});
+      const { success, message, data } = res.data || {};
+      if (!success || !data?.key) {
+        showError(message || t('请求失败'));
+        return;
+      }
+      await copyText(data.key);
+      const models = (data.models || []).join(', ');
+      showSuccess(
+        `${t('已复制到剪切板')} · ${data.base_url}${models ? ` · ${models}` : ''}`,
+      );
+      await reloadSubscriptionSelf?.();
+    } catch {
+      showError(t('请求失败'));
+    } finally {
+      setCreatingMonthlyCardKey(false);
     }
   };
 
@@ -252,6 +291,15 @@ const SubscriptionPlansCard = ({
     return map;
   }, [plans]);
 
+  const hasActiveMonthlyCard = (activeSubscriptions || []).some((sub) => {
+    const subscription = sub?.subscription;
+    const planTitle = planTitleMap.get(subscription?.plan_id) || '';
+    return (
+      Number(subscription?.monthly_amount_total || 0) > 0 ||
+      planTitle.includes('500 月卡')
+    );
+  });
+
   const getPlanPurchaseCount = (planId) =>
     planPurchaseCountMap.get(planId) || 0;
 
@@ -347,6 +395,17 @@ const SubscriptionPlansCard = ({
                 )}
               </div>
               <div className='flex items-center gap-2'>
+                <Button
+                  size='small'
+                  theme='light'
+                  type='tertiary'
+                  icon={<KeyRound size={12} />}
+                  onClick={createMonthlyCardToken}
+                  disabled={!hasActiveMonthlyCard || creatingMonthlyCardKey}
+                  loading={creatingMonthlyCardKey}
+                >
+                  {t('创建月卡专用 API Key')}
+                </Button>
                 <Select
                   value={displayBillingPreference}
                   onChange={onChangeBillingPreference}
@@ -391,6 +450,13 @@ const SubscriptionPlansCard = ({
                 {subscriptionPreferenceLabel}
                 {t('，当前无生效订阅，将自动使用钱包')}
               </Text>
+            )}
+            {hasActiveMonthlyCard && (
+              <div className='text-xs text-gray-500 mb-2'>
+                {t(
+                  '月卡用户请使用月卡专用 API Key；模型列表只返回月卡专供通道模型，调用固定走订阅额度。',
+                )}
+              </div>
             )}
 
             {hasAnySubscription ? (

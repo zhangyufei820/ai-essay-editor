@@ -129,6 +129,10 @@ export interface MonthlyCardTokenResponse {
   models: string[]
 }
 
+export interface SubscriptionApiMessageResponse {
+  message?: string
+}
+
 // ============================================================================
 // Self Subscription Data (user-facing)
 // ============================================================================
