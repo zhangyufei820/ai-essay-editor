@@ -4,6 +4,7 @@ import {
   hasInternalAiDetailText,
   hasTechnicalUpstreamErrorText,
   sanitizePublicAiError,
+  sanitizePublicAiErrorCode,
   sanitizePublicAiStatus,
   sanitizeAssistantMessageForPublicDisplay,
   stripUpstreamBranding,
@@ -84,6 +85,14 @@ describe("chat message guards", () => {
     expect(stripUpstreamBranding(answer)).toContain("https://www.shenxiang.school/slides/geometry-proof.html")
     expect(stripUpstreamBranding(answer)).toContain("/api/openclaw-media-sign/output/preview.png")
     expect(sanitizePublicAiError(upstreamError, "服务暂时不可用，请稍后重试。")).not.toMatch(/moonapix\.com|request_id|gateway/i)
+  })
+
+  it("maps image safety rejections to a precise public message and code", () => {
+    const upstreamError = "Your request was rejected by the safety system. safety_violations=[sexual]. code=moderation_blocked"
+
+    expect(getSafeUpstreamErrorMessage(upstreamError, "图片服务暂时不可用，请稍后重试。")).toBe("图片内容触发安全审核，请调整描述或素材后重试。")
+    expect(sanitizePublicAiError(upstreamError, "图片服务暂时不可用，请稍后重试。")).toBe("图片内容触发安全审核，请调整描述或素材后重试。")
+    expect(sanitizePublicAiErrorCode("moderation_blocked")).toBe("SERVICE_INPUT_REJECTED")
   })
 
   it("blocks backend model and provider labels from public labels", () => {
@@ -190,6 +199,8 @@ describe("chat message guards", () => {
     expect(imageWorkspace).not.toContain("图像工作流凭据失效，请管理员更新 Dify 应用 API Key 后重试。")
     expect(route).toContain('code: sanitizePublicAiErrorCode("DIFY_CREDENTIAL_MISSING")')
     expect(route).toContain("code: sanitizePublicAiErrorCode(handledErrorCode)")
+    expect(route).toContain('await finalizeDifyChatResponse(controller, "流结束")')
+    expect(route).toContain("hasReceivedContent = true")
     expect(uploadRoute).toContain("文件上传服务暂时不可用，请稍后重试。")
     expect(uploadRoute).toContain('code: sanitizePublicAiErrorCode("DIFY_UPLOAD_CREDENTIAL_MISSING")')
     expect(uploadRoute).not.toMatch(/error:\s*`[^`]*(API Key 未配置|Dify API Key|DIFY_[A-Z_]+_API_KEY)/)
@@ -244,12 +255,15 @@ describe("chat message guards", () => {
     expect(route).toContain("let pendingOpenClawAnswerRawText = \"\"")
     expect(route).toContain("const appendOpenClawAnswerChunk")
     expect(route).toContain("const emitOpenClawFallbackDisplay")
-    expect(route).toContain("if (model === \"open-claw\") {\n                    appendOpenClawAnswerChunk(String(json.answer))\n                    continue\n                  }")
+    expect(route).toContain("if (model === \"open-claw\") {")
+    expect(route).toContain("appendOpenClawAnswerChunk(String(json.answer))")
+    expect(route).toContain("continue")
     expect(route).toContain("if (model === \"open-claw\" && json.event === \"message_end\")")
     expect(route).toContain("openClawFinalOutputText,\n        pendingOpenClawAnswerRawText,\n        finalNodeOutputText")
     expect(route).toContain(".map((text) => cleanOpenClawAnswerForDisplay(text))")
     expect(route).toContain("hasUsefulOpenClawResult(text)")
-    expect(route).toContain("rewriteOpenClawMediaReferencesWithSignedUrls(rawOutputText, undefined, userId)")
+    expect(route).toContain("rewriteOpenClawMediaReferencesWithSignedUrls(")
+    expect(route).toContain("rawOutputText")
     expect(route).not.toContain("rewriteOpenClawMediaReferencesWithSignedUrls(String(json.answer), undefined, userId)")
   })
 

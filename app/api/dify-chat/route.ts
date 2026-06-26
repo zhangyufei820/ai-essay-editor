@@ -246,6 +246,18 @@ function sanitizeUpstreamErrorText(value: unknown, fallback = "图片服务暂�
   return sanitizePublicAiError(getSafeUpstreamErrorMessage(value, fallback) || stripUpstreamBranding(value), fallback)
 }
 
+function extractGatewayErrorCode(value: unknown, fallback = "IMAGE_GATEWAY_HTTP_ERROR") {
+  const record = value && typeof value === "object" ? value as Record<string, unknown> : {}
+  const nestedError = record.error && typeof record.error === "object" ? record.error as Record<string, unknown> : {}
+  const rawCode =
+    (typeof nestedError.code === "string" && nestedError.code.trim()) ||
+    (typeof nestedError.type === "string" && nestedError.type.trim()) ||
+    (typeof record.code === "string" && record.code.trim()) ||
+    (typeof record.type === "string" && record.type.trim()) ||
+    fallback
+  return sanitizePublicAiErrorCode(rawCode)
+}
+
 function buildGptImageV11Inputs(inputs: unknown): GptImageV11Inputs {
   const record = inputs && typeof inputs === "object" ? inputs as Record<string, unknown> : {}
   const referenceImageUrls = pickUrlStrings(record.reference_image_urls)
@@ -1899,6 +1911,7 @@ function createImageGatewayResponse(payload: unknown) {
   const record = payload && typeof payload === "object" ? payload as Record<string, unknown> : {}
   const success = record.success !== false
   const statusCode = typeof record.status_code === "number" ? record.status_code : success ? 200 : 502
+  const publicErrorCode = extractGatewayErrorCode(record, "IMAGE_GATEWAY_FAILED")
   const data = record.data && typeof record.data === "object" ? record.data as Record<string, unknown> : {}
   const imageUrls = extractWorkflowImageUrls(data)
   const detail = record.detail && typeof record.detail === "object" ? record.detail as Record<string, unknown> : {}
@@ -1919,7 +1932,7 @@ function createImageGatewayResponse(payload: unknown) {
   })
 
   if (!success) {
-    return Response.json({ error: message, code: sanitizePublicAiErrorCode("IMAGE_GATEWAY_FAILED") }, { status: statusCode >= 400 ? statusCode : 502 })
+    return Response.json({ error: message, code: publicErrorCode }, { status: statusCode >= 400 ? statusCode : 502 })
   }
 
   return Response.json({
@@ -1941,6 +1954,7 @@ function createProviderTaskResponseFromStoredResult(payload: unknown) {
     const statusCode = typeof record.status === "number" && record.status >= 400 ? record.status : 502
     const errorPayload = record.payload && typeof record.payload === "object" ? record.payload as Record<string, unknown> : {}
     const nestedError = errorPayload.error && typeof errorPayload.error === "object" ? errorPayload.error as Record<string, unknown> : {}
+    const publicErrorCode = extractGatewayErrorCode(errorPayload, "IMAGE_GATEWAY_HTTP_ERROR")
     const message = sanitizeUpstreamErrorText(
       typeof errorPayload.message === "string"
         ? errorPayload.message
@@ -1953,7 +1967,7 @@ function createProviderTaskResponseFromStoredResult(payload: unknown) {
             : "",
       "图片服务请求失败，请稍后重试。",
     )
-    return Response.json({ error: message, code: sanitizePublicAiErrorCode("IMAGE_GATEWAY_HTTP_ERROR") }, { status: statusCode })
+    return Response.json({ error: message, code: publicErrorCode }, { status: statusCode })
   }
 
   return createVivaApiImageResponse(record.payload || payload)
@@ -2319,7 +2333,7 @@ async function callImageGatewayDirect(query: string, inputs: unknown) {
     if (!response.ok) {
       const record = payload && typeof payload === "object" ? payload as Record<string, unknown> : {}
       const message = sanitizeUpstreamErrorText(record.message, "图片服务请求失败，请稍后重试。")
-      return Response.json({ error: message, code: sanitizePublicAiErrorCode("IMAGE_GATEWAY_HTTP_ERROR") }, { status: response.status })
+      return Response.json({ error: message, code: extractGatewayErrorCode(record, "IMAGE_GATEWAY_HTTP_ERROR") }, { status: response.status })
     }
 
     return process.env.VIVAAPI_IMAGE_API_KEY
@@ -2380,7 +2394,7 @@ async function callGeminiImageGatewayDirect(query: string, inputs: unknown) {
     if (!response.ok) {
       const record = payload && typeof payload === "object" ? payload as Record<string, unknown> : {}
       const message = sanitizeUpstreamErrorText(record.message, "图像服务请求失败，请稍后重试。")
-      return Response.json({ error: message, code: sanitizePublicAiErrorCode("GEMINI_IMAGE_GATEWAY_HTTP_ERROR") }, { status: response.status })
+      return Response.json({ error: message, code: extractGatewayErrorCode(record, "GEMINI_IMAGE_GATEWAY_HTTP_ERROR") }, { status: response.status })
     }
 
     return isMoonapixGateway ? createVivaApiImageResponse(payload) : createImageGatewayResponse(payload)
@@ -4530,6 +4544,14 @@ export async function POST(request: NextRequest) {
       return flushPendingOpenClawAnswer(controller)
     }
 
+    const shouldBufferForDisplay = isAllInOneAgent
+
+    const enqueueAllInOneDisplayOnce = (controller: SseByteController, rawValue: string) => {
+      if (!shouldBufferForDisplay || allInOneDisplaySent || !rawValue.trim()) return
+      allInOneDisplaySent = true
+      enqueueSseAnswer(controller, normalizeAllInOneAgentDisplay(rawValue))
+    }
+
     // 🔥 扣费函数：流结束后根据实际 token 用量扣费
     const deductCredit = async () => {
       if (!userId) return
@@ -4719,7 +4741,32 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const finalizeDifyChatResponse = async (stagePrefix = "任务完成") => {
+    const finalizeDifyChatResponse = async (controller: SseByteController, stagePrefix = "任务完成") => {
+      if (actualDifyResponseMode === "streaming") {
+        if (shouldBufferForDisplay && fullResponseText.trim() && !allInOneDisplaySent && !allInOneStreamedAnswer) {
+          enqueueAllInOneDisplayOnce(controller, fullResponseText)
+        }
+        if (model === "open-claw") {
+          const openClawDisplayText = emitOpenClawFallbackDisplay(controller)
+          if (openClawDisplayText) {
+            console.log(`🎨 [OpenClaw] ${stagePrefix}前展示内容:`, { length: openClawDisplayText.length })
+          }
+        } else if (!hasReceivedContent && finalNodeOutputText.trim()) {
+          const displayText = isAllInOneAgent ? normalizeAllInOneAgentDisplay(finalNodeOutputText) : finalNodeOutputText
+          enqueueSseAnswer(controller, displayText)
+          fullResponseText = displayText
+          hasReceivedContent = true
+        }
+        if (model === "open-claw" && !hasReceivedContent && !workflowNodeFailure) {
+          const message = "高级创作本次没有返回可展示内容，请重新提交。当前任务未扣费。"
+          workflowNodeFailure = {
+            message,
+            code: "OPENCLAW_EMPTY_UPSTREAM_RESPONSE",
+          }
+          enqueueSseError(controller, message, workflowNodeFailure.code)
+        }
+      }
+
       const shouldCharge = !workflowNodeFailure && hasReceivedContent && (promptTokens > 0 || completionTokens > 0 || workflowImageUrls.length > 0)
       console.log(`💰 [Billing] ${stagePrefix}，输入 ${promptTokens} tokens，输出 ${completionTokens} tokens，总 ${totalTokens} tokens，内容长度: ${fullResponseText.length}，hasReceivedContent: ${hasReceivedContent}`)
       if (shouldCharge) {
@@ -4729,6 +4776,9 @@ export async function POST(request: NextRequest) {
       }
 
       const finalFailed = Boolean(workflowNodeFailure) || !hasReceivedContent
+      if (bufferedNodeEvents.length > 0) {
+        await replaceTaskNodeEvents(taskRun.id, bufferedNodeEvents)
+      }
       taskCompleted = true
       await updateTaskRun(taskRun.id, {
         status: finalFailed ? "failed" : "succeeded",
@@ -4748,9 +4798,6 @@ export async function POST(request: NextRequest) {
           dify_response_mode: actualDifyResponseMode,
         },
       })
-      if (bufferedNodeEvents.length > 0) {
-        fireAndForget("AI Task Trace node batch", replaceTaskNodeEvents(taskRun.id, bufferedNodeEvents))
-      }
       logPerf(taskRun.requestId, "stream_end", apiStartedAt, {
         responseLength: fullResponseText.length,
         nodeEvents: bufferedNodeEvents.length,
@@ -4778,7 +4825,7 @@ export async function POST(request: NextRequest) {
           try {
             enqueueSseStatus(controller, { stage: "已收到服务结果，正在整理内容", progress: 90 })
             await applyBlockingDifyPayload(blockingPayload, controller)
-            await finalizeDifyChatResponse("blocking 响应结束")
+            await finalizeDifyChatResponse(controller, "blocking 响应结束")
             controller.close()
           } catch (error) {
             const message = error instanceof Error ? error.message : String(error)
@@ -4844,12 +4891,6 @@ export async function POST(request: NextRequest) {
         try {
           const text = new TextDecoder().decode(chunk)
           const outputText = model === "open-claw" ? rewriteOpenClawMediaReferencesWithSignedUrls(text, undefined, userId) : text
-          const shouldBufferForDisplay = isAllInOneAgent
-          const enqueueAllInOneDisplayOnce = (rawValue: string) => {
-            if (!shouldBufferForDisplay || allInOneDisplaySent || !rawValue.trim()) return
-            allInOneDisplaySent = true
-            enqueueSseAnswer(controller, normalizeAllInOneAgentDisplay(rawValue))
-          }
 
 	          // 后端解析 Dify 原始 SSE 后只重发用户端需要的安全事件，避免节点、模型、工作流 ID 穿透到浏览器。
 
@@ -4916,9 +4957,9 @@ export async function POST(request: NextRequest) {
                     }
                     enqueueSseError(controller, sanitizePublicAiError(errorMessage, "任务处理失败，请稍后重试。"), workflowNodeFailure.code)
                     updateTaskRun(taskRun.id, {
-                      status: "failed",
+                      status: "running",
                       stage: `${title}处理失败`,
-                      progress: 100,
+                      progress: 95,
                       workflowRunId: nodeData.workflow_run_id || json.workflow_run_id || null,
                       errorMessage: sanitizePublicAiError(errorMessage, "任务处理失败，请稍后重试。"),
                       errorCode: workflowNodeFailure.code,
@@ -5038,7 +5079,7 @@ export async function POST(request: NextRequest) {
 	                    hasReceivedContent = true
 	                    console.log(`🎨 [Workflow完成] 收集到输出文本:`, { length: outputText.length })
                       if (shouldBufferForDisplay && !allInOneStreamedAnswer) {
-                        enqueueAllInOneDisplayOnce(outputText)
+                        enqueueAllInOneDisplayOnce(controller, outputText)
                       } else if (!shouldBufferForDisplay) {
                         enqueueSseEvent(controller, {
                           event: "workflow_finished",
@@ -5054,16 +5095,16 @@ export async function POST(request: NextRequest) {
 	                if (parsedUsage.promptTokens > 0) promptTokens = parsedUsage.promptTokens
 	                if (parsedUsage.completionTokens > 0) completionTokens = parsedUsage.completionTokens
 	                updateTaskRun(taskRun.id, {
-	                  status: "succeeded",
-	                  stage: "任务已完成",
-	                  progress: 100,
+	                  status: "running",
+	                  stage: "任务已完成，正在结算",
+	                  progress: 95,
 	                  workflowRunId,
 	                  artifacts: extractArtifactsFromUnknown(json.data?.outputs || json.outputs || fullResponseText),
 	                }).catch((error) => console.warn("[AI Task Trace] workflow finish update failed:", error))
 	              }
 
               if (shouldBufferForDisplay && json.event === "message_end" && fullResponseText.trim() && !allInOneStreamedAnswer) {
-                enqueueAllInOneDisplayOnce(fullResponseText)
+                enqueueAllInOneDisplayOnce(controller, fullResponseText)
               }
               if (model === "open-claw" && json.event === "message_end") {
                 const openClawDisplayText = emitOpenClawFallbackDisplay(controller)
@@ -5084,9 +5125,9 @@ export async function POST(request: NextRequest) {
                 }
 	                enqueueSseError(controller, message, workflowNodeFailure.code)
                 updateTaskRun(taskRun.id, {
-                  status: "failed",
+                  status: "running",
                   stage: "任务没有返回可展示内容",
-                  progress: 100,
+                  progress: 95,
                   conversationId: conversationId || undefined,
                   errorMessage: message,
                   errorCode: workflowNodeFailure.code,
@@ -5148,7 +5189,25 @@ export async function POST(request: NextRequest) {
                 if (model === "open-claw") {
                   appendOpenClawAnswerChunk(String(json.answer))
                 } else {
-                  fullResponseText += String(json.answer)
+                  const answerText = String(json.answer)
+                  fullResponseText += answerText
+                  hasReceivedContent = true
+                  if (model === "vocab-card") {
+                    const cleanAnswer = cleanVocabAnswer(answerText)
+                    if (cleanAnswer) {
+                      enqueueSseAnswer(controller, cleanAnswer)
+                    }
+                  } else if (model === BEIKE_PRO_MODEL) {
+                    const cleanAnswer = sanitizeDifyAnswerForModel(answerText, model)
+                    if (cleanAnswer) {
+                      enqueueSseAnswer(controller, cleanAnswer)
+                    }
+                  } else if (shouldBufferForDisplay && shouldStreamAllInOneAnswer(json)) {
+                    allInOneStreamedAnswer = true
+                    enqueueSseAnswer(controller, answerText)
+                  } else if (!shouldBufferForDisplay) {
+                    enqueueSseAnswer(controller, answerText)
+                  }
                 }
               }
               if (json.conversation_id) {
@@ -5167,78 +5226,7 @@ export async function POST(request: NextRequest) {
             }
           }
         }
-
-        // 🔥 流结束，触发扣费（仅当有实际内容时才扣费）
-        if (isAllInOneAgent && fullResponseText.trim() && !allInOneDisplaySent && !allInOneStreamedAnswer) {
-          allInOneDisplaySent = true
-          enqueueSseAnswer(controller, normalizeAllInOneAgentDisplay(fullResponseText))
-        }
-        if (model === "open-claw") {
-          const openClawDisplayText = emitOpenClawFallbackDisplay(controller)
-          if (openClawDisplayText) {
-            console.log(`🎨 [OpenClaw] 流结束后展示内容:`, { length: openClawDisplayText.length })
-          }
-        } else if (!hasReceivedContent && finalNodeOutputText.trim()) {
-          const displayText = isAllInOneAgent ? normalizeAllInOneAgentDisplay(finalNodeOutputText) : finalNodeOutputText
-          enqueueSseAnswer(controller, displayText)
-          fullResponseText = displayText
-          hasReceivedContent = true
-        }
-        if (model === "open-claw" && !hasReceivedContent && !workflowNodeFailure) {
-          const message = "高级创作本次没有返回可展示内容，请重新提交。当前任务未扣费。"
-          workflowNodeFailure = {
-            message,
-            code: "OPENCLAW_EMPTY_UPSTREAM_RESPONSE",
-          }
-          enqueueSseError(controller, message, workflowNodeFailure.code)
-          updateTaskRun(taskRun.id, {
-            status: "failed",
-            stage: "任务没有返回可展示内容",
-            progress: 100,
-            conversationId: conversationId || undefined,
-            errorMessage: message,
-            errorCode: workflowNodeFailure.code,
-            metadata: {
-              has_received_content: false,
-              total_tokens: totalTokens,
-              prompt_tokens: promptTokens,
-              completion_tokens: completionTokens,
-              dify_response_mode: actualDifyResponseMode,
-            },
-          }).catch((error) => console.warn("[AI Task Trace] openclaw empty flush update failed:", error))
-        }
-	        console.log(`💰 [Billing] 流结束，输入 ${promptTokens} tokens，输出 ${completionTokens} tokens，总 ${totalTokens} tokens，内容长度: ${fullResponseText.length}，hasReceivedContent: ${hasReceivedContent}`)
-	        if (!workflowNodeFailure && hasReceivedContent && (promptTokens > 0 || completionTokens > 0 || workflowImageUrls.length > 0)) {
-	          deductCredit().catch(e => console.error("[Billing] 扣费异步异常:", e))
-	        } else {
-	          console.warn(`⚠️ [Billing] 流结束但无可结算 token，不扣费`)
-	        }
-          const finalFailed = Boolean(workflowNodeFailure) || !hasReceivedContent
-          taskCompleted = true
-	        updateTaskRun(taskRun.id, {
-	          status: finalFailed ? "failed" : "succeeded",
-	          stage: workflowNodeFailure ? "任务处理失败" : hasReceivedContent ? "任务完成" : "流结束但没有返回内容",
-	          progress: 100,
-	          conversationId: conversationId || undefined,
-	          artifacts: extractArtifactsFromText(fullResponseText),
-	          errorMessage: workflowNodeFailure?.message || (hasReceivedContent ? null : "流结束但没有返回内容"),
-	          errorCode: workflowNodeFailure?.code || (hasReceivedContent ? null : "EMPTY_STREAM"),
-	          metadata: {
-	            total_tokens: totalTokens,
-	            prompt_tokens: promptTokens,
-	            completion_tokens: completionTokens,
-	            response_length: fullResponseText.length,
-	            has_received_content: hasReceivedContent,
-              node_failure: workflowNodeFailure,
-	          },
-	        }).catch((error) => console.warn("[AI Task Trace] flush update failed:", error))
-	        if (bufferedNodeEvents.length > 0) {
-	          fireAndForget("AI Task Trace node batch", replaceTaskNodeEvents(taskRun.id, bufferedNodeEvents))
-	        }
-	        logPerf(taskRun.requestId, "stream_end", apiStartedAt, {
-	          responseLength: fullResponseText.length,
-	          nodeEvents: bufferedNodeEvents.length,
-	        })
+        await finalizeDifyChatResponse(controller, "流结束")
 	      }
 
     })

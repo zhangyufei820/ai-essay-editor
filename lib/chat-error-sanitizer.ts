@@ -97,6 +97,15 @@ const TIMEOUT_ERROR_PATTERNS = [
   /超时/,
 ] as const
 
+const SAFETY_REJECTION_ERROR_PATTERNS = [
+  /moderation[_\s-]?blocked/i,
+  /safety[_\s-]?violations?/i,
+  /safety system/i,
+  /content[_\s-]?(?:filter|policy)/i,
+  /image_generation_user_error/i,
+  /request was rejected/i,
+] as const
+
 const PUBLIC_OPENCLAW_ARTIFACT_URL_PATTERN =
   /(?:https?:\/\/(?:www\.)?(?:shenxiang\.school|school\.shenxiang\.school|api\.shenxiang\.school|cloudflare\.shenxiang\.school))?\/(?:slides\/|api\/openclaw-media(?:-sign)?\/)[^\s)"'<>`]+/gi
 
@@ -135,11 +144,22 @@ export function hasTimeoutUpstreamErrorText(value: unknown): boolean {
   return TIMEOUT_ERROR_PATTERNS.some((pattern) => pattern.test(value))
 }
 
+function hasSafetyRejectionErrorText(value: unknown): boolean {
+  if (typeof value !== "string") return false
+  return SAFETY_REJECTION_ERROR_PATTERNS.some((pattern) => pattern.test(value))
+}
+
+function getSafetyRejectionMessage(fallback: string) {
+  if (/图片|图像/.test(fallback)) return "图片内容触发安全审核，请调整描述或素材后重试。"
+  return "请求内容触发安全审核，请调整后重试。"
+}
+
 export function getSafeUpstreamErrorMessage(
   value: unknown,
   fallback = "服务暂时不可用，请稍后重试。",
 ): string | null {
   if (typeof value !== "string" || !value.trim()) return fallback
+  if (hasSafetyRejectionErrorText(value)) return getSafetyRejectionMessage(fallback)
   if (!hasTechnicalUpstreamErrorText(value)) return null
 
   const noun = serviceNounFromFallback(fallback)
@@ -243,6 +263,9 @@ export function sanitizePublicAiErrorCode(value: unknown): string | null {
   }
   if (/FORBIDDEN|UNAUTHORIZED|ACCESS_DENIED|OWNER|SESSION/i.test(code)) {
     return "SERVICE_ACCESS_DENIED"
+  }
+  if (/MODERATION|SAFETY|CONTENT_FILTER|POLICY|BLOCKED|REJECTED/i.test(code)) {
+    return "SERVICE_INPUT_REJECTED"
   }
   if (/EMPTY|NO_RESPONSE|BLANK|NO_CONTENT/i.test(code)) {
     return "SERVICE_EMPTY_RESPONSE"
