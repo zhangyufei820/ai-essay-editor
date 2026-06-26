@@ -13,6 +13,11 @@ import (
 	"gorm.io/gorm/clause"
 )
 
+const (
+	TokenQuotaPeriodDaily   = "daily"
+	TokenQuotaPeriodMonthly = "monthly"
+)
+
 type Token struct {
 	Id                 int            `json:"id"`
 	UserId             int            `json:"user_id" gorm:"index"`
