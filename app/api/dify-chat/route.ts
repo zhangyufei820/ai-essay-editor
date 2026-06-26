@@ -258,6 +258,18 @@ function extractGatewayErrorCode(value: unknown, fallback = "IMAGE_GATEWAY_HTTP_
   return sanitizePublicAiErrorCode(rawCode)
 }
 
+function extractGatewayErrorMessage(value: unknown, fallback = "图片服务暂时不可用，请稍后重试。") {
+  const record = value && typeof value === "object" ? value as Record<string, unknown> : {}
+  const nestedError = record.error && typeof record.error === "object" ? record.error as Record<string, unknown> : {}
+  const rawMessage =
+    (typeof nestedError.message === "string" && nestedError.message.trim()) ||
+    (typeof record.message === "string" && record.message.trim()) ||
+    (typeof nestedError.error === "string" && nestedError.error.trim()) ||
+    (typeof record.detail === "string" && record.detail.trim()) ||
+    ""
+  return sanitizeUpstreamErrorText(rawMessage, fallback)
+}
+
 function buildGptImageV11Inputs(inputs: unknown): GptImageV11Inputs {
   const record = inputs && typeof inputs === "object" ? inputs as Record<string, unknown> : {}
   const referenceImageUrls = pickUrlStrings(record.reference_image_urls)
@@ -1917,9 +1929,9 @@ function createImageGatewayResponse(payload: unknown) {
   const detail = record.detail && typeof record.detail === "object" ? record.detail as Record<string, unknown> : {}
   const requestPayload = detail.request_payload && typeof detail.request_payload === "object" ? detail.request_payload as Record<string, unknown> : {}
   const referenceImageUrls = Array.isArray(requestPayload.reference_image_urls) ? requestPayload.reference_image_urls : []
-  const message = typeof record.message === "string"
-    ? sanitizeUpstreamErrorText(record.message, success ? "图片生成成功" : "图片服务暂时不可用，请稍后重试。")
-    : success ? "图片生成成功" : "图片服务暂时不可用，请稍后重试。"
+  const message = success
+    ? (typeof record.message === "string" ? sanitizeUpstreamErrorText(record.message, "图片生成成功") : "图片生成成功")
+    : extractGatewayErrorMessage(record, "图片服务暂时不可用，请稍后重试。")
   const answer = [message, ...imageUrls.map((url) => `![Generated Image](${url})`)].join("\n\n")
 
   console.log("[GPT Image Gateway] response", {
@@ -1955,16 +1967,12 @@ function createProviderTaskResponseFromStoredResult(payload: unknown) {
     const errorPayload = record.payload && typeof record.payload === "object" ? record.payload as Record<string, unknown> : {}
     const nestedError = errorPayload.error && typeof errorPayload.error === "object" ? errorPayload.error as Record<string, unknown> : {}
     const publicErrorCode = extractGatewayErrorCode(errorPayload, "IMAGE_GATEWAY_HTTP_ERROR")
-    const message = sanitizeUpstreamErrorText(
-      typeof errorPayload.message === "string"
-        ? errorPayload.message
-        : typeof errorPayload.error === "string"
-          ? errorPayload.error
-          : typeof nestedError.message === "string"
-            ? nestedError.message
-          : typeof record.text === "string"
-            ? record.text
-            : "",
+    const message = extractGatewayErrorMessage(
+      {
+        ...errorPayload,
+        error: nestedError,
+        detail: typeof record.text === "string" ? record.text : errorPayload.detail,
+      },
       "图片服务请求失败，请稍后重试。",
     )
     return Response.json({ error: message, code: publicErrorCode }, { status: statusCode })
@@ -2332,7 +2340,7 @@ async function callImageGatewayDirect(query: string, inputs: unknown) {
 
     if (!response.ok) {
       const record = payload && typeof payload === "object" ? payload as Record<string, unknown> : {}
-      const message = sanitizeUpstreamErrorText(record.message, "图片服务请求失败，请稍后重试。")
+      const message = extractGatewayErrorMessage(record, "图片服务请求失败，请稍后重试。")
       return Response.json({ error: message, code: extractGatewayErrorCode(record, "IMAGE_GATEWAY_HTTP_ERROR") }, { status: response.status })
     }
 
@@ -2393,7 +2401,7 @@ async function callGeminiImageGatewayDirect(query: string, inputs: unknown) {
 
     if (!response.ok) {
       const record = payload && typeof payload === "object" ? payload as Record<string, unknown> : {}
-      const message = sanitizeUpstreamErrorText(record.message, "图像服务请求失败，请稍后重试。")
+      const message = extractGatewayErrorMessage(record, "图像服务请求失败，请稍后重试。")
       return Response.json({ error: message, code: extractGatewayErrorCode(record, "GEMINI_IMAGE_GATEWAY_HTTP_ERROR") }, { status: response.status })
     }
 

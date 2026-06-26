@@ -199,6 +199,7 @@ describe("chat message guards", () => {
     expect(imageWorkspace).not.toContain("图像工作流凭据失效，请管理员更新 Dify 应用 API Key 后重试。")
     expect(route).toContain('code: sanitizePublicAiErrorCode("DIFY_CREDENTIAL_MISSING")')
     expect(route).toContain("code: sanitizePublicAiErrorCode(handledErrorCode)")
+    expect(route).toContain("extractGatewayErrorMessage(")
     expect(route).toContain('await finalizeDifyChatResponse(controller, "流结束")')
     expect(route).toContain("hasReceivedContent = true")
     expect(uploadRoute).toContain("文件上传服务暂时不可用，请稍后重试。")
