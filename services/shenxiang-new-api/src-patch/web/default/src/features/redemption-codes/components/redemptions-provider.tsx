@@ -60,7 +60,6 @@ export function RedemptionsProvider({
   )
 }
 
-// eslint-disable-next-line react-refresh/only-export-components
 export const useRedemptions = () => {
   const redemptionsContext = React.useContext(RedemptionsContext)
 
