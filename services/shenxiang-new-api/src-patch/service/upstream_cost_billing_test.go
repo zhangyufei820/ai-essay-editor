@@ -2,10 +2,13 @@ package service
 
 import (
 	"net/http"
+	"os"
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/dto"
+	"github.com/QuantumNous/new-api/model"
+	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/stretchr/testify/require"
 )
@@ -13,7 +16,16 @@ import (
 func TestApplyUpstreamCostBillingUsesUSDPlusMarkup(t *testing.T) {
 	oldQuotaPerUnit := common.QuotaPerUnit
 	common.QuotaPerUnit = 500_000
-	defer func() { common.QuotaPerUnit = oldQuotaPerUnit }()
+	oldMarkup := os.Getenv("UPSTREAM_COST_MARKUP_RATE")
+	require.NoError(t, os.Setenv("UPSTREAM_COST_MARKUP_RATE", "0.08"))
+	defer func() {
+		common.QuotaPerUnit = oldQuotaPerUnit
+		if oldMarkup == "" {
+			_ = os.Unsetenv("UPSTREAM_COST_MARKUP_RATE")
+		} else {
+			_ = os.Setenv("UPSTREAM_COST_MARKUP_RATE", oldMarkup)
+		}
+	}()
 
 	quota, result := ApplyUpstreamCostBilling(nil, &dto.Usage{
 		Cost: 1.0,
@@ -30,11 +42,18 @@ func TestApplyUpstreamCostBillingUsesUSDPlusMarkup(t *testing.T) {
 func TestApplyUpstreamCostBillingConvertsCNYPlusMarkup(t *testing.T) {
 	oldQuotaPerUnit := common.QuotaPerUnit
 	oldExchangeRate := operation_setting.USDExchangeRate
+	oldMarkup := os.Getenv("UPSTREAM_COST_MARKUP_RATE")
 	common.QuotaPerUnit = 500_000
 	operation_setting.USDExchangeRate = 7.3
+	require.NoError(t, os.Setenv("UPSTREAM_COST_MARKUP_RATE", "0.08"))
 	defer func() {
 		common.QuotaPerUnit = oldQuotaPerUnit
 		operation_setting.USDExchangeRate = oldExchangeRate
+		if oldMarkup == "" {
+			_ = os.Unsetenv("UPSTREAM_COST_MARKUP_RATE")
+		} else {
+			_ = os.Setenv("UPSTREAM_COST_MARKUP_RATE", oldMarkup)
+		}
 	}()
 
 	quota, result := ApplyUpstreamCostBilling(nil, &dto.Usage{
@@ -45,6 +64,59 @@ func TestApplyUpstreamCostBillingConvertsCNYPlusMarkup(t *testing.T) {
 	require.Equal(t, "usage.cost_cny", result.Source)
 	require.Equal(t, "CNY", result.UpstreamCostCurrency)
 	require.Equal(t, 540000, quota)
+}
+
+func TestApplyUpstreamCostBillingUsesOfficialEquivalentOnlyForDragtokensMonthlyCard(t *testing.T) {
+	oldQuotaPerUnit := common.QuotaPerUnit
+	oldExchangeRate := operation_setting.USDExchangeRate
+	oldMarkup := os.Getenv("UPSTREAM_COST_MARKUP_RATE")
+	oldOfficialRate := os.Getenv("UPSTREAM_OFFICIAL_USD_COST_CNY")
+	common.QuotaPerUnit = 500_000
+	operation_setting.USDExchangeRate = 7.3
+	require.NoError(t, os.Setenv("UPSTREAM_COST_MARKUP_RATE", "0"))
+	require.NoError(t, os.Setenv("UPSTREAM_OFFICIAL_USD_COST_CNY", "0.09"))
+	defer func() {
+		common.QuotaPerUnit = oldQuotaPerUnit
+		operation_setting.USDExchangeRate = oldExchangeRate
+		if oldMarkup == "" {
+			_ = os.Unsetenv("UPSTREAM_COST_MARKUP_RATE")
+		} else {
+			_ = os.Setenv("UPSTREAM_COST_MARKUP_RATE", oldMarkup)
+		}
+		if oldOfficialRate == "" {
+			_ = os.Unsetenv("UPSTREAM_OFFICIAL_USD_COST_CNY")
+		} else {
+			_ = os.Setenv("UPSTREAM_OFFICIAL_USD_COST_CNY", oldOfficialRate)
+		}
+	}()
+
+	require.NoError(t, model.DB.Create(&model.Channel{
+		Id:   21,
+		Name: "dragtokens",
+		Tag:  common.GetPointer(dragtokensMonthlyCardTag),
+	}).Error)
+	defer model.DB.Where("id = ?", 21).Delete(&model.Channel{})
+
+	relayInfo := &relaycommon.RelayInfo{
+		BillingSource:         BillingSourceSubscription,
+		SubscriptionId:        1001,
+		SubscriptionPlanTitle: dragtokensMonthlyCardPlanTitle,
+		ChannelMeta: &relaycommon.ChannelMeta{
+			ChannelId: 21,
+		},
+	}
+	quota, result := ApplyUpstreamCostBilling(relayInfo, &dto.Usage{
+		CostCNY: 14.4,
+	}, 123)
+
+	require.True(t, result.Applied)
+	require.Equal(t, "usage.cost_cny", result.Source)
+	require.Equal(t, "CNY", result.UpstreamCostCurrency)
+	require.Equal(t, 80_000_000, quota)
+	require.Equal(t, 14.4, result.UpstreamCostCNY)
+	require.InDelta(t, 160, result.OfficialEquivalentUSD, 0.000001)
+	require.Equal(t, 0.0, result.MarkupRate)
+	require.Equal(t, 80_000_000, result.FinalQuota)
 }
 
 func TestApplyUpstreamCostBillingFallsBackWhenCostMissing(t *testing.T) {

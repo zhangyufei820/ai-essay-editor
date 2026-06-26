@@ -9,24 +9,35 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/dto"
+	"github.com/QuantumNous/new-api/model"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 
 	"github.com/shopspring/decimal"
 )
 
-const DefaultUpstreamCostMarkupRate = 0.08
+const (
+	DefaultUpstreamCostMarkupRate   = 0.08
+	DefaultOfficialUSDCostCNY       = 0.09
+	upstreamCostBillingModeStandard = "upstream_cost_plus_markup"
+	upstreamCostBillingModeOfficial = "upstream_cost_to_official_usd_quota"
+	dragtokensMonthlyCardTag        = "dragtokens-gpt55-responses"
+	dragtokensMonthlyCardPlanTitle  = "¥500 月卡"
+)
 
 type UpstreamCostBillingResult struct {
-	Applied              bool
-	Source               string
-	FallbackReason       string
-	UpstreamCost         float64
-	UpstreamCostCurrency string
-	MarkupRate           float64
-	BilledCostUSD        float64
-	PreviousQuota        int
-	FinalQuota           int
+	Applied               bool
+	Source                string
+	FallbackReason        string
+	UpstreamCost          float64
+	UpstreamCostCurrency  string
+	MarkupRate            float64
+	OfficialUSDCostCNY    float64
+	UpstreamCostCNY       float64
+	OfficialEquivalentUSD float64
+	BilledCostUSD         float64
+	PreviousQuota         int
+	FinalQuota            int
 }
 
 type upstreamCostCandidate struct {
@@ -44,6 +55,19 @@ func upstreamCostMarkupRate() float64 {
 	if err != nil || parsed < 0 {
 		common.SysError(fmt.Sprintf("invalid UPSTREAM_COST_MARKUP_RATE %q; using default %.4f", value, DefaultUpstreamCostMarkupRate))
 		return DefaultUpstreamCostMarkupRate
+	}
+	return parsed
+}
+
+func officialUSDCostCNY() float64 {
+	value := common.GetEnvOrDefaultString("UPSTREAM_OFFICIAL_USD_COST_CNY", "")
+	if value == "" {
+		return DefaultOfficialUSDCostCNY
+	}
+	parsed, err := strconv.ParseFloat(value, 64)
+	if err != nil || parsed <= 0 {
+		common.SysError(fmt.Sprintf("invalid UPSTREAM_OFFICIAL_USD_COST_CNY %q; using default %.4f", value, DefaultOfficialUSDCostCNY))
+		return DefaultOfficialUSDCostCNY
 	}
 	return parsed
 }
@@ -84,10 +108,16 @@ var responseHeaderCurrencyFields = []string{
 
 func ApplyUpstreamCostBilling(relayInfo *relaycommon.RelayInfo, usage *dto.Usage, currentQuota int) (int, *UpstreamCostBillingResult) {
 	markupRate := upstreamCostMarkupRate()
+	officialRateCNY := officialUSDCostCNY()
+	useOfficialEquivalent := shouldUseOfficialEquivalentBilling(relayInfo)
+	if useOfficialEquivalent {
+		markupRate = 0
+	}
 	result := &UpstreamCostBillingResult{
-		MarkupRate:    markupRate,
-		PreviousQuota: currentQuota,
-		FinalQuota:    currentQuota,
+		MarkupRate:         markupRate,
+		OfficialUSDCostCNY: officialRateCNY,
+		PreviousQuota:      currentQuota,
+		FinalQuota:         currentQuota,
 	}
 	cost, currency, source, ok, reason := ExtractUpstreamCostFromUsage(usage)
 	if !ok {
@@ -95,7 +125,7 @@ func ApplyUpstreamCostBilling(relayInfo *relaycommon.RelayInfo, usage *dto.Usage
 		return currentQuota, result
 	}
 
-	quota, billedCostUSD, ok := quotaFromUpstreamCost(cost, currency, markupRate)
+	quota, billedCostUSD, upstreamCostCNY, ok := quotaFromUpstreamCost(cost, currency, markupRate, officialRateCNY, useOfficialEquivalent)
 	if !ok {
 		result.FallbackReason = "unsupported_currency"
 		return currentQuota, result
@@ -105,6 +135,10 @@ func ApplyUpstreamCostBilling(relayInfo *relaycommon.RelayInfo, usage *dto.Usage
 	result.Source = source
 	result.UpstreamCost = cost
 	result.UpstreamCostCurrency = currency
+	result.UpstreamCostCNY = upstreamCostCNY
+	if useOfficialEquivalent {
+		result.OfficialEquivalentUSD = billedCostUSD
+	}
 	result.BilledCostUSD = billedCostUSD
 	result.FinalQuota = quota
 	return quota, result
@@ -348,6 +382,7 @@ func InjectUpstreamCostBillingInfo(other map[string]interface{}, result *Upstrea
 		return
 	}
 	other["upstream_cost_markup_rate"] = result.MarkupRate
+	other["upstream_official_usd_cost_cny"] = result.OfficialUSDCostCNY
 	other["quota_before_upstream_cost"] = result.PreviousQuota
 	if !result.Applied {
 		other["upstream_cost_billing"] = "fallback"
@@ -356,36 +391,68 @@ func InjectUpstreamCostBillingInfo(other map[string]interface{}, result *Upstrea
 		}
 		return
 	}
-	other["billing_mode"] = "upstream_cost_plus_markup"
+	billingMode := upstreamCostBillingModeStandard
+	if result.OfficialEquivalentUSD > 0 {
+		billingMode = upstreamCostBillingModeOfficial
+	}
+	other["billing_mode"] = billingMode
 	other["upstream_cost_billing"] = "applied"
 	other["upstream_cost_source"] = result.Source
 	other["upstream_cost"] = result.UpstreamCost
 	other["upstream_cost_currency"] = result.UpstreamCostCurrency
+	other["upstream_cost_cny"] = result.UpstreamCostCNY
+	if result.OfficialEquivalentUSD > 0 {
+		other["official_equivalent_usd"] = result.OfficialEquivalentUSD
+	}
 	other["billed_cost_usd"] = result.BilledCostUSD
 	other["quota_after_upstream_cost"] = result.FinalQuota
 }
 
-func quotaFromUpstreamCost(cost float64, currency string, markupRate float64) (quota int, billedCostUSD float64, ok bool) {
+func quotaFromUpstreamCost(cost float64, currency string, markupRate float64, officialUSDCostCNY float64, useOfficialEquivalent bool) (quota int, billedCostUSD float64, upstreamCostCNY float64, ok bool) {
 	currency = normalizeCostCurrency(currency)
 	if currency == "" {
 		currency = "USD"
 	}
+	if useOfficialEquivalent && officialUSDCostCNY <= 0 {
+		common.SysError("UPSTREAM_OFFICIAL_USD_COST_CNY must be positive; upstream cost billing is disabled")
+		return 0, 0, 0, false
+	}
 	costDecimal := decimal.NewFromFloat(cost)
 	switch currency {
 	case "USD":
-		billedCostUSD = costDecimal.Mul(decimal.NewFromFloat(1 + markupRate)).InexactFloat64()
-	case "CNY":
-		exchangeRate := operation_setting.USDExchangeRate
-		if exchangeRate <= 0 {
-			common.SysError("USDExchangeRate is not configured; upstream CNY cost billing is disabled to avoid profit distortion")
-			return 0, 0, false
+		if useOfficialEquivalent {
+			exchangeRate := operation_setting.USDExchangeRate
+			if exchangeRate <= 0 {
+				common.SysError("USDExchangeRate is not configured; upstream USD cost billing is disabled to avoid profit distortion")
+				return 0, 0, 0, false
+			}
+			upstreamCostCNY = costDecimal.
+				Mul(decimal.NewFromFloat(exchangeRate)).
+				InexactFloat64()
+		} else {
+			billedCostUSD = costDecimal.Mul(decimal.NewFromFloat(1 + markupRate)).InexactFloat64()
 		}
-		billedCostUSD = costDecimal.
-			Div(decimal.NewFromFloat(exchangeRate)).
+	case "CNY":
+		upstreamCostCNY = costDecimal.InexactFloat64()
+		if !useOfficialEquivalent {
+			exchangeRate := operation_setting.USDExchangeRate
+			if exchangeRate <= 0 {
+				common.SysError("USDExchangeRate is not configured; upstream CNY cost billing is disabled to avoid profit distortion")
+				return 0, 0, 0, false
+			}
+			billedCostUSD = costDecimal.
+				Div(decimal.NewFromFloat(exchangeRate)).
+				Mul(decimal.NewFromFloat(1 + markupRate)).
+				InexactFloat64()
+		}
+	default:
+		return 0, 0, 0, false
+	}
+	if useOfficialEquivalent {
+		billedCostUSD = decimal.NewFromFloat(upstreamCostCNY).
+			Div(decimal.NewFromFloat(officialUSDCostCNY)).
 			Mul(decimal.NewFromFloat(1 + markupRate)).
 			InexactFloat64()
-	default:
-		return 0, 0, false
 	}
 	quotaDecimal := decimal.NewFromFloat(billedCostUSD).Mul(decimal.NewFromFloat(common.QuotaPerUnit))
 	// 防御异常上游成本（如恶意/错误的 cost header）导致 IntPart 溢出回绕成负数或垃圾值：
@@ -393,13 +460,34 @@ func quotaFromUpstreamCost(cost float64, currency string, markupRate float64) (q
 	maxSafeQuota := decimal.New(1, 18) // 1e18，远超任何合理单请求成本，且安全位于 int64 范围内
 	if quotaDecimal.IsNegative() || quotaDecimal.GreaterThan(maxSafeQuota) {
 		common.SysError(fmt.Sprintf("upstream cost billing produced out-of-range quota (cost=%v %s, billedUSD=%v); skipping upstream cost billing", cost, currency, billedCostUSD))
-		return 0, 0, false
+		return 0, 0, 0, false
 	}
 	quota = int(quotaDecimal.Round(0).IntPart())
 	if quota == 0 && cost > 0 {
 		quota = 1
 	}
-	return quota, billedCostUSD, true
+	return quota, billedCostUSD, upstreamCostCNY, true
+}
+
+func shouldUseOfficialEquivalentBilling(relayInfo *relaycommon.RelayInfo) bool {
+	if relayInfo == nil || relayInfo.BillingSource != BillingSourceSubscription || relayInfo.SubscriptionId <= 0 {
+		return false
+	}
+	channel, err := model.CacheGetChannel(relayInfo.ChannelId)
+	if err != nil || channel == nil {
+		return false
+	}
+	return shouldUseOfficialEquivalentBillingForChannel(relayInfo, channel)
+}
+
+func shouldUseOfficialEquivalentBillingForChannel(relayInfo *relaycommon.RelayInfo, channel *model.Channel) bool {
+	if relayInfo == nil || channel == nil {
+		return false
+	}
+	if relayInfo.SubscriptionPlanTitle != dragtokensMonthlyCardPlanTitle {
+		return false
+	}
+	return channel.GetTag() == dragtokensMonthlyCardTag
 }
 
 func parsePositiveCost(value any) (float64, bool) {
@@ -486,6 +574,16 @@ func firstNonEmpty(values ...string) string {
 func FormatUpstreamCostBillingLog(result *UpstreamCostBillingResult) string {
 	if result == nil || !result.Applied {
 		return ""
+	}
+	if result.OfficialEquivalentUSD > 0 {
+		return fmt.Sprintf("上游成本按官网等值额度回填（¥%.4f = 官网 $1，额外加价 %.0f%%），上游成本 %.8f %s，官网等值 $%.6f，最终扣费 %d",
+			result.OfficialUSDCostCNY,
+			result.MarkupRate*100,
+			result.UpstreamCost,
+			result.UpstreamCostCurrency,
+			result.OfficialEquivalentUSD,
+			result.FinalQuota,
+		)
 	}
 	return fmt.Sprintf("上游账单回填 +%.0f%%，上游成本 %.8f %s，最终扣费 %d",
 		result.MarkupRate*100,

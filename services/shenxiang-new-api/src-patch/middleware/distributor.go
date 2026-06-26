@@ -101,32 +101,39 @@ func Distribute() func(c *gin.Context) {
 					}
 				}
 
-				if preferredChannelID, found := service.GetPreferredChannelByAffinity(c, modelRequest.Model, usingGroup); found {
-					affinityUsable := false
-					preferred, err := model.CacheGetChannel(preferredChannelID)
-					if err == nil && preferred != nil && preferred.Status == common.ChannelStatusEnabled {
-						if usingGroup == "auto" {
-							userGroup := common.GetContextKeyString(c, constant.ContextKeyUserGroup)
-							autoGroups := service.GetUserAutoGroup(userGroup)
-							for _, g := range autoGroups {
-								if model.IsChannelCurrentPriorityForGroupModel(g, modelRequest.Model, preferred.Id) {
-									selectGroup = g
-									common.SetContextKey(c, constant.ContextKeyAutoGroup, g)
-									channel = preferred
-									affinityUsable = true
-									service.MarkChannelAffinityUsed(c, g, preferred.Id)
-									break
+				if monthlyCardChannel, monthlyCardGroup, found := getDragtokensMonthlyCardChannel(c, modelRequest.Model, usingGroup); found {
+					channel = monthlyCardChannel
+					selectGroup = monthlyCardGroup
+				}
+
+				if channel == nil {
+					if preferredChannelID, found := service.GetPreferredChannelByAffinity(c, modelRequest.Model, usingGroup); found {
+						affinityUsable := false
+						preferred, err := model.CacheGetChannel(preferredChannelID)
+						if err == nil && preferred != nil && preferred.Status == common.ChannelStatusEnabled {
+							if usingGroup == "auto" {
+								userGroup := common.GetContextKeyString(c, constant.ContextKeyUserGroup)
+								autoGroups := service.GetUserAutoGroup(userGroup)
+								for _, g := range autoGroups {
+									if model.IsChannelCurrentPriorityForGroupModel(g, modelRequest.Model, preferred.Id) {
+										selectGroup = g
+										common.SetContextKey(c, constant.ContextKeyAutoGroup, g)
+										channel = preferred
+										affinityUsable = true
+										service.MarkChannelAffinityUsed(c, g, preferred.Id)
+										break
+									}
 								}
+							} else if model.IsChannelCurrentPriorityForGroupModel(usingGroup, modelRequest.Model, preferred.Id) {
+								channel = preferred
+								selectGroup = usingGroup
+								affinityUsable = true
+								service.MarkChannelAffinityUsed(c, usingGroup, preferred.Id)
 							}
-						} else if model.IsChannelCurrentPriorityForGroupModel(usingGroup, modelRequest.Model, preferred.Id) {
-							channel = preferred
-							selectGroup = usingGroup
-							affinityUsable = true
-							service.MarkChannelAffinityUsed(c, usingGroup, preferred.Id)
 						}
-					}
-					if !affinityUsable && !service.ShouldKeepChannelAffinityOnChannelDisabled() {
-						service.ClearCurrentChannelAffinityCache(c)
+						if !affinityUsable && !service.ShouldKeepChannelAffinityOnChannelDisabled() {
+							service.ClearCurrentChannelAffinityCache(c)
+						}
 					}
 				}
 
@@ -165,6 +172,33 @@ func Distribute() func(c *gin.Context) {
 			service.RecordChannelAffinity(c, channel.Id)
 		}
 	}
+}
+
+func getDragtokensMonthlyCardChannel(c *gin.Context, modelName string, usingGroup string) (*model.Channel, string, bool) {
+	if c == nil || !c.GetBool("monthly_card_token") {
+		return nil, "", false
+	}
+	if !service.MonthlyCardChannelSupportsModel(modelName) {
+		return nil, "", false
+	}
+	channel, err := model.GetEnabledChannelByTag(service.MonthlyCardChannelTag)
+	if err != nil || channel == nil {
+		if err != nil {
+			common.SysError(fmt.Sprintf("monthly card channel unavailable: %s", err.Error()))
+		}
+		return nil, "", false
+	}
+	if usingGroup == "auto" {
+		userGroup := common.GetContextKeyString(c, constant.ContextKeyUserGroup)
+		for _, group := range service.GetUserAutoGroup(userGroup) {
+			if group != "" {
+				common.SetContextKey(c, constant.ContextKeyAutoGroup, group)
+				return channel, group, true
+			}
+		}
+		return channel, usingGroup, true
+	}
+	return channel, usingGroup, true
 }
 
 // getModelFromRequest 从请求中读取模型信息

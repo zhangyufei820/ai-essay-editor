@@ -67,6 +67,15 @@ func Login(c *gin.Context) {
 	completeLogin(&user, c)
 }
 
+func ensureSystemTokensForUser(c *gin.Context, userID int) {
+	if userID <= 0 {
+		return
+	}
+	if _, err := service.EnsureSystemTokensForUserID(c.Request.Context(), userID); err != nil {
+		logger.LogWarn(c, fmt.Sprintf("ensure system tokens failed: user_id=%d err=%v", userID, err))
+	}
+}
+
 // completeLogin enforces 2FA (when enabled) before establishing a session.
 // Every login entry point — password and all OAuth providers — must go
 // through here so the 2FA gate cannot be bypassed by an OAuth path. When
@@ -1099,7 +1108,7 @@ func TopUp(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	quota, err := model.Redeem(req.Key, id)
+	result, err := model.Redeem(req.Key, id)
 	if err != nil {
 		if errors.Is(err, model.ErrRedeemFailed) {
 			common.ApiErrorI18n(c, i18n.MsgRedeemFailed)
@@ -1111,7 +1120,7 @@ func TopUp(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
-		"data":    quota,
+		"data":    result,
 	})
 }
 

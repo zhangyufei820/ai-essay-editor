@@ -4,11 +4,13 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/bytedance/gopkg/util/gopool"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type Token struct {
@@ -22,6 +24,8 @@ type Token struct {
 	ExpiredTime        int64          `json:"expired_time" gorm:"bigint;default:-1"` // -1 means never expired
 	RemainQuota        int            `json:"remain_quota" gorm:"default:0"`
 	UnlimitedQuota     bool           `json:"unlimited_quota"`
+	DailyQuota         int            `json:"daily_quota" gorm:"default:0"`
+	MonthlyQuota       int            `json:"monthly_quota" gorm:"default:0"`
 	ModelLimitsEnabled bool           `json:"model_limits_enabled"`
 	ModelLimits        string         `json:"model_limits" gorm:"type:text"`
 	AllowIps           *string        `json:"allow_ips" gorm:"default:''"`
@@ -29,6 +33,16 @@ type Token struct {
 	Group              string         `json:"group" gorm:"default:''"`
 	CrossGroupRetry    bool           `json:"cross_group_retry"` // 跨分组重试，仅auto分组有效
 	DeletedAt          gorm.DeletedAt `gorm:"index"`
+}
+
+type TokenQuotaWindow struct {
+	Id          int    `json:"id"`
+	TokenId     int    `json:"token_id" gorm:"uniqueIndex:idx_token_quota_window,priority:1;index"`
+	Period      string `json:"period" gorm:"type:varchar(16);uniqueIndex:idx_token_quota_window,priority:2"`
+	WindowStart int64  `json:"window_start" gorm:"bigint;uniqueIndex:idx_token_quota_window,priority:3;index"`
+	UsedQuota   int    `json:"used_quota" gorm:"default:0"`
+	CreatedAt   int64  `json:"created_at" gorm:"bigint"`
+	UpdatedAt   int64  `json:"updated_at" gorm:"bigint"`
 }
 
 func (token *Token) Clean() {
@@ -295,7 +309,7 @@ func (token *Token) Update() (err error) {
 		}
 	}()
 	err = DB.Model(token).Select("name", "status", "expired_time", "remain_quota", "unlimited_quota",
-		"model_limits_enabled", "model_limits", "allow_ips", "group", "cross_group_retry").Updates(token).Error
+		"daily_quota", "monthly_quota", "model_limits_enabled", "model_limits", "allow_ips", "group", "cross_group_retry").Updates(token).Error
 	return err
 }
 
@@ -376,6 +390,13 @@ func IncreaseTokenQuota(tokenId int, key string, quota int) (err error) {
 	if quota < 0 {
 		return errors.New("quota 不能为负数！")
 	}
+	if common.BatchUpdateEnabled {
+		addNewRecord(BatchUpdateTypeTokenQuota, tokenId, quota)
+		return nil
+	}
+	if err = increaseTokenQuota(tokenId, quota); err != nil {
+		return err
+	}
 	if common.RedisEnabled {
 		gopool.Go(func() {
 			err := cacheIncrTokenQuota(key, int64(quota))
@@ -384,11 +405,7 @@ func IncreaseTokenQuota(tokenId int, key string, quota int) (err error) {
 			}
 		})
 	}
-	if common.BatchUpdateEnabled {
-		addNewRecord(BatchUpdateTypeTokenQuota, tokenId, quota)
-		return nil
-	}
-	return increaseTokenQuota(tokenId, quota)
+	return nil
 }
 
 func increaseTokenQuota(id int, quota int) (err error) {
@@ -402,40 +419,150 @@ func increaseTokenQuota(id int, quota int) (err error) {
 	return err
 }
 
+func RefundTokenQuotaWindows(tokenId int, quota int) error {
+	if tokenId <= 0 || quota <= 0 {
+		return nil
+	}
+	return DB.Transaction(func(tx *gorm.DB) error {
+		var token Token
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", tokenId).First(&token).Error; err != nil {
+			return err
+		}
+		return refundTokenQuotaWindows(tx, &token, quota)
+	})
+}
+
 func DecreaseTokenQuota(id int, key string, quota int) (err error) {
 	if quota < 0 {
 		return errors.New("quota 不能为负数！")
 	}
+	// Token consumption must be an immediate conditional database update.
+	// Batch updates are fine for refunds/topups, but unsafe for concurrent spend.
+	if err = decreaseTokenQuota(id, quota); err != nil {
+		return err
+	}
 	if common.RedisEnabled {
 		gopool.Go(func() {
-			err := cacheDecrTokenQuota(key, int64(quota))
+			err := cacheDeleteToken(key)
 			if err != nil {
-				common.SysLog("failed to decrease token quota: " + err.Error())
+				common.SysLog("failed to delete token cache after quota decrease: " + err.Error())
 			}
 		})
 	}
-	if common.BatchUpdateEnabled {
-		addNewRecord(BatchUpdateTypeTokenQuota, id, -quota)
-		return nil
-	}
-	return decreaseTokenQuota(id, quota)
+	return nil
 }
 
 func decreaseTokenQuota(id int, quota int) (err error) {
-	result := DB.Model(&Token{}).Where("id = ? AND (unlimited_quota = ? OR remain_quota >= ?)", id, true, quota).Updates(
-		map[string]interface{}{
-			"remain_quota":  gorm.Expr("CASE WHEN unlimited_quota THEN remain_quota ELSE remain_quota - ? END", quota),
+	return DB.Transaction(func(tx *gorm.DB) error {
+		var token Token
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", id).First(&token).Error; err != nil {
+			return err
+		}
+		if !token.UnlimitedQuota && token.RemainQuota < quota {
+			return errors.New("token quota is not enough")
+		}
+		if quota > 0 {
+			if err := consumeTokenQuotaWindows(tx, &token, quota); err != nil {
+				return err
+			}
+		}
+		updates := map[string]interface{}{
 			"used_quota":    gorm.Expr("used_quota + ?", quota),
 			"accessed_time": common.GetTimestamp(),
-		},
-	)
-	if result.Error != nil {
-		return result.Error
+		}
+		if !token.UnlimitedQuota {
+			updates["remain_quota"] = gorm.Expr("remain_quota - ?", quota)
+		}
+		return tx.Model(&Token{}).Where("id = ?", id).Updates(updates).Error
+	})
+}
+
+func tokenQuotaWindowStart(period string, now time.Time) int64 {
+	switch period {
+	case TokenQuotaPeriodDaily:
+		return time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).Unix()
+	case TokenQuotaPeriodMonthly:
+		return time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location()).Unix()
+	default:
+		return 0
 	}
-	if result.RowsAffected == 0 {
-		return errors.New("token quota is not enough")
+}
+
+func consumeTokenQuotaWindows(tx *gorm.DB, token *Token, quota int) error {
+	if token == nil || quota <= 0 {
+		return nil
+	}
+	now := time.Now()
+	if token.DailyQuota > 0 {
+		if err := consumeTokenQuotaWindow(tx, token.Id, TokenQuotaPeriodDaily, tokenQuotaWindowStart(TokenQuotaPeriodDaily, now), token.DailyQuota, quota); err != nil {
+			return err
+		}
+	}
+	if token.MonthlyQuota > 0 {
+		if err := consumeTokenQuotaWindow(tx, token.Id, TokenQuotaPeriodMonthly, tokenQuotaWindowStart(TokenQuotaPeriodMonthly, now), token.MonthlyQuota, quota); err != nil {
+			return err
+		}
 	}
 	return nil
+}
+
+func consumeTokenQuotaWindow(tx *gorm.DB, tokenId int, period string, windowStart int64, limit int, quota int) error {
+	if limit > 0 && quota > limit {
+		return fmt.Errorf("token %s quota limit exceeded", period)
+	}
+	now := common.GetTimestamp()
+	var window TokenQuotaWindow
+	err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+		Where("token_id = ? AND period = ? AND window_start = ?", tokenId, period, windowStart).
+		First(&window).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		window = TokenQuotaWindow{
+			TokenId:     tokenId,
+			Period:      period,
+			WindowStart: windowStart,
+			UsedQuota:   quota,
+			CreatedAt:   now,
+			UpdatedAt:   now,
+		}
+		return tx.Create(&window).Error
+	}
+	if err != nil {
+		return err
+	}
+	if limit > 0 && window.UsedQuota+quota > limit {
+		return fmt.Errorf("token %s quota limit exceeded", period)
+	}
+	return tx.Model(&window).Updates(map[string]interface{}{
+		"used_quota": gorm.Expr("used_quota + ?", quota),
+		"updated_at": now,
+	}).Error
+}
+
+func refundTokenQuotaWindows(tx *gorm.DB, token *Token, quota int) error {
+	if token == nil || quota <= 0 {
+		return nil
+	}
+	now := time.Now()
+	if token.DailyQuota > 0 {
+		if err := refundTokenQuotaWindow(tx, token.Id, TokenQuotaPeriodDaily, tokenQuotaWindowStart(TokenQuotaPeriodDaily, now), quota); err != nil {
+			return err
+		}
+	}
+	if token.MonthlyQuota > 0 {
+		if err := refundTokenQuotaWindow(tx, token.Id, TokenQuotaPeriodMonthly, tokenQuotaWindowStart(TokenQuotaPeriodMonthly, now), quota); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func refundTokenQuotaWindow(tx *gorm.DB, tokenId int, period string, windowStart int64, quota int) error {
+	return tx.Model(&TokenQuotaWindow{}).
+		Where("token_id = ? AND period = ? AND window_start = ?", tokenId, period, windowStart).
+		Updates(map[string]interface{}{
+			"used_quota": gorm.Expr("CASE WHEN used_quota >= ? THEN used_quota - ? ELSE 0 END", quota, quota),
+			"updated_at": common.GetTimestamp(),
+		}).Error
 }
 
 // CountUserTokens returns total number of tokens for the given user, used for pagination
