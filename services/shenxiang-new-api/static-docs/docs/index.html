@@ -6,88 +6,1163 @@
   <title>星人 API 文档中心</title>
   <meta name="robots" content="noindex,nofollow">
   <style>
-    :root{color-scheme:dark;--bg:#090d12;--panel:#121a24;--panel2:#172231;--line:#273447;--text:#edf4fb;--muted:#a9b6c8;--accent:#6fb7ff;--accent2:#6ee7bd;--shadow:rgba(0,0,0,.28)}
-    *{box-sizing:border-box}body{overflow-x:hidden;margin:0;font:15px/1.72 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;background:radial-gradient(circle at 18% -8%,rgba(111,183,255,.16),transparent 34%),radial-gradient(circle at 88% 0,rgba(110,231,189,.10),transparent 30%),linear-gradient(180deg,#080c12,#0b1017 38%,#090d12);color:var(--text)}
-    a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}header{border-bottom:1px solid var(--line);background:rgba(8,12,18,.72);backdrop-filter:blur(14px);position:sticky;top:0;z-index:10}.top{max-width:1180px;margin:0 auto;padding:18px 22px;display:flex;align-items:center;justify-content:space-between;gap:16px}.brand{display:flex;align-items:center;gap:11px;font-weight:750}.mark{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,var(--accent),var(--accent2));box-shadow:0 10px 28px rgba(111,183,255,.18)}.nav{display:flex;gap:12px;flex-wrap:wrap}.nav a{color:var(--muted);font-size:14px}.wrap{max-width:1180px;margin:0 auto;padding:42px 22px 72px}.hero{padding:34px 0 28px}.eyebrow{display:inline-flex;padding:4px 10px;border:1px solid var(--line);border-radius:999px;color:var(--accent2);background:rgba(23,34,49,.7);font-size:13px}.hero h1{margin:16px 0 12px;font-size:42px;line-height:1.12;letter-spacing:0}.hero p{max-width:780px;color:var(--muted);font-size:17px;margin:0}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-top:22px}.card{display:block;background:linear-gradient(180deg,rgba(23,34,49,.92),rgba(18,26,36,.92));border:1px solid var(--line);border-radius:12px;padding:18px;box-shadow:0 14px 40px var(--shadow)}.card h2{margin:0 0 8px;font-size:20px}.card p{margin:0;color:var(--muted)}.tag{display:inline-block;margin-bottom:10px;color:#061016;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:999px;padding:2px 9px;font-size:12px;font-weight:800}.note{margin-top:28px;color:var(--muted);background:rgba(18,26,36,.7);border:1px solid var(--line);border-radius:12px;padding:16px}code{background:#1a2431;border:1px solid var(--line);border-radius:6px;padding:2px 6px;color:#f6fbff}@media(max-width:760px){.top{align-items:flex-start;flex-direction:column}.hero h1{font-size:34px}}
+    :root {
+      color-scheme: light;
+      --page: #f6f8fb;
+      --surface: #ffffff;
+      --surface-soft: #eef4f8;
+      --ink: #111827;
+      --muted: #526174;
+      --subtle: #7a8797;
+      --line: #dbe3ec;
+      --line-strong: #b9c7d6;
+      --blue: #1769e0;
+      --teal: #078f8c;
+      --green: #147a4b;
+      --amber: #9b5b00;
+      --code: #101828;
+      --shadow: 0 18px 44px rgba(17, 24, 39, .08);
+    }
 
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      min-width: 320px;
+      font: 15px/1.68 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: var(--ink);
+      background:
+        linear-gradient(180deg, #ffffff 0, var(--page) 520px),
+        var(--page);
+      letter-spacing: 0;
+    }
+    a { color: var(--blue); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    code {
+      display: inline-block;
+      max-width: 100%;
+      overflow-wrap: anywhere;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #f8fafc;
+      padding: 1px 6px;
+      color: #0f172a;
+      line-height: 1.5;
+    }
+    pre {
+      margin: 0;
+      overflow: auto;
+      border-radius: 8px;
+      background: var(--code);
+      color: #f8fafc;
+      padding: 16px;
+      white-space: pre;
+      line-height: 1.56;
+    }
+    pre code {
+      display: block;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      padding: 0;
+      color: inherit;
+    }
 
-    .tools{margin:8px 0 30px}.section-head{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;margin-bottom:14px}.section-head h2{margin:0;font-size:24px}.section-head p{margin:0;color:var(--muted);max-width:620px}.tool-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}.tool-card{position:relative;overflow:hidden;display:flex;min-height:286px;flex-direction:column;justify-content:space-between;border:1px solid rgba(148,163,184,.22);border-radius:22px;background:linear-gradient(180deg,rgba(255,255,255,.96),rgba(244,249,253,.94));box-shadow:0 22px 62px rgba(2,6,23,.22);padding:22px;color:#091225;transition:transform .2s ease,box-shadow .2s ease,border-color .2s ease}.tool-card:hover{transform:translateY(-3px);border-color:rgba(111,183,255,.42);box-shadow:0 28px 76px rgba(111,183,255,.18)}.tool-card:before{content:"";position:absolute;right:-18px;top:-22px;width:86px;height:86px;border-radius:999px;background:linear-gradient(135deg,#c7f9e3,#b9ecff)}.tool-card:after{content:attr(data-badge);position:absolute;right:23px;top:10px;color:#00769f;font-weight:950}.tool-title{position:relative}.tool-title h3{margin:0;font-size:25px;line-height:1.12}.tool-title p{margin:9px 0 0;min-height:44px;color:#52627a;font-size:14px}.pill-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.pill{border:1px solid #dbe7f2;border-radius:999px;background:#f6faff;color:#516176;padding:3px 9px;font-size:12px;font-weight:700}.actions{position:relative;display:grid;gap:12px;margin-top:22px}.download-btn{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:54px;border-radius:15px;background:#030819;color:#fff;padding:0 16px 0 18px;font-weight:850;text-decoration:none;box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 14px 28px rgba(3,8,25,.13)}.download-btn:hover{text-decoration:none;background:#0b1430}.download-btn small{max-width:48%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#dbeafe;font-weight:600}.meta{position:relative;display:flex;justify-content:space-between;gap:10px;border-top:1px solid #d8e2ee;margin-top:18px;padding-top:14px;color:#52627a;font-size:13px}.download-note{margin-top:16px;color:#52627a;background:rgba(255,255,255,.82);border:1px solid rgba(148,163,184,.24);border-radius:16px;padding:14px 16px}.download-note a{color:#0a77d8;font-weight:800}.codex-plus-panel{margin-top:18px;border:1px solid rgba(148,241,216,.22);border-radius:18px;background:linear-gradient(180deg,rgba(18,31,35,.98),rgba(12,22,25,.96));box-shadow:0 24px 64px rgba(0,0,0,.28);padding:22px;color:#eefcf8}.codex-plus-panel .mini-label{display:inline-flex;color:#8fe5d0;font-weight:850;font-size:13px}.codex-plus-panel h3{margin:8px 0 6px;font-size:24px;line-height:1.2}.codex-plus-panel p{margin:0;color:#b9c9c6}.codex-plus-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:18px}.codex-plus-card,.config-box{border:1px solid rgba(143,229,208,.15);border-radius:14px;background:rgba(255,255,255,.04);padding:14px}.codex-plus-card span,.config-box label{display:block;color:#8fe5d0;font-size:12px;font-weight:850;margin-bottom:6px}.codex-plus-card strong,.config-box strong{display:block;color:#fff;font-size:16px;margin-bottom:6px}.codex-plus-card p{font-size:13px}.codex-plus-downloads{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:16px}.codex-plus-downloads a{border:1px solid rgba(143,229,208,.15);border-radius:14px;background:rgba(8,16,18,.78);padding:12px;color:#eefcf8;text-decoration:none}.codex-plus-downloads a:hover{border-color:rgba(143,229,208,.45);text-decoration:none}.codex-plus-downloads span{display:block;color:#8fe5d0;font-size:12px;font-weight:850}.codex-plus-downloads strong{display:block;margin-top:4px}.codex-plus-downloads em{display:block;margin-top:4px;color:#b9c9c6;font-style:normal;font-size:12px}.codex-config{display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,.9fr);gap:12px;margin-top:16px}.config-value{display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid rgba(143,229,208,.14);border-radius:10px;background:#091114;padding:9px 10px;color:#f8fffd;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;overflow-wrap:anywhere}.config-value small{color:#8fe5d0;font-family:inherit;font-weight:850}.step-list{margin:0;padding-left:20px;color:#d2dfdc}.step-list li{margin:6px 0}.codex-plus-foot{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}.codex-plus-foot a{display:inline-flex;border:1px solid rgba(143,229,208,.22);border-radius:999px;padding:6px 11px;color:#8fe5d0;text-decoration:none}@media(max-width:920px){.tool-grid,.codex-plus-grid,.codex-plus-downloads,.codex-config{grid-template-columns:1fr}.section-head{align-items:flex-start;flex-direction:column}.tool-card{min-height:250px}}@media(max-width:760px){.tool-card{border-radius:18px;padding:18px}.tool-title h3{font-size:23px}.meta{flex-direction:column}.download-btn small{max-width:42%}.codex-plus-panel{padding:16px}.codex-plus-panel h3{font-size:21px}}
+    .shell { max-width: 1180px; margin: 0 auto; padding: 0 22px; }
+    .skip {
+      position: absolute;
+      left: 12px;
+      top: -48px;
+      z-index: 20;
+      background: var(--ink);
+      color: #fff;
+      padding: 8px 10px;
+      border-radius: 6px;
+    }
+    .skip:focus { top: 12px; }
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      border-bottom: 1px solid rgba(219, 227, 236, .86);
+      background: rgba(255, 255, 255, .92);
+      backdrop-filter: blur(14px);
+    }
+    .topbar {
+      min-height: 66px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+    }
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--ink);
+      font-weight: 780;
+    }
+    .brand-mark {
+      width: 30px;
+      height: 30px;
+      border: 1px solid #a5d8d2;
+      border-radius: 8px;
+      background:
+        linear-gradient(135deg, #ffffff 0 32%, #dff7f2 32% 68%, #dcecff 68% 100%);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.8);
+    }
+    nav {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 4px;
+      flex-wrap: wrap;
+    }
+    nav a {
+      min-height: 34px;
+      display: inline-flex;
+      align-items: center;
+      border-radius: 6px;
+      padding: 0 10px;
+      color: #334155;
+      font-size: 14px;
+      font-weight: 680;
+    }
+    nav a:hover {
+      background: #eef4f8;
+      text-decoration: none;
+    }
+    .console-link {
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--blue);
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.12fr) minmax(340px, .88fr);
+      gap: 28px;
+      align-items: start;
+      padding: 54px 0 32px;
+    }
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 30px;
+      border: 1px solid #bde7df;
+      border-radius: 999px;
+      background: #ecfbf7;
+      padding: 0 11px;
+      color: #096964;
+      font-size: 13px;
+      font-weight: 760;
+    }
+    h1 {
+      margin: 18px 0 14px;
+      max-width: 760px;
+      font-size: clamp(36px, 5vw, 68px);
+      line-height: 1.02;
+      letter-spacing: 0;
+    }
+    .lead {
+      max-width: 720px;
+      margin: 0;
+      color: var(--muted);
+      font-size: 18px;
+    }
+    .hero-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 26px;
+    }
+    .btn {
+      min-height: 42px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #fff;
+      color: var(--ink);
+      padding: 0 14px;
+      font-weight: 760;
+      cursor: pointer;
+      transition: background .18s ease, border-color .18s ease, color .18s ease, transform .18s ease;
+    }
+    .btn:hover {
+      border-color: #a9b8ca;
+      background: #f8fafc;
+      text-decoration: none;
+    }
+    .btn.primary {
+      border-color: #0f172a;
+      background: #0f172a;
+      color: #fff;
+    }
+    .btn.primary:hover { background: #1e293b; }
+    .btn:focus-visible, a:focus-visible {
+      outline: 3px solid rgba(23, 105, 224, .28);
+      outline-offset: 2px;
+    }
+
+    .copy-panel {
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+      padding: 18px;
+    }
+    .panel-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .panel-title h2 {
+      margin: 0;
+      font-size: 20px;
+      line-height: 1.2;
+    }
+    .status {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      border: 1px solid #bae6d2;
+      border-radius: 999px;
+      background: #effaf4;
+      padding: 0 8px;
+      color: var(--green);
+      font-size: 12px;
+      font-weight: 760;
+      white-space: nowrap;
+    }
+    .copy-list { display: grid; gap: 10px; }
+    .copy-row {
+      min-width: 0;
+      display: grid;
+      grid-template-columns: 114px minmax(0, 1fr) 72px;
+      gap: 10px;
+      align-items: center;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfdff;
+      padding: 10px;
+    }
+    .copy-row span {
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 760;
+    }
+    .copy-value {
+      min-width: 0;
+      overflow-wrap: anywhere;
+      color: #0f172a;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 13px;
+      font-weight: 720;
+    }
+    .copy {
+      min-height: 34px;
+      border: 1px solid #c7d4e1;
+      border-radius: 6px;
+      background: #fff;
+      color: var(--blue);
+      font-weight: 760;
+      cursor: pointer;
+    }
+    .copy:hover { background: #edf5ff; border-color: #9cc3ff; }
+    .micro-note {
+      margin: 12px 0 0;
+      color: var(--subtle);
+      font-size: 13px;
+    }
+
+    section { scroll-margin-top: 86px; }
+    .band {
+      border-top: 1px solid var(--line);
+      padding: 34px 0;
+    }
+    .section-head {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 18px;
+    }
+    .section-head h2 {
+      margin: 0;
+      font-size: clamp(24px, 3vw, 34px);
+      line-height: 1.14;
+    }
+    .section-head p {
+      max-width: 610px;
+      margin: 0;
+      color: var(--muted);
+    }
+    .steps {
+      min-width: 0;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .step {
+      min-width: 0;
+      position: relative;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      padding: 18px;
+      min-height: 176px;
+    }
+    .num {
+      width: 32px;
+      height: 32px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
+      background: #0f172a;
+      color: #fff;
+      font-weight: 820;
+    }
+    .step h3, .tool h3, .download h3, .faq h3 {
+      margin: 12px 0 8px;
+      font-size: 20px;
+      line-height: 1.2;
+    }
+    .step p, .tool p, .download p, .faq p {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .tool-grid {
+      min-width: 0;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .tool {
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      padding: 18px;
+    }
+    .tool-top {
+      display: flex;
+      align-items: start;
+      justify-content: space-between;
+      gap: 14px;
+    }
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      min-height: 26px;
+      border-radius: 999px;
+      background: #edf5ff;
+      color: var(--blue);
+      padding: 0 9px;
+      font-size: 12px;
+      font-weight: 760;
+      white-space: nowrap;
+    }
+    .tag.teal { background: #ecfbf7; color: var(--teal); }
+    .tag.amber { background: #fff6df; color: var(--amber); }
+    .config-table {
+      display: grid;
+      gap: 8px;
+      margin-top: 14px;
+    }
+    .config-line {
+      display: grid;
+      grid-template-columns: 96px minmax(0, 1fr);
+      gap: 10px;
+      border-top: 1px solid var(--line);
+      padding-top: 8px;
+      color: var(--muted);
+    }
+    .config-line strong {
+      color: var(--ink);
+      font-weight: 760;
+    }
+    .config-line code { background: #fff; }
+
+    .downloads {
+      min-width: 0;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .download {
+      min-width: 0;
+      display: flex;
+      min-height: 232px;
+      flex-direction: column;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      padding: 18px;
+    }
+    .version {
+      margin: -2px 0 10px;
+      color: var(--subtle);
+      font-size: 12px;
+      font-weight: 760;
+    }
+    .download-meta {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 14px;
+      border-top: 1px solid var(--line);
+      padding-top: 12px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .download-meta strong {
+      display: block;
+      color: var(--ink);
+      font-size: 12px;
+    }
+    .download-actions {
+      display: grid;
+      gap: 8px;
+      margin-top: auto;
+      padding-top: 16px;
+    }
+    .download-actions a {
+      min-height: 38px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      border: 1px solid #0f172a;
+      border-radius: 6px;
+      background: #0f172a;
+      color: #fff;
+      padding: 0 11px;
+      font-weight: 760;
+      text-decoration: none;
+    }
+    .download-actions a:hover { background: #1e293b; }
+    .source-link {
+      border-color: #c7d4e1 !important;
+      background: #fff !important;
+      color: var(--blue) !important;
+    }
+    .source-link:hover { background: #edf5ff !important; }
+
+    .install-panel {
+      min-width: 0;
+      display: grid;
+      grid-template-columns: minmax(0, .95fr) minmax(320px, 1.05fr);
+      gap: 14px;
+      margin-top: 14px;
+    }
+    .install-card {
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      padding: 18px;
+    }
+    .install-card h3 {
+      margin: 0 0 10px;
+      font-size: 22px;
+    }
+    .install-card p {
+      margin: 0;
+      color: var(--muted);
+    }
+    .mini-steps {
+      display: grid;
+      gap: 10px;
+      margin-top: 14px;
+    }
+    .mini-step {
+      display: grid;
+      grid-template-columns: 30px minmax(0, 1fr);
+      gap: 10px;
+      align-items: start;
+      border-top: 1px solid var(--line);
+      padding-top: 10px;
+      color: var(--muted);
+    }
+    .mini-step strong {
+      color: var(--ink);
+    }
+    .mini-step span:first-child {
+      width: 28px;
+      height: 28px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 7px;
+      background: #eef4f8;
+      color: var(--blue);
+      font-weight: 820;
+    }
+    .usage-guide {
+      display: grid;
+      gap: 12px;
+      margin-top: 14px;
+    }
+    .usage-row {
+      display: grid;
+      grid-template-columns: 96px minmax(0, 1fr);
+      gap: 12px;
+      align-items: center;
+      color: var(--muted);
+    }
+    .usage-label {
+      color: var(--ink);
+      font-weight: 760;
+    }
+    .usage-bar {
+      position: relative;
+      min-height: 12px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: #e7edf4;
+    }
+    .usage-bar span {
+      display: block;
+      height: 12px;
+      border-radius: inherit;
+      background: var(--teal);
+    }
+    .usage-bar.warn span { background: var(--amber); }
+    .usage-bar.stop span { background: #b42318; }
+    .callout {
+      border: 1px solid #bde7df;
+      border-radius: 8px;
+      background: #f0fbf8;
+      padding: 14px;
+      color: #075c58;
+    }
+    .callout strong {
+      display: block;
+      margin-bottom: 4px;
+      color: #0f172a;
+    }
+
+    .example-grid {
+      min-width: 0;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 14px;
+    }
+    .example {
+      min-width: 0;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+    }
+    .example-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      border-bottom: 1px solid var(--line);
+      padding: 10px 12px;
+      font-weight: 760;
+    }
+
+    .faq-grid {
+      min-width: 0;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .faq {
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      padding: 16px;
+    }
+
+    .pricing-panel {
+      min-width: 0;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(280px, .72fr);
+      gap: 14px;
+      align-items: stretch;
+    }
+    .pricing-copy, .security-note {
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      padding: 18px;
+    }
+    .pricing-copy h3, .security-note h3 {
+      margin: 0 0 8px;
+      font-size: 22px;
+    }
+    .pricing-copy p, .security-note p {
+      margin: 0;
+      color: var(--muted);
+    }
+    .check-list {
+      display: grid;
+      gap: 8px;
+      margin: 14px 0 0;
+      padding: 0;
+      list-style: none;
+      color: var(--muted);
+    }
+    .check-list li {
+      position: relative;
+      padding-left: 20px;
+    }
+    .check-list li:before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: .72em;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--teal);
+    }
+    footer {
+      border-top: 1px solid var(--line);
+      padding: 26px 0 42px;
+      color: var(--subtle);
+      font-size: 13px;
+    }
+
+    @media (max-width: 980px) {
+      .hero, .pricing-panel, .install-panel { grid-template-columns: 1fr; }
+      .downloads, .faq-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 720px) {
+      .shell { padding: 0 14px; }
+      .topbar { align-items: flex-start; flex-direction: column; padding: 12px 0; }
+      nav { justify-content: flex-start; }
+      .hero { padding-top: 34px; }
+      .copy-row, .config-line { grid-template-columns: 1fr; }
+      .copy-row { gap: 7px; }
+      .copy { width: 100%; }
+      code { white-space: normal; word-break: break-word; }
+      pre code { white-space: pre; word-break: normal; }
+      .section-head { align-items: flex-start; flex-direction: column; }
+      .steps, .tool-grid, .downloads, .example-grid, .faq-grid { grid-template-columns: 1fr; }
+      .download { min-height: 0; }
+      .download-meta { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
-<header>
-  <div class="top">
-    <a class="brand" href="/docs/"><span class="mark"></span><span>星人 API 文档中心</span></a>
-    <nav class="nav">
-      <a href="/docs/customer-quickstart.html">快速开始</a>
-      <a href="/docs/api-usage-examples.html">API 示例</a>
-      <a href="/docs/claude-code-user-guide.html">Claude Code</a>
-      <a href="/docs/terminal-clients-quickstart.html">终端接入</a>
-      <a href="/docs/desktop-apps.html">桌面 App 下载</a>
-      <a href="/docs/third-party-api-keys.html">第三方接入</a>
-      <a href="/docs/recharge-guide.html">充值说明</a>
-      <a href="/docs/model-pricing.html">公开价格</a>
-      <a href="https://api.aiphui.top">控制台</a>
-    </nav>
-  </div>
-</header>
-<main class="wrap">
-  <section class="hero">
-    <span class="eyebrow">用户公开文档</span>
-    <h1>星人 API 文档中心</h1>
-    <p>这里仅放用户需要看的接入说明、使用教程和公开价格。普通 OpenAI-compatible 客户端使用 <code>https://api.aiphui.top/v1</code>；Claude Code 使用 <code>https://api.aiphui.top/claude</code>。</p>
-  </section>
+  <a class="skip" href="#main">跳到正文</a>
+  <header>
+    <div class="shell topbar">
+      <a class="brand" href="/docs/"><span class="brand-mark" aria-hidden="true"></span><span>星人 API 文档中心</span></a>
+      <nav aria-label="主导航">
+        <a href="#quickstart">三步配置</a>
+        <a href="#monthly-card">月卡使用</a>
+        <a href="#client-setup">选择工具</a>
+        <a href="#downloads">下载</a>
+        <a href="#troubleshooting">排错</a>
+        <a class="console-link" href="https://api.aiphui.top">打开控制台</a>
+      </nav>
+    </div>
+  </header>
 
-  <section class="tools" aria-labelledby="client-tools-title">
-    <div class="section-head"><div><span class="eyebrow">桌面客户端</span><h2 id="client-tools-title">桌面 App 下载</h2></div><p>选择系统直接下载安装。安装完成后，再到云 Codex 的“第三方接入”页面复制配置。</p></div>
-    <div class="tool-grid"><article class="tool-card" data-badge="C">
-        <div class="tool-title"><h3>Codex</h3><p>OpenAI 官方发布客户端，适合终端和代码工作流。</p><div class="pill-row"><span class="pill">代码工作流</span><span class="pill">终端用户</span><span class="pill">官方客户端</span></div></div>
-        <div class="actions"><a class="download-btn" href="https://down.eido.top/api.php?action=download&id=codex&endpoint=win" rel="noopener"><span>Windows 下载</span><small>Codex-Windows-x64.msix</small></a><a class="download-btn" href="https://down.eido.top/api.php?action=download&id=codex&endpoint=mac" rel="noopener"><span>macOS 下载</span><small>Codex-mac-arm64.dmg</small></a></div>
-        <div class="meta"><span>配置：OpenAI-compatible</span><span>Base URL: /v1</span></div>
-      </article>
-      <article class="tool-card" data-badge="C">
-        <div class="tool-title"><h3>Cherry Studio 公版</h3><p>国内大厂研发的大模型连接工具，适合桌面可视化聊天。</p><div class="pill-row"><span class="pill">桌面聊天</span><span class="pill">小白友好</span><span class="pill">多模型管理</span></div></div>
-        <div class="actions"><a class="download-btn" href="https://down.eido.top/api.php?action=download&id=cherry-studio&endpoint=win" rel="noopener"><span>Windows 下载</span><small>Cherry Studio 1.9.6</small></a><a class="download-btn" href="https://down.eido.top/api.php?action=download&id=cherry-studio&endpoint=mac" rel="noopener"><span>macOS 下载</span><small>Cherry Studio arm64</small></a></div>
-        <div class="meta"><span>配置：OpenAI-compatible</span><span>Base URL: /v1</span></div>
-      </article>
-      <article class="tool-card" data-badge="C">
-        <div class="tool-title"><h3>CC Switch</h3><p>Claude Code 配置管理工具，适合切换模型和多套配置。</p><div class="pill-row"><span class="pill">Claude Code</span><span class="pill">配置切换</span><span class="pill">开发者工具</span></div></div>
-        <div class="actions"><a class="download-btn" href="https://down.eido.top/api.php?action=download&id=cc-switch&endpoint=win" rel="noopener"><span>Windows 下载</span><small>CC Switch v3.15.0</small></a><a class="download-btn" href="https://down.eido.top/api.php?action=download&id=cc-switch&endpoint=mac" rel="noopener"><span>macOS 下载</span><small>CC Switch macOS</small></a></div>
-        <div class="meta"><span>配置：Claude Code</span><span>Base URL: /claude</span></div>
-      </article></div>
-    <section class="codex-plus-panel" aria-labelledby="codex-plus-title">
-      <span class="mini-label">Codex++</span>
-      <h3 id="codex-plus-title">把 Codex 桌面版接入星人 API</h3>
-      <p>Codex++ 是第三方增强工具，包含静默启动器和管理面板。先下载桌面 App，再按下面的卡片填写 Base URL、API Key 和模型，新用户一眼就能照着配置。</p>
-      <div class="codex-plus-grid">
-        <div class="codex-plus-card"><span>日常启动</span><strong>Codex++</strong><p>静默启动 Codex App，并通过外部 CDP 注入增强功能。不显示管理界面，不修改 Codex App 原始安装文件。</p></div>
-        <div class="codex-plus-card"><span>配置诊断</span><strong>Codex++ 管理工具</strong><p>用于配置中转注入、检查状态、修复、更新、查看日志、管理增强功能和用户脚本。</p></div>
+  <main id="main">
+    <div class="shell">
+      <section class="hero" aria-labelledby="hero-title">
+        <div>
+          <span class="eyebrow">给第三方客户端用的 API 配置页</span>
+          <h1 id="hero-title">配置 API，就三件事。</h1>
+          <p class="lead">打开控制台创建一个 Key，把 Base URL、API Key、模型名粘贴到客户端里。这里把 Codex、Cherry Studio、CC Switch、Dify 和常见代码工具的配置方式放在同一个页面。</p>
+          <div class="hero-actions">
+            <a class="btn primary" href="https://api.aiphui.top/console/token">创建或复制 API Key</a>
+            <a class="btn" href="#client-setup">按工具选择配置</a>
+          </div>
+        </div>
+
+        <aside class="copy-panel" aria-labelledby="copy-title">
+          <div class="panel-title">
+            <h2 id="copy-title">最常用配置</h2>
+            <span class="status">可直接复制</span>
+          </div>
+          <div class="copy-list">
+            <div class="copy-row">
+              <span>普通客户端</span>
+              <div class="copy-value">https://api.aiphui.top/v1</div>
+              <button class="copy" data-copy="https://api.aiphui.top/v1">复制</button>
+            </div>
+            <div class="copy-row">
+              <span>Claude Code</span>
+              <div class="copy-value">https://api.aiphui.top/claude</div>
+              <button class="copy" data-copy="https://api.aiphui.top/claude">复制</button>
+            </div>
+            <div class="copy-row">
+              <span>推荐模型</span>
+              <div class="copy-value">gpt-5.5</div>
+              <button class="copy" data-copy="gpt-5.5">复制</button>
+            </div>
+            <div class="copy-row">
+              <span>备用模型</span>
+              <div class="copy-value">gpt-5.4-mini</div>
+              <button class="copy" data-copy="gpt-5.4-mini">复制</button>
+            </div>
+          </div>
+          <p class="micro-note">API Key 在控制台创建。不要把完整 Key 发给别人，也不要放到公开网页或 GitHub。</p>
+        </aside>
+      </section>
+    </div>
+
+    <section id="quickstart" class="band">
+      <div class="shell">
+        <div class="section-head">
+          <h2>三步完成配置</h2>
+          <p>不需要理解复杂术语。只要知道自己用的是普通客户端，还是 Claude Code。</p>
+        </div>
+        <div class="steps">
+          <article class="step">
+            <span class="num">1</span>
+            <h3>打开控制台</h3>
+            <p>登录后进入令牌页面，新建一个用于当前工具的 API Key。建议一个工具用一个 Key，后续更好管理。</p>
+          </article>
+          <article class="step">
+            <span class="num">2</span>
+            <h3>复制三项配置</h3>
+            <p>复制 Base URL、API Key 和模型名。普通客户端用 <code>/v1</code>，Claude Code 用 <code>/claude</code>。</p>
+          </article>
+          <article class="step">
+            <span class="num">3</span>
+            <h3>粘贴并测试</h3>
+            <p>在客户端设置页保存配置，发送一句“你好”。能收到回复，就说明接入成功。</p>
+          </article>
+        </div>
       </div>
-      <div class="codex-plus-downloads" aria-label="Codex++ 下载链接">
-        <a href="https://github.com/BigPizzaV3/CodexPlusPlus/releases/latest" target="_blank" rel="noopener noreferrer"><span>统一入口</span><strong>GitHub Releases</strong><em>永远下载最新版本</em></a>
-        <a href="https://github.com/BigPizzaV3/CodexPlusPlus/releases/download/v1.2.18/CodexPlusPlus-1.2.18-windows-x64-setup.exe" target="_blank" rel="noopener noreferrer"><span>Windows</span><strong>x64 安装包</strong><em>.exe setup</em></a>
-        <a href="https://github.com/BigPizzaV3/CodexPlusPlus/releases/download/v1.2.18/CodexPlusPlus-1.2.18-macos-arm64.dmg" target="_blank" rel="noopener noreferrer"><span>macOS</span><strong>Apple Silicon</strong><em>M1/M2/M3/M4</em></a>
-        <a href="https://github.com/BigPizzaV3/CodexPlusPlus/releases/download/v1.2.18/CodexPlusPlus-1.2.18-macos-x64.dmg" target="_blank" rel="noopener noreferrer"><span>macOS</span><strong>Intel x64</strong><em>Intel Mac</em></a>
-      </div>
-      <div class="codex-config">
-        <div class="config-box"><strong>安装后先做这 5 步</strong><ol class="step-list"><li>打开原版 Codex App，确认能正常进入界面，然后关闭。</li><li>打开 <strong>Codex++ 管理工具</strong>。</li><li>进入中转注入/API 配置页，选择 OpenAI-compatible。</li><li>复制右侧 Base URL、API Key 和模型名。</li><li>应用配置后，日常从 <strong>Codex++</strong> 启动。</li></ol></div>
-        <div class="config-box"><strong>星人 API 推荐填写</strong><label>Base URL</label><div class="config-value">https://api.aiphui.top/v1 <small>复制</small></div><label>API Key</label><div class="config-value">粘贴星人 Codex 文本令牌 <small>sk-...</small></div><label>Model</label><div class="config-value">gpt-5.5 <small>推荐</small></div></div>
-      </div>
-      <div class="codex-plus-foot"><a href="/docs/third-party-api-keys.html">打开完整第三方接入教程</a><a href="https://api.aiphui.top/codex/docs/third-party-api-keys" target="_blank" rel="noopener noreferrer">查看云 Codex 图文说明</a></div>
     </section>
-    <div class="download-note">需要更完整的安装说明，请打开 <a href="/docs/desktop-apps.html">桌面 App 下载与配置说明</a>。下载后不会自动完成 API 配置，请继续复制对应 Key。</div>
-  </section>
-  <section class="grid">
-    <a class="card" href="/docs/customer-quickstart.html"><span class="tag">新手</span><h2>快速开始</h2><p>注册、兑换码、创建 API Key、Dify / Cherry Studio 使用方法。</p></a>
-    <a class="card" href="/docs/api-usage-examples.html"><span class="tag">API</span><h2>OpenAI-compatible API 示例</h2><p>模型列表、非流式对话、流式对话和客户端接入格式。</p></a>
-    <a class="card" href="/docs/claude-code-user-guide.html"><span class="tag">Claude Code</span><h2>Claude Code 接入教程</h2><p>GPT 映射 Claude 与 Claude 原生模型两套接入方式。</p></a>
-    <a class="card" href="/docs/model-pricing.html"><span class="tag">价格</span><h2>公开模型价格</h2><p>只展示用户售卖价和计费口径，不展示内部成本和供应商策略。</p></a>
-    <a class="card" href="/docs/terminal-clients-quickstart.html"><span class="tag">终端</span><h2>Mac / Windows 一键接入</h2><p>安装并配置 Codex、Hermes、Claude Code，适合零基础用户复制执行。</p></a>
-    <a class="card" href="/docs/third-party-api-keys.html"><span class="tag">接入</span><h2>第三方客户端接入</h2><p>四类系统 Key、OpenAI-compatible、Claude Code、图像和视频模型的配置方法。</p></a>
-    <a class="card" href="/docs/recharge-guide.html"><span class="tag">充值</span><h2>人工充值与兑换码</h2><p>在线支付暂未开放时，如何添加管理员微信、购买兑换码并完成到账。</p></a>
-    <a class="card" href="/docs/api-agent-onboarding-skill.html"><span class="tag">Skill</span><h2>API 接入老师 Skill</h2><p>让 Codex 像老师一样带零基础用户接入 Claude Code、Codex、Hermes、OpenClaw、OpenCode 和常见客户端。</p></a>
-  </section>
-  <div class="note">请不要把 API Key 发给他人，不要提交到 GitHub，也不要放进公开网页前端代码里。</div>
-</main>
+
+    <section id="monthly-card" class="band">
+      <div class="shell">
+        <div class="section-head">
+          <h2>¥500 月卡这样使用</h2>
+          <p>月卡开通后，不是在令牌创建页选择扣费方式。先到充值中心把扣费方式设为仅用订阅，再用 <code>gpt-5.5</code> 调用。</p>
+        </div>
+
+        <div class="steps">
+          <article class="step">
+            <span class="num">1</span>
+            <h3>确认月卡已生效</h3>
+            <p>进入控制台充值中心，找到我的订阅。看到 ¥500 月卡、到期时间、每日额度和月总额度进度，就说明已经开通。</p>
+          </article>
+          <article class="step">
+            <span class="num">2</span>
+            <h3>选择仅用订阅</h3>
+            <p>在我的订阅右侧找到扣费方式下拉框，选择仅用订阅。这样调用会明确使用月卡额度，不会转扣钱包余额。</p>
+          </article>
+          <article class="step">
+            <span class="num">3</span>
+            <h3>模型填写 gpt-5.5</h3>
+            <p>创建 API Key 后，客户端模型名只填 <code>gpt-5.5</code>。不要添加渠道后缀，也不要写成 <code>gpt-5.5-数字后缀</code>。</p>
+          </article>
+        </div>
+
+        <div class="install-panel">
+          <article class="install-card">
+            <h3>入口在哪里</h3>
+            <p>如果你在创建令牌页面看到过期时间、令牌分组、额度设置，说明还没有到月卡扣费方式的位置。这里可以正常创建 Key，但不能选择月卡扣费。</p>
+            <div class="mini-steps">
+              <div class="mini-step"><span>1</span><div><strong>打开充值中心</strong><br>进入 <code>https://api.aiphui.top/console/topup</code>。</div></div>
+              <div class="mini-step"><span>2</span><div><strong>看我的订阅</strong><br>先看页面顶部或订阅套餐区域里的我的订阅，不是在新建令牌弹窗里找。</div></div>
+              <div class="mini-step"><span>3</span><div><strong>改扣费方式</strong><br>把我的订阅右侧下拉框从默认选项改成仅用订阅。没有生效订阅时，这个选项会显示不可用。</div></div>
+            </div>
+            <div class="hero-actions">
+              <a class="btn primary" href="https://api.aiphui.top/console/topup">打开充值中心</a>
+              <a class="btn" href="https://api.aiphui.top/console/token">去创建 API Key</a>
+            </div>
+          </article>
+
+          <article class="install-card">
+            <h3>月卡专用调用示例</h3>
+            <p>推荐优先使用 Responses API。系统会自动识别有效的 ¥500 月卡和 <code>gpt-5.5</code>，并路由到月卡专用模型。</p>
+            <div class="copy-list" style="margin-top:14px">
+              <div class="copy-row">
+                <span>Base URL</span>
+                <div class="copy-value">https://api.aiphui.top/v1</div>
+                <button class="copy" data-copy="https://api.aiphui.top/v1">复制</button>
+              </div>
+              <div class="copy-row">
+                <span>模型</span>
+                <div class="copy-value">gpt-5.5</div>
+                <button class="copy" data-copy="gpt-5.5">复制</button>
+              </div>
+              <div class="copy-row">
+                <span>接口</span>
+                <div class="copy-value">/v1/responses</div>
+                <button class="copy" data-copy="/v1/responses">复制</button>
+              </div>
+            </div>
+            <div class="example" style="margin-top:14px">
+              <div class="example-title">
+                <span>复制测试请求</span>
+                <button class="copy" data-copy="curl https://api.aiphui.top/v1/responses -H 'Authorization: Bearer sk-你的Key' -H 'Content-Type: application/json' -d '{&quot;model&quot;:&quot;gpt-5.5&quot;,&quot;input&quot;:&quot;你好&quot;}'">复制</button>
+              </div>
+              <pre><code>curl https://api.aiphui.top/v1/responses \
+  -H 'Authorization: Bearer sk-你的Key' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "gpt-5.5",
+    "input": "你好"
+  }'</code></pre>
+            </div>
+          </article>
+        </div>
+
+        <div class="install-panel">
+          <article class="install-card">
+            <h3>进度条怎么看</h3>
+            <p>月卡按官网等值美元额度展示进度。当天额度用完会暂停到次日自动恢复；月总额度用完会暂停到续费或重新购买。</p>
+            <div class="usage-guide" aria-label="月卡额度进度说明">
+              <div class="usage-row">
+                <div class="usage-label">绿色</div>
+                <div><div class="usage-bar"><span style="width:42%"></span></div>额度正常，可以继续调用。</div>
+              </div>
+              <div class="usage-row">
+                <div class="usage-label">黄色</div>
+                <div><div class="usage-bar warn"><span style="width:78%"></span></div>接近日额度或月额度上限，建议减少大请求。</div>
+              </div>
+              <div class="usage-row">
+                <div class="usage-label">红色</div>
+                <div><div class="usage-bar stop"><span style="width:100%"></span></div>额度已达上限，系统会限制月卡调用。</div>
+              </div>
+            </div>
+          </article>
+
+          <article class="install-card">
+            <h3>调用前自查</h3>
+            <div class="callout">
+              <strong>最关键的一句话</strong>
+              创建 API Key 页面只负责生成 Key；月卡扣费方式在充值中心选择；客户端模型只填 <code>gpt-5.5</code>。
+            </div>
+            <div class="mini-steps">
+              <div class="mini-step"><span>1</span><div><strong>Base URL</strong><br>普通客户端填写 <code>https://api.aiphui.top/v1</code>。</div></div>
+              <div class="mini-step"><span>2</span><div><strong>接口优先级</strong><br>优先使用 <code>/v1/responses</code>；旧客户端可以继续用 <code>/v1/chat/completions</code>。</div></div>
+              <div class="mini-step"><span>3</span><div><strong>出错时</strong><br>403 先检查是否已开通月卡、是否选择仅用订阅、模型是否写成 <code>gpt-5.5</code>。</div></div>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="client-setup" class="band">
+      <div class="shell">
+        <div class="section-head">
+          <h2>按工具选择怎么填</h2>
+          <p>下面这些卡片就是配置表。看你正在使用哪个工具，照着对应卡片填即可。</p>
+        </div>
+        <div class="tool-grid">
+          <article class="tool">
+            <div class="tool-top">
+              <div>
+            <span class="tag">桌面聊天</span>
+            <h3>Cherry Studio / Chatbox / OpenCat</h3>
+              </div>
+            </div>
+            <p>适合可视化聊天、保存多个模型和日常提问。</p>
+            <div class="config-table">
+              <div class="config-line"><strong>类型</strong><span>通用 API</span></div>
+              <div class="config-line"><strong>Base URL</strong><span><code>https://api.aiphui.top/v1</code></span></div>
+              <div class="config-line"><strong>模型</strong><span><code>gpt-5.5</code> 或 <code>gpt-5.4-mini</code></span></div>
+            </div>
+          </article>
+
+          <article class="tool">
+            <div class="tool-top">
+              <div>
+                <span class="tag teal">代码工具</span>
+                <h3>Codex / Cursor / Continue</h3>
+              </div>
+            </div>
+            <p>适合写代码、重构、解释项目和命令行工作流。</p>
+            <div class="config-table">
+              <div class="config-line"><strong>类型</strong><span>通用 API</span></div>
+              <div class="config-line"><strong>Base URL</strong><span><code>https://api.aiphui.top/v1</code></span></div>
+              <div class="config-line"><strong>模型</strong><span><code>gpt-5.5</code></span></div>
+            </div>
+          </article>
+
+          <article class="tool">
+            <div class="tool-top">
+              <div>
+                <span class="tag amber">Claude Code</span>
+                <h3>Claude Code / CC Switch</h3>
+              </div>
+            </div>
+            <p>适合 Claude Code 用户。这里的地址和普通客户端不同。</p>
+            <div class="config-table">
+              <div class="config-line"><strong>Base URL</strong><span><code>https://api.aiphui.top/claude</code></span></div>
+              <div class="config-line"><strong>API Key</strong><span>粘贴为 Claude Code 创建的 Key</span></div>
+              <div class="config-line"><strong>模型</strong><span><code>cc-gpt-sonnet</code> 或控制台展示的可用模型</span></div>
+            </div>
+          </article>
+
+          <article class="tool">
+            <div class="tool-top">
+              <div>
+                <span class="tag">工作流</span>
+                <h3>Dify / 自己写程序</h3>
+              </div>
+            </div>
+            <p>适合接入工作流、后端服务或脚本调用。</p>
+            <div class="config-table">
+              <div class="config-line"><strong>接口格式</strong><span>通用 API</span></div>
+              <div class="config-line"><strong>Base URL</strong><span><code>https://api.aiphui.top/v1</code></span></div>
+              <div class="config-line"><strong>请求头</strong><span><code>Authorization: Bearer sk-...</code></span></div>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="downloads" class="band">
+      <div class="shell">
+        <div class="section-head">
+          <h2>桌面 App 下载</h2>
+          <p>先装工具，再填本页的 Base URL、API Key 和模型名。每张卡片都标了该用哪个地址。</p>
+        </div>
+        <div class="downloads">
+          <article class="download">
+            <span class="tag teal">代码</span>
+            <h3>Codex</h3>
+            <div class="version">最新发布：0.142.0</div>
+            <p>适合代码工作流和终端用户。安装后在第三方 API 设置里填 <code>/v1</code> 地址。</p>
+            <div class="download-meta">
+              <span><strong>配置类型</strong>通用 API</span>
+              <span><strong>Base URL</strong><code>/v1</code></span>
+            </div>
+            <div class="download-actions">
+              <a href="https://github.com/openai/codex/releases/latest" target="_blank" rel="noopener noreferrer">GitHub <span>最新版</span></a>
+              <a href="https://down.eido.top/api.php?action=download&id=codex&endpoint=win" rel="noopener">Windows <span>直达</span></a>
+              <a href="https://down.eido.top/api.php?action=download&id=codex&endpoint=mac" rel="noopener">macOS <span>直达</span></a>
+            </div>
+          </article>
+
+          <article class="download">
+            <span class="tag">聊天</span>
+            <h3>Cherry Studio</h3>
+            <div class="version">最新发布：v1.9.11</div>
+            <p>适合桌面聊天、多模型管理和新手配置。选择通用 API 即可。</p>
+            <div class="download-meta">
+              <span><strong>配置类型</strong>通用 API</span>
+              <span><strong>Base URL</strong><code>/v1</code></span>
+            </div>
+            <div class="download-actions">
+              <a href="https://github.com/CherryHQ/cherry-studio/releases/latest" target="_blank" rel="noopener noreferrer">GitHub <span>最新版</span></a>
+              <a href="https://down.eido.top/api.php?action=download&id=cherry-studio&endpoint=win" rel="noopener">Windows <span>直达</span></a>
+              <a href="https://down.eido.top/api.php?action=download&id=cherry-studio&endpoint=mac" rel="noopener">macOS <span>直达</span></a>
+            </div>
+          </article>
+
+          <article class="download">
+            <span class="tag amber">切换配置</span>
+            <h3>CC Switch</h3>
+            <div class="version">最新发布：v3.16.3</div>
+            <p>适合管理 Claude Code 多套配置。Base URL 使用 <code>/claude</code> 地址。</p>
+            <div class="download-meta">
+              <span><strong>配置类型</strong>Claude Code</span>
+              <span><strong>Base URL</strong><code>/claude</code></span>
+            </div>
+            <div class="download-actions">
+              <a href="https://github.com/farion1231/cc-switch/releases/latest" target="_blank" rel="noopener noreferrer">GitHub <span>最新版</span></a>
+              <a href="https://ccswitch.io" target="_blank" rel="noopener noreferrer" class="source-link">官网 <span>打开</span></a>
+              <a href="https://down.eido.top/api.php?action=download&id=cc-switch&endpoint=win" rel="noopener">Windows <span>直达</span></a>
+              <a href="https://down.eido.top/api.php?action=download&id=cc-switch&endpoint=mac" rel="noopener">macOS <span>直达</span></a>
+            </div>
+          </article>
+
+          <article class="download">
+            <span class="tag teal">增强工具</span>
+            <h3>Codex++</h3>
+            <div class="version">最新发布：v1.2.18</div>
+            <p>适合把 Codex 桌面版接入星人 API，并用管理面板检查配置状态。</p>
+            <div class="download-meta">
+              <span><strong>配置类型</strong>通用 API</span>
+              <span><strong>Base URL</strong><code>/v1</code></span>
+            </div>
+            <div class="download-actions">
+              <a href="https://github.com/BigPizzaV3/CodexPlusPlus/releases/latest" target="_blank" rel="noopener noreferrer">GitHub <span>最新版</span></a>
+              <a href="https://github.com/BigPizzaV3/CodexPlusPlus/releases/download/v1.2.18/CodexPlusPlus-1.2.18-windows-x64-setup.exe" rel="noopener">Windows <span>安装包</span></a>
+              <a href="https://github.com/BigPizzaV3/CodexPlusPlus/releases/download/v1.2.18/CodexPlusPlus-1.2.18-macos-arm64.dmg" rel="noopener">macOS M 系列 <span>DMG</span></a>
+              <a href="https://github.com/BigPizzaV3/CodexPlusPlus/releases/download/v1.2.18/CodexPlusPlus-1.2.18-macos-x64.dmg" rel="noopener">macOS Intel <span>DMG</span></a>
+            </div>
+          </article>
+        </div>
+
+        <div class="install-panel">
+          <article class="install-card">
+            <h3>Codex++ 安装后这样做</h3>
+            <p>它是 Codex 桌面版的增强启动器。先用 Codex++ 打开 Codex，再在管理工具里写入星人 API 配置。</p>
+            <div class="mini-steps">
+              <div class="mini-step"><span>1</span><div><strong>安装两个入口</strong><br>Windows 会生成快捷方式；macOS 会安装 Codex++ 和 Codex++ 管理工具。</div></div>
+              <div class="mini-step"><span>2</span><div><strong>打开管理工具</strong><br>进入配置页，填入 Base URL、API Key 和模型名。</div></div>
+              <div class="mini-step"><span>3</span><div><strong>启动 Codex++</strong><br>用 Codex++ 启动 Codex，确认第三方 API 配置已生效。</div></div>
+            </div>
+          </article>
+          <article class="install-card">
+            <h3>CC Switch 安装后这样做</h3>
+            <p>它适合管理 Claude Code 的多套配置。星人 API 在这里使用 Claude Code 专用地址。</p>
+            <div class="copy-list" style="margin-top:14px">
+              <div class="copy-row">
+                <span>Base URL</span>
+                <div class="copy-value">https://api.aiphui.top/claude</div>
+                <button class="copy" data-copy="https://api.aiphui.top/claude">复制</button>
+              </div>
+              <div class="copy-row">
+                <span>API Key</span>
+                <div class="copy-value">控制台令牌页面复制</div>
+                <a class="btn" href="https://api.aiphui.top/console/token">去创建</a>
+              </div>
+              <div class="copy-row">
+                <span>模型</span>
+                <div class="copy-value">cc-gpt-sonnet</div>
+                <button class="copy" data-copy="cc-gpt-sonnet">复制</button>
+              </div>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="api-examples" class="band">
+      <div class="shell">
+        <div class="section-head">
+          <h2>最小 API 示例</h2>
+          <p>如果你在写程序，先跑通这两个最小示例，再接入自己的业务。</p>
+        </div>
+        <div class="example-grid">
+          <article class="example">
+            <div class="example-title">
+              <span>对话请求</span>
+              <button class="copy" data-copy="curl https://api.aiphui.top/v1/chat/completions -H 'Authorization: Bearer sk-你的Key' -H 'Content-Type: application/json' -d '{&quot;model&quot;:&quot;gpt-5.5&quot;,&quot;messages&quot;:[{&quot;role&quot;:&quot;user&quot;,&quot;content&quot;:&quot;你好&quot;}]}';">复制</button>
+            </div>
+            <pre><code>curl https://api.aiphui.top/v1/chat/completions \
+  -H 'Authorization: Bearer sk-你的Key' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "gpt-5.5",
+    "messages": [
+      {"role": "user", "content": "你好"}
+    ]
+  }'</code></pre>
+          </article>
+
+          <article class="example">
+            <div class="example-title">
+              <span>模型列表</span>
+              <button class="copy" data-copy="curl https://api.aiphui.top/v1/models -H 'Authorization: Bearer sk-你的Key'">复制</button>
+            </div>
+            <pre><code>curl https://api.aiphui.top/v1/models \
+  -H 'Authorization: Bearer sk-你的Key'</code></pre>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="troubleshooting" class="band">
+      <div class="shell">
+        <div class="section-head">
+          <h2>常见问题一眼看懂</h2>
+          <p>先看错误提示，再按下面处理。大多数配置问题都能在一分钟内定位。</p>
+        </div>
+        <div class="faq-grid">
+          <article class="faq">
+            <span class="tag amber">401</span>
+            <h3>Key 不正确</h3>
+            <p>重新复制 API Key，确认没有多余空格，也没有把别的工具的 Key 填进来。</p>
+          </article>
+          <article class="faq">
+            <span class="tag amber">403</span>
+            <h3>模型未开通</h3>
+            <p>换用控制台里能看到的模型，或联系客户支持开通对应模型权限。</p>
+          </article>
+          <article class="faq">
+            <span class="tag">余额</span>
+            <h3>额度不足</h3>
+            <p>进入控制台钱包页面充值或兑换额度，到账后再发起请求。</p>
+          </article>
+          <article class="faq">
+            <span class="tag teal">重试</span>
+            <h3>服务繁忙</h3>
+            <p>稍后再试，或把请求内容缩短一点。长文本建议开启流式输出。</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="pricing" class="band">
+      <div class="shell">
+        <div class="pricing-panel">
+          <div class="pricing-copy">
+            <h3>价格、充值与安全</h3>
+            <p>配置成功后，实际消耗以控制台价格和钱包记录为准。不要把 API Key 贴到公开网页、公开仓库或聊天群。</p>
+            <div class="hero-actions">
+              <a class="btn primary" href="https://api.aiphui.top/pricing">查看公开价格</a>
+              <a class="btn" href="https://api.aiphui.top/console/topup">打开钱包</a>
+            </div>
+          </div>
+          <aside id="recharge" class="security-note">
+            <h3>配置前检查</h3>
+            <ul class="check-list">
+              <li>Base URL 和工具类型匹配。</li>
+              <li>API Key 只复制给自己的客户端。</li>
+              <li>模型名来自控制台可用模型。</li>
+              <li>余额充足，测试请求尽量短。</li>
+            </ul>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <section id="assistant" class="band">
+      <div class="shell">
+        <div class="pricing-copy">
+          <h3>不会配置时，直接这样问</h3>
+          <p>把你使用的工具名、系统、截图里的报错发给客户支持。说明“我想接入星人 API”，并贴上你看到的错误码，不需要发送完整 API Key。</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="shell">
+      星人 API 文档中心 ｜ 更新时间：2026-06-26 ｜ 请妥善保管自己的 API Key
+    </div>
+  </footer>
+
+  <script>
+    const buttons = document.querySelectorAll('[data-copy]');
+    buttons.forEach((button) => {
+      button.addEventListener('click', async () => {
+        const text = button.getAttribute('data-copy') || '';
+        try {
+          await navigator.clipboard.writeText(text);
+          const old = button.textContent;
+          button.textContent = '已复制';
+          setTimeout(() => { button.textContent = old || '复制'; }, 1200);
+        } catch (error) {
+          button.textContent = '手动复制';
+          setTimeout(() => { button.textContent = '复制'; }, 1200);
+        }
+      });
+    });
+  </script>
 </body>
 </html>

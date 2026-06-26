@@ -32,8 +32,8 @@ func SetWebRouter(router *gin.Engine, assets ThemeAssets) {
 	themeFS := common.NewThemeAwareFS(defaultFS, classicFS)
 
 	router.Use(gzip.Gzip(gzip.DefaultCompression))
-	router.Use(middleware.GlobalWebRateLimit())
 	router.Use(middleware.Cache())
+	router.Use(middleware.GlobalWebRateLimit())
 	setCodexWorkspaceProxy(router)
 	router.Use(static.Serve("/", themeFS))
 	router.NoRoute(func(c *gin.Context) {
