@@ -28,6 +28,7 @@ type ImageRequest struct {
 	OutputFormat      json.RawMessage `json:"output_format,omitempty"`
 	OutputCompression json.RawMessage `json:"output_compression,omitempty"`
 	PartialImages     json.RawMessage `json:"partial_images,omitempty"`
+	ExtraBody         json.RawMessage `json:"extra_body,omitempty"`
 	// Stream            bool            `json:"stream,omitempty"`
 	Images        json.RawMessage `json:"images,omitempty"`
 	Mask          json.RawMessage `json:"mask,omitempty"`

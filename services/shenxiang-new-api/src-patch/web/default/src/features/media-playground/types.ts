@@ -81,9 +81,23 @@ export type ImageGenerationResponse = {
 export type VideoSubmitResponse = {
   id?: string
   task_id?: string
+  taskId?: string
   object?: string
   status?: string
+  task_status?: string
+  taskStatus?: string
   progress?: number
+  data?: {
+    id?: string
+    task_id?: string
+    taskId?: string
+    status?: string
+    task_status?: string
+    taskStatus?: string
+    progress?: number
+    [key: string]: unknown
+  }
+  metadata?: Record<string, unknown>
   error?: {
     message?: string
   }
@@ -92,7 +106,6 @@ export type VideoSubmitResponse = {
 export type VideoFetchResponse = VideoSubmitResponse & {
   completed_at?: number
   expires_at?: number
-  metadata?: Record<string, unknown>
 }
 
 export type MediaCacheResponse = {
