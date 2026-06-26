@@ -138,7 +138,10 @@ function isGeminiImageModel(model: string) {
 }
 
 function isGptImage2Model(model: string) {
-  return model === 'gpt-image-2-4K'
+  return (
+    model === 'gpt-image-2-4K' ||
+    model === 'image 2电商商品图快速通道(1.5K)'
+  )
 }
 
 function clampCount(value: number, model: ModelCapability) {
@@ -162,6 +165,7 @@ function imageResponseFormat(aspectRatio: string, imageSize: string) {
 }
 
 function gptImage2SizeFor(aspectRatio: string, imageSize: string) {
+  if (imageSize === 'auto') return 'auto'
   const normalizedResolution = imageSize && imageSize !== 'auto' ? imageSize : '1K'
   return (
     GPT_IMAGE_2_SIZE_BY_RESOLUTION[normalizedResolution]?.[aspectRatio] ??
@@ -178,6 +182,10 @@ function sizeOptionLabel(size: string, model: ModelCapability) {
     return SIZE_TO_ASPECT_RATIO[size] ?? size
   }
   return size
+}
+
+function resolutionOptionLabel(resolution: string) {
+  return resolution === 'auto' ? '默认' : resolution
 }
 
 function userFacingGenerationError(error: unknown) {
@@ -1084,7 +1092,7 @@ function MediaParameters(props: {
           >
             {props.activeModel.resolutions.map((resolution) => (
               <NativeSelectOption key={resolution} value={resolution}>
-                {resolution}
+                {resolutionOptionLabel(resolution)}
               </NativeSelectOption>
             ))}
           </NativeSelect>

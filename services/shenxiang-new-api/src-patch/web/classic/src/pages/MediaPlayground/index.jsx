@@ -157,6 +157,27 @@ const IMAGE_MODELS = [
     hint: '适合高阶视觉方案、复杂场景草图和高分辨率创意图。',
   },
   {
+    value: 'image 2电商商品图快速通道(1.5K)',
+    label: 'image 2电商商品图快速通道(1.5K)',
+    badge: '1.5K',
+    vendor: '星人图像',
+    sizes: ['1:1', '2:3', '3:2', '16:9', '9:16'],
+    resolutions: ['auto'],
+    qualities: ['auto', 'low', 'medium', 'high'],
+    formats: ['png', 'jpeg', 'webp'],
+    defaultSize: '1:1',
+    defaultResolution: 'auto',
+    defaultQuality: 'high',
+    maxCount: 4,
+    countParam: 'n',
+    sizeParam: 'size',
+    backgroundOptions: ['auto', 'opaque'],
+    supportsInputFidelity: true,
+    supportsOutputCompression: true,
+    edit: true,
+    hint: '电商商品图快速通道，实测约 1.5K 输出，单次调用 ¥0.055/张。',
+  },
+  {
     value: 'ecommerce-banana-2',
     label: '电商特价banana-2',
     badge: '1K',
@@ -275,7 +296,10 @@ function isGeminiImageModel(model) {
 }
 
 function isGptImage2Model(model) {
-  return model === 'gpt-image-2-4K';
+  return (
+    model === 'gpt-image-2-4K' ||
+    model === 'image 2电商商品图快速通道(1.5K)'
+  );
 }
 
 function clampCount(value, model) {
@@ -299,6 +323,7 @@ function imageResponseFormat(aspectRatio, imageSize) {
 }
 
 function gptImage2SizeFor(aspectRatio, imageSize) {
+  if (imageSize === 'auto') return 'auto';
   const normalizedResolution = imageSize && imageSize !== 'auto' ? imageSize : '1K';
   return (
     GPT_IMAGE_2_SIZE_BY_RESOLUTION[normalizedResolution]?.[aspectRatio] ||
@@ -365,6 +390,13 @@ const IMAGE_WAIT_MESSAGE =
 
 function toSelectOptions(values) {
   return values.map((value) => ({ value, label: String(value) }));
+}
+
+function toResolutionSelectOptions(values) {
+  return values.map((value) => ({
+    value,
+    label: value === 'auto' ? '默认' : String(value),
+  }));
 }
 
 function sizeOptionLabel(value, model) {
@@ -1438,7 +1470,7 @@ const MediaPlayground = () => {
           </div>
           <div className='mp-hero-stats'>
             <StatPill label='保留' value='24 小时' />
-            <StatPill label='图像' value='5 模型' />
+            <StatPill label='图像' value='6 模型' />
             <StatPill label='视频' value='2 模型' />
           </div>
         </section>
@@ -1558,7 +1590,7 @@ const MediaPlayground = () => {
                 <NativeSelect
                   label='画面尺寸'
                   value={resolution}
-                  options={toSelectOptions(activeImageModel.resolutions)}
+                  options={toResolutionSelectOptions(activeImageModel.resolutions)}
                   onChange={setResolution}
                 />
               ) : (
