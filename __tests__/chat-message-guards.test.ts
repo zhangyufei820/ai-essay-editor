@@ -216,6 +216,20 @@ describe("chat message guards", () => {
     expect(openClawSkills).not.toMatch(/description:\s*"[^"]*(OpenClaw|节点|工作流)|tags:\s*\[[^\]]*"(OpenClaw|节点|工作流)"|name:\s*"[^"]*(节点|工作流)/)
   })
 
+  it("settles chat preflight failures before the frontend polls task status", () => {
+    const route = read("app/api/dify-chat/route.ts")
+
+    expect(route).toContain("const taskRunCreatePromise = usesPersistedTaskRun")
+    expect(route).toContain("const settlePreflightFailure = async")
+    expect(route).toContain("await taskRunCreatePromise.catch")
+    expect(route).toContain('status: "failed"')
+    expect(route).toContain('failure_phase: "preflight"')
+    expect(route).toContain('errorCode: "INSUFFICIENT_CREDITS"')
+    expect(route).toContain('stage: "积分不足"')
+    expect(route).toContain('errorCode: "SURVEY_REQUIRED"')
+    expect(route).toContain('errorCode: "DIFY_CREDENTIAL_MISSING"')
+  })
+
   it("shows OpenClaw presentations through HTML preview instead of a download-first PPT viewer", () => {
     const enhancedChat = read("components/chat/enhanced-chat-interface.tsx")
     const messageBubble = read("components/chat/MessageBubble.tsx")

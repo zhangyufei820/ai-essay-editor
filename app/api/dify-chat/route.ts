@@ -3532,7 +3532,8 @@ export async function POST(request: NextRequest) {
         async_image_task: async_image_task === true,
       },
     }
-    const taskRun = isDirectImageGatewayRequest && async_image_task === true
+    const usesPersistedTaskRun = isDirectImageGatewayRequest && async_image_task === true
+    const taskRun = usesPersistedTaskRun
       ? await createTaskRun(createTaskRunInput)
       : {
           id: requestId,
@@ -3540,8 +3541,36 @@ export async function POST(request: NextRequest) {
           traceId: createTraceId(requestId),
           persisted: false,
         }
-    if (!(isDirectImageGatewayRequest && async_image_task === true)) {
-      fireAndForget("AI Task Trace create", createTaskRun(createTaskRunInput))
+    const taskRunCreatePromise = usesPersistedTaskRun
+      ? Promise.resolve(taskRun)
+      : createTaskRun(createTaskRunInput)
+    if (!usesPersistedTaskRun) {
+      fireAndForget("AI Task Trace create", taskRunCreatePromise)
+    }
+    const initialTaskMetadata = createTaskRunInput.metadata
+    const settlePreflightFailure = async (input: {
+      stage: string
+      errorMessage: string
+      errorCode: string
+      metadata?: Record<string, unknown>
+    }) => {
+      if (!usesPersistedTaskRun) {
+        await taskRunCreatePromise.catch((error) => {
+          console.warn("[AI Task Trace] create before preflight failure failed:", error instanceof Error ? error.message : String(error))
+        })
+      }
+      await updateTaskRun(taskRun.id, {
+        status: "failed",
+        stage: input.stage,
+        progress: 100,
+        errorMessage: input.errorMessage,
+        errorCode: input.errorCode,
+        metadata: {
+          ...initialTaskMetadata,
+          failure_phase: "preflight",
+          ...input.metadata,
+        },
+      })
     }
 
     if (typeof sessionId === "string" && sessionId.trim()) {
@@ -3553,17 +3582,35 @@ export async function POST(request: NextRequest) {
 
       if (sessionOwnerError) {
         console.error("[Dify-Chat] 会话 owner 校验失败:", sessionOwnerError.message)
+        await settlePreflightFailure({
+          stage: "会话权限校验失败",
+          errorMessage: "会话权限校验失败",
+          errorCode: "CHAT_SESSION_OWNER_LOOKUP_FAILED",
+          metadata: { session_id: sessionId },
+        })
         return Response.json({ error: "会话权限校验失败", code: sanitizePublicAiErrorCode("CHAT_SESSION_OWNER_LOOKUP_FAILED") }, { status: 500 })
       }
 
       if (sessionOwner && sessionOwner.user_id !== userId) {
         console.warn(`🚫 [Dify-Chat] 会话越权访问被拦截: requestId=${requestId}`)
+        await settlePreflightFailure({
+          stage: "无权访问该会话",
+          errorMessage: "无权访问该会话",
+          errorCode: "CHAT_SESSION_FORBIDDEN",
+          metadata: { session_id: sessionId },
+        })
         return Response.json({ error: "无权访问该会话", code: sanitizePublicAiErrorCode("CHAT_SESSION_FORBIDDEN") }, { status: 403 })
       }
     }
 
     if (!isDirectImageGatewayRequest && !isAllInOneAgent && fileUrls.length > 0 && difyFileIds.length === 0) {
       console.warn(`🚫 [Dify-Chat] 非图片生成模型拒绝 remote_url 附件: model=${model || "general-chat"} urls=${fileUrls.length}`)
+      await settlePreflightFailure({
+        stage: "文件上传缺少 Dify 文件 ID",
+        errorMessage: "文件上传缺少 Dify 文件 ID，请重新上传文件后再试",
+        errorCode: "DIFY_FILE_ID_MISSING",
+        metadata: { file_url_count: fileUrls.length },
+      })
       return new Response(
         JSON.stringify({ error: "文件上传缺少 Dify 文件 ID，请重新上传文件后再试" }),
         {
@@ -3584,6 +3631,12 @@ export async function POST(request: NextRequest) {
     if (!selectedCredential && !isDirectImageGatewayRequest) {
         console.error(`❌ 严重错误: 模型 ${workflowSkillId || model} 的凭据未配置！环境变量 ${keySource} 为空`);
         const message = "当前智能服务配置暂不可用，请联系管理员处理。"
+        await settlePreflightFailure({
+          stage: "智能服务配置缺失",
+          errorMessage: message,
+          errorCode: "DIFY_CREDENTIAL_MISSING",
+          metadata: { key_source: keySource || null },
+        })
         return new Response(JSON.stringify({ 
           error: message,
           code: sanitizePublicAiErrorCode("DIFY_CREDENTIAL_MISSING"),
@@ -3658,6 +3711,16 @@ export async function POST(request: NextRequest) {
       currentCredits < estimatedMinCost
     ) {
       console.warn(`🚫 [计费] 共创体验问卷未完成: user=${userId.slice(0, 8)}, required=${estimatedMinCost}`)
+      await settlePreflightFailure({
+        stage: "请先完成今日问卷",
+        errorMessage: "请先完成今日问卷，解锁免费体验额度",
+        errorCode: "SURVEY_REQUIRED",
+        metadata: {
+          current_credits: currentCredits,
+          required_credits: estimatedMinCost,
+          trial_remaining: trialPrecheck.data.remainingToday,
+        },
+      })
       return new Response(
         JSON.stringify({
           error: "请先完成今日问卷，解锁免费体验额度",
@@ -3702,6 +3765,16 @@ export async function POST(request: NextRequest) {
         membership_status: membershipStatus,
       })) {
         console.warn(`🚫 [媒体权限] 用户无共创体验或订阅/白名单权限，不能使用 ${billingModelType || "gpt-image-2"}`)
+        await settlePreflightFailure({
+          stage: "图像权限校验失败",
+          errorMessage: "当前账号暂时无法使用该图像能力，请重新登录后再试。",
+          errorCode: "IMAGE2_ACCESS_DENIED",
+          metadata: {
+            billing_model: billingModelType || "gpt-image-2",
+            has_trial_grant: hasActiveTrialForRequest,
+            has_worksheet_poster_token: hasVerifiedWorksheetPosterToken,
+          },
+        })
         return new Response(
           JSON.stringify({
             error: "当前账号暂时无法使用该图像能力，请重新登录后再试。",
@@ -3718,10 +3791,21 @@ export async function POST(request: NextRequest) {
     const availableTrialForMinimum = trialPrecheck.data?.trialUsedAvailable || 0
     if (currentCredits + availableTrialForMinimum < estimatedMinCost) {
       console.warn(`🚫 [计费] 用户积分不足: 当前 ${currentCredits}`)
+      const insufficientCreditsMessage = `当前功能至少需要 ${estimatedMinCost} 积分，当前剩余 ${currentCredits} 积分。请充值、升级会员或完成体验额度解锁后继续使用。`
+      await settlePreflightFailure({
+        stage: "积分不足",
+        errorMessage: insufficientCreditsMessage,
+        errorCode: "INSUFFICIENT_CREDITS",
+        metadata: {
+          current_credits: currentCredits,
+          required_credits: estimatedMinCost,
+          trial_remaining: availableTrialForMinimum,
+        },
+      })
       return new Response(
         JSON.stringify({
           error: "当前积分不足",
-          message: `当前功能至少需要 ${estimatedMinCost} 积分，当前剩余 ${currentCredits} 积分。请充值、升级会员或完成体验额度解锁后继续使用。`,
+          message: insufficientCreditsMessage,
           required: estimatedMinCost,
           current: currentCredits,
           trialRemaining: availableTrialForMinimum,
