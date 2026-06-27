@@ -11,7 +11,7 @@ ROOT = Path(os.environ.get("SHENXIANG_NEW_API_ROOT", "/opt/shenxiang-new-api"))
 MODEL_NAME = "image 2电商商品图快速通道(1.5K)"
 UPSTREAM_MODEL = "gpt-image-2"
 CHANNEL_TAG = "dragtokens-image2-ecommerce"
-DEFAULT_BASE_URL = "https://dragtokens.com/v1"
+DEFAULT_BASE_URL = "http://draw.dragtokens.com"
 DISPLAY_PRICE_CNY = 0.055
 DEFAULT_USD_EXCHANGE_RATE = 7.3
 CHANNEL_PRIORITY = 17
@@ -286,7 +286,7 @@ def patch_pricing_display_overrides() -> dict[str, bool]:
 def main() -> None:
     load_dotenv(ROOT / ".env")
     api_key = require_env("DRAGTOKENS_API_KEY")
-    base_url = os.environ.get("DRAGTOKENS_BASE_URL", DEFAULT_BASE_URL).strip() or DEFAULT_BASE_URL
+    base_url = os.environ.get("DRAGTOKENS_IMAGE_BASE_URL", DEFAULT_BASE_URL).strip() or DEFAULT_BASE_URL
     channel_id = upsert_channel(api_key, base_url)
     upsert_model_and_abilities(channel_id)
     price = upsert_pricing()
