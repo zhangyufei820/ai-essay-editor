@@ -383,6 +383,11 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 	if err := SettleBilling(ctx, relayInfo, summary.Quota); err != nil {
 		logger.LogError(ctx, "error settling billing: "+err.Error())
 	}
+	if callback, ok := ctx.Get("playground_image_billing_capture"); ok {
+		if capture, ok := callback.(func(int, *relaycommon.RelayInfo)); ok {
+			capture(summary.Quota, relayInfo)
+		}
+	}
 
 	logModel := summary.ModelName
 	if strings.HasPrefix(logModel, "gpt-4-gizmo") {

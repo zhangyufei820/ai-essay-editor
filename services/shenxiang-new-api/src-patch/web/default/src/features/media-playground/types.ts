@@ -40,12 +40,15 @@ export type ModelCapability = {
   supportsPromptEnhancement?: boolean
   supportsWatermark?: boolean
   sizes: string[]
+  sizeParam?: 'size' | 'aspect_ratio' | 'responseFormat'
   qualities?: string[]
   aspectRatios?: string[]
   resolutions?: string[]
   durations?: number[]
   fps?: number[]
   outputFormats?: string[]
+  backgroundOptions?: string[]
+  maxCount?: number
   defaultSize: string
   defaultQuality?: string
   defaultAspectRatio?: string
@@ -59,6 +62,7 @@ export type MediaResult = {
   id: string
   kind: MediaKind
   url: string
+  displayUrl?: string
   cachedUrl?: string
   revisedPrompt?: string
   taskId?: string
@@ -78,12 +82,84 @@ export type ImageGenerationResponse = {
   }
 }
 
+export type ImageTaskItem = {
+  task_id: string
+  request_id?: string
+  status: string
+  progress?: string
+  submit_time?: number
+  start_time?: number
+  finish_time?: number
+  model?: string
+  prompt?: string
+  action?: string
+  result_url?: string
+  fail_reason?: string
+  quota?: number
+  data?: {
+    cached_url?: string
+    item?: {
+      url?: string
+      cachedUrl?: string
+      displayUrl?: string
+      revisedPrompt?: string
+      [key: string]: unknown
+    }
+    error?: string
+    [key: string]: unknown
+  }
+  item?: {
+    url?: string
+    cachedUrl?: string
+    displayUrl?: string
+    revisedPrompt?: string
+    [key: string]: unknown
+  }
+}
+
+export type ImageTaskCreateResponse = {
+  success?: boolean
+  message?: string
+  data?: {
+    task_id: string
+    request_id?: string
+    status: string
+    poll_url?: string
+  }
+  error?: {
+    message?: string
+  }
+}
+
+export type ImageTaskFetchResponse = {
+  success?: boolean
+  message?: string
+  data?: ImageTaskItem
+  error?: {
+    message?: string
+  }
+}
+
 export type VideoSubmitResponse = {
   id?: string
   task_id?: string
+  taskId?: string
   object?: string
   status?: string
+  task_status?: string
+  taskStatus?: string
   progress?: number
+  data?: {
+    id?: string
+    task_id?: string
+    taskId?: string
+    status?: string
+    task_status?: string
+    taskStatus?: string
+    progress?: number
+    [key: string]: unknown
+  }
+  metadata?: Record<string, unknown>
   error?: {
     message?: string
   }
@@ -92,7 +168,6 @@ export type VideoSubmitResponse = {
 export type VideoFetchResponse = VideoSubmitResponse & {
   completed_at?: number
   expires_at?: number
-  metadata?: Record<string, unknown>
 }
 
 export type MediaCacheResponse = {
@@ -101,5 +176,13 @@ export type MediaCacheResponse = {
   data?: {
     url: string
     expires_in: number
+  }
+}
+
+export type MediaListResponse = {
+  success: boolean
+  message?: string
+  data?: {
+    items: MediaResult[]
   }
 }
