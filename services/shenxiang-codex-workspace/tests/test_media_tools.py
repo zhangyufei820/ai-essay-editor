@@ -3,7 +3,7 @@ import asyncio
 import pytest
 
 from app.config import Settings
-from app.media_tools import MediaGenerationError, generate_image
+from app.media_tools import MediaGenerationError, extract_media_urls, generate_image
 from app.models import WorkspaceFile, WorkspaceRunRequest
 from app.security import UserContext
 
@@ -61,3 +61,21 @@ def test_image_edit_does_not_fallback_to_grok_on_image2_failure(monkeypatch):
 
     assert len(FakeAsyncClient.calls) == 1
     assert FakeAsyncClient.calls[0]["kwargs"]["data"]["model"] == "gpt-image-2-4K"
+
+
+def test_extract_media_urls_supports_responses_image_generation_call():
+    payload = {
+        "object": "response",
+        "output": [
+            {"type": "message", "content": [{"type": "output_text", "text": "done"}]},
+            {
+                "type": "image_generation_call",
+                "status": "completed",
+                "result": "iVBORw0KGgo=",
+                "size": "1254x1254",
+                "quality": "low",
+            },
+        ],
+    }
+
+    assert extract_media_urls(payload, "image") == ["data:image/png;base64,iVBORw0KGgo="]

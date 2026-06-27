@@ -1,21 +1,27 @@
+from dataclasses import replace
+
 import pytest
 
 from app.main import (
     FAST_CHAT_HISTORY_CHARS,
     FAST_CHAT_HISTORY_LIMIT,
     FastPathUpstreamError,
+    build_direct_task,
+    credential_mode,
     fast_chat_messages,
     fast_skill_messages,
     fast_skill_responses_payload,
+    normalize_media_request,
     render_simple_markdown,
     response_error_message,
     responses_delta_text,
     runtime_guard_payload,
     should_use_fast_skill,
+    should_use_responses_image_tool,
     stream_chat_completion_deltas,
 )
 from app.models import WorkspaceFile, WorkspaceRunRequest
-from app.security import contains_forbidden_runtime_action
+from app.security import UserContext, contains_forbidden_runtime_action
 from app.codex_runner import CodexRunner
 
 
@@ -43,6 +49,71 @@ def test_runtime_guard_still_blocks_destructive_user_intent():
     )
 
     assert contains_forbidden_runtime_action(runtime_guard_payload(request))
+
+
+def test_explicit_image_generation_tool_routes_to_media_generation():
+    request = WorkspaceRunRequest(
+        user_query="请用 image_generation 工具生成一张红色圆形图标",
+        skill_name="codex_workspace",
+        model_role="chat_main",
+        model_config={"chat_main": "gpt-5.5"},
+        metadata={"mode": "codex"},
+    )
+
+    assert should_use_responses_image_tool(request)
+
+
+def test_image_generation_tool_uses_codex_credentials(monkeypatch, tmp_path):
+    import app.main as main
+
+    skill_root = tmp_path / "codex_workspace"
+    skill_root.mkdir()
+    (skill_root / "SKILL.md").write_text("# Codex Workspace\n", encoding="utf-8")
+    registry_path = tmp_path / "skill_registry.json"
+    registry_path.write_text(
+        '{"codex_workspace":{"enabled":true,"public":true,"queue":"fast","timeout":120,"cost_points":1,"sandbox":"workspace-write"}}',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        main,
+        "settings",
+        replace(
+            main.settings,
+            skills_dir=tmp_path,
+            user_skills_dir=tmp_path / "user-skills",
+            registry_path=registry_path,
+            codex_allowed_models=("gpt-5.4-mini", "gpt-5.5"),
+            image_allowed_models=("gpt-image-2-4K", "gpt-image-2"),
+            default_chat_model="gpt-5.4-mini",
+            default_small_fast_model="gpt-5.4-mini",
+            runs_dir=tmp_path / "runs",
+        ),
+    )
+
+    request = WorkspaceRunRequest(
+        user_query="请用 image_generation 工具生成一张红色圆形图标",
+        skill_name="codex_workspace",
+        model_role="chat_main",
+        model_config={"chat_main": "gpt-5.4-mini"},
+        metadata={"mode": "codex"},
+    )
+    media_request = normalize_media_request(request, "image")
+
+    assert media_request.model_role == "image_generation"
+    assert credential_mode(media_request) == "codex"
+    assert media_request.model_roles.image_generation == "gpt-image-2"
+    assert media_request.params["image_model"] == "gpt-image-2"
+    assert media_request.params["text_model"] == "gpt-5.5"
+    task = build_direct_task(
+        media_request,
+        UserContext(
+            api_key="sk-image",
+            api_keys={"codex": "sk-codex", "image": "sk-image"},
+            user_id="u1",
+            key_hint="sk-image",
+        ),
+    )
+    assert task["_user_api_key"] == "sk-codex"
 
 
 def test_codex_runner_runtime_scan_ignores_uploaded_file_content():

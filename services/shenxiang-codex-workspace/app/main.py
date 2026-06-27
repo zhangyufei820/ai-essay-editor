@@ -162,6 +162,7 @@ FAST_CHAT_EXECUTION_HINTS = (
 )
 
 MEDIA_MODEL_HINTS = ("image", "imagine", "video", "seedance", "sora", "veo")
+IMAGE_TOOL_INTENT_RE = re.compile(r"\bimage_generation\b|\bimage generation\b|图像生成工具|图片生成工具", re.IGNORECASE)
 FAST_SKILL_BLOCKING_HINTS = (
     "终端",
     "命令",
@@ -466,12 +467,14 @@ async def chat_stream(
     request: WorkspaceRunRequest,
     user: UserContext = Depends(require_codex_user),
 ) -> StreamingResponse:
+    media_kind = detect_media_kind(request)
+    if media_kind:
+        request = normalize_media_request(request, media_kind)
     task_or_error = build_direct_task(request, user)
     if task_or_error.get("status") == "failed":
         async def error_stream():
             yield sse_event(task_or_error)
         return StreamingResponse(error_stream(), media_type="text/event-stream")
-    media_kind = detect_media_kind(request)
     if media_kind:
         async def media_event_stream():
             async for event in stream_media_generation(request, user, task_or_error, media_kind):
@@ -677,7 +680,7 @@ def model_modes() -> dict[str, Any]:
     return {
         "codex": {
             "label": "对话 / 代码",
-            "description": "普通对话、代码审查、文件分析和 Skill 工作区。",
+            "description": "普通对话、代码审查、文件分析和 Skill 工作区；显式请求 image_generation 工具时可直接生成图片。",
             "models": ordered_codex_models(),
             "token_name": settings.auto_token_name,
             "billing": "按文本 Token 计费，适合日常任务和代码任务。",
@@ -760,6 +763,31 @@ async def submit_workspace_task(
     user: UserContext,
     allow_admin_intent: bool = False,
 ) -> dict[str, Any]:
+    media_kind = detect_media_kind(request)
+    if media_kind:
+        media_request = normalize_media_request(request, media_kind)
+        task = build_direct_task(media_request, user)
+        if task.get("status") == "failed":
+            return task
+        last_event: dict[str, Any] = {}
+        async for event in stream_media_generation(media_request, user, task, media_kind):
+            last_event = event
+        if last_event.get("type") == "complete":
+            return {
+                "status": "completed",
+                "result": last_event.get("result", ""),
+                "result_type": last_event.get("result_type", media_kind),
+                "duration_ms": last_event.get("duration_ms", 0),
+                "task_id": last_event.get("task_id"),
+                "media": last_event.get("media"),
+            }
+        return failed_response(
+            "task_failed",
+            str(last_event.get("code") or "MEDIA_GENERATION_FAILED"),
+            str(last_event.get("message") or "媒体服务暂时不可用，请稍后重试。"),
+            request.skill_name,
+        )
+
     if request.risk_level == "unsafe":
         return failed_response("task_rejected", "UNSAFE_REQUEST", "This request was classified as unsafe.", request.skill_name)
     if len(request.files) > settings.max_files_per_task:
@@ -821,7 +849,7 @@ async def submit_workspace_task(
     }
     store = task_store()
     queue = task_queue()
-    task_user = user_for_mode(user, request_mode(request))
+    task_user = user_for_mode(user, credential_mode(request))
     store.put_task_secret(task_id, task_user.api_key)
     task["key_hint"] = task_user.key_hint
     store.create(task)
@@ -883,8 +911,33 @@ def build_direct_task(request: WorkspaceRunRequest, user: UserContext) -> dict[s
         "cost_points": skill.cost_points,
         "created_at": now_iso(),
         "updated_at": now_iso(),
-        "_user_api_key": user_for_mode(user, request_mode(request)).api_key,
+        "_user_api_key": user_for_mode(user, credential_mode(request)).api_key,
     }
+
+
+def normalize_media_request(request: WorkspaceRunRequest, media_kind: str) -> WorkspaceRunRequest:
+    if media_kind == "image" and should_use_responses_image_tool(request):
+        text_model = selected_responses_image_tool_model(request)
+        image_model = selected_responses_image_tool_image_model(request)
+        return request.model_copy(
+            update={
+                "model_role": "image_generation",
+                "model_roles": request.model_roles.model_copy(update={"image_generation": image_model}),
+                "params": {
+                    **request.params,
+                    "image_model": image_model,
+                    "tool": "image_generation",
+                    "text_model": text_model,
+                },
+                "metadata": {
+                    **request.metadata,
+                    "mode": "image",
+                    "credential_mode": "codex",
+                    "image_generation_mode": "responses_tool",
+                },
+            }
+        )
+    return request
 
 
 def validate_workspace_request(request: WorkspaceRunRequest) -> dict[str, Any] | None:
@@ -960,6 +1013,17 @@ def should_use_fast_chat(request: WorkspaceRunRequest) -> bool:
     return True
 
 
+def should_use_responses_image_tool(request: WorkspaceRunRequest) -> bool:
+    if request_mode(request) != "codex":
+        return False
+    query = normalize_for_intent_match(request.user_query)
+    if not query:
+        return False
+    if IMAGE_TOOL_INTENT_RE.search(query):
+        return True
+    return str(request.params.get("tool") or "").strip().lower() == "image_generation"
+
+
 def normalize_for_intent_match(text: str) -> str:
     return re.sub(r"\s+", " ", str(text or "").strip().lower())
 
@@ -974,6 +1038,7 @@ async def stream_media_generation(
     store = task_store()
     store.create({key: value for key, value in task.items() if not str(key).startswith("_")})
     model = selected_media_model(settings, request, media_kind)
+    mode_user = user_for_mode(user, credential_mode(request))
     label = "图像" if media_kind == "image" else "视频"
     yield {
         "type": "status",
@@ -988,7 +1053,7 @@ async def stream_media_generation(
         "task_id": task_id,
     }
     try:
-        generation_task = asyncio.create_task(generate_media(settings, request, user_for_mode(user, media_kind), task, media_kind))
+        generation_task = asyncio.create_task(generate_media(settings, request, mode_user, task, media_kind))
         heartbeat = 0
         while not generation_task.done():
             await asyncio.sleep(10)
@@ -1008,13 +1073,13 @@ async def stream_media_generation(
             task_id,
             status="failed",
             result_type=media_kind,
-            error=safe_error("MEDIA_GENERATION_FAILED", redact(str(exc), secret_values_for_redaction(settings, user.api_key))),
+            error=safe_error("MEDIA_GENERATION_FAILED", redact(str(exc), secret_values_for_redaction(settings, mode_user.api_key))),
         )
         yield {
             "type": "error",
             "code": "MEDIA_GENERATION_FAILED",
             "message": public_error_message(
-                redact(str(exc), secret_values_for_redaction(settings, user.api_key)),
+                redact(str(exc), secret_values_for_redaction(settings, mode_user.api_key)),
                 "媒体服务暂时不可用，请稍后重试。",
             ),
             "task_id": task_id,
@@ -1618,6 +1683,41 @@ def selected_fast_text_model(request: WorkspaceRunRequest) -> str:
     return selected_text_model(request)
 
 
+def selected_responses_image_tool_model(request: WorkspaceRunRequest) -> str:
+    allowed = set(settings.codex_allowed_models)
+    for value in (
+        request.params.get("text_model"),
+        request.params.get("responses_model"),
+        request.params.get("codex_model"),
+        "gpt-5.5",
+        settings.default_chat_model,
+        settings.default_small_fast_model,
+        request.model_roles.chat_main,
+        request.model_roles.small_fast,
+        settings.codex_allowed_models[0] if settings.codex_allowed_models else "",
+    ):
+        model = str(value or "").strip()
+        if model and model in allowed and is_text_model(model):
+            return model
+    return selected_fast_text_model(request)
+
+
+def selected_responses_image_tool_image_model(request: WorkspaceRunRequest) -> str:
+    allowed = set(settings.image_allowed_models)
+    for value in (
+        request.params.get("image_model"),
+        request.params.get("tool_model"),
+        request.model_roles.image_generation,
+        "gpt-image-2",
+        settings.default_image_model,
+        settings.image_allowed_models[0] if settings.image_allowed_models else "",
+    ):
+        model = str(value or "").strip()
+        if model and model in allowed:
+            return model
+    return settings.default_image_model
+
+
 def ordered_codex_models() -> list[str]:
     preferred = [
         settings.default_small_fast_model,
@@ -1674,6 +1774,15 @@ def request_mode(request: WorkspaceRunRequest | str) -> str:
     if value in {"codex", "claude", "image", "video"}:
         return value
     return "codex"
+
+
+def credential_mode(request: WorkspaceRunRequest | str) -> str:
+    if isinstance(request, str):
+        return request
+    value = str(request.metadata.get("credential_mode") or "").strip()
+    if value in {"codex", "claude", "image", "video"}:
+        return value
+    return request_mode(request)
 
 
 def allowed_models_for_mode(mode: str) -> tuple[str, ...]:

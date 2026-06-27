@@ -158,6 +158,9 @@ async def generate_image(
     user: UserContext,
     model: str,
 ) -> MediaResult:
+    if should_use_responses_image_tool(request):
+        return await generate_image_with_responses_tool(settings, request, user, model)
+
     payload: dict[str, Any] = {
         "model": model,
         "prompt": request.user_query,
@@ -188,6 +191,108 @@ async def generate_image(
         raise MediaGenerationError("图像服务没有返回有效结果。") from exc
     urls = extract_media_urls(body, "image")
     return MediaResult(media_type="image", model=model, prompt=request.user_query, urls=urls, raw_text=json.dumps(body, ensure_ascii=False)[:4000])
+
+
+def should_use_responses_image_tool(request: WorkspaceRunRequest) -> bool:
+    value = request.params.get("tool")
+    if isinstance(value, str) and value.strip().lower() == "image_generation":
+        return True
+    return str(request.metadata.get("image_generation_mode") or "").strip().lower() == "responses_tool"
+
+
+async def generate_image_with_responses_tool(
+    settings: Settings,
+    request: WorkspaceRunRequest,
+    user: UserContext,
+    image_model: str,
+) -> MediaResult:
+    text_model = responses_image_tool_text_model(settings, request)
+    payload: dict[str, Any] = {
+        "model": text_model,
+        "input": responses_image_tool_prompt(request),
+        "tools": [responses_image_tool_config(request)],
+        "tool_choice": {"type": "image_generation"},
+        "store": False,
+    }
+    max_output_tokens = request.params.get("max_output_tokens")
+    if max_output_tokens is not None:
+        try:
+            payload["max_output_tokens"] = int(max_output_tokens)
+        except (TypeError, ValueError):
+            pass
+
+    timeout = httpx.Timeout(420.0, connect=10.0, read=420.0, write=30.0)
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        response = await client.post(
+            f"{settings.new_api_base_url}/responses",
+            headers=auth_headers(user.api_key),
+            json=payload,
+        )
+    if response.status_code >= 400:
+        raise MediaGenerationError(upstream_error(settings, user.api_key, response))
+    try:
+        body = response.json()
+    except ValueError as exc:
+        raise MediaGenerationError("图像工具没有返回有效结果。") from exc
+    urls = extract_media_urls(body, "image")
+    if not urls:
+        raise MediaGenerationError("图像工具已响应，但没有返回可预览的图片。")
+    return MediaResult(
+        media_type="image",
+        model=f"{text_model}+image_generation({image_model})",
+        prompt=request.user_query,
+        urls=urls,
+        raw_text=json.dumps(body, ensure_ascii=False)[:4000],
+    )
+
+
+def responses_image_tool_text_model(settings: Settings, request: WorkspaceRunRequest) -> str:
+    allowed = set(settings.codex_allowed_models)
+    for key in ("text_model", "responses_model", "codex_model"):
+        value = request.params.get(key)
+        if isinstance(value, str) and value.strip() in allowed:
+            return value.strip()
+    config = request.model_roles.model_dump()
+    for candidate in (
+        "gpt-5.5",
+        config.get("chat_main"),
+        config.get("small_fast"),
+        settings.default_chat_model,
+        settings.default_small_fast_model,
+        settings.codex_allowed_models[0] if settings.codex_allowed_models else "",
+    ):
+        value = str(candidate or "").strip()
+        if value and value in allowed:
+            return value
+    return settings.default_chat_model
+
+
+def responses_image_tool_config(request: WorkspaceRunRequest) -> dict[str, Any]:
+    tool: dict[str, Any] = {"type": "image_generation", "action": "generate"}
+    for key in ("size", "quality", "background", "moderation", "output_format", "action", "input_fidelity"):
+        value = request.params.get(key)
+        if value is not None and str(value):
+            tool[key] = str(value)
+    for key in ("output_compression", "partial_images"):
+        value = request.params.get(key)
+        if value is not None:
+            try:
+                tool[key] = int(value)
+            except (TypeError, ValueError):
+                pass
+    image_model = request.params.get("image_model") or request.params.get("tool_model")
+    if isinstance(image_model, str) and image_model.strip():
+        tool["model"] = image_model.strip()
+    return tool
+
+
+def responses_image_tool_prompt(request: WorkspaceRunRequest) -> str:
+    text = str(request.user_query or "").strip()
+    text = re.sub(r"\buse\s+the\s+image_generation\s+tool\b", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\bimage_generation\s*(工具|tool)?", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"(请用|使用|调用)\s*(工具)?", "", text)
+    text = re.sub(r"\s+", " ", text).strip(" ，,。")
+    return text or str(request.user_query or "").strip()
 
 
 async def generate_video(
@@ -346,6 +451,13 @@ def image_suffix_for_mime(mime: str) -> str:
 def extract_media_urls(payload: Any, media_type: str) -> list[str]:
     urls: list[str] = []
     if isinstance(payload, dict):
+        if media_type == "image" and payload.get("type") == "image_generation_call":
+            result = payload.get("result")
+            if isinstance(result, str) and result:
+                if result.startswith("data:image/"):
+                    urls.append(result)
+                else:
+                    urls.append(f"data:image/png;base64,{result}")
         data = payload.get("data")
         if isinstance(data, list):
             for item in data:
