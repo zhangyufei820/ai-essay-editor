@@ -127,7 +127,7 @@ const IMAGE_GENERATION_GROUP = {
 const IMAGE_EDIT_REFERENCE_LIMIT = 10
 const VIDEO_REFERENCE_LIMIT = 5
 const MEDIA_RESULT_STORAGE_KEY = 'shenxiang-media-playground-results:v1'
-const MEDIA_RESULT_TTL_MS = 24 * 60 * 60 * 1000
+const MEDIA_RESULT_TTL_MS = 72 * 60 * 60 * 1000
 
 function isGrokImageModel(model: string) {
   return model === 'grok-imagine-image'
