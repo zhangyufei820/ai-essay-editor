@@ -1,0 +1,18 @@
+services:
+  app:
+    build: .
+    image: relaydance-video-gateway:newapi-test
+    container_name: relaydance-video-test-gateway
+    restart: unless-stopped
+    env_file: .env.newapi-test
+    mem_limit: 512m
+    expose:
+      - "8000"
+    networks:
+      shenxiang-new-api-net:
+        aliases:
+          - relaydance-video-test-gateway
+
+networks:
+  shenxiang-new-api-net:
+    external: true

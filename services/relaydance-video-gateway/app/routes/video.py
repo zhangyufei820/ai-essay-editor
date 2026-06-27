@@ -1,5 +1,8 @@
+from time import time
+from typing import Any
+
 from fastapi import APIRouter, Depends
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
 import re
 
 from app.config import Settings, get_settings
@@ -17,6 +20,7 @@ from app.schemas import (
 )
 
 router = APIRouter(prefix="/api/v1", tags=["video"])
+compat_router = APIRouter(prefix="/v1", tags=["openai-video-compatible"])
 
 IMAGE_INTENT_PATTERNS = (
     re.compile(r"生成(?:图片|图像|图)(?!.*(?:视频|短片|影片|mp4))", re.IGNORECASE),
@@ -71,6 +75,134 @@ def build_generation_from_dify(body: DifyVideoCreateRequest, settings: Settings)
     ), warnings
 
 
+def _as_dict(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _as_text(value: Any) -> str:
+    return value.strip() if isinstance(value, str) and value.strip() else ""
+
+
+def _ratio_from_size(size: Any, width: Any = None, height: Any = None) -> str:
+    if isinstance(size, str) and "x" in size.lower():
+        left, right = size.lower().split("x", 1)
+        try:
+            width_value = int(left)
+            height_value = int(right)
+        except ValueError:
+            width_value = height_value = 0
+    else:
+        try:
+            width_value = int(width or 0)
+            height_value = int(height or 0)
+        except (TypeError, ValueError):
+            width_value = height_value = 0
+
+    if width_value <= 0 or height_value <= 0:
+        return "16:9"
+    if width_value == height_value:
+        return "1:1"
+    return "16:9" if width_value > height_value else "9:16"
+
+
+def _resolution_from_model(model: str, metadata: dict[str, Any], body: dict[str, Any]) -> str:
+    explicit = _as_text(metadata.get("resolution")) or _as_text(body.get("resolution"))
+    if explicit:
+        return explicit
+    if model.endswith("-1080p"):
+        return "1080p"
+    return "720p"
+
+
+def build_openai_provider_body(body: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    metadata = _as_dict(body.get("metadata"))
+    model = _as_text(body.get("model")) or "seedance-nsfw-4k"
+    seconds = str(body.get("seconds") or body.get("duration") or "5")
+    size = _as_text(body.get("size")) or "1280x720"
+    provider_body = dict(body)
+    provider_body["model"] = model
+    provider_body["prompt"] = _as_text(body.get("prompt"))
+    provider_body["seconds"] = seconds
+    if size:
+        provider_body["size"] = size
+    if not provider_body.get("ratio"):
+        provider_body["ratio"] = _as_text(metadata.get("ratio")) or _ratio_from_size(
+            size,
+            body.get("width"),
+            body.get("height"),
+        )
+    if not provider_body.get("resolution"):
+        provider_body["resolution"] = _resolution_from_model(model, metadata, body)
+    return provider_body, {
+        "model": model,
+        "seconds": seconds,
+        "size": size,
+    }
+
+
+def _compatible_status(status: str, success: bool = True) -> str:
+    text = (status or "").lower()
+    if text in {"completed", "succeeded", "success", "done"}:
+        return "completed"
+    if text in {"failed", "failure", "error", "cancelled"}:
+        return "failed"
+    if text in {"processing", "running", "in_progress"}:
+        return "in_progress"
+    if text in {"queued", "pending", "submitted"}:
+        return "queued"
+    return "queued" if success else "failed"
+
+
+def _compatible_video_response(
+    payload: GatewayResponse,
+    *,
+    task_id: str = "",
+    model: str = "",
+    seconds: str = "",
+    size: str = "",
+) -> dict[str, Any]:
+    resolved_task_id = task_id or payload.task_id
+    status = _compatible_status(payload.status, payload.success)
+    progress = payload.progress
+    if progress is None:
+        progress = 100 if status == "completed" else 0
+
+    body: dict[str, Any] = {
+        "id": resolved_task_id,
+        "task_id": resolved_task_id,
+        "object": "video",
+        "model": model,
+        "status": status,
+        "progress": progress,
+        "created_at": int(time()),
+    }
+    if seconds:
+        body["seconds"] = seconds
+    if size:
+        body["size"] = size
+    if payload.video_url:
+        body["metadata"] = {"url": payload.video_url}
+    if status == "failed":
+        body["error"] = {
+            "message": payload.message or "视频任务失败。",
+            "code": payload.provider_code or "service_error",
+        }
+    return body
+
+
+def _provider_error_response(payload: GatewayResponse) -> JSONResponse:
+    status_code = payload.status_code if payload.status_code >= 400 else 502
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "error": {
+                "message": payload.message or "服务暂时不可用，请稍后重试。",
+                "code": payload.provider_code or "service_error",
+            }
+        },
+    )
+
+
 @router.post("/video/generations", response_model=GatewayResponse)
 async def submit_generation(
     body: VideoGenerationRequest,
@@ -83,6 +215,24 @@ async def submit_generation(
         "/v1/video/generations",
         json_body=public_body(body),
     )
+
+
+@compat_router.post("/videos", response_model=None)
+async def submit_openai_compatible_video(
+    body: dict[str, Any],
+    client: RelayDanceClient = Depends(client_dep),
+    settings: Settings = Depends(get_settings),
+) -> Any:
+    provider_body, response_meta = build_openai_provider_body(body)
+    validate_model(response_meta["model"], settings)
+    response = await client.request(
+        "POST",
+        "/v1/videos",
+        json_body=provider_body,
+    )
+    if not response.success or not response.task_id:
+        return _provider_error_response(response)
+    return _compatible_video_response(response, **response_meta)
 
 
 @router.post("/video/create", response_model=GatewayResponse)
@@ -109,8 +259,28 @@ async def get_video_task(
     return await client.request("GET", f"/v1/videos/{task_id}", retry=True)
 
 
+@compat_router.get("/videos/{task_id}", response_model=None)
+async def get_openai_compatible_video_task(
+    task_id: str,
+    client: RelayDanceClient = Depends(client_dep),
+) -> Any:
+    response = await client.request("GET", f"/v1/videos/{task_id}", retry=True)
+    if not response.success:
+        return _provider_error_response(response)
+    return _compatible_video_response(response, task_id=task_id)
+
+
 @router.get("/videos/{task_id}/content")
 async def get_video_content(
+    task_id: str,
+    client: RelayDanceClient = Depends(client_dep),
+) -> Response:
+    status_code, content_type, content, headers = await client.content(task_id)
+    return Response(content=content, status_code=status_code, media_type=content_type, headers=headers)
+
+
+@compat_router.get("/videos/{task_id}/content")
+async def get_openai_compatible_video_content(
     task_id: str,
     client: RelayDanceClient = Depends(client_dep),
 ) -> Response:

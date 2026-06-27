@@ -28,6 +28,7 @@ export const IMAGE_MODEL_IDS = [
 export const VIDEO_MODEL_IDS = [
   'grok-video-super-720p',
   'seedance-2.0',
+  'seedance-nsfw-4k',
 ] as const
 
 export const MEDIA_MODEL_CONFIGS: ModelCapability[] = [
@@ -178,6 +179,29 @@ export const MEDIA_MODEL_CONFIGS: ModelCapability[] = [
     notes: [
       '后台计费按秒配置，页面会显示时长，避免把 6元/15秒误解成按次。',
       '支持文生视频、图生视频、首尾帧三种模式；这些模式互斥，页面会自动生成对应请求。',
+    ],
+  },
+  {
+    id: 'seedance-nsfw-4k',
+    label: 'RelayDance Seedance NSFW · 私测',
+    kind: 'video',
+    vendorLabel: '管理员测试',
+    endpoint: '/v1/videos',
+    description: '仅供管理员验证 RelayDance 视频通道连通性，不进入公开模型池。',
+    private: true,
+    supportsImageToVideo: true,
+    supportsPromptEnhancement: true,
+    supportsWatermark: true,
+    sizes: ['1280x720', '720x1280', '1024x1024'],
+    durations: [3, 5, 10],
+    fps: [24, 30],
+    defaultSize: '1280x720',
+    defaultDuration: 5,
+    defaultFps: 24,
+    notes: [
+      '这是管理员私测模型，只有具备对应模型权限的账号会看到。',
+      '请求会走独立 RelayDance 测试网关，不影响公开 Seedance/Grok 视频渠道。',
+      '支持文生视频和首帧图生视频，提交后按异步任务轮询结果。',
     ],
   },
 ]

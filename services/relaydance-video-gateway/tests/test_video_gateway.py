@@ -13,6 +13,16 @@ def test_missing_gateway_key_returns_401(client):
     assert body["error"]["message"] == "未授权"
 
 
+def test_authorization_bearer_gateway_key_is_accepted(client):
+    response = client.post(
+        "/api/v1/video/create",
+        headers={"Authorization": "Bearer gateway-secret"},
+        json={"prompt": "test"},
+    )
+
+    assert response.status_code != 401
+
+
 def test_create_video_rejects_image_generation_intent(client, auth_headers):
     response = client.post(
         "/api/v1/video/create",
@@ -155,3 +165,62 @@ def test_raw_allows_video_path(client, auth_headers, provider_base):
 
     assert response.status_code == 200
     assert route.called
+
+
+@respx.mock
+def test_openai_compatible_videos_submit_forwards_to_openai_videos(client, auth_headers, provider_base):
+    route = respx.post(f"{provider_base}/v1/videos").mock(
+        return_value=Response(200, json={"id": "rd-task-1", "status": "queued"}),
+    )
+
+    response = client.post(
+        "/v1/videos",
+        headers=auth_headers,
+        json={
+            "model": "seedance-nsfw-4k",
+            "prompt": "A neutral product demo shot.",
+            "seconds": "5",
+            "size": "1280x720",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["id"] == "rd-task-1"
+    assert body["task_id"] == "rd-task-1"
+    assert body["object"] == "video"
+    assert body["status"] == "queued"
+
+    sent = json.loads(route.calls.last.request.content)
+    assert sent == {
+        "model": "seedance-nsfw-4k",
+        "prompt": "A neutral product demo shot.",
+        "seconds": "5",
+        "size": "1280x720",
+        "ratio": "16:9",
+        "resolution": "720p",
+    }
+
+
+@respx.mock
+def test_openai_compatible_videos_status_exposes_metadata_url(client, auth_headers, provider_base):
+    respx.get(f"{provider_base}/v1/videos/rd-task-1").mock(
+        return_value=Response(
+            200,
+            json={
+                "id": "rd-task-1",
+                "status": "completed",
+                "progress": 100,
+                "metadata": {"url": "https://cdn.relaydance.com/result.mp4"},
+            },
+        ),
+    )
+
+    response = client.get("/v1/videos/rd-task-1", headers=auth_headers)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["id"] == "rd-task-1"
+    assert body["status"] == "completed"
+    assert body["progress"] == 100
+    assert body["metadata"]["url"] == "https://cdn.relaydance.com/result.mp4"

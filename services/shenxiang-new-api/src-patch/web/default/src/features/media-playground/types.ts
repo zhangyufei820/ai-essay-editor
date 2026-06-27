@@ -39,6 +39,7 @@ export type ModelCapability = {
   supportsOutputCompression?: boolean
   supportsPromptEnhancement?: boolean
   supportsWatermark?: boolean
+  private?: boolean
   sizes: string[]
   sizeParam?: 'size' | 'aspect_ratio' | 'responseFormat'
   qualities?: string[]

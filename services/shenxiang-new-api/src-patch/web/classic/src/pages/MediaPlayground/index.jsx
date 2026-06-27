@@ -357,6 +357,19 @@ const VIDEO_MODELS = [
     defaultFps: 24,
     hint: '适合图生视频、人物动作和首尾帧控制。',
   },
+  {
+    value: 'seedance-nsfw-4k',
+    label: 'RelayDance Seedance NSFW',
+    badge: '私测',
+    vendor: '管理员测试',
+    private: true,
+    sizes: ['1280x720', '720x1280', '1024x1024'],
+    durations: [3, 5, 10],
+    defaultSize: '1280x720',
+    defaultDuration: 5,
+    defaultFps: 24,
+    hint: '仅供管理员验证 RelayDance 视频通道连通性。',
+  },
 ];
 
 const PROMPT_PRESETS = [
@@ -1618,7 +1631,9 @@ const MediaPlayground = () => {
 
   const handleRemoveResult = (id) =>
     setResults((prev) => prev.filter((item) => item.id !== id));
-  const modelOptions = mode === 'image' ? IMAGE_MODELS : VIDEO_MODELS;
+  const modelOptions = (mode === 'image' ? IMAGE_MODELS : VIDEO_MODELS).filter(
+    (item) => !item.private || models.some((model) => model === item.value),
+  );
   const workflowLabel =
     mode === 'image'
       ? imageWorkflow === 'edit'

@@ -328,6 +328,27 @@ export function MediaPlayground() {
     }, {})
   }, [userModels])
 
+  const availableModelIds = useMemo(
+    () => new Set(userModels.map((item) => item.value)),
+    [userModels]
+  )
+
+  const visibleImageModels = useMemo(
+    () =>
+      IMAGE_MODELS.filter(
+        (model) => !model.private || availableModelIds.has(model.id)
+      ),
+    [availableModelIds]
+  )
+
+  const visibleVideoModels = useMemo(
+    () =>
+      VIDEO_MODELS.filter(
+        (model) => !model.private || availableModelIds.has(model.id)
+      ),
+    [availableModelIds]
+  )
+
   useEffect(() => {
     if (!group && userGroups.length > 0) {
       const fallback =
@@ -778,6 +799,7 @@ export function MediaPlayground() {
               {mode === 'image' ? (
                 <ImageControls
                   activeModel={activeModel}
+                  models={visibleImageModels}
                   modelAccess={modelAccess}
                   modelValue={imageModel}
                   workflow={imageWorkflow}
@@ -787,6 +809,7 @@ export function MediaPlayground() {
               ) : (
                 <VideoControls
                   activeModel={activeModel}
+                  models={visibleVideoModels}
                   modelAccess={modelAccess}
                   modelValue={videoModel}
                   workflow={videoWorkflow}
@@ -1003,6 +1026,7 @@ function MediaHeader({
 
 function ImageControls(props: {
   activeModel: ModelCapability
+  models: ModelCapability[]
   modelAccess: Record<string, boolean>
   modelValue: string
   workflow: ImageWorkflow
@@ -1014,7 +1038,7 @@ function ImageControls(props: {
     <div className='space-y-4'>
       <Field label='图像模型'>
         <ModelSelect
-          models={IMAGE_MODELS}
+          models={props.models}
           modelAccess={props.modelAccess}
           value={props.modelValue}
           onChange={props.onModelChange}
@@ -1040,6 +1064,7 @@ function ImageControls(props: {
 
 function VideoControls(props: {
   activeModel: ModelCapability
+  models: ModelCapability[]
   modelAccess: Record<string, boolean>
   modelValue: string
   workflow: VideoWorkflow
@@ -1050,7 +1075,7 @@ function VideoControls(props: {
     <div className='space-y-4'>
       <Field label='视频模型'>
         <ModelSelect
-          models={VIDEO_MODELS}
+          models={props.models}
           modelAccess={props.modelAccess}
           value={props.modelValue}
           onChange={props.onModelChange}

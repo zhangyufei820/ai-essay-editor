@@ -8,6 +8,7 @@ ALLOWED_MODELS = {
     "doubao-seedance-2-0-fast-260128",
     "doubao-seedance-2-0-720p",
     "doubao-seedance-2-0-1080p",
+    "seedance-nsfw-4k",
 }
 ALLOWED_SECONDS = {"3", "5", "10"}
 ALLOWED_RATIOS = {"16:9", "9:16", "1:1", "4:3", "3:4", "21:9"}

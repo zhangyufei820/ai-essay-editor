@@ -1,4 +1,5 @@
 .env
+.env.newapi-test
 .venv/
 .pytest_cache/
 __pycache__/

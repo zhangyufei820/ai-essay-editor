@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 
 from app.config import Settings, get_settings
 from app.relaydance_client import normalize_provider_response, redact
+from app.routes.video import compat_router as video_compat_router
 from app.routes.video import router as video_router
 from app.schemas import GatewayResponse
 
@@ -41,15 +42,22 @@ def create_app() -> FastAPI:
             return JSONResponse(status_code=500, content=jsonable_encoder(payload))
 
     async def require_gateway_key(
+        authorization: Annotated[str | None, Header(alias="Authorization")] = None,
         x_gateway_key: Annotated[str | None, Header(alias="X-Gateway-Key")] = None,
         settings: Settings = Depends(get_settings),
     ) -> None:
         if not settings.gateway_api_key:
             raise HTTPException(status_code=503, detail="服务暂时不可用，请稍后重试。")
-        if x_gateway_key != settings.gateway_api_key:
+        bearer_key = ""
+        if authorization:
+            scheme, _, value = authorization.partition(" ")
+            if scheme.lower() == "bearer":
+                bearer_key = value.strip()
+        if x_gateway_key != settings.gateway_api_key and bearer_key != settings.gateway_api_key:
             raise HTTPException(status_code=401, detail="未授权")
 
     app.include_router(video_router, dependencies=[Depends(require_gateway_key)])
+    app.include_router(video_compat_router, dependencies=[Depends(require_gateway_key)])
 
     @app.get("/health", tags=["health"])
     async def health(settings: Settings = Depends(get_settings)) -> dict[str, object]:
