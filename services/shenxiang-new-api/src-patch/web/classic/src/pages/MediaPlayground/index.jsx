@@ -281,7 +281,7 @@ const IMAGE_GENERATION_GROUP = {
 const IMAGE_EDIT_REFERENCE_LIMIT = 10;
 const VIDEO_REFERENCE_LIMIT = 5;
 const MEDIA_RESULT_STORAGE_KEY = 'shenxiang-media-playground-results:v1';
-const MEDIA_RESULT_TTL_MS = 24 * 60 * 60 * 1000;
+const MEDIA_RESULT_TTL_MS = 72 * 60 * 60 * 1000;
 
 function isGrokImageModel(model) {
   return model === 'grok-imagine-image';
@@ -736,6 +736,43 @@ function NativeSelect({ label, value, options, onChange, disabled = false }) {
   );
 }
 
+function OptionChips({
+  label,
+  value,
+  options,
+  onChange,
+  compact = false,
+  disabled = false,
+}) {
+  return (
+    <div className={compact ? 'mp-chip-field is-compact' : 'mp-chip-field'}>
+      <span>{label}</span>
+      <div
+        className={
+          options.length > 6 ? 'mp-chip-row is-scrollable' : 'mp-chip-row'
+        }
+      >
+        {options.map((option) => {
+          const optionValue = option.value ?? option;
+          const optionLabel = option.label ?? option;
+          const active = String(value) === String(optionValue);
+          return (
+            <button
+              key={String(optionValue)}
+              type='button'
+              disabled={disabled}
+              className={active ? 'mp-param-chip active' : 'mp-param-chip'}
+              onClick={() => onChange(optionValue)}
+            >
+              {optionLabel}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function FileDrop({ label, file, onFile, compact = false }) {
   const [previewUrl, setPreviewUrl] = useState('');
   const [isDragging, setIsDragging] = useState(false);
@@ -967,7 +1004,7 @@ function ResultCard({ result, onRemove }) {
           <Tag color={result.kind === 'image' ? 'blue' : 'purple'}>
             {result.kind === 'image' ? '图像' : '视频'}
           </Tag>
-          <Tag color='orange'>24 小时内有效</Tag>
+          <Tag color='orange'>72 小时内有效</Tag>
         </div>
         <Space spacing={8}>
           <Tooltip content='复制可访问链接'>
@@ -1041,6 +1078,8 @@ const MediaPlayground = () => {
   const [resultsLoaded, setResultsLoaded] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [taskMessage, setTaskMessage] = useState('');
+  const [submitStartedAt, setSubmitStartedAt] = useState(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
   const activeImageModel = useMemo(
     () =>
@@ -1145,6 +1184,18 @@ const MediaPlayground = () => {
     if (!resultsLoaded) return;
     persistResults(results);
   }, [results, resultsLoaded]);
+
+  useEffect(() => {
+    if (!submitting || !submitStartedAt) {
+      setElapsedSeconds(0);
+      return undefined;
+    }
+    const updateElapsed = () =>
+      setElapsedSeconds(Math.max(0, Math.floor((Date.now() - submitStartedAt) / 1000)));
+    updateElapsed();
+    const timer = window.setInterval(updateElapsed, 1000);
+    return () => window.clearInterval(timer);
+  }, [submitting, submitStartedAt]);
 
   function addReferenceFiles(fileList) {
     const incoming = Array.from(fileList || []);
@@ -1439,6 +1490,7 @@ const MediaPlayground = () => {
       return Toast.error('首尾帧视频需要同时上传首帧和尾帧。');
 
     setSubmitting(true);
+    setSubmitStartedAt(Date.now());
     setTaskMessage(
       mode === 'video' ? '正在提交视频任务...' : IMAGE_WAIT_MESSAGE,
     );
@@ -1450,33 +1502,129 @@ const MediaPlayground = () => {
     } finally {
       setSubmitting(false);
       setTaskMessage('');
+      setSubmitStartedAt(null);
     }
   }
 
   const handleRemoveResult = (id) =>
     setResults((prev) => prev.filter((item) => item.id !== id));
   const modelOptions = mode === 'image' ? IMAGE_MODELS : VIDEO_MODELS;
+  const workflowLabel =
+    mode === 'image'
+      ? imageWorkflow === 'edit'
+        ? '图像修改'
+        : '文生图'
+      : videoWorkflow === 'first-last'
+        ? '首尾帧'
+        : videoWorkflow === 'image'
+          ? '图生视频'
+          : '文生视频';
+  const sizeLabel =
+    mode === 'image'
+      ? resolution && resolution !== 'auto'
+        ? resolution
+        : size
+      : size;
+  const ratioLabel =
+    mode === 'image'
+      ? imageRatioValue || '默认'
+      : String(size || '').replace('x', ' × ');
+  const qualityLabel =
+    mode === 'image' ? quality || '默认' : `${duration} 秒 · ${fps} fps`;
+  const amountLabel =
+    mode === 'image'
+      ? `${clampCount(count, activeImageModel)} 张`
+      : watermark
+        ? '含水印'
+        : '无水印';
+  const formatLabel = mode === 'image' ? String(format || 'url').toUpperCase() : 'URL / MP4';
+  const inspectorItems = [
+    { label: '当前模型', value: activeModel.label },
+    { label: '生成方式', value: workflowLabel },
+    { label: mode === 'image' ? '画面尺寸' : '视频尺寸', value: sizeLabel },
+    { label: mode === 'image' ? '画面比例' : '画面规格', value: ratioLabel },
+    { label: mode === 'image' ? '清晰度' : '时长 / 帧率', value: qualityLabel },
+    { label: mode === 'image' ? '输出数量' : '水印', value: amountLabel },
+    { label: '输出格式', value: formatLabel },
+  ];
+  const referenceLabel =
+    mode === 'image'
+      ? imageWorkflow === 'edit'
+        ? `${referenceFiles.length} / ${referenceFileLimit} 张`
+        : '不需要'
+      : videoWorkflow === 'text'
+        ? '不需要'
+        : `${referenceFiles.length} / ${referenceFileLimit} 张`;
+  const lastFrameLabel =
+    mode === 'video' && videoWorkflow === 'first-last'
+      ? lastFrameFile
+        ? '已上传'
+        : '未上传'
+      : '不需要';
+  const readinessItems = [
+    { label: '模型', done: modelAllowed, value: modelAllowed ? '已开放' : '无权限' },
+    { label: '提示词', done: Boolean(prompt.trim()), value: prompt.trim() ? '已填写' : '待填写' },
+    {
+      label: '参考图',
+      done:
+        (mode === 'image' && imageWorkflow !== 'edit') ||
+        (mode === 'video' && videoWorkflow === 'text') ||
+        referenceFiles.length > 0,
+      value: referenceLabel,
+    },
+    {
+      label: '尾帧',
+      done: !(mode === 'video' && videoWorkflow === 'first-last') || Boolean(lastFrameFile),
+      value: lastFrameLabel,
+    },
+  ];
+  const activePromptPreset =
+    PROMPT_PRESETS.find((preset) => preset.value === prompt)?.label || '自定义描述';
+  const outputSpec =
+    mode === 'image'
+      ? `${ratioLabel} · ${sizeLabel} · ${qualityLabel}`
+      : `${ratioLabel} · ${qualityLabel}`;
+  const stageItems = [
+    { label: '任务', value: workflowLabel },
+    { label: '提示', value: prompt.trim() ? '已填写' : '待填写' },
+    { label: '参数', value: outputSpec },
+    { label: '生成', value: submitting ? `${elapsedSeconds} 秒` : '可提交' },
+    { label: '结果', value: results.length ? `${results.length} 个` : '待生成' },
+  ];
 
   return (
     <div className='mp-page classic-page-fill'>
       <div className='mp-shell'>
         <section className='mp-hero'>
           <div>
-            <Tag color='blue' prefixIcon={<IconImage />}>
+            <Tag color='blue' prefixIcon={<IconImage />} className='mp-hero-kicker'>
               星人媒体工坊
             </Tag>
-            <Title heading={2}>图像与视频创作台</Title>
-            <Paragraph>从提示词到成片下载，统一在一个工作台完成。</Paragraph>
+            <Title heading={2}>媒体创作工作台</Title>
+            <Paragraph>
+              任务、提示词、参数、生成和结果按同一条操作线排列。
+            </Paragraph>
           </div>
           <div className='mp-hero-stats'>
-            <StatPill label='保留' value='24 小时' />
-            <StatPill label='图像' value='6 模型' />
-            <StatPill label='视频' value='2 模型' />
+            <StatPill label='保留' value='72 小时' />
+            <StatPill label='当前模式' value={mode === 'image' ? '图像' : '视频'} />
+            <StatPill label='输出规格' value={outputSpec} />
           </div>
         </section>
 
+        <div className='mp-stage-strip' aria-label='媒体创作流程'>
+          {stageItems.map((item, index) => (
+            <div key={item.label} className='mp-stage-item'>
+              <span>{String(index + 1).padStart(2, '0')}</span>
+              <strong>{item.label}</strong>
+              <em>{item.value}</em>
+            </div>
+          ))}
+        </div>
+
         <section className='mp-workbench'>
           <aside className='mp-panel mp-controls'>
+            <div className='mp-panel-label'>01 · 任务</div>
             <div
               className='mp-mode-switch'
               role='tablist'
@@ -1496,31 +1644,6 @@ const MediaPlayground = () => {
               >
                 <IconPlay /> 视频
               </button>
-            </div>
-
-            <SectionTitle meta={activeModel.vendor}>模型</SectionTitle>
-            <div className='mp-model-grid'>
-              {modelOptions.map((item) => {
-                const selected = currentModelId === item.value;
-                return (
-                  <button
-                    key={item.value}
-                    type='button'
-                    className={
-                      selected ? 'mp-model-card active' : 'mp-model-card'
-                    }
-                    onClick={() =>
-                      mode === 'image'
-                        ? setImageModel(item.value)
-                        : setVideoModel(item.value)
-                    }
-                  >
-                    <span>{item.label}</span>
-                    <Tag color={selected ? 'blue' : 'grey'}>{item.badge}</Tag>
-                    <small>{item.hint}</small>
-                  </button>
-                );
-              })}
             </div>
 
             <SectionTitle>生成方式</SectionTitle>
@@ -1566,175 +1689,42 @@ const MediaPlayground = () => {
               </div>
             )}
 
-            {mode === 'image' &&
-            imageWorkflow === 'edit' &&
-            activeImageModel.supportsInputFidelity ? (
-              <NativeSelect
-                label='参考图保真度'
-                value={inputFidelity}
-                options={toSelectOptions(['auto', 'low', 'high'])}
-                onChange={setInputFidelity}
-              />
-            ) : null}
-
-            <div className='mp-field-grid'>
-              {mode === 'video' ? (
-                <NativeSelect
-                  label='分组'
-                  value={effectiveGroup}
-                  options={visibleGroupOptions}
-                  onChange={setGroup}
-                />
-              ) : null}
-              {mode === 'image' && activeImageModel.resolutions?.length ? (
-                <NativeSelect
-                  label='画面尺寸'
-                  value={resolution}
-                  options={toResolutionSelectOptions(activeImageModel.resolutions)}
-                  onChange={setResolution}
-                />
-              ) : (
-                <NativeSelect
-                  label={mode === 'image' ? '画面尺寸' : '视频尺寸'}
-                  value={size}
-                  options={toSizeSelectOptions(activeModel.sizes, activeModel)}
-                  onChange={setSize}
-                />
-              )}
-              {mode === 'image' && imageRatioOptions.length ? (
-                <NativeSelect
-                  label='画面比例'
-                  value={imageRatioValue}
-                  options={toSelectOptions(imageRatioOptions)}
-                  onChange={handleImageRatioChange}
-                />
-              ) : null}
-              {mode === 'image' ? (
-                <NativeSelect
-                  label='清晰度'
-                  value={quality}
-                  options={toSelectOptions(activeImageModel.qualities)}
-                  onChange={setQuality}
-                />
-              ) : (
-                <NativeSelect
-                  label='时长'
-                  value={duration}
-                  options={activeVideoModel.durations.map((value) => ({
-                    value,
-                    label: `${value} 秒`,
-                  }))}
-                  onChange={setDuration}
-                />
-              )}
-              {mode === 'image' ? (
-                <NativeSelect
-                  label='输出格式'
-                  value={format}
-                  options={toSelectOptions(activeImageModel.formats)}
-                  onChange={setFormat}
-                />
-              ) : (
-                <NativeSelect
-                  label='帧率'
-                  value={fps}
-                  options={[
-                    { value: 24, label: '24 fps' },
-                    { value: 30, label: '30 fps' },
-                  ]}
-                  onChange={setFps}
-                />
-              )}
-            </div>
-
-            {mode === 'image' ? (
-              <>
-                {activeImageModel.backgroundOptions?.length ? (
-                  <NativeSelect
-                    label='背景'
-                    value={background}
-                    options={toSelectOptions(activeImageModel.backgroundOptions)}
-                    onChange={setBackground}
-                  />
-                ) : null}
-                <div className='mp-slider-field'>
-                  <div>
-                    <span>生成数量</span>
-                    <b>{clampCount(count, activeImageModel)} 张</b>
-                  </div>
-                  <Slider
-                    min={1}
-                    max={activeImageModel.maxCount || 1}
-                    step={1}
-                    value={clampCount(count, activeImageModel)}
-                    onChange={(value) => setCount(clampCount(value, activeImageModel))}
-                  />
-                </div>
-                {format !== 'png' && format !== 'url' ? (
-                  <div className='mp-slider-field'>
-                    <div>
-                      <span>压缩质量</span>
-                      <b>{compression}</b>
-                    </div>
-                    <Slider
-                      min={0}
-                      max={100}
-                      value={compression}
-                      onChange={setCompression}
-                    />
-                  </div>
-                ) : null}
-              </>
-            ) : (
-              <>
-                <label className='mp-field'>
-                  <span>Seed</span>
-                  <Input
-                    value={seed}
-                    onChange={setSeed}
-                    placeholder='留空随机'
-                  />
-                </label>
-                <div className='mp-switch-line'>
-                  <div>
-                    <strong>智能润色提示词</strong>
-                    <span>适合小白用户，默认开启</span>
-                  </div>
-                  <Switch checked={enhancePrompt} onChange={setEnhancePrompt} />
-                </div>
-                <div className='mp-switch-line'>
-                  <div>
-                    <strong>添加水印</strong>
-                    <span>默认关闭，方便直接保存成品</span>
-                  </div>
-                  <Switch checked={watermark} onChange={setWatermark} />
-                </div>
-                {videoWorkflow !== 'text' ? (
-                  <MultiFileDrop
-                    label={
-                      videoWorkflow === 'first-last'
-                        ? '上传首帧 / 参考图'
-                        : '上传参考图 / 首帧'
+            <SectionTitle meta={activeModel.vendor}>模型</SectionTitle>
+            <div className='mp-model-grid'>
+              {modelOptions.map((item) => {
+                const selected = currentModelId === item.value;
+                return (
+                  <button
+                    key={item.value}
+                    type='button'
+                    className={
+                      selected ? 'mp-model-card active' : 'mp-model-card'
                     }
-                    files={referenceFiles}
-                    maxFiles={referenceFileLimit}
-                    onFiles={addReferenceFiles}
-                    onRemove={removeReferenceFile}
-                  />
-                ) : null}
-                {videoWorkflow === 'first-last' ? (
-                  <FileDrop
-                    label='上传尾帧图片'
-                    file={lastFrameFile}
-                    onFile={setLastFrameFile}
-                  />
-                ) : null}
-              </>
-            )}
+                    onClick={() =>
+                      mode === 'image'
+                        ? setImageModel(item.value)
+                        : setVideoModel(item.value)
+                    }
+                  >
+                    <div className='mp-model-card-head'>
+                      <span className='mp-model-name'>{item.label}</span>
+                      <Tag color={selected ? 'blue' : 'grey'}>{item.badge}</Tag>
+                    </div>
+                    <div className='mp-model-meta'>
+                      <span>{item.vendor}</span>
+                      {item.maxCount ? <span>最多 {item.maxCount} 张</span> : null}
+                      {item.sizes?.length ? <span>{item.sizes.length} 规格</span> : null}
+                    </div>
+                    <small>{item.hint}</small>
+                  </button>
+                );
+              })}
+            </div>
           </aside>
 
           <main className='mp-canvas-panel'>
             <div className='mp-prompt-card'>
+              <div className='mp-panel-label'>02 · 提示</div>
               <div className='mp-prompt-head'>
                 <div>
                   <SectionTitle meta='Prompt'>画面描述</SectionTitle>
@@ -1745,6 +1735,8 @@ const MediaPlayground = () => {
                     <Button
                       key={preset.label}
                       size='small'
+                      theme={activePromptPreset === preset.label ? 'solid' : 'light'}
+                      type={activePromptPreset === preset.label ? 'primary' : 'tertiary'}
                       onClick={() => setPrompt(preset.value)}
                     >
                       {preset.label}
@@ -1782,7 +1774,195 @@ const MediaPlayground = () => {
                   />
                 </div>
               ) : null}
+
+              {mode === 'video' && videoWorkflow !== 'text' ? (
+                <div className='mp-field-grid'>
+                  <MultiFileDrop
+                    label={
+                      videoWorkflow === 'first-last'
+                        ? '上传首帧 / 参考图'
+                        : '上传参考图 / 首帧'
+                    }
+                    files={referenceFiles}
+                    maxFiles={referenceFileLimit}
+                    onFiles={addReferenceFiles}
+                    onRemove={removeReferenceFile}
+                  />
+                  {videoWorkflow === 'first-last' ? (
+                    <FileDrop
+                      label='上传尾帧图片'
+                      file={lastFrameFile}
+                      onFile={setLastFrameFile}
+                    />
+                  ) : null}
+                </div>
+              ) : null}
+
+              <div className='mp-parameter-panel'>
+                <div className='mp-parameter-head'>
+                  <SectionTitle meta='03 · Params'>生成参数</SectionTitle>
+                  <span>{workflowLabel} · {outputSpec}</span>
+                </div>
+                <div className='mp-param-priority'>
+                  {mode === 'video' ? (
+                    <NativeSelect
+                      label='分组'
+                      value={effectiveGroup}
+                      options={visibleGroupOptions}
+                      onChange={setGroup}
+                    />
+                  ) : null}
+                  {mode === 'image' && activeImageModel.resolutions?.length ? (
+                    <OptionChips
+                      label='画面尺寸'
+                      value={resolution}
+                      options={toResolutionSelectOptions(activeImageModel.resolutions)}
+                      onChange={setResolution}
+                      compact
+                    />
+                  ) : (
+                    <OptionChips
+                      label={mode === 'image' ? '画面尺寸' : '视频尺寸'}
+                      value={size}
+                      options={toSizeSelectOptions(activeModel.sizes, activeModel)}
+                      onChange={setSize}
+                    />
+                  )}
+                  {mode === 'image' && imageRatioOptions.length ? (
+                    <OptionChips
+                      label='画面比例'
+                      value={imageRatioValue}
+                      options={toSelectOptions(imageRatioOptions)}
+                      onChange={handleImageRatioChange}
+                    />
+                  ) : null}
+                  {mode === 'image' ? (
+                    <OptionChips
+                      label='清晰度'
+                      value={quality}
+                      options={toSelectOptions(activeImageModel.qualities)}
+                      onChange={setQuality}
+                      compact
+                    />
+                  ) : (
+                    <OptionChips
+                      label='时长'
+                      value={duration}
+                      options={activeVideoModel.durations.map((value) => ({
+                        value,
+                        label: `${value} 秒`,
+                      }))}
+                      onChange={setDuration}
+                      compact
+                    />
+                  )}
+                </div>
+
+                <div className='mp-param-secondary'>
+                  {mode === 'image' ? (
+                    <OptionChips
+                      label='输出格式'
+                      value={format}
+                      options={toSelectOptions(activeImageModel.formats)}
+                      onChange={setFormat}
+                      compact
+                    />
+                  ) : (
+                    <OptionChips
+                      label='帧率'
+                      value={fps}
+                      options={[
+                        { value: 24, label: '24 fps' },
+                        { value: 30, label: '30 fps' },
+                      ]}
+                      onChange={setFps}
+                      compact
+                    />
+                  )}
+                  {mode === 'image' &&
+                  imageWorkflow === 'edit' &&
+                  activeImageModel.supportsInputFidelity ? (
+                    <OptionChips
+                      label='参考图保真度'
+                      value={inputFidelity}
+                      options={toSelectOptions(['auto', 'low', 'high'])}
+                      onChange={setInputFidelity}
+                      compact
+                    />
+                  ) : null}
+                  {mode === 'image' && activeImageModel.backgroundOptions?.length ? (
+                    <OptionChips
+                      label='背景'
+                      value={background}
+                      options={toSelectOptions(activeImageModel.backgroundOptions)}
+                      onChange={setBackground}
+                      compact
+                    />
+                  ) : null}
+                  {mode === 'video' ? (
+                    <label className='mp-field'>
+                      <span>Seed</span>
+                      <Input
+                        value={seed}
+                        onChange={setSeed}
+                        placeholder='留空随机'
+                      />
+                    </label>
+                  ) : null}
+                </div>
+
+                {mode === 'image' ? (
+                  <div className='mp-inline-controls'>
+                    <div className='mp-slider-field'>
+                      <div>
+                        <span>生成数量</span>
+                        <b>{clampCount(count, activeImageModel)} 张</b>
+                      </div>
+                      <Slider
+                        min={1}
+                        max={activeImageModel.maxCount || 1}
+                        step={1}
+                        value={clampCount(count, activeImageModel)}
+                        onChange={(value) => setCount(clampCount(value, activeImageModel))}
+                      />
+                    </div>
+                    {format !== 'png' && format !== 'url' ? (
+                      <div className='mp-slider-field'>
+                        <div>
+                          <span>压缩质量</span>
+                          <b>{compression}</b>
+                        </div>
+                        <Slider
+                          min={0}
+                          max={100}
+                          value={compression}
+                          onChange={setCompression}
+                        />
+                      </div>
+                    ) : null}
+                  </div>
+                ) : (
+                  <div className='mp-inline-controls'>
+                    <div className='mp-switch-line'>
+                      <div>
+                        <strong>智能润色提示词</strong>
+                        <span>适合小白用户，默认开启</span>
+                      </div>
+                      <Switch checked={enhancePrompt} onChange={setEnhancePrompt} />
+                    </div>
+                    <div className='mp-switch-line'>
+                      <div>
+                        <strong>添加水印</strong>
+                        <span>默认关闭，方便直接保存成品</span>
+                      </div>
+                      <Switch checked={watermark} onChange={setWatermark} />
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <div className='mp-action-row'>
+                <span className='mp-panel-label'>04 · 生成</span>
                 <Button
                   theme='solid'
                   type='primary'
@@ -1795,7 +1975,40 @@ const MediaPlayground = () => {
                 >
                   {mode === 'image' ? '生成图像' : '生成视频'}
                 </Button>
+                <div className='mp-action-context'>
+                  <strong>{activeModel.label}</strong>
+                  <span>{workflowLabel} · {outputSpec}</span>
+                </div>
               </div>
+              {taskMessage ? (
+                <div className='mp-wait-panel' role='status' aria-live='polite'>
+                  <div className='mp-wait-orbit'>
+                    <Spin size='large' />
+                  </div>
+                  <div className='mp-wait-copy'>
+                    <strong>{mode === 'image' ? '图像生成中' : '视频生成中'}</strong>
+                    <span>{taskMessage}</span>
+                  </div>
+                  <div className='mp-wait-meter'>
+                    <div>
+                      <span>已等待</span>
+                      <strong>{elapsedSeconds} 秒</strong>
+                    </div>
+                    <div>
+                      <span>常规预期</span>
+                      <strong>至少 30 秒</strong>
+                    </div>
+                    <div>
+                      <span>下一步</span>
+                      <strong>结果会进入下方画布</strong>
+                    </div>
+                  </div>
+                  <div className='mp-wait-actions'>
+                    <span>可以先构思下一版提示词，当前任务会按提交瞬间的内容执行。</span>
+                    <span>保持页面打开，完成后可直接复制链接或下载。</span>
+                  </div>
+                </div>
+              ) : null}
               {!modelAllowed ? (
                 <Banner
                   type='danger'
@@ -1805,56 +2018,110 @@ const MediaPlayground = () => {
               ) : null}
             </div>
 
-            <div className='mp-gallery-head'>
-              <div>
-                <Title heading={4}>结果画布</Title>
-                <Text type='tertiary'>
-                  生成完成后会自动缓存为本站临时链接，便于预览和下载。
-                </Text>
+            <section className='mp-results-section'>
+              <div className='mp-gallery-head'>
+                <div>
+                  <span className='mp-panel-label'>05 · 结果</span>
+                  <Title heading={4}>结果画布</Title>
+                  <Text type='tertiary'>
+                    生成完成后会自动缓存为本站 72 小时临时链接，便于预览和下载。
+                  </Text>
+                </div>
+                <Space spacing={8}>
+                  <Button
+                    icon={<IconRefresh />}
+                    onClick={() => setResults([])}
+                    disabled={results.length === 0}
+                  >
+                    清空
+                  </Button>
+                </Space>
               </div>
-              <Space spacing={8}>
-                <Button
-                  icon={<IconRefresh />}
-                  onClick={() => setResults([])}
-                  disabled={results.length === 0}
-                >
-                  清空
-                </Button>
-              </Space>
-            </div>
 
+              {results.length === 0 ? (
+                <div className={submitting ? 'mp-empty-canvas is-rendering' : 'mp-empty-canvas'}>
+                  <div className='mp-empty-mark'>
+                    {submitting ? <Spin size='large' /> : <IconUpload />}
+                  </div>
+                  <Title heading={4}>
+                    {submitting ? '正在生成第一个作品' : '等待第一个作品'}
+                  </Title>
+                  <Paragraph>
+                    {submitting
+                      ? '当前任务正在执行，完成后作品会自动落到这里。'
+                      : '选择模型后点击生成。你会在这里看到可预览、可复制、可下载的临时结果。'}
+                  </Paragraph>
+                  {submitting ? (
+                    <div className='mp-render-preview' aria-hidden='true'>
+                      <span />
+                      <span />
+                      <span />
+                    </div>
+                  ) : null}
+                  <div className='mp-empty-spec'>
+                    <span>{activeModel.label}</span>
+                    <span>{workflowLabel}</span>
+                    <span>{outputSpec}</span>
+                  </div>
+                </div>
+              ) : (
+                <div className='mp-result-grid'>
+                  {results.map((result) => (
+                    <ResultCard
+                      key={result.id}
+                      result={result}
+                      onRemove={handleRemoveResult}
+                    />
+                  ))}
+                </div>
+              )}
+              <div className='mp-retention-note'>
+                生成后的临时预览文件保留 72 小时，到期自动清理；请在有效期内下载保存。
+              </div>
+            </section>
+          </main>
+
+          <aside className='mp-panel mp-inspector' aria-label='当前生成方案'>
+            <div className='mp-panel-label'>状态</div>
+            <SectionTitle meta='Live'>当前方案</SectionTitle>
+            <div className='mp-inspector-hero'>
+              <div className='mp-inspector-badge'>
+                {mode === 'image' ? <IconImage /> : <IconPlay />}
+              </div>
+              <div>
+                <strong>{workflowLabel}</strong>
+                <span>{activeModel.vendor} · {activeModel.badge}</span>
+              </div>
+            </div>
+            <div className='mp-readiness'>
+              {readinessItems.map((item) => (
+                <div
+                  key={item.label}
+                  className={item.done ? 'is-ready' : 'is-missing'}
+                >
+                  <span>{item.label}</span>
+                  <strong>{item.value}</strong>
+                </div>
+              ))}
+            </div>
+            <div className='mp-inspector-list'>
+              {inspectorItems.map((item) => (
+                <div key={item.label}>
+                  <span>{item.label}</span>
+                  <strong>{item.value}</strong>
+                </div>
+              ))}
+            </div>
             {taskMessage ? (
-              <div className='mp-progress-line'>
-                <Spin size='small' />
-                <span>{taskMessage}</span>
+              <div className='mp-inspector-wait'>
+                <strong>生成中 · {elapsedSeconds} 秒</strong>
+                <span>不用重复点击生成。完成后结果会自动出现在画布顶部。</span>
               </div>
             ) : null}
-
-            {results.length === 0 ? (
-              <div className='mp-empty-canvas'>
-                <div className='mp-empty-mark'>
-                  <IconUpload />
-                </div>
-                <Title heading={4}>等待第一个作品</Title>
-                <Paragraph>
-                  选择模型后点击生成。你会在这里看到可预览、可复制、可下载的临时结果。
-                </Paragraph>
-              </div>
-            ) : (
-              <div className='mp-result-grid'>
-                {results.map((result) => (
-                  <ResultCard
-                    key={result.id}
-                    result={result}
-                    onRemove={handleRemoveResult}
-                  />
-                ))}
-              </div>
-            )}
-            <div className='mp-retention-note'>
-              生成后的临时预览文件保留 24 小时，到期自动清理；请在有效期内下载保存。
+            <div className='mp-inspector-note'>
+              生成前重点确认模型、比例、清晰度和输出数量；临时预览结果保留 72 小时。
             </div>
-          </main>
+          </aside>
         </section>
       </div>
     </div>
