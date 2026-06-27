@@ -2,7 +2,7 @@ name: shenxiang-new-api
 
 services:
   shenxiang-new-api:
-    image: shenxiang-new-api-dragtokens-monthly-routing:20260625-1725
+    image: shenxiang-new-api-codex:2800fb8d-20260627-1626-media-image-log
     container_name: shenxiang-new-api
     restart: unless-stopped
     depends_on:
