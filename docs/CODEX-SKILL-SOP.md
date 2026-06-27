@@ -77,6 +77,38 @@ SHENXIANG_E2E_TEST_PASSWORD=...
 
 执行 Browser / Playwright 登录验证时，脚本必须从上述来源读取密码；输出、截图命名、交付总结和错误日志中只允许写测试账号标识，不得回显密码。
 
+## 0.5 New API 运维测试令牌规则
+
+涉及 New API、媒体工坊、云端 Codex 或任何生产 API 的运维 smoke test / 直连测试 / 日志核对时，测试身份必须固定在可审计的运维范围内：
+
+1. 优先使用 `user_id=1` 的管理员令牌，或明确标记为 ops 专用的测试 token。
+2. 任何查询、脚本、curl 组装命令都必须显式限定 `user_id=1` 或 ops 专用 token 的唯一标识；如果按 token 名称查询，也必须同时限定运维用户范围。
+3. 禁止使用“按 token 名称全局查询 + 最近访问排序 + `LIMIT 1`”来取测试 key，因为同名 token 可能属于真实用户。
+4. 命令输出、日志、截图和提交记录只允许展示 token mask，不得回显完整 key。
+5. 测试完成后核对日志时，也必须用 `user_id=1`、ops token id、request id、channel id 或时间窗口组合定位，禁止按 token 名称全局取最近一条。
+
+禁止模式示例：
+
+```sql
+SELECT ...
+FROM tokens
+WHERE name = '<token_name>'
+ORDER BY accessed_time DESC, id DESC
+LIMIT 1;
+```
+
+安全模式示例：
+
+```sql
+SELECT ...
+FROM tokens
+WHERE user_id = 1
+  AND name = '<ops_token_name>'
+  AND deleted_at IS NULL
+ORDER BY id DESC
+LIMIT 1;
+```
+
 ## 1. 安全红线
 
 修改权限仅限当前开发项目 `/Users/aixingren/ai-essay-editor` 的代码、文档和相关业务逻辑文件。基础设施、容器环境、系统配置和持久化数据默认属于禁止触碰区。
@@ -625,6 +657,7 @@ npm test -- __tests__/credits.test.ts __tests__/payment-guards.test.ts __tests__
 - 环境变量：新增变量后，必须同步 `.env.example`、部署文档、Docker/服务器运行说明；不得提交真实值。
 - Dify Key 串线：优先查 `lib/dify-credentials.ts`、相关 API route 和生产 `.env.production`；`DIFY_API_KEY` 必须为空或示例占位，不能作为任何应用 fallback。
 - URL 拼接：检查 Base URL 是否已包含 `/v1` 等路径，避免重复拼接。
+- New API 运维测试：固定使用 `user_id=1` 或 ops 专用 token，禁止按 token 名称全局取最近一条。
 - 端口绑定：服务间通信不要在容器内误用 `127.0.0.1:port`；服务监听通常应为 `0.0.0.0`，容器互调用容器名。
 - 流式输出：后端确认 `stream: true` 或等价配置，前端确认 `ReadableStream` 读取循环和 Markdown 增量渲染。
 - 历史会话：检查 `ai_model`、session id、agent 参数和模型映射是否同步。
