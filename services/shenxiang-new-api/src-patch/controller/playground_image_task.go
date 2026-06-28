@@ -37,6 +37,17 @@ type playgroundImageTaskCreateResponse struct {
 	PollURL   string `json:"poll_url"`
 }
 
+type openAIImageTaskCreateResponse struct {
+	TaskID  string `json:"task_id"`
+	ID      string `json:"id,omitempty"`
+	Status  string `json:"status"`
+	PollURL string `json:"poll_url"`
+}
+
+type openAIImageTaskListResponse struct {
+	Data []map[string]interface{} `json:"data"`
+}
+
 type playgroundImageTaskPayload struct {
 	Model          string                 `json:"model,omitempty"`
 	Prompt         string                 `json:"prompt,omitempty"`
@@ -46,6 +57,9 @@ type playgroundImageTaskPayload struct {
 	RequestFile    string                 `json:"request_file,omitempty"`
 	ContentType    string                 `json:"content_type,omitempty"`
 	RequestID      string                 `json:"request_id,omitempty"`
+	TokenID        int                    `json:"token_id,omitempty"`
+	TokenName      string                 `json:"token_name,omitempty"`
+	UseAPIToken    bool                   `json:"use_api_token,omitempty"`
 	Metadata       map[string]interface{} `json:"metadata,omitempty"`
 	CachedURL      string                 `json:"cached_url,omitempty"`
 	Item           *playgroundMediaItem   `json:"item,omitempty"`
@@ -61,6 +75,14 @@ type playgroundImageTaskResultCapture struct {
 }
 
 func PlaygroundCreateImageTask(c *gin.Context) {
+	createImageTask(c, false)
+}
+
+func V1CreateImageTask(c *gin.Context) {
+	createImageTask(c, true)
+}
+
+func createImageTask(c *gin.Context, openAICompat bool) {
 	path := normalizePlaygroundImageTaskPath(c.Query("endpoint"))
 	if path == "" {
 		path = "/pg/images/generations"
@@ -142,6 +164,9 @@ func PlaygroundCreateImageTask(c *gin.Context) {
 		RequestFile:   requestFile,
 		ContentType:   truncatePlaygroundText(contentType, 300),
 		RequestID:     requestID,
+		TokenID:       c.GetInt("token_id"),
+		TokenName:     truncatePlaygroundText(c.GetString("token_name"), 160),
+		UseAPIToken:   openAICompat,
 		Metadata: map[string]interface{}{
 			"endpoint": path,
 			"async":    true,
@@ -177,6 +202,16 @@ func PlaygroundCreateImageTask(c *gin.Context) {
 	gopool.Go(func() {
 		runPlaygroundImageTask(task.TaskID, userID, username, role, userGroup, usingGroup, tokenName)
 	})
+
+	if openAICompat {
+		c.JSON(http.StatusOK, openAIImageTaskCreateResponse{
+			TaskID:  taskID,
+			ID:      taskID,
+			Status:  string(task.Status),
+			PollURL: "/v1/images/tasks/" + taskID,
+		})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -321,6 +356,23 @@ func PlaygroundGetImageTask(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": taskToPlaygroundImageTask(task)})
 }
 
+func V1GetImageTask(c *gin.Context) {
+	taskID := strings.TrimSpace(c.Param("task_id"))
+	if taskID == "" {
+		taskID = strings.TrimSpace(c.Query("task_id"))
+	}
+	task, exists, err := model.GetByTaskId(c.GetInt("id"), taskID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{"message": "failed to read image task"}})
+		return
+	}
+	if !exists || task.Platform != constant.TaskPlatformPlaygroundImage || !isPlaygroundImageTaskAction(task.Action) {
+		c.JSON(http.StatusNotFound, gin.H{"error": gin.H{"message": "image task not found"}})
+		return
+	}
+	c.JSON(http.StatusOK, taskToOpenAIImageTask(task))
+}
+
 func PlaygroundListImageTasks(c *gin.Context) {
 	query := model.SyncTaskQueryParams{
 		Platform:       constant.TaskPlatformPlaygroundImage,
@@ -338,6 +390,25 @@ func PlaygroundListImageTasks(c *gin.Context) {
 		items = append(items, taskToPlaygroundImageTask(task))
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": gin.H{"items": items}})
+}
+
+func V1ListImageTasks(c *gin.Context) {
+	query := model.SyncTaskQueryParams{
+		Platform:       constant.TaskPlatformPlaygroundImage,
+		StartTimestamp: time.Now().Add(-playgroundMediaRetentionDuration()).Unix(),
+	}
+	if taskID := strings.TrimSpace(c.Query("task_id")); taskID != "" {
+		query.TaskID = taskID
+	}
+	tasks := model.TaskGetAllUserTask(c.GetInt("id"), 0, 50, query)
+	items := make([]map[string]interface{}, 0, len(tasks))
+	for _, task := range tasks {
+		if task == nil || !isPlaygroundImageTaskAction(task.Action) {
+			continue
+		}
+		items = append(items, taskToOpenAIImageTask(task))
+	}
+	c.JSON(http.StatusOK, openAIImageTaskListResponse{Data: items})
 }
 
 func resolvePlaygroundImageTaskGroup(c *gin.Context, imageReq *dto.ImageRequest) (string, string, error) {
@@ -534,7 +605,7 @@ func runPlaygroundImageTask(taskID string, userID int, username string, role int
 		common.CleanupBodyStorage(ginCtx)
 	})
 	engine.Use(func(ginCtx *gin.Context) {
-		seedPlaygroundImageTaskContext(ginCtx, userID, username, role, userGroup, usingGroup, tokenName, payload.RequestID, task.TaskID, bodyBytes, capture)
+		seedPlaygroundImageTaskContext(ginCtx, userID, username, role, userGroup, usingGroup, tokenName, &payload, task.TaskID, bodyBytes, capture)
 	})
 	engine.Use(middleware.Distribute())
 	engine.POST("/pg/images/generations", func(ginCtx *gin.Context) {
@@ -579,7 +650,14 @@ func runPlaygroundImageTask(taskID string, userID int, username string, role int
 	markPlaygroundImageTaskSuccess(task, item, &payload, recorder.Code, capture.Quota)
 }
 
-func seedPlaygroundImageTaskContext(ginCtx *gin.Context, userID int, username string, role int, userGroup string, usingGroup string, tokenName string, requestID string, taskID string, bodyBytes []byte, capture *playgroundImageTaskResultCapture) {
+func seedPlaygroundImageTaskContext(ginCtx *gin.Context, userID int, username string, role int, userGroup string, usingGroup string, tokenName string, payload *playgroundImageTaskPayload, taskID string, bodyBytes []byte, capture *playgroundImageTaskResultCapture) {
+	requestID := ""
+	if payload != nil {
+		requestID = payload.RequestID
+		if payload.TokenName != "" {
+			tokenName = payload.TokenName
+		}
+	}
 	ginCtx.Set(common.RequestIdKey, requestID)
 	ginCtx.Set("id", userID)
 	ginCtx.Set("username", username)
@@ -595,15 +673,28 @@ func seedPlaygroundImageTaskContext(ginCtx *gin.Context, userID int, username st
 	}
 	common.SetContextKey(ginCtx, constant.ContextKeyUserGroup, userGroup)
 	common.SetContextKey(ginCtx, constant.ContextKeyUsingGroup, usingGroup)
-	tempToken := &model.Token{
-		UserId: userID,
-		Name:   fmt.Sprintf("playground-%s", usingGroup),
-		Group:  usingGroup,
+	if payload != nil && payload.UseAPIToken && payload.TokenID > 0 {
+		token, err := model.GetTokenById(payload.TokenID)
+		if err != nil {
+			ginCtx.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": gin.H{"message": "image task token unavailable"}})
+			return
+		}
+		if err := middleware.SetupContextForToken(ginCtx, token); err != nil {
+			ginCtx.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": gin.H{"message": err.Error()}})
+			return
+		}
+	} else {
+		tempToken := &model.Token{
+			UserId: userID,
+			Name:   fmt.Sprintf("playground-%s", usingGroup),
+			Group:  usingGroup,
+		}
+		if err := middleware.SetupContextForToken(ginCtx, tempToken); err != nil {
+			ginCtx.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": gin.H{"message": err.Error()}})
+			return
+		}
 	}
-	if err := middleware.SetupContextForToken(ginCtx, tempToken); err != nil {
-		ginCtx.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": gin.H{"message": err.Error()}})
-		return
-	}
+	ginCtx.Set("token_name", tokenName)
 	common.SetContextKey(ginCtx, constant.ContextKeyUserGroup, userGroup)
 	common.SetContextKey(ginCtx, constant.ContextKeyUsingGroup, usingGroup)
 	storage, err := common.CreateBodyStorage(bodyBytes)
@@ -829,6 +920,58 @@ func taskToPlaygroundImageTask(task *model.Task) gin.H {
 		"data":        payload,
 		"item":        payload.Item,
 	}
+}
+
+func taskToOpenAIImageTask(task *model.Task) map[string]interface{} {
+	payload := playgroundImageTaskPayload{}
+	_ = task.GetData(&payload)
+	payload.RequestFile = ""
+	taskID := task.TaskID
+	resultURL := strings.TrimSpace(task.GetResultURL())
+	response := map[string]interface{}{
+		"task_id":     taskID,
+		"id":          taskID,
+		"status":      string(task.Status),
+		"task_status": string(task.Status),
+		"progress":    task.Progress,
+		"created":     task.SubmitTime,
+		"created_at":  task.SubmitTime,
+		"updated_at":  task.FinishTime,
+		"model":       task.Properties.OriginModelName,
+		"result_url":  resultURL,
+		"fail_reason": task.FailReason,
+		"message":     task.FailReason,
+		"data": map[string]interface{}{
+			"task_id":     taskID,
+			"status":      string(task.Status),
+			"task_status": string(task.Status),
+			"progress":    task.Progress,
+			"result_url":  resultURL,
+			"fail_reason": task.FailReason,
+			"data":        []map[string]interface{}{},
+		},
+	}
+	if resultURL != "" && task.Status == model.TaskStatusSuccess {
+		imageData := []map[string]interface{}{
+			{
+				"url": resultURL,
+			},
+		}
+		if payload.Item != nil && strings.TrimSpace(payload.Item.RevisedPrompt) != "" {
+			imageData[0]["revised_prompt"] = payload.Item.RevisedPrompt
+		}
+		response["data"].(map[string]interface{})["data"] = imageData
+		response["data"].(map[string]interface{})["url"] = resultURL
+		response["url"] = resultURL
+	}
+	if payload.Item != nil {
+		response["item"] = payload.Item
+		response["data"].(map[string]interface{})["item"] = payload.Item
+	}
+	if payload.Error != "" {
+		response["error"] = gin.H{"message": payload.Error}
+	}
+	return response
 }
 
 func isPlaygroundImageTaskAction(action string) bool {

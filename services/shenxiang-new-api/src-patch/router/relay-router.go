@@ -137,11 +137,21 @@ func SetRelayRouter(router *gin.Engine) {
 			controller.Relay(c, types.RelayFormatOpenAIImage)
 		})
 		httpRouter.POST("/images/generations", func(c *gin.Context) {
+			if c.Query("async") == "true" {
+				controller.V1CreateImageTask(c)
+				return
+			}
 			controller.Relay(c, types.RelayFormatOpenAIImage)
 		})
 		httpRouter.POST("/images/edits", func(c *gin.Context) {
+			if c.Query("async") == "true" {
+				controller.V1CreateImageTask(c)
+				return
+			}
 			controller.Relay(c, types.RelayFormatOpenAIImage)
 		})
+		httpRouter.GET("/images/tasks", controller.V1ListImageTasks)
+		httpRouter.GET("/images/tasks/:task_id", controller.V1GetImageTask)
 
 		// embedding related routes
 		httpRouter.POST("/embeddings", func(c *gin.Context) {
