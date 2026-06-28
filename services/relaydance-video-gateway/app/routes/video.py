@@ -17,6 +17,7 @@ from app.schemas import (
     UploadUrlRequest,
     VideoContentItem,
     VideoGenerationRequest,
+    canonical_model,
 )
 
 router = APIRouter(prefix="/api/v1", tags=["video"])
@@ -116,7 +117,7 @@ def _resolution_from_model(model: str, metadata: dict[str, Any], body: dict[str,
 
 def build_openai_provider_body(body: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     metadata = _as_dict(body.get("metadata"))
-    model = _as_text(body.get("model")) or "seedance-nsfw-4k"
+    model = canonical_model(_as_text(body.get("model")) or "seedance-nsfw")
     seconds = str(body.get("seconds") or body.get("duration") or "5")
     size = _as_text(body.get("size")) or "1280x720"
     provider_body = dict(body)

@@ -74,7 +74,7 @@ func TestCachePlaygroundVideoTaskResultWritesMediaItem(t *testing.T) {
 			"playground_media": {
 				"request_id": "req_test_video",
 				"prompt": "red cube",
-				"model": "seedance-nsfw-4k",
+				"model": "seedance-nsfw",
 				"workflow": "video",
 				"size": "1920x1080",
 				"duration": 4,
@@ -89,7 +89,7 @@ func TestCachePlaygroundVideoTaskResultWritesMediaItem(t *testing.T) {
 		UserId:    task.UserId,
 		CreatedAt: 1,
 		Type:      model.LogTypeConsume,
-		ModelName: "seedance-nsfw-4k",
+		ModelName: "seedance-nsfw",
 		Other: common.MapToJsonStr(map[string]interface{}{
 			"task_id":               task.TaskID,
 			"playground_video_task": true,
@@ -133,7 +133,7 @@ func TestCachePlaygroundVideoTaskResultWritesMediaItem(t *testing.T) {
 			data, err := os.ReadFile(filepath.Join(userDir, entry.Name()))
 			require.NoError(t, err)
 			require.Contains(t, string(data), `"kind": "video"`)
-			require.Contains(t, string(data), `"model": "seedance-nsfw-4k"`)
+			require.Contains(t, string(data), `"model": "seedance-nsfw"`)
 			continue
 		}
 		mediaFiles++

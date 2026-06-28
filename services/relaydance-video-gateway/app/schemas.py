@@ -8,13 +8,20 @@ ALLOWED_MODELS = {
     "doubao-seedance-2-0-fast-260128",
     "doubao-seedance-2-0-720p",
     "doubao-seedance-2-0-1080p",
-    "seedance-nsfw-4k",
+    "seedance-nsfw",
+}
+MODEL_ALIASES = {
+    "seedance-nsfw-4k": "seedance-nsfw",
 }
 ALLOWED_SECONDS = {str(value) for value in range(4, 16)}
 ALLOWED_RATIOS = {"16:9", "9:16", "1:1", "4:3", "3:4", "21:9"}
 ALLOWED_RESOLUTIONS = {"720p", "1080p"}
 COMPLETED_STATUSES = {"completed", "succeeded", "success"}
 FAILED_STATUSES = {"failed", "failure", "error"}
+
+
+def canonical_model(model: str) -> str:
+    return MODEL_ALIASES.get(model, model)
 
 
 class FlexibleModel(BaseModel):

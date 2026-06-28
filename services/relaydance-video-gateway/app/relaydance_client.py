@@ -7,7 +7,7 @@ from typing import Any
 import httpx
 
 from app.config import Settings, get_settings
-from app.schemas import ALLOWED_MODELS, GatewayResponse
+from app.schemas import ALLOWED_MODELS, GatewayResponse, canonical_model
 
 logger = logging.getLogger("relaydance_video_gateway")
 
@@ -32,7 +32,7 @@ def public_body(model: Any) -> dict[str, Any]:
 
 def validate_model(model: str, settings: Settings | None = None) -> None:
     settings = settings or get_settings()
-    if settings.strict_model_validation and model not in ALLOWED_MODELS:
+    if settings.strict_model_validation and canonical_model(model) not in ALLOWED_MODELS:
         raise ValueError("requested model is not available")
 
 
@@ -245,6 +245,17 @@ class RelayDanceClient:
                 },
                 200,
                 warnings=["status endpoint failed but video content is available"],
+            )
+        if response.status_code in {400, 403, 404} and content_status in {400, 403, 404}:
+            return normalize_provider_response(
+                {
+                    "id": task_id,
+                    "task_id": task_id,
+                    "status": "queued",
+                    "progress": 0,
+                },
+                200,
+                warnings=["status endpoint is temporarily unavailable and video content is not ready"],
             )
         return response
 

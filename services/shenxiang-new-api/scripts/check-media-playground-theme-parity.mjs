@@ -15,7 +15,7 @@ const requiredImageModels = [
 const requiredVideoModels = [
   'grok-video-super-720p',
   'seedance-2.0',
-  'seedance-nsfw-4k',
+  'seedance-nsfw',
 ]
 
 const requiredMarkers = {

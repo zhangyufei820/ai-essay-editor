@@ -30,7 +30,7 @@ export const IMAGE_MODEL_IDS = [
 export const VIDEO_MODEL_IDS = [
   'grok-video-super-720p',
   'seedance-2.0',
-  'seedance-nsfw-4k',
+  'seedance-nsfw',
 ] as const
 
 const GOOGLE_NANO_BANANA_2_ASPECT_RATIOS = [
@@ -259,7 +259,7 @@ export const MEDIA_MODEL_CONFIGS: ModelCapability[] = [
     ],
   },
   {
-    id: 'seedance-nsfw-4k',
+    id: 'seedance-nsfw',
     label: 'Seedance 私测视频',
     kind: 'video',
     vendorLabel: '星人视频',

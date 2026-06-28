@@ -388,7 +388,7 @@ const VIDEO_MODELS = [
     hint: '适合图生视频、人物动作和首尾帧控制。',
   },
   {
-    value: 'seedance-nsfw-4k',
+    value: 'seedance-nsfw',
     label: 'Seedance 私测视频',
     badge: '私测',
     vendor: '星人视频',

@@ -71,7 +71,7 @@ def test_video_generation_accepts_official_seedance_2_min_duration(client, auth_
         "/api/v1/video/generations",
         headers=auth_headers,
         json={
-            "model": "seedance-nsfw-4k",
+            "model": "seedance-nsfw",
             "prompt": "A neutral studio product shot.",
             "seconds": 4,
             "metadata": {"ratio": "16:9", "resolution": "720p"},
@@ -202,7 +202,7 @@ def test_openai_compatible_videos_submit_forwards_to_openai_videos(client, auth_
         "/v1/videos",
         headers=auth_headers,
         json={
-            "model": "seedance-nsfw-4k",
+            "model": "seedance-nsfw",
             "prompt": "A neutral product demo shot.",
             "seconds": "5",
             "size": "1280x720",
@@ -218,7 +218,7 @@ def test_openai_compatible_videos_submit_forwards_to_openai_videos(client, auth_
 
     sent = json.loads(route.calls.last.request.content)
     assert sent == {
-        "model": "seedance-nsfw-4k",
+        "model": "seedance-nsfw",
         "prompt": "A neutral product demo shot.",
         "seconds": "5",
         "size": "1280x720",
@@ -237,7 +237,7 @@ def test_openai_compatible_videos_duration_is_forwarded_as_seconds(client, auth_
         "/v1/videos",
         headers=auth_headers,
         json={
-            "model": "seedance-nsfw-4k",
+            "model": "seedance-nsfw",
             "prompt": "A neutral studio product shot.",
             "duration": 4,
             "size": "1280x720",
@@ -251,6 +251,28 @@ def test_openai_compatible_videos_duration_is_forwarded_as_seconds(client, auth_
     sent = json.loads(route.calls.last.request.content)
     assert sent["seconds"] == "4"
     assert sent["duration"] == 4
+
+
+@respx.mock
+def test_openai_compatible_videos_maps_legacy_nsfw_model(client, auth_headers, provider_base):
+    route = respx.post(f"{provider_base}/v1/videos").mock(
+        return_value=Response(200, json={"id": "rd-task-legacy", "status": "queued"}),
+    )
+
+    response = client.post(
+        "/v1/videos",
+        headers=auth_headers,
+        json={
+            "model": "seedance-nsfw-4k",
+            "prompt": "A neutral studio product shot.",
+            "seconds": "4",
+            "size": "1280x720",
+        },
+    )
+
+    assert response.status_code == 200
+    sent = json.loads(route.calls.last.request.content)
+    assert sent["model"] == "seedance-nsfw"
 
 
 @respx.mock
@@ -301,3 +323,27 @@ def test_openai_compatible_status_recovers_when_content_exists(client, auth_head
     assert body["status"] == "completed"
     assert body["progress"] == 100
     assert body["metadata"]["url"] == "/v1/videos/rd-task-content-only/content"
+
+
+@respx.mock
+def test_openai_compatible_status_keeps_polling_when_status_forbidden_and_content_not_ready(
+    client, auth_headers, provider_base
+):
+    respx.get(f"{provider_base}/v1/videos/rd-task-pending").mock(
+        return_value=Response(
+            403,
+            json={"error": {"code": "service_error", "message": "Service unavailable"}},
+        ),
+    )
+    respx.get(f"{provider_base}/v1/videos/rd-task-pending/content").mock(
+        return_value=Response(400, json={"error": {"code": "service_error"}}),
+    )
+
+    response = client.get("/v1/videos/rd-task-pending", headers=auth_headers)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["id"] == "rd-task-pending"
+    assert body["status"] == "queued"
+    assert body["progress"] == 0
+    assert "error" not in body
