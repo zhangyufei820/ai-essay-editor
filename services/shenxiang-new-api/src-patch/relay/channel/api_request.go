@@ -500,7 +500,7 @@ func (r *cancelOnCloseReadCloser) Close() error {
 }
 
 func withPlaygroundImageTimeout(c *gin.Context, req *http.Request, info *common.RelayInfo) (*http.Request, context.CancelFunc) {
-	if c == nil || c.Request == nil || c.Request.URL == nil || req == nil || info == nil || info.IsStream {
+	if c == nil || c.Request == nil || c.Request.URL == nil || req == nil || info == nil {
 		return req, nil
 	}
 	if !strings.HasPrefix(c.Request.URL.Path, "/pg/images/") {
@@ -508,7 +508,9 @@ func withPlaygroundImageTimeout(c *gin.Context, req *http.Request, info *common.
 	}
 	timeoutSeconds := common2.GetEnvOrDefault("PLAYGROUND_IMAGE_RELAY_TIMEOUT_SECONDS", 95)
 	if c.GetBool("playground_image_async_worker") {
-		timeoutSeconds = common2.GetEnvOrDefault("PLAYGROUND_IMAGE_TASK_TIMEOUT_SECONDS", 1800)
+		timeoutSeconds = common2.GetEnvOrDefault("PLAYGROUND_IMAGE_TASK_TIMEOUT_SECONDS", 600)
+	} else if info.IsStream {
+		return req, nil
 	}
 	if timeoutSeconds <= 0 {
 		return req, nil
