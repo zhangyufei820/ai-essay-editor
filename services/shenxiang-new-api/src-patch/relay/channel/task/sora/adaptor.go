@@ -44,6 +44,10 @@ type responseTask struct {
 	Object             string `json:"object"`
 	Model              string `json:"model"`
 	Status             string `json:"status"`
+	Success            *bool  `json:"success,omitempty"`
+	StatusCode         int    `json:"status_code,omitempty"`
+	ProviderCode       string `json:"provider_code,omitempty"`
+	Message            string `json:"message,omitempty"`
 	Progress           int    `json:"progress"`
 	CreatedAt          int64  `json:"created_at"`
 	CompletedAt        int64  `json:"completed_at,omitempty"`
@@ -572,6 +576,11 @@ func (a *TaskAdaptor) DoResponse(c *gin.Context, resp *http.Response, info *rela
 		return
 	}
 
+	if dResp.Success != nil && !*dResp.Success {
+		taskErr = seedanceGatewayTaskError(dResp, resp.StatusCode)
+		return
+	}
+
 	upstreamID := dResp.ID
 	if upstreamID == "" {
 		upstreamID = dResp.TaskID
@@ -586,6 +595,40 @@ func (a *TaskAdaptor) DoResponse(c *gin.Context, resp *http.Response, info *rela
 	dResp.TaskID = info.PublicTaskID
 	c.JSON(http.StatusOK, dResp)
 	return upstreamID, responseBody, nil
+}
+
+func seedanceGatewayTaskError(dResp responseTask, httpStatus int) *dto.TaskError {
+	statusCode := dResp.StatusCode
+	if statusCode < http.StatusBadRequest {
+		statusCode = httpStatus
+	}
+	if statusCode < http.StatusBadRequest {
+		statusCode = http.StatusBadGateway
+	}
+
+	code := strings.TrimSpace(dResp.ProviderCode)
+	message := strings.TrimSpace(dResp.Message)
+	if dResp.Error != nil {
+		if code == "" {
+			code = strings.TrimSpace(dResp.Error.Code)
+		}
+		if message == "" {
+			message = strings.TrimSpace(dResp.Error.Message)
+		}
+	}
+	if code == "" {
+		code = "service_error"
+	}
+	if message == "" {
+		message = "服务暂时不可用，请稍后重试。"
+	}
+
+	return &dto.TaskError{
+		Code:       code,
+		Message:    message,
+		StatusCode: statusCode,
+		Error:      fmt.Errorf("%s", message),
+	}
 }
 
 // FetchTask fetch task status

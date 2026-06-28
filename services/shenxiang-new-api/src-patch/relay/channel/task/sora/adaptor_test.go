@@ -132,3 +132,23 @@ func TestSeedanceBuildRequestURLUsesGenerationEndpoint(t *testing.T) {
 		t.Fatalf("BuildRequestURL() = %q", url)
 	}
 }
+
+func TestSeedanceGatewayFailureReturnsProviderStatus(t *testing.T) {
+	success := false
+	taskErr := seedanceGatewayTaskError(responseTask{
+		Success:      &success,
+		StatusCode:   400,
+		ProviderCode: "service_error",
+		Message:      "服务暂时不可用，请稍后重试。",
+	}, 200)
+
+	if taskErr == nil {
+		t.Fatal("taskErr is nil")
+	}
+	if taskErr.StatusCode != 400 {
+		t.Fatalf("StatusCode = %d, want 400", taskErr.StatusCode)
+	}
+	if taskErr.Code != "service_error" {
+		t.Fatalf("Code = %q, want service_error", taskErr.Code)
+	}
+}
