@@ -269,6 +269,7 @@ func parsePlaygroundImageTaskMultipartRequest(c *gin.Context, imageReq *dto.Imag
 	imageReq.Quality = formValue("quality")
 	imageReq.AspectRatio = formValue("aspect_ratio")
 	imageReq.Resolution = formValue("resolution")
+	imageReq.ImageSize = formValue("image_size")
 	imageReq.ResponseFormat = formValue("response_format")
 	if rawN := formValue("n"); rawN != "" {
 		var n uint
@@ -348,7 +349,7 @@ func playgroundImageTaskFormRawMessage(value string) json.RawMessage {
 
 func isPlaygroundImageTaskKnownFormField(key string) bool {
 	switch key {
-	case "model", "prompt", "n", "size", "quality", "aspect_ratio", "resolution", "response_format", "stream", "watermark":
+	case "model", "prompt", "n", "size", "quality", "aspect_ratio", "resolution", "image_size", "response_format", "stream", "watermark":
 		return true
 	default:
 		return false
@@ -493,6 +494,9 @@ func annotatePlaygroundImageRequestMetadata(metadata map[string]interface{}, req
 	if resolution := strings.TrimSpace(request.Resolution); resolution != "" {
 		metadata["resolution"] = resolution
 	}
+	if imageSize := strings.TrimSpace(request.ImageSize); imageSize != "" {
+		metadata["image_size"] = imageSize
+	}
 	if aspectRatio := strings.TrimSpace(request.AspectRatio); aspectRatio != "" {
 		metadata["aspect_ratio"] = aspectRatio
 	}
@@ -547,6 +551,9 @@ func recordPlaygroundImageTaskSubmittedLog(c *gin.Context, task *model.Task, pay
 	}
 	if resolution := strings.TrimSpace(request.Resolution); resolution != "" {
 		other["resolution"] = resolution
+	}
+	if imageSize := strings.TrimSpace(request.ImageSize); imageSize != "" {
+		other["image_size"] = imageSize
 	}
 	if aspectRatio := strings.TrimSpace(request.AspectRatio); aspectRatio != "" {
 		other["aspect_ratio"] = aspectRatio

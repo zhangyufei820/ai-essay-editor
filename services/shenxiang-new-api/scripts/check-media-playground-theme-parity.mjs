@@ -26,6 +26,10 @@ const requiredMarkers = {
   safeWindowOpen: 'noopener,noreferrer',
   gptImage2SizeMapping: 'GPT_IMAGE_2_SIZE_BY_RESOLUTION',
   responseFormatPayload: 'responseFormat',
+  geminiImageConfig: 'imageConfig',
+  geminiExtraBody: 'extra_body',
+  geminiAspectRatio: 'aspect_ratio',
+  geminiImageSize: 'image_size',
   outputCompression: 'output_compression',
   inputFidelity: 'input_fidelity',
 }

@@ -65,6 +65,9 @@ func recordPlaygroundImageRequestLog(c *gin.Context, info *relaycommon.RelayInfo
 	if resolution := strings.TrimSpace(request.Resolution); resolution != "" {
 		contentParts = append(contentParts, fmt.Sprintf("分辨率 %s", resolution))
 	}
+	if imageSize := strings.TrimSpace(request.ImageSize); imageSize != "" && imageSize != strings.TrimSpace(request.Resolution) {
+		contentParts = append(contentParts, fmt.Sprintf("图像尺寸 %s", imageSize))
+	}
 
 	other := map[string]interface{}{
 		"request_path":  path,
@@ -76,6 +79,9 @@ func recordPlaygroundImageRequestLog(c *gin.Context, info *relaycommon.RelayInfo
 	}
 	if resolution := strings.TrimSpace(request.Resolution); resolution != "" {
 		other["resolution"] = resolution
+	}
+	if imageSize := strings.TrimSpace(request.ImageSize); imageSize != "" {
+		other["image_size"] = imageSize
 	}
 	if aspectRatio := strings.TrimSpace(request.AspectRatio); aspectRatio != "" {
 		other["aspect_ratio"] = aspectRatio

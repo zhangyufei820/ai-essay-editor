@@ -327,6 +327,32 @@ function imageResponseFormat(aspectRatio, imageSize) {
   };
 }
 
+function geminiImageConfig(aspectRatio, imageSize) {
+  const imageConfig = {};
+  if (aspectRatio && aspectRatio !== 'auto') {
+    imageConfig.aspectRatio = aspectRatio;
+  }
+  if (imageSize && imageSize !== 'auto') {
+    imageConfig.imageSize = String(imageSize).toUpperCase();
+  }
+  return imageConfig;
+}
+
+function geminiExtraBodyImageConfig(aspectRatio, imageSize) {
+  const imageConfig = {};
+  if (aspectRatio && aspectRatio !== 'auto') {
+    imageConfig.aspect_ratio = aspectRatio;
+  }
+  if (imageSize && imageSize !== 'auto') {
+    imageConfig.image_size = String(imageSize).toUpperCase();
+  }
+  return {
+    google: {
+      image_config: imageConfig,
+    },
+  };
+}
+
 function gptImage2SizeFor(aspectRatio, imageSize) {
   const normalizedResolution = imageSize && imageSize !== 'auto' ? imageSize : '1K';
   return (
@@ -1352,11 +1378,22 @@ const MediaPlayground = () => {
       }
       if (isGeminiImageModel(imageModel)) {
         const responseFormat = imageResponseFormat(effectiveAspectRatio, resolution);
+        const imageConfig = geminiImageConfig(effectiveAspectRatio, resolution);
+        if (effectiveAspectRatio) payload.aspect_ratio = effectiveAspectRatio;
+        if (resolution && resolution !== 'auto') {
+          payload.resolution = resolution;
+          payload.image_size = String(resolution).toUpperCase();
+        }
         payload.responseFormat = responseFormat;
         payload.generationConfig = {
           responseModalities: ['TEXT', 'IMAGE'],
+          imageConfig,
           responseFormat,
         };
+        payload.extra_body = geminiExtraBodyImageConfig(
+          effectiveAspectRatio,
+          resolution,
+        );
         if (negativePrompt.trim())
           payload.extra_fields = { negative_prompt: negativePrompt.trim() };
         return payload;
