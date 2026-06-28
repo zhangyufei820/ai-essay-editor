@@ -66,6 +66,11 @@ const GOOGLE_NANO_BANANA_2_ASPECT_RATIOS = [
   '21:9',
 ];
 
+const openMediaUrl = (url) => {
+  if (!url) return;
+  window.open(url, '_blank', 'noopener,noreferrer');
+};
+
 const IMAGE_MODELS = [
   {
     value: 'gpt-image-2-4K',
@@ -1018,6 +1023,7 @@ function ResultCard({ result, onRemove }) {
   const cacheFailed = result.cacheStatus === 'failed';
   const previewUnavailable = previewFailed || !displayUrl;
   const usedFallbackPreview = activeUrlIndex > 0;
+  const openUrl = originalUrl || displayUrl;
   const statusText = cacheFailed
     ? '临时缓存不可用，作品已生成，请用原始链接保存。'
     : '浏览器暂时无法直接预览，请打开原始链接保存。';
@@ -1039,13 +1045,20 @@ function ResultCard({ result, onRemove }) {
     <div className='mp-result-card'>
       <div className='mp-result-frame'>
         {displayUrl && result.kind === 'image' ? (
-          <img
-            key={displayUrl}
-            src={displayUrl}
-            alt='生成结果'
-            onLoad={() => setPreviewFailed(false)}
-            onError={handlePreviewError}
-          />
+          <button
+            type='button'
+            className='mp-result-open-media'
+            onClick={() => openMediaUrl(openUrl)}
+            aria-label='查看原图'
+          >
+            <img
+              key={displayUrl}
+              src={displayUrl}
+              alt='生成结果'
+              onLoad={() => setPreviewFailed(false)}
+              onError={handlePreviewError}
+            />
+          </button>
         ) : displayUrl ? (
           <video
             key={displayUrl}
@@ -1071,7 +1084,7 @@ function ResultCard({ result, onRemove }) {
                 <Button
                   size='small'
                   icon={<IconExternalOpen />}
-                  onClick={() => window.open(originalUrl, '_blank')}
+                  onClick={() => openMediaUrl(originalUrl)}
                 >
                   打开原始链接
                 </Button>
@@ -1098,6 +1111,13 @@ function ResultCard({ result, onRemove }) {
           <Tag color='orange'>72 小时内有效</Tag>
         </div>
         <Space spacing={8}>
+          <Tooltip content='查看原图'>
+            <Button
+              icon={<IconExternalOpen />}
+              disabled={!openUrl}
+              onClick={() => openMediaUrl(openUrl)}
+            />
+          </Tooltip>
           <Tooltip content='复制可访问链接'>
             <Button
               icon={<IconCopy />}
@@ -1951,13 +1971,38 @@ const MediaPlayground = () => {
                   ))}
                 </Space>
               </div>
-              <TextArea
-                value={prompt}
-                autosize={{ minRows: 6, maxRows: 12 }}
-                onChange={setPrompt}
-                placeholder='例如：一张高级商业海报，主体清晰，真实光影，适合品牌宣传。'
-                className='mp-prompt-input'
-              />
+              <div className='mp-prompt-input-wrap'>
+                <TextArea
+                  value={prompt}
+                  autosize={{ minRows: 6, maxRows: 12 }}
+                  onChange={setPrompt}
+                  placeholder='例如：一张高级商业海报，主体清晰，真实光影，适合品牌宣传。'
+                  className='mp-prompt-input'
+                />
+                <div className='mp-prompt-tools'>
+                  <Tooltip content='复制提示词'>
+                    <Button
+                      size='small'
+                      theme='borderless'
+                      icon={<IconCopy />}
+                      disabled={!prompt.trim()}
+                      onClick={async () => {
+                        const ok = await copy(prompt);
+                        if (ok) Toast.success('提示词已复制');
+                      }}
+                    />
+                  </Tooltip>
+                  <Tooltip content='清空提示词'>
+                    <Button
+                      size='small'
+                      theme='borderless'
+                      icon={<IconDelete />}
+                      disabled={!prompt}
+                      onClick={() => setPrompt('')}
+                    />
+                  </Tooltip>
+                </div>
+              </div>
               <Input
                 value={negativePrompt}
                 onChange={setNegativePrompt}

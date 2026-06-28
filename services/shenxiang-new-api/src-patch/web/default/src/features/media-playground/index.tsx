@@ -22,9 +22,11 @@ import {
   CheckCircle2,
   Copy,
   Download,
+  ExternalLink,
   Film,
   Image as ImageIcon,
   Loader2,
+  Trash2,
   Sparkles,
   Upload,
   Wand2,
@@ -127,6 +129,10 @@ const IMAGE_EDIT_REFERENCE_LIMIT = 10
 const VIDEO_REFERENCE_LIMIT = 5
 const MEDIA_RESULT_STORAGE_KEY = 'shenxiang-media-playground-results:v1'
 const MEDIA_RESULT_TTL_MS = 72 * 60 * 60 * 1000
+
+function openMediaUrl(url: string) {
+  window.open(url, '_blank', 'noopener,noreferrer')
+}
 
 function isGrokImageModel(model: string) {
   return model === 'grok-imagine-image'
@@ -906,12 +912,41 @@ export function MediaPlayground() {
               ) : null}
 
               <Field label='你想生成什么'>
-                <Textarea
-                  className='min-h-32 resize-none'
-                  value={prompt}
-                  onChange={(event) => setPrompt(event.target.value)}
-                  placeholder='用自然语言描述画面、主体、风格、镜头和用途。'
-                />
+                <div className='relative'>
+                  <Textarea
+                    className='min-h-32 resize-none pr-24 pb-12'
+                    value={prompt}
+                    onChange={(event) => setPrompt(event.target.value)}
+                    placeholder='用自然语言描述画面、主体、风格、镜头和用途。'
+                  />
+                  <div className='bg-background/80 absolute right-2 bottom-2 flex gap-1 rounded-md border p-1 shadow-sm backdrop-blur'>
+                    <Button
+                      type='button'
+                      variant='ghost'
+                      size='icon'
+                      disabled={!prompt.trim()}
+                      aria-label='复制提示词'
+                      title='复制提示词'
+                      onClick={() => {
+                        void navigator.clipboard.writeText(prompt)
+                        toast.success('提示词已复制')
+                      }}
+                    >
+                      <Copy className='size-4' />
+                    </Button>
+                    <Button
+                      type='button'
+                      variant='ghost'
+                      size='icon'
+                      disabled={!prompt}
+                      aria-label='清空提示词'
+                      title='清空提示词'
+                      onClick={() => setPrompt('')}
+                    >
+                      <Trash2 className='size-4' />
+                    </Button>
+                  </div>
+                </div>
               </Field>
 
               <Field label='不想出现的内容'>
@@ -1611,7 +1646,7 @@ function FileInput({
 function RetentionNotice() {
   return (
     <div className='text-muted-foreground mt-auto border-t px-4 py-3 text-xs leading-relaxed'>
-      生成后的临时预览文件保留 24 小时，到期自动清理；请在有效期内下载保存。
+      生成后的临时预览文件保留 72 小时，到期自动清理；请在有效期内下载保存。
     </div>
   )
 }
@@ -1650,7 +1685,7 @@ function ResultGrid({ results }: { results: MediaResult[] }) {
           </div>
           <h3 className='mt-4 text-base font-semibold'>等待你的第一个作品</h3>
           <p className='text-muted-foreground mt-2 text-sm'>
-            生成完成后，图像和视频会出现在这里。临时文件保留 24 小时。
+            生成完成后，图像和视频会出现在这里。临时文件保留 72 小时。
           </p>
         </div>
       </div>
@@ -1661,6 +1696,7 @@ function ResultGrid({ results }: { results: MediaResult[] }) {
     <div className='grid gap-4 p-4 sm:grid-cols-2 xl:grid-cols-3'>
       {results.map((result) => {
         const usableUrl = result.cachedUrl || result.url
+        const openUrl = result.url || usableUrl
         return (
           <div
             key={result.id}
@@ -1668,11 +1704,18 @@ function ResultGrid({ results }: { results: MediaResult[] }) {
           >
             <div className='bg-muted/30 flex aspect-square items-center justify-center overflow-hidden'>
               {result.kind === 'image' ? (
-                <img
-                  src={usableUrl}
-                  alt='generated result'
-                  className='h-full w-full object-contain'
-                />
+                <button
+                  type='button'
+                  className='h-full w-full cursor-zoom-in'
+                  aria-label='查看原图'
+                  onClick={() => openMediaUrl(openUrl)}
+                >
+                  <img
+                    src={usableUrl}
+                    alt='generated result'
+                    className='h-full w-full object-contain transition hover:brightness-110'
+                  />
+                </button>
               ) : (
                 <video
                   src={usableUrl}
@@ -1688,7 +1731,7 @@ function ResultGrid({ results }: { results: MediaResult[] }) {
                   {result.kind === 'image' ? '图像' : '视频'}
                 </Badge>
                 <span className='text-muted-foreground text-xs'>
-                  24小时内有效
+                  72 小时内有效
                 </span>
               </div>
               {result.revisedPrompt && (
@@ -1696,7 +1739,15 @@ function ResultGrid({ results }: { results: MediaResult[] }) {
                   {result.revisedPrompt}
                 </p>
               )}
-              <div className='grid grid-cols-2 gap-2'>
+              <div className='grid grid-cols-3 gap-2'>
+                <Button
+                  variant='outline'
+                  size='sm'
+                  onClick={() => openMediaUrl(openUrl)}
+                >
+                  <ExternalLink className='mr-2 size-4' />
+                  查看
+                </Button>
                 <Button
                   variant='outline'
                   size='sm'
