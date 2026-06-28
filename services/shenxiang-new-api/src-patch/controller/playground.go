@@ -1,9 +1,11 @@
 package controller
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -13,6 +15,7 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
+	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/model"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
@@ -55,6 +58,18 @@ func setupPlaygroundTokenContext(c *gin.Context) (*types.NewAPIError, *relaycomm
 	}
 	userCache.WriteContext(c)
 
+	if benefitToken, ok := activePlaygroundImageBenefitToken(c, userId); ok {
+		if err := middleware.SetupContextForToken(c, benefitToken); err != nil {
+			return types.NewError(err, types.ErrorCodeAccessDenied, types.ErrOptionWithSkipRetry()), nil
+		}
+		common.SetContextKey(c, constant.ContextKeyTokenGroup, benefitToken.Group)
+		if benefitToken.Group != "" {
+			common.SetContextKey(c, constant.ContextKeyUsingGroup, benefitToken.Group)
+			relayInfo.UsingGroup = benefitToken.Group
+		}
+		return nil, relayInfo
+	}
+
 	tempToken := &model.Token{
 		UserId: userId,
 		Name:   fmt.Sprintf("playground-%s", relayInfo.UsingGroup),
@@ -62,6 +77,63 @@ func setupPlaygroundTokenContext(c *gin.Context) (*types.NewAPIError, *relaycomm
 	}
 	_ = middleware.SetupContextForToken(c, tempToken)
 	return nil, relayInfo
+}
+
+func activePlaygroundImageBenefitToken(c *gin.Context, userId int) (*model.Token, bool) {
+	modelName := playgroundImageRequestModel(c)
+	if !model.IsImageBenefitModel(modelName) {
+		return nil, false
+	}
+	token, ok, err := model.GetActiveImageBenefitTokenForUser(userId, modelName)
+	if err != nil || !ok {
+		if err != nil {
+			common.SysLog(fmt.Sprintf("failed to load image benefit token for playground user %d: %s", userId, err.Error()))
+		}
+		return nil, false
+	}
+	return token, true
+}
+
+func playgroundImageRequestModel(c *gin.Context) string {
+	if c == nil || c.Request == nil {
+		return ""
+	}
+	if c.Request.URL != nil {
+		path := c.Request.URL.Path
+		if path != "/pg/images/generations" && path != "/pg/images/edits" {
+			return ""
+		}
+	}
+	storage, err := common.GetBodyStorage(c)
+	if err != nil {
+		return ""
+	}
+	bodyBytes, err := storage.Bytes()
+	if err != nil || len(bodyBytes) == 0 {
+		return ""
+	}
+	c.Request.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+	var imageReq dto.ImageRequest
+	if strings.Contains(c.Request.Header.Get("Content-Type"), gin.MIMEMultipartPOSTForm) {
+		form, err := common.ParseMultipartFormReusable(c)
+		if err != nil {
+			c.Request.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+			return ""
+		}
+		defer form.RemoveAll()
+		if values := form.Value["model"]; len(values) > 0 {
+			c.Request.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+			return strings.TrimSpace(values[0])
+		}
+		c.Request.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+		return ""
+	}
+	if err := common.UnmarshalBodyReusable(c, &imageReq); err != nil {
+		c.Request.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+		return ""
+	}
+	c.Request.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+	return strings.TrimSpace(imageReq.Model)
 }
 
 func Playground(c *gin.Context) {

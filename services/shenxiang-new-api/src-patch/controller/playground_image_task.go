@@ -132,6 +132,19 @@ func createImageTask(c *gin.Context, openAICompat bool) {
 		c.JSON(http.StatusForbidden, gin.H{"success": false, "message": err.Error()})
 		return
 	}
+	if !openAICompat {
+		if benefitToken, ok, err := model.GetActiveImageBenefitTokenForUser(c.GetInt("id"), imageReq.Model); err != nil {
+			logger.LogError(c, "failed to load image benefit token: "+err.Error())
+		} else if ok {
+			if err := middleware.SetupContextForToken(c, benefitToken); err != nil {
+				c.JSON(http.StatusForbidden, gin.H{"success": false, "message": err.Error()})
+				return
+			}
+			if benefitToken.Group != "" {
+				usingGroup = benefitToken.Group
+			}
+		}
+	}
 
 	taskID := model.GenerateTaskID()
 	requestID := c.GetString(common.RequestIdKey)
@@ -683,6 +696,18 @@ func seedPlaygroundImageTaskContext(ginCtx *gin.Context, userID int, username st
 			ginCtx.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": gin.H{"message": err.Error()}})
 			return
 		}
+		tokenName = token.Name
+	} else if payload != nil && model.IsImageBenefitTokenName(payload.TokenName) && payload.TokenID > 0 {
+		token, err := model.GetTokenById(payload.TokenID)
+		if err != nil {
+			ginCtx.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": gin.H{"message": "image benefit token unavailable"}})
+			return
+		}
+		if err := middleware.SetupContextForToken(ginCtx, token); err != nil {
+			ginCtx.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": gin.H{"message": err.Error()}})
+			return
+		}
+		tokenName = token.Name
 	} else {
 		tempToken := &model.Token{
 			UserId: userID,
