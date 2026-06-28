@@ -10,7 +10,7 @@ ALLOWED_MODELS = {
     "doubao-seedance-2-0-1080p",
     "seedance-nsfw-4k",
 }
-ALLOWED_SECONDS = {"3", "5", "10"}
+ALLOWED_SECONDS = {str(value) for value in range(4, 16)}
 ALLOWED_RATIOS = {"16:9", "9:16", "1:1", "4:3", "3:4", "21:9"}
 ALLOWED_RESOLUTIONS = {"720p", "1080p"}
 COMPLETED_STATUSES = {"completed", "succeeded", "success"}
@@ -97,7 +97,7 @@ class VideoGenerationRequest(FlexibleModel):
     @classmethod
     def validate_seconds(cls, value: str) -> str:
         if value not in ALLOWED_SECONDS:
-            raise ValueError("seconds must be one of: 3, 5, 10")
+            raise ValueError("seconds must be an integer from 4 to 15")
         return value
 
     @model_validator(mode="after")

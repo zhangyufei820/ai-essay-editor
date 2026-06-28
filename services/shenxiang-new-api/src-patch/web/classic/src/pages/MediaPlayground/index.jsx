@@ -364,11 +364,11 @@ const VIDEO_MODELS = [
     vendor: '星人视频',
     private: true,
     sizes: ['1280x720', '720x1280', '1024x1024'],
-    durations: [3, 5, 10],
+    durations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
     defaultSize: '1280x720',
-    defaultDuration: 5,
+    defaultDuration: 4,
     defaultFps: 24,
-    hint: '仅供管理员验证私测视频模型连通性。',
+    hint: '仅供管理员验证私测视频模型连通性，支持 4-15 秒整数。',
   },
 ];
 

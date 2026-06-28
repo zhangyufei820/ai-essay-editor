@@ -57,6 +57,31 @@ def test_authorization_bearer_auto_prefix(client, auth_headers, provider_base):
     assert response.status_code == 200
     assert response.json()["task_id"] == "task-1"
     assert route.calls.last.request.headers["Authorization"] == "Bearer test-token"
+    sent = json.loads(route.calls.last.request.content)
+    assert sent["seconds"] == "5"
+
+
+@respx.mock
+def test_video_generation_accepts_official_seedance_2_min_duration(client, auth_headers, provider_base):
+    route = respx.post(f"{provider_base}/v1/video/generations").mock(
+        return_value=Response(200, json={"task_id": "task-4s"}),
+    )
+
+    response = client.post(
+        "/api/v1/video/generations",
+        headers=auth_headers,
+        json={
+            "model": "seedance-nsfw-4k",
+            "prompt": "A neutral studio product shot.",
+            "seconds": 4,
+            "metadata": {"ratio": "16:9", "resolution": "720p"},
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["task_id"] == "task-4s"
+    sent = json.loads(route.calls.last.request.content)
+    assert sent["seconds"] == "4"
 
 
 @respx.mock
@@ -200,6 +225,32 @@ def test_openai_compatible_videos_submit_forwards_to_openai_videos(client, auth_
         "ratio": "16:9",
         "resolution": "720p",
     }
+
+
+@respx.mock
+def test_openai_compatible_videos_duration_is_forwarded_as_seconds(client, auth_headers, provider_base):
+    route = respx.post(f"{provider_base}/v1/videos").mock(
+        return_value=Response(200, json={"id": "rd-task-4s", "status": "queued"}),
+    )
+
+    response = client.post(
+        "/v1/videos",
+        headers=auth_headers,
+        json={
+            "model": "seedance-nsfw-4k",
+            "prompt": "A neutral studio product shot.",
+            "duration": 4,
+            "size": "1280x720",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["id"] == "rd-task-4s"
+    assert body["seconds"] == "4"
+    sent = json.loads(route.calls.last.request.content)
+    assert sent["seconds"] == "4"
+    assert sent["duration"] == 4
 
 
 @respx.mock
