@@ -411,7 +411,7 @@ func recordPlaygroundImageTaskSubmittedLog(c *gin.Context, task *model.Task, pay
 		quality = "auto"
 	}
 	contentParts := []string{
-		"媒体工坊图片任务已提交",
+		"媒体工坊图片任务生成中",
 		fmt.Sprintf("任务ID %s", task.TaskID),
 		fmt.Sprintf("请求ID %s", payload.RequestID),
 		fmt.Sprintf("模式 %s", payload.Workflow),
@@ -420,15 +420,20 @@ func recordPlaygroundImageTaskSubmittedLog(c *gin.Context, task *model.Task, pay
 		fmt.Sprintf("生成数量 %d", imageN),
 	}
 	other := map[string]interface{}{
-		"task_id":       task.TaskID,
-		"request_id":    payload.RequestID,
-		"request_path":  payload.RequestPath,
-		"request_phase": "submitted",
-		"workflow":      payload.Workflow,
-		"async":         true,
-		"size":          size,
-		"quality":       quality,
-		"n":             imageN,
+		"task_id":               task.TaskID,
+		"request_id":            payload.RequestID,
+		"request_path":          payload.RequestPath,
+		"request_phase":         "submitted",
+		"task_status":           string(task.Status),
+		"playground_image_task": true,
+		"workflow":              payload.Workflow,
+		"async":                 true,
+		"result_url":            "",
+		"image_url":             "",
+		"cached_url":            "",
+		"size":                  size,
+		"quality":               quality,
+		"n":                     imageN,
 	}
 	if resolution := strings.TrimSpace(request.Resolution); resolution != "" {
 		other["resolution"] = resolution
@@ -445,7 +450,7 @@ func recordPlaygroundImageTaskSubmittedLog(c *gin.Context, task *model.Task, pay
 		UserId:    task.UserId,
 		Username:  username,
 		CreatedAt: common.GetTimestamp(),
-		Type:      model.LogTypeSystem,
+		Type:      model.LogTypeConsume,
 		Content:   strings.Join(contentParts, "，"),
 		TokenName: c.GetString("token_name"),
 		ModelName: payload.Model,
@@ -584,6 +589,7 @@ func seedPlaygroundImageTaskContext(ginCtx *gin.Context, userID int, username st
 	ginCtx.Set("token_name", tokenName)
 	ginCtx.Set("use_access_token", false)
 	ginCtx.Set("playground_image_async_worker", true)
+	ginCtx.Set("playground_image_task_id", taskID)
 	if userCache, err := model.GetUserCache(userID); err == nil && userCache != nil {
 		userCache.WriteContext(ginCtx)
 	}
@@ -708,6 +714,19 @@ func markPlaygroundImageTaskSuccess(task *model.Task, item *playgroundMediaItem,
 		return
 	}
 	if won {
+		extra := map[string]interface{}{}
+		if actualQuota > 0 {
+			extra["actual_quota"] = actualQuota
+		}
+		if task.ChannelId > 0 {
+			extra["channel_id"] = task.ChannelId
+		}
+		if task.StartTime > 0 && task.FinishTime >= task.StartTime {
+			extra["use_time"] = int(task.FinishTime - task.StartTime)
+		}
+		if err := model.UpdatePlaygroundImageTaskConsumeLogResult(task.UserId, payload.RequestID, task.TaskID, item.URL, task.FinishTime, string(model.TaskStatusSuccess), extra); err != nil {
+			common.SysError("failed to update playground image task result log: " + err.Error())
+		}
 		cleanupPlaygroundImageTaskRequest(requestFile)
 	}
 }
@@ -742,8 +761,51 @@ func markPlaygroundImageTaskFailure(task *model.Task, reason string) {
 	if !won {
 		return
 	}
+	markPlaygroundImageTaskLogFailure(task, &payload, reason)
 	cleanupPlaygroundImageTaskRequest(requestFile)
 	service.RefundTaskQuota(nil, task, reason)
+}
+
+func markPlaygroundImageTaskLogFailure(task *model.Task, payload *playgroundImageTaskPayload, reason string) {
+	if task == nil || payload == nil || payload.RequestID == "" || model.LOG_DB == nil {
+		return
+	}
+	var existing model.Log
+	err := model.LOG_DB.Where("user_id = ? AND request_id = ? AND type = ?", task.UserId, payload.RequestID, model.LogTypeConsume).
+		Order("id asc").
+		First(&existing).Error
+	if err != nil {
+		return
+	}
+	other, _ := common.StrToMap(existing.Other)
+	if other == nil {
+		other = map[string]interface{}{}
+	}
+	other["task_id"] = task.TaskID
+	other["request_id"] = payload.RequestID
+	other["request_phase"] = "failed"
+	other["task_status"] = string(model.TaskStatusFailure)
+	other["playground_image_task"] = true
+	other["finish_time"] = task.FinishTime
+	other["fail_reason"] = reason
+	other["result_url"] = ""
+	other["image_url"] = ""
+	other["cached_url"] = ""
+	useTime := 0
+	if task.StartTime > 0 && task.FinishTime >= task.StartTime {
+		useTime = int(task.FinishTime - task.StartTime)
+	}
+	content := "媒体工坊图片任务失败"
+	if reason != "" {
+		content += "，" + reason
+	}
+	if err := model.LOG_DB.Model(&model.Log{}).Where("id = ?", existing.Id).Updates(map[string]interface{}{
+		"content":  truncatePlaygroundText(content, 1000),
+		"use_time": useTime,
+		"other":    common.MapToJsonStr(other),
+	}).Error; err != nil {
+		common.SysError("failed to update playground image task failure log: " + err.Error())
+	}
 }
 
 func taskToPlaygroundImageTask(task *model.Task) gin.H {
