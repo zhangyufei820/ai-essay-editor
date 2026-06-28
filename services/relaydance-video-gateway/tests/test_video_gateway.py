@@ -275,3 +275,29 @@ def test_openai_compatible_videos_status_exposes_metadata_url(client, auth_heade
     assert body["status"] == "completed"
     assert body["progress"] == 100
     assert body["metadata"]["url"] == "https://cdn.relaydance.com/result.mp4"
+
+
+@respx.mock
+def test_openai_compatible_status_recovers_when_content_exists(client, auth_headers, provider_base):
+    respx.get(f"{provider_base}/v1/videos/rd-task-content-only").mock(
+        return_value=Response(
+            403,
+            json={"error": {"code": "", "message": "This token has no access to model"}},
+        ),
+    )
+    respx.get(f"{provider_base}/v1/videos/rd-task-content-only/content").mock(
+        return_value=Response(
+            200,
+            headers={"content-type": "video/mp4"},
+            content=b"\x00\x00\x00\x18ftypisom\x00\x00\x02\x00fake-video",
+        ),
+    )
+
+    response = client.get("/v1/videos/rd-task-content-only", headers=auth_headers)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["id"] == "rd-task-content-only"
+    assert body["status"] == "completed"
+    assert body["progress"] == 100
+    assert body["metadata"]["url"] == "/v1/videos/rd-task-content-only/content"

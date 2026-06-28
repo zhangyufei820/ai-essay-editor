@@ -227,3 +227,32 @@ class RelayDanceClient:
             "cache-control": "private, no-store",
         }
         return response.status_code, response.headers.get("content-type", "video/mp4"), response.content, headers
+
+    async def video_status(self, task_id: str) -> GatewayResponse:
+        response = await self.request("GET", f"/v1/videos/{task_id}", retry=True)
+        if response.success:
+            return response
+
+        content_status, content_type, content, _headers = await self.content(task_id)
+        if content_status == 200 and _looks_like_video_content(content_type, content):
+            return normalize_provider_response(
+                {
+                    "id": task_id,
+                    "task_id": task_id,
+                    "status": "completed",
+                    "progress": 100,
+                    "metadata": {"url": f"/v1/videos/{task_id}/content"},
+                },
+                200,
+                warnings=["status endpoint failed but video content is available"],
+            )
+        return response
+
+
+def _looks_like_video_content(content_type: str, content: bytes) -> bool:
+    lowered = content_type.lower()
+    if lowered.startswith("video/"):
+        return True
+    if len(content) < 12:
+        return False
+    return b"ftyp" in content[:16]

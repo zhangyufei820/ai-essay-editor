@@ -256,7 +256,7 @@ async def get_video_task(
     task_id: str,
     client: RelayDanceClient = Depends(client_dep),
 ) -> GatewayResponse:
-    return await client.request("GET", f"/v1/videos/{task_id}", retry=True)
+    return await client.video_status(task_id)
 
 
 @compat_router.get("/videos/{task_id}", response_model=None)
@@ -264,7 +264,7 @@ async def get_openai_compatible_video_task(
     task_id: str,
     client: RelayDanceClient = Depends(client_dep),
 ) -> Any:
-    response = await client.request("GET", f"/v1/videos/{task_id}", retry=True)
+    response = await client.video_status(task_id)
     if not response.success:
         return _provider_error_response(response)
     return _compatible_video_response(response, task_id=task_id)
