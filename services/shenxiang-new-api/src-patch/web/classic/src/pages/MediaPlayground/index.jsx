@@ -181,7 +181,7 @@ const IMAGE_MODELS = [
     value: 'ecommerce-banana-2',
     label: '电商特价banana-2',
     badge: '1K',
-    vendor: 'Gemini',
+    vendor: '星人图像',
     sizes: GOOGLE_NANO_BANANA_2_ASPECT_RATIOS,
     aspectRatios: GOOGLE_NANO_BANANA_2_ASPECT_RATIOS,
     resolutions: ['1K'],
@@ -359,16 +359,16 @@ const VIDEO_MODELS = [
   },
   {
     value: 'seedance-nsfw-4k',
-    label: 'RelayDance Seedance NSFW',
+    label: 'Seedance 私测视频',
     badge: '私测',
-    vendor: '管理员测试',
+    vendor: '星人视频',
     private: true,
     sizes: ['1280x720', '720x1280', '1024x1024'],
     durations: [3, 5, 10],
     defaultSize: '1280x720',
     defaultDuration: 5,
     defaultFps: 24,
-    hint: '仅供管理员验证 RelayDance 视频通道连通性。',
+    hint: '仅供管理员验证私测视频模型连通性。',
   },
 ];
 
@@ -444,6 +444,26 @@ function userFacingGenerationError(error) {
     lower.includes('network error')
   ) {
     return '本次生成等待时间过长，请稍后刷新媒体工坊查看结果；如果没有结果，再降低分辨率或重试。';
+  }
+  if (
+    lower.includes('no access to model') ||
+    lower.includes('has no access to model') ||
+    lower.includes('token has no access')
+  ) {
+    return '当前账号暂未开通该模型，请联系管理员或切换模型。';
+  }
+  if (
+    lower.includes('upstream') ||
+    lower.includes('provider') ||
+    lower.includes('supplier') ||
+    lower.includes('channel') ||
+    lower.includes('dragtokens') ||
+    lower.includes('relaydance') ||
+    String(message).includes('上游') ||
+    String(message).includes('供应商') ||
+    String(message).includes('渠道')
+  ) {
+    return '模型服务暂时不可用，请稍后重试。';
   }
   return message;
 }

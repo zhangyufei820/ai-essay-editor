@@ -132,7 +132,7 @@ export const MEDIA_MODEL_CONFIGS: ModelCapability[] = [
     defaultResolution: '2k',
     defaultQuality: 'high',
     notes: [
-      '按上游支持的尺寸、宽高比、质量和 1k/2k 分辨率提交，避免浏览器选项和实际生成比例错位。',
+      '按模型支持的尺寸、宽高比、质量和 1k/2k 分辨率提交，避免浏览器选项和实际生成比例错位。',
       '支持图像修改：切换到图像修改后上传参考图，系统会自动转成 multipart 请求。',
     ],
   },
@@ -156,7 +156,7 @@ export const MEDIA_MODEL_CONFIGS: ModelCapability[] = [
     notes: [
       '视频是异步任务，提交后需要等待任务完成。',
       '上传首帧或首尾帧时，系统会自动把图片转成 data URL 放入请求。',
-      '首尾帧请求会附带 metadata.frames，方便兼容支持首尾帧的上游。',
+      '首尾帧请求会附带 metadata.frames，方便兼容支持首尾帧的模型服务。',
     ],
   },
   {
@@ -183,11 +183,11 @@ export const MEDIA_MODEL_CONFIGS: ModelCapability[] = [
   },
   {
     id: 'seedance-nsfw-4k',
-    label: 'RelayDance Seedance NSFW · 私测',
+    label: 'Seedance 私测视频',
     kind: 'video',
-    vendorLabel: '管理员测试',
+    vendorLabel: '星人视频',
     endpoint: '/v1/videos',
-    description: '仅供管理员验证 RelayDance 视频通道连通性，不进入公开模型池。',
+    description: '仅供管理员验证私测视频模型连通性，不进入公开模型池。',
     private: true,
     supportsImageToVideo: true,
     supportsPromptEnhancement: true,
@@ -200,7 +200,7 @@ export const MEDIA_MODEL_CONFIGS: ModelCapability[] = [
     defaultFps: 24,
     notes: [
       '这是管理员私测模型，只有具备对应模型权限的账号会看到。',
-      '请求会走独立 RelayDance 测试网关，不影响公开 Seedance/Grok 视频渠道。',
+      '请求会走独立私测服务，不影响公开视频模型。',
       '支持文生视频和首帧图生视频，提交后按异步任务轮询结果。',
     ],
   },

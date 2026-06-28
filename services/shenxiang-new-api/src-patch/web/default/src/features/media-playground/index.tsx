@@ -215,6 +215,26 @@ function userFacingGenerationError(error: unknown) {
   ) {
     return '本次生成等待时间过长，请稍后刷新媒体工坊查看结果；如果没有结果，再降低分辨率或重试。'
   }
+  if (
+    lower.includes('no access to model') ||
+    lower.includes('has no access to model') ||
+    lower.includes('token has no access')
+  ) {
+    return '当前账号暂未开通该模型，请联系管理员或切换模型。'
+  }
+  if (
+    lower.includes('upstream') ||
+    lower.includes('provider') ||
+    lower.includes('supplier') ||
+    lower.includes('channel') ||
+    lower.includes('dragtokens') ||
+    lower.includes('relaydance') ||
+    message.includes('上游') ||
+    message.includes('供应商') ||
+    message.includes('渠道')
+  ) {
+    return '模型服务暂时不可用，请稍后重试。'
+  }
   return message
 }
 
@@ -1387,7 +1407,7 @@ function MediaParameters(props: {
           {props.activeModel.supportsPromptEnhancement && (
             <SwitchField
               label='智能润色提示词'
-              description='开启后让上游优化镜头语言，适合小白用户；关闭则更严格按原文执行。'
+              description='开启后让系统优化镜头语言，适合小白用户；关闭则更严格按原文执行。'
               checked={props.enhancePrompt}
               onCheckedChange={props.onEnhancePromptChange}
             />
