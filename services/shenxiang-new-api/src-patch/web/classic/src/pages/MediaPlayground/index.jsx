@@ -1593,7 +1593,7 @@ const MediaPlayground = () => {
       content: references.map((item) => ({
         type: 'image_url',
         image_url: { url: item.url },
-        role: 'reference_image',
+        role: item.role,
       })),
       frames: references.map((item) => ({
         role: item.role,
