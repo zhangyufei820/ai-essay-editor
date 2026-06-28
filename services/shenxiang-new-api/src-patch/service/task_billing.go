@@ -47,6 +47,22 @@ func LogTaskConsumption(c *gin.Context, info *relaycommon.RelayInfo) {
 	other := make(map[string]interface{})
 	other["is_task"] = true
 	other["request_path"] = c.Request.URL.Path
+	if info.TaskRelayInfo != nil && strings.TrimSpace(info.PublicTaskID) != "" {
+		other["task_id"] = strings.TrimSpace(info.PublicTaskID)
+		other["request_phase"] = "submitted"
+		other["task_status"] = string(model.TaskStatusSubmitted)
+		other["async"] = true
+	}
+	if c != nil && c.Request != nil && c.Request.URL != nil {
+		switch strings.TrimSpace(c.Request.URL.Path) {
+		case "/pg/videos", "/pg/video/generations":
+			other["playground_video_task"] = true
+			other["media_kind"] = "video"
+			other["result_url"] = ""
+			other["video_url"] = ""
+			other["cached_url"] = ""
+		}
+	}
 	other["model_price"] = info.PriceData.ModelPrice
 	if info.PriceData.ModelRatio > 0 {
 		other["model_ratio"] = info.PriceData.ModelRatio

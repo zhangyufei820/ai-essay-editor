@@ -713,6 +713,7 @@ func RelayTask(c *gin.Context) {
 		}
 		task.Quota = result.Quota
 		task.Data = result.TaskData
+		annotatePlaygroundVideoTaskData(c, task, relayInfo)
 		task.Action = relayInfo.Action
 		if insertErr := task.Insert(); insertErr != nil {
 			common.SysError("insert task error: " + insertErr.Error())

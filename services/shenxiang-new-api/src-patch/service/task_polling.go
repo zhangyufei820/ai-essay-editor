@@ -1,11 +1,19 @@
 package service
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -20,6 +28,41 @@ import (
 
 	"github.com/samber/lo"
 )
+
+type playgroundVideoMediaMarker struct {
+	RequestID string         `json:"request_id,omitempty"`
+	Prompt    string         `json:"prompt,omitempty"`
+	Model     string         `json:"model,omitempty"`
+	Workflow  string         `json:"workflow,omitempty"`
+	Size      string         `json:"size,omitempty"`
+	Duration  int            `json:"duration,omitempty"`
+	Seconds   string         `json:"seconds,omitempty"`
+	Group     string         `json:"group,omitempty"`
+	Endpoint  string         `json:"endpoint,omitempty"`
+	Metadata  map[string]any `json:"metadata,omitempty"`
+	CachedURL string         `json:"cached_url,omitempty"`
+	Item      any            `json:"item,omitempty"`
+	Error     string         `json:"error,omitempty"`
+}
+
+type playgroundVideoMediaItem struct {
+	ID            string         `json:"id"`
+	Kind          string         `json:"kind"`
+	URL           string         `json:"url"`
+	DisplayURL    string         `json:"displayUrl"`
+	CachedURL     string         `json:"cachedUrl"`
+	OriginalURL   string         `json:"originalUrl,omitempty"`
+	Filename      string         `json:"filename"`
+	Prompt        string         `json:"prompt,omitempty"`
+	Model         string         `json:"model,omitempty"`
+	Workflow      string         `json:"workflow,omitempty"`
+	RevisedPrompt string         `json:"revisedPrompt,omitempty"`
+	Status        string         `json:"status"`
+	CacheStatus   string         `json:"cacheStatus"`
+	CreatedAt     string         `json:"createdAt"`
+	ExpiresAt     string         `json:"expiresAt"`
+	Metadata      map[string]any `json:"metadata,omitempty"`
+}
 
 // TaskPollingAdaptor 定义轮询所需的最小适配器接口，避免 service -> relay 的循环依赖
 type TaskPollingAdaptor interface {
@@ -378,6 +421,8 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 	logger.LogDebug(ctx, "updateVideoSingleTask response: %s", responseBody)
 
 	snap := task.Snapshot()
+	originalData := append([]byte(nil), task.Data...)
+	playgroundMarker := extractPlaygroundVideoMediaMarker(originalData)
 
 	taskResult := &relaycommon.TaskInfo{}
 	// try parse as New API response format
@@ -395,7 +440,7 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 		return fmt.Errorf("parseTaskResult failed for task %s: %w", taskId, err)
 	}
 
-	task.Data = redactVideoResponseBody(responseBody)
+	task.Data = mergePlaygroundVideoTaskData(redactVideoResponseBody(responseBody), playgroundMarker)
 
 	logger.LogDebug(ctx, "updateVideoSingleTask taskResult: %+v", taskResult)
 
@@ -442,6 +487,7 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 		if task.FinishTime == 0 {
 			task.FinishTime = now
 		}
+		resultURLForCache := taskResult.Url
 		if strings.HasPrefix(taskResult.Url, "data:") {
 			// data: URI (e.g. Vertex base64 encoded video) — keep in Data, not in ResultURL
 			task.PrivateData.ResultURL = taskcommon.BuildProxyURL(task.TaskID)
@@ -451,6 +497,34 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 		} else {
 			// No URL from adaptor — construct proxy URL using public task ID
 			task.PrivateData.ResultURL = taskcommon.BuildProxyURL(task.TaskID)
+		}
+		if snap.Status != model.TaskStatusSuccess && playgroundMarker != nil {
+			if strings.TrimSpace(resultURLForCache) == "" {
+				resultURLForCache = task.GetResultURL()
+			}
+			item, err := cachePlaygroundVideoTaskResult(ctx, task, playgroundMarker, resultURLForCache)
+			if err != nil {
+				logger.LogError(ctx, fmt.Sprintf("cache playground video task %s failed: %s", task.TaskID, err.Error()))
+				playgroundMarker.Error = err.Error()
+			} else if item != nil {
+				playgroundMarker.CachedURL = item.URL
+				playgroundMarker.Item = item
+				task.PrivateData.ResultURL = item.URL
+			}
+			task.Data = mergePlaygroundVideoTaskData(task.Data, playgroundMarker)
+			extra := map[string]interface{}{}
+			if task.ChannelId > 0 {
+				extra["channel_id"] = task.ChannelId
+			}
+			if task.StartTime > 0 && task.FinishTime >= task.StartTime {
+				extra["use_time"] = int(task.FinishTime - task.StartTime)
+			}
+			if task.Quota > 0 {
+				extra["actual_quota"] = task.Quota
+			}
+			if err := model.UpdatePlaygroundVideoTaskConsumeLogResult(task.UserId, task.TaskID, task.GetResultURL(), task.FinishTime, string(model.TaskStatusSuccess), extra); err != nil {
+				logger.LogError(ctx, fmt.Sprintf("failed to update playground video task log %s: %s", task.TaskID, err.Error()))
+			}
 		}
 		shouldSettle = true
 	case model.TaskStatusFailure:
@@ -528,6 +602,379 @@ func redactVideoResponseBody(body []byte) []byte {
 		return body
 	}
 	return b
+}
+
+func extractPlaygroundVideoMediaMarker(data []byte) *playgroundVideoMediaMarker {
+	if len(data) == 0 {
+		return nil
+	}
+	var payload map[string]any
+	if err := common.Unmarshal(data, &payload); err != nil {
+		return nil
+	}
+	raw, ok := payload["playground_media"]
+	if !ok {
+		return nil
+	}
+	encoded, err := common.Marshal(raw)
+	if err != nil {
+		return nil
+	}
+	var marker playgroundVideoMediaMarker
+	if err := common.Unmarshal(encoded, &marker); err != nil {
+		return nil
+	}
+	if marker.Metadata == nil {
+		marker.Metadata = map[string]any{}
+	}
+	return &marker
+}
+
+func mergePlaygroundVideoTaskData(data []byte, marker *playgroundVideoMediaMarker) []byte {
+	if marker == nil {
+		return data
+	}
+	payload := map[string]any{}
+	if len(data) > 0 {
+		if err := common.Unmarshal(data, &payload); err != nil {
+			if json.Valid(data) {
+				payload["response"] = json.RawMessage(data)
+			} else {
+				payload["raw_response"] = truncatePlaygroundVideoText(string(data), 3000)
+			}
+		}
+	}
+	payload["playground_media"] = marker
+	encoded, err := common.Marshal(payload)
+	if err != nil {
+		return data
+	}
+	return encoded
+}
+
+func cachePlaygroundVideoTaskResult(ctx context.Context, task *model.Task, marker *playgroundVideoMediaMarker, rawURL string) (*playgroundVideoMediaItem, error) {
+	if task == nil || marker == nil {
+		return nil, nil
+	}
+	rawURL = strings.TrimSpace(rawURL)
+	if rawURL == "" {
+		return nil, errors.New("video task returned no media url")
+	}
+	if strings.HasPrefix(strings.ToLower(rawURL), "data:") {
+		return cachePlaygroundVideoDataMedia(task, marker, rawURL)
+	}
+	remoteURL, err := validatePlaygroundVideoMediaURL(rawURL)
+	if err != nil {
+		return nil, err
+	}
+	client := &http.Client{
+		Timeout: 90 * time.Second,
+		Transport: &http.Transport{
+			DialContext: safePlaygroundVideoMediaDialContext,
+		},
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 5 {
+				return errors.New("too many media redirects")
+			}
+			_, err := validatePlaygroundVideoMediaURL(req.URL.String())
+			return err
+		},
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, remoteURL.String(), nil)
+	if err != nil {
+		return nil, errors.New("failed to prepare video download")
+	}
+	httpReq.Header.Set("User-Agent", "NewAPI-Playground-Video-Cache/1.0")
+	resp, err := client.Do(httpReq)
+	if err != nil {
+		return nil, errors.New("failed to download generated video")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("video download failed with status %d", resp.StatusCode)
+	}
+	contentType := strings.ToLower(strings.TrimSpace(strings.Split(resp.Header.Get("Content-Type"), ";")[0]))
+	ext := playgroundVideoExtFromContentType(contentType)
+	if ext == "" {
+		ext = playgroundVideoExtFromPath(remoteURL.Path)
+	}
+	if ext == "" {
+		return nil, errors.New("unsupported video content type")
+	}
+	maxBytes := playgroundVideoMediaMaxBytes()
+	if resp.ContentLength > maxBytes {
+		return nil, errors.New("generated video is too large to cache")
+	}
+	return writePlaygroundVideoMedia(task, marker, rawURL, resp.Body, ext, maxBytes)
+}
+
+func cachePlaygroundVideoDataMedia(task *model.Task, marker *playgroundVideoMediaMarker, rawURL string) (*playgroundVideoMediaItem, error) {
+	contentType, data, err := decodePlaygroundVideoDataURL(rawURL)
+	if err != nil {
+		return nil, err
+	}
+	ext := playgroundVideoExtFromContentType(contentType)
+	if ext == "" {
+		return nil, errors.New("unsupported video content type")
+	}
+	maxBytes := playgroundVideoMediaMaxBytes()
+	if int64(len(data)) > maxBytes {
+		return nil, errors.New("generated video exceeds cache size limit")
+	}
+	return writePlaygroundVideoMedia(task, marker, rawURL, bytes.NewReader(data), ext, maxBytes)
+}
+
+func writePlaygroundVideoMedia(task *model.Task, marker *playgroundVideoMediaMarker, originalURL string, reader io.Reader, ext string, maxBytes int64) (*playgroundVideoMediaItem, error) {
+	root := filepath.Join(playgroundVideoMediaCacheRoot(), playgroundVideoMediaUserDirName(task.UserId))
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		return nil, errors.New("failed to create video cache directory")
+	}
+	sum := sha256.Sum256([]byte(fmt.Sprintf("%d:%s:%s:%d", time.Now().UnixNano(), originalURL, task.TaskID, task.UserId)))
+	id := fmt.Sprintf("%x", sum[:12])
+	name := id + ext
+	fullPath := filepath.Join(root, name)
+	cleanRoot := filepath.Clean(root) + string(os.PathSeparator)
+	cleanPath := filepath.Clean(fullPath)
+	if !strings.HasPrefix(cleanPath, cleanRoot) {
+		return nil, errors.New("invalid video cache path")
+	}
+	out, err := os.OpenFile(cleanPath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0o644)
+	if err != nil {
+		return nil, errors.New("failed to create cached video file")
+	}
+	defer out.Close()
+	written, err := io.Copy(out, io.LimitReader(reader, maxBytes+1))
+	if err != nil {
+		_ = os.Remove(cleanPath)
+		return nil, errors.New("failed to save generated video")
+	}
+	if written > maxBytes {
+		_ = os.Remove(cleanPath)
+		return nil, errors.New("generated video exceeds cache size limit")
+	}
+
+	metadata := normalizePlaygroundVideoMetadata(marker.Metadata)
+	if metadata == nil {
+		metadata = map[string]any{}
+	}
+	metadata["actual_bytes"] = written
+	metadata["task_id"] = task.TaskID
+	metadata["request_id"] = marker.RequestID
+	if marker.Size != "" {
+		metadata["size"] = marker.Size
+	}
+	if marker.Duration > 0 {
+		metadata["duration"] = marker.Duration
+	}
+	if marker.Seconds != "" {
+		metadata["seconds"] = marker.Seconds
+	}
+	if marker.Group != "" {
+		metadata["group"] = marker.Group
+	}
+	if marker.Endpoint != "" {
+		metadata["endpoint"] = marker.Endpoint
+	}
+
+	now := time.Now()
+	mediaURL := playgroundVideoMediaURLPrefix() + "/" + playgroundVideoMediaUserDirName(task.UserId) + "/" + name
+	item := &playgroundVideoMediaItem{
+		ID:          id,
+		Kind:        "video",
+		URL:         mediaURL,
+		DisplayURL:  mediaURL,
+		CachedURL:   mediaURL,
+		OriginalURL: playgroundVideoOriginalURL(originalURL),
+		Filename:    name,
+		Prompt:      truncatePlaygroundVideoText(marker.Prompt, 3000),
+		Model:       truncatePlaygroundVideoText(marker.Model, 160),
+		Workflow:    truncatePlaygroundVideoText(marker.Workflow, 120),
+		Status:      "ready",
+		CacheStatus: "ready",
+		CreatedAt:   now.Format(time.RFC3339),
+		ExpiresAt:   now.Add(playgroundVideoMediaRetentionDuration()).Format(time.RFC3339),
+		Metadata:    metadata,
+	}
+	if err := writePlaygroundVideoMediaMetadata(cleanPath, item); err != nil {
+		_ = os.Remove(cleanPath)
+		_ = os.Remove(cleanPath + ".json")
+		return nil, errors.New("failed to save video metadata")
+	}
+	return item, nil
+}
+
+func playgroundVideoMediaCacheRoot() string {
+	return common.GetEnvOrDefaultString("PLAYGROUND_MEDIA_CACHE_DIR", "/data/media-cache")
+}
+
+func playgroundVideoMediaURLPrefix() string {
+	prefix := common.GetEnvOrDefaultString("PLAYGROUND_MEDIA_URL_PREFIX", "/pg/media/files")
+	return "/" + strings.Trim(strings.TrimSpace(prefix), "/")
+}
+
+func playgroundVideoMediaRetentionDuration() time.Duration {
+	keepMinutes := common.GetEnvOrDefault("PLAYGROUND_MEDIA_KEEP_MINUTES", 72*60)
+	if keepMinutes < 1 {
+		keepMinutes = 72 * 60
+	}
+	return time.Duration(keepMinutes) * time.Minute
+}
+
+func playgroundVideoMediaMaxBytes() int64 {
+	maxMB := common.GetEnvOrDefault("PLAYGROUND_MEDIA_MAX_MB", 256)
+	if maxMB < 1 {
+		maxMB = 256
+	}
+	return int64(maxMB) * 1024 * 1024
+}
+
+func playgroundVideoMediaUserDirName(userID int) string {
+	return fmt.Sprintf("u-%d", userID)
+}
+
+func playgroundVideoExtFromContentType(contentType string) string {
+	switch strings.ToLower(strings.TrimSpace(contentType)) {
+	case "video/mp4":
+		return ".mp4"
+	case "video/webm":
+		return ".webm"
+	default:
+		return ""
+	}
+}
+
+func playgroundVideoExtFromPath(path string) string {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".mp4":
+		return ".mp4"
+	case ".webm":
+		return ".webm"
+	default:
+		return ""
+	}
+}
+
+func playgroundVideoOriginalURL(rawURL string) string {
+	rawURL = strings.TrimSpace(rawURL)
+	if rawURL == "" || strings.HasPrefix(strings.ToLower(rawURL), "data:") {
+		return ""
+	}
+	return rawURL
+}
+
+func validatePlaygroundVideoMediaURL(raw string) (*url.URL, error) {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || parsed == nil || parsed.Hostname() == "" {
+		return nil, errors.New("invalid video url")
+	}
+	if parsed.Scheme != "https" && parsed.Scheme != "http" {
+		return nil, errors.New("only http and https video urls can be cached")
+	}
+	if isPrivatePlaygroundVideoHost(parsed.Hostname()) || playgroundVideoHostResolvesPrivate(parsed.Hostname()) {
+		return nil, errors.New("private video urls cannot be cached")
+	}
+	return parsed, nil
+}
+
+func isPrivatePlaygroundVideoHost(host string) bool {
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return false
+	}
+	return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified()
+}
+
+func playgroundVideoHostResolvesPrivate(host string) bool {
+	if net.ParseIP(host) != nil {
+		return false
+	}
+	ips, err := net.LookupIP(host)
+	if err != nil || len(ips) == 0 {
+		return true
+	}
+	for _, ip := range ips {
+		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() {
+			return true
+		}
+	}
+	return false
+}
+
+func safePlaygroundVideoMediaDialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	host, port, err := net.SplitHostPort(address)
+	if err != nil {
+		return nil, err
+	}
+	if isPrivatePlaygroundVideoHost(host) {
+		return nil, errors.New("private video address cannot be reached")
+	}
+	ips, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+	if err != nil {
+		return nil, err
+	}
+	for _, ipAddr := range ips {
+		ip := ipAddr.IP
+		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() {
+			return nil, errors.New("private video address cannot be reached")
+		}
+	}
+	dialer := &net.Dialer{Timeout: 30 * time.Second}
+	return dialer.DialContext(ctx, network, net.JoinHostPort(host, port))
+}
+
+func decodePlaygroundVideoDataURL(raw string) (string, []byte, error) {
+	idx := strings.Index(raw, ",")
+	if idx <= 5 {
+		return "", nil, errors.New("invalid data video url")
+	}
+	header := strings.ToLower(strings.TrimSpace(raw[:idx]))
+	if !strings.HasPrefix(header, "data:") || !strings.Contains(header, ";base64") {
+		return "", nil, errors.New("only base64 data video urls can be cached")
+	}
+	contentType := strings.TrimSpace(strings.TrimPrefix(strings.Split(header, ";")[0], "data:"))
+	if contentType == "" {
+		return "", nil, errors.New("missing data video content type")
+	}
+	data, err := base64.StdEncoding.DecodeString(strings.TrimSpace(raw[idx+1:]))
+	if err != nil {
+		return "", nil, errors.New("invalid base64 video data")
+	}
+	return contentType, data, nil
+}
+
+func normalizePlaygroundVideoMetadata(metadata map[string]any) map[string]any {
+	if len(metadata) == 0 {
+		return nil
+	}
+	encoded, err := json.Marshal(metadata)
+	if err != nil || len(encoded) > 8192 {
+		return nil
+	}
+	var normalized map[string]any
+	if err := json.Unmarshal(encoded, &normalized); err != nil {
+		return nil
+	}
+	return normalized
+}
+
+func writePlaygroundVideoMediaMetadata(mediaPath string, item *playgroundVideoMediaItem) error {
+	data, err := json.MarshalIndent(item, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(mediaPath+".json", data, 0o644)
+}
+
+func truncatePlaygroundVideoText(value string, maxRunes int) string {
+	value = strings.TrimSpace(value)
+	if maxRunes <= 0 {
+		return value
+	}
+	runes := []rune(value)
+	if len(runes) <= maxRunes {
+		return value
+	}
+	return string(runes[:maxRunes])
 }
 
 func truncateBase64(s string) string {

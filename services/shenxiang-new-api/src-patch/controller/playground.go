@@ -1,11 +1,13 @@
 package controller
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -18,6 +20,19 @@ import (
 
 	"github.com/gin-gonic/gin"
 )
+
+type playgroundVideoMediaMarker struct {
+	RequestID string                 `json:"request_id,omitempty"`
+	Prompt    string                 `json:"prompt,omitempty"`
+	Model     string                 `json:"model,omitempty"`
+	Workflow  string                 `json:"workflow,omitempty"`
+	Size      string                 `json:"size,omitempty"`
+	Duration  int                    `json:"duration,omitempty"`
+	Seconds   string                 `json:"seconds,omitempty"`
+	Group     string                 `json:"group,omitempty"`
+	Endpoint  string                 `json:"endpoint,omitempty"`
+	Metadata  map[string]interface{} `json:"metadata,omitempty"`
+}
 
 func setupPlaygroundTokenContext(c *gin.Context) (*types.NewAPIError, *relaycommon.RelayInfo) {
 	useAccessToken := c.GetBool("use_access_token")
@@ -122,6 +137,63 @@ func PlaygroundVideoFetch(c *gin.Context) {
 	}
 
 	RelayTaskFetch(c)
+}
+
+func annotatePlaygroundVideoTaskData(c *gin.Context, task *model.Task, relayInfo *relaycommon.RelayInfo) {
+	if c == nil || c.Request == nil || task == nil || relayInfo == nil {
+		return
+	}
+	path := strings.TrimSpace(c.Request.URL.Path)
+	if path != "/pg/videos" && path != "/pg/video/generations" {
+		return
+	}
+	taskReq, err := relaycommon.GetTaskRequest(c)
+	if err != nil {
+		return
+	}
+	marker := playgroundVideoMediaMarker{
+		RequestID: c.GetString(common.RequestIdKey),
+		Prompt:    truncatePlaygroundText(taskReq.Prompt, 3000),
+		Model:     truncatePlaygroundText(firstNonEmptyString(taskReq.Model, relayInfo.OriginModelName), 160),
+		Workflow:  "video",
+		Size:      truncatePlaygroundText(taskReq.Size, 120),
+		Duration:  taskReq.Duration,
+		Seconds:   truncatePlaygroundText(taskReq.Seconds, 40),
+		Group:     truncatePlaygroundText(relayInfo.UsingGroup, 50),
+		Endpoint:  path,
+		Metadata:  normalizePlaygroundMetadata(taskReq.Metadata),
+	}
+	if marker.Duration <= 0 && marker.Seconds != "" {
+		if v, err := strconv.Atoi(marker.Seconds); err == nil {
+			marker.Duration = v
+		}
+	}
+	payload := map[string]interface{}{}
+	if len(task.Data) > 0 {
+		_ = json.Unmarshal(task.Data, &payload)
+	}
+	payload["playground_media"] = marker
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return
+	}
+	task.Data = encoded
+	if task.Properties.Input == "" {
+		task.Properties.Input = marker.Prompt
+	}
+	if task.Properties.OriginModelName == "" {
+		task.Properties.OriginModelName = marker.Model
+	}
+}
+
+func firstNonEmptyString(values ...string) string {
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 type playgroundMediaCacheRequest struct {
