@@ -83,6 +83,12 @@ const IMAGE_LONG_WAIT_MS = 70 * 1000
 const IMAGE_LONG_WAIT_MESSAGE =
   '图像任务仍在生成中，耗时接近 70 秒。请不要重复提交，可继续等待或稍后用任务 ID 查询结果。'
 
+const agentSelectorValue = (value: string | number | boolean) =>
+  String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'item'
 
 const SIZE_TO_ASPECT_RATIO: Record<string, string> = {
   '960x960': '1:1',
@@ -946,6 +952,7 @@ export function MediaPlayground() {
                   <NativeSelect
                     className='w-full'
                     value={effectiveGroup}
+                    data-xr-agent='media-group'
                     onChange={(event) => setGroup(event.target.value)}
                   >
                     {visibleGroupOptions.map((item) => (
@@ -962,6 +969,7 @@ export function MediaPlayground() {
                   <Textarea
                     className='min-h-32 resize-none pr-24 pb-12'
                     value={prompt}
+                    data-xr-agent='media-prompt'
                     onChange={(event) => setPrompt(event.target.value)}
                     placeholder='用自然语言描述画面、主体、风格、镜头和用途。'
                   />
@@ -998,6 +1006,7 @@ export function MediaPlayground() {
               <Field label='不想出现的内容'>
                 <Input
                   value={negativePrompt}
+                  data-xr-agent='media-negative-prompt'
                   onChange={(event) => setNegativePrompt(event.target.value)}
                   placeholder='可选，例如：低清晰度、畸形手指、文字错误'
                 />
@@ -1057,6 +1066,7 @@ export function MediaPlayground() {
                 className='h-10 w-full'
                 onClick={handleSubmit}
                 disabled={isSubmitting || !selectedModelAllowed}
+                data-xr-agent='media-generate'
               >
                 {isSubmitting ? (
                   <Loader2 className='mr-2 size-4 animate-spin' />
@@ -1162,11 +1172,11 @@ function MediaHeader({
         onValueChange={(value) => onModeChange(value as MediaMode)}
       >
         <TabsList>
-          <TabsTrigger value='image'>
+          <TabsTrigger value='image' data-xr-agent='media-mode-image'>
             <ImageIcon className='size-4' />
             图像
           </TabsTrigger>
-          <TabsTrigger value='video'>
+          <TabsTrigger value='video' data-xr-agent='media-mode-video'>
             <Film className='size-4' />
             视频
           </TabsTrigger>
@@ -1198,6 +1208,7 @@ function ImageControls(props: {
       </Field>
       <Segmented
         value={props.workflow}
+        agentPrefix='media-image-workflow'
         items={[
           { value: 'generate', label: '文生图', icon: ImageIcon },
           {
@@ -1235,6 +1246,7 @@ function VideoControls(props: {
       </Field>
       <Segmented
         value={props.workflow}
+        agentPrefix='media-video-workflow'
         items={[
           { value: 'text', label: '文生视频', icon: Film },
           { value: 'image', label: '图生视频', icon: Upload },
@@ -1257,6 +1269,7 @@ function ModelSelect(props: {
     <NativeSelect
       className='w-full'
       value={props.value}
+      data-xr-agent='media-model'
       onChange={(event) => props.onChange(event.target.value)}
     >
       {props.models.map((model) => (
@@ -1348,6 +1361,7 @@ function MediaParameters(props: {
           <NativeSelect
             className='w-full'
             value={props.resolution}
+            data-xr-agent='media-resolution'
             onChange={(event) => props.onResolutionChange(event.target.value)}
           >
             {props.activeModel.resolutions.map((resolution) => (
@@ -1362,6 +1376,7 @@ function MediaParameters(props: {
           <NativeSelect
             className='w-full'
             value={props.size}
+            data-xr-agent='media-size'
             onChange={(event) => props.onSizeChange(event.target.value)}
           >
             {props.activeModel.sizes.map((size) => (
@@ -1378,6 +1393,7 @@ function MediaParameters(props: {
           <NativeSelect
             className='w-full'
             value={imageRatioValue}
+            data-xr-agent='media-aspect-ratio'
             onChange={(event) => handleImageRatioChange(event.target.value)}
           >
             {imageRatioOptions.map((ratio) => (
@@ -1395,6 +1411,7 @@ function MediaParameters(props: {
             <NativeSelect
               className='w-full'
               value={props.quality}
+              data-xr-agent='media-quality'
               onChange={(event) => props.onQualityChange(event.target.value)}
             >
               {(props.activeModel.qualities ?? ['auto']).map((quality) => (
@@ -1411,6 +1428,7 @@ function MediaParameters(props: {
                 max={props.activeModel.maxCount ?? 1}
                 step={1}
                 value={[clampCount(props.count, props.activeModel)]}
+                data-xr-agent='media-count'
                 onValueChange={(value) =>
                   props.onCountChange(
                     clampCount(
@@ -1429,6 +1447,7 @@ function MediaParameters(props: {
             <NativeSelect
               className='w-full'
               value={props.outputFormat}
+              data-xr-agent='media-format'
               onChange={(event) =>
                 props.onOutputFormatChange(event.target.value)
               }
@@ -1450,6 +1469,7 @@ function MediaParameters(props: {
                     max={100}
                     step={1}
                     value={[props.outputCompression]}
+                    data-xr-agent='media-compression'
                     onValueChange={(value) =>
                       props.onOutputCompressionChange(
                         Array.isArray(value) ? (value[0] ?? 100) : value
@@ -1467,6 +1487,7 @@ function MediaParameters(props: {
               <NativeSelect
                 className='w-full'
                 value={props.background}
+                data-xr-agent='media-background'
                 onChange={(event) => props.onBackgroundChange(event.target.value)}
               >
                 {props.activeModel.backgroundOptions.map((option) => (
@@ -1483,6 +1504,7 @@ function MediaParameters(props: {
                 <NativeSelect
                   className='w-full'
                   value={props.inputFidelity}
+                  data-xr-agent='media-input-fidelity'
                   onChange={(event) =>
                     props.onInputFidelityChange(event.target.value)
                   }
@@ -1502,6 +1524,7 @@ function MediaParameters(props: {
             <NativeSelect
               className='w-full'
               value={String(props.duration)}
+              data-xr-agent='media-duration'
               onChange={(event) =>
                 props.onDurationChange(Number(event.target.value))
               }
@@ -1517,6 +1540,7 @@ function MediaParameters(props: {
             <NativeSelect
               className='w-full'
               value={String(props.fps)}
+              data-xr-agent='media-fps'
               onChange={(event) =>
                 props.onFpsChange(Number(event.target.value))
               }
@@ -1532,6 +1556,7 @@ function MediaParameters(props: {
             <Input
               inputMode='numeric'
               value={props.seed}
+              data-xr-agent='media-seed'
               onChange={(event) => props.onSeedChange(event.target.value)}
               placeholder='可选，留空随机'
             />
@@ -1845,6 +1870,7 @@ function Field({
 
 function Segmented(props: {
   value: string
+  agentPrefix?: string
   items: Array<{
     value: string
     label: string
@@ -1860,6 +1886,11 @@ function Segmented(props: {
           key={item.value}
           type='button'
           disabled={item.disabled}
+          data-xr-agent={
+            props.agentPrefix
+              ? `${props.agentPrefix}-${agentSelectorValue(item.value)}`
+              : undefined
+          }
           onClick={() => props.onChange(item.value)}
           className={cn(
             'flex h-10 items-center justify-center gap-2 rounded-lg border px-3 text-sm font-medium transition-colors',

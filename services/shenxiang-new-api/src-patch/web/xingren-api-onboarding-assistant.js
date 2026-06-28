@@ -23,6 +23,7 @@
   };
 
   var ASSISTANT_AVATAR_URL = "/assets/xingren-api-assistant-avatar.jpg";
+  var OPERATION_QUEUE_KEY = "xingren-api-assistant-operation:v1";
 
   var SITE_ROUTES = {
     home: {
@@ -103,6 +104,7 @@
     selectedOS: "mac",
     generatedKey: "",
     awaitingCustomModel: false,
+    operationRunning: false,
   };
 
   function redactSecrets(text) {
@@ -465,15 +467,510 @@
       .join("\n");
   }
 
+  function agentSelector(key) {
+    return '[data-xr-agent="' + String(key || "").replace(/"/g, '\\"') + '"]';
+  }
+
+  function normalizeAgentSelectorValue(value) {
+    return (
+      String(value || "")
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "") || "item"
+    );
+  }
+
+  function sleep(ms) {
+    return new Promise(function (resolve) {
+      window.setTimeout(resolve, ms);
+    });
+  }
+
+  function isVisibleElement(element) {
+    if (!element || !element.getBoundingClientRect) return false;
+    if (element.closest && element.closest("#xr-api-assistant-root")) return false;
+    var rect = element.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return false;
+    var style = window.getComputedStyle ? window.getComputedStyle(element) : null;
+    return !style || (style.display !== "none" && style.visibility !== "hidden" && style.opacity !== "0");
+  }
+
+  function findAgentElement(selector, fallbackLabels) {
+    var element = selector ? document.querySelector(selector) : null;
+    if (isVisibleElement(element)) return element;
+    var labels = fallbackLabels || [];
+    if (!labels.length) return null;
+    var candidates = Array.prototype.slice.call(
+      document.querySelectorAll("button,[role='button'],a,input,textarea,select,label")
+    );
+    for (var i = 0; i < candidates.length; i += 1) {
+      if (!isVisibleElement(candidates[i])) continue;
+      var text = normalizeSpaces(
+        candidates[i].innerText ||
+          candidates[i].textContent ||
+          candidates[i].getAttribute("aria-label") ||
+          candidates[i].getAttribute("placeholder") ||
+          candidates[i].getAttribute("title") ||
+          ""
+      );
+      for (var j = 0; j < labels.length; j += 1) {
+        if (text.indexOf(labels[j]) >= 0) return candidates[i];
+      }
+    }
+    return null;
+  }
+
+  function findRouteLink(path, title) {
+    var normalizedPath = String(path || "").replace(/\/+$/, "") || "/";
+    var links = Array.prototype.slice.call(document.querySelectorAll("a[href]"));
+    for (var i = 0; i < links.length; i += 1) {
+      if (!isVisibleElement(links[i])) continue;
+      var href = links[i].getAttribute("href") || "";
+      var linkPath = href.split("#")[0].split("?")[0].replace(/\/+$/, "") || "/";
+      var text = normalizeSpaces(links[i].innerText || links[i].textContent || "");
+      if (linkPath === normalizedPath || (title && text.indexOf(title) >= 0)) {
+        return links[i];
+      }
+    }
+    return null;
+  }
+
+  function ensureOperationLayer() {
+    var layer = document.getElementById("xr-api-operation-layer");
+    if (layer) return layer;
+    layer = document.createElement("div");
+    layer.id = "xr-api-operation-layer";
+    layer.innerHTML =
+      '<div class="xr-api-operation-backdrop"></div>' +
+      '<div class="xr-api-operation-ring" aria-hidden="true"></div>' +
+      '<div class="xr-api-operation-cursor" aria-hidden="true"></div>' +
+      '<div class="xr-api-operation-toast" role="status" aria-live="polite"></div>';
+    document.body.appendChild(layer);
+    return layer;
+  }
+
+  function clearOperationLayer() {
+    var layer = document.getElementById("xr-api-operation-layer");
+    if (layer) layer.remove();
+  }
+
+  function moveOperationLayerTo(element, label, options) {
+    var layer = ensureOperationLayer();
+    var ring = layer.querySelector(".xr-api-operation-ring");
+    var cursor = layer.querySelector(".xr-api-operation-cursor");
+    var toast = layer.querySelector(".xr-api-operation-toast");
+    var rect = element.getBoundingClientRect();
+    var pad = (options && options.pad) || 8;
+    var left = Math.max(8, rect.left - pad);
+    var top = Math.max(8, rect.top - pad);
+    var width = Math.min(window.innerWidth - left - 8, rect.width + pad * 2);
+    var height = Math.min(window.innerHeight - top - 8, rect.height + pad * 2);
+
+    ring.style.left = left + "px";
+    ring.style.top = top + "px";
+    ring.style.width = Math.max(32, width) + "px";
+    ring.style.height = Math.max(28, height) + "px";
+    cursor.style.left = Math.min(window.innerWidth - 28, left + Math.max(24, width - 14)) + "px";
+    cursor.style.top = Math.min(window.innerHeight - 28, top + Math.max(20, height - 12)) + "px";
+    toast.textContent = label || "正在操作这里";
+    toast.style.left = Math.min(window.innerWidth - 280, Math.max(14, left)) + "px";
+    toast.style.top = Math.min(window.innerHeight - 72, Math.max(14, top - 48)) + "px";
+  }
+
+  function highlightElement(element, label, options) {
+    if (!element) return Promise.resolve(false);
+    try {
+      element.scrollIntoView({ block: "center", inline: "center", behavior: "smooth" });
+    } catch (error) {
+      element.scrollIntoView();
+    }
+    return sleep((options && options.scrollDelay) || 420).then(function () {
+      moveOperationLayerTo(element, label, options);
+      return sleep((options && options.duration) || 520).then(function () {
+        return true;
+      });
+    });
+  }
+
+  function clickElement(element) {
+    if (!element) return false;
+    var cursor = document.querySelector(".xr-api-operation-cursor");
+    if (cursor) {
+      cursor.classList.add("is-clicking");
+      window.setTimeout(function () {
+        cursor.classList.remove("is-clicking");
+      }, 180);
+    }
+    element.focus && element.focus({ preventScroll: true });
+    element.click();
+    return true;
+  }
+
+  function controlTarget(element) {
+    if (!element) return null;
+    var tag = String(element.tagName || "").toLowerCase();
+    if (tag === "input" || tag === "textarea" || tag === "select") return element;
+    return element.querySelector ? element.querySelector("textarea,input,select") : null;
+  }
+
+  function setNativeValue(element, value) {
+    element = controlTarget(element) || element;
+    var tag = String(element.tagName || "").toLowerCase();
+    var setter;
+    if (tag === "textarea") {
+      setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
+    } else if (tag === "input") {
+      setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+    } else if (tag === "select") {
+      setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, "value").set;
+    }
+    if (setter) {
+      setter.call(element, value);
+    } else {
+      element.value = value;
+    }
+    element.dispatchEvent(new Event("input", { bubbles: true }));
+    element.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+
+  function selectNativeValue(element, value) {
+    if (!element) return false;
+    var target = controlTarget(element);
+    if (target) element = target;
+    if (String(element.tagName || "").toLowerCase() === "select") {
+      var wanted = String(value);
+      var found = Array.prototype.slice.call(element.options || []).some(function (option) {
+        return String(option.value) === wanted;
+      });
+      if (!found) return false;
+      setNativeValue(element, wanted);
+      return true;
+    }
+    clickElement(element);
+    return true;
+  }
+
+  function resolveSelectableElement(action, element) {
+    if (!action || action.type !== "select" || !action.agent || !action.value) return element;
+    if (element && String(element.tagName || "").toLowerCase() === "select") return element;
+    var option = findAgentElement(
+      agentSelector(action.agent + "-" + normalizeAgentSelectorValue(action.value)),
+      action.optionLabels || []
+    );
+    return option || element;
+  }
+
+  function persistOperation(actions, message) {
+    try {
+      sessionStorage.setItem(
+        OPERATION_QUEUE_KEY,
+        JSON.stringify({
+          actions: actions || [],
+          message: message || "",
+          createdAt: Date.now(),
+        })
+      );
+    } catch (error) {
+      // sessionStorage can be disabled. The current-page operation still runs.
+    }
+  }
+
+  function readPersistedOperation() {
+    var raw;
+    try {
+      raw = sessionStorage.getItem(OPERATION_QUEUE_KEY);
+      if (raw) sessionStorage.removeItem(OPERATION_QUEUE_KEY);
+    } catch (error) {
+      return null;
+    }
+    if (!raw) return null;
+    try {
+      var parsed = JSON.parse(raw);
+      if (!parsed || !Array.isArray(parsed.actions)) return null;
+      if (Date.now() - Number(parsed.createdAt || 0) > 120000) return null;
+      return parsed;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function clearPersistedOperation() {
+    try {
+      sessionStorage.removeItem(OPERATION_QUEUE_KEY);
+    } catch (error) {
+      // sessionStorage can be disabled.
+    }
+  }
+
+  function waitForPath(path, timeout) {
+    var started = Date.now();
+    var target = String(path || "").replace(/\/+$/, "") || "/";
+    return new Promise(function (resolve) {
+      function tick() {
+        var current = (window.location.pathname || "/").replace(/\/+$/, "") || "/";
+        if (current === target) {
+          resolve(true);
+          return;
+        }
+        if (Date.now() - started >= (timeout || 2200)) {
+          resolve(false);
+          return;
+        }
+        window.setTimeout(tick, 120);
+      }
+      tick();
+    });
+  }
+
+  function waitForAgentElement(selector, labels, timeout) {
+    var started = Date.now();
+    return new Promise(function (resolve) {
+      function tick() {
+        var element = findAgentElement(selector, labels);
+        if (element) {
+          resolve(element);
+          return;
+        }
+        if (Date.now() - started >= (timeout || 8000)) {
+          resolve(null);
+          return;
+        }
+        window.setTimeout(tick, 180);
+      }
+      tick();
+    });
+  }
+
+  function runOperationSequence(actions) {
+    var chain = Promise.resolve();
+    (actions || []).forEach(function (action) {
+      chain = chain.then(function () {
+        return runOperationAction(action);
+      });
+    });
+    return chain;
+  }
+
+  function runOperationActions(actions) {
+    if (!actions || !actions.length || state.operationRunning) return Promise.resolve();
+    state.operationRunning = true;
+    document.documentElement.classList.add("xr-api-assistant-operating");
+    return runOperationSequence(actions)
+      .catch(function (error) {
+        typeAssistant(error.message || "我在页面操作时没有找到目标控件。你可以刷新后再试一次。", {
+          tone: "error",
+          actions: [{ label: "重新演示媒体工坊", value: "operate:media-image" }],
+        });
+      })
+      .finally(function () {
+        state.operationRunning = false;
+        document.documentElement.classList.remove("xr-api-assistant-operating");
+        window.setTimeout(clearOperationLayer, 900);
+      });
+  }
+
+  function runOperationAction(action) {
+    if (!action) return Promise.resolve();
+    if (action.type === "message") {
+      typeAssistant(action.text || "", action.options || {});
+      return sleep(action.delay || 260);
+    }
+    if (action.type === "wait") {
+      return sleep(action.ms || 400);
+    }
+    if (action.type === "goto") {
+      if (window.location.pathname === action.path) return runOperationSequence(action.next || []);
+      persistOperation(action.next || [], action.resumeMessage || "");
+      typeAssistant(action.message || "我先带你到目标页面，到了以后继续操作。", { tone: "operation" });
+      return new Promise(function (resolve, reject) {
+        window.setTimeout(function () {
+          var link = findRouteLink(action.path, action.title || "");
+          if (!link) {
+            window.location.assign(action.path);
+            return;
+          }
+          highlightElement(link, action.label || "点击进入目标页面", { duration: 520 }).then(function () {
+            clickElement(link);
+            waitForPath(action.path, 2400).then(function (matched) {
+              if (!matched) {
+                window.location.assign(action.path);
+                return;
+              }
+              clearPersistedOperation();
+              runOperationSequence(action.next || []).then(resolve).catch(reject);
+            });
+          }).catch(reject);
+        }, 260);
+      });
+    }
+    var selector = action.selector || (action.agent ? agentSelector(action.agent) : "");
+    if (action.type === "select" && action.agent && action.value) {
+      selector =
+        selector +
+        "," +
+        agentSelector(action.agent + "-" + normalizeAgentSelectorValue(action.value));
+    }
+    return waitForAgentElement(selector, action.labels, action.timeout || 8000).then(function (element) {
+      if (!element) {
+        throw new Error(action.missing || "我没有找到要操作的页面控件。");
+      }
+      element = resolveSelectableElement(action, element);
+      return highlightElement(element, action.label || "我正在操作这里", {
+        duration: action.highlightMs || 520,
+      }).then(function () {
+        if (action.type === "click") {
+          clickElement(element);
+        } else if (action.type === "type") {
+          setNativeValue(element, action.value || "");
+        } else if (action.type === "select") {
+          if (!selectNativeValue(element, action.value)) {
+            throw new Error(action.missing || "这个参数暂时不可选。");
+          }
+        } else if (action.type === "highlight") {
+          return sleep(action.ms || 360);
+        }
+        return sleep(action.after || 360);
+      });
+    });
+  }
+
+  function extractMediaPrompt(text) {
+    var value = String(text || "").trim();
+    var markers = ["提示词", "prompt", "要求", "描述"];
+    for (var i = 0; i < markers.length; i += 1) {
+      var index = value.toLowerCase().indexOf(markers[i].toLowerCase());
+      if (index >= 0) {
+        var tail = value.slice(index + markers[i].length).replace(/^[：:\s，,。]+/, "").trim();
+        if (tail.length >= 6) return tail;
+      }
+    }
+    return value
+      .replace(/我给你一段提示词[，,。:\s]*/g, "")
+      .replace(/你按照要求帮我把图片生成好[，,。:\s]*/g, "")
+      .replace(/帮我生成(一张)?图片[，,。:\s]*/g, "")
+      .trim();
+  }
+
+  function wantsMediaImageOperation(text) {
+    var lower = String(text || "").toLowerCase();
+    var hasImage = lower.indexOf("图片") >= 0 || lower.indexOf("图像") >= 0 || lower.indexOf("画图") >= 0 || lower.indexOf("海报") >= 0 || lower.indexOf("生成图") >= 0;
+    var hasPrompt = lower.indexOf("提示词") >= 0 || lower.indexOf("prompt") >= 0 || lower.indexOf("要求") >= 0 || lower.indexOf("描述") >= 0;
+    var hasDo = lower.indexOf("生成") >= 0 || lower.indexOf("帮我") >= 0 || lower.indexOf("做") >= 0 || lower.indexOf("按照") >= 0;
+    return hasImage && (hasPrompt || hasDo);
+  }
+
+  function mediaImageWorkflowActions(prompt, skipGoto) {
+    var finalPrompt =
+      prompt ||
+      "高级商业海报，真实光影，主体清晰，画面干净，适合品牌宣传。";
+    var actions = [
+      { type: "click", agent: "media-mode-image", label: "先切到图像生成" },
+      { type: "click", agent: "media-image-workflow-generate", label: "选择文生图" },
+      {
+        type: "select",
+        agent: "media-model",
+        value: "gpt-image-2-4K",
+        label: "选择 GPT Image 2",
+        missing: "我没有找到 GPT Image 2 模型，可能当前分组没有权限。",
+      },
+      { type: "type", agent: "media-prompt", value: finalPrompt, label: "把你的提示词填进去" },
+      {
+        type: "select",
+        agent: "media-resolution",
+        value: "2K",
+        label: "选择适合小白用户的 2K 尺寸",
+      },
+      { type: "select", agent: "media-quality", value: "high", label: "选择高清晰度" },
+      {
+        type: "highlight",
+        agent: "media-generate",
+        label: "最后点击这里提交生成，会消耗当前账号额度",
+        ms: 720,
+      },
+      {
+        type: "message",
+        text:
+          "我已经带你完成媒体工坊的图片生成准备：图像模式、文生图、模型、提示词、尺寸和清晰度都已定位。\n\n最后这个“生成图像”按钮会真实提交任务并消耗额度。确认要生成时，直接点“确认提交生成”。",
+        options: {
+          tone: "operation",
+          actions: [
+            { label: "确认提交生成", value: "operate:media-submit" },
+            { label: "重新演示媒体工坊", value: "operate:media-image" },
+          ],
+        },
+      },
+    ];
+    if (skipGoto || window.location.pathname === CONFIG.mediaPath) return actions;
+    return [
+      {
+        type: "goto",
+        path: CONFIG.mediaPath,
+        title: "媒体工坊",
+        label: "点击媒体工坊入口",
+        message: "我先带你去媒体工坊，然后像真人操作电脑一样帮你选参数、填提示词。",
+        next: mediaImageWorkflowActions(finalPrompt, true),
+      },
+    ];
+  }
+
+  function startMediaImageWorkflow(text) {
+    var prompt = extractMediaPrompt(text);
+    typeAssistant("收到。我会按真实网页操作来走：打开媒体工坊、选择图像参数、填写提示词，再把生成按钮高亮给你确认。", {
+      tone: "operation",
+    });
+    runOperationActions(mediaImageWorkflowActions(prompt));
+  }
+
+  function submitMediaGeneration() {
+    runOperationActions([
+      {
+        type: "click",
+        agent: "media-generate",
+        label: "正在点击生成图像",
+        missing: "我没有找到生成按钮，请先打开媒体工坊。",
+        after: 800,
+      },
+      {
+        type: "message",
+        text: "已经提交生成。接下来等媒体工坊显示任务状态和结果；生成时间较长时，不要重复点击。",
+        options: { tone: "operation" },
+      },
+    ]);
+  }
+
   function navigateToRoute(key) {
     var route = SITE_ROUTES[key];
     if (!route) return;
-    typeAssistant("我现在带你到" + route.title + "。\n\n到页面后你继续问，我会根据当前界面接着指导。", {
+    var targetPath = route.path.replace(/\/+$/, "") || "/";
+    if ((window.location.pathname.replace(/\/+$/, "") || "/") === targetPath) {
+      var currentTarget = findAgentElement("h1,h2,main", [route.title]);
+      typeAssistant("你已经在" + route.title + "。我把当前页面高亮给你看。", {
+        tone: "operation",
+      });
+      if (currentTarget) {
+        highlightElement(currentTarget, "当前就是" + route.title, { duration: 900 });
+      }
+      return;
+    }
+    typeAssistant("我现在像真人操作一样带你到" + route.title + "。\n\n我会先找页面上的入口，能点就直接高亮并点击。", {
       tone: "operation",
     });
     window.setTimeout(function () {
-      window.location.assign(route.path);
-    }, 320);
+      var link = findRouteLink(route.path, route.title);
+      if (!link) {
+        window.location.assign(route.path);
+        return;
+      }
+      highlightElement(link, "点击" + route.title, { duration: 520 }).then(function () {
+        clickElement(link);
+        window.setTimeout(function () {
+          if ((window.location.pathname.replace(/\/+$/, "") || "/") !== targetPath) {
+            window.location.assign(route.path);
+          }
+        }, 700);
+      });
+    }, 160);
   }
 
   function clickVisibleButton(labels) {
@@ -602,7 +1099,7 @@
           { label: "开始自动接入 Codex", value: "codex" },
           routeAction("token", "令牌管理"),
           routeAction("pricing", "模型价格"),
-          routeAction("media", "媒体工坊"),
+          { label: "媒体工坊", value: "operate:media-image" },
         ],
       }
     );
@@ -805,6 +1302,10 @@
 
   function tryHandleLocalIntent(value) {
     var routes = detectRoutes(value);
+    if (wantsMediaImageOperation(value)) {
+      startMediaImageWorkflow(value);
+      return true;
+    }
     if (wantsCodex(value)) {
       askCodexModel();
       return true;
@@ -906,6 +1407,9 @@
     if (lower.indexOf("401") >= 0 || lower.indexOf("403") >= 0 || lower.indexOf("timeout") >= 0) {
       actions.push({ label: "检查模型列表", value: "models-check" });
     }
+    if (wantsMediaImageOperation(text) || lower.indexOf("媒体工坊") >= 0 || lower.indexOf("图片") >= 0 || lower.indexOf("图像") >= 0) {
+      actions.push({ label: "操作媒体工坊", value: "operate:media-image" });
+    }
     if (wantsNavigation(text) && (lower.indexOf("key") >= 0 || lower.indexOf("令牌") >= 0 || lower.indexOf("api") >= 0)) {
       actions.push({ label: "打开令牌管理", value: "route:token" });
     }
@@ -929,6 +1433,8 @@
     if (value === "err-401" || value === "err-403" || value === "err-timeout") return cannedError(value);
     if (value.indexOf("route:") === 0) return navigateToRoute(value.slice("route:".length));
     if (value === "operate:token-create") return openTokenCreateUI();
+    if (value === "operate:media-image") return startMediaImageWorkflow("");
+    if (value === "operate:media-submit") return submitMediaGeneration();
     if (value === "open-token") return navigateToRoute("token");
     if (value === "login") return window.location.assign(CONFIG.loginPath);
     if (value === "end-session") return closeAssistant();
@@ -1046,10 +1552,10 @@
         ? '<aside class="xr-api-assistant-panel" role="dialog" aria-label="星人 API 接入老师">' +
           '<header><div class="xr-api-assistant-title">' +
           renderAvatar("xr-api-assistant-avatar") +
-          '<div><strong>星人 API 全站接入老师</strong><span>读当前页、答疑、授权后自动创建 Key</span></div></div><button type="button" class="xr-api-assistant-close" aria-label="结束会话并清空历史">×</button></header>' +
-          '<div class="xr-api-assistant-statusbar"><span>全站可见</span><span>读当前页</span><span>授权后操作</span><span>结束即清空</span></div>' +
+          '<div><strong>星人 API 全站接入老师</strong><span>读当前页、真人式高亮代操作</span></div></div><button type="button" class="xr-api-assistant-close" aria-label="结束会话并清空历史">×</button></header>' +
+          '<div class="xr-api-assistant-statusbar"><span>全站可见</span><span>读当前页</span><span>高亮代操作</span><span>结束即清空</span></div>' +
           '<div class="xr-api-assistant-messages" aria-live="polite"></div>' +
-          '<form class="xr-api-assistant-form"><input aria-label="输入接入需求" placeholder="问当前页面、入口、价格、报错，或说：我要将 API 接入 Codex" autocomplete="off" maxlength="900" /><button type="submit">发送</button></form>' +
+          '<form class="xr-api-assistant-form"><input aria-label="输入接入需求" placeholder="问当前页；或说：用这段提示词帮我生成图片" autocomplete="off" maxlength="900" /><button type="submit">发送</button></form>' +
           "</aside>"
         : "");
     root.querySelector(".xr-api-assistant-launcher").addEventListener("click", openAssistant);
@@ -1066,6 +1572,18 @@
       });
     }
     renderMessages();
+  }
+
+  function resumePersistedOperation() {
+    var queued = readPersistedOperation();
+    if (!queued || !queued.actions.length) return;
+    window.setTimeout(function () {
+      openAssistant();
+      if (queued.message) {
+        typeAssistant(queued.message, { tone: "operation" });
+      }
+      runOperationActions(queued.actions);
+    }, 700);
   }
 
   function injectStyles() {
@@ -1090,11 +1608,13 @@
       ".xr-api-assistant-messages{flex:1;overflow:auto;padding:15px;background:linear-gradient(180deg,#f6f8fb,#eef7f4)}" +
       ".xr-api-assistant-message{display:flex;margin:0 0 12px}.xr-api-assistant-message-user{justify-content:flex-end}.xr-api-assistant-bubble{max-width:94%;border:1px solid #e2e8f0;border-radius:13px;background:#ffffff;padding:11px 12px;box-shadow:0 4px 16px rgba(15,23,42,.04);font-size:13px;line-height:1.62}.xr-api-assistant-message-user .xr-api-assistant-bubble{background:#122033;color:#f8fafc;border-color:#122033}.xr-api-assistant-tone-operation .xr-api-assistant-bubble{border-color:#99f6e4;background:#ecfeff}.xr-api-assistant-tone-error .xr-api-assistant-bubble{border-color:#fecaca;background:#fff7f7;color:#7f1d1d}" +
       ".xr-api-assistant-bubble p{margin:0;white-space:normal}.xr-api-assistant-bubble p:empty{display:none}" +
-      ".xr-api-assistant-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:11px}.xr-api-assistant-actions button,.xr-api-assistant-form button{border:0;border-radius:10px;background:#0f766e;color:white;padding:8px 10px;font-size:12px;font-weight:750;cursor:pointer;white-space:normal;text-align:center;line-height:1.25}.xr-api-assistant-actions button:nth-child(2n){background:#334155}.xr-api-assistant-actions button:nth-child(3n){background:#155e75}.xr-api-assistant-actions button:nth-child(4n){background:#7c2d12}.xr-api-assistant-actions button:hover,.xr-api-assistant-form button:hover{filter:brightness(.96)}" +
-      ".xr-api-assistant-code{position:relative;margin:11px 0 2px;background:#101828;border-radius:12px;color:#e2e8f0;overflow:hidden;border:1px solid rgba(255,255,255,.08)}.xr-api-assistant-code button{position:absolute;right:8px;top:8px;border:0;border-radius:8px;background:#22c55e;color:#062814;padding:6px 9px;font-size:12px;font-weight:800;cursor:pointer}.xr-api-assistant-code pre{margin:0;padding:44px 12px 12px;white-space:pre-wrap;word-break:break-word;font-size:12px;line-height:1.54}" +
-      ".xr-api-assistant-form{display:grid;grid-template-columns:1fr auto;gap:9px;padding:12px;border-top:1px solid #e5e7eb;background:white}.xr-api-assistant-form input{min-width:0;border:1px solid #cbd5e1;border-radius:11px;padding:11px 12px;font-size:13px;outline:none}.xr-api-assistant-form input:focus{border-color:#0f766e;box-shadow:0 0 0 3px rgba(15,118,110,.14)}.xr-api-assistant-form button{padding:0 14px}" +
-      ".xr-api-assistant-typing{display:flex;gap:6px;align-items:center;width:auto}.xr-api-assistant-typing strong{font-size:12px;color:#475569;margin-right:2px}.xr-api-assistant-typing span{width:6px;height:6px;border-radius:50%;background:#64748b;animation:xrApiTyping 1s infinite ease-in-out}.xr-api-assistant-typing span:nth-child(2){animation-delay:.15s}.xr-api-assistant-typing span:nth-child(3){animation-delay:.3s}@keyframes xrApiTyping{0%,80%,100%{opacity:.35;transform:translateY(0)}40%{opacity:1;transform:translateY(-3px)}}@keyframes xrApiLauncherPing{0%{opacity:.72;transform:scale(.82)}70%,100%{opacity:0;transform:scale(1.28)}}@keyframes xrApiOnlineDot{0%,100%{transform:scale(1);opacity:.82}50%{transform:scale(1.24);opacity:1}}" +
-      "@media (prefers-reduced-motion:reduce){.xr-api-assistant-launcher,.xr-api-assistant-launcher::before,.xr-api-assistant-launcher::after,.xr-api-assistant-typing span{animation:none;transition:none}}" +
+	      ".xr-api-assistant-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:11px}.xr-api-assistant-actions button,.xr-api-assistant-form button{border:0;border-radius:10px;background:#0f766e;color:white;padding:8px 10px;font-size:12px;font-weight:750;cursor:pointer;white-space:normal;text-align:center;line-height:1.25}.xr-api-assistant-actions button:nth-child(2n){background:#334155}.xr-api-assistant-actions button:nth-child(3n){background:#155e75}.xr-api-assistant-actions button:nth-child(4n){background:#7c2d12}.xr-api-assistant-actions button:hover,.xr-api-assistant-form button:hover{filter:brightness(.96)}" +
+	      ".xr-api-assistant-code{position:relative;margin:11px 0 2px;background:#101828;border-radius:12px;color:#e2e8f0;overflow:hidden;border:1px solid rgba(255,255,255,.08)}.xr-api-assistant-code button{position:absolute;right:8px;top:8px;border:0;border-radius:8px;background:#22c55e;color:#062814;padding:6px 9px;font-size:12px;font-weight:800;cursor:pointer}.xr-api-assistant-code pre{margin:0;padding:44px 12px 12px;white-space:pre-wrap;word-break:break-word;font-size:12px;line-height:1.54}" +
+	      ".xr-api-assistant-form{display:grid;grid-template-columns:1fr auto;gap:9px;padding:12px;border-top:1px solid #e5e7eb;background:white}.xr-api-assistant-form input{min-width:0;border:1px solid #cbd5e1;border-radius:11px;padding:11px 12px;font-size:13px;outline:none}.xr-api-assistant-form input:focus{border-color:#0f766e;box-shadow:0 0 0 3px rgba(15,118,110,.14)}.xr-api-assistant-form button{padding:0 14px}" +
+	      "#xr-api-operation-layer{position:fixed;inset:0;z-index:2147482999;pointer-events:none;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif}.xr-api-operation-backdrop{position:absolute;inset:0;background:rgba(2,6,23,.18);backdrop-filter:saturate(1.1)}.xr-api-operation-ring{position:absolute;border:3px solid #22d3ee;border-radius:14px;box-shadow:0 0 0 9999px rgba(2,6,23,.18),0 0 0 7px rgba(34,211,238,.2),0 16px 48px rgba(8,47,73,.3);transition:left .28s ease,top .28s ease,width .28s ease,height .28s ease;animation:xrApiTargetPulse 1.15s ease-in-out infinite}.xr-api-operation-cursor{position:absolute;width:28px;height:28px;border-radius:999px;background:#ffffff;border:2px solid #0f766e;box-shadow:0 10px 24px rgba(15,23,42,.35);transition:left .28s ease,top .28s ease,transform .16s ease}.xr-api-operation-cursor::after{content:'';position:absolute;left:8px;top:8px;width:8px;height:8px;border-radius:999px;background:#0f766e}.xr-api-operation-cursor.is-clicking{transform:scale(.78)}.xr-api-operation-toast{position:absolute;max-width:min(280px,calc(100vw - 28px));border:1px solid rgba(8,145,178,.24);border-radius:12px;background:#ffffff;color:#0f172a;padding:9px 11px;font-size:12px;font-weight:800;line-height:1.35;box-shadow:0 14px 36px rgba(15,23,42,.2);transition:left .28s ease,top .28s ease}" +
+	      ".xr-api-assistant-typing{display:flex;gap:6px;align-items:center;width:auto}.xr-api-assistant-typing strong{font-size:12px;color:#475569;margin-right:2px}.xr-api-assistant-typing span{width:6px;height:6px;border-radius:50%;background:#64748b;animation:xrApiTyping 1s infinite ease-in-out}.xr-api-assistant-typing span:nth-child(2){animation-delay:.15s}.xr-api-assistant-typing span:nth-child(3){animation-delay:.3s}@keyframes xrApiTyping{0%,80%,100%{opacity:.35;transform:translateY(0)}40%{opacity:1;transform:translateY(-3px)}}@keyframes xrApiLauncherPing{0%{opacity:.72;transform:scale(.82)}70%,100%{opacity:0;transform:scale(1.28)}}@keyframes xrApiOnlineDot{0%,100%{transform:scale(1);opacity:.82}50%{transform:scale(1.24);opacity:1}}" +
+	      "@keyframes xrApiTargetPulse{0%,100%{border-color:#22d3ee}50%{border-color:#14b8a6}}" +
+	      "@media (prefers-reduced-motion:reduce){.xr-api-assistant-launcher,.xr-api-assistant-launcher::before,.xr-api-assistant-launcher::after,.xr-api-assistant-typing span,.xr-api-operation-ring{animation:none;transition:none}}" +
       "@media (max-width:640px){#xr-api-assistant-root{right:10px;top:auto;bottom:76px;transform:none}.xr-api-assistant-launcher{width:48px;height:48px;padding:6px}.xr-api-assistant-launcher-icon{width:36px;height:36px}.xr-api-assistant-panel{left:0;right:0;top:auto;bottom:0;transform:none;width:100%;height:min(75vh,660px);border-radius:16px 16px 0 0}.xr-api-assistant-title span:last-child{max-width:200px}.xr-api-assistant-actions button{flex:1 1 calc(50% - 8px)}}";
     document.head.appendChild(style);
   }
@@ -1107,6 +1627,7 @@
     if (!document.body) return;
     injectStyles();
     renderShell();
+    resumePersistedOperation();
   }
 
   if (document.readyState === "loading") {

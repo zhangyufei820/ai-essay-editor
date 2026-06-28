@@ -71,6 +71,13 @@ const openMediaUrl = (url) => {
   window.open(url, '_blank', 'noopener,noreferrer');
 };
 
+const agentSelectorValue = (value) =>
+  String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'item';
+
 const IMAGE_MODELS = [
   {
     value: 'gpt-image-2-4K',
@@ -845,9 +852,16 @@ function SectionTitle({ children, meta }) {
   );
 }
 
-function NativeSelect({ label, value, options, onChange, disabled = false }) {
+function NativeSelect({
+  label,
+  value,
+  options,
+  onChange,
+  disabled = false,
+  agentKey,
+}) {
   return (
-    <label className='mp-field'>
+    <label className='mp-field' data-xr-agent={agentKey || undefined}>
       <span>{label}</span>
       <Select
         value={value}
@@ -868,9 +882,13 @@ function OptionChips({
   onChange,
   compact = false,
   disabled = false,
+  agentKey,
 }) {
   return (
-    <div className={compact ? 'mp-chip-field is-compact' : 'mp-chip-field'}>
+    <div
+      className={compact ? 'mp-chip-field is-compact' : 'mp-chip-field'}
+      data-xr-agent={agentKey || undefined}
+    >
       <span>{label}</span>
       <div
         className={
@@ -887,6 +905,9 @@ function OptionChips({
               type='button'
               disabled={disabled}
               className={active ? 'mp-param-chip active' : 'mp-param-chip'}
+              data-xr-agent={
+                agentKey ? `${agentKey}-${agentSelectorValue(optionValue)}` : undefined
+              }
               onClick={() => onChange(optionValue)}
             >
               {optionLabel}
@@ -1910,6 +1931,7 @@ const MediaPlayground = () => {
                 className={mode === 'image' ? 'active' : ''}
                 onClick={() => setMode('image')}
                 type='button'
+                data-xr-agent='media-mode-image'
               >
                 <IconImage /> 图像
               </button>
@@ -1917,6 +1939,7 @@ const MediaPlayground = () => {
                 className={mode === 'video' ? 'active' : ''}
                 onClick={() => setMode('video')}
                 type='button'
+                data-xr-agent='media-mode-video'
               >
                 <IconPlay /> 视频
               </button>
@@ -1940,6 +1963,7 @@ const MediaPlayground = () => {
                     type='button'
                     disabled={item.disabled}
                     className={imageWorkflow === item.key ? 'active' : ''}
+                    data-xr-agent={`media-image-workflow-${item.key}`}
                     onClick={() => setImageWorkflow(item.key)}
                   >
                     {item.label}
@@ -1957,6 +1981,7 @@ const MediaPlayground = () => {
                     key={item.key}
                     type='button'
                     className={videoWorkflow === item.key ? 'active' : ''}
+                    data-xr-agent={`media-video-workflow-${item.key}`}
                     onClick={() => setVideoWorkflow(item.key)}
                   >
                     {item.label}
@@ -1976,6 +2001,7 @@ const MediaPlayground = () => {
                     className={
                       selected ? 'mp-model-card active' : 'mp-model-card'
                     }
+                    data-xr-agent={`media-model-${agentSelectorValue(item.value)}`}
                     onClick={() =>
                       mode === 'image'
                         ? setImageModel(item.value)
@@ -2027,6 +2053,7 @@ const MediaPlayground = () => {
                   onChange={setPrompt}
                   placeholder='例如：一张高级商业海报，主体清晰，真实光影，适合品牌宣传。'
                   className='mp-prompt-input'
+                  data-xr-agent='media-prompt'
                 />
                 <div className='mp-prompt-tools'>
                   <Tooltip content='复制提示词'>
@@ -2057,6 +2084,7 @@ const MediaPlayground = () => {
                 onChange={setNegativePrompt}
                 placeholder='不想出现的内容：低清晰度、畸形手指、文字错误、过曝等'
                 className='mp-negative-input'
+                data-xr-agent='media-negative-prompt'
               />
               {mode === 'image' && imageWorkflow === 'edit' ? (
                 <div className='mp-field-grid'>
@@ -2111,6 +2139,7 @@ const MediaPlayground = () => {
                       value={effectiveGroup}
                       options={visibleGroupOptions}
                       onChange={setGroup}
+                      agentKey='media-group'
                     />
                   ) : null}
                   {mode === 'image' && activeImageModel.resolutions?.length ? (
@@ -2120,6 +2149,7 @@ const MediaPlayground = () => {
                       options={toResolutionSelectOptions(activeImageModel.resolutions)}
                       onChange={setResolution}
                       compact
+                      agentKey='media-resolution'
                     />
                   ) : (
                     <OptionChips
@@ -2127,6 +2157,7 @@ const MediaPlayground = () => {
                       value={size}
                       options={toSizeSelectOptions(activeModel.sizes, activeModel)}
                       onChange={setSize}
+                      agentKey='media-size'
                     />
                   )}
                   {mode === 'image' && imageRatioOptions.length ? (
@@ -2135,6 +2166,7 @@ const MediaPlayground = () => {
                       value={imageRatioValue}
                       options={toSelectOptions(imageRatioOptions)}
                       onChange={handleImageRatioChange}
+                      agentKey='media-aspect-ratio'
                     />
                   ) : null}
                   {mode === 'image' ? (
@@ -2144,6 +2176,7 @@ const MediaPlayground = () => {
                       options={toSelectOptions(activeImageModel.qualities)}
                       onChange={setQuality}
                       compact
+                      agentKey='media-quality'
                     />
                   ) : (
                     <OptionChips
@@ -2155,6 +2188,7 @@ const MediaPlayground = () => {
                       }))}
                       onChange={setDuration}
                       compact
+                      agentKey='media-duration'
                     />
                   )}
                 </div>
@@ -2167,6 +2201,7 @@ const MediaPlayground = () => {
                       options={toSelectOptions(activeImageModel.formats)}
                       onChange={setFormat}
                       compact
+                      agentKey='media-format'
                     />
                   ) : (
                     <OptionChips
@@ -2178,6 +2213,7 @@ const MediaPlayground = () => {
                       ]}
                       onChange={setFps}
                       compact
+                      agentKey='media-fps'
                     />
                   )}
                   {mode === 'image' &&
@@ -2189,6 +2225,7 @@ const MediaPlayground = () => {
                       options={toSelectOptions(['auto', 'low', 'high'])}
                       onChange={setInputFidelity}
                       compact
+                      agentKey='media-input-fidelity'
                     />
                   ) : null}
                   {mode === 'image' && activeImageModel.backgroundOptions?.length ? (
@@ -2198,6 +2235,7 @@ const MediaPlayground = () => {
                       options={toSelectOptions(activeImageModel.backgroundOptions)}
                       onChange={setBackground}
                       compact
+                      agentKey='media-background'
                     />
                   ) : null}
                   {mode === 'video' ? (
@@ -2224,6 +2262,7 @@ const MediaPlayground = () => {
                         max={activeImageModel.maxCount || 1}
                         step={1}
                         value={clampCount(count, activeImageModel)}
+                        data-xr-agent='media-count'
                         onChange={(value) => setCount(clampCount(value, activeImageModel))}
                       />
                     </div>
@@ -2237,6 +2276,7 @@ const MediaPlayground = () => {
                           min={0}
                           max={100}
                           value={compression}
+                          data-xr-agent='media-compression'
                           onChange={setCompression}
                         />
                       </div>
@@ -2273,6 +2313,7 @@ const MediaPlayground = () => {
                   disabled={!modelAllowed}
                   onClick={handleSubmit}
                   className='mp-generate-button'
+                  data-xr-agent='media-generate'
                 >
                   {mode === 'image' ? '生成图像' : '生成视频'}
                 </Button>
