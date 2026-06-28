@@ -124,6 +124,10 @@
     awaitingCustomModel: false,
     operationRunning: false,
     pendingPageOperation: null,
+    typingTimer: null,
+    typingMessageId: "",
+    typingFull: "",
+    typingOptions: null,
   };
 
   function redactSecrets(text) {
@@ -324,15 +328,34 @@
 
   function currentRouteKey() {
     var path = window.location.pathname || "/";
+    return routeKeyForPath(path);
+  }
+
+  function normalizePathname(path) {
+    return String(path || "/").split("#")[0].split("?")[0].replace(/\/+$/, "") || "/";
+  }
+
+  function routeKeyForPath(path) {
+    path = normalizePathname(path);
     var best = "";
     Object.keys(SITE_ROUTES).forEach(function (key) {
-      var routePath = SITE_ROUTES[key].path;
+      var routePath = normalizePathname(SITE_ROUTES[key].path);
       if (!routePath) return;
       if (path === routePath || (routePath !== "/" && path.indexOf(routePath) === 0)) {
         if (!best || routePath.length > SITE_ROUTES[best].path.length) best = key;
       }
     });
     return best;
+  }
+
+  function hrefPath(element) {
+    var href = element && element.getAttribute ? element.getAttribute("href") : "";
+    if (!href) return "";
+    try {
+      return normalizePathname(new URL(href, window.location.origin).pathname);
+    } catch (error) {
+      return normalizePathname(href);
+    }
   }
 
   function collectLabels(selector, limit) {
@@ -393,20 +416,28 @@
       var label = document.querySelector('label[for="' + String(element.id).replace(/"/g, '\\"') + '"]');
       explicitLabel = label ? label.innerText || label.textContent || "" : "";
     }
-    return normalizeSpaces(
-      [
-        element.innerText,
-        element.textContent,
-        element.getAttribute && element.getAttribute("aria-label"),
-        labelledText,
-        explicitLabel,
-        element.getAttribute && element.getAttribute("placeholder"),
-        element.getAttribute && element.getAttribute("title"),
-        element.getAttribute && element.getAttribute("value"),
-      ]
-        .filter(Boolean)
-        .join(" ")
-    );
+    var seen = {};
+    return [
+      element.innerText,
+      element.textContent,
+      element.getAttribute && element.getAttribute("aria-label"),
+      labelledText,
+      explicitLabel,
+      element.getAttribute && element.getAttribute("placeholder"),
+      element.getAttribute && element.getAttribute("title"),
+      element.getAttribute && element.getAttribute("value"),
+    ]
+      .map(function (item) {
+        return normalizeSpaces(item);
+      })
+      .filter(Boolean)
+      .filter(function (item) {
+        var key = normalizeSearchText(item);
+        if (!key || seen[key]) return false;
+        seen[key] = true;
+        return true;
+      })
+      .join(" ");
   }
 
   function visiblePageText() {
@@ -448,6 +479,9 @@
       headings: collectLabels("h1,h2,h3,[role='heading']", 12),
       buttons: collectLabels("button,[role='button'],a", 24),
       fields: collectLabels("label,[aria-label],input[placeholder],textarea[placeholder]", 24),
+      controls: collectInteractiveInventory(28).map(function (item) {
+        return item.label + "|" + item.kind + (item.routeTitle ? "|to:" + item.routeTitle : "") + (item.sensitive ? "|confirm" : "");
+      }),
       visible_text: visiblePageText(),
     };
   }
@@ -488,6 +522,11 @@
     return lower.indexOf("codex") >= 0;
   }
 
+  function wantsCodexCloud(text) {
+    var lower = String(text || "").toLowerCase();
+    return hasAnyText(lower, ["云codex", "云 codex", "云端codex", "云端 codex", "cloud codex", "codex 工作区", "codex workspace", "workspace"]);
+  }
+
   function wantsCreateKey(text) {
     var lower = String(text || "").toLowerCase();
     return (
@@ -523,6 +562,22 @@
       lower.indexOf("按下") >= 0 ||
       lower.indexOf("打开") >= 0 ||
       lower.indexOf("进入") >= 0 ||
+      lower.indexOf("展开") >= 0 ||
+      lower.indexOf("选择") >= 0 ||
+      lower.indexOf("选中") >= 0 ||
+      lower.indexOf("切换到") >= 0 ||
+      lower.indexOf("切到") >= 0
+    );
+  }
+
+  function wantsExplicitControlOperation(text) {
+    var lower = String(text || "").toLowerCase();
+    return (
+      lower.indexOf("点击") >= 0 ||
+      lower.indexOf("点一下") >= 0 ||
+      lower.indexOf("点开") >= 0 ||
+      lower.indexOf("帮我点") >= 0 ||
+      lower.indexOf("按下") >= 0 ||
       lower.indexOf("展开") >= 0 ||
       lower.indexOf("选择") >= 0 ||
       lower.indexOf("选中") >= 0 ||
@@ -574,6 +629,22 @@
     return cleanOperationTarget(value);
   }
 
+  function extractExplicitControlTarget(text) {
+    var value = normalizeSpaces(text);
+    var verbs = ["点击", "点一下", "点开", "帮我点", "按下", "展开", "选择", "选中", "切换到", "切到"];
+    var bestIndex = -1;
+    var bestVerb = "";
+    verbs.forEach(function (verb) {
+      var index = value.lastIndexOf(verb);
+      if (index > bestIndex) {
+        bestIndex = index;
+        bestVerb = verb;
+      }
+    });
+    if (bestIndex < 0) return "";
+    return cleanOperationTarget(value.slice(bestIndex + bestVerb.length));
+  }
+
   function isSensitiveOperationText(text) {
     var lower = String(text || "").toLowerCase();
     return (
@@ -595,6 +666,60 @@
     );
   }
 
+  function elementKind(element) {
+    var tag = String((element && element.tagName) || "").toLowerCase();
+    var role = element && element.getAttribute ? element.getAttribute("role") : "";
+    var type = element && element.getAttribute ? String(element.getAttribute("type") || "").toLowerCase() : "";
+    if (tag === "a") return "link";
+    if (tag === "textarea") return "textarea";
+    if (tag === "select") return "select";
+    if (tag === "input") return type ? "input:" + type : "input";
+    if (tag === "summary") return "summary";
+    if (role) return role;
+    return tag || "control";
+  }
+
+  function elementRouteKey(element) {
+    var path = hrefPath(element);
+    return path ? routeKeyForPath(path) : "";
+  }
+
+  function elementCapability(element, index) {
+    var label = elementLabel(element);
+    if (!label) {
+      var path = hrefPath(element);
+      var routeKey = path ? routeKeyForPath(path) : "";
+      if (routeKey && SITE_ROUTES[routeKey]) label = SITE_ROUTES[routeKey].title;
+    }
+    if (!label) label = elementKind(element);
+    var routeKey = elementRouteKey(element);
+    var path = hrefPath(element);
+    return {
+      index: index,
+      label: limitText(label, 90),
+      kind: elementKind(element),
+      href: path,
+      route: routeKey,
+      routeTitle: routeKey && SITE_ROUTES[routeKey] ? SITE_ROUTES[routeKey].title : "",
+      sensitive: isSensitiveOperationText(label),
+    };
+  }
+
+  function collectInteractiveInventory(limit) {
+    var seen = {};
+    var items = [];
+    var elements = interactiveElements();
+    for (var i = 0; i < elements.length; i += 1) {
+      var item = elementCapability(elements[i], i);
+      var key = [item.kind, item.label, item.href].join("|");
+      if (seen[key]) continue;
+      seen[key] = true;
+      items.push(item);
+      if (items.length >= (limit || 36)) break;
+    }
+    return items;
+  }
+
   function routeSummary(keys) {
     return keys
       .map(function (key) {
@@ -603,6 +728,188 @@
       })
       .filter(Boolean)
       .join("\n");
+  }
+
+  function routeScore(key, text) {
+    var route = SITE_ROUTES[key];
+    if (!route) return 0;
+    var lower = String(text || "").toLowerCase();
+    var clean = normalizeSearchText(text);
+    var score = 0;
+    var aliases = [route.title, route.path, route.hint].concat(route.aliases || []);
+    aliases.forEach(function (alias) {
+      var raw = String(alias || "").toLowerCase();
+      var normalized = normalizeSearchText(alias);
+      if (!raw && !normalized) return;
+      if (raw && lower.indexOf(raw) >= 0) score += Math.min(70, 24 + raw.length);
+      if (normalized && clean.indexOf(normalized) >= 0) score += Math.min(70, 24 + normalized.length);
+      if (normalized && normalized.length >= 2 && normalized.indexOf(clean) >= 0) score += 18;
+    });
+    if (key === "logs" && hasAnyText(lower, ["日志", "记录", "用量", "消耗", "扣费", "request id"])) score += 42;
+    if (key === "media" && hasAnyText(lower, ["图片", "图像", "画图", "媒体", "视频", "提示词", "prompt"])) score += 34;
+    if (key === "pricing" && hasAnyText(lower, ["价格", "费用", "扣费", "模型", "权限", "分组"])) score += 30;
+    if (key === "token" && hasAnyText(lower, ["key", "令牌", "密钥", "sk-", "api key"])) score += 34;
+    if (key === "wallet" && hasAnyText(lower, ["充值", "余额", "支付", "套餐"])) score += 34;
+    if (key === "docs" && hasAnyText(lower, ["文档", "教程", "接入", "curl", "base url", "接口"])) score += 30;
+    if (key === "codexCloud" && hasAnyText(lower, ["codex", "云端", "工作区", "workspace"])) score += 32;
+    return score;
+  }
+
+  function rankRoutes(text) {
+    return Object.keys(SITE_ROUTES)
+      .map(function (key) {
+        return { key: key, score: routeScore(key, text) };
+      })
+      .filter(function (item) {
+        return item.score > 0;
+      })
+      .sort(function (a, b) {
+        return b.score - a.score;
+      });
+  }
+
+  function suggestedRouteActions(text) {
+    var ranked = rankRoutes(text).slice(0, 4).map(function (item) {
+      return routeAction(item.key);
+    });
+    if (!ranked.length) {
+      ranked = [routeAction("media", "媒体工坊"), routeAction("token", "令牌管理"), routeAction("pricing", "模型价格"), routeAction("logs", "用量日志")];
+    }
+    ranked.push({ label: "扫描当前页面", value: "operate:scan-page" });
+    return uniqueActions(ranked.filter(Boolean)).slice(0, 5);
+  }
+
+  function wantsPageDiscovery(text) {
+    var lower = String(text || "").toLowerCase();
+    return (
+      lower.indexOf("这个页面能做什么") >= 0 ||
+      lower.indexOf("当前页面能做什么") >= 0 ||
+      lower.indexOf("页面上有什么") >= 0 ||
+      lower.indexOf("有哪些按钮") >= 0 ||
+      lower.indexOf("有什么按钮") >= 0 ||
+      lower.indexOf("帮我看看这个页面") >= 0 ||
+      lower.indexOf("扫描当前页面") >= 0
+    );
+  }
+
+  function describeCurrentPageCapabilities() {
+    var routeKey = currentRouteKey();
+    var route = routeKey ? SITE_ROUTES[routeKey] : null;
+    var inventory = collectInteractiveInventory(24);
+    var actionable = inventory
+      .filter(function (item) {
+        return item.label && item.label.length <= 90;
+      })
+      .slice(0, 10);
+    var text =
+      "我已经扫描当前页面。" +
+      (route ? "\n\n当前是" + route.title + "：" + route.hint : "") +
+      (actionable.length ? "\n\n我能识别这些可操作入口：\n" + actionable.map(function (item) {
+        return item.label + (item.sensitive ? "（执行前需确认）" : "");
+      }).join("\n") : "\n\n当前可见区域里没有识别到明确按钮。");
+    typeAssistant(text + "\n\n你可以直接说“点击 + 按钮名”，我会先高亮再操作。", {
+      tone: "operation",
+      actions: uniqueActions(
+        actionable.slice(0, 4).map(function (item) {
+          return { label: "点击 " + item.label, value: "operate:page:" + encodeURIComponent(item.label) };
+        }).concat(suggestedRouteActions(""))
+      ).slice(0, 5),
+    });
+    scanCurrentPageHighlights(actionable);
+    return true;
+  }
+
+  function scanCurrentPageHighlights(items) {
+    var list = (items && items.length ? items : collectInteractiveInventory(8)).slice(0, 5);
+    if (!list.length) return;
+    var actions = list.map(function (item) {
+      return {
+        type: "highlight",
+        selector: "",
+        labels: [item.label],
+        label: item.label + (item.sensitive ? "（执行前需确认）" : ""),
+        ms: 520,
+      };
+    });
+    runOperationActions(actions);
+  }
+
+  function inferGeneralTaskPlan(text) {
+    var target = extractPageOperationTarget(text);
+    var controlTarget = extractExplicitControlTarget(text);
+    var current = findPageOperationMatch(target || text, text);
+    var routes = rankRoutes(text);
+    var currentRoute = currentRouteKey();
+    if (current.match && wantsPageOperation(text)) {
+      return {
+        kind: "current-page-operation",
+        target: controlTarget || target || text,
+        routeKey: currentRoute,
+      };
+    }
+    if (routes.length && (wantsNavigation(text) || wantsPageOperation(text))) {
+      var best = routes[0];
+      var route = SITE_ROUTES[best.key];
+      if (best.key === currentRoute && wantsPageOperation(text)) {
+        return { kind: "current-page-operation", target: controlTarget || target || text, routeKey: currentRoute };
+      }
+      if (best.score >= 34 || wantsNavigation(text)) {
+        return {
+          kind:
+            wantsExplicitControlOperation(text) &&
+            (controlTarget || target) &&
+            normalizeSearchText(controlTarget || target) !== normalizeSearchText(route.title)
+              ? "route-then-operation"
+              : "route",
+          routeKey: best.key,
+          target: controlTarget || target || route.title,
+        };
+      }
+    }
+    if (wantsPageOperation(text)) {
+      return { kind: "current-page-operation", target: controlTarget || target || text, routeKey: currentRoute };
+    }
+    return null;
+  }
+
+  function runGeneralSiteTask(text) {
+    if (wantsPageDiscovery(text)) return describeCurrentPageCapabilities();
+    var plan = inferGeneralTaskPlan(text);
+    if (!plan) return false;
+    if (plan.kind === "current-page-operation") {
+      return runGenericPageOperation(plan.target, text, false);
+    }
+    if (plan.kind === "route") {
+      navigateToRoute(plan.routeKey);
+      return true;
+    }
+    if (plan.kind === "route-then-operation") {
+      var route = SITE_ROUTES[plan.routeKey];
+      if (!route) return false;
+      typeAssistant("我理解你要去“" + route.title + "”并继续操作“" + plan.target + "”。我会先打开目标页面，到页后继续找对应按钮并高亮。", {
+        tone: "operation",
+      });
+      runOperationActions([
+        {
+          type: "goto",
+          path: route.path,
+          title: route.title,
+          label: "点击" + route.title,
+          message: "我先带你到" + route.title + "。",
+          resumeMessage: "已经到" + route.title + "，我继续查找“" + plan.target + "”。",
+          next: [
+            {
+              type: "page-operation",
+              target: plan.target,
+              originalText: text,
+              confirmed: false,
+            },
+          ],
+        },
+      ]);
+      return true;
+    }
+    return false;
   }
 
   function agentSelector(key) {
@@ -983,6 +1290,9 @@
     if (action.type === "wait") {
       return sleep(action.ms || 400);
     }
+    if (action.type === "page-operation") {
+      return performGenericPageOperation(action.target || action.label || "", action.originalText || action.target || "", !!action.confirmed);
+    }
     if (action.type === "goto") {
       if (window.location.pathname === action.path) return runOperationSequence(action.next || []);
       persistOperation(action.next || [], action.resumeMessage || "");
@@ -1270,61 +1580,79 @@
     return { target: target, match: match };
   }
 
-  function runGenericPageOperation(targetText, originalText, confirmed) {
-    var resolved = findPageOperationMatch(targetText, originalText);
-    var target = resolved.target;
-    var match = resolved.match;
-    if (!match) {
-      typeAssistant(
-        "我没有在当前可见页面里找到“" +
-          (target || "这个") +
-          "”。\n\n你可以把要点的按钮文字发给我，或者先让我打开对应入口。",
-        {
-          tone: "error",
-          actions: [routeAction("token", "令牌管理"), routeAction("media", "媒体工坊"), routeAction("pricing", "模型价格")],
+  function waitForPageOperationMatch(targetText, originalText, timeout) {
+    var started = Date.now();
+    return new Promise(function (resolve) {
+      function tick() {
+        var resolved = findPageOperationMatch(targetText, originalText);
+        if (resolved.match) {
+          resolve(resolved);
+          return;
         }
-      );
-      return true;
-    }
+        if (Date.now() - started >= (timeout || 6500)) {
+          resolve(resolved);
+          return;
+        }
+        window.setTimeout(tick, 180);
+      }
+      tick();
+    });
+  }
 
-    var label = describeElementTarget(match);
-    var sensitive = isSensitiveOperationText(originalText) || isSensitiveOperationText(target) || isSensitiveOperationText(label);
-    if (sensitive && !confirmed) {
-      state.pendingPageOperation = { target: target || label, label: label };
-      runOperationActions([
-        {
-          type: "highlight",
-          selector: "",
-          labels: [label, target],
-          label: "这一步可能提交、扣费或修改账号，先高亮给你确认",
-          missing: "我刚才找到的控件已经不可见了，请重新发一下要操作的按钮文字。",
-          ms: 760,
-        },
-      ]);
-      typeAssistant("我找到了“" + label + "”。\n\n这类按钮可能会提交任务、扣费或修改账号，我先不直接点。确认后我再执行。", {
+  function performGenericPageOperation(targetText, originalText, confirmed) {
+    return waitForPageOperationMatch(targetText, originalText).then(function (resolved) {
+      var target = resolved.target;
+      var match = resolved.match;
+      if (!match) {
+        typeAssistant(
+          "我没有在当前可见页面里找到“" +
+            (target || "这个") +
+            "”。\n\n你可以把要点的按钮文字发给我，或者先让我打开对应入口。",
+          {
+            tone: "error",
+            actions: suggestedRouteActions(originalText || targetText),
+          }
+        );
+        return true;
+      }
+
+      var label = describeElementTarget(match);
+      var sensitive = isSensitiveOperationText(originalText) || isSensitiveOperationText(target) || isSensitiveOperationText(label);
+      if (sensitive && !confirmed) {
+        state.pendingPageOperation = { target: target || label, label: label };
+        return highlightElement(match.element, "这一步可能提交、扣费或修改账号，先高亮给你确认", { duration: 760 }).then(function () {
+          typeAssistant("我找到了“" + label + "”。\n\n这类按钮可能会提交任务、扣费或修改账号，我先不直接点。确认后我再执行。", {
+            tone: "operation",
+            actions: [
+              { label: "确认点击", value: "operate:page-confirm" },
+              { label: "取消", value: "operate:page-cancel" },
+            ],
+          });
+          return true;
+        });
+      }
+
+      state.pendingPageOperation = null;
+      typeAssistant("我会像真人操作一样点击“" + label + "”。如果页面跳转或展开，我会继续读取新页面内容。", {
         tone: "operation",
-        actions: [
-          { label: "确认点击", value: "operate:page-confirm" },
-          { label: "取消", value: "operate:page-cancel" },
-        ],
       });
-      return true;
-    }
+      return highlightElement(match.element, "正在点击“" + label + "”", { duration: 520 })
+        .then(function () {
+          clickElement(match.element);
+          return sleep(480);
+        });
+    });
+  }
 
-    state.pendingPageOperation = null;
+  function runGenericPageOperation(targetText, originalText, confirmed) {
     runOperationActions([
       {
-        type: "click",
-        selector: "",
-        labels: [label, target],
-        label: "正在点击“" + label + "”",
-        missing: "我刚才找到的控件已经不可见了，请重新发一下要操作的按钮文字。",
-        after: 480,
+        type: "page-operation",
+        target: targetText,
+        originalText: originalText || targetText,
+        confirmed: !!confirmed,
       },
     ]);
-    typeAssistant("我会像真人操作一样点击“" + label + "”。如果页面跳转或展开，我会继续读取新页面内容。", {
-      tone: "operation",
-    });
     return true;
   }
 
@@ -1403,22 +1731,46 @@
     renderMessages();
   }
 
+  function flushTypingMessage() {
+    if (!state.typingTimer) return;
+    window.clearInterval(state.typingTimer);
+    state.typingTimer = null;
+    if (state.typingMessageId) {
+      updateMessage(state.typingMessageId, {
+        content: state.typingFull || "",
+        actions: (state.typingOptions && state.typingOptions.actions) || [],
+        code: (state.typingOptions && state.typingOptions.code) || "",
+        tone: (state.typingOptions && state.typingOptions.tone) || "",
+      });
+    }
+    state.typingMessageId = "";
+    state.typingFull = "";
+    state.typingOptions = null;
+    state.streaming = false;
+  }
+
   function typeAssistant(content, options) {
+    flushTypingMessage();
     var full = normalizeAgentText(content);
     var id = addMessage("assistant", "", Object.assign({}, options, { actions: [], code: "" }));
     var index = 0;
     var chunkSize = full.length > 260 ? 6 : 3;
     state.streaming = true;
-    state.loading = true;
+    state.typingMessageId = id;
+    state.typingFull = full;
+    state.typingOptions = options || {};
     renderMessages();
 
-    var timer = window.setInterval(function () {
+    state.typingTimer = window.setInterval(function () {
       index += chunkSize;
       updateMessage(id, { content: full.slice(0, index) });
       if (index >= full.length) {
-        window.clearInterval(timer);
+        window.clearInterval(state.typingTimer);
+        state.typingTimer = null;
         state.streaming = false;
-        state.loading = false;
+        state.typingMessageId = "";
+        state.typingFull = "";
+        state.typingOptions = null;
         updateMessage(id, {
           content: full,
           actions: (options && options.actions) || [],
@@ -1442,6 +1794,7 @@
   }
 
   function resetSession() {
+    flushTypingMessage();
     state.messages = [];
     state.loading = false;
     state.streaming = false;
@@ -1450,6 +1803,7 @@
     state.selectedOS = "mac";
     state.generatedKey = "";
     state.awaitingCustomModel = false;
+    state.pendingPageOperation = null;
   }
 
   function starter() {
@@ -1671,15 +2025,19 @@
       startUsageLogWorkflow(value);
       return true;
     }
-    if (wantsPageOperation(value)) {
-      var pageTarget = findPageOperationMatch(value, value);
+    if (wantsExplicitControlOperation(value)) {
+      var explicitTarget = extractExplicitControlTarget(value) || value;
+      var pageTarget = findPageOperationMatch(explicitTarget, value);
       if (pageTarget.match) {
-        return runGenericPageOperation(value, value, false);
+        return runGenericPageOperation(explicitTarget, value, false);
       }
     }
     if (wantsMediaImageOperation(value)) {
       startMediaImageWorkflow(value);
       return true;
+    }
+    if (wantsCodexCloud(value) && (wantsNavigation(value) || wantsPageOperation(value))) {
+      return runGeneralSiteTask(value);
     }
     if (wantsCodex(value)) {
       askCodexModel();
@@ -1695,6 +2053,7 @@
       });
       return true;
     }
+    if (runGeneralSiteTask(value)) return true;
     if (routes.length === 1 && wantsDirectRouteOperation(value)) {
       navigateToRoute(routes[0]);
       return true;
@@ -1804,6 +2163,12 @@
     if (wantsNavigation(text) && (lower.indexOf("价格") >= 0 || lower.indexOf("扣费") >= 0 || lower.indexOf("余额") >= 0)) {
       actions.push({ label: "模型价格", value: "route:pricing" });
     }
+    collectInteractiveInventory(8).slice(0, 2).forEach(function (item) {
+      if (!item.sensitive && item.label && scoreElementLabel(text, item.label) >= 34) {
+        actions.push({ label: "点击 " + item.label, value: "operate:page:" + encodeURIComponent(item.label) });
+      }
+    });
+    if (!actions.length) actions.push({ label: "扫描当前页面", value: "operate:scan-page" });
     return uniqueActions(actions).slice(0, 4);
   }
 
@@ -1828,6 +2193,10 @@
     if (value === "operate:page-cancel") {
       state.pendingPageOperation = null;
       return typeAssistant("已取消。你可以继续问我当前页面怎么操作，或者说要打开哪个入口。");
+    }
+    if (value === "operate:scan-page") return describeCurrentPageCapabilities();
+    if (value.indexOf("operate:page:") === 0) {
+      return runGenericPageOperation(decodeURIComponent(value.slice("operate:page:".length)), "", false);
     }
     if (value === "open-token") return navigateToRoute("token");
     if (value === "login") return window.location.assign(CONFIG.loginPath);
