@@ -79,6 +79,9 @@ import type {
 
 const IMAGE_WAIT_MESSAGE =
   '图像任务已提交，后台会持久化结果，可用任务 ID 查询。'
+const IMAGE_LONG_WAIT_MS = 70 * 1000
+const IMAGE_LONG_WAIT_MESSAGE =
+  '图像任务仍在生成中，耗时接近 70 秒。请不要重复提交，可继续等待或稍后用任务 ID 查询结果。'
 
 
 const SIZE_TO_ASPECT_RATIO: Record<string, string> = {
@@ -787,7 +790,9 @@ export function MediaPlayground() {
   }
 
   async function pollImageTask(taskId: string): Promise<MediaResult> {
+    const startedAt = Date.now()
     const deadline = Date.now() + 30 * 60 * 1000
+    let longWaitNotified = false
     while (Date.now() < deadline) {
       const response = await fetchImageTask(taskId)
       if (response.error?.message) throw new Error(response.error.message)
@@ -796,7 +801,14 @@ export function MediaPlayground() {
       }
       const status = getImageTaskStatus(response)
       const progress = getImageTaskProgress(response)
-      setTaskMessage(`图像任务 ${response.data.task_id}：${status}，进度 ${progress}%`)
+      const elapsedMs = Date.now() - startedAt
+      if (!longWaitNotified && elapsedMs >= IMAGE_LONG_WAIT_MS) {
+        longWaitNotified = true
+        toast.info(IMAGE_LONG_WAIT_MESSAGE)
+      }
+      const longWaitSuffix =
+        elapsedMs >= IMAGE_LONG_WAIT_MS ? '，生成耗时较长，请继续等待或稍后用任务 ID 查询' : ''
+      setTaskMessage(`图像任务 ${response.data.task_id}：${status}，进度 ${progress}%${longWaitSuffix}`)
       if (status === 'completed') {
         const result = imageTaskToResult(response.data)
         if (result) return result
