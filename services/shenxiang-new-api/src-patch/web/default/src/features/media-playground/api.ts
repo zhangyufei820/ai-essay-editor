@@ -102,7 +102,7 @@ export async function cacheGeneratedMedia(
 ) {
   const res = await api.post<MediaCacheResponse>(
     '/pg/media/cache',
-    { url, kind, ...(metadata ?? {}) },
+    { url, kind, metadata },
     { skipErrorHandler: true }
   )
   if (!res.data.success || !res.data.data?.url) {

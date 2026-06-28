@@ -542,9 +542,25 @@ function dataURLToBlobURL(dataURL) {
   }
 }
 
+function promptWithReferenceImages(value, count) {
+  if (count <= 0) return value;
+  const markers = Array.from({ length: count }, (_, index) => `@image${index + 1}`);
+  const missing = markers.filter((marker) => !String(value || '').includes(marker));
+  if (missing.length === 0) return value;
+  return `${missing.join(' ')} ${value || ''}`.trim();
+}
+
 function normalizeURL(url) {
   if (!url) return '';
   if (url.startsWith('/')) return url;
+  return url;
+}
+
+function toAbsoluteMediaURL(url) {
+  if (/^https?:\/\//i.test(url)) return url;
+  if (url.startsWith('/') && typeof window !== 'undefined') {
+    return `${window.location.origin}${url}`;
+  }
   return url;
 }
 
@@ -1446,6 +1462,78 @@ const MediaPlayground = () => {
     }
   }
 
+  async function cacheReferenceImage(file, role, index) {
+    const dataUrl = await fileToDataURL(file);
+    const res = await API.post(
+      '/pg/media/cache',
+      {
+        url: dataUrl,
+        kind: 'image',
+        metadata: {
+          role: 'reference',
+          reference_role: role,
+          reference_index: index + 1,
+          hidden: true,
+          source: 'video_input',
+          model: videoModel,
+          workflow: videoWorkflow,
+        },
+      },
+      { skipErrorHandler: true },
+    );
+    if (!res.data?.success || !res.data?.data?.url) {
+      throw new Error(res.data?.message || '参考图缓存失败。');
+    }
+    return toAbsoluteMediaURL(res.data.data.url);
+  }
+
+  async function applyVideoReferenceImages(payload) {
+    if (videoWorkflow !== 'image' && videoWorkflow !== 'first-last') return payload;
+
+    const references = await Promise.all(
+      referenceFiles.map(async (file, index) => ({
+        role: index === 0 ? 'first_frame' : 'reference_image',
+        url: await cacheReferenceImage(
+          file,
+          index === 0 ? 'first_frame' : 'reference_image',
+          index,
+        ),
+      })),
+    );
+    if (videoWorkflow === 'first-last' && lastFrameFile) {
+      references.push({
+        role: 'last_frame',
+        url: await cacheReferenceImage(lastFrameFile, 'last_frame', references.length),
+      });
+    }
+    if (references.length === 0) return payload;
+
+    const metadata = {
+      ...(payload.metadata || {}),
+      content: references.map((item) => ({
+        type: 'image_url',
+        image_url: { url: item.url },
+        role: 'reference_image',
+      })),
+      frames: references.map((item) => ({
+        role: item.role,
+        image: item.url,
+      })),
+      image_reference_count: references.length,
+    };
+    if (videoWorkflow === 'first-last') {
+      metadata.last_frame_image = references[references.length - 1]?.url;
+    }
+
+    return {
+      ...payload,
+      prompt: promptWithReferenceImages(payload.prompt || '', references.length),
+      image: references[0].url,
+      images: references.map((item) => item.url),
+      metadata,
+    };
+  }
+
   async function submitImage() {
     let response;
     if (imageWorkflow === 'edit') {
@@ -1575,32 +1663,7 @@ const MediaPlayground = () => {
   }
 
   async function submitVideo() {
-    const payload = { ...requestPayload };
-    if (videoWorkflow === 'image' || videoWorkflow === 'first-last') {
-      const referenceFrames = await Promise.all(
-        referenceFiles.map((file) => fileToDataURL(file)),
-      );
-      payload.image = referenceFrames[0];
-      payload.images = referenceFrames;
-    }
-    if (videoWorkflow === 'first-last') {
-      const lastFrame = await fileToDataURL(lastFrameFile);
-      const referenceFrames = Array.isArray(payload.images)
-        ? payload.images
-        : [payload.image];
-      payload.images = [...referenceFrames, lastFrame];
-      payload.metadata = {
-        ...(payload.metadata || {}),
-        last_frame_image: lastFrame,
-        frames: [
-          ...referenceFrames.map((image, index) => ({
-            role: index === 0 ? 'first_frame' : 'reference_frame',
-            image,
-          })),
-          { role: 'last_frame', image: lastFrame },
-        ],
-      };
-    }
+    const payload = await applyVideoReferenceImages({ ...requestPayload });
     const res = await API.post('/pg/videos', payload, {
       skipErrorHandler: true,
     });

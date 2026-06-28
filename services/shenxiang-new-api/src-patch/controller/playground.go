@@ -32,6 +32,7 @@ type playgroundVideoMediaMarker struct {
 	Group     string                 `json:"group,omitempty"`
 	Endpoint  string                 `json:"endpoint,omitempty"`
 	Metadata  map[string]interface{} `json:"metadata,omitempty"`
+	Inputs    map[string]interface{} `json:"inputs,omitempty"`
 }
 
 func setupPlaygroundTokenContext(c *gin.Context) (*types.NewAPIError, *relaycommon.RelayInfo) {
@@ -162,6 +163,7 @@ func annotatePlaygroundVideoTaskData(c *gin.Context, task *model.Task, relayInfo
 		Group:     truncatePlaygroundText(relayInfo.UsingGroup, 50),
 		Endpoint:  path,
 		Metadata:  normalizePlaygroundMetadata(taskReq.Metadata),
+		Inputs:    summarizePlaygroundVideoInputs(taskReq.Metadata),
 	}
 	if marker.Duration <= 0 && marker.Seconds != "" {
 		if v, err := strconv.Atoi(marker.Seconds); err == nil {
@@ -184,6 +186,61 @@ func annotatePlaygroundVideoTaskData(c *gin.Context, task *model.Task, relayInfo
 	if task.Properties.OriginModelName == "" {
 		task.Properties.OriginModelName = marker.Model
 	}
+}
+
+func summarizePlaygroundVideoInputs(metadata map[string]interface{}) map[string]interface{} {
+	contentCount := 0
+	referenceURLCount := 0
+	for _, item := range playgroundVideoMetadataContent(metadata) {
+		contentCount++
+		if playgroundVideoContentImageURL(item) != "" {
+			referenceURLCount++
+		}
+	}
+	if contentCount == 0 && referenceURLCount == 0 {
+		return nil
+	}
+	return map[string]interface{}{
+		"metadata_content_count": contentCount,
+		"reference_url_count":    referenceURLCount,
+	}
+}
+
+func playgroundVideoMetadataContent(metadata map[string]interface{}) []interface{} {
+	if len(metadata) == 0 {
+		return nil
+	}
+	content, ok := metadata["content"]
+	if !ok {
+		return nil
+	}
+	items, ok := content.([]interface{})
+	if !ok {
+		return nil
+	}
+	return items
+}
+
+func playgroundVideoContentImageURL(item interface{}) string {
+	obj, ok := item.(map[string]interface{})
+	if !ok {
+		return ""
+	}
+	imageURL, ok := obj["image_url"]
+	if !ok {
+		return ""
+	}
+	if value, ok := imageURL.(string); ok {
+		return strings.TrimSpace(value)
+	}
+	nested, ok := imageURL.(map[string]interface{})
+	if !ok {
+		return ""
+	}
+	if value, ok := nested["url"].(string); ok {
+		return strings.TrimSpace(value)
+	}
+	return ""
 }
 
 func firstNonEmptyString(values ...string) string {

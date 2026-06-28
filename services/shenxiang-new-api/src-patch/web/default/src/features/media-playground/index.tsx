@@ -54,7 +54,6 @@ import {
   extractImageTaskId,
   extractVideoTaskId,
   extractVideoUrl,
-  fileToDataUrl,
   getImageTaskProgress,
   getImageTaskStatus,
   getVideoProgress,
@@ -243,6 +242,14 @@ function isPersistentMediaUrl(url?: string) {
   return url.startsWith('/') || /^https?:\/\//i.test(url)
 }
 
+function toAbsoluteMediaUrl(url: string) {
+  if (/^https?:\/\//i.test(url)) return url
+  if (url.startsWith('/') && typeof window !== 'undefined') {
+    return `${window.location.origin}${url}`
+  }
+  return url
+}
+
 function restoreStoredResults(): MediaResult[] {
   if (typeof window === 'undefined') return []
   try {
@@ -283,6 +290,14 @@ function persistResults(results: MediaResult[]) {
     .filter(Boolean)
     .slice(0, 60)
   window.localStorage.setItem(MEDIA_RESULT_STORAGE_KEY, JSON.stringify(storable))
+}
+
+function promptWithReferenceImages(value: string, count: number) {
+  if (count <= 0) return value
+  const markers = Array.from({ length: count }, (_, index) => `@image${index + 1}`)
+  const missing = markers.filter((marker) => !value.includes(marker))
+  if (missing.length === 0) return value
+  return `${missing.join(' ')} ${value}`.trim()
 }
 
 const DEFAULT_PROMPT =
@@ -591,6 +606,68 @@ export function MediaPlayground() {
     }
   }
 
+  async function cacheReferenceImage(file: File, role: string, index: number) {
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(String(reader.result))
+      reader.onerror = () => reject(new Error('读取参考图失败'))
+      reader.readAsDataURL(file)
+    })
+    const cached = await cacheGeneratedMedia(dataUrl, 'image', {
+      role: 'reference',
+      reference_role: role,
+      reference_index: index + 1,
+      hidden: true,
+      source: 'video_input',
+      model: videoModel,
+      workflow: videoWorkflow,
+    })
+    return toAbsoluteMediaUrl(cached.url)
+  }
+
+  async function applyVideoReferenceImages(payload: Record<string, unknown>) {
+    if (videoWorkflow !== 'image' && videoWorkflow !== 'first-last') return payload
+
+    const references = await Promise.all(
+      referenceFiles.map(async (file, index) => ({
+        role: index === 0 ? 'first_frame' : 'reference_image',
+        url: await cacheReferenceImage(file, index === 0 ? 'first_frame' : 'reference_image', index),
+      }))
+    )
+    if (videoWorkflow === 'first-last' && lastFrameFile) {
+      references.push({
+        role: 'last_frame',
+        url: await cacheReferenceImage(lastFrameFile, 'last_frame', references.length),
+      })
+    }
+    if (references.length === 0) return payload
+
+    const metadata: Record<string, unknown> = {
+      ...((payload.metadata as Record<string, unknown> | undefined) ?? {}),
+      content: references.map((item) => ({
+        type: 'image_url',
+        image_url: { url: item.url },
+        role: 'reference_image',
+      })),
+      frames: references.map((item) => ({
+        role: item.role,
+        image: item.url,
+      })),
+      image_reference_count: references.length,
+    }
+    if (videoWorkflow === 'first-last') {
+      metadata.last_frame_image = references[references.length - 1]?.url
+    }
+
+    return {
+      ...payload,
+      prompt: promptWithReferenceImages(String(payload.prompt ?? ''), references.length),
+      image: references[0].url,
+      images: references.map((item) => item.url),
+      metadata,
+    }
+  }
+
   async function handleSubmit() {
     if (!selectedModelAllowed) {
       toast.error('当前用户分组暂未开放这个模型。')
@@ -642,32 +719,7 @@ export function MediaPlayground() {
         return
       }
 
-      const payload = { ...requestPayload }
-      if (videoWorkflow === 'image' || videoWorkflow === 'first-last') {
-        const referenceFrames = await Promise.all(
-          referenceFiles.map((file) => fileToDataUrl(file))
-        )
-        payload.image = referenceFrames[0]
-        payload.images = referenceFrames
-      }
-      if (videoWorkflow === 'first-last') {
-        const lastFrame = await fileToDataUrl(lastFrameFile!)
-        const referenceFrames = Array.isArray(payload.images)
-          ? (payload.images as string[])
-          : [payload.image as string]
-        payload.images = [...referenceFrames, lastFrame]
-        payload.metadata = {
-          ...(payload.metadata as Record<string, unknown> | undefined),
-          last_frame_image: lastFrame,
-          frames: [
-            ...referenceFrames.map((image, index) => ({
-              role: index === 0 ? 'first_frame' : 'reference_frame',
-              image,
-            })),
-            { role: 'last_frame', image: lastFrame },
-          ],
-        }
-      }
+      const payload = await applyVideoReferenceImages({ ...requestPayload })
 
       const submit = await createVideo(payload)
       if (submit.error?.message) throw new Error(submit.error.message)

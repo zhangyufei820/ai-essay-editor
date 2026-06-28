@@ -155,7 +155,7 @@ export const MEDIA_MODEL_CONFIGS: ModelCapability[] = [
     defaultFps: 24,
     notes: [
       '视频是异步任务，提交后需要等待任务完成。',
-      '上传首帧或首尾帧时，系统会自动把图片转成 data URL 放入请求。',
+      '上传首帧或首尾帧时，系统会先缓存成可访问 URL，再写入 metadata.content[] 并在提示词中引用。',
       '首尾帧请求会附带 metadata.frames，方便兼容支持首尾帧的模型服务。',
     ],
   },
