@@ -186,6 +186,7 @@ func createImageTask(c *gin.Context, openAICompat bool) {
 			"group":    usingGroup,
 		},
 	}
+	annotatePlaygroundImageRequestMetadata(payload.Metadata, &imageReq)
 	task := &model.Task{
 		TaskID:     taskID,
 		Platform:   constant.TaskPlatformPlaygroundImage,
@@ -296,6 +297,8 @@ func parsePlaygroundImageTaskMultipartRequest(c *gin.Context, imageReq *dto.Imag
 		"watermark_enabled":  &imageReq.WatermarkEnabled,
 		"user_id":            &imageReq.UserId,
 		"image":              &imageReq.Image,
+		"responseFormat":     &imageReq.ResponseFormatObj,
+		"generationConfig":   &imageReq.GenerationConfig,
 	}
 	for key, target := range rawFields {
 		if value := formValue(key); value != "" {
@@ -476,6 +479,29 @@ func playgroundImageRequestExtraString(imageReq *dto.ImageRequest, key string) s
 		return value
 	}
 	return strings.Trim(strings.TrimSpace(string(raw)), `"`)
+}
+
+func annotatePlaygroundImageRequestMetadata(metadata map[string]interface{}, request *dto.ImageRequest) {
+	if metadata == nil || request == nil {
+		return
+	}
+	size := strings.TrimSpace(request.Size)
+	if size != "" {
+		metadata["requested_size"] = size
+		metadata["effective_size"] = size
+	}
+	if resolution := strings.TrimSpace(request.Resolution); resolution != "" {
+		metadata["resolution"] = resolution
+	}
+	if aspectRatio := strings.TrimSpace(request.AspectRatio); aspectRatio != "" {
+		metadata["aspect_ratio"] = aspectRatio
+	}
+	if len(request.ResponseFormatObj) > 0 {
+		metadata["responseFormat"] = json.RawMessage(request.ResponseFormatObj)
+	}
+	if len(request.GenerationConfig) > 0 {
+		metadata["generationConfig"] = json.RawMessage(request.GenerationConfig)
+	}
 }
 
 func recordPlaygroundImageTaskSubmittedLog(c *gin.Context, task *model.Task, payload *playgroundImageTaskPayload, request *dto.ImageRequest) {

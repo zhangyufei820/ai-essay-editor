@@ -168,7 +168,6 @@ function imageResponseFormat(aspectRatio: string, imageSize: string) {
 }
 
 function gptImage2SizeFor(aspectRatio: string, imageSize: string) {
-  if (imageSize === 'auto') return 'auto'
   const normalizedResolution = imageSize && imageSize !== 'auto' ? imageSize : '1K'
   return (
     GPT_IMAGE_2_SIZE_BY_RESOLUTION[normalizedResolution]?.[aspectRatio] ??

@@ -20,6 +20,8 @@ type ImageRequest struct {
 	AspectRatio       string          `json:"aspect_ratio,omitempty"`
 	Resolution        string          `json:"resolution,omitempty"`
 	ResponseFormat    string          `json:"response_format,omitempty"`
+	ResponseFormatObj json.RawMessage `json:"responseFormat,omitempty"`
+	GenerationConfig  json.RawMessage `json:"generationConfig,omitempty"`
 	Style             json.RawMessage `json:"style,omitempty"`
 	User              json.RawMessage `json:"user,omitempty"`
 	ExtraFields       json.RawMessage `json:"extra_fields,omitempty"`
