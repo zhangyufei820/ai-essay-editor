@@ -134,7 +134,7 @@ func (a *TaskAdaptor) BuildRequestURL(info *relaycommon.RelayInfo) (string, erro
 		return fmt.Sprintf("%s/v1/videos/%s/remix", a.baseURL, info.OriginTaskID), nil
 	}
 	if isSeedanceVideoModel(info.UpstreamModelName) {
-		return fmt.Sprintf("%s/v1/video/generations", a.baseURL), nil
+		return fmt.Sprintf("%s/api/v1/video/generations", a.baseURL), nil
 	}
 	return fmt.Sprintf("%s/v1/videos", a.baseURL), nil
 }

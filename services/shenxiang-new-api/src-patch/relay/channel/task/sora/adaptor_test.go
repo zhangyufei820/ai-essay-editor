@@ -128,7 +128,7 @@ func TestSeedanceBuildRequestURLUsesGenerationEndpoint(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if url != "https://provider.test/v1/video/generations" {
+	if url != "https://provider.test/api/v1/video/generations" {
 		t.Fatalf("BuildRequestURL() = %q", url)
 	}
 }
