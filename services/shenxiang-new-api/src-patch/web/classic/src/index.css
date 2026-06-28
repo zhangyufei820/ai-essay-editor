@@ -89,7 +89,8 @@ body.sx-home-active header button:hover {
   background:
     linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
     linear-gradient(180deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
-    linear-gradient(180deg, #090b0f 0%, #10151b 56%, #f4f7f5 56%, #f8faf7 100%);
+    radial-gradient(circle at 72% 18%, rgba(142, 230, 199, 0.11), transparent 30%),
+    linear-gradient(180deg, #090b0f 0%, #10151b 100%);
   background-size: 36px 36px, 36px 36px, auto;
   color: #f8fafc;
   overflow-x: hidden;
@@ -475,6 +476,24 @@ body.sx-home-active header button:hover {
   grid-template-columns: minmax(0, 0.72fr) minmax(0, 1.28fr);
   gap: 24px;
   align-items: start;
+  padding-top: 46px;
+  padding-bottom: 74px;
+  color: #f8fafc;
+}
+
+.sx-home-launch .sx-section-copy {
+  position: sticky;
+  top: 104px;
+}
+
+.sx-home-launch .sx-section-eyebrow {
+  border-color: rgba(142, 230, 199, 0.34);
+  background: rgba(142, 230, 199, 0.1);
+  color: #8ee6c7;
+}
+
+.sx-home-launch h2 {
+  color: #f8fafc;
 }
 
 .sx-section-copy {
@@ -502,6 +521,10 @@ body.sx-home-active header button:hover {
   letter-spacing: 0;
 }
 
+.sx-home-section.sx-home-launch h2 {
+  color: #f8fafc;
+}
+
 .sx-launch-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -513,10 +536,12 @@ body.sx-home-active header button:hover {
   display: grid;
   gap: 10px;
   min-height: 210px;
-  border: 1px solid #d9e3dd;
+  border: 1px solid rgba(204, 213, 205, 0.16);
   border-radius: 8px;
-  background: #ffffff;
-  color: #10151b;
+  background:
+    linear-gradient(135deg, rgba(142, 230, 199, 0.1), transparent 38%),
+    rgba(255, 255, 255, 0.055);
+  color: #f8fafc;
   padding: 18px;
   text-decoration: none;
   cursor: pointer;
@@ -525,13 +550,13 @@ body.sx-home-active header button:hover {
 
 .sx-launch-card:hover {
   border-color: #8ecfbd;
-  box-shadow: 0 18px 44px rgba(16, 21, 27, 0.1);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.22);
   text-decoration: none;
   transform: translateY(-2px);
 }
 
 .sx-launch-card span {
-  color: #315d55;
+  color: #8ee6c7;
   font-size: 12px;
   font-weight: 820;
 }
@@ -542,7 +567,7 @@ body.sx-home-active header button:hover {
 
 .sx-launch-card p {
   margin: 0;
-  color: #53615c;
+  color: #cbd6d3;
   line-height: 1.72;
 }
 
@@ -550,12 +575,27 @@ body.sx-home-active header button:hover {
   position: absolute;
   right: 16px;
   bottom: 16px;
-  color: #315d55;
+  color: #8ee6c7;
 }
 
 .sx-home-api {
-  padding-top: 20px;
-  padding-bottom: 58px;
+  position: relative;
+  z-index: 0;
+  padding-top: 58px;
+  padding-bottom: 66px;
+  color: #10151b;
+}
+
+.sx-home-api::before {
+  content: "";
+  position: absolute;
+  top: -26px;
+  bottom: 0;
+  left: 50%;
+  z-index: -1;
+  width: 100vw;
+  transform: translateX(-50%);
+  background: linear-gradient(180deg, rgba(244, 247, 245, 0), #f4f7f5 26px, #f8faf7 100%);
 }
 
 .sx-api-panel {
@@ -695,7 +735,8 @@ body.sx-home-active header button:hover {
     background:
       linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
       linear-gradient(180deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
-      linear-gradient(180deg, #090b0f 0%, #10151b 58%, #f4f7f5 58%, #f8faf7 100%);
+      radial-gradient(circle at 72% 12%, rgba(142, 230, 199, 0.11), transparent 32%),
+      linear-gradient(180deg, #090b0f 0%, #10151b 100%);
     background-size: 28px 28px, 28px 28px, auto;
   }
 
@@ -780,6 +821,20 @@ body.sx-home-active header button:hover {
 
   .sx-home-section {
     padding: 34px 0;
+  }
+
+  .sx-home-launch {
+    padding-top: 34px;
+    padding-bottom: 58px;
+  }
+
+  .sx-home-launch .sx-section-copy {
+    position: static;
+  }
+
+  .sx-home-api {
+    padding-top: 46px;
+    padding-bottom: 52px;
   }
 }
 
