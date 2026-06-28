@@ -3,6 +3,8 @@ import json
 import respx
 from httpx import Response
 
+from app.relaydance_client import request_diagnostic_summary
+
 
 def test_missing_gateway_key_returns_401(client):
     response = client.post("/api/v1/video/create", json={"prompt": "test"})
@@ -35,6 +37,35 @@ def test_create_video_rejects_image_generation_intent(client, auth_headers):
     assert body["success"] is False
     assert body["provider_code"] == "validation_error"
     assert body["message"] == "参数格式错误，请检查后重试。"
+
+
+def test_video_request_diagnostic_summary_redacts_prompt_and_image_url():
+    summary = request_diagnostic_summary(
+        "/v1/video/generations",
+        {
+            "model": "seedance-nsfw",
+            "prompt": "sensitive prompt text",
+            "seconds": "4",
+            "metadata": {
+                "ratio": "9:16",
+                "resolution": "720p",
+                "content": [
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": "https://cdn.example.test/private/path/source.png?token=secret"},
+                        "role": "first_frame",
+                    }
+                ],
+            },
+        },
+    )
+
+    assert summary["prompt_length"] == len("sensitive prompt text")
+    assert "sensitive prompt text" not in json.dumps(summary)
+    assert "private/path" not in json.dumps(summary)
+    assert "secret" not in json.dumps(summary)
+    assert summary["image_urls"] == [{"host": "cdn.example.test", "sha256_12": summary["image_urls"][0]["sha256_12"]}]
+    assert len(summary["image_urls"][0]["sha256_12"]) == 12
 
 
 @respx.mock

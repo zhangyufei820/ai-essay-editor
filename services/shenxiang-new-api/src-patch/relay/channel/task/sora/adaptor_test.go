@@ -1,6 +1,7 @@
 package sora
 
 import (
+	"net/http"
 	"reflect"
 	"testing"
 
@@ -147,6 +148,28 @@ func TestSeedanceGatewayFailureReturnsProviderStatus(t *testing.T) {
 	}
 	if taskErr.StatusCode != 400 {
 		t.Fatalf("StatusCode = %d, want 400", taskErr.StatusCode)
+	}
+	if taskErr.Code != "service_error" {
+		t.Fatalf("Code = %q, want service_error", taskErr.Code)
+	}
+}
+
+func TestSeedanceHTTPErrorWithErrorObjectReturnsProviderStatus(t *testing.T) {
+	taskErr := seedanceGatewayTaskError(responseTask{
+		Error: &struct {
+			Message string `json:"message"`
+			Code    string `json:"code"`
+		}{
+			Message: "服务暂时不可用，请稍后重试。",
+			Code:    "service_error",
+		},
+	}, http.StatusBadRequest)
+
+	if taskErr == nil {
+		t.Fatal("taskErr is nil")
+	}
+	if taskErr.StatusCode != http.StatusBadRequest {
+		t.Fatalf("StatusCode = %d, want %d", taskErr.StatusCode, http.StatusBadRequest)
 	}
 	if taskErr.Code != "service_error" {
 		t.Fatalf("Code = %q, want service_error", taskErr.Code)

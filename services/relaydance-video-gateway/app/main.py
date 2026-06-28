@@ -13,6 +13,7 @@ from app.routes.video import router as video_router
 from app.schemas import GatewayResponse
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger("relaydance_video_gateway")
 
 

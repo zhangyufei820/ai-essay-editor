@@ -1,8 +1,10 @@
 import asyncio
+import hashlib
 import json
 import logging
 from collections.abc import Mapping
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 
@@ -13,6 +15,7 @@ logger = logging.getLogger("relaydance_video_gateway")
 
 SENSITIVE_KEYS = {"authorization", "token", "signature", "policy", "x-gateway-key", "relaydance_api_token"}
 RETRY_STATUS_CODES = {429, 500, 502, 503, 504}
+DIAGNOSTIC_VIDEO_PATHS = {"/v1/video/generations", "/v1/videos"}
 
 
 def redact(value: Any) -> Any:
@@ -34,6 +37,70 @@ def validate_model(model: str, settings: Settings | None = None) -> None:
     settings = settings or get_settings()
     if settings.strict_model_validation and canonical_model(model) not in ALLOWED_MODELS:
         raise ValueError("requested model is not available")
+
+
+def _public_url_summary(value: Any) -> dict[str, str]:
+    text = value.strip() if isinstance(value, str) else ""
+    if not text:
+        return {}
+    parsed = urlparse(text)
+    host = parsed.netloc.lower()
+    if "@" in host:
+        host = host.rsplit("@", 1)[-1]
+    digest = hashlib.sha256(text.encode("utf-8")).hexdigest()[:12]
+    return {"host": host, "sha256_12": digest}
+
+
+def _image_url_from_content_item(item: Any) -> str:
+    if not isinstance(item, Mapping):
+        return ""
+    image_url = item.get("image_url")
+    if isinstance(image_url, str):
+        return image_url
+    if isinstance(image_url, Mapping):
+        value = image_url.get("url") or image_url.get("src")
+        return value if isinstance(value, str) else ""
+    return ""
+
+
+def request_diagnostic_summary(path: str, body: dict[str, Any] | None) -> dict[str, Any]:
+    body = body or {}
+    metadata = body.get("metadata") if isinstance(body.get("metadata"), Mapping) else {}
+    content = metadata.get("content") if isinstance(metadata, Mapping) else None
+    content_items = content if isinstance(content, list) else []
+
+    image_summaries: list[dict[str, str]] = []
+    roles: list[str] = []
+    for item in content_items:
+        if isinstance(item, Mapping):
+            role = item.get("role")
+            if isinstance(role, str) and role:
+                roles.append(role)
+            image_summary = _public_url_summary(_image_url_from_content_item(item))
+            if image_summary:
+                image_summaries.append(image_summary)
+
+    return {
+        "path": path,
+        "model": body.get("model"),
+        "seconds": str(body.get("seconds", "")) if body.get("seconds") is not None else "",
+        "prompt_length": len(body.get("prompt", "")) if isinstance(body.get("prompt"), str) else 0,
+        "metadata_keys": sorted(str(key) for key in metadata.keys()) if isinstance(metadata, Mapping) else [],
+        "ratio": metadata.get("ratio") if isinstance(metadata, Mapping) else None,
+        "resolution": metadata.get("resolution") if isinstance(metadata, Mapping) else None,
+        "content_count": len(content_items),
+        "content_roles": roles,
+        "image_urls": image_summaries,
+    }
+
+
+def provider_payload_diagnostic_summary(payload: Any, status_code: int) -> dict[str, Any]:
+    message = message_from_payload(payload)
+    return {
+        "payload_keys": sorted(str(key) for key in payload.keys()) if isinstance(payload, Mapping) else [],
+        "provider_code": public_provider_code(provider_code_from_payload(payload, status_code), status_code),
+        "message_length": len(message),
+    }
 
 
 def provider_code_from_payload(payload: Any, status_code: int) -> str:
@@ -171,10 +238,20 @@ class RelayDanceClient:
         headers = self.headers()
         if method.upper() == "POST":
             headers["Content-Type"] = "application/json"
+        diagnostic_summary = (
+            request_diagnostic_summary(path, json_body)
+            if method.upper() == "POST" and path in DIAGNOSTIC_VIDEO_PATHS
+            else None
+        )
 
         attempts = 3 if retry else 1
         for attempt in range(attempts):
             try:
+                if diagnostic_summary is not None:
+                    logger.info(
+                        "video submit request summary: %s",
+                        redact({"attempt": attempt + 1, **diagnostic_summary}),
+                    )
                 async with httpx.AsyncClient(timeout=self.settings.request_timeout_seconds) as client:
                     response = await client.request(
                         method.upper(),
@@ -184,6 +261,17 @@ class RelayDanceClient:
                         params=query,
                     )
                 payload = await self._response_payload(response)
+                if diagnostic_summary is not None and response.status_code >= 400:
+                    logger.warning(
+                        "video provider rejected request: %s",
+                        redact(
+                            {
+                                "status_code": response.status_code,
+                                "request": diagnostic_summary,
+                                "response": provider_payload_diagnostic_summary(payload, response.status_code),
+                            }
+                        ),
+                    )
                 if response.status_code in RETRY_STATUS_CODES and retry and attempt < attempts - 1:
                     retry_after = response.headers.get("retry-after")
                     sleep_seconds = float(retry_after) if retry_after and retry_after.isdigit() else 0.5 * (2**attempt)

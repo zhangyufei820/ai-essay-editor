@@ -47,6 +47,7 @@ type responseTask struct {
 	Success            *bool  `json:"success,omitempty"`
 	StatusCode         int    `json:"status_code,omitempty"`
 	ProviderCode       string `json:"provider_code,omitempty"`
+	Code               string `json:"code,omitempty"`
 	Message            string `json:"message,omitempty"`
 	Progress           int    `json:"progress"`
 	CreatedAt          int64  `json:"created_at"`
@@ -576,7 +577,7 @@ func (a *TaskAdaptor) DoResponse(c *gin.Context, resp *http.Response, info *rela
 		return
 	}
 
-	if dResp.Success != nil && !*dResp.Success {
+	if resp.StatusCode >= http.StatusBadRequest || dResp.Error != nil || (dResp.Success != nil && !*dResp.Success) {
 		taskErr = seedanceGatewayTaskError(dResp, resp.StatusCode)
 		return
 	}
@@ -607,6 +608,9 @@ func seedanceGatewayTaskError(dResp responseTask, httpStatus int) *dto.TaskError
 	}
 
 	code := strings.TrimSpace(dResp.ProviderCode)
+	if code == "" {
+		code = strings.TrimSpace(dResp.Code)
+	}
 	message := strings.TrimSpace(dResp.Message)
 	if dResp.Error != nil {
 		if code == "" {
