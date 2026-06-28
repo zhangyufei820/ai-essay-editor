@@ -3,6 +3,8 @@ package sora
 import (
 	"reflect"
 	"testing"
+
+	relaycommon "github.com/QuantumNous/new-api/relay/common"
 )
 
 func TestNormalizeSeedanceVideoRequestBodyKeepsFirstFrameOnly(t *testing.T) {
@@ -40,10 +42,16 @@ func TestNormalizeSeedanceVideoRequestBodyKeepsFirstFrameOnly(t *testing.T) {
 	}
 
 	got := normalizeSeedanceVideoRequestBody(body)
-	for _, removed := range []string{"group", "width", "height", "fps", "response_format", "enhance_prompt", "image", "images"} {
+	for _, removed := range []string{"group", "duration", "size", "width", "height", "fps", "response_format", "enhance_prompt", "image", "images"} {
 		if _, ok := got[removed]; ok {
 			t.Fatalf("normalizeSeedanceVideoRequestBody kept %q: %#v", removed, got)
 		}
+	}
+	if got["prompt"] != "follow this image" {
+		t.Fatalf("prompt = %#v, want marker-stripped prompt", got["prompt"])
+	}
+	if got["seconds"] != "4" {
+		t.Fatalf("seconds = %#v, want string seconds", got["seconds"])
 	}
 
 	wantContent := []interface{}{
@@ -54,11 +62,17 @@ func TestNormalizeSeedanceVideoRequestBodyKeepsFirstFrameOnly(t *testing.T) {
 		},
 	}
 	metadata := got["metadata"].(map[string]interface{})
+	if metadata["ratio"] != "9:16" {
+		t.Fatalf("metadata.ratio = %#v, want 9:16", metadata["ratio"])
+	}
+	if metadata["resolution"] != "720p" {
+		t.Fatalf("metadata.resolution = %#v, want 720p", metadata["resolution"])
+	}
 	if !reflect.DeepEqual(metadata["content"], wantContent) {
 		t.Fatalf("metadata.content = %#v, want %#v", metadata["content"], wantContent)
 	}
-	if metadata["negative_prompt"] != "low quality" {
-		t.Fatalf("negative_prompt = %#v, want trimmed value", metadata["negative_prompt"])
+	if _, ok := metadata["negative_prompt"]; ok {
+		t.Fatalf("metadata should not forward unsupported negative_prompt: %#v", metadata)
 	}
 }
 
@@ -102,5 +116,19 @@ func TestNormalizeSeedanceVideoRequestBodyKeepsLastFrame(t *testing.T) {
 	metadata := got["metadata"].(map[string]interface{})
 	if !reflect.DeepEqual(metadata["content"], wantContent) {
 		t.Fatalf("metadata.content = %#v, want %#v", metadata["content"], wantContent)
+	}
+}
+
+func TestSeedanceBuildRequestURLUsesGenerationEndpoint(t *testing.T) {
+	adaptor := TaskAdaptor{baseURL: "https://provider.test"}
+	url, err := adaptor.BuildRequestURL(&relaycommon.RelayInfo{
+		ChannelMeta:   &relaycommon.ChannelMeta{UpstreamModelName: "seedance-nsfw"},
+		TaskRelayInfo: &relaycommon.TaskRelayInfo{},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if url != "https://provider.test/v1/video/generations" {
+		t.Fatalf("BuildRequestURL() = %q", url)
 	}
 }

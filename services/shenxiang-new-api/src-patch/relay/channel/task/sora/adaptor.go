@@ -133,6 +133,9 @@ func (a *TaskAdaptor) BuildRequestURL(info *relaycommon.RelayInfo) (string, erro
 	if info.Action == constant.TaskActionRemix {
 		return fmt.Sprintf("%s/v1/videos/%s/remix", a.baseURL, info.OriginTaskID), nil
 	}
+	if isSeedanceVideoModel(info.UpstreamModelName) {
+		return fmt.Sprintf("%s/v1/video/generations", a.baseURL), nil
+	}
 	return fmt.Sprintf("%s/v1/videos", a.baseURL), nil
 }
 
@@ -228,34 +231,28 @@ func isSeedanceVideoModel(modelName string) bool {
 
 func normalizeSeedanceVideoRequestBody(bodyMap map[string]interface{}) map[string]interface{} {
 	cleaned := make(map[string]interface{}, len(bodyMap))
-	for _, key := range []string{
-		"model",
-		"prompt",
-		"seconds",
-		"duration",
-		"size",
-		"ratio",
-		"resolution",
-		"watermark",
-		"seed",
-		"execution_expires_after",
-		"return_last_frame",
-	} {
-		copyPresentNonBlank(cleaned, bodyMap, key)
+	copyPresentNonBlank(cleaned, bodyMap, "model")
+	if prompt := stripPromptReferenceMarkers(trimmedString(bodyMap["prompt"])); prompt != "" {
+		cleaned["prompt"] = prompt
 	}
+	cleaned["seconds"] = seedanceVideoSeconds(bodyMap)
 
 	metadata := mapFromAny(bodyMap["metadata"])
 	content := normalizeSeedanceVideoContent(bodyMap, metadata)
-	cleanMetadata := make(map[string]interface{}, 2)
-	if negativePrompt := trimmedString(metadata["negative_prompt"]); negativePrompt != "" {
-		cleanMetadata["negative_prompt"] = negativePrompt
+	cleanMetadata := map[string]interface{}{
+		"ratio":      seedanceVideoRatio(bodyMap),
+		"resolution": seedanceVideoResolution(bodyMap),
 	}
 	if len(content) > 0 {
 		cleanMetadata["content"] = content
 	}
-	if len(cleanMetadata) > 0 {
-		cleaned["metadata"] = cleanMetadata
+	if value, ok := boolFromAny(firstPresentAny(bodyMap["watermark"], metadata["watermark"])); ok && value {
+		cleanMetadata["watermark"] = value
 	}
+	if value, ok := boolFromAny(firstPresentAny(bodyMap["generate_audio"], metadata["generate_audio"])); ok && value {
+		cleanMetadata["generate_audio"] = value
+	}
+	cleaned["metadata"] = cleanMetadata
 
 	return cleaned
 }
@@ -269,6 +266,143 @@ func copyPresentNonBlank(dst, src map[string]interface{}, key string) {
 		return
 	}
 	dst[key] = value
+}
+
+func seedanceVideoSeconds(bodyMap map[string]interface{}) string {
+	for _, key := range []string{"seconds", "duration"} {
+		if value, ok := integerFromAny(bodyMap[key]); ok && value >= 4 && value <= 15 {
+			return strconv.Itoa(value)
+		}
+	}
+	return "4"
+}
+
+func seedanceVideoRatio(bodyMap map[string]interface{}) string {
+	if ratio := normalizedSeedanceRatio(trimmedString(bodyMap["ratio"])); ratio != "" {
+		return ratio
+	}
+	metadata := mapFromAny(bodyMap["metadata"])
+	if ratio := normalizedSeedanceRatio(trimmedString(metadata["ratio"])); ratio != "" {
+		return ratio
+	}
+
+	width, height := seedanceVideoDimensions(bodyMap)
+	if width > 0 && height > 0 {
+		if width == height {
+			return "1:1"
+		}
+		if width > height {
+			return "16:9"
+		}
+		return "9:16"
+	}
+	return "16:9"
+}
+
+func normalizedSeedanceRatio(value string) string {
+	switch strings.TrimSpace(value) {
+	case "16:9", "9:16", "1:1", "4:3", "3:4", "21:9":
+		return value
+	default:
+		return ""
+	}
+}
+
+func seedanceVideoDimensions(bodyMap map[string]interface{}) (int, int) {
+	size := strings.ToLower(strings.TrimSpace(trimmedString(bodyMap["size"])))
+	if strings.Contains(size, "x") {
+		parts := strings.SplitN(size, "x", 2)
+		width, widthOK := integerFromAny(strings.TrimSpace(parts[0]))
+		height, heightOK := integerFromAny(strings.TrimSpace(parts[1]))
+		if widthOK && heightOK {
+			return width, height
+		}
+	}
+	width, widthOK := integerFromAny(bodyMap["width"])
+	height, heightOK := integerFromAny(bodyMap["height"])
+	if widthOK && heightOK {
+		return width, height
+	}
+	return 0, 0
+}
+
+func seedanceVideoResolution(bodyMap map[string]interface{}) string {
+	if resolution := normalizedSeedanceResolution(trimmedString(bodyMap["resolution"])); resolution != "" {
+		return resolution
+	}
+	metadata := mapFromAny(bodyMap["metadata"])
+	if resolution := normalizedSeedanceResolution(trimmedString(metadata["resolution"])); resolution != "" {
+		return resolution
+	}
+	return "720p"
+}
+
+func normalizedSeedanceResolution(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "720p":
+		return "720p"
+	case "1080p":
+		return "1080p"
+	default:
+		return ""
+	}
+}
+
+func stripPromptReferenceMarkers(prompt string) string {
+	fields := strings.Fields(strings.TrimSpace(prompt))
+	for len(fields) > 0 && isPromptReferenceMarker(fields[0]) {
+		fields = fields[1:]
+	}
+	return strings.TrimSpace(strings.Join(fields, " "))
+}
+
+func isPromptReferenceMarker(value string) bool {
+	value = strings.Trim(strings.ToLower(strings.TrimSpace(value)), ",，.:：;；")
+	if !strings.HasPrefix(value, "@image") {
+		return false
+	}
+	suffix := strings.TrimPrefix(value, "@image")
+	if suffix == "" {
+		return false
+	}
+	for _, char := range suffix {
+		if char < '0' || char > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+func integerFromAny(value interface{}) (int, bool) {
+	switch typed := value.(type) {
+	case int:
+		return typed, true
+	case int64:
+		return int(typed), true
+	case float64:
+		return int(typed), typed == float64(int(typed))
+	case string:
+		parsed, err := strconv.Atoi(strings.TrimSpace(typed))
+		return parsed, err == nil
+	default:
+		return 0, false
+	}
+}
+
+func boolFromAny(value interface{}) (bool, bool) {
+	if typed, ok := value.(bool); ok {
+		return typed, true
+	}
+	return false, false
+}
+
+func firstPresentAny(values ...interface{}) interface{} {
+	for _, value := range values {
+		if value != nil {
+			return value
+		}
+	}
+	return nil
 }
 
 type seedanceVideoReference struct {
