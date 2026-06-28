@@ -55,7 +55,7 @@ func LogTaskConsumption(c *gin.Context, info *relaycommon.RelayInfo) {
 	}
 	if c != nil && c.Request != nil && c.Request.URL != nil {
 		switch strings.TrimSpace(c.Request.URL.Path) {
-		case "/pg/videos", "/pg/video/generations":
+		case "/pg/videos", "/pg/video/generations", "/v1/videos", "/v1/video/generations":
 			other["playground_video_task"] = true
 			other["media_kind"] = "video"
 			other["result_url"] = ""

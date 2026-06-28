@@ -143,10 +143,13 @@ func TestCachePlaygroundVideoTaskResultWritesMediaItem(t *testing.T) {
 	require.Equal(t, 1, metadataFiles)
 }
 
-func TestCachePlaygroundVideoTaskResultSkipsPlainVideoTask(t *testing.T) {
+func TestCachePlaygroundVideoTaskResultCachesPlainVideoTask(t *testing.T) {
 	truncate(t)
 	tmp := t.TempDir()
 	t.Setenv("PLAYGROUND_MEDIA_CACHE_DIR", tmp)
+	t.Setenv("PLAYGROUND_MEDIA_URL_PREFIX", "/pg/media/files")
+	t.Setenv("PLAYGROUND_MEDIA_MAX_MB", "1")
+	t.Setenv("PLAYGROUND_MEDIA_KEEP_MINUTES", "4320")
 
 	task := &model.Task{
 		TaskID:      "task_plain_video_success",
@@ -159,6 +162,19 @@ func TestCachePlaygroundVideoTaskResultSkipsPlainVideoTask(t *testing.T) {
 		PrivateData: model.TaskPrivateData{UpstreamTaskID: "upstream_plain_success"},
 	}
 	require.NoError(t, model.DB.Create(task).Error)
+	require.NoError(t, model.LOG_DB.Create(&model.Log{
+		UserId:    task.UserId,
+		CreatedAt: 1,
+		Type:      model.LogTypeConsume,
+		ModelName: "seedance-nsfw",
+		Other: common.MapToJsonStr(map[string]interface{}{
+			"task_id":       task.TaskID,
+			"request_path":  "/v1/videos",
+			"request_phase": "submitted",
+			"task_status":   "SUBMITTED",
+			"media_kind":    "video",
+		}),
+	}).Error)
 
 	body, err := json.Marshal(map[string]any{
 		"status": model.TaskStatusSuccess,
@@ -174,7 +190,18 @@ func TestCachePlaygroundVideoTaskResultSkipsPlainVideoTask(t *testing.T) {
 	var reloaded model.Task
 	require.NoError(t, model.DB.First(&reloaded, "task_id = ?", task.TaskID).Error)
 	require.Equal(t, model.TaskStatus(model.TaskStatusSuccess), reloaded.Status)
-	require.Equal(t, "https://example.com/result.mp4", reloaded.GetResultURL())
-	_, err = os.Stat(filepath.Join(tmp, "u-1002"))
-	require.True(t, os.IsNotExist(err))
+	require.Contains(t, reloaded.GetResultURL(), "/pg/media/files/u-1002/")
+	var log model.Log
+	require.NoError(t, model.LOG_DB.First(&log, "user_id = ? AND type = ?", task.UserId, model.LogTypeConsume).Error)
+	other, err := common.StrToMap(log.Other)
+	require.NoError(t, err)
+	require.Equal(t, "completed", other["request_phase"])
+	require.Equal(t, "SUCCESS", other["task_status"])
+	require.Equal(t, "video", other["media_kind"])
+	require.Contains(t, other["result_url"], "/pg/media/files/u-1002/")
+	require.Contains(t, other["video_url"], "/pg/media/files/u-1002/")
+	require.Contains(t, other["cached_url"], "/pg/media/files/u-1002/")
+	entries, err := os.ReadDir(filepath.Join(tmp, "u-1002"))
+	require.NoError(t, err)
+	require.NotEmpty(t, entries)
 }

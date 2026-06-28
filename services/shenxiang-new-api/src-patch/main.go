@@ -50,6 +50,12 @@ var classicBuildFS embed.FS
 //go:embed web/classic/dist/index.html
 var classicIndexPage []byte
 
+//go:embed web/xingren-api-onboarding-assistant.js
+var xingrenAPIOnboardingAssistantJS []byte
+
+//go:embed web/xingren-api-assistant-avatar.jpg
+var xingrenAPIAssistantAvatarJPG []byte
+
 func localPprofListenAddr(configured string) string {
 	configured = strings.TrimSpace(configured)
 	if configured == "" {
@@ -186,6 +192,7 @@ func main() {
 
 	// Initialize HTTP server
 	server := gin.New()
+	configureTrustedProxies(server)
 	server.Use(gin.CustomRecovery(func(c *gin.Context, err any) {
 		common.SysLog(fmt.Sprintf("panic detected: %v", err))
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -215,6 +222,9 @@ func main() {
 
 	InjectUmamiAnalytics()
 	InjectGoogleAnalytics()
+	InjectXingrenAPIOnboardingAssistant()
+	RegisterXingrenAPIStaticAssets(server)
+	RegisterXingrenOnboardingAssistant(server)
 
 	// 设置路由
 	router.SetRouter(server, router.ThemeAssets{
@@ -223,6 +233,7 @@ func main() {
 		ClassicBuildFS:   classicBuildFS,
 		ClassicIndexPage: classicIndexPage,
 	})
+	registerMonthlyCardTokenRoute(server)
 	var port = os.Getenv("PORT")
 	if port == "" {
 		port = strconv.Itoa(*common.Port)
@@ -235,6 +246,33 @@ func main() {
 	if err != nil {
 		common.FatalLog("failed to start HTTP server: " + err.Error())
 	}
+}
+
+func configureTrustedProxies(server *gin.Engine) {
+	server.ForwardedByClientIP = true
+	server.RemoteIPHeaders = []string{"CF-Connecting-IP", "X-Forwarded-For", "X-Real-IP"}
+	configured := common.GetEnvOrDefaultString("TRUSTED_PROXIES", "127.0.0.1,::1,172.16.0.0/12,10.0.0.0/8,192.168.0.0/16")
+	proxies := make([]string, 0)
+	for _, item := range strings.Split(configured, ",") {
+		item = strings.TrimSpace(item)
+		if item != "" {
+			proxies = append(proxies, item)
+		}
+	}
+	if len(proxies) == 0 {
+		proxies = []string{"127.0.0.1", "::1"}
+	}
+	if err := server.SetTrustedProxies(proxies); err != nil {
+		common.SysError("failed to configure trusted proxies: " + err.Error())
+		_ = server.SetTrustedProxies([]string{"127.0.0.1", "::1"})
+	}
+}
+
+func RegisterXingrenAPIStaticAssets(server *gin.Engine) {
+	server.GET("/assets/xingren-api-assistant-avatar.jpg", func(c *gin.Context) {
+		c.Header("Cache-Control", "public, max-age=31536000, immutable")
+		c.Data(http.StatusOK, "image/jpeg", xingrenAPIAssistantAvatarJPG)
+	})
 }
 
 // analyticsIDPattern restricts analytics identifiers to characters that cannot
@@ -318,6 +356,30 @@ func InjectGoogleAnalytics() {
 	classicIndexPage = bytes.ReplaceAll(classicIndexPage, placeholder, analyticsInject)
 }
 
+func InjectXingrenAPIOnboardingAssistant() {
+	if strings.EqualFold(os.Getenv("XINGREN_API_ONBOARDING_ASSISTANT"), "false") {
+		return
+	}
+
+	snippet := make([]byte, 0, len(xingrenAPIOnboardingAssistantJS)+64)
+	snippet = append(snippet, []byte("\n<script>\n")...)
+	snippet = append(snippet, xingrenAPIOnboardingAssistantJS...)
+	snippet = append(snippet, []byte("\n</script>\n")...)
+
+	indexPage = injectBeforeClosingBody(indexPage, snippet)
+	classicIndexPage = injectBeforeClosingBody(classicIndexPage, snippet)
+}
+
+func injectBeforeClosingBody(page []byte, snippet []byte) []byte {
+	if bytes.Contains(page, snippet) {
+		return page
+	}
+	if bytes.Contains(page, []byte("</body>")) {
+		return bytes.Replace(page, []byte("</body>"), append(snippet, []byte("</body>")...), 1)
+	}
+	return append(page, snippet...)
+}
+
 func InitResources() error {
 	// Initialize resources here if needed
 	// This is a placeholder function for future resource initialization
@@ -394,4 +456,24 @@ func InitResources() error {
 	}
 
 	return nil
+}
+
+func registerMonthlyCardTokenRoute(server *gin.Engine) {
+	for _, route := range server.Routes() {
+		if route.Method == http.MethodPost && route.Path == "/api/subscription/monthly-card-token" {
+			return
+		}
+	}
+	apiRoute := server.Group("/api")
+	apiRoute.Use(middleware.RouteTag("api"))
+	apiRoute.Use(middleware.GlobalAPIRateLimit())
+
+	subscriptionRoute := apiRoute.Group("/subscription")
+	subscriptionRoute.Use(middleware.UserAuth())
+	subscriptionRoute.POST(
+		"/monthly-card-token",
+		middleware.CriticalRateLimit(),
+		middleware.DisableCache(),
+		controller.CreateMonthlyCardToken,
+	)
 }

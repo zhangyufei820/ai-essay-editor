@@ -422,6 +422,7 @@ func UpdatePlaygroundImageTaskConsumeLogResult(userId int, requestId string, tas
 			other["task_status"] = status
 		}
 		other["playground_image_task"] = true
+		other["media_kind"] = "image"
 		other["async"] = true
 		if resultURL != "" {
 			other["result_url"] = resultURL
@@ -466,8 +467,11 @@ func UpdatePlaygroundVideoTaskConsumeLogResult(userId int, taskID string, result
 			other = map[string]interface{}{}
 		}
 		candidateTaskID := strings.TrimSpace(fmt.Sprint(other["task_id"]))
+		requestPath := strings.TrimSpace(fmt.Sprint(other["request_path"]))
+		mediaKind := strings.TrimSpace(fmt.Sprint(other["media_kind"]))
 		isPlaygroundTask := fmt.Sprint(other["playground_video_task"]) == "true"
-		if candidateTaskID != taskID || !isPlaygroundTask {
+		isVideoTask := isPlaygroundTask || mediaKind == "video" || requestPath == "/v1/videos" || requestPath == "/v1/video/generations" || requestPath == "/pg/videos" || requestPath == "/pg/video/generations"
+		if candidateTaskID != taskID || !isVideoTask {
 			continue
 		}
 		if extra != nil {

@@ -498,20 +498,26 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 			// No URL from adaptor — construct proxy URL using public task ID
 			task.PrivateData.ResultURL = taskcommon.BuildProxyURL(task.TaskID)
 		}
-		if snap.Status != model.TaskStatusSuccess && playgroundMarker != nil {
-			if strings.TrimSpace(resultURLForCache) == "" {
-				resultURLForCache = task.GetResultURL()
+		if snap.Status != model.TaskStatusSuccess {
+			videoMarker := playgroundMarker
+			if videoMarker == nil {
+				videoMarker = taskVideoMediaMarker(task)
 			}
-			item, err := cachePlaygroundVideoTaskResult(ctx, task, playgroundMarker, resultURLForCache)
-			if err != nil {
-				logger.LogError(ctx, fmt.Sprintf("cache playground video task %s failed: %s", task.TaskID, err.Error()))
-				playgroundMarker.Error = err.Error()
-			} else if item != nil {
-				playgroundMarker.CachedURL = item.URL
-				playgroundMarker.Item = item
-				task.PrivateData.ResultURL = item.URL
+			if videoMarker != nil {
+				if strings.TrimSpace(resultURLForCache) == "" {
+					resultURLForCache = task.GetResultURL()
+				}
+				item, err := cachePlaygroundVideoTaskResult(ctx, task, videoMarker, resultURLForCache)
+				if err != nil {
+					logger.LogError(ctx, fmt.Sprintf("cache video task %s failed: %s", task.TaskID, err.Error()))
+					videoMarker.Error = err.Error()
+				} else if item != nil {
+					videoMarker.CachedURL = item.URL
+					videoMarker.Item = item
+					task.PrivateData.ResultURL = item.URL
+				}
+				task.Data = mergePlaygroundVideoTaskData(task.Data, videoMarker)
 			}
-			task.Data = mergePlaygroundVideoTaskData(task.Data, playgroundMarker)
 			extra := map[string]interface{}{}
 			if task.ChannelId > 0 {
 				extra["channel_id"] = task.ChannelId
@@ -628,6 +634,44 @@ func extractPlaygroundVideoMediaMarker(data []byte) *playgroundVideoMediaMarker 
 		marker.Metadata = map[string]any{}
 	}
 	return &marker
+}
+
+func taskVideoMediaMarker(task *model.Task) *playgroundVideoMediaMarker {
+	if task == nil {
+		return nil
+	}
+	modelName := firstNonEmptyVideoString(task.Properties.OriginModelName, task.Properties.UpstreamModelName)
+	if modelName == "" && task.PrivateData.BillingContext != nil {
+		modelName = task.PrivateData.BillingContext.OriginModelName
+	}
+	marker := &playgroundVideoMediaMarker{
+		RequestID: task.TaskID,
+		Prompt:    truncatePlaygroundVideoText(task.Properties.Input, 3000),
+		Model:     truncatePlaygroundVideoText(modelName, 160),
+		Workflow:  "video",
+		Size:      "",
+		Duration:  0,
+		Group:     truncatePlaygroundVideoText(task.Group, 50),
+		Endpoint:  "/v1/videos",
+		Metadata: map[string]any{
+			"task_id":    task.TaskID,
+			"media_kind": "video",
+		},
+	}
+	if task.Action != "" {
+		marker.Metadata["action"] = task.Action
+	}
+	return marker
+}
+
+func firstNonEmptyVideoString(values ...string) string {
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func mergePlaygroundVideoTaskData(data []byte, marker *playgroundVideoMediaMarker) []byte {

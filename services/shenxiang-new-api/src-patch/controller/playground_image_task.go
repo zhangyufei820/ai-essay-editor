@@ -127,6 +127,12 @@ func createImageTask(c *gin.Context, openAICompat bool) {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "prompt is required"})
 		return
 	}
+	if normalizedBody, ok := normalizePlaygroundImageTaskPayload(bodyBytes, &imageReq); ok {
+		bodyBytes = normalizedBody
+		if storage, err := common.CreateBodyStorage(bodyBytes); err == nil {
+			c.Set(common.KeyBodyStorage, storage)
+		}
+	}
 	usingGroup, userGroup, err := resolvePlaygroundImageTaskGroup(c, &imageReq)
 	if err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"success": false, "message": err.Error()})
@@ -246,6 +252,128 @@ func parsePlaygroundImageTaskRequest(c *gin.Context, imageReq *dto.ImageRequest)
 		return parsePlaygroundImageTaskMultipartRequest(c, imageReq)
 	}
 	return common.UnmarshalBodyReusable(c, imageReq)
+}
+
+func normalizePlaygroundImageTaskPayload(body []byte, imageReq *dto.ImageRequest) ([]byte, bool) {
+	if len(body) == 0 || imageReq == nil {
+		return nil, false
+	}
+	var payload map[string]interface{}
+	if err := json.Unmarshal(body, &payload); err != nil || payload == nil {
+		return nil, false
+	}
+	changed := normalizePlaygroundImageTaskRequest(imageReq, payload)
+	if !changed {
+		return nil, false
+	}
+	normalized, err := json.Marshal(payload)
+	if err != nil {
+		return nil, false
+	}
+	return normalized, true
+}
+
+func normalizePlaygroundImageTaskRequest(imageReq *dto.ImageRequest, payload map[string]interface{}) bool {
+	if imageReq == nil || payload == nil {
+		return false
+	}
+	changed := false
+	aspectRatio := strings.TrimSpace(imageReq.AspectRatio)
+	imageSize := strings.TrimSpace(imageReq.ImageSize)
+	resolution := strings.TrimSpace(imageReq.Resolution)
+	if aspectRatio == "" {
+		aspectRatio = firstNonEmptyNestedString(payload, []string{"responseFormat", "image", "aspectRatio"}, []string{"generationConfig", "imageConfig", "aspectRatio"}, []string{"generationConfig", "responseFormat", "image", "aspectRatio"}, []string{"extra_body", "google", "image_config", "aspect_ratio"})
+	}
+	if imageSize == "" {
+		imageSize = firstNonEmptyNestedString(payload, []string{"responseFormat", "image", "imageSize"}, []string{"generationConfig", "imageConfig", "imageSize"}, []string{"generationConfig", "responseFormat", "image", "imageSize"}, []string{"extra_body", "google", "image_config", "image_size"})
+	}
+	if resolution == "" {
+		resolution = firstNonEmptyNestedString(payload, []string{"resolution"})
+	}
+	if resolution == "" && imageSize != "" {
+		resolution = imageSize
+	}
+	if imageSize == "" && resolution != "" {
+		imageSize = resolution
+	}
+	if aspectRatio != "" && strings.TrimSpace(imageReq.AspectRatio) == "" {
+		imageReq.AspectRatio = aspectRatio
+		payload["aspect_ratio"] = aspectRatio
+		changed = true
+	}
+	if resolution != "" && strings.TrimSpace(imageReq.Resolution) == "" {
+		imageReq.Resolution = resolution
+		payload["resolution"] = resolution
+		changed = true
+	}
+	if imageSize != "" && strings.TrimSpace(imageReq.ImageSize) == "" {
+		imageReq.ImageSize = imageSize
+		payload["image_size"] = imageSize
+		changed = true
+	}
+	if aspectRatio != "" || imageSize != "" {
+		if ensureGoogleImageConfig(payload, aspectRatio, imageSize) {
+			changed = true
+		}
+		if raw, err := json.Marshal(payload["extra_body"]); err == nil && len(raw) > 0 {
+			imageReq.ExtraBody = raw
+		}
+	}
+	return changed
+}
+
+func firstNonEmptyNestedString(payload map[string]interface{}, paths ...[]string) string {
+	for _, path := range paths {
+		if value := nestedString(payload, path...); value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func nestedString(payload map[string]interface{}, path ...string) string {
+	var current interface{} = payload
+	for _, key := range path {
+		m, ok := current.(map[string]interface{})
+		if !ok {
+			return ""
+		}
+		current = m[key]
+	}
+	switch value := current.(type) {
+	case string:
+		return strings.TrimSpace(value)
+	default:
+		return ""
+	}
+}
+
+func ensureGoogleImageConfig(payload map[string]interface{}, aspectRatio string, imageSize string) bool {
+	extraBody := ensureMap(payload, "extra_body")
+	google := ensureMap(extraBody, "google")
+	imageConfig := ensureMap(google, "image_config")
+	changed := false
+	if aspectRatio != "" && strings.TrimSpace(fmt.Sprint(imageConfig["aspect_ratio"])) == "" {
+		imageConfig["aspect_ratio"] = aspectRatio
+		changed = true
+	}
+	if imageSize != "" && strings.TrimSpace(fmt.Sprint(imageConfig["image_size"])) == "" {
+		imageConfig["image_size"] = imageSize
+		changed = true
+	}
+	return changed
+}
+
+func ensureMap(parent map[string]interface{}, key string) map[string]interface{} {
+	if parent == nil {
+		return map[string]interface{}{}
+	}
+	if existing, ok := parent[key].(map[string]interface{}); ok && existing != nil {
+		return existing
+	}
+	created := map[string]interface{}{}
+	parent[key] = created
+	return created
 }
 
 func parsePlaygroundImageTaskMultipartRequest(c *gin.Context, imageReq *dto.ImageRequest) error {
@@ -540,6 +668,7 @@ func recordPlaygroundImageTaskSubmittedLog(c *gin.Context, task *model.Task, pay
 		"request_phase":         "submitted",
 		"task_status":           string(task.Status),
 		"playground_image_task": true,
+		"media_kind":            "image",
 		"workflow":              payload.Workflow,
 		"async":                 true,
 		"result_url":            "",
@@ -664,7 +793,7 @@ func runPlaygroundImageTask(taskID string, userID int, username string, role int
 	})
 	engine.ServeHTTP(recorder, request)
 	if recorder.Code >= http.StatusBadRequest {
-		markPlaygroundImageTaskFailure(task, extractPlaygroundImageTaskError(recorder.Body.Bytes(), recorder.Code))
+		markPlaygroundImageTaskFailure(task, sanitizePlaygroundImageTaskFailure(extractPlaygroundImageTaskError(recorder.Body.Bytes(), recorder.Code)))
 		return
 	}
 
@@ -676,7 +805,7 @@ func runPlaygroundImageTask(taskID string, userID int, username string, role int
 	responseBody := recorder.Body.Bytes()
 	if err := common.Unmarshal(responseBody, &response); err != nil || len(response.Data) == 0 {
 		if msg := extractPlaygroundImageTaskError(responseBody, recorder.Code); msg != "" {
-			markPlaygroundImageTaskFailure(task, msg)
+			markPlaygroundImageTaskFailure(task, sanitizePlaygroundImageTaskFailure(msg))
 		} else {
 			markPlaygroundImageTaskFailure(task, "image task completed without a usable image")
 		}
@@ -887,7 +1016,7 @@ func markPlaygroundImageTaskFailure(task *model.Task, reason string) {
 	if latest, exists, err := model.GetByOnlyTaskId(task.TaskID); err == nil && exists && latest != nil {
 		task = latest
 	}
-	reason = truncatePlaygroundText(strings.TrimSpace(reason), 1000)
+	reason = truncatePlaygroundText(strings.TrimSpace(sanitizePlaygroundImageTaskFailure(reason)), 1000)
 	if reason == "" {
 		reason = "image task failed"
 	}
@@ -915,6 +1044,31 @@ func markPlaygroundImageTaskFailure(task *model.Task, reason string) {
 	service.RefundTaskQuota(nil, task, reason)
 }
 
+func sanitizePlaygroundImageTaskFailure(reason string) string {
+	trimmed := strings.TrimSpace(reason)
+	if trimmed == "" {
+		return ""
+	}
+	lower := strings.ToLower(trimmed)
+	sensitiveMarkers := []string{
+		"upstream",
+		"channel",
+		"渠道",
+		"供应商",
+		"request id",
+		"request_id",
+		"api key",
+		"apikey",
+		"sk-",
+	}
+	for _, marker := range sensitiveMarkers {
+		if strings.Contains(lower, marker) {
+			return "模型服务暂时无法处理该请求，请稍后重试或调整参数"
+		}
+	}
+	return trimmed
+}
+
 func markPlaygroundImageTaskLogFailure(task *model.Task, payload *playgroundImageTaskPayload, reason string) {
 	if task == nil || payload == nil || payload.RequestID == "" || model.LOG_DB == nil {
 		return
@@ -935,6 +1089,7 @@ func markPlaygroundImageTaskLogFailure(task *model.Task, payload *playgroundImag
 	other["request_phase"] = "failed"
 	other["task_status"] = string(model.TaskStatusFailure)
 	other["playground_image_task"] = true
+	other["media_kind"] = "image"
 	other["finish_time"] = task.FinishTime
 	other["fail_reason"] = reason
 	other["result_url"] = ""
