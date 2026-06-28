@@ -85,7 +85,24 @@
       title: "用量日志",
       path: CONFIG.logsPath,
       hint: "查看请求记录、扣费、状态码和返回信息。",
-      aliases: ["日志", "记录", "用量", "报错记录", "request id", "日志记录"],
+      aliases: [
+        "日志",
+        "记录",
+        "用量",
+        "使用日志",
+        "用量日志",
+        "任务日志",
+        "生成记录",
+        "图片使用日志",
+        "图像使用日志",
+        "图片生成日志",
+        "图像生成日志",
+        "媒体日志",
+        "媒体记录",
+        "报错记录",
+        "request id",
+        "日志记录",
+      ],
     },
     codexCloud: {
       title: "云 Codex",
@@ -931,7 +948,7 @@
       .catch(function (error) {
         typeAssistant(error.message || "我在页面操作时没有找到目标控件。你可以刷新后再试一次。", {
           tone: "error",
-          actions: [{ label: "重新演示媒体工坊", value: "operate:media-image" }],
+          actions: inferOperationRetryActions(actions),
         });
       })
       .finally(function () {
@@ -939,6 +956,22 @@
         document.documentElement.classList.remove("xr-api-assistant-operating");
         window.setTimeout(clearOperationLayer, 900);
       });
+  }
+
+  function inferOperationRetryActions(actions) {
+    var text = "";
+    try {
+      text = JSON.stringify(actions || []);
+    } catch (error) {
+      text = "";
+    }
+    if (text.indexOf(CONFIG.logsPath) >= 0 || text.indexOf("用量日志") >= 0 || text.indexOf("日志") >= 0) {
+      return [{ label: "重新打开用量日志", value: "operate:usage-log-image" }];
+    }
+    if (text.indexOf(CONFIG.mediaPath) >= 0 || text.indexOf("media-") >= 0 || text.indexOf("媒体工坊") >= 0) {
+      return [{ label: "重新演示媒体工坊", value: "operate:media-image" }];
+    }
+    return [routeAction("token", "令牌管理"), routeAction("media", "媒体工坊"), routeAction("logs", "用量日志")].filter(Boolean);
   }
 
   function runOperationAction(action) {
@@ -1025,10 +1058,92 @@
 
   function wantsMediaImageOperation(text) {
     var lower = String(text || "").toLowerCase();
+    if (wantsUsageLogOperation(lower)) return false;
     var hasImage = lower.indexOf("图片") >= 0 || lower.indexOf("图像") >= 0 || lower.indexOf("画图") >= 0 || lower.indexOf("海报") >= 0 || lower.indexOf("生成图") >= 0;
     var hasPrompt = lower.indexOf("提示词") >= 0 || lower.indexOf("prompt") >= 0 || lower.indexOf("要求") >= 0 || lower.indexOf("描述") >= 0;
-    var hasDo = lower.indexOf("生成") >= 0 || lower.indexOf("帮我") >= 0 || lower.indexOf("做") >= 0 || lower.indexOf("按照") >= 0;
+    var hasDo = lower.indexOf("生成") >= 0 || lower.indexOf("画") >= 0 || lower.indexOf("做成") >= 0 || lower.indexOf("制作") >= 0 || lower.indexOf("按照") >= 0;
     return hasImage && (hasPrompt || hasDo);
+  }
+
+  function hasAnyText(text, keywords) {
+    for (var i = 0; i < keywords.length; i += 1) {
+      if (String(text || "").indexOf(keywords[i]) >= 0) return true;
+    }
+    return false;
+  }
+
+  function wantsUsageLogOperation(text) {
+    var lower = String(text || "").toLowerCase();
+    var hasLog = hasAnyText(lower, ["日志", "记录", "用量", "使用情况", "消耗", "扣费", "任务"]);
+    var hasMedia = hasAnyText(lower, ["图片", "图像", "媒体", "画图", "生成图", "视频", "image", "media"]);
+    var hasOpen = hasAnyText(lower, ["看", "查看", "打开", "进入", "跳转", "带我", "帮我", "今天", "最近", "当前"]);
+    var explicitLog = hasAnyText(lower, [
+      "使用日志",
+      "用量日志",
+      "任务日志",
+      "生成记录",
+      "图像使用日志",
+      "图片使用日志",
+      "图像生成日志",
+      "图片生成日志",
+      "媒体日志",
+      "媒体记录",
+      "使用情况",
+      "今天图像使用",
+      "今天图片使用",
+      "request id",
+    ]);
+    return explicitLog || (hasLog && hasOpen && (hasMedia || hasAnyText(lower, ["日志", "记录", "用量"])));
+  }
+
+  function usageLogWorkflowActions(text, skipGoto) {
+    var mediaFocused = hasAnyText(String(text || "").toLowerCase(), ["图片", "图像", "媒体", "画图", "生成图", "视频"]);
+    var logTitle = mediaFocused ? "图像/媒体使用日志" : "用量日志";
+    var actions = [
+      { type: "wait", ms: 460 },
+      {
+        type: "highlight",
+        selector: "main,.semi-table,.ant-table,.table,section",
+        labels: ["用量日志", "使用日志", "任务日志", "请求记录", "日志", "模型", "状态", "时间", "消耗", "扣费"],
+        label: "这里是" + logTitle + "的日志区域",
+        missing: "我已经打开用量日志页，但没有识别到日志列表。你可以刷新页面或确认当前账号已登录。",
+        ms: 900,
+      },
+      {
+        type: "message",
+        text:
+          "已经打开" +
+          logTitle +
+          "。\n\n这里用来看请求记录、任务状态、模型、时间和消耗。你要查“今天图像生成日志”时，先看时间列，再按模型名或任务状态筛选；如果页面提供搜索框，我可以继续帮你点筛选项。",
+        options: {
+          tone: "operation",
+          actions: [
+            { label: "继续筛选图像记录", value: "operate:usage-log-image" },
+            routeAction("media", "回到媒体工坊"),
+            routeAction("pricing", "查看模型价格"),
+          ].filter(Boolean),
+        },
+      },
+    ];
+    if (skipGoto || window.location.pathname === CONFIG.logsPath) return actions;
+    return [
+      {
+        type: "goto",
+        path: CONFIG.logsPath,
+        title: "用量日志",
+        label: "点击用量日志入口",
+        message: "我先从当前页面带你打开用量日志，到了以后继续高亮日志区域。",
+        resumeMessage: "已经到用量日志页，我继续帮你定位图像/媒体记录区域。",
+        next: usageLogWorkflowActions(text, true),
+      },
+    ];
+  }
+
+  function startUsageLogWorkflow(text) {
+    typeAssistant("收到。我会像真人操作一样从当前页面打开用量日志，再把日志区域高亮给你看。", {
+      tone: "operation",
+    });
+    runOperationActions(usageLogWorkflowActions(text));
   }
 
   function mediaImageWorkflowActions(prompt, skipGoto) {
@@ -1552,6 +1667,10 @@
 
   function tryHandleLocalIntent(value) {
     var routes = detectRoutes(value);
+    if (wantsUsageLogOperation(value)) {
+      startUsageLogWorkflow(value);
+      return true;
+    }
     if (wantsPageOperation(value)) {
       var pageTarget = findPageOperationMatch(value, value);
       if (pageTarget.match) {
@@ -1670,7 +1789,13 @@
     if (lower.indexOf("401") >= 0 || lower.indexOf("403") >= 0 || lower.indexOf("timeout") >= 0) {
       actions.push({ label: "检查模型列表", value: "models-check" });
     }
-    if (wantsMediaImageOperation(text) || lower.indexOf("媒体工坊") >= 0 || lower.indexOf("图片") >= 0 || lower.indexOf("图像") >= 0) {
+    if (wantsUsageLogOperation(text)) {
+      actions.push({ label: "打开图像使用日志", value: "operate:usage-log-image" });
+    }
+    if (
+      !wantsUsageLogOperation(text) &&
+      (wantsMediaImageOperation(text) || lower.indexOf("媒体工坊") >= 0 || lower.indexOf("图片") >= 0 || lower.indexOf("图像") >= 0)
+    ) {
       actions.push({ label: "操作媒体工坊", value: "operate:media-image" });
     }
     if (wantsNavigation(text) && (lower.indexOf("key") >= 0 || lower.indexOf("令牌") >= 0 || lower.indexOf("api") >= 0)) {
@@ -1696,6 +1821,7 @@
     if (value === "err-401" || value === "err-403" || value === "err-timeout") return cannedError(value);
     if (value.indexOf("route:") === 0) return navigateToRoute(value.slice("route:".length));
     if (value === "operate:token-create") return openTokenCreateUI();
+    if (value === "operate:usage-log-image") return startUsageLogWorkflow("图像使用日志");
     if (value === "operate:media-image") return startMediaImageWorkflow("");
     if (value === "operate:media-submit") return submitMediaGeneration();
     if (value === "operate:page-confirm") return confirmPendingPageOperation();
