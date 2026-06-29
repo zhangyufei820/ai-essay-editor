@@ -20,6 +20,7 @@
     logsPath: "/console/log",
     codexCloudPath: "/codex",
     loginPath: "/login",
+    maxScreenshotBytes: 3 * 1024 * 1024,
   };
 
   var ASSISTANT_AVATAR_URL = "/assets/xingren-api-assistant-avatar.jpg";
@@ -124,6 +125,7 @@
     awaitingCustomModel: false,
     operationRunning: false,
     pendingPageOperation: null,
+    pendingScreenshot: null,
     typingTimer: null,
     typingMessageId: "",
     typingFull: "",
@@ -178,6 +180,10 @@
 
   function powershellDoubleQuote(value) {
     return '"' + String(value || "").replace(/`/g, "``").replace(/"/g, '`"') + '"';
+  }
+
+  function powershellSingleQuote(value) {
+    return "'" + String(value || "").replace(/'/g, "''") + "'";
   }
 
   function getCurrentUserId() {
@@ -282,36 +288,106 @@
   }
 
   function windowsCodexCommand(model, key) {
-    return [
-      "$key = " + powershellDoubleQuote(key),
-      '$codexDir = Join-Path $HOME ".codex"',
-      "New-Item -ItemType Directory -Force -Path $codexDir | Out-Null",
-      '$keyPath = Join-Path $codexDir "xingren_api_key"',
-      "Set-Content -Path $keyPath -Value $key -NoNewline",
-      '$configPath = Join-Path $codexDir "config.toml"',
-      '@"',
+    var configLines = [
       'model = "' + model + '"',
-      'model_provider = "xingren"',
+      'model_provider = "aiphui"',
+      'approval_policy = "on-request"',
+      'sandbox_mode = "workspace-write"',
       'model_reasoning_effort = "high"',
       "",
-      "[model_providers.xingren]",
-      'name = "星人 API"',
+      "[model_providers.aiphui]",
+      'name = "AIPHUI"',
       'base_url = "' + CONFIG.baseUrl + '"',
-      'wire_api = "chat"',
+      'env_key = "AIPHUI_API_KEY"',
+      'wire_api = "responses"',
       "",
-      "[model_providers.xingren.auth]",
-      'command = "powershell"',
-      'args = ["-NoProfile", "-Command", "Get-Content `$HOME/.codex/xingren_api_key -Raw"]',
-      "timeout_ms = 5000",
-      "refresh_interval_ms = 0",
+      "[windows]",
+      'sandbox = "elevated"',
       "",
-      "[profiles.xingren]",
-      'model = "' + model + '"',
-      'model_provider = "xingren"',
-      '"@ | Set-Content -Path $configPath -Encoding UTF8',
+      "[sandbox_workspace_write]",
+      "network_access = true",
+    ];
+    return [
+      "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8",
       "",
-      'codex --profile xingren "请只回复：Codex 接入成功"',
-    ].join("\n");
+      "# 先完全退出 Codex 桌面 App，包括任务栏托盘里的 Codex，再执行这段。",
+      "$ApiKey = " + powershellDoubleQuote(key),
+      "$BaseUrl = " + powershellDoubleQuote(CONFIG.baseUrl),
+      "",
+      '[Environment]::SetEnvironmentVariable("AIPHUI_API_KEY", $ApiKey, "User")',
+      '[Environment]::SetEnvironmentVariable("CODEX_HOME", "$env:USERPROFILE\\.codex", "User")',
+      "$env:AIPHUI_API_KEY = $ApiKey",
+      '$env:CODEX_HOME = "$env:USERPROFILE\\.codex"',
+      "",
+      '$codexDir = Join-Path $env:USERPROFILE ".codex"',
+      "New-Item -ItemType Directory -Path $codexDir -Force | Out-Null",
+      '$configPath = Join-Path $codexDir "config.toml"',
+      "",
+      "$lines = @(",
+    ]
+      .concat(configLines.map(powershellSingleQuote))
+      .concat([
+        ")",
+        "",
+        "Set-Content -Path $configPath -Value $lines -Encoding UTF8",
+      "",
+      'Write-Host "===== AIPHUI Codex 配置写入完成 =====" -ForegroundColor Green',
+      'Write-Host "下一步：先执行下面的 /v1/responses 连通性检查；成功后重新打开 Codex 桌面 App。" -ForegroundColor Cyan',
+      'Write-Host "CONFIG = $configPath"',
+      "Get-Content $configPath",
+      "",
+      "$headers = @{",
+      '  "Authorization" = "Bearer $env:AIPHUI_API_KEY"',
+      '  "Content-Type"  = "application/json"',
+      "}",
+      "$body = @{",
+      '  model = "' + model + '"',
+      '  input = "只回复 OK"',
+      "} | ConvertTo-Json -Depth 10",
+      "",
+      "Invoke-RestMethod `",
+      '  -Uri "' + CONFIG.baseUrl + '/responses" `',
+      "  -Method Post `",
+      "  -Headers $headers `",
+      "  -Body $body",
+      ])
+      .join("\n");
+  }
+
+  function codexNextStepGuide(os, model) {
+    if (os === "windows") {
+      return (
+        "执行后下一步：\n" +
+        "1. PowerShell 里如果 /v1/responses 返回 OK，说明 Key、Base URL 和 " +
+        model +
+        " 已经能通。\n" +
+        "2. 完全重新打开 Codex 桌面 App，看顶部模型是否是 " +
+        model +
+        "，然后发送“只回复 OK”。\n" +
+        "3. 如果 PowerShell 能回但桌面 App 不回，先退出托盘里的 Codex，再重开；还不行就重启 Windows。\n\n" +
+        "常见问题和修复：\n" +
+        "401：Key 错、复制多了空格或令牌被禁用。重新创建 Key，再执行配置命令。\n" +
+        "403：Key 可用但模型权限、分组或余额不足。换成已授权模型，或检查令牌权限和余额。\n" +
+        "404 / endpoint not found：base_url 必须是 " +
+        CONFIG.baseUrl +
+        "，不要写成 /responses；Codex 会自己拼 /v1/responses。\n" +
+        "桌面 App 不读配置：检查 [Environment]::GetEnvironmentVariable(\"AIPHUI_API_KEY\",\"User\") 和 Get-Content \"$env:USERPROFILE\\.codex\\config.toml\"。\n" +
+        "codex 命令不存在：桌面 App 接入不一定需要 CLI；CLI 只是额外验证工具。"
+      );
+    }
+    return (
+      "执行后下一步：\n" +
+      "1. 终端如果返回“Codex 接入成功”，说明 Key、Base URL 和模型能通。\n" +
+      "2. 重新打开 Codex，确认使用的是 " +
+      model +
+      "。\n\n" +
+      "常见问题和修复：\n" +
+      "401：重新创建 Key，检查复制时有没有空格。\n" +
+      "403：检查令牌模型权限、分组和余额。\n" +
+      "timeout：确认网络能访问 " +
+      CONFIG.baseUrl +
+      "。"
+    );
   }
 
   function installCodexCommand() {
@@ -1830,6 +1906,7 @@
     state.generatedKey = "";
     state.awaitingCustomModel = false;
     state.pendingPageOperation = null;
+    state.pendingScreenshot = null;
   }
 
   function starter() {
@@ -1968,7 +2045,9 @@
     var command = os === "windows" ? windowsCodexCommand(model, key) : macCodexCommand(model, key);
     var nameLine = tokenName ? "\n\n令牌名称：" + tokenName : "";
     typeAssistant(
-      "配置已经生成。\n\n下面这段命令可以直接复制到终端执行。执行完成后，如果 Codex 回复“Codex 接入成功”，说明已经走通。" +
+      "配置已经生成。\n\n下面这段命令可以直接复制到终端执行。" +
+        "\n\n" +
+        codexNextStepGuide(os, model) +
         nameLine +
         "\n\n请现在复制保存。结束会话会清空本窗口历史，完整 Key 不会再次显示。",
       {
@@ -2006,8 +2085,84 @@
     });
   }
 
+  function humanFileSize(bytes) {
+    var size = Number(bytes || 0);
+    if (size >= 1024 * 1024) return (size / 1024 / 1024).toFixed(1) + " MB";
+    if (size >= 1024) return Math.ceil(size / 1024) + " KB";
+    return size + " B";
+  }
+
+  function validScreenshotMime(type) {
+    return type === "image/png" || type === "image/jpeg" || type === "image/webp";
+  }
+
+  function clearPendingScreenshot() {
+    state.pendingScreenshot = null;
+    renderAttachmentPreview();
+  }
+
+  function chooseScreenshot() {
+    var input = document.querySelector(".xr-api-assistant-file");
+    if (input) input.click();
+  }
+
+  function setPendingScreenshot(file) {
+    if (!file) return;
+    if (!validScreenshotMime(file.type)) {
+      typeAssistant("这个文件格式我暂时不能识别。\n\n请上传 PNG、JPG 或 WebP 报错截图。", {
+        tone: "error",
+      });
+      return;
+    }
+    if (file.size > CONFIG.maxScreenshotBytes) {
+      typeAssistant("这张截图太大了。\n\n请裁剪到报错区域，控制在 " + humanFileSize(CONFIG.maxScreenshotBytes) + " 以内再上传。", {
+        tone: "error",
+      });
+      return;
+    }
+    var reader = new FileReader();
+    reader.onload = function () {
+      var dataUrl = String(reader.result || "");
+      if (dataUrl.indexOf("data:" + file.type + ";base64,") !== 0) {
+        typeAssistant("截图读取失败。\n\n请换一张 PNG、JPG 或 WebP 截图再试。", { tone: "error" });
+        return;
+      }
+      state.pendingScreenshot = {
+        name: limitText(file.name || "error-screenshot", 120),
+        mime: file.type,
+        bytes: file.size,
+        data_url: dataUrl,
+      };
+      renderAttachmentPreview();
+      typeAssistant("已添加截图：" + state.pendingScreenshot.name + "。\n\n下一步：在输入框里简单描述你正在做什么，然后发送。我会先识别截图里的报错，再给你修复步骤。\n\n请确认截图里没有完整 API Key；如果已经露出完整 Key，建议重置。");
+    };
+    reader.onerror = function () {
+      typeAssistant("截图读取失败。\n\n请重新选择一次，或者直接把报错文字发给我。", { tone: "error" });
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function renderAttachmentPreview() {
+    var holder = document.querySelector(".xr-api-assistant-attachment");
+    if (!holder) return;
+    if (!state.pendingScreenshot) {
+      holder.innerHTML = "";
+      holder.hidden = true;
+      return;
+    }
+    holder.hidden = false;
+    holder.innerHTML =
+      '<span class="xr-api-assistant-attachment-chip">截图：' +
+      escapeHTML(state.pendingScreenshot.name) +
+      " · " +
+      escapeHTML(humanFileSize(state.pendingScreenshot.bytes)) +
+      '</span><button type="button" class="xr-api-assistant-attachment-remove" aria-label="移除截图">移除</button>';
+    var remove = holder.querySelector(".xr-api-assistant-attachment-remove");
+    if (remove) remove.addEventListener("click", clearPendingScreenshot);
+  }
+
   function showDiagnosisPrompt() {
-    typeAssistant("把错误类型或报错文本发给我即可。\n\n请删掉完整 API Key、Authorization header、手机号、邮箱等敏感信息。", {
+    typeAssistant("把错误类型、报错文本或报错截图发给我即可。\n\n截图上传前请遮住完整 API Key、Authorization header、手机号、邮箱等敏感信息。如果截图里已经露出了完整 Key，建议立刻重置。", {
       actions: [
         { label: "401", value: "err-401" },
         { label: "403", value: "err-403" },
@@ -2018,14 +2173,15 @@
 
   function cannedError(type) {
     var messages = {
-      "err-401": "401 通常表示 Key 没传对、复制多了空格、令牌被禁用，或者客户端没有正确发送 Authorization。\n\n先重新生成配置，再跑模型列表检查。",
-      "err-403": "403 通常表示 Key 可用，但这个令牌没有访问该模型，或者余额和分组权限不够。\n\n你可以换一个模型重新创建 Key，默认建议先用 " + CONFIG.codexModel + "。",
-      "err-timeout": "timeout 先查 Base URL 和网络。\n\n通用 API 客户端使用 " + CONFIG.baseUrl + "。\nClaude Code 专用地址才是 " + CONFIG.claudeBaseUrl + "。",
+      "err-401": "401 通常表示 Key 没传对、复制多了空格、令牌被禁用，或者客户端没有正确发送 Authorization。\n\n下一步：先重新生成配置，再跑 /v1/responses 检查命令。\n\n可能问题：环境变量没生效、Key 不是当前账号生成、复制时多了空格、令牌被停用。修复：重新创建 Key，完全退出 Codex 后重开。",
+      "err-403": "403 通常表示 Key 可用，但这个令牌没有访问该模型，或者余额和分组权限不够。\n\n下一步：检查令牌模型权限、账号余额和分组。\n\n可能问题：模型没勾选 " + CONFIG.codexModel + "、月卡 Key 限制了模型、余额不足。修复：换授权模型重新创建 Key，或到模型广场核对权限。",
+      "err-timeout": "timeout 先查 Base URL 和网络。\n\n下一步：确认 base_url 是 " + CONFIG.baseUrl + "，不要写成 /responses。\n\n可能问题：网络访问失败、代理拦截、桌面 App 没重启、Claude Code 地址误填到通用 Codex。修复：PowerShell 先跑 /v1/responses 检查，成功后重启 Codex 桌面 App。",
     };
     typeAssistant(messages[type] || messages["err-401"], {
       actions: [
         { label: "自动接入 Codex", value: "codex" },
         { label: "检查模型列表", value: "models-check" },
+        { label: "上传报错截图", value: "attach-screenshot" },
       ],
     });
   }
@@ -2094,10 +2250,19 @@
     return false;
   }
 
-  function submitUserInput(text) {
+  function submitUserInput(text, screenshot) {
     var value = redactSecrets(String(text || "").trim());
-    if (!value || state.loading) return;
-    addMessage("user", value);
+    screenshot = screenshot || state.pendingScreenshot;
+    if ((!value && !screenshot) || state.loading) return;
+    var displayValue = value || "请帮我看这张报错截图";
+    if (screenshot) {
+      displayValue += "\n\n已上传截图：" + screenshot.name + "（" + humanFileSize(screenshot.bytes) + "）";
+    }
+    addMessage("user", displayValue);
+    if (screenshot && screenshot === state.pendingScreenshot) {
+      state.pendingScreenshot = null;
+      renderAttachmentPreview();
+    }
     if (state.awaitingCustomModel) {
       var model = validModelName(value);
       if (!model) {
@@ -2109,13 +2274,17 @@
       chooseModel(model);
       return;
     }
+    if (screenshot) {
+      askOnline(value || "请识别这张报错截图，并告诉我下一步怎么修复。", screenshot);
+      return;
+    }
     if (tryHandleLocalIntent(value)) return;
-    askOnline(value);
+    askOnline(value, screenshot);
   }
 
-  function askOnline(value) {
+  function askOnline(value, screenshot) {
     state.loading = true;
-    state.busyLabel = "正在思考";
+    state.busyLabel = screenshot ? "正在识别截图" : "正在思考";
     renderMessages();
     fetch(CONFIG.chatEndpoint, {
       method: "POST",
@@ -2125,6 +2294,7 @@
         message: value,
         history: visibleHistory(),
         context: collectPageContext(),
+        screenshot: screenshot || null,
       }),
     })
       .then(function (res) {
@@ -2150,6 +2320,7 @@
           actions: [
             { label: "自动接入 Codex", value: "codex" },
             { label: "检查模型列表", value: "models-check" },
+            { label: "上传报错截图", value: "attach-screenshot" },
           ],
         });
       })
@@ -2270,6 +2441,7 @@
     if (value === "authorize-create") return authorizeAndCreate();
     if (value === "install-codex") return showInstall();
     if (value === "diagnose") return showDiagnosisPrompt();
+    if (value === "attach-screenshot") return chooseScreenshot();
     if (value === "models-check") return showModelsCheck();
     if (value === "err-401" || value === "err-403" || value === "err-timeout") return cannedError(value);
     if (value.indexOf("route:") === 0) return navigateToRoute(value.slice("route:".length));
@@ -2406,7 +2578,7 @@
           renderAvatar("xr-api-assistant-avatar") +
           '<div><strong>API 老师</strong><span>像 ChatGPT 一样问，也像真人一样操作网页</span></div></div><button type="button" class="xr-api-assistant-close" aria-label="结束会话并清空历史">×</button></header>' +
           '<div class="xr-api-assistant-messages" aria-live="polite"></div>' +
-          '<form class="xr-api-assistant-form"><label class="xr-api-assistant-input-wrap"><span>输入问题</span><textarea aria-label="输入接入需求" placeholder="问任何 API 接入问题，或说：打开媒体工坊 / 点击模型价格 / 用这段提示词帮我生成图片" autocomplete="off" maxlength="900" rows="1"></textarea></label><button type="submit" aria-label="发送">发送</button></form>' +
+          '<form class="xr-api-assistant-form"><div class="xr-api-assistant-attachment" hidden></div><div class="xr-api-assistant-row"><button type="button" class="xr-api-assistant-upload" aria-label="上传报错截图" title="上传报错截图">图</button><input class="xr-api-assistant-file" type="file" accept="image/png,image/jpeg,image/webp" hidden><label class="xr-api-assistant-input-wrap"><span>输入问题</span><textarea aria-label="输入接入需求" placeholder="问任何 API 接入问题，或上传报错截图让我识别" autocomplete="off" maxlength="900" rows="1"></textarea></label><button type="submit" class="xr-api-assistant-submit" aria-label="发送">发送</button></div></form>' +
           "</aside>"
         : "");
     root.querySelector(".xr-api-assistant-launcher").addEventListener("click", openAssistant);
@@ -2419,8 +2591,17 @@
         var input = form.querySelector("textarea");
         var value = input ? input.value : "";
         if (input) input.value = "";
-        submitUserInput(value);
+        submitUserInput(value, state.pendingScreenshot);
       });
+      var upload = form.querySelector(".xr-api-assistant-upload");
+      var fileInput = form.querySelector(".xr-api-assistant-file");
+      if (upload) upload.addEventListener("click", chooseScreenshot);
+      if (fileInput) {
+        fileInput.addEventListener("change", function () {
+          setPendingScreenshot(fileInput.files && fileInput.files[0]);
+          fileInput.value = "";
+        });
+      }
       var textarea = form.querySelector("textarea");
       if (textarea) {
         textarea.addEventListener("keydown", function (event) {
@@ -2432,6 +2613,7 @@
       }
     }
     renderMessages();
+    renderAttachmentPreview();
   }
 
   function resumePersistedOperation() {
@@ -2483,11 +2665,11 @@
       ".xr-api-assistant-bubble p{margin:0;white-space:normal}.xr-api-assistant-bubble p:empty{display:none}",
       ".xr-api-assistant-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}.xr-api-assistant-actions button{border:1px solid #d1d5db;border-radius:999px;background:#ffffff;color:#111827;padding:7px 11px;font-size:12px;font-weight:650;cursor:pointer;white-space:normal;text-align:center;line-height:1.25;transition:background .16s ease,border-color .16s ease,transform .16s ease}.xr-api-assistant-actions button:first-child{background:#111827;border-color:#111827;color:#ffffff}.xr-api-assistant-actions button:hover{background:#f3f4f6;border-color:#9ca3af;transform:translateY(-1px)}.xr-api-assistant-actions button:first-child:hover{background:#0f172a}",
       ".xr-api-assistant-code{position:relative;margin:12px 0 2px;background:#0f172a;border-radius:10px;color:#e5e7eb;overflow:hidden;border:1px solid rgba(255,255,255,.08)}.xr-api-assistant-code button{position:absolute;right:8px;top:8px;border:0;border-radius:7px;background:#ffffff;color:#111827;padding:6px 9px;font-size:12px;font-weight:750;cursor:pointer}.xr-api-assistant-code pre{margin:0;padding:44px 12px 12px;white-space:pre-wrap;word-break:break-word;font-size:12px;line-height:1.56}",
-      ".xr-api-assistant-form{display:grid;grid-template-columns:1fr auto;gap:10px;padding:14px 16px 16px;border-top:1px solid #e5e7eb;background:#ffffff;flex:0 0 auto}.xr-api-assistant-input-wrap{display:block;min-width:0;border:1px solid #d1d5db;border-radius:12px;background:#ffffff;padding:9px 11px}.xr-api-assistant-input-wrap span{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}.xr-api-assistant-form textarea{display:block;width:100%;min-height:24px;max-height:112px;resize:vertical;border:0;outline:none;padding:0;background:transparent;color:#111827;font:inherit;font-size:14px;line-height:1.5}.xr-api-assistant-form textarea::placeholder{color:#9ca3af}.xr-api-assistant-input-wrap:focus-within{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.14)}.xr-api-assistant-form button{align-self:end;border:0;border-radius:10px;background:#111827;color:white;padding:0 16px;height:44px;font-size:13px;font-weight:750;cursor:pointer;line-height:1.25}.xr-api-assistant-form button:hover{background:#0f172a}",
+      ".xr-api-assistant-form{display:flex;flex-direction:column;gap:9px;padding:14px 16px 16px;border-top:1px solid #e5e7eb;background:#ffffff;flex:0 0 auto}.xr-api-assistant-row{display:grid;grid-template-columns:42px 1fr auto;gap:9px;align-items:end}.xr-api-assistant-input-wrap{display:block;min-width:0;border:1px solid #d1d5db;border-radius:12px;background:#ffffff;padding:9px 11px}.xr-api-assistant-input-wrap span{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}.xr-api-assistant-form textarea{display:block;width:100%;min-height:24px;max-height:112px;resize:vertical;border:0;outline:none;padding:0;background:transparent;color:#111827;font:inherit;font-size:14px;line-height:1.5}.xr-api-assistant-form textarea::placeholder{color:#9ca3af}.xr-api-assistant-input-wrap:focus-within{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.14)}.xr-api-assistant-form button{align-self:end;border:0;border-radius:10px;background:#111827;color:white;padding:0 16px;height:44px;font-size:13px;font-weight:750;cursor:pointer;line-height:1.25}.xr-api-assistant-form button:hover{background:#0f172a}.xr-api-assistant-upload{width:42px;padding:0!important;background:#ffffff!important;color:#111827!important;border:1px solid #d1d5db!important;font-weight:850}.xr-api-assistant-upload:hover{background:#f3f4f6!important;border-color:#9ca3af!important}.xr-api-assistant-attachment{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:32px;border:1px solid #bfdbfe;border-radius:10px;background:#eff6ff;color:#1e3a8a;padding:6px 8px;font-size:12px;line-height:1.25}.xr-api-assistant-attachment[hidden]{display:none}.xr-api-assistant-attachment-chip{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.xr-api-assistant-attachment-remove{height:28px!important;padding:0 8px!important;background:#ffffff!important;color:#1e3a8a!important;border:1px solid #bfdbfe!important;border-radius:8px!important;font-size:12px!important;flex:0 0 auto}",
       "#xr-api-operation-layer{position:fixed;inset:0;z-index:2147482999;pointer-events:none;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif}.xr-api-operation-backdrop{position:absolute;inset:0;background:rgba(2,6,23,.2);backdrop-filter:saturate(1.1)}.xr-api-operation-ring{position:absolute;border:3px solid #2563eb;border-radius:12px;box-shadow:0 0 0 9999px rgba(2,6,23,.18),0 0 0 7px rgba(37,99,235,.2),0 16px 48px rgba(15,23,42,.3);transition:left .28s ease,top .28s ease,width .28s ease,height .28s ease;animation:xrApiTargetPulse 1.15s ease-in-out infinite}.xr-api-operation-cursor{position:absolute;width:28px;height:28px;border-radius:999px;background:#ffffff;border:2px solid #2563eb;box-shadow:0 10px 24px rgba(15,23,42,.35);transition:left .28s ease,top .28s ease,transform .16s ease}.xr-api-operation-cursor::after{content:'';position:absolute;left:8px;top:8px;width:8px;height:8px;border-radius:999px;background:#2563eb}.xr-api-operation-cursor.is-clicking{transform:scale(.78)}.xr-api-operation-toast{position:absolute;max-width:min(300px,calc(100vw - 28px));border:1px solid #bfdbfe;border-radius:10px;background:#ffffff;color:#111827;padding:9px 11px;font-size:12px;font-weight:800;line-height:1.35;box-shadow:0 14px 36px rgba(15,23,42,.2);transition:left .28s ease,top .28s ease}",
       ".xr-api-assistant-typing{display:flex;gap:6px;align-items:center;width:auto}.xr-api-assistant-typing strong{font-size:12px;color:#6b7280;margin-right:2px}.xr-api-assistant-typing span{width:6px;height:6px;border-radius:50%;background:#6b7280;animation:xrApiTyping 1s infinite ease-in-out}.xr-api-assistant-typing span:nth-child(2){animation-delay:.15s}.xr-api-assistant-typing span:nth-child(3){animation-delay:.3s}@keyframes xrApiTyping{0%,80%,100%{opacity:.35;transform:translateY(0)}40%{opacity:1;transform:translateY(-3px)}}@keyframes xrApiTargetPulse{0%,100%{border-color:#2563eb}50%{border-color:#0ea5e9}}",
       "@media (prefers-reduced-motion:reduce){.xr-api-assistant-launcher,.xr-api-assistant-typing span,.xr-api-operation-ring{animation:none;transition:none}}",
-      "@media (max-width:640px){#xr-api-assistant-root{right:12px;bottom:12px}.xr-api-assistant-launcher{width:52px;height:52px;min-width:52px;padding:6px;border-radius:999px}.xr-api-assistant-launcher-copy{display:none}.xr-api-assistant-launcher-icon{width:38px;height:38px}.xr-api-assistant-panel{left:0;right:0;top:auto;bottom:0;width:100%;height:min(78vh,660px);border-radius:14px 14px 0 0}.xr-api-assistant-header{padding:12px 14px}.xr-api-assistant-title span:last-child{max-width:190px}.xr-api-assistant-messages{padding:16px 12px}.xr-api-assistant-bubble{max-width:92%;font-size:13px}.xr-api-assistant-form{grid-template-columns:1fr;padding:12px}.xr-api-assistant-form button{width:100%}.xr-api-assistant-actions button{flex:1 1 calc(50% - 8px)}}",
+      "@media (max-width:640px){#xr-api-assistant-root{right:12px;bottom:12px}.xr-api-assistant-launcher{width:52px;height:52px;min-width:52px;padding:6px;border-radius:999px}.xr-api-assistant-launcher-copy{display:none}.xr-api-assistant-launcher-icon{width:38px;height:38px}.xr-api-assistant-panel{left:0;right:0;top:auto;bottom:0;width:100%;height:min(78vh,660px);border-radius:14px 14px 0 0}.xr-api-assistant-header{padding:12px 14px}.xr-api-assistant-title span:last-child{max-width:190px}.xr-api-assistant-messages{padding:16px 12px}.xr-api-assistant-bubble{max-width:92%;font-size:13px}.xr-api-assistant-form{padding:12px}.xr-api-assistant-row{grid-template-columns:42px 1fr}.xr-api-assistant-submit{grid-column:1 / -1;width:100%}.xr-api-assistant-actions button{flex:1 1 calc(50% - 8px)}}",
     ].join("");
     document.head.appendChild(style);
   }
