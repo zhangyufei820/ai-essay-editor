@@ -152,9 +152,10 @@ def test_private_seedance_generation_does_not_forward_default_generate_audio(cli
     assert response.status_code == 200
     sent = json.loads(route.calls.last.request.content)
     assert sent["model"] == "seedance-nsfw"
-    assert sent["prompt"] == "follow this reference."
+    assert sent["prompt"] == "@image1 follow this reference."
     assert sent["first_frame_url"] == "https://cdn.test/reference.png"
-    assert "content" not in sent["metadata"]
+    assert sent["image_urls"] == ["https://cdn.test/reference.png"]
+    assert sent["metadata"]["content"][0]["image_url"]["url"] == "https://cdn.test/reference.png"
     assert "generate_audio" not in sent["metadata"]
 
 
@@ -207,7 +208,8 @@ def test_dify_create_builds_first_frame_payload_and_warns_on_last_frame(client, 
     sent = json.loads(route.calls.last.request.content)
     assert sent["seconds"] == "5"
     assert sent["first_frame_url"] == "https://cdn.test/first.jpg"
-    assert "content" not in sent["metadata"]
+    assert sent["image_urls"] == ["https://cdn.test/first.jpg"]
+    assert sent["metadata"]["content"][0]["image_url"]["url"] == "https://cdn.test/first.jpg"
 
 
 @respx.mock
@@ -398,9 +400,10 @@ def test_openai_compatible_videos_extracts_first_frame_from_metadata(client, aut
     assert response.status_code == 200
     sent = json.loads(route.calls.last.request.content)
     assert sent["model"] == "seedance-nsfw"
-    assert sent["prompt"] == "A neutral studio product shot."
+    assert sent["prompt"] == "@image1 A neutral studio product shot."
     assert sent["first_frame_url"] == "https://cdn.test/reference.png"
-    assert "content" not in sent["metadata"]
+    assert sent["image_urls"] == ["https://cdn.test/reference.png"]
+    assert sent["metadata"]["content"][0]["image_url"]["url"] == "https://cdn.test/reference.png"
     assert "generate_audio" not in sent["metadata"]
 
 

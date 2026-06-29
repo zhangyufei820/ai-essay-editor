@@ -507,7 +507,7 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 				if strings.TrimSpace(resultURLForCache) == "" {
 					resultURLForCache = task.GetResultURL()
 				}
-				item, err := cachePlaygroundVideoTaskResult(ctx, task, videoMarker, resultURLForCache)
+				item, err := cachePlaygroundVideoTaskResult(ctx, task, videoMarker, resultURLForCache, ch)
 				if err != nil {
 					logger.LogError(ctx, fmt.Sprintf("cache video task %s failed: %s", task.TaskID, err.Error()))
 					videoMarker.Error = err.Error()
@@ -696,7 +696,7 @@ func mergePlaygroundVideoTaskData(data []byte, marker *playgroundVideoMediaMarke
 	return encoded
 }
 
-func cachePlaygroundVideoTaskResult(ctx context.Context, task *model.Task, marker *playgroundVideoMediaMarker, rawURL string) (*playgroundVideoMediaItem, error) {
+func cachePlaygroundVideoTaskResult(ctx context.Context, task *model.Task, marker *playgroundVideoMediaMarker, rawURL string, ch *model.Channel) (*playgroundVideoMediaItem, error) {
 	if task == nil || marker == nil {
 		return nil, nil
 	}
@@ -707,7 +707,37 @@ func cachePlaygroundVideoTaskResult(ctx context.Context, task *model.Task, marke
 	if strings.HasPrefix(strings.ToLower(rawURL), "data:") {
 		return cachePlaygroundVideoDataMedia(task, marker, rawURL)
 	}
-	remoteURL, err := validatePlaygroundVideoMediaURL(rawURL)
+
+	item, err := cachePlaygroundVideoRemoteMedia(ctx, task, marker, rawURL, "", "")
+	if err == nil || !shouldFallbackToUpstreamVideoContent(rawURL, err) {
+		return item, err
+	}
+
+	upstreamTaskID := strings.TrimSpace(task.GetUpstreamTaskID())
+	if ch == nil || upstreamTaskID == "" || upstreamTaskID == strings.TrimSpace(task.TaskID) {
+		return nil, err
+	}
+	baseURL := strings.TrimRight(strings.TrimSpace(ch.GetBaseURL()), "/")
+	if baseURL == "" {
+		return nil, err
+	}
+	upstreamURL := fmt.Sprintf("%s/v1/videos/%s/content", baseURL, upstreamTaskID)
+	return cachePlaygroundVideoRemoteMediaWithValidation(ctx, task, marker, upstreamURL, ch.Key, ch.GetSetting().Proxy, false)
+}
+
+func shouldFallbackToUpstreamVideoContent(rawURL string, err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(strings.ToLower(rawURL), "/v1/videos/") && strings.Contains(strings.ToLower(rawURL), "/content")
+}
+
+func cachePlaygroundVideoRemoteMedia(ctx context.Context, task *model.Task, marker *playgroundVideoMediaMarker, rawURL string, bearerToken string, proxy string) (*playgroundVideoMediaItem, error) {
+	return cachePlaygroundVideoRemoteMediaWithValidation(ctx, task, marker, rawURL, bearerToken, proxy, true)
+}
+
+func cachePlaygroundVideoRemoteMediaWithValidation(ctx context.Context, task *model.Task, marker *playgroundVideoMediaMarker, rawURL string, bearerToken string, proxy string, rejectPrivateHost bool) (*playgroundVideoMediaItem, error) {
+	remoteURL, err := validatePlaygroundVideoMediaURLWithPolicy(rawURL, rejectPrivateHost)
 	if err != nil {
 		return nil, err
 	}
@@ -724,11 +754,22 @@ func cachePlaygroundVideoTaskResult(ctx context.Context, task *model.Task, marke
 			return err
 		},
 	}
+	if !rejectPrivateHost {
+		client = &http.Client{Timeout: 90 * time.Second}
+	}
+	if strings.TrimSpace(proxy) != "" {
+		if proxyClient, proxyErr := GetHttpClientWithProxy(proxy); proxyErr == nil && proxyClient != nil {
+			client = proxyClient
+		}
+	}
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, remoteURL.String(), nil)
 	if err != nil {
 		return nil, errors.New("failed to prepare video download")
 	}
 	httpReq.Header.Set("User-Agent", "NewAPI-Playground-Video-Cache/1.0")
+	if strings.TrimSpace(bearerToken) != "" {
+		httpReq.Header.Set("Authorization", "Bearer "+strings.TrimSpace(bearerToken))
+	}
 	resp, err := client.Do(httpReq)
 	if err != nil {
 		return nil, errors.New("failed to download generated video")
@@ -907,6 +948,10 @@ func playgroundVideoOriginalURL(rawURL string) string {
 }
 
 func validatePlaygroundVideoMediaURL(raw string) (*url.URL, error) {
+	return validatePlaygroundVideoMediaURLWithPolicy(raw, true)
+}
+
+func validatePlaygroundVideoMediaURLWithPolicy(raw string, rejectPrivateHost bool) (*url.URL, error) {
 	parsed, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil || parsed == nil || parsed.Hostname() == "" {
 		return nil, errors.New("invalid video url")
@@ -914,7 +959,7 @@ func validatePlaygroundVideoMediaURL(raw string) (*url.URL, error) {
 	if parsed.Scheme != "https" && parsed.Scheme != "http" {
 		return nil, errors.New("only http and https video urls can be cached")
 	}
-	if isPrivatePlaygroundVideoHost(parsed.Hostname()) || playgroundVideoHostResolvesPrivate(parsed.Hostname()) {
+	if rejectPrivateHost && (isPrivatePlaygroundVideoHost(parsed.Hostname()) || playgroundVideoHostResolvesPrivate(parsed.Hostname())) {
 		return nil, errors.New("private video urls cannot be cached")
 	}
 	return parsed, nil

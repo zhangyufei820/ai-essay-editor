@@ -87,6 +87,9 @@ class VideoGenerationRequest(FlexibleModel):
     prompt: str
     seconds: str
     metadata: GenerationMetadata
+    first_frame_url: str | None = None
+    image_urls: list[str] | None = None
+    image_with_roles: list[dict[str, Any]] | None = None
 
     @field_validator("seconds", mode="before")
     @classmethod

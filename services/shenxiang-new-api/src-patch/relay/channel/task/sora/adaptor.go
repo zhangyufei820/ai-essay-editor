@@ -259,6 +259,11 @@ func normalizeSeedanceVideoRequestBody(bodyMap map[string]interface{}) map[strin
 		if firstFrameURL := seedanceFirstFrameURL(content); firstFrameURL != "" {
 			cleaned["first_frame_url"] = firstFrameURL
 		}
+		if imageWithRoles := seedanceImageWithRoles(content); len(imageWithRoles) > 0 {
+			cleaned["image_with_roles"] = imageWithRoles
+		} else if imageURLs := seedanceImageURLs(content); len(imageURLs) > 0 {
+			cleaned["image_urls"] = imageURLs
+		}
 	}
 	if value, ok := boolFromAny(firstPresentAny(bodyMap["watermark"], metadata["watermark"])); ok && value {
 		cleanMetadata["watermark"] = value
@@ -291,46 +296,44 @@ func seedanceFirstFrameURL(content []interface{}) string {
 	return ""
 }
 
-func seedanceVideoPrompt(prompt string, referenceCount int) string {
-	prompt = strings.TrimSpace(prompt)
-	if referenceCount <= 0 {
-		return prompt
-	}
-	return stripLeadingPromptReferenceMarkers(prompt)
-}
-
-func containsPromptReferenceMarker(prompt, marker string) bool {
-	for _, field := range strings.Fields(prompt) {
-		if strings.Trim(strings.ToLower(strings.TrimSpace(field)), ",，.:：;；") == strings.ToLower(marker) {
-			return true
+func seedanceImageURLs(content []interface{}) []string {
+	urls := make([]string, 0, len(content))
+	for _, item := range content {
+		itemMap := mapFromAny(item)
+		if normalizeSeedanceVideoRole(trimmedString(itemMap["role"])) == "last_frame" {
+			return nil
+		}
+		if url := videoContentImageURL(itemMap); url != "" {
+			urls = append(urls, url)
 		}
 	}
-	return false
+	return urls
 }
 
-func stripLeadingPromptReferenceMarkers(prompt string) string {
-	fields := strings.Fields(strings.TrimSpace(prompt))
-	for len(fields) > 0 && isSeedancePromptReferenceMarker(fields[0]) {
-		fields = fields[1:]
-	}
-	return strings.TrimSpace(strings.Join(fields, " "))
-}
-
-func isSeedancePromptReferenceMarker(value string) bool {
-	value = strings.Trim(strings.ToLower(strings.TrimSpace(value)), ",，.:：;；")
-	if !strings.HasPrefix(value, "@image") {
-		return false
-	}
-	suffix := strings.TrimPrefix(value, "@image")
-	if suffix == "" {
-		return false
-	}
-	for _, char := range suffix {
-		if char < '0' || char > '9' {
-			return false
+func seedanceImageWithRoles(content []interface{}) []map[string]interface{} {
+	hasLastFrame := false
+	items := make([]map[string]interface{}, 0, len(content))
+	for _, item := range content {
+		itemMap := mapFromAny(item)
+		role := normalizeSeedanceVideoRole(trimmedString(itemMap["role"]))
+		if role == "last_frame" {
+			hasLastFrame = true
+		}
+		if url := videoContentImageURL(itemMap); url != "" {
+			items = append(items, map[string]interface{}{
+				"url":  url,
+				"role": role,
+			})
 		}
 	}
-	return true
+	if !hasLastFrame {
+		return nil
+	}
+	return items
+}
+
+func seedanceVideoPrompt(prompt string, _ int) string {
+	return strings.TrimSpace(prompt)
 }
 
 func shouldForwardSeedanceGenerateAudio(modelName string) bool {

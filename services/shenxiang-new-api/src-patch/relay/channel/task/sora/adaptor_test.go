@@ -51,8 +51,8 @@ func TestNormalizeSeedanceVideoRequestBodyUsesOfficialFirstFramePayload(t *testi
 	if got["model"] != "seedance-nsfw" {
 		t.Fatalf("model = %#v, want seedance-nsfw", got["model"])
 	}
-	if got["prompt"] != "follow this image" {
-		t.Fatalf("prompt = %#v, want prompt without reference markers", got["prompt"])
+	if got["prompt"] != "@image1 follow this image" {
+		t.Fatalf("prompt = %#v, want prompt with reference marker", got["prompt"])
 	}
 	if got["seconds"] != "4" {
 		t.Fatalf("seconds = %#v, want string seconds", got["seconds"])
@@ -60,6 +60,10 @@ func TestNormalizeSeedanceVideoRequestBodyUsesOfficialFirstFramePayload(t *testi
 
 	if got["first_frame_url"] != "https://cdn.test/first.png" {
 		t.Fatalf("first_frame_url = %#v, want first reference image", got["first_frame_url"])
+	}
+	imageURLs, ok := got["image_urls"].([]string)
+	if !ok || len(imageURLs) != 2 || imageURLs[0] != "https://cdn.test/first.png" || imageURLs[1] != "https://cdn.test/second.png" {
+		t.Fatalf("image_urls = %#v, want first and second reference images", got["image_urls"])
 	}
 	metadata := got["metadata"].(map[string]interface{})
 	if metadata["ratio"] != "9:16" {

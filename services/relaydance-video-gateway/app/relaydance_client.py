@@ -46,23 +46,24 @@ def normalize_video_provider_body(body: Mapping[str, Any]) -> dict[str, Any]:
     if not isinstance(metadata, Mapping):
         if _is_private_seedance_model(str(body.get("model") or "")):
             body.pop("generate_audio", None)
-        if body.get("first_frame_url"):
-            _strip_prompt_reference_markers(body)
         return body
 
     cleaned_metadata = dict(metadata)
+    content_items = _metadata_content_items(cleaned_metadata)
     first_frame_url = _first_frame_url_from_metadata(cleaned_metadata)
     if first_frame_url and not body.get("first_frame_url"):
         body["first_frame_url"] = first_frame_url
-    cleaned_metadata.pop("content", None)
+    if content_items:
+        if not body.get("image_with_roles") and _has_last_frame(content_items):
+            body["image_with_roles"] = _image_with_roles(content_items)
+        if not body.get("image_urls") and not body.get("image_with_roles"):
+            body["image_urls"] = _image_urls_from_content(content_items)
     generate_audio = cleaned_metadata.get("generate_audio")
     if _is_private_seedance_model(str(body.get("model") or "")) or generate_audio is not True:
         cleaned_metadata.pop("generate_audio", None)
     body["metadata"] = cleaned_metadata
     if _is_private_seedance_model(str(body.get("model") or "")):
         body.pop("generate_audio", None)
-    if body.get("first_frame_url"):
-        _strip_prompt_reference_markers(body)
     return body
 
 
@@ -71,8 +72,7 @@ def _is_private_seedance_model(model: str) -> bool:
 
 
 def _first_frame_url_from_metadata(metadata: Mapping[str, Any]) -> str:
-    content = metadata.get("content")
-    content_items = content if isinstance(content, list) else []
+    content_items = _metadata_content_items(metadata)
     for item in content_items:
         if isinstance(item, Mapping) and str(item.get("role") or "").lower() == "first_frame":
             url = _image_url_from_content_item(item)
@@ -85,22 +85,52 @@ def _first_frame_url_from_metadata(metadata: Mapping[str, Any]) -> str:
     return ""
 
 
-def _strip_prompt_reference_markers(body: dict[str, Any]) -> None:
-    prompt = body.get("prompt")
-    if not isinstance(prompt, str):
-        return
-    fields = prompt.strip().split()
-    while fields and _is_prompt_reference_marker(fields[0]):
-        fields.pop(0)
-    body["prompt"] = " ".join(fields).strip()
+def _metadata_content_items(metadata: Mapping[str, Any]) -> list[Any]:
+    content = metadata.get("content")
+    return content if isinstance(content, list) else []
 
 
-def _is_prompt_reference_marker(value: str) -> bool:
-    text = value.strip().lower().strip(",，.:：;；")
-    if not text.startswith("@image"):
-        return False
-    suffix = text.removeprefix("@image")
-    return suffix.isdigit()
+def _normalized_frame_role(value: Any) -> str:
+    text = str(value or "").lower().strip()
+    if text in {"first_frame", "start_frame", "source_image"}:
+        return "first_frame"
+    if text in {"last_frame", "end_frame"}:
+        return "last_frame"
+    return "reference_image"
+
+
+def _has_last_frame(content_items: list[Any]) -> bool:
+    return any(
+        isinstance(item, Mapping) and _normalized_frame_role(item.get("role")) == "last_frame"
+        for item in content_items
+    )
+
+
+def _image_urls_from_content(content_items: list[Any]) -> list[str]:
+    urls: list[str] = []
+    for item in content_items:
+        url = _image_url_from_content_item(item)
+        if url and url not in urls:
+            urls.append(url)
+    return urls
+
+
+def _image_with_roles(content_items: list[Any]) -> list[dict[str, str]]:
+    items: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for item in content_items:
+        if not isinstance(item, Mapping):
+            continue
+        url = _image_url_from_content_item(item)
+        if not url:
+            continue
+        role = _normalized_frame_role(item.get("role"))
+        key = (url, role)
+        if key in seen:
+            continue
+        seen.add(key)
+        items.append({"url": url, "role": role})
+    return items
 
 
 def validate_model(model: str, settings: Settings | None = None) -> None:

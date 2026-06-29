@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -150,7 +151,6 @@ func TestCachePlaygroundVideoTaskResultCachesPlainVideoTask(t *testing.T) {
 	t.Setenv("PLAYGROUND_MEDIA_URL_PREFIX", "/pg/media/files")
 	t.Setenv("PLAYGROUND_MEDIA_MAX_MB", "1")
 	t.Setenv("PLAYGROUND_MEDIA_KEEP_MINUTES", "4320")
-
 	task := &model.Task{
 		TaskID:      "task_plain_video_success",
 		UserId:      1002,
@@ -178,7 +178,7 @@ func TestCachePlaygroundVideoTaskResultCachesPlainVideoTask(t *testing.T) {
 
 	body, err := json.Marshal(map[string]any{
 		"status": model.TaskStatusSuccess,
-		"url":    "https://example.com/result.mp4",
+		"url":    "data:video/mp4;base64,ZmFrZSBtcDQgYnl0ZXM=",
 	})
 	require.NoError(t, err)
 
@@ -204,4 +204,88 @@ func TestCachePlaygroundVideoTaskResultCachesPlainVideoTask(t *testing.T) {
 	entries, err := os.ReadDir(filepath.Join(tmp, "u-1002"))
 	require.NoError(t, err)
 	require.NotEmpty(t, entries)
+}
+
+func TestCachePlaygroundVideoTaskResultFallsBackToAuthenticatedUpstreamContent(t *testing.T) {
+	truncate(t)
+	tmp := t.TempDir()
+	t.Setenv("PLAYGROUND_MEDIA_CACHE_DIR", tmp)
+	t.Setenv("PLAYGROUND_MEDIA_URL_PREFIX", "/pg/media/files")
+	t.Setenv("PLAYGROUND_MEDIA_MAX_MB", "1")
+	t.Setenv("PLAYGROUND_MEDIA_KEEP_MINUTES", "4320")
+
+	var sawAuth bool
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, "/v1/videos/upstream_private_success/content", r.URL.Path)
+		if r.Header.Get("Authorization") == "Bearer sk-test" {
+			sawAuth = true
+		}
+		w.Header().Set("Content-Type", "video/mp4")
+		_, _ = w.Write([]byte("fake mp4 bytes"))
+	}))
+	defer upstream.Close()
+
+	task := &model.Task{
+		TaskID:    "task_private_video_success",
+		UserId:    1003,
+		ChannelId: 23,
+		Status:    model.TaskStatusInProgress,
+		Progress:  "50%",
+		Platform:  constant.TaskPlatform("relaydance-video"),
+		Data: json.RawMessage(`{
+			"playground_media": {
+				"request_id": "req_private_video",
+				"prompt": "@image1 move this image",
+				"model": "seedance-nsfw",
+				"workflow": "video",
+				"size": "720x1280",
+				"duration": 4,
+				"group": "internal",
+				"endpoint": "/pg/videos"
+			}
+		}`),
+		PrivateData: model.TaskPrivateData{UpstreamTaskID: "upstream_private_success"},
+	}
+	require.NoError(t, model.DB.Create(task).Error)
+	require.NoError(t, model.LOG_DB.Create(&model.Log{
+		UserId:    task.UserId,
+		CreatedAt: 1,
+		Type:      model.LogTypeConsume,
+		ModelName: "seedance-nsfw",
+		Other: common.MapToJsonStr(map[string]interface{}{
+			"task_id":               task.TaskID,
+			"request_path":          "/pg/videos",
+			"playground_video_task": true,
+			"request_phase":         "submitted",
+			"task_status":           "SUBMITTED",
+			"media_kind":            "video",
+		}),
+	}).Error)
+
+	body, err := json.Marshal(map[string]any{
+		"status": model.TaskStatusSuccess,
+	})
+	require.NoError(t, err)
+
+	err = updateVideoSingleTask(
+		context.Background(),
+		&playgroundVideoTestAdaptor{body: body},
+		&model.Channel{Id: 23, Key: "sk-test", BaseURL: &upstream.URL},
+		"upstream_private_success",
+		map[string]*model.Task{"upstream_private_success": task},
+	)
+	require.NoError(t, err)
+	require.True(t, sawAuth, "upstream content fallback must send channel authorization")
+
+	var reloaded model.Task
+	require.NoError(t, model.DB.First(&reloaded, "task_id = ?", task.TaskID).Error)
+	require.Equal(t, model.TaskStatus(model.TaskStatusSuccess), reloaded.Status)
+	require.Contains(t, reloaded.GetResultURL(), "/pg/media/files/u-1003/")
+	var log model.Log
+	require.NoError(t, model.LOG_DB.First(&log, "user_id = ? AND type = ?", task.UserId, model.LogTypeConsume).Error)
+	other, err := common.StrToMap(log.Other)
+	require.NoError(t, err)
+	require.Equal(t, "completed", other["request_phase"])
+	require.Equal(t, "video", other["media_kind"])
+	require.Contains(t, other["cached_url"], "/pg/media/files/u-1003/")
 }
