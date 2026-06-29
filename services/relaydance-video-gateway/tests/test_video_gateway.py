@@ -155,7 +155,7 @@ def test_private_seedance_generation_does_not_forward_default_generate_audio(cli
     assert sent["prompt"] == "@image1 follow this reference."
     assert sent["first_frame_url"] == "https://cdn.test/reference.png"
     assert sent["image_urls"] == ["https://cdn.test/reference.png"]
-    assert sent["metadata"]["content"][0]["image_url"]["url"] == "https://cdn.test/reference.png"
+    assert sent["metadata"] == {"ratio": "9:16", "resolution": "720p"}
     assert "generate_audio" not in sent["metadata"]
 
 
@@ -182,12 +182,16 @@ def test_private_seedance_generation_reconstructs_metadata_content_from_top_leve
     assert response.status_code == 200
     sent = json.loads(route.calls.last.request.content)
     assert sent["first_frame_url"] == "https://cdn.test/reference.png"
-    assert sent["metadata"]["content"][0]["image_url"]["url"] == "https://cdn.test/reference.png"
-    assert sent["metadata"]["content"][0]["role"] == "first_frame"
+    assert sent["image_urls"] == ["https://cdn.test/reference.png"]
+    assert sent["metadata"] == {"ratio": "9:16", "resolution": "720p"}
 
     summary = request_diagnostic_summary("/v1/video/generations", sent)
-    assert summary["content_count"] == 1
-    assert summary["metadata_keys"] == ["content", "ratio", "resolution"]
+    assert summary["content_count"] == 0
+    assert summary["metadata_keys"] == ["ratio", "resolution"]
+    assert summary["first_frame_url"] == {
+        "host": "cdn.test",
+        "sha256_12": summary["first_frame_url"]["sha256_12"],
+    }
 
 
 @respx.mock
@@ -212,8 +216,9 @@ def test_private_seedance_generation_reconstructs_metadata_content_from_image_ro
 
     assert response.status_code == 200
     sent = json.loads(route.calls.last.request.content)
-    assert sent["metadata"]["content"][0]["image_url"]["url"] == "https://cdn.test/reference.png"
-    assert sent["metadata"]["content"][0]["role"] == "first_frame"
+    assert sent["first_frame_url"] == "https://cdn.test/reference.png"
+    assert sent["image_with_roles"] == [{"url": "https://cdn.test/reference.png", "role": "first_frame"}]
+    assert sent["metadata"] == {"ratio": "9:16", "resolution": "720p"}
 
 
 @respx.mock
@@ -460,7 +465,7 @@ def test_openai_compatible_videos_extracts_first_frame_from_metadata(client, aut
     assert sent["prompt"] == "@image1 A neutral studio product shot."
     assert sent["first_frame_url"] == "https://cdn.test/reference.png"
     assert sent["image_urls"] == ["https://cdn.test/reference.png"]
-    assert sent["metadata"]["content"][0]["image_url"]["url"] == "https://cdn.test/reference.png"
+    assert sent["metadata"] == {"ratio": "9:16", "resolution": "720p"}
     assert "generate_audio" not in sent["metadata"]
 
 

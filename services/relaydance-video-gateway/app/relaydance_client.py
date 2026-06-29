@@ -42,9 +42,10 @@ def video_generation_body(model: Any) -> dict[str, Any]:
 def normalize_video_provider_body(body: Mapping[str, Any]) -> dict[str, Any]:
     body = dict(body)
     body["model"] = canonical_model(str(body.get("model") or ""))
+    is_private_seedance = _is_private_seedance_model(str(body.get("model") or ""))
     metadata = body.get("metadata")
     if not isinstance(metadata, Mapping):
-        if _is_private_seedance_model(str(body.get("model") or "")):
+        if is_private_seedance:
             body.pop("generate_audio", None)
         return body
 
@@ -52,9 +53,11 @@ def normalize_video_provider_body(body: Mapping[str, Any]) -> dict[str, Any]:
     content_items = _metadata_content_items(cleaned_metadata)
     if not content_items:
         content_items = _content_items_from_body(body)
-        if content_items:
+        if content_items and not is_private_seedance:
             cleaned_metadata["content"] = content_items
     first_frame_url = _first_frame_url_from_metadata(cleaned_metadata)
+    if not first_frame_url and content_items:
+        first_frame_url = _first_frame_url_from_content_items(content_items)
     if first_frame_url and not body.get("first_frame_url"):
         body["first_frame_url"] = first_frame_url
     if content_items:
@@ -63,10 +66,12 @@ def normalize_video_provider_body(body: Mapping[str, Any]) -> dict[str, Any]:
         if not body.get("image_urls") and not body.get("image_with_roles"):
             body["image_urls"] = _image_urls_from_content(content_items)
     generate_audio = cleaned_metadata.get("generate_audio")
-    if _is_private_seedance_model(str(body.get("model") or "")) or generate_audio is not True:
+    if is_private_seedance or generate_audio is not True:
         cleaned_metadata.pop("generate_audio", None)
+    if is_private_seedance:
+        cleaned_metadata.pop("content", None)
     body["metadata"] = cleaned_metadata
-    if _is_private_seedance_model(str(body.get("model") or "")):
+    if is_private_seedance:
         body.pop("generate_audio", None)
     return body
 
@@ -76,7 +81,10 @@ def _is_private_seedance_model(model: str) -> bool:
 
 
 def _first_frame_url_from_metadata(metadata: Mapping[str, Any]) -> str:
-    content_items = _metadata_content_items(metadata)
+    return _first_frame_url_from_content_items(_metadata_content_items(metadata))
+
+
+def _first_frame_url_from_content_items(content_items: list[Any]) -> str:
     for item in content_items:
         if isinstance(item, Mapping) and str(item.get("role") or "").lower() == "first_frame":
             url = _image_url_from_content_item(item)
