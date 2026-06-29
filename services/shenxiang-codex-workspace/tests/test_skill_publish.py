@@ -141,3 +141,26 @@ def test_submit_workspace_task_does_not_persist_user_api_key(tmp_path, monkeypat
     assert captured["secret_value"] == "sk-mode-secret"
     assert "_user_api_key" not in captured["task"]
     assert captured["task"]["credential_ref"].startswith("redis:codex:task-secret:")
+
+
+def test_task_file_route_hides_internal_guidance_files(tmp_path, monkeypatch):
+    task_id = "task-1"
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / "AGENTS.md").write_text("internal", encoding="utf-8")
+    (workspace / "result.md").write_text("public", encoding="utf-8")
+
+    class FakeStore:
+        def get(self, requested_task_id):
+            assert requested_task_id == task_id
+            return {"task_id": task_id, "user_id": "user_1", "workspace": str(workspace)}
+
+    monkeypatch.setattr(workspace_main, "task_store", lambda: FakeStore())
+    user = UserContext(api_key="sk-test", user_id="user_1", key_hint="sk-test")
+
+    with pytest.raises(workspace_main.HTTPException) as exc:
+        workspace_main.get_task_file(task_id, "AGENTS.md", user)
+
+    assert exc.value.status_code == 404
+    public_response = workspace_main.get_task_file(task_id, "result.md", user)
+    assert public_response.filename == "result.md"

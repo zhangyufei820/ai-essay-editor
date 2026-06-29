@@ -691,6 +691,35 @@ class CodexRunner:
             target,
             ignore=shutil.ignore_patterns("__pycache__", ".pytest_cache", ".git", "*.pyc", "*.pyo"),
         )
+        self._prepare_workspace_guidance(workspace, skill_name)
+
+    def _prepare_workspace_guidance(self, workspace: Path, skill_name: str) -> Path:
+        docs_root = Path(__file__).resolve().parents[1] / "docs"
+        router_path = docs_root / "codex_task_router.md"
+        if router_path.exists():
+            router_text = router_path.read_text(encoding="utf-8")
+        else:
+            router_text = "# Cloud Codex Task Router\n\nRead the selected skill, lock scope, and stay inside the current workspace.\n"
+        guidance = f"""# Cloud Codex Workspace Instructions
+
+You are running inside a temporary cloud Codex task workspace.
+
+Required first steps:
+1. Read this `AGENTS.md`.
+2. Read `.agents/skills/{skill_name}/SKILL.md`.
+3. If `./input/UPLOAD_MANIFEST.md` exists, read it before answering.
+4. Produce or internally apply a routing card with `scope_lock`, `target_stack`, `target_paths`, `forbidden_paths`, `evidence_first`, `done_card`, `verification`, and `cleanup`.
+
+Important distinction:
+- Cloud Codex is a service platform for user tasks, not the local development workspace.
+- Do not require this temporary user workspace to commit, deploy, or clean the local repository.
+- Local repository repair hygiene applies only when a maintainer is changing the cloud Codex service platform itself.
+
+{router_text}
+"""
+        target = workspace / "AGENTS.md"
+        target.write_text(guidance, encoding="utf-8")
+        return target
 
     def _prepare_command_guards(self, workspace: Path) -> Path:
         guard_dir = workspace / "bin"
@@ -819,6 +848,7 @@ class CodexRunner:
 
 请显式使用 {skill_name} 这个 Codex Skill 完成任务。
 你必须遵守本工作区 .agents/skills/{skill_name}/SKILL.md 中定义的要求。
+你必须先读取当前工作区根目录的 AGENTS.md，并按其中的 Task Router 完成 scope lock、证据链选择和 Done Card 判断。
 
 用户原始需求：
 {request.get("user_query", "")}
@@ -855,6 +885,7 @@ class CodexRunner:
 7. 如果看到 `[REDACTED]替换成...`、`Invalid token`，应明确说明这是复制了占位文本，不是真实令牌，并让用户点击左侧“自动配置/第三方接入”重新复制。
 
 工作区说明：
+0. 当前工作区根目录包含 AGENTS.md；开始任务前必须读取并遵守。它是云端 Codex 服务平台注入的运行边界，不应作为用户产物输出。
 1. 用户上传文件只在 ./input/ 目录内；如果上方列出了上传文件，你必须先读取 ./input/UPLOAD_MANIFEST.md，再读取清单里的相关文件后再回答。
 2. 你可以在当前临时工作区自由读取上传文件、创建文件、编辑文件、安装或创建 Skill、写入结果文件。
 3. 不允许删除任何文件或目录。如果需要替换内容，请覆盖写入或创建新版本文件。

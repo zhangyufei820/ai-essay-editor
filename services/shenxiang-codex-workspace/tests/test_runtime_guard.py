@@ -65,6 +65,19 @@ def test_codex_runner_runtime_scan_ignores_uploaded_file_content():
     assert not contains_forbidden_runtime_action(payload)
 
 
+def test_codex_runner_writes_task_router_guidance(tmp_path):
+    runner = CodexRunner.__new__(CodexRunner)
+
+    agents_path = runner._prepare_workspace_guidance(tmp_path, "codex_workspace")
+    content = agents_path.read_text(encoding="utf-8")
+
+    assert agents_path == tmp_path / "AGENTS.md"
+    assert "Cloud Codex Workspace Instructions" in content
+    assert "Cloud Codex Task Router" in content
+    assert ".agents/skills/codex_workspace/SKILL.md" in content
+    assert "not the local development workspace" in content
+
+
 def test_fast_skill_route_allows_pure_text_skill():
     request = WorkspaceRunRequest(
         user_query="请按当前 paper_outline skill 执行。为了测试响应速度，只输出一行 pong",

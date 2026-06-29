@@ -82,6 +82,17 @@ FAST_CHAT_HISTORY_CHARS = 1200
 FAST_SKILL_HISTORY_LIMIT = 4
 FAST_SKILL_HISTORY_CHARS = 1200
 FAST_SKILL_MARKDOWN_CHAR_LIMIT = 12000
+INTERNAL_TASK_FILE_NAMES = {
+    "AGENTS.md",
+    "prompt.txt",
+    "stdout.txt",
+    "stderr.txt",
+}
+INTERNAL_TASK_FILE_PARTS = {
+    ".agents",
+    "bin",
+    "__pycache__",
+}
 
 
 class FastPathFallback(Exception):
@@ -543,6 +554,9 @@ def get_task_file(
     if requested != workspace_root and not str(requested).startswith(str(workspace_root) + "/"):
         raise HTTPException(status_code=400, detail="Invalid file path")
     if not requested.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+    normalized_parts = set(Path(file_path).parts)
+    if Path(file_path).name in INTERNAL_TASK_FILE_NAMES or normalized_parts.intersection(INTERNAL_TASK_FILE_PARTS):
         raise HTTPException(status_code=404, detail="File not found")
     return FileResponse(str(requested), filename=requested.name)
 
