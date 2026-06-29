@@ -473,10 +473,15 @@ function userFacingGenerationError(error) {
   if (
     lower.includes('prompt_blocked') ||
     lower.includes('content_policy_violation') ||
+    lower.includes('content moderation') ||
+    lower.includes('output audio may contain sensitive information') ||
     lower.includes('rejected by the safety system') ||
     lower.includes('safety_violations=')
   ) {
     return '提示词或参考图被安全策略拒绝，请调整内容后重试。';
+  }
+  if (lower.includes('current status: failure')) {
+    return '视频任务已失败，上游没有返回可下载视频；请调整提示词或参考图后重试。';
   }
   if (
     code === 'econnaborted' ||
@@ -734,6 +739,35 @@ function getVideoProgress(response) {
     response?.data?.progress ||
     response?.metadata?.progress ||
     0
+  );
+}
+
+function videoErrorMessage(value) {
+  if (!value) return '';
+  if (typeof value === 'string') return value.trim();
+  if (typeof value !== 'object') return '';
+  return (
+    String(value.message || '').trim() ||
+    String(value.error || '').trim() ||
+    String(value.fail_reason || '').trim() ||
+    String(value.failReason || '').trim()
+  );
+}
+
+function extractVideoFailureReason(response) {
+  return (
+    videoErrorMessage(response?.error) ||
+    String(response?.fail_reason || '').trim() ||
+    String(response?.failReason || '').trim() ||
+    String(response?.message || '').trim() ||
+    videoErrorMessage(response?.data?.error) ||
+    String(response?.data?.fail_reason || '').trim() ||
+    String(response?.data?.failReason || '').trim() ||
+    String(response?.data?.message || '').trim() ||
+    videoErrorMessage(response?.metadata?.error) ||
+    String(response?.metadata?.fail_reason || '').trim() ||
+    String(response?.metadata?.failReason || '').trim() ||
+    String(response?.metadata?.message || '').trim()
   );
 }
 
@@ -1742,7 +1776,7 @@ const MediaPlayground = () => {
       setTaskMessage(`视频任务 ${status}，进度 ${progress}%`);
       if (url) return createVideoResult(res.data, url, taskId);
       if (status === 'failed')
-        throw new Error(res.data?.error?.message || '视频任务失败。');
+        throw new Error(extractVideoFailureReason(res.data) || '视频任务失败。');
       if (status === 'completed') {
         throw new Error('视频完成但没有返回视频地址。');
       }

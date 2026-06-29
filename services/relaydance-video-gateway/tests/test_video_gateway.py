@@ -541,3 +541,53 @@ def test_openai_compatible_status_keeps_polling_when_status_forbidden_and_conten
     assert body["status"] == "queued"
     assert body["progress"] == 0
     assert "error" not in body
+
+
+@respx.mock
+def test_openai_compatible_status_fails_when_content_reports_terminal_failure(
+    client, auth_headers, provider_base
+):
+    respx.get(f"{provider_base}/v1/videos/rd-task-failed").mock(
+        return_value=Response(
+            403,
+            json={"error": {"code": "service_error", "message": "This token has no access to model"}},
+        ),
+    )
+    respx.get(f"{provider_base}/v1/videos/rd-task-failed/content").mock(
+        return_value=Response(
+            400,
+            json={"error": {"message": "Task is not completed yet, current status: FAILURE"}},
+        ),
+    )
+
+    response = client.get("/v1/videos/rd-task-failed", headers=auth_headers)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["id"] == "rd-task-failed"
+    assert body["status"] == "failed"
+    assert body["progress"] == 100
+    assert body["error"]["message"] == "Task is not completed yet, current status: FAILURE"
+
+
+@respx.mock
+def test_openai_compatible_status_fails_on_output_audio_safety_message(
+    client, auth_headers, provider_base
+):
+    message = "The request failed because the output audio may contain sensitive information. Request id: req-test"
+    respx.get(f"{provider_base}/v1/videos/rd-task-audio-safety").mock(
+        return_value=Response(
+            403,
+            json={"error": {"code": "service_error", "message": "This token has no access to model"}},
+        ),
+    )
+    respx.get(f"{provider_base}/v1/videos/rd-task-audio-safety/content").mock(
+        return_value=Response(400, json={"error": {"message": message}}),
+    )
+
+    response = client.get("/v1/videos/rd-task-audio-safety", headers=auth_headers)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "failed"
+    assert body["error"]["message"] == message

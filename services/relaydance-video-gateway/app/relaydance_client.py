@@ -299,6 +299,37 @@ def message_from_payload(payload: Any) -> str:
     return ""
 
 
+def error_payload_from_content(content: bytes, content_type: str = "") -> Any:
+    lowered = content_type.lower()
+    if "json" not in lowered and not content.lstrip().startswith((b"{", b"[")):
+        return None
+    try:
+        return json.loads(content.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return None
+
+
+def content_failure_message(payload: Any) -> str:
+    message = message_from_payload(payload)
+    if not message:
+        return ""
+    lowered = message.lower()
+    if "current status:" in lowered and any(
+        marker in lowered for marker in ("failure", "failed", "error", "cancelled", "canceled")
+    ):
+        return message
+    if "output audio may contain sensitive information" in lowered:
+        return message
+    return ""
+
+
+def content_failure_code(payload: Any, status_code: int) -> str:
+    code = provider_code_from_payload(payload, status_code).strip().lower()
+    if code in {"", "service_error", "provider_error", "error"}:
+        return "task_failed"
+    return code
+
+
 def find_first(payload: Any, keys: set[str]) -> Any:
     if isinstance(payload, dict):
         for key, value in payload.items():
@@ -350,13 +381,15 @@ def normalize_provider_response(
     progress_value = find_first(payload, {"progress"})
     progress = progress_value if isinstance(progress_value, int) else None
     provider_code_lower = raw_provider_code.lower()
+    message = message_from_payload(payload)
+    status_lower = status.lower()
     success = 200 <= status_code < 300 and provider_code_lower not in {"service_error", "provider_error", "error", "failed", "failure"}
 
     return GatewayResponse(
         success=success,
         status_code=status_code,
         provider_code=public_provider_code(raw_provider_code, status_code),
-        message="" if success else "服务暂时不可用，请稍后重试。",
+        message=message if success and status_lower in {"failed", "failure", "error", "cancelled", "canceled"} else ("" if success else "服务暂时不可用，请稍后重试。"),
         task_id=task_id,
         status=status,
         progress=progress,
@@ -492,6 +525,23 @@ class RelayDanceClient:
                 },
                 200,
                 warnings=["status endpoint failed but video content is available"],
+            )
+        failure_payload = error_payload_from_content(content, content_type)
+        failure_message = content_failure_message(failure_payload)
+        if failure_message:
+            return normalize_provider_response(
+                {
+                    "id": task_id,
+                    "task_id": task_id,
+                    "status": "failed",
+                    "progress": 100,
+                    "error": {
+                        "code": content_failure_code(failure_payload, content_status),
+                        "message": failure_message,
+                    },
+                },
+                200,
+                warnings=["content endpoint reported terminal task failure"],
             )
         if response.status_code in {400, 403, 404} and content_status in {400, 403, 404}:
             return normalize_provider_response(
