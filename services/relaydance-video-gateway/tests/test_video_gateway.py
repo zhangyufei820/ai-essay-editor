@@ -116,6 +116,60 @@ def test_video_generation_accepts_official_seedance_2_min_duration(client, auth_
 
 
 @respx.mock
+def test_private_seedance_generation_does_not_forward_default_generate_audio(client, auth_headers, provider_base):
+    route = respx.post(f"{provider_base}/v1/video/generations").mock(
+        return_value=Response(200, json={"task_id": "task-private"}),
+    )
+
+    response = client.post(
+        "/api/v1/video/generations",
+        headers=auth_headers,
+        json={
+            "model": "seedance-nsfw",
+            "prompt": "@image1 follow this reference.",
+            "seconds": "4",
+            "metadata": {
+                "ratio": "9:16",
+                "resolution": "720p",
+                "content": [
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": "https://cdn.test/reference.png"},
+                        "role": "reference_image",
+                    }
+                ],
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    sent = json.loads(route.calls.last.request.content)
+    assert "generate_audio" not in sent["metadata"]
+
+
+@respx.mock
+def test_seedance_2_generation_only_forwards_generate_audio_when_true(client, auth_headers, provider_base):
+    route = respx.post(f"{provider_base}/v1/video/generations").mock(
+        return_value=Response(200, json={"task_id": "task-audio"}),
+    )
+
+    response = client.post(
+        "/api/v1/video/generations",
+        headers=auth_headers,
+        json={
+            "model": "doubao-seedance-2-0-720p",
+            "prompt": "A calm product demo shot.",
+            "seconds": "5",
+            "metadata": {"ratio": "16:9", "resolution": "720p", "generate_audio": True},
+        },
+    )
+
+    assert response.status_code == 200
+    sent = json.loads(route.calls.last.request.content)
+    assert sent["metadata"]["generate_audio"] is True
+
+
+@respx.mock
 def test_dify_create_builds_first_frame_payload_and_warns_on_last_frame(client, auth_headers, provider_base):
     route = respx.post(f"{provider_base}/v1/video/generations").mock(
         return_value=Response(200, json={"task_id": "task-2"}),

@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse, Response
 import re
 
 from app.config import Settings, get_settings
-from app.relaydance_client import RelayDanceClient, public_body, validate_model
+from app.relaydance_client import RelayDanceClient, public_body, validate_model, video_generation_body
 from app.schemas import (
     AssetCreateRequest,
     DifyVideoCreateRequest,
@@ -214,7 +214,7 @@ async def submit_generation(
     return await client.request(
         "POST",
         "/v1/video/generations",
-        json_body=public_body(body),
+        json_body=video_generation_body(body),
     )
 
 
@@ -247,7 +247,7 @@ async def create_video(
     return await client.request(
         "POST",
         "/v1/video/generations",
-        json_body=public_body(generation),
+        json_body=video_generation_body(generation),
         warnings=warnings,
     )
 

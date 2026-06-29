@@ -33,6 +33,20 @@ def public_body(model: Any) -> dict[str, Any]:
     return model.model_dump(exclude_none=True) if hasattr(model, "model_dump") else dict(model)
 
 
+def video_generation_body(model: Any) -> dict[str, Any]:
+    body = public_body(model)
+    metadata = body.get("metadata")
+    if not isinstance(metadata, dict):
+        return body
+
+    cleaned_metadata = dict(metadata)
+    generate_audio = cleaned_metadata.get("generate_audio")
+    if canonical_model(str(body.get("model") or "")) == "seedance-nsfw" or generate_audio is not True:
+        cleaned_metadata.pop("generate_audio", None)
+    body["metadata"] = cleaned_metadata
+    return body
+
+
 def validate_model(model: str, settings: Settings | None = None) -> None:
     settings = settings or get_settings()
     if settings.strict_model_validation and canonical_model(model) not in ALLOWED_MODELS:
