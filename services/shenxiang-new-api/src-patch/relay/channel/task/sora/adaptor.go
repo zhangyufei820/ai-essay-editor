@@ -237,13 +237,14 @@ func isSeedanceVideoModel(modelName string) bool {
 func normalizeSeedanceVideoRequestBody(bodyMap map[string]interface{}) map[string]interface{} {
 	cleaned := make(map[string]interface{}, len(bodyMap))
 	copyPresentNonBlank(cleaned, bodyMap, "model")
-	if prompt := stripPromptReferenceMarkers(trimmedString(bodyMap["prompt"])); prompt != "" {
+
+	metadata := mapFromAny(bodyMap["metadata"])
+	content := normalizeSeedanceVideoContent(bodyMap, metadata)
+	if prompt := seedanceVideoPrompt(trimmedString(bodyMap["prompt"]), len(content)); prompt != "" {
 		cleaned["prompt"] = prompt
 	}
 	cleaned["seconds"] = seedanceVideoSeconds(bodyMap)
 
-	metadata := mapFromAny(bodyMap["metadata"])
-	content := normalizeSeedanceVideoContent(bodyMap, metadata)
 	cleanMetadata := map[string]interface{}{
 		"ratio":      seedanceVideoRatio(bodyMap),
 		"resolution": seedanceVideoResolution(bodyMap),
@@ -254,12 +255,75 @@ func normalizeSeedanceVideoRequestBody(bodyMap map[string]interface{}) map[strin
 	if value, ok := boolFromAny(firstPresentAny(bodyMap["watermark"], metadata["watermark"])); ok && value {
 		cleanMetadata["watermark"] = value
 	}
-	if value, ok := boolFromAny(firstPresentAny(bodyMap["generate_audio"], metadata["generate_audio"])); ok && value {
-		cleanMetadata["generate_audio"] = value
+	if shouldForwardSeedanceGenerateAudio(trimmedString(bodyMap["model"])) {
+		value, ok := boolFromAny(firstPresentAny(bodyMap["generate_audio"], metadata["generate_audio"]))
+		if ok && value {
+			cleanMetadata["generate_audio"] = value
+		}
 	}
 	cleaned["metadata"] = cleanMetadata
 
 	return cleaned
+}
+
+func seedanceVideoPrompt(prompt string, referenceCount int) string {
+	prompt = strings.TrimSpace(prompt)
+	if referenceCount <= 0 {
+		return prompt
+	}
+
+	markers := make([]string, 0, referenceCount)
+	missingMarker := false
+	for index := 1; index <= referenceCount; index++ {
+		marker := fmt.Sprintf("@image%d", index)
+		markers = append(markers, marker)
+		if !containsPromptReferenceMarker(prompt, marker) {
+			missingMarker = true
+		}
+	}
+	if !missingMarker {
+		return prompt
+	}
+	return strings.TrimSpace(strings.Join(append(markers, stripLeadingPromptReferenceMarkers(prompt)), " "))
+}
+
+func containsPromptReferenceMarker(prompt, marker string) bool {
+	for _, field := range strings.Fields(prompt) {
+		if strings.Trim(strings.ToLower(strings.TrimSpace(field)), ",，.:：;；") == strings.ToLower(marker) {
+			return true
+		}
+	}
+	return false
+}
+
+func stripLeadingPromptReferenceMarkers(prompt string) string {
+	fields := strings.Fields(strings.TrimSpace(prompt))
+	for len(fields) > 0 && isSeedancePromptReferenceMarker(fields[0]) {
+		fields = fields[1:]
+	}
+	return strings.TrimSpace(strings.Join(fields, " "))
+}
+
+func isSeedancePromptReferenceMarker(value string) bool {
+	value = strings.Trim(strings.ToLower(strings.TrimSpace(value)), ",，.:：;；")
+	if !strings.HasPrefix(value, "@image") {
+		return false
+	}
+	suffix := strings.TrimPrefix(value, "@image")
+	if suffix == "" {
+		return false
+	}
+	for _, char := range suffix {
+		if char < '0' || char > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+func shouldForwardSeedanceGenerateAudio(modelName string) bool {
+	modelName = strings.ToLower(strings.TrimSpace(modelName))
+	return strings.HasPrefix(modelName, "doubao-seedance-2-0")
 }
 
 func copyPresentNonBlank(dst, src map[string]interface{}, key string) {
@@ -353,31 +417,6 @@ func normalizedSeedanceResolution(value string) string {
 	}
 }
 
-func stripPromptReferenceMarkers(prompt string) string {
-	fields := strings.Fields(strings.TrimSpace(prompt))
-	for len(fields) > 0 && isPromptReferenceMarker(fields[0]) {
-		fields = fields[1:]
-	}
-	return strings.TrimSpace(strings.Join(fields, " "))
-}
-
-func isPromptReferenceMarker(value string) bool {
-	value = strings.Trim(strings.ToLower(strings.TrimSpace(value)), ",，.:：;；")
-	if !strings.HasPrefix(value, "@image") {
-		return false
-	}
-	suffix := strings.TrimPrefix(value, "@image")
-	if suffix == "" {
-		return false
-	}
-	for _, char := range suffix {
-		if char < '0' || char > '9' {
-			return false
-		}
-	}
-	return true
-}
-
 func integerFromAny(value interface{}) (int, bool) {
 	switch typed := value.(type) {
 	case int:
@@ -446,37 +485,22 @@ func normalizeSeedanceVideoContent(bodyMap, metadata map[string]interface{}) []i
 		appendReference(role, firstNonBlankAnyString(image))
 	}
 
-	firstFrameURL := ""
-	lastFrameURL := ""
+	referenceURLs := make([]string, 0, 9)
 	seen := make(map[string]bool)
 	for _, reference := range references {
-		key := reference.role + "|" + reference.url
-		if seen[key] {
+		if seen[reference.url] {
 			continue
 		}
-		seen[key] = true
-		switch reference.role {
-		case "last_frame":
-			if lastFrameURL == "" {
-				lastFrameURL = reference.url
-			}
-		case "first_frame":
-			if firstFrameURL == "" {
-				firstFrameURL = reference.url
-			}
-		default:
-			if firstFrameURL == "" {
-				firstFrameURL = reference.url
-			}
+		seen[reference.url] = true
+		referenceURLs = append(referenceURLs, reference.url)
+		if len(referenceURLs) >= 9 {
+			break
 		}
 	}
 
-	content := make([]interface{}, 0, 2)
-	if firstFrameURL != "" {
-		content = append(content, seedanceVideoContentItem("first_frame", firstFrameURL))
-	}
-	if lastFrameURL != "" && lastFrameURL != firstFrameURL {
-		content = append(content, seedanceVideoContentItem("last_frame", lastFrameURL))
+	content := make([]interface{}, 0, len(referenceURLs))
+	for _, url := range referenceURLs {
+		content = append(content, seedanceVideoContentItem("reference_image", url))
 	}
 	return content
 }

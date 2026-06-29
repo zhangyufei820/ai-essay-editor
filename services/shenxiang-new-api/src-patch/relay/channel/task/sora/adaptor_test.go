@@ -8,7 +8,7 @@ import (
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 )
 
-func TestNormalizeSeedanceVideoRequestBodyKeepsFirstFrameOnly(t *testing.T) {
+func TestNormalizeSeedanceVideoRequestBodyUsesOfficialReferenceImagePayload(t *testing.T) {
 	body := map[string]interface{}{
 		"model":           "seedance-nsfw",
 		"group":           "internal",
@@ -21,6 +21,7 @@ func TestNormalizeSeedanceVideoRequestBodyKeepsFirstFrameOnly(t *testing.T) {
 		"fps":             float64(24),
 		"response_format": "url",
 		"enhance_prompt":  false,
+		"generate_audio":  true,
 		"image":           "https://cdn.test/first.png",
 		"images": []interface{}{
 			"https://cdn.test/first.png",
@@ -48,8 +49,8 @@ func TestNormalizeSeedanceVideoRequestBodyKeepsFirstFrameOnly(t *testing.T) {
 			t.Fatalf("normalizeSeedanceVideoRequestBody kept %q: %#v", removed, got)
 		}
 	}
-	if got["prompt"] != "follow this image" {
-		t.Fatalf("prompt = %#v, want marker-stripped prompt", got["prompt"])
+	if got["prompt"] != "@image1 @image2 follow this image" {
+		t.Fatalf("prompt = %#v, want complete official reference markers", got["prompt"])
 	}
 	if got["seconds"] != "4" {
 		t.Fatalf("seconds = %#v, want string seconds", got["seconds"])
@@ -59,7 +60,12 @@ func TestNormalizeSeedanceVideoRequestBodyKeepsFirstFrameOnly(t *testing.T) {
 		map[string]interface{}{
 			"type":      "image_url",
 			"image_url": map[string]interface{}{"url": "https://cdn.test/first.png"},
-			"role":      "first_frame",
+			"role":      "reference_image",
+		},
+		map[string]interface{}{
+			"type":      "image_url",
+			"image_url": map[string]interface{}{"url": "https://cdn.test/second.png"},
+			"role":      "reference_image",
 		},
 	}
 	metadata := got["metadata"].(map[string]interface{})
@@ -75,12 +81,15 @@ func TestNormalizeSeedanceVideoRequestBodyKeepsFirstFrameOnly(t *testing.T) {
 	if _, ok := metadata["negative_prompt"]; ok {
 		t.Fatalf("metadata should not forward unsupported negative_prompt: %#v", metadata)
 	}
+	if _, ok := metadata["generate_audio"]; ok {
+		t.Fatalf("metadata should not forward generate_audio for private seedance model: %#v", metadata)
+	}
 }
 
-func TestNormalizeSeedanceVideoRequestBodyKeepsLastFrame(t *testing.T) {
+func TestNormalizeSeedanceVideoRequestBodyAddsReferenceMarkers(t *testing.T) {
 	body := map[string]interface{}{
 		"model":    "seedance-nsfw",
-		"prompt":   "first and last frame",
+		"prompt":   "use these references",
 		"seconds":  "4",
 		"duration": float64(4),
 		"size":     "720x1280",
@@ -102,21 +111,43 @@ func TestNormalizeSeedanceVideoRequestBodyKeepsLastFrame(t *testing.T) {
 	}
 
 	got := normalizeSeedanceVideoRequestBody(body)
+	if got["prompt"] != "@image1 @image2 use these references" {
+		t.Fatalf("prompt = %#v, want official reference markers", got["prompt"])
+	}
 	wantContent := []interface{}{
 		map[string]interface{}{
 			"type":      "image_url",
 			"image_url": map[string]interface{}{"url": "https://cdn.test/first.png"},
-			"role":      "first_frame",
+			"role":      "reference_image",
 		},
 		map[string]interface{}{
 			"type":      "image_url",
 			"image_url": map[string]interface{}{"url": "https://cdn.test/last.png"},
-			"role":      "last_frame",
+			"role":      "reference_image",
 		},
 	}
 	metadata := got["metadata"].(map[string]interface{})
 	if !reflect.DeepEqual(metadata["content"], wantContent) {
 		t.Fatalf("metadata.content = %#v, want %#v", metadata["content"], wantContent)
+	}
+}
+
+func TestNormalizeSeedanceVideoRequestBodyForwardsGenerateAudioForSeedance2(t *testing.T) {
+	body := map[string]interface{}{
+		"model":          "doubao-seedance-2-0-720p",
+		"prompt":         "text to video",
+		"seconds":        "5",
+		"generate_audio": true,
+		"metadata": map[string]interface{}{
+			"ratio":      "16:9",
+			"resolution": "720p",
+		},
+	}
+
+	got := normalizeSeedanceVideoRequestBody(body)
+	metadata := got["metadata"].(map[string]interface{})
+	if metadata["generate_audio"] != true {
+		t.Fatalf("metadata.generate_audio = %#v, want true for Seedance 2.0", metadata["generate_audio"])
 	}
 }
 
