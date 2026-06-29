@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse, Response
 import re
 
 from app.config import Settings, get_settings
-from app.relaydance_client import RelayDanceClient, public_body, validate_model
+from app.relaydance_client import RelayDanceClient, normalize_video_provider_body, public_body, validate_model, video_generation_body
 from app.schemas import (
     AssetCreateRequest,
     DifyVideoCreateRequest,
@@ -17,6 +17,7 @@ from app.schemas import (
     UploadUrlRequest,
     VideoContentItem,
     VideoGenerationRequest,
+    canonical_model,
 )
 
 router = APIRouter(prefix="/api/v1", tags=["video"])
@@ -116,7 +117,7 @@ def _resolution_from_model(model: str, metadata: dict[str, Any], body: dict[str,
 
 def build_openai_provider_body(body: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     metadata = _as_dict(body.get("metadata"))
-    model = _as_text(body.get("model")) or "seedance-nsfw-4k"
+    model = canonical_model(_as_text(body.get("model")) or "seedance-nsfw")
     seconds = str(body.get("seconds") or body.get("duration") or "5")
     size = _as_text(body.get("size")) or "1280x720"
     provider_body = dict(body)
@@ -133,6 +134,7 @@ def build_openai_provider_body(body: dict[str, Any]) -> tuple[dict[str, Any], di
         )
     if not provider_body.get("resolution"):
         provider_body["resolution"] = _resolution_from_model(model, metadata, body)
+    provider_body = normalize_video_provider_body(provider_body)
     return provider_body, {
         "model": model,
         "seconds": seconds,
@@ -213,7 +215,7 @@ async def submit_generation(
     return await client.request(
         "POST",
         "/v1/video/generations",
-        json_body=public_body(body),
+        json_body=video_generation_body(body),
     )
 
 
@@ -246,7 +248,7 @@ async def create_video(
     return await client.request(
         "POST",
         "/v1/video/generations",
-        json_body=public_body(generation),
+        json_body=video_generation_body(generation),
         warnings=warnings,
     )
 

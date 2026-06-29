@@ -1,18 +1,22 @@
 import asyncio
+import hashlib
 import json
 import logging
 from collections.abc import Mapping
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 
 from app.config import Settings, get_settings
-from app.schemas import ALLOWED_MODELS, GatewayResponse
+from app.schemas import ALLOWED_MODELS, GatewayResponse, canonical_model
 
 logger = logging.getLogger("relaydance_video_gateway")
 
 SENSITIVE_KEYS = {"authorization", "token", "signature", "policy", "x-gateway-key", "relaydance_api_token"}
 RETRY_STATUS_CODES = {429, 500, 502, 503, 504}
+DIAGNOSTIC_VIDEO_PATHS = {"/v1/video/generations", "/v1/videos"}
+PRIVATE_SEEDANCE_MODELS = {"seedance-nsfw", "seedance-nsfw-4k"}
 
 
 def redact(value: Any) -> Any:
@@ -30,10 +34,224 @@ def public_body(model: Any) -> dict[str, Any]:
     return model.model_dump(exclude_none=True) if hasattr(model, "model_dump") else dict(model)
 
 
+def video_generation_body(model: Any) -> dict[str, Any]:
+    body = public_body(model)
+    return normalize_video_provider_body(body)
+
+
+def normalize_video_provider_body(body: Mapping[str, Any]) -> dict[str, Any]:
+    body = dict(body)
+    body["model"] = canonical_model(str(body.get("model") or ""))
+    metadata = body.get("metadata")
+    if not isinstance(metadata, Mapping):
+        if _is_private_seedance_model(str(body.get("model") or "")):
+            body.pop("generate_audio", None)
+        return body
+
+    cleaned_metadata = dict(metadata)
+    content_items = _metadata_content_items(cleaned_metadata)
+    if not content_items:
+        content_items = _content_items_from_body(body)
+        if content_items:
+            cleaned_metadata["content"] = content_items
+    first_frame_url = _first_frame_url_from_metadata(cleaned_metadata)
+    if first_frame_url and not body.get("first_frame_url"):
+        body["first_frame_url"] = first_frame_url
+    if content_items:
+        if not body.get("image_with_roles") and _has_last_frame(content_items):
+            body["image_with_roles"] = _image_with_roles(content_items)
+        if not body.get("image_urls") and not body.get("image_with_roles"):
+            body["image_urls"] = _image_urls_from_content(content_items)
+    generate_audio = cleaned_metadata.get("generate_audio")
+    if _is_private_seedance_model(str(body.get("model") or "")) or generate_audio is not True:
+        cleaned_metadata.pop("generate_audio", None)
+    body["metadata"] = cleaned_metadata
+    if _is_private_seedance_model(str(body.get("model") or "")):
+        body.pop("generate_audio", None)
+    return body
+
+
+def _is_private_seedance_model(model: str) -> bool:
+    return model in PRIVATE_SEEDANCE_MODELS or canonical_model(model) in PRIVATE_SEEDANCE_MODELS
+
+
+def _first_frame_url_from_metadata(metadata: Mapping[str, Any]) -> str:
+    content_items = _metadata_content_items(metadata)
+    for item in content_items:
+        if isinstance(item, Mapping) and str(item.get("role") or "").lower() == "first_frame":
+            url = _image_url_from_content_item(item)
+            if url:
+                return url
+    for item in content_items:
+        url = _image_url_from_content_item(item)
+        if url:
+            return url
+    return ""
+
+
+def _metadata_content_items(metadata: Mapping[str, Any]) -> list[Any]:
+    content = metadata.get("content")
+    return content if isinstance(content, list) else []
+
+
+def _content_items_from_body(body: Mapping[str, Any]) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    seen: dict[str, int] = {}
+
+    def append_reference(role: Any, url: Any) -> None:
+        text = str(url or "").strip() if isinstance(url, str) or url is None else ""
+        if not text:
+            return
+        normalized_role = _normalized_frame_role(role)
+        existing_index = seen.get(text)
+        if existing_index is not None:
+            if normalized_role == "first_frame" and items[existing_index]["role"] != "first_frame":
+                items[existing_index]["role"] = "first_frame"
+            return
+        seen[text] = len(items)
+        items.append(
+            {
+                "type": "image_url",
+                "image_url": {"url": text},
+                "role": normalized_role,
+            }
+        )
+
+    first_frame_url = body.get("first_frame_url") or body.get("image")
+    append_reference("first_frame", first_frame_url)
+
+    image_with_roles = body.get("image_with_roles")
+    if isinstance(image_with_roles, list) and image_with_roles:
+        for item in image_with_roles:
+            if not isinstance(item, Mapping):
+                continue
+            append_reference(item.get("role"), _image_url_from_content_item(item))
+        return items
+
+    image_urls = body.get("image_urls")
+    if isinstance(image_urls, list):
+        for index, url in enumerate(image_urls):
+            append_reference("first_frame" if index == 0 else "reference_image", url)
+    return items
+
+
+def _normalized_frame_role(value: Any) -> str:
+    text = str(value or "").lower().strip()
+    if text in {"first_frame", "start_frame", "source_image"}:
+        return "first_frame"
+    if text in {"last_frame", "end_frame"}:
+        return "last_frame"
+    return "reference_image"
+
+
+def _has_last_frame(content_items: list[Any]) -> bool:
+    return any(
+        isinstance(item, Mapping) and _normalized_frame_role(item.get("role")) == "last_frame"
+        for item in content_items
+    )
+
+
+def _image_urls_from_content(content_items: list[Any]) -> list[str]:
+    urls: list[str] = []
+    for item in content_items:
+        url = _image_url_from_content_item(item)
+        if url and url not in urls:
+            urls.append(url)
+    return urls
+
+
+def _image_with_roles(content_items: list[Any]) -> list[dict[str, str]]:
+    items: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for item in content_items:
+        if not isinstance(item, Mapping):
+            continue
+        url = _image_url_from_content_item(item)
+        if not url:
+            continue
+        role = _normalized_frame_role(item.get("role"))
+        key = (url, role)
+        if key in seen:
+            continue
+        seen.add(key)
+        items.append({"url": url, "role": role})
+    return items
+
+
 def validate_model(model: str, settings: Settings | None = None) -> None:
     settings = settings or get_settings()
-    if settings.strict_model_validation and model not in ALLOWED_MODELS:
+    if settings.strict_model_validation and canonical_model(model) not in ALLOWED_MODELS:
         raise ValueError("requested model is not available")
+
+
+def _public_url_summary(value: Any) -> dict[str, str]:
+    text = value.strip() if isinstance(value, str) else ""
+    if not text:
+        return {}
+    parsed = urlparse(text)
+    host = parsed.netloc.lower()
+    if "@" in host:
+        host = host.rsplit("@", 1)[-1]
+    digest = hashlib.sha256(text.encode("utf-8")).hexdigest()[:12]
+    return {"host": host, "sha256_12": digest}
+
+
+def _image_url_from_content_item(item: Any) -> str:
+    if not isinstance(item, Mapping):
+        return ""
+    for key in ("url", "src"):
+        value = item.get(key)
+        if isinstance(value, str):
+            return value
+    image_url = item.get("image_url")
+    if isinstance(image_url, str):
+        return image_url
+    if isinstance(image_url, Mapping):
+        value = image_url.get("url") or image_url.get("src")
+        return value if isinstance(value, str) else ""
+    return ""
+
+
+def request_diagnostic_summary(path: str, body: dict[str, Any] | None) -> dict[str, Any]:
+    body = body or {}
+    metadata = body.get("metadata") if isinstance(body.get("metadata"), Mapping) else {}
+    content = metadata.get("content") if isinstance(metadata, Mapping) else None
+    content_items = content if isinstance(content, list) else []
+
+    image_summaries: list[dict[str, str]] = []
+    roles: list[str] = []
+    for item in content_items:
+        if isinstance(item, Mapping):
+            role = item.get("role")
+            if isinstance(role, str) and role:
+                roles.append(role)
+            image_summary = _public_url_summary(_image_url_from_content_item(item))
+            if image_summary:
+                image_summaries.append(image_summary)
+    first_frame_summary = _public_url_summary(body.get("first_frame_url"))
+
+    return {
+        "path": path,
+        "model": body.get("model"),
+        "seconds": str(body.get("seconds", "")) if body.get("seconds") is not None else "",
+        "prompt_length": len(body.get("prompt", "")) if isinstance(body.get("prompt"), str) else 0,
+        "metadata_keys": sorted(str(key) for key in metadata.keys()) if isinstance(metadata, Mapping) else [],
+        "ratio": metadata.get("ratio") if isinstance(metadata, Mapping) else None,
+        "resolution": metadata.get("resolution") if isinstance(metadata, Mapping) else None,
+        "content_count": len(content_items),
+        "content_roles": roles,
+        "first_frame_url": first_frame_summary or None,
+        "image_urls": image_summaries,
+    }
+
+
+def provider_payload_diagnostic_summary(payload: Any, status_code: int) -> dict[str, Any]:
+    message = message_from_payload(payload)
+    return {
+        "payload_keys": sorted(str(key) for key in payload.keys()) if isinstance(payload, Mapping) else [],
+        "provider_code": public_provider_code(provider_code_from_payload(payload, status_code), status_code),
+        "message_length": len(message),
+    }
 
 
 def provider_code_from_payload(payload: Any, status_code: int) -> str:
@@ -171,10 +389,20 @@ class RelayDanceClient:
         headers = self.headers()
         if method.upper() == "POST":
             headers["Content-Type"] = "application/json"
+        diagnostic_summary = (
+            request_diagnostic_summary(path, json_body)
+            if method.upper() == "POST" and path in DIAGNOSTIC_VIDEO_PATHS
+            else None
+        )
 
         attempts = 3 if retry else 1
         for attempt in range(attempts):
             try:
+                if diagnostic_summary is not None:
+                    logger.info(
+                        "video submit request summary: %s",
+                        redact({"attempt": attempt + 1, **diagnostic_summary}),
+                    )
                 async with httpx.AsyncClient(timeout=self.settings.request_timeout_seconds) as client:
                     response = await client.request(
                         method.upper(),
@@ -184,6 +412,17 @@ class RelayDanceClient:
                         params=query,
                     )
                 payload = await self._response_payload(response)
+                if diagnostic_summary is not None and response.status_code >= 400:
+                    logger.warning(
+                        "video provider rejected request: %s",
+                        redact(
+                            {
+                                "status_code": response.status_code,
+                                "request": diagnostic_summary,
+                                "response": provider_payload_diagnostic_summary(payload, response.status_code),
+                            }
+                        ),
+                    )
                 if response.status_code in RETRY_STATUS_CODES and retry and attempt < attempts - 1:
                     retry_after = response.headers.get("retry-after")
                     sleep_seconds = float(retry_after) if retry_after and retry_after.isdigit() else 0.5 * (2**attempt)
@@ -245,6 +484,17 @@ class RelayDanceClient:
                 },
                 200,
                 warnings=["status endpoint failed but video content is available"],
+            )
+        if response.status_code in {400, 403, 404} and content_status in {400, 403, 404}:
+            return normalize_provider_response(
+                {
+                    "id": task_id,
+                    "task_id": task_id,
+                    "status": "queued",
+                    "progress": 0,
+                },
+                200,
+                warnings=["status endpoint is temporarily unavailable and video content is not ready"],
             )
         return response
 
