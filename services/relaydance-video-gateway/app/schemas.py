@@ -14,8 +14,7 @@ ALLOWED_MODELS = {
     "seedance-nsfw",
 }
 MODEL_ALIASES = {
-    "seedance-nsfw": "dreamina-seedance-2-0-260128",
-    "seedance-nsfw-4k": "dreamina-seedance-2-0-260128",
+    "seedance-nsfw-4k": "seedance-nsfw",
 }
 ALLOWED_SECONDS = {str(value) for value in range(4, 16)}
 ALLOWED_RATIOS = {"16:9", "9:16", "1:1", "4:3", "3:4", "21:9"}

@@ -118,7 +118,7 @@ def test_video_generation_accepts_official_seedance_2_min_duration(client, auth_
     assert response.status_code == 200
     assert response.json()["task_id"] == "task-4s"
     sent = json.loads(route.calls.last.request.content)
-    assert sent["model"] == "dreamina-seedance-2-0-260128"
+    assert sent["model"] == "seedance-nsfw"
     assert sent["seconds"] == "4"
 
 
@@ -151,7 +151,7 @@ def test_private_seedance_generation_does_not_forward_default_generate_audio(cli
 
     assert response.status_code == 200
     sent = json.loads(route.calls.last.request.content)
-    assert sent["model"] == "dreamina-seedance-2-0-260128"
+    assert sent["model"] == "seedance-nsfw"
     assert sent["prompt"] == "follow this reference."
     assert sent["first_frame_url"] == "https://cdn.test/reference.png"
     assert "content" not in sent["metadata"]
@@ -309,7 +309,7 @@ def test_openai_compatible_videos_submit_forwards_to_openai_videos(client, auth_
 
     sent = json.loads(route.calls.last.request.content)
     assert sent == {
-        "model": "dreamina-seedance-2-0-260128",
+        "model": "seedance-nsfw",
         "prompt": "A neutral product demo shot.",
         "seconds": "5",
         "size": "1280x720",
@@ -363,7 +363,7 @@ def test_openai_compatible_videos_maps_legacy_nsfw_model(client, auth_headers, p
 
     assert response.status_code == 200
     sent = json.loads(route.calls.last.request.content)
-    assert sent["model"] == "dreamina-seedance-2-0-260128"
+    assert sent["model"] == "seedance-nsfw"
 
 
 @respx.mock
@@ -397,7 +397,7 @@ def test_openai_compatible_videos_extracts_first_frame_from_metadata(client, aut
 
     assert response.status_code == 200
     sent = json.loads(route.calls.last.request.content)
-    assert sent["model"] == "dreamina-seedance-2-0-260128"
+    assert sent["model"] == "seedance-nsfw"
     assert sent["prompt"] == "A neutral studio product shot."
     assert sent["first_frame_url"] == "https://cdn.test/reference.png"
     assert "content" not in sent["metadata"]

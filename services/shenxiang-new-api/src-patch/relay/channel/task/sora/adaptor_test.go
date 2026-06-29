@@ -48,8 +48,8 @@ func TestNormalizeSeedanceVideoRequestBodyUsesOfficialFirstFramePayload(t *testi
 			t.Fatalf("normalizeSeedanceVideoRequestBody kept %q: %#v", removed, got)
 		}
 	}
-	if got["model"] != "dreamina-seedance-2-0-260128" {
-		t.Fatalf("model = %#v, want dreamina-seedance-2-0-260128", got["model"])
+	if got["model"] != "seedance-nsfw" {
+		t.Fatalf("model = %#v, want seedance-nsfw", got["model"])
 	}
 	if got["prompt"] != "follow this image" {
 		t.Fatalf("prompt = %#v, want prompt without reference markers", got["prompt"])

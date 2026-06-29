@@ -16,7 +16,7 @@ logger = logging.getLogger("relaydance_video_gateway")
 SENSITIVE_KEYS = {"authorization", "token", "signature", "policy", "x-gateway-key", "relaydance_api_token"}
 RETRY_STATUS_CODES = {429, 500, 502, 503, 504}
 DIAGNOSTIC_VIDEO_PATHS = {"/v1/video/generations", "/v1/videos"}
-PRIVATE_SEEDANCE_MODEL = "dreamina-seedance-2-0-260128"
+PRIVATE_SEEDANCE_MODELS = {"seedance-nsfw", "seedance-nsfw-4k"}
 
 
 def redact(value: Any) -> Any:
@@ -67,7 +67,7 @@ def normalize_video_provider_body(body: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def _is_private_seedance_model(model: str) -> bool:
-    return canonical_model(model) == PRIVATE_SEEDANCE_MODEL
+    return model in PRIVATE_SEEDANCE_MODELS or canonical_model(model) in PRIVATE_SEEDANCE_MODELS
 
 
 def _first_frame_url_from_metadata(metadata: Mapping[str, Any]) -> str:

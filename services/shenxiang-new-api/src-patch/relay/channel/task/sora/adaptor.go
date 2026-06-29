@@ -235,13 +235,7 @@ func isSeedanceVideoModel(modelName string) bool {
 }
 
 func seedanceUpstreamModel(modelName string) string {
-	modelName = strings.TrimSpace(modelName)
-	switch strings.ToLower(modelName) {
-	case "seedance-nsfw", "seedance-nsfw-4k":
-		return "dreamina-seedance-2-0-260128"
-	default:
-		return modelName
-	}
+	return strings.TrimSpace(modelName)
 }
 
 func normalizeSeedanceVideoRequestBody(bodyMap map[string]interface{}) map[string]interface{} {
