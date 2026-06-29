@@ -1388,6 +1388,7 @@
     var hasLog = hasAnyText(lower, ["日志", "记录", "用量", "使用情况", "消耗", "扣费", "任务"]);
     var hasMedia = hasAnyText(lower, ["图片", "图像", "媒体", "画图", "生成图", "视频", "image", "media"]);
     var hasOpen = hasAnyText(lower, ["看", "查看", "打开", "进入", "跳转", "带我", "帮我", "今天", "最近", "当前"]);
+    var explicitOpenLog = hasAnyText(lower, ["打开日志", "查看日志", "进入日志", "打开用量日志", "查看用量日志", "打开使用日志", "查看使用日志"]);
     var asksHistory = hasAnyText(lower, [
       "最近",
       "刚才",
@@ -1428,7 +1429,7 @@
       "今天图片使用",
       "request id",
     ]);
-    return explicitLog || (hasMedia && asksHistory) || (hasLog && hasOpen && (hasMedia || hasAnyText(lower, ["日志", "记录", "用量"])));
+    return explicitOpenLog || explicitLog || (hasMedia && asksHistory) || (hasLog && hasOpen && hasMedia);
   }
 
   function usageLogWorkflowActions(text, skipGoto) {
@@ -2141,7 +2142,7 @@
       })
       .then(function (payload) {
         typeAssistant(payload.reply || "我没有拿到有效回复。你可以换一种说法，或者直接点自动接入 Codex。", {
-          actions: smartActions(payload.reply || value),
+          actions: smartActions(payload.reply || value, value),
         });
       })
       .catch(function (error) {
@@ -2159,47 +2160,109 @@
       });
   }
 
-  function smartActions(text) {
-    var lower = String(text || "").toLowerCase();
+  function followUpAction(label, question) {
+    return { label: label, value: "ask:" + encodeURIComponent(question) };
+  }
+
+  function followUpActions(question, answer) {
+    var source = [question, answer].filter(Boolean).join(" ");
+    var lower = source.toLowerCase();
     var actions = [];
-    if (wantsNavigation(text)) {
-      actions = detectRoutes(text).map(function (key) {
+    var usageRelated = hasAnyText(lower, ["调用", "用量", "日志", "tokens", "token", "花费", "成本", "消耗", "用户", "令牌", "模型"]);
+    var mediaRelated = hasAnyText(lower, ["图片", "图像", "媒体", "生成", "任务", "结果"]);
+    var codexRelated = hasAnyText(lower, ["codex", "代码", "工作区"]);
+    var keyRelated = hasAnyText(lower, ["key", "令牌", "密钥", "api key", "权限"]);
+    var pricingRelated = hasAnyText(lower, ["价格", "费用", "扣费", "余额", "人民币", "￥"]);
+
+    if (usageRelated) {
+      actions.push(followUpAction("按用户拆分调用", "按用户拆分刚才的模型调用情况，列出每个用户的调用次数、tokens 和花费。"));
+      actions.push(followUpAction("按模型拆分消耗", "按模型维度汇总调用情况，列出模型、调用次数、输入输出 tokens 和总花费。"));
+      actions.push(followUpAction("找出成本最高项", "从刚才的数据里找出成本最高的用户、令牌和模型，并解释主要原因。"));
+      actions.push(followUpAction("查看失败和异常", "继续检查这批调用里有没有失败、超时、403、429 或异常扣费记录。"));
+      actions.push(followUpAction("继续看原始日志", "打开用量日志，并按刚才的问题继续筛选相关记录。"));
+    }
+    if (mediaRelated) {
+      actions.push(followUpAction("只看图像任务", "只筛选图像或媒体任务，列出最近生成记录、状态、模型和花费。"));
+      actions.push(followUpAction("查看生成失败原因", "帮我检查最近图像生成失败或长时间等待的原因。"));
+    }
+    if (codexRelated) {
+      actions.push(followUpAction("只看 Codex 调用", "只看 Codex 相关调用，按用户、令牌、模型和成本重新汇总。"));
+      actions.push(followUpAction("检查 Codex Key 权限", "检查 Codex 使用的 Key 是否有模型权限、余额和分组限制问题。"));
+    }
+    if (keyRelated) {
+      actions.push(followUpAction("检查令牌权限", "检查相关令牌的模型权限、分组、额度和是否被禁用。"));
+      actions.push(followUpAction("打开令牌管理", "打开令牌管理并帮我定位相关 Key。"));
+    }
+    if (pricingRelated) {
+      actions.push(followUpAction("核对模型价格", "打开模型价格页，核对刚才提到模型的单价和扣费是否一致。"));
+      actions.push(followUpAction("解释扣费公式", "按输入 tokens、输出 tokens、缓存读写和模型单价解释这次扣费公式。"));
+    }
+    actions.push(followUpAction("生成可复查结论", "把刚才结论整理成一段可复查的简短报告，列出依据、风险和下一步。"));
+    actions.push(followUpAction("我还应该查什么", "基于刚才的问题，你建议我下一步优先查哪 3 件事？"));
+    return actions;
+  }
+
+  function ensureMinimumGuidanceActions(actions, question, answer) {
+    var topic = limitText(normalizeSpaces(question || answer || "这个问题"), 48);
+    var fallback = [
+      followUpAction("继续追问细节", "围绕“" + topic + "”继续展开，补充关键细节和判断依据。"),
+      followUpAction("给我执行步骤", "把“" + topic + "”整理成我下一步可以直接执行的操作步骤。"),
+      followUpAction("指出主要风险", "基于“" + topic + "”，指出最需要注意的风险、误判点和验证方式。"),
+      followUpAction("帮我复核结论", "复核刚才关于“" + topic + "”的回答，找出可能不完整或需要继续查证的地方。"),
+      followUpAction("给出下一步建议", "针对“" + topic + "”，给出最值得继续追问或操作的 5 个方向。"),
+    ];
+    var result = uniqueActions((actions || []).concat(fallback));
+    return result.slice(0, Math.max(5, Math.min(8, result.length)));
+  }
+
+  function smartActions(text, originalQuestion) {
+    var combined = [originalQuestion, text].filter(Boolean).join(" ");
+    var lower = String(combined || "").toLowerCase();
+    var operationalActions = [];
+    if (wantsNavigation(combined)) {
+      operationalActions = detectRoutes(combined).map(function (key) {
         return routeAction(key);
       });
     }
     if (lower.indexOf("codex") >= 0 || lower.indexOf("配置") >= 0 || lower.indexOf("api key") >= 0) {
-      actions.push({ label: "自动接入 Codex", value: "codex" });
+      operationalActions.push({ label: "自动接入 Codex", value: "codex" });
     }
     if (lower.indexOf("401") >= 0 || lower.indexOf("403") >= 0 || lower.indexOf("timeout") >= 0) {
-      actions.push({ label: "检查模型列表", value: "models-check" });
+      operationalActions.push({ label: "检查模型列表", value: "models-check" });
     }
-    if (wantsUsageLogOperation(text)) {
-      actions.push({ label: "打开图像使用日志", value: "operate:usage-log-image" });
+    if (wantsUsageLogOperation(combined)) {
+      var usageLogMediaFocused = hasAnyText(lower, ["图片", "图像", "媒体", "画图", "生成图", "视频", "image", "media"]);
+      operationalActions.push({
+        label: usageLogMediaFocused ? "打开图像使用日志" : "打开用量日志",
+        value: usageLogMediaFocused ? "operate:usage-log-image" : "operate:usage-log",
+      });
     }
     if (
-      !wantsUsageLogOperation(text) &&
-      (wantsMediaImageOperation(text) || lower.indexOf("媒体工坊") >= 0 || lower.indexOf("图片") >= 0 || lower.indexOf("图像") >= 0)
+      !wantsUsageLogOperation(combined) &&
+      (wantsMediaImageOperation(combined) || lower.indexOf("媒体工坊") >= 0 || lower.indexOf("图片") >= 0 || lower.indexOf("图像") >= 0)
     ) {
-      actions.push({ label: "操作媒体工坊", value: "operate:media-image" });
+      operationalActions.push({ label: "操作媒体工坊", value: "operate:media-image" });
     }
-    if (wantsNavigation(text) && (lower.indexOf("key") >= 0 || lower.indexOf("令牌") >= 0 || lower.indexOf("api") >= 0)) {
-      actions.push({ label: "打开令牌管理", value: "route:token" });
+    if (wantsNavigation(combined) && (lower.indexOf("key") >= 0 || lower.indexOf("令牌") >= 0 || lower.indexOf("api") >= 0)) {
+      operationalActions.push({ label: "打开令牌管理", value: "route:token" });
     }
-    if (wantsNavigation(text) && (lower.indexOf("价格") >= 0 || lower.indexOf("扣费") >= 0 || lower.indexOf("余额") >= 0)) {
-      actions.push({ label: "模型价格", value: "route:pricing" });
+    if (wantsNavigation(combined) && (lower.indexOf("价格") >= 0 || lower.indexOf("扣费") >= 0 || lower.indexOf("余额") >= 0)) {
+      operationalActions.push({ label: "模型价格", value: "route:pricing" });
     }
     collectInteractiveInventory(8).slice(0, 2).forEach(function (item) {
-      if (!item.sensitive && item.label && scoreElementLabel(text, item.label) >= 34) {
-        actions.push({ label: "点击 " + item.label, value: "operate:page:" + encodeURIComponent(item.label) });
+      if (!item.sensitive && item.label && scoreElementLabel(combined, item.label) >= 34) {
+        operationalActions.push({ label: "点击 " + item.label, value: "operate:page:" + encodeURIComponent(item.label) });
       }
     });
-    if (!actions.length) actions.push({ label: "扫描当前页面", value: "operate:scan-page" });
-    return uniqueActions(actions).slice(0, 4);
+    var guidanceActions = ensureMinimumGuidanceActions(followUpActions(originalQuestion || text, text), originalQuestion, text);
+    if (!operationalActions.length) operationalActions.push({ label: "扫描当前页面", value: "operate:scan-page" });
+    return uniqueActions(guidanceActions.concat(operationalActions)).slice(0, 8);
   }
 
   function handleAction(value) {
     if (state.loading && value !== "end-session") return;
     if (value === "codex") return askCodexModel();
+    if (value.indexOf("ask:") === 0) return submitUserInput(decodeURIComponent(value.slice("ask:".length)));
     if (value.indexOf("model:") === 0) return chooseModel(value.slice("model:".length));
     if (value === "model-custom") return askCustomModel();
     if (value === "os:mac") return chooseOS("mac");
@@ -2211,6 +2274,7 @@
     if (value === "err-401" || value === "err-403" || value === "err-timeout") return cannedError(value);
     if (value.indexOf("route:") === 0) return navigateToRoute(value.slice("route:".length));
     if (value === "operate:token-create") return openTokenCreateUI();
+    if (value === "operate:usage-log") return startUsageLogWorkflow("用量日志");
     if (value === "operate:usage-log-image") return startUsageLogWorkflow("图像使用日志");
     if (value === "operate:media-image") return startMediaImageWorkflow("");
     if (value === "operate:media-submit") return submitMediaGeneration();
