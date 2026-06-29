@@ -436,7 +436,7 @@ func shouldRetry(c *gin.Context, openaiErr *types.NewAPIError, retryTimes int) b
 	if openaiErr == nil {
 		return false
 	}
-	if service.ShouldSkipRetryAfterChannelAffinityFailure(c) {
+	if service.ShouldSkipRetryAfterChannelAffinityFailure(c) && !shouldBypassChannelAffinityRetryLock(openaiErr, retryTimes) {
 		return false
 	}
 	if types.IsChannelError(openaiErr) {
@@ -462,6 +462,17 @@ func shouldRetry(c *gin.Context, openaiErr *types.NewAPIError, retryTimes int) b
 		return false
 	}
 	return operation_setting.ShouldRetryByStatusCode(code)
+}
+
+func shouldBypassChannelAffinityRetryLock(openaiErr *types.NewAPIError, retryTimes int) bool {
+	if openaiErr == nil || retryTimes <= 0 || types.IsSkipRetryError(openaiErr) {
+		return false
+	}
+	code := openaiErr.StatusCode
+	if code == http.StatusForbidden || code == http.StatusTooManyRequests || code/100 == 5 {
+		return operation_setting.ShouldRetryByStatusCode(code)
+	}
+	return false
 }
 
 func processChannelError(c *gin.Context, channelError types.ChannelError, err *types.NewAPIError) {

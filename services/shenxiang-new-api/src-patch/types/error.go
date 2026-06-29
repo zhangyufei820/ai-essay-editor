@@ -218,6 +218,10 @@ func (e *NewAPIError) PublicMessage() string {
 	lowerMsg := strings.ToLower(msg)
 	code := strings.ToLower(string(e.errorCode))
 
+	if e.IsUpstreamRelayError() && (ContainsQuotaLikeError(code) || ContainsQuotaLikeError(lowerMsg)) {
+		return "模型服务暂时不可用，请稍后重试。"
+	}
+
 	if strings.Contains(lowerMsg, "no access to model") ||
 		strings.Contains(lowerMsg, "has no access to model") ||
 		strings.Contains(lowerMsg, "token has no access") ||
@@ -240,6 +244,9 @@ func (e *NewAPIError) PublicMessage() string {
 	case ErrorCodeSensitiveWordsDetected, ErrorCodePromptBlocked, ErrorCodeViolationFeeGrokCSAM:
 		return "提示词或参考图被安全策略拒绝，请调整内容后重试。"
 	case ErrorCodeInsufficientUserQuota, ErrorCodePreConsumeTokenQuotaFailed:
+		if e.IsUpstreamRelayError() {
+			return "模型服务暂时不可用，请稍后重试。"
+		}
 		return "账户额度不足，请充值或联系管理员。"
 	case ErrorCodeGetChannelFailed, ErrorCodeDoRequestFailed, ErrorCodeBadResponseStatusCode,
 		ErrorCodeReadResponseBodyFailed, ErrorCodeBadResponse, ErrorCodeBadResponseBody,
@@ -262,6 +269,43 @@ func (e *NewAPIError) PublicMessage() string {
 		return "模型服务暂时不可用，请稍后重试。"
 	}
 	return common.MaskSensitiveInfo(msg)
+}
+
+func (e *NewAPIError) IsUpstreamRelayError() bool {
+	if e == nil {
+		return false
+	}
+	switch e.errorType {
+	case ErrorTypeOpenAIError, ErrorTypeClaudeError, ErrorTypeGeminiError,
+		ErrorTypeMidjourneyError, ErrorTypeRerankError, ErrorTypeUpstreamError:
+		return true
+	default:
+		return false
+	}
+}
+
+func ContainsQuotaLikeError(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, term := range []string{
+		"insufficient_quota",
+		"insufficient_user_quota",
+		"quota_exceeded",
+		"quota exceeded",
+		"exceeded quota",
+		"balance_not_enough",
+		"insufficient balance",
+		"账户额度不足",
+		"账号额度不足",
+		"余额不足",
+		"额度不足",
+	} {
+		if strings.Contains(s, term) {
+			return true
+		}
+	}
+	return false
 }
 
 func ContainsProviderDisclosure(s string) bool {
@@ -312,6 +356,9 @@ func (e *NewAPIError) ToPublicOpenAIError(requestId string) OpenAIError {
 		result.Type = string(ErrorTypeNewAPIError)
 	}
 	result.Code = publicErrorCode(result.Code)
+	if e.IsUpstreamRelayError() && ContainsQuotaLikeError(strings.ToLower(fmt.Sprintf("%v", result.Code))) {
+		result.Code = "service_unavailable"
+	}
 	return result
 }
 
