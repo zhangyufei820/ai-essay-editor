@@ -9,6 +9,11 @@
     claudeBaseUrl: "https://api.aiphui.top/claude",
     codexModel: "gpt-5.5",
     fallbackCodexModel: "gpt-5.4-mini",
+    providerId: "aiphui",
+    providerName: "AIPHUI",
+    apiEnvKey: "AIPHUI_API_KEY",
+    codexWorkDir: "C:\\codex-work",
+    macCodexWorkDir: "$HOME/codex-work",
     dashboardPath: "/console",
     tokenPath: "/console/token",
     playgroundPath: "/console/playground",
@@ -120,7 +125,9 @@
     busyLabel: "",
     messages: [],
     selectedModel: CONFIG.codexModel,
-    selectedOS: "mac",
+    selectedOS: "windows",
+    aiphuiMode: "desktop",
+    allowKeyPrint: true,
     generatedKey: "",
     awaitingCustomModel: false,
     operationRunning: false,
@@ -255,39 +262,14 @@
       });
   }
 
-  function macCodexCommand(model, key) {
-    return [
-      "XINGREN_API_KEY=" + shellSingleQuote(key),
-      'mkdir -p "$HOME/.codex"',
-      'printf "%s" "$XINGREN_API_KEY" > "$HOME/.codex/xingren_api_key"',
-      'chmod 600 "$HOME/.codex/xingren_api_key"',
-      "",
-      "cat > \"$HOME/.codex/config.toml\" <<'EOF'",
-      'model = "' + model + '"',
-      'model_provider = "xingren"',
-      'model_reasoning_effort = "high"',
-      "",
-      "[model_providers.xingren]",
-      'name = "星人 API"',
-      'base_url = "' + CONFIG.baseUrl + '"',
-      'wire_api = "chat"',
-      "",
-      "[model_providers.xingren.auth]",
-      'command = "/bin/sh"',
-      'args = ["-lc", "cat \\"$HOME/.codex/xingren_api_key\\""]',
-      "timeout_ms = 5000",
-      "refresh_interval_ms = 0",
-      "",
-      "[profiles.xingren]",
-      'model = "' + model + '"',
-      'model_provider = "xingren"',
-      "EOF",
-      "",
-      'codex --profile xingren "请只回复：Codex 接入成功"',
-    ].join("\n");
+  function maskKey(key) {
+    var value = String(key || "");
+    if (!value) return "";
+    if (value.length <= 12) return value.slice(0, 4) + "***";
+    return value.slice(0, 7) + "***" + value.slice(-4);
   }
 
-  function windowsCodexCommand(model, key) {
+  function aiphuiConfigLines(model, includeTrust) {
     var configLines = [
       'model = "' + model + '"',
       'model_provider = "aiphui"',
@@ -307,99 +289,281 @@
       "[sandbox_workspace_write]",
       "network_access = true",
     ];
-    return [
-      "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8",
-      "",
-      "# 先完全退出 Codex 桌面 App，包括任务栏托盘里的 Codex，再执行这段。",
-      "$ApiKey = " + powershellDoubleQuote(key),
-      "$BaseUrl = " + powershellDoubleQuote(CONFIG.baseUrl),
-      "",
-      '[Environment]::SetEnvironmentVariable("AIPHUI_API_KEY", $ApiKey, "User")',
-      '[Environment]::SetEnvironmentVariable("CODEX_HOME", "$env:USERPROFILE\\.codex", "User")',
-      "$env:AIPHUI_API_KEY = $ApiKey",
-      '$env:CODEX_HOME = "$env:USERPROFILE\\.codex"',
-      "",
-      '$codexDir = Join-Path $env:USERPROFILE ".codex"',
-      "New-Item -ItemType Directory -Path $codexDir -Force | Out-Null",
-      '$configPath = Join-Path $codexDir "config.toml"',
-      "",
-      "$lines = @(",
-    ]
-      .concat(configLines.map(powershellSingleQuote))
-      .concat([
-        ")",
+    if (includeTrust) {
+      configLines = configLines.concat([
         "",
-        "Set-Content -Path $configPath -Value $lines -Encoding UTF8",
+        '[projects."C:\\\\codex-work"]',
+        'trust_level = "trusted"',
+      ]);
+    }
+    return configLines;
+  }
+
+  function powershellStringArray(items) {
+    return "@(" + items.map(powershellSingleQuote).join(",") + ")";
+  }
+
+  function shellPrintfLiteral(value) {
+    return shellSingleQuote(
+      String(value || "")
+        .replace(/\\/g, "\\\\")
+        .replace(/\n/g, "\\n")
+    );
+  }
+
+  function configLinesForOS(model, os, includeTrust) {
+    var lines = aiphuiConfigLines(model, os === "windows" && includeTrust);
+    if (os === "mac") {
+      lines = lines.filter(function (line) {
+        return line !== "[windows]" && line !== 'sandbox = "elevated"';
+      });
+      if (includeTrust) {
+        lines = lines.concat(["", '[projects."$HOME/codex-work"]', 'trust_level = "trusted"']);
+      }
+    }
+    return lines;
+  }
+
+  function windowsAiphuiConfigCommand(model, key, options) {
+    options = options || {};
+    var allowPrint = options.allowPrint !== false;
+    var includeTrust = options.includeTrust !== false;
+    var configLines = aiphuiConfigLines(model, includeTrust);
+    var command =
+      '[Console]::OutputEncoding=[System.Text.Encoding]::UTF8; ' +
+      "$ApiKey=" +
+      powershellDoubleQuote(key) +
+      "; " +
+      '[Environment]::SetEnvironmentVariable("AIPHUI_API_KEY",$ApiKey,"User"); ' +
+      "$env:AIPHUI_API_KEY=$ApiKey; " +
+      '$codexDir=Join-Path $env:USERPROFILE ".codex"; ' +
+      "New-Item -ItemType Directory -Path $codexDir -Force | Out-Null; " +
+      '$configPath=Join-Path $codexDir "config.toml"; ' +
+      "$lines=" +
+      powershellStringArray(configLines) +
+      "; " +
+      "Set-Content -Path $configPath -Value $lines -Encoding UTF8; " +
+      "New-Item -ItemType Directory -Path " +
+      powershellDoubleQuote(CONFIG.codexWorkDir) +
+      " -Force | Out-Null; " +
+      'Write-Host "===== AIPHUI Codex 配置写入完成 =====" -ForegroundColor Green; ' +
+      'Write-Host "CONFIG = $configPath"; ' +
+      (allowPrint ? 'Write-Host "AIPHUI_API_KEY = $env:AIPHUI_API_KEY"; ' : 'Write-Host "AIPHUI_API_KEY = 已写入"; ') +
+      "Get-Content $configPath";
+    if (allowPrint) {
+      command =
+        'Write-Host "注意：下面会打印完整 AIPHUI_API_KEY，只发给接入老师时可用，公开截图前请遮住。" -ForegroundColor Yellow; ' +
+        command;
+    }
+    return command;
+  }
+
+  function windowsCodexCommand(model, key) {
+    return windowsAiphuiConfigCommand(model, key, {
+      allowPrint: state.allowKeyPrint,
+      includeTrust: true,
+    });
+  }
+
+  function macAiphuiConfigCommand(model, key, options) {
+    options = options || {};
+    var allowPrint = options.allowPrint !== false;
+    var config = configLinesForOS(model, "mac", true);
+    var body = config.join("\n");
+    var command =
+      "export AIPHUI_API_KEY=" +
+      shellSingleQuote(key) +
+      '; printf "\\nexport AIPHUI_API_KEY=%s\\n" "$(printf %q "$AIPHUI_API_KEY")" >> "$HOME/.zshrc"; mkdir -p "$HOME/.codex" "$HOME/codex-work"; printf %b ' +
+      shellPrintfLiteral(body) +
+      ' > "$HOME/.codex/config.toml"; ' +
+      'echo "===== AIPHUI Codex 配置写入完成 ====="; ' +
+      'echo "CONFIG = $HOME/.codex/config.toml"; ' +
+      (allowPrint ? 'echo "AIPHUI_API_KEY = $AIPHUI_API_KEY"; ' : 'echo "AIPHUI_API_KEY = 已写入"; ') +
+      'cat "$HOME/.codex/config.toml"';
+    if (allowPrint) {
+      command = 'echo "注意：下面会打印完整 AIPHUI_API_KEY，公开截图前请遮住。"; ' + command;
+    }
+    return command;
+  }
+
+  function macModelsCheckCommand(key) {
+    var apiKeySetter = key
+      ? "export AIPHUI_API_KEY=" + shellSingleQuote(key) + "; "
+      : 'source "$HOME/.zshrc" 2>/dev/null; ';
+    return (
+      apiKeySetter +
+      'if [ -z "$AIPHUI_API_KEY" ]; then echo "没有读到 AIPHUI_API_KEY，请先执行配置命令。"; exit 1; fi; ' +
+      'echo "AIPHUI_API_KEY = $AIPHUI_API_KEY"; ' +
+      "curl -sS " +
+      shellSingleQuote(CONFIG.baseUrl + "/responses") +
+      ' -H "Authorization: Bearer $AIPHUI_API_KEY" -H "Content-Type: application/json" -d ' +
+      shellSingleQuote(JSON.stringify({ model: CONFIG.codexModel, input: "只回复 OK" }))
+    );
+  }
+
+  function macInstallCodexCommand() {
+    return [
+      "node -v",
+      "npm -v",
+      "npm install -g @openai/codex@latest",
+      "codex --version",
+      'mkdir -p "$HOME/codex-work"',
+      'cd "$HOME/codex-work"',
+      'codex "只回复 OK"',
+    ].join("\n");
+  }
+
+  function windowsManualAiphuiConfigCommand(model) {
+    var configLines = aiphuiConfigLines(model, true);
+    var command =
+      '[Console]::OutputEncoding=[System.Text.Encoding]::UTF8; ' +
+      "$ApiKey=Read-Host '请粘贴 AIPHUI API Key'; " +
+      '[Environment]::SetEnvironmentVariable("AIPHUI_API_KEY",$ApiKey,"User"); ' +
+      "$env:AIPHUI_API_KEY=$ApiKey; " +
+      '$codexDir=Join-Path $env:USERPROFILE ".codex"; ' +
+      "New-Item -ItemType Directory -Path $codexDir -Force | Out-Null; " +
+      '$configPath=Join-Path $codexDir "config.toml"; ' +
+      "$lines=" +
+      powershellStringArray(configLines) +
+      "; " +
+      "Set-Content -Path $configPath -Value $lines -Encoding UTF8; " +
+      "New-Item -ItemType Directory -Path " +
+      powershellDoubleQuote(CONFIG.codexWorkDir) +
+      " -Force | Out-Null; " +
+      'Write-Host "===== AIPHUI Codex 配置写入完成 =====" -ForegroundColor Green; ' +
+      'Write-Host "CONFIG = $configPath"; ' +
+      'Write-Host "AIPHUI_API_KEY = $env:AIPHUI_API_KEY"; ' +
+      "Get-Content $configPath";
+    command =
+      'Write-Host "注意：下面会打印完整 AIPHUI_API_KEY，只发给接入老师时可用，公开截图前请遮住。" -ForegroundColor Yellow; ' +
+      command;
+    return command;
+  }
+
+  function macManualAiphuiConfigCommand(model) {
+    var config = configLinesForOS(model, "mac", true);
+    var body = config.join("\n");
+    return (
+      'echo "注意：下面会打印完整 AIPHUI_API_KEY，公开截图前请遮住。"; ' +
+      'printf "请粘贴 AIPHUI API Key: "; IFS= read -r AIPHUI_API_KEY; export AIPHUI_API_KEY; ' +
+      'printf "\\nexport AIPHUI_API_KEY=%s\\n" "$(printf %q "$AIPHUI_API_KEY")" >> "$HOME/.zshrc"; ' +
+      'mkdir -p "$HOME/.codex" "$HOME/codex-work"; printf %b ' +
+      shellPrintfLiteral(body) +
+      ' > "$HOME/.codex/config.toml"; echo "CONFIG = $HOME/.codex/config.toml"; echo "AIPHUI_API_KEY = $AIPHUI_API_KEY"; cat "$HOME/.codex/config.toml"'
+    );
+  }
+
+  function aiphuiConfigTemplate(model) {
+    return [
+      'model = "' + model + '"',
+      'model_provider = "aiphui"',
+      'approval_policy = "on-request"',
+      'sandbox_mode = "workspace-write"',
+      'model_reasoning_effort = "high"',
       "",
-      'Write-Host "===== AIPHUI Codex 配置写入完成 =====" -ForegroundColor Green',
-      'Write-Host "下一步：先执行下面的 /v1/responses 连通性检查；成功后重新打开 Codex 桌面 App。" -ForegroundColor Cyan',
-      'Write-Host "CONFIG = $configPath"',
-      "Get-Content $configPath",
+      "[model_providers.aiphui]",
+      'name = "AIPHUI"',
+      'base_url = "' + CONFIG.baseUrl + '"',
+      'env_key = "AIPHUI_API_KEY"',
+      'wire_api = "responses"',
       "",
-      "$headers = @{",
-      '  "Authorization" = "Bearer $env:AIPHUI_API_KEY"',
-      '  "Content-Type"  = "application/json"',
-      "}",
-      "$body = @{",
-      '  model = "' + model + '"',
-      '  input = "只回复 OK"',
-      "} | ConvertTo-Json -Depth 10",
+      "[windows]",
+      'sandbox = "elevated"',
       "",
-      "Invoke-RestMethod `",
-      '  -Uri "' + CONFIG.baseUrl + '/responses" `',
-      "  -Method Post `",
-      "  -Headers $headers `",
-      "  -Body $body",
-      ])
+      "[sandbox_workspace_write]",
+      "network_access = true",
+      "",
+      '[projects."C:\\\\codex-work"]',
+      'trust_level = "trusted"',
+    ]
       .join("\n");
   }
 
   function codexNextStepGuide(os, model) {
-    if (os === "windows") {
+    if (os === "mac") {
       return (
         "执行后下一步：\n" +
-        "1. PowerShell 里如果 /v1/responses 返回 OK，说明 Key、Base URL 和 " +
+        "1. 在同一个终端执行 cd \"$HOME/codex-work\"。\n" +
+        "2. 如果已安装 Codex CLI，执行 codex \"只回复 OK\"。\n" +
+        "3. 如果提示没有 codex 命令，先执行 npm install -g @openai/codex@latest，再执行 codex --version。\n" +
+        "4. 如果 Codex 询问是否信任目录，选择信任。Mac 终端读取的是 ~/.codex/config.toml 和 AIPHUI_API_KEY 环境变量。\n\n" +
+        "配置标准：provider=aiphui，model=" +
         model +
-        " 已经能通。\n" +
-        "2. 完全重新打开 Codex 桌面 App，看顶部模型是否是 " +
-        model +
-        "，然后发送“只回复 OK”。\n" +
-        "3. 如果 PowerShell 能回但桌面 App 不回，先退出托盘里的 Codex，再重开；还不行就重启 Windows。\n\n" +
-        "常见问题和修复：\n" +
-        "401：Key 错、复制多了空格或令牌被禁用。重新创建 Key，再执行配置命令。\n" +
-        "403：Key 可用但模型权限、分组或余额不足。换成已授权模型，或检查令牌权限和余额。\n" +
-        "404 / endpoint not found：base_url 必须是 " +
+        "，base_url=" +
         CONFIG.baseUrl +
-        "，不要写成 /responses；Codex 会自己拼 /v1/responses。\n" +
-        "桌面 App 不读配置：检查 [Environment]::GetEnvironmentVariable(\"AIPHUI_API_KEY\",\"User\") 和 Get-Content \"$env:USERPROFILE\\.codex\\config.toml\"。\n" +
-        "codex 命令不存在：桌面 App 接入不一定需要 CLI；CLI 只是额外验证工具。"
+        "，env_key=AIPHUI_API_KEY，wire_api=responses。\n\n" +
+        "官方 Codex 配置形态：用户级配置在 ~/.codex/config.toml，自定义供应商放在 [model_providers.aiphui]，认证用 env_key。"
       );
     }
     return (
       "执行后下一步：\n" +
-      "1. 终端如果返回“Codex 接入成功”，说明 Key、Base URL 和模型能通。\n" +
-      "2. 重新打开 Codex，确认使用的是 " +
+      "1. 完全退出 Codex 桌面 App，包括任务栏托盘，再重新打开。\n" +
+      "2. 打开或新建 C:\\codex-work，选择 Local 后发送“只回复 OK”。\n" +
+      "3. 如果桌面 App 一直 Working，再点“测试 AIPHUI API”或“安装 CLI 验证”。CLI 能回就说明 AIPHUI API 大概率没问题，优先查 App 是否读到 %USERPROFILE%\\.codex\\config.toml 和 User 级环境变量。\n\n" +
+      "配置标准：provider=aiphui，model=" +
       model +
-      "。\n\n" +
-      "常见问题和修复：\n" +
-      "401：重新创建 Key，检查复制时有没有空格。\n" +
-      "403：检查令牌模型权限、分组和余额。\n" +
-      "timeout：确认网络能访问 " +
+      "，base_url=" +
       CONFIG.baseUrl +
-      "。"
+      "，env_key=AIPHUI_API_KEY，wire_api=responses。\n\n" +
+      "常见问题和修复：\n" +
+      "401：Key 错、复制多了空格或令牌被禁用。重新创建 Key，再写入 User 环境变量。\n" +
+      "403：Key 可用但模型权限、分组或余额不足。检查令牌是否允许 gpt-5.5。\n" +
+      "404：base_url 必须是 " +
+      CONFIG.baseUrl +
+      "，不要写成 /v1/responses。\n" +
+      "PowerShell 出现 >>：按 Ctrl+C 回到 PS 提示符，再复制我给的一整行命令。"
     );
   }
 
   function installCodexCommand() {
-    return ["node -v", "npm -v", "npm install -g @openai/codex", "codex --version"].join("\n");
+    if (state.selectedOS === "mac") return macInstallCodexCommand();
+    return [
+      "node -v",
+      "npm.cmd -v",
+      "git --version",
+      "npm.cmd install -g @openai/codex@latest",
+      '$env:Path="$env:Path;$env:APPDATA\\npm;C:\\Program Files\\nodejs"',
+      "codex.cmd --version",
+      '& "$env:APPDATA\\npm\\codex.cmd" --version',
+      'New-Item -ItemType Directory -Path "C:\\codex-work" -Force | Out-Null',
+      "cd C:\\codex-work",
+      'codex.cmd "只回复 OK"',
+      '& "$env:APPDATA\\npm\\codex.cmd" "只回复 OK"',
+    ].join("\n");
+  }
+
+  function nodeInstallCommand() {
+    return [
+      "winget install --id OpenJS.NodeJS.LTS -e --source winget --accept-package-agreements --accept-source-agreements",
+      "",
+      "如果 winget 报 0x80072efd / InternetOpenUrl() failed / install 失败：",
+      "1. 不要反复重试同一条 winget install。",
+      "2. 打开 Node.js 官网下载 Windows LTS MSI 安装包。",
+      "3. 安装完成后关闭当前 PowerShell，重新打开，再执行 node -v 和 npm.cmd -v。",
+      "",
+      "如果文件已存在但命令不识别，执行这一行刷新当前窗口 PATH：",
+      '$env:Path="$env:Path;C:\\Program Files\\nodejs;$env:APPDATA\\npm"; node -v; npm.cmd -v',
+    ].join("\n");
   }
 
   function modelsCheckCommand(key) {
-    return [
-      "XINGREN_API_KEY=" + shellSingleQuote(key),
-      'curl -sS "' + CONFIG.baseUrl + '/models" \\',
-      '  -H "Authorization: Bearer $XINGREN_API_KEY"',
-    ].join("\n");
+    if (state.selectedOS === "mac") return macModelsCheckCommand(key);
+    var apiKeySetter = key
+      ? '$env:AIPHUI_API_KEY=' + powershellDoubleQuote(key) + "; "
+      : '$env:AIPHUI_API_KEY=[Environment]::GetEnvironmentVariable("AIPHUI_API_KEY","User"); ';
+    return (
+      "[Console]::OutputEncoding=[System.Text.Encoding]::UTF8; " +
+      apiKeySetter +
+      'if (-not $env:AIPHUI_API_KEY) { Write-Host "没有读到 AIPHUI_API_KEY，请先执行配置命令。" -ForegroundColor Red; exit 1 }; ' +
+      'Write-Host "AIPHUI_API_KEY = $env:AIPHUI_API_KEY"; ' +
+      '$headers=@{"Authorization"="Bearer $env:AIPHUI_API_KEY";"Content-Type"="application/json"}; ' +
+      '$body=@{model="' +
+      CONFIG.codexModel +
+      '";input="只回复 OK"} | ConvertTo-Json -Depth 10; ' +
+      'Invoke-RestMethod -Uri "' +
+      CONFIG.baseUrl +
+      '/responses" -Method Post -Headers $headers -Body $body'
+    );
   }
 
   function currentRouteKey() {
@@ -595,7 +759,14 @@
 
   function wantsCodex(text) {
     var lower = String(text || "").toLowerCase();
-    return lower.indexOf("codex") >= 0;
+    return (
+      lower.indexOf("codex") >= 0 ||
+      lower.indexOf("aiphui") >= 0 ||
+      lower.indexOf("api 接入") >= 0 ||
+      lower.indexOf("api接入") >= 0 ||
+      lower.indexOf("桌面 app") >= 0 ||
+      lower.indexOf("桌面app") >= 0
+    );
   }
 
   function wantsCodexCloud(text) {
@@ -1289,6 +1460,39 @@
     });
   }
 
+  function isLoginPath() {
+    var path = (window.location.pathname || "/").replace(/\/+$/, "") || "/";
+    return path === CONFIG.loginPath;
+  }
+
+  function describeQueuedOperation(actions) {
+    var text = "";
+    try {
+      text = JSON.stringify(actions || []);
+    } catch (error) {
+      text = "";
+    }
+    if (text.indexOf(CONFIG.logsPath) >= 0 || text.indexOf("用量日志") >= 0 || text.indexOf("日志") >= 0) return "打开用量日志";
+    if (text.indexOf(CONFIG.mediaPath) >= 0 || text.indexOf("媒体工坊") >= 0 || text.indexOf("media-") >= 0) return "操作媒体工坊";
+    return "继续刚才的页面操作";
+  }
+
+  function showLoginGateForOperation(queued) {
+    var actions = (queued && queued.actions) || [];
+    typeAssistant(
+      "我已经带你到需要登录的页面。\n\n先完成登录；登录后点“继续刚才操作”，我会继续" +
+        describeQueuedOperation(actions) +
+        "。",
+      {
+        tone: "operation",
+        actions: [
+          { label: "继续刚才操作", value: "operate:resume-persisted" },
+          { label: "回到首页", value: "route:home" },
+        ],
+      }
+    );
+  }
+
   function waitForAgentElement(selector, labels, timeout) {
     var started = Date.now();
     return new Promise(function (resolve) {
@@ -1654,6 +1858,21 @@
     typeAssistant("我现在像真人操作一样带你到" + route.title + "。\n\n我会先找页面上的入口，能点就直接高亮并点击。", {
       tone: "operation",
     });
+    if (route.path !== CONFIG.loginPath && route.path !== "/" && /^\/console\//.test(route.path)) {
+      persistOperation(
+        [
+          {
+            type: "highlight",
+            selector: "main,.semi-table,.ant-table,.table,section",
+            labels: [route.title],
+            label: "这里是" + route.title,
+            missing: "已经打开目标页，但没有识别到主体内容。请确认是否需要先登录。",
+            ms: 900,
+          },
+        ],
+        "登录后我继续帮你定位" + route.title + "。"
+      );
+    }
     window.setTimeout(function () {
       var link = findRouteLink(route.path, route.title);
       if (!link) {
@@ -1798,7 +2017,7 @@
     var clicked = clickVisibleButton();
     typeAssistant(
       clicked
-        ? "我已经帮你点开创建令牌入口。\n\n接下来只填写名称、分组和模型权限，不要把完整 Key 发到聊天里。"
+        ? "我已经帮你点开创建令牌入口。\n\n接下来只填写名称、分组和模型权限。接入命令可以打印完整 Key，公开截图或发到群里之前要遮住。"
         : "我在当前页面没有找到明确的创建按钮。\n\n你可以点“开始自动接入 Codex”，我会通过安全接口直接为当前账号创建 Key。",
       {
         actions: [
@@ -1902,7 +2121,9 @@
     state.streaming = false;
     state.busyLabel = "";
     state.selectedModel = CONFIG.codexModel;
-    state.selectedOS = "mac";
+    state.selectedOS = "windows";
+    state.aiphuiMode = "desktop";
+    state.allowKeyPrint = true;
     state.generatedKey = "";
     state.awaitingCustomModel = false;
     state.pendingPageOperation = null;
@@ -1912,15 +2133,20 @@
   function starter() {
     if (state.messages.length) return;
     typeAssistant(
-      "需要我的帮助吗？有任何问题都可以问我。\n\n我是星人 API 接入老师，会先读你当前所在页面，再回答按钮、模型、价格、报错和下一步操作。\n\n你也可以直接说“打开媒体工坊”“点击模型价格”“用这段提示词帮我生成图片”。我会像真人操作电脑一样高亮页面、移动鼠标并点击；涉及提交、支付、删除、生成等动作前，会先让你确认。\n\n默认 Codex 接入模型是 " +
+      "需要我的帮助吗？有任何问题都可以问我。\n\n我是 AIPHUI 的 Codex 接入老师，专门帮零代码用户把 Windows Codex 桌面 App、Windows CLI 或 Mac 终端里的 Codex 接到 AIPHUI。\n\n固定配置：provider=aiphui，base_url=" +
+        CONFIG.baseUrl +
+        "，env_key=AIPHUI_API_KEY，model=" +
         CONFIG.codexModel +
-        "，创建 Key 前我会先问你是否要改模型。\n\n安全提醒：结束会话会立即删除本窗口的全部历史记录，删除后无法恢复。",
+        "，wire_api=responses。\n\n我会直接打印完整命令和完整读取到的 API Key，避免你手动替换格式出错。截图公开发送前记得遮住 Key。",
       {
         actions: [
-          { label: "开始自动接入 Codex", value: "codex" },
-          routeAction("token", "令牌管理"),
-          routeAction("pricing", "模型价格"),
-          { label: "媒体工坊", value: "operate:media-image" },
+          { label: "开始接入 AIPHUI", value: "codex" },
+          { label: "Windows 桌面 App", value: "aiphui-preset:windows-desktop" },
+          { label: "Windows CLI 验证", value: "aiphui-preset:windows-cli" },
+          { label: "Mac 终端接入", value: "aiphui-preset:mac-terminal" },
+          { label: "Mac CLI 验证", value: "aiphui-preset:mac-cli" },
+          { label: "上传报错截图", value: "attach-screenshot" },
+          { label: "常见报错", value: "common-errors" },
         ],
       }
     );
@@ -1942,12 +2168,29 @@
   }
 
   function askCodexModel() {
+    startAiphuiFlow();
+  }
+
+  function startAiphuiFlow() {
     state.awaitingCustomModel = false;
-    typeAssistant("你想让 Codex 使用哪个模型？\n\n我会默认选择 " + CONFIG.codexModel + "，适合代码和复杂任务。", {
+    state.selectedModel = CONFIG.codexModel;
+    typeAssistant("先选你的接入场景。\n\nWindows 桌面 App 不一定需要 CLI；CLI 只是验证工具。Mac 终端接入会按官方 Codex 配置方式写入 ~/.codex/config.toml，并用 AIPHUI_API_KEY 环境变量认证。", {
+      actions: [
+        { label: "Windows 桌面 App", value: "aiphui-preset:windows-desktop" },
+        { label: "Windows CLI 验证", value: "aiphui-preset:windows-cli" },
+        { label: "Mac 终端接入", value: "aiphui-preset:mac-terminal" },
+        { label: "Mac CLI 验证", value: "aiphui-preset:mac-cli" },
+        { label: "上传报错截图", value: "attach-screenshot" },
+      ],
+    });
+  }
+
+  function askLegacyCodexModel() {
+    state.awaitingCustomModel = false;
+    typeAssistant("AIPHUI 接入已固定使用 " + CONFIG.codexModel + "。\n\n现在不再让用户选择 xingren/profile/chat 旧模板。", {
       actions: [
         { label: CONFIG.codexModel + " 默认", value: "model:" + CONFIG.codexModel },
-        { label: CONFIG.fallbackCodexModel, value: "model:" + CONFIG.fallbackCodexModel },
-        { label: "我输入模型名", value: "model-custom" },
+        { label: "开始接入 AIPHUI", value: "codex" },
       ],
     });
   }
@@ -1968,7 +2211,7 @@
   function askCodexOS() {
     typeAssistant("好，我会按 " + state.selectedModel + " 来生成配置。\n\n你准备用哪台电脑运行 Codex？", {
       actions: [
-        { label: "Mac / Linux", value: "os:mac" },
+        { label: "Mac 终端", value: "os:mac" },
         { label: "Windows", value: "os:windows" },
         { label: "返回换模型", value: "codex" },
       ],
@@ -1976,18 +2219,73 @@
   }
 
   function chooseOS(os) {
-    state.selectedOS = os === "windows" ? "windows" : "mac";
-    addMessage("user", state.selectedOS === "windows" ? "使用 Windows" : "使用 Mac / Linux");
+    state.selectedOS = os === "mac" ? "mac" : "windows";
+    addMessage("user", state.selectedOS === "mac" ? "使用 Mac 终端" : "使用 Windows");
     confirmCreateToken();
   }
 
-  function confirmCreateToken() {
+  function chooseAiphuiMode(mode) {
+    state.aiphuiMode = mode === "cli" ? "cli" : "desktop";
+    state.selectedModel = CONFIG.codexModel;
+    addMessage(
+      "user",
+      (state.selectedOS === "mac" ? "Mac 终端：" : "Windows：") + (state.aiphuiMode === "cli" ? "安装 Codex CLI 做验证" : "只接 Codex 桌面 App")
+    );
+    var isCli = state.aiphuiMode === "cli";
+    var isMac = state.selectedOS === "mac";
     typeAssistant(
-      "接下来我会替你完成站内操作。\n\n我会为当前登录账号创建一枚新的 Codex 文本 API Key，并把完整 Key 写进一段配置命令里。\n\nKey 只在本窗口显示这一次。结束会话会立即删除历史记录，无法恢复。",
+      (isMac
+        ? "可以。Mac 终端接入会写入 ~/.codex/config.toml，并把 AIPHUI_API_KEY 写入当前终端和 ~/.zshrc。"
+        : isCli
+          ? "可以。CLI 是验证工具，不是桌面 App 接入 AIPHUI 的必要条件。\n\n我会先生成 AIPHUI 标准配置，再给你 Node/npm、Codex CLI 和 C:\\codex-work 的验证命令。"
+          : "可以。不安装 Codex CLI 也能接入桌面 App。\n\n最稳的做法是：完全退出 Codex 桌面 App，把 AIPHUI_API_KEY 写入 User 级环境变量，再写入 %USERPROFILE%\\.codex\\config.toml。") +
+        "\n\n我建议直接为当前登录账号创建一枚 Codex 专用 Key。命令里会包含完整 Key，执行结果也会打印完整读取到的 Key，避免你手动替换格式出错。",
+      {
+        actions: [
+          { label: "创建 Key 并生成命令", value: "authorize-create" },
+          { label: "我已有 Key，终端输入", value: "manual-key-command" },
+          { label: isMac ? "切到 Windows" : "切到 Mac", value: isMac ? "aiphui-preset:windows-desktop" : "aiphui-preset:mac-terminal" },
+          { label: isCli ? "只写配置" : "安装 CLI 验证", value: isCli ? "aiphui-mode:desktop" : "aiphui-mode:cli" },
+        ],
+      }
+    );
+  }
+
+  function chooseAiphuiPreset(preset) {
+    if (preset === "mac-terminal" || preset === "mac-cli") {
+      state.selectedOS = "mac";
+      state.aiphuiMode = preset === "mac-cli" ? "cli" : "desktop";
+    } else {
+      state.selectedOS = "windows";
+      state.aiphuiMode = preset === "windows-cli" ? "cli" : "desktop";
+    }
+    return chooseAiphuiMode(state.aiphuiMode);
+  }
+
+  function enableKeyPrint() {
+    state.allowKeyPrint = true;
+    typeAssistant("已确认：接下来生成的命令会显示完整 AIPHUI_API_KEY。\n\n这是为了让零代码用户不用手动替换占位符。截图公开发送前请遮住 Key；如果 Key 已经外泄，测试完重置。", {
+      tone: "warning",
+      actions: [
+        { label: "创建 Key 并生成命令", value: "authorize-create" },
+        { label: "关闭重开会话", value: "end-session" },
+      ],
+    });
+  }
+
+  function confirmCreateToken() {
+    var configPath = state.selectedOS === "mac" ? "~/.codex/config.toml" : "%USERPROFILE%\\.codex\\config.toml";
+    var envTarget = state.selectedOS === "mac" ? "当前终端和 ~/.zshrc" : "Windows User 级环境变量";
+    typeAssistant(
+      "接下来我会为当前登录账号创建一枚 AIPHUI Codex 专用 Key，并生成完整终端命令。\n\n命令会把 AIPHUI_API_KEY 写入 " +
+        envTarget +
+        "，并写入 " +
+        configPath +
+        "。config.toml 只保存 env_key，不保存明文 Key。\n\n完整 Key 会出现在命令里，执行后也会打印读取到的完整 Key，方便新手核对格式。",
       {
         actions: [
           { label: "授权创建并生成配置", value: "authorize-create" },
-          { label: "返回换模型", value: "codex" },
+          { label: state.selectedOS === "mac" ? "改用 Windows" : "改用 Mac", value: state.selectedOS === "mac" ? "aiphui-preset:windows-desktop" : "aiphui-preset:mac-terminal" },
           { label: "打开令牌管理", value: "open-token" },
         ],
       }
@@ -2042,19 +2340,31 @@
   }
 
   function showCodexConfig(os, model, key, tokenName) {
-    var command = os === "windows" ? windowsCodexCommand(model, key) : macCodexCommand(model, key);
+    var isMac = os === "mac";
+    var command = isMac ? macAiphuiConfigCommand(model, key, { allowPrint: true }) : windowsCodexCommand(model, key);
+    if (state.aiphuiMode === "cli") {
+      command += "\n\n# CLI 验证步骤：如果只写配置，可以不执行下面这些。\n" + installCodexCommand();
+    }
     var nameLine = tokenName ? "\n\n令牌名称：" + tokenName : "";
     typeAssistant(
-      "配置已经生成。\n\n下面这段命令可以直接复制到终端执行。" +
+      "配置已经生成。\n\n复制完整" +
+        (isMac ? "Mac 终端" : "PowerShell") +
+        "命令执行。" +
+        (isMac ? "它会写入 ~/.codex/config.toml，并把 Key 写入当前终端和 ~/.zshrc。" : "先完全退出 Codex 桌面 App，包括任务栏托盘。") +
         "\n\n" +
         codexNextStepGuide(os, model) +
         nameLine +
-        "\n\n请现在复制保存。结束会话会清空本窗口历史，完整 Key 不会再次显示。",
+        "\n\n本次命令会打印完整 Key。脱敏预览：" +
+        maskKey(key) +
+        "\n结束会话会清空本窗口历史，请先完成复制和测试。",
       {
         code: command,
         actions: [
-          { label: "检查模型列表", value: "models-check" },
-          { label: "打开令牌管理", value: "open-token" },
+          { label: "测试 AIPHUI API", value: "models-check" },
+          { label: isMac ? "Mac CLI 验证" : "Windows CLI 验证", value: "aiphui-mode:cli" },
+          { label: isMac ? "改用 Windows" : "改用 Mac", value: isMac ? "aiphui-preset:windows-desktop" : "aiphui-preset:mac-terminal" },
+          { label: "上传报错截图", value: "attach-screenshot" },
+          { label: "常见报错", value: "common-errors" },
           { label: "结束会话", value: "end-session" },
         ],
       }
@@ -2062,24 +2372,68 @@
   }
 
   function showInstall() {
-    typeAssistant("如果终端提示 codex: command not found，先执行这段安装命令。", {
+    typeAssistant(
+      state.selectedOS === "mac"
+        ? "如果你要在 Mac 终端安装 Codex CLI 做验证，按下面顺序执行。它会使用官方 Codex CLI，读取 ~/.codex/config.toml。"
+        : "如果你要安装 Codex CLI 做验证，按下面顺序执行。\n\n注意：只接桌面 App 不一定需要安装 CLI。npm 命令用 npm.cmd，避免 npm.ps1 执行策略报错。",
+      {
       code: installCodexCommand(),
-      actions: [{ label: "开始自动接入 Codex", value: "codex" }],
+      actions: [
+        { label: "创建 Key 并生成配置", value: "authorize-create" },
+        { label: state.selectedOS === "mac" ? "改用 Windows" : "电脑没有 Node", value: state.selectedOS === "mac" ? "aiphui-preset:windows-desktop" : "node-missing" },
+        { label: "codex 不识别", value: "err-codex-path" },
+      ],
+      }
+    );
+  }
+
+  function showManualKeyCommand() {
+    var isMac = state.selectedOS === "mac";
+    var command = isMac ? macManualAiphuiConfigCommand(CONFIG.codexModel) : windowsManualAiphuiConfigCommand(CONFIG.codexModel);
+    typeAssistant(
+      "这是“我已有 Key”的终端输入命令。\n\n它不会让你把完整 Key 发到网页聊天框，而是在你自己的" +
+        (isMac ? "Mac 终端" : "PowerShell") +
+        "里输入 Key。执行后会打印读取到的完整 Key，方便核对。",
+      {
+        code: command,
+        actions: [
+          { label: "测试 AIPHUI API", value: "models-check" },
+          { label: isMac ? "Mac CLI 验证" : "安装 CLI 验证", value: "aiphui-mode:cli" },
+          { label: "上传报错截图", value: "attach-screenshot" },
+        ],
+      }
+    );
+  }
+
+  function showNodeInstall() {
+    typeAssistant("如果电脑没有 Node/npm，先解决运行环境。\n\n优先 winget；如果 winget 报 0x80072efd、InternetOpenUrl() failed、search 能搜到但 install 失败，直接换 Node.js LTS MSI 安装包。安装后关闭 PowerShell 重新打开。", {
+      code: nodeInstallCommand(),
+      actions: [
+        { label: "继续安装 CLI", value: "install-codex" },
+        { label: "npm.ps1 报错", value: "err-npm-ps1" },
+        { label: "winget 失败", value: "err-winget" },
+      ],
     });
   }
 
   function showModelsCheck() {
     if (!state.generatedKey) {
-      typeAssistant("我还没有为本次会话创建 API Key。\n\n先授权创建，然后我会给你一段带 Key 的检查命令，不需要你手动输入。", {
-        actions: [{ label: "开始自动接入 Codex", value: "codex" }],
+      typeAssistant("这是 AIPHUI /v1/responses 连通性测试。\n\n我会先从当前" + (state.selectedOS === "mac" ? "Mac 终端环境或 ~/.zshrc" : "PowerShell 的 User 级环境变量") + "读取 AIPHUI_API_KEY，并打印完整读取结果，方便新手核对。", {
+        code: modelsCheckCommand(""),
+        actions: [
+          { label: "创建 Key 并生成配置", value: "authorize-create" },
+          { label: "401 怎么办", value: "err-401" },
+          { label: "404 怎么办", value: "err-404" },
+        ],
       });
       return;
     }
-    typeAssistant("这是模型列表检查命令。\n\n它只验证 Key 和 Base URL，不会生成内容。", {
+    typeAssistant("这是 AIPHUI /v1/responses 连通性测试。\n\n它会发送“只回复 OK”，并打印完整读取到的 AIPHUI_API_KEY。成功说明 Key、base_url、model 和 responses 接口大概率没问题。", {
       code: modelsCheckCommand(state.generatedKey),
       actions: [
         { label: "401 怎么办", value: "err-401" },
         { label: "403 怎么办", value: "err-403" },
+        { label: "404 怎么办", value: "err-404" },
         { label: "结束会话", value: "end-session" },
       ],
     });
@@ -2166,6 +2520,8 @@
       actions: [
         { label: "401", value: "err-401" },
         { label: "403", value: "err-403" },
+        { label: "codex 不识别", value: "err-codex-path" },
+        { label: "npm.ps1", value: "err-npm-ps1" },
         { label: "timeout", value: "err-timeout" },
       ],
     });
@@ -2173,17 +2529,68 @@
 
   function cannedError(type) {
     var messages = {
+      "err-ps-continuation": "结论：PowerShell 出现 >> 是进入多行等待模式，不是安装卡死。\n\n常见原因是粘贴了没闭合的 @'、大括号，或者多行脚本顺序乱了。\n\n下一步：按 Ctrl+C，看到 PS ...> 后重新复制我给你的一整行 PowerShell 命令。不要继续在 >> 后面输入。",
+      "err-codex-path": "结论：codex / codex.cmd 不识别，通常是 CLI 没安装，或 npm 全局目录没进当前 PowerShell 的 PATH。\n\n如果你只接桌面 App，可以先忽略，CLI 不是必须。\n\n如果要 CLI 验证，执行：\n$env:Path=\"$env:Path;$env:APPDATA\\npm;C:\\Program Files\\nodejs\"\ncodex.cmd --version\n& \"$env:APPDATA\\npm\\codex.cmd\" --version\n\n还不行再执行 npm.cmd install -g @openai/codex@latest。",
+      "err-npm-ps1": "结论：这是 PowerShell 执行策略拦截 npm.ps1，不代表 Node 没装坏。\n\n不要先改执行策略，直接用 npm.cmd：\nnpm.cmd -v\nnpm.cmd install -g @openai/codex@latest\n\n安装成功后再刷新 PATH 并检查 codex.cmd --version。",
+      "err-node-missing": "结论：node/npm 不识别，通常是 Node 没装，或安装后 PATH 没刷新。\n\n下一步先执行 node -v 和 npm.cmd -v。如果 C:\\Program Files\\nodejs\\node.exe 存在但命令不识别，关闭 PowerShell 重新打开，或执行：\n$env:Path=\"$env:Path;C:\\Program Files\\nodejs;$env:APPDATA\\npm\"; node -v; npm.cmd -v",
+      "err-winget": "结论：winget 的 0x80072efd / InternetOpenUrl() failed / search 能搜到但 install 失败，多半是 winget 源网络或商店协议问题。\n\n不要反复执行同一条 install。更稳的下一步是下载安装 Node.js LTS MSI，安装后关闭 PowerShell 重开，再执行 node -v 和 npm.cmd -v。",
+      "err-config-write": "结论：config/batchWrite failed、Failed to set trust、$configPath 为空、WriteAllText 空路径，都是写配置或 trust 失败，不要在 Codex TUI 里继续乱试。\n\n下一步：手动写 %USERPROFILE%\\.codex\\config.toml，使用 C:\\codex-work，并写入 [projects.\"C:\\\\codex-work\"] trust_level = \"trusted\"。如果在 C:\\Windows\\system32，先切到 C:\\codex-work。",
+      "err-old-config": "结论：这是旧模板或错误模板。AIPHUI 标准配置不能用 model_provider=\"xingren\"、[model_providers.xingren]、wire_api=\"chat\" 或 --profile xingren。\n\n下一步：覆盖为 provider=aiphui，base_url=https://api.aiphui.top/v1，env_key=AIPHUI_API_KEY，wire_api=responses。不要把 base_url 写成 /v1/responses。",
+      "err-app-not-working": "结论：如果 CLI 或 /v1/responses 能回 OK，但桌面 App 不回，AIPHUI API 大概率没问题，问题在桌面 App 没读到默认 config.toml/User 环境变量，或 App 没完全退出重启。\n\n下一步：完全退出 Codex App 包括任务栏托盘，重新打开；还不行重启 Windows。测试目录用 C:\\codex-work，不要用 C:\\Windows\\system32。",
+      "err-working": "结论：Codex App 一直 Working，优先查配置读取、Key 权限、当前目录和 trust/sandbox。\n\n下一步最短路径：先跑“测试 AIPHUI API”。如果返回 OK，再完全退出 App、重启，选择 C:\\codex-work 和 Local，发送“只回复 OK”。",
+      "err-english-ui": "结论：Codex 桌面 App 英文界面不影响 AIPHUI 接入，也不影响中文回复。\n\n下一步：在新会话里输入“以后全部用中文回复我”。目前不要承诺桌面 App 一定能切中文界面。",
+      "err-system32": "结论：C:\\Windows\\system32 是管理员 PowerShell 默认目录，不适合 Codex 项目测试。\n\n下一步执行：\nNew-Item -ItemType Directory -Path \"C:\\codex-work\" -Force | Out-Null\ncd C:\\codex-work\ncodex.cmd \"只回复 OK\"",
+      "err-key-exposed": "结论：截图里如果露出完整 API Key，有安全风险。\n\n下一步：测试完成后到令牌管理删除或重置这枚 Key。后续截图请遮住 sk- 后面的完整内容，我也不会在回复里复述完整 Key。",
       "err-401": "401 通常表示 Key 没传对、复制多了空格、令牌被禁用，或者客户端没有正确发送 Authorization。\n\n下一步：先重新生成配置，再跑 /v1/responses 检查命令。\n\n可能问题：环境变量没生效、Key 不是当前账号生成、复制时多了空格、令牌被停用。修复：重新创建 Key，完全退出 Codex 后重开。",
       "err-403": "403 通常表示 Key 可用，但这个令牌没有访问该模型，或者余额和分组权限不够。\n\n下一步：检查令牌模型权限、账号余额和分组。\n\n可能问题：模型没勾选 " + CONFIG.codexModel + "、月卡 Key 限制了模型、余额不足。修复：换授权模型重新创建 Key，或到模型广场核对权限。",
+      "err-404": "404 通常是路径写错。\n\nAIPHUI 的 base_url 必须是 " + CONFIG.baseUrl + "，不要写成 https://api.aiphui.top，也不要写成 https://api.aiphui.top/v1/responses。Codex 会自己拼 responses 路径。\n\n下一步：重新生成 AIPHUI 标准配置并覆盖旧 config.toml。",
       "err-timeout": "timeout 先查 Base URL 和网络。\n\n下一步：确认 base_url 是 " + CONFIG.baseUrl + "，不要写成 /responses。\n\n可能问题：网络访问失败、代理拦截、桌面 App 没重启、Claude Code 地址误填到通用 Codex。修复：PowerShell 先跑 /v1/responses 检查，成功后重启 Codex 桌面 App。",
     };
     typeAssistant(messages[type] || messages["err-401"], {
       actions: [
-        { label: "自动接入 Codex", value: "codex" },
-        { label: "检查模型列表", value: "models-check" },
+        { label: "开始接入 AIPHUI", value: "codex" },
+        { label: "测试 AIPHUI API", value: "models-check" },
         { label: "上传报错截图", value: "attach-screenshot" },
+        { label: "常见报错", value: "common-errors" },
       ],
     });
+  }
+
+  function showCommonErrors() {
+    typeAssistant("常见报错我会按“结论、依据、下一步命令”处理。你也可以直接把报错文字或截图发我。", {
+      actions: [
+        { label: "PowerShell 出现 >>", value: "err-ps-continuation" },
+        { label: "codex 不识别", value: "err-codex-path" },
+        { label: "npm.ps1 报错", value: "err-npm-ps1" },
+        { label: "Node/npm 没有", value: "err-node-missing" },
+        { label: "winget 失败", value: "err-winget" },
+        { label: "旧配置/chat", value: "err-old-config" },
+        { label: "CLI 能回 App 不回", value: "err-app-not-working" },
+        { label: "App 一直 Working", value: "err-working" },
+      ],
+    });
+  }
+
+  function localAiphuiErrorType(text) {
+    var lower = String(text || "").toLowerCase();
+    var compact = normalizeSearchText(text);
+    if (/(^|\s)>>\s*$/.test(String(text || "")) || hasAnyText(lower, ["powershell >>", "进入了>>", "出现 >>", "显示 >>"])) return "err-ps-continuation";
+    if (hasAnyText(lower, ["npm.ps1", "禁止运行脚本", "无法加载文件 c:\\program files\\nodejs\\npm.ps1"])) return "err-npm-ps1";
+    if (hasAnyText(lower, ["codex : 无法将", "codex: command not found", "codex.cmd", "无法将“codex”", "无法将 codex", "codex 不识别", "codex不识别"])) return "err-codex-path";
+    if (hasAnyText(lower, ["node : 无法将", "npm : 无法将", "无法将“node”", "无法将“npm”", "node 不识别", "npm 不识别"])) return "err-node-missing";
+    if (hasAnyText(lower, ["0x80072efd", "internetopenurl() failed", "internetopenurl failed", "msstore", "winget search", "winget install"])) return "err-winget";
+    if (hasAnyText(lower, ["config/batchwrite failed", "failed to set trust", "get-content", "path，因为该参数是空值", "writealltext", "空路径名", "$configpath"])) return "err-config-write";
+    if (hasAnyText(lower, ['wire_api = "chat"', "wire_api=chat", "model_provider = \"xingren\"", "[model_providers.xingren]", "--profile xingren", "base_url = \"https://api.aiphui.top\"", "base_url = \"https://api.aiphui.top/v1/responses\""])) return "err-old-config";
+    if (hasAnyText(lower, ["cli 能回", "cli能回", "桌面 app 不回", "桌面app不回", "api 没写入", "api没写入"])) return "err-app-not-working";
+    if (hasAnyText(lower, ["working", "一直 working", "卡在 working"])) return "err-working";
+    if (hasAnyText(lower, ["english ui", "英文界面", "英文版", "切中文"])) return "err-english-ui";
+    if (hasAnyText(lower, ["c:\\windows\\system32", "system32"])) return "err-system32";
+    if (compact.indexOf("sk***") >= 0 || /sk-[A-Za-z0-9._-]{12,}/.test(String(text || ""))) return "err-key-exposed";
+    if (lower.indexOf("401") >= 0) return "err-401";
+    if (lower.indexOf("403") >= 0) return "err-403";
+    if (lower.indexOf("404") >= 0) return "err-404";
+    if (lower.indexOf("timeout") >= 0 || lower.indexOf("超时") >= 0) return "err-timeout";
+    return "";
   }
 
   function showRouteHelp(keys, originalText) {
@@ -2203,6 +2610,11 @@
 
   function tryHandleLocalIntent(value) {
     var routes = detectRoutes(value);
+    var aiphuiErrorType = localAiphuiErrorType(value);
+    if (aiphuiErrorType) {
+      cannedError(aiphuiErrorType);
+      return true;
+    }
     if (wantsUsageLogOperation(value)) {
       startUsageLogWorkflow(value);
       return true;
@@ -2228,9 +2640,9 @@
     if (wantsCreateKey(value)) {
       typeAssistant("你要的是创建 API Key。\n\n我可以走两种方式：直接为 Codex 创建可复制配置，或者带你到令牌管理页手动创建。", {
         actions: [
-          { label: "自动创建 Codex Key", value: "codex" },
+          { label: "创建 AIPHUI Codex Key", value: "codex" },
           { label: "打开令牌管理", value: "route:token" },
-          { label: "点开创建令牌", value: "operate:token-create" },
+          { label: "我已有 Key，终端输入", value: "manual-key-command" },
         ],
       });
       return true;
@@ -2339,12 +2751,20 @@
     var source = [question, answer].filter(Boolean).join(" ");
     var lower = source.toLowerCase();
     var actions = [];
+    var aiphuiRelated = hasAnyText(lower, ["aiphui", "codex", "桌面 app", "桌面app", "cli", "powershell", "config.toml", "wire_api", "base_url", "npm", "node", "winget", "working"]);
     var usageRelated = hasAnyText(lower, ["调用", "用量", "日志", "tokens", "token", "花费", "成本", "消耗", "用户", "令牌", "模型"]);
     var mediaRelated = hasAnyText(lower, ["图片", "图像", "媒体", "生成", "任务", "结果"]);
     var codexRelated = hasAnyText(lower, ["codex", "代码", "工作区"]);
     var keyRelated = hasAnyText(lower, ["key", "令牌", "密钥", "api key", "权限"]);
     var pricingRelated = hasAnyText(lower, ["价格", "费用", "扣费", "余额", "人民币", "￥"]);
 
+    if (aiphuiRelated) {
+      actions.push(followUpAction("测试 AIPHUI API", "给我一条 PowerShell 命令，测试 AIPHUI 的 /v1/responses 是否能返回 OK。"));
+      actions.push(followUpAction("只接桌面 App", "我不想安装 CLI，只想让 Codex 桌面 App 接入 AIPHUI，下一步怎么做？"));
+      actions.push(followUpAction("CLI 能回 App 不回", "CLI 或 /v1/responses 已经能回 OK，但桌面 Codex App 不回复，下一步怎么排查？"));
+      actions.push(followUpAction("检查旧配置", "帮我检查 config.toml 是否有 xingren、wire_api=chat、base_url 写错这些旧配置问题。"));
+      actions.push(followUpAction("上传截图诊断", "我准备上传 PowerShell 或 Codex App 报错截图，你按截图判断下一步。"));
+    }
     if (usageRelated) {
       actions.push(followUpAction("按用户拆分调用", "按用户拆分刚才的模型调用情况，列出每个用户的调用次数、tokens 和花费。"));
       actions.push(followUpAction("按模型拆分消耗", "按模型维度汇总调用情况，列出模型、调用次数、输入输出 tokens 和总花费。"));
@@ -2396,10 +2816,11 @@
       });
     }
     if (lower.indexOf("codex") >= 0 || lower.indexOf("配置") >= 0 || lower.indexOf("api key") >= 0) {
-      operationalActions.push({ label: "自动接入 Codex", value: "codex" });
+      operationalActions.push({ label: "开始接入 AIPHUI", value: "codex" });
+      operationalActions.push({ label: "测试 AIPHUI API", value: "models-check" });
     }
     if (lower.indexOf("401") >= 0 || lower.indexOf("403") >= 0 || lower.indexOf("timeout") >= 0) {
-      operationalActions.push({ label: "检查模型列表", value: "models-check" });
+      operationalActions.push({ label: "测试 AIPHUI API", value: "models-check" });
     }
     if (wantsUsageLogOperation(combined)) {
       var usageLogMediaFocused = hasAnyText(lower, ["图片", "图像", "媒体", "画图", "生成图", "视频", "image", "media"]);
@@ -2438,12 +2859,18 @@
     if (value === "model-custom") return askCustomModel();
     if (value === "os:mac") return chooseOS("mac");
     if (value === "os:windows") return chooseOS("windows");
+    if (value.indexOf("aiphui-preset:") === 0) return chooseAiphuiPreset(value.slice("aiphui-preset:".length));
+    if (value.indexOf("aiphui-mode:") === 0) return chooseAiphuiMode(value.slice("aiphui-mode:".length));
+    if (value === "allow-key-print") return enableKeyPrint();
+    if (value === "manual-key-command") return showManualKeyCommand();
+    if (value === "node-missing") return showNodeInstall();
     if (value === "authorize-create") return authorizeAndCreate();
     if (value === "install-codex") return showInstall();
     if (value === "diagnose") return showDiagnosisPrompt();
+    if (value === "common-errors") return showCommonErrors();
     if (value === "attach-screenshot") return chooseScreenshot();
     if (value === "models-check") return showModelsCheck();
-    if (value === "err-401" || value === "err-403" || value === "err-timeout") return cannedError(value);
+    if (value.indexOf("err-") === 0) return cannedError(value);
     if (value.indexOf("route:") === 0) return navigateToRoute(value.slice("route:".length));
     if (value === "operate:token-create") return openTokenCreateUI();
     if (value === "operate:usage-log") return startUsageLogWorkflow("用量日志");
@@ -2451,6 +2878,7 @@
     if (value === "operate:media-image") return startMediaImageWorkflow("");
     if (value === "operate:media-submit") return submitMediaGeneration();
     if (value === "operate:page-confirm") return confirmPendingPageOperation();
+    if (value === "operate:resume-persisted") return resumePersistedOperation();
     if (value === "operate:page-cancel") {
       state.pendingPageOperation = null;
       return typeAssistant("已取消。你可以继续问我当前页面怎么操作，或者说要打开哪个入口。");
@@ -2621,6 +3049,11 @@
     if (!queued || !queued.actions.length) return;
     window.setTimeout(function () {
       openAssistant();
+      if (isLoginPath()) {
+        showLoginGateForOperation(queued);
+        persistOperation(queued.actions, queued.message || "");
+        return;
+      }
       if (queued.message) {
         typeAssistant(queued.message, { tone: "operation" });
       }
@@ -2645,7 +3078,8 @@
     var style = document.createElement("style");
     style.id = "xr-api-assistant-style";
     style.textContent = [
-      "#xr-api-assistant-root{position:fixed;right:18px;bottom:18px;z-index:2147483000;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;color:#111827;letter-spacing:0}",
+      "#xr-api-assistant-root{display:block!important;position:fixed;right:18px;bottom:18px;z-index:2147483000;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;color:#111827;letter-spacing:0}",
+      "body.sx-home-active #xr-api-assistant-root{display:block!important}",
       "#xr-api-assistant-root *,#xr-api-operation-layer *{box-sizing:border-box}",
       ".xr-api-assistant-launcher{position:relative;display:flex;align-items:center;gap:10px;border:1px solid #d1d5db;border-radius:999px;background:#ffffff;color:#111827;padding:7px 12px 7px 7px;box-shadow:0 14px 42px rgba(15,23,42,.18);cursor:pointer;min-width:54px;min-height:54px;text-align:left;transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease}",
       ".xr-api-assistant-launcher::after{content:'';position:absolute;right:9px;top:8px;width:9px;height:9px;border-radius:999px;background:#10b981;box-shadow:0 0 0 3px rgba(16,185,129,.16);pointer-events:none}",
