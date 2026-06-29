@@ -104,15 +104,18 @@ def detect_media_kind(request: WorkspaceRunRequest) -> str | None:
         return "image"
     if explicit == "video_generation":
         return "video"
+    mode = str(request.metadata.get("mode") or request.metadata.get("model_mode") or "").strip()
+    if mode not in {"image", "video"}:
+        return None
     text = normalize_intent_text(request.user_query)
     if not text:
         return None
     if any(hint in text for hint in NEGATION_HINTS):
         return None
-    if any(keyword in text for keyword in VIDEO_INTENT_KEYWORDS):
-        return "video"
-    if any(keyword in text for keyword in IMAGE_INTENT_KEYWORDS):
-        return "image"
+    if mode == "video":
+        return "video" if any(keyword in text for keyword in VIDEO_INTENT_KEYWORDS) else None
+    if mode == "image":
+        return "image" if any(keyword in text for keyword in IMAGE_INTENT_KEYWORDS) else None
     return None
 
 
