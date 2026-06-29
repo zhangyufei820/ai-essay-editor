@@ -66,7 +66,7 @@ body {
 }
 
 body.sx-home-active header {
-  background: rgba(248, 250, 247, 0.92) !important;
+  background: rgba(248, 250, 247, 0.94) !important;
   border-bottom: 1px solid rgba(16, 21, 27, 0.08);
   color: #10151b;
   box-shadow: 0 10px 30px rgba(9, 11, 15, 0.12);
@@ -94,6 +94,35 @@ body.sx-home-active header button:hover {
   background-size: 36px 36px, 36px 36px, auto;
   color: #f8fafc;
   overflow-x: hidden;
+}
+
+body.sx-home-active .semi-layout-footer {
+  border-top: 1px solid rgba(204, 213, 205, 0.14) !important;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(180deg, #10151b 0%, #090b0f 100%) !important;
+  background-size: 36px 36px, 36px 36px, auto !important;
+  color: #cbd6d3 !important;
+}
+
+body.sx-home-active .semi-layout-footer footer {
+  background: transparent !important;
+  color: #cbd6d3 !important;
+}
+
+body.sx-home-active .semi-layout-footer footer,
+body.sx-home-active .semi-layout-footer footer span,
+body.sx-home-active .semi-layout-footer footer div {
+  color: #cbd6d3 !important;
+}
+
+body.sx-home-active .semi-layout-footer a {
+  color: #8ee6c7 !important;
+}
+
+body.sx-home-active .semi-layout-footer a:hover {
+  color: #f8fafc !important;
 }
 
 .sx-home-hero,
@@ -133,8 +162,8 @@ body.sx-home-active header button:hover {
   margin: 18px 0 16px;
   max-width: 780px;
   color: #f8fafc;
-  font-size: 62px;
-  line-height: 1.06;
+  font-size: 58px;
+  line-height: 1.08;
   letter-spacing: 0;
 }
 
@@ -195,17 +224,6 @@ body.sx-home-active header button:hover {
   line-height: 1.45;
 }
 
-.sx-media-stage {
-  min-width: 0;
-  border: 1px solid rgba(204, 213, 205, 0.18);
-  border-radius: 8px;
-  background:
-    linear-gradient(135deg, rgba(142, 230, 199, 0.12), transparent 30%),
-    linear-gradient(180deg, rgba(23, 27, 32, 0.96), rgba(9, 11, 15, 0.96));
-  box-shadow: 0 26px 80px rgba(0, 0, 0, 0.42);
-  overflow: hidden;
-}
-
 .sx-stage-bar {
   display: flex;
   align-items: center;
@@ -249,19 +267,30 @@ body.sx-home-active header button:hover {
   font-weight: 760;
 }
 
-.sx-stage-grid {
+.sx-assistant-stage {
+  min-width: 0;
+  border: 1px solid rgba(204, 213, 205, 0.18);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(142, 230, 199, 0.12), transparent 30%),
+    linear-gradient(180deg, rgba(23, 27, 32, 0.96), rgba(9, 11, 15, 0.96));
+  box-shadow: 0 26px 80px rgba(0, 0, 0, 0.42);
+  overflow: hidden;
+}
+
+.sx-assistant-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.28fr) minmax(190px, 0.72fr);
+  grid-template-columns: minmax(0, 1.16fr) minmax(210px, 0.84fr);
   gap: 12px;
   padding: 16px;
 }
 
-.sx-stage-canvas,
-.sx-stage-side {
+.sx-chat-preview,
+.sx-config-preview {
   min-width: 0;
 }
 
-.sx-stage-canvas {
+.sx-chat-preview {
   border: 1px solid rgba(204, 213, 205, 0.13);
   border-radius: 8px;
   background:
@@ -272,7 +301,7 @@ body.sx-home-active header button:hover {
   overflow: hidden;
 }
 
-.sx-stage-canvas-head {
+.sx-chat-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -284,191 +313,194 @@ body.sx-home-active header button:hover {
   font-size: 12px;
 }
 
-.sx-stage-canvas-head strong {
+.sx-chat-head strong {
   color: #f8fafc;
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
   font-size: 12px;
+  text-align: right;
 }
 
-.sx-art-board {
-  position: relative;
-  min-height: 330px;
+.sx-chat-thread {
+  display: grid;
+  gap: 12px;
+  min-height: 302px;
   padding: 18px;
+  align-content: start;
 }
 
-.sx-art-card {
-  position: absolute;
-  border: 1px solid rgba(255, 255, 255, 0.18);
+.sx-chat-bubble {
+  max-width: 86%;
+  margin: 0;
   border-radius: 8px;
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.28);
-  overflow: hidden;
+  padding: 12px 13px;
+  font-size: 14px;
+  line-height: 1.68;
 }
 
-.sx-art-card span {
-  position: absolute;
-  left: 12px;
-  bottom: 10px;
-  z-index: 1;
-  border-radius: 999px;
-  background: rgba(9, 11, 15, 0.72);
-  color: #f8fafc;
-  padding: 4px 9px;
-  font-size: 12px;
-  font-weight: 780;
+.sx-chat-bubble-user {
+  justify-self: end;
+  background: rgba(63, 148, 238, 0.18);
+  border: 1px solid rgba(93, 171, 255, 0.3);
+  color: #e8f1ee;
 }
 
-.sx-art-card-main {
-  inset: 18px 92px 42px 18px;
-  background:
-    linear-gradient(142deg, rgba(255, 255, 255, 0.3), transparent 30%),
-    linear-gradient(32deg, #1d332c 0%, #7a3522 48%, #e2a047 100%);
+.sx-chat-bubble-agent {
+  justify-self: start;
+  background: rgba(142, 230, 199, 0.12);
+  border: 1px solid rgba(142, 230, 199, 0.24);
+  color: #e8f1ee;
 }
 
-.sx-art-card-main::after {
-  content: "";
-  position: absolute;
-  left: 12%;
-  right: 12%;
-  top: 14%;
-  bottom: 12%;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 8px;
-  background:
-    linear-gradient(155deg, rgba(255, 255, 255, 0.28), transparent 34%),
-    linear-gradient(180deg, rgba(142, 230, 199, 0.18), rgba(247, 130, 67, 0.16));
+.sx-chat-bubble-muted {
+  background: rgba(255, 255, 255, 0.055);
+  border-color: rgba(204, 213, 205, 0.13);
+  color: #cbd6d3;
 }
 
-.sx-art-card-video {
-  right: 18px;
-  top: 52px;
-  width: 118px;
-  height: 142px;
+.sx-agent-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  border-top: 1px solid rgba(204, 213, 205, 0.1);
+  padding: 12px;
+}
+
+.sx-agent-actions span {
   display: grid;
   place-items: center;
-  background:
-    linear-gradient(180deg, rgba(247, 130, 67, 0.24), transparent),
-    repeating-linear-gradient(90deg, #171b20 0 14px, #2a2f36 14px 18px);
-  color: #f8fafc;
-  font-size: 28px;
+  min-height: 38px;
+  border: 1px solid rgba(142, 230, 199, 0.18);
+  border-radius: 8px;
+  background: rgba(9, 11, 15, 0.72);
+  color: #8ee6c7;
+  font-size: 12px;
+  font-weight: 780;
+  text-align: center;
 }
 
-.sx-art-card-video span {
-  left: 8px;
-  bottom: 8px;
-  font-size: 11px;
-}
-
-.sx-art-card-ref {
-  right: 58px;
-  bottom: 18px;
-  width: 122px;
-  height: 92px;
-  background:
-    linear-gradient(140deg, rgba(255, 255, 255, 0.24), transparent 34%),
-    linear-gradient(45deg, #15212b, #315d55 50%, #df6f3d);
-}
-
-.sx-stage-side {
+.sx-config-preview {
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
   gap: 12px;
+  align-content: stretch;
 }
 
-.sx-prompt-box,
-.sx-param-list {
+.sx-config-card,
+.sx-config-mini,
+.sx-safety-note {
   border: 1px solid rgba(204, 213, 205, 0.13);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.055);
-  padding: 14px;
 }
 
-.sx-prompt-box {
+.sx-config-card {
   display: grid;
-  align-content: start;
-  gap: 10px;
-  min-height: 216px;
+  gap: 8px;
+  min-height: 126px;
+  padding: 15px;
+  background:
+    linear-gradient(135deg, rgba(142, 230, 199, 0.13), transparent 48%),
+    rgba(255, 255, 255, 0.055);
 }
 
-.sx-prompt-box span,
-.sx-param-list span {
+.sx-config-card span,
+.sx-config-mini span {
   color: #8ee6c7;
   font-size: 12px;
   font-weight: 780;
 }
 
-.sx-prompt-box p {
+.sx-config-card strong {
+  color: #f8fafc;
+  font-size: 18px;
+  line-height: 1.35;
+}
+
+.sx-config-card p {
   margin: 0;
-  color: #e8f1ee;
-  line-height: 1.7;
+  color: #aab8b3;
+  line-height: 1.58;
 }
 
-.sx-param-list {
+.sx-config-mini {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 9px 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 5px 10px;
   align-items: center;
-  color: #cbd6d3;
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
-  font-size: 12px;
+  min-height: 78px;
+  color: #f8fafc;
+  padding: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.18s ease, background 0.18s ease;
 }
 
-.sx-param-list strong {
+.sx-config-mini:hover,
+.sx-config-mini:focus-visible {
+  border-color: rgba(142, 230, 199, 0.44);
+  background: rgba(142, 230, 199, 0.08);
+  outline: none;
+}
+
+.sx-config-mini span {
+  grid-column: 1 / -1;
+}
+
+.sx-config-mini strong {
   min-width: 0;
   overflow-wrap: anywhere;
   color: #f8fafc;
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
   font-size: 12px;
+  line-height: 1.45;
 }
 
-.sx-stream-row {
+.sx-config-mini .semi-icon {
+  color: #8ee6c7;
+}
+
+.sx-safety-note {
+  display: flex;
+  align-items: center;
+  min-height: 62px;
+  color: #cbd6d3;
+  padding: 13px;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.sx-assistant-pills {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
   padding: 0 16px 16px;
 }
 
-.sx-stream-item {
+.sx-assistant-pill {
   display: grid;
   gap: 6px;
-  min-height: 142px;
+  min-height: 86px;
   border: 1px solid rgba(204, 213, 205, 0.13);
   border-radius: 8px;
   background: rgba(9, 11, 15, 0.58);
   padding: 13px;
 }
 
-.sx-stream-item span {
-  width: fit-content;
-  border-radius: 999px;
-  background: rgba(142, 230, 199, 0.12);
-  color: #8ee6c7;
-  padding: 3px 8px;
-  font-size: 12px;
-  font-weight: 780;
-}
-
-.sx-stream-item strong {
+.sx-assistant-pill span {
   color: #f8fafc;
-  font-size: 15px;
-  line-height: 1.35;
+  font-size: 14px;
+  font-weight: 820;
 }
 
-.sx-stream-item em {
+.sx-assistant-pill em {
   color: #aab8b3;
   font-size: 12px;
   font-style: normal;
   line-height: 1.5;
 }
 
-.sx-stream-item small {
-  align-self: end;
-  color: #f78243;
-  font-size: 12px;
-  font-weight: 820;
-}
-
 .sx-home-section {
   padding: 50px 0;
-  color: #10151b;
+  color: #f8fafc;
 }
 
 .sx-home-launch {
@@ -504,10 +536,10 @@ body.sx-home-active header button:hover {
   display: inline-flex;
   align-items: center;
   min-height: 28px;
-  border: 1px solid #d9e3dd;
+  border: 1px solid rgba(142, 230, 199, 0.34);
   border-radius: 999px;
-  background: #ffffff;
-  color: #315d55;
+  background: rgba(142, 230, 199, 0.1);
+  color: #8ee6c7;
   padding: 0 10px;
   font-size: 12px;
   font-weight: 820;
@@ -515,7 +547,7 @@ body.sx-home-active header button:hover {
 
 .sx-home-section h2 {
   margin: 6px 0 0;
-  color: #10151b;
+  color: #f8fafc;
   font-size: 38px;
   line-height: 1.16;
   letter-spacing: 0;
@@ -583,11 +615,11 @@ body.sx-home-active header button:hover {
   z-index: 0;
   padding-top: 58px;
   padding-bottom: 66px;
-  color: #10151b;
+  color: #f8fafc;
 }
 
 .sx-home-api::before {
-  content: "";
+  content: none;
   position: absolute;
   top: -26px;
   bottom: 0;
@@ -603,11 +635,11 @@ body.sx-home-active header button:hover {
   grid-template-columns: minmax(0, 0.9fr) minmax(360px, 1.1fr);
   gap: 26px;
   align-items: stretch;
-  border: 1px solid #d9e3dd;
+  border: 1px solid rgba(204, 213, 205, 0.16);
   border-radius: 8px;
   background:
-    linear-gradient(135deg, rgba(142, 230, 199, 0.12), transparent 34%),
-    #ffffff;
+    linear-gradient(135deg, rgba(142, 230, 199, 0.1), transparent 34%),
+    rgba(255, 255, 255, 0.055);
   padding: 24px;
 }
 
@@ -618,7 +650,7 @@ body.sx-home-active header button:hover {
 
 .sx-api-copy p {
   max-width: 620px;
-  color: #53615c;
+  color: #cbd6d3;
   font-size: 16px;
   line-height: 1.78;
 }
@@ -639,10 +671,10 @@ body.sx-home-active header button:hover {
   align-items: center;
   min-height: 74px;
   width: 100%;
-  border: 1px solid #d9e3dd;
+  border: 1px solid rgba(204, 213, 205, 0.13);
   border-radius: 8px;
-  background: #f8faf7;
-  color: #10151b;
+  background: rgba(9, 11, 15, 0.58);
+  color: #f8fafc;
   padding: 12px 14px;
   text-align: left;
   cursor: pointer;
@@ -651,13 +683,13 @@ body.sx-home-active header button:hover {
 
 .sx-api-config-row:hover,
 .sx-api-config-row:focus-visible {
-  border-color: #8ecfbd;
-  background: #ffffff;
+  border-color: rgba(142, 230, 199, 0.44);
+  background: rgba(142, 230, 199, 0.08);
   outline: none;
 }
 
 .sx-api-config-row span {
-  color: #53615c;
+  color: #8ee6c7;
   font-size: 13px;
   font-weight: 760;
 }
@@ -665,14 +697,14 @@ body.sx-home-active header button:hover {
 .sx-api-config-row strong {
   min-width: 0;
   overflow-wrap: anywhere;
-  color: #10151b;
+  color: #f8fafc;
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
   font-size: 13px;
   line-height: 1.45;
 }
 
 .sx-api-config-row .semi-icon {
-  color: #315d55;
+  color: #8ee6c7;
 }
 
 .sx-model-strip {
@@ -688,23 +720,24 @@ body.sx-home-active header button:hover {
   justify-content: center;
   gap: 8px;
   min-height: 68px;
-  border: 1px solid #d9e3dd;
+  border: 1px solid rgba(204, 213, 205, 0.13);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.78);
-  color: #10151b;
+  background: rgba(255, 255, 255, 0.055);
+  color: #f8fafc;
   font-weight: 760;
 }
 
 .sx-model-badge-more {
-  background: #10151b;
-  border-color: #10151b;
-  color: #f8fafc;
+  background: #f8fafc;
+  border-color: #f8fafc;
+  color: #10151b;
   font-size: 22px;
 }
 
 @media (max-width: 1024px) {
   .sx-home-hero,
   .sx-home-launch,
+  .sx-assistant-layout,
   .sx-api-panel {
     grid-template-columns: 1fr;
   }
@@ -740,6 +773,10 @@ body.sx-home-active header button:hover {
     background-size: 28px 28px, 28px 28px, auto;
   }
 
+  body.sx-home-active .semi-layout-footer {
+    background-size: 28px 28px, 28px 28px, auto !important;
+  }
+
   .sx-home-hero,
   .sx-home-section {
     width: min(100% - 24px, 1180px);
@@ -771,8 +808,9 @@ body.sx-home-active header button:hover {
   }
 
   .sx-home-proof,
-  .sx-stage-grid,
-  .sx-stream-row,
+  .sx-agent-actions,
+  .sx-assistant-layout,
+  .sx-assistant-pills,
   .sx-launch-grid,
   .sx-model-strip {
     grid-template-columns: 1fr;
@@ -782,29 +820,24 @@ body.sx-home-active header button:hover {
     min-height: 68px;
   }
 
-  .sx-art-board {
-    min-height: 260px;
+  .sx-chat-head {
+    align-items: flex-start;
+    flex-direction: column;
+    justify-content: center;
+    padding: 10px 13px;
   }
 
-  .sx-art-card-main {
-    inset: 16px 70px 44px 16px;
+  .sx-chat-head strong {
+    text-align: left;
   }
 
-  .sx-art-card-video {
-    right: 16px;
-    top: 48px;
-    width: 92px;
-    height: 116px;
+  .sx-chat-thread {
+    min-height: 244px;
+    padding: 14px;
   }
 
-  .sx-art-card-ref {
-    right: 32px;
-    width: 106px;
-    height: 76px;
-  }
-
-  .sx-prompt-box {
-    min-height: 148px;
+  .sx-chat-bubble {
+    max-width: 100%;
   }
 
   .sx-api-panel {
@@ -840,6 +873,7 @@ body.sx-home-active header button:hover {
 
 @media (prefers-reduced-motion: reduce) {
   .sx-launch-card,
+  .sx-config-mini,
   .sx-api-config-row,
   .sx-home-actions .semi-button,
   .sx-api-actions .semi-button {

@@ -31,7 +31,6 @@ import {
   IconFile,
   IconCopy,
   IconExternalOpen,
-  IconImage,
 } from '@douyinfe/semi-icons';
 import { Link } from 'react-router-dom';
 import NoticeModal from '../../components/layout/NoticeModal';
@@ -47,45 +46,39 @@ import {
 
 const { Title, Paragraph } = Typography;
 
-const mediaStreams = [
+const assistantPills = [
   {
-    label: '图像',
-    model: 'GPT Image 2 / Banana 2',
-    text: '海报、商品图、封面、参考图编辑',
-    value: '1K / 2K / 4K',
+    label: 'Codex',
+    text: '模型、Key、Base URL 一起配好',
   },
   {
-    label: '视频',
-    model: 'Veo / Grok Video',
-    text: '分镜短片、动态素材、首尾帧任务',
-    value: '队列生成',
+    label: 'Claude Code',
+    text: '专用入口直接复制',
   },
   {
-    label: 'Agent',
-    model: 'Codex / Claude Code',
-    text: '开发、配置、文档接入、自动化执行',
-    value: '同一把 Key',
+    label: 'Dify / 客户系统',
+    text: '按真实业务场景落地',
   },
 ];
 
 const launchCards = [
   {
-    eyebrow: '先体验',
-    title: '媒体工坊',
-    href: '/console/media-playground',
-    text: '在网页里完成图像、视频、参考图和生成记录，不需要先写代码。',
-  },
-  {
-    eyebrow: '跑 Agent',
-    title: '云端 Codex',
-    href: '/codex/',
-    text: '浏览器里运行 Codex Skill，适合调试脚本、改项目、验证 API 接入。',
-  },
-  {
-    eyebrow: '不会配',
+    eyebrow: '先问清楚',
     title: 'API 接入老师',
     href: '/codex/',
-    text: '把系统名称、客户端和目标说清楚，让它一步步带你填 Base URL 和 Key。',
+    text: '说出你要接的客户端和目标，它会先判断路径，再带你点页面、拿配置。',
+  },
+  {
+    eyebrow: '拿到凭证',
+    title: '令牌管理',
+    href: '/console/token',
+    text: '创建可控的 API Key，按模型权限、余额和用途分开管理。',
+  },
+  {
+    eyebrow: '确认能跑',
+    title: '模型广场',
+    href: '/pricing',
+    text: '先看可用模型和价格，再决定把哪一个接进 Codex、Claude Code 或业务系统。',
   },
 ];
 
@@ -207,41 +200,41 @@ const Home = () => {
             <section className='sx-home-hero' aria-labelledby='sx-home-title'>
               <div className='sx-home-copy'>
                 <div className='sx-home-kicker'>
-                  <IconImage aria-hidden />
-                  <span>多媒体 API · Agent 工具 · 低价中转</span>
+                  <IconFile aria-hidden />
+                  <span>低价 API · 接入老师 · Agent 客户端</span>
                 </div>
                 <Title
                   heading={1}
                   id='sx-home-title'
                   className='sx-home-title'
                 >
-                  致力于让更多人以最便宜的 API 价格用上 Agent
+                  便宜的 API，不该只给会配置的人用
                 </Title>
                 <Paragraph className='sx-home-lead'>
-                  先在媒体工坊生成图片和视频，再用同一套 Base URL 与
-                  API Key 接入 Codex、Claude Code、Cherry Studio、Dify
-                  或你自己的智能客户系统。
+                  星人 API 把模型、价格、Base URL、API Key 和客户端接入放在同一个入口。
+                  新用户不用读长教程，接入老师会带他把 Codex、Claude Code、Dify
+                  或自己的客户系统真正跑起来。
                 </Paragraph>
 
                 <div className='sx-home-actions'>
-                  <Link to='/console/media-playground'>
+                  <a href='/codex/'>
                     <Button
                       theme='solid'
                       type='primary'
                       size={isMobile ? 'default' : 'large'}
-                      icon={<IconImage />}
-                    >
-                      打开媒体工坊
-                    </Button>
-                  </Link>
-                  <a href='/codex/'>
-                    <Button
-                      size={isMobile ? 'default' : 'large'}
                       icon={<IconPlay />}
                     >
-                      进入云端 Codex
+                      找 API 接入老师
                     </Button>
                   </a>
+                  <Link to='/console/token'>
+                    <Button
+                      size={isMobile ? 'default' : 'large'}
+                      icon={<IconCopy />}
+                    >
+                      创建 API Key
+                    </Button>
+                  </Link>
                   <Button
                     size={isMobile ? 'default' : 'large'}
                     icon={<IconCopy />}
@@ -253,70 +246,90 @@ const Home = () => {
 
                 <div className='sx-home-proof' aria-label='核心能力'>
                   <span>
-                    <strong>OpenAI-compatible</strong>
-                    <em>普通客户端填 /v1</em>
+                    <strong>先判断入口</strong>
+                    <em>不同客户端给不同接法</em>
                   </span>
                   <span>
-                    <strong>Claude 兼容入口</strong>
-                    <em>Claude Code 填 /claude</em>
+                    <strong>同一把 Key 跑 Agent</strong>
+                    <em>Codex / Claude Code / Dify</em>
                   </span>
                   <span>
-                    <strong>媒体结果留存 72h</strong>
-                    <em>生成后可回看、复制和下载</em>
+                    <strong>价格先讲清楚</strong>
+                    <em>模型、权限、余额都可查</em>
                   </span>
                 </div>
               </div>
 
               <div
-                className='sx-media-stage'
-                aria-label='星人 API 多媒体工作台预览'
+                className='sx-assistant-stage'
+                aria-label='星人 API 接入老师预览'
               >
-                <div className='sx-stage-bar'>
+                <div className='sx-stage-bar sx-assistant-bar'>
                   <div>
-                    <span>星人媒体工坊</span>
-                    <strong>Media Agent Console</strong>
+                    <span>星人 API 接入老师</span>
+                    <strong>API Onboarding Agent</strong>
                   </div>
-                  <em>live</em>
+                  <em>online</em>
                 </div>
-                <div className='sx-stage-grid'>
-                  <div className='sx-stage-canvas'>
-                    <div className='sx-stage-canvas-head'>
-                      <span>生成预览</span>
-                      <strong>gpt-image-2-4K</strong>
+                <div className='sx-assistant-layout'>
+                  <div className='sx-chat-preview'>
+                    <div className='sx-chat-head'>
+                      <span>当前用户停在首页</span>
+                      <strong>已识别：Claude Code 接入</strong>
                     </div>
-                    <div className='sx-art-board'>
-                      <div className='sx-art-card sx-art-card-main'>
-                        <span>4K poster</span>
-                      </div>
-                      <div className='sx-art-card sx-art-card-video'>
-                        <IconPlay />
-                        <span>video cut</span>
-                      </div>
-                      <div className='sx-art-card sx-art-card-ref'>
-                        <span>reference</span>
-                      </div>
+                    <div className='sx-chat-thread'>
+                      <p className='sx-chat-bubble sx-chat-bubble-user'>
+                        我想把 Claude Code 接到星人 API，应该填哪里？
+                      </p>
+                      <p className='sx-chat-bubble sx-chat-bubble-agent'>
+                        你用 Claude Code，先复制专用地址，不要填通用 /v1。下一步我带你创建 Key。
+                      </p>
+                      <p className='sx-chat-bubble sx-chat-bubble-agent sx-chat-bubble-muted'>
+                        涉及创建、充值、生成和删除前，我会先让你确认。
+                      </p>
+                    </div>
+                    <div className='sx-agent-actions'>
+                      <span>打开令牌管理</span>
+                      <span>复制 Claude 地址</span>
+                      <span>检查模型权限</span>
                     </div>
                   </div>
-                  <div className='sx-stage-side'>
-                    <div className='sx-prompt-box'>
-                      <span>Prompt</span>
-                      <p>高级商业海报，真实光影，清晰主体，适合品牌宣传。</p>
+                  <div className='sx-config-preview'>
+                    <div className='sx-config-card sx-config-card-primary'>
+                      <span>推荐路径</span>
+                      <strong>Claude Code / Codex</strong>
+                      <p>先建 Key，再把地址和模型填进客户端。</p>
                     </div>
-                    <div className='sx-param-list'>
-                      <span>size</span>
-                      <strong>2880 × 2880</strong>
-                      <span>status</span>
-                      <strong>queued · 72h cache</strong>
+                    <button
+                      type='button'
+                      className='sx-config-mini'
+                      onClick={() =>
+                        handleCopyText(`${normalizedServerAddress}/claude`)
+                      }
+                    >
+                      <span>Claude Base URL</span>
+                      <strong>{`${normalizedServerAddress}/claude`}</strong>
+                      <IconCopy aria-hidden />
+                    </button>
+                    <button
+                      type='button'
+                      className='sx-config-mini'
+                      onClick={() => handleCopyText('gpt-5.5')}
+                    >
+                      <span>推荐模型</span>
+                      <strong>gpt-5.5</strong>
+                      <IconCopy aria-hidden />
+                    </button>
+                    <div className='sx-safety-note'>
+                      不要把完整 API Key 发给网页聊天。贴过 Key 就建议重置。
                     </div>
                   </div>
                 </div>
-                <div className='sx-stream-row'>
-                  {mediaStreams.map((item) => (
-                    <div className='sx-stream-item' key={item.label}>
+                <div className='sx-assistant-pills'>
+                  {assistantPills.map((item) => (
+                    <div className='sx-assistant-pill' key={item.label}>
                       <span>{item.label}</span>
-                      <strong>{item.model}</strong>
                       <em>{item.text}</em>
-                      <small>{item.value}</small>
                     </div>
                   ))}
                 </div>
@@ -328,9 +341,9 @@ const Home = () => {
               aria-labelledby='sx-launch-title'
             >
               <div className='sx-section-copy'>
-                <span className='sx-section-eyebrow'>从体验到接入</span>
+                <span className='sx-section-eyebrow'>产品路径</span>
                 <Title heading={2} id='sx-launch-title'>
-                  一个用户第一次进来，应该先知道自己点哪里
+                  入口少一点，接入快一点
                 </Title>
               </div>
               <div className='sx-launch-grid'>
@@ -351,13 +364,13 @@ const Home = () => {
             >
               <div className='sx-api-panel'>
                 <div className='sx-api-copy'>
-                  <span className='sx-section-eyebrow'>接入配置</span>
+                  <span className='sx-section-eyebrow'>可复制配置</span>
                   <Title heading={2} id='sx-api-title'>
-                    看文档、复制配置、让接入老师带你做
+                    少给一堆教程，多给能直接粘贴的配置
                   </Title>
                   <Paragraph>
-                    文档中心负责给出可复制的接口路径；云端 Codex 里的
-                    API 接入老师负责把这些配置落到你的客户端、机器人或客户系统里。
+                    常用客户端只需要确认入口、模型和 Key。页面把通用地址、Claude Code
+                    专用地址和推荐模型放在一起；接入老师负责把它们落到真实客户端里。
                   </Paragraph>
                   <div className='sx-api-actions'>
                     <a href={docsHref}>
