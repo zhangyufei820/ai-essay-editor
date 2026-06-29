@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import React, { useContext, useEffect, useState } from 'react';
+import React, { useContext, useEffect, useRef, useState } from 'react';
 import { Button, Typography } from '@douyinfe/semi-ui';
 import { API, showError, copy, showSuccess } from '../../helpers';
 import { useIsMobile } from '../../hooks/common/useIsMobile';
@@ -33,7 +33,6 @@ import {
   IconExternalOpen,
 } from '@douyinfe/semi-icons';
 import { Link } from 'react-router-dom';
-import NoticeModal from '../../components/layout/NoticeModal';
 import {
   OpenAI,
   Claude,
@@ -60,6 +59,47 @@ const assistantPills = [
     text: '按真实业务场景落地',
   },
 ];
+
+const homeAssistantQuickPrompts = [
+  'Codex 桌面怎么接 AIPHUI？',
+  'Claude Code 应该填哪个地址？',
+  'Dify 里 Base URL 怎么配置？',
+];
+
+const initialHomeAssistantMessages = [
+  {
+    role: 'assistant',
+    content:
+      '你好，我是星人 API 接入老师。你可以直接告诉我想接 Codex、Claude Code、Dify，或者把报错贴过来，我会按你的客户端给下一步。',
+  },
+];
+
+const buildHomeAssistantContext = () => ({
+  url: `${window.location.origin}${window.location.pathname}`,
+  path: window.location.pathname || '/',
+  title: document.title || 'New API',
+  route_title: '星人 API 首页',
+  route_hint:
+    '用户正在首页右侧的 API 接入老师窗口咨询 Codex、Claude Code、Dify 或业务系统接入。',
+  headings: [
+    '把低价模型，接进你每天用的 Agent',
+    '星人 API 接入老师',
+  ],
+  buttons: [
+    '直接问接入老师',
+    '创建 API Key',
+    '复制 Base URL',
+    '打开文档中心',
+  ],
+  fields: ['向 API 接入老师提问'],
+  controls: [
+    '直接问接入老师|chat',
+    '创建 API Key|link|to:令牌管理',
+    '复制 Base URL|button',
+  ],
+  visible_text:
+    '星人 API 首页提供低价模型、Base URL、API Key、Codex、Claude Code、Dify 和客户系统接入。用户可以在首页直接向 API 接入老师提问。',
+});
 
 const launchCards = [
   {
@@ -104,7 +144,14 @@ const Home = () => {
   const actualTheme = useActualTheme();
   const [homePageContentLoaded, setHomePageContentLoaded] = useState(false);
   const [homePageContent, setHomePageContent] = useState('');
-  const [noticeVisible, setNoticeVisible] = useState(false);
+  const [assistantMessages, setAssistantMessages] = useState(() => [
+    ...initialHomeAssistantMessages,
+  ]);
+  const [assistantInput, setAssistantInput] = useState('');
+  const [assistantLoading, setAssistantLoading] = useState(false);
+  const [assistantError, setAssistantError] = useState('');
+  const assistantThreadRef = useRef(null);
+  const assistantInputRef = useRef(null);
   const isMobile = useIsMobile();
   const isDemoSiteMode = statusState?.status?.demo_site_enabled || false;
   const docsLink = statusState?.status?.docs_link || '';
@@ -156,25 +203,78 @@ const Home = () => {
     }
   };
 
-  useEffect(() => {
-    const checkNoticeAndShow = async () => {
-      const lastCloseDate = localStorage.getItem('notice_close_date');
-      const today = new Date().toDateString();
-      if (lastCloseDate !== today) {
-        try {
-          const res = await API.get('/api/notice');
-          const { success, data } = res.data;
-          if (success && data && data.trim() !== '') {
-            setNoticeVisible(true);
-          }
-        } catch (error) {
-          console.error('获取公告失败:', error);
-        }
-      }
-    };
+  const askHomeAssistant = async (value) => {
+    const question = value.trim();
+    if (!question || assistantLoading) {
+      return;
+    }
 
-    checkNoticeAndShow();
-  }, []);
+    const history = assistantMessages.map((item) => ({
+      role: item.role,
+      content: item.content,
+    }));
+
+    setAssistantInput('');
+    setAssistantError('');
+    setAssistantMessages((prev) => [
+      ...prev,
+      { role: 'user', content: question },
+    ]);
+    setAssistantLoading(true);
+
+    try {
+      const response = await fetch('/api/xingren-onboarding-assistant/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          message: question,
+          history,
+          context: buildHomeAssistantContext(),
+          screenshot: null,
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || payload.success === false) {
+        throw new Error(payload.message || '在线接入老师暂时不可用。');
+      }
+      setAssistantMessages((prev) => [
+        ...prev,
+        {
+          role: 'assistant',
+          content:
+            payload.reply ||
+            '我没有拿到有效回复。你可以换一种说法，或直接问 Codex / Claude Code / Dify 的接入步骤。',
+        },
+      ]);
+    } catch (error) {
+      const message =
+        error?.message || '在线接入老师暂时没有连上模型，请稍后再试。';
+      setAssistantError(message);
+      setAssistantMessages((prev) => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: message,
+        },
+      ]);
+    } finally {
+      setAssistantLoading(false);
+    }
+  };
+
+  const submitHomeAssistant = (event) => {
+    event.preventDefault();
+    askHomeAssistant(assistantInput);
+  };
+
+  const focusHomeAssistant = () => {
+    assistantInputRef.current?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'center',
+    });
+    assistantInputRef.current?.focus();
+  };
 
   useEffect(() => {
     displayHomePageContent().then();
@@ -187,13 +287,15 @@ const Home = () => {
     };
   }, []);
 
+  useEffect(() => {
+    if (assistantThreadRef.current) {
+      assistantThreadRef.current.scrollTop =
+        assistantThreadRef.current.scrollHeight;
+    }
+  }, [assistantMessages, assistantLoading]);
+
   return (
     <div className='classic-page-fill classic-home-page w-full overflow-x-hidden'>
-      <NoticeModal
-        visible={noticeVisible}
-        onClose={() => setNoticeVisible(false)}
-        isMobile={isMobile}
-      />
       {homePageContentLoaded && homePageContent === '' ? (
         <div className='classic-home-default w-full overflow-x-hidden'>
           <main className='classic-home-hero sx-home-shell'>
@@ -208,25 +310,23 @@ const Home = () => {
                   id='sx-home-title'
                   className='sx-home-title'
                 >
-                  便宜的 API，不该只给会配置的人用
+                  把低价模型，接进你每天用的 Agent
                 </Title>
                 <Paragraph className='sx-home-lead'>
-                  星人 API 把模型、价格、Base URL、API Key 和客户端接入放在同一个入口。
-                  新用户不用读长教程，接入老师会带他把 Codex、Claude Code、Dify
-                  或自己的客户系统真正跑起来。
+                  打开首页就能问接入老师：Codex 怎么填、Claude Code 用哪个地址、Dify
+                  怎么配置、401/403 怎么排查。少翻教程，先把客户端跑通。
                 </Paragraph>
 
                 <div className='sx-home-actions'>
-                  <a href='/codex/'>
-                    <Button
-                      theme='solid'
-                      type='primary'
-                      size={isMobile ? 'default' : 'large'}
-                      icon={<IconPlay />}
-                    >
-                      找 API 接入老师
-                    </Button>
-                  </a>
+                  <Button
+                    theme='solid'
+                    type='primary'
+                    size={isMobile ? 'default' : 'large'}
+                    icon={<IconPlay />}
+                    onClick={focusHomeAssistant}
+                  >
+                    直接问接入老师
+                  </Button>
                   <Link to='/console/token'>
                     <Button
                       size={isMobile ? 'default' : 'large'}
@@ -262,7 +362,7 @@ const Home = () => {
 
               <div
                 className='sx-assistant-stage'
-                aria-label='星人 API 接入老师预览'
+                aria-label='星人 API 接入老师'
               >
                 <div className='sx-stage-bar sx-assistant-bar'>
                   <div>
@@ -274,55 +374,83 @@ const Home = () => {
                 <div className='sx-assistant-layout'>
                   <div className='sx-chat-preview'>
                     <div className='sx-chat-head'>
-                      <span>当前用户停在首页</span>
-                      <strong>已识别：Claude Code 接入</strong>
+                      <span>首页直接对话</span>
+                      <strong>Codex / Claude Code / Dify</strong>
                     </div>
-                    <div className='sx-chat-thread'>
-                      <p className='sx-chat-bubble sx-chat-bubble-user'>
-                        我想把 Claude Code 接到星人 API，应该填哪里？
-                      </p>
-                      <p className='sx-chat-bubble sx-chat-bubble-agent'>
-                        你用 Claude Code，先复制专用地址，不要填通用 /v1。下一步我带你创建 Key。
-                      </p>
-                      <p className='sx-chat-bubble sx-chat-bubble-agent sx-chat-bubble-muted'>
-                        涉及创建、充值、生成和删除前，我会先让你确认。
-                      </p>
+                    <div className='sx-chat-thread' ref={assistantThreadRef}>
+                      {assistantMessages.map((message, index) => (
+                        <p
+                          className={`sx-chat-bubble ${
+                            message.role === 'user'
+                              ? 'sx-chat-bubble-user'
+                              : 'sx-chat-bubble-agent'
+                          }`}
+                          key={`${message.role}-${index}`}
+                        >
+                          {message.content}
+                        </p>
+                      ))}
+                      {assistantLoading ? (
+                        <p className='sx-chat-bubble sx-chat-bubble-agent sx-chat-bubble-muted'>
+                          接入老师正在看你的问题...
+                        </p>
+                      ) : null}
                     </div>
                     <div className='sx-agent-actions'>
-                      <span>打开令牌管理</span>
-                      <span>复制 Claude 地址</span>
-                      <span>检查模型权限</span>
+                      {homeAssistantQuickPrompts.map((prompt) => (
+                        <button
+                          type='button'
+                          key={prompt}
+                          disabled={assistantLoading}
+                          onClick={() => askHomeAssistant(prompt)}
+                        >
+                          {prompt}
+                        </button>
+                      ))}
                     </div>
-                  </div>
-                  <div className='sx-config-preview'>
-                    <div className='sx-config-card sx-config-card-primary'>
-                      <span>推荐路径</span>
-                      <strong>Claude Code / Codex</strong>
-                      <p>先建 Key，再把地址和模型填进客户端。</p>
-                    </div>
-                    <button
-                      type='button'
-                      className='sx-config-mini'
-                      onClick={() =>
-                        handleCopyText(`${normalizedServerAddress}/claude`)
-                      }
-                    >
-                      <span>Claude Base URL</span>
-                      <strong>{`${normalizedServerAddress}/claude`}</strong>
-                      <IconCopy aria-hidden />
-                    </button>
-                    <button
-                      type='button'
-                      className='sx-config-mini'
-                      onClick={() => handleCopyText('gpt-5.5')}
-                    >
-                      <span>推荐模型</span>
-                      <strong>gpt-5.5</strong>
-                      <IconCopy aria-hidden />
-                    </button>
-                    <div className='sx-safety-note'>
-                      不要把完整 API Key 发给网页聊天。贴过 Key 就建议重置。
-                    </div>
+                    <form className='sx-chat-form' onSubmit={submitHomeAssistant}>
+                      <label
+                        className='sx-chat-label'
+                        htmlFor='sx-home-assistant-input'
+                      >
+                        向 API 接入老师提问
+                      </label>
+                      <div className='sx-chat-input-row'>
+                        <textarea
+                          id='sx-home-assistant-input'
+                          ref={assistantInputRef}
+                          className='sx-chat-input'
+                          value={assistantInput}
+                          rows={isMobile ? 3 : 2}
+                          maxLength={600}
+                          disabled={assistantLoading}
+                          placeholder='例如：Codex 桌面怎么接 AIPHUI？'
+                          onChange={(event) =>
+                            setAssistantInput(event.target.value)
+                          }
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter' && !event.shiftKey) {
+                              event.preventDefault();
+                              askHomeAssistant(assistantInput);
+                            }
+                          }}
+                        />
+                        <button
+                          type='submit'
+                          className='sx-chat-submit'
+                          disabled={
+                            assistantLoading || assistantInput.trim() === ''
+                          }
+                        >
+                          {assistantLoading ? '思考中' : '发送'}
+                        </button>
+                      </div>
+                      {assistantError ? (
+                        <p className='sx-chat-error' role='status'>
+                          {assistantError}
+                        </p>
+                      ) : null}
+                    </form>
                   </div>
                 </div>
                 <div className='sx-assistant-pills'>

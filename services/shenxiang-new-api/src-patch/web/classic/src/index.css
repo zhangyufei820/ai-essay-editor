@@ -125,6 +125,10 @@ body.sx-home-active .semi-layout-footer a:hover {
   color: #f8fafc !important;
 }
 
+body.sx-home-active #xr-api-assistant-root {
+  display: none !important;
+}
+
 .sx-home-hero,
 .sx-home-section {
   width: min(1180px, calc(100vw - 32px));
@@ -133,7 +137,7 @@ body.sx-home-active .semi-layout-footer a:hover {
 
 .sx-home-hero {
   display: grid;
-  grid-template-columns: minmax(0, 0.92fr) minmax(420px, 1.08fr);
+  grid-template-columns: minmax(0, 0.82fr) minmax(520px, 1.18fr);
   gap: 34px;
   align-items: center;
   min-height: 0;
@@ -272,31 +276,32 @@ body.sx-home-active .semi-layout-footer a:hover {
   border: 1px solid rgba(204, 213, 205, 0.18);
   border-radius: 8px;
   background:
-    linear-gradient(135deg, rgba(142, 230, 199, 0.12), transparent 30%),
-    linear-gradient(180deg, rgba(23, 27, 32, 0.96), rgba(9, 11, 15, 0.96));
+    linear-gradient(90deg, rgba(255, 255, 255, 0.024) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.024) 1px, transparent 1px),
+    linear-gradient(135deg, rgba(142, 230, 199, 0.1), transparent 32%),
+    linear-gradient(180deg, rgba(16, 21, 27, 0.98), rgba(9, 11, 15, 0.98));
+  background-size: 28px 28px, 28px 28px, auto, auto;
   box-shadow: 0 26px 80px rgba(0, 0, 0, 0.42);
   overflow: hidden;
 }
 
 .sx-assistant-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1.16fr) minmax(210px, 0.84fr);
-  gap: 12px;
   padding: 16px;
 }
 
-.sx-chat-preview,
-.sx-config-preview {
+.sx-chat-preview {
   min-width: 0;
 }
 
 .sx-chat-preview {
+  display: grid;
+  grid-template-rows: auto minmax(330px, 44vh) auto auto;
   border: 1px solid rgba(204, 213, 205, 0.13);
   border-radius: 8px;
   background:
     linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
     linear-gradient(180deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
-    #12161b;
+    rgba(18, 22, 27, 0.94);
   background-size: 24px 24px, 24px 24px, auto;
   overflow: hidden;
 }
@@ -323,18 +328,22 @@ body.sx-home-active .semi-layout-footer a:hover {
 .sx-chat-thread {
   display: grid;
   gap: 12px;
-  min-height: 302px;
+  min-height: 330px;
   padding: 18px;
   align-content: start;
+  overflow-y: auto;
+  scroll-behavior: smooth;
 }
 
 .sx-chat-bubble {
-  max-width: 86%;
+  max-width: 82%;
   margin: 0;
   border-radius: 8px;
   padding: 12px 13px;
   font-size: 14px;
   line-height: 1.68;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .sx-chat-bubble-user {
@@ -365,7 +374,7 @@ body.sx-home-active .semi-layout-footer a:hover {
   padding: 12px;
 }
 
-.sx-agent-actions span {
+.sx-agent-actions button {
   display: grid;
   place-items: center;
   min-height: 38px;
@@ -376,96 +385,94 @@ body.sx-home-active .semi-layout-footer a:hover {
   font-size: 12px;
   font-weight: 780;
   text-align: center;
-}
-
-.sx-config-preview {
-  display: grid;
-  gap: 12px;
-  align-content: stretch;
-}
-
-.sx-config-card,
-.sx-config-mini,
-.sx-safety-note {
-  border: 1px solid rgba(204, 213, 205, 0.13);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.055);
-}
-
-.sx-config-card {
-  display: grid;
-  gap: 8px;
-  min-height: 126px;
-  padding: 15px;
-  background:
-    linear-gradient(135deg, rgba(142, 230, 199, 0.13), transparent 48%),
-    rgba(255, 255, 255, 0.055);
-}
-
-.sx-config-card span,
-.sx-config-mini span {
-  color: #8ee6c7;
-  font-size: 12px;
-  font-weight: 780;
-}
-
-.sx-config-card strong {
-  color: #f8fafc;
-  font-size: 18px;
-  line-height: 1.35;
-}
-
-.sx-config-card p {
-  margin: 0;
-  color: #aab8b3;
-  line-height: 1.58;
-}
-
-.sx-config-mini {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 5px 10px;
-  align-items: center;
-  min-height: 78px;
-  color: #f8fafc;
-  padding: 13px;
-  text-align: left;
   cursor: pointer;
   transition: border-color 0.18s ease, background 0.18s ease;
 }
 
-.sx-config-mini:hover,
-.sx-config-mini:focus-visible {
+.sx-agent-actions button:hover,
+.sx-agent-actions button:focus-visible {
   border-color: rgba(142, 230, 199, 0.44);
   background: rgba(142, 230, 199, 0.08);
   outline: none;
 }
 
-.sx-config-mini span {
-  grid-column: 1 / -1;
+.sx-agent-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
 }
 
-.sx-config-mini strong {
-  min-width: 0;
-  overflow-wrap: anywhere;
-  color: #f8fafc;
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
-  font-size: 12px;
-  line-height: 1.45;
+.sx-chat-form {
+  display: grid;
+  gap: 9px;
+  border-top: 1px solid rgba(204, 213, 205, 0.1);
+  padding: 12px;
 }
 
-.sx-config-mini .semi-icon {
-  color: #8ee6c7;
-}
-
-.sx-safety-note {
-  display: flex;
-  align-items: center;
-  min-height: 62px;
+.sx-chat-label {
   color: #cbd6d3;
-  padding: 13px;
   font-size: 12px;
+  font-weight: 760;
+}
+
+.sx-chat-input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 88px;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.sx-chat-input {
+  width: 100%;
+  min-height: 52px;
+  max-height: 128px;
+  resize: vertical;
+  border: 1px solid rgba(204, 213, 205, 0.16);
+  border-radius: 8px;
+  background: rgba(9, 11, 15, 0.82);
+  color: #f8fafc;
+  padding: 11px 12px;
   line-height: 1.55;
+  outline: none;
+}
+
+.sx-chat-input::placeholder {
+  color: #6f807a;
+}
+
+.sx-chat-input:focus {
+  border-color: rgba(142, 230, 199, 0.62);
+  box-shadow: 0 0 0 3px rgba(142, 230, 199, 0.12);
+}
+
+.sx-chat-submit {
+  min-height: 52px;
+  border: 1px solid rgba(142, 230, 199, 0.52);
+  border-radius: 8px;
+  background: #8ee6c7;
+  color: #07110d;
+  font-weight: 820;
+  cursor: pointer;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.sx-chat-submit:hover,
+.sx-chat-submit:focus-visible {
+  opacity: 0.92;
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.sx-chat-submit:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+  transform: none;
+}
+
+.sx-chat-error {
+  margin: 0;
+  color: #fecaca;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .sx-assistant-pills {
@@ -809,7 +816,6 @@ body.sx-home-active .semi-layout-footer a:hover {
 
   .sx-home-proof,
   .sx-agent-actions,
-  .sx-assistant-layout,
   .sx-assistant-pills,
   .sx-launch-grid,
   .sx-model-strip {
@@ -838,6 +844,10 @@ body.sx-home-active .semi-layout-footer a:hover {
 
   .sx-chat-bubble {
     max-width: 100%;
+  }
+
+  .sx-chat-input-row {
+    grid-template-columns: 1fr;
   }
 
   .sx-api-panel {
@@ -873,7 +883,6 @@ body.sx-home-active .semi-layout-footer a:hover {
 
 @media (prefers-reduced-motion: reduce) {
   .sx-launch-card,
-  .sx-config-mini,
   .sx-api-config-row,
   .sx-home-actions .semi-button,
   .sx-api-actions .semi-button {
