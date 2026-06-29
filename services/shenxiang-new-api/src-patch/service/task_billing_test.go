@@ -317,6 +317,34 @@ func TestImageBenefitPlaygroundBillingSessionRefundsTokenQuota(t *testing.T) {
 	}, time.Second, 10*time.Millisecond)
 }
 
+func TestPlaygroundWalletBillingSessionRefundsUserQuotaWithoutTokenQuota(t *testing.T) {
+	truncate(t)
+
+	const userID = 33
+	const initQuota = 1000
+	const quota = 90
+	seedUser(t, userID, initQuota)
+
+	relayInfo := &relaycommon.RelayInfo{
+		UserId:       userID,
+		IsPlayground: true,
+	}
+	session := &BillingSession{
+		relayInfo: relayInfo,
+		funding:   &WalletFunding{userId: userID},
+	}
+
+	apiErr := session.preConsume(nil, quota)
+	require.Nil(t, apiErr)
+	assert.Equal(t, initQuota-quota, getUserQuota(t, userID))
+	assert.True(t, session.NeedsRefund())
+
+	session.Refund(nil)
+	require.Eventually(t, func() bool {
+		return getUserQuota(t, userID) == initQuota
+	}, time.Second, 10*time.Millisecond)
+}
+
 func TestRefundTaskQuota_NoToken(t *testing.T) {
 	truncate(t)
 	ctx := context.Background()
