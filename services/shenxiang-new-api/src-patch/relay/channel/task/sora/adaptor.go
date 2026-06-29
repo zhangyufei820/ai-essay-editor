@@ -336,6 +336,7 @@ func normalizeSeedanceVideoRequestBody(bodyMap map[string]interface{}) map[strin
 		"resolution": seedanceVideoResolution(bodyMap),
 	}
 	if len(content) > 0 {
+		cleanMetadata["content"] = content
 		if firstFrameURL := seedanceFirstFrameURL(content); firstFrameURL != "" {
 			cleaned["first_frame_url"] = firstFrameURL
 		}

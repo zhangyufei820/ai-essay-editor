@@ -53,7 +53,7 @@ def normalize_video_provider_body(body: Mapping[str, Any]) -> dict[str, Any]:
     content_items = _metadata_content_items(cleaned_metadata)
     if not content_items:
         content_items = _content_items_from_body(body)
-        if content_items and not is_private_seedance:
+        if content_items:
             cleaned_metadata["content"] = content_items
     first_frame_url = _first_frame_url_from_metadata(cleaned_metadata)
     if not first_frame_url and content_items:
@@ -68,8 +68,6 @@ def normalize_video_provider_body(body: Mapping[str, Any]) -> dict[str, Any]:
     generate_audio = cleaned_metadata.get("generate_audio")
     if is_private_seedance or generate_audio is not True:
         cleaned_metadata.pop("generate_audio", None)
-    if is_private_seedance:
-        cleaned_metadata.pop("content", None)
     body["metadata"] = cleaned_metadata
     if is_private_seedance:
         body.pop("generate_audio", None)

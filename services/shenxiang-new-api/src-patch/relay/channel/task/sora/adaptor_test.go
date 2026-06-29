@@ -73,8 +73,21 @@ func TestNormalizeSeedanceVideoRequestBodyUsesOfficialFirstFramePayload(t *testi
 	if metadata["resolution"] != "720p" {
 		t.Fatalf("metadata.resolution = %#v, want 720p", metadata["resolution"])
 	}
-	if _, ok := metadata["content"]; ok {
-		t.Fatalf("metadata should not forward content array for private seedance model: %#v", metadata)
+	content, ok := metadata["content"].([]interface{})
+	if !ok || len(content) != 2 {
+		t.Fatalf("metadata.content = %#v, want two official image_url entries", metadata["content"])
+	}
+	first := content[0].(map[string]interface{})
+	if first["role"] != "first_frame" {
+		t.Fatalf("metadata.content[0].role = %#v, want first_frame", first["role"])
+	}
+	firstImage := first["image_url"].(map[string]interface{})
+	if first["type"] != "image_url" || firstImage["url"] != "https://cdn.test/first.png" {
+		t.Fatalf("metadata.content[0] = %#v, want official first frame image_url", first)
+	}
+	second := content[1].(map[string]interface{})
+	if second["role"] != "reference_image" {
+		t.Fatalf("metadata.content[1].role = %#v, want reference_image", second["role"])
 	}
 	if _, ok := metadata["negative_prompt"]; ok {
 		t.Fatalf("metadata should not forward unsupported negative_prompt: %#v", metadata)
@@ -116,8 +129,17 @@ func TestNormalizeSeedanceVideoRequestBodyExtractsFirstFrameFromContent(t *testi
 		t.Fatalf("first_frame_url = %#v, want first reference image", got["first_frame_url"])
 	}
 	metadata := got["metadata"].(map[string]interface{})
-	if _, ok := metadata["content"]; ok {
-		t.Fatalf("metadata should not forward content array: %#v", metadata)
+	content, ok := metadata["content"].([]interface{})
+	if !ok || len(content) != 2 {
+		t.Fatalf("metadata.content = %#v, want first and last frame entries", metadata["content"])
+	}
+	first := content[0].(map[string]interface{})
+	if first["role"] != "first_frame" {
+		t.Fatalf("metadata.content[0].role = %#v, want first_frame", first["role"])
+	}
+	last := content[1].(map[string]interface{})
+	if last["role"] != "last_frame" {
+		t.Fatalf("metadata.content[1].role = %#v, want last_frame", last["role"])
 	}
 }
 
