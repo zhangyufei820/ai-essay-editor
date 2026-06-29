@@ -1633,10 +1633,6 @@ func GeminiImageHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.
 		return nil, types.NewOpenAIError(jsonErr, types.ErrorCodeBadResponseBody, http.StatusInternalServerError)
 	}
 
-	if len(geminiResponse.Predictions) == 0 {
-		return nil, types.NewOpenAIError(errors.New("no images generated"), types.ErrorCodeBadResponseBody, http.StatusInternalServerError)
-	}
-
 	// convert to openai format response
 	openAIResponse := dto.ImageResponse{
 		Created: common.GetTimestamp(),
@@ -1652,6 +1648,24 @@ func GeminiImageHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.
 		})
 	}
 
+	usage := geminiImageUsageFromImageCount(len(openAIResponse.Data))
+	if len(openAIResponse.Data) == 0 {
+		var chatResponse dto.GeminiChatResponse
+		if jsonErr := common.Unmarshal(responseBody, &chatResponse); jsonErr != nil {
+			return nil, types.NewOpenAIError(jsonErr, types.ErrorCodeBadResponseBody, http.StatusInternalServerError)
+		}
+		openAIResponse.Data = extractGeminiInlineImageData(chatResponse)
+		if len(openAIResponse.Data) == 0 {
+			return nil, types.NewOpenAIError(errors.New("no images generated"), types.ErrorCodeBadResponseBody, http.StatusInternalServerError)
+		}
+		mappedUsage := buildUsageFromGeminiMetadata(chatResponse.UsageMetadata, info.GetEstimatePromptTokens())
+		if mappedUsage.TotalTokens > 0 || mappedUsage.PromptTokens > 0 || mappedUsage.CompletionTokens > 0 {
+			usage = &mappedUsage
+		} else {
+			usage = geminiImageUsageFromImageCount(len(openAIResponse.Data))
+		}
+	}
+
 	jsonResponse, jsonErr := json.Marshal(openAIResponse)
 	if jsonErr != nil {
 		return nil, types.NewError(jsonErr, types.ErrorCodeBadResponseBody)
@@ -1661,18 +1675,42 @@ func GeminiImageHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.
 	c.Writer.WriteHeader(resp.StatusCode)
 	_, _ = c.Writer.Write(jsonResponse)
 
+	return usage, nil
+}
+
+func extractGeminiInlineImageData(response dto.GeminiChatResponse) []dto.ImageData {
+	images := make([]dto.ImageData, 0, len(response.Candidates))
+	for _, candidate := range response.Candidates {
+		for _, part := range candidate.Content.Parts {
+			if part.InlineData == nil {
+				continue
+			}
+			mimeType := strings.ToLower(strings.TrimSpace(part.InlineData.MimeType))
+			if !strings.HasPrefix(mimeType, "image/") {
+				continue
+			}
+			imageData := strings.TrimSpace(part.InlineData.Data)
+			if imageData == "" {
+				continue
+			}
+			images = append(images, dto.ImageData{
+				B64Json: imageData,
+			})
+		}
+	}
+	return images
+}
+
+func geminiImageUsageFromImageCount(generatedImages int) *dto.Usage {
 	// https://github.com/google-gemini/cookbook/blob/719a27d752aac33f39de18a8d3cb42a70874917e/quickstarts/Counting_Tokens.ipynb
 	// each image has fixed 258 tokens
 	const imageTokens = 258
-	generatedImages := len(openAIResponse.Data)
 
-	usage := &dto.Usage{
+	return &dto.Usage{
 		PromptTokens:     imageTokens * generatedImages, // each generated image has fixed 258 tokens
 		CompletionTokens: 0,                             // image generation does not calculate completion tokens
 		TotalTokens:      imageTokens * generatedImages,
 	}
-
-	return usage, nil
 }
 
 type GeminiModelsResponse struct {
