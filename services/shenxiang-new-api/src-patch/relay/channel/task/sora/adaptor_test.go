@@ -2,13 +2,12 @@ package sora
 
 import (
 	"net/http"
-	"reflect"
 	"testing"
 
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 )
 
-func TestNormalizeSeedanceVideoRequestBodyUsesOfficialReferenceImagePayload(t *testing.T) {
+func TestNormalizeSeedanceVideoRequestBodyUsesOfficialFirstFramePayload(t *testing.T) {
 	body := map[string]interface{}{
 		"model":           "seedance-nsfw",
 		"group":           "internal",
@@ -49,24 +48,18 @@ func TestNormalizeSeedanceVideoRequestBodyUsesOfficialReferenceImagePayload(t *t
 			t.Fatalf("normalizeSeedanceVideoRequestBody kept %q: %#v", removed, got)
 		}
 	}
-	if got["prompt"] != "@image1 @image2 follow this image" {
-		t.Fatalf("prompt = %#v, want complete official reference markers", got["prompt"])
+	if got["model"] != "dreamina-seedance-2-0-260128" {
+		t.Fatalf("model = %#v, want dreamina-seedance-2-0-260128", got["model"])
+	}
+	if got["prompt"] != "follow this image" {
+		t.Fatalf("prompt = %#v, want prompt without reference markers", got["prompt"])
 	}
 	if got["seconds"] != "4" {
 		t.Fatalf("seconds = %#v, want string seconds", got["seconds"])
 	}
 
-	wantContent := []interface{}{
-		map[string]interface{}{
-			"type":      "image_url",
-			"image_url": map[string]interface{}{"url": "https://cdn.test/first.png"},
-			"role":      "reference_image",
-		},
-		map[string]interface{}{
-			"type":      "image_url",
-			"image_url": map[string]interface{}{"url": "https://cdn.test/second.png"},
-			"role":      "reference_image",
-		},
+	if got["first_frame_url"] != "https://cdn.test/first.png" {
+		t.Fatalf("first_frame_url = %#v, want first reference image", got["first_frame_url"])
 	}
 	metadata := got["metadata"].(map[string]interface{})
 	if metadata["ratio"] != "9:16" {
@@ -75,8 +68,8 @@ func TestNormalizeSeedanceVideoRequestBodyUsesOfficialReferenceImagePayload(t *t
 	if metadata["resolution"] != "720p" {
 		t.Fatalf("metadata.resolution = %#v, want 720p", metadata["resolution"])
 	}
-	if !reflect.DeepEqual(metadata["content"], wantContent) {
-		t.Fatalf("metadata.content = %#v, want %#v", metadata["content"], wantContent)
+	if _, ok := metadata["content"]; ok {
+		t.Fatalf("metadata should not forward content array for private seedance model: %#v", metadata)
 	}
 	if _, ok := metadata["negative_prompt"]; ok {
 		t.Fatalf("metadata should not forward unsupported negative_prompt: %#v", metadata)
@@ -86,7 +79,7 @@ func TestNormalizeSeedanceVideoRequestBodyUsesOfficialReferenceImagePayload(t *t
 	}
 }
 
-func TestNormalizeSeedanceVideoRequestBodyAddsReferenceMarkers(t *testing.T) {
+func TestNormalizeSeedanceVideoRequestBodyExtractsFirstFrameFromContent(t *testing.T) {
 	body := map[string]interface{}{
 		"model":    "seedance-nsfw",
 		"prompt":   "use these references",
@@ -111,24 +104,15 @@ func TestNormalizeSeedanceVideoRequestBodyAddsReferenceMarkers(t *testing.T) {
 	}
 
 	got := normalizeSeedanceVideoRequestBody(body)
-	if got["prompt"] != "@image1 @image2 use these references" {
-		t.Fatalf("prompt = %#v, want official reference markers", got["prompt"])
+	if got["prompt"] != "use these references" {
+		t.Fatalf("prompt = %#v, want prompt without reference markers", got["prompt"])
 	}
-	wantContent := []interface{}{
-		map[string]interface{}{
-			"type":      "image_url",
-			"image_url": map[string]interface{}{"url": "https://cdn.test/first.png"},
-			"role":      "reference_image",
-		},
-		map[string]interface{}{
-			"type":      "image_url",
-			"image_url": map[string]interface{}{"url": "https://cdn.test/last.png"},
-			"role":      "reference_image",
-		},
+	if got["first_frame_url"] != "https://cdn.test/first.png" {
+		t.Fatalf("first_frame_url = %#v, want first reference image", got["first_frame_url"])
 	}
 	metadata := got["metadata"].(map[string]interface{})
-	if !reflect.DeepEqual(metadata["content"], wantContent) {
-		t.Fatalf("metadata.content = %#v, want %#v", metadata["content"], wantContent)
+	if _, ok := metadata["content"]; ok {
+		t.Fatalf("metadata should not forward content array: %#v", metadata)
 	}
 }
 

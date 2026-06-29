@@ -16,6 +16,7 @@ logger = logging.getLogger("relaydance_video_gateway")
 SENSITIVE_KEYS = {"authorization", "token", "signature", "policy", "x-gateway-key", "relaydance_api_token"}
 RETRY_STATUS_CODES = {429, 500, 502, 503, 504}
 DIAGNOSTIC_VIDEO_PATHS = {"/v1/video/generations", "/v1/videos"}
+PRIVATE_SEEDANCE_MODEL = "dreamina-seedance-2-0-260128"
 
 
 def redact(value: Any) -> Any:
@@ -35,16 +36,71 @@ def public_body(model: Any) -> dict[str, Any]:
 
 def video_generation_body(model: Any) -> dict[str, Any]:
     body = public_body(model)
+    return normalize_video_provider_body(body)
+
+
+def normalize_video_provider_body(body: Mapping[str, Any]) -> dict[str, Any]:
+    body = dict(body)
+    body["model"] = canonical_model(str(body.get("model") or ""))
     metadata = body.get("metadata")
-    if not isinstance(metadata, dict):
+    if not isinstance(metadata, Mapping):
+        if _is_private_seedance_model(str(body.get("model") or "")):
+            body.pop("generate_audio", None)
+        if body.get("first_frame_url"):
+            _strip_prompt_reference_markers(body)
         return body
 
     cleaned_metadata = dict(metadata)
+    first_frame_url = _first_frame_url_from_metadata(cleaned_metadata)
+    if first_frame_url and not body.get("first_frame_url"):
+        body["first_frame_url"] = first_frame_url
+    cleaned_metadata.pop("content", None)
     generate_audio = cleaned_metadata.get("generate_audio")
-    if canonical_model(str(body.get("model") or "")) == "seedance-nsfw" or generate_audio is not True:
+    if _is_private_seedance_model(str(body.get("model") or "")) or generate_audio is not True:
         cleaned_metadata.pop("generate_audio", None)
     body["metadata"] = cleaned_metadata
+    if _is_private_seedance_model(str(body.get("model") or "")):
+        body.pop("generate_audio", None)
+    if body.get("first_frame_url"):
+        _strip_prompt_reference_markers(body)
     return body
+
+
+def _is_private_seedance_model(model: str) -> bool:
+    return canonical_model(model) == PRIVATE_SEEDANCE_MODEL
+
+
+def _first_frame_url_from_metadata(metadata: Mapping[str, Any]) -> str:
+    content = metadata.get("content")
+    content_items = content if isinstance(content, list) else []
+    for item in content_items:
+        if isinstance(item, Mapping) and str(item.get("role") or "").lower() == "first_frame":
+            url = _image_url_from_content_item(item)
+            if url:
+                return url
+    for item in content_items:
+        url = _image_url_from_content_item(item)
+        if url:
+            return url
+    return ""
+
+
+def _strip_prompt_reference_markers(body: dict[str, Any]) -> None:
+    prompt = body.get("prompt")
+    if not isinstance(prompt, str):
+        return
+    fields = prompt.strip().split()
+    while fields and _is_prompt_reference_marker(fields[0]):
+        fields.pop(0)
+    body["prompt"] = " ".join(fields).strip()
+
+
+def _is_prompt_reference_marker(value: str) -> bool:
+    text = value.strip().lower().strip(",，.:：;；")
+    if not text.startswith("@image"):
+        return False
+    suffix = text.removeprefix("@image")
+    return suffix.isdigit()
 
 
 def validate_model(model: str, settings: Settings | None = None) -> None:
@@ -93,6 +149,7 @@ def request_diagnostic_summary(path: str, body: dict[str, Any] | None) -> dict[s
             image_summary = _public_url_summary(_image_url_from_content_item(item))
             if image_summary:
                 image_summaries.append(image_summary)
+    first_frame_summary = _public_url_summary(body.get("first_frame_url"))
 
     return {
         "path": path,
@@ -104,6 +161,7 @@ def request_diagnostic_summary(path: str, body: dict[str, Any] | None) -> dict[s
         "resolution": metadata.get("resolution") if isinstance(metadata, Mapping) else None,
         "content_count": len(content_items),
         "content_roles": roles,
+        "first_frame_url": first_frame_summary or None,
         "image_urls": image_summaries,
     }
 

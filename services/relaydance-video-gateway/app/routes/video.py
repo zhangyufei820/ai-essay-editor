@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse, Response
 import re
 
 from app.config import Settings, get_settings
-from app.relaydance_client import RelayDanceClient, public_body, validate_model, video_generation_body
+from app.relaydance_client import RelayDanceClient, normalize_video_provider_body, public_body, validate_model, video_generation_body
 from app.schemas import (
     AssetCreateRequest,
     DifyVideoCreateRequest,
@@ -134,6 +134,7 @@ def build_openai_provider_body(body: dict[str, Any]) -> tuple[dict[str, Any], di
         )
     if not provider_body.get("resolution"):
         provider_body["resolution"] = _resolution_from_model(model, metadata, body)
+    provider_body = normalize_video_provider_body(provider_body)
     return provider_body, {
         "model": model,
         "seconds": seconds,

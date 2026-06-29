@@ -234,9 +234,21 @@ func isSeedanceVideoModel(modelName string) bool {
 	return strings.Contains(strings.ToLower(strings.TrimSpace(modelName)), "seedance")
 }
 
+func seedanceUpstreamModel(modelName string) string {
+	modelName = strings.TrimSpace(modelName)
+	switch strings.ToLower(modelName) {
+	case "seedance-nsfw", "seedance-nsfw-4k":
+		return "dreamina-seedance-2-0-260128"
+	default:
+		return modelName
+	}
+}
+
 func normalizeSeedanceVideoRequestBody(bodyMap map[string]interface{}) map[string]interface{} {
 	cleaned := make(map[string]interface{}, len(bodyMap))
-	copyPresentNonBlank(cleaned, bodyMap, "model")
+	if modelName := seedanceUpstreamModel(trimmedString(bodyMap["model"])); modelName != "" {
+		cleaned["model"] = modelName
+	}
 
 	metadata := mapFromAny(bodyMap["metadata"])
 	content := normalizeSeedanceVideoContent(bodyMap, metadata)
@@ -250,7 +262,9 @@ func normalizeSeedanceVideoRequestBody(bodyMap map[string]interface{}) map[strin
 		"resolution": seedanceVideoResolution(bodyMap),
 	}
 	if len(content) > 0 {
-		cleanMetadata["content"] = content
+		if firstFrameURL := seedanceFirstFrameURL(content); firstFrameURL != "" {
+			cleaned["first_frame_url"] = firstFrameURL
+		}
 	}
 	if value, ok := boolFromAny(firstPresentAny(bodyMap["watermark"], metadata["watermark"])); ok && value {
 		cleanMetadata["watermark"] = value
@@ -266,25 +280,29 @@ func normalizeSeedanceVideoRequestBody(bodyMap map[string]interface{}) map[strin
 	return cleaned
 }
 
+func seedanceFirstFrameURL(content []interface{}) string {
+	for _, item := range content {
+		itemMap := mapFromAny(item)
+		if normalizeSeedanceVideoRole(trimmedString(itemMap["role"])) == "first_frame" {
+			if url := videoContentImageURL(itemMap); url != "" {
+				return url
+			}
+		}
+	}
+	for _, item := range content {
+		if url := videoContentImageURL(mapFromAny(item)); url != "" {
+			return url
+		}
+	}
+	return ""
+}
+
 func seedanceVideoPrompt(prompt string, referenceCount int) string {
 	prompt = strings.TrimSpace(prompt)
 	if referenceCount <= 0 {
 		return prompt
 	}
-
-	markers := make([]string, 0, referenceCount)
-	missingMarker := false
-	for index := 1; index <= referenceCount; index++ {
-		marker := fmt.Sprintf("@image%d", index)
-		markers = append(markers, marker)
-		if !containsPromptReferenceMarker(prompt, marker) {
-			missingMarker = true
-		}
-	}
-	if !missingMarker {
-		return prompt
-	}
-	return strings.TrimSpace(strings.Join(append(markers, stripLeadingPromptReferenceMarkers(prompt)), " "))
+	return stripLeadingPromptReferenceMarkers(prompt)
 }
 
 func containsPromptReferenceMarker(prompt, marker string) bool {
@@ -485,22 +503,25 @@ func normalizeSeedanceVideoContent(bodyMap, metadata map[string]interface{}) []i
 		appendReference(role, firstNonBlankAnyString(image))
 	}
 
-	referenceURLs := make([]string, 0, 9)
-	seen := make(map[string]bool)
+	referenceItems := make([]seedanceVideoReference, 0, 9)
+	seen := make(map[string]int)
 	for _, reference := range references {
-		if seen[reference.url] {
+		if existingIndex, ok := seen[reference.url]; ok {
+			if reference.role == "first_frame" && referenceItems[existingIndex].role != "first_frame" {
+				referenceItems[existingIndex].role = reference.role
+			}
 			continue
 		}
-		seen[reference.url] = true
-		referenceURLs = append(referenceURLs, reference.url)
-		if len(referenceURLs) >= 9 {
+		seen[reference.url] = len(referenceItems)
+		referenceItems = append(referenceItems, reference)
+		if len(referenceItems) >= 9 {
 			break
 		}
 	}
 
-	content := make([]interface{}, 0, len(referenceURLs))
-	for _, url := range referenceURLs {
-		content = append(content, seedanceVideoContentItem("reference_image", url))
+	content := make([]interface{}, 0, len(referenceItems))
+	for _, reference := range referenceItems {
+		content = append(content, seedanceVideoContentItem(reference.role, reference.url))
 	}
 	return content
 }

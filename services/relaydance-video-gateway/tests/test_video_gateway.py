@@ -43,9 +43,10 @@ def test_video_request_diagnostic_summary_redacts_prompt_and_image_url():
     summary = request_diagnostic_summary(
         "/v1/video/generations",
         {
-            "model": "seedance-nsfw",
+            "model": "dreamina-seedance-2-0-260128",
             "prompt": "sensitive prompt text",
             "seconds": "4",
+            "first_frame_url": "https://cdn.example.test/private/path/first.png?token=secret",
             "metadata": {
                 "ratio": "9:16",
                 "resolution": "720p",
@@ -64,6 +65,11 @@ def test_video_request_diagnostic_summary_redacts_prompt_and_image_url():
     assert "sensitive prompt text" not in json.dumps(summary)
     assert "private/path" not in json.dumps(summary)
     assert "secret" not in json.dumps(summary)
+    assert summary["first_frame_url"] == {
+        "host": "cdn.example.test",
+        "sha256_12": summary["first_frame_url"]["sha256_12"],
+    }
+    assert len(summary["first_frame_url"]["sha256_12"]) == 12
     assert summary["image_urls"] == [{"host": "cdn.example.test", "sha256_12": summary["image_urls"][0]["sha256_12"]}]
     assert len(summary["image_urls"][0]["sha256_12"]) == 12
 
@@ -112,6 +118,7 @@ def test_video_generation_accepts_official_seedance_2_min_duration(client, auth_
     assert response.status_code == 200
     assert response.json()["task_id"] == "task-4s"
     sent = json.loads(route.calls.last.request.content)
+    assert sent["model"] == "dreamina-seedance-2-0-260128"
     assert sent["seconds"] == "4"
 
 
@@ -144,6 +151,10 @@ def test_private_seedance_generation_does_not_forward_default_generate_audio(cli
 
     assert response.status_code == 200
     sent = json.loads(route.calls.last.request.content)
+    assert sent["model"] == "dreamina-seedance-2-0-260128"
+    assert sent["prompt"] == "follow this reference."
+    assert sent["first_frame_url"] == "https://cdn.test/reference.png"
+    assert "content" not in sent["metadata"]
     assert "generate_audio" not in sent["metadata"]
 
 
@@ -195,13 +206,8 @@ def test_dify_create_builds_first_frame_payload_and_warns_on_last_frame(client, 
     assert body["warnings"]
     sent = json.loads(route.calls.last.request.content)
     assert sent["seconds"] == "5"
-    assert sent["metadata"]["content"] == [
-        {
-            "type": "image_url",
-            "image_url": {"url": "https://cdn.test/first.jpg"},
-            "role": "first_frame",
-        }
-    ]
+    assert sent["first_frame_url"] == "https://cdn.test/first.jpg"
+    assert "content" not in sent["metadata"]
 
 
 @respx.mock
@@ -303,7 +309,7 @@ def test_openai_compatible_videos_submit_forwards_to_openai_videos(client, auth_
 
     sent = json.loads(route.calls.last.request.content)
     assert sent == {
-        "model": "seedance-nsfw",
+        "model": "dreamina-seedance-2-0-260128",
         "prompt": "A neutral product demo shot.",
         "seconds": "5",
         "size": "1280x720",
@@ -357,7 +363,45 @@ def test_openai_compatible_videos_maps_legacy_nsfw_model(client, auth_headers, p
 
     assert response.status_code == 200
     sent = json.loads(route.calls.last.request.content)
-    assert sent["model"] == "seedance-nsfw"
+    assert sent["model"] == "dreamina-seedance-2-0-260128"
+
+
+@respx.mock
+def test_openai_compatible_videos_extracts_first_frame_from_metadata(client, auth_headers, provider_base):
+    route = respx.post(f"{provider_base}/v1/videos").mock(
+        return_value=Response(200, json={"id": "rd-task-frame", "status": "queued"}),
+    )
+
+    response = client.post(
+        "/v1/videos",
+        headers=auth_headers,
+        json={
+            "model": "seedance-nsfw",
+            "prompt": "@image1 A neutral studio product shot.",
+            "seconds": "4",
+            "size": "720x1280",
+            "metadata": {
+                "ratio": "9:16",
+                "resolution": "720p",
+                "content": [
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": "https://cdn.test/reference.png"},
+                        "role": "reference_image",
+                    }
+                ],
+                "generate_audio": True,
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    sent = json.loads(route.calls.last.request.content)
+    assert sent["model"] == "dreamina-seedance-2-0-260128"
+    assert sent["prompt"] == "A neutral studio product shot."
+    assert sent["first_frame_url"] == "https://cdn.test/reference.png"
+    assert "content" not in sent["metadata"]
+    assert "generate_audio" not in sent["metadata"]
 
 
 @respx.mock

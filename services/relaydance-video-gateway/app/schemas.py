@@ -5,13 +5,17 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 
 ALLOWED_MODELS = {
+    "dreamina-seedance-2-0-260128",
+    "dreamina-seedance-2-0-fast-260128",
+    "dreamina-seedance-2-0-mini-260615",
     "doubao-seedance-2-0-fast-260128",
     "doubao-seedance-2-0-720p",
     "doubao-seedance-2-0-1080p",
     "seedance-nsfw",
 }
 MODEL_ALIASES = {
-    "seedance-nsfw-4k": "seedance-nsfw",
+    "seedance-nsfw": "dreamina-seedance-2-0-260128",
+    "seedance-nsfw-4k": "dreamina-seedance-2-0-260128",
 }
 ALLOWED_SECONDS = {str(value) for value in range(4, 16)}
 ALLOWED_RATIOS = {"16:9", "9:16", "1:1", "4:3", "3:4", "21:9"}
