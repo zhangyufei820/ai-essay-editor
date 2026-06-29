@@ -160,6 +160,63 @@ def test_private_seedance_generation_does_not_forward_default_generate_audio(cli
 
 
 @respx.mock
+def test_private_seedance_generation_reconstructs_metadata_content_from_top_level_reference(
+    client, auth_headers, provider_base
+):
+    route = respx.post(f"{provider_base}/v1/video/generations").mock(
+        return_value=Response(200, json={"task_id": "task-reconstructed"}),
+    )
+
+    response = client.post(
+        "/api/v1/video/generations",
+        headers=auth_headers,
+        json={
+            "model": "seedance-nsfw",
+            "prompt": "A neutral studio product shot.",
+            "seconds": "4",
+            "first_frame_url": "https://cdn.test/reference.png",
+            "metadata": {"ratio": "9:16", "resolution": "720p"},
+        },
+    )
+
+    assert response.status_code == 200
+    sent = json.loads(route.calls.last.request.content)
+    assert sent["first_frame_url"] == "https://cdn.test/reference.png"
+    assert sent["metadata"]["content"][0]["image_url"]["url"] == "https://cdn.test/reference.png"
+    assert sent["metadata"]["content"][0]["role"] == "first_frame"
+
+    summary = request_diagnostic_summary("/v1/video/generations", sent)
+    assert summary["content_count"] == 1
+    assert summary["metadata_keys"] == ["content", "ratio", "resolution"]
+
+
+@respx.mock
+def test_private_seedance_generation_reconstructs_metadata_content_from_image_roles(
+    client, auth_headers, provider_base
+):
+    route = respx.post(f"{provider_base}/v1/video/generations").mock(
+        return_value=Response(200, json={"task_id": "task-roles"}),
+    )
+
+    response = client.post(
+        "/api/v1/video/generations",
+        headers=auth_headers,
+        json={
+            "model": "seedance-nsfw",
+            "prompt": "A neutral studio product shot.",
+            "seconds": "4",
+            "image_with_roles": [{"url": "https://cdn.test/reference.png", "role": "first_frame"}],
+            "metadata": {"ratio": "9:16", "resolution": "720p"},
+        },
+    )
+
+    assert response.status_code == 200
+    sent = json.loads(route.calls.last.request.content)
+    assert sent["metadata"]["content"][0]["image_url"]["url"] == "https://cdn.test/reference.png"
+    assert sent["metadata"]["content"][0]["role"] == "first_frame"
+
+
+@respx.mock
 def test_seedance_2_generation_only_forwards_generate_audio_when_true(client, auth_headers, provider_base):
     route = respx.post(f"{provider_base}/v1/video/generations").mock(
         return_value=Response(200, json={"task_id": "task-audio"}),

@@ -50,6 +50,10 @@ def normalize_video_provider_body(body: Mapping[str, Any]) -> dict[str, Any]:
 
     cleaned_metadata = dict(metadata)
     content_items = _metadata_content_items(cleaned_metadata)
+    if not content_items:
+        content_items = _content_items_from_body(body)
+        if content_items:
+            cleaned_metadata["content"] = content_items
     first_frame_url = _first_frame_url_from_metadata(cleaned_metadata)
     if first_frame_url and not body.get("first_frame_url"):
         body["first_frame_url"] = first_frame_url
@@ -88,6 +92,47 @@ def _first_frame_url_from_metadata(metadata: Mapping[str, Any]) -> str:
 def _metadata_content_items(metadata: Mapping[str, Any]) -> list[Any]:
     content = metadata.get("content")
     return content if isinstance(content, list) else []
+
+
+def _content_items_from_body(body: Mapping[str, Any]) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    seen: dict[str, int] = {}
+
+    def append_reference(role: Any, url: Any) -> None:
+        text = str(url or "").strip() if isinstance(url, str) or url is None else ""
+        if not text:
+            return
+        normalized_role = _normalized_frame_role(role)
+        existing_index = seen.get(text)
+        if existing_index is not None:
+            if normalized_role == "first_frame" and items[existing_index]["role"] != "first_frame":
+                items[existing_index]["role"] = "first_frame"
+            return
+        seen[text] = len(items)
+        items.append(
+            {
+                "type": "image_url",
+                "image_url": {"url": text},
+                "role": normalized_role,
+            }
+        )
+
+    first_frame_url = body.get("first_frame_url") or body.get("image")
+    append_reference("first_frame", first_frame_url)
+
+    image_with_roles = body.get("image_with_roles")
+    if isinstance(image_with_roles, list) and image_with_roles:
+        for item in image_with_roles:
+            if not isinstance(item, Mapping):
+                continue
+            append_reference(item.get("role"), _image_url_from_content_item(item))
+        return items
+
+    image_urls = body.get("image_urls")
+    if isinstance(image_urls, list):
+        for index, url in enumerate(image_urls):
+            append_reference("first_frame" if index == 0 else "reference_image", url)
+    return items
 
 
 def _normalized_frame_role(value: Any) -> str:
@@ -154,6 +199,10 @@ def _public_url_summary(value: Any) -> dict[str, str]:
 def _image_url_from_content_item(item: Any) -> str:
     if not isinstance(item, Mapping):
         return ""
+    for key in ("url", "src"):
+        value = item.get(key)
+        if isinstance(value, str):
+            return value
     image_url = item.get("image_url")
     if isinstance(image_url, str):
         return image_url
