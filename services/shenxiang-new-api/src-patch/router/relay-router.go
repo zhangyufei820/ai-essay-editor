@@ -65,6 +65,14 @@ func SetRelayRouter(router *gin.Engine) {
 		playgroundMediaRouter.GET("/*filepath", controller.PlaygroundServeMedia)
 	}
 
+	playgroundMediaAPIRouter := router.Group("/pg/media")
+	playgroundMediaAPIRouter.Use(middleware.RouteTag("web"))
+	playgroundMediaAPIRouter.Use(middleware.UserAuth())
+	{
+		playgroundMediaAPIRouter.POST("/cache", controller.PlaygroundCacheMedia)
+		playgroundMediaAPIRouter.GET("/list", controller.PlaygroundListMedia)
+	}
+
 	playgroundRouter := router.Group("/pg")
 	playgroundRouter.Use(middleware.RouteTag("relay"))
 	playgroundRouter.Use(middleware.SystemPerformanceCheck())
@@ -86,8 +94,6 @@ func SetRelayRouter(router *gin.Engine) {
 		playgroundRouter.POST("/images/tasks/edits", controller.PlaygroundCreateImageTask)
 		playgroundRouter.GET("/images/tasks", controller.PlaygroundListImageTasks)
 		playgroundRouter.GET("/images/tasks/:task_id", controller.PlaygroundGetImageTask)
-		playgroundRouter.POST("/media/cache", controller.PlaygroundCacheMedia)
-		playgroundRouter.GET("/media/list", controller.PlaygroundListMedia)
 		playgroundRouter.POST("/media/recovery", controller.PlaygroundCreateImageRecoveryTask)
 		playgroundRouter.GET("/media/recovery", controller.PlaygroundListImageRecoveryTasks)
 		playgroundRouter.POST("/media/recovery/:task_id/recover", controller.PlaygroundRecoverImageTask)
