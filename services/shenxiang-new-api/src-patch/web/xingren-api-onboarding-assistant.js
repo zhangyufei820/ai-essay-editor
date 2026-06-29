@@ -1371,7 +1371,8 @@
     if (wantsUsageLogOperation(lower)) return false;
     var hasImage = lower.indexOf("图片") >= 0 || lower.indexOf("图像") >= 0 || lower.indexOf("画图") >= 0 || lower.indexOf("海报") >= 0 || lower.indexOf("生成图") >= 0;
     var hasPrompt = lower.indexOf("提示词") >= 0 || lower.indexOf("prompt") >= 0 || lower.indexOf("要求") >= 0 || lower.indexOf("描述") >= 0;
-    var hasDo = lower.indexOf("生成") >= 0 || lower.indexOf("画") >= 0 || lower.indexOf("做成") >= 0 || lower.indexOf("制作") >= 0 || lower.indexOf("按照") >= 0;
+    var hasCreateIntent = hasAnyText(lower, ["帮我生成", "生成一张", "生成图片", "生成图像", "画一张", "做成", "制作", "按照"]);
+    var hasDo = hasCreateIntent || lower.indexOf("画") >= 0;
     return hasImage && (hasPrompt || hasDo);
   }
 
@@ -1387,6 +1388,30 @@
     var hasLog = hasAnyText(lower, ["日志", "记录", "用量", "使用情况", "消耗", "扣费", "任务"]);
     var hasMedia = hasAnyText(lower, ["图片", "图像", "媒体", "画图", "生成图", "视频", "image", "media"]);
     var hasOpen = hasAnyText(lower, ["看", "查看", "打开", "进入", "跳转", "带我", "帮我", "今天", "最近", "当前"]);
+    var asksHistory = hasAnyText(lower, [
+      "最近",
+      "刚才",
+      "刚刚",
+      "刚生成",
+      "之前",
+      "上次",
+      "以前",
+      "哪些",
+      "哪几",
+      "生成了",
+      "生成过",
+      "生成的",
+      "我生成的",
+      "已生成",
+      "已经生成",
+      "完成的",
+      "历史",
+      "记录",
+      "结果",
+      "列表",
+      "找一下",
+      "查一下",
+    ]);
     var explicitLog = hasAnyText(lower, [
       "使用日志",
       "用量日志",
@@ -1403,7 +1428,7 @@
       "今天图片使用",
       "request id",
     ]);
-    return explicitLog || (hasLog && hasOpen && (hasMedia || hasAnyText(lower, ["日志", "记录", "用量"])));
+    return explicitLog || (hasMedia && asksHistory) || (hasLog && hasOpen && (hasMedia || hasAnyText(lower, ["日志", "记录", "用量"])));
   }
 
   function usageLogWorkflowActions(text, skipGoto) {
