@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/QuantumNous/new-api/model"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 )
 
@@ -192,5 +193,49 @@ func TestSeedanceHTTPErrorWithErrorObjectReturnsProviderStatus(t *testing.T) {
 	}
 	if taskErr.Code != "service_error" {
 		t.Fatalf("Code = %q, want service_error", taskErr.Code)
+	}
+}
+
+func TestParseTaskResultTreatsSucceededAsSuccessWithVideoURL(t *testing.T) {
+	adaptor := TaskAdaptor{}
+
+	result, err := adaptor.ParseTaskResult([]byte(`{
+		"id":"task_upstream_success",
+		"task_id":"task_upstream_success",
+		"model":"grok-imagine-video-1.5-preview",
+		"status":"succeeded",
+		"metadata":{"url":"https://media.example.com/from-metadata.mp4"},
+		"output":{"url":"https://media.example.com/from-output.mp4"},
+		"result_url":"https://media.example.com/from-result.mp4",
+		"video_url":"https://media.example.com/from-video.mp4",
+		"url":"https://media.example.com/from-url.mp4"
+	}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Status != model.TaskStatusSuccess {
+		t.Fatalf("Status = %q, want %q", result.Status, model.TaskStatusSuccess)
+	}
+	if result.Url != "https://media.example.com/from-url.mp4" {
+		t.Fatalf("Url = %q, want direct url from upstream response", result.Url)
+	}
+}
+
+func TestParseTaskResultFindsNestedOutputURL(t *testing.T) {
+	adaptor := TaskAdaptor{}
+
+	result, err := adaptor.ParseTaskResult([]byte(`{
+		"id":"task_nested_output",
+		"status":"success",
+		"output":{"videos":[{"url":"https://media.example.com/nested.mp4"}]}
+	}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Status != model.TaskStatusSuccess {
+		t.Fatalf("Status = %q, want %q", result.Status, model.TaskStatusSuccess)
+	}
+	if result.Url != "https://media.example.com/nested.mp4" {
+		t.Fatalf("Url = %q, want nested output url", result.Url)
 	}
 }

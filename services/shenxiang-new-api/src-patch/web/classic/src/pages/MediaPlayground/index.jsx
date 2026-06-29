@@ -378,9 +378,9 @@ const VIDEO_MODELS = [
     sizes: ['1280x720', '720x1280'],
     durations: [5, 10, 15],
     defaultSize: '1280x720',
-    defaultDuration: 5,
+    defaultDuration: 15,
     defaultFps: 24,
-    hint: '适合短视频镜头、氛围片段和动态展示。',
+    hint: '6.5 元/次，按次计费，不是按秒，建议生成 15 秒。',
   },
   {
     value: 'seedance-2.0',

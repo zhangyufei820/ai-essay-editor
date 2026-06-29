@@ -50,6 +50,12 @@ type responseTask struct {
 	Code               string `json:"code,omitempty"`
 	Message            string `json:"message,omitempty"`
 	Progress           int    `json:"progress"`
+	Url                string `json:"url,omitempty"`
+	VideoUrl           string `json:"video_url,omitempty"`
+	ResultUrl          string `json:"result_url,omitempty"`
+	OutputUrl          string `json:"output_url,omitempty"`
+	Output             any    `json:"output,omitempty"`
+	Metadata           any    `json:"metadata,omitempty"`
 	CreatedAt          int64  `json:"created_at"`
 	CompletedAt        int64  `json:"completed_at,omitempty"`
 	ExpiresAt          int64  `json:"expires_at,omitempty"`
@@ -60,6 +66,80 @@ type responseTask struct {
 		Message string `json:"message"`
 		Code    string `json:"code"`
 	} `json:"error,omitempty"`
+}
+
+func pickVideoResultURL(value any, depth int) string {
+	if value == nil || depth > 6 {
+		return ""
+	}
+	switch v := value.(type) {
+	case string:
+		return strings.TrimSpace(v)
+	case []any:
+		for _, item := range v {
+			if url := pickVideoResultURL(item, depth+1); url != "" {
+				return url
+			}
+		}
+	case map[string]any:
+		for _, key := range []string{
+			"url",
+			"video_url",
+			"videoUrl",
+			"result_url",
+			"resultUrl",
+			"output_url",
+			"outputUrl",
+			"download_url",
+			"downloadUrl",
+			"file_url",
+			"fileUrl",
+			"signed_url",
+			"signedUrl",
+			"uri",
+			"link",
+			"href",
+		} {
+			if url := pickVideoResultURL(v[key], depth+1); url != "" {
+				return url
+			}
+		}
+		for _, key := range []string{
+			"output",
+			"outputs",
+			"metadata",
+			"data",
+			"result",
+			"response",
+			"content",
+			"items",
+			"videos",
+			"files",
+			"artifact",
+			"artifacts",
+		} {
+			if url := pickVideoResultURL(v[key], depth+1); url != "" {
+				return url
+			}
+		}
+	}
+	return ""
+}
+
+func videoResultURLFromTask(resTask responseTask) string {
+	for _, value := range []any{
+		resTask.Url,
+		resTask.VideoUrl,
+		resTask.ResultUrl,
+		resTask.OutputUrl,
+		resTask.Output,
+		resTask.Metadata,
+	} {
+		if url := pickVideoResultURL(value, 0); url != "" {
+			return url
+		}
+	}
+	return ""
 }
 
 // ============================
@@ -718,14 +798,14 @@ func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, e
 		Code: 0,
 	}
 
-	switch resTask.Status {
+	switch strings.ToLower(strings.TrimSpace(resTask.Status)) {
 	case "queued", "pending":
 		taskResult.Status = model.TaskStatusQueued
 	case "processing", "in_progress":
 		taskResult.Status = model.TaskStatusInProgress
-	case "completed":
+	case "completed", "succeeded", "success", "done":
 		taskResult.Status = model.TaskStatusSuccess
-		// Url intentionally left empty — the caller constructs the proxy URL using the public task ID
+		taskResult.Url = videoResultURLFromTask(resTask)
 	case "failed", "cancelled":
 		taskResult.Status = model.TaskStatusFailure
 		if resTask.Error != nil {
