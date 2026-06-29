@@ -4,6 +4,7 @@
 
   var CONFIG = {
     chatEndpoint: "/api/xingren-onboarding-assistant/chat",
+    intentEndpoint: "/api/xingren-onboarding-assistant/intent",
     tokenEndpoint: "/api/xingren-onboarding-assistant/codex-token",
     baseUrl: "https://api.aiphui.top/v1",
     claudeBaseUrl: "https://api.aiphui.top/claude",
@@ -759,11 +760,19 @@
     var lower = String(text || "").toLowerCase();
     return (
       lower.indexOf("codex") >= 0 ||
-      lower.indexOf("aiphui") >= 0 ||
       lower.indexOf("api 接入") >= 0 ||
       lower.indexOf("api接入") >= 0 ||
       lower.indexOf("桌面 app") >= 0 ||
-      lower.indexOf("桌面app") >= 0
+      lower.indexOf("桌面app") >= 0 ||
+      lower.indexOf("config.toml") >= 0 ||
+      lower.indexOf("wire_api") >= 0 ||
+      lower.indexOf("aiphui_api_key") >= 0 ||
+      lower.indexOf("codex cli") >= 0 ||
+      lower.indexOf("codex 桌面") >= 0 ||
+      lower.indexOf("codex桌面") >= 0 ||
+      lower.indexOf("接入 aiphui") >= 0 ||
+      lower.indexOf("接到 aiphui") >= 0 ||
+      lower.indexOf("配置 aiphui") >= 0
     );
   }
 
@@ -780,6 +789,11 @@
       lower.indexOf("复制") >= 0 ||
       lower.indexOf("自动") >= 0
     ) && (lower.indexOf("key") >= 0 || lower.indexOf("令牌") >= 0 || lower.indexOf("api") >= 0);
+  }
+
+  function wantsStandaloneAiphuiKey(text) {
+    var lower = String(text || "").toLowerCase();
+    return lower.indexOf("aiphui") >= 0 && wantsCreateKey(lower);
   }
 
   function wantsNavigation(text) {
@@ -1665,7 +1679,7 @@
     var lower = String(text || "").toLowerCase();
     var hasLog = hasAnyText(lower, ["日志", "记录", "用量", "使用情况", "消耗", "扣费", "任务"]);
     var hasMedia = hasAnyText(lower, ["图片", "图像", "媒体", "画图", "生成图", "视频", "image", "media"]);
-    var hasOpen = hasAnyText(lower, ["看", "查看", "打开", "进入", "跳转", "带我", "帮我", "今天", "最近", "当前"]);
+    var hasOpen = hasAnyText(lower, ["看", "查看", "打开", "进入", "跳转", "带我", "帮我", "今天", "最近", "当前", "下载", "导出", "拿到"]);
     var explicitOpenLog = hasAnyText(lower, ["打开日志", "查看日志", "进入日志", "打开用量日志", "查看用量日志", "打开使用日志", "查看使用日志"]);
     var asksHistory = hasAnyText(lower, [
       "最近",
@@ -1700,6 +1714,12 @@
       "图片使用日志",
       "图像生成日志",
       "图片生成日志",
+      "下载最近",
+      "最近的图像生成日志",
+      "最近图像生成日志",
+      "最近图片生成日志",
+      "下载图像生成日志",
+      "下载图片生成日志",
       "媒体日志",
       "媒体记录",
       "使用情况",
@@ -1758,6 +1778,142 @@
       tone: "operation",
     });
     runOperationActions(usageLogWorkflowActions(text));
+  }
+
+  function assistantIntentFromRules(value) {
+    var text = String(value || "");
+    var routes = detectRoutes(text);
+    if (wantsUsageLogOperation(text)) {
+      return {
+        intent: "site.usage_log",
+        confidence: 1,
+        mediaFocused: hasAnyText(text.toLowerCase(), ["图片", "图像", "媒体", "画图", "生成图", "视频", "image", "media"]),
+        source: "rule",
+      };
+    }
+    var aiphuiErrorType = localAiphuiErrorType(text);
+    if (aiphuiErrorType) return { intent: "codex.diagnosis", confidence: 1, errorType: aiphuiErrorType, source: "rule" };
+    if (wantsExplicitControlOperation(text)) {
+      var explicitTarget = extractExplicitControlTarget(text) || text;
+      var pageTarget = findPageOperationMatch(explicitTarget, text);
+      if (pageTarget.match) {
+        return { intent: "site.page_operation", confidence: 0.95, target: explicitTarget, source: "rule" };
+      }
+    }
+    if (wantsMediaImageOperation(text)) return { intent: "site.media_image", confidence: 0.95, source: "rule" };
+    if (wantsCodexCloud(text) && (wantsNavigation(text) || wantsPageOperation(text))) {
+      return { intent: "site.general", confidence: 0.92, source: "rule" };
+    }
+    if (wantsStandaloneAiphuiKey(text) || wantsCreateKey(text)) {
+      return { intent: "site.create_key", confidence: 0.92, source: "rule" };
+    }
+    if (wantsCodex(text)) return { intent: "codex.onboarding", confidence: 0.95, source: "rule" };
+    if (runGeneralSiteTaskCanHandle(text)) return { intent: "site.general", confidence: 0.9, source: "rule" };
+    if (routes.length === 1 && wantsDirectRouteOperation(text)) {
+      return { intent: "site.route", confidence: 0.9, route: routes[0], source: "rule" };
+    }
+    if (routes.length && wantsNavigation(text)) {
+      return { intent: "site.route_help", confidence: 0.88, routes: routes, source: "rule" };
+    }
+    if (wantsPageOperation(text)) return { intent: "site.page_operation", confidence: 0.8, target: text, source: "rule" };
+    return null;
+  }
+
+  function runGeneralSiteTaskCanHandle(text) {
+    if (wantsPageDiscovery(text)) return true;
+    return !!inferGeneralTaskPlan(text);
+  }
+
+  function executeAssistantIntent(intent, originalText) {
+    if (!intent || !intent.intent) return false;
+    var value = String(originalText || "");
+    switch (intent.intent) {
+      case "codex.diagnosis":
+        if (!intent.errorType) return false;
+        cannedError(intent.errorType);
+        return true;
+      case "site.usage_log":
+        startUsageLogWorkflow(intent.mediaFocused ? "图像使用日志" : value || "用量日志");
+        return true;
+      case "site.media_image":
+        startMediaImageWorkflow(value);
+        return true;
+      case "site.create_key":
+        typeAssistant("你要的是创建 API Key。\n\n我可以走两种方式：直接为 Codex 创建可复制配置，或者带你到令牌管理页手动创建。", {
+          actions: [
+            { label: "创建 AIPHUI Codex Key", value: "codex" },
+            { label: "打开令牌管理", value: "route:token" },
+            { label: "我已有 Key，终端输入", value: "manual-key-command" },
+          ],
+        });
+        return true;
+      case "codex.onboarding":
+        askCodexModel();
+        return true;
+      case "site.general":
+        return runGeneralSiteTask(value);
+      case "site.route":
+        if (intent.route) {
+          navigateToRoute(intent.route);
+          return true;
+        }
+        return false;
+      case "site.route_help":
+        showRouteHelp(intent.routes || detectRoutes(value), value);
+        return true;
+      case "site.page_operation":
+        return runGenericPageOperation(intent.target || value, value, !!intent.confirmed);
+      default:
+        return false;
+    }
+  }
+
+  function normalizeModelIntent(payload) {
+    payload = payload || {};
+    var confidence = Number(payload.confidence || 0);
+    if (!isFinite(confidence)) confidence = 0;
+    return {
+      intent: String(payload.intent || ""),
+      confidence: Math.max(0, Math.min(1, confidence)),
+      target: limitText(String(payload.target || ""), 90),
+      route: String(payload.route || ""),
+      mediaFocused: !!payload.media_focused,
+      confirmed: false,
+      source: payload.source || "model",
+    };
+  }
+
+  function askIntentModel(value) {
+    state.loading = true;
+    state.busyLabel = "正在判断意图";
+    renderMessages();
+    return fetch(CONFIG.intentEndpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({
+        message: value,
+        context: collectPageContext(),
+      }),
+    })
+      .then(function (res) {
+        return res
+          .json()
+          .catch(function () {
+            return {};
+          })
+          .then(function (payload) {
+            if (!res.ok || payload.success === false) {
+              throw new Error(payload.message || "暂时没有判断出明确意图");
+            }
+            return normalizeModelIntent(payload);
+          });
+      })
+      .finally(function () {
+        state.loading = false;
+        state.busyLabel = "";
+        renderMessages();
+      });
   }
 
   function mediaImageWorkflowActions(prompt, skipGoto) {
@@ -2607,57 +2763,24 @@
   }
 
   function tryHandleLocalIntent(value) {
-    var routes = detectRoutes(value);
-    var aiphuiErrorType = localAiphuiErrorType(value);
-    if (aiphuiErrorType) {
-      cannedError(aiphuiErrorType);
-      return true;
+    return executeAssistantIntent(assistantIntentFromRules(value), value);
+  }
+
+  function routeAssistantIntent(value) {
+    var ruleIntent = assistantIntentFromRules(value);
+    if (ruleIntent && ruleIntent.confidence >= 0.86) {
+      return Promise.resolve({ handled: executeAssistantIntent(ruleIntent, value), source: "rule" });
     }
-    if (wantsUsageLogOperation(value)) {
-      startUsageLogWorkflow(value);
-      return true;
-    }
-    if (wantsExplicitControlOperation(value)) {
-      var explicitTarget = extractExplicitControlTarget(value) || value;
-      var pageTarget = findPageOperationMatch(explicitTarget, value);
-      if (pageTarget.match) {
-        return runGenericPageOperation(explicitTarget, value, false);
-      }
-    }
-    if (wantsMediaImageOperation(value)) {
-      startMediaImageWorkflow(value);
-      return true;
-    }
-    if (wantsCodexCloud(value) && (wantsNavigation(value) || wantsPageOperation(value))) {
-      return runGeneralSiteTask(value);
-    }
-    if (wantsCodex(value)) {
-      askCodexModel();
-      return true;
-    }
-    if (wantsCreateKey(value)) {
-      typeAssistant("你要的是创建 API Key。\n\n我可以走两种方式：直接为 Codex 创建可复制配置，或者带你到令牌管理页手动创建。", {
-        actions: [
-          { label: "创建 AIPHUI Codex Key", value: "codex" },
-          { label: "打开令牌管理", value: "route:token" },
-          { label: "我已有 Key，终端输入", value: "manual-key-command" },
-        ],
+    return askIntentModel(value)
+      .then(function (modelIntent) {
+        if (modelIntent.confidence >= 0.72 && executeAssistantIntent(modelIntent, value)) {
+          return { handled: true, source: "model" };
+        }
+        return { handled: false, source: "model" };
+      })
+      .catch(function () {
+        return { handled: ruleIntent ? executeAssistantIntent(ruleIntent, value) : false, source: "fallback" };
       });
-      return true;
-    }
-    if (runGeneralSiteTask(value)) return true;
-    if (routes.length === 1 && wantsDirectRouteOperation(value)) {
-      navigateToRoute(routes[0]);
-      return true;
-    }
-    if (routes.length && wantsNavigation(value)) {
-      showRouteHelp(routes, value);
-      return true;
-    }
-    if (wantsPageOperation(value)) {
-      return runGenericPageOperation(value, value, false);
-    }
-    return false;
   }
 
   function submitUserInput(text, screenshot) {
@@ -2688,8 +2811,12 @@
       askOnline(value || "请识别这张报错截图，并告诉我下一步怎么修复。", screenshot);
       return;
     }
-    if (tryHandleLocalIntent(value)) return;
-    askOnline(value, screenshot);
+    var ruleIntent = assistantIntentFromRules(value);
+    if (ruleIntent && ruleIntent.confidence >= 0.86 && executeAssistantIntent(ruleIntent, value)) return;
+    routeAssistantIntent(value).then(function (result) {
+      if (result && result.handled) return;
+      askOnline(value, screenshot);
+    });
   }
 
   function askOnline(value, screenshot) {

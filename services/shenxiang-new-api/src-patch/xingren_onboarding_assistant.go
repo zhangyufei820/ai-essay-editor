@@ -60,6 +60,11 @@ type xingrenAssistantChatRequest struct {
 	Screenshot *xingrenAssistantScreenshot  `json:"screenshot,omitempty"`
 }
 
+type xingrenAssistantIntentRequest struct {
+	Message string                       `json:"message"`
+	Context *xingrenAssistantPageContext `json:"context,omitempty"`
+}
+
 type xingrenAssistantScreenshot struct {
 	DataURL string `json:"data_url"`
 	Name    string `json:"name,omitempty"`
@@ -85,6 +90,18 @@ type xingrenAssistantChatResponse struct {
 	Message string `json:"message,omitempty"`
 	Reply   string `json:"reply,omitempty"`
 	Model   string `json:"model,omitempty"`
+}
+
+type xingrenAssistantIntentResponse struct {
+	Success           bool    `json:"success"`
+	Message           string  `json:"message,omitempty"`
+	Intent            string  `json:"intent,omitempty"`
+	Confidence        float64 `json:"confidence,omitempty"`
+	Target            string  `json:"target,omitempty"`
+	Route             string  `json:"route,omitempty"`
+	MediaFocused      bool    `json:"media_focused,omitempty"`
+	NeedsConfirmation bool    `json:"needs_confirmation,omitempty"`
+	Source            string  `json:"source,omitempty"`
 }
 
 type xingrenCodexTokenRequest struct {
@@ -117,6 +134,7 @@ func RegisterXingrenOnboardingAssistant(server *gin.Engine) {
 		return
 	}
 	server.POST("/api/xingren-onboarding-assistant/chat", middleware.RouteTag("api"), xingrenOnboardingAssistantChat)
+	server.POST("/api/xingren-onboarding-assistant/intent", middleware.RouteTag("api"), xingrenOnboardingAssistantIntent)
 	server.POST("/api/xingren-onboarding-assistant/codex-token", middleware.RouteTag("api"), middleware.UserAuth(), middleware.CriticalRateLimit(), middleware.DisableCache(), xingrenOnboardingAssistantCreateCodexToken)
 }
 
@@ -196,11 +214,6 @@ func xingrenOnboardingAssistantChat(c *gin.Context) {
 }
 
 func xingrenAssistantCallModel(ctx context.Context, message string, history []xingrenAssistantMessage, pageContext *xingrenAssistantPageContext, screenshot *xingrenAssistantScreenshot) (string, error) {
-	token, err := xingrenAssistantToken(ctx)
-	if err != nil {
-		return "", err
-	}
-
 	messages := []map[string]any{
 		{
 			"role":    "system",
@@ -229,14 +242,155 @@ func xingrenAssistantCallModel(ctx context.Context, message string, history []xi
 		"max_tokens": 700,
 		"stream":     false,
 	}
-	rawPayload, err := json.Marshal(payload)
-	if err != nil {
-		return "", err
-	}
 
 	timeout := 35 * time.Second
 	if screenshot != nil {
 		timeout = 80 * time.Second
+	}
+	return xingrenAssistantPostChatCompletion(ctx, payload, timeout)
+}
+
+func xingrenOnboardingAssistantIntent(c *gin.Context) {
+	clientKey := xingrenAssistantClientKey(c) + ":intent"
+	if !xingrenAssistantAllow(clientKey) {
+		c.JSON(http.StatusTooManyRequests, xingrenAssistantIntentResponse{
+			Success: false,
+			Message: "请求太频繁了，请稍后再试。",
+		})
+		return
+	}
+
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, xingrenAssistantMaxBody)
+	var req xingrenAssistantIntentRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, xingrenAssistantIntentResponse{
+			Success: false,
+			Message: "没有读到有效的问题，请重新输入。",
+		})
+		return
+	}
+	message := xingrenAssistantLimitText(xingrenAssistantRedact(strings.TrimSpace(req.Message)), xingrenAssistantMaxInput)
+	if message == "" {
+		c.JSON(http.StatusBadRequest, xingrenAssistantIntentResponse{
+			Success: false,
+			Message: "请先输入你想做什么。",
+		})
+		return
+	}
+
+	intent, err := xingrenAssistantClassifyIntent(c.Request.Context(), message, req.Context)
+	if err != nil {
+		common.SysError("xingren onboarding assistant intent failed: " + xingrenAssistantRedact(err.Error()))
+		c.JSON(http.StatusBadGateway, xingrenAssistantIntentResponse{
+			Success: false,
+			Message: "暂时没有判断出明确意图。",
+		})
+		return
+	}
+	intent.Success = true
+	intent.Source = "model"
+	c.JSON(http.StatusOK, intent)
+}
+
+func xingrenAssistantClassifyIntent(ctx context.Context, message string, pageContext *xingrenAssistantPageContext) (xingrenAssistantIntentResponse, error) {
+	contextPrompt := xingrenAssistantContextPrompt(pageContext)
+	messages := []map[string]any{
+		{
+			"role": "system",
+			"content": strings.Join([]string{
+				"你只做 AIPHUI 站内助手的意图分类，不直接回答用户问题。",
+				"必须只输出一个 JSON 对象，不能输出 Markdown、解释、推理过程或代码块。",
+				"intent 只能取以下值之一：site.usage_log、site.media_image、site.route、site.page_operation、site.create_key、codex.onboarding、codex.diagnosis、guidance.online。",
+				"route 只能取以下值之一或空字符串：home、dashboard、token、playground、media、pricing、wallet、docs、service、logs、codexCloud。",
+				"如果用户问图像生成日志、图片生成记录、最近任务、下载日志、用量、扣费、消耗，优先判为 site.usage_log，media_focused=true。",
+				"如果用户要求生成图片、操作媒体工坊、填写图片提示词，判为 site.media_image。",
+				"如果用户要打开价格、令牌、文档、钱包、日志、媒体工坊等页面，判为 site.route 并填写 route。",
+				"只有用户明确要把 Codex、Codex CLI、Codex 桌面 App 接入 AIPHUI，或排查 config.toml、AIPHUI_API_KEY、wire_api、base_url、Working 时，才判为 codex.onboarding 或 codex.diagnosis。",
+				"创建 Key、提交生成、删除、充值、支付、重置等可能影响账号或额度的动作 needs_confirmation=true。",
+				"置信度不足 0.72 时用 guidance.online。",
+				"JSON 字段固定为：intent、confidence、target、route、media_focused、needs_confirmation。",
+			}, "\n"),
+		},
+	}
+	if contextPrompt != "" {
+		messages = append(messages, map[string]any{
+			"role":    "system",
+			"content": contextPrompt,
+		})
+	}
+	messages = append(messages, map[string]any{
+		"role":    "user",
+		"content": message,
+	})
+	payload := map[string]any{
+		"model":      xingrenAssistantModel(),
+		"messages":   messages,
+		"max_tokens": 220,
+		"stream":     false,
+	}
+	reply, err := xingrenAssistantPostChatCompletion(ctx, payload, 18*time.Second)
+	if err != nil {
+		return xingrenAssistantIntentResponse{}, err
+	}
+	return xingrenAssistantParseIntentReply(reply)
+}
+
+func xingrenAssistantParseIntentReply(reply string) (xingrenAssistantIntentResponse, error) {
+	reply = strings.TrimSpace(reply)
+	start := strings.Index(reply, "{")
+	end := strings.LastIndex(reply, "}")
+	if start < 0 || end < start {
+		return xingrenAssistantIntentResponse{}, errors.New("intent response is not json")
+	}
+	var parsed xingrenAssistantIntentResponse
+	if err := json.Unmarshal([]byte(reply[start:end+1]), &parsed); err != nil {
+		return xingrenAssistantIntentResponse{}, err
+	}
+	parsed.Intent = strings.TrimSpace(parsed.Intent)
+	parsed.Route = strings.TrimSpace(parsed.Route)
+	parsed.Target = xingrenAssistantLimitText(xingrenAssistantRedact(parsed.Target), 160)
+	if parsed.Confidence < 0 || parsed.Confidence > 1 {
+		parsed.Confidence = 0
+	}
+	if !xingrenAssistantKnownIntent(parsed.Intent) {
+		parsed.Intent = "guidance.online"
+		parsed.Confidence = 0
+	}
+	if !xingrenAssistantKnownRoute(parsed.Route) {
+		parsed.Route = ""
+	}
+	return parsed, nil
+}
+
+func xingrenAssistantKnownIntent(intent string) bool {
+	switch intent {
+	case "site.usage_log", "site.media_image", "site.route", "site.page_operation", "site.create_key", "codex.onboarding", "codex.diagnosis", "guidance.online":
+		return true
+	default:
+		return false
+	}
+}
+
+func xingrenAssistantKnownRoute(route string) bool {
+	if route == "" {
+		return true
+	}
+	switch route {
+	case "home", "dashboard", "token", "playground", "media", "pricing", "wallet", "docs", "service", "logs", "codexCloud":
+		return true
+	default:
+		return false
+	}
+}
+
+func xingrenAssistantPostChatCompletion(ctx context.Context, payload map[string]any, timeout time.Duration) (string, error) {
+	token, err := xingrenAssistantToken(ctx)
+	if err != nil {
+		return "", err
+	}
+	rawPayload, err := json.Marshal(payload)
+	if err != nil {
+		return "", err
 	}
 	callCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
@@ -459,8 +613,8 @@ func xingrenAssistantFindToken(ctx context.Context) (*model.Token, error) {
 
 func xingrenAssistantSystemPrompt() string {
 	return strings.Join([]string{
-		"你是 AIPHUI 的 Codex 接入老师，只服务一个目标：帮助普通零代码用户把 Windows Codex 桌面 App、Windows Codex CLI 或 Mac 终端里的 Codex 接入 AIPHUI 第三方 API。",
-		"你不是泛聊客服，也不是全站媒体工坊 agent。除非用户明确要求站内导航，否则不要把回答扩展到价格、媒体生成、其它中转站或通用 OpenAI-compatible 平台。",
+		"你是 AIPHUI 的站内 API 接入老师，优先帮助用户完成当前站内操作；只有用户明确提到 Codex、Codex CLI、Codex 桌面 App、config.toml、AIPHUI_API_KEY、wire_api、base_url 或 Working 排障时，才进入 Codex 接入辅导。",
+		"如果用户问图像生成日志、图片生成记录、最近任务、下载日志、用量、扣费、消耗、媒体工坊、模型价格、令牌管理、钱包或文档入口，必须按站内助手回答：说明应该打开哪个页面、看哪些列或筛选项，不要强行转成 Codex Key、401、config.toml 排障。",
 		"固定配置必须保持：provider id 是 aiphui，provider name 是 AIPHUI，base_url 是 https://api.aiphui.top/v1，env_key 是 AIPHUI_API_KEY，model 是 gpt-5.5，wire_api 是 responses。Windows 默认配置文件是 %USERPROFILE%\\.codex\\config.toml；Mac 终端默认配置文件是 ~/.codex/config.toml。",
 		"config.toml 只写 env_key = \"AIPHUI_API_KEY\"，不要把明文 Key 写进 config.toml。Windows 把 API Key 写入 User 级环境变量；Mac 终端把 API Key 写入当前 shell 环境并追加到 ~/.zshrc。用户是零代码新手，所以生成命令必须包含完整 Key，执行后也必须打印读取到的完整 AIPHUI_API_KEY，避免让用户手动替换占位符。",
 		"核心判断：只接 Codex 桌面 App 不一定必须安装 Codex CLI。Codex CLI 只是验证工具。CLI 能回复通常说明 AIPHUI API 大概率没问题；CLI 能回但桌面 App 不回，优先判断 App 没读到默认 config.toml、User 级环境变量、没有完全退出重启、当前目录不适合或 trust/sandbox 问题。",
@@ -473,7 +627,8 @@ func xingrenAssistantSystemPrompt() string {
 }
 
 func xingrenAssistantKnowledgeReply(message string, pageContext *xingrenAssistantPageContext, screenshot *xingrenAssistantScreenshot) string {
-	text := strings.ToLower(xingrenAssistantCleanContextText(message, 1400))
+	messageText := strings.ToLower(xingrenAssistantCleanContextText(message, 1400))
+	text := messageText
 	if pageContext != nil {
 		text += " " + strings.ToLower(xingrenAssistantCleanContextText(pageContext.VisibleText, 900))
 		text += " " + strings.ToLower(strings.Join(xingrenAssistantCleanContextList(pageContext.Controls, 20, 80), " "))
@@ -517,13 +672,13 @@ func xingrenAssistantKnowledgeReply(message string, pageContext *xingrenAssistan
 		return "结论：Codex 桌面 App 英文界面不影响 AIPHUI 接入，也不影响中文回复。\n\n目前不要承诺 App 一定能切中文界面。下一步在对话里输入：以后全部用中文回复我。\n\n如果你要长期固定中文回复，可以在项目里的 AGENTS.md 写中文回复偏好。"
 	case regexp.MustCompile(`(?i)sk-[A-Za-z0-9._\-]{12,}`).MatchString(message):
 		return "结论：你发来的内容里像是露出了完整 API Key。\n\n接入老师生成命令时可以打印完整 Key，方便你核对；但不要把完整 Key 发到公开群、公开截图或不可信页面。测试完成后如果担心外泄，到令牌管理删除或重置这枚 Key。\n\n接入配置仍然应该把 Key 写到环境变量 AIPHUI_API_KEY，config.toml 只保存 env_key。"
-	case strings.Contains(text, "401"):
+	case strings.Contains(messageText, "401"):
 		return "结论：401 通常是 Key 没传对、复制多了空格、令牌被禁用，或客户端没正确发送 Authorization。\n\n下一步：重新写入 AIPHUI_API_KEY，然后跑 /v1/responses 测试。测试命令要打印完整读取到的 AIPHUI_API_KEY，方便核对是否多空格或没读到。\n\n如果终端能回但桌面 App 不回，重启 Codex App 或系统。"
-	case strings.Contains(text, "403"):
+	case strings.Contains(messageText, "403"):
 		return "结论：403 通常表示 Key 能读到，但模型权限、分组、套餐或余额不允许访问 gpt-5.5。\n\n下一步：检查令牌是否允许 gpt-5.5、账号余额和分组权限。权限修好后再跑 /v1/responses 测试。"
-	case strings.Contains(text, "404"):
+	case strings.Contains(messageText, "404"):
 		return "结论：404 优先查 base_url 和路径。\n\nAIPHUI 标准 base_url 是 https://api.aiphui.top/v1。不要写成 https://api.aiphui.top/v1/responses，因为 Codex 会自己拼 responses 路径。\n\n下一步：覆盖 config.toml，确认 wire_api = \"responses\"。"
-	case strings.Contains(text, "timeout") || strings.Contains(text, "超时"):
+	case strings.Contains(messageText, "timeout") || strings.Contains(messageText, "超时"):
 		return "结论：timeout 先查网络、代理、AIPHUI 响应慢和 base_url，不要先判定 Key 错。\n\n下一步：用 PowerShell 直接测 /v1/responses。如果 PowerShell 成功而桌面 App 超时，完全退出 App 后重启；如果 PowerShell 也超时，换网络或检查代理。"
 	default:
 		return ""
