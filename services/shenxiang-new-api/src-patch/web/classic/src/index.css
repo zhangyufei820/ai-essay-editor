@@ -119,18 +119,30 @@ html.dark .semi-layout-content {
   flex: 1 0 auto;
 }
 
-body.sx-home-active header {
+body.sx-home-active .semi-layout > header,
+body.sx-home-active .app-layout > header,
+body.sx-home-active .public-page-content > header {
   display: none !important;
 }
 
-body.sx-home-active header a,
-body.sx-home-active header button,
-body.sx-home-active header .semi-typography {
+body.sx-home-active .semi-layout > header a,
+body.sx-home-active .semi-layout > header button,
+body.sx-home-active .semi-layout > header .semi-typography,
+body.sx-home-active .app-layout > header a,
+body.sx-home-active .app-layout > header button,
+body.sx-home-active .app-layout > header .semi-typography,
+body.sx-home-active .public-page-content > header a,
+body.sx-home-active .public-page-content > header button,
+body.sx-home-active .public-page-content > header .semi-typography {
   color: var(--sx-text-0) !important;
 }
 
-body.sx-home-active header a:hover,
-body.sx-home-active header button:hover {
+body.sx-home-active .semi-layout > header a:hover,
+body.sx-home-active .semi-layout > header button:hover,
+body.sx-home-active .app-layout > header a:hover,
+body.sx-home-active .app-layout > header button:hover,
+body.sx-home-active .public-page-content > header a:hover,
+body.sx-home-active .public-page-content > header button:hover {
   color: var(--sx-accent) !important;
 }
 
@@ -1535,7 +1547,9 @@ html.dark .semi-typography-tertiary {
 }
 
 @media (max-width: 720px) {
-  body.sx-home-active header nav {
+  body.sx-home-active .semi-layout > header nav,
+  body.sx-home-active .app-layout > header nav,
+  body.sx-home-active .public-page-content > header nav {
     display: none;
   }
 
