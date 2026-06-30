@@ -440,6 +440,10 @@ const IMAGE_WAIT_MESSAGE =
 const IMAGE_LONG_WAIT_MS = 70 * 1000;
 const IMAGE_LONG_WAIT_MESSAGE =
   '图像任务仍在生成中，耗时接近 70 秒。请不要重复提交，可继续等待或稍后用任务 ID 查询结果。';
+const REVERSE_PROMPT_MODEL = 'gpt-5.4-mini';
+const REVERSE_PROMPT_MAX_IMAGE_BYTES = 12 * 1024 * 1024;
+const REVERSE_PROMPT_INSTRUCTION =
+  '请根据上传图片反推出可用于图像生成的详细提示词，只返回提示词正文。请用中文写作，保留主体、构图、镜头、光线、材质、色彩、风格、画幅和可复现细节，不要解释过程，不要输出 Markdown。';
 
 function toSelectOptions(values) {
   return values.map((value) => ({ value, label: String(value) }));
@@ -467,9 +471,11 @@ function toSizeSelectOptions(values, model) {
 }
 
 function userFacingGenerationError(error) {
-  const message = error?.message || '生成失败';
+  const message =
+    typeof error === 'string' ? error || '生成失败' : error?.message || '生成失败';
   const lower = String(message).toLowerCase();
-  const code = String(error?.code || '').toLowerCase();
+  const code =
+    typeof error === 'string' ? '' : String(error?.code || '').toLowerCase();
   if (
     lower.includes('prompt_blocked') ||
     lower.includes('content_policy_violation') ||
@@ -511,6 +517,40 @@ function userFacingGenerationError(error) {
     return '模型服务暂时不可用，请稍后重试。';
   }
   return message;
+}
+
+function userFacingReversePromptError(error) {
+  const message = generationErrorMessage(error);
+  const lower = String(message || '').toLowerCase();
+  if (
+    lower.includes('no access to model') ||
+    lower.includes('has no access to model') ||
+    lower.includes('token has no access') ||
+    lower.includes('access denied') ||
+    lower.includes('forbidden')
+  ) {
+    return '当前用户分组暂未开放图像反推模型。';
+  }
+  if (
+    lower.includes('context length') ||
+    lower.includes('too large') ||
+    lower.includes('payload') ||
+    lower.includes('413')
+  ) {
+    return '参考图过大，请压缩到 12MB 以内后重试。';
+  }
+  if (
+    lower.includes('content policy') ||
+    lower.includes('safety') ||
+    lower.includes('blocked') ||
+    lower.includes('moderation')
+  ) {
+    return '参考图可能触发安全审核，请更换图片后再试。';
+  }
+  if (lower.includes('timeout') || lower.includes('network')) {
+    return '图像反推连接超时，请稍后重试。';
+  }
+  return message || '图像反推失败，请稍后重试。';
 }
 
 function isPersistentMediaURL(url) {
@@ -585,6 +625,40 @@ function dataURLToBlobURL(dataURL) {
   } catch (error) {
     return dataURL;
   }
+}
+
+function validateReversePromptImage(file) {
+  if (!file) return '请先上传一张参考图。';
+  const allowedTypes = ['image/png', 'image/jpeg', 'image/webp'];
+  if (!allowedTypes.includes(file.type)) {
+    return '仅支持 PNG / JPG / WebP 图片。';
+  }
+  if (file.size > REVERSE_PROMPT_MAX_IMAGE_BYTES) {
+    return '参考图不能超过 12MB，请压缩后再上传。';
+  }
+  return '';
+}
+
+function extractReversePromptText(payload) {
+  const choices = Array.isArray(payload?.choices) ? payload.choices : [];
+  const firstChoice = choices[0] || {};
+  const content = firstChoice?.message?.content ?? firstChoice?.delta?.content;
+  let text = '';
+  if (typeof content === 'string') {
+    text = content;
+  } else if (Array.isArray(content)) {
+    text = content
+      .map((item) => {
+        if (typeof item === 'string') return item;
+        return item?.text || item?.content || '';
+      })
+      .filter(Boolean)
+      .join('\n');
+  }
+  return String(text || '')
+    .replace(/^```(?:text|markdown|json)?/i, '')
+    .replace(/```$/i, '')
+    .trim();
 }
 
 function promptWithReferenceImages(value, count) {
@@ -768,6 +842,17 @@ function extractVideoFailureReason(response) {
     String(response?.metadata?.fail_reason || '').trim() ||
     String(response?.metadata?.failReason || '').trim() ||
     String(response?.metadata?.message || '').trim()
+  );
+}
+
+function generationErrorMessage(error) {
+  return (
+    videoErrorMessage(error?.response?.data?.error) ||
+    String(error?.response?.data?.message || '').trim() ||
+    videoErrorMessage(error?.response?.data?.data?.error) ||
+    String(error?.response?.data?.data?.message || '').trim() ||
+    String(error?.message || '').trim() ||
+    String(error || '').trim()
   );
 }
 
@@ -1267,6 +1352,10 @@ const MediaPlayground = () => {
   const [enhancePrompt, setEnhancePrompt] = useState(true);
   const [watermark, setWatermark] = useState(false);
   const [referenceFiles, setReferenceFiles] = useState([]);
+  const [reversePromptFile, setReversePromptFile] = useState(null);
+  const [reversePromptText, setReversePromptText] = useState('');
+  const [reversePromptRunning, setReversePromptRunning] = useState(false);
+  const [reversePromptMessage, setReversePromptMessage] = useState('');
   const [lastFrameFile, setLastFrameFile] = useState(null);
   const [maskFile, setMaskFile] = useState(null);
   const [results, setResults] = useState([]);
@@ -1293,6 +1382,7 @@ const MediaPlayground = () => {
     models.length === 0 || models.some((item) => item === currentModelId);
   const effectiveGroup =
     mode === 'image' ? IMAGE_GENERATION_GROUP.value : group;
+  const reversePromptGroup = group || groups[0]?.value || '';
   const visibleGroupOptions =
     mode === 'image' ? [IMAGE_GENERATION_GROUP] : groups;
   const referenceFileLimit =
@@ -1601,6 +1691,95 @@ const MediaPlayground = () => {
     return toAbsoluteMediaURL(res.data.data.url);
   }
 
+  async function cacheReversePromptImage(file) {
+    const dataUrl = await fileToDataURL(file);
+    const res = await API.post(
+      '/pg/media/cache',
+      {
+        url: dataUrl,
+        kind: 'image',
+        metadata: {
+          role: 'reference',
+          reference_role: 'reverse_prompt',
+          hidden: true,
+          source: 'reverse_prompt',
+          model: REVERSE_PROMPT_MODEL,
+          target_model: imageModel,
+        },
+      },
+      { skipErrorHandler: true },
+    );
+    if (!res.data?.success || !res.data?.data?.url) {
+      throw new Error(res.data?.message || '参考图缓存失败。');
+    }
+    return toAbsoluteMediaURL(res.data.data.url);
+  }
+
+  async function reverseImagePrompt() {
+    const validationError = validateReversePromptImage(reversePromptFile);
+    if (validationError) {
+      Toast.error(validationError);
+      return;
+    }
+
+    setMode('image');
+    setReversePromptRunning(true);
+    setReversePromptMessage('正在上传参考图并调用图像识别模型...');
+    try {
+      const imageUrl = await cacheReversePromptImage(reversePromptFile);
+      setReversePromptMessage('参考图已上传，正在反推可生成提示词...');
+      const res = await API.post(
+        '/pg/chat/completions',
+        {
+          model: REVERSE_PROMPT_MODEL,
+          group: reversePromptGroup,
+          stream: false,
+          temperature: 0.2,
+          messages: [
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'text',
+                  text: `${REVERSE_PROMPT_INSTRUCTION}\n\n目标生成模型：${activeImageModel.label || imageModel}。`,
+                },
+                {
+                  type: 'image_url',
+                  image_url: { url: imageUrl },
+                },
+              ],
+            },
+          ],
+        },
+        { skipErrorHandler: true, timeout: 180000 },
+      );
+      if (res.data?.error?.message) throw new Error(res.data.error.message);
+      const nextPrompt = extractReversePromptText(res.data);
+      if (!nextPrompt) throw new Error('反推结果为空，请换一张图片重试。');
+      setReversePromptText(nextPrompt);
+      setPrompt(nextPrompt);
+      setReversePromptMessage('提示词已反推并写入画面描述，可继续选择模型生成图像。');
+      Toast.success('图像提示词已反推');
+    } catch (error) {
+      const message = userFacingReversePromptError(error);
+      setReversePromptMessage(message);
+      Toast.error(message);
+    } finally {
+      setReversePromptRunning(false);
+    }
+  }
+
+  function applyReversePrompt() {
+    const nextPrompt = reversePromptText.trim();
+    if (!nextPrompt) {
+      Toast.warning('暂无可套用的反推提示词。');
+      return;
+    }
+    setMode('image');
+    setPrompt(nextPrompt);
+    Toast.success('已套用反推提示词');
+  }
+
   async function applyVideoReferenceImages(payload) {
     if (videoWorkflow !== 'image' && videoWorkflow !== 'first-last') return payload;
 
@@ -1756,7 +1935,7 @@ const MediaPlayground = () => {
       }
       Toast.info(`图像任务仍在处理中：${status}`);
     } catch (error) {
-      Toast.error(userFacingGenerationError(error));
+      Toast.error(userFacingGenerationError(generationErrorMessage(error)));
     } finally {
       setSubmitting(false);
       setTaskMessage('');
@@ -1827,7 +2006,7 @@ const MediaPlayground = () => {
       if (mode === 'image') await submitImage();
       else await submitVideo();
     } catch (error) {
-      Toast.error(userFacingGenerationError(error));
+      Toast.error(userFacingGenerationError(generationErrorMessage(error)));
     } finally {
       setSubmitting(false);
       setTaskMessage('');
@@ -2120,6 +2299,79 @@ const MediaPlayground = () => {
                 className='mp-negative-input'
                 data-xr-agent='media-negative-prompt'
               />
+              {mode === 'image' ? (
+                <div className='mp-reverse-panel'>
+                  <div className='mp-reverse-head'>
+                    <div>
+                      <SectionTitle meta={REVERSE_PROMPT_MODEL}>图像提示词反推</SectionTitle>
+                      <Text type='tertiary'>上传参考图，先识别画面，再套用到当前图像生成模型。</Text>
+                    </div>
+                    <Tag color='cyan'>识图反推</Tag>
+                  </div>
+                  <div className='mp-reverse-body'>
+                    <FileDrop
+                      label='上传反推参考图'
+                      file={reversePromptFile}
+                      onFile={setReversePromptFile}
+                      compact
+                    />
+                    <div className='mp-reverse-output'>
+                      <NativeSelect
+                        label='生成模型'
+                        value={imageModel}
+                        options={modelOptions.map((item) => ({
+                          label: item.label,
+                          value: item.value,
+                        }))}
+                        onChange={setImageModel}
+                        agentKey='media-reverse-target-model'
+                      />
+                      <TextArea
+                        value={reversePromptText}
+                        autosize={{ minRows: 4, maxRows: 8 }}
+                        onChange={setReversePromptText}
+                        placeholder='反推完成后，提示词会出现在这里，并自动写入上方画面描述。'
+                        aria-label='反推提示词'
+                      />
+                      <div className='mp-reverse-actions'>
+                        <Button
+                          theme='solid'
+                          type='primary'
+                          icon={<IconEyeOpened />}
+                          loading={reversePromptRunning}
+                          disabled={!reversePromptFile}
+                          onClick={reverseImagePrompt}
+                          data-xr-agent='media-reverse-prompt'
+                        >
+                          开始反推
+                        </Button>
+                        <Button
+                          icon={<IconCopy />}
+                          disabled={!reversePromptText.trim()}
+                          onClick={async () => {
+                            const ok = await copy(reversePromptText);
+                            if (ok) Toast.success('反推提示词已复制');
+                          }}
+                        >
+                          复制
+                        </Button>
+                        <Button
+                          icon={<IconRefresh />}
+                          disabled={!reversePromptText.trim()}
+                          onClick={applyReversePrompt}
+                        >
+                          套用
+                        </Button>
+                      </div>
+                      {reversePromptMessage ? (
+                        <div className='mp-reverse-status' role='status' aria-live='polite'>
+                          {reversePromptMessage}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              ) : null}
               {mode === 'image' && imageWorkflow === 'edit' ? (
                 <div className='mp-field-grid'>
                   <MultiFileDrop

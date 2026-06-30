@@ -600,6 +600,65 @@
   min-height: 40px;
 }
 
+.mp-reverse-panel {
+  margin-top: 14px;
+  padding: 13px;
+  border: 1px solid rgba(94, 234, 212, 0.16);
+  border-radius: 10px;
+  background:
+    linear-gradient(135deg, rgba(20, 184, 166, 0.11), rgba(37, 99, 235, 0.06)),
+    rgba(255, 255, 255, 0.035);
+}
+
+.mp-reverse-head,
+.mp-reverse-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.mp-reverse-head .mp-section-title {
+  margin-top: 0;
+}
+
+.mp-reverse-body {
+  display: grid;
+  grid-template-columns: minmax(190px, 260px) minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.mp-reverse-output {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.mp-reverse-output textarea {
+  min-height: 112px !important;
+  color: #f4fffb !important;
+  background: rgba(255, 255, 255, 0.052) !important;
+  border-color: rgba(255, 255, 255, 0.105) !important;
+  border-radius: 10px !important;
+  line-height: 1.62 !important;
+}
+
+.mp-reverse-actions {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.mp-reverse-status {
+  padding: 9px 10px;
+  border: 1px solid rgba(226, 186, 92, 0.18);
+  border-radius: 8px;
+  color: rgba(235, 247, 243, 0.78);
+  background: rgba(226, 186, 92, 0.08);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
 .mp-upload {
   display: grid;
   gap: 8px;
@@ -1372,6 +1431,7 @@
 
   .mp-workbench,
   .mp-field-grid,
+  .mp-reverse-body,
   .mp-parameter-grid,
   .mp-param-priority,
   .mp-param-secondary,
