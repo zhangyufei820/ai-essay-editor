@@ -470,6 +470,13 @@ func intFromLogOther(value interface{}) int {
 	}
 }
 
+func logContainsPattern(value string) string {
+	value = strings.ReplaceAll(value, "!", "!!")
+	value = strings.ReplaceAll(value, "%", "!%")
+	value = strings.ReplaceAll(value, "_", "!_")
+	return "%" + value + "%"
+}
+
 func UpdatePlaygroundVideoTaskConsumeLogResult(userId int, taskID string, resultURL string, finishTime int64, status string, extra map[string]interface{}) error {
 	if LOG_DB == nil {
 		return nil
@@ -479,10 +486,33 @@ func UpdatePlaygroundVideoTaskConsumeLogResult(userId int, taskID string, result
 	if userId <= 0 || taskID == "" {
 		return nil
 	}
+	upstreamTaskID := ""
+	if extra != nil {
+		upstreamTaskID = strings.TrimSpace(fmt.Sprint(extra["upstream_task_id"]))
+	}
+	isFailure := strings.EqualFold(status, "FAILURE") || strings.EqualFold(status, "failed")
+	logTypes := []int{LogTypeConsume}
+	if isFailure {
+		logTypes = []int{LogTypeConsume, LogTypeError}
+	}
 	var candidates []*Log
-	if err := LOG_DB.Where("user_id = ? AND type = ?", userId, LogTypeConsume).
+	query := LOG_DB.Where("user_id = ? AND type IN ?", userId, logTypes)
+	taskPattern := logContainsPattern(taskID)
+	if upstreamTaskID != "" {
+		upstreamPattern := logContainsPattern(upstreamTaskID)
+		query = query.Where(
+			"(other LIKE ? ESCAPE '!' OR content LIKE ? ESCAPE '!' OR other LIKE ? ESCAPE '!' OR content LIKE ? ESCAPE '!')",
+			taskPattern,
+			taskPattern,
+			upstreamPattern,
+			upstreamPattern,
+		)
+	} else {
+		query = query.Where("(other LIKE ? ESCAPE '!' OR content LIKE ? ESCAPE '!')", taskPattern, taskPattern)
+	}
+	if err := query.
 		Order("id desc").
-		Limit(16).
+		Limit(64).
 		Find(&candidates).Error; err != nil {
 		return err
 	}
@@ -494,12 +524,17 @@ func UpdatePlaygroundVideoTaskConsumeLogResult(userId int, taskID string, result
 		if other == nil {
 			other = map[string]interface{}{}
 		}
+		if fmt.Sprint(other["playground_video_completion_log"]) == "true" {
+			continue
+		}
 		candidateTaskID := strings.TrimSpace(fmt.Sprint(other["task_id"]))
+		candidateUpstreamTaskID := strings.TrimSpace(fmt.Sprint(other["upstream_task_id"]))
 		requestPath := strings.TrimSpace(fmt.Sprint(other["request_path"]))
 		mediaKind := strings.TrimSpace(fmt.Sprint(other["media_kind"]))
 		isPlaygroundTask := fmt.Sprint(other["playground_video_task"]) == "true"
 		isVideoTask := isPlaygroundTask || mediaKind == "video" || requestPath == "/v1/videos" || requestPath == "/v1/video/generations" || requestPath == "/pg/videos" || requestPath == "/pg/video/generations"
-		if candidateTaskID != taskID || !isVideoTask {
+		taskMatches := candidateTaskID == taskID || (upstreamTaskID != "" && candidateUpstreamTaskID == upstreamTaskID)
+		if !taskMatches || !isVideoTask {
 			continue
 		}
 		if extra != nil {
@@ -508,6 +543,9 @@ func UpdatePlaygroundVideoTaskConsumeLogResult(userId int, taskID string, result
 			}
 		}
 		other["task_id"] = taskID
+		if upstreamTaskID != "" {
+			other["upstream_task_id"] = upstreamTaskID
+		}
 		other["request_phase"] = "completed"
 		if status != "" {
 			other["task_status"] = status
@@ -526,7 +564,7 @@ func UpdatePlaygroundVideoTaskConsumeLogResult(userId int, taskID string, result
 		updates := map[string]interface{}{
 			"other": common.MapToJsonStr(other),
 		}
-		if strings.EqualFold(status, "FAILURE") || strings.EqualFold(status, "failed") {
+		if isFailure {
 			reason := strings.TrimSpace(fmt.Sprint(other["fail_reason"]))
 			content := "媒体工坊视频任务失败"
 			if reason != "" {
@@ -549,9 +587,237 @@ func UpdatePlaygroundVideoTaskConsumeLogResult(userId int, taskID string, result
 		if err := LOG_DB.Model(&Log{}).Where("id = ?", candidate.Id).Updates(updates).Error; err != nil {
 			return err
 		}
+		if !isFailure {
+			if err := createPlaygroundVideoCompletionReceiptLog(userId, candidate, taskID, upstreamTaskID, resultURL, finishTime, status, other); err != nil {
+				return err
+			}
+		}
 		return nil
 	}
+	return createPlaygroundVideoTaskResultLog(userId, taskID, upstreamTaskID, resultURL, finishTime, status, extra)
+}
+
+func playgroundVideoCompletionLogExists(userId int, taskID string, upstreamTaskID string) (bool, error) {
+	if LOG_DB == nil || userId <= 0 || taskID == "" {
+		return false, nil
+	}
+	query := LOG_DB.Where("user_id = ? AND type = ?", userId, LogTypeConsume).
+		Where("other LIKE ? ESCAPE '!'", logContainsPattern("playground_video_completion_log"))
+	if upstreamTaskID != "" {
+		query = query.Where(
+			"(other LIKE ? ESCAPE '!' OR other LIKE ? ESCAPE '!')",
+			logContainsPattern(taskID),
+			logContainsPattern(upstreamTaskID),
+		)
+	} else {
+		query = query.Where("other LIKE ? ESCAPE '!'", logContainsPattern(taskID))
+	}
+	var candidates []*Log
+	if err := query.Order("id desc").Limit(32).Find(&candidates).Error; err != nil {
+		return false, err
+	}
+	for _, candidate := range candidates {
+		if candidate == nil {
+			continue
+		}
+		other, _ := common.StrToMap(candidate.Other)
+		if other == nil || fmt.Sprint(other["playground_video_completion_log"]) != "true" {
+			continue
+		}
+		candidateTaskID := strings.TrimSpace(fmt.Sprint(other["task_id"]))
+		candidateUpstreamTaskID := strings.TrimSpace(fmt.Sprint(other["upstream_task_id"]))
+		if candidateTaskID == taskID || (upstreamTaskID != "" && candidateUpstreamTaskID == upstreamTaskID) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func createPlaygroundVideoCompletionReceiptLog(userId int, source *Log, taskID string, upstreamTaskID string, resultURL string, finishTime int64, status string, extra map[string]interface{}) error {
+	if LOG_DB == nil || source == nil || userId <= 0 || taskID == "" {
+		return nil
+	}
+	exists, err := playgroundVideoCompletionLogExists(userId, taskID, upstreamTaskID)
+	if err != nil || exists {
+		return err
+	}
+	other := map[string]interface{}{}
+	if extra != nil {
+		for key, value := range extra {
+			other[key] = value
+		}
+	}
+	other["task_id"] = taskID
+	if upstreamTaskID != "" {
+		other["upstream_task_id"] = upstreamTaskID
+	}
+	if source.RequestId != "" {
+		other["request_id"] = source.RequestId
+	}
+	other["request_phase"] = "completed"
+	if status != "" {
+		other["task_status"] = status
+	} else {
+		other["task_status"] = "SUCCESS"
+	}
+	other["playground_video_task"] = true
+	other["playground_video_completion_log"] = true
+	other["completion_log_kind"] = "receipt"
+	other["source_log_id"] = source.Id
+	other["media_kind"] = "video"
+	other["async"] = true
+	other["receipt_quota"] = 0
+	other["original_quota"] = source.Quota
+	if resultURL != "" {
+		other["result_url"] = resultURL
+		other["video_url"] = resultURL
+		other["cached_url"] = resultURL
+	}
+	if finishTime > 0 {
+		other["finish_time"] = finishTime
+	}
+	createdAt := finishTime
+	if createdAt <= 0 {
+		createdAt = common.GetTimestamp()
+	}
+	username := source.Username
+	if username == "" {
+		username, _ = GetUsernameById(userId, false)
+	}
+	log := &Log{
+		UserId:            userId,
+		Username:          username,
+		CreatedAt:         createdAt,
+		Type:              LogTypeConsume,
+		Content:           "媒体工坊视频任务完成",
+		TokenName:         firstNonEmptyLogString(source.TokenName, strings.TrimSpace(fmt.Sprint(other["token_name"])), "playground"),
+		ModelName:         firstNonEmptyLogString(source.ModelName, strings.TrimSpace(fmt.Sprint(other["model_name"]))),
+		Quota:             0,
+		ChannelId:         firstNonZeroLogInt(source.ChannelId, intFromLogOther(other["channel_id"])),
+		TokenId:           firstNonZeroLogInt(source.TokenId, intFromLogOther(other["token_id"])),
+		UseTime:           intFromLogOther(other["use_time"]),
+		IsStream:          false,
+		Group:             firstNonEmptyLogString(source.Group, strings.TrimSpace(fmt.Sprint(other["group"]))),
+		Ip:                source.Ip,
+		RequestId:         source.RequestId,
+		UpstreamRequestId: source.UpstreamRequestId,
+		Other:             common.MapToJsonStr(other),
+	}
+	return LOG_DB.Create(log).Error
+}
+
+func createPlaygroundVideoTaskResultLog(userId int, taskID string, upstreamTaskID string, resultURL string, finishTime int64, status string, extra map[string]interface{}) error {
+	if LOG_DB == nil || userId <= 0 || taskID == "" {
+		return nil
+	}
+	isFailure := strings.EqualFold(status, "FAILURE") || strings.EqualFold(status, "failed")
+	if !isFailure && !common.LogConsumeEnabled {
+		return nil
+	}
+	if !isFailure {
+		exists, err := playgroundVideoCompletionLogExists(userId, taskID, upstreamTaskID)
+		if err != nil || exists {
+			return err
+		}
+	}
+	other := map[string]interface{}{}
+	if extra != nil {
+		for key, value := range extra {
+			other[key] = value
+		}
+	}
+	other["task_id"] = taskID
+	if upstreamTaskID != "" {
+		other["upstream_task_id"] = upstreamTaskID
+	}
+	other["playground_video_task"] = true
+	other["media_kind"] = "video"
+	other["async"] = true
+	if !isFailure {
+		other["playground_video_completion_log"] = true
+		other["completion_log_kind"] = "standalone"
+	}
+	if status != "" {
+		other["task_status"] = status
+	}
+	if resultURL != "" {
+		other["result_url"] = resultURL
+		other["video_url"] = resultURL
+		other["cached_url"] = resultURL
+	}
+	if finishTime > 0 {
+		other["finish_time"] = finishTime
+	}
+
+	logType := LogTypeConsume
+	content := "媒体工坊视频任务完成"
+	quota := 0
+	if isFailure {
+		logType = LogTypeError
+		reason := strings.TrimSpace(fmt.Sprint(other["fail_reason"]))
+		content = "媒体工坊视频任务失败"
+		if reason != "" {
+			content += "，" + reason
+		}
+		other["request_phase"] = "failed"
+		other["task_status"] = "FAILURE"
+		other["final_log_type"] = "error"
+		other["failure_kind"] = "media_task_failed"
+	} else {
+		other["request_phase"] = "completed"
+		if status == "" {
+			other["task_status"] = "SUCCESS"
+		}
+		if actualQuota := intFromLogOther(other["actual_quota"]); actualQuota > 0 {
+			other["original_quota"] = actualQuota
+			other["receipt_quota"] = 0
+		}
+	}
+
+	username, _ := GetUsernameById(userId, false)
+	log := &Log{
+		UserId:    userId,
+		Username:  username,
+		CreatedAt: common.GetTimestamp(),
+		Type:      logType,
+		Content:   content,
+		TokenName: strings.TrimSpace(fmt.Sprint(other["token_name"])),
+		ModelName: strings.TrimSpace(fmt.Sprint(other["model_name"])),
+		Quota:     quota,
+		ChannelId: intFromLogOther(other["channel_id"]),
+		TokenId:   intFromLogOther(other["token_id"]),
+		UseTime:   intFromLogOther(other["use_time"]),
+		IsStream:  false,
+		Group:     strings.TrimSpace(fmt.Sprint(other["group"])),
+		RequestId: strings.TrimSpace(fmt.Sprint(other["request_id"])),
+		Other:     common.MapToJsonStr(other),
+	}
+	if log.TokenName == "" {
+		log.TokenName = "playground"
+	}
+	if err := LOG_DB.Create(log).Error; err != nil {
+		return err
+	}
 	return nil
+}
+
+func firstNonEmptyLogString(values ...string) string {
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func firstNonZeroLogInt(values ...int) int {
+	for _, value := range values {
+		if value != 0 {
+			return value
+		}
+	}
+	return 0
 }
 
 func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams) {

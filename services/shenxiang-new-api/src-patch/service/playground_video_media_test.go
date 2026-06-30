@@ -121,6 +121,7 @@ func TestCachePlaygroundVideoTaskResultWritesMediaItem(t *testing.T) {
 	require.Equal(t, "completed", other["request_phase"])
 	require.Equal(t, "SUCCESS", other["task_status"])
 	require.Equal(t, "video", other["media_kind"])
+	require.Equal(t, "upstream_video_success", other["upstream_task_id"])
 	require.Contains(t, other["cached_url"], "/pg/media/files/u-1001/")
 
 	userDir := filepath.Join(tmp, "u-1001")
@@ -142,6 +143,197 @@ func TestCachePlaygroundVideoTaskResultWritesMediaItem(t *testing.T) {
 	}
 	require.Equal(t, 1, mediaFiles)
 	require.Equal(t, 1, metadataFiles)
+}
+
+func TestCachePlaygroundVideoTaskResultCreatesCompletionReceiptLog(t *testing.T) {
+	truncate(t)
+	tmp := t.TempDir()
+	t.Setenv("PLAYGROUND_MEDIA_CACHE_DIR", tmp)
+	t.Setenv("PLAYGROUND_MEDIA_URL_PREFIX", "/pg/media/files")
+	t.Setenv("PLAYGROUND_MEDIA_MAX_MB", "1")
+	t.Setenv("PLAYGROUND_MEDIA_KEEP_MINUTES", "4320")
+
+	task := &model.Task{
+		TaskID:     "task_receipt_video_success",
+		UserId:     1005,
+		ChannelId:  26,
+		Status:     model.TaskStatusInProgress,
+		Progress:   "50%",
+		Platform:   constant.TaskPlatform("relaydance-video"),
+		Group:      "default",
+		StartTime:  100,
+		FinishTime: 0,
+		Data: json.RawMessage(`{
+			"playground_media": {
+				"request_id": "req_receipt_video",
+				"prompt": "poster in the wind",
+				"model": "seedance-2.0-ld-17",
+				"workflow": "video",
+				"size": "1280x720",
+				"duration": 15,
+				"group": "default",
+				"endpoint": "/pg/videos"
+			}
+		}`),
+		PrivateData: model.TaskPrivateData{
+			UpstreamTaskID: "upstream_receipt_video_success",
+			TokenId:        252,
+			BillingContext: &model.TaskBillingContext{
+				OriginModelName: "seedance-2.0-ld-17",
+				ModelPrice:      0.88,
+				GroupRatio:      1,
+				PerCallBilling:  true,
+			},
+		},
+		Properties: model.Properties{OriginModelName: "seedance-2.0-ld-17"},
+		Quota:      443835,
+	}
+	require.NoError(t, model.DB.Create(task).Error)
+	require.NoError(t, model.LOG_DB.Create(&model.Log{
+		UserId:    task.UserId,
+		Username:  "receipt-user",
+		CreatedAt: 1,
+		Type:      model.LogTypeConsume,
+		Content:   "操作 textGenerate",
+		ModelName: "seedance-2.0-ld-17",
+		TokenName: "playground-default",
+		Quota:     task.Quota,
+		ChannelId: task.ChannelId,
+		TokenId:   252,
+		Group:     "default",
+		RequestId: "req_receipt_video",
+		Other: common.MapToJsonStr(map[string]interface{}{
+			"task_id":               task.TaskID,
+			"request_path":          "/pg/videos",
+			"playground_video_task": true,
+			"request_phase":         "submitted",
+			"task_status":           "SUBMITTED",
+			"media_kind":            "video",
+		}),
+	}).Error)
+
+	body, err := json.Marshal(map[string]any{
+		"status": model.TaskStatusSuccess,
+		"url":    "data:video/mp4;base64,ZmFrZSBtcDQgYnl0ZXM=",
+	})
+	require.NoError(t, err)
+
+	err = updateVideoSingleTask(context.Background(), &playgroundVideoTestAdaptor{body: body}, &model.Channel{Id: 26, Key: "sk-test"}, "upstream_receipt_video_success", map[string]*model.Task{
+		"upstream_receipt_video_success": task,
+	})
+	require.NoError(t, err)
+
+	var logs []model.Log
+	require.NoError(t, model.LOG_DB.Where("user_id = ?", task.UserId).Order("id asc").Find(&logs).Error)
+	require.Len(t, logs, 2)
+	require.Equal(t, "操作 textGenerate", logs[0].Content)
+	require.Equal(t, task.Quota, logs[0].Quota)
+	require.Equal(t, "媒体工坊视频任务完成", logs[1].Content)
+	require.Equal(t, 0, logs[1].Quota)
+
+	submittedOther, err := common.StrToMap(logs[0].Other)
+	require.NoError(t, err)
+	require.Equal(t, "completed", submittedOther["request_phase"])
+	require.Equal(t, "SUCCESS", submittedOther["task_status"])
+	require.Equal(t, "upstream_receipt_video_success", submittedOther["upstream_task_id"])
+
+	receiptOther, err := common.StrToMap(logs[1].Other)
+	require.NoError(t, err)
+	require.Equal(t, "completed", receiptOther["request_phase"])
+	require.Equal(t, "SUCCESS", receiptOther["task_status"])
+	require.Equal(t, "video", receiptOther["media_kind"])
+	require.Equal(t, true, receiptOther["playground_video_task"])
+	require.Equal(t, true, receiptOther["playground_video_completion_log"])
+	require.Equal(t, "receipt", receiptOther["completion_log_kind"])
+	require.Equal(t, float64(logs[0].Id), receiptOther["source_log_id"])
+	require.Equal(t, float64(0), receiptOther["receipt_quota"])
+	require.Equal(t, float64(task.Quota), receiptOther["original_quota"])
+	require.Equal(t, task.TaskID, receiptOther["task_id"])
+	require.Equal(t, "upstream_receipt_video_success", receiptOther["upstream_task_id"])
+	require.Contains(t, receiptOther["cached_url"], "/pg/media/files/u-1005/")
+
+	err = updateVideoSingleTask(context.Background(), &playgroundVideoTestAdaptor{body: body}, &model.Channel{Id: 26, Key: "sk-test"}, "upstream_receipt_video_success", map[string]*model.Task{
+		"upstream_receipt_video_success": task,
+	})
+	require.NoError(t, err)
+	var count int64
+	require.NoError(t, model.LOG_DB.Model(&model.Log{}).Where("user_id = ?", task.UserId).Count(&count).Error)
+	require.Equal(t, int64(2), count)
+}
+
+func TestCachePlaygroundVideoTaskResultCreatesLogWhenSubmittedLogMissing(t *testing.T) {
+	truncate(t)
+	tmp := t.TempDir()
+	t.Setenv("PLAYGROUND_MEDIA_CACHE_DIR", tmp)
+	t.Setenv("PLAYGROUND_MEDIA_URL_PREFIX", "/pg/media/files")
+	t.Setenv("PLAYGROUND_MEDIA_MAX_MB", "1")
+	t.Setenv("PLAYGROUND_MEDIA_KEEP_MINUTES", "4320")
+
+	task := &model.Task{
+		TaskID:    "task_missing_log_video_success",
+		UserId:    1004,
+		ChannelId: 26,
+		Status:    model.TaskStatusInProgress,
+		Progress:  "50%",
+		Platform:  constant.TaskPlatform("relaydance-video"),
+		Group:     "default",
+		Data: json.RawMessage(`{
+			"playground_media": {
+				"request_id": "req_missing_video",
+				"prompt": "wind moves a poster",
+				"model": "seedance-2.0-ld-17",
+				"workflow": "video",
+				"size": "1280x720",
+				"duration": 15,
+				"group": "default",
+				"endpoint": "/pg/videos"
+			}
+		}`),
+		PrivateData: model.TaskPrivateData{
+			UpstreamTaskID: "task_upstream_missing_log_success",
+			TokenId:        252,
+			BillingContext: &model.TaskBillingContext{
+				OriginModelName: "seedance-2.0-ld-17",
+				ModelPrice:      0.88,
+				GroupRatio:      1,
+				PerCallBilling:  true,
+			},
+		},
+		Properties: model.Properties{OriginModelName: "seedance-2.0-ld-17"},
+		Quota:      443835,
+	}
+	require.NoError(t, model.DB.Create(task).Error)
+
+	body, err := json.Marshal(map[string]any{
+		"status": model.TaskStatusSuccess,
+		"url":    "data:video/mp4;base64,ZmFrZSBtcDQgYnl0ZXM=",
+	})
+	require.NoError(t, err)
+
+	err = updateVideoSingleTask(context.Background(), &playgroundVideoTestAdaptor{body: body}, &model.Channel{Id: 26, Key: "sk-test"}, "task_upstream_missing_log_success", map[string]*model.Task{
+		"task_upstream_missing_log_success": task,
+	})
+	require.NoError(t, err)
+
+	var log model.Log
+	require.NoError(t, model.LOG_DB.First(&log, "user_id = ? AND type = ?", task.UserId, model.LogTypeConsume).Error)
+	require.Equal(t, "媒体工坊视频任务完成", log.Content)
+	require.Equal(t, "seedance-2.0-ld-17", log.ModelName)
+	require.Equal(t, 0, log.Quota)
+	require.Equal(t, 26, log.ChannelId)
+	require.Equal(t, 252, log.TokenId)
+	other, err := common.StrToMap(log.Other)
+	require.NoError(t, err)
+	require.Equal(t, "completed", other["request_phase"])
+	require.Equal(t, "SUCCESS", other["task_status"])
+	require.Equal(t, "video", other["media_kind"])
+	require.Equal(t, task.TaskID, other["task_id"])
+	require.Equal(t, "task_upstream_missing_log_success", other["upstream_task_id"])
+	require.Equal(t, true, other["playground_video_completion_log"])
+	require.Equal(t, "standalone", other["completion_log_kind"])
+	require.Equal(t, float64(0), other["receipt_quota"])
+	require.Equal(t, float64(443835), other["original_quota"])
+	require.Contains(t, other["cached_url"], "/pg/media/files/u-1004/")
 }
 
 func TestCachePlaygroundVideoTaskResultCachesPlainVideoTask(t *testing.T) {
