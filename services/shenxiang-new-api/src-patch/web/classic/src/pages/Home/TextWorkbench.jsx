@@ -27,11 +27,13 @@ import {
 } from '@douyinfe/semi-ui';
 import {
   IconFile,
-  IconPlay,
 } from '@douyinfe/semi-icons';
 import {
+  ArrowUp,
   BadgeDollarSign,
   Cloud,
+  Copy,
+  Edit3,
   Headphones,
   Image,
   KeyRound,
@@ -42,12 +44,52 @@ import {
   Store,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { API } from '../../helpers';
+import { API, copy } from '../../helpers';
 import { getDefaultTextModel, toTextModelOptions } from './textModelFilter';
 
-const MAX_TEXT_FILES = 4;
-const MAX_TEXT_FILE_SIZE = 160 * 1024;
-const TEXT_FILE_ACCEPT = '.txt,.md,.csv,.json,text/plain,text/markdown,text/csv,application/json';
+const MAX_ATTACHMENTS = 6;
+const MAX_TEXT_FILE_SIZE = 512 * 1024;
+const MAX_BINARY_FILE_SIZE = 8 * 1024 * 1024;
+const TEXT_FILE_EXTENSIONS = [
+  '.txt',
+  '.md',
+  '.csv',
+  '.json',
+  '.log',
+  '.xml',
+  '.html',
+  '.css',
+  '.js',
+  '.jsx',
+  '.ts',
+  '.tsx',
+  '.yaml',
+  '.yml',
+];
+const WORKBENCH_FILE_ACCEPT = [
+  ...TEXT_FILE_EXTENSIONS,
+  '.pdf',
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.webp',
+  '.gif',
+  '.doc',
+  '.docx',
+  '.xls',
+  '.xlsx',
+  '.ppt',
+  '.pptx',
+  'text/plain',
+  'text/markdown',
+  'text/csv',
+  'application/json',
+  'application/pdf',
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/gif',
+].join(',');
 
 const primaryNav = [
   { label: '新聊天', icon: Plus, action: 'new' },
@@ -66,6 +108,26 @@ const starterPrompts = [
   '查找资料',
 ];
 
+function getFileExtension(name = '') {
+  const dotIndex = name.lastIndexOf('.');
+  return dotIndex >= 0 ? name.slice(dotIndex).toLowerCase() : '';
+}
+
+function isTextLikeFile(file) {
+  const type = file.type || '';
+  const extension = getFileExtension(file.name);
+  return type.startsWith('text/') || TEXT_FILE_EXTENSIONS.includes(extension) || type === 'application/json';
+}
+
+function getAttachmentKind(file) {
+  const type = file.type || '';
+  const extension = getFileExtension(file.name);
+  if (isTextLikeFile(file)) return 'text';
+  if (type.startsWith('image/') || ['.png', '.jpg', '.jpeg', '.webp', '.gif'].includes(extension)) return 'image';
+  if (type === 'application/pdf' || extension === '.pdf') return 'pdf';
+  return 'unsupported';
+}
+
 const readTextFile = (file) =>
   new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -75,12 +137,43 @@ const readTextFile = (file) =>
         name: file.name,
         size: file.size,
         type: file.type || 'text/plain',
+        kind: 'text',
+        readable: true,
         content: String(reader.result || ''),
       });
     };
     reader.onerror = () => reject(reader.error || new Error('文件读取失败'));
     reader.readAsText(file);
   });
+
+const readDataUrlFile = (file, kind) =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      resolve({
+        id: `${file.name}-${file.size}-${file.lastModified}`,
+        name: file.name,
+        size: file.size,
+        type: file.type || (kind === 'pdf' ? 'application/pdf' : 'application/octet-stream'),
+        kind,
+        readable: true,
+        dataUrl: String(reader.result || ''),
+      });
+    };
+    reader.onerror = () => reject(reader.error || new Error('文件读取失败'));
+    reader.readAsDataURL(file);
+  });
+
+function createUnsupportedAttachment(file) {
+  return {
+    id: `${file.name}-${file.size}-${file.lastModified}`,
+    name: file.name,
+    size: file.size,
+    type: file.type || 'application/octet-stream',
+    kind: 'unsupported',
+    readable: false,
+  };
+}
 
 function getStoredUser() {
   try {
@@ -136,15 +229,75 @@ function formatBytes(size) {
   return `${(size / 1024 / 1024).toFixed(1)} MB`;
 }
 
-function buildAttachmentContext(files) {
-  if (!files.length) return '';
-  return files
+function getAttachmentLabel(file) {
+  if (file.kind === 'text') return '已读取';
+  if (file.kind === 'image') return '可读取图片';
+  if (file.kind === 'pdf') return '可读取 PDF';
+  return '当前不读取';
+}
+
+function buildTextAttachmentContext(files) {
+  const textFiles = files.filter((file) => file.kind === 'text' && file.content);
+  if (!textFiles.length) return '';
+  return textFiles
     .map((file) => {
-      const content = file.content.slice(0, 3600);
-      const suffix = file.content.length > 3600 ? '\n...[内容较长，已自动节选]' : '';
+      const content = file.content.slice(0, 6200);
+      const suffix = file.content.length > 6200 ? '\n...[内容较长，已自动节选]' : '';
       return `\n\n[文件: ${file.name}]\n${content}${suffix}`;
     })
     .join('');
+}
+
+function buildUserRequestContent(text, files) {
+  const trimmed = text.trim();
+  const textWithContext = `${trimmed}${buildTextAttachmentContext(files)}` || '请根据附件内容继续。';
+  const mediaParts = [];
+
+  files.forEach((file) => {
+    if (!file.readable || !file.dataUrl) return;
+    if (file.kind === 'image') {
+      mediaParts.push({
+        type: 'image_url',
+        image_url: {
+          url: file.dataUrl,
+        },
+      });
+      return;
+    }
+    if (file.kind === 'pdf') {
+      mediaParts.push({
+        type: 'file',
+        file: {
+          filename: file.name,
+          file_data: file.dataUrl,
+        },
+      });
+    }
+  });
+
+  if (!mediaParts.length) return textWithContext;
+  return [
+    {
+      type: 'text',
+      text: textWithContext,
+    },
+    ...mediaParts,
+  ];
+}
+
+function contentToPlainText(content) {
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return '';
+  return content
+    .map((item) => {
+      if (typeof item === 'string') return item;
+      if (item?.type === 'text') return item.text || '';
+      if (item?.type === 'image_url') return `[图片: ${item?.image_url?.url ? '已附加' : '未读取'}]`;
+      if (item?.type === 'file') return `[文件: ${item?.file?.filename || '已附加'}]`;
+      return item?.text || '';
+    })
+    .filter(Boolean)
+    .join('\n');
 }
 
 function extractAssistantText(payload) {
@@ -268,6 +421,194 @@ function getChatFailureMessage(error) {
     .trim();
 }
 
+function InlineMarkdown({ text }) {
+  const parts = String(text || '').split(/(`[^`]+`|\*\*[^*]+\*\*)/g);
+  return (
+    <>
+      {parts.map((part, index) => {
+        if (part.startsWith('`') && part.endsWith('`') && part.length > 1) {
+          return <code key={`inline-${index}`}>{part.slice(1, -1)}</code>;
+        }
+        if (part.startsWith('**') && part.endsWith('**') && part.length > 3) {
+          return <strong key={`strong-${index}`}>{part.slice(2, -2)}</strong>;
+        }
+        return <React.Fragment key={`text-${index}`}>{part}</React.Fragment>;
+      })}
+    </>
+  );
+}
+
+const CODE_KEYWORDS = new Set([
+  'async',
+  'await',
+  'break',
+  'case',
+  'catch',
+  'class',
+  'const',
+  'continue',
+  'default',
+  'else',
+  'export',
+  'extends',
+  'false',
+  'finally',
+  'for',
+  'from',
+  'function',
+  'if',
+  'import',
+  'let',
+  'new',
+  'null',
+  'return',
+  'switch',
+  'throw',
+  'true',
+  'try',
+  'undefined',
+  'var',
+  'while',
+]);
+
+function highlightCodeLine(line) {
+  const tokens = String(line).match(/\/\/.*|#.*|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`|\b\d+(?:\.\d+)?\b|\b[A-Za-z_$][\w$]*\b|\s+|./g) || [];
+  return tokens.map((token, index) => {
+    let className = '';
+    if (/^(\/\/|#)/.test(token)) className = 'is-comment';
+    else if (/^(['"`])/.test(token)) className = 'is-string';
+    else if (/^\d/.test(token)) className = 'is-number';
+    else if (CODE_KEYWORDS.has(token)) className = 'is-keyword';
+    return className ? <span className={className} key={`${token}-${index}`}>{token}</span> : token;
+  });
+}
+
+function CodeBlock({ code, language }) {
+  const [copied, setCopied] = useState(false);
+  const label = language || '代码';
+  const lines = String(code).split('\n');
+
+  const handleCopy = async () => {
+    const ok = await copy(code);
+    setCopied(ok);
+    Toast[ok ? 'success' : 'error'](ok ? '已复制' : '复制失败');
+    if (ok) window.setTimeout(() => setCopied(false), 1200);
+  };
+
+  return (
+    <div className='sx-gpt-code-block'>
+      <div className='sx-gpt-code-header'>
+        <span>{label}</span>
+        <button type='button' onClick={handleCopy} aria-label='复制代码'>
+          <Copy size={14} />
+          <span>{copied ? '已复制' : '复制'}</span>
+        </button>
+      </div>
+      <pre>
+        <code className={language ? `language-${language}` : ''}>
+          {lines.map((line, index) => (
+            <React.Fragment key={`line-${index}`}>
+              {highlightCodeLine(line)}
+              {index < lines.length - 1 ? '\n' : ''}
+            </React.Fragment>
+          ))}
+        </code>
+      </pre>
+    </div>
+  );
+}
+
+function MarkdownContent({ content }) {
+  const source = contentToPlainText(content);
+  const blocks = source.split(/```([^\n`]*)\n?([\s\S]*?)```/g);
+
+  return (
+    <div className='sx-gpt-markdown'>
+      {blocks.map((block, index) => {
+        if (index % 3 === 1) return null;
+        if (index % 3 === 2) {
+          const language = String(blocks[index - 1] || '').trim();
+          return <CodeBlock key={`code-${index}`} code={block.replace(/\n$/, '')} language={language} />;
+        }
+
+        return String(block || '')
+          .split(/\n{2,}/)
+          .filter((paragraph) => paragraph.trim())
+          .map((paragraph, paragraphIndex) => {
+            const trimmed = paragraph.trim();
+            const heading = trimmed.match(/^(#{1,3})\s+(.+)$/);
+            if (heading) {
+              const HeadingTag = `h${Math.min(heading[1].length + 2, 4)}`;
+              return (
+                <HeadingTag key={`heading-${index}-${paragraphIndex}`}>
+                  <InlineMarkdown text={heading[2]} />
+                </HeadingTag>
+              );
+            }
+            const listLines = trimmed.split('\n').filter((line) => /^(\s*[-*]\s+|\s*\d+\.\s+)/.test(line));
+            if (listLines.length > 1 && listLines.length === trimmed.split('\n').length) {
+              const isOrdered = /^\s*\d+\.\s+/.test(listLines[0]);
+              const Tag = isOrdered ? 'ol' : 'ul';
+              return (
+                <Tag key={`list-${index}-${paragraphIndex}`}>
+                  {listLines.map((line, lineIndex) => (
+                    <li key={`item-${lineIndex}`}>
+                      <InlineMarkdown text={line.replace(/^\s*(?:[-*]|\d+\.)\s+/, '')} />
+                    </li>
+                  ))}
+                </Tag>
+              );
+            }
+            return (
+              <p key={`paragraph-${index}-${paragraphIndex}`}>
+                <InlineMarkdown text={trimmed} />
+              </p>
+            );
+          });
+      })}
+    </div>
+  );
+}
+
+function AttachmentChips({ files, onRemove }) {
+  if (!files?.length) return null;
+  return (
+    <div className='sx-gpt-files'>
+      {files.map((file) => {
+        const content = (
+          <>
+            <IconFile />
+            <span>{file.name}</span>
+            <em>{getAttachmentLabel(file)} · {formatBytes(file.size)}</em>
+          </>
+        );
+        if (!onRemove) {
+          return (
+            <span
+              key={file.id}
+              title={getAttachmentLabel(file)}
+              className={file.readable ? 'sx-gpt-file-chip' : 'sx-gpt-file-chip is-muted'}
+            >
+              {content}
+            </span>
+          );
+        }
+        return (
+          <button
+            type='button'
+            key={file.id}
+            onClick={() => onRemove(file.id)}
+            title='点击移除'
+            className={file.readable ? '' : 'is-muted'}
+          >
+            {content}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 const TextWorkbench = ({ isMobile }) => {
   const [user, setUser] = useState(() => getStoredUser());
   const [models, setModels] = useState([]);
@@ -353,33 +694,29 @@ const TextWorkbench = ({ isMobile }) => {
     const incoming = Array.from(fileList || []);
     if (!incoming.length) return;
 
-    const room = MAX_TEXT_FILES - attachments.length;
+    const room = MAX_ATTACHMENTS - attachments.length;
     if (room <= 0) {
-      Toast.warning(`最多上传 ${MAX_TEXT_FILES} 个纯文本文件。`);
+      Toast.warning(`最多上传 ${MAX_ATTACHMENTS} 个文件。`);
       return;
     }
 
-    const accepted = incoming.slice(0, room).filter((file) => {
-      const lower = file.name.toLowerCase();
-      const isTextLike =
-        file.type.startsWith('text/') ||
-        lower.endsWith('.txt') ||
-        lower.endsWith('.md') ||
-        lower.endsWith('.csv') ||
-        lower.endsWith('.json');
-      if (!isTextLike) {
-        Toast.warning(`${file.name} 当前不支持。`);
-        return false;
+    const readers = incoming.slice(0, room).map((file) => {
+      const kind = getAttachmentKind(file);
+      if (kind === 'unsupported') {
+        Toast.warning(`${file.name} 已附加，但当前会话暂不读取这种格式。`);
+        return Promise.resolve(createUnsupportedAttachment(file));
       }
-      if (file.size > MAX_TEXT_FILE_SIZE) {
-        Toast.warning(`${file.name} 超过 ${formatBytes(MAX_TEXT_FILE_SIZE)}。`);
-        return false;
+      const maxSize = kind === 'text' ? MAX_TEXT_FILE_SIZE : MAX_BINARY_FILE_SIZE;
+      if (file.size > maxSize) {
+        Toast.warning(`${file.name} 超过 ${formatBytes(maxSize)}，已跳过。`);
+        return null;
       }
-      return true;
-    });
+      if (kind === 'text') return readTextFile(file);
+      return readDataUrlFile(file, kind);
+    }).filter(Boolean);
 
     try {
-      const parsed = await Promise.all(accepted.map(readTextFile));
+      const parsed = await Promise.all(readers);
       setAttachments((prev) => [...prev, ...parsed]);
     } catch (error) {
       Toast.error(error?.message || '文件读取失败');
@@ -409,6 +746,17 @@ const TextWorkbench = ({ isMobile }) => {
     composerInputRef.current?.focus();
   };
 
+  const copyMessage = async (message) => {
+    const ok = await copy(message.displayContent || contentToPlainText(message.content));
+    Toast[ok ? 'success' : 'error'](ok ? '已复制' : '复制失败');
+  };
+
+  const editMessage = (message) => {
+    setInput(message.displayContent || contentToPlainText(message.content));
+    setAttachments([]);
+    window.setTimeout(() => composerInputRef.current?.focus(), 0);
+  };
+
   const organizeMessage = async () => {
     if (isSubmitting) return;
 
@@ -425,16 +773,27 @@ const TextWorkbench = ({ isMobile }) => {
     }
 
     if (!canOrganize) {
-      Toast.warning('先输入问题，或上传一个纯文本文件。');
+      Toast.warning('先输入问题，或上传一个文件。');
       return;
     }
 
-    const attachmentContext = buildAttachmentContext(attachments);
-    const userMessage = `${input.trim()}${attachmentContext}` || '请根据文件内容继续。';
+    const readableAttachments = attachments.filter((file) => file.readable);
+    const unsupportedOnly = attachments.length > 0 && readableAttachments.length === 0 && !input.trim();
+    if (unsupportedOnly) {
+      Toast.warning('这个格式当前会话暂不读取，请补充文字说明或换成图片、PDF、文本文件。');
+      return;
+    }
+
+    const displayContent = input.trim() || '请根据附件内容继续。';
+    const userRequestContent = buildUserRequestContent(input, readableAttachments);
     const userMessageItem = {
+      id: `user-${Date.now()}`,
       role: 'user',
-      title: activeModel,
-      content: userMessage,
+      title: '你',
+      content: displayContent,
+      apiContent: userRequestContent,
+      displayContent,
+      attachments: attachments.map(({ content, dataUrl, ...file }) => file),
     };
     const pendingId = `assistant-${Date.now()}`;
     const history = messages
@@ -442,7 +801,7 @@ const TextWorkbench = ({ isMobile }) => {
       .filter((message) => !message.pending)
       .map((message) => ({
         role: message.role,
-        content: message.content,
+        content: message.apiContent || message.content,
       }));
 
     setMessages((prev) => [
@@ -451,7 +810,7 @@ const TextWorkbench = ({ isMobile }) => {
       {
         id: pendingId,
         role: 'assistant',
-        title: 'AIPHUI',
+        title: activeModel,
         content: '正在思考...',
         pending: true,
       },
@@ -498,7 +857,7 @@ const TextWorkbench = ({ isMobile }) => {
               ...history,
               {
                 role: 'user',
-                content: userMessage,
+                content: userRequestContent,
               },
             ],
           }),
@@ -523,9 +882,11 @@ const TextWorkbench = ({ isMobile }) => {
         prev.map((item) =>
           item.id === pendingId
             ? {
+                ...item,
                 role: 'assistant',
-                title: 'AIPHUI',
+                title: activeModel,
                 content: `这次没有完成：${message}`,
+                pending: false,
               }
             : item,
         ),
@@ -652,14 +1013,33 @@ const TextWorkbench = ({ isMobile }) => {
                 >
                   <div className='sx-gpt-message-name'>{message.title}</div>
                   <div className={message.pending ? 'sx-gpt-bubble is-pending' : 'sx-gpt-bubble'}>
-                    {message.content}
+                    {message.role === 'assistant' ? (
+                      <MarkdownContent content={message.content} />
+                    ) : (
+                      <InlineMarkdown text={message.displayContent || message.content} />
+                    )}
                   </div>
+                  {message.attachments?.length ? (
+                    <AttachmentChips files={message.attachments} />
+                  ) : null}
+                  {message.role === 'user' ? (
+                    <div className='sx-gpt-message-actions' aria-label='消息操作'>
+                      <button type='button' onClick={() => copyMessage(message)}>
+                        <Copy size={13} />
+                        <span>复制</span>
+                      </button>
+                      <button type='button' onClick={() => editMessage(message)}>
+                        <Edit3 size={13} />
+                        <span>再次编辑</span>
+                      </button>
+                    </div>
+                  ) : null}
                 </article>
               ))}
             </div>
           ) : (
             <div className='sx-gpt-landing'>
-              <h1>今天有什么计划？</h1>
+              <h1>你好，{isLoggedIn ? displayName : '欢迎使用'}。准备好开始了吗？</h1>
             </div>
           )}
 
@@ -676,22 +1056,7 @@ const TextWorkbench = ({ isMobile }) => {
               addFiles(event.dataTransfer.files);
             }}
           >
-            {attachments.length ? (
-              <div className='sx-gpt-files'>
-                {attachments.map((file) => (
-                  <button
-                    type='button'
-                    key={file.id}
-                    onClick={() => removeAttachment(file.id)}
-                    title='点击移除'
-                  >
-                    <IconFile />
-                    <span>{file.name}</span>
-                    <em>{formatBytes(file.size)}</em>
-                  </button>
-                ))}
-              </div>
-            ) : null}
+            <AttachmentChips files={attachments} onRemove={removeAttachment} />
 
             <div className='sx-gpt-composer'>
               <input
@@ -699,7 +1064,7 @@ const TextWorkbench = ({ isMobile }) => {
                 className='sx-gpt-file-input'
                 type='file'
                 multiple
-                accept={TEXT_FILE_ACCEPT}
+                accept={WORKBENCH_FILE_ACCEPT}
                 onChange={(event) => {
                   addFiles(event.target.files);
                   event.target.value = '';
@@ -746,7 +1111,7 @@ const TextWorkbench = ({ isMobile }) => {
                 className='sx-gpt-send'
                 theme='solid'
                 type='primary'
-                icon={<IconPlay />}
+                icon={<ArrowUp size={18} strokeWidth={2.7} />}
                 onClick={organizeMessage}
                 loading={isSubmitting}
                 disabled={isSubmitting || (!canOrganize && isLoggedIn)}

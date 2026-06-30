@@ -1,6 +1,11 @@
 const MEDIA_MODEL_PATTERN =
   /(image|gpt-image|banana|midjourney|flux|seedance|sora|kling|veo|video|audio|tts|whisper|speech|voice|embedding|rerank|realtime)/i;
 
+const HIDDEN_TEXT_MODELS = new Set([
+  'claude-opus-4-6-fast',
+  'claude-opus-4-6-full',
+]);
+
 const FALLBACK_TEXT_MODELS = [
   'gpt-5.5',
   'gpt-5.4',
@@ -15,6 +20,7 @@ const FALLBACK_TEXT_MODELS = [
 export function isTextModelName(modelName) {
   const name = String(modelName || '').trim();
   if (!name) return false;
+  if (HIDDEN_TEXT_MODELS.has(name)) return false;
   if (MEDIA_MODEL_PATTERN.test(name)) return false;
   return true;
 }
