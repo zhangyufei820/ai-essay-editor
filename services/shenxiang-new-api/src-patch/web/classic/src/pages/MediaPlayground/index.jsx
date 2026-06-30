@@ -440,6 +440,9 @@ const IMAGE_WAIT_MESSAGE =
 const IMAGE_LONG_WAIT_MS = 70 * 1000;
 const IMAGE_LONG_WAIT_MESSAGE =
   '图像任务仍在生成中，耗时接近 70 秒。请不要重复提交，可继续等待或稍后用任务 ID 查询结果。';
+const IMAGE_VERY_LONG_WAIT_MS = 180 * 1000;
+const IMAGE_VERY_LONG_WAIT_MESSAGE =
+  '图像任务已进入长尾等待，系统仍会继续轮询并保留任务结果。请保持当前页面或稍后用任务 ID 查询。';
 const REVERSE_PROMPT_MODEL = 'gpt-5.4-mini';
 const REVERSE_PROMPT_MAX_IMAGE_BYTES = 12 * 1024 * 1024;
 const REVERSE_PROMPT_INSTRUCTION =
@@ -1865,6 +1868,7 @@ const MediaPlayground = () => {
     const startedAt = Date.now();
     const deadline = Date.now() + 30 * 60 * 1000;
     let longWaitNotified = false;
+    let veryLongWaitNotified = false;
     while (Date.now() < deadline) {
       const res = await API.get(`/pg/images/tasks/${encodeURIComponent(taskId)}`, {
         skipErrorHandler: true,
@@ -1881,9 +1885,17 @@ const MediaPlayground = () => {
         longWaitNotified = true;
         Toast.info(IMAGE_LONG_WAIT_MESSAGE);
       }
-      const longWaitSuffix =
-        elapsedMs >= IMAGE_LONG_WAIT_MS ? '，生成耗时较长，请继续等待或稍后用任务 ID 查询' : '';
-      setTaskMessage(`图像任务 ${res.data.data.task_id}：${status}，进度 ${progress}%${longWaitSuffix}`);
+      if (!veryLongWaitNotified && elapsedMs >= IMAGE_VERY_LONG_WAIT_MS) {
+        veryLongWaitNotified = true;
+        Toast.info(IMAGE_VERY_LONG_WAIT_MESSAGE);
+      }
+      let waitSuffix = '';
+      if (elapsedMs >= IMAGE_VERY_LONG_WAIT_MS) {
+        waitSuffix = '，已进入长尾等待，后台仍会继续保留结果';
+      } else if (elapsedMs >= IMAGE_LONG_WAIT_MS) {
+        waitSuffix = '，生成耗时较长，请继续等待或稍后用任务 ID 查询';
+      }
+      setTaskMessage(`图像任务 ${res.data.data.task_id}：${status}，进度 ${progress}%${waitSuffix}`);
       if (status === 'completed') {
         const result = imageTaskToResult(res.data.data);
         if (result) return result;

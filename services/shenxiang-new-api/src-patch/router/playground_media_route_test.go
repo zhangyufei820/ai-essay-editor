@@ -1,6 +1,7 @@
 package router
 
 import (
+	"embed"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -10,6 +11,39 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
+
+func TestSensitiveWebPathDenyList(t *testing.T) {
+	require.True(t, isSensitiveWebPath("/.env", "/.env"))
+	require.True(t, isSensitiveWebPath("/.git/config", "/.git/config"))
+	require.True(t, isSensitiveWebPath("/docker-compose.yml", "/docker-compose.yml"))
+	require.True(t, isSensitiveWebPath("/%2eenv", "/%2eenv"))
+	require.False(t, isSensitiveWebPath("/assets/app.123.js", "/assets/app.123.js"))
+	require.False(t, isSensitiveWebPath("/.well-known/security.txt", "/.well-known/security.txt"))
+}
+
+//go:embed testdata/web/default/dist/index.html
+var webDefaultFS embed.FS
+
+//go:embed testdata/web/classic/dist/index.html
+var webClassicFS embed.FS
+
+func TestSetWebRouterDeniesDotfileBeforeSpaFallback(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	server := gin.New()
+	SetWebRouter(server, ThemeAssets{
+		DefaultBuildFS:   webDefaultFS,
+		DefaultIndexPage: []byte("<html>default</html>"),
+		ClassicBuildFS:   webClassicFS,
+		ClassicIndexPage: []byte("<html>classic</html>"),
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/.env", nil)
+	resp := httptest.NewRecorder()
+	server.ServeHTTP(resp, req)
+
+	require.Equal(t, http.StatusNotFound, resp.Code)
+	require.NotContains(t, resp.Body.String(), "<html>")
+}
 
 func TestRegisterPlaygroundMediaFilesRouteDoesNotUseRelayPerformanceGate(t *testing.T) {
 	gin.SetMode(gin.TestMode)

@@ -288,7 +288,18 @@ func newConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams) *L
 func afterConsumeLogRecorded(userId int, username string, params RecordConsumeLogParams) {
 	if common.DataExportEnabled {
 		gopool.Go(func() {
-			LogQuotaData(userId, username, params.ModelName, params.Quota, common.GetTimestamp(), params.PromptTokens+params.CompletionTokens)
+			LogQuotaData(QuotaDataLogParams{
+				UserID:    userId,
+				Username:  username,
+				ModelName: params.ModelName,
+				Quota:     params.Quota,
+				CreatedAt: common.GetTimestamp(),
+				TokenUsed: params.PromptTokens + params.CompletionTokens,
+				UseGroup:  params.Group,
+				TokenID:   params.TokenId,
+				ChannelID: params.ChannelId,
+				NodeName:  common.NodeName,
+			})
 		})
 	}
 }
@@ -442,6 +453,23 @@ func UpdatePlaygroundImageTaskConsumeLogResult(userId int, requestId string, tas
 	return nil
 }
 
+func intFromLogOther(value interface{}) int {
+	switch typed := value.(type) {
+	case int:
+		return typed
+	case int64:
+		return int(typed)
+	case float64:
+		return int(typed)
+	default:
+		var parsed int
+		if n, err := fmt.Sscanf(fmt.Sprint(value), "%d", &parsed); err == nil && n == 1 {
+			return parsed
+		}
+		return 0
+	}
+}
+
 func UpdatePlaygroundVideoTaskConsumeLogResult(userId int, taskID string, resultURL string, finishTime int64, status string, extra map[string]interface{}) error {
 	if LOG_DB == nil {
 		return nil
@@ -495,9 +523,30 @@ func UpdatePlaygroundVideoTaskConsumeLogResult(userId int, taskID string, result
 		if finishTime > 0 {
 			other["finish_time"] = finishTime
 		}
-		if err := LOG_DB.Model(&Log{}).Where("id = ?", candidate.Id).Updates(map[string]interface{}{
+		updates := map[string]interface{}{
 			"other": common.MapToJsonStr(other),
-		}).Error; err != nil {
+		}
+		if strings.EqualFold(status, "FAILURE") || strings.EqualFold(status, "failed") {
+			reason := strings.TrimSpace(fmt.Sprint(other["fail_reason"]))
+			content := "媒体工坊视频任务失败"
+			if reason != "" {
+				content += "，" + reason
+			}
+			useTime := 0
+			if value, ok := other["use_time"]; ok {
+				useTime = intFromLogOther(value)
+			}
+			other["request_phase"] = "failed"
+			other["task_status"] = "FAILURE"
+			other["final_log_type"] = "error"
+			other["failure_kind"] = "media_task_failed"
+			updates["type"] = LogTypeError
+			updates["quota"] = 0
+			updates["content"] = content
+			updates["use_time"] = useTime
+			updates["other"] = common.MapToJsonStr(other)
+		}
+		if err := LOG_DB.Model(&Log{}).Where("id = ?", candidate.Id).Updates(updates).Error; err != nil {
 			return err
 		}
 		return nil
@@ -805,6 +854,23 @@ func SumUsedToken(logType int, startTimestamp int64, endTimestamp int64, modelNa
 	}
 	tx.Where("type = ?", LogTypeConsume).Scan(&token)
 	return token
+}
+
+func CountOldLog(ctx context.Context, targetTimestamp int64) (int64, error) {
+	var total int64
+	err := LOG_DB.WithContext(ctx).Model(&Log{}).Where("created_at < ?", targetTimestamp).Count(&total).Error
+	return total, err
+}
+
+func DeleteOldLogBatch(ctx context.Context, targetTimestamp int64, limit int) (int64, error) {
+	if limit <= 0 {
+		limit = 1000
+	}
+	result := LOG_DB.WithContext(ctx).Where("created_at < ?", targetTimestamp).Limit(limit).Delete(&Log{})
+	if result.Error != nil {
+		return 0, result.Error
+	}
+	return result.RowsAffected, nil
 }
 
 func DeleteOldLog(ctx context.Context, targetTimestamp int64, limit int) (int64, error) {

@@ -1009,6 +1009,45 @@ func markPlaygroundImageTaskSuccess(task *model.Task, item *playgroundMediaItem,
 	}
 }
 
+func updatePlaygroundImageRecoveryTaskReady(task *model.Task, url string, item *playgroundMediaItem) {
+	if task == nil {
+		return
+	}
+	var payload playgroundImageTaskPayload
+	_ = task.GetData(&payload)
+	if item == nil {
+		url = strings.TrimSpace(url)
+		if url == "" {
+			return
+		}
+		item = &playgroundMediaItem{
+			ID:          task.TaskID,
+			Kind:        "image",
+			URL:         url,
+			DisplayURL:  url,
+			CachedURL:   url,
+			Filename:    filepath.Base(url),
+			Prompt:      payload.Prompt,
+			Model:       payload.Model,
+			Workflow:    payload.Workflow,
+			Status:      "ready",
+			CacheStatus: "cached",
+			CreatedAt:   time.Now().Format(time.RFC3339),
+			ExpiresAt:   time.Now().Add(playgroundMediaRetentionDuration()).Format(time.RFC3339),
+		}
+	}
+	if item.URL == "" {
+		item.URL = strings.TrimSpace(url)
+	}
+	if item.DisplayURL == "" {
+		item.DisplayURL = item.URL
+	}
+	if item.CachedURL == "" {
+		item.CachedURL = item.URL
+	}
+	markPlaygroundImageTaskSuccess(task, item, &payload, http.StatusOK, task.Quota)
+}
+
 func markPlaygroundImageTaskFailure(task *model.Task, reason string) {
 	if task == nil {
 		return
@@ -1090,21 +1129,37 @@ func markPlaygroundImageTaskLogFailure(task *model.Task, payload *playgroundImag
 	other["task_status"] = string(model.TaskStatusFailure)
 	other["playground_image_task"] = true
 	other["media_kind"] = "image"
+	other["failure_kind"] = "media_task_failed"
+	other["final_log_type"] = "error"
+	other["refund_reason"] = "media_task_failed"
+	other["billing_settlement"] = "preconsume_refund_task_failed"
 	other["finish_time"] = task.FinishTime
 	other["fail_reason"] = reason
 	other["result_url"] = ""
 	other["image_url"] = ""
 	other["cached_url"] = ""
+	if task.ChannelId > 0 {
+		other["channel_id"] = task.ChannelId
+	}
+	if task.Group != "" {
+		other["group"] = task.Group
+	}
+	if task.Quota > 0 {
+		other["pre_refund_quota"] = task.Quota
+	}
 	useTime := 0
 	if task.StartTime > 0 && task.FinishTime >= task.StartTime {
 		useTime = int(task.FinishTime - task.StartTime)
 	}
+	other["use_time"] = useTime
 	content := "媒体工坊图片任务失败"
 	if reason != "" {
 		content += "，" + reason
 	}
 	if err := model.LOG_DB.Model(&model.Log{}).Where("id = ?", existing.Id).Updates(map[string]interface{}{
 		"content":  truncatePlaygroundText(content, 1000),
+		"type":     model.LogTypeError,
+		"quota":    0,
 		"use_time": useTime,
 		"other":    common.MapToJsonStr(other),
 	}).Error; err != nil {

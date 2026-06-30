@@ -80,6 +80,9 @@ func TextHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *types
 		if newApiErr != nil {
 			return newApiErr
 		}
+		if service.ShouldRetryTextEmptyOutput(c, info, usage) {
+			return service.TextEmptyOutputRetryError()
+		}
 
 		var containAudioTokens = usage.CompletionTokenDetails.AudioTokens > 0 || usage.PromptTokensDetails.AudioTokens > 0
 		var containsAudioRatios = ratio_setting.ContainsAudioRatio(info.OriginModelName) || ratio_setting.ContainsAudioCompletionRatio(info.OriginModelName)
@@ -215,6 +218,9 @@ func TextHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *types
 	if !ok || usageDto == nil {
 		common.SysError(fmt.Sprintf("TextHelper: unexpected usage type %T for model %s, skip billing", usage, info.OriginModelName))
 		return nil
+	}
+	if service.ShouldRetryTextEmptyOutput(c, info, usageDto) {
+		return service.TextEmptyOutputRetryError()
 	}
 	var containAudioTokens = usageDto.CompletionTokenDetails.AudioTokens > 0 || usageDto.PromptTokensDetails.AudioTokens > 0
 	var containsAudioRatios = ratio_setting.ContainsAudioRatio(info.OriginModelName) || ratio_setting.ContainsAudioCompletionRatio(info.OriginModelName)

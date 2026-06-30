@@ -64,6 +64,14 @@ type playgroundVideoMediaItem struct {
 	Metadata      map[string]any `json:"metadata,omitempty"`
 }
 
+type TaskPollingSummary struct {
+	Total             int            `json:"total"`
+	Processed         int            `json:"processed"`
+	FixedNullTasks    int            `json:"fixed_null_tasks"`
+	SkippedPlayground int            `json:"skipped_playground"`
+	PlatformCount     map[string]int `json:"platform_count"`
+}
+
 // TaskPollingAdaptor 定义轮询所需的最小适配器接口，避免 service -> relay 的循环依赖
 type TaskPollingAdaptor interface {
 	Init(info *relaycommon.RelayInfo)
@@ -135,52 +143,78 @@ func TaskPollingLoop() {
 	for {
 		time.Sleep(time.Duration(15) * time.Second)
 		common.SysLog("任务进度轮询开始")
-		ctx := context.TODO()
-		sweepTimedOutTasks(ctx)
-		allTasks := model.GetAllUnFinishSyncTasks(constant.TaskQueryLimit)
-		platformTask := make(map[constant.TaskPlatform][]*model.Task)
-		for _, t := range allTasks {
-			platformTask[t.Platform] = append(platformTask[t.Platform], t)
-		}
-		for platform, tasks := range platformTask {
-			if len(tasks) == 0 {
-				continue
-			}
-			if platform == constant.TaskPlatformPlaygroundImage {
-				continue
-			}
-			taskChannelM := make(map[int][]string)
-			taskM := make(map[string]*model.Task)
-			nullTaskIds := make([]int64, 0)
-			for _, task := range tasks {
-				upstreamID := task.GetUpstreamTaskID()
-				if upstreamID == "" {
-					// 统计失败的未完成任务
-					nullTaskIds = append(nullTaskIds, task.ID)
-					continue
-				}
-				taskM[upstreamID] = task
-				taskChannelM[task.ChannelId] = append(taskChannelM[task.ChannelId], upstreamID)
-			}
-			if len(nullTaskIds) > 0 {
-				err := model.TaskBulkUpdateByID(nullTaskIds, map[string]any{
-					"status":   "FAILURE",
-					"progress": "100%",
-				})
-				if err != nil {
-					logger.LogError(ctx, fmt.Sprintf("Fix null task_id task error: %v", err))
-				} else {
-					logger.LogInfo(ctx, fmt.Sprintf("Fix null task_id task success: %v", nullTaskIds))
-				}
-			}
-			if len(taskChannelM) == 0 {
-				continue
-			}
-
-			DispatchPlatformUpdate(platform, taskChannelM, taskM)
-		}
+		RunTaskPollingOnce(context.TODO(), nil)
 		common.SysLog("任务进度轮询完成")
 	}
+}
+
+func RunTaskPollingOnce(ctx context.Context, progress func(processed, total int)) TaskPollingSummary {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	sweepTimedOutTasks(ctx)
+	allTasks := model.GetAllUnFinishSyncTasks(constant.TaskQueryLimit)
+	summary := TaskPollingSummary{
+		Total:         len(allTasks),
+		PlatformCount: make(map[string]int),
+	}
+	if progress != nil {
+		progress(0, summary.Total)
+	}
+	platformTask := make(map[constant.TaskPlatform][]*model.Task)
+	for _, t := range allTasks {
+		platformTask[t.Platform] = append(platformTask[t.Platform], t)
+		summary.PlatformCount[string(t.Platform)]++
+	}
+	for platform, tasks := range platformTask {
+		if len(tasks) == 0 {
+			continue
+		}
+		if platform == constant.TaskPlatformPlaygroundImage {
+			summary.SkippedPlayground += len(tasks)
+			summary.Processed += len(tasks)
+			if progress != nil {
+				progress(summary.Processed, summary.Total)
+			}
+			continue
+		}
+		taskChannelM := make(map[int][]string)
+		taskM := make(map[string]*model.Task)
+		nullTaskIds := make([]int64, 0)
+		for _, task := range tasks {
+			upstreamID := task.GetUpstreamTaskID()
+			if upstreamID == "" {
+				// 统计失败的未完成任务
+				nullTaskIds = append(nullTaskIds, task.ID)
+				continue
+			}
+			taskM[upstreamID] = task
+			taskChannelM[task.ChannelId] = append(taskChannelM[task.ChannelId], upstreamID)
+		}
+		if len(nullTaskIds) > 0 {
+			err := model.TaskBulkUpdateByID(nullTaskIds, map[string]any{
+				"status":   "FAILURE",
+				"progress": "100%",
+			})
+			if err != nil {
+				logger.LogError(ctx, fmt.Sprintf("Fix null task_id task error: %v", err))
+			} else {
+				summary.FixedNullTasks += len(nullTaskIds)
+				logger.LogInfo(ctx, fmt.Sprintf("Fix null task_id task success: %v", nullTaskIds))
+			}
+		}
+		if len(taskChannelM) > 0 {
+			DispatchPlatformUpdate(platform, taskChannelM, taskM)
+		}
+		summary.Processed += len(tasks)
+		if progress != nil {
+			progress(summary.Processed, summary.Total)
+		}
+	}
+	if progress != nil && summary.Total == 0 {
+		progress(0, 0)
+	}
+	return summary
 }
 
 // DispatchPlatformUpdate 按平台分发轮询更新
@@ -578,6 +612,25 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 		settleTaskBillingOnComplete(ctx, adaptor, task, taskResult)
 	}
 	if shouldRefund {
+		extra := map[string]interface{}{
+			"fail_reason":        task.FailReason,
+			"failure_kind":       "media_task_failed",
+			"final_log_type":     "error",
+			"refund_reason":      "media_task_failed",
+			"billing_settlement": "preconsume_refund_task_failed",
+		}
+		if task.ChannelId > 0 {
+			extra["channel_id"] = task.ChannelId
+		}
+		if task.StartTime > 0 && task.FinishTime >= task.StartTime {
+			extra["use_time"] = int(task.FinishTime - task.StartTime)
+		}
+		if task.Quota > 0 {
+			extra["pre_refund_quota"] = task.Quota
+		}
+		if err := model.UpdatePlaygroundVideoTaskConsumeLogResult(task.UserId, task.TaskID, "", task.FinishTime, string(model.TaskStatusFailure), extra); err != nil {
+			logger.LogError(ctx, fmt.Sprintf("failed to update failed playground video task log %s: %s", task.TaskID, err.Error()))
+		}
 		RefundTaskQuota(ctx, task, task.FailReason)
 	}
 

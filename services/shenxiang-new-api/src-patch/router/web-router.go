@@ -6,6 +6,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"path"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
@@ -34,6 +35,7 @@ func SetWebRouter(router *gin.Engine, assets ThemeAssets) {
 	router.Use(gzip.Gzip(gzip.DefaultCompression))
 	router.Use(middleware.GlobalWebRateLimit())
 	router.Use(middleware.Cache())
+	router.Use(denySensitiveWebPaths())
 	setCodexWorkspaceProxy(router)
 	router.Use(static.Serve("/", themeFS))
 	router.NoRoute(func(c *gin.Context) {
@@ -49,6 +51,50 @@ func SetWebRouter(router *gin.Engine, assets ThemeAssets) {
 			c.Data(http.StatusOK, "text/html; charset=utf-8", assets.DefaultIndexPage)
 		}
 	})
+}
+
+func denySensitiveWebPaths() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if isSensitiveWebPath(c.Request.URL.Path, c.Request.RequestURI) {
+			c.Set(middleware.RouteTagKey, "web")
+			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"success": false, "message": "not found"})
+			return
+		}
+		c.Next()
+	}
+}
+
+func isSensitiveWebPath(urlPath string, requestURI string) bool {
+	checks := []string{urlPath, requestURI}
+	for _, raw := range checks {
+		lowerRaw := strings.ToLower(strings.TrimSpace(raw))
+		if lowerRaw == "" {
+			continue
+		}
+		if strings.Contains(lowerRaw, "%2e") || strings.Contains(lowerRaw, "%2f") {
+			return true
+		}
+	}
+	cleanPath := path.Clean("/" + strings.TrimSpace(urlPath))
+	lowerPath := strings.ToLower(cleanPath)
+	base := path.Base(lowerPath)
+	switch {
+	case base == ".env" || strings.HasPrefix(base, ".env."):
+		return true
+	case base == "docker-compose.yml" || base == "docker-compose.yaml" || strings.HasPrefix(base, "docker-compose."):
+		return true
+	case base == "compose.yml" || base == "compose.yaml":
+		return true
+	}
+	for _, segment := range strings.Split(lowerPath, "/") {
+		if segment == "" || segment == "." || segment == ".." || segment == ".well-known" {
+			continue
+		}
+		if strings.HasPrefix(segment, ".") {
+			return true
+		}
+	}
+	return false
 }
 
 func setCodexWorkspaceProxy(router *gin.Engine) {

@@ -2,11 +2,14 @@ package service
 
 import (
 	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/dto"
+	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
+	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
 
@@ -133,4 +136,33 @@ func TestMergeRealtimeUpstreamCostAddsMatchingCurrency(t *testing.T) {
 	require.True(t, ok, reason)
 	require.Equal(t, "USD", currency)
 	require.InDelta(t, 0.35, cost, 0.000001)
+}
+
+func TestShouldRetryTextEmptyOutputOnceBeforeResponseWritten(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	info := &relaycommon.RelayInfo{}
+
+	require.True(t, ShouldRetryTextEmptyOutput(c, info, &dto.Usage{}))
+	require.False(t, ShouldRetryTextEmptyOutput(c, info, &dto.Usage{}))
+	require.True(t, c.GetBool(textEmptyOutputRetryKey))
+	require.Equal(t, TextEmptyOutputRetryReason, c.GetString("text_empty_output_retry_reason"))
+}
+
+func TestShouldRetryTextEmptyOutputSkipsAfterOutputSent(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Set("response_stream_output_sent", true)
+
+	require.False(t, ShouldRetryTextEmptyOutput(c, &relaycommon.RelayInfo{}, &dto.Usage{}))
+}
+
+func TestShouldRetryTextEmptyOutputSkipsWhenUsageOrCostExists(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+
+	require.False(t, ShouldRetryTextEmptyOutput(c, &relaycommon.RelayInfo{}, &dto.Usage{CompletionTokens: 1}))
+
+	c2, _ := gin.CreateTestContext(httptest.NewRecorder())
+	require.False(t, ShouldRetryTextEmptyOutput(c2, &relaycommon.RelayInfo{}, &dto.Usage{CostUSD: 0.01}))
 }

@@ -40,6 +40,11 @@ RECOVERING_RUNS = int(os.environ.get("PROVIDER_MONITOR_RECOVERING_RUNS", "2"))
 REAL_REQUEST_LOOKBACK_SECONDS = int(os.environ.get("PROVIDER_MONITOR_REAL_REQUEST_LOOKBACK_SECONDS", "1800"))
 REAL_REQUEST_LIMIT = int(os.environ.get("PROVIDER_MONITOR_REAL_REQUEST_LIMIT", "300"))
 REAL_REQUEST_USE_TIME_DEGRADE_MS = int(os.environ.get("PROVIDER_MONITOR_REAL_REQUEST_USE_TIME_DEGRADE_MS", "60000"))
+IMAGE_REAL_REQUEST_LOOKBACK_SECONDS = int(os.environ.get("PROVIDER_MONITOR_IMAGE_REAL_REQUEST_LOOKBACK_SECONDS", "86400"))
+IMAGE_REAL_REQUEST_LIMIT = int(os.environ.get("PROVIDER_MONITOR_IMAGE_REAL_REQUEST_LIMIT", "500"))
+IMAGE_REAL_REQUEST_P95_DEGRADE_MS = int(os.environ.get("PROVIDER_MONITOR_IMAGE_REAL_REQUEST_P95_DEGRADE_MS", "300000"))
+IMAGE_REAL_REQUEST_P95_SEVERE_MS = int(os.environ.get("PROVIDER_MONITOR_IMAGE_REAL_REQUEST_P95_SEVERE_MS", "600000"))
+IMAGE_LONG_TAIL_CHANNEL_IDS = os.environ.get("PROVIDER_MONITOR_IMAGE_LONG_TAIL_CHANNEL_IDS", "4,8,12,16")
 
 REDACTED = "***redacted***"
 SENSITIVE_TEXT_PATTERNS = (
@@ -91,6 +96,11 @@ IMAGE2_PRIMARY = {
     "lookback_seconds": 1800,
     "disable_threshold": 2,
     "recover_cooldown_seconds": 1800,
+}
+
+IMAGE_LONG_TAIL = {
+    "name": "image2_long_tail_real_p95",
+    "model": "gpt-image-2-4K",
 }
 
 
@@ -160,6 +170,24 @@ def mysql_json(query: str, env: dict[str, str]) -> list[dict[str, Any]]:
 
 def shell_quote(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
+
+
+def parse_int_list(value: str) -> list[int]:
+    ids: list[int] = []
+    seen: set[int] = set()
+    for part in re.split(r"[\s,;]+", value or ""):
+        item = part.strip()
+        if not item:
+            continue
+        try:
+            channel_id = int(item)
+        except ValueError:
+            continue
+        if channel_id <= 0 or channel_id in seen:
+            continue
+        ids.append(channel_id)
+        seen.add(channel_id)
+    return ids
 
 
 def redact_text(value: str) -> str:
@@ -955,8 +983,140 @@ def evaluate_image2_primary(channels_by_id: dict[int, dict[str, Any]], state: di
     return event
 
 
+def load_image_long_tail_rows(env: dict[str, str], channel_ids: list[int]) -> list[dict[str, Any]]:
+    if not channel_ids or IMAGE_REAL_REQUEST_LIMIT <= 0:
+        return []
+    cutoff = now_ts() - IMAGE_REAL_REQUEST_LOOKBACK_SECONDS
+    ids = ",".join(str(channel_id) for channel_id in channel_ids)
+    model = shell_quote(str(IMAGE_LONG_TAIL["model"]))
+    select = f"""
+SELECT JSON_OBJECT(
+  'id', id,
+  'created_at', created_at,
+  'channel_id', channel_id,
+  'type', type,
+  'use_time', use_time,
+  'content', LEFT(COALESCE(content, ''), 220),
+  'other', LEFT(COALESCE(other, ''), 1200)
+)
+FROM logs
+WHERE created_at >= {cutoff}
+  AND model_name = {model}
+  AND channel_id IN ({ids})
+  AND use_time > 0
+ORDER BY id DESC
+LIMIT {int(IMAGE_REAL_REQUEST_LIMIT)}
+"""
+    return mysql_json(select, env)
+
+
+def row_is_media_failure(row: dict[str, Any]) -> bool:
+    content = str(row.get("content") or "")
+    other = str(row.get("other") or "")
+    return (
+        int(row.get("type") or 0) == 5
+        or '"failure_kind":"media_task_failed"' in other
+        or '"task_status":"FAILURE"' in other
+        or "任务失败" in content
+    )
+
+
+def evaluate_image_long_tail_real_p95(
+    channels_by_id: dict[int, dict[str, Any]],
+    state: dict[str, Any],
+    env: dict[str, str],
+    dry_run: bool,
+) -> dict[str, Any]:
+    configured_channel_ids = parse_int_list(IMAGE_LONG_TAIL_CHANNEL_IDS)
+    channel_ids = [channel_id for channel_id in configured_channel_ids if channel_id in channels_by_id]
+    if not channel_ids:
+        return {"event": IMAGE_LONG_TAIL["name"], "action": "missing_channel", "configured_channel_ids": configured_channel_ids}
+
+    rows = load_image_long_tail_rows(env, channel_ids)
+    by_channel: dict[int, list[dict[str, Any]]] = {channel_id: [] for channel_id in channel_ids}
+    for row in rows:
+        channel_id = int(row.get("channel_id") or 0)
+        if channel_id in by_channel:
+            by_channel[channel_id].append(row)
+
+    available_channels = [
+        channel_id
+        for channel_id in channel_ids
+        if int(channels_by_id.get(channel_id, {}).get("status") or 0) == 1
+    ]
+    summaries: dict[int, dict[str, Any]] = {}
+    for index, channel_id in enumerate(channel_ids):
+        channel = channels_by_id.get(channel_id, {})
+        channel_rows = by_channel.get(channel_id, [])
+        use_times_ms = [int(row.get("use_time") or 0) * 1000 for row in channel_rows if int(row.get("use_time") or 0) > 0]
+        failures = sum(1 for row in channel_rows if row_is_media_failure(row))
+        p95_ms = percentile(use_times_ms, 0.95)
+        max_ms = max(use_times_ms) if use_times_ms else None
+        current_weight = int(channel.get("weight") or 0)
+        target_weight = current_weight if current_weight > 0 else 100
+        action = "none"
+        severity = "insufficient_samples" if len(use_times_ms) < 2 else "healthy"
+        if p95_ms is not None and len(use_times_ms) >= 2:
+            target_weight = 100
+            if p95_ms >= IMAGE_REAL_REQUEST_P95_SEVERE_MS:
+                severity = "severe_long_tail"
+                target_weight = 25
+            elif p95_ms >= IMAGE_REAL_REQUEST_P95_DEGRADE_MS:
+                severity = "degraded_long_tail"
+                target_weight = 50
+        if failures and len(channel_rows) >= 2 and failures / max(len(channel_rows), 1) >= DEGRADE_ERROR_RATE:
+            severity = "failure_degraded" if severity == "healthy" else severity
+            target_weight = min(target_weight, 50)
+        if target_weight < 100 and len(available_channels) <= 1:
+            target_weight = min(75, max(target_weight, 75))
+            action = "soft_degrade_no_fallback"
+
+        baseline_priority = int(channel.get("priority") or 0)
+        ch_state = channel_state(state, channel_id, baseline_priority)
+        ch_state["last_image_p95_ms"] = p95_ms
+        ch_state["last_image_max_ms"] = max_ms
+        ch_state["last_image_sample_count"] = len(use_times_ms)
+        ch_state["last_image_severity"] = severity
+        ch_state["last_checked_at"] = now_iso()
+
+        if current_weight != target_weight:
+            set_channel_weight(env, channel_id, target_weight, f"{IMAGE_LONG_TAIL['name']}_{severity}", dry_run)
+            if action == "none":
+                action = f"weight_{target_weight}"
+
+        summaries[channel_id] = {
+            "channel_id": channel_id,
+            "current_status": int(channel.get("status") or 0),
+            "current_weight": current_weight,
+            "target_weight": target_weight,
+            "current_priority": baseline_priority,
+            "sample_count": len(use_times_ms),
+            "failure_count": failures,
+            "p95_use_ms": p95_ms,
+            "max_use_ms": max_ms,
+            "severity": severity,
+            "action": action,
+            "rank": index + 1,
+        }
+
+    event = {
+        "ts": now_iso(),
+        "event": IMAGE_LONG_TAIL["name"],
+        "model": IMAGE_LONG_TAIL["model"],
+        "dry_run": dry_run,
+        "lookback_seconds": IMAGE_REAL_REQUEST_LOOKBACK_SECONDS,
+        "rows": len(rows),
+        "configured_channel_ids": configured_channel_ids,
+        "available_channel_ids": available_channels,
+        "channels": summaries,
+    }
+    write_event(event)
+    return event
+
+
 def all_configured_channel_ids() -> list[int]:
     ids: set[int] = {IMAGE2_PRIMARY["channel_id"], IMAGE2_PRIMARY["fallback_channel_id"]}
+    ids.update(parse_int_list(IMAGE_LONG_TAIL_CHANNEL_IDS))
     for family in TEXT_FAMILIES:
         ids.update(family.channel_ids)
     return sorted(ids)
@@ -998,6 +1158,12 @@ def main() -> int:
         results["real_request_latency_ingest"] = ingest_real_request_samples(TEXT_FAMILIES, state, env)
         results[IMAGE2_PRIMARY["name"]] = evaluate_image2_primary(
             load_channels_by_id(env, [IMAGE2_PRIMARY["channel_id"], IMAGE2_PRIMARY["fallback_channel_id"]]),
+            state,
+            env,
+            args.dry_run,
+        )
+        results[IMAGE_LONG_TAIL["name"]] = evaluate_image_long_tail_real_p95(
+            channels,
             state,
             env,
             args.dry_run,

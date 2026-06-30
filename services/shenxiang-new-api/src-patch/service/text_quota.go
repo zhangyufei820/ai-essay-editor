@@ -1,7 +1,9 @@
 package service
 
 import (
+	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -20,6 +22,57 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/shopspring/decimal"
 )
+
+const (
+	TextEmptyOutputRetryReason = "no_effective_output"
+	textEmptyOutputRetryKey    = "text_empty_output_retry"
+)
+
+func isZeroUsageForRetry(usage *dto.Usage) bool {
+	if usage == nil {
+		return true
+	}
+	return usage.PromptTokens == 0 &&
+		usage.CompletionTokens == 0 &&
+		usage.TotalTokens == 0 &&
+		usage.InputTokens == 0 &&
+		usage.OutputTokens == 0 &&
+		usage.Cost == nil &&
+		usage.TotalCost == nil &&
+		usage.CostUSD == nil &&
+		usage.CostCNY == nil &&
+		usage.Billing == nil
+}
+
+func HasTextOutputSent(ctx *gin.Context) bool {
+	if ctx == nil {
+		return false
+	}
+	if ctx.Writer != nil && (ctx.Writer.Written() || ctx.Writer.Size() > 0) {
+		return true
+	}
+	return ctx.GetBool("response_stream_output_sent") || ctx.GetBool("response_completed_seen")
+}
+
+func ShouldRetryTextEmptyOutput(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, usage *dto.Usage) bool {
+	if ctx == nil || relayInfo == nil || !isZeroUsageForRetry(usage) || HasTextOutputSent(ctx) {
+		return false
+	}
+	if relayInfo.RetryIndex > 0 || ctx.GetBool(textEmptyOutputRetryKey) {
+		return false
+	}
+	ctx.Set(textEmptyOutputRetryKey, true)
+	ctx.Set("text_empty_output_retry_reason", TextEmptyOutputRetryReason)
+	return true
+}
+
+func TextEmptyOutputRetryError() *types.NewAPIError {
+	return types.NewOpenAIError(
+		errors.New("upstream returned no effective output"),
+		types.ErrorCodeEmptyResponse,
+		http.StatusBadGateway,
+	)
+}
 
 type textQuotaSummary struct {
 	PromptTokens             int
@@ -424,8 +477,19 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 	}
 	if summary.TotalTokens == 0 && (upstreamCostBilling == nil || !upstreamCostBilling.Applied) {
 		other["billing_settlement"] = "preconsume_refund_no_usage"
+		other["zero_usage"] = true
+		other["empty_output"] = !responseStreamOutputSent
+		other["refund_reason"] = TextEmptyOutputRetryReason
+		other["failure_kind"] = "text_no_effective_output"
+		other["retry_attempted"] = ctx.GetBool(textEmptyOutputRetryKey)
+		if retryReason := strings.TrimSpace(ctx.GetString("text_empty_output_retry_reason")); retryReason != "" {
+			other["retry_reason"] = retryReason
+		}
 		if responseStreamOutputSent {
 			other["billing_settlement"] = "zero_usage_after_output_review"
+			other["empty_output"] = false
+			other["refund_reason"] = "upstream_missing_usage_after_output"
+			other["failure_kind"] = "text_missing_usage_after_output"
 		}
 		other["pre_consumed_quota"] = relayInfo.FinalPreConsumedQuota
 	}

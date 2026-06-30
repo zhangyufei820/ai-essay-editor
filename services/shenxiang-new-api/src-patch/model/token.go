@@ -22,6 +22,8 @@ type Token struct {
 	ExpiredTime        int64          `json:"expired_time" gorm:"bigint;default:-1"` // -1 means never expired
 	RemainQuota        int            `json:"remain_quota" gorm:"default:0"`
 	UnlimitedQuota     bool           `json:"unlimited_quota"`
+	DailyQuota         int            `json:"daily_quota" gorm:"-"`
+	MonthlyQuota       int            `json:"monthly_quota" gorm:"-"`
 	ModelLimitsEnabled bool           `json:"model_limits_enabled"`
 	ModelLimits        string         `json:"model_limits" gorm:"type:text"`
 	AllowIps           *string        `json:"allow_ips" gorm:"default:''"`
@@ -434,6 +436,13 @@ func decreaseTokenQuota(id int, quota int) (err error) {
 	}
 	if result.RowsAffected == 0 {
 		return errors.New("token quota is not enough")
+	}
+	return nil
+}
+
+func RefundTokenQuotaWindows(tokenId int, quota int) error {
+	if tokenId <= 0 || quota <= 0 {
+		return nil
 	}
 	return nil
 }
