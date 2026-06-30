@@ -1385,7 +1385,7 @@ const MediaPlayground = () => {
     models.length === 0 || models.some((item) => item === currentModelId);
   const effectiveGroup =
     mode === 'image' ? IMAGE_GENERATION_GROUP.value : group;
-  const reversePromptGroup = group || groups[0]?.value || '';
+  const reversePromptGroup = IMAGE_GENERATION_GROUP.value;
   const visibleGroupOptions =
     mode === 'image' ? [IMAGE_GENERATION_GROUP] : groups;
   const referenceFileLimit =
