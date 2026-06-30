@@ -22,6 +22,7 @@ import {
   Banner,
   Button,
   Input,
+  Modal,
   TextArea,
   Select,
   Slider,
@@ -494,13 +495,114 @@ const IMAGE_VERY_LONG_WAIT_MESSAGE =
   '图像任务已进入长尾等待，系统仍会继续轮询并保留任务结果。请保持当前页面或稍后用任务 ID 查询。';
 const REVERSE_PROMPT_MODEL = 'gpt-5.4-mini';
 const REVERSE_PROMPT_MAX_IMAGE_BYTES = 12 * 1024 * 1024;
+const REVERSE_PROMPT_REFERENCE_PREFIX = '我需要按参考图生成图片：';
 const REVERSE_PROMPT_INSTRUCTION_BASE =
-  '请根据上传图片反推出可用于图像生成的详细提示词，只返回提示词正文。请用中文写作，目标是让后续图像生成尽可能接近参考图，而不是生成同题材的新图。必须优先锁定以下可复现因素：1. 画幅比例、裁切边界、主体在画面中的大小、头顶/脚底/左右留白、相机高度、拍摄距离和镜头焦段感；2. 主体姿态、朝向、步态、手臂位置、腿部交叉关系、手持物位置、表情、视线、发型走向和头发遮挡；3. 服装版型、颜色、材质、纹理、褶皱、领口、腰线、裙摆形状、鞋包首饰等具体细节；4. 背景真实元素的位置关系，包括街道/斑马线/路沿/店招/广告牌/桌椅/遮阳伞/植物/墙柱/路人，说明哪些元素必须保留、在哪一侧、虚化程度如何；5. 光线方向、阴影强弱、肤色质感、清晰度、景深、色温、对比度、真实街拍感或商业精修感。请避免泛化成“美女街拍、咖啡店背景”这类宽泛描述，不要擅自替换背景、删除路人、改变裁切、改变衣服结构或把画面过度棚拍化。只输出一段可直接用于图像生成的中文提示词，不要解释过程，不要输出 Markdown。';
+  '请根据上传图片反推出可用于图像生成的详细提示词，并按最终输出规则返回。请用中文写作，目标是让后续图像生成尽可能接近参考图，而不是生成同题材的新图。必须优先锁定以下可复现因素：1. 画幅比例、裁切边界、主体在画面中的大小、头顶/脚底/左右留白、相机高度、拍摄距离和镜头焦段感；2. 主体姿态、朝向、步态、手臂位置、腿部交叉关系、手持物位置、表情、视线、发型走向和头发遮挡；3. 服装版型、颜色、材质、纹理、褶皱、领口、腰线、裙摆形状、鞋包首饰等具体细节；4. 背景真实元素的位置关系，包括街道/斑马线/路沿/店招/广告牌/桌椅/遮阳伞/植物/墙柱/路人，说明哪些元素必须保留、在哪一侧、虚化程度如何；5. 光线方向、阴影强弱、肤色质感、清晰度、景深、色温、对比度、真实街拍感或商业精修感。请避免泛化成“美女街拍、咖啡店背景”这类宽泛描述，不要擅自替换背景、删除路人、改变裁切、改变衣服结构或把画面过度棚拍化。不要解释过程，不要输出 Markdown。';
 const REVERSE_PROMPT_INSTRUCTION_EXTENSION =
   '在以上基础上继续整合以下反推规则：必须把“保持不变的视觉不变量”和“禁止漂移项”写进最终提示词，优先使用“严格保持参考图的同一构图、同一主体比例、同一相机距离、同一拍摄角度、同一透视关系、同一背景物体位置、同一光线方向和同一服装结构”这类硬约束。若参考图是近距离手机自拍、低机位、广角或手臂伸向镜头，必须明确写出前景手臂/袖口占画面比例、近大远小透视畸变、脸部在画面上半部的位置、头顶到画面边缘距离、胸肩腰在画面中的裁切边界，禁止把它改成端正半身写真、棚拍写真或更远的全身构图。若参考图是超长竖图或非标准 9:16 画幅，必须写出近似原图的纵横比或“保持原图超长竖向裁切”，并说明不允许为了适配常规尺寸而向下补全身体、扩大背景或改变主体占比。必须按相对位置描述关键物体：例如头发/发饰/耳饰/领口/腰带/袖口/刺绣/门框/天花板/灯源/高光/阴影分别位于画面哪一侧、上下百分比区间、是否被裁切、是否被前景遮挡。人物类图片必须锁定脸部朝向、下巴角度、眼睛视线、嘴唇开合、耳朵露出程度、碎发贴脸和遮挡位置、皮肤真实纹理与修图强度；服装类图片必须锁定交叠衣襟方向、透明薄纱层、刺绣图案的位置密度、腰带宽度和配饰数量，禁止凭空增加更华丽的流苏、耳坠、腰饰或改变衣服层级。光线类图片必须保留原图中的过曝点、背光轮廓光、发丝高光、镜头眩光、硬阴影或低对比灰墙质感，不要自动优化成均匀柔光、干净影棚或电影海报色调。最终提示词要同时包含正向复现描述和负向约束：不要改变裁切，不要改变视角，不要居中重构，不要拉远镜头，不要标准化五官姿态，不要增加不存在的配饰，不要把真实自拍感改成精修商业写真。';
 const REVERSE_PROMPT_MATERIAL_CARD_EXTENSION =
-  '同时把“JSON素材卡模板”的字段作为内部拆解框架使用，但最终仍然只输出一段中文提示词，不输出JSON、字段名、标题或分析过程。内部必须按以下维度检查后再写最终提示词：baseInfo 图像类型、竖横方向、近似比例、景别和真实感来源；mainSubject 主体类型、成年人物属性、脸部识别感、五官轮廓、脸型比例、神态气质、整体体态、发型状态、服装层次、妆容配饰、动作表情和画面位置；composition 构图方式、主体位置、前景/中景/背景、边缘残留和必须遵守的构图约束；cameraSetup 手机镜头类型、低/平/俯仰角度、拍摄距离、广角畸变、自拍或他拍逻辑、观者视角；lightShadow 光源位置、光线性质、高光、阴影、曝光和动态范围；colorTone 主色、辅色、饱和度、对比度和整体冷暖；textureMaterial 服装、皮肤、头发、环境、道具材质和细节真实感；sceneSpace 地点类型、可见物体、真实场景证据、纵深关系和生活现场感；spatialLogic 前中后景层级、遮挡顺序、人物与物体接触关系、肢体前后拓扑和容易生成错误的风险点；imageQuality 清晰度、噪点、手机压缩感、自动锐化、轻微低动态范围、后期程度和AI感风险；negativePrompt 避免的风格、构图漂移、身体错误、道具漂浮、塑料皮肤、背景糊成色块、人物贴图感和低俗凝视。只描述图片中真实可见的内容，不脑补不存在的物体、动作、关系和情绪，不写“高级、漂亮、氛围感强”这类没有生成指导价值的空话。人物图片必须自然加入参考图人物一致性要求：以上传图片中的成年人物为人物原型，保留脸部识别感、五官轮廓、脸型比例、神态气质和整体人物辨识度；但不要把胸部、臀部、腿部等身体局部作为提示词焦点。默认写成真实手机生活照、手机抓拍照或生活随拍照的可生成提示词，强调自然、不摆拍、不影棚、不广告、不精修，清晰但不过锐，皮肤保留真实纹理，边缘保留真实环境残留。';
-const REVERSE_PROMPT_INSTRUCTION = `${REVERSE_PROMPT_INSTRUCTION_BASE}${REVERSE_PROMPT_INSTRUCTION_EXTENSION}${REVERSE_PROMPT_MATERIAL_CARD_EXTENSION}`;
+  '同时把“JSON素材卡模板”的字段作为内部拆解框架使用，但最终只输出指定 JSON 对象，不输出字段外标题或分析过程。内部必须按以下维度检查后再写最终提示词：baseInfo 图像类型、竖横方向、近似比例、景别和真实感来源；mainSubject 主体类型、成年人物属性、脸部识别感、五官轮廓、脸型比例、神态气质、整体体态、发型状态、服装层次、妆容配饰、动作表情和画面位置；composition 构图方式、主体位置、前景/中景/背景、边缘残留和必须遵守的构图约束；cameraSetup 手机镜头类型、低/平/俯仰角度、拍摄距离、广角畸变、自拍或他拍逻辑、观者视角；lightShadow 光源位置、光线性质、高光、阴影、曝光和动态范围；colorTone 主色、辅色、饱和度、对比度和整体冷暖；textureMaterial 服装、皮肤、头发、环境、道具材质和细节真实感；sceneSpace 地点类型、可见物体、真实场景证据、纵深关系和生活现场感；spatialLogic 前中后景层级、遮挡顺序、人物与物体接触关系、肢体前后拓扑和容易生成错误的风险点；imageQuality 清晰度、噪点、手机压缩感、自动锐化、轻微低动态范围、后期程度和AI感风险；negativePrompt 避免的风格、构图漂移、身体错误、道具漂浮、塑料皮肤、背景糊成色块、人物贴图感和低俗凝视。只描述图片中真实可见的内容，不脑补不存在的物体、动作、关系和情绪，不写“高级、漂亮、氛围感强”这类没有生成指导价值的空话。人物图片必须自然加入参考图人物一致性要求：以上传图片中的成年人物为人物原型，保留脸部识别感、五官轮廓、脸型比例、神态气质和整体人物辨识度；但不要把胸部、臀部、腿部等身体局部作为提示词焦点。默认写成真实手机生活照、手机抓拍照或生活随拍照的可生成提示词，强调自然、不摆拍、不影棚、不广告、不精修，清晰但不过锐，皮肤保留真实纹理，边缘保留真实环境残留。';
+const REVERSE_PROMPT_FINAL_OUTPUT_GUARD =
+  '最终必须同时输出两套提示词，并且只输出一个 JSON 对象，不要 Markdown、不要解释、不要字段外文本。JSON 结构固定为 {"reference_prompt":"...","text_prompt":"..."}。reference_prompt 用于“带参考图生成”，必须以“我需要按参考图生成图片：”开头，允许使用“参考图”作为生成锚点，必须写清严格保持参考图的同一构图、同一主体比例、同一相机距离、同一拍摄角度、同一透视关系、同一背景物体位置、同一光线方向、同一服装结构和同一人物识别特征。text_prompt 用于“纯文生图”，不得出现“上传图片、上传图、输入图、源图、参考图、原图、这张图”等元描述，必须把源图关系改写成可独立生成的视觉属性描述，例如把“保留原图构图”改写为“保持同一超长竖向近距离自拍构图”，把“参考图人物”改写为“同一成年人物识别特征”，把“上传图片中的服装”改写为“深红交叠衣襟、透明薄纱袖、刺绣位置和腰带宽度”。';
+const REVERSE_PROMPT_INSTRUCTION = `${REVERSE_PROMPT_INSTRUCTION_BASE}${REVERSE_PROMPT_INSTRUCTION_EXTENSION}${REVERSE_PROMPT_MATERIAL_CARD_EXTENSION}${REVERSE_PROMPT_FINAL_OUTPUT_GUARD}`;
+
+const REVERSE_PROMPT_SOURCE_PHRASE_REPLACEMENTS = [
+  [/以上传图片中的成年女性为人物原型[，,、\s]*/g, '以同一成年女性人物识别特征为基础，'],
+  [/以上传图片中的成年男性为人物原型[，,、\s]*/g, '以同一成年男性人物识别特征为基础，'],
+  [/以上传图片中的成年人物为人物原型[，,、\s]*/g, '以同一成年人物识别特征为基础，'],
+  [/以上传图片中的人物为人物原型[，,、\s]*/g, '以同一人物识别特征为基础，'],
+  [/以输入图中的成年女性为人物原型[，,、\s]*/g, '以同一成年女性人物识别特征为基础，'],
+  [/以输入图中的成年男性为人物原型[，,、\s]*/g, '以同一成年男性人物识别特征为基础，'],
+  [/以输入图中的成年人物为人物原型[，,、\s]*/g, '以同一成年人物识别特征为基础，'],
+  [/以输入图中的人物为人物原型[，,、\s]*/g, '以同一人物识别特征为基础，'],
+  [/以上传图中的成年女性为人物原型[，,、\s]*/g, '以同一成年女性人物识别特征为基础，'],
+  [/以上传图中的成年男性为人物原型[，,、\s]*/g, '以同一成年男性人物识别特征为基础，'],
+  [/以上传图中的成年人物为人物原型[，,、\s]*/g, '以同一成年人物识别特征为基础，'],
+  [/以上传图中的人物为人物原型[，,、\s]*/g, '以同一人物识别特征为基础，'],
+  [/以参考图中的成年女性为人物原型[，,、\s]*/g, '以同一成年女性人物识别特征为基础，'],
+  [/以参考图中的成年男性为人物原型[，,、\s]*/g, '以同一成年男性人物识别特征为基础，'],
+  [/以参考图中的成年人物为人物原型[，,、\s]*/g, '以同一成年人物识别特征为基础，'],
+  [/以参考图中的人物为人物原型[，,、\s]*/g, '以同一人物识别特征为基础，'],
+  [/保持原图超长竖向裁切/g, '保持同一超长竖向裁切'],
+  [/保留原图超长竖向裁切/g, '保留同一超长竖向裁切'],
+  [/严格保持参考图的/g, '严格保持同一'],
+  [/严格保留参考图的/g, '严格保留同一'],
+  [/保持参考图的/g, '保持同一'],
+  [/保留参考图的/g, '保留同一'],
+  [/保持原图的/g, '保持同一'],
+  [/保留原图的/g, '保留同一'],
+  [/保持这张图的/g, '保持同一'],
+  [/保留这张图的/g, '保留同一'],
+  [/保持上传图片的/g, '保持同一'],
+  [/保留上传图片的/g, '保留同一'],
+  [/保持上传图的/g, '保持同一'],
+  [/保留上传图的/g, '保留同一'],
+  [/保持输入图的/g, '保持同一'],
+  [/保留输入图的/g, '保留同一'],
+  [/保持源图的/g, '保持同一'],
+  [/保留源图的/g, '保留同一'],
+  [/与原图一致/g, '与上述视觉特征一致'],
+  [/和原图一致/g, '与上述视觉特征一致'],
+  [/与参考图一致/g, '与上述视觉特征一致'],
+  [/和参考图一致/g, '与上述视觉特征一致'],
+  [/与上传图片一致/g, '与上述视觉特征一致'],
+  [/和上传图片一致/g, '与上述视觉特征一致'],
+  [/与上传图一致/g, '与上述视觉特征一致'],
+  [/和上传图一致/g, '与上述视觉特征一致'],
+  [/与输入图一致/g, '与上述视觉特征一致'],
+  [/和输入图一致/g, '与上述视觉特征一致'],
+  [/与源图一致/g, '与上述视觉特征一致'],
+  [/和源图一致/g, '与上述视觉特征一致'],
+  [/接近原图/g, '接近上述视觉特征'],
+  [/接近参考图/g, '接近上述视觉特征'],
+  [/接近上传图片/g, '接近上述视觉特征'],
+  [/接近上传图/g, '接近上述视觉特征'],
+  [/接近输入图/g, '接近上述视觉特征'],
+  [/接近源图/g, '接近上述视觉特征'],
+  [/还原原图/g, '还原上述视觉特征'],
+  [/复刻原图/g, '复刻上述视觉特征'],
+  [/还原参考图/g, '还原上述视觉特征'],
+  [/复刻参考图/g, '复刻上述视觉特征'],
+  [/还原上传图片/g, '还原上述视觉特征'],
+  [/复刻上传图片/g, '复刻上述视觉特征'],
+  [/还原上传图/g, '还原上述视觉特征'],
+  [/复刻上传图/g, '复刻上述视觉特征'],
+  [/还原输入图/g, '还原上述视觉特征'],
+  [/复刻输入图/g, '复刻上述视觉特征'],
+  [/还原源图/g, '还原上述视觉特征'],
+  [/复刻源图/g, '复刻上述视觉特征'],
+  [/上传图片中的/g, '画面中的'],
+  [/上传图中的/g, '画面中的'],
+  [/输入图中的/g, '画面中的'],
+  [/源图中的/g, '画面中的'],
+  [/参考图中的/g, '画面中的'],
+  [/原图中的/g, '画面中的'],
+  [/这张图中的/g, '画面中的'],
+  [/上传图片里/g, '画面里'],
+  [/上传图里/g, '画面里'],
+  [/输入图里/g, '画面里'],
+  [/源图里/g, '画面里'],
+  [/参考图里/g, '画面里'],
+  [/原图里/g, '画面里'],
+  [/这张图里/g, '画面里'],
+  [/上传图片/g, '画面'],
+  [/上传图/g, '画面'],
+  [/输入图/g, '画面'],
+  [/源图/g, '画面'],
+  [/参考图/g, '画面'],
+  [/原图/g, '画面'],
+  [/这张图/g, '画面'],
+];
+
+const REVERSE_PROMPT_REFERENCE_PHRASE_REPLACEMENTS = [
+  [/上传图片/g, '参考图'],
+  [/上传图/g, '参考图'],
+  [/输入图/g, '参考图'],
+  [/源图/g, '参考图'],
+  [/原图/g, '参考图'],
+  [/这张图/g, '参考图'],
+  [/参考图参考图/g, '参考图'],
+];
 
 function toSelectOptions(values) {
   return values.map((value) => ({ value, label: String(value) }));
@@ -716,6 +818,91 @@ function extractReversePromptText(payload) {
     .replace(/^```(?:text|markdown|json)?/i, '')
     .replace(/```$/i, '')
     .trim();
+}
+
+function sanitizeReversePromptOutput(value) {
+  let text = String(value || '').trim();
+  for (const [pattern, replacement] of REVERSE_PROMPT_SOURCE_PHRASE_REPLACEMENTS) {
+    text = text.replace(pattern, replacement);
+  }
+  return text
+    .replace(/保持画面超长竖向裁切/g, '保持同一超长竖向裁切')
+    .replace(/保留画面超长竖向裁切/g, '保留同一超长竖向裁切')
+    .replace(/保持画面的/g, '保持同一')
+    .replace(/保留画面的/g, '保留同一')
+    .replace(/严格保持画面的/g, '严格保持同一')
+    .replace(/严格保留画面的/g, '严格保留同一')
+    .replace(/同一同一/g, '同一')
+    .replace(/画面人物/g, '人物')
+    .replace(/画面画面/g, '画面')
+    .replace(/，{2,}/g, '，')
+    .replace(/、{2,}/g, '、')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function normalizeReferenceReversePrompt(value) {
+  let text = String(value || '').replace(/\s+/g, ' ').trim();
+  for (const [pattern, replacement] of REVERSE_PROMPT_REFERENCE_PHRASE_REPLACEMENTS) {
+    text = text.replace(pattern, replacement);
+  }
+  if (!text) return '';
+  return text.startsWith(REVERSE_PROMPT_REFERENCE_PREFIX)
+    ? text
+    : `${REVERSE_PROMPT_REFERENCE_PREFIX}${text}`;
+}
+
+function parseReversePromptResult(payload) {
+  const rawText = extractReversePromptText(payload);
+  if (!rawText) return { referencePrompt: '', textPrompt: '' };
+
+  const candidates = [rawText];
+  const objectMatch = rawText.match(/\{[\s\S]*\}/);
+  if (objectMatch && objectMatch[0] !== rawText) candidates.push(objectMatch[0]);
+
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(candidate);
+      const referencePrompt =
+        parsed?.reference_prompt ||
+        parsed?.referencePrompt ||
+        parsed?.reference ||
+        '';
+      const textPrompt =
+        parsed?.text_prompt ||
+        parsed?.textPrompt ||
+        parsed?.prompt ||
+        parsed?.text ||
+        '';
+      if (referencePrompt || textPrompt) {
+        return {
+          referencePrompt: normalizeReferenceReversePrompt(referencePrompt || textPrompt),
+          textPrompt: sanitizeReversePromptOutput(textPrompt || referencePrompt),
+        };
+      }
+    } catch (error) {
+      // Some providers wrap JSON in prose despite the instruction; fall back below.
+    }
+  }
+
+  return {
+    referencePrompt: normalizeReferenceReversePrompt(rawText),
+    textPrompt: sanitizeReversePromptOutput(rawText),
+  };
+}
+
+function askReversePromptReferenceMode() {
+  return new Promise((resolve) => {
+    Modal.confirm({
+      title: '是否把这张图作为生成参考图？',
+      content:
+        '选择“是”会把反推图自动加入下方参考图，并生成“按参考图生成图片”的提示词；选择“否”则只生成纯文生图提示词。',
+      okText: '是，作为参考图',
+      cancelText: '否，仅文生图',
+      onOk: () => resolve(true),
+      onCancel: () => resolve(false),
+    });
+  });
 }
 
 function promptWithReferenceImages(value, count) {
@@ -2114,6 +2301,21 @@ const MediaPlayground = () => {
     );
   }
 
+  function addReversePromptFileAsReference(file) {
+    if (!file) return;
+    if (referenceFiles.some((item) => referenceFileOf(item) === file)) return;
+    if (referenceFiles.length >= IMAGE_EDIT_REFERENCE_LIMIT) {
+      Toast.warning(`最多支持上传 ${IMAGE_EDIT_REFERENCE_LIMIT} 张参考图。`);
+      return;
+    }
+    setReferenceFiles((current) => {
+      if (current.some((item) => referenceFileOf(item) === file)) return current;
+      if (current.length >= IMAGE_EDIT_REFERENCE_LIMIT) return current;
+      const counters = nextReferenceCounters(current);
+      return [...current, createReferenceItem(file, counters)];
+    });
+  }
+
   const requestPayload = useMemo(() => {
     if (mode === 'image') {
       const effectiveCount = clampCount(count, activeImageModel);
@@ -2338,12 +2540,20 @@ const MediaPlayground = () => {
       return;
     }
 
+    let useReferenceImage = await askReversePromptReferenceMode();
+    if (useReferenceImage && !activeImageModel.edit) {
+      Toast.warning('当前模型不支持参考图输入，已按文生图提示词处理。');
+      useReferenceImage = false;
+    }
+
     setMode('image');
+    setImageWorkflow(useReferenceImage ? 'edit' : 'generate');
+    if (useReferenceImage) addReversePromptFileAsReference(reversePromptFile);
     setReversePromptRunning(true);
-    setReversePromptMessage('正在上传参考图并调用图像识别模型...');
+    setReversePromptMessage('正在上传图片并调用图像识别模型...');
     try {
       const imageUrl = await cacheReversePromptImage(reversePromptFile);
-      setReversePromptMessage('参考图已上传，正在反推可生成提示词...');
+      setReversePromptMessage('图片已上传，正在反推两套可生成提示词...');
       const res = await API.post(
         '/pg/chat/completions',
         {
@@ -2370,11 +2580,18 @@ const MediaPlayground = () => {
         { skipErrorHandler: true, timeout: 180000 },
       );
       if (res.data?.error?.message) throw new Error(res.data.error.message);
-      const nextPrompt = extractReversePromptText(res.data);
+      const parsedPrompt = parseReversePromptResult(res.data);
+      const nextPrompt = useReferenceImage
+        ? parsedPrompt.referencePrompt
+        : parsedPrompt.textPrompt;
       if (!nextPrompt) throw new Error('反推结果为空，请换一张图片重试。');
       setReversePromptText(nextPrompt);
       setPrompt(nextPrompt);
-      setReversePromptMessage('提示词已反推并写入画面描述，可继续选择模型生成图像。');
+      setReversePromptMessage(
+        useReferenceImage
+          ? '已生成参考图模式提示词，并自动加入下方参考图。'
+          : '已生成文生图模式提示词，并写入画面描述。',
+      );
       Toast.success('图像提示词已反推');
     } catch (error) {
       const message = userFacingReversePromptError(error);
