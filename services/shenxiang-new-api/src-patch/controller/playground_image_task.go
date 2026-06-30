@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -83,17 +84,7 @@ func V1CreateImageTask(c *gin.Context) {
 }
 
 func createImageTask(c *gin.Context, openAICompat bool) {
-	path := normalizePlaygroundImageTaskPath(c.Query("endpoint"))
-	if path == "" {
-		path = "/pg/images/generations"
-	}
-	if c.Request != nil && c.Request.URL != nil {
-		if strings.HasSuffix(c.Request.URL.Path, "/edits") {
-			path = "/pg/images/edits"
-		} else if strings.HasSuffix(c.Request.URL.Path, "/generations") {
-			path = "/pg/images/generations"
-		}
-	}
+	path := resolvePlaygroundImageTaskRequestPath(c)
 	if path != "/pg/images/generations" && path != "/pg/images/edits" {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid image task endpoint"})
 		return
@@ -278,6 +269,9 @@ func normalizePlaygroundImageTaskRequest(imageReq *dto.ImageRequest, payload map
 		return false
 	}
 	changed := false
+	if normalizePlaygroundImageTaskCount(imageReq, payload) {
+		changed = true
+	}
 	aspectRatio := strings.TrimSpace(imageReq.AspectRatio)
 	imageSize := strings.TrimSpace(imageReq.ImageSize)
 	resolution := strings.TrimSpace(imageReq.Resolution)
@@ -322,6 +316,52 @@ func normalizePlaygroundImageTaskRequest(imageReq *dto.ImageRequest, payload map
 	return changed
 }
 
+func normalizePlaygroundImageTaskCount(imageReq *dto.ImageRequest, payload map[string]interface{}) bool {
+	raw, exists := payload["n"]
+	if !exists {
+		return false
+	}
+	n, ok := parsePlaygroundImageTaskCount(raw)
+	if !ok || n == 0 {
+		delete(payload, "n")
+		imageReq.N = nil
+		return true
+	}
+	if imageReq.N == nil || *imageReq.N != n {
+		imageReq.N = &n
+	}
+	if current, ok := raw.(float64); ok && current == float64(n) {
+		return false
+	}
+	payload["n"] = float64(n)
+	return true
+}
+
+func parsePlaygroundImageTaskCount(raw interface{}) (uint, bool) {
+	switch value := raw.(type) {
+	case float64:
+		maxUint := uint64(^uint(0))
+		if value <= 0 || value > float64(maxUint) || value != float64(uint64(value)) {
+			return 0, false
+		}
+		return uint(value), true
+	case string:
+		parsed, err := strconv.ParseUint(strings.TrimSpace(value), 10, 32)
+		if err != nil || parsed == 0 {
+			return 0, false
+		}
+		return uint(parsed), true
+	case json.Number:
+		parsed, err := strconv.ParseUint(strings.TrimSpace(value.String()), 10, 32)
+		if err != nil || parsed == 0 {
+			return 0, false
+		}
+		return uint(parsed), true
+	default:
+		return 0, false
+	}
+}
+
 func firstNonEmptyNestedString(payload map[string]interface{}, paths ...[]string) string {
 	for _, path := range paths {
 		if value := nestedString(payload, path...); value != "" {
@@ -353,15 +393,22 @@ func ensureGoogleImageConfig(payload map[string]interface{}, aspectRatio string,
 	google := ensureMap(extraBody, "google")
 	imageConfig := ensureMap(google, "image_config")
 	changed := false
-	if aspectRatio != "" && strings.TrimSpace(fmt.Sprint(imageConfig["aspect_ratio"])) == "" {
+	if aspectRatio != "" && isPlaygroundImageTaskBlankValue(imageConfig["aspect_ratio"]) {
 		imageConfig["aspect_ratio"] = aspectRatio
 		changed = true
 	}
-	if imageSize != "" && strings.TrimSpace(fmt.Sprint(imageConfig["image_size"])) == "" {
+	if imageSize != "" && isPlaygroundImageTaskBlankValue(imageConfig["image_size"]) {
 		imageConfig["image_size"] = imageSize
 		changed = true
 	}
 	return changed
+}
+
+func isPlaygroundImageTaskBlankValue(value interface{}) bool {
+	if value == nil {
+		return true
+	}
+	return strings.TrimSpace(fmt.Sprint(value)) == ""
 }
 
 func ensureMap(parent map[string]interface{}, key string) map[string]interface{} {
@@ -400,9 +447,9 @@ func parsePlaygroundImageTaskMultipartRequest(c *gin.Context, imageReq *dto.Imag
 	imageReq.ImageSize = formValue("image_size")
 	imageReq.ResponseFormat = formValue("response_format")
 	if rawN := formValue("n"); rawN != "" {
-		var n uint
-		if _, err := fmt.Sscanf(rawN, "%d", &n); err != nil {
-			return err
+		n, ok := parsePlaygroundImageTaskCount(rawN)
+		if !ok {
+			return fmt.Errorf("invalid image count")
 		}
 		imageReq.N = &n
 	}
@@ -1258,6 +1305,24 @@ func normalizePlaygroundImageTaskPath(value string) string {
 		return value
 	}
 	return ""
+}
+
+func resolvePlaygroundImageTaskRequestPath(c *gin.Context) string {
+	path := ""
+	if c != nil {
+		path = normalizePlaygroundImageTaskPath(c.Query("endpoint"))
+	}
+	if path == "" {
+		path = "/pg/images/generations"
+	}
+	if c != nil && c.Request != nil && c.Request.URL != nil {
+		if strings.HasSuffix(c.Request.URL.Path, "/edits") {
+			path = "/pg/images/edits"
+		} else if strings.HasSuffix(c.Request.URL.Path, "/generations") {
+			path = "/pg/images/generations"
+		}
+	}
+	return path
 }
 
 func persistPlaygroundImageTaskRequest(userID int, taskID string, body []byte) (string, error) {

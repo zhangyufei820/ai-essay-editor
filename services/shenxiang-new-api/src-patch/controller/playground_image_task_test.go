@@ -1,13 +1,19 @@
 package controller
 
 import (
+	"bytes"
 	"encoding/json"
+	"mime/multipart"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/model"
+	relayconstant "github.com/QuantumNous/new-api/relay/constant"
+	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
@@ -39,6 +45,59 @@ func TestNormalizePlaygroundImageTaskPayloadAddsGeminiImageConfig(t *testing.T) 
 	imageConfig := google["image_config"].(map[string]any)
 	require.Equal(t, "9:16", imageConfig["aspect_ratio"])
 	require.Equal(t, "2K", imageConfig["image_size"])
+}
+
+func TestNormalizePlaygroundImageTaskPayloadConvertsStringN(t *testing.T) {
+	raw := []byte(`{
+		"model":"gpt-image-2-4K",
+		"prompt":"edit poster",
+		"n":"1",
+		"size":"2048x1152"
+	}`)
+	request := dto.ImageRequest{
+		Model:  "gpt-image-2-4K",
+		Prompt: "edit poster",
+	}
+
+	normalized, changed := normalizePlaygroundImageTaskPayload(raw, &request)
+	require.True(t, changed)
+	require.NotNil(t, request.N)
+	require.Equal(t, uint(1), *request.N)
+
+	var replay dto.ImageRequest
+	require.NoError(t, json.Unmarshal(normalized, &replay))
+	require.NotNil(t, replay.N)
+	require.Equal(t, uint(1), *replay.N)
+
+	var payload map[string]any
+	require.NoError(t, json.Unmarshal(normalized, &payload))
+	require.Equal(t, float64(1), payload["n"])
+}
+
+func TestPlaygroundImageTaskEditsMultipartReplaysWithNormalizedN(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	require.NoError(t, writer.WriteField("model", "gpt-image-2-4K"))
+	require.NoError(t, writer.WriteField("prompt", "edit poster"))
+	require.NoError(t, writer.WriteField("n", "1"))
+	require.NoError(t, writer.WriteField("size", "2048x1152"))
+	require.NoError(t, writer.Close())
+
+	request := httptest.NewRequest(http.MethodPost, "/pg/images/tasks/edits", bytes.NewReader(body.Bytes()))
+	request.Header.Set("Content-Type", writer.FormDataContentType())
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = request
+
+	replayPath := resolvePlaygroundImageTaskRequestPath(ctx)
+	require.Equal(t, "/pg/images/edits", replayPath)
+	require.Equal(t, relayconstant.RelayModeImagesEdits, relayconstant.Path2RelayMode(replayPath))
+
+	var imageReq dto.ImageRequest
+	require.NoError(t, parsePlaygroundImageTaskRequest(ctx, &imageReq))
+	require.NotNil(t, imageReq.N)
+	require.Equal(t, uint(1), *imageReq.N)
 }
 
 func TestMarkPlaygroundImageTaskLogFailureConvertsConsumeLogToError(t *testing.T) {
