@@ -3,7 +3,7 @@ import json
 import respx
 from httpx import Response
 
-from app.relaydance_client import request_diagnostic_summary
+from app.relaydance_client import provider_payload_diagnostic_summary, request_diagnostic_summary
 
 
 def test_missing_gateway_key_returns_401(client):
@@ -72,6 +72,82 @@ def test_video_request_diagnostic_summary_redacts_prompt_and_image_url():
     assert len(summary["first_frame_url"]["sha256_12"]) == 12
     assert summary["image_urls"] == [{"host": "cdn.example.test", "sha256_12": summary["image_urls"][0]["sha256_12"]}]
     assert len(summary["image_urls"][0]["sha256_12"]) == 12
+
+
+def test_provider_payload_diagnostic_summary_includes_redacted_message():
+    summary = provider_payload_diagnostic_summary(
+        {
+            "code": "invalid_request",
+            "message": "image url https://api.aiphui.top/pg/media/files/u-1/private.png failed validation",
+            "data": None,
+        },
+        400,
+    )
+
+    assert summary["payload_keys"] == ["code", "data", "message"]
+    assert summary["provider_code"] == "service_error"
+    assert summary["message"] == "image url [URL] failed validation"
+    assert "api.aiphui.top" not in json.dumps(summary)
+
+
+def test_provider_payload_diagnostic_summary_unwraps_json_encoded_message():
+    summary = provider_payload_diagnostic_summary(
+        {
+            "code": "upstream_error",
+            "message": json.dumps(
+                {
+                    "error": {
+                        "code": "InputImageSensitiveContentDetected.PrivacyInformation",
+                        "message": "The request failed because the input image may contain real person. Request id: abc",
+                    }
+                }
+            ),
+        },
+        400,
+    )
+
+    assert summary["message"] == "The request failed because the input image may contain real person. Request id: abc"
+
+
+@respx.mock
+def test_video_generation_surfaces_upstream_rejection_message(client, auth_headers, provider_base):
+    respx.post(f"{provider_base}/v1/video/generations").mock(
+        return_value=Response(
+            400,
+            json={
+                "code": "invalid_request",
+                "message": "The request was rejected by content policy for https://api.aiphui.top/private.png",
+                "data": None,
+            },
+        ),
+    )
+
+    response = client.post(
+        "/api/v1/video/generations",
+        headers=auth_headers,
+        json={
+            "model": "seedance-nsfw",
+            "prompt": "@image1 follow this reference.",
+            "seconds": "4",
+            "metadata": {
+                "ratio": "9:16",
+                "resolution": "720p",
+                "content": [
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": "https://cdn.test/reference.png"},
+                        "role": "first_frame",
+                    }
+                ],
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["success"] is False
+    assert body["message"] == "The request was rejected by content policy for [URL]"
+    assert "api.aiphui.top" not in json.dumps(body)
 
 
 @respx.mock
@@ -153,6 +229,14 @@ def test_private_seedance_generation_does_not_forward_default_generate_audio(cli
     sent = json.loads(route.calls.last.request.content)
     assert sent["model"] == "seedance-nsfw"
     assert sent["prompt"] == "@image1 follow this reference."
+    assert sent["content"] == [
+        {"type": "text", "text": "follow this reference."},
+        {
+            "type": "image_url",
+            "image_url": {"url": "https://cdn.test/reference.png"},
+            "role": "reference_image",
+        },
+    ]
     assert sent["first_frame_url"] == "https://cdn.test/reference.png"
     assert sent["image_urls"] == ["https://cdn.test/reference.png"]
     assert sent["metadata"] == {
@@ -191,6 +275,14 @@ def test_private_seedance_generation_reconstructs_metadata_content_from_top_leve
 
     assert response.status_code == 200
     sent = json.loads(route.calls.last.request.content)
+    assert sent["content"] == [
+        {"type": "text", "text": "A neutral studio product shot."},
+        {
+            "type": "image_url",
+            "image_url": {"url": "https://cdn.test/reference.png"},
+            "role": "first_frame",
+        },
+    ]
     assert sent["first_frame_url"] == "https://cdn.test/reference.png"
     assert sent["image_urls"] == ["https://cdn.test/reference.png"]
     assert sent["metadata"] == {
@@ -237,6 +329,14 @@ def test_private_seedance_generation_reconstructs_metadata_content_from_image_ro
 
     assert response.status_code == 200
     sent = json.loads(route.calls.last.request.content)
+    assert sent["content"] == [
+        {"type": "text", "text": "A neutral studio product shot."},
+        {
+            "type": "image_url",
+            "image_url": {"url": "https://cdn.test/reference.png"},
+            "role": "first_frame",
+        },
+    ]
     assert sent["first_frame_url"] == "https://cdn.test/reference.png"
     assert sent["image_with_roles"] == [{"url": "https://cdn.test/reference.png", "role": "first_frame"}]
     assert sent["metadata"] == {
@@ -272,6 +372,47 @@ def test_seedance_2_generation_only_forwards_generate_audio_when_true(client, au
     assert response.status_code == 200
     sent = json.loads(route.calls.last.request.content)
     assert sent["metadata"]["generate_audio"] is True
+
+
+@respx.mock
+def test_seedance_2_generation_forwards_official_top_level_content(client, auth_headers, provider_base):
+    route = respx.post(f"{provider_base}/v1/video/generations").mock(
+        return_value=Response(200, json={"task_id": "task-seedance-2-reference"}),
+    )
+
+    response = client.post(
+        "/api/v1/video/generations",
+        headers=auth_headers,
+        json={
+            "model": "doubao-seedance-2-0-720p",
+            "prompt": "@image1 keep the uploaded character identity.",
+            "seconds": "4",
+            "metadata": {
+                "ratio": "9:16",
+                "resolution": "720p",
+                "content": [
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": "https://cdn.test/reference.png"},
+                        "role": "first_frame",
+                    }
+                ],
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    sent = json.loads(route.calls.last.request.content)
+    assert sent["model"] == "doubao-seedance-2-0-720p"
+    assert sent["content"] == [
+        {"type": "text", "text": "keep the uploaded character identity."},
+        {
+            "type": "image_url",
+            "image_url": {"url": "https://cdn.test/reference.png"},
+            "role": "first_frame",
+        },
+    ]
+    assert sent["first_frame_url"] == "https://cdn.test/reference.png"
 
 
 @respx.mock
@@ -494,6 +635,14 @@ def test_openai_compatible_videos_extracts_first_frame_from_metadata(client, aut
     sent = json.loads(route.calls.last.request.content)
     assert sent["model"] == "seedance-nsfw"
     assert sent["prompt"] == "@image1 A neutral studio product shot."
+    assert sent["content"] == [
+        {"type": "text", "text": "A neutral studio product shot."},
+        {
+            "type": "image_url",
+            "image_url": {"url": "https://cdn.test/reference.png"},
+            "role": "reference_image",
+        },
+    ]
     assert sent["first_frame_url"] == "https://cdn.test/reference.png"
     assert sent["image_urls"] == ["https://cdn.test/reference.png"]
     assert sent["metadata"] == {

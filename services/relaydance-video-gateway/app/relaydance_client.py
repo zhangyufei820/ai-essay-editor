@@ -2,6 +2,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import re
 from collections.abc import Mapping
 from typing import Any
 from urllib.parse import urlparse
@@ -17,6 +18,7 @@ SENSITIVE_KEYS = {"authorization", "token", "signature", "policy", "x-gateway-ke
 RETRY_STATUS_CODES = {429, 500, 502, 503, 504}
 DIAGNOSTIC_VIDEO_PATHS = {"/v1/video/generations", "/v1/videos"}
 PRIVATE_SEEDANCE_MODELS = {"seedance-nsfw", "seedance-nsfw-4k"}
+MAX_PUBLIC_PROVIDER_MESSAGE_CHARS = 500
 
 
 def redact(value: Any) -> Any:
@@ -42,6 +44,7 @@ def video_generation_body(model: Any) -> dict[str, Any]:
 def normalize_video_provider_body(body: Mapping[str, Any]) -> dict[str, Any]:
     body = dict(body)
     body["model"] = canonical_model(str(body.get("model") or ""))
+    is_seedance_video = _is_seedance_video_model(str(body.get("model") or ""))
     is_private_seedance = _is_private_seedance_model(str(body.get("model") or ""))
     metadata = body.get("metadata")
     if not isinstance(metadata, Mapping):
@@ -61,6 +64,8 @@ def normalize_video_provider_body(body: Mapping[str, Any]) -> dict[str, Any]:
     if first_frame_url and not body.get("first_frame_url"):
         body["first_frame_url"] = first_frame_url
     if content_items:
+        if is_seedance_video and not body.get("content"):
+            body["content"] = _top_level_video_content(body.get("prompt"), content_items)
         if not body.get("image_with_roles") and _has_last_frame(content_items):
             body["image_with_roles"] = _image_with_roles(content_items)
         if not body.get("image_urls") and not body.get("image_with_roles"):
@@ -76,6 +81,10 @@ def normalize_video_provider_body(body: Mapping[str, Any]) -> dict[str, Any]:
 
 def _is_private_seedance_model(model: str) -> bool:
     return model in PRIVATE_SEEDANCE_MODELS or canonical_model(model) in PRIVATE_SEEDANCE_MODELS
+
+
+def _is_seedance_video_model(model: str) -> bool:
+    return "seedance" in canonical_model(model).lower()
 
 
 def _first_frame_url_from_metadata(metadata: Mapping[str, Any]) -> str:
@@ -98,6 +107,32 @@ def _first_frame_url_from_content_items(content_items: list[Any]) -> str:
 def _metadata_content_items(metadata: Mapping[str, Any]) -> list[Any]:
     content = metadata.get("content")
     return content if isinstance(content, list) else []
+
+
+def _top_level_video_content(prompt: Any, content_items: list[Any]) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    prompt_text = str(prompt or "").strip() if isinstance(prompt, str) or prompt is None else ""
+    if prompt_text:
+        items.append({"type": "text", "text": _strip_image_reference_markers(prompt_text)})
+    for item in content_items:
+        if not isinstance(item, Mapping):
+            continue
+        url = _image_url_from_content_item(item)
+        if not url:
+            continue
+        image_item: dict[str, Any] = {
+            "type": "image_url",
+            "image_url": {"url": url},
+        }
+        role = _normalized_frame_role(item.get("role"))
+        if role:
+            image_item["role"] = role
+        items.append(image_item)
+    return items
+
+
+def _strip_image_reference_markers(prompt: str) -> str:
+    return re.sub(r"@image\d+\s*", "", prompt).strip() or prompt
 
 
 def _content_items_from_body(body: Mapping[str, Any]) -> list[dict[str, Any]]:
@@ -257,6 +292,7 @@ def provider_payload_diagnostic_summary(payload: Any, status_code: int) -> dict[
         "payload_keys": sorted(str(key) for key in payload.keys()) if isinstance(payload, Mapping) else [],
         "provider_code": public_provider_code(provider_code_from_payload(payload, status_code), status_code),
         "message_length": len(message),
+        "message": public_provider_message(message),
     }
 
 
@@ -293,8 +329,32 @@ def message_from_payload(payload: Any) -> str:
         for key in ("message", "msg", "error_message", "detail"):
             value = payload.get(key)
             if isinstance(value, str):
-                return value
+                return message_from_payload(error_payload_from_message(value)) or value
     return ""
+
+
+def error_payload_from_message(message: str) -> Any:
+    text = message.strip()
+    if not text.startswith(("{", "[")):
+        return None
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return None
+
+
+def public_provider_message(message: str) -> str:
+    text = str(message or "").strip()
+    if not text:
+        return ""
+    text = _redact_public_urls(text)
+    if len(text) > MAX_PUBLIC_PROVIDER_MESSAGE_CHARS:
+        text = text[:MAX_PUBLIC_PROVIDER_MESSAGE_CHARS].rstrip() + "..."
+    return text
+
+
+def _redact_public_urls(text: str) -> str:
+    return re.sub(r"https?://[^\s\"'<>]+", "[URL]", text)
 
 
 def error_payload_from_content(content: bytes, content_type: str = "") -> Any:
@@ -387,7 +447,9 @@ def normalize_provider_response(
         success=success,
         status_code=status_code,
         provider_code=public_provider_code(raw_provider_code, status_code),
-        message=message if success and status_lower in {"failed", "failure", "error", "cancelled", "canceled"} else ("" if success else "服务暂时不可用，请稍后重试。"),
+        message=public_provider_message(message)
+        if (success and status_lower in {"failed", "failure", "error", "cancelled", "canceled"}) or not success
+        else "",
         task_id=task_id,
         status=status,
         progress=progress,
