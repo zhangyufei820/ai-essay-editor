@@ -341,7 +341,7 @@
 }
 
 .mp-param-priority {
-  grid-template-columns: minmax(120px, max-content) minmax(240px, 1fr) minmax(130px, max-content);
+  grid-template-columns: minmax(160px, 220px) minmax(260px, 1fr) minmax(150px, 190px);
   align-items: start;
 }
 
@@ -357,6 +357,14 @@
 
 .mp-chip-field.is-compact {
   max-width: 210px;
+}
+
+.mp-duration-field {
+  min-width: 150px;
+}
+
+.mp-duration-field .semi-select {
+  min-width: 150px;
 }
 
 .mp-chip-row {

@@ -402,7 +402,9 @@ const VIDEO_MODELS = [
     defaultSize: '1280x720',
     defaultDuration: 15,
     defaultFps: 24,
-    hint: '适合图生视频、人物动作和首尾帧控制。',
+    priceLabel: '¥6.50/次',
+    billingLabel: '按次计费',
+    hint: '调用价格 ¥6.50/次，按次计费；适合图生视频、人物动作和首尾帧控制。',
   },
   {
     value: 'seedance-2.0-dj-fast',
@@ -434,7 +436,7 @@ const VIDEO_MODELS = [
     supportsFace: true,
     billingLabel: '按次计费',
     priceLabel: `¥${SEEDANCE_LD17_PRICE_PER_CALL.toFixed(2)}/次`,
-    hint: '¥6.48/次；支持 5-15 秒，可过人脸，支持 9 图 / 3 视频 / 3 音频。',
+    hint: '¥6.48/次；支持 5-15 秒，可以过人脸，支持 9 图 / 3 视频 / 3 音频。',
   },
   {
     value: 'seedance-nsfw',
@@ -487,8 +489,13 @@ const IMAGE_VERY_LONG_WAIT_MESSAGE =
   '图像任务已进入长尾等待，系统仍会继续轮询并保留任务结果。请保持当前页面或稍后用任务 ID 查询。';
 const REVERSE_PROMPT_MODEL = 'gpt-5.4-mini';
 const REVERSE_PROMPT_MAX_IMAGE_BYTES = 12 * 1024 * 1024;
-const REVERSE_PROMPT_INSTRUCTION =
-  '请根据上传图片反推出可用于图像生成的详细提示词，只返回提示词正文。请用中文写作，保留主体、构图、镜头、光线、材质、色彩、风格、画幅和可复现细节，不要解释过程，不要输出 Markdown。';
+const REVERSE_PROMPT_INSTRUCTION_BASE =
+  '请根据上传图片反推出可用于图像生成的详细提示词，只返回提示词正文。请用中文写作，目标是让后续图像生成尽可能接近参考图，而不是生成同题材的新图。必须优先锁定以下可复现因素：1. 画幅比例、裁切边界、主体在画面中的大小、头顶/脚底/左右留白、相机高度、拍摄距离和镜头焦段感；2. 主体姿态、朝向、步态、手臂位置、腿部交叉关系、手持物位置、表情、视线、发型走向和头发遮挡；3. 服装版型、颜色、材质、纹理、褶皱、领口、腰线、裙摆形状、鞋包首饰等具体细节；4. 背景真实元素的位置关系，包括街道/斑马线/路沿/店招/广告牌/桌椅/遮阳伞/植物/墙柱/路人，说明哪些元素必须保留、在哪一侧、虚化程度如何；5. 光线方向、阴影强弱、肤色质感、清晰度、景深、色温、对比度、真实街拍感或商业精修感。请避免泛化成“美女街拍、咖啡店背景”这类宽泛描述，不要擅自替换背景、删除路人、改变裁切、改变衣服结构或把画面过度棚拍化。只输出一段可直接用于图像生成的中文提示词，不要解释过程，不要输出 Markdown。';
+const REVERSE_PROMPT_INSTRUCTION_EXTENSION =
+  '在以上基础上继续整合以下反推规则：必须把“保持不变的视觉不变量”和“禁止漂移项”写进最终提示词，优先使用“严格保持参考图的同一构图、同一主体比例、同一相机距离、同一拍摄角度、同一透视关系、同一背景物体位置、同一光线方向和同一服装结构”这类硬约束。若参考图是近距离手机自拍、低机位、广角或手臂伸向镜头，必须明确写出前景手臂/袖口占画面比例、近大远小透视畸变、脸部在画面上半部的位置、头顶到画面边缘距离、胸肩腰在画面中的裁切边界，禁止把它改成端正半身写真、棚拍写真或更远的全身构图。若参考图是超长竖图或非标准 9:16 画幅，必须写出近似原图的纵横比或“保持原图超长竖向裁切”，并说明不允许为了适配常规尺寸而向下补全身体、扩大背景或改变主体占比。必须按相对位置描述关键物体：例如头发/发饰/耳饰/领口/腰带/袖口/刺绣/门框/天花板/灯源/高光/阴影分别位于画面哪一侧、上下百分比区间、是否被裁切、是否被前景遮挡。人物类图片必须锁定脸部朝向、下巴角度、眼睛视线、嘴唇开合、耳朵露出程度、碎发贴脸和遮挡位置、皮肤真实纹理与修图强度；服装类图片必须锁定交叠衣襟方向、透明薄纱层、刺绣图案的位置密度、腰带宽度和配饰数量，禁止凭空增加更华丽的流苏、耳坠、腰饰或改变衣服层级。光线类图片必须保留原图中的过曝点、背光轮廓光、发丝高光、镜头眩光、硬阴影或低对比灰墙质感，不要自动优化成均匀柔光、干净影棚或电影海报色调。最终提示词要同时包含正向复现描述和负向约束：不要改变裁切，不要改变视角，不要居中重构，不要拉远镜头，不要标准化五官姿态，不要增加不存在的配饰，不要把真实自拍感改成精修商业写真。';
+const REVERSE_PROMPT_MATERIAL_CARD_EXTENSION =
+  '同时把“JSON素材卡模板”的字段作为内部拆解框架使用，但最终仍然只输出一段中文提示词，不输出JSON、字段名、标题或分析过程。内部必须按以下维度检查后再写最终提示词：baseInfo 图像类型、竖横方向、近似比例、景别和真实感来源；mainSubject 主体类型、成年人物属性、脸部识别感、五官轮廓、脸型比例、神态气质、整体体态、发型状态、服装层次、妆容配饰、动作表情和画面位置；composition 构图方式、主体位置、前景/中景/背景、边缘残留和必须遵守的构图约束；cameraSetup 手机镜头类型、低/平/俯仰角度、拍摄距离、广角畸变、自拍或他拍逻辑、观者视角；lightShadow 光源位置、光线性质、高光、阴影、曝光和动态范围；colorTone 主色、辅色、饱和度、对比度和整体冷暖；textureMaterial 服装、皮肤、头发、环境、道具材质和细节真实感；sceneSpace 地点类型、可见物体、真实场景证据、纵深关系和生活现场感；spatialLogic 前中后景层级、遮挡顺序、人物与物体接触关系、肢体前后拓扑和容易生成错误的风险点；imageQuality 清晰度、噪点、手机压缩感、自动锐化、轻微低动态范围、后期程度和AI感风险；negativePrompt 避免的风格、构图漂移、身体错误、道具漂浮、塑料皮肤、背景糊成色块、人物贴图感和低俗凝视。只描述图片中真实可见的内容，不脑补不存在的物体、动作、关系和情绪，不写“高级、漂亮、氛围感强”这类没有生成指导价值的空话。人物图片必须自然加入参考图人物一致性要求：以上传图片中的成年人物为人物原型，保留脸部识别感、五官轮廓、脸型比例、神态气质和整体人物辨识度；但不要把胸部、臀部、腿部等身体局部作为提示词焦点。默认写成真实手机生活照、手机抓拍照或生活随拍照的可生成提示词，强调自然、不摆拍、不影棚、不广告、不精修，清晰但不过锐，皮肤保留真实纹理，边缘保留真实环境残留。';
+const REVERSE_PROMPT_INSTRUCTION = `${REVERSE_PROMPT_INSTRUCTION_BASE}${REVERSE_PROMPT_INSTRUCTION_EXTENSION}${REVERSE_PROMPT_MATERIAL_CARD_EXTENSION}`;
 
 function toSelectOptions(values) {
   return values.map((value) => ({ value, label: String(value) }));
@@ -1093,9 +1100,13 @@ function NativeSelect({
   onChange,
   disabled = false,
   agentKey,
+  className = '',
 }) {
   return (
-    <label className='mp-field' data-xr-agent={agentKey || undefined}>
+    <label
+      className={className ? `mp-field ${className}` : 'mp-field'}
+      data-xr-agent={agentKey || undefined}
+    >
       <span>{label}</span>
       <Select
         value={value}
@@ -1485,6 +1496,8 @@ const MediaPlayground = () => {
   const [results, setResults] = useState([]);
   const [resultsLoaded, setResultsLoaded] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [videoPolling, setVideoPolling] = useState(false);
+  const [activeVideoTask, setActiveVideoTask] = useState(null);
   const [taskMessage, setTaskMessage] = useState('');
   const [imageTaskLookup, setImageTaskLookup] = useState('');
   const [submitStartedAt, setSubmitStartedAt] = useState(null);
@@ -1507,8 +1520,7 @@ const MediaPlayground = () => {
   const effectiveGroup =
     mode === 'image' ? IMAGE_GENERATION_GROUP.value : group;
   const reversePromptGroup = IMAGE_GENERATION_GROUP.value;
-  const visibleGroupOptions =
-    mode === 'image' ? [IMAGE_GENERATION_GROUP] : groups;
+  const visibleGroupOptions = mode === 'image' ? [IMAGE_GENERATION_GROUP] : groups;
   const videoRefPolicy = useMemo(
     () => videoReferencePolicy(activeVideoModel),
     [activeVideoModel],
@@ -1613,7 +1625,7 @@ const MediaPlayground = () => {
   }, [results, resultsLoaded]);
 
   useEffect(() => {
-    if (!submitting || !submitStartedAt) {
+    if ((!submitting && !videoPolling) || !submitStartedAt) {
       setElapsedSeconds(0);
       return undefined;
     }
@@ -1622,7 +1634,7 @@ const MediaPlayground = () => {
     updateElapsed();
     const timer = window.setInterval(updateElapsed, 1000);
     return () => window.clearInterval(timer);
-  }, [submitting, submitStartedAt]);
+  }, [submitting, videoPolling, submitStartedAt]);
 
   function addReferenceFiles(fileList) {
     const incoming = Array.from(fileList || []);
@@ -2170,6 +2182,7 @@ const MediaPlayground = () => {
 
   async function pollVideo(taskId) {
     const deadline = Date.now() + 10 * 60 * 1000;
+    setVideoPolling(true);
     while (Date.now() < deadline) {
       const res = await API.get(`/pg/videos/${encodeURIComponent(taskId)}`, {
         skipErrorHandler: true,
@@ -2206,11 +2219,35 @@ const MediaPlayground = () => {
     }
     const taskId = getVideoTaskId(res.data);
     if (!taskId) throw new Error('视频任务提交成功但没有返回任务 ID。');
-    setTaskMessage(`视频任务已提交：${taskId}，正在等待结果...`);
-    const result = await pollVideo(taskId);
-    const cached = await cacheMedia(result);
-    setResults((prev) => [cached, ...prev]);
-    Toast.success('视频已生成，请立即下载保存。');
+    setActiveVideoTask({
+      taskId,
+      model: activeVideoModel.label,
+      workflow: workflowLabel,
+      spec: outputSpec,
+    });
+    setVideoPolling(true);
+    setTaskMessage(`视频任务已提交：${taskId}，页面保持打开时会后台自动轮询结果。`);
+    Toast.info('视频任务已进入后台轮询，可以继续修改提示词或参数。');
+    window.setTimeout(async () => {
+      let keepTaskMessage = false;
+      try {
+        const result = await pollVideo(taskId);
+        const cached = await cacheMedia(result);
+        setResults((prev) => [cached, ...prev]);
+        Toast.success('视频已生成，请立即下载保存。');
+      } catch (error) {
+        Toast.error(userFacingGenerationError(generationErrorMessage(error)));
+        setTaskMessage(`视频任务 ${taskId} 后台轮询结束：${generationErrorMessage(error)}`);
+        keepTaskMessage = true;
+      } finally {
+        setVideoPolling(false);
+        setActiveVideoTask(null);
+        if (!keepTaskMessage) {
+          setTaskMessage('');
+        }
+        setSubmitStartedAt(null);
+      }
+    }, 0);
   }
 
   async function handleSubmit() {
@@ -2244,8 +2281,10 @@ const MediaPlayground = () => {
       Toast.error(userFacingGenerationError(generationErrorMessage(error)));
     } finally {
       setSubmitting(false);
-      setTaskMessage('');
-      setSubmitStartedAt(null);
+      if (mode === 'image') {
+        setTaskMessage('');
+        setSubmitStartedAt(null);
+      }
     }
   }
 
@@ -2334,7 +2373,10 @@ const MediaPlayground = () => {
     { label: '任务', value: workflowLabel },
     { label: '提示', value: prompt.trim() ? '已填写' : '待填写' },
     { label: '参数', value: outputSpec },
-    { label: '生成', value: submitting ? `${elapsedSeconds} 秒` : '可提交' },
+    {
+      label: '生成',
+      value: videoPolling ? `轮询中 ${elapsedSeconds} 秒` : submitting ? `${elapsedSeconds} 秒` : '可提交',
+    },
     { label: '结果', value: results.length ? `${results.length} 个` : '待生成' },
   ];
 
@@ -2711,15 +2753,15 @@ const MediaPlayground = () => {
                       agentKey='media-quality'
                     />
                   ) : (
-                    <OptionChips
+                    <NativeSelect
                       label='时长'
                       value={duration}
                       options={activeVideoModel.durations.map((value) => ({
                         value,
                         label: `${value} 秒`,
                       }))}
-                      onChange={setDuration}
-                      compact
+                      onChange={(value) => setDuration(Number(value))}
+                      className='mp-duration-field'
                       agentKey='media-duration'
                     />
                   )}
@@ -2860,8 +2902,19 @@ const MediaPlayground = () => {
                     <Spin size='large' />
                   </div>
                   <div className='mp-wait-copy'>
-                    <strong>{mode === 'image' ? '图像生成中' : '视频生成中'}</strong>
+                    <strong>
+                      {mode === 'image'
+                        ? '图像生成中'
+                        : videoPolling
+                          ? '视频后台轮询中'
+                          : '视频生成中'}
+                    </strong>
                     <span>{taskMessage}</span>
+                    {activeVideoTask ? (
+                      <span>
+                        {activeVideoTask.model} · {activeVideoTask.workflow} · {activeVideoTask.spec}
+                      </span>
+                    ) : null}
                   </div>
                   <div className='mp-wait-meter'>
                     <div>
@@ -2874,12 +2927,12 @@ const MediaPlayground = () => {
                     </div>
                     <div>
                       <span>下一步</span>
-                      <strong>结果会进入下方画布</strong>
+                      <strong>{videoPolling ? '完成后自动落到画布' : '结果会进入下方画布'}</strong>
                     </div>
                   </div>
                   <div className='mp-wait-actions'>
-                    <span>可以先构思下一版提示词，当前任务会按提交瞬间的内容执行。</span>
-                    <span>保持页面打开，完成后可直接复制链接或下载。</span>
+                    <span>当前任务已交给后台异步轮询，按提交瞬间的内容执行。</span>
+                    <span>保持页面打开时会自动刷新进度；你可以继续修改参数或准备下一版提示词。</span>
                   </div>
                 </div>
               ) : null}
@@ -3006,8 +3059,8 @@ const MediaPlayground = () => {
             </div>
             {taskMessage ? (
               <div className='mp-inspector-wait'>
-                <strong>生成中 · {elapsedSeconds} 秒</strong>
-                <span>不用重复点击生成。完成后结果会自动出现在画布顶部。</span>
+                <strong>{videoPolling ? '后台轮询中' : '生成中'} · {elapsedSeconds} 秒</strong>
+                <span>不用重复点击生成。页面保持打开时会自动查询，完成后结果会出现在画布顶部。</span>
               </div>
             ) : null}
             <div className='mp-inspector-note'>

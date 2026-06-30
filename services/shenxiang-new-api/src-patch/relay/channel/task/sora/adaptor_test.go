@@ -344,12 +344,9 @@ func TestSeedanceGatewayFailureReturnsProviderStatus(t *testing.T) {
 
 func TestSeedanceHTTPErrorWithErrorObjectReturnsProviderStatus(t *testing.T) {
 	taskErr := seedanceGatewayTaskError(responseTask{
-		Error: &struct {
-			Message string `json:"message"`
-			Code    string `json:"code"`
-		}{
-			Message: "服务暂时不可用，请稍后重试。",
-			Code:    "service_error",
+		Error: map[string]any{
+			"message": "服务暂时不可用，请稍后重试。",
+			"code":    "service_error",
 		},
 	}, http.StatusBadRequest)
 
@@ -361,6 +358,22 @@ func TestSeedanceHTTPErrorWithErrorObjectReturnsProviderStatus(t *testing.T) {
 	}
 	if taskErr.Code != "service_error" {
 		t.Fatalf("Code = %q, want service_error", taskErr.Code)
+	}
+}
+
+func TestSeedanceHTTPErrorWithErrorStringReturnsProviderStatus(t *testing.T) {
+	taskErr := seedanceGatewayTaskError(responseTask{
+		Error: "上游任务失败",
+	}, http.StatusBadRequest)
+
+	if taskErr == nil {
+		t.Fatal("taskErr is nil")
+	}
+	if taskErr.StatusCode != http.StatusBadRequest {
+		t.Fatalf("StatusCode = %d, want %d", taskErr.StatusCode, http.StatusBadRequest)
+	}
+	if taskErr.Message != "上游任务失败" {
+		t.Fatalf("Message = %q, want upstream error string", taskErr.Message)
 	}
 }
 
@@ -405,5 +418,43 @@ func TestParseTaskResultFindsNestedOutputURL(t *testing.T) {
 	}
 	if result.Url != "https://media.example.com/nested.mp4" {
 		t.Fatalf("Url = %q, want nested output url", result.Url)
+	}
+}
+
+func TestParseTaskResultAcceptsStringProgress(t *testing.T) {
+	adaptor := TaskAdaptor{}
+
+	result, err := adaptor.ParseTaskResult([]byte(`{
+		"id":"task_string_progress",
+		"status":"processing",
+		"progress":"42%"
+	}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Status != model.TaskStatusInProgress {
+		t.Fatalf("Status = %q, want %q", result.Status, model.TaskStatusInProgress)
+	}
+	if result.Progress != "42%" {
+		t.Fatalf("Progress = %q, want 42%%", result.Progress)
+	}
+}
+
+func TestParseTaskResultAcceptsStringError(t *testing.T) {
+	adaptor := TaskAdaptor{}
+
+	result, err := adaptor.ParseTaskResult([]byte(`{
+		"id":"task_string_error",
+		"status":"failed",
+		"error":"上游任务失败"
+	}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Status != model.TaskStatusFailure {
+		t.Fatalf("Status = %q, want %q", result.Status, model.TaskStatusFailure)
+	}
+	if result.Reason != "上游任务失败" {
+		t.Fatalf("Reason = %q, want upstream error string", result.Reason)
 	}
 }

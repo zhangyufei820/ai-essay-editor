@@ -209,7 +209,123 @@ func PlaygroundVideoFetch(c *gin.Context) {
 		return
 	}
 
+	if handled := playgroundVideoFetchFromLocalTask(c); handled {
+		return
+	}
+
 	RelayTaskFetch(c)
+}
+
+func playgroundVideoFetchFromLocalTask(c *gin.Context) bool {
+	if c == nil {
+		return false
+	}
+	taskID := strings.TrimSpace(c.Param("task_id"))
+	if taskID == "" {
+		taskID = strings.TrimSpace(c.Param("id"))
+	}
+	if taskID == "" {
+		taskID = strings.TrimSpace(c.Query("task_id"))
+	}
+	if taskID == "" {
+		return false
+	}
+	task, exists, err := model.GetByTaskId(c.GetInt("id"), taskID)
+	if err != nil {
+		common.SysError(fmt.Sprintf("failed to load playground video task %s: %s", taskID, err.Error()))
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": gin.H{
+				"message": "查询视频任务失败",
+				"type":    "playground_video_task_query_error",
+			},
+		})
+		return true
+	}
+	if !exists || task == nil {
+		return false
+	}
+	marker := playgroundVideoMarkerFromTask(task)
+	if marker == nil {
+		return false
+	}
+	c.JSON(http.StatusOK, taskToPlaygroundVideoTask(task, marker))
+	return true
+}
+
+func playgroundVideoMarkerFromTask(task *model.Task) *playgroundVideoMediaMarker {
+	if task == nil || len(task.Data) == 0 {
+		return nil
+	}
+	payload := map[string]json.RawMessage{}
+	if err := json.Unmarshal(task.Data, &payload); err != nil {
+		return nil
+	}
+	encoded, ok := payload["playground_media"]
+	if !ok || len(encoded) == 0 {
+		return nil
+	}
+	marker := playgroundVideoMediaMarker{}
+	if err := json.Unmarshal(encoded, &marker); err != nil {
+		return nil
+	}
+	if strings.TrimSpace(marker.Endpoint) != "" && !strings.Contains(marker.Endpoint, "/video") {
+		return nil
+	}
+	if marker.Metadata == nil {
+		marker.Metadata = map[string]interface{}{}
+	}
+	return &marker
+}
+
+func taskToPlaygroundVideoTask(task *model.Task, marker *playgroundVideoMediaMarker) gin.H {
+	taskID := strings.TrimSpace(task.TaskID)
+	resultURL := strings.TrimSpace(task.GetResultURL())
+	status := string(task.Status)
+	response := gin.H{
+		"id":          taskID,
+		"task_id":     taskID,
+		"status":      status,
+		"task_status": status,
+		"progress":    task.Progress,
+		"created":     task.SubmitTime,
+		"created_at":  task.SubmitTime,
+		"updated_at":  task.FinishTime,
+		"finish_time": task.FinishTime,
+		"model":       firstNonEmptyString(marker.Model, task.Properties.OriginModelName),
+		"prompt":      firstNonEmptyString(marker.Prompt, task.Properties.Input),
+		"result_url":  resultURL,
+		"url":         resultURL,
+		"video_url":   resultURL,
+		"fail_reason": task.FailReason,
+		"message":     task.FailReason,
+		"data": gin.H{
+			"task_id":     taskID,
+			"status":      status,
+			"task_status": status,
+			"progress":    task.Progress,
+			"result_url":  resultURL,
+			"url":         resultURL,
+			"video_url":   resultURL,
+			"fail_reason": task.FailReason,
+		},
+		"metadata": gin.H{
+			"playground_media": marker,
+			"source":           "local_task_polling",
+		},
+	}
+	if marker.Duration > 0 {
+		response["duration"] = marker.Duration
+		response["data"].(gin.H)["duration"] = marker.Duration
+	}
+	if marker.Size != "" {
+		response["size"] = marker.Size
+		response["data"].(gin.H)["size"] = marker.Size
+	}
+	if resultURL != "" && task.Status == model.TaskStatusSuccess {
+		response["output"] = gin.H{"url": resultURL}
+		response["data"].(gin.H)["output"] = gin.H{"url": resultURL}
+	}
+	return response
 }
 
 func annotatePlaygroundVideoTaskData(c *gin.Context, task *model.Task, relayInfo *relaycommon.RelayInfo) {

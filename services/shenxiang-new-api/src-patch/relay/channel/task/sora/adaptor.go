@@ -2,6 +2,7 @@ package sora
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -49,7 +50,7 @@ type responseTask struct {
 	ProviderCode       string `json:"provider_code,omitempty"`
 	Code               string `json:"code,omitempty"`
 	Message            string `json:"message,omitempty"`
-	Progress           int    `json:"progress"`
+	Progress           any    `json:"progress"`
 	Url                string `json:"url,omitempty"`
 	VideoUrl           string `json:"video_url,omitempty"`
 	ResultUrl          string `json:"result_url,omitempty"`
@@ -62,10 +63,7 @@ type responseTask struct {
 	Seconds            string `json:"seconds,omitempty"`
 	Size               string `json:"size,omitempty"`
 	RemixedFromVideoID string `json:"remixed_from_video_id,omitempty"`
-	Error              *struct {
-		Message string `json:"message"`
-		Code    string `json:"code"`
-	} `json:"error,omitempty"`
+	Error              any    `json:"error,omitempty"`
 }
 
 func pickVideoResultURL(value any, depth int) string {
@@ -140,6 +138,61 @@ func videoResultURLFromTask(resTask responseTask) string {
 		}
 	}
 	return ""
+}
+
+func responseTaskErrorMessage(value any) string {
+	switch v := value.(type) {
+	case nil:
+		return ""
+	case string:
+		return strings.TrimSpace(v)
+	case map[string]any:
+		for _, key := range []string{"message", "error", "reason", "detail"} {
+			if message := responseTaskErrorMessage(v[key]); message != "" {
+				return message
+			}
+		}
+	}
+	return strings.TrimSpace(fmt.Sprint(value))
+}
+
+func responseTaskErrorCode(value any) string {
+	if obj, ok := value.(map[string]any); ok {
+		for _, key := range []string{"code", "error_code", "type"} {
+			if code := strings.TrimSpace(fmt.Sprint(obj[key])); code != "" && code != "<nil>" {
+				return code
+			}
+		}
+	}
+	return ""
+}
+
+func responseTaskProgress(value any) int {
+	switch v := value.(type) {
+	case nil:
+		return 0
+	case float64:
+		return int(v)
+	case float32:
+		return int(v)
+	case int:
+		return v
+	case int64:
+		return int(v)
+	case json.Number:
+		if i, err := v.Int64(); err == nil {
+			return int(i)
+		}
+	case string:
+		raw := strings.TrimSpace(strings.TrimSuffix(v, "%"))
+		if raw == "" {
+			return 0
+		}
+		if f, err := strconv.ParseFloat(raw, 64); err == nil {
+			return int(f)
+		}
+	}
+	return 0
 }
 
 // ============================
@@ -995,10 +1048,10 @@ func seedanceGatewayTaskError(dResp responseTask, httpStatus int) *dto.TaskError
 	message := strings.TrimSpace(dResp.Message)
 	if dResp.Error != nil {
 		if code == "" {
-			code = strings.TrimSpace(dResp.Error.Code)
+			code = responseTaskErrorCode(dResp.Error)
 		}
 		if message == "" {
-			message = strings.TrimSpace(dResp.Error.Message)
+			message = responseTaskErrorMessage(dResp.Error)
 		}
 	}
 	if code == "" {
@@ -1067,15 +1120,15 @@ func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, e
 		taskResult.Url = videoResultURLFromTask(resTask)
 	case "failed", "cancelled":
 		taskResult.Status = model.TaskStatusFailure
-		if resTask.Error != nil {
-			taskResult.Reason = resTask.Error.Message
+		if message := responseTaskErrorMessage(resTask.Error); message != "" {
+			taskResult.Reason = message
 		} else {
 			taskResult.Reason = "task failed"
 		}
 	default:
 	}
-	if resTask.Progress > 0 && resTask.Progress < 100 {
-		taskResult.Progress = fmt.Sprintf("%d%%", resTask.Progress)
+	if progress := responseTaskProgress(resTask.Progress); progress > 0 && progress < 100 {
+		taskResult.Progress = fmt.Sprintf("%d%%", progress)
 	}
 
 	return &taskResult, nil
