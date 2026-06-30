@@ -578,7 +578,7 @@ func GetUserModels(c *gin.Context) {
 func normalizeUserVisibleModels(userID int, models []string) []string {
 	visible := make([]string, 0, len(models)+1)
 	for _, modelName := range models {
-		if modelName == seedancePrivateVideoModel && userID != seedancePrivateVideoAllowedUserID {
+		if isHiddenUserVisibleModelForUser(userID, modelName) {
 			continue
 		}
 		if !common.StringsContains(visible, modelName) {

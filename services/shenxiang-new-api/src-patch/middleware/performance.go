@@ -36,7 +36,9 @@ func shouldSkipCPUOverloadCheck(path string) bool {
 	return path == "/v1" ||
 		strings.HasPrefix(path, "/v1/") ||
 		path == "/v1beta" ||
-		strings.HasPrefix(path, "/v1beta/")
+		strings.HasPrefix(path, "/v1beta/") ||
+		path == "/pg" ||
+		strings.HasPrefix(path, "/pg/")
 }
 
 // checkSystemPerformance checks whether system pressure exceeds configured thresholds.

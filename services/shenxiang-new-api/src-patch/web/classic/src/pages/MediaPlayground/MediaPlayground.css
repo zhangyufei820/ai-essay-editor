@@ -916,6 +916,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 6px;
+  flex-wrap: wrap;
 }
 
 .mp-upload-audio-card,
@@ -1004,6 +1005,17 @@
   border-radius: 14px;
   color: #bdf6e6;
   background: rgba(74, 210, 178, 0.12);
+}
+
+.mp-upload-selection-state {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+}
+
+.mp-upload-selection-state strong {
+  color: #d8fff4;
+  font-size: 12px;
 }
 
 .mp-upload-preview {

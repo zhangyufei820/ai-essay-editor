@@ -1684,9 +1684,18 @@ function MultiFileDrop({
         onDragLeave={() => setIsDragging(false)}
         onDrop={handleDrop}
       >
-        <div className='mp-upload-placeholder'>
-          <IconUpload size='extra-large' />
-        </div>
+        {files.length > 0 ? (
+          <div className='mp-upload-selection-state'>
+            <div className='mp-upload-placeholder'>
+              <IconUpload size='extra-large' />
+            </div>
+            <strong>{`已选 ${files.length} 个素材`}</strong>
+          </div>
+        ) : (
+          <div className='mp-upload-placeholder'>
+            <IconUpload size='extra-large' />
+          </div>
+        )}
         <span className='mp-upload-title'>{label}</span>
         <span className='mp-upload-hint'>
           {hint || `已选 ${files.length} / ${maxFiles} 张，拖入或点击上传 PNG / JPG / WebP`}

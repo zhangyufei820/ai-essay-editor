@@ -728,11 +728,28 @@ func RelayTask(c *gin.Context) {
 		task.Action = relayInfo.Action
 		if insertErr := task.Insert(); insertErr != nil {
 			common.SysError("insert task error: " + insertErr.Error())
+		} else if isPlaygroundVideoTaskPath(c) {
+			publicTaskID := task.TaskID
+			gopool.Go(func() {
+				service.WatchAsyncVideoTask(publicTaskID)
+			})
 		}
 	}
 
 	if taskErr != nil {
 		respondTaskError(c, taskErr)
+	}
+}
+
+func isPlaygroundVideoTaskPath(c *gin.Context) bool {
+	if c == nil || c.Request == nil || c.Request.URL == nil {
+		return false
+	}
+	switch strings.TrimSpace(c.Request.URL.Path) {
+	case "/pg/videos", "/pg/video/generations":
+		return true
+	default:
+		return false
 	}
 }
 

@@ -1036,22 +1036,22 @@ func markPlaygroundImageTaskSuccess(task *model.Task, item *playgroundMediaItem,
 	won, err := task.UpdateWithStatus(fromStatus)
 	if err != nil {
 		logger.LogError(nil, fmt.Sprintf("failed to complete playground image task %s: %s", task.TaskID, err.Error()))
-		return
 	}
-	if won {
-		extra := map[string]interface{}{}
-		if actualQuota > 0 {
-			extra["actual_quota"] = actualQuota
-		}
-		if task.ChannelId > 0 {
-			extra["channel_id"] = task.ChannelId
-		}
-		if task.StartTime > 0 && task.FinishTime >= task.StartTime {
-			extra["use_time"] = int(task.FinishTime - task.StartTime)
-		}
-		if err := model.UpdatePlaygroundImageTaskConsumeLogResult(task.UserId, payload.RequestID, task.TaskID, item.URL, task.FinishTime, string(model.TaskStatusSuccess), extra); err != nil {
-			common.SysError("failed to update playground image task result log: " + err.Error())
-		}
+	extra := map[string]interface{}{}
+	if actualQuota > 0 {
+		extra["actual_quota"] = actualQuota
+	}
+	if task.ChannelId > 0 {
+		extra["channel_id"] = task.ChannelId
+	}
+	if task.StartTime > 0 && task.FinishTime >= task.StartTime {
+		extra["use_time"] = int(task.FinishTime - task.StartTime)
+	}
+	logErr := model.UpdatePlaygroundImageTaskConsumeLogResult(task.UserId, payload.RequestID, task.TaskID, item.URL, task.FinishTime, string(model.TaskStatusSuccess), extra)
+	if logErr != nil {
+		common.SysError("failed to update playground image task result log: " + logErr.Error())
+	}
+	if logErr == nil && won {
 		cleanupPlaygroundImageTaskRequest(requestFile)
 	}
 }

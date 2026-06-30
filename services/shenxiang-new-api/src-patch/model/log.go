@@ -408,6 +408,8 @@ func UpdatePlaygroundImageTaskConsumeLogResult(userId int, requestId string, tas
 		Find(&candidates).Error; err != nil {
 		return err
 	}
+
+	var matched *Log
 	for _, candidate := range candidates {
 		if candidate == nil {
 			continue
@@ -416,11 +418,15 @@ func UpdatePlaygroundImageTaskConsumeLogResult(userId int, requestId string, tas
 		if other == nil {
 			other = map[string]interface{}{}
 		}
+		if fmt.Sprint(other["playground_image_completion_log"]) == "true" {
+			continue
+		}
 		candidateTaskID := strings.TrimSpace(fmt.Sprint(other["task_id"]))
 		isPlaygroundTask := fmt.Sprint(other["playground_image_task"]) == "true"
 		if candidateTaskID != taskID && !isPlaygroundTask {
 			continue
 		}
+		matched = candidate
 		if extra != nil {
 			for key, value := range extra {
 				other[key] = value
@@ -448,9 +454,178 @@ func UpdatePlaygroundImageTaskConsumeLogResult(userId int, requestId string, tas
 		}).Error; err != nil {
 			return err
 		}
-		return nil
+		break
+	}
+	if matched == nil {
+		return createPlaygroundImageTaskResultLog(userId, requestId, taskID, resultURL, finishTime, status, extra)
+	}
+	if err := createPlaygroundImageCompletionReceiptLog(userId, matched, requestId, taskID, resultURL, finishTime, status, extra); err != nil {
+		return err
 	}
 	return nil
+}
+
+func playgroundImageCompletionLogExists(userId int, taskID string, requestID string) (bool, error) {
+	if LOG_DB == nil || userId <= 0 || taskID == "" || requestID == "" {
+		return false, nil
+	}
+	query := LOG_DB.Where("user_id = ? AND type = ?", userId, LogTypeConsume).
+		Where("other LIKE ? ESCAPE '!'", logContainsPattern("playground_image_completion_log")).
+		Where("(other LIKE ? ESCAPE '!' OR other LIKE ? ESCAPE '!')", logContainsPattern(taskID), logContainsPattern(requestID))
+	var candidates []*Log
+	if err := query.Order("id desc").Limit(32).Find(&candidates).Error; err != nil {
+		return false, err
+	}
+	for _, candidate := range candidates {
+		if candidate == nil {
+			continue
+		}
+		other, _ := common.StrToMap(candidate.Other)
+		if other == nil || fmt.Sprint(other["playground_image_completion_log"]) != "true" {
+			continue
+		}
+		candidateTaskID := strings.TrimSpace(fmt.Sprint(other["task_id"]))
+		candidateRequestID := strings.TrimSpace(fmt.Sprint(other["request_id"]))
+		if candidateTaskID == taskID || candidateRequestID == requestID {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func createPlaygroundImageCompletionReceiptLog(userId int, source *Log, requestID string, taskID string, resultURL string, finishTime int64, status string, extra map[string]interface{}) error {
+	if LOG_DB == nil || userId <= 0 || requestID == "" || taskID == "" {
+		return nil
+	}
+	exists, err := playgroundImageCompletionLogExists(userId, taskID, requestID)
+	if err != nil || exists {
+		return err
+	}
+	return createPlaygroundImageResultLog(userId, source, requestID, taskID, resultURL, finishTime, status, extra, true)
+}
+
+func createPlaygroundImageTaskResultLog(userId int, requestID string, taskID string, resultURL string, finishTime int64, status string, extra map[string]interface{}) error {
+	exists, err := playgroundImageCompletionLogExists(userId, taskID, requestID)
+	if err != nil || exists {
+		return err
+	}
+	return createPlaygroundImageResultLog(userId, nil, requestID, taskID, resultURL, finishTime, status, extra, false)
+}
+
+func createPlaygroundImageResultLog(userId int, source *Log, requestID string, taskID string, resultURL string, finishTime int64, status string, extra map[string]interface{}, receipt bool) error {
+	if LOG_DB == nil || userId <= 0 || requestID == "" || taskID == "" {
+		return nil
+	}
+	other := map[string]interface{}{}
+	if extra != nil {
+		for key, value := range extra {
+			other[key] = value
+		}
+	}
+	other["task_id"] = taskID
+	other["request_id"] = requestID
+	other["request_phase"] = "completed"
+	if status != "" {
+		other["task_status"] = status
+	} else {
+		other["task_status"] = "SUCCESS"
+	}
+	other["playground_image_task"] = true
+	other["media_kind"] = "image"
+	other["async"] = true
+	if receipt {
+		other["playground_image_completion_log"] = true
+		other["completion_log_kind"] = "receipt"
+		if source != nil {
+			other["source_log_id"] = source.Id
+			other["original_quota"] = source.Quota
+		} else if actualQuota := intFromLogOther(other["actual_quota"]); actualQuota > 0 {
+			other["original_quota"] = actualQuota
+		}
+		other["receipt_quota"] = 0
+	} else {
+		other["playground_image_completion_log"] = true
+		other["completion_log_kind"] = "standalone"
+		if actualQuota := intFromLogOther(other["actual_quota"]); actualQuota > 0 {
+			other["original_quota"] = actualQuota
+			other["receipt_quota"] = 0
+		}
+	}
+	if resultURL != "" {
+		other["result_url"] = resultURL
+		other["image_url"] = resultURL
+		other["cached_url"] = resultURL
+	}
+	if finishTime > 0 {
+		other["finish_time"] = finishTime
+	}
+
+	username := ""
+	if source != nil {
+		username = source.Username
+	}
+	if username == "" {
+		username, _ = GetUsernameById(userId, false)
+	}
+	createdAt := common.GetTimestamp()
+	if finishTime > 0 {
+		createdAt = finishTime
+	}
+	sourceTokenName := ""
+	sourceModelName := ""
+	sourceChannelID := 0
+	sourceTokenID := 0
+	sourceGroup := ""
+	sourceIP := ""
+	sourceRequestID := ""
+	sourceUpstreamRequestID := ""
+	if source != nil {
+		sourceTokenName = source.TokenName
+		sourceModelName = source.ModelName
+		sourceChannelID = source.ChannelId
+		sourceTokenID = source.TokenId
+		sourceGroup = source.Group
+		sourceIP = source.Ip
+		sourceRequestID = source.RequestId
+		sourceUpstreamRequestID = source.UpstreamRequestId
+	}
+	log := &Log{
+		UserId:    userId,
+		Username:  username,
+		CreatedAt: createdAt,
+		Type:      LogTypeConsume,
+		Content:   "媒体工坊图片任务完成",
+		TokenName: firstNonEmptyLogString(
+			sourceTokenName,
+			logOtherString(other["token_name"]),
+			"playground",
+		),
+		ModelName: firstNonEmptyLogString(sourceModelName, logOtherString(other["model_name"])),
+		Quota:     0,
+		ChannelId: firstNonZeroLogInt(sourceChannelID, intFromLogOther(other["channel_id"])),
+		TokenId:   firstNonZeroLogInt(sourceTokenID, intFromLogOther(other["token_id"])),
+		UseTime:   intFromLogOther(other["use_time"]),
+		IsStream:  false,
+		Group:     firstNonEmptyLogString(sourceGroup, logOtherString(other["group"])),
+		Ip: func() string {
+			if strings.TrimSpace(sourceIP) != "" {
+				return sourceIP
+			}
+			return logOtherString(other["ip"])
+		}(),
+		RequestId: firstNonEmptyLogString(sourceRequestID, requestID),
+		UpstreamRequestId: func() string {
+			if strings.TrimSpace(sourceUpstreamRequestID) != "" {
+				return sourceUpstreamRequestID
+			}
+			return logOtherString(other["upstream_request_id"])
+		}(),
+		Other: common.MapToJsonStr(other),
+	}
+	if log.TokenName == "" {
+		log.TokenName = "playground"
+	}
+	return LOG_DB.Create(log).Error
 }
 
 func intFromLogOther(value interface{}) int {
@@ -468,6 +643,17 @@ func intFromLogOther(value interface{}) int {
 		}
 		return 0
 	}
+}
+
+func logOtherString(value interface{}) string {
+	if value == nil {
+		return ""
+	}
+	valueStr := strings.TrimSpace(fmt.Sprint(value))
+	if valueStr == "" || valueStr == "<nil>" {
+		return ""
+	}
+	return valueStr
 }
 
 func logContainsPattern(value string) string {

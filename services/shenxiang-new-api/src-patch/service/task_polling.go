@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -71,6 +72,13 @@ type TaskPollingSummary struct {
 	SkippedPlayground int            `json:"skipped_playground"`
 	PlatformCount     map[string]int `json:"platform_count"`
 }
+
+const (
+	asyncVideoWatchInterval = 15 * time.Second
+	asyncVideoWatchTimeout  = 35 * time.Minute
+)
+
+var activeAsyncVideoWatchers sync.Map
 
 // TaskPollingAdaptor 定义轮询所需的最小适配器接口，避免 service -> relay 的循环依赖
 type TaskPollingAdaptor interface {
@@ -215,6 +223,67 @@ func RunTaskPollingOnce(ctx context.Context, progress func(processed, total int)
 		progress(0, 0)
 	}
 	return summary
+}
+
+func WatchAsyncVideoTask(taskID string) {
+	taskID = strings.TrimSpace(taskID)
+	if taskID == "" {
+		return
+	}
+	if _, loaded := activeAsyncVideoWatchers.LoadOrStore(taskID, struct{}{}); loaded {
+		return
+	}
+	defer activeAsyncVideoWatchers.Delete(taskID)
+
+	timer := time.NewTimer(asyncVideoWatchTimeout)
+	defer timer.Stop()
+	ticker := time.NewTicker(asyncVideoWatchInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-timer.C:
+			logger.LogWarn(context.Background(), fmt.Sprintf("async video watcher timed out for task %s", taskID))
+			return
+		case <-ticker.C:
+			done, err := pollAsyncVideoTaskByPublicID(context.Background(), taskID)
+			if err != nil {
+				logger.LogWarn(context.Background(), fmt.Sprintf("async video watcher failed for task %s: %s", taskID, err.Error()))
+				continue
+			}
+			if done {
+				return
+			}
+		}
+	}
+}
+
+func pollAsyncVideoTaskByPublicID(ctx context.Context, taskID string) (bool, error) {
+	task, exists, err := model.GetByOnlyTaskId(taskID)
+	if err != nil {
+		return false, err
+	}
+	if !exists || task == nil {
+		return true, nil
+	}
+	if task.Status == model.TaskStatusSuccess || task.Status == model.TaskStatusFailure {
+		return true, nil
+	}
+	upstreamID := strings.TrimSpace(task.GetUpstreamTaskID())
+	if upstreamID == "" {
+		return false, nil
+	}
+	if err := updateVideoTasks(ctx, task.Platform, task.ChannelId, []string{upstreamID}, map[string]*model.Task{upstreamID: task}); err != nil {
+		return false, err
+	}
+	refreshed, exists, err := model.GetByOnlyTaskId(taskID)
+	if err != nil {
+		return false, err
+	}
+	if !exists || refreshed == nil {
+		return true, nil
+	}
+	return refreshed.Status == model.TaskStatusSuccess || refreshed.Status == model.TaskStatusFailure, nil
 }
 
 // DispatchPlatformUpdate 按平台分发轮询更新
@@ -556,11 +625,19 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 			if task.ChannelId > 0 {
 				extra["channel_id"] = task.ChannelId
 			}
+			if upstreamTaskID := strings.TrimSpace(task.GetUpstreamTaskID()); upstreamTaskID != "" {
+				extra["upstream_task_id"] = upstreamTaskID
+			}
 			if task.StartTime > 0 && task.FinishTime >= task.StartTime {
 				extra["use_time"] = int(task.FinishTime - task.StartTime)
 			}
 			if task.Quota > 0 {
 				extra["actual_quota"] = task.Quota
+			}
+			extra["model_name"] = taskModelName(task)
+			extra["group"] = task.Group
+			if task.PrivateData.TokenId > 0 {
+				extra["token_id"] = task.PrivateData.TokenId
 			}
 			if err := model.UpdatePlaygroundVideoTaskConsumeLogResult(task.UserId, task.TaskID, task.GetResultURL(), task.FinishTime, string(model.TaskStatusSuccess), extra); err != nil {
 				logger.LogError(ctx, fmt.Sprintf("failed to update playground video task log %s: %s", task.TaskID, err.Error()))
@@ -622,11 +699,19 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 		if task.ChannelId > 0 {
 			extra["channel_id"] = task.ChannelId
 		}
+		if upstreamTaskID := strings.TrimSpace(task.GetUpstreamTaskID()); upstreamTaskID != "" {
+			extra["upstream_task_id"] = upstreamTaskID
+		}
 		if task.StartTime > 0 && task.FinishTime >= task.StartTime {
 			extra["use_time"] = int(task.FinishTime - task.StartTime)
 		}
 		if task.Quota > 0 {
 			extra["pre_refund_quota"] = task.Quota
+		}
+		extra["model_name"] = taskModelName(task)
+		extra["group"] = task.Group
+		if task.PrivateData.TokenId > 0 {
+			extra["token_id"] = task.PrivateData.TokenId
 		}
 		if err := model.UpdatePlaygroundVideoTaskConsumeLogResult(task.UserId, task.TaskID, "", task.FinishTime, string(model.TaskStatusFailure), extra); err != nil {
 			logger.LogError(ctx, fmt.Sprintf("failed to update failed playground video task log %s: %s", task.TaskID, err.Error()))

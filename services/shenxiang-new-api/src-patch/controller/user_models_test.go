@@ -19,3 +19,24 @@ func TestNormalizeUserVisibleModelsRemovesSeedancePrivateVideoForOtherUsers(t *t
 	require.NotContains(t, models, "seedance-nsfw")
 	require.Equal(t, []string{"seedance-2.0"}, models)
 }
+
+func TestNormalizeUserVisibleModelsHidesClaudeFastAndFullGroups(t *testing.T) {
+	models := normalizeUserVisibleModels(2, []string{
+		"claude-sonnet-4-5-20250929-fast",
+		"claude-sonnet-4-5-20250929-full",
+		"claude-sonnet-4-5-20250929",
+		"seedance-2.0-dj-fast",
+	})
+
+	require.Equal(t, []string{"claude-sonnet-4-5-20250929", "seedance-2.0-dj-fast"}, models)
+}
+
+func TestFilterUserVisibleModelNamesHidesSeedancePrivateVideoForNonRootUsers(t *testing.T) {
+	models := filterUserVisibleModelNames(2, []string{
+		"seedance-nsfw",
+		"seedance-2.0-dj-fast",
+		"seedance-2.0-ld-17",
+	})
+
+	require.Equal(t, []string{"seedance-2.0-dj-fast", "seedance-2.0-ld-17"}, models)
+}
