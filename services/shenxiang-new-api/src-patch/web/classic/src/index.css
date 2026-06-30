@@ -538,6 +538,10 @@ body.sx-home-active #xr-api-assistant-root {
   padding-left: 0;
 }
 
+.sx-gpt-bubble.is-pending {
+  color: var(--sx-gpt-muted);
+}
+
 .sx-gpt-composer-area {
   position: sticky;
   right: 0;

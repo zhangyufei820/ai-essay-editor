@@ -116,6 +116,42 @@ function buildAttachmentContext(files) {
     .join('');
 }
 
+function extractAssistantText(payload) {
+  const choices = Array.isArray(payload?.choices) ? payload.choices : [];
+  const firstChoice = choices[0] || {};
+  const content = firstChoice?.message?.content ?? firstChoice?.delta?.content;
+  if (typeof content === 'string') return content.trim();
+  if (Array.isArray(content)) {
+    return content
+      .map((item) => {
+        if (typeof item === 'string') return item;
+        return item?.text || item?.content || '';
+      })
+      .filter(Boolean)
+      .join('\n')
+      .trim();
+  }
+  if (typeof payload?.text === 'string') return payload.text.trim();
+  if (typeof payload?.content === 'string') return payload.content.trim();
+  return '';
+}
+
+function getChatFailureMessage(error) {
+  const data = error?.response?.data || error?.data || {};
+  const message =
+    data?.error?.message ||
+    data?.message ||
+    error?.message ||
+    '这次回复没有完成，请稍后再试。';
+  return String(message)
+    .replace(/\u4e0a\u6e38|\u4f9b\u5e94\u5546|\u63a5\u53e3\u5730\u5740/g, '模型服务')
+    .replace(/upstream/gi, '模型服务')
+    .replace(/supplier/gi, '模型服务')
+    .replace(/provider/gi, '模型服务')
+    .replace(/\bapi\b/gi, '服务')
+    .trim();
+}
+
 const TextWorkbench = ({ isMobile }) => {
   const [user, setUser] = useState(() => getStoredUser());
   const [models, setModels] = useState([]);
@@ -125,6 +161,7 @@ const TextWorkbench = ({ isMobile }) => {
   const [input, setInput] = useState('');
   const [attachments, setAttachments] = useState([]);
   const [messages, setMessages] = useState([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [isDark, setIsDark] = useState(() => {
     const stored = localStorage.getItem('theme-mode') || localStorage.getItem('theme');
@@ -232,7 +269,9 @@ const TextWorkbench = ({ isMobile }) => {
     setAttachments([]);
   };
 
-  const organizeMessage = () => {
+  const organizeMessage = async () => {
+    if (isSubmitting) return;
+
     if (!isLoggedIn) {
       setMessages((prev) => [
         ...prev,
@@ -252,23 +291,84 @@ const TextWorkbench = ({ isMobile }) => {
 
     const attachmentContext = buildAttachmentContext(attachments);
     const userMessage = `${input.trim()}${attachmentContext}` || '请根据文件内容继续。';
-    const fileCount = attachments.length;
+    const userMessageItem = {
+      role: 'user',
+      title: activeModel,
+      content: userMessage,
+    };
+    const pendingId = `assistant-${Date.now()}`;
+    const history = messages
+      .filter((message) => message.role === 'user' || message.role === 'assistant')
+      .filter((message) => !message.pending)
+      .map((message) => ({
+        role: message.role,
+        content: message.content,
+      }));
 
     setMessages((prev) => [
       ...prev,
+      userMessageItem,
       {
-        role: 'user',
-        title: activeModel,
-        content: userMessage,
-      },
-      {
+        id: pendingId,
         role: 'assistant',
         title: 'AIPHUI',
-        content: `已整理好这条消息。当前模型：${activeModel}；文件：${fileCount} 个。你可以继续补充，或换一个模型重新整理。`,
+        content: '正在思考...',
+        pending: true,
       },
     ]);
     setInput('');
     setAttachments([]);
+    setIsSubmitting(true);
+
+    try {
+      const res = await API.post(
+        '/pg/chat/completions',
+        {
+          model: activeModel,
+          stream: false,
+          messages: [
+            ...history,
+            {
+              role: 'user',
+              content: userMessage,
+            },
+          ],
+        },
+        { skipErrorHandler: true, timeout: 180000 },
+      );
+      if (res.data?.error?.message) {
+        throw new Error(res.data.error.message);
+      }
+      const answer = extractAssistantText(res.data);
+      if (!answer) throw new Error('模型没有返回可展示的内容。');
+      setMessages((prev) =>
+        prev.map((message) =>
+          message.id === pendingId
+            ? {
+                role: 'assistant',
+                title: activeModel,
+                content: answer,
+              }
+            : message,
+        ),
+      );
+    } catch (error) {
+      const message = getChatFailureMessage(error);
+      Toast.error(message);
+      setMessages((prev) =>
+        prev.map((item) =>
+          item.id === pendingId
+            ? {
+                role: 'assistant',
+                title: 'AIPHUI',
+                content: `这次没有完成：${message}`,
+              }
+            : item,
+        ),
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const applyStarter = (label) => {
@@ -342,7 +442,12 @@ const TextWorkbench = ({ isMobile }) => {
       <main className={messages.length ? 'sx-gpt-main has-thread' : 'sx-gpt-main is-empty'}>
         <div className='sx-gpt-topbar'>
           <div className='sx-gpt-model-status'>
-            {modelsLoading ? (
+            {isSubmitting ? (
+              <>
+                <Spin size='small' />
+                <span>正在回复</span>
+              </>
+            ) : modelsLoading ? (
               <>
                 <Spin size='small' />
                 <span>读取模型中</span>
@@ -369,10 +474,12 @@ const TextWorkbench = ({ isMobile }) => {
               {messages.map((message, index) => (
                 <article
                   className={`sx-gpt-message sx-gpt-message-${message.role}`}
-                  key={`${message.role}-${index}`}
+                  key={message.id || `${message.role}-${index}`}
                 >
                   <div className='sx-gpt-message-name'>{message.title}</div>
-                  <div className='sx-gpt-bubble'>{message.content}</div>
+                  <div className={message.pending ? 'sx-gpt-bubble is-pending' : 'sx-gpt-bubble'}>
+                    {message.content}
+                  </div>
                 </article>
               ))}
             </div>
@@ -439,6 +546,7 @@ const TextWorkbench = ({ isMobile }) => {
                 value={input}
                 rows={1}
                 placeholder='有问题，尽管问'
+                disabled={isSubmitting}
                 onChange={(event) => setInput(event.target.value)}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' && !event.shiftKey) {
@@ -452,7 +560,7 @@ const TextWorkbench = ({ isMobile }) => {
                 className='sx-gpt-model-select'
                 value={selectedModel}
                 loading={modelsLoading}
-                disabled={!isLoggedIn || modelsLoading}
+                disabled={!isLoggedIn || modelsLoading || isSubmitting}
                 optionList={modelOptions}
                 placeholder={modelsLoading ? '模型' : '选择模型'}
                 onChange={(value) => setSelectedModel(value)}
@@ -465,8 +573,9 @@ const TextWorkbench = ({ isMobile }) => {
                 type='primary'
                 icon={<IconPlay />}
                 onClick={organizeMessage}
-                disabled={!canOrganize && isLoggedIn}
-                aria-label={isLoggedIn ? '整理消息' : '登录后使用'}
+                loading={isSubmitting}
+                disabled={isSubmitting || (!canOrganize && isLoggedIn)}
+                aria-label={isLoggedIn ? '发送消息' : '登录后使用'}
               />
             </div>
 
