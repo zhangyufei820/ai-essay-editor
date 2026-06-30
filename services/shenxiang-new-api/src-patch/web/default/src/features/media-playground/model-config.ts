@@ -30,6 +30,8 @@ export const IMAGE_MODEL_IDS = [
 export const VIDEO_MODEL_IDS = [
   'grok-video-super-720p',
   'seedance-2.0',
+  'seedance-2.0-dj-fast',
+  'seedance-2.0-ld-17',
   'seedance-nsfw',
 ] as const
 
@@ -256,6 +258,49 @@ export const MEDIA_MODEL_CONFIGS: ModelCapability[] = [
     notes: [
       '后台计费按秒配置，页面会显示时长，避免把 6元/15秒误解成按次。',
       '支持文生视频、图生视频、首尾帧三种模式；这些模式互斥，页面会自动生成对应请求。',
+    ],
+  },
+  {
+    id: 'seedance-2.0-dj-fast',
+    label: 'Seedance 2.0 DJ Fast',
+    kind: 'video',
+    vendorLabel: '豆包视频',
+    endpoint: '/v1/videos',
+    description: '适合快速草稿和社交短片，只接收图片参考，不支持过人脸。',
+    supportsImageToVideo: true,
+    sizes: ['1280x720', '720x1280'],
+    durations: [5, 10, 15],
+    fps: [24, 30],
+    defaultSize: '1280x720',
+    defaultDuration: 10,
+    defaultFps: 24,
+    notes: [
+      '按秒计费，适合快速验证镜头效果。',
+      '只接收图片参考，不支持视频或音频参考。',
+      '支持 5/10/15 秒，默认 10 秒。',
+    ],
+  },
+  {
+    id: 'seedance-2.0-ld-17',
+    label: 'Seedance 2.0 LD-17',
+    kind: 'video',
+    vendorLabel: '豆包视频',
+    endpoint: '/v1/videos',
+    description: '适合更完整的视频镜头，支持图片、视频和音频参考。',
+    supportsImageToVideo: true,
+    supportsFirstLastFrame: true,
+    supportsPromptEnhancement: true,
+    supportsWatermark: true,
+    sizes: ['1280x720', '720x1280', '1024x1024'],
+    durations: [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    fps: [24, 30],
+    defaultSize: '1280x720',
+    defaultDuration: 8,
+    defaultFps: 24,
+    notes: [
+      '按次计费，支持 5-15 秒。',
+      '可接受图片、视频和音频参考。',
+      '适合需要更强参考约束的视频生成。',
     ],
   },
   {
