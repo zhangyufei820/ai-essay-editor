@@ -562,6 +562,167 @@
   color: rgba(225, 239, 235, 0.78);
 }
 
+.mp-mention-menu {
+  position: absolute;
+  left: 10px;
+  right: 76px;
+  bottom: 48px;
+  z-index: 5;
+  max-width: 440px;
+  padding: 8px;
+  border: 1px solid rgba(129, 218, 196, 0.24);
+  border-radius: 10px;
+  background:
+    linear-gradient(180deg, rgba(19, 28, 31, 0.98), rgba(6, 11, 14, 0.96)),
+    rgba(7, 12, 15, 0.96);
+  box-shadow:
+    0 18px 42px rgba(0, 0, 0, 0.36),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(18px);
+}
+
+.mp-mention-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 6px 8px;
+  color: rgba(235, 247, 243, 0.8);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.mp-mention-title em {
+  min-width: 0;
+  overflow: hidden;
+  color: rgba(216, 187, 104, 0.9);
+  font-style: normal;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mp-mention-options {
+  display: grid;
+  gap: 4px;
+  max-height: 238px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.mp-mention-option {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  padding: 7px 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: rgba(235, 247, 243, 0.86);
+  text-align: left;
+  background: transparent;
+  cursor: pointer;
+}
+
+.mp-mention-option:hover,
+.mp-mention-option.active {
+  border-color: rgba(94, 234, 212, 0.28);
+  background: rgba(94, 234, 212, 0.1);
+}
+
+.mp-mention-option span:last-child {
+  min-width: 0;
+}
+
+.mp-mention-option strong,
+.mp-mention-option em {
+  display: block;
+}
+
+.mp-mention-option strong {
+  color: #f7fffc;
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.mp-mention-option em {
+  margin-top: 2px;
+  overflow: hidden;
+  color: rgba(225, 239, 235, 0.58);
+  font-size: 11px;
+  font-style: normal;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mp-mention-icon,
+.mp-reference-alias {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.mp-mention-icon {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  color: #04120f;
+  font-size: 12px;
+  background: #45dcc4;
+}
+
+.mp-reference-alias {
+  min-width: 42px;
+  min-height: 22px;
+  margin-right: 7px;
+  padding: 0 8px;
+  color: #04120f;
+  font-size: 11px;
+  vertical-align: middle;
+  background: #45dcc4;
+}
+
+.mp-mention-icon.is-video,
+.mp-reference-alias.is-video {
+  background: #84b8ff;
+}
+
+.mp-mention-icon.is-audio,
+.mp-reference-alias.is-audio {
+  background: #d8bb68;
+}
+
+.mp-mention-empty {
+  padding: 16px 8px;
+  color: rgba(225, 239, 235, 0.56);
+  font-size: 12px;
+  text-align: center;
+}
+
+.mp-mention-close {
+  width: 100%;
+  margin-top: 6px;
+  padding: 7px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 8px;
+  color: rgba(225, 239, 235, 0.72);
+  background: rgba(255, 255, 255, 0.042);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.mp-mention-close:hover {
+  color: #f7fffc;
+  background: rgba(255, 255, 255, 0.07);
+}
+
 .mp-prompt-input textarea,
 .mp-negative-input input,
 .mp-field .semi-select,
@@ -1340,6 +1501,11 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.mp-upload-file-item > span:first-child {
+  display: flex;
+  align-items: center;
 }
 
 .mp-page .semi-tag {

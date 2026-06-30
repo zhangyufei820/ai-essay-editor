@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Banner,
   Button,
@@ -304,6 +304,11 @@ const SEEDANCE_DJ_FAST_PRICE_PER_SECOND = 0.162;
 const SEEDANCE_LD17_PRICE_PER_CALL = 6.48;
 const MEDIA_RESULT_STORAGE_KEY = 'shenxiang-media-playground-results:v1';
 const MEDIA_RESULT_TTL_MS = 72 * 60 * 60 * 1000;
+const VIDEO_LONG_WAIT_MS = 70 * 1000;
+const VIDEO_BACKGROUND_WAIT_MS = 10 * 60 * 1000;
+const VIDEO_MAX_PAGE_POLL_MS = 45 * 60 * 1000;
+const VIDEO_POLL_INTERVAL_MS = 5000;
+const VIDEO_BACKGROUND_POLL_INTERVAL_MS = 15000;
 
 function isGrokImageModel(model) {
   return model === 'grok-imagine-image';
@@ -760,8 +765,107 @@ function fileMediaType(file) {
   return 'unknown';
 }
 
-function videoReferencePolicy(model) {
-  const limits = model?.referenceLimits || { image: VIDEO_REFERENCE_LIMIT, video: 0, audio: 0 };
+function referenceFileOf(item) {
+  return item?.file || item;
+}
+
+function referenceMediaTypeOf(item) {
+  return item?.mediaType || fileMediaType(referenceFileOf(item));
+}
+
+function referenceAliasPrefix(mediaType) {
+  return {
+    image: '图片',
+    video: '视频',
+    audio: '音频',
+  }[mediaType] || '素材';
+}
+
+function createReferenceItem(file, counters = {}) {
+  const mediaType = fileMediaType(file);
+  const nextIndex = (counters[mediaType] || 0) + 1;
+  counters[mediaType] = nextIndex;
+  return {
+    id: `${mediaType}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+    file,
+    mediaType,
+    alias: `${referenceAliasPrefix(mediaType)}${nextIndex}`,
+  };
+}
+
+function nextReferenceCounters(items) {
+  return items.reduce(
+    (counts, item) => {
+      const mediaType = referenceMediaTypeOf(item);
+      const alias = String(item?.alias || '');
+      const match = alias.match(/(\d+)$/);
+      const aliasIndex = match ? Number(match[1]) : 0;
+      counts[mediaType] = Math.max(counts[mediaType] || 0, aliasIndex);
+      return counts;
+    },
+    { image: 0, video: 0, audio: 0 },
+  );
+}
+
+function referenceMentionMarker(alias) {
+  return `@${String(alias || '').trim()}`;
+}
+
+function referenceMentionPattern(alias) {
+  const marker = referenceMentionMarker(alias).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(^|\\s)${marker}(?=\\s|$)`, 'u');
+}
+
+function sortedReferenceMentions(promptValue, references) {
+  const text = String(promptValue || '');
+  return references
+    .map((item, index) => ({
+      item,
+      index,
+      marker: referenceMentionMarker(item.alias),
+      position: text.search(referenceMentionPattern(item.alias)),
+    }))
+    .filter((entry) => entry.position >= 0)
+    .sort((left, right) => left.position - right.position || left.index - right.index)
+    .map((entry) => entry.item);
+}
+
+function orderedReferencesForPrompt(promptValue, references) {
+  const mentioned = sortedReferenceMentions(promptValue, references);
+  const mentionedIds = new Set(mentioned.map((item) => item.id));
+  return [
+    ...mentioned,
+    ...references.filter((item) => !mentionedIds.has(item.id)),
+  ];
+}
+
+function mentionQueryAtCursor(value, cursor) {
+  const beforeCursor = String(value || '').slice(0, cursor);
+  const match = beforeCursor.match(/(^|\s)@([^\s@]*)$/u);
+  if (!match) return null;
+  const token = match[0];
+  return {
+    query: match[2] || '',
+    start: cursor - token.length + (match[1] ? match[1].length : 0),
+    end: cursor,
+  };
+}
+
+function isOfficialSeedanceReferenceModel(modelValue) {
+  return modelValue === 'seedance-2.0-dj-fast' || modelValue === 'seedance-2.0-ld-17';
+}
+
+function reservedLastFrameImageSlots(modelValue, workflow) {
+  return isOfficialSeedanceReferenceModel(modelValue) && workflow === 'first-last' ? 1 : 0;
+}
+
+function videoReferencePolicy(model, options = {}) {
+  const baseLimits = model?.referenceLimits || { image: VIDEO_REFERENCE_LIMIT, video: 0, audio: 0 };
+  const reservedImageSlots = Math.max(0, Number(options.reservedImageSlots) || 0);
+  const limits = {
+    ...baseLimits,
+    image: Math.max(0, (Number(baseLimits.image) || 0) - reservedImageSlots),
+  };
   const allowedTypes = Object.entries(limits)
     .filter(([, limit]) => Number(limit) > 0)
     .map(([type]) => type);
@@ -777,6 +881,7 @@ function videoReferencePolicy(model) {
   const limitLabel = allowedTypes
     .map((type) => `${limits[type]} ${typeLabel[type]}`)
     .join(' / ');
+  const reservedHint = reservedImageSlots > 0 ? `；尾帧会占用 ${reservedImageSlots} 张图片额度` : '';
   const accept = [
     ...(limits.image ? VIDEO_IMAGE_TYPES : []),
     ...(limits.video ? VIDEO_VIDEO_TYPES : []),
@@ -789,20 +894,31 @@ function videoReferencePolicy(model) {
     limitLabel: limitLabel || `${VIDEO_REFERENCE_LIMIT} 图片`,
     accept: accept || VIDEO_REFERENCE_ACCEPT,
     hint: allowedTypes.includes('audio')
-      ? `已选素材，支持 ${limitLabel}；音频必须搭配图片或视频。`
-      : `已选素材，支持 ${limitLabel}。`,
+      ? `已选素材，支持 ${limitLabel}${reservedHint}；音频必须搭配图片或视频。`
+      : `已选素材，支持 ${limitLabel}${reservedHint}。`,
   };
 }
 
 function videoReferenceCounts(files) {
   return files.reduce(
     (counts, file) => {
-      const type = fileMediaType(file);
+      const type = referenceMediaTypeOf(file);
       if (counts[type] !== undefined) counts[type] += 1;
       return counts;
     },
     { image: 0, video: 0, audio: 0 },
   );
+}
+
+function filterReferenceItemsByPolicy(items, policy) {
+  const counts = { image: 0, video: 0, audio: 0 };
+  return items.filter((item) => {
+    const type = referenceMediaTypeOf(item);
+    if (!policy.allowedTypes.includes(type)) return false;
+    if (counts[type] >= (policy.limits[type] || 0)) return false;
+    counts[type] += 1;
+    return true;
+  });
 }
 
 function isBrowserPreviewableURL(url) {
@@ -965,6 +1081,52 @@ function extractVideoFailureReason(response) {
     String(response?.metadata?.failReason || '').trim() ||
     String(response?.metadata?.message || '').trim()
   );
+}
+
+function videoPollErrorStatus(error) {
+  const status = error?.response?.status || error?.status;
+  const numericStatus = Number(status);
+  return Number.isFinite(numericStatus) ? numericStatus : 0;
+}
+
+function isTransientVideoPollError(error) {
+  const status = videoPollErrorStatus(error);
+  if ([408, 425, 429, 500, 502, 503, 504].includes(status)) return true;
+  if (status >= 500) return true;
+
+  const code = String(error?.code || '').toLowerCase();
+  if (
+    ['econnaborted', 'err_network', 'err_connection_reset', 'etimedout', 'econnreset'].includes(code)
+  ) {
+    return true;
+  }
+
+  const message = generationErrorMessage(error).toLowerCase();
+  if (
+    message.includes('timeout') ||
+    message.includes('network error') ||
+    message.includes('failed to fetch') ||
+    message.includes('load failed') ||
+    message.includes('bad gateway') ||
+    message.includes('gateway time') ||
+    message.includes('service unavailable') ||
+    message.includes('temporarily unavailable') ||
+    message.includes('too many requests') ||
+    message.includes('socket hang up') ||
+    message.includes('connection reset') ||
+    message.includes('查询超时')
+  ) {
+    return true;
+  }
+
+  return !error?.response && Boolean(error?.request);
+}
+
+function videoPollErrorMessage(error) {
+  const status = videoPollErrorStatus(error);
+  const message = generationErrorMessage(error);
+  if (message) return message;
+  return status ? `HTTP ${status}` : '查询请求暂时失败';
 }
 
 function generationErrorMessage(error) {
@@ -1228,23 +1390,25 @@ function MultiFileDrop({
   maxFiles,
   onFiles,
   onRemove,
+  onInsertMention,
   accept = 'image/png,image/jpeg,image/webp',
   hint,
 }) {
   const [isDragging, setIsDragging] = useState(false);
   const previewFile = files[0] || null;
   const [previewUrl, setPreviewUrl] = useState('');
-  const previewType = fileMediaType(previewFile);
+  const previewType = referenceMediaTypeOf(previewFile);
+  const previewSourceFile = referenceFileOf(previewFile);
 
   useEffect(() => {
-    if (!previewFile) {
+    if (!previewSourceFile) {
       setPreviewUrl('');
       return undefined;
     }
-    const nextUrl = URL.createObjectURL(previewFile);
+    const nextUrl = URL.createObjectURL(previewSourceFile);
     setPreviewUrl(nextUrl);
     return () => URL.revokeObjectURL(nextUrl);
-  }, [previewFile]);
+  }, [previewSourceFile]);
 
   const handleFiles = (fileList) => {
     onFiles(fileList);
@@ -1295,25 +1459,96 @@ function MultiFileDrop({
       </label>
       {files.length > 0 ? (
         <div className='mp-upload-file-list'>
-          {files.map((file, index) => (
-            <div
-              key={`${file.name}-${file.lastModified}-${index}`}
-              className='mp-upload-file-item'
-            >
-              <span>
-                {index + 1}. {file.name}
-              </span>
-              <Button
-                size='small'
-                theme='borderless'
-                onClick={() => onRemove(index)}
+          {files.map((item, index) => {
+            const file = referenceFileOf(item);
+            const alias = item?.alias || `${index + 1}`;
+            const mediaType = referenceMediaTypeOf(item);
+            return (
+              <div
+                key={item?.id || `${file.name}-${file.lastModified}-${index}`}
+                className='mp-upload-file-item'
               >
-                移除
-              </Button>
-            </div>
-          ))}
+                <span>
+                  <strong className={`mp-reference-alias is-${mediaType}`}>{alias}</strong>
+                  {file.name}
+                </span>
+                {onInsertMention ? (
+                  <Button
+                    size='small'
+                    theme='borderless'
+                    onClick={() => onInsertMention(item)}
+                  >
+                    @引用
+                  </Button>
+                ) : null}
+                <Button
+                  size='small'
+                  theme='borderless'
+                  onClick={() => onRemove(item?.id || index)}
+                >
+                  移除
+                </Button>
+              </div>
+            );
+          })}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function MentionMenu({
+  visible,
+  items,
+  activeIndex,
+  query,
+  onPick,
+  onClose,
+}) {
+  if (!visible) return null;
+  return (
+    <div className='mp-mention-menu' role='listbox' aria-label='可能@的内容'>
+      <div className='mp-mention-title'>
+        <span>可能@的内容</span>
+        {query ? <em>{query}</em> : null}
+      </div>
+      {items.length > 0 ? (
+        <div className='mp-mention-options'>
+          {items.map((item, index) => (
+            <button
+              key={item.id}
+              type='button'
+              role='option'
+              aria-selected={activeIndex === index}
+              className={activeIndex === index ? 'mp-mention-option active' : 'mp-mention-option'}
+              onMouseDown={(event) => {
+                event.preventDefault();
+                onPick(item);
+              }}
+            >
+              <span className={`mp-mention-icon is-${item.mediaType}`}>
+                {item.mediaType === 'audio' ? '音' : item.mediaType === 'video' ? '视' : '图'}
+              </span>
+              <span>
+                <strong>{item.alias}</strong>
+                <em>{referenceFileOf(item).name}</em>
+              </span>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className='mp-mention-empty'>当前没有可引用素材</div>
+      )}
+      <button
+        type='button'
+        className='mp-mention-close'
+        onMouseDown={(event) => {
+          event.preventDefault();
+          onClose();
+        }}
+      >
+        关闭
+      </button>
     </div>
   );
 }
@@ -1467,6 +1702,15 @@ const MediaPlayground = () => {
   const [groups, setGroups] = useState([]);
   const [models, setModels] = useState(EMPTY_MODELS);
   const [prompt, setPrompt] = useState(DEFAULT_PROMPT);
+  const promptTextareaRef = useRef(null);
+  const [mentionState, setMentionState] = useState({
+    visible: false,
+    start: 0,
+    end: 0,
+    query: '',
+    activeIndex: 0,
+  });
+  const [promptComposing, setPromptComposing] = useState(false);
   const [negativePrompt, setNegativePrompt] = useState('');
   const [size, setSize] = useState(IMAGE_MODELS[0].defaultSize);
   const [quality, setQuality] = useState(IMAGE_MODELS[0].defaultQuality);
@@ -1521,10 +1765,31 @@ const MediaPlayground = () => {
     mode === 'image' ? IMAGE_GENERATION_GROUP.value : group;
   const reversePromptGroup = IMAGE_GENERATION_GROUP.value;
   const visibleGroupOptions = mode === 'image' ? [IMAGE_GENERATION_GROUP] : groups;
+  const reservedVideoImageSlots = reservedLastFrameImageSlots(videoModel, videoWorkflow);
   const videoRefPolicy = useMemo(
-    () => videoReferencePolicy(activeVideoModel),
-    [activeVideoModel],
+    () => videoReferencePolicy(activeVideoModel, { reservedImageSlots: reservedVideoImageSlots }),
+    [activeVideoModel, reservedVideoImageSlots],
   );
+  const mentionCandidates = useMemo(() => {
+    if (mode !== 'video' || videoWorkflow === 'text') return [];
+    return referenceFiles
+      .filter((item) => videoRefPolicy.allowedTypes.includes(referenceMediaTypeOf(item)))
+      .map((item) => ({
+        ...item,
+        mediaType: referenceMediaTypeOf(item),
+      }));
+  }, [mode, referenceFiles, videoRefPolicy, videoWorkflow]);
+  const mentionMenuItems = useMemo(() => {
+    const query = mentionState.query.trim().toLowerCase();
+    if (!query) return mentionCandidates;
+    return mentionCandidates.filter((item) => {
+      const file = referenceFileOf(item);
+      return (
+        String(item.alias || '').toLowerCase().includes(query) ||
+        String(file?.name || '').toLowerCase().includes(query)
+      );
+    });
+  }, [mentionCandidates, mentionState.query]);
   const referenceFileLimit =
     mode === 'image' ? IMAGE_EDIT_REFERENCE_LIMIT : videoRefPolicy.maxFiles;
   const imageRatioOptions =
@@ -1534,6 +1799,110 @@ const MediaPlayground = () => {
   const imageRatioValue = activeImageModel.aspectRatios?.length
     ? aspectRatio
     : size;
+
+  function promptTextarea() {
+    const current = promptTextareaRef.current;
+    if (!current) return null;
+    if (current.tagName === 'TEXTAREA') return current;
+    if (current.textAreaRef?.current) return current.textAreaRef.current;
+    if (current.textAreaRef) return current.textAreaRef;
+    if (current.input) return current.input;
+    if (typeof current.querySelector === 'function') return current.querySelector('textarea');
+    return null;
+  }
+
+  function closeMentionMenu() {
+    setMentionState((current) => ({ ...current, visible: false, activeIndex: 0 }));
+  }
+
+  function syncMentionAtCursor(nextPrompt = prompt) {
+    if (promptComposing || mode !== 'video' || videoWorkflow === 'text') {
+      closeMentionMenu();
+      return;
+    }
+    const textarea = promptTextarea();
+    const cursor = textarea?.selectionStart ?? String(nextPrompt || '').length;
+    const mention = mentionQueryAtCursor(nextPrompt, cursor);
+    if (!mention) {
+      closeMentionMenu();
+      return;
+    }
+    setMentionState({
+      visible: true,
+      start: mention.start,
+      end: mention.end,
+      query: mention.query,
+      activeIndex: 0,
+    });
+  }
+
+  function insertPromptText(text, range = null) {
+    const textarea = promptTextarea();
+    const start = range?.start ?? textarea?.selectionStart ?? prompt.length;
+    const end = range?.end ?? textarea?.selectionEnd ?? start;
+    const before = prompt.slice(0, start);
+    const after = prompt.slice(end);
+    const needsLeadingSpace = before && !/\s$/.test(before);
+    const needsTrailingSpace = after && !/^\s/.test(after);
+    const insertion = `${needsLeadingSpace ? ' ' : ''}${text}${needsTrailingSpace ? ' ' : ''}`;
+    const nextPrompt = `${before}${insertion}${after}`;
+    const nextCursor = before.length + insertion.length;
+    setPrompt(nextPrompt);
+    closeMentionMenu();
+    window.requestAnimationFrame(() => {
+      const nextTextarea = promptTextarea();
+      if (!nextTextarea) return;
+      nextTextarea.focus();
+      nextTextarea.setSelectionRange(nextCursor, nextCursor);
+    });
+  }
+
+  function insertReferenceMention(item, range = null) {
+    if (!item?.alias) return;
+    insertPromptText(
+      referenceMentionMarker(item.alias),
+      range || (mentionState.visible ? mentionState : null),
+    );
+  }
+
+  function handlePromptChange(value) {
+    setPrompt(value);
+    window.requestAnimationFrame(() => syncMentionAtCursor(value));
+  }
+
+  function handlePromptKeyDown(event) {
+    if (!mentionState.visible) return;
+    if (event.nativeEvent?.isComposing || promptComposing) return;
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setMentionState((current) => ({
+        ...current,
+        activeIndex: mentionMenuItems.length
+          ? (current.activeIndex + 1) % mentionMenuItems.length
+          : 0,
+      }));
+      return;
+    }
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setMentionState((current) => ({
+        ...current,
+        activeIndex: mentionMenuItems.length
+          ? (current.activeIndex - 1 + mentionMenuItems.length) % mentionMenuItems.length
+          : 0,
+      }));
+      return;
+    }
+    if ((event.key === 'Enter' || event.key === 'Tab') && mentionMenuItems.length > 0) {
+      event.preventDefault();
+      insertReferenceMention(mentionMenuItems[mentionState.activeIndex] || mentionMenuItems[0], mentionState);
+      return;
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeMentionMenu();
+    }
+  }
 
   function handleImageRatioChange(value) {
     if (activeImageModel.aspectRatios?.length) {
@@ -1600,19 +1969,30 @@ const MediaPlayground = () => {
           ? files.slice(0, referenceFileLimit)
           : files;
       }
-      const counts = { image: 0, video: 0, audio: 0 };
-      const allowed = files.filter((file) => {
-        const type = fileMediaType(file);
-        if (!videoRefPolicy.allowedTypes.includes(type)) return false;
-        if (counts[type] >= (videoRefPolicy.limits[type] || 0)) return false;
-        counts[type] += 1;
-        return true;
-      });
+      const allowed = filterReferenceItemsByPolicy(files, videoRefPolicy);
       return allowed.length > referenceFileLimit
         ? allowed.slice(0, referenceFileLimit)
         : allowed;
     });
   }, [mode, referenceFileLimit, videoRefPolicy]);
+
+  useEffect(() => {
+    if (!mentionState.visible) return;
+    if (mentionMenuItems.length === 0) {
+      setMentionState((current) => ({ ...current, activeIndex: 0 }));
+      return;
+    }
+    if (mentionState.activeIndex >= mentionMenuItems.length) {
+      setMentionState((current) => ({
+        ...current,
+        activeIndex: mentionMenuItems.length - 1,
+      }));
+    }
+  }, [mentionMenuItems.length, mentionState.activeIndex, mentionState.visible]);
+
+  useEffect(() => {
+    closeMentionMenu();
+  }, [mode, videoWorkflow, videoModel]);
 
   useEffect(() => {
     setResults(restoreStoredResults());
@@ -1644,6 +2024,7 @@ const MediaPlayground = () => {
       const counts = videoReferenceCounts(referenceFiles);
       const accepted = [];
       let rejected = 0;
+      const counters = nextReferenceCounters(referenceFiles);
       incoming.forEach((file) => {
         const type = fileMediaType(file);
         if (!videoRefPolicy.allowedTypes.includes(type)) {
@@ -1655,7 +2036,7 @@ const MediaPlayground = () => {
           return;
         }
         counts[type] += 1;
-        accepted.push(file);
+        accepted.push(createReferenceItem(file, counters));
       });
       if (accepted.length === 0) {
         Toast.warning(`当前模型最多支持 ${videoRefPolicy.limitLabel}。`);
@@ -1675,7 +2056,10 @@ const MediaPlayground = () => {
       Toast.warning(`最多支持上传 ${referenceFileLimit} 张参考图。`);
       return;
     }
-    const accepted = incoming.slice(0, available);
+    const counters = nextReferenceCounters(referenceFiles);
+    const accepted = incoming
+      .slice(0, available)
+      .map((file) => createReferenceItem(file, counters));
     setReferenceFiles((current) =>
       [...current, ...accepted].slice(0, referenceFileLimit),
     );
@@ -1686,9 +2070,9 @@ const MediaPlayground = () => {
     }
   }
 
-  function removeReferenceFile(index) {
+  function removeReferenceFile(idOrIndex) {
     setReferenceFiles((files) =>
-      files.filter((_, itemIndex) => itemIndex !== index),
+      files.filter((item, itemIndex) => item.id !== idOrIndex && itemIndex !== idOrIndex),
     );
   }
 
@@ -1857,7 +2241,8 @@ const MediaPlayground = () => {
     }
   }
 
-  async function cacheReferenceMedia(file, mediaType, role, index) {
+  async function cacheReferenceMedia(reference, mediaType, role, index) {
+    const file = referenceFileOf(reference);
     const dataUrl = await fileToDataURL(file);
     const res = await API.post(
       '/pg/media/cache',
@@ -1869,6 +2254,7 @@ const MediaPlayground = () => {
           media_type: mediaType,
           reference_role: role,
           reference_index: index + 1,
+          reference_alias: reference?.alias || '',
           hidden: true,
           source: 'video_input',
           model: videoModel,
@@ -1975,16 +2361,21 @@ const MediaPlayground = () => {
   async function applyVideoReferences(payload) {
     if (videoWorkflow !== 'image' && videoWorkflow !== 'first-last') return payload;
 
-    const isOfficialReferencesModel =
-      videoModel === 'seedance-2.0-dj-fast' || videoModel === 'seedance-2.0-ld-17';
-    const filesForModel =
+    const isOfficialReferencesModel = isOfficialSeedanceReferenceModel(videoModel);
+    const referenceItemsForModel =
       videoModel === 'seedance-2.0-dj-fast'
-        ? referenceFiles.filter((file) => fileMediaType(file) === 'image')
+        ? referenceFiles.filter((item) => referenceMediaTypeOf(item) === 'image')
         : referenceFiles;
+    const limitedReferenceItems = isOfficialReferencesModel
+      ? filterReferenceItemsByPolicy(referenceItemsForModel, videoRefPolicy)
+      : referenceItemsForModel;
+    const orderedReferenceItems = isOfficialReferencesModel
+      ? orderedReferencesForPrompt(payload.prompt || '', limitedReferenceItems)
+      : limitedReferenceItems;
 
     const references = await Promise.all(
-      filesForModel.map(async (file, index) => {
-        const mediaType = isOfficialReferencesModel ? fileMediaType(file) : 'image';
+      orderedReferenceItems.map(async (item, index) => {
+        const mediaType = isOfficialReferencesModel ? referenceMediaTypeOf(item) : 'image';
         const role =
           mediaType === 'video'
             ? 'reference_video'
@@ -1996,8 +2387,8 @@ const MediaPlayground = () => {
         return {
           mediaType,
           role,
-          alias: `${mediaType}${index + 1}`,
-          url: await cacheReferenceMedia(file, mediaType, role, index),
+          alias: item.alias || `${referenceAliasPrefix(mediaType)}${index + 1}`,
+          url: await cacheReferenceMedia(item, mediaType, role, index),
         };
       }),
     );
@@ -2005,7 +2396,7 @@ const MediaPlayground = () => {
       references.push({
         mediaType: 'image',
         role: 'last_frame',
-        alias: `image${references.length + 1}`,
+        alias: `尾帧${references.length + 1}`,
         url: await cacheReferenceMedia(lastFrameFile, 'image', 'last_frame', references.length),
       });
     }
@@ -2023,10 +2414,12 @@ const MediaPlayground = () => {
       return {
         ...payload,
         references: officialReferences,
-        prompt: promptWithReferenceAliases(
-          payload.prompt || '',
-          officialReferences.map((item) => item.alias),
-        ),
+        prompt: payload.prompt || '',
+        metadata: {
+          ...(payload.metadata || {}),
+          reference_aliases: officialReferences.map((item) => item.alias).filter(Boolean),
+          reference_mentions: sortedReferenceMentions(payload.prompt || '', orderedReferenceItems).map((item) => item.alias),
+        },
       };
     }
 
@@ -2067,7 +2460,7 @@ const MediaPlayground = () => {
           typeof value === 'object' ? JSON.stringify(value) : String(value),
         );
       });
-      referenceFiles.forEach((file) => form.append('image', file));
+      referenceFiles.forEach((item) => form.append('image', referenceFileOf(item)));
       if (maskFile) form.set('mask', maskFile);
       response = await API.post('/pg/images/tasks/edits', form, {
         skipErrorHandler: true,
@@ -2181,26 +2574,68 @@ const MediaPlayground = () => {
   }
 
   async function pollVideo(taskId) {
-    const deadline = Date.now() + 10 * 60 * 1000;
+    const startedAt = Date.now();
+    const deadline = startedAt + VIDEO_MAX_PAGE_POLL_MS;
+    let longWaitNotified = false;
+    let backgroundNotified = false;
     setVideoPolling(true);
     while (Date.now() < deadline) {
-      const res = await API.get(`/pg/videos/${encodeURIComponent(taskId)}`, {
-        skipErrorHandler: true,
-        disableDuplicate: true,
-      });
-      const status = getVideoStatus(res.data);
-      const progress = getVideoProgress(res.data);
-      const url = extractVideoURL(res.data);
-      setTaskMessage(`视频任务 ${status}，进度 ${progress}%`);
-      if (url) return createVideoResult(res.data, url, taskId);
-      if (status === 'failed')
-        throw new Error(extractVideoFailureReason(res.data) || '视频任务失败。');
-      if (status === 'completed') {
-        throw new Error('视频完成但没有返回视频地址。');
+      try {
+        const res = await API.get(`/pg/videos/${encodeURIComponent(taskId)}`, {
+          skipErrorHandler: true,
+          disableDuplicate: true,
+        });
+        const status = getVideoStatus(res.data);
+        const progress = getVideoProgress(res.data);
+        const url = extractVideoURL(res.data);
+        const elapsedMs = Date.now() - startedAt;
+        let waitSuffix = '';
+        if (!longWaitNotified && elapsedMs >= VIDEO_LONG_WAIT_MS) {
+          Toast.info('视频任务仍在生成中，请不要重复提交，完成后会自动回写日志和媒体工坊。');
+          longWaitNotified = true;
+        }
+        if (elapsedMs >= VIDEO_BACKGROUND_WAIT_MS) {
+          waitSuffix = '，已转入长时间后台轮询，上游完成后会回写日志和媒体工坊';
+          if (!backgroundNotified) {
+            Toast.info('视频任务耗时较长，页面将低频轮询；请稍后在日志或媒体工坊查看结果。');
+            backgroundNotified = true;
+          }
+        }
+        setTaskMessage(`视频任务 ${status}，进度 ${progress}%${waitSuffix}`);
+        if (url) return createVideoResult(res.data, url, taskId);
+        if (status === 'failed')
+          throw new Error(extractVideoFailureReason(res.data) || '视频任务失败。');
+        if (status === 'completed') {
+          throw new Error('视频完成但没有返回视频地址。');
+        }
+      } catch (error) {
+        if (!isTransientVideoPollError(error)) throw error;
+        const elapsedMs = Date.now() - startedAt;
+        let waitSuffix = '，页面会继续轮询，不会中断上游生成任务';
+        if (!longWaitNotified && elapsedMs >= VIDEO_LONG_WAIT_MS) {
+          Toast.info('视频任务仍在生成中，请不要重复提交，完成后会自动回写日志和媒体工坊。');
+          longWaitNotified = true;
+        }
+        if (elapsedMs >= VIDEO_BACKGROUND_WAIT_MS) {
+          waitSuffix = '，已转入长时间后台轮询，上游完成后会回写日志和媒体工坊';
+          if (!backgroundNotified) {
+            Toast.info('视频任务耗时较长，页面将低频轮询；请稍后在日志或媒体工坊查看结果。');
+            backgroundNotified = true;
+          }
+        }
+        setTaskMessage(`视频任务查询暂时失败：${videoPollErrorMessage(error)}${waitSuffix}`);
       }
-      await new Promise((resolve) => setTimeout(resolve, 5000));
+      const elapsedMs = Date.now() - startedAt;
+      await new Promise((resolve) =>
+        setTimeout(
+          resolve,
+          elapsedMs >= VIDEO_BACKGROUND_WAIT_MS
+            ? VIDEO_BACKGROUND_POLL_INTERVAL_MS
+            : VIDEO_POLL_INTERVAL_MS,
+        ),
+      );
     }
-    throw new Error('视频生成等待超时，请稍后到任务日志查看结果。');
+    return null;
   }
 
   async function submitVideo() {
@@ -2232,6 +2667,12 @@ const MediaPlayground = () => {
       let keepTaskMessage = false;
       try {
         const result = await pollVideo(taskId);
+        if (!result) {
+          Toast.info('页面轮询已暂停，任务仍在后台继续生成，完成后会写入日志和媒体工坊。');
+          setTaskMessage(`视频任务 ${taskId} 已转入后台生成，完成后可在任务日志和媒体工坊查看。`);
+          keepTaskMessage = true;
+          return;
+        }
         const cached = await cacheMedia(result);
         setResults((prev) => [cached, ...prev]);
         Toast.success('视频已生成，请立即下载保存。');
@@ -2546,12 +2987,29 @@ const MediaPlayground = () => {
               </div>
               <div className='mp-prompt-input-wrap'>
                 <TextArea
+                  ref={promptTextareaRef}
                   value={prompt}
                   autosize={{ minRows: 6, maxRows: 12 }}
-                  onChange={setPrompt}
+                  onChange={handlePromptChange}
+                  onClick={() => syncMentionAtCursor()}
+                  onKeyUp={() => syncMentionAtCursor()}
+                  onKeyDown={handlePromptKeyDown}
+                  onCompositionStart={() => setPromptComposing(true)}
+                  onCompositionEnd={() => {
+                    setPromptComposing(false);
+                    window.requestAnimationFrame(() => syncMentionAtCursor());
+                  }}
                   placeholder='例如：一张高级商业海报，主体清晰，真实光影，适合品牌宣传。'
                   className='mp-prompt-input'
                   data-xr-agent='media-prompt'
+                />
+                <MentionMenu
+                  visible={mentionState.visible}
+                  items={mentionMenuItems}
+                  activeIndex={mentionState.activeIndex}
+                  query={mentionState.query}
+                  onPick={(item) => insertReferenceMention(item, mentionState)}
+                  onClose={closeMentionMenu}
                 />
                 <div className='mp-prompt-tools'>
                   <Tooltip content='复制提示词'>
@@ -2689,6 +3147,7 @@ const MediaPlayground = () => {
                     onFiles={addReferenceFiles}
                     onRemove={removeReferenceFile}
                     accept={videoRefPolicy.accept}
+                    onInsertMention={insertReferenceMention}
                     hint={`${videoRefPolicy.hint} 已选 ${referenceFiles.length} / ${referenceFileLimit}。`}
                   />
                   {videoWorkflow === 'first-last' ? (
