@@ -43,8 +43,8 @@ done
 info "本机访问测试"
 curl -fsSI "http://127.0.0.1:${HOST_BIND_PORT}" | sed -n '1,20p'
 
-info "检查媒体工坊 / 云端 Codex 入口"
-python3 "${APP_DIR}/scripts/ensure_codex_entry.py" --sync-db --check-url "http://127.0.0.1:${HOST_BIND_PORT}" --strict
+info "检查关键入口守卫"
+python3 "${APP_DIR}/scripts/ensure_codex_entry.py" --check-source --sync-db --check-url "http://127.0.0.1:${HOST_BIND_PORT}" --strict
 
 info "下一步"
 cat <<EOF

@@ -68,7 +68,7 @@ def latest_source_root(app_root: Path) -> Path:
     return DEFAULT_SOURCE_ROOT
 
 
-def normalize_codex_labels(source_root: Path) -> dict[str, bool]:
+def normalize_critical_labels(source_root: Path) -> dict[str, bool]:
     paths = [
         source_root / "web/classic/src/hooks/common/useNavigation.js",
         source_root / "web/classic/src/pages/Setting/Operation/SettingsHeaderNavModules.jsx",
@@ -82,12 +82,20 @@ def normalize_codex_labels(source_root: Path) -> dict[str, bool]:
             results[path.name] = False
             continue
         text = read_text(path)
-        normalized = text.replace("云端 Codex", "云 Codex").replace("云端Codex", "云 Codex")
+        normalized = (
+            text.replace("云端 Codex", "云 Codex")
+            .replace("云端Codex", "云 Codex")
+            .replace("绘图日志", "图像生成日志")
+        )
         changed = normalized != text
         if changed:
             write_text(path, normalized)
         results[path.name] = changed
     return results
+
+
+def normalize_codex_labels(source_root: Path) -> dict[str, bool]:
+    return normalize_critical_labels(source_root)
 
 
 def patch_classic_app(source_root: Path) -> bool:
@@ -392,6 +400,53 @@ def patch_source(source_root: Path) -> dict[str, bool]:
     return results
 
 
+def source_text(source_root: Path, relative_path: str) -> str:
+    path = source_root / relative_path
+    if not path.exists():
+        return ""
+    return read_text(path)
+
+
+def has_pattern(text: str, pattern: str) -> bool:
+    return bool(re.search(pattern, text, re.S))
+
+
+def check_source(source_root: Path) -> dict[str, bool]:
+    sidebar = source_text(source_root, "web/classic/src/components/layout/SiderBar.jsx")
+    sidebar_config = source_text(source_root, "web/classic/src/hooks/common/useSidebar.js")
+    navigation = source_text(source_root, "web/classic/src/hooks/common/useNavigation.js")
+    app = source_text(source_root, "web/classic/src/App.jsx")
+    media_playground = source_text(source_root, "web/classic/src/pages/MediaPlayground/index.jsx")
+    user_controller = source_text(source_root, "controller/user.go")
+
+    return {
+        "source_root_exists": source_root.exists(),
+        "has_sidebar_media_entry": "媒体工坊" in sidebar and "itemKey: 'media'" in sidebar and "/media-playground" in sidebar,
+        "has_sidebar_codex_entry": "云 Codex" in sidebar and "itemKey: 'codex'" in sidebar and "/codex/" in sidebar,
+        "has_image_generation_log_label": "图像生成日志" in sidebar,
+        "has_no_legacy_drawing_log_label": "绘图日志" not in sidebar,
+        "has_midjourney_log_entry": "itemKey: 'midjourney'" in sidebar and "/midjourney" in sidebar,
+        "has_task_log_entry": "任务日志" in sidebar and "itemKey: 'task'" in sidebar and "/task" in sidebar,
+        "has_admin_models_entry": "模型管理" in sidebar and "itemKey: 'models'" in sidebar and "/console/models" in sidebar,
+        "has_sidebar_default_media": has_pattern(sidebar_config, r"chat:\s*\{[^}]*media:\s*true"),
+        "has_sidebar_default_codex": has_pattern(sidebar_config, r"chat:\s*\{[^}]*codex:\s*true"),
+        "has_sidebar_default_midjourney": has_pattern(sidebar_config, r"console:\s*\{[^}]*midjourney:\s*true"),
+        "has_sidebar_default_task": has_pattern(sidebar_config, r"console:\s*\{[^}]*task:\s*true"),
+        "has_sidebar_default_admin_models": has_pattern(sidebar_config, r"admin:\s*\{[^}]*models:\s*true"),
+        "has_top_nav_media_entry": "媒体工坊" in navigation and "itemKey: 'media'" in navigation and "/console/media-playground" in navigation,
+        "has_top_nav_codex_entry": "云 Codex" in navigation and "itemKey: 'codex'" in navigation and "/console/codex" in navigation,
+        "has_app_media_route": "path='/console/media-playground'" in app and "path='/media-playground'" in app,
+        "has_app_codex_route": "path='/console/codex'" in app and "CodexRedirect" in app,
+        "has_seedance_private_model": "Seedance 私测视频" in media_playground and "seedance-nsfw" in media_playground,
+        "has_seedance_private_filter": "private: true" in media_playground and "/api/user/models" in media_playground,
+        "has_seedance_backend_guard": (
+            'seedancePrivateVideoModel         = "seedance-nsfw"' in user_controller
+            and "seedancePrivateVideoAllowedUserID = 1" in user_controller
+            and "normalizeUserVisibleModels(id, models)" in user_controller
+        ),
+    }
+
+
 def load_dotenv(path: Path) -> dict[str, str]:
     env: dict[str, str] = {}
     if not path.exists():
@@ -492,14 +547,21 @@ def sync_db_options(app_root: Path) -> dict[str, Any]:
 
     sidebar = parse_or_default(data.get("SidebarModulesAdmin"), sidebar_default)
     changed_sidebar = False
-    chat = sidebar.setdefault("chat", {})
-    if not isinstance(chat, dict):
-        sidebar["chat"] = chat = {}
-        changed_sidebar = True
-    for key in ("enabled", "codex", "media", "playground", "chat"):
-        if chat.get(key) is not True:
-            chat[key] = True
+
+    def ensure_sidebar_section(section_name: str, keys: tuple[str, ...]) -> None:
+        nonlocal changed_sidebar
+        section = sidebar.setdefault(section_name, {})
+        if not isinstance(section, dict):
+            sidebar[section_name] = section = {}
             changed_sidebar = True
+        for key in keys:
+            if section.get(key) is not True:
+                section[key] = True
+                changed_sidebar = True
+
+    ensure_sidebar_section("chat", ("enabled", "codex", "media", "playground", "chat"))
+    ensure_sidebar_section("console", ("enabled", "log", "midjourney", "task", "token", "detail"))
+    ensure_sidebar_section("admin", ("enabled", "models"))
 
     statements = ["START TRANSACTION;"]
     if changed_header:
@@ -568,6 +630,12 @@ def check_url(base_url: str) -> dict[str, bool]:
         "has_top_nav_media_item": has_top_nav_media_item,
         "codex_route_serves_workspace": "星人 Codex" in codex_text and "页面未找到" not in codex_text,
         "has_media_label": "媒体工坊" in text,
+        "has_image_generation_log_label": "图像生成日志" in text,
+        "has_no_legacy_drawing_log_label": "绘图日志" not in text,
+        "has_midjourney_log_route": "/console/midjourney" in text,
+        "has_task_log_label": "任务日志" in text,
+        "has_task_log_route": "/console/task" in text,
+        "has_admin_models_route": "/console/models" in text,
     }
 
 
@@ -576,6 +644,7 @@ def main() -> int:
     parser.add_argument("--app-root", default=str(DEFAULT_APP_ROOT))
     parser.add_argument("--source-root", default="")
     parser.add_argument("--patch-source", action="store_true")
+    parser.add_argument("--check-source", action="store_true")
     parser.add_argument("--sync-db", action="store_true")
     parser.add_argument("--check-url", default="")
     parser.add_argument("--strict", action="store_true")
@@ -586,6 +655,12 @@ def main() -> int:
     if args.patch_source:
         results["source_root"] = str(source_root)
         results["source"] = patch_source(source_root)
+    if args.check_source:
+        results["source_root"] = str(source_root)
+        results["source_check"] = check_source(source_root)
+        if args.strict and not all(results["source_check"].values()):
+            print(json.dumps(results, ensure_ascii=False, sort_keys=True))
+            return 2
     if args.sync_db:
         results["db"] = sync_db_options(Path(args.app_root))
     if args.check_url:

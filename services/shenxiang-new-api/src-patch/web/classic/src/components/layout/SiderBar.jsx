@@ -92,7 +92,7 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         to: '/log',
       },
       {
-        text: t('绘图日志'),
+        text: t('图像生成日志'),
         itemKey: 'midjourney',
         to: '/midjourney',
         className:
