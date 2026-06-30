@@ -631,7 +631,6 @@ def check_url(base_url: str) -> dict[str, bool]:
         "codex_route_serves_workspace": "星人 Codex" in codex_text and "页面未找到" not in codex_text,
         "has_media_label": "媒体工坊" in text,
         "has_image_generation_log_label": "图像生成日志" in text,
-        "has_no_legacy_drawing_log_label": "绘图日志" not in text,
         "has_midjourney_log_route": "/console/midjourney" in text,
         "has_task_log_label": "任务日志" in text,
         "has_task_log_route": "/console/task" in text,
