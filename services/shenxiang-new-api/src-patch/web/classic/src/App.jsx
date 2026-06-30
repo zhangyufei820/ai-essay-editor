@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import React, { lazy, Suspense, useContext, useMemo } from 'react';
+import React, { lazy, Suspense, useContext, useEffect, useMemo } from 'react';
 import { Route, Routes, useLocation, useParams } from 'react-router-dom';
 import Loading from './components/common/ui/Loading';
 import User from './pages/User';
@@ -60,6 +60,13 @@ const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
 function DynamicOAuth2Callback() {
   const { provider } = useParams();
   return <OAuth2Callback type={provider} />;
+}
+
+function CodexRedirect() {
+  useEffect(() => {
+    window.location.replace('/codex/');
+  }, []);
+  return <Loading />;
 }
 
 function App() {
@@ -158,6 +165,24 @@ function App() {
         />
         <Route
           path='/console/media-playground'
+          element={
+            <PrivateRoute>
+              <Suspense fallback={<Loading></Loading>} key={location.pathname}>
+                <MediaPlayground />
+              </Suspense>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path='/console/codex'
+          element={
+            <PrivateRoute>
+              <CodexRedirect />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path='/media-playground'
           element={
             <PrivateRoute>
               <Suspense fallback={<Loading></Loading>} key={location.pathname}>

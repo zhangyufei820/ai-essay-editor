@@ -33,15 +33,131 @@ def replace_once(text: str, old: str, new: str, label: str) -> tuple[str, bool]:
     return text.replace(old, new, 1), True
 
 
-def patch_file(path: Path, replacements: list[tuple[str, str, str]]) -> bool:
+def patch_file(
+    path: Path,
+    replacements: list[tuple[str, str, str]],
+    *,
+    missing_ok: bool = False,
+) -> bool:
+    if not path.exists():
+        return False
     text = read_text(path)
     changed_any = False
     for old, new, label in replacements:
-        text, changed = replace_once(text, old, new, label)
+        try:
+            text, changed = replace_once(text, old, new, label)
+        except RuntimeError:
+            if not missing_ok:
+                raise
+            continue
         changed_any = changed_any or changed
     if changed_any:
         write_text(path, text)
     return changed_any
+
+
+def latest_source_root(app_root: Path) -> Path:
+    candidates = sorted(
+        (app_root / "build").glob("src-*"),
+        key=lambda path: path.stat().st_mtime,
+        reverse=True,
+    )
+    for candidate in candidates:
+        if (candidate / "Dockerfile").exists() and (candidate / "web/package.json").exists():
+            return candidate
+    return DEFAULT_SOURCE_ROOT
+
+
+def normalize_codex_labels(source_root: Path) -> dict[str, bool]:
+    paths = [
+        source_root / "web/classic/src/hooks/common/useNavigation.js",
+        source_root / "web/classic/src/pages/Setting/Operation/SettingsHeaderNavModules.jsx",
+        source_root / "web/classic/src/components/layout/SiderBar.jsx",
+        source_root / "web/default/src/hooks/use-top-nav-links.ts",
+        source_root / "web/default/src/features/system-settings/maintenance/header-navigation-section.tsx",
+    ]
+    results: dict[str, bool] = {}
+    for path in paths:
+        if not path.exists():
+            results[path.name] = False
+            continue
+        text = read_text(path)
+        normalized = text.replace("云端 Codex", "云 Codex").replace("云端Codex", "云 Codex")
+        changed = normalized != text
+        if changed:
+            write_text(path, normalized)
+        results[path.name] = changed
+    return results
+
+
+def patch_classic_app(source_root: Path) -> bool:
+    path = source_root / "web/classic/src/App.jsx"
+    if not path.exists():
+        return False
+    text = read_text(path)
+    changed = False
+    replacements = [
+        (
+            "import React, { lazy, Suspense, useContext, useMemo } from 'react';",
+            "import React, { lazy, Suspense, useContext, useEffect, useMemo } from 'react';",
+            "classic app useEffect import",
+        ),
+        (
+            "function DynamicOAuth2Callback() {\n  const { provider } = useParams();\n  return <OAuth2Callback type={provider} />;\n}\n\nfunction App() {",
+            "function DynamicOAuth2Callback() {\n  const { provider } = useParams();\n  return <OAuth2Callback type={provider} />;\n}\n\nfunction CodexRedirect() {\n  useEffect(() => {\n    window.location.replace('/codex/');\n  }, []);\n  return <Loading />;\n}\n\nfunction App() {",
+            "classic app codex redirect component",
+        ),
+        (
+            "        <Route\n          path='/console/media-playground'\n          element={\n            <PrivateRoute>\n              <Suspense fallback={<Loading></Loading>} key={location.pathname}>\n                <MediaPlayground />\n              </Suspense>\n            </PrivateRoute>\n          }\n        />\n        <Route\n          path='/console/redemption'",
+            "        <Route\n          path='/console/media-playground'\n          element={\n            <PrivateRoute>\n              <Suspense fallback={<Loading></Loading>} key={location.pathname}>\n                <MediaPlayground />\n              </Suspense>\n            </PrivateRoute>\n          }\n        />\n        <Route\n          path='/console/codex'\n          element={\n            <PrivateRoute>\n              <CodexRedirect />\n            </PrivateRoute>\n          }\n        />\n        <Route\n          path='/media-playground'\n          element={\n            <PrivateRoute>\n              <Suspense fallback={<Loading></Loading>} key={location.pathname}>\n                <MediaPlayground />\n              </Suspense>\n            </PrivateRoute>\n          }\n        />\n        <Route\n          path='/console/redemption'",
+            "classic app codex and media aliases",
+        ),
+    ]
+    for old, new, label in replacements:
+        text, item_changed = replace_once(text, old, new, label)
+        changed = changed or item_changed
+    if changed:
+        write_text(path, text)
+    return changed
+
+
+def patch_classic_sidebar(source_root: Path) -> bool:
+    path = source_root / "web/classic/src/components/layout/SiderBar.jsx"
+    return patch_file(
+        path,
+        [
+            (
+                "  playground: '/console/playground',\n  personal: '/console/personal',",
+                "  playground: '/console/playground',\n  media: '/console/media-playground',\n  codex: '/console/codex',\n  personal: '/console/personal',",
+                "classic sidebar router map codex",
+            ),
+            (
+                "      {\n        text: t('操练场'),\n        itemKey: 'playground',\n        to: '/playground',\n      },\n      {\n        text: t('聊天'),",
+                "      {\n        text: t('操练场'),\n        itemKey: 'playground',\n        to: '/playground',\n      },\n      {\n        text: t('媒体工坊'),\n        itemKey: 'media',\n        to: '/media-playground',\n      },\n      {\n        text: t('云 Codex'),\n        itemKey: 'codex',\n        to: '/codex/',\n        external: true,\n      },\n      {\n        text: t('聊天'),",
+                "classic sidebar chat codex item",
+            ),
+            (
+                "            // 如果没有路由，直接返回元素\n            if (!to) return itemElement;\n\n            return (",
+                "            // 如果没有路由，直接返回元素\n            if (!to) return itemElement;\n\n            if (to.startsWith('/codex/')) {\n              return (\n                <a\n                  style={{ textDecoration: 'none' }}\n                  href={to}\n                  onClick={onNavigate}\n                >\n                  {itemElement}\n                </a>\n              );\n            }\n\n            return (",
+                "classic sidebar codex external link",
+            ),
+        ],
+        missing_ok=True,
+    )
+
+
+def patch_classic_sidebar_config(source_root: Path) -> bool:
+    path = source_root / "web/classic/src/hooks/common/useSidebar.js"
+    return patch_file(
+        path,
+        [
+            (
+                "  chat: {\n    enabled: true,\n    playground: true,\n    chat: true,\n  },",
+                "  chat: {\n    enabled: true,\n    playground: true,\n    media: true,\n    codex: true,\n    chat: true,\n  },",
+                "classic sidebar default media codex",
+            ),
+        ],
+    )
 
 
 def patch_classic_navigation(source_root: Path) -> bool:
@@ -65,11 +181,14 @@ def patch_classic_navigation(source_root: Path) -> bool:
                 "classic nav codex filter",
             ),
         ],
+        missing_ok=True,
     )
 
 
 def patch_classic_settings(source_root: Path) -> bool:
     path = source_root / "web/classic/src/pages/Setting/Operation/SettingsHeaderNavModules.jsx"
+    if not path.exists():
+        return False
     changed = False
     replacements = [
         (
@@ -95,7 +214,10 @@ def patch_classic_settings(source_root: Path) -> bool:
     ]
     text = read_text(path)
     for old, new, label in replacements:
-        text, item_changed = replace_once(text, old, new, label)
+        try:
+            text, item_changed = replace_once(text, old, new, label)
+        except RuntimeError:
+            continue
         changed = changed or item_changed
     if changed:
         write_text(path, text)
@@ -118,6 +240,7 @@ def patch_default_nav_modules(source_root: Path) -> bool:
                 "default nav default codex",
             ),
         ],
+        missing_ok=True,
     )
 
 
@@ -137,6 +260,7 @@ def patch_default_top_links(source_root: Path) -> bool:
                 "default top links codex",
             ),
         ],
+        missing_ok=True,
     )
 
 
@@ -157,6 +281,7 @@ def patch_default_settings(source_root: Path) -> bool:
                 "default settings default codex",
             ),
         ],
+        missing_ok=True,
     )
     changed_section = patch_file(
         section,
@@ -182,12 +307,17 @@ def patch_default_settings(source_root: Path) -> bool:
                 "default header simple module codex",
             ),
         ],
+        missing_ok=True,
     )
     return changed_config or changed_section
 
 
 def patch_source(source_root: Path) -> dict[str, bool]:
     results = {
+        "codex_label_normalized": any(normalize_codex_labels(source_root).values()),
+        "classic_app": patch_classic_app(source_root),
+        "classic_sidebar": patch_classic_sidebar(source_root),
+        "classic_sidebar_config": patch_classic_sidebar_config(source_root),
         "classic_navigation": patch_classic_navigation(source_root),
         "classic_settings": patch_classic_settings(source_root),
         "default_nav_modules": patch_default_nav_modules(source_root),
@@ -350,8 +480,11 @@ def check_url(base_url: str) -> dict[str, bool]:
     except Exception:
         codex_text = ""
     return {
-        "has_codex_label": "云端 Codex" in text or "云端Codex" in text,
+        "has_codex_label": "云 Codex" in text or "云端 Codex" in text or "云端Codex" in text,
         "has_codex_route": "/codex/" in text,
+        "has_console_codex_route": "/console/codex" in text,
+        "has_sidebar_codex_item": 'itemKey:"codex"' in text,
+        "has_sidebar_media_item": 'itemKey:"media"' in text,
         "codex_route_serves_workspace": "星人 Codex" in codex_text and "页面未找到" not in codex_text,
         "has_media_label": "媒体工坊" in text,
     }
@@ -360,7 +493,7 @@ def check_url(base_url: str) -> dict[str, bool]:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--app-root", default=str(DEFAULT_APP_ROOT))
-    parser.add_argument("--source-root", default=str(DEFAULT_SOURCE_ROOT))
+    parser.add_argument("--source-root", default="")
     parser.add_argument("--patch-source", action="store_true")
     parser.add_argument("--sync-db", action="store_true")
     parser.add_argument("--check-url", default="")
@@ -368,8 +501,10 @@ def main() -> int:
     args = parser.parse_args()
 
     results: dict[str, Any] = {}
+    source_root = Path(args.source_root) if args.source_root else latest_source_root(Path(args.app_root))
     if args.patch_source:
-        results["source"] = patch_source(Path(args.source_root))
+        results["source_root"] = str(source_root)
+        results["source"] = patch_source(source_root)
     if args.sync_db:
         results["db"] = sync_db_options(Path(args.app_root))
     if args.check_url:
