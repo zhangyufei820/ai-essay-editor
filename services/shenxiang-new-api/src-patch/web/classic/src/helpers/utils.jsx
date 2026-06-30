@@ -100,6 +100,44 @@ export function getPricingBillingLabel(model, t = (key) => key) {
   return '-';
 }
 
+function pricingModelTags(model) {
+  return String(model?.tags || '')
+    .toLowerCase()
+    .split(/[,;|]+/)
+    .map((tag) => tag.trim())
+    .filter(Boolean);
+}
+
+export function getVisibleModelGroup(model, t = (key) => key) {
+  const tags = pricingModelTags(model);
+  const modelName = String(model?.model_name || '').toLowerCase();
+  const hasTag = (...values) => values.some((value) => tags.includes(value));
+
+  if (hasTag('image') || /image|banana|gpt-image|flux|midjourney/.test(modelName)) {
+    return { value: 'image', label: t('图像'), color: 'cyan' };
+  }
+  if (hasTag('video') || /video|sora|seedance|kling|veo|grok-video/.test(modelName)) {
+    return { value: 'video', label: t('视频'), color: 'purple' };
+  }
+  if (hasTag('audio') || /audio|tts|whisper|speech|voice/.test(modelName)) {
+    return { value: 'audio', label: t('音频'), color: 'orange' };
+  }
+  if (hasTag('embedding') || /embedding|rerank/.test(modelName)) {
+    return { value: 'embedding', label: t('向量'), color: 'green' };
+  }
+  if (hasTag('text') || /gpt-|claude|gemini|deepseek|qwen|moonshot|kimi/.test(modelName)) {
+    return { value: 'text', label: t('文本'), color: 'blue' };
+  }
+  return { value: 'unknown', label: t('未知'), color: 'white' };
+}
+
+export function isModelInVisibleGroup(model, group) {
+  if (!group || group === 'all') return true;
+  if (group === 'unknown') return !model?.vendor_name;
+  if (model?.vendor_name === group) return true;
+  return getVisibleModelGroup(model).value === group;
+}
+
 const HTMLToastContent = ({ htmlContent }) => {
   return <div dangerouslySetInnerHTML={{ __html: htmlContent }} />;
 };
