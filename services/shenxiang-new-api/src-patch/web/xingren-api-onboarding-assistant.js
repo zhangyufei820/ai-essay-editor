@@ -3192,7 +3192,6 @@
     style.id = "xr-api-assistant-style";
     style.textContent = [
       "#xr-api-assistant-root{display:block!important;position:fixed;right:18px;bottom:18px;z-index:2147483000;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;color:#111827;letter-spacing:0}",
-      "body.sx-home-active #xr-api-assistant-root{display:none!important}",
       "#xr-api-assistant-root *,#xr-api-operation-layer *{box-sizing:border-box}",
       ".xr-api-assistant-launcher{position:relative;display:flex;align-items:center;gap:10px;border:1px solid #d1d5db;border-radius:999px;background:#ffffff;color:#111827;padding:7px 12px 7px 7px;box-shadow:0 14px 42px rgba(15,23,42,.18);cursor:pointer;min-width:54px;min-height:54px;text-align:left;transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease}",
       ".xr-api-assistant-launcher::after{content:'';position:absolute;right:9px;top:8px;width:9px;height:9px;border-radius:999px;background:#10b981;box-shadow:0 0 0 3px rgba(16,185,129,.16);pointer-events:none}",
@@ -3224,6 +3223,8 @@
   document.addEventListener("keydown", function (event) {
     if (event.key === "Escape" && state.open) closeAssistant();
   });
+
+  window.addEventListener("aiphui:open-api-teacher", openAssistant);
 
   function init() {
     if (!document.body) return;

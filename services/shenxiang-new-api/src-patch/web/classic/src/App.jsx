@@ -17,8 +17,9 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import React, { lazy, Suspense, useContext, useEffect, useMemo } from 'react';
+import React, { lazy, Suspense, useContext, useEffect, useMemo, useState } from 'react';
 import { Route, Routes, useLocation, useParams } from 'react-router-dom';
+import { Moon, Sun } from 'lucide-react';
 import Loading from './components/common/ui/Loading';
 import User from './pages/User';
 import { AuthRedirect, PrivateRoute, AdminRoute } from './helpers';
@@ -69,6 +70,36 @@ function CodexRedirect() {
   return <Loading />;
 }
 
+function GlobalThemeToggle() {
+  const location = useLocation();
+  const [isDark, setIsDark] = useState(() => {
+    const stored = localStorage.getItem('theme-mode') || localStorage.getItem('theme');
+    if (stored === 'light') return false;
+    if (stored === 'dark') return true;
+    return true;
+  });
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', isDark);
+    localStorage.setItem('theme-mode', isDark ? 'dark' : 'light');
+    localStorage.setItem('theme', isDark ? 'dark' : 'light');
+  }, [isDark]);
+
+  if (location.pathname === '/') return null;
+
+  return (
+    <button
+      type='button'
+      className='sx-global-theme-toggle'
+      aria-label='切换明暗模式'
+      title={isDark ? '白天模式' : '暗黑模式'}
+      onClick={() => setIsDark((value) => !value)}
+    >
+      {isDark ? <Sun size={18} /> : <Moon size={18} />}
+    </button>
+  );
+}
+
 function App() {
   const location = useLocation();
   const [statusState] = useContext(StatusContext);
@@ -97,6 +128,7 @@ function App() {
 
   return (
     <SetupCheck>
+      <GlobalThemeToggle />
       <Routes>
         <Route
           path='/'

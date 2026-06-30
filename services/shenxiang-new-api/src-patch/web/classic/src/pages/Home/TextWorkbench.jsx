@@ -29,6 +29,18 @@ import {
   IconFile,
   IconPlay,
 } from '@douyinfe/semi-icons';
+import {
+  BadgeDollarSign,
+  Cloud,
+  Headphones,
+  Image,
+  KeyRound,
+  MessageSquare,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Plus,
+  Store,
+} from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { API } from '../../helpers';
 import { getDefaultTextModel, toTextModelOptions } from './textModelFilter';
@@ -38,40 +50,20 @@ const MAX_TEXT_FILE_SIZE = 160 * 1024;
 const TEXT_FILE_ACCEPT = '.txt,.md,.csv,.json,text/plain,text/markdown,text/csv,application/json';
 
 const primaryNav = [
-  { label: '新聊天', icon: '✎', action: 'new' },
-  { label: '搜索聊天', icon: '⌕' },
-  { label: '文件库', icon: '▥' },
-  { label: '项目', icon: '□' },
-  { label: '已安排', icon: '◷' },
-  { label: '应用', icon: '⌘' },
-  { label: '更多', icon: '⋯' },
-];
-
-const appLinks = [
-  { label: '云端 Codex', href: '/codex/' },
+  { label: '新聊天', icon: Plus, action: 'new' },
+  { label: '聊天', icon: MessageSquare, action: 'chat', active: true },
+  { label: '媒体工坊', icon: Image, href: '/console/media-playground' },
+  { label: '云端 Codex', icon: Cloud, href: '/codex/' },
+  { label: '接入设置', icon: KeyRound, href: '/console/token' },
   { label: '模型广场', href: '/pricing' },
-  { label: '接入设置', href: '/console/token' },
-  { label: '定价', href: '/pricing' },
-  { label: '在线客服', href: '/docs/' },
+  { label: '定价', icon: BadgeDollarSign, href: '/pricing' },
+  { label: '在线客服', icon: Headphones, action: 'teacher' },
 ];
 
 const starterPrompts = [
   '整理文件',
   '撰写或编辑',
   '查找资料',
-];
-
-const sampleThreads = [
-  '文本模型对话',
-  '文件内容整理',
-  '接入设置说明',
-  '模型选择建议',
-  '资料摘要',
-  '提示词优化',
-  '问题排查记录',
-  '课程文案修改',
-  '项目计划整理',
-  '客服回复草稿',
 ];
 
 const readTextFile = (file) =>
@@ -97,6 +89,45 @@ function getStoredUser() {
   } catch {
     return null;
   }
+}
+
+function getCurrentUserId(currentUser) {
+  const direct = [
+    currentUser?.id,
+    currentUser?.user_id,
+    currentUser?.userId,
+    currentUser?.user?.id,
+    currentUser?.data?.id,
+  ];
+  for (const value of direct) {
+    if (/^\d+$/.test(String(value || '').trim())) return String(value).trim();
+  }
+
+  const directKeys = ['uid', 'user_id', 'userId', 'new-api-user'];
+  for (const key of directKeys) {
+    const value = localStorage.getItem(key);
+    if (/^\d+$/.test(String(value || '').trim())) return String(value).trim();
+  }
+
+  const objectKeys = ['user', 'new_api_user', 'userInfo', 'account'];
+  for (const key of objectKeys) {
+    const raw = localStorage.getItem(key);
+    if (!raw) continue;
+    try {
+      const parsed = JSON.parse(raw);
+      const value =
+        parsed?.id ||
+        parsed?.user_id ||
+        parsed?.userId ||
+        parsed?.user?.id ||
+        parsed?.data?.id;
+      if (/^\d+$/.test(String(value || '').trim())) return String(value).trim();
+    } catch {
+      if (/^\d+$/.test(raw.trim())) return raw.trim();
+    }
+  }
+
+  return '';
 }
 
 function formatBytes(size) {
@@ -136,6 +167,91 @@ function extractAssistantText(payload) {
   return '';
 }
 
+function extractAssistantDelta(payload) {
+  const choices = Array.isArray(payload?.choices) ? payload.choices : [];
+  const firstChoice = choices[0] || {};
+  const content =
+    firstChoice?.delta?.content ??
+    firstChoice?.message?.content ??
+    payload?.delta?.content ??
+    payload?.text ??
+    payload?.content;
+
+  if (typeof content === 'string') return content;
+  if (Array.isArray(content)) {
+    return content
+      .map((item) => {
+        if (typeof item === 'string') return item;
+        return item?.text || item?.content || '';
+      })
+      .filter(Boolean)
+      .join('');
+  }
+  return '';
+}
+
+async function readResponseError(response) {
+  const text = await response.text();
+  if (!text) return `请求失败：${response.status}`;
+  try {
+    const payload = JSON.parse(text);
+    return payload?.error?.message || payload?.message || text;
+  } catch {
+    return text;
+  }
+}
+
+async function readStreamingResponse(response, onText) {
+  const contentType = response.headers.get('content-type') || '';
+  if (!response.body || contentType.includes('application/json')) {
+    const payload = await response.json();
+    if (payload?.error?.message) throw new Error(payload.error.message);
+    const answer = extractAssistantText(payload);
+    if (answer) onText(answer);
+    return answer;
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder('utf-8');
+  let buffer = '';
+  let answer = '';
+
+  const applyPayload = (raw) => {
+    const data = raw.trim();
+    if (!data || data === '[DONE]') return data === '[DONE]';
+    try {
+      const payload = JSON.parse(data);
+      if (payload?.error?.message) throw new Error(payload.error.message);
+      const delta = extractAssistantDelta(payload);
+      if (delta) {
+        answer += delta;
+        onText(answer);
+      }
+    } catch (error) {
+      if (error instanceof SyntaxError) return false;
+      throw error;
+    }
+    return false;
+  };
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split(/\r?\n/);
+    buffer = lines.pop() || '';
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith(':')) continue;
+      if (!trimmed.startsWith('data:')) continue;
+      if (applyPayload(trimmed.slice(5))) return answer;
+    }
+  }
+
+  if (buffer.trim().startsWith('data:')) applyPayload(buffer.trim().slice(5));
+  return answer;
+}
+
 function getChatFailureMessage(error) {
   const data = error?.response?.data || error?.data || {};
   const message =
@@ -163,6 +279,7 @@ const TextWorkbench = ({ isMobile }) => {
   const [messages, setMessages] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isDark, setIsDark] = useState(() => {
     const stored = localStorage.getItem('theme-mode') || localStorage.getItem('theme');
     if (stored === 'light') return false;
@@ -170,6 +287,7 @@ const TextWorkbench = ({ isMobile }) => {
     return true;
   });
   const fileInputRef = useRef(null);
+  const composerInputRef = useRef(null);
   const threadRef = useRef(null);
 
   const isLoggedIn = !!user;
@@ -222,6 +340,15 @@ const TextWorkbench = ({ isMobile }) => {
     setIsDark(nextDark);
   };
 
+  const openApiTeacher = () => {
+    window.dispatchEvent(new CustomEvent('aiphui:open-api-teacher'));
+    window.setTimeout(() => {
+      const panel = document.querySelector('.xr-api-assistant-panel');
+      const launcher = document.querySelector('.xr-api-assistant-launcher');
+      if (!panel && launcher instanceof HTMLElement) launcher.click();
+    }, 0);
+  };
+
   const addFiles = async (fileList) => {
     const incoming = Array.from(fileList || []);
     if (!incoming.length) return;
@@ -267,6 +394,19 @@ const TextWorkbench = ({ isMobile }) => {
     setMessages([]);
     setInput('');
     setAttachments([]);
+    window.setTimeout(() => composerInputRef.current?.focus(), 0);
+  };
+
+  const handleNavAction = (action) => {
+    if (action === 'new') {
+      resetConversation();
+      return;
+    }
+    if (action === 'teacher') {
+      openApiTeacher();
+      return;
+    }
+    composerInputRef.current?.focus();
   };
 
   const organizeMessage = async () => {
@@ -320,38 +460,62 @@ const TextWorkbench = ({ isMobile }) => {
     setAttachments([]);
     setIsSubmitting(true);
 
-    try {
-      const res = await API.post(
-        '/pg/chat/completions',
-        {
-          model: activeModel,
-          stream: false,
-          messages: [
-            ...history,
-            {
-              role: 'user',
-              content: userMessage,
-            },
-          ],
-        },
-        { skipErrorHandler: true, timeout: 180000 },
-      );
-      if (res.data?.error?.message) {
-        throw new Error(res.data.error.message);
-      }
-      const answer = extractAssistantText(res.data);
-      if (!answer) throw new Error('模型没有返回可展示的内容。');
+    const updateAssistantMessage = (content, pending = true) => {
       setMessages((prev) =>
         prev.map((message) =>
           message.id === pendingId
             ? {
-                role: 'assistant',
+                ...message,
                 title: activeModel,
-                content: answer,
+                content,
+                pending,
               }
             : message,
         ),
       );
+    };
+
+    try {
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), 180000);
+      try {
+        const userId = getCurrentUserId(user);
+        const headers = {
+          Accept: 'text/event-stream',
+          'Content-Type': 'application/json',
+        };
+        if (userId) headers['New-Api-User'] = userId;
+
+        const response = await fetch('/pg/chat/completions', {
+          method: 'POST',
+          headers,
+          credentials: 'same-origin',
+          signal: controller.signal,
+          body: JSON.stringify({
+            model: activeModel,
+            stream: true,
+            messages: [
+              ...history,
+              {
+                role: 'user',
+                content: userMessage,
+              },
+            ],
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error(await readResponseError(response));
+        }
+
+        const answer = await readStreamingResponse(response, (nextText) => {
+          updateAssistantMessage(nextText || '正在回复...', true);
+        });
+        if (!answer.trim()) throw new Error('模型没有返回可展示的内容。');
+        updateAssistantMessage(answer.trim(), false);
+      } finally {
+        window.clearTimeout(timeout);
+      }
     } catch (error) {
       const message = getChatFailureMessage(error);
       Toast.error(message);
@@ -382,51 +546,61 @@ const TextWorkbench = ({ isMobile }) => {
 
   return (
     <section
-      className={isDark ? 'sx-gpt-shell is-dark' : 'sx-gpt-shell is-light'}
+      className={`${isDark ? 'sx-gpt-shell is-dark' : 'sx-gpt-shell is-light'}${
+        isSidebarCollapsed ? ' is-sidebar-collapsed' : ''
+      }`}
       aria-label='AIPHUI 聊天工作站'
     >
       <aside className='sx-gpt-sidebar' aria-label='侧边栏'>
         <div className='sx-gpt-brand'>
           <strong>AIPHUI Pro</strong>
-          <button type='button' aria-label='收起侧边栏'>◫</button>
+          <button
+            type='button'
+            aria-label={isSidebarCollapsed ? '展开侧边栏' : '收起侧边栏'}
+            onClick={() => setIsSidebarCollapsed((value) => !value)}
+          >
+            {isSidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+          </button>
         </div>
 
         <nav className='sx-gpt-nav' aria-label='主导航'>
-          {primaryNav.map((item, index) => (
-            <button
-              type='button'
-              className={index === 0 ? 'is-active' : ''}
-              key={item.label}
-              onClick={item.action === 'new' ? resetConversation : undefined}
-            >
-              <span className='sx-gpt-nav-icon'>{item.icon}</span>
-              <span>{item.label}</span>
-            </button>
-          ))}
-        </nav>
+          {primaryNav.map((item) => {
+            const Icon = item.icon || Store;
+            const content = (
+              <>
+                <span className='sx-gpt-nav-icon'>
+                  <Icon size={17} strokeWidth={2.2} />
+                </span>
+                <span className='sx-gpt-nav-label'>{item.label}</span>
+              </>
+            );
 
-        <div className='sx-gpt-apps' aria-label='常用入口'>
-          {appLinks.map((item) => (
-            <a key={item.label} href={item.href}>
-              {item.label}
-            </a>
-          ))}
-        </div>
+            if (item.href) {
+              return (
+                <a
+                  className={item.active ? 'is-active' : ''}
+                  href={item.href}
+                  key={item.label}
+                  title={item.label}
+                >
+                  {content}
+                </a>
+              );
+            }
 
-        <div className='sx-gpt-recent'>
-          <span>最近</span>
-          <div>
-            {sampleThreads.map((title, index) => (
+            return (
               <button
                 type='button'
-                className={index === 0 ? 'has-dot' : ''}
-                key={title}
+                className={item.active ? 'is-active' : ''}
+                key={item.label}
+                onClick={() => handleNavAction(item.action)}
+                title={item.label}
               >
-                {title}
+                {content}
               </button>
-            ))}
-          </div>
-        </div>
+            );
+          })}
+        </nav>
 
         <div className='sx-gpt-account'>
           <div className='sx-gpt-account-avatar'>
@@ -543,6 +717,7 @@ const TextWorkbench = ({ isMobile }) => {
               </Tooltip>
 
               <textarea
+                ref={composerInputRef}
                 value={input}
                 rows={1}
                 placeholder='有问题，尽管问'

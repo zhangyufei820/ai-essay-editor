@@ -229,6 +229,7 @@ const SiderBar = ({ onNavigate = () => {} }) => {
 
     // 根据配置过滤项目
     const filteredItems = items.filter((item) => {
+      if (item.itemKey === 'media') return true;
       const configVisible = isModuleVisible('chat', item.itemKey);
       return configVisible;
     });
