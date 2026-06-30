@@ -162,27 +162,92 @@ def patch_classic_sidebar_config(source_root: Path) -> bool:
 
 def patch_classic_navigation(source_root: Path) -> bool:
     path = source_root / "web/classic/src/hooks/common/useNavigation.js"
-    return patch_file(
-        path,
-        [
-            (
-                "      media: true,\n      pricing: true,",
-                "      media: true,\n      codex: true,\n      pricing: true,",
-                "classic nav default codex",
-            ),
-            (
-                "      {\n        text: t('媒体工坊'),\n        itemKey: 'media',\n        to: '/console/media-playground',\n      },\n      {\n        text: t('模型广场'),",
-                "      {\n        text: t('媒体工坊'),\n        itemKey: 'media',\n        to: '/console/media-playground',\n      },\n      {\n        text: t('云端 Codex'),\n        itemKey: 'codex',\n        to: '/codex/',\n      },\n      {\n        text: t('模型广场'),",
-                "classic nav codex link",
-            ),
-            (
-                "      if (link.itemKey === 'media') {\n        return modules.media !== false;\n      }\n      return modules[link.itemKey] === true;",
-                "      if (link.itemKey === 'media') {\n        return modules.media !== false;\n      }\n      if (link.itemKey === 'codex') {\n        return modules.codex !== false;\n      }\n      return modules[link.itemKey] === true;",
-                "classic nav codex filter",
-            ),
-        ],
-        missing_ok=True,
+    if not path.exists():
+        return False
+
+    text = read_text(path)
+    original = text
+
+    for old, new in [
+        (
+            "      console: true,\n      pricing: true,",
+            "      console: true,\n      media: true,\n      codex: true,\n      pricing: true,",
+        ),
+        (
+            "      media: true,\n      pricing: true,",
+            "      media: true,\n      codex: true,\n      pricing: true,",
+        ),
+    ]:
+        if new in text:
+            break
+        if old in text:
+            text = text.replace(old, new, 1)
+            break
+
+    pricing_link = (
+        "      {\n"
+        "        text: t('模型广场'),\n"
+        "        itemKey: 'pricing',\n"
+        "        to: '/pricing',\n"
+        "      },"
     )
+    media_link = (
+        "      {\n"
+        "        text: t('媒体工坊'),\n"
+        "        itemKey: 'media',\n"
+        "        to: '/console/media-playground',\n"
+        "      },"
+    )
+    codex_link = (
+        "      {\n"
+        "        text: t('云 Codex'),\n"
+        "        itemKey: 'codex',\n"
+        "        to: '/console/codex',\n"
+        "      },"
+    )
+    if "itemKey: 'media'" not in text:
+        if pricing_link not in text:
+            raise RuntimeError("patch anchor not found: classic nav pricing link")
+        text = text.replace(pricing_link, f"{media_link}\n{codex_link}\n{pricing_link}", 1)
+    elif "itemKey: 'codex'" not in text:
+        if media_link not in text:
+            raise RuntimeError("patch anchor not found: classic nav media link")
+        text = text.replace(media_link, f"{media_link}\n{codex_link}", 1)
+
+    if "link.itemKey === 'media'" not in text:
+        pricing_filter = "      if (link.itemKey === 'pricing') {"
+        nav_filters = (
+            "      if (link.itemKey === 'media') {\n"
+            "        return modules.media !== false;\n"
+            "      }\n"
+            "      if (link.itemKey === 'codex') {\n"
+            "        return modules.codex !== false;\n"
+            "      }\n"
+            f"{pricing_filter}"
+        )
+        if pricing_filter not in text:
+            raise RuntimeError("patch anchor not found: classic nav pricing filter")
+        text = text.replace(pricing_filter, nav_filters, 1)
+    elif "link.itemKey === 'codex'" not in text:
+        media_filter = (
+            "      if (link.itemKey === 'media') {\n"
+            "        return modules.media !== false;\n"
+            "      }"
+        )
+        codex_filter = (
+            f"{media_filter}\n"
+            "      if (link.itemKey === 'codex') {\n"
+            "        return modules.codex !== false;\n"
+            "      }"
+        )
+        if media_filter not in text:
+            raise RuntimeError("patch anchor not found: classic nav media filter")
+        text = text.replace(media_filter, codex_filter, 1)
+
+    if text != original:
+        write_text(path, text)
+        return True
+    return False
 
 
 def patch_classic_settings(source_root: Path) -> bool:
@@ -208,7 +273,7 @@ def patch_classic_settings(source_root: Path) -> bool:
         ),
         (
             "    {\n      key: 'media',\n      title: t('媒体工坊'),\n      description: t('图像和视频生成入口'),\n    },\n    {\n      key: 'pricing',",
-            "    {\n      key: 'media',\n      title: t('媒体工坊'),\n      description: t('图像和视频生成入口'),\n    },\n    {\n      key: 'codex',\n      title: t('云端 Codex'),\n      description: t('在线 Codex 工作台入口'),\n    },\n    {\n      key: 'pricing',",
+            "    {\n      key: 'media',\n      title: t('媒体工坊'),\n      description: t('图像和视频生成入口'),\n    },\n    {\n      key: 'codex',\n      title: t('云 Codex'),\n      description: t('在线 Codex 工作台入口'),\n    },\n    {\n      key: 'pricing',",
             "classic settings codex card",
         ),
     ]
@@ -256,7 +321,7 @@ def patch_default_top_links(source_root: Path) -> bool:
             ),
             (
                 "  // Pricing\n  const pricing = modules?.pricing",
-                "  // Cloud Codex\n  if (modules?.codex !== false) {\n    links.push({ title: t('云端 Codex'), href: '/codex/' })\n  }\n\n  // Pricing\n  const pricing = modules?.pricing",
+                "  // Cloud Codex\n  if (modules?.codex !== false) {\n    links.push({ title: t('云 Codex'), href: '/codex/' })\n  }\n\n  // Pricing\n  const pricing = modules?.pricing",
                 "default top links codex",
             ),
         ],
@@ -303,7 +368,7 @@ def patch_default_settings(source_root: Path) -> bool:
             ),
             (
                 "    {\n      key: 'docs',\n      title: t('Docs'),",
-                "    {\n      key: 'codex',\n      title: t('云端 Codex'),\n      description: t('Online Codex workspace.'),\n    },\n    {\n      key: 'docs',\n      title: t('Docs'),",
+                "    {\n      key: 'codex',\n      title: t('云 Codex'),\n      description: t('Online Codex workspace.'),\n    },\n    {\n      key: 'docs',\n      title: t('Docs'),",
                 "default header simple module codex",
             ),
         ],
@@ -479,12 +544,28 @@ def check_url(base_url: str) -> dict[str, bool]:
         codex_text = fetch_text(base_url.rstrip("/") + "/codex/")
     except Exception:
         codex_text = ""
+    has_top_nav_codex_item = bool(
+        re.search(
+            r"itemKey\s*:\s*['\"]codex['\"][^{}]{0,240}to\s*:\s*['\"]/console/codex['\"]",
+            text,
+            re.S,
+        )
+    )
+    has_top_nav_media_item = bool(
+        re.search(
+            r"itemKey\s*:\s*['\"]media['\"][^{}]{0,240}to\s*:\s*['\"]/console/media-playground['\"]",
+            text,
+            re.S,
+        )
+    )
     return {
-        "has_codex_label": "云 Codex" in text or "云端 Codex" in text or "云端Codex" in text,
+        "has_codex_label": "云 Codex" in text,
         "has_codex_route": "/codex/" in text,
         "has_console_codex_route": "/console/codex" in text,
         "has_sidebar_codex_item": 'itemKey:"codex"' in text,
         "has_sidebar_media_item": 'itemKey:"media"' in text,
+        "has_top_nav_codex_item": has_top_nav_codex_item,
+        "has_top_nav_media_item": has_top_nav_media_item,
         "codex_route_serves_workspace": "星人 Codex" in codex_text and "页面未找到" not in codex_text,
         "has_media_label": "媒体工坊" in text,
     }
