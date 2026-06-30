@@ -162,6 +162,136 @@ func TestNormalizeSeedanceVideoRequestBodyForwardsGenerateAudioForSeedance2(t *t
 	}
 }
 
+func TestNormalizeSeedanceDJFastUsesOfficialReferencesAndDuration(t *testing.T) {
+	body := map[string]interface{}{
+		"model":    "seedance-2.0-dj-fast",
+		"prompt":   "Use @product as a short ad.",
+		"duration": float64(12),
+		"ratio":    "9:16",
+		"metadata": map[string]interface{}{
+			"resolution": "1080p",
+			"content": []interface{}{
+				map[string]interface{}{
+					"type":      "image_url",
+					"image_url": map[string]interface{}{"url": "https://cdn.test/product.png"},
+					"role":      "reference_image",
+				},
+				map[string]interface{}{
+					"type":      "video_url",
+					"video_url": map[string]interface{}{"url": "https://cdn.test/skip.mp4"},
+					"role":      "reference_video",
+				},
+				map[string]interface{}{
+					"type":      "audio_url",
+					"audio_url": map[string]interface{}{"url": "https://cdn.test/skip.mp3"},
+					"role":      "reference_audio",
+				},
+			},
+		},
+	}
+
+	got := normalizeSeedanceVideoRequestBody(body)
+	if got["model"] != "seedance-2.0-dj-fast" {
+		t.Fatalf("model = %#v, want seedance-2.0-dj-fast", got["model"])
+	}
+	if got["duration"] != 15 {
+		t.Fatalf("duration = %#v, want nearest official enum 15", got["duration"])
+	}
+	if _, ok := got["seconds"]; ok {
+		t.Fatalf("DJ payload should not forward seconds: %#v", got)
+	}
+	refs, ok := got["references"].([]map[string]interface{})
+	if !ok || len(refs) != 1 {
+		t.Fatalf("references = %#v, want one image reference", got["references"])
+	}
+	if refs[0]["media_type"] != "image" || refs[0]["role"] != "reference_image" || refs[0]["url"] != "https://cdn.test/product.png" {
+		t.Fatalf("references[0] = %#v, want official image reference", refs[0])
+	}
+	if got["ratio"] != "9:16" {
+		t.Fatalf("ratio = %#v, want 9:16", got["ratio"])
+	}
+	if got["resolution"] != "720P" {
+		t.Fatalf("DJ resolution = %#v, want 720P", got["resolution"])
+	}
+	if _, ok := got["metadata"]; ok {
+		t.Fatalf("DJ payload should not forward metadata: %#v", got)
+	}
+}
+
+func TestNormalizeSeedanceLD17KeepsMixedOfficialReferences(t *testing.T) {
+	body := map[string]interface{}{
+		"model":    "seedance-2.0-ld-17",
+		"prompt":   "Use @hero and @voice.",
+		"duration": float64(8),
+		"ratio":    "4:3",
+		"references": []interface{}{
+			map[string]interface{}{
+				"media_type": "image",
+				"role":       "first_frame",
+				"url":        "https://cdn.test/hero.png",
+				"alias":      "hero",
+			},
+			map[string]interface{}{
+				"media_type": "video",
+				"role":       "reference_video",
+				"url":        "https://cdn.test/ref.mp4",
+			},
+			map[string]interface{}{
+				"media_type": "audio",
+				"role":       "reference_audio",
+				"url":        "https://cdn.test/voice.mp3",
+				"alias":      "voice",
+			},
+		},
+	}
+
+	got := normalizeSeedanceVideoRequestBody(body)
+	if got["duration"] != 8 {
+		t.Fatalf("duration = %#v, want 8", got["duration"])
+	}
+	if got["ratio"] != "4:3" {
+		t.Fatalf("ratio = %#v, want 4:3", got["ratio"])
+	}
+	if _, ok := got["resolution"]; ok {
+		t.Fatalf("LD-17 payload should not forward resolution: %#v", got)
+	}
+	refs, ok := got["references"].([]map[string]interface{})
+	if !ok || len(refs) != 3 {
+		t.Fatalf("references = %#v, want image/video/audio", got["references"])
+	}
+	if refs[0]["media_type"] != "image" || refs[0]["role"] != "first_frame" || refs[0]["alias"] != "hero" {
+		t.Fatalf("image reference = %#v", refs[0])
+	}
+	if refs[1]["media_type"] != "video" || refs[1]["role"] != "reference_video" {
+		t.Fatalf("video reference = %#v", refs[1])
+	}
+	if refs[2]["media_type"] != "audio" || refs[2]["role"] != "reference_audio" || refs[2]["alias"] != "voice" {
+		t.Fatalf("audio reference = %#v", refs[2])
+	}
+	if _, ok := got["image_urls"]; ok {
+		t.Fatalf("LD-17 should prefer official references over legacy image_urls: %#v", got)
+	}
+}
+
+func TestNormalizeSeedanceLD17DropsAudioOnlyReferences(t *testing.T) {
+	body := map[string]interface{}{
+		"model":  "seedance-2.0-ld-17",
+		"prompt": "audio only should be dropped",
+		"references": []interface{}{
+			map[string]interface{}{
+				"media_type": "audio",
+				"role":       "reference_audio",
+				"url":        "https://cdn.test/voice.mp3",
+			},
+		},
+	}
+
+	got := normalizeSeedanceVideoRequestBody(body)
+	if refs, ok := got["references"]; ok {
+		t.Fatalf("audio-only LD-17 references should be dropped to avoid upstream rejection: %#v", refs)
+	}
+}
+
 func TestSeedanceBuildRequestURLUsesGenerationEndpoint(t *testing.T) {
 	adaptor := TaskAdaptor{baseURL: "https://provider.test"}
 	url, err := adaptor.BuildRequestURL(&relaycommon.RelayInfo{
@@ -173,6 +303,22 @@ func TestSeedanceBuildRequestURLUsesGenerationEndpoint(t *testing.T) {
 	}
 	if url != "https://provider.test/api/v1/video/generations" {
 		t.Fatalf("BuildRequestURL() = %q", url)
+	}
+}
+
+func TestSeedanceOfficialReferencesBuildRequestURLUsesVideosEndpoint(t *testing.T) {
+	adaptor := TaskAdaptor{baseURL: "https://provider.test"}
+	for _, model := range []string{"seedance-2.0-dj-fast", "seedance-2.0-ld-17"} {
+		url, err := adaptor.BuildRequestURL(&relaycommon.RelayInfo{
+			ChannelMeta:   &relaycommon.ChannelMeta{UpstreamModelName: model},
+			TaskRelayInfo: &relaycommon.TaskRelayInfo{},
+		})
+		if err != nil {
+			t.Fatalf("BuildRequestURL(%s) error = %v", model, err)
+		}
+		if url != "https://provider.test/v1/videos" {
+			t.Fatalf("BuildRequestURL(%s) = %q", model, url)
+		}
 	}
 }
 

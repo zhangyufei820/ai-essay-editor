@@ -45,7 +45,12 @@ class Settings:
         "claude-opus-4-8-full",
     )
     image_allowed_models: tuple[str, ...] = ("gpt-image-2-4K", "grok-imagine-image")
-    video_allowed_models: tuple[str, ...] = ("seedance-2.0", "grok-video-super-720p")
+    video_allowed_models: tuple[str, ...] = (
+        "seedance-2.0",
+        "seedance-2.0-dj-fast",
+        "seedance-2.0-ld-17",
+        "grok-video-super-720p",
+    )
     sync_wait_seconds: int = 180
     task_retention_seconds: int = 86400
     max_files_per_task: int = 20
@@ -104,7 +109,10 @@ def get_settings() -> Settings:
             "claude-fable-5,claude-opus-4-6-full,claude-opus-4-7-full,claude-opus-4-8-full",
         ),
         image_allowed_models=_env_list("IMAGE_ALLOWED_MODELS", "gpt-image-2-4K,grok-imagine-image"),
-        video_allowed_models=_env_list("VIDEO_ALLOWED_MODELS", "seedance-2.0,grok-video-super-720p"),
+        video_allowed_models=_env_list(
+            "VIDEO_ALLOWED_MODELS",
+            "seedance-2.0,seedance-2.0-dj-fast,seedance-2.0-ld-17,grok-video-super-720p",
+        ),
         sync_wait_seconds=_env_int("SYNC_WAIT_SECONDS", 180),
         task_retention_seconds=_env_int("TASK_RETENTION_SECONDS", 86400),
         max_files_per_task=_env_int("MAX_FILES_PER_TASK", 20),

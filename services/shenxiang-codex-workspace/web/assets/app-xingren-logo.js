@@ -60,9 +60,9 @@ const fallbackModelModes = {
   },
   video: {
     label: "视频生成",
-    description: "Seedance / Grok 文生视频、图生视频。",
-    models: ["seedance-2.0", "grok-video-super-720p"],
-    billing: "按秒或按次计费。Seedance 2.0 当前展示价 ¥6/15秒，生成后请立即下载。",
+    description: "Seedance / Grok 文生视频、图生视频。DJ Fast 只接收图片参考，LD-17 支持图片、视频、音频参考。",
+    models: ["seedance-2.0", "seedance-2.0-dj-fast", "seedance-2.0-ld-17", "grok-video-super-720p"],
+    billing: "按秒或按次计费。DJ Fast ¥0.162/秒，支持 5/10/15 秒、不能过人脸；LD-17 ¥6.48/次，支持 5-15 秒、可过人脸、9图3视频3音频。",
   },
 };
 const imageUrlPattern = /^https?:\/\/\S+\.(png|jpe?g|webp|gif)(\?\S*)?$/i;

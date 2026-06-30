@@ -185,6 +185,10 @@ func (a *TaskAdaptor) EstimateBilling(c *gin.Context, info *relaycommon.RelayInf
 	if info.Action == constant.TaskActionRemix {
 		return nil
 	}
+	if strings.EqualFold(strings.TrimSpace(info.OriginModelName), "seedance-2.0-ld-17") ||
+		strings.EqualFold(strings.TrimSpace(info.UpstreamModelName), "seedance-2.0-ld-17") {
+		return nil
+	}
 
 	req, err := relaycommon.GetTaskRequest(c)
 	if err != nil {
@@ -217,6 +221,9 @@ func (a *TaskAdaptor) EstimateBilling(c *gin.Context, info *relaycommon.RelayInf
 func (a *TaskAdaptor) BuildRequestURL(info *relaycommon.RelayInfo) (string, error) {
 	if info.Action == constant.TaskActionRemix {
 		return fmt.Sprintf("%s/v1/videos/%s/remix", a.baseURL, info.OriginTaskID), nil
+	}
+	if isOfficialSeedanceReferencesModel(info.UpstreamModelName) {
+		return fmt.Sprintf("%s/v1/videos", a.baseURL), nil
 	}
 	if isSeedanceVideoModel(info.UpstreamModelName) {
 		return fmt.Sprintf("%s/api/v1/video/generations", a.baseURL), nil
@@ -320,11 +327,30 @@ func seedanceUpstreamModel(modelName string) string {
 
 func normalizeSeedanceVideoRequestBody(bodyMap map[string]interface{}) map[string]interface{} {
 	cleaned := make(map[string]interface{}, len(bodyMap))
-	if modelName := seedanceUpstreamModel(trimmedString(bodyMap["model"])); modelName != "" {
+	modelName := seedanceUpstreamModel(trimmedString(bodyMap["model"]))
+	if modelName != "" {
 		cleaned["model"] = modelName
 	}
 
 	metadata := mapFromAny(bodyMap["metadata"])
+	if isOfficialSeedanceReferencesModel(modelName) {
+		if prompt := seedanceVideoPrompt(trimmedString(bodyMap["prompt"]), 0); prompt != "" {
+			cleaned["prompt"] = prompt
+		}
+		cleaned["duration"] = seedanceVideoDuration(bodyMap, modelName)
+		cleaned["ratio"] = seedanceVideoRatio(bodyMap)
+		if resolution := seedanceOfficialResolutionForModel(bodyMap, modelName); resolution != "" {
+			cleaned["resolution"] = resolution
+		}
+		if references := normalizeSeedanceOfficialReferences(bodyMap, metadata, modelName); len(references) > 0 {
+			cleaned["references"] = references
+		}
+		if callbackURL := firstNonBlankAnyString(bodyMap["callback_url"], metadata["callback_url"]); callbackURL != "" {
+			cleaned["callback_url"] = callbackURL
+		}
+		return cleaned
+	}
+
 	content := normalizeSeedanceVideoContent(bodyMap, metadata)
 	if prompt := seedanceVideoPrompt(trimmedString(bodyMap["prompt"]), len(content)); prompt != "" {
 		cleaned["prompt"] = prompt
@@ -358,6 +384,15 @@ func normalizeSeedanceVideoRequestBody(bodyMap map[string]interface{}) map[strin
 	cleaned["metadata"] = cleanMetadata
 
 	return cleaned
+}
+
+func isOfficialSeedanceReferencesModel(modelName string) bool {
+	switch strings.ToLower(strings.TrimSpace(modelName)) {
+	case "seedance-2.0-dj-fast", "seedance-2.0-ld-17":
+		return true
+	default:
+		return false
+	}
 }
 
 func seedanceFirstFrameURL(content []interface{}) string {
@@ -442,6 +477,34 @@ func seedanceVideoSeconds(bodyMap map[string]interface{}) string {
 	return "4"
 }
 
+func seedanceVideoDuration(bodyMap map[string]interface{}, modelName string) int {
+	value := 0
+	for _, key := range []string{"duration", "seconds"} {
+		if parsed, ok := integerFromAny(bodyMap[key]); ok {
+			value = parsed
+			break
+		}
+	}
+	modelName = strings.ToLower(strings.TrimSpace(modelName))
+	if modelName == "seedance-2.0-dj-fast" {
+		switch {
+		case value <= 5:
+			return 5
+		case value <= 10:
+			return 10
+		default:
+			return 15
+		}
+	}
+	if value < 5 {
+		return 5
+	}
+	if value > 15 {
+		return 15
+	}
+	return value
+}
+
 func seedanceVideoRatio(bodyMap map[string]interface{}) string {
 	if ratio := normalizedSeedanceRatio(trimmedString(bodyMap["ratio"])); ratio != "" {
 		return ratio
@@ -502,6 +565,13 @@ func seedanceVideoResolution(bodyMap map[string]interface{}) string {
 	return "720p"
 }
 
+func seedanceOfficialResolutionForModel(bodyMap map[string]interface{}, modelName string) string {
+	if strings.EqualFold(strings.TrimSpace(modelName), "seedance-2.0-dj-fast") {
+		return "720P"
+	}
+	return ""
+}
+
 func normalizedSeedanceResolution(value string) string {
 	switch strings.ToLower(strings.TrimSpace(value)) {
 	case "720p":
@@ -546,62 +616,219 @@ func firstPresentAny(values ...interface{}) interface{} {
 }
 
 type seedanceVideoReference struct {
-	role string
-	url  string
+	mediaType string
+	role      string
+	url       string
+	alias     string
 }
 
 func normalizeSeedanceVideoContent(bodyMap, metadata map[string]interface{}) []interface{} {
+	references := normalizeSeedanceVideoReferences(bodyMap, metadata, "image")
+	content := make([]interface{}, 0, len(references))
+	for _, reference := range references {
+		content = append(content, seedanceVideoContentItem(reference.role, reference.url))
+	}
+	return content
+}
+
+func normalizeSeedanceOfficialReferences(bodyMap, metadata map[string]interface{}, modelName string) []map[string]interface{} {
+	modelName = strings.ToLower(strings.TrimSpace(modelName))
+	allowVideo := modelName == "seedance-2.0-ld-17"
+	allowAudio := modelName == "seedance-2.0-ld-17"
+	maxImages := 10
+	maxVideos := 0
+	maxAudios := 0
+	if modelName == "seedance-2.0-ld-17" {
+		maxImages = 9
+		maxVideos = 3
+		maxAudios = 3
+	}
+
+	allowed := map[string]bool{"image": true}
+	if allowVideo {
+		allowed["video"] = true
+	}
+	if allowAudio {
+		allowed["audio"] = true
+	}
+	rawReferences := normalizeSeedanceVideoReferences(bodyMap, metadata, "image", "video", "audio")
+	seen := make(map[string]bool)
+	imageCount := 0
+	videoCount := 0
+	audioCount := 0
+	hasVisualReference := false
+	result := make([]map[string]interface{}, 0, maxImages+maxVideos+maxAudios)
+	for _, reference := range rawReferences {
+		if !allowed[reference.mediaType] || reference.url == "" {
+			continue
+		}
+		key := reference.mediaType + "\x00" + reference.url
+		if seen[key] {
+			continue
+		}
+		switch reference.mediaType {
+		case "image":
+			if imageCount >= maxImages {
+				continue
+			}
+			imageCount++
+			hasVisualReference = true
+		case "video":
+			if videoCount >= maxVideos {
+				continue
+			}
+			videoCount++
+			hasVisualReference = true
+		case "audio":
+			if audioCount >= maxAudios {
+				continue
+			}
+			audioCount++
+		}
+		seen[key] = true
+		item := map[string]interface{}{
+			"media_type": reference.mediaType,
+			"role":       reference.role,
+			"url":        reference.url,
+		}
+		if reference.alias != "" {
+			item["alias"] = reference.alias
+		}
+		result = append(result, item)
+	}
+	if allowAudio && audioCount > 0 && !hasVisualReference {
+		filtered := result[:0]
+		for _, item := range result {
+			if item["media_type"] != "audio" {
+				filtered = append(filtered, item)
+			}
+		}
+		result = filtered
+	}
+	return result
+}
+
+func normalizeSeedanceVideoReferences(bodyMap, metadata map[string]interface{}, mediaTypes ...string) []seedanceVideoReference {
+	allowedMediaTypes := map[string]bool{}
+	for _, mediaType := range mediaTypes {
+		allowedMediaTypes[normalizeSeedanceMediaType(mediaType)] = true
+	}
+	if len(allowedMediaTypes) == 0 {
+		allowedMediaTypes["image"] = true
+	}
+
 	references := make([]seedanceVideoReference, 0)
-	appendReference := func(role string, url string) {
+	appendReference := func(mediaType string, role string, url string, alias string) {
+		mediaType = normalizeSeedanceMediaType(mediaType)
+		if !allowedMediaTypes[mediaType] {
+			return
+		}
 		url = strings.TrimSpace(url)
 		if url == "" || isVideoInputPlaceholder(url) {
 			return
 		}
 		references = append(references, seedanceVideoReference{
-			role: normalizeSeedanceVideoRole(role),
-			url:  url,
+			mediaType: mediaType,
+			role:      normalizeSeedanceReferenceRole(mediaType, role),
+			url:       url,
+			alias:     strings.TrimSpace(alias),
 		})
 	}
 
+	for _, item := range sliceFromAny(bodyMap["references"]) {
+		itemMap := mapFromAny(item)
+		mediaType := normalizeSeedanceMediaType(trimmedString(itemMap["media_type"]))
+		appendReference(
+			mediaType,
+			trimmedString(itemMap["role"]),
+			firstNonBlankAnyString(itemMap["url"], itemMap["asset_url"], itemMap["asset_ref"]),
+			trimmedString(itemMap["alias"]),
+		)
+	}
 	for _, item := range sliceFromAny(metadata["content"]) {
 		itemMap := mapFromAny(item)
-		appendReference(trimmedString(itemMap["role"]), videoContentImageURL(itemMap))
+		mediaType := seedanceMediaTypeFromContentType(trimmedString(itemMap["type"]))
+		appendReference(
+			mediaType,
+			trimmedString(itemMap["role"]),
+			videoContentURLByMediaType(itemMap, mediaType),
+			trimmedString(itemMap["alias"]),
+		)
 	}
 	for _, item := range sliceFromAny(metadata["frames"]) {
 		itemMap := mapFromAny(item)
-		appendReference(trimmedString(itemMap["role"]), firstNonBlankAnyString(itemMap["image"], itemMap["url"]))
+		appendReference("image", trimmedString(itemMap["role"]), firstNonBlankAnyString(itemMap["image"], itemMap["url"]), trimmedString(itemMap["alias"]))
 	}
-	appendReference("last_frame", trimmedString(metadata["last_frame_image"]))
-	appendReference("first_frame", trimmedString(bodyMap["image"]))
+	appendReference("image", "last_frame", trimmedString(metadata["last_frame_image"]), "")
+	appendReference("image", "first_frame", firstNonBlankAnyString(bodyMap["image"], bodyMap["image_url"], bodyMap["first_frame_url"]), "")
 	for index, image := range sliceFromAny(bodyMap["images"]) {
 		role := "reference_image"
 		if index == 0 {
 			role = "first_frame"
 		}
-		appendReference(role, firstNonBlankAnyString(image))
+		itemMap := mapFromAny(image)
+		appendReference("image", role, firstNonBlankAnyString(image, itemMap["url"], itemMap["image"], itemMap["image_url"]), trimmedString(itemMap["alias"]))
+	}
+	appendReference("image", "reference_image", firstNonBlankAnyString(bodyMap["reference_image_url"], bodyMap["reference_image"]), "")
+	for _, image := range sliceFromAny(bodyMap["reference_image_urls"]) {
+		itemMap := mapFromAny(image)
+		appendReference("image", "reference_image", firstNonBlankAnyString(image, itemMap["url"]), trimmedString(itemMap["alias"]))
+	}
+	appendReference("video", "reference_video", firstNonBlankAnyString(bodyMap["video"], bodyMap["video_url"], bodyMap["reference_video_url"]), "")
+	for _, video := range sliceFromAny(bodyMap["videos"]) {
+		itemMap := mapFromAny(video)
+		appendReference("video", "reference_video", firstNonBlankAnyString(video, itemMap["url"], itemMap["video"], itemMap["video_url"]), trimmedString(itemMap["alias"]))
+	}
+	for _, video := range sliceFromAny(bodyMap["reference_video_urls"]) {
+		itemMap := mapFromAny(video)
+		appendReference("video", "reference_video", firstNonBlankAnyString(video, itemMap["url"]), trimmedString(itemMap["alias"]))
+	}
+	appendReference("audio", "reference_audio", firstNonBlankAnyString(bodyMap["audio"], bodyMap["audio_url"], bodyMap["reference_audio_url"]), "")
+	for _, audio := range sliceFromAny(bodyMap["audios"]) {
+		itemMap := mapFromAny(audio)
+		appendReference("audio", "reference_audio", firstNonBlankAnyString(audio, itemMap["url"], itemMap["audio"], itemMap["audio_url"]), trimmedString(itemMap["alias"]))
+	}
+	for _, audio := range sliceFromAny(bodyMap["reference_audio_urls"]) {
+		itemMap := mapFromAny(audio)
+		appendReference("audio", "reference_audio", firstNonBlankAnyString(audio, itemMap["url"]), trimmedString(itemMap["alias"]))
 	}
 
 	referenceItems := make([]seedanceVideoReference, 0, 9)
 	seen := make(map[string]int)
 	for _, reference := range references {
-		if existingIndex, ok := seen[reference.url]; ok {
-			if reference.role == "first_frame" && referenceItems[existingIndex].role != "first_frame" {
+		key := reference.mediaType + "\x00" + reference.url
+		if existingIndex, ok := seen[key]; ok {
+			if reference.mediaType == "image" && reference.role == "first_frame" && referenceItems[existingIndex].role != "first_frame" {
 				referenceItems[existingIndex].role = reference.role
 			}
 			continue
 		}
-		seen[reference.url] = len(referenceItems)
+		seen[key] = len(referenceItems)
 		referenceItems = append(referenceItems, reference)
-		if len(referenceItems) >= 9 {
-			break
-		}
 	}
+	return referenceItems
+}
 
-	content := make([]interface{}, 0, len(referenceItems))
-	for _, reference := range referenceItems {
-		content = append(content, seedanceVideoContentItem(reference.role, reference.url))
+func normalizeSeedanceMediaType(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "video", "reference_video", "video_url":
+		return "video"
+	case "audio", "music", "reference_audio", "audio_url":
+		return "audio"
+	default:
+		return "image"
 	}
-	return content
+}
+
+func seedanceMediaTypeFromContentType(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "video_url":
+		return "video"
+	case "audio_url":
+		return "audio"
+	default:
+		return "image"
+	}
 }
 
 func normalizeSeedanceVideoRole(role string) string {
@@ -612,6 +839,18 @@ func normalizeSeedanceVideoRole(role string) string {
 		return "last_frame"
 	default:
 		return "reference_image"
+	}
+}
+
+func normalizeSeedanceReferenceRole(mediaType string, role string) string {
+	mediaType = normalizeSeedanceMediaType(mediaType)
+	switch mediaType {
+	case "video":
+		return "reference_video"
+	case "audio":
+		return "reference_audio"
+	default:
+		return normalizeSeedanceVideoRole(role)
 	}
 }
 
@@ -630,6 +869,25 @@ func videoContentImageURL(itemMap map[string]interface{}) string {
 	}
 	imageMap := mapFromAny(imageURL)
 	return firstNonBlankAnyString(imageMap["url"], imageMap["src"])
+}
+
+func videoContentURLByMediaType(itemMap map[string]interface{}, mediaType string) string {
+	switch normalizeSeedanceMediaType(mediaType) {
+	case "video":
+		return nestedMediaURL(itemMap["video_url"])
+	case "audio":
+		return nestedMediaURL(itemMap["audio_url"])
+	default:
+		return videoContentImageURL(itemMap)
+	}
+}
+
+func nestedMediaURL(value interface{}) string {
+	if url := trimmedString(value); url != "" {
+		return url
+	}
+	valueMap := mapFromAny(value)
+	return firstNonBlankAnyString(valueMap["url"], valueMap["src"], valueMap["asset_url"])
 }
 
 func mapFromAny(value interface{}) map[string]interface{} {

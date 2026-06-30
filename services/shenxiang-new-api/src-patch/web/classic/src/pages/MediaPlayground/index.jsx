@@ -292,6 +292,16 @@ const IMAGE_GENERATION_GROUP = {
 
 const IMAGE_EDIT_REFERENCE_LIMIT = 10;
 const VIDEO_REFERENCE_LIMIT = 5;
+const VIDEO_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
+const VIDEO_VIDEO_TYPES = ['video/mp4', 'video/webm', 'video/quicktime', 'video/x-m4v'];
+const VIDEO_AUDIO_TYPES = ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-wav', 'audio/mp4', 'audio/aac'];
+const VIDEO_REFERENCE_ACCEPT = [
+  ...VIDEO_IMAGE_TYPES,
+  ...VIDEO_VIDEO_TYPES,
+  ...VIDEO_AUDIO_TYPES,
+].join(',');
+const SEEDANCE_DJ_FAST_PRICE_PER_SECOND = 0.162;
+const SEEDANCE_LD17_PRICE_PER_CALL = 6.48;
 const MEDIA_RESULT_STORAGE_KEY = 'shenxiang-media-playground-results:v1';
 const MEDIA_RESULT_TTL_MS = 72 * 60 * 60 * 1000;
 
@@ -393,6 +403,38 @@ const VIDEO_MODELS = [
     defaultDuration: 15,
     defaultFps: 24,
     hint: '适合图生视频、人物动作和首尾帧控制。',
+  },
+  {
+    value: 'seedance-2.0-dj-fast',
+    label: 'Seedance 2.0 DJ Fast',
+    badge: '豆包',
+    vendor: '豆包视频',
+    sizes: ['1280x720', '720x1280'],
+    durations: [5, 10, 15],
+    defaultSize: '1280x720',
+    defaultDuration: 10,
+    defaultFps: 24,
+    referenceLimits: { image: 10, video: 0, audio: 0 },
+    supportsFace: false,
+    billingLabel: '按秒计费',
+    priceLabel: `¥${SEEDANCE_DJ_FAST_PRICE_PER_SECOND.toFixed(3)}/秒`,
+    hint: '¥0.162/秒；支持 5/10/15 秒，只接收图片参考，不能过人脸。',
+  },
+  {
+    value: 'seedance-2.0-ld-17',
+    label: 'Seedance 2.0 LD-17',
+    badge: '豆包',
+    vendor: '豆包视频',
+    sizes: ['1280x720', '720x1280', '1024x1024'],
+    durations: [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    defaultSize: '1280x720',
+    defaultDuration: 8,
+    defaultFps: 24,
+    referenceLimits: { image: 9, video: 3, audio: 3 },
+    supportsFace: true,
+    billingLabel: '按次计费',
+    priceLabel: `¥${SEEDANCE_LD17_PRICE_PER_CALL.toFixed(2)}/次`,
+    hint: '¥6.48/次；支持 5-15 秒，可过人脸，支持 9 图 / 3 视频 / 3 音频。',
   },
   {
     value: 'seedance-nsfw',
@@ -672,6 +714,16 @@ function promptWithReferenceImages(value, count) {
   return `${missing.join(' ')} ${value || ''}`.trim();
 }
 
+function promptWithReferenceAliases(value, aliases) {
+  const markers = aliases
+    .map((alias) => String(alias || '').trim())
+    .filter(Boolean)
+    .map((alias) => `@${alias}`);
+  const missing = markers.filter((marker) => !String(value || '').includes(marker));
+  if (missing.length === 0) return value;
+  return `${missing.join(' ')} ${value || ''}`.trim();
+}
+
 function normalizeURL(url) {
   if (!url) return '';
   if (url.startsWith('/')) return url;
@@ -684,6 +736,66 @@ function toAbsoluteMediaURL(url) {
     return `${window.location.origin}${url}`;
   }
   return url;
+}
+
+function fileMediaType(file) {
+  const mime = String(file?.type || '').toLowerCase();
+  const name = String(file?.name || '').toLowerCase();
+  if (VIDEO_IMAGE_TYPES.includes(mime) || /\.(png|jpe?g|webp)$/.test(name)) {
+    return 'image';
+  }
+  if (VIDEO_VIDEO_TYPES.includes(mime) || /\.(mp4|webm|mov|m4v)$/.test(name)) {
+    return 'video';
+  }
+  if (VIDEO_AUDIO_TYPES.includes(mime) || /\.(mp3|m4a|aac|wav)$/.test(name)) {
+    return 'audio';
+  }
+  return 'unknown';
+}
+
+function videoReferencePolicy(model) {
+  const limits = model?.referenceLimits || { image: VIDEO_REFERENCE_LIMIT, video: 0, audio: 0 };
+  const allowedTypes = Object.entries(limits)
+    .filter(([, limit]) => Number(limit) > 0)
+    .map(([type]) => type);
+  const maxFiles = allowedTypes.reduce(
+    (sum, type) => sum + Math.max(0, Number(limits[type]) || 0),
+    0,
+  );
+  const typeLabel = {
+    image: '图片',
+    video: '视频',
+    audio: '音频',
+  };
+  const limitLabel = allowedTypes
+    .map((type) => `${limits[type]} ${typeLabel[type]}`)
+    .join(' / ');
+  const accept = [
+    ...(limits.image ? VIDEO_IMAGE_TYPES : []),
+    ...(limits.video ? VIDEO_VIDEO_TYPES : []),
+    ...(limits.audio ? VIDEO_AUDIO_TYPES : []),
+  ].join(',');
+  return {
+    limits,
+    allowedTypes,
+    maxFiles: maxFiles || VIDEO_REFERENCE_LIMIT,
+    limitLabel: limitLabel || `${VIDEO_REFERENCE_LIMIT} 图片`,
+    accept: accept || VIDEO_REFERENCE_ACCEPT,
+    hint: allowedTypes.includes('audio')
+      ? `已选素材，支持 ${limitLabel}；音频必须搭配图片或视频。`
+      : `已选素材，支持 ${limitLabel}。`,
+  };
+}
+
+function videoReferenceCounts(files) {
+  return files.reduce(
+    (counts, file) => {
+      const type = fileMediaType(file);
+      if (counts[type] !== undefined) counts[type] += 1;
+      return counts;
+    },
+    { image: 0, video: 0, audio: 0 },
+  );
 }
 
 function isBrowserPreviewableURL(url) {
@@ -1099,10 +1211,19 @@ function FileDrop({ label, file, onFile, compact = false }) {
   );
 }
 
-function MultiFileDrop({ label, files, maxFiles, onFiles, onRemove }) {
+function MultiFileDrop({
+  label,
+  files,
+  maxFiles,
+  onFiles,
+  onRemove,
+  accept = 'image/png,image/jpeg,image/webp',
+  hint,
+}) {
   const [isDragging, setIsDragging] = useState(false);
   const previewFile = files[0] || null;
   const [previewUrl, setPreviewUrl] = useState('');
+  const previewType = fileMediaType(previewFile);
 
   useEffect(() => {
     if (!previewFile) {
@@ -1137,7 +1258,7 @@ function MultiFileDrop({ label, files, maxFiles, onFiles, onRemove }) {
         onDragLeave={() => setIsDragging(false)}
         onDrop={handleDrop}
       >
-        {previewUrl ? (
+        {previewUrl && previewType === 'image' ? (
           <div className='mp-upload-preview'>
             <img src={previewUrl} alt={`${label}预览`} />
           </div>
@@ -1148,12 +1269,12 @@ function MultiFileDrop({ label, files, maxFiles, onFiles, onRemove }) {
         )}
         <span className='mp-upload-title'>{label}</span>
         <span className='mp-upload-hint'>
-          已选 {files.length} / {maxFiles} 张，拖入或点击上传 PNG / JPG / WebP
+          {hint || `已选 ${files.length} / ${maxFiles} 张，拖入或点击上传 PNG / JPG / WebP`}
         </span>
         <input
           type='file'
           multiple
-          accept='image/png,image/jpeg,image/webp'
+          accept={accept}
           className='mp-upload-input'
           onChange={(event) => {
             handleFiles(event.target.files);
@@ -1388,8 +1509,12 @@ const MediaPlayground = () => {
   const reversePromptGroup = IMAGE_GENERATION_GROUP.value;
   const visibleGroupOptions =
     mode === 'image' ? [IMAGE_GENERATION_GROUP] : groups;
+  const videoRefPolicy = useMemo(
+    () => videoReferencePolicy(activeVideoModel),
+    [activeVideoModel],
+  );
   const referenceFileLimit =
-    mode === 'image' ? IMAGE_EDIT_REFERENCE_LIMIT : VIDEO_REFERENCE_LIMIT;
+    mode === 'image' ? IMAGE_EDIT_REFERENCE_LIMIT : videoRefPolicy.maxFiles;
   const imageRatioOptions =
     activeImageModel.aspectRatios?.length
       ? activeImageModel.aspectRatios
@@ -1457,12 +1582,25 @@ const MediaPlayground = () => {
   }, [activeModel, activeImageModel, activeVideoModel, mode]);
 
   useEffect(() => {
-    setReferenceFiles((files) =>
-      files.length > referenceFileLimit
-        ? files.slice(0, referenceFileLimit)
-        : files,
-    );
-  }, [referenceFileLimit]);
+    setReferenceFiles((files) => {
+      if (mode !== 'video') {
+        return files.length > referenceFileLimit
+          ? files.slice(0, referenceFileLimit)
+          : files;
+      }
+      const counts = { image: 0, video: 0, audio: 0 };
+      const allowed = files.filter((file) => {
+        const type = fileMediaType(file);
+        if (!videoRefPolicy.allowedTypes.includes(type)) return false;
+        if (counts[type] >= (videoRefPolicy.limits[type] || 0)) return false;
+        counts[type] += 1;
+        return true;
+      });
+      return allowed.length > referenceFileLimit
+        ? allowed.slice(0, referenceFileLimit)
+        : allowed;
+    });
+  }, [mode, referenceFileLimit, videoRefPolicy]);
 
   useEffect(() => {
     setResults(restoreStoredResults());
@@ -1489,6 +1627,37 @@ const MediaPlayground = () => {
   function addReferenceFiles(fileList) {
     const incoming = Array.from(fileList || []);
     if (incoming.length === 0) return;
+
+    if (mode === 'video') {
+      const counts = videoReferenceCounts(referenceFiles);
+      const accepted = [];
+      let rejected = 0;
+      incoming.forEach((file) => {
+        const type = fileMediaType(file);
+        if (!videoRefPolicy.allowedTypes.includes(type)) {
+          rejected += 1;
+          return;
+        }
+        if (counts[type] >= (videoRefPolicy.limits[type] || 0)) {
+          rejected += 1;
+          return;
+        }
+        counts[type] += 1;
+        accepted.push(file);
+      });
+      if (accepted.length === 0) {
+        Toast.warning(`当前模型最多支持 ${videoRefPolicy.limitLabel}。`);
+        return;
+      }
+      setReferenceFiles((current) =>
+        [...current, ...accepted].slice(0, referenceFileLimit),
+      );
+      if (rejected > 0) {
+        Toast.warning(`已按模型限制保留素材：${videoRefPolicy.limitLabel}。`);
+      }
+      return;
+    }
+
     const available = referenceFileLimit - referenceFiles.length;
     if (available <= 0) {
       Toast.warning(`最多支持上传 ${referenceFileLimit} 张参考图。`);
@@ -1586,15 +1755,21 @@ const MediaPlayground = () => {
       response_format: 'url',
       enhance_prompt: enhancePrompt,
       watermark,
+      ratio: SIZE_TO_ASPECT_RATIO[size] || undefined,
+      resolution: activeVideoModel.value === 'seedance-2.0-dj-fast' ? '720P' : undefined,
+      metadata: {},
     };
     if (seed.trim()) payload.seed = Number(seed);
     if (negativePrompt.trim())
-      payload.metadata = { negative_prompt: negativePrompt.trim() };
-    if (videoWorkflow === 'image') {
+      payload.metadata.negative_prompt = negativePrompt.trim();
+    if (activeVideoModel.value === 'seedance-2.0-dj-fast' || activeVideoModel.value === 'seedance-2.0-ld-17') {
+      if (videoWorkflow !== 'text') {
+        payload.references = ['上传的参考素材会在提交时自动填入'];
+      }
+    } else if (videoWorkflow === 'image') {
       payload.image = '上传的第一张参考图会在提交时自动填入';
       payload.images = ['最多 5 张参考图会在提交时自动填入'];
-    }
-    if (videoWorkflow === 'first-last') {
+    } else if (videoWorkflow === 'first-last') {
       payload.image = '上传的第一张首帧 / 参考图会在提交时自动填入';
       payload.images = [
         '最多 5 张首帧 / 参考图会在提交时自动填入',
@@ -1634,6 +1809,7 @@ const MediaPlayground = () => {
     videoWorkflow,
     watermark,
     activeImageModel,
+    activeVideoModel,
   ]);
 
   async function cacheMedia(result) {
@@ -1669,15 +1845,16 @@ const MediaPlayground = () => {
     }
   }
 
-  async function cacheReferenceImage(file, role, index) {
+  async function cacheReferenceMedia(file, mediaType, role, index) {
     const dataUrl = await fileToDataURL(file);
     const res = await API.post(
       '/pg/media/cache',
       {
         url: dataUrl,
-        kind: 'image',
+        kind: mediaType,
         metadata: {
           role: 'reference',
+          media_type: mediaType,
           reference_role: role,
           reference_index: index + 1,
           hidden: true,
@@ -1689,7 +1866,7 @@ const MediaPlayground = () => {
       { skipErrorHandler: true },
     );
     if (!res.data?.success || !res.data?.data?.url) {
-      throw new Error(res.data?.message || '参考图缓存失败。');
+      throw new Error(res.data?.message || '参考素材缓存失败。');
     }
     return toAbsoluteMediaURL(res.data.data.url);
   }
@@ -1783,26 +1960,63 @@ const MediaPlayground = () => {
     Toast.success('已套用反推提示词');
   }
 
-  async function applyVideoReferenceImages(payload) {
+  async function applyVideoReferences(payload) {
     if (videoWorkflow !== 'image' && videoWorkflow !== 'first-last') return payload;
 
+    const isOfficialReferencesModel =
+      videoModel === 'seedance-2.0-dj-fast' || videoModel === 'seedance-2.0-ld-17';
+    const filesForModel =
+      videoModel === 'seedance-2.0-dj-fast'
+        ? referenceFiles.filter((file) => fileMediaType(file) === 'image')
+        : referenceFiles;
+
     const references = await Promise.all(
-      referenceFiles.map(async (file, index) => ({
-        role: index === 0 ? 'first_frame' : 'reference_image',
-        url: await cacheReferenceImage(
-          file,
-          index === 0 ? 'first_frame' : 'reference_image',
-          index,
-        ),
-      })),
+      filesForModel.map(async (file, index) => {
+        const mediaType = isOfficialReferencesModel ? fileMediaType(file) : 'image';
+        const role =
+          mediaType === 'video'
+            ? 'reference_video'
+            : mediaType === 'audio'
+              ? 'reference_audio'
+              : index === 0
+                ? 'first_frame'
+                : 'reference_image';
+        return {
+          mediaType,
+          role,
+          alias: `${mediaType}${index + 1}`,
+          url: await cacheReferenceMedia(file, mediaType, role, index),
+        };
+      }),
     );
     if (videoWorkflow === 'first-last' && lastFrameFile) {
       references.push({
+        mediaType: 'image',
         role: 'last_frame',
-        url: await cacheReferenceImage(lastFrameFile, 'last_frame', references.length),
+        alias: `image${references.length + 1}`,
+        url: await cacheReferenceMedia(lastFrameFile, 'image', 'last_frame', references.length),
       });
     }
     if (references.length === 0) return payload;
+
+    if (isOfficialReferencesModel) {
+      const officialReferences = references
+        .filter((item) => ['image', 'video', 'audio'].includes(item.mediaType))
+        .map((item) => ({
+          media_type: item.mediaType,
+          role: item.role,
+          url: item.url,
+          alias: item.alias,
+        }));
+      return {
+        ...payload,
+        references: officialReferences,
+        prompt: promptWithReferenceAliases(
+          payload.prompt || '',
+          officialReferences.map((item) => item.alias),
+        ),
+      };
+    }
 
     const metadata = {
       ...(payload.metadata || {}),
@@ -1977,7 +2191,7 @@ const MediaPlayground = () => {
   }
 
   async function submitVideo() {
-    const payload = await applyVideoReferenceImages({ ...requestPayload });
+    const payload = await applyVideoReferences({ ...requestPayload });
     const res = await API.post('/pg/videos', payload, {
       skipErrorHandler: true,
     });
@@ -2005,7 +2219,16 @@ const MediaPlayground = () => {
     if (mode === 'image' && imageWorkflow === 'edit' && referenceFiles.length === 0)
       return Toast.error('图像修改需要先上传参考图。');
     if (mode === 'video' && videoWorkflow !== 'text' && referenceFiles.length === 0)
-      return Toast.error('图生视频需要先上传首帧或参考图。');
+      return Toast.error('图生视频需要先上传首帧或参考素材。');
+    if (mode === 'video' && videoWorkflow !== 'text') {
+      const counts = videoReferenceCounts(referenceFiles);
+      if (videoModel === 'seedance-2.0-dj-fast' && counts.image === 0) {
+        return Toast.error('DJ Fast 只支持图片参考，请先上传图片素材。');
+      }
+      if (videoModel === 'seedance-2.0-ld-17' && counts.audio > 0 && counts.image + counts.video === 0) {
+        return Toast.error('LD-17 的音频参考必须搭配图片或视频参考。');
+      }
+    }
     if (mode === 'video' && videoWorkflow === 'first-last' && !lastFrameFile)
       return Toast.error('首尾帧视频需要同时上传首帧和尾帧。');
 
@@ -2053,6 +2276,7 @@ const MediaPlayground = () => {
       : String(size || '').replace('x', ' × ');
   const qualityLabel =
     mode === 'image' ? quality || '默认' : `${duration} 秒 · ${fps} fps`;
+  const videoReferenceText = `${referenceFiles.length} / ${referenceFileLimit} 素材`;
   const amountLabel =
     mode === 'image'
       ? `${clampCount(count, activeImageModel)} 张`
@@ -2076,7 +2300,7 @@ const MediaPlayground = () => {
         : '不需要'
       : videoWorkflow === 'text'
         ? '不需要'
-        : `${referenceFiles.length} / ${referenceFileLimit} 张`;
+        : videoReferenceText;
   const lastFrameLabel =
     mode === 'video' && videoWorkflow === 'first-last'
       ? lastFrameFile
@@ -2087,7 +2311,7 @@ const MediaPlayground = () => {
     { label: '模型', done: modelAllowed, value: modelAllowed ? '已开放' : '无权限' },
     { label: '提示词', done: Boolean(prompt.trim()), value: prompt.trim() ? '已填写' : '待填写' },
     {
-      label: '参考图',
+      label: mode === 'video' ? '参考素材' : '参考图',
       done:
         (mode === 'image' && imageWorkflow !== 'edit') ||
         (mode === 'video' && videoWorkflow === 'text') ||
@@ -2239,6 +2463,13 @@ const MediaPlayground = () => {
                     </div>
                     <div className='mp-model-meta'>
                       <span>{item.vendor}</span>
+                      {item.priceLabel ? <span>{item.priceLabel}</span> : null}
+                      {item.billingLabel ? <span>{item.billingLabel}</span> : null}
+                      {item.supportsFace === true ? <span>可过人脸</span> : null}
+                      {item.supportsFace === false ? <span>不能过人脸</span> : null}
+                      {item.referenceLimits ? (
+                        <span>{videoReferencePolicy(item).limitLabel}</span>
+                      ) : null}
                       {item.maxCount ? <span>最多 {item.maxCount} 张</span> : null}
                       {item.sizes?.length ? <span>{item.sizes.length} 规格</span> : null}
                     </div>
@@ -2392,6 +2623,7 @@ const MediaPlayground = () => {
                     maxFiles={referenceFileLimit}
                     onFiles={addReferenceFiles}
                     onRemove={removeReferenceFile}
+                    hint={`已选 ${referenceFiles.length} / ${referenceFileLimit} 张，拖入或点击上传 PNG / JPG / WebP`}
                   />
                   <FileDrop
                     label='上传遮罩图，可选'
@@ -2407,13 +2639,15 @@ const MediaPlayground = () => {
                   <MultiFileDrop
                     label={
                       videoWorkflow === 'first-last'
-                        ? '上传首帧 / 参考图'
-                        : '上传参考图 / 首帧'
+                        ? '上传首帧 / 参考素材'
+                        : '上传参考素材 / 首帧'
                     }
                     files={referenceFiles}
                     maxFiles={referenceFileLimit}
                     onFiles={addReferenceFiles}
                     onRemove={removeReferenceFile}
+                    accept={videoRefPolicy.accept}
+                    hint={`${videoRefPolicy.hint} 已选 ${referenceFiles.length} / ${referenceFileLimit}。`}
                   />
                   {videoWorkflow === 'first-last' ? (
                     <FileDrop

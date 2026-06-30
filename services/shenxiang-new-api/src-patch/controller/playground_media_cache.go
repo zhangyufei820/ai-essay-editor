@@ -27,12 +27,19 @@ import (
 )
 
 var playgroundMediaExtensions = map[string]string{
-	"image/jpeg": ".jpg",
-	"image/png":  ".png",
-	"image/webp": ".webp",
-	"image/gif":  ".gif",
-	"video/mp4":  ".mp4",
-	"video/webm": ".webm",
+	"audio/aac":       ".aac",
+	"audio/mp4":       ".m4a",
+	"audio/mpeg":      ".mp3",
+	"audio/wav":       ".wav",
+	"audio/x-wav":     ".wav",
+	"image/gif":       ".gif",
+	"image/jpeg":      ".jpg",
+	"image/png":       ".png",
+	"image/webp":      ".webp",
+	"video/mp4":       ".mp4",
+	"video/quicktime": ".mov",
+	"video/webm":      ".webm",
+	"video/x-m4v":     ".m4v",
 }
 
 type playgroundMediaItem struct {
@@ -302,8 +309,20 @@ func extFromRemotePath(path string) string {
 		return ".gif"
 	case ".mp4":
 		return ".mp4"
+	case ".mov":
+		return ".mov"
+	case ".m4v":
+		return ".m4v"
 	case ".webm":
 		return ".webm"
+	case ".mp3":
+		return ".mp3"
+	case ".m4a":
+		return ".m4a"
+	case ".aac":
+		return ".aac"
+	case ".wav":
+		return ".wav"
 	default:
 		return ""
 	}
@@ -339,12 +358,14 @@ func playgroundMediaUserDir(c *gin.Context) string {
 
 func normalizePlaygroundMediaKind(kind string, ext string) string {
 	kind = strings.ToLower(strings.TrimSpace(kind))
-	if kind == "image" || kind == "video" {
+	if kind == "image" || kind == "video" || kind == "audio" {
 		return kind
 	}
 	switch ext {
-	case ".mp4", ".webm":
+	case ".mp4", ".mov", ".m4v", ".webm":
 		return "video"
+	case ".mp3", ".m4a", ".aac", ".wav":
+		return "audio"
 	default:
 		return "image"
 	}

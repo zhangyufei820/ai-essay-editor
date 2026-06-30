@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import asyncio
 import ipaddress
 import json
 import re
@@ -65,6 +66,7 @@ NEGATION_HINTS = ("不要生成图片", "不用生成图片", "不要出图", "�
 
 VIDEO_URL_RE = re.compile(r"https?://[^\s\"'<>]+?\.(?:mp4|webm|mov|m4v)(?:\?[^\s\"'<>]+)?", re.IGNORECASE)
 IMAGE_URL_RE = re.compile(r"https?://[^\s\"'<>]+?\.(?:png|jpe?g|webp|gif)(?:\?[^\s\"'<>]+)?", re.IGNORECASE)
+OFFICIAL_SEEDANCE_REFERENCE_MODELS = {"seedance-2.0-dj-fast", "seedance-2.0-ld-17"}
 MAX_REMOTE_IMAGE_BYTES = 20 * 1024 * 1024
 MAX_REMOTE_VIDEO_BYTES = 120 * 1024 * 1024
 
@@ -199,6 +201,9 @@ async def generate_video(
     user: UserContext,
     model: str,
 ) -> MediaResult:
+    if model in OFFICIAL_SEEDANCE_REFERENCE_MODELS:
+        return await generate_official_seedance_video(settings, request, user, model)
+
     headers = auth_headers(user.api_key)
     content: list[dict[str, Any]] = [{"type": "text", "text": request.user_query}]
     for file in request.files[:10]:
@@ -232,6 +237,179 @@ async def generate_video(
         text = response.text[:4000]
         urls = VIDEO_URL_RE.findall(text)
     return MediaResult(media_type="video", model=model, prompt=request.user_query, urls=dedupe(urls), raw_text=text)
+
+
+async def generate_official_seedance_video(
+    settings: Settings,
+    request: WorkspaceRunRequest,
+    user: UserContext,
+    model: str,
+) -> MediaResult:
+    payload: dict[str, Any] = {
+        "model": model,
+        "prompt": request.user_query,
+        "duration": official_seedance_duration(model, request.params),
+        "ratio": video_ratio_from_request(request),
+    }
+    if model == "seedance-2.0-dj-fast":
+        payload["resolution"] = "720P"
+    references = official_seedance_references(model, request)
+    if references:
+        payload["references"] = references
+    timeout = httpx.Timeout(480.0, connect=10.0, read=480.0, write=30.0)
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        response = await client.post(
+            f"{settings.new_api_base_url}/videos",
+            headers=auth_headers(user.api_key),
+            json=payload,
+        )
+        if response.status_code >= 400:
+            raise MediaGenerationError(upstream_error(settings, user.api_key, response))
+        try:
+            body = response.json()
+        except ValueError as exc:
+            raise MediaGenerationError("视频服务没有返回有效任务。") from exc
+        urls = extract_media_urls(body, "video")
+        task_id = video_task_id(body)
+        if not urls and task_id:
+            body = await poll_official_seedance_video(client, settings, user, task_id)
+            urls = extract_media_urls(body, "video")
+        text = json.dumps(body, ensure_ascii=False)[:4000]
+    return MediaResult(media_type="video", model=model, prompt=request.user_query, urls=dedupe(urls), raw_text=text, task_id=task_id)
+
+
+async def poll_official_seedance_video(
+    client: httpx.AsyncClient,
+    settings: Settings,
+    user: UserContext,
+    task_id: str,
+) -> dict[str, Any]:
+    deadline = time.monotonic() + 480
+    interval = 3.0
+    last_body: dict[str, Any] = {}
+    while time.monotonic() < deadline:
+        await asyncio.sleep(interval)
+        response = await client.get(
+            f"{settings.new_api_base_url}/videos/{task_id}",
+            headers=auth_headers(user.api_key),
+        )
+        if response.status_code >= 400:
+            raise MediaGenerationError(upstream_error(settings, user.api_key, response))
+        try:
+            body = response.json()
+        except ValueError:
+            last_body = {"raw": response.text[:4000]}
+            continue
+        last_body = body
+        status = str(body.get("status") or body.get("data", {}).get("status") or "").lower()
+        if extract_media_urls(body, "video"):
+            return body
+        if status in {"failed", "error", "cancelled", "canceled"}:
+            raise MediaGenerationError(video_failure_reason(body) or "视频任务失败。")
+        if interval < 8:
+            interval += 1
+    if last_body:
+        return last_body
+    raise MediaGenerationError("视频生成等待超时，请稍后到任务日志查看结果。")
+
+
+def official_seedance_duration(model: str, params: dict[str, Any]) -> int:
+    raw = params.get("duration") or params.get("duration_seconds") or params.get("seconds")
+    try:
+        value = int(float(str(raw)))
+    except (TypeError, ValueError):
+        value = 10 if model == "seedance-2.0-dj-fast" else 8
+    if model == "seedance-2.0-dj-fast":
+        if value <= 5:
+            return 5
+        if value <= 10:
+            return 10
+        return 15
+    return max(5, min(15, value))
+
+
+def video_ratio_from_request(request: WorkspaceRunRequest) -> str:
+    ratio = str(request.params.get("ratio") or request.params.get("aspect_ratio") or "").strip()
+    if ratio in {"16:9", "9:16", "1:1", "4:3", "3:4"}:
+        return ratio
+    size = str(request.params.get("size") or "").strip().lower()
+    if size in {"720x1280", "1080x1920"}:
+        return "9:16"
+    return "16:9"
+
+
+def official_seedance_references(model: str, request: WorkspaceRunRequest) -> list[dict[str, str]]:
+    limits = {"image": 10, "video": 0, "audio": 0}
+    if model == "seedance-2.0-ld-17":
+        limits = {"image": 9, "video": 3, "audio": 3}
+    counts = {"image": 0, "video": 0, "audio": 0}
+    references: list[dict[str, str]] = []
+    for file in request.files:
+        media_type = workspace_file_media_type(file)
+        if media_type not in limits or limits[media_type] <= 0:
+            continue
+        if counts[media_type] >= limits[media_type]:
+            continue
+        if media_type == "audio" and model != "seedance-2.0-ld-17":
+            continue
+        counts[media_type] += 1
+        role = {
+            "image": "first_frame" if counts[media_type] == 1 else "reference_image",
+            "video": "reference_video",
+            "audio": "reference_audio",
+        }[media_type]
+        references.append(
+            {
+                "media_type": media_type,
+                "role": role,
+                "url": file.content,
+                "alias": f"{media_type}{counts[media_type]}",
+            }
+        )
+    if counts["audio"] and not (counts["image"] or counts["video"]):
+        return [item for item in references if item["media_type"] != "audio"]
+    return references
+
+
+def workspace_file_media_type(file: Any) -> str:
+    content = str(getattr(file, "content", "") or "").lower()
+    path = str(getattr(file, "path", "") or "").lower()
+    if content.startswith("data:image/") or re.search(r"\.(png|jpe?g|webp|gif)$", path):
+        return "image"
+    if content.startswith("data:video/") or re.search(r"\.(mp4|webm|mov|m4v)$", path):
+        return "video"
+    if content.startswith("data:audio/") or re.search(r"\.(mp3|m4a|aac|wav)$", path):
+        return "audio"
+    return "unknown"
+
+
+def video_task_id(body: dict[str, Any]) -> str:
+    for key in ("task_id", "id"):
+        value = body.get(key)
+        if isinstance(value, str) and value:
+            return value
+    data = body.get("data")
+    if isinstance(data, dict):
+        for key in ("task_id", "id"):
+            value = data.get(key)
+            if isinstance(value, str) and value:
+                return value
+    return ""
+
+
+def video_failure_reason(body: dict[str, Any]) -> str:
+    for key in ("error", "message", "fail_reason"):
+        value = body.get(key)
+        if isinstance(value, str) and value:
+            return value
+        if isinstance(value, dict):
+            message = value.get("message")
+            if isinstance(message, str) and message:
+                return message
+    data = body.get("data")
+    if isinstance(data, dict):
+        return video_failure_reason(data)
+    return ""
 
 
 async def persist_remote_media(

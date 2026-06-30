@@ -63,6 +63,22 @@ const PRICING_DISPLAY_OVERRIDES = {
     billing_label: '按张计费',
     icon: 'OpenAI',
   },
+  'seedance-2.0-dj-fast': {
+    display_name: 'seedance-2.0-dj-fast',
+    description: '豆包 Seedance 2.0 DJ Fast：人民币 ¥0.162/秒，按秒计费；支持 5/10/15 秒，只接收图片参考，不能过人脸。',
+    fixed_price_label: '¥0.162',
+    price_unit_label: '秒',
+    billing_label: '按秒计费',
+    icon: 'Doubao',
+  },
+  'seedance-2.0-ld-17': {
+    display_name: 'seedance-2.0-ld-17',
+    description: '豆包 Seedance 2.0 LD-17：人民币 ¥6.48/次，按次计费；支持 5-15 秒，可过人脸，支持 9 图 / 3 视频 / 3 音频参考。',
+    fixed_price_label: '¥6.48',
+    price_unit_label: '次',
+    billing_label: '按次计费',
+    icon: 'Doubao',
+  },
 };
 
 export function getPricingDisplayOverride(modelOrName) {

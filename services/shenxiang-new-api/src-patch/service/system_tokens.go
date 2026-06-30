@@ -43,7 +43,7 @@ func SystemTokenProfiles() []SystemTokenProfile {
 		{
 			Mode:   "video",
 			Name:   "星人视频生成令牌",
-			Models: []string{"seedance-2.0", "grok-video-super-720p"},
+			Models: []string{"seedance-2.0", "seedance-2.0-dj-fast", "seedance-2.0-ld-17", "grok-video-super-720p"},
 		},
 	}
 }

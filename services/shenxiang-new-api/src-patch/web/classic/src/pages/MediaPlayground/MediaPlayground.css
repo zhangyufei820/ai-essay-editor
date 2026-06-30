@@ -258,7 +258,7 @@
 }
 
 .mp-model-card {
-  min-height: 94px;
+  min-height: 116px;
   padding: 12px;
   text-align: left;
 }
@@ -300,11 +300,10 @@
 }
 
 .mp-model-card small {
-  display: -webkit-box;
+  display: block;
   margin-top: 8px;
   overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  line-height: 1.45;
 }
 
 .mp-field,
@@ -728,9 +727,8 @@
 
 .mp-upload-hint {
   max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  line-height: 1.45;
 }
 
 .mp-upload-input {
