@@ -1,0 +1,21 @@
+package controller
+
+import (
+	"testing"
+
+	"github.com/stretchr/testify/require"
+)
+
+func TestNormalizeUserVisibleModelsAddsSeedancePrivateVideoForRootUser(t *testing.T) {
+	models := normalizeUserVisibleModels(1, []string{"grok-video-super-720p", "seedance-2.0"})
+
+	require.Contains(t, models, "seedance-nsfw")
+	require.Equal(t, []string{"grok-video-super-720p", "seedance-2.0", "seedance-nsfw"}, models)
+}
+
+func TestNormalizeUserVisibleModelsRemovesSeedancePrivateVideoForOtherUsers(t *testing.T) {
+	models := normalizeUserVisibleModels(2, []string{"seedance-nsfw", "seedance-2.0", "seedance-nsfw"})
+
+	require.NotContains(t, models, "seedance-nsfw")
+	require.Equal(t, []string{"seedance-2.0"}, models)
+}

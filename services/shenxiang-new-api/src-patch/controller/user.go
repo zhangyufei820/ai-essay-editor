@@ -29,6 +29,11 @@ type LoginRequest struct {
 	Password string `json:"password"`
 }
 
+const (
+	seedancePrivateVideoModel         = "seedance-nsfw"
+	seedancePrivateVideoAllowedUserID = 1
+)
+
 func Login(c *gin.Context) {
 	if !common.PasswordLoginEnabled {
 		common.ApiErrorI18n(c, i18n.MsgUserPasswordLoginDisabled)
@@ -561,12 +566,29 @@ func GetUserModels(c *gin.Context) {
 			}
 		}
 	}
+	models = normalizeUserVisibleModels(id, models)
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
 		"data":    models,
 	})
 	return
+}
+
+func normalizeUserVisibleModels(userID int, models []string) []string {
+	visible := make([]string, 0, len(models)+1)
+	for _, modelName := range models {
+		if modelName == seedancePrivateVideoModel && userID != seedancePrivateVideoAllowedUserID {
+			continue
+		}
+		if !common.StringsContains(visible, modelName) {
+			visible = append(visible, modelName)
+		}
+	}
+	if userID == seedancePrivateVideoAllowedUserID && !common.StringsContains(visible, seedancePrivateVideoModel) {
+		visible = append(visible, seedancePrivateVideoModel)
+	}
+	return visible
 }
 
 func UpdateUser(c *gin.Context) {
