@@ -1384,6 +1384,84 @@ function FileDrop({ label, file, onFile, compact = false }) {
   );
 }
 
+function ReferenceThumbCard({ item, index, onInsertMention, onRemove }) {
+  const file = referenceFileOf(item);
+  const mediaType = referenceMediaTypeOf(item);
+  const alias = item?.alias || `${index + 1}`;
+  const [previewUrl, setPreviewUrl] = useState('');
+
+  useEffect(() => {
+    if (!file) {
+      setPreviewUrl('');
+      return undefined;
+    }
+    const nextUrl = URL.createObjectURL(file);
+    setPreviewUrl(nextUrl);
+    return () => URL.revokeObjectURL(nextUrl);
+  }, [file]);
+
+  const renderMedia = () => {
+    if (mediaType === 'image' && previewUrl) {
+      return <img src={previewUrl} alt={file?.name || `${alias} 参考图`} />;
+    }
+    if (mediaType === 'video' && previewUrl) {
+      return <video src={previewUrl} muted playsInline preload='metadata' />;
+    }
+    if (mediaType === 'audio') {
+      return (
+        <div className='mp-upload-audio-card'>
+          <div className='mp-upload-audio-icon'>
+            <IconPlay />
+          </div>
+          <div className='mp-upload-audio-bars' aria-hidden='true'>
+            <span />
+            <span />
+            <span />
+            <span />
+            <span />
+          </div>
+          <strong>音频素材</strong>
+        </div>
+      );
+    }
+    return (
+      <div className='mp-upload-generic-card'>
+        <IconUpload />
+        <strong>素材文件</strong>
+      </div>
+    );
+  };
+
+  return (
+    <div className='mp-upload-thumb-card'>
+      <div className={`mp-upload-thumb-media is-${mediaType}`}>{renderMedia()}</div>
+      <div className='mp-upload-thumb-meta'>
+        <div className='mp-upload-thumb-head'>
+          <strong className={`mp-reference-alias is-${mediaType}`}>{alias}</strong>
+          <span className='mp-upload-thumb-type'>{referenceAliasPrefix(mediaType)}</span>
+        </div>
+        <span className='mp-upload-thumb-name' title={file?.name || ''}>
+          {file?.name || '未命名文件'}
+        </span>
+      </div>
+      <div className='mp-upload-thumb-actions'>
+        {onInsertMention ? (
+          <Button size='small' theme='borderless' onClick={() => onInsertMention(item)}>
+            @引用
+          </Button>
+        ) : null}
+        <Button
+          size='small'
+          theme='borderless'
+          onClick={() => onRemove(item?.id || index)}
+        >
+          移除
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function MultiFileDrop({
   label,
   files,
@@ -1395,20 +1473,6 @@ function MultiFileDrop({
   hint,
 }) {
   const [isDragging, setIsDragging] = useState(false);
-  const previewFile = files[0] || null;
-  const [previewUrl, setPreviewUrl] = useState('');
-  const previewType = referenceMediaTypeOf(previewFile);
-  const previewSourceFile = referenceFileOf(previewFile);
-
-  useEffect(() => {
-    if (!previewSourceFile) {
-      setPreviewUrl('');
-      return undefined;
-    }
-    const nextUrl = URL.createObjectURL(previewSourceFile);
-    setPreviewUrl(nextUrl);
-    return () => URL.revokeObjectURL(nextUrl);
-  }, [previewSourceFile]);
 
   const handleFiles = (fileList) => {
     onFiles(fileList);
@@ -1433,15 +1497,9 @@ function MultiFileDrop({
         onDragLeave={() => setIsDragging(false)}
         onDrop={handleDrop}
       >
-        {previewUrl && previewType === 'image' ? (
-          <div className='mp-upload-preview'>
-            <img src={previewUrl} alt={`${label}预览`} />
-          </div>
-        ) : (
-          <div className='mp-upload-placeholder'>
-            <IconUpload size='extra-large' />
-          </div>
-        )}
+        <div className='mp-upload-placeholder'>
+          <IconUpload size='extra-large' />
+        </div>
         <span className='mp-upload-title'>{label}</span>
         <span className='mp-upload-hint'>
           {hint || `已选 ${files.length} / ${maxFiles} 张，拖入或点击上传 PNG / JPG / WebP`}
@@ -1458,37 +1516,17 @@ function MultiFileDrop({
         />
       </label>
       {files.length > 0 ? (
-        <div className='mp-upload-file-list'>
+        <div className='mp-upload-thumb-grid'>
           {files.map((item, index) => {
             const file = referenceFileOf(item);
-            const alias = item?.alias || `${index + 1}`;
-            const mediaType = referenceMediaTypeOf(item);
             return (
-              <div
+              <ReferenceThumbCard
                 key={item?.id || `${file.name}-${file.lastModified}-${index}`}
-                className='mp-upload-file-item'
-              >
-                <span>
-                  <strong className={`mp-reference-alias is-${mediaType}`}>{alias}</strong>
-                  {file.name}
-                </span>
-                {onInsertMention ? (
-                  <Button
-                    size='small'
-                    theme='borderless'
-                    onClick={() => onInsertMention(item)}
-                  >
-                    @引用
-                  </Button>
-                ) : null}
-                <Button
-                  size='small'
-                  theme='borderless'
-                  onClick={() => onRemove(item?.id || index)}
-                >
-                  移除
-                </Button>
-              </div>
+                item={item}
+                index={index}
+                onInsertMention={onInsertMention}
+                onRemove={onRemove}
+              />
             );
           })}
         </div>
