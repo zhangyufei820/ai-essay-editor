@@ -175,7 +175,7 @@ const IMAGE_MODELS = [
     vendor: '星人图像',
     sizes: GOOGLE_GEMINI_31_FLASH_IMAGE_ASPECT_RATIOS,
     aspectRatios: GOOGLE_GEMINI_31_FLASH_IMAGE_ASPECT_RATIOS,
-    resolutions: ['1K', '2K'],
+    resolutions: ['1K', '2K', '4K'],
     qualities: ['auto'],
     formats: ['url'],
     defaultSize: '16:9',
