@@ -341,14 +341,18 @@
 }
 
 .mp-param-priority {
-  grid-template-columns: minmax(160px, 220px) minmax(260px, 1fr) minmax(150px, 190px);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: start;
 }
 
 .mp-param-secondary {
-  grid-template-columns: repeat(auto-fit, minmax(112px, max-content));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: start;
   margin-top: 8px;
+}
+
+.mp-param-wide {
+  margin-top: 12px;
 }
 
 .mp-chip-field {
@@ -356,7 +360,7 @@
 }
 
 .mp-chip-field.is-compact {
-  max-width: 210px;
+  max-width: none;
 }
 
 .mp-duration-field {
@@ -371,6 +375,7 @@
   min-width: 0;
   display: flex;
   flex-wrap: wrap;
+  align-content: flex-start;
   gap: 7px;
   padding: 7px;
   border: 1px solid rgba(255, 255, 255, 0.07);
@@ -381,10 +386,9 @@
 }
 
 .mp-chip-row.is-scrollable {
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  padding-bottom: 8px;
-  scrollbar-width: thin;
+  flex-wrap: wrap;
+  overflow-x: visible;
+  padding-bottom: 7px;
 }
 
 .mp-param-chip {
@@ -835,7 +839,7 @@
 
 .mp-upload-card {
   position: relative;
-  min-height: 168px;
+  min-height: 148px;
   padding: 13px;
   display: flex;
   flex-direction: column;
@@ -1091,7 +1095,7 @@
 
 .mp-inline-controls {
   display: grid;
-  grid-template-columns: minmax(240px, 420px) minmax(220px, 340px);
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 10px;
   margin-top: 10px;
 }

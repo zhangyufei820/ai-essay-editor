@@ -335,6 +335,29 @@ const GPT_IMAGE_2_SIZE_BY_RESOLUTION = {
   },
 };
 
+const GOOGLE_IMAGE_EDIT_SIZE_BY_RESOLUTION = {
+  '512': {
+    square: '1024x1024',
+    portrait: '1024x1024',
+    landscape: '1024x1024',
+  },
+  '1K': {
+    square: '1024x1024',
+    portrait: '1024x1024',
+    landscape: '1024x1024',
+  },
+  '2K': {
+    square: '2048x2048',
+    portrait: '2048x2048',
+    landscape: '2048x2048',
+  },
+  '4K': {
+    square: '2048x2048',
+    portrait: '2048x4096',
+    landscape: '4096x2048',
+  },
+};
+
 const IMAGE_GENERATION_GROUP = {
   value: 'default',
   label: '图像生成分组',
@@ -377,6 +400,10 @@ function isGeminiImageModel(model) {
     model === 'gemini-3-pro-image-preview' ||
     model === 'ecommerce-banana-2'
   );
+}
+
+function isGoogleImageEditModel(model) {
+  return isGeminiImageModel(model);
 }
 
 function isGptImage2Model(model) {
@@ -440,6 +467,26 @@ function gptImage2SizeFor(aspectRatio, imageSize) {
     GPT_IMAGE_2_SIZE_BY_RESOLUTION[normalizedResolution]?.['1:1'] ||
     '1024x1024'
   );
+}
+
+function aspectOrientation(aspectRatio) {
+  const [rawWidth, rawHeight] = String(aspectRatio || '').split(':');
+  const width = Number(rawWidth);
+  const height = Number(rawHeight);
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    return 'square';
+  }
+  if (width === height) return 'square';
+  return width > height ? 'landscape' : 'portrait';
+}
+
+function googleImageEditSizeFor(aspectRatio, imageSize) {
+  const normalizedResolution =
+    imageSize && imageSize !== 'auto' ? String(imageSize).toUpperCase() : '1K';
+  const sizeMap =
+    GOOGLE_IMAGE_EDIT_SIZE_BY_RESOLUTION[normalizedResolution] ||
+    GOOGLE_IMAGE_EDIT_SIZE_BY_RESOLUTION['1K'];
+  return sizeMap[aspectOrientation(aspectRatio)] || sizeMap.square || '1024x1024';
 }
 
 const VIDEO_MODELS = [
@@ -1584,18 +1631,22 @@ function OptionChips({
   compact = false,
   disabled = false,
   agentKey,
+  className = '',
 }) {
+  const classes = [
+    'mp-chip-field',
+    compact ? 'is-compact' : '',
+    className,
+  ]
+    .filter(Boolean)
+    .join(' ');
   return (
     <div
-      className={compact ? 'mp-chip-field is-compact' : 'mp-chip-field'}
+      className={classes}
       data-xr-agent={agentKey || undefined}
     >
       <span>{label}</span>
-      <div
-        className={
-          options.length > 6 ? 'mp-chip-row is-scrollable' : 'mp-chip-row'
-        }
-      >
+      <div className='mp-chip-row'>
         {options.map((option) => {
           const optionValue = option.value ?? option;
           const optionLabel = option.label ?? option;
@@ -2467,6 +2518,14 @@ const MediaPlayground = () => {
         return payload;
       }
       if (isGeminiImageModel(imageModel)) {
+        if (imageWorkflow === 'edit' && isGoogleImageEditModel(imageModel)) {
+          if (effectiveAspectRatio) payload.aspect_ratio = effectiveAspectRatio;
+          payload.size = googleImageEditSizeFor(effectiveAspectRatio, resolution);
+          if (quality) payload.quality = quality;
+          if (negativePrompt.trim())
+            payload.extra_fields = { negative_prompt: negativePrompt.trim() };
+          return payload;
+        }
         const responseFormat = imageResponseFormat(effectiveAspectRatio, resolution);
         const imageConfig = geminiImageConfig(effectiveAspectRatio, resolution);
         if (effectiveAspectRatio) payload.aspect_ratio = effectiveAspectRatio;
@@ -3611,24 +3670,25 @@ const MediaPlayground = () => {
                       agentKey='media-size'
                     />
                   )}
-                  {mode === 'image' && imageRatioOptions.length ? (
-                    <OptionChips
-                      label='画面比例'
-                      value={imageRatioValue}
-                      options={toSelectOptions(imageRatioOptions)}
-                      onChange={handleImageRatioChange}
-                      agentKey='media-aspect-ratio'
-                    />
-                  ) : null}
                   {mode === 'image' ? (
-                    <OptionChips
-                      label='清晰度'
-                      value={quality}
-                      options={toSelectOptions(activeImageModel.qualities)}
-                      onChange={setQuality}
-                      compact
-                      agentKey='media-quality'
-                    />
+                    <>
+                      <OptionChips
+                        label='清晰度'
+                        value={quality}
+                        options={toSelectOptions(activeImageModel.qualities)}
+                        onChange={setQuality}
+                        compact
+                        agentKey='media-quality'
+                      />
+                      <OptionChips
+                        label='输出格式'
+                        value={format}
+                        options={toSelectOptions(activeImageModel.formats)}
+                        onChange={setFormat}
+                        compact
+                        agentKey='media-format'
+                      />
+                    </>
                   ) : (
                     <NativeSelect
                       label='时长'
@@ -3644,17 +3704,20 @@ const MediaPlayground = () => {
                   )}
                 </div>
 
-                <div className='mp-param-secondary'>
-                  {mode === 'image' ? (
+                {mode === 'image' && imageRatioOptions.length ? (
+                  <div className='mp-param-wide'>
                     <OptionChips
-                      label='输出格式'
-                      value={format}
-                      options={toSelectOptions(activeImageModel.formats)}
-                      onChange={setFormat}
-                      compact
-                      agentKey='media-format'
+                      label='画面比例'
+                      value={imageRatioValue}
+                      options={toSelectOptions(imageRatioOptions)}
+                      onChange={handleImageRatioChange}
+                      agentKey='media-aspect-ratio'
                     />
-                  ) : (
+                  </div>
+                ) : null}
+
+                <div className='mp-param-secondary'>
+                  {mode === 'video' ? (
                     <OptionChips
                       label='帧率'
                       value={fps}
@@ -3666,7 +3729,7 @@ const MediaPlayground = () => {
                       compact
                       agentKey='media-fps'
                     />
-                  )}
+                  ) : null}
                   {mode === 'video' && activeVideoModel.resolutions?.length ? (
                     <OptionChips
                       label='清晰度'
