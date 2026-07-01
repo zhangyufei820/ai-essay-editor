@@ -65,7 +65,7 @@ func TestConvertImageRequestAllowsGeminiImagePreviewMultipartEdit(t *testing.T) 
 	var imageConfig map[string]string
 	require.NoError(t, json.Unmarshal(geminiRequest.GenerationConfig.ImageConfig, &imageConfig))
 	require.Equal(t, "3:4", imageConfig["aspectRatio"])
-	require.Equal(t, "4K", imageConfig["imageSize"])
+	require.Empty(t, imageConfig["imageSize"])
 }
 
 func TestConvertImageRequestRejectsNonImagineGeminiModel(t *testing.T) {

@@ -314,9 +314,6 @@ func geminiImagePreviewConfig(request dto.ImageRequest) ([]byte, error) {
 	if aspectRatio := geminiImagePreviewAspectRatio(request); aspectRatio != "" {
 		imageConfig["aspectRatio"] = aspectRatio
 	}
-	if imageSize := geminiImagePreviewImageSize(request); imageSize != "" {
-		imageConfig["imageSize"] = imageSize
-	}
 	if len(imageConfig) == 0 {
 		return nil, nil
 	}
@@ -346,26 +343,6 @@ func geminiImagePreviewAspectRatio(request dto.ImageRequest) string {
 	return ""
 }
 
-func geminiImagePreviewImageSize(request dto.ImageRequest) string {
-	for _, value := range []string{request.ImageSize, request.Resolution} {
-		normalized := strings.ToUpper(strings.TrimSpace(value))
-		if normalized != "" && normalized != "AUTO" {
-			return normalized
-		}
-	}
-
-	size := strings.ToLower(strings.TrimSpace(request.Size))
-	switch {
-	case strings.Contains(size, "4096") || strings.Contains(size, "3840") || strings.Contains(size, "3808"):
-		return "4K"
-	case strings.Contains(size, "2048") || strings.Contains(size, "2160"):
-		return "2K"
-	case strings.Contains(size, "1024"):
-		return "1K"
-	default:
-		return ""
-	}
-}
 
 func (a *Adaptor) Init(info *relaycommon.RelayInfo) {
 
