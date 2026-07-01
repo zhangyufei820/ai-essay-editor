@@ -153,3 +153,103 @@ func TestMarkPlaygroundImageTaskLogFailureConvertsConsumeLogToError(t *testing.T
 	require.Equal(t, "media_task_failed", other["refund_reason"])
 	require.Equal(t, "preconsume_refund_task_failed", other["billing_settlement"])
 }
+
+func TestSanitizePlaygroundImageTaskFailureKeepsUpstreamRejectionReason(t *testing.T) {
+	reason := `status_code=400, 抱歉，我不能帮你生成这张图片。你可以尝试一种更温和的描述。 (request_id: req_123, upstream channel #22, token sk-secret-value)`
+
+	got := sanitizePlaygroundImageTaskFailure(reason)
+
+	require.Contains(t, got, "抱歉，我不能帮你生成这张图片")
+	require.Contains(t, got, "你可以尝试一种更温和的描述")
+	require.NotContains(t, got, "request_id")
+	require.NotContains(t, got, "upstream")
+	require.NotContains(t, got, "channel")
+	require.NotContains(t, got, "sk-secret-value")
+}
+
+func TestSanitizePlaygroundImageTaskFailureKeepsWrappedUpstreamRejectionReason(t *testing.T) {
+	reason := `upstream error: 抱歉，我不能帮你生成这张图片。请改成安全版画面。`
+
+	got := sanitizePlaygroundImageTaskFailure(reason)
+
+	require.Equal(t, "抱歉，我不能帮你生成这张图片。请改成安全版画面", got)
+}
+
+func TestSanitizePlaygroundImageTaskFailureHidesCredentialOnlyErrors(t *testing.T) {
+	got := sanitizePlaygroundImageTaskFailure("upstream request failed with bearer abcdefghijklmnop")
+
+	require.Equal(t, "模型服务暂时无法处理该请求，请稍后重试或调整参数", got)
+}
+
+func TestResolvePlaygroundImageTaskFailureReasonPrefersRelayErrorLog(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err)
+	require.NoError(t, db.AutoMigrate(&model.Log{}))
+	oldLogDB := model.LOG_DB
+	model.LOG_DB = db
+	t.Cleanup(func() {
+		model.LOG_DB = oldLogDB
+	})
+
+	requestID := "req-image-upstream-rejected"
+	require.NoError(t, model.LOG_DB.Create(&model.Log{
+		UserId:    1001,
+		CreatedAt: common.GetTimestamp(),
+		Type:      model.LogTypeError,
+		Content:   `status_code=400, 抱歉，我不能帮你生成这张图片。你可以尝试一种更温和的描述。 (request_id: req_123, upstream channel #22)`,
+		RequestId: requestID,
+	}).Error)
+	body := []byte(`{"error":{"message":"请求参数有误，请检查后重试。"}}`)
+
+	got := resolvePlaygroundImageTaskFailureReason(1001, requestID, body, 400)
+
+	require.Contains(t, got, "抱歉，我不能帮你生成这张图片")
+	require.Contains(t, got, "你可以尝试一种更温和的描述")
+	require.NotContains(t, got, "status_code")
+	require.NotContains(t, got, "request_id")
+	require.NotContains(t, got, "channel")
+}
+
+func TestMarkPlaygroundImageTaskLogFailureKeepsSubmittedChannelWhenTaskChannelMissing(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err)
+	require.NoError(t, db.AutoMigrate(&model.Log{}))
+	oldLogDB := model.LOG_DB
+	model.LOG_DB = db
+	t.Cleanup(func() {
+		model.LOG_DB = oldLogDB
+	})
+
+	requestID := "req-image-failure-channel"
+	task := &model.Task{
+		TaskID:     "task-image-failure-channel",
+		UserId:     1001,
+		ChannelId:  0,
+		Group:      "default",
+		StartTime:  time.Now().Add(-4 * time.Second).Unix(),
+		FinishTime: time.Now().Unix(),
+	}
+	payload := &playgroundImageTaskPayload{RequestID: requestID}
+	initialOther := map[string]interface{}{
+		"request_phase": "submitted",
+	}
+	require.NoError(t, model.LOG_DB.Create(&model.Log{
+		UserId:    task.UserId,
+		CreatedAt: common.GetTimestamp(),
+		Type:      model.LogTypeConsume,
+		Content:   "媒体工坊图片任务生成中",
+		ModelName: "gpt-image-2-4K",
+		ChannelId: 22,
+		RequestId: requestID,
+		Other:     common.MapToJsonStr(initialOther),
+	}).Error)
+
+	markPlaygroundImageTaskLogFailure(task, payload, "provider rejected request")
+
+	var log model.Log
+	require.NoError(t, model.LOG_DB.Where("request_id = ?", requestID).First(&log).Error)
+	require.Equal(t, 22, log.ChannelId)
+	other, err := common.StrToMap(log.Other)
+	require.NoError(t, err)
+	require.Equal(t, float64(22), other["channel_id"])
+}

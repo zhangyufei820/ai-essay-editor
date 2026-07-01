@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -31,6 +32,15 @@ import (
 )
 
 const playgroundImageAsyncBillingCaptureKey = "playground_image_billing_capture"
+
+var (
+	playgroundCredentialPattern       = regexp.MustCompile(`(?i)(bearer\s+|sk-)[A-Za-z0-9._\-]{8,}`)
+	playgroundSecretClausePattern     = regexp.MustCompile(`(?i)\s*[,，;；]?\s*(api[_\s-]?key|apikey|bearer|token|secret|password|sk-)\s*[:=]?\s*[^,，;；\)）]*`)
+	playgroundRequestIDPattern        = regexp.MustCompile(`(?i)\s*[\(（]?\s*(request[_\s-]?id|upstream[_\s-]?request[_\s-]?id)\s*[:=]\s*[^,，;；\)）\s]+[\)）]?`)
+	playgroundInternalPrefixPattern   = regexp.MustCompile(`(?i)^\s*(upstream|provider|供应商|渠道)\s*(error|response|request\s+failed|rejected|返回|拒绝)?\s*[:：=\-]?\s*`)
+	playgroundInternalClausePattern   = regexp.MustCompile(`(?i)\s*[\(（]?\s*(upstream\s+)?(channel|provider|供应商|渠道)\s*[:=#]?\s*[^,，;；\)）]*[\)）]?`)
+	playgroundStatusCodePrefixPattern = regexp.MustCompile(`(?i)^\s*status[_\s-]?code\s*=\s*\d+\s*[,，:]?\s*`)
+)
 
 type playgroundImageTaskCreateResponse struct {
 	TaskID    string `json:"task_id"`
@@ -843,7 +853,7 @@ func runPlaygroundImageTask(taskID string, userID int, username string, role int
 	})
 	engine.ServeHTTP(recorder, request)
 	if recorder.Code >= http.StatusBadRequest {
-		markPlaygroundImageTaskFailure(task, sanitizePlaygroundImageTaskFailure(extractPlaygroundImageTaskError(recorder.Body.Bytes(), recorder.Code)))
+		markPlaygroundImageTaskFailure(task, resolvePlaygroundImageTaskFailureReason(task.UserId, payload.RequestID, recorder.Body.Bytes(), recorder.Code))
 		return
 	}
 
@@ -856,7 +866,7 @@ func runPlaygroundImageTask(taskID string, userID int, username string, role int
 	responseBody := recorder.Body.Bytes()
 	if err := common.Unmarshal(responseBody, &response); err != nil || len(response.Data) == 0 {
 		if msg := extractPlaygroundImageTaskError(responseBody, recorder.Code); msg != "" {
-			markPlaygroundImageTaskFailure(task, sanitizePlaygroundImageTaskFailure(msg))
+			markPlaygroundImageTaskFailure(task, resolvePlaygroundImageTaskFailureReason(task.UserId, payload.RequestID, responseBody, recorder.Code))
 		} else {
 			markPlaygroundImageTaskFailure(task, "image task completed without a usable image")
 		}
@@ -1139,6 +1149,9 @@ func sanitizePlaygroundImageTaskFailure(reason string) string {
 	if trimmed == "" {
 		return ""
 	}
+	if publicReason := sanitizePlaygroundImageTaskPublicReason(trimmed); publicReason != "" {
+		return publicReason
+	}
 	lower := strings.ToLower(trimmed)
 	sensitiveMarkers := []string{
 		"upstream",
@@ -1154,6 +1167,7 @@ func sanitizePlaygroundImageTaskFailure(reason string) string {
 		"token",
 		"secret",
 		"password",
+		"status_code",
 	}
 	for _, marker := range sensitiveMarkers {
 		if strings.Contains(lower, marker) {
@@ -1161,6 +1175,83 @@ func sanitizePlaygroundImageTaskFailure(reason string) string {
 		}
 	}
 	return trimmed
+}
+
+func sanitizePlaygroundImageTaskPublicReason(reason string) string {
+	cleaned := strings.TrimSpace(common.MaskSensitiveInfo(reason))
+	if cleaned == "" {
+		return ""
+	}
+	cleaned = playgroundCredentialPattern.ReplaceAllString(cleaned, "[REDACTED]")
+	cleaned = playgroundSecretClausePattern.ReplaceAllString(cleaned, "")
+	cleaned = playgroundStatusCodePrefixPattern.ReplaceAllString(cleaned, "")
+	cleaned = playgroundRequestIDPattern.ReplaceAllString(cleaned, "")
+	cleaned = playgroundInternalPrefixPattern.ReplaceAllString(cleaned, "")
+	cleaned = playgroundInternalClausePattern.ReplaceAllString(cleaned, "")
+	cleaned = strings.TrimSpace(strings.Trim(cleaned, " ,，;；.。()（）"))
+	if cleaned == "" {
+		return ""
+	}
+	if strings.Contains(cleaned, "[REDACTED]") {
+		return ""
+	}
+	lower := strings.ToLower(cleaned)
+	for _, marker := range []string{"api key", "apikey", "bearer", "token", "secret", "password", "sk-"} {
+		if strings.Contains(lower, marker) {
+			return ""
+		}
+	}
+	if isGenericPlaygroundImageTaskFailureReason(cleaned) {
+		return ""
+	}
+	return cleaned
+}
+
+func resolvePlaygroundImageTaskFailureReason(userID int, requestID string, body []byte, status int) string {
+	if reason := latestPlaygroundImageTaskRelayErrorReason(userID, requestID); reason != "" {
+		return reason
+	}
+	return sanitizePlaygroundImageTaskFailure(extractPlaygroundImageTaskError(body, status))
+}
+
+func latestPlaygroundImageTaskRelayErrorReason(userID int, requestID string) string {
+	requestID = strings.TrimSpace(requestID)
+	if userID == 0 || requestID == "" || model.LOG_DB == nil {
+		return ""
+	}
+	var logs []model.Log
+	err := model.LOG_DB.Where("user_id = ? AND request_id = ? AND type = ?", userID, requestID, model.LogTypeError).
+		Order("id desc").
+		Limit(5).
+		Find(&logs).Error
+	if err != nil {
+		return ""
+	}
+	for _, log := range logs {
+		reason := sanitizePlaygroundImageTaskFailure(log.Content)
+		if reason != "" && !isGenericPlaygroundImageTaskFailureReason(reason) {
+			return reason
+		}
+	}
+	return ""
+}
+
+func isGenericPlaygroundImageTaskFailureReason(reason string) bool {
+	normalized := strings.TrimSpace(reason)
+	if normalized == "" {
+		return true
+	}
+	switch normalized {
+	case "模型服务暂时无法处理该请求，请稍后重试或调整参数",
+		"请求参数有误，请检查后重试。",
+		"模型服务暂时不可用，请稍后重试。",
+		"image task failed",
+		"request failed",
+		"request failed with",
+		"with":
+		return true
+	}
+	return false
 }
 
 func markPlaygroundImageTaskLogFailure(task *model.Task, payload *playgroundImageTaskPayload, reason string) {
@@ -1178,6 +1269,13 @@ func markPlaygroundImageTaskLogFailure(task *model.Task, payload *playgroundImag
 	if other == nil {
 		other = map[string]interface{}{}
 	}
+	failureChannelID := task.ChannelId
+	if failureChannelID == 0 {
+		failureChannelID = existing.ChannelId
+	}
+	if failureChannelID == 0 {
+		failureChannelID = intFromPlaygroundLogValue(other["channel_id"])
+	}
 	other["task_id"] = task.TaskID
 	other["request_id"] = payload.RequestID
 	other["request_phase"] = "failed"
@@ -1193,8 +1291,8 @@ func markPlaygroundImageTaskLogFailure(task *model.Task, payload *playgroundImag
 	other["result_url"] = ""
 	other["image_url"] = ""
 	other["cached_url"] = ""
-	if task.ChannelId > 0 {
-		other["channel_id"] = task.ChannelId
+	if failureChannelID > 0 {
+		other["channel_id"] = failureChannelID
 	}
 	if task.Group != "" {
 		other["group"] = task.Group
@@ -1212,13 +1310,34 @@ func markPlaygroundImageTaskLogFailure(task *model.Task, payload *playgroundImag
 		content += "，" + reason
 	}
 	if err := model.LOG_DB.Model(&model.Log{}).Where("id = ?", existing.Id).Updates(map[string]interface{}{
-		"content":  truncatePlaygroundText(content, 1000),
-		"type":     model.LogTypeError,
-		"quota":    0,
-		"use_time": useTime,
-		"other":    common.MapToJsonStr(other),
+		"content":    truncatePlaygroundText(content, 1000),
+		"type":       model.LogTypeError,
+		"quota":      0,
+		"channel_id": failureChannelID,
+		"use_time":   useTime,
+		"other":      common.MapToJsonStr(other),
 	}).Error; err != nil {
 		common.SysError("failed to update playground image task failure log: " + err.Error())
+	}
+}
+
+func intFromPlaygroundLogValue(value interface{}) int {
+	switch typed := value.(type) {
+	case int:
+		return typed
+	case int64:
+		return int(typed)
+	case float64:
+		return int(typed)
+	case json.Number:
+		parsed, _ := typed.Int64()
+		return int(parsed)
+	default:
+		var parsed int
+		if n, err := fmt.Sscanf(fmt.Sprint(value), "%d", &parsed); err == nil && n == 1 {
+			return parsed
+		}
+		return 0
 	}
 }
 
