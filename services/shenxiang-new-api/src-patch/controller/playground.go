@@ -588,7 +588,7 @@ func isValidPlaygroundMediaFilename(value string) bool {
 		return false
 	}
 	stem := strings.TrimSuffix(value, ext)
-	if len(stem) != 32 {
+	if len(stem) != 32 && len(stem) != 24 {
 		return false
 	}
 	for _, ch := range stem {
