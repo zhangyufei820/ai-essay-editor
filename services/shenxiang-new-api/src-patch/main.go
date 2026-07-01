@@ -273,6 +273,10 @@ func RegisterXingrenAPIStaticAssets(server *gin.Engine) {
 		c.Header("Cache-Control", "public, max-age=31536000, immutable")
 		c.Data(http.StatusOK, "image/jpeg", xingrenAPIAssistantAvatarJPG)
 	})
+	server.GET("/assets/xingren-api-onboarding-assistant.js", func(c *gin.Context) {
+		c.Header("Cache-Control", "public, max-age=31536000, immutable")
+		c.Data(http.StatusOK, "application/javascript; charset=utf-8", xingrenAPIOnboardingAssistantJS)
+	})
 }
 
 // analyticsIDPattern restricts analytics identifiers to characters that cannot
@@ -361,10 +365,7 @@ func InjectXingrenAPIOnboardingAssistant() {
 		return
 	}
 
-	snippet := make([]byte, 0, len(xingrenAPIOnboardingAssistantJS)+64)
-	snippet = append(snippet, []byte("\n<script>\n")...)
-	snippet = append(snippet, xingrenAPIOnboardingAssistantJS...)
-	snippet = append(snippet, []byte("\n</script>\n")...)
+	snippet := []byte("\n<script src=\"/assets/xingren-api-onboarding-assistant.js\" defer></script>\n")
 
 	indexPage = injectBeforeClosingBody(indexPage, snippet)
 	classicIndexPage = injectBeforeClosingBody(classicIndexPage, snippet)
