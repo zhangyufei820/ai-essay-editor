@@ -341,7 +341,7 @@ func TestMoonApiXSeedanceBuildRequestURLUsesVideosEndpoint(t *testing.T) {
 func TestNormalizeMoonApiXCLMiniKeepsOfficialMediaFields(t *testing.T) {
 	body := map[string]interface{}{
 		"model":      "seedance-2.0-cl-mini",
-		"prompt":     "Use @image1 and @video1.",
+		"prompt":     "@图片1 Use @image1 and @video1. 请参考@视频1生成，@尾帧2",
 		"duration":   float64(2),
 		"ratio":      "9:16",
 		"resolution": "1080p",
@@ -375,6 +375,9 @@ func TestNormalizeMoonApiXCLMiniKeepsOfficialMediaFields(t *testing.T) {
 	if got["model"] != "seedance-2.0-cl-mini" {
 		t.Fatalf("model = %#v, want seedance-2.0-cl-mini", got["model"])
 	}
+	if got["prompt"] != "Use @image1 and @video1. 请参考生成，" {
+		t.Fatalf("prompt = %#v, want local Chinese reference mention stripped", got["prompt"])
+	}
 	if got["duration"] != 4 {
 		t.Fatalf("duration = %#v, want lower clamp 4", got["duration"])
 	}
@@ -397,8 +400,13 @@ func TestNormalizeMoonApiXCLMiniKeepsOfficialMediaFields(t *testing.T) {
 	if !ok || len(refs) != 3 {
 		t.Fatalf("references = %#v, want two images plus one video", got["references"])
 	}
-	if refs[2]["media_type"] != "video" || refs[2]["alias"] != "video1" {
-		t.Fatalf("video reference = %#v, want aliased video reference", refs[2])
+	for index, ref := range refs {
+		if _, ok := ref["alias"]; ok {
+			t.Fatalf("reference %d forwarded alias to MoonApiX: %#v", index, ref)
+		}
+	}
+	if refs[2]["media_type"] != "video" {
+		t.Fatalf("video reference = %#v, want video reference", refs[2])
 	}
 	images, ok := got["images"].([]map[string]interface{})
 	if !ok || len(images) != 2 {

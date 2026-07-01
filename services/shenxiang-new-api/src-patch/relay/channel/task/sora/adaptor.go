@@ -463,7 +463,7 @@ func normalizeMoonApiXSeedanceVideoRequestBody(bodyMap map[string]interface{}) m
 	if modelName != "" {
 		cleaned["model"] = modelName
 	}
-	if prompt := strings.TrimSpace(trimmedString(bodyMap["prompt"])); prompt != "" {
+	if prompt := stripMoonApiXLocalReferenceMentions(trimmedString(bodyMap["prompt"])); prompt != "" {
 		cleaned["prompt"] = prompt
 	}
 	cleaned["duration"] = moonApiXSeedanceDuration(bodyMap)
@@ -573,12 +573,73 @@ func normalizeMoonApiXSeedanceReferences(bodyMap, metadata map[string]interface{
 			"role":       reference.role,
 			"url":        reference.url,
 		}
-		if reference.alias != "" {
-			item["alias"] = reference.alias
-		}
 		result = append(result, item)
 	}
 	return result
+}
+
+func stripMoonApiXLocalReferenceMentions(prompt string) string {
+	prompt = strings.TrimSpace(prompt)
+	if prompt == "" {
+		return ""
+	}
+
+	var builder strings.Builder
+	for index := 0; index < len(prompt); {
+		if end, ok := moonApiXLocalReferenceMentionEnd(prompt, index); ok {
+			index = end
+			continue
+		}
+		builder.WriteByte(prompt[index])
+		index++
+	}
+
+	return strings.Join(strings.Fields(builder.String()), " ")
+}
+
+func moonApiXLocalReferenceMentionEnd(prompt string, start int) (int, bool) {
+	if start >= len(prompt) || prompt[start] != '@' {
+		return 0, false
+	}
+	rest := prompt[start+1:]
+	for _, prefix := range []string{"图片", "视频", "音频", "尾帧"} {
+		if !strings.HasPrefix(rest, prefix) {
+			continue
+		}
+		digitStart := start + 1 + len(prefix)
+		digitEnd := digitStart
+		for digitEnd < len(prompt) && prompt[digitEnd] >= '0' && prompt[digitEnd] <= '9' {
+			digitEnd++
+		}
+		if digitEnd == digitStart || prompt[digitStart:digitEnd] == "0" {
+			return 0, false
+		}
+		if digitEnd < len(prompt) && isASCIIMentionNameByte(prompt[digitEnd]) {
+			return 0, false
+		}
+		return trimMoonApiXLocalReferencePunctuation(prompt, digitEnd), true
+	}
+	return 0, false
+}
+
+func trimMoonApiXLocalReferencePunctuation(prompt string, index int) int {
+	for {
+		next := index
+		for _, suffix := range []string{",", "，", ".", "。", ";", "；", ":", "："} {
+			if strings.HasPrefix(prompt[index:], suffix) {
+				next = index + len(suffix)
+				break
+			}
+		}
+		if next == index {
+			return index
+		}
+		index = next
+	}
+}
+
+func isASCIIMentionNameByte(value byte) bool {
+	return value == '_' || (value >= '0' && value <= '9') || (value >= 'A' && value <= 'Z') || (value >= 'a' && value <= 'z')
 }
 
 func moonApiXSeedanceImages(references []map[string]interface{}) []map[string]interface{} {

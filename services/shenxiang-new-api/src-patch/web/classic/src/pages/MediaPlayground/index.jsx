@@ -350,6 +350,7 @@ const VIDEO_REFERENCE_ACCEPT = [
   ...VIDEO_VIDEO_TYPES,
   ...VIDEO_AUDIO_TYPES,
 ].join(',');
+const SEEDANCE_2_0_PRICE_PER_SECOND = 0.4;
 const SEEDANCE_DJ_FAST_PRICE_PER_SECOND = 0.162;
 const SEEDANCE_LD17_PRICE_PER_CALL = 6.48;
 const SEEDANCE_CL_MINI_INPUT_WITH_VIDEO_PRICE_PER_1M = 12.852;
@@ -453,6 +454,21 @@ const VIDEO_MODELS = [
     defaultDuration: 15,
     defaultFps: 24,
     hint: '6.5 元/次，按次计费，不是按秒，建议生成 15 秒。',
+  },
+  {
+    value: 'seedance-2.0',
+    label: 'Seedance 2.0',
+    badge: 'Seedance',
+    vendor: '星人视频',
+    sizes: ['1280x720', '720x1280', '1024x1024'],
+    durations: [5, 10, 15],
+    defaultSize: '1280x720',
+    defaultDuration: 15,
+    defaultFps: 24,
+    referenceLimits: { image: 10, video: 1, audio: 0 },
+    billingLabel: '按秒计费',
+    priceLabel: `¥${SEEDANCE_2_0_PRICE_PER_SECOND.toFixed(1)}/秒`,
+    hint: '0.4 元/秒；支持文生视频、图生视频、首尾帧，15 秒约 6 元。',
   },
   {
     value: 'seedance-2.0-dj-fast',
