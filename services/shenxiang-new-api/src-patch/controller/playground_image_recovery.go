@@ -77,6 +77,10 @@ func PlaygroundRecoverImageTask(c *gin.Context) {
 		c.JSON(http.StatusConflict, gin.H{"success": false, "message": "task already in terminal state"})
 		return
 	}
+	if task.Status != model.TaskStatusSubmitted {
+		c.JSON(http.StatusConflict, gin.H{"success": false, "message": "task is already being processed"})
+		return
+	}
 
 	if resultURL := strings.TrimSpace(task.GetResultURL()); resultURL != "" {
 		updatePlaygroundImageRecoveryTaskReady(task, resultURL, nil)

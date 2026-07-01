@@ -84,8 +84,13 @@ func cachePlaygroundMedia(c *gin.Context, req playgroundMediaCacheRequest) (*pla
 			if len(via) >= 5 {
 				return errors.New("too many media redirects")
 			}
-			_, err := validatePlaygroundMediaURL(req.URL.String())
-			return err
+			if req.URL.Scheme != "https" && req.URL.Scheme != "http" {
+				return errors.New("invalid redirect url scheme")
+			}
+			if isPrivateHost(req.URL.Hostname()) {
+				return errors.New("private redirect target")
+			}
+			return nil
 		},
 	}
 	httpReq, err := http.NewRequestWithContext(c.Request.Context(), http.MethodGet, remoteURL.String(), nil)
@@ -139,16 +144,16 @@ func cachePlaygroundDataMedia(c *gin.Context, req playgroundMediaCacheRequest, r
 
 func writePlaygroundMedia(c *gin.Context, req playgroundMediaCacheRequest, reader io.Reader, ext string, maxBytes int64) (*playgroundMediaItem, error) {
 	root := playgroundMediaUserDir(c)
-	if err := os.MkdirAll(root, 0o755); err != nil {
+	if err := os.MkdirAll(root, 0o700); err != nil {
 		return nil, errors.New("failed to create media cache directory")
 	}
 
 	sum := sha256.Sum256([]byte(fmt.Sprintf("%d:%s:%s:%d", time.Now().UnixNano(), req.URL, c.GetString(common.RequestIdKey), c.GetInt("id"))))
-	id := fmt.Sprintf("%x", sum[:12])
-	name := fmt.Sprintf("%x%s", sum[:12], ext)
+	id := fmt.Sprintf("%x", sum[:16])
+	name := fmt.Sprintf("%x%s", sum[:16], ext)
 	fullPath := filepath.Join(root, name)
 
-	out, err := os.OpenFile(fullPath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0o644)
+	out, err := os.OpenFile(fullPath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0o600)
 	if err != nil {
 		return nil, errors.New("failed to create cached media file")
 	}
@@ -403,7 +408,7 @@ func writePlaygroundMediaMetadata(mediaPath string, item *playgroundMediaItem) e
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(mediaPath+".json", data, 0o644)
+	return os.WriteFile(mediaPath+".json", data, 0o600)
 }
 
 func removePlaygroundMediaWithMetadata(mediaPath string) {
@@ -527,6 +532,24 @@ func CleanupPlaygroundMediaCache(maxAge time.Duration) (int, error) {
 			}
 			for _, nested := range nestedEntries {
 				if nested.IsDir() {
+					// Two-level nesting: tasks/u-{id}/ — clean up orphan .body files.
+					nestedDirPath := filepath.Join(entryPath, nested.Name())
+					if innerEntries, err := os.ReadDir(nestedDirPath); err == nil {
+						for _, inner := range innerEntries {
+							if inner.IsDir() {
+								continue
+							}
+							innerPath := filepath.Join(nestedDirPath, inner.Name())
+							info, err := inner.Info()
+							if err != nil || !info.ModTime().Before(cutoff) {
+								continue
+							}
+							if err := os.Remove(innerPath); err == nil {
+								removed++
+							}
+						}
+					}
+					_ = os.Remove(nestedDirPath)
 					continue
 				}
 				nestedPath := filepath.Join(entryPath, nested.Name())

@@ -36,8 +36,13 @@ const (
 	playgroundImageTaskResultCaptureKey   = "playground_image_task_result_capture"
 )
 
+// playgroundImageWorkerSem caps the number of concurrent async image workers
+// to prevent goroutine exhaustion under high load.
+var playgroundImageWorkerSem = make(chan struct{}, 500)
+
 var (
 	playgroundCredentialPattern       = regexp.MustCompile(`(?i)(bearer\s+|sk-)[A-Za-z0-9._\-]{8,}`)
+	playgroundCredentialEncodedPattern = regexp.MustCompile(`(?i)(bearer%20|bearer\+|sk-)[A-Za-z0-9._\-%+]{8,}`)
 	playgroundSecretClausePattern     = regexp.MustCompile(`(?i)\s*[,，;；]?\s*(api[_\s-]?key|apikey|bearer|token|secret|password|sk-)\s*[:=]?\s*[^,，;；\)）]*`)
 	playgroundRequestIDPattern        = regexp.MustCompile(`(?i)\s*[\(（]?\s*(request[_\s-]?id|upstream[_\s-]?request[_\s-]?id)\s*[:=]\s*[^,，;；\)）\s]+[\)）]?`)
 	playgroundInternalPrefixPattern   = regexp.MustCompile(`(?i)^\s*(upstream|provider|供应商|渠道)\s*(error|response|request\s+failed|rejected|返回|拒绝)?\s*[:：=\-]?\s*`)
@@ -75,6 +80,7 @@ type playgroundImageTaskPayload struct {
 	TokenID        int                    `json:"token_id,omitempty"`
 	TokenName      string                 `json:"token_name,omitempty"`
 	UseAPIToken    bool                   `json:"use_api_token,omitempty"`
+	ClientIP       string                 `json:"client_ip,omitempty"`
 	Metadata       map[string]interface{} `json:"metadata,omitempty"`
 	CachedURL      string                 `json:"cached_url,omitempty"`
 	Item           *playgroundMediaItem   `json:"item,omitempty"`
@@ -132,6 +138,10 @@ func createImageTask(c *gin.Context, openAICompat bool) {
 	}
 	if strings.TrimSpace(imageReq.Prompt) == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "prompt is required"})
+		return
+	}
+	if len([]rune(strings.TrimSpace(imageReq.Prompt))) > 10000 {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "prompt is too long"})
 		return
 	}
 	if normalizedBody, ok := normalizePlaygroundImageTaskPayload(bodyBytes, &imageReq); ok {
@@ -193,6 +203,7 @@ func createImageTask(c *gin.Context, openAICompat bool) {
 		TokenID:       c.GetInt("token_id"),
 		TokenName:     truncatePlaygroundText(c.GetString("token_name"), 160),
 		UseAPIToken:   openAICompat,
+		ClientIP:      c.ClientIP(),
 		Metadata: map[string]interface{}{
 			"endpoint": path,
 			"async":    true,
@@ -332,6 +343,8 @@ func normalizePlaygroundImageTaskRequest(imageReq *dto.ImageRequest, payload map
 	return changed
 }
 
+const playgroundImageMaxCount = uint(10)
+
 func normalizePlaygroundImageTaskCount(imageReq *dto.ImageRequest, payload map[string]interface{}) bool {
 	raw, exists := payload["n"]
 	if !exists {
@@ -342,6 +355,9 @@ func normalizePlaygroundImageTaskCount(imageReq *dto.ImageRequest, payload map[s
 		delete(payload, "n")
 		imageReq.N = nil
 		return true
+	}
+	if n > playgroundImageMaxCount {
+		n = playgroundImageMaxCount
 	}
 	if imageReq.N == nil || *imageReq.N != n {
 		imageReq.N = &n
@@ -779,6 +795,16 @@ func recordPlaygroundImageTaskSubmittedLog(c *gin.Context, task *model.Task, pay
 }
 
 func runPlaygroundImageTask(taskID string, userID int, username string, role int, userGroup string, usingGroup string, tokenName string) {
+	select {
+	case playgroundImageWorkerSem <- struct{}{}:
+		defer func() { <-playgroundImageWorkerSem }()
+	default:
+		if task, exists, err := model.GetByTaskId(userID, taskID); err == nil && exists && task != nil {
+			markPlaygroundImageTaskFailure(task, "server busy, please retry later")
+		}
+		return
+	}
+
 	task, exists, err := model.GetByTaskId(userID, taskID)
 	if err != nil || !exists || task == nil {
 		common.SysLog(fmt.Sprintf("playground image task %s not found for user %d", taskID, userID))
@@ -815,6 +841,9 @@ func runPlaygroundImageTask(taskID string, userID int, username string, role int
 		return
 	}
 	request.RemoteAddr = "127.0.0.1:0"
+	if ip := strings.TrimSpace(payload.ClientIP); ip != "" {
+		request.RemoteAddr = ip + ":0"
+	}
 	if payload.ContentType != "" {
 		request.Header.Set("Content-Type", payload.ContentType)
 	}
@@ -932,6 +961,10 @@ func seedPlaygroundImageTaskContext(ginCtx *gin.Context, userID int, username st
 		token, err := model.GetTokenById(payload.TokenID)
 		if err != nil {
 			ginCtx.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": gin.H{"message": "image benefit token unavailable"}})
+			return
+		}
+		if !model.IsActiveImageBenefitToken(token, model.ImageBenefitModelName) {
+			ginCtx.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": gin.H{"message": "image benefit token expired or exhausted"}})
 			return
 		}
 		if err := middleware.SetupContextForToken(ginCtx, token); err != nil {

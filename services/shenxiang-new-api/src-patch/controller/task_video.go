@@ -138,6 +138,11 @@ func updateVideoSingleTask(ctx context.Context, adaptor channel.TaskAdaptor, cha
 	preStatus := task.Status
 
 	task.Status = model.TaskStatus(taskResult.Status)
+
+	// billingAction is executed only if we win the CAS update, preventing double-billing
+	// when concurrent pollers process the same task simultaneously.
+	var billingAction func()
+
 	switch taskResult.Status {
 	case model.TaskStatusSubmitted:
 		task.Progress = "10%"
@@ -190,10 +195,6 @@ func updateVideoSingleTask(ctx context.Context, adaptor channel.TaskAdaptor, cha
 								finalGroupRatio = groupRatio
 							}
 
-							// 计算实际应扣费额度: totalTokens * modelRatio * groupRatio
-							// totalTokens 已在上方限制 <= maxVideoTotalTokens；这里再次
-							// 防御非有限/负值结果，并钳制 actualQuota >= 0，杜绝因溢出走入
-							// 退款分支给用户凭空充值。
 							rawQuota := float64(taskResult.TotalTokens) * modelRatio * finalGroupRatio
 							if math.IsNaN(rawQuota) || math.IsInf(rawQuota, 0) || rawQuota < 0 {
 								rawQuota = 0
@@ -203,56 +204,60 @@ func updateVideoSingleTask(ctx context.Context, adaptor channel.TaskAdaptor, cha
 								actualQuota = 0
 							}
 
-							// 计算差额
 							preConsumedQuota := task.Quota
 							quotaDelta := actualQuota - preConsumedQuota
 
-							if quotaDelta > 0 {
-								// 需要补扣费
-								logger.LogInfo(ctx, fmt.Sprintf("视频任务 %s 预扣费后补扣费：%s（实际消耗：%s，预扣费：%s，tokens：%d）",
-									task.TaskID,
-									logger.LogQuota(quotaDelta),
-									logger.LogQuota(actualQuota),
-									logger.LogQuota(preConsumedQuota),
-									taskResult.TotalTokens,
-								))
-								if err := model.DecreaseUserQuota(task.UserId, quotaDelta, false); err != nil {
-									logger.LogError(ctx, fmt.Sprintf("补扣费失败: %s", err.Error()))
-								} else {
-									model.UpdateUsageStats(task.UserId, task.ChannelId, quotaDelta)
-									task.Quota = actualQuota // 更新任务记录的实际扣费额度
+							// Capture billing variables for the post-CAS closure.
+							capturedDelta := quotaDelta
+							capturedActual := actualQuota
+							capturedPre := preConsumedQuota
+							capturedModelRatio := modelRatio
+							capturedGroupRatio := finalGroupRatio
+							capturedTokens := taskResult.TotalTokens
 
-									// 记录消费日志
-									logContent := fmt.Sprintf("视频任务成功补扣费，模型倍率 %.2f，分组倍率 %.2f，tokens %d，预扣费 %s，实际扣费 %s，补扣费 %s",
-										modelRatio, finalGroupRatio, taskResult.TotalTokens,
-										logger.LogQuota(preConsumedQuota), logger.LogQuota(actualQuota), logger.LogQuota(quotaDelta))
-									model.RecordLog(task.UserId, model.LogTypeSystem, logContent)
+							task.Quota = actualQuota // reflect in task record before update
+
+							if quotaDelta > 0 {
+								billingAction = func() {
+									logger.LogInfo(ctx, fmt.Sprintf("视频任务 %s 预扣费后补扣费：%s（实际消耗：%s，预扣费：%s，tokens：%d）",
+										task.TaskID,
+										logger.LogQuota(capturedDelta),
+										logger.LogQuota(capturedActual),
+										logger.LogQuota(capturedPre),
+										capturedTokens,
+									))
+									if err := model.DecreaseUserQuota(task.UserId, capturedDelta, false); err != nil {
+										logger.LogError(ctx, fmt.Sprintf("补扣费失败: %s", err.Error()))
+									} else {
+										model.UpdateUsageStats(task.UserId, task.ChannelId, capturedDelta)
+										logContent := fmt.Sprintf("视频任务成功补扣费，模型倍率 %.2f，分组倍率 %.2f，tokens %d，预扣费 %s，实际扣费 %s，补扣费 %s",
+											capturedModelRatio, capturedGroupRatio, capturedTokens,
+											logger.LogQuota(capturedPre), logger.LogQuota(capturedActual), logger.LogQuota(capturedDelta))
+										model.RecordLog(task.UserId, model.LogTypeSystem, logContent)
+									}
 								}
 							} else if quotaDelta < 0 {
-								// 需要退还多扣的费用
-								refundQuota := -quotaDelta
-								logger.LogInfo(ctx, fmt.Sprintf("视频任务 %s 预扣费后返还：%s（实际消耗：%s，预扣费：%s，tokens：%d）",
-									task.TaskID,
-									logger.LogQuota(refundQuota),
-									logger.LogQuota(actualQuota),
-									logger.LogQuota(preConsumedQuota),
-									taskResult.TotalTokens,
-								))
-								if err := model.IncreaseUserQuota(task.UserId, refundQuota, false); err != nil {
-									logger.LogError(ctx, fmt.Sprintf("退还预扣费失败: %s", err.Error()))
-								} else {
-									task.Quota = actualQuota // 更新任务记录的实际扣费额度
-
-									// 记录退款日志
-									logContent := fmt.Sprintf("视频任务成功退还多扣费用，模型倍率 %.2f，分组倍率 %.2f，tokens %d，预扣费 %s，实际扣费 %s，退还 %s",
-										modelRatio, finalGroupRatio, taskResult.TotalTokens,
-										logger.LogQuota(preConsumedQuota), logger.LogQuota(actualQuota), logger.LogQuota(refundQuota))
-									model.RecordLog(task.UserId, model.LogTypeSystem, logContent)
+								refundQuota := -capturedDelta
+								billingAction = func() {
+									logger.LogInfo(ctx, fmt.Sprintf("视频任务 %s 预扣费后返还：%s（实际消耗：%s，预扣费：%s，tokens：%d）",
+										task.TaskID,
+										logger.LogQuota(refundQuota),
+										logger.LogQuota(capturedActual),
+										logger.LogQuota(capturedPre),
+										capturedTokens,
+									))
+									if err := model.IncreaseUserQuota(task.UserId, refundQuota, false); err != nil {
+										logger.LogError(ctx, fmt.Sprintf("退还预扣费失败: %s", err.Error()))
+									} else {
+										logContent := fmt.Sprintf("视频任务成功退还多扣费用，模型倍率 %.2f，分组倍率 %.2f，tokens %d，预扣费 %s，实际扣费 %s，退还 %s",
+											capturedModelRatio, capturedGroupRatio, capturedTokens,
+											logger.LogQuota(capturedPre), logger.LogQuota(capturedActual), logger.LogQuota(refundQuota))
+										model.RecordLog(task.UserId, model.LogTypeSystem, logContent)
+									}
 								}
 							} else {
-								// quotaDelta == 0, 预扣费刚好准确
 								logger.LogInfo(ctx, fmt.Sprintf("视频任务 %s 预扣费准确（%s，tokens：%d）",
-									task.TaskID, logger.LogQuota(actualQuota), taskResult.TotalTokens))
+									task.TaskID, logger.LogQuota(capturedActual), capturedTokens))
 							}
 						}
 					}
@@ -282,9 +287,13 @@ func updateVideoSingleTask(ctx context.Context, adaptor channel.TaskAdaptor, cha
 	if taskResult.Progress != "" {
 		task.Progress = taskResult.Progress
 	}
-	if err := task.Update(); err != nil {
+	won, err := task.UpdateWithStatus(preStatus)
+	if err != nil {
 		common.SysLog("UpdateVideoTask task error: " + err.Error())
 		shouldRefund = false
+	}
+	if won && billingAction != nil {
+		billingAction()
 	}
 
 	if shouldRefund {

@@ -75,6 +75,14 @@ func IsActiveImageBenefitToken(token *Token, modelName string) bool {
 	return token.UnlimitedQuota || token.RemainQuota > 0
 }
 
+func maskImageBenefitAPIKey(key string) string {
+	key = strings.TrimSpace(key)
+	if len(key) <= 8 {
+		return "sk-****"
+	}
+	return key[:7] + "****" + key[len(key)-4:]
+}
+
 func ImageBenefitBearerKey(key string) string {
 	key = strings.TrimSpace(key)
 	if key == "" {
@@ -232,7 +240,7 @@ func ImageBenefitTokenResultFromTokenWithUsedImages(token *Token, loggedUsedImag
 
 	return &ImageBenefitTokenResult{
 		TokenId:         token.Id,
-		Key:             ImageBenefitBearerKey(token.Key),
+		Key:             maskImageBenefitAPIKey(ImageBenefitBearerKey(token.Key)),
 		Name:            token.Name,
 		BaseURL:         ImageBenefitBaseURL,
 		Model:           ImageBenefitModelName,

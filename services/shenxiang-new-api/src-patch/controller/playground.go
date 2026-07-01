@@ -481,11 +481,6 @@ func PlaygroundCacheMedia(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": err.Error()})
 		return
 	}
-	if taskID, _ := req.Metadata["recovery_task_id"].(string); strings.TrimSpace(taskID) != "" {
-		if task, exists, err := model.GetByTaskId(c.GetInt("id"), strings.TrimSpace(taskID)); err == nil && exists && task.Platform == constant.TaskPlatformPlaygroundImage {
-			updatePlaygroundImageRecoveryTaskReady(task, item.URL, item)
-		}
-	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -526,6 +521,10 @@ func PlaygroundServeMedia(c *gin.Context) {
 		c.AbortWithStatus(http.StatusNotFound)
 		return
 	}
+	if userDir != playgroundMediaUserDirName(c.GetInt("id")) {
+		c.AbortWithStatus(http.StatusForbidden)
+		return
+	}
 	root := playgroundMediaCacheRoot()
 	fullPath := filepath.Join(root, userDir, name)
 	cleanRoot := filepath.Clean(root) + string(os.PathSeparator)
@@ -539,12 +538,26 @@ func PlaygroundServeMedia(c *gin.Context) {
 		c.AbortWithStatus(http.StatusNotFound)
 		return
 	}
-	if time.Since(info.ModTime()) > playgroundMediaRetentionDuration() {
+	// Prefer ExpiresAt from sidecar JSON over mtime-based fallback (L-5).
+	expiresAt := info.ModTime().Add(playgroundMediaRetentionDuration())
+	if metaBytes, err := os.ReadFile(fullPath + ".json"); err == nil {
+		var meta playgroundMediaItem
+		if json.Unmarshal(metaBytes, &meta) == nil && meta.ExpiresAt != "" {
+			if t, err := time.Parse(time.RFC3339, meta.ExpiresAt); err == nil {
+				expiresAt = t
+			}
+		}
+	}
+	if time.Now().After(expiresAt) {
 		removePlaygroundMediaWithMetadata(fullPath)
 		c.AbortWithStatus(http.StatusGone)
 		return
 	}
-	c.Header("Cache-Control", fmt.Sprintf("private, max-age=%d", int(playgroundMediaRetentionDuration().Seconds())))
+	ttl := time.Until(expiresAt)
+	if ttl < 0 {
+		ttl = 0
+	}
+	c.Header("Cache-Control", fmt.Sprintf("private, max-age=%d", int(ttl.Seconds())))
 	c.File(fullPath)
 }
 
@@ -575,7 +588,7 @@ func isValidPlaygroundMediaFilename(value string) bool {
 		return false
 	}
 	stem := strings.TrimSuffix(value, ext)
-	if len(stem) != 24 {
+	if len(stem) != 32 {
 		return false
 	}
 	for _, ch := range stem {
