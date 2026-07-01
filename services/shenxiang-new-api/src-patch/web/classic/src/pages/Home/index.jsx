@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Spin } from '@douyinfe/semi-ui';
 import { API, showError } from '../../helpers';
 import { useIsMobile } from '../../hooks/common/useIsMobile';
@@ -33,7 +33,7 @@ const Home = () => {
   const [homePageContentLoaded, setHomePageContentLoaded] = useState(false);
   const [homePageContent, setHomePageContent] = useState('');
 
-  const displayHomePageContent = async () => {
+  const displayHomePageContent = useCallback(async () => {
     setHomePageContent(localStorage.getItem('home_page_content') || '');
     const res = await API.get('/api/home_page_content');
     const { success, message, data } = res.data;
@@ -59,11 +59,21 @@ const Home = () => {
       setHomePageContent('加载首页内容失败...');
     }
     setHomePageContentLoaded(true);
-  };
+  }, [actualTheme, i18n.language]);
 
   useEffect(() => {
     displayHomePageContent().then();
-  }, []);
+  }, [displayHomePageContent]);
+
+  useEffect(() => {
+    if (!homePageContent.startsWith('https://')) return;
+
+    const iframe = document.querySelector('iframe');
+    if (!iframe?.contentWindow) return;
+
+    iframe.contentWindow.postMessage({ themeMode: actualTheme }, '*');
+    iframe.contentWindow.postMessage({ lang: i18n.language }, '*');
+  }, [homePageContent, actualTheme, i18n.language]);
 
   useEffect(() => {
     document.body.classList.add('sx-home-active');

@@ -27,13 +27,11 @@ import {
   getPricingModelDescription,
   getPricingModelDisplayName,
   getModelPriceItems,
-  getVisibleModelGroup,
 } from '../../../../../helpers';
 import {
   renderLimitedItems,
   renderDescription,
 } from '../../../../common/ui/RenderUtils';
-import { useIsMobile } from '../../../../../hooks/common/useIsMobile';
 
 function renderQuotaType(type, t) {
   switch (type) {
@@ -53,20 +51,6 @@ function renderQuotaType(type, t) {
       return t('未知');
   }
 }
-
-// Render user-visible model group
-const renderModelGroup = (record, t) => {
-  const group = getVisibleModelGroup(record, t);
-  return (
-    <Tag
-      color={group.color || 'white'}
-      shape='circle'
-      prefixIcon={group.icon}
-    >
-      {group.label}
-    </Tag>
-  );
-};
 
 // Render tags list using RenderUtils
 const renderTags = (text) => {
@@ -115,8 +99,8 @@ export const getPricingTableColumns = ({
   tokenUnit,
   displayPrice,
   showRatio,
+  isMobile = false,
 }) => {
-  const isMobile = useIsMobile();
   const priceDataCache = new WeakMap();
 
   const getPriceData = (record) => {
@@ -182,15 +166,8 @@ export const getPricingTableColumns = ({
     render: renderTags,
   };
 
-  const groupColumn = {
-    title: t('模型分组'),
-    dataIndex: 'model_group',
-    render: (_text, record) => renderModelGroup(record, t),
-  };
-
   const baseColumns = [
     modelNameColumn,
-    groupColumn,
     descriptionColumn,
     tagsColumn,
     quotaColumn,

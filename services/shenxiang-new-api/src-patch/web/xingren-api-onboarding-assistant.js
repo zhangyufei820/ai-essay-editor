@@ -109,12 +109,6 @@
         "日志记录",
       ],
     },
-    codexCloud: {
-      title: "云 Codex",
-      path: CONFIG.codexCloudPath,
-      hint: "在浏览器里使用云端 Codex 工作区，处理代码任务、查看运行状态和排查环境问题。",
-      aliases: ["云codex", "云 codex", "云端codex", "云端 codex", "cloud codex", "codex 工作区", "codex workspace"],
-    },
   };
 
   var state = {
@@ -778,7 +772,7 @@
 
   function wantsCodexCloud(text) {
     var lower = String(text || "").toLowerCase();
-    return hasAnyText(lower, ["云codex", "云 codex", "云端codex", "云端 codex", "cloud codex", "codex 工作区", "codex workspace", "workspace"]);
+    return false;
   }
 
   function wantsCreateKey(text) {
@@ -1010,7 +1004,6 @@
     if (key === "token" && hasAnyText(lower, ["key", "令牌", "密钥", "sk-", "api key"])) score += 34;
     if (key === "wallet" && hasAnyText(lower, ["充值", "余额", "支付", "套餐"])) score += 34;
     if (key === "docs" && hasAnyText(lower, ["文档", "教程", "接入", "curl", "base url", "接口"])) score += 30;
-    if (key === "codexCloud" && hasAnyText(lower, ["codex", "云端", "工作区", "workspace"])) score += 32;
     return score;
   }
 
