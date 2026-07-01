@@ -1,7 +1,11 @@
 const MEDIA_MODEL_PATTERN =
   /(image|gpt-image|banana|midjourney|flux|seedance|sora|kling|veo|video|audio|tts|whisper|speech|voice|embedding|rerank|realtime)/i;
 
+const DEFAULT_TEXT_MODEL = 'gpt-5.3-codex-spark';
+const HIDDEN_TEXT_MODELS = new Set(['gpt-5.3-spark']);
+
 const FALLBACK_TEXT_MODELS = [
+  DEFAULT_TEXT_MODEL,
   'gpt-5.5',
   'gpt-5.4',
   'gpt-5.4-mini',
@@ -14,6 +18,7 @@ const FALLBACK_TEXT_MODELS = [
 
 function isHiddenTextModel(modelName) {
   const name = String(modelName || '').trim().toLowerCase();
+  if (HIDDEN_TEXT_MODELS.has(name)) return true;
   if (!name.startsWith('claude')) return false;
   const parts = name.split(/[-_\s]+/).filter(Boolean);
   if (parts.length < 2 || !parts[0].startsWith('claude')) return false;
@@ -42,7 +47,7 @@ export function toTextModelOptions(models = []) {
 
 export function getDefaultTextModel(models = []) {
   const options = toTextModelOptions(models);
-  return options[0]?.value || FALLBACK_TEXT_MODELS[0];
+  return options.find((option) => option.value === DEFAULT_TEXT_MODEL)?.value || options[0]?.value || DEFAULT_TEXT_MODEL;
 }
 
-export { FALLBACK_TEXT_MODELS };
+export { DEFAULT_TEXT_MODEL, FALLBACK_TEXT_MODELS };
