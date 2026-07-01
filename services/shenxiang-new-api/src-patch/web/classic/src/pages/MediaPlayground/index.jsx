@@ -592,6 +592,7 @@ const PROMPT_PRESETS = [
 const DEFAULT_PROMPT = PROMPT_PRESETS[0].value;
 const EMPTY_MODELS = [];
 const IMAGE_REQUEST_TIMEOUT_MS = 240000;
+const IMAGE_POLL_REQUEST_TIMEOUT_MS = 30000;
 const IMAGE_WAIT_MESSAGE =
   '图像任务已提交，后台会持久化结果，可用任务 ID 查询。';
 const IMAGE_LONG_WAIT_MS = 70 * 1000;
@@ -1452,6 +1453,14 @@ function videoPollErrorMessage(error) {
   const message = generationErrorMessage(error);
   if (message) return message;
   return status ? `HTTP ${status}` : '查询请求暂时失败';
+}
+
+function isTransientImagePollError(error) {
+  return isTransientVideoPollError(error);
+}
+
+function imagePollErrorMessage(error) {
+  return videoPollErrorMessage(error);
 }
 
 function generationErrorMessage(error) {
@@ -2921,10 +2930,12 @@ const MediaPlayground = () => {
       response = await API.post('/pg/images/tasks/edits', form, {
         skipErrorHandler: true,
         headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: IMAGE_REQUEST_TIMEOUT_MS,
       });
     } else {
       response = await API.post('/pg/images/tasks/generations', requestPayload, {
         skipErrorHandler: true,
+        timeout: IMAGE_REQUEST_TIMEOUT_MS,
       });
     }
     const payload = response.data;
@@ -2935,6 +2946,7 @@ const MediaPlayground = () => {
     setImageTaskLookup(taskId);
     setTaskMessage(`图像任务已提交：${taskId}，正在等待持久化结果...`);
     const result = await pollImageTask(taskId, submittedPrompt);
+    if (!result) return;
     setResults((prev) => [result, ...prev]);
     Toast.success('图像已生成，请立即下载保存。');
   }
@@ -2946,43 +2958,61 @@ const MediaPlayground = () => {
     let veryLongWaitNotified = false;
     while (Date.now() < deadline) {
       if (pollingCancelledRef.current) return null;
-      const res = await API.get(`/pg/images/tasks/${encodeURIComponent(taskId)}`, {
-        skipErrorHandler: true,
-        disableDuplicate: true,
-      });
-      if (res.data?.error?.message) throw new Error(res.data.error.message);
-      if (!res.data?.success || !res.data?.data) {
-        throw new Error(res.data?.message || '图像任务查询失败。');
-      }
-      const status = getImageTaskStatus(res.data);
-      const progress = getImageTaskProgress(res.data);
       const elapsedMs = Date.now() - startedAt;
-      if (!longWaitNotified && elapsedMs >= IMAGE_LONG_WAIT_MS) {
-        longWaitNotified = true;
-        Toast.info(IMAGE_LONG_WAIT_MESSAGE);
-      }
-      if (!veryLongWaitNotified && elapsedMs >= IMAGE_VERY_LONG_WAIT_MS) {
-        veryLongWaitNotified = true;
-        Toast.info(IMAGE_VERY_LONG_WAIT_MESSAGE);
-      }
-      let waitSuffix = '';
-      if (elapsedMs >= IMAGE_VERY_LONG_WAIT_MS) {
-        waitSuffix = '，已进入长尾等待，后台仍会继续保留结果';
-      } else if (elapsedMs >= IMAGE_LONG_WAIT_MS) {
-        waitSuffix = '，生成耗时较长，请继续等待或稍后用任务 ID 查询';
-      }
-      setTaskMessage(`图像任务 ${res.data.data.task_id}：${status}，进度 ${progress}%${waitSuffix}`);
-      if (status === 'completed') {
-        const result = imageTaskToResult(res.data.data, submittedPrompt);
-        if (result) return result;
-        throw new Error('图像任务完成但没有返回持久化图片。');
-      }
-      if (status === 'failed') {
-        throw new Error(
-          res.data.data.fail_reason ||
-            res.data.data.data?.error ||
-            '图像任务失败。',
-        );
+      try {
+        const res = await API.get(`/pg/images/tasks/${encodeURIComponent(taskId)}`, {
+          skipErrorHandler: true,
+          disableDuplicate: true,
+          timeout: IMAGE_POLL_REQUEST_TIMEOUT_MS,
+        });
+        if (res.data?.error?.message) throw new Error(res.data.error.message);
+        if (!res.data?.success || !res.data?.data) {
+          throw new Error(res.data?.message || '图像任务查询失败。');
+        }
+        const status = getImageTaskStatus(res.data);
+        const progress = getImageTaskProgress(res.data);
+        if (!longWaitNotified && elapsedMs >= IMAGE_LONG_WAIT_MS) {
+          longWaitNotified = true;
+          Toast.info(IMAGE_LONG_WAIT_MESSAGE);
+        }
+        if (!veryLongWaitNotified && elapsedMs >= IMAGE_VERY_LONG_WAIT_MS) {
+          veryLongWaitNotified = true;
+          Toast.info(IMAGE_VERY_LONG_WAIT_MESSAGE);
+        }
+        let waitSuffix = '';
+        if (elapsedMs >= IMAGE_VERY_LONG_WAIT_MS) {
+          waitSuffix = '，已进入长尾等待，后台仍会继续保留结果';
+        } else if (elapsedMs >= IMAGE_LONG_WAIT_MS) {
+          waitSuffix = '，生成耗时较长，请继续等待或稍后用任务 ID 查询';
+        }
+        setTaskMessage(`图像任务 ${res.data.data.task_id}：${status}，进度 ${progress}%${waitSuffix}`);
+        if (status === 'completed') {
+          const result = imageTaskToResult(res.data.data, submittedPrompt);
+          if (result) return result;
+          throw new Error('图像任务完成但没有返回持久化图片。');
+        }
+        if (status === 'failed') {
+          throw new Error(
+            res.data.data.fail_reason ||
+              res.data.data.data?.error ||
+              '图像任务失败。',
+          );
+        }
+      } catch (error) {
+        if (!isTransientImagePollError(error)) throw error;
+        let waitSuffix = '，页面会继续查询，不会中断后台生成任务';
+        if (!longWaitNotified && elapsedMs >= IMAGE_LONG_WAIT_MS) {
+          longWaitNotified = true;
+          Toast.info(IMAGE_LONG_WAIT_MESSAGE);
+        }
+        if (elapsedMs >= IMAGE_VERY_LONG_WAIT_MS) {
+          waitSuffix = '，后台仍会保留结果，可稍后用任务 ID 查询';
+          if (!veryLongWaitNotified) {
+            veryLongWaitNotified = true;
+            Toast.info(IMAGE_VERY_LONG_WAIT_MESSAGE);
+          }
+        }
+        setTaskMessage(`图像任务 ${taskId} 查询暂时失败：${imagePollErrorMessage(error)}${waitSuffix}`);
       }
       await new Promise((resolve) => setTimeout(resolve, 5000));
     }
