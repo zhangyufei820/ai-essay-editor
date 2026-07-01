@@ -2504,6 +2504,10 @@ const MediaPlayground = () => {
       if (isGeminiImageModel(imageModel)) {
         if (imageWorkflow === 'edit' && isGoogleImageEditModel(imageModel)) {
           if (effectiveAspectRatio) payload.aspect_ratio = effectiveAspectRatio;
+          if (resolution && resolution !== 'auto') {
+            payload.resolution = String(resolution).toUpperCase();
+            payload.image_size = String(resolution).toUpperCase();
+          }
           payload.size = googleImageEditSizeFor(effectiveAspectRatio, resolution);
           if (quality) payload.quality = quality;
           if (negativePrompt.trim())
