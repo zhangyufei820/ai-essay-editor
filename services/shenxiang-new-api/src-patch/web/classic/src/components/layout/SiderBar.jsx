@@ -39,7 +39,6 @@ const routerMap = {
   user: '/console/user',
   subscription: '/console/subscription',
   log: '/console/log',
-  midjourney: '/console/midjourney',
   setting: '/console/setting',
   about: '/about',
   detail: '/console',
@@ -68,7 +67,6 @@ const SiderBar = ({ onNavigate = () => {} }) => {
   const [openedKeys, setOpenedKeys] = useState([]);
   const location = useLocation();
   const dataExportEnabled = localStorage.getItem('enable_data_export');
-  const drawingEnabled = localStorage.getItem('enable_drawing');
   const taskEnabled = localStorage.getItem('enable_task');
   const adminVisible = isAdmin();
   const rootVisible = isRoot();
@@ -92,12 +90,6 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         to: '/log',
       },
       {
-        text: t('图像生成日志'),
-        itemKey: 'midjourney',
-        to: '/midjourney',
-        className: drawingEnabled === 'true' ? '' : 'tableHiddle',
-      },
-      {
         text: t('任务日志'),
         itemKey: 'task',
         to: '/task',
@@ -112,7 +104,7 @@ const SiderBar = ({ onNavigate = () => {} }) => {
     });
 
     return filteredItems;
-  }, [dataExportEnabled, drawingEnabled, taskEnabled, t, isModuleVisible]);
+  }, [dataExportEnabled, taskEnabled, t, isModuleVisible]);
 
   const financeItems = useMemo(() => {
     const items = [

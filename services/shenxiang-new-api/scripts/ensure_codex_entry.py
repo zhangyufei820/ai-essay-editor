@@ -85,7 +85,8 @@ def normalize_critical_labels(source_root: Path) -> dict[str, bool]:
         normalized = (
             text.replace("云端 Codex", "云 Codex")
             .replace("云端Codex", "云 Codex")
-            .replace("绘图日志", "图像生成日志")
+            .replace("绘图日志", "任务日志")
+            .replace("图像生成日志", "任务日志")
         )
         changed = normalized != text
         if changed:
@@ -425,16 +426,16 @@ def check_source(source_root: Path) -> dict[str, bool]:
         "has_sidebar_chat_entry": "itemKey: 'chat'" in sidebar and "/console/chat" in sidebar,
         "has_sidebar_codex_entry": "itemKey: 'codex'" in sidebar and ("/console/codex" in sidebar or "/codex/" in sidebar),
         "hides_sidebar_playground_entry": "itemKey: 'playground'" not in sidebar and "操练场" not in sidebar,
-        "has_image_generation_log_label": "图像生成日志" in sidebar,
+        "hides_image_generation_log_label": "图像生成日志" not in sidebar,
         "has_no_legacy_drawing_log_label": "绘图日志" not in sidebar,
-        "has_midjourney_log_entry": "itemKey: 'midjourney'" in sidebar and "/midjourney" in sidebar,
+        "hides_midjourney_log_entry": "itemKey: 'midjourney'" not in sidebar and "/midjourney" not in sidebar,
         "has_task_log_entry": "任务日志" in sidebar and "itemKey: 'task'" in sidebar and "/task" in sidebar,
         "has_admin_models_entry": "模型管理" in sidebar and "itemKey: 'models'" in sidebar and "/console/models" in sidebar,
         "has_sidebar_default_media": has_pattern(sidebar_config, r"chat:\s*\{[^}]*media:\s*true"),
         "has_sidebar_default_chat": has_pattern(sidebar_config, r"chat:\s*\{[^}]*chat:\s*true"),
         "has_sidebar_default_codex": has_pattern(sidebar_config, r"chat:\s*\{[^}]*codex:\s*true"),
         "hides_sidebar_default_playground": not has_pattern(sidebar_config, r"chat:\s*\{[^}]*playground:\s*true"),
-        "has_sidebar_default_midjourney": has_pattern(sidebar_config, r"console:\s*\{[^}]*midjourney:\s*true"),
+        "hides_sidebar_default_midjourney": not has_pattern(sidebar_config, r"console:\s*\{[^}]*midjourney:\s*true"),
         "has_sidebar_default_task": has_pattern(sidebar_config, r"console:\s*\{[^}]*task:\s*true"),
         "has_sidebar_default_admin_models": has_pattern(sidebar_config, r"admin:\s*\{[^}]*models:\s*true"),
         "has_top_nav_media_entry": "媒体工坊" in navigation and "itemKey: 'media'" in navigation and "/console/media-playground" in navigation,
@@ -521,7 +522,7 @@ def sync_db_options(app_root: Path) -> dict[str, Any]:
     }
     sidebar_default: dict[str, Any] = {
         "chat": {"chat": True, "codex": True, "enabled": True, "media": True, "playground": False},
-        "console": {"detail": True, "enabled": True, "log": True, "midjourney": True, "task": True, "token": True},
+        "console": {"detail": True, "enabled": True, "log": True, "task": True, "token": True},
         "personal": {"enabled": True, "personal": True, "topup": True},
         "admin": {"channel": True, "deployment": True, "enabled": True, "models": True, "redemption": True, "setting": True, "subscription": True, "user": True},
     }
@@ -577,7 +578,8 @@ def sync_db_options(app_root: Path) -> dict[str, Any]:
 
     ensure_sidebar_section("chat", ("enabled", "media", "codex", "chat"))
     disable_sidebar_section_keys("chat", ("playground",))
-    ensure_sidebar_section("console", ("enabled", "log", "midjourney", "task", "token", "detail"))
+    ensure_sidebar_section("console", ("enabled", "log", "task", "token", "detail"))
+    disable_sidebar_section_keys("console", ("midjourney",))
     ensure_sidebar_section("admin", ("enabled", "models"))
 
     statements = ["START TRANSACTION;"]
@@ -662,8 +664,8 @@ def check_url(base_url: str) -> dict[str, bool]:
         "has_top_nav_codex_item": has_top_nav_codex_item,
         "has_top_nav_media_item": has_top_nav_media_item,
         "has_media_label": "媒体工坊" in text,
-        "has_image_generation_log_label": "图像生成日志" in text,
-        "has_midjourney_log_route": "/console/midjourney" in text,
+        "hides_image_generation_log_label": "图像生成日志" not in text,
+        "has_midjourney_log_route_redirect": "/console/midjourney" in text and "/console/task" in text,
         "has_task_log_label": "任务日志" in text,
         "has_task_log_route": "/console/task" in text,
         "has_admin_models_route": "/console/models" in text,

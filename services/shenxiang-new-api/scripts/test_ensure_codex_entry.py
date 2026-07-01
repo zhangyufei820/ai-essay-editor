@@ -40,7 +40,6 @@ const routerMap = {
   chat: '/console/chat',
   media: '/console/media-playground',
   codex: '/console/codex',
-  midjourney: '/console/midjourney',
   task: '/console/task',
   models: '/console/models',
 };
@@ -48,7 +47,6 @@ const items = [
   { text: t('聊天'), itemKey: 'chat', to: '/console/chat' },
   { text: t('媒体工坊'), itemKey: 'media', to: '/media-playground' },
   { text: t('云 Codex'), itemKey: 'codex', to: '/codex/' },
-  { text: t('图像生成日志'), itemKey: 'midjourney', to: '/midjourney' },
   { text: t('任务日志'), itemKey: 'task', to: '/task' },
   { text: t('模型管理'), itemKey: 'models', to: '/console/models' },
 ];
@@ -59,7 +57,7 @@ const items = [
             """
 export const DEFAULT_ADMIN_CONFIG = {
   chat: { enabled: true, media: true, chat: true, codex: true, playground: false },
-  console: { enabled: true, log: true, midjourney: true, task: true, token: true },
+  console: { enabled: true, log: true, task: true, token: true },
   admin: { enabled: true, models: true },
 };
 """,
@@ -116,18 +114,17 @@ func GetUserModels() {
     def test_normalize_critical_labels_restores_image_generation_log_label(self) -> None:
         sidebar = self.source_root / "web/classic/src/components/layout/SiderBar.jsx"
         sidebar.write_text(
-            sidebar.read_text(encoding="utf-8").replace("图像生成日志", "绘图日志"),
+            sidebar.read_text(encoding="utf-8").replace("任务日志", "图像生成日志"),
             encoding="utf-8",
         )
 
         before = self.module.check_source(self.source_root)
-        self.assertFalse(before["has_image_generation_log_label"])
-        self.assertFalse(before["has_no_legacy_drawing_log_label"])
+        self.assertFalse(before["hides_image_generation_log_label"])
 
         self.module.normalize_critical_labels(self.source_root)
 
         after = self.module.check_source(self.source_root)
-        self.assertTrue(after["has_image_generation_log_label"])
+        self.assertTrue(after["hides_image_generation_log_label"])
         self.assertTrue(after["has_no_legacy_drawing_log_label"])
 
     def test_check_source_fails_when_seedance_backend_guard_is_missing(self) -> None:
