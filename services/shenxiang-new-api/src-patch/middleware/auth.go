@@ -120,7 +120,16 @@ func authHelper(c *gin.Context, minRole int) {
 		c.Abort()
 		return
 	}
-	if status.(int) == common.UserStatusDisabled {
+	statusVal, ok := status.(int)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"message": common.TranslateMessage(c, i18n.MsgAuthNotLoggedIn),
+		})
+		c.Abort()
+		return
+	}
+	if statusVal == common.UserStatusDisabled {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
 			"message": common.TranslateMessage(c, i18n.MsgAuthUserBanned),
@@ -243,6 +252,19 @@ func TokenAuthReadOnly() func(c *gin.Context) {
 					"message": common.TranslateMessage(c, i18n.MsgDatabaseError),
 				})
 			}
+			c.Abort()
+			return
+		}
+
+		// Allow expired/exhausted tokens (intentional design), but block
+		// tokens explicitly disabled by an admin.
+		if token.Status != common.TokenStatusEnabled &&
+			token.Status != common.TokenStatusExhausted &&
+			token.Status != common.TokenStatusExpired {
+			c.JSON(http.StatusForbidden, gin.H{
+				"success": false,
+				"message": common.TranslateMessage(c, i18n.MsgTokenInvalid),
+			})
 			c.Abort()
 			return
 		}

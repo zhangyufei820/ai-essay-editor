@@ -244,8 +244,13 @@ func SearchUsers(keyword string, group string, role *int, status *int, startIdx 
 	query := tx.Unscoped().Model(&User{})
 
 	// 构建搜索条件
+	sanitized, sanitizeErr := sanitizeLikePattern(keyword)
+	if sanitizeErr != nil {
+		sanitized = ""
+	}
 	likeCondition := "username LIKE ? OR email LIKE ? OR display_name LIKE ?"
-	likeArgs := []interface{}{"%" + keyword + "%", "%" + keyword + "%", "%" + keyword + "%"}
+	likeArg := "%" + sanitized + "%"
+	likeArgs := []interface{}{likeArg, likeArg, likeArg}
 
 	// 尝试将关键字转换为整数ID
 	keywordInt, err := strconv.Atoi(keyword)
@@ -789,7 +794,9 @@ func ValidateAccessToken(token string) (*User, error) {
 	if token == "" {
 		return nil, nil
 	}
-	token = strings.Replace(token, "Bearer ", "", 1)
+	if strings.HasPrefix(strings.ToLower(token), "bearer ") {
+		token = strings.TrimSpace(token[7:])
+	}
 	user := &User{}
 	err := DB.Where("access_token = ?", token).First(user).Error
 	if err != nil {

@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"os"
 	"regexp"
@@ -43,10 +42,43 @@ var (
 	xingrenAssistantHits    = map[string][]time.Time{}
 	xingrenAssistantSecrets = []*regexp.Regexp{
 		regexp.MustCompile(`(?i)sk-[A-Za-z0-9._\-]{8,}`),
-		regexp.MustCompile(`(?i)(Bearer\s+)[A-Za-z0-9._\-]{8,}`),
-		regexp.MustCompile(`(?i)(Authorization\s*:\s*)[A-Za-z0-9._\- ]{8,}`),
+		regexp.MustCompile(`(?i)(Bearer[\s\t]+)[A-Za-z0-9._\-]{8,}`),
+		regexp.MustCompile(`(?i)(Authorization[\s\t]*:[\s\t]*)[A-Za-z0-9._\- ]{8,}`),
+	}
+	// xingrenAssistantHTTPClient has an explicit timeout so context cancellation
+	// is honoured even when the underlying transport stalls.
+	xingrenAssistantHTTPClient = &http.Client{
+		Timeout: 120 * time.Second,
 	}
 )
+
+func init() {
+	// Periodic cleanup so xingrenAssistantHits cannot grow without bound even
+	// when the on-request cleanup threshold (2000 keys) is not reached.
+	go func() {
+		ticker := time.NewTicker(10 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			window := 5 * time.Minute
+			cutoff := time.Now().Add(-window)
+			xingrenAssistantRateMu.Lock()
+			for key, hits := range xingrenAssistantHits {
+				kept := hits[:0]
+				for _, h := range hits {
+					if h.After(cutoff) {
+						kept = append(kept, h)
+					}
+				}
+				if len(kept) == 0 {
+					delete(xingrenAssistantHits, key)
+				} else {
+					xingrenAssistantHits[key] = kept
+				}
+			}
+			xingrenAssistantRateMu.Unlock()
+		}
+	}()
+}
 
 type xingrenAssistantMessage struct {
 	Role    string `json:"role"`
@@ -402,7 +434,7 @@ func xingrenAssistantPostChatCompletion(ctx context.Context, payload map[string]
 	httpReq.Header.Set("Authorization", "Bearer "+xingrenAssistantBearerKey(token.Key))
 	httpReq.Header.Set("User-Agent", "xingren-api-onboarding-assistant/1.0")
 
-	resp, err := http.DefaultClient.Do(httpReq)
+	resp, err := xingrenAssistantHTTPClient.Do(httpReq)
 	if err != nil {
 		return "", err
 	}
@@ -523,13 +555,22 @@ func xingrenOnboardingAssistantCreateCodexToken(c *gin.Context) {
 		return
 	}
 
+	baseURL := strings.TrimSpace(os.Getenv("XINGREN_API_BASE_URL"))
+	if baseURL == "" {
+		baseURL = "https://api.aiphui.top/v1"
+	}
+	model.RecordOperationAuditLog(userID, "用户创建 Codex API Key", "", "create_codex_token", map[string]interface{}{
+		"token_name": tokenName,
+		"token_id":   newToken.Id,
+		"model":      selectedModel,
+	}, nil, nil)
 	c.JSON(http.StatusOK, xingrenCodexTokenResponse{
 		Success:   true,
 		Key:       xingrenAssistantBearerKey(key),
 		TokenID:   newToken.Id,
 		TokenName: tokenName,
 		Model:     selectedModel,
-		BaseURL:   "https://api.aiphui.top/v1",
+		BaseURL:   baseURL,
 	})
 }
 
@@ -582,6 +623,10 @@ func xingrenAssistantToken(ctx context.Context) (*model.Token, error) {
 	if err := newToken.Insert(); err != nil {
 		return nil, err
 	}
+	model.RecordOperationAuditLog(root.Id, "自动创建接入老师令牌", "", "create_assistant_token", map[string]interface{}{
+		"token_name": xingrenAssistantTokenName,
+		"token_id":   newToken.Id,
+	}, nil, nil)
 	return newToken, nil
 }
 
@@ -913,7 +958,11 @@ func xingrenAssistantModel() string {
 
 func xingrenAssistantChatURL() string {
 	if configured := strings.TrimSpace(os.Getenv("XINGREN_API_ASSISTANT_CHAT_URL")); configured != "" {
-		return configured
+		if err := common.ValidatePublicHTTPURL(configured); err != nil {
+			common.SysLog("XINGREN_API_ASSISTANT_CHAT_URL invalid, falling back to localhost: " + err.Error())
+		} else {
+			return configured
+		}
 	}
 	port := strings.TrimSpace(os.Getenv("PORT"))
 	if port == "" {
@@ -931,16 +980,8 @@ func xingrenAssistantBearerKey(key string) string {
 }
 
 func xingrenAssistantClientKey(c *gin.Context) string {
-	for _, header := range []string{"X-Real-IP", "X-Forwarded-For"} {
-		value := strings.TrimSpace(c.GetHeader(header))
-		if value == "" {
-			continue
-		}
-		first := strings.TrimSpace(strings.Split(value, ",")[0])
-		if net.ParseIP(first) != nil {
-			return first
-		}
-	}
+	// Use Gin's ClientIP which respects the configured trusted-proxy list,
+	// preventing clients from spoofing their IP via X-Forwarded-For.
 	if ip := c.ClientIP(); ip != "" {
 		return ip
 	}

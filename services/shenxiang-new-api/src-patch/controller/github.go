@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"strconv"
 	"time"
 
@@ -169,11 +170,11 @@ func GitHubOAuth(c *gin.Context) {
 			return
 		}
 		existing = true
-	} else if model.IsGitHubIdAlreadyTaken(githubUser.Login) {
-		// SECURITY (已知接受风险, 2026-06-14): 此 login-based 迁移分支存在账户接管向量。
-		// 若旧 GitHub 用户名被释放并被攻击者重新注册(numeric id 不同), 攻击者 OAuth
-		// 登录会命中此分支, UpdateGitHubId 把受害者旧行改写到攻击者的 numeric id, 致接管。
-		// 经决策暂保留以维持老用户迁移连续性; 后续应改为"已验证主邮箱匹配后才迁移"或手动重绑。
+	} else if os.Getenv("GITHUB_LEGACY_MIGRATION_ENABLED") == "true" && model.IsGitHubIdAlreadyTaken(githubUser.Login) {
+		// SECURITY: 此 login-based 迁移分支存在账户接管向量。
+		// 默认禁用，仅当 GITHUB_LEGACY_MIGRATION_ENABLED=true 时启用。
+		// 旧 GitHub 用户名被他人注册后攻击者可接管受害者账号。
+		// 后续应改为"已验证主邮箱匹配后才迁移"或手动重绑。
 		legacyUser := model.User{GitHubId: githubUser.Login}
 		if err := legacyUser.FillUserByGitHubId(); err != nil {
 			c.JSON(http.StatusOK, gin.H{

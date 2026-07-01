@@ -1,6 +1,7 @@
 package model
 
 import (
+	"os"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
@@ -36,16 +37,18 @@ func ResolveAuditClientIP(c *gin.Context) string {
 	if c == nil {
 		return ""
 	}
-	for _, header := range []string{"CF-Connecting-IP", "X-Real-IP", "X-Forwarded-For"} {
-		value := strings.TrimSpace(c.GetHeader(header))
-		if value == "" {
-			continue
-		}
-		if comma := strings.Index(value, ","); comma >= 0 {
-			value = strings.TrimSpace(value[:comma])
-		}
-		if value != "" {
-			return value
+	// Allow operators to declare which header carries the real client IP,
+	// matching the actual proxy topology (e.g. CF-Connecting-IP for Cloudflare,
+	// X-Real-IP for nginx, empty to use RemoteAddr directly).
+	trustedHeader := strings.TrimSpace(os.Getenv("TRUSTED_IP_HEADER"))
+	if trustedHeader != "" {
+		if value := strings.TrimSpace(c.GetHeader(trustedHeader)); value != "" {
+			if comma := strings.Index(value, ","); comma >= 0 {
+				value = strings.TrimSpace(value[:comma])
+			}
+			if value != "" {
+				return value
+			}
 		}
 	}
 	return c.ClientIP()
