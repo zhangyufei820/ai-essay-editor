@@ -46,7 +46,7 @@ const routerMap = {
   task: '/console/task',
   models: '/console/models',
   deployment: '/console/deployment',
-  chat: '/console/chat',
+  chat: '/',
   media: '/console/media-playground',
   codex: '/console/codex',
   personal: '/console/personal',

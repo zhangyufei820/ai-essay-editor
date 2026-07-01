@@ -134,6 +134,18 @@ const renderType = (type, t) => {
           {t('视频Remix')}
         </Tag>
       );
+    case 'imageGenerate':
+      return (
+        <Tag color='violet' shape='circle' prefixIcon={<Sparkles size={14} />}>
+          {t('图像生成')}
+        </Tag>
+      );
+    case 'imageEdit':
+      return (
+        <Tag color='indigo' shape='circle' prefixIcon={<Sparkles size={14} />}>
+          {t('图像编辑')}
+        </Tag>
+      );
     default:
       return (
         <Tag color='white' shape='circle' prefixIcon={<HelpCircle size={14} />}>
@@ -159,6 +171,12 @@ const renderPlatform = (platform, t) => {
       return (
         <Tag color='green' shape='circle'>
           Suno
+        </Tag>
+      );
+    case 'playground_image':
+      return (
+        <Tag color='violet' shape='circle'>
+          {t('媒体工坊')}
         </Tag>
       );
     default:
