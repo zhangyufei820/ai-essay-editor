@@ -23,31 +23,22 @@ CODEX_ALLOWED_MODELS = ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini"]
 CODEX_DEFAULT_MODEL = "gpt-5.5"
 CODEX_CHAT_FALLBACK_MODEL = "gpt-5.4-mini"
 PUBLIC_SEEDANCE_VIDEO_MODELS = [
+    "seedance-2.0-cl-mini",
+]
+DEPRECATED_PUBLIC_SEEDANCE_MODELS = [
+    "seedance-2.0",
     "seedance-2.0-kz-fast",
     "seedance-2.0-cl-fast",
     "seedance-2.0-cl",
-    "seedance-2.0-cl-mini",
 ]
 PUBLIC_SEEDANCE_MODEL_DESCRIPTIONS = {
-    "seedance-2.0-kz-fast": "星人 Seedance 2.0 KZ Fast 视频生成｜支持 4-15 秒｜支持文生视频和图片参考，生成后请及时下载",
-    "seedance-2.0-cl-fast": "星人 Seedance 2.0 CL Fast 视频生成｜支持 4-15 秒｜支持图片参考，生成后请及时下载",
-    "seedance-2.0-cl": "星人 Seedance 2.0 CL 视频生成｜支持 4-15 秒｜适合质量优先的参考图视频任务，生成后请及时下载",
     "seedance-2.0-cl-mini": "星人 Seedance 2.0 CL Mini 视频生成｜支持 4-15 秒｜支持图片参考，也可传 1 个视频参考，生成后请及时下载",
 }
 PUBLIC_SEEDANCE_CHANNEL_ID = "5"
 PUBLIC_SEEDANCE_CHANNEL_MODELS = [
-    "seedance-2.0",
     *PUBLIC_SEEDANCE_VIDEO_MODELS,
 ]
-PUBLIC_SEEDANCE_MODEL_MAPPING = (
-    '{"seedance-2.0":"seedance-2-cheap",'
-    '"seedance-2.0-ld-17":"seedance-2.0-ld-17",'
-    '"seedance-2.0-dj-fast":"seedance-2.0-dj-fast",'
-    '"seedance-2.0-kz-fast":"seedance-2.0-kz-fast",'
-    '"seedance-2.0-cl-fast":"seedance-2.0-cl-fast",'
-    '"seedance-2.0-cl":"seedance-2.0-cl",'
-    '"seedance-2.0-cl-mini":"seedance-2.0-cl-mini"}'
-)
+PUBLIC_SEEDANCE_MODEL_MAPPING = '{"seedance-2.0-cl-mini":"seedance-2.0-cl-mini"}'
 PUBLIC_SEEDANCE_TOKEN_PRICES_CNY_PER_1M = {
     # Customer price = official RMB token price * 1.08.
     # New API ratio formula: input CNY per 1M = model_ratio * 2 * USDExchangeRate.
@@ -230,6 +221,17 @@ def active_groups() -> list[str]:
 
 def ensure_public_seedance_models() -> None:
     statements = ["START TRANSACTION;", "SET @now := UNIX_TIMESTAMP();"]
+    if DEPRECATED_PUBLIC_SEEDANCE_MODELS:
+        deprecated_models = ", ".join(sql_quote(model) for model in DEPRECATED_PUBLIC_SEEDANCE_MODELS)
+        statements.append(
+            "UPDATE models SET status = 0, deleted_at = COALESCE(deleted_at, DATE_ADD(FROM_UNIXTIME(@now), INTERVAL id SECOND)) "
+            f"WHERE model_name IN ({deprecated_models});"
+        )
+        statements.append(
+            "UPDATE abilities SET enabled = 0 WHERE channel_id = "
+            + PUBLIC_SEEDANCE_CHANNEL_ID
+            + f" AND model IN ({deprecated_models});"
+        )
     for model in PUBLIC_SEEDANCE_VIDEO_MODELS:
         description = PUBLIC_SEEDANCE_MODEL_DESCRIPTIONS[model]
         statements.append(

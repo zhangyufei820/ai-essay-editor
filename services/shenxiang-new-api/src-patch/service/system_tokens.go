@@ -26,14 +26,11 @@ type SystemTokenEnsureResult struct {
 }
 
 var MoonApiXSeedanceVideoModels = []string{
-	"seedance-2.0-kz-fast",
-	"seedance-2.0-cl-fast",
-	"seedance-2.0-cl",
 	"seedance-2.0-cl-mini",
 }
 
 func videoTokenModels() []string {
-	models := []string{"seedance-2.0", "seedance-2.0-dj-fast", "seedance-2.0-ld-17", "grok-video-super-720p"}
+	models := []string{"seedance-2.0-dj-fast", "seedance-2.0-ld-17", "grok-video-super-720p"}
 	models = append(models, MoonApiXSeedanceVideoModels...)
 	return models
 }
