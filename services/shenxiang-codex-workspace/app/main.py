@@ -258,9 +258,20 @@ SKILL_FRONT_MATTER_RE = re.compile(r"^---\s*\n(?P<body>[\s\S]{0,4000}?)\n---\s*"
 SAFE_SKILL_NAME_RE = re.compile(r"^[a-zA-Z0-9_-]{2,80}$")
 
 web_dir = Path(__file__).resolve().parents[1] / "web"
+
+
+class NoCacheStaticFiles(StaticFiles):
+    def file_response(self, *args: Any, **kwargs: Any) -> FileResponse:
+        response = super().file_response(*args, **kwargs)
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+        return response
+
+
 if web_dir.is_dir():
-    app.mount("/assets", StaticFiles(directory=str(web_dir / "assets")), name="assets")
-    app.mount("/codex/assets", StaticFiles(directory=str(web_dir / "assets")), name="codex-assets")
+    app.mount("/assets", NoCacheStaticFiles(directory=str(web_dir / "assets")), name="assets")
+    app.mount("/codex/assets", NoCacheStaticFiles(directory=str(web_dir / "assets")), name="codex-assets")
 
 
 def redis_client() -> Redis:

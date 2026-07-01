@@ -34,13 +34,6 @@ const (
 	seedancePrivateVideoAllowedUserID = 1
 )
 
-var publicSeedanceVideoModels = []string{
-	"seedance-2.0-kz-fast",
-	"seedance-2.0-cl-fast",
-	"seedance-2.0-cl",
-	"seedance-2.0-cl-mini",
-}
-
 func Login(c *gin.Context) {
 	if !common.PasswordLoginEnabled {
 		common.ApiErrorI18n(c, i18n.MsgUserPasswordLoginDisabled)
@@ -581,11 +574,6 @@ func GetUserModels(c *gin.Context) {
 		}
 	}
 	models = normalizeUserVisibleModels(id, models)
-	for _, modelName := range publicSeedanceVideoModels {
-		if !common.StringsContains(models, modelName) {
-			models = append(models, modelName)
-		}
-	}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",

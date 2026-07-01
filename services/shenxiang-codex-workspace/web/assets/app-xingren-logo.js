@@ -60,9 +60,9 @@ const fallbackModelModes = {
   },
   video: {
     label: "视频生成",
-    description: "Seedance / MoonApiX / Grok 文生视频、图生视频。DJ Fast 只接收图片参考，CL Mini 可接 1 个视频参考。",
+    description: "Seedance / Grok 文生视频、图生视频。DJ Fast 只接收图片参考，CL Mini 可接 1 个视频参考。",
     models: ["seedance-2.0", "seedance-2.0-dj-fast", "seedance-2.0-ld-17", "seedance-2.0-kz-fast", "seedance-2.0-cl-fast", "seedance-2.0-cl", "seedance-2.0-cl-mini", "grok-video-super-720p"],
-    billing: "按秒或按次计费。MoonApiX Seedance 支持 4-15 秒；DJ Fast ¥0.162/秒，支持 5/10/15 秒；LD-17 ¥6.48/次，支持 5-15 秒、9图3视频3音频。",
+    billing: "按秒或按次计费。Seedance 扩展模型支持 4-15 秒；DJ Fast ¥0.162/秒，支持 5/10/15 秒；LD-17 ¥6.48/次，支持 5-15 秒、9图3视频3音频。",
   },
 };
 const imageUrlPattern = /^https?:\/\/\S+\.(png|jpe?g|webp|gif)(\?\S*)?$/i;

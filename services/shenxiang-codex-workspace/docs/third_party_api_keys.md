@@ -351,7 +351,7 @@ API Key: 星人视频生成令牌
 Model: seedance-2.0 / seedance-2.0-kz-fast / seedance-2.0-cl-fast / seedance-2.0-cl / seedance-2.0-cl-mini / grok-video-super-720p
 ```
 
-不同视频模型的请求参数可能不同。MoonApiX Seedance 模型走 `/v1/videos` 异步任务接口；参考素材必须显式传公网 URL 或 `Asset://...`，不会因为上传过素材就自动关联。新手建议优先在网站的媒体工坊里使用，不需要自己写接口。
+不同视频模型的请求参数可能不同。Seedance 扩展模型走 `/v1/videos` 异步任务接口；参考素材必须显式传公网 URL 或 `Asset://...`，不会因为上传过素材就自动关联。新手建议优先在网站的媒体工坊里使用，不需要自己写接口。
 
 生成视频后请及时下载，平台缓存文件只保留一段时间。
 

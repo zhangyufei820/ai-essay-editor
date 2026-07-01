@@ -321,6 +321,7 @@ func ContainsProviderDisclosure(s string) bool {
 		"drag tokens",
 		"relaydance",
 		"relay dance",
+		"moonapix",
 		"上游",
 		"供应商",
 		"渠道",

@@ -507,12 +507,12 @@ def validate_moonapix_seedance_reference_inputs(model: str, request: WorkspaceRu
             unsupported_video.append(file.path)
     if unsupported_local:
         raise MediaGenerationError(
-            "MoonApiX 视频参考素材需要公网 URL 或 Asset:// 引用；云端 Codex 暂不能把本地上传文件直接作为 MoonApiX 素材。"
+            "视频参考素材需要公网 URL 或 Asset:// 引用；云端 Codex 暂不能把本地上传文件直接作为参考素材。"
         )
     if unsupported_audio:
-        raise MediaGenerationError("MoonApiX 视频模型暂不接收音频参考，请移除音频素材。")
+        raise MediaGenerationError("该视频模型暂不接收音频参考，请移除音频素材。")
     if unsupported_video:
-        raise MediaGenerationError("当前 MoonApiX 模型只支持图片参考，请移除视频素材或切换到 CL Mini。")
+        raise MediaGenerationError("当前视频模型只支持图片参考，请移除视频素材或切换到 CL Mini。")
 
 
 def public_media_reference_url(file: Any) -> str:

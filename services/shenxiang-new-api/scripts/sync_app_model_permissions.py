@@ -20,26 +20,55 @@ TOKEN_PROFILES = {
 CODEX_ALLOWED_MODELS = ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini"]
 CODEX_DEFAULT_MODEL = "gpt-5.5"
 CODEX_CHAT_FALLBACK_MODEL = "gpt-5.4-mini"
+PUBLIC_SEEDANCE_VIDEO_MODELS = [
+    "seedance-2.0-kz-fast",
+    "seedance-2.0-cl-fast",
+    "seedance-2.0-cl",
+    "seedance-2.0-cl-mini",
+]
+PUBLIC_SEEDANCE_MODEL_DESCRIPTIONS = {
+    "seedance-2.0-kz-fast": "星人 Seedance 2.0 KZ Fast 视频生成｜支持 4-15 秒｜支持文生视频和图片参考，生成后请及时下载",
+    "seedance-2.0-cl-fast": "星人 Seedance 2.0 CL Fast 视频生成｜支持 4-15 秒｜支持图片参考，生成后请及时下载",
+    "seedance-2.0-cl": "星人 Seedance 2.0 CL 视频生成｜支持 4-15 秒｜适合质量优先的参考图视频任务，生成后请及时下载",
+    "seedance-2.0-cl-mini": "星人 Seedance 2.0 CL Mini 视频生成｜支持 4-15 秒｜支持图片参考，也可传 1 个视频参考，生成后请及时下载",
+}
+PUBLIC_SEEDANCE_CHANNEL_ID = "5"
+PUBLIC_SEEDANCE_CHANNEL_MODELS = [
+    "seedance-2.0",
+    *PUBLIC_SEEDANCE_VIDEO_MODELS,
+]
+PUBLIC_SEEDANCE_MODEL_MAPPING = (
+    '{"seedance-2.0":"seedance-2-cheap",'
+    '"seedance-2.0-ld-17":"seedance-2.0-ld-17",'
+    '"seedance-2.0-dj-fast":"seedance-2.0-dj-fast",'
+    '"seedance-2.0-kz-fast":"seedance-2.0-kz-fast",'
+    '"seedance-2.0-cl-fast":"seedance-2.0-cl-fast",'
+    '"seedance-2.0-cl":"seedance-2.0-cl",'
+    '"seedance-2.0-cl-mini":"seedance-2.0-cl-mini"}'
+)
 
 
 def mysql(query: str) -> list[list[str]]:
     password = os.environ["MYSQL_ROOT_PASSWORD"]
     database = os.environ["MYSQL_DATABASE"]
+    env = os.environ.copy()
+    env["MYSQL_PWD"] = password
     cmd = [
         "docker",
         "exec",
+        "-e",
+        "MYSQL_PWD",
         "shenxiang-new-api-mysql",
         "mysql",
         "--default-character-set=utf8mb4",
         "-uroot",
-        f"-p{password}",
         "-N",
         "-B",
         database,
         "-e",
         query,
     ]
-    output = subprocess.check_output(cmd, stderr=subprocess.DEVNULL).decode("utf-8", errors="replace")
+    output = subprocess.check_output(cmd, env=env, stderr=subprocess.DEVNULL).decode("utf-8", errors="replace")
     rows: list[list[str]] = []
     for line in output.splitlines():
         rows.append(line.split("\t"))
@@ -49,18 +78,21 @@ def mysql(query: str) -> list[list[str]]:
 def mysql_exec(query: str) -> None:
     password = os.environ["MYSQL_ROOT_PASSWORD"]
     database = os.environ["MYSQL_DATABASE"]
+    env = os.environ.copy()
+    env["MYSQL_PWD"] = password
     cmd = [
         "docker",
         "exec",
         "-i",
+        "-e",
+        "MYSQL_PWD",
         "shenxiang-new-api-mysql",
         "mysql",
         "--default-character-set=utf8mb4",
         "-uroot",
-        f"-p{password}",
         database,
     ]
-    subprocess.run(cmd, input=query.encode("utf-8"), check=True, stderr=subprocess.DEVNULL)
+    subprocess.run(cmd, input=query.encode("utf-8"), env=env, check=True, stderr=subprocess.DEVNULL)
 
 
 def sql_quote(value: str) -> str:
@@ -77,23 +109,31 @@ def model_lists() -> dict[str, list[str]]:
         """
     )
     profiles = {"codex": [], "claude": [], "image": [], "video": []}
+
+    def append_model(profile: str, model: str) -> None:
+        if model not in profiles[profile]:
+            profiles[profile].append(model)
+
     for _id, model, raw_tags in rows:
         tags = {item.strip().lower() for item in raw_tags.split(",") if item.strip()}
         if "internal-hidden" in tags:
             continue
         if "video" in tags:
-            profiles["video"].append(model)
+            append_model("video", model)
             continue
         if "image" in tags:
-            profiles["image"].append(model)
+            append_model("image", model)
             continue
         if "claude" in tags or model.startswith("claude-"):
-            profiles["claude"].append(model)
+            append_model("claude", model)
             continue
         if "text" in tags and ("openai" in tags or "codex" in tags or model.startswith("gpt-") or model == "codex-auto-review"):
-            profiles["codex"].append(model)
+            append_model("codex", model)
     available_codex_models = set(profiles["codex"])
     profiles["codex"] = [model for model in CODEX_ALLOWED_MODELS if model in available_codex_models]
+    for model in PUBLIC_SEEDANCE_VIDEO_MODELS:
+        if model not in profiles["video"]:
+            profiles["video"].append(model)
     return profiles
 
 
@@ -106,6 +146,67 @@ def active_groups() -> list[str]:
         if row and row[0]:
             groups.add(row[0])
     return sorted(groups)
+
+
+def ensure_public_seedance_models() -> None:
+    statements = ["START TRANSACTION;", "SET @now := UNIX_TIMESTAMP();"]
+    for model in PUBLIC_SEEDANCE_VIDEO_MODELS:
+        description = PUBLIC_SEEDANCE_MODEL_DESCRIPTIONS[model]
+        statements.append(
+            "SET @seedance_model := "
+            + sql_quote(model)
+            + " COLLATE utf8mb4_unicode_ci;"
+            "SET @keep_model_id := ("
+            "SELECT MIN(id) FROM models WHERE model_name = @seedance_model AND deleted_at IS NULL"
+            ");"
+            "SET @keep_model_id := IFNULL(@keep_model_id, ("
+            "SELECT MIN(id) FROM models WHERE model_name = @seedance_model"
+            "));"
+            "INSERT INTO models "
+            "(model_name, description, icon, tags, vendor_id, endpoints, status, sync_official, created_time, updated_time, name_rule) "
+            "SELECT "
+            + ", ".join(
+                [
+                    "@seedance_model",
+                    sql_quote(description),
+                    sql_quote("Doubao.Color"),
+                    sql_quote("video,seedance"),
+                    "4",
+                    sql_quote('{"openai-video":"/v1/videos"}'),
+                    "1",
+                    "0",
+                    "@now",
+                    "@now",
+                    "0",
+                ]
+            )
+            + " WHERE @keep_model_id IS NULL;"
+            "SET @keep_model_id := IFNULL(@keep_model_id, LAST_INSERT_ID());"
+            "UPDATE models SET "
+            "description = "
+            + sql_quote(description)
+            + ", icon = "
+            + sql_quote("Doubao.Color")
+            + ", tags = "
+            + sql_quote("video,seedance")
+            + ", vendor_id = 4, endpoints = "
+            + sql_quote('{"openai-video":"/v1/videos"}')
+            + ", status = 1, sync_official = 0, updated_time = @now, deleted_at = NULL, name_rule = 0 "
+            "WHERE id = @keep_model_id;"
+            "UPDATE models SET status = 0, deleted_at = COALESCE(deleted_at, DATE_ADD(FROM_UNIXTIME(@now), INTERVAL id SECOND)) "
+            "WHERE model_name = @seedance_model AND id <> @keep_model_id;"
+        )
+    statements.append(
+        "UPDATE channels SET models = "
+        + sql_quote(",".join(PUBLIC_SEEDANCE_CHANNEL_MODELS))
+        + ", model_mapping = "
+        + sql_quote(PUBLIC_SEEDANCE_MODEL_MAPPING)
+        + " WHERE id = "
+        + PUBLIC_SEEDANCE_CHANNEL_ID
+        + ";"
+    )
+    statements.append("COMMIT;")
+    mysql_exec("\n".join(statements))
 
 
 def sync_tokens(profiles: dict[str, list[str]]) -> None:
@@ -223,6 +324,7 @@ def refresh_codex() -> None:
 
 
 def main() -> int:
+    ensure_public_seedance_models()
     profiles = model_lists()
     missing = [name for name, values in profiles.items() if not values]
     if missing:
