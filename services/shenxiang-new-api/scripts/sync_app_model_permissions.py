@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
+from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
 
 
@@ -46,6 +48,14 @@ PUBLIC_SEEDANCE_MODEL_MAPPING = (
     '"seedance-2.0-cl":"seedance-2.0-cl",'
     '"seedance-2.0-cl-mini":"seedance-2.0-cl-mini"}'
 )
+PUBLIC_SEEDANCE_TOKEN_PRICES_CNY_PER_1M = {
+    # Customer price = official RMB token price * 1.08.
+    # New API ratio formula: input CNY per 1M = model_ratio * 2 * USDExchangeRate.
+    "seedance-2.0-cl-mini": {
+        "input_with_video": Decimal("11.90") * Decimal("1.08"),
+        "output": Decimal("19.55") * Decimal("1.08"),
+    }
+}
 
 
 def mysql(query: str) -> list[list[str]]:
@@ -97,6 +107,76 @@ def mysql_exec(query: str) -> None:
 
 def sql_quote(value: str) -> str:
     return "'" + value.replace("\\", "\\\\").replace("'", "''") + "'"
+
+
+def option_value(key: str) -> str | None:
+    rows = mysql(f"SELECT `value` FROM options WHERE `key` = {sql_quote(key)} LIMIT 1")
+    if not rows:
+        return None
+    return rows[0][0]
+
+
+def parse_json_option(key: str) -> dict[str, float]:
+    raw = option_value(key)
+    if not raw:
+        return {}
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"invalid JSON in option {key}") from exc
+    if not isinstance(parsed, dict):
+        raise ValueError(f"option {key} must be a JSON object")
+    result: dict[str, float] = {}
+    for name, value in parsed.items():
+        if isinstance(name, str) and isinstance(value, (int, float)):
+            result[name] = float(value)
+    return result
+
+
+def upsert_json_option(key: str, values: dict[str, float]) -> None:
+    payload = json.dumps(values, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    mysql_exec(
+        "INSERT INTO options (`key`, `value`) VALUES ("
+        + sql_quote(key)
+        + ", "
+        + sql_quote(payload)
+        + ") ON DUPLICATE KEY UPDATE `value` = VALUES(`value`);"
+    )
+
+
+def decimal_to_float(value: Decimal, places: str = "0.000000000001") -> float:
+    return float(value.quantize(Decimal(places), rounding=ROUND_HALF_UP))
+
+
+def usd_exchange_rate() -> Decimal:
+    raw = option_value("USDExchangeRate") or "7.3"
+    try:
+        rate = Decimal(raw)
+    except Exception as exc:
+        raise ValueError("USDExchangeRate must be a decimal number") from exc
+    if rate <= 0:
+        raise ValueError("USDExchangeRate must be greater than 0")
+    return rate
+
+
+def sync_public_seedance_pricing() -> None:
+    model_ratios = parse_json_option("ModelRatio")
+    completion_ratios = parse_json_option("CompletionRatio")
+    model_prices = parse_json_option("ModelPrice")
+    exchange_rate = usd_exchange_rate()
+
+    for model, prices in PUBLIC_SEEDANCE_TOKEN_PRICES_CNY_PER_1M.items():
+        input_cny = prices["input_with_video"]
+        output_cny = prices["output"]
+        model_ratio = input_cny / (Decimal("2") * exchange_rate)
+        completion_ratio = output_cny / input_cny
+        model_ratios[model] = decimal_to_float(model_ratio)
+        completion_ratios[model] = decimal_to_float(completion_ratio)
+        model_prices.pop(model, None)
+
+    upsert_json_option("ModelRatio", model_ratios)
+    upsert_json_option("CompletionRatio", completion_ratios)
+    upsert_json_option("ModelPrice", model_prices)
 
 
 def model_lists() -> dict[str, list[str]]:
@@ -325,6 +405,7 @@ def refresh_codex() -> None:
 
 def main() -> int:
     ensure_public_seedance_models()
+    sync_public_seedance_pricing()
     profiles = model_lists()
     missing = [name for name, values in profiles.items() if not values]
     if missing:

@@ -352,6 +352,8 @@ const VIDEO_REFERENCE_ACCEPT = [
 ].join(',');
 const SEEDANCE_DJ_FAST_PRICE_PER_SECOND = 0.162;
 const SEEDANCE_LD17_PRICE_PER_CALL = 6.48;
+const SEEDANCE_CL_MINI_INPUT_WITH_VIDEO_PRICE_PER_1M = 12.852;
+const SEEDANCE_CL_MINI_OUTPUT_PRICE_PER_1M = 21.114;
 const SEEDANCE_EXTENDED_VIDEO_DURATIONS = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
 const PUBLIC_SEEDANCE_VIDEO_MODELS = [
   'seedance-2.0-kz-fast',
@@ -547,7 +549,9 @@ const VIDEO_MODELS = [
     defaultResolution: '720p',
     referenceLimits: { image: 10, video: 1, audio: 0 },
     extendedSeedance: true,
-    hint: '支持图片参考，也可传 1 个视频参考。',
+    billingLabel: '按 token 计费',
+    priceLabel: `输入含视频 ¥${SEEDANCE_CL_MINI_INPUT_WITH_VIDEO_PRICE_PER_1M.toFixed(3)}/1M｜输出 ¥${SEEDANCE_CL_MINI_OUTPUT_PRICE_PER_1M.toFixed(3)}/1M`,
+    hint: `支持图片参考，也可传 1 个视频参考；输入含视频 ¥${SEEDANCE_CL_MINI_INPUT_WITH_VIDEO_PRICE_PER_1M.toFixed(3)}/1M tokens，输出 ¥${SEEDANCE_CL_MINI_OUTPUT_PRICE_PER_1M.toFixed(3)}/1M tokens。`,
   },
   {
     value: 'seedance-2.0-ld-17',
