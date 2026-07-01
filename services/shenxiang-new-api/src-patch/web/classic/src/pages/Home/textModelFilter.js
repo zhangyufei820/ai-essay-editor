@@ -18,19 +18,13 @@ const FALLBACK_TEXT_MODELS = [
 
 function isHiddenTextModel(modelName) {
   const name = String(modelName || '').trim().toLowerCase();
-  if (HIDDEN_TEXT_MODELS.has(name)) return true;
-  if (!name.startsWith('claude')) return false;
-  const parts = name.split(/[-_\s]+/).filter(Boolean);
-  if (parts.length < 2 || !parts[0].startsWith('claude')) return false;
-  const last = parts[parts.length - 1];
-  return last === 'fast' || last === 'full';
+  return HIDDEN_TEXT_MODELS.has(name);
 }
 
 export function isTextModelName(modelName) {
   const name = String(modelName || '').trim();
   if (!name) return false;
   if (isHiddenTextModel(name)) return false;
-  if (/\b(fast|full)\b$/i.test(name)) return false;
   if (MEDIA_MODEL_PATTERN.test(name)) return false;
   return true;
 }
