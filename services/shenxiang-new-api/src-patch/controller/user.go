@@ -34,6 +34,13 @@ const (
 	seedancePrivateVideoAllowedUserID = 1
 )
 
+var publicSeedanceVideoModels = []string{
+	"seedance-2.0-kz-fast",
+	"seedance-2.0-cl-fast",
+	"seedance-2.0-cl",
+	"seedance-2.0-cl-mini",
+}
+
 func Login(c *gin.Context) {
 	if !common.PasswordLoginEnabled {
 		common.ApiErrorI18n(c, i18n.MsgUserPasswordLoginDisabled)
@@ -209,6 +216,15 @@ func Register(c *gin.Context) {
 		common.ApiErrorI18n(c, i18n.MsgUserRegisterFailed)
 		return
 	}
+	// 新用户注册赠送5元人民币
+	if bonusQuota := int(5 * common.QuotaPerUnit); bonusQuota > 0 {
+		if err := model.IncreaseUserQuota(insertedUser.Id, bonusQuota, true); err != nil {
+			common.SysLog(fmt.Sprintf("failed to grant registration bonus to user %d: %v", insertedUser.Id, err))
+		} else {
+			model.RecordLog(insertedUser.Id, model.LogTypeSystem, fmt.Sprintf("新用户注册赠送 %s", logger.LogQuota(bonusQuota)))
+		}
+	}
+
 	// 生成默认令牌
 	if constant.GenerateDefaultToken {
 		key, err := common.GenerateKey()
@@ -565,6 +581,11 @@ func GetUserModels(c *gin.Context) {
 		}
 	}
 	models = normalizeUserVisibleModels(id, models)
+	for _, modelName := range publicSeedanceVideoModels {
+		if !common.StringsContains(models, modelName) {
+			models = append(models, modelName)
+		}
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
