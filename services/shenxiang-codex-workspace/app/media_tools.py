@@ -90,10 +90,9 @@ class MediaResult:
     duration_ms: int = 0
 
     def markdown(self) -> str:
+        label = "图像" if self.media_type == "image" else "视频"
         lines = [
-            f"### {self.model} 生成完成",
-            "",
-            "生成后请立即下载，媒体文件只保留一小时。",
+            f"### {label}生成完成",
             "",
         ]
         if self.media_type == "image":
@@ -102,8 +101,6 @@ class MediaResult:
         else:
             for index, url in enumerate(self.local_urls or self.urls, start=1):
                 lines.append(f"[生成视频 {index}]({url})")
-        if not self.urls and self.raw_text:
-            lines.extend(["", "```text", self.raw_text[:4000], "```"])
         return "\n".join(lines).strip()
 
 
@@ -207,6 +204,8 @@ async def generate_image(
     except ValueError as exc:
         raise MediaGenerationError("图像服务没有返回有效结果。") from exc
     urls = extract_media_urls(body, "image")
+    if not urls:
+        raise MediaGenerationError("图像服务没有返回可展示结果，请重试或更换图像模型。")
     return MediaResult(media_type="image", model=model, prompt=request.user_query, urls=urls, raw_text=json.dumps(body, ensure_ascii=False)[:4000])
 
 
@@ -253,6 +252,8 @@ async def generate_video(
     except ValueError:
         text = response.text[:4000]
         urls = VIDEO_URL_RE.findall(text)
+    if not urls:
+        raise MediaGenerationError("视频服务没有返回可展示结果，请重试或更换视频模型。")
     return MediaResult(media_type="video", model=model, prompt=request.user_query, urls=dedupe(urls), raw_text=text)
 
 
@@ -305,6 +306,8 @@ async def generate_moonapix_seedance_video(
             body = await poll_official_seedance_video(client, settings, user, task_id)
             urls = extract_media_urls(body, "video")
         text = json.dumps(body, ensure_ascii=False)[:4000]
+    if not urls:
+        raise MediaGenerationError("视频服务没有返回可展示结果，请重试或更换视频模型。")
     return MediaResult(media_type="video", model=model, prompt=request.user_query, urls=dedupe(urls), raw_text=text, task_id=task_id)
 
 
@@ -344,6 +347,8 @@ async def generate_official_seedance_video(
             body = await poll_official_seedance_video(client, settings, user, task_id)
             urls = extract_media_urls(body, "video")
         text = json.dumps(body, ensure_ascii=False)[:4000]
+    if not urls:
+        raise MediaGenerationError("视频服务没有返回可展示结果，请重试或更换视频模型。")
     return MediaResult(media_type="video", model=model, prompt=request.user_query, urls=dedupe(urls), raw_text=text, task_id=task_id)
 
 

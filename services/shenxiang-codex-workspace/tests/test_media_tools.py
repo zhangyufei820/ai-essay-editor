@@ -3,7 +3,7 @@ import asyncio
 import pytest
 
 from app.config import Settings
-from app.media_tools import MediaGenerationError, detect_media_kind, generate_image, generate_video
+from app.media_tools import MediaGenerationError, MediaResult, detect_media_kind, generate_image, generate_video
 from app.models import WorkspaceFile, WorkspaceRunRequest
 from app.security import UserContext
 
@@ -210,6 +210,63 @@ def test_geek2api_image2_generation_uses_requested_model_and_size(monkeypatch):
     assert payload["size"] == "1024x1024"
     assert payload["quality"] == "low"
     assert result.urls == ["https://cdn.test/geek2api-image.png"]
+
+
+def test_media_result_markdown_is_preview_first_and_hides_internal_model_name():
+    result = MediaResult(
+        media_type="image",
+        model="geek2api-image-2",
+        prompt="生成图片",
+        urls=["https://cdn.test/image.png"],
+        raw_text='{"error":"should not be shown"}',
+    )
+
+    markdown = result.markdown()
+
+    assert "图像生成完成" in markdown
+    assert "![生成图片 1](https://cdn.test/image.png)" in markdown
+    assert "geek2api" not in markdown.lower()
+    assert "下载" not in markdown
+    assert "raw_text" not in markdown
+
+
+def test_image_generation_without_renderable_url_fails(monkeypatch):
+    class EmptyImageResponse:
+        status_code = 200
+        text = '{"data":[{"revised_prompt":"ok"}]}'
+
+        def json(self):
+            return {"data": [{"revised_prompt": "ok"}]}
+
+    class EmptyImageAsyncClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def post(self, url, **kwargs):
+            return EmptyImageResponse()
+
+    monkeypatch.setattr("app.media_tools.httpx.AsyncClient", EmptyImageAsyncClient)
+    request = WorkspaceRunRequest(
+        user_query="生成图片：一个白底红色立方体。",
+        model_role="image_generation",
+        model_config={"image_generation": "geek2api-image-2"},
+    )
+
+    with pytest.raises(MediaGenerationError, match="可展示结果"):
+        asyncio.run(
+            generate_image(
+                Settings(new_api_base_url="https://api.example.test/v1"),
+                request,
+                UserContext(api_key="sk-test", user_id="1", key_hint="sk-****"),
+                "geek2api-image-2",
+            )
+        )
 
 
 def test_seedance_dj_fast_uses_videos_endpoint_with_image_references(monkeypatch):

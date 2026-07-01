@@ -39,7 +39,7 @@ class Settings:
     default_code_model: str = "gpt-5.4-mini"
     codex_chat_fallback_model: str = "gpt-5.4-mini"
     auto_token_name: str = "星人 Codex 文本令牌"
-    claude_token_name: str = "星人 Claude 高阶令牌"
+    claude_token_name: str = "星人高阶创作令牌"
     image_token_name: str = "星人图像生成令牌"
     video_token_name: str = "星人视频生成令牌"
     auto_token_cache_seconds: int = 3600
@@ -103,7 +103,7 @@ def get_settings() -> Settings:
         default_code_model=os.getenv("DEFAULT_CODE_MODEL", "gpt-5.4-mini"),
         codex_chat_fallback_model=os.getenv("CODEX_CHAT_FALLBACK_MODEL", "gpt-5.4-mini"),
         auto_token_name=os.getenv("AUTO_TOKEN_NAME", "星人 Codex 文本令牌"),
-        claude_token_name=os.getenv("CLAUDE_TOKEN_NAME", "星人 Claude 高阶令牌"),
+        claude_token_name=os.getenv("CLAUDE_TOKEN_NAME", "星人高阶创作令牌"),
         image_token_name=os.getenv("IMAGE_TOKEN_NAME", "星人图像生成令牌"),
         video_token_name=os.getenv("VIDEO_TOKEN_NAME", "星人视频生成令牌"),
         auto_token_cache_seconds=_env_int("AUTO_TOKEN_CACHE_SECONDS", 3600),

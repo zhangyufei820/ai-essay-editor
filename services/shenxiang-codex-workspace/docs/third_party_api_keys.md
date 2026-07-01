@@ -11,7 +11,7 @@
 
 简单说：日常使用打开 `Codex++`；要配置 API、修复、更新或排查问题时打开 `Codex++ 管理工具`。
 
-Codex++ 是第三方增强工具，不是星人 API 自研客户端。它的作用是让已经安装的 Codex App 更容易接入自定义 API，并补充删除会话、导出 Markdown、插件入口解锁、用户脚本、Provider 同步、Timeline 等增强能力。星人 API 提供的是可填写进去的 Base URL、API Key 和模型。
+Codex++ 是第三方增强工具，不是星人 API 自研客户端。它的作用是让已经安装的 Codex App 更容易接入自定义 API，并补充删除会话、导出 Markdown、插件入口解锁、用户脚本、配置同步、Timeline 等增强能力。星人 API 提供的是可填写进去的 Base URL、API Key 和模型。
 
 ## 一、先打开四类系统 Key
 
@@ -20,7 +20,7 @@ Codex++ 是第三方增强工具，不是星人 API 自研客户端。它的作�
 3. 点击左侧 `第三方接入`。
 4. 页面会自动同步四类 Key：
    - 星人 Codex 文本令牌
-   - 星人 Claude 高阶令牌
+   - 星人高阶创作令牌
    - 星人图像生成令牌
    - 星人视频生成令牌
 5. 需要接入哪个工具，就复制对应卡片里的 `Base URL` 和 `API Key`。
@@ -123,7 +123,7 @@ experimental_bearer_token = "sk-你的星人Codex文本令牌"
 - 管理增强功能开关。
 - 管理用户脚本。
 - 查看诊断和日志。
-- 处理 Provider 同步和本地会话状态。
+- 处理配置同步和本地会话状态。
 
 常用增强功能：
 
@@ -145,7 +145,7 @@ experimental_bearer_token = "sk-你的星人Codex文本令牌"
 | Codex 登录状态 | `~/.codex/auth.json` |
 | Codex 本地数据库 | `~/.codex/sqlite/*.db` 或旧版 `~/.codex/state_5.sqlite` |
 | Codex++ 状态与日志 | `~/.codex-session-delete/` |
-| Provider 同步备份 | `~/.codex/backups_state/provider-sync` |
+| 配置同步备份 | `~/.codex/backups_state/provider-sync` |
 
 ## 五、如果你使用的是 Codex CLI
 
@@ -274,13 +274,13 @@ gpt-5.4
 
 ## 八、Claude Code 接入
 
-Claude Code 使用 Claude 原生协议，所以要复制 `星人 Claude 高阶令牌`。
+Claude Code 使用原生协议，所以要复制 `星人高阶创作令牌`。
 
 macOS / Linux 终端输入：
 
 ```bash
 export ANTHROPIC_BASE_URL="https://api.aiphui.top/claude"
-export ANTHROPIC_AUTH_TOKEN="sk-你的星人Claude高阶令牌"
+export ANTHROPIC_AUTH_TOKEN="sk-你的星人高阶创作令牌"
 export ANTHROPIC_MODEL="cc-native-sonnet-fast"
 export ANTHROPIC_SMALL_FAST_MODEL="cc-native-haiku"
 export CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=1
@@ -290,7 +290,7 @@ Windows PowerShell 输入：
 
 ```powershell
 $env:ANTHROPIC_BASE_URL="https://api.aiphui.top/claude"
-$env:ANTHROPIC_AUTH_TOKEN="sk-你的星人Claude高阶令牌"
+$env:ANTHROPIC_AUTH_TOKEN="sk-你的星人高阶创作令牌"
 $env:ANTHROPIC_MODEL="cc-native-sonnet-fast"
 $env:ANTHROPIC_SMALL_FAST_MODEL="cc-native-haiku"
 $env:CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY="1"
@@ -337,9 +337,9 @@ POST https://api.aiphui.top/v1/images/generations
 POST https://api.aiphui.top/v1/images/edits
 ```
 
-`gpt-image-2-4K` 本身支持 `/v1/images/edits` 和 mask。`mask` 必须是 PNG、小于 4MB，并且宽高和原图完全一致；透明区域会被重画，不透明区域会尽量保持不变。`gpt-image-2-4K` 与 `grok-imagine-image` 是独立模型，云 Codex 不会在两者之间自动切换；如果要使用 Grok 图像，请在模型选择中明确选择。
+Image 2 支持 `/v1/images/edits` 和 mask。`mask` 必须是 PNG、小于 4MB，并且宽高和原图完全一致；透明区域会被重画，不透明区域会尽量保持不变。不同图像模型是独立模型，云 Codex 不会在它们之间自动切换；如果要使用其它图像模型，请在模型选择中明确选择。
 
-生成图片后请及时下载，平台缓存文件只保留一段时间。
+生成图片后会在云 Codex 页面内直接预览；打开按钮只是辅助操作。
 
 ## 十、视频生成接入
 
@@ -348,12 +348,12 @@ POST https://api.aiphui.top/v1/images/edits
 ```text
 Base URL: https://api.aiphui.top/v1
 API Key: 星人视频生成令牌
-Model: seedance-2.0 / seedance-2.0-kz-fast / seedance-2.0-cl-fast / seedance-2.0-cl / seedance-2.0-cl-mini / grok-video-super-720p
+Model: 在第三方接入页面复制当前账户开放的视频模型
 ```
 
-不同视频模型的请求参数可能不同。Seedance 扩展模型走 `/v1/videos` 异步任务接口；参考素材必须显式传公网 URL 或 `Asset://...`，不会因为上传过素材就自动关联。新手建议优先在网站的媒体工坊里使用，不需要自己写接口。
+不同视频模型的请求参数可能不同。扩展视频模型走 `/v1/videos` 异步任务接口；参考素材必须显式传公网 URL 或 `Asset://...`，不会因为上传过素材就自动关联。新手建议优先在网站的媒体工坊里使用，不需要自己写接口。
 
-生成视频后请及时下载，平台缓存文件只保留一段时间。
+生成视频后会在云 Codex 页面内直接预览；打开按钮只是辅助操作。
 
 ## 十一、Codex++ 常见排查
 
@@ -397,7 +397,7 @@ Invoke-RestMethod -Method Post -Uri http://127.0.0.1:57321/backend/status -Body 
 1. 重新复制对应 Key。
 2. 确认前面有 `sk-`。
 3. 不要复制空格。
-4. Claude Code 要用 `星人 Claude 高阶令牌`，不要用普通文本 Key。
+4. Claude Code 要用 `星人高阶创作令牌`，不要用普通文本 Key。
 
 ### 403 / insufficient quota
 
@@ -446,7 +446,7 @@ Invoke-RestMethod -Method Post -Uri http://127.0.0.1:57321/backend/status -Body 
 排查顺序：
 
 1. `ANTHROPIC_BASE_URL` 是否是 `https://api.aiphui.top/claude`。
-2. `ANTHROPIC_AUTH_TOKEN` 是否复制了 Claude 高阶令牌。
+2. `ANTHROPIC_AUTH_TOKEN` 是否复制了高阶创作令牌。
 3. `ANTHROPIC_MODEL` 是否是 `cc-native-sonnet-fast` 这类 Claude Code 模型。
 4. 终端重新打开后，之前的 export 会失效，需要重新设置，或写入 shell 配置文件。
 

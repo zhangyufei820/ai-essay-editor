@@ -34,6 +34,35 @@ from app.security import contains_forbidden_runtime_action, normalize_sandbox, p
 logger = logging.getLogger(__name__)
 
 RETRYABLE_UPSTREAM_STATUS_CODES = ("502", "503", "524")
+PREVIEWABLE_OUTPUT_SUFFIXES = {
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".webp",
+    ".gif",
+    ".mp4",
+    ".webm",
+    ".mov",
+    ".m4v",
+    ".pdf",
+    ".html",
+    ".htm",
+    ".docx",
+    ".xlsx",
+    ".pptx",
+    ".md",
+    ".txt",
+    ".csv",
+}
+INTERNAL_OUTPUT_NAMES = {
+    "AGENTS.md",
+    "UPLOAD_MANIFEST.md",
+    "prompt.txt",
+    "stdout.txt",
+    "stderr.txt",
+    "result.md",
+}
+INTERNAL_OUTPUT_PARTS = {".agents", ".codex", ".git", "input"}
 
 
 class CodexRunner:
@@ -138,6 +167,7 @@ class CodexRunner:
             return self._failed(task, started, "CODEX_EXEC_FAILED", message)
 
         result = redact(stdout.strip(), secret_values_for_redaction(self.settings, user_api_key))
+        result = self._append_preview_artifacts(task, workspace, result)
         (workspace / "result.md").write_text(result, encoding="utf-8")
         return {
             "status": "completed",
@@ -257,6 +287,7 @@ class CodexRunner:
 
         result = final_message.strip() or self._extract_final_text(stdout, user_api_key)
         result = redact(result, secret_values_for_redaction(self.settings, user_api_key))
+        result = self._append_preview_artifacts(task, workspace, result)
         (workspace / "result.md").write_text(result, encoding="utf-8")
         yield {
             "type": "complete",
@@ -473,6 +504,7 @@ class CodexRunner:
         result = final_text.strip() or "稳定链路已完成，但没有返回文本。"
         workspace = Path(task["workspace"])
         workspace.mkdir(parents=True, exist_ok=True)
+        result = self._append_preview_artifacts(task, workspace, result)
         (workspace / "result.md").write_text(
             redact(result, secret_values_for_redaction(self.settings, user_api_key)),
             encoding="utf-8",
@@ -1014,6 +1046,72 @@ Important distinction:
         if "markdown" in output_format:
             return "markdown"
         return "text"
+
+    def _append_preview_artifacts(self, task: dict[str, Any], workspace: Path, result: str) -> str:
+        artifacts = self._preview_artifacts(task, workspace)
+        if not artifacts:
+            return result
+        existing = result or ""
+        additions: list[str] = []
+        for artifact in artifacts:
+            url = str(artifact["url"])
+            if url in existing:
+                continue
+            label = str(artifact["label"])
+            kind = str(artifact["kind"])
+            if kind == "image":
+                additions.append(f"![{label}]({url})")
+            else:
+                additions.append(f"[{label}]({url})")
+        if not additions:
+            return result
+        prefix = existing.strip()
+        suffix = "\n".join(additions)
+        if not prefix:
+            return suffix
+        return f"{prefix}\n\n### 生成产物预览\n\n{suffix}"
+
+    def _preview_artifacts(self, task: dict[str, Any], workspace: Path) -> list[dict[str, str]]:
+        workspace_root = workspace.resolve()
+        task_id = str(task.get("task_id") or "")
+        if not task_id or not workspace_root.is_dir():
+            return []
+        artifacts: list[dict[str, str]] = []
+        for path in sorted(workspace_root.rglob("*")):
+            if not path.is_file():
+                continue
+            try:
+                relative = path.resolve().relative_to(workspace_root)
+            except ValueError:
+                continue
+            parts = set(relative.parts)
+            if path.name in INTERNAL_OUTPUT_NAMES or parts.intersection(INTERNAL_OUTPUT_PARTS):
+                continue
+            suffix = path.suffix.lower()
+            if suffix not in PREVIEWABLE_OUTPUT_SUFFIXES:
+                continue
+            relative_url = "/".join(relative.parts)
+            artifacts.append(
+                {
+                    "label": f"生成文件 {len(artifacts) + 1} · {path.name}",
+                    "url": f"{self.settings.public_base_url}/api/tasks/{task_id}/files/{relative_url}",
+                    "kind": self._artifact_kind(suffix),
+                }
+            )
+            if len(artifacts) >= 12:
+                break
+        return artifacts
+
+    def _artifact_kind(self, suffix: str) -> str:
+        if suffix in {".png", ".jpg", ".jpeg", ".webp", ".gif"}:
+            return "image"
+        if suffix in {".mp4", ".webm", ".mov", ".m4v"}:
+            return "video"
+        if suffix == ".pdf":
+            return "pdf"
+        if suffix in {".html", ".htm"}:
+            return "html"
+        return "document"
 
     def _to_text(self, value: str | bytes | None) -> str:
         if value is None:

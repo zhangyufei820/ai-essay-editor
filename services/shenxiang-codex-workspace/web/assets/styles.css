@@ -1255,12 +1255,38 @@ code {
 }
 
 .generated-media img,
-.generated-media video {
+.generated-media video,
+.generated-media iframe {
   display: block;
   max-width: 100%;
   max-height: min(68vh, 760px);
   margin: 0 auto;
   background: #030908;
+}
+
+.generated-media iframe {
+  width: 100%;
+  min-height: min(72vh, 760px);
+  border: 0;
+}
+
+.document-preview {
+  display: grid;
+  gap: 8px;
+  min-height: 180px;
+  place-content: center;
+  padding: 28px;
+  text-align: center;
+}
+
+.document-preview strong {
+  color: #edf7f2;
+  font-size: 16px;
+}
+
+.document-preview span {
+  color: var(--muted);
+  font-size: 13px;
 }
 
 .generated-media figcaption {

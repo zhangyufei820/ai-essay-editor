@@ -47,26 +47,27 @@ const fallbackModelModes = {
     billing: "按文本 Token 计费，适合日常任务和代码任务。",
   },
   claude: {
-    label: "Claude 高阶",
+    label: "高阶创作",
     description: "高质量长文、剧本、复杂推理和高级创作。",
     models: ["claude-fable-5", "claude-opus-4-6", "claude-opus-4-7", "claude-opus-4-8"],
-    billing: "按 Claude 高阶模型输入/输出 Token 计费，价格高于普通对话。",
+    billing: "按高阶模型输入/输出 Token 计费，价格高于普通对话。",
   },
   image: {
     label: "图像生成",
-    description: "Image 2、Geek2API Image 2、Grok、Banana 2、Gemini 图像是独立模型，请按任务明确选择。",
+    description: "Image 2、高速图像、通用图像和高质量图像是独立模型，请按任务明确选择。",
     models: ["gpt-image-2-4K", "geek2api-image-2", "grok-imagine-image", "banana-2", "gemini-3-pro-image-preview"],
-    billing: "按张计费。Geek2API Image 2：1K ¥0.03 / 2K ¥0.06 / 4K ¥0.10。",
+    billing: "按张计费。Image 2：1K ¥0.03 / 2K ¥0.06 / 4K ¥0.10。",
   },
   video: {
     label: "视频生成",
-    description: "Seedance / Grok 文生视频、图生视频。DJ Fast 只接收图片参考，CL Mini 可接 1 个视频参考。",
+    description: "文生视频、图生视频和多素材视频。参考图视频只接收图片参考，轻量图生视频可接 1 个视频参考。",
     models: ["seedance-2.0", "seedance-2.0-dj-fast", "seedance-2.0-ld-17", "seedance-2.0-kz-fast", "seedance-2.0-cl-fast", "seedance-2.0-cl", "seedance-2.0-cl-mini", "grok-video-super-720p"],
-    billing: "按秒或按次计费。Seedance 扩展模型支持 4-15 秒；DJ Fast ¥0.162/秒，支持 5/10/15 秒；LD-17 ¥6.48/次，支持 5-15 秒、9图3视频3音频。",
+    billing: "按秒或按次计费。扩展视频模型支持 4-15 秒；参考图视频 ¥0.162/秒，支持 5/10/15 秒；多素材视频 ¥6.48/次，支持 5-15 秒、9图3视频3音频。",
   },
 };
 const imageUrlPattern = /^https?:\/\/\S+\.(png|jpe?g|webp|gif)(\?\S*)?$/i;
 const videoUrlPattern = /^https?:\/\/\S+\.(mp4|webm|mov|m4v)(\?\S*)?$/i;
+const renderableLinkPattern = /^(https?:\/\/\S+|\/(?:codex\/)?api\/tasks\/\S+)$/i;
 const agentLogoImg = `<img src="/codex/assets/xingren-logo.png" alt="星人 Codex" />`;
 
 const $ = (id) => document.getElementById(id);
@@ -399,10 +400,18 @@ function defaultModelForMode(mode, choices) {
 
 function modelLabel(model) {
   if (model === "gpt-image-2-4K") return "星人 Image 2 4K · 生图 / 局部编辑";
-  if (model === "geek2api-image-2") return "Geek2API Image 2 · 1K ¥0.03 / 2K ¥0.06 / 4K ¥0.10";
-  if (model === "grok-imagine-image") return "Grok 图像 · 快速编辑 / mask";
-  if (model === "banana-2") return "Banana 2 · 图像生成 / 图像编辑";
-  if (model === "gemini-3-pro-image-preview") return "Gemini 3 Pro Image · 高质量图像";
+  if (model === "geek2api-image-2") return "Image 2 · 1K ¥0.03 / 2K ¥0.06 / 4K ¥0.10";
+  if (model === "grok-imagine-image") return "高速图像 · 快速编辑 / mask";
+  if (model === "banana-2") return "通用图像 · 图像生成 / 图像编辑";
+  if (model === "gemini-3-pro-image-preview") return "高质量图像 · 精细生成";
+  if (model === "seedance-2.0") return "视频生成 · 标准";
+  if (model === "seedance-2.0-dj-fast") return "参考图视频 · 5/10/15 秒";
+  if (model === "seedance-2.0-ld-17") return "多素材视频 · 图片/视频/音频参考";
+  if (model === "seedance-2.0-kz-fast") return "高速视频 · 4-15 秒";
+  if (model === "seedance-2.0-cl-fast") return "轻量图生视频 · 4-15 秒";
+  if (model === "seedance-2.0-cl") return "标准图生视频 · 4-15 秒";
+  if (model === "seedance-2.0-cl-mini") return "轻量图生视频 · 支持视频参考";
+  if (model === "grok-video-super-720p") return "高质量视频 · 720p";
   return model;
 }
 
@@ -431,9 +440,9 @@ function renderModeConsole() {
 }
 
 function placeholderForMode(mode) {
-  if (mode === "claude") return "描述你的高阶创作或复杂推理任务，Claude 模型会按高阶价格计费";
+  if (mode === "claude") return "描述你的高阶创作或复杂推理任务，高阶模型会按高阶价格计费";
   if (mode === "image") return "描述要生成或修改的图片。局部编辑请上传原图和蒙版 PNG，透明区域会被重画";
-  if (mode === "video") return "描述视频内容，可上传首帧/参考图；按秒或按次计费，生成后请立即下载";
+  if (mode === "video") return "描述视频内容，可上传首帧/参考图；按秒或按次计费";
   return "给 Codex 发消息，Enter 发送，Shift + Enter 换行";
 }
 
@@ -691,10 +700,10 @@ function codexPlusPlusGuideHtml() {
       <div class="feature-list">
         <strong>完整功能说明</strong>
         <ul>
-          <li>中转注入：配置多个 API 供应商，可切回官方 ChatGPT 登录态。</li>
+          <li>中转注入：配置多个 API 配置档，可切回官方 ChatGPT 登录态。</li>
           <li>增强功能：插件入口解锁、特殊插件强制安装、会话删除、Markdown 导出、项目移动和 Timeline。</li>
           <li>粘贴修复：富文本粘贴只保留纯文本，减少被误识别为附件。</li>
-          <li>Provider 同步：切换供应商后旧会话仍可见，并保留同步备份。</li>
+          <li>配置同步：切换配置档后旧会话仍可见，并保留同步备份。</li>
           <li>开发辅助：Zed 打开入口、upstream worktree 创建、用户脚本管理。</li>
           <li>自动更新：管理工具和静默启动器都会检查 GitHub Release。</li>
         </ul>
@@ -712,7 +721,7 @@ function provisionCardsHtml() {
   const keys = state.provisionKeys.length ? state.provisionKeys : fallbackProvisionKeys();
   return keys
     .map((item) => {
-      const models = Array.isArray(item.models) ? item.models.join(" / ") : "";
+      const models = Array.isArray(item.models) ? item.models.map(modelLabel).join(" / ") : "";
       return `
         <section class="integration-card">
           <div>
@@ -787,7 +796,11 @@ async function runTask() {
     user_query: query,
     skill_name: mode === "codex" || mode === "claude" ? (state.activeSkill || $("skillSelect").value || "codex_workspace") : "codex_workspace",
     model_role: role,
-    model_config: { ...collectModelConfig(), [role]: selectedModel },
+    model_config: {
+      ...collectModelConfig(),
+      [role]: selectedModel,
+      ...(mode === "codex" ? { chat_main: selectedModel } : {}),
+    },
     mode: "sync",
     files: [...state.files, state.maskFile].filter(Boolean).map(({ path, content }) => ({ path, content })),
     metadata: {
@@ -929,7 +942,7 @@ function handleStreamEvent(event) {
   }
   if (event.type === "complete") {
     addEvent(`完成 · ${Math.round((event.duration_ms || 0) / 1000)}s`, "done");
-    const finalText = event.result || state.activeContent || "已完成。";
+    const finalText = finalTextFromCompleteEvent(event);
     updateAssistant(finalText);
     commitHistory(state.activeUserQuery, finalText);
     finishAssistant();
@@ -940,6 +953,22 @@ function handleStreamEvent(event) {
     updateAssistant(userFriendlyError(event));
     finishAssistant();
   }
+}
+
+function finalTextFromCompleteEvent(event) {
+  const media = event?.media && typeof event.media === "object" ? event.media : null;
+  const urls = Array.isArray(media?.urls) ? media.urls.filter(Boolean) : [];
+  if (urls.length) {
+    const type = media.type === "video" ? "video" : "image";
+    const label = type === "video" ? "生成视频" : "生成图片";
+    return urls.map((url, index) => mediaMarkdown(type, url, `${label} ${index + 1}`)).join("\n\n");
+  }
+  return event.result || state.activeContent || "已完成。";
+}
+
+function mediaMarkdown(type, url, label) {
+  if (type === "video") return `[${label}](${url})`;
+  return `![${label}](${url})`;
 }
 
 function appendMessage(role, text, streaming = false) {
@@ -1076,16 +1105,16 @@ function renderProse(text) {
       flushList();
       continue;
     }
-    const image = trimmed.match(/^!\[([^\]]*)\]\((https?:\/\/[^)]+)\)$/);
+    const image = trimmed.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
     if (image) {
       flushList();
-      html += renderGeneratedMedia("image", image[2], image[1] || "生成图片");
+      html += renderGeneratedArtifact(image[2], image[1] || "生成图片", "image");
       continue;
     }
-    const link = trimmed.match(/^\[([^\]]+)\]\((https?:\/\/[^)]+)\)$/);
-    if (link && videoUrlPattern.test(link[2])) {
+    const link = trimmed.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+    if (link && isRenderableUrl(link[2])) {
       flushList();
-      html += renderGeneratedMedia("video", link[2], link[1] || "生成视频");
+      html += renderGeneratedArtifact(link[2], link[1] || "生成产物");
       continue;
     }
     if (videoUrlPattern.test(trimmed)) {
@@ -1096,6 +1125,11 @@ function renderProse(text) {
     if (imageUrlPattern.test(trimmed)) {
       flushList();
       html += renderGeneratedMedia("image", trimmed, "生成图片");
+      continue;
+    }
+    if (isRenderableUrl(trimmed)) {
+      flushList();
+      html += renderGeneratedArtifact(trimmed, "生成产物");
       continue;
     }
     if (/^#{1,4}\s+/.test(trimmed)) {
@@ -1125,11 +1159,55 @@ function renderGeneratedMedia(type, url, label = "") {
     <figure class="generated-media ${type}">
       <div class="media-frame">${preview}</div>
       <figcaption>
-        <span>${safeLabel} · 生成后请立即下载，文件只保留一小时。</span>
-        <a href="${safeUrl}" download target="_blank" rel="noopener noreferrer">下载</a>
+        <span>${safeLabel}</span>
+        <a href="${safeUrl}" target="_blank" rel="noopener noreferrer">打开</a>
       </figcaption>
     </figure>
   `;
+}
+
+function renderGeneratedArtifact(url, label = "", forcedType = "") {
+  const type = forcedType || artifactTypeFromUrl(url);
+  if (type === "image" || type === "video") {
+    return renderGeneratedMedia(type, url, label || (type === "video" ? "生成视频" : "生成图片"));
+  }
+  const safeUrl = escapeHtml(url);
+  const safeLabel = escapeHtml(label || artifactLabelForType(type));
+  const preview = type === "pdf" || type === "html"
+    ? `<iframe src="${safeUrl}" title="${safeLabel}" loading="lazy"></iframe>`
+    : `<div class="document-preview"><strong>${safeLabel}</strong><span>已生成文档，可在线打开查看。</span></div>`;
+  return `
+    <figure class="generated-media ${type}">
+      <div class="media-frame">${preview}</div>
+      <figcaption>
+        <span>${safeLabel}</span>
+        <a href="${safeUrl}" target="_blank" rel="noopener noreferrer">打开</a>
+      </figcaption>
+    </figure>
+  `;
+}
+
+function isRenderableUrl(url) {
+  const value = String(url || "").trim();
+  if (!renderableLinkPattern.test(value)) return false;
+  return ["image", "video", "pdf", "html", "document"].includes(artifactTypeFromUrl(value));
+}
+
+function artifactTypeFromUrl(url) {
+  const clean = String(url || "").split(/[?#]/)[0].toLowerCase();
+  if (/\.(png|jpe?g|webp|gif)$/.test(clean)) return "image";
+  if (/\.(mp4|webm|mov|m4v)$/.test(clean)) return "video";
+  if (/\.pdf$/.test(clean)) return "pdf";
+  if (/\.(html?|xhtml)$/.test(clean)) return "html";
+  if (/\.(docx?|xlsx?|pptx?|md|txt|csv)$/.test(clean)) return "document";
+  return "";
+}
+
+function artifactLabelForType(type) {
+  if (type === "pdf") return "生成 PDF";
+  if (type === "html") return "生成页面";
+  if (type === "document") return "生成文档";
+  return "生成产物";
 }
 
 function inlineFormat(text) {

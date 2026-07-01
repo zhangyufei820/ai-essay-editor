@@ -586,7 +586,7 @@ def get_task_file(
     normalized_parts = set(Path(file_path).parts)
     if Path(file_path).name in INTERNAL_TASK_FILE_NAMES or normalized_parts.intersection(INTERNAL_TASK_FILE_PARTS):
         raise HTTPException(status_code=404, detail="File not found")
-    return FileResponse(str(requested), filename=requested.name)
+    return FileResponse(str(requested), filename=requested.name, content_disposition_type="inline")
 
 
 @app.post("/admin/run", dependencies=[Depends(require_admin_bearer)])
@@ -727,25 +727,25 @@ def model_modes(user: UserContext | None = None) -> dict[str, Any]:
             "billing": "按文本 Token 计费，适合日常任务和代码任务。",
         },
         "claude": {
-            "label": "Claude 高阶",
+            "label": "高阶创作",
             "description": "高质量长文、剧本、复杂推理和高级创作。",
             "models": list(mode_models["claude"]),
             "token_name": settings.claude_token_name,
-            "billing": "按 Claude 高阶模型输入/输出 Token 计费，价格高于普通对话。",
+            "billing": "按高阶模型输入/输出 Token 计费，价格高于普通对话。",
         },
         "image": {
             "label": "图像生成",
-            "description": "Image 2 和 Grok 图像是独立模型，请按任务明确选择。",
+            "description": "Image 2、高速图像、通用图像和高质量图像是独立模型，请按任务明确选择。",
             "models": list(mode_models["image"]),
             "token_name": settings.image_token_name,
-            "billing": "按张计费。系统不会在 Image 2 与 Grok 图像之间自动切换。",
+            "billing": "按张计费。系统不会在不同图像模型之间自动切换。",
         },
         "video": {
             "label": "视频生成",
-            "description": "Seedance / Grok 文生视频、图生视频。",
+            "description": "文生视频、图生视频和多素材视频。",
             "models": list(mode_models["video"]),
             "token_name": settings.video_token_name,
-            "billing": "按秒或按次计费。Seedance 2.0 当前展示价 ¥6/15秒，生成后请立即下载。",
+            "billing": "按秒或按次计费。扩展视频模型支持 4-15 秒。",
         },
     }
 
@@ -766,7 +766,7 @@ def provision_key_profiles(key_map: dict[str, str], mode_models: dict[str, tuple
         },
         {
             "mode": "claude",
-            "usage": "Claude Code / Claude 原生协议客户端",
+            "usage": "高阶原生协议客户端",
             "base_url": claude_base_url,
             "endpoint": "/v1/messages",
         },
@@ -1662,10 +1662,6 @@ def selected_text_model(request: WorkspaceRunRequest) -> str:
 
 
 def selected_fast_text_model(request: WorkspaceRunRequest) -> str:
-    if request_mode(request) == "codex":
-        fast = settings.default_small_fast_model
-        if is_allowed_model_for_request(fast, request):
-            return fast
     return selected_text_model(request)
 
 

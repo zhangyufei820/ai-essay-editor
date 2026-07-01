@@ -11,6 +11,7 @@ from app.main import (
     response_error_message,
     responses_delta_text,
     runtime_guard_payload,
+    selected_fast_text_model,
     should_use_fast_skill,
     stream_chat_completion_deltas,
 )
@@ -184,6 +185,39 @@ def test_onboarding_fast_skill_uses_compact_prompt():
     assert payload["model"] == "gpt-5.4-mini"
     assert payload["stream"] is True
     assert "用户自己的本机客户端" in payload["instructions"]
+
+
+def test_fast_chat_respects_selected_text_model():
+    request = WorkspaceRunRequest(
+        user_query="只回复 pong",
+        model_role="chat_main",
+        model_config={"chat_main": "gpt-5.5", "small_fast": "gpt-5.4-mini"},
+        metadata={"mode": "codex", "mode_models": {"codex": ["gpt-5.4-mini", "gpt-5.5"]}},
+    )
+
+    assert selected_fast_text_model(request) == "gpt-5.5"
+
+
+def test_codex_runner_appends_previewable_artifacts(tmp_path):
+    runner = CodexRunner.__new__(CodexRunner)
+    runner.settings = type("Settings", (), {"public_base_url": "https://api.test/codex"})()
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / "output.pdf").write_bytes(b"%PDF-1.4")
+    (workspace / "hero.png").write_bytes(b"png")
+    (workspace / "AGENTS.md").write_text("internal", encoding="utf-8")
+    input_dir = workspace / "input"
+    input_dir.mkdir()
+    (input_dir / "uploaded.pdf").write_bytes(b"input")
+    task = {"task_id": "task_123"}
+
+    result = runner._append_preview_artifacts(task, workspace, "完成。")
+
+    assert "生成产物预览" in result
+    assert "https://api.test/codex/api/tasks/task_123/files/hero.png" in result
+    assert "https://api.test/codex/api/tasks/task_123/files/output.pdf" in result
+    assert "AGENTS.md" not in result
+    assert "uploaded.pdf" not in result
 
 
 def test_markdown_doc_renderer_supports_tables_and_ordered_lists():
