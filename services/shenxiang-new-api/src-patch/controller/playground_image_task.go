@@ -2,6 +2,7 @@ package controller
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -791,7 +792,9 @@ func runPlaygroundImageTask(taskID string, userID int, username string, role int
 		return
 	}
 
-	request, err := http.NewRequest(http.MethodPost, payload.RequestPath, bytes.NewReader(bodyBytes))
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, payload.RequestPath, bytes.NewReader(bodyBytes))
 	if err != nil {
 		markPlaygroundImageTaskFailure(task, "failed to prepare image task request")
 		return
@@ -846,6 +849,7 @@ func runPlaygroundImageTask(taskID string, userID int, username string, role int
 
 	task, exists, err = model.GetByTaskId(userID, taskID)
 	if err != nil || !exists || task == nil {
+		cleanupPlaygroundImageTaskRequest(payload.RequestFile)
 		return
 	}
 	var response dto.ImageResponse
@@ -1146,6 +1150,10 @@ func sanitizePlaygroundImageTaskFailure(reason string) string {
 		"api key",
 		"apikey",
 		"sk-",
+		"bearer",
+		"token",
+		"secret",
+		"password",
 	}
 	for _, marker := range sensitiveMarkers {
 		if strings.Contains(lower, marker) {

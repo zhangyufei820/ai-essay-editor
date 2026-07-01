@@ -1987,6 +1987,7 @@ const MediaPlayground = () => {
   const [models, setModels] = useState(EMPTY_MODELS);
   const [prompt, setPrompt] = useState(DEFAULT_PROMPT);
   const promptTextareaRef = useRef(null);
+  const pollingCancelledRef = useRef(false);
   const [mentionState, setMentionState] = useState({
     visible: false,
     start: 0,
@@ -2281,6 +2282,11 @@ const MediaPlayground = () => {
   useEffect(() => {
     setResults(restoreStoredResults());
     setResultsLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    pollingCancelledRef.current = false;
+    return () => { pollingCancelledRef.current = true; };
   }, []);
 
   useEffect(() => {
@@ -2803,6 +2809,7 @@ const MediaPlayground = () => {
     let longWaitNotified = false;
     let veryLongWaitNotified = false;
     while (Date.now() < deadline) {
+      if (pollingCancelledRef.current) return null;
       const res = await API.get(`/pg/images/tasks/${encodeURIComponent(taskId)}`, {
         skipErrorHandler: true,
         disableDuplicate: true,
@@ -2894,6 +2901,7 @@ const MediaPlayground = () => {
     let backgroundNotified = false;
     setVideoPolling(true);
     while (Date.now() < deadline) {
+      if (pollingCancelledRef.current) return null;
       try {
         const res = await API.get(`/pg/videos/${encodeURIComponent(taskId)}`, {
           skipErrorHandler: true,

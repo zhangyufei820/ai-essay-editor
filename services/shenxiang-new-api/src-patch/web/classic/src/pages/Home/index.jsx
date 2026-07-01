@@ -17,7 +17,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import DOMPurify from 'dompurify';
 import { Spin } from '@douyinfe/semi-ui';
 import { API, showError } from '../../helpers';
 import { useIsMobile } from '../../hooks/common/useIsMobile';
@@ -30,30 +31,21 @@ const Home = () => {
   const { i18n } = useTranslation();
   const actualTheme = useActualTheme();
   const isMobile = useIsMobile();
+  const iframeRef = useRef(null);
   const [homePageContentLoaded, setHomePageContentLoaded] = useState(false);
   const [homePageContent, setHomePageContent] = useState('');
 
   const displayHomePageContent = useCallback(async () => {
-    setHomePageContent(localStorage.getItem('home_page_content') || '');
+    setHomePageContent(DOMPurify.sanitize(localStorage.getItem('home_page_content') || ''));
     const res = await API.get('/api/home_page_content');
     const { success, message, data } = res.data;
     if (success) {
       let content = String(data || '');
       if (content && !content.startsWith('https://')) {
-        content = marked.parse(content);
+        content = DOMPurify.sanitize(marked.parse(content));
       }
       setHomePageContent(content);
       localStorage.setItem('home_page_content', content);
-
-      if (content.startsWith('https://')) {
-        const iframe = document.querySelector('iframe');
-        if (iframe) {
-          iframe.onload = () => {
-            iframe.contentWindow.postMessage({ themeMode: actualTheme }, '*');
-            iframe.contentWindow.postMessage({ lang: i18n.language }, '*');
-          };
-        }
-      }
     } else {
       showError(message);
       setHomePageContent('加载首页内容失败...');
@@ -68,7 +60,7 @@ const Home = () => {
   useEffect(() => {
     if (!homePageContent.startsWith('https://')) return;
 
-    const iframe = document.querySelector('iframe');
+    const iframe = iframeRef.current;
     if (!iframe?.contentWindow) return;
 
     iframe.contentWindow.postMessage({ themeMode: actualTheme }, '*');
@@ -100,6 +92,7 @@ const Home = () => {
         <div className='classic-page-fill overflow-x-hidden w-full'>
           {homePageContent.startsWith('https://') ? (
             <iframe
+              ref={iframeRef}
               src={homePageContent}
               className='w-full h-full border-none'
             />

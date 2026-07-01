@@ -87,7 +87,7 @@ export const useNavigation = (t, docsLink, headerNavModules) => {
         return modules.media !== false;
       }
       if (link.itemKey === 'codex') {
-        return true;
+        return modules[link.itemKey] !== false;
       }
       if (link.itemKey === 'pricing') {
         // 支持新的pricing配置格式

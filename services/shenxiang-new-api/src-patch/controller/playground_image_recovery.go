@@ -35,6 +35,10 @@ func PlaygroundCreateImageRecoveryTask(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "image task not found"})
 		return
 	}
+	if task.Status == model.TaskStatusSuccess || task.Status == model.TaskStatusFailure {
+		c.JSON(http.StatusConflict, gin.H{"success": false, "message": "task already in terminal state"})
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": taskToPlaygroundImageTask(task)})
 }
 
@@ -67,6 +71,10 @@ func PlaygroundRecoverImageTask(c *gin.Context) {
 	}
 	if !exists || task == nil || task.Platform != constant.TaskPlatformPlaygroundImage || !isPlaygroundImageTaskAction(task.Action) {
 		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "image task not found"})
+		return
+	}
+	if task.Status == model.TaskStatusSuccess || task.Status == model.TaskStatusFailure {
+		c.JSON(http.StatusConflict, gin.H{"success": false, "message": "task already in terminal state"})
 		return
 	}
 

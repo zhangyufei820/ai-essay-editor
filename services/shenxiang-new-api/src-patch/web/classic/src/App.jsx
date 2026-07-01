@@ -414,9 +414,11 @@ function App() {
         <Route
           path='/console/chat/:id?'
           element={
-            <Suspense fallback={<Loading></Loading>} key={location.pathname}>
-              <Chat />
-            </Suspense>
+            <PrivateRoute>
+              <Suspense fallback={<Loading></Loading>} key={location.pathname}>
+                <Chat />
+              </Suspense>
+            </PrivateRoute>
           }
         />
         {/* 方便使用chat2link直接跳转聊天... */}

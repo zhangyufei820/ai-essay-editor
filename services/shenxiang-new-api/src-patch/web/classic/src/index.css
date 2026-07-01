@@ -2777,7 +2777,7 @@ html.dark .sbg-variant-green {
   animation: sweep-shine 4s linear infinite;
 }
 
-.dark .shine-text {
+html.dark .shine-text {
   background: linear-gradient(
     90deg,
     currentColor 0%,
