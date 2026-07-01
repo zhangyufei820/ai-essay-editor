@@ -68,6 +68,12 @@ NEGATION_HINTS = ("不要生成图片", "不用生成图片", "不要出图", "�
 VIDEO_URL_RE = re.compile(r"https?://[^\s\"'<>]+?\.(?:mp4|webm|mov|m4v)(?:\?[^\s\"'<>]+)?", re.IGNORECASE)
 IMAGE_URL_RE = re.compile(r"https?://[^\s\"'<>]+?\.(?:png|jpe?g|webp|gif)(?:\?[^\s\"'<>]+)?", re.IGNORECASE)
 OFFICIAL_SEEDANCE_REFERENCE_MODELS = {"seedance-2.0-dj-fast", "seedance-2.0-ld-17"}
+MOONAPIX_SEEDANCE_VIDEO_MODELS = {
+    "seedance-2.0-kz-fast",
+    "seedance-2.0-cl-fast",
+    "seedance-2.0-cl",
+    "seedance-2.0-cl-mini",
+}
 MAX_REMOTE_IMAGE_BYTES = 20 * 1024 * 1024
 MAX_REMOTE_VIDEO_BYTES = 120 * 1024 * 1024
 
@@ -212,6 +218,8 @@ async def generate_video(
 ) -> MediaResult:
     if model in OFFICIAL_SEEDANCE_REFERENCE_MODELS:
         return await generate_official_seedance_video(settings, request, user, model)
+    if model in MOONAPIX_SEEDANCE_VIDEO_MODELS:
+        return await generate_moonapix_seedance_video(settings, request, user, model)
 
     headers = auth_headers(user.api_key)
     content: list[dict[str, Any]] = [{"type": "text", "text": request.user_query}]
@@ -246,6 +254,58 @@ async def generate_video(
         text = response.text[:4000]
         urls = VIDEO_URL_RE.findall(text)
     return MediaResult(media_type="video", model=model, prompt=request.user_query, urls=dedupe(urls), raw_text=text)
+
+
+async def generate_moonapix_seedance_video(
+    settings: Settings,
+    request: WorkspaceRunRequest,
+    user: UserContext,
+    model: str,
+) -> MediaResult:
+    payload: dict[str, Any] = {
+        "model": model,
+        "prompt": request.user_query,
+        "duration": moonapix_seedance_duration(request.params),
+        "ratio": video_ratio_from_request(request),
+        "resolution": moonapix_seedance_resolution(model, request.params),
+    }
+    validate_moonapix_seedance_reference_inputs(model, request)
+    references = moonapix_seedance_references(model, request)
+    if references:
+        payload["references"] = references
+        image_urls = [item["url"] for item in references if item["media_type"] == "image"]
+        video_urls = [item["url"] for item in references if item["media_type"] == "video"]
+        if image_urls:
+            payload["images"] = [{"url": url, "role": "first_frame" if index == 0 else "reference_image"} for index, url in enumerate(image_urls)]
+            payload["image_url"] = image_urls[0]
+            payload["first_frame_url"] = image_urls[0]
+        if video_urls:
+            payload["video_url"] = video_urls[0]
+            payload["reference_video_url"] = video_urls[0]
+    for key in ("watermark", "seed", "callback_url"):
+        value = request.params.get(key)
+        if value is not None and str(value):
+            payload[key] = value
+    timeout = httpx.Timeout(480.0, connect=10.0, read=480.0, write=30.0)
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        response = await client.post(
+            f"{settings.new_api_base_url}/videos",
+            headers=auth_headers(user.api_key),
+            json=payload,
+        )
+        if response.status_code >= 400:
+            raise MediaGenerationError(upstream_error(settings, user.api_key, response))
+        try:
+            body = response.json()
+        except ValueError as exc:
+            raise MediaGenerationError("视频服务没有返回有效任务。") from exc
+        urls = extract_media_urls(body, "video")
+        task_id = video_task_id(body)
+        if not urls and task_id:
+            body = await poll_official_seedance_video(client, settings, user, task_id)
+            urls = extract_media_urls(body, "video")
+        text = json.dumps(body, ensure_ascii=False)[:4000]
+    return MediaResult(media_type="video", model=model, prompt=request.user_query, urls=dedupe(urls), raw_text=text, task_id=task_id)
 
 
 async def generate_official_seedance_video(
@@ -337,6 +397,22 @@ def official_seedance_duration(model: str, params: dict[str, Any]) -> int:
     return max(5, min(15, value))
 
 
+def moonapix_seedance_duration(params: dict[str, Any]) -> int:
+    raw = params.get("duration") or params.get("duration_seconds") or params.get("seconds")
+    try:
+        value = int(float(str(raw)))
+    except (TypeError, ValueError):
+        value = 4
+    return max(4, min(15, value))
+
+
+def moonapix_seedance_resolution(model: str, params: dict[str, Any]) -> str:
+    value = str(params.get("resolution") or params.get("size") or "").strip().lower()
+    if model in {"seedance-2.0-cl-fast", "seedance-2.0-cl", "seedance-2.0-cl-mini"}:
+        return "480p" if value == "480p" else "720p"
+    return "720p"
+
+
 def video_ratio_from_request(request: WorkspaceRunRequest) -> str:
     ratio = str(request.params.get("ratio") or request.params.get("aspect_ratio") or "").strip()
     if ratio in {"16:9", "9:16", "1:1", "4:3", "3:4"}:
@@ -380,12 +456,80 @@ def official_seedance_references(model: str, request: WorkspaceRunRequest) -> li
     return references
 
 
+def moonapix_seedance_references(model: str, request: WorkspaceRunRequest) -> list[dict[str, str]]:
+    allow_video = model == "seedance-2.0-cl-mini"
+    counts = {"image": 0, "video": 0}
+    references: list[dict[str, str]] = []
+    for file in request.files:
+        media_type = workspace_file_media_type(file)
+        if media_type not in counts:
+            continue
+        if media_type == "video" and not allow_video:
+            continue
+        if media_type == "image" and counts[media_type] >= 10:
+            continue
+        if media_type == "video" and counts[media_type] >= 1:
+            continue
+        url = public_media_reference_url(file)
+        if not url:
+            continue
+        counts[media_type] += 1
+        role = {
+            "image": "first_frame" if counts[media_type] == 1 else "reference_image",
+            "video": "reference_video",
+        }[media_type]
+        references.append(
+            {
+                "media_type": media_type,
+                "role": role,
+                "url": url,
+                "alias": f"{media_type}{counts[media_type]}",
+            }
+        )
+    return references
+
+
+def validate_moonapix_seedance_reference_inputs(model: str, request: WorkspaceRunRequest) -> None:
+    unsupported_local: list[str] = []
+    unsupported_audio: list[str] = []
+    unsupported_video: list[str] = []
+    for file in request.files:
+        media_type = workspace_file_media_type(file)
+        if media_type not in {"image", "video", "audio"}:
+            continue
+        if media_type == "audio":
+            unsupported_audio.append(file.path)
+            continue
+        if not public_media_reference_url(file):
+            unsupported_local.append(file.path)
+            continue
+        if media_type == "video" and model != "seedance-2.0-cl-mini":
+            unsupported_video.append(file.path)
+    if unsupported_local:
+        raise MediaGenerationError(
+            "MoonApiX 视频参考素材需要公网 URL 或 Asset:// 引用；云端 Codex 暂不能把本地上传文件直接作为 MoonApiX 素材。"
+        )
+    if unsupported_audio:
+        raise MediaGenerationError("MoonApiX 视频模型暂不接收音频参考，请移除音频素材。")
+    if unsupported_video:
+        raise MediaGenerationError("当前 MoonApiX 模型只支持图片参考，请移除视频素材或切换到 CL Mini。")
+
+
+def public_media_reference_url(file: Any) -> str:
+    content = str(getattr(file, "content", "") or "").strip()
+    if content.startswith("Asset://"):
+        return content
+    if is_public_http_url(content):
+        return content
+    return ""
+
+
 def workspace_file_media_type(file: Any) -> str:
     content = str(getattr(file, "content", "") or "").lower()
     path = str(getattr(file, "path", "") or "").lower()
-    if content.startswith("data:image/") or re.search(r"\.(png|jpe?g|webp|gif)$", path):
+    if content.startswith("data:image/") or re.search(r"\.(png|jpe?g|webp|gif)$", path) or IMAGE_URL_RE.match(content):
         return "image"
-    if content.startswith("data:video/") or re.search(r"\.(mp4|webm|mov|m4v)$", path):
+    if content.startswith("data:video/") or re.search(r"\.(mp4|webm|mov|m4v)$", path) or VIDEO_URL_RE.match(content):
         return "video"
     if content.startswith("data:audio/") or re.search(r"\.(mp3|m4a|aac|wav)$", path):
         return "audio"

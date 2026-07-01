@@ -322,6 +322,121 @@ func TestSeedanceOfficialReferencesBuildRequestURLUsesVideosEndpoint(t *testing.
 	}
 }
 
+func TestMoonApiXSeedanceBuildRequestURLUsesVideosEndpoint(t *testing.T) {
+	adaptor := TaskAdaptor{baseURL: "https://moonapix.test"}
+	for _, model := range []string{"seedance-2.0-kz-fast", "seedance-2.0-cl-fast", "seedance-2.0-cl", "seedance-2.0-cl-mini"} {
+		url, err := adaptor.BuildRequestURL(&relaycommon.RelayInfo{
+			ChannelMeta:   &relaycommon.ChannelMeta{UpstreamModelName: model},
+			TaskRelayInfo: &relaycommon.TaskRelayInfo{},
+		})
+		if err != nil {
+			t.Fatalf("BuildRequestURL(%s) error = %v", model, err)
+		}
+		if url != "https://moonapix.test/v1/videos" {
+			t.Fatalf("BuildRequestURL(%s) = %q", model, url)
+		}
+	}
+}
+
+func TestNormalizeMoonApiXCLMiniKeepsOfficialMediaFields(t *testing.T) {
+	body := map[string]interface{}{
+		"model":      "seedance-2.0-cl-mini",
+		"prompt":     "Use @image1 and @video1.",
+		"duration":   float64(2),
+		"ratio":      "9:16",
+		"resolution": "1080p",
+		"references": []interface{}{
+			map[string]interface{}{
+				"media_type": "image",
+				"role":       "first_frame",
+				"url":        "https://cdn.test/first.png",
+				"alias":      "image1",
+			},
+			map[string]interface{}{
+				"media_type": "image",
+				"role":       "last_frame",
+				"url":        "https://cdn.test/last.png",
+			},
+			map[string]interface{}{
+				"media_type": "video",
+				"role":       "reference_video",
+				"url":        "https://cdn.test/ref.mp4",
+				"alias":      "video1",
+			},
+			map[string]interface{}{
+				"media_type": "audio",
+				"role":       "reference_audio",
+				"url":        "https://cdn.test/skip.mp3",
+			},
+		},
+	}
+
+	got := normalizeMoonApiXSeedanceVideoRequestBody(body)
+	if got["model"] != "seedance-2.0-cl-mini" {
+		t.Fatalf("model = %#v, want seedance-2.0-cl-mini", got["model"])
+	}
+	if got["duration"] != 4 {
+		t.Fatalf("duration = %#v, want lower clamp 4", got["duration"])
+	}
+	if got["resolution"] != "720p" {
+		t.Fatalf("resolution = %#v, want CL Mini fallback 720p", got["resolution"])
+	}
+	if got["ratio"] != "9:16" || got["aspect_ratio"] != "9:16" {
+		t.Fatalf("ratio/aspect_ratio = %#v/%#v, want 9:16", got["ratio"], got["aspect_ratio"])
+	}
+	if got["image"] != "https://cdn.test/first.png" || got["image_url"] != "https://cdn.test/first.png" || got["first_frame_url"] != "https://cdn.test/first.png" {
+		t.Fatalf("first image aliases not set from first frame: %#v", got)
+	}
+	if got["last_frame_url"] != "https://cdn.test/last.png" {
+		t.Fatalf("last_frame_url = %#v, want last frame", got["last_frame_url"])
+	}
+	if got["video_url"] != "https://cdn.test/ref.mp4" || got["reference_video_url"] != "https://cdn.test/ref.mp4" {
+		t.Fatalf("video aliases not set from video reference: %#v", got)
+	}
+	refs, ok := got["references"].([]map[string]interface{})
+	if !ok || len(refs) != 3 {
+		t.Fatalf("references = %#v, want two images plus one video", got["references"])
+	}
+	if refs[2]["media_type"] != "video" || refs[2]["alias"] != "video1" {
+		t.Fatalf("video reference = %#v, want aliased video reference", refs[2])
+	}
+	images, ok := got["images"].([]map[string]interface{})
+	if !ok || len(images) != 2 {
+		t.Fatalf("images = %#v, want two image compatibility items", got["images"])
+	}
+	if _, ok := got["metadata"]; ok {
+		t.Fatalf("MoonApiX payload should not forward metadata: %#v", got)
+	}
+}
+
+func TestNormalizeMoonApiXNonMiniDropsVideoReferencesAndClampsDuration(t *testing.T) {
+	body := map[string]interface{}{
+		"model":      "seedance-2.0-cl-fast",
+		"prompt":     "Use image only.",
+		"duration":   float64(30),
+		"resolution": "480p",
+		"references": []interface{}{
+			map[string]interface{}{"media_type": "image", "role": "reference_image", "url": "https://cdn.test/image.png"},
+			map[string]interface{}{"media_type": "video", "role": "reference_video", "url": "https://cdn.test/skip.mp4"},
+		},
+	}
+
+	got := normalizeMoonApiXSeedanceVideoRequestBody(body)
+	if got["duration"] != 15 {
+		t.Fatalf("duration = %#v, want upper clamp 15", got["duration"])
+	}
+	if got["resolution"] != "480p" {
+		t.Fatalf("resolution = %#v, want 480p", got["resolution"])
+	}
+	refs, ok := got["references"].([]map[string]interface{})
+	if !ok || len(refs) != 1 || refs[0]["media_type"] != "image" {
+		t.Fatalf("references = %#v, want only image reference", got["references"])
+	}
+	if _, ok := got["video_url"]; ok {
+		t.Fatalf("non-mini MoonApiX payload should not keep video_url: %#v", got)
+	}
+}
+
 func TestSeedanceGatewayFailureReturnsProviderStatus(t *testing.T) {
 	success := false
 	taskErr := seedanceGatewayTaskError(responseTask{
@@ -418,6 +533,28 @@ func TestParseTaskResultFindsNestedOutputURL(t *testing.T) {
 	}
 	if result.Url != "https://media.example.com/nested.mp4" {
 		t.Fatalf("Url = %q, want nested output url", result.Url)
+	}
+}
+
+func TestParseTaskResultFindsMoonApiXDataStatusAndVideoURL(t *testing.T) {
+	adaptor := TaskAdaptor{}
+
+	result, err := adaptor.ParseTaskResult([]byte(`{
+		"id":"task_moonapix",
+		"model":"seedance-2.0-cl-mini",
+		"data":{
+			"status":"succeeded",
+			"video_url":"https://media.example.com/moonapix.mp4"
+		}
+	}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Status != model.TaskStatusSuccess {
+		t.Fatalf("Status = %q, want %q", result.Status, model.TaskStatusSuccess)
+	}
+	if result.Url != "https://media.example.com/moonapix.mp4" {
+		t.Fatalf("Url = %q, want nested data.video_url", result.Url)
 	}
 }
 

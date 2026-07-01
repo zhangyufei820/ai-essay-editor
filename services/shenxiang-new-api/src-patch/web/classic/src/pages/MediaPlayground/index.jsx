@@ -352,6 +352,7 @@ const VIDEO_REFERENCE_ACCEPT = [
 ].join(',');
 const SEEDANCE_DJ_FAST_PRICE_PER_SECOND = 0.162;
 const SEEDANCE_LD17_PRICE_PER_CALL = 6.48;
+const MOONAPIX_VIDEO_DURATIONS = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
 const MEDIA_RESULT_STORAGE_KEY = 'shenxiang-media-playground-results:v1';
 const MEDIA_RESULT_TTL_MS = 72 * 60 * 60 * 1000;
 const VIDEO_LONG_WAIT_MS = 70 * 1000;
@@ -477,6 +478,70 @@ const VIDEO_MODELS = [
     billingLabel: '按秒计费',
     priceLabel: `¥${SEEDANCE_DJ_FAST_PRICE_PER_SECOND.toFixed(3)}/秒`,
     hint: '¥0.162/秒；支持 5/10/15 秒，只接收图片参考，不能过人脸。',
+  },
+  {
+    value: 'seedance-2.0-kz-fast',
+    label: 'MoonApiX Seedance KZ Fast',
+    badge: 'MoonApiX',
+    vendor: 'MoonApiX 视频',
+    sizes: ['1280x720', '720x1280', '1024x1024'],
+    durations: MOONAPIX_VIDEO_DURATIONS,
+    defaultSize: '1280x720',
+    defaultDuration: 5,
+    defaultFps: 24,
+    resolutions: ['720p'],
+    defaultResolution: '720p',
+    referenceLimits: { image: 10, video: 0, audio: 0 },
+    moonApiX: true,
+    hint: 'MoonApiX 官方 /v1/videos；支持文生视频和图片参考，上传素材会先转成公网 URL 再提交。',
+  },
+  {
+    value: 'seedance-2.0-cl-fast',
+    label: 'MoonApiX Seedance CL Fast',
+    badge: 'MoonApiX',
+    vendor: 'MoonApiX 视频',
+    sizes: ['1280x720', '720x1280', '1024x1024'],
+    durations: MOONAPIX_VIDEO_DURATIONS,
+    defaultSize: '1280x720',
+    defaultDuration: 4,
+    defaultFps: 24,
+    resolutions: ['480p', '720p'],
+    defaultResolution: '720p',
+    referenceLimits: { image: 10, video: 0, audio: 0 },
+    moonApiX: true,
+    hint: 'MoonApiX 官方 CL Fast；支持 4-15 秒，适合首帧/参考图驱动的视频生成。',
+  },
+  {
+    value: 'seedance-2.0-cl',
+    label: 'MoonApiX Seedance CL',
+    badge: 'MoonApiX',
+    vendor: 'MoonApiX 视频',
+    sizes: ['1280x720', '720x1280', '1024x1024'],
+    durations: MOONAPIX_VIDEO_DURATIONS,
+    defaultSize: '1280x720',
+    defaultDuration: 4,
+    defaultFps: 24,
+    resolutions: ['480p', '720p'],
+    defaultResolution: '720p',
+    referenceLimits: { image: 10, video: 0, audio: 0 },
+    moonApiX: true,
+    hint: 'MoonApiX 官方 CL；支持 4-15 秒，适合质量优先的参考图视频任务。',
+  },
+  {
+    value: 'seedance-2.0-cl-mini',
+    label: 'MoonApiX Seedance CL Mini',
+    badge: 'MoonApiX',
+    vendor: 'MoonApiX 视频',
+    sizes: ['1280x720', '720x1280', '1024x1024'],
+    durations: MOONAPIX_VIDEO_DURATIONS,
+    defaultSize: '1280x720',
+    defaultDuration: 4,
+    defaultFps: 24,
+    resolutions: ['480p', '720p'],
+    defaultResolution: '720p',
+    referenceLimits: { image: 10, video: 1, audio: 0 },
+    moonApiX: true,
+    hint: 'MoonApiX 官方 CL Mini；支持图片参考，也可传 1 个视频参考。',
   },
   {
     value: 'seedance-2.0-ld-17',
@@ -1092,8 +1157,15 @@ function isOfficialSeedanceReferenceModel(modelValue) {
   return modelValue === 'seedance-2.0-dj-fast' || modelValue === 'seedance-2.0-ld-17';
 }
 
+function isMoonApiXVideoModel(modelValue) {
+  return Boolean(VIDEO_MODELS.find((item) => item.value === modelValue)?.moonApiX);
+}
+
 function reservedLastFrameImageSlots(modelValue, workflow) {
-  return isOfficialSeedanceReferenceModel(modelValue) && workflow === 'first-last' ? 1 : 0;
+  return (isOfficialSeedanceReferenceModel(modelValue) || isMoonApiXVideoModel(modelValue)) &&
+    workflow === 'first-last'
+    ? 1
+    : 0;
 }
 
 function videoReferencePolicy(model, options = {}) {
@@ -2244,6 +2316,11 @@ const MediaPlayground = () => {
           5,
       );
       setFps(activeVideoModel.defaultFps || 24);
+      setResolution(
+        activeVideoModel.defaultResolution ||
+          activeVideoModel.resolutions?.[0] ||
+          'auto',
+      );
     }
   }, [activeModel, activeImageModel, activeVideoModel, mode]);
 
@@ -2457,13 +2534,21 @@ const MediaPlayground = () => {
       enhance_prompt: enhancePrompt,
       watermark,
       ratio: SIZE_TO_ASPECT_RATIO[size] || undefined,
-      resolution: activeVideoModel.value === 'seedance-2.0-dj-fast' ? '720P' : undefined,
+      resolution: activeVideoModel.value === 'seedance-2.0-dj-fast'
+        ? '720P'
+        : activeVideoModel.resolutions?.includes(resolution)
+          ? resolution
+          : undefined,
       metadata: {},
     };
     if (seed.trim()) payload.seed = Number(seed);
     if (negativePrompt.trim())
       payload.metadata.negative_prompt = negativePrompt.trim();
-    if (activeVideoModel.value === 'seedance-2.0-dj-fast' || activeVideoModel.value === 'seedance-2.0-ld-17') {
+    if (
+      activeVideoModel.value === 'seedance-2.0-dj-fast' ||
+      activeVideoModel.value === 'seedance-2.0-ld-17' ||
+      activeVideoModel.moonApiX
+    ) {
       if (videoWorkflow !== 'text') {
         payload.references = ['上传的参考素材会在提交时自动填入'];
       }
@@ -2681,7 +2766,8 @@ const MediaPlayground = () => {
   async function applyVideoReferences(payload) {
     if (videoWorkflow !== 'image' && videoWorkflow !== 'first-last') return payload;
 
-    const isOfficialReferencesModel = isOfficialSeedanceReferenceModel(videoModel);
+    const isOfficialReferencesModel =
+      isOfficialSeedanceReferenceModel(videoModel) || isMoonApiXVideoModel(videoModel);
     const referenceItemsForModel =
       videoModel === 'seedance-2.0-dj-fast'
         ? referenceFiles.filter((item) => referenceMediaTypeOf(item) === 'image')
@@ -2734,7 +2820,10 @@ const MediaPlayground = () => {
       return {
         ...payload,
         references: officialReferences,
-        prompt: payload.prompt || '',
+        prompt: promptWithReferenceAliases(
+          payload.prompt || '',
+          officialReferences.map((item) => item.alias),
+        ),
         metadata: {
           ...(payload.metadata || {}),
           reference_aliases: officialReferences.map((item) => item.alias).filter(Boolean),
@@ -3027,6 +3116,12 @@ const MediaPlayground = () => {
       }
       if (videoModel === 'seedance-2.0-ld-17' && counts.audio > 0 && counts.image + counts.video === 0) {
         return Toast.error('LD-17 的音频参考必须搭配图片或视频参考。');
+      }
+      if (activeVideoModel.moonApiX && counts.audio > 0) {
+        return Toast.error('MoonApiX 视频模型暂不接收音频参考，请移除音频素材。');
+      }
+      if (activeVideoModel.moonApiX && videoModel !== 'seedance-2.0-cl-mini' && counts.video > 0) {
+        return Toast.error('当前 MoonApiX 模型只支持图片参考，请移除视频素材或切换到 CL Mini。');
       }
     }
     if (mode === 'video' && videoWorkflow === 'first-last' && !lastFrameFile)
@@ -3571,6 +3666,16 @@ const MediaPlayground = () => {
                       agentKey='media-fps'
                     />
                   )}
+                  {mode === 'video' && activeVideoModel.resolutions?.length ? (
+                    <OptionChips
+                      label='清晰度'
+                      value={resolution}
+                      options={toSelectOptions(activeVideoModel.resolutions)}
+                      onChange={setResolution}
+                      compact
+                      agentKey='media-video-resolution'
+                    />
+                  ) : null}
                   {mode === 'image' &&
                   imageWorkflow === 'edit' &&
                   activeImageModel.supportsInputFidelity ? (

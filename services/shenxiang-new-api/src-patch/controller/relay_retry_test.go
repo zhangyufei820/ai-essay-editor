@@ -42,3 +42,28 @@ func TestShouldRetryKeepsChannelAffinityLockForLocalQuota(t *testing.T) {
 		t.Fatal("shouldRetry() = true, want false for local quota failure")
 	}
 }
+
+func TestIsVideoTaskPathIncludesPublicSubmitEndpoint(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	tests := []struct {
+		name string
+		path string
+		want bool
+	}{
+		{name: "public video submit", path: "/v1/videos", want: true},
+		{name: "playground videos", path: "/pg/videos", want: true},
+		{name: "playground video generations", path: "/pg/video/generations", want: true},
+		{name: "public video fetch", path: "/v1/videos/task_123", want: false},
+		{name: "image submit", path: "/v1/images/generations", want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c, _ := gin.CreateTestContext(httptest.NewRecorder())
+			c.Request = httptest.NewRequest(http.MethodPost, tt.path, nil)
+			if got := isVideoTaskPath(c); got != tt.want {
+				t.Fatalf("isVideoTaskPath(%q) = %v, want %v", tt.path, got, tt.want)
+			}
+		})
+	}
+}

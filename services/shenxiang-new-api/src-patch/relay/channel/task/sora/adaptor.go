@@ -25,6 +25,13 @@ import (
 	"github.com/tidwall/sjson"
 )
 
+var moonApiXSeedanceVideoModels = map[string]bool{
+	"seedance-2.0-kz-fast": true,
+	"seedance-2.0-cl-fast": true,
+	"seedance-2.0-cl":      true,
+	"seedance-2.0-cl-mini": true,
+}
+
 // ============================
 // Request / Response structures
 // ============================
@@ -57,6 +64,7 @@ type responseTask struct {
 	OutputUrl          string `json:"output_url,omitempty"`
 	Output             any    `json:"output,omitempty"`
 	Metadata           any    `json:"metadata,omitempty"`
+	Data               any    `json:"data,omitempty"`
 	CreatedAt          int64  `json:"created_at"`
 	CompletedAt        int64  `json:"completed_at,omitempty"`
 	ExpiresAt          int64  `json:"expires_at,omitempty"`
@@ -132,6 +140,7 @@ func videoResultURLFromTask(resTask responseTask) string {
 		resTask.OutputUrl,
 		resTask.Output,
 		resTask.Metadata,
+		resTask.Data,
 	} {
 		if url := pickVideoResultURL(value, 0); url != "" {
 			return url
@@ -275,6 +284,9 @@ func (a *TaskAdaptor) BuildRequestURL(info *relaycommon.RelayInfo) (string, erro
 	if info.Action == constant.TaskActionRemix {
 		return fmt.Sprintf("%s/v1/videos/%s/remix", a.baseURL, info.OriginTaskID), nil
 	}
+	if isMoonApiXSeedanceVideoModel(info.UpstreamModelName) {
+		return fmt.Sprintf("%s/v1/videos", a.baseURL), nil
+	}
 	if isOfficialSeedanceReferencesModel(info.UpstreamModelName) {
 		return fmt.Sprintf("%s/v1/videos", a.baseURL), nil
 	}
@@ -306,7 +318,9 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 		var bodyMap map[string]interface{}
 		if err := common.Unmarshal(cachedBody, &bodyMap); err == nil {
 			bodyMap["model"] = info.UpstreamModelName
-			if isSeedanceVideoModel(info.UpstreamModelName) {
+			if isMoonApiXSeedanceVideoModel(info.UpstreamModelName) {
+				bodyMap = normalizeMoonApiXSeedanceVideoRequestBody(bodyMap)
+			} else if isSeedanceVideoModel(info.UpstreamModelName) {
 				bodyMap = normalizeSeedanceVideoRequestBody(bodyMap)
 			}
 			if newBody, err := common.Marshal(bodyMap); err == nil {
@@ -368,6 +382,10 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 	}
 
 	return common.ReaderOnly(storage), nil
+}
+
+func isMoonApiXSeedanceVideoModel(modelName string) bool {
+	return moonApiXSeedanceVideoModels[strings.ToLower(strings.TrimSpace(modelName))]
 }
 
 func isSeedanceVideoModel(modelName string) bool {
@@ -437,6 +455,189 @@ func normalizeSeedanceVideoRequestBody(bodyMap map[string]interface{}) map[strin
 	cleaned["metadata"] = cleanMetadata
 
 	return cleaned
+}
+
+func normalizeMoonApiXSeedanceVideoRequestBody(bodyMap map[string]interface{}) map[string]interface{} {
+	cleaned := make(map[string]interface{}, len(bodyMap))
+	modelName := strings.ToLower(strings.TrimSpace(trimmedString(bodyMap["model"])))
+	if modelName != "" {
+		cleaned["model"] = modelName
+	}
+	if prompt := strings.TrimSpace(trimmedString(bodyMap["prompt"])); prompt != "" {
+		cleaned["prompt"] = prompt
+	}
+	cleaned["duration"] = moonApiXSeedanceDuration(bodyMap)
+	if ratio := seedanceVideoRatio(bodyMap); ratio != "" {
+		cleaned["ratio"] = ratio
+		cleaned["aspect_ratio"] = ratio
+	}
+	if resolution := moonApiXSeedanceResolution(bodyMap, modelName); resolution != "" {
+		cleaned["resolution"] = resolution
+	}
+	if seed, ok := integerFromAny(bodyMap["seed"]); ok {
+		cleaned["seed"] = seed
+	}
+	if value, ok := boolFromAny(firstPresentAny(bodyMap["watermark"], mapFromAny(bodyMap["metadata"])["watermark"])); ok {
+		cleaned["watermark"] = value
+	}
+
+	metadata := mapFromAny(bodyMap["metadata"])
+	references := normalizeMoonApiXSeedanceReferences(bodyMap, metadata, modelName)
+	if len(references) > 0 {
+		cleaned["references"] = references
+		cleaned["images"] = moonApiXSeedanceImages(references)
+		if firstFrameURL := moonApiXFirstFrameURL(references); firstFrameURL != "" {
+			cleaned["image"] = firstFrameURL
+			cleaned["image_url"] = firstFrameURL
+			cleaned["first_frame_url"] = firstFrameURL
+		}
+		if lastFrameURL := moonApiXLastFrameURL(references); lastFrameURL != "" {
+			cleaned["last_frame_url"] = lastFrameURL
+		}
+		if firstVideoURL := moonApiXFirstVideoURL(references); firstVideoURL != "" {
+			cleaned["video"] = firstVideoURL
+			cleaned["video_url"] = firstVideoURL
+			cleaned["reference_video_url"] = firstVideoURL
+		}
+	}
+	if callbackURL := firstNonBlankAnyString(bodyMap["callback_url"], metadata["callback_url"]); callbackURL != "" {
+		cleaned["callback_url"] = callbackURL
+	}
+	return cleaned
+}
+
+func moonApiXSeedanceDuration(bodyMap map[string]interface{}) int {
+	value := 5
+	for _, key := range []string{"duration", "seconds"} {
+		if parsed, ok := integerFromAny(bodyMap[key]); ok {
+			value = parsed
+			break
+		}
+	}
+	if value < 4 {
+		return 4
+	}
+	if value > 15 {
+		return 15
+	}
+	return value
+}
+
+func moonApiXSeedanceResolution(bodyMap map[string]interface{}, modelName string) string {
+	value := firstNonBlankAnyString(bodyMap["resolution"], mapFromAny(bodyMap["metadata"])["resolution"])
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	switch modelName {
+	case "seedance-2.0-cl-fast", "seedance-2.0-cl", "seedance-2.0-cl-mini":
+		if normalized == "480p" {
+			return "480p"
+		}
+		return "720p"
+	default:
+		return "720p"
+	}
+}
+
+func normalizeMoonApiXSeedanceReferences(bodyMap, metadata map[string]interface{}, modelName string) []map[string]interface{} {
+	allowVideo := modelName == "seedance-2.0-cl-mini"
+	rawReferences := normalizeSeedanceVideoReferences(bodyMap, metadata, "image", "video")
+	seen := make(map[string]bool)
+	result := make([]map[string]interface{}, 0, len(rawReferences))
+	imageCount := 0
+	videoCount := 0
+	for _, reference := range rawReferences {
+		if reference.url == "" {
+			continue
+		}
+		if reference.mediaType == "video" && !allowVideo {
+			continue
+		}
+		key := reference.mediaType + "\x00" + reference.url
+		if seen[key] {
+			continue
+		}
+		switch reference.mediaType {
+		case "video":
+			if videoCount >= 1 {
+				continue
+			}
+			videoCount++
+		default:
+			if imageCount >= 10 {
+				continue
+			}
+			imageCount++
+		}
+		seen[key] = true
+		item := map[string]interface{}{
+			"media_type": reference.mediaType,
+			"role":       reference.role,
+			"url":        reference.url,
+		}
+		if reference.alias != "" {
+			item["alias"] = reference.alias
+		}
+		result = append(result, item)
+	}
+	return result
+}
+
+func moonApiXSeedanceImages(references []map[string]interface{}) []map[string]interface{} {
+	images := make([]map[string]interface{}, 0, len(references))
+	for _, reference := range references {
+		if reference["media_type"] != "image" {
+			continue
+		}
+		url := trimmedString(reference["url"])
+		if url == "" {
+			continue
+		}
+		item := map[string]interface{}{"url": url}
+		if role := trimmedString(reference["role"]); role != "" {
+			item["role"] = role
+		}
+		images = append(images, item)
+	}
+	return images
+}
+
+func moonApiXFirstFrameURL(references []map[string]interface{}) string {
+	for _, reference := range references {
+		if reference["media_type"] == "image" && reference["role"] == "first_frame" {
+			if url := trimmedString(reference["url"]); url != "" {
+				return url
+			}
+		}
+	}
+	for _, reference := range references {
+		if reference["media_type"] == "image" {
+			if url := trimmedString(reference["url"]); url != "" {
+				return url
+			}
+		}
+	}
+	return ""
+}
+
+func moonApiXLastFrameURL(references []map[string]interface{}) string {
+	for _, reference := range references {
+		if reference["media_type"] == "image" && reference["role"] == "last_frame" {
+			if url := trimmedString(reference["url"]); url != "" {
+				return url
+			}
+		}
+	}
+	return ""
+}
+
+func moonApiXFirstVideoURL(references []map[string]interface{}) string {
+	for _, reference := range references {
+		if reference["media_type"] == "video" {
+			if url := trimmedString(reference["url"]); url != "" {
+				return url
+			}
+		}
+	}
+	return ""
 }
 
 func isOfficialSeedanceReferencesModel(modelName string) bool {
@@ -1021,6 +1222,12 @@ func (a *TaskAdaptor) DoResponse(c *gin.Context, resp *http.Response, info *rela
 		upstreamID = dResp.TaskID
 	}
 	if upstreamID == "" {
+		upstreamID = responseTaskNestedString(dResp.Data, "task_id")
+	}
+	if upstreamID == "" {
+		upstreamID = responseTaskNestedString(dResp.Data, "id")
+	}
+	if upstreamID == "" {
 		taskErr = service.TaskErrorWrapper(fmt.Errorf("task_id is empty"), "invalid_response", http.StatusInternalServerError)
 		return
 	}
@@ -1110,10 +1317,22 @@ func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, e
 		Code: 0,
 	}
 
-	switch strings.ToLower(strings.TrimSpace(resTask.Status)) {
+	status := strings.ToLower(strings.TrimSpace(resTask.Status))
+	if status == "" {
+		if dataStatus := responseTaskNestedString(resTask.Data, "status"); dataStatus != "" {
+			status = strings.ToLower(dataStatus)
+		}
+	}
+	if status == "" {
+		if dataStatus := responseTaskNestedString(resTask.Metadata, "status"); dataStatus != "" {
+			status = strings.ToLower(dataStatus)
+		}
+	}
+
+	switch status {
 	case "queued", "pending":
 		taskResult.Status = model.TaskStatusQueued
-	case "processing", "in_progress", "running":
+	case "submitted", "processing", "in_progress", "running":
 		taskResult.Status = model.TaskStatusInProgress
 	case "completed", "succeeded", "success", "done":
 		taskResult.Status = model.TaskStatusSuccess
@@ -1132,6 +1351,18 @@ func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, e
 	}
 
 	return &taskResult, nil
+}
+
+func responseTaskNestedString(value any, key string) string {
+	typed, ok := value.(map[string]any)
+	if !ok {
+		return ""
+	}
+	raw, ok := typed[key]
+	if !ok || raw == nil {
+		return ""
+	}
+	return strings.TrimSpace(fmt.Sprint(raw))
 }
 
 func (a *TaskAdaptor) ConvertToOpenAIVideo(task *model.Task) ([]byte, error) {

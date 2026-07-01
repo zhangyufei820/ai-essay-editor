@@ -5,6 +5,19 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
+DEFAULT_VIDEO_ALLOWED_MODELS = (
+    "seedance-2.0",
+    "seedance-2.0-dj-fast",
+    "seedance-2.0-ld-17",
+    "seedance-2.0-kz-fast",
+    "seedance-2.0-cl-fast",
+    "seedance-2.0-cl",
+    "seedance-2.0-cl-mini",
+    "grok-video-super-720p",
+)
+DEFAULT_VIDEO_ALLOWED_MODELS_ENV = ",".join(DEFAULT_VIDEO_ALLOWED_MODELS)
+
+
 @dataclass(frozen=True)
 class Settings:
     service_name: str = "shenxiang-codex-workspace"
@@ -46,10 +59,7 @@ class Settings:
     )
     image_allowed_models: tuple[str, ...] = ("gpt-image-2-4K", "geek2api-image-2", "grok-imagine-image")
     video_allowed_models: tuple[str, ...] = (
-        "seedance-2.0",
-        "seedance-2.0-dj-fast",
-        "seedance-2.0-ld-17",
-        "grok-video-super-720p",
+        *DEFAULT_VIDEO_ALLOWED_MODELS,
     )
     sync_wait_seconds: int = 180
     task_retention_seconds: int = 86400
@@ -112,7 +122,7 @@ def get_settings() -> Settings:
         image_allowed_models=_env_list("IMAGE_ALLOWED_MODELS", "gpt-image-2-4K,geek2api-image-2,grok-imagine-image"),
         video_allowed_models=_env_list(
             "VIDEO_ALLOWED_MODELS",
-            "seedance-2.0,seedance-2.0-dj-fast,seedance-2.0-ld-17,grok-video-super-720p",
+            DEFAULT_VIDEO_ALLOWED_MODELS_ENV,
         ),
         sync_wait_seconds=_env_int("SYNC_WAIT_SECONDS", 180),
         task_retention_seconds=_env_int("TASK_RETENTION_SECONDS", 86400),

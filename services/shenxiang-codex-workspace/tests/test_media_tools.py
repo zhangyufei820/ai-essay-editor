@@ -304,3 +304,146 @@ def test_seedance_ld17_keeps_mixed_references(monkeypatch):
             "alias": "audio1",
         },
     ]
+
+
+def test_moonapix_cl_mini_uses_videos_endpoint_with_public_references(monkeypatch):
+    FakeVideoAsyncClient.calls = []
+    monkeypatch.setattr("app.media_tools.httpx.AsyncClient", FakeVideoAsyncClient)
+    monkeypatch.setattr("app.media_tools.asyncio.sleep", no_sleep)
+
+    request = WorkspaceRunRequest(
+        user_query="生成视频：保留 @image1 的角色，用 @video1 的镜头节奏。",
+        model_role="video_generation",
+        model_config={"video_generation": "seedance-2.0-cl-mini"},
+        params={"duration": 2, "ratio": "9:16", "resolution": "480p"},
+        files=[
+            WorkspaceFile(path="hero.png", content="https://cdn.test/hero.png"),
+            WorkspaceFile(path="clip.mp4", content="Asset://asset_video_xxx"),
+        ],
+    )
+
+    result = asyncio.run(
+        generate_video(
+            Settings(new_api_base_url="https://api.example.test/v1"),
+            request,
+            UserContext(api_key="sk-test", user_id="1", key_hint="sk-****"),
+            "seedance-2.0-cl-mini",
+        )
+    )
+
+    post_call = FakeVideoAsyncClient.calls[0]
+    payload = post_call["kwargs"]["json"]
+    assert post_call["url"] == "https://api.example.test/v1/videos"
+    assert payload["duration"] == 4
+    assert payload["ratio"] == "9:16"
+    assert payload["resolution"] == "480p"
+    assert payload["image_url"] == "https://cdn.test/hero.png"
+    assert payload["video_url"] == "Asset://asset_video_xxx"
+    assert payload["references"] == [
+        {
+            "media_type": "image",
+            "role": "first_frame",
+            "url": "https://cdn.test/hero.png",
+            "alias": "image1",
+        },
+        {
+            "media_type": "video",
+            "role": "reference_video",
+            "url": "Asset://asset_video_xxx",
+            "alias": "video1",
+        },
+    ]
+    assert result.urls == ["https://cdn.test/out.mp4"]
+
+
+def test_moonapix_non_mini_rejects_video_reference(monkeypatch):
+    FakeVideoAsyncClient.calls = []
+    monkeypatch.setattr("app.media_tools.httpx.AsyncClient", FakeVideoAsyncClient)
+    monkeypatch.setattr("app.media_tools.asyncio.sleep", no_sleep)
+
+    request = WorkspaceRunRequest(
+        user_query="生成视频：用参考图做产品展示。",
+        model_role="video_generation",
+        model_config={"video_generation": "seedance-2.0-cl-fast"},
+        params={"duration": 30, "resolution": "1080p"},
+        files=[
+            WorkspaceFile(path="hero.png", content="https://cdn.test/hero.png"),
+            WorkspaceFile(path="clip.mp4", content="https://cdn.test/skip.mp4"),
+        ],
+    )
+
+    with pytest.raises(MediaGenerationError, match="只支持图片参考"):
+        asyncio.run(
+            generate_video(
+                Settings(new_api_base_url="https://api.example.test/v1"),
+                request,
+                UserContext(api_key="sk-test", user_id="1", key_hint="sk-****"),
+                "seedance-2.0-cl-fast",
+            )
+        )
+
+    assert FakeVideoAsyncClient.calls == []
+
+
+def test_moonapix_cl_fast_accepts_public_image_reference(monkeypatch):
+    FakeVideoAsyncClient.calls = []
+    monkeypatch.setattr("app.media_tools.httpx.AsyncClient", FakeVideoAsyncClient)
+    monkeypatch.setattr("app.media_tools.asyncio.sleep", no_sleep)
+
+    request = WorkspaceRunRequest(
+        user_query="生成视频：用参考图做产品展示。",
+        model_role="video_generation",
+        model_config={"video_generation": "seedance-2.0-cl-fast"},
+        params={"duration": 30, "resolution": "1080p"},
+        files=[
+            WorkspaceFile(path="hero.png", content="https://cdn.test/hero.png"),
+        ],
+    )
+
+    asyncio.run(
+        generate_video(
+            Settings(new_api_base_url="https://api.example.test/v1"),
+            request,
+            UserContext(api_key="sk-test", user_id="1", key_hint="sk-****"),
+            "seedance-2.0-cl-fast",
+        )
+    )
+
+    payload = FakeVideoAsyncClient.calls[0]["kwargs"]["json"]
+    assert payload["duration"] == 15
+    assert payload["resolution"] == "720p"
+    assert payload["references"] == [
+        {
+            "media_type": "image",
+            "role": "first_frame",
+            "url": "https://cdn.test/hero.png",
+            "alias": "image1",
+        }
+    ]
+    assert "video_url" not in payload
+
+
+def test_moonapix_rejects_local_data_url_reference(monkeypatch):
+    FakeVideoAsyncClient.calls = []
+    monkeypatch.setattr("app.media_tools.httpx.AsyncClient", FakeVideoAsyncClient)
+
+    request = WorkspaceRunRequest(
+        user_query="生成视频：用本地上传图做参考。",
+        model_role="video_generation",
+        model_config={"video_generation": "seedance-2.0-cl-fast"},
+        files=[
+            WorkspaceFile(path="local.png", content="data:image/png;base64,iVBORw0KGgo="),
+        ],
+    )
+
+    with pytest.raises(MediaGenerationError, match="公网 URL"):
+        asyncio.run(
+            generate_video(
+                Settings(new_api_base_url="https://api.example.test/v1"),
+                request,
+                UserContext(api_key="sk-test", user_id="1", key_hint="sk-****"),
+                "seedance-2.0-cl-fast",
+            )
+        )
+
+    assert FakeVideoAsyncClient.calls == []

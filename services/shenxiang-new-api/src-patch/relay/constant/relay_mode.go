@@ -70,6 +70,10 @@ func Path2RelayMode(path string) int {
 		relayMode = RelayModeImagesGenerations
 	} else if strings.HasPrefix(path, "/v1/images/edits") || strings.HasPrefix(path, "/pg/images/edits") {
 		relayMode = RelayModeImagesEdits
+	} else if strings.HasPrefix(path, "/v1/videos/") || strings.HasPrefix(path, "/pg/videos/") || strings.HasPrefix(path, "/pg/video/generations/") {
+		relayMode = RelayModeVideoFetchByID
+	} else if strings.HasPrefix(path, "/v1/videos") || strings.HasPrefix(path, "/pg/videos") || strings.HasPrefix(path, "/pg/video/generations") {
+		relayMode = RelayModeVideoSubmit
 	} else if strings.HasPrefix(path, "/v1/edits") {
 		relayMode = RelayModeEdits
 	} else if strings.HasPrefix(path, "/v1/responses/compact") {

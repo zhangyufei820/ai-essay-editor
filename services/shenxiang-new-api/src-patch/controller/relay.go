@@ -728,7 +728,7 @@ func RelayTask(c *gin.Context) {
 		task.Action = relayInfo.Action
 		if insertErr := task.Insert(); insertErr != nil {
 			common.SysError("insert task error: " + insertErr.Error())
-		} else if isPlaygroundVideoTaskPath(c) {
+		} else if isVideoTaskPath(c) {
 			publicTaskID := task.TaskID
 			gopool.Go(func() {
 				service.WatchAsyncVideoTask(publicTaskID)
@@ -741,12 +741,12 @@ func RelayTask(c *gin.Context) {
 	}
 }
 
-func isPlaygroundVideoTaskPath(c *gin.Context) bool {
+func isVideoTaskPath(c *gin.Context) bool {
 	if c == nil || c.Request == nil || c.Request.URL == nil {
 		return false
 	}
 	switch strings.TrimSpace(c.Request.URL.Path) {
-	case "/pg/videos", "/pg/video/generations":
+	case "/v1/videos", "/pg/videos", "/pg/video/generations":
 		return true
 	default:
 		return false

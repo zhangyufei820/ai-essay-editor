@@ -68,6 +68,10 @@ key_types:
     base_url: "https://api.aiphui.top/v1"
     allowed_models:
       - seedance-2.0
+      - seedance-2.0-kz-fast
+      - seedance-2.0-cl-fast
+      - seedance-2.0-cl
+      - seedance-2.0-cl-mini
       - grok-video-super-720p
     use_for:
       - Video generation

@@ -18,6 +18,7 @@ def test_split_visible_models_uses_runtime_user_models_for_all_modes() -> None:
             "geek2api-image-2",
             "banana-2",
             "seedance-2.0-ld-17",
+            "seedance-2.0-cl-mini",
             IMAGE_BENEFIT_MODEL,
         ],
         include_image_benefit=True,
@@ -26,7 +27,7 @@ def test_split_visible_models_uses_runtime_user_models_for_all_modes() -> None:
     assert result["codex"] == ("gpt-5.5", "gpt-5.4-mini")
     assert result["claude"] == ("claude-opus-4-8",)
     assert result["image"] == ("gpt-image-2-4K", "geek2api-image-2", "banana-2", IMAGE_BENEFIT_MODEL)
-    assert result["video"] == ("seedance-2.0-ld-17",)
+    assert result["video"] == ("seedance-2.0-ld-17", "seedance-2.0-cl-mini")
 
 
 def test_strip_claude_group_suffix_keeps_media_fast_models() -> None:

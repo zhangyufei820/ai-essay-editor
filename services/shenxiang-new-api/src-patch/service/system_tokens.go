@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -20,7 +21,21 @@ type SystemTokenProfile struct {
 type SystemTokenEnsureResult struct {
 	UserID  int
 	Created int
+	Updated int
 	Skipped int
+}
+
+var MoonApiXSeedanceVideoModels = []string{
+	"seedance-2.0-kz-fast",
+	"seedance-2.0-cl-fast",
+	"seedance-2.0-cl",
+	"seedance-2.0-cl-mini",
+}
+
+func videoTokenModels() []string {
+	models := []string{"seedance-2.0", "seedance-2.0-dj-fast", "seedance-2.0-ld-17", "grok-video-super-720p"}
+	models = append(models, MoonApiXSeedanceVideoModels...)
+	return models
 }
 
 func SystemTokenProfiles() []SystemTokenProfile {
@@ -43,7 +58,7 @@ func SystemTokenProfiles() []SystemTokenProfile {
 		{
 			Mode:   "video",
 			Name:   "星人视频生成令牌",
-			Models: []string{"seedance-2.0", "seedance-2.0-dj-fast", "seedance-2.0-ld-17", "grok-video-super-720p"},
+			Models: videoTokenModels(),
 		},
 	}
 }
@@ -61,6 +76,28 @@ func EnsureSystemTokensForUserID(ctx context.Context, userID int) (SystemTokenEn
 		}
 
 		for _, profile := range SystemTokenProfiles() {
+			var token model.Token
+			if err := tx.Where("user_id = ? AND name = ?", user.Id, profile.Name).First(&token).Error; err != nil {
+				if !errors.Is(err, gorm.ErrRecordNotFound) {
+					return err
+				}
+			} else {
+				nextLimits := mergeModelLimits(token.ModelLimits, profile.Models)
+				if !token.ModelLimitsEnabled || nextLimits != token.ModelLimits {
+					updates := map[string]interface{}{
+						"model_limits_enabled": true,
+						"model_limits":         nextLimits,
+					}
+					if err := tx.Model(&model.Token{}).Where("id = ?", token.Id).Updates(updates).Error; err != nil {
+						return err
+					}
+					result.Updated++
+				} else {
+					result.Skipped++
+				}
+				continue
+			}
+
 			var count int64
 			if err := tx.Model(&model.Token{}).Where("user_id = ? AND name = ?", user.Id, profile.Name).Count(&count).Error; err != nil {
 				return err
@@ -74,7 +111,7 @@ func EnsureSystemTokensForUserID(ctx context.Context, userID int) (SystemTokenEn
 			if err != nil {
 				return err
 			}
-			token := model.Token{
+			newToken := model.Token{
 				UserId:             user.Id,
 				Key:                key,
 				Status:             common.TokenStatusEnabled,
@@ -89,7 +126,7 @@ func EnsureSystemTokensForUserID(ctx context.Context, userID int) (SystemTokenEn
 				Group:              user.Group,
 				CrossGroupRetry:    true,
 			}
-			if err := tx.Create(&token).Error; err != nil {
+			if err := tx.Create(&newToken).Error; err != nil {
 				return err
 			}
 			result.Created++
@@ -99,5 +136,32 @@ func EnsureSystemTokensForUserID(ctx context.Context, userID int) (SystemTokenEn
 	if err != nil {
 		return result, err
 	}
+	if result.Updated > 0 {
+		if err := model.InvalidateUserTokensCache(userID); err != nil {
+			common.SysLog(fmt.Sprintf("failed to invalidate system token cache for user %d: %v", userID, err))
+		}
+	}
 	return result, nil
+}
+
+func mergeModelLimits(existing string, required []string) string {
+	values := make([]string, 0, len(required))
+	seen := make(map[string]bool)
+	for _, modelName := range strings.Split(existing, ",") {
+		modelName = strings.TrimSpace(modelName)
+		if modelName == "" || seen[modelName] {
+			continue
+		}
+		seen[modelName] = true
+		values = append(values, modelName)
+	}
+	for _, modelName := range required {
+		modelName = strings.TrimSpace(modelName)
+		if modelName == "" || seen[modelName] {
+			continue
+		}
+		seen[modelName] = true
+		values = append(values, modelName)
+	}
+	return strings.Join(values, ",")
 }

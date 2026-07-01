@@ -50,6 +50,7 @@ func runSystemTokenReconcileOnce() {
 	defer cancel()
 	var scanned int
 	var created int
+	var updated int
 	var failed int
 	lastID := 0
 	for {
@@ -78,9 +79,10 @@ func runSystemTokenReconcileOnce() {
 				continue
 			}
 			created += result.Created
+			updated += result.Updated
 		}
 	}
-	if created > 0 || failed > 0 {
-		logger.LogInfo(ctx, fmt.Sprintf("system token reconcile completed: scanned=%d created=%d failed=%d", scanned, created, failed))
+	if created > 0 || updated > 0 || failed > 0 {
+		logger.LogInfo(ctx, fmt.Sprintf("system token reconcile completed: scanned=%d created=%d updated=%d failed=%d", scanned, created, updated, failed))
 	}
 }

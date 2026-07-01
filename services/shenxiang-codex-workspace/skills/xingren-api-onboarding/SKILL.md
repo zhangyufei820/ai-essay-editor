@@ -70,7 +70,7 @@ Use this mapping before writing commands:
 | Claude Code native | `https://api.aiphui.top/claude` | Xingren Claude key | `cc-native-sonnet-fast`, `cc-native-haiku` |
 | Claude Code GPT mapping | `https://api.aiphui.top/claude` | Xingren Claude key | `cc-gpt-sonnet`, `cc-gpt-haiku` |
 | Image generation | `https://api.aiphui.top/v1` | Xingren image key | 普通文生图用 `gpt-image-2-4K`；局部编辑 / mask 可用 `gpt-image-2-4K` 或 `grok-imagine-image` |
-| Video generation | `https://api.aiphui.top/v1` | Xingren video key | `seedance-2.0`, `grok-video-super-720p` |
+| Video generation | `https://api.aiphui.top/v1` | Xingren video key | `seedance-2.0`, `seedance-2.0-kz-fast`, `seedance-2.0-cl-fast`, `seedance-2.0-cl`, `seedance-2.0-cl-mini`, `grok-video-super-720p` |
 
 ## Teaching Style
 
