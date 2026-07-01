@@ -42,6 +42,7 @@ import {
   Plus,
   RotateCcw,
   MoonStar,
+  Settings2,
   Square,
   SunMedium,
   Store,
@@ -101,8 +102,7 @@ const primaryNav = [
   { label: '聊天', icon: MessageSquare, action: 'chat', active: true },
   { label: '媒体工坊', icon: Store, href: '/console/media-playground' },
   { label: '云 Codex', icon: KeyRound, href: '/codex/' },
-  { label: '接入设置', icon: KeyRound, href: '/console/token' },
-  { label: '模型广场', href: '/pricing' },
+  { label: '接入设置', icon: Settings2, href: '/console/token' },
   { label: '定价', icon: BadgeDollarSign, href: '/pricing' },
   { label: '在线客服', icon: Headphones, action: 'teacher' },
 ];
@@ -1068,7 +1068,7 @@ const TextWorkbench = ({ isMobile }) => {
           </div>
           <div>
             <strong>{isLoggedIn ? displayName : '未登录'}</strong>
-            {isLoggedIn ? <span>Pro</span> : <Link to='/login'>登录后使用</Link>}
+            {!isLoggedIn && <Link to='/login'>登录后使用</Link>}
           </div>
         </div>
       </aside>
@@ -1199,7 +1199,7 @@ const TextWorkbench = ({ isMobile }) => {
           ) : (
             <div className='sx-gpt-landing'>
               <div className='sx-gpt-landing-copy'>
-                <p className='sx-gpt-landing-kicker'>ChatGPT 工作站</p>
+                <p className='sx-gpt-landing-kicker'>AIPHUI 工作站</p>
                 <h1>新聊天</h1>
                 <p>文本对话、文件读取、模型切换、复制和再次编辑，都放在这里。</p>
               </div>
