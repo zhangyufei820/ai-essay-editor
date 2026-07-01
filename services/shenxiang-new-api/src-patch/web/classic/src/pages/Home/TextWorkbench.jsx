@@ -100,6 +100,7 @@ const primaryNav = [
   { label: '新聊天', icon: Plus, action: 'new' },
   { label: '聊天', icon: MessageSquare, action: 'chat', active: true },
   { label: '媒体工坊', icon: Store, href: '/console/media-playground' },
+  { label: '云 Codex', icon: KeyRound, href: '/codex/' },
   { label: '接入设置', icon: KeyRound, href: '/console/token' },
   { label: '模型广场', href: '/pricing' },
   { label: '定价', icon: BadgeDollarSign, href: '/pricing' },

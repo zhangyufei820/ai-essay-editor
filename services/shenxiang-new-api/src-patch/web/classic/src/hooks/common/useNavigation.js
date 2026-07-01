@@ -26,6 +26,7 @@ export const useNavigation = (t, docsLink, headerNavModules) => {
       home: true,
       console: true,
       media: true,
+      codex: true,
       pricing: true,
       docs: true,
       about: true,
@@ -49,6 +50,11 @@ export const useNavigation = (t, docsLink, headerNavModules) => {
         text: t('媒体工坊'),
         itemKey: 'media',
         to: '/console/media-playground',
+      },
+      {
+        text: t('云 Codex'),
+        itemKey: 'codex',
+        to: '/codex/',
       },
       {
         text: t('模型广场'),
@@ -79,6 +85,9 @@ export const useNavigation = (t, docsLink, headerNavModules) => {
       }
       if (link.itemKey === 'media') {
         return modules.media !== false;
+      }
+      if (link.itemKey === 'codex') {
+        return true;
       }
       if (link.itemKey === 'pricing') {
         // 支持新的pricing配置格式

@@ -23,7 +23,10 @@ import {
   API,
   applyPricingDisplayOverrides,
   copy,
+  getPricingModelDescription,
   getPricingModelDisplayName,
+  getPricingModelVisibleTags,
+  getPricingModelVisibleVendorName,
   isModelInVisibleGroup,
   showError,
   showInfo,
@@ -139,12 +142,9 @@ export const useModelPricingData = () => {
     if (filterTag !== 'all') {
       const tagLower = filterTag.toLowerCase();
       result = result.filter((model) => {
-        if (!model.tags) return false;
-        const tagsArr = model.tags
-          .toLowerCase()
-          .split(/[,;|]+/)
-          .map((tag) => tag.trim())
-          .filter(Boolean);
+        const tagsArr = getPricingModelVisibleTags(model).map((tag) =>
+          tag.toLowerCase(),
+        );
         return tagsArr.includes(tagLower);
       });
     }
@@ -160,11 +160,17 @@ export const useModelPricingData = () => {
             getPricingModelDisplayName(model)
               .toLowerCase()
               .includes(searchTerm)) ||
-          (model.description &&
-            model.description.toLowerCase().includes(searchTerm)) ||
-          (model.tags && model.tags.toLowerCase().includes(searchTerm)) ||
-          (model.vendor_name &&
-            model.vendor_name.toLowerCase().includes(searchTerm)),
+          (getPricingModelDescription(model) &&
+            getPricingModelDescription(model)
+              .toLowerCase()
+              .includes(searchTerm)) ||
+          getPricingModelVisibleTags(model)
+            .join(',')
+            .toLowerCase()
+            .includes(searchTerm) ||
+          getPricingModelVisibleVendorName(model)
+            .toLowerCase()
+            .includes(searchTerm),
       );
     }
 
@@ -216,6 +222,12 @@ export const useModelPricingData = () => {
         m.vendor_icon = vendor.icon;
         m.vendor_description = vendor.description;
       }
+
+      const visibleVendorName = getPricingModelVisibleVendorName(m);
+      if (visibleVendorName) {
+        m.vendor_name = visibleVendorName;
+      }
+      m.visible_tags = getPricingModelVisibleTags(m).join(',');
     }
     models.sort((a, b) => {
       return a.quota_type - b.quota_type;

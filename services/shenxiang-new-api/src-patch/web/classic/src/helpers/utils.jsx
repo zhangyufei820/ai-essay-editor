@@ -64,12 +64,14 @@ const PRICING_DISPLAY_OVERRIDES = {
     icon: 'OpenAI',
   },
   'geek2api-image-2': {
-    display_name: 'Geek2API Image 2',
-    description: 'Geek2API Image 2：支持 1K/2K/4K 输出，人民币 1K ¥0.03、2K ¥0.06、4K ¥0.10/张。',
+    display_name: '星人 Image 2',
+    description: '星人 Image 2：支持 1K/2K/4K 输出，人民币 1K ¥0.03、2K ¥0.06、4K ¥0.10/张。',
     fixed_price_label: '1K ¥0.03 / 2K ¥0.06 / 4K ¥0.10',
     price_unit_label: '',
     billing_label: '按张计费',
     icon: 'OpenAI',
+    visible_vendor_name: '星人图像',
+    hidden_tags: ['geek2api'],
   },
   'seedance-2.0-dj-fast': {
     display_name: 'seedance-2.0-dj-fast',
@@ -116,6 +118,23 @@ export function getPricingModelDescription(model) {
   return getPricingDisplayOverride(model)?.description || model?.description || '';
 }
 
+export function getPricingModelVisibleVendorName(model) {
+  return getPricingDisplayOverride(model)?.visible_vendor_name || model?.vendor_name || '';
+}
+
+export function getPricingModelVisibleTags(model) {
+  const tags = String(model?.tags || '')
+    .split(/[,;|]+/)
+    .map((tag) => tag.trim())
+    .filter(Boolean);
+  const hiddenTags = new Set(
+    (getPricingDisplayOverride(model)?.hidden_tags || []).map((tag) =>
+      String(tag).toLowerCase(),
+    ),
+  );
+  return tags.filter((tag) => !hiddenTags.has(tag.toLowerCase()));
+}
+
 export function getPricingBillingLabel(model, t = (key) => key) {
   const override = getPricingDisplayOverride(model);
   if (override?.billing_label) return override.billing_label;
@@ -125,11 +144,7 @@ export function getPricingBillingLabel(model, t = (key) => key) {
 }
 
 function pricingModelTags(model) {
-  return String(model?.tags || '')
-    .toLowerCase()
-    .split(/[,;|]+/)
-    .map((tag) => tag.trim())
-    .filter(Boolean);
+  return getPricingModelVisibleTags(model).map((tag) => tag.toLowerCase());
 }
 
 export function getVisibleModelGroup(model, t = (key) => key) {
@@ -157,8 +172,9 @@ export function getVisibleModelGroup(model, t = (key) => key) {
 
 export function isModelInVisibleGroup(model, group) {
   if (!group || group === 'all') return true;
-  if (group === 'unknown') return !model?.vendor_name;
-  if (model?.vendor_name === group) return true;
+  const visibleVendorName = getPricingModelVisibleVendorName(model);
+  if (group === 'unknown') return !visibleVendorName;
+  if (visibleVendorName === group) return true;
   return getVisibleModelGroup(model).value === group;
 }
 

@@ -26,6 +26,7 @@ import {
   calculateModelPrice,
   getPricingModelDescription,
   getPricingModelDisplayName,
+  getPricingModelVisibleTags,
   getModelPriceItems,
 } from '../../../../../helpers';
 import {
@@ -53,9 +54,9 @@ function renderQuotaType(type, t) {
 }
 
 // Render tags list using RenderUtils
-const renderTags = (text) => {
-  if (!text) return '-';
-  const tagsArr = text.split(',').filter((tag) => tag.trim());
+const renderTags = (_, record) => {
+  const tagsArr = getPricingModelVisibleTags(record);
+  if (tagsArr.length === 0) return '-';
   return renderLimitedItems({
     items: tagsArr,
     renderItem: (tag, idx) => (
@@ -134,7 +135,7 @@ export const getPricingTableColumns = ({
     render: (text, record, index) => {
       return renderModelTag(getPricingModelDisplayName(record), {
         onClick: () => {
-          copyText(text);
+          copyText(getPricingModelDisplayName(record));
         },
       });
     },

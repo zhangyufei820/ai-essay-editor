@@ -49,6 +49,7 @@ const routerMap = {
   deployment: '/console/deployment',
   chat: '/console/chat',
   media: '/console/media-playground',
+  codex: '/console/codex',
   personal: '/console/personal',
 };
 
@@ -199,6 +200,11 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         to: '/media-playground',
       },
       {
+        text: t('云 Codex'),
+        itemKey: 'codex',
+        to: '/codex/',
+      },
+      {
         text: t('聊天'),
         itemKey: 'chat',
         to: '/console/chat',
@@ -208,6 +214,7 @@ const SiderBar = ({ onNavigate = () => {} }) => {
     // 根据配置过滤项目
     const filteredItems = items.filter((item) => {
       if (item.itemKey === 'media') return true;
+      if (item.itemKey === 'codex') return true;
       const configVisible = isModuleVisible('chat', item.itemKey);
       return configVisible;
     });

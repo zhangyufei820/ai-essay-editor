@@ -29,6 +29,7 @@ export const DEFAULT_ADMIN_CONFIG = {
   chat: {
     enabled: true,
     media: true,
+    codex: true,
     chat: true,
   },
   console: {
@@ -59,7 +60,7 @@ export const DEFAULT_ADMIN_CONFIG = {
 const deepClone = (value) => JSON.parse(JSON.stringify(value));
 
 const FORCED_HIDDEN_MODULES = {
-  chat: new Set(['playground', 'codex']),
+  chat: new Set(['playground']),
 };
 
 const applyForcedHiddenModules = (config) => {

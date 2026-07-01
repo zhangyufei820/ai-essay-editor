@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import React, { lazy, Suspense, useContext, useMemo } from 'react';
+import React, { lazy, Suspense, useContext, useEffect, useMemo } from 'react';
 import { Route, Routes, useLocation, useParams } from 'react-router-dom';
 import { Moon, Sun } from 'lucide-react';
 import Loading from './components/common/ui/Loading';
@@ -61,6 +61,13 @@ const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
 function DynamicOAuth2Callback() {
   const { provider } = useParams();
   return <OAuth2Callback type={provider} />;
+}
+
+function CodexRedirect() {
+  useEffect(() => {
+    window.location.replace('/codex/');
+  }, []);
+  return <Loading />;
 }
 
 function GlobalThemeToggle() {
@@ -176,6 +183,14 @@ function App() {
               <Suspense fallback={<Loading></Loading>} key={location.pathname}>
                 <MediaPlayground />
               </Suspense>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path='/console/codex'
+          element={
+            <PrivateRoute>
+              <CodexRedirect />
             </PrivateRoute>
           }
         />

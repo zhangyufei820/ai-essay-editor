@@ -41,6 +41,7 @@ import {
   formatDynamicPriceSummary,
   getPricingModelDescription,
   getPricingModelDisplayName,
+  getPricingModelVisibleTags,
   getLobeHubIcon,
 } from '../../../../../helpers';
 import PricingCardSkeleton from './PricingCardSkeleton';
@@ -179,8 +180,8 @@ const PricingCardView = ({
 
     // 自定义标签（右边）
     const customTags = [];
-    if (record.tags) {
-      const tagArr = record.tags.split(',').filter(Boolean);
+    const tagArr = getPricingModelVisibleTags(record);
+    if (tagArr.length > 0) {
       tagArr.forEach((tg, idx) => {
         customTags.push(
           <Tag
@@ -290,7 +291,7 @@ const PricingCardView = ({
                       icon={<Copy size={12} />}
                       onClick={(e) => {
                         e.stopPropagation();
-                        copyText(model.model_name);
+                        copyText(displayName);
                       }}
                     />
 

@@ -148,9 +148,9 @@ const IMAGE_MODELS = [
   },
   {
     value: 'geek2api-image-2',
-    label: 'Geek2API Image 2',
+    label: '星人 Image 2',
     badge: '4K',
-    vendor: 'Geek2API',
+    vendor: '星人图像',
     sizes: OPENAI_IMAGE_ASPECT_RATIOS,
     aspectRatios: OPENAI_IMAGE_ASPECT_RATIOS,
     resolutions: ['1K', '2K', '4K'],
@@ -166,7 +166,7 @@ const IMAGE_MODELS = [
     edit: true,
     priceLabel: '1K ¥0.03 / 2K ¥0.06 / 4K ¥0.10',
     billingLabel: '按张计费',
-    hint: 'Geek2API Image 2 链路，支持 1K/2K/4K，按分辨率三档计费。',
+    hint: '星人 Image 2：支持 1K/2K/4K，按分辨率三档计费。',
   },
   {
     value: 'banana-2',
