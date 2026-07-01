@@ -83,18 +83,7 @@ const GOOGLE_GEMINI_31_FLASH_IMAGE_ASPECT_RATIOS = [
   '21:9',
 ];
 
-const GOOGLE_GEMINI_PRO_IMAGE_ASPECT_RATIOS = [
-  '1:1',
-  '2:3',
-  '3:2',
-  '3:4',
-  '4:3',
-  '4:5',
-  '5:4',
-  '9:16',
-  '16:9',
-  '21:9',
-];
+const GOOGLE_GEMINI_PRO_IMAGE_ASPECT_RATIOS = GOOGLE_GEMINI_31_FLASH_IMAGE_ASPECT_RATIOS;
 
 const XAI_GROK_IMAGE_ASPECT_RATIOS = [
   'auto',
@@ -195,7 +184,7 @@ const IMAGE_MODELS = [
     vendor: '星人图像',
     sizes: GOOGLE_GEMINI_PRO_IMAGE_ASPECT_RATIOS,
     aspectRatios: GOOGLE_GEMINI_PRO_IMAGE_ASPECT_RATIOS,
-    resolutions: ['512', '1K', '2K', '4K'],
+    resolutions: ['1K', '2K', '4K'],
     qualities: ['auto'],
     formats: ['url'],
     defaultSize: '16:9',
@@ -336,11 +325,6 @@ const GPT_IMAGE_2_SIZE_BY_RESOLUTION = {
 };
 
 const GOOGLE_IMAGE_EDIT_SIZE_BY_RESOLUTION = {
-  '512': {
-    square: '1024x1024',
-    portrait: '1024x1024',
-    landscape: '1024x1024',
-  },
   '1K': {
     square: '1024x1024',
     portrait: '1024x1024',
