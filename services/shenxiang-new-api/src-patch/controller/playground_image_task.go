@@ -1051,7 +1051,7 @@ func markPlaygroundImageTaskSuccess(task *model.Task, item *playgroundMediaItem,
 	if logErr != nil {
 		common.SysError("failed to update playground image task result log: " + logErr.Error())
 	}
-	if logErr == nil && won {
+	if won {
 		cleanupPlaygroundImageTaskRequest(requestFile)
 	}
 }

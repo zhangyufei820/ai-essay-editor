@@ -24,6 +24,8 @@ func TestNormalizeUserVisibleModelsHidesClaudeFastAndFullGroups(t *testing.T) {
 	models := normalizeUserVisibleModels(2, []string{
 		"claude-sonnet-4-5-20250929-fast",
 		"claude-sonnet-4-5-20250929-full",
+		"claude sonnet 4 5 20250929 fast",
+		"claude_sonnet_4_5_20250929_full",
 		"claude-sonnet-4-5-20250929",
 		"seedance-2.0-dj-fast",
 	})

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
@@ -18,7 +19,19 @@ import (
 
 func isHiddenUserVisibleModel(modelName string) bool {
 	name := strings.ToLower(strings.TrimSpace(modelName))
-	return strings.HasPrefix(name, "claude-") && (strings.HasSuffix(name, "-fast") || strings.HasSuffix(name, "-full"))
+	if !strings.HasPrefix(name, "claude") {
+		return false
+	}
+
+	tokens := strings.FieldsFunc(name, func(r rune) bool {
+		return r == '-' || r == '_' || unicode.IsSpace(r)
+	})
+	if len(tokens) < 2 || !strings.HasPrefix(tokens[0], "claude") {
+		return false
+	}
+
+	lastToken := tokens[len(tokens)-1]
+	return lastToken == "fast" || lastToken == "full"
 }
 
 func isHiddenUserVisibleModelForUser(userID int, modelName string) bool {

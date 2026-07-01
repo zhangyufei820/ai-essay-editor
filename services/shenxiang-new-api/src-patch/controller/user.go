@@ -492,10 +492,9 @@ func generateDefaultSidebarConfig(userRole int) string {
 
 	// 聊天区域 - 所有用户都可以访问
 	defaultConfig["chat"] = map[string]interface{}{
-		"enabled":    true,
-		"playground": true,
-		"media":      true,
-		"chat":       true,
+		"enabled": true,
+		"media":   true,
+		"chat":    true,
 	}
 
 	// 控制台区域 - 所有用户都可以访问
@@ -576,15 +575,7 @@ func GetUserModels(c *gin.Context) {
 }
 
 func normalizeUserVisibleModels(userID int, models []string) []string {
-	visible := make([]string, 0, len(models)+1)
-	for _, modelName := range models {
-		if isHiddenUserVisibleModelForUser(userID, modelName) {
-			continue
-		}
-		if !common.StringsContains(visible, modelName) {
-			visible = append(visible, modelName)
-		}
-	}
+	visible := filterUserVisibleModelNames(userID, models)
 	if userID == seedancePrivateVideoAllowedUserID && !common.StringsContains(visible, seedancePrivateVideoModel) {
 		visible = append(visible, seedancePrivateVideoModel)
 	}
