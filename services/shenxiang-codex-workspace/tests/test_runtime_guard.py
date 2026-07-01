@@ -79,6 +79,26 @@ def test_codex_runner_writes_task_router_guidance(tmp_path):
     assert "not the local development workspace" in content
 
 
+def test_codex_runner_reads_prompt_from_stdin_after_image_args(tmp_path):
+    runner = CodexRunner.__new__(CodexRunner)
+    runner.settings = type("Settings", (), {"codex_exec_sandbox": "workspace-write"})()
+    runner._cached_help_text = "--model --json --ephemeral --color --sandbox --skip-git-repo-check --cd --image"
+    runner._model_for_task = lambda _task: "gpt-5.4-mini"
+
+    prompt = "请基于上传图片设计一个儿童启蒙帆布袋。"
+    command = runner._build_command(
+        {"skill": {"sandbox": "workspace-write"}},
+        tmp_path,
+        prompt,
+        [str(tmp_path / "input.png")],
+        json_events=True,
+    )
+
+    assert command[-2:] == ["--", "-"]
+    assert prompt not in command
+    assert command[command.index("--image") + 1] == str(tmp_path / "input.png")
+
+
 def test_fast_skill_route_allows_pure_text_skill():
     request = WorkspaceRunRequest(
         user_query="请按当前 paper_outline skill 执行。为了测试响应速度，只输出一行 pong",

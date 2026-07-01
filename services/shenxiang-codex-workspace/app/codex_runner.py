@@ -131,6 +131,7 @@ class CodexRunner:
                 command,
                 cwd=str(workspace),
                 env=build_codex_env(self.settings, user_api_key, self._command_guard_path(task)),
+                input=prompt,
                 text=True,
                 capture_output=True,
                 timeout=timeout,
@@ -223,7 +224,9 @@ class CodexRunner:
             env=build_codex_env(self.settings, user_api_key, self._command_guard_path(task)),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            stdin=asyncio.subprocess.PIPE,
         )
+        await self._write_prompt_stdin(process, prompt)
         stdout_chunks: list[str] = []
         stderr_chunks: list[str] = []
         final_message = ""
@@ -326,7 +329,7 @@ class CodexRunner:
         if image_paths and "--image" in help_text:
             for image_path in image_paths:
                 command.extend(["--image", image_path])
-        command.append(prompt)
+        command.extend(["--", "-"])
         return command
 
     async def _collect_stderr(self, process: asyncio.subprocess.Process, chunks: list[str]) -> None:
@@ -336,6 +339,17 @@ class CodexRunner:
             line = raw_line.decode("utf-8", errors="replace").rstrip()
             if line:
                 chunks.append(line)
+
+    async def _write_prompt_stdin(self, process: asyncio.subprocess.Process, prompt: str) -> None:
+        if process.stdin is None:
+            return
+        try:
+            process.stdin.write(prompt.encode("utf-8"))
+            await process.stdin.drain()
+        except (BrokenPipeError, ConnectionResetError):
+            return
+        finally:
+            process.stdin.close()
 
     def _parse_codex_event(self, line: str, user_api_key: str) -> dict[str, Any]:
         secret_values = secret_values_for_redaction(self.settings, user_api_key)
