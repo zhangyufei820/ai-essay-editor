@@ -9,6 +9,17 @@ import httpx
 from redis import Redis
 
 from app.config import Settings, secret_values_for_redaction
+from app.model_access import (
+    IMAGE_BENEFIT_MODEL,
+    SERVER_ALLOWED_MODELS_METADATA_KEY,
+    default_mode_models,
+    dedupe_models,
+    mode_models_payload_from_metadata,
+    normalize_mode_models_payload,
+    split_visible_models,
+    supported_image_models,
+    supported_video_models,
+)
 from app.security import public_error_message, redact
 
 logger = logging.getLogger(__name__)
@@ -44,7 +55,9 @@ class NewApiClient:
             actual_user_id = str(user.get("id") or "")
             if actual_user_id and actual_user_id != requested_user_id:
                 raise NewApiAuthError("登录身份不一致，请退出后重新登录。")
-            token_keys = await self.ensure_mode_tokens(client, actual_user_id or requested_user_id, headers, user)
+            mode_models = await self.resolve_mode_models(client, headers, actual_user_id or requested_user_id, user)
+            self._attach_mode_models(user, mode_models)
+            token_keys = await self.ensure_mode_tokens(client, actual_user_id or requested_user_id, headers, user, mode_models)
             token_key = token_keys["codex"]
         result = {
             "user": user,
@@ -72,7 +85,9 @@ class NewApiClient:
             actual_user_id = str(user.get("id") or "")
             if actual_user_id and actual_user_id != requested_user_id:
                 raise NewApiAuthError("登录身份不一致，请退出后重新登录。")
-            token_keys = await self.ensure_mode_tokens(client, actual_user_id or requested_user_id, headers, user)
+            mode_models = await self.resolve_mode_models(client, headers, actual_user_id or requested_user_id, user)
+            self._attach_mode_models(user, mode_models)
+            token_keys = await self.ensure_mode_tokens(client, actual_user_id or requested_user_id, headers, user, mode_models)
         return {"user": user, "api_keys": token_keys}
 
     async def ensure_mode_tokens(
@@ -81,12 +96,14 @@ class NewApiClient:
         user_id: str,
         headers: dict[str, str],
         user: dict[str, Any],
+        mode_models: dict[str, tuple[str, ...]] | None = None,
     ) -> dict[str, str]:
+        effective_models = self._effective_mode_models(mode_models)
         profiles = {
-            "codex": (self.settings.auto_token_name, self.settings.codex_allowed_models),
-            "claude": (self.settings.claude_token_name, self.settings.claude_allowed_models),
-            "image": (self.settings.image_token_name, self.settings.image_allowed_models),
-            "video": (self.settings.video_token_name, self.settings.video_allowed_models),
+            "codex": (self.settings.auto_token_name, effective_models["codex"]),
+            "claude": (self.settings.claude_token_name, effective_models["claude"]),
+            "image": (self.settings.image_token_name, effective_models["image"]),
+            "video": (self.settings.video_token_name, effective_models["video"]),
         }
         tokens = await self._list_tokens(client, headers)
         result: dict[str, str] = {}
@@ -110,6 +127,86 @@ class NewApiClient:
             self.settings.auto_token_name,
             self.settings.codex_allowed_models,
         )
+
+    async def resolve_mode_models(
+        self,
+        client: httpx.AsyncClient,
+        headers: dict[str, str],
+        user_id: str,
+        user: dict[str, Any],
+    ) -> dict[str, tuple[str, ...]]:
+        visible_models = await self._load_visible_models(client, headers)
+        if visible_models is not None:
+            mode_models = split_visible_models(self.settings, visible_models)
+        else:
+            existing = user.get("metadata") if isinstance(user.get("metadata"), dict) else None
+            mode_models = mode_models_payload_from_metadata(existing)
+            if not mode_models:
+                mode_models = default_mode_models(self.settings)
+        has_image_benefit = await self._has_image_benefit_access(client, headers, user_id)
+        if has_image_benefit:
+            image_models = dedupe_models((*mode_models.get("image", ()), IMAGE_BENEFIT_MODEL))
+            mode_models["image"] = image_models
+        effective = self._effective_mode_models(mode_models)
+        if has_image_benefit and IMAGE_BENEFIT_MODEL not in effective["image"]:
+            effective["image"] = dedupe_models((*effective["image"], IMAGE_BENEFIT_MODEL))
+        return effective
+
+    async def _load_visible_models(self, client: httpx.AsyncClient, headers: dict[str, str]) -> tuple[str, ...] | None:
+        payload = await self._get_json(client, "/api/user/models", headers)
+        if not payload.get("success", False):
+            return None
+        data = payload.get("data")
+        if not isinstance(data, list):
+            return None
+        return dedupe_models(str(item or "").strip() for item in data)
+
+    async def _has_image_benefit_access(
+        self,
+        client: httpx.AsyncClient,
+        headers: dict[str, str],
+        user_id: str,
+    ) -> bool:
+        cache_key = f"codex:image-benefit:{user_id}"
+        cached = self._cache_get_json(cache_key)
+        if isinstance(cached, dict):
+            return bool(cached.get("enabled"))
+        payload = await self._get_json(client, "/api/user/image-benefit", headers)
+        enabled = False
+        if payload.get("success", False):
+            data = payload.get("data")
+            if isinstance(data, dict):
+                status = str(data.get("status") or "").strip().lower()
+                enabled = bool(data.get("token_id")) and status not in {"", "none", "expired", "disabled"}
+        self._cache_set_json(cache_key, {"enabled": enabled}, self.settings.user_bootstrap_cache_seconds)
+        return enabled
+
+    def _effective_mode_models(
+        self,
+        mode_models: dict[str, tuple[str, ...]] | None,
+    ) -> dict[str, tuple[str, ...]]:
+        defaults = default_mode_models(self.settings)
+        current = normalize_mode_models_payload(mode_models or {})
+        codex_models = current["codex"] if "codex" in current else defaults["codex"]
+        claude_models = current["claude"] if "claude" in current else defaults["claude"]
+        image_models = current["image"] if "image" in current else supported_image_models(self.settings)
+        video_models = current["video"] if "video" in current else supported_video_models(self.settings)
+        return {
+            "codex": tuple(codex_models),
+            "claude": tuple(claude_models),
+            "image": tuple(image_models),
+            "video": tuple(video_models),
+        }
+
+    def _attach_mode_models(self, user: dict[str, Any], mode_models: dict[str, tuple[str, ...]]) -> None:
+        metadata = user.get("metadata")
+        if not isinstance(metadata, dict):
+            metadata = {}
+            user["metadata"] = metadata
+        metadata[SERVER_ALLOWED_MODELS_METADATA_KEY] = {
+            mode: list(models)
+            for mode, models in mode_models.items()
+        }
 
     async def _list_tokens(self, client: httpx.AsyncClient, headers: dict[str, str]) -> list[dict[str, Any]]:
         payload = await self._get_json(client, "/api/token/?p=1&size=100", headers)

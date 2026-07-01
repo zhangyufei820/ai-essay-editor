@@ -16,6 +16,7 @@ from uuid import uuid4
 import httpx
 
 from app.config import Settings, secret_values_for_redaction
+from app.model_access import mode_models_from_metadata, mode_models_payload_from_metadata
 from app.models import WorkspaceRunRequest
 from app.security import UserContext, redact
 
@@ -129,10 +130,18 @@ def selected_media_model(settings: Settings, request: WorkspaceRunRequest, media
     role = "image_generation" if media_type == "image" else "video_generation"
     config = request.model_roles.model_dump()
     candidate = str(config.get(role) or "").strip()
-    allowed = set(settings.image_allowed_models if media_type == "image" else settings.video_allowed_models)
+    metadata = request.metadata if isinstance(request.metadata, dict) else {}
+    configured = mode_models_from_metadata(metadata, "image" if media_type == "image" else "video")
+    allowed = set(configured or (settings.image_allowed_models if media_type == "image" else settings.video_allowed_models))
+    mode_key = "image" if media_type == "image" else "video"
+    if mode_key in mode_models_payload_from_metadata(metadata) and not allowed:
+        raise MediaGenerationError(f"当前账号没有可用的{ '图像' if media_type == 'image' else '视频' }模型权限。")
     if candidate in allowed:
         return candidate
-    return settings.default_image_model if media_type == "image" else settings.default_video_model
+    default_model = settings.default_image_model if media_type == "image" else settings.default_video_model
+    if default_model in allowed:
+        return default_model
+    return next(iter(allowed), default_model)
 
 
 async def generate_media(

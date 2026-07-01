@@ -31,6 +31,18 @@ from app.models import (
     WorkspaceRunRequest,
 )
 from app.media_tools import MediaGenerationError, detect_media_kind, generate_media, selected_media_model
+from app.model_access import (
+    SERVER_ALLOWED_MODELS_METADATA_KEY,
+    default_mode_models,
+    is_claude_model,
+    is_image_model as is_supported_image_model,
+    is_text_model as is_supported_text_model,
+    is_video_model as is_supported_video_model,
+    mode_models_payload_from_metadata,
+    mode_models_from_metadata,
+    supported_image_models,
+    supported_video_models,
+)
 from app.new_api_client import NewApiAuthError, NewApiClient, safe_json_dumps
 from app.queue import RedisTaskQueue
 from app.registry import (
@@ -280,6 +292,8 @@ async def require_codex_user(
     except NewApiAuthError as exc:
         raise HTTPException(status_code=401, detail=public_error_message(str(exc), "登录态无效，请重新登录。")) from exc
     user = data.get("user") if isinstance(data.get("user"), dict) else {}
+    allowed_models_by_mode = normalize_user_allowed_models(user)
+    metadata = user.get("metadata") if isinstance(user.get("metadata"), dict) else {}
     return UserContext(
         api_key=str(data["api_key"]),
         api_keys=data.get("api_keys") if isinstance(data.get("api_keys"), dict) else None,
@@ -290,6 +304,7 @@ async def require_codex_user(
         quota=user.get("quota"),
         used_quota=user.get("used_quota"),
         request_count=user.get("request_count"),
+        allowed_models_by_mode=allowed_models_by_mode if SERVER_ALLOWED_MODELS_METADATA_KEY in metadata else None,
     )
 
 
@@ -346,6 +361,7 @@ def health() -> dict[str, str]:
 @app.get("/api/bootstrap", dependencies=[Depends(require_codex_user)])
 @app.get("/codex/api/bootstrap", dependencies=[Depends(require_codex_user)])
 async def bootstrap(user: UserContext = Depends(require_codex_user)) -> dict[str, Any]:
+    mode_models = user_mode_models(user)
     return {
         "user": {
             "id": user.user_id,
@@ -358,9 +374,9 @@ async def bootstrap(user: UserContext = Depends(require_codex_user)) -> dict[str
         "defaults": default_model_config().model_dump(),
         "suggestions": model_suggestions(),
         "skills": list_user_visible_skills(user),
-        "models": fast_models_payload(),
-        "allowed_models": list(settings.codex_allowed_models),
-        "model_modes": model_modes(),
+        "models": fast_models_payload(user),
+        "allowed_models": list(mode_models["codex"]),
+        "model_modes": model_modes(user),
         "limits": {
             "max_files_per_task": settings.max_files_per_task,
             "max_file_bytes": settings.max_file_bytes,
@@ -390,13 +406,14 @@ async def provision_account_keys(
         raise HTTPException(status_code=401, detail=public_error_message(str(exc), "登录态无效，请重新登录。")) from exc
     user = data.get("user") if isinstance(data.get("user"), dict) else {}
     key_map = data.get("api_keys") if isinstance(data.get("api_keys"), dict) else {}
+    mode_models = normalize_user_allowed_models(user)
     return {
         "success": True,
         "user": {
             "id": str(user.get("id") or user_id),
             "username": str(user.get("username") or user.get("display_name") or ""),
         },
-        "keys": provision_key_profiles(key_map),
+        "keys": provision_key_profiles(key_map, mode_models),
         "notes": [
             "系统 Key 会自动创建并维护模型权限。",
             "Codex、Claude、图像工坊、视频工坊会自动选择对应 Key。",
@@ -408,7 +425,7 @@ async def provision_account_keys(
 @app.get("/api/models", dependencies=[Depends(require_codex_user)])
 @app.get("/codex/api/models", dependencies=[Depends(require_codex_user)])
 async def models(user: UserContext = Depends(require_codex_user)) -> dict[str, Any]:
-    return await fetch_new_api_models(user.api_key)
+    return await fetch_new_api_models(user)
 
 
 @app.get("/api/skills", dependencies=[Depends(require_codex_user)])
@@ -584,11 +601,11 @@ def admin_cleanup() -> dict[str, Any]:
     return cleanup_expired_runs()
 
 
-async def fetch_new_api_models(api_key: str) -> dict[str, Any]:
-    cached = get_cached_models(api_key)
+async def fetch_new_api_models(user: UserContext) -> dict[str, Any]:
+    cached = get_cached_models(user.api_key)
     if cached is not None:
         return cached
-    headers = {"Authorization": f"Bearer {api_key}"}
+    headers = {"Authorization": f"Bearer {user.api_key}"}
     url = f"{settings.new_api_base_url}/models"
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(15.0, connect=5.0)) as client:
@@ -604,18 +621,19 @@ async def fetch_new_api_models(api_key: str) -> dict[str, Any]:
     except ValueError:
         return {"ok": False, "models": [], "error": "模型列表暂时不可用，请稍后重试。"}
     models = [item.get("id", "") for item in payload.get("data", []) if isinstance(item, dict) and item.get("id")]
-    allowed = set(settings.codex_allowed_models)
+    allowed = set(user_mode_models(user)["codex"])
     visible_models = sorted(model for model in set(models) if model in allowed)
     result = {"ok": True, "models": visible_models, "raw_count": len(models)}
-    set_cached_models(api_key, result)
+    set_cached_models(user.api_key, result)
     return copy.deepcopy(result)
 
 
-def fast_models_payload() -> dict[str, Any]:
+def fast_models_payload(user: UserContext | None = None) -> dict[str, Any]:
+    mode_models = user_mode_models(user)
     return {
         "ok": True,
-        "models": list(settings.codex_allowed_models),
-        "raw_count": len(settings.codex_allowed_models),
+        "models": list(mode_models["codex"]),
+        "raw_count": len(mode_models["codex"]),
         "source": "configured",
     }
 
@@ -687,41 +705,45 @@ def model_suggestions() -> dict[str, Any]:
     }
 
 
-def model_modes() -> dict[str, Any]:
+def model_modes(user: UserContext | None = None) -> dict[str, Any]:
+    mode_models = user_mode_models(user)
     return {
         "codex": {
             "label": "对话 / 代码",
             "description": "普通对话、代码审查、文件分析和 Skill 工作区。",
-            "models": ordered_codex_models(),
+            "models": ordered_codex_models(user),
             "token_name": settings.auto_token_name,
             "billing": "按文本 Token 计费，适合日常任务和代码任务。",
         },
         "claude": {
             "label": "Claude 高阶",
             "description": "高质量长文、剧本、复杂推理和高级创作。",
-            "models": list(settings.claude_allowed_models),
+            "models": list(mode_models["claude"]),
             "token_name": settings.claude_token_name,
             "billing": "按 Claude 高阶模型输入/输出 Token 计费，价格高于普通对话。",
         },
         "image": {
             "label": "图像生成",
             "description": "Image 2 和 Grok 图像是独立模型，请按任务明确选择。",
-            "models": list(settings.image_allowed_models),
+            "models": list(mode_models["image"]),
             "token_name": settings.image_token_name,
             "billing": "按张计费。系统不会在 Image 2 与 Grok 图像之间自动切换。",
         },
         "video": {
             "label": "视频生成",
             "description": "Seedance / Grok 文生视频、图生视频。",
-            "models": list(settings.video_allowed_models),
+            "models": list(mode_models["video"]),
             "token_name": settings.video_token_name,
             "billing": "按秒或按次计费。Seedance 2.0 当前展示价 ¥6/15秒，生成后请立即下载。",
         },
     }
 
 
-def provision_key_profiles(key_map: dict[str, str]) -> list[dict[str, Any]]:
-    modes = model_modes()
+def provision_key_profiles(key_map: dict[str, str], mode_models: dict[str, tuple[str, ...]] | None = None) -> list[dict[str, Any]]:
+    pseudo_user = None
+    if mode_models:
+        pseudo_user = UserContext(api_key="", user_id="", key_hint="sk-****", allowed_models_by_mode=mode_models)
+    modes = model_modes(pseudo_user)
     public_root = settings.public_base_url.removesuffix("/codex").rstrip("/")
     claude_base_url = f"{public_root}/claude"
     profiles = [
@@ -774,6 +796,7 @@ async def submit_workspace_task(
     user: UserContext,
     allow_admin_intent: bool = False,
 ) -> dict[str, Any]:
+    attach_allowed_models_metadata(request, user)
     if request.risk_level == "unsafe":
         return failed_response("task_rejected", "UNSAFE_REQUEST", "This request was classified as unsafe.", request.skill_name)
     if len(request.files) > settings.max_files_per_task:
@@ -860,6 +883,7 @@ async def submit_workspace_task(
 
 
 def build_direct_task(request: WorkspaceRunRequest, user: UserContext) -> dict[str, Any]:
+    attach_allowed_models_metadata(request, user)
     rejection = validate_workspace_request(request)
     if rejection:
         return rejection
@@ -1616,12 +1640,14 @@ def selected_text_model(request: WorkspaceRunRequest) -> str:
     if is_allowed_model_for_request(candidate, request):
         return candidate
     if role == "web_search":
-        fallback = settings.claude_allowed_models[0] if settings.claude_allowed_models else settings.default_chat_model
+        claude_models = allowed_models_for_mode(request_mode(request), request.metadata)
+        fallback = claude_models[0] if claude_models else settings.default_chat_model
         return fallback if is_allowed_model_for_request(fallback, request) else settings.default_chat_model
     fallback = settings.default_small_fast_model if role == "small_fast" else settings.default_chat_model
     if is_allowed_model_for_request(fallback, request):
         return fallback
-    return settings.codex_allowed_models[0] if settings.codex_allowed_models else settings.default_small_fast_model
+    codex_models = allowed_models_for_mode(request_mode(request), request.metadata)
+    return codex_models[0] if codex_models else settings.default_small_fast_model
 
 
 def selected_fast_text_model(request: WorkspaceRunRequest) -> str:
@@ -1632,7 +1658,8 @@ def selected_fast_text_model(request: WorkspaceRunRequest) -> str:
     return selected_text_model(request)
 
 
-def ordered_codex_models() -> list[str]:
+def ordered_codex_models(user: UserContext | None = None) -> list[str]:
+    allowed_codex_models = user_mode_models(user)["codex"]
     preferred = [
         settings.default_small_fast_model,
         settings.default_chat_model,
@@ -1640,8 +1667,8 @@ def ordered_codex_models() -> list[str]:
         settings.default_code_model,
     ]
     result: list[str] = []
-    for model in [*preferred, *settings.codex_allowed_models]:
-        if model and model in settings.codex_allowed_models and model not in result:
+    for model in [*preferred, *allowed_codex_models]:
+        if model and model in allowed_codex_models and model not in result:
             result.append(model)
     return result
 
@@ -1665,8 +1692,7 @@ def fast_chat_messages(request: WorkspaceRunRequest) -> list[dict[str, str]]:
 
 
 def is_text_model(model: str) -> bool:
-    lower = str(model or "").lower()
-    return bool(lower) and not any(hint in lower for hint in MEDIA_MODEL_HINTS)
+    return is_supported_text_model(settings, model)
 
 
 def is_codex_allowed_model(model: str) -> bool:
@@ -1690,18 +1716,29 @@ def request_mode(request: WorkspaceRunRequest | str) -> str:
     return "codex"
 
 
-def allowed_models_for_mode(mode: str) -> tuple[str, ...]:
+def allowed_models_for_mode(mode: str, metadata: dict[str, Any] | None = None) -> tuple[str, ...]:
+    mode_models = mode_models_payload_from_metadata(metadata)
+    if mode in mode_models:
+        return mode_models[mode]
     if mode == "claude":
         return settings.claude_allowed_models
     if mode == "image":
-        return settings.image_allowed_models
+        return supported_image_models(settings)
     if mode == "video":
-        return settings.video_allowed_models
+        return supported_video_models(settings)
     return settings.codex_allowed_models
 
 
 def is_allowed_model_for_request(model: str, request: WorkspaceRunRequest) -> bool:
-    return is_text_model(model) and str(model or "") in set(allowed_models_for_mode(request_mode(request)))
+    mode = request_mode(request)
+    allowed = set(allowed_models_for_mode(mode, request.metadata))
+    if mode == "claude":
+        return is_claude_model(model) and str(model or "") in allowed
+    if mode == "image":
+        return is_supported_image_model(settings, model) and str(model or "") in allowed
+    if mode == "video":
+        return is_supported_video_model(settings, model) and str(model or "") in allowed
+    return is_text_model(model) and str(model or "") in allowed
 
 
 def user_for_mode(user: UserContext, mode: str) -> UserContext:
@@ -1717,7 +1754,46 @@ def user_for_mode(user: UserContext, mode: str) -> UserContext:
         used_quota=user.used_quota,
         request_count=user.request_count,
         api_keys=user.api_keys,
+        allowed_models_by_mode=user.allowed_models_by_mode,
     )
+
+
+def normalize_user_allowed_models(user: dict[str, Any]) -> dict[str, tuple[str, ...]]:
+    metadata = user.get("metadata") if isinstance(user, dict) else None
+    return normalize_allowed_models_from_metadata(metadata)
+
+
+def normalize_allowed_models_from_metadata(metadata: dict[str, Any] | None) -> dict[str, tuple[str, ...]]:
+    payload = mode_models_payload_from_metadata(metadata)
+    result = {}
+    for mode in ("codex", "claude", "image", "video"):
+        result[mode] = payload.get(mode, ())
+    return result
+
+
+def attach_allowed_models_metadata(request: WorkspaceRunRequest, user: UserContext) -> None:
+    if not user.allowed_models_by_mode:
+        return
+    request.metadata[SERVER_ALLOWED_MODELS_METADATA_KEY] = {
+        mode: list(models)
+        for mode, models in user.allowed_models_by_mode.items()
+        if models
+    }
+
+
+def user_mode_models(user: UserContext | None) -> dict[str, tuple[str, ...]]:
+    defaults = default_mode_models(settings)
+    result = {
+        "codex": defaults["codex"],
+        "claude": defaults["claude"],
+        "image": supported_image_models(settings),
+        "video": supported_video_models(settings),
+    }
+    if user is None or not user.allowed_models_by_mode:
+        return result
+    for mode, values in user.allowed_models_by_mode.items():
+        result[mode] = tuple(values)
+    return result
 
 
 def key_hint(key: str) -> str:

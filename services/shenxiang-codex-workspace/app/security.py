@@ -29,6 +29,7 @@ class UserContext:
     used_quota: Any = None
     request_count: Any = None
     api_keys: dict[str, str] | None = None
+    allowed_models_by_mode: dict[str, tuple[str, ...]] | None = None
 
 
 ADMIN_INTENT_KEYWORDS = (

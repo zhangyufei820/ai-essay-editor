@@ -21,6 +21,14 @@ from app.config import (
     secret_values_for_redaction,
     write_codex_config,
 )
+from app.model_access import (
+    is_claude_model,
+    is_image_model,
+    is_text_model,
+    is_video_model,
+    mode_models_payload_from_metadata,
+    mode_models_from_metadata,
+)
 from app.security import contains_forbidden_runtime_action, normalize_sandbox, public_error_code, public_error_message, redact
 
 logger = logging.getLogger(__name__)
@@ -481,11 +489,11 @@ class CodexRunner:
 
     def _chat_fallback_model(self, task: dict[str, Any]) -> str:
         configured = str(getattr(self.settings, "codex_chat_fallback_model", "") or "").strip()
-        if configured:
+        if configured and self._is_allowed_model_for_mode(task, configured, "codex"):
             return configured
-        if self.settings.default_chat_model in set(self.settings.codex_allowed_models):
+        if self._is_allowed_model_for_mode(task, self.settings.default_chat_model, "codex"):
             return self.settings.default_chat_model
-        return self.settings.codex_allowed_models[0] if self.settings.codex_allowed_models else self.settings.default_chat_model
+        return self._fallback_model_for_mode(task, "codex", self.settings.default_chat_model)
 
     def _chat_fallback_messages(self, task: dict[str, Any]) -> list[dict[str, str]]:
         prompt = self._build_prompt(task)
@@ -606,31 +614,32 @@ class CodexRunner:
         model_config = task.get("model_config") if isinstance(task.get("model_config"), dict) else {}
         model = str(model_config.get(role) or "")
         mode = self._task_mode(task, role)
-        if model and self._is_allowed_model_for_mode(model, mode) and role not in {"image_generation", "video_generation"}:
+        if model and self._is_allowed_model_for_mode(task, model, mode):
             return model
-        if role in {"image_generation", "video_generation"}:
-            return self.settings.default_chat_model
+        if role == "image_generation":
+            return self._fallback_model_for_mode(task, "image", self.settings.default_image_model)
+        if role == "video_generation":
+            return self._fallback_model_for_mode(task, "video", self.settings.default_video_model)
         if mode == "claude":
             candidate = self.settings.default_web_search_model
-            if self._is_allowed_model_for_mode(candidate, mode):
+            if self._is_allowed_model_for_mode(task, candidate, mode):
                 return candidate
-            return self.settings.claude_allowed_models[0] if self.settings.claude_allowed_models else self.settings.default_chat_model
+            return self._fallback_model_for_mode(task, mode, self.settings.default_chat_model)
         fallback = {
             "chat_main": self.settings.default_chat_model,
             "small_fast": self.settings.default_small_fast_model,
             "web_search": self.settings.default_web_search_model,
-            "image_generation": self.settings.default_chat_model,
-            "video_generation": self.settings.default_chat_model,
+            "image_generation": self.settings.default_image_model,
+            "video_generation": self.settings.default_video_model,
             "code_review": self.settings.default_code_model,
         }
         candidate = fallback.get(role, self.settings.default_chat_model)
-        if self._is_allowed_model_for_mode(candidate, mode):
+        if self._is_allowed_model_for_mode(task, candidate, mode):
             return candidate
-        return self.settings.codex_allowed_models[0] if self.settings.codex_allowed_models else self.settings.default_chat_model
+        return self._fallback_model_for_mode(task, mode, self.settings.default_chat_model)
 
     def _is_codex_text_model(self, model: str) -> bool:
-        lower = model.lower()
-        return not any(hint in lower for hint in ("image", "imagine", "video", "seedance", "sora", "veo"))
+        return is_text_model(self.settings, model)
 
     def _is_codex_allowed_model(self, model: str) -> bool:
         return self._is_codex_text_model(model) and model in set(self.settings.codex_allowed_models)
@@ -649,12 +658,36 @@ class CodexRunner:
             return "video"
         return "codex"
 
-    def _is_allowed_model_for_mode(self, model: str, mode: str) -> bool:
-        if not self._is_codex_text_model(model):
-            return False
+    def _allowed_models_for_mode(self, task: dict[str, Any], mode: str) -> tuple[str, ...]:
+        request = task.get("request") if isinstance(task.get("request"), dict) else {}
+        metadata = request.get("metadata") if isinstance(request.get("metadata"), dict) else {}
+        payload = mode_models_payload_from_metadata(metadata)
+        if mode in payload:
+            configured = mode_models_from_metadata(metadata, mode)
+            return configured
         if mode == "claude":
-            return model in set(self.settings.claude_allowed_models)
-        return model in set(self.settings.codex_allowed_models)
+            return self.settings.claude_allowed_models
+        if mode == "image":
+            return self.settings.image_allowed_models
+        if mode == "video":
+            return self.settings.video_allowed_models
+        return self.settings.codex_allowed_models
+
+    def _is_allowed_model_for_mode(self, task: dict[str, Any], model: str, mode: str) -> bool:
+        allowed = set(self._allowed_models_for_mode(task, mode))
+        if mode == "claude":
+            return is_claude_model(model) and model in allowed
+        if mode == "image":
+            return is_image_model(self.settings, model) and model in allowed
+        if mode == "video":
+            return is_video_model(self.settings, model) and model in allowed
+        return self._is_codex_text_model(model) and model in allowed
+
+    def _fallback_model_for_mode(self, task: dict[str, Any], mode: str, default: str) -> str:
+        allowed = self._allowed_models_for_mode(task, mode)
+        if default in allowed:
+            return default
+        return allowed[0] if allowed else default
 
     def _help_text(self) -> str:
         if self._cached_help_text is not None:
