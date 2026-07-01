@@ -3,6 +3,7 @@ package controller
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -13,6 +14,7 @@ import (
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/model"
 	relayconstant "github.com/QuantumNous/new-api/relay/constant"
+	"github.com/QuantumNous/new-api/types"
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/require"
@@ -181,6 +183,44 @@ func TestSanitizePlaygroundImageTaskFailureHidesCredentialOnlyErrors(t *testing.
 	require.Equal(t, "模型服务暂时无法处理该请求，请稍后重试或调整参数", got)
 }
 
+func TestSanitizePlaygroundImageTaskFailureKeepsChannelErrorReasons(t *testing.T) {
+	cases := []struct {
+		name   string
+		raw    string
+		expect string
+	}{
+		{
+			name:   "unsupported model",
+			raw:    "status_code=500, not supported model for image generation, only imagen models are supported (request id: req_123, upstream channel #18)",
+			expect: "not supported model for image generation, only imagen models are supported",
+		},
+		{
+			name:   "application not found",
+			raw:    "status_code=404, Application not found",
+			expect: "Application not found",
+		},
+		{
+			name:   "no available channel",
+			raw:    "status_code=503, No available channel for model gpt-image-2-vip under group default (distributor) (request id: req_123)",
+			expect: "No available channel for model gpt-image-2-vip under group default (distributor)",
+		},
+		{
+			name:   "cloudflare timeout",
+			raw:    "status_code=524, The origin web server did not return a complete response within the 120-second Proxy Read Timeout window.",
+			expect: "The origin web server did not return a complete response within the 120-second Proxy Read Timeout window",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := sanitizePlaygroundImageTaskFailure(tc.raw)
+			require.Contains(t, got, tc.expect)
+			require.NotContains(t, got, "request id")
+			require.NotContains(t, got, "upstream channel #")
+			require.NotContains(t, got, "status_code")
+		})
+	}
+}
+
 func TestResolvePlaygroundImageTaskFailureReasonPrefersRelayErrorLog(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
@@ -201,13 +241,42 @@ func TestResolvePlaygroundImageTaskFailureReasonPrefersRelayErrorLog(t *testing.
 	}).Error)
 	body := []byte(`{"error":{"message":"请求参数有误，请检查后重试。"}}`)
 
-	got := resolvePlaygroundImageTaskFailureReason(1001, requestID, body, 400)
+	got := resolvePlaygroundImageTaskFailureReason(nil, 1001, requestID, body, 400)
 
 	require.Contains(t, got, "抱歉，我不能帮你生成这张图片")
 	require.Contains(t, got, "你可以尝试一种更温和的描述")
 	require.NotContains(t, got, "status_code")
 	require.NotContains(t, got, "request_id")
 	require.NotContains(t, got, "channel")
+}
+
+func TestResolvePlaygroundImageTaskFailureReasonPrefersCapturedChannelError(t *testing.T) {
+	body := []byte(`{"error":{"message":"请求参数有误，请检查后重试。"}}`)
+	capture := &playgroundImageTaskResultCapture{
+		LastFailureReason:    "Application not found",
+		LastFailureChannelID: 24,
+	}
+
+	got := resolvePlaygroundImageTaskFailureReason(capture, 1001, "req-missing-db-error", body, 400)
+
+	require.Equal(t, "Application not found", got)
+}
+
+func TestProcessChannelErrorCapturesAsyncPlaygroundImageFailureReason(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	capture := &playgroundImageTaskResultCapture{}
+	ctx.Set("playground_image_async_worker", true)
+	ctx.Set(playgroundImageTaskResultCaptureKey, capture)
+
+	processChannelError(
+		ctx,
+		*types.NewChannelError(24, 0, "moonapix", false, "", false),
+		types.NewErrorWithStatusCode(errors.New("Application not found"), types.ErrorCodeBadResponseStatusCode, http.StatusNotFound),
+	)
+
+	require.Equal(t, "Application not found", capture.LastFailureReason)
+	require.Equal(t, 24, capture.LastFailureChannelID)
 }
 
 func TestMarkPlaygroundImageTaskLogFailureKeepsSubmittedChannelWhenTaskChannelMissing(t *testing.T) {
@@ -252,4 +321,56 @@ func TestMarkPlaygroundImageTaskLogFailureKeepsSubmittedChannelWhenTaskChannelMi
 	other, err := common.StrToMap(log.Other)
 	require.NoError(t, err)
 	require.Equal(t, float64(22), other["channel_id"])
+}
+
+func TestMarkPlaygroundImageTaskLogFailureFallsBackToSubmittedChannelLog(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err)
+	require.NoError(t, db.AutoMigrate(&model.Log{}))
+	oldLogDB := model.LOG_DB
+	model.LOG_DB = db
+	t.Cleanup(func() {
+		model.LOG_DB = oldLogDB
+	})
+
+	requestID := "req-image-submitted-channel"
+	task := &model.Task{
+		TaskID:     "task-image-submitted-channel",
+		UserId:     1001,
+		ChannelId:  0,
+		Group:      "default",
+		StartTime:  time.Now().Add(-4 * time.Second).Unix(),
+		FinishTime: time.Now().Unix(),
+	}
+	payload := &playgroundImageTaskPayload{RequestID: requestID}
+	require.NoError(t, model.LOG_DB.Create(&model.Log{
+		UserId:    task.UserId,
+		CreatedAt: common.GetTimestamp(),
+		Type:      model.LogTypeConsume,
+		Content:   "媒体工坊图片任务生成中",
+		ModelName: "gpt-image-2-4K",
+		ChannelId: 0,
+		RequestId: requestID,
+		Other:     common.MapToJsonStr(map[string]interface{}{"request_phase": "submitted"}),
+	}).Error)
+	require.NoError(t, model.LOG_DB.Create(&model.Log{
+		UserId:    task.UserId,
+		CreatedAt: common.GetTimestamp(),
+		Type:      model.LogTypeSystem,
+		Content:   "媒体工坊图片请求已提交",
+		ModelName: "gpt-image-2-4K",
+		ChannelId: 24,
+		RequestId: requestID,
+		Other:     common.MapToJsonStr(map[string]interface{}{"request_phase": "submitted"}),
+	}).Error)
+
+	markPlaygroundImageTaskLogFailure(task, payload, "Application not found")
+
+	var log model.Log
+	require.NoError(t, model.LOG_DB.Where("request_id = ? AND type = ?", requestID, model.LogTypeError).First(&log).Error)
+	require.Equal(t, 24, log.ChannelId)
+	other, err := common.StrToMap(log.Other)
+	require.NoError(t, err)
+	require.Equal(t, float64(24), other["channel_id"])
+	require.Equal(t, "Application not found", other["fail_reason"])
 }

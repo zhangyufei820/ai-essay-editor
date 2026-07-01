@@ -31,14 +31,17 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-const playgroundImageAsyncBillingCaptureKey = "playground_image_billing_capture"
+const (
+	playgroundImageAsyncBillingCaptureKey = "playground_image_billing_capture"
+	playgroundImageTaskResultCaptureKey   = "playground_image_task_result_capture"
+)
 
 var (
 	playgroundCredentialPattern       = regexp.MustCompile(`(?i)(bearer\s+|sk-)[A-Za-z0-9._\-]{8,}`)
 	playgroundSecretClausePattern     = regexp.MustCompile(`(?i)\s*[,，;；]?\s*(api[_\s-]?key|apikey|bearer|token|secret|password|sk-)\s*[:=]?\s*[^,，;；\)）]*`)
 	playgroundRequestIDPattern        = regexp.MustCompile(`(?i)\s*[\(（]?\s*(request[_\s-]?id|upstream[_\s-]?request[_\s-]?id)\s*[:=]\s*[^,，;；\)）\s]+[\)）]?`)
 	playgroundInternalPrefixPattern   = regexp.MustCompile(`(?i)^\s*(upstream|provider|供应商|渠道)\s*(error|response|request\s+failed|rejected|返回|拒绝)?\s*[:：=\-]?\s*`)
-	playgroundInternalClausePattern   = regexp.MustCompile(`(?i)\s*[\(（]?\s*(upstream\s+)?(channel|provider|供应商|渠道)\s*[:=#]?\s*[^,，;；\)）]*[\)）]?`)
+	playgroundInternalClausePattern   = regexp.MustCompile(`(?i)\s*[\(（]?\s*(upstream\s+)?(channel|provider|供应商|渠道)\s*(#|id|[:=])\s*[^,，;；\)）]*[\)）]?`)
 	playgroundStatusCodePrefixPattern = regexp.MustCompile(`(?i)^\s*status[_\s-]?code\s*=\s*\d+\s*[,，:]?\s*`)
 )
 
@@ -81,9 +84,11 @@ type playgroundImageTaskPayload struct {
 }
 
 type playgroundImageTaskResultCapture struct {
-	Response *dto.ImageResponse
-	Usage    *dto.Usage
-	Quota    int
+	Response             *dto.ImageResponse
+	Usage                *dto.Usage
+	Quota                int
+	LastFailureReason    string
+	LastFailureChannelID int
 }
 
 func PlaygroundCreateImageTask(c *gin.Context) {
@@ -853,7 +858,8 @@ func runPlaygroundImageTask(taskID string, userID int, username string, role int
 	})
 	engine.ServeHTTP(recorder, request)
 	if recorder.Code >= http.StatusBadRequest {
-		markPlaygroundImageTaskFailure(task, resolvePlaygroundImageTaskFailureReason(task.UserId, payload.RequestID, recorder.Body.Bytes(), recorder.Code))
+		applyPlaygroundImageTaskFailureCapture(task, capture)
+		markPlaygroundImageTaskFailure(task, resolvePlaygroundImageTaskFailureReason(capture, task.UserId, payload.RequestID, recorder.Body.Bytes(), recorder.Code))
 		return
 	}
 
@@ -866,7 +872,8 @@ func runPlaygroundImageTask(taskID string, userID int, username string, role int
 	responseBody := recorder.Body.Bytes()
 	if err := common.Unmarshal(responseBody, &response); err != nil || len(response.Data) == 0 {
 		if msg := extractPlaygroundImageTaskError(responseBody, recorder.Code); msg != "" {
-			markPlaygroundImageTaskFailure(task, resolvePlaygroundImageTaskFailureReason(task.UserId, payload.RequestID, responseBody, recorder.Code))
+			applyPlaygroundImageTaskFailureCapture(task, capture)
+			markPlaygroundImageTaskFailure(task, resolvePlaygroundImageTaskFailureReason(capture, task.UserId, payload.RequestID, responseBody, recorder.Code))
 		} else {
 			markPlaygroundImageTaskFailure(task, "image task completed without a usable image")
 		}
@@ -904,6 +911,7 @@ func seedPlaygroundImageTaskContext(ginCtx *gin.Context, userID int, username st
 	ginCtx.Set("use_access_token", false)
 	ginCtx.Set("playground_image_async_worker", true)
 	ginCtx.Set("playground_image_task_id", taskID)
+	ginCtx.Set(playgroundImageTaskResultCaptureKey, capture)
 	if userCache, err := model.GetUserCache(userID); err == nil && userCache != nil {
 		userCache.WriteContext(ginCtx)
 	}
@@ -958,6 +966,35 @@ func seedPlaygroundImageTaskContext(ginCtx *gin.Context, userID int, username st
 	ginCtx.Set(relaypkg.PlaygroundImageResponseCaptureKey, func(_ *dto.ImageRequest, usage *dto.Usage) {
 		capture.Usage = usage
 	})
+}
+
+func recordPlaygroundImageTaskChannelError(c *gin.Context, channelID int, err *types.NewAPIError) {
+	if c == nil || err == nil || !c.GetBool("playground_image_async_worker") {
+		return
+	}
+	value, exists := c.Get(playgroundImageTaskResultCaptureKey)
+	if !exists {
+		return
+	}
+	capture, ok := value.(*playgroundImageTaskResultCapture)
+	if !ok || capture == nil {
+		return
+	}
+	reason := sanitizePlaygroundImageTaskFailure(err.MaskSensitiveErrorWithStatusCode())
+	if reason == "" || isGenericPlaygroundImageTaskFailureReason(reason) {
+		return
+	}
+	capture.LastFailureReason = reason
+	if channelID > 0 {
+		capture.LastFailureChannelID = channelID
+	}
+}
+
+func applyPlaygroundImageTaskFailureCapture(task *model.Task, capture *playgroundImageTaskResultCapture) {
+	if task == nil || capture == nil || capture.LastFailureChannelID <= 0 || task.ChannelId > 0 {
+		return
+	}
+	task.ChannelId = capture.LastFailureChannelID
 }
 
 func capturePlaygroundImageTaskBilling(taskID string, actualQuota int, info *relaycommon.RelayInfo) {
@@ -1113,7 +1150,11 @@ func markPlaygroundImageTaskFailure(task *model.Task, reason string) {
 	if task == nil {
 		return
 	}
+	capturedChannelID := task.ChannelId
 	if latest, exists, err := model.GetByOnlyTaskId(task.TaskID); err == nil && exists && latest != nil {
+		if latest.ChannelId == 0 && capturedChannelID > 0 {
+			latest.ChannelId = capturedChannelID
+		}
 		task = latest
 	}
 	reason = truncatePlaygroundText(strings.TrimSpace(sanitizePlaygroundImageTaskFailure(reason)), 1000)
@@ -1188,7 +1229,7 @@ func sanitizePlaygroundImageTaskPublicReason(reason string) string {
 	cleaned = playgroundRequestIDPattern.ReplaceAllString(cleaned, "")
 	cleaned = playgroundInternalPrefixPattern.ReplaceAllString(cleaned, "")
 	cleaned = playgroundInternalClausePattern.ReplaceAllString(cleaned, "")
-	cleaned = strings.TrimSpace(strings.Trim(cleaned, " ,，;；.。()（）"))
+	cleaned = strings.TrimSpace(strings.Trim(cleaned, " ,，;；.。"))
 	if cleaned == "" {
 		return ""
 	}
@@ -1207,7 +1248,13 @@ func sanitizePlaygroundImageTaskPublicReason(reason string) string {
 	return cleaned
 }
 
-func resolvePlaygroundImageTaskFailureReason(userID int, requestID string, body []byte, status int) string {
+func resolvePlaygroundImageTaskFailureReason(capture *playgroundImageTaskResultCapture, userID int, requestID string, body []byte, status int) string {
+	if capture != nil {
+		reason := strings.TrimSpace(capture.LastFailureReason)
+		if reason != "" && !isGenericPlaygroundImageTaskFailureReason(reason) {
+			return reason
+		}
+	}
 	if reason := latestPlaygroundImageTaskRelayErrorReason(userID, requestID); reason != "" {
 		return reason
 	}
@@ -1276,6 +1323,9 @@ func markPlaygroundImageTaskLogFailure(task *model.Task, payload *playgroundImag
 	if failureChannelID == 0 {
 		failureChannelID = intFromPlaygroundLogValue(other["channel_id"])
 	}
+	if failureChannelID == 0 {
+		failureChannelID = latestPlaygroundImageTaskRequestChannelID(task.UserId, payload.RequestID)
+	}
 	other["task_id"] = task.TaskID
 	other["request_id"] = payload.RequestID
 	other["request_phase"] = "failed"
@@ -1319,6 +1369,21 @@ func markPlaygroundImageTaskLogFailure(task *model.Task, payload *playgroundImag
 	}).Error; err != nil {
 		common.SysError("failed to update playground image task failure log: " + err.Error())
 	}
+}
+
+func latestPlaygroundImageTaskRequestChannelID(userID int, requestID string) int {
+	requestID = strings.TrimSpace(requestID)
+	if userID == 0 || requestID == "" || model.LOG_DB == nil {
+		return 0
+	}
+	var log model.Log
+	err := model.LOG_DB.Where("user_id = ? AND request_id = ? AND channel_id > 0", userID, requestID).
+		Order("id desc").
+		First(&log).Error
+	if err != nil {
+		return 0
+	}
+	return log.ChannelId
 }
 
 func intFromPlaygroundLogValue(value interface{}) int {
