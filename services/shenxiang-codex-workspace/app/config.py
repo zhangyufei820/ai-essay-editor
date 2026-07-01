@@ -40,9 +40,9 @@ class Settings:
     )
     claude_allowed_models: tuple[str, ...] = (
         "claude-fable-5",
-        "claude-opus-4-6-full",
-        "claude-opus-4-7-full",
-        "claude-opus-4-8-full",
+        "claude-opus-4-6",
+        "claude-opus-4-7",
+        "claude-opus-4-8",
     )
     image_allowed_models: tuple[str, ...] = ("gpt-image-2-4K", "geek2api-image-2", "grok-imagine-image")
     video_allowed_models: tuple[str, ...] = (
@@ -106,7 +106,8 @@ def get_settings() -> Settings:
         ),
         claude_allowed_models=_env_list(
             "CLAUDE_ALLOWED_MODELS",
-            "claude-fable-5,claude-opus-4-6-full,claude-opus-4-7-full,claude-opus-4-8-full",
+            "claude-fable-5,claude-opus-4-6,claude-opus-4-7,claude-opus-4-8",
+            normalize_claude_group_suffix=True,
         ),
         image_allowed_models=_env_list("IMAGE_ALLOWED_MODELS", "gpt-image-2-4K,geek2api-image-2,grok-imagine-image"),
         video_allowed_models=_env_list(
@@ -127,10 +128,28 @@ def get_settings() -> Settings:
     )
 
 
-def _env_list(name: str, default: str) -> tuple[str, ...]:
+def _env_list(name: str, default: str, *, normalize_claude_group_suffix: bool = False) -> tuple[str, ...]:
     raw = os.getenv(name, default)
-    values = tuple(dict.fromkeys(item.strip() for item in raw.split(",") if item.strip()))
-    return values or tuple(item.strip() for item in default.split(",") if item.strip())
+    values = [item.strip() for item in raw.split(",") if item.strip()]
+    if normalize_claude_group_suffix:
+        values = [strip_claude_group_suffix(item) for item in values]
+    deduped = tuple(dict.fromkeys(item for item in values if item))
+    if deduped:
+        return deduped
+    fallback = [item.strip() for item in default.split(",") if item.strip()]
+    if normalize_claude_group_suffix:
+        fallback = [strip_claude_group_suffix(item) for item in fallback]
+    return tuple(dict.fromkeys(item for item in fallback if item))
+
+
+def strip_claude_group_suffix(model: str) -> str:
+    name = str(model or "").strip()
+    lower = name.lower()
+    if lower.startswith("claude-"):
+        for suffix in ("-fast", "-full"):
+            if lower.endswith(suffix):
+                return name[: -len(suffix)]
+    return name
 
 
 def ensure_directories(settings: Settings) -> None:

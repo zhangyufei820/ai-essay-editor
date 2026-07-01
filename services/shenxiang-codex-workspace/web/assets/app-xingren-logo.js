@@ -49,7 +49,7 @@ const fallbackModelModes = {
   claude: {
     label: "Claude 高阶",
     description: "高质量长文、剧本、复杂推理和高级创作。",
-    models: ["claude-fable-5", "claude-opus-4-6-full", "claude-opus-4-7-full", "claude-opus-4-8-full"],
+    models: ["claude-fable-5", "claude-opus-4-6", "claude-opus-4-7", "claude-opus-4-8"],
     billing: "按 Claude 高阶模型输入/输出 Token 计费，价格高于普通对话。",
   },
   image: {
@@ -391,7 +391,7 @@ function modelsForMode(mode = currentMode()) {
 function defaultModelForMode(mode, choices) {
   if (!choices.length) return "";
   if (mode === "codex" && choices.includes(state.defaults.small_fast)) return state.defaults.small_fast;
-  if (mode === "claude" && choices.includes("claude-opus-4-6-full")) return "claude-opus-4-6-full";
+  if (mode === "claude" && choices.includes("claude-opus-4-6")) return "claude-opus-4-6";
   if (mode === "image" && choices.includes(state.defaults.image_generation)) return state.defaults.image_generation;
   if (mode === "video" && choices.includes(state.defaults.video_generation)) return state.defaults.video_generation;
   return choices[0];
