@@ -1263,7 +1263,15 @@ function getPreviewURLs(result) {
   return Array.from(new Set(urls));
 }
 
-function extractImageResults(response) {
+function firstPromptText(...values) {
+  for (const value of values) {
+    const text = String(value || '').trim();
+    if (text) return text;
+  }
+  return '';
+}
+
+function extractImageResults(response, fallbackPrompt = '') {
   const data = response?.data || [];
   return data
     .map((item, index) => {
@@ -1271,12 +1279,16 @@ function extractImageResults(response) {
         item.url ||
         (item.b64_json ? `data:image/png;base64,${item.b64_json}` : '');
       if (!url) return null;
+      const originalPrompt = firstPromptText(item.prompt, fallbackPrompt);
+      const revisedPrompt = firstPromptText(item.revised_prompt);
       return {
         id: `image-${Date.now()}-${index}`,
         kind: 'image',
         url,
         displayUrl: url.startsWith('data:') ? dataURLToBlobURL(url) : url,
-        revisedPrompt: item.revised_prompt,
+        prompt: originalPrompt,
+        revisedPrompt,
+        displayPrompt: firstPromptText(revisedPrompt, originalPrompt),
         status: 'ready',
         createdAt: Date.now(),
       };
@@ -1302,7 +1314,7 @@ function getImageTaskProgress(response) {
   return match ? Number(match[0]) : 0;
 }
 
-function imageTaskToResult(task) {
+function imageTaskToResult(task, fallbackPrompt = '') {
   if (!task) return null;
   const item = task.item || task.data?.item || {};
   const url =
@@ -1313,13 +1325,25 @@ function imageTaskToResult(task) {
     task.data?.cached_url ||
     '';
   if (!url) return null;
+  const originalPrompt = firstPromptText(
+    item.prompt,
+    task.prompt,
+    task.data?.prompt,
+    fallbackPrompt,
+  );
+  const revisedPrompt = firstPromptText(
+    item.revisedPrompt,
+    item.revised_prompt,
+  );
   return {
     id: `image-${task.task_id}`,
     kind: 'image',
     url,
     displayUrl: item.displayUrl || item.cachedUrl || url,
     cachedUrl: item.cachedUrl || url,
-    revisedPrompt: item.revisedPrompt,
+    prompt: originalPrompt,
+    revisedPrompt,
+    displayPrompt: firstPromptText(revisedPrompt, originalPrompt),
     taskId: task.task_id,
     status: 'ready',
     cacheStatus: 'ready',
@@ -1925,6 +1949,11 @@ function ResultCard({ result, onRemove }) {
   const previewUnavailable = previewFailed || !displayUrl;
   const usedFallbackPreview = activeUrlIndex > 0;
   const openUrl = originalUrl || displayUrl;
+  const displayPrompt = firstPromptText(
+    result.displayPrompt,
+    result.revisedPrompt,
+    result.prompt,
+  );
   const statusText = cacheFailed
     ? '临时缓存不可用，作品已生成，请用原始链接保存。'
     : '浏览器暂时无法直接预览，请打开原始链接保存。';
@@ -2047,8 +2076,8 @@ function ResultCard({ result, onRemove }) {
           </Tooltip>
         </Space>
       </div>
-      {result.revisedPrompt ? (
-        <p className='mp-revised-prompt'>{result.revisedPrompt}</p>
+      {displayPrompt ? (
+        <p className='mp-revised-prompt'>{displayPrompt}</p>
       ) : null}
     </div>
   );
@@ -2868,6 +2897,7 @@ const MediaPlayground = () => {
 
   async function submitImage() {
     let response;
+    const submittedPrompt = firstPromptText(requestPayload.prompt, prompt);
     if (imageWorkflow === 'edit') {
       const form = new FormData();
       Object.entries(requestPayload).forEach(([key, value]) => {
@@ -2895,12 +2925,12 @@ const MediaPlayground = () => {
     if (!taskId) throw new Error('图像任务提交成功但没有返回任务 ID。');
     setImageTaskLookup(taskId);
     setTaskMessage(`图像任务已提交：${taskId}，正在等待持久化结果...`);
-    const result = await pollImageTask(taskId);
+    const result = await pollImageTask(taskId, submittedPrompt);
     setResults((prev) => [result, ...prev]);
     Toast.success('图像已生成，请立即下载保存。');
   }
 
-  async function pollImageTask(taskId) {
+  async function pollImageTask(taskId, submittedPrompt = '') {
     const startedAt = Date.now();
     const deadline = Date.now() + 30 * 60 * 1000;
     let longWaitNotified = false;
@@ -2934,7 +2964,7 @@ const MediaPlayground = () => {
       }
       setTaskMessage(`图像任务 ${res.data.data.task_id}：${status}，进度 ${progress}%${waitSuffix}`);
       if (status === 'completed') {
-        const result = imageTaskToResult(res.data.data);
+        const result = imageTaskToResult(res.data.data, submittedPrompt);
         if (result) return result;
         throw new Error('图像任务完成但没有返回持久化图片。');
       }
