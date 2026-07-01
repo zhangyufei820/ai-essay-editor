@@ -440,6 +440,25 @@ func TestParseTaskResultAcceptsStringProgress(t *testing.T) {
 	}
 }
 
+func TestParseTaskResultTreatsRunningAsInProgress(t *testing.T) {
+	adaptor := TaskAdaptor{}
+
+	result, err := adaptor.ParseTaskResult([]byte(`{
+		"id":"task_running_progress",
+		"status":"running",
+		"progress":"50%"
+	}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Status != model.TaskStatusInProgress {
+		t.Fatalf("Status = %q, want %q", result.Status, model.TaskStatusInProgress)
+	}
+	if result.Progress != "50%" {
+		t.Fatalf("Progress = %q, want 50%%", result.Progress)
+	}
+}
+
 func TestParseTaskResultAcceptsStringError(t *testing.T) {
 	adaptor := TaskAdaptor{}
 
