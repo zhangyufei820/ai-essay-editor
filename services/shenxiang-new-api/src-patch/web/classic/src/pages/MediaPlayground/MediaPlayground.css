@@ -1685,6 +1685,445 @@
   }
 }
 
+/* ─── Light mode overrides ─────────────────────────────────────────────── */
+
+html:not(.dark) .mp-page {
+  color: #1a2e26;
+  background:
+    linear-gradient(115deg, rgba(37, 99, 235, 0.05), transparent 28%),
+    linear-gradient(250deg, rgba(226, 186, 92, 0.04), transparent 36%),
+    #f4f9f7;
+}
+
+html:not(.dark) .mp-hero h2 {
+  color: #0f2119;
+}
+
+html:not(.dark) .mp-hero p,
+html:not(.dark) .mp-prompt-card .semi-typography,
+html:not(.dark) .mp-gallery-head .semi-typography,
+html:not(.dark) .mp-empty-canvas .semi-typography,
+html:not(.dark) .mp-inspector .semi-typography {
+  color: rgba(30, 60, 45, 0.65) !important;
+}
+
+html:not(.dark) .mp-stat-pill {
+  border-color: rgba(20, 184, 166, 0.18);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.7)),
+    rgba(240, 250, 246, 0.9);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+html:not(.dark) .mp-stat-pill span,
+html:not(.dark) .mp-inspector-list span,
+html:not(.dark) .mp-section-title em,
+html:not(.dark) .mp-upload-hint,
+html:not(.dark) .mp-model-card small,
+html:not(.dark) .mp-panel-label {
+  color: rgba(30, 60, 45, 0.52);
+}
+
+html:not(.dark) .mp-stat-pill strong {
+  color: #0f2119;
+}
+
+html:not(.dark) .mp-stage-strip {
+  border-color: rgba(20, 184, 166, 0.14);
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.6)),
+    rgba(240, 250, 246, 0.9);
+}
+
+html:not(.dark) .mp-stage-item {
+  color: rgba(20, 55, 40, 0.8);
+  background: rgba(255, 255, 255, 0.5);
+}
+
+html:not(.dark) .mp-stage-item strong {
+  color: #1a2e26;
+}
+
+html:not(.dark) .mp-stage-item em {
+  color: rgba(30, 60, 45, 0.52);
+}
+
+html:not(.dark) .mp-panel-label {
+  color: rgba(20, 184, 166, 0.9);
+}
+
+html:not(.dark) .mp-panel,
+html:not(.dark) .mp-prompt-card,
+html:not(.dark) .mp-result-card,
+html:not(.dark) .mp-empty-canvas {
+  border-color: rgba(20, 184, 166, 0.18);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 253, 250, 0.96)),
+    rgba(240, 250, 246, 0.9);
+  box-shadow:
+    0 4px 18px rgba(0, 0, 0, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 1);
+}
+
+html:not(.dark) .mp-mode-switch,
+html:not(.dark) .mp-toggle-row {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.07);
+}
+
+html:not(.dark) .mp-mode-switch button,
+html:not(.dark) .mp-toggle-row button,
+html:not(.dark) .mp-model-card {
+  border-color: rgba(0, 0, 0, 0.08);
+  color: rgba(15, 40, 30, 0.8);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(248, 252, 250, 0.7));
+}
+
+html:not(.dark) .mp-mode-switch button.active,
+html:not(.dark) .mp-toggle-row button.active,
+html:not(.dark) .mp-model-card.active {
+  color: #07100f;
+  border-color: rgba(20, 184, 166, 0.5);
+  background:
+    linear-gradient(135deg, rgba(20, 184, 166, 0.18), rgba(37, 99, 235, 0.1)),
+    rgba(255, 255, 255, 0.9);
+  box-shadow:
+    0 4px 14px rgba(20, 184, 166, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+html:not(.dark) .mp-section-title {
+  color: #0f2119;
+}
+
+html:not(.dark) .mp-model-name {
+  color: #0f2119;
+}
+
+html:not(.dark) .mp-model-meta span,
+html:not(.dark) .mp-empty-spec span {
+  color: rgba(20, 55, 40, 0.72);
+  background: rgba(0, 0, 0, 0.05);
+}
+
+html:not(.dark) .mp-field > span,
+html:not(.dark) .mp-chip-field > span,
+html:not(.dark) .mp-slider-field span,
+html:not(.dark) .mp-switch-line strong {
+  color: rgba(15, 40, 30, 0.82);
+}
+
+html:not(.dark) .mp-chip-row {
+  border-color: rgba(0, 0, 0, 0.08);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.6), rgba(248, 252, 250, 0.4)),
+    rgba(240, 250, 246, 0.3);
+}
+
+html:not(.dark) .mp-param-chip {
+  border-color: rgba(0, 0, 0, 0.09);
+  color: rgba(15, 40, 30, 0.78);
+  background: rgba(255, 255, 255, 0.7);
+}
+
+html:not(.dark) .mp-param-chip:hover {
+  border-color: rgba(20, 184, 166, 0.4);
+  background: rgba(255, 255, 255, 0.95);
+}
+
+html:not(.dark) .mp-switch-line {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.07);
+}
+
+html:not(.dark) .mp-switch-line span {
+  color: rgba(30, 60, 45, 0.52);
+}
+
+html:not(.dark) .mp-slider-field {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.07);
+}
+
+html:not(.dark) .mp-prompt-input textarea,
+html:not(.dark) .mp-negative-input input,
+html:not(.dark) .mp-field .semi-select,
+html:not(.dark) .mp-field .semi-input-wrapper {
+  color: #0f2119 !important;
+  background: rgba(255, 255, 255, 0.9) !important;
+  border-color: rgba(0, 0, 0, 0.12) !important;
+}
+
+html:not(.dark) .mp-page .semi-select .semi-select-selection,
+html:not(.dark) .mp-page .semi-select .semi-select-selection-text,
+html:not(.dark) .mp-page .semi-select .semi-select-content-wrapper,
+html:not(.dark) .mp-page .semi-select .semi-select-prefix,
+html:not(.dark) .mp-page .semi-select .semi-select-suffix,
+html:not(.dark) .mp-page .semi-input-wrapper input,
+html:not(.dark) .mp-page .semi-input-wrapper .semi-input {
+  color: #0f2119 !important;
+}
+
+html:not(.dark) .mp-page .semi-select .semi-select-arrow {
+  color: rgba(15, 40, 30, 0.5) !important;
+}
+
+html:not(.dark) .mp-page .semi-select .semi-select-placeholder,
+html:not(.dark) .mp-page .semi-input-wrapper .semi-input::placeholder,
+html:not(.dark) .mp-prompt-input textarea::placeholder,
+html:not(.dark) .mp-negative-input input::placeholder {
+  color: rgba(15, 40, 30, 0.36) !important;
+}
+
+html:not(.dark) .mp-page .semi-select:hover,
+html:not(.dark) .mp-page .semi-input-wrapper:hover,
+html:not(.dark) .mp-prompt-input textarea:hover {
+  border-color: rgba(20, 184, 166, 0.4) !important;
+}
+
+html:not(.dark) .mp-action-row {
+  border-top-color: rgba(0, 0, 0, 0.08);
+}
+
+html:not(.dark) .mp-action-context strong {
+  color: #0f2119;
+}
+
+html:not(.dark) .mp-action-context span {
+  color: rgba(30, 60, 45, 0.55);
+}
+
+html:not(.dark) .mp-results-section {
+  border-color: rgba(20, 184, 166, 0.18);
+  border-top-color: rgba(226, 186, 92, 0.26);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 253, 250, 0.96)),
+    rgba(240, 250, 246, 0.9);
+  box-shadow:
+    0 6px 20px rgba(0, 0, 0, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 1);
+}
+
+html:not(.dark) .mp-empty-canvas {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 253, 250, 0.96)),
+    rgba(240, 250, 246, 0.9);
+}
+
+html:not(.dark) .mp-empty-canvas::before {
+  background:
+    linear-gradient(rgba(0, 0, 0, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.04) 1px, transparent 1px);
+  background-size: 46px 46px;
+}
+
+html:not(.dark) .mp-gallery-head h4,
+html:not(.dark) .mp-empty-canvas h4 {
+  color: #0f2119;
+}
+
+html:not(.dark) .mp-empty-mark {
+  color: #0d7a62;
+  background: rgba(20, 184, 166, 0.1);
+  border-color: rgba(20, 184, 166, 0.22);
+}
+
+html:not(.dark) .mp-inspector-hero {
+  background:
+    linear-gradient(135deg, rgba(37, 99, 235, 0.08), rgba(20, 184, 166, 0.06)),
+    rgba(255, 255, 255, 0.8);
+  border-color: rgba(20, 184, 166, 0.18);
+}
+
+html:not(.dark) .mp-inspector-badge {
+  color: #0d7a62;
+  background: rgba(20, 184, 166, 0.1);
+  border-color: rgba(20, 184, 166, 0.2);
+}
+
+html:not(.dark) .mp-inspector-hero strong {
+  color: #0f2119;
+}
+
+html:not(.dark) .mp-inspector-hero span {
+  color: rgba(30, 60, 45, 0.58);
+}
+
+html:not(.dark) .mp-readiness > div,
+html:not(.dark) .mp-inspector-list > div {
+  background: rgba(255, 255, 255, 0.7);
+  border-color: rgba(0, 0, 0, 0.07);
+}
+
+html:not(.dark) .mp-readiness span {
+  color: rgba(30, 60, 45, 0.52);
+}
+
+html:not(.dark) .mp-readiness strong,
+html:not(.dark) .mp-inspector-list strong {
+  color: #0f2119;
+}
+
+html:not(.dark) .mp-inspector-note,
+html:not(.dark) .mp-retention-note {
+  color: rgba(30, 60, 45, 0.6);
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.07);
+}
+
+html:not(.dark) .mp-inspector-wait {
+  background: rgba(226, 186, 92, 0.07);
+  border-color: rgba(226, 186, 92, 0.22);
+}
+
+html:not(.dark) .mp-inspector-wait strong {
+  color: #7a5a12;
+}
+
+html:not(.dark) .mp-inspector-wait span {
+  color: rgba(30, 60, 45, 0.6);
+}
+
+html:not(.dark) .mp-wait-panel {
+  color: #1a2e26;
+  background:
+    linear-gradient(135deg, rgba(226, 186, 92, 0.08), rgba(51, 214, 189, 0.06)),
+    rgba(255, 255, 255, 0.9);
+  border-color: rgba(226, 186, 92, 0.26);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 1),
+    0 4px 18px rgba(0, 0, 0, 0.06);
+}
+
+html:not(.dark) .mp-wait-copy strong {
+  color: #5c3d00;
+}
+
+html:not(.dark) .mp-wait-copy span,
+html:not(.dark) .mp-wait-meter span,
+html:not(.dark) .mp-wait-actions span {
+  color: rgba(30, 60, 45, 0.6);
+}
+
+html:not(.dark) .mp-wait-meter > div {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.07);
+}
+
+html:not(.dark) .mp-wait-meter strong {
+  color: #0f2119;
+}
+
+html:not(.dark) .mp-upload-card {
+  border-color: rgba(20, 184, 166, 0.3);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.8), rgba(248, 253, 250, 0.6));
+}
+
+html:not(.dark) .mp-upload-card:hover,
+html:not(.dark) .mp-upload-card.is-dragging {
+  border-color: rgba(20, 184, 166, 0.55);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(245, 253, 250, 0.9)),
+    rgba(240, 250, 246, 0.6);
+  box-shadow: 0 4px 16px rgba(20, 184, 166, 0.1);
+}
+
+html:not(.dark) .mp-upload-title {
+  color: #0f2119;
+}
+
+html:not(.dark) .mp-upload-thumb-card {
+  background: rgba(255, 255, 255, 0.9);
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+html:not(.dark) .mp-upload-thumb-media {
+  border-color: rgba(0, 0, 0, 0.08);
+  background: rgba(240, 250, 246, 0.9);
+}
+
+html:not(.dark) .mp-upload-thumb-name {
+  color: rgba(15, 40, 30, 0.82);
+}
+
+html:not(.dark) .mp-upload-thumb-type {
+  color: rgba(15, 40, 30, 0.52);
+}
+
+html:not(.dark) .mp-parameter-panel {
+  border-color: rgba(20, 184, 166, 0.16);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(248, 253, 250, 0.9)),
+    rgba(240, 250, 246, 0.6);
+}
+
+html:not(.dark) .mp-parameter-head > span {
+  color: rgba(15, 40, 30, 0.52);
+}
+
+html:not(.dark) .mp-payload {
+  color: #1a3d2e;
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.09);
+}
+
+html:not(.dark) .mp-mention-menu {
+  border-color: rgba(20, 184, 166, 0.22);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(248, 253, 250, 0.97)),
+    rgba(240, 250, 246, 0.9);
+  box-shadow:
+    0 18px 42px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 1);
+}
+
+html:not(.dark) .mp-mention-title {
+  color: rgba(15, 40, 30, 0.8);
+}
+
+html:not(.dark) .mp-mention-title em {
+  color: rgba(160, 110, 10, 0.9);
+}
+
+html:not(.dark) .mp-mention-option {
+  color: rgba(15, 40, 30, 0.82);
+  background: transparent;
+  border-color: transparent;
+}
+
+html:not(.dark) .mp-mention-option:hover,
+html:not(.dark) .mp-mention-option.active {
+  background: rgba(20, 184, 166, 0.08);
+  border-color: rgba(20, 184, 166, 0.18);
+}
+
+html:not(.dark) .mp-mention-option strong {
+  color: #0f2119;
+}
+
+html:not(.dark) .mp-mention-option em {
+  color: rgba(15, 40, 30, 0.52);
+}
+
+html:not(.dark) .mp-reverse-panel {
+  border-color: rgba(20, 184, 166, 0.18);
+  background:
+    linear-gradient(135deg, rgba(20, 184, 166, 0.07), rgba(37, 99, 235, 0.04)),
+    rgba(255, 255, 255, 0.85);
+}
+
+html:not(.dark) .mp-reverse-output textarea {
+  color: #0f2119 !important;
+  background: rgba(255, 255, 255, 0.9) !important;
+  border-color: rgba(0, 0, 0, 0.12) !important;
+}
+
+html:not(.dark) .mp-reverse-status {
+  color: rgba(15, 40, 30, 0.75);
+  background: rgba(226, 186, 92, 0.07);
+  border-color: rgba(226, 186, 92, 0.22);
+}
+
 @media (max-width: 1360px) {
   .mp-workbench {
     grid-template-columns: minmax(248px, 300px) minmax(0, 1fr);
