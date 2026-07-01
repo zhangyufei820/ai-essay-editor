@@ -45,6 +45,7 @@ services:
     restart: unless-stopped
     networks:
       - shenxiang-codex-workspace-net
+      - shenxiang-new-api-net
 
   shenxiang-codex-worker-fast:
     build:
@@ -69,6 +70,7 @@ services:
     restart: unless-stopped
     networks:
       - shenxiang-codex-workspace-net
+      - shenxiang-new-api-net
 
   shenxiang-codex-worker-heavy:
     image: shenxiang-codex-workspace:latest
@@ -87,7 +89,11 @@ services:
     restart: unless-stopped
     networks:
       - shenxiang-codex-workspace-net
+      - shenxiang-new-api-net
 
 networks:
   shenxiang-codex-workspace-net:
     name: shenxiang-codex-workspace-net
+  shenxiang-new-api-net:
+    external: true
+    name: shenxiang-new-api-net
