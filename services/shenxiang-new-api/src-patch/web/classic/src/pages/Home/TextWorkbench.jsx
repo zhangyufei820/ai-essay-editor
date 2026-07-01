@@ -50,7 +50,7 @@ import {
 import { Link } from 'react-router-dom';
 import { API, copy } from '../../helpers';
 import { getDefaultTextModel, toTextModelOptions } from './textModelFilter';
-import { useThemePreference } from '../../context/Theme.js';
+import { useThemePreference } from '../../context/Theme';
 
 const MAX_ATTACHMENTS = 6;
 const MAX_TEXT_FILE_SIZE = 512 * 1024;
