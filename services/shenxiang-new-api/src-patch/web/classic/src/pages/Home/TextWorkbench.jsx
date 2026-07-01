@@ -31,21 +31,26 @@ import {
 import {
   ArrowUp,
   BadgeDollarSign,
-  Cloud,
   Copy,
   Edit3,
   Headphones,
-  Image,
   KeyRound,
   MessageSquare,
   PanelLeftClose,
   PanelLeftOpen,
+  Paperclip,
   Plus,
+  RotateCcw,
+  MoonStar,
+  Square,
+  SunMedium,
   Store,
+  Upload,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { API, copy } from '../../helpers';
 import { getDefaultTextModel, toTextModelOptions } from './textModelFilter';
+import { useThemePreference } from '../../context/Theme.js';
 
 const MAX_ATTACHMENTS = 6;
 const MAX_TEXT_FILE_SIZE = 512 * 1024;
@@ -94,8 +99,6 @@ const WORKBENCH_FILE_ACCEPT = [
 const primaryNav = [
   { label: '新聊天', icon: Plus, action: 'new' },
   { label: '聊天', icon: MessageSquare, action: 'chat', active: true },
-  { label: '媒体工坊', icon: Image, href: '/console/media-playground' },
-  { label: '云端 Codex', icon: Cloud, href: '/codex/' },
   { label: '接入设置', icon: KeyRound, href: '/console/token' },
   { label: '模型广场', href: '/pricing' },
   { label: '定价', icon: BadgeDollarSign, href: '/pricing' },
@@ -621,29 +624,28 @@ const TextWorkbench = ({ isMobile }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [isDark, setIsDark] = useState(() => {
-    const stored = localStorage.getItem('theme-mode') || localStorage.getItem('theme');
-    if (stored === 'light') return false;
-    if (stored === 'dark') return true;
-    return true;
-  });
+  const [isDark, setIsDark] = useThemePreference();
   const fileInputRef = useRef(null);
   const composerInputRef = useRef(null);
   const threadRef = useRef(null);
+  const requestControllerRef = useRef(null);
 
   const isLoggedIn = !!user;
   const displayName = user?.username || user?.display_name || user?.email || '已登录用户';
   const modelOptions = useMemo(() => toTextModelOptions(models), [models]);
   const activeModel = selectedModel || getDefaultTextModel(models);
   const canOrganize = input.trim() || attachments.length > 0;
+  const hasConversation = messages.some((message) => message.role === 'user' || message.role === 'assistant');
+  const lastAssistantIndex = useMemo(() => {
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      if (messages[index]?.role === 'assistant') return index;
+    }
+    return -1;
+  }, [messages]);
 
   useEffect(() => {
     setUser(getStoredUser());
   }, []);
-
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', isDark);
-  }, [isDark]);
 
   useEffect(() => {
     if (!isLoggedIn) {
@@ -674,11 +676,15 @@ const TextWorkbench = ({ isMobile }) => {
     }
   }, [messages]);
 
-  const setTheme = (nextDark) => {
-    document.documentElement.classList.toggle('dark', nextDark);
-    localStorage.setItem('theme-mode', nextDark ? 'dark' : 'light');
-    localStorage.setItem('theme', nextDark ? 'dark' : 'light');
-    setIsDark(nextDark);
+  useEffect(() => {
+    const composer = composerInputRef.current;
+    if (!composer) return;
+    composer.style.height = 'auto';
+    composer.style.height = `${Math.min(composer.scrollHeight, 122)}px`;
+  }, [input]);
+
+  const abortActiveRequest = () => {
+    requestControllerRef.current?.abort();
   };
 
   const openApiTeacher = () => {
@@ -688,6 +694,10 @@ const TextWorkbench = ({ isMobile }) => {
       const launcher = document.querySelector('.xr-api-assistant-launcher');
       if (!panel && launcher instanceof HTMLElement) launcher.click();
     }, 0);
+  };
+
+  const openFilePicker = () => {
+    fileInputRef.current?.click();
   };
 
   const addFiles = async (fileList) => {
@@ -728,6 +738,7 @@ const TextWorkbench = ({ isMobile }) => {
   };
 
   const resetConversation = () => {
+    abortActiveRequest();
     setMessages([]);
     setInput('');
     setAttachments([]);
@@ -749,6 +760,193 @@ const TextWorkbench = ({ isMobile }) => {
   const copyMessage = async (message) => {
     const ok = await copy(message.displayContent || contentToPlainText(message.content));
     Toast[ok ? 'success' : 'error'](ok ? '已复制' : '复制失败');
+  };
+
+  const buildHistory = (sourceMessages = []) =>
+    sourceMessages
+      .filter((message) => message.role === 'user' || message.role === 'assistant')
+      .filter((message) => !message.pending)
+      .map((message) => ({
+        role: message.role,
+        content: message.apiContent || message.content,
+      }));
+
+  const streamConversation = async ({
+    displayContent,
+    userRequestContent,
+    attachmentsSnapshot = [],
+    historySource = messages,
+    clearComposer = true,
+    appendUserMessage = true,
+    assistantMessageId = '',
+  }) => {
+    const userMessageItem = {
+      id: `user-${Date.now()}`,
+      role: 'user',
+      title: '你',
+      content: displayContent,
+      apiContent: userRequestContent,
+      displayContent,
+      attachments: attachmentsSnapshot.map(({ content, dataUrl, ...file }) => file),
+    };
+    const pendingId = assistantMessageId || `assistant-${Date.now()}`;
+    const history = buildHistory(historySource);
+
+    setMessages((prev) => {
+      if (!appendUserMessage && assistantMessageId) {
+        return prev.map((message) =>
+          message.id === assistantMessageId
+            ? {
+                ...message,
+                title: activeModel,
+                content: '正在思考...',
+                pending: true,
+              }
+            : message,
+        );
+      }
+
+      return [
+        ...prev,
+        userMessageItem,
+        {
+          id: pendingId,
+          role: 'assistant',
+          title: activeModel,
+          content: '正在思考...',
+          pending: true,
+        },
+      ];
+    });
+
+    if (clearComposer) {
+      setInput('');
+      setAttachments([]);
+    }
+
+    setIsSubmitting(true);
+
+    const updateAssistantMessage = (content, pending = true) => {
+      setMessages((prev) =>
+        prev.map((message) =>
+          message.id === pendingId
+            ? {
+                ...message,
+                title: activeModel,
+                content,
+                pending,
+              }
+            : message,
+        ),
+      );
+    };
+
+    const controller = new AbortController();
+    requestControllerRef.current = controller;
+    const timeout = window.setTimeout(() => controller.abort(), 180000);
+
+    try {
+      const userId = getCurrentUserId(user);
+      const headers = {
+        Accept: 'text/event-stream',
+        'Content-Type': 'application/json',
+      };
+      if (userId) headers['New-Api-User'] = userId;
+
+      const response = await fetch('/pg/chat/completions', {
+        method: 'POST',
+        headers,
+        credentials: 'same-origin',
+        signal: controller.signal,
+        body: JSON.stringify({
+          model: activeModel,
+          stream: true,
+          messages: [
+            ...history,
+            {
+              role: 'user',
+              content: userRequestContent,
+            },
+          ],
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(await readResponseError(response));
+      }
+
+      const answer = await readStreamingResponse(response, (nextText) => {
+        updateAssistantMessage(nextText || '正在回复...', true);
+      });
+      if (!answer.trim()) throw new Error('模型没有返回可展示的内容。');
+      updateAssistantMessage(answer.trim(), false);
+    } catch (error) {
+      if (controller.signal.aborted || error?.name === 'AbortError') {
+        setMessages((prev) =>
+          prev.map((message) =>
+            message.id === pendingId
+              ? {
+                  ...message,
+                  title: activeModel,
+                  content: (message.content || '').trim() || '已停止生成。',
+                  pending: false,
+                }
+              : message,
+          ),
+        );
+        return;
+      }
+
+      const message = getChatFailureMessage(error);
+      Toast.error(message);
+      setMessages((prev) =>
+        prev.map((item) =>
+          item.id === pendingId
+            ? {
+                ...item,
+                role: 'assistant',
+                title: activeModel,
+                content: `这次没有完成：${message}`,
+                pending: false,
+              }
+            : item,
+        ),
+      );
+    } finally {
+      window.clearTimeout(timeout);
+      if (requestControllerRef.current === controller) {
+        requestControllerRef.current = null;
+      }
+      setIsSubmitting(false);
+    }
+  };
+
+  const retryLatestAnswer = () => {
+    if (isSubmitting || lastAssistantIndex < 0) return;
+
+    let userIndex = -1;
+    for (let index = lastAssistantIndex - 1; index >= 0; index -= 1) {
+      if (messages[index]?.role === 'user' && !messages[index]?.pending) {
+        userIndex = index;
+        break;
+      }
+    }
+
+    if (userIndex < 0) {
+      Toast.warning('找不到可重试的提问。');
+      return;
+    }
+
+    const sourceMessage = messages[userIndex];
+    streamConversation({
+      displayContent: sourceMessage.displayContent || contentToPlainText(sourceMessage.content),
+      userRequestContent: sourceMessage.apiContent || sourceMessage.content,
+      attachmentsSnapshot: sourceMessage.attachments || [],
+      historySource: messages.slice(0, userIndex),
+      clearComposer: false,
+      appendUserMessage: false,
+      assistantMessageId: messages[lastAssistantIndex]?.id || '',
+    }).catch(() => {});
   };
 
   const editMessage = (message) => {
@@ -786,114 +984,13 @@ const TextWorkbench = ({ isMobile }) => {
 
     const displayContent = input.trim() || '请根据附件内容继续。';
     const userRequestContent = buildUserRequestContent(input, readableAttachments);
-    const userMessageItem = {
-      id: `user-${Date.now()}`,
-      role: 'user',
-      title: '你',
-      content: displayContent,
-      apiContent: userRequestContent,
+    await streamConversation({
       displayContent,
-      attachments: attachments.map(({ content, dataUrl, ...file }) => file),
-    };
-    const pendingId = `assistant-${Date.now()}`;
-    const history = messages
-      .filter((message) => message.role === 'user' || message.role === 'assistant')
-      .filter((message) => !message.pending)
-      .map((message) => ({
-        role: message.role,
-        content: message.apiContent || message.content,
-      }));
-
-    setMessages((prev) => [
-      ...prev,
-      userMessageItem,
-      {
-        id: pendingId,
-        role: 'assistant',
-        title: activeModel,
-        content: '正在思考...',
-        pending: true,
-      },
-    ]);
-    setInput('');
-    setAttachments([]);
-    setIsSubmitting(true);
-
-    const updateAssistantMessage = (content, pending = true) => {
-      setMessages((prev) =>
-        prev.map((message) =>
-          message.id === pendingId
-            ? {
-                ...message,
-                title: activeModel,
-                content,
-                pending,
-              }
-            : message,
-        ),
-      );
-    };
-
-    try {
-      const controller = new AbortController();
-      const timeout = window.setTimeout(() => controller.abort(), 180000);
-      try {
-        const userId = getCurrentUserId(user);
-        const headers = {
-          Accept: 'text/event-stream',
-          'Content-Type': 'application/json',
-        };
-        if (userId) headers['New-Api-User'] = userId;
-
-        const response = await fetch('/pg/chat/completions', {
-          method: 'POST',
-          headers,
-          credentials: 'same-origin',
-          signal: controller.signal,
-          body: JSON.stringify({
-            model: activeModel,
-            stream: true,
-            messages: [
-              ...history,
-              {
-                role: 'user',
-                content: userRequestContent,
-              },
-            ],
-          }),
-        });
-
-        if (!response.ok) {
-          throw new Error(await readResponseError(response));
-        }
-
-        const answer = await readStreamingResponse(response, (nextText) => {
-          updateAssistantMessage(nextText || '正在回复...', true);
-        });
-        if (!answer.trim()) throw new Error('模型没有返回可展示的内容。');
-        updateAssistantMessage(answer.trim(), false);
-      } finally {
-        window.clearTimeout(timeout);
-      }
-    } catch (error) {
-      const message = getChatFailureMessage(error);
-      Toast.error(message);
-      setMessages((prev) =>
-        prev.map((item) =>
-          item.id === pendingId
-            ? {
-                ...item,
-                role: 'assistant',
-                title: activeModel,
-                content: `这次没有完成：${message}`,
-                pending: false,
-              }
-            : item,
-        ),
-      );
-    } finally {
-      setIsSubmitting(false);
-    }
+      userRequestContent,
+      attachmentsSnapshot: attachments,
+      historySource: messages,
+      clearComposer: true,
+    });
   };
 
   const applyStarter = (label) => {
@@ -914,7 +1011,7 @@ const TextWorkbench = ({ isMobile }) => {
     >
       <aside className='sx-gpt-sidebar' aria-label='侧边栏'>
         <div className='sx-gpt-brand'>
-          <strong>AIPHUI Pro</strong>
+          <strong>AIPHUI Workspace</strong>
           <button
             type='button'
             aria-label={isSidebarCollapsed ? '展开侧边栏' : '收起侧边栏'}
@@ -976,7 +1073,39 @@ const TextWorkbench = ({ isMobile }) => {
 
       <main className={messages.length ? 'sx-gpt-main has-thread' : 'sx-gpt-main is-empty'}>
         <div className='sx-gpt-topbar'>
-          <div className='sx-gpt-model-status'>
+          <div className='sx-gpt-topbar-left'>
+            <Tooltip content='新聊天'>
+              <button
+                type='button'
+                className='sx-gpt-topbar-button'
+                aria-label='新聊天'
+                onClick={resetConversation}
+              >
+                <Plus size={16} />
+              </button>
+            </Tooltip>
+            <Tooltip content='上传文件'>
+              <button
+                type='button'
+                className='sx-gpt-topbar-button'
+                aria-label='上传文件'
+                onClick={openFilePicker}
+              >
+                <Paperclip size={16} />
+              </button>
+            </Tooltip>
+            <Tooltip content='在线客服'>
+              <button
+                type='button'
+                className='sx-gpt-topbar-button'
+                aria-label='在线客服'
+                onClick={openApiTeacher}
+              >
+                <Headphones size={16} />
+              </button>
+            </Tooltip>
+          </div>
+          <div className='sx-gpt-topbar-status'>
             {isSubmitting ? (
               <>
                 <Spin size='small' />
@@ -990,17 +1119,32 @@ const TextWorkbench = ({ isMobile }) => {
             ) : (
               <span>{modelError || activeModel}</span>
             )}
+            <em>{hasConversation ? `${messages.length} 条消息` : '新聊天'}</em>
           </div>
-          <Tooltip content={isDark ? '白天模式' : '暗黑模式'}>
-            <button
-              type='button'
-              className='sx-gpt-theme'
-              onClick={() => setTheme(!isDark)}
-              aria-label='切换明暗模式'
-            >
-              {isDark ? '☼' : '☾'}
-            </button>
-          </Tooltip>
+          <div className='sx-gpt-topbar-right'>
+            {isSubmitting ? (
+              <Tooltip content='停止生成'>
+                <button
+                  type='button'
+                  className='sx-gpt-topbar-button'
+                  aria-label='停止生成'
+                  onClick={abortActiveRequest}
+                >
+                  <Square size={15} />
+                </button>
+              </Tooltip>
+            ) : null}
+            <Tooltip content={isDark ? '白天模式' : '暗黑模式'}>
+              <button
+                type='button'
+                className='sx-gpt-theme'
+                onClick={() => setIsDark((value) => !value)}
+                aria-label='切换明暗模式'
+              >
+                {isDark ? <SunMedium size={16} /> : <MoonStar size={16} />}
+              </button>
+            </Tooltip>
+          </div>
         </div>
 
         <div className='sx-gpt-stage' ref={threadRef}>
@@ -1033,13 +1177,30 @@ const TextWorkbench = ({ isMobile }) => {
                         <span>再次编辑</span>
                       </button>
                     </div>
-                  ) : null}
+                  ) : (
+                    <div className='sx-gpt-message-actions' aria-label='消息操作'>
+                      <button type='button' onClick={() => copyMessage(message)}>
+                        <Copy size={13} />
+                        <span>复制</span>
+                      </button>
+                      {index === lastAssistantIndex ? (
+                        <button type='button' onClick={retryLatestAnswer} disabled={isSubmitting}>
+                          <RotateCcw size={13} />
+                          <span>重新生成</span>
+                        </button>
+                      ) : null}
+                    </div>
+                  )}
                 </article>
               ))}
             </div>
           ) : (
             <div className='sx-gpt-landing'>
-              <h1>你好，{isLoggedIn ? displayName : '欢迎使用'}。准备好开始了吗？</h1>
+              <div className='sx-gpt-landing-copy'>
+                <p className='sx-gpt-landing-kicker'>ChatGPT 工作站</p>
+                <h1>新聊天</h1>
+                <p>文本对话、文件读取、模型切换、复制和再次编辑，都放在这里。</p>
+              </div>
             </div>
           )}
 
@@ -1074,10 +1235,10 @@ const TextWorkbench = ({ isMobile }) => {
                 <button
                   type='button'
                   className='sx-gpt-upload'
-                  onClick={() => fileInputRef.current?.click()}
+                  onClick={openFilePicker}
                   aria-label='上传文件'
                 >
-                  <span aria-hidden='true'>+</span>
+                  <Upload size={16} />
                 </button>
               </Tooltip>
 
@@ -1108,14 +1269,14 @@ const TextWorkbench = ({ isMobile }) => {
               />
 
               <Button
-                className='sx-gpt-send'
+                className={isSubmitting ? 'sx-gpt-send is-stop' : 'sx-gpt-send'}
                 theme='solid'
                 type='primary'
-                icon={<ArrowUp size={18} strokeWidth={2.7} />}
-                onClick={organizeMessage}
-                loading={isSubmitting}
-                disabled={isSubmitting || (!canOrganize && isLoggedIn)}
-                aria-label={isLoggedIn ? '发送消息' : '登录后使用'}
+                icon={isSubmitting ? <Square size={18} strokeWidth={2.7} /> : <ArrowUp size={18} strokeWidth={2.7} />}
+                onClick={isSubmitting ? abortActiveRequest : organizeMessage}
+                loading={false}
+                disabled={!isSubmitting && isLoggedIn && !canOrganize}
+                aria-label={isSubmitting ? '停止生成' : isLoggedIn ? '发送消息' : '登录后使用'}
               />
             </div>
 

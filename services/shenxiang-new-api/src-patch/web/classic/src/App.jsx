@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import React, { lazy, Suspense, useContext, useEffect, useMemo, useState } from 'react';
+import React, { lazy, Suspense, useContext, useMemo } from 'react';
 import { Route, Routes, useLocation, useParams } from 'react-router-dom';
 import { Moon, Sun } from 'lucide-react';
 import Loading from './components/common/ui/Loading';
@@ -29,6 +29,7 @@ import NotFound from './pages/NotFound';
 import Forbidden from './pages/Forbidden';
 import Setting from './pages/Setting';
 import { StatusContext } from './context/Status';
+import { useThemePreference } from './context/Theme.js';
 
 import PasswordResetForm from './components/auth/PasswordResetForm';
 import PasswordResetConfirm from './components/auth/PasswordResetConfirm';
@@ -44,7 +45,6 @@ import Pricing from './pages/Pricing';
 import Task from './pages/Task';
 import ModelPage from './pages/Model';
 import ModelDeploymentPage from './pages/ModelDeployment';
-import Playground from './pages/Playground';
 import MediaPlayground from './pages/MediaPlayground';
 import Subscription from './pages/Subscription';
 import OAuth2Callback from './components/auth/OAuth2Callback';
@@ -63,27 +63,9 @@ function DynamicOAuth2Callback() {
   return <OAuth2Callback type={provider} />;
 }
 
-function CodexRedirect() {
-  useEffect(() => {
-    window.location.replace('/codex/');
-  }, []);
-  return <Loading />;
-}
-
 function GlobalThemeToggle() {
   const location = useLocation();
-  const [isDark, setIsDark] = useState(() => {
-    const stored = localStorage.getItem('theme-mode') || localStorage.getItem('theme');
-    if (stored === 'light') return false;
-    if (stored === 'dark') return true;
-    return true;
-  });
-
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', isDark);
-    localStorage.setItem('theme-mode', isDark ? 'dark' : 'light');
-    localStorage.setItem('theme', isDark ? 'dark' : 'light');
-  }, [isDark]);
+  const [isDark, setIsDark] = useThemePreference();
 
   if (location.pathname === '/') return null;
 
@@ -188,28 +170,12 @@ function App() {
           }
         />
         <Route
-          path='/console/playground'
-          element={
-            <PrivateRoute>
-              <Playground />
-            </PrivateRoute>
-          }
-        />
-        <Route
           path='/console/media-playground'
           element={
             <PrivateRoute>
               <Suspense fallback={<Loading></Loading>} key={location.pathname}>
                 <MediaPlayground />
               </Suspense>
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path='/console/codex'
-          element={
-            <PrivateRoute>
-              <CodexRedirect />
             </PrivateRoute>
           }
         />

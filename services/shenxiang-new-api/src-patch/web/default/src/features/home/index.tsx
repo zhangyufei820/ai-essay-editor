@@ -26,7 +26,6 @@ import {
   MessageCircle,
   Play,
   ShieldCheck,
-  TerminalSquare,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Markdown } from '@/components/ui/markdown'
@@ -37,33 +36,6 @@ import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { useStatus } from '@/hooks/use-status'
 import { useAuthStore } from '@/stores/auth-store'
 import { useHomePageContent } from './hooks'
-
-const cards = [
-  {
-    label: '先选入口',
-    title: 'API 接入老师',
-    text: '告诉它你要接 Codex、Claude Code、Dify 还是自己的系统，它会先判断该走哪条路径。',
-    href: '/codex/',
-  },
-  {
-    label: '拿到凭证',
-    title: '令牌管理',
-    text: '创建专用 API Key，按用途分开管理，后面排查权限和余额也更清楚。',
-    href: '/keys/',
-  },
-  {
-    label: '确认能跑',
-    title: '模型广场',
-    text: '先看模型、价格和权限，再决定把哪个模型写进客户端配置。',
-    href: '/pricing/',
-  },
-]
-
-const proofItems = [
-  ['不先甩文档', '先问你用什么客户端，再给对应配置。'],
-  ['不让新手猜入口', 'OpenAI 兼容、Claude Code、Codex 分开讲清楚。'],
-  ['不碰危险动作', '创建、充值、删除和生成前都要用户确认。'],
-]
 
 const modelBadges = [
   'OpenAI',
@@ -91,10 +63,35 @@ function HomeLanding(props: { isAuthenticated: boolean }) {
   const docsUrl =
     (status?.docs_link as string | undefined) || 'https://docs.newapi.pro'
   const isExternalDocs = docsUrl.startsWith('http')
+  const cards = [
+    {
+      label: '先登录',
+      title: '工作台入口',
+      text: '登录后进入文本对话、文件上传和模型选择的统一工作台。',
+      href: props.isAuthenticated ? '/login' : '/login',
+    },
+    {
+      label: '拿到凭证',
+      title: '令牌管理',
+      text: '创建并管理 API Key，按用途区分更方便排查权限、余额和调用记录。',
+      href: '/keys/',
+    },
+    {
+      label: '确认可用',
+      title: '模型广场',
+      text: '先看可用模型、价格和权限，再决定实际调用方案。',
+      href: '/pricing/',
+    },
+  ]
+  const proofItems = [
+    ['入口更集中', '文本对话、文件上传、模型选择放在同一个工作台。'],
+    ['配置更直接', '常用地址、模型和令牌入口放在同一屏就能找到。'],
+    ['操作更稳妥', '创建、充值、删除和生成前都保留用户确认。'],
+  ]
 
   const copyRows = [
-    ['普通客户端', `${baseUrl}/v1`],
-    ['Claude Code', `${baseUrl}/claude`],
+    ['通用地址', `${baseUrl}/v1`],
+    ['工作台入口', `${baseUrl}/`],
     ['推荐模型', 'gpt-5.5'],
   ]
 
@@ -109,24 +106,23 @@ function HomeLanding(props: { isAuthenticated: boolean }) {
         <div className='min-w-0'>
           <div className='mb-5 inline-flex items-center gap-2 rounded-full border border-emerald-300/25 bg-emerald-300/10 px-3 py-1.5 text-xs font-semibold text-emerald-200'>
             <MessageCircle className='size-3.5' aria-hidden />
-            低价 API · 接入老师 · Agent 客户端
+            文本对话 · 文件上传 · 模型广场
           </div>
           <h1 className='max-w-3xl text-4xl leading-tight font-black tracking-normal text-balance sm:text-5xl lg:text-[58px]'>
-            便宜的 API，不该只给会配置的人用
+            一个入口，把对话和配置都放顺手
           </h1>
           <p className='mt-5 max-w-2xl text-base leading-8 text-slate-300 sm:text-lg'>
-            星人 API 把模型、价格、Base URL、API Key 和客户端接入放在同一个入口。
-            你不用先读一长串教程，接入老师会带你把 Codex、Claude Code、Dify
-            或自己的客户系统真正跑起来。
+            星人 API 把文本对话、文件上传、模型选择、Base URL 和 API Key
+            收在同一个工作台里。你不用先翻很长的说明，就能先开始用，再按需要补配置。
           </p>
 
           <div className='mt-8 flex flex-wrap items-center gap-3'>
             <Button
               className='h-11 rounded-lg bg-blue-500 px-5 text-sm font-semibold text-white hover:bg-blue-400'
-              render={<a href='/codex/' />}
+              render={<a href='/pricing/' />}
             >
               <Play className='size-4' aria-hidden />
-              找 API 接入老师
+              查看模型与定价
             </Button>
             <Button
               variant='outline'
@@ -167,10 +163,10 @@ function HomeLanding(props: { isAuthenticated: boolean }) {
           <div className='flex items-center justify-between border-b border-white/10 px-5 py-4'>
             <div>
               <span className='block text-lg font-bold text-white'>
-                星人 API 接入老师
+                AIPHUI 工作台
               </span>
               <strong className='mt-1 block text-xs tracking-wide text-emerald-200 uppercase'>
-                API Onboarding Agent
+                Text Chat Workspace
               </strong>
             </div>
             <span className='rounded-full border border-emerald-300/30 bg-emerald-300/10 px-3 py-1 text-xs font-semibold text-emerald-200'>
@@ -183,22 +179,22 @@ function HomeLanding(props: { isAuthenticated: boolean }) {
               <div className='flex flex-col gap-1 border-b border-white/10 px-4 py-3 text-xs text-slate-400 sm:flex-row sm:items-center sm:justify-between'>
                 <span>当前用户停在首页</span>
                 <strong className='font-mono text-slate-100'>
-                  已识别：Claude Code 接入
+                  可用：文本对话与文件上传
                 </strong>
               </div>
               <div className='grid min-h-72 content-start gap-3 p-4'>
                 <p className='ml-auto max-w-[88%] rounded-lg border border-blue-300/25 bg-blue-400/10 px-4 py-3 text-sm leading-7 text-slate-100'>
-                  我想把 Claude Code 接到星人 API，应该填哪里？
+                  我上传了一份文件，先帮我整理重点。
                 </p>
                 <p className='max-w-[88%] rounded-lg border border-emerald-300/25 bg-emerald-300/10 px-4 py-3 text-sm leading-7 text-slate-100'>
-                  你用 Claude Code，先复制专用地址，不要填通用 /v1。下一步我带你创建 Key。
+                  可以。先选择文本模型，我会结合文件内容继续对话，也可以顺手帮你梳理后续提问方向。
                 </p>
                 <p className='max-w-[88%] rounded-lg border border-white/10 bg-white/10 px-4 py-3 text-sm leading-7 text-slate-300'>
-                  涉及创建、充值、生成和删除前，我会先让你确认。
+                  登录后还能继续管理令牌、模型、余额和使用记录。
                 </p>
               </div>
               <div className='grid grid-cols-1 gap-2 border-t border-white/10 p-3 sm:grid-cols-3'>
-                {['打开令牌管理', '复制 Claude 地址', '检查模型权限'].map((item) => (
+                {['打开令牌管理', '复制 Base URL', '查看模型广场'].map((item) => (
                   <span
                     key={item}
                     className='grid min-h-10 place-items-center rounded-lg border border-emerald-300/20 bg-black/30 px-2 text-center text-xs font-semibold text-emerald-200'
@@ -215,10 +211,10 @@ function HomeLanding(props: { isAuthenticated: boolean }) {
                   推荐路径
                 </span>
                 <strong className='mt-2 block text-xl leading-snug text-white'>
-                  Claude Code / Codex
+                  文本对话 / API 配置
                 </strong>
                 <p className='mt-2 text-sm leading-6 text-slate-400'>
-                  先建 Key，再把地址和模型填进客户端。
+                  先开始对话，再按需要补齐地址、模型和 Key。
                 </p>
               </div>
               {copyRows.map(([label, value]) => (
@@ -245,9 +241,9 @@ function HomeLanding(props: { isAuthenticated: boolean }) {
 
           <div className='grid grid-cols-1 gap-3 border-t border-white/10 p-4 sm:grid-cols-3'>
             {[
-              ['Codex', '模型、Key、Base URL 一起配好'],
-              ['Claude Code', '专用入口直接复制'],
-              ['Dify / 客户系统', '按真实业务场景落地'],
+              ['文本对话', '先对话，再逐步收敛需求和材料'],
+              ['文件上传', '纯文本、图片、PDF 等材料都能作为输入'],
+              ['API 配置', '地址、模型、Key 在同一套入口里管理'],
             ].map(([title, text]) => (
               <div
                 key={title}
@@ -269,7 +265,7 @@ function HomeLanding(props: { isAuthenticated: boolean }) {
             产品路径
           </span>
           <h2 className='mt-4 text-3xl leading-tight font-black tracking-normal text-white md:text-4xl'>
-            入口少一点，接入快一点
+            入口少一点，开始快一点
           </h2>
         </div>
         <div className='grid grid-cols-1 gap-4 md:grid-cols-3'>
@@ -300,8 +296,7 @@ function HomeLanding(props: { isAuthenticated: boolean }) {
               少给一堆教程，多给能直接粘贴的配置
             </h2>
             <p className='mt-4 max-w-xl text-sm leading-7 text-slate-300 md:text-base'>
-              常用客户端只需要确认入口、模型和 Key。页面把通用地址、Claude Code
-              专用地址和推荐模型放在一起；接入老师负责把它们落到真实客户端里。
+              常用场景只需要先确认地址、模型和 Key。页面把通用地址、工作台入口和推荐模型放在一起，减少来回跳转。
             </p>
             <div className='mt-6 flex flex-wrap gap-3'>
               {isExternalDocs ? (
@@ -327,10 +322,10 @@ function HomeLanding(props: { isAuthenticated: boolean }) {
               )}
               <Button
                 className='h-10 rounded-lg bg-blue-500 text-white hover:bg-blue-400'
-                render={<a href='/codex/' />}
+                render={<a href='/pricing/' />}
               >
-                <TerminalSquare className='size-4' aria-hidden />
-                找接入老师
+                <Play className='size-4' aria-hidden />
+                查看模型广场
               </Button>
             </div>
           </div>
@@ -370,7 +365,7 @@ function HomeLanding(props: { isAuthenticated: boolean }) {
       <section className='relative z-10 mx-auto max-w-6xl px-6 pb-20'>
         <div className='grid grid-cols-1 gap-4 md:grid-cols-3'>
           {[
-            ['401 先查 Key', '确认复制的是完整 Key，且没有把 Claude 专用地址填到普通客户端。'],
+            ['401 先查 Key', '确认复制的是完整 Key，地址和模型也是当前页面展示的那一组。'],
             ['403 先查权限', '模型是否在令牌权限内，余额和分组是否允许调用。'],
             ['timeout 先查地址', 'Base URL、网络、代理和客户端协议先排查，不急着重置全部配置。'],
           ].map(([title, text]) => (
@@ -387,7 +382,7 @@ function HomeLanding(props: { isAuthenticated: boolean }) {
         <div className='mt-6 flex items-start gap-3 rounded-lg border border-emerald-300/20 bg-emerald-300/10 p-4 text-sm leading-7 text-emerald-50'>
           <ShieldCheck className='mt-1 size-5 shrink-0 text-emerald-200' aria-hidden />
           <p>
-            接入老师可以读当前页面并指导下一步，但不会绕过登录、不会替你确认危险动作，也不会要求你把完整 API Key 发到聊天里。
+            在线支持会结合当前页面给出下一步建议，但不会绕过登录、不会替你确认危险动作，也不会要求你把完整 API Key 发到聊天里。
           </p>
         </div>
       </section>

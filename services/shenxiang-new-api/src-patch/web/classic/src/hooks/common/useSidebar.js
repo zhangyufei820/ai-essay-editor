@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import { useState, useEffect, useMemo, useContext, useRef } from 'react';
+import { useState, useEffect, useMemo, useContext, useRef, useCallback } from 'react';
 import { StatusContext } from '../../context/Status';
 import { API } from '../../helpers';
 
@@ -28,9 +28,7 @@ const SIDEBAR_REFRESH_EVENT = 'sidebar-refresh';
 export const DEFAULT_ADMIN_CONFIG = {
   chat: {
     enabled: true,
-    playground: true,
     media: true,
-    codex: true,
     chat: true,
   },
   console: {
@@ -60,6 +58,26 @@ export const DEFAULT_ADMIN_CONFIG = {
 
 const deepClone = (value) => JSON.parse(JSON.stringify(value));
 
+const FORCED_HIDDEN_MODULES = {
+  chat: new Set(['playground', 'codex']),
+};
+
+const applyForcedHiddenModules = (config) => {
+  if (!config || typeof config !== 'object') return config;
+
+  const nextConfig = deepClone(config);
+  Object.entries(FORCED_HIDDEN_MODULES).forEach(([sectionKey, moduleKeys]) => {
+    const section = nextConfig[sectionKey];
+    if (!section || typeof section !== 'object') return;
+
+    moduleKeys.forEach((moduleKey) => {
+      section[moduleKey] = false;
+    });
+  });
+
+  return nextConfig;
+};
+
 export const mergeAdminConfig = (savedConfig) => {
   const merged = deepClone(DEFAULT_ADMIN_CONFIG);
   if (!savedConfig || typeof savedConfig !== 'object') return merged;
@@ -75,7 +93,7 @@ export const mergeAdminConfig = (savedConfig) => {
     merged[sectionKey] = { ...merged[sectionKey], ...sectionConfig };
   }
 
-  return merged;
+  return applyForcedHiddenModules(merged);
 };
 
 export const useSidebar = () => {
@@ -101,74 +119,77 @@ export const useSidebar = () => {
       }
     }
     return mergeAdminConfig(null);
-  }, [statusState?.status?.SidebarModulesAdmin]);
+  }, [statusState]);
 
   // 加载用户配置的通用方法
-  const loadUserConfig = async ({ withLoading } = {}) => {
-    const shouldShowLoader =
-      typeof withLoading === 'boolean'
-        ? withLoading
-        : !hasLoadedOnceRef.current;
+  const loadUserConfig = useCallback(
+    async ({ withLoading } = {}) => {
+      const shouldShowLoader =
+        typeof withLoading === 'boolean'
+          ? withLoading
+          : !hasLoadedOnceRef.current;
 
-    try {
-      if (shouldShowLoader) {
-        setLoading(true);
-      }
-
-      const res = await API.get('/api/user/self');
-      if (res.data.success && res.data.data.sidebar_modules) {
-        let config;
-        // 检查sidebar_modules是字符串还是对象
-        if (typeof res.data.data.sidebar_modules === 'string') {
-          config = JSON.parse(res.data.data.sidebar_modules);
-        } else {
-          config = res.data.data.sidebar_modules;
+      try {
+        if (shouldShowLoader) {
+          setLoading(true);
         }
-        setUserConfig(config);
-      } else {
-        // 当用户没有配置时，生成一个基于管理员配置的默认用户配置
-        // 这样可以确保权限控制正确生效
+
+        const res = await API.get('/api/user/self');
+        if (res.data.success && res.data.data.sidebar_modules) {
+          let config;
+          // 检查sidebar_modules是字符串还是对象
+          if (typeof res.data.data.sidebar_modules === 'string') {
+            config = JSON.parse(res.data.data.sidebar_modules);
+          } else {
+            config = res.data.data.sidebar_modules;
+          }
+          setUserConfig(applyForcedHiddenModules(config));
+        } else {
+          // 当用户没有配置时，生成一个基于管理员配置的默认用户配置
+          // 这样可以确保权限控制正确生效
+          const defaultUserConfig = {};
+          Object.keys(adminConfig).forEach((sectionKey) => {
+            if (adminConfig[sectionKey]?.enabled) {
+              defaultUserConfig[sectionKey] = { enabled: true };
+              // 为每个管理员允许的模块设置默认值为true
+              Object.keys(adminConfig[sectionKey]).forEach((moduleKey) => {
+                if (
+                  moduleKey !== 'enabled' &&
+                  adminConfig[sectionKey][moduleKey]
+                ) {
+                  defaultUserConfig[sectionKey][moduleKey] = true;
+                }
+              });
+            }
+          });
+          setUserConfig(applyForcedHiddenModules(defaultUserConfig));
+        }
+      } catch (error) {
+        // 出错时也生成默认配置，而不是设置为空对象
         const defaultUserConfig = {};
         Object.keys(adminConfig).forEach((sectionKey) => {
           if (adminConfig[sectionKey]?.enabled) {
             defaultUserConfig[sectionKey] = { enabled: true };
-            // 为每个管理员允许的模块设置默认值为true
             Object.keys(adminConfig[sectionKey]).forEach((moduleKey) => {
-              if (
-                moduleKey !== 'enabled' &&
-                adminConfig[sectionKey][moduleKey]
-              ) {
+              if (moduleKey !== 'enabled' && adminConfig[sectionKey][moduleKey]) {
                 defaultUserConfig[sectionKey][moduleKey] = true;
               }
             });
           }
         });
-        setUserConfig(defaultUserConfig);
-      }
-    } catch (error) {
-      // 出错时也生成默认配置，而不是设置为空对象
-      const defaultUserConfig = {};
-      Object.keys(adminConfig).forEach((sectionKey) => {
-        if (adminConfig[sectionKey]?.enabled) {
-          defaultUserConfig[sectionKey] = { enabled: true };
-          Object.keys(adminConfig[sectionKey]).forEach((moduleKey) => {
-            if (moduleKey !== 'enabled' && adminConfig[sectionKey][moduleKey]) {
-              defaultUserConfig[sectionKey][moduleKey] = true;
-            }
-          });
+        setUserConfig(applyForcedHiddenModules(defaultUserConfig));
+      } finally {
+        if (shouldShowLoader) {
+          setLoading(false);
         }
-      });
-      setUserConfig(defaultUserConfig);
-    } finally {
-      if (shouldShowLoader) {
-        setLoading(false);
+        hasLoadedOnceRef.current = true;
       }
-      hasLoadedOnceRef.current = true;
-    }
-  };
+    },
+    [adminConfig],
+  );
 
   // 刷新用户配置的方法（供外部调用）
-  const refreshUserConfig = async () => {
+  const refreshUserConfig = useCallback(async () => {
     if (Object.keys(adminConfig).length > 0) {
       await loadUserConfig({ withLoading: false });
     }
@@ -179,7 +200,7 @@ export const useSidebar = () => {
         detail: { sourceId: instanceIdRef.current, skipLoader: true },
       }),
     );
-  };
+  }, [adminConfig, loadUserConfig]);
 
   // 加载用户配置
   useEffect(() => {
@@ -187,7 +208,7 @@ export const useSidebar = () => {
     if (Object.keys(adminConfig).length > 0) {
       loadUserConfig();
     }
-  }, [adminConfig]);
+  }, [adminConfig, loadUserConfig]);
 
   // 监听全局刷新事件
   useEffect(() => {
@@ -211,7 +232,7 @@ export const useSidebar = () => {
         handleRefresh,
       );
     };
-  }, [adminConfig]);
+  }, [adminConfig, loadUserConfig]);
 
   // 计算最终的显示配置
   const finalConfig = useMemo(() => {
@@ -258,7 +279,7 @@ export const useSidebar = () => {
       });
     });
 
-    return result;
+    return applyForcedHiddenModules(result);
   }, [adminConfig, userConfig]);
 
   // 检查特定功能是否应该显示

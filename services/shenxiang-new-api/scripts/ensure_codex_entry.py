@@ -422,21 +422,26 @@ def check_source(source_root: Path) -> dict[str, bool]:
     return {
         "source_root_exists": source_root.exists(),
         "has_sidebar_media_entry": "媒体工坊" in sidebar and "itemKey: 'media'" in sidebar and "/media-playground" in sidebar,
-        "has_sidebar_codex_entry": "云 Codex" in sidebar and "itemKey: 'codex'" in sidebar and "/codex/" in sidebar,
+        "has_sidebar_chat_entry": "itemKey: 'chat'" in sidebar and "/console/chat" in sidebar,
+        "hides_sidebar_codex_entry": "itemKey: 'codex'" not in sidebar and "/console/codex" not in sidebar,
+        "hides_sidebar_playground_entry": "itemKey: 'playground'" not in sidebar and "操练场" not in sidebar,
         "has_image_generation_log_label": "图像生成日志" in sidebar,
         "has_no_legacy_drawing_log_label": "绘图日志" not in sidebar,
         "has_midjourney_log_entry": "itemKey: 'midjourney'" in sidebar and "/midjourney" in sidebar,
         "has_task_log_entry": "任务日志" in sidebar and "itemKey: 'task'" in sidebar and "/task" in sidebar,
         "has_admin_models_entry": "模型管理" in sidebar and "itemKey: 'models'" in sidebar and "/console/models" in sidebar,
         "has_sidebar_default_media": has_pattern(sidebar_config, r"chat:\s*\{[^}]*media:\s*true"),
-        "has_sidebar_default_codex": has_pattern(sidebar_config, r"chat:\s*\{[^}]*codex:\s*true"),
+        "has_sidebar_default_chat": has_pattern(sidebar_config, r"chat:\s*\{[^}]*chat:\s*true"),
+        "hides_sidebar_default_codex": not has_pattern(sidebar_config, r"chat:\s*\{[^}]*codex:\s*true"),
+        "hides_sidebar_default_playground": not has_pattern(sidebar_config, r"chat:\s*\{[^}]*playground:\s*true"),
         "has_sidebar_default_midjourney": has_pattern(sidebar_config, r"console:\s*\{[^}]*midjourney:\s*true"),
         "has_sidebar_default_task": has_pattern(sidebar_config, r"console:\s*\{[^}]*task:\s*true"),
         "has_sidebar_default_admin_models": has_pattern(sidebar_config, r"admin:\s*\{[^}]*models:\s*true"),
         "has_top_nav_media_entry": "媒体工坊" in navigation and "itemKey: 'media'" in navigation and "/console/media-playground" in navigation,
-        "has_top_nav_codex_entry": "云 Codex" in navigation and "itemKey: 'codex'" in navigation and "/console/codex" in navigation,
+        "hides_top_nav_codex_entry": "itemKey: 'codex'" not in navigation and "/console/codex" not in navigation,
         "has_app_media_route": "path='/console/media-playground'" in app and "path='/media-playground'" in app,
-        "has_app_codex_route": "path='/console/codex'" in app and "CodexRedirect" in app,
+        "has_app_chat_route": "path='/console/chat/:id?'" in app,
+        "hides_app_codex_route": "path='/console/codex'" not in app and "CodexRedirect" not in app,
         "has_seedance_private_model": "Seedance 私测视频" in media_playground and "seedance-nsfw" in media_playground,
         "has_seedance_private_filter": "private: true" in media_playground and "/api/user/models" in media_playground,
         "has_seedance_backend_guard": (
@@ -507,7 +512,6 @@ def sync_db_options(app_root: Path) -> dict[str, Any]:
 
     header_default: dict[str, Any] = {
         "home": True,
-        "codex": True,
         "console": True,
         "docs": True,
         "media": True,
@@ -515,7 +519,7 @@ def sync_db_options(app_root: Path) -> dict[str, Any]:
         "about": True,
     }
     sidebar_default: dict[str, Any] = {
-        "chat": {"chat": True, "codex": True, "enabled": True, "media": True, "playground": True},
+        "chat": {"chat": True, "codex": False, "enabled": True, "media": True, "playground": False},
         "console": {"detail": True, "enabled": True, "log": True, "midjourney": True, "task": True, "token": True},
         "personal": {"enabled": True, "personal": True, "topup": True},
         "admin": {"channel": True, "deployment": True, "enabled": True, "models": True, "redemption": True, "setting": True, "subscription": True, "user": True},
@@ -538,8 +542,8 @@ def sync_db_options(app_root: Path) -> dict[str, Any]:
         if key not in header:
             header[key] = value
             changed_header = True
-    if header.get("codex") is not True:
-        header["codex"] = True
+    if header.get("codex") is not False:
+        header["codex"] = False
         changed_header = True
     if header.get("media") is not True:
         header["media"] = True
@@ -559,7 +563,19 @@ def sync_db_options(app_root: Path) -> dict[str, Any]:
                 section[key] = True
                 changed_sidebar = True
 
-    ensure_sidebar_section("chat", ("enabled", "codex", "media", "playground", "chat"))
+    def disable_sidebar_section_keys(section_name: str, keys: tuple[str, ...]) -> None:
+        nonlocal changed_sidebar
+        section = sidebar.setdefault(section_name, {})
+        if not isinstance(section, dict):
+            sidebar[section_name] = section = {}
+            changed_sidebar = True
+        for key in keys:
+            if section.get(key) is not False:
+                section[key] = False
+                changed_sidebar = True
+
+    ensure_sidebar_section("chat", ("enabled", "media", "chat"))
+    disable_sidebar_section_keys("chat", ("codex", "playground"))
     ensure_sidebar_section("console", ("enabled", "log", "midjourney", "task", "token", "detail"))
     ensure_sidebar_section("admin", ("enabled", "models"))
 
@@ -602,10 +618,27 @@ def fetch_text(url: str) -> str:
 
 def check_url(base_url: str) -> dict[str, bool]:
     text = fetch_bundle_text(base_url)
-    try:
-        codex_text = fetch_text(base_url.rstrip("/") + "/codex/")
-    except Exception:
-        codex_text = ""
+    has_sidebar_codex_item = bool(
+        re.search(
+            r"itemKey\s*:\s*['\"]codex['\"][^{}]{0,240}to\s*:\s*['\"]/console/codex['\"]",
+            text,
+            re.S,
+        )
+    )
+    has_sidebar_playground_item = bool(
+        re.search(
+            r"itemKey\s*:\s*['\"]playground['\"][^{}]{0,240}to\s*:\s*['\"]/playground['\"]",
+            text,
+            re.S,
+        )
+    )
+    has_sidebar_chat_item = bool(
+        re.search(
+            r"itemKey\s*:\s*['\"]chat['\"][^{}]{0,240}to\s*:\s*['\"]/console/chat",
+            text,
+            re.S,
+        )
+    )
     has_top_nav_codex_item = bool(
         re.search(
             r"itemKey\s*:\s*['\"]codex['\"][^{}]{0,240}to\s*:\s*['\"]/console/codex['\"]",
@@ -621,14 +654,12 @@ def check_url(base_url: str) -> dict[str, bool]:
         )
     )
     return {
-        "has_codex_label": "云 Codex" in text,
-        "has_codex_route": "/codex/" in text,
-        "has_console_codex_route": "/console/codex" in text,
-        "has_sidebar_codex_item": 'itemKey:"codex"' in text,
         "has_sidebar_media_item": 'itemKey:"media"' in text,
-        "has_top_nav_codex_item": has_top_nav_codex_item,
+        "has_sidebar_chat_item": has_sidebar_chat_item,
+        "hides_sidebar_codex_item": not has_sidebar_codex_item,
+        "hides_sidebar_playground_item": not has_sidebar_playground_item,
+        "hides_top_nav_codex_item": not has_top_nav_codex_item,
         "has_top_nav_media_item": has_top_nav_media_item,
-        "codex_route_serves_workspace": "星人 Codex" in codex_text and "页面未找到" not in codex_text,
         "has_media_label": "媒体工坊" in text,
         "has_image_generation_log_label": "图像生成日志" in text,
         "has_midjourney_log_route": "/console/midjourney" in text,

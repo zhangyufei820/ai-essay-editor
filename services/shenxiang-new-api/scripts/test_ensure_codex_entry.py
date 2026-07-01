@@ -37,13 +37,15 @@ class EnsureCodexEntryTest(unittest.TestCase):
             "web/classic/src/components/layout/SiderBar.jsx",
             """
 const routerMap = {
+  chat: '/console/chat',
+  media: '/console/media-playground',
   midjourney: '/console/midjourney',
   task: '/console/task',
   models: '/console/models',
 };
 const items = [
+  { text: t('聊天'), itemKey: 'chat', to: '/console/chat' },
   { text: t('媒体工坊'), itemKey: 'media', to: '/media-playground' },
-  { text: t('云 Codex'), itemKey: 'codex', to: '/codex/' },
   { text: t('图像生成日志'), itemKey: 'midjourney', to: '/midjourney' },
   { text: t('任务日志'), itemKey: 'task', to: '/task' },
   { text: t('模型管理'), itemKey: 'models', to: '/console/models' },
@@ -54,7 +56,7 @@ const items = [
             "web/classic/src/hooks/common/useSidebar.js",
             """
 export const DEFAULT_ADMIN_CONFIG = {
-  chat: { enabled: true, playground: true, media: true, codex: true, chat: true },
+  chat: { enabled: true, media: true, chat: true, codex: false, playground: false },
   console: { enabled: true, log: true, midjourney: true, task: true, token: true },
   admin: { enabled: true, models: true },
 };
@@ -65,18 +67,16 @@ export const DEFAULT_ADMIN_CONFIG = {
             """
 const links = [
   { text: t('媒体工坊'), itemKey: 'media', to: '/console/media-playground' },
-  { text: t('云 Codex'), itemKey: 'codex', to: '/console/codex' },
 ];
 """,
         )
         self.write_file(
             "web/classic/src/App.jsx",
             """
-function CodexRedirect() {}
 const routes = [
+  "path='/console/chat/:id?'",
   "path='/console/media-playground'",
   "path='/media-playground'",
-  "path='/console/codex'",
 ];
 """,
         )
