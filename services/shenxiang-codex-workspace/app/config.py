@@ -44,7 +44,7 @@ class Settings:
         "claude-opus-4-7-full",
         "claude-opus-4-8-full",
     )
-    image_allowed_models: tuple[str, ...] = ("gpt-image-2-4K", "grok-imagine-image")
+    image_allowed_models: tuple[str, ...] = ("gpt-image-2-4K", "geek2api-image-2", "grok-imagine-image")
     video_allowed_models: tuple[str, ...] = (
         "seedance-2.0",
         "seedance-2.0-dj-fast",
@@ -108,7 +108,7 @@ def get_settings() -> Settings:
             "CLAUDE_ALLOWED_MODELS",
             "claude-fable-5,claude-opus-4-6-full,claude-opus-4-7-full,claude-opus-4-8-full",
         ),
-        image_allowed_models=_env_list("IMAGE_ALLOWED_MODELS", "gpt-image-2-4K,grok-imagine-image"),
+        image_allowed_models=_env_list("IMAGE_ALLOWED_MODELS", "gpt-image-2-4K,geek2api-image-2,grok-imagine-image"),
         video_allowed_models=_env_list(
             "VIDEO_ALLOWED_MODELS",
             "seedance-2.0,seedance-2.0-dj-fast,seedance-2.0-ld-17,grok-video-super-720p",

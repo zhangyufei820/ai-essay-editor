@@ -147,6 +147,28 @@ const IMAGE_MODELS = [
     hint: '适合高质量海报、产品图和需要透明背景的素材。',
   },
   {
+    value: 'geek2api-image-2',
+    label: 'Geek2API Image 2',
+    badge: '4K',
+    vendor: 'Geek2API',
+    sizes: OPENAI_IMAGE_ASPECT_RATIOS,
+    aspectRatios: OPENAI_IMAGE_ASPECT_RATIOS,
+    resolutions: ['1K', '2K', '4K'],
+    qualities: ['auto', 'low', 'medium', 'high'],
+    formats: ['png', 'jpeg', 'webp'],
+    defaultSize: '1:1',
+    defaultResolution: '1K',
+    defaultQuality: 'high',
+    maxCount: 4,
+    countParam: 'n',
+    sizeParam: 'size',
+    backgroundOptions: ['auto', 'opaque'],
+    edit: true,
+    priceLabel: '1K ¥0.03 / 2K ¥0.06 / 4K ¥0.10',
+    billingLabel: '按张计费',
+    hint: 'Geek2API Image 2 链路，支持 1K/2K/4K，按分辨率三档计费。',
+  },
+  {
     value: 'banana-2',
     label: 'Banana 2',
     badge: '4K',
@@ -353,6 +375,7 @@ function isGeminiImageModel(model) {
 function isGptImage2Model(model) {
   return (
     model === 'gpt-image-2-4K' ||
+    model === 'geek2api-image-2' ||
     model === 'image 2电商商品图快速通道(1.5K)'
   );
 }

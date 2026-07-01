@@ -54,9 +54,9 @@ const fallbackModelModes = {
   },
   image: {
     label: "图像生成",
-    description: "Image 2、Grok、Banana 2、Gemini 图像是独立模型，请按任务明确选择。",
-    models: ["gpt-image-2-4K", "grok-imagine-image", "banana-2", "gemini-3-pro-image-preview"],
-    billing: "按张计费。四个图像模型各自独立，不会自动互相切换。",
+    description: "Image 2、Geek2API Image 2、Grok、Banana 2、Gemini 图像是独立模型，请按任务明确选择。",
+    models: ["gpt-image-2-4K", "geek2api-image-2", "grok-imagine-image", "banana-2", "gemini-3-pro-image-preview"],
+    billing: "按张计费。Geek2API Image 2：1K ¥0.03 / 2K ¥0.06 / 4K ¥0.10。",
   },
   video: {
     label: "视频生成",
@@ -399,6 +399,7 @@ function defaultModelForMode(mode, choices) {
 
 function modelLabel(model) {
   if (model === "gpt-image-2-4K") return "星人 Image 2 4K · 生图 / 局部编辑";
+  if (model === "geek2api-image-2") return "Geek2API Image 2 · 1K ¥0.03 / 2K ¥0.06 / 4K ¥0.10";
   if (model === "grok-imagine-image") return "Grok 图像 · 快速编辑 / mask";
   if (model === "banana-2") return "Banana 2 · 图像生成 / 图像编辑";
   if (model === "gemini-3-pro-image-preview") return "Gemini 3 Pro Image · 高质量图像";

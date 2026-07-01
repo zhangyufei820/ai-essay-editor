@@ -63,6 +63,14 @@ const PRICING_DISPLAY_OVERRIDES = {
     billing_label: '按张计费',
     icon: 'OpenAI',
   },
+  'geek2api-image-2': {
+    display_name: 'Geek2API Image 2',
+    description: 'Geek2API Image 2：支持 1K/2K/4K 输出，人民币 1K ¥0.03、2K ¥0.06、4K ¥0.10/张。',
+    fixed_price_label: '1K ¥0.03 / 2K ¥0.06 / 4K ¥0.10',
+    price_unit_label: '',
+    billing_label: '按张计费',
+    icon: 'OpenAI',
+  },
   'seedance-2.0-dj-fast': {
     display_name: 'seedance-2.0-dj-fast',
     description: '豆包 Seedance 2.0 DJ Fast：人民币 ¥0.162/秒，按秒计费；支持 5/10/15 秒，只接收图片参考，不能过人脸。',
@@ -776,6 +784,7 @@ export const calculateModelPrice = ({
     return {
       price: displayOverride.fixed_price_label,
       priceUnitLabel: displayOverride.price_unit_label || '次',
+      hidePriceUnitSuffix: displayOverride.price_unit_label === '',
       isPerToken: false,
       isTokensDisplay: false,
       usedGroup,
@@ -1029,7 +1038,9 @@ export const getModelPriceItems = (
       key: 'fixed',
       label: t('模型价格'),
       value: priceData.price,
-      suffix: ` / ${priceData.priceUnitLabel || t('次')}`,
+      suffix: priceData.hidePriceUnitSuffix
+        ? ''
+        : ` / ${priceData.priceUnitLabel || t('次')}`,
     },
   ].filter((item) => item.value !== null && item.value !== undefined && item.value !== '');
 };

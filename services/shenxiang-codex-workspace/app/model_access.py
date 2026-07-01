@@ -8,6 +8,7 @@ from app.config import Settings
 SERVER_ALLOWED_MODELS_METADATA_KEY = "server_allowed_models_by_mode"
 IMAGE_BENEFIT_MODEL = "image 2电商商品图快速通道(1.5K)"
 EXTRA_IMAGE_MODELS = (
+    "geek2api-image-2",
     "banana-2",
     "gemini-3-pro-image-preview",
 )

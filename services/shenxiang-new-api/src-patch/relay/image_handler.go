@@ -21,8 +21,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-const playgroundImageRequestLogKey = "playground_image_request_log_recorded"
-const PlaygroundImageResponseCaptureKey = "playground_image_response_capture"
+const (
+	playgroundImageRequestLogKey      = "playground_image_request_log_recorded"
+	PlaygroundImageResponseCaptureKey = "playground_image_response_capture"
+)
 
 func recordPlaygroundImageRequestLog(c *gin.Context, info *relaycommon.RelayInfo, request *dto.ImageRequest) {
 	if c == nil || c.Request == nil || c.Request.URL == nil || info == nil || request == nil {
@@ -179,6 +181,10 @@ func ImageHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *type
 				if err != nil {
 					return newAPIErrorFromParamOverride(err)
 				}
+			}
+			jsonData, err = sanitizeGeek2APIImage2OutboundBody(info, jsonData)
+			if err != nil {
+				return types.NewError(err, types.ErrorCodeConvertRequestFailed, types.ErrOptionWithSkipRetry())
 			}
 
 			logger.LogDebug(c, "image request body: %s", jsonData)
