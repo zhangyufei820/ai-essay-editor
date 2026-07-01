@@ -19,6 +19,18 @@ cleanup:
 
 If the scope is ambiguous, make the safest narrow assumption and say it. Ask only when the task cannot be safely routed.
 
+## Multi-Agent Coordination Rule
+
+This rule applies to all conversations in this repository, not only repair work. When the user says `紧急修复`, `监督`, `多 agent`, `多线程协作`, `不要开多个窗口`, `不要另开线程`, `统一协调`, or expresses the same intent, Codex must default to sub-agents inside the current thread instead of creating new user-visible Codex threads.
+
+- The current thread is the coordinator. It owns scope locking, decomposition, conflict control, final decisions, commit/deploy choices, and the final user report.
+- Do not create a new user-visible Codex thread by default. Create one only when the user explicitly asks for a new thread, new window, or Codex thread.
+- Sub-agent tasks must be specific, non-duplicative, and verifiable. For code-writing subtasks, assign mutually exclusive write scopes so agents do not edit the same files or modules in parallel.
+- Include at least one read-only monitor for production state, logs, read-only DB evidence, health checks, or user-path monitoring when the task involves production, urgent incidents, supervision, or runtime verification. This monitor must not edit files, restart services, write DB rows, or deploy.
+- The coordinator must keep moving on the critical path and must not offload the blocking root decision to a sub-agent and then idle.
+- All sub-agent findings must return to the coordinator for review and synthesis. The final report to the user must be written only by the coordinator thread.
+- If the task is too small to justify spawning a sub-agent, the coordinator must state why no sub-agent was started, while still avoiding new user-visible threads.
+
 ## Scope Locks
 
 ### Main Site
