@@ -2785,25 +2785,32 @@ const MediaPlayground = () => {
     if (references.length === 0) return payload;
 
     if (isOfficialReferencesModel) {
+      const shouldForwardReferenceAliases = !activeVideoModel.extendedSeedance;
       const officialReferences = references
         .filter((item) => ['image', 'video', 'audio'].includes(item.mediaType))
         .map((item) => ({
           media_type: item.mediaType,
           role: item.role,
           url: item.url,
-          alias: item.alias,
+          ...(shouldForwardReferenceAliases ? { alias: item.alias } : {}),
         }));
+      const referenceAliases = shouldForwardReferenceAliases
+        ? officialReferences.map((item) => item.alias).filter(Boolean)
+        : [];
       return {
         ...payload,
         references: officialReferences,
-        prompt: promptWithReferenceAliases(
-          payload.prompt || '',
-          officialReferences.map((item) => item.alias),
-        ),
+        prompt: shouldForwardReferenceAliases
+          ? promptWithReferenceAliases(payload.prompt || '', referenceAliases)
+          : payload.prompt || '',
         metadata: {
           ...(payload.metadata || {}),
-          reference_aliases: officialReferences.map((item) => item.alias).filter(Boolean),
-          reference_mentions: sortedReferenceMentions(payload.prompt || '', orderedReferenceItems).map((item) => item.alias),
+          ...(shouldForwardReferenceAliases
+            ? {
+              reference_aliases: referenceAliases,
+              reference_mentions: sortedReferenceMentions(payload.prompt || '', orderedReferenceItems).map((item) => item.alias),
+            }
+            : {}),
         },
       };
     }
@@ -3467,7 +3474,8 @@ const MediaPlayground = () => {
                         value={reversePromptText}
                         autosize={{ minRows: 4, maxRows: 8 }}
                         onChange={setReversePromptText}
-                        placeholder='反推完成后，提示词会出现在这里，并自动写入上方画面描述。'
+                        disabled={imageWorkflow === 'generate'}
+                        placeholder={imageWorkflow === 'generate' ? '文生图模式下此框仅展示反推结果，请在上方"画面描述"输入提示词。' : '反推完成后，提示词会出现在这里，并自动写入上方画面描述。'}
                         aria-label='反推提示词'
                       />
                       <div className='mp-reverse-actions'>
