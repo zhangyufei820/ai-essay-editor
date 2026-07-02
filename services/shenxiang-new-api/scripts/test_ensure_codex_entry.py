@@ -163,6 +163,22 @@ API.get('/api/user/models');
 
         self.assertFalse(results["has_media_result_model_guard"])
 
+    def test_latest_source_root_prefers_deploy_marker_over_mtime(self) -> None:
+        app_root = self.source_root / "app"
+        good = app_root / "build/src-good"
+        stale = app_root / "build/src-stale"
+        for source_root in (good, stale):
+            (source_root / "web").mkdir(parents=True)
+            (source_root / "Dockerfile").write_text("FROM scratch\n", encoding="utf-8")
+            (source_root / "web/package.json").write_text("{}", encoding="utf-8")
+
+        (app_root / ".last_media_source_model_guard_source").write_text(
+            "build/src-good\n",
+            encoding="utf-8",
+        )
+
+        self.assertEqual(self.module.latest_source_root(app_root), good)
+
 
 if __name__ == "__main__":
     unittest.main()
