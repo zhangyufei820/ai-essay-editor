@@ -15,10 +15,6 @@ from typing import Any
 DEFAULT_APP_ROOT = Path("/opt/shenxiang-new-api")
 DEFAULT_SOURCE_ROOT = DEFAULT_APP_ROOT / "build" / "src-20260606-143624"
 DEFAULT_BASE_URL = "http://127.0.0.1:3120"
-SOURCE_ROOT_MARKERS = (
-    ".last_media_source_model_guard_source",
-    ".last_codex_entry_source",
-)
 
 
 def read_text(path: Path) -> str:
@@ -61,21 +57,6 @@ def patch_file(
 
 
 def latest_source_root(app_root: Path) -> Path:
-    for marker in SOURCE_ROOT_MARKERS:
-        marker_path = app_root / marker
-        if not marker_path.exists():
-            continue
-        raw = read_text(marker_path).strip()
-        if not raw:
-            continue
-        source_root = Path(raw)
-        candidates = [source_root]
-        if not source_root.is_absolute():
-            candidates = [app_root / source_root, app_root / "build" / source_root]
-        for candidate in candidates:
-            if (candidate / "Dockerfile").exists() and (candidate / "web/package.json").exists():
-                return candidate
-
     candidates = sorted(
         (app_root / "build").glob("src-*"),
         key=lambda path: path.stat().st_mtime,
