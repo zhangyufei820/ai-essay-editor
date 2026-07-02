@@ -321,11 +321,16 @@ const SiderBar = ({ onNavigate = () => {} }) => {
     }
   };
 
+  // 检查是否在媒体工坊页面
+  const isMediaPlayground = location.pathname.includes('media-playground');
+
   return (
     <div
       className='sidebar-container'
       style={{
         width: 'var(--sidebar-current-width)',
+        background: isMediaPlayground ? '#0A0F14' : undefined,
+        borderRight: isMediaPlayground ? '1px solid rgba(255, 255, 255, 0.06)' : undefined,
       }}
     >
       <SkeletonWrapper
@@ -344,6 +349,10 @@ const SiderBar = ({ onNavigate = () => {} }) => {
           itemStyle='sidebar-nav-item'
           hoverStyle='sidebar-nav-item:hover'
           selectedStyle='sidebar-nav-item-selected'
+          style={{
+            background: isMediaPlayground ? '#0A0F14' : undefined,
+            color: isMediaPlayground ? 'rgba(240, 244, 248, 0.7)' : undefined,
+          }}
           renderWrapper={({ itemElement, props }) => {
             const to = routerMap[props.itemKey];
 
