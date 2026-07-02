@@ -320,7 +320,7 @@ body[theme-mode='dark'] .mp-page {
 .mp-chip-field > span,
 .mp-slider-field span,
 .mp-switch-line strong {
-  color: rgba(241, 250, 247, 0.88);
+  color: var(--mp-text-primary);
   font-size: 12px;
   font-weight: 760;
 }
@@ -379,11 +379,9 @@ body[theme-mode='dark'] .mp-page {
   align-content: flex-start;
   gap: 7px;
   padding: 7px;
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 10px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.036), rgba(255, 255, 255, 0.016)),
-    rgba(5, 9, 12, 0.32);
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: var(--mp-radius-md);
+  background: var(--mp-bg-elevated);
 }
 
 .mp-chip-row.is-scrollable {
@@ -400,26 +398,26 @@ body[theme-mode='dark'] .mp-page {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
-  color: rgba(233, 246, 241, 0.82);
-  background: rgba(255, 255, 255, 0.042);
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: var(--mp-radius-sm);
+  color: var(--mp-text-secondary);
+  background: var(--mp-bg-elevated);
   cursor: pointer;
   font-size: 13px;
   font-weight: 760;
   line-height: 1;
   white-space: nowrap;
-  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
+  transition: all var(--mp-transition-fast);
 }
 
 .mp-param-chip:hover {
   transform: translateY(-1px);
-  border-color: rgba(94, 234, 212, 0.34);
-  background: rgba(255, 255, 255, 0.075);
+  border-color: var(--mp-accent-primary);
+  background: var(--mp-bg-card-hover);
 }
 
 .mp-param-chip:focus-visible {
-  outline: 2px solid rgba(45, 212, 191, 0.82);
+  outline: 2px solid var(--mp-accent-primary);
   outline-offset: 2px;
 }
 
@@ -428,12 +426,10 @@ body[theme-mode='dark'] .mp-page {
 }
 
 .mp-param-chip.active {
-  color: #04120f;
-  border-color: rgba(94, 234, 212, 0.58);
-  background: linear-gradient(135deg, #d8bb68, #4ed8c5 60%, #6aa7ec);
-  box-shadow:
-    0 10px 28px rgba(45, 212, 191, 0.14),
-    inset 0 1px 0 rgba(255, 255, 255, 0.38);
+  color: #FFFFFF;
+  border-color: var(--mp-accent-primary);
+  background: var(--mp-accent-primary);
+  box-shadow: var(--mp-shadow-card);
 }
 
 .mp-param-chip:disabled {
@@ -445,23 +441,23 @@ body[theme-mode='dark'] .mp-page {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   padding: 12px;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.045);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: var(--mp-radius-md);
+  background: var(--mp-bg-elevated);
+  border: 1px solid var(--mp-border-subtle);
 }
 
 .mp-switch-line span {
   display: block;
   margin-top: 3px;
-  color: rgba(225, 239, 235, 0.58);
+  color: var(--mp-text-muted);
   font-size: 12px;
 }
 
 .mp-slider-field {
   padding: 12px;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.045);
-  border: 1px solid rgba(255, 255, 255, 0.065);
+  border-radius: var(--mp-radius-md);
+  background: var(--mp-bg-elevated);
+  border: 1px solid var(--mp-border-subtle);
 }
 
 .mp-slider-field > div {
