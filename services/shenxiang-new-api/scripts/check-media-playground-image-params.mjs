@@ -68,7 +68,7 @@ function main() {
 
   errors.push(
     ...markerErrors('GPT Image 2 official size constraints', classic, [
-      "const GPT_IMAGE_2_RESOLUTIONS = ['1K', '2K', '4K', 'custom']",
+      "const GPT_IMAGE_2_RESOLUTIONS = ['auto', '1K', '2K', '4K', 'custom']",
       "'16:9': '3840x2160'",
       "'9:16': '2160x3840'",
       'const GPT_IMAGE_2_MIN_PIXELS = 655360',

@@ -57,7 +57,7 @@ const PRICING_DISPLAY_OVERRIDES = {
   },
   'gpt-image-2-4K': {
     display_name: 'gpt-image-2-4K',
-    description: '星人 OpenAI 图像生成，支持 1K/2K/4K 与官方约束内自定义尺寸；gpt-image-2 最大边 3840，4K 横竖图为 3840x2160 / 2160x3840。',
+    description: '星人 OpenAI 图像生成，支持 1K/2K/4K 与官方约束内自动或自定义尺寸；gpt-image-2 最大边 3840，4K 横竖图为 3840x2160 / 2160x3840。',
     fixed_price_label: '¥0.108',
     price_unit_label: '张',
     billing_label: '按张计费',
@@ -65,7 +65,7 @@ const PRICING_DISPLAY_OVERRIDES = {
   },
   'geek2api-image-2': {
     display_name: '星人 Image 2',
-    description: '星人 Image 2：按 gpt-image-2 官方尺寸约束提交，支持 1K/2K/4K 与自定义 WxH，人民币 1K ¥0.03、2K ¥0.06、4K ¥0.10/张。',
+    description: '星人 Image 2：按 gpt-image-2 官方尺寸约束提交，支持 1K/2K/4K、auto 与自定义 WxH，人民币 1K ¥0.03、2K ¥0.06、4K ¥0.10/张。',
     fixed_price_label: '1K ¥0.03 / 2K ¥0.06 / 4K ¥0.10',
     price_unit_label: '',
     billing_label: '按张计费',

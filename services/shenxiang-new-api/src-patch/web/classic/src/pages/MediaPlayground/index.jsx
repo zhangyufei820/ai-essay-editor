@@ -79,7 +79,7 @@ const OPENAI_IMAGE_ASPECT_RATIOS = [
   '21:9',
 ];
 
-const GPT_IMAGE_2_RESOLUTIONS = ['1K', '2K', '4K', 'custom'];
+const GPT_IMAGE_2_RESOLUTIONS = ['auto', '1K', '2K', '4K', 'custom'];
 
 const GOOGLE_GEMINI_31_FLASH_IMAGE_ASPECT_RATIOS = [
   '1:1',
@@ -580,6 +580,9 @@ function gptImage2SizeFor(aspectRatio, imageSize, customSize = '') {
   if (imageSize === 'custom') {
     return gptImage2CustomSizeFor(customSize);
   }
+  if (imageSize === 'auto') {
+    return 'auto';
+  }
   const normalizedResolution = imageSize && imageSize !== 'auto' ? imageSize : '1K';
   return (
     GPT_IMAGE_2_SIZE_BY_RESOLUTION[normalizedResolution]?.[aspectRatio] ||
@@ -595,7 +598,9 @@ function geminiProImageSizeFor(aspectRatio, imageSize) {
 
 function imagePixelSizeForModel(modelValue, aspectRatio, imageSize, customSize = '') {
   if (isGptImage2Model(modelValue)) {
-    return gptImage2SizeFor(aspectRatio, imageSize, customSize) || '自定义尺寸待输入';
+    const pixelSize = gptImage2SizeFor(aspectRatio, imageSize, customSize);
+    if (pixelSize === 'auto') return '';
+    return pixelSize || '自定义尺寸待输入';
   }
   if (modelValue === 'gemini-3-pro-image-preview') {
     return geminiProImageSizeFor(aspectRatio, imageSize);
