@@ -1,19 +1,19 @@
 import React from 'react';
 import { Button, Spin } from '@douyinfe/semi-ui';
-import { IconDownload, IconCopy, IconDelete, IconRefresh } from '@douyinfe/semi-icons';
+import { IconDownload, IconCopy, IconDelete, IconExternalOpen } from '@douyinfe/semi-icons';
 import './ResultCard.css';
 
 /**
  * 单个结果卡片
  * 所有操作通过 props 传入
+ * 仅包含原业务实际存在的操作：查看原图、复制链接、下载、删除
  */
 export function ResultCard({
   result,
   onDownload,
   onCopy,
   onDelete,
-  onContinueEdit,
-  onUseAsReference,
+  onOpen,
   mediaType = 'image',
 }) {
   const isVideo = mediaType === 'video';
@@ -52,41 +52,33 @@ export function ResultCard({
 
       {!isLoading && !isError && (
         <div className="mp-result-actions">
-          <Button
-            size="small"
-            icon={<IconDownload />}
-            onClick={() => onDownload(result)}
-            theme="borderless"
-          >
-            下载
-          </Button>
+          {onOpen && (
+            <Button
+              size="small"
+              icon={<IconExternalOpen />}
+              onClick={() => onOpen(result)}
+              theme="borderless"
+            >
+              查看原图
+            </Button>
+          )}
           <Button
             size="small"
             icon={<IconCopy />}
             onClick={() => onCopy(result)}
             theme="borderless"
           >
-            复制
+            复制链接
           </Button>
-          {onContinueEdit && (
-            <Button
-              size="small"
-              icon={<IconRefresh />}
-              onClick={() => onContinueEdit(result)}
-              theme="borderless"
-            >
-              继续编辑
-            </Button>
-          )}
-          {onUseAsReference && (
-            <Button
-              size="small"
-              onClick={() => onUseAsReference(result)}
-              theme="borderless"
-            >
-              作为参考图
-            </Button>
-          )}
+          <Button
+            size="small"
+            type="primary"
+            icon={<IconDownload />}
+            onClick={() => onDownload(result)}
+            theme="borderless"
+          >
+            下载
+          </Button>
           <Button
             size="small"
             icon={<IconDelete />}
