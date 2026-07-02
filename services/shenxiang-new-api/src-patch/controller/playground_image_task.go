@@ -40,14 +40,39 @@ const (
 // to prevent goroutine exhaustion under high load.
 var playgroundImageWorkerSem = make(chan struct{}, 500)
 
+func FailInterruptedPlaygroundImageTasksOnStartup() {
+	if model.DB == nil {
+		return
+	}
+	var tasks []*model.Task
+	err := model.DB.
+		Where("platform = ?", constant.TaskPlatformPlaygroundImage).
+		Where("action IN ?", []string{constant.TaskActionImageGenerate, constant.TaskActionImageEdit}).
+		Where("status NOT IN ?", []string{string(model.TaskStatusFailure), string(model.TaskStatusSuccess)}).
+		Order("id").
+		Limit(200).
+		Find(&tasks).Error
+	if err != nil {
+		common.SysError("failed to load interrupted playground image tasks: " + err.Error())
+		return
+	}
+	if len(tasks) == 0 {
+		return
+	}
+	for _, task := range tasks {
+		markPlaygroundImageTaskFailure(task, "图像任务因服务重启中断，请重新提交。")
+	}
+	common.SysLog(fmt.Sprintf("marked %d interrupted playground image tasks as failed on startup", len(tasks)))
+}
+
 var (
-	playgroundCredentialPattern       = regexp.MustCompile(`(?i)(bearer\s+|sk-)[A-Za-z0-9._\-]{8,}`)
+	playgroundCredentialPattern        = regexp.MustCompile(`(?i)(bearer\s+|sk-)[A-Za-z0-9._\-]{8,}`)
 	playgroundCredentialEncodedPattern = regexp.MustCompile(`(?i)(bearer%20|bearer\+|sk-)[A-Za-z0-9._\-%+]{8,}`)
-	playgroundSecretClausePattern     = regexp.MustCompile(`(?i)\s*[,，;；]?\s*(api[_\s-]?key|apikey|bearer|token|secret|password|sk-)\s*[:=]?\s*[^,，;；\)）]*`)
-	playgroundRequestIDPattern        = regexp.MustCompile(`(?i)\s*[\(（]?\s*(request[_\s-]?id|upstream[_\s-]?request[_\s-]?id)\s*[:=]\s*[^,，;；\)）\s]+[\)）]?`)
-	playgroundInternalPrefixPattern   = regexp.MustCompile(`(?i)^\s*(upstream|provider|供应商|渠道)\s*(error|response|request\s+failed|rejected|返回|拒绝)?\s*[:：=\-]?\s*`)
-	playgroundInternalClausePattern   = regexp.MustCompile(`(?i)\s*[\(（]?\s*(upstream\s+)?(channel|provider|供应商|渠道)\s*(#|id|[:=])\s*[^,，;；\)）]*[\)）]?`)
-	playgroundStatusCodePrefixPattern = regexp.MustCompile(`(?i)^\s*status[_\s-]?code\s*=\s*\d+\s*[,，:]?\s*`)
+	playgroundSecretClausePattern      = regexp.MustCompile(`(?i)\s*[,，;；]?\s*(api[_\s-]?key|apikey|bearer|token|secret|password|sk-)\s*[:=]?\s*[^,，;；\)）]*`)
+	playgroundRequestIDPattern         = regexp.MustCompile(`(?i)\s*[\(（]?\s*(request[_\s-]?id|upstream[_\s-]?request[_\s-]?id)\s*[:=]\s*[^,，;；\)）\s]+[\)）]?`)
+	playgroundInternalPrefixPattern    = regexp.MustCompile(`(?i)^\s*(upstream|provider|供应商|渠道)\s*(error|response|request\s+failed|rejected|返回|拒绝)?\s*[:：=\-]?\s*`)
+	playgroundInternalClausePattern    = regexp.MustCompile(`(?i)\s*[\(（]?\s*(upstream\s+)?(channel|provider|供应商|渠道)\s*(#|id|[:=])\s*[^,，;；\)）]*[\)）]?`)
+	playgroundStatusCodePrefixPattern  = regexp.MustCompile(`(?i)^\s*status[_\s-]?code\s*=\s*\d+\s*[,，:]?\s*`)
 )
 
 type playgroundImageTaskCreateResponse struct {

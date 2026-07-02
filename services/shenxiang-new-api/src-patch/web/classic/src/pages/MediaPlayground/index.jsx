@@ -1623,6 +1623,12 @@ function imagePollErrorMessage(error) {
   return videoPollErrorMessage(error);
 }
 
+function createTerminalImageTaskError(message) {
+  const error = new Error(message || '图像任务失败。');
+  error.imageTaskTerminal = true;
+  return error;
+}
+
 function generationErrorMessage(error) {
   return (
     videoErrorMessage(error?.response?.data?.error) ||
@@ -3239,13 +3245,14 @@ const MediaPlayground = () => {
           throw new Error('图像任务完成但没有返回持久化图片。');
         }
         if (status === 'failed') {
-          throw new Error(
+          throw createTerminalImageTaskError(
             res.data.data.fail_reason ||
               res.data.data.data?.error ||
               '图像任务失败。',
           );
         }
       } catch (error) {
+        if (error?.imageTaskTerminal) throw error;
         if (!isTransientImagePollError(error)) throw error;
         let waitSuffix = '，页面会继续查询，不会中断后台生成任务';
         if (!longWaitNotified && elapsedMs >= IMAGE_LONG_WAIT_MS) {
