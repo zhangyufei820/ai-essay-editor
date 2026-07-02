@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -79,6 +80,111 @@ func playgroundImageRetryTimes(c *gin.Context) int {
 		return 0
 	}
 	return retryTimes
+}
+
+const (
+	playgroundImage2TempCircuitChannelID = 24
+	playgroundImage2VipMappedChannelID   = 4
+
+	playgroundForcedChannelIDsKey         = "playground_forced_channel_ids"
+	playgroundImage2TempCircuitScopeKey   = "playground_image2_temp_circuit_scope"
+	playgroundImage2TempCircuitRequestKey = "playground_image2_temp_circuit_request"
+)
+
+type temporaryChannelCircuit struct {
+	mu            sync.Mutex
+	initialized   bool
+	cooling       bool
+	coolingUntil  time.Time
+	probeInFlight bool
+	now           func() time.Time
+}
+
+func (c *temporaryChannelCircuit) currentTime() time.Time {
+	if c != nil && c.now != nil {
+		return c.now()
+	}
+	return time.Now()
+}
+
+func (c *temporaryChannelCircuit) ensureInitialCooldown(duration time.Duration) {
+	if c == nil || duration <= 0 {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.initialized {
+		return
+	}
+	c.initialized = true
+	c.cooling = true
+	c.coolingUntil = c.currentTime().Add(duration)
+}
+
+func (c *temporaryChannelCircuit) shouldSkipOrProbe(cooldown time.Duration) (skip bool, probe bool, until time.Time) {
+	if c == nil {
+		return false, false, time.Time{}
+	}
+	c.ensureInitialCooldown(cooldown)
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	now := c.currentTime()
+	if !c.cooling {
+		return false, false, time.Time{}
+	}
+	if now.Before(c.coolingUntil) {
+		return true, false, c.coolingUntil
+	}
+	if c.probeInFlight {
+		c.probeInFlight = false
+	}
+	c.probeInFlight = true
+	c.coolingUntil = now.Add(cooldown)
+	return false, true, time.Time{}
+}
+
+func (c *temporaryChannelCircuit) coolDown(duration time.Duration) time.Time {
+	if c == nil {
+		return time.Time{}
+	}
+	if duration <= 0 {
+		duration = 5 * time.Minute
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.initialized = true
+	c.cooling = true
+	c.probeInFlight = false
+	c.coolingUntil = c.currentTime().Add(duration)
+	return c.coolingUntil
+}
+
+func (c *temporaryChannelCircuit) clear() {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.initialized = true
+	c.cooling = false
+	c.probeInFlight = false
+	c.coolingUntil = time.Time{}
+}
+
+var playgroundImage2Channel24TempCircuit = &temporaryChannelCircuit{}
+
+func playgroundImage2Channel24TempCircuitEnabled() bool {
+	value := strings.ToLower(strings.TrimSpace(common.GetEnvOrDefaultString("PLAYGROUND_IMAGE2_CHANNEL24_TEMP_CIRCUIT_ENABLED", "true")))
+	return value != "0" && value != "false" && value != "off" && value != "no"
+}
+
+func playgroundImage2Channel24TempCircuitCooldown() time.Duration {
+	seconds := common.GetEnvOrDefault("PLAYGROUND_IMAGE2_CHANNEL24_TEMP_COOLDOWN_SECONDS", 300)
+	if seconds <= 0 {
+		return 5 * time.Minute
+	}
+	return time.Duration(seconds) * time.Second
 }
 
 func Relay(c *gin.Context, relayFormat types.RelayFormat) {
@@ -243,6 +349,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 
 		if newAPIError == nil {
 			relayInfo.LastError = nil
+			recordPlaygroundImage2TempCircuitSuccess(c, channel.Id)
 			return
 		}
 
@@ -326,6 +433,35 @@ func addUsedChannel(c *gin.Context, channelId int) {
 	c.Set("use_channel", useChannel)
 }
 
+func setPlaygroundForcedChannelIDs(c *gin.Context, channelIDs []int) {
+	if c == nil {
+		return
+	}
+	filtered := make([]int, 0, len(channelIDs))
+	for _, channelID := range channelIDs {
+		if channelID <= 0 {
+			continue
+		}
+		filtered = append(filtered, channelID)
+	}
+	c.Set(playgroundForcedChannelIDsKey, filtered)
+}
+
+func getPlaygroundForcedChannelIDs(c *gin.Context) []int {
+	if c == nil {
+		return nil
+	}
+	value, exists := c.Get(playgroundForcedChannelIDsKey)
+	if !exists {
+		return nil
+	}
+	channelIDs, ok := value.([]int)
+	if !ok || len(channelIDs) == 0 {
+		return nil
+	}
+	return channelIDs
+}
+
 func forcePlaygroundImageChannel(c *gin.Context, request dto.Request, relayInfo *relaycommon.RelayInfo) {
 	if c == nil || c.Request == nil || c.Request.URL == nil || relayInfo == nil || request == nil {
 		return
@@ -337,16 +473,18 @@ func forcePlaygroundImageChannel(c *gin.Context, request dto.Request, relayInfo 
 	if !ok || imageReq == nil {
 		return
 	}
-	resolution := strings.ToUpper(strings.TrimSpace(imageReq.Resolution))
-	if resolution == "" {
-		resolution = playgroundImageResolutionFromBody(imageReq.ExtraBody)
-	}
+	resolution := playgroundImage2ForcedResolution(imageReq)
 	if resolution != "2K" && resolution != "4K" {
 		return
 	}
+	c.Set(playgroundImage2TempCircuitScopeKey, true)
 	envKey := "GPT_IMAGE_2_4K_" + resolution + "_CHANNEL_IDS"
 	channelIDs := parseChannelIDList(common.GetEnvOrDefaultString(envKey, ""))
+	setPlaygroundForcedChannelIDs(c, channelIDs)
 	for _, channelID := range channelIDs {
+		if shouldSkipPlaygroundImage2ForcedChannel(c, channelID) {
+			continue
+		}
 		if !model.IsChannelEnabledForGroupModel(relayInfo.TokenGroup, relayInfo.OriginModelName, channelID) {
 			continue
 		}
@@ -360,7 +498,104 @@ func forcePlaygroundImageChannel(c *gin.Context, request dto.Request, relayInfo 
 	}
 	if len(channelIDs) > 0 {
 		logger.LogError(c, fmt.Sprintf("playground configured %s channels %v are unavailable for group %s", envKey, channelIDs, relayInfo.TokenGroup))
+		c.Set("playground_forced_channel_unavailable", true)
 	}
+}
+
+func playgroundImage2ForcedResolution(imageReq *dto.ImageRequest) string {
+	if imageReq == nil {
+		return ""
+	}
+	for _, value := range []string{
+		imageReq.Resolution,
+		playgroundImageResolutionFromBody(imageReq.ExtraBody),
+		imageReq.ImageSize,
+		imageReq.Size,
+	} {
+		if resolution := normalizePlaygroundImage2Resolution(value); resolution != "" {
+			return resolution
+		}
+	}
+	return ""
+}
+
+func normalizePlaygroundImage2Resolution(value string) string {
+	normalized := strings.ToUpper(strings.TrimSpace(value))
+	switch normalized {
+	case "2K", "4K":
+		return normalized
+	case "", "AUTO", "CUSTOM", "1K":
+		return ""
+	}
+	return playgroundImage2ResolutionFromPixelSize(normalized)
+}
+
+func playgroundImage2ResolutionFromPixelSize(value string) string {
+	width, height, ok := parsePlaygroundImagePixelSize(value)
+	if !ok {
+		return ""
+	}
+	maxSide := width
+	if height > maxSide {
+		maxSide = height
+	}
+	pixels := width * height
+	if maxSide >= 2800 || pixels > 2048*2048 {
+		return "4K"
+	}
+	if maxSide >= 1900 || pixels > 1536*1536 {
+		return "2K"
+	}
+	return ""
+}
+
+func parsePlaygroundImagePixelSize(value string) (int, int, bool) {
+	compact := strings.ReplaceAll(strings.ToLower(strings.TrimSpace(value)), " ", "")
+	parts := strings.Split(compact, "x")
+	if len(parts) != 2 {
+		return 0, 0, false
+	}
+	width, err := strconv.Atoi(parts[0])
+	if err != nil || width <= 0 {
+		return 0, 0, false
+	}
+	height, err := strconv.Atoi(parts[1])
+	if err != nil || height <= 0 {
+		return 0, 0, false
+	}
+	return width, height, true
+}
+
+func shouldSkipPlaygroundImage2ForcedChannel(c *gin.Context, channelID int) bool {
+	if shouldSkipPlaygroundImage2TempCircuitChannel(c, channelID) {
+		return true
+	}
+	if channelID == playgroundImage2VipMappedChannelID {
+		if c != nil {
+			logger.LogWarn(c, fmt.Sprintf("playground image2 forced fallback skips channel #%d because its mapped upstream model is unavailable for this pool", channelID))
+		}
+		return true
+	}
+	return false
+}
+
+func shouldSkipPlaygroundImage2TempCircuitChannel(c *gin.Context, channelID int) bool {
+	if channelID != playgroundImage2TempCircuitChannelID || !playgroundImage2Channel24TempCircuitEnabled() {
+		return false
+	}
+	skip, probe, until := playgroundImage2Channel24TempCircuit.shouldSkipOrProbe(playgroundImage2Channel24TempCircuitCooldown())
+	if probe && c != nil {
+		c.Set(playgroundImage2TempCircuitRequestKey, true)
+		logger.LogInfo(c, fmt.Sprintf("playground image2 temporary circuit half-open probing channel #%d", channelID))
+	}
+	if skip && c != nil {
+		if until.IsZero() {
+			logger.LogInfo(c, fmt.Sprintf("playground image2 temporary circuit skips channel #%d while probe is in flight", channelID))
+		} else {
+			logger.LogInfo(c, fmt.Sprintf("playground image2 temporary circuit skips channel #%d until %s", channelID, until.Format(time.RFC3339)))
+		}
+	}
+	return skip
 }
 
 func playgroundImageResolutionFromBody(raw json.RawMessage) string {
@@ -440,6 +675,19 @@ func getChannel(c *gin.Context, info *relaycommon.RelayInfo, retryParam *service
 		info.PriceData.GroupRatioInfo = helper.HandleGroupRatio(c, info)
 		return channel, nil
 	}
+	if c.GetBool("playground_forced_channel_unavailable") && retryParam.GetRetry() == 0 {
+		return nil, types.NewError(
+			fmt.Errorf("媒体工坊高分辨率备用渠道暂不可用"),
+			types.ErrorCodeGetChannelFailed,
+			types.ErrOptionWithSkipRetry(),
+		)
+	}
+	if channel, handled, channelErr := getNextPlaygroundForcedChannel(c, info, retryParam); handled {
+		if channelErr != nil {
+			return nil, channelErr
+		}
+		return channel, nil
+	}
 	if info.ChannelMeta == nil {
 		autoBan := c.GetBool("auto_ban")
 		autoBanInt := 1
@@ -479,6 +727,47 @@ func getChannel(c *gin.Context, info *relaycommon.RelayInfo, retryParam *service
 		return nil, newAPIError
 	}
 	return channel, nil
+}
+
+func getNextPlaygroundForcedChannel(c *gin.Context, info *relaycommon.RelayInfo, retryParam *service.RetryParam) (*model.Channel, bool, *types.NewAPIError) {
+	if c == nil || info == nil || retryParam == nil || retryParam.GetRetry() <= 0 {
+		return nil, false, nil
+	}
+	channelIDs := getPlaygroundForcedChannelIDs(c)
+	if len(channelIDs) == 0 {
+		return nil, false, nil
+	}
+	used := map[int]bool{}
+	for _, raw := range c.GetStringSlice("use_channel") {
+		channelID, err := strconv.Atoi(strings.TrimSpace(raw))
+		if err == nil && channelID > 0 {
+			used[channelID] = true
+		}
+	}
+	for _, channelID := range channelIDs {
+		if used[channelID] || shouldSkipPlaygroundImage2ForcedChannel(c, channelID) {
+			continue
+		}
+		if !model.IsChannelEnabledForGroupModel(info.TokenGroup, info.OriginModelName, channelID) {
+			continue
+		}
+		channel, err := model.CacheGetChannel(channelID)
+		if err != nil || channel == nil || channel.Status != common.ChannelStatusEnabled {
+			continue
+		}
+		newAPIError := middleware.SetupContextForSelectedChannel(c, channel, info.OriginModelName)
+		if newAPIError != nil {
+			continue
+		}
+		info.InitChannelMeta(c)
+		info.PriceData.GroupRatioInfo = helper.HandleGroupRatio(c, info)
+		return channel, true, nil
+	}
+	return nil, true, types.NewError(
+		fmt.Errorf("媒体工坊高分辨率备用渠道暂不可用"),
+		types.ErrorCodeGetChannelFailed,
+		types.ErrOptionWithSkipRetry(),
+	)
 }
 
 func shouldRetry(c *gin.Context, openaiErr *types.NewAPIError, retryTimes int) bool {
@@ -526,6 +815,7 @@ func shouldBypassChannelAffinityRetryLock(openaiErr *types.NewAPIError, retryTim
 
 func processChannelError(c *gin.Context, channelError types.ChannelError, err *types.NewAPIError) {
 	logger.LogError(c, fmt.Sprintf("channel error (channel #%d, status code: %d): %s", channelError.ChannelId, err.StatusCode, common.LocalLogPreview(err.Error())))
+	recordPlaygroundImage2TempCircuitFailure(c, channelError.ChannelId, err)
 	recordPlaygroundImageTaskChannelError(c, channelError.ChannelId, err)
 	// 不要使用context获取渠道信息，异步处理时可能会出现渠道信息不一致的情况
 	// do not use context to get channel info, there may be inconsistent channel info when processing asynchronously
@@ -622,6 +912,44 @@ func RelayMidjourney(c *gin.Context) {
 		channelId := c.GetInt("channel_id")
 		logger.LogError(c, fmt.Sprintf("relay error (channel #%d, status code %d): %s", channelId, statusCode, fmt.Sprintf("%s %s", mjErr.Description, mjErr.Result)))
 	}
+}
+
+func recordPlaygroundImage2TempCircuitFailure(c *gin.Context, channelID int, err *types.NewAPIError) {
+	if c == nil || err == nil || channelID != playgroundImage2TempCircuitChannelID ||
+		!c.GetBool(playgroundImage2TempCircuitScopeKey) || !playgroundImage2Channel24TempCircuitEnabled() {
+		return
+	}
+	if !shouldCoolDownPlaygroundImage2Channel24(err) {
+		return
+	}
+	until := playgroundImage2Channel24TempCircuit.coolDown(playgroundImage2Channel24TempCircuitCooldown())
+	logger.LogWarn(c, fmt.Sprintf("playground image2 temporary circuit cools channel #%d until %s after status %d", channelID, until.Format(time.RFC3339), err.StatusCode))
+}
+
+func shouldCoolDownPlaygroundImage2Channel24(err *types.NewAPIError) bool {
+	if err == nil {
+		return false
+	}
+	if types.IsChannelError(err) {
+		return true
+	}
+	statusCode := err.StatusCode
+	if statusCode == http.StatusNotFound || statusCode == http.StatusRequestTimeout || statusCode == http.StatusTooManyRequests || statusCode >= 500 {
+		return true
+	}
+	if statusCode < 100 || statusCode > 599 {
+		return true
+	}
+	return false
+}
+
+func recordPlaygroundImage2TempCircuitSuccess(c *gin.Context, channelID int) {
+	if c == nil || channelID != playgroundImage2TempCircuitChannelID ||
+		!c.GetBool(playgroundImage2TempCircuitScopeKey) || !playgroundImage2Channel24TempCircuitEnabled() {
+		return
+	}
+	playgroundImage2Channel24TempCircuit.clear()
+	logger.LogInfo(c, fmt.Sprintf("playground image2 temporary circuit restores channel #%d after successful probe", channelID))
 }
 
 func RelayNotImplemented(c *gin.Context) {

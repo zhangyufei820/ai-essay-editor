@@ -1,11 +1,13 @@
 package controller
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/types"
@@ -106,5 +108,119 @@ func TestRejectImageModelResponsesRequestSkipsImageEndpoint(t *testing.T) {
 	)
 	if err != nil {
 		t.Fatalf("rejectImageModelResponsesRequest() = %v, want nil for image endpoint", err)
+	}
+}
+
+func TestPlaygroundImage2ForcedResolution(t *testing.T) {
+	tests := []struct {
+		name string
+		req  *dto.ImageRequest
+		want string
+	}{
+		{
+			name: "explicit 4K wins",
+			req:  &dto.ImageRequest{Resolution: "4K", Size: "1024x1024"},
+			want: "4K",
+		},
+		{
+			name: "extra body image size",
+			req:  &dto.ImageRequest{ExtraBody: json.RawMessage(`{"google":{"image_config":{"image_size":"2K"}}}`)},
+			want: "2K",
+		},
+		{
+			name: "custom 4K landscape size",
+			req:  &dto.ImageRequest{Size: "3840x2160"},
+			want: "4K",
+		},
+		{
+			name: "custom 4K portrait size",
+			req:  &dto.ImageRequest{Resolution: "custom", Size: "2160x3840"},
+			want: "4K",
+		},
+		{
+			name: "2K size",
+			req:  &dto.ImageRequest{Size: "2048x1152"},
+			want: "2K",
+		},
+		{
+			name: "1K size not forced",
+			req:  &dto.ImageRequest{Size: "1536x864"},
+			want: "",
+		},
+		{
+			name: "custom without size not forced",
+			req:  &dto.ImageRequest{Resolution: "custom"},
+			want: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := playgroundImage2ForcedResolution(tt.req); got != tt.want {
+				t.Fatalf("playgroundImage2ForcedResolution() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestPlaygroundImage2ForcedChannelSkipsKnownBadVipMapping(t *testing.T) {
+	if !shouldSkipPlaygroundImage2ForcedChannel(nil, playgroundImage2VipMappedChannelID) {
+		t.Fatal("shouldSkipPlaygroundImage2ForcedChannel(#4) = false, want true")
+	}
+	if shouldSkipPlaygroundImage2ForcedChannel(nil, 8) {
+		t.Fatal("shouldSkipPlaygroundImage2ForcedChannel(#8) = true, want false")
+	}
+}
+
+func TestTemporaryChannelCircuitStartsCoolingThenAllowsProbe(t *testing.T) {
+	now := time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)
+	circuit := &temporaryChannelCircuit{now: func() time.Time { return now }}
+
+	skip, probe, _ := circuit.shouldSkipOrProbe(5 * time.Minute)
+	if !skip || probe {
+		t.Fatalf("initial shouldSkipOrProbe() = skip %v probe %v, want initial cooldown skip", skip, probe)
+	}
+
+	now = now.Add(5*time.Minute + time.Second)
+	skip, probe, _ = circuit.shouldSkipOrProbe(5 * time.Minute)
+	if skip || !probe {
+		t.Fatalf("expired shouldSkipOrProbe() = skip %v probe %v, want half-open probe", skip, probe)
+	}
+
+	skip, probe, _ = circuit.shouldSkipOrProbe(5 * time.Minute)
+	if !skip || probe {
+		t.Fatalf("probe window shouldSkipOrProbe() = skip %v probe %v, want skip while probe cooldown is active", skip, probe)
+	}
+}
+
+func TestTemporaryChannelCircuitClearsAfterSuccessfulProbe(t *testing.T) {
+	now := time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)
+	circuit := &temporaryChannelCircuit{now: func() time.Time { return now }}
+	circuit.coolDown(5 * time.Minute)
+
+	now = now.Add(5*time.Minute + time.Second)
+	_, probe, _ := circuit.shouldSkipOrProbe(5 * time.Minute)
+	if !probe {
+		t.Fatal("shouldSkipOrProbe() probe = false, want half-open probe after cooldown")
+	}
+
+	circuit.clear()
+	for i := 0; i < 3; i++ {
+		skip, probe, _ := circuit.shouldSkipOrProbe(5 * time.Minute)
+		if skip || probe {
+			t.Fatalf("after clear attempt %d = skip %v probe %v, want normal open channel", i, skip, probe)
+		}
+	}
+}
+
+func TestTemporaryChannelCircuitFailureReentersCooldown(t *testing.T) {
+	now := time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)
+	circuit := &temporaryChannelCircuit{now: func() time.Time { return now }}
+	circuit.clear()
+
+	circuit.coolDown(5 * time.Minute)
+	skip, probe, _ := circuit.shouldSkipOrProbe(5 * time.Minute)
+	if !skip || probe {
+		t.Fatalf("after failure shouldSkipOrProbe() = skip %v probe %v, want cooldown skip", skip, probe)
 	}
 }
