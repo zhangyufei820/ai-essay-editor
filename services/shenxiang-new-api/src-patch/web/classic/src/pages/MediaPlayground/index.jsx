@@ -79,6 +79,8 @@ const OPENAI_IMAGE_ASPECT_RATIOS = [
   '21:9',
 ];
 
+const GPT_IMAGE_2_RESOLUTIONS = ['1K', '2K', '4K', 'custom'];
+
 const GOOGLE_GEMINI_31_FLASH_IMAGE_ASPECT_RATIOS = [
   '1:1',
   '1:4',
@@ -96,7 +98,20 @@ const GOOGLE_GEMINI_31_FLASH_IMAGE_ASPECT_RATIOS = [
   '21:9',
 ];
 
-const GOOGLE_GEMINI_PRO_IMAGE_ASPECT_RATIOS = GOOGLE_GEMINI_31_FLASH_IMAGE_ASPECT_RATIOS;
+const GOOGLE_GEMINI_31_FLASH_IMAGE_RESOLUTIONS = ['512', '1K', '2K', '4K'];
+
+const GOOGLE_GEMINI_PRO_IMAGE_ASPECT_RATIOS = [
+  '1:1',
+  '2:3',
+  '3:2',
+  '3:4',
+  '4:3',
+  '4:5',
+  '5:4',
+  '9:16',
+  '16:9',
+  '21:9',
+];
 
 const XAI_GROK_IMAGE_ASPECT_RATIOS = [
   'auto',
@@ -135,7 +150,7 @@ const IMAGE_MODELS = [
     vendor: '星人图像',
     sizes: OPENAI_IMAGE_ASPECT_RATIOS,
     aspectRatios: OPENAI_IMAGE_ASPECT_RATIOS,
-    resolutions: ['1K', '2K', '4K'],
+    resolutions: GPT_IMAGE_2_RESOLUTIONS,
     qualities: ['auto', 'low', 'medium', 'high'],
     formats: ['png', 'jpeg', 'webp'],
     defaultSize: '1:1',
@@ -146,7 +161,7 @@ const IMAGE_MODELS = [
     sizeParam: 'size',
     backgroundOptions: ['auto', 'opaque'],
     edit: true,
-    hint: '适合高质量海报、产品图和需要透明背景的素材。',
+    hint: '适合高质量海报、产品图和商品素材。官方最大边 3840，4K 横竖图使用 3840x2160 / 2160x3840，可自定义合法 WxH。',
   },
   {
     value: 'geek2api-image-2',
@@ -155,7 +170,7 @@ const IMAGE_MODELS = [
     vendor: '星人图像',
     sizes: OPENAI_IMAGE_ASPECT_RATIOS,
     aspectRatios: OPENAI_IMAGE_ASPECT_RATIOS,
-    resolutions: ['1K', '2K', '4K'],
+    resolutions: GPT_IMAGE_2_RESOLUTIONS,
     qualities: ['auto', 'low', 'medium', 'high'],
     formats: ['png', 'jpeg', 'webp'],
     defaultSize: '1:1',
@@ -168,7 +183,7 @@ const IMAGE_MODELS = [
     edit: true,
     priceLabel: '1K ¥0.03 / 2K ¥0.06 / 4K ¥0.10',
     billingLabel: '按张计费',
-    hint: '星人 Image 2：支持 1K/2K/4K，按分辨率三档计费。',
+    hint: '星人 Image 2：按 OpenAI gpt-image-2 约束提交，最大边 3840，4K 横竖图使用 3840x2160 / 2160x3840，可自定义合法 WxH。',
   },
   {
     value: 'banana-2',
@@ -177,7 +192,7 @@ const IMAGE_MODELS = [
     vendor: '星人图像',
     sizes: GOOGLE_GEMINI_31_FLASH_IMAGE_ASPECT_RATIOS,
     aspectRatios: GOOGLE_GEMINI_31_FLASH_IMAGE_ASPECT_RATIOS,
-    resolutions: ['1K', '2K', '4K'],
+    resolutions: GOOGLE_GEMINI_31_FLASH_IMAGE_RESOLUTIONS,
     qualities: ['auto'],
     formats: ['url'],
     defaultSize: '16:9',
@@ -188,7 +203,7 @@ const IMAGE_MODELS = [
     countParam: 'none',
     sizeParam: 'responseFormat',
     edit: true,
-    hint: '适合快速高分辨率创意图、场景草图和视觉方案探索。',
+    hint: '适合快速高分辨率创意图、场景草图和视觉方案探索。支持 512 / 1K / 2K / 4K 和极端比例。',
   },
   {
     value: 'gemini-3-pro-image-preview',
@@ -208,7 +223,7 @@ const IMAGE_MODELS = [
     countParam: 'none',
     sizeParam: 'responseFormat',
     edit: true,
-    hint: '适合高阶视觉方案、复杂场景草图和高分辨率创意图。',
+    hint: '适合高阶视觉方案、复杂场景草图和高分辨率创意图。4K 会按 Gemini 官方比例表输出，如 16:9 为 5504x3072。',
   },
   {
     value: 'image 2电商商品图快速通道(1.5K)',
@@ -257,12 +272,12 @@ const IMAGE_MODELS = [
     label: 'Grok Image Pro',
     badge: 'Pro',
     vendor: '星人图像',
-    sizes: ['960x960', '720x1280', '1280x720', '1168x784', '784x1168'],
+    sizes: XAI_GROK_IMAGE_ASPECT_RATIOS,
     aspectRatios: XAI_GROK_IMAGE_ASPECT_RATIOS,
     resolutions: ['1k', '2k'],
     qualities: ['low', 'medium', 'high'],
     formats: ['url', 'b64_json'],
-    defaultSize: '960x960',
+    defaultSize: '1:1',
     defaultAspectRatio: '1:1',
     defaultResolution: '2k',
     defaultQuality: 'high',
@@ -270,7 +285,7 @@ const IMAGE_MODELS = [
     countParam: 'n',
     sizeParam: 'aspect_ratio',
     edit: true,
-    hint: '适合真实感、社媒封面和快速创意探索。支持尺寸、宽高比、质量和 1k/2k 分辨率。',
+    hint: '适合真实感、社媒封面和快速创意探索。官方按比例 + 1k/2k 分辨率控制，不公布固定像素表。',
   },
 ];
 
@@ -334,6 +349,51 @@ const GPT_IMAGE_2_SIZE_BY_RESOLUTION = {
     '9:16': '2160x3840',
     '9:21': '1632x3808',
     '21:9': '3808x1632',
+  },
+};
+
+const GPT_IMAGE_2_MIN_PIXELS = 655360;
+const GPT_IMAGE_2_MAX_PIXELS = 8294400;
+const GPT_IMAGE_2_MAX_SIDE = 3840;
+const GPT_IMAGE_2_MIN_SIDE = 16;
+const GPT_IMAGE_2_MAX_RATIO = 3;
+
+const GOOGLE_GEMINI_PRO_IMAGE_SIZE_BY_RESOLUTION = {
+  '1K': {
+    '1:1': '1024x1024',
+    '2:3': '848x1264',
+    '3:2': '1264x848',
+    '3:4': '896x1200',
+    '4:3': '1200x896',
+    '4:5': '928x1152',
+    '5:4': '1152x928',
+    '9:16': '768x1376',
+    '16:9': '1376x768',
+    '21:9': '1584x672',
+  },
+  '2K': {
+    '1:1': '2048x2048',
+    '2:3': '1696x2528',
+    '3:2': '2528x1696',
+    '3:4': '1792x2400',
+    '4:3': '2400x1792',
+    '4:5': '1856x2304',
+    '5:4': '2304x1856',
+    '9:16': '1536x2752',
+    '16:9': '2752x1536',
+    '21:9': '3168x1344',
+  },
+  '4K': {
+    '1:1': '4096x4096',
+    '2:3': '3392x5056',
+    '3:2': '5056x3392',
+    '3:4': '3584x4800',
+    '4:3': '4800x3584',
+    '4:5': '3712x4608',
+    '5:4': '4608x3712',
+    '9:16': '3072x5504',
+    '16:9': '5504x3072',
+    '21:9': '6336x2688',
   },
 };
 
@@ -457,13 +517,90 @@ function geminiExtraBodyImageConfig(aspectRatio, imageSize) {
   };
 }
 
-function gptImage2SizeFor(aspectRatio, imageSize) {
+function gcd(left, right) {
+  let a = Math.abs(Number(left) || 0);
+  let b = Math.abs(Number(right) || 0);
+  while (b) {
+    const next = a % b;
+    a = b;
+    b = next;
+  }
+  return a || 1;
+}
+
+function parsePixelSize(value) {
+  const match = String(value || '').trim().match(/^(\d{2,5})\s*x\s*(\d{2,5})$/i);
+  if (!match) return null;
+  return {
+    width: Number(match[1]),
+    height: Number(match[2]),
+  };
+}
+
+function normalizePixelSize(value) {
+  const parsed = parsePixelSize(value);
+  return parsed ? `${parsed.width}x${parsed.height}` : '';
+}
+
+function aspectRatioLabelForPixelSize(value) {
+  const parsed = parsePixelSize(value);
+  if (!parsed) return '';
+  const divisor = gcd(parsed.width, parsed.height);
+  return `${parsed.width / divisor}:${parsed.height / divisor}`;
+}
+
+function gptImage2CustomSizeError(value) {
+  const parsed = parsePixelSize(value);
+  if (!parsed) return '请输入有效尺寸，例如 3840x2160。';
+  const { width, height } = parsed;
+  const pixels = width * height;
+  if (width < GPT_IMAGE_2_MIN_SIDE || height < GPT_IMAGE_2_MIN_SIDE) {
+    return '尺寸边长不能小于 16px。';
+  }
+  if (width > GPT_IMAGE_2_MAX_SIDE || height > GPT_IMAGE_2_MAX_SIDE) {
+    return 'gpt-image-2 最大边不能超过 3840px。';
+  }
+  if (width % 16 !== 0 || height % 16 !== 0) {
+    return 'gpt-image-2 的宽高都必须是 16px 的倍数。';
+  }
+  if (Math.max(width, height) / Math.min(width, height) > GPT_IMAGE_2_MAX_RATIO) {
+    return 'gpt-image-2 的长短边比例不能超过 3:1。';
+  }
+  if (pixels < GPT_IMAGE_2_MIN_PIXELS || pixels > GPT_IMAGE_2_MAX_PIXELS) {
+    return 'gpt-image-2 总像素必须在 655,360 到 8,294,400 之间。';
+  }
+  return '';
+}
+
+function gptImage2CustomSizeFor(value) {
+  return gptImage2CustomSizeError(value) ? '' : normalizePixelSize(value);
+}
+
+function gptImage2SizeFor(aspectRatio, imageSize, customSize = '') {
+  if (imageSize === 'custom') {
+    return gptImage2CustomSizeFor(customSize);
+  }
   const normalizedResolution = imageSize && imageSize !== 'auto' ? imageSize : '1K';
   return (
     GPT_IMAGE_2_SIZE_BY_RESOLUTION[normalizedResolution]?.[aspectRatio] ||
     GPT_IMAGE_2_SIZE_BY_RESOLUTION[normalizedResolution]?.['1:1'] ||
     '1024x1024'
   );
+}
+
+function geminiProImageSizeFor(aspectRatio, imageSize) {
+  const normalizedResolution = imageSize && imageSize !== 'auto' ? imageSize : '1K';
+  return GOOGLE_GEMINI_PRO_IMAGE_SIZE_BY_RESOLUTION[normalizedResolution]?.[aspectRatio] || '';
+}
+
+function imagePixelSizeForModel(modelValue, aspectRatio, imageSize, customSize = '') {
+  if (isGptImage2Model(modelValue)) {
+    return gptImage2SizeFor(aspectRatio, imageSize, customSize) || '自定义尺寸待输入';
+  }
+  if (modelValue === 'gemini-3-pro-image-preview') {
+    return geminiProImageSizeFor(aspectRatio, imageSize);
+  }
+  return '';
 }
 
 function aspectOrientation(aspectRatio) {
@@ -477,7 +614,11 @@ function aspectOrientation(aspectRatio) {
   return width > height ? 'landscape' : 'portrait';
 }
 
-function googleImageEditSizeFor(aspectRatio, imageSize) {
+function googleImageEditSizeFor(aspectRatio, imageSize, modelValue) {
+  if (modelValue === 'gemini-3-pro-image-preview') {
+    const officialSize = geminiProImageSizeFor(aspectRatio, imageSize);
+    if (officialSize) return officialSize;
+  }
   const normalizedResolution =
     imageSize && imageSize !== 'auto' ? String(imageSize).toUpperCase() : '1K';
   const sizeMap =
@@ -733,7 +874,7 @@ function toSelectOptions(values) {
 function toResolutionSelectOptions(values) {
   return values.map((value) => ({
     value,
-    label: value === 'auto' ? '默认' : String(value),
+    label: value === 'auto' ? '默认' : value === 'custom' ? '自定义' : String(value),
   }));
 }
 
@@ -2128,6 +2269,7 @@ const MediaPlayground = () => {
   const [resolution, setResolution] = useState(
     IMAGE_MODELS[0].defaultResolution || 'auto',
   );
+  const [customImageSize, setCustomImageSize] = useState('3840x2160');
   const [background, setBackground] = useState('auto');
   const [inputFidelity, setInputFidelity] = useState('auto');
   const [compression, setCompression] = useState(100);
@@ -2208,6 +2350,24 @@ const MediaPlayground = () => {
   const imageRatioValue = activeImageModel.aspectRatios?.length
     ? aspectRatio
     : size;
+  const imagePixelLabel =
+    mode === 'image'
+      ? imagePixelSizeForModel(imageModel, imageRatioValue, resolution, customImageSize)
+      : '';
+  const imageDisplayRatio =
+    mode === 'image' &&
+    isGptImage2Model(imageModel) &&
+    resolution === 'custom' &&
+    imagePixelLabel &&
+    imagePixelLabel !== '自定义尺寸待输入'
+      ? aspectRatioLabelForPixelSize(imagePixelLabel)
+      : imageRatioValue;
+  const showImageRatioOptions =
+    mode === 'image' &&
+    imageRatioOptions.length > 0 &&
+    !(isGptImage2Model(imageModel) && resolution === 'custom');
+  const showGptImage2CustomSize =
+    mode === 'image' && isGptImage2Model(imageModel) && resolution === 'custom';
 
   function promptTextarea() {
     const current = promptTextareaRef.current;
@@ -2420,6 +2580,9 @@ const MediaPlayground = () => {
           activeImageModel.resolutions?.[0] ||
           'auto',
       );
+      if (isGptImage2Model(activeImageModel.value)) {
+        setCustomImageSize('3840x2160');
+      }
     } else {
       setDuration(
         activeVideoModel.defaultDuration ||
@@ -2592,7 +2755,7 @@ const MediaPlayground = () => {
             payload.resolution = String(resolution).toUpperCase();
             payload.image_size = String(resolution).toUpperCase();
           }
-          payload.size = googleImageEditSizeFor(effectiveAspectRatio, resolution);
+          payload.size = googleImageEditSizeFor(effectiveAspectRatio, resolution, imageModel);
           if (quality) payload.quality = quality;
           if (negativePrompt.trim())
             payload.extra_fields = { negative_prompt: negativePrompt.trim() };
@@ -2622,9 +2785,9 @@ const MediaPlayground = () => {
       const isGptImage2 = isGptImage2Model(imageModel);
       payload.n = effectiveCount;
       payload.size = isGptImage2
-        ? gptImage2SizeFor(effectiveAspectRatio, resolution)
+        ? gptImage2SizeFor(effectiveAspectRatio, resolution, customImageSize)
         : size;
-      if (isGptImage2 && resolution && resolution !== 'auto')
+      if (isGptImage2 && resolution && resolution !== 'auto' && resolution !== 'custom')
         payload.resolution = resolution;
       if (quality) payload.quality = quality;
       if (format && format !== 'url') payload.output_format = format;
@@ -2699,6 +2862,7 @@ const MediaPlayground = () => {
     background,
     compression,
     count,
+    customImageSize,
     duration,
     effectiveGroup,
     enhancePrompt,
@@ -3258,6 +3422,10 @@ const MediaPlayground = () => {
   async function handleSubmit() {
     if (!modelAllowed) return Toast.error('当前用户分组暂未开放这个模型。');
     if (!prompt.trim()) return Toast.error('请先写一句你想生成什么。');
+    if (mode === 'image' && isGptImage2Model(imageModel) && resolution === 'custom') {
+      const sizeError = gptImage2CustomSizeError(customImageSize);
+      if (sizeError) return Toast.error(sizeError);
+    }
     if (mode === 'image' && imageWorkflow === 'edit' && referenceFiles.length === 0)
       return Toast.error('图像修改需要先上传参考图。');
     if (mode === 'video' && videoWorkflow !== 'text' && referenceFiles.length === 0)
@@ -3320,12 +3488,14 @@ const MediaPlayground = () => {
   const sizeLabel =
     mode === 'image'
       ? resolution && resolution !== 'auto'
-        ? resolution
+        ? resolution === 'custom'
+          ? '自定义'
+          : resolution
         : size
       : size;
   const ratioLabel =
     mode === 'image'
-      ? imageRatioValue || '默认'
+      ? imageDisplayRatio || '默认'
       : String(size || '').replace('x', ' × ');
   const qualityLabel =
     mode === 'image' ? quality || '默认' : `${duration} 秒 · ${fps} fps`;
@@ -3381,7 +3551,12 @@ const MediaPlayground = () => {
     PROMPT_PRESETS.find((preset) => preset.value === prompt)?.label || '自定义描述';
   const outputSpec =
     mode === 'image'
-      ? `${ratioLabel} · ${sizeLabel} · ${qualityLabel}`
+      ? [
+        ratioLabel,
+        sizeLabel,
+        imagePixelLabel,
+        qualityLabel,
+      ].filter(Boolean).join(' · ')
       : `${ratioLabel} · ${qualityLabel}`;
   const stageItems = [
     { label: '任务', value: workflowLabel },
@@ -3662,9 +3837,19 @@ const MediaPlayground = () => {
                       agentKey='media-duration'
                     />
                   )}
+                  {showGptImage2CustomSize ? (
+                    <label className='mp-field' data-xr-agent='media-custom-size'>
+                      <span>自定义尺寸</span>
+                      <Input
+                        value={customImageSize}
+                        onChange={setCustomImageSize}
+                        placeholder='3840x2160'
+                      />
+                    </label>
+                  ) : null}
                 </div>
 
-                {mode === 'image' && imageRatioOptions.length ? (
+                {showImageRatioOptions ? (
                   <div className='mp-param-wide'>
                     <OptionChips
                       label='画面比例'
