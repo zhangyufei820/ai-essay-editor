@@ -5,31 +5,35 @@
 
 :root {
   /* 深色模式 - 默认 */
-  --mp-bg-page: #070B10;
-  --mp-bg-shell: #0B1118;
-  --mp-bg-panel: #101722;
-  --mp-bg-card: rgba(255, 255, 255, 0.045);
-  --mp-bg-card-hover: rgba(255, 255, 255, 0.07);
-  --mp-bg-elevated: rgba(255, 255, 255, 0.08);
-  --mp-bg-input: rgba(255, 255, 255, 0.05);
-  --mp-bg-input-hover: rgba(255, 255, 255, 0.08);
+  --mp-bg-page: #061017;
+  --mp-bg-shell: #08131B;
+  --mp-bg-panel: #0B1822;
+  --mp-bg-preview: #071018;
+  --mp-bg-card: rgba(12, 25, 34, 0.92);
+  --mp-bg-card-hover: rgba(18, 38, 50, 0.96);
+  --mp-bg-elevated: rgba(255, 255, 255, 0.055);
+  --mp-bg-input: rgba(7, 15, 21, 0.82);
+  --mp-bg-input-hover: rgba(10, 22, 30, 0.92);
 
-  --mp-border-subtle: rgba(255, 255, 255, 0.08);
-  --mp-border-strong: rgba(255, 255, 255, 0.12);
-  --mp-border-focus: rgba(54, 224, 180, 0.4);
+  --mp-border-subtle: rgba(179, 230, 216, 0.105);
+  --mp-border-strong: rgba(179, 230, 216, 0.18);
+  --mp-border-focus: rgba(54, 224, 180, 0.48);
 
-  --mp-text-primary: #F5FAF8;
-  --mp-text-secondary: #A5B3AF;
-  --mp-text-muted: #6F7D79;
+  --mp-text-primary: #EFFBF8;
+  --mp-text-secondary: #B9CAC7;
+  --mp-text-muted: #7D918D;
   --mp-text-placeholder: rgba(165, 179, 175, 0.5);
+  --mp-text-on-accent: #05211C;
 
   --mp-accent-primary: #36E0B4;
+  --mp-accent-primary-solid: #35E0B7;
   --mp-accent-primary-hover: #55F0C7;
   --mp-accent-primary-active: #2BC99F;
   --mp-accent-soft: rgba(54, 224, 180, 0.12);
   --mp-accent-soft-hover: rgba(54, 224, 180, 0.18);
 
   --mp-accent-secondary: #7C8BFF;
+  --mp-accent-cta-end: #20BCA1;
   --mp-accent-secondary-hover: #94A1FF;
   --mp-accent-secondary-soft: rgba(124, 139, 255, 0.12);
 
@@ -38,8 +42,8 @@
   --mp-status-error: #FF4D4F;
   --mp-status-info: #1890FF;
 
-  --mp-shadow-card: 0 2px 8px rgba(0, 0, 0, 0.25);
-  --mp-shadow-elevated: 0 4px 16px rgba(0, 0, 0, 0.35);
+  --mp-shadow-card: 0 20px 54px rgba(0, 0, 0, 0.34);
+  --mp-shadow-elevated: 0 26px 72px rgba(0, 0, 0, 0.44);
   --mp-shadow-popover: 0 6px 24px rgba(0, 0, 0, 0.45);
 
   --mp-radius-sm: 6px;
@@ -64,31 +68,35 @@
 
 /* 浅色模式 */
 :is(html:not(.dark), body[theme-mode='light']) {
-  --mp-bg-page: #F5F8FA;
+  --mp-bg-page: #F4F8FB;
   --mp-bg-shell: #FFFFFF;
-  --mp-bg-panel: #F8FAFC;
-  --mp-bg-card: #FFFFFF;
-  --mp-bg-card-hover: #F2F7F7;
-  --mp-bg-elevated: #FFFFFF;
+  --mp-bg-panel: #EEF5F7;
+  --mp-bg-preview: #EEF4F6;
+  --mp-bg-card: rgba(255, 255, 255, 0.96);
+  --mp-bg-card-hover: #F5FBFB;
+  --mp-bg-elevated: #F7FAFC;
   --mp-bg-input: #FFFFFF;
   --mp-bg-input-hover: #F8FAFC;
 
-  --mp-border-subtle: rgba(15, 23, 42, 0.08);
+  --mp-border-subtle: rgba(15, 23, 42, 0.09);
   --mp-border-strong: rgba(15, 23, 42, 0.15);
-  --mp-border-focus: rgba(15, 175, 142, 0.3);
+  --mp-border-focus: rgba(15, 175, 142, 0.34);
 
   --mp-text-primary: #0F172A;
-  --mp-text-secondary: #475569;
-  --mp-text-muted: #94A3B8;
+  --mp-text-secondary: #425466;
+  --mp-text-muted: #64748B;
   --mp-text-placeholder: rgba(71, 85, 105, 0.5);
+  --mp-text-on-accent: #FFFFFF;
 
   --mp-accent-primary: #0FAF8E;
+  --mp-accent-primary-solid: #0FAF8E;
   --mp-accent-primary-hover: #0C967A;
   --mp-accent-primary-active: #0A7D66;
   --mp-accent-soft: rgba(15, 175, 142, 0.08);
   --mp-accent-soft-hover: rgba(15, 175, 142, 0.12);
 
   --mp-accent-secondary: #5B6CFF;
+  --mp-accent-cta-end: #0A967A;
   --mp-accent-secondary-hover: #4A5AE6;
   --mp-accent-secondary-soft: rgba(91, 108, 255, 0.08);
 
@@ -97,8 +105,8 @@
   --mp-status-error: #FF4D4F;
   --mp-status-info: #1890FF;
 
-  --mp-shadow-card: 0 1px 3px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.03);
-  --mp-shadow-elevated: 0 4px 6px rgba(15, 23, 42, 0.08), 0 2px 4px rgba(15, 23, 42, 0.04);
+  --mp-shadow-card: 0 16px 42px rgba(15, 23, 42, 0.075);
+  --mp-shadow-elevated: 0 24px 58px rgba(15, 23, 42, 0.12);
   --mp-shadow-popover: 0 10px 15px rgba(15, 23, 42, 0.1), 0 4px 6px rgba(15, 23, 42, 0.05);
 }
 

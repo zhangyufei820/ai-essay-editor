@@ -1,9 +1,12 @@
 .mp-prompt-composer {
-  background: var(--mp-bg-card);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.018)),
+    var(--mp-bg-card);
   border: 1px solid var(--mp-border-subtle);
   border-radius: var(--mp-radius-lg);
   padding: var(--mp-spacing-xl);
-  margin-bottom: var(--mp-spacing-xl);
+  margin-bottom: 0;
+  box-shadow: var(--mp-shadow-card);
 }
 
 .mp-prompt-header {
@@ -11,7 +14,7 @@
   justify-content: space-between;
   align-items: flex-start;
   gap: var(--mp-spacing-xl);
-  margin-bottom: var(--mp-spacing-lg);
+  margin-bottom: var(--mp-spacing-md);
 }
 
 .mp-section-title {
@@ -31,12 +34,56 @@
   font-family: var(--mp-font-mono);
 }
 
+.mp-prompt-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--mp-spacing-sm);
+}
+
+.mp-prompt-toolbar .semi-button {
+  height: 30px;
+  border-radius: var(--mp-radius-sm) !important;
+  color: var(--mp-text-secondary) !important;
+  background: var(--mp-bg-elevated) !important;
+  border: 1px solid var(--mp-border-subtle) !important;
+}
+
+.mp-prompt-toolbar .semi-button:hover {
+  color: var(--mp-accent-primary) !important;
+  border-color: var(--mp-border-focus) !important;
+  background: var(--mp-accent-soft) !important;
+}
+
+.mp-prompt-counter {
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 9px;
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: var(--mp-radius-sm);
+  color: var(--mp-text-muted);
+  background: var(--mp-bg-elevated);
+  font-size: 12px;
+  font-family: var(--mp-font-mono);
+}
+
+.mp-prompt-presets {
+  margin-bottom: var(--mp-spacing-md);
+}
+
+.mp-prompt-presets .semi-button {
+  border-radius: 999px !important;
+  font-weight: 700 !important;
+}
+
 .mp-prompt-input-container {
   position: relative;
   margin-bottom: var(--mp-spacing-md);
 }
 
-.mp-prompt-textarea {
+.mp-prompt-textarea,
+.mp-prompt-textarea textarea {
   width: 100%;
   background: var(--mp-bg-input) !important;
   border: 1px solid var(--mp-border-subtle) !important;
@@ -47,30 +94,33 @@
   transition: all var(--mp-transition-fast) !important;
 }
 
-.mp-prompt-textarea:hover {
+.mp-prompt-textarea:hover,
+.mp-prompt-textarea:hover textarea {
   background: var(--mp-bg-input-hover) !important;
   border-color: var(--mp-border-strong) !important;
 }
 
-.mp-prompt-textarea:focus {
+.mp-prompt-textarea:focus,
+.mp-prompt-textarea:focus-within,
+.mp-prompt-textarea textarea:focus {
   background: var(--mp-bg-input) !important;
   border-color: var(--mp-border-focus) !important;
   box-shadow: 0 0 0 2px var(--mp-accent-soft) !important;
 }
 
-.mp-prompt-actions {
-  position: absolute;
-  bottom: var(--mp-spacing-sm);
-  right: var(--mp-spacing-sm);
-  display: flex;
-  gap: 4px;
-  background: var(--mp-bg-card);
-  border-radius: var(--mp-radius-sm);
-  padding: 2px;
-  box-shadow: var(--mp-shadow-card);
+.mp-negative-prompt-field {
+  display: grid;
+  gap: var(--mp-spacing-sm);
 }
 
-.mp-negative-prompt-input {
+.mp-negative-prompt-field > span {
+  color: var(--mp-text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.mp-negative-prompt-input,
+.mp-negative-prompt-input .semi-input-wrapper {
   width: 100%;
   background: var(--mp-bg-input) !important;
   border: 1px solid var(--mp-border-subtle) !important;
@@ -83,7 +133,19 @@
   border-color: var(--mp-border-strong) !important;
 }
 
-.mp-negative-prompt-input:focus {
+.mp-negative-prompt-input:focus,
+.mp-negative-prompt-input:focus-within {
   border-color: var(--mp-border-focus) !important;
   box-shadow: 0 0 0 2px var(--mp-accent-soft) !important;
+}
+
+@media (max-width: 768px) {
+  .mp-prompt-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .mp-prompt-toolbar {
+    justify-content: flex-start;
+  }
 }

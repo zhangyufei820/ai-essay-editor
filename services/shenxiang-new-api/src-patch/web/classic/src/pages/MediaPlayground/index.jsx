@@ -49,13 +49,11 @@ import { API, copy } from '../../helpers';
 import './MediaPlayground.css';
 import '../../styles/media-tokens.css';
 import {
-  MediaWorkbenchShell,
   MediaTopBar,
   TaskModeTabs,
   PromptComposer,
   ReversePromptPanel,
   GenerateActionBar,
-  ResultGallery,
   RightStatusPanel,
   MediaUploadPanel,
   ModelSelector,
@@ -1742,6 +1740,23 @@ function StatPill({ label, value }) {
   );
 }
 
+function formatResultTime(createdAt) {
+  if (!createdAt) return '刚刚';
+  const elapsed = Math.max(0, Date.now() - Number(createdAt));
+  const minutes = Math.floor(elapsed / 60000);
+  if (minutes < 1) return '刚刚';
+  if (minutes < 60) return `${minutes} 分钟前`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} 小时前`;
+  return `${Math.floor(hours / 24)} 天前`;
+}
+
+function parseProgressPercent(message) {
+  const match = String(message || '').match(/进度\s*(\d{1,3})%/);
+  if (!match) return undefined;
+  return Math.min(100, Math.max(0, Number(match[1])));
+}
+
 function SectionTitle({ children, meta }) {
   return (
     <div className='mp-section-title'>
@@ -2100,7 +2115,13 @@ function MentionMenu({
   );
 }
 
-function ResultCard({ result, onRemove }) {
+function ResultCard({
+  result,
+  onRemove,
+  onReusePrompt,
+  selected = false,
+  onToggleSelect,
+}) {
   const previewUrls = getPreviewURLs(result);
   const [activeUrlIndex, setActiveUrlIndex] = useState(0);
   const [previewFailed, setPreviewFailed] = useState(false);
@@ -2118,6 +2139,10 @@ function ResultCard({ result, onRemove }) {
   const statusText = cacheFailed
     ? '临时缓存不可用，作品已生成，请用原始链接保存。'
     : '浏览器暂时无法直接预览，请打开原始链接保存。';
+  const kindLabel = result.kind === 'image' ? '图片作品' : '视频作品';
+  const fileLabel = result.kind === 'image' ? 'PNG / URL' : 'MP4 / URL';
+  const createdLabel = formatResultTime(result.createdAt);
+  const taskLabel = result.taskId ? `任务 ${result.taskId}` : '即时结果';
 
   useEffect(() => {
     setActiveUrlIndex(0);
@@ -2133,7 +2158,25 @@ function ResultCard({ result, onRemove }) {
   };
 
   return (
-    <div className='mp-result-card'>
+    <div className={selected ? 'mp-result-card is-selected' : 'mp-result-card'}>
+      <div className='mp-result-card-head'>
+        <label className='mp-result-select'>
+          <input
+            type='checkbox'
+            checked={selected}
+            onChange={() => onToggleSelect?.(result.id)}
+            aria-label='选择作品'
+          />
+          <span />
+        </label>
+        <div>
+          <strong>{kindLabel}</strong>
+          <span>{taskLabel}</span>
+        </div>
+        <Tag color={cacheFailed ? 'orange' : 'green'}>
+          {cacheFailed ? '原始链接' : '已完成'}
+        </Tag>
+      </div>
       <div className='mp-result-frame'>
         {displayUrl && result.kind === 'image' ? (
           <button
@@ -2195,47 +2238,57 @@ function ResultCard({ result, onRemove }) {
         ) : null}
       </div>
       <div className='mp-result-meta'>
-        <div>
-          <Tag color={result.kind === 'image' ? 'blue' : 'purple'}>
-            {result.kind === 'image' ? '图像' : '视频'}
-          </Tag>
-          <Tag color='orange'>72 小时内有效</Tag>
-        </div>
-        <Space spacing={8}>
-          <Tooltip content='查看原图'>
-            <Button
-              icon={<IconExternalOpen />}
-              disabled={!openUrl}
-              onClick={() => openMediaUrl(openUrl)}
-            />
-          </Tooltip>
-          <Tooltip content='复制可访问链接'>
-            <Button
-              icon={<IconCopy />}
-              onClick={async () => {
-                const ok = await copy(displayUrl || originalUrl);
-                if (ok) Toast.success('链接已复制');
-              }}
-            />
-          </Tooltip>
-          <Tooltip content='立即下载'>
-            <Button
-              type='primary'
-              icon={<IconDownload />}
-              onClick={() =>
-                downloadURL(
-                  displayUrl || originalUrl,
-                  result.kind === 'image'
-                    ? 'xingren-image.png'
-                    : 'xingren-video.mp4',
-                )
-              }
-            />
-          </Tooltip>
-          <Tooltip content='从列表移除'>
-            <Button icon={<IconDelete />} onClick={() => onRemove(result.id)} />
-          </Tooltip>
-        </Space>
+        <span>{fileLabel}</span>
+        <span>{createdLabel}</span>
+        <span>72 小时内有效</span>
+      </div>
+      <div className='mp-result-actions'>
+        <Button
+          icon={<IconExternalOpen />}
+          disabled={!openUrl}
+          onClick={() => openMediaUrl(openUrl)}
+        >
+          查看
+        </Button>
+        <Button
+          icon={<IconCopy />}
+          onClick={async () => {
+            const ok = await copy(displayUrl || originalUrl);
+            if (ok) Toast.success('链接已复制');
+          }}
+        >
+          复制
+        </Button>
+        <Button
+          type='primary'
+          icon={<IconDownload />}
+          onClick={() =>
+            downloadURL(
+              displayUrl || originalUrl,
+              result.kind === 'image'
+                ? 'xingren-image.png'
+                : 'xingren-video.mp4',
+            )
+          }
+        >
+          下载
+        </Button>
+        {displayPrompt ? (
+          <Button
+            icon={<IconRefresh />}
+            onClick={() => onReusePrompt(displayPrompt)}
+          >
+            套用
+          </Button>
+        ) : null}
+        <Tooltip content='从结果中移除'>
+          <Button
+            theme='borderless'
+            type='danger'
+            icon={<IconDelete />}
+            onClick={() => onRemove(result.id)}
+          />
+        </Tooltip>
       </div>
       {displayPrompt ? (
         <p className='mp-revised-prompt'>{displayPrompt}</p>
@@ -2293,6 +2346,9 @@ const MediaPlayground = () => {
   const [maskFile, setMaskFile] = useState(null);
   const [results, setResults] = useState([]);
   const [resultsLoaded, setResultsLoaded] = useState(false);
+  const [selectedResultIds, setSelectedResultIds] = useState([]);
+  const [resultViewMode, setResultViewMode] = useState('grid');
+  const [resultSort, setResultSort] = useState('newest');
   const [submitting, setSubmitting] = useState(false);
   const [videoPolling, setVideoPolling] = useState(false);
   const [activeVideoTask, setActiveVideoTask] = useState(null);
@@ -2300,6 +2356,11 @@ const MediaPlayground = () => {
   const [imageTaskLookup, setImageTaskLookup] = useState('');
   const [submitStartedAt, setSubmitStartedAt] = useState(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  useEffect(() => {
+    document.body.classList.add('mp-route-active');
+    return () => document.body.classList.remove('mp-route-active');
+  }, []);
 
   const activeImageModel = useMemo(
     () =>
@@ -2487,65 +2548,6 @@ const MediaPlayground = () => {
     setSize(value);
     setAspectRatio(value);
   }
-
-  // 强制左侧导航和顶部使用深色主题
-  useEffect(() => {
-    const styleId = 'media-playground-sidebar-dark-theme';
-
-    // 如果样式已存在，先移除
-    const existingStyle = document.getElementById(styleId);
-    if (existingStyle) {
-      existingStyle.remove();
-    }
-
-    // 创建样式标签
-    const style = document.createElement('style');
-    style.id = styleId;
-    style.textContent = `
-      /* MediaPlayground 强制左侧导航深色主题 */
-      .semi-layout-sider,
-      .semi-navigation,
-      [class*="SiderBar"] {
-        background: #0A0F14 !important;
-        border-right: 1px solid rgba(255, 255, 255, 0.06) !important;
-      }
-
-      .semi-navigation-item,
-      [class*="semi-navigation"] a,
-      [class*="semi-navigation"] button {
-        color: rgba(240, 244, 248, 0.7) !important;
-      }
-
-      .semi-navigation-item:hover,
-      [class*="semi-navigation"] a:hover,
-      [class*="semi-navigation"] button:hover {
-        background: rgba(255, 255, 255, 0.05) !important;
-        color: rgba(240, 244, 248, 0.9) !important;
-      }
-
-      .semi-navigation-item-selected,
-      [class*="semi-navigation"] .semi-navigation-item-selected {
-        background: rgba(45, 212, 191, 0.15) !important;
-        color: #2DD4BF !important;
-      }
-
-      .semi-layout-header {
-        background: #0A0F14 !important;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
-      }
-    `;
-
-    // 添加到 head
-    document.head.appendChild(style);
-
-    // 清理函数：组件卸载时移除样式
-    return () => {
-      const styleToRemove = document.getElementById(styleId);
-      if (styleToRemove) {
-        styleToRemove.remove();
-      }
-    };
-  }, []);
 
   useEffect(() => {
     API.get('/api/user/self/groups')
@@ -3475,8 +3477,35 @@ const MediaPlayground = () => {
     }
   }
 
-  const handleRemoveResult = (id) =>
+  const handleRemoveResult = (id) => {
     setResults((prev) => prev.filter((item) => item.id !== id));
+    setSelectedResultIds((prev) => prev.filter((item) => item !== id));
+  };
+  const visibleResults = useMemo(() => {
+    const sorted = [...results].sort((left, right) => {
+      const leftTime = Number(left.createdAt || 0);
+      const rightTime = Number(right.createdAt || 0);
+      return resultSort === 'oldest' ? leftTime - rightTime : rightTime - leftTime;
+    });
+    return sorted;
+  }, [results, resultSort]);
+  const allVisibleResultsSelected =
+    visibleResults.length > 0 &&
+    visibleResults.every((item) => selectedResultIds.includes(item.id));
+  const toggleResultSelection = (id) => {
+    setSelectedResultIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
+    );
+  };
+  const toggleAllVisibleResults = () => {
+    setSelectedResultIds((prev) => {
+      const visibleIds = visibleResults.map((item) => item.id);
+      if (visibleIds.every((id) => prev.includes(id))) {
+        return prev.filter((id) => !visibleIds.includes(id));
+      }
+      return Array.from(new Set([...prev, ...visibleIds]));
+    });
+  };
   const modelOptions = (mode === 'image' ? IMAGE_MODELS : VIDEO_MODELS).filter(
     (item) => !item.private || models.some((model) => model === item.value),
   );
@@ -3573,92 +3602,291 @@ const MediaPlayground = () => {
     },
     { label: '结果', value: results.length ? `${results.length} 个` : '待生成' },
   ];
+  const rightPanelTask = {
+    name: workflowLabel,
+    model: activeModel.label,
+    status: submitting ? 'running' : videoPolling ? 'polling' : results.length ? 'completed' : 'idle',
+    statusText: submitting ? '生成中' : videoPolling ? '后台轮询中' : results.length ? '已有结果' : '待提交',
+    progress: parseProgressPercent(taskMessage),
+    remainingTime: taskMessage || (submitting || videoPolling ? '正在等待任务状态' : outputSpec),
+    taskId: activeVideoTask?.taskId || imageTaskLookup || '',
+  };
+  const rightPanelSummary = [
+    { label: '任务类型', value: workflowLabel },
+    { label: '模型', value: activeModel.label },
+    { label: mode === 'image' ? '尺寸' : '比例 / 尺寸', value: sizeLabel },
+    { label: mode === 'image' ? '比例' : '时长 / 帧率', value: ratioLabel },
+    { label: mode === 'image' ? '清晰度' : '水印', value: qualityLabel },
+    { label: '输出格式', value: formatLabel },
+  ];
+  const creativeNavItems = [
+    {
+      key: 'video',
+      label: '视频生成',
+      active: mode === 'video',
+      onClick: () => setMode('video'),
+    },
+    {
+      key: 'image-generate',
+      label: '图片生成',
+      active: mode === 'image' && imageWorkflow === 'generate',
+      onClick: () => {
+        setMode('image');
+        setImageWorkflow('generate');
+      },
+    },
+    {
+      key: 'image-edit',
+      label: '图片编辑',
+      active: mode === 'image' && imageWorkflow === 'edit',
+      disabled: !activeImageModel.edit,
+      onClick: () => {
+        if (!activeImageModel.edit) return;
+        setMode('image');
+        setImageWorkflow('edit');
+      },
+    },
+    {
+      key: 'reverse',
+      label: '图像反推提示词',
+      active: mode === 'image' && Boolean(reversePromptFile || reversePromptText),
+      onClick: () => {
+        setMode('image');
+        window.requestAnimationFrame(() => {
+          document.getElementById('mp-reverse-workbench')?.scrollIntoView({
+            behavior: 'smooth',
+            block: 'start',
+          });
+        });
+      },
+    },
+    {
+      key: 'history',
+      label: '历史任务',
+      active: false,
+      onClick: () =>
+        document.getElementById('mp-results-workbench')?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'start',
+        }),
+    },
+    {
+      key: 'library',
+      label: '素材库',
+      active: false,
+      onClick: () =>
+        document.getElementById('mp-assets-workbench')?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'start',
+        }),
+    },
+  ];
+  const quickEntryItems = [
+    {
+      key: 'text-image',
+      label: '文生图',
+      onClick: () => {
+        setMode('image');
+        setImageWorkflow('generate');
+      },
+    },
+    {
+      key: 'image-image',
+      label: '图生图',
+      onClick: () => {
+        setMode('image');
+        if (activeImageModel.edit) setImageWorkflow('edit');
+      },
+    },
+    {
+      key: 'inpaint',
+      label: '局部重绘',
+      onClick: () => {
+        setMode('image');
+        if (activeImageModel.edit) setImageWorkflow('edit');
+      },
+    },
+    {
+      key: 'style',
+      label: '风格模板',
+      onClick: () => {
+        setMode('image');
+        if (activeImageModel.edit) setImageWorkflow('edit');
+        setPrompt(PROMPT_PRESETS[1]?.value || prompt);
+      },
+    },
+  ];
 
   return (
     <div className='mp-page classic-page-fill'>
       <div className='mp-shell'>
-        <MediaTopBar
-          title='媒体创作工作台'
-          subtitle='任务、提示词、参数、生成和结果按同一条操作线排列。'
-          stats={[
-            { label: '保留', value: '72 小时' },
-            { label: '当前模式', value: mode === 'image' ? '图像' : '视频' },
-            { label: '输出规格', value: outputSpec },
-          ]}
-        />
-
-        <div className='mp-stage-strip' aria-label='媒体创作流程'>
-          {stageItems.map((item, index) => (
-            <div key={item.label} className='mp-stage-item'>
-              <span>{String(index + 1).padStart(2, '0')}</span>
-              <strong>{item.label}</strong>
-              <em>{item.value}</em>
-            </div>
-          ))}
-        </div>
-
         <section className='mp-workbench'>
-          <aside className='mp-panel mp-controls'>
-            <div className='mp-panel-label'>01 · 任务</div>
-            <TaskModeTabs mode={mode} onChange={setMode} />
+          <aside className='mp-media-sidebar' aria-label='媒体工坊导航'>
+            <div className='mp-media-brand'>
+              <div className='mp-media-logo'>
+                <IconImage />
+              </div>
+              <div>
+                <strong>星人 Codex</strong>
+                <span>媒体工坊</span>
+              </div>
+              <Tag color='green'>Pro</Tag>
+            </div>
 
-            <SectionTitle>生成方式</SectionTitle>
-            {mode === 'image' ? (
-              <div className='mp-toggle-row'>
-                {[
-                  { key: 'generate', label: '文生图' },
-                  {
-                    key: 'edit',
-                    label: activeImageModel.edit
-                      ? '图像修改'
-                      : '图像修改不可用',
-                    disabled: !activeImageModel.edit,
-                  },
-                ].map((item) => (
-                  <button
-                    key={item.key}
-                    type='button'
-                    disabled={item.disabled}
-                    className={imageWorkflow === item.key ? 'active' : ''}
-                    data-xr-agent={`media-image-workflow-${item.key}`}
-                    onClick={() => setImageWorkflow(item.key)}
-                  >
-                    {item.label}
+            <Button
+              block
+              type='primary'
+              theme='solid'
+              icon={<IconRefresh />}
+              className='mp-new-creation-btn'
+              onClick={() => {
+                setPrompt(DEFAULT_PROMPT);
+                setNegativePrompt('');
+                setReferenceFiles([]);
+                setReversePromptFile(null);
+                setReversePromptText('');
+                setReversePromptMessage('');
+                setLastFrameFile(null);
+                setMaskFile(null);
+                setImageTaskLookup('');
+                setTaskMessage('');
+                setSubmitStartedAt(null);
+                setElapsedSeconds(0);
+                setSelectedResultIds([]);
+              }}
+            >
+              新建创作
+            </Button>
+
+            <nav className='mp-creative-nav' aria-label='创作导航'>
+              <span>创作</span>
+              {creativeNavItems.map((item) => (
+                <button
+                  key={item.key}
+                  type='button'
+                  className={item.active ? 'active' : ''}
+                  disabled={item.disabled}
+                  onClick={item.onClick}
+                >
+                  <span className='mp-nav-dot' />
+                  {item.label}
+                </button>
+              ))}
+            </nav>
+
+            <div className='mp-sidebar-card mp-sidebar-model-card'>
+              <SectionTitle meta={activeModel.badge}>当前模型</SectionTitle>
+              <ModelSelector
+                models={modelOptions}
+                selectedModel={currentModelId}
+                onSelectModel={(value) =>
+                  mode === 'image' ? setImageModel(value) : setVideoModel(value)
+                }
+                mode={mode}
+              />
+            </div>
+
+            <div className='mp-sidebar-card'>
+              <SectionTitle>快捷入口</SectionTitle>
+              <div className='mp-quick-grid'>
+                {quickEntryItems.map((item) => (
+                  <button key={item.key} type='button' onClick={item.onClick}>
+                    <IconImage />
+                    <span>{item.label}</span>
                   </button>
                 ))}
               </div>
-            ) : (
-              <div className='mp-toggle-row'>
-                {[
-                  { key: 'text', label: '文生视频' },
-                  { key: 'image', label: '图生视频' },
-                  { key: 'first-last', label: '首尾帧' },
-                ].map((item) => (
-                  <button
-                    key={item.key}
-                    type='button'
-                    className={videoWorkflow === item.key ? 'active' : ''}
-                    data-xr-agent={`media-video-workflow-${item.key}`}
-                    onClick={() => setVideoWorkflow(item.key)}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </div>
-            )}
+            </div>
 
-            <ModelSelector
-              models={modelOptions}
-              selectedModel={currentModelId}
-              onSelectModel={(value) =>
-                mode === 'image' ? setImageModel(value) : setVideoModel(value)
-              }
-              mode={mode}
-            />
+            <div className='mp-sidebar-card mp-resource-card'>
+              <SectionTitle>账户与资源</SectionTitle>
+              <div className='mp-resource-row'>
+                <span>本次方案</span>
+                <strong>{formatLabel}</strong>
+              </div>
+              <div className='mp-resource-row'>
+                <span>结果数量</span>
+                <strong>{results.length} 个</strong>
+              </div>
+              <div className='mp-resource-meter'>
+                <span style={{ width: `${Math.min(results.length * 12, 100)}%` }} />
+              </div>
+              <p>临时预览保留 72 小时，请及时下载保存。</p>
+            </div>
           </aside>
 
           <main className='mp-canvas-panel'>
-            <div className='mp-panel-label'>02 · 提示</div>
+            <MediaTopBar
+              title='媒体创作工作台'
+              subtitle='图片、视频、编辑与反推提示词，统一在一个创作台完成。'
+              stats={[
+                { label: '保留', value: '72 小时' },
+                { label: '当前模型', value: activeModel.label },
+                { label: '输出规格', value: outputSpec },
+              ]}
+            />
+
+            <div className='mp-stage-strip' aria-label='媒体创作流程'>
+              {stageItems.map((item, index) => (
+                <div key={item.label} className='mp-stage-item'>
+                  <span>{String(index + 1).padStart(2, '0')}</span>
+                  <strong>{item.label}</strong>
+                  <em>{item.value}</em>
+                </div>
+              ))}
+            </div>
+
+            <section className='mp-mode-panel'>
+              <TaskModeTabs mode={mode} onChange={setMode} />
+              <div className='mp-mode-workflows'>
+                <SectionTitle>生成方式</SectionTitle>
+                {mode === 'image' ? (
+                  <div className='mp-toggle-row'>
+                    {[
+                      { key: 'generate', label: '文生图' },
+                      {
+                        key: 'edit',
+                        label: activeImageModel.edit
+                          ? '图像修改'
+                          : '图像修改不可用',
+                        disabled: !activeImageModel.edit,
+                      },
+                    ].map((item) => (
+                      <button
+                        key={item.key}
+                        type='button'
+                        disabled={item.disabled}
+                        className={imageWorkflow === item.key ? 'active' : ''}
+                        data-xr-agent={`media-image-workflow-${item.key}`}
+                        onClick={() => setImageWorkflow(item.key)}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className='mp-toggle-row'>
+                    {[
+                      { key: 'text', label: '文生视频' },
+                      { key: 'image', label: '图生视频' },
+                      { key: 'first-last', label: '首尾帧' },
+                    ].map((item) => (
+                      <button
+                        key={item.key}
+                        type='button'
+                        className={videoWorkflow === item.key ? 'active' : ''}
+                        data-xr-agent={`media-video-workflow-${item.key}`}
+                        onClick={() => setVideoWorkflow(item.key)}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </section>
+
+            <div className='mp-panel-label'>Prompt 提示词</div>
             <PromptComposer
               prompt={prompt}
               onPromptChange={handlePromptChange}
@@ -3691,45 +3919,20 @@ const MediaPlayground = () => {
                   onClose={closeMentionMenu}
                 />
               }
+              onReverseClick={() =>
+                document.getElementById('mp-reverse-workbench')?.scrollIntoView({
+                  behavior: 'smooth',
+                  block: 'start',
+                })
+              }
             />
-            {mode === 'image' ? (
-              <ReversePromptPanel
-                file={reversePromptFile}
-                onFileChange={setReversePromptFile}
-                reversePromptText={reversePromptText}
-                onReversePromptTextChange={setReversePromptText}
-                isRunning={reversePromptRunning}
-                onStartReverse={reverseImagePrompt}
-                onCopyResult={async () => {
-                  const ok = await copy(reversePromptText);
-                  if (ok) Toast.success('反推提示词已复制');
-                }}
-                onApplyResult={applyReversePrompt}
-                message={reversePromptMessage}
-                modelName={REVERSE_PROMPT_MODEL}
-                imageWorkflow={imageWorkflow}
-                fileDrop={
-                  <FileDrop
-                    label='上传反推参考图'
-                    file={reversePromptFile}
-                    onFile={setReversePromptFile}
-                    compact
-                  />
-                }
-                modelSelector={
-                  <NativeSelect
-                    label='生成模型'
-                    value={imageModel}
-                    options={modelOptions.map((item) => ({
-                      label: item.label,
-                      value: item.value,
-                    }))}
-                    onChange={setImageModel}
-                    agentKey='media-reverse-target-model'
-                  />
-                }
-              />
-            ) : null}
+            <section id='mp-assets-workbench' className='mp-assets-section'>
+              <div className='mp-section-head'>
+                <SectionTitle meta={referenceLabel}>参考素材</SectionTitle>
+                <span>
+                  {mode === 'image' ? `最多 ${referenceFileLimit} 张` : videoRefPolicy.limitLabel}
+                </span>
+              </div>
               {mode === 'image' && imageWorkflow === 'edit' ? (
                 <div className='mp-field-grid'>
                   <MediaUploadPanel
@@ -3739,8 +3942,8 @@ const MediaPlayground = () => {
                     accept='image/png,image/jpeg,image/webp'
                     onFiles={addReferenceFiles}
                     onRemove={removeReferenceFile}
-                    label='上传参考图'
-                    hint='拖入或点击上传 PNG / JPG / WebP'
+                    label='图片参考图 / 图片编辑'
+                    hint='支持 JPG / PNG / WebP'
                   />
                   <FileDrop
                     label='上传遮罩图，可选'
@@ -3777,9 +3980,62 @@ const MediaPlayground = () => {
                 </div>
               ) : null}
 
+              {((mode === 'image' && imageWorkflow !== 'edit') ||
+                (mode === 'video' && videoWorkflow === 'text')) ? (
+                <div className='mp-assets-empty'>
+                  <IconUpload />
+                  <div>
+                    <strong>当前生成方式不需要参考素材</strong>
+                    <span>切换到图片编辑、图生视频或首尾帧后会在这里上传素材。</span>
+                  </div>
+                </div>
+              ) : null}
+            </section>
+
+            {mode === 'image' ? (
+              <section id='mp-reverse-workbench' className='mp-reverse-workbench'>
+                <ReversePromptPanel
+                  file={reversePromptFile}
+                  onFileChange={setReversePromptFile}
+                  reversePromptText={reversePromptText}
+                  onReversePromptTextChange={setReversePromptText}
+                  isRunning={reversePromptRunning}
+                  onStartReverse={reverseImagePrompt}
+                  onCopyResult={async () => {
+                    const ok = await copy(reversePromptText);
+                    if (ok) Toast.success('反推提示词已复制');
+                  }}
+                  onApplyResult={applyReversePrompt}
+                  message={reversePromptMessage}
+                  modelName={REVERSE_PROMPT_MODEL}
+                  imageWorkflow={imageWorkflow}
+                  fileDrop={
+                    <FileDrop
+                      label='上传反推参考图'
+                      file={reversePromptFile}
+                      onFile={setReversePromptFile}
+                      compact
+                    />
+                  }
+                  modelSelector={
+                    <NativeSelect
+                      label='生成模型'
+                      value={imageModel}
+                      options={modelOptions.map((item) => ({
+                        label: item.label,
+                        value: item.value,
+                      }))}
+                      onChange={setImageModel}
+                      agentKey='media-reverse-target-model'
+                    />
+                  }
+                />
+              </section>
+            ) : null}
+
               <div className='mp-parameter-panel'>
                 <div className='mp-parameter-head'>
-                  <SectionTitle meta='03 · Params'>生成参数</SectionTitle>
+                  <SectionTitle meta='Params'>参数设置</SectionTitle>
                   <span>{workflowLabel} · {outputSpec}</span>
                 </div>
                 <div className='mp-param-priority'>
@@ -3976,7 +4232,6 @@ const MediaPlayground = () => {
                 )}
               </div>
 
-              <div className='mp-panel-label'>04 · 生成</div>
               <GenerateActionBar
                 mode={mode}
                 imageWorkflow={imageWorkflow}
@@ -4053,8 +4308,7 @@ const MediaPlayground = () => {
                   description='当前用户分组暂未开放这个模型。'
                 />
               ) : null}
-            <section className='mp-results-section'>
-              <div className='mp-panel-label'>05 · 结果</div>
+            <section id='mp-results-workbench' className='mp-results-section'>
               {results.length === 0 ? (
                 <div className={submitting ? 'mp-empty-canvas is-rendering' : 'mp-empty-canvas'}>
                   <div className='mp-empty-mark'>
@@ -4084,23 +4338,77 @@ const MediaPlayground = () => {
               ) : (
                 <>
                   <div className='mp-gallery-head'>
-                    <Title heading={4}>结果画布</Title>
+                    <div>
+                      <Title heading={4}>生成结果</Title>
+                      <Paragraph>
+                        共 {results.length} 个作品 · 已选 {selectedResultIds.length} 个 ·
+                        {resultSort === 'newest' ? '按最新生成排序' : '按最早生成排序'}
+                      </Paragraph>
+                    </div>
                     <Space spacing={8}>
                       <Button
+                        theme={allVisibleResultsSelected ? 'solid' : 'borderless'}
+                        type={allVisibleResultsSelected ? 'primary' : 'tertiary'}
+                        onClick={toggleAllVisibleResults}
+                      >
+                        {allVisibleResultsSelected ? '取消全选' : '全选'}
+                      </Button>
+                      <Button
+                        theme={resultViewMode === 'grid' ? 'solid' : 'borderless'}
+                        type='tertiary'
+                        icon={<IconImage />}
+                        onClick={() => setResultViewMode('grid')}
+                      >
+                        网格
+                      </Button>
+                      <Button
+                        theme={resultViewMode === 'list' ? 'solid' : 'borderless'}
+                        type='tertiary'
+                        onClick={() => setResultViewMode('list')}
+                      >
+                        列表
+                      </Button>
+                      <Button
+                        theme='borderless'
+                        type='tertiary'
+                        onClick={() =>
+                          setResultSort((value) =>
+                            value === 'newest' ? 'oldest' : 'newest',
+                          )
+                        }
+                      >
+                        {resultSort === 'newest' ? '最新' : '最早'}
+                      </Button>
+                      <Button
                         icon={<IconRefresh />}
-                        onClick={() => setResults([])}
+                        onClick={() => {
+                          setResults([]);
+                          setSelectedResultIds([]);
+                        }}
                         disabled={results.length === 0}
                       >
                         清空
                       </Button>
                     </Space>
                   </div>
-                  <div className='mp-result-grid'>
-                    {results.map((result) => (
+                  <div
+                    className={
+                      resultViewMode === 'list'
+                        ? 'mp-result-grid is-list-view'
+                        : 'mp-result-grid'
+                    }
+                  >
+                    {visibleResults.map((result) => (
                       <ResultCard
                         key={result.id}
                         result={result}
                         onRemove={handleRemoveResult}
+                        selected={selectedResultIds.includes(result.id)}
+                        onToggleSelect={toggleResultSelection}
+                        onReusePrompt={(value) => {
+                          setPrompt(value);
+                          Toast.success('已套用到提示词。');
+                        }}
                       />
                     ))}
                   </div>
@@ -4112,33 +4420,29 @@ const MediaPlayground = () => {
             </section>
           </main>
 
-          <aside className='mp-panel mp-inspector' aria-label='当前生成方案'>
-            <div className='mp-panel-label'>状态</div>
+          <aside className='mp-inspector' aria-label='当前生成方案'>
             <RightStatusPanel
-              currentTask={submitting || videoPolling ? {
-                name: mode === 'image' ? '图像生成' : '视频生成',
-                model: activeModel.label,
-                status: submitting ? 'running' : 'polling',
-                statusText: videoPolling ? '后台轮询中' : '生成中',
-                progress: undefined,
-                remainingTime: taskMessage,
-              } : null}
+              currentTask={rightPanelTask}
               resourceUsage={{
-                usagePercent: 0,
-                used: '本次消耗',
-                total: outputSpec,
+                usagePercent: Math.min(results.length * 10, 100),
+                label: '当前画布',
+                period: '72 小时',
+                used: `${results.length} 个临时结果`,
+                total: '临时保留',
                 balance: undefined
               }}
               taskQueue={{
                 running: submitting || videoPolling ? 1 : 0,
                 pending: 0,
-                completed: results.length
+                completed: results.length,
+                failed: 0
               }}
-              activityLog={results.slice(0, 3).map((r, i) => ({
-                icon: r.kind === 'image' ? '🖼️' : '🎬',
+              activityLog={results.slice(0, 3).map((r) => ({
+                icon: r.kind === 'image' ? '图' : '视',
                 text: `${r.kind === 'image' ? '图像' : '视频'}生成完成`,
-                time: '刚刚'
+                time: formatResultTime(r.createdAt)
               }))}
+              summary={rightPanelSummary}
             />
             <div className='mp-inspector-legacy'>
               <SectionTitle meta='Live'>当前方案</SectionTitle>

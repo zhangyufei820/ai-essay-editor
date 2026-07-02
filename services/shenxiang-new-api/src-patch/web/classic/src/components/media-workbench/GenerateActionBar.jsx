@@ -1,5 +1,6 @@
 import React from 'react';
 import { Button } from '@douyinfe/semi-ui';
+import { IconImage, IconPlay } from '@douyinfe/semi-icons';
 import './GenerateActionBar.css';
 
 /**
@@ -24,12 +25,7 @@ export function GenerateActionBar({
     return '生成视频';
   };
 
-  const getButtonIcon = () => {
-    if (mode === 'image') {
-      return imageWorkflow === 'edit' ? '✨' : '🎨';
-    }
-    return '🎬';
-  };
+  const buttonIcon = mode === 'image' ? <IconImage /> : <IconPlay />;
 
   return (
     <div className="mp-generate-action-bar">
@@ -62,7 +58,7 @@ export function GenerateActionBar({
         className="mp-generate-button"
         data-xr-agent="media-generate"
       >
-        <span className="mp-generate-icon">{getButtonIcon()}</span>
+        <span className="mp-generate-icon">{buttonIcon}</span>
         <span>{getButtonText()}</span>
       </Button>
     </div>

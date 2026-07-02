@@ -5,23 +5,40 @@
 }
 
 .mp-status-card {
-  background: var(--mp-bg-card);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02)),
+    var(--mp-bg-card);
   border: 1px solid var(--mp-border-subtle);
   border-radius: var(--mp-radius-lg);
   padding: var(--mp-spacing-lg);
+  box-shadow: var(--mp-shadow-card);
 }
 
 .mp-status-card-title {
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 760;
   color: var(--mp-text-primary);
-  margin: 0 0 var(--mp-spacing-md) 0;
+  margin: 0;
+}
+
+.mp-status-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mp-spacing-md);
+  margin-bottom: var(--mp-spacing-md);
 }
 
 .mp-status-card-content {
   display: flex;
   flex-direction: column;
   gap: var(--mp-spacing-md);
+}
+
+.mp-status-link {
+  color: var(--mp-accent-primary);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 /* 当前任务 */
@@ -37,12 +54,29 @@
   flex-direction: column;
   gap: 4px;
   flex: 1;
+  min-width: 0;
 }
 
 .mp-task-progress {
   display: flex;
   flex-direction: column;
   gap: var(--mp-spacing-sm);
+}
+
+.mp-task-progress.is-pending {
+  padding: var(--mp-spacing-sm) var(--mp-spacing-md);
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: var(--mp-radius-md);
+  background: var(--mp-bg-elevated);
+}
+
+.mp-task-progress-meta {
+  display: grid;
+  gap: 4px;
+}
+
+.mp-status-progress .semi-progress-line-inner {
+  background: linear-gradient(90deg, var(--mp-accent-primary), var(--mp-accent-secondary)) !important;
 }
 
 /* 资源使用 */
@@ -70,7 +104,7 @@
 /* 任务队列 */
 .mp-queue-stats {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: var(--mp-spacing-sm);
 }
 
@@ -81,6 +115,7 @@
   gap: 4px;
   padding: var(--mp-spacing-sm);
   background: var(--mp-bg-elevated);
+  border: 1px solid var(--mp-border-subtle);
   border-radius: var(--mp-radius-sm);
 }
 
@@ -102,12 +137,20 @@
   gap: var(--mp-spacing-sm);
   padding: var(--mp-spacing-sm);
   background: var(--mp-bg-elevated);
+  border: 1px solid var(--mp-border-subtle);
   border-radius: var(--mp-radius-sm);
 }
 
 .mp-activity-icon {
-  font-size: 16px;
-  line-height: 1;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--mp-accent-soft);
+  color: var(--mp-accent-primary);
+  font-size: 12px;
+  font-weight: 800;
   flex-shrink: 0;
 }
 
@@ -123,4 +166,43 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.mp-activity-empty {
+  padding: var(--mp-spacing-md);
+  border: 1px dashed var(--mp-border-subtle);
+  border-radius: var(--mp-radius-md);
+  background: var(--mp-bg-elevated);
+}
+
+.mp-summary-list {
+  display: grid;
+  gap: var(--mp-spacing-sm);
+}
+
+.mp-summary-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mp-spacing-md);
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: var(--mp-radius-sm);
+  background: var(--mp-bg-elevated);
+}
+
+.mp-summary-item span {
+  color: var(--mp-text-muted);
+  font-size: 12px;
+}
+
+.mp-summary-item strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--mp-text-primary);
+  font-size: 12px;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

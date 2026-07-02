@@ -326,11 +326,9 @@ const SiderBar = ({ onNavigate = () => {} }) => {
 
   return (
     <div
-      className='sidebar-container'
+      className={isMediaPlayground ? 'sidebar-container media-playground-sidebar' : 'sidebar-container'}
       style={{
         width: 'var(--sidebar-current-width)',
-        background: isMediaPlayground ? '#0A0F14' : undefined,
-        borderRight: isMediaPlayground ? '1px solid rgba(255, 255, 255, 0.06)' : undefined,
       }}
     >
       <SkeletonWrapper
@@ -341,7 +339,6 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         showAdmin={adminVisible}
       >
         <Nav
-          className='sidebar-nav'
           defaultIsCollapsed={collapsed}
           isCollapsed={collapsed}
           onCollapseChange={toggleCollapsed}
@@ -349,10 +346,7 @@ const SiderBar = ({ onNavigate = () => {} }) => {
           itemStyle='sidebar-nav-item'
           hoverStyle='sidebar-nav-item:hover'
           selectedStyle='sidebar-nav-item-selected'
-          style={{
-            background: isMediaPlayground ? '#0A0F14' : undefined,
-            color: isMediaPlayground ? 'rgba(240, 244, 248, 0.7)' : undefined,
-          }}
+          className={isMediaPlayground ? 'sidebar-nav media-playground-sidebar-nav' : 'sidebar-nav'}
           renderWrapper={({ itemElement, props }) => {
             const to = routerMap[props.itemKey];
 

@@ -13,13 +13,27 @@ export function RightStatusPanel({
   resourceUsage,
   taskQueue,
   activityLog,
+  summary = [],
 }) {
+  const statusColor = currentTask?.status === 'running' || currentTask?.status === 'polling'
+    ? 'blue'
+    : currentTask?.status === 'failed'
+      ? 'red'
+      : currentTask?.status === 'completed'
+        ? 'green'
+        : 'grey';
+  const hasProgress = typeof currentTask?.progress === 'number';
+
   return (
     <div className="mp-right-status-panel">
-      {/* 当前任务卡片 */}
       {currentTask && (
-        <div className="mp-status-card">
-          <h4 className="mp-status-card-title">当前任务</h4>
+        <div className="mp-status-card mp-current-task-card">
+          <div className="mp-status-card-head">
+            <h4 className="mp-status-card-title">当前任务</h4>
+            <Tag color={statusColor}>
+              {currentTask.statusText || currentTask.status}
+            </Tag>
+          </div>
           <div className="mp-status-card-content">
             <div className="mp-task-status">
               <div className="mp-task-info">
@@ -28,40 +42,45 @@ export function RightStatusPanel({
                   {currentTask.model}
                 </Text>
               </div>
-              <Tag color={currentTask.status === 'running' ? 'blue' : 'grey'}>
-                {currentTask.statusText || currentTask.status}
-              </Tag>
             </div>
-            {currentTask.progress !== undefined && (
-              <div className="mp-task-progress">
+            <div className={hasProgress ? 'mp-task-progress' : 'mp-task-progress is-pending'}>
+              {hasProgress ? (
                 <Progress
                   percent={currentTask.progress}
-                  showInfo
+                  showInfo={false}
                   size="small"
+                  className="mp-status-progress"
                 />
-                {currentTask.remainingTime && (
+              ) : null}
+              <div className="mp-task-progress-meta">
+                <Text type="tertiary" size="small">
+                  {currentTask.remainingTime || '等待提交后显示进度'}
+                </Text>
+                {currentTask.taskId ? (
                   <Text type="tertiary" size="small">
-                    预计剩余 {currentTask.remainingTime}
+                    ID {currentTask.taskId}
                   </Text>
-                )}
+                ) : null}
               </div>
-            )}
+            </div>
           </div>
         </div>
       )}
 
-      {/* 资源使用卡片 */}
       {resourceUsage && (
         <div className="mp-status-card">
-          <h4 className="mp-status-card-title">资源使用</h4>
+          <div className="mp-status-card-head">
+            <h4 className="mp-status-card-title">资源使用</h4>
+            <span className="mp-status-link">{resourceUsage.period || '本次'}</span>
+          </div>
           <div className="mp-status-card-content">
             <div className="mp-resource-item">
-              <Text type="tertiary">本月已用</Text>
+              <Text type="tertiary">{resourceUsage.label || '本次作品'}</Text>
               <Progress
                 percent={resourceUsage.usagePercent}
                 showInfo={false}
                 size="small"
-                className="mp-resource-progress"
+                className="mp-status-progress mp-resource-progress"
               />
               <div className="mp-resource-stats">
                 <Text strong>{resourceUsage.used}</Text>
@@ -80,10 +99,11 @@ export function RightStatusPanel({
         </div>
       )}
 
-      {/* 任务队列卡片 */}
       {taskQueue && (
         <div className="mp-status-card">
-          <h4 className="mp-status-card-title">任务队列</h4>
+          <div className="mp-status-card-head">
+            <h4 className="mp-status-card-title">任务队列</h4>
+          </div>
           <div className="mp-status-card-content">
             <div className="mp-queue-stats">
               <div className="mp-queue-stat-item">
@@ -98,24 +118,52 @@ export function RightStatusPanel({
                 <span className="mp-queue-count">{taskQueue.completed || 0}</span>
                 <Text type="tertiary" size="small">已完成</Text>
               </div>
+              <div className="mp-queue-stat-item">
+                <span className="mp-queue-count">{taskQueue.failed || 0}</span>
+                <Text type="tertiary" size="small">失败</Text>
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* 活动记录卡片 */}
-      {activityLog && activityLog.length > 0 && (
-        <div className="mp-status-card">
+      <div className="mp-status-card">
+        <div className="mp-status-card-head">
           <h4 className="mp-status-card-title">活动记录</h4>
-          <div className="mp-status-card-content">
+          <span className="mp-status-link">最新</span>
+        </div>
+        <div className="mp-status-card-content">
+          {activityLog && activityLog.length > 0 ? (
             <div className="mp-activity-list">
               {activityLog.slice(0, 5).map((activity, index) => (
                 <div key={index} className="mp-activity-item">
-                  <div className="mp-activity-icon">{activity.icon || '📝'}</div>
+                  <div className="mp-activity-icon">{activity.icon || '记'}</div>
                   <div className="mp-activity-content">
                     <Text size="small">{activity.text}</Text>
                     <Text type="tertiary" size="small">{activity.time}</Text>
                   </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="mp-activity-empty">
+              <Text type="tertiary" size="small">生成完成后会记录在这里。</Text>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {summary.length > 0 && (
+        <div className="mp-status-card">
+          <div className="mp-status-card-head">
+            <h4 className="mp-status-card-title">本次任务摘要</h4>
+          </div>
+          <div className="mp-status-card-content">
+            <div className="mp-summary-list">
+              {summary.map((item) => (
+                <div key={item.label} className="mp-summary-item">
+                  <span>{item.label}</span>
+                  <strong>{item.value}</strong>
                 </div>
               ))}
             </div>
