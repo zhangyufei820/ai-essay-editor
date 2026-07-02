@@ -2,6 +2,7 @@ package relay
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -128,6 +129,70 @@ func recordPlaygroundImageRequestLog(c *gin.Context, info *relaycommon.RelayInfo
 	}
 }
 
+func hydrateNativeGeminiImageRequestFromMultipart(c *gin.Context, info *relaycommon.RelayInfo, request *dto.ImageRequest) {
+	if c == nil || c.Request == nil || info == nil || request == nil || info.ApiType != constant.APITypeGemini {
+		return
+	}
+	if !strings.Contains(c.Request.Header.Get("Content-Type"), gin.MIMEMultipartPOSTForm) {
+		return
+	}
+
+	values := c.Request.PostForm
+	if len(values) == 0 && c.Request.MultipartForm != nil {
+		values = c.Request.MultipartForm.Value
+	}
+	if len(values) == 0 {
+		form, err := common.ParseMultipartFormReusable(c)
+		if err != nil || form == nil {
+			return
+		}
+		values = form.Value
+	}
+
+	formValue := func(key string) string {
+		if values == nil {
+			return ""
+		}
+		return strings.TrimSpace(values.Get(key))
+	}
+	if value := formValue("aspect_ratio"); value != "" && strings.TrimSpace(request.AspectRatio) == "" {
+		request.AspectRatio = value
+	}
+	if value := formValue("resolution"); value != "" && strings.TrimSpace(request.Resolution) == "" {
+		request.Resolution = value
+	}
+	if value := formValue("image_size"); value != "" && strings.TrimSpace(request.ImageSize) == "" {
+		request.ImageSize = value
+	}
+	if value := formValue("response_format"); value != "" && strings.TrimSpace(request.ResponseFormat) == "" {
+		request.ResponseFormat = value
+	}
+	if value := formValue("responseFormat"); value != "" && len(request.ResponseFormatObj) == 0 {
+		request.ResponseFormatObj = imageRequestFormRawMessage(value)
+	}
+	if value := formValue("generationConfig"); value != "" && len(request.GenerationConfig) == 0 {
+		request.GenerationConfig = imageRequestFormRawMessage(value)
+	}
+	if value := formValue("extra_body"); value != "" && len(request.ExtraBody) == 0 {
+		request.ExtraBody = imageRequestFormRawMessage(value)
+	}
+}
+
+func imageRequestFormRawMessage(value string) json.RawMessage {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil
+	}
+	raw := []byte(value)
+	if json.Valid(raw) {
+		return json.RawMessage(raw)
+	}
+	if encoded, err := common.Marshal(value); err == nil {
+		return json.RawMessage(encoded)
+	}
+	return nil
+}
+
 func ImageHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *types.NewAPIError) {
 	info.InitChannelMeta(c)
 
@@ -146,6 +211,7 @@ func ImageHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *type
 		return types.NewError(err, types.ErrorCodeChannelModelMappedError, types.ErrOptionWithSkipRetry())
 	}
 	useGeminiAdaptorForNativeImageModel(info)
+	hydrateNativeGeminiImageRequestFromMultipart(c, info, request)
 
 	adaptor := GetAdaptor(info.ApiType)
 	if adaptor == nil {
