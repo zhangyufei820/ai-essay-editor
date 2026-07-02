@@ -464,6 +464,65 @@ function isGptImage2Model(model) {
   );
 }
 
+function imageModelConfig(modelValue) {
+  return IMAGE_MODELS.find((item) => item.value === modelValue) || null;
+}
+
+function videoModelConfig(modelValue) {
+  return VIDEO_MODELS.find((item) => item.value === modelValue) || null;
+}
+
+function resultImageModelValue(result) {
+  const raw = String(
+    result?.model ||
+      result?.modelValue ||
+      result?.modelLabel ||
+      result?.metadata?.model ||
+      result?.data?.model ||
+      '',
+  ).trim();
+  if (!raw) return '';
+  if (imageModelConfig(raw)) return raw;
+  const byLabel = IMAGE_MODELS.find((item) => item.label === raw);
+  return byLabel?.value || raw;
+}
+
+function resultVideoModelValue(result) {
+  const raw = String(
+    result?.model ||
+      result?.modelValue ||
+      result?.modelLabel ||
+      result?.metadata?.model ||
+      result?.data?.model ||
+      '',
+  ).trim();
+  if (!raw) return '';
+  if (videoModelConfig(raw)) return raw;
+  const byLabel = VIDEO_MODELS.find((item) => item.label === raw);
+  return byLabel?.value || raw;
+}
+
+function resultModelLabel(result, fallbackImageModel, fallbackVideoModel) {
+  if (result?.kind === 'image') {
+    const modelValue = resultImageModelValue(result);
+    return (
+      result?.modelLabel ||
+      imageModelConfig(modelValue)?.label ||
+      modelValue ||
+      fallbackImageModel?.label ||
+      '图片模型'
+    );
+  }
+  const modelValue = resultVideoModelValue(result);
+  return (
+    result?.modelLabel ||
+    videoModelConfig(modelValue)?.label ||
+    modelValue ||
+    fallbackVideoModel?.label ||
+    '视频模型'
+  );
+}
+
 function clampCount(value, model) {
   const max = Math.max(1, model.maxCount || 1);
   return Math.min(Math.max(1, Number(value) || 1), max);
@@ -1435,7 +1494,12 @@ function firstPromptText(...values) {
   return '';
 }
 
-function extractImageResults(response, fallbackPrompt = '') {
+function extractImageResults(
+  response,
+  fallbackPrompt = '',
+  fallbackModel = '',
+  fallbackModelLabel = '',
+) {
   const data = response?.data || [];
   return data
     .map((item, index) => {
@@ -1445,11 +1509,20 @@ function extractImageResults(response, fallbackPrompt = '') {
       if (!url) return null;
       const originalPrompt = firstPromptText(item.prompt, fallbackPrompt);
       const revisedPrompt = firstPromptText(item.revised_prompt);
+      const modelValue = String(item.model || fallbackModel || '').trim();
       return {
         id: `image-${Date.now()}-${index}`,
         kind: 'image',
         url,
         displayUrl: url.startsWith('data:') ? dataURLToBlobURL(url) : url,
+        model: modelValue,
+        modelLabel: firstPromptText(
+          item.modelLabel,
+          item.model_label,
+          imageModelConfig(modelValue)?.label,
+          fallbackModelLabel,
+          modelValue,
+        ),
         prompt: originalPrompt,
         revisedPrompt,
         displayPrompt: firstPromptText(revisedPrompt, originalPrompt),
@@ -1478,7 +1551,12 @@ function getImageTaskProgress(response) {
   return match ? Number(match[0]) : 0;
 }
 
-function imageTaskToResult(task, fallbackPrompt = '') {
+function imageTaskToResult(
+  task,
+  fallbackPrompt = '',
+  fallbackModel = '',
+  fallbackModelLabel = '',
+) {
   if (!task) return null;
   const item = task.item || task.data?.item || {};
   const url =
@@ -1499,12 +1577,33 @@ function imageTaskToResult(task, fallbackPrompt = '') {
     item.revisedPrompt,
     item.revised_prompt,
   );
+  const modelValue = String(
+    item.model ||
+      task.model ||
+      task.data?.model ||
+      task.request?.model ||
+      task.data?.request?.model ||
+      fallbackModel ||
+      '',
+  ).trim();
   return {
     id: `image-${task.task_id}`,
     kind: 'image',
     url,
     displayUrl: item.displayUrl || item.cachedUrl || url,
     cachedUrl: item.cachedUrl || url,
+    model: modelValue,
+    modelLabel: firstPromptText(
+      item.modelLabel,
+      item.model_label,
+      task.modelLabel,
+      task.model_label,
+      task.data?.modelLabel,
+      task.data?.model_label,
+      imageModelConfig(modelValue)?.label,
+      fallbackModelLabel,
+      modelValue,
+    ),
     prompt: originalPrompt,
     revisedPrompt,
     displayPrompt: firstPromptText(revisedPrompt, originalPrompt),
@@ -1731,13 +1830,36 @@ function extractVideoURL(response) {
   return pickVideoURL(response);
 }
 
-function createVideoResult(response, url, taskId = '') {
+function createVideoResult(
+  response,
+  url,
+  taskId = '',
+  fallbackModel = '',
+  fallbackModelLabel = '',
+) {
   const id = taskId || getVideoTaskId(response) || `direct-${Date.now()}`;
+  const modelValue = String(
+    response?.model ||
+      response?.data?.model ||
+      response?.metadata?.model ||
+      fallbackModel ||
+      '',
+  ).trim();
   return {
     id: `video-${id}`,
     kind: 'video',
     url,
     displayUrl: url,
+    model: modelValue,
+    modelLabel: firstPromptText(
+      response?.modelLabel,
+      response?.model_label,
+      response?.data?.modelLabel,
+      response?.data?.model_label,
+      videoModelConfig(modelValue)?.label,
+      fallbackModelLabel,
+      modelValue,
+    ),
     taskId,
     status: 'completed',
     createdAt: Date.now(),
@@ -2439,6 +2561,11 @@ const MediaPlayground = () => {
     PUBLIC_SEEDANCE_VIDEO_MODELS.includes(currentModelId) ||
     models.length === 0 ||
     models.some((item) => item === currentModelId);
+  const isImageModelAllowed = (modelValue) => {
+    const config = imageModelConfig(modelValue);
+    if (!config) return false;
+    return !config.private || models.length === 0 || models.some((item) => item === modelValue);
+  };
   const effectiveGroup =
     mode === 'image' ? IMAGE_GENERATION_GROUP.value : group;
   const reversePromptGroup = IMAGE_GENERATION_GROUP.value;
@@ -3224,6 +3351,8 @@ const MediaPlayground = () => {
   async function submitImage() {
     let response;
     const submittedPrompt = firstPromptText(requestPayload.prompt, prompt);
+    const submittedModel = imageModel;
+    const submittedModelLabel = activeImageModel.label;
     if (imageWorkflow === 'edit') {
       const form = new FormData();
       Object.entries(requestPayload).forEach(([key, value]) => {
@@ -3253,13 +3382,23 @@ const MediaPlayground = () => {
     if (!taskId) throw new Error('图像任务提交成功但没有返回任务 ID。');
     setImageTaskLookup(taskId);
     setTaskMessage(`图像任务已提交：${taskId}，正在等待持久化结果...`);
-    const result = await pollImageTask(taskId, submittedPrompt);
+    const result = await pollImageTask(
+      taskId,
+      submittedPrompt,
+      submittedModel,
+      submittedModelLabel,
+    );
     if (!result) return;
     setResults((prev) => [result, ...prev]);
     Toast.success('图像已生成，请立即下载保存。');
   }
 
-  async function pollImageTask(taskId, submittedPrompt = '') {
+  async function pollImageTask(
+    taskId,
+    submittedPrompt = '',
+    submittedModel = '',
+    submittedModelLabel = '',
+  ) {
     const startedAt = Date.now();
     const deadline = Date.now() + 30 * 60 * 1000;
     let longWaitNotified = false;
@@ -3295,7 +3434,12 @@ const MediaPlayground = () => {
         }
         setTaskMessage(`图像任务 ${res.data.data.task_id}：${status}，进度 ${progress}%${waitSuffix}`);
         if (status === 'completed') {
-          const result = imageTaskToResult(res.data.data, submittedPrompt);
+          const result = imageTaskToResult(
+            res.data.data,
+            submittedPrompt,
+            submittedModel,
+            submittedModelLabel,
+          );
           if (result) return result;
           throw new Error('图像任务完成但没有返回持久化图片。');
         }
@@ -3399,7 +3543,15 @@ const MediaPlayground = () => {
           }
         }
         setTaskMessage(`视频任务 ${status}，进度 ${progress}%${waitSuffix}`);
-        if (url) return createVideoResult(res.data, url, taskId);
+        if (url) {
+          return createVideoResult(
+            res.data,
+            url,
+            taskId,
+            videoModel,
+            activeVideoModel.label,
+          );
+        }
         if (status === 'failed')
           throw new Error(extractVideoFailureReason(res.data) || '视频任务失败。');
         if (status === 'completed') {
@@ -3443,7 +3595,13 @@ const MediaPlayground = () => {
     if (res.data?.error?.message) throw new Error(res.data.error.message);
     const directUrl = extractVideoURL(res.data);
     if (directUrl) {
-      const result = createVideoResult(res.data, directUrl);
+      const result = createVideoResult(
+        res.data,
+        directUrl,
+        '',
+        videoModel,
+        activeVideoModel.label,
+      );
       const cached = await cacheMedia(result);
       setResults((prev) => [cached, ...prev]);
       Toast.success('视频已生成，请立即下载保存。');
@@ -3551,6 +3709,23 @@ const MediaPlayground = () => {
     });
     return sorted;
   }, [results, resultSort]);
+  const inspectorResult = useMemo(
+    () =>
+      visibleResults.find((item) => selectedResultIds.includes(item.id)) ||
+      visibleResults[0] ||
+      null,
+    [selectedResultIds, visibleResults],
+  );
+  const inspectorResultPreview = inspectorResult
+    ? getPreviewURLs(inspectorResult)[0] || ''
+    : '';
+  const inspectorResultPrompt = inspectorResult
+    ? firstPromptText(
+      inspectorResult.displayPrompt,
+      inspectorResult.revisedPrompt,
+      inspectorResult.prompt,
+    )
+    : '';
   const allVisibleResultsSelected =
     visibleResults.length > 0 &&
     visibleResults.every((item) => selectedResultIds.includes(item.id));
@@ -3646,22 +3821,83 @@ const MediaPlayground = () => {
     return true;
   }
 
+  async function loadResultImageModelValue(result) {
+    const sourceModelValue = resultImageModelValue(result);
+    if (sourceModelValue) return sourceModelValue;
+    if (!result?.taskId) return '';
+    try {
+      const res = await API.get(`/pg/images/tasks/${encodeURIComponent(result.taskId)}`, {
+        skipErrorHandler: true,
+        disableDuplicate: true,
+      });
+      const task = res.data?.data || {};
+      const item = task.item || task.data?.item || {};
+      const modelValue = String(
+        item.model ||
+          task.model ||
+          task.data?.model ||
+          task.request?.model ||
+          task.data?.request?.model ||
+          '',
+      ).trim();
+      if (!modelValue) return '';
+      const modelLabel = imageModelConfig(modelValue)?.label || modelValue;
+      setResults((current) =>
+        current.map((item) =>
+          item.id === result.id
+            ? { ...item, model: modelValue, modelLabel }
+            : item,
+        ),
+      );
+      return modelValue;
+    } catch (error) {
+      return '';
+    }
+  }
+
+  function activateImageEditWorkflow() {
+    setCreativeTask('image-edit');
+    setMode('image');
+    setImageWorkflow('edit');
+  }
+
   async function reuseResultMedia(result, action) {
     try {
-      if ((action === 'edit' || action === 'reference') && !activeImageModel.edit) {
-        Toast.warning('当前模型不支持图片编辑，请先更换模型。');
-        return;
+      const sourceModelValue = resultImageModelValue(result);
+      const hydratedSourceModelValue =
+        sourceModelValue || (action === 'edit' || action === 'reference'
+          ? await loadResultImageModelValue(result)
+          : '');
+      const sourceModel = imageModelConfig(hydratedSourceModelValue);
+      const targetImageModel = sourceModel || activeImageModel;
+      if (action === 'edit' || action === 'reference') {
+        if (!hydratedSourceModelValue) {
+          Toast.warning('结果缺少原模型标记，请先用任务 ID 查询或重新选择原模型后再提交。');
+          return;
+        }
+        if (!sourceModel || !isImageModelAllowed(hydratedSourceModelValue)) {
+          Toast.warning('原结果模型当前不可用，请先手动选择可用模型。');
+          return;
+        }
+        if (!targetImageModel.edit) {
+          Toast.warning('当前模型不支持图片编辑，请先更换模型。');
+          return;
+        }
+        if (imageModel !== hydratedSourceModelValue) {
+          setImageModel(hydratedSourceModelValue);
+          Toast.info(`已切回原结果模型：${sourceModel.label}`);
+        }
       }
       const file = await resultMediaFile(result, action);
       if (action === 'edit') {
-        selectCreativeTask('image-edit');
+        activateImageEditWorkflow();
         if (appendImageReferenceFile(file, '已放入编辑源图。')) {
           scrollWorkbenchTo('mp-assets-workbench');
         }
         return;
       }
       if (action === 'reference') {
-        selectCreativeTask('image-edit');
+        activateImageEditWorkflow();
         if (appendImageReferenceFile(file, '已作为图生图参考放入编辑源图。')) {
           scrollWorkbenchTo('mp-assets-workbench');
         }
@@ -3738,7 +3974,7 @@ const MediaPlayground = () => {
       id: item.id,
       title: item.kind === 'image' ? '图片生成完成' : '视频生成完成',
       kind: item.kind,
-      model: item.kind === 'image' ? activeImageModel.label : activeVideoModel.label,
+      model: resultModelLabel(item, activeImageModel, activeVideoModel),
       status: 'completed',
       statusText: '已完成',
       createdAt: item.createdAt,
@@ -3843,6 +4079,48 @@ const MediaPlayground = () => {
         selectCreativeTask('image-edit');
         setPrompt(PROMPT_PRESETS[1]?.value || prompt);
       },
+    },
+  ];
+  const flowSteps = [
+    {
+      key: 'task',
+      number: '01',
+      title: '任务',
+      caption: workflowLabel,
+      active: false,
+      onClick: () => scrollWorkbenchTo('mp-task-workbench'),
+    },
+    {
+      key: 'prompt',
+      number: '02',
+      title: creativeTask === 'reverse' ? '反推' : '提示',
+      caption: creativeTask === 'reverse' ? '上传反推图' : '输入创作描述',
+      active: !submitting && !videoPolling && creativeTask !== 'reverse',
+      onClick: () => promptTextareaRef.current?.focus?.(),
+    },
+    {
+      key: 'params',
+      number: '03',
+      title: '参数',
+      caption: '设置生成参数',
+      active: false,
+      onClick: () => scrollWorkbenchTo('mp-parameter-workbench'),
+    },
+    {
+      key: 'generate',
+      number: '04',
+      title: '生成',
+      caption: submitting || videoPolling ? '任务运行中' : 'AI 生成图片',
+      active: submitting || videoPolling,
+      onClick: () => scrollWorkbenchTo('mp-parameter-workbench'),
+    },
+    {
+      key: 'result',
+      number: '05',
+      title: '结果',
+      caption: results.length ? '查看与管理' : '等待作品',
+      active: !submitting && !videoPolling && results.length > 0,
+      onClick: () => scrollWorkbenchTo('mp-results-workbench'),
     },
   ];
 
@@ -3978,7 +4256,22 @@ const MediaPlayground = () => {
           </aside>
 
           <main className='mp-canvas-panel'>
-            <section className='mp-mode-panel'>
+            <section className='mp-flow-steps' aria-label='媒体创作流程'>
+              {flowSteps.map((step) => (
+                <button
+                  key={step.key}
+                  type='button'
+                  className={step.active ? 'mp-flow-step is-active' : 'mp-flow-step'}
+                  onClick={step.onClick}
+                >
+                  <span>{step.number}</span>
+                  <strong>{step.title}</strong>
+                  <em>{step.caption}</em>
+                </button>
+              ))}
+            </section>
+
+            <section id='mp-task-workbench' className='mp-mode-panel'>
               <div className='mp-task-type-tabs' aria-label='创作类型'>
                 {[
                   { key: 'image-generate', label: '图片生成' },
@@ -4276,7 +4569,7 @@ const MediaPlayground = () => {
               </section>
             ) : null}
 
-              <div className='mp-parameter-panel'>
+              <div id='mp-parameter-workbench' className='mp-parameter-panel'>
                 <div className='mp-parameter-head'>
                   <SectionTitle meta='Control'>参数控制台</SectionTitle>
                   <span>{workflowLabel} · {outputSpec}</span>
@@ -4796,6 +5089,115 @@ const MediaPlayground = () => {
                 <div className='mp-queue-empty'>
                   <IconUpload />
                   <span>还没有队列任务。</span>
+                </div>
+              )}
+            </div>
+
+            <div className='mp-queue-card mp-result-inspector-card'>
+              <div className='mp-queue-card-head'>
+                <SectionTitle meta='Detail'>结果详情</SectionTitle>
+                {inspectorResult ? (
+                  <Tag color={inspectorResult.cacheStatus === 'failed' ? 'orange' : 'green'}>
+                    {inspectorResult.cacheStatus === 'failed' ? '原始链接' : '已完成'}
+                  </Tag>
+                ) : null}
+              </div>
+              {inspectorResult ? (
+                <div className='mp-result-inspector'>
+                  <strong>{inspectorResult.kind === 'image' ? '图片作品' : '视频作品'}</strong>
+                  <div className='mp-result-inspector-preview'>
+                    {inspectorResultPreview && inspectorResult.kind === 'image' ? (
+                      <img src={inspectorResultPreview} alt='结果详情预览' />
+                    ) : inspectorResultPreview ? (
+                      <video src={inspectorResultPreview} muted playsInline preload='metadata' />
+                    ) : (
+                      <div className='mp-result-inspector-empty'>
+                        <IconEyeOpened />
+                        <span>预览暂不可用</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className='mp-result-inspector-meta'>
+                    <div>
+                      <span>完成时间</span>
+                      <strong>{formatResultTime(inspectorResult.createdAt)}</strong>
+                    </div>
+                    <div>
+                      <span>模型</span>
+                      <strong>{resultModelLabel(inspectorResult, activeImageModel, activeVideoModel)}</strong>
+                    </div>
+                    <div>
+                      <span>规格</span>
+                      <strong>{inspectorResult.kind === 'image' ? imagePixelLabel : outputSpec}</strong>
+                    </div>
+                    <div>
+                      <span>格式</span>
+                      <strong>{inspectorResult.kind === 'image' ? formatLabel : 'MP4 / URL'}</strong>
+                    </div>
+                  </div>
+                  {inspectorResultPrompt ? (
+                    <p className='mp-result-inspector-prompt'>{inspectorResultPrompt}</p>
+                  ) : null}
+                  <div className='mp-result-inspector-actions'>
+                    {inspectorResult.kind === 'image' ? (
+                      <>
+                        <Button size='small' onClick={() => reuseResultMedia(inspectorResult, 'reference')}>
+                          作为参考图
+                        </Button>
+                        <Button size='small' onClick={() => reuseResultMedia(inspectorResult, 'video')}>
+                          生成视频
+                        </Button>
+                        <Button size='small' onClick={() => reuseResultMedia(inspectorResult, 'reverse')}>
+                          图像反推
+                        </Button>
+                        <Button size='small' onClick={() => reuseResultMedia(inspectorResult, 'edit')}>
+                          再次编辑
+                        </Button>
+                      </>
+                    ) : (
+                      <Button size='small' onClick={() => reuseResultMedia(inspectorResult, 'video')}>
+                        作为视频参考
+                      </Button>
+                    )}
+                    <Button
+                      size='small'
+                      icon={<IconDownload />}
+                      onClick={() =>
+                        downloadURL(
+                          inspectorResultPreview || normalizeURL(inspectorResult.url),
+                          inspectorResult.kind === 'image'
+                            ? 'xingren-image.png'
+                            : 'xingren-video.mp4',
+                        )
+                      }
+                    >
+                      下载
+                    </Button>
+                    <Button
+                      size='small'
+                      icon={<IconCopy />}
+                      onClick={async () => {
+                        const ok = await copy(inspectorResultPreview || normalizeURL(inspectorResult.url));
+                        if (ok) Toast.success('链接已复制');
+                      }}
+                    >
+                      复制
+                    </Button>
+                  </div>
+                  <Button
+                    size='small'
+                    theme='borderless'
+                    type='danger'
+                    icon={<IconDelete />}
+                    onClick={() => handleRemoveResult(inspectorResult.id)}
+                  >
+                    删除
+                  </Button>
+                </div>
+              ) : (
+                <div className='mp-queue-empty'>
+                  <IconImage />
+                  <span>生成或选择一个作品后，这里会显示详情与下一步操作。</span>
                 </div>
               )}
             </div>
