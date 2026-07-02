@@ -44,7 +44,7 @@ function main() {
 
   errors.push(
     ...missingMarkerErrors('image result mapping', classic, [
-      "function extractImageResults(response, fallbackPrompt = '')",
+      'function extractImageResults(',
       'const originalPrompt = firstPromptText(item.prompt, fallbackPrompt)',
       'displayPrompt: firstPromptText(revisedPrompt, originalPrompt)',
     ]),
@@ -52,7 +52,7 @@ function main() {
 
   errors.push(
     ...missingMarkerErrors('image task result mapping', classic, [
-      "function imageTaskToResult(task, fallbackPrompt = '')",
+      'function imageTaskToResult(',
       'item.prompt',
       'task.prompt',
       'task.data?.prompt',
@@ -62,11 +62,54 @@ function main() {
   )
 
   errors.push(
+    ...missingMarkerErrors('image result model mapping', classic, [
+      'function imageModelConfig(modelValue)',
+      'function resultImageModelValue(result)',
+      'function resultModelLabel(result, fallbackImageModel, fallbackVideoModel)',
+      'fallbackModel = \'\'',
+      'item.model ||',
+      'task.model ||',
+      'task.data?.model ||',
+      'model: modelValue,',
+      'modelLabel: firstPromptText(',
+    ]),
+  )
+
+  errors.push(
     ...missingMarkerErrors('submit prompt snapshot', classic, [
-      'const submittedPrompt = firstPromptText(requestPayload.prompt, prompt)',
-      'pollImageTask(taskId, submittedPrompt)',
-      "async function pollImageTask(taskId, submittedPrompt = '')",
-      'imageTaskToResult(res.data.data, submittedPrompt)',
+      'const imageEditModelLockRef = useRef(\'\')',
+      'const lockedEditModel =',
+      'const effectiveRequestPayload =',
+      'Object.entries(effectiveRequestPayload)',
+      'const submittedPrompt = firstPromptText(effectiveRequestPayload.prompt, prompt)',
+      'const submittedModel = effectiveRequestPayload.model || imageModel',
+      'const submittedModelLabel =',
+      'pollImageTask(',
+      'async function pollImageTask(',
+      'imageTaskToResult(',
+      'submittedModel',
+      'submittedModelLabel',
+    ]),
+  )
+
+  errors.push(
+    ...missingMarkerErrors('result model reuse', classic, [
+      'const isImageModelAllowed = (modelValue) =>',
+      'async function loadResultImageModelValue(result)',
+      'const sourceModelValue = resultImageModelValue(result)',
+      'await loadResultImageModelValue(result)',
+      '原结果模型当前不可用',
+      'imageEditModelLockRef.current = hydratedSourceModelValue',
+      'setImageModel(hydratedSourceModelValue)',
+      '已切回原结果模型',
+      'activateImageEditWorkflow()',
+    ]),
+  )
+
+  errors.push(
+    ...missingMarkerErrors('result model display', classic, [
+      'model: resultModelLabel(item, activeImageModel, activeVideoModel)',
+      'resultModelLabel(inspectorResult, activeImageModel, activeVideoModel)',
     ]),
   )
 
