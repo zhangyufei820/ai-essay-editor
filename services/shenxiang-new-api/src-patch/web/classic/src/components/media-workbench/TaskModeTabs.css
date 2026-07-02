@@ -1,0 +1,46 @@
+.mp-task-mode-tabs {
+  display: flex;
+  gap: var(--mp-spacing-sm);
+  padding: 4px;
+  background: var(--mp-bg-card);
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: var(--mp-radius-lg);
+  margin-bottom: var(--mp-spacing-xl);
+}
+
+.mp-task-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--mp-spacing-sm);
+  padding: var(--mp-spacing-md) var(--mp-spacing-lg);
+  background: transparent;
+  border: none;
+  border-radius: var(--mp-radius-md);
+  color: var(--mp-text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--mp-transition-fast);
+}
+
+.mp-task-tab:hover {
+  background: var(--mp-bg-card-hover);
+  color: var(--mp-text-primary);
+}
+
+.mp-task-tab.active {
+  background: var(--mp-accent-primary);
+  color: #FFFFFF;
+  font-weight: 600;
+}
+
+.mp-task-tab.active:hover {
+  background: var(--mp-accent-primary-hover);
+}
+
+.mp-task-tab svg {
+  width: 16px;
+  height: 16px;
+}

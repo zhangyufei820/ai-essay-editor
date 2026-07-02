@@ -1,0 +1,75 @@
+.mp-reverse-prompt-panel {
+  background: var(--mp-bg-card);
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: var(--mp-radius-lg);
+  padding: var(--mp-spacing-xl);
+  margin-bottom: var(--mp-spacing-xl);
+}
+
+.mp-reverse-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--mp-spacing-xl);
+  margin-bottom: var(--mp-spacing-lg);
+}
+
+.mp-reverse-body {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: var(--mp-spacing-xl);
+}
+
+.mp-reverse-upload-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mp-spacing-md);
+}
+
+.mp-reverse-output-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mp-spacing-md);
+}
+
+.mp-reverse-textarea {
+  width: 100%;
+  background: var(--mp-bg-input) !important;
+  border: 1px solid var(--mp-border-subtle) !important;
+  border-radius: var(--mp-radius-md) !important;
+  color: var(--mp-text-primary) !important;
+  font-size: 14px !important;
+  line-height: 1.6 !important;
+}
+
+.mp-reverse-textarea:hover:not(:disabled) {
+  background: var(--mp-bg-input-hover) !important;
+  border-color: var(--mp-border-strong) !important;
+}
+
+.mp-reverse-textarea:focus {
+  border-color: var(--mp-border-focus) !important;
+  box-shadow: 0 0 0 2px var(--mp-accent-soft) !important;
+}
+
+.mp-reverse-actions {
+  display: flex;
+  gap: var(--mp-spacing-sm);
+  flex-wrap: wrap;
+}
+
+.mp-reverse-message {
+  padding: var(--mp-spacing-md);
+  background: var(--mp-bg-elevated);
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: var(--mp-radius-md);
+  font-size: 13px;
+  color: var(--mp-text-secondary);
+  line-height: 1.5;
+}
+
+@media (max-width: 1024px) {
+  .mp-reverse-body {
+    grid-template-columns: 1fr;
+  }
+}

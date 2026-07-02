@@ -1,13 +1,22 @@
+/* 导入统一的 Design Tokens */
+@import '../../styles/media-tokens.css';
+
 .mp-page {
   min-height: calc(100vh - 64px);
   padding: 34px 32px 48px;
-  color: #eef7f2;
+  color: var(--mp-text-primary);
+  background: var(--mp-bg-page);
+  overflow-x: hidden;
+}
+
+/* 暗色模式保持原有渐变 */
+html.dark .mp-page,
+body[theme-mode='dark'] .mp-page {
   background:
     linear-gradient(115deg, rgba(37, 99, 235, 0.1), transparent 28%),
     linear-gradient(250deg, rgba(226, 186, 92, 0.08), transparent 36%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 24%),
-    #070a0d;
-  overflow-x: hidden;
+    var(--mp-bg-page);
 }
 
 .mp-page * {

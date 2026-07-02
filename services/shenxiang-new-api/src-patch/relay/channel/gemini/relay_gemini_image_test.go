@@ -225,6 +225,47 @@ func TestGeminiImageHandlerConvertsInlineDataCandidates(t *testing.T) {
 	require.Equal(t, "ZmFrZS1wbmc=", imageResponse.Data[0].B64Json)
 }
 
+func TestGeminiImageHandlerConvertsMarkdownImageURLCandidates(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/pg/images/generations", nil)
+
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+		Body: io.NopCloser(strings.NewReader(`{
+			"candidates": [
+				{
+					"content": {
+						"parts": [
+							{"text": "![image](https://file2.aitohumanize.com/file/example-image.png)"}
+						]
+					}
+				}
+			],
+			"usageMetadata": {
+				"promptTokenCount": 100,
+				"candidatesTokenCount": 20,
+				"totalTokenCount": 120
+			}
+		}`)),
+	}
+
+	usage, apiErr := GeminiImageHandler(ctx, &relaycommon.RelayInfo{
+		ChannelMeta: &relaycommon.ChannelMeta{UpstreamModelName: "banana-2"},
+	}, resp)
+	require.Nil(t, apiErr)
+	require.NotNil(t, usage)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	var imageResponse dto.ImageResponse
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &imageResponse))
+	require.Len(t, imageResponse.Data, 1)
+	require.Equal(t, "https://file2.aitohumanize.com/file/example-image.png", imageResponse.Data[0].Url)
+	require.Empty(t, imageResponse.Data[0].B64Json)
+}
+
 func TestGeminiImagePreviewRelayUsesImageHandler(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	recorder := httptest.NewRecorder()

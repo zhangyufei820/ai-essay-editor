@@ -1,0 +1,154 @@
+/* 导入新的 Design Tokens */
+@import '../../styles/media-tokens.css';
+
+/*
+  MediaPlayground 重构说明：
+
+  旧的硬编码颜色值正在逐步迁移到 CSS 变量。
+  新组件使用 var(--mp-*) 变量系统，支持完整的浅色/深色模式。
+
+  迁移优先级：
+  1. 背景色 → var(--mp-bg-*)
+  2. 文字颜色 → var(--mp-text-*)
+  3. 边框 → var(--mp-border-*)
+  4. 强调色 → var(--mp-accent-*)
+*/
+
+/* 页面容器 - 使用新的 token 系统 */
+.mp-page {
+  min-height: calc(100vh - 64px);
+  padding: 34px 32px 48px;
+  color: var(--mp-text-primary);
+  background: var(--mp-bg-page);
+  overflow-x: hidden;
+}
+
+/* 保持原有渐变效果（暗色模式） */
+html.dark .mp-page,
+body[theme-mode='dark'] .mp-page {
+  background:
+    linear-gradient(115deg, rgba(37, 99, 235, 0.1), transparent 28%),
+    linear-gradient(250deg, rgba(226, 186, 92, 0.08), transparent 36%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 24%),
+    var(--mp-bg-page);
+}
+
+/* 浅色模式的干净背景 */
+html:not(.dark) .mp-page,
+body[theme-mode='light'] .mp-page {
+  background: var(--mp-bg-page);
+}
+
+.mp-page * {
+  box-sizing: border-box;
+}
+
+.mp-shell {
+  width: min(1720px, 100%);
+  margin: 0 auto;
+}
+
+/* Hero 区域 - 迁移到新的 token */
+.mp-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 520px);
+  gap: 28px;
+  align-items: end;
+  margin-bottom: 22px;
+  padding: 2px 4px 0;
+}
+
+.mp-hero-kicker {
+  border-radius: 999px !important;
+  background: var(--mp-accent-soft) !important;
+  border-color: var(--mp-border-strong) !important;
+}
+
+.mp-hero h2 {
+  margin: 14px 0 8px;
+  color: var(--mp-text-primary);
+  font-size: clamp(30px, 3vw, 50px);
+  line-height: 1.02;
+  letter-spacing: 0;
+}
+
+.mp-hero p,
+.mp-prompt-card .semi-typography,
+.mp-gallery-head .semi-typography,
+.mp-empty-canvas .semi-typography,
+.mp-inspector .semi-typography {
+  color: var(--mp-text-secondary) !important;
+}
+
+/* 统计信息 */
+.mp-hero-stats {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+/* 阶段指示条 */
+.mp-stage-strip {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 28px;
+  padding: 12px 16px;
+  background: var(--mp-bg-card);
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: var(--mp-radius-lg);
+  overflow-x: auto;
+}
+
+.mp-stage-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  background: var(--mp-bg-elevated);
+  border-radius: var(--mp-radius-md);
+  white-space: nowrap;
+  font-size: 13px;
+  border: 1px solid var(--mp-border-subtle);
+}
+
+.mp-stage-item span {
+  color: var(--mp-text-muted);
+  font-family: var(--mp-font-mono);
+}
+
+.mp-stage-item strong {
+  color: var(--mp-text-primary);
+  font-weight: 600;
+}
+
+.mp-stage-item em {
+  color: var(--mp-text-secondary);
+  font-style: normal;
+}
+
+/* 工作台布局 */
+.mp-workbench {
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+  gap: 24px;
+  margin-bottom: 32px;
+}
+
+/* 面板样式 - 使用新的 token */
+.mp-panel {
+  background: var(--mp-bg-card);
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: var(--mp-radius-lg);
+  padding: 24px;
+}
+
+.mp-panel-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--mp-text-muted);
+  margin-bottom: 16px;
+}
+
+/* 继续使用原有的 CSS，但逐步迁移颜色值... */

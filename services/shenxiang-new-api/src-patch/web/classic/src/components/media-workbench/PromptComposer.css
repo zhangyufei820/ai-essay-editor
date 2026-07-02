@@ -1,0 +1,89 @@
+.mp-prompt-composer {
+  background: var(--mp-bg-card);
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: var(--mp-radius-lg);
+  padding: var(--mp-spacing-xl);
+  margin-bottom: var(--mp-spacing-xl);
+}
+
+.mp-prompt-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--mp-spacing-xl);
+  margin-bottom: var(--mp-spacing-lg);
+}
+
+.mp-section-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--mp-text-primary);
+  margin: 0 0 4px 0;
+  display: flex;
+  align-items: center;
+  gap: var(--mp-spacing-sm);
+}
+
+.mp-section-meta {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--mp-text-muted);
+  font-family: var(--mp-font-mono);
+}
+
+.mp-prompt-input-container {
+  position: relative;
+  margin-bottom: var(--mp-spacing-md);
+}
+
+.mp-prompt-textarea {
+  width: 100%;
+  background: var(--mp-bg-input) !important;
+  border: 1px solid var(--mp-border-subtle) !important;
+  border-radius: var(--mp-radius-md) !important;
+  color: var(--mp-text-primary) !important;
+  font-size: 14px !important;
+  line-height: 1.6 !important;
+  transition: all var(--mp-transition-fast) !important;
+}
+
+.mp-prompt-textarea:hover {
+  background: var(--mp-bg-input-hover) !important;
+  border-color: var(--mp-border-strong) !important;
+}
+
+.mp-prompt-textarea:focus {
+  background: var(--mp-bg-input) !important;
+  border-color: var(--mp-border-focus) !important;
+  box-shadow: 0 0 0 2px var(--mp-accent-soft) !important;
+}
+
+.mp-prompt-actions {
+  position: absolute;
+  bottom: var(--mp-spacing-sm);
+  right: var(--mp-spacing-sm);
+  display: flex;
+  gap: 4px;
+  background: var(--mp-bg-card);
+  border-radius: var(--mp-radius-sm);
+  padding: 2px;
+  box-shadow: var(--mp-shadow-card);
+}
+
+.mp-negative-prompt-input {
+  width: 100%;
+  background: var(--mp-bg-input) !important;
+  border: 1px solid var(--mp-border-subtle) !important;
+  border-radius: var(--mp-radius-md) !important;
+  color: var(--mp-text-primary) !important;
+}
+
+.mp-negative-prompt-input:hover {
+  background: var(--mp-bg-input-hover) !important;
+  border-color: var(--mp-border-strong) !important;
+}
+
+.mp-negative-prompt-input:focus {
+  border-color: var(--mp-border-focus) !important;
+  box-shadow: 0 0 0 2px var(--mp-accent-soft) !important;
+}

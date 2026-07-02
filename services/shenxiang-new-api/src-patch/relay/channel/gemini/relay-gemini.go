@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -60,6 +61,9 @@ const (
 	flash25LiteMinBudget = 512
 	flash25LiteMaxBudget = 24576
 )
+
+var geminiMarkdownImagePattern = regexp.MustCompile(`!\[[^\]]*\]\((https?://[^\s)]+)\)`)
+var geminiPlainImageURLPattern = regexp.MustCompile(`https?://[^\s<>"')]+`)
 
 func isNew25ProModel(modelName string) bool {
 	return strings.HasPrefix(modelName, "gemini-2.5-pro") &&
@@ -1682,23 +1686,64 @@ func extractGeminiInlineImageData(response dto.GeminiChatResponse) []dto.ImageDa
 	images := make([]dto.ImageData, 0, len(response.Candidates))
 	for _, candidate := range response.Candidates {
 		for _, part := range candidate.Content.Parts {
-			if part.InlineData == nil {
-				continue
+			if part.InlineData != nil {
+				mimeType := strings.ToLower(strings.TrimSpace(part.InlineData.MimeType))
+				if strings.HasPrefix(mimeType, "image/") {
+					imageData := strings.TrimSpace(part.InlineData.Data)
+					if imageData != "" {
+						images = append(images, dto.ImageData{
+							B64Json: imageData,
+						})
+					}
+				}
 			}
-			mimeType := strings.ToLower(strings.TrimSpace(part.InlineData.MimeType))
-			if !strings.HasPrefix(mimeType, "image/") {
-				continue
+			for _, imageURL := range extractGeminiImageURLsFromText(part.Text) {
+				images = append(images, dto.ImageData{
+					Url: imageURL,
+				})
 			}
-			imageData := strings.TrimSpace(part.InlineData.Data)
-			if imageData == "" {
-				continue
-			}
-			images = append(images, dto.ImageData{
-				B64Json: imageData,
-			})
 		}
 	}
 	return images
+}
+
+func extractGeminiImageURLsFromText(text string) []string {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return nil
+	}
+	seen := make(map[string]struct{})
+	urls := make([]string, 0, 1)
+	appendURL := func(raw string) {
+		raw = strings.TrimRight(strings.TrimSpace(raw), ".,;:!?，。；：！？")
+		if raw == "" || !isGeminiImageResultURL(raw) {
+			return
+		}
+		if _, exists := seen[raw]; exists {
+			return
+		}
+		seen[raw] = struct{}{}
+		urls = append(urls, raw)
+	}
+	for _, match := range geminiMarkdownImagePattern.FindAllStringSubmatch(text, -1) {
+		if len(match) > 1 {
+			appendURL(match[1])
+		}
+	}
+	for _, match := range geminiPlainImageURLPattern.FindAllString(text, -1) {
+		appendURL(match)
+	}
+	return urls
+}
+
+func isGeminiImageResultURL(rawURL string) bool {
+	lower := strings.ToLower(rawURL)
+	for _, ext := range []string{".png", ".jpg", ".jpeg", ".webp", ".gif"} {
+		if strings.Contains(lower, ext) {
+			return true
+		}
+	}
+	return strings.HasPrefix(lower, "data:image/")
 }
 
 func geminiImageUsageFromImageCount(generatedImages int) *dto.Usage {

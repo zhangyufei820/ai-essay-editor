@@ -1,0 +1,62 @@
+.mp-workbench-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: var(--mp-bg-page);
+  color: var(--mp-text-primary);
+}
+
+.mp-shell-top {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--mp-bg-shell);
+  border-bottom: 1px solid var(--mp-border-subtle);
+  backdrop-filter: blur(8px);
+}
+
+.mp-shell-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.mp-shell-sidebar {
+  width: 280px;
+  flex-shrink: 0;
+  background: var(--mp-bg-shell);
+  border-right: 1px solid var(--mp-border-subtle);
+  overflow-y: auto;
+  padding: var(--mp-spacing-lg);
+}
+
+.mp-shell-workspace {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--mp-spacing-xl);
+  background: var(--mp-bg-page);
+}
+
+.mp-shell-right {
+  width: 320px;
+  flex-shrink: 0;
+  background: var(--mp-bg-shell);
+  border-left: 1px solid var(--mp-border-subtle);
+  overflow-y: auto;
+  padding: var(--mp-spacing-lg);
+}
+
+@media (max-width: 1280px) {
+  .mp-shell-right {
+    width: 280px;
+  }
+}
+
+@media (max-width: 1024px) {
+  .mp-shell-sidebar {
+    width: 240px;
+  }
+  .mp-shell-right {
+    display: none;
+  }
+}
