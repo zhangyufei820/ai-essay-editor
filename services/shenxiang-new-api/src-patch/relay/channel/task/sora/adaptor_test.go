@@ -1,6 +1,7 @@
 package sora
 
 import (
+	"fmt"
 	"net/http"
 	"testing"
 
@@ -324,7 +325,7 @@ func TestSeedanceOfficialReferencesBuildRequestURLUsesVideosEndpoint(t *testing.
 
 func TestMoonApiXSeedanceBuildRequestURLUsesVideosEndpoint(t *testing.T) {
 	adaptor := TaskAdaptor{baseURL: "https://moonapix.test"}
-	for _, model := range []string{"seedance-2.0-kz-fast", "seedance-2.0-cl-fast", "seedance-2.0-cl", "seedance-2.0-cl-mini"} {
+	for _, model := range []string{"seedance-2.0", "seedance-2.0-kz", "seedance-2.0-kz-fast", "seedance-2.0-cl-fast", "seedance-2.0-cl", "seedance-2.0-cl-mini"} {
 		url, err := adaptor.BuildRequestURL(&relaycommon.RelayInfo{
 			ChannelMeta:   &relaycommon.ChannelMeta{UpstreamModelName: model},
 			TaskRelayInfo: &relaycommon.TaskRelayInfo{},
@@ -335,6 +336,90 @@ func TestMoonApiXSeedanceBuildRequestURLUsesVideosEndpoint(t *testing.T) {
 		if url != "https://moonapix.test/v1/videos" {
 			t.Fatalf("BuildRequestURL(%s) = %q", model, url)
 		}
+	}
+}
+
+func TestNormalizeMoonApiXSeedanceAliasKeepsKZMultimodalReferences(t *testing.T) {
+	body := map[string]interface{}{
+		"model":    "seedance-2.0",
+		"prompt":   "让 @hero 按 @beat 的节奏挥手，参考 @clip 的镜头。",
+		"duration": float64(15),
+		"ratio":    "16:9",
+		"references": []interface{}{
+			map[string]interface{}{"media_type": "image", "role": "reference_image", "url": "https://cdn.test/hero.png", "alias": "hero"},
+			map[string]interface{}{"media_type": "video", "role": "reference_video", "url": "https://cdn.test/clip.mp4", "alias": "clip"},
+			map[string]interface{}{"media_type": "audio", "role": "reference_audio", "url": "https://cdn.test/beat.mp3", "alias": "beat"},
+		},
+	}
+
+	got := normalizeMoonApiXSeedanceVideoRequestBody(body)
+	if got["model"] != "seedance-2.0" {
+		t.Fatalf("model = %#v, want seedance-2.0", got["model"])
+	}
+	if got["prompt"] != "让 @hero 按 @beat 的节奏挥手，参考 @clip 的镜头。" {
+		t.Fatalf("prompt = %#v, want alias mentions preserved", got["prompt"])
+	}
+	refs, ok := got["references"].([]map[string]interface{})
+	if !ok || len(refs) != 3 {
+		t.Fatalf("references = %#v, want image/video/audio", got["references"])
+	}
+	if refs[0]["media_type"] != "image" || refs[0]["alias"] != "hero" {
+		t.Fatalf("image reference = %#v", refs[0])
+	}
+	if refs[1]["media_type"] != "video" || refs[1]["alias"] != "clip" {
+		t.Fatalf("video reference = %#v", refs[1])
+	}
+	if refs[2]["media_type"] != "audio" || refs[2]["alias"] != "beat" {
+		t.Fatalf("audio reference = %#v", refs[2])
+	}
+	if got["video_url"] != "https://cdn.test/clip.mp4" || got["reference_video_url"] != "https://cdn.test/clip.mp4" {
+		t.Fatalf("video aliases not set from video reference: %#v", got)
+	}
+	images, ok := got["images"].([]map[string]interface{})
+	if !ok || len(images) != 1 {
+		t.Fatalf("images = %#v, want one image compatibility item", got["images"])
+	}
+}
+
+func TestNormalizeMoonApiXSeedanceAliasLimitsKZReferences(t *testing.T) {
+	references := make([]interface{}, 0, 20)
+	for i := 0; i < 12; i++ {
+		references = append(references, map[string]interface{}{"media_type": "image", "url": fmt.Sprintf("https://cdn.test/image-%02d.png", i)})
+	}
+	for i := 0; i < 4; i++ {
+		references = append(references, map[string]interface{}{"media_type": "video", "url": fmt.Sprintf("https://cdn.test/video-%02d.mp4", i)})
+	}
+	for i := 0; i < 4; i++ {
+		references = append(references, map[string]interface{}{"media_type": "audio", "url": fmt.Sprintf("https://cdn.test/audio-%02d.mp3", i)})
+	}
+	got := normalizeMoonApiXSeedanceVideoRequestBody(map[string]interface{}{
+		"model":      "seedance-2.0",
+		"prompt":     "limit references",
+		"references": references,
+	})
+	refs, ok := got["references"].([]map[string]interface{})
+	if !ok {
+		t.Fatalf("references = %#v", got["references"])
+	}
+	counts := map[string]int{}
+	for _, ref := range refs {
+		counts[ref["media_type"].(string)]++
+	}
+	if counts["image"] != 9 || counts["video"] != 3 || counts["audio"] != 3 {
+		t.Fatalf("counts = %#v, want 9 images / 3 videos / 3 audios", counts)
+	}
+}
+
+func TestNormalizeMoonApiXSeedanceAliasDropsAudioOnlyKZReferences(t *testing.T) {
+	got := normalizeMoonApiXSeedanceVideoRequestBody(map[string]interface{}{
+		"model":  "seedance-2.0",
+		"prompt": "audio only",
+		"references": []interface{}{
+			map[string]interface{}{"media_type": "audio", "role": "reference_audio", "url": "https://cdn.test/beat.mp3"},
+		},
+	})
+	if refs, ok := got["references"]; ok {
+		t.Fatalf("audio-only seedance-2.0 references should be dropped: %#v", refs)
 	}
 }
 

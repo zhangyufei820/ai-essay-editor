@@ -26,6 +26,8 @@ import (
 )
 
 var moonApiXSeedanceVideoModels = map[string]bool{
+	"seedance-2.0":         true,
+	"seedance-2.0-kz":      true,
 	"seedance-2.0-kz-fast": true,
 	"seedance-2.0-cl-fast": true,
 	"seedance-2.0-cl":      true,
@@ -388,6 +390,15 @@ func isMoonApiXSeedanceVideoModel(modelName string) bool {
 	return moonApiXSeedanceVideoModels[strings.ToLower(strings.TrimSpace(modelName))]
 }
 
+func isMoonApiXKZSeedanceVideoModel(modelName string) bool {
+	switch strings.ToLower(strings.TrimSpace(modelName)) {
+	case "seedance-2.0", "seedance-2.0-kz", "seedance-2.0-kz-fast":
+		return true
+	default:
+		return false
+	}
+}
+
 func isSeedanceVideoModel(modelName string) bool {
 	return strings.Contains(strings.ToLower(strings.TrimSpace(modelName)), "seedance")
 }
@@ -538,17 +549,32 @@ func moonApiXSeedanceResolution(bodyMap map[string]interface{}, modelName string
 }
 
 func normalizeMoonApiXSeedanceReferences(bodyMap, metadata map[string]interface{}, modelName string) []map[string]interface{} {
-	allowVideo := modelName == "seedance-2.0-cl-mini"
-	rawReferences := normalizeSeedanceVideoReferences(bodyMap, metadata, "image", "video")
+	isKZModel := isMoonApiXKZSeedanceVideoModel(modelName)
+	allowVideo := isKZModel || modelName == "seedance-2.0-cl-mini"
+	allowAudio := isKZModel
+	maxImages := 10
+	maxVideos := 1
+	maxAudios := 0
+	if isKZModel {
+		maxImages = 9
+		maxVideos = 3
+		maxAudios = 3
+	}
+	rawReferences := normalizeSeedanceVideoReferences(bodyMap, metadata, "image", "video", "audio")
 	seen := make(map[string]bool)
 	result := make([]map[string]interface{}, 0, len(rawReferences))
 	imageCount := 0
 	videoCount := 0
+	audioCount := 0
+	hasVisualReference := false
 	for _, reference := range rawReferences {
 		if reference.url == "" {
 			continue
 		}
 		if reference.mediaType == "video" && !allowVideo {
+			continue
+		}
+		if reference.mediaType == "audio" && !allowAudio {
 			continue
 		}
 		key := reference.mediaType + "\x00" + reference.url
@@ -557,15 +583,22 @@ func normalizeMoonApiXSeedanceReferences(bodyMap, metadata map[string]interface{
 		}
 		switch reference.mediaType {
 		case "video":
-			if videoCount >= 1 {
+			if videoCount >= maxVideos {
 				continue
 			}
 			videoCount++
+			hasVisualReference = true
+		case "audio":
+			if audioCount >= maxAudios {
+				continue
+			}
+			audioCount++
 		default:
-			if imageCount >= 10 {
+			if imageCount >= maxImages {
 				continue
 			}
 			imageCount++
+			hasVisualReference = true
 		}
 		seen[key] = true
 		item := map[string]interface{}{
@@ -573,7 +606,19 @@ func normalizeMoonApiXSeedanceReferences(bodyMap, metadata map[string]interface{
 			"role":       reference.role,
 			"url":        reference.url,
 		}
+		if reference.alias != "" && isKZModel {
+			item["alias"] = reference.alias
+		}
 		result = append(result, item)
+	}
+	if allowAudio && audioCount > 0 && !hasVisualReference {
+		filtered := result[:0]
+		for _, item := range result {
+			if item["media_type"] != "audio" {
+				filtered = append(filtered, item)
+			}
+		}
+		result = filtered
 	}
 	return result
 }

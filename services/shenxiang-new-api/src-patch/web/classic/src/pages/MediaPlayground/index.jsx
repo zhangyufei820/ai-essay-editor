@@ -509,10 +509,11 @@ const VIDEO_MODELS = [
     defaultSize: '1280x720',
     defaultDuration: 15,
     defaultFps: 24,
-    referenceLimits: { image: 10, video: 1, audio: 0 },
+    referenceLimits: { image: 9, video: 3, audio: 3 },
+    officialSeedanceReferences: true,
     billingLabel: '按秒计费',
     priceLabel: `¥${SEEDANCE_2_0_PRICE_PER_SECOND.toFixed(1)}/秒`,
-    hint: '0.4 元/秒；支持文生视频、图生视频、首尾帧，15 秒约 6 元。',
+    hint: '0.4 元/秒；支持文生视频、图生视频、首尾帧，15 秒约 6 元，最多 9 图 / 3 视频 / 3 音频。',
   },
   {
     value: 'seedance-2.0-dj-fast',
@@ -1160,7 +1161,9 @@ function mentionQueryAtCursor(value, cursor) {
 }
 
 function isOfficialSeedanceReferenceModel(modelValue) {
-  return modelValue === 'seedance-2.0-dj-fast' || modelValue === 'seedance-2.0-ld-17';
+  return Boolean(VIDEO_MODELS.find((item) => item.value === modelValue)?.officialSeedanceReferences) ||
+    modelValue === 'seedance-2.0-dj-fast' ||
+    modelValue === 'seedance-2.0-ld-17';
 }
 
 function isExtendedSeedanceVideoModel(modelValue) {
@@ -2667,6 +2670,7 @@ const MediaPlayground = () => {
     if (
       activeVideoModel.value === 'seedance-2.0-dj-fast' ||
       activeVideoModel.value === 'seedance-2.0-ld-17' ||
+      activeVideoModel.officialSeedanceReferences ||
       activeVideoModel.extendedSeedance
     ) {
       if (videoWorkflow !== 'text') {
@@ -3263,8 +3267,11 @@ const MediaPlayground = () => {
       if (videoModel === 'seedance-2.0-dj-fast' && counts.image === 0) {
         return Toast.error('DJ Fast 只支持图片参考，请先上传图片素材。');
       }
-      if (videoModel === 'seedance-2.0-ld-17' && counts.audio > 0 && counts.image + counts.video === 0) {
-        return Toast.error('LD-17 的音频参考必须搭配图片或视频参考。');
+      if ((videoModel === 'seedance-2.0' || videoModel === 'seedance-2.0-ld-17') &&
+        counts.audio > 0 &&
+        counts.image + counts.video === 0
+      ) {
+        return Toast.error('音频参考必须搭配图片或视频参考。');
       }
       if (activeVideoModel.extendedSeedance && counts.audio > 0) {
         return Toast.error('该视频模型暂不接收音频参考，请移除音频素材。');

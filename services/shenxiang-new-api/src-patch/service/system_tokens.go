@@ -26,6 +26,7 @@ type SystemTokenEnsureResult struct {
 }
 
 var MoonApiXSeedanceVideoModels = []string{
+	"seedance-2.0",
 	"seedance-2.0-cl-mini",
 }
 
