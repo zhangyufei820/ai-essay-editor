@@ -774,7 +774,9 @@ func shouldRetry(c *gin.Context, openaiErr *types.NewAPIError, retryTimes int) b
 	if openaiErr == nil {
 		return false
 	}
-	if service.ShouldSkipRetryAfterChannelAffinityFailure(c) && !shouldBypassChannelAffinityRetryLock(openaiErr, retryTimes) {
+	if service.ShouldSkipRetryAfterChannelAffinityFailure(c) &&
+		!shouldRetryPlaygroundForcedChannelError(c, openaiErr, retryTimes) &&
+		!shouldBypassChannelAffinityRetryLock(openaiErr, retryTimes) {
 		return false
 	}
 	if types.IsChannelError(openaiErr) {
@@ -790,6 +792,9 @@ func shouldRetry(c *gin.Context, openaiErr *types.NewAPIError, retryTimes int) b
 		return false
 	}
 	code := openaiErr.StatusCode
+	if shouldRetryPlaygroundForcedChannelError(c, openaiErr, retryTimes) {
+		return true
+	}
 	if code >= 200 && code < 300 {
 		return false
 	}
@@ -800,6 +805,40 @@ func shouldRetry(c *gin.Context, openaiErr *types.NewAPIError, retryTimes int) b
 		return false
 	}
 	return operation_setting.ShouldRetryByStatusCode(code)
+}
+
+func shouldRetryPlaygroundForcedChannelError(c *gin.Context, openaiErr *types.NewAPIError, retryTimes int) bool {
+	if c == nil || openaiErr == nil || retryTimes <= 0 || !hasUnusedPlaygroundForcedChannel(c) {
+		return false
+	}
+	code := openaiErr.StatusCode
+	if code == http.StatusGatewayTimeout || code == 524 || code >= 500 || code < 100 || code > 599 {
+		return true
+	}
+	return false
+}
+
+func hasUnusedPlaygroundForcedChannel(c *gin.Context) bool {
+	if c == nil {
+		return false
+	}
+	channelIDs := getPlaygroundForcedChannelIDs(c)
+	if len(channelIDs) == 0 {
+		return false
+	}
+	used := map[int]bool{}
+	for _, raw := range c.GetStringSlice("use_channel") {
+		channelID, err := strconv.Atoi(strings.TrimSpace(raw))
+		if err == nil && channelID > 0 {
+			used[channelID] = true
+		}
+	}
+	for _, channelID := range channelIDs {
+		if !used[channelID] {
+			return true
+		}
+	}
+	return false
 }
 
 func shouldBypassChannelAffinityRetryLock(openaiErr *types.NewAPIError, retryTimes int) bool {

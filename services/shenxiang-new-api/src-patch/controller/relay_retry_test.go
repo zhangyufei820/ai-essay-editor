@@ -172,6 +172,56 @@ func TestPlaygroundImage2ForcedChannelSkipsKnownBadVipMapping(t *testing.T) {
 	}
 }
 
+func TestShouldRetryAllowsPlaygroundForcedTimeoutFallback(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Set("channel_affinity_skip_retry_on_failure", true)
+	setPlaygroundForcedChannelIDs(c, []int{24, 4, 8, 16, 12})
+	c.Set("use_channel", []string{"8"})
+
+	err := types.WithOpenAIError(types.OpenAIError{
+		Message: "The origin web server did not return a complete response within the 120-second Proxy Read Timeout window",
+		Type:    "openai_error",
+		Code:    "upstream_timeout",
+	}, 524)
+
+	if !shouldRetry(c, err, 2) {
+		t.Fatal("shouldRetry() = false, want true for playground forced 524 with remaining channels")
+	}
+}
+
+func TestShouldRetryKeepsGlobalTimeoutPolicyWithoutForcedFallback(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+
+	err := types.WithOpenAIError(types.OpenAIError{
+		Message: "gateway timeout",
+		Type:    "openai_error",
+		Code:    "upstream_timeout",
+	}, 524)
+
+	if shouldRetry(c, err, 2) {
+		t.Fatal("shouldRetry() = true, want false for normal 524 without playground forced fallback")
+	}
+}
+
+func TestShouldRetryStopsWhenForcedFallbackExhausted(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	setPlaygroundForcedChannelIDs(c, []int{8})
+	c.Set("use_channel", []string{"8"})
+
+	err := types.WithOpenAIError(types.OpenAIError{
+		Message: "gateway timeout",
+		Type:    "openai_error",
+		Code:    "upstream_timeout",
+	}, 524)
+
+	if shouldRetry(c, err, 2) {
+		t.Fatal("shouldRetry() = true, want false after forced fallback channels are exhausted")
+	}
+}
+
 func TestTemporaryChannelCircuitStartsCoolingThenAllowsProbe(t *testing.T) {
 	now := time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)
 	circuit := &temporaryChannelCircuit{now: func() time.Time { return now }}
