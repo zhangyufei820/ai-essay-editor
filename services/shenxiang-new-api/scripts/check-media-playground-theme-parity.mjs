@@ -45,6 +45,15 @@ function readText(file) {
   return fs.readFileSync(file, 'utf8')
 }
 
+function readDirectoryText(directory) {
+  if (!fs.existsSync(directory)) return ''
+  return fs
+    .readdirSync(directory, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && /\.(jsx?|tsx?)$/.test(entry.name))
+    .map((entry) => readText(path.join(directory, entry.name)))
+    .join('\n')
+}
+
 function findModels(text, regex) {
   return new Set([...text.matchAll(regex)].map((match) => match[1]))
 }
@@ -73,6 +82,10 @@ function main() {
   const defaultPage = readText(defaultPagePath)
   const defaultConfig = readText(defaultConfigPath)
   const defaultTypes = readText(defaultTypesPath)
+  const classicComponents = readDirectoryText(
+    path.join(root, 'classic/src/components/media-workbench')
+  )
+  const classicAll = `${classic}\n${classicComponents}`
   const defaultAll = `${defaultPage}\n${defaultConfig}\n${defaultTypes}`
 
   const classicModels = findModels(classic, /value:\s*['"]([^'"]+)['"]/g)
@@ -85,7 +98,7 @@ function main() {
   }
 
   for (const [label, marker] of Object.entries(requiredMarkers)) {
-    errors.push(...missingMarkerErrors(`classic marker ${label}`, classic, marker))
+    errors.push(...missingMarkerErrors(`classic marker ${label}`, classicAll, marker))
     errors.push(...missingMarkerErrors(`default marker ${label}`, defaultAll, marker))
   }
 
