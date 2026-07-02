@@ -2320,6 +2320,65 @@ const MediaPlayground = () => {
     setAspectRatio(value);
   }
 
+  // 强制左侧导航和顶部使用深色主题
+  useEffect(() => {
+    const styleId = 'media-playground-sidebar-dark-theme';
+
+    // 如果样式已存在，先移除
+    const existingStyle = document.getElementById(styleId);
+    if (existingStyle) {
+      existingStyle.remove();
+    }
+
+    // 创建样式标签
+    const style = document.createElement('style');
+    style.id = styleId;
+    style.textContent = `
+      /* MediaPlayground 强制左侧导航深色主题 */
+      .semi-layout-sider,
+      .semi-navigation,
+      [class*="SiderBar"] {
+        background: #0A0F14 !important;
+        border-right: 1px solid rgba(255, 255, 255, 0.06) !important;
+      }
+
+      .semi-navigation-item,
+      [class*="semi-navigation"] a,
+      [class*="semi-navigation"] button {
+        color: rgba(240, 244, 248, 0.7) !important;
+      }
+
+      .semi-navigation-item:hover,
+      [class*="semi-navigation"] a:hover,
+      [class*="semi-navigation"] button:hover {
+        background: rgba(255, 255, 255, 0.05) !important;
+        color: rgba(240, 244, 248, 0.9) !important;
+      }
+
+      .semi-navigation-item-selected,
+      [class*="semi-navigation"] .semi-navigation-item-selected {
+        background: rgba(45, 212, 191, 0.15) !important;
+        color: #2DD4BF !important;
+      }
+
+      .semi-layout-header {
+        background: #0A0F14 !important;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
+      }
+    `;
+
+    // 添加到 head
+    document.head.appendChild(style);
+
+    // 清理函数：组件卸载时移除样式
+    return () => {
+      const styleToRemove = document.getElementById(styleId);
+      if (styleToRemove) {
+        styleToRemove.remove();
+      }
+    };
+  }, []);
+
   useEffect(() => {
     API.get('/api/user/self/groups')
       .then((res) => {
