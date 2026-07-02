@@ -76,7 +76,10 @@ function main() {
       'result.displayPrompt',
       'result.revisedPrompt',
       'result.prompt',
-      "<p className='mp-revised-prompt'>{displayPrompt}</p>",
+      'const [promptExpanded, setPromptExpanded] = useState(false)',
+      "className={promptExpanded ? 'mp-result-prompt is-expanded' : 'mp-result-prompt'}",
+      'Prompt 摘要',
+      "{promptExpanded ? '收起' : '展开'}",
     ]),
   )
 

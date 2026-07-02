@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Button, TextArea, Input, Space, Tooltip, Typography } from '@douyinfe/semi-ui';
 import { IconCopy, IconDelete, IconRefresh } from '@douyinfe/semi-icons';
 import './PromptComposer.css';
@@ -30,6 +30,7 @@ export function PromptComposer({
 }) {
   const promptLength = String(prompt || '').trim().length;
   const assistantPreset = presets[0];
+  const [negativeExpanded, setNegativeExpanded] = useState(Boolean(negativePrompt));
 
   return (
     <div className="mp-prompt-composer">
@@ -122,16 +123,25 @@ export function PromptComposer({
         {mentionMenu}
       </div>
 
-      <label className="mp-negative-prompt-field">
-        <span>负面提示词</span>
-        <Input
-          value={negativePrompt}
-          onChange={onNegativePromptChange}
-          placeholder="不想出现的内容：低清晰度、畸形手指、文字错误、过曝等"
-          className="mp-negative-prompt-input"
-          data-xr-agent="media-negative-prompt"
-        />
-      </label>
+      <div className={negativeExpanded ? 'mp-negative-prompt-field is-expanded' : 'mp-negative-prompt-field'}>
+        <button
+          type="button"
+          className="mp-negative-toggle"
+          onClick={() => setNegativeExpanded((value) => !value)}
+        >
+          <span>负面提示词</span>
+          <strong>{negativePrompt ? '已填写' : '可选'}</strong>
+        </button>
+        {negativeExpanded ? (
+          <Input
+            value={negativePrompt}
+            onChange={onNegativePromptChange}
+            placeholder="不想出现的内容：低清晰度、畸形手指、文字错误、过曝等"
+            className="mp-negative-prompt-input"
+            data-xr-agent="media-negative-prompt"
+          />
+        ) : null}
+      </div>
     </div>
   );
 }

@@ -113,8 +113,36 @@
   gap: var(--mp-spacing-sm);
 }
 
-.mp-negative-prompt-field > span {
+.mp-negative-toggle {
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mp-spacing-md);
+  padding: 0 var(--mp-spacing-md);
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: var(--mp-radius-md);
   color: var(--mp-text-secondary);
+  background: var(--mp-bg-elevated);
+  cursor: pointer;
+  transition: border-color var(--mp-transition-fast), background var(--mp-transition-fast);
+}
+
+.mp-negative-toggle:hover,
+.mp-negative-toggle:focus-visible {
+  border-color: var(--mp-border-focus);
+  background: var(--mp-accent-soft);
+  outline: none;
+}
+
+.mp-negative-toggle > span {
+  color: var(--mp-text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.mp-negative-toggle > strong {
+  color: var(--mp-text-muted);
   font-size: 12px;
   font-weight: 700;
 }
