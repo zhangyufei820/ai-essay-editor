@@ -464,6 +464,65 @@ function isGptImage2Model(model) {
   );
 }
 
+function imageModelConfig(modelValue) {
+  return IMAGE_MODELS.find((item) => item.value === modelValue) || null;
+}
+
+function videoModelConfig(modelValue) {
+  return VIDEO_MODELS.find((item) => item.value === modelValue) || null;
+}
+
+function resultImageModelValue(result) {
+  const raw = String(
+    result?.model ||
+      result?.modelValue ||
+      result?.modelLabel ||
+      result?.metadata?.model ||
+      result?.data?.model ||
+      '',
+  ).trim();
+  if (!raw) return '';
+  if (imageModelConfig(raw)) return raw;
+  const byLabel = IMAGE_MODELS.find((item) => item.label === raw);
+  return byLabel?.value || raw;
+}
+
+function resultVideoModelValue(result) {
+  const raw = String(
+    result?.model ||
+      result?.modelValue ||
+      result?.modelLabel ||
+      result?.metadata?.model ||
+      result?.data?.model ||
+      '',
+  ).trim();
+  if (!raw) return '';
+  if (videoModelConfig(raw)) return raw;
+  const byLabel = VIDEO_MODELS.find((item) => item.label === raw);
+  return byLabel?.value || raw;
+}
+
+function resultModelLabel(result, fallbackImageModel, fallbackVideoModel) {
+  if (result?.kind === 'image') {
+    const modelValue = resultImageModelValue(result);
+    return (
+      result?.modelLabel ||
+      imageModelConfig(modelValue)?.label ||
+      modelValue ||
+      fallbackImageModel?.label ||
+      '图片模型'
+    );
+  }
+  const modelValue = resultVideoModelValue(result);
+  return (
+    result?.modelLabel ||
+    videoModelConfig(modelValue)?.label ||
+    modelValue ||
+    fallbackVideoModel?.label ||
+    '视频模型'
+  );
+}
+
 function clampCount(value, model) {
   const max = Math.max(1, model.maxCount || 1);
   return Math.min(Math.max(1, Number(value) || 1), max);
@@ -1435,7 +1494,12 @@ function firstPromptText(...values) {
   return '';
 }
 
-function extractImageResults(response, fallbackPrompt = '') {
+function extractImageResults(
+  response,
+  fallbackPrompt = '',
+  fallbackModel = '',
+  fallbackModelLabel = '',
+) {
   const data = response?.data || [];
   return data
     .map((item, index) => {
@@ -1445,11 +1509,20 @@ function extractImageResults(response, fallbackPrompt = '') {
       if (!url) return null;
       const originalPrompt = firstPromptText(item.prompt, fallbackPrompt);
       const revisedPrompt = firstPromptText(item.revised_prompt);
+      const modelValue = String(item.model || fallbackModel || '').trim();
       return {
         id: `image-${Date.now()}-${index}`,
         kind: 'image',
         url,
         displayUrl: url.startsWith('data:') ? dataURLToBlobURL(url) : url,
+        model: modelValue,
+        modelLabel: firstPromptText(
+          item.modelLabel,
+          item.model_label,
+          imageModelConfig(modelValue)?.label,
+          fallbackModelLabel,
+          modelValue,
+        ),
         prompt: originalPrompt,
         revisedPrompt,
         displayPrompt: firstPromptText(revisedPrompt, originalPrompt),
@@ -1478,7 +1551,12 @@ function getImageTaskProgress(response) {
   return match ? Number(match[0]) : 0;
 }
 
-function imageTaskToResult(task, fallbackPrompt = '') {
+function imageTaskToResult(
+  task,
+  fallbackPrompt = '',
+  fallbackModel = '',
+  fallbackModelLabel = '',
+) {
   if (!task) return null;
   const item = task.item || task.data?.item || {};
   const url =
@@ -1499,12 +1577,33 @@ function imageTaskToResult(task, fallbackPrompt = '') {
     item.revisedPrompt,
     item.revised_prompt,
   );
+  const modelValue = String(
+    item.model ||
+      task.model ||
+      task.data?.model ||
+      task.request?.model ||
+      task.data?.request?.model ||
+      fallbackModel ||
+      '',
+  ).trim();
   return {
     id: `image-${task.task_id}`,
     kind: 'image',
     url,
     displayUrl: item.displayUrl || item.cachedUrl || url,
     cachedUrl: item.cachedUrl || url,
+    model: modelValue,
+    modelLabel: firstPromptText(
+      item.modelLabel,
+      item.model_label,
+      task.modelLabel,
+      task.model_label,
+      task.data?.modelLabel,
+      task.data?.model_label,
+      imageModelConfig(modelValue)?.label,
+      fallbackModelLabel,
+      modelValue,
+    ),
     prompt: originalPrompt,
     revisedPrompt,
     displayPrompt: firstPromptText(revisedPrompt, originalPrompt),
@@ -1731,13 +1830,36 @@ function extractVideoURL(response) {
   return pickVideoURL(response);
 }
 
-function createVideoResult(response, url, taskId = '') {
+function createVideoResult(
+  response,
+  url,
+  taskId = '',
+  fallbackModel = '',
+  fallbackModelLabel = '',
+) {
   const id = taskId || getVideoTaskId(response) || `direct-${Date.now()}`;
+  const modelValue = String(
+    response?.model ||
+      response?.data?.model ||
+      response?.metadata?.model ||
+      fallbackModel ||
+      '',
+  ).trim();
   return {
     id: `video-${id}`,
     kind: 'video',
     url,
     displayUrl: url,
+    model: modelValue,
+    modelLabel: firstPromptText(
+      response?.modelLabel,
+      response?.model_label,
+      response?.data?.modelLabel,
+      response?.data?.model_label,
+      videoModelConfig(modelValue)?.label,
+      fallbackModelLabel,
+      modelValue,
+    ),
     taskId,
     status: 'completed',
     createdAt: Date.now(),
@@ -2369,6 +2491,7 @@ const MediaPlayground = () => {
   const [prompt, setPrompt] = useState(DEFAULT_PROMPT);
   const promptTextareaRef = useRef(null);
   const pollingCancelledRef = useRef(false);
+  const imageEditModelLockRef = useRef('');
   const [mentionState, setMentionState] = useState({
     visible: false,
     start: 0,
@@ -2439,6 +2562,8 @@ const MediaPlayground = () => {
     PUBLIC_SEEDANCE_VIDEO_MODELS.includes(currentModelId) ||
     models.length === 0 ||
     models.some((item) => item === currentModelId);
+  const isImageModelAllowed = (modelValue) =>
+    models.length === 0 || models.some((item) => item === modelValue);
   const effectiveGroup =
     mode === 'image' ? IMAGE_GENERATION_GROUP.value : group;
   const reversePromptGroup = IMAGE_GENERATION_GROUP.value;
@@ -3223,10 +3348,25 @@ const MediaPlayground = () => {
 
   async function submitImage() {
     let response;
-    const submittedPrompt = firstPromptText(requestPayload.prompt, prompt);
+    const lockedEditModel =
+      imageWorkflow === 'edit' ? imageEditModelLockRef.current : '';
+    if (lockedEditModel && !isImageModelAllowed(lockedEditModel)) {
+      imageEditModelLockRef.current = '';
+      throw new Error('原结果模型当前不可用，请先手动选择可用模型。');
+    }
+    const effectiveRequestPayload =
+      lockedEditModel && lockedEditModel !== requestPayload.model
+        ? { ...requestPayload, model: lockedEditModel }
+        : requestPayload;
+    const submittedPrompt = firstPromptText(effectiveRequestPayload.prompt, prompt);
+    const submittedModel = effectiveRequestPayload.model || imageModel;
+    const submittedModelLabel =
+      imageModelConfig(submittedModel)?.label ||
+      activeImageModel.label ||
+      submittedModel;
     if (imageWorkflow === 'edit') {
       const form = new FormData();
-      Object.entries(requestPayload).forEach(([key, value]) => {
+      Object.entries(effectiveRequestPayload).forEach(([key, value]) => {
         if (value === undefined || value === null) return;
         form.set(
           key,
@@ -3241,7 +3381,7 @@ const MediaPlayground = () => {
         timeout: IMAGE_REQUEST_TIMEOUT_MS,
       });
     } else {
-      response = await API.post('/pg/images/tasks/generations', requestPayload, {
+      response = await API.post('/pg/images/tasks/generations', effectiveRequestPayload, {
         skipErrorHandler: true,
         timeout: IMAGE_REQUEST_TIMEOUT_MS,
       });
@@ -3253,13 +3393,23 @@ const MediaPlayground = () => {
     if (!taskId) throw new Error('图像任务提交成功但没有返回任务 ID。');
     setImageTaskLookup(taskId);
     setTaskMessage(`图像任务已提交：${taskId}，正在等待持久化结果...`);
-    const result = await pollImageTask(taskId, submittedPrompt);
+    const result = await pollImageTask(
+      taskId,
+      submittedPrompt,
+      submittedModel,
+      submittedModelLabel,
+    );
     if (!result) return;
     setResults((prev) => [result, ...prev]);
     Toast.success('图像已生成，请立即下载保存。');
   }
 
-  async function pollImageTask(taskId, submittedPrompt = '') {
+  async function pollImageTask(
+    taskId,
+    submittedPrompt = '',
+    submittedModel = '',
+    submittedModelLabel = '',
+  ) {
     const startedAt = Date.now();
     const deadline = Date.now() + 30 * 60 * 1000;
     let longWaitNotified = false;
@@ -3295,7 +3445,12 @@ const MediaPlayground = () => {
         }
         setTaskMessage(`图像任务 ${res.data.data.task_id}：${status}，进度 ${progress}%${waitSuffix}`);
         if (status === 'completed') {
-          const result = imageTaskToResult(res.data.data, submittedPrompt);
+          const result = imageTaskToResult(
+            res.data.data,
+            submittedPrompt,
+            submittedModel,
+            submittedModelLabel,
+          );
           if (result) return result;
           throw new Error('图像任务完成但没有返回持久化图片。');
         }
@@ -3399,7 +3554,13 @@ const MediaPlayground = () => {
           }
         }
         setTaskMessage(`视频任务 ${status}，进度 ${progress}%${waitSuffix}`);
-        if (url) return createVideoResult(res.data, url, taskId);
+        if (url) return createVideoResult(
+          res.data,
+          url,
+          taskId,
+          videoModel,
+          activeVideoModel.label,
+        );
         if (status === 'failed')
           throw new Error(extractVideoFailureReason(res.data) || '视频任务失败。');
         if (status === 'completed') {
@@ -3443,7 +3604,13 @@ const MediaPlayground = () => {
     if (res.data?.error?.message) throw new Error(res.data.error.message);
     const directUrl = extractVideoURL(res.data);
     if (directUrl) {
-      const result = createVideoResult(res.data, directUrl);
+      const result = createVideoResult(
+        res.data,
+        directUrl,
+        '',
+        videoModel,
+        activeVideoModel.label,
+      );
       const cached = await cacheMedia(result);
       setResults((prev) => [cached, ...prev]);
       Toast.success('视频已生成，请立即下载保存。');
@@ -3596,6 +3763,7 @@ const MediaPlayground = () => {
   }
 
   function selectCreativeTask(task, nextWorkflow) {
+    imageEditModelLockRef.current = '';
     if (task === 'image-edit' && !activeImageModel.edit) {
       Toast.warning('当前模型不支持图片编辑，请先更换模型。');
       return;
@@ -3663,22 +3831,84 @@ const MediaPlayground = () => {
     return true;
   }
 
+  async function loadResultImageModelValue(result) {
+    const sourceModelValue = resultImageModelValue(result);
+    if (sourceModelValue) return sourceModelValue;
+    if (!result?.taskId) return '';
+    try {
+      const res = await API.get(`/pg/images/tasks/${encodeURIComponent(result.taskId)}`, {
+        skipErrorHandler: true,
+        disableDuplicate: true,
+      });
+      const task = res.data?.data || {};
+      const item = task.item || task.data?.item || {};
+      const modelValue = String(
+        item.model ||
+          task.model ||
+          task.data?.model ||
+          task.request?.model ||
+          task.data?.request?.model ||
+          '',
+      ).trim();
+      if (!modelValue) return '';
+      const modelLabel = imageModelConfig(modelValue)?.label || modelValue;
+      setResults((current) =>
+        current.map((item) =>
+          item.id === result.id
+            ? { ...item, model: modelValue, modelLabel }
+            : item,
+        ),
+      );
+      return modelValue;
+    } catch (error) {
+      return '';
+    }
+  }
+
+  function activateImageEditWorkflow() {
+    setCreativeTask('image-edit');
+    setMode('image');
+    setImageWorkflow('edit');
+  }
+
   async function reuseResultMedia(result, action) {
     try {
-      if ((action === 'edit' || action === 'reference') && !activeImageModel.edit) {
-        Toast.warning('当前模型不支持图片编辑，请先更换模型。');
-        return;
+      const sourceModelValue = resultImageModelValue(result);
+      const hydratedSourceModelValue =
+        sourceModelValue || (action === 'edit' || action === 'reference'
+          ? await loadResultImageModelValue(result)
+          : '');
+      const sourceModel = imageModelConfig(hydratedSourceModelValue);
+      const targetImageModel = sourceModel || activeImageModel;
+      if (action === 'edit' || action === 'reference') {
+        if (!hydratedSourceModelValue) {
+          Toast.warning('结果缺少原模型标记，请先用任务 ID 查询或重新选择原模型后再提交。');
+          return;
+        }
+        if (!sourceModel || !isImageModelAllowed(hydratedSourceModelValue)) {
+          Toast.warning('原结果模型当前不可用，请先手动选择可用模型。');
+          return;
+        }
+        if (!targetImageModel.edit) {
+          Toast.warning('当前模型不支持图片编辑，请先更换模型。');
+          return;
+        }
+        imageEditModelLockRef.current = hydratedSourceModelValue;
+        if (imageModel !== hydratedSourceModelValue) {
+          setImageModel(hydratedSourceModelValue);
+          Toast.info(`已切回原结果模型：${sourceModel.label}`);
+        }
       }
       const file = await resultMediaFile(result, action);
       if (action === 'edit') {
-        selectCreativeTask('image-edit');
+        activateImageEditWorkflow();
         if (appendImageReferenceFile(file, '已放入编辑源图。')) {
           scrollWorkbenchTo('mp-assets-workbench');
         }
         return;
       }
       if (action === 'reference') {
-        selectCreativeTask('image-edit');
+        activateImageEditWorkflow();
         if (appendImageReferenceFile(file, '已作为图生图参考放入编辑源图。')) {
           scrollWorkbenchTo('mp-assets-workbench');
         }
@@ -3755,7 +3985,7 @@ const MediaPlayground = () => {
       id: item.id,
       title: item.kind === 'image' ? '图片生成完成' : '视频生成完成',
       kind: item.kind,
-      model: item.kind === 'image' ? activeImageModel.label : activeVideoModel.label,
+      model: resultModelLabel(item, activeImageModel, activeVideoModel),
       status: 'completed',
       statusText: '已完成',
       createdAt: item.createdAt,
@@ -4003,9 +4233,10 @@ const MediaPlayground = () => {
               <ModelSelector
                 models={modelOptions}
                 selectedModel={currentModelId}
-                onSelectModel={(value) =>
-                  mode === 'image' ? setImageModel(value) : setVideoModel(value)
-                }
+                onSelectModel={(value) => {
+                  imageEditModelLockRef.current = '';
+                  mode === 'image' ? setImageModel(value) : setVideoModel(value);
+                }}
                 mode={mode}
               />
             </div>
@@ -4097,6 +4328,7 @@ const MediaPlayground = () => {
                             selectCreativeTask('image-edit');
                             return;
                           }
+                          imageEditModelLockRef.current = '';
                           setImageWorkflow(item.key);
                         }}
                       >
@@ -4116,6 +4348,7 @@ const MediaPlayground = () => {
                         type='button'
                         className={item.key === 'edit' ? 'active' : ''}
                         onClick={() => {
+                          imageEditModelLockRef.current = '';
                           setImageWorkflow('edit');
                           if (item.key === 'style') setPrompt(PROMPT_PRESETS[1]?.value || prompt);
                         }}
@@ -4331,7 +4564,10 @@ const MediaPlayground = () => {
                         label: item.label,
                         value: item.value,
                       }))}
-                      onChange={setImageModel}
+                      onChange={(value) => {
+                        imageEditModelLockRef.current = '';
+                        setImageModel(value);
+                      }}
                       agentKey='media-reverse-target-model'
                     />
                   }
@@ -4371,9 +4607,10 @@ const MediaPlayground = () => {
                       label: item.label,
                       value: item.value,
                     }))}
-                    onChange={(value) =>
-                      mode === 'image' ? setImageModel(value) : setVideoModel(value)
-                    }
+                    onChange={(value) => {
+                      imageEditModelLockRef.current = '';
+                      mode === 'image' ? setImageModel(value) : setVideoModel(value);
+                    }}
                     agentKey='media-inline-model'
                     className='mp-param-control is-model'
                   />
@@ -4915,11 +5152,7 @@ const MediaPlayground = () => {
                     </div>
                     <div>
                       <span>模型</span>
-                      <strong>
-                        {inspectorResult.kind === 'image'
-                          ? activeImageModel.label
-                          : activeVideoModel.label}
-                      </strong>
+                      <strong>{resultModelLabel(inspectorResult, activeImageModel, activeVideoModel)}</strong>
                     </div>
                     <div>
                       <span>规格</span>
