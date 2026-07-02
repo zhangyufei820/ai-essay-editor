@@ -4,7 +4,9 @@ import (
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	relayconstant "github.com/QuantumNous/new-api/relay/constant"
 	"github.com/stretchr/testify/require"
 )
 
@@ -63,4 +65,38 @@ func TestSanitizeGeek2APIImage2OutboundBodyLeavesOtherModelsUntouched(t *testing
 
 	require.NoError(t, err)
 	require.Equal(t, string(body), string(sanitized))
+}
+
+func TestUseGeminiAdaptorForNativeImageModelMappedFromOpenAIChannel(t *testing.T) {
+	info := &relaycommon.RelayInfo{
+		RelayMode: relayconstant.RelayModeImagesEdits,
+		ChannelMeta: &relaycommon.ChannelMeta{
+			ApiType:           constant.APITypeOpenAI,
+			ChannelType:       constant.ChannelTypeOpenAI,
+			ChannelBaseUrl:    "https://moonapix.com/v1/",
+			UpstreamModelName: "gemini-3.1-flash-image-preview",
+			IsModelMapped:     true,
+		},
+	}
+
+	useGeminiAdaptorForNativeImageModel(info)
+
+	require.Equal(t, constant.APITypeGemini, info.ApiType)
+	require.Equal(t, constant.ChannelTypeOpenAI, info.ChannelType)
+	require.Equal(t, "https://moonapix.com", info.ChannelBaseUrl)
+}
+
+func TestUseGeminiAdaptorForNativeImageModelSupportsNanoBananaAliases(t *testing.T) {
+	info := &relaycommon.RelayInfo{
+		RelayMode: relayconstant.RelayModeImagesGenerations,
+		ChannelMeta: &relaycommon.ChannelMeta{
+			ApiType:           constant.APITypeOpenAI,
+			ChannelBaseUrl:    "https://moonapix.com",
+			UpstreamModelName: "nano-banana-2",
+		},
+	}
+
+	useGeminiAdaptorForNativeImageModel(info)
+
+	require.Equal(t, constant.APITypeGemini, info.ApiType)
 }

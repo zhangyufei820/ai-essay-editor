@@ -13,6 +13,7 @@ import (
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	relayconstant "github.com/QuantumNous/new-api/relay/constant"
 	"github.com/QuantumNous/new-api/relay/helper"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/model_setting"
@@ -144,6 +145,7 @@ func ImageHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *type
 	if err != nil {
 		return types.NewError(err, types.ErrorCodeChannelModelMappedError, types.ErrOptionWithSkipRetry())
 	}
+	useGeminiAdaptorForNativeImageModel(info)
 
 	adaptor := GetAdaptor(info.ApiType)
 	if adaptor == nil {
@@ -278,4 +280,40 @@ func ImageHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *type
 
 	service.PostTextConsumeQuota(c, info, usage.(*dto.Usage), logContent)
 	return nil
+}
+
+func useGeminiAdaptorForNativeImageModel(info *relaycommon.RelayInfo) {
+	if info == nil || info.ChannelMeta == nil {
+		return
+	}
+	if info.RelayMode != relayconstant.RelayModeImagesGenerations &&
+		info.RelayMode != relayconstant.RelayModeImagesEdits {
+		return
+	}
+	if !isNativeGeminiImageModel(info.UpstreamModelName) {
+		return
+	}
+	info.ApiType = constant.APITypeGemini
+	info.ChannelBaseUrl = normalizeGeminiImageBaseURL(info.ChannelBaseUrl)
+}
+
+func isNativeGeminiImageModel(modelName string) bool {
+	modelName = strings.TrimSpace(modelName)
+	if modelName == "" {
+		return false
+	}
+	if model_setting.IsGeminiModelSupportImagine(modelName) {
+		return true
+	}
+	lowerName := strings.ToLower(modelName)
+	return (strings.HasPrefix(lowerName, "gemini-") && strings.Contains(lowerName, "image-preview")) ||
+		strings.HasPrefix(lowerName, "nano-banana-")
+}
+
+func normalizeGeminiImageBaseURL(baseURL string) string {
+	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	if strings.HasSuffix(baseURL, "/v1") {
+		baseURL = strings.TrimSuffix(baseURL, "/v1")
+	}
+	return baseURL
 }

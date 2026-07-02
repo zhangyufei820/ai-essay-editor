@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
+	appconstant "github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/relay/channel"
 	"github.com/QuantumNous/new-api/relay/channel/openai"
@@ -67,7 +68,7 @@ func (a *Adaptor) ConvertImageRequest(c *gin.Context, info *relaycommon.RelayInf
 		return convertImagenImageRequest(request), nil
 	}
 
-	if !model_setting.IsGeminiModelSupportImagine(info.UpstreamModelName) {
+	if !isGeminiNativeImageModel(info.UpstreamModelName) {
 		return nil, errors.New("not supported model for image generation, only imagen and gemini image-preview models are supported")
 	}
 
@@ -314,6 +315,9 @@ func geminiImagePreviewConfig(request dto.ImageRequest) ([]byte, error) {
 	if aspectRatio := geminiImagePreviewAspectRatio(request); aspectRatio != "" {
 		imageConfig["aspectRatio"] = aspectRatio
 	}
+	if imageSize := geminiImagePreviewImageSize(request); imageSize != "" {
+		imageConfig["imageSize"] = imageSize
+	}
 	if len(imageConfig) == 0 {
 		return nil, nil
 	}
@@ -343,6 +347,55 @@ func geminiImagePreviewAspectRatio(request dto.ImageRequest) string {
 	return ""
 }
 
+func geminiImagePreviewImageSize(request dto.ImageRequest) string {
+	for _, value := range []string{
+		request.ImageSize,
+		request.Resolution,
+		geminiImagePreviewNestedString(request.ExtraBody, []string{"google", "image_config", "image_size"}),
+		geminiImagePreviewNestedString(request.GenerationConfig, []string{"imageConfig", "imageSize"}),
+		geminiImagePreviewNestedString(request.GenerationConfig, []string{"responseFormat", "image", "imageSize"}),
+		geminiImagePreviewNestedString(request.ResponseFormatObj, []string{"image", "imageSize"}),
+	} {
+		normalized := strings.ToUpper(strings.TrimSpace(value))
+		if normalized != "" && normalized != "AUTO" {
+			return normalized
+		}
+	}
+
+	size := strings.ToLower(strings.TrimSpace(request.Size))
+	switch {
+	case strings.Contains(size, "4096") || strings.Contains(size, "3840") || strings.Contains(size, "3808"):
+		return "4K"
+	case strings.Contains(size, "2048") || strings.Contains(size, "2160"):
+		return "2K"
+	case strings.Contains(size, "1024"):
+		return "1K"
+	}
+	return ""
+}
+
+func geminiImagePreviewNestedString(raw []byte, path []string) string {
+	if len(raw) == 0 || len(path) == 0 {
+		return ""
+	}
+	var payload map[string]interface{}
+	if err := common.Unmarshal(raw, &payload); err != nil {
+		return ""
+	}
+	var current interface{} = payload
+	for _, key := range path {
+		nested, ok := current.(map[string]interface{})
+		if !ok {
+			return ""
+		}
+		current = nested[key]
+	}
+	value, ok := current.(string)
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(value)
+}
 
 func (a *Adaptor) Init(info *relaycommon.RelayInfo) {
 
@@ -393,6 +446,14 @@ func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
 
 func (a *Adaptor) SetupRequestHeader(c *gin.Context, req *http.Header, info *relaycommon.RelayInfo) error {
 	channel.SetupApiRequestHeader(info, c, req)
+	if strings.HasPrefix(info.UpstreamModelName, "imagen") ||
+		(isGeminiImageRelay(info) && isGeminiNativeImageModel(info.UpstreamModelName)) {
+		req.Set("Content-Type", "application/json")
+	}
+	if info.ChannelType == appconstant.ChannelTypeOpenAI {
+		req.Set("Authorization", "Bearer "+info.ApiKey)
+		return nil
+	}
 	req.Set("x-goog-api-key", info.ApiKey)
 	return nil
 }
@@ -497,7 +558,7 @@ func (a *Adaptor) DoResponse(c *gin.Context, resp *http.Response, info *relaycom
 	}
 
 	if strings.HasPrefix(info.UpstreamModelName, "imagen") ||
-		(isGeminiImageRelay(info) && model_setting.IsGeminiModelSupportImagine(info.UpstreamModelName)) {
+		(isGeminiImageRelay(info) && isGeminiNativeImageModel(info.UpstreamModelName)) {
 		return GeminiImageHandler(c, info, resp)
 	}
 
@@ -530,4 +591,17 @@ func isGeminiImageRelay(info *relaycommon.RelayInfo) bool {
 	}
 	return info.RelayMode == constant.RelayModeImagesGenerations ||
 		info.RelayMode == constant.RelayModeImagesEdits
+}
+
+func isGeminiNativeImageModel(modelName string) bool {
+	modelName = strings.TrimSpace(modelName)
+	if modelName == "" {
+		return false
+	}
+	if model_setting.IsGeminiModelSupportImagine(modelName) {
+		return true
+	}
+	lowerName := strings.ToLower(modelName)
+	return (strings.HasPrefix(lowerName, "gemini-") && strings.Contains(lowerName, "image-preview")) ||
+		strings.HasPrefix(lowerName, "nano-banana-")
 }

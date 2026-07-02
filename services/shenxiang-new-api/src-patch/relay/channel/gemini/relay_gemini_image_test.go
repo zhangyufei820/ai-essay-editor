@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
+	appconstant "github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relay/constant"
@@ -49,6 +50,7 @@ func TestConvertImageRequestAllowsGeminiImagePreviewMultipartEdit(t *testing.T) 
 		Prompt:      "turn this into a product poster",
 		Size:        "2048x4096",
 		AspectRatio: "3:4",
+		ImageSize:   "4K",
 	})
 
 	require.NoError(t, err)
@@ -65,7 +67,63 @@ func TestConvertImageRequestAllowsGeminiImagePreviewMultipartEdit(t *testing.T) 
 	var imageConfig map[string]string
 	require.NoError(t, json.Unmarshal(geminiRequest.GenerationConfig.ImageConfig, &imageConfig))
 	require.Equal(t, "3:4", imageConfig["aspectRatio"])
-	require.Empty(t, imageConfig["imageSize"])
+	require.Equal(t, "4K", imageConfig["imageSize"])
+}
+
+func TestConvertImageRequestPreservesGeminiImageSizeFromNestedConfigs(t *testing.T) {
+	tests := []struct {
+		name    string
+		model   string
+		request dto.ImageRequest
+		want    string
+	}{
+		{
+			name:  "banana generation extra body",
+			model: "gemini-3.1-flash-image-preview",
+			request: dto.ImageRequest{
+				Prompt:      "test",
+				AspectRatio: "16:9",
+				ExtraBody:   json.RawMessage(`{"google":{"image_config":{"image_size":"2K"}}}`),
+			},
+			want: "2K",
+		},
+		{
+			name:  "gemini pro generation config",
+			model: "gemini-3-pro-image-preview",
+			request: dto.ImageRequest{
+				Prompt:           "test",
+				AspectRatio:      "1:1",
+				GenerationConfig: json.RawMessage(`{"imageConfig":{"imageSize":"4K"}}`),
+			},
+			want: "4K",
+		},
+		{
+			name:  "ecommerce nano banana top level",
+			model: "nano-banana-2",
+			request: dto.ImageRequest{
+				Prompt:    "test",
+				ImageSize: "1K",
+			},
+			want: "1K",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			converted, err := (&Adaptor{}).ConvertImageRequest(nil, &relaycommon.RelayInfo{
+				RelayMode:   constant.RelayModeImagesGenerations,
+				ChannelMeta: &relaycommon.ChannelMeta{UpstreamModelName: tt.model},
+			}, tt.request)
+
+			require.NoError(t, err)
+			geminiRequest, ok := converted.(*dto.GeminiChatRequest)
+			require.True(t, ok)
+
+			var imageConfig map[string]string
+			require.NoError(t, json.Unmarshal(geminiRequest.GenerationConfig.ImageConfig, &imageConfig))
+			require.Equal(t, tt.want, imageConfig["imageSize"])
+		})
+	}
 }
 
 func TestConvertImageRequestRejectsNonImagineGeminiModel(t *testing.T) {
@@ -74,6 +132,53 @@ func TestConvertImageRequestRejectsNonImagineGeminiModel(t *testing.T) {
 		ChannelMeta: &relaycommon.ChannelMeta{UpstreamModelName: "gemini-2.0-flash"},
 	}, dto.ImageRequest{Prompt: "test"})
 	require.ErrorContains(t, err, "only imagen and gemini image-preview models are supported")
+}
+
+func TestConvertImageRequestAllowsNanoBananaModel(t *testing.T) {
+	converted, err := (&Adaptor{}).ConvertImageRequest(nil, &relaycommon.RelayInfo{
+		RelayMode:   constant.RelayModeImagesGenerations,
+		ChannelMeta: &relaycommon.ChannelMeta{UpstreamModelName: "nano-banana-2"},
+	}, dto.ImageRequest{Prompt: "test"})
+
+	require.NoError(t, err)
+	_, ok := converted.(*dto.GeminiChatRequest)
+	require.True(t, ok)
+}
+
+func TestGeminiImagePreviewEditUsesGenerateContentURL(t *testing.T) {
+	url, err := (&Adaptor{}).GetRequestURL(&relaycommon.RelayInfo{
+		IsStream: false,
+		ChannelMeta: &relaycommon.ChannelMeta{
+			ChannelBaseUrl:    "https://moonapix.com",
+			UpstreamModelName: "gemini-3.1-flash-image-preview",
+		},
+		RelayMode: constant.RelayModeImagesEdits,
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, "https://moonapix.com/v1beta/models/gemini-3.1-flash-image-preview:generateContent", url)
+}
+
+func TestGeminiAdaptorUsesBearerAuthForOpenAICompatibleGeminiEndpoint(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/pg/images/edits", nil)
+
+	header := http.Header{}
+	err := (&Adaptor{}).SetupRequestHeader(ctx, &header, &relaycommon.RelayInfo{
+		RelayMode: constant.RelayModeImagesEdits,
+		ChannelMeta: &relaycommon.ChannelMeta{
+			ChannelType:       appconstant.ChannelTypeOpenAI,
+			UpstreamModelName: "gemini-3.1-flash-image-preview",
+			ApiKey:            "test-key",
+		},
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, "application/json", header.Get("Content-Type"))
+	require.Equal(t, "Bearer test-key", header.Get("Authorization"))
+	require.Empty(t, header.Get("x-goog-api-key"))
 }
 
 func TestGeminiImageHandlerConvertsInlineDataCandidates(t *testing.T) {

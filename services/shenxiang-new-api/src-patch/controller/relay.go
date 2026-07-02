@@ -131,6 +131,10 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		}
 		return
 	}
+	if guardErr := rejectImageModelResponsesRequest(relayFormat, request); guardErr != nil {
+		newAPIError = guardErr
+		return
+	}
 
 	relayInfo, err := relaycommon.GenRelayInfo(c, relayFormat, request, ws)
 	if err != nil {
@@ -262,6 +266,51 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			perfmetrics.RecordRelaySample(relayInfo, false, 0)
 		})
 	}
+}
+
+func rejectImageModelResponsesRequest(relayFormat types.RelayFormat, request dto.Request) *types.NewAPIError {
+	if relayFormat != types.RelayFormatOpenAIResponses && relayFormat != types.RelayFormatOpenAIResponsesCompaction {
+		return nil
+	}
+	modelName := ""
+	switch r := request.(type) {
+	case *dto.OpenAIResponsesRequest:
+		modelName = r.Model
+	case *dto.OpenAIResponsesCompactionRequest:
+		modelName = r.Model
+	default:
+		return nil
+	}
+	modelName = strings.TrimSpace(modelName)
+	if !isImageGenerationModelName(modelName) {
+		return nil
+	}
+	return types.NewErrorWithStatusCode(
+		fmt.Errorf("%s is an image generation model; use POST /v1/images/generations instead of /v1/responses", modelName),
+		types.ErrorCodeInvalidRequest,
+		http.StatusBadRequest,
+		types.ErrOptionWithSkipRetry(),
+	)
+}
+
+func isImageGenerationModelName(modelName string) bool {
+	modelName = strings.ToLower(strings.TrimSpace(modelName))
+	if modelName == "" {
+		return false
+	}
+	if strings.HasPrefix(modelName, "gpt-image-") || strings.HasPrefix(modelName, "dall-e-") {
+		return true
+	}
+	if strings.HasPrefix(modelName, "imagen-") || strings.HasPrefix(modelName, "banana-") {
+		return true
+	}
+	if strings.HasPrefix(modelName, "geek2api-image-") || strings.HasPrefix(modelName, "grok-imagine-image") {
+		return true
+	}
+	if strings.HasPrefix(modelName, "image 2") {
+		return true
+	}
+	return strings.Contains(modelName, "image-preview")
 }
 
 var upgrader = websocket.Upgrader{
