@@ -464,65 +464,6 @@ function isGptImage2Model(model) {
   );
 }
 
-function imageModelConfig(modelValue) {
-  return IMAGE_MODELS.find((item) => item.value === modelValue) || null;
-}
-
-function videoModelConfig(modelValue) {
-  return VIDEO_MODELS.find((item) => item.value === modelValue) || null;
-}
-
-function resultImageModelValue(result) {
-  const raw = String(
-    result?.model ||
-      result?.modelValue ||
-      result?.modelLabel ||
-      result?.metadata?.model ||
-      result?.data?.model ||
-      '',
-  ).trim();
-  if (!raw) return '';
-  if (imageModelConfig(raw)) return raw;
-  const byLabel = IMAGE_MODELS.find((item) => item.label === raw);
-  return byLabel?.value || raw;
-}
-
-function resultVideoModelValue(result) {
-  const raw = String(
-    result?.model ||
-      result?.modelValue ||
-      result?.modelLabel ||
-      result?.metadata?.model ||
-      result?.data?.model ||
-      '',
-  ).trim();
-  if (!raw) return '';
-  if (videoModelConfig(raw)) return raw;
-  const byLabel = VIDEO_MODELS.find((item) => item.label === raw);
-  return byLabel?.value || raw;
-}
-
-function resultModelLabel(result, fallbackImageModel, fallbackVideoModel) {
-  if (result?.kind === 'image') {
-    const modelValue = resultImageModelValue(result);
-    return (
-      result?.modelLabel ||
-      imageModelConfig(modelValue)?.label ||
-      modelValue ||
-      fallbackImageModel?.label ||
-      '图片模型'
-    );
-  }
-  const modelValue = resultVideoModelValue(result);
-  return (
-    result?.modelLabel ||
-    videoModelConfig(modelValue)?.label ||
-    modelValue ||
-    fallbackVideoModel?.label ||
-    '视频模型'
-  );
-}
-
 function clampCount(value, model) {
   const max = Math.max(1, model.maxCount || 1);
   return Math.min(Math.max(1, Number(value) || 1), max);
@@ -3978,11 +3919,8 @@ const MediaPlayground = () => {
             返回主页
           </Button>
           <div className='mp-topbar-title-block'>
-            <img className='mp-site-logo' src='/logo.png' alt='星人' />
-            <div>
-              <strong>媒体创作工作台</strong>
-              <span>{workflowLabel} · {activeModel.label}</span>
-            </div>
+            <strong>媒体创作工作台</strong>
+            <span>{workflowLabel} · {activeModel.label}</span>
           </div>
           <div className='mp-topbar-summary' aria-label='当前任务摘要'>
             <div>
@@ -4256,9 +4194,15 @@ const MediaPlayground = () => {
                 <div className='mp-material-zone is-disabled'>
                   <div className='mp-material-zone-head'>
                     <strong>参考图 Reference Images</strong>
+                    <span>用于图生图、视频首帧或作为结果复用入口。</span>
                   </div>
                   <div className='mp-material-disabled'>
                     <IconImage />
+                    <span>
+                      {creativeTask === 'image-generate'
+                        ? '当前为文生图，不会发送参考图；如需使用图片，请切换到图生图或图片编辑。'
+                        : '当前任务的图片输入在编辑源图或视频参考区操作，避免混用素材。'}
+                    </span>
                     <Button size='small' theme='borderless' onClick={() => selectCreativeTask('image-edit')}>
                       切换图生图
                     </Button>
@@ -4268,6 +4212,7 @@ const MediaPlayground = () => {
                 <div className={creativeTask === 'image-edit' ? 'mp-material-zone is-primary' : 'mp-material-zone is-disabled'}>
                   <div className='mp-material-zone-head'>
                     <strong>编辑源图 Edit Source</strong>
+                    <span>用于图片编辑、局部重绘、风格迁移。</span>
                   </div>
                   {creativeTask === 'image-edit' ? (
                     <div className='mp-field-grid is-material'>
@@ -4290,6 +4235,7 @@ const MediaPlayground = () => {
                   ) : (
                     <div className='mp-material-disabled'>
                       <IconImage />
+                      <span>切换到图片编辑后可上传源图，并用 Prompt 描述修改要求。</span>
                     </div>
                   )}
                 </div>
@@ -4297,6 +4243,7 @@ const MediaPlayground = () => {
                 <div className={creativeTask === 'reverse' ? 'mp-material-zone is-primary' : 'mp-material-zone is-disabled'}>
                   <div className='mp-material-zone-head'>
                     <strong>反推图 Reverse Prompt Image</strong>
+                    <span>用于从图片生成提示词，不参与文生图提交。</span>
                   </div>
                   {creativeTask === 'reverse' ? (
                     <div className='mp-reverse-material'>
@@ -4317,6 +4264,9 @@ const MediaPlayground = () => {
                   ) : (
                     <div className='mp-material-disabled'>
                       <IconImage />
+                      <span>
+                        当前为{creativeTask === 'image-generate' ? '文生图模式，不需要反推图片。如需从图片反推提示词，请切换到图像反推提示词。' : '其他创作模式，选择图像反推后可上传图片生成提示词。'}
+                      </span>
                       <Button size='small' theme='borderless' onClick={() => selectCreativeTask('reverse')}>
                         切换反推
                       </Button>
@@ -4327,6 +4277,7 @@ const MediaPlayground = () => {
                 <div className={creativeTask === 'video' && videoWorkflow !== 'text' ? 'mp-material-zone is-primary' : 'mp-material-zone is-disabled'}>
                   <div className='mp-material-zone-head'>
                     <strong>视频参考 Video Reference</strong>
+                    <span>用于图生视频、首尾帧或视频参考素材。</span>
                   </div>
                   {creativeTask === 'video' && videoWorkflow !== 'text' ? (
                     <div className='mp-field-grid is-material'>
@@ -4351,6 +4302,7 @@ const MediaPlayground = () => {
                   ) : (
                     <div className='mp-material-disabled'>
                       <IconPlay />
+                      <span>文生视频无需上传素材；切换图生视频或首尾帧后启用。</span>
                     </div>
                   )}
                 </div>
@@ -4399,30 +4351,11 @@ const MediaPlayground = () => {
             ) : null}
 
               <div id='mp-parameter-workbench' className='mp-parameter-panel'>
-                <details className='mp-parameter-drawer'>
-                  <summary className='mp-parameter-drawer-summary'>
-                    <div className='mp-parameter-summary-title'>
-                      <SectionTitle meta='Control'>参数设置</SectionTitle>
-                      <span>{workflowLabel} · {outputSpec}</span>
-                    </div>
-                    <div className='mp-parameter-summary-pills' aria-hidden='true'>
-                      <span>{activeModel.label}</span>
-                      <span>{mode === 'image' ? imageRatioValue : size}</span>
-                      <span>
-                        {mode === 'image'
-                          ? `${clampCount(count, activeImageModel)} 张`
-                          : `${duration} 秒`}
-                      </span>
-                      <span>{mode === 'image' ? quality : `${fps} fps`}</span>
-                      <span>{formatLabel}</span>
-                    </div>
-                    <span className='mp-parameter-drawer-label'>
-                      <span className='is-closed'>展开参数</span>
-                      <span className='is-open'>收起参数</span>
-                    </span>
-                  </summary>
-                  <div className='mp-parameter-drawer-body'>
-                    <div className='mp-parameter-bar'>
+                <div className='mp-parameter-head'>
+                  <SectionTitle meta='Control'>参数控制台</SectionTitle>
+                  <span>{workflowLabel} · {outputSpec}</span>
+                </div>
+                <div className='mp-parameter-bar'>
                   <NativeSelect
                     label='模型'
                     value={currentModelId}
@@ -4554,109 +4487,107 @@ const MediaPlayground = () => {
                   >
                     {showAdvancedParams ? '收起高级' : '高级设置'}
                   </Button>
-                    </div>
+                  <Button
+                    type='primary'
+                    loading={creativeTask === 'reverse' ? reversePromptRunning : submitting}
+                    disabled={
+                      creativeTask === 'reverse'
+                        ? reversePromptRunning || !reversePromptFile
+                        : !modelAllowed
+                    }
+                    className='mp-generate-main-button'
+                    onClick={creativeTask === 'reverse' ? reverseImagePrompt : handleSubmit}
+                  >
+                    {creativeTask === 'reverse' ? '开始反推' : mode === 'video' ? '生成视频' : '生成图片'}
+                  </Button>
+                </div>
 
-                    {showAdvancedParams ? (
-                      <div className='mp-advanced-params'>
-                        {mode === 'video' ? (
-                          <NativeSelect
-                            label='分组'
-                            value={effectiveGroup}
-                            options={visibleGroupOptions}
-                            onChange={setGroup}
-                            agentKey='media-group'
-                          />
-                        ) : null}
-                        {showGptImage2CustomSize ? (
-                          <label className='mp-field' data-xr-agent='media-custom-size'>
-                            <span>自定义尺寸</span>
-                            <Input
-                              value={customImageSize}
-                              onChange={setCustomImageSize}
-                              placeholder='3840x2160'
-                            />
-                          </label>
-                        ) : null}
-                        {mode === 'image' &&
-                        imageWorkflow === 'edit' &&
-                        activeImageModel.supportsInputFidelity ? (
-                          <OptionChips
-                            label='参考图保真度'
-                            value={inputFidelity}
-                            options={toSelectOptions(['auto', 'low', 'high'])}
-                            onChange={setInputFidelity}
-                            compact
-                            agentKey='media-input-fidelity'
-                          />
-                        ) : null}
-                        {mode === 'image' && activeImageModel.backgroundOptions?.length ? (
-                          <OptionChips
-                            label='背景'
-                            value={background}
-                            options={toSelectOptions(activeImageModel.backgroundOptions)}
-                            onChange={setBackground}
-                            compact
-                            agentKey='media-background'
-                          />
-                        ) : null}
-                        {mode === 'image' && format !== 'png' && format !== 'url' ? (
-                          <div className='mp-slider-field'>
-                            <div>
-                              <span>压缩质量</span>
-                              <b>{compression}</b>
-                            </div>
-                            <Slider
-                              min={0}
-                              max={100}
-                              value={compression}
-                              data-xr-agent='media-compression'
-                              onChange={setCompression}
-                            />
-                          </div>
-                        ) : null}
-                        {mode === 'video' ? (
-                          <>
-                            <label className='mp-field'>
-                              <span>Seed</span>
-                              <Input
-                                value={seed}
-                                onChange={setSeed}
-                                placeholder='留空随机'
-                              />
-                            </label>
-                            <div className='mp-switch-line'>
-                              <div>
-                                <strong>智能润色提示词</strong>
-                                <span>适合小白用户，默认开启</span>
-                              </div>
-                              <Switch checked={enhancePrompt} onChange={setEnhancePrompt} />
-                            </div>
-                            <div className='mp-switch-line'>
-                              <div>
-                                <strong>添加水印</strong>
-                                <span>默认关闭，方便直接保存成品</span>
-                              </div>
-                              <Switch checked={watermark} onChange={setWatermark} />
-                            </div>
-                          </>
-                        ) : null}
+                {showAdvancedParams ? (
+                  <div className='mp-advanced-params'>
+                    {mode === 'video' ? (
+                      <NativeSelect
+                        label='分组'
+                        value={effectiveGroup}
+                        options={visibleGroupOptions}
+                        onChange={setGroup}
+                        agentKey='media-group'
+                      />
+                    ) : null}
+                    {showGptImage2CustomSize ? (
+                      <label className='mp-field' data-xr-agent='media-custom-size'>
+                        <span>自定义尺寸</span>
+                        <Input
+                          value={customImageSize}
+                          onChange={setCustomImageSize}
+                          placeholder='3840x2160'
+                        />
+                      </label>
+                    ) : null}
+                    {mode === 'image' &&
+                    imageWorkflow === 'edit' &&
+                    activeImageModel.supportsInputFidelity ? (
+                      <OptionChips
+                        label='参考图保真度'
+                        value={inputFidelity}
+                        options={toSelectOptions(['auto', 'low', 'high'])}
+                        onChange={setInputFidelity}
+                        compact
+                        agentKey='media-input-fidelity'
+                      />
+                    ) : null}
+                    {mode === 'image' && activeImageModel.backgroundOptions?.length ? (
+                      <OptionChips
+                        label='背景'
+                        value={background}
+                        options={toSelectOptions(activeImageModel.backgroundOptions)}
+                        onChange={setBackground}
+                        compact
+                        agentKey='media-background'
+                      />
+                    ) : null}
+                    {mode === 'image' && format !== 'png' && format !== 'url' ? (
+                      <div className='mp-slider-field'>
+                        <div>
+                          <span>压缩质量</span>
+                          <b>{compression}</b>
+                        </div>
+                        <Slider
+                          min={0}
+                          max={100}
+                          value={compression}
+                          data-xr-agent='media-compression'
+                          onChange={setCompression}
+                        />
                       </div>
                     ) : null}
+                    {mode === 'video' ? (
+                      <>
+                        <label className='mp-field'>
+                          <span>Seed</span>
+                          <Input
+                            value={seed}
+                            onChange={setSeed}
+                            placeholder='留空随机'
+                          />
+                        </label>
+                        <div className='mp-switch-line'>
+                          <div>
+                            <strong>智能润色提示词</strong>
+                            <span>适合小白用户，默认开启</span>
+                          </div>
+                          <Switch checked={enhancePrompt} onChange={setEnhancePrompt} />
+                        </div>
+                        <div className='mp-switch-line'>
+                          <div>
+                            <strong>添加水印</strong>
+                            <span>默认关闭，方便直接保存成品</span>
+                          </div>
+                          <Switch checked={watermark} onChange={setWatermark} />
+                        </div>
+                      </>
+                    ) : null}
                   </div>
-                </details>
-                <Button
-                  type='primary'
-                  loading={creativeTask === 'reverse' ? reversePromptRunning : submitting}
-                  disabled={
-                    creativeTask === 'reverse'
-                      ? reversePromptRunning || !reversePromptFile
-                      : !modelAllowed
-                  }
-                  className='mp-generate-main-button'
-                  onClick={creativeTask === 'reverse' ? reverseImagePrompt : handleSubmit}
-                >
-                  {creativeTask === 'reverse' ? '开始反推' : mode === 'video' ? '生成视频' : '生成图片'}
-                </Button>
+                ) : null}
               </div>
               {taskMessage ? (
                 <div className='mp-wait-panel' role='status' aria-live='polite'>
