@@ -381,6 +381,24 @@ func TestNormalizeMoonApiXSeedanceAliasKeepsKZMultimodalReferences(t *testing.T)
 	}
 }
 
+func TestNormalizeMoonApiXSeedanceAliasKeepsLocalReferenceMentions(t *testing.T) {
+	body := map[string]interface{}{
+		"model":    "seedance-2.0",
+		"prompt":   "让 @图片1 跟随 @音频1 的节奏移动，并参考 @视频1 的镜头。",
+		"duration": float64(10),
+		"references": []interface{}{
+			map[string]interface{}{"media_type": "image", "role": "reference_image", "url": "https://cdn.test/image.png", "alias": "图片1"},
+			map[string]interface{}{"media_type": "video", "role": "reference_video", "url": "https://cdn.test/video.mp4", "alias": "视频1"},
+			map[string]interface{}{"media_type": "audio", "role": "reference_audio", "url": "https://cdn.test/audio.mp3", "alias": "音频1"},
+		},
+	}
+
+	got := normalizeMoonApiXSeedanceVideoRequestBody(body)
+	if got["prompt"] != "让 @图片1 跟随 @音频1 的节奏移动，并参考 @视频1 的镜头。" {
+		t.Fatalf("prompt = %#v, want local alias mentions preserved", got["prompt"])
+	}
+}
+
 func TestNormalizeMoonApiXSeedanceAliasLimitsKZReferences(t *testing.T) {
 	references := make([]interface{}, 0, 20)
 	for i := 0; i < 12; i++ {

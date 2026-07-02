@@ -474,7 +474,11 @@ func normalizeMoonApiXSeedanceVideoRequestBody(bodyMap map[string]interface{}) m
 	if modelName != "" {
 		cleaned["model"] = modelName
 	}
-	if prompt := stripMoonApiXLocalReferenceMentions(trimmedString(bodyMap["prompt"])); prompt != "" {
+	prompt := trimmedString(bodyMap["prompt"])
+	if !isMoonApiXKZSeedanceVideoModel(modelName) {
+		prompt = stripMoonApiXLocalReferenceMentions(prompt)
+	}
+	if prompt != "" {
 		cleaned["prompt"] = prompt
 	}
 	cleaned["duration"] = moonApiXSeedanceDuration(bodyMap)
