@@ -412,6 +412,21 @@ def has_pattern(text: str, pattern: str) -> bool:
     return bool(re.search(pattern, text, re.S))
 
 
+def has_media_result_model_guard(text: str) -> bool:
+    markers = [
+        "function resultImageModelValue(result)",
+        "function resultVideoModelValue(result)",
+        "function resultModelLabel(result, fallbackImageModel, fallbackVideoModel)",
+        "const imageEditModelLockRef = useRef('')",
+        "const effectiveRequestPayload =",
+        "async function loadResultImageModelValue(result)",
+        "imageEditModelLockRef.current = hydratedSourceModelValue",
+        "已切回原结果模型",
+        "原结果模型当前不可用",
+    ]
+    return all(marker in text for marker in markers)
+
+
 def check_source(source_root: Path) -> dict[str, bool]:
     sidebar = source_text(source_root, "web/classic/src/components/layout/SiderBar.jsx")
     sidebar_config = source_text(source_root, "web/classic/src/hooks/common/useSidebar.js")
@@ -445,6 +460,7 @@ def check_source(source_root: Path) -> dict[str, bool]:
         "has_app_codex_route": "path='/console/codex'" in app and "CodexRedirect" in app,
         "has_seedance_private_model": "Seedance 私测视频" in media_playground and "seedance-nsfw" in media_playground,
         "has_seedance_private_filter": "private: true" in media_playground and "/api/user/models" in media_playground,
+        "has_media_result_model_guard": has_media_result_model_guard(media_playground),
         "has_seedance_backend_guard": (
             'seedancePrivateVideoModel         = "seedance-nsfw"' in user_controller
             and "seedancePrivateVideoAllowedUserID = 1" in user_controller
@@ -669,6 +685,7 @@ def check_url(base_url: str) -> dict[str, bool]:
         "has_task_log_label": "任务日志" in text,
         "has_task_log_route": "/console/task" in text,
         "has_admin_models_route": "/console/models" in text,
+        "has_media_result_model_guard": "已切回原结果模型" in text and "原结果模型当前不可用" in text,
     }
 
 

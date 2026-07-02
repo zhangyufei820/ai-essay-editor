@@ -86,10 +86,24 @@ function CodexRedirect() {}
         self.write_file(
             "web/classic/src/pages/MediaPlayground/index.jsx",
             """
+function resultImageModelValue(result) {}
+function resultVideoModelValue(result) {}
+function resultModelLabel(result, fallbackImageModel, fallbackVideoModel) {}
+
+function MediaPlayground() {
+  const imageEditModelLockRef = useRef('');
+  const effectiveRequestPayload = {};
+  imageEditModelLockRef.current = hydratedSourceModelValue;
+}
+
+async function loadResultImageModelValue(result) {}
+
 const VIDEO_MODELS = [
   { value: 'seedance-nsfw', label: 'Seedance 私测视频', private: true },
 ];
 API.get('/api/user/models');
+Toast.info('已切回原结果模型：GPT Image 2');
+Toast.warning('原结果模型当前不可用，请先手动选择可用模型。');
 """,
         )
         self.write_file(
@@ -133,6 +147,21 @@ func GetUserModels() {
         results = self.module.check_source(self.source_root)
 
         self.assertFalse(results["has_seedance_backend_guard"])
+
+    def test_check_source_fails_when_media_result_model_guard_is_missing(self) -> None:
+        self.write_file(
+            "web/classic/src/pages/MediaPlayground/index.jsx",
+            """
+const VIDEO_MODELS = [
+  { value: 'seedance-nsfw', label: 'Seedance 私测视频', private: true },
+];
+API.get('/api/user/models');
+""",
+        )
+
+        results = self.module.check_source(self.source_root)
+
+        self.assertFalse(results["has_media_result_model_guard"])
 
 
 if __name__ == "__main__":
