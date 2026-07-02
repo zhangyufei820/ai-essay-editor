@@ -3856,8 +3856,6 @@ const MediaPlayground = () => {
                   description='当前用户分组暂未开放这个模型。'
                 />
               ) : null}
-            </div>
-
             <section className='mp-results-section'>
               <div className='mp-panel-label'>05 · 结果</div>
               {results.length === 0 ? (
