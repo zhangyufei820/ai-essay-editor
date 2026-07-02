@@ -1,6 +1,36 @@
 /* 导入统一的 Design Tokens */
 @import '../../styles/media-tokens.css';
 
+/*
+  修复左侧导航和媒体工坊的视觉割裂问题
+  在媒体工坊页面时，强制左侧导航使用深色主题
+*/
+body:has(.mp-page) .semi-layout-sider,
+body:has(.mp-page) .semi-navigation,
+body:has(.mp-page) .semi-layout-header {
+  background: #0A0F14 !important;
+  border-right: 1px solid rgba(255, 255, 255, 0.06) !important;
+}
+
+body:has(.mp-page) .semi-navigation-item {
+  color: rgba(240, 244, 248, 0.7) !important;
+}
+
+body:has(.mp-page) .semi-navigation-item:hover {
+  background: rgba(255, 255, 255, 0.05) !important;
+  color: rgba(240, 244, 248, 0.9) !important;
+}
+
+body:has(.mp-page) .semi-navigation-item-selected {
+  background: rgba(45, 212, 191, 0.15) !important;
+  color: #2DD4BF !important;
+}
+
+body:has(.mp-page) .semi-layout-header {
+  background: #0A0F14 !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
+}
+
 .mp-page {
   min-height: calc(100vh - 64px);
   padding: 34px 32px 48px;
