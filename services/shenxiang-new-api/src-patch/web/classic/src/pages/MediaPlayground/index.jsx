@@ -57,6 +57,8 @@ import {
   GenerateActionBar,
   ResultGallery,
   RightStatusPanel,
+  MediaUploadPanel,
+  ModelSelector,
 } from '../../components/media-workbench';
 
 const { Text, Title, Paragraph } = Typography;
@@ -3399,45 +3401,14 @@ const MediaPlayground = () => {
               </div>
             )}
 
-            <SectionTitle meta={activeModel.vendor}>模型</SectionTitle>
-            <div className='mp-model-grid'>
-              {modelOptions.map((item) => {
-                const selected = currentModelId === item.value;
-                return (
-                  <button
-                    key={item.value}
-                    type='button'
-                    className={
-                      selected ? 'mp-model-card active' : 'mp-model-card'
-                    }
-                    data-xr-agent={`media-model-${agentSelectorValue(item.value)}`}
-                    onClick={() =>
-                      mode === 'image'
-                        ? setImageModel(item.value)
-                        : setVideoModel(item.value)
-                    }
-                  >
-                    <div className='mp-model-card-head'>
-                      <span className='mp-model-name'>{item.label}</span>
-                      <Tag color={selected ? 'blue' : 'grey'}>{item.badge}</Tag>
-                    </div>
-                    <div className='mp-model-meta'>
-                      <span>{item.vendor}</span>
-                      {item.priceLabel ? <span>{item.priceLabel}</span> : null}
-                      {item.billingLabel ? <span>{item.billingLabel}</span> : null}
-                      {item.supportsFace === true ? <span>可过人脸</span> : null}
-                      {item.supportsFace === false ? <span>不能过人脸</span> : null}
-                      {item.referenceLimits ? (
-                        <span>{videoReferencePolicy(item).limitLabel}</span>
-                      ) : null}
-                      {item.maxCount ? <span>最多 {item.maxCount} 张</span> : null}
-                      {item.sizes?.length ? <span>{item.sizes.length} 规格</span> : null}
-                    </div>
-                    <small>{item.hint}</small>
-                  </button>
-                );
-              })}
-            </div>
+            <ModelSelector
+              models={modelOptions}
+              selectedModel={currentModelId}
+              onSelectModel={(value) =>
+                mode === 'image' ? setImageModel(value) : setVideoModel(value)
+              }
+              mode={mode}
+            />
           </aside>
 
           <main className='mp-canvas-panel'>

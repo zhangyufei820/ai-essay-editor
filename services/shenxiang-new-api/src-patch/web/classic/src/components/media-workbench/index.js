@@ -7,3 +7,5 @@ export { GenerateActionBar } from './GenerateActionBar';
 export { ResultCard } from './ResultCard';
 export { ResultGallery } from './ResultGallery';
 export { RightStatusPanel } from './RightStatusPanel';
+export { MediaUploadPanel } from './MediaUploadPanel';
+export { ModelSelector } from './ModelSelector';
