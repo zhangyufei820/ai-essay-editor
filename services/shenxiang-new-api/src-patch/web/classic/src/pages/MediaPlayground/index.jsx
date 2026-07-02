@@ -3486,13 +3486,15 @@ const MediaPlayground = () => {
             ) : null}
               {mode === 'image' && imageWorkflow === 'edit' ? (
                 <div className='mp-field-grid'>
-                  <MultiFileDrop
-                    label='上传参考图'
+                  <MediaUploadPanel
+                    type='image'
                     files={referenceFiles}
                     maxFiles={referenceFileLimit}
+                    accept='image/png,image/jpeg,image/webp'
                     onFiles={addReferenceFiles}
                     onRemove={removeReferenceFile}
-                    hint={`已选 ${referenceFiles.length} / ${referenceFileLimit} 张，拖入或点击上传 PNG / JPG / WebP`}
+                    label='上传参考图'
+                    hint='拖入或点击上传 PNG / JPG / WebP'
                   />
                   <FileDrop
                     label='上传遮罩图，可选'
@@ -3505,19 +3507,19 @@ const MediaPlayground = () => {
 
               {mode === 'video' && videoWorkflow !== 'text' ? (
                 <div className='mp-field-grid'>
-                  <MultiFileDrop
+                  <MediaUploadPanel
+                    type='mixed'
+                    files={referenceFiles}
+                    maxFiles={referenceFileLimit}
+                    accept={videoRefPolicy.accept}
+                    onFiles={addReferenceFiles}
+                    onRemove={removeReferenceFile}
                     label={
                       videoWorkflow === 'first-last'
                         ? '上传首帧 / 参考素材'
                         : '上传参考素材 / 首帧'
                     }
-                    files={referenceFiles}
-                    maxFiles={referenceFileLimit}
-                    onFiles={addReferenceFiles}
-                    onRemove={removeReferenceFile}
-                    accept={videoRefPolicy.accept}
-                    onInsertMention={insertReferenceMention}
-                    hint={`${videoRefPolicy.hint} 已选 ${referenceFiles.length} / ${referenceFileLimit}。`}
+                    hint={videoRefPolicy.hint}
                   />
                   {videoWorkflow === 'first-last' ? (
                     <FileDrop

@@ -9,11 +9,12 @@ import './MediaUploadPanel.css';
  * 所有逻辑通过 props 传入，保持原有业务逻辑
  */
 export function MediaUploadPanel({
-  type = 'image', // 'image' | 'video' | 'audio'
+  type = 'image', // 'image' | 'video' | 'audio' | 'mixed'
   files = [],
   maxFiles = 10,
   accept = '',
-  onFilesChange,
+  onFiles, // 原 MultiFileDrop 使用 onFiles
+  onFilesChange, // 新接口使用 onFilesChange
   onRemove,
   disabled = false,
   hint = '',
@@ -24,7 +25,12 @@ export function MediaUploadPanel({
   const handleFileInput = (event) => {
     const selectedFiles = Array.from(event.target.files || []);
     if (selectedFiles.length > 0) {
-      onFilesChange(selectedFiles);
+      // 兼容原 onFiles 和新 onFilesChange
+      if (onFiles) {
+        onFiles(selectedFiles);
+      } else if (onFilesChange) {
+        onFilesChange(selectedFiles);
+      }
     }
   };
 
@@ -47,6 +53,7 @@ export function MediaUploadPanel({
 
   const isImage = type === 'image';
   const isVideo = type === 'video';
+  const isMixed = type === 'mixed';
   const isEmpty = files.length === 0;
   const isFull = files.length >= maxFiles;
 
@@ -58,11 +65,15 @@ export function MediaUploadPanel({
         {files.map((file, index) => (
           <div key={index} className="mp-upload-item">
             <div className="mp-upload-preview">
-              {isImage && (
+              {(isImage || isMixed) && (
                 <img
                   src={getFilePreview(file)}
                   alt={`预览 ${index + 1}`}
                   className="mp-upload-image"
+                  onError={(e) => {
+                    // 如果不是图片，显示占位符
+                    e.target.style.display = 'none';
+                  }}
                 />
               )}
               {isVideo && (
@@ -72,7 +83,7 @@ export function MediaUploadPanel({
                   preload="metadata"
                 />
               )}
-              {!isImage && !isVideo && (
+              {!isImage && !isVideo && !isMixed && (
                 <div className="mp-upload-audio">
                   <IconVideo size="large" />
                   <span className="mp-upload-filename">
