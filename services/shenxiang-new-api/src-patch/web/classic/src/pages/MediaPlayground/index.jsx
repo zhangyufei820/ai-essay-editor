@@ -29,7 +29,6 @@ import {
   Switch,
   Tag,
   Toast,
-  Tooltip,
   Typography,
 } from '@douyinfe/semi-ui';
 import {
@@ -2401,10 +2400,9 @@ function MentionMenu({
 
 function ResultCard({
   result,
-  onRemove,
-  onReusePrompt,
   onContinueEdit,
   onUseAsReference,
+  onInspect,
   selected = false,
   onToggleSelect,
 }) {
@@ -2581,16 +2579,6 @@ function ResultCard({
             size='small'
             theme='borderless'
             className='mp-btn-tool'
-            icon={<IconExternalOpen />}
-            disabled={!openUrl}
-            onClick={() => openMediaUrl(openUrl)}
-          >
-            查看
-          </Button>
-          <Button
-            size='small'
-            theme='borderless'
-            className='mp-btn-tool'
             icon={<IconDownload />}
             onClick={() =>
               downloadURL(
@@ -2606,37 +2594,12 @@ function ResultCard({
           <Button
             size='small'
             theme='borderless'
-            className='mp-btn-tool'
-            icon={<IconCopy />}
-            onClick={async () => {
-              const ok = await copy(displayUrl || originalUrl);
-              if (ok) Toast.success('链接已复制');
-            }}
+            className='mp-btn-ghost'
+            icon={<IconExternalOpen />}
+            onClick={() => onInspect?.(result)}
           >
-            复制
+            更多
           </Button>
-          {displayPrompt ? (
-            <Button
-              size='small'
-              theme='borderless'
-              className='mp-btn-ghost'
-              icon={<IconRefresh />}
-              onClick={() => onReusePrompt(displayPrompt)}
-            >
-              套用
-            </Button>
-          ) : null}
-          <Tooltip content='从结果中移除'>
-            <Button
-              size='small'
-              theme='borderless'
-              type='danger'
-              className='mp-btn-danger'
-              icon={<IconDelete />}
-              onClick={() => onRemove(result.id)}
-              aria-label='删除作品'
-            />
-          </Tooltip>
         </div>
       </div>
     </div>
@@ -4051,9 +4014,7 @@ const MediaPlayground = () => {
   }, [results, resultSort]);
   const inspectorResult = useMemo(
     () =>
-      visibleResults.find((item) => selectedResultIds.includes(item.id)) ||
-      visibleResults[0] ||
-      null,
+      visibleResults.find((item) => selectedResultIds.includes(item.id)) || null,
     [selectedResultIds, visibleResults],
   );
   const inspectorResultPreview = inspectorResult
@@ -4091,6 +4052,13 @@ const MediaPlayground = () => {
         block: 'start',
       });
     });
+  }
+
+  function inspectResult(item) {
+    setSelectedResultIds((prev) =>
+      prev.includes(item.id) ? prev : [item.id, ...prev],
+    );
+    scrollWorkbenchTo('mp-context-panel');
   }
 
   function selectCreativeTask(task, nextWorkflow) {
@@ -4441,21 +4409,25 @@ const MediaPlayground = () => {
     {
       key: 'text-image',
       label: '文生图',
+      active: creativeTask === 'image-generate',
       onClick: () => selectCreativeTask('image-generate'),
     },
     {
       key: 'image-image',
       label: '图生图',
+      active: creativeTask === 'image-edit',
       onClick: () => selectCreativeTask('image-edit'),
     },
     {
       key: 'inpaint',
       label: '局部重绘',
+      active: creativeTask === 'image-edit',
       onClick: () => selectCreativeTask('image-edit'),
     },
     {
       key: 'style',
       label: '风格迁移',
+      active: creativeTask === 'image-edit',
       onClick: () => selectCreativeTask('image-edit'),
     },
   ];
@@ -4523,21 +4495,14 @@ const MediaPlayground = () => {
             </div>
           </div>
           <div className='mp-topbar-summary' aria-label='当前任务摘要'>
-            <div>
-              <span>输出规格</span>
-              <strong>{outputSpec}</strong>
+            <div className='mp-topbar-primary-spec'>
+              <span>当前模型 / 输出规格</span>
+              <strong>{activeModel.label} · {outputSpec}</strong>
             </div>
-            <div>
-              <span>作品</span>
-              <strong>{results.length} 个</strong>
-            </div>
-            <div>
-              <span>素材</span>
-              <strong>{referenceFiles.length} / {referenceFileLimit}</strong>
-            </div>
-            <div>
-              <span>保留</span>
-              <strong>72 小时</strong>
+            <div className='mp-topbar-pills'>
+              <span>作品 {results.length} 个</span>
+              <span>素材 {referenceFiles.length} / {referenceFileLimit}</span>
+              <span>保留 72 小时</span>
             </div>
           </div>
         </header>
@@ -4613,7 +4578,12 @@ const MediaPlayground = () => {
               <SectionTitle>快捷入口</SectionTitle>
               <div className='mp-quick-grid'>
                 {quickEntryItems.map((item) => (
-                  <button key={item.key} type='button' onClick={item.onClick}>
+                  <button
+                    key={item.key}
+                    type='button'
+                    className={item.active ? 'active' : ''}
+                    onClick={item.onClick}
+                  >
                     <IconImage />
                     <span>{item.label}</span>
                   </button>
@@ -4828,7 +4798,7 @@ const MediaPlayground = () => {
                 <details className='mp-parameter-drawer'>
                   <summary className='mp-parameter-drawer-summary'>
                     <div className='mp-parameter-summary-title'>
-                      <SectionTitle meta='Control'>参数设置</SectionTitle>
+                      <SectionTitle meta='Control'>创作控制条</SectionTitle>
                       <span>{workflowLabel} · {outputSpec}</span>
                     </div>
                     <div className='mp-parameter-summary-pills' aria-hidden='true'>
@@ -5080,7 +5050,7 @@ const MediaPlayground = () => {
                     className='mp-generate-main-button'
                     onClick={creativeTask === 'reverse' ? reverseImagePrompt : handleSubmit}
                   >
-                    {mode === 'video' ? '生成视频' : '生成图片'}
+                    {mode === 'video' ? '立即生成视频' : '立即生成图片'}
                   </Button>
                 </div>
               </div>
@@ -5192,15 +5162,11 @@ const MediaPlayground = () => {
                       <ResultCard
                         key={result.id}
                         result={result}
-                        onRemove={handleRemoveResult}
                         onContinueEdit={(item) => reuseResultMedia(item, 'edit')}
                         onUseAsReference={(item) => reuseResultMedia(item, item.kind === 'video' ? 'video' : 'reference')}
+                        onInspect={inspectResult}
                         selected={selectedResultIds.includes(result.id)}
                         onToggleSelect={toggleResultSelection}
-                        onReusePrompt={(value) => {
-                          setPrompt(value);
-                          Toast.success('已套用到提示词。');
-                        }}
                       />
                     ))}
                   </div>
@@ -5213,6 +5179,7 @@ const MediaPlayground = () => {
           </main>
 
           <aside
+            id='mp-context-panel'
             className={
               inspectorResult
                 ? 'mp-inspector mp-queue-panel is-result-context'
@@ -5297,23 +5264,10 @@ const MediaPlayground = () => {
                               theme='borderless'
                               className='mp-btn-ghost'
                               onClick={() => {
-                                setSelectedResultIds((prev) =>
-                                  prev.includes(item.result.id)
-                                    ? prev
-                                    : [item.result.id, ...prev],
-                                );
-                                scrollWorkbenchTo('mp-results-workbench');
+                                inspectResult(item.result);
                               }}
                             >
                               查看
-                            </Button>
-                            <Button
-                              size='small'
-                              theme='borderless'
-                              type='danger'
-                              onClick={() => handleRemoveResult(item.result.id)}
-                            >
-                              删除
                             </Button>
                           </>
                         ) : (
@@ -5423,6 +5377,20 @@ const MediaPlayground = () => {
                     )}
                   </div>
                   <div className='mp-result-inspector-tools'>
+                    {inspectorResultPrompt ? (
+                      <Button
+                        size='small'
+                        theme='borderless'
+                        className='mp-btn-tool'
+                        icon={<IconRefresh />}
+                        onClick={() => {
+                          setPrompt(inspectorResultPrompt);
+                          Toast.success('已套用到提示词。');
+                        }}
+                      >
+                        套用提示词
+                      </Button>
+                    ) : null}
                     <Button
                       size='small'
                       theme='borderless'

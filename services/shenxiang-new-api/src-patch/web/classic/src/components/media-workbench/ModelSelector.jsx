@@ -18,6 +18,15 @@ export function ModelSelector({
   const [searchQuery, setSearchQuery] = useState('');
 
   const currentModel = models.find(m => m.value === selectedModel) || models[0];
+  const currentHint = String(currentModel?.hint || '').split('。')[0].trim();
+  const capabilityLabel = mode === 'image'
+    ? currentModel?.edit
+      ? '图片生成 / 图片编辑'
+      : '图片生成'
+    : '视频生成';
+  const shortHint = currentHint || (mode === 'image'
+    ? '高质量图像模型，适合商业海报与产品图。'
+    : '视频生成模型，适合镜头化创意短片。');
 
   const filteredModels = models.filter(model =>
     model.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -45,19 +54,14 @@ export function ModelSelector({
           </div>
 
           <div className="mp-current-model-meta">
-            {currentModel.priceLabel && (
-              <span className="mp-meta-tag">{currentModel.priceLabel}</span>
-            )}
-            {currentModel.billingLabel && (
-              <span className="mp-meta-tag">{currentModel.billingLabel}</span>
-            )}
+            <span className="mp-meta-tag">{capabilityLabel}</span>
             {currentModel.sizes?.length && (
               <span className="mp-meta-tag">{currentModel.sizes.length} 规格</span>
             )}
           </div>
 
-          {currentModel.hint && (
-            <p className="mp-current-model-hint">{currentModel.hint}</p>
+          {shortHint && (
+            <p className="mp-current-model-hint">{shortHint}。</p>
           )}
 
           <Button

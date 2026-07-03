@@ -37,8 +37,8 @@
 .mp-current-model-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--mp-spacing-sm);
-  margin-bottom: var(--mp-spacing-md);
+  gap: 6px;
+  margin-bottom: 10px;
 }
 
 .mp-meta-tag {
@@ -53,8 +53,8 @@
 .mp-current-model-hint {
   font-size: 12px;
   color: var(--mp-text-muted);
-  line-height: 1.5;
-  margin: 0 0 var(--mp-spacing-md) 0;
+  line-height: 1.45;
+  margin: 0 0 12px 0;
 }
 
 .mp-change-model-btn {
@@ -67,6 +67,35 @@
 .mp-change-model-btn:hover {
   background: var(--mp-accent-soft-hover) !important;
   color: var(--mp-accent-primary-hover) !important;
+}
+
+.mp-sidebar-model-card .mp-current-model-card {
+  padding: 0;
+}
+
+.mp-sidebar-model-card .mp-current-model-header {
+  margin-bottom: 8px;
+}
+
+.mp-sidebar-model-card .mp-current-model-name {
+  margin-bottom: 3px;
+  font-size: 15px;
+}
+
+.mp-sidebar-model-card .mp-current-model-vendor {
+  font-size: 12px;
+}
+
+.mp-sidebar-model-card .mp-meta-tag {
+  padding: 3px 7px;
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 999px;
+}
+
+.mp-sidebar-model-card .mp-change-model-btn {
+  height: 36px;
+  border-radius: 9px !important;
+  font-weight: 760 !important;
 }
 
 /* 模型选择弹窗 */

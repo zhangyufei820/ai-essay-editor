@@ -53,6 +53,14 @@ export function PromptComposer({
       text: '主体：\n动作：\n场景：\n镜头运动：\n光线：\n节奏：\n画幅用途：',
     },
   ];
+  const promptAtoms = [
+    { key: 'subject', label: '主体', text: '主体：' },
+    { key: 'scene', label: '场景', text: '场景：' },
+    { key: 'light', label: '光线', text: '光线：' },
+    { key: 'camera', label: '镜头', text: '镜头：' },
+    { key: 'style', label: '风格', text: '风格：' },
+    { key: 'usage', label: '用途', text: '用途：' },
+  ];
   const handleNegativeSwitch = (checked) => {
     onNegativePromptEnabledChange?.(checked);
     setNegativeExpanded(Boolean(checked));
@@ -60,6 +68,13 @@ export function PromptComposer({
   const applyPromptStructure = (text) => {
     const nextPrompt = promptValue.trim() ? `${promptValue}\n\n${text}` : text;
     onPromptChange?.(nextPrompt);
+  };
+  const insertPromptAtom = (text) => {
+    const prefix = promptValue.trim() ? '\n' : '';
+    onPromptChange?.(`${promptValue}${prefix}${text}`);
+  };
+  const openPromptAssistant = () => {
+    window.dispatchEvent(new CustomEvent('aiphui:open-api-teacher'));
   };
 
   useEffect(() => {
@@ -79,60 +94,88 @@ export function PromptComposer({
           <p className="mp-prompt-guide">描述主体、场景、光线、镜头、风格和用途。</p>
         </div>
         <div className="mp-prompt-toolbar" aria-label="提示词工具">
-          {onReverseClick ? (
-            <Tooltip content="跳转到图像反推面板">
+          <div className="mp-prompt-primary-tools">
+            <Tooltip content="打开 API 老师，协助整理提示词和页面操作">
               <Button
                 size="small"
                 theme="borderless"
-                icon={<IconRefresh />}
-                className="mp-btn-tool"
-                onClick={onReverseClick}
+                className="mp-btn-secondary is-strong"
+                onClick={openPromptAssistant}
               >
-                反推填入
+                提示词助手
               </Button>
             </Tooltip>
-          ) : null}
-          <Tooltip content="复制提示词">
-            <Button
-              size="small"
-              theme="borderless"
-              icon={<IconCopy />}
-              className="mp-btn-tool"
-              disabled={!promptValue.trim()}
-              onClick={onCopy}
-            >
-              复制
-            </Button>
-          </Tooltip>
-          <Tooltip content="清空提示词">
-            <Button
-              size="small"
-              theme="borderless"
-              icon={<IconDelete />}
-              className="mp-btn-tool is-danger"
-              disabled={!promptValue}
-              onClick={onClear}
-            >
-              清空
-            </Button>
-          </Tooltip>
-          <span className="mp-prompt-counter">{promptLength} / 2000</span>
+            {onReverseClick ? (
+              <Tooltip content="跳转到图像反推面板">
+                <Button
+                  size="small"
+                  theme="borderless"
+                  icon={<IconRefresh />}
+                  className="mp-btn-secondary"
+                  onClick={onReverseClick}
+                >
+                  反推填入
+                </Button>
+              </Tooltip>
+            ) : null}
+          </div>
+          <div className="mp-prompt-utility-tools">
+            <Tooltip content="复制提示词">
+              <Button
+                size="small"
+                theme="borderless"
+                className="mp-btn-tool"
+                icon={<IconCopy />}
+                disabled={!promptValue.trim()}
+                onClick={onCopy}
+              >
+                复制
+              </Button>
+            </Tooltip>
+            <Tooltip content="清空提示词">
+              <Button
+                size="small"
+                theme="borderless"
+                icon={<IconDelete />}
+                className="mp-btn-ghost is-danger"
+                disabled={!promptValue}
+                onClick={onClear}
+              >
+                清空
+              </Button>
+            </Tooltip>
+            <span className="mp-prompt-counter">{promptLength} / 2000</span>
+          </div>
         </div>
       </div>
 
       <div className="mp-prompt-structure-row" aria-label="提示词结构模板">
         <span>结构模板</span>
-        <div>
-          {promptStructures.map((item) => (
-            <button
-              key={item.key}
-              type="button"
-              className="mp-prompt-structure-chip"
-              onClick={() => applyPromptStructure(item.text)}
-            >
-              {item.label}
-            </button>
-          ))}
+        <div className="mp-prompt-template-group">
+          <div className="mp-prompt-template-presets">
+            {promptStructures.map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                className="mp-prompt-structure-chip"
+                onClick={() => applyPromptStructure(item.text)}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+          <div className="mp-prompt-atom-rail" aria-label="提示词结构片段">
+            {promptAtoms.map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                className="mp-prompt-atom-chip"
+                onClick={() => insertPromptAtom(item.text)}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -148,7 +191,7 @@ export function PromptComposer({
             onKeyDown={onPromptKeyDown}
             onCompositionStart={onCompositionStart}
             onCompositionEnd={onCompositionEnd}
-            placeholder="输入你要生成的画面、镜头或修改要求。"
+            placeholder="从一个清晰画面开始：主体是谁，在哪里，什么光线，什么镜头，什么风格，最终用在什么场景。"
             className="mp-prompt-textarea"
             data-xr-agent="media-prompt"
           />

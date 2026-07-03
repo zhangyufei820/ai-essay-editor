@@ -331,3 +331,104 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Creator-core pass: make Prompt feel like the primary creative surface. */
+.mp-prompt-toolbar {
+  align-items: center;
+}
+
+.mp-prompt-primary-tools,
+.mp-prompt-utility-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--mp-spacing-sm);
+  min-width: 0;
+}
+
+.mp-prompt-primary-tools {
+  padding-right: var(--mp-spacing-sm);
+  border-right: 1px solid var(--mp-border-subtle);
+}
+
+.mp-prompt-utility-tools .mp-btn-ghost.is-danger:hover {
+  color: var(--mp-status-error) !important;
+  border-color: var(--mp-status-error) !important;
+  background: color-mix(in srgb, var(--mp-status-error) 10%, transparent) !important;
+}
+
+.mp-prompt-template-group {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.mp-prompt-template-presets,
+.mp-prompt-atom-rail {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--mp-spacing-sm);
+}
+
+.mp-prompt-atom-rail {
+  padding: 8px;
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: var(--mp-radius-md);
+  background: var(--mp-bg-card);
+}
+
+.mp-prompt-atom-chip {
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  color: var(--mp-text-muted);
+  background: var(--mp-bg-elevated);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 760;
+  transition:
+    border-color var(--mp-transition-fast),
+    background var(--mp-transition-fast),
+    color var(--mp-transition-fast),
+    transform var(--mp-transition-fast);
+}
+
+.mp-prompt-atom-chip:hover,
+.mp-prompt-atom-chip:focus-visible {
+  border-color: var(--mp-border-focus);
+  color: var(--mp-accent-primary);
+  background: var(--mp-accent-soft);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.mp-prompt-textarea,
+.mp-prompt-textarea textarea {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--mp-accent-primary) 4%, transparent), transparent 46%),
+    var(--mp-bg-input) !important;
+  font-size: 15px !important;
+}
+
+.mp-prompt-textarea textarea::placeholder {
+  color: color-mix(in srgb, var(--mp-text-muted) 78%, var(--mp-text-secondary)) !important;
+}
+
+@media (max-width: 860px) {
+  .mp-prompt-toolbar,
+  .mp-prompt-primary-tools,
+  .mp-prompt-utility-tools {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .mp-prompt-primary-tools {
+    padding-right: 0;
+    border-right: 0;
+  }
+}
