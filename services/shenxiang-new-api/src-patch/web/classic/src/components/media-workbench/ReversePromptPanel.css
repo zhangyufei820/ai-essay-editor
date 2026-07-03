@@ -20,6 +20,10 @@
   gap: var(--mp-spacing-xl);
 }
 
+.mp-reverse-body:has(> .mp-reverse-output-section:only-child) {
+  grid-template-columns: 1fr;
+}
+
 .mp-reverse-upload-section {
   display: flex;
   flex-direction: column;

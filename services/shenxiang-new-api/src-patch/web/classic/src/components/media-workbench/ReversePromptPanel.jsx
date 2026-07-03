@@ -1,9 +1,7 @@
 import React from 'react';
-import { Button, TextArea, Tag, Typography } from '@douyinfe/semi-ui';
+import { Button, TextArea, Tag } from '@douyinfe/semi-ui';
 import { IconEyeOpened, IconCopy, IconRefresh } from '@douyinfe/semi-icons';
 import './ReversePromptPanel.css';
-
-const { Text } = Typography;
 
 /**
  * 图像反推提示词面板
@@ -33,17 +31,16 @@ export function ReversePromptPanel({
             图像提示词反推
             <span className="mp-section-meta">{modelName}</span>
           </h3>
-          <Text type="tertiary">
-            上传参考图，先识别画面，再套用到当前图像生成模型。
-          </Text>
         </div>
         <Tag color="cyan">识图反推</Tag>
       </div>
 
       <div className="mp-reverse-body">
-        <div className="mp-reverse-upload-section">
-          {fileDrop}
-        </div>
+        {fileDrop ? (
+          <div className="mp-reverse-upload-section">
+            {fileDrop}
+          </div>
+        ) : null}
 
         <div className="mp-reverse-output-section">
           {modelSelector}

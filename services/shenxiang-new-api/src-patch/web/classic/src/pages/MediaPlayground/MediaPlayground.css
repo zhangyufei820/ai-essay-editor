@@ -5111,6 +5111,34 @@ body.mp-route-active .mp-material-grid.is-reverse-only .mp-material-zone.is-prim
   min-width: 0;
 }
 
+body.mp-route-active .mp-material-grid.is-upload-only {
+  overflow-x: visible;
+  overflow-y: visible;
+  padding-bottom: 0;
+  scroll-snap-type: none;
+}
+
+body.mp-route-active .mp-material-grid.is-upload-only .mp-material-zone {
+  flex: 1 1 100%;
+  min-width: 0;
+  min-height: 0;
+  scroll-snap-align: none;
+}
+
+body.mp-route-active .mp-material-grid.is-upload-only .mp-material-zone.is-primary {
+  flex-basis: 100%;
+  min-width: 0;
+}
+
+body.mp-route-active .mp-material-zone.is-primary.is-reverse-source .mp-upload-card {
+  min-height: 152px;
+}
+
+body.mp-route-active .mp-material-zone.is-primary.is-edit-source .mp-field-grid.is-material,
+body.mp-route-active .mp-material-zone.is-primary.is-video-source .mp-field-grid.is-material {
+  gap: 10px;
+}
+
 body.mp-route-active .mp-material-zone {
   flex: 0 0 190px;
   min-height: 152px;

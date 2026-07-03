@@ -26,7 +26,6 @@ import {
   Select,
   Slider,
   Space,
-  Spin,
   Switch,
   Tag,
   Toast,
@@ -2535,11 +2534,30 @@ const MediaPlayground = () => {
   const [submitting, setSubmitting] = useState(false);
   const [videoPolling, setVideoPolling] = useState(false);
   const [activeVideoTask, setActiveVideoTask] = useState(null);
+  const [liveQueueTasks, setLiveQueueTasks] = useState([]);
   const [taskMessage, setTaskMessage] = useState('');
   const [imageTaskLookup, setImageTaskLookup] = useState('');
   const [submitStartedAt, setSubmitStartedAt] = useState(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [showAdvancedParams, setShowAdvancedParams] = useState(false);
+
+  function upsertLiveQueueTask(task) {
+    if (!task?.id) return;
+    setLiveQueueTasks((current) => {
+      const existing = current.find((item) => item.id === task.id);
+      const nextTask = {
+        ...(existing || {}),
+        ...task,
+        createdAt: task.createdAt || existing?.createdAt || Date.now(),
+      };
+      return [nextTask, ...current.filter((item) => item.id !== task.id)].slice(0, 12);
+    });
+  }
+
+  function removeLiveQueueTask(id) {
+    if (!id) return;
+    setLiveQueueTasks((current) => current.filter((item) => item.id !== id));
+  }
 
   useEffect(() => {
     document.body.classList.add('mp-route-active');
@@ -3393,13 +3411,40 @@ const MediaPlayground = () => {
     if (!taskId) throw new Error('图像任务提交成功但没有返回任务 ID。');
     setImageTaskLookup(taskId);
     setTaskMessage(`图像任务已提交：${taskId}，正在等待持久化结果...`);
-    const result = await pollImageTask(
-      taskId,
-      submittedPrompt,
-      submittedModel,
-      submittedModelLabel,
-    );
+    upsertLiveQueueTask({
+      id: taskId,
+      title: '图片生成中',
+      kind: 'image',
+      model: submittedModelLabel,
+      status: 'running',
+      statusText: '生成中',
+      progress: 3,
+      createdAt: Date.now(),
+      message: `图像任务已提交：${taskId}`,
+    });
+    let result;
+    try {
+      result = await pollImageTask(
+        taskId,
+        submittedPrompt,
+        submittedModel,
+        submittedModelLabel,
+      );
+    } catch (error) {
+      upsertLiveQueueTask({
+        id: taskId,
+        title: '图片生成失败',
+        kind: 'image',
+        model: submittedModelLabel,
+        status: 'failed',
+        statusText: '失败',
+        progress: 100,
+        message: generationErrorMessage(error),
+      });
+      throw error;
+    }
     if (!result) return;
+    removeLiveQueueTask(taskId);
     setResults((prev) => [result, ...prev]);
     Toast.success('图像已生成，请立即下载保存。');
   }
@@ -3443,7 +3488,17 @@ const MediaPlayground = () => {
         } else if (elapsedMs >= IMAGE_LONG_WAIT_MS) {
           waitSuffix = '，生成耗时较长，请继续等待或稍后用任务 ID 查询';
         }
-        setTaskMessage(`图像任务 ${res.data.data.task_id}：${status}，进度 ${progress}%${waitSuffix}`);
+        const nextMessage = `图像任务 ${res.data.data.task_id}：${status}，进度 ${progress}%${waitSuffix}`;
+        setTaskMessage(nextMessage);
+        upsertLiveQueueTask({
+          id: taskId,
+          title: '图片生成中',
+          kind: 'image',
+          status: status === 'completed' ? 'running' : status || 'running',
+          statusText: status === 'completed' ? '回收结果' : status || '生成中',
+          progress,
+          message: nextMessage,
+        });
         if (status === 'completed') {
           const result = imageTaskToResult(
             res.data.data,
@@ -3455,6 +3510,18 @@ const MediaPlayground = () => {
           throw new Error('图像任务完成但没有返回持久化图片。');
         }
         if (status === 'failed') {
+          upsertLiveQueueTask({
+            id: taskId,
+            title: '图片生成失败',
+            kind: 'image',
+            status: 'failed',
+            statusText: '失败',
+            progress: 100,
+            message:
+              res.data.data.fail_reason ||
+              res.data.data.data?.error ||
+              '图像任务失败。',
+          });
           throw createTerminalImageTaskError(
             res.data.data.fail_reason ||
               res.data.data.data?.error ||
@@ -3476,7 +3543,17 @@ const MediaPlayground = () => {
             Toast.info(IMAGE_VERY_LONG_WAIT_MESSAGE);
           }
         }
-        setTaskMessage(`图像任务 ${taskId} 查询暂时失败：${imagePollErrorMessage(error)}${waitSuffix}`);
+        const nextMessage = `图像任务 ${taskId} 查询暂时失败：${imagePollErrorMessage(error)}${waitSuffix}`;
+        setTaskMessage(nextMessage);
+        upsertLiveQueueTask({
+          id: taskId,
+          title: '图片生成中',
+          kind: 'image',
+          status: 'running',
+          statusText: '轮询中',
+          progress: parseProgressPercent(nextMessage),
+          message: nextMessage,
+        });
       }
       await new Promise((resolve) => setTimeout(resolve, 5000));
     }
@@ -3553,7 +3630,18 @@ const MediaPlayground = () => {
             backgroundNotified = true;
           }
         }
-        setTaskMessage(`视频任务 ${status}，进度 ${progress}%${waitSuffix}`);
+        const nextMessage = `视频任务 ${status}，进度 ${progress}%${waitSuffix}`;
+        setTaskMessage(nextMessage);
+        upsertLiveQueueTask({
+          id: taskId,
+          title: '视频生成中',
+          kind: 'video',
+          model: activeVideoModel.label,
+          status: status === 'completed' ? 'polling' : status || 'polling',
+          statusText: status === 'completed' ? '回收结果' : status || '轮询中',
+          progress,
+          message: nextMessage,
+        });
         if (url) return createVideoResult(
           res.data,
           url,
@@ -3561,8 +3649,19 @@ const MediaPlayground = () => {
           videoModel,
           activeVideoModel.label,
         );
-        if (status === 'failed')
+        if (status === 'failed') {
+          upsertLiveQueueTask({
+            id: taskId,
+            title: '视频生成失败',
+            kind: 'video',
+            model: activeVideoModel.label,
+            status: 'failed',
+            statusText: '失败',
+            progress: 100,
+            message: extractVideoFailureReason(res.data) || '视频任务失败。',
+          });
           throw new Error(extractVideoFailureReason(res.data) || '视频任务失败。');
+        }
         if (status === 'completed') {
           throw new Error('视频完成但没有返回视频地址。');
         }
@@ -3581,7 +3680,18 @@ const MediaPlayground = () => {
             backgroundNotified = true;
           }
         }
-        setTaskMessage(`视频任务查询暂时失败：${videoPollErrorMessage(error)}${waitSuffix}`);
+        const nextMessage = `视频任务查询暂时失败：${videoPollErrorMessage(error)}${waitSuffix}`;
+        setTaskMessage(nextMessage);
+        upsertLiveQueueTask({
+          id: taskId,
+          title: '视频生成中',
+          kind: 'video',
+          model: activeVideoModel.label,
+          status: 'polling',
+          statusText: '轮询中',
+          progress: parseProgressPercent(nextMessage),
+          message: nextMessage,
+        });
       }
       const elapsedMs = Date.now() - startedAt;
       await new Promise((resolve) =>
@@ -3626,6 +3736,17 @@ const MediaPlayground = () => {
     });
     setVideoPolling(true);
     setTaskMessage(`视频任务已提交：${taskId}，页面保持打开时会后台自动轮询结果。`);
+    upsertLiveQueueTask({
+      id: taskId,
+      title: '视频生成中',
+      kind: 'video',
+      model: activeVideoModel.label,
+      status: 'polling',
+      statusText: '轮询中',
+      progress: 3,
+      createdAt: Date.now(),
+      message: `视频任务已提交：${taskId}`,
+    });
     Toast.info('视频任务已进入后台轮询，可以继续修改提示词或参数。');
     window.setTimeout(async () => {
       let keepTaskMessage = false;
@@ -3638,9 +3759,20 @@ const MediaPlayground = () => {
           return;
         }
         const cached = await cacheMedia(result);
+        removeLiveQueueTask(taskId);
         setResults((prev) => [cached, ...prev]);
         Toast.success('视频已生成，请立即下载保存。');
       } catch (error) {
+        upsertLiveQueueTask({
+          id: taskId,
+          title: '视频生成失败',
+          kind: 'video',
+          model: activeVideoModel.label,
+          status: 'failed',
+          statusText: '失败',
+          progress: 100,
+          message: generationErrorMessage(error),
+        });
         Toast.error(userFacingGenerationError(generationErrorMessage(error)));
         setTaskMessage(`视频任务 ${taskId} 后台轮询结束：${generationErrorMessage(error)}`);
         keepTaskMessage = true;
@@ -3965,8 +4097,10 @@ const MediaPlayground = () => {
     mode === 'image' ? quality || '默认' : `${duration} 秒 · ${fps} fps`;
   const videoReferenceText = `${referenceFiles.length} / ${referenceFileLimit} 素材`;
   const formatLabel = mode === 'image' ? String(format || 'url').toUpperCase() : 'URL / MP4';
+  const runningQueueItems = liveQueueTasks.filter((item) => item.status !== 'failed');
   const activeQueueItem =
-    submitting || videoPolling
+    runningQueueItems[0] ||
+    (submitting || videoPolling
       ? {
         id: activeVideoTask?.taskId || imageTaskLookup || 'current-generation',
         title: workflowLabel,
@@ -3978,9 +4112,9 @@ const MediaPlayground = () => {
         createdAt: submitStartedAt || Date.now(),
         message: taskMessage || '任务已提交，等待上游返回。',
       }
-      : null;
+      : null);
   const queueItems = [
-    ...(activeQueueItem ? [activeQueueItem] : []),
+    ...liveQueueTasks,
     ...visibleResults.slice(0, 10).map((item) => ({
       id: item.id,
       title: item.kind === 'image' ? '图片生成完成' : '视频生成完成',
@@ -3994,11 +4128,14 @@ const MediaPlayground = () => {
     })),
   ];
   const queueCounts = {
-    running: activeQueueItem ? 1 : 0,
-    pending: 0,
+    running: liveQueueTasks.filter((item) => item.status === 'running' || item.status === 'polling').length,
+    pending: liveQueueTasks.filter((item) => item.status === 'queued').length,
     completed: visibleResults.length,
-    failed: 0,
+    failed: liveQueueTasks.filter((item) => item.status === 'failed').length,
   };
+  const activeQueueElapsedSeconds = activeQueueItem?.createdAt
+    ? Math.max(0, Math.floor((Date.now() - activeQueueItem.createdAt) / 1000))
+    : elapsedSeconds;
   const referenceLabel =
     mode === 'image'
       ? imageWorkflow === 'edit'
@@ -4007,6 +4144,10 @@ const MediaPlayground = () => {
       : videoWorkflow === 'text'
         ? '不需要'
         : videoReferenceText;
+  const showMaterialUploads =
+    creativeTask === 'image-edit' ||
+    creativeTask === 'reverse' ||
+    (creativeTask === 'video' && videoWorkflow !== 'text');
   const activePromptPreset =
     PROMPT_PRESETS.find((preset) => preset.value === prompt)?.label || '自定义描述';
   const outputSpec =
@@ -4338,24 +4479,16 @@ const MediaPlayground = () => {
                   </div>
                 ) : creativeTask === 'image-edit' ? (
                   <div className='mp-toggle-row'>
-                    {[
-                      { key: 'edit', label: '图像修改' },
-                      { key: 'inpaint', label: '局部重绘' },
-                      { key: 'style', label: '风格迁移' },
-                    ].map((item) => (
-                      <button
-                        key={item.key}
-                        type='button'
-                        className={item.key === 'edit' ? 'active' : ''}
-                        onClick={() => {
-                          imageEditModelLockRef.current = '';
-                          setImageWorkflow('edit');
-                          if (item.key === 'style') setPrompt(PROMPT_PRESETS[1]?.value || prompt);
-                        }}
-                      >
-                        {item.label}
-                      </button>
-                    ))}
+                    <button
+                      type='button'
+                      className='active'
+                      onClick={() => {
+                        imageEditModelLockRef.current = '';
+                        setImageWorkflow('edit');
+                      }}
+                    >
+                      图像修改
+                    </button>
                   </div>
                 ) : creativeTask === 'reverse' ? (
                   <div className='mp-toggle-row is-single'>
@@ -4421,93 +4554,57 @@ const MediaPlayground = () => {
                 onReverseClick={() => selectCreativeTask('reverse')}
               />
             </div>
-            <section id='mp-assets-workbench' className='mp-assets-section'>
-              <div className='mp-section-head'>
-                <SectionTitle meta='Source'>素材输入</SectionTitle>
-                <span>{workflowLabel} · {referenceLabel}</span>
-              </div>
-              <div className={creativeTask === 'reverse' ? 'mp-material-grid is-reverse-only' : 'mp-material-grid'}>
-                {creativeTask !== 'reverse' ? (
-                  <>
-                    <div className='mp-material-zone is-disabled'>
+            {showMaterialUploads ? (
+              <section id='mp-assets-workbench' className='mp-assets-section'>
+                <div className='mp-section-head'>
+                  <SectionTitle meta='Source'>素材输入</SectionTitle>
+                  <span>{workflowLabel} · {referenceLabel}</span>
+                </div>
+                <div className='mp-material-grid is-upload-only'>
+                  {creativeTask === 'image-edit' ? (
+                    <div className='mp-material-zone is-primary is-edit-source'>
                       <div className='mp-material-zone-head'>
-                        <strong>参考图 Reference Images</strong>
+                        <strong>编辑源图</strong>
                       </div>
-                      <div className='mp-material-disabled'>
-                        <IconImage />
-                        <Button size='small' theme='borderless' onClick={() => selectCreativeTask('image-edit')}>
-                          切换图生图
-                        </Button>
+                      <div className='mp-field-grid is-material'>
+                        <MultiFileDrop
+                          label='上传编辑源图'
+                          files={referenceFiles}
+                          maxFiles={referenceFileLimit}
+                          accept='image/png,image/jpeg,image/webp'
+                          onFiles={addReferenceFiles}
+                          onRemove={removeReferenceFile}
+                          hint={`支持 JPG / PNG / WebP，最多 ${referenceFileLimit} 张。`}
+                        />
+                        <FileDrop
+                          label='遮罩图，可选'
+                          file={maskFile}
+                          onFile={setMaskFile}
+                          compact
+                        />
                       </div>
                     </div>
+                  ) : null}
 
-                    <div className={creativeTask === 'image-edit' ? 'mp-material-zone is-primary' : 'mp-material-zone is-disabled'}>
-                      <div className='mp-material-zone-head'>
-                        <strong>编辑源图 Edit Source</strong>
-                      </div>
-                      {creativeTask === 'image-edit' ? (
-                        <div className='mp-field-grid is-material'>
-                          <MultiFileDrop
-                            label='上传编辑源图'
-                            files={referenceFiles}
-                            maxFiles={referenceFileLimit}
-                            accept='image/png,image/jpeg,image/webp'
-                            onFiles={addReferenceFiles}
-                            onRemove={removeReferenceFile}
-                            hint={`支持 JPG / PNG / WebP，最多 ${referenceFileLimit} 张。`}
-                          />
-                          <FileDrop
-                            label='遮罩图，可选'
-                            file={maskFile}
-                            onFile={setMaskFile}
-                            compact
-                          />
-                        </div>
-                      ) : (
-                        <div className='mp-material-disabled'>
-                          <IconImage />
-                        </div>
-                      )}
-                    </div>
-                  </>
-                ) : null}
-
-                <div className={creativeTask === 'reverse' ? 'mp-material-zone is-primary' : 'mp-material-zone is-disabled'}>
-                  <div className='mp-material-zone-head'>
-                    <strong>反推图 Reverse Prompt Image</strong>
-                  </div>
                   {creativeTask === 'reverse' ? (
-                    <div className='mp-reverse-material'>
+                    <div className='mp-material-zone is-primary is-reverse-source'>
+                      <div className='mp-material-zone-head'>
+                        <strong>反推图片</strong>
+                      </div>
                       <FileDrop
                         label='上传反推图片'
                         file={reversePromptFile}
                         onFile={setReversePromptFile}
                         compact
                       />
-                      <Button
-                        type='primary'
-                        loading={reversePromptRunning}
-                        onClick={reverseImagePrompt}
-                      >
-                        开始反推
-                      </Button>
                     </div>
-                  ) : (
-                    <div className='mp-material-disabled'>
-                      <IconImage />
-                      <Button size='small' theme='borderless' onClick={() => selectCreativeTask('reverse')}>
-                        切换反推
-                      </Button>
-                    </div>
-                  )}
-                </div>
+                  ) : null}
 
-                {creativeTask !== 'reverse' ? (
-                  <div className={creativeTask === 'video' && videoWorkflow !== 'text' ? 'mp-material-zone is-primary' : 'mp-material-zone is-disabled'}>
-                    <div className='mp-material-zone-head'>
-                      <strong>视频参考 Video Reference</strong>
-                    </div>
-                    {creativeTask === 'video' && videoWorkflow !== 'text' ? (
+                  {creativeTask === 'video' && videoWorkflow !== 'text' ? (
+                    <div className='mp-material-zone is-primary is-video-source'>
+                      <div className='mp-material-zone-head'>
+                        <strong>{videoWorkflow === 'first-last' ? '首尾帧素材' : '视频参考素材'}</strong>
+                      </div>
                       <div className='mp-field-grid is-material'>
                         <MultiFileDrop
                           label={videoWorkflow === 'first-last' ? '首帧 / 参考素材' : '上传视频参考素材'}
@@ -4527,15 +4624,11 @@ const MediaPlayground = () => {
                           />
                         ) : null}
                       </div>
-                    ) : (
-                      <div className='mp-material-disabled'>
-                        <IconPlay />
-                      </div>
-                    )}
-                  </div>
-                ) : null}
-              </div>
-            </section>
+                    </div>
+                  ) : null}
+                </div>
+              </section>
+            ) : null}
 
             {creativeTask === 'reverse' ? (
               <section id='mp-reverse-workbench' className='mp-reverse-workbench'>
@@ -4554,14 +4647,7 @@ const MediaPlayground = () => {
                   message={reversePromptMessage}
                   modelName={REVERSE_PROMPT_MODEL}
                   imageWorkflow={imageWorkflow}
-                  fileDrop={
-                    <FileDrop
-                      label='上传反推参考图'
-                      file={reversePromptFile}
-                      onFile={setReversePromptFile}
-                      compact
-                    />
-                  }
+                  fileDrop={null}
                   modelSelector={
                     <NativeSelect
                       label='生成模型'
@@ -4830,7 +4916,7 @@ const MediaPlayground = () => {
                 </details>
                 <Button
                   type='primary'
-                  loading={creativeTask === 'reverse' ? reversePromptRunning : submitting}
+                  loading={creativeTask === 'reverse' ? reversePromptRunning : false}
                   disabled={
                     creativeTask === 'reverse'
                       ? reversePromptRunning || !reversePromptFile
@@ -4842,46 +4928,6 @@ const MediaPlayground = () => {
                   {creativeTask === 'reverse' ? '开始反推' : mode === 'video' ? '生成视频' : '生成图片'}
                 </Button>
               </div>
-              {taskMessage ? (
-                <div className='mp-wait-panel' role='status' aria-live='polite'>
-                  <div className='mp-wait-orbit'>
-                    <Spin size='large' />
-                  </div>
-                  <div className='mp-wait-copy'>
-                    <strong>
-                      {mode === 'image'
-                        ? '图像生成中'
-                        : videoPolling
-                          ? '视频后台轮询中'
-                          : '视频生成中'}
-                    </strong>
-                    <span>{taskMessage}</span>
-                    {activeVideoTask ? (
-                      <span>
-                        {activeVideoTask.model} · {activeVideoTask.workflow} · {activeVideoTask.spec}
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className='mp-wait-meter'>
-                    <div>
-                      <span>已等待</span>
-                      <strong>{elapsedSeconds} 秒</strong>
-                    </div>
-                    <div>
-                      <span>常规预期</span>
-                      <strong>至少 30 秒</strong>
-                    </div>
-                    <div>
-                      <span>下一步</span>
-                      <strong>{videoPolling ? '完成后自动落到画布' : '结果会进入下方画布'}</strong>
-                    </div>
-                  </div>
-                  <div className='mp-wait-actions'>
-                    <span>当前任务已交给后台异步轮询，按提交瞬间的内容执行。</span>
-                    <span>保持页面打开时会自动刷新进度；你可以继续修改参数或准备下一版提示词。</span>
-                  </div>
-                </div>
-              ) : null}
               {mode === 'image' ? (
                 <div className='mp-task-lookup'>
                   <Input
@@ -4909,25 +4955,14 @@ const MediaPlayground = () => {
               ) : null}
             <section id='mp-results-workbench' className='mp-results-section'>
               {results.length === 0 ? (
-                <div className={submitting ? 'mp-empty-canvas is-rendering' : 'mp-empty-canvas'}>
+                <div className='mp-empty-canvas'>
                   <div className='mp-empty-mark'>
-                    {submitting ? <Spin size='large' /> : <IconUpload />}
+                    <IconUpload />
                   </div>
-                  <Title heading={4}>
-                    {submitting ? '正在生成第一个作品' : '等待第一个作品'}
-                  </Title>
+                  <Title heading={4}>等待第一个作品</Title>
                   <Paragraph>
-                    {submitting
-                      ? '当前任务正在执行，完成后作品会自动落到这里。'
-                      : '选择模型后点击生成。你会在这里看到可预览、可复制、可下载的临时结果。'}
+                    选择模型后点击生成。任务进度会进入右侧队列，完成后作品会自动落到这里。
                   </Paragraph>
-                  {submitting ? (
-                    <div className='mp-render-preview' aria-hidden='true'>
-                      <span />
-                      <span />
-                      <span />
-                    </div>
-                  ) : null}
                   <div className='mp-empty-spec'>
                     <span>{activeModel.label}</span>
                     <span>{workflowLabel}</span>
@@ -5062,7 +5097,7 @@ const MediaPlayground = () => {
                     <div className='mp-queue-progress'>
                       <span style={{ width: `${activeQueueItem.progress || 18}%` }} />
                     </div>
-                    <em>{elapsedSeconds} 秒 · {activeQueueItem.id}</em>
+                    <em>{activeQueueElapsedSeconds} 秒 · {activeQueueItem.id}</em>
                   </div>
                 </div>
               ) : (
