@@ -523,7 +523,7 @@ func PlaygroundServeMedia(c *gin.Context) {
 		c.AbortWithStatus(http.StatusNotFound)
 		return
 	}
-	if userDir != playgroundMediaUserDirName(c.GetInt("id")) {
+	if !canServePlaygroundMediaUserDir(c, userDir) {
 		c.AbortWithStatus(http.StatusForbidden)
 		return
 	}
@@ -561,6 +561,17 @@ func PlaygroundServeMedia(c *gin.Context) {
 	}
 	c.Header("Cache-Control", fmt.Sprintf("private, max-age=%d", int(ttl.Seconds())))
 	c.File(fullPath)
+}
+
+func canServePlaygroundMediaUserDir(c *gin.Context, userDir string) bool {
+	currentUserID := c.GetInt("id")
+	if userDir == playgroundMediaUserDirName(currentUserID) {
+		return true
+	}
+	if currentUserID == 0 || c.GetInt("token_id") != 0 {
+		return false
+	}
+	return model.IsAdmin(currentUserID)
 }
 
 func isValidPlaygroundMediaUserDir(value string) bool {

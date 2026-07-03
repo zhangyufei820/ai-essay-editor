@@ -251,7 +251,9 @@ const renderStatus = (type, t) => {
   }
 };
 
-const previewableUrlPattern = /^(https?:\/\/|\/pg\/media\/files\/|\/v1\/videos\/|\/pg\/videos\/)/i;
+const previewableRelativeUrlPattern = /^\/(?:pg\/media\/files\/|v1\/videos\/|pg\/videos\/)/i;
+const protectedMediaRelativeUrlPattern = /^\/pg\/media\/files\//i;
+const absoluteHttpUrlPattern = /^https?:\/\//i;
 const videoUrlPattern = /\.(mp4|webm|mov|m4v)(\?|#|$)|\/videos\/[^/]+\/content(?:\?|#|$)|\/pg\/media\/files\/.*\.(mp4|webm|mov|m4v)(\?|#|$)/i;
 const imageUrlPattern = /\.(png|jpe?g|webp|gif)(\?|#|$)|\/pg\/media\/files\/.*\.(png|jpe?g|webp|gif)(\?|#|$)/i;
 
@@ -282,12 +284,53 @@ function collectRecordMediaUrl(record) {
   ];
   for (const value of candidates) {
     if (typeof value !== 'string') continue;
-    const trimmed = value.trim();
-    if (previewableUrlPattern.test(trimmed)) {
-      return trimmed;
+    const safeUrl = normalizePreviewMediaUrl(value);
+    if (safeUrl) {
+      return safeUrl;
     }
   }
   return '';
+}
+
+function normalizePreviewMediaUrl(value) {
+  const trimmed = (value || '').trim();
+  if (!trimmed) return '';
+
+  try {
+    if (previewableRelativeUrlPattern.test(trimmed)) {
+      if (typeof window !== 'undefined' && window.location?.origin) {
+        return new URL(trimmed, window.location.origin).href;
+      }
+      return trimmed;
+    }
+
+    if (!absoluteHttpUrlPattern.test(trimmed)) {
+      return '';
+    }
+
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return '';
+    }
+    return parsed.href;
+  } catch {
+    return '';
+  }
+}
+
+function isSameOriginProtectedMediaUrl(value) {
+  if (typeof window === 'undefined' || !window.location?.origin) {
+    return false;
+  }
+  try {
+    const parsed = new URL(value, window.location.origin);
+    return (
+      parsed.origin === window.location.origin &&
+      protectedMediaRelativeUrlPattern.test(parsed.pathname)
+    );
+  } catch {
+    return false;
+  }
 }
 
 function isVideoRecord(record, url) {
@@ -316,8 +359,57 @@ function isImageRecord(record, url) {
   );
 }
 
-function openMediaUrl(url) {
-  window.open(url, '_blank', 'noopener,noreferrer');
+function writePreviewWindowMessage(previewWindow, message) {
+  if (!previewWindow) return;
+  try {
+    previewWindow.document.title = message;
+    previewWindow.document.body.style.margin = '24px';
+    previewWindow.document.body.style.fontFamily =
+      'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+    previewWindow.document.body.textContent = message;
+  } catch {
+    // Ignore cross-window write failures; the click handler still fails closed.
+  }
+}
+
+async function openMediaUrl(url) {
+  const safeUrl = normalizePreviewMediaUrl(url);
+  if (!safeUrl || typeof window === 'undefined') {
+    return false;
+  }
+  if (isSameOriginProtectedMediaUrl(safeUrl)) {
+    const previewWindow = window.open('', '_blank');
+    if (previewWindow) {
+      previewWindow.opener = null;
+      writePreviewWindowMessage(previewWindow, '正在加载预览...');
+    }
+    try {
+      const response = await fetch(safeUrl, {
+        credentials: 'include',
+        cache: 'no-store',
+      });
+      const contentType = response.headers.get('content-type') || '';
+      if (!response.ok || contentType.includes('application/json')) {
+        throw new Error(`preview request failed: ${response.status}`);
+      }
+      const objectUrl = URL.createObjectURL(await response.blob());
+      if (previewWindow) {
+        previewWindow.location.replace(objectUrl);
+      } else {
+        window.open(objectUrl, '_blank', 'noopener,noreferrer');
+      }
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60 * 1000);
+      return true;
+    } catch {
+      writePreviewWindowMessage(
+        previewWindow,
+        '预览失败，请回到控制台刷新登录状态后重试。',
+      );
+      return false;
+    }
+  }
+  window.open(safeUrl, '_blank', 'noopener,noreferrer');
+  return true;
 }
 
 export const getTaskLogsColumns = ({
