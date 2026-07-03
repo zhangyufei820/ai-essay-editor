@@ -333,6 +333,35 @@ function isSameOriginProtectedMediaUrl(value) {
   }
 }
 
+function protectedMediaDownloadUrl(value) {
+  if (typeof window === 'undefined' || !window.location?.origin) {
+    return value;
+  }
+  try {
+    const parsed = new URL(value, window.location.origin);
+    if (
+      parsed.origin === window.location.origin &&
+      protectedMediaRelativeUrlPattern.test(parsed.pathname)
+    ) {
+      parsed.searchParams.set('download', '1');
+      return parsed.href;
+    }
+    return parsed.href;
+  } catch {
+    return value;
+  }
+}
+
+function mediaFilenameFromUrl(value) {
+  try {
+    const parsed = new URL(value, window.location?.origin || undefined);
+    const filename = decodeURIComponent(parsed.pathname.split('/').pop() || '').trim();
+    return filename || 'xingren-media';
+  } catch {
+    return 'xingren-media';
+  }
+}
+
 function isVideoRecord(record, url) {
   const action = record?.action;
   return (
@@ -372,6 +401,84 @@ function writePreviewWindowMessage(previewWindow, message) {
   }
 }
 
+function renderProtectedMediaPreview(previewWindow, safeUrl) {
+  if (!previewWindow) {
+    window.open(safeUrl, '_blank', 'noopener,noreferrer');
+    return;
+  }
+  const doc = previewWindow.document;
+  doc.title = '媒体预览';
+  doc.body.textContent = '';
+  doc.body.style.margin = '0';
+  doc.body.style.background = '#111827';
+  doc.body.style.color = '#f9fafb';
+  doc.body.style.fontFamily =
+    'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+
+  const toolbar = doc.createElement('div');
+  toolbar.style.position = 'sticky';
+  toolbar.style.top = '0';
+  toolbar.style.zIndex = '1';
+  toolbar.style.display = 'flex';
+  toolbar.style.alignItems = 'center';
+  toolbar.style.justifyContent = 'space-between';
+  toolbar.style.gap = '12px';
+  toolbar.style.padding = '10px 14px';
+  toolbar.style.background = 'rgba(17, 24, 39, 0.92)';
+  toolbar.style.backdropFilter = 'blur(8px)';
+
+  const status = doc.createElement('span');
+  status.textContent = '正在加载预览...';
+  status.style.fontSize = '13px';
+  status.style.color = '#d1d5db';
+
+  const downloadLink = doc.createElement('a');
+  downloadLink.href = protectedMediaDownloadUrl(safeUrl);
+  downloadLink.download = mediaFilenameFromUrl(safeUrl);
+  downloadLink.rel = 'noopener noreferrer';
+  downloadLink.textContent = '下载';
+  downloadLink.style.color = '#ffffff';
+  downloadLink.style.fontSize = '13px';
+  downloadLink.style.textDecoration = 'none';
+  downloadLink.style.border = '1px solid rgba(255, 255, 255, 0.35)';
+  downloadLink.style.borderRadius = '6px';
+  downloadLink.style.padding = '5px 10px';
+
+  const image = doc.createElement('img');
+  image.src = safeUrl;
+  image.alt = '媒体预览';
+  image.style.display = 'block';
+  image.style.maxWidth = '100vw';
+  image.style.height = 'auto';
+  image.style.margin = '0 auto';
+  image.addEventListener('load', () => {
+    status.textContent = '';
+  });
+  image.addEventListener('error', () => {
+    status.textContent = '预览失败，请回到控制台刷新登录状态后重试。';
+  });
+
+  toolbar.appendChild(status);
+  toolbar.appendChild(downloadLink);
+  doc.body.appendChild(toolbar);
+  doc.body.appendChild(image);
+}
+
+function downloadMediaUrl(url) {
+  const safeUrl = normalizePreviewMediaUrl(url);
+  if (!safeUrl || typeof document === 'undefined') {
+    return false;
+  }
+  const link = document.createElement('a');
+  link.href = protectedMediaDownloadUrl(safeUrl);
+  link.download = mediaFilenameFromUrl(safeUrl);
+  link.rel = 'noopener noreferrer';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  return true;
+}
+
 async function openMediaUrl(url) {
   const safeUrl = normalizePreviewMediaUrl(url);
   if (!safeUrl || typeof window === 'undefined') {
@@ -381,24 +488,9 @@ async function openMediaUrl(url) {
     const previewWindow = window.open('', '_blank');
     if (previewWindow) {
       previewWindow.opener = null;
-      writePreviewWindowMessage(previewWindow, '正在加载预览...');
     }
     try {
-      const response = await fetch(safeUrl, {
-        credentials: 'include',
-        cache: 'no-store',
-      });
-      const contentType = response.headers.get('content-type') || '';
-      if (!response.ok || contentType.includes('application/json')) {
-        throw new Error(`preview request failed: ${response.status}`);
-      }
-      const objectUrl = URL.createObjectURL(await response.blob());
-      if (previewWindow) {
-        previewWindow.location.replace(objectUrl);
-      } else {
-        window.open(objectUrl, '_blank', 'noopener,noreferrer');
-      }
-      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60 * 1000);
+      renderProtectedMediaPreview(previewWindow, safeUrl);
       return true;
     } catch {
       writePreviewWindowMessage(
@@ -603,32 +695,56 @@ export const getTaskLogsColumns = ({
         }
         if (isSuccess && resultUrl && isImageRecord(record, resultUrl)) {
           return (
-            <a
-              href={resultUrl}
-              target='_blank'
-              rel='noopener noreferrer'
-              onClick={(e) => {
-                e.preventDefault();
-                openMediaUrl(resultUrl);
-              }}
-            >
-              {t('点击预览图像')}
-            </a>
+            <Space spacing={8}>
+              <a
+                href={resultUrl}
+                target='_blank'
+                rel='noopener noreferrer'
+                onClick={(e) => {
+                  e.preventDefault();
+                  openMediaUrl(resultUrl);
+                }}
+              >
+                {t('点击预览图像')}
+              </a>
+              <a
+                href={protectedMediaDownloadUrl(resultUrl)}
+                rel='noopener noreferrer'
+                onClick={(e) => {
+                  e.preventDefault();
+                  downloadMediaUrl(resultUrl);
+                }}
+              >
+                {t('下载')}
+              </a>
+            </Space>
           );
         }
         if (isSuccess && resultUrl) {
           return (
-            <a
-              href={resultUrl}
-              target='_blank'
-              rel='noopener noreferrer'
-              onClick={(e) => {
-                e.preventDefault();
-                openMediaUrl(resultUrl);
-              }}
-            >
-              {t('点击打开结果')}
-            </a>
+            <Space spacing={8}>
+              <a
+                href={resultUrl}
+                target='_blank'
+                rel='noopener noreferrer'
+                onClick={(e) => {
+                  e.preventDefault();
+                  openMediaUrl(resultUrl);
+                }}
+              >
+                {t('点击打开结果')}
+              </a>
+              <a
+                href={protectedMediaDownloadUrl(resultUrl)}
+                rel='noopener noreferrer'
+                onClick={(e) => {
+                  e.preventDefault();
+                  downloadMediaUrl(resultUrl);
+                }}
+              >
+                {t('下载')}
+              </a>
+            </Space>
           );
         }
         if (!text) {

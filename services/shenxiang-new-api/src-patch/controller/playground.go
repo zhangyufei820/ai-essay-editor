@@ -560,7 +560,19 @@ func PlaygroundServeMedia(c *gin.Context) {
 		ttl = 0
 	}
 	c.Header("Cache-Control", fmt.Sprintf("private, max-age=%d", int(ttl.Seconds())))
+	if wantsPlaygroundMediaAttachment(c) {
+		c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, name))
+	}
 	c.File(fullPath)
+}
+
+func wantsPlaygroundMediaAttachment(c *gin.Context) bool {
+	value := strings.ToLower(strings.TrimSpace(c.Query("download")))
+	switch value {
+	case "1", "true", "yes", "attachment":
+		return true
+	}
+	return strings.EqualFold(strings.TrimSpace(c.Query("disposition")), "attachment")
 }
 
 func canServePlaygroundMediaUserDir(c *gin.Context, userDir string) bool {

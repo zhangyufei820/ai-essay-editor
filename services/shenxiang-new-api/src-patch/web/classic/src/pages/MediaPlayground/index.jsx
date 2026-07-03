@@ -1404,6 +1404,23 @@ function toAbsoluteMediaURL(url) {
   return url;
 }
 
+function toDownloadMediaURL(url) {
+  const absoluteUrl = toAbsoluteMediaURL(normalizeURL(url));
+  if (!absoluteUrl || typeof window === 'undefined' || !window.location?.origin) {
+    return absoluteUrl;
+  }
+  try {
+    const parsed = new URL(absoluteUrl, window.location.origin);
+    if (parsed.origin === window.location.origin && /^\/pg\/media\/files\//i.test(parsed.pathname)) {
+      parsed.searchParams.set('download', '1');
+      return parsed.href;
+    }
+    return parsed.href;
+  } catch {
+    return absoluteUrl;
+  }
+}
+
 function fileMediaType(file) {
   const mime = String(file?.type || '').toLowerCase();
   const name = String(file?.name || '').toLowerCase();
@@ -2015,7 +2032,7 @@ function createVideoResult(
 
 function downloadURL(url, filename) {
   const link = document.createElement('a');
-  link.href = url;
+  link.href = toDownloadMediaURL(url);
   link.download = filename;
   link.rel = 'noopener noreferrer';
   document.body.appendChild(link);

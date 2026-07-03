@@ -93,6 +93,17 @@ func TestPlaygroundServeMediaAllowsOwner(t *testing.T) {
 	require.Equal(t, "png", recorder.Body.String())
 }
 
+func TestPlaygroundServeMediaDownloadDisposition(t *testing.T) {
+	root := setupPlaygroundServeMediaTest(t)
+	writePlaygroundServeMediaTestFile(t, root, 1)
+
+	recorder := requestPlaygroundServeMedia(t, 1, 0, "/pg/media/files/u-1/"+playgroundServeMediaTestFilename+"?download=1")
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.Equal(t, `attachment; filename="`+playgroundServeMediaTestFilename+`"`, recorder.Header().Get("Content-Disposition"))
+	require.Equal(t, "png", recorder.Body.String())
+}
+
 func TestPlaygroundServeMediaRejectsCrossUserForNormalUser(t *testing.T) {
 	root := setupPlaygroundServeMediaTest(t)
 	writePlaygroundServeMediaTestFile(t, root, 2)
