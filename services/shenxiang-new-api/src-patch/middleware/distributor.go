@@ -399,15 +399,19 @@ func getModelRequest(c *gin.Context) (*ModelRequest, bool, error) {
 	if strings.HasPrefix(c.Request.URL.Path, "/v1/responses/compact") && modelRequest.Model != "" {
 		modelRequest.Model = ratio_setting.WithCompactModelSuffix(modelRequest.Model)
 	}
-	normalizePlaygroundImageModelRequest(c, &modelRequest)
+	normalizeImageEndpointModelRequest(c, &modelRequest)
+	if isOpenAITextEndpointPath(c.Request.URL.Path) && isImageGenerationModelName(modelRequest.Model) {
+		return nil, false, fmt.Errorf("%s is an image generation model; use POST /v1/images/generations or POST /v1/images/edits instead of text endpoints", strings.TrimSpace(modelRequest.Model))
+	}
 	return &modelRequest, shouldSelectChannel, nil
 }
 
-func normalizePlaygroundImageModelRequest(c *gin.Context, modelRequest *ModelRequest) {
+func normalizeImageEndpointModelRequest(c *gin.Context, modelRequest *ModelRequest) {
 	if c == nil || c.Request == nil || c.Request.URL == nil || modelRequest == nil {
 		return
 	}
-	if !strings.HasPrefix(c.Request.URL.Path, "/pg/images/") {
+	path := c.Request.URL.Path
+	if !strings.HasPrefix(path, "/pg/images/") && !strings.HasPrefix(path, "/v1/images/") {
 		return
 	}
 	modelName := strings.TrimSpace(modelRequest.Model)
@@ -416,6 +420,33 @@ func normalizePlaygroundImageModelRequest(c *gin.Context, modelRequest *ModelReq
 		return
 	}
 	modelRequest.Model = modelName
+}
+
+func isOpenAITextEndpointPath(path string) bool {
+	return strings.HasPrefix(path, "/v1/completions") ||
+		strings.HasPrefix(path, "/v1/chat/completions") ||
+		strings.HasPrefix(path, "/v1/responses") ||
+		strings.HasPrefix(path, "/pg/chat/completions")
+}
+
+func isImageGenerationModelName(modelName string) bool {
+	modelName = strings.ToLower(strings.TrimSpace(modelName))
+	if modelName == "" {
+		return false
+	}
+	if strings.HasPrefix(modelName, "gpt-image-") || strings.HasPrefix(modelName, "dall-e-") {
+		return true
+	}
+	if strings.HasPrefix(modelName, "imagen-") || strings.HasPrefix(modelName, "banana-") {
+		return true
+	}
+	if strings.HasPrefix(modelName, "geek2api-image-") || strings.HasPrefix(modelName, "grok-imagine-image") {
+		return true
+	}
+	if strings.HasPrefix(modelName, "image 2") {
+		return true
+	}
+	return strings.Contains(modelName, "image-preview")
 }
 
 // 修复 #4834: GET /v1/video/generations/:task_id && /v1/video/:task_id 此前不解析 model，

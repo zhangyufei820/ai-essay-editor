@@ -237,7 +237,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		}
 		return
 	}
-	if guardErr := rejectImageModelResponsesRequest(relayFormat, request); guardErr != nil {
+	if guardErr := rejectImageModelTextEndpointRequest(relayFormat, request); guardErr != nil {
 		newAPIError = guardErr
 		return
 	}
@@ -375,12 +375,16 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	}
 }
 
-func rejectImageModelResponsesRequest(relayFormat types.RelayFormat, request dto.Request) *types.NewAPIError {
-	if relayFormat != types.RelayFormatOpenAIResponses && relayFormat != types.RelayFormatOpenAIResponsesCompaction {
+func rejectImageModelTextEndpointRequest(relayFormat types.RelayFormat, request dto.Request) *types.NewAPIError {
+	if relayFormat != types.RelayFormatOpenAI &&
+		relayFormat != types.RelayFormatOpenAIResponses &&
+		relayFormat != types.RelayFormatOpenAIResponsesCompaction {
 		return nil
 	}
 	modelName := ""
 	switch r := request.(type) {
+	case *dto.GeneralOpenAIRequest:
+		modelName = r.Model
 	case *dto.OpenAIResponsesRequest:
 		modelName = r.Model
 	case *dto.OpenAIResponsesCompactionRequest:
@@ -393,7 +397,7 @@ func rejectImageModelResponsesRequest(relayFormat types.RelayFormat, request dto
 		return nil
 	}
 	return types.NewErrorWithStatusCode(
-		fmt.Errorf("%s is an image generation model; use POST /v1/images/generations instead of /v1/responses", modelName),
+		fmt.Errorf("%s is an image generation model; use POST /v1/images/generations or POST /v1/images/edits instead of text endpoints", modelName),
 		types.ErrorCodeInvalidRequest,
 		http.StatusBadRequest,
 		types.ErrOptionWithSkipRetry(),
@@ -466,7 +470,8 @@ func forcePlaygroundImageChannel(c *gin.Context, request dto.Request, relayInfo 
 	if c == nil || c.Request == nil || c.Request.URL == nil || relayInfo == nil || request == nil {
 		return
 	}
-	if !strings.HasPrefix(c.Request.URL.Path, "/pg/images/") || relayInfo.OriginModelName != "gpt-image-2-4K" {
+	path := c.Request.URL.Path
+	if (!strings.HasPrefix(path, "/pg/images/") && !strings.HasPrefix(path, "/v1/images/")) || relayInfo.OriginModelName != "gpt-image-2-4K" {
 		return
 	}
 	imageReq, ok := request.(*dto.ImageRequest)
@@ -493,11 +498,11 @@ func forcePlaygroundImageChannel(c *gin.Context, request dto.Request, relayInfo 
 			continue
 		}
 		c.Set("playground_forced_channel_id", channelID)
-		logger.LogInfo(c, fmt.Sprintf("playground forced %s %s to channel #%d", relayInfo.OriginModelName, resolution, channelID))
+		logger.LogInfo(c, fmt.Sprintf("image2 forced %s %s to channel #%d", relayInfo.OriginModelName, resolution, channelID))
 		return
 	}
 	if len(channelIDs) > 0 {
-		logger.LogError(c, fmt.Sprintf("playground configured %s channels %v are unavailable for group %s", envKey, channelIDs, relayInfo.TokenGroup))
+		logger.LogError(c, fmt.Sprintf("image2 configured %s channels %v are unavailable for group %s", envKey, channelIDs, relayInfo.TokenGroup))
 		c.Set("playground_forced_channel_unavailable", true)
 	}
 }
