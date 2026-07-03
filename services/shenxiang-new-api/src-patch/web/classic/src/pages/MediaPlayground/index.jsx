@@ -4914,19 +4914,21 @@ const MediaPlayground = () => {
                     ) : null}
                   </div>
                 </details>
-                <Button
-                  type='primary'
-                  loading={creativeTask === 'reverse' ? reversePromptRunning : false}
-                  disabled={
-                    creativeTask === 'reverse'
-                      ? reversePromptRunning || !reversePromptFile
-                      : !modelAllowed
-                  }
-                  className='mp-generate-main-button'
-                  onClick={creativeTask === 'reverse' ? reverseImagePrompt : handleSubmit}
-                >
-                  {creativeTask === 'reverse' ? '开始反推' : mode === 'video' ? '生成视频' : '生成图片'}
-                </Button>
+                <div className='mp-generate-action-dock'>
+                  <Button
+                    type='primary'
+                    loading={creativeTask === 'reverse' ? reversePromptRunning : false}
+                    disabled={
+                      creativeTask === 'reverse'
+                        ? reversePromptRunning || !reversePromptFile
+                        : !modelAllowed
+                    }
+                    className='mp-generate-main-button'
+                    onClick={creativeTask === 'reverse' ? reverseImagePrompt : handleSubmit}
+                  >
+                    {creativeTask === 'reverse' ? '开始反推' : mode === 'video' ? '生成视频' : '生成图片'}
+                  </Button>
+                </div>
               </div>
               {mode === 'image' ? (
                 <div className='mp-task-lookup'>

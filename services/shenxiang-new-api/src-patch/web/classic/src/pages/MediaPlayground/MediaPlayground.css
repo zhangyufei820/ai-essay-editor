@@ -5500,23 +5500,24 @@ body.mp-route-active .mp-material-disabled svg {
 
 body.mp-route-active .mp-parameter-panel {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 150px;
-  align-items: stretch;
-  gap: 10px;
-  padding: 10px;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+  padding: 10px 12px 12px;
 }
 
 body.mp-route-active .mp-parameter-drawer {
   min-width: 0;
+  position: relative;
 }
 
 body.mp-route-active .mp-parameter-drawer-summary {
-  min-height: 54px;
+  min-height: 58px;
   display: grid;
-  grid-template-columns: minmax(150px, 0.76fr) minmax(0, 1.35fr) auto;
+  grid-template-columns: minmax(156px, 0.74fr) minmax(0, 1.4fr) auto;
   align-items: center;
   gap: 10px;
-  padding: 9px 10px;
+  padding: 10px 12px;
   border: 1px solid var(--mp-border-subtle);
   border-radius: 8px;
   color: var(--mp-text-primary);
@@ -5605,11 +5606,16 @@ body.mp-route-active .mp-parameter-drawer[open] .mp-parameter-drawer-label::afte
 }
 
 body.mp-route-active .mp-parameter-drawer-body {
-  margin-top: 10px;
+  margin-top: 8px;
+  max-height: min(42vh, 360px);
+  overflow: auto;
   padding: 10px;
-  border: 1px solid var(--mp-border-subtle);
+  border: 1px solid var(--mp-border-strong);
   border-radius: 8px;
-  background: var(--mp-bg-card);
+  background:
+    linear-gradient(180deg, var(--mp-bg-elevated), var(--mp-bg-card)),
+    var(--mp-bg-card);
+  box-shadow: var(--mp-shadow-soft);
 }
 
 body.mp-route-active .mp-parameter-drawer-body .mp-parameter-bar {
@@ -5628,12 +5634,20 @@ body.mp-route-active .mp-parameter-drawer-body .mp-parameter-bar .mp-advanced-to
   width: 100%;
 }
 
-body.mp-route-active .mp-parameter-panel > .mp-generate-main-button {
-  width: 100%;
-  height: 54px !important;
+body.mp-route-active .mp-generate-action-dock {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  min-height: 58px;
+  padding: 2px 0 0;
+}
+
+body.mp-route-active .mp-generate-action-dock .mp-generate-main-button {
+  width: min(220px, 100%);
+  height: 56px !important;
   margin: 0 !important;
-  align-self: stretch;
   border-radius: 8px !important;
+  box-shadow: 0 16px 30px color-mix(in srgb, var(--mp-accent-primary) 22%, transparent);
 }
 
 @media (max-width: 1180px) {
@@ -5653,5 +5667,13 @@ body.mp-route-active .mp-parameter-panel > .mp-generate-main-button {
 @media (max-width: 720px) {
   body.mp-route-active .mp-parameter-summary-pills {
     flex-wrap: wrap;
+  }
+
+  body.mp-route-active .mp-generate-action-dock {
+    justify-content: stretch;
+  }
+
+  body.mp-route-active .mp-generate-action-dock .mp-generate-main-button {
+    width: 100%;
   }
 }
