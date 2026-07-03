@@ -46,6 +46,14 @@ curl -fsSI "http://127.0.0.1:${HOST_BIND_PORT}" | sed -n '1,20p'
 info "检查关键入口守卫"
 python3 "${APP_DIR}/scripts/ensure_codex_entry.py" --check-source --sync-db --check-url "http://127.0.0.1:${HOST_BIND_PORT}" --strict
 
+info "检查媒体工坊运行时防漂移守卫"
+if ! command -v node >/dev/null 2>&1; then
+  die "Node.js 不可用，无法执行媒体工坊运行时防漂移守卫"
+fi
+node "${APP_DIR}/scripts/check-media-playground-runtime.mjs" \
+  --base-url "http://127.0.0.1:${HOST_BIND_PORT}" \
+  --mysql-container shenxiang-new-api-mysql
+
 info "下一步"
 cat <<EOF
 1. 配置 DNS：将 ${PUBLIC_API_DOMAIN} A 记录指向当前服务器公网 IP。
