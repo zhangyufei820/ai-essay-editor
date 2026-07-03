@@ -6676,3 +6676,461 @@ body.mp-route-active .mp-result-grid.is-list-view .mp-result-tool-actions .semi-
     padding-right: 0;
   }
 }
+
+/* Top-tier creator workstation pass: prompt first, compact controls, contextual right rail. */
+body.mp-route-active .mp-canvas-panel {
+  gap: 10px;
+}
+
+body.mp-route-active .mp-flow-steps {
+  gap: 6px !important;
+  padding: 6px !important;
+}
+
+body.mp-route-active .mp-flow-step {
+  min-height: 44px !important;
+  padding: 7px 8px !important;
+}
+
+body.mp-route-active .mp-flow-step span {
+  width: 22px;
+  height: 22px;
+  font-size: 11px;
+}
+
+body.mp-route-active .mp-flow-step strong {
+  font-size: 12px;
+}
+
+body.mp-route-active .mp-flow-step em {
+  display: none;
+}
+
+body.mp-route-active .mp-mode-panel {
+  padding: 6px !important;
+}
+
+body.mp-route-active .mp-task-type-tabs {
+  min-height: 48px;
+  gap: 6px;
+}
+
+body.mp-route-active .mp-task-type-tabs button {
+  min-height: 44px !important;
+  padding: 0 8px;
+  border-radius: 9px;
+  font-size: 12px;
+}
+
+body.mp-route-active .mp-prompt-composer {
+  padding: 12px 14px 13px;
+}
+
+body.mp-route-active .mp-prompt-header {
+  gap: 12px;
+  margin-bottom: 9px;
+}
+
+body.mp-route-active .mp-prompt-structure-row {
+  margin-bottom: 8px;
+}
+
+body.mp-route-active .mp-prompt-textarea,
+body.mp-route-active .mp-prompt-textarea textarea {
+  min-height: 154px !important;
+  max-height: 204px !important;
+}
+
+body.mp-route-active .mp-negative-prompt-input,
+body.mp-route-active .mp-negative-prompt-input textarea {
+  max-height: 96px !important;
+}
+
+body.mp-route-active .mp-parameter-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 8px !important;
+  min-height: 0;
+  padding: 8px !important;
+  border-radius: 12px;
+  border-color: color-mix(in srgb, var(--mp-accent-primary) 20%, var(--mp-border-subtle));
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--mp-accent-primary) 5%, transparent), transparent),
+    var(--mp-bg-card);
+}
+
+body.mp-route-active .mp-control-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(158px, 188px);
+  grid-template-rows: auto auto;
+  gap: 6px 8px;
+  align-items: end;
+}
+
+body.mp-route-active .mp-control-bar-title {
+  grid-column: 1 / -1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+body.mp-route-active .mp-control-bar-title .mp-section-title {
+  margin: 0;
+  font-size: 12px;
+}
+
+body.mp-route-active .mp-control-bar-title > span {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--mp-text-muted);
+  font-size: 11px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.mp-route-active .mp-control-grid {
+  grid-column: 1;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(86px, 1fr));
+  gap: 6px;
+  align-items: end;
+}
+
+body.mp-route-active .mp-control-grid .mp-param-control,
+body.mp-route-active .mp-control-grid .mp-param-control.is-ratio,
+body.mp-route-active .mp-control-grid .mp-param-control.is-model,
+body.mp-route-active .mp-control-grid .mp-param-control.is-workflow,
+body.mp-route-active .mp-control-grid .mp-static-param,
+body.mp-route-active .mp-control-grid .mp-advanced-toggle {
+  grid-column: auto !important;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+}
+
+body.mp-route-active .mp-control-grid .mp-field > span {
+  display: block;
+  margin-bottom: 3px;
+  overflow: hidden;
+  color: var(--mp-text-muted);
+  font-size: 10.5px;
+  font-weight: 780;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.mp-route-active .mp-control-grid .semi-select,
+body.mp-route-active .mp-control-grid .semi-select-selection,
+body.mp-route-active .mp-control-grid .mp-static-param,
+body.mp-route-active .mp-control-grid .mp-advanced-toggle.semi-button {
+  min-height: 36px !important;
+  height: 36px !important;
+  border-radius: 9px !important;
+}
+
+body.mp-route-active .mp-control-grid .semi-select-selection {
+  border-color: var(--mp-border-subtle) !important;
+  background: var(--mp-bg-elevated) !important;
+}
+
+body.mp-route-active .mp-control-grid .semi-select-selection-text {
+  font-size: 12px;
+  font-weight: 760;
+}
+
+body.mp-route-active .mp-control-grid .mp-static-param {
+  gap: 1px;
+  padding: 6px 8px;
+}
+
+body.mp-route-active .mp-control-grid .mp-static-param span {
+  font-size: 10.5px;
+  line-height: 1.1;
+}
+
+body.mp-route-active .mp-control-grid .mp-static-param strong {
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.mp-route-active .mp-control-grid .mp-advanced-toggle.semi-button {
+  padding: 0 10px !important;
+  color: var(--mp-text-secondary) !important;
+  background: var(--mp-bg-elevated) !important;
+  border: 1px solid var(--mp-border-subtle) !important;
+}
+
+body.mp-route-active .mp-control-submit {
+  grid-column: 2;
+  align-self: end;
+}
+
+body.mp-route-active .mp-control-submit .mp-generate-main-button {
+  width: 100% !important;
+  min-height: 46px !important;
+  height: 46px !important;
+  margin: 0 !important;
+  border-radius: 12px !important;
+  font-size: 14px !important;
+}
+
+body.mp-route-active .mp-advanced-params-drawer {
+  max-height: min(30vh, 260px);
+  overflow: auto;
+  margin-top: 0;
+  padding: 10px;
+  border: 1px solid var(--mp-border-subtle);
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, var(--mp-bg-elevated), var(--mp-bg-card)),
+    var(--mp-bg-card);
+  box-shadow: var(--mp-shadow-soft);
+}
+
+body.mp-route-active .mp-task-lookup {
+  margin-top: -2px;
+  padding: 8px;
+  border-radius: 10px;
+}
+
+body.mp-route-active .mp-gallery-head {
+  gap: 10px;
+  padding: 0;
+}
+
+body.mp-route-active .mp-gallery-head h4 {
+  font-size: 17px;
+}
+
+body.mp-route-active .mp-gallery-head p {
+  margin-top: 2px;
+  font-size: 12px;
+}
+
+body.mp-route-active .mp-gallery-head .semi-space {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+body.mp-route-active .mp-gallery-head .mp-btn-tool.semi-button,
+body.mp-route-active .mp-gallery-head .mp-btn-secondary.semi-button,
+body.mp-route-active .mp-gallery-head .mp-btn-danger.semi-button {
+  height: 32px;
+  padding: 0 10px !important;
+}
+
+body.mp-route-active .mp-result-card {
+  overflow: hidden;
+}
+
+body.mp-route-active .mp-result-action-stack {
+  border-top: 1px solid var(--mp-border-subtle);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--mp-bg-elevated) 70%, transparent), var(--mp-bg-card)),
+    var(--mp-bg-card);
+}
+
+body.mp-route-active .mp-result-next-actions .mp-btn-secondary.semi-button {
+  height: 34px;
+  justify-content: center;
+}
+
+body.mp-route-active .mp-result-tool-actions .mp-btn-tool.semi-button,
+body.mp-route-active .mp-result-tool-actions .mp-btn-ghost.semi-button {
+  height: 30px;
+  justify-content: center;
+}
+
+body.mp-route-active .mp-result-prompt {
+  max-height: 74px;
+}
+
+body.mp-route-active .mp-result-prompt p {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+body.mp-route-active .mp-result-prompt.is-expanded {
+  max-height: 126px;
+  overflow: auto;
+}
+
+body.mp-route-active .mp-result-prompt.is-expanded p {
+  display: block;
+}
+
+body.mp-route-active .mp-queue-panel {
+  min-height: 0;
+  overflow: hidden;
+}
+
+body.mp-route-active .mp-queue-panel.is-queue-context {
+  gap: 10px;
+}
+
+body.mp-route-active .mp-queue-panel.is-result-context {
+  gap: 0;
+}
+
+body.mp-route-active .mp-queue-panel.is-result-context .mp-queue-card:not(.mp-result-inspector-card) {
+  display: none !important;
+}
+
+body.mp-route-active .mp-queue-panel.is-result-context .mp-result-inspector-card {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  flex-direction: column;
+}
+
+body.mp-route-active .mp-queue-panel.is-queue-context .mp-result-inspector-card {
+  display: none !important;
+}
+
+body.mp-route-active .mp-result-inspector-card .mp-queue-card-head {
+  flex: 0 0 auto;
+}
+
+body.mp-route-active .mp-result-inspector {
+  min-height: 0;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+body.mp-route-active .mp-result-inspector-preview {
+  aspect-ratio: 16 / 10;
+  border-radius: 12px;
+}
+
+body.mp-route-active .mp-result-inspector-next {
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--mp-accent-primary) 18%, var(--mp-border-subtle));
+  border-radius: 12px;
+  background: var(--mp-accent-soft);
+}
+
+body.mp-route-active .mp-result-inspector-tools {
+  padding-top: 2px;
+}
+
+body.mp-route-active .mp-result-danger-zone {
+  padding-top: 2px;
+  border-top: 1px solid var(--mp-border-subtle);
+}
+
+@media (max-width: 1440px) {
+  body.mp-route-active .mp-control-grid {
+    grid-template-columns: repeat(auto-fit, minmax(82px, 1fr));
+  }
+}
+
+@media (max-width: 1180px) {
+  body.mp-route-active .mp-control-bar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body.mp-route-active .mp-control-submit {
+    grid-column: 1;
+  }
+
+  body.mp-route-active .mp-control-submit .mp-generate-main-button {
+    height: 44px !important;
+  }
+}
+
+@media (max-width: 720px) {
+  body.mp-route-active .mp-control-bar-title {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  body.mp-route-active .mp-control-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Final compact control-bar pass: keep the core create flow in the first screen. */
+body.mp-route-active .mp-parameter-panel {
+  gap: 6px !important;
+  padding: 7px 8px !important;
+}
+
+body.mp-route-active .mp-control-bar {
+  grid-template-columns: minmax(0, 1fr) minmax(150px, 178px) !important;
+  grid-template-rows: minmax(42px, auto) !important;
+  gap: 8px !important;
+  align-items: center !important;
+}
+
+body.mp-route-active .mp-control-bar-title {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0 0 0 0) !important;
+  clip-path: inset(50%) !important;
+  white-space: nowrap !important;
+}
+
+body.mp-route-active .mp-control-grid {
+  display: flex !important;
+  grid-column: 1 !important;
+  gap: 6px !important;
+  align-items: end !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  padding: 0 2px 2px 0 !important;
+  scrollbar-width: thin;
+}
+
+body.mp-route-active .mp-control-grid .mp-param-control,
+body.mp-route-active .mp-control-grid .mp-static-param,
+body.mp-route-active .mp-control-grid .mp-advanced-toggle {
+  flex: 0 0 clamp(88px, 9vw, 122px) !important;
+}
+
+body.mp-route-active .mp-control-grid .mp-param-control.is-model {
+  flex-basis: clamp(132px, 12vw, 168px) !important;
+}
+
+body.mp-route-active .mp-control-grid .mp-param-control.is-workflow {
+  flex-basis: clamp(108px, 10vw, 132px) !important;
+}
+
+body.mp-route-active .mp-control-grid .mp-field > span {
+  margin-bottom: 2px !important;
+}
+
+body.mp-route-active .mp-control-submit {
+  grid-column: 2 !important;
+  align-self: end !important;
+}
+
+body.mp-route-active .mp-control-submit .mp-generate-main-button {
+  min-height: 44px !important;
+  height: 44px !important;
+  border-radius: 11px !important;
+}
+
+@media (max-width: 1180px) {
+  body.mp-route-active .mp-control-bar {
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-rows: auto auto !important;
+  }
+
+  body.mp-route-active .mp-control-submit {
+    grid-column: 1 !important;
+  }
+}

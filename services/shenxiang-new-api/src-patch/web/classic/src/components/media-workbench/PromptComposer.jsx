@@ -28,9 +28,7 @@ export function PromptComposer({
 }) {
   const promptLength = String(prompt || '').trim().length;
   const promptValue = String(prompt || '');
-  const [negativeExpanded, setNegativeExpanded] = useState(
-    Boolean(negativePromptEnabled || negativePrompt),
-  );
+  const [negativeExpanded, setNegativeExpanded] = useState(false);
   const promptStructures = [
     {
       key: 'frame',
@@ -54,12 +52,12 @@ export function PromptComposer({
     },
   ];
   const promptAtoms = [
-    { key: 'subject', label: '主体', text: '主体：' },
-    { key: 'scene', label: '场景', text: '场景：' },
-    { key: 'light', label: '光线', text: '光线：' },
-    { key: 'camera', label: '镜头', text: '镜头：' },
-    { key: 'style', label: '风格', text: '风格：' },
-    { key: 'usage', label: '用途', text: '用途：' },
+    { key: 'subject', label: '主体', hint: '谁或什么是主角', text: '主体：' },
+    { key: 'scene', label: '场景', hint: '地点、时代、环境', text: '场景：' },
+    { key: 'light', label: '光线', hint: '自然光、棚拍、夜景', text: '光线：' },
+    { key: 'camera', label: '镜头', hint: '角度、景别、运动', text: '镜头：' },
+    { key: 'style', label: '风格', hint: '质感、艺术方向', text: '风格：' },
+    { key: 'usage', label: '用途', hint: '海报、商品图、短片', text: '用途：' },
   ];
   const handleNegativeSwitch = (checked) => {
     onNegativePromptEnabledChange?.(checked);
@@ -91,7 +89,9 @@ export function PromptComposer({
             Prompt 提示词
             <span className="mp-section-meta">Prompt</span>
           </h3>
-          <p className="mp-prompt-guide">描述主体、场景、光线、镜头、风格和用途。</p>
+          <p className="mp-prompt-guide">
+            把创意拆成一张可执行的画面：先写主体，再补场景、光线、镜头、风格和用途。
+          </p>
         </div>
         <div className="mp-prompt-toolbar" aria-label="提示词工具">
           <div className="mp-prompt-primary-tools">
@@ -137,7 +137,7 @@ export function PromptComposer({
                 size="small"
                 theme="borderless"
                 icon={<IconDelete />}
-                className="mp-btn-ghost is-danger"
+                className="mp-btn-danger"
                 disabled={!promptValue}
                 onClick={onClear}
               >
@@ -146,6 +146,27 @@ export function PromptComposer({
             </Tooltip>
             <span className="mp-prompt-counter">{promptLength} / 2000</span>
           </div>
+        </div>
+      </div>
+
+      <div className="mp-prompt-writing-rail" aria-label="提示词写作顺序">
+        <div className="mp-prompt-rail-head">
+          <span>写作顺序</span>
+          <em>点击任一节点插入结构片段</em>
+        </div>
+        <div className="mp-prompt-atom-rail">
+          {promptAtoms.map((item, index) => (
+            <button
+              key={item.key}
+              type="button"
+              className="mp-prompt-atom-chip"
+              onClick={() => insertPromptAtom(item.text)}
+            >
+              <span>{index + 1}</span>
+              <strong>{item.label}</strong>
+              <small>{item.hint}</small>
+            </button>
+          ))}
         </div>
       </div>
 
@@ -164,38 +185,32 @@ export function PromptComposer({
               </button>
             ))}
           </div>
-          <div className="mp-prompt-atom-rail" aria-label="提示词结构片段">
-            {promptAtoms.map((item) => (
-              <button
-                key={item.key}
-                type="button"
-                className="mp-prompt-atom-chip"
-                onClick={() => insertPromptAtom(item.text)}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
         </div>
       </div>
 
       <div className="mp-prompt-creative-grid">
-        <div className="mp-prompt-input-container">
-          <TextArea
-            ref={promptTextareaRef}
-            value={prompt}
-            autosize={{ minRows: 8, maxRows: 14 }}
-            onChange={onPromptChange}
-            onClick={onPromptClick}
-            onKeyUp={onPromptKeyUp}
-            onKeyDown={onPromptKeyDown}
-            onCompositionStart={onCompositionStart}
-            onCompositionEnd={onCompositionEnd}
-            placeholder="从一个清晰画面开始：主体是谁，在哪里，什么光线，什么镜头，什么风格，最终用在什么场景。"
-            className="mp-prompt-textarea"
-            data-xr-agent="media-prompt"
-          />
-          {mentionMenu}
+        <div className="mp-prompt-editor-shell">
+          <div className="mp-prompt-editor-topline">
+            <span>创意画布</span>
+            <em>{promptValue.trim() ? '继续补足画面细节' : '从主体开始写，避免只写风格词'}</em>
+          </div>
+          <div className="mp-prompt-input-container">
+            <TextArea
+              ref={promptTextareaRef}
+              value={prompt}
+              autosize={{ minRows: 7, maxRows: 12 }}
+              onChange={onPromptChange}
+              onClick={onPromptClick}
+              onKeyUp={onPromptKeyUp}
+              onKeyDown={onPromptKeyDown}
+              onCompositionStart={onCompositionStart}
+              onCompositionEnd={onCompositionEnd}
+              placeholder="例如：主体是一位穿墨绿色丝绒西装的老师，站在雨后玻璃教室里，柔和侧逆光，35mm 电影镜头，高级教育品牌海报，留出标题空间。"
+              className="mp-prompt-textarea"
+              data-xr-agent="media-prompt"
+            />
+            {mentionMenu}
+          </div>
         </div>
       </div>
 
