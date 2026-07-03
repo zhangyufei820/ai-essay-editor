@@ -2405,8 +2405,6 @@ function ResultCard({
   onReusePrompt,
   onContinueEdit,
   onUseAsReference,
-  onGenerateVideo,
-  onReverseFromResult,
   selected = false,
   onToggleSelect,
 }) {
@@ -2549,77 +2547,97 @@ function ResultCard({
           <p>{displayPrompt}</p>
         </div>
       ) : null}
-      <div className='mp-result-actions'>
-        {result.kind === 'image' ? (
-          <>
-            <Button size='small' type='primary' onClick={() => onContinueEdit?.(result)}>
-              继续编辑
+      <div className='mp-result-action-stack'>
+        <div className='mp-result-next-actions' aria-label='下一步创作'>
+          {result.kind === 'image' ? (
+            <>
+              <Button
+                size='small'
+                className='mp-btn-secondary is-strong'
+                onClick={() => onContinueEdit?.(result)}
+              >
+                继续编辑
+              </Button>
+              <Button
+                size='small'
+                className='mp-btn-secondary'
+                onClick={() => onUseAsReference?.(result)}
+              >
+                作为参考图
+              </Button>
+            </>
+          ) : (
+            <Button
+              size='small'
+              className='mp-btn-secondary'
+              onClick={() => onUseAsReference?.(result)}
+            >
+              作为视频参考
             </Button>
-            <Button size='small' onClick={() => onUseAsReference?.(result)}>
-              作为参考图
-            </Button>
-            <Button size='small' onClick={() => onGenerateVideo?.(result)}>
-              生成视频
-            </Button>
-            <Button size='small' onClick={() => onReverseFromResult?.(result)}>
-              图像反推
-            </Button>
-          </>
-        ) : (
-          <Button size='small' onClick={() => onUseAsReference?.(result)}>
-            作为视频参考
-          </Button>
-        )}
-        <Button
-          size='small'
-          icon={<IconExternalOpen />}
-          disabled={!openUrl}
-          onClick={() => openMediaUrl(openUrl)}
-        >
-          查看
-        </Button>
-        <Button
-          size='small'
-          icon={<IconCopy />}
-          onClick={async () => {
-            const ok = await copy(displayUrl || originalUrl);
-            if (ok) Toast.success('链接已复制');
-          }}
-        >
-          复制
-        </Button>
-        <Button
-          size='small'
-          icon={<IconDownload />}
-          onClick={() =>
-            downloadURL(
-              displayUrl || originalUrl,
-              result.kind === 'image'
-                ? 'xingren-image.png'
-                : 'xingren-video.mp4',
-            )
-          }
-        >
-          下载
-        </Button>
-        {displayPrompt ? (
-          <Button
-            size='small'
-            icon={<IconRefresh />}
-            onClick={() => onReusePrompt(displayPrompt)}
-          >
-            套用
-          </Button>
-        ) : null}
-        <Tooltip content='从结果中移除'>
+          )}
+        </div>
+        <div className='mp-result-tool-actions' aria-label='作品工具'>
           <Button
             size='small'
             theme='borderless'
-            type='danger'
-            icon={<IconDelete />}
-            onClick={() => onRemove(result.id)}
-          />
-        </Tooltip>
+            className='mp-btn-tool'
+            icon={<IconExternalOpen />}
+            disabled={!openUrl}
+            onClick={() => openMediaUrl(openUrl)}
+          >
+            查看
+          </Button>
+          <Button
+            size='small'
+            theme='borderless'
+            className='mp-btn-tool'
+            icon={<IconDownload />}
+            onClick={() =>
+              downloadURL(
+                displayUrl || originalUrl,
+                result.kind === 'image'
+                  ? 'xingren-image.png'
+                  : 'xingren-video.mp4',
+              )
+            }
+          >
+            下载
+          </Button>
+          <Button
+            size='small'
+            theme='borderless'
+            className='mp-btn-tool'
+            icon={<IconCopy />}
+            onClick={async () => {
+              const ok = await copy(displayUrl || originalUrl);
+              if (ok) Toast.success('链接已复制');
+            }}
+          >
+            复制
+          </Button>
+          {displayPrompt ? (
+            <Button
+              size='small'
+              theme='borderless'
+              className='mp-btn-ghost'
+              icon={<IconRefresh />}
+              onClick={() => onReusePrompt(displayPrompt)}
+            >
+              套用
+            </Button>
+          ) : null}
+          <Tooltip content='从结果中移除'>
+            <Button
+              size='small'
+              theme='borderless'
+              type='danger'
+              className='mp-btn-danger'
+              icon={<IconDelete />}
+              onClick={() => onRemove(result.id)}
+              aria-label='删除作品'
+            />
+          </Tooltip>
+        </div>
       </div>
     </div>
   );
@@ -3615,6 +3633,9 @@ const MediaPlayground = () => {
     if (!result) return;
     removeLiveQueueTask(taskId);
     setResults((prev) => [result, ...prev]);
+    setSelectedResultIds((prev) =>
+      prev.includes(result.id) ? prev : [result.id, ...prev],
+    );
     Toast.success('图像已生成，请立即下载保存。');
   }
 
@@ -3751,6 +3772,9 @@ const MediaPlayground = () => {
         const result = imageTaskToResult(res.data.data);
         if (!result) throw new Error('图像任务完成但没有返回持久化图片。');
         setResults((prev) => [result, ...prev.filter((item) => item.id !== result.id)]);
+        setSelectedResultIds((prev) =>
+          prev.includes(result.id) ? prev : [result.id, ...prev],
+        );
         Toast.success('已找到图像任务结果。');
         return;
       }
@@ -3892,6 +3916,9 @@ const MediaPlayground = () => {
       );
       const cached = await cacheMedia(result);
       setResults((prev) => [cached, ...prev]);
+      setSelectedResultIds((prev) =>
+        prev.includes(cached.id) ? prev : [cached.id, ...prev],
+      );
       Toast.success('视频已生成，请立即下载保存。');
       return;
     }
@@ -3930,6 +3957,9 @@ const MediaPlayground = () => {
         const cached = await cacheMedia(result);
         removeLiveQueueTask(taskId);
         setResults((prev) => [cached, ...prev]);
+        setSelectedResultIds((prev) =>
+          prev.includes(cached.id) ? prev : [cached.id, ...prev],
+        );
         Toast.success('视频已生成，请立即下载保存。');
       } catch (error) {
         upsertLiveQueueTask({
@@ -5165,8 +5195,6 @@ const MediaPlayground = () => {
                         onRemove={handleRemoveResult}
                         onContinueEdit={(item) => reuseResultMedia(item, 'edit')}
                         onUseAsReference={(item) => reuseResultMedia(item, item.kind === 'video' ? 'video' : 'reference')}
-                        onGenerateVideo={(item) => reuseResultMedia(item, 'video')}
-                        onReverseFromResult={(item) => reuseResultMedia(item, 'reverse')}
                         selected={selectedResultIds.includes(result.id)}
                         onToggleSelect={toggleResultSelection}
                         onReusePrompt={(value) => {
@@ -5184,8 +5212,15 @@ const MediaPlayground = () => {
             </section>
           </main>
 
-          <aside className='mp-inspector mp-queue-panel' aria-label='任务队列中心'>
-            <div className='mp-queue-card'>
+          <aside
+            className={
+              inspectorResult
+                ? 'mp-inspector mp-queue-panel is-result-context'
+                : 'mp-inspector mp-queue-panel is-queue-context'
+            }
+            aria-label={inspectorResult ? '结果上下文面板' : '任务队列中心'}
+          >
+            <div className='mp-queue-card is-overview'>
               <div className='mp-queue-card-head'>
                 <SectionTitle meta='Queue'>任务队列中心</SectionTitle>
                 <Tag color={queueCounts.running ? 'blue' : 'grey'}>
@@ -5207,7 +5242,7 @@ const MediaPlayground = () => {
               </div>
             </div>
 
-            <div className='mp-queue-card'>
+            <div className='mp-queue-card is-current'>
               <div className='mp-queue-card-head'>
                 <SectionTitle meta='Current'>当前生成任务</SectionTitle>
               </div>
@@ -5260,7 +5295,15 @@ const MediaPlayground = () => {
                             <Button
                               size='small'
                               theme='borderless'
-                              onClick={() => scrollWorkbenchTo('mp-results-workbench')}
+                              className='mp-btn-ghost'
+                              onClick={() => {
+                                setSelectedResultIds((prev) =>
+                                  prev.includes(item.result.id)
+                                    ? prev
+                                    : [item.result.id, ...prev],
+                                );
+                                scrollWorkbenchTo('mp-results-workbench');
+                              }}
                             >
                               查看
                             </Button>
@@ -5331,31 +5374,59 @@ const MediaPlayground = () => {
                     </div>
                   </div>
                   {inspectorResultPrompt ? (
-                    <p className='mp-result-inspector-prompt'>{inspectorResultPrompt}</p>
+                    <div className='mp-result-inspector-prompt'>
+                      <span>Prompt 摘要</span>
+                      <p>{inspectorResultPrompt}</p>
+                    </div>
                   ) : null}
-                  <div className='mp-result-inspector-actions'>
+                  <div className='mp-result-inspector-next'>
+                    <strong>下一步操作</strong>
                     {inspectorResult.kind === 'image' ? (
                       <>
-                        <Button size='small' onClick={() => reuseResultMedia(inspectorResult, 'reference')}>
+                        <Button
+                          size='small'
+                          className='mp-btn-secondary'
+                          onClick={() => reuseResultMedia(inspectorResult, 'reference')}
+                        >
                           作为参考图
                         </Button>
-                        <Button size='small' onClick={() => reuseResultMedia(inspectorResult, 'video')}>
+                        <Button
+                          size='small'
+                          className='mp-btn-secondary'
+                          onClick={() => reuseResultMedia(inspectorResult, 'video')}
+                        >
                           生成视频
                         </Button>
-                        <Button size='small' onClick={() => reuseResultMedia(inspectorResult, 'reverse')}>
+                        <Button
+                          size='small'
+                          className='mp-btn-secondary'
+                          onClick={() => reuseResultMedia(inspectorResult, 'reverse')}
+                        >
                           图像反推
                         </Button>
-                        <Button size='small' onClick={() => reuseResultMedia(inspectorResult, 'edit')}>
+                        <Button
+                          size='small'
+                          className='mp-btn-secondary'
+                          onClick={() => reuseResultMedia(inspectorResult, 'edit')}
+                        >
                           再次编辑
                         </Button>
                       </>
                     ) : (
-                      <Button size='small' onClick={() => reuseResultMedia(inspectorResult, 'video')}>
+                      <Button
+                        size='small'
+                        className='mp-btn-secondary'
+                        onClick={() => reuseResultMedia(inspectorResult, 'video')}
+                      >
                         作为视频参考
                       </Button>
                     )}
+                  </div>
+                  <div className='mp-result-inspector-tools'>
                     <Button
                       size='small'
+                      theme='borderless'
+                      className='mp-btn-tool'
                       icon={<IconDownload />}
                       onClick={() =>
                         downloadURL(
@@ -5370,6 +5441,8 @@ const MediaPlayground = () => {
                     </Button>
                     <Button
                       size='small'
+                      theme='borderless'
+                      className='mp-btn-tool'
                       icon={<IconCopy />}
                       onClick={async () => {
                         const ok = await copy(inspectorResultPreview || normalizeURL(inspectorResult.url));
@@ -5379,15 +5452,18 @@ const MediaPlayground = () => {
                       复制
                     </Button>
                   </div>
-                  <Button
-                    size='small'
-                    theme='borderless'
-                    type='danger'
-                    icon={<IconDelete />}
-                    onClick={() => handleRemoveResult(inspectorResult.id)}
-                  >
-                    删除
-                  </Button>
+                  <div className='mp-result-danger-zone'>
+                    <Button
+                      size='small'
+                      theme='borderless'
+                      type='danger'
+                      className='mp-btn-danger'
+                      icon={<IconDelete />}
+                      onClick={() => handleRemoveResult(inspectorResult.id)}
+                    >
+                      删除
+                    </Button>
+                  </div>
                 </div>
               ) : (
                 <div className='mp-queue-empty'>
