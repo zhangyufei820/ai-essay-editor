@@ -176,6 +176,83 @@ func TestPlaygroundImage2ForcedResolution(t *testing.T) {
 	}
 }
 
+func TestPlaygroundImage2ForcedChannelResolutionDefaultsTo1K(t *testing.T) {
+	tests := []struct {
+		name string
+		req  *dto.ImageRequest
+		want string
+	}{
+		{
+			name: "plain 1024 request",
+			req:  &dto.ImageRequest{Size: "1024x1024"},
+			want: "1K",
+		},
+		{
+			name: "explicit auto",
+			req:  &dto.ImageRequest{Resolution: "auto"},
+			want: "1K",
+		},
+		{
+			name: "forced 2K remains 2K",
+			req:  &dto.ImageRequest{Resolution: "2K"},
+			want: "2K",
+		},
+		{
+			name: "custom 4K size remains 4K",
+			req:  &dto.ImageRequest{Resolution: "custom", Size: "3840x2160"},
+			want: "4K",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := playgroundImage2ForcedChannelResolution(tt.req); got != tt.want {
+				t.Fatalf("playgroundImage2ForcedChannelResolution() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestPlaygroundImage2ForcedChannelIDsDefaultList(t *testing.T) {
+	t.Setenv("GPT_IMAGE_2_4K_1K_CHANNEL_IDS", "")
+	t.Setenv("GPT_IMAGE_2_4K_CHANNEL_IDS", "")
+	t.Setenv("GPT_IMAGE_2_CHANNEL_IDS", "")
+
+	key, channelIDs := playgroundImage2ForcedChannelIDs("1K")
+	if key != "default" {
+		t.Fatalf("key = %q, want default", key)
+	}
+	want := []int{24, 4, 8, 16}
+	if len(channelIDs) != len(want) {
+		t.Fatalf("channelIDs = %v, want %v", channelIDs, want)
+	}
+	for i := range want {
+		if channelIDs[i] != want[i] {
+			t.Fatalf("channelIDs = %v, want %v", channelIDs, want)
+		}
+	}
+}
+
+func TestPlaygroundImage2ForcedChannelIDsResolutionEnvWins(t *testing.T) {
+	t.Setenv("GPT_IMAGE_2_4K_1K_CHANNEL_IDS", "8,16")
+	t.Setenv("GPT_IMAGE_2_4K_CHANNEL_IDS", "24,4,8,16")
+	t.Setenv("GPT_IMAGE_2_CHANNEL_IDS", "")
+
+	key, channelIDs := playgroundImage2ForcedChannelIDs("1K")
+	if key != "GPT_IMAGE_2_4K_1K_CHANNEL_IDS" {
+		t.Fatalf("key = %q, want GPT_IMAGE_2_4K_1K_CHANNEL_IDS", key)
+	}
+	want := []int{8, 16}
+	if len(channelIDs) != len(want) {
+		t.Fatalf("channelIDs = %v, want %v", channelIDs, want)
+	}
+	for i := range want {
+		if channelIDs[i] != want[i] {
+			t.Fatalf("channelIDs = %v, want %v", channelIDs, want)
+		}
+	}
+}
+
 func TestPlaygroundImage2ForcedChannelSkipsKnownBadVipMapping(t *testing.T) {
 	if !shouldSkipPlaygroundImage2ForcedChannel(nil, playgroundImage2VipMappedChannelID) {
 		t.Fatal("shouldSkipPlaygroundImage2ForcedChannel(#4) = false, want true")

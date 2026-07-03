@@ -478,13 +478,9 @@ func forcePlaygroundImageChannel(c *gin.Context, request dto.Request, relayInfo 
 	if !ok || imageReq == nil {
 		return
 	}
-	resolution := playgroundImage2ForcedResolution(imageReq)
-	if resolution != "2K" && resolution != "4K" {
-		return
-	}
+	resolution := playgroundImage2ForcedChannelResolution(imageReq)
 	c.Set(playgroundImage2TempCircuitScopeKey, true)
-	envKey := "GPT_IMAGE_2_4K_" + resolution + "_CHANNEL_IDS"
-	channelIDs := parseChannelIDList(common.GetEnvOrDefaultString(envKey, ""))
+	envKey, channelIDs := playgroundImage2ForcedChannelIDs(resolution)
 	setPlaygroundForcedChannelIDs(c, channelIDs)
 	for _, channelID := range channelIDs {
 		if shouldSkipPlaygroundImage2ForcedChannel(c, channelID) {
@@ -505,6 +501,28 @@ func forcePlaygroundImageChannel(c *gin.Context, request dto.Request, relayInfo 
 		logger.LogError(c, fmt.Sprintf("image2 configured %s channels %v are unavailable for group %s", envKey, channelIDs, relayInfo.TokenGroup))
 		c.Set("playground_forced_channel_unavailable", true)
 	}
+}
+
+func playgroundImage2ForcedChannelResolution(imageReq *dto.ImageRequest) string {
+	if resolution := playgroundImage2ForcedResolution(imageReq); resolution != "" {
+		return resolution
+	}
+	return "1K"
+}
+
+func playgroundImage2ForcedChannelIDs(resolution string) (string, []int) {
+	normalized := strings.ToUpper(strings.TrimSpace(resolution))
+	envKeys := make([]string, 0, 3)
+	if normalized != "" {
+		envKeys = append(envKeys, "GPT_IMAGE_2_4K_"+normalized+"_CHANNEL_IDS")
+	}
+	envKeys = append(envKeys, "GPT_IMAGE_2_4K_CHANNEL_IDS", "GPT_IMAGE_2_CHANNEL_IDS")
+	for _, key := range envKeys {
+		if channelIDs := parseChannelIDList(common.GetEnvOrDefaultString(key, "")); len(channelIDs) > 0 {
+			return key, channelIDs
+		}
+	}
+	return "default", []int{24, 4, 8, 16}
 }
 
 func playgroundImage2ForcedResolution(imageReq *dto.ImageRequest) string {
@@ -670,7 +688,7 @@ func getChannel(c *gin.Context, info *relaycommon.RelayInfo, retryParam *service
 	if forcedID := c.GetInt("playground_forced_channel_id"); forcedID > 0 && retryParam.GetRetry() == 0 {
 		channel, err := model.CacheGetChannel(forcedID)
 		if err != nil || channel == nil || channel.Status != common.ChannelStatusEnabled {
-			return nil, types.NewError(fmt.Errorf("指定媒体工坊高分辨率渠道 #%d 不可用", forcedID), types.ErrorCodeGetChannelFailed)
+			return nil, types.NewError(fmt.Errorf("指定媒体工坊图片渠道 #%d 不可用", forcedID), types.ErrorCodeGetChannelFailed)
 		}
 		newAPIError := middleware.SetupContextForSelectedChannel(c, channel, info.OriginModelName)
 		if newAPIError != nil {
@@ -682,7 +700,7 @@ func getChannel(c *gin.Context, info *relaycommon.RelayInfo, retryParam *service
 	}
 	if c.GetBool("playground_forced_channel_unavailable") && retryParam.GetRetry() == 0 {
 		return nil, types.NewError(
-			fmt.Errorf("媒体工坊高分辨率备用渠道暂不可用"),
+			fmt.Errorf("媒体工坊图片备用渠道暂不可用"),
 			types.ErrorCodeGetChannelFailed,
 			types.ErrOptionWithSkipRetry(),
 		)
@@ -769,7 +787,7 @@ func getNextPlaygroundForcedChannel(c *gin.Context, info *relaycommon.RelayInfo,
 		return channel, true, nil
 	}
 	return nil, true, types.NewError(
-		fmt.Errorf("媒体工坊高分辨率备用渠道暂不可用"),
+		fmt.Errorf("媒体工坊图片备用渠道暂不可用"),
 		types.ErrorCodeGetChannelFailed,
 		types.ErrOptionWithSkipRetry(),
 	)
