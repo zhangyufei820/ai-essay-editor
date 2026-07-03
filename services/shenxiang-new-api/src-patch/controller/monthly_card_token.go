@@ -66,7 +66,7 @@ func CreateMonthlyCardToken(c *gin.Context) {
 		RemainQuota:        0,
 		UnlimitedQuota:     true,
 		ModelLimitsEnabled: true,
-		ModelLimits:        strings.Join([]string{"gpt-5.5", "gpt-5.4", "gpt-5.4-mini"}, ","),
+		ModelLimits:        strings.Join(service.MonthlyCardAllowedModels(), ","),
 		Group:              c.GetString("group"),
 		CrossGroupRetry:    true,
 	}

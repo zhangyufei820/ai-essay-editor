@@ -396,8 +396,44 @@ func NewBillingSession(c *gin.Context, relayInfo *relaycommon.RelayInfo, preCons
 	}
 
 	pref := common.NormalizeBillingPreference(relayInfo.UserSetting.BillingPreference)
-	if c != nil && (c.GetBool("monthly_card_token") || IsMonthlyCardTokenName(c.GetString("token_name"))) {
-		hasMonthlyCard, err := UserHasMonthlyCard(relayInfo.UserId)
+	isMonthlyCardToken := c != nil && (c.GetBool("monthly_card_token") || IsMonthlyCardTokenName(c.GetString("token_name")))
+	hasMonthlyCardCached := false
+	hasMonthlyCardValue := false
+	getUserMonthlyCard := func() (bool, error) {
+		if hasMonthlyCardCached {
+			return hasMonthlyCardValue, nil
+		}
+		ok, err := UserHasMonthlyCard(relayInfo.UserId)
+		if err != nil {
+			return false, err
+		}
+		hasMonthlyCardValue = ok
+		hasMonthlyCardCached = true
+		return ok, nil
+	}
+	monthlyCardModelDenied := func() *types.NewAPIError {
+		modelName := strings.TrimSpace(relayInfo.OriginModelName)
+		if modelName == "" {
+			modelName = "requested model"
+		}
+		return types.NewErrorWithStatusCode(
+			fmt.Errorf("¥500 月卡不支持模型 %s，请切换到月卡模型或使用余额支付", modelName),
+			types.ErrorCodeAccessDenied, http.StatusForbidden,
+			types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
+	}
+	checkSubscriptionModelAllowed := func() *types.NewAPIError {
+		hasMonthlyCard, err := getUserMonthlyCard()
+		if err != nil {
+			return types.NewError(err, types.ErrorCodeQueryDataError, types.ErrOptionWithSkipRetry())
+		}
+		if !canUseSubscriptionFundingForModel(hasMonthlyCard, relayInfo.OriginModelName) {
+			return monthlyCardModelDenied()
+		}
+		return nil
+	}
+
+	if isMonthlyCardToken {
+		hasMonthlyCard, err := getUserMonthlyCard()
 		if err != nil {
 			return nil, types.NewError(err, types.ErrorCodeQueryDataError, types.ErrOptionWithSkipRetry())
 		}
@@ -457,14 +493,18 @@ func NewBillingSession(c *gin.Context, relayInfo *relaycommon.RelayInfo, preCons
 	}
 
 	trySubscription := func() (*BillingSession, *types.NewAPIError) {
+		if apiErr := checkSubscriptionModelAllowed(); apiErr != nil {
+			return nil, apiErr
+		}
 		subConsume := int64(preConsumedQuota)
 		if subConsume <= 0 {
 			subConsume = 1
 		}
 		skipTokenQuota := false
-		if c != nil && (c.GetBool("monthly_card_token") || IsMonthlyCardTokenName(c.GetString("token_name"))) {
+		hasMonthlyCard, _ := getUserMonthlyCard()
+		if isMonthlyCardToken {
 			skipTokenQuota = true
-		} else if ok, err := UserHasMonthlyCard(relayInfo.UserId); err == nil && ok && MonthlyCardChannelSupportsModel(relayInfo.OriginModelName) {
+		} else if hasMonthlyCard && MonthlyCardChannelSupportsModel(relayInfo.OriginModelName) {
 			skipTokenQuota = true
 		}
 		session := &BillingSession{
@@ -494,7 +534,11 @@ func NewBillingSession(c *gin.Context, relayInfo *relaycommon.RelayInfo, preCons
 		session, err := tryWallet()
 		if err != nil {
 			if err.GetErrorCode() == types.ErrorCodeInsufficientUserQuota {
-				return trySubscription()
+				session, subErr := trySubscription()
+				if subErr != nil && subErr.GetErrorCode() == types.ErrorCodeAccessDenied {
+					return nil, err
+				}
+				return session, subErr
 			}
 			return nil, err
 		}
@@ -511,6 +555,9 @@ func NewBillingSession(c *gin.Context, relayInfo *relaycommon.RelayInfo, preCons
 		}
 		session, apiErr := trySubscription()
 		if apiErr != nil {
+			if apiErr.GetErrorCode() == types.ErrorCodeAccessDenied {
+				return tryWallet()
+			}
 			if model.IsSubscriptionHardLimitError(apiErr) || model.IsSubscriptionHardLimitError(apiErr.Err) {
 				return nil, apiErr
 			}
