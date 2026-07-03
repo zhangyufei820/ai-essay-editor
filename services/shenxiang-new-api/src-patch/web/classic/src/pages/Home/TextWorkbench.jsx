@@ -31,6 +31,7 @@ import {
 import {
   ArrowUp,
   BadgeDollarSign,
+  CircleHelp,
   Copy,
   Edit3,
   Headphones,
@@ -100,6 +101,7 @@ const WORKBENCH_FILE_ACCEPT = [
 
 const primaryNav = [
   { label: '新聊天', icon: Plus, action: 'new' },
+  { label: '帮助', icon: CircleHelp, href: '/docs/' },
   { label: '聊天', icon: MessageSquare, action: 'chat', active: true },
   { label: '媒体工坊', icon: Store, href: '/console/media-playground' },
   { label: '云 Codex', icon: KeyRound, href: '/codex/' },
