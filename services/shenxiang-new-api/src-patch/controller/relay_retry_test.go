@@ -72,13 +72,13 @@ func TestIsVideoTaskPathIncludesPublicSubmitEndpoint(t *testing.T) {
 	}
 }
 
-func TestRejectImageModelResponsesRequest(t *testing.T) {
-	err := rejectImageModelResponsesRequest(
+func TestRejectImageModelTextEndpointRequestRejectsResponses(t *testing.T) {
+	err := rejectImageModelTextEndpointRequest(
 		types.RelayFormatOpenAIResponses,
 		&dto.OpenAIResponsesRequest{Model: "gpt-image-2-4K"},
 	)
 	if err == nil {
-		t.Fatal("rejectImageModelResponsesRequest() = nil, want image model rejection")
+		t.Fatal("rejectImageModelTextEndpointRequest() = nil, want image model rejection")
 	}
 	if err.StatusCode != http.StatusBadRequest {
 		t.Fatalf("StatusCode = %d, want %d", err.StatusCode, http.StatusBadRequest)
@@ -86,28 +86,41 @@ func TestRejectImageModelResponsesRequest(t *testing.T) {
 	if !types.IsSkipRetryError(err) {
 		t.Fatal("IsSkipRetryError() = false, want true")
 	}
-	if !strings.Contains(err.Error(), "/v1/images/generations") {
-		t.Fatalf("error = %q, want /v1/images/generations hint", err.Error())
+	if !strings.Contains(err.Error(), "/v1/images/generations") || !strings.Contains(err.Error(), "/v1/images/edits") {
+		t.Fatalf("error = %q, want image endpoint hints", err.Error())
 	}
 }
 
-func TestRejectImageModelResponsesRequestAllowsTextModels(t *testing.T) {
-	err := rejectImageModelResponsesRequest(
+func TestRejectImageModelTextEndpointRequestRejectsChat(t *testing.T) {
+	err := rejectImageModelTextEndpointRequest(
+		types.RelayFormatOpenAI,
+		&dto.GeneralOpenAIRequest{Model: "gpt-image-2"},
+	)
+	if err == nil {
+		t.Fatal("rejectImageModelTextEndpointRequest() = nil, want image model rejection")
+	}
+	if err.StatusCode != http.StatusBadRequest {
+		t.Fatalf("StatusCode = %d, want %d", err.StatusCode, http.StatusBadRequest)
+	}
+}
+
+func TestRejectImageModelTextEndpointRequestAllowsTextModels(t *testing.T) {
+	err := rejectImageModelTextEndpointRequest(
 		types.RelayFormatOpenAIResponses,
 		&dto.OpenAIResponsesRequest{Model: "gpt-5.5"},
 	)
 	if err != nil {
-		t.Fatalf("rejectImageModelResponsesRequest() = %v, want nil for text model", err)
+		t.Fatalf("rejectImageModelTextEndpointRequest() = %v, want nil for text model", err)
 	}
 }
 
-func TestRejectImageModelResponsesRequestSkipsImageEndpoint(t *testing.T) {
-	err := rejectImageModelResponsesRequest(
+func TestRejectImageModelTextEndpointRequestSkipsImageEndpoint(t *testing.T) {
+	err := rejectImageModelTextEndpointRequest(
 		types.RelayFormatOpenAIImage,
 		&dto.ImageRequest{Model: "gpt-image-2-4K"},
 	)
 	if err != nil {
-		t.Fatalf("rejectImageModelResponsesRequest() = %v, want nil for image endpoint", err)
+		t.Fatalf("rejectImageModelTextEndpointRequest() = %v, want nil for image endpoint", err)
 	}
 }
 
