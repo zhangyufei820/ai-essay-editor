@@ -2715,20 +2715,36 @@ const MediaPlayground = () => {
       VIDEO_MODELS.find((item) => item.value === videoModel) || VIDEO_MODELS[0],
     [videoModel],
   );
+  const isImageModelAllowed = (modelValue) =>
+    models.length === 0 || models.some((item) => item === modelValue);
+  const isVideoModelAllowed = (modelValue) =>
+    PUBLIC_SEEDANCE_VIDEO_MODELS.includes(modelValue) ||
+    models.length === 0 ||
+    models.some((item) => item === modelValue);
   const activeModel = mode === 'image' ? activeImageModel : activeVideoModel;
   const currentModelId = mode === 'image' ? imageModel : videoModel;
   const modelAllowed =
-    PUBLIC_SEEDANCE_VIDEO_MODELS.includes(currentModelId) ||
-    models.length === 0 ||
-    models.some((item) => item === currentModelId);
-  const isImageModelAllowed = (modelValue) =>
-    models.length === 0 || models.some((item) => item === modelValue);
+    mode === 'image' ? isImageModelAllowed(imageModel) : isVideoModelAllowed(videoModel);
   const effectiveGroup =
     mode === 'image' ? IMAGE_GENERATION_GROUP.value : group;
   const reversePromptGroup = IMAGE_GENERATION_GROUP.value;
   const visibleGroupOptions = mode === 'image' ? [IMAGE_GENERATION_GROUP] : groups;
   const defaultNegativePrompt = defaultNegativePromptForMode(mode);
   const activeNegativePrompt = negativePromptEnabled ? negativePrompt.trim() : '';
+
+  useEffect(() => {
+    if (mode !== 'video' || models.length === 0 || isVideoModelAllowed(videoModel)) return;
+    const nextModel = VIDEO_MODELS.find(
+      (item) =>
+        (!item.private || models.some((model) => model === item.value)) &&
+        isVideoModelAllowed(item.value),
+    );
+    if (!nextModel?.value || nextModel.value === videoModel) return;
+    const previousLabel = videoModelConfig(videoModel)?.label || videoModel;
+    setVideoModel(nextModel.value);
+    Toast.info(`当前分组未开放 ${previousLabel}，已切换到 ${nextModel.label}。`);
+  }, [mode, models, videoModel]);
+
   const reservedVideoImageSlots = reservedLastFrameImageSlots(videoModel, videoWorkflow);
   const videoRefPolicy = useMemo(
     () => videoReferencePolicy(activeVideoModel, { reservedImageSlots: reservedVideoImageSlots }),
@@ -4236,7 +4252,9 @@ const MediaPlayground = () => {
   }
 
   const modelOptions = (mode === 'image' ? IMAGE_MODELS : VIDEO_MODELS).filter(
-    (item) => !item.private || models.some((model) => model === item.value),
+    (item) =>
+      (!item.private || models.some((model) => model === item.value)) &&
+      (mode === 'image' || isVideoModelAllowed(item.value)),
   );
   const workflowSelectValue = mode === 'video' ? videoWorkflow : imageWorkflow;
   const workflowSelectOptions =
@@ -5187,111 +5205,123 @@ const MediaPlayground = () => {
             }
             aria-label={inspectorResult ? '结果上下文面板' : '任务队列中心'}
           >
-            <div className='mp-queue-card is-overview'>
-              <div className='mp-queue-card-head'>
-                <SectionTitle meta='Queue'>任务队列中心</SectionTitle>
-                <Tag color={queueCounts.running ? 'blue' : 'grey'}>
-                  {queueCounts.running ? '运行中' : '空闲'}
-                </Tag>
-              </div>
-              <div className='mp-queue-stats'>
-                {[
-                  { label: '运行中', value: queueCounts.running, key: 'running' },
-                  { label: '等待中', value: queueCounts.pending, key: 'pending' },
-                  { label: '已完成', value: queueCounts.completed, key: 'completed' },
-                  { label: '失败', value: queueCounts.failed, key: 'failed' },
-                ].map((item) => (
-                  <div key={item.key} className={`mp-queue-stat-item is-${item.key}`}>
-                    <span className='mp-queue-count'>{item.value}</span>
-                    <Text type='tertiary' size='small'>{item.label}</Text>
+            {!inspectorResult ? (
+              <>
+                <div className='mp-queue-card is-overview'>
+                  <div className='mp-queue-card-head'>
+                    <SectionTitle meta='Queue'>任务队列中心</SectionTitle>
+                    <Tag color={queueCounts.running ? 'blue' : 'grey'}>
+                      {queueCounts.running ? '运行中' : '空闲'}
+                    </Tag>
                   </div>
-                ))}
-              </div>
-            </div>
-
-            <div className='mp-queue-card is-current'>
-              <div className='mp-queue-card-head'>
-                <SectionTitle meta='Current'>当前生成任务</SectionTitle>
-              </div>
-              {activeQueueItem ? (
-                <div className='mp-current-queue-task'>
-                  <div className='mp-queue-task-icon'>
-                    {activeQueueItem.kind === 'video' ? <IconPlay /> : <IconImage />}
-                  </div>
-                  <div className='mp-queue-task-main'>
-                    <strong>{activeQueueItem.title}</strong>
-                    <span>{activeQueueItem.model}</span>
-                    <p>{activeQueueItem.message}</p>
-                    <div className='mp-queue-progress'>
-                      <span style={{ width: `${activeQueueItem.progress || 18}%` }} />
-                    </div>
-                    <em>{activeQueueElapsedSeconds} 秒 · {activeQueueItem.id}</em>
-                  </div>
-                </div>
-              ) : (
-                <div className='mp-queue-empty'>
-                  <IconRefresh />
-                  <span>提交生成后，当前任务会在这里显示进度。</span>
-                </div>
-              )}
-            </div>
-
-            <div className='mp-queue-card is-list'>
-              <div className='mp-queue-card-head'>
-                <SectionTitle meta={`${queueItems.length}`}>队列列表</SectionTitle>
-              </div>
-              {queueItems.length ? (
-                <div className='mp-queue-list'>
-                  {queueItems.map((item) => (
-                    <div key={item.id} className={`mp-queue-item is-${item.status}`}>
-                      <div className='mp-queue-kind'>
-                        {item.kind === 'video' ? <IconPlay /> : <IconImage />}
+                  <div className='mp-queue-stats'>
+                    {[
+                      { label: '运行中', value: queueCounts.running, key: 'running' },
+                      { label: '等待中', value: queueCounts.pending, key: 'pending' },
+                      { label: '已完成', value: queueCounts.completed, key: 'completed' },
+                      { label: '失败', value: queueCounts.failed, key: 'failed' },
+                    ].map((item) => (
+                      <div key={item.key} className={`mp-queue-stat-item is-${item.key}`}>
+                        <span className='mp-queue-count'>{item.value}</span>
+                        <Text type='tertiary' size='small'>{item.label}</Text>
                       </div>
-                      <div className='mp-queue-item-body'>
-                        <div className='mp-queue-item-title'>
-                          <strong>{item.title}</strong>
-                          <span>{item.statusText}</span>
+                    ))}
+                  </div>
+                </div>
+
+                <div className='mp-queue-card is-current'>
+                  <div className='mp-queue-card-head'>
+                    <SectionTitle meta='Current'>当前生成任务</SectionTitle>
+                  </div>
+                  {activeQueueItem ? (
+                    <div className='mp-current-queue-task'>
+                      <div className='mp-queue-task-icon'>
+                        {activeQueueItem.kind === 'video' ? <IconPlay /> : <IconImage />}
+                      </div>
+                      <div className='mp-queue-task-main'>
+                        <strong>{activeQueueItem.title}</strong>
+                        <span>{activeQueueItem.model}</span>
+                        <p>{activeQueueItem.message}</p>
+                        <div className='mp-queue-progress'>
+                          <span style={{ width: `${activeQueueItem.progress || 18}%` }} />
                         </div>
-                        <p>{item.model}</p>
-                        <em>{formatResultTime(item.createdAt)}</em>
-                        {item.message ? <small>{item.message}</small> : null}
-                      </div>
-                      <div className='mp-queue-item-actions'>
-                        {item.result ? (
-                          <>
-                            <Button
-                              size='small'
-                              theme='borderless'
-                              className='mp-btn-ghost'
-                              onClick={() => {
-                                inspectResult(item.result);
-                              }}
-                            >
-                              查看
-                            </Button>
-                          </>
-                        ) : (
-                          <span>等待完成</span>
-                        )}
+                        <em>{activeQueueElapsedSeconds} 秒 · {activeQueueItem.id}</em>
                       </div>
                     </div>
-                  ))}
+                  ) : (
+                    <div className='mp-queue-empty'>
+                      <IconRefresh />
+                      <span>提交生成后，当前任务会在这里显示进度。</span>
+                    </div>
+                  )}
                 </div>
-              ) : (
-                <div className='mp-queue-empty'>
-                  <IconUpload />
-                  <span>还没有队列任务。</span>
+
+                <div className='mp-queue-card is-list'>
+                  <div className='mp-queue-card-head'>
+                    <SectionTitle meta={`${queueItems.length}`}>队列列表</SectionTitle>
+                  </div>
+                  {queueItems.length ? (
+                    <div className='mp-queue-list'>
+                      {queueItems.map((item) => (
+                        <div key={item.id} className={`mp-queue-item is-${item.status}`}>
+                          <div className='mp-queue-kind'>
+                            {item.kind === 'video' ? <IconPlay /> : <IconImage />}
+                          </div>
+                          <div className='mp-queue-item-body'>
+                            <div className='mp-queue-item-title'>
+                              <strong>{item.title}</strong>
+                              <span>{item.statusText}</span>
+                            </div>
+                            <p>{item.model}</p>
+                            <em>{formatResultTime(item.createdAt)}</em>
+                            {item.message ? <small>{item.message}</small> : null}
+                          </div>
+                          <div className='mp-queue-item-actions'>
+                            {item.result ? (
+                              <Button
+                                size='small'
+                                theme='borderless'
+                                className='mp-btn-ghost'
+                                onClick={() => {
+                                  inspectResult(item.result);
+                                }}
+                              >
+                                查看
+                              </Button>
+                            ) : (
+                              <span>等待完成</span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className='mp-queue-empty'>
+                      <IconUpload />
+                      <span>还没有队列任务。</span>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
+              </>
+            ) : null}
 
             <div className='mp-queue-card mp-result-inspector-card'>
               <div className='mp-queue-card-head'>
                 <SectionTitle meta='Detail'>结果详情</SectionTitle>
                 {inspectorResult ? (
-                  <Tag color={inspectorResult.cacheStatus === 'failed' ? 'orange' : 'green'}>
-                    {inspectorResult.cacheStatus === 'failed' ? '原始链接' : '已完成'}
-                  </Tag>
+                  <div className='mp-result-inspector-head-actions'>
+                    <Tag color={inspectorResult.cacheStatus === 'failed' ? 'orange' : 'green'}>
+                      {inspectorResult.cacheStatus === 'failed' ? '原始链接' : '已完成'}
+                    </Tag>
+                    <Button
+                      size='small'
+                      theme='borderless'
+                      className='mp-btn-ghost'
+                      onClick={() => setSelectedResultIds([])}
+                    >
+                      返回队列
+                    </Button>
+                  </div>
                 ) : null}
               </div>
               {inspectorResult ? (

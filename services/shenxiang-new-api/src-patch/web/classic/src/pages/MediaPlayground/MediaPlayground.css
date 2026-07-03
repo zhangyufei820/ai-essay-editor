@@ -6317,6 +6317,112 @@ body.mp-route-active .mp-result-danger-zone .mp-btn-danger.semi-button:hover {
   opacity: 1;
 }
 
+/* Final creator-console polish: keep the first screen focused on prompt -> controls -> generate. */
+body.mp-route-active .mp-prompt-creative-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+body.mp-route-active .mp-prompt-creative-grid .mp-prompt-input-container {
+  margin-bottom: 8px;
+}
+
+body.mp-route-active .mp-prompt-template-group {
+  gap: 7px;
+}
+
+body.mp-route-active .mp-prompt-atom-rail {
+  padding: 7px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--mp-accent-primary) 4%, transparent), transparent),
+    var(--mp-bg-card);
+}
+
+body.mp-route-active .mp-parameter-panel {
+  min-height: 96px;
+  max-height: none;
+  grid-template-columns: minmax(0, 1fr) 196px !important;
+}
+
+body.mp-route-active .mp-parameter-drawer-summary {
+  min-height: 52px;
+  padding: 8px 10px;
+}
+
+body.mp-route-active .mp-parameter-summary-title > span {
+  display: block;
+  max-width: 420px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.mp-route-active .mp-parameter-summary-pills {
+  align-items: center;
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+
+body.mp-route-active .mp-parameter-summary-pills span {
+  flex: 0 1 auto;
+  max-width: 124px;
+}
+
+body.mp-route-active .mp-parameter-drawer-body {
+  max-height: min(34vh, 300px);
+}
+
+body.mp-route-active .mp-parameter-drawer-body .mp-parameter-bar {
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+}
+
+body.mp-route-active .mp-parameter-drawer-body .mp-field .semi-select,
+body.mp-route-active .mp-parameter-drawer-body .mp-static-param,
+body.mp-route-active .mp-parameter-drawer-body .mp-advanced-toggle {
+  min-height: 38px;
+}
+
+body.mp-route-active .mp-generate-action-dock {
+  min-height: 52px;
+}
+
+body.mp-route-active .mp-generate-action-dock .mp-generate-main-button {
+  height: 52px !important;
+}
+
+body.mp-route-active .mp-result-inspector-head-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: 0;
+}
+
+body.mp-route-active .mp-queue-panel.is-result-context {
+  gap: 0;
+}
+
+body.mp-route-active .mp-queue-panel.is-result-context .mp-result-inspector-card {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  flex-direction: column;
+}
+
+body.mp-route-active .mp-queue-panel.is-result-context .mp-result-inspector {
+  min-height: 0;
+  overflow: auto;
+}
+
+body.mp-route-active .mp-result-inspector-next .mp-btn-secondary.semi-button {
+  justify-content: center;
+}
+
+@media (max-width: 1180px) {
+  body.mp-route-active .mp-parameter-panel {
+    grid-template-columns: 1fr !important;
+  }
+}
+
 @media (max-width: 1120px) {
   body.mp-route-active .mp-workbench-topbar {
     grid-template-columns: minmax(0, 1fr);

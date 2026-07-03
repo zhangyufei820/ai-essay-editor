@@ -197,17 +197,6 @@ export function PromptComposer({
           />
           {mentionMenu}
         </div>
-        <aside className="mp-prompt-quality-panel" aria-label="提示词写作顺序">
-          <strong>写作顺序</strong>
-          <div>
-            <span>主体</span>
-            <span>场景</span>
-            <span>光线</span>
-            <span>镜头</span>
-            <span>风格</span>
-            <span>用途</span>
-          </div>
-        </aside>
       </div>
 
       <div className={negativeExpanded ? 'mp-negative-prompt-field is-expanded' : 'mp-negative-prompt-field'}>
