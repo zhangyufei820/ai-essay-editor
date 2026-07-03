@@ -157,6 +157,9 @@ func createImageTask(c *gin.Context, openAICompat bool) {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid image request"})
 		return
 	}
+	if normalizedModel, changed := normalizePlaygroundImageProductModelName(imageReq.Model); changed {
+		imageReq.Model = normalizedModel
+	}
 	if strings.TrimSpace(imageReq.Model) == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "model is required"})
 		return
@@ -321,6 +324,9 @@ func normalizePlaygroundImageTaskRequest(imageReq *dto.ImageRequest, payload map
 		return false
 	}
 	changed := false
+	if normalizePlaygroundImageTaskModel(imageReq, payload) {
+		changed = true
+	}
 	if normalizePlaygroundImageTaskCount(imageReq, payload) {
 		changed = true
 	}
@@ -366,6 +372,24 @@ func normalizePlaygroundImageTaskRequest(imageReq *dto.ImageRequest, payload map
 		}
 	}
 	return changed
+}
+
+func normalizePlaygroundImageTaskModel(imageReq *dto.ImageRequest, payload map[string]interface{}) bool {
+	normalized, changed := normalizePlaygroundImageProductModelName(imageReq.Model)
+	if !changed {
+		return false
+	}
+	imageReq.Model = normalized
+	payload["model"] = normalized
+	return true
+}
+
+func normalizePlaygroundImageProductModelName(modelName string) (string, bool) {
+	trimmed := strings.TrimSpace(modelName)
+	if strings.EqualFold(trimmed, "gpt-image-2") {
+		return "gpt-image-2-4K", true
+	}
+	return trimmed, trimmed != modelName
 }
 
 const playgroundImageMaxCount = uint(10)

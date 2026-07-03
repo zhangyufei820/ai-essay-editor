@@ -123,7 +123,8 @@ func playgroundImageRequestModel(c *gin.Context) string {
 		defer form.RemoveAll()
 		if values := form.Value["model"]; len(values) > 0 {
 			c.Request.Body = io.NopCloser(bytes.NewReader(bodyBytes))
-			return strings.TrimSpace(values[0])
+			modelName, _ := normalizePlaygroundImageProductModelName(values[0])
+			return modelName
 		}
 		c.Request.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 		return ""
@@ -133,7 +134,8 @@ func playgroundImageRequestModel(c *gin.Context) string {
 		return ""
 	}
 	c.Request.Body = io.NopCloser(bytes.NewReader(bodyBytes))
-	return strings.TrimSpace(imageReq.Model)
+	modelName, _ := normalizePlaygroundImageProductModelName(imageReq.Model)
+	return modelName
 }
 
 func Playground(c *gin.Context) {

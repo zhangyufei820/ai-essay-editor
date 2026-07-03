@@ -399,7 +399,23 @@ func getModelRequest(c *gin.Context) (*ModelRequest, bool, error) {
 	if strings.HasPrefix(c.Request.URL.Path, "/v1/responses/compact") && modelRequest.Model != "" {
 		modelRequest.Model = ratio_setting.WithCompactModelSuffix(modelRequest.Model)
 	}
+	normalizePlaygroundImageModelRequest(c, &modelRequest)
 	return &modelRequest, shouldSelectChannel, nil
+}
+
+func normalizePlaygroundImageModelRequest(c *gin.Context, modelRequest *ModelRequest) {
+	if c == nil || c.Request == nil || c.Request.URL == nil || modelRequest == nil {
+		return
+	}
+	if !strings.HasPrefix(c.Request.URL.Path, "/pg/images/") {
+		return
+	}
+	modelName := strings.TrimSpace(modelRequest.Model)
+	if strings.EqualFold(modelName, "gpt-image-2") {
+		modelRequest.Model = "gpt-image-2-4K"
+		return
+	}
+	modelRequest.Model = modelName
 }
 
 // 修复 #4834: GET /v1/video/generations/:task_id && /v1/video/:task_id 此前不解析 model，

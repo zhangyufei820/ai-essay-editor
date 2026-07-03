@@ -76,6 +76,28 @@ func TestNormalizePlaygroundImageTaskPayloadConvertsStringN(t *testing.T) {
 	require.Equal(t, float64(1), payload["n"])
 }
 
+func TestNormalizePlaygroundImageTaskPayloadMapsRawGPTImage2ToProductModel(t *testing.T) {
+	raw := []byte(`{
+		"model":"gpt-image-2",
+		"prompt":"poster",
+		"resolution":"4K",
+		"size":"2160x3840"
+	}`)
+	request := dto.ImageRequest{
+		Model:  "gpt-image-2",
+		Prompt: "poster",
+	}
+
+	normalized, changed := normalizePlaygroundImageTaskPayload(raw, &request)
+	require.True(t, changed)
+	require.Equal(t, "gpt-image-2-4K", request.Model)
+
+	var payload map[string]any
+	require.NoError(t, json.Unmarshal(normalized, &payload))
+	require.Equal(t, "gpt-image-2-4K", payload["model"])
+	require.Equal(t, "4K", payload["resolution"])
+}
+
 func TestPlaygroundImageTaskEditsMultipartReplaysWithNormalizedN(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	var body bytes.Buffer

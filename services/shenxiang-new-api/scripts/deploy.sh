@@ -11,11 +11,41 @@ cd "$APP_DIR"
 load_env
 require_local_bind
 
+check_active_playground_image_tasks() {
+  local mysql_container="${MYSQL_CONTAINER:-shenxiang-new-api-mysql}"
+  local active_count
+
+  if ! docker inspect "$mysql_container" >/dev/null 2>&1; then
+    warn "未找到 ${mysql_container}，跳过媒体工坊图片任务重启保护"
+    return 0
+  fi
+
+  active_count="$(
+    docker exec -i "$mysql_container" sh -lc 'mysql --default-character-set=utf8mb4 --batch --skip-column-names -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' <<'SQL'
+SET NAMES utf8mb4;
+SELECT COUNT(*)
+FROM tasks
+WHERE platform = 'playground_image'
+  AND action IN ('imageGenerate','imageEdit')
+  AND status NOT IN ('FAILURE','SUCCESS');
+SQL
+  )"
+  active_count="$(printf '%s' "$active_count" | tr -cd '0-9')"
+  active_count="${active_count:-0}"
+
+  if [ "$active_count" -gt 0 ]; then
+    die "检测到 ${active_count} 个媒体工坊图片任务仍在运行，暂不重启 shenxiang-new-api；请等待完成后重试，或先人工确认中断风险。"
+  fi
+}
+
 info "生成 nginx/shenxiang-new-api.conf（仅供人工接入，不自动 reload）"
 sed \
   -e "s|\${PUBLIC_API_DOMAIN}|${PUBLIC_API_DOMAIN}|g" \
   -e "s|\${HOST_BIND_PORT}|${HOST_BIND_PORT:-3120}|g" \
   nginx/shenxiang-new-api.conf.template > nginx/shenxiang-new-api.conf
+
+info "检查媒体工坊图片活跃任务"
+check_active_playground_image_tasks
 
 info "拉取镜像"
 compose_cmd pull
