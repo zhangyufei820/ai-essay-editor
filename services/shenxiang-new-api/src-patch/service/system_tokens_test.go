@@ -37,3 +37,9 @@ func TestSystemTokenProfilesIncludesGeek2APIImage2(t *testing.T) {
 	require.Contains(t, imageModels, "gpt-image-2-4K")
 	require.Contains(t, imageModels, "geek2api-image-2")
 }
+
+func TestMergeModelLimitsCanonicalizesRawGPTImage2(t *testing.T) {
+	limits := mergeModelLimits("gpt-5.5,gpt-image-2,gpt-image-2-4K", []string{"gpt-image-2-4K"})
+
+	require.Equal(t, "gpt-5.5,gpt-image-2-4K", limits)
+}

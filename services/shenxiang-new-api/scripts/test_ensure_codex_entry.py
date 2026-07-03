@@ -179,6 +179,25 @@ API.get('/api/user/models');
 
         self.assertEqual(self.module.latest_source_root(app_root), good)
 
+    def test_sanitize_model_limits_replaces_raw_gpt_image2(self) -> None:
+        raw = "gpt-image-2,gpt-image-2-4K,gpt-5.5,gpt-image-2"
+
+        self.assertEqual(
+            self.module.sanitize_model_limits(raw),
+            "gpt-image-2-4K,gpt-5.5",
+        )
+
+    def test_mysql_count_parses_last_numeric_row(self) -> None:
+        def fake_mysql_exec(_app_root: Path, _query: str) -> str:
+            return "COUNT(*)\n5\n"
+
+        original = self.module.mysql_exec
+        self.module.mysql_exec = fake_mysql_exec
+        try:
+            self.assertEqual(self.module.mysql_count(self.source_root, "SELECT COUNT(*)"), 5)
+        finally:
+            self.module.mysql_exec = original
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -19,6 +19,16 @@ TOKEN_PROFILES = {
     "video": ("星人视频生成令牌",),
 }
 
+RAW_GPT_IMAGE2_MODEL = "gpt-image-2"
+GPT_IMAGE2_PRODUCT_MODEL = "gpt-image-2-4K"
+DISABLED_ABILITY_PAIRS = {
+    ("12", GPT_IMAGE2_PRODUCT_MODEL),
+    ("21", RAW_GPT_IMAGE2_MODEL),
+}
+TOKEN_MODEL_REPLACEMENTS = {
+    RAW_GPT_IMAGE2_MODEL: GPT_IMAGE2_PRODUCT_MODEL,
+}
+
 CODEX_ALLOWED_MODELS = ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini"]
 CODEX_DEFAULT_MODEL = "gpt-5.5"
 CODEX_CHAT_FALLBACK_MODEL = "gpt-5.4-mini"
@@ -98,6 +108,29 @@ def mysql_exec(query: str) -> None:
 
 def sql_quote(value: str) -> str:
     return "'" + value.replace("\\", "\\\\").replace("'", "''") + "'"
+
+
+def sanitize_token_models(models: list[str]) -> list[str]:
+    sanitized: list[str] = []
+    seen: set[str] = set()
+    for model in models:
+        model = model.strip()
+        if not model:
+            continue
+        model = TOKEN_MODEL_REPLACEMENTS.get(model, model)
+        if model in seen:
+            continue
+        seen.add(model)
+        sanitized.append(model)
+    return sanitized
+
+
+def sanitize_model_limits(raw: str) -> str:
+    return ",".join(sanitize_token_models(raw.split(",")))
+
+
+def is_disabled_ability_pair(channel_id: str, model: str) -> bool:
+    return (str(channel_id).strip(), model.strip()) in DISABLED_ABILITY_PAIRS
 
 
 def option_value(key: str) -> str | None:
@@ -182,6 +215,8 @@ def model_lists() -> dict[str, list[str]]:
     profiles = {"codex": [], "claude": [], "image": [], "video": []}
 
     def append_model(profile: str, model: str) -> None:
+        if model in TOKEN_MODEL_REPLACEMENTS:
+            return
         if model not in profiles[profile]:
             profiles[profile].append(model)
 
@@ -294,7 +329,7 @@ def ensure_public_seedance_models() -> None:
 def sync_tokens(profiles: dict[str, list[str]]) -> None:
     statements = ["START TRANSACTION;"]
     for profile, names in TOKEN_PROFILES.items():
-        models = ",".join(profiles[profile])
+        models = ",".join(sanitize_token_models(profiles[profile]))
         for name in names:
             statements.append(
                 "UPDATE tokens "
@@ -324,6 +359,8 @@ def sync_abilities() -> None:
         for model in [item.strip() for item in raw_models.split(",") if item.strip()]:
             if model not in existing_models:
                 continue
+            if is_disabled_ability_pair(channel_id, model):
+                continue
             for group in groups:
                 statements.append(
                     "INSERT INTO abilities (`group`, model, channel_id, enabled, priority, weight, tag) VALUES ("
@@ -342,6 +379,53 @@ def sync_abilities() -> None:
                 )
     statements.append("COMMIT;")
     mysql_exec("\n".join(statements))
+
+
+def enforce_gpt_image2_db_guard() -> dict[str, int]:
+    disabled_ability_counts: dict[str, int] = {}
+    for channel_id, model in DISABLED_ABILITY_PAIRS:
+        rows = mysql(
+            "SELECT COUNT(*) FROM abilities WHERE enabled = 1 AND channel_id = "
+            + sql_quote(channel_id)
+            + " AND model = "
+            + sql_quote(model)
+            + ";"
+        )
+        disabled_ability_counts[f"channel_{channel_id}_{model}"] = int(rows[0][0]) if rows else 0
+    token_rows = mysql(
+        "SELECT id, COALESCE(model_limits, '') FROM tokens "
+        "WHERE deleted_at IS NULL AND model_limits_enabled = 1 "
+        "AND COALESCE(model_limits, '') LIKE "
+        + sql_quote(f"%{RAW_GPT_IMAGE2_MODEL}%")
+        + ";"
+    )
+    token_updates: list[tuple[str, str]] = []
+    for token_id, raw_limits in token_rows:
+        next_limits = sanitize_model_limits(raw_limits)
+        if next_limits != raw_limits:
+            token_updates.append((token_id, next_limits))
+
+    statements = ["START TRANSACTION;"]
+    for channel_id, model in DISABLED_ABILITY_PAIRS:
+        statements.append(
+            "UPDATE abilities SET enabled = 0 WHERE channel_id = "
+            + sql_quote(channel_id)
+            + " AND model = "
+            + sql_quote(model)
+            + ";"
+        )
+    for token_id, next_limits in token_updates:
+        statements.append(
+            "UPDATE tokens SET model_limits = "
+            + sql_quote(next_limits)
+            + " WHERE id = "
+            + sql_quote(token_id)
+            + ";"
+        )
+    statements.append("COMMIT;")
+    mysql_exec("\n".join(statements))
+    disabled_ability_counts["tokens_rewritten"] = len(token_updates)
+    return disabled_ability_counts
 
 
 def update_env_line(lines: list[str], key: str, value: str) -> tuple[list[str], bool]:
@@ -415,13 +499,14 @@ def main() -> int:
         return 2
     sync_abilities()
     sync_tokens(profiles)
+    guard_result = enforce_gpt_image2_db_guard()
     env_changed = sync_codex_env(profiles)
     if env_changed or os.environ.get("SYNC_FORCE_CODEX_REFRESH") == "1":
         refresh_codex()
     print(
         "synced model permissions: "
         + ", ".join(f"{name}={len(values)}" for name, values in profiles.items())
-        + f", codex_env_changed={env_changed}"
+        + f", codex_env_changed={env_changed}, gpt_image2_guard={guard_result}"
     )
     return 0
 

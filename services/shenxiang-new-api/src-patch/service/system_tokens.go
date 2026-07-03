@@ -30,6 +30,11 @@ var MoonApiXSeedanceVideoModels = []string{
 	"seedance-2.0-cl-mini",
 }
 
+const (
+	rawGPTImage2ModelName     = "gpt-image-2"
+	productGPTImage2ModelName = "gpt-image-2-4K"
+)
+
 func videoTokenModels() []string {
 	models := []string{"seedance-2.0-dj-fast", "seedance-2.0-ld-17", "grok-video-super-720p"}
 	models = append(models, MoonApiXSeedanceVideoModels...)
@@ -147,6 +152,7 @@ func mergeModelLimits(existing string, required []string) string {
 	seen := make(map[string]bool)
 	for _, modelName := range strings.Split(existing, ",") {
 		modelName = strings.TrimSpace(modelName)
+		modelName = canonicalSystemTokenModelLimit(modelName)
 		if modelName == "" || seen[modelName] {
 			continue
 		}
@@ -155,6 +161,7 @@ func mergeModelLimits(existing string, required []string) string {
 	}
 	for _, modelName := range required {
 		modelName = strings.TrimSpace(modelName)
+		modelName = canonicalSystemTokenModelLimit(modelName)
 		if modelName == "" || seen[modelName] {
 			continue
 		}
@@ -162,4 +169,11 @@ func mergeModelLimits(existing string, required []string) string {
 		values = append(values, modelName)
 	}
 	return strings.Join(values, ",")
+}
+
+func canonicalSystemTokenModelLimit(modelName string) string {
+	if strings.EqualFold(strings.TrimSpace(modelName), rawGPTImage2ModelName) {
+		return productGPTImage2ModelName
+	}
+	return strings.TrimSpace(modelName)
 }

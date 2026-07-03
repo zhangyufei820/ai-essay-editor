@@ -19,6 +19,15 @@ SOURCE_ROOT_MARKERS = (
     ".last_media_source_model_guard_source",
     ".last_codex_entry_source",
 )
+RAW_GPT_IMAGE2_MODEL = "gpt-image-2"
+GPT_IMAGE2_PRODUCT_MODEL = "gpt-image-2-4K"
+DISABLED_GPT_IMAGE2_ABILITY_PAIRS = (
+    ("12", GPT_IMAGE2_PRODUCT_MODEL),
+    ("21", RAW_GPT_IMAGE2_MODEL),
+)
+TOKEN_MODEL_REPLACEMENTS = {
+    RAW_GPT_IMAGE2_MODEL: GPT_IMAGE2_PRODUCT_MODEL,
+}
 
 
 def read_text(path: Path) -> str:
@@ -536,6 +545,89 @@ def sql_quote(value: str) -> str:
     return "'" + value.replace("\\", "\\\\").replace("'", "''") + "'"
 
 
+def sanitize_token_models(models: list[str]) -> list[str]:
+    sanitized: list[str] = []
+    seen: set[str] = set()
+    for model in models:
+        model = model.strip()
+        if not model:
+            continue
+        model = TOKEN_MODEL_REPLACEMENTS.get(model, model)
+        if model in seen:
+            continue
+        seen.add(model)
+        sanitized.append(model)
+    return sanitized
+
+
+def sanitize_model_limits(raw: str) -> str:
+    return ",".join(sanitize_token_models(raw.split(",")))
+
+
+def mysql_count(app_root: Path, query: str) -> int:
+    rows = mysql_exec(app_root, query).splitlines()
+    for row in reversed(rows):
+        first_cell = row.split("\t", 1)[0].strip()
+        if first_cell.isdigit():
+            return int(first_cell)
+    return 0
+
+
+def enforce_gpt_image2_route_db_guard(app_root: Path) -> dict[str, int]:
+    result: dict[str, int] = {}
+    for channel_id, model in DISABLED_GPT_IMAGE2_ABILITY_PAIRS:
+        result[f"channel_{channel_id}_{model}"] = mysql_count(
+            app_root,
+            "SELECT COUNT(*) FROM abilities WHERE enabled = 1 AND channel_id = "
+            + sql_quote(channel_id)
+            + " AND model = "
+            + sql_quote(model)
+            + ";",
+        )
+
+    token_rows = mysql_exec(
+        app_root,
+        "SELECT id, COALESCE(model_limits, '') FROM tokens "
+        "WHERE deleted_at IS NULL AND model_limits_enabled = 1 "
+        "AND COALESCE(model_limits, '') LIKE "
+        + sql_quote(f"%{RAW_GPT_IMAGE2_MODEL}%")
+        + ";",
+    ).splitlines()
+    token_updates: list[tuple[str, str]] = []
+    for row in token_rows:
+        if "\t" not in row:
+            continue
+        token_id, raw_limits = row.split("\t", 1)
+        token_id = token_id.strip()
+        if not token_id.isdigit():
+            continue
+        next_limits = sanitize_model_limits(raw_limits)
+        if next_limits != raw_limits:
+            token_updates.append((token_id, next_limits))
+
+    statements = ["START TRANSACTION;"]
+    for channel_id, model in DISABLED_GPT_IMAGE2_ABILITY_PAIRS:
+        statements.append(
+            "UPDATE abilities SET enabled = 0 WHERE channel_id = "
+            + sql_quote(channel_id)
+            + " AND model = "
+            + sql_quote(model)
+            + ";"
+        )
+    for token_id, next_limits in token_updates:
+        statements.append(
+            "UPDATE tokens SET model_limits = "
+            + sql_quote(next_limits)
+            + " WHERE id = "
+            + sql_quote(token_id)
+            + ";"
+        )
+    statements.append("COMMIT;")
+    mysql_exec(app_root, "\n".join(statements))
+    result["tokens_rewritten"] = len(token_updates)
+    return result
+
+
 def sync_db_options(app_root: Path) -> dict[str, Any]:
     query = "SELECT `key`, value FROM options WHERE `key` IN ('HeaderNavModules','SidebarModulesAdmin');"
     rows = mysql_exec(app_root, query).splitlines()
@@ -633,7 +725,8 @@ def sync_db_options(app_root: Path) -> dict[str, Any]:
     statements.append("COMMIT;")
     if changed_header or changed_sidebar:
         mysql_exec(app_root, "\n".join(statements))
-    return {"header_changed": changed_header, "sidebar_changed": changed_sidebar}
+    guard_result = enforce_gpt_image2_route_db_guard(app_root)
+    return {"header_changed": changed_header, "sidebar_changed": changed_sidebar, "gpt_image2_guard": guard_result}
 
 
 def fetch_bundle_text(base_url: str) -> str:
