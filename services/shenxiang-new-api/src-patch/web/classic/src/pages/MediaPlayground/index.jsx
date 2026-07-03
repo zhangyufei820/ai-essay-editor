@@ -4426,47 +4426,51 @@ const MediaPlayground = () => {
                 <SectionTitle meta='Source'>素材输入</SectionTitle>
                 <span>{workflowLabel} · {referenceLabel}</span>
               </div>
-              <div className='mp-material-grid'>
-                <div className='mp-material-zone is-disabled'>
-                  <div className='mp-material-zone-head'>
-                    <strong>参考图 Reference Images</strong>
-                  </div>
-                  <div className='mp-material-disabled'>
-                    <IconImage />
-                    <Button size='small' theme='borderless' onClick={() => selectCreativeTask('image-edit')}>
-                      切换图生图
-                    </Button>
-                  </div>
-                </div>
+              <div className={creativeTask === 'reverse' ? 'mp-material-grid is-reverse-only' : 'mp-material-grid'}>
+                {creativeTask !== 'reverse' ? (
+                  <>
+                    <div className='mp-material-zone is-disabled'>
+                      <div className='mp-material-zone-head'>
+                        <strong>参考图 Reference Images</strong>
+                      </div>
+                      <div className='mp-material-disabled'>
+                        <IconImage />
+                        <Button size='small' theme='borderless' onClick={() => selectCreativeTask('image-edit')}>
+                          切换图生图
+                        </Button>
+                      </div>
+                    </div>
 
-                <div className={creativeTask === 'image-edit' ? 'mp-material-zone is-primary' : 'mp-material-zone is-disabled'}>
-                  <div className='mp-material-zone-head'>
-                    <strong>编辑源图 Edit Source</strong>
-                  </div>
-                  {creativeTask === 'image-edit' ? (
-                    <div className='mp-field-grid is-material'>
-                      <MultiFileDrop
-                        label='上传编辑源图'
-                        files={referenceFiles}
-                        maxFiles={referenceFileLimit}
-                        accept='image/png,image/jpeg,image/webp'
-                        onFiles={addReferenceFiles}
-                        onRemove={removeReferenceFile}
-                        hint={`支持 JPG / PNG / WebP，最多 ${referenceFileLimit} 张。`}
-                      />
-                      <FileDrop
-                        label='遮罩图，可选'
-                        file={maskFile}
-                        onFile={setMaskFile}
-                        compact
-                      />
+                    <div className={creativeTask === 'image-edit' ? 'mp-material-zone is-primary' : 'mp-material-zone is-disabled'}>
+                      <div className='mp-material-zone-head'>
+                        <strong>编辑源图 Edit Source</strong>
+                      </div>
+                      {creativeTask === 'image-edit' ? (
+                        <div className='mp-field-grid is-material'>
+                          <MultiFileDrop
+                            label='上传编辑源图'
+                            files={referenceFiles}
+                            maxFiles={referenceFileLimit}
+                            accept='image/png,image/jpeg,image/webp'
+                            onFiles={addReferenceFiles}
+                            onRemove={removeReferenceFile}
+                            hint={`支持 JPG / PNG / WebP，最多 ${referenceFileLimit} 张。`}
+                          />
+                          <FileDrop
+                            label='遮罩图，可选'
+                            file={maskFile}
+                            onFile={setMaskFile}
+                            compact
+                          />
+                        </div>
+                      ) : (
+                        <div className='mp-material-disabled'>
+                          <IconImage />
+                        </div>
+                      )}
                     </div>
-                  ) : (
-                    <div className='mp-material-disabled'>
-                      <IconImage />
-                    </div>
-                  )}
-                </div>
+                  </>
+                ) : null}
 
                 <div className={creativeTask === 'reverse' ? 'mp-material-zone is-primary' : 'mp-material-zone is-disabled'}>
                   <div className='mp-material-zone-head'>
@@ -4498,36 +4502,38 @@ const MediaPlayground = () => {
                   )}
                 </div>
 
-                <div className={creativeTask === 'video' && videoWorkflow !== 'text' ? 'mp-material-zone is-primary' : 'mp-material-zone is-disabled'}>
-                  <div className='mp-material-zone-head'>
-                    <strong>视频参考 Video Reference</strong>
-                  </div>
-                  {creativeTask === 'video' && videoWorkflow !== 'text' ? (
-                    <div className='mp-field-grid is-material'>
-                      <MultiFileDrop
-                        label={videoWorkflow === 'first-last' ? '首帧 / 参考素材' : '上传视频参考素材'}
-                        files={referenceFiles}
-                        maxFiles={referenceFileLimit}
-                        accept={videoRefPolicy.accept}
-                        onFiles={addReferenceFiles}
-                        onRemove={removeReferenceFile}
-                        onInsertMention={insertReferenceMention}
-                        hint={videoRefPolicy.hint}
-                      />
-                      {videoWorkflow === 'first-last' ? (
-                        <FileDrop
-                          label='上传尾帧图片'
-                          file={lastFrameFile}
-                          onFile={setLastFrameFile}
+                {creativeTask !== 'reverse' ? (
+                  <div className={creativeTask === 'video' && videoWorkflow !== 'text' ? 'mp-material-zone is-primary' : 'mp-material-zone is-disabled'}>
+                    <div className='mp-material-zone-head'>
+                      <strong>视频参考 Video Reference</strong>
+                    </div>
+                    {creativeTask === 'video' && videoWorkflow !== 'text' ? (
+                      <div className='mp-field-grid is-material'>
+                        <MultiFileDrop
+                          label={videoWorkflow === 'first-last' ? '首帧 / 参考素材' : '上传视频参考素材'}
+                          files={referenceFiles}
+                          maxFiles={referenceFileLimit}
+                          accept={videoRefPolicy.accept}
+                          onFiles={addReferenceFiles}
+                          onRemove={removeReferenceFile}
+                          onInsertMention={insertReferenceMention}
+                          hint={videoRefPolicy.hint}
                         />
-                      ) : null}
-                    </div>
-                  ) : (
-                    <div className='mp-material-disabled'>
-                      <IconPlay />
-                    </div>
-                  )}
-                </div>
+                        {videoWorkflow === 'first-last' ? (
+                          <FileDrop
+                            label='上传尾帧图片'
+                            file={lastFrameFile}
+                            onFile={setLastFrameFile}
+                          />
+                        ) : null}
+                      </div>
+                    ) : (
+                      <div className='mp-material-disabled'>
+                        <IconPlay />
+                      </div>
+                    )}
+                  </div>
+                ) : null}
               </div>
             </section>
 

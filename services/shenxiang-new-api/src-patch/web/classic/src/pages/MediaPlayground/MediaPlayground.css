@@ -5102,6 +5102,15 @@ body.mp-route-active .mp-material-grid {
   scroll-snap-type: x proximity;
 }
 
+body.mp-route-active .mp-material-grid.is-reverse-only {
+  overflow-x: visible;
+}
+
+body.mp-route-active .mp-material-grid.is-reverse-only .mp-material-zone.is-primary {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+
 body.mp-route-active .mp-material-zone {
   flex: 0 0 190px;
   min-height: 152px;
