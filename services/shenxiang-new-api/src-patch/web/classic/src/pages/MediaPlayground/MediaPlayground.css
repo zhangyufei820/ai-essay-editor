@@ -6433,3 +6433,246 @@ body.mp-route-active .mp-result-inspector-next .mp-btn-secondary.semi-button {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Focused UI polish: compact control drawer and stable result list layout. */
+body.mp-route-active .mp-parameter-panel {
+  grid-template-columns: minmax(0, 1fr) 184px !important;
+  gap: 8px !important;
+  min-height: 86px;
+  padding: 8px !important;
+  border-radius: 12px;
+}
+
+body.mp-route-active .mp-parameter-drawer {
+  align-self: stretch;
+}
+
+body.mp-route-active .mp-parameter-drawer-summary {
+  min-height: 48px;
+  grid-template-columns: minmax(142px, 0.58fr) minmax(0, 1.7fr) auto;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 10px;
+}
+
+body.mp-route-active .mp-parameter-summary-title {
+  gap: 1px;
+}
+
+body.mp-route-active .mp-parameter-summary-title .mp-section-title {
+  font-size: 12px;
+  letter-spacing: 0;
+}
+
+body.mp-route-active .mp-parameter-summary-title > span {
+  max-width: 360px;
+  font-size: 11px;
+}
+
+body.mp-route-active .mp-parameter-summary-pills {
+  gap: 5px;
+}
+
+body.mp-route-active .mp-parameter-summary-pills span {
+  max-width: 112px;
+  padding: 4px 7px;
+  font-size: 10.5px;
+  line-height: 1.15;
+}
+
+body.mp-route-active .mp-parameter-drawer-label {
+  min-width: 78px;
+  font-size: 11.5px;
+}
+
+body.mp-route-active .mp-parameter-drawer-body {
+  margin-top: 6px;
+  max-height: min(30vh, 238px);
+  padding: 8px;
+  border-radius: 10px;
+}
+
+body.mp-route-active .mp-parameter-drawer-body .mp-parameter-bar {
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 7px;
+  align-items: end;
+}
+
+body.mp-route-active .mp-parameter-drawer-body .mp-param-control.is-model {
+  grid-column: span 1;
+}
+
+body.mp-route-active .mp-parameter-drawer-body .mp-field > span {
+  margin-bottom: 4px;
+  font-size: 11px;
+  line-height: 1.1;
+}
+
+body.mp-route-active .mp-parameter-drawer-body .mp-field .semi-select,
+body.mp-route-active .mp-parameter-drawer-body .mp-static-param,
+body.mp-route-active .mp-parameter-drawer-body .mp-advanced-toggle {
+  min-height: 36px;
+  border-radius: 9px !important;
+}
+
+body.mp-route-active .mp-parameter-drawer-body .semi-select,
+body.mp-route-active .mp-parameter-drawer-body .semi-select-selection {
+  min-height: 36px !important;
+}
+
+body.mp-route-active .mp-parameter-drawer-body .mp-advanced-toggle.semi-button {
+  align-self: end;
+  height: 36px !important;
+  padding: 0 10px !important;
+  color: var(--mp-text-secondary) !important;
+}
+
+body.mp-route-active .mp-advanced-params {
+  margin-top: 8px;
+  padding-top: 8px;
+}
+
+body.mp-route-active .mp-generate-action-dock {
+  min-height: 48px;
+  align-self: stretch;
+  display: flex;
+}
+
+body.mp-route-active .mp-generate-action-dock .mp-generate-main-button {
+  height: 48px !important;
+  min-height: 48px !important;
+  border-radius: 12px !important;
+  font-size: 14px !important;
+  font-weight: 760 !important;
+}
+
+body.mp-route-active .mp-result-grid.is-list-view {
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 10px;
+}
+
+body.mp-route-active .mp-result-grid.is-list-view .mp-result-card {
+  display: grid;
+  grid-template-columns: 228px minmax(0, 1fr) 184px;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 0;
+  min-height: 192px;
+  align-items: stretch;
+}
+
+body.mp-route-active .mp-result-grid.is-list-view .mp-result-card-head {
+  grid-column: 2 / 4;
+  grid-row: 1;
+  min-width: 0;
+  padding: 12px 12px 8px;
+}
+
+body.mp-route-active .mp-result-grid.is-list-view .mp-result-card-head > div {
+  min-width: 0;
+}
+
+body.mp-route-active .mp-result-grid.is-list-view .mp-result-frame {
+  grid-column: 1;
+  grid-row: 1 / 4;
+  justify-self: stretch;
+  width: calc(100% - 12px) !important;
+  max-width: calc(100% - 12px);
+  min-width: 0;
+  height: auto;
+  min-height: 168px;
+  aspect-ratio: 4 / 3;
+  margin: 12px 0 12px 12px;
+}
+
+body.mp-route-active .mp-result-grid.is-list-view .mp-result-meta {
+  grid-column: 2 / 4;
+  grid-row: 2;
+  min-width: 0;
+  padding: 0 12px 8px;
+}
+
+body.mp-route-active .mp-result-grid.is-list-view .mp-result-prompt {
+  grid-column: 2;
+  grid-row: 3;
+  align-self: stretch;
+  min-width: 0;
+  max-height: 82px;
+  margin: 0 8px 12px 12px;
+  overflow: hidden;
+}
+
+body.mp-route-active .mp-result-grid.is-list-view .mp-result-prompt.is-expanded {
+  max-height: 118px;
+  overflow: auto;
+}
+
+body.mp-route-active .mp-result-grid.is-list-view .mp-result-prompt p {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+body.mp-route-active .mp-result-grid.is-list-view .mp-result-prompt.is-expanded p {
+  display: block;
+}
+
+body.mp-route-active .mp-result-grid.is-list-view .mp-result-action-stack {
+  grid-column: 3;
+  grid-row: 3;
+  align-self: end;
+  gap: 7px;
+  min-width: 0;
+  padding: 0 12px 12px 4px;
+  background: transparent;
+}
+
+body.mp-route-active .mp-result-grid.is-list-view .mp-result-next-actions {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+body.mp-route-active .mp-result-grid.is-list-view .mp-result-tool-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+body.mp-route-active .mp-result-grid.is-list-view .mp-result-tool-actions .semi-button {
+  justify-content: center;
+  width: 100%;
+}
+
+@media (max-width: 1320px) {
+  body.mp-route-active .mp-parameter-drawer-body .mp-parameter-bar {
+    grid-template-columns: repeat(auto-fit, minmax(94px, 1fr));
+  }
+
+  body.mp-route-active .mp-result-grid.is-list-view .mp-result-card {
+    grid-template-columns: 194px minmax(0, 1fr) 164px;
+  }
+}
+
+@media (max-width: 1180px) {
+  body.mp-route-active .mp-parameter-panel {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (max-width: 860px) {
+  body.mp-route-active .mp-result-grid.is-list-view .mp-result-card {
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
+
+  body.mp-route-active .mp-result-grid.is-list-view .mp-result-card-head,
+  body.mp-route-active .mp-result-grid.is-list-view .mp-result-frame,
+  body.mp-route-active .mp-result-grid.is-list-view .mp-result-meta,
+  body.mp-route-active .mp-result-grid.is-list-view .mp-result-prompt,
+  body.mp-route-active .mp-result-grid.is-list-view .mp-result-action-stack {
+    grid-column: auto;
+    grid-row: auto;
+    margin-left: 12px;
+    margin-right: 12px;
+    padding-left: 0;
+    padding-right: 0;
+  }
+}
