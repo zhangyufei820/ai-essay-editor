@@ -46,6 +46,7 @@ import {
   Square,
   SunMedium,
   Store,
+  Trash2,
   Upload,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -112,6 +113,13 @@ const starterPrompts = [
   '撰写或编辑',
   '查找资料',
 ];
+const CHAT_HISTORY_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+const CHAT_HISTORY_LIMIT = 30;
+const CHAT_HISTORY_STORAGE_PREFIX = 'aiphui-home-chat-history:v1';
+
+function createConversationId() {
+  return `chat-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
 
 function getFileExtension(name = '') {
   const dotIndex = name.lastIndexOf('.');
@@ -226,6 +234,105 @@ function getCurrentUserId(currentUser) {
   }
 
   return '';
+}
+
+function getHistoryStorageKey(currentUser) {
+  const userId = getCurrentUserId(currentUser);
+  const fallback =
+    currentUser?.username ||
+    currentUser?.email ||
+    currentUser?.display_name ||
+    'guest';
+  return `${CHAT_HISTORY_STORAGE_PREFIX}:${userId || fallback}`;
+}
+
+function sanitizeHistoryText(value, maxLength = 6000) {
+  const text = contentToPlainText(value).trim();
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, maxLength)}\n...[内容较长，已自动节选]`;
+}
+
+function sanitizeHistoryMessage(message) {
+  if (!message || (message.role !== 'user' && message.role !== 'assistant')) return null;
+  if (message.pending) return null;
+  const displayContent = sanitizeHistoryText(message.displayContent || message.content, 1200);
+  const apiContent = sanitizeHistoryText(message.apiContent || displayContent, 4000);
+  return {
+    id: message.id || `${message.role}-${Date.now()}`,
+    role: message.role,
+    title: message.title || (message.role === 'user' ? '你' : '助手'),
+    content: sanitizeHistoryText(message.content, 6000),
+    displayContent,
+    apiContent,
+    attachments: Array.isArray(message.attachments)
+      ? message.attachments.map(({ content, dataUrl, ...file }) => file)
+      : [],
+  };
+}
+
+function conversationTitleFromMessages(messages) {
+  const firstUser = messages.find((message) => message.role === 'user');
+  const text = sanitizeHistoryText(firstUser?.displayContent || firstUser?.content || '', 80)
+    .replace(/\s+/g, ' ')
+    .trim();
+  return text || '新聊天';
+}
+
+function pruneConversations(conversations, now = Date.now()) {
+  return (Array.isArray(conversations) ? conversations : [])
+    .filter((item) => item && item.id && Array.isArray(item.messages) && item.messages.length > 0)
+    .filter((item) => now - Number(item.updatedAt || 0) <= CHAT_HISTORY_RETENTION_MS)
+    .sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0))
+    .slice(0, CHAT_HISTORY_LIMIT);
+}
+
+function readStoredConversations(storageKey) {
+  try {
+    const raw = localStorage.getItem(storageKey);
+    if (!raw) return [];
+    const payload = JSON.parse(raw);
+    return pruneConversations(payload?.items || payload);
+  } catch {
+    return [];
+  }
+}
+
+function writeStoredConversations(storageKey, items) {
+  try {
+    localStorage.setItem(storageKey, JSON.stringify({
+      version: 1,
+      retentionDays: 7,
+      savedAt: Date.now(),
+      items: pruneConversations(items),
+    }));
+  } catch {
+    // localStorage may be full or blocked; the active chat should keep working.
+  }
+}
+
+function buildConversationRecord(id, messages, model) {
+  const savedMessages = messages.map(sanitizeHistoryMessage).filter(Boolean);
+  if (!id || !savedMessages.length) return null;
+  const now = Date.now();
+  return {
+    id,
+    title: conversationTitleFromMessages(savedMessages),
+    model,
+    messageCount: savedMessages.length,
+    createdAt: now,
+    updatedAt: now,
+    messages: savedMessages,
+  };
+}
+
+function formatConversationAge(updatedAt) {
+  const elapsed = Math.max(0, Date.now() - Number(updatedAt || 0));
+  const minutes = Math.floor(elapsed / 60000);
+  if (minutes < 1) return '刚刚';
+  if (minutes < 60) return `${minutes} 分钟前`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} 小时前`;
+  return `${Math.floor(hours / 24)} 天前`;
 }
 
 function formatBytes(size) {
@@ -623,6 +730,8 @@ const TextWorkbench = ({ isMobile }) => {
   const [input, setInput] = useState('');
   const [attachments, setAttachments] = useState([]);
   const [messages, setMessages] = useState([]);
+  const [savedConversations, setSavedConversations] = useState([]);
+  const [currentConversationId, setCurrentConversationId] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -636,6 +745,7 @@ const TextWorkbench = ({ isMobile }) => {
   const displayName = user?.username || user?.display_name || user?.email || '已登录用户';
   const modelOptions = useMemo(() => toTextModelOptions(models), [models]);
   const activeModel = selectedModel || getDefaultTextModel(models);
+  const historyStorageKey = useMemo(() => getHistoryStorageKey(user), [user]);
   const canOrganize = input.trim() || attachments.length > 0;
   const hasConversation = messages.some((message) => message.role === 'user' || message.role === 'assistant');
   const lastAssistantIndex = useMemo(() => {
@@ -648,6 +758,40 @@ const TextWorkbench = ({ isMobile }) => {
   useEffect(() => {
     setUser(getStoredUser());
   }, []);
+
+  useEffect(() => {
+    const stored = readStoredConversations(historyStorageKey);
+    setSavedConversations(stored);
+    if (!messages.length && stored[0]?.messages?.length) {
+      setCurrentConversationId(stored[0].id);
+      setMessages(stored[0].messages);
+    }
+  }, [historyStorageKey]);
+
+  useEffect(() => {
+    if (!currentConversationId || !messages.length) return;
+    if (messages.some((message) => message.pending)) return;
+
+    const record = buildConversationRecord(currentConversationId, messages, activeModel);
+    if (!record) return;
+
+    setSavedConversations((prev) => {
+      const existing = prev.find((item) => item.id === record.id);
+      if (existing && JSON.stringify(existing.messages) === JSON.stringify(record.messages)) {
+        return prev;
+      }
+      const nextRecord = {
+        ...record,
+        createdAt: existing?.createdAt || record.createdAt,
+      };
+      const next = pruneConversations([
+        nextRecord,
+        ...prev.filter((item) => item.id !== record.id),
+      ]);
+      writeStoredConversations(historyStorageKey, next);
+      return next;
+    });
+  }, [activeModel, currentConversationId, historyStorageKey, messages]);
 
   useEffect(() => {
     if (!isLoggedIn) {
@@ -741,10 +885,33 @@ const TextWorkbench = ({ isMobile }) => {
 
   const resetConversation = () => {
     abortActiveRequest();
+    setCurrentConversationId('');
     setMessages([]);
     setInput('');
     setAttachments([]);
     window.setTimeout(() => composerInputRef.current?.focus(), 0);
+  };
+
+  const openConversation = (conversation) => {
+    if (!conversation?.messages?.length) return;
+    abortActiveRequest();
+    setCurrentConversationId(conversation.id);
+    setMessages(conversation.messages);
+    setInput('');
+    setAttachments([]);
+    window.setTimeout(() => composerInputRef.current?.focus(), 0);
+  };
+
+  const deleteConversation = (conversationId, event) => {
+    event?.stopPropagation();
+    setSavedConversations((prev) => {
+      const next = prev.filter((item) => item.id !== conversationId);
+      writeStoredConversations(historyStorageKey, next);
+      return next;
+    });
+    if (currentConversationId === conversationId) {
+      resetConversation();
+    }
   };
 
   const handleNavAction = (action) => {
@@ -782,6 +949,11 @@ const TextWorkbench = ({ isMobile }) => {
     appendUserMessage = true,
     assistantMessageId = '',
   }) => {
+    const nextConversationId = currentConversationId || createConversationId();
+    if (!currentConversationId) {
+      setCurrentConversationId(nextConversationId);
+    }
+
     const userMessageItem = {
       id: `user-${Date.now()}`,
       role: 'user',
@@ -1061,6 +1233,49 @@ const TextWorkbench = ({ isMobile }) => {
             );
           })}
         </nav>
+
+        <section className='sx-gpt-history' aria-label='最近聊天记录'>
+          <div className='sx-gpt-history-head'>
+            <strong>最近聊天</strong>
+            <span>保留 7 天</span>
+          </div>
+          {savedConversations.length ? (
+            <div className='sx-gpt-history-list'>
+              {savedConversations.map((conversation) => (
+                <div
+                  key={conversation.id}
+                  className={
+                    conversation.id === currentConversationId
+                      ? 'sx-gpt-history-item is-active'
+                      : 'sx-gpt-history-item'
+                  }
+                >
+                  <button
+                    type='button'
+                    className='sx-gpt-history-open'
+                    onClick={() => openConversation(conversation)}
+                    title={conversation.title}
+                  >
+                    <span>{conversation.title}</span>
+                    <em>
+                      {formatConversationAge(conversation.updatedAt)} · {conversation.messageCount || conversation.messages.length} 条
+                    </em>
+                  </button>
+                  <button
+                    type='button'
+                    className='sx-gpt-history-delete'
+                    onClick={(event) => deleteConversation(conversation.id, event)}
+                    aria-label={`删除聊天记录：${conversation.title}`}
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className='sx-gpt-history-empty'>发送第一条消息后，会在这里保留 7 天。</p>
+          )}
+        </section>
 
         <div className='sx-gpt-account'>
           <div className='sx-gpt-account-avatar'>
