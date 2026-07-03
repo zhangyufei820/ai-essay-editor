@@ -777,31 +777,180 @@ const VIDEO_MODELS = [
   },
 ];
 
-const PROMPT_PRESETS = [
-  {
-    label: '商业海报',
-    value:
-      '一张高级商业海报，主体清晰，构图克制，真实摄影质感，柔和棚拍光，适合品牌宣传。',
-  },
-  {
-    label: '产品大片',
-    value:
-      '一个高端产品陈列在干净的工作室中，细腻材质，浅景深，真实光影，电商主图质感。',
-  },
-  {
-    label: '人物肖像',
-    value:
-      '一位自信的年轻创业者半身肖像，城市夜景背景，电影级布光，真实皮肤纹理，高级杂志封面风格。',
-  },
-  {
-    label: '短视频镜头',
-    value:
-      '一个流畅的商业短视频镜头，镜头缓慢推进，主体保持稳定，光影自然，画面高级。',
-  },
+const DEFAULT_PROMPT = '';
+const DEFAULT_IMAGE_NEGATIVE_PROMPT = [
+  'low quality',
+  'worst quality',
+  'low resolution',
+  'blurry',
+  'out of focus',
+  'soft focus',
+  'pixelated',
+  'jpeg artifacts',
+  'compression artifacts',
+  'noise',
+  'grainy',
+  'overexposed',
+  'underexposed',
+  'washed out',
+  'flat lighting',
+  'harsh flash',
+  'color banding',
+  'posterization',
+  'oversaturated',
+  'undersaturated',
+  'bad contrast',
+  'muddy colors',
+  'wrong white balance',
+  'chromatic aberration',
+  'lens dirt',
+  'watermark',
+  'logo',
+  'signature',
+  'caption',
+  'subtitle',
+  'text',
+  'random letters',
+  'misspelled text',
+  'ui elements',
+  'frame border',
+  'duplicate subject',
+  'extra person',
+  'cropped head',
+  'cropped face',
+  'cut off limbs',
+  'bad anatomy',
+  'deformed anatomy',
+  'disfigured face',
+  'asymmetrical face',
+  'cross eye',
+  'bad eyes',
+  'dead eyes',
+  'bad teeth',
+  'distorted mouth',
+  'deformed hands',
+  'bad hands',
+  'extra fingers',
+  'missing fingers',
+  'fused fingers',
+  'long fingers',
+  'broken fingers',
+  'extra arms',
+  'extra legs',
+  'missing arms',
+  'missing legs',
+  'twisted limbs',
+  'floating limbs',
+  'unnatural pose',
+  'stiff pose',
+  'plastic skin',
+  'waxy skin',
+  'over-smoothed skin',
+  'uncanny face',
+  'doll-like face',
+  'ai generated look',
+  'over-sharpened',
+  'heavy retouching',
+  'bad hair',
+  'melted hair',
+  'broken jewelry',
+  'floating object',
+  'warped object',
+  'melted object',
+  'incorrect perspective',
+  'distorted perspective',
+  'tilted horizon',
+  'bad composition',
+  'messy background',
+  'background smear',
+  'background blobs',
+  'depth error',
+  'shadow error',
+  'reflection error',
+  'object intersection',
+  'duplicated pattern',
+  'texture stretching',
+  'unnatural material',
+  'cartoon',
+  'anime',
+  '3d render',
+  'cgi',
+  'illustration',
+  'painting',
+  'sketch',
+].join(', ');
+const DEFAULT_VIDEO_NEGATIVE_PROMPT = [
+  DEFAULT_IMAGE_NEGATIVE_PROMPT,
+  'flicker',
+  'temporal flicker',
+  'frame flicker',
+  'brightness flicker',
+  'color flicker',
+  'exposure pumping',
+  'strobing',
+  'jitter',
+  'camera jitter',
+  'shaky frame',
+  'warped motion',
+  'morphing subject',
+  'identity drift',
+  'face drift',
+  'body drift',
+  'shape drift',
+  'texture crawling',
+  'boiling texture',
+  'pulsing edges',
+  'wobbling edges',
+  'rubber limbs',
+  'melting objects',
+  'object popping',
+  'object teleporting',
+  'inconsistent lighting',
+  'inconsistent shadows',
+  'inconsistent reflections',
+  'background swimming',
+  'background sliding',
+  'camera path jump',
+  'bad motion blur',
+  'excessive motion blur',
+  'ghosting',
+  'double exposure',
+  'frame blending artifacts',
+  'low frame rate',
+  'choppy motion',
+  'loop seam',
+  'frozen subject',
+  'unnatural physics',
+  'floating feet',
+  'foot sliding',
+  'hand deformation over time',
+  'mouth deformation over time',
+  'rolling shutter artifacts',
+  'video compression artifacts',
+  'subtitle overlay',
+  'timestamp',
+].join(', ');
+const BUILTIN_NEGATIVE_PROMPTS = [
+  DEFAULT_IMAGE_NEGATIVE_PROMPT,
+  DEFAULT_VIDEO_NEGATIVE_PROMPT,
 ];
-
-const DEFAULT_PROMPT = PROMPT_PRESETS[0].value;
 const EMPTY_MODELS = [];
+
+function defaultNegativePromptForMode(mode) {
+  return mode === 'video' ? DEFAULT_VIDEO_NEGATIVE_PROMPT : DEFAULT_IMAGE_NEGATIVE_PROMPT;
+}
+
+function isBuiltinNegativePrompt(value) {
+  const normalized = String(value || '').trim();
+  return BUILTIN_NEGATIVE_PROMPTS.some((item) => item === normalized);
+}
+
+function toCountSelectOptions(maxCount = 1) {
+  return Array.from({ length: Math.max(1, Number(maxCount) || 1) }, (_, index) => {
+    const value = index + 1;
+    return { value, label: `${value} 张` };
+  });
+}
 const IMAGE_REQUEST_TIMEOUT_MS = 240000;
 const IMAGE_POLL_REQUEST_TIMEOUT_MS = 30000;
 const IMAGE_WAIT_MESSAGE =
@@ -2499,6 +2648,7 @@ const MediaPlayground = () => {
     activeIndex: 0,
   });
   const [promptComposing, setPromptComposing] = useState(false);
+  const [negativePromptEnabled, setNegativePromptEnabled] = useState(false);
   const [negativePrompt, setNegativePrompt] = useState('');
   const [size, setSize] = useState(IMAGE_MODELS[0].defaultSize);
   const [quality, setQuality] = useState(IMAGE_MODELS[0].defaultQuality);
@@ -2564,6 +2714,16 @@ const MediaPlayground = () => {
     return () => document.body.classList.remove('mp-route-active');
   }, []);
 
+  useEffect(() => {
+    if (!negativePromptEnabled) return;
+    setNegativePrompt((current) => {
+      if (!current.trim() || isBuiltinNegativePrompt(current)) {
+        return defaultNegativePromptForMode(mode);
+      }
+      return current;
+    });
+  }, [mode, negativePromptEnabled]);
+
   const activeImageModel = useMemo(
     () =>
       IMAGE_MODELS.find((item) => item.value === imageModel) || IMAGE_MODELS[0],
@@ -2586,6 +2746,8 @@ const MediaPlayground = () => {
     mode === 'image' ? IMAGE_GENERATION_GROUP.value : group;
   const reversePromptGroup = IMAGE_GENERATION_GROUP.value;
   const visibleGroupOptions = mode === 'image' ? [IMAGE_GENERATION_GROUP] : groups;
+  const defaultNegativePrompt = defaultNegativePromptForMode(mode);
+  const activeNegativePrompt = negativePromptEnabled ? negativePrompt.trim() : '';
   const reservedVideoImageSlots = reservedLastFrameImageSlots(videoModel, videoWorkflow);
   const videoRefPolicy = useMemo(
     () => videoReferencePolicy(activeVideoModel, { reservedImageSlots: reservedVideoImageSlots }),
@@ -2707,6 +2869,13 @@ const MediaPlayground = () => {
   function handlePromptChange(value) {
     setPrompt(value);
     window.requestAnimationFrame(() => syncMentionAtCursor(value));
+  }
+
+  function handleNegativePromptEnabledChange(checked) {
+    setNegativePromptEnabled(checked);
+    if (checked) {
+      setNegativePrompt((current) => current.trim() || defaultNegativePromptForMode(mode));
+    }
   }
 
   function handlePromptKeyDown(event) {
@@ -2968,8 +3137,8 @@ const MediaPlayground = () => {
           }
           payload.size = googleImageEditSizeFor(effectiveAspectRatio, resolution, imageModel);
           if (quality) payload.quality = quality;
-          if (negativePrompt.trim())
-            payload.extra_fields = { negative_prompt: negativePrompt.trim() };
+          if (activeNegativePrompt)
+            payload.extra_fields = { negative_prompt: activeNegativePrompt };
           return payload;
         }
         const responseFormat = imageResponseFormat(effectiveAspectRatio, resolution);
@@ -2989,8 +3158,8 @@ const MediaPlayground = () => {
           effectiveAspectRatio,
           resolution,
         );
-        if (negativePrompt.trim())
-          payload.extra_fields = { negative_prompt: negativePrompt.trim() };
+        if (activeNegativePrompt)
+          payload.extra_fields = { negative_prompt: activeNegativePrompt };
         return payload;
       }
       const isGptImage2 = isGptImage2Model(imageModel);
@@ -3011,8 +3180,8 @@ const MediaPlayground = () => {
         payload.background = background;
       if (imageWorkflow === 'edit' && activeImageModel.supportsInputFidelity)
         payload.input_fidelity = inputFidelity;
-      if (negativePrompt.trim())
-        payload.extra_fields = { negative_prompt: negativePrompt.trim() };
+      if (activeNegativePrompt)
+        payload.extra_fields = { negative_prompt: activeNegativePrompt };
       return payload;
     }
 
@@ -3039,8 +3208,8 @@ const MediaPlayground = () => {
       metadata: {},
     };
     if (seed.trim()) payload.seed = Number(seed);
-    if (negativePrompt.trim())
-      payload.metadata.negative_prompt = negativePrompt.trim();
+    if (activeNegativePrompt)
+      payload.metadata.negative_prompt = activeNegativePrompt;
     if (
       activeVideoModel.value === 'seedance-2.0-dj-fast' ||
       activeVideoModel.value === 'seedance-2.0-ld-17' ||
@@ -3083,7 +3252,7 @@ const MediaPlayground = () => {
     imageWorkflow,
     inputFidelity,
     mode,
-    negativePrompt,
+    activeNegativePrompt,
     prompt,
     quality,
     aspectRatio,
@@ -4071,6 +4240,38 @@ const MediaPlayground = () => {
   const modelOptions = (mode === 'image' ? IMAGE_MODELS : VIDEO_MODELS).filter(
     (item) => !item.private || models.some((model) => model === item.value),
   );
+  const workflowSelectValue = mode === 'video' ? videoWorkflow : imageWorkflow;
+  const workflowSelectOptions =
+    mode === 'video'
+      ? [
+        { value: 'text', label: '文生视频' },
+        { value: 'image', label: '图生视频' },
+        { value: 'first-last', label: '首尾帧' },
+      ]
+      : creativeTask === 'image-edit'
+        ? [{ value: 'edit', label: '图像修改' }]
+        : [
+          { value: 'generate', label: '文生图' },
+          {
+            value: 'edit',
+            label: activeImageModel.edit ? '图生图' : '图生图不可用',
+            disabled: !activeImageModel.edit,
+          },
+        ];
+  const handleWorkflowSelect = (value) => {
+    if (mode === 'video') {
+      setVideoWorkflow(value);
+      return;
+    }
+    if (value === 'edit') {
+      selectCreativeTask('image-edit');
+      return;
+    }
+    imageEditModelLockRef.current = '';
+    setImageWorkflow('generate');
+    setCreativeTask('image-generate');
+    setMode('image');
+  };
   const workflowLabel =
     mode === 'image'
       ? imageWorkflow === 'edit'
@@ -4148,8 +4349,6 @@ const MediaPlayground = () => {
     creativeTask === 'image-edit' ||
     creativeTask === 'reverse' ||
     (creativeTask === 'video' && videoWorkflow !== 'text');
-  const activePromptPreset =
-    PROMPT_PRESETS.find((preset) => preset.value === prompt)?.label || '自定义描述';
   const outputSpec =
     mode === 'image'
       ? [
@@ -4226,11 +4425,8 @@ const MediaPlayground = () => {
     },
     {
       key: 'style',
-      label: '风格模板',
-      onClick: () => {
-        selectCreativeTask('image-edit');
-        setPrompt(PROMPT_PRESETS[1]?.value || prompt);
-      },
+      label: '风格迁移',
+      onClick: () => selectCreativeTask('image-edit'),
     },
   ];
   const flowSteps = [
@@ -4334,10 +4530,11 @@ const MediaPlayground = () => {
               theme='solid'
               icon={<IconRefresh />}
               className='mp-new-creation-btn'
-              onClick={() => {
-                setPrompt(DEFAULT_PROMPT);
-                setNegativePrompt('');
-                setReferenceFiles([]);
+                onClick={() => {
+                  setPrompt(DEFAULT_PROMPT);
+                  setNegativePromptEnabled(false);
+                  setNegativePrompt('');
+                  setReferenceFiles([]);
                 setReversePromptFile(null);
                 setReversePromptText('');
                 setReversePromptMessage('');
@@ -4446,76 +4643,6 @@ const MediaPlayground = () => {
                   </button>
                 ))}
               </div>
-              <div className='mp-mode-workflows'>
-                <SectionTitle>生成方式</SectionTitle>
-                {creativeTask === 'image-generate' ? (
-                  <div className='mp-toggle-row'>
-                    {[
-                      { key: 'generate', label: '文生图' },
-                      {
-                        key: 'edit',
-                        label: activeImageModel.edit ? '图生图' : '图生图不可用',
-                        disabled: !activeImageModel.edit,
-                      },
-                    ].map((item) => (
-                      <button
-                        key={item.key}
-                        type='button'
-                        disabled={item.disabled}
-                        className={imageWorkflow === item.key ? 'active' : ''}
-                        data-xr-agent={`media-image-workflow-${item.key}`}
-                        onClick={() => {
-                          if (item.key === 'edit') {
-                            selectCreativeTask('image-edit');
-                            return;
-                          }
-                          imageEditModelLockRef.current = '';
-                          setImageWorkflow(item.key);
-                        }}
-                      >
-                        {item.label}
-                      </button>
-                    ))}
-                  </div>
-                ) : creativeTask === 'image-edit' ? (
-                  <div className='mp-toggle-row'>
-                    <button
-                      type='button'
-                      className='active'
-                      onClick={() => {
-                        imageEditModelLockRef.current = '';
-                        setImageWorkflow('edit');
-                      }}
-                    >
-                      图像修改
-                    </button>
-                  </div>
-                ) : creativeTask === 'reverse' ? (
-                  <div className='mp-toggle-row is-single'>
-                    <button type='button' className='active' onClick={() => scrollWorkbenchTo('mp-reverse-workbench')}>
-                      上传图片反推提示词
-                    </button>
-                  </div>
-                ) : (
-                  <div className='mp-toggle-row'>
-                    {[
-                      { key: 'text', label: '文生视频' },
-                      { key: 'image', label: '图生视频' },
-                      { key: 'first-last', label: '首尾帧' },
-                    ].map((item) => (
-                      <button
-                        key={item.key}
-                        type='button'
-                        className={videoWorkflow === item.key ? 'active' : ''}
-                        data-xr-agent={`media-video-workflow-${item.key}`}
-                        onClick={() => setVideoWorkflow(item.key)}
-                      >
-                        {item.label}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
             </section>
 
             <div className={creativeTask === 'reverse' ? 'mp-prompt-zone is-muted' : 'mp-prompt-zone'}>
@@ -4524,9 +4651,9 @@ const MediaPlayground = () => {
                 onPromptChange={handlePromptChange}
                 negativePrompt={negativePrompt}
                 onNegativePromptChange={setNegativePrompt}
-                presets={PROMPT_PRESETS}
-                activePreset={activePromptPreset}
-                onPresetClick={setPrompt}
+                negativePromptEnabled={negativePromptEnabled}
+                onNegativePromptEnabledChange={handleNegativePromptEnabledChange}
+                negativePromptPreset={defaultNegativePrompt}
                 onCopy={async () => {
                   const ok = await copy(prompt);
                   if (ok) Toast.success('提示词已复制');
@@ -4692,6 +4819,16 @@ const MediaPlayground = () => {
                   </summary>
                   <div className='mp-parameter-drawer-body'>
                     <div className='mp-parameter-bar'>
+                  {creativeTask !== 'reverse' ? (
+                    <NativeSelect
+                      label='生成方式'
+                      value={workflowSelectValue}
+                      options={workflowSelectOptions}
+                      onChange={handleWorkflowSelect}
+                      agentKey='media-workflow-select'
+                      className='mp-param-control is-workflow'
+                    />
+                  ) : null}
                   <NativeSelect
                     label='模型'
                     value={currentModelId}
@@ -4707,52 +4844,43 @@ const MediaPlayground = () => {
                     className='mp-param-control is-model'
                   />
                   {mode === 'image' && activeImageModel.resolutions?.length ? (
-                    <OptionChips
+                    <NativeSelect
                       label='尺寸'
                       value={resolution}
                       options={toResolutionSelectOptions(activeImageModel.resolutions)}
                       onChange={setResolution}
-                      compact
                       agentKey='media-resolution'
                       className='mp-param-control'
                     />
                   ) : (
-                    <OptionChips
+                    <NativeSelect
                       label={mode === 'image' ? '尺寸' : '视频尺寸'}
                       value={size}
                       options={toSizeSelectOptions(activeModel.sizes, activeModel)}
                       onChange={setSize}
-                      compact
                       agentKey='media-size'
                       className='mp-param-control'
                     />
                   )}
                   {mode === 'image' && showImageRatioOptions ? (
-                    <OptionChips
+                    <NativeSelect
                       label='比例'
                       value={imageRatioValue}
                       options={toSelectOptions(imageRatioOptions)}
                       onChange={handleImageRatioChange}
-                      compact
                       agentKey='media-aspect-ratio'
                       className='mp-param-control is-ratio'
                     />
                   ) : null}
                   {mode === 'image' ? (
-                    <div className='mp-slider-field is-compact'>
-                      <div>
-                        <span>数量</span>
-                        <b>{clampCount(count, activeImageModel)} 张</b>
-                      </div>
-                      <Slider
-                        min={1}
-                        max={activeImageModel.maxCount || 1}
-                        step={1}
-                        value={clampCount(count, activeImageModel)}
-                        data-xr-agent='media-count'
-                        onChange={(value) => setCount(clampCount(value, activeImageModel))}
-                      />
-                    </div>
+                    <NativeSelect
+                      label='数量'
+                      value={clampCount(count, activeImageModel)}
+                      options={toCountSelectOptions(activeImageModel.maxCount || 1)}
+                      onChange={(value) => setCount(clampCount(Number(value), activeImageModel))}
+                      className='mp-param-control'
+                      agentKey='media-count'
+                    />
                   ) : (
                     <NativeSelect
                       label='时长'
@@ -4767,17 +4895,16 @@ const MediaPlayground = () => {
                     />
                   )}
                   {mode === 'image' ? (
-                    <OptionChips
+                    <NativeSelect
                       label='清晰度'
                       value={quality}
                       options={toSelectOptions(activeImageModel.qualities)}
                       onChange={setQuality}
-                      compact
                       agentKey='media-quality'
                       className='mp-param-control'
                     />
                   ) : (
-                    <OptionChips
+                    <NativeSelect
                       label='帧率'
                       value={fps}
                       options={[
@@ -4785,28 +4912,25 @@ const MediaPlayground = () => {
                         { value: 30, label: '30 fps' },
                       ]}
                       onChange={setFps}
-                      compact
                       agentKey='media-fps'
                       className='mp-param-control'
                     />
                   )}
                   {mode === 'image' ? (
-                    <OptionChips
+                    <NativeSelect
                       label='格式'
                       value={format}
                       options={toSelectOptions(activeImageModel.formats)}
                       onChange={setFormat}
-                      compact
                       agentKey='media-format'
                       className='mp-param-control'
                     />
                   ) : activeVideoModel.resolutions?.length ? (
-                    <OptionChips
+                    <NativeSelect
                       label='清晰度'
                       value={resolution}
                       options={toSelectOptions(activeVideoModel.resolutions)}
                       onChange={setResolution}
-                      compact
                       agentKey='media-video-resolution'
                       className='mp-param-control'
                     />
@@ -4926,7 +5050,7 @@ const MediaPlayground = () => {
                     className='mp-generate-main-button'
                     onClick={creativeTask === 'reverse' ? reverseImagePrompt : handleSubmit}
                   >
-                    {creativeTask === 'reverse' ? '开始反推' : mode === 'video' ? '生成视频' : '生成图片'}
+                    {mode === 'video' ? '生成视频' : '生成图片'}
                   </Button>
                 </div>
               </div>

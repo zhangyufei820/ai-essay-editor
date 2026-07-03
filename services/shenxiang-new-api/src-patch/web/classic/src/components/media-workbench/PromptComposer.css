@@ -124,36 +124,56 @@
   border-radius: var(--mp-radius-md);
   color: var(--mp-text-secondary);
   background: var(--mp-bg-elevated);
-  cursor: pointer;
   transition: border-color var(--mp-transition-fast), background var(--mp-transition-fast);
 }
 
 .mp-negative-toggle:hover,
-.mp-negative-toggle:focus-visible {
+.mp-negative-toggle:focus-within {
   border-color: var(--mp-border-focus);
   background: var(--mp-accent-soft);
   outline: none;
 }
 
-.mp-negative-toggle > span {
+.mp-negative-toggle-main {
+  min-width: 0;
+  display: inline-flex;
+  flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mp-spacing-md);
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.mp-negative-toggle-main:focus-visible {
+  outline: none;
+}
+
+.mp-negative-toggle-main > span {
   color: var(--mp-text-secondary);
   font-size: 12px;
   font-weight: 700;
 }
 
-.mp-negative-toggle > strong {
+.mp-negative-toggle-main > strong {
   color: var(--mp-text-muted);
   font-size: 12px;
   font-weight: 700;
 }
 
 .mp-negative-prompt-input,
+.mp-negative-prompt-input textarea,
 .mp-negative-prompt-input .semi-input-wrapper {
   width: 100%;
   background: var(--mp-bg-input) !important;
   border: 1px solid var(--mp-border-subtle) !important;
   border-radius: var(--mp-radius-md) !important;
   color: var(--mp-text-primary) !important;
+  font-size: 12px !important;
+  line-height: 1.55 !important;
 }
 
 .mp-negative-prompt-input:hover {

@@ -1,9 +1,7 @@
-import React, { useState } from 'react';
-import { Button, TextArea, Input, Space, Tooltip, Typography } from '@douyinfe/semi-ui';
+import React, { useEffect, useState } from 'react';
+import { Button, TextArea, Switch, Tooltip } from '@douyinfe/semi-ui';
 import { IconCopy, IconDelete, IconRefresh } from '@douyinfe/semi-icons';
 import './PromptComposer.css';
-
-const { Text } = Typography;
 
 /**
  * Prompt 编辑器组件
@@ -14,9 +12,9 @@ export function PromptComposer({
   onPromptChange,
   negativePrompt,
   onNegativePromptChange,
-  presets = [],
-  activePreset,
-  onPresetClick,
+  negativePromptEnabled = false,
+  onNegativePromptEnabledChange,
+  negativePromptPreset = '',
   onCopy,
   onClear,
   promptTextareaRef,
@@ -29,8 +27,19 @@ export function PromptComposer({
   onReverseClick,
 }) {
   const promptLength = String(prompt || '').trim().length;
-  const assistantPreset = presets[0];
-  const [negativeExpanded, setNegativeExpanded] = useState(Boolean(negativePrompt));
+  const [negativeExpanded, setNegativeExpanded] = useState(
+    Boolean(negativePromptEnabled || negativePrompt),
+  );
+  const handleNegativeSwitch = (checked) => {
+    onNegativePromptEnabledChange?.(checked);
+    setNegativeExpanded(Boolean(checked));
+  };
+
+  useEffect(() => {
+    if (!negativePromptEnabled) {
+      setNegativeExpanded(false);
+    }
+  }, [negativePromptEnabled]);
 
   return (
     <div className="mp-prompt-composer">
@@ -40,21 +49,8 @@ export function PromptComposer({
             Prompt 提示词
             <span className="mp-section-meta">Prompt</span>
           </h3>
-          <Text type="tertiary">主体、镜头、光线、风格、用途。</Text>
         </div>
         <div className="mp-prompt-toolbar" aria-label="提示词工具">
-          {assistantPreset ? (
-            <Tooltip content="套用推荐提示词模板">
-              <Button
-                size="small"
-                theme="borderless"
-                icon={<IconRefresh />}
-                onClick={() => onPresetClick(assistantPreset.value)}
-              >
-                推荐模板
-              </Button>
-            </Tooltip>
-          ) : null}
           {onReverseClick ? (
             <Tooltip content="跳转到图像反推面板">
               <Button
@@ -89,34 +85,18 @@ export function PromptComposer({
         </div>
       </div>
 
-      {presets.length > 0 ? (
-        <Space spacing={8} wrap className="mp-prompt-presets">
-          {presets.map((preset) => (
-            <Button
-              key={preset.label}
-              size="small"
-              theme={activePreset === preset.label ? 'solid' : 'light'}
-              type={activePreset === preset.label ? 'primary' : 'tertiary'}
-              onClick={() => onPresetClick(preset.value)}
-            >
-              {preset.label}
-            </Button>
-          ))}
-        </Space>
-      ) : null}
-
       <div className="mp-prompt-input-container">
         <TextArea
           ref={promptTextareaRef}
           value={prompt}
-          autosize={{ minRows: 6, maxRows: 12 }}
+          autosize={{ minRows: 8, maxRows: 14 }}
           onChange={onPromptChange}
           onClick={onPromptClick}
           onKeyUp={onPromptKeyUp}
           onKeyDown={onPromptKeyDown}
           onCompositionStart={onCompositionStart}
           onCompositionEnd={onCompositionEnd}
-          placeholder="例如：一张高级商业海报，主体清晰，真实光影，适合品牌宣传。"
+          placeholder="输入你要生成的画面、镜头或修改要求。"
           className="mp-prompt-textarea"
           data-xr-agent="media-prompt"
         />
@@ -124,19 +104,29 @@ export function PromptComposer({
       </div>
 
       <div className={negativeExpanded ? 'mp-negative-prompt-field is-expanded' : 'mp-negative-prompt-field'}>
-        <button
-          type="button"
-          className="mp-negative-toggle"
-          onClick={() => setNegativeExpanded((value) => !value)}
-        >
-          <span>负面提示词</span>
-          <strong>{negativePrompt ? '已填写' : '可选'}</strong>
-        </button>
-        {negativeExpanded ? (
-          <Input
+        <div className="mp-negative-toggle">
+          <button
+            type="button"
+            className="mp-negative-toggle-main"
+            onClick={() => setNegativeExpanded((value) => !value)}
+            aria-expanded={negativeExpanded}
+          >
+            <span>负面提示词</span>
+            <strong>{negativePromptEnabled ? '已开启' : '关闭'}</strong>
+          </button>
+          <Switch
+            size="small"
+            checked={negativePromptEnabled}
+            onChange={handleNegativeSwitch}
+            aria-label="启用负面提示词"
+          />
+        </div>
+        {negativePromptEnabled && negativeExpanded ? (
+          <TextArea
             value={negativePrompt}
             onChange={onNegativePromptChange}
-            placeholder="不想出现的内容：低清晰度、畸形手指、文字错误、过曝等"
+            autosize={{ minRows: 2, maxRows: 5 }}
+            placeholder={negativePromptPreset || '打开后自动填入通用图像/视频负面提示词，可继续编辑。'}
             className="mp-negative-prompt-input"
             data-xr-agent="media-negative-prompt"
           />
