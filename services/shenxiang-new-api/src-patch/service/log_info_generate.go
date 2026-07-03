@@ -14,6 +14,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+const contextKeyRelayRetryAttempts = "relay_retry_attempts"
+
 func appendRequestPath(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, other map[string]interface{}) {
 	if other == nil {
 		return
@@ -31,6 +33,55 @@ func appendRequestPath(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, other
 		}
 		other["request_path"] = path
 	}
+}
+
+func RecordRelayRetryAttempt(ctx *gin.Context, channelID int, channelName string, retryIndex int, err *types.NewAPIError) {
+	if ctx == nil || err == nil {
+		return
+	}
+	attempt := map[string]interface{}{
+		"channel_id":    channelID,
+		"status_code":   err.StatusCode,
+		"error_code":    string(err.GetErrorCode()),
+		"error_message": common.LocalLogPreview(err.MaskSensitiveError()),
+		"retry_index":   retryIndex,
+	}
+	if channelName != "" {
+		attempt["channel_name"] = channelName
+	}
+	if errorType := err.GetErrorType(); errorType != "" {
+		attempt["error_type"] = string(errorType)
+	}
+
+	attempts := relayRetryAttemptsFromContext(ctx)
+	attempts = append(attempts, attempt)
+	ctx.Set(contextKeyRelayRetryAttempts, attempts)
+}
+
+func relayRetryAttemptsFromContext(ctx *gin.Context) []map[string]interface{} {
+	if ctx == nil {
+		return nil
+	}
+	raw, exists := ctx.Get(contextKeyRelayRetryAttempts)
+	if !exists {
+		return nil
+	}
+	attempts, ok := raw.([]map[string]interface{})
+	if !ok {
+		return nil
+	}
+	return attempts
+}
+
+func appendRelayRetryAttempts(ctx *gin.Context, other map[string]interface{}) {
+	if other == nil {
+		return
+	}
+	attempts := relayRetryAttemptsFromContext(ctx)
+	if len(attempts) == 0 {
+		return
+	}
+	other["retry_attempts"] = attempts
 }
 
 func GenerateTextOtherInfo(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, modelRatio, groupRatio, completionRatio float64,
@@ -79,6 +130,7 @@ func GenerateTextOtherInfo(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, m
 	appendBillingInfo(relayInfo, other)
 	appendParamOverrideInfo(relayInfo, other)
 	appendStreamStatus(relayInfo, other)
+	appendRelayRetryAttempts(ctx, other)
 	return other
 }
 

@@ -361,6 +361,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		if !shouldRetry(c, newAPIError, maxRetryTimes-retryParam.GetRetry()) {
 			break
 		}
+		service.RecordRelayRetryAttempt(c, channel.Id, channel.Name, retryParam.GetRetry(), newAPIError)
 	}
 
 	useChannel := c.GetStringSlice("use_channel")
