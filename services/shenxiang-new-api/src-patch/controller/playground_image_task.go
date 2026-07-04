@@ -168,7 +168,7 @@ func createImageTask(c *gin.Context, openAICompat bool) {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "prompt is required"})
 		return
 	}
-	if len([]rune(strings.TrimSpace(imageReq.Prompt))) > 10000 {
+	if playgroundPromptTooLong(imageReq.Prompt) {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "prompt is too long"})
 		return
 	}

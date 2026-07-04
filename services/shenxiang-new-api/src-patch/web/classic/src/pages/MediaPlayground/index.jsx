@@ -776,6 +776,7 @@ const VIDEO_MODELS = [
   },
 ];
 
+const MEDIA_PROMPT_MAX_LENGTH = 10000;
 const DEFAULT_PROMPT = '';
 const DEFAULT_IMAGE_NEGATIVE_PROMPT = [
   'low quality',
@@ -1373,11 +1374,11 @@ function askReversePromptReferenceMode() {
 }
 
 function promptWithReferenceImages(value, count) {
-  if (count <= 0) return value;
+  if (count <= 0) return clampPromptText(value);
   const markers = Array.from({ length: count }, (_, index) => `@image${index + 1}`);
   const missing = markers.filter((marker) => !String(value || '').includes(marker));
-  if (missing.length === 0) return value;
-  return `${missing.join(' ')} ${value || ''}`.trim();
+  if (missing.length === 0) return clampPromptText(value);
+  return clampPromptText(`${missing.join(' ')} ${value || ''}`.trim());
 }
 
 function promptWithReferenceAliases(value, aliases) {
@@ -1386,8 +1387,15 @@ function promptWithReferenceAliases(value, aliases) {
     .filter(Boolean)
     .map((alias) => `@${alias}`);
   const missing = markers.filter((marker) => !String(value || '').includes(marker));
-  if (missing.length === 0) return value;
-  return `${missing.join(' ')} ${value || ''}`.trim();
+  if (missing.length === 0) return clampPromptText(value);
+  return clampPromptText(`${missing.join(' ')} ${value || ''}`.trim());
+}
+
+function clampPromptText(value) {
+  const text = String(value || '');
+  const chars = Array.from(text);
+  if (chars.length <= MEDIA_PROMPT_MAX_LENGTH) return text;
+  return chars.slice(0, MEDIA_PROMPT_MAX_LENGTH).join('');
 }
 
 function normalizeURL(url) {
@@ -2860,8 +2868,8 @@ const MediaPlayground = () => {
     const needsLeadingSpace = before && !/\s$/.test(before);
     const needsTrailingSpace = after && !/^\s/.test(after);
     const insertion = `${needsLeadingSpace ? ' ' : ''}${text}${needsTrailingSpace ? ' ' : ''}`;
-    const nextPrompt = `${before}${insertion}${after}`;
-    const nextCursor = before.length + insertion.length;
+    const nextPrompt = clampPromptText(`${before}${insertion}${after}`);
+    const nextCursor = Math.min(before.length + insertion.length, nextPrompt.length);
     setPrompt(nextPrompt);
     closeMentionMenu();
     window.requestAnimationFrame(() => {
@@ -2881,8 +2889,9 @@ const MediaPlayground = () => {
   }
 
   function handlePromptChange(value) {
-    setPrompt(value);
-    window.requestAnimationFrame(() => syncMentionAtCursor(value));
+    const nextPrompt = clampPromptText(value);
+    setPrompt(nextPrompt);
+    window.requestAnimationFrame(() => syncMentionAtCursor(nextPrompt));
   }
 
   function handleNegativePromptEnabledChange(checked) {
@@ -3418,7 +3427,7 @@ const MediaPlayground = () => {
         : parsedPrompt.textPrompt;
       if (!nextPrompt) throw new Error('反推结果为空，请换一张图片重试。');
       setReversePromptText(nextPrompt);
-      setPrompt(nextPrompt);
+      handlePromptChange(nextPrompt);
       setReversePromptMessage(
         useReferenceImage
           ? '已生成参考图模式提示词，并自动加入下方参考图。'
@@ -3441,7 +3450,7 @@ const MediaPlayground = () => {
       return;
     }
     setMode('image');
-    setPrompt(nextPrompt);
+    handlePromptChange(nextPrompt);
     Toast.success('已套用反推提示词');
   }
 
@@ -4561,7 +4570,7 @@ const MediaPlayground = () => {
               icon={<IconRefresh />}
               className='mp-new-creation-btn'
                 onClick={() => {
-                  setPrompt(DEFAULT_PROMPT);
+                  handlePromptChange(DEFAULT_PROMPT);
                   setNegativePromptEnabled(false);
                   setNegativePrompt('');
                   setReferenceFiles([]);
@@ -4684,6 +4693,7 @@ const MediaPlayground = () => {
               <PromptComposer
                 prompt={prompt}
                 onPromptChange={handlePromptChange}
+                promptMaxLength={MEDIA_PROMPT_MAX_LENGTH}
                 negativePrompt={negativePrompt}
                 onNegativePromptChange={setNegativePrompt}
                 negativePromptEnabled={negativePromptEnabled}
@@ -4693,7 +4703,7 @@ const MediaPlayground = () => {
                   const ok = await copy(prompt);
                   if (ok) Toast.success('提示词已复制');
                 }}
-                onClear={() => setPrompt('')}
+                onClear={() => handlePromptChange('')}
                 promptTextareaRef={promptTextareaRef}
                 onPromptClick={() => syncMentionAtCursor()}
                 onPromptKeyUp={() => syncMentionAtCursor()}
@@ -5422,7 +5432,7 @@ const MediaPlayground = () => {
                         className='mp-btn-tool'
                         icon={<IconRefresh />}
                         onClick={() => {
-                          setPrompt(inspectorResultPrompt);
+                          handlePromptChange(inspectorResultPrompt);
                           Toast.success('已套用到提示词。');
                         }}
                       >

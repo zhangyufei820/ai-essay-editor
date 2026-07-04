@@ -38,6 +38,12 @@ type playgroundVideoMediaMarker struct {
 	Inputs    map[string]interface{} `json:"inputs,omitempty"`
 }
 
+const playgroundPromptMaxRunes = 10000
+
+func playgroundPromptTooLong(prompt string) bool {
+	return len([]rune(strings.TrimSpace(prompt))) > playgroundPromptMaxRunes
+}
+
 func setupPlaygroundTokenContext(c *gin.Context) (*types.NewAPIError, *relaycommon.RelayInfo) {
 	useAccessToken := c.GetBool("use_access_token")
 	if useAccessToken {
@@ -192,7 +198,46 @@ func PlaygroundVideo(c *gin.Context) {
 		return
 	}
 
+	if newAPIError = validatePlaygroundVideoPromptLimit(c); newAPIError != nil {
+		return
+	}
+
 	RelayTask(c)
+}
+
+func validatePlaygroundVideoPromptLimit(c *gin.Context) *types.NewAPIError {
+	if c == nil || c.Request == nil {
+		return nil
+	}
+	if strings.HasPrefix(strings.ToLower(c.GetHeader("Content-Type")), "multipart/form-data") {
+		return nil
+	}
+	bodyStorage, err := common.GetBodyStorage(c)
+	if err != nil {
+		statusCode := http.StatusBadRequest
+		if common.IsRequestBodyTooLargeError(err) || errors.Is(err, common.ErrRequestBodyTooLarge) {
+			statusCode = http.StatusRequestEntityTooLarge
+		}
+		return types.NewErrorWithStatusCode(err, types.ErrorCodeReadRequestBodyFailed, statusCode, types.ErrOptionWithSkipRetry())
+	}
+	bodyBytes, err := bodyStorage.Bytes()
+	if err != nil {
+		return types.NewErrorWithStatusCode(err, types.ErrorCodeReadRequestBodyFailed, http.StatusBadRequest, types.ErrOptionWithSkipRetry())
+	}
+	c.Request.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+	if len(bodyBytes) == 0 {
+		return nil
+	}
+	var payload struct {
+		Prompt string `json:"prompt"`
+	}
+	if err := json.Unmarshal(bodyBytes, &payload); err != nil {
+		return nil
+	}
+	if playgroundPromptTooLong(payload.Prompt) {
+		return types.NewErrorWithStatusCode(errors.New("prompt is too long"), types.ErrorCodeInvalidRequest, http.StatusBadRequest, types.ErrOptionWithSkipRetry())
+	}
+	return nil
 }
 
 func PlaygroundVideoFetch(c *gin.Context) {

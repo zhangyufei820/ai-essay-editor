@@ -10,6 +10,7 @@ import './PromptComposer.css';
 export function PromptComposer({
   prompt,
   onPromptChange,
+  promptMaxLength = 10000,
   negativePrompt,
   onNegativePromptChange,
   negativePromptEnabled = false,
@@ -26,7 +27,8 @@ export function PromptComposer({
   mentionMenu,
   onReverseClick,
 }) {
-  const promptLength = String(prompt || '').trim().length;
+  const promptLimit = Math.max(1, Number(promptMaxLength) || 10000);
+  const promptLength = Array.from(String(prompt || '').trim()).length;
   const promptValue = String(prompt || '');
   const [negativeExpanded, setNegativeExpanded] = useState(false);
   const promptStructures = [
@@ -144,7 +146,7 @@ export function PromptComposer({
                 清空
               </Button>
             </Tooltip>
-            <span className="mp-prompt-counter">{promptLength} / 2000</span>
+            <span className="mp-prompt-counter">{promptLength} / {promptLimit}</span>
           </div>
         </div>
       </div>
@@ -198,6 +200,7 @@ export function PromptComposer({
             <TextArea
               ref={promptTextareaRef}
               value={prompt}
+              maxLength={promptLimit}
               autosize={{ minRows: 7, maxRows: 12 }}
               onChange={onPromptChange}
               onClick={onPromptClick}

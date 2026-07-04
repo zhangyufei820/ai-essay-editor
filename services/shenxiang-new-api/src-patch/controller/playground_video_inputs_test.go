@@ -1,6 +1,9 @@
 package controller
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestSummarizePlaygroundVideoInputsCountsMetadataContentReferences(t *testing.T) {
 	inputs := summarizePlaygroundVideoInputs(map[string]interface{}{
@@ -35,5 +38,17 @@ func TestSummarizePlaygroundVideoInputsCountsMetadataContentReferences(t *testin
 func TestSummarizePlaygroundVideoInputsReturnsNilWithoutContent(t *testing.T) {
 	if got := summarizePlaygroundVideoInputs(map[string]interface{}{"frames": []interface{}{}}); got != nil {
 		t.Fatalf("summarizePlaygroundVideoInputs() = %v, want nil", got)
+	}
+}
+
+func TestPlaygroundPromptTooLongUsesTenThousandRuneLimit(t *testing.T) {
+	if playgroundPromptTooLong(strings.Repeat("字", playgroundPromptMaxRunes)) {
+		t.Fatalf("playgroundPromptTooLong() rejected exactly %d runes", playgroundPromptMaxRunes)
+	}
+	if !playgroundPromptTooLong(strings.Repeat("字", playgroundPromptMaxRunes+1)) {
+		t.Fatalf("playgroundPromptTooLong() accepted more than %d runes", playgroundPromptMaxRunes)
+	}
+	if playgroundPromptTooLong("  " + strings.Repeat("字", playgroundPromptMaxRunes) + "  ") {
+		t.Fatalf("playgroundPromptTooLong() should trim surrounding whitespace before counting")
 	}
 }

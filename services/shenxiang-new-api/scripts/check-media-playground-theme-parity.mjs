@@ -33,6 +33,12 @@ const requiredMarkers = {
   inputFidelity: 'input_fidelity',
 }
 
+const requiredClassicOnlyMarkers = {
+  mediaPromptLimitConstant: 'MEDIA_PROMPT_MAX_LENGTH = 10000',
+  mediaPromptLimitProp: 'promptMaxLength={MEDIA_PROMPT_MAX_LENGTH}',
+  promptTextareaMaxLength: 'maxLength={promptLimit}',
+}
+
 function sourceRootFromArgs() {
   const index = process.argv.indexOf('--source-root')
   if (index !== -1 && process.argv[index + 1]) {
@@ -100,6 +106,9 @@ function main() {
   for (const [label, marker] of Object.entries(requiredMarkers)) {
     errors.push(...missingMarkerErrors(`classic marker ${label}`, classicAll, marker))
     errors.push(...missingMarkerErrors(`default marker ${label}`, defaultAll, marker))
+  }
+  for (const [label, marker] of Object.entries(requiredClassicOnlyMarkers)) {
+    errors.push(...missingMarkerErrors(`classic marker ${label}`, classicAll, marker))
   }
 
   const parityPairs = [
