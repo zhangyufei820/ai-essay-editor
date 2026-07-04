@@ -144,7 +144,7 @@ func main() {
 	// Codex credential auto-refresh check every 10 minutes, refresh when expires within 1 day
 	service.StartCodexCredentialAutoRefreshTask()
 
-	// Ensure every active user has the four managed system tokens.
+	// System smoke/probe tokens are admin-owned only; never mint them for normal users.
 	service.StartSystemTokenReconcileTask()
 
 	// Subscription quota reset task (daily/weekly/monthly/custom)

@@ -11,6 +11,7 @@ from pathlib import Path
 
 ROOT = Path("/opt/shenxiang-new-api")
 CODEX_ROOT = Path("/opt/shenxiang-codex-workspace")
+ADMIN_SYSTEM_TOKEN_USER_ID = 1
 
 TOKEN_PROFILES = {
     "codex": ("星人 Codex 文本令牌", "星人 Codex 自动令牌"),
@@ -337,6 +338,8 @@ def sync_tokens(profiles: dict[str, list[str]]) -> None:
                 + sql_quote(models)
                 + " WHERE deleted_at IS NULL AND name = "
                 + sql_quote(name)
+                + " AND user_id = "
+                + str(ADMIN_SYSTEM_TOKEN_USER_ID)
                 + ";"
             )
     statements.append("COMMIT;")

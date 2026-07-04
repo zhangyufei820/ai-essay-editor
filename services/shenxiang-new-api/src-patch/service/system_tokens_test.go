@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -42,4 +43,15 @@ func TestMergeModelLimitsCanonicalizesRawGPTImage2(t *testing.T) {
 	limits := mergeModelLimits("gpt-5.5,gpt-image-2,gpt-image-2-4K", []string{"gpt-image-2-4K"})
 
 	require.Equal(t, "gpt-5.5,gpt-image-2-4K", limits)
+}
+
+func TestEnsureSystemTokensRejectsNonAdminUser(t *testing.T) {
+	result, err := EnsureSystemTokensForUserID(context.Background(), AdminSystemTokenUserID+1)
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "restricted to admin user 1")
+	require.Equal(t, AdminSystemTokenUserID+1, result.UserID)
+	require.Zero(t, result.Created)
+	require.Zero(t, result.Updated)
+	require.Zero(t, result.Skipped)
 }

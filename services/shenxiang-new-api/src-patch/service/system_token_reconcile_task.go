@@ -9,13 +9,11 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/logger"
-	"github.com/QuantumNous/new-api/model"
 	"github.com/bytedance/gopkg/util/gopool"
 )
 
 const (
 	systemTokenReconcileTickInterval = 10 * time.Minute
-	systemTokenReconcileBatchSize    = 200
 )
 
 var (
@@ -29,7 +27,7 @@ func StartSystemTokenReconcileTask() {
 			return
 		}
 		gopool.Go(func() {
-			logger.LogInfo(context.Background(), fmt.Sprintf("system token reconcile task started: tick=%s", systemTokenReconcileTickInterval))
+			logger.LogInfo(context.Background(), fmt.Sprintf("admin system token reconcile task started: user_id=%d tick=%s", AdminSystemTokenUserID, systemTokenReconcileTickInterval))
 			runSystemTokenReconcileOnce()
 			ticker := time.NewTicker(systemTokenReconcileTickInterval)
 			defer ticker.Stop()
@@ -46,43 +44,15 @@ func runSystemTokenReconcileOnce() {
 	}
 	defer systemTokenReconcileRunning.Store(false)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	var scanned int
-	var created int
-	var updated int
-	var failed int
-	lastID := 0
-	for {
-		var users []*model.User
-		if err := model.DB.WithContext(ctx).
-			Where("id > ? AND status = ?", lastID, common.UserStatusEnabled).
-			Order("id asc").
-			Limit(systemTokenReconcileBatchSize).
-			Find(&users).Error; err != nil {
-			logger.LogError(ctx, fmt.Sprintf("system token reconcile: query users failed: %v", err))
-			return
-		}
-		if len(users) == 0 {
-			break
-		}
-		for _, user := range users {
-			if user == nil {
-				continue
-			}
-			lastID = user.Id
-			scanned++
-			result, err := EnsureSystemTokensForUserID(ctx, user.Id)
-			if err != nil {
-				failed++
-				logger.LogWarn(ctx, fmt.Sprintf("system token reconcile: user_id=%d failed: %v", user.Id, err))
-				continue
-			}
-			created += result.Created
-			updated += result.Updated
-		}
+
+	result, err := EnsureSystemTokensForUserID(ctx, AdminSystemTokenUserID)
+	if err != nil {
+		logger.LogWarn(ctx, fmt.Sprintf("admin system token reconcile failed: user_id=%d error=%v", AdminSystemTokenUserID, err))
+		return
 	}
-	if created > 0 || updated > 0 || failed > 0 {
-		logger.LogInfo(ctx, fmt.Sprintf("system token reconcile completed: scanned=%d created=%d updated=%d failed=%d", scanned, created, updated, failed))
+	if result.Created > 0 || result.Updated > 0 {
+		logger.LogInfo(ctx, fmt.Sprintf("admin system token reconcile completed: user_id=%d created=%d updated=%d skipped=%d", AdminSystemTokenUserID, result.Created, result.Updated, result.Skipped))
 	}
 }

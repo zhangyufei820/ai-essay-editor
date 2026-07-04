@@ -25,6 +25,8 @@ type SystemTokenEnsureResult struct {
 	Skipped int
 }
 
+const AdminSystemTokenUserID = 1
+
 var MoonApiXSeedanceVideoModels = []string{
 	"seedance-2.0",
 	"seedance-2.0-cl-mini",
@@ -66,10 +68,17 @@ func SystemTokenProfiles() []SystemTokenProfile {
 	}
 }
 
+func IsAdminSystemTokenUserID(userID int) bool {
+	return userID == AdminSystemTokenUserID
+}
+
 func EnsureSystemTokensForUserID(ctx context.Context, userID int) (SystemTokenEnsureResult, error) {
 	result := SystemTokenEnsureResult{UserID: userID}
 	if userID <= 0 {
 		return result, fmt.Errorf("invalid user id: %d", userID)
+	}
+	if !IsAdminSystemTokenUserID(userID) {
+		return result, fmt.Errorf("system test tokens are restricted to admin user %d, got user %d", AdminSystemTokenUserID, userID)
 	}
 
 	err := model.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {

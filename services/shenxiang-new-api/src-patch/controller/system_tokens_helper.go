@@ -14,6 +14,9 @@ func ensureSystemTokensForUser(c *gin.Context, userID int) {
 	if userID <= 0 {
 		return
 	}
+	if !service.IsAdminSystemTokenUserID(userID) {
+		return
+	}
 	ctx := context.Background()
 	if c != nil && c.Request != nil {
 		ctx = c.Request.Context()

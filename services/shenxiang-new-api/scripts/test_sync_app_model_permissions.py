@@ -35,6 +35,23 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertTrue(self.module.is_disabled_ability_pair("21", "gpt-image-2"))
         self.assertFalse(self.module.is_disabled_ability_pair("8", "gpt-image-2-4K"))
 
+    def test_sync_tokens_updates_admin_system_tokens_only(self) -> None:
+        captured: list[str] = []
+        self.module.mysql_exec = captured.append
+
+        self.module.sync_tokens(
+            {
+                "codex": ["gpt-5.5"],
+                "claude": ["claude-opus-4-8"],
+                "image": ["gpt-image-2-4K"],
+                "video": ["seedance-2.0-cl-mini"],
+            }
+        )
+
+        sql = "\n".join(captured)
+        self.assertIn("AND user_id = 1", sql)
+        self.assertEqual(sql.count("AND user_id = 1"), 5)
+
 
 if __name__ == "__main__":
     unittest.main()

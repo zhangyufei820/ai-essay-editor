@@ -146,7 +146,7 @@ def docker_mysql(args: list[str], env: dict[str, str], *, input_text: str | None
         "-uroot",
         env["MYSQL_DATABASE"],
     ] + args
-    kwargs: dict[str, Any] = {"text": True}
+    kwargs: dict[str, Any] = {"text": True, "encoding": "utf-8", "errors": "replace"}
     if capture:
         kwargs["stdout"] = subprocess.PIPE
         kwargs["stderr"] = subprocess.PIPE
@@ -871,6 +871,8 @@ def docker_logs_since(seconds: int) -> str:
     result = subprocess.run(
         ["docker", "logs", "--since", f"{int(seconds)}s", "shenxiang-new-api"],
         text=True,
+        encoding="utf-8",
+        errors="replace",
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
     )
