@@ -83,8 +83,9 @@ func playgroundImageRetryTimes(c *gin.Context) int {
 }
 
 const (
-	playgroundImage2TempCircuitChannelID = 24
-	playgroundImage2VipMappedChannelID   = 4
+	playgroundImage2Channel24TempCircuitChannelID = 24
+	playgroundImage2Channel16TempCircuitChannelID = 16
+	playgroundImage2VipMappedChannelID            = 4
 
 	playgroundForcedChannelIDsKey         = "playground_forced_channel_ids"
 	playgroundImage2TempCircuitScopeKey   = "playground_image2_temp_circuit_scope"
@@ -172,15 +173,27 @@ func (c *temporaryChannelCircuit) clear() {
 	c.coolingUntil = time.Time{}
 }
 
-var playgroundImage2Channel24TempCircuit = &temporaryChannelCircuit{}
+var playgroundImage2TempCircuits = map[int]*temporaryChannelCircuit{
+	playgroundImage2Channel24TempCircuitChannelID: {},
+	playgroundImage2Channel16TempCircuitChannelID: {},
+}
 
-func playgroundImage2Channel24TempCircuitEnabled() bool {
-	value := strings.ToLower(strings.TrimSpace(common.GetEnvOrDefaultString("PLAYGROUND_IMAGE2_CHANNEL24_TEMP_CIRCUIT_ENABLED", "true")))
+func playgroundImage2TempCircuitForChannel(channelID int) (*temporaryChannelCircuit, bool) {
+	circuit, ok := playgroundImage2TempCircuits[channelID]
+	return circuit, ok && circuit != nil
+}
+
+func playgroundImage2TempCircuitEnabled(channelID int) bool {
+	if _, ok := playgroundImage2TempCircuitForChannel(channelID); !ok {
+		return false
+	}
+	key := fmt.Sprintf("PLAYGROUND_IMAGE2_CHANNEL%d_TEMP_CIRCUIT_ENABLED", channelID)
+	value := strings.ToLower(strings.TrimSpace(common.GetEnvOrDefaultString(key, "true")))
 	return value != "0" && value != "false" && value != "off" && value != "no"
 }
 
-func playgroundImage2Channel24TempCircuitCooldown() time.Duration {
-	seconds := common.GetEnvOrDefault("PLAYGROUND_IMAGE2_CHANNEL24_TEMP_COOLDOWN_SECONDS", 300)
+func playgroundImage2TempCircuitCooldown(channelID int) time.Duration {
+	seconds := common.GetEnvOrDefault(fmt.Sprintf("PLAYGROUND_IMAGE2_CHANNEL%d_TEMP_COOLDOWN_SECONDS", channelID), 300)
 	if seconds <= 0 {
 		return 5 * time.Minute
 	}
@@ -604,10 +617,11 @@ func shouldSkipPlaygroundImage2ForcedChannel(c *gin.Context, channelID int) bool
 }
 
 func shouldSkipPlaygroundImage2TempCircuitChannel(c *gin.Context, channelID int) bool {
-	if channelID != playgroundImage2TempCircuitChannelID || !playgroundImage2Channel24TempCircuitEnabled() {
+	circuit, ok := playgroundImage2TempCircuitForChannel(channelID)
+	if !ok || !playgroundImage2TempCircuitEnabled(channelID) {
 		return false
 	}
-	skip, probe, until := playgroundImage2Channel24TempCircuit.shouldSkipOrProbe(playgroundImage2Channel24TempCircuitCooldown())
+	skip, probe, until := circuit.shouldSkipOrProbe(playgroundImage2TempCircuitCooldown(channelID))
 	if probe && c != nil {
 		c.Set(playgroundImage2TempCircuitRequestKey, true)
 		logger.LogInfo(c, fmt.Sprintf("playground image2 temporary circuit half-open probing channel #%d", channelID))
@@ -978,18 +992,19 @@ func RelayMidjourney(c *gin.Context) {
 }
 
 func recordPlaygroundImage2TempCircuitFailure(c *gin.Context, channelID int, err *types.NewAPIError) {
-	if c == nil || err == nil || channelID != playgroundImage2TempCircuitChannelID ||
-		!c.GetBool(playgroundImage2TempCircuitScopeKey) || !playgroundImage2Channel24TempCircuitEnabled() {
+	circuit, ok := playgroundImage2TempCircuitForChannel(channelID)
+	if c == nil || err == nil || !ok ||
+		!c.GetBool(playgroundImage2TempCircuitScopeKey) || !playgroundImage2TempCircuitEnabled(channelID) {
 		return
 	}
-	if !shouldCoolDownPlaygroundImage2Channel24(err) {
+	if !shouldCoolDownPlaygroundImage2TempCircuit(err) {
 		return
 	}
-	until := playgroundImage2Channel24TempCircuit.coolDown(playgroundImage2Channel24TempCircuitCooldown())
+	until := circuit.coolDown(playgroundImage2TempCircuitCooldown(channelID))
 	logger.LogWarn(c, fmt.Sprintf("playground image2 temporary circuit cools channel #%d until %s after status %d", channelID, until.Format(time.RFC3339), err.StatusCode))
 }
 
-func shouldCoolDownPlaygroundImage2Channel24(err *types.NewAPIError) bool {
+func shouldCoolDownPlaygroundImage2TempCircuit(err *types.NewAPIError) bool {
 	if err == nil {
 		return false
 	}
@@ -1007,11 +1022,12 @@ func shouldCoolDownPlaygroundImage2Channel24(err *types.NewAPIError) bool {
 }
 
 func recordPlaygroundImage2TempCircuitSuccess(c *gin.Context, channelID int) {
-	if c == nil || channelID != playgroundImage2TempCircuitChannelID ||
-		!c.GetBool(playgroundImage2TempCircuitScopeKey) || !playgroundImage2Channel24TempCircuitEnabled() {
+	circuit, ok := playgroundImage2TempCircuitForChannel(channelID)
+	if c == nil || !ok ||
+		!c.GetBool(playgroundImage2TempCircuitScopeKey) || !playgroundImage2TempCircuitEnabled(channelID) {
 		return
 	}
-	playgroundImage2Channel24TempCircuit.clear()
+	circuit.clear()
 	logger.LogInfo(c, fmt.Sprintf("playground image2 temporary circuit restores channel #%d after successful probe", channelID))
 }
 

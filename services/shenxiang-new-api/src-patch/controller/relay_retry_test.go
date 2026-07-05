@@ -262,6 +262,71 @@ func TestPlaygroundImage2ForcedChannelSkipsKnownBadVipMapping(t *testing.T) {
 	}
 }
 
+func withPlaygroundImage2TempCircuitForTest(t *testing.T, channelID int, circuit *temporaryChannelCircuit) {
+	t.Helper()
+	oldCircuit, existed := playgroundImage2TempCircuits[channelID]
+	playgroundImage2TempCircuits[channelID] = circuit
+	t.Cleanup(func() {
+		if existed {
+			playgroundImage2TempCircuits[channelID] = oldCircuit
+			return
+		}
+		delete(playgroundImage2TempCircuits, channelID)
+	})
+}
+
+func TestPlaygroundImage2TempCircuitSkipsChannel16ButNotGeek2API(t *testing.T) {
+	t.Setenv("PLAYGROUND_IMAGE2_CHANNEL16_TEMP_CIRCUIT_ENABLED", "true")
+	t.Setenv("PLAYGROUND_IMAGE2_CHANNEL16_TEMP_COOLDOWN_SECONDS", "300")
+	now := time.Date(2026, 7, 5, 9, 0, 0, 0, time.UTC)
+	withPlaygroundImage2TempCircuitForTest(t, playgroundImage2Channel16TempCircuitChannelID, &temporaryChannelCircuit{
+		now: func() time.Time { return now },
+	})
+
+	if !shouldSkipPlaygroundImage2TempCircuitChannel(nil, playgroundImage2Channel16TempCircuitChannelID) {
+		t.Fatal("shouldSkipPlaygroundImage2TempCircuitChannel(#16) = false, want true during initial cooldown")
+	}
+	if shouldSkipPlaygroundImage2TempCircuitChannel(nil, 27) {
+		t.Fatal("shouldSkipPlaygroundImage2TempCircuitChannel(#27) = true, want false for independent Geek2API channel")
+	}
+}
+
+func TestPlaygroundImage2TempCircuitChannel16FailureAndSuccess(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	t.Setenv("PLAYGROUND_IMAGE2_CHANNEL16_TEMP_CIRCUIT_ENABLED", "true")
+	t.Setenv("PLAYGROUND_IMAGE2_CHANNEL16_TEMP_COOLDOWN_SECONDS", "300")
+	now := time.Date(2026, 7, 5, 9, 0, 0, 0, time.UTC)
+	circuit := &temporaryChannelCircuit{now: func() time.Time { return now }}
+	circuit.clear()
+	withPlaygroundImage2TempCircuitForTest(t, playgroundImage2Channel16TempCircuitChannelID, circuit)
+
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Set(playgroundImage2TempCircuitScopeKey, true)
+	err := types.WithOpenAIError(types.OpenAIError{
+		Message: "The origin web server did not return a complete response within the 120-second Proxy Read Timeout window",
+		Type:    "openai_error",
+		Code:    "upstream_timeout",
+	}, 524)
+
+	recordPlaygroundImage2TempCircuitFailure(c, playgroundImage2Channel16TempCircuitChannelID, err)
+	skip, probe, _ := circuit.shouldSkipOrProbe(5 * time.Minute)
+	if !skip || probe {
+		t.Fatalf("after #16 failure shouldSkipOrProbe() = skip %v probe %v, want cooldown skip", skip, probe)
+	}
+
+	now = now.Add(5*time.Minute + time.Second)
+	skip, probe, _ = circuit.shouldSkipOrProbe(5 * time.Minute)
+	if skip || !probe {
+		t.Fatalf("expired #16 cooldown shouldSkipOrProbe() = skip %v probe %v, want half-open probe", skip, probe)
+	}
+
+	recordPlaygroundImage2TempCircuitSuccess(c, playgroundImage2Channel16TempCircuitChannelID)
+	skip, probe, _ = circuit.shouldSkipOrProbe(5 * time.Minute)
+	if skip || probe {
+		t.Fatalf("after #16 success shouldSkipOrProbe() = skip %v probe %v, want restored channel", skip, probe)
+	}
+}
+
 func TestShouldRetryAllowsPlaygroundForcedTimeoutFallback(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
