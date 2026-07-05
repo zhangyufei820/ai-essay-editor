@@ -295,6 +295,7 @@ func TestPlaygroundImage2TempCircuitChannel16FailureAndSuccess(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	t.Setenv("PLAYGROUND_IMAGE2_CHANNEL16_TEMP_CIRCUIT_ENABLED", "true")
 	t.Setenv("PLAYGROUND_IMAGE2_CHANNEL16_TEMP_COOLDOWN_SECONDS", "300")
+	t.Setenv("PLAYGROUND_IMAGE2_CHANNEL16_TEMP_SUCCESS_THRESHOLD", "1")
 	now := time.Date(2026, 7, 5, 9, 0, 0, 0, time.UTC)
 	circuit := &temporaryChannelCircuit{now: func() time.Time { return now }}
 	circuit.clear()
@@ -320,10 +321,51 @@ func TestPlaygroundImage2TempCircuitChannel16FailureAndSuccess(t *testing.T) {
 		t.Fatalf("expired #16 cooldown shouldSkipOrProbe() = skip %v probe %v, want half-open probe", skip, probe)
 	}
 
+	c.Set(playgroundImage2TempCircuitRequestKey, true)
 	recordPlaygroundImage2TempCircuitSuccess(c, playgroundImage2Channel16TempCircuitChannelID)
 	skip, probe, _ = circuit.shouldSkipOrProbe(5 * time.Minute)
 	if skip || probe {
 		t.Fatalf("after #16 success shouldSkipOrProbe() = skip %v probe %v, want restored channel", skip, probe)
+	}
+}
+
+func TestPlaygroundImage2TempCircuitRequiresConsecutiveProbeSuccesses(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	t.Setenv("PLAYGROUND_IMAGE2_CHANNEL24_TEMP_CIRCUIT_ENABLED", "true")
+	t.Setenv("PLAYGROUND_IMAGE2_CHANNEL24_TEMP_COOLDOWN_SECONDS", "300")
+	t.Setenv("PLAYGROUND_IMAGE2_CHANNEL24_TEMP_SUCCESS_THRESHOLD", "3")
+	now := time.Date(2026, 7, 5, 9, 0, 0, 0, time.UTC)
+	circuit := &temporaryChannelCircuit{now: func() time.Time { return now }}
+	circuit.coolDown(5 * time.Minute)
+	withPlaygroundImage2TempCircuitForTest(t, playgroundImage2Channel24TempCircuitChannelID, circuit)
+
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Set(playgroundImage2TempCircuitScopeKey, true)
+
+	for attempt := 1; attempt <= 2; attempt++ {
+		now = now.Add(5*time.Minute + time.Second)
+		skip, probe, _ := circuit.shouldSkipOrProbe(5 * time.Minute)
+		if skip || !probe {
+			t.Fatalf("probe attempt %d shouldSkipOrProbe() = skip %v probe %v, want half-open probe", attempt, skip, probe)
+		}
+		c.Set(playgroundImage2TempCircuitRequestKey, true)
+		recordPlaygroundImage2TempCircuitSuccess(c, playgroundImage2Channel24TempCircuitChannelID)
+		skip, probe, _ = circuit.shouldSkipOrProbe(5 * time.Minute)
+		if !skip || probe {
+			t.Fatalf("after probe success %d shouldSkipOrProbe() = skip %v probe %v, want still cooled", attempt, skip, probe)
+		}
+	}
+
+	now = now.Add(5*time.Minute + time.Second)
+	skip, probe, _ := circuit.shouldSkipOrProbe(5 * time.Minute)
+	if skip || !probe {
+		t.Fatalf("third probe shouldSkipOrProbe() = skip %v probe %v, want half-open probe", skip, probe)
+	}
+	c.Set(playgroundImage2TempCircuitRequestKey, true)
+	recordPlaygroundImage2TempCircuitSuccess(c, playgroundImage2Channel24TempCircuitChannelID)
+	skip, probe, _ = circuit.shouldSkipOrProbe(5 * time.Minute)
+	if skip || probe {
+		t.Fatalf("after third probe success shouldSkipOrProbe() = skip %v probe %v, want restored", skip, probe)
 	}
 }
 

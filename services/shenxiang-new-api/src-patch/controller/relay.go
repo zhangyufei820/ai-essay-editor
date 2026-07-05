@@ -93,12 +93,13 @@ const (
 )
 
 type temporaryChannelCircuit struct {
-	mu            sync.Mutex
-	initialized   bool
-	cooling       bool
-	coolingUntil  time.Time
-	probeInFlight bool
-	now           func() time.Time
+	mu             sync.Mutex
+	initialized    bool
+	cooling        bool
+	coolingUntil   time.Time
+	probeInFlight  bool
+	probeSuccesses int
+	now            func() time.Time
 }
 
 func (c *temporaryChannelCircuit) currentTime() time.Time {
@@ -157,6 +158,7 @@ func (c *temporaryChannelCircuit) coolDown(duration time.Duration) time.Time {
 	c.initialized = true
 	c.cooling = true
 	c.probeInFlight = false
+	c.probeSuccesses = 0
 	c.coolingUntil = c.currentTime().Add(duration)
 	return c.coolingUntil
 }
@@ -170,7 +172,35 @@ func (c *temporaryChannelCircuit) clear() {
 	c.initialized = true
 	c.cooling = false
 	c.probeInFlight = false
+	c.probeSuccesses = 0
 	c.coolingUntil = time.Time{}
+}
+
+func (c *temporaryChannelCircuit) markProbeSuccess(requiredSuccesses int, cooldown time.Duration) (restored bool, successes int, until time.Time) {
+	if c == nil {
+		return false, 0, time.Time{}
+	}
+	if requiredSuccesses <= 0 {
+		requiredSuccesses = 1
+	}
+	if cooldown <= 0 {
+		cooldown = 5 * time.Minute
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.initialized = true
+	c.probeInFlight = false
+	c.probeSuccesses++
+	successes = c.probeSuccesses
+	if c.probeSuccesses >= requiredSuccesses {
+		c.cooling = false
+		c.probeSuccesses = 0
+		c.coolingUntil = time.Time{}
+		return true, successes, time.Time{}
+	}
+	c.cooling = true
+	c.coolingUntil = c.currentTime().Add(cooldown)
+	return false, successes, c.coolingUntil
 }
 
 var playgroundImage2TempCircuits = map[int]*temporaryChannelCircuit{
@@ -198,6 +228,14 @@ func playgroundImage2TempCircuitCooldown(channelID int) time.Duration {
 		return 5 * time.Minute
 	}
 	return time.Duration(seconds) * time.Second
+}
+
+func playgroundImage2TempCircuitSuccessThreshold(channelID int) int {
+	threshold := common.GetEnvOrDefault(fmt.Sprintf("PLAYGROUND_IMAGE2_CHANNEL%d_TEMP_SUCCESS_THRESHOLD", channelID), 3)
+	if threshold <= 0 {
+		return 1
+	}
+	return threshold
 }
 
 func Relay(c *gin.Context, relayFormat types.RelayFormat) {
@@ -1024,11 +1062,17 @@ func shouldCoolDownPlaygroundImage2TempCircuit(err *types.NewAPIError) bool {
 func recordPlaygroundImage2TempCircuitSuccess(c *gin.Context, channelID int) {
 	circuit, ok := playgroundImage2TempCircuitForChannel(channelID)
 	if c == nil || !ok ||
-		!c.GetBool(playgroundImage2TempCircuitScopeKey) || !playgroundImage2TempCircuitEnabled(channelID) {
+		!c.GetBool(playgroundImage2TempCircuitScopeKey) || !c.GetBool(playgroundImage2TempCircuitRequestKey) ||
+		!playgroundImage2TempCircuitEnabled(channelID) {
 		return
 	}
-	circuit.clear()
-	logger.LogInfo(c, fmt.Sprintf("playground image2 temporary circuit restores channel #%d after successful probe", channelID))
+	threshold := playgroundImage2TempCircuitSuccessThreshold(channelID)
+	restored, successes, until := circuit.markProbeSuccess(threshold, playgroundImage2TempCircuitCooldown(channelID))
+	if restored {
+		logger.LogInfo(c, fmt.Sprintf("playground image2 temporary circuit restores channel #%d after %d consecutive successful probes", channelID, successes))
+		return
+	}
+	logger.LogInfo(c, fmt.Sprintf("playground image2 temporary circuit keeps channel #%d cooled until %s after successful probe (%d/%d)", channelID, until.Format(time.RFC3339), successes, threshold))
 }
 
 func RelayNotImplemented(c *gin.Context) {
