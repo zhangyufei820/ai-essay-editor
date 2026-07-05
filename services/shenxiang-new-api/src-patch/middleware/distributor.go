@@ -142,6 +142,7 @@ func Distribute() func(c *gin.Context) {
 						if usingGroup == "auto" {
 							showGroup = fmt.Sprintf("auto(%s)", selectGroup)
 						}
+						logDistributorNoAvailableChannel(c, modelRequest.Model, showGroup, err.Error())
 						message := i18n.T(c, i18n.MsgDistributorGetChannelFailed, map[string]any{"Group": showGroup, "Model": modelRequest.Model, "Error": err.Error()})
 						// 如果错误，但是渠道不为空，说明是数据库一致性问题
 						//if channel != nil {
@@ -152,6 +153,7 @@ func Distribute() func(c *gin.Context) {
 						return
 					}
 					if channel == nil {
+						logDistributorNoAvailableChannel(c, modelRequest.Model, usingGroup, "nil channel")
 						abortWithOpenAiMessage(c, http.StatusServiceUnavailable, i18n.T(c, i18n.MsgDistributorNoAvailableChannel, map[string]any{"Group": usingGroup, "Model": modelRequest.Model}), types.ErrorCodeModelNotFound)
 						return
 					}
@@ -165,6 +167,21 @@ func Distribute() func(c *gin.Context) {
 			service.RecordChannelAffinity(c, channel.Id)
 		}
 	}
+}
+
+func logDistributorNoAvailableChannel(c *gin.Context, modelName, groupName, reason string) {
+	if c == nil || c.Request == nil || c.Request.URL == nil {
+		return
+	}
+	common.SysLog(fmt.Sprintf(
+		"distributor no available channel: request_id=%s user_id=%d path=%s model=%s group=%s reason=%s",
+		c.GetString(common.RequestIdKey),
+		c.GetInt("id"),
+		c.Request.URL.Path,
+		modelName,
+		groupName,
+		reason,
+	))
 }
 
 // getModelFromRequest 从请求中读取模型信息
