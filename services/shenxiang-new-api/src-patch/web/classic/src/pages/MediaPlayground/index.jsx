@@ -152,6 +152,8 @@ const IMAGE_MODELS = [
     sizeParam: 'size',
     backgroundOptions: ['auto', 'opaque'],
     edit: true,
+    priceLabel: '¥0.108/张',
+    billingLabel: '按张计费',
     hint: '适合高质量海报、产品图和商品素材。官方最大边 3840，4K 横竖图使用 3840x2160 / 2160x3840，可自定义合法 WxH。',
   },
   {
@@ -172,6 +174,7 @@ const IMAGE_MODELS = [
     sizeParam: 'size',
     backgroundOptions: ['auto', 'opaque'],
     edit: true,
+    statusLabel: '稳定',
     priceLabel: '1K ¥0.03 / 2K ¥0.06 / 4K ¥0.10',
     billingLabel: '按张计费',
     hint: '星人 Image 2：按 OpenAI gpt-image-2 约束提交，最大边 3840，4K 横竖图使用 3840x2160 / 2160x3840，可自定义合法 WxH。',
@@ -194,6 +197,8 @@ const IMAGE_MODELS = [
     countParam: 'none',
     sizeParam: 'responseFormat',
     edit: true,
+    priceLabel: '¥0.162/张',
+    billingLabel: '按张计费',
     hint: '适合快速高分辨率创意图、场景草图和视觉方案探索。支持 512 / 1K / 2K / 4K 和极端比例。',
   },
   {
@@ -214,6 +219,8 @@ const IMAGE_MODELS = [
     countParam: 'none',
     sizeParam: 'responseFormat',
     edit: true,
+    priceLabel: '¥0.238/张',
+    billingLabel: '按张计费',
     hint: '适合高阶视觉方案、复杂场景草图和高分辨率创意图。4K 会按 Gemini 官方比例表输出，如 16:9 为 5504x3072。',
   },
   {
@@ -236,6 +243,8 @@ const IMAGE_MODELS = [
     supportsInputFidelity: true,
     supportsOutputCompression: true,
     edit: true,
+    priceLabel: '¥0.055/张',
+    billingLabel: '按张计费',
     hint: '电商商品图快速通道，实测约 1.5K 输出，单次调用 ¥0.055/张。',
   },
   {
@@ -256,6 +265,8 @@ const IMAGE_MODELS = [
     countParam: 'none',
     sizeParam: 'responseFormat',
     edit: true,
+    priceLabel: '¥0.085/张',
+    billingLabel: '按张计费',
     hint: '电商特价 Banana 2，仅支持 1K 输出，可编辑图像，按 0.085/张计费。',
   },
   {
@@ -276,9 +287,23 @@ const IMAGE_MODELS = [
     countParam: 'n',
     sizeParam: 'aspect_ratio',
     edit: true,
+    priceLabel: '¥0.324/张',
+    billingLabel: '按张计费',
     hint: '适合真实感、社媒封面和快速创意探索。官方按比例 + 1k/2k 分辨率控制，不公布固定像素表。',
   },
 ];
+
+function modelOptionDisplayLabel(model) {
+  const tags = [model.statusLabel, model.priceLabel].filter(Boolean);
+  return tags.length ? `${model.label} · ${tags.join(' · ')}` : model.label;
+}
+
+function toModelSelectOptions(models) {
+  return models.map((item) => ({
+    label: modelOptionDisplayLabel(item),
+    value: item.value,
+  }));
+}
 
 const SIZE_TO_ASPECT_RATIO = {
   '960x960': '1:1',
@@ -693,6 +718,8 @@ const VIDEO_MODELS = [
     defaultSize: '1280x720',
     defaultDuration: 15,
     defaultFps: 24,
+    billingLabel: '按次计费',
+    priceLabel: '¥6.5/次',
     hint: '6.5 元/次，按次计费，不是按秒，建议生成 15 秒。',
   },
   {
@@ -4824,10 +4851,7 @@ const MediaPlayground = () => {
                     <NativeSelect
                       label='生成模型'
                       value={imageModel}
-                      options={modelOptions.map((item) => ({
-                        label: item.label,
-                        value: item.value,
-                      }))}
+                      options={toModelSelectOptions(modelOptions)}
                       onChange={(value) => {
                         imageEditModelLockRef.current = '';
                         setImageModel(value);
@@ -4859,10 +4883,7 @@ const MediaPlayground = () => {
                   <NativeSelect
                     label='模型'
                     value={currentModelId}
-                    options={modelOptions.map((item) => ({
-                      label: item.label,
-                      value: item.value,
-                    }))}
+                    options={toModelSelectOptions(modelOptions)}
                     onChange={(value) => {
                       imageEditModelLockRef.current = '';
                       mode === 'image' ? setImageModel(value) : setVideoModel(value);

@@ -55,6 +55,13 @@ const PRICING_DISPLAY_OVERRIDES = {
     price_unit_label: '张',
     billing_label: '按张计费',
   },
+  'gemini-3-pro-image-preview': {
+    display_name: 'Gemini 3 Pro Image',
+    description: 'Gemini 3 Pro Image：高阶视觉方案和高分辨率创意图，人民币 ¥0.238/张。',
+    fixed_price_label: '¥0.238',
+    price_unit_label: '张',
+    billing_label: '按张计费',
+  },
   'gpt-image-2-4K': {
     display_name: 'gpt-image-2-4K',
     description: '星人 OpenAI 图像生成，支持 1K/2K/4K 与官方约束内自动或自定义尺寸；gpt-image-2 最大边 3840，4K 横竖图为 3840x2160 / 2160x3840。',
@@ -72,6 +79,13 @@ const PRICING_DISPLAY_OVERRIDES = {
     icon: 'OpenAI',
     visible_vendor_name: '星人图像',
     hidden_tags: ['geek2api'],
+  },
+  'grok-imagine-image': {
+    display_name: 'Grok Image Pro',
+    description: 'Grok Image Pro：真实感、社媒配图和快速风格探索，人民币 ¥0.324/张。',
+    fixed_price_label: '¥0.324',
+    price_unit_label: '张',
+    billing_label: '按张计费',
   },
   'seedance-2.0-dj-fast': {
     display_name: 'seedance-2.0-dj-fast',

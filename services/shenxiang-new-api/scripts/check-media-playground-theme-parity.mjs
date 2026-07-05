@@ -37,7 +37,19 @@ const requiredClassicOnlyMarkers = {
   mediaPromptLimitConstant: 'MEDIA_PROMPT_MAX_LENGTH = 10000',
   mediaPromptLimitProp: 'promptMaxLength={MEDIA_PROMPT_MAX_LENGTH}',
   promptTextareaMaxLength: 'maxLength={promptLimit}',
+  geekImage2StableLabel: "statusLabel: '稳定'",
+  geekImage2TierPriceLabel: '1K ¥0.03 / 2K ¥0.06 / 4K ¥0.10',
+  compactModelOptionLabel: 'function modelOptionDisplayLabel(model)',
 }
+
+const requiredImagePriceLabels = [
+  '¥0.108/张',
+  '¥0.162/张',
+  '¥0.238/张',
+  '¥0.055/张',
+  '¥0.085/张',
+  '¥0.324/张',
+]
 
 function sourceRootFromArgs() {
   const index = process.argv.indexOf('--source-root')
@@ -109,6 +121,9 @@ function main() {
   }
   for (const [label, marker] of Object.entries(requiredClassicOnlyMarkers)) {
     errors.push(...missingMarkerErrors(`classic marker ${label}`, classicAll, marker))
+  }
+  for (const marker of requiredImagePriceLabels) {
+    errors.push(...missingMarkerErrors('classic image price label', classicAll, marker))
   }
 
   const parityPairs = [

@@ -54,7 +54,13 @@ export function ModelSelector({
           </div>
 
           <div className="mp-current-model-meta">
+            {currentModel.statusLabel && (
+              <span className="mp-meta-tag">{currentModel.statusLabel}</span>
+            )}
             <span className="mp-meta-tag">{capabilityLabel}</span>
+            {currentModel.priceLabel && (
+              <span className="mp-meta-tag">{currentModel.priceLabel}</span>
+            )}
             {currentModel.sizes?.length && (
               <span className="mp-meta-tag">{currentModel.sizes.length} 规格</span>
             )}
@@ -111,6 +117,9 @@ export function ModelSelector({
               </div>
 
               <div className="mp-model-option-meta">
+                {model.statusLabel && (
+                  <span className="mp-model-option-tag">{model.statusLabel}</span>
+                )}
                 {model.priceLabel && (
                   <span className="mp-model-option-tag">{model.priceLabel}</span>
                 )}
