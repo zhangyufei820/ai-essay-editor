@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -65,6 +66,20 @@ func writePlaygroundServeMediaTestFile(t *testing.T, root string, userID int) {
 	require.NoError(t, os.WriteFile(fullPath+".json", []byte(`{"expiresAt":"`+expiresAt+`"}`), 0o644))
 }
 
+func writePlaygroundPublicReferenceTestFile(t *testing.T, root string, userID int) {
+	t.Helper()
+
+	userDir := filepath.Join(root, playgroundMediaUserDirName(userID))
+	require.NoError(t, os.MkdirAll(userDir, 0o755))
+	fullPath := filepath.Join(userDir, playgroundServeMediaTestFilename)
+	require.NoError(t, os.WriteFile(fullPath, []byte("png"), 0o644))
+	expiresAt := time.Now().Add(time.Hour).Format(time.RFC3339)
+	require.NoError(t, os.WriteFile(fullPath+".json", []byte(`{
+		"expiresAt":"`+expiresAt+`",
+		"metadata":{"hidden":true,"source":"video_input","public_reference":true}
+	}`), 0o644))
+}
+
 func requestPlaygroundServeMedia(t *testing.T, currentUserID int, tokenID int, targetPath string) *httptest.ResponseRecorder {
 	t.Helper()
 
@@ -76,6 +91,18 @@ func requestPlaygroundServeMedia(t *testing.T, currentUserID int, tokenID int, t
 		}
 		PlaygroundServeMedia(c)
 	})
+
+	recorder := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, targetPath, nil)
+	server.ServeHTTP(recorder, req)
+	return recorder
+}
+
+func requestPlaygroundServePublicMedia(t *testing.T, targetPath string) *httptest.ResponseRecorder {
+	t.Helper()
+
+	server := gin.New()
+	server.GET("/pg/media/public/*filepath", PlaygroundServePublicMedia)
 
 	recorder := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, targetPath, nil)
@@ -139,4 +166,75 @@ func TestPlaygroundServeMediaRejectsInvalidPathShape(t *testing.T) {
 	recorder := requestPlaygroundServeMedia(t, 1, 0, "/pg/media/files/u-1/nested/"+playgroundServeMediaTestFilename)
 
 	require.Equal(t, http.StatusNotFound, recorder.Code)
+}
+
+func TestPlaygroundServePublicMediaAllowsSignedReference(t *testing.T) {
+	root := setupPlaygroundServeMediaTest(t)
+	writePlaygroundPublicReferenceTestFile(t, root, 1)
+	userDir := playgroundMediaUserDirName(1)
+	expiresUnix := time.Now().Add(time.Hour).Unix()
+	sig := playgroundPublicMediaSignature(userDir, playgroundServeMediaTestFilename, expiresUnix)
+	target := fmt.Sprintf(
+		"/pg/media/public/%s/%s?expires=%d&sig=%s",
+		userDir,
+		playgroundServeMediaTestFilename,
+		expiresUnix,
+		sig,
+	)
+
+	recorder := requestPlaygroundServePublicMedia(t, target)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.Equal(t, "png", recorder.Body.String())
+}
+
+func TestPlaygroundServePublicMediaRejectsUnsignedReference(t *testing.T) {
+	root := setupPlaygroundServeMediaTest(t)
+	writePlaygroundPublicReferenceTestFile(t, root, 1)
+
+	recorder := requestPlaygroundServePublicMedia(t, "/pg/media/public/u-1/"+playgroundServeMediaTestFilename)
+
+	require.Equal(t, http.StatusForbidden, recorder.Code)
+}
+
+func TestPlaygroundServePublicMediaRejectsPrivateCacheItem(t *testing.T) {
+	root := setupPlaygroundServeMediaTest(t)
+	writePlaygroundServeMediaTestFile(t, root, 1)
+	userDir := playgroundMediaUserDirName(1)
+	expiresUnix := time.Now().Add(time.Hour).Unix()
+	sig := playgroundPublicMediaSignature(userDir, playgroundServeMediaTestFilename, expiresUnix)
+	target := fmt.Sprintf(
+		"/pg/media/public/%s/%s?expires=%d&sig=%s",
+		userDir,
+		playgroundServeMediaTestFilename,
+		expiresUnix,
+		sig,
+	)
+
+	recorder := requestPlaygroundServePublicMedia(t, target)
+
+	require.Equal(t, http.StatusForbidden, recorder.Code)
+}
+
+func TestPlaygroundPublicMediaSignatureUsesRuntimeSecretFallback(t *testing.T) {
+	t.Setenv("PLAYGROUND_MEDIA_PUBLIC_SIGNING_SECRET", "")
+	t.Setenv("CRYPTO_SECRET", "")
+	t.Setenv("SESSION_SECRET", "")
+	originalCryptoSecret := common.CryptoSecret
+	originalSessionSecret := common.SessionSecret
+	defer func() {
+		common.CryptoSecret = originalCryptoSecret
+		common.SessionSecret = originalSessionSecret
+	}()
+
+	common.CryptoSecret = ""
+	common.SessionSecret = "runtime-session-secret"
+	expiresUnix := time.Now().Add(time.Hour).Unix()
+	sig := playgroundPublicMediaSignature("u-1", playgroundServeMediaTestFilename, expiresUnix)
+
+	require.NotEmpty(t, sig)
+	require.True(t, playgroundPublicMediaSignatureValid("u-1", playgroundServeMediaTestFilename, expiresUnix, sig))
+
+	common.SessionSecret = "different-runtime-session-secret"
+	require.False(t, playgroundPublicMediaSignatureValid("u-1", playgroundServeMediaTestFilename, expiresUnix, sig))
 }

@@ -66,6 +66,12 @@ func SetRelayRouter(router *gin.Engine) {
 		playgroundMediaRouter.GET("/*filepath", controller.PlaygroundServeMedia)
 	}
 
+	playgroundMediaPublicRouter := router.Group("/pg/media/public")
+	playgroundMediaPublicRouter.Use(middleware.RouteTag("web"))
+	{
+		playgroundMediaPublicRouter.GET("/*filepath", controller.PlaygroundServePublicMedia)
+	}
+
 	playgroundMediaAPIRouter := router.Group("/pg/media")
 	playgroundMediaAPIRouter.Use(middleware.RouteTag("web"))
 	playgroundMediaAPIRouter.Use(middleware.UserAuth())

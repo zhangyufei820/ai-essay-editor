@@ -529,12 +529,15 @@ func PlaygroundCacheMedia(c *gin.Context) {
 		return
 	}
 
+	publicURL := playgroundSignedPublicMediaURL(c, item)
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": gin.H{
-			"url":        item.URL,
-			"item":       item,
-			"expires_in": int(playgroundMediaRetentionDuration().Seconds()),
+			"url":          item.URL,
+			"public_url":   publicURL,
+			"upstream_url": publicURL,
+			"item":         item,
+			"expires_in":   int(playgroundMediaRetentionDuration().Seconds()),
 		},
 	})
 }
@@ -611,6 +614,73 @@ func PlaygroundServeMedia(c *gin.Context) {
 	c.File(fullPath)
 }
 
+func PlaygroundServePublicMedia(c *gin.Context) {
+	parts := strings.Split(strings.Trim(c.Param("filepath"), "/"), "/")
+	if len(parts) != 2 {
+		c.AbortWithStatus(http.StatusNotFound)
+		return
+	}
+	userDir := strings.TrimSpace(parts[0])
+	name := filepath.Base(parts[len(parts)-1])
+	if !isValidPlaygroundMediaUserDir(userDir) || !isValidPlaygroundMediaFilename(name) || name != parts[1] {
+		c.AbortWithStatus(http.StatusNotFound)
+		return
+	}
+	expiresUnix, err := strconv.ParseInt(strings.TrimSpace(c.Query("expires")), 10, 64)
+	if err != nil || expiresUnix <= 0 || time.Now().Unix() > expiresUnix {
+		c.AbortWithStatus(http.StatusForbidden)
+		return
+	}
+	if !playgroundPublicMediaSignatureValid(userDir, name, expiresUnix, c.Query("sig")) {
+		c.AbortWithStatus(http.StatusForbidden)
+		return
+	}
+
+	root := playgroundMediaCacheRoot()
+	fullPath := filepath.Join(root, userDir, name)
+	cleanRoot := filepath.Clean(root) + string(os.PathSeparator)
+	cleanPath := filepath.Clean(fullPath)
+	if !strings.HasPrefix(cleanPath, cleanRoot) {
+		c.AbortWithStatus(http.StatusNotFound)
+		return
+	}
+	info, err := os.Stat(fullPath)
+	if err != nil || info.IsDir() {
+		c.AbortWithStatus(http.StatusNotFound)
+		return
+	}
+	metaBytes, err := os.ReadFile(fullPath + ".json")
+	if err != nil {
+		c.AbortWithStatus(http.StatusForbidden)
+		return
+	}
+	var meta playgroundMediaItem
+	if json.Unmarshal(metaBytes, &meta) != nil || !playgroundMediaPublicReferenceAllowed(&meta) {
+		c.AbortWithStatus(http.StatusForbidden)
+		return
+	}
+	expiresAt := info.ModTime().Add(playgroundMediaRetentionDuration())
+	if meta.ExpiresAt != "" {
+		if t, err := time.Parse(time.RFC3339, meta.ExpiresAt); err == nil {
+			expiresAt = t
+		}
+	}
+	if time.Now().After(expiresAt) {
+		removePlaygroundMediaWithMetadata(fullPath)
+		c.AbortWithStatus(http.StatusGone)
+		return
+	}
+	ttl := time.Until(time.Unix(expiresUnix, 0))
+	if mediaTTL := time.Until(expiresAt); mediaTTL < ttl {
+		ttl = mediaTTL
+	}
+	if ttl < 0 {
+		ttl = 0
+	}
+	c.Header("Cache-Control", fmt.Sprintf("public, max-age=%d", int(ttl.Seconds())))
+	c.File(fullPath)
+}
+
 func wantsPlaygroundMediaAttachment(c *gin.Context) bool {
 	value := strings.ToLower(strings.TrimSpace(c.Query("download")))
 	switch value {
@@ -653,7 +723,7 @@ func isValidPlaygroundMediaFilename(value string) bool {
 	}
 	ext := strings.ToLower(filepath.Ext(value))
 	switch ext {
-	case ".jpg", ".jpeg", ".png", ".webp", ".gif", ".mp4", ".webm":
+	case ".jpg", ".jpeg", ".png", ".webp", ".gif", ".mp4", ".mov", ".m4v", ".webm", ".mp3", ".m4a", ".aac", ".wav":
 	default:
 		return false
 	}

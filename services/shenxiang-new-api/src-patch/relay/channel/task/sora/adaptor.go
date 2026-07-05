@@ -320,7 +320,9 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 		var bodyMap map[string]interface{}
 		if err := common.Unmarshal(cachedBody, &bodyMap); err == nil {
 			bodyMap["model"] = info.UpstreamModelName
-			if isMoonApiXSeedanceVideoModel(info.UpstreamModelName) {
+			if isGrokVideoModel(info.UpstreamModelName) {
+				bodyMap = normalizeGrokVideoRequestBody(bodyMap)
+			} else if isMoonApiXSeedanceVideoModel(info.UpstreamModelName) {
 				bodyMap = normalizeMoonApiXSeedanceVideoRequestBody(bodyMap)
 			} else if isSeedanceVideoModel(info.UpstreamModelName) {
 				bodyMap = normalizeSeedanceVideoRequestBody(bodyMap)
@@ -403,8 +405,67 @@ func isSeedanceVideoModel(modelName string) bool {
 	return strings.Contains(strings.ToLower(strings.TrimSpace(modelName)), "seedance")
 }
 
+func isGrokVideoModel(modelName string) bool {
+	modelName = strings.ToLower(strings.TrimSpace(modelName))
+	return strings.Contains(modelName, "grok-video") || strings.Contains(modelName, "grok-imagine-video")
+}
+
 func seedanceUpstreamModel(modelName string) string {
 	return strings.TrimSpace(modelName)
+}
+
+func normalizeGrokVideoRequestBody(bodyMap map[string]interface{}) map[string]interface{} {
+	cleaned := make(map[string]interface{}, len(bodyMap))
+	if modelName := strings.TrimSpace(trimmedString(bodyMap["model"])); modelName != "" {
+		cleaned["model"] = modelName
+	}
+	if prompt := strings.TrimSpace(trimmedString(bodyMap["prompt"])); prompt != "" {
+		cleaned["prompt"] = prompt
+	}
+	cleaned["duration"] = 15
+	if aspectRatio := seedanceVideoRatio(bodyMap); aspectRatio != "" {
+		cleaned["aspect_ratio"] = aspectRatio
+	}
+	cleaned["size"] = grokVideoSize(bodyMap)
+
+	metadata := mapFromAny(bodyMap["metadata"])
+	references := normalizeSeedanceVideoReferences(bodyMap, metadata, "image")
+	imageURLs := make([]string, 0, len(references))
+	seen := make(map[string]bool)
+	for _, reference := range references {
+		if reference.url == "" || seen[reference.url] {
+			continue
+		}
+		seen[reference.url] = true
+		imageURLs = append(imageURLs, reference.url)
+	}
+	switch len(imageURLs) {
+	case 0:
+	case 1:
+		cleaned["input_reference"] = imageURLs[0]
+	default:
+		cleaned["reference_image_urls"] = imageURLs
+	}
+	if callbackURL := firstNonBlankAnyString(bodyMap["callback_url"], metadata["callback_url"]); callbackURL != "" {
+		cleaned["callback_url"] = callbackURL
+	}
+	return cleaned
+}
+
+func grokVideoSize(bodyMap map[string]interface{}) string {
+	for _, value := range []string{
+		trimmedString(bodyMap["size"]),
+		trimmedString(bodyMap["resolution"]),
+		trimmedString(mapFromAny(bodyMap["metadata"])["resolution"]),
+	} {
+		switch strings.ToUpper(strings.TrimSpace(value)) {
+		case "720P":
+			return "720P"
+		case "1080P":
+			return "1080P"
+		}
+	}
+	return "720P"
 }
 
 func normalizeSeedanceVideoRequestBody(bodyMap map[string]interface{}) map[string]interface{} {

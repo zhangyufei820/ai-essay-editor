@@ -714,13 +714,13 @@ const VIDEO_MODELS = [
     badge: '720P',
     vendor: '星人视频',
     sizes: ['1280x720', '720x1280'],
-    durations: [5, 10, 15],
+    durations: [15],
     defaultSize: '1280x720',
     defaultDuration: 15,
     defaultFps: 24,
     billingLabel: '按次计费',
     priceLabel: '¥6.5/次',
-    hint: '6.5 元/次，按次计费，不是按秒，建议生成 15 秒。',
+    hint: '6.5 元/次，按次计费；官方 Grok 1.5 固定 15 秒，单图/多图参考会自动按官方字段提交。',
   },
   {
     value: 'seedance-2.0',
@@ -3364,6 +3364,7 @@ const MediaPlayground = () => {
           reference_index: index + 1,
           reference_alias: reference?.alias || '',
           hidden: true,
+          public_reference: true,
           source: 'video_input',
           model: videoModel,
           workflow: videoWorkflow,
@@ -3374,7 +3375,9 @@ const MediaPlayground = () => {
     if (!res.data?.success || !res.data?.data?.url) {
       throw new Error(res.data?.message || '参考素材缓存失败。');
     }
-    return toAbsoluteMediaURL(res.data.data.url);
+    return toAbsoluteMediaURL(
+      res.data.data.upstream_url || res.data.data.public_url || res.data.data.url,
+    );
   }
 
   async function cacheReversePromptImage(file) {
@@ -3388,6 +3391,8 @@ const MediaPlayground = () => {
           role: 'reference',
           reference_role: 'reverse_prompt',
           hidden: true,
+          public_reference: true,
+          public_reference_reason: 'reverse_prompt_upstream_url',
           source: 'reverse_prompt',
           model: REVERSE_PROMPT_MODEL,
           target_model: imageModel,
@@ -3398,7 +3403,9 @@ const MediaPlayground = () => {
     if (!res.data?.success || !res.data?.data?.url) {
       throw new Error(res.data?.message || '参考图缓存失败。');
     }
-    return toAbsoluteMediaURL(res.data.data.url);
+    return toAbsoluteMediaURL(
+      res.data.data.upstream_url || res.data.data.public_url || res.data.data.url,
+    );
   }
 
   async function reverseImagePrompt() {
@@ -3486,10 +3493,13 @@ const MediaPlayground = () => {
 
     const isOfficialReferencesModel =
       isOfficialSeedanceReferenceModel(videoModel) || isExtendedSeedanceVideoModel(videoModel);
+    const imageReferenceItems = referenceFiles.filter((item) => referenceMediaTypeOf(item) === 'image');
     const referenceItemsForModel =
-      videoModel === 'seedance-2.0-dj-fast'
-        ? referenceFiles.filter((item) => referenceMediaTypeOf(item) === 'image')
-        : referenceFiles;
+      videoWorkflow === 'first-last'
+        ? imageReferenceItems.slice(0, 1)
+        : videoModel === 'seedance-2.0-dj-fast'
+          ? imageReferenceItems
+          : referenceFiles;
     const limitedReferenceItems = isOfficialReferencesModel
       ? filterReferenceItemsByPolicy(referenceItemsForModel, videoRefPolicy)
       : referenceItemsForModel;
@@ -3505,7 +3515,7 @@ const MediaPlayground = () => {
             ? 'reference_video'
             : mediaType === 'audio'
               ? 'reference_audio'
-              : index === 0
+              : videoWorkflow === 'first-last' && index === 0
                 ? 'first_frame'
                 : 'reference_image';
         return {
@@ -4031,6 +4041,9 @@ const MediaPlayground = () => {
       return Toast.error('图生视频需要先上传首帧或参考素材。');
     if (mode === 'video' && videoWorkflow !== 'text') {
       const counts = videoReferenceCounts(referenceFiles);
+      if (videoWorkflow === 'first-last' && counts.image === 0) {
+        return Toast.error('首尾帧视频需要先上传首帧图片。');
+      }
       if (videoModel === 'seedance-2.0-dj-fast' && counts.image === 0) {
         return Toast.error('DJ Fast 只支持图片参考，请先上传图片素材。');
       }

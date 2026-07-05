@@ -43,3 +43,12 @@ func TestExtFromRemotePathSupportsReferenceAudioAndVideo(t *testing.T) {
 		}
 	}
 }
+
+func TestIsValidPlaygroundMediaFilenameSupportsReferenceAudioAndVideo(t *testing.T) {
+	stem := "0123456789abcdef0123456789abcdef"
+	for _, ext := range []string{".mov", ".m4v", ".mp3", ".m4a", ".aac", ".wav"} {
+		if !isValidPlaygroundMediaFilename(stem + ext) {
+			t.Fatalf("isValidPlaygroundMediaFilename(%q) = false, want true", stem+ext)
+		}
+	}
+}

@@ -3,8 +3,10 @@ package controller
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -18,6 +20,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -235,6 +238,106 @@ func playgroundOriginalURL(rawURL string) string {
 		return ""
 	}
 	return rawURL
+}
+
+func playgroundMediaPublicURLPrefix() string {
+	prefix := common.GetEnvOrDefaultString("PLAYGROUND_MEDIA_PUBLIC_URL_PREFIX", "/pg/media/public")
+	prefix = strings.TrimSpace(prefix)
+	if prefix == "" {
+		prefix = "/pg/media/public"
+	}
+	if strings.HasPrefix(prefix, "https://") || strings.HasPrefix(prefix, "http://") {
+		return strings.TrimRight(prefix, "/")
+	}
+	return "/" + strings.Trim(prefix, "/")
+}
+
+func playgroundMediaPublicTTL() time.Duration {
+	keepMinutes := common.GetEnvOrDefault("PLAYGROUND_MEDIA_PUBLIC_KEEP_MINUTES", 6*60)
+	if keepMinutes < 1 {
+		keepMinutes = 6 * 60
+	}
+	return time.Duration(keepMinutes) * time.Minute
+}
+
+func playgroundMediaPublicSigningSecret() []byte {
+	for _, key := range []string{"PLAYGROUND_MEDIA_PUBLIC_SIGNING_SECRET", "CRYPTO_SECRET", "SESSION_SECRET"} {
+		if value := strings.TrimSpace(os.Getenv(key)); value != "" {
+			return []byte(value)
+		}
+	}
+	for _, value := range []string{common.CryptoSecret, common.SessionSecret} {
+		if value = strings.TrimSpace(value); value != "" {
+			return []byte(value)
+		}
+	}
+	return nil
+}
+
+func playgroundMediaPublicReferenceAllowed(item *playgroundMediaItem) bool {
+	if item == nil || len(item.Metadata) == 0 {
+		return false
+	}
+	if value, ok := item.Metadata["public_reference"].(bool); ok && value {
+		return true
+	}
+	hidden, _ := item.Metadata["hidden"].(bool)
+	source := strings.TrimSpace(fmt.Sprint(item.Metadata["source"]))
+	return hidden && source == "video_input"
+}
+
+func playgroundSignedPublicMediaURL(c *gin.Context, item *playgroundMediaItem) string {
+	if item == nil || !playgroundMediaPublicReferenceAllowed(item) {
+		return ""
+	}
+	userDir := playgroundMediaUserDirName(c.GetInt("id"))
+	filename := filepath.Base(item.Filename)
+	if !isValidPlaygroundMediaUserDir(userDir) || !isValidPlaygroundMediaFilename(filename) {
+		return ""
+	}
+	if len(playgroundMediaPublicSigningSecret()) == 0 {
+		return ""
+	}
+
+	expiresAt := time.Now().Add(playgroundMediaPublicTTL())
+	if item.ExpiresAt != "" {
+		if t, err := time.Parse(time.RFC3339, item.ExpiresAt); err == nil && t.Before(expiresAt) {
+			expiresAt = t
+		}
+	}
+	expiresUnix := expiresAt.Unix()
+	sig := playgroundPublicMediaSignature(userDir, filename, expiresUnix)
+	return fmt.Sprintf("%s/%s/%s?expires=%d&sig=%s", playgroundMediaPublicURLPrefix(), userDir, filename, expiresUnix, sig)
+}
+
+func playgroundPublicMediaSignature(userDir, filename string, expiresUnix int64) string {
+	secret := playgroundMediaPublicSigningSecret()
+	if len(secret) == 0 {
+		return ""
+	}
+	mac := hmac.New(sha256.New, secret)
+	_, _ = mac.Write([]byte(userDir))
+	_, _ = mac.Write([]byte{'\n'})
+	_, _ = mac.Write([]byte(filename))
+	_, _ = mac.Write([]byte{'\n'})
+	_, _ = mac.Write([]byte(strconv.FormatInt(expiresUnix, 10)))
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
+func playgroundPublicMediaSignatureValid(userDir, filename string, expiresUnix int64, sig string) bool {
+	expectedSig := playgroundPublicMediaSignature(userDir, filename, expiresUnix)
+	if expectedSig == "" {
+		return false
+	}
+	expected, err := hex.DecodeString(expectedSig)
+	if err != nil {
+		return false
+	}
+	actual, err := hex.DecodeString(strings.TrimSpace(sig))
+	if err != nil {
+		return false
+	}
+	return hmac.Equal(actual, expected)
 }
 
 func validatePlaygroundMediaURL(raw string) (*url.URL, error) {

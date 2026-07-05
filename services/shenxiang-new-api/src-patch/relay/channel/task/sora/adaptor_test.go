@@ -339,6 +339,67 @@ func TestMoonApiXSeedanceBuildRequestURLUsesVideosEndpoint(t *testing.T) {
 	}
 }
 
+func TestNormalizeGrokVideoRequestBodyUsesOfficialSingleReferenceField(t *testing.T) {
+	got := normalizeGrokVideoRequestBody(map[string]interface{}{
+		"model":    "grok-imagine-video-1.5-preview",
+		"prompt":   "animate this image",
+		"duration": float64(5),
+		"ratio":    "9:16",
+		"size":     "720x1280",
+		"images": []interface{}{
+			"https://cdn.test/first.png",
+		},
+	})
+
+	if got["model"] != "grok-imagine-video-1.5-preview" {
+		t.Fatalf("model = %#v", got["model"])
+	}
+	if got["duration"] != 15 {
+		t.Fatalf("duration = %#v, want fixed 15", got["duration"])
+	}
+	if got["aspect_ratio"] != "9:16" {
+		t.Fatalf("aspect_ratio = %#v, want 9:16", got["aspect_ratio"])
+	}
+	if got["size"] != "720P" {
+		t.Fatalf("size = %#v, want 720P", got["size"])
+	}
+	if got["input_reference"] != "https://cdn.test/first.png" {
+		t.Fatalf("input_reference = %#v", got["input_reference"])
+	}
+	for _, removed := range []string{"image", "images", "references", "reference_image_urls"} {
+		if _, ok := got[removed]; ok {
+			t.Fatalf("normalizeGrokVideoRequestBody kept %q: %#v", removed, got)
+		}
+	}
+}
+
+func TestNormalizeGrokVideoRequestBodyUsesOfficialMultiReferenceField(t *testing.T) {
+	got := normalizeGrokVideoRequestBody(map[string]interface{}{
+		"model":  "grok-imagine-video-1.5-preview",
+		"prompt": "blend references",
+		"metadata": map[string]interface{}{
+			"content": []interface{}{
+				map[string]interface{}{
+					"type":      "image_url",
+					"image_url": map[string]interface{}{"url": "https://cdn.test/a.png"},
+				},
+				map[string]interface{}{
+					"type":      "image_url",
+					"image_url": map[string]interface{}{"url": "https://cdn.test/b.png"},
+				},
+			},
+		},
+	})
+
+	urls, ok := got["reference_image_urls"].([]string)
+	if !ok || len(urls) != 2 || urls[0] != "https://cdn.test/a.png" || urls[1] != "https://cdn.test/b.png" {
+		t.Fatalf("reference_image_urls = %#v", got["reference_image_urls"])
+	}
+	if _, ok := got["input_reference"]; ok {
+		t.Fatalf("multi-reference Grok payload should not keep input_reference: %#v", got)
+	}
+}
+
 func TestNormalizeMoonApiXSeedanceAliasKeepsKZMultimodalReferences(t *testing.T) {
 	body := map[string]interface{}{
 		"model":    "seedance-2.0",
