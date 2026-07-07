@@ -39,8 +39,6 @@ import {
 } from '../../helpers/subscriptionFormat';
 
 const { Text } = Typography;
-const QUOTA_PER_MODEL_USD = 500000;
-const PAYG_CNY_PER_MODEL_USD = 1.08;
 
 // 过滤易支付方式
 function getEpayMethods(payMethods = []) {
@@ -70,15 +68,10 @@ function submitEpayForm({ url, params }) {
   document.body.removeChild(form);
 }
 
-function quotaToModelUsd(quota) {
-  const value = Number(quota || 0) / QUOTA_PER_MODEL_USD;
-  return Number.isFinite(value) ? value : 0;
-}
-
-function formatModelUsd(value) {
-  if (!Number.isFinite(value)) return '$0';
-  return `$${value.toLocaleString(undefined, {
-    maximumFractionDigits: Number.isInteger(value) ? 0 : 1,
+function formatCnyAmount(value) {
+  if (!Number.isFinite(value)) return '¥0';
+  return `¥${value.toLocaleString(undefined, {
+    maximumFractionDigits: Number.isInteger(value) ? 0 : 2,
   })}`;
 }
 
@@ -97,19 +90,11 @@ function getPlanAudience(plan, t) {
   return t('团队、工作室和重度用户');
 }
 
-function getPaygComparison(plan) {
+function getPlanQuotaSummary(plan) {
   const price = Number(plan?.price_amount || 0);
-  const monthlyUsd = quotaToModelUsd(getMonthlyQuota(plan));
-  const paygSameMoneyUsd = price / PAYG_CNY_PER_MODEL_USD;
-  const paygCostSameQuota = monthlyUsd * PAYG_CNY_PER_MODEL_USD;
-  const discount = paygCostSameQuota > 0 ? (price / paygCostSameQuota) * 10 : 0;
-  const multiple = paygSameMoneyUsd > 0 ? monthlyUsd / paygSameMoneyUsd : 0;
   return {
-    monthlyUsd,
-    paygSameMoneyUsd,
-    paygCostSameQuota,
-    discount,
-    multiple,
+    priceText: formatCnyAmount(price),
+    quotaText: renderQuota(getMonthlyQuota(plan), 2),
   };
 }
 
@@ -128,18 +113,18 @@ function MonthlyCardValueGuide({ t, plans = [] }) {
       <div className='space-y-3'>
         <div>
           <Typography.Title heading={6} style={{ margin: 0 }}>
-            {t('按量计费 vs 月卡')}
+            {t('月卡额度说明')}
           </Typography.Title>
           <Text type='tertiary' size='small'>
             {t(
-              '按量适合偶尔使用；月卡适合高频 Codex、长上下文、多文件分析和反复调试。月卡整体约等于按量计费 2-3 折，额度更高，预算更可控。',
+              '月卡按实付人民币发放可消费额度，适合高频 Codex、长上下文、多文件分析和反复调试。额度仅用于模型调用，不等同于现金余额。',
             )}
           </Text>
         </div>
 
         <div className='grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3'>
           {monthlyPlans.map((plan) => {
-            const comparison = getPaygComparison(plan);
+            const quotaSummary = getPlanQuotaSummary(plan);
             return (
               <div
                 key={plan.id}
@@ -154,22 +139,16 @@ function MonthlyCardValueGuide({ t, plans = [] }) {
                   )}
                 </div>
                 <div className='mt-2 text-xs text-gray-500'>
-                  {t('同价按量约')}{' '}
-                  {formatModelUsd(comparison.paygSameMoneyUsd)}
+                  {t('套餐价格')} {quotaSummary.priceText}
                 </div>
                 <div className='mt-1 text-sm'>
-                  <Text strong>{t('月卡额度')} </Text>
+                  <Text strong>{t('可消费额度')} </Text>
                   <span className='text-blue-600 font-semibold'>
-                    {formatModelUsd(comparison.monthlyUsd)}
+                    {quotaSummary.quotaText}
                   </span>
                 </div>
                 <div className='mt-1 text-xs text-gray-500'>
-                  {t('按量购买约需')} ¥
-                  {comparison.paygCostSameQuota.toFixed(0)}
-                  {' · '}
-                  {t('约')}
-                  {comparison.discount.toFixed(1)}
-                  {t('折')}
+                  {t('人民币计价，30 天内用完为止')}
                 </div>
               </div>
             );
@@ -612,7 +591,7 @@ const SubscriptionPlansCard = ({
             <>
               <div className='px-1'>
                 <Text type='tertiary' size='small'>
-                  {t('模型额度仅用于模型调用消耗，不等同于现金余额。本月额度用完为止。')}
+                  {t('可消费额度仅用于模型调用消耗，不等同于现金余额。本月额度用完为止。')}
                 </Text>
               </div>
               <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-5 w-full px-1'>
@@ -629,7 +608,7 @@ const SubscriptionPlansCard = ({
                   const upgradeLabel = plan?.upgrade_group
                     ? `${t('升级分组')}: ${plan.upgrade_group}`
                     : null;
-                  const comparison = getPaygComparison(plan);
+                  const quotaSummary = getPlanQuotaSummary(plan);
                   const resetText = formatSubscriptionResetPeriod(plan, t);
                   const resetLabel =
                     resetText === t('不重置')
@@ -674,113 +653,110 @@ const SubscriptionPlansCard = ({
                           </Typography.Title>
                         </div>
 
-                      {/* 价格区域 */}
-                      <div className='py-2'>
-                        <div className='flex items-end justify-start gap-1'>
-                          <span className='text-3xl font-bold text-blue-600'>
-                            ¥
-                            {displayPrice}
-                          </span>
-                          <Text type='tertiary' size='small'>
-                            / {t('月')}
+                        {/* 价格区域 */}
+                        <div className='py-2'>
+                          <div className='flex items-end justify-start gap-1'>
+                            <span className='text-3xl font-bold text-blue-600'>
+                              ¥
+                              {displayPrice}
+                            </span>
+                            <Text type='tertiary' size='small'>
+                              / {t('月')}
+                            </Text>
+                          </div>
+                          <div className='mt-2 text-sm'>
+                            <Text>{t('含')} </Text>
+                            <span className='font-semibold text-blue-600'>
+                              {quotaSummary.quotaText}
+                            </span>
+                            <Text> {t('可消费额度')}</Text>
+                          </div>
+                          <div className='mt-1 flex flex-wrap items-center gap-2'>
+                            <Tag color='blue' shape='circle' size='small'>
+                              {t('人民币计价')}
+                            </Tag>
+                            <Text type='tertiary' size='small'>
+                              {t('30 天内用完为止')}
+                            </Text>
+                          </div>
+                          <Text
+                            type='tertiary'
+                            size='small'
+                            style={{ display: 'block', marginTop: 4 }}
+                          >
+                            {t('额度仅用于模型调用，不等同于现金余额')}
                           </Text>
                         </div>
-                        <div className='mt-2 text-sm'>
-                          <Text>{t('含')} </Text>
-                          <span className='font-semibold text-blue-600'>
-                            {formatModelUsd(comparison.monthlyUsd)}
-                          </span>
-                          <Text> {t('模型额度')}</Text>
-                        </div>
-                        <div className='mt-1 flex flex-wrap items-center gap-2'>
-                          <Tag color='blue' shape='circle' size='small'>
-                            {t('约等于按量')}
-                            {comparison.discount.toFixed(1)}
-                            {t('折')}
-                          </Tag>
-                          <Text type='tertiary' size='small'>
-                            {t('按量购买约需')} ¥
-                            {comparison.paygCostSameQuota.toFixed(0)}
-                          </Text>
-                        </div>
-                        <Text
-                          type='tertiary'
-                          size='small'
-                          style={{ display: 'block', marginTop: 4 }}
-                        >
-                          {t('本月额度用完为止')}
-                        </Text>
-                      </div>
 
-                      {/* 套餐权益描述 */}
-                      <div className='flex flex-col items-start gap-1 pb-2'>
-                        {planBenefits.map((item) => {
-                          const content = (
-                            <div className='flex items-center gap-2 text-xs text-gray-500'>
-                              <Badge dot type='tertiary' />
-                              <span>{item.label}</span>
-                            </div>
-                          );
-                          if (!item.tooltip) {
-                            return (
-                              <div
-                                key={item.label}
-                                className='w-full flex justify-start'
-                              >
-                                {content}
+                        {/* 套餐权益描述 */}
+                        <div className='flex flex-col items-start gap-1 pb-2'>
+                          {planBenefits.map((item) => {
+                            const content = (
+                              <div className='flex items-center gap-2 text-xs text-gray-500'>
+                                <Badge dot type='tertiary' />
+                                <span>{item.label}</span>
                               </div>
                             );
-                          }
-                          return (
-                            <Tooltip key={item.label} content={item.tooltip}>
-                              <div className='w-full flex justify-start'>
-                                {content}
-                              </div>
-                            </Tooltip>
-                          );
-                        })}
-                      </div>
+                            if (!item.tooltip) {
+                              return (
+                                <div
+                                  key={item.label}
+                                  className='w-full flex justify-start'
+                                >
+                                  {content}
+                                </div>
+                              );
+                            }
+                            return (
+                              <Tooltip key={item.label} content={item.tooltip}>
+                                <div className='w-full flex justify-start'>
+                                  {content}
+                                </div>
+                              </Tooltip>
+                            );
+                          })}
+                        </div>
 
-                      <div className='mt-auto'>
-                        <Divider margin={12} />
+                        <div className='mt-auto'>
+                          <Divider margin={12} />
 
-                        {/* 购买按钮 */}
-                        {(() => {
-                          const count = getPlanPurchaseCount(p?.plan?.id);
-                          const reached = limit > 0 && count >= limit;
-                          const tip = reached
-                            ? t('已达到购买上限') + ` (${count}/${limit})`
-                            : '';
-                          const buttonEl = (
-                            <Button
-                              theme={isPopular ? 'solid' : 'outline'}
-                              type='primary'
-                              block
-                              disabled={reached}
-                              className={
-                                isPopular && !reached
-                                  ? '!bg-blue-600 !border-blue-600 hover:!bg-blue-700'
-                                  : ''
-                              }
-                              onClick={() => {
-                                if (!reached) openBuy(p);
-                              }}
-                            >
-                              {reached ? t('已达上限') : t('立即订阅')}
-                            </Button>
-                          );
-                          return reached ? (
-                            <Tooltip content={tip} position='top'>
-                              {buttonEl}
-                            </Tooltip>
-                          ) : (
-                            buttonEl
-                          );
-                        })()}
+                          {/* 购买按钮 */}
+                          {(() => {
+                            const count = getPlanPurchaseCount(p?.plan?.id);
+                            const reached = limit > 0 && count >= limit;
+                            const tip = reached
+                              ? t('已达到购买上限') + ` (${count}/${limit})`
+                              : '';
+                            const buttonEl = (
+                              <Button
+                                theme={isPopular ? 'solid' : 'outline'}
+                                type='primary'
+                                block
+                                disabled={reached}
+                                className={
+                                  isPopular && !reached
+                                    ? '!bg-blue-600 !border-blue-600 hover:!bg-blue-700'
+                                    : ''
+                                }
+                                onClick={() => {
+                                  if (!reached) openBuy(p);
+                                }}
+                              >
+                                {reached ? t('已达上限') : t('立即订阅')}
+                              </Button>
+                            );
+                            return reached ? (
+                              <Tooltip content={tip} position='top'>
+                                {buttonEl}
+                              </Tooltip>
+                            ) : (
+                              buttonEl
+                            );
+                          })()}
+                        </div>
                       </div>
-                    </div>
-                  </Card>
-                );
+                    </Card>
+                  );
                 })}
               </div>
             </>

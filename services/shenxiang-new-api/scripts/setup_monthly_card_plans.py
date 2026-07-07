@@ -5,76 +5,55 @@ import argparse
 import os
 import subprocess
 from dataclasses import dataclass
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, ROUND_FLOOR, ROUND_HALF_UP
 from pathlib import Path
 
 
 ROOT = Path(os.environ.get("SHENXIANG_NEW_API_ROOT", "/opt/shenxiang-new-api"))
 QUOTA_PER_UNIT = Decimal("500000")
 USD_EXCHANGE_RATE = Decimal("7.3")
-PAYG_CNY_PER_OFFICIAL_USD = Decimal("1.08")
-QUOTA_PER_OFFICIAL_USD = QUOTA_PER_UNIT * PAYG_CNY_PER_OFFICIAL_USD / USD_EXCHANGE_RATE
+QUOTA_PER_CNY = QUOTA_PER_UNIT / USD_EXCHANGE_RATE
 
 
 @dataclass(frozen=True)
 class MonthlyCardPlan:
     title: str
     price_cny: int
-    monthly_usd: int
     concurrency_limit: int
     sort_order: int
 
     @property
     def monthly_quota(self) -> int:
         return int(
-            (Decimal(self.monthly_usd) * QUOTA_PER_OFFICIAL_USD).quantize(
+            (Decimal(self.price_cny) * QUOTA_PER_CNY).quantize(
                 Decimal("1"),
-                rounding=ROUND_HALF_UP,
+                rounding=ROUND_FLOOR,
             )
         )
 
     @property
-    def payg_usd_same_money(self) -> Decimal:
-        return (Decimal(self.price_cny) / PAYG_CNY_PER_OFFICIAL_USD).quantize(
+    def monthly_cny_value(self) -> Decimal:
+        return (
+            Decimal(self.monthly_quota) / QUOTA_PER_UNIT * USD_EXCHANGE_RATE
+        ).quantize(
             Decimal("0.01"),
-            rounding=ROUND_HALF_UP,
-        )
-
-    @property
-    def monthly_vs_payg_multiple(self) -> Decimal:
-        return (Decimal(self.monthly_usd) / self.payg_usd_same_money).quantize(
-            Decimal("0.1"),
-            rounding=ROUND_HALF_UP,
-        )
-
-    @property
-    def payg_cost_same_quota(self) -> Decimal:
-        return (Decimal(self.monthly_usd) * PAYG_CNY_PER_OFFICIAL_USD).quantize(
-            Decimal("0.01"),
-            rounding=ROUND_HALF_UP,
-        )
-
-    @property
-    def monthly_discount(self) -> Decimal:
-        return (Decimal(self.price_cny) / self.payg_cost_same_quota * Decimal("10")).quantize(
-            Decimal("0.1"),
             rounding=ROUND_HALF_UP,
         )
 
     @property
     def subtitle(self) -> str:
         return (
-            f"月总 ${self.monthly_usd} 模型额度｜30 天有效｜并发 {self.concurrency_limit}｜"
-            f"本月额度用完为止｜约等于按量 {self.monthly_discount} 折"
+            f"月总 ¥{self.price_cny} 可消费额度｜30 天有效｜并发 {self.concurrency_limit}｜"
+            "本月额度用完为止"
         )
 
 
 PLANS = [
-    MonthlyCardPlan("¥100 月卡", 100, 350, 1, 100),
-    MonthlyCardPlan("¥200 月卡", 200, 830, 2, 200),
-    MonthlyCardPlan("¥300 月卡", 300, 1350, 3, 300),
-    MonthlyCardPlan("¥500 月卡", 500, 2300, 5, 500),
-    MonthlyCardPlan("¥1000 月卡", 1000, 4600, 10, 1000),
+    MonthlyCardPlan("¥100 月卡", 100, 1, 100),
+    MonthlyCardPlan("¥200 月卡", 200, 2, 200),
+    MonthlyCardPlan("¥300 月卡", 300, 3, 300),
+    MonthlyCardPlan("¥500 月卡", 500, 5, 500),
+    MonthlyCardPlan("¥1000 月卡", 1000, 10, 1000),
 ]
 
 def load_dotenv(path: Path) -> None:
@@ -139,7 +118,7 @@ INSERT INTO subscription_plans
    downgrade_group, total_amount, monthly_amount_total, concurrency_limit,
    quota_reset_period, quota_reset_custom_seconds, created_at, updated_at)
 SELECT
-  {title}, {subtitle}, {plan.price_cny}, 'USD', 'day', 30, 0,
+  {title}, {subtitle}, {plan.price_cny}, 'CNY', 'day', 30, 0,
   1, {plan.sort_order}, 0, 0, '',
   '', '', 0, '',
   '', {plan.monthly_quota}, {plan.monthly_quota}, {plan.concurrency_limit},
@@ -151,7 +130,7 @@ WHERE NOT EXISTS (
 
 UPDATE subscription_plans
 SET subtitle = {subtitle},
-    currency = 'USD',
+    currency = 'CNY',
     duration_unit = 'day',
     duration_value = 30,
     custom_seconds = 0,
@@ -175,9 +154,7 @@ def build_active_subscription_sql() -> str:
     return f"""
 UPDATE user_subscriptions us
 JOIN subscription_plans sp ON sp.id = us.plan_id
-SET us.amount_used = LEAST(GREATEST(us.amount_used, us.monthly_amount_used), sp.monthly_amount_total),
-    us.monthly_amount_used = LEAST(GREATEST(us.amount_used, us.monthly_amount_used), sp.monthly_amount_total),
-    us.amount_total = sp.monthly_amount_total,
+SET us.amount_total = sp.monthly_amount_total,
     us.monthly_amount_total = sp.monthly_amount_total,
     us.concurrency_limit = sp.concurrency_limit,
     us.allow_wallet_overflow = sp.allow_wallet_overflow,
@@ -187,14 +164,39 @@ WHERE us.status = 'active'
   AND us.end_time > @now
   AND us.monthly_amount_total > 0
   AND sp.title IN ({plan_titles})
+  AND GREATEST(us.amount_used, us.monthly_amount_used) < sp.monthly_amount_total
   AND (
     us.amount_total <> sp.monthly_amount_total
     OR us.monthly_amount_total <> sp.monthly_amount_total
     OR us.concurrency_limit <> sp.concurrency_limit
     OR COALESCE(us.allow_wallet_overflow, -1) <> COALESCE(sp.allow_wallet_overflow, -1)
     OR us.next_reset_time > 0
-    OR us.amount_used <> us.monthly_amount_used
   );
+
+UPDATE user_subscriptions us
+JOIN subscription_plans sp ON sp.id = us.plan_id
+SET us.amount_total = sp.monthly_amount_total,
+    us.monthly_amount_total = sp.monthly_amount_total,
+    us.concurrency_limit = sp.concurrency_limit,
+    us.allow_wallet_overflow = sp.allow_wallet_overflow,
+    us.next_reset_time = 0,
+    us.status = 'expired',
+    us.end_time = @now,
+    us.updated_at = @now
+WHERE us.status = 'active'
+  AND us.end_time > @now
+  AND us.monthly_amount_total > 0
+  AND sp.title IN ({plan_titles})
+  AND GREATEST(us.amount_used, us.monthly_amount_used) >= sp.monthly_amount_total;
+
+UPDATE user_subscriptions us
+JOIN subscription_plans sp ON sp.id = us.plan_id
+SET us.status = 'expired',
+    us.end_time = @now,
+    us.updated_at = @now
+WHERE us.status = 'active'
+  AND us.end_time > @now
+  AND (sp.enabled = 0 OR sp.title LIKE 'VIP 旧版%');
 """
 
 
@@ -215,14 +217,13 @@ COMMIT;
 
 def print_summary() -> None:
     print(
-        "title\tprice_cny\tmonthly_usd\tquota_reset\tpayg_usd_same_money"
-        "\tpayg_cost_same_quota\tmonthly_discount\tmonthly_vs_payg"
+        "title\tprice_cny\tcurrency\tmonthly_quota\tmonthly_cny_value"
+        "\tquota_reset"
     )
     for plan in PLANS:
         print(
-            f"{plan.title}\t{plan.price_cny}\t{plan.monthly_usd}\tnever"
-            f"\t{plan.payg_usd_same_money}\t{plan.payg_cost_same_quota}"
-            f"\t{plan.monthly_discount}折\t{plan.monthly_vs_payg_multiple}x"
+            f"{plan.title}\t{plan.price_cny}\tCNY\t{plan.monthly_quota}\t"
+            f"{plan.monthly_cny_value}\tnever"
         )
 
 
