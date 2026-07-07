@@ -666,11 +666,12 @@ export function MediaPlayground() {
       reference_role: role,
       reference_index: index + 1,
       hidden: true,
+      public_reference: true,
       source: 'video_input',
       model: videoModel,
       workflow: videoWorkflow,
     })
-    return toAbsoluteMediaUrl(cached.url)
+    return toAbsoluteMediaUrl(cached.upstream_url || cached.public_url || cached.url)
   }
 
   async function applyVideoReferenceImages(payload: Record<string, unknown>) {

@@ -31,6 +31,8 @@ const requiredMarkers = {
   geminiImageSize: 'image_size',
   outputCompression: 'output_compression',
   inputFidelity: 'input_fidelity',
+  videoPublicReference: 'public_reference',
+  videoUpstreamReferenceUrl: 'upstream_url ||',
 }
 
 const requiredClassicOnlyMarkers = {

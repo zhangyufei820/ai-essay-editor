@@ -176,6 +176,8 @@ export type MediaCacheResponse = {
   message?: string
   data?: {
     url: string
+    public_url?: string
+    upstream_url?: string
     expires_in: number
   }
 }
