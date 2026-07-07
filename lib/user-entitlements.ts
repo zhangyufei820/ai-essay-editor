@@ -1,5 +1,5 @@
-import { createClient } from "@supabase/supabase-js"
 import { isSubscribedUser, resolveMembershipStatus } from "@/lib/products"
+import { getSupabaseAdmin } from "@/lib/supabase-admin"
 
 const MEMBERSHIP_PRODUCT_IDS = ["basic", "pro", "premium", "enterprise", "campus"]
 
@@ -33,13 +33,6 @@ export type UserEntitlementSummary = {
 }
 
 type SupabaseAdminClient = any
-
-function getSupabaseAdmin() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !key) throw new Error("缺少 Supabase 配置")
-  return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } })
-}
 
 function normalizeEmail(value?: string | null): string | null {
   const normalized = value?.trim().toLowerCase()

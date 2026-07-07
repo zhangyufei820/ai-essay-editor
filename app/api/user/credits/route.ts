@@ -1,8 +1,8 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireUser } from '@/lib/auth/verified-user'
 import { getUserTrialStatus } from '@/lib/free-trial'
 import { isOperationTimeoutError, withTimeout } from '@/lib/server-timeout'
+import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { getUserEntitlementSummary } from '@/lib/user-entitlements'
 
 /**
@@ -14,19 +14,56 @@ import { getUserEntitlementSummary } from '@/lib/user-entitlements'
  * 使用 Service Role Key，绕过 RLS 限制
  */
 
-// 创建超级管理员客户端
-const getSupabaseAdmin = () => {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !key) {
-    throw new Error('缺少 Supabase 配置')
-  }
-  return createClient(url, key)
-}
-
 const AUTH_TIMEOUT_MS = 5_000
 const BASE_CREDITS_TIMEOUT_MS = 4_000
 const OPTIONAL_STATUS_TIMEOUT_MS = 2_500
+const OPTIONAL_ENHANCEMENT_WAIT_MS = 750
+
+type CreditsEnhancement = {
+  trialStatus: unknown
+  entitlement: Awaited<ReturnType<typeof getUserEntitlementSummary>>
+}
+
+async function loadOptionalCreditsEnhancement(
+  userId: string,
+  authUser: NonNullable<Awaited<ReturnType<typeof requireUser>>["user"]>,
+): Promise<CreditsEnhancement> {
+  const trialStatusPromise = withTimeout(
+    getUserTrialStatus(userId),
+    OPTIONAL_STATUS_TIMEOUT_MS,
+    "user-credits.trial-status",
+  )
+    .then((result) => result.data)
+    .catch((error) => {
+      console.warn("[积分API] 试用状态降级:", error)
+      return null
+    })
+
+  const entitlementPromise = withTimeout(
+    getUserEntitlementSummary(userId, {
+      email: authUser.email || null,
+      phone: authUser.phone || null,
+      metadata: authUser.metadata || null,
+    }),
+    OPTIONAL_STATUS_TIMEOUT_MS,
+    "user-credits.entitlement",
+  ).catch((error) => {
+    console.warn("[积分API] 权益合并降级:", error)
+    return null
+  })
+
+  try {
+    const [trialStatus, entitlement] = await withTimeout(
+      Promise.all([trialStatusPromise, entitlementPromise]),
+      OPTIONAL_ENHANCEMENT_WAIT_MS,
+      "user-credits.optional-enhancement",
+    )
+    return { trialStatus, entitlement }
+  } catch (error) {
+    console.warn("[积分API] 可选权益增强超时:", error)
+    return { trialStatus: null, entitlement: null }
+  }
+}
 
 function createSafeCreditsDegradedResponse({
   userId,
@@ -56,32 +93,7 @@ export async function GET(request: NextRequest) {
 
     console.log("🔍 [积分API] 查询用户积分")
 
-    // 使用 Service Role Key 创建超级管理员客户端
     const supabaseAdmin = getSupabaseAdmin()
-    const trialStatusPromise = withTimeout(
-      getUserTrialStatus(userId),
-      OPTIONAL_STATUS_TIMEOUT_MS,
-      "user-credits.trial-status",
-    )
-      .then((result) => result.data)
-      .catch((error) => {
-        console.warn("[积分API] 试用状态降级:", error)
-        return null
-      })
-
-    const entitlementPromise = withTimeout(
-      getUserEntitlementSummary(userId, {
-        email: auth.user!.email || null,
-        phone: auth.user!.phone || null,
-        metadata: auth.user!.metadata || null,
-      }),
-      OPTIONAL_STATUS_TIMEOUT_MS,
-      "user-credits.entitlement",
-    ).catch((error) => {
-      console.warn("[积分API] 权益合并降级:", error)
-      return null
-    })
-
     const baseCreditsPromise = withTimeout(
       Promise.resolve(
         supabaseAdmin
@@ -96,29 +108,12 @@ export async function GET(request: NextRequest) {
       .then((result) => ({ ok: true as const, result }))
       .catch((error) => ({ ok: false as const, error }))
 
-    const [trialStatus, entitlement, baseCredits] = await Promise.all([
-      trialStatusPromise,
-      entitlementPromise,
-      baseCreditsPromise,
-    ])
-
-    if (entitlement) {
-      return NextResponse.json({
-        userId,
-        credits: entitlement.credits,
-        is_pro: entitlement.isPro,
-        membership_status: entitlement.membershipStatus,
-        entitlementUserId: entitlement.entitlementUserId,
-        relatedUserIds: entitlement.relatedUserIds,
-        trialStatus,
-      })
-    }
+    const baseCredits = await baseCreditsPromise
 
     if (!baseCredits.ok) {
       console.error("[积分API] 基础积分查询超时或失败:", baseCredits.error)
       return createSafeCreditsDegradedResponse({
         userId,
-        trialStatus,
         code: isOperationTimeoutError(baseCredits.error) ? "CREDITS_TIMEOUT" : "CREDITS_QUERY_FAILED",
       })
     }
@@ -130,8 +125,22 @@ export async function GET(request: NextRequest) {
       console.error(`❌ [积分API] 查询失败:`, error)
       return createSafeCreditsDegradedResponse({
         userId,
-        trialStatus,
         code: "CREDITS_QUERY_FAILED",
+      })
+    }
+
+    const enhancementPromise = loadOptionalCreditsEnhancement(userId, auth.user!)
+    const { trialStatus, entitlement } = await enhancementPromise
+
+    if (entitlement) {
+      return NextResponse.json({
+        userId,
+        credits: entitlement.credits,
+        is_pro: entitlement.isPro,
+        membership_status: entitlement.membershipStatus,
+        entitlementUserId: entitlement.entitlementUserId,
+        relatedUserIds: entitlement.relatedUserIds,
+        trialStatus,
       })
     }
 
