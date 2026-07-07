@@ -10,8 +10,10 @@ from pathlib import Path
 
 
 ROOT = Path(os.environ.get("SHENXIANG_NEW_API_ROOT", "/opt/shenxiang-new-api"))
-QUOTA_PER_USD = 500_000
-PAYG_CNY_PER_USD = Decimal("1.08")
+QUOTA_PER_UNIT = Decimal("500000")
+USD_EXCHANGE_RATE = Decimal("7.3")
+PAYG_CNY_PER_OFFICIAL_USD = Decimal("1.08")
+QUOTA_PER_OFFICIAL_USD = QUOTA_PER_UNIT * PAYG_CNY_PER_OFFICIAL_USD / USD_EXCHANGE_RATE
 
 
 @dataclass(frozen=True)
@@ -24,11 +26,16 @@ class MonthlyCardPlan:
 
     @property
     def monthly_quota(self) -> int:
-        return self.monthly_usd * QUOTA_PER_USD
+        return int(
+            (Decimal(self.monthly_usd) * QUOTA_PER_OFFICIAL_USD).quantize(
+                Decimal("1"),
+                rounding=ROUND_HALF_UP,
+            )
+        )
 
     @property
     def payg_usd_same_money(self) -> Decimal:
-        return (Decimal(self.price_cny) / PAYG_CNY_PER_USD).quantize(
+        return (Decimal(self.price_cny) / PAYG_CNY_PER_OFFICIAL_USD).quantize(
             Decimal("0.01"),
             rounding=ROUND_HALF_UP,
         )
@@ -42,7 +49,7 @@ class MonthlyCardPlan:
 
     @property
     def payg_cost_same_quota(self) -> Decimal:
-        return (Decimal(self.monthly_usd) * PAYG_CNY_PER_USD).quantize(
+        return (Decimal(self.monthly_usd) * PAYG_CNY_PER_OFFICIAL_USD).quantize(
             Decimal("0.01"),
             rounding=ROUND_HALF_UP,
         )
@@ -69,10 +76,6 @@ PLANS = [
     MonthlyCardPlan("¥500 月卡", 500, 2300, 5, 500),
     MonthlyCardPlan("¥1000 月卡", 1000, 4600, 10, 1000),
 ]
-
-LEGACY_TITLE = "VIP 旧版 ¥500 月卡"
-LEGACY_SUBTITLE = "历史权益｜月总 $4800 模型额度｜30 天有效｜本月额度用完为止｜不再新购"
-
 
 def load_dotenv(path: Path) -> None:
     if not path.exists():
@@ -172,17 +175,23 @@ def build_active_subscription_sql() -> str:
     return f"""
 UPDATE user_subscriptions us
 JOIN subscription_plans sp ON sp.id = us.plan_id
-SET us.amount_used = LEAST(GREATEST(us.amount_used, us.monthly_amount_used), us.monthly_amount_total),
-    us.monthly_amount_used = LEAST(GREATEST(us.amount_used, us.monthly_amount_used), us.monthly_amount_total),
-    us.amount_total = us.monthly_amount_total,
+SET us.amount_used = LEAST(GREATEST(us.amount_used, us.monthly_amount_used), sp.monthly_amount_total),
+    us.monthly_amount_used = LEAST(GREATEST(us.amount_used, us.monthly_amount_used), sp.monthly_amount_total),
+    us.amount_total = sp.monthly_amount_total,
+    us.monthly_amount_total = sp.monthly_amount_total,
+    us.concurrency_limit = sp.concurrency_limit,
+    us.allow_wallet_overflow = sp.allow_wallet_overflow,
     us.next_reset_time = 0,
     us.updated_at = @now
 WHERE us.status = 'active'
   AND us.end_time > @now
   AND us.monthly_amount_total > 0
-  AND sp.title IN ({plan_titles}, {sql_quote(LEGACY_TITLE)})
+  AND sp.title IN ({plan_titles})
   AND (
-    us.amount_total < us.monthly_amount_total
+    us.amount_total <> sp.monthly_amount_total
+    OR us.monthly_amount_total <> sp.monthly_amount_total
+    OR us.concurrency_limit <> sp.concurrency_limit
+    OR COALESCE(us.allow_wallet_overflow, -1) <> COALESCE(sp.allow_wallet_overflow, -1)
     OR us.next_reset_time > 0
     OR us.amount_used <> us.monthly_amount_used
   );
@@ -195,21 +204,6 @@ def build_sql() -> str:
 SET NAMES utf8mb4;
 SET @now := UNIX_TIMESTAMP();
 START TRANSACTION;
-
-UPDATE subscription_plans
-SET title = {sql_quote(LEGACY_TITLE)},
-    subtitle = {sql_quote(LEGACY_SUBTITLE)},
-    enabled = 0,
-    sort_order = 950,
-    allow_balance_pay = 0,
-    allow_wallet_overflow = 0,
-    total_amount = monthly_amount_total,
-    quota_reset_period = 'never',
-    quota_reset_custom_seconds = 0,
-    updated_at = @now
-WHERE id = 1
-  AND ABS(price_amount - 500) < 0.000001
-  AND total_amount >= 80000000;
 
 {plan_sql}
 
