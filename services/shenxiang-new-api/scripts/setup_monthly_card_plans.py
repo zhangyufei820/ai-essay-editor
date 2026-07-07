@@ -19,13 +19,8 @@ class MonthlyCardPlan:
     title: str
     price_cny: int
     monthly_usd: int
-    daily_usd: int
     concurrency_limit: int
     sort_order: int
-
-    @property
-    def daily_quota(self) -> int:
-        return self.daily_usd * QUOTA_PER_USD
 
     @property
     def monthly_quota(self) -> int:
@@ -62,21 +57,21 @@ class MonthlyCardPlan:
     @property
     def subtitle(self) -> str:
         return (
-            f"每日 ${self.daily_usd} 模型额度｜月总 ${self.monthly_usd}｜"
-            f"30 天有效｜并发 {self.concurrency_limit}｜约等于按量 {self.monthly_discount} 折"
+            f"月总 ${self.monthly_usd} 模型额度｜30 天有效｜并发 {self.concurrency_limit}｜"
+            f"本月额度用完为止｜约等于按量 {self.monthly_discount} 折"
         )
 
 
 PLANS = [
-    MonthlyCardPlan("¥100 月卡", 100, 350, 12, 1, 100),
-    MonthlyCardPlan("¥200 月卡", 200, 830, 28, 2, 200),
-    MonthlyCardPlan("¥300 月卡", 300, 1350, 45, 3, 300),
-    MonthlyCardPlan("¥500 月卡", 500, 2300, 77, 5, 500),
-    MonthlyCardPlan("¥1000 月卡", 1000, 4600, 154, 10, 1000),
+    MonthlyCardPlan("¥100 月卡", 100, 350, 1, 100),
+    MonthlyCardPlan("¥200 月卡", 200, 830, 2, 200),
+    MonthlyCardPlan("¥300 月卡", 300, 1350, 3, 300),
+    MonthlyCardPlan("¥500 月卡", 500, 2300, 5, 500),
+    MonthlyCardPlan("¥1000 月卡", 1000, 4600, 10, 1000),
 ]
 
 LEGACY_TITLE = "VIP 旧版 ¥500 月卡"
-LEGACY_SUBTITLE = "历史权益｜每日 $160 模型额度｜月总 $4800｜额度用尽或到期自动结束｜不再新购"
+LEGACY_SUBTITLE = "历史权益｜月总 $4800 模型额度｜30 天有效｜本月额度用完为止｜不再新购"
 
 
 def load_dotenv(path: Path) -> None:
@@ -144,8 +139,8 @@ SELECT
   {title}, {subtitle}, {plan.price_cny}, 'USD', 'day', 30, 0,
   1, {plan.sort_order}, 0, 0, '',
   '', '', 0, '',
-  '', {plan.daily_quota}, {plan.monthly_quota}, {plan.concurrency_limit},
-  'daily', 0, @now, @now
+  '', {plan.monthly_quota}, {plan.monthly_quota}, {plan.concurrency_limit},
+  'never', 0, @now, @now
 WHERE NOT EXISTS (
   SELECT 1 FROM subscription_plans
   WHERE title = {title} AND ABS(price_amount - {plan.price_cny}) < 0.000001
@@ -162,13 +157,35 @@ SET subtitle = {subtitle},
     allow_balance_pay = 0,
     allow_wallet_overflow = 0,
     max_purchase_per_user = 0,
-    total_amount = {plan.daily_quota},
+    total_amount = {plan.monthly_quota},
     monthly_amount_total = {plan.monthly_quota},
     concurrency_limit = {plan.concurrency_limit},
-    quota_reset_period = 'daily',
+    quota_reset_period = 'never',
     quota_reset_custom_seconds = 0,
     updated_at = @now
 WHERE title = {title} AND ABS(price_amount - {plan.price_cny}) < 0.000001;
+"""
+
+
+def build_active_subscription_sql() -> str:
+    plan_titles = ", ".join(sql_quote(plan.title) for plan in PLANS)
+    return f"""
+UPDATE user_subscriptions us
+JOIN subscription_plans sp ON sp.id = us.plan_id
+SET us.amount_used = LEAST(GREATEST(us.amount_used, us.monthly_amount_used), us.monthly_amount_total),
+    us.monthly_amount_used = LEAST(GREATEST(us.amount_used, us.monthly_amount_used), us.monthly_amount_total),
+    us.amount_total = us.monthly_amount_total,
+    us.next_reset_time = 0,
+    us.updated_at = @now
+WHERE us.status = 'active'
+  AND us.end_time > @now
+  AND us.monthly_amount_total > 0
+  AND sp.title IN ({plan_titles}, {sql_quote(LEGACY_TITLE)})
+  AND (
+    us.amount_total < us.monthly_amount_total
+    OR us.next_reset_time > 0
+    OR us.amount_used <> us.monthly_amount_used
+  );
 """
 
 
@@ -186,6 +203,9 @@ SET title = {sql_quote(LEGACY_TITLE)},
     sort_order = 950,
     allow_balance_pay = 0,
     allow_wallet_overflow = 0,
+    total_amount = monthly_amount_total,
+    quota_reset_period = 'never',
+    quota_reset_custom_seconds = 0,
     updated_at = @now
 WHERE id = 1
   AND ABS(price_amount - 500) < 0.000001
@@ -193,18 +213,20 @@ WHERE id = 1
 
 {plan_sql}
 
+{build_active_subscription_sql()}
+
 COMMIT;
 """
 
 
 def print_summary() -> None:
     print(
-        "title\tprice_cny\tmonthly_usd\tdaily_usd\tpayg_usd_same_money"
+        "title\tprice_cny\tmonthly_usd\tquota_reset\tpayg_usd_same_money"
         "\tpayg_cost_same_quota\tmonthly_discount\tmonthly_vs_payg"
     )
     for plan in PLANS:
         print(
-            f"{plan.title}\t{plan.price_cny}\t{plan.monthly_usd}\t{plan.daily_usd}"
+            f"{plan.title}\t{plan.price_cny}\t{plan.monthly_usd}\tnever"
             f"\t{plan.payg_usd_same_money}\t{plan.payg_cost_same_quota}"
             f"\t{plan.monthly_discount}折\t{plan.monthly_vs_payg_multiple}x"
         )

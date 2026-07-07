@@ -159,12 +159,12 @@ function MonthlyCardValueGuide({ t, plans = [] }) {
                 </div>
                 <div className='mt-1 text-sm'>
                   <Text strong>{t('月卡额度')} </Text>
-                  <span className='text-purple-600 font-semibold'>
+                  <span className='text-blue-600 font-semibold'>
                     {formatModelUsd(comparison.monthlyUsd)}
                   </span>
                 </div>
                 <div className='mt-1 text-xs text-gray-500'>
-                  {t('同等额度按量约需')} ¥
+                  {t('按量购买约需')} ¥
                   {comparison.paygCostSameQuota.toFixed(0)}
                   {' · '}
                   {t('约')}
@@ -202,6 +202,18 @@ const SubscriptionPlansCard = ({
   const [refreshing, setRefreshing] = useState(false);
 
   const epayMethods = useMemo(() => getEpayMethods(payMethods), [payMethods]);
+  const displayPlans = useMemo(
+    () =>
+      [...(plans || [])].sort((a, b) => {
+        const priceA = Number(a?.plan?.price_amount || 0);
+        const priceB = Number(b?.plan?.price_amount || 0);
+        if (priceA !== priceB) return priceA - priceB;
+        return (
+          Number(a?.plan?.sort_order || 0) - Number(b?.plan?.sort_order || 0)
+        );
+      }),
+    [plans],
+  );
 
   const openBuy = (p) => {
     setSelectedPlan(p);
@@ -596,71 +608,76 @@ const SubscriptionPlansCard = ({
           </Card>
 
           {/* 可购买套餐 - 标准定价卡片 */}
-          {plans.length > 0 ? (
-            <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-5 w-full px-1'>
-              {plans.map((p) => {
-                const plan = p?.plan;
-                const dailyAmount = Number(plan?.total_amount || 0);
-                const price = Number(plan?.price_amount || 0);
-                const displayPrice = price.toFixed(
-                  Number.isInteger(price) ? 0 : 2,
-                );
-                const isPopular = Math.round(price) === 300;
-                const limit = Number(plan?.max_purchase_per_user || 0);
-                const limitLabel = limit > 0 ? `${t('限购')} ${limit}` : null;
-                const upgradeLabel = plan?.upgrade_group
-                  ? `${t('升级分组')}: ${plan.upgrade_group}`
-                  : null;
-                const comparison = getPaygComparison(plan);
-                const dailyUsd = quotaToModelUsd(dailyAmount);
-                const resetText = formatSubscriptionResetPeriod(plan, t);
-                const resetLabel =
-                  resetText === t('不重置')
-                    ? null
-                    : `${t('额度重置')}: ${resetText}`;
-                const planBenefits = [
-                  { label: `${t('适合')}: ${getPlanAudience(plan, t)}` },
-                  {
-                    label: `${t('有效期')}: ${formatSubscriptionDuration(plan, t)}`,
-                  },
-                  resetLabel ? { label: resetLabel } : null,
-                  limitLabel ? { label: limitLabel } : null,
-                  upgradeLabel ? { label: upgradeLabel } : null,
-                ].filter(Boolean);
+          {displayPlans.length > 0 ? (
+            <>
+              <div className='px-1'>
+                <Text type='tertiary' size='small'>
+                  {t('模型额度仅用于模型调用消耗，不等同于现金余额。本月额度用完为止。')}
+                </Text>
+              </div>
+              <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-5 w-full px-1'>
+                {displayPlans.map((p) => {
+                  const plan = p?.plan;
+                  const price = Number(plan?.price_amount || 0);
+                  const displayPrice = price.toFixed(
+                    Number.isInteger(price) ? 0 : 2,
+                  );
+                  const isPopular = Math.round(price) === 300;
+                  const limit = Number(plan?.max_purchase_per_user || 0);
+                  const limitLabel =
+                    limit > 0 ? `${t('限购')} ${limit}` : null;
+                  const upgradeLabel = plan?.upgrade_group
+                    ? `${t('升级分组')}: ${plan.upgrade_group}`
+                    : null;
+                  const comparison = getPaygComparison(plan);
+                  const resetText = formatSubscriptionResetPeriod(plan, t);
+                  const resetLabel =
+                    resetText === t('不重置')
+                      ? `${t('额度规则')}: ${t('本月额度用完为止')}`
+                      : `${t('额度重置')}: ${resetText}`;
+                  const planBenefits = [
+                    { label: `${t('适合')}: ${getPlanAudience(plan, t)}` },
+                    {
+                      label: `${t('有效期')}: ${formatSubscriptionDuration(plan, t)}`,
+                    },
+                    resetLabel ? { label: resetLabel } : null,
+                    limitLabel ? { label: limitLabel } : null,
+                    upgradeLabel ? { label: upgradeLabel } : null,
+                  ].filter(Boolean);
 
-                return (
-                  <Card
-                    key={plan?.id}
-                    className={`!rounded-xl transition-all hover:shadow-lg w-full h-full ${
-                      isPopular ? 'ring-2 ring-purple-500' : ''
-                    }`}
-                    bodyStyle={{ padding: 0 }}
-                  >
-                    <div className='p-4 h-full flex flex-col'>
-                      {/* 推荐标签 */}
-                      {isPopular && (
-                        <div className='mb-2'>
-                          <Tag color='purple' shape='circle' size='small'>
-                            <Sparkles size={10} className='mr-1' />
-                            {t('个人推荐')}
-                          </Tag>
+                  return (
+                    <Card
+                      key={plan?.id}
+                      className={`!rounded-xl transition-all hover:shadow-lg w-full h-full ${
+                        isPopular ? 'ring-2 ring-blue-500' : ''
+                      }`}
+                      bodyStyle={{ padding: 0 }}
+                    >
+                      <div className='p-4 h-full flex flex-col'>
+                        {/* 推荐标签 */}
+                        {isPopular && (
+                          <div className='mb-2'>
+                            <Tag color='blue' shape='circle' size='small'>
+                              <Sparkles size={10} className='mr-1' />
+                              {t('个人推荐')}
+                            </Tag>
+                          </div>
+                        )}
+                        {/* 套餐名称 */}
+                        <div className='mb-3'>
+                          <Typography.Title
+                            heading={5}
+                            ellipsis={{ rows: 1, showTooltip: true }}
+                            style={{ margin: 0 }}
+                          >
+                            {plan?.title || t('订阅套餐')}
+                          </Typography.Title>
                         </div>
-                      )}
-                      {/* 套餐名称 */}
-                      <div className='mb-3'>
-                        <Typography.Title
-                          heading={5}
-                          ellipsis={{ rows: 1, showTooltip: true }}
-                          style={{ margin: 0 }}
-                        >
-                          {plan?.title || t('订阅套餐')}
-                        </Typography.Title>
-                      </div>
 
                       {/* 价格区域 */}
                       <div className='py-2'>
                         <div className='flex items-end justify-start gap-1'>
-                          <span className='text-3xl font-bold text-purple-600'>
+                          <span className='text-3xl font-bold text-blue-600'>
                             ¥
                             {displayPrice}
                           </span>
@@ -670,32 +687,29 @@ const SubscriptionPlansCard = ({
                         </div>
                         <div className='mt-2 text-sm'>
                           <Text>{t('含')} </Text>
-                          <span className='font-semibold text-purple-600'>
+                          <span className='font-semibold text-blue-600'>
                             {formatModelUsd(comparison.monthlyUsd)}
                           </span>
                           <Text> {t('模型额度')}</Text>
                         </div>
                         <div className='mt-1 flex flex-wrap items-center gap-2'>
-                          <Tag color='purple' shape='circle' size='small'>
+                          <Tag color='blue' shape='circle' size='small'>
                             {t('约等于按量')}
                             {comparison.discount.toFixed(1)}
                             {t('折')}
                           </Tag>
                           <Text type='tertiary' size='small'>
-                            {t('按量同等额度约')} ¥
+                            {t('按量购买约需')} ¥
                             {comparison.paygCostSameQuota.toFixed(0)}
                           </Text>
                         </div>
-                        {dailyUsd > 0 && (
-                          <Text
-                            type='tertiary'
-                            size='small'
-                            style={{ display: 'block', marginTop: 4 }}
-                          >
-                            {t('每日约')} {formatModelUsd(dailyUsd)}{' '}
-                            {t('模型额度')}
-                          </Text>
-                        )}
+                        <Text
+                          type='tertiary'
+                          size='small'
+                          style={{ display: 'block', marginTop: 4 }}
+                        >
+                          {t('本月额度用完为止')}
+                        </Text>
                       </div>
 
                       {/* 套餐权益描述 */}
@@ -739,10 +753,15 @@ const SubscriptionPlansCard = ({
                             : '';
                           const buttonEl = (
                             <Button
-                              theme='outline'
+                              theme={isPopular ? 'solid' : 'outline'}
                               type='primary'
                               block
                               disabled={reached}
+                              className={
+                                isPopular && !reached
+                                  ? '!bg-blue-600 !border-blue-600 hover:!bg-blue-700'
+                                  : ''
+                              }
                               onClick={() => {
                                 if (!reached) openBuy(p);
                               }}
@@ -762,14 +781,15 @@ const SubscriptionPlansCard = ({
                     </div>
                   </Card>
                 );
-              })}
-            </div>
+                })}
+              </div>
+            </>
           ) : (
             <div className='text-center text-gray-400 text-sm py-4'>
               {t('暂无可购买套餐')}
             </div>
           )}
-          <MonthlyCardValueGuide t={t} plans={plans} />
+          <MonthlyCardValueGuide t={t} plans={displayPlans} />
         </Space>
       )}
     </>
