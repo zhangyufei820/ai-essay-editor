@@ -11,8 +11,7 @@ from pathlib import Path
 
 ROOT = Path(os.environ.get("SHENXIANG_NEW_API_ROOT", "/opt/shenxiang-new-api"))
 QUOTA_PER_USD = 500_000
-PAYG_MARKUP = Decimal("1.08")
-USD_EXCHANGE_RATE = Decimal("7.3")
+PAYG_CNY_PER_USD = Decimal("1.08")
 
 
 @dataclass(frozen=True)
@@ -34,7 +33,7 @@ class MonthlyCardPlan:
 
     @property
     def payg_usd_same_money(self) -> Decimal:
-        return (Decimal(self.price_cny) / (USD_EXCHANGE_RATE * PAYG_MARKUP)).quantize(
+        return (Decimal(self.price_cny) / PAYG_CNY_PER_USD).quantize(
             Decimal("0.01"),
             rounding=ROUND_HALF_UP,
         )
@@ -47,23 +46,37 @@ class MonthlyCardPlan:
         )
 
     @property
+    def payg_cost_same_quota(self) -> Decimal:
+        return (Decimal(self.monthly_usd) * PAYG_CNY_PER_USD).quantize(
+            Decimal("0.01"),
+            rounding=ROUND_HALF_UP,
+        )
+
+    @property
+    def monthly_discount(self) -> Decimal:
+        return (Decimal(self.price_cny) / self.payg_cost_same_quota * Decimal("10")).quantize(
+            Decimal("0.1"),
+            rounding=ROUND_HALF_UP,
+        )
+
+    @property
     def subtitle(self) -> str:
         return (
-            f"每日 ${self.daily_usd} 官网等值额度｜月总 ${self.monthly_usd}｜"
-            f"30 天有效｜并发 {self.concurrency_limit}｜约为同价按量的 {self.monthly_vs_payg_multiple} 倍"
+            f"每日 ${self.daily_usd} 模型额度｜月总 ${self.monthly_usd}｜"
+            f"30 天有效｜并发 {self.concurrency_limit}｜约等于按量 {self.monthly_discount} 折"
         )
 
 
 PLANS = [
-    MonthlyCardPlan("¥100 月卡", 100, 450, 15, 1, 100),
-    MonthlyCardPlan("¥200 月卡", 200, 900, 30, 2, 200),
+    MonthlyCardPlan("¥100 月卡", 100, 350, 12, 1, 100),
+    MonthlyCardPlan("¥200 月卡", 200, 830, 28, 2, 200),
     MonthlyCardPlan("¥300 月卡", 300, 1350, 45, 3, 300),
-    MonthlyCardPlan("¥500 月卡", 500, 2250, 75, 5, 500),
-    MonthlyCardPlan("¥1000 月卡", 1000, 4500, 150, 10, 1000),
+    MonthlyCardPlan("¥500 月卡", 500, 2300, 77, 5, 500),
+    MonthlyCardPlan("¥1000 月卡", 1000, 4600, 154, 10, 1000),
 ]
 
 LEGACY_TITLE = "VIP 旧版 ¥500 月卡"
-LEGACY_SUBTITLE = "历史权益｜每日 $160 官网等值额度｜月总 $4800｜额度用尽或到期自动结束｜不再新购"
+LEGACY_SUBTITLE = "历史权益｜每日 $160 模型额度｜月总 $4800｜额度用尽或到期自动结束｜不再新购"
 
 
 def load_dotenv(path: Path) -> None:
@@ -185,11 +198,15 @@ COMMIT;
 
 
 def print_summary() -> None:
-    print("title\tprice_cny\tmonthly_usd\tdaily_usd\tpayg_usd_same_money\tmonthly_vs_payg")
+    print(
+        "title\tprice_cny\tmonthly_usd\tdaily_usd\tpayg_usd_same_money"
+        "\tpayg_cost_same_quota\tmonthly_discount\tmonthly_vs_payg"
+    )
     for plan in PLANS:
         print(
             f"{plan.title}\t{plan.price_cny}\t{plan.monthly_usd}\t{plan.daily_usd}"
-            f"\t{plan.payg_usd_same_money}\t{plan.monthly_vs_payg_multiple}x"
+            f"\t{plan.payg_usd_same_money}\t{plan.payg_cost_same_quota}"
+            f"\t{plan.monthly_discount}折\t{plan.monthly_vs_payg_multiple}x"
         )
 
 
