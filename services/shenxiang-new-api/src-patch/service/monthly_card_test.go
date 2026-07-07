@@ -13,7 +13,7 @@ func TestMonthlyCardAllowedModelsMatchSubscriptionWhitelist(t *testing.T) {
 	require.Contains(t, allowed, "gpt-5.4")
 	require.Contains(t, allowed, "gpt-5.4-mini")
 	require.Contains(t, allowed, "gpt-image-2-4K")
-	require.Contains(t, allowed, "gpt-5.4-pro")
+	require.NotContains(t, allowed, "gpt-5.4-pro")
 	require.NotContains(t, allowed, "gpt-image-2")
 	require.Contains(t, allowed, "gpt-5.3-codex-spark")
 	require.Contains(t, allowed, "gpt-5.5-openai-compact")
