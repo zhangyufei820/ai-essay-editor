@@ -205,6 +205,17 @@ func TestSanitizePlaygroundImageTaskFailureHidesCredentialOnlyErrors(t *testing.
 	require.Equal(t, "模型服务暂时无法处理该请求，请稍后重试或调整参数", got)
 }
 
+func TestSanitizePlaygroundImageTaskFailureHidesUpstreamBalanceErrors(t *testing.T) {
+	reason := "余额不足以发起生图请求：当前可用 $1.972320，本次及在途任务预计最多需要 $1.980000。请充值后重试。Insufficient balance to start image generation: available $1.972320, required up to $1.980000"
+
+	got := sanitizePlaygroundImageTaskFailure(reason)
+
+	require.Equal(t, "模型服务暂时不可用，请稍后重试。", got)
+	require.NotContains(t, got, "余额不足")
+	require.NotContains(t, got, "$1.972320")
+	require.NotContains(t, got, "required up to")
+}
+
 func TestSanitizePlaygroundImageTaskFailureKeepsChannelErrorReasons(t *testing.T) {
 	cases := []struct {
 		name   string

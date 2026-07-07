@@ -574,7 +574,7 @@ func playgroundImage2ForcedChannelIDs(resolution string) (string, []int) {
 			return key, channelIDs
 		}
 	}
-	return "default", []int{24, 4, 8, 16}
+	return "default", []int{24, 16, 12}
 }
 
 func playgroundImage2ForcedResolution(imageReq *dto.ImageRequest) string {
@@ -887,11 +887,38 @@ func shouldRetryPlaygroundForcedChannelError(c *gin.Context, openaiErr *types.Ne
 	if c == nil || openaiErr == nil || retryTimes <= 0 || !hasUnusedPlaygroundForcedChannel(c) {
 		return false
 	}
+	if isPlaygroundUpstreamQuotaLikeError(openaiErr) {
+		return true
+	}
 	code := openaiErr.StatusCode
 	if code == http.StatusGatewayTimeout || code == 524 || code >= 500 || code < 100 || code > 599 {
 		return true
 	}
 	return false
+}
+
+func isPlaygroundUpstreamQuotaLikeError(openaiErr *types.NewAPIError) bool {
+	if openaiErr == nil || types.IsSkipRetryError(openaiErr) || !openaiErr.IsUpstreamRelayError() {
+		return false
+	}
+	message := strings.ToLower(openaiErr.Error())
+	code := strings.ToLower(string(openaiErr.GetErrorCode()))
+	return types.ContainsQuotaLikeError(message) ||
+		types.ContainsQuotaLikeError(code) ||
+		looksLikeUpstreamImageBalanceError(message)
+}
+
+func looksLikeUpstreamImageBalanceError(value string) bool {
+	lower := strings.ToLower(strings.TrimSpace(value))
+	if lower == "" {
+		return false
+	}
+	if strings.Contains(lower, "required up to") && strings.Contains(lower, "available") {
+		return true
+	}
+	return strings.Contains(lower, "发起生图请求") ||
+		strings.Contains(lower, "本次及在途任务") ||
+		strings.Contains(lower, "start image generation")
 }
 
 func hasUnusedPlaygroundForcedChannel(c *gin.Context) bool {
@@ -1047,6 +1074,9 @@ func shouldCoolDownPlaygroundImage2TempCircuit(err *types.NewAPIError) bool {
 		return false
 	}
 	if types.IsChannelError(err) {
+		return true
+	}
+	if isPlaygroundUpstreamQuotaLikeError(err) {
 		return true
 	}
 	statusCode := err.StatusCode

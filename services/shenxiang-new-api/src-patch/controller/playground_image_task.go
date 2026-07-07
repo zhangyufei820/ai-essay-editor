@@ -1525,6 +1525,9 @@ func sanitizePlaygroundImageTaskFailure(reason string) string {
 	if trimmed == "" {
 		return ""
 	}
+	if looksLikeUpstreamImageBalanceError(trimmed) {
+		return "模型服务暂时不可用，请稍后重试。"
+	}
 	if publicReason := sanitizePlaygroundImageTaskPublicReason(trimmed); publicReason != "" {
 		return publicReason
 	}

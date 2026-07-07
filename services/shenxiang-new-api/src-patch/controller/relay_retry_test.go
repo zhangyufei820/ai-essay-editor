@@ -222,7 +222,7 @@ func TestPlaygroundImage2ForcedChannelIDsDefaultList(t *testing.T) {
 	if key != "default" {
 		t.Fatalf("key = %q, want default", key)
 	}
-	want := []int{24, 4, 8, 16}
+	want := []int{24, 16, 12}
 	if len(channelIDs) != len(want) {
 		t.Fatalf("channelIDs = %v, want %v", channelIDs, want)
 	}
@@ -384,6 +384,24 @@ func TestShouldRetryAllowsPlaygroundForcedTimeoutFallback(t *testing.T) {
 
 	if !shouldRetry(c, err, 2) {
 		t.Fatal("shouldRetry() = false, want true for playground forced 524 with remaining channels")
+	}
+}
+
+func TestShouldRetryAllowsPlaygroundForcedUpstreamBalanceFallback(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Set("channel_affinity_skip_retry_on_failure", true)
+	setPlaygroundForcedChannelIDs(c, []int{8, 16, 12})
+	c.Set("use_channel", []string{"8"})
+
+	err := types.WithOpenAIError(types.OpenAIError{
+		Message: "Insufficient balance to start image generation: available $1.972320, required up to $1.980000",
+		Type:    "insufficient_user_quota",
+		Code:    "insufficient_user_quota",
+	}, http.StatusBadRequest)
+
+	if !shouldRetry(c, err, 2) {
+		t.Fatal("shouldRetry() = false, want true for upstream image balance failure with remaining channels")
 	}
 }
 
