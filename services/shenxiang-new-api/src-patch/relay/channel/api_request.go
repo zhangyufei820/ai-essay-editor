@@ -516,9 +516,6 @@ func withPlaygroundImageTimeout(c *gin.Context, req *http.Request, info *common.
 		return req, nil
 	}
 	baseCtx := c.Request.Context()
-	if c.GetBool("playground_image_async_worker") {
-		baseCtx = context.Background()
-	}
 	ctx, cancel := context.WithTimeout(baseCtx, time.Duration(timeoutSeconds)*time.Second)
 	return req.WithContext(ctx), cancel
 }
