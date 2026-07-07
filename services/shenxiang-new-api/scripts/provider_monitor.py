@@ -73,7 +73,7 @@ TEXT_FAMILIES = (
     ),
     TextFamily(
         name="claude_text",
-        models=("claude-opus-4-8", "claude-opus-4-7", "claude-opus-4-6", "claude-sonnet-4-6"),
+        models=("claude-sonnet-5", "claude-opus-4-8", "claude-opus-4-7", "claude-opus-4-6", "claude-sonnet-4-6"),
         channel_ids=(13, 9),
         baseline_priorities={13: 30, 9: 20},
     ),
@@ -333,7 +333,11 @@ def classify_exception(exc: Exception) -> str:
 
 
 def request_chat(base_url: str, api_key: str, model: str) -> dict[str, Any]:
-    url = base_url.rstrip("/") + "/v1/chat/completions"
+    normalized_base = base_url.rstrip("/")
+    if normalized_base.endswith("/v1"):
+        url = normalized_base + "/chat/completions"
+    else:
+        url = normalized_base + "/v1/chat/completions"
     body = json.dumps(
         {
             "model": model,
