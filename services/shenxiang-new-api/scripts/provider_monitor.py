@@ -68,14 +68,14 @@ TEXT_FAMILIES = (
     TextFamily(
         name="openai_text",
         models=("gpt-5.5", "gpt-5.4", "gpt-5.4-mini"),
-        channel_ids=(1, 14, 2, 3),
-        baseline_priorities={1: 40, 14: 30, 2: 20, 3: 10},
+        channel_ids=(1, 14, 2),
+        baseline_priorities={1: 40, 14: 30, 2: 20},
     ),
     TextFamily(
         name="claude_text",
         models=("claude-opus-4-8", "claude-opus-4-7", "claude-opus-4-6", "claude-sonnet-4-6"),
-        channel_ids=(13, 9, 10),
-        baseline_priorities={13: 30, 9: 20, 10: 10},
+        channel_ids=(13, 9),
+        baseline_priorities={13: 30, 9: 20},
     ),
     TextFamily(
         name="claude_fable_text",
@@ -109,7 +109,6 @@ LEGACY_PROVIDER_TO_CHANNEL_ID = {
     "yunwu": 14,
     "moonapi": 2,
     "moonapix": 2,
-    "vivaapi": 3,
 }
 
 
