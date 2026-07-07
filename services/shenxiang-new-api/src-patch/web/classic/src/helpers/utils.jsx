@@ -1079,19 +1079,24 @@ export const getModelPriceItems = (
 export const formatDynamicPriceSummary = (billingExpr, t, groupRatio = 1) => {
   if (!billingExpr) return <span style={{ color: 'var(--semi-color-text-1)' }}>{t('动态计费')}</span>;
 
-  const quotaDisplayType = localStorage.getItem('quota_display_type') || 'USD';
+  let status = {};
+  try {
+    status = JSON.parse(localStorage.getItem('status') || '{}');
+  } catch (e) {}
+
+  const quotaDisplayType =
+    localStorage.getItem('quota_display_type') ||
+    status?.quota_display_type ||
+    'CNY';
   let symbol = '$';
   let rate = 1;
-  try {
-    const s = JSON.parse(localStorage.getItem('status') || '{}');
-    if (quotaDisplayType === 'CNY') {
-      symbol = '¥';
-      rate = s?.usd_exchange_rate || 7;
-    } else if (quotaDisplayType === 'CUSTOM') {
-      symbol = s?.custom_currency_symbol || '¤';
-      rate = s?.custom_currency_exchange_rate || 1;
-    }
-  } catch (e) {}
+  if (quotaDisplayType === 'CNY') {
+    symbol = '¥';
+    rate = status?.usd_exchange_rate || 7;
+  } else if (quotaDisplayType === 'CUSTOM') {
+    symbol = status?.custom_currency_symbol || '¤';
+    rate = status?.custom_currency_exchange_rate || 1;
+  }
 
   const gr = groupRatio || 1;
   const exprBody = billingExpr.replace(/^v\d+:/, '');
@@ -1235,7 +1240,7 @@ export const createCardProPagination = ({
 const DEFAULT_PRICING_FILTERS = {
   search: '',
   showWithRecharge: false,
-  currency: 'USD',
+  currency: 'CNY',
   showRatio: false,
   viewMode: 'card',
   tokenUnit: 'M',
