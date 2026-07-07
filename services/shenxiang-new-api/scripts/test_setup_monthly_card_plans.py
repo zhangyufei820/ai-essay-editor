@@ -43,7 +43,7 @@ class SetupMonthlyCardPlansTest(unittest.TestCase):
                 )
                 self.assertGreater(plan.monthly_quota, 0)
 
-    def test_generated_sql_uses_cny_currency_and_expires_legacy_vip(self) -> None:
+    def test_generated_sql_uses_cny_currency_and_disables_legacy_vip_sales(self) -> None:
         sql = self.module.build_sql()
         first_plan_sql = self.module.build_plan_sql(self.module.PLANS[0])
 
@@ -51,7 +51,9 @@ class SetupMonthlyCardPlansTest(unittest.TestCase):
         self.assertIn("100, 'CNY'", first_plan_sql)
         self.assertIn("allow_balance_pay = 0", sql)
         self.assertIn("allow_wallet_overflow = 0", sql)
-        self.assertIn("sp.title LIKE 'VIP 旧版%'", sql)
+        self.assertIn("UPDATE subscription_plans", sql)
+        self.assertIn("WHERE title LIKE 'VIP 旧版%'", sql)
+        self.assertNotIn("sp.enabled = 0 OR sp.title LIKE 'VIP 旧版%'", sql)
         self.assertNotIn("currency = 'USD'", sql)
         self.assertNotIn("折", sql)
 

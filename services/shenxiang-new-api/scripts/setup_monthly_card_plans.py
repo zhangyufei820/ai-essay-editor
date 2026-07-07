@@ -189,14 +189,10 @@ WHERE us.status = 'active'
   AND sp.title IN ({plan_titles})
   AND GREATEST(us.amount_used, us.monthly_amount_used) >= sp.monthly_amount_total;
 
-UPDATE user_subscriptions us
-JOIN subscription_plans sp ON sp.id = us.plan_id
-SET us.status = 'expired',
-    us.end_time = @now,
-    us.updated_at = @now
-WHERE us.status = 'active'
-  AND us.end_time > @now
-  AND (sp.enabled = 0 OR sp.title LIKE 'VIP 旧版%');
+UPDATE subscription_plans
+SET enabled = 0,
+    updated_at = @now
+WHERE title LIKE 'VIP 旧版%';
 """
 
 
