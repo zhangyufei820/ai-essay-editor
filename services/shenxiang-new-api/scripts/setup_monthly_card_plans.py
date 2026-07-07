@@ -1,0 +1,214 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import os
+import subprocess
+from dataclasses import dataclass
+from decimal import Decimal, ROUND_HALF_UP
+from pathlib import Path
+
+
+ROOT = Path(os.environ.get("SHENXIANG_NEW_API_ROOT", "/opt/shenxiang-new-api"))
+QUOTA_PER_USD = 500_000
+PAYG_MARKUP = Decimal("1.08")
+USD_EXCHANGE_RATE = Decimal("7.3")
+
+
+@dataclass(frozen=True)
+class MonthlyCardPlan:
+    title: str
+    price_cny: int
+    monthly_usd: int
+    daily_usd: int
+    concurrency_limit: int
+    sort_order: int
+
+    @property
+    def daily_quota(self) -> int:
+        return self.daily_usd * QUOTA_PER_USD
+
+    @property
+    def monthly_quota(self) -> int:
+        return self.monthly_usd * QUOTA_PER_USD
+
+    @property
+    def payg_usd_same_money(self) -> Decimal:
+        return (Decimal(self.price_cny) / (USD_EXCHANGE_RATE * PAYG_MARKUP)).quantize(
+            Decimal("0.01"),
+            rounding=ROUND_HALF_UP,
+        )
+
+    @property
+    def monthly_vs_payg_multiple(self) -> Decimal:
+        return (Decimal(self.monthly_usd) / self.payg_usd_same_money).quantize(
+            Decimal("0.1"),
+            rounding=ROUND_HALF_UP,
+        )
+
+    @property
+    def subtitle(self) -> str:
+        return (
+            f"每日 ${self.daily_usd} 官网等值额度｜月总 ${self.monthly_usd}｜"
+            f"30 天有效｜并发 {self.concurrency_limit}｜约为同价按量的 {self.monthly_vs_payg_multiple} 倍"
+        )
+
+
+PLANS = [
+    MonthlyCardPlan("¥100 月卡", 100, 450, 15, 1, 100),
+    MonthlyCardPlan("¥200 月卡", 200, 900, 30, 2, 200),
+    MonthlyCardPlan("¥300 月卡", 300, 1350, 45, 3, 300),
+    MonthlyCardPlan("¥500 月卡", 500, 2250, 75, 5, 500),
+    MonthlyCardPlan("¥1000 月卡", 1000, 4500, 150, 10, 1000),
+]
+
+LEGACY_TITLE = "VIP 旧版 ¥500 月卡"
+LEGACY_SUBTITLE = "历史权益｜每日 $160 官网等值额度｜月总 $4800｜额度用尽或到期自动结束｜不再新购"
+
+
+def load_dotenv(path: Path) -> None:
+    if not path.exists():
+        return
+    for raw_line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+
+
+def require_env(key: str) -> str:
+    value = os.environ.get(key, "").strip()
+    if not value:
+        raise SystemExit(f"missing required env: {key}")
+    return value
+
+
+def sql_quote(value: str) -> str:
+    return "'" + value.replace("\\", "\\\\").replace("'", "''") + "'"
+
+
+def mysql_exec(sql: str, *, capture: bool = False) -> str:
+    env = os.environ.copy()
+    env["MYSQL_PWD"] = require_env("MYSQL_ROOT_PASSWORD")
+    cmd = [
+        "docker",
+        "exec",
+        "-i",
+        "-e",
+        f"MYSQL_PWD={env['MYSQL_PWD']}",
+        os.environ.get("MYSQL_CONTAINER", "shenxiang-new-api-mysql"),
+        "mysql",
+        "--default-character-set=utf8mb4",
+        "--batch",
+        "--raw",
+        "-uroot",
+        require_env("MYSQL_DATABASE"),
+    ]
+    kwargs = {
+        "input": sql,
+        "text": True,
+        "check": True,
+        "stderr": subprocess.DEVNULL,
+    }
+    if capture:
+        kwargs["stdout"] = subprocess.PIPE
+    result = subprocess.run(cmd, **kwargs)
+    return result.stdout if capture else ""
+
+
+def build_plan_sql(plan: MonthlyCardPlan) -> str:
+    title = sql_quote(plan.title)
+    subtitle = sql_quote(plan.subtitle)
+    return f"""
+INSERT INTO subscription_plans
+  (title, subtitle, price_amount, currency, duration_unit, duration_value, custom_seconds,
+   enabled, sort_order, allow_balance_pay, allow_wallet_overflow, stripe_price_id,
+   creem_product_id, waffo_pancake_product_id, max_purchase_per_user, upgrade_group,
+   downgrade_group, total_amount, monthly_amount_total, concurrency_limit,
+   quota_reset_period, quota_reset_custom_seconds, created_at, updated_at)
+SELECT
+  {title}, {subtitle}, {plan.price_cny}, 'USD', 'day', 30, 0,
+  1, {plan.sort_order}, 0, 0, '',
+  '', '', 0, '',
+  '', {plan.daily_quota}, {plan.monthly_quota}, {plan.concurrency_limit},
+  'daily', 0, @now, @now
+WHERE NOT EXISTS (
+  SELECT 1 FROM subscription_plans
+  WHERE title = {title} AND ABS(price_amount - {plan.price_cny}) < 0.000001
+);
+
+UPDATE subscription_plans
+SET subtitle = {subtitle},
+    currency = 'USD',
+    duration_unit = 'day',
+    duration_value = 30,
+    custom_seconds = 0,
+    enabled = 1,
+    sort_order = {plan.sort_order},
+    allow_balance_pay = 0,
+    allow_wallet_overflow = 0,
+    max_purchase_per_user = 0,
+    total_amount = {plan.daily_quota},
+    monthly_amount_total = {plan.monthly_quota},
+    concurrency_limit = {plan.concurrency_limit},
+    quota_reset_period = 'daily',
+    quota_reset_custom_seconds = 0,
+    updated_at = @now
+WHERE title = {title} AND ABS(price_amount - {plan.price_cny}) < 0.000001;
+"""
+
+
+def build_sql() -> str:
+    plan_sql = "\n".join(build_plan_sql(plan) for plan in PLANS)
+    return f"""
+SET NAMES utf8mb4;
+SET @now := UNIX_TIMESTAMP();
+START TRANSACTION;
+
+UPDATE subscription_plans
+SET title = {sql_quote(LEGACY_TITLE)},
+    subtitle = {sql_quote(LEGACY_SUBTITLE)},
+    enabled = 0,
+    sort_order = 950,
+    allow_balance_pay = 0,
+    allow_wallet_overflow = 0,
+    updated_at = @now
+WHERE id = 1
+  AND ABS(price_amount - 500) < 0.000001
+  AND total_amount >= 80000000;
+
+{plan_sql}
+
+COMMIT;
+"""
+
+
+def print_summary() -> None:
+    print("title\tprice_cny\tmonthly_usd\tdaily_usd\tpayg_usd_same_money\tmonthly_vs_payg")
+    for plan in PLANS:
+        print(
+            f"{plan.title}\t{plan.price_cny}\t{plan.monthly_usd}\t{plan.daily_usd}"
+            f"\t{plan.payg_usd_same_money}\t{plan.monthly_vs_payg_multiple}x"
+        )
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--apply", action="store_true", help="apply changes to MySQL")
+    parser.add_argument("--print-sql", action="store_true", help="print SQL")
+    args = parser.parse_args()
+
+    load_dotenv(ROOT / ".env")
+    sql = build_sql()
+    if args.print_sql:
+        print(sql)
+    print_summary()
+    if args.apply:
+        mysql_exec(sql)
+        print("applied")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

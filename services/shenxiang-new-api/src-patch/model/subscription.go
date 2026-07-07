@@ -873,6 +873,67 @@ func UserActiveSubscriptionsAllowWalletOverflow(userId int) (bool, error) {
 	return strictCount == 0, nil
 }
 
+func userSubscriptionQuotaExhausted(sub *UserSubscription) bool {
+	if sub == nil || sub.Status != "active" {
+		return false
+	}
+	if sub.MonthlyAmountTotal > 0 {
+		return sub.MonthlyAmountUsed >= sub.MonthlyAmountTotal
+	}
+	if sub.AmountTotal <= 0 {
+		return false
+	}
+	if sub.NextResetTime > 0 {
+		return false
+	}
+	return sub.AmountUsed >= sub.AmountTotal
+}
+
+// ExpireUserSubscriptionIfQuotaExhausted marks a subscription as expired once
+// its non-resetting or monthly quota is fully consumed.
+func ExpireUserSubscriptionIfQuotaExhausted(userSubscriptionId int) (bool, error) {
+	if userSubscriptionId <= 0 {
+		return false, errors.New("invalid userSubscriptionId")
+	}
+	now := common.GetTimestamp()
+	var cacheUserId int
+	var cacheGroup string
+	expired := false
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		var sub UserSubscription
+		if err := tx.Set("gorm:query_option", "FOR UPDATE").
+			Where("id = ?", userSubscriptionId).
+			First(&sub).Error; err != nil {
+			return err
+		}
+		if !userSubscriptionQuotaExhausted(&sub) {
+			return nil
+		}
+		if err := tx.Model(&sub).Updates(map[string]interface{}{
+			"status":     "expired",
+			"end_time":   now,
+			"updated_at": now,
+		}).Error; err != nil {
+			return err
+		}
+		expired = true
+		cacheUserId = sub.UserId
+		target, err := downgradeUserGroupForSubscriptionTx(tx, &sub, now)
+		if err != nil {
+			return err
+		}
+		cacheGroup = target
+		return nil
+	})
+	if err != nil {
+		return false, err
+	}
+	if cacheGroup != "" && cacheUserId > 0 {
+		_ = UpdateUserGroupCache(cacheUserId, cacheGroup)
+	}
+	return expired, nil
+}
+
 // GetAllUserSubscriptions returns all subscriptions (active and expired) for a user.
 func GetAllUserSubscriptions(userId int) ([]SubscriptionSummary, error) {
 	if userId <= 0 {

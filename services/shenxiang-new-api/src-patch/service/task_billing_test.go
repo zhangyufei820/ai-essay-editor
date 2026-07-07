@@ -167,6 +167,13 @@ func getSubscriptionUsed(t *testing.T, id int) int64 {
 	return sub.AmountUsed
 }
 
+func getSubscriptionStatus(t *testing.T, id int) string {
+	t.Helper()
+	var sub model.UserSubscription
+	require.NoError(t, model.DB.Select("status").Where("id = ?", id).First(&sub).Error)
+	return sub.Status
+}
+
 func getLastLog(t *testing.T) *model.Log {
 	t.Helper()
 	var log model.Log
@@ -343,6 +350,33 @@ func TestPlaygroundWalletBillingSessionRefundsUserQuotaWithoutTokenQuota(t *test
 	require.Eventually(t, func() bool {
 		return getUserQuota(t, userID) == initQuota
 	}, time.Second, 10*time.Millisecond)
+}
+
+func TestBillingSessionSettleExpiresSubscriptionWhenPreConsumeExactlyExhaustsQuota(t *testing.T) {
+	truncate(t)
+
+	const userID, subID = 34, 34
+	seedUser(t, userID, 0)
+	require.NoError(t, model.DB.Create(&model.UserSubscription{
+		Id:                 subID,
+		UserId:             userID,
+		AmountTotal:        100,
+		AmountUsed:         100,
+		MonthlyAmountTotal: 100,
+		MonthlyAmountUsed:  100,
+		Status:             "active",
+		StartTime:          time.Now().Unix(),
+		EndTime:            time.Now().Add(30 * 24 * time.Hour).Unix(),
+	}).Error)
+
+	session := &BillingSession{
+		relayInfo:        &relaycommon.RelayInfo{UserId: userID},
+		funding:          &SubscriptionFunding{subscriptionId: subID},
+		preConsumedQuota: 10,
+	}
+
+	require.NoError(t, session.Settle(10))
+	assert.Equal(t, "expired", getSubscriptionStatus(t, subID))
 }
 
 func TestRefundTaskQuota_NoToken(t *testing.T) {

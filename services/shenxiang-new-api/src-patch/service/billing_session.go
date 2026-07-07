@@ -52,6 +52,24 @@ func (s *BillingSession) shouldChargeTokenQuota() bool {
 	return true
 }
 
+func (s *BillingSession) expireSubscriptionIfExhausted() {
+	if s.funding == nil || s.funding.Source() != BillingSourceSubscription {
+		return
+	}
+	sub, ok := s.funding.(*SubscriptionFunding)
+	if !ok || sub.subscriptionId <= 0 {
+		return
+	}
+	userId := 0
+	if s.relayInfo != nil {
+		userId = s.relayInfo.UserId
+	}
+	if _, err := model.ExpireUserSubscriptionIfQuotaExhausted(sub.subscriptionId); err != nil {
+		common.SysLog(fmt.Sprintf("error expiring exhausted subscription (userId=%d, subscriptionId=%d): %s",
+			userId, sub.subscriptionId, err.Error()))
+	}
+}
+
 // Settle 根据实际消耗额度进行结算。
 // 资金来源和令牌额度分两步提交：若资金来源已提交但令牌调整失败，
 // 会标记 fundingSettled 防止 Refund 对已提交的资金来源执行退款。
@@ -64,6 +82,7 @@ func (s *BillingSession) Settle(actualQuota int) error {
 	defer s.funding.Close()
 	delta := actualQuota - s.preConsumedQuota
 	if delta == 0 {
+		s.expireSubscriptionIfExhausted()
 		s.settled = true
 		return nil
 	}
@@ -95,6 +114,7 @@ func (s *BillingSession) Settle(actualQuota int) error {
 	// 3) 更新 relayInfo 上的订阅 PostDelta（用于日志）
 	if s.funding.Source() == BillingSourceSubscription {
 		s.relayInfo.SubscriptionPostDelta += int64(delta)
+		s.expireSubscriptionIfExhausted()
 	}
 	s.settled = true
 	return tokenErr
@@ -562,6 +582,13 @@ func NewBillingSession(c *gin.Context, relayInfo *relaycommon.RelayInfo, preCons
 				return nil, apiErr
 			}
 			if apiErr.GetErrorCode() == types.ErrorCodeInsufficientUserQuota {
+				allowOverflow, overflowErr := model.UserActiveSubscriptionsAllowWalletOverflow(relayInfo.UserId)
+				if overflowErr != nil {
+					return nil, types.NewError(overflowErr, types.ErrorCodeQueryDataError, types.ErrOptionWithSkipRetry())
+				}
+				if !allowOverflow {
+					return nil, apiErr
+				}
 				return tryWallet()
 			}
 			return nil, apiErr
