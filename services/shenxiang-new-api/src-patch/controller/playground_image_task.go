@@ -34,6 +34,11 @@ import (
 const (
 	playgroundImageAsyncBillingCaptureKey = "playground_image_billing_capture"
 	playgroundImageTaskResultCaptureKey   = "playground_image_task_result_capture"
+
+	playgroundImageTaskDefaultRetryTimes = 2
+	playgroundImageTaskMaxRetryTimes     = 5
+	playgroundImageTaskRetryBaseSeconds  = 20
+	playgroundImageTaskRetryMaxSeconds   = 120
 )
 
 // playgroundImageWorkerSem caps the number of concurrent async image workers
@@ -59,10 +64,69 @@ func FailInterruptedPlaygroundImageTasksOnStartup() {
 	if len(tasks) == 0 {
 		return
 	}
+	recovered := 0
+	failed := 0
 	for _, task := range tasks {
+		if recoverInterruptedPlaygroundImageTaskOnStartup(task) {
+			recovered++
+			continue
+		}
 		markPlaygroundImageTaskFailure(task, "图像任务因服务重启中断，请重新提交。")
+		failed++
 	}
-	common.SysLog(fmt.Sprintf("marked %d interrupted playground image tasks as failed on startup", len(tasks)))
+	common.SysLog(fmt.Sprintf("handled %d interrupted playground image tasks on startup (recovered=%d, failed=%d)", len(tasks), recovered, failed))
+}
+
+func recoverInterruptedPlaygroundImageTaskOnStartup(task *model.Task) bool {
+	if task == nil {
+		return false
+	}
+	if task.Status != model.TaskStatusSubmitted && task.Status != model.TaskStatusInProgress {
+		return false
+	}
+	var payload playgroundImageTaskPayload
+	_ = task.GetData(&payload)
+	if payload.ActualQuota > 0 || task.Quota > 0 {
+		return false
+	}
+	if strings.TrimSpace(payload.RequestFile) == "" {
+		return false
+	}
+	if _, err := os.Stat(payload.RequestFile); err != nil {
+		return false
+	}
+	fromStatus := task.Status
+	task.Status = model.TaskStatusSubmitted
+	task.Progress = "10%"
+	task.StartTime = 0
+	task.FailReason = ""
+	task.FinishTime = 0
+	task.SetData(payload)
+	if won, err := task.UpdateWithStatus(fromStatus); err != nil {
+		common.SysError(fmt.Sprintf("failed to recover submitted playground image task %s on startup: %s", task.TaskID, err.Error()))
+		return false
+	} else if !won {
+		return true
+	}
+	delay := time.Duration(0)
+	if payload.NextRetryAt > 0 {
+		if remaining := time.Until(time.Unix(payload.NextRetryAt, 0)); remaining > 0 {
+			delay = remaining
+		}
+	}
+	userID := task.UserId
+	taskID := task.TaskID
+	userGroup := task.Group
+	usingGroup := task.Group
+	tokenName := payload.TokenName
+	gopool.Go(func() {
+		if delay > 0 {
+			time.Sleep(delay)
+		}
+		runPlaygroundImageTask(taskID, userID, "", 0, userGroup, usingGroup, tokenName)
+	})
+	common.SysLog(fmt.Sprintf("recovered interrupted playground image task %s on startup", task.TaskID))
+	return true
 }
 
 var (
@@ -94,24 +158,28 @@ type openAIImageTaskListResponse struct {
 }
 
 type playgroundImageTaskPayload struct {
-	Model          string                 `json:"model,omitempty"`
-	Prompt         string                 `json:"prompt,omitempty"`
-	Workflow       string                 `json:"workflow,omitempty"`
-	RequestPath    string                 `json:"request_path,omitempty"`
-	RequestMethod  string                 `json:"request_method,omitempty"`
-	RequestFile    string                 `json:"request_file,omitempty"`
-	ContentType    string                 `json:"content_type,omitempty"`
-	RequestID      string                 `json:"request_id,omitempty"`
-	TokenID        int                    `json:"token_id,omitempty"`
-	TokenName      string                 `json:"token_name,omitempty"`
-	UseAPIToken    bool                   `json:"use_api_token,omitempty"`
-	ClientIP       string                 `json:"client_ip,omitempty"`
-	Metadata       map[string]interface{} `json:"metadata,omitempty"`
-	CachedURL      string                 `json:"cached_url,omitempty"`
-	Item           *playgroundMediaItem   `json:"item,omitempty"`
-	OriginalStatus int                    `json:"original_status,omitempty"`
-	Error          string                 `json:"error,omitempty"`
-	ActualQuota    int                    `json:"actual_quota,omitempty"`
+	Model           string                 `json:"model,omitempty"`
+	Prompt          string                 `json:"prompt,omitempty"`
+	Workflow        string                 `json:"workflow,omitempty"`
+	RequestPath     string                 `json:"request_path,omitempty"`
+	RequestMethod   string                 `json:"request_method,omitempty"`
+	RequestFile     string                 `json:"request_file,omitempty"`
+	ContentType     string                 `json:"content_type,omitempty"`
+	RequestID       string                 `json:"request_id,omitempty"`
+	TokenID         int                    `json:"token_id,omitempty"`
+	TokenName       string                 `json:"token_name,omitempty"`
+	UseAPIToken     bool                   `json:"use_api_token,omitempty"`
+	ClientIP        string                 `json:"client_ip,omitempty"`
+	Metadata        map[string]interface{} `json:"metadata,omitempty"`
+	CachedURL       string                 `json:"cached_url,omitempty"`
+	Item            *playgroundMediaItem   `json:"item,omitempty"`
+	OriginalStatus  int                    `json:"original_status,omitempty"`
+	Error           string                 `json:"error,omitempty"`
+	ActualQuota     int                    `json:"actual_quota,omitempty"`
+	RetryCount      int                    `json:"retry_count,omitempty"`
+	MaxRetries      int                    `json:"max_retries,omitempty"`
+	NextRetryAt     int64                  `json:"next_retry_at,omitempty"`
+	LastRetryReason string                 `json:"last_retry_reason,omitempty"`
 }
 
 type playgroundImageTaskResultCapture struct {
@@ -849,7 +917,7 @@ func runPlaygroundImageTask(taskID string, userID int, username string, role int
 		defer func() { <-playgroundImageWorkerSem }()
 	default:
 		if task, exists, err := model.GetByTaskId(userID, taskID); err == nil && exists && task != nil {
-			markPlaygroundImageTaskFailure(task, "server busy, please retry later")
+			retryOrFailPlaygroundImageTask(task, "server busy, please retry later", http.StatusServiceUnavailable, userID, username, role, userGroup, usingGroup, tokenName)
 		}
 		return
 	}
@@ -937,7 +1005,8 @@ func runPlaygroundImageTask(taskID string, userID int, username string, role int
 	engine.ServeHTTP(recorder, request)
 	if recorder.Code >= http.StatusBadRequest {
 		applyPlaygroundImageTaskFailureCapture(task, capture)
-		markPlaygroundImageTaskFailure(task, resolvePlaygroundImageTaskFailureReason(capture, task.UserId, payload.RequestID, recorder.Body.Bytes(), recorder.Code))
+		reason := resolvePlaygroundImageTaskFailureReason(capture, task.UserId, payload.RequestID, recorder.Body.Bytes(), recorder.Code)
+		retryOrFailPlaygroundImageTask(task, reason, recorder.Code, userID, username, role, userGroup, usingGroup, tokenName)
 		return
 	}
 
@@ -951,7 +1020,8 @@ func runPlaygroundImageTask(taskID string, userID int, username string, role int
 	if err := common.Unmarshal(responseBody, &response); err != nil || len(response.Data) == 0 {
 		if msg := extractPlaygroundImageTaskError(responseBody, recorder.Code); msg != "" {
 			applyPlaygroundImageTaskFailureCapture(task, capture)
-			markPlaygroundImageTaskFailure(task, resolvePlaygroundImageTaskFailureReason(capture, task.UserId, payload.RequestID, responseBody, recorder.Code))
+			reason := resolvePlaygroundImageTaskFailureReason(capture, task.UserId, payload.RequestID, responseBody, recorder.Code)
+			retryOrFailPlaygroundImageTask(task, reason, recorder.Code, userID, username, role, userGroup, usingGroup, tokenName)
 		} else {
 			markPlaygroundImageTaskFailure(task, "image task completed without a usable image")
 		}
@@ -969,6 +1039,189 @@ func runPlaygroundImageTask(taskID string, userID int, username string, role int
 		_ = task.GetData(&payload)
 	}
 	markPlaygroundImageTaskSuccess(task, item, &payload, recorder.Code, capture.Quota)
+}
+
+func retryOrFailPlaygroundImageTask(task *model.Task, reason string, status int, userID int, username string, role int, userGroup string, usingGroup string, tokenName string) {
+	if requeuePlaygroundImageTask(task, reason, status, userID, username, role, userGroup, usingGroup, tokenName) {
+		return
+	}
+	markPlaygroundImageTaskFailure(task, reason)
+}
+
+func requeuePlaygroundImageTask(task *model.Task, reason string, status int, userID int, username string, role int, userGroup string, usingGroup string, tokenName string) bool {
+	if task == nil {
+		return false
+	}
+	if latest, exists, err := model.GetByOnlyTaskId(task.TaskID); err == nil && exists && latest != nil {
+		task = latest
+	}
+	var payload playgroundImageTaskPayload
+	_ = task.GetData(&payload)
+	if !canRetryPlaygroundImageTaskFailure(&payload, task.Quota, reason, status) {
+		return false
+	}
+	if _, err := os.Stat(payload.RequestFile); err != nil {
+		return false
+	}
+	maxRetries := playgroundImageTaskRetryTimes()
+	retryCount := payload.RetryCount + 1
+	delay := playgroundImageTaskRetryDelay(retryCount)
+	now := time.Now().Unix()
+	payload.RetryCount = retryCount
+	payload.MaxRetries = maxRetries
+	payload.NextRetryAt = now + int64(delay/time.Second)
+	payload.LastRetryReason = truncatePlaygroundText(strings.TrimSpace(sanitizePlaygroundImageTaskFailure(reason)), 1000)
+	payload.Error = payload.LastRetryReason
+
+	fromStatus := task.Status
+	task.Status = model.TaskStatusSubmitted
+	task.Progress = "10%"
+	task.StartTime = 0
+	task.FinishTime = 0
+	task.FailReason = ""
+	task.SetData(payload)
+	won, err := task.UpdateWithStatus(fromStatus)
+	if err != nil {
+		logger.LogError(nil, fmt.Sprintf("failed to requeue playground image task %s: %s", task.TaskID, err.Error()))
+		return false
+	}
+	if !won {
+		return true
+	}
+
+	common.SysLog(fmt.Sprintf(
+		"requeued playground image task %s after retryable failure (attempt %d/%d, delay %s): %s",
+		task.TaskID,
+		retryCount,
+		maxRetries,
+		delay.String(),
+		common.LocalLogPreview(payload.LastRetryReason),
+	))
+	gopool.Go(func() {
+		time.Sleep(delay)
+		runPlaygroundImageTask(task.TaskID, userID, username, role, userGroup, usingGroup, tokenName)
+	})
+	return true
+}
+
+func canRetryPlaygroundImageTaskFailure(payload *playgroundImageTaskPayload, taskQuota int, reason string, status int) bool {
+	if payload == nil || strings.TrimSpace(payload.RequestFile) == "" {
+		return false
+	}
+	if payload.ActualQuota > 0 || taskQuota > 0 {
+		return false
+	}
+	maxRetries := playgroundImageTaskRetryTimes()
+	if maxRetries <= 0 || payload.RetryCount >= maxRetries {
+		return false
+	}
+	return shouldRetryPlaygroundImageTaskFailure(reason, status)
+}
+
+func playgroundImageTaskRetryTimes() int {
+	retryTimes := common.GetEnvOrDefault("PLAYGROUND_IMAGE_TASK_RETRY_TIMES", playgroundImageTaskDefaultRetryTimes)
+	if retryTimes < 0 {
+		return 0
+	}
+	if retryTimes > playgroundImageTaskMaxRetryTimes {
+		return playgroundImageTaskMaxRetryTimes
+	}
+	return retryTimes
+}
+
+func playgroundImageTaskRetryDelay(retryCount int) time.Duration {
+	baseSeconds := common.GetEnvOrDefault("PLAYGROUND_IMAGE_TASK_RETRY_BASE_DELAY_SECONDS", playgroundImageTaskRetryBaseSeconds)
+	if baseSeconds <= 0 {
+		baseSeconds = playgroundImageTaskRetryBaseSeconds
+	}
+	maxSeconds := common.GetEnvOrDefault("PLAYGROUND_IMAGE_TASK_RETRY_MAX_DELAY_SECONDS", playgroundImageTaskRetryMaxSeconds)
+	if maxSeconds <= 0 {
+		maxSeconds = playgroundImageTaskRetryMaxSeconds
+	}
+	if retryCount < 1 {
+		retryCount = 1
+	}
+	delaySeconds := baseSeconds
+	for i := 1; i < retryCount; i++ {
+		delaySeconds *= 2
+		if delaySeconds >= maxSeconds {
+			delaySeconds = maxSeconds
+			break
+		}
+	}
+	return time.Duration(delaySeconds) * time.Second
+}
+
+func shouldRetryPlaygroundImageTaskFailure(reason string, status int) bool {
+	normalized := strings.ToLower(strings.TrimSpace(reason))
+	if normalized != "" {
+		if playgroundImageTaskFailureHasAny(normalized,
+			"content policy",
+			"content_policy",
+			"moderation",
+			"safety",
+			"抱歉，我不能",
+			"不支持",
+			"not supported",
+			"application not found",
+			"invalid image",
+			"invalid request",
+			"bad request",
+			"prompt is too long",
+			"payload missing",
+			"payload unavailable",
+			"quota insufficient",
+			"quota is not enough",
+			"额度不足",
+			"余额不足",
+			"未配置订阅",
+			"subscription quota insufficient",
+			"subscription monthly quota insufficient",
+			"token quota",
+			"user quota",
+		) {
+			return false
+		}
+		if playgroundImageTaskFailureHasAny(normalized,
+			"subscription concurrency limit exceeded",
+			"concurrency limit",
+			"server busy",
+			"too many requests",
+			"rate limit",
+			"context deadline exceeded",
+			"deadline exceeded",
+			"i/o timeout",
+			"timeout",
+			"timed out",
+			"gateway timeout",
+			"proxy read timeout",
+			"temporarily unavailable",
+			"try again later",
+			"no available channel",
+			"no available channels",
+			"备用渠道暂不可用",
+			"可用渠道不存在",
+			"可用渠道失败",
+			"模型服务暂时不可用",
+		) {
+			return true
+		}
+	}
+	switch status {
+	case http.StatusRequestTimeout, http.StatusTooManyRequests, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout, 524:
+		return true
+	default:
+		return status >= 500 && status < 600
+	}
+}
+
+func playgroundImageTaskFailureHasAny(value string, needles ...string) bool {
+	for _, needle := range needles {
+		if strings.Contains(value, needle) {
+			return true
+		}
+	}
+	return false
 }
 
 func seedPlaygroundImageTaskContext(ginCtx *gin.Context, userID int, username string, role int, userGroup string, usingGroup string, tokenName string, payload *playgroundImageTaskPayload, taskID string, bodyBytes []byte, capture *playgroundImageTaskResultCapture) {

@@ -301,6 +301,84 @@ func TestProcessChannelErrorCapturesAsyncPlaygroundImageFailureReason(t *testing
 	require.Equal(t, 24, capture.LastFailureChannelID)
 }
 
+func TestShouldRetryPlaygroundImageTaskFailureOnlyForTransientErrors(t *testing.T) {
+	cases := []struct {
+		name   string
+		reason string
+		status int
+		want   bool
+	}{
+		{
+			name:   "subscription concurrency",
+			reason: "subscription concurrency limit exceeded",
+			status: http.StatusForbidden,
+			want:   true,
+		},
+		{
+			name:   "context deadline",
+			reason: "context deadline exceeded",
+			status: http.StatusGatewayTimeout,
+			want:   true,
+		},
+		{
+			name:   "upstream unavailable",
+			reason: "媒体工坊图片备用渠道暂不可用",
+			status: http.StatusServiceUnavailable,
+			want:   true,
+		},
+		{
+			name:   "quota insufficient",
+			reason: "subscription monthly quota insufficient",
+			status: http.StatusForbidden,
+			want:   false,
+		},
+		{
+			name:   "policy rejection",
+			reason: "抱歉，我不能帮你生成这张图片。请改成安全版画面。",
+			status: http.StatusBadRequest,
+			want:   false,
+		},
+		{
+			name:   "unsupported model",
+			reason: "not supported model for image generation",
+			status: http.StatusInternalServerError,
+			want:   false,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.want, shouldRetryPlaygroundImageTaskFailure(tc.reason, tc.status))
+		})
+	}
+}
+
+func TestCanRetryPlaygroundImageTaskFailureStopsAfterQuotaOrMaxAttempts(t *testing.T) {
+	t.Setenv("PLAYGROUND_IMAGE_TASK_RETRY_TIMES", "2")
+	payload := &playgroundImageTaskPayload{RequestFile: "/tmp/request.body"}
+
+	require.True(t, canRetryPlaygroundImageTaskFailure(payload, 0, "context deadline exceeded", http.StatusGatewayTimeout))
+
+	payload.ActualQuota = 10
+	require.False(t, canRetryPlaygroundImageTaskFailure(payload, 0, "context deadline exceeded", http.StatusGatewayTimeout))
+
+	payload.ActualQuota = 0
+	require.False(t, canRetryPlaygroundImageTaskFailure(payload, 10, "context deadline exceeded", http.StatusGatewayTimeout))
+
+	payload.RetryCount = 2
+	require.False(t, canRetryPlaygroundImageTaskFailure(payload, 0, "context deadline exceeded", http.StatusGatewayTimeout))
+}
+
+func TestPlaygroundImageTaskRetrySettingsAreBounded(t *testing.T) {
+	t.Setenv("PLAYGROUND_IMAGE_TASK_RETRY_TIMES", "99")
+	t.Setenv("PLAYGROUND_IMAGE_TASK_RETRY_BASE_DELAY_SECONDS", "3")
+	t.Setenv("PLAYGROUND_IMAGE_TASK_RETRY_MAX_DELAY_SECONDS", "10")
+
+	require.Equal(t, playgroundImageTaskMaxRetryTimes, playgroundImageTaskRetryTimes())
+	require.Equal(t, 3*time.Second, playgroundImageTaskRetryDelay(1))
+	require.Equal(t, 6*time.Second, playgroundImageTaskRetryDelay(2))
+	require.Equal(t, 10*time.Second, playgroundImageTaskRetryDelay(3))
+}
+
 func TestMarkPlaygroundImageTaskLogFailureKeepsSubmittedChannelWhenTaskChannelMissing(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
