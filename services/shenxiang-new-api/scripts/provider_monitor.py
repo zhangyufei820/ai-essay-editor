@@ -68,8 +68,8 @@ TEXT_FAMILIES = (
     TextFamily(
         name="openai_text",
         models=("gpt-5.5", "gpt-5.4", "gpt-5.4-mini"),
-        channel_ids=(1, 14, 2),
-        baseline_priorities={1: 40, 14: 30, 2: 20},
+        channel_ids=(2, 14),
+        baseline_priorities={2: 40, 14: 30},
     ),
     TextFamily(
         name="claude_text",
@@ -105,7 +105,6 @@ IMAGE_LONG_TAIL = {
 
 
 LEGACY_PROVIDER_TO_CHANNEL_ID = {
-    "tokenflux": 1,
     "yunwu": 14,
     "moonapi": 2,
     "moonapix": 2,
