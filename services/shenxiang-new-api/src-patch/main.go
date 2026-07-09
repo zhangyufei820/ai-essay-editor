@@ -369,7 +369,7 @@ func InjectXingrenAPIOnboardingAssistant() {
 		return
 	}
 
-	snippet := []byte("\n<script src=\"/assets/xingren-api-onboarding-assistant.js\" defer></script>\n")
+	snippet := []byte("\n<script src=\"/assets/xingren-api-onboarding-assistant.js?v=api-teacher-panel-20260709\" defer></script>\n")
 
 	indexPage = injectBeforeClosingBody(indexPage, snippet)
 	classicIndexPage = injectBeforeClosingBody(classicIndexPage, snippet)

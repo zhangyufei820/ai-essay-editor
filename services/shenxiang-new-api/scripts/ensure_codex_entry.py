@@ -476,6 +476,9 @@ def check_source(source_root: Path) -> dict[str, bool]:
     sidebar = source_text(source_root, "web/classic/src/components/layout/SiderBar.jsx")
     sidebar_config = source_text(source_root, "web/classic/src/hooks/common/useSidebar.js")
     navigation = source_text(source_root, "web/classic/src/hooks/common/useNavigation.js")
+    home_workbench = source_text(source_root, "web/classic/src/pages/Home/TextWorkbench.jsx")
+    api_teacher = source_text(source_root, "web/xingren-api-onboarding-assistant.js")
+    main_go = source_text(source_root, "main.go")
     app = source_text(source_root, "web/classic/src/App.jsx")
     media_playground = source_text(source_root, "web/classic/src/pages/MediaPlayground/index.jsx")
     user_controller = source_text(source_root, "controller/user.go")
@@ -500,6 +503,20 @@ def check_source(source_root: Path) -> dict[str, bool]:
         "has_sidebar_default_admin_models": has_pattern(sidebar_config, r"admin:\s*\{[^}]*models:\s*true"),
         "has_top_nav_media_entry": "媒体工坊" in navigation and "itemKey: 'media'" in navigation and "/console/media-playground" in navigation,
         "has_top_nav_codex_entry": "itemKey: 'codex'" in navigation and ("/console/codex" in navigation or "/codex/" in navigation),
+        "has_home_console_nav": "控制台" in home_workbench and "LayoutDashboard" in home_workbench and "href: '/console'" in home_workbench,
+        "has_api_teacher_detached_panel": (
+            "function renderDetachedPanel()" in api_teacher
+            and 'id="xr-api-assistant-panel"' in api_teacher
+            and 'document.body.insertAdjacentHTML(' in api_teacher
+        ),
+        "has_api_teacher_route_aware_layout": (
+            "function getRouteKind()" in api_teacher
+            and "data-xr-route" in api_teacher
+            and "height:min(320px" in api_teacher
+            and "height:min(500px" in api_teacher
+        ),
+        "has_api_teacher_non_fullheight_panel": "top:64px;bottom:20px" not in api_teacher and "bottom:auto" in api_teacher,
+        "has_api_teacher_cache_busted_script": "xingren-api-onboarding-assistant.js?v=api-teacher-panel-" in main_go,
         "has_app_media_route": "path='/console/media-playground'" in app and "path='/media-playground'" in app,
         "has_app_chat_route": "path='/console/chat/:id?'" in app,
         "has_app_codex_route": "path='/console/codex'" in app and "CodexRedirect" in app,

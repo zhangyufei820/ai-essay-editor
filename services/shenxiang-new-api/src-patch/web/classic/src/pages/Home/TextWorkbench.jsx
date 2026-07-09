@@ -36,6 +36,7 @@ import {
   Edit3,
   Headphones,
   KeyRound,
+  LayoutDashboard,
   MessageSquare,
   PanelLeftClose,
   PanelLeftOpen,
@@ -101,6 +102,7 @@ const WORKBENCH_FILE_ACCEPT = [
 
 const primaryNav = [
   { label: '新聊天', icon: Plus, action: 'new' },
+  { label: '控制台', icon: LayoutDashboard, href: '/console' },
   { label: '帮助', icon: CircleHelp, href: '/docs/' },
   { label: '聊天', icon: MessageSquare, action: 'chat', active: true },
   { label: '媒体工坊', icon: Store, href: '/console/media-playground' },

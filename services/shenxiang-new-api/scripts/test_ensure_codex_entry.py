@@ -84,6 +84,37 @@ function CodexRedirect() {}
 """,
         )
         self.write_file(
+            "main.go",
+            """
+func InjectXingrenAPIOnboardingAssistant() {
+  snippet := []byte("<script src=\\"/assets/xingren-api-onboarding-assistant.js?v=api-teacher-panel-20260709\\" defer></script>")
+  _ = snippet
+}
+""",
+        )
+        self.write_file(
+            "web/classic/src/pages/Home/TextWorkbench.jsx",
+            """
+import { LayoutDashboard } from 'lucide-react';
+
+const primaryNav = [
+  { label: '新聊天', action: 'new' },
+  { label: '控制台', icon: LayoutDashboard, href: '/console' },
+  { label: '聊天', action: 'chat', active: true },
+];
+""",
+        )
+        self.write_file(
+            "web/xingren-api-onboarding-assistant.js",
+            """
+function getRouteKind() {}
+function renderDetachedPanel() {
+  document.body.insertAdjacentHTML("beforeend", '<aside id="xr-api-assistant-panel" data-xr-route="home"></aside>');
+}
+const css = ".xr-api-assistant-panel{bottom:auto;height:min(540px,calc(100vh - 132px))}.xr-api-assistant-panel[data-xr-route='home']{height:min(320px,calc(100vh - 150px))}.xr-api-assistant-panel[data-xr-route='codex']{height:min(500px,calc(100vh - 220px))}";
+""",
+        )
+        self.write_file(
             "web/classic/src/pages/MediaPlayground/index.jsx",
             """
 function resultImageModelValue(result) {}
@@ -271,12 +302,18 @@ API.get('/api/user/models');
         self.assertIn('root.classList.add("xr-api-assistant-docked")', source)
         self.assertIn('root.setAttribute("data-xr-docked", "top-nav")', source)
         self.assertIn("#xr-api-assistant-root.xr-api-assistant-docked", source)
-        self.assertIn(".xr-api-assistant-panel{position:fixed;right:20px;top:64px;bottom:20px;z-index:2147483000", source)
+        self.assertIn("function getRouteKind()", source)
+        self.assertIn("function renderDetachedPanel()", source)
+        self.assertIn('id="xr-api-assistant-panel"', source)
+        self.assertIn("document.body.insertAdjacentHTML(", source)
+        self.assertIn(".xr-api-assistant-panel{position:fixed;right:22px;top:96px;bottom:auto;z-index:2147483000", source)
+        self.assertIn(".xr-api-assistant-panel[data-xr-route='home']{top:96px", source)
+        self.assertNotIn(".xr-api-assistant-panel{position:fixed;right:20px;top:64px;bottom:20px", source)
         self.assertIn(
             ".xr-api-assistant-open #xr-api-assistant-root:not(.xr-api-assistant-docked) .xr-api-assistant-launcher",
             source,
         )
-        self.assertIn("#xr-api-assistant-root:not(.xr-api-assistant-docked){right:12px;top:auto;bottom:12px}", source)
+        self.assertIn("#xr-api-assistant-root:not(.xr-api-assistant-docked){right:12px;top:auto!important;bottom:12px}", source)
 
 
 if __name__ == "__main__":

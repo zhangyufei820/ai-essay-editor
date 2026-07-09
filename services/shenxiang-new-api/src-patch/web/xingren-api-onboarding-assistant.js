@@ -3109,6 +3109,25 @@
   var dockTimer = 0;
   var dockKeepAliveTimer = 0;
 
+  function getRouteKind() {
+    var pathname = window.location && window.location.pathname ? window.location.pathname : "/";
+    var hash = window.location && window.location.hash ? window.location.hash : "";
+    var routeText = pathname + " " + hash;
+    if (routeText.indexOf("/docs") >= 0) return "docs";
+    if (routeText.indexOf("/codex") >= 0) return "codex";
+    if (routeText.indexOf("/console") >= 0 || routeText.indexOf("/login") >= 0) return "console";
+    if (routeText.indexOf("/pricing") >= 0) return "pricing";
+    if (pathname === "/" || pathname === "" || hash === "" || hash === "#/") return "home";
+    return "generic";
+  }
+
+  function applyRouteKind(root) {
+    var routeKind = getRouteKind();
+    root.setAttribute("data-xr-route", routeKind);
+    document.documentElement.setAttribute("data-xr-api-assistant-route", routeKind);
+    return routeKind;
+  }
+
   function navIsVisible(nav) {
     if (!nav) return false;
     var rect = nav.getBoundingClientRect();
@@ -3186,26 +3205,48 @@
       root.id = "xr-api-assistant-root";
       document.body.appendChild(root);
     }
+    applyRouteKind(root);
     scheduleDockRoot(root);
     startDockKeepAlive();
     root.innerHTML =
       '<button type="button" class="xr-api-assistant-launcher" aria-label="打开星人 API 接入老师">' +
       renderAvatar("xr-api-assistant-launcher-icon") +
       '<span class="xr-api-assistant-launcher-copy"><strong>API 老师</strong><small>问问题 / 点页面</small></span>' +
-      "</button>" +
-      (state.open
-        ? '<aside class="xr-api-assistant-panel" role="dialog" aria-label="星人 API 接入老师">' +
-          '<header class="xr-api-assistant-header"><div class="xr-api-assistant-title">' +
-          renderAvatar("xr-api-assistant-avatar") +
-          '<div><strong>API 老师</strong><span>像 ChatGPT 一样问，也像真人一样操作网页</span></div></div><button type="button" class="xr-api-assistant-close" aria-label="结束会话并清空历史">×</button></header>' +
-          '<div class="xr-api-assistant-messages" aria-live="polite"></div>' +
-          '<form class="xr-api-assistant-form"><div class="xr-api-assistant-attachment" hidden></div><div class="xr-api-assistant-row"><button type="button" class="xr-api-assistant-upload" aria-label="上传报错截图" title="上传报错截图">图</button><input class="xr-api-assistant-file" type="file" accept="image/png,image/jpeg,image/webp" hidden><label class="xr-api-assistant-input-wrap"><span>输入问题</span><textarea aria-label="输入接入需求" placeholder="问任何 API 接入问题，或上传报错截图让我识别" autocomplete="off" maxlength="900" rows="1"></textarea></label><button type="submit" class="xr-api-assistant-submit" aria-label="发送">发送</button></div></form>' +
-          "</aside>"
-        : "");
+      "</button>";
     root.querySelector(".xr-api-assistant-launcher").addEventListener("click", openAssistant);
-    var closeButton = root.querySelector(".xr-api-assistant-close");
+    if (state.open) {
+      renderDetachedPanel();
+    } else {
+      removeDetachedPanel();
+    }
+    renderMessages();
+    renderAttachmentPreview();
+  }
+
+  function removeDetachedPanel() {
+    var panel = document.getElementById("xr-api-assistant-panel");
+    if (panel) panel.remove();
+  }
+
+  function renderDetachedPanel() {
+    removeDetachedPanel();
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      '<aside id="xr-api-assistant-panel" class="xr-api-assistant-panel" role="dialog" aria-label="星人 API 接入老师" data-xr-route="' +
+        escapeHTML(getRouteKind()) +
+        '">' +
+        '<header class="xr-api-assistant-header"><div class="xr-api-assistant-title">' +
+        renderAvatar("xr-api-assistant-avatar") +
+        '<div><strong>API 老师</strong><span>像 ChatGPT 一样问，也像真人一样操作网页</span></div></div><button type="button" class="xr-api-assistant-close" aria-label="结束会话并清空历史">×</button></header>' +
+        '<div class="xr-api-assistant-messages" aria-live="polite"></div>' +
+        '<form class="xr-api-assistant-form"><div class="xr-api-assistant-attachment" hidden></div><div class="xr-api-assistant-row"><button type="button" class="xr-api-assistant-upload" aria-label="上传报错截图" title="上传报错截图">图</button><input class="xr-api-assistant-file" type="file" accept="image/png,image/jpeg,image/webp" hidden><label class="xr-api-assistant-input-wrap"><span>输入问题</span><textarea aria-label="输入接入需求" placeholder="问任何 API 接入问题，或上传报错截图让我识别" autocomplete="off" maxlength="900" rows="1"></textarea></label><button type="submit" class="xr-api-assistant-submit" aria-label="发送">发送</button></div></form>' +
+        "</aside>"
+    );
+    var panel = document.getElementById("xr-api-assistant-panel");
+    if (!panel) return;
+    var closeButton = panel.querySelector(".xr-api-assistant-close");
     if (closeButton) closeButton.addEventListener("click", closeAssistant);
-    var form = root.querySelector(".xr-api-assistant-form");
+    var form = panel.querySelector(".xr-api-assistant-form");
     if (form) {
       form.addEventListener("submit", function (event) {
         event.preventDefault();
@@ -3233,8 +3274,6 @@
         });
       }
     }
-    renderMessages();
-    renderAttachmentPreview();
   }
 
   function resumePersistedOperation() {
@@ -3259,8 +3298,10 @@
     var style = document.createElement("style");
     style.id = "xr-api-assistant-style";
     style.textContent = [
-      "#xr-api-assistant-root{display:block!important;position:fixed;right:18px;top:10px;bottom:auto;z-index:2147483000;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;color:#111827;letter-spacing:0}",
+      "#xr-api-assistant-root{display:block!important;position:fixed;right:22px;top:clamp(96px,18vh,176px);bottom:auto;z-index:2147483000;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;color:#111827;letter-spacing:0}",
       "#xr-api-assistant-root.xr-api-assistant-docked{position:relative;right:auto;top:auto;bottom:auto;z-index:auto;display:flex!important;align-items:center;flex:0 0 auto;font-family:inherit;color:inherit}",
+      "#xr-api-assistant-root[data-xr-route='home']:not(.xr-api-assistant-docked),#xr-api-assistant-root[data-xr-route='codex']:not(.xr-api-assistant-docked){top:clamp(112px,20vh,192px)}",
+      "#xr-api-assistant-root[data-xr-route='docs']:not(.xr-api-assistant-docked){top:104px}",
       "#xr-api-assistant-root *,#xr-api-operation-layer *{box-sizing:border-box}",
       ".xr-api-assistant-launcher{position:relative;display:flex;align-items:center;gap:9px;border:1px solid rgba(148,163,184,.34);border-radius:999px;background:rgba(255,255,255,.94);color:#111827;padding:5px 12px 5px 6px;box-shadow:0 10px 28px rgba(15,23,42,.16);cursor:pointer;min-width:44px;min-height:42px;text-align:left;backdrop-filter:blur(14px);transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease,background .18s ease}",
       ".xr-api-assistant-docked .xr-api-assistant-launcher{min-height:36px;min-width:auto;padding:5px 10px 5px 5px;gap:7px;box-shadow:none;background:transparent;border-color:transparent;color:inherit;backdrop-filter:none}",
@@ -3276,7 +3317,10 @@
       "html.dark .xr-api-assistant-launcher,body[theme-mode='dark'] .xr-api-assistant-launcher{background:rgba(15,23,42,.88);border-color:rgba(45,212,191,.3);color:#ecfeff;box-shadow:0 12px 30px rgba(0,0,0,.34)}html.dark .xr-api-assistant-launcher:hover,body[theme-mode='dark'] .xr-api-assistant-launcher:hover{background:rgba(17,24,39,.96);border-color:#2dd4bf}html.dark .xr-api-assistant-launcher-copy small,body[theme-mode='dark'] .xr-api-assistant-launcher-copy small{color:#94a3b8}",
       "html.dark .xr-api-assistant-docked .xr-api-assistant-launcher,body[theme-mode='dark'] .xr-api-assistant-docked .xr-api-assistant-launcher{background:transparent;border-color:transparent;box-shadow:none;color:inherit}html.dark .xr-api-assistant-docked .xr-api-assistant-launcher:hover,body[theme-mode='dark'] .xr-api-assistant-docked .xr-api-assistant-launcher:hover{background:var(--semi-color-fill-1,rgba(255,255,255,.08));border-color:transparent}",
       ".xr-api-assistant-open #xr-api-assistant-root:not(.xr-api-assistant-docked) .xr-api-assistant-launcher{display:none}",
-      ".xr-api-assistant-panel{position:fixed;right:20px;top:64px;bottom:20px;z-index:2147483000;width:min(520px,calc(100vw - 40px));background:#ffffff;border:1px solid #d1d5db;border-radius:12px;box-shadow:0 28px 90px rgba(15,23,42,.26);display:flex;flex-direction:column;overflow:hidden}",
+      ".xr-api-assistant-panel{position:fixed;right:22px;top:96px;bottom:auto;z-index:2147483000;width:min(440px,calc(100vw - 44px));height:min(540px,calc(100vh - 132px));background:#ffffff;border:1px solid #d1d5db;border-radius:12px;box-shadow:0 28px 90px rgba(15,23,42,.26);display:flex;flex-direction:column;overflow:hidden}",
+      ".xr-api-assistant-panel[data-xr-route='home']{top:96px;width:min(400px,calc(100vw - 44px));height:min(320px,calc(100vh - 150px))}",
+      ".xr-api-assistant-panel[data-xr-route='codex']{top:108px;height:min(500px,calc(100vh - 220px))}",
+      ".xr-api-assistant-panel[data-xr-route='docs']{top:88px;width:min(420px,calc(100vw - 44px));height:min(540px,calc(100vh - 120px))}",
       ".xr-api-assistant-header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;border-bottom:1px solid #e5e7eb;background:#ffffff;flex:0 0 auto}",
       ".xr-api-assistant-title{display:flex;align-items:center;gap:11px;min-width:0}.xr-api-assistant-title strong{display:block;font-size:15px;line-height:1.2;color:#111827}.xr-api-assistant-title span:last-child{display:block;margin-top:3px;font-size:12px;color:#6b7280;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:350px}",
       ".xr-api-assistant-close{display:grid;place-items:center;width:34px;height:34px;border:1px solid #e5e7eb;border-radius:8px;background:#ffffff;color:#374151;font-size:22px;line-height:1;cursor:pointer;flex:0 0 auto}.xr-api-assistant-close:hover{background:#f9fafb;border-color:#d1d5db}",
@@ -3291,7 +3335,7 @@
       "#xr-api-operation-layer{position:fixed;inset:0;z-index:2147482999;pointer-events:none;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif}.xr-api-operation-backdrop{position:absolute;inset:0;background:rgba(2,6,23,.2);backdrop-filter:saturate(1.1)}.xr-api-operation-ring{position:absolute;border:3px solid #2563eb;border-radius:12px;box-shadow:0 0 0 9999px rgba(2,6,23,.18),0 0 0 7px rgba(37,99,235,.2),0 16px 48px rgba(15,23,42,.3);transition:left .28s ease,top .28s ease,width .28s ease,height .28s ease;animation:xrApiTargetPulse 1.15s ease-in-out infinite}.xr-api-operation-cursor{position:absolute;width:28px;height:28px;border-radius:999px;background:#ffffff;border:2px solid #2563eb;box-shadow:0 10px 24px rgba(15,23,42,.35);transition:left .28s ease,top .28s ease,transform .16s ease}.xr-api-operation-cursor::after{content:'';position:absolute;left:8px;top:8px;width:8px;height:8px;border-radius:999px;background:#2563eb}.xr-api-operation-cursor.is-clicking{transform:scale(.78)}.xr-api-operation-toast{position:absolute;max-width:min(300px,calc(100vw - 28px));border:1px solid #bfdbfe;border-radius:10px;background:#ffffff;color:#111827;padding:9px 11px;font-size:12px;font-weight:800;line-height:1.35;box-shadow:0 14px 36px rgba(15,23,42,.2);transition:left .28s ease,top .28s ease}",
       ".xr-api-assistant-typing{display:flex;gap:6px;align-items:center;width:auto}.xr-api-assistant-typing strong{font-size:12px;color:#6b7280;margin-right:2px}.xr-api-assistant-typing span{width:6px;height:6px;border-radius:50%;background:#6b7280;animation:xrApiTyping 1s infinite ease-in-out}.xr-api-assistant-typing span:nth-child(2){animation-delay:.15s}.xr-api-assistant-typing span:nth-child(3){animation-delay:.3s}@keyframes xrApiTyping{0%,80%,100%{opacity:.35;transform:translateY(0)}40%{opacity:1;transform:translateY(-3px)}}@keyframes xrApiTargetPulse{0%,100%{border-color:#2563eb}50%{border-color:#0ea5e9}}",
       "@media (prefers-reduced-motion:reduce){.xr-api-assistant-launcher,.xr-api-assistant-typing span,.xr-api-operation-ring{animation:none;transition:none}}",
-      "@media (max-width:640px){#xr-api-assistant-root:not(.xr-api-assistant-docked){right:12px;top:auto;bottom:12px}#xr-api-assistant-root:not(.xr-api-assistant-docked) .xr-api-assistant-launcher{width:52px;height:52px;min-width:52px;padding:6px;border-radius:999px}#xr-api-assistant-root:not(.xr-api-assistant-docked) .xr-api-assistant-launcher-copy{display:none}#xr-api-assistant-root:not(.xr-api-assistant-docked) .xr-api-assistant-launcher-icon{width:38px;height:38px}.xr-api-assistant-docked .xr-api-assistant-launcher{min-height:34px;padding:4px 8px 4px 4px}.xr-api-assistant-docked .xr-api-assistant-launcher-copy strong{font-size:12px}.xr-api-assistant-panel{left:0;right:0;top:auto;bottom:0;width:100%;height:min(78vh,660px);border-radius:14px 14px 0 0}.xr-api-assistant-header{padding:12px 14px}.xr-api-assistant-title span:last-child{max-width:190px}.xr-api-assistant-messages{padding:16px 12px}.xr-api-assistant-bubble{max-width:92%;font-size:13px}.xr-api-assistant-form{padding:12px}.xr-api-assistant-row{grid-template-columns:42px 1fr}.xr-api-assistant-submit{grid-column:1 / -1;width:100%}.xr-api-assistant-actions button{flex:1 1 calc(50% - 8px)}}",
+      "@media (max-width:640px){#xr-api-assistant-root:not(.xr-api-assistant-docked){right:12px;top:auto!important;bottom:12px}#xr-api-assistant-root:not(.xr-api-assistant-docked) .xr-api-assistant-launcher{width:52px;height:52px;min-width:52px;padding:6px;border-radius:999px}#xr-api-assistant-root:not(.xr-api-assistant-docked) .xr-api-assistant-launcher-copy{display:none}#xr-api-assistant-root:not(.xr-api-assistant-docked) .xr-api-assistant-launcher-icon{width:38px;height:38px}.xr-api-assistant-docked .xr-api-assistant-launcher{min-height:34px;padding:4px 8px 4px 4px}.xr-api-assistant-docked .xr-api-assistant-launcher-copy strong{font-size:12px}.xr-api-assistant-panel,.xr-api-assistant-panel[data-xr-route]{left:0;right:0;top:auto;bottom:0;width:100%;height:min(72vh,620px);border-radius:14px 14px 0 0}.xr-api-assistant-header{padding:12px 14px}.xr-api-assistant-title span:last-child{max-width:190px}.xr-api-assistant-messages{padding:16px 12px}.xr-api-assistant-bubble{max-width:92%;font-size:13px}.xr-api-assistant-form{padding:12px}.xr-api-assistant-row{grid-template-columns:42px 1fr}.xr-api-assistant-submit{grid-column:1 / -1;width:100%}.xr-api-assistant-actions button{flex:1 1 calc(50% - 8px)}}",
     ].join("");
     document.head.appendChild(style);
   }
