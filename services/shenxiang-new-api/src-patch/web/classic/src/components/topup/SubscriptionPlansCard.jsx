@@ -41,11 +41,11 @@ import {
 const { Text } = Typography;
 
 const MONTHLY_TEXT_VALUE_MULTIPLIER_BY_PLAN_ID = {
-  2: 1.5,
-  3: 1.7,
+  2: 1.8,
+  3: 1.9,
   4: 2.0,
-  5: 2.1,
-  6: 2.2,
+  5: 2.05,
+  6: 2.08,
 };
 const OPENAI_INPUT_EQUIVALENT_USD_PER_TEXT_CNY = 165.31 / 180;
 
@@ -113,17 +113,23 @@ function getPlanTextMultiplier(plan) {
     return MONTHLY_TEXT_VALUE_MULTIPLIER_BY_PLAN_ID[id];
   }
   const price = Number(plan?.price_amount || 0);
-  if (price >= 1000) return 2.2;
-  if (price >= 500) return 2.1;
+  if (price >= 1000) return 2.08;
+  if (price >= 500) return 2.05;
   if (price >= 300) return 2.0;
-  if (price >= 200) return 1.7;
-  if (price >= 100) return 1.5;
+  if (price >= 200) return 1.9;
+  if (price >= 100) return 1.8;
   return 1.8;
+}
+
+function formatMultiplierText(value) {
+  if (!Number.isFinite(value)) return '1.0x';
+  const fixed = value.toFixed(2);
+  return `${fixed.replace(/\.?0+$/, '')}x`;
 }
 
 function getPlanPositioning(plan, t) {
   const price = Number(plan?.price_amount || 0);
-  if (Math.round(price) === 300) return t('个人首选，性价比最高');
+  if (Math.round(price) === 300) return t('最多人选择');
   if (price >= 1000) return t('团队容量，最高总额度');
   if (price >= 500) return t('重度用户，更高并发');
   if (price >= 200) return t('日常稳定，比入门更划算');
@@ -139,7 +145,7 @@ function getPlanQuotaSummary(plan) {
     priceText: formatCnyAmount(price),
     quotaText: renderQuota(baseQuota, 2),
     textMultiplier,
-    multiplierText: `${textMultiplier.toFixed(1)}x`,
+    multiplierText: formatMultiplierText(textMultiplier),
     textQuotaText: renderQuota(textQuota, 2),
     openAIInputEquivalentText: formatUsdAmount(
       price * textMultiplier * OPENAI_INPUT_EQUIVALENT_USD_PER_TEXT_CNY,
@@ -183,7 +189,7 @@ function MonthlyCardValueGuide({ t, plans = [] }) {
                   <Text strong>{plan.title}</Text>
                   {Number(plan?.price_amount || 0) === 300 && (
                     <Tag color='purple' shape='circle' size='small'>
-                      {t('个人推荐')}
+                      {t('最多人选择')}
                     </Tag>
                   )}
                 </div>
@@ -694,7 +700,7 @@ const SubscriptionPlansCard = ({
                           <div className='mb-2'>
                             <Tag color='blue' shape='circle' size='small'>
                               <Sparkles size={10} className='mr-1' />
-                              {t('个人推荐')}
+                              {t('最多人选择')}
                             </Tag>
                           </div>
                         )}
@@ -733,7 +739,7 @@ const SubscriptionPlansCard = ({
                             </Tag>
                             {isPopular && (
                               <Tag color='green' shape='circle' size='small'>
-                                {t('个人性价比最高')}
+                                {t('最多人选择')}
                               </Tag>
                             )}
                             <Text type='tertiary' size='small'>

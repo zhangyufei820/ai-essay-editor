@@ -36,11 +36,19 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertNotIn("gpt-image-2-4K", self.module.CODEX_ALLOWED_MODELS)
 
     def test_ensure_codex_image_model_limits_adds_only_public_15k_image_model(self) -> None:
-        raw = "gpt-5.4-mini,gpt-image-2-4K,geek2api-image-2,banana-2"
+        raw = "gpt-5.4-mini,gpt-image-2-4K,geek2api-image-2,banana-2,claude-opus-4-8,seedance-2.0-cl-mini"
 
         self.assertEqual(
             self.module.ensure_codex_image_model_limits(raw),
             "gpt-5.4-mini,image 2电商商品图快速通道(1.5K)",
+        )
+
+    def test_ensure_codex_image_model_limits_defaults_empty_to_text_and_image(self) -> None:
+        raw = "claude-opus-4-8,seedance-2.0-cl-mini"
+
+        self.assertEqual(
+            self.module.ensure_codex_image_model_limits(raw),
+            "gpt-5.5,image 2电商商品图快速通道(1.5K)",
         )
 
     def test_supplier_exposed_model_limit_predicate_covers_known_markers(self) -> None:
@@ -129,10 +137,12 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         def fake_mysql(query: str) -> list[list[str]]:
             self.assertIn("user_id <> 1", query)
             self.assertIn("name LIKE '星人Codex %'", query)
+            self.assertNotIn("model_limits_enabled = 1", query)
             return [
-                ["101", "gpt-5.5"],
-                ["102", "gpt-5.4-mini,gpt-image-2-4K,geek2api-image-2"],
-                ["103", "gpt-5.5,image 2电商商品图快速通道(1.5K)"],
+                ["101", "gpt-5.5", "1"],
+                ["102", "gpt-5.4-mini,gpt-image-2-4K,geek2api-image-2,claude-opus-4-8,seedance-2.0-cl-mini", "1"],
+                ["103", "gpt-5.5,image 2电商商品图快速通道(1.5K)", "1"],
+                ["104", "", "0"],
             ]
 
         self.module.mysql = fake_mysql
@@ -141,14 +151,18 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         result = self.module.sync_user_codex_tokens()
 
         sql = "\n".join(captured)
-        self.assertEqual(result, {"tokens_rewritten": 2})
+        self.assertEqual(result, {"tokens_rewritten": 3})
         self.assertIn("WHERE id = '101'", sql)
         self.assertIn("WHERE id = '102'", sql)
         self.assertNotIn("WHERE id = '103'", sql)
+        self.assertIn("WHERE id = '104'", sql)
+        self.assertIn("model_limits_enabled = 1", sql)
         self.assertIn("gpt-5.5,image 2电商商品图快速通道(1.5K)", sql)
         self.assertIn("gpt-5.4-mini,image 2电商商品图快速通道(1.5K)", sql)
         self.assertNotIn("geek2api-image-2", sql)
         self.assertNotIn("gpt-image-2-4K", sql)
+        self.assertNotIn("claude-opus-4-8", sql)
+        self.assertNotIn("seedance-2.0-cl-mini", sql)
 
     def test_sync_supplier_safe_public_metadata_removes_supplier_price_keys(self) -> None:
         captured_options: dict[str, dict[str, float]] = {}

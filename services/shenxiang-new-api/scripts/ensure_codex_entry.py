@@ -616,15 +616,14 @@ def is_codex_disallowed_image_model(model: str) -> bool:
 
 
 def sanitize_codex_token_models(models: list[str]) -> list[str]:
-    return [
-        model
-        for model in sanitize_token_models(models)
-        if not is_codex_disallowed_image_model(model)
-    ]
+    allowed = {"gpt-5.5", "gpt-5.4", "gpt-5.4-mini", CODEX_IMAGE_15K_MODEL}
+    return [model for model in sanitize_token_models(models) if model in allowed]
 
 
 def ensure_codex_image_model_limits(raw: str) -> str:
     models = sanitize_codex_token_models(raw.split(","))
+    if not models:
+        models.append("gpt-5.5")
     if CODEX_IMAGE_15K_MODEL not in models:
         models.append(CODEX_IMAGE_15K_MODEL)
     return ",".join(models)
@@ -770,8 +769,8 @@ def enforce_gpt_image2_route_db_guard(app_root: Path) -> dict[str, int]:
     ]
     codex_token_rows = mysql_exec(
         app_root,
-        "SELECT id, COALESCE(model_limits, '') FROM tokens "
-        "WHERE deleted_at IS NULL AND model_limits_enabled = 1 "
+        "SELECT id, COALESCE(model_limits, ''), COALESCE(model_limits_enabled, 0) FROM tokens "
+        "WHERE deleted_at IS NULL "
         "AND (" + " OR ".join(codex_name_predicates) + ") "
         "AND user_id <> "
         + str(ADMIN_SYSTEM_TOKEN_USER_ID)
@@ -781,12 +780,15 @@ def enforce_gpt_image2_route_db_guard(app_root: Path) -> dict[str, int]:
     for row in codex_token_rows:
         if "\t" not in row:
             continue
-        token_id, raw_limits = row.split("\t", 1)
+        parts = row.split("\t")
+        if len(parts) != 3:
+            continue
+        token_id, raw_limits, raw_enabled = parts
         token_id = token_id.strip()
         if not token_id.isdigit():
             continue
         next_limits = ensure_codex_image_model_limits(raw_limits)
-        if next_limits != raw_limits:
+        if next_limits != raw_limits or raw_enabled != "1":
             codex_token_updates.append((token_id, next_limits))
 
     statements = ["START TRANSACTION;"]
@@ -818,7 +820,7 @@ def enforce_gpt_image2_route_db_guard(app_root: Path) -> dict[str, int]:
         )
     for token_id, next_limits in codex_token_updates:
         statements.append(
-            "UPDATE tokens SET model_limits = "
+            "UPDATE tokens SET model_limits_enabled = 1, model_limits = "
             + sql_quote(next_limits)
             + " WHERE id = "
             + sql_quote(token_id)

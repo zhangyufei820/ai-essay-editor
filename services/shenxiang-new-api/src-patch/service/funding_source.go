@@ -1,6 +1,7 @@
 package service
 
 import (
+	"errors"
 	"time"
 
 	"github.com/QuantumNous/new-api/model"
@@ -121,19 +122,27 @@ func (s *SubscriptionFunding) PreConsume(_ int) error {
 	s.AmountUsedAfter = res.AmountUsedAfter
 	s.MonthlyAmountTotal = res.MonthlyAmountTotal
 	s.MonthlyAmountUsedAfter = res.MonthlyAmountUsedAfter
-	// 获取订阅计划信息
-	if planInfo, err := model.GetSubscriptionPlanInfoByUserSubscriptionId(res.UserSubscriptionId); err == nil && planInfo != nil {
-		s.PlanId = planInfo.PlanId
-		s.PlanTitle = planInfo.PlanTitle
-		s.ConcurrencyLimit = planInfo.ConcurrencyLimit
-		if s.ConcurrencyLimit > 0 {
-			release, err := acquireSubscriptionConcurrency(s.subscriptionId, s.ConcurrencyLimit)
-			if err != nil {
-				_ = model.RefundSubscriptionPreConsume(s.requestId)
-				return &model.SubscriptionLimitError{Reason: "concurrency"}
-			}
-			s.releaseConcurrency = release
+	// 获取订阅计划信息。月卡文本折扣结算依赖 PlanId/PlanTitle；读取失败时必须退回预扣，
+	// 不能静默继续，否则后结算可能按原价补扣。
+	planInfo, err := model.GetSubscriptionPlanInfoByUserSubscriptionId(res.UserSubscriptionId)
+	if err != nil {
+		_ = model.RefundSubscriptionPreConsume(s.requestId)
+		return err
+	}
+	if planInfo == nil {
+		_ = model.RefundSubscriptionPreConsume(s.requestId)
+		return errors.New("subscription plan info is missing")
+	}
+	s.PlanId = planInfo.PlanId
+	s.PlanTitle = planInfo.PlanTitle
+	s.ConcurrencyLimit = planInfo.ConcurrencyLimit
+	if s.ConcurrencyLimit > 0 {
+		release, err := acquireSubscriptionConcurrency(s.subscriptionId, s.ConcurrencyLimit)
+		if err != nil {
+			_ = model.RefundSubscriptionPreConsume(s.requestId)
+			return &model.SubscriptionLimitError{Reason: "concurrency"}
 		}
+		s.releaseConcurrency = release
 	}
 	return nil
 }

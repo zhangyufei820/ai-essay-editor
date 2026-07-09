@@ -219,11 +219,19 @@ API.get('/api/user/models');
         )
 
     def test_ensure_codex_image_model_limits_adds_only_public_15k_image_model(self) -> None:
-        raw = "gpt-5.4-mini,gpt-image-2-4K,geek2api-image-2,banana-2"
+        raw = "gpt-5.4-mini,gpt-image-2-4K,geek2api-image-2,banana-2,claude-opus-4-8,seedance-2.0-cl-mini"
 
         self.assertEqual(
             self.module.ensure_codex_image_model_limits(raw),
             "gpt-5.4-mini,image 2电商商品图快速通道(1.5K)",
+        )
+
+    def test_ensure_codex_image_model_limits_defaults_empty_to_text_and_image(self) -> None:
+        raw = "claude-opus-4-8,seedance-2.0-cl-mini"
+
+        self.assertEqual(
+            self.module.ensure_codex_image_model_limits(raw),
+            "gpt-5.5,image 2电商商品图快速通道(1.5K)",
         )
 
     def test_supplier_exposed_model_limit_predicate_covers_known_markers(self) -> None:

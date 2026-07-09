@@ -23,15 +23,15 @@ var defaultMonthlyCardTextTier = monthlyCardTextTier{
 }
 
 var monthlyCardTextTiersByPlanId = map[int]monthlyCardTextTier{
-	2: {Numerator: 3, Denominator: 2, Multiplier: 1.5},
-	3: {Numerator: 17, Denominator: 10, Multiplier: 1.7},
+	2: {Numerator: 9, Denominator: 5, Multiplier: 1.8},
+	3: {Numerator: 19, Denominator: 10, Multiplier: 1.9},
 	4: {Numerator: 2, Denominator: 1, Multiplier: 2.0},
-	5: {Numerator: 21, Denominator: 10, Multiplier: 2.1},
-	6: {Numerator: 11, Denominator: 5, Multiplier: 2.2},
+	5: {Numerator: 41, Denominator: 20, Multiplier: 2.05},
+	6: {Numerator: 52, Denominator: 25, Multiplier: 2.08},
 }
 
 var monthlyCardAllowedModels = []string{
-	"gpt-image-2-4K",
+	model.ImageBenefitModelName,
 	"gpt-5.5",
 	"gpt-5.4-mini",
 	"gpt-5.3-codex-spark",
