@@ -248,6 +248,36 @@ API.get('/api/user/models');
         self.assertNotIn("gpt-image-2\":0.2", sql)
         self.assertNotIn("dragtokens", sql)
 
+    def test_api_teacher_launcher_is_docked_in_top_navigation(self) -> None:
+        source_root = SCRIPT_PATH.parent.parent
+        candidates = [
+            source_root / "src-patch/web/xingren-api-onboarding-assistant.js",
+            source_root / "web/xingren-api-onboarding-assistant.js",
+        ]
+        assistant = next((path for path in candidates if path.exists()), candidates[0])
+        source = assistant.read_text(encoding="utf-8")
+
+        self.assertIn("function findDockTargetNav()", source)
+        self.assertIn("function navIsVisible(nav)", source)
+        self.assertIn('document.querySelectorAll("header nav")', source)
+        self.assertIn('style.display === "none"', source)
+        self.assertIn("rect.width > 0 && rect.height > 0", source)
+        self.assertIn("function undockRoot(root)", source)
+        self.assertIn("function refreshDockRoot(root)", source)
+        self.assertIn("function startDockKeepAlive()", source)
+        self.assertIn('root.classList.remove("xr-api-assistant-docked")', source)
+        self.assertIn('window.addEventListener("resize"', source)
+        self.assertIn("nav.insertBefore(root, nav.firstChild)", source)
+        self.assertIn('root.classList.add("xr-api-assistant-docked")', source)
+        self.assertIn('root.setAttribute("data-xr-docked", "top-nav")', source)
+        self.assertIn("#xr-api-assistant-root.xr-api-assistant-docked", source)
+        self.assertIn(".xr-api-assistant-panel{position:fixed;right:20px;top:64px;bottom:20px;z-index:2147483000", source)
+        self.assertIn(
+            ".xr-api-assistant-open #xr-api-assistant-root:not(.xr-api-assistant-docked) .xr-api-assistant-launcher",
+            source,
+        )
+        self.assertIn("#xr-api-assistant-root:not(.xr-api-assistant-docked){right:12px;top:auto;bottom:12px}", source)
+
 
 if __name__ == "__main__":
     unittest.main()
