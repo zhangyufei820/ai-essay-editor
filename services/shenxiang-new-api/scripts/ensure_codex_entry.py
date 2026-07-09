@@ -21,6 +21,22 @@ SOURCE_ROOT_MARKERS = (
 )
 RAW_GPT_IMAGE2_MODEL = "gpt-image-2"
 GPT_IMAGE2_PRODUCT_MODEL = "gpt-image-2-4K"
+CODEX_IMAGE_15K_MODEL = "image 2电商商品图快速通道(1.5K)"
+CODEX_TOKEN_NAMES = ("星人 Codex 文本令牌", "星人 Codex 自动令牌")
+USER_CODEX_TOKEN_NAME_PREFIXES = ("星人Codex ",)
+ADMIN_SYSTEM_TOKEN_USER_ID = 1
+SUPPLIER_EXPOSED_MODELS = {
+    "geek2api-image-2",
+}
+SUPPLIER_EXPOSED_MARKERS = (
+    "ccapi",
+    "drag tokens",
+    "dragtokens",
+    "geek2api",
+    "moonapix",
+    "relay dance",
+    "relaydance",
+)
 DISABLED_GPT_IMAGE2_ABILITY_PAIRS = (
     ("12", GPT_IMAGE2_PRODUCT_MODEL),
     ("21", RAW_GPT_IMAGE2_MODEL),
@@ -553,6 +569,8 @@ def sanitize_token_models(models: list[str]) -> list[str]:
         if not model:
             continue
         model = TOKEN_MODEL_REPLACEMENTS.get(model, model)
+        if is_supplier_exposed_model(model):
+            continue
         if model in seen:
             continue
         seen.add(model)
@@ -562,6 +580,61 @@ def sanitize_token_models(models: list[str]) -> list[str]:
 
 def sanitize_model_limits(raw: str) -> str:
     return ",".join(sanitize_token_models(raw.split(",")))
+
+
+def is_codex_disallowed_image_model(model: str) -> bool:
+    normalized = model.strip().lower()
+    if model == CODEX_IMAGE_15K_MODEL:
+        return False
+    return (
+        normalized.startswith("gpt-image-")
+        or normalized.startswith("dall-e-")
+        or normalized.startswith("imagen-")
+        or normalized.startswith("banana-")
+        or normalized.startswith("grok-imagine-image")
+        or normalized.startswith("image 2")
+        or "image-preview" in normalized
+    )
+
+
+def sanitize_codex_token_models(models: list[str]) -> list[str]:
+    return [
+        model
+        for model in sanitize_token_models(models)
+        if not is_codex_disallowed_image_model(model)
+    ]
+
+
+def ensure_codex_image_model_limits(raw: str) -> str:
+    models = sanitize_codex_token_models(raw.split(","))
+    if CODEX_IMAGE_15K_MODEL not in models:
+        models.append(CODEX_IMAGE_15K_MODEL)
+    return ",".join(models)
+
+
+def is_supplier_exposed_model(model: str) -> bool:
+    normalized = model.strip().lower()
+    if normalized in SUPPLIER_EXPOSED_MODELS:
+        return True
+    return any(marker in normalized for marker in SUPPLIER_EXPOSED_MARKERS)
+
+
+def supplier_exposed_model_limit_predicate() -> str:
+    terms = [RAW_GPT_IMAGE2_MODEL, *SUPPLIER_EXPOSED_MARKERS]
+    clauses = [
+        "COALESCE(model_limits, '') LIKE " + sql_quote(f"%{term}%")
+        for term in terms
+    ]
+    return " OR ".join(clauses)
+
+
+def supplier_exposed_model_name_predicate(column: str = "model") -> str:
+    terms = [*SUPPLIER_EXPOSED_MODELS, *SUPPLIER_EXPOSED_MARKERS]
+    clauses = [
+        f"COALESCE({column}, '') LIKE " + sql_quote(f"%{term}%")
+        for term in terms
+    ]
+    return " OR ".join(clauses)
 
 
 def mysql_count(app_root: Path, query: str) -> int:
@@ -585,13 +658,26 @@ def enforce_gpt_image2_route_db_guard(app_root: Path) -> dict[str, int]:
             + ";",
         )
 
+    result["supplier_exposed_abilities"] = mysql_count(
+        app_root,
+        "SELECT COUNT(*) FROM abilities WHERE enabled = 1 AND ("
+        + supplier_exposed_model_name_predicate("model")
+        + ");",
+    )
+    result["supplier_exposed_models"] = mysql_count(
+        app_root,
+        "SELECT COUNT(*) FROM models WHERE deleted_at IS NULL AND status = 1 AND ("
+        + supplier_exposed_model_name_predicate("model_name")
+        + ");",
+    )
+
     token_rows = mysql_exec(
         app_root,
         "SELECT id, COALESCE(model_limits, '') FROM tokens "
         "WHERE deleted_at IS NULL AND model_limits_enabled = 1 "
-        "AND COALESCE(model_limits, '') LIKE "
-        + sql_quote(f"%{RAW_GPT_IMAGE2_MODEL}%")
-        + ";",
+        "AND ("
+        + supplier_exposed_model_limit_predicate()
+        + ");",
     ).splitlines()
     token_updates: list[tuple[str, str]] = []
     for row in token_rows:
@@ -605,6 +691,34 @@ def enforce_gpt_image2_route_db_guard(app_root: Path) -> dict[str, int]:
         if next_limits != raw_limits:
             token_updates.append((token_id, next_limits))
 
+    codex_name_predicates = [
+        "name IN (" + ", ".join(sql_quote(name) for name in CODEX_TOKEN_NAMES) + ")",
+        *[
+            "name LIKE " + sql_quote(prefix + "%")
+            for prefix in USER_CODEX_TOKEN_NAME_PREFIXES
+        ],
+    ]
+    codex_token_rows = mysql_exec(
+        app_root,
+        "SELECT id, COALESCE(model_limits, '') FROM tokens "
+        "WHERE deleted_at IS NULL AND model_limits_enabled = 1 "
+        "AND (" + " OR ".join(codex_name_predicates) + ") "
+        "AND user_id <> "
+        + str(ADMIN_SYSTEM_TOKEN_USER_ID)
+        + ";",
+    ).splitlines()
+    codex_token_updates: list[tuple[str, str]] = []
+    for row in codex_token_rows:
+        if "\t" not in row:
+            continue
+        token_id, raw_limits = row.split("\t", 1)
+        token_id = token_id.strip()
+        if not token_id.isdigit():
+            continue
+        next_limits = ensure_codex_image_model_limits(raw_limits)
+        if next_limits != raw_limits:
+            codex_token_updates.append((token_id, next_limits))
+
     statements = ["START TRANSACTION;"]
     for channel_id, model in DISABLED_GPT_IMAGE2_ABILITY_PAIRS:
         statements.append(
@@ -614,7 +728,25 @@ def enforce_gpt_image2_route_db_guard(app_root: Path) -> dict[str, int]:
             + sql_quote(model)
             + ";"
         )
+    statements.append(
+        "UPDATE abilities SET enabled = 0 WHERE "
+        + supplier_exposed_model_name_predicate("model")
+        + ";"
+    )
+    statements.append(
+        "UPDATE models SET status = 0 WHERE deleted_at IS NULL AND "
+        + supplier_exposed_model_name_predicate("model_name")
+        + ";"
+    )
     for token_id, next_limits in token_updates:
+        statements.append(
+            "UPDATE tokens SET model_limits = "
+            + sql_quote(next_limits)
+            + " WHERE id = "
+            + sql_quote(token_id)
+            + ";"
+        )
+    for token_id, next_limits in codex_token_updates:
         statements.append(
             "UPDATE tokens SET model_limits = "
             + sql_quote(next_limits)
@@ -625,6 +757,7 @@ def enforce_gpt_image2_route_db_guard(app_root: Path) -> dict[str, int]:
     statements.append("COMMIT;")
     mysql_exec(app_root, "\n".join(statements))
     result["tokens_rewritten"] = len(token_updates)
+    result["codex_tokens_rewritten"] = len(codex_token_updates)
     return result
 
 

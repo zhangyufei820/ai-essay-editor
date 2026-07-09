@@ -157,29 +157,6 @@ const IMAGE_MODELS = [
     hint: '适合高质量海报、产品图和商品素材。官方最大边 3840，4K 横竖图使用 3840x2160 / 2160x3840，可自定义合法 WxH。',
   },
   {
-    value: 'geek2api-image-2',
-    label: '星人 Image 2',
-    badge: '4K',
-    vendor: '星人图像',
-    sizes: OPENAI_IMAGE_ASPECT_RATIOS,
-    aspectRatios: OPENAI_IMAGE_ASPECT_RATIOS,
-    resolutions: GPT_IMAGE_2_RESOLUTIONS,
-    qualities: ['auto', 'low', 'medium', 'high'],
-    formats: ['png', 'jpeg', 'webp'],
-    defaultSize: '1:1',
-    defaultResolution: '1K',
-    defaultQuality: 'high',
-    maxCount: 4,
-    countParam: 'n',
-    sizeParam: 'size',
-    backgroundOptions: ['auto', 'opaque'],
-    edit: true,
-    statusLabel: '稳定',
-    priceLabel: '1K ¥0.03 / 2K ¥0.06 / 4K ¥0.10',
-    billingLabel: '按张计费',
-    hint: '星人 Image 2：按 OpenAI gpt-image-2 约束提交，最大边 3840，4K 横竖图使用 3840x2160 / 2160x3840，可自定义合法 WxH。',
-  },
-  {
     value: 'banana-2',
     label: 'Banana 2',
     badge: '4K',
@@ -482,7 +459,6 @@ function isGoogleImageEditModel(model) {
 function isGptImage2Model(model) {
   return (
     model === 'gpt-image-2-4K' ||
-    model === 'geek2api-image-2' ||
     model === 'image 2电商商品图快速通道(1.5K)'
   );
 }
@@ -1162,8 +1138,6 @@ function userFacingGenerationError(error) {
     lower.includes('provider') ||
     lower.includes('supplier') ||
     lower.includes('channel') ||
-    lower.includes('dragtokens') ||
-    lower.includes('relaydance') ||
     String(message).includes('上游') ||
     String(message).includes('供应商') ||
     String(message).includes('渠道')

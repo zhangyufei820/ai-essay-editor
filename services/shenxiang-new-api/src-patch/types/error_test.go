@@ -46,3 +46,26 @@ func TestPublicMessageKeepsLocalQuotaMessage(t *testing.T) {
 		t.Fatalf("PublicMessage() = %q, want %q", got, want)
 	}
 }
+
+func TestPublicMessageHidesSupplierNames(t *testing.T) {
+	for _, message := range []string{
+		"geek2api-image-2 upstream rejected request",
+		"ccapi provider returned invalid response",
+		"moonapix balance_not_enough",
+		"dragtokens temporary error",
+	} {
+		err := WithOpenAIError(OpenAIError{
+			Message: message,
+			Type:    "upstream_error",
+			Code:    "bad_response",
+		}, http.StatusBadGateway)
+
+		publicErr := err.ToPublicOpenAIError("req-test")
+		if got, want := publicErr.Message, "模型服务暂时不可用，请稍后重试。 (request id: req-test)"; got != want {
+			t.Fatalf("Message for %q = %q, want %q", message, got, want)
+		}
+		if publicErr.Code == "bad_response" {
+			t.Fatalf("Code for %q = %v, want sanitized service_unavailable", message, publicErr.Code)
+		}
+	}
+}

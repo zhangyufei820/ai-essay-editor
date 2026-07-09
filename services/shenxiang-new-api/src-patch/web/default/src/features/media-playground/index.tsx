@@ -266,8 +266,6 @@ function userFacingGenerationError(error: unknown) {
     lower.includes('provider') ||
     lower.includes('supplier') ||
     lower.includes('channel') ||
-    lower.includes('dragtokens') ||
-    lower.includes('relaydance') ||
     message.includes('上游') ||
     message.includes('供应商') ||
     message.includes('渠道')

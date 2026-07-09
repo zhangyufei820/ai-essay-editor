@@ -91,6 +91,22 @@ func TestRejectImageModelTextEndpointRequestRejectsResponses(t *testing.T) {
 	}
 }
 
+func TestRejectImageModelTextEndpointRequestHidesSupplierModelName(t *testing.T) {
+	err := rejectImageModelTextEndpointRequest(
+		types.RelayFormatOpenAIResponses,
+		&dto.OpenAIResponsesRequest{Model: "geek2api-image-2"},
+	)
+	if err == nil {
+		t.Fatal("rejectImageModelTextEndpointRequest() = nil, want image model rejection")
+	}
+	if strings.Contains(err.Error(), "geek2api") {
+		t.Fatalf("error = %q, want no supplier model name", err.Error())
+	}
+	if !strings.Contains(err.Error(), "/v1/images/generations") || !strings.Contains(err.Error(), "/v1/images/edits") {
+		t.Fatalf("error = %q, want image endpoint hints", err.Error())
+	}
+}
+
 func TestRejectImageModelTextEndpointRequestRejectsChat(t *testing.T) {
 	err := rejectImageModelTextEndpointRequest(
 		types.RelayFormatOpenAI,

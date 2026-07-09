@@ -19,9 +19,23 @@ TOKEN_PROFILES = {
     "image": ("星人图像生成令牌",),
     "video": ("星人视频生成令牌",),
 }
+USER_CODEX_TOKEN_NAME_PREFIXES = ("星人Codex ",)
 
 RAW_GPT_IMAGE2_MODEL = "gpt-image-2"
 GPT_IMAGE2_PRODUCT_MODEL = "gpt-image-2-4K"
+CODEX_IMAGE_15K_MODEL = "image 2电商商品图快速通道(1.5K)"
+SUPPLIER_EXPOSED_MODELS = {
+    "geek2api-image-2",
+}
+SUPPLIER_EXPOSED_MARKERS = (
+    "ccapi",
+    "drag tokens",
+    "dragtokens",
+    "geek2api",
+    "moonapix",
+    "relay dance",
+    "relaydance",
+)
 DISABLED_ABILITY_PAIRS = {
     ("12", GPT_IMAGE2_PRODUCT_MODEL),
     ("21", RAW_GPT_IMAGE2_MODEL),
@@ -30,7 +44,7 @@ TOKEN_MODEL_REPLACEMENTS = {
     RAW_GPT_IMAGE2_MODEL: GPT_IMAGE2_PRODUCT_MODEL,
 }
 
-CODEX_ALLOWED_MODELS = ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini"]
+CODEX_ALLOWED_MODELS = ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini", CODEX_IMAGE_15K_MODEL]
 CODEX_DEFAULT_MODEL = "gpt-5.5"
 CODEX_CHAT_FALLBACK_MODEL = "gpt-5.4-mini"
 PUBLIC_SEEDANCE_VIDEO_MODELS = [
@@ -119,6 +133,8 @@ def sanitize_token_models(models: list[str]) -> list[str]:
         if not model:
             continue
         model = TOKEN_MODEL_REPLACEMENTS.get(model, model)
+        if is_supplier_exposed_model(model):
+            continue
         if model in seen:
             continue
         seen.add(model)
@@ -128,6 +144,61 @@ def sanitize_token_models(models: list[str]) -> list[str]:
 
 def sanitize_model_limits(raw: str) -> str:
     return ",".join(sanitize_token_models(raw.split(",")))
+
+
+def is_codex_disallowed_image_model(model: str) -> bool:
+    normalized = model.strip().lower()
+    if model == CODEX_IMAGE_15K_MODEL:
+        return False
+    return (
+        normalized.startswith("gpt-image-")
+        or normalized.startswith("dall-e-")
+        or normalized.startswith("imagen-")
+        or normalized.startswith("banana-")
+        or normalized.startswith("grok-imagine-image")
+        or normalized.startswith("image 2")
+        or "image-preview" in normalized
+    )
+
+
+def sanitize_codex_token_models(models: list[str]) -> list[str]:
+    return [
+        model
+        for model in sanitize_token_models(models)
+        if not is_codex_disallowed_image_model(model)
+    ]
+
+
+def ensure_codex_image_model_limits(raw: str) -> str:
+    models = sanitize_codex_token_models(raw.split(","))
+    if CODEX_IMAGE_15K_MODEL not in models:
+        models.append(CODEX_IMAGE_15K_MODEL)
+    return ",".join(models)
+
+
+def is_supplier_exposed_model(model: str) -> bool:
+    normalized = model.strip().lower()
+    if normalized in SUPPLIER_EXPOSED_MODELS:
+        return True
+    return any(marker in normalized for marker in SUPPLIER_EXPOSED_MARKERS)
+
+
+def supplier_exposed_model_limit_predicate() -> str:
+    terms = [RAW_GPT_IMAGE2_MODEL, *SUPPLIER_EXPOSED_MARKERS]
+    clauses = [
+        "COALESCE(model_limits, '') LIKE " + sql_quote(f"%{term}%")
+        for term in terms
+    ]
+    return " OR ".join(clauses)
+
+
+def supplier_exposed_model_name_predicate(column: str = "model") -> str:
+    terms = [*SUPPLIER_EXPOSED_MODELS, *SUPPLIER_EXPOSED_MARKERS]
+    clauses = [
+        f"COALESCE({column}, '') LIKE " + sql_quote(f"%{term}%")
+        for term in terms
+    ]
+    return " OR ".join(clauses)
 
 
 def is_disabled_ability_pair(channel_id: str, model: str) -> bool:
@@ -229,6 +300,8 @@ def model_lists() -> dict[str, list[str]]:
             append_model("video", model)
             continue
         if "image" in tags:
+            if is_supplier_exposed_model(model):
+                continue
             append_model("image", model)
             continue
         if "claude" in tags or model.startswith("claude-"):
@@ -236,7 +309,7 @@ def model_lists() -> dict[str, list[str]]:
             continue
         if "text" in tags and ("openai" in tags or "codex" in tags or model.startswith("gpt-") or model == "codex-auto-review"):
             append_model("codex", model)
-    available_codex_models = set(profiles["codex"])
+    available_codex_models = set(profiles["codex"]) | set(profiles["image"])
     profiles["codex"] = [model for model in CODEX_ALLOWED_MODELS if model in available_codex_models]
     for model in PUBLIC_SEEDANCE_VIDEO_MODELS:
         if model not in profiles["video"]:
@@ -346,6 +419,43 @@ def sync_tokens(profiles: dict[str, list[str]]) -> None:
     mysql_exec("\n".join(statements))
 
 
+def sync_user_codex_tokens() -> dict[str, int]:
+    names = TOKEN_PROFILES["codex"]
+    name_predicates = [
+        "name IN (" + ", ".join(sql_quote(name) for name in names) + ")",
+        *[
+            "name LIKE " + sql_quote(prefix + "%")
+            for prefix in USER_CODEX_TOKEN_NAME_PREFIXES
+        ],
+    ]
+    token_rows = mysql(
+        "SELECT id, COALESCE(model_limits, '') FROM tokens "
+        "WHERE deleted_at IS NULL AND model_limits_enabled = 1 "
+        "AND (" + " OR ".join(name_predicates) + ") "
+        "AND user_id <> "
+        + str(ADMIN_SYSTEM_TOKEN_USER_ID)
+        + ";"
+    )
+    token_updates: list[tuple[str, str]] = []
+    for token_id, raw_limits in token_rows:
+        next_limits = ensure_codex_image_model_limits(raw_limits)
+        if next_limits != raw_limits:
+            token_updates.append((token_id, next_limits))
+
+    statements = ["START TRANSACTION;"]
+    for token_id, next_limits in token_updates:
+        statements.append(
+            "UPDATE tokens SET model_limits = "
+            + sql_quote(next_limits)
+            + " WHERE id = "
+            + sql_quote(token_id)
+            + ";"
+        )
+    statements.append("COMMIT;")
+    mysql_exec("\n".join(statements))
+    return {"tokens_rewritten": len(token_updates)}
+
+
 def sync_abilities() -> None:
     groups = active_groups()
     channel_rows = mysql(
@@ -356,10 +466,16 @@ def sync_abilities() -> None:
         ORDER BY id
         """
     )
-    existing_models = {row[0] for row in mysql("SELECT model_name FROM models WHERE deleted_at IS NULL AND status = 1")}
+    existing_models = {
+        row[0]
+        for row in mysql("SELECT model_name FROM models WHERE deleted_at IS NULL AND status = 1")
+        if not is_supplier_exposed_model(row[0])
+    }
     statements = ["START TRANSACTION;"]
     for channel_id, raw_models, priority, weight, tag in channel_rows:
         for model in [item.strip() for item in raw_models.split(",") if item.strip()]:
+            if is_supplier_exposed_model(model):
+                continue
             if model not in existing_models:
                 continue
             if is_disabled_ability_pair(channel_id, model):
@@ -395,12 +511,24 @@ def enforce_gpt_image2_db_guard() -> dict[str, int]:
             + ";"
         )
         disabled_ability_counts[f"channel_{channel_id}_{model}"] = int(rows[0][0]) if rows else 0
+    supplier_ability_rows = mysql(
+        "SELECT COUNT(*) FROM abilities WHERE enabled = 1 AND ("
+        + supplier_exposed_model_name_predicate("model")
+        + ");"
+    )
+    supplier_model_rows = mysql(
+        "SELECT COUNT(*) FROM models WHERE deleted_at IS NULL AND status = 1 AND ("
+        + supplier_exposed_model_name_predicate("model_name")
+        + ");"
+    )
+    disabled_ability_counts["supplier_exposed_abilities"] = int(supplier_ability_rows[0][0]) if supplier_ability_rows else 0
+    disabled_ability_counts["supplier_exposed_models"] = int(supplier_model_rows[0][0]) if supplier_model_rows else 0
     token_rows = mysql(
         "SELECT id, COALESCE(model_limits, '') FROM tokens "
         "WHERE deleted_at IS NULL AND model_limits_enabled = 1 "
-        "AND COALESCE(model_limits, '') LIKE "
-        + sql_quote(f"%{RAW_GPT_IMAGE2_MODEL}%")
-        + ";"
+        "AND ("
+        + supplier_exposed_model_limit_predicate()
+        + ");"
     )
     token_updates: list[tuple[str, str]] = []
     for token_id, raw_limits in token_rows:
@@ -417,6 +545,16 @@ def enforce_gpt_image2_db_guard() -> dict[str, int]:
             + sql_quote(model)
             + ";"
         )
+    statements.append(
+        "UPDATE abilities SET enabled = 0 WHERE "
+        + supplier_exposed_model_name_predicate("model")
+        + ";"
+    )
+    statements.append(
+        "UPDATE models SET status = 0 WHERE deleted_at IS NULL AND "
+        + supplier_exposed_model_name_predicate("model_name")
+        + ";"
+    )
     for token_id, next_limits in token_updates:
         statements.append(
             "UPDATE tokens SET model_limits = "
@@ -502,6 +640,7 @@ def main() -> int:
         return 2
     sync_abilities()
     sync_tokens(profiles)
+    codex_token_result = sync_user_codex_tokens()
     guard_result = enforce_gpt_image2_db_guard()
     env_changed = sync_codex_env(profiles)
     if env_changed or os.environ.get("SYNC_FORCE_CODEX_REFRESH") == "1":
@@ -509,7 +648,7 @@ def main() -> int:
     print(
         "synced model permissions: "
         + ", ".join(f"{name}={len(values)}" for name, values in profiles.items())
-        + f", codex_env_changed={env_changed}, gpt_image2_guard={guard_result}"
+        + f", codex_env_changed={env_changed}, codex_token_sync={codex_token_result}, gpt_image2_guard={guard_result}"
     )
     return 0
 

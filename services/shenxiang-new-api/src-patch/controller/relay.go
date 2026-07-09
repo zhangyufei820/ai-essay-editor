@@ -448,6 +448,14 @@ func rejectImageModelTextEndpointRequest(relayFormat types.RelayFormat, request 
 	if !isImageGenerationModelName(modelName) {
 		return nil
 	}
+	if service.IsSupplierExposedModelName(modelName) {
+		return types.NewErrorWithStatusCode(
+			fmt.Errorf("image generation models must use POST /v1/images/generations or POST /v1/images/edits instead of text endpoints"),
+			types.ErrorCodeInvalidRequest,
+			http.StatusBadRequest,
+			types.ErrOptionWithSkipRetry(),
+		)
+	}
 	return types.NewErrorWithStatusCode(
 		fmt.Errorf("%s is an image generation model; use POST /v1/images/generations or POST /v1/images/edits instead of text endpoints", modelName),
 		types.ErrorCodeInvalidRequest,

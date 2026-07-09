@@ -180,12 +180,32 @@ API.get('/api/user/models');
         self.assertEqual(self.module.latest_source_root(app_root), good)
 
     def test_sanitize_model_limits_replaces_raw_gpt_image2(self) -> None:
-        raw = "gpt-image-2,gpt-image-2-4K,gpt-5.5,gpt-image-2"
+        raw = "gpt-image-2,gpt-image-2-4K,gpt-5.5,gpt-image-2,geek2api-image-2"
 
         self.assertEqual(
             self.module.sanitize_model_limits(raw),
             "gpt-image-2-4K,gpt-5.5",
         )
+
+    def test_ensure_codex_image_model_limits_adds_only_public_15k_image_model(self) -> None:
+        raw = "gpt-5.4-mini,gpt-image-2-4K,geek2api-image-2,banana-2"
+
+        self.assertEqual(
+            self.module.ensure_codex_image_model_limits(raw),
+            "gpt-5.4-mini,image 2电商商品图快速通道(1.5K)",
+        )
+
+    def test_supplier_exposed_model_limit_predicate_covers_known_markers(self) -> None:
+        predicate = self.module.supplier_exposed_model_limit_predicate()
+
+        for marker in ["gpt-image-2", "ccapi", "drag tokens", "dragtokens", "geek2api", "moonapix", "relay dance", "relaydance"]:
+            self.assertIn(marker, predicate)
+
+    def test_supplier_exposed_model_name_predicate_covers_known_markers(self) -> None:
+        predicate = self.module.supplier_exposed_model_name_predicate("model")
+
+        for marker in ["ccapi", "drag tokens", "dragtokens", "geek2api", "moonapix", "relay dance", "relaydance"]:
+            self.assertIn(marker, predicate)
 
     def test_mysql_count_parses_last_numeric_row(self) -> None:
         def fake_mysql_exec(_app_root: Path, _query: str) -> str:

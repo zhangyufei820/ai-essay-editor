@@ -33,6 +33,7 @@ const (
 	xingrenAssistantMaxScreenshotBytes = 3 * 1024 * 1024
 	xingrenAssistantRateMax            = 8
 	xingrenCodexDefaultModel           = "gpt-5.5"
+	xingrenCodexImage15KModel          = "image 2电商商品图快速通道(1.5K)"
 	xingrenAssistantFallback           = xingrenCodexDefaultModel
 )
 
@@ -49,6 +50,11 @@ var (
 	// is honoured even when the underlying transport stalls.
 	xingrenAssistantHTTPClient = &http.Client{
 		Timeout: 120 * time.Second,
+	}
+	xingrenCodexAllowedTextModels = map[string]bool{
+		"gpt-5.5":      true,
+		"gpt-5.4":      true,
+		"gpt-5.4-mini": true,
 	}
 )
 
@@ -531,6 +537,7 @@ func xingrenOnboardingAssistantCreateCodexToken(c *gin.Context) {
 	}
 
 	selectedModel := xingrenCodexModel(req.Model)
+	modelLimits := xingrenCodexTokenModelLimits(selectedModel)
 	tokenName := xingrenCodexTokenName()
 	newToken := &model.Token{
 		UserId:             userID,
@@ -543,7 +550,7 @@ func xingrenOnboardingAssistantCreateCodexToken(c *gin.Context) {
 		RemainQuota:        0,
 		UnlimitedQuota:     true,
 		ModelLimitsEnabled: true,
-		ModelLimits:        selectedModel,
+		ModelLimits:        modelLimits,
 		Group:              tokenGroup,
 		CrossGroupRetry:    true,
 	}
@@ -563,6 +570,7 @@ func xingrenOnboardingAssistantCreateCodexToken(c *gin.Context) {
 		"token_name": tokenName,
 		"token_id":   newToken.Id,
 		"model":      selectedModel,
+		"models":     modelLimits,
 	}, nil, nil)
 	c.JSON(http.StatusOK, xingrenCodexTokenResponse{
 		Success:   true,
@@ -936,7 +944,18 @@ func xingrenCodexModel(modelName string) string {
 		}
 		return xingrenCodexDefaultModel
 	}
+	if !xingrenCodexAllowedTextModels[modelName] {
+		return xingrenCodexDefaultModel
+	}
 	return modelName
+}
+
+func xingrenCodexTokenModelLimits(textModel string) string {
+	textModel = xingrenCodexModel(textModel)
+	if textModel == "" {
+		textModel = xingrenCodexDefaultModel
+	}
+	return textModel + "," + xingrenCodexImage15KModel
 }
 
 func xingrenAssistantModel() string {

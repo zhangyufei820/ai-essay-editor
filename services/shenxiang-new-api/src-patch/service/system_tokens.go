@@ -35,6 +35,7 @@ var MoonApiXSeedanceVideoModels = []string{
 const (
 	rawGPTImage2ModelName     = "gpt-image-2"
 	productGPTImage2ModelName = "gpt-image-2-4K"
+	codexImage15KModelName    = "image 2电商商品图快速通道(1.5K)"
 )
 
 func videoTokenModels() []string {
@@ -48,7 +49,7 @@ func SystemTokenProfiles() []SystemTokenProfile {
 		{
 			Mode:   "codex",
 			Name:   "星人 Codex 文本令牌",
-			Models: []string{"gpt-5.5", "gpt-5.4", "gpt-5.4-mini"},
+			Models: []string{"gpt-5.5", "gpt-5.4", "gpt-5.4-mini", codexImage15KModelName},
 		},
 		{
 			Mode:   "claude",
@@ -58,7 +59,7 @@ func SystemTokenProfiles() []SystemTokenProfile {
 		{
 			Mode:   "image",
 			Name:   "星人图像生成令牌",
-			Models: []string{"gpt-image-2-4K", "geek2api-image-2", "grok-imagine-image", "banana-2", "gemini-3-pro-image-preview"},
+			Models: []string{"gpt-image-2-4K", "grok-imagine-image", "banana-2", "gemini-3-pro-image-preview", "ecommerce-banana-2", codexImage15KModelName},
 		},
 		{
 			Mode:   "video",

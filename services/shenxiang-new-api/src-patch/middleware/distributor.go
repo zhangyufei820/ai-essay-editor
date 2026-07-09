@@ -38,6 +38,10 @@ func Distribute() func(c *gin.Context) {
 			abortWithOpenAiMessage(c, http.StatusBadRequest, i18n.T(c, i18n.MsgDistributorInvalidRequest, map[string]any{"Error": err.Error()}))
 			return
 		}
+		if service.IsSupplierExposedModelName(modelRequest.Model) {
+			abortWithOpenAiMessage(c, http.StatusForbidden, "当前账号暂未开通该模型，请联系管理员或切换模型。", types.ErrorCodeAccessDenied)
+			return
+		}
 		if ok {
 			id, err := strconv.Atoi(channelId.(string))
 			if err != nil {
@@ -418,6 +422,9 @@ func getModelRequest(c *gin.Context) (*ModelRequest, bool, error) {
 	}
 	normalizeImageEndpointModelRequest(c, &modelRequest)
 	if isOpenAITextEndpointPath(c.Request.URL.Path) && isImageGenerationModelName(modelRequest.Model) {
+		if service.IsSupplierExposedModelName(modelRequest.Model) {
+			return nil, false, fmt.Errorf("image generation models must use POST /v1/images/generations or POST /v1/images/edits instead of text endpoints")
+		}
 		return nil, false, fmt.Errorf("%s is an image generation model; use POST /v1/images/generations or POST /v1/images/edits instead of text endpoints", strings.TrimSpace(modelRequest.Model))
 	}
 	return &modelRequest, shouldSelectChannel, nil

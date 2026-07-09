@@ -42,7 +42,6 @@ function main() {
 
   const classic = readText(classicPath)
   const gptImage2Block = modelBlock(classic, 'gpt-image-2-4K')
-  const geekImage2Block = modelBlock(classic, 'geek2api-image-2')
   const banana2Block = modelBlock(classic, 'banana-2')
   const geminiProBlock = modelBlock(classic, 'gemini-3-pro-image-preview')
   const grokBlock = modelBlock(classic, 'grok-imagine-image')
@@ -105,17 +104,12 @@ function main() {
     errors.push('gpt-image-2-4K must use GPT_IMAGE_2_RESOLUTIONS')
   }
 
-  if (!geekImage2Block.includes('resolutions: GPT_IMAGE_2_RESOLUTIONS')) {
-    errors.push('geek2api-image-2 must use GPT_IMAGE_2_RESOLUTIONS')
+  if (gptImage2Block.includes('GOOGLE_GEMINI_31_FLASH_IMAGE_RESOLUTIONS')) {
+    errors.push('gpt-image-2-4K must not expose Gemini 512 resolution choices')
   }
 
-  for (const [model, block] of [
-    ['gpt-image-2-4K', gptImage2Block],
-    ['geek2api-image-2', geekImage2Block],
-  ]) {
-    if (block.includes('GOOGLE_GEMINI_31_FLASH_IMAGE_RESOLUTIONS')) {
-      errors.push(`${model} must not expose Gemini 512 resolution choices`)
-    }
+  if (classic.includes('geek2api-image-2')) {
+    errors.push('classic media playground must not expose supplier model geek2api-image-2')
   }
 
   if (!banana2Block.includes('resolutions: GOOGLE_GEMINI_31_FLASH_IMAGE_RESOLUTIONS')) {

@@ -26,7 +26,7 @@ func TestSystemTokenProfilesIncludesSeedanceVideoModels(t *testing.T) {
 	require.NotContains(t, videoModels, "seedance-2.0-cl")
 }
 
-func TestSystemTokenProfilesIncludesGeek2APIImage2(t *testing.T) {
+func TestSystemTokenProfilesImageModelsDoNotExposeSupplierModel(t *testing.T) {
 	var imageModels []string
 	for _, profile := range SystemTokenProfiles() {
 		if profile.Mode == "image" {
@@ -36,7 +36,23 @@ func TestSystemTokenProfilesIncludesGeek2APIImage2(t *testing.T) {
 	}
 
 	require.Contains(t, imageModels, "gpt-image-2-4K")
-	require.Contains(t, imageModels, "geek2api-image-2")
+	require.Contains(t, imageModels, "image 2电商商品图快速通道(1.5K)")
+	require.NotContains(t, imageModels, "geek2api-image-2")
+}
+
+func TestSystemTokenProfilesCodexTextIncludesOnly15KImageModel(t *testing.T) {
+	var codexModels []string
+	for _, profile := range SystemTokenProfiles() {
+		if profile.Mode == "codex" {
+			codexModels = profile.Models
+			break
+		}
+	}
+
+	require.Contains(t, codexModels, "gpt-5.5")
+	require.Contains(t, codexModels, "image 2电商商品图快速通道(1.5K)")
+	require.NotContains(t, codexModels, "gpt-image-2-4K")
+	require.NotContains(t, codexModels, "geek2api-image-2")
 }
 
 func TestMergeModelLimitsCanonicalizesRawGPTImage2(t *testing.T) {

@@ -1535,6 +1535,10 @@ func sanitizePlaygroundImageTaskFailure(reason string) string {
 	sensitiveMarkers := []string{
 		"upstream",
 		"channel",
+		"ccapi",
+		"dragtokens",
+		"geek2api",
+		"moonapix",
 		"渠道",
 		"供应商",
 		"request id",
@@ -1575,7 +1579,7 @@ func sanitizePlaygroundImageTaskPublicReason(reason string) string {
 		return ""
 	}
 	lower := strings.ToLower(cleaned)
-	for _, marker := range []string{"api key", "apikey", "bearer", "token", "secret", "password", "sk-"} {
+	for _, marker := range []string{"api key", "apikey", "bearer", "token", "secret", "password", "sk-", "ccapi", "dragtokens", "geek2api", "moonapix"} {
 		if strings.Contains(lower, marker) {
 			return ""
 		}
