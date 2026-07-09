@@ -1407,7 +1407,7 @@ func markPlaygroundImageTaskSuccess(task *model.Task, item *playgroundMediaItem,
 	task.Status = model.TaskStatusSuccess
 	task.Progress = "100%"
 	task.FinishTime = now
-	task.FailReason = item.URL
+	task.FailReason = ""
 	task.PrivateData.ResultURL = item.URL
 	payload.CachedURL = item.URL
 	payload.Item = item

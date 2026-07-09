@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/model"
 	relayconstant "github.com/QuantumNous/new-api/relay/constant"
@@ -176,6 +177,96 @@ func TestMarkPlaygroundImageTaskLogFailureConvertsConsumeLogToError(t *testing.T
 	require.Equal(t, "error", other["final_log_type"])
 	require.Equal(t, "media_task_failed", other["refund_reason"])
 	require.Equal(t, "preconsume_refund_task_failed", other["billing_settlement"])
+}
+
+func TestMarkPlaygroundImageTaskSuccessKeepsFailReasonEmpty(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err)
+	require.NoError(t, db.AutoMigrate(&model.Task{}, &model.Log{}))
+	oldDB := model.DB
+	oldLogDB := model.LOG_DB
+	model.DB = db
+	model.LOG_DB = db
+	t.Cleanup(func() {
+		model.DB = oldDB
+		model.LOG_DB = oldLogDB
+	})
+
+	payload := &playgroundImageTaskPayload{
+		RequestID: "req-image-success",
+		Model:     "image 2电商商品图快速通道(1.5K)",
+		Prompt:    "blue square",
+		Workflow:  "文生图",
+	}
+	task := &model.Task{
+		TaskID:     "task-image-success",
+		Platform:   constant.TaskPlatformPlaygroundImage,
+		UserId:     1001,
+		Group:      "internal",
+		ChannelId:  22,
+		Quota:      0,
+		Action:     constant.TaskActionImageGenerate,
+		Status:     model.TaskStatusInProgress,
+		Progress:   "50%",
+		SubmitTime: time.Now().Add(-20 * time.Second).Unix(),
+		StartTime:  time.Now().Add(-15 * time.Second).Unix(),
+		Properties: model.Properties{
+			Input:           payload.Prompt,
+			OriginModelName: payload.Model,
+		},
+	}
+	task.SetData(payload)
+	require.NoError(t, model.DB.Create(task).Error)
+	require.NoError(t, model.LOG_DB.Create(&model.Log{
+		UserId:    task.UserId,
+		Username:  "test-user",
+		CreatedAt: common.GetTimestamp(),
+		Type:      model.LogTypeConsume,
+		Content:   "媒体工坊图片任务生成中",
+		ModelName: payload.Model,
+		Quota:     task.Quota,
+		RequestId: payload.RequestID,
+		Other: common.MapToJsonStr(map[string]interface{}{
+			"task_id":               task.TaskID,
+			"request_id":            payload.RequestID,
+			"request_phase":         "submitted",
+			"task_status":           string(task.Status),
+			"playground_image_task": true,
+		}),
+	}).Error)
+
+	resultURL := "/pg/media/files/u-1001/image-success.png"
+	item := &playgroundMediaItem{
+		ID:          "media-image-success",
+		Kind:        "image",
+		URL:         resultURL,
+		DisplayURL:  resultURL,
+		CachedURL:   resultURL,
+		Filename:    "image-success.png",
+		Prompt:      payload.Prompt,
+		Model:       payload.Model,
+		Workflow:    payload.Workflow,
+		Status:      "ready",
+		CacheStatus: "cached",
+	}
+
+	markPlaygroundImageTaskSuccess(task, item, payload, http.StatusOK, 3767)
+
+	var reloaded model.Task
+	require.NoError(t, model.DB.Where("task_id = ?", task.TaskID).First(&reloaded).Error)
+	require.Equal(t, model.TaskStatus(model.TaskStatusSuccess), reloaded.Status)
+	require.Empty(t, reloaded.FailReason)
+	require.Equal(t, resultURL, reloaded.GetResultURL())
+	require.Equal(t, 3767, reloaded.Quota)
+
+	openAIResponse := taskToOpenAIImageTask(&reloaded)
+	require.Equal(t, resultURL, openAIResponse["result_url"])
+	require.Empty(t, openAIResponse["fail_reason"])
+	require.Empty(t, openAIResponse["message"])
+	nested, ok := openAIResponse["data"].(map[string]interface{})
+	require.True(t, ok)
+	require.Equal(t, resultURL, nested["result_url"])
+	require.Empty(t, nested["fail_reason"])
 }
 
 func TestSanitizePlaygroundImageTaskFailureKeepsUpstreamRejectionReason(t *testing.T) {
