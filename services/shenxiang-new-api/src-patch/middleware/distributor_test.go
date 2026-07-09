@@ -5,11 +5,45 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 
+	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
+	"github.com/QuantumNous/new-api/model"
 	"github.com/gin-gonic/gin"
+	"github.com/glebarez/sqlite"
+	"gorm.io/gorm"
 )
+
+func TestMain(m *testing.M) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		panic("failed to open test db: " + err.Error())
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		panic("failed to get sql DB: " + err.Error())
+	}
+	sqlDB.SetMaxOpenConns(1)
+
+	model.DB = db
+	model.LOG_DB = db
+	common.SetDatabaseTypes(common.DatabaseTypeSQLite, common.DatabaseTypeSQLite)
+	if err := db.AutoMigrate(&model.Task{}); err != nil {
+		panic("failed to migrate test db: " + err.Error())
+	}
+
+	os.Exit(m.Run())
+}
+
+func truncateMiddlewareTestDB(t *testing.T) {
+	t.Helper()
+	t.Cleanup(func() {
+		model.DB.Exec("DELETE FROM tasks")
+	})
+}
 
 func TestNormalizeImageEndpointModelRequestMapsPlaygroundRawGPTImage2(t *testing.T) {
 	gin.SetMode(gin.TestMode)
@@ -50,6 +84,47 @@ func TestNormalizeImageEndpointModelRequestMapsV1EditRawGPTImage2(t *testing.T) 
 	}
 }
 
+func TestNormalizeImageEndpointModelRequestMapsDiscountImage2PublicAlias(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/v1/images/generations", bytes.NewBufferString(`{"model":"特价 image-2"}`))
+	modelRequest := &ModelRequest{Model: "特价 image-2"}
+
+	normalizeImageEndpointModelRequest(ctx, modelRequest)
+
+	if modelRequest.Model != "geek2api-image-2" {
+		t.Fatalf("model = %q, want geek2api-image-2", modelRequest.Model)
+	}
+	if publicAlias := PublicImageModelAliasForRequest(ctx); publicAlias != "特价 image-2" {
+		t.Fatalf("public alias = %q, want 特价 image-2", publicAlias)
+	}
+}
+
+func TestGetTaskOriginModelNameUsesPublicDiscountImage2Alias(t *testing.T) {
+	truncateMiddlewareTestDB(t)
+	gin.SetMode(gin.TestMode)
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	ctx.Request = httptest.NewRequest(http.MethodGet, "/v1/images/tasks/task_public_alias", nil)
+	ctx.Params = gin.Params{{Key: "task_id", Value: "task_public_alias"}}
+	ctx.Set("id", 1)
+	common.SetContextKey(ctx, constant.ContextKeyTokenModelLimitEnabled, true)
+
+	task := &model.Task{
+		TaskID: "task_public_alias",
+		UserId: 1,
+		Properties: model.Properties{
+			OriginModelName: "geek2api-image-2",
+		},
+	}
+	if err := model.DB.Create(task).Error; err != nil {
+		t.Fatalf("create task: %v", err)
+	}
+
+	if got := getTaskOriginModelName(ctx); got != "特价 image-2" {
+		t.Fatalf("getTaskOriginModelName() = %q, want 特价 image-2", got)
+	}
+}
+
 func TestGetModelRequestRejectsChatImageModelBeforeChannelSelection(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
@@ -60,6 +135,28 @@ func TestGetModelRequestRejectsChatImageModelBeforeChannelSelection(t *testing.T
 
 	if err == nil {
 		t.Fatal("getModelRequest() err = nil, want image model text endpoint rejection")
+	}
+	if !strings.Contains(err.Error(), "/v1/images/generations") || !strings.Contains(err.Error(), "/v1/images/edits") {
+		t.Fatalf("error = %q, want image endpoint hints", err.Error())
+	}
+}
+
+func TestGetModelRequestRejectsDiscountImage2TextEndpointWithoutSupplierLeak(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewBufferString(`{"model":"特价 image-2","messages":[]}`))
+	ctx.Request.Header.Set("Content-Type", "application/json")
+
+	_, _, err := getModelRequest(ctx)
+
+	if err == nil {
+		t.Fatal("getModelRequest() err = nil, want image model text endpoint rejection")
+	}
+	if strings.Contains(err.Error(), "geek2api") {
+		t.Fatalf("error = %q, want no supplier model name", err.Error())
+	}
+	if !strings.Contains(err.Error(), "特价 image-2") {
+		t.Fatalf("error = %q, want public model name", err.Error())
 	}
 	if !strings.Contains(err.Error(), "/v1/images/generations") || !strings.Contains(err.Error(), "/v1/images/edits") {
 		t.Fatalf("error = %q, want image endpoint hints", err.Error())

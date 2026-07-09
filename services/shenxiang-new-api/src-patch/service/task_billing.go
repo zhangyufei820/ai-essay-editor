@@ -71,13 +71,21 @@ func LogTaskConsumption(c *gin.Context, info *relaycommon.RelayInfo) {
 	if info.PriceData.GroupRatioInfo.HasSpecialRatio {
 		other["user_group_ratio"] = info.PriceData.GroupRatioInfo.GroupSpecialRatio
 	}
-	if info.IsModelMapped {
+	publicAlias := ""
+	if c != nil {
+		publicAlias = c.GetString("public_image_model_alias")
+	}
+	if info.IsModelMapped && ShouldRecordModelMapping(info.OriginModelName, info.UpstreamModelName, publicAlias) {
 		other["is_model_mapped"] = true
 		other["upstream_model_name"] = info.UpstreamModelName
 	}
+	displayModelName := PublicImageModelDisplayName(info.OriginModelName, "")
+	if c != nil {
+		displayModelName = PublicImageModelDisplayName(info.OriginModelName, publicAlias)
+	}
 	model.RecordConsumeLog(c, info.UserId, model.RecordConsumeLogParams{
 		ChannelId: info.ChannelId,
-		ModelName: info.OriginModelName,
+		ModelName: displayModelName,
 		TokenName: tokenName,
 		Quota:     info.PriceData.Quota,
 		Content:   logContent,
@@ -163,7 +171,7 @@ func taskBillingOther(task *model.Task) map[string]interface{} {
 		}
 	}
 	props := task.Properties
-	if props.UpstreamModelName != "" && props.UpstreamModelName != props.OriginModelName {
+	if ShouldRecordModelMapping(props.OriginModelName, props.UpstreamModelName, "") {
 		other["is_model_mapped"] = true
 		other["upstream_model_name"] = props.UpstreamModelName
 	}
@@ -176,6 +184,10 @@ func taskModelName(task *model.Task) string {
 		return bc.OriginModelName
 	}
 	return task.Properties.OriginModelName
+}
+
+func taskBillingLogModelName(task *model.Task) string {
+	return PublicImageModelDisplayName(taskModelName(task), "")
 }
 
 // RefundTaskQuota 统一的任务失败退款逻辑。
@@ -204,7 +216,7 @@ func RefundTaskQuota(ctx context.Context, task *model.Task, reason string) {
 		LogType:   model.LogTypeRefund,
 		Content:   "",
 		ChannelId: task.ChannelId,
-		ModelName: taskModelName(task),
+		ModelName: taskBillingLogModelName(task),
 		Quota:     quota,
 		TokenId:   task.PrivateData.TokenId,
 		Group:     task.Group,
@@ -266,7 +278,7 @@ func RecalculateTaskQuota(ctx context.Context, task *model.Task, actualQuota int
 		LogType:   logType,
 		Content:   reason,
 		ChannelId: task.ChannelId,
-		ModelName: taskModelName(task),
+		ModelName: taskBillingLogModelName(task),
 		Quota:     logQuota,
 		TokenId:   task.PrivateData.TokenId,
 		Group:     task.Group,

@@ -3,6 +3,7 @@ package dto
 import (
 	"encoding/json"
 	"reflect"
+	"strconv"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
@@ -10,6 +11,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 )
+
+// MaxImageN caps the image generation count. Without this bound a huge or
+// malicious n value can multiply fixed-price image billing and stress upstreams.
+const MaxImageN = 128
 
 type ImageRequest struct {
 	Model             string          `json:"model"`
@@ -136,6 +141,7 @@ func indexComma(s string) int {
 func (i *ImageRequest) GetTokenCountMeta() *types.TokenCountMeta {
 	var sizeRatio = 1.0
 	var qualityRatio = 1.0
+	var imagePriceCNY float64
 
 	if strings.HasPrefix(i.Model, "dall-e") {
 		// Size
@@ -156,6 +162,9 @@ func (i *ImageRequest) GetTokenCountMeta() *types.TokenCountMeta {
 			}
 		}
 	}
+	if priceCNY, ok := discountImage2PriceCNY(i); ok {
+		imagePriceCNY = priceCNY
+	}
 
 	// n is NOT included here; it is handled via OtherRatio("n") in
 	// image_handler.go (default) or channel adaptors (actual count).
@@ -165,7 +174,106 @@ func (i *ImageRequest) GetTokenCountMeta() *types.TokenCountMeta {
 		CombineText:     i.Prompt,
 		MaxTokens:       1584,
 		ImagePriceRatio: sizeRatio * qualityRatio,
+		ImagePriceCNY:   imagePriceCNY,
 	}
+}
+
+func discountImage2PriceCNY(request *ImageRequest) (float64, bool) {
+	if request == nil || !isDiscountImage2Model(request.Model) {
+		return 0, false
+	}
+	switch discountImage2Resolution(request) {
+	case "4K":
+		return 0.10, true
+	case "2K":
+		return 0.06, true
+	default:
+		return 0.03, true
+	}
+}
+
+func isDiscountImage2Model(model string) bool {
+	trimmed := strings.TrimSpace(model)
+	return strings.EqualFold(trimmed, "特价 image-2") ||
+		strings.EqualFold(trimmed, "geek2api-image-2")
+}
+
+func discountImage2Resolution(request *ImageRequest) string {
+	for _, value := range []string{
+		request.Resolution,
+		discountImage2ResolutionFromExtraBody(request.ExtraBody),
+		request.ImageSize,
+		request.Size,
+	} {
+		if resolution := normalizeDiscountImage2Resolution(value); resolution != "" {
+			return resolution
+		}
+	}
+	return "1K"
+}
+
+func discountImage2ResolutionFromExtraBody(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var payload struct {
+		Google struct {
+			ImageConfig struct {
+				ImageSize string `json:"image_size"`
+			} `json:"image_config"`
+		} `json:"google"`
+	}
+	if err := common.Unmarshal(raw, &payload); err != nil {
+		return ""
+	}
+	return strings.TrimSpace(payload.Google.ImageConfig.ImageSize)
+}
+
+func normalizeDiscountImage2Resolution(value string) string {
+	normalized := strings.ToUpper(strings.TrimSpace(value))
+	switch normalized {
+	case "1K", "2K", "4K":
+		return normalized
+	case "", "AUTO", "CUSTOM":
+		return ""
+	}
+	return discountImage2ResolutionFromPixelSize(normalized)
+}
+
+func discountImage2ResolutionFromPixelSize(value string) string {
+	width, height, ok := parseDiscountImage2PixelSize(value)
+	if !ok {
+		return ""
+	}
+	maxSide := width
+	if height > maxSide {
+		maxSide = height
+	}
+	pixels := width * height
+	if maxSide >= 2800 || pixels > 2048*2048 {
+		return "4K"
+	}
+	if maxSide >= 1900 || pixels > 1536*1536 {
+		return "2K"
+	}
+	return "1K"
+}
+
+func parseDiscountImage2PixelSize(value string) (int, int, bool) {
+	compact := strings.ReplaceAll(strings.ToLower(strings.TrimSpace(value)), " ", "")
+	parts := strings.Split(compact, "x")
+	if len(parts) != 2 {
+		return 0, 0, false
+	}
+	width, err := strconv.Atoi(parts[0])
+	if err != nil || width <= 0 {
+		return 0, 0, false
+	}
+	height, err := strconv.Atoi(parts[1])
+	if err != nil || height <= 0 {
+		return 0, 0, false
+	}
+	return width, height, true
 }
 
 func (i *ImageRequest) IsStream(c *gin.Context) bool {

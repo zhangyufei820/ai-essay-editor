@@ -54,3 +54,34 @@ func TestGenerateTextOtherInfoOmitsEmptyRelayRetryAttempts(t *testing.T) {
 	_, exists := other["retry_attempts"]
 	require.False(t, exists)
 }
+
+func TestGenerateTextOtherInfoHidesDiscountImage2UpstreamMapping(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Set("public_image_model_alias", PublicDiscountImage2ModelName)
+
+	other := GenerateTextOtherInfo(c, &relaycommon.RelayInfo{
+		OriginModelName:   InternalDiscountImage2ModelName,
+		StartTime:         time.UnixMilli(1000),
+		FirstResponseTime: time.UnixMilli(1500),
+		ChannelMeta:       &relaycommon.ChannelMeta{UpstreamModelName: "gpt-image-2", IsModelMapped: true},
+	}, 1, 1, 1, 0, 0, -1, -1)
+
+	require.NotContains(t, other, "is_model_mapped")
+	require.NotContains(t, other, "upstream_model_name")
+}
+
+func TestGenerateTextOtherInfoKeepsSafeModelMapping(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+
+	other := GenerateTextOtherInfo(c, &relaycommon.RelayInfo{
+		OriginModelName:   "public-text-model",
+		StartTime:         time.UnixMilli(1000),
+		FirstResponseTime: time.UnixMilli(1500),
+		ChannelMeta:       &relaycommon.ChannelMeta{UpstreamModelName: "provider-text-model", IsModelMapped: true},
+	}, 1, 1, 1, 0, 0, -1, -1)
+
+	require.Equal(t, true, other["is_model_mapped"])
+	require.Equal(t, "provider-text-model", other["upstream_model_name"])
+}

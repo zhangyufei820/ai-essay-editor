@@ -481,6 +481,9 @@ func isImageGenerationModelName(modelName string) bool {
 	if strings.HasPrefix(modelName, "image 2") {
 		return true
 	}
+	if service.IsPublicImageModelAlias(modelName) {
+		return true
+	}
 	return strings.Contains(modelName, "image-preview")
 }
 

@@ -383,6 +383,7 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 
 	adminRejectReason := common.GetContextKeyString(ctx, constant.ContextKeyAdminRejectReason)
 	summary := calculateTextQuotaSummary(ctx, relayInfo, usage)
+	displayModelName := PublicImageModelDisplayName(summary.ModelName, ctx.GetString("public_image_model_alias"))
 	responseStreamOutputSent := ctx.GetBool("response_stream_output_sent")
 	responseCompletedSeen := ctx.GetBool("response_completed_seen")
 
@@ -437,7 +438,7 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 		} else {
 			extraContent = append(extraContent, "未向用户输出有效内容，上游没有返回计费信息，本次按 0 扣费并返还预扣")
 		}
-		logger.LogError(ctx, fmt.Sprintf("total tokens is 0, cannot consume quota, userId %d, channelId %d, tokenId %d, model %s， pre-consumed quota %d", relayInfo.UserId, relayInfo.ChannelId, relayInfo.TokenId, summary.ModelName, relayInfo.FinalPreConsumedQuota))
+		logger.LogError(ctx, fmt.Sprintf("total tokens is 0, cannot consume quota, userId %d, channelId %d, tokenId %d, model %s， pre-consumed quota %d", relayInfo.UserId, relayInfo.ChannelId, relayInfo.TokenId, displayModelName, relayInfo.FinalPreConsumedQuota))
 	} else {
 		model.UpdateUsageStats(relayInfo.UserId, relayInfo.ChannelId, billingQuota)
 	}
@@ -451,12 +452,12 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 		}
 	}
 
-	logModel := summary.ModelName
-	if strings.HasPrefix(logModel, "gpt-4-gizmo") {
+	logModel := displayModelName
+	if strings.HasPrefix(summary.ModelName, "gpt-4-gizmo") {
 		logModel = "gpt-4-gizmo-*"
 		extraContent = append(extraContent, fmt.Sprintf("模型 %s", summary.ModelName))
 	}
-	if strings.HasPrefix(logModel, "gpt-4o-gizmo") {
+	if strings.HasPrefix(summary.ModelName, "gpt-4o-gizmo") {
 		logModel = "gpt-4o-gizmo-*"
 		extraContent = append(extraContent, fmt.Sprintf("模型 %s", summary.ModelName))
 	}

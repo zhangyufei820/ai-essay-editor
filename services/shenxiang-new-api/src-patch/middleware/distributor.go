@@ -29,6 +29,8 @@ type ModelRequest struct {
 	Group string `json:"group,omitempty"`
 }
 
+const PublicImageModelAliasContextKey = "public_image_model_alias"
+
 func Distribute() func(c *gin.Context) {
 	return func(c *gin.Context) {
 		var channel *model.Channel
@@ -38,7 +40,9 @@ func Distribute() func(c *gin.Context) {
 			abortWithOpenAiMessage(c, http.StatusBadRequest, i18n.T(c, i18n.MsgDistributorInvalidRequest, map[string]any{"Error": err.Error()}))
 			return
 		}
-		if service.IsSupplierExposedModelName(modelRequest.Model) {
+		publicModelAlias := publicImageModelAliasForRequest(c)
+		if service.IsSupplierExposedModelName(modelRequest.Model) &&
+			!service.IsInternalImageModelAllowedByPublicAlias(modelRequest.Model, publicModelAlias) {
 			abortWithOpenAiMessage(c, http.StatusForbidden, "当前账号暂未开通该模型，请联系管理员或切换模型。", types.ErrorCodeAccessDenied)
 			return
 		}
@@ -73,9 +77,18 @@ func Distribute() func(c *gin.Context) {
 				if !ok {
 					tokenModelLimit = map[string]bool{}
 				}
-				matchName := ratio_setting.FormatMatchingModelName(modelRequest.Model) // match gpts & thinking-*
-				if _, ok := tokenModelLimit[matchName]; !ok {
-					abortWithOpenAiMessage(c, http.StatusForbidden, i18n.T(c, i18n.MsgDistributorTokenModelForbidden, map[string]any{"Model": modelRequest.Model}))
+				accessModelName := publicModelAlias
+				if strings.TrimSpace(accessModelName) == "" {
+					accessModelName = modelRequest.Model
+				}
+				matchName := ratio_setting.FormatMatchingModelName(accessModelName) // match gpts & thinking-*
+				_, allowed := tokenModelLimit[matchName]
+				if !allowed && service.IsInternalImageModelAllowedByPublicAlias(modelRequest.Model, publicModelAlias) {
+					legacyMatchName := ratio_setting.FormatMatchingModelName(modelRequest.Model)
+					_, allowed = tokenModelLimit[legacyMatchName]
+				}
+				if !allowed {
+					abortWithOpenAiMessage(c, http.StatusForbidden, i18n.T(c, i18n.MsgDistributorTokenModelForbidden, map[string]any{"Model": accessModelName}))
 					return
 				}
 			}
@@ -438,12 +451,31 @@ func normalizeImageEndpointModelRequest(c *gin.Context, modelRequest *ModelReque
 	if !strings.HasPrefix(path, "/pg/images/") && !strings.HasPrefix(path, "/v1/images/") {
 		return
 	}
-	modelName := strings.TrimSpace(modelRequest.Model)
-	if strings.EqualFold(modelName, "gpt-image-2") {
-		modelRequest.Model = "gpt-image-2-4K"
+	modelName, publicAlias, _ := service.NormalizeImageGenerationModelName(modelRequest.Model)
+	modelRequest.Model = modelName
+	if publicAlias != "" {
+		SetPublicImageModelAlias(c, publicAlias)
+	}
+}
+
+func publicImageModelAliasForRequest(c *gin.Context) string {
+	return PublicImageModelAliasForRequest(c)
+}
+
+func SetPublicImageModelAlias(c *gin.Context, publicAlias string) {
+	if c == nil {
 		return
 	}
-	modelRequest.Model = modelName
+	if alias := strings.TrimSpace(publicAlias); alias != "" {
+		c.Set(PublicImageModelAliasContextKey, alias)
+	}
+}
+
+func PublicImageModelAliasForRequest(c *gin.Context) string {
+	if c == nil {
+		return ""
+	}
+	return strings.TrimSpace(c.GetString(PublicImageModelAliasContextKey))
 }
 
 func isOpenAITextEndpointPath(path string) bool {
@@ -470,6 +502,9 @@ func isImageGenerationModelName(modelName string) bool {
 	if strings.HasPrefix(modelName, "image 2") {
 		return true
 	}
+	if service.IsPublicImageModelAlias(modelName) {
+		return true
+	}
 	return strings.Contains(modelName, "image-preview")
 }
 
@@ -493,7 +528,7 @@ func getTaskOriginModelName(c *gin.Context) string {
 
 	userId := c.GetInt("id")
 	if task, exist, err := model.GetByTaskId(userId, taskId); err == nil && exist && task != nil {
-		return task.Properties.OriginModelName
+		return service.PublicImageModelDisplayName(task.Properties.OriginModelName, "")
 	}
 	return ""
 }

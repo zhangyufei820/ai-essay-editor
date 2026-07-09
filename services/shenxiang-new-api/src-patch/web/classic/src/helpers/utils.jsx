@@ -70,6 +70,14 @@ const PRICING_DISPLAY_OVERRIDES = {
     billing_label: '按张计费',
     icon: 'OpenAI',
   },
+  '特价 image-2': {
+    display_name: '特价 image-2',
+    description: '特价 image-2：支持 1K/2K/4K 与合法自定义尺寸，人民币 1K ¥0.03 / 2K ¥0.06 / 4K ¥0.10。',
+    fixed_price_label: '1K ¥0.03 / 2K ¥0.06 / 4K ¥0.10',
+    price_unit_label: '张',
+    billing_label: '按张计费',
+    icon: 'OpenAI',
+  },
   'grok-imagine-image': {
     display_name: 'Grok Image Pro',
     description: 'Grok Image Pro：真实感、社媒配图和快速风格探索，人民币 ¥0.324/张。',

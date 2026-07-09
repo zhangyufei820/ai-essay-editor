@@ -4,13 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/model"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/new-api/types"
+	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -184,6 +188,15 @@ func getLastLog(t *testing.T) *model.Log {
 	return &log
 }
 
+func getLastLogOther(t *testing.T) map[string]interface{} {
+	t.Helper()
+	log := getLastLog(t)
+	require.NotNil(t, log)
+	var other map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(log.Other), &other))
+	return other
+}
+
 func countLogs(t *testing.T) int64 {
 	t.Helper()
 	var count int64
@@ -271,6 +284,122 @@ func TestRefundTaskQuota_ZeroQuota(t *testing.T) {
 
 	// No log created
 	assert.Equal(t, int64(0), countLogs(t))
+}
+
+func TestRefundTaskQuotaDiscountImage2UsesPublicLogName(t *testing.T) {
+	truncate(t)
+	ctx := context.Background()
+
+	const userID, tokenID, channelID = 30, 30, 30
+	const initQuota, preConsumed = 10000, 3000
+
+	seedUser(t, userID, initQuota)
+	seedToken(t, tokenID, userID, "sk-discount-refund", 5000)
+	seedChannel(t, channelID)
+
+	task := makeTask(userID, channelID, preConsumed, tokenID, BillingSourceWallet, 0)
+	task.Properties.OriginModelName = InternalDiscountImage2ModelName
+	task.Properties.UpstreamModelName = "gpt-image-2"
+	task.PrivateData.BillingContext.OriginModelName = InternalDiscountImage2ModelName
+
+	RefundTaskQuota(ctx, task, "task failed")
+
+	log := getLastLog(t)
+	require.NotNil(t, log)
+	assert.Equal(t, model.LogTypeRefund, log.Type)
+	assert.Equal(t, PublicDiscountImage2ModelName, log.ModelName)
+	other := getLastLogOther(t)
+	assert.NotContains(t, other, "is_model_mapped")
+	assert.NotContains(t, other, "upstream_model_name")
+}
+
+func TestLogTaskConsumptionDiscountImage2UsesPublicLogName(t *testing.T) {
+	truncate(t)
+	gin.SetMode(gin.TestMode)
+
+	const userID, tokenID, channelID = 31, 31, 31
+	seedUser(t, userID, 10000)
+	seedToken(t, tokenID, userID, "sk-discount-task", 5000)
+	seedChannel(t, channelID)
+
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest(http.MethodPost, "/pg/images/tasks/generations", nil)
+	c.Set("token_name", "system-image-token")
+	c.Set("public_image_model_alias", PublicDiscountImage2ModelName)
+
+	LogTaskConsumption(c, &relaycommon.RelayInfo{
+		UserId:          userID,
+		TokenId:         tokenID,
+		OriginModelName: InternalDiscountImage2ModelName,
+		UsingGroup:      "default",
+		PriceData: types.PriceData{
+			ModelPrice:     0.03,
+			Quota:          2055,
+			GroupRatioInfo: types.GroupRatioInfo{GroupRatio: 1},
+		},
+		ChannelMeta: &relaycommon.ChannelMeta{
+			ChannelId:         channelID,
+			UpstreamModelName: "gpt-image-2",
+			IsModelMapped:     true,
+		},
+		TaskRelayInfo: &relaycommon.TaskRelayInfo{
+			Action: "images.generations",
+		},
+	})
+
+	log := getLastLog(t)
+	require.NotNil(t, log)
+	assert.Equal(t, model.LogTypeConsume, log.Type)
+	assert.Equal(t, PublicDiscountImage2ModelName, log.ModelName)
+	other := getLastLogOther(t)
+	assert.NotContains(t, other, "is_model_mapped")
+	assert.NotContains(t, other, "upstream_model_name")
+}
+
+func TestPostTextConsumeQuotaDiscountImage2UsesPublicLogName(t *testing.T) {
+	truncate(t)
+	gin.SetMode(gin.TestMode)
+
+	const userID, tokenID, channelID = 32, 32, 32
+	seedUser(t, userID, 10000)
+	seedToken(t, tokenID, userID, "sk-discount-text", 5000)
+	seedChannel(t, channelID)
+
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest(http.MethodPost, "/pg/images/tasks/generations", nil)
+	c.Set("token_name", "system-image-token")
+	c.Set("public_image_model_alias", PublicDiscountImage2ModelName)
+
+	PostTextConsumeQuota(c, &relaycommon.RelayInfo{
+		UserId:            userID,
+		TokenId:           tokenID,
+		OriginModelName:   InternalDiscountImage2ModelName,
+		StartTime:         time.Now().Add(-time.Second),
+		FirstResponseTime: time.Now(),
+		UsingGroup:        "default",
+		PriceData: types.PriceData{
+			UsePrice:       true,
+			ModelPrice:     0.03,
+			GroupRatioInfo: types.GroupRatioInfo{GroupRatio: 1},
+		},
+		ChannelMeta: &relaycommon.ChannelMeta{
+			ChannelId:         channelID,
+			UpstreamModelName: "gpt-image-2",
+			IsModelMapped:     true,
+		},
+	}, &dto.Usage{
+		PromptTokens:     1,
+		CompletionTokens: 0,
+		TotalTokens:      1,
+	}, nil)
+
+	log := getLastLog(t)
+	require.NotNil(t, log)
+	assert.Equal(t, model.LogTypeConsume, log.Type)
+	assert.Equal(t, PublicDiscountImage2ModelName, log.ModelName)
+	other := getLastLogOther(t)
+	assert.NotContains(t, other, "is_model_mapped")
+	assert.NotContains(t, other, "upstream_model_name")
 }
 
 func TestImageBenefitPlaygroundTokenPreConsume(t *testing.T) {

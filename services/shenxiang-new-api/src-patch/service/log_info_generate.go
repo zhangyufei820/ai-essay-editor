@@ -98,7 +98,7 @@ func GenerateTextOtherInfo(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, m
 	if relayInfo.ReasoningEffort != "" {
 		other["reasoning_effort"] = relayInfo.ReasoningEffort
 	}
-	if relayInfo.IsModelMapped {
+	if relayInfo.IsModelMapped && ShouldRecordModelMapping(relayInfo.OriginModelName, relayInfo.UpstreamModelName, ctx.GetString("public_image_model_alias")) {
 		other["is_model_mapped"] = true
 		other["upstream_model_name"] = relayInfo.UpstreamModelName
 	}

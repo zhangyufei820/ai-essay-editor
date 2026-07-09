@@ -99,6 +99,75 @@ func TestNormalizePlaygroundImageTaskPayloadMapsRawGPTImage2ToProductModel(t *te
 	require.Equal(t, "4K", payload["resolution"])
 }
 
+func TestNormalizePlaygroundImageTaskPayloadMapsDiscountImage2PublicAliasToInternalModel(t *testing.T) {
+	raw := []byte(`{
+		"model":"特价 image-2",
+		"prompt":"poster",
+		"resolution":"2K",
+		"size":"2048x2048"
+	}`)
+	request := dto.ImageRequest{
+		Model:  "特价 image-2",
+		Prompt: "poster",
+	}
+
+	normalized, changed := normalizePlaygroundImageTaskPayload(raw, &request)
+	require.True(t, changed)
+	require.Equal(t, "geek2api-image-2", request.Model)
+
+	var payload map[string]any
+	require.NoError(t, json.Unmarshal(normalized, &payload))
+	require.Equal(t, "geek2api-image-2", payload["model"])
+	require.Equal(t, "2K", payload["resolution"])
+	require.NotContains(t, payload, "display_model")
+}
+
+func TestPlaygroundImageTaskResponsesUseDiscountImage2PublicDisplayName(t *testing.T) {
+	task := &model.Task{
+		TaskID:     "task-discount-image-2",
+		Status:     model.TaskStatusSubmitted,
+		Progress:   "10%",
+		SubmitTime: time.Now().Unix(),
+		Properties: model.Properties{
+			Input:           "poster",
+			OriginModelName: "geek2api-image-2",
+		},
+	}
+	task.SetData(playgroundImageTaskPayload{
+		Model:        "geek2api-image-2",
+		DisplayModel: "特价 image-2",
+		Prompt:       "poster",
+		RequestID:    "req-discount-image-2",
+		Item: &playgroundMediaItem{
+			ID:          "media-discount-image-2",
+			Kind:        "image",
+			URL:         "/pg/media/files/u-1/discount.png",
+			DisplayURL:  "/pg/media/files/u-1/discount.png",
+			CachedURL:   "/pg/media/files/u-1/discount.png",
+			Filename:    "discount.png",
+			Model:       "geek2api-image-2",
+			Status:      "ready",
+			CacheStatus: "cached",
+			Metadata: map[string]interface{}{
+				"model": "geek2api-image-2",
+			},
+		},
+	})
+
+	playgroundResponse := taskToPlaygroundImageTask(task)
+	openAIResponse := taskToOpenAIImageTask(task)
+
+	playgroundJSON, err := json.Marshal(playgroundResponse)
+	require.NoError(t, err)
+	openAIJSON, err := json.Marshal(openAIResponse)
+	require.NoError(t, err)
+
+	require.Contains(t, string(playgroundJSON), "特价 image-2")
+	require.Contains(t, string(openAIJSON), "特价 image-2")
+	require.NotContains(t, string(playgroundJSON), "geek2api")
+	require.NotContains(t, string(openAIJSON), "geek2api")
+}
+
 func TestPlaygroundImageTaskEditsMultipartReplaysWithNormalizedN(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	var body bytes.Buffer

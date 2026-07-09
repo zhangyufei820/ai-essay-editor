@@ -159,6 +159,7 @@ type openAIImageTaskListResponse struct {
 
 type playgroundImageTaskPayload struct {
 	Model           string                 `json:"model,omitempty"`
+	DisplayModel    string                 `json:"display_model,omitempty"`
 	Prompt          string                 `json:"prompt,omitempty"`
 	Workflow        string                 `json:"workflow,omitempty"`
 	RequestPath     string                 `json:"request_path,omitempty"`
@@ -225,8 +226,16 @@ func createImageTask(c *gin.Context, openAICompat bool) {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid image request"})
 		return
 	}
-	if normalizedModel, changed := normalizePlaygroundImageProductModelName(imageReq.Model); changed {
+	displayModel := service.PublicImageModelDisplayName(imageReq.Model, "")
+	if normalizedModel, publicAlias, changed := normalizePlaygroundImageProductModelNameForRelay(imageReq.Model); changed {
 		imageReq.Model = normalizedModel
+		displayModel = service.PublicImageModelDisplayName(normalizedModel, publicAlias)
+		if publicAlias != "" {
+			middleware.SetPublicImageModelAlias(c, publicAlias)
+		}
+	}
+	if displayModel == "" {
+		displayModel = imageReq.Model
 	}
 	if strings.TrimSpace(imageReq.Model) == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "model is required"})
@@ -289,6 +298,7 @@ func createImageTask(c *gin.Context, openAICompat bool) {
 	now := time.Now().Unix()
 	payload := playgroundImageTaskPayload{
 		Model:         truncatePlaygroundText(imageReq.Model, 160),
+		DisplayModel:  truncatePlaygroundText(displayModel, 160),
 		Prompt:        truncatePlaygroundText(imageReq.Prompt, 3000),
 		Workflow:      workflow,
 		RequestPath:   path,
@@ -443,7 +453,7 @@ func normalizePlaygroundImageTaskRequest(imageReq *dto.ImageRequest, payload map
 }
 
 func normalizePlaygroundImageTaskModel(imageReq *dto.ImageRequest, payload map[string]interface{}) bool {
-	normalized, changed := normalizePlaygroundImageProductModelName(imageReq.Model)
+	normalized, _, changed := normalizePlaygroundImageProductModelNameForRelay(imageReq.Model)
 	if !changed {
 		return false
 	}
@@ -453,11 +463,57 @@ func normalizePlaygroundImageTaskModel(imageReq *dto.ImageRequest, payload map[s
 }
 
 func normalizePlaygroundImageProductModelName(modelName string) (string, bool) {
-	trimmed := strings.TrimSpace(modelName)
-	if strings.EqualFold(trimmed, "gpt-image-2") {
-		return "gpt-image-2-4K", true
+	normalized, _, changed := normalizePlaygroundImageProductModelNameForRelay(modelName)
+	return normalized, changed
+}
+
+func normalizePlaygroundImageProductModelNameForRelay(modelName string) (string, string, bool) {
+	return service.NormalizeImageGenerationModelName(modelName)
+}
+
+func playgroundImagePayloadDisplayModel(payload *playgroundImageTaskPayload) string {
+	if payload == nil {
+		return ""
 	}
-	return trimmed, trimmed != modelName
+	return service.PublicImageModelDisplayName(payload.Model, payload.DisplayModel)
+}
+
+func playgroundImageTaskDisplayModel(task *model.Task, payload *playgroundImageTaskPayload) string {
+	if displayModel := playgroundImagePayloadDisplayModel(payload); displayModel != "" {
+		return displayModel
+	}
+	if task == nil {
+		return ""
+	}
+	return service.PublicImageModelDisplayName(task.Properties.OriginModelName, "")
+}
+
+func sanitizePlaygroundImageTaskPayloadForResponse(payload *playgroundImageTaskPayload, displayModel string) {
+	if payload == nil {
+		return
+	}
+	payload.RequestFile = ""
+	if displayModel == "" {
+		return
+	}
+	payload.Model = displayModel
+	payload.DisplayModel = displayModel
+	if payload.Item == nil {
+		return
+	}
+	item := *payload.Item
+	item.Model = displayModel
+	if len(item.Metadata) > 0 {
+		metadata := make(map[string]interface{}, len(item.Metadata))
+		for key, value := range item.Metadata {
+			metadata[key] = value
+		}
+		if _, ok := metadata["model"]; ok {
+			metadata["model"] = displayModel
+		}
+		item.Metadata = metadata
+	}
+	payload.Item = &item
 }
 
 const playgroundImageMaxCount = uint(10)
@@ -895,7 +951,7 @@ func recordPlaygroundImageTaskSubmittedLog(c *gin.Context, task *model.Task, pay
 		Type:      model.LogTypeConsume,
 		Content:   strings.Join(contentParts, "，"),
 		TokenName: c.GetString("token_name"),
-		ModelName: payload.Model,
+		ModelName: playgroundImageTaskDisplayModel(task, payload),
 		Quota:     0,
 		ChannelId: 0,
 		TokenId:   c.GetInt("token_id"),
@@ -1231,6 +1287,9 @@ func seedPlaygroundImageTaskContext(ginCtx *gin.Context, userID int, username st
 		if payload.TokenName != "" {
 			tokenName = payload.TokenName
 		}
+		if service.IsInternalImageModelAllowedByPublicAlias(payload.Model, payload.DisplayModel) {
+			middleware.SetPublicImageModelAlias(ginCtx, payload.DisplayModel)
+		}
 	}
 	ginCtx.Set(common.RequestIdKey, requestID)
 	ginCtx.Set("id", userID)
@@ -1387,7 +1446,7 @@ func cacheFirstPlaygroundImageTaskResult(c *gin.Context, task *model.Task, paylo
 		URL:           rawURL,
 		Kind:          "image",
 		Prompt:        payload.Prompt,
-		Model:         payload.Model,
+		Model:         playgroundImageTaskDisplayModel(task, payload),
 		Workflow:      payload.Workflow,
 		RevisedPrompt: first.RevisedPrompt,
 		Metadata:      metadata,
@@ -1433,6 +1492,9 @@ func markPlaygroundImageTaskSuccess(task *model.Task, item *playgroundMediaItem,
 	if task.StartTime > 0 && task.FinishTime >= task.StartTime {
 		extra["use_time"] = int(task.FinishTime - task.StartTime)
 	}
+	if displayModel := playgroundImageTaskDisplayModel(task, payload); displayModel != "" {
+		extra["model_name"] = displayModel
+	}
 	logErr := model.UpdatePlaygroundImageTaskConsumeLogResult(task.UserId, payload.RequestID, task.TaskID, item.URL, task.FinishTime, string(model.TaskStatusSuccess), extra)
 	if logErr != nil {
 		common.SysError("failed to update playground image task result log: " + logErr.Error())
@@ -1461,7 +1523,7 @@ func updatePlaygroundImageRecoveryTaskReady(task *model.Task, url string, item *
 			CachedURL:   url,
 			Filename:    filepath.Base(url),
 			Prompt:      payload.Prompt,
-			Model:       payload.Model,
+			Model:       playgroundImageTaskDisplayModel(task, &payload),
 			Workflow:    payload.Workflow,
 			Status:      "ready",
 			CacheStatus: "cached",
@@ -1751,7 +1813,8 @@ func intFromPlaygroundLogValue(value interface{}) int {
 func taskToPlaygroundImageTask(task *model.Task) gin.H {
 	payload := playgroundImageTaskPayload{}
 	_ = task.GetData(&payload)
-	payload.RequestFile = ""
+	displayModel := playgroundImageTaskDisplayModel(task, &payload)
+	sanitizePlaygroundImageTaskPayloadForResponse(&payload, displayModel)
 	return gin.H{
 		"task_id":     task.TaskID,
 		"request_id":  payload.RequestID,
@@ -1760,7 +1823,7 @@ func taskToPlaygroundImageTask(task *model.Task) gin.H {
 		"submit_time": task.SubmitTime,
 		"start_time":  task.StartTime,
 		"finish_time": task.FinishTime,
-		"model":       task.Properties.OriginModelName,
+		"model":       displayModel,
 		"prompt":      task.Properties.Input,
 		"action":      task.Action,
 		"result_url":  task.GetResultURL(),
@@ -1774,9 +1837,10 @@ func taskToPlaygroundImageTask(task *model.Task) gin.H {
 func taskToOpenAIImageTask(task *model.Task) map[string]interface{} {
 	payload := playgroundImageTaskPayload{}
 	_ = task.GetData(&payload)
-	payload.RequestFile = ""
 	taskID := task.TaskID
 	resultURL := strings.TrimSpace(task.GetResultURL())
+	displayModel := playgroundImageTaskDisplayModel(task, &payload)
+	sanitizePlaygroundImageTaskPayloadForResponse(&payload, displayModel)
 	response := map[string]interface{}{
 		"task_id":     taskID,
 		"id":          taskID,
@@ -1786,7 +1850,7 @@ func taskToOpenAIImageTask(task *model.Task) map[string]interface{} {
 		"created":     task.SubmitTime,
 		"created_at":  task.SubmitTime,
 		"updated_at":  task.FinishTime,
-		"model":       task.Properties.OriginModelName,
+		"model":       displayModel,
 		"result_url":  resultURL,
 		"fail_reason": task.FailReason,
 		"message":     task.FailReason,

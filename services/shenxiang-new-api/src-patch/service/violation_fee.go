@@ -148,7 +148,7 @@ func ChargeViolationFeeIfNeeded(ctx *gin.Context, relayInfo *relaycommon.RelayIn
 
 	model.RecordConsumeLog(ctx, relayInfo.UserId, model.RecordConsumeLogParams{
 		ChannelId:      relayInfo.ChannelId,
-		ModelName:      relayInfo.OriginModelName,
+		ModelName:      PublicImageModelDisplayName(relayInfo.OriginModelName, ctx.GetString("public_image_model_alias")),
 		TokenName:      tokenName,
 		Quota:          feeQuota,
 		Content:        "Violation fee charged",

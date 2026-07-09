@@ -85,6 +85,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
             ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "image 2电商商品图快速通道(1.5K)"],
         )
         self.assertNotIn("gpt-image-2-4K", profiles["codex"])
+        self.assertIn("特价 image-2", profiles["image"])
         self.assertNotIn("geek2api-image-2", profiles["image"])
 
     def test_disabled_image2_ability_pairs_are_not_synced(self) -> None:

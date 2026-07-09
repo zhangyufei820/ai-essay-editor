@@ -23,6 +23,7 @@ USER_CODEX_TOKEN_NAME_PREFIXES = ("星人Codex ",)
 
 RAW_GPT_IMAGE2_MODEL = "gpt-image-2"
 GPT_IMAGE2_PRODUCT_MODEL = "gpt-image-2-4K"
+DISCOUNT_IMAGE2_PUBLIC_MODEL = "特价 image-2"
 CODEX_IMAGE_15K_MODEL = "image 2电商商品图快速通道(1.5K)"
 CODEX_IMAGE_15K_PUBLIC_TAGS = "image,openai,ecommerce,1.5k"
 SUPPLIER_EXPOSED_MODELS = {
@@ -339,6 +340,8 @@ def model_lists() -> dict[str, list[str]]:
             append_model("codex", model)
     available_codex_models = set(profiles["codex"]) | set(profiles["image"])
     profiles["codex"] = [model for model in CODEX_ALLOWED_MODELS if model in available_codex_models]
+    if DISCOUNT_IMAGE2_PUBLIC_MODEL not in profiles["image"]:
+        profiles["image"].append(DISCOUNT_IMAGE2_PUBLIC_MODEL)
     for model in PUBLIC_SEEDANCE_VIDEO_MODELS:
         if model not in profiles["video"]:
             profiles["video"].append(model)

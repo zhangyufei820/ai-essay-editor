@@ -93,7 +93,7 @@ func recordPlaygroundImageRequestLog(c *gin.Context, info *relaycommon.RelayInfo
 	if info.FinalPreConsumedQuota > 0 {
 		other["reserved_quota"] = info.FinalPreConsumedQuota
 	}
-	if info.IsModelMapped {
+	if info.IsModelMapped && service.ShouldRecordModelMapping(info.OriginModelName, info.UpstreamModelName, c.GetString("public_image_model_alias")) {
 		other["is_model_mapped"] = true
 		other["upstream_model_name"] = info.UpstreamModelName
 	}
@@ -106,6 +106,7 @@ func recordPlaygroundImageRequestLog(c *gin.Context, info *relaycommon.RelayInfo
 	if username == "" {
 		username, _ = model.GetUsernameById(info.UserId, false)
 	}
+	displayModel := service.PublicImageModelDisplayName(info.OriginModelName, c.GetString("public_image_model_alias"))
 	log := &model.Log{
 		UserId:    info.UserId,
 		Username:  username,
@@ -113,7 +114,7 @@ func recordPlaygroundImageRequestLog(c *gin.Context, info *relaycommon.RelayInfo
 		Type:      model.LogTypeSystem,
 		Content:   strings.Join(contentParts, "，"),
 		TokenName: c.GetString("token_name"),
-		ModelName: info.OriginModelName,
+		ModelName: displayModel,
 		Quota:     0,
 		ChannelId: info.ChannelId,
 		TokenId:   info.TokenId,
