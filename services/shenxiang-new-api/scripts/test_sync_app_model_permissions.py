@@ -150,6 +150,33 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertNotIn("geek2api-image-2", sql)
         self.assertNotIn("gpt-image-2-4K", sql)
 
+    def test_sync_supplier_safe_public_metadata_removes_supplier_price_keys(self) -> None:
+        captured_options: dict[str, dict[str, float]] = {}
+        captured_sql: list[str] = []
+
+        def fake_parse_json_option(key: str) -> dict[str, float]:
+            if key == "ModelPrice":
+                return {
+                    "geek2api-image-2": 0.1,
+                    "gpt-image-2": 0.2,
+                    "image 2电商商品图快速通道(1.5K)": 1500.0,
+                }
+            return {"gpt-5.5": 1.0}
+
+        self.module.parse_json_option = fake_parse_json_option
+        self.module.upsert_json_option = lambda key, values: captured_options.update({key: values})
+        self.module.mysql_exec = captured_sql.append
+
+        result = self.module.sync_supplier_safe_public_metadata()
+
+        self.assertEqual(result, {"pricing_options_sanitized": 1, "public_model_tags_synced": 1})
+        self.assertNotIn("geek2api-image-2", captured_options["ModelPrice"])
+        self.assertNotIn("gpt-image-2", captured_options["ModelPrice"])
+        self.assertIn("image 2电商商品图快速通道(1.5K)", captured_options["ModelPrice"])
+        sql = "\n".join(captured_sql)
+        self.assertIn("image,openai,ecommerce,1.5k", sql)
+        self.assertNotIn("dragtokens", sql)
+
 
 if __name__ == "__main__":
     unittest.main()

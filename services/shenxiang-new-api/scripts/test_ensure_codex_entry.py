@@ -218,6 +218,36 @@ API.get('/api/user/models');
         finally:
             self.module.mysql_exec = original
 
+    def test_supplier_safe_public_metadata_guard_removes_supplier_price_keys(self) -> None:
+        captured: list[str] = []
+
+        def fake_mysql_exec(_app_root: Path, query: str) -> str:
+            if "SELECT value FROM options" in query and "ModelPrice" in query:
+                return (
+                    "value\n"
+                    '{"geek2api-image-2":0.1,"gpt-image-2":0.2,'
+                    '"image 2电商商品图快速通道(1.5K)":1500.0}\n'
+                )
+            if "SELECT value FROM options" in query:
+                return "value\n{\"gpt-5.5\":1.0}\n"
+            captured.append(query)
+            return ""
+
+        original = self.module.mysql_exec
+        self.module.mysql_exec = fake_mysql_exec
+        try:
+            result = self.module.sync_supplier_safe_public_metadata_guard(self.source_root)
+        finally:
+            self.module.mysql_exec = original
+
+        self.assertEqual(result, {"pricing_options_sanitized": 1, "public_model_tags_synced": 1})
+        sql = "\n".join(captured)
+        self.assertIn("image 2电商商品图快速通道(1.5K)", sql)
+        self.assertIn("image,openai,ecommerce,1.5k", sql)
+        self.assertNotIn("geek2api-image-2", sql)
+        self.assertNotIn("gpt-image-2\":0.2", sql)
+        self.assertNotIn("dragtokens", sql)
+
 
 if __name__ == "__main__":
     unittest.main()

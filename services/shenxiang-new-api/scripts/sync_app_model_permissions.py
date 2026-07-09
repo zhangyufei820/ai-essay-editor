@@ -24,6 +24,7 @@ USER_CODEX_TOKEN_NAME_PREFIXES = ("星人Codex ",)
 RAW_GPT_IMAGE2_MODEL = "gpt-image-2"
 GPT_IMAGE2_PRODUCT_MODEL = "gpt-image-2-4K"
 CODEX_IMAGE_15K_MODEL = "image 2电商商品图快速通道(1.5K)"
+CODEX_IMAGE_15K_PUBLIC_TAGS = "image,openai,ecommerce,1.5k"
 SUPPLIER_EXPOSED_MODELS = {
     "geek2api-image-2",
 }
@@ -183,6 +184,10 @@ def is_supplier_exposed_model(model: str) -> bool:
     return any(marker in normalized for marker in SUPPLIER_EXPOSED_MARKERS)
 
 
+def is_hidden_pricing_model(model: str) -> bool:
+    return model.strip() == RAW_GPT_IMAGE2_MODEL or is_supplier_exposed_model(model)
+
+
 def supplier_exposed_model_limit_predicate() -> str:
     terms = [RAW_GPT_IMAGE2_MODEL, *SUPPLIER_EXPOSED_MARKERS]
     clauses = [
@@ -273,6 +278,30 @@ def sync_public_seedance_pricing() -> None:
     upsert_json_option("ModelRatio", model_ratios)
     upsert_json_option("CompletionRatio", completion_ratios)
     upsert_json_option("ModelPrice", model_prices)
+
+
+def sync_supplier_safe_public_metadata() -> dict[str, int]:
+    sanitized_options = 0
+    for key in ("ModelRatio", "CompletionRatio", "ModelPrice"):
+        values = parse_json_option(key)
+        sanitized = {
+            model: value
+            for model, value in values.items()
+            if not is_hidden_pricing_model(model)
+        }
+        if sanitized != values:
+            upsert_json_option(key, sanitized)
+            sanitized_options += 1
+
+    mysql_exec(
+        "UPDATE models SET tags = "
+        + sql_quote(CODEX_IMAGE_15K_PUBLIC_TAGS)
+        + ", updated_time = UNIX_TIMESTAMP() "
+        "WHERE deleted_at IS NULL AND model_name = "
+        + sql_quote(CODEX_IMAGE_15K_MODEL)
+        + ";"
+    )
+    return {"pricing_options_sanitized": sanitized_options, "public_model_tags_synced": 1}
 
 
 def model_lists() -> dict[str, list[str]]:
@@ -633,6 +662,7 @@ def refresh_codex() -> None:
 def main() -> int:
     ensure_public_seedance_models()
     sync_public_seedance_pricing()
+    metadata_result = sync_supplier_safe_public_metadata()
     profiles = model_lists()
     missing = [name for name, values in profiles.items() if not values]
     if missing:
@@ -649,6 +679,7 @@ def main() -> int:
         "synced model permissions: "
         + ", ".join(f"{name}={len(values)}" for name, values in profiles.items())
         + f", codex_env_changed={env_changed}, codex_token_sync={codex_token_result}, gpt_image2_guard={guard_result}"
+        + f", supplier_safe_metadata={metadata_result}"
     )
     return 0
 

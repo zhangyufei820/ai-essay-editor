@@ -22,6 +22,7 @@ SOURCE_ROOT_MARKERS = (
 RAW_GPT_IMAGE2_MODEL = "gpt-image-2"
 GPT_IMAGE2_PRODUCT_MODEL = "gpt-image-2-4K"
 CODEX_IMAGE_15K_MODEL = "image 2电商商品图快速通道(1.5K)"
+CODEX_IMAGE_15K_PUBLIC_TAGS = "image,openai,ecommerce,1.5k"
 CODEX_TOKEN_NAMES = ("星人 Codex 文本令牌", "星人 Codex 自动令牌")
 USER_CODEX_TOKEN_NAME_PREFIXES = ("星人Codex ",)
 ADMIN_SYSTEM_TOKEN_USER_ID = 1
@@ -619,6 +620,10 @@ def is_supplier_exposed_model(model: str) -> bool:
     return any(marker in normalized for marker in SUPPLIER_EXPOSED_MARKERS)
 
 
+def is_hidden_pricing_model(model: str) -> bool:
+    return model.strip() == RAW_GPT_IMAGE2_MODEL or is_supplier_exposed_model(model)
+
+
 def supplier_exposed_model_limit_predicate() -> str:
     terms = [RAW_GPT_IMAGE2_MODEL, *SUPPLIER_EXPOSED_MARKERS]
     clauses = [
@@ -644,6 +649,54 @@ def mysql_count(app_root: Path, query: str) -> int:
         if first_cell.isdigit():
             return int(first_cell)
     return 0
+
+
+def mysql_option_value(app_root: Path, key: str) -> str:
+    rows = mysql_exec(app_root, "SELECT value FROM options WHERE `key` = " + sql_quote(key) + " LIMIT 1;").splitlines()
+    for row in reversed(rows):
+        if row.strip() and row.strip() != "value":
+            return row
+    return ""
+
+
+def sync_supplier_safe_public_metadata_guard(app_root: Path) -> dict[str, int]:
+    result = {"pricing_options_sanitized": 0, "public_model_tags_synced": 1}
+    statements = ["START TRANSACTION;"]
+    for key in ("ModelRatio", "CompletionRatio", "ModelPrice"):
+        raw = mysql_option_value(app_root, key)
+        if not raw:
+            continue
+        try:
+            parsed = json.loads(raw)
+        except Exception:
+            continue
+        if not isinstance(parsed, dict):
+            continue
+        sanitized = {
+            model: value
+            for model, value in parsed.items()
+            if isinstance(model, str) and not is_hidden_pricing_model(model)
+        }
+        if sanitized != parsed:
+            statements.append(
+                "REPLACE INTO options (`key`, value) VALUES ("
+                + sql_quote(key)
+                + ", "
+                + sql_quote(json.dumps(sanitized, ensure_ascii=False, sort_keys=True, separators=(",", ":")))
+                + ");"
+            )
+            result["pricing_options_sanitized"] += 1
+    statements.append(
+        "UPDATE models SET tags = "
+        + sql_quote(CODEX_IMAGE_15K_PUBLIC_TAGS)
+        + ", updated_time = UNIX_TIMESTAMP() "
+        "WHERE deleted_at IS NULL AND model_name = "
+        + sql_quote(CODEX_IMAGE_15K_MODEL)
+        + ";"
+    )
+    statements.append("COMMIT;")
+    mysql_exec(app_root, "\n".join(statements))
+    return result
 
 
 def enforce_gpt_image2_route_db_guard(app_root: Path) -> dict[str, int]:
@@ -758,6 +811,7 @@ def enforce_gpt_image2_route_db_guard(app_root: Path) -> dict[str, int]:
     mysql_exec(app_root, "\n".join(statements))
     result["tokens_rewritten"] = len(token_updates)
     result["codex_tokens_rewritten"] = len(codex_token_updates)
+    result.update(sync_supplier_safe_public_metadata_guard(app_root))
     return result
 
 
