@@ -40,6 +40,9 @@ import {
 
 const { Text } = Typography;
 
+const MONTHLY_TEXT_VALUE_MULTIPLIER = 1.8;
+const OPENAI_INPUT_EQUIVALENT_USD_PER_CNY = 1.6531;
+
 // 过滤易支付方式
 function getEpayMethods(payMethods = []) {
   return (payMethods || []).filter(
@@ -75,6 +78,14 @@ function formatCnyAmount(value) {
   })}`;
 }
 
+function formatUsdAmount(value) {
+  if (!Number.isFinite(value)) return '$0';
+  return `$${value.toLocaleString(undefined, {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+  })}`;
+}
+
 function getMonthlyQuota(plan) {
   const monthly = Number(plan?.monthly_amount_total || 0);
   if (monthly > 0) return monthly;
@@ -92,9 +103,15 @@ function getPlanAudience(plan, t) {
 
 function getPlanQuotaSummary(plan) {
   const price = Number(plan?.price_amount || 0);
+  const baseQuota = getMonthlyQuota(plan);
+  const textQuota = Math.round(baseQuota * MONTHLY_TEXT_VALUE_MULTIPLIER);
   return {
     priceText: formatCnyAmount(price),
-    quotaText: renderQuota(getMonthlyQuota(plan), 2),
+    quotaText: renderQuota(baseQuota, 2),
+    textQuotaText: renderQuota(textQuota, 2),
+    openAIInputEquivalentText: formatUsdAmount(
+      price * OPENAI_INPUT_EQUIVALENT_USD_PER_CNY,
+    ),
   };
 }
 
@@ -113,11 +130,11 @@ function MonthlyCardValueGuide({ t, plans = [] }) {
       <div className='space-y-3'>
         <div>
           <Typography.Title heading={6} style={{ margin: 0 }}>
-            {t('月卡额度说明')}
+            {t('月卡文本额度说明')}
           </Typography.Title>
           <Text type='tertiary' size='small'>
             {t(
-              '月卡按实付人民币发放可消费额度，适合高频 Codex、长上下文、多文件分析和反复调试。额度仅用于模型调用，不等同于现金余额。',
+              '月卡面向文本模型提供约 1.8 倍按量等值额度，适合高频 Codex、长上下文、多文件分析和反复调试。图片、视频等权益按活动规则独立计算。',
             )}
           </Text>
         </div>
@@ -142,13 +159,15 @@ function MonthlyCardValueGuide({ t, plans = [] }) {
                   {t('套餐价格')} {quotaSummary.priceText}
                 </div>
                 <div className='mt-1 text-sm'>
-                  <Text strong>{t('可消费额度')} </Text>
+                  <Text strong>{t('按量文本等值')} </Text>
                   <span className='text-blue-600 font-semibold'>
-                    {quotaSummary.quotaText}
+                    {quotaSummary.textQuotaText}
                   </span>
                 </div>
                 <div className='mt-1 text-xs text-gray-500'>
-                  {t('人民币计价，30 天内用完为止')}
+                  {t('约 OpenAI 官网')}{' '}
+                  {quotaSummary.openAIInputEquivalentText}{' '}
+                  {t('输入等值用量')}
                 </div>
               </div>
             );
@@ -591,7 +610,7 @@ const SubscriptionPlansCard = ({
             <>
               <div className='px-1'>
                 <Text type='tertiary' size='small'>
-                  {t('可消费额度仅用于模型调用消耗，不等同于现金余额。本月额度用完为止。')}
+                  {t('月卡优先给文本模型按量等值额度，额度仅用于模型调用，不等同于现金余额。')}
                 </Text>
               </div>
               <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-5 w-full px-1'>
@@ -665,15 +684,19 @@ const SubscriptionPlansCard = ({
                             </Text>
                           </div>
                           <div className='mt-2 text-sm'>
-                            <Text>{t('含')} </Text>
+                            <Text>{t('文本模型约')} </Text>
                             <span className='font-semibold text-blue-600'>
-                              {quotaSummary.quotaText}
+                              {quotaSummary.textQuotaText}
                             </span>
-                            <Text> {t('可消费额度')}</Text>
+                            <Text> {t('按量等值额度')}</Text>
                           </div>
                           <div className='mt-1 flex flex-wrap items-center gap-2'>
                             <Tag color='blue' shape='circle' size='small'>
-                              {t('人民币计价')}
+                              {t('约 1.8 倍文本额度')}
+                            </Tag>
+                            <Tag color='green' shape='circle' size='small'>
+                              {t('OpenAI 官网约')}{' '}
+                              {quotaSummary.openAIInputEquivalentText}
                             </Tag>
                             <Text type='tertiary' size='small'>
                               {t('30 天内用完为止')}
@@ -684,7 +707,8 @@ const SubscriptionPlansCard = ({
                             size='small'
                             style={{ display: 'block', marginTop: 4 }}
                           >
-                            {t('额度仅用于模型调用，不等同于现金余额')}
+                            {t('基础额度')} {quotaSummary.quotaText}
+                            {t('，文本月卡扣减后约等于更高按量用量')}
                           </Text>
                         </div>
 

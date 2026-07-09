@@ -204,6 +204,8 @@ func (s *BillingSession) GetPreConsumedQuota() int {
 }
 
 func (s *BillingSession) Reserve(targetQuota int) error {
+	targetQuota = EffectiveMonthlyCardTextBillingQuota(s.relayInfo, targetQuota)
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -419,6 +421,8 @@ func NewBillingSession(c *gin.Context, relayInfo *relaycommon.RelayInfo, preCons
 	isMonthlyCardToken := c != nil && (c.GetBool("monthly_card_token") || IsMonthlyCardTokenName(c.GetString("token_name")))
 	hasMonthlyCardCached := false
 	hasMonthlyCardValue := false
+	hasCurrentMonthlyCardTextDiscountCached := false
+	hasCurrentMonthlyCardTextDiscountValue := false
 	getUserMonthlyCard := func() (bool, error) {
 		if hasMonthlyCardCached {
 			return hasMonthlyCardValue, nil
@@ -431,13 +435,25 @@ func NewBillingSession(c *gin.Context, relayInfo *relaycommon.RelayInfo, preCons
 		hasMonthlyCardCached = true
 		return ok, nil
 	}
+	getUserCurrentMonthlyCardTextDiscount := func() (bool, error) {
+		if hasCurrentMonthlyCardTextDiscountCached {
+			return hasCurrentMonthlyCardTextDiscountValue, nil
+		}
+		ok, err := model.HasActiveCurrentMonthlyCardTextDiscountSubscription(relayInfo.UserId)
+		if err != nil {
+			return false, err
+		}
+		hasCurrentMonthlyCardTextDiscountValue = ok
+		hasCurrentMonthlyCardTextDiscountCached = true
+		return ok, nil
+	}
 	monthlyCardModelDenied := func() *types.NewAPIError {
 		modelName := strings.TrimSpace(relayInfo.OriginModelName)
 		if modelName == "" {
 			modelName = "requested model"
 		}
 		return types.NewErrorWithStatusCode(
-			fmt.Errorf("¥500 月卡不支持模型 %s，请切换到月卡模型或使用余额支付", modelName),
+			fmt.Errorf("月卡不支持模型 %s，请切换到月卡模型或使用余额支付", modelName),
 			types.ErrorCodeAccessDenied, http.StatusForbidden,
 			types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
 	}
@@ -459,7 +475,7 @@ func NewBillingSession(c *gin.Context, relayInfo *relaycommon.RelayInfo, preCons
 		}
 		if !hasMonthlyCard {
 			return nil, types.NewErrorWithStatusCode(
-				fmt.Errorf("月卡专用 API Key 需要生效中的 ¥500 月卡"),
+				fmt.Errorf("月卡专用 API Key 需要生效中的月卡"),
 				types.ErrorCodeInsufficientUserQuota, http.StatusForbidden,
 				types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
 		}
@@ -517,6 +533,17 @@ func NewBillingSession(c *gin.Context, relayInfo *relaycommon.RelayInfo, preCons
 			return nil, apiErr
 		}
 		subConsume := int64(preConsumedQuota)
+		quotaType := model.SubscriptionQuotaTypeDefault
+		if MonthlyCardTextSupportsModel(relayInfo.OriginModelName) {
+			hasCurrentMonthlyCard, err := getUserCurrentMonthlyCardTextDiscount()
+			if err != nil {
+				return nil, types.NewError(err, types.ErrorCodeQueryDataError, types.ErrOptionWithSkipRetry())
+			}
+			if hasCurrentMonthlyCard {
+				subConsume = int64(MonthlyCardTextBillingQuota(preConsumedQuota))
+				quotaType = model.SubscriptionQuotaTypeMonthlyCardText
+			}
+		}
 		if subConsume <= 0 {
 			subConsume = 1
 		}
@@ -534,6 +561,7 @@ func NewBillingSession(c *gin.Context, relayInfo *relaycommon.RelayInfo, preCons
 				requestId: relayInfo.RequestId,
 				userId:    relayInfo.UserId,
 				modelName: relayInfo.OriginModelName,
+				quotaType: quotaType,
 				amount:    subConsume,
 			},
 		}

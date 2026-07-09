@@ -6,11 +6,28 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
+	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
+)
+
+const MonthlyCardTextValueMultiplier = 1.8
+
+const (
+	monthlyCardTextBillingNumerator   int64 = 5
+	monthlyCardTextBillingDenominator int64 = 9
 )
 
 var monthlyCardAllowedModels = []string{
 	"gpt-image-2-4K",
+	"gpt-5.5",
+	"gpt-5.4-mini",
+	"gpt-5.3-codex-spark",
+	"gpt-5.4",
+	"gpt-5.5-openai-compact",
+	"codex-auto-review",
+}
+
+var monthlyCardTextDiscountModels = []string{
 	"gpt-5.5",
 	"gpt-5.4-mini",
 	"gpt-5.3-codex-spark",
@@ -72,6 +89,60 @@ func MonthlyCardChannelSupportsModel(modelName string) bool {
 		}
 	}
 	return false
+}
+
+func MonthlyCardTextSupportsModel(modelName string) bool {
+	name := normalizeMonthlyCardModelName(modelName)
+	if name == "" {
+		return false
+	}
+	for _, allowed := range monthlyCardTextDiscountModels {
+		if normalizeMonthlyCardModelName(allowed) == name {
+			return true
+		}
+	}
+	return false
+}
+
+func MonthlyCardTextBillingQuota(retailQuota int) int {
+	if retailQuota <= 0 {
+		return 0
+	}
+	quota := (int64(retailQuota)*monthlyCardTextBillingNumerator + monthlyCardTextBillingDenominator - 1) / monthlyCardTextBillingDenominator
+	if quota <= 0 {
+		return 1
+	}
+	return int(quota)
+}
+
+func monthlyCardTextDiscountApplies(relayInfo *relaycommon.RelayInfo) bool {
+	if relayInfo == nil || relayInfo.BillingSource != BillingSourceSubscription {
+		return false
+	}
+	if !MonthlyCardTextSupportsModel(relayInfo.OriginModelName) {
+		return false
+	}
+	return model.IsCurrentMonthlyCardTextDiscountPlanInfo(relayInfo.SubscriptionPlanId, relayInfo.SubscriptionPlanTitle)
+}
+
+func EffectiveMonthlyCardTextBillingQuota(relayInfo *relaycommon.RelayInfo, retailQuota int) int {
+	if !monthlyCardTextDiscountApplies(relayInfo) {
+		return retailQuota
+	}
+	return MonthlyCardTextBillingQuota(retailQuota)
+}
+
+func InjectMonthlyCardTextBillingInfo(other map[string]interface{}, relayInfo *relaycommon.RelayInfo, retailQuota int, billedQuota int) {
+	if other == nil || !monthlyCardTextDiscountApplies(relayInfo) {
+		return
+	}
+	other["monthly_card_text_discount"] = true
+	other["monthly_card_text_value_multiplier"] = MonthlyCardTextValueMultiplier
+	other["monthly_card_retail_quota"] = retailQuota
+	other["monthly_card_billed_quota"] = billedQuota
+	if retailQuota > billedQuota {
+		other["monthly_card_saved_quota"] = retailQuota - billedQuota
+	}
 }
 
 func canUseSubscriptionFundingForModel(hasMonthlyCard bool, modelName string) bool {

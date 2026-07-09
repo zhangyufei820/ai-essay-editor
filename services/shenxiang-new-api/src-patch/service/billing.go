@@ -34,37 +34,46 @@ func PreConsumeBilling(c *gin.Context, preConsumedQuota int, relayInfo *relaycom
 // 否则回退到旧的 PostConsumeQuota 路径（兼容按次计费等场景）。
 func SettleBilling(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, actualQuota int) error {
 	if relayInfo.Billing != nil {
+		actualBillingQuota := EffectiveMonthlyCardTextBillingQuota(relayInfo, actualQuota)
 		preConsumed := relayInfo.Billing.GetPreConsumedQuota()
-		delta := actualQuota - preConsumed
+		delta := actualBillingQuota - preConsumed
+
+		if actualBillingQuota != actualQuota {
+			logger.LogInfo(ctx, fmt.Sprintf("月卡文本额度换算：按量额度 %s，月卡实际扣减 %s（约 %.1f 倍文本额度）",
+				logger.FormatQuota(actualQuota),
+				logger.FormatQuota(actualBillingQuota),
+				MonthlyCardTextValueMultiplier,
+			))
+		}
 
 		if delta > 0 {
 			logger.LogInfo(ctx, fmt.Sprintf("预扣费后补扣费：%s（实际消耗：%s，预扣费：%s）",
 				logger.FormatQuota(delta),
-				logger.FormatQuota(actualQuota),
+				logger.FormatQuota(actualBillingQuota),
 				logger.FormatQuota(preConsumed),
 			))
 		} else if delta < 0 {
 			logger.LogInfo(ctx, fmt.Sprintf("预扣费后返还扣费：%s（实际消耗：%s，预扣费：%s）",
 				logger.FormatQuota(-delta),
-				logger.FormatQuota(actualQuota),
+				logger.FormatQuota(actualBillingQuota),
 				logger.FormatQuota(preConsumed),
 			))
 		} else {
 			logger.LogInfo(ctx, fmt.Sprintf("预扣费与实际消耗一致，无需调整：%s（按次计费）",
-				logger.FormatQuota(actualQuota),
+				logger.FormatQuota(actualBillingQuota),
 			))
 		}
 
-		if err := relayInfo.Billing.Settle(actualQuota); err != nil {
+		if err := relayInfo.Billing.Settle(actualBillingQuota); err != nil {
 			return err
 		}
 
 		// 发送额度通知（订阅计费使用订阅剩余额度）
-		if actualQuota != 0 {
+		if actualBillingQuota != 0 {
 			if relayInfo.BillingSource == BillingSourceSubscription {
 				checkAndSendSubscriptionQuotaNotify(relayInfo)
 			} else {
-				checkAndSendQuotaNotify(relayInfo, actualQuota-preConsumed, preConsumed)
+				checkAndSendQuotaNotify(relayInfo, actualBillingQuota-preConsumed, preConsumed)
 			}
 		}
 		return nil

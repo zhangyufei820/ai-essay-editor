@@ -33,6 +33,11 @@ const (
 	SubscriptionResetCustom  = "custom"
 )
 
+const (
+	SubscriptionQuotaTypeDefault         = 0
+	SubscriptionQuotaTypeMonthlyCardText = 1
+)
+
 var (
 	ErrSubscriptionOrderNotFound      = errors.New("subscription order not found")
 	ErrSubscriptionOrderStatusInvalid = errors.New("subscription order status invalid")
@@ -296,6 +301,30 @@ func (s *UserSubscription) BeforeCreate(tx *gorm.DB) error {
 func (s *UserSubscription) BeforeUpdate(tx *gorm.DB) error {
 	s.UpdatedAt = common.GetTimestamp()
 	return nil
+}
+
+func IsCurrentMonthlyCardTextDiscountPlanInfo(planId int, planTitle string) bool {
+	title := strings.ToLower(strings.TrimSpace(planTitle))
+	if planId <= 0 || title == "" {
+		return false
+	}
+	if strings.Contains(title, "旧版") || strings.Contains(title, "vip") {
+		return false
+	}
+	return strings.Contains(title, "月卡")
+}
+
+func isCurrentMonthlyCardTextDiscountPlan(plan *SubscriptionPlan) bool {
+	if plan == nil {
+		return false
+	}
+	if !IsCurrentMonthlyCardTextDiscountPlanInfo(plan.Id, plan.Title) {
+		return false
+	}
+	if plan.Currency != "" && !strings.EqualFold(plan.Currency, "CNY") {
+		return false
+	}
+	return true
 }
 
 type SubscriptionSummary struct {
@@ -855,6 +884,36 @@ func HasActiveUserSubscription(userId int) (bool, error) {
 	return count > 0, nil
 }
 
+func HasActiveCurrentMonthlyCardTextDiscountSubscription(userId int) (bool, error) {
+	if userId <= 0 {
+		return false, errors.New("invalid userId")
+	}
+	now := common.GetTimestamp()
+	var rows []struct {
+		Id       int
+		Title    string
+		Currency string
+	}
+	if err := DB.Table("user_subscriptions AS us").
+		Select("sp.id, sp.title, sp.currency").
+		Joins("JOIN subscription_plans AS sp ON sp.id = us.plan_id").
+		Where("us.user_id = ? AND us.status = ? AND us.end_time > ?", userId, "active", now).
+		Find(&rows).Error; err != nil {
+		return false, err
+	}
+	for _, row := range rows {
+		plan := &SubscriptionPlan{
+			Id:       row.Id,
+			Title:    row.Title,
+			Currency: row.Currency,
+		}
+		if isCurrentMonthlyCardTextDiscountPlan(plan) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // UserActiveSubscriptionsAllowWalletOverflow returns whether wallet balance may be used
 // after the user's subscription quota is exhausted. A single active subscription that
 // disallows wallet overflow (allow_wallet_overflow = false) blocks the fallback.
@@ -1273,6 +1332,9 @@ func PreConsumeUserSubscription(requestId string, userId int, modelName string, 
 			plan, err := getSubscriptionPlanByIdTx(tx, sub.PlanId)
 			if err != nil {
 				return err
+			}
+			if quotaType == SubscriptionQuotaTypeMonthlyCardText && !isCurrentMonthlyCardTextDiscountPlan(plan) {
+				continue
 			}
 			if err := maybeResetUserSubscriptionWithPlanTx(tx, &sub, plan, now); err != nil {
 				return err

@@ -405,6 +405,15 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 	if upstreamCostLog := FormatUpstreamCostBillingLog(upstreamCostBilling); upstreamCostLog != "" {
 		extraContent = append(extraContent, upstreamCostLog)
 	}
+	retailQuota := summary.Quota
+	billingQuota := EffectiveMonthlyCardTextBillingQuota(relayInfo, retailQuota)
+	if billingQuota != retailQuota {
+		extraContent = append(extraContent, fmt.Sprintf("月卡文本额度换算：按量额度 %s，实际扣减 %s，约 %.1f 倍文本额度",
+			logger.FormatQuota(retailQuota),
+			logger.FormatQuota(billingQuota),
+			MonthlyCardTextValueMultiplier,
+		))
+	}
 
 	if summary.WebSearchCallCount > 0 {
 		extraContent = append(extraContent, fmt.Sprintf("Web Search 调用 %d 次，调用花费 %s", summary.WebSearchCallCount, decimal.NewFromFloat(summary.WebSearchPrice).Mul(decimal.NewFromInt(int64(summary.WebSearchCallCount))).Div(decimal.NewFromInt(1000)).Mul(decimal.NewFromFloat(summary.GroupRatio)).Mul(decimal.NewFromFloat(common.QuotaPerUnit)).String()))
@@ -430,15 +439,15 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 		}
 		logger.LogError(ctx, fmt.Sprintf("total tokens is 0, cannot consume quota, userId %d, channelId %d, tokenId %d, model %s， pre-consumed quota %d", relayInfo.UserId, relayInfo.ChannelId, relayInfo.TokenId, summary.ModelName, relayInfo.FinalPreConsumedQuota))
 	} else {
-		model.UpdateUsageStats(relayInfo.UserId, relayInfo.ChannelId, summary.Quota)
+		model.UpdateUsageStats(relayInfo.UserId, relayInfo.ChannelId, billingQuota)
 	}
 
-	if err := SettleBilling(ctx, relayInfo, summary.Quota); err != nil {
+	if err := SettleBilling(ctx, relayInfo, retailQuota); err != nil {
 		logger.LogError(ctx, "error settling billing: "+err.Error())
 	}
 	if callback, ok := ctx.Get("playground_image_billing_capture"); ok {
 		if capture, ok := callback.(func(int, *relaycommon.RelayInfo)); ok {
-			capture(summary.Quota, relayInfo)
+			capture(billingQuota, relayInfo)
 		}
 	}
 
@@ -551,6 +560,7 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 		InjectTieredBillingInfo(other, relayInfo, tieredResult)
 	}
 	InjectUpstreamCostBillingInfo(other, upstreamCostBilling)
+	InjectMonthlyCardTextBillingInfo(other, relayInfo, retailQuota, billingQuota)
 
 	model.RecordConsumeLog(ctx, relayInfo.UserId, model.RecordConsumeLogParams{
 		ChannelId:        relayInfo.ChannelId,
@@ -558,7 +568,7 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 		CompletionTokens: summary.CompletionTokens,
 		ModelName:        logModel,
 		TokenName:        summary.TokenName,
-		Quota:            summary.Quota,
+		Quota:            billingQuota,
 		Content:          logContent,
 		TokenId:          relayInfo.TokenId,
 		UseTimeSeconds:   int(summary.UseTimeSeconds),
