@@ -63,6 +63,13 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         for marker in ["ccapi", "drag tokens", "dragtokens", "geek2api", "moonapix", "relay dance", "relaydance"]:
             self.assertIn(marker, predicate)
 
+    def test_supplier_exposed_model_name_predicate_can_exclude_public_alias_backing_model(self) -> None:
+        predicate = self.module.supplier_exposed_model_name_predicate("model", exclude_public_alias_backing=True)
+
+        self.assertIn("geek2api", predicate)
+        self.assertIn("NOT IN", predicate)
+        self.assertIn("geek2api-image-2", predicate)
+
     def test_model_lists_allows_codex_to_use_public_15k_image_model(self) -> None:
         def fake_mysql(query: str) -> list[list[str]]:
             if "FROM models" not in query:
@@ -93,14 +100,14 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.assertTrue(self.module.is_disabled_ability_pair("21", "gpt-image-2"))
         self.assertFalse(self.module.is_disabled_ability_pair("8", "gpt-image-2-4K"))
 
-    def test_sync_abilities_skips_supplier_exposed_models(self) -> None:
+    def test_sync_abilities_allows_discount_image2_backing_model_only(self) -> None:
         captured: list[str] = []
 
         def fake_mysql(query: str) -> list[list[str]]:
             if "FROM channels" in query:
-                return [["27", "geek2api-image-2,image 2电商商品图快速通道(1.5K)", "0", "100", "test"]]
+                return [["27", "geek2api-image-2,custom-geek2api-leak,image 2电商商品图快速通道(1.5K)", "0", "100", "test"]]
             if "SELECT model_name FROM models" in query:
-                return [["geek2api-image-2"], ["image 2电商商品图快速通道(1.5K)"]]
+                return [["geek2api-image-2"], ["custom-geek2api-leak"], ["image 2电商商品图快速通道(1.5K)"]]
             return []
 
         self.module.active_groups = lambda: ["default"]
@@ -110,8 +117,21 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.module.sync_abilities()
 
         sql = "\n".join(captured)
+        self.assertIn("geek2api-image-2", sql)
         self.assertIn("image 2电商商品图快速通道(1.5K)", sql)
-        self.assertNotIn("geek2api-image-2", sql)
+        self.assertNotIn("custom-geek2api-leak", sql)
+
+    def test_ensure_discount_image2_backing_model_uses_public_metadata(self) -> None:
+        captured: list[str] = []
+        self.module.mysql_exec = captured.append
+
+        self.module.ensure_discount_image2_backing_model()
+
+        sql = "\n".join(captured)
+        self.assertIn("geek2api-image-2", sql)
+        self.assertIn("特价 image-2", sql)
+        self.assertIn("image,openai", sql)
+        self.assertNotIn("image,openai,geek2api", sql)
 
     def test_sync_tokens_updates_admin_system_tokens_only(self) -> None:
         captured: list[str] = []

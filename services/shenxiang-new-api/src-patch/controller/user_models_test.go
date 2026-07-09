@@ -40,6 +40,7 @@ func TestNormalizeUserVisibleModelsHidesSupplierExposedImageModels(t *testing.T)
 	models := normalizeUserVisibleModels(2, []string{
 		"gpt-5.5",
 		"geek2api-image-2",
+		"特价 image-2",
 		"image 2电商商品图快速通道(1.5K)",
 		"ccapi-image-leak",
 		"custom-geek2api-leak",
@@ -47,7 +48,8 @@ func TestNormalizeUserVisibleModelsHidesSupplierExposedImageModels(t *testing.T)
 		"moonapix-image-leak",
 	})
 
-	require.Equal(t, []string{"gpt-5.5", "image 2电商商品图快速通道(1.5K)"}, models)
+	require.Equal(t, []string{"gpt-5.5", "特价 image-2", "image 2电商商品图快速通道(1.5K)"}, models)
+	require.NotContains(t, models, "geek2api-image-2")
 }
 
 func TestFilterUserVisibleModelNamesHidesSeedancePrivateVideoForNonRootUsers(t *testing.T) {

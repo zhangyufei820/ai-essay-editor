@@ -21,13 +21,18 @@ SOURCE_ROOT_MARKERS = (
 )
 RAW_GPT_IMAGE2_MODEL = "gpt-image-2"
 GPT_IMAGE2_PRODUCT_MODEL = "gpt-image-2-4K"
+INTERNAL_DISCOUNT_IMAGE2_MODEL = "geek2api-image-2"
+DISCOUNT_IMAGE2_PUBLIC_MODEL = "特价 image-2"
 CODEX_IMAGE_15K_MODEL = "image 2电商商品图快速通道(1.5K)"
 CODEX_IMAGE_15K_PUBLIC_TAGS = "image,openai,ecommerce,1.5k"
 CODEX_TOKEN_NAMES = ("星人 Codex 文本令牌", "星人 Codex 自动令牌")
 USER_CODEX_TOKEN_NAME_PREFIXES = ("星人Codex ",)
 ADMIN_SYSTEM_TOKEN_USER_ID = 1
 SUPPLIER_EXPOSED_MODELS = {
-    "geek2api-image-2",
+    INTERNAL_DISCOUNT_IMAGE2_MODEL,
+}
+PUBLIC_ALIAS_BACKING_MODELS = {
+    INTERNAL_DISCOUNT_IMAGE2_MODEL: DISCOUNT_IMAGE2_PUBLIC_MODEL,
 }
 SUPPLIER_EXPOSED_MARKERS = (
     "ccapi",
@@ -636,6 +641,10 @@ def is_supplier_exposed_model(model: str) -> bool:
     return any(marker in normalized for marker in SUPPLIER_EXPOSED_MARKERS)
 
 
+def is_public_alias_backing_model(model: str) -> bool:
+    return model.strip().lower() in PUBLIC_ALIAS_BACKING_MODELS
+
+
 def is_hidden_pricing_model(model: str) -> bool:
     return model.strip() == RAW_GPT_IMAGE2_MODEL or is_supplier_exposed_model(model)
 
@@ -649,13 +658,23 @@ def supplier_exposed_model_limit_predicate() -> str:
     return " OR ".join(clauses)
 
 
-def supplier_exposed_model_name_predicate(column: str = "model") -> str:
+def supplier_exposed_model_name_predicate(column: str = "model", *, exclude_public_alias_backing: bool = False) -> str:
     terms = [*SUPPLIER_EXPOSED_MODELS, *SUPPLIER_EXPOSED_MARKERS]
     clauses = [
         f"COALESCE({column}, '') LIKE " + sql_quote(f"%{term}%")
         for term in terms
     ]
-    return " OR ".join(clauses)
+    predicate = " OR ".join(clauses)
+    if not exclude_public_alias_backing:
+        return predicate
+    backing_models = ", ".join(sql_quote(model) for model in PUBLIC_ALIAS_BACKING_MODELS)
+    return (
+        "("
+        + predicate
+        + f") AND LOWER(TRIM(COALESCE({column}, ''))) NOT IN ("
+        + backing_models
+        + ")"
+    )
 
 
 def mysql_count(app_root: Path, query: str) -> int:
@@ -730,13 +749,13 @@ def enforce_gpt_image2_route_db_guard(app_root: Path) -> dict[str, int]:
     result["supplier_exposed_abilities"] = mysql_count(
         app_root,
         "SELECT COUNT(*) FROM abilities WHERE enabled = 1 AND ("
-        + supplier_exposed_model_name_predicate("model")
+        + supplier_exposed_model_name_predicate("model", exclude_public_alias_backing=True)
         + ");",
     )
     result["supplier_exposed_models"] = mysql_count(
         app_root,
         "SELECT COUNT(*) FROM models WHERE deleted_at IS NULL AND status = 1 AND ("
-        + supplier_exposed_model_name_predicate("model_name")
+        + supplier_exposed_model_name_predicate("model_name", exclude_public_alias_backing=True)
         + ");",
     )
 
@@ -802,12 +821,12 @@ def enforce_gpt_image2_route_db_guard(app_root: Path) -> dict[str, int]:
         )
     statements.append(
         "UPDATE abilities SET enabled = 0 WHERE "
-        + supplier_exposed_model_name_predicate("model")
+        + supplier_exposed_model_name_predicate("model", exclude_public_alias_backing=True)
         + ";"
     )
     statements.append(
         "UPDATE models SET status = 0 WHERE deleted_at IS NULL AND "
-        + supplier_exposed_model_name_predicate("model_name")
+        + supplier_exposed_model_name_predicate("model_name", exclude_public_alias_backing=True)
         + ";"
     )
     for token_id, next_limits in token_updates:

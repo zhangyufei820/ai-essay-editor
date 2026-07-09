@@ -246,6 +246,13 @@ API.get('/api/user/models');
         for marker in ["ccapi", "drag tokens", "dragtokens", "geek2api", "moonapix", "relay dance", "relaydance"]:
             self.assertIn(marker, predicate)
 
+    def test_supplier_exposed_model_name_predicate_can_exclude_public_alias_backing_model(self) -> None:
+        predicate = self.module.supplier_exposed_model_name_predicate("model", exclude_public_alias_backing=True)
+
+        self.assertIn("geek2api", predicate)
+        self.assertIn("NOT IN", predicate)
+        self.assertIn("geek2api-image-2", predicate)
+
     def test_mysql_count_parses_last_numeric_row(self) -> None:
         def fake_mysql_exec(_app_root: Path, _query: str) -> str:
             return "COUNT(*)\n5\n"

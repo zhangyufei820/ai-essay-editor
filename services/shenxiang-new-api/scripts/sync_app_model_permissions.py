@@ -23,11 +23,18 @@ USER_CODEX_TOKEN_NAME_PREFIXES = ("星人Codex ",)
 
 RAW_GPT_IMAGE2_MODEL = "gpt-image-2"
 GPT_IMAGE2_PRODUCT_MODEL = "gpt-image-2-4K"
+INTERNAL_DISCOUNT_IMAGE2_MODEL = "geek2api-image-2"
 DISCOUNT_IMAGE2_PUBLIC_MODEL = "特价 image-2"
+DISCOUNT_IMAGE2_DESCRIPTION = "特价 image-2：支持 1K/2K/4K 输出，人民币 1K ¥0.03、2K ¥0.06、4K ¥0.10/张。"
+DISCOUNT_IMAGE2_TAGS = "image,openai"
+DISCOUNT_IMAGE2_ENDPOINTS = '{"image-generation":"/v1/images/generations","image-edit":"/v1/images/edits"}'
 CODEX_IMAGE_15K_MODEL = "image 2电商商品图快速通道(1.5K)"
 CODEX_IMAGE_15K_PUBLIC_TAGS = "image,openai,ecommerce,1.5k"
 SUPPLIER_EXPOSED_MODELS = {
-    "geek2api-image-2",
+    INTERNAL_DISCOUNT_IMAGE2_MODEL,
+}
+PUBLIC_ALIAS_BACKING_MODELS = {
+    INTERNAL_DISCOUNT_IMAGE2_MODEL: DISCOUNT_IMAGE2_PUBLIC_MODEL,
 }
 SUPPLIER_EXPOSED_MARKERS = (
     "ccapi",
@@ -184,6 +191,14 @@ def is_supplier_exposed_model(model: str) -> bool:
     return any(marker in normalized for marker in SUPPLIER_EXPOSED_MARKERS)
 
 
+def is_public_alias_backing_model(model: str) -> bool:
+    return model.strip().lower() in PUBLIC_ALIAS_BACKING_MODELS
+
+
+def should_sync_ability_model(model: str) -> bool:
+    return is_public_alias_backing_model(model) or not is_supplier_exposed_model(model)
+
+
 def is_hidden_pricing_model(model: str) -> bool:
     return model.strip() == RAW_GPT_IMAGE2_MODEL or is_supplier_exposed_model(model)
 
@@ -197,13 +212,23 @@ def supplier_exposed_model_limit_predicate() -> str:
     return " OR ".join(clauses)
 
 
-def supplier_exposed_model_name_predicate(column: str = "model") -> str:
+def supplier_exposed_model_name_predicate(column: str = "model", *, exclude_public_alias_backing: bool = False) -> str:
     terms = [*SUPPLIER_EXPOSED_MODELS, *SUPPLIER_EXPOSED_MARKERS]
     clauses = [
         f"COALESCE({column}, '') LIKE " + sql_quote(f"%{term}%")
         for term in terms
     ]
-    return " OR ".join(clauses)
+    predicate = " OR ".join(clauses)
+    if not exclude_public_alias_backing:
+        return predicate
+    backing_models = ", ".join(sql_quote(model) for model in PUBLIC_ALIAS_BACKING_MODELS)
+    return (
+        "("
+        + predicate
+        + f") AND LOWER(TRIM(COALESCE({column}, ''))) NOT IN ("
+        + backing_models
+        + ")"
+    )
 
 
 def is_disabled_ability_pair(channel_id: str, model: str) -> bool:
@@ -431,6 +456,57 @@ def ensure_public_seedance_models() -> None:
     mysql_exec("\n".join(statements))
 
 
+def ensure_discount_image2_backing_model() -> None:
+    statements = [
+        "START TRANSACTION;",
+        "SET @now := UNIX_TIMESTAMP();",
+        "SET @discount_image2_model := "
+        + sql_quote(INTERNAL_DISCOUNT_IMAGE2_MODEL)
+        + " COLLATE utf8mb4_unicode_ci;",
+        "SET @keep_model_id := ("
+        "SELECT MIN(id) FROM models WHERE model_name = @discount_image2_model AND deleted_at IS NULL"
+        ");",
+        "SET @keep_model_id := IFNULL(@keep_model_id, ("
+        "SELECT MIN(id) FROM models WHERE model_name = @discount_image2_model"
+        "));",
+        "INSERT INTO models "
+        "(model_name, description, icon, tags, vendor_id, endpoints, status, sync_official, created_time, updated_time, name_rule) "
+        "SELECT "
+        + ", ".join(
+            [
+                "@discount_image2_model",
+                sql_quote(DISCOUNT_IMAGE2_DESCRIPTION),
+                sql_quote("OpenAI"),
+                sql_quote(DISCOUNT_IMAGE2_TAGS),
+                "1",
+                sql_quote(DISCOUNT_IMAGE2_ENDPOINTS),
+                "1",
+                "0",
+                "@now",
+                "@now",
+                "0",
+            ]
+        )
+        + " WHERE @keep_model_id IS NULL;",
+        "SET @keep_model_id := IFNULL(@keep_model_id, LAST_INSERT_ID());",
+        "UPDATE models SET "
+        "description = "
+        + sql_quote(DISCOUNT_IMAGE2_DESCRIPTION)
+        + ", icon = "
+        + sql_quote("OpenAI")
+        + ", tags = "
+        + sql_quote(DISCOUNT_IMAGE2_TAGS)
+        + ", vendor_id = 1, endpoints = "
+        + sql_quote(DISCOUNT_IMAGE2_ENDPOINTS)
+        + ", status = 1, sync_official = 0, updated_time = @now, deleted_at = NULL, name_rule = 0 "
+        "WHERE id = @keep_model_id;",
+        "UPDATE models SET status = 0, deleted_at = COALESCE(deleted_at, DATE_ADD(FROM_UNIXTIME(@now), INTERVAL id SECOND)) "
+        "WHERE model_name = @discount_image2_model AND id <> @keep_model_id;",
+        "COMMIT;",
+    ]
+    mysql_exec("\n".join(statements))
+
+
 def sync_tokens(profiles: dict[str, list[str]]) -> None:
     statements = ["START TRANSACTION;"]
     for profile, names in TOKEN_PROFILES.items():
@@ -500,12 +576,12 @@ def sync_abilities() -> None:
     existing_models = {
         row[0]
         for row in mysql("SELECT model_name FROM models WHERE deleted_at IS NULL AND status = 1")
-        if not is_supplier_exposed_model(row[0])
+        if should_sync_ability_model(row[0])
     }
     statements = ["START TRANSACTION;"]
     for channel_id, raw_models, priority, weight, tag in channel_rows:
         for model in [item.strip() for item in raw_models.split(",") if item.strip()]:
-            if is_supplier_exposed_model(model):
+            if not should_sync_ability_model(model):
                 continue
             if model not in existing_models:
                 continue
@@ -544,12 +620,12 @@ def enforce_gpt_image2_db_guard() -> dict[str, int]:
         disabled_ability_counts[f"channel_{channel_id}_{model}"] = int(rows[0][0]) if rows else 0
     supplier_ability_rows = mysql(
         "SELECT COUNT(*) FROM abilities WHERE enabled = 1 AND ("
-        + supplier_exposed_model_name_predicate("model")
+        + supplier_exposed_model_name_predicate("model", exclude_public_alias_backing=True)
         + ");"
     )
     supplier_model_rows = mysql(
         "SELECT COUNT(*) FROM models WHERE deleted_at IS NULL AND status = 1 AND ("
-        + supplier_exposed_model_name_predicate("model_name")
+        + supplier_exposed_model_name_predicate("model_name", exclude_public_alias_backing=True)
         + ");"
     )
     disabled_ability_counts["supplier_exposed_abilities"] = int(supplier_ability_rows[0][0]) if supplier_ability_rows else 0
@@ -578,12 +654,12 @@ def enforce_gpt_image2_db_guard() -> dict[str, int]:
         )
     statements.append(
         "UPDATE abilities SET enabled = 0 WHERE "
-        + supplier_exposed_model_name_predicate("model")
+        + supplier_exposed_model_name_predicate("model", exclude_public_alias_backing=True)
         + ";"
     )
     statements.append(
         "UPDATE models SET status = 0 WHERE deleted_at IS NULL AND "
-        + supplier_exposed_model_name_predicate("model_name")
+        + supplier_exposed_model_name_predicate("model_name", exclude_public_alias_backing=True)
         + ";"
     )
     for token_id, next_limits in token_updates:
@@ -663,6 +739,7 @@ def refresh_codex() -> None:
 
 def main() -> int:
     ensure_public_seedance_models()
+    ensure_discount_image2_backing_model()
     sync_public_seedance_pricing()
     metadata_result = sync_supplier_safe_public_metadata()
     profiles = model_lists()

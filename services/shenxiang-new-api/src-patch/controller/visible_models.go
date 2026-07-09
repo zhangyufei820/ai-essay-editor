@@ -50,11 +50,15 @@ func filterUserVisibleModelNames(userID int, modelNames []string) []string {
 	visible := make([]string, 0, len(modelNames))
 	for _, modelName := range modelNames {
 		trimmed := strings.TrimSpace(modelName)
-		if trimmed == "" || isHiddenUserVisibleModelForUser(userID, trimmed) {
+		if trimmed == "" {
 			continue
 		}
-		if !common.StringsContains(visible, trimmed) {
-			visible = append(visible, trimmed)
+		displayName := service.PublicImageModelDisplayName(trimmed, "")
+		if isHiddenUserVisibleModelForUser(userID, displayName) {
+			continue
+		}
+		if !common.StringsContains(visible, displayName) {
+			visible = append(visible, displayName)
 		}
 	}
 	return visible
