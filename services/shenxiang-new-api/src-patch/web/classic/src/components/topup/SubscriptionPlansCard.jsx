@@ -40,8 +40,14 @@ import {
 
 const { Text } = Typography;
 
-const MONTHLY_TEXT_VALUE_MULTIPLIER = 1.8;
-const OPENAI_INPUT_EQUIVALENT_USD_PER_CNY = 1.6531;
+const MONTHLY_TEXT_VALUE_MULTIPLIER_BY_PLAN_ID = {
+  2: 1.5,
+  3: 1.7,
+  4: 2.0,
+  5: 2.1,
+  6: 2.2,
+};
+const OPENAI_INPUT_EQUIVALENT_USD_PER_TEXT_CNY = 165.31 / 180;
 
 // 过滤易支付方式
 function getEpayMethods(payMethods = []) {
@@ -96,21 +102,47 @@ function getPlanAudience(plan, t) {
   const price = Number(plan?.price_amount || 0);
   if (price <= 100) return t('轻度体验');
   if (price <= 200) return t('日常使用');
-  if (price <= 300) return t('稳定使用 Codex');
-  if (price <= 500) return t('高频开发和项目用户');
-  return t('团队、工作室和重度用户');
+  if (price <= 300) return t('个人高频使用首选');
+  if (price <= 500) return t('重度开发和多项目用户');
+  return t('团队、工作室和全天候使用');
+}
+
+function getPlanTextMultiplier(plan) {
+  const id = Number(plan?.id || 0);
+  if (MONTHLY_TEXT_VALUE_MULTIPLIER_BY_PLAN_ID[id]) {
+    return MONTHLY_TEXT_VALUE_MULTIPLIER_BY_PLAN_ID[id];
+  }
+  const price = Number(plan?.price_amount || 0);
+  if (price >= 1000) return 2.2;
+  if (price >= 500) return 2.1;
+  if (price >= 300) return 2.0;
+  if (price >= 200) return 1.7;
+  if (price >= 100) return 1.5;
+  return 1.8;
+}
+
+function getPlanPositioning(plan, t) {
+  const price = Number(plan?.price_amount || 0);
+  if (Math.round(price) === 300) return t('个人首选，性价比最高');
+  if (price >= 1000) return t('团队容量，最高总额度');
+  if (price >= 500) return t('重度用户，更高并发');
+  if (price >= 200) return t('日常稳定，比入门更划算');
+  return t('入门体验，适合先试用');
 }
 
 function getPlanQuotaSummary(plan) {
   const price = Number(plan?.price_amount || 0);
   const baseQuota = getMonthlyQuota(plan);
-  const textQuota = Math.round(baseQuota * MONTHLY_TEXT_VALUE_MULTIPLIER);
+  const textMultiplier = getPlanTextMultiplier(plan);
+  const textQuota = Math.round(baseQuota * textMultiplier);
   return {
     priceText: formatCnyAmount(price),
     quotaText: renderQuota(baseQuota, 2),
+    textMultiplier,
+    multiplierText: `${textMultiplier.toFixed(1)}x`,
     textQuotaText: renderQuota(textQuota, 2),
     openAIInputEquivalentText: formatUsdAmount(
-      price * OPENAI_INPUT_EQUIVALENT_USD_PER_CNY,
+      price * textMultiplier * OPENAI_INPUT_EQUIVALENT_USD_PER_TEXT_CNY,
     ),
   };
 }
@@ -134,7 +166,7 @@ function MonthlyCardValueGuide({ t, plans = [] }) {
           </Typography.Title>
           <Text type='tertiary' size='small'>
             {t(
-              '月卡面向文本模型提供约 1.8 倍按量等值额度，适合高频 Codex、长上下文、多文件分析和反复调试。图片、视频等权益按活动规则独立计算。',
+              '月卡文本额度按档位阶梯放大，¥300 是个人高频使用首选；¥500/¥1000 面向重度用户和团队，提供更高并发与更大总额度。图片、视频等权益按活动规则独立计算。',
             )}
           </Text>
         </div>
@@ -163,8 +195,13 @@ function MonthlyCardValueGuide({ t, plans = [] }) {
                   <span className='text-blue-600 font-semibold'>
                     {quotaSummary.textQuotaText}
                   </span>
+                  <Text type='tertiary' size='small'>
+                    {' '}
+                    ({quotaSummary.multiplierText})
+                  </Text>
                 </div>
                 <div className='mt-1 text-xs text-gray-500'>
+                  {getPlanPositioning(plan, t)} ·{' '}
                   {t('约 OpenAI 官网')}{' '}
                   {quotaSummary.openAIInputEquivalentText}{' '}
                   {t('输入等值用量')}
@@ -692,12 +729,13 @@ const SubscriptionPlansCard = ({
                           </div>
                           <div className='mt-1 flex flex-wrap items-center gap-2'>
                             <Tag color='blue' shape='circle' size='small'>
-                              {t('约 1.8 倍文本额度')}
+                              {quotaSummary.multiplierText} {t('文本额度')}
                             </Tag>
-                            <Tag color='green' shape='circle' size='small'>
-                              {t('OpenAI 官网约')}{' '}
-                              {quotaSummary.openAIInputEquivalentText}
-                            </Tag>
+                            {isPopular && (
+                              <Tag color='green' shape='circle' size='small'>
+                                {t('个人性价比最高')}
+                              </Tag>
+                            )}
                             <Text type='tertiary' size='small'>
                               {t('30 天内用完为止')}
                             </Text>
@@ -707,8 +745,20 @@ const SubscriptionPlansCard = ({
                             size='small'
                             style={{ display: 'block', marginTop: 4 }}
                           >
-                            {t('基础额度')} {quotaSummary.quotaText}
-                            {t('，文本月卡扣减后约等于更高按量用量')}
+                            {getPlanPositioning(plan, t)}
+                          </Text>
+                          <Text
+                            type='tertiary'
+                            size='small'
+                            style={{
+                              display: 'block',
+                              marginTop: 2,
+                              whiteSpace: 'normal',
+                            }}
+                          >
+                            {t('约 OpenAI 官网')}{' '}
+                            {quotaSummary.openAIInputEquivalentText}{' '}
+                            {t('输入等值用量')}
                           </Text>
                         </div>
 

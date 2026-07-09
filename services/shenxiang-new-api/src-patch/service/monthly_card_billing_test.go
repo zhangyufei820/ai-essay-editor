@@ -15,6 +15,14 @@ func TestMonthlyCardTextBillingQuotaUsesOnePointEightEquivalent(t *testing.T) {
 	assert.Equal(t, 164_228, MonthlyCardTextBillingQuota(295_609))
 }
 
+func TestMonthlyCardTextBillingQuotaUsesPlanSpecificTiers(t *testing.T) {
+	assert.Equal(t, 100, MonthlyCardTextBillingQuotaForPlan(150, 2, "¥100 月卡"))
+	assert.Equal(t, 100, MonthlyCardTextBillingQuotaForPlan(170, 3, "¥200 月卡"))
+	assert.Equal(t, 100, MonthlyCardTextBillingQuotaForPlan(200, 4, "¥300 月卡"))
+	assert.Equal(t, 100, MonthlyCardTextBillingQuotaForPlan(210, 5, "¥500 月卡"))
+	assert.Equal(t, 100, MonthlyCardTextBillingQuotaForPlan(220, 6, "¥1000 月卡"))
+}
+
 func TestMonthlyCardTextDiscountOnlyAppliesToCurrentTextMonthlyPlans(t *testing.T) {
 	assert.True(t, model.IsCurrentMonthlyCardTextDiscountPlanInfo(4, "¥300 月卡"))
 	assert.False(t, model.IsCurrentMonthlyCardTextDiscountPlanInfo(1, "VIP 旧版 ¥500 月卡"))
@@ -29,7 +37,7 @@ func TestEffectiveMonthlyCardTextBillingQuota(t *testing.T) {
 		SubscriptionPlanId:    4,
 		SubscriptionPlanTitle: "¥300 月卡",
 	}
-	assert.Equal(t, 100, EffectiveMonthlyCardTextBillingQuota(info, 180))
+	assert.Equal(t, 90, EffectiveMonthlyCardTextBillingQuota(info, 180))
 
 	info.SubscriptionPlanId = 1
 	info.SubscriptionPlanTitle = "VIP 旧版 ¥500 月卡"

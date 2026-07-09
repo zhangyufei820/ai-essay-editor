@@ -42,7 +42,7 @@ func SettleBilling(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, actualQuo
 			logger.LogInfo(ctx, fmt.Sprintf("月卡文本额度换算：按量额度 %s，月卡实际扣减 %s（约 %.1f 倍文本额度）",
 				logger.FormatQuota(actualQuota),
 				logger.FormatQuota(actualBillingQuota),
-				MonthlyCardTextValueMultiplier,
+				MonthlyCardTextValueMultiplierForRelayInfo(relayInfo),
 			))
 		}
 

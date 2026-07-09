@@ -10,12 +10,25 @@ import (
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 )
 
-const MonthlyCardTextValueMultiplier = 1.8
+type monthlyCardTextTier struct {
+	Numerator   int64
+	Denominator int64
+	Multiplier  float64
+}
 
-const (
-	monthlyCardTextBillingNumerator   int64 = 5
-	monthlyCardTextBillingDenominator int64 = 9
-)
+var defaultMonthlyCardTextTier = monthlyCardTextTier{
+	Numerator:   9,
+	Denominator: 5,
+	Multiplier:  1.8,
+}
+
+var monthlyCardTextTiersByPlanId = map[int]monthlyCardTextTier{
+	2: {Numerator: 3, Denominator: 2, Multiplier: 1.5},
+	3: {Numerator: 17, Denominator: 10, Multiplier: 1.7},
+	4: {Numerator: 2, Denominator: 1, Multiplier: 2.0},
+	5: {Numerator: 21, Denominator: 10, Multiplier: 2.1},
+	6: {Numerator: 11, Denominator: 5, Multiplier: 2.2},
+}
 
 var monthlyCardAllowedModels = []string{
 	"gpt-image-2-4K",
@@ -34,6 +47,13 @@ var monthlyCardTextDiscountModels = []string{
 	"gpt-5.4",
 	"gpt-5.5-openai-compact",
 	"codex-auto-review",
+}
+
+type monthlyCardTextPlanSelection struct {
+	PlanId      int
+	PlanTitle   string
+	BilledQuota int
+	Multiplier  float64
 }
 
 func IsMonthlyCardTokenName(name string) bool {
@@ -104,15 +124,110 @@ func MonthlyCardTextSupportsModel(modelName string) bool {
 	return false
 }
 
+func monthlyCardTextTierForPlan(planId int, planTitle string) monthlyCardTextTier {
+	if !model.IsCurrentMonthlyCardTextDiscountPlanInfo(planId, planTitle) {
+		return defaultMonthlyCardTextTier
+	}
+	if tier, ok := monthlyCardTextTiersByPlanId[planId]; ok {
+		return tier
+	}
+	title := strings.TrimSpace(planTitle)
+	switch {
+	case strings.Contains(title, "1000"):
+		return monthlyCardTextTiersByPlanId[6]
+	case strings.Contains(title, "500"):
+		return monthlyCardTextTiersByPlanId[5]
+	case strings.Contains(title, "300"):
+		return monthlyCardTextTiersByPlanId[4]
+	case strings.Contains(title, "200"):
+		return monthlyCardTextTiersByPlanId[3]
+	case strings.Contains(title, "100"):
+		return monthlyCardTextTiersByPlanId[2]
+	default:
+		return defaultMonthlyCardTextTier
+	}
+}
+
+func MonthlyCardTextValueMultiplierForPlan(planId int, planTitle string) float64 {
+	return monthlyCardTextTierForPlan(planId, planTitle).Multiplier
+}
+
+func MonthlyCardTextValueMultiplierForRelayInfo(relayInfo *relaycommon.RelayInfo) float64 {
+	if relayInfo == nil {
+		return defaultMonthlyCardTextTier.Multiplier
+	}
+	return MonthlyCardTextValueMultiplierForPlan(relayInfo.SubscriptionPlanId, relayInfo.SubscriptionPlanTitle)
+}
+
 func MonthlyCardTextBillingQuota(retailQuota int) int {
+	return MonthlyCardTextBillingQuotaForPlan(retailQuota, 0, "")
+}
+
+func MonthlyCardTextBillingQuotaForPlan(retailQuota int, planId int, planTitle string) int {
 	if retailQuota <= 0 {
 		return 0
 	}
-	quota := (int64(retailQuota)*monthlyCardTextBillingNumerator + monthlyCardTextBillingDenominator - 1) / monthlyCardTextBillingDenominator
+	tier := monthlyCardTextTierForPlan(planId, planTitle)
+	quota := (int64(retailQuota)*tier.Denominator + tier.Numerator - 1) / tier.Numerator
 	if quota <= 0 {
 		return 1
 	}
 	return int(quota)
+}
+
+func selectCurrentMonthlyCardTextDiscountPlan(userId int, retailQuota int) (*monthlyCardTextPlanSelection, error) {
+	if userId <= 0 {
+		return nil, errors.New("invalid userId")
+	}
+	if model.DB == nil {
+		return nil, errors.New("database is not initialized")
+	}
+	now := common.GetTimestamp()
+	var rows []struct {
+		SubscriptionId     int
+		PlanId             int
+		PlanTitle          string
+		Currency           string
+		AmountTotal        int64
+		AmountUsed         int64
+		MonthlyAmountTotal int64
+		MonthlyAmountUsed  int64
+	}
+	if err := model.DB.Table("user_subscriptions AS us").
+		Select("us.id AS subscription_id, sp.id AS plan_id, sp.title AS plan_title, sp.currency, us.amount_total, us.amount_used, us.monthly_amount_total, us.monthly_amount_used").
+		Joins("JOIN subscription_plans AS sp ON sp.id = us.plan_id").
+		Where("us.user_id = ? AND us.status = ? AND us.end_time > ?", userId, "active", now).
+		Order("us.end_time asc, us.id asc").
+		Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	var fallback *monthlyCardTextPlanSelection
+	for _, row := range rows {
+		if !model.IsCurrentMonthlyCardTextDiscountPlanInfo(row.PlanId, row.PlanTitle) {
+			continue
+		}
+		if row.Currency != "" && !strings.EqualFold(row.Currency, "CNY") {
+			continue
+		}
+		billedQuota := MonthlyCardTextBillingQuotaForPlan(retailQuota, row.PlanId, row.PlanTitle)
+		selection := &monthlyCardTextPlanSelection{
+			PlanId:      row.PlanId,
+			PlanTitle:   row.PlanTitle,
+			BilledQuota: billedQuota,
+			Multiplier:  MonthlyCardTextValueMultiplierForPlan(row.PlanId, row.PlanTitle),
+		}
+		if fallback == nil {
+			fallback = selection
+		}
+		if row.AmountTotal > 0 && row.AmountTotal-row.AmountUsed < int64(billedQuota) {
+			continue
+		}
+		if row.MonthlyAmountTotal > 0 && row.MonthlyAmountTotal-row.MonthlyAmountUsed < int64(billedQuota) {
+			continue
+		}
+		return selection, nil
+	}
+	return fallback, nil
 }
 
 func monthlyCardTextDiscountApplies(relayInfo *relaycommon.RelayInfo) bool {
@@ -129,7 +244,7 @@ func EffectiveMonthlyCardTextBillingQuota(relayInfo *relaycommon.RelayInfo, reta
 	if !monthlyCardTextDiscountApplies(relayInfo) {
 		return retailQuota
 	}
-	return MonthlyCardTextBillingQuota(retailQuota)
+	return MonthlyCardTextBillingQuotaForPlan(retailQuota, relayInfo.SubscriptionPlanId, relayInfo.SubscriptionPlanTitle)
 }
 
 func InjectMonthlyCardTextBillingInfo(other map[string]interface{}, relayInfo *relaycommon.RelayInfo, retailQuota int, billedQuota int) {
@@ -137,7 +252,7 @@ func InjectMonthlyCardTextBillingInfo(other map[string]interface{}, relayInfo *r
 		return
 	}
 	other["monthly_card_text_discount"] = true
-	other["monthly_card_text_value_multiplier"] = MonthlyCardTextValueMultiplier
+	other["monthly_card_text_value_multiplier"] = MonthlyCardTextValueMultiplierForRelayInfo(relayInfo)
 	other["monthly_card_retail_quota"] = retailQuota
 	other["monthly_card_billed_quota"] = billedQuota
 	if retailQuota > billedQuota {

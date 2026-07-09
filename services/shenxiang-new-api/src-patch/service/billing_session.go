@@ -421,8 +421,6 @@ func NewBillingSession(c *gin.Context, relayInfo *relaycommon.RelayInfo, preCons
 	isMonthlyCardToken := c != nil && (c.GetBool("monthly_card_token") || IsMonthlyCardTokenName(c.GetString("token_name")))
 	hasMonthlyCardCached := false
 	hasMonthlyCardValue := false
-	hasCurrentMonthlyCardTextDiscountCached := false
-	hasCurrentMonthlyCardTextDiscountValue := false
 	getUserMonthlyCard := func() (bool, error) {
 		if hasMonthlyCardCached {
 			return hasMonthlyCardValue, nil
@@ -433,18 +431,6 @@ func NewBillingSession(c *gin.Context, relayInfo *relaycommon.RelayInfo, preCons
 		}
 		hasMonthlyCardValue = ok
 		hasMonthlyCardCached = true
-		return ok, nil
-	}
-	getUserCurrentMonthlyCardTextDiscount := func() (bool, error) {
-		if hasCurrentMonthlyCardTextDiscountCached {
-			return hasCurrentMonthlyCardTextDiscountValue, nil
-		}
-		ok, err := model.HasActiveCurrentMonthlyCardTextDiscountSubscription(relayInfo.UserId)
-		if err != nil {
-			return false, err
-		}
-		hasCurrentMonthlyCardTextDiscountValue = ok
-		hasCurrentMonthlyCardTextDiscountCached = true
 		return ok, nil
 	}
 	monthlyCardModelDenied := func() *types.NewAPIError {
@@ -534,14 +520,16 @@ func NewBillingSession(c *gin.Context, relayInfo *relaycommon.RelayInfo, preCons
 		}
 		subConsume := int64(preConsumedQuota)
 		quotaType := model.SubscriptionQuotaTypeDefault
+		targetPlanId := 0
 		if MonthlyCardTextSupportsModel(relayInfo.OriginModelName) {
-			hasCurrentMonthlyCard, err := getUserCurrentMonthlyCardTextDiscount()
+			monthlyCardPlan, err := selectCurrentMonthlyCardTextDiscountPlan(relayInfo.UserId, preConsumedQuota)
 			if err != nil {
 				return nil, types.NewError(err, types.ErrorCodeQueryDataError, types.ErrOptionWithSkipRetry())
 			}
-			if hasCurrentMonthlyCard {
-				subConsume = int64(MonthlyCardTextBillingQuota(preConsumedQuota))
+			if monthlyCardPlan != nil {
+				subConsume = int64(monthlyCardPlan.BilledQuota)
 				quotaType = model.SubscriptionQuotaTypeMonthlyCardText
+				targetPlanId = monthlyCardPlan.PlanId
 			}
 		}
 		if subConsume <= 0 {
@@ -558,11 +546,12 @@ func NewBillingSession(c *gin.Context, relayInfo *relaycommon.RelayInfo, preCons
 			relayInfo:      relayInfo,
 			skipTokenQuota: skipTokenQuota,
 			funding: &SubscriptionFunding{
-				requestId: relayInfo.RequestId,
-				userId:    relayInfo.UserId,
-				modelName: relayInfo.OriginModelName,
-				quotaType: quotaType,
-				amount:    subConsume,
+				requestId:    relayInfo.RequestId,
+				userId:       relayInfo.UserId,
+				modelName:    relayInfo.OriginModelName,
+				quotaType:    quotaType,
+				targetPlanId: targetPlanId,
+				amount:       subConsume,
 			},
 		}
 		// 必须传 subConsume 而非 preConsumedQuota，保证 SubscriptionFunding.amount、

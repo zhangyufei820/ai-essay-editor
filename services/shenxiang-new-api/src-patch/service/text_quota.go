@@ -411,7 +411,7 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 		extraContent = append(extraContent, fmt.Sprintf("月卡文本额度换算：按量额度 %s，实际扣减 %s，约 %.1f 倍文本额度",
 			logger.FormatQuota(retailQuota),
 			logger.FormatQuota(billingQuota),
-			MonthlyCardTextValueMultiplier,
+			MonthlyCardTextValueMultiplierForRelayInfo(relayInfo),
 		))
 	}
 
