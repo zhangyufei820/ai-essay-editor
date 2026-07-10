@@ -211,7 +211,7 @@ API.get('/api/user/models');
         self.assertEqual(self.module.latest_source_root(app_root), good)
 
     def test_sanitize_model_limits_replaces_raw_gpt_image2(self) -> None:
-        raw = "gpt-image-2,gpt-image-2-4K,gpt-5.5,gpt-image-2,geek2api-image-2"
+        raw = "gpt-image-2,gpt-image-2-4K,gpt-5.5,gpt-image-2,geek2api-image-2,gpt-5.3-codex-spark,gpt-5.3-spark"
 
         self.assertEqual(
             self.module.sanitize_model_limits(raw),
@@ -272,6 +272,7 @@ API.get('/api/user/models');
                 return (
                     "value\n"
                     '{"geek2api-image-2":0.1,"gpt-image-2":0.2,'
+                    '"gpt-5.3-codex-spark":0.3,"gpt-5.3-spark":0.4,'
                     '"image 2电商商品图快速通道(1.5K)":1500.0}\n'
                 )
             if "SELECT value FROM options" in query:
@@ -292,6 +293,8 @@ API.get('/api/user/models');
         self.assertIn("image,openai,ecommerce,1.5k", sql)
         self.assertNotIn("geek2api-image-2", sql)
         self.assertNotIn("gpt-image-2\":0.2", sql)
+        self.assertNotIn("gpt-5.3-codex-spark", sql)
+        self.assertNotIn("gpt-5.3-spark", sql)
         self.assertNotIn("dragtokens", sql)
 
     def test_api_teacher_launcher_is_docked_in_top_navigation(self) -> None:

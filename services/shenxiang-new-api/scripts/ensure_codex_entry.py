@@ -50,6 +50,7 @@ DISABLED_GPT_IMAGE2_ABILITY_PAIRS = (
 TOKEN_MODEL_REPLACEMENTS = {
     RAW_GPT_IMAGE2_MODEL: GPT_IMAGE2_PRODUCT_MODEL,
 }
+RETIRED_CODEX_TEXT_MODELS = ("gpt-5.3-codex-spark", "gpt-5.3-spark")
 
 
 def read_text(path: Path) -> str:
@@ -584,6 +585,10 @@ def sql_quote(value: str) -> str:
     return "'" + value.replace("\\", "\\\\").replace("'", "''") + "'"
 
 
+def is_retired_codex_text_model(model: str) -> bool:
+    return model.strip() in RETIRED_CODEX_TEXT_MODELS
+
+
 def sanitize_token_models(models: list[str]) -> list[str]:
     sanitized: list[str] = []
     seen: set[str] = set()
@@ -592,6 +597,8 @@ def sanitize_token_models(models: list[str]) -> list[str]:
         if not model:
             continue
         model = TOKEN_MODEL_REPLACEMENTS.get(model, model)
+        if is_retired_codex_text_model(model):
+            continue
         if is_supplier_exposed_model(model):
             continue
         if model in seen:
@@ -646,7 +653,11 @@ def is_public_alias_backing_model(model: str) -> bool:
 
 
 def is_hidden_pricing_model(model: str) -> bool:
-    return model.strip() == RAW_GPT_IMAGE2_MODEL or is_supplier_exposed_model(model)
+    return (
+        model.strip() == RAW_GPT_IMAGE2_MODEL
+        or is_retired_codex_text_model(model)
+        or is_supplier_exposed_model(model)
+    )
 
 
 def supplier_exposed_model_limit_predicate() -> str:

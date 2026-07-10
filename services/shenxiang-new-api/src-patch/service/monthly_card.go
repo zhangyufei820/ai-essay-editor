@@ -34,7 +34,6 @@ var monthlyCardAllowedModels = []string{
 	model.ImageBenefitModelName,
 	"gpt-5.5",
 	"gpt-5.4-mini",
-	"gpt-5.3-codex-spark",
 	"gpt-5.4",
 	"gpt-5.5-openai-compact",
 	"codex-auto-review",
@@ -43,7 +42,6 @@ var monthlyCardAllowedModels = []string{
 var monthlyCardTextDiscountModels = []string{
 	"gpt-5.5",
 	"gpt-5.4-mini",
-	"gpt-5.3-codex-spark",
 	"gpt-5.4",
 	"gpt-5.5-openai-compact",
 	"codex-auto-review",

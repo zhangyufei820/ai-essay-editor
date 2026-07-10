@@ -19,7 +19,8 @@ func TestMonthlyCardAllowedModelsMatchSubscriptionWhitelist(t *testing.T) {
 	require.NotContains(t, allowed, "gpt-image-2-4K")
 	require.NotContains(t, allowed, "claude-opus-4-6")
 	require.NotContains(t, allowed, "seedance-2.0-cl-mini")
-	require.Contains(t, allowed, "gpt-5.3-codex-spark")
+	require.NotContains(t, allowed, "gpt-5.3-codex-spark")
+	require.NotContains(t, allowed, "gpt-5.3-spark")
 	require.Contains(t, allowed, "gpt-5.5-openai-compact")
 	require.Contains(t, allowed, "codex-auto-review")
 
