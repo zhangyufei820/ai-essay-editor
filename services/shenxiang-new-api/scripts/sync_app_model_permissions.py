@@ -94,6 +94,8 @@ PUBLIC_SEEDANCE_CHANNEL_MODELS = [
 PUBLIC_SEEDANCE_MODEL_MAPPING = '{"seedance-2.0-cl-mini":"seedance-2.0-cl-mini"}'
 CODEX_TEXT_CHANNEL_ID = "21"
 CODEX_TEXT_CHANNEL_REQUIRED_MODELS = [
+    "gpt-5.5",
+    "gpt-5.4",
     "gpt-5.6-luna",
     "gpt-5.6-terra",
     "gpt-5.6-sol",
@@ -109,6 +111,28 @@ PUBLIC_SEEDANCE_TOKEN_PRICES_CNY_PER_1M = {
 }
 OPENAI_TEXT_LONG_CONTEXT_THRESHOLD_TOKENS = 272_000
 PUBLIC_OPENAI_TEXT_MODELS = {
+    "gpt-5.4": {
+        "description": "OpenAI GPT-5.4 文本模型，适合高质量写作、分析和通用推理。",
+        "input_cny": Decimal("2.3760"),
+        "output_cny": Decimal("14.5800"),
+        "cache_read_cny": Decimal("0.2376"),
+        "cache_create_cny": Decimal("2.9700"),
+        "longcontext_input_cny": Decimal("4.7520"),
+        "longcontext_output_cny": Decimal("21.8700"),
+        "longcontext_cache_read_cny": Decimal("0.4752"),
+        "longcontext_cache_create_cny": Decimal("5.9400"),
+    },
+    "gpt-5.5": {
+        "description": "OpenAI GPT-5.5 文本模型，适合复杂推理、长文分析和高质量代码任务。",
+        "input_cny": Decimal("5.4000"),
+        "output_cny": Decimal("32.4000"),
+        "cache_read_cny": Decimal("0.5400"),
+        "cache_create_cny": Decimal("6.7500"),
+        "longcontext_input_cny": Decimal("10.8000"),
+        "longcontext_output_cny": Decimal("48.6000"),
+        "longcontext_cache_read_cny": Decimal("1.0800"),
+        "longcontext_cache_create_cny": Decimal("13.5000"),
+    },
     "gpt-5.6-luna": {
         "description": "OpenAI GPT-5.6 Luna 文本模型，适合日常对话、写作和轻量推理。",
         "input_cny": Decimal("1.0000"),

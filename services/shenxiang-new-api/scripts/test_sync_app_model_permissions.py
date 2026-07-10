@@ -287,7 +287,7 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
         self.module.ensure_public_openai_text_models()
 
         sql = "\n".join(captured)
-        for model in ["gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol"]:
+        for model in ["gpt-5.4", "gpt-5.5", "gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol"]:
             self.assertIn(model, sql)
         self.assertIn("text,openai,codex", sql)
         self.assertIn('{"openai":"/v1/chat/completions"}', sql)
@@ -303,23 +303,57 @@ class SyncAppModelPermissionsTest(unittest.TestCase):
 
         self.module.sync_public_openai_text_pricing()
 
-        self.assertEqual(captured_options["ModelRatio"]["gpt-5.6-luna"], 0.068493150685)
-        self.assertEqual(captured_options["ModelRatio"]["gpt-5.6-terra"], 0.171232876712)
-        self.assertEqual(captured_options["ModelRatio"]["gpt-5.6-sol"], 0.342465753425)
-        for model in ["gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol"]:
-            self.assertEqual(captured_options["CompletionRatio"][model], 6.0)
+        expected_model_ratios = {
+            "gpt-5.4": 0.162739726027,
+            "gpt-5.5": 0.369863013699,
+            "gpt-5.6-luna": 0.068493150685,
+            "gpt-5.6-terra": 0.171232876712,
+            "gpt-5.6-sol": 0.342465753425,
+        }
+        expected_completion_ratios = {
+            "gpt-5.4": 6.136363636364,
+            "gpt-5.5": 6.0,
+            "gpt-5.6-luna": 6.0,
+            "gpt-5.6-terra": 6.0,
+            "gpt-5.6-sol": 6.0,
+        }
+        for model, ratio in expected_model_ratios.items():
+            self.assertEqual(captured_options["ModelRatio"][model], ratio)
+            self.assertEqual(captured_options["CompletionRatio"][model], expected_completion_ratios[model])
             self.assertEqual(captured_options["CacheRatio"][model], 0.1)
             self.assertEqual(captured_options["CreateCacheRatio"][model], 1.25)
             self.assertNotIn(model, captured_options["ModelPrice"])
             self.assertEqual(captured_options["billing_setting.billing_mode"][model], "tiered_expr")
 
+        gpt54_expr = captured_options["billing_setting.billing_expr"]["gpt-5.4"]
+        gpt55_expr = captured_options["billing_setting.billing_expr"]["gpt-5.5"]
         luna_expr = captured_options["billing_setting.billing_expr"]["gpt-5.6-luna"]
         terra_expr = captured_options["billing_setting.billing_expr"]["gpt-5.6-terra"]
         sol_expr = captured_options["billing_setting.billing_expr"]["gpt-5.6-sol"]
 
-        self.assertIn("len <= 272000", luna_expr)
-        self.assertIn('tier("base"', luna_expr)
-        self.assertIn('tier("longcontext"', luna_expr)
+        for expr in [gpt54_expr, gpt55_expr, luna_expr, terra_expr, sol_expr]:
+            self.assertIn("len <= 272000", expr)
+            self.assertIn('tier("base"', expr)
+            self.assertIn('tier("longcontext"', expr)
+
+        self.assertIn("p * 0.325479452055", gpt54_expr)
+        self.assertIn("c * 1.997260273973", gpt54_expr)
+        self.assertIn("cr * 0.032547945205", gpt54_expr)
+        self.assertIn("cc * 0.406849315068", gpt54_expr)
+        self.assertIn("p * 0.65095890411", gpt54_expr)
+        self.assertIn("c * 2.995890410959", gpt54_expr)
+        self.assertIn("cr * 0.065095890411", gpt54_expr)
+        self.assertIn("cc * 0.813698630137", gpt54_expr)
+
+        self.assertIn("p * 0.739726027397", gpt55_expr)
+        self.assertIn("c * 4.438356164384", gpt55_expr)
+        self.assertIn("cr * 0.07397260274", gpt55_expr)
+        self.assertIn("cc * 0.924657534247", gpt55_expr)
+        self.assertIn("p * 1.479452054795", gpt55_expr)
+        self.assertIn("c * 6.657534246575", gpt55_expr)
+        self.assertIn("cr * 0.147945205479", gpt55_expr)
+        self.assertIn("cc * 1.849315068493", gpt55_expr)
+
         self.assertIn("p * 0.13698630137", luna_expr)
         self.assertIn("c * 0.821917808219", luna_expr)
         self.assertIn("cr * 0.013698630137", luna_expr)
