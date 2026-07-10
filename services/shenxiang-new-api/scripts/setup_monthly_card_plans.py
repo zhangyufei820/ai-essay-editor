@@ -51,10 +51,14 @@ class MonthlyCardPlan:
 PLANS = [
     MonthlyCardPlan("¥100 月卡", 100, 1, 100),
     MonthlyCardPlan("¥200 月卡", 200, 2, 200),
-    MonthlyCardPlan("¥300 月卡", 300, 3, 300),
-    MonthlyCardPlan("¥500 月卡", 500, 5, 500),
+    MonthlyCardPlan("¥300 月卡", 300, 5, 300),
+    MonthlyCardPlan("¥500 月卡", 500, 8, 500),
     MonthlyCardPlan("¥1000 月卡", 1000, 10, 1000),
 ]
+
+LEGACY_MONTHLY_CARD_CONCURRENCY = {
+    "VIP 旧版 ¥500 月卡": 8,
+}
 
 def load_dotenv(path: Path) -> None:
     if not path.exists():
@@ -151,6 +155,19 @@ WHERE title = {title} AND ABS(price_amount - {plan.price_cny}) < 0.000001;
 
 def build_active_subscription_sql() -> str:
     plan_titles = ", ".join(sql_quote(plan.title) for plan in PLANS)
+    legacy_updates = "\n".join(
+        f"""
+UPDATE user_subscriptions us
+JOIN subscription_plans sp ON sp.id = us.plan_id
+SET us.concurrency_limit = {concurrency},
+    us.updated_at = @now
+WHERE us.status = 'active'
+  AND us.end_time > @now
+  AND sp.title = {sql_quote(title)}
+  AND us.concurrency_limit <> {concurrency};
+"""
+        for title, concurrency in LEGACY_MONTHLY_CARD_CONCURRENCY.items()
+    )
     return f"""
 UPDATE user_subscriptions us
 JOIN subscription_plans sp ON sp.id = us.plan_id
@@ -188,6 +205,8 @@ WHERE us.status = 'active'
   AND us.monthly_amount_total > 0
   AND sp.title IN ({plan_titles})
   AND GREATEST(us.amount_used, us.monthly_amount_used) >= sp.monthly_amount_total;
+
+{legacy_updates}
 
 UPDATE subscription_plans
 SET enabled = 0,

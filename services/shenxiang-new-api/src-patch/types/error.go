@@ -85,6 +85,7 @@ const (
 	// quota error
 	ErrorCodeInsufficientUserQuota      ErrorCode = "insufficient_user_quota"
 	ErrorCodePreConsumeTokenQuotaFailed ErrorCode = "pre_consume_token_quota_failed"
+	ErrorCodeSubscriptionConcurrency    ErrorCode = "subscription_concurrency_limit"
 )
 
 type NewAPIError struct {
@@ -243,6 +244,8 @@ func (e *NewAPIError) PublicMessage() string {
 		return "请求内容读取失败，请检查后重试。"
 	case ErrorCodeSensitiveWordsDetected, ErrorCodePromptBlocked, ErrorCodeViolationFeeGrokCSAM:
 		return "提示词或参考图被安全策略拒绝，请调整内容后重试。"
+	case ErrorCodeSubscriptionConcurrency:
+		return "当前月卡并发已满，请等待已有任务完成后重试。"
 	case ErrorCodeInsufficientUserQuota, ErrorCodePreConsumeTokenQuotaFailed:
 		if e.IsUpstreamRelayError() {
 			return "模型服务暂时不可用，请稍后重试。"

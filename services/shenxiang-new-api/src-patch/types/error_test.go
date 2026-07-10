@@ -47,6 +47,26 @@ func TestPublicMessageKeepsLocalQuotaMessage(t *testing.T) {
 	}
 }
 
+func TestPublicMessageKeepsSubscriptionConcurrencyMessage(t *testing.T) {
+	err := NewErrorWithStatusCode(
+		errors.New("subscription concurrency limit exceeded"),
+		ErrorCodeSubscriptionConcurrency,
+		http.StatusTooManyRequests,
+	)
+
+	if got, want := err.PublicMessage(), "当前月卡并发已满，请等待已有任务完成后重试。"; got != want {
+		t.Fatalf("PublicMessage() = %q, want %q", got, want)
+	}
+
+	publicErr := err.ToPublicOpenAIError("req-test")
+	if got, want := publicErr.Message, "当前月卡并发已满，请等待已有任务完成后重试。 (request id: req-test)"; got != want {
+		t.Fatalf("ToPublicOpenAIError().Message = %q, want %q", got, want)
+	}
+	if got, want := publicErr.Code, any(ErrorCodeSubscriptionConcurrency); got != want {
+		t.Fatalf("ToPublicOpenAIError().Code = %v, want %v", got, want)
+	}
+}
+
 func TestPublicMessageHidesSupplierNames(t *testing.T) {
 	for _, message := range []string{
 		"geek2api-image-2 upstream rejected request",

@@ -57,6 +57,24 @@ class SetupMonthlyCardPlansTest(unittest.TestCase):
         self.assertNotIn("currency = 'USD'", sql)
         self.assertNotIn("折", sql)
 
+    def test_monthly_card_concurrency_tiers(self) -> None:
+        concurrency_by_title = {
+            plan.title: plan.concurrency_limit for plan in self.module.PLANS
+        }
+
+        self.assertEqual(concurrency_by_title["¥300 月卡"], 5)
+        self.assertEqual(concurrency_by_title["¥500 月卡"], 8)
+        self.assertEqual(
+            self.module.LEGACY_MONTHLY_CARD_CONCURRENCY["VIP 旧版 ¥500 月卡"],
+            8,
+        )
+
+        sql = self.module.build_sql()
+        self.assertIn("并发 5", sql)
+        self.assertIn("并发 8", sql)
+        self.assertIn("sp.title = 'VIP 旧版 ¥500 月卡'", sql)
+        self.assertIn("us.concurrency_limit <> 8", sql)
+
 
 if __name__ == "__main__":
     unittest.main()
