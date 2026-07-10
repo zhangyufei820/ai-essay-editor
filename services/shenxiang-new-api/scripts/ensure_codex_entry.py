@@ -28,6 +28,16 @@ CODEX_IMAGE_15K_PUBLIC_TAGS = "image,openai,ecommerce,1.5k"
 CODEX_TOKEN_NAMES = ("星人 Codex 文本令牌", "星人 Codex 自动令牌")
 USER_CODEX_TOKEN_NAME_PREFIXES = ("星人Codex ",)
 ADMIN_SYSTEM_TOKEN_USER_ID = 1
+CODEX_ALLOWED_MODELS = (
+    "gpt-5.5",
+    "gpt-5.4",
+    "gpt-5.4-mini",
+    "gpt-5.6-luna",
+    "gpt-5.6-terra",
+    "gpt-5.6-sol",
+    "gpt-5.5-openai-compact",
+    CODEX_IMAGE_15K_MODEL,
+)
 SUPPLIER_EXPOSED_MODELS = {
     INTERNAL_DISCOUNT_IMAGE2_MODEL,
 }
@@ -50,7 +60,12 @@ DISABLED_GPT_IMAGE2_ABILITY_PAIRS = (
 TOKEN_MODEL_REPLACEMENTS = {
     RAW_GPT_IMAGE2_MODEL: GPT_IMAGE2_PRODUCT_MODEL,
 }
-RETIRED_CODEX_TEXT_MODELS = ("gpt-5.3-codex-spark", "gpt-5.3-spark")
+RETIRED_CODEX_TEXT_MODELS = (
+    "gpt-5.3-codex-spark",
+    "gpt-5.3-spark",
+    "gpt-5.4-openai-compact",
+    "codex-auto-review",
+)
 
 
 def read_text(path: Path) -> str:
@@ -628,16 +643,15 @@ def is_codex_disallowed_image_model(model: str) -> bool:
 
 
 def sanitize_codex_token_models(models: list[str]) -> list[str]:
-    allowed = {"gpt-5.5", "gpt-5.4", "gpt-5.4-mini", CODEX_IMAGE_15K_MODEL}
+    allowed = set(CODEX_ALLOWED_MODELS)
     return [model for model in sanitize_token_models(models) if model in allowed]
 
 
 def ensure_codex_image_model_limits(raw: str) -> str:
     models = sanitize_codex_token_models(raw.split(","))
-    if not models:
-        models.append("gpt-5.5")
-    if CODEX_IMAGE_15K_MODEL not in models:
-        models.append(CODEX_IMAGE_15K_MODEL)
+    for model in CODEX_ALLOWED_MODELS:
+        if model not in models:
+            models.append(model)
     return ",".join(models)
 
 
